@@ -162,27 +162,7 @@ The `Runtime<C: Console>` handles:
 
 ### Phase 4: Application Shell
 
-- **Implement egui integration for library UI**
-  - egui-wgpu renderer setup
-  - Library screen (game list with thumbnails)
-  - Game actions: play, view info, delete
-  - Settings screen (video, audio, controls)
-  - Download progress UI with cancel option
-
-- **Implement application state machine**
-  - States: Library → Downloading → Playing → back to Library
-  - Error handling:
-    - CPU exceeded → log warning, skip frame
-    - OOM → crash with error message
-    - WASM panic → return to library with error
-    - Network disconnect → return to library
-
-- **Implement debug overlay (console-wide)**
-  - FPS counter (update and render rates)
-  - Memory usage (RAM/VRAM current and limit)
-  - Network stats (ping, rollback frames, frame advantage)
-  - Toggle via hotkey (F3 or similar)
-  - Optional: frame time graph
+(Moved to In Progress)
 
 ### Phase 5: Networking & Polish
 
@@ -326,6 +306,22 @@ The `Runtime<C: Console>` handles:
 (No tasks currently in progress)
 
 ## Done
+
+- **Implement application state machine (Phase 4)**
+  - States: Library → Downloading → Playing → back to Library
+  - Error handling transitions via RuntimeError enum
+  - Handle errors: WasmPanic, NetworkDisconnect, OutOfMemory, Other
+  - Error display in Library UI with dismiss button
+  - handle_runtime_error() transitions back to library with error message
+
+- **Implement debug overlay (console-wide) (Phase 4)**
+  - FPS counter (update rate)
+  - Frame time with millisecond precision
+  - Frame time graph (120 sample history, color-coded bars)
+  - VRAM usage (current/limit with progress bar)
+  - Network stats (ping, rollback frames, frame advantage) - ready for P2P sessions
+  - Toggle via F3 hotkey
+  - Resizable debug window
 
 - **Handle GGRS events (Phase 2)**
   - Integrated RollbackSession into Runtime game loop

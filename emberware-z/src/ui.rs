@@ -73,4 +73,5 @@ pub enum UiAction {
     DeleteGame(String),
     OpenBrowser,
     OpenSettings,
+    DismissError,
 }

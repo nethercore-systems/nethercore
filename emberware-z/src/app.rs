@@ -1,5 +1,6 @@
 //! Application state and main loop
 
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Instant;
 use thiserror::Error;
@@ -12,6 +13,7 @@ use winit::{
 };
 
 use crate::config::{self, Config};
+use crate::console::VRAM_LIMIT;
 use crate::graphics::ZGraphics;
 use crate::input::InputManager;
 use crate::library::{self, LocalGame};
@@ -36,6 +38,54 @@ pub enum AppError {
     Runtime(String),
     #[error("Event loop error: {0}")]
     EventLoop(String),
+}
+
+/// Runtime error types for state machine transitions
+#[derive(Debug, Clone)]
+pub enum RuntimeError {
+    /// WASM game panicked
+    WasmPanic(String),
+    /// Network disconnected
+    NetworkDisconnect,
+    /// Out of memory (RAM or VRAM)
+    OutOfMemory { resource: String, used: usize, limit: usize },
+    /// Generic runtime error
+    Other(String),
+}
+
+impl std::fmt::Display for RuntimeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::WasmPanic(msg) => write!(f, "Game crashed: {}", msg),
+            Self::NetworkDisconnect => write!(f, "Network disconnected"),
+            Self::OutOfMemory { resource, used, limit } => {
+                write!(f, "Out of {}: {} / {} bytes", resource, used, limit)
+            }
+            Self::Other(msg) => write!(f, "{}", msg),
+        }
+    }
+}
+
+/// Frame time sample for graph
+const FRAME_TIME_HISTORY_SIZE: usize = 120;
+/// Target frame time for reference line (60 FPS = 16.67ms)
+const TARGET_FRAME_TIME_MS: f32 = 16.67;
+
+/// Debug statistics for overlay
+#[derive(Debug, Default)]
+pub struct DebugStats {
+    /// Frame times ring buffer (milliseconds)
+    pub frame_times: VecDeque<f32>,
+    /// VRAM usage in bytes
+    pub vram_used: usize,
+    /// VRAM limit in bytes
+    pub vram_limit: usize,
+    /// Network stats (when in P2P session)
+    pub ping_ms: Option<u32>,
+    /// Rollback frames this session
+    pub rollback_frames: u64,
+    /// Frame advantage (how far ahead of opponent)
+    pub frame_advantage: i32,
 }
 
 /// Application state
@@ -68,6 +118,10 @@ pub struct App {
     frame_times: Vec<Instant>,
     /// Last frame time
     last_frame: Instant,
+    /// Debug statistics
+    debug_stats: DebugStats,
+    /// Last runtime error (for displaying error in library)
+    last_error: Option<RuntimeError>,
 }
 
 impl App {
@@ -98,7 +152,21 @@ impl App {
             debug_overlay: false,
             frame_times: Vec::with_capacity(120),
             last_frame: now,
+            debug_stats: DebugStats {
+                frame_times: VecDeque::with_capacity(FRAME_TIME_HISTORY_SIZE),
+                vram_limit: VRAM_LIMIT,
+                ..Default::default()
+            },
+            last_error: None,
         }
+    }
+
+    /// Handle a runtime error by transitioning back to library
+    fn handle_runtime_error(&mut self, error: RuntimeError) {
+        tracing::error!("Runtime error: {}", error);
+        self.last_error = Some(error);
+        self.mode = AppMode::Library;
+        self.local_games = library::get_local_games();
     }
 
     /// Handle window resize
@@ -185,6 +253,7 @@ impl App {
         match action {
             UiAction::PlayGame(game_id) => {
                 tracing::info!("Playing game: {}", game_id);
+                self.last_error = None; // Clear any previous error
                 self.mode = AppMode::Playing { game_id };
             }
             UiAction::DeleteGame(game_id) => {
@@ -202,6 +271,9 @@ impl App {
             UiAction::OpenSettings => {
                 tracing::info!("Opening settings...");
                 self.mode = AppMode::Settings;
+            }
+            UiAction::DismissError => {
+                self.last_error = None;
             }
         }
     }
@@ -233,10 +305,17 @@ impl App {
         let frame_time_ms = now.duration_since(self.last_frame).as_secs_f32() * 1000.0;
         self.last_frame = now;
 
+        // Update debug stats
+        self.debug_stats.frame_times.push_back(frame_time_ms);
+        while self.debug_stats.frame_times.len() > FRAME_TIME_HISTORY_SIZE {
+            self.debug_stats.frame_times.pop_front();
+        }
+
         // Pre-collect values to avoid borrow conflicts
         let mode = self.mode.clone();
         let debug_overlay = self.debug_overlay;
         let fps = self.calculate_fps();
+        let last_error = self.last_error.clone();
 
         let window = match self.window.clone() {
             Some(w) => w,
@@ -247,6 +326,9 @@ impl App {
             Some(g) => g,
             None => return,
         };
+
+        // Update VRAM usage from graphics
+        self.debug_stats.vram_used = graphics.vram_used();
 
         let egui_state = match &mut self.egui_state {
             Some(s) => s,
@@ -275,10 +357,31 @@ impl App {
         // Collect UI action separately to avoid borrow conflicts
         let mut ui_action = None;
 
+        // Collect debug stats for overlay
+        let debug_stats = DebugStats {
+            frame_times: self.debug_stats.frame_times.clone(),
+            vram_used: self.debug_stats.vram_used,
+            vram_limit: self.debug_stats.vram_limit,
+            ping_ms: self.debug_stats.ping_ms,
+            rollback_frames: self.debug_stats.rollback_frames,
+            frame_advantage: self.debug_stats.frame_advantage,
+        };
+
         let full_output = self.egui_ctx.run(raw_input, |ctx| {
             // Render UI based on current mode
             match &mode {
                 AppMode::Library => {
+                    // Show error message if there was a recent error
+                    if let Some(ref error) = last_error {
+                        egui::TopBottomPanel::top("error_panel").show(ctx, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.colored_label(egui::Color32::RED, format!("Error: {}", error));
+                                if ui.button("Dismiss").clicked() {
+                                    ui_action = Some(UiAction::DismissError);
+                                }
+                            });
+                        });
+                    }
                     if let Some(action) = self.library_ui.show(ctx, &self.local_games) {
                         ui_action = Some(action);
                     }
@@ -313,15 +416,93 @@ impl App {
             if debug_overlay {
                 egui::Window::new("Debug")
                     .default_pos([10.0, 10.0])
+                    .resizable(true)
+                    .default_width(300.0)
                     .show(ctx, |ui| {
+                        // Performance section
+                        ui.heading("Performance");
                         ui.label(format!("FPS: {:.1}", fps));
                         ui.label(format!("Frame time: {:.2}ms", frame_time_ms));
                         ui.label(format!("Mode: {:?}", mode));
+
+                        // Frame time graph
+                        ui.add_space(4.0);
+                        let graph_height = 60.0;
+                        let (rect, _response) = ui.allocate_exact_size(
+                            egui::vec2(ui.available_width(), graph_height),
+                            egui::Sense::hover(),
+                        );
+
+                        if ui.is_rect_visible(rect) {
+                            let painter = ui.painter_at(rect);
+
+                            // Background
+                            painter.rect_filled(rect, 2.0, egui::Color32::from_gray(30));
+
+                            // Target line (16.67ms for 60 FPS)
+                            let target_y = rect.bottom() - (TARGET_FRAME_TIME_MS / 33.33 * graph_height);
+                            painter.hline(
+                                rect.left()..=rect.right(),
+                                target_y,
+                                egui::Stroke::new(1.0, egui::Color32::from_rgb(100, 100, 100)),
+                            );
+
+                            // Frame time bars
+                            if !debug_stats.frame_times.is_empty() {
+                                let bar_width = rect.width() / FRAME_TIME_HISTORY_SIZE as f32;
+                                for (i, &time_ms) in debug_stats.frame_times.iter().enumerate() {
+                                    let x = rect.left() + i as f32 * bar_width;
+                                    // Scale: 0-33.33ms maps to full height
+                                    let height = (time_ms / 33.33 * graph_height).min(graph_height);
+                                    let bar_rect = egui::Rect::from_min_max(
+                                        egui::pos2(x, rect.bottom() - height),
+                                        egui::pos2(x + bar_width - 1.0, rect.bottom()),
+                                    );
+
+                                    // Color based on frame time
+                                    let color = if time_ms <= TARGET_FRAME_TIME_MS {
+                                        egui::Color32::from_rgb(100, 200, 100) // Green
+                                    } else if time_ms <= 33.33 {
+                                        egui::Color32::from_rgb(200, 200, 100) // Yellow
+                                    } else {
+                                        egui::Color32::from_rgb(200, 100, 100) // Red
+                                    };
+
+                                    painter.rect_filled(bar_rect, 0.0, color);
+                                }
+                            }
+
+                            // Label
+                            painter.text(
+                                egui::pos2(rect.left() + 4.0, rect.top() + 2.0),
+                                egui::Align2::LEFT_TOP,
+                                "Frame time (0-33ms)",
+                                egui::FontId::proportional(10.0),
+                                egui::Color32::from_gray(150),
+                            );
+                        }
+
                         ui.separator();
-                        ui.label("Memory: N/A");
-                        ui.label("VRAM: N/A");
+
+                        // Memory section
+                        ui.heading("Memory");
+                        let vram_mb = debug_stats.vram_used as f32 / (1024.0 * 1024.0);
+                        let vram_limit_mb = debug_stats.vram_limit as f32 / (1024.0 * 1024.0);
+                        let vram_pct = debug_stats.vram_used as f32 / debug_stats.vram_limit as f32;
+                        ui.label(format!("VRAM: {:.2} / {:.2} MB ({:.1}%)", vram_mb, vram_limit_mb, vram_pct * 100.0));
+                        ui.add(egui::ProgressBar::new(vram_pct).show_percentage());
+
                         ui.separator();
-                        ui.label("Network: N/A");
+
+                        // Network section
+                        ui.heading("Network");
+                        if let Some(ping) = debug_stats.ping_ms {
+                            ui.label(format!("Ping: {}ms", ping));
+                            ui.label(format!("Rollback frames: {}", debug_stats.rollback_frames));
+                            ui.label(format!("Frame advantage: {}", debug_stats.frame_advantage));
+                        } else {
+                            ui.label("No network session");
+                        }
                     });
             }
         });
