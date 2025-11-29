@@ -110,6 +110,11 @@ Combine direct light specular with environment specular.
 
 **Roughness behavior:** Only affects specular highlight size (shininess), NOT reflection sharpness.
 
+**F0 (Fresnel at 0°):** Specular intensity is determined by surface type:
+- Dielectrics (metallic=0): Fixed F0 of ~0.04 (4% reflectance)
+- Metals (metallic=1): F0 comes from base color
+- Blended for intermediate metallic values
+
 ```wgsl
 // Direct specular from directional light
 let light_dir = sky.sun_direction; // Same as sky sun direction
@@ -118,14 +123,18 @@ let ndoth = max(dot(normal, half_dir), 0.0);
 
 // Roughness controls shininess
 let shininess = mix(4.0, 128.0, 1.0 - material.roughness);
-let direct_spec = pow(ndoth, shininess) * sky.sun_color;
+
+// Calculate F0 based on metallic workflow
+let f0 = mix(vec3<f32>(0.04), base_color, material.metallic);
+
+let direct_spec = pow(ndoth, shininess) * sky.sun_color * f0;
 
 // Environment specular (always sharp sample)
 let reflection_dir = reflect(-view_dir, normal);
-let env_spec = sample_sky(reflection_dir);
+let env_spec = sample_sky(reflection_dir) * f0;
 
 // Combine
-let total_specular = (direct_spec + env_spec) * material.specular_strength;
+let total_specular = direct_spec + env_spec;
 ```
 
 ## Use Case 4: Diffuse Ambient (IBL Approximation)
@@ -138,9 +147,9 @@ Sample sky in the **normal direction** for diffuse ambient/IBL contribution.
 // Sample sky at surface normal (N) for diffuse ambient
 let ambient_sky = sample_sky(normal);
 
-// Apply as ambient term
-let ambient = ambient_sky * material.ambient_strength;
-final_color += base_color * ambient;
+// Apply directly - sky color IS the intensity
+let ambient = base_color * ambient_sky;
+final_color += ambient;
 ```
 
 **Why normal vs reflection:**
@@ -156,14 +165,6 @@ struct FragmentInput {
     @location(2) uv: vec2<f32>,
 }
 
-struct Material {
-    base_color: vec3<f32>,
-    metallic: f32,           // 0 = dielectric, 1 = metal
-    roughness: f32,          // Only affects specular highlight size
-    ambient_strength: f32,   // Ambient light intensity (0.0-1.0 typical)
-    specular_strength: f32,  // Specular intensity (0.0-1.0 typical)
-}
-
 @fragment
 fn fs_main(in: FragmentInput) -> @location(0) vec4<f32> {
     let N = normalize(in.normal);
@@ -172,34 +173,40 @@ fn fs_main(in: FragmentInput) -> @location(0) vec4<f32> {
     let H = normalize(V + L);
     let R = reflect(-V, N);  // Reflection direction
     
-    let base_color = material.base_color;
+    // Sample material properties from textures
+    let base_color = texture_sample(albedo_texture, in.uv).rgb;
+    let metallic = texture_sample(metallic_roughness_texture, in.uv).b;  // Blue channel
+    let roughness = texture_sample(metallic_roughness_texture, in.uv).g;  // Green channel
     
     // 1. DIFFUSE (Lambert + ambient from sky)
     let ndotl = max(dot(N, L), 0.0);
     let direct_diffuse = base_color * sky.sun_color * ndotl;
     
     let ambient_sky = sample_sky(N);  // Sample at NORMAL direction
-    let ambient_diffuse = base_color * ambient_sky * material.ambient_strength;
+    let ambient_diffuse = base_color * ambient_sky;
     
     let total_diffuse = direct_diffuse + ambient_diffuse;
     
     // 2. SPECULAR (roughness affects shininess only)
     let ndoth = max(dot(N, H), 0.0);
-    let shininess = mix(4.0, 128.0, 1.0 - material.roughness);
-    let direct_spec = pow(ndoth, shininess) * sky.sun_color;
+    let shininess = mix(4.0, 128.0, 1.0 - roughness);
     
-    let env_spec = sample_sky(R);  // Sample at REFLECTION direction
+    // Dielectrics have fixed specular intensity (~4%), metals use base color
+    let f0 = mix(vec3<f32>(0.04), base_color, metallic);
     
-    let total_specular = (direct_spec + env_spec) * material.specular_strength;
+    let direct_spec = pow(ndoth, shininess) * sky.sun_color * f0;
+    let env_spec = sample_sky(R) * f0;  // Sample at REFLECTION direction
+    
+    let total_specular = direct_spec + env_spec;
     
     // 3. REFLECTIONS (metallic surfaces - always sharp)
     let env_reflection = sample_sky(R);  // Sample at REFLECTION direction
     
     // 4. COMBINE
     // Metals have no diffuse, dielectrics have no reflections
-    let final_color = total_diffuse * (1.0 - material.metallic) 
+    let final_color = total_diffuse * (1.0 - metallic) 
                     + total_specular 
-                    + env_reflection * material.metallic;
+                    + env_reflection * metallic;
     
     return vec4<f32>(final_color, 1.0);
 }
@@ -230,6 +237,15 @@ Where:
 - Reflection sharpness (reflections are always sharp)
 - Reflection brightness (controlled by metallic only)
 
+**Specular Intensity (F0):**
+In the metallic/roughness workflow, specular intensity is NOT a separate parameter. It's calculated as:
+```wgsl
+let f0 = mix(vec3<f32>(0.04), base_color, metallic);
+```
+- Dielectrics (metallic=0): Fixed 4% specular reflectance
+- Metals (metallic=1): Specular comes from base color (colored reflections)
+- This is physically correct for most materials
+
 **Why:** Proper rough reflections require mipmaps or multi-sampling. The procedural sky has no mipmaps, so reflections are always sharp samples. This is era-appropriate for PS1/N64 aesthetics.
 
 **Alternative (if needed):** Rough surfaces can simply fade reflection intensity:
@@ -249,17 +265,15 @@ pub fn set_sky(
     sun_color: [f32; 3],      // Can exceed 1.0 for brightness
     sun_sharpness: f32,       // 10.0-1000.0 typical
 )
-```
 
-**Default state:** All zeros (black sky, no sun, no lighting). Must call `set_sky()` in `init()` to enable any sky-based lighting.
-
-```rust
 // Internally used for:
 // - Skybox background rendering
-// - Environment reflections (matcap/PBR modes)
-// - Specular highlights
+// - Environment reflections (PBR mode)
+// - Specular highlights (F0 calculation)
 // - Diffuse ambient lighting
 ```
+
+**Note:** Sky color intensity IS the ambient light intensity. To dim ambient, adjust sky colors.
 
 ## Synchronization with Directional Light
 
@@ -306,32 +320,29 @@ sharpness: 0.0
 ## Material Parameter Guidelines
 
 ```rust
-// Typical material values:
+// Typical material values (metallic and roughness only):
 
-// Matte dielectric (plastic, painted metal)
+// Matte dielectric (plastic, painted surfaces)
 metallic: 0.0
 roughness: 0.8
-ambient_strength: 0.3
-specular_strength: 0.5
 
-// Glossy dielectric (polished wood, ceramic)
+// Glossy dielectric (polished wood, ceramic, glass)
 metallic: 0.0
 roughness: 0.2
-ambient_strength: 0.3
-specular_strength: 0.8
 
-// Raw metal (iron, steel)
+// Raw metal (iron, steel, brushed aluminum)
 metallic: 1.0
 roughness: 0.6
-ambient_strength: 0.2
-specular_strength: 0.7
 
-// Polished metal (chrome, mirror)
+// Polished metal (chrome, mirror, gold)
 metallic: 1.0
 roughness: 0.1
-ambient_strength: 0.1
-specular_strength: 1.0
 ```
+
+**Sky color controls ambient intensity:**
+- Brighter sky colors = brighter ambient lighting
+- Darker sky colors = darker ambient lighting
+- No separate multiplier needed
 
 ## Performance Notes
 

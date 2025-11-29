@@ -108,156 +108,434 @@ The `Runtime<C: Console>` handles:
 - [ ] **Create `core` crate with workspace configuration**
   - Add `core/Cargo.toml` with wasmtime, ggrs, matchbox_socket, winit
   - Update root `Cargo.toml` workspace members
-  - Define core module structure
+  - Define core module structure: `lib.rs`, `console.rs`, `runtime.rs`, `wasm.rs`, `ffi.rs`, `rollback.rs`
 
 - [ ] **Define `Console` trait and associated types**
   - `Console` trait with specs, FFI registration, graphics/audio factory methods
   - `Graphics` trait for rendering backend abstraction
   - `Audio` trait for audio backend abstraction
-  - `ConsoleSpecs` struct (resolutions, tick rates, RAM/VRAM limits)
+  - `ConsoleInput` trait with bytemuck requirements for GGRS serialization
+  - `ConsoleSpecs` struct (resolutions, tick rates, RAM/VRAM limits, ROM size)
 
 - [ ] **Implement `GameState` for WASM instance**
-  - Wasmtime `Store` data structure
-  - Memory management (RAM limits)
-  - FFI context (graphics commands buffer, audio commands, RNG state)
+  - Wasmtime `Store` data structure containing all per-game state
+  - Memory management with RAM limit enforcement (16MB for Z)
+  - FFI context: graphics command buffer, audio commands, RNG state
+  - Input state for all 4 players
+  - Transform stack (16 matrices deep)
+  - Current render state (color, blend mode, depth test, cull mode, filter)
 
 - [ ] **Implement WASM runtime wrapper**
-  - `WasmEngine` — shared wasmtime `Engine`
+  - `WasmEngine` — shared wasmtime `Engine` (one per app)
   - `GameInstance` — loaded game with `Module`, `Instance`, `Store`
   - Export function bindings: `init()`, `update()`, `render()`
-  - Export function bindings: `save_state()`, `load_state()` (for rollback)
+  - Export function bindings: `save_state(ptr, max_len) -> len`, `load_state(ptr, len)`
   - Memory access helpers for FFI string/buffer passing
+  - WASM memory bounds checking and validation
 
 - [ ] **Implement common FFI host functions**
-  - System: `delta_time`, `elapsed_time`, `tick_count`, `log`, `quit`
-  - Rollback: `random` (deterministic seeded RNG)
-  - Save data: `save`, `load`, `delete`
-  - Session: `player_count`, `local_player_mask` (input functions are console-specific)
+  - System functions:
+    - `delta_time() -> f32` — time since last tick
+    - `elapsed_time() -> f32` — total time since game start
+    - `tick_count() -> u64` — current tick number
+    - `log(ptr, len)` — debug output to console
+    - `quit()` — exit to library
+  - Rollback functions:
+    - `random() -> u32` — deterministic seeded RNG (PCG or similar)
+  - Save data functions:
+    - `save(slot, data_ptr, data_len) -> u32` — save to slot (0-7), max 64KB
+    - `load(slot, data_ptr, max_len) -> u32` — load from slot, returns bytes read
+    - `delete(slot) -> u32` — delete save slot
+  - Session functions:
+    - `player_count() -> u32` — number of players (1-4)
+    - `local_player_mask() -> u32` — bitmask of local players
 
 - [ ] **Implement game loop orchestration**
-  - Fixed timestep update loop (tick rate)
-  - Variable render rate with interpolation support
+  - Fixed timestep update loop (configurable tick rate: 24, 30, 60, 120)
+  - Variable render rate with interpolation support (uncapped frame rate)
   - Frame timing and delta time calculation
-  - Update/render separation (render skipped during rollback)
+  - Update/render separation (render skipped during rollback replay)
+  - CPU budget enforcement (4ms per tick at 60fps, warn on exceed)
 
 ### Phase 2: GGRS Rollback Integration
 
 - [ ] **Define GGRS config and input types**
-  - `GGRSConfig` implementing `ggrs::Config`
-  - `PlayerInput` struct (buttons, stick axes)
-  - Input serialization for network
+  - `GGRSConfig` implementing `ggrs::Config` trait
+  - Generic input type parameterized by console's `ConsoleInput`
+  - Input serialization for network (bytemuck Pod)
+  - Input delay and frame advantage settings
 
 - [ ] **Implement rollback state management**
-  - `save_game_state()` — call WASM `save_state`, store snapshot
+  - `save_game_state()` — call WASM `save_state`, store snapshot with checksum
   - `load_game_state()` — call WASM `load_state`, restore snapshot
-  - State buffer pool for efficient rollback
+  - State buffer pool for efficient rollback (avoid allocations in hot path)
+  - State compression (optional, for network sync)
 
 - [ ] **Integrate GGRS session into runtime**
   - Local session (single player or local multiplayer, no rollback)
-  - P2P session with matchbox_socket
+  - P2P session with matchbox_socket (WebRTC)
   - `advance_frame()` with GGRS requests handling
+  - Synchronization test mode for local debugging
   - TODO [needs clarification]: Spectator session support
 
 - [ ] **Handle GGRS events**
   - `GGRSRequest::SaveGameState` → serialize WASM state
   - `GGRSRequest::LoadGameState` → deserialize WASM state
   - `GGRSRequest::AdvanceFrame` → run `update()` with confirmed inputs
+  - Connection quality events (desync detection, frame advantage warnings)
   - Audio muting during rollback replay
 
 ### Phase 3: Emberware Z Implementation
 
+#### 3.1 Console Setup
+
 - [ ] **Create Emberware Z `Console` implementation**
   - Implement `Console` trait for PS1/N64 aesthetic
-  - Define Z-specific specs (540p default, 60fps, 16MB RAM, 8MB VRAM)
-  - RGBA8 color output (easy to change later if needed)
+  - Define Z-specific specs:
+    - Resolution: 360p, 540p (default), 720p, 1080p
+    - Tick rate: 24, 30, 60 (default), 120 fps
+    - RAM: 16MB, VRAM: 8MB, ROM: 32MB max
+    - Color depth: RGBA8
+    - CPU budget: 4ms per tick at 60fps
+  - `ZInput` struct (buttons, dual sticks, triggers)
 
-- [ ] **Implement wgpu graphics backend**
-  - `ZGraphics` implementing `Graphics` trait
-  - wgpu device/queue/surface setup
-  - Render pipeline for 3D (no PS1 effects for now, can add later)
-  - Render pipeline for 2D sprites/UI
-  - Command buffer pattern (game FFI queues commands, rendered at frame_end)
-  - VRAM budget tracking (no texture count limit, just memory)
-  - **Vertex buffer architecture:**
-    - Single vertex buffer per stride (e.g., pos+uv+color = one buffer, pos+uv+color+normal = another)
-    - Buffers grow dynamically as meshes are loaded during `init()`
-    - Immediate-mode drawing (`draw_triangle`, `draw_sprite`, etc.) buffers on CPU side
-    - CPU buffer flushed to GPU once per frame to minimize draw calls
-    - No manual resource cleanup — all graphics resources freed on game shutdown
+#### 3.2 Graphics Backend (wgpu)
 
-- [ ] **Implement Z-specific FFI functions**
-  - Graphics: `camera_set`, `camera_fov`, `set_clear_color` (init-only)
-  - Textures: `load_texture` (raw RGBA pixels), `texture_bind`, `texture_bind_slot`
-  - Meshes: `load_mesh(data, count, format)`, `load_mesh_indexed(data, count, indices, index_count, format)`, `draw_mesh(handle)`
-  - Immediate 3D: `draw_triangles(data, count, format)`, `draw_triangles_indexed(data, count, indices, index_count, format)`
-  - 2D: `draw_sprite`, `draw_rect`, `draw_text` (built-in font, UTF-8)
-  - Transform: `transform_identity/translate/rotate/scale/push/pop/set`
-  - Billboarding: `draw_billboard`, `draw_billboard_region` (modes: 1=spherical, 2-4=cylindrical Y/X/Z)
-  - Render state: `set_color`, `depth_test`, `cull_mode`, `blend_mode`, `texture_filter`
-  - Input: `button_held`, `button_pressed`, `button_released`, `left_stick_x/y`, `right_stick_x/y`, `trigger_left`, `trigger_right`
-  - Vertex formats: 3-bit bitmask (`FORMAT_UV`, `FORMAT_COLOR`, `FORMAT_NORMAL`) producing 8 combinations
-  - NO `*_free` functions — resources auto-cleaned on shutdown
+- [ ] **Implement wgpu device initialization**
+  - `ZGraphics` struct implementing `Graphics` trait
+  - wgpu `Instance`, `Adapter`, `Device`, `Queue` setup
+  - Surface configuration for window
+  - Resize handling with surface reconfiguration
 
-- [ ] **Implement GPU skinning**
-  - Add `FORMAT_SKINNED` flag (adds 20 bytes: 4×u8 bone indices + 4×f32 bone weights)
-  - Implement `set_bones(matrices, count)` — upload bone transforms (max 256 bones)
-  - Shader support for weighted bone transform in vertex shader
-  - Works with both retained mode (`load_mesh` + `draw_mesh`) and immediate mode (`draw_triangles`)
-  - CPU-side animation (keyframes, blend trees, IK) left to developers
+- [ ] **Implement vertex buffer architecture**
+  - One vertex buffer per stride (format determines buffer)
+  - `GrowableBuffer` struct for auto-growing GPU buffers
+  - 8 base vertex formats (POS, POS_UV, POS_COLOR, etc.)
+  - 8 skinned variants (each base format + skinning data)
+  - Total: 16 vertex format pipelines per render mode
 
-- [ ] **Implement shader generation system**
-  - 4 mode templates (Mode 0-3) with different fragment shader logic
-  - 16 vertex format permutations per mode (UV, COLOR, NORMAL, SKINNED flags)
-  - Total: 40 shaders (16 for Mode 0, 8 each for Modes 1-3 requiring NORMAL)
-  - Placeholder replacement: `//VIN_*`, `//VOUT_*`, `//VS_*`, `//FS_*`
-  - Reference: `shader_gen_example/` for template pattern
-  - Reference: `emberware-z/pbr-lite.wgsl` for PBR lighting function
+- [ ] **Implement texture management**
+  - `TextureHandle` allocation and tracking
+  - `load_texture(width, height, pixels)` — create RGBA8 texture
+  - VRAM budget tracking (8MB limit)
+  - Fallback textures: 8×8 magenta/black checkerboard, 1×1 white
+  - Sampler creation (nearest, linear filters)
 
-- [ ] **Implement procedural sky system**
-  - `set_sky()` FFI: horizon color, zenith color, sun direction, sun color, sun sharpness
-  - `sample_sky(direction)` shader function for background + reflections + ambient
-  - Render sky background (fullscreen quad at far plane or clear color)
-  - Integrate with Mode 0 (simple Lambert when normals present)
-  - Integrate with Mode 2/3 (environment reflections, ambient lighting)
-  - Reference: `docs/procedural-sky.md` for implementation details
+- [ ] **Implement render state management**
+  - Current color (uniform tint)
+  - Depth test enable/disable
+  - Cull mode (none, back, front)
+  - Blend mode (none, alpha, additive, multiply)
+  - Texture filter (nearest, linear)
+  - Currently bound textures (slots 0-3)
 
-- [ ] **Implement built-in font for draw_text**
-  - Static embedded bitmap/SDF font
-  - Full UTF-8 support for localization
-  - TODO [needs clarification]: Custom font loading in the future
+- [ ] **Implement command buffer pattern**
+  - Immediate-mode draws buffered on CPU side
+  - Single flush to GPU per frame (minimize draw calls)
+  - Draw command batching by pipeline/texture state
+  - Retained mesh handles separate from immediate draws
 
-- [ ] **Audio system**
-  - TODO [needs clarification]: Audio architecture, formats, sample rates, channel count, etc.
-  - Shelved for initial implementation
+#### 3.3 Configuration FFI (init-only)
+
+- [ ] **Implement configuration functions**
+  - `set_resolution(res: u32)` — 0=360p, 1=540p, 2=720p, 3=1080p
+  - `set_tick_rate(fps: u32)` — 24, 30, 60, 120
+  - `set_clear_color(color: u32)` — 0xRRGGBBAA background color
+  - `render_mode(mode: u32)` — 0-3 (Unlit, Matcap, PBR, Hybrid)
+  - Enforce init-only: error/warning if called outside `init()`
+
+#### 3.4 Camera FFI
+
+- [ ] **Implement camera functions**
+  - `camera_set(x, y, z, target_x, target_y, target_z)` — look-at camera
+  - `camera_fov(fov_degrees: f32)` — field of view (default 60°)
+  - View matrix calculation
+  - Projection matrix calculation
+  - Camera uniform buffer upload
+
+#### 3.5 Input FFI
+
+- [ ] **Implement individual button queries**
+  - `button_held(player, button) -> u32` — 1 if held
+  - `button_pressed(player, button) -> u32` — 1 if just pressed this tick
+  - `button_released(player, button) -> u32` — 1 if just released this tick
+  - Button constants: UP(0), DOWN(1), LEFT(2), RIGHT(3), A(4), B(5), X(6), Y(7), LB(8), RB(9), L3(10), R3(11), START(12), SELECT(13)
+
+- [ ] **Implement bulk button queries**
+  - `buttons_held(player) -> u32` — bitmask of all held buttons
+  - `buttons_pressed(player) -> u32` — bitmask of all just pressed
+  - `buttons_released(player) -> u32` — bitmask of all just released
+  - Efficient for checking multiple buttons (single FFI call)
+
+- [ ] **Implement analog stick queries**
+  - `left_stick_x(player) -> f32` — -1.0 to 1.0
+  - `left_stick_y(player) -> f32` — -1.0 to 1.0
+  - `right_stick_x(player) -> f32` — -1.0 to 1.0
+  - `right_stick_y(player) -> f32` — -1.0 to 1.0
+  - `left_stick(player, out_x, out_y)` — bulk query (both axes)
+  - `right_stick(player, out_x, out_y)` — bulk query (both axes)
+
+- [ ] **Implement trigger queries**
+  - `trigger_left(player) -> f32` — 0.0 to 1.0
+  - `trigger_right(player) -> f32` — 0.0 to 1.0
+
+#### 3.6 Texture FFI
+
+- [ ] **Implement texture functions**
+  - `load_texture(width, height, pixels) -> u32` — create texture, return handle
+  - `texture_bind(handle)` — bind to slot 0 (albedo)
+  - `texture_bind_slot(handle, slot)` — bind to specific slot (0-3)
+  - Validate VRAM budget on load
+  - Track bound textures per slot for batching
+
+#### 3.7 Mesh FFI (Retained Mode)
+
+- [ ] **Implement mesh loading**
+  - `load_mesh(data, vertex_count, format) -> u32` — non-indexed mesh
+  - `load_mesh_indexed(data, vertex_count, indices, index_count, format) -> u32`
+  - Vertex format flags: FORMAT_UV(1), FORMAT_COLOR(2), FORMAT_NORMAL(4), FORMAT_SKINNED(8)
+  - Calculate stride from format, copy to appropriate vertex buffer
+  - Return mesh handle for draw_mesh
+
+- [ ] **Implement mesh drawing**
+  - `draw_mesh(handle)` — draw retained mesh with current transform/state
+  - Look up mesh by handle, record draw command
+  - Apply current transform, textures, render state
+
+#### 3.8 Immediate Mode 3D FFI
+
+- [ ] **Implement immediate mode drawing**
+  - `draw_triangles(data, vertex_count, format)` — non-indexed
+  - `draw_triangles_indexed(data, vertex_count, indices, index_count, format)`
+  - Buffer vertices on CPU side (per format)
+  - Flush all immediate draws at frame end
+
+#### 3.9 Transform Stack FFI
+
+- [ ] **Implement transform functions**
+  - `transform_identity()` — reset to identity matrix
+  - `transform_translate(x, y, z)` — translate
+  - `transform_rotate(angle_deg, x, y, z)` — rotate around axis
+  - `transform_scale(x, y, z)` — scale
+  - `transform_push()` — push current matrix to stack
+  - `transform_pop()` — pop matrix from stack
+  - `transform_set(matrix_ptr)` — set from 16 floats (column-major)
+  - Stack depth: 16 matrices
+  - Matrix math using glam
+
+#### 3.10 Billboarding FFI
+
+- [ ] **Implement billboard drawing**
+  - `draw_billboard(w, h, mode, color)` — draw billboard at current transform
+  - `draw_billboard_region(w, h, src_x, src_y, src_w, src_h, mode, color)` — with UV region
+  - Billboard modes: 1=spherical, 2=cylindrical Y, 3=cylindrical X, 4=cylindrical Z
+  - Compute billboard rotation matrix based on mode and camera
+  - Generate quad vertices with UVs, add to immediate buffer
+
+#### 3.11 2D Drawing FFI (Screen Space)
+
+- [ ] **Implement 2D sprite drawing**
+  - `draw_sprite(x, y, w, h, color)` — draw bound texture
+  - `draw_sprite_region(x, y, w, h, src_x, src_y, src_w, src_h, color)` — with UV region
+  - `draw_sprite_ex(x, y, w, h, src_x, src_y, src_w, src_h, origin_x, origin_y, angle_deg, color)` — full control
+  - Screen-space coordinates (0,0 = top-left)
+  - Orthographic projection for 2D pass
+
+- [ ] **Implement 2D primitive drawing**
+  - `draw_rect(x, y, w, h, color)` — solid color rectangle
+  - No texture, just colored quad
+
+- [ ] **Implement text drawing**
+  - `draw_text(ptr, len, x, y, size, color)` — draw UTF-8 string
+  - Built-in bitmap font (embedded in binary)
+  - Full UTF-8 support for internationalization
+  - TODO [needs clarification]: Custom font loading
+
+#### 3.12 Render State FFI
+
+- [ ] **Implement render state functions**
+  - `set_color(color: u32)` — uniform tint color (0xRRGGBBAA)
+  - `depth_test(enabled: u32)` — 0=off, 1=on
+  - `cull_mode(mode: u32)` — 0=none, 1=back, 2=front
+  - `blend_mode(mode: u32)` — 0=none, 1=alpha, 2=additive, 3=multiply
+  - `texture_filter(filter: u32)` — 0=nearest, 1=linear
+  - Track state changes for pipeline selection
+
+#### 3.13 Shader Generation System
+
+- [ ] **Implement shader template system**
+  - 4 mode templates: mode0_unlit.wgsl, mode1_matcap.wgsl, mode2_pbr.wgsl, mode3_hybrid.wgsl
+  - Placeholder categories: `//VIN_*`, `//VOUT_*`, `//VS_*`, `//FS_*`
+  - Template replacement function: `generate_shader(template, mode, format)`
+
+- [ ] **Generate vertex format permutations**
+  - `//VIN_UV` — UV input struct field
+  - `//VIN_COLOR` — Color input struct field
+  - `//VIN_NORMAL` — Normal input struct field
+  - `//VIN_SKINNED` — Bone indices/weights input fields
+  - `//VOUT_*` — Corresponding output struct fields
+  - `//VS_*` — Vertex shader attribute passing, skinning transform, normal transform
+
+- [ ] **Generate Mode 0 (Unlit) shaders**
+  - 16 permutations (all vertex formats)
+  - Without normals: `final = albedo * vertex_color`
+  - With normals: Simple Lambert using sky sun direction
+  - `//FS_UV` — texture sample
+  - `//FS_NORMAL` — Lambert shading: `sky_lambert(normal)`
+
+- [ ] **Generate Mode 1 (Matcap) shaders**
+  - 8 permutations (only formats with NORMAL)
+  - Matcap UV from view-space normal: `uv = normal.xy * 0.5 + 0.5`
+  - Multiply matcaps from slots 1-3
+  - Unused slots default to white (1×1 white texture)
+
+- [ ] **Generate Mode 2 (PBR-lite) shaders**
+  - 8 permutations (only formats with NORMAL)
+  - GGX specular distribution (D term)
+  - Schlick fresnel approximation (F term)
+  - Energy-conserving Lambert diffuse
+  - MRE texture in slot 1 (R=Metallic, G=Roughness, B=Emissive)
+  - Env matcap in slot 2 multiplies with sky reflection
+  - Up to 4 dynamic lights
+  - Reference: `emberware-z/pbr-lite.wgsl`
+
+- [ ] **Generate Mode 3 (Hybrid) shaders**
+  - 8 permutations (only formats with NORMAL)
+  - PBR direct lighting from single directional light
+  - Matcap (slot 3) for ambient/stylized reflections
+  - Env matcap (slot 2) multiplies with sky reflection
+  - Single directional light + ambient color
+
+- [ ] **Implement shader compilation and caching**
+  - Compile all 40 shaders at startup (16 + 8 + 8 + 8)
+  - Create render pipelines for each shader
+  - Cache pipelines by (mode, format, blend_mode, depth_test, cull_mode)
+  - Hot-reload shaders in debug builds (optional)
+
+#### 3.14 Procedural Sky System
+
+- [ ] **Implement sky uniform buffer**
+  - `SkyUniforms` struct: horizon_color, zenith_color, sun_direction, sun_color, sun_sharpness
+  - Default: all zeros (black sky, no lighting until configured)
+  - Upload sky uniforms to GPU each frame
+
+- [ ] **Implement `set_sky()` FFI**
+  - `set_sky(horizon_rgb, zenith_rgb, sun_dir_xyz, sun_rgb, sharpness)`
+  - 13 f32 parameters total
+  - Validate sun direction is normalized (or normalize internally)
+  - Store in sky uniform buffer
+
+- [ ] **Implement sky background rendering**
+  - Fullscreen triangle at far plane (depth = 1.0)
+  - Vertex shader: compute view ray from clip position
+  - Fragment shader: `sample_sky(normalize(view_ray))`
+  - Render before all geometry (or use clear color for solid backgrounds)
+
+- [ ] **Implement `sample_sky()` shader function**
+  - Gradient: `lerp(horizon, zenith, direction.y * 0.5 + 0.5)`
+  - Sun: `sun_color * pow(max(0, dot(direction, sun_direction)), sharpness)`
+  - Return: `gradient + sun`
+  - Used for: background, reflections (Mode 2/3), ambient (Mode 0 with normals)
+
+#### 3.15 Mode-Specific Lighting FFI
+
+- [ ] **Implement Mode 1 (Matcap) functions**
+  - `matcap_set(slot, texture)` — bind matcap to slot 1-3
+  - Validate slot is 1-3, warn otherwise
+
+- [ ] **Implement Mode 2 (PBR) lighting functions**
+  - `light_set(index, light_type, x, y, z)` — position/direction for light 0-3
+  - `light_color(index, r, g, b)` — set light color (linear RGB)
+  - `light_intensity(index, intensity)` — set light intensity multiplier
+  - `light_disable(index)` — disable light
+  - Light types: 0=ambient, 1=directional, 2=point, 3=spot (TBD)
+  - Light uniform buffer with 4 light slots
+
+- [ ] **Implement Mode 3 (Hybrid) lighting functions**
+  - `light_direction(x, y, z)` — single directional light direction
+  - `light_color(r, g, b)` — directional light color (overloaded)
+  - `ambient_color(r, g, b)` — ambient light color
+  - Simpler than Mode 2 (single light + ambient)
+
+- [ ] **Implement material functions**
+  - `material_mre(texture)` — bind MRE texture (R=Metallic, G=Roughness, B=Emissive)
+  - `material_albedo(texture)` — bind albedo texture (alternative to slot 0)
+  - `material_metallic(value)` — set metallic (0.0-1.0, default 0.0)
+  - `material_roughness(value)` — set roughness (0.0-1.0, default 0.0)
+  - `material_emissive(value)` — set emissive intensity (default 0.0)
+  - Material uniform buffer
+
+#### 3.16 GPU Skinning
+
+- [ ] **Implement bone uniform buffer**
+  - Support up to 256 bones (256 × 4×4 matrices = 16KB)
+  - `set_bones(matrices_ptr, count)` — upload bone transforms
+  - Bone matrices in column-major order (16 floats each)
+
+- [ ] **Implement skinned vertex shader**
+  - Read bone indices (4 × u8) and weights (4 × f32) from vertex
+  - Compute skinned position: `Σ(weight[i] * bone_matrix[bone_index[i]] * pos)`
+  - Compute skinned normal: `Σ(weight[i] * inverse_transpose(bone_matrix[i]) * normal)`
+  - Apply before model-view-projection transform
+
+- [ ] **Update vertex formats for skinning**
+  - `FORMAT_SKINNED` (8) adds 20 bytes per vertex
+  - Bone indices: 4 bytes (4 × u8)
+  - Bone weights: 16 bytes (4 × f32)
+  - Attribute order: pos → uv → color → normal → bone_indices → bone_weights
+
+#### 3.17 Built-in Font
+
+- [ ] **Create embedded bitmap font**
+  - ASCII + extended Latin characters minimum
+  - Full UTF-8 support for CJK and other scripts (or subset)
+  - Single texture atlas with glyph metrics
+  - Embed via `include_bytes!()` in binary
+
+- [ ] **Implement text rendering**
+  - Parse UTF-8 string, look up glyph metrics
+  - Generate quads for each character
+  - Support variable size via scaling
+  - Left-aligned, single line (no word wrap in v1)
+  - TODO [needs clarification]: Custom font loading
 
 ### Phase 4: Application Shell
 
 - [ ] **Implement winit window management**
   - Window creation with configurable resolution
-  - Fullscreen toggle
+  - Fullscreen toggle (F11 or Alt+Enter)
   - Event loop integration
+  - Window resize handling
+  - DPI/scale factor handling
 
 - [ ] **Implement egui integration for library UI**
   - egui-wgpu renderer setup
-  - Library screen (game list, play/delete)
-  - Settings screen (video, controls)
-  - Download progress UI
+  - Library screen (game list with thumbnails)
+  - Game actions: play, view info, delete
+  - Settings screen (video, audio, controls)
+  - Download progress UI with cancel option
 
 - [ ] **Implement application state machine**
-  - Library mode → Downloading → Playing → back to Library
-  - Error handling: CPU exceeded → skip frame, OOM → crash, panic → return to library
+  - States: Library → Downloading → Playing → back to Library
+  - Error handling:
+    - CPU exceeded → log warning, skip frame
+    - OOM → crash with error message
+    - WASM panic → return to library with error
+    - Network disconnect → return to library
 
 - [ ] **Implement keyboard/gamepad input**
-  - Keyboard mapping to virtual controller
-  - Gamepad support via gilrs or similar
-  - Multiple local players (e.g., keyboard + gamepad on same instance)
-  - Input config persistence
+  - Keyboard mapping to virtual controller (configurable)
+  - Gamepad support via gilrs
+  - Multiple local players (keyboard + gamepads)
+  - Input config persistence in config.toml
+  - Deadzone and sensitivity settings
 
 - [ ] **Implement debug overlay (console-wide)**
-  - FPS counter
-  - Memory usage (RAM/VRAM)
-  - Network stats (ping, rollback frames)
-  - Toggle via hotkey
+  - FPS counter (update and render rates)
+  - Memory usage (RAM/VRAM current and limit)
+  - Network stats (ping, rollback frames, frame advantage)
+  - Toggle via hotkey (F3 or similar)
+  - Optional: frame time graph
 
 ### Phase 5: Networking & Polish
 
@@ -266,71 +544,134 @@ The `Runtime<C: Console>` handles:
   - Examples: 4 local, 1 local + 3 remote, 2 local + 2 remote
   - Each local player maps to a physical input device
   - GGRS handles all players uniformly
+  - Player slot assignment
 
 - [ ] **Implement matchbox signaling connection**
   - Connect to matchbox signaling server
-  - Peer connection establishment
+  - WebRTC peer connection establishment
+  - ICE candidate exchange
+  - Connection timeout handling
   - TODO [needs clarification]: Matchmaking handled by platform service
 
 - [ ] **Implement netplay session management**
-  - Host/join game flow via platform
-  - Connection quality display
-  - Disconnect handling
+  - Host/join game flow via platform deep links
+  - Connection quality display (ping bars)
+  - Disconnect handling (return to library)
+  - Session cleanup on exit
 
 - [ ] **Implement local network testing**
   - Multiple instances on same machine via localhost
-  - Connect via 127.0.0.1:port for testing
+  - Connect via `127.0.0.1:port` for local testing
+  - Debug mode: disable matchbox, use direct connections
 
 - [ ] **Add input delay configuration**
-  - Local input delay setting
+  - Local input delay setting (0-10 frames)
   - Frame delay vs rollback tradeoff UI
+  - Persist per-game or globally
 
 - [ ] **Performance optimization**
-  - State serialization optimization
-  - Render batching
-  - Memory pooling
+  - State serialization optimization (avoid allocations)
+  - Render batching (minimize state changes)
+  - Memory pooling for rollback buffers
+  - Profile and optimize hot paths
 
 ### Phase 6: Emberware Z Examples
 
 - [ ] **Create `triangle` example**
-  - Demonstrates `draw_triangle` (immediate mode 3D)
-  - Spinning colored triangle
-  - Shows transform stack usage (`transform_rotate`)
-  - Minimal no_std WASM game
+  - Minimal no_std WASM game demonstrating:
+    - `draw_triangles()` (immediate mode 3D)
+    - Vertex format: POS_COLOR (format 2)
+    - Transform stack: `transform_rotate()` for spinning
+    - Game lifecycle: init/update/render
+  - ~50 lines of Rust code
 
 - [ ] **Create `textured-quad` example**
-  - Demonstrates `load_texture` and `texture_bind`
-  - Embed PNG via `include_bytes!()`, decode, upload
-  - Draw textured sprite with `draw_sprite`
-  - Shows texture coordinates and color tinting
+  - Demonstrates texture loading and 2D drawing:
+    - `include_bytes!()` for embedded PNG
+    - PNG decoding (minipng or similar)
+    - `load_texture()` and `texture_bind()`
+    - `draw_sprite()` for 2D rendering
+    - `set_color()` for tinting
 
 - [ ] **Create `cube` example**
-  - Demonstrates `load_mesh_indexed` and `draw_mesh` (retained mode)
-  - Load cube vertices/indices in `init()`
-  - Draw by handle in `render()`
-  - Camera setup with `camera_set` and `camera_fov`
-  - Interactive rotation via analog stick input
+  - Demonstrates retained mode 3D:
+    - `load_mesh_indexed()` in init()
+    - `draw_mesh()` in render()
+    - Vertex format: POS_UV_NORMAL (format 5)
+    - Camera setup: `camera_set()`, `camera_fov()`
+    - Interactive rotation via analog stick
+    - Mode 0 with normals (simple Lambert)
 
 - [ ] **Create `lighting` example**
-  - Demonstrates render modes 1-3 (Matcap, PBR-lite, Hybrid)
-  - Toggle between modes with button press
-  - Show material properties (metallic, roughness, emissive)
-  - Dynamic light positioning
+  - Demonstrates all render modes (0-3):
+    - Toggle between modes with button press
+    - Mode 0: Unlit/Lambert
+    - Mode 1: Matcap (load 3 matcap textures)
+    - Mode 2: PBR with 4 lights
+    - Mode 3: Hybrid (1 light + matcap ambient)
+    - Material properties: `material_metallic()`, `material_roughness()`, `material_emissive()`
+    - Dynamic light positioning
+    - `set_sky()` for procedural sky
 
 - [ ] **Create `skinned-mesh` example**
-  - Demonstrates GPU skinning with `FORMAT_SKINNED`
-  - Load skinned mesh with bone indices/weights in `init()`
-  - Simple bone hierarchy (e.g., arm with 3 bones)
-  - Animate bones on CPU each frame (sine wave for demo)
-  - Upload bone matrices with `set_bones()`
-  - Shows workflow: CPU animation → GPU skinning
+  - Demonstrates GPU skinning:
+    - Load skinned mesh with FORMAT_SKINNED | FORMAT_UV | FORMAT_NORMAL
+    - Simple bone hierarchy (e.g., arm with 3 bones)
+    - CPU-side bone animation (sine wave for demo)
+    - `set_bones()` to upload bone matrices each frame
+    - Shows workflow: CPU animation → GPU skinning
+
+- [ ] **Create `billboard` example**
+  - Demonstrates billboard drawing:
+    - `draw_billboard()` with different modes (1-4)
+    - Sprite-based character (cylindrical Y)
+    - Particle system (spherical)
+    - Tree/foliage sprites (cylindrical Y)
+    - Comparison of billboard modes side-by-side
 
 - [ ] **Create `platformer` example**
-  - Full mini-game demonstrating multiple Z features
-  - Textured sprites for player/enemies
-  - Simple physics and collision
-  - Multiple players with analog stick input
-  - Background and foreground layers
+  - Full mini-game demonstrating multiple Z features:
+    - 2D gameplay using 3D renderer
+    - Textured sprites for player/enemies
+    - Billboarded sprites in 3D space
+    - Simple physics and collision (AABB)
+    - Multiple players with analog stick input
+    - 2D UI overlay with `draw_text()`, `draw_rect()`
+    - Sky background with `set_sky()`
+    - Demonstrates rollback-safe game state
+
+### Phase 7: Testing & Documentation
+
+- [ ] **Create unit tests for core framework**
+  - WASM loading and execution tests
+  - FFI function binding tests
+  - Input serialization tests (bytemuck roundtrip)
+  - State save/load tests
+
+- [ ] **Create integration tests**
+  - Full game lifecycle test (init → update → render)
+  - Rollback simulation test (save → modify → load → verify)
+  - Multi-player input synchronization test
+  - Resource limit enforcement test (RAM/VRAM)
+
+- [ ] **Create graphics tests**
+  - Shader compilation tests (all 40 shaders)
+  - Vertex format stride validation
+  - Texture loading and binding tests
+  - Render state switching tests
+
+- [ ] **Update documentation**
+  - Ensure docs/ffi.md matches implementation
+  - Ensure docs/emberware-z.md matches implementation
+  - Add troubleshooting section
+  - Add performance tips section
+  - API versioning documentation
+
+- [ ] **Create developer guide**
+  - Getting started tutorial
+  - Best practices for rollback-safe code
+  - Asset pipeline recommendations
+  - Debugging tips
 
 ---
 

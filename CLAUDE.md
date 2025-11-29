@@ -225,6 +225,8 @@ fn sample_sky(direction: vec3<f32>) -> vec3<f32> {
 }
 ```
 
+**Default:** All zeros (black sky, no sun, no lighting). Call `set_sky()` in `init()` to enable lighting.
+
 Used for: background rendering, environment reflections, ambient lighting.
 
 **Mode-specific fragment shader logic:**
