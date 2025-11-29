@@ -272,3 +272,416 @@ impl<C: Console> Runtime<C> {
         self.audio.as_mut()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytemuck::{Pod, Zeroable};
+    use std::sync::Arc;
+    use wasmtime::Linker;
+    use winit::window::Window;
+
+    use crate::console::{ConsoleSpecs, Graphics, RawInput, SoundHandle};
+    use crate::wasm::{GameInstance, GameState, WasmEngine};
+
+    // ============================================================================
+    // Test Console Implementation
+    // ============================================================================
+
+    /// Test console for unit tests
+    struct TestConsole;
+
+    /// Test graphics backend (no-op)
+    struct TestGraphics;
+
+    impl Graphics for TestGraphics {
+        fn resize(&mut self, _width: u32, _height: u32) {}
+        fn begin_frame(&mut self) {}
+        fn end_frame(&mut self) {}
+    }
+
+    /// Test audio backend (no-op)
+    struct TestAudio {
+        rollback_mode: bool,
+    }
+
+    impl crate::console::Audio for TestAudio {
+        fn play(&mut self, _handle: SoundHandle, _volume: f32, _looping: bool) {}
+        fn stop(&mut self, _handle: SoundHandle) {}
+        fn set_rollback_mode(&mut self, rolling_back: bool) {
+            self.rollback_mode = rolling_back;
+        }
+    }
+
+    /// Test input type
+    #[repr(C)]
+    #[derive(Clone, Copy, Default, PartialEq, Debug)]
+    struct TestInput {
+        buttons: u16,
+    }
+
+    unsafe impl Pod for TestInput {}
+    unsafe impl Zeroable for TestInput {}
+    impl crate::console::ConsoleInput for TestInput {}
+
+    impl Console for TestConsole {
+        type Graphics = TestGraphics;
+        type Audio = TestAudio;
+        type Input = TestInput;
+
+        fn name(&self) -> &'static str {
+            "Test Console"
+        }
+
+        fn specs(&self) -> &ConsoleSpecs {
+            static SPECS: ConsoleSpecs = ConsoleSpecs {
+                name: "Test Console",
+                resolutions: &[(320, 240), (640, 480)],
+                default_resolution: 0,
+                tick_rates: &[30, 60],
+                default_tick_rate: 1,
+                ram_limit: 1024 * 1024,
+                vram_limit: 512 * 1024,
+                rom_limit: 512 * 1024,
+                cpu_budget_us: 4000,
+            };
+            &SPECS
+        }
+
+        fn register_ffi(&self, _linker: &mut Linker<GameState>) -> Result<()> {
+            Ok(())
+        }
+
+        fn create_graphics(&self, _window: Arc<Window>) -> Result<Self::Graphics> {
+            Ok(TestGraphics)
+        }
+
+        fn create_audio(&self) -> Result<Self::Audio> {
+            Ok(TestAudio { rollback_mode: false })
+        }
+
+        fn map_input(&self, raw: &RawInput) -> Self::Input {
+            let mut buttons = 0u16;
+            if raw.button_a {
+                buttons |= 1;
+            }
+            if raw.button_b {
+                buttons |= 2;
+            }
+            TestInput { buttons }
+        }
+    }
+
+    // ============================================================================
+    // RuntimeConfig Tests
+    // ============================================================================
+
+    #[test]
+    fn test_runtime_config_default() {
+        let config = RuntimeConfig::default();
+        assert_eq!(config.tick_rate, 60);
+        assert_eq!(config.max_delta, std::time::Duration::from_millis(100));
+        assert_eq!(config.cpu_budget, std::time::Duration::from_micros(4000));
+    }
+
+    // ============================================================================
+    // Runtime Creation Tests
+    // ============================================================================
+
+    #[test]
+    fn test_runtime_new() {
+        let console = TestConsole;
+        let runtime = Runtime::new(console);
+
+        assert_eq!(runtime.tick_rate(), 60);
+        assert!(runtime.game().is_none());
+        assert!(runtime.session().is_none());
+        assert!(runtime.audio().is_none());
+    }
+
+    #[test]
+    fn test_runtime_console_access() {
+        let console = TestConsole;
+        let runtime = Runtime::new(console);
+
+        assert_eq!(runtime.console().name(), "Test Console");
+    }
+
+    #[test]
+    fn test_runtime_set_tick_rate() {
+        let console = TestConsole;
+        let mut runtime = Runtime::new(console);
+
+        runtime.set_tick_rate(30);
+        assert_eq!(runtime.tick_rate(), 30);
+
+        runtime.set_tick_rate(120);
+        assert_eq!(runtime.tick_rate(), 120);
+    }
+
+    // ============================================================================
+    // Game Loading Tests
+    // ============================================================================
+
+    #[test]
+    fn test_runtime_load_game() {
+        let console = TestConsole;
+        let mut runtime = Runtime::new(console);
+
+        let engine = WasmEngine::new().unwrap();
+        let wasm = wat::parse_str(r#"
+            (module
+                (memory (export "memory") 1)
+            )
+        "#).unwrap();
+        let module = engine.load_module(&wasm).unwrap();
+        let linker = Linker::new(engine.engine());
+        let game = GameInstance::new(&engine, &module, &linker).unwrap();
+
+        runtime.load_game(game);
+        assert!(runtime.game().is_some());
+    }
+
+    #[test]
+    fn test_runtime_init_game() {
+        let console = TestConsole;
+        let mut runtime = Runtime::new(console);
+
+        let engine = WasmEngine::new().unwrap();
+        let wasm = wat::parse_str(r#"
+            (module
+                (memory (export "memory") 1)
+                (func (export "init"))
+            )
+        "#).unwrap();
+        let module = engine.load_module(&wasm).unwrap();
+        let linker = Linker::new(engine.engine());
+        let game = GameInstance::new(&engine, &module, &linker).unwrap();
+
+        runtime.load_game(game);
+        let result = runtime.init_game();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_runtime_init_no_game() {
+        let console = TestConsole;
+        let mut runtime = Runtime::new(console);
+
+        // Should succeed even with no game loaded
+        let result = runtime.init_game();
+        assert!(result.is_ok());
+    }
+
+    // ============================================================================
+    // Session Tests
+    // ============================================================================
+
+    #[test]
+    fn test_runtime_set_session() {
+        let console = TestConsole;
+        let mut runtime = Runtime::<TestConsole>::new(console);
+
+        let session = crate::rollback::RollbackSession::new_local(2);
+        runtime.set_session(session);
+
+        assert!(runtime.session().is_some());
+        assert_eq!(runtime.session().unwrap().local_players().len(), 2);
+    }
+
+    #[test]
+    fn test_runtime_session_mut() {
+        let console = TestConsole;
+        let mut runtime = Runtime::<TestConsole>::new(console);
+
+        let session = crate::rollback::RollbackSession::new_local(2);
+        runtime.set_session(session);
+
+        // Verify mutable access
+        assert!(runtime.session_mut().is_some());
+    }
+
+    // ============================================================================
+    // Audio Tests
+    // ============================================================================
+
+    #[test]
+    fn test_runtime_set_audio() {
+        let console = TestConsole;
+        let mut runtime = Runtime::new(console);
+
+        let audio = TestAudio { rollback_mode: false };
+        runtime.set_audio(audio);
+
+        assert!(runtime.audio().is_some());
+    }
+
+    #[test]
+    fn test_runtime_audio_mut() {
+        let console = TestConsole;
+        let mut runtime = Runtime::new(console);
+
+        let audio = TestAudio { rollback_mode: false };
+        runtime.set_audio(audio);
+
+        // Verify mutable access
+        assert!(runtime.audio_mut().is_some());
+    }
+
+    // ============================================================================
+    // Render Tests
+    // ============================================================================
+
+    #[test]
+    fn test_runtime_render_no_game() {
+        let console = TestConsole;
+        let mut runtime = Runtime::new(console);
+
+        // Should succeed with no game
+        let result = runtime.render();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_runtime_render_with_game() {
+        let console = TestConsole;
+        let mut runtime = Runtime::new(console);
+
+        let engine = WasmEngine::new().unwrap();
+        let wasm = wat::parse_str(r#"
+            (module
+                (memory (export "memory") 1)
+                (func (export "render"))
+            )
+        "#).unwrap();
+        let module = engine.load_module(&wasm).unwrap();
+        let linker = Linker::new(engine.engine());
+        let game = GameInstance::new(&engine, &module, &linker).unwrap();
+
+        runtime.load_game(game);
+        let result = runtime.render();
+        assert!(result.is_ok());
+    }
+
+    // ============================================================================
+    // Input Tests
+    // ============================================================================
+
+    #[test]
+    fn test_runtime_add_local_input_no_session() {
+        let console = TestConsole;
+        let mut runtime = Runtime::<TestConsole>::new(console);
+
+        // Should succeed even without a session
+        let result = runtime.add_local_input(0, TestInput { buttons: 0 });
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_runtime_add_local_input_with_session() {
+        let console = TestConsole;
+        let mut runtime = Runtime::<TestConsole>::new(console);
+
+        let session = crate::rollback::RollbackSession::new_local(2);
+        runtime.set_session(session);
+
+        // Local sessions don't use GGRS input, so this should succeed
+        let result = runtime.add_local_input(0, TestInput { buttons: 1 });
+        assert!(result.is_ok());
+    }
+
+    // ============================================================================
+    // Session Events Tests
+    // ============================================================================
+
+    #[test]
+    fn test_runtime_handle_session_events_no_session() {
+        let console = TestConsole;
+        let mut runtime = Runtime::<TestConsole>::new(console);
+
+        let events = runtime.handle_session_events();
+        assert!(events.is_empty());
+    }
+
+    #[test]
+    fn test_runtime_handle_session_events_local_session() {
+        let console = TestConsole;
+        let mut runtime = Runtime::<TestConsole>::new(console);
+
+        let session = crate::rollback::RollbackSession::new_local(2);
+        runtime.set_session(session);
+
+        // Local sessions don't produce events
+        let events = runtime.handle_session_events();
+        assert!(events.is_empty());
+    }
+
+    // ============================================================================
+    // Poll Remote Clients Tests
+    // ============================================================================
+
+    #[test]
+    fn test_runtime_poll_remote_clients_no_session() {
+        let console = TestConsole;
+        let mut runtime = Runtime::<TestConsole>::new(console);
+
+        // Should not panic
+        runtime.poll_remote_clients();
+    }
+
+    #[test]
+    fn test_runtime_poll_remote_clients_local_session() {
+        let console = TestConsole;
+        let mut runtime = Runtime::<TestConsole>::new(console);
+
+        let session = crate::rollback::RollbackSession::new_local(2);
+        runtime.set_session(session);
+
+        // Should not panic (no-op for local sessions)
+        runtime.poll_remote_clients();
+    }
+
+    // ============================================================================
+    // Test Console Implementation Tests
+    // ============================================================================
+
+    #[test]
+    fn test_console_specs() {
+        let console = TestConsole;
+        let specs = console.specs();
+
+        assert_eq!(specs.name, "Test Console");
+        assert_eq!(specs.resolutions.len(), 2);
+        assert_eq!(specs.tick_rates.len(), 2);
+        assert_eq!(specs.ram_limit, 1024 * 1024);
+    }
+
+    #[test]
+    fn test_console_map_input() {
+        let console = TestConsole;
+
+        let raw = RawInput {
+            button_a: true,
+            button_b: false,
+            ..Default::default()
+        };
+        let input = console.map_input(&raw);
+        assert_eq!(input.buttons, 1);
+
+        let raw = RawInput {
+            button_a: false,
+            button_b: true,
+            ..Default::default()
+        };
+        let input = console.map_input(&raw);
+        assert_eq!(input.buttons, 2);
+
+        let raw = RawInput {
+            button_a: true,
+            button_b: true,
+            ..Default::default()
+        };
+        let input = console.map_input(&raw);
+        assert_eq!(input.buttons, 3);
+    }
+}

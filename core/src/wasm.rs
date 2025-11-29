@@ -660,3 +660,806 @@ impl GameInstance {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::f32::consts::PI;
+
+    // ============================================================================
+    // WasmEngine Tests
+    // ============================================================================
+
+    #[test]
+    fn test_wasm_engine_creation() {
+        let engine = WasmEngine::new();
+        assert!(engine.is_ok());
+    }
+
+    #[test]
+    fn test_wasm_engine_default() {
+        // Default should not panic
+        let _engine = WasmEngine::default();
+    }
+
+    #[test]
+    fn test_wasm_engine_load_invalid_module() {
+        let engine = WasmEngine::new().unwrap();
+        let result = engine.load_module(b"not valid wasm");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_wasm_engine_load_valid_module() {
+        let engine = WasmEngine::new().unwrap();
+        // Minimal valid WASM module (empty module)
+        let wasm = wat::parse_str("(module)").unwrap();
+        let result = engine.load_module(&wasm);
+        assert!(result.is_ok());
+    }
+
+    // ============================================================================
+    // GameState Tests
+    // ============================================================================
+
+    #[test]
+    fn test_game_state_new() {
+        let state = GameState::new();
+        assert!(state.memory.is_none());
+        assert_eq!(state.tick_count, 0);
+        assert_eq!(state.elapsed_time, 0.0);
+        assert_eq!(state.delta_time, 0.0);
+        assert_eq!(state.player_count, 1);
+        assert_eq!(state.local_player_mask, 1);
+        assert!(state.in_init);
+        assert!(state.transform_stack.is_empty());
+        assert_eq!(state.current_transform, Mat4::IDENTITY);
+        assert!(!state.quit_requested);
+        assert_eq!(state.next_texture_handle, 1);
+        assert_eq!(state.next_mesh_handle, 1);
+    }
+
+    #[test]
+    fn test_game_state_default() {
+        let state1 = GameState::new();
+        let state2 = GameState::default();
+        // Both should have same initial values
+        assert_eq!(state1.tick_count, state2.tick_count);
+        assert_eq!(state1.player_count, state2.player_count);
+    }
+
+    #[test]
+    fn test_game_state_transform_stack_capacity() {
+        let state = GameState::new();
+        assert!(state.transform_stack.capacity() >= MAX_TRANSFORM_STACK);
+    }
+
+    // ============================================================================
+    // CameraState Tests
+    // ============================================================================
+
+    #[test]
+    fn test_camera_state_default() {
+        let camera = CameraState::default();
+        assert_eq!(camera.position, Vec3::new(0.0, 0.0, 5.0));
+        assert_eq!(camera.target, Vec3::ZERO);
+        assert_eq!(camera.fov, DEFAULT_CAMERA_FOV);
+        assert_eq!(camera.near, 0.1);
+        assert_eq!(camera.far, 1000.0);
+    }
+
+    #[test]
+    fn test_camera_state_view_matrix_identity_position() {
+        let camera = CameraState {
+            position: Vec3::new(0.0, 0.0, 1.0),
+            target: Vec3::ZERO,
+            ..Default::default()
+        };
+        let view = camera.view_matrix();
+        // View matrix should transform world origin to be in front of camera
+        let world_origin = Vec3::ZERO;
+        let view_space = view.transform_point3(world_origin);
+        // Origin should be at z=-1 in view space (1 unit in front of camera)
+        assert!((view_space.z - (-1.0)).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_camera_state_view_matrix_translation() {
+        let camera = CameraState {
+            position: Vec3::new(10.0, 0.0, 0.0),
+            target: Vec3::ZERO,
+            ..Default::default()
+        };
+        let view = camera.view_matrix();
+        // Target should be transformed to be in front of camera
+        let target_view_space = view.transform_point3(camera.target);
+        // Target should be at negative Z (in front of camera)
+        assert!(target_view_space.z < 0.0);
+    }
+
+    #[test]
+    fn test_camera_state_projection_matrix_aspect_ratio() {
+        let camera = CameraState::default();
+        let proj_16_9 = camera.projection_matrix(16.0 / 9.0);
+        let proj_4_3 = camera.projection_matrix(4.0 / 3.0);
+        // Different aspect ratios should produce different matrices
+        assert_ne!(proj_16_9, proj_4_3);
+    }
+
+    #[test]
+    fn test_camera_state_projection_matrix_fov() {
+        let camera_narrow = CameraState {
+            fov: 45.0,
+            ..Default::default()
+        };
+        let camera_wide = CameraState {
+            fov: 90.0,
+            ..Default::default()
+        };
+        let proj_narrow = camera_narrow.projection_matrix(1.0);
+        let proj_wide = camera_wide.projection_matrix(1.0);
+        // Different FOV should produce different matrices
+        assert_ne!(proj_narrow, proj_wide);
+    }
+
+    #[test]
+    fn test_camera_state_view_projection_matrix() {
+        let camera = CameraState::default();
+        let aspect = 16.0 / 9.0;
+        let vp = camera.view_projection_matrix(aspect);
+        let expected = camera.projection_matrix(aspect) * camera.view_matrix();
+        assert_eq!(vp, expected);
+    }
+
+    // ============================================================================
+    // InputState Tests
+    // ============================================================================
+
+    #[test]
+    fn test_input_state_default() {
+        let input = InputState::default();
+        assert_eq!(input.buttons, 0);
+        assert_eq!(input.left_stick_x, 0);
+        assert_eq!(input.left_stick_y, 0);
+        assert_eq!(input.right_stick_x, 0);
+        assert_eq!(input.right_stick_y, 0);
+        assert_eq!(input.left_trigger, 0);
+        assert_eq!(input.right_trigger, 0);
+    }
+
+    #[test]
+    fn test_input_state_full_values() {
+        let input = InputState {
+            buttons: 0xFFFF,
+            left_stick_x: 127,
+            left_stick_y: -128,
+            right_stick_x: 100,
+            right_stick_y: -100,
+            left_trigger: 255,
+            right_trigger: 128,
+        };
+        assert_eq!(input.buttons, 0xFFFF);
+        assert_eq!(input.left_stick_x, 127);
+        assert_eq!(input.left_stick_y, -128);
+        assert_eq!(input.right_trigger, 128);
+    }
+
+    #[test]
+    fn test_input_state_bytemuck_roundtrip() {
+        let original = InputState {
+            buttons: 0x1234,
+            left_stick_x: 50,
+            left_stick_y: -75,
+            right_stick_x: 25,
+            right_stick_y: -25,
+            left_trigger: 200,
+            right_trigger: 100,
+        };
+
+        // InputState should be Copy + Clone
+        let copied = original;
+        assert_eq!(copied.buttons, original.buttons);
+        assert_eq!(copied.left_stick_x, original.left_stick_x);
+        assert_eq!(copied.left_trigger, original.left_trigger);
+    }
+
+    // ============================================================================
+    // RenderState Tests
+    // ============================================================================
+
+    #[test]
+    fn test_render_state_default() {
+        let state = RenderState::default();
+        assert_eq!(state.color, 0xFFFFFFFF); // White, fully opaque
+        assert!(state.depth_test);
+        assert_eq!(state.cull_mode, 1); // Back-face culling
+        assert_eq!(state.blend_mode, 0); // No blending
+        assert_eq!(state.texture_filter, 0); // Nearest
+        assert_eq!(state.bound_textures, [0; 4]);
+        assert_eq!(state.render_mode, 0); // Unlit
+        assert_eq!(state.material_metallic, 0.0);
+        assert_eq!(state.material_roughness, 0.5);
+        assert_eq!(state.material_emissive, 0.0);
+        assert_eq!(state.bone_count, 0);
+        assert!(state.bone_matrices.is_empty());
+    }
+
+    #[test]
+    fn test_render_state_lights_default() {
+        let state = RenderState::default();
+        for light in &state.lights {
+            assert!(!light.enabled);
+            assert_eq!(light.color, [1.0, 1.0, 1.0]);
+            assert_eq!(light.intensity, 1.0);
+        }
+    }
+
+    // ============================================================================
+    // LightState Tests
+    // ============================================================================
+
+    #[test]
+    fn test_light_state_default() {
+        let light = LightState::default();
+        assert!(!light.enabled);
+        assert_eq!(light.direction, [0.0, -1.0, 0.0]);
+        assert_eq!(light.color, [1.0, 1.0, 1.0]);
+        assert_eq!(light.intensity, 1.0);
+    }
+
+    // ============================================================================
+    // InitConfig Tests
+    // ============================================================================
+
+    #[test]
+    fn test_init_config_default() {
+        let config = InitConfig::default();
+        assert_eq!(config.resolution_index, 1); // 540p
+        assert_eq!(config.tick_rate_index, 2); // 60fps
+        assert_eq!(config.clear_color, 0x000000FF); // Black, opaque
+        assert_eq!(config.render_mode, 0); // Unlit
+        assert!(!config.modified);
+    }
+
+    // ============================================================================
+    // PendingTexture Tests
+    // ============================================================================
+
+    #[test]
+    fn test_pending_texture() {
+        let texture = PendingTexture {
+            handle: 1,
+            width: 64,
+            height: 64,
+            data: vec![0xFF; 64 * 64 * 4],
+        };
+        assert_eq!(texture.handle, 1);
+        assert_eq!(texture.width, 64);
+        assert_eq!(texture.height, 64);
+        assert_eq!(texture.data.len(), 64 * 64 * 4);
+    }
+
+    // ============================================================================
+    // PendingMesh Tests
+    // ============================================================================
+
+    #[test]
+    fn test_pending_mesh_non_indexed() {
+        let mesh = PendingMesh {
+            handle: 1,
+            format: 0, // POS only
+            vertex_data: vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+            index_data: None,
+        };
+        assert_eq!(mesh.handle, 1);
+        assert_eq!(mesh.format, 0);
+        assert_eq!(mesh.vertex_data.len(), 9); // 3 vertices * 3 floats
+        assert!(mesh.index_data.is_none());
+    }
+
+    #[test]
+    fn test_pending_mesh_indexed() {
+        let mesh = PendingMesh {
+            handle: 2,
+            format: 1, // POS_UV
+            vertex_data: vec![
+                0.0, 0.0, 0.0, 0.0, 0.0, // v0: pos + uv
+                1.0, 0.0, 0.0, 1.0, 0.0, // v1: pos + uv
+                0.0, 1.0, 0.0, 0.0, 1.0, // v2: pos + uv
+            ],
+            index_data: Some(vec![0, 1, 2]),
+        };
+        assert_eq!(mesh.handle, 2);
+        assert_eq!(mesh.format, 1);
+        assert_eq!(mesh.vertex_data.len(), 15); // 3 vertices * 5 floats
+        assert_eq!(mesh.index_data, Some(vec![0, 1, 2]));
+    }
+
+    // ============================================================================
+    // DrawCommand Tests
+    // ============================================================================
+
+    #[test]
+    fn test_draw_command_triangles() {
+        let cmd = DrawCommand::DrawTriangles {
+            format: 2,
+            vertex_data: vec![0.0; 24], // 3 verts * 6 floats (pos + color)
+            transform: Mat4::IDENTITY,
+            color: 0xFFFFFFFF,
+            depth_test: true,
+            cull_mode: 1,
+            blend_mode: 0,
+            bound_textures: [0; 4],
+        };
+        match cmd {
+            DrawCommand::DrawTriangles { format, .. } => assert_eq!(format, 2),
+            _ => panic!("Expected DrawTriangles"),
+        }
+    }
+
+    #[test]
+    fn test_draw_command_mesh() {
+        let cmd = DrawCommand::DrawMesh {
+            handle: 5,
+            transform: Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0)),
+            color: 0xFF0000FF,
+            depth_test: false,
+            cull_mode: 0,
+            blend_mode: 1,
+            bound_textures: [1, 0, 0, 0],
+        };
+        match cmd {
+            DrawCommand::DrawMesh { handle, depth_test, .. } => {
+                assert_eq!(handle, 5);
+                assert!(!depth_test);
+            }
+            _ => panic!("Expected DrawMesh"),
+        }
+    }
+
+    #[test]
+    fn test_draw_command_billboard() {
+        let cmd = DrawCommand::DrawBillboard {
+            width: 2.0,
+            height: 3.0,
+            mode: 1, // Spherical
+            uv_rect: Some((0.0, 0.0, 0.5, 0.5)),
+            transform: Mat4::IDENTITY,
+            color: 0xFFFFFFFF,
+            depth_test: true,
+            cull_mode: 0,
+            blend_mode: 1,
+            bound_textures: [1, 0, 0, 0],
+        };
+        match cmd {
+            DrawCommand::DrawBillboard { width, height, mode, uv_rect, .. } => {
+                assert_eq!(width, 2.0);
+                assert_eq!(height, 3.0);
+                assert_eq!(mode, 1);
+                assert_eq!(uv_rect, Some((0.0, 0.0, 0.5, 0.5)));
+            }
+            _ => panic!("Expected DrawBillboard"),
+        }
+    }
+
+    #[test]
+    fn test_draw_command_sprite() {
+        let cmd = DrawCommand::DrawSprite {
+            x: 100.0,
+            y: 50.0,
+            width: 64.0,
+            height: 64.0,
+            uv_rect: None,
+            origin: Some((32.0, 32.0)),
+            rotation: 45.0,
+            color: 0xFFFFFFFF,
+            blend_mode: 1,
+            bound_textures: [1, 0, 0, 0],
+        };
+        match cmd {
+            DrawCommand::DrawSprite { x, y, rotation, origin, .. } => {
+                assert_eq!(x, 100.0);
+                assert_eq!(y, 50.0);
+                assert_eq!(rotation, 45.0);
+                assert_eq!(origin, Some((32.0, 32.0)));
+            }
+            _ => panic!("Expected DrawSprite"),
+        }
+    }
+
+    #[test]
+    fn test_draw_command_rect() {
+        let cmd = DrawCommand::DrawRect {
+            x: 0.0,
+            y: 0.0,
+            width: 100.0,
+            height: 50.0,
+            color: 0x00FF00FF,
+            blend_mode: 0,
+        };
+        match cmd {
+            DrawCommand::DrawRect { width, height, color, .. } => {
+                assert_eq!(width, 100.0);
+                assert_eq!(height, 50.0);
+                assert_eq!(color, 0x00FF00FF);
+            }
+            _ => panic!("Expected DrawRect"),
+        }
+    }
+
+    #[test]
+    fn test_draw_command_text() {
+        let cmd = DrawCommand::DrawText {
+            text: "Hello World".to_string(),
+            x: 10.0,
+            y: 20.0,
+            size: 16.0,
+            color: 0xFFFFFFFF,
+            blend_mode: 1,
+        };
+        match cmd {
+            DrawCommand::DrawText { text, size, .. } => {
+                assert_eq!(text, "Hello World");
+                assert_eq!(size, 16.0);
+            }
+            _ => panic!("Expected DrawText"),
+        }
+    }
+
+    #[test]
+    fn test_draw_command_set_sky() {
+        let cmd = DrawCommand::SetSky {
+            horizon_color: [0.5, 0.7, 1.0],
+            zenith_color: [0.1, 0.2, 0.8],
+            sun_direction: [0.5, 0.5, 0.5],
+            sun_color: [1.0, 0.9, 0.8],
+            sun_sharpness: 64.0,
+        };
+        match cmd {
+            DrawCommand::SetSky { horizon_color, sun_sharpness, .. } => {
+                assert_eq!(horizon_color, [0.5, 0.7, 1.0]);
+                assert_eq!(sun_sharpness, 64.0);
+            }
+            _ => panic!("Expected SetSky"),
+        }
+    }
+
+    // ============================================================================
+    // GameInstance Integration Tests (require WASM modules)
+    // ============================================================================
+
+    #[test]
+    fn test_game_instance_creation_empty_module() {
+        let engine = WasmEngine::new().unwrap();
+        let wasm = wat::parse_str(r#"
+            (module
+                (memory (export "memory") 1)
+            )
+        "#).unwrap();
+        let module = engine.load_module(&wasm).unwrap();
+        let linker = Linker::new(engine.engine());
+
+        let result = GameInstance::new(&engine, &module, &linker);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_game_instance_with_init_function() {
+        let engine = WasmEngine::new().unwrap();
+        let wasm = wat::parse_str(r#"
+            (module
+                (memory (export "memory") 1)
+                (func (export "init"))
+            )
+        "#).unwrap();
+        let module = engine.load_module(&wasm).unwrap();
+        let linker = Linker::new(engine.engine());
+
+        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let result = game.init();
+        assert!(result.is_ok());
+        // in_init should be false after init completes
+        assert!(!game.state().in_init);
+    }
+
+    #[test]
+    fn test_game_instance_with_update_function() {
+        let engine = WasmEngine::new().unwrap();
+        let wasm = wat::parse_str(r#"
+            (module
+                (memory (export "memory") 1)
+                (func (export "update"))
+            )
+        "#).unwrap();
+        let module = engine.load_module(&wasm).unwrap();
+        let linker = Linker::new(engine.engine());
+
+        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let delta = 1.0 / 60.0;
+        let result = game.update(delta);
+        assert!(result.is_ok());
+        assert_eq!(game.state().tick_count, 1);
+        assert!((game.state().delta_time - delta).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_game_instance_update_increments_tick() {
+        let engine = WasmEngine::new().unwrap();
+        let wasm = wat::parse_str(r#"
+            (module
+                (memory (export "memory") 1)
+                (func (export "update"))
+            )
+        "#).unwrap();
+        let module = engine.load_module(&wasm).unwrap();
+        let linker = Linker::new(engine.engine());
+
+        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+
+        for i in 1..=5 {
+            game.update(1.0 / 60.0).unwrap();
+            assert_eq!(game.state().tick_count, i);
+        }
+    }
+
+    #[test]
+    fn test_game_instance_update_accumulates_elapsed_time() {
+        let engine = WasmEngine::new().unwrap();
+        let wasm = wat::parse_str(r#"
+            (module
+                (memory (export "memory") 1)
+                (func (export "update"))
+            )
+        "#).unwrap();
+        let module = engine.load_module(&wasm).unwrap();
+        let linker = Linker::new(engine.engine());
+
+        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let delta = 0.016; // ~60fps
+
+        game.update(delta).unwrap();
+        game.update(delta).unwrap();
+        game.update(delta).unwrap();
+
+        assert!((game.state().elapsed_time - delta * 3.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_game_instance_with_render_function() {
+        let engine = WasmEngine::new().unwrap();
+        let wasm = wat::parse_str(r#"
+            (module
+                (memory (export "memory") 1)
+                (func (export "render"))
+            )
+        "#).unwrap();
+        let module = engine.load_module(&wasm).unwrap();
+        let linker = Linker::new(engine.engine());
+
+        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let result = game.render();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_game_instance_set_input() {
+        let engine = WasmEngine::new().unwrap();
+        let wasm = wat::parse_str(r#"
+            (module
+                (memory (export "memory") 1)
+            )
+        "#).unwrap();
+        let module = engine.load_module(&wasm).unwrap();
+        let linker = Linker::new(engine.engine());
+
+        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+
+        let input = InputState {
+            buttons: 0x00FF,
+            left_stick_x: 100,
+            left_stick_y: -50,
+            right_stick_x: 25,
+            right_stick_y: -25,
+            left_trigger: 200,
+            right_trigger: 100,
+        };
+
+        game.set_input(0, input);
+        assert_eq!(game.state().input_curr[0].buttons, 0x00FF);
+        assert_eq!(game.state().input_curr[0].left_stick_x, 100);
+        assert_eq!(game.state().input_curr[0].left_trigger, 200);
+    }
+
+    #[test]
+    fn test_game_instance_set_input_invalid_player() {
+        let engine = WasmEngine::new().unwrap();
+        let wasm = wat::parse_str(r#"
+            (module
+                (memory (export "memory") 1)
+            )
+        "#).unwrap();
+        let module = engine.load_module(&wasm).unwrap();
+        let linker = Linker::new(engine.engine());
+
+        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+
+        // Should not panic for invalid player index
+        game.set_input(10, InputState::default());
+    }
+
+    #[test]
+    fn test_game_instance_input_rotation() {
+        let engine = WasmEngine::new().unwrap();
+        let wasm = wat::parse_str(r#"
+            (module
+                (memory (export "memory") 1)
+                (func (export "update"))
+            )
+        "#).unwrap();
+        let module = engine.load_module(&wasm).unwrap();
+        let linker = Linker::new(engine.engine());
+
+        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+
+        // Set input for player 0
+        let input1 = InputState {
+            buttons: 0x0001,
+            ..Default::default()
+        };
+        game.set_input(0, input1);
+
+        // Call update (which rotates input_prev = input_curr)
+        game.update(1.0 / 60.0).unwrap();
+
+        // Previous should now have our input
+        assert_eq!(game.state().input_prev[0].buttons, 0x0001);
+
+        // Set new input
+        let input2 = InputState {
+            buttons: 0x0002,
+            ..Default::default()
+        };
+        game.set_input(0, input2);
+
+        // Current should have new input
+        assert_eq!(game.state().input_curr[0].buttons, 0x0002);
+    }
+
+    #[test]
+    fn test_game_instance_store_access() {
+        let engine = WasmEngine::new().unwrap();
+        let wasm = wat::parse_str(r#"
+            (module
+                (memory (export "memory") 1)
+            )
+        "#).unwrap();
+        let module = engine.load_module(&wasm).unwrap();
+        let linker = Linker::new(engine.engine());
+
+        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+
+        // Test mutable access
+        game.state_mut().player_count = 4;
+        assert_eq!(game.state().player_count, 4);
+
+        // Test store access
+        let _store = game.store();
+        let _store_mut = game.store_mut();
+    }
+
+    #[test]
+    fn test_game_instance_save_state_no_function() {
+        let engine = WasmEngine::new().unwrap();
+        let wasm = wat::parse_str(r#"
+            (module
+                (memory (export "memory") 1)
+            )
+        "#).unwrap();
+        let module = engine.load_module(&wasm).unwrap();
+        let linker = Linker::new(engine.engine());
+
+        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut buffer = vec![0u8; 1024];
+
+        // Should return Ok(0) when save_state is not exported
+        let result = game.save_state(&mut buffer);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 0);
+    }
+
+    #[test]
+    fn test_game_instance_load_state_no_function() {
+        let engine = WasmEngine::new().unwrap();
+        let wasm = wat::parse_str(r#"
+            (module
+                (memory (export "memory") 1)
+            )
+        "#).unwrap();
+        let module = engine.load_module(&wasm).unwrap();
+        let linker = Linker::new(engine.engine());
+
+        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+
+        // Should return Ok when load_state is not exported
+        let result = game.load_state(&[1, 2, 3, 4]);
+        assert!(result.is_ok());
+    }
+
+    // ============================================================================
+    // Transform Matrix Tests
+    // ============================================================================
+
+    #[test]
+    fn test_transform_identity() {
+        let transform = Mat4::IDENTITY;
+        let point = Vec3::new(1.0, 2.0, 3.0);
+        let transformed = transform.transform_point3(point);
+        assert_eq!(transformed, point);
+    }
+
+    #[test]
+    fn test_transform_translation() {
+        let transform = Mat4::from_translation(Vec3::new(10.0, 20.0, 30.0));
+        let point = Vec3::ZERO;
+        let transformed = transform.transform_point3(point);
+        assert!((transformed.x - 10.0).abs() < 0.0001);
+        assert!((transformed.y - 20.0).abs() < 0.0001);
+        assert!((transformed.z - 30.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_transform_scale() {
+        let transform = Mat4::from_scale(Vec3::new(2.0, 3.0, 4.0));
+        let point = Vec3::new(1.0, 1.0, 1.0);
+        let transformed = transform.transform_point3(point);
+        assert!((transformed.x - 2.0).abs() < 0.0001);
+        assert!((transformed.y - 3.0).abs() < 0.0001);
+        assert!((transformed.z - 4.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_transform_rotation_90_deg_y() {
+        let transform = Mat4::from_rotation_y(PI / 2.0);
+        let point = Vec3::new(1.0, 0.0, 0.0);
+        let transformed = transform.transform_point3(point);
+        // Rotating (1, 0, 0) 90° around Y should give (0, 0, -1)
+        assert!(transformed.x.abs() < 0.0001);
+        assert!(transformed.y.abs() < 0.0001);
+        assert!((transformed.z - (-1.0)).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_transform_combination() {
+        // Scale, then rotate, then translate
+        let scale = Mat4::from_scale(Vec3::splat(2.0));
+        let rotate = Mat4::from_rotation_z(PI / 2.0);
+        let translate = Mat4::from_translation(Vec3::new(5.0, 0.0, 0.0));
+
+        // Combined transform (applied right-to-left)
+        let transform = translate * rotate * scale;
+
+        let point = Vec3::new(1.0, 0.0, 0.0);
+        let transformed = transform.transform_point3(point);
+
+        // (1, 0, 0) * 2 = (2, 0, 0)
+        // Rotate 90° Z: (0, 2, 0)
+        // Translate: (5, 2, 0)
+        assert!((transformed.x - 5.0).abs() < 0.0001);
+        assert!((transformed.y - 2.0).abs() < 0.0001);
+        assert!(transformed.z.abs() < 0.0001);
+    }
+
+    // ============================================================================
+    // Constants Tests
+    // ============================================================================
+
+    #[test]
+    fn test_constants() {
+        assert_eq!(MAX_TRANSFORM_STACK, 16);
+        assert_eq!(MAX_PLAYERS, 4);
+        assert_eq!(DEFAULT_CAMERA_FOV, 60.0);
+        assert_eq!(MAX_SAVE_SLOTS, 8);
+        assert_eq!(MAX_SAVE_SIZE, 64 * 1024);
+        assert_eq!(MAX_BONES, 256);
+    }
+}

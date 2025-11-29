@@ -269,12 +269,6 @@ The `Runtime<C: Console>` handles:
 
 ### Phase 7: Testing & Documentation
 
-- **Create unit tests for core framework**
-  - WASM loading and execution tests
-  - FFI function binding tests
-  - Input serialization tests (bytemuck roundtrip)
-  - State save/load tests
-
 - **Create integration tests**
   - Full game lifecycle test (init → update → render)
   - Rollback simulation test (save → modify → load → verify)
@@ -308,6 +302,29 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **Create unit tests for core framework (Phase 7)**
+  - Added wat dev-dependency for test WASM module parsing
+  - **wasm.rs**: 48 tests for WASM loading, GameState, CameraState, InputState, DrawCommand, transforms
+    - `test_wasm_engine_*` - Engine creation and module loading
+    - `test_game_state_*` - GameState initialization and defaults
+    - `test_camera_state_*` - View/projection matrix calculations
+    - `test_input_state_*` - Input serialization roundtrips
+    - `test_render_state_*` - Render state defaults
+    - `test_draw_command_*` - All DrawCommand variants
+    - `test_game_instance_*` - WASM game lifecycle (init, update, render)
+    - `test_transform_*` - Matrix math verification
+  - **ffi.rs**: 17 tests for FFI registration and bindings
+    - `test_register_common_ffi` - FFI function registration
+    - `test_ffi_with_wasm_module` - FFI imports work from WASM
+    - `test_ffi_random_from_wasm` - RNG callable from WASM
+    - `test_ffi_quit_from_wasm` - Quit callable from WASM
+    - `test_rng_*` - RNG determinism and edge cases
+    - `test_save_data_*` - Save slot management
+  - **runtime.rs**: 21 tests for Runtime and Console trait
+    - `test_runtime_*` - Runtime creation, game loading, session management
+    - `test_console_*` - Console trait implementation tests
+  - Total: 108 tests (from 26 baseline) - all passing
 
 - **Create shader compilation tests (all 40 shaders) (Phase 7)**
   - Added naga as dev-dependency for WGSL parsing and validation

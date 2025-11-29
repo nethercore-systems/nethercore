@@ -38,3 +38,7 @@ log = "0.4"
 # Random number generation (deterministic)
 rand = "0.8"
 rand_pcg = "0.3"
+
+[dev-dependencies]
+# WAT text format parser for test WASM modules
+wat = "1"
