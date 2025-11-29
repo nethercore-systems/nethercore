@@ -497,6 +497,13 @@ The `Runtime<C: Console>` handles:
 
 ## Done
 
+- **Implement billboard drawing (Phase 3.10)**
+  - `draw_billboard(w, h, mode, color)` — draw billboard at current transform
+  - `draw_billboard_region(w, h, src_x, src_y, src_w, src_h, mode, color)` — with UV region
+  - Billboard modes: 1=spherical, 2=cylindrical Y, 3=cylindrical X, 4=cylindrical Z
+  - DrawBillboard command added to DrawCommand enum
+  - FFI functions registered and implemented with validation
+
 - **Implement Mesh FFI functions (Phase 3.7)**
   - `load_mesh(data_ptr, vertex_count, format) -> u32` — non-indexed mesh
   - `load_mesh_indexed(data_ptr, vertex_count, index_ptr, index_count, format) -> u32`

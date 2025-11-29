@@ -75,6 +75,29 @@ pub enum DrawCommand {
         blend_mode: u8,
         bound_textures: [u32; 4],
     },
+    /// Draw a billboard (camera-facing quad)
+    DrawBillboard {
+        /// Billboard width
+        width: f32,
+        /// Billboard height
+        height: f32,
+        /// Billboard mode (1=spherical, 2=cylindrical Y, 3=cylindrical X, 4=cylindrical Z)
+        mode: u8,
+        /// Source UV rectangle (x, y, w, h) - None for full texture (0,0,1,1)
+        uv_rect: Option<(f32, f32, f32, f32)>,
+        /// World position from transform
+        transform: Mat4,
+        /// Color tint
+        color: u32,
+        /// Depth test enabled
+        depth_test: bool,
+        /// Cull mode
+        cull_mode: u8,
+        /// Blend mode
+        blend_mode: u8,
+        /// Bound textures
+        bound_textures: [u32; 4],
+    },
 }
 
 /// Shared WASM engine (one per application)

@@ -70,6 +70,10 @@ pub fn register_z_ffi(linker: &mut Linker<GameState>) -> Result<()> {
     linker.func_wrap("env", "draw_triangles", draw_triangles)?;
     linker.func_wrap("env", "draw_triangles_indexed", draw_triangles_indexed)?;
 
+    // Billboard drawing
+    linker.func_wrap("env", "draw_billboard", draw_billboard)?;
+    linker.func_wrap("env", "draw_billboard_region", draw_billboard_region)?;
+
     Ok(())
 }
 
@@ -1426,6 +1430,95 @@ fn draw_triangles_indexed(
         index_data,
         transform: state.current_transform,
         color: state.render_state.color,
+        depth_test: state.render_state.depth_test,
+        cull_mode: state.render_state.cull_mode,
+        blend_mode: state.render_state.blend_mode,
+        bound_textures: state.render_state.bound_textures,
+    });
+}
+
+// ============================================================================
+// Billboard Drawing
+// ============================================================================
+
+/// Draw a billboard (camera-facing quad) with full texture
+///
+/// # Arguments
+/// * `w` — Billboard width in world units
+/// * `h` — Billboard height in world units
+/// * `mode` — Billboard mode (1=spherical, 2=cylindrical Y, 3=cylindrical X, 4=cylindrical Z)
+/// * `color` — Color tint (0xRRGGBBAA)
+///
+/// The billboard is positioned at the current transform origin and always faces the camera.
+/// Modes:
+/// - 1 (spherical): Faces camera completely (rotates on all axes)
+/// - 2 (cylindrical Y): Rotates around Y axis only (stays upright)
+/// - 3 (cylindrical X): Rotates around X axis only
+/// - 4 (cylindrical Z): Rotates around Z axis only
+fn draw_billboard(mut caller: Caller<'_, GameState>, w: f32, h: f32, mode: u32, color: u32) {
+    // Validate mode
+    if mode < 1 || mode > 4 {
+        warn!("draw_billboard: invalid mode {} (must be 1-4)", mode);
+        return;
+    }
+
+    let state = caller.data_mut();
+
+    // Record billboard draw command
+    state.draw_commands.push(DrawCommand::DrawBillboard {
+        width: w,
+        height: h,
+        mode: mode as u8,
+        uv_rect: None, // Full texture (0,0,1,1)
+        transform: state.current_transform,
+        color,
+        depth_test: state.render_state.depth_test,
+        cull_mode: state.render_state.cull_mode,
+        blend_mode: state.render_state.blend_mode,
+        bound_textures: state.render_state.bound_textures,
+    });
+}
+
+/// Draw a billboard with a UV region from the texture
+///
+/// # Arguments
+/// * `w` — Billboard width in world units
+/// * `h` — Billboard height in world units
+/// * `src_x` — Source texture X coordinate (0.0-1.0)
+/// * `src_y` — Source texture Y coordinate (0.0-1.0)
+/// * `src_w` — Source texture width (0.0-1.0)
+/// * `src_h` — Source texture height (0.0-1.0)
+/// * `mode` — Billboard mode (1=spherical, 2=cylindrical Y, 3=cylindrical X, 4=cylindrical Z)
+/// * `color` — Color tint (0xRRGGBBAA)
+///
+/// This allows drawing a region of a sprite sheet as a billboard.
+fn draw_billboard_region(
+    mut caller: Caller<'_, GameState>,
+    w: f32,
+    h: f32,
+    src_x: f32,
+    src_y: f32,
+    src_w: f32,
+    src_h: f32,
+    mode: u32,
+    color: u32,
+) {
+    // Validate mode
+    if mode < 1 || mode > 4 {
+        warn!("draw_billboard_region: invalid mode {} (must be 1-4)", mode);
+        return;
+    }
+
+    let state = caller.data_mut();
+
+    // Record billboard draw command with UV region
+    state.draw_commands.push(DrawCommand::DrawBillboard {
+        width: w,
+        height: h,
+        mode: mode as u8,
+        uv_rect: Some((src_x, src_y, src_w, src_h)),
+        transform: state.current_transform,
+        color,
         depth_test: state.render_state.depth_test,
         cull_mode: state.render_state.cull_mode,
         blend_mode: state.render_state.blend_mode,
