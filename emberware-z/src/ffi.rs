@@ -94,6 +94,16 @@ pub fn register_z_ffi(linker: &mut Linker<GameState>) -> Result<()> {
     linker.func_wrap("env", "material_roughness", material_roughness)?;
     linker.func_wrap("env", "material_emissive", material_emissive)?;
 
+    // Mode 2 (PBR) lighting functions
+    linker.func_wrap("env", "light_set", light_set)?;
+    linker.func_wrap("env", "light_color", light_color)?;
+    linker.func_wrap("env", "light_intensity", light_intensity)?;
+    linker.func_wrap("env", "light_disable", light_disable)?;
+
+    // Mode 3 (Hybrid) lighting functions
+    // Note: Mode 3 uses the same FFI functions as Mode 2 but conventionally only uses light 0
+    // The shader in Mode 3 uses light 0 as the single directional light
+
     Ok(())
 }
 
@@ -1922,6 +1932,135 @@ fn material_emissive(mut caller: Caller<'_, GameState>, value: f32) {
     } else {
         state.render_state.material_emissive = value;
     }
+}
+
+// ============================================================================
+// Mode 2 (PBR) Lighting Functions
+// ============================================================================
+
+/// Set light parameters (position/direction)
+///
+/// # Arguments
+/// * `index` — Light index (0-3)
+/// * `x` — Direction X component (will be normalized)
+/// * `y` — Direction Y component (will be normalized)
+/// * `z` — Direction Z component (will be normalized)
+///
+/// This function sets the light direction and enables the light.
+/// The direction vector will be automatically normalized by the graphics backend.
+/// For Mode 2 (PBR), all lights are directional.
+/// Use `light_color()` and `light_intensity()` to set color and brightness.
+fn light_set(mut caller: Caller<'_, GameState>, index: u32, x: f32, y: f32, z: f32) {
+    // Validate index
+    if index > 3 {
+        warn!("light_set: invalid light index {} (must be 0-3)", index);
+        return;
+    }
+
+    // Validate direction vector (warn if zero-length)
+    let len_sq = x * x + y * y + z * z;
+    if len_sq < 1e-10 {
+        warn!("light_set: zero-length direction vector, using default (0, -1, 0)");
+        let state = caller.data_mut();
+        state.render_state.lights[index as usize].direction = [0.0, -1.0, 0.0];
+        state.render_state.lights[index as usize].enabled = true;
+        return;
+    }
+
+    let state = caller.data_mut();
+    let light = &mut state.render_state.lights[index as usize];
+
+    // Set direction (will be normalized by graphics backend) and enable
+    light.direction = [x, y, z];
+    light.enabled = true;
+}
+
+/// Set light color
+///
+/// # Arguments
+/// * `index` — Light index (0-3)
+/// * `r` — Red component (0.0-1.0+, can be > 1.0 for HDR-like effects)
+/// * `g` — Green component (0.0-1.0+)
+/// * `b` — Blue component (0.0-1.0+)
+///
+/// Sets the color for a light.
+/// Colors can exceed 1.0 for brighter lights (HDR-like effects).
+/// Negative values are clamped to 0.0.
+fn light_color(mut caller: Caller<'_, GameState>, index: u32, r: f32, g: f32, b: f32) {
+    // Validate index
+    if index > 3 {
+        warn!("light_color: invalid light index {} (must be 0-3)", index);
+        return;
+    }
+
+    // Validate color values (allow > 1.0 for HDR effects, but clamp negative to 0.0)
+    let r = if r < 0.0 {
+        warn!("light_color: negative red value {}, clamping to 0.0", r);
+        0.0
+    } else {
+        r
+    };
+    let g = if g < 0.0 {
+        warn!("light_color: negative green value {}, clamping to 0.0", g);
+        0.0
+    } else {
+        g
+    };
+    let b = if b < 0.0 {
+        warn!("light_color: negative blue value {}, clamping to 0.0", b);
+        0.0
+    } else {
+        b
+    };
+
+    let state = caller.data_mut();
+    state.render_state.lights[index as usize].color = [r, g, b];
+}
+
+/// Set light intensity multiplier
+///
+/// # Arguments
+/// * `index` — Light index (0-3)
+/// * `intensity` — Intensity multiplier (typically 0.0-10.0, but no upper limit)
+///
+/// Sets the intensity multiplier for a light. The final light contribution is color × intensity.
+/// Negative values are clamped to 0.0.
+fn light_intensity(mut caller: Caller<'_, GameState>, index: u32, intensity: f32) {
+    // Validate index
+    if index > 3 {
+        warn!("light_intensity: invalid light index {} (must be 0-3)", index);
+        return;
+    }
+
+    // Validate intensity (allow > 1.0, but clamp negative to 0.0)
+    let intensity = if intensity < 0.0 {
+        warn!("light_intensity: negative intensity {}, clamping to 0.0", intensity);
+        0.0
+    } else {
+        intensity
+    };
+
+    let state = caller.data_mut();
+    state.render_state.lights[index as usize].intensity = intensity;
+}
+
+/// Disable a light
+///
+/// # Arguments
+/// * `index` — Light index (0-3)
+///
+/// Disables a light so it no longer contributes to the scene.
+/// Useful for toggling lights on/off dynamically.
+/// The light's direction, color, and intensity are preserved and can be re-enabled later.
+fn light_disable(mut caller: Caller<'_, GameState>, index: u32) {
+    // Validate index
+    if index > 3 {
+        warn!("light_disable: invalid light index {} (must be 0-3)", index);
+        return;
+    }
+
+    let state = caller.data_mut();
+    state.render_state.lights[index as usize].enabled = false;
 }
 
 #[cfg(test)]

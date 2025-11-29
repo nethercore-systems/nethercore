@@ -159,19 +159,7 @@ The `Runtime<C: Console>` handles:
 
 #### 3.15 Mode-Specific Lighting FFI
 
-- **Implement Mode 2 (PBR) lighting functions**
-  - `light_set(index, light_type, x, y, z)` — position/direction for light 0-3
-  - `light_color(index, r, g, b)` — set light color (linear RGB)
-  - `light_intensity(index, intensity)` — set light intensity multiplier
-  - `light_disable(index)` — disable light
-  - Light types: 0=ambient, 1=directional, 2=point, 3=spot (TBD)
-  - Light uniform buffer with 4 light slots
-
-- **Implement Mode 3 (Hybrid) lighting functions**
-  - `light_direction(x, y, z)` — single directional light direction
-  - `light_color(r, g, b)` — directional light color (overloaded)
-  - `ambient_color(r, g, b)` — ambient light color
-  - Simpler than Mode 2 (single light + ambient)
+(Moved to In Progress)
 
 #### 3.16 GPU Skinning
 
@@ -385,6 +373,19 @@ The `Runtime<C: Console>` handles:
 ## In Progress
 
 ## Done
+
+- **Implement Mode 2 (PBR) and Mode 3 (Hybrid) lighting functions (Phase 3.15)**
+  - `light_set(index, x, y, z)` — set directional light direction for light 0-3
+  - `light_color(index, r, g, b)` — set light color (linear RGB, supports HDR values > 1.0)
+  - `light_intensity(index, intensity)` — set light intensity multiplier
+  - `light_disable(index)` — disable light
+  - Light state tracked in RenderState (4 light slots)
+  - LightState struct with enabled, direction, color, intensity
+  - All lights are directional (normalized direction vectors)
+  - Mode 2: Uses all 4 lights in shader
+  - Mode 3: Uses light 0 as single directional light (same FFI functions)
+  - FFI validation: index range (0-3), zero-length direction vectors, negative color/intensity values
+  - No light uniform buffer needed yet (will be added when graphics backend processes lights)
 
 - **Implement Mode 1 (Matcap) functions (Phase 3.15)**
   - `matcap_set(slot, texture)` — bind matcap to slot 1-3

@@ -318,6 +318,30 @@ impl Default for GameState {
     }
 }
 
+/// Light state for Mode 2/3 (PBR/Hybrid)
+#[derive(Debug, Clone, Copy)]
+pub struct LightState {
+    /// Light enabled
+    pub enabled: bool,
+    /// Light direction (normalized)
+    pub direction: [f32; 3],
+    /// Light color (RGB, linear)
+    pub color: [f32; 3],
+    /// Light intensity multiplier
+    pub intensity: f32,
+}
+
+impl Default for LightState {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            direction: [0.0, -1.0, 0.0],  // Default: downward
+            color: [1.0, 1.0, 1.0],       // Default: white
+            intensity: 1.0,
+        }
+    }
+}
+
 /// Current render state for batching
 #[derive(Debug, Clone)]
 pub struct RenderState {
@@ -341,6 +365,8 @@ pub struct RenderState {
     pub material_roughness: f32,
     /// Material emissive intensity (default 0.0)
     pub material_emissive: f32,
+    /// Light states for Mode 2/3 (4 lights)
+    pub lights: [LightState; 4],
 }
 
 /// Configuration set during init (immutable after init)
@@ -383,6 +409,7 @@ impl Default for RenderState {
             material_metallic: 0.0,
             material_roughness: 0.5,
             material_emissive: 0.0,
+            lights: [LightState::default(); 4],
         }
     }
 }
