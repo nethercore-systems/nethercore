@@ -103,12 +103,7 @@ The `Runtime<C: Console>` handles:
 
 ### Phase 2: GGRS Rollback Integration
 
-- **Handle GGRS events**
-  - `GGRSRequest::SaveGameState` → serialize WASM state
-  - `GGRSRequest::LoadGameState` → deserialize WASM state
-  - `GGRSRequest::AdvanceFrame` → run `update()` with confirmed inputs
-  - Connection quality events (desync detection, frame advantage warnings)
-  - Audio muting during rollback replay
+(Moved to In Progress)
 
 ### Phase 3: Emberware Z Implementation
 
@@ -331,6 +326,18 @@ The `Runtime<C: Console>` handles:
 (No tasks currently in progress)
 
 ## Done
+
+- **Handle GGRS events (Phase 2)**
+  - Integrated RollbackSession into Runtime game loop
+  - Runtime now owns optional RollbackSession<C::Input> and Audio backend
+  - Added methods: `set_session()`, `set_audio()`, `add_local_input()`, `poll_remote_clients()`, `handle_session_events()`
+  - Modified `frame()` to call `advance_frame()`, `handle_requests()`, and process GGRS requests
+  - `GGRSRequest::SaveGameState` → calls `session.handle_requests()` which saves WASM state via `game.save_state()`
+  - `GGRSRequest::LoadGameState` → calls `session.handle_requests()` which restores WASM state via `game.load_state()`
+  - `GGRSRequest::AdvanceFrame` → executes `game.update()` with confirmed inputs
+  - Audio muting during rollback via `audio.set_rollback_mode(session.is_rolling_back())`
+  - Session events (desync, network interruption, frame advantage warnings) exposed via `handle_session_events()`
+  - All tests passing with no warnings
 
 - **Implement egui integration for library UI (Phase 4)**
   - egui-wgpu renderer setup with wgpu 23 (for egui 0.30 compatibility)
