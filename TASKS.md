@@ -101,6 +101,59 @@ The `Runtime<C: Console>` handles:
 
 ## TODO
 
+### Stability
+
+- **[STABILITY] Fix input not passed to game during rollback** (`core/src/runtime.rs:178`)
+  - Critical: During GGRS rollback, `advance_frame` requests provide confirmed inputs but these are never passed to the game before calling `update()`. Breaks deterministic rollback netcode.
+  - TODO comment exists: "This requires exposing GameState input setters"
+
+- **[STABILITY] Fix potential panic in transform_set()** (`emberware-z/src/ffi.rs:422`)
+  - The `.try_into().expect("slice with incorrect length")` can panic if memory read results in fewer than 16 floats.
+  - Should return early with warning instead of panicking.
+
+- **[STABILITY] Fix gamepad initialization double-panic** (`emberware-z/src/input.rs:132-137`)
+  - After catching first `Gilrs::new()` error and logging it, code retries and immediately unwraps. If second call fails, application panics.
+  - Should gracefully disable gamepad support instead of panicking.
+
+- **[STABILITY] Replace expect() calls in graphics initialization** (`emberware-z/src/graphics.rs:1366,1372,1379`)
+  - Creating fallback textures uses `.expect()` which will panic on GPU resource creation failure.
+  - Should use `?` operator and propagate errors, or create minimal fallback behavior.
+
+- **[STABILITY] Fix WasmEngine::Default panic** (`core/src/wasm.rs:194`)
+  - `Default` implementation panics if WASM engine fails to initialize.
+  - Violates Rust conventions where `Default` should not panic.
+  - Consider removing `Default` impl or documenting the panic.
+
+- **[STABILITY] Implement audio backend** (`emberware-z/src/console.rs:173,177,239`)
+  - `ZAudio::play()`, `ZAudio::stop()`, and `create_audio()` are stubs with TODO comments.
+  - Games can call sound functions but nothing plays.
+
+- **[STABILITY] Remove outdated TODO comment** (`emberware-z/src/console.rs:225-230`)
+  - Comment lists FFI functions as TODO but they are already registered via `crate::ffi::register_z_ffi()`.
+  - Misleading documentation.
+
+- **[STABILITY] Add keyboard mapping serialization** (`emberware-z/src/input.rs:40`)
+  - TODO comment: "Add proper serialization with string-based key names"
+  - Custom key bindings are lost on restart.
+
+- **[STABILITY] Implement settings web link** (`emberware-z/src/app.rs:269`)
+  - TODO: "Open web browser to platform website"
+  - Settings UI doesn't open a web link as intended.
+
+- **[STABILITY] Add comments to dead_code suppressions** (`core/src/runtime.rs:41`, `core/src/wasm.rs:492`)
+  - `#[allow(dead_code)]` on `console` and `instance` fields lack explanation.
+  - Should document they're kept for lifetime management.
+
+- **[STABILITY] Add tests for GPU skinning** (`emberware-z/src/graphics.rs`)
+  - Bone matrix skinning system is untested.
+  - Should add tests for `set_bones()`, skinned vertex format validation.
+
+- **[STABILITY] Add tests for input system** (`emberware-z/src/input.rs`)
+  - `InputManager` and `KeyboardMapping` lack tests for:
+    - Gamepad connection/disconnection edge cases
+    - Deadzone application correctness
+    - Player slot assignment logic
+
 ### Phase 2: GGRS Rollback Integration
 
 (Moved to In Progress)
