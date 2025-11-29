@@ -204,13 +204,7 @@ The `Runtime<C: Console>` handles:
 
 ### Phase 6: Emberware Z Examples
 
-- **Create `triangle` example**
-  - Minimal no_std WASM game demonstrating:
-    - `draw_triangles()` (immediate mode 3D)
-    - Vertex format: POS_COLOR (format 2)
-    - Transform stack: `transform_rotate()` for spinning
-    - Game lifecycle: init/update/render
-  - ~50 lines of Rust code
+- **(Moved to In Progress)** Create `triangle` example
 
 - **Create `textured-quad` example**
   - Demonstrates texture loading and 2D drawing:
@@ -298,6 +292,16 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **Create `triangle` example (Phase 6)**
+  - Minimal no_std WASM game demonstrating:
+    - `draw_triangles()` (immediate mode 3D)
+    - Vertex format: POS_COLOR (format 2)
+    - Transform stack: `transform_rotate()` for spinning
+    - Game lifecycle: init/update/render
+  - ~50 lines of Rust code
+  - Also fixed hello-world example to use correct FFI module ("env" instead of "emberware")
+  - Updated workspace Cargo.toml to exclude examples from workspace
 
 - **Create graphics tests (Phase 7)**
   - **Shader compilation tests (all 40 shaders)**: 15 tests in shader_gen.rs
