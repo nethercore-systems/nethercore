@@ -156,57 +156,6 @@ The `Runtime<C: Console>` handles:
 
 (Moved to In Progress)
 
-#### 3.13 Shader Generation System
-
-- **Implement shader template system**
-  - 4 mode templates: mode0_unlit.wgsl, mode1_matcap.wgsl, mode2_pbr.wgsl, mode3_hybrid.wgsl
-  - Placeholder categories: `//VIN_*`, `//VOUT_*`, `//VS_*`, `//FS_*`
-  - Template replacement function: `generate_shader(template, mode, format)`
-
-- **Generate vertex format permutations**
-  - `//VIN_UV` — UV input struct field
-  - `//VIN_COLOR` — Color input struct field
-  - `//VIN_NORMAL` — Normal input struct field
-  - `//VIN_SKINNED` — Bone indices/weights input fields
-  - `//VOUT_*` — Corresponding output struct fields
-  - `//VS_*` — Vertex shader attribute passing, skinning transform, normal transform
-
-- **Generate Mode 0 (Unlit) shaders**
-  - 16 permutations (all vertex formats)
-  - Without normals: `final = albedo * vertex_color`
-  - With normals: Simple Lambert using sky sun direction
-  - `//FS_UV` — texture sample
-  - `//FS_NORMAL` — Lambert shading: `sky_lambert(normal)`
-
-- **Generate Mode 1 (Matcap) shaders**
-  - 8 permutations (only formats with NORMAL)
-  - Matcap UV from view-space normal: `uv = normal.xy * 0.5 + 0.5`
-  - Multiply matcaps from slots 1-3
-  - Unused slots default to white (1×1 white texture)
-
-- **Generate Mode 2 (PBR-lite) shaders**
-  - 8 permutations (only formats with NORMAL)
-  - GGX specular distribution (D term)
-  - Schlick fresnel approximation (F term)
-  - Energy-conserving Lambert diffuse
-  - MRE texture in slot 1 (R=Metallic, G=Roughness, B=Emissive)
-  - Env matcap in slot 2 multiplies with sky reflection
-  - Up to 4 dynamic lights
-  - Reference: `emberware-z/pbr-lite.wgsl`
-
-- **Generate Mode 3 (Hybrid) shaders**
-  - 8 permutations (only formats with NORMAL)
-  - PBR direct lighting from single directional light
-  - Matcap (slot 3) for ambient/stylized reflections
-  - Env matcap (slot 2) multiplies with sky reflection
-  - Single directional light + ambient color
-
-- **Implement shader compilation and caching**
-  - Compile all 40 shaders at startup (16 + 8 + 8 + 8)
-  - Create render pipelines for each shader
-  - Cache pipelines by (mode, format, blend_mode, depth_test, cull_mode)
-  - Hot-reload shaders in debug builds (optional)
-
 #### 3.14 Procedural Sky System
 
 - **Implement sky uniform buffer**
@@ -472,6 +421,22 @@ The `Runtime<C: Console>` handles:
 ## In Progress
 
 ## Done
+
+- **Implement Shader Generation System (Phase 3.13)**
+  - Created 4 shader mode templates: mode0_unlit.wgsl, mode1_matcap.wgsl, mode2_pbr.wgsl, mode3_hybrid.wgsl
+  - Implemented template placeholder replacement system (`//VIN_*`, `//VOUT_*`, `//VS_*`, `//FS_*`)
+  - Template replacement function: `generate_shader(mode, format)`
+  - Mode 0 (Unlit): 16 shader permutations for all vertex formats
+  - Modes 1-3 (Matcap, PBR, Hybrid): 8 permutations each (formats with NORMAL flag)
+  - Total: 40 shader variations (16 + 8 + 8 + 8)
+  - Shader compilation and caching system
+  - Pipeline cache by (mode, format, blend_mode, depth_test, cull_mode)
+  - Bind group layouts for per-frame uniforms (group 0) and textures (group 1)
+  - Procedural sky system (gradient + sun) integrated in shaders
+  - Simple Lambert shading for Mode 0 with normals
+  - Matcap lighting (Mode 1) with 3 matcap texture slots
+  - PBR-lite (Mode 2): GGX specular, Schlick fresnel, up to 4 dynamic lights
+  - Hybrid mode (Mode 3): PBR direct lighting + matcap ambient
 
 - **Implement 2D Drawing FFI (Phase 3.11)**
   - `draw_sprite(x, y, w, h, color)` — draw bound texture in screen space
