@@ -182,13 +182,6 @@ The `Runtime<C: Console>` handles:
     - WASM panic → return to library with error
     - Network disconnect → return to library
 
-- **Implement keyboard/gamepad input**
-  - Keyboard mapping to virtual controller (configurable)
-  - Gamepad support via gilrs
-  - Multiple local players (keyboard + gamepads)
-  - Input config persistence in config.toml
-  - Deadzone and sensitivity settings
-
 - **Implement debug overlay (console-wide)**
   - FPS counter (update and render rates)
   - Memory usage (RAM/VRAM current and limit)
@@ -338,6 +331,18 @@ The `Runtime<C: Console>` handles:
 (No tasks currently in progress)
 
 ## Done
+
+- **Implement keyboard/gamepad input**
+  - Keyboard mapping to virtual controller (configurable)
+  - Gamepad support via gilrs
+  - Multiple local players (keyboard + gamepads)
+  - Input config persistence in config.toml
+  - Deadzone and sensitivity settings
+  - Created input.rs module with InputManager
+  - Integrated with App event loop
+  - Automatic gamepad detection and player slot assignment
+  - Deadzone application for analog sticks and triggers
+  - All tests passing
 
 - **Implement winit window management (Phase 4)**
   - Window creation with configurable resolution (1920x1080 default)

@@ -12,6 +12,7 @@ use winit::{
 
 use crate::config::{self, Config};
 use crate::graphics::ZGraphics;
+use crate::input::InputManager;
 use emberware_core::console::Graphics;
 
 #[derive(Debug, Clone)]
@@ -44,6 +45,8 @@ pub struct App {
     window: Option<Arc<Window>>,
     /// Graphics backend (initialized after window creation)
     graphics: Option<ZGraphics>,
+    /// Input manager (keyboard + gamepad)
+    input_manager: Option<InputManager>,
     /// Whether the application should exit
     should_exit: bool,
 }
@@ -52,11 +55,16 @@ impl App {
     /// Create a new application instance
     pub fn new(initial_mode: AppMode) -> Self {
         let config = config::load();
+
+        // Initialize input manager
+        let input_manager = Some(InputManager::new(config.input.clone()));
+
         Self {
             mode: initial_mode,
             config,
             window: None,
             graphics: None,
+            input_manager,
             should_exit: false,
         }
     }
@@ -92,29 +100,44 @@ impl App {
 
     /// Handle keyboard input
     fn handle_key_input(&mut self, key_event: KeyEvent) {
-        if key_event.state == ElementState::Pressed {
-            match key_event.physical_key {
-                PhysicalKey::Code(KeyCode::F11) => {
-                    self.toggle_fullscreen();
-                }
-                PhysicalKey::Code(KeyCode::Enter) => {
-                    // Alt+Enter for fullscreen toggle
-                    if key_event.state == ElementState::Pressed {
+        let pressed = key_event.state == ElementState::Pressed;
+
+        // Update input manager with key state
+        if let PhysicalKey::Code(key_code) = key_event.physical_key {
+            if let Some(input_manager) = &mut self.input_manager {
+                input_manager.update_keyboard(key_code, pressed);
+            }
+
+            // Handle special keys
+            if pressed {
+                match key_code {
+                    KeyCode::F11 => {
+                        self.toggle_fullscreen();
+                    }
+                    KeyCode::Enter => {
+                        // Alt+Enter for fullscreen toggle
                         // Note: Alt modifier check would go here
                         // For now, we use F11 as the primary method
                     }
-                }
-                PhysicalKey::Code(KeyCode::Escape) => {
-                    // Return to library when in game
-                    match self.mode {
-                        AppMode::Playing { .. } => {
-                            self.mode = AppMode::Library;
+                    KeyCode::Escape => {
+                        // Return to library when in game
+                        match self.mode {
+                            AppMode::Playing { .. } => {
+                                self.mode = AppMode::Library;
+                            }
+                            _ => {}
                         }
-                        _ => {}
                     }
+                    _ => {}
                 }
-                _ => {}
             }
+        }
+    }
+
+    /// Update input state (call this each frame)
+    fn update_input(&mut self) {
+        if let Some(input_manager) = &mut self.input_manager {
+            input_manager.update();
         }
     }
 }
@@ -196,6 +219,9 @@ impl ApplicationHandler for App {
     }
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+        // Update input state
+        self.update_input();
+
         // Request redraw for continuous rendering
         if let Some(window) = &self.window {
             window.request_redraw();

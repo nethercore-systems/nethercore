@@ -10,6 +10,7 @@ mod download;
 mod ffi;
 mod font;
 mod graphics;
+mod input;
 mod library;
 mod runtime;
 mod shader_gen;

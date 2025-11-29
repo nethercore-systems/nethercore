@@ -3,12 +3,16 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+use crate::input::InputConfig;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     #[serde(default)]
     pub video: VideoConfig,
     #[serde(default)]
     pub audio: AudioConfig,
+    #[serde(default)]
+    pub input: InputConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -36,6 +40,7 @@ impl Default for Config {
         Self {
             video: VideoConfig::default(),
             audio: AudioConfig::default(),
+            input: InputConfig::default(),
         }
     }
 }
