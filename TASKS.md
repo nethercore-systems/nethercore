@@ -165,29 +165,7 @@ The `Runtime<C: Console>` handles:
 
 (Moved to In Progress)
 
-#### 3.17 Built-in Font
-
-- **Create embedded bitmap font**
-  - ASCII + extended Latin characters minimum
-  - Full UTF-8 support for CJK and other scripts (or subset)
-  - Single texture atlas with glyph metrics
-  - Embed via `include_bytes!()` in binary
-
-- **Implement text rendering**
-  - Parse UTF-8 string, look up glyph metrics
-  - Generate quads for each character
-  - Support variable size via scaling
-  - Left-aligned, single line (no word wrap in v1)
-  - TODO [needs clarification]: Custom font loading
-
 ### Phase 4: Application Shell
-
-- **Implement winit window management**
-  - Window creation with configurable resolution
-  - Fullscreen toggle (F11 or Alt+Enter)
-  - Event loop integration
-  - Window resize handling
-  - DPI/scale factor handling
 
 - **Implement egui integration for library UI**
   - egui-wgpu renderer setup
@@ -360,6 +338,17 @@ The `Runtime<C: Console>` handles:
 (No tasks currently in progress)
 
 ## Done
+
+- **Implement winit window management (Phase 4)**
+  - Window creation with configurable resolution (1920x1080 default)
+  - Fullscreen toggle via F11 key
+  - Event loop integration using winit 0.30 ApplicationHandler trait
+  - Window resize handling with graphics backend resize calls
+  - DPI/scale factor change handling
+  - Window close handling with graceful shutdown
+  - Escape key returns to library from game mode
+  - Fullscreen state persistence in config.toml
+  - Integration with ZGraphics backend initialization
 
 - **Implement Built-in Font (Phase 3.17)**
   - Created `font.rs` module with 8x8 monospace bitmap font
