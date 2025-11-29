@@ -103,18 +103,6 @@ The `Runtime<C: Console>` handles:
 
 ### Phase 2: GGRS Rollback Integration
 
-- **Define GGRS config and input types**
-  - `GGRSConfig` implementing `ggrs::Config` trait
-  - Generic input type parameterized by console's `ConsoleInput`
-  - Input serialization for network (bytemuck Pod)
-  - Input delay and frame advantage settings
-
-- **Implement rollback state management**
-  - `save_game_state()` — call WASM `save_state`, store snapshot with checksum
-  - `load_game_state()` — call WASM `load_state`, restore snapshot
-  - State buffer pool for efficient rollback (avoid allocations in hot path)
-  - State compression (optional, for network sync)
-
 - **Integrate GGRS session into runtime**
   - Local session (single player or local multiplayer, no rollback)
   - P2P session with matchbox_socket (WebRTC)
@@ -621,6 +609,18 @@ The `Runtime<C: Console>` handles:
 ## In Progress
 
 ## Done
+
+- **Define GGRS config and input types**
+  - `GGRSConfig` implementing `ggrs::Config` trait
+  - Generic input type parameterized by console's `ConsoleInput`
+  - Input serialization for network (bytemuck Pod)
+  - Input delay and frame advantage settings
+
+- **Implement rollback state management**
+  - `save_game_state()` — call WASM `save_state`, store snapshot with checksum
+  - `load_game_state()` — call WASM `load_state`, restore snapshot
+  - State buffer pool for efficient rollback (avoid allocations in hot path)
+  - State compression (optional, for network sync)
 
 - **Create `core` crate with workspace configuration**
   - Add `core/Cargo.toml` with wasmtime, ggrs, matchbox_socket, winit
