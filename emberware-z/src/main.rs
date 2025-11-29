@@ -11,6 +11,7 @@ mod ffi;
 mod graphics;
 mod library;
 mod runtime;
+mod shader_gen;
 mod ui;
 
 fn main() {

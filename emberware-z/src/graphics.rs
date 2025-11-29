@@ -1011,6 +1011,27 @@ struct TextureEntry {
 }
 
 // ============================================================================
+// Pipeline Cache
+// ============================================================================
+
+/// Key for pipeline cache lookup
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct PipelineKey {
+    render_mode: u8,
+    vertex_format: u8,
+    blend_mode: u8,
+    depth_test: bool,
+    cull_mode: u8,
+}
+
+/// Cached pipeline entry with bind group layouts
+pub(crate) struct PipelineEntry {
+    pub(crate) pipeline: wgpu::RenderPipeline,
+    pub(crate) bind_group_layout_frame: wgpu::BindGroupLayout,
+    pub(crate) bind_group_layout_textures: wgpu::BindGroupLayout,
+}
+
+// ============================================================================
 // ZGraphics
 // ============================================================================
 
@@ -1067,6 +1088,10 @@ pub struct ZGraphics {
     current_transform: Mat4,
     // Transform stack for push/pop
     transform_stack: Vec<Mat4>,
+
+    // Shader and pipeline cache
+    pipelines: HashMap<PipelineKey, PipelineEntry>,
+    current_render_mode: u8,
 }
 
 impl ZGraphics {
@@ -1205,6 +1230,8 @@ impl ZGraphics {
             command_buffer: CommandBuffer::new(),
             current_transform: Mat4::IDENTITY,
             transform_stack: Vec::with_capacity(16),
+            pipelines: HashMap::new(),
+            current_render_mode: 0,  // Default to Mode 0 (Unlit)
         };
 
         // Create fallback textures
@@ -1744,6 +1771,341 @@ impl ZGraphics {
     /// Get current surface dimensions
     pub fn dimensions(&self) -> (u32, u32) {
         (self.config.width, self.config.height)
+    }
+
+    // ========================================================================
+    // Shader Compilation and Pipeline Management
+    // ========================================================================
+
+    /// Set the current render mode (0-3)
+    ///
+    /// This determines which shader templates are used for rendering.
+    /// Must be called in init() before any rendering.
+    pub fn set_render_mode(&mut self, mode: u8) {
+        if mode > 3 {
+            tracing::warn!("Invalid render mode: {}, clamping to 3", mode);
+            self.current_render_mode = 3;
+        } else {
+            self.current_render_mode = mode;
+            tracing::info!("Set render mode to {} ({})", mode, crate::shader_gen::mode_name(mode));
+        }
+    }
+
+    /// Get the current render mode
+    pub fn render_mode(&self) -> u8 {
+        self.current_render_mode
+    }
+
+    /// Get or create a pipeline for the given state
+    ///
+    /// This caches pipelines to avoid recompilation.
+    pub fn get_pipeline(&mut self, format: u8, state: &RenderState) -> &PipelineEntry {
+        let key = PipelineKey {
+            render_mode: self.current_render_mode,
+            vertex_format: format,
+            blend_mode: state.blend_mode as u8,
+            depth_test: state.depth_test,
+            cull_mode: state.cull_mode as u8,
+        };
+
+        // Return existing pipeline if cached
+        if self.pipelines.contains_key(&key) {
+            return &self.pipelines[&key];
+        }
+
+        // Otherwise, create a new pipeline
+        tracing::debug!(
+            "Creating pipeline: mode={}, format={}, blend={:?}, depth={}, cull={:?}",
+            self.current_render_mode,
+            format,
+            state.blend_mode,
+            state.depth_test,
+            state.cull_mode
+        );
+
+        let entry = self.create_pipeline(format, state);
+        self.pipelines.insert(key, entry);
+        &self.pipelines[&key]
+    }
+
+    /// Create a new pipeline for the given vertex format and render state
+    fn create_pipeline(&self, format: u8, state: &RenderState) -> PipelineEntry {
+        use crate::shader_gen::generate_shader;
+
+        // Generate shader source
+        let shader_source = generate_shader(self.current_render_mode, format);
+
+        // Create shader module
+        let shader_module = self.device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some(&format!(
+                "Shader Mode{} Format{}",
+                self.current_render_mode,
+                format
+            )),
+            source: wgpu::ShaderSource::Wgsl(shader_source.into()),
+        });
+
+        // Create bind group layouts
+        let bind_group_layout_frame = self.create_frame_bind_group_layout();
+        let bind_group_layout_textures = self.create_texture_bind_group_layout();
+
+        // Create pipeline layout
+        let pipeline_layout = self.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Pipeline Layout"),
+            bind_group_layouts: &[&bind_group_layout_frame, &bind_group_layout_textures],
+            push_constant_ranges: &[],
+        });
+
+        // Get vertex format info
+        let vertex_info = VertexFormatInfo::for_format(format);
+
+        // Create render pipeline
+        let pipeline = self.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some(&format!("Pipeline Mode{} Format{}", self.current_render_mode, format)),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader_module,
+                entry_point: Some("vs"),
+                buffers: &[vertex_info.vertex_buffer_layout()],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader_module,
+                entry_point: Some("fs"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: self.config.format,
+                    blend: state.blend_mode.to_wgpu(),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: Default::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: state.cull_mode.to_wgpu(),
+                unclipped_depth: false,
+                polygon_mode: wgpu::PolygonMode::Fill,
+                conservative: false,
+            },
+            depth_stencil: if state.depth_test {
+                Some(wgpu::DepthStencilState {
+                    format: wgpu::TextureFormat::Depth32Float,
+                    depth_write_enabled: true,
+                    depth_compare: wgpu::CompareFunction::Less,
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState::default(),
+                })
+            } else {
+                None
+            },
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+            cache: None,
+        });
+
+        PipelineEntry {
+            pipeline,
+            bind_group_layout_frame,
+            bind_group_layout_textures,
+        }
+    }
+
+    /// Create bind group layout for per-frame uniforms (group 0)
+    fn create_frame_bind_group_layout(&self) -> wgpu::BindGroupLayout {
+        // Different modes need different uniforms
+        let bindings = match self.current_render_mode {
+            0 | 1 => {
+                // Mode 0 (Unlit) and Mode 1 (Matcap): Basic uniforms
+                vec![
+                    // View matrix
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Projection matrix
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Sky uniforms
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Material uniforms
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ]
+            }
+            2 | 3 => {
+                // Mode 2 (PBR) and Mode 3 (Hybrid): Additional lighting uniforms
+                vec![
+                    // View matrix
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Projection matrix
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Sky uniforms
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Material uniforms
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Light uniforms
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 4,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Camera position
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 5,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ]
+            }
+            _ => vec![],
+        };
+
+        self.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Frame Bind Group Layout"),
+            entries: &bindings,
+        })
+    }
+
+    /// Create bind group layout for textures (group 1)
+    fn create_texture_bind_group_layout(&self) -> wgpu::BindGroupLayout {
+        self.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Texture Bind Group Layout"),
+            entries: &[
+                // Slot 0: Albedo texture
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                // Slot 1: MRE or Matcap
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                // Slot 2: Environment matcap or Matcap
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                // Slot 3: Matcap (modes 1, 3)
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                // Sampler
+                wgpu::BindGroupLayoutEntry {
+                    binding: 4,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+        })
     }
 }
 
