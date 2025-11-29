@@ -57,3 +57,6 @@ tracing = "0.1"
 tracing-subscriber = "0.3"
 anyhow = "1"
 pollster = "0.4"
+
+[dev-dependencies]
+naga = { version = "23", features = ["wgsl-in"] }

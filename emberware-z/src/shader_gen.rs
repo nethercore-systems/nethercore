@@ -65,17 +65,14 @@ const VS_SKINNED_FINAL_NORMAL: &str = "let final_normal = normalize(skinned_norm
 const VS_POSITION_SKINNED: &str = "let world_pos = vec4<f32>(final_position, 1.0);";
 const VS_POSITION_UNSKINNED: &str = "let world_pos = vec4<f32>(in.position, 1.0);";
 
-// Fragment shader code (Mode 0)
+// Fragment shader code (Mode 0 and Mode 1 - use "color" variable)
 const FS_COLOR: &str = "color *= in.color;";
 const FS_UV: &str = "color *= textureSample(slot0, tex_sampler, in.uv).rgb;";
 const FS_NORMAL: &str = "color *= sky_lambert(in.world_normal);";
 
-// Fragment shader code (Modes 1-3 for MRE texture)
-const FS_MRE: &str = r#"// Sample MRE texture if UV present
-    #ifdef HAS_UV
-    let mre_sample = textureSample(slot1, tex_sampler, in.uv);
-    mre = vec3<f32>(mre_sample.r, mre_sample.g, mre_sample.b);
-    #endif"#;
+// Fragment shader code (Modes 2-3 - use "albedo" variable)
+const FS_ALBEDO_COLOR: &str = "albedo *= in.color;";
+const FS_ALBEDO_UV: &str = "albedo *= textureSample(slot0, tex_sampler, in.uv).rgb;";
 
 // ============================================================================
 // Shader Generation
@@ -161,9 +158,9 @@ pub fn generate_shader(mode: u8, format: u8) -> String {
             shader = shader.replace("//FS_UV", if has_uv { FS_UV } else { "" });
         }
         2 | 3 => {
-            // Mode 2 (PBR) and Mode 3 (Hybrid)
-            shader = shader.replace("//FS_COLOR", if has_color { FS_COLOR } else { "" });
-            shader = shader.replace("//FS_UV", if has_uv { FS_UV } else { "" });
+            // Mode 2 (PBR) and Mode 3 (Hybrid) - use "albedo" variable
+            shader = shader.replace("//FS_COLOR", if has_color { FS_ALBEDO_COLOR } else { "" });
+            shader = shader.replace("//FS_UV", if has_uv { FS_ALBEDO_UV } else { "" });
 
             // MRE texture sampling (conditionally based on UV)
             if has_uv {
@@ -279,5 +276,160 @@ mod tests {
     fn test_total_shader_count() {
         let total: usize = (0..4).map(|m| shader_count_for_mode(m)).sum();
         assert_eq!(total, 40);  // 16 + 8 + 8 + 8 = 40
+    }
+
+    // ========================================================================
+    // Shader Compilation Tests (using naga)
+    // ========================================================================
+
+    /// Helper to compile a WGSL shader and validate it using naga
+    fn compile_and_validate_shader(mode: u8, format: u8) -> Result<(), String> {
+        let shader_source = generate_shader(mode, format);
+
+        // Parse the WGSL source
+        let module = naga::front::wgsl::parse_str(&shader_source)
+            .map_err(|e| format!("WGSL parse error for mode {} format {}: {:?}", mode, format, e))?;
+
+        // Validate the module
+        let mut validator = naga::valid::Validator::new(
+            naga::valid::ValidationFlags::all(),
+            naga::valid::Capabilities::all(),
+        );
+
+        validator.validate(&module)
+            .map_err(|e| format!("Validation error for mode {} format {}: {:?}", mode, format, e))?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_compile_all_40_shaders() {
+        let mut errors = Vec::new();
+
+        // Mode 0: All 16 vertex formats
+        for format in 0u8..16 {
+            if let Err(e) = compile_and_validate_shader(0, format) {
+                errors.push(e);
+            }
+        }
+
+        // Modes 1-3: Only formats with NORMAL flag
+        for mode in 1u8..=3 {
+            for format in valid_formats_for_mode(mode) {
+                if let Err(e) = compile_and_validate_shader(mode, format) {
+                    errors.push(e);
+                }
+            }
+        }
+
+        if !errors.is_empty() {
+            panic!(
+                "Shader compilation failed for {} shaders:\n{}",
+                errors.len(),
+                errors.join("\n")
+            );
+        }
+    }
+
+    #[test]
+    fn test_compile_mode0_all_formats() {
+        for format in 0u8..16 {
+            compile_and_validate_shader(0, format)
+                .unwrap_or_else(|e| panic!("{}", e));
+        }
+    }
+
+    #[test]
+    fn test_compile_mode1_matcap() {
+        for format in valid_formats_for_mode(1) {
+            compile_and_validate_shader(1, format)
+                .unwrap_or_else(|e| panic!("{}", e));
+        }
+    }
+
+    #[test]
+    fn test_compile_mode2_pbr() {
+        for format in valid_formats_for_mode(2) {
+            compile_and_validate_shader(2, format)
+                .unwrap_or_else(|e| panic!("{}", e));
+        }
+    }
+
+    #[test]
+    fn test_compile_mode3_hybrid() {
+        for format in valid_formats_for_mode(3) {
+            compile_and_validate_shader(3, format)
+                .unwrap_or_else(|e| panic!("{}", e));
+        }
+    }
+
+    #[test]
+    fn test_compile_skinned_variants() {
+        // Test all skinned formats (formats 8-15)
+        // Mode 0 supports all skinned formats
+        for format in 8u8..16 {
+            compile_and_validate_shader(0, format)
+                .unwrap_or_else(|e| panic!("{}", e));
+        }
+
+        // Modes 1-3 only support skinned formats with NORMAL (12-15)
+        for mode in 1u8..=3 {
+            for format in [12, 13, 14, 15] {
+                compile_and_validate_shader(mode, format)
+                    .unwrap_or_else(|e| panic!("{}", e));
+            }
+        }
+    }
+
+    #[test]
+    fn test_shader_has_vertex_entry() {
+        for mode in 0u8..=3 {
+            for format in valid_formats_for_mode(mode) {
+                let shader = generate_shader(mode, format);
+                assert!(
+                    shader.contains("fn vs("),
+                    "Mode {} format {} missing vertex entry point 'vs'",
+                    mode, format
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_shader_has_fragment_entry() {
+        for mode in 0u8..=3 {
+            for format in valid_formats_for_mode(mode) {
+                let shader = generate_shader(mode, format);
+                assert!(
+                    shader.contains("fn fs("),
+                    "Mode {} format {} missing fragment entry point 'fs'",
+                    mode, format
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_no_unreplaced_placeholders() {
+        for mode in 0u8..=3 {
+            for format in valid_formats_for_mode(mode) {
+                let shader = generate_shader(mode, format);
+                let placeholders = [
+                    "//VIN_UV", "//VIN_COLOR", "//VIN_NORMAL", "//VIN_SKINNED",
+                    "//VOUT_UV", "//VOUT_COLOR", "//VOUT_NORMAL",
+                    "//VS_UV", "//VS_COLOR", "//VS_NORMAL", "//VS_SKINNED",
+                    "//VS_POSITION",
+                    "//FS_COLOR", "//FS_UV", "//FS_NORMAL", "//FS_MRE",
+                ];
+
+                for placeholder in placeholders {
+                    assert!(
+                        !shader.contains(placeholder),
+                        "Mode {} format {} has unreplaced placeholder '{}'",
+                        mode, format, placeholder
+                    );
+                }
+            }
+        }
     }
 }

@@ -305,7 +305,24 @@ The `Runtime<C: Console>` handles:
 
 (No tasks currently in progress)
 
+---
+
 ## Done
+
+- **Create shader compilation tests (all 40 shaders) (Phase 7)**
+  - Added naga as dev-dependency for WGSL parsing and validation
+  - `compile_and_validate_shader()` helper validates each shader permutation
+  - `test_compile_all_40_shaders` - comprehensive test of all mode/format combinations
+  - `test_compile_mode0_all_formats` - all 16 formats for Mode 0 (Unlit)
+  - `test_compile_mode1_matcap` - 8 formats with NORMAL for Mode 1 (Matcap)
+  - `test_compile_mode2_pbr` - 8 formats with NORMAL for Mode 2 (PBR)
+  - `test_compile_mode3_hybrid` - 8 formats with NORMAL for Mode 3 (Hybrid)
+  - `test_compile_skinned_variants` - all skinned format permutations
+  - `test_shader_has_vertex_entry` - verify `fn vs()` entry point exists
+  - `test_shader_has_fragment_entry` - verify `fn fs()` entry point exists
+  - `test_no_unreplaced_placeholders` - verify all template placeholders replaced
+  - Fixed shader bug: Modes 2/3 used wrong variable name (`color` vs `albedo`)
+  - Added `FS_ALBEDO_COLOR` and `FS_ALBEDO_UV` snippets for PBR/Hybrid modes
 
 - **Implement application state machine (Phase 4)**
   - States: Library → Downloading → Playing → back to Library
