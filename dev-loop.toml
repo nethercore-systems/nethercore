@@ -141,11 +141,11 @@ exit_on_limit = false
 
 [model_tiering]
 # Enable smart model selection based on task complexity (reduces token usage)
-enabled = false
+enabled = true
 
 # Model for simple tasks (docs, typos, config changes)
 # Examples: "haiku", "claude-3-haiku-20240307"
-# simple_model = "haiku"
+simple_model = "sonnet"
 
 # Model for standard tasks (uses default if not set)
 # standard_model = "sonnet"
