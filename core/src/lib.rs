@@ -33,6 +33,8 @@
 
 pub mod console;
 pub mod ffi;
+#[cfg(test)]
+mod integration;
 pub mod rollback;
 pub mod runtime;
 pub mod wasm;

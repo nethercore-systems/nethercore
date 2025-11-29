@@ -303,6 +303,13 @@ The `Runtime<C: Console>` handles:
 
 ## Done
 
+- **Create integration tests (Phase 7)**
+  - Added integration.rs module with 24 comprehensive tests
+  - **Game lifecycle tests**: Full init/update/render flow, minimal games, state persistence
+  - **Rollback simulation tests**: Save/load state, RollbackStateManager, checksum verification, multiple save points
+  - **Multi-player input tests**: Input state rotation, 4-player handling, local player mask, console input mapping
+  - **Resource limit tests**: Console specs, texture/mesh allocation tracking, save slot limits, transform stack limits, rollback state size, player count limits, draw command buffer
+
 - **Create unit tests for core framework (Phase 7)**
   - Added wat dev-dependency for test WASM module parsing
   - **wasm.rs**: 48 tests for WASM loading, GameState, CameraState, InputState, DrawCommand, transforms
