@@ -84,6 +84,16 @@ pub fn register_z_ffi(linker: &mut Linker<GameState>) -> Result<()> {
     // Sky system
     linker.func_wrap("env", "set_sky", set_sky)?;
 
+    // Mode 1 (Matcap) functions
+    linker.func_wrap("env", "matcap_set", matcap_set)?;
+
+    // Material functions
+    linker.func_wrap("env", "material_mre", material_mre)?;
+    linker.func_wrap("env", "material_albedo", material_albedo)?;
+    linker.func_wrap("env", "material_metallic", material_metallic)?;
+    linker.func_wrap("env", "material_roughness", material_roughness)?;
+    linker.func_wrap("env", "material_emissive", material_emissive)?;
+
     Ok(())
 }
 
@@ -1805,6 +1815,113 @@ fn set_sky(
         sun_r, sun_g, sun_b,
         sun_sharpness
     );
+}
+
+// ============================================================================
+// Mode 1 (Matcap) Functions
+// ============================================================================
+
+/// Bind a matcap texture to a slot (Mode 1 only)
+///
+/// # Arguments
+/// * `slot` — Matcap slot (1-3)
+/// * `texture` — Texture handle from load_texture
+///
+/// In Mode 1 (Matcap), slots 1-3 are used for matcap textures that multiply together.
+/// Slot 0 is reserved for albedo texture.
+/// Using this function in other modes is allowed but has no effect.
+fn matcap_set(mut caller: Caller<'_, GameState>, slot: u32, texture: u32) {
+    // Validate slot range (1-3 for matcaps)
+    if slot < 1 || slot > 3 {
+        warn!("matcap_set: invalid slot {} (must be 1-3)", slot);
+        return;
+    }
+
+    let state = caller.data_mut();
+    state.render_state.bound_textures[slot as usize] = texture;
+}
+
+// ============================================================================
+// Material Functions
+// ============================================================================
+
+/// Bind an MRE texture (Metallic-Roughness-Emissive)
+///
+/// # Arguments
+/// * `texture` — Texture handle where R=Metallic, G=Roughness, B=Emissive
+///
+/// Binds to slot 1. Used in Mode 2 (PBR) and Mode 3 (Hybrid).
+/// In Mode 2/3, slot 1 is interpreted as an MRE texture instead of a matcap.
+fn material_mre(mut caller: Caller<'_, GameState>, texture: u32) {
+    let state = caller.data_mut();
+    state.render_state.bound_textures[1] = texture;
+}
+
+/// Bind an albedo texture
+///
+/// # Arguments
+/// * `texture` — Texture handle for the base color/albedo map
+///
+/// Binds to slot 0. This is equivalent to texture_bind(texture) but more semantically clear.
+/// The albedo texture is multiplied with the uniform color and vertex colors.
+fn material_albedo(mut caller: Caller<'_, GameState>, texture: u32) {
+    let state = caller.data_mut();
+    state.render_state.bound_textures[0] = texture;
+}
+
+/// Set the material metallic value
+///
+/// # Arguments
+/// * `value` — Metallic value (0.0 = dielectric, 1.0 = metal)
+///
+/// Used in Mode 2 (PBR) and Mode 3 (Hybrid).
+/// Clamped to 0.0-1.0 range. Default is 0.0 (non-metallic).
+fn material_metallic(mut caller: Caller<'_, GameState>, value: f32) {
+    let state = caller.data_mut();
+    let clamped = value.clamp(0.0, 1.0);
+
+    if (value - clamped).abs() > 0.001 {
+        warn!("material_metallic: value {} out of range, clamped to {}", value, clamped);
+    }
+
+    state.render_state.material_metallic = clamped;
+}
+
+/// Set the material roughness value
+///
+/// # Arguments
+/// * `value` — Roughness value (0.0 = smooth/glossy, 1.0 = rough/matte)
+///
+/// Used in Mode 2 (PBR) and Mode 3 (Hybrid).
+/// Clamped to 0.0-1.0 range. Default is 0.5.
+fn material_roughness(mut caller: Caller<'_, GameState>, value: f32) {
+    let state = caller.data_mut();
+    let clamped = value.clamp(0.0, 1.0);
+
+    if (value - clamped).abs() > 0.001 {
+        warn!("material_roughness: value {} out of range, clamped to {}", value, clamped);
+    }
+
+    state.render_state.material_roughness = clamped;
+}
+
+/// Set the material emissive intensity
+///
+/// # Arguments
+/// * `value` — Emissive intensity (0.0 = no emission, higher = brighter)
+///
+/// Used in Mode 2 (PBR) and Mode 3 (Hybrid).
+/// Values can be greater than 1.0 for HDR-like effects. Default is 0.0.
+fn material_emissive(mut caller: Caller<'_, GameState>, value: f32) {
+    let state = caller.data_mut();
+
+    // No clamping for emissive - allow HDR values
+    if value < 0.0 {
+        warn!("material_emissive: negative value {} not allowed, using 0.0", value);
+        state.render_state.material_emissive = 0.0;
+    } else {
+        state.render_state.material_emissive = value;
+    }
 }
 
 #[cfg(test)]

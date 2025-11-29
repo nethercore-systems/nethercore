@@ -159,10 +159,6 @@ The `Runtime<C: Console>` handles:
 
 #### 3.15 Mode-Specific Lighting FFI
 
-- **Implement Mode 1 (Matcap) functions**
-  - `matcap_set(slot, texture)` — bind matcap to slot 1-3
-  - Validate slot is 1-3, warn otherwise
-
 - **Implement Mode 2 (PBR) lighting functions**
   - `light_set(index, light_type, x, y, z)` — position/direction for light 0-3
   - `light_color(index, r, g, b)` — set light color (linear RGB)
@@ -176,14 +172,6 @@ The `Runtime<C: Console>` handles:
   - `light_color(r, g, b)` — directional light color (overloaded)
   - `ambient_color(r, g, b)` — ambient light color
   - Simpler than Mode 2 (single light + ambient)
-
-- **Implement material functions**
-  - `material_mre(texture)` — bind MRE texture (R=Metallic, G=Roughness, B=Emissive)
-  - `material_albedo(texture)` — bind albedo texture (alternative to slot 0)
-  - `material_metallic(value)` — set metallic (0.0-1.0, default 0.0)
-  - `material_roughness(value)` — set roughness (0.0-1.0, default 0.0)
-  - `material_emissive(value)` — set emissive intensity (default 0.0)
-  - Material uniform buffer
 
 #### 3.16 GPU Skinning
 
@@ -397,6 +385,20 @@ The `Runtime<C: Console>` handles:
 ## In Progress
 
 ## Done
+
+- **Implement Mode 1 (Matcap) functions (Phase 3.15)**
+  - `matcap_set(slot, texture)` — bind matcap to slot 1-3
+  - Validate slot is 1-3, warn otherwise
+  - FFI function registered and implemented
+
+- **Implement material functions (Phase 3.15)**
+  - `material_mre(texture)` — bind MRE texture (R=Metallic, G=Roughness, B=Emissive)
+  - `material_albedo(texture)` — bind albedo texture (alternative to slot 0)
+  - `material_metallic(value)` — set metallic (0.0-1.0, default 0.0)
+  - `material_roughness(value)` — set roughness (0.0-1.0, default 0.5)
+  - `material_emissive(value)` — set emissive intensity (default 0.0)
+  - Material properties added to RenderState struct
+  - All FFI functions registered and implemented with validation
 
 - **Implement Procedural Sky System (Phase 3.14)**
   - Created `SkyUniforms` struct with horizon_color, zenith_color, sun_direction, sun_color, sun_sharpness

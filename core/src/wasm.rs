@@ -335,6 +335,12 @@ pub struct RenderState {
     pub bound_textures: [u32; 4],
     /// Current render mode (0-3)
     pub render_mode: u8,
+    /// Material metallic value (0.0-1.0, default 0.0)
+    pub material_metallic: f32,
+    /// Material roughness value (0.0-1.0, default 0.5)
+    pub material_roughness: f32,
+    /// Material emissive intensity (default 0.0)
+    pub material_emissive: f32,
 }
 
 /// Configuration set during init (immutable after init)
@@ -374,6 +380,9 @@ impl Default for RenderState {
             texture_filter: 0, // Nearest by default (retro look)
             bound_textures: [0; 4],
             render_mode: 0,
+            material_metallic: 0.0,
+            material_roughness: 0.5,
+            material_emissive: 0.0,
         }
     }
 }
