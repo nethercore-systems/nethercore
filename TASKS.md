@@ -100,54 +100,6 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## TODO
-### Phase 1: Core Framework Foundation
-
-- **Define `Console` trait and associated types**
-  - `Console` trait with specs, FFI registration, graphics/audio factory methods
-  - `Graphics` trait for rendering backend abstraction
-  - `Audio` trait for audio backend abstraction
-  - `ConsoleInput` trait with bytemuck requirements for GGRS serialization
-  - `ConsoleSpecs` struct (resolutions, tick rates, RAM/VRAM limits, ROM size)
-
-- **Implement `GameState` for WASM instance**
-  - Wasmtime `Store` data structure containing all per-game state
-  - Memory management with RAM limit enforcement (16MB for Z)
-  - FFI context: graphics command buffer, audio commands, RNG state
-  - Input state for all 4 players
-  - Transform stack (16 matrices deep)
-  - Current render state (color, blend mode, depth test, cull mode, filter)
-
-- **Implement WASM runtime wrapper**
-  - `WasmEngine` — shared wasmtime `Engine` (one per app)
-  - `GameInstance` — loaded game with `Module`, `Instance`, `Store`
-  - Export function bindings: `init()`, `update()`, `render()`
-  - Export function bindings: `save_state(ptr, max_len) -> len`, `load_state(ptr, len)`
-  - Memory access helpers for FFI string/buffer passing
-  - WASM memory bounds checking and validation
-
-- **Implement common FFI host functions**
-  - System functions:
-    - `delta_time() -> f32` — time since last tick
-    - `elapsed_time() -> f32` — total time since game start
-    - `tick_count() -> u64` — current tick number
-    - `log(ptr, len)` — debug output to console
-    - `quit()` — exit to library
-  - Rollback functions:
-    - `random() -> u32` — deterministic seeded RNG (PCG or similar)
-  - Save data functions:
-    - `save(slot, data_ptr, data_len) -> u32` — save to slot (0-7), max 64KB
-    - `load(slot, data_ptr, max_len) -> u32` — load from slot, returns bytes read
-    - `delete(slot) -> u32` — delete save slot
-  - Session functions:
-    - `player_count() -> u32` — number of players (1-4)
-    - `local_player_mask() -> u32` — bitmask of local players
-
-- **Implement game loop orchestration**
-  - Fixed timestep update loop (configurable tick rate: 24, 30, 60, 120)
-  - Variable render rate with interpolation support (uncapped frame rate)
-  - Frame timing and delta time calculation
-  - Update/render separation (render skipped during rollback replay)
-  - CPU budget enforcement (4ms per tick at 60fps, warn on exceed)
 
 ### Phase 2: GGRS Rollback Integration
 
@@ -674,3 +626,131 @@ The `Runtime<C: Console>` handles:
   - Add `core/Cargo.toml` with wasmtime, ggrs, matchbox_socket, winit
   - Update root `Cargo.toml` workspace members
   - Define core module structure: `lib.rs`, `console.rs`, `runtime.rs`, `wasm.rs`, `ffi.rs`, `rollback.rs`
+
+- **Create repository structure**
+  - Root Cargo.toml workspace
+  - README.md with project overview
+  - CLAUDE.md with development instructions
+  - .gitignore and LICENSE
+
+- **Create `shared` crate**
+  - API types: Game, Author, User, Auth responses
+  - Request/response types for platform API
+  - LocalGameManifest for downloaded games
+  - Error types and codes
+
+- **Create `emberware-z` crate skeleton**
+  - Cargo.toml with dependencies
+  - main.rs entry point
+  - app.rs application state
+  - config.rs configuration management
+  - deep_link.rs URL parsing
+  - download.rs ROM fetching
+  - library.rs local game management
+  - ui.rs egui library interface
+  - runtime/mod.rs module declaration (stubs)
+
+- **Create FFI documentation**
+  - docs/ffi.md with complete API reference
+  - All function signatures and examples
+  - Console specs and lifecycle documentation
+
+- **Create hello-world example**
+  - Minimal no_std WASM game
+  - Demonstrates init/update/render lifecycle
+  - Basic input and rendering
+
+- **Initialize git repository and push to GitHub**
+
+- **Define `Console` trait and associated types**
+  - `Console` trait with specs, FFI registration, graphics/audio factory methods
+  - `Graphics` trait for rendering backend abstraction
+  - `Audio` trait for audio backend abstraction
+  - `ConsoleInput` trait with bytemuck requirements for GGRS serialization
+  - `ConsoleSpecs` struct (resolutions, tick rates, RAM/VRAM limits, ROM size)
+
+- **Implement `GameState` for WASM instance**
+  - Wasmtime `Store` data structure containing all per-game state
+  - FFI context: graphics command buffer, audio commands, RNG state
+  - Input state for all 4 players
+  - Transform stack (16 matrices deep)
+  - Current render state (color, blend mode, depth test, cull mode, filter)
+  - Save data slots (8 slots × 64KB max each)
+
+- **Implement WASM runtime wrapper**
+  - `WasmEngine` — shared wasmtime `Engine` (one per app)
+  - `GameInstance` — loaded game with `Module`, `Instance`, `Store`
+  - Export function bindings: `init()`, `update()`, `render()`
+  - Export function bindings: `save_state(ptr, max_len) -> len`, `load_state(ptr, len)`
+  - Memory access helpers for FFI string/buffer passing
+  - WASM memory bounds checking and validation
+
+- **Implement common FFI host functions**
+  - System functions: `delta_time`, `elapsed_time`, `tick_count`, `log`, `quit`
+  - Rollback functions: `random` (deterministic PCG)
+  - Save data functions: `save`, `load`, `delete`
+  - Session functions: `player_count`, `local_player_mask`
+
+- **Implement game loop orchestration**
+  - Fixed timestep update loop (configurable tick rate: 24, 30, 60, 120)
+  - Variable render rate with interpolation support (uncapped frame rate)
+  - Frame timing and delta time calculation
+  - Update/render separation (render skipped during rollback replay)
+  - CPU budget enforcement (4ms per tick at 60fps, warn on exceed)
+
+---
+
+## DEFERRED (Emberware Classic)
+
+These tasks are deferred until Emberware Z is complete. Classic shares the core framework but has its own console implementation.
+
+### Classic Console Implementation
+
+- **Create Emberware Classic `Console` implementation**
+  - Implement `Console` trait for SNES/Genesis aesthetic
+  - Define Classic-specific specs (384×216 default, 60fps, 4MB RAM, 2MB VRAM)
+  - 8 resolution options (4× 16:9 + 4× 4:3, pixel-perfect to 1080p)
+
+- **Implement Classic graphics backend**
+  - `ClassicGraphics` implementing `Graphics` trait
+  - 2D-only rendering pipeline (no 3D transforms)
+  - Sprite layers (4 layers, back-to-front)
+  - Tilemap system (4 layers with parallax scrolling)
+  - Palette swapping (256-color indexed textures)
+
+- **Implement Classic-specific FFI functions**
+  - Textures: `load_texture`, `texture_bind`
+  - Sprites: `draw_sprite`, `draw_sprite_region`, `draw_sprite_ex` (with flip)
+  - Sprite control: `sprite_layer`, `draw_sprite_flipped`
+  - Tilemaps: `tilemap_create`, `tilemap_set_texture`, `tilemap_set_tile`, `tilemap_set_tiles`, `tilemap_scroll`
+  - Palettes: `palette_create`, `palette_bind`
+  - Input: `button_held`, `button_pressed`, `button_released`, `dpad_x`, `dpad_y`
+  - Render state: `blend_mode`, `texture_filter`
+
+### Classic Examples
+
+- **Create `sprites` example (Classic)**
+  - Demonstrates Classic-specific 2D features
+  - Sprite sheets with `draw_sprite_region`
+  - Sprite flipping with `draw_sprite_ex`
+  - Sprite layers and priority
+  - D-pad input for movement
+
+- **Create `tilemap` example (Classic)**
+  - Demonstrates `tilemap_create` and `tilemap_scroll`
+  - Multiple parallax layers
+  - Tile animation via `tilemap_set_tile`
+  - Sprite/tilemap layer interleaving
+
+- **Create `palette-swap` example (Classic)**
+  - Demonstrates `palette_create` and `palette_bind`
+  - Enemy color variants from single sprite
+  - Damage flash effect
+  - Dynamic palette cycling
+
+- **Create `platformer` example (Classic)**
+  - Full mini-game demonstrating Classic features
+  - Tilemap-based levels with scrolling
+  - Animated sprite character
+  - Parallax background layers
+  - 6-button input scheme

@@ -6,7 +6,7 @@
 use anyhow::Result;
 use wasmtime::{Caller, Linker};
 
-use crate::wasm::GameState;
+use crate::wasm::{GameState, MAX_SAVE_SIZE, MAX_SAVE_SLOTS};
 
 /// Register common FFI functions with the linker
 pub fn register_common_ffi(linker: &mut Linker<GameState>) -> Result<()> {
@@ -15,9 +15,15 @@ pub fn register_common_ffi(linker: &mut Linker<GameState>) -> Result<()> {
     linker.func_wrap("env", "elapsed_time", elapsed_time)?;
     linker.func_wrap("env", "tick_count", tick_count)?;
     linker.func_wrap("env", "log", log_message)?;
+    linker.func_wrap("env", "quit", quit)?;
 
     // Rollback functions
     linker.func_wrap("env", "random", random)?;
+
+    // Save data functions
+    linker.func_wrap("env", "save", save)?;
+    linker.func_wrap("env", "load", load)?;
+    linker.func_wrap("env", "delete", delete)?;
 
     // Session functions
     linker.func_wrap("env", "player_count", player_count)?;
@@ -53,6 +59,97 @@ fn log_message(caller: Caller<'_, GameState>, ptr: u32, len: u32) {
             }
         }
     }
+}
+
+/// Request to quit to the library
+fn quit(mut caller: Caller<'_, GameState>) {
+    caller.data_mut().quit_requested = true;
+}
+
+/// Save data to a slot (0-7)
+///
+/// Returns: 0 = success, 1 = invalid slot, 2 = data too large
+fn save(mut caller: Caller<'_, GameState>, slot: u32, data_ptr: u32, data_len: u32) -> u32 {
+    let slot = slot as usize;
+    let data_len = data_len as usize;
+
+    // Validate slot
+    if slot >= MAX_SAVE_SLOTS {
+        return 1;
+    }
+
+    // Validate data size
+    if data_len > MAX_SAVE_SIZE {
+        return 2;
+    }
+
+    // Read data from WASM memory
+    let data = if let Some(memory) = caller.data().memory {
+        let mem_data = memory.data(&caller);
+        let ptr = data_ptr as usize;
+        if ptr + data_len <= mem_data.len() {
+            mem_data[ptr..ptr + data_len].to_vec()
+        } else {
+            return 2; // Invalid memory access
+        }
+    } else {
+        return 2;
+    };
+
+    // Store the data
+    caller.data_mut().save_data[slot] = Some(data);
+    0
+}
+
+/// Load data from a slot (0-7)
+///
+/// Returns: bytes read, or 0 if slot is empty/invalid
+fn load(mut caller: Caller<'_, GameState>, slot: u32, data_ptr: u32, max_len: u32) -> u32 {
+    let slot = slot as usize;
+    let max_len = max_len as usize;
+
+    // Validate slot
+    if slot >= MAX_SAVE_SLOTS {
+        return 0;
+    }
+
+    // Get saved data (clone to avoid borrow issues)
+    let data = match &caller.data().save_data[slot] {
+        Some(d) => d.clone(),
+        None => return 0,
+    };
+
+    // Calculate actual length to copy
+    let copy_len = data.len().min(max_len);
+
+    // Write data to WASM memory
+    if let Some(memory) = caller.data().memory {
+        let mem_data = memory.data_mut(&mut caller);
+        let ptr = data_ptr as usize;
+        if ptr + copy_len <= mem_data.len() {
+            mem_data[ptr..ptr + copy_len].copy_from_slice(&data[..copy_len]);
+            copy_len as u32
+        } else {
+            0
+        }
+    } else {
+        0
+    }
+}
+
+/// Delete data in a slot (0-7)
+///
+/// Returns: 0 = success, 1 = invalid slot
+fn delete(mut caller: Caller<'_, GameState>, slot: u32) -> u32 {
+    let slot = slot as usize;
+
+    // Validate slot
+    if slot >= MAX_SAVE_SLOTS {
+        return 1;
+    }
+
+    caller.data_mut().save_data[slot] = None;
+    0
 }
 
 /// Generate deterministic random u32
@@ -103,5 +200,38 @@ mod tests {
             }
         }
         assert!(matches < 5); // Allow some coincidental matches
+    }
+
+    #[test]
+    fn test_save_data_slots() {
+        let mut state = GameState::new();
+
+        // Initially all slots are empty
+        for slot in 0..MAX_SAVE_SLOTS {
+            assert!(state.save_data[slot].is_none());
+        }
+
+        // Save some data
+        let test_data = vec![1, 2, 3, 4, 5];
+        state.save_data[0] = Some(test_data.clone());
+        assert_eq!(state.save_data[0], Some(test_data.clone()));
+
+        // Other slots still empty
+        for slot in 1..MAX_SAVE_SLOTS {
+            assert!(state.save_data[slot].is_none());
+        }
+
+        // Delete data
+        state.save_data[0] = None;
+        assert!(state.save_data[0].is_none());
+    }
+
+    #[test]
+    fn test_quit_requested() {
+        let mut state = GameState::new();
+        assert!(!state.quit_requested);
+
+        state.quit_requested = true;
+        assert!(state.quit_requested);
     }
 }

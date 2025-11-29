@@ -12,6 +12,12 @@ pub const MAX_TRANSFORM_STACK: usize = 16;
 /// Maximum number of players
 pub const MAX_PLAYERS: usize = 4;
 
+/// Maximum number of save slots
+pub const MAX_SAVE_SLOTS: usize = 8;
+
+/// Maximum save data size per slot (64KB)
+pub const MAX_SAVE_SIZE: usize = 64 * 1024;
+
 /// Shared WASM engine (one per application)
 pub struct WasmEngine {
     engine: Engine,
@@ -82,6 +88,12 @@ pub struct GameState {
     /// Input state for all players (previous and current frame)
     pub input_prev: [InputState; MAX_PLAYERS],
     pub input_curr: [InputState; MAX_PLAYERS],
+
+    /// Save data slots (8 slots × 64KB max each)
+    pub save_data: [Option<Vec<u8>>; MAX_SAVE_SLOTS],
+
+    /// Quit requested by game
+    pub quit_requested: bool,
 }
 
 impl GameState {
@@ -101,6 +113,8 @@ impl GameState {
             render_state: RenderState::default(),
             input_prev: [InputState::default(); MAX_PLAYERS],
             input_curr: [InputState::default(); MAX_PLAYERS],
+            save_data: Default::default(),
+            quit_requested: false,
         }
     }
 
