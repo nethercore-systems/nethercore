@@ -332,6 +332,17 @@ The `Runtime<C: Console>` handles:
 
 ## Done
 
+- **Implement egui integration for library UI (Phase 4)**
+  - egui-wgpu renderer setup with wgpu 23 (for egui 0.30 compatibility)
+  - egui-winit state integration for event handling
+  - Library screen with game list and selection
+  - Game actions: play, view info, delete
+  - Settings screen placeholder (not yet implemented)
+  - Download progress UI placeholder
+  - Debug overlay with F3 toggle showing FPS, frame time, mode
+  - Application state machine (Library → Playing → Settings)
+  - Error handling integration
+
 - **Implement keyboard/gamepad input**
   - Keyboard mapping to virtual controller (configurable)
   - Gamepad support via gilrs

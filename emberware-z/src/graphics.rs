@@ -1159,7 +1159,7 @@ impl ZGraphics {
         let height = size.height.max(1);
 
         // Create wgpu instance
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
             ..Default::default()
         });
@@ -1921,6 +1921,23 @@ impl ZGraphics {
     /// Get current surface dimensions
     pub fn dimensions(&self) -> (u32, u32) {
         (self.config.width, self.config.height)
+    }
+
+    /// Get current surface width
+    pub fn width(&self) -> u32 {
+        self.config.width
+    }
+
+    /// Get current surface height
+    pub fn height(&self) -> u32 {
+        self.config.height
+    }
+
+    /// Get the current surface texture for rendering
+    pub fn get_current_texture(&mut self) -> Result<wgpu::SurfaceTexture> {
+        self.surface
+            .get_current_texture()
+            .context("Failed to acquire next surface texture")
     }
 
     // ========================================================================
