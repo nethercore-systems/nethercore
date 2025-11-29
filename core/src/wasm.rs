@@ -85,6 +85,9 @@ pub struct GameState {
     /// Current render state
     pub render_state: RenderState,
 
+    /// Init-time configuration (locked after init completes)
+    pub init_config: InitConfig,
+
     /// Input state for all players (previous and current frame)
     pub input_prev: [InputState; MAX_PLAYERS],
     pub input_curr: [InputState; MAX_PLAYERS],
@@ -111,6 +114,7 @@ impl GameState {
             current_transform: Mat4::IDENTITY,
             rng_state: 0,
             render_state: RenderState::default(),
+            init_config: InitConfig::default(),
             input_prev: [InputState::default(); MAX_PLAYERS],
             input_curr: [InputState::default(); MAX_PLAYERS],
             save_data: Default::default(),
@@ -159,6 +163,33 @@ pub struct RenderState {
     pub bound_textures: [u32; 4],
     /// Current render mode (0-3)
     pub render_mode: u8,
+}
+
+/// Configuration set during init (immutable after init)
+#[derive(Debug, Clone)]
+pub struct InitConfig {
+    /// Resolution index (0-3 for Z: 360p, 540p, 720p, 1080p)
+    pub resolution_index: u32,
+    /// Tick rate index (0-3 for Z: 24, 30, 60, 120 fps)
+    pub tick_rate_index: u32,
+    /// Clear/background color (RGBA: 0xRRGGBBAA)
+    pub clear_color: u32,
+    /// Render mode (0-3: Unlit, Matcap, PBR, Hybrid)
+    pub render_mode: u8,
+    /// Whether any config was changed during init
+    pub modified: bool,
+}
+
+impl Default for InitConfig {
+    fn default() -> Self {
+        Self {
+            resolution_index: 1,  // Default 540p
+            tick_rate_index: 2,   // Default 60 fps
+            clear_color: 0x000000FF, // Black, fully opaque
+            render_mode: 0,       // Unlit
+            modified: false,
+        }
+    }
 }
 
 impl Default for RenderState {

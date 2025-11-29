@@ -218,8 +218,11 @@ impl Console for EmberwareZ {
         &Z_SPECS
     }
 
-    fn register_ffi(&self, _linker: &mut Linker<GameState>) -> Result<()> {
-        // TODO: Register Z-specific FFI functions:
+    fn register_ffi(&self, linker: &mut Linker<GameState>) -> Result<()> {
+        // Register Z-specific FFI functions
+        crate::ffi::register_z_ffi(linker)?;
+
+        // TODO: Register additional Z-specific FFI functions:
         // - Graphics: draw_triangles, draw_mesh, load_texture, etc.
         // - Input: button_held, left_stick_x, trigger_left, etc.
         // - Transform: transform_push, transform_pop, transform_rotate, etc.

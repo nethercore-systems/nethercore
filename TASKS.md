@@ -122,12 +122,7 @@ The `Runtime<C: Console>` handles:
 
 #### 3.3 Configuration FFI (init-only)
 
-- **Implement configuration functions**
-  - `set_resolution(res: u32)` — 0=360p, 1=540p, 2=720p, 3=1080p
-  - `set_tick_rate(fps: u32)` — 24, 30, 60, 120
-  - `set_clear_color(color: u32)` — 0xRRGGBBAA background color
-  - `render_mode(mode: u32)` — 0-3 (Unlit, Matcap, PBR, Hybrid)
-  - Enforce init-only: error/warning if called outside `init()`
+(Moved to In Progress)
 
 #### 3.4 Camera FFI
 
@@ -562,6 +557,13 @@ The `Runtime<C: Console>` handles:
 ## In Progress
 
 ## Done
+
+- **Implement configuration functions (Phase 3.3)**
+  - `set_resolution(res: u32)` — 0=360p, 1=540p, 2=720p, 3=1080p
+  - `set_tick_rate(fps: u32)` — 24, 30, 60, 120
+  - `set_clear_color(color: u32)` — 0xRRGGBBAA background color
+  - `render_mode(mode: u32)` — 0-3 (Unlit, Matcap, PBR, Hybrid)
+  - Enforce init-only: error/warning if called outside `init()`
 
 - **Implement vertex buffer architecture**
   - One vertex buffer per stride (format determines buffer)
