@@ -305,7 +305,7 @@ static LEVEL_DATA: &[u8] = include_bytes!("assets/level1.bin");
 fn init() {
     // Decode and upload to GPU at runtime
     let (w, h, pixels) = decode_png(SPRITE_PNG);
-    let tex = texture_create(w, h, pixels.as_ptr());
+    let tex = load_texture(w, h, pixels.as_ptr());
 }
 ```
 

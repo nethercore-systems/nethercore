@@ -192,6 +192,7 @@ The `Runtime<C: Console>` handles:
   - Immediate 3D: `draw_triangles(data, count, format)`, `draw_triangles_indexed(data, count, indices, index_count, format)`
   - 2D: `draw_sprite`, `draw_rect`, `draw_text` (built-in font, UTF-8)
   - Transform: `transform_identity/translate/rotate/scale/push/pop/set`
+  - Billboarding: `draw_billboard`, `draw_billboard_region` (modes: 1=spherical, 2-4=cylindrical Y/X/Z)
   - Render state: `set_color`, `depth_test`, `cull_mode`, `blend_mode`, `texture_filter`
   - Input: `button_held`, `button_pressed`, `button_released`, `left_stick_x/y`, `right_stick_x/y`, `trigger_left`, `trigger_right`
   - Vertex formats: 3-bit bitmask (`FORMAT_UV`, `FORMAT_COLOR`, `FORMAT_NORMAL`) producing 8 combinations
@@ -203,6 +204,22 @@ The `Runtime<C: Console>` handles:
   - Shader support for weighted bone transform in vertex shader
   - Works with both retained mode (`load_mesh` + `draw_mesh`) and immediate mode (`draw_triangles`)
   - CPU-side animation (keyframes, blend trees, IK) left to developers
+
+- [ ] **Implement shader generation system**
+  - 4 mode templates (Mode 0-3) with different fragment shader logic
+  - 16 vertex format permutations per mode (UV, COLOR, NORMAL, SKINNED flags)
+  - Total: 40 shaders (16 for Mode 0, 8 each for Modes 1-3 requiring NORMAL)
+  - Placeholder replacement: `//VIN_*`, `//VOUT_*`, `//VS_*`, `//FS_*`
+  - Reference: `shader_gen_example/` for template pattern
+  - Reference: `emberware-z/pbr-lite.wgsl` for PBR lighting function
+
+- [ ] **Implement procedural sky system**
+  - `set_sky()` FFI: horizon color, zenith color, sun direction, sun color, sun sharpness
+  - `sample_sky(direction)` shader function for background + reflections + ambient
+  - Render sky background (fullscreen quad at far plane or clear color)
+  - Integrate with Mode 0 (simple Lambert when normals present)
+  - Integrate with Mode 2/3 (environment reflections, ambient lighting)
+  - Reference: `docs/procedural-sky.md` for implementation details
 
 - [ ] **Implement built-in font for draw_text**
   - Static embedded bitmap/SDF font

@@ -165,35 +165,46 @@ fn render_mode(mode: u32)               // 0-3, see below (init-only)
 
 | Mode | Name | Lights | Description |
 |------|------|--------|-------------|
-| 0 | **Unlit** | None | Texture × vertex color. No lighting calculations. |
+| 0 | **Unlit** | Sky (if normals) | Texture × vertex color. Simple Lambert if normals present. |
 | 1 | **Matcap** | None (baked) | Adds view-space normal matcap sampling. Stylized, cheap. |
 | 2 | **PBR-lite** | 4 lights | Physically-based rendering. Dynamic lighting, most realistic. |
 | 3 | **Hybrid** | 1 dir + ambient | Matcap for reflections + PBR for direct lighting. |
 
 Each mode builds on the previous — textures and vertex colors always work.
 
-#### Mode 0: Unlit
+#### Mode 0: Unlit (or Simple Lit)
 
-No lighting calculations. Output = texture × vertex color.
-
+Without normals: flat shading, no lighting calculations.
 ```
 final_color = texture_sample * vertex_color
 ```
 
+**With normals:** Simple Lambert shading using the procedural sky's sun direction. This gives you directional lighting "for free" just by including normals in your vertex format.
+
+```
+n_dot_l = max(0, dot(normal, sky.sun_direction))
+direct = albedo * sky.sun_color * n_dot_l
+ambient = albedo * sample_sky(normal) * 0.3
+final_color = direct + ambient
+```
+
+This is much cheaper than PBR but still provides meaningful shading. To disable, set `sun_color` to black in `set_sky()`.
+
 #### Mode 1: Matcap
 
-Adds view-space normal sampling from up to 4 blended matcap textures. Lighting is "baked" into the matcap — cheap stylized look.
+Adds view-space normal sampling from up to 3 matcap textures in slots 1-3. Lighting is "baked" into the matcap — cheap stylized look.
 
 ```rust
-fn matcap_set(slot: u32, texture: u32)      // slot 0-3
-fn matcap_blend(m0: f32, m1: f32, m2: f32, m3: f32)  // Blend weights (normalized)
+fn matcap_set(slot: u32, texture: u32)      // slot 1-3 (texture binding slots)
 ```
 
 ```
 view_normal = transform_normal_to_view_space(surface_normal)
 matcap_uv = view_normal.xy * 0.5 + 0.5
-final_color = texture * vertex_color * matcap_sample(matcap_uv)
+final_color = albedo * vertex_color * matcap1 * matcap2 * matcap3
 ```
+
+Matcaps in slots 1-3 multiply together. Unused slots default to white (no effect).
 
 Good for:
 - Stylized/toon rendering
@@ -251,9 +262,8 @@ Best of both worlds with constrained lighting:
 - Good balance of quality and performance
 
 ```rust
-// Matcap for reflections
-fn matcap_set(slot: u32, texture: u32)
-fn matcap_blend(m0: f32, m1: f32, m2: f32, m3: f32)
+// Single matcap for ambient reflections (binds to slot 3)
+fn texture_bind_slot(handle: u32, slot: u32)  // Use slot 3 for matcap
 
 // Single directional light + ambient
 fn light_direction(x: f32, y: f32, z: f32)  // Normalized direction TO light
@@ -275,6 +285,61 @@ ambient_reflection = matcap * ambient_color * albedo
 direct = pbr_direct(light_direction, light_color, material)
 
 final_color = direct + ambient_reflection + emissive
+```
+
+### Procedural Sky
+
+Emberware Z includes a procedural sky system for backgrounds and environment lighting. The sky uses a hemispherical gradient with an analytical sun — no texture lookups, minimal GPU cost.
+
+```rust
+fn set_sky(
+    horizon_r: f32, horizon_g: f32, horizon_b: f32,  // Horizon color (linear RGB)
+    zenith_r: f32, zenith_g: f32, zenith_b: f32,     // Zenith color (linear RGB)
+    sun_dir_x: f32, sun_dir_y: f32, sun_dir_z: f32,  // Normalized direction TO sun
+    sun_r: f32, sun_g: f32, sun_b: f32,              // Sun color (linear RGB)
+    sun_sharpness: f32                                // Sun disc sharpness (10-1000)
+)
+```
+
+**Default:** All zeros (black sky, no sun). Call `set_sky()` in `init()` to enable lighting.
+
+The sky is used for:
+1. **Background** — Rendered behind all geometry (replaces clear color)
+2. **Environment reflections** — Sampled by Mode 2/3 for metallic surfaces, multiplied with env matcap (slot 2)
+3. **Ambient lighting** — Provides diffuse ambient term in PBR modes
+
+**Algorithm:**
+```
+sky_gradient = lerp(horizon_color, zenith_color, direction.y * 0.5 + 0.5)
+sun_amount = max(0, dot(direction, sun_direction))
+sun_contribution = sun_color * pow(sun_amount, sun_sharpness)
+final_color = sky_gradient + sun_contribution
+```
+
+**Recommended:** Use the same `sun_direction` for both `set_sky()` and `light_direction()` to maintain visual consistency.
+
+**Example presets:**
+```rust
+// Midday
+set_sky(0.7, 0.8, 0.9,  // horizon
+        0.3, 0.5, 0.9,  // zenith
+        0.3, 0.8, 0.5,  // sun direction (normalized)
+        2.0, 1.9, 1.8,  // sun color (HDR)
+        200.0);         // sharpness
+
+// Sunset
+set_sky(1.0, 0.5, 0.3,  // horizon (warm)
+        0.3, 0.1, 0.5,  // zenith (purple)
+        0.8, 0.2, 0.0,  // sun direction (low)
+        3.0, 1.8, 0.9,  // sun color (orange HDR)
+        100.0);         // sharpness (softer)
+
+// Overcast (no sun disc)
+set_sky(0.6, 0.6, 0.65, // horizon
+        0.4, 0.4, 0.45, // zenith
+        0.0, 1.0, 0.0,  // sun direction (doesn't matter)
+        0.0, 0.0, 0.0,  // sun color = black (disabled)
+        1.0);           // sharpness (irrelevant)
 ```
 
 **Note:** All lit modes output linear RGB. The runtime applies tonemapping and gamma correction.
@@ -428,10 +493,12 @@ fn texture_bind_slot(handle: u32, slot: u32)    // Bind to specific slot
 |------|--------|--------|--------|--------|
 | **0 (Unlit)** | Albedo (UV) | — | — | — |
 | **1 (Matcap)** | Albedo (UV) | Matcap (N) | Matcap (N) | Matcap (N) |
-| **2 (PBR)** | Albedo (UV) | MRE (UV) | Reflection (N) | — |
-| **3 (Hybrid)** | Albedo (UV) | MRE (UV) | Reflection (N) | Matcap (N) |
+| **2 (PBR)** | Albedo (UV) | MRE (UV) | Env Matcap (N) | — |
+| **3 (Hybrid)** | Albedo (UV) | MRE (UV) | Env Matcap (N) | Matcap (N) |
 
 **(N) = Normal-sampled (requires `FORMAT_NORMAL`), (UV) = UV-sampled (requires `FORMAT_UV`)**
+
+**Slot 2 "Env Matcap" in Modes 2/3:** Optional matcap that multiplies with procedural sky reflections. Allows stylized reflection highlights on top of the sky. Defaults to white (sky-only reflections).
 
 **Fallback rules:**
 - UV-sampled slots with no UVs or no texture → use `set_color()` / `material_*()` uniforms
@@ -441,8 +508,8 @@ fn texture_bind_slot(handle: u32, slot: u32)    // Bind to specific slot
 **Debug fallback texture:** When a required texture is missing, an 8×8 magenta/black checkerboard is used to make the error visually obvious during development.
 
 **Matcap combination:**
-- Mode 1: Matcaps in slots 1-3 multiply together (more blend modes TBD)
-- Mode 3: Slot 2 (reflection) and slot 3 (matcap) multiply
+- Mode 1: Matcaps in slots 1-3 multiply together. Unused slots default to white.
+- Mode 3: Single matcap in slot 3, combined with PBR ambient term.
 
 **Example:**
 ```rust
@@ -552,7 +619,64 @@ fn transform_set(matrix: *const f32)    // 16 floats, column-major
 - Angles are in **degrees** (converted internally to radians)
 - Y-up coordinate system, right-handed
 
-### 2D Drawing
+### Billboarding (3D Sprites)
+
+Draw camera-facing quads in 3D world space. Useful for particles, foliage, and classic sprite-based characters.
+
+```rust
+fn draw_billboard(w: f32, h: f32, mode: u32, color: u32)
+fn draw_billboard_region(
+    w: f32, h: f32,
+    src_x: f32, src_y: f32, src_w: f32, src_h: f32,
+    mode: u32, color: u32
+)
+```
+
+| Mode | Name | Behavior |
+|------|------|----------|
+| 1 | **Spherical** | Fully faces camera (all axes) |
+| 2 | **Cylindrical Y** | Rotates around world Y axis only |
+| 3 | **Cylindrical X** | Rotates around world X axis only |
+| 4 | **Cylindrical Z** | Rotates around world Z axis only |
+
+**When to use each mode:**
+- **Spherical**: Particles, floating UI, explosions — things that should always face you
+- **Cylindrical Y**: Trees, characters, signposts — upright objects that rotate to face you but stay vertical
+- **Cylindrical X/Z**: Specialized effects (tire tracks, wall decals viewed from angles)
+
+```rust
+// Example: Sprite-based character that stays upright
+fn render() {
+    unsafe {
+        texture_bind(CHARACTER_TEXTURE);
+        transform_translate(player_x, player_y, player_z);
+        draw_billboard(1.0, 2.0, 2, 0xFFFFFFFF);  // 1x2 unit, cylindrical Y
+    }
+}
+
+// Example: Particle system
+fn render_particles() {
+    unsafe {
+        texture_bind(PARTICLE_TEXTURE);
+        for p in &PARTICLES {
+            transform_push();
+            transform_translate(p.x, p.y, p.z);
+            transform_scale(p.size, p.size, 1.0);
+            draw_billboard(1.0, 1.0, 1, p.color);  // Spherical
+            transform_pop();
+        }
+    }
+}
+```
+
+**Notes:**
+- Billboards are centered at the current transform origin
+- The billboard rotation is applied after the current transform stack
+- For cylindrical Y mode, the billboard pivot is at the bottom center (good for characters/trees)
+
+### 2D Drawing (Screen Space)
+
+For UI, HUD, and overlay graphics. Coordinates are in screen pixels (0,0 = top-left). Not affected by camera or 3D transforms.
 
 **Simple:**
 

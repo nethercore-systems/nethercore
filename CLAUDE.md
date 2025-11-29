@@ -155,38 +155,174 @@ The console uses GGRS for deterministic rollback netcode. This means:
 
 #### Shader Generation System
 
-Shaders are generated from templates using flag-based permutations. Each flag combination produces a unique shader variant with only the needed vertex attributes and fragment operations.
+Shaders are generated from WGSL templates using placeholder replacement. Two compile-time dimensions:
+
+1. **Render mode** (0-3) — Set once in `init()`, never changes. Each mode has its own template with different fragment shader logic.
+2. **Vertex format** (0-15) — Flags determine which vertex attributes exist.
+
+**Render mode templates (compile-time, not runtime):**
+
+Each mode is a separate shader template because the fragment logic differs fundamentally:
+
+| Mode | Fragment Logic | Why Separate |
+|------|---------------|--------------|
+| 0 (Unlit) | `albedo × vertex_color` | No lighting calculations at all |
+| 1 (Matcap) | `albedo × vertex_color × matcap_blend` | Matcaps multiply together |
+| 2 (PBR) | Full PBR with 4 lights | GGX specular, Fresnel, MRE texture |
+| 3 (Hybrid) | PBR direct + matcap ambient | Combines both approaches |
+
+Mode 0 skips all lighting for maximum performance. Modes 1-3 require `FORMAT_NORMAL`.
+
+**Vertex format flags (compile-time permutations):**
 
 ```rust
-// Vertex format flags (bitmask)
-pub mod flags {
-    pub const VERTEX_COLOR: u8 = 1;  // Include per-vertex color
-    pub const UV_TEXTURE: u8 = 2;    // Include UV coordinates
-    pub const CUBEMAP: u8 = 4;       // Include cubemap reflection (implies NORMAL)
-    pub const MATCAP: u8 = 8;        // Include matcap sampling (implies NORMAL)
-    // NORMAL is derived: has_normal = has_cubemap || has_matcap
+const FORMAT_UV: u32 = 1;       // Has UV coordinates
+const FORMAT_COLOR: u32 = 2;    // Has per-vertex color (RGB, 3 floats)
+const FORMAT_NORMAL: u32 = 4;   // Has normals
+const FORMAT_SKINNED: u32 = 8;  // Has bone indices/weights
+```
+
+**Shader count:**
+- Mode 0: 16 permutations (all vertex formats)
+- Modes 1-3: 8 permutations each (only formats with NORMAL flag)
+- Total: 16 + 8 + 8 + 8 = **40 shaders**
+
+Formats without NORMAL in modes 1-3 fall back to Mode 0 at runtime (warning logged).
+
+**Template placeholder replacement:**
+
+```rust
+pub fn generate_shader(template: &str, mode: u8, format: u8) -> String {
+    let has_uv = format & FORMAT_UV != 0;
+    let has_color = format & FORMAT_COLOR != 0;
+    let has_normal = format & FORMAT_NORMAL != 0;
+    let has_skinned = format & FORMAT_SKINNED != 0;
+
+    // Replace placeholders with WGSL code or empty string
+    shader.replace("//VIN_UV", if has_uv { VIN_UV } else { "" });
+    shader.replace("//VIN_COLOR", if has_color { VIN_COLOR } else { "" });
+    shader.replace("//VIN_NORMAL", if has_normal { VIN_NORMAL } else { "" });
+    shader.replace("//VIN_SKINNED", if has_skinned { VIN_SKINNED } else { "" });
+    // ... same pattern for VOUT_*, VS_*, FS_*
 }
 ```
 
-The shader generator replaces placeholders in a template:
-```rust
-pub fn generate_shader(template: &str, flags: u8) -> String {
-    let has_color = flags & flags::VERTEX_COLOR != 0;
-    let has_uv = flags & flags::UV_TEXTURE != 0;
-    let has_cubemap = flags & flags::CUBEMAP != 0;
-    let has_matcap = flags & flags::MATCAP != 0;
-    let has_normal = has_cubemap || has_matcap;
+**Placeholder categories:**
+- `//VIN_*` — Vertex input struct fields
+- `//VOUT_*` — Vertex output to fragment (interpolated)
+- `//VS_*` — Vertex shader code (attribute passing, skinning, normal transform)
+- `//FS_*` — Fragment shader code (mode-specific, see below)
 
-    // Replace placeholders like //VIN_COLOR, //VS_COLOR, //FS_COLOR
-    // with actual WGSL code or empty string
+**Procedural sky (shared by all modes):**
+
+```wgsl
+fn sample_sky(direction: vec3<f32>) -> vec3<f32> {
+    let up_factor = direction.y * 0.5 + 0.5;
+    let gradient = mix(sky.horizon_color, sky.zenith_color, up_factor);
+    let sun_dot = max(0.0, dot(direction, sky.sun_direction));
+    let sun = sky.sun_color * pow(sun_dot, sky.sun_sharpness);
+    return gradient + sun;
 }
 ```
 
-Template placeholders:
-- `//VIN_*` - Vertex input attributes
-- `//VOUT_*` - Vertex output (to fragment)
-- `//VS_*` - Vertex shader code
-- `//FS_*` - Fragment shader code
+Used for: background rendering, environment reflections, ambient lighting.
+
+**Mode-specific fragment shader logic:**
+
+```wgsl
+// Mode 0 (Unlit) — Flat or simple Lambert if normals present
+fn fs_mode0(in: VertexOut) -> vec4<f32> {
+    var color = get_base_color(in);  // vertex_color × uniform_color
+    //FS_UV      → color *= textureSample(slot0, sampler, in.uv).rgb;
+    //FS_NORMAL  → Simple Lambert: color *= sky_lambert(in.world_normal);
+    return vec4(color, 1.0);
+}
+
+// Sky lambert for Mode 0 with normals (cheap directional + ambient)
+fn sky_lambert(normal: vec3<f32>) -> vec3<f32> {
+    let n_dot_l = max(0.0, dot(normal, sky.sun_direction));
+    let direct = sky.sun_color * n_dot_l;
+    let ambient = sample_sky(normal) * 0.3;
+    return direct + ambient;
+}
+
+// Mode 1 (Matcap) — Matcaps in slots 1-3 multiply together
+fn fs_mode1(in: VertexOut) -> vec4<f32> {
+    var color = get_base_color(in);
+    //FS_UV   → color *= textureSample(slot0, sampler, in.uv).rgb;
+    let matcap_uv = compute_matcap_uv(in.view_normal);
+    color *= textureSample(slot1, sampler, matcap_uv).rgb;
+    color *= textureSample(slot2, sampler, matcap_uv).rgb;
+    color *= textureSample(slot3, sampler, matcap_uv).rgb;
+    return vec4(color, 1.0);
+}
+
+// Mode 2 (PBR-lite) — GGX specular, Schlick fresnel, up to 4 lights
+// Reference: emberware-z/pbr-lite.wgsl
+fn fs_mode2(in: VertexOut) -> vec4<f32> {
+    let albedo = get_albedo(in);
+    let mre = textureSample(slot1, sampler, in.uv);  // R=Metallic, G=Roughness, B=Emissive
+
+    var final_color = vec3(0.0);
+    for (var i = 0u; i < 4u; i++) {
+        if (lights[i].enabled) {
+            final_color += pbr_lite(
+                in.world_normal, view_dir, lights[i].direction,
+                albedo, mre.r, mre.g, mre.b,
+                lights[i].color, sample_sky(in.world_normal) * 0.3
+            );
+        }
+    }
+
+    // Environment reflection: sky × env matcap (slot 2)
+    let reflection_dir = reflect(-view_dir, in.world_normal);
+    let env_matcap_uv = compute_matcap_uv(in.view_normal);
+    let env_matcap = textureSample(slot2, sampler, env_matcap_uv).rgb;  // White if unbound
+    let env_reflection = sample_sky(reflection_dir) * env_matcap * mre.r;
+
+    return vec4(final_color + env_reflection, 1.0);
+}
+
+// Mode 3 (Hybrid) — PBR direct + matcap for ambient/reflections
+fn fs_mode3(in: VertexOut) -> vec4<f32> {
+    let albedo = get_albedo(in);
+    let mre = textureSample(slot1, sampler, in.uv);
+    let matcap_uv = compute_matcap_uv(in.view_normal);
+    let env_matcap = textureSample(slot2, sampler, matcap_uv).rgb;  // Env reflection tint
+    let matcap = textureSample(slot3, sampler, matcap_uv).rgb;      // Ambient/stylized
+
+    // Single directional light (sun) for direct lighting
+    let direct = pbr_lite(
+        in.world_normal, view_dir, sky.sun_direction,
+        albedo, mre.r, mre.g, mre.b,
+        sky.sun_color, vec3(0.0)  // No ambient here, matcaps provide it
+    );
+
+    // Environment reflection: sky × env matcap (slot 2)
+    let reflection_dir = reflect(-view_dir, in.world_normal);
+    let env_reflection = sample_sky(reflection_dir) * env_matcap * mre.r;
+
+    // Ambient from matcap (slot 3) × sky
+    let ambient = matcap * sample_sky(in.world_normal) * albedo * (1.0 - mre.r);
+
+    return vec4(direct + env_reflection + ambient, 1.0);
+}
+```
+
+**Bind groups are identical across all shaders:**
+
+All 4 texture slots always bound (simplifies bind group management):
+
+```wgsl
+@group(1) @binding(0) var slot0: texture_2d<f32>;  // Albedo
+@group(1) @binding(1) var slot1: texture_2d<f32>;  // MRE or Matcap
+@group(1) @binding(2) var slot2: texture_2d<f32>;  // Reflection or Matcap
+@group(1) @binding(3) var slot3: texture_2d<f32>;  // Matcap (modes 1, 3)
+```
+
+Unused slots bound to fallback texture (8×8 magenta/black or 1×1 white depending on context).
+
+**Key design principle:** One vertex buffer per stride. A mesh with pos+color uses a different buffer than one with pos+uv+color+normal. This avoids vertex padding waste while keeping bind groups uniform.
 
 #### Pipeline Entry Structure
 
@@ -213,10 +349,12 @@ Fixed layout per render mode (set in `init()`):
 |------|--------|--------|--------|--------|
 | 0 (Unlit) | Albedo (UV) | — | — | — |
 | 1 (Matcap) | Albedo (UV) | Matcap (N) | Matcap (N) | Matcap (N) |
-| 2 (PBR) | Albedo (UV) | MRE (UV) | Reflection (N) | — |
-| 3 (Hybrid) | Albedo (UV) | MRE (UV) | Reflection (N) | Matcap (N) |
+| 2 (PBR) | Albedo (UV) | MRE (UV) | Env Matcap (N) | — |
+| 3 (Hybrid) | Albedo (UV) | MRE (UV) | Env Matcap (N) | Matcap (N) |
 
 **(N) = Normal-sampled, (UV) = UV-sampled**
+
+Slot 2 "Env Matcap" in Modes 2/3 multiplies with procedural sky reflections (defaults to white).
 
 Fallbacks:
 - UV slots without UVs/texture → `set_color()` / `material_*()` uniforms
@@ -279,6 +417,25 @@ Called before `draw_mesh()` or `draw_triangles()` to set the current bone transf
 1. In `init()`: Load skinned mesh with bone indices/weights baked into vertices
 2. Each `update()`: Animate skeleton on CPU (update bone transforms)
 3. Each `render()`: Call `set_bones()` then `draw_mesh()`
+
+#### 2D Drawing (Screen Space)
+
+For UI/HUD, renders in screen pixel coordinates (not affected by 3D transforms):
+- `draw_sprite`, `draw_sprite_region`, `draw_sprite_ex` — textured quads
+- `draw_rect` — solid color rectangles
+- `draw_text` — built-in font rendering (UTF-8)
+
+#### Billboarding (3D Sprites)
+
+Camera-facing quads in 3D world space (uses current transform):
+
+```rust
+fn draw_billboard(w: f32, h: f32, mode: u32, color: u32)
+fn draw_billboard_region(w, h, src_x, src_y, src_w, src_h, mode, color)
+// mode: 1=spherical, 2=cylindrical Y, 3=cylindrical X, 4=cylindrical Z
+```
+
+Use for particles, foliage, sprite-based characters.
 
 ### Local Storage
 ```
