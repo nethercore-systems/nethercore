@@ -357,26 +357,20 @@ The `Runtime<C: Console>` handles:
 ---
 ## In Progress
 
-### Phase 3.16: GPU Skinning
-
-- **Implement bone uniform buffer**
-  - Support up to 256 bones (256 × 4×4 matrices = 16KB)
-  - `set_bones(matrices_ptr, count)` — upload bone transforms
-  - Bone matrices in column-major order (16 floats each)
-
-- **Implement skinned vertex shader**
-  - Read bone indices (4 × u8) and weights (4 × f32) from vertex
-  - Compute skinned position: `Σ(weight[i] * bone_matrix[bone_index[i]] * pos)`
-  - Compute skinned normal: `Σ(weight[i] * inverse_transpose(bone_matrix[i]) * normal)`
-  - Apply before model-view-projection transform
-
-- **Update vertex formats for skinning**
-  - `FORMAT_SKINNED` (8) adds 20 bytes per vertex
-  - Bone indices: 4 bytes (4 × u8)
-  - Bone weights: 16 bytes (4 × f32)
-  - Attribute order: pos → uv → color → normal → bone_indices → bone_weights
+(No tasks currently in progress)
 
 ## Done
+
+- **Implement GPU Skinning (Phase 3.16)**
+  - Bone storage buffer: 256 bones × 4×4 matrices = 16KB
+  - `set_bones(matrices_ptr, count)` FFI function implemented and registered
+  - Bone matrices stored in RenderState (Vec<Mat4>)
+  - Graphics trait extended with `set_bones()` method for GPU upload
+  - ZGraphics implements bone matrix upload via wgpu queue.write_buffer()
+  - Skinned vertex shader code in shader templates (VIN_SKINNED, VS_SKINNED)
+  - FORMAT_SKINNED (8) adds 20 bytes per vertex (4 u8 indices + 4 f32 weights)
+  - Vertex attribute order: pos → uv → color → normal → bone_indices → bone_weights
+  - All 16 vertex format permutations supported (8 base + 8 skinned variants)
 
 - **Implement Mode 2 (PBR) and Mode 3 (Hybrid) lighting functions (Phase 3.15)**
   - `light_set(index, x, y, z)` — set directional light direction for light 0-3

@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
+use glam::Mat4;
 use wasmtime::Linker;
 use winit::window::Window;
 
@@ -128,6 +129,14 @@ pub trait Graphics: Send {
 
     /// End the current frame and present
     fn end_frame(&mut self);
+
+    /// Set bone matrices for GPU skinning (up to 256 bones)
+    ///
+    /// Call this before rendering skinned meshes. The matrices are in column-major order.
+    /// An empty slice clears the bone data.
+    fn set_bones(&mut self, _bones: &[Mat4]) {
+        // Default implementation does nothing (for consoles without GPU skinning)
+    }
 }
 
 /// Trait for audio backends
