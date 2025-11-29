@@ -19,9 +19,13 @@
 //! 4. Confirmed inputs are passed to `GameInstance::update()` during advance
 
 use std::marker::PhantomData;
+use std::time::Duration;
 
 use bytemuck::{Pod, Zeroable};
-use ggrs::Config;
+use ggrs::{
+    Config, GgrsError, GgrsEvent, GgrsRequest, InputStatus, NonBlockingSocket, P2PSession,
+    PlayerType, SessionBuilder, SessionState, SyncTestSession,
+};
 
 use crate::console::ConsoleInput;
 use crate::wasm::GameInstance;
@@ -76,6 +80,8 @@ pub struct SessionConfig {
     pub disconnect_timeout: u64,
     /// Disconnect notify start in milliseconds
     pub disconnect_notify_start: u64,
+    /// Frame rate for time sync
+    pub fps: usize,
 }
 
 impl Default for SessionConfig {
@@ -86,6 +92,7 @@ impl Default for SessionConfig {
             max_prediction_frames: MAX_ROLLBACK_FRAMES,
             disconnect_timeout: 5000,
             disconnect_notify_start: 3000,
+            fps: 60,
         }
     }
 }
@@ -114,7 +121,7 @@ impl SessionConfig {
         Self {
             num_players: 1,
             input_delay: 0,
-            max_prediction_frames: 1,
+            max_prediction_frames: MAX_ROLLBACK_FRAMES,
             ..Default::default()
         }
     }
@@ -416,76 +423,6 @@ pub enum SessionType {
 }
 
 // ============================================================================
-// Rollback Session
-// ============================================================================
-
-/// Rollback session manager
-///
-/// Wraps GGRS session types and provides a unified interface for
-/// local, sync-test, and P2P sessions.
-pub struct RollbackSession<I: ConsoleInput> {
-    session_type: SessionType,
-    config: SessionConfig,
-    state_manager: RollbackStateManager,
-    _phantom: PhantomData<I>,
-}
-
-impl<I: ConsoleInput> RollbackSession<I> {
-    /// Create a new local session (no rollback)
-    pub fn new_local(num_players: usize) -> Self {
-        Self {
-            session_type: SessionType::Local,
-            config: SessionConfig::local(num_players),
-            state_manager: RollbackStateManager::new(),
-            _phantom: PhantomData,
-        }
-    }
-
-    /// Create a new sync test session (for testing determinism)
-    pub fn new_sync_test() -> Self {
-        Self {
-            session_type: SessionType::SyncTest,
-            config: SessionConfig::sync_test(),
-            state_manager: RollbackStateManager::new(),
-            _phantom: PhantomData,
-        }
-    }
-
-    /// Get the session type
-    pub fn session_type(&self) -> SessionType {
-        self.session_type
-    }
-
-    /// Get the session configuration
-    pub fn config(&self) -> &SessionConfig {
-        &self.config
-    }
-
-    /// Get mutable access to the state manager
-    pub fn state_manager_mut(&mut self) -> &mut RollbackStateManager {
-        &mut self.state_manager
-    }
-
-    /// Save game state (convenience wrapper)
-    pub fn save_game_state(
-        &mut self,
-        game: &mut GameInstance,
-        frame: i32,
-    ) -> Result<GameStateSnapshot, SaveStateError> {
-        self.state_manager.save_state(game, frame)
-    }
-
-    /// Load game state (convenience wrapper)
-    pub fn load_game_state(
-        &mut self,
-        game: &mut GameInstance,
-        snapshot: &GameStateSnapshot,
-    ) -> Result<(), LoadStateError> {
-        self.state_manager.load_state(game, snapshot)
-    }
-}
-
-// ============================================================================
 // Network Input Wrapper
 // ============================================================================
 
@@ -510,6 +447,350 @@ impl<I: ConsoleInput> NetworkInput<I> {
 // Safety: I is required to be Pod + Zeroable by ConsoleInput trait bounds
 unsafe impl<I: ConsoleInput> Pod for NetworkInput<I> {}
 unsafe impl<I: ConsoleInput> Zeroable for NetworkInput<I> {}
+
+// ============================================================================
+// GGRS Session Wrapper
+// ============================================================================
+
+/// Inner session types for different modes
+enum SessionInner<I: ConsoleInput> {
+    /// Local session - no GGRS, just direct execution
+    Local {
+        num_players: usize,
+        current_frame: i32,
+    },
+    /// Sync test session for determinism testing
+    SyncTest {
+        session: SyncTestSession<EmberwareConfig<I>>,
+        current_frame: i32,
+    },
+    /// P2P session with rollback
+    P2P(P2PSession<EmberwareConfig<I>>),
+}
+
+/// Rollback session manager
+///
+/// Wraps GGRS session types and provides a unified interface for
+/// local, sync-test, and P2P sessions. Handles state management
+/// and input processing.
+pub struct RollbackSession<I: ConsoleInput> {
+    inner: SessionInner<I>,
+    session_type: SessionType,
+    config: SessionConfig,
+    state_manager: RollbackStateManager,
+    /// Whether we're currently in rollback mode (used to mute audio)
+    rolling_back: bool,
+    /// Local player handles for this session
+    local_players: Vec<usize>,
+}
+
+impl<I: ConsoleInput> RollbackSession<I> {
+    /// Create a new local session (no rollback)
+    ///
+    /// Local sessions run without GGRS - updates execute immediately
+    /// without any rollback support. Useful for single player games
+    /// or local multiplayer on the same machine.
+    pub fn new_local(num_players: usize) -> Self {
+        Self {
+            inner: SessionInner::Local {
+                num_players,
+                current_frame: 0,
+            },
+            session_type: SessionType::Local,
+            config: SessionConfig::local(num_players),
+            state_manager: RollbackStateManager::new(),
+            rolling_back: false,
+            local_players: (0..num_players).collect(),
+        }
+    }
+
+    /// Create a new sync test session (for testing determinism)
+    ///
+    /// Sync test sessions simulate rollback every frame to verify
+    /// the game state is deterministic. Use this during development
+    /// to catch non-determinism bugs.
+    pub fn new_sync_test(config: SessionConfig) -> Result<Self, GgrsError> {
+        let session = SessionBuilder::<EmberwareConfig<I>>::new()
+            .with_num_players(config.num_players)
+            .with_max_prediction_window(config.max_prediction_frames)?
+            .with_input_delay(config.input_delay)
+            .with_check_distance(2)
+            .start_synctest_session()?;
+
+        Ok(Self {
+            inner: SessionInner::SyncTest {
+                session,
+                current_frame: 0,
+            },
+            session_type: SessionType::SyncTest,
+            config,
+            state_manager: RollbackStateManager::new(),
+            rolling_back: false,
+            local_players: vec![0], // Sync test has one local player
+        })
+    }
+
+    /// Create a new P2P session with the given socket
+    ///
+    /// P2P sessions use GGRS for rollback netcode. Players must be
+    /// added via the session builder before starting.
+    pub fn new_p2p<S>(
+        config: SessionConfig,
+        socket: S,
+        players: Vec<(usize, PlayerType<String>)>,
+    ) -> Result<Self, GgrsError>
+    where
+        S: NonBlockingSocket<String> + 'static,
+    {
+        let mut builder = SessionBuilder::<EmberwareConfig<I>>::new()
+            .with_num_players(config.num_players)
+            .with_max_prediction_window(config.max_prediction_frames)?
+            .with_input_delay(config.input_delay)
+            .with_fps(config.fps)?
+            .with_disconnect_timeout(Duration::from_millis(config.disconnect_timeout))
+            .with_disconnect_notify_delay(Duration::from_millis(config.disconnect_notify_start));
+
+        let mut local_players = Vec::new();
+
+        for (handle, player_type) in players {
+            if matches!(player_type, PlayerType::Local) {
+                local_players.push(handle);
+            }
+            builder = builder.add_player(player_type, handle)?;
+        }
+
+        let session = builder.start_p2p_session(socket)?;
+
+        Ok(Self {
+            inner: SessionInner::P2P(session),
+            session_type: SessionType::P2P,
+            config,
+            state_manager: RollbackStateManager::new(),
+            rolling_back: false,
+            local_players,
+        })
+    }
+
+    /// Get the session type
+    pub fn session_type(&self) -> SessionType {
+        self.session_type
+    }
+
+    /// Get the session configuration
+    pub fn config(&self) -> &SessionConfig {
+        &self.config
+    }
+
+    /// Get mutable access to the state manager
+    pub fn state_manager_mut(&mut self) -> &mut RollbackStateManager {
+        &mut self.state_manager
+    }
+
+    /// Check if currently rolling back
+    pub fn is_rolling_back(&self) -> bool {
+        self.rolling_back
+    }
+
+    /// Get local player handles
+    pub fn local_players(&self) -> &[usize] {
+        &self.local_players
+    }
+
+    /// Get current frame number
+    pub fn current_frame(&self) -> i32 {
+        match &self.inner {
+            SessionInner::Local { current_frame, .. } => *current_frame,
+            SessionInner::SyncTest { current_frame, .. } => *current_frame,
+            SessionInner::P2P(session) => session.current_frame(),
+        }
+    }
+
+    /// Get the current session state (for P2P sessions)
+    pub fn session_state(&self) -> Option<SessionState> {
+        match &self.inner {
+            SessionInner::P2P(session) => Some(session.current_state()),
+            _ => None,
+        }
+    }
+
+    /// Add local input for a player
+    ///
+    /// For Local sessions, input is stored immediately.
+    /// For GGRS sessions, input is passed to GGRS for synchronization.
+    pub fn add_local_input(&mut self, player_handle: usize, input: I) -> Result<(), GgrsError> {
+        match &mut self.inner {
+            SessionInner::Local { .. } => {
+                // Local sessions don't need GGRS input handling
+                // Input is set directly on GameInstance
+                Ok(())
+            }
+            SessionInner::SyncTest { session, .. } => session.add_local_input(player_handle, input),
+            SessionInner::P2P(session) => session.add_local_input(player_handle, input),
+        }
+    }
+
+    /// Poll remote clients (P2P only)
+    ///
+    /// Must be called regularly to receive network messages.
+    pub fn poll_remote_clients(&mut self) {
+        if let SessionInner::P2P(session) = &mut self.inner {
+            session.poll_remote_clients();
+        }
+    }
+
+    /// Advance the frame and get GGRS requests
+    ///
+    /// Returns a list of requests that must be handled by the game:
+    /// - SaveGameState: Save current state for rollback
+    /// - LoadGameState: Restore to a previous state
+    /// - AdvanceFrame: Execute one tick with the given inputs
+    ///
+    /// For Local sessions, this returns a simple AdvanceFrame request
+    /// with default inputs for all players.
+    pub fn advance_frame(&mut self) -> Result<Vec<GgrsRequest<EmberwareConfig<I>>>, GgrsError> {
+        match &mut self.inner {
+            SessionInner::Local {
+                num_players,
+                current_frame,
+            } => {
+                // Local sessions just advance immediately with default inputs
+                *current_frame += 1;
+                let inputs: Vec<(I, InputStatus)> = (0..*num_players)
+                    .map(|_| (I::default(), InputStatus::Confirmed))
+                    .collect();
+                Ok(vec![GgrsRequest::AdvanceFrame { inputs }])
+            }
+            SessionInner::SyncTest {
+                session,
+                current_frame,
+            } => {
+                let requests = session.advance_frame()?;
+                // Track frame count - increment for each AdvanceFrame request
+                for req in &requests {
+                    if matches!(req, GgrsRequest::AdvanceFrame { .. }) {
+                        *current_frame += 1;
+                    }
+                }
+                Ok(requests)
+            }
+            SessionInner::P2P(session) => session.advance_frame(),
+        }
+    }
+
+    /// Drain events from the session (P2P only)
+    pub fn events(&mut self) -> Vec<GgrsEvent<EmberwareConfig<I>>> {
+        match &mut self.inner {
+            SessionInner::P2P(session) => session.events().collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// Get network stats for a player (P2P only)
+    pub fn network_stats(
+        &self,
+        player_handle: usize,
+    ) -> Option<ggrs::NetworkStats> {
+        match &self.inner {
+            SessionInner::P2P(session) => session.network_stats(player_handle).ok(),
+            _ => None,
+        }
+    }
+
+    /// Get frames ahead (P2P only)
+    pub fn frames_ahead(&self) -> i32 {
+        match &self.inner {
+            SessionInner::P2P(session) => session.frames_ahead(),
+            _ => 0,
+        }
+    }
+
+    /// Handle all GGRS requests for a frame
+    ///
+    /// Processes SaveGameState, LoadGameState, and AdvanceFrame requests.
+    /// Returns the inputs for each AdvanceFrame request so the caller
+    /// can update the game.
+    pub fn handle_requests(
+        &mut self,
+        game: &mut GameInstance,
+        requests: Vec<GgrsRequest<EmberwareConfig<I>>>,
+    ) -> Result<Vec<Vec<(I, InputStatus)>>, SessionError> {
+        let mut advance_inputs = Vec::new();
+
+        for request in requests {
+            match request {
+                GgrsRequest::SaveGameState { cell, frame } => {
+                    let snapshot = self
+                        .state_manager
+                        .save_state(game, frame)
+                        .map_err(|e| SessionError::SaveState(e.to_string()))?;
+                    let checksum = snapshot.checksum as u128;
+                    cell.save(frame, Some(snapshot), Some(checksum));
+                }
+                GgrsRequest::LoadGameState { cell, frame: _ } => {
+                    self.rolling_back = true;
+                    if let Some(snapshot) = cell.load() {
+                        self.state_manager
+                            .load_state(game, &snapshot)
+                            .map_err(|e| SessionError::LoadState(e.to_string()))?;
+                    }
+                }
+                GgrsRequest::AdvanceFrame { inputs } => {
+                    self.rolling_back = false;
+                    advance_inputs.push(inputs);
+                }
+            }
+        }
+
+        Ok(advance_inputs)
+    }
+
+    /// Save game state (convenience wrapper)
+    pub fn save_game_state(
+        &mut self,
+        game: &mut GameInstance,
+        frame: i32,
+    ) -> Result<GameStateSnapshot, SaveStateError> {
+        self.state_manager.save_state(game, frame)
+    }
+
+    /// Load game state (convenience wrapper)
+    pub fn load_game_state(
+        &mut self,
+        game: &mut GameInstance,
+        snapshot: &GameStateSnapshot,
+    ) -> Result<(), LoadStateError> {
+        self.state_manager.load_state(game, snapshot)
+    }
+}
+
+/// Session errors
+#[derive(Debug, Clone)]
+pub enum SessionError {
+    /// Error during state save
+    SaveState(String),
+    /// Error during state load
+    LoadState(String),
+    /// GGRS error
+    Ggrs(String),
+}
+
+impl std::fmt::Display for SessionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SaveState(e) => write!(f, "Failed to save state: {}", e),
+            Self::LoadState(e) => write!(f, "Failed to load state: {}", e),
+            Self::Ggrs(e) => write!(f, "GGRS error: {}", e),
+        }
+    }
+}
+
+impl std::error::Error for SessionError {}
+
+impl From<GgrsError> for SessionError {
+    fn from(e: GgrsError) -> Self {
+        Self::Ggrs(e.to_string())
+    }
+}
 
 // ============================================================================
 // Tests
@@ -622,13 +903,37 @@ mod tests {
         let session = RollbackSession::<TestInput>::new_local(2);
         assert_eq!(session.session_type(), SessionType::Local);
         assert_eq!(session.config().num_players, 2);
+        assert_eq!(session.current_frame(), 0);
+        assert_eq!(session.local_players(), &[0, 1]);
     }
 
     #[test]
     fn test_rollback_session_sync_test() {
-        let session = RollbackSession::<TestInput>::new_sync_test();
+        let config = SessionConfig::sync_test();
+        let session = RollbackSession::<TestInput>::new_sync_test(config).unwrap();
         assert_eq!(session.session_type(), SessionType::SyncTest);
-        assert_eq!(session.config().num_players, 1);
+    }
+
+    #[test]
+    fn test_local_session_advance() {
+        let mut session = RollbackSession::<TestInput>::new_local(2);
+        assert_eq!(session.current_frame(), 0);
+
+        let requests = session.advance_frame().unwrap();
+        assert_eq!(requests.len(), 1);
+
+        match &requests[0] {
+            GgrsRequest::AdvanceFrame { inputs } => {
+                assert_eq!(inputs.len(), 2);
+                for (input, status) in inputs {
+                    assert_eq!(*input, TestInput::default());
+                    assert_eq!(*status, InputStatus::Confirmed);
+                }
+            }
+            _ => panic!("Expected AdvanceFrame request"),
+        }
+
+        assert_eq!(session.current_frame(), 1);
     }
 
     #[test]

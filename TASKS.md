@@ -103,13 +103,6 @@ The `Runtime<C: Console>` handles:
 
 ### Phase 2: GGRS Rollback Integration
 
-- **Integrate GGRS session into runtime**
-  - Local session (single player or local multiplayer, no rollback)
-  - P2P session with matchbox_socket (WebRTC)
-  - `advance_frame()` with GGRS requests handling
-  - Synchronization test mode for local debugging
-  - TODO [needs clarification]: Spectator session support
-
 - **Handle GGRS events**
   - `GGRSRequest::SaveGameState` → serialize WASM state
   - `GGRSRequest::LoadGameState` → deserialize WASM state
@@ -609,6 +602,13 @@ The `Runtime<C: Console>` handles:
 ## In Progress
 
 ## Done
+
+- **Integrate GGRS session into runtime**
+  - Local session (single player or local multiplayer, no rollback)
+  - P2P session with matchbox_socket (WebRTC)
+  - `advance_frame()` with GGRS requests handling
+  - Synchronization test mode for local debugging
+  - TODO [needs clarification]: Spectator session support
 
 - **Define GGRS config and input types**
   - `GGRSConfig` implementing `ggrs::Config` trait
