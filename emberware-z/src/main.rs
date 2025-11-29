@@ -7,6 +7,7 @@ mod config;
 mod console;
 mod deep_link;
 mod download;
+mod graphics;
 mod library;
 mod runtime;
 mod ui;

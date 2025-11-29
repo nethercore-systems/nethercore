@@ -118,33 +118,12 @@ The `Runtime<C: Console>` handles:
 
 #### 3.2 Graphics Backend (wgpu)
 
-- **Implement wgpu device initialization**
-  - `ZGraphics` struct implementing `Graphics` trait
-  - wgpu `Instance`, `Adapter`, `Device`, `Queue` setup
-  - Surface configuration for window
-  - Resize handling with surface reconfiguration
-
 - **Implement vertex buffer architecture**
   - One vertex buffer per stride (format determines buffer)
   - `GrowableBuffer` struct for auto-growing GPU buffers
   - 8 base vertex formats (POS, POS_UV, POS_COLOR, etc.)
   - 8 skinned variants (each base format + skinning data)
   - Total: 16 vertex format pipelines per render mode
-
-- **Implement texture management**
-  - `TextureHandle` allocation and tracking
-  - `load_texture(width, height, pixels)` — create RGBA8 texture
-  - VRAM budget tracking (8MB limit)
-  - Fallback textures: 8×8 magenta/black checkerboard, 1×1 white
-  - Sampler creation (nearest, linear filters)
-
-- **Implement render state management**
-  - Current color (uniform tint)
-  - Depth test enable/disable
-  - Cull mode (none, back, front)
-  - Blend mode (none, alpha, additive, multiply)
-  - Texture filter (nearest, linear)
-  - Currently bound textures (slots 0-3)
 
 - **Implement command buffer pattern**
   - Immediate-mode draws buffered on CPU side
@@ -594,6 +573,27 @@ The `Runtime<C: Console>` handles:
 ## In Progress
 
 ## Done
+
+- **Implement wgpu device initialization**
+  - `ZGraphics` struct implementing `Graphics` trait
+  - wgpu `Instance`, `Adapter`, `Device`, `Queue` setup
+  - Surface configuration for window
+  - Resize handling with surface reconfiguration
+
+- **Implement texture management**
+  - `TextureHandle` allocation and tracking
+  - `load_texture(width, height, pixels)` — create RGBA8 texture
+  - VRAM budget tracking (8MB limit)
+  - Fallback textures: 8×8 magenta/black checkerboard, 1×1 white
+  - Sampler creation (nearest, linear filters)
+
+- **Implement render state management**
+  - Current color (uniform tint)
+  - Depth test enable/disable
+  - Cull mode (none, back, front)
+  - Blend mode (none, alpha, additive, multiply)
+  - Texture filter (nearest, linear)
+  - Currently bound textures (slots 0-3)
 
 - **Create Emberware Z `Console` implementation**
   - Implement `Console` trait for PS1/N64 aesthetic

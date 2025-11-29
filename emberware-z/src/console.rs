@@ -10,9 +10,11 @@ use wasmtime::Linker;
 use winit::window::Window;
 
 use emberware_core::{
-    console::{Audio, Console, ConsoleInput, ConsoleSpecs, Graphics, RawInput, SoundHandle},
+    console::{Audio, Console, ConsoleInput, ConsoleSpecs, RawInput, SoundHandle},
     wasm::GameState,
 };
+
+use crate::graphics::ZGraphics;
 
 /// Emberware Z resolutions (16:9)
 pub const RESOLUTIONS: &[(u32, u32)] = &[
@@ -155,25 +157,7 @@ impl ZInput {
 
 impl ConsoleInput for ZInput {}
 
-/// Emberware Z graphics backend (placeholder until wgpu implementation)
-pub struct ZGraphics {
-    // Will contain wgpu device, queue, surface, pipelines, etc.
-    _placeholder: (),
-}
-
-impl Graphics for ZGraphics {
-    fn resize(&mut self, _width: u32, _height: u32) {
-        // TODO: Reconfigure wgpu surface
-    }
-
-    fn begin_frame(&mut self) {
-        // TODO: Begin render pass
-    }
-
-    fn end_frame(&mut self) {
-        // TODO: Present frame
-    }
-}
+// ZGraphics is now implemented in graphics.rs
 
 /// Emberware Z audio backend (placeholder until rodio implementation)
 pub struct ZAudio {
@@ -244,9 +228,8 @@ impl Console for EmberwareZ {
         Ok(())
     }
 
-    fn create_graphics(&self, _window: Arc<Window>) -> Result<Self::Graphics> {
-        // TODO: Initialize wgpu device, surface, pipelines
-        Ok(ZGraphics { _placeholder: () })
+    fn create_graphics(&self, window: Arc<Window>) -> Result<Self::Graphics> {
+        ZGraphics::new_blocking(window)
     }
 
     fn create_audio(&self) -> Result<Self::Audio> {
