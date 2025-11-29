@@ -275,11 +275,7 @@ The `Runtime<C: Console>` handles:
   - Multi-player input synchronization test
   - Resource limit enforcement test (RAM/VRAM)
 
-- **Create graphics tests**
-  - Shader compilation tests (all 40 shaders)
-  - Vertex format stride validation
-  - Texture loading and binding tests
-  - Render state switching tests
+(Moved to Done)
 
 - **Update documentation**
   - Ensure docs/ffi.md matches implementation
@@ -302,6 +298,36 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **Create graphics tests (Phase 7)**
+  - **Shader compilation tests (all 40 shaders)**: 15 tests in shader_gen.rs
+    - `test_compile_all_40_shaders` - validates all mode/format combinations
+    - `test_compile_mode0_all_formats` - all 16 formats for Mode 0 (Unlit)
+    - `test_compile_mode1_matcap` - 8 formats with NORMAL for Mode 1
+    - `test_compile_mode2_pbr` - 8 formats with NORMAL for Mode 2
+    - `test_compile_mode3_hybrid` - 8 formats with NORMAL for Mode 3
+    - `test_compile_skinned_variants` - all skinned permutations
+    - `test_shader_has_vertex_entry` / `test_shader_has_fragment_entry` - entry points
+    - `test_no_unreplaced_placeholders` - template validation
+  - **Vertex format stride validation**: 11 tests for all 16 formats
+    - `test_vertex_stride_*` - validates stride calculations for each format
+    - `test_all_16_vertex_formats` - comprehensive format coverage
+    - `test_vertex_format_info_*` - name and flag validation
+  - **Texture loading and binding tests**: 4 new tests
+    - `test_texture_slot_binding` - slot assignment
+    - `test_texture_slot_rebinding` - rebinding and unbinding
+    - `test_texture_slots_all_bound` - all 4 slots bound
+    - `test_draw_command_captures_texture_slots` - state capture
+  - **Render state switching tests**: 9 new tests
+    - `test_render_state_depth_test_toggle` - depth test on/off
+    - `test_render_state_cull_mode_switching` - cull mode changes
+    - `test_render_state_blend_mode_switching` - blend mode changes
+    - `test_render_state_color_changes` - color and vec4 conversion
+    - `test_render_state_texture_filter_switching` - filter mode changes
+    - `test_draw_commands_capture_render_state` - full state capture
+    - `test_render_state_equality` / `test_render_state_clone` - Copy/PartialEq
+  - Total graphics tests: 42 (was 29, added 13 new tests)
+  - All 206 tests passing (132 core + 74 emberware-z)
 
 - **Update documentation (Phase 7)**
   - Fixed save function return value documentation in ffi.md (was "1 on success", now "0 on success, 1 invalid slot, 2 data too large")

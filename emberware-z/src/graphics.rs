@@ -2730,4 +2730,247 @@ mod tests {
         assert_eq!(base2, 3); // Should start after first batch
         assert_eq!(cb.commands().len(), 2);
     }
+
+    // ========================================================================
+    // Texture Binding Tests
+    // ========================================================================
+
+    #[test]
+    fn test_texture_slot_binding() {
+        let mut state = RenderState::default();
+
+        // Initial state: all slots invalid
+        for slot in 0..4 {
+            assert_eq!(state.texture_slots[slot], TextureHandle::INVALID);
+        }
+
+        // Bind texture to slot 0
+        state.texture_slots[0] = TextureHandle(1);
+        assert_eq!(state.texture_slots[0], TextureHandle(1));
+        assert_eq!(state.texture_slots[1], TextureHandle::INVALID);
+
+        // Bind texture to slot 2
+        state.texture_slots[2] = TextureHandle(5);
+        assert_eq!(state.texture_slots[2], TextureHandle(5));
+    }
+
+    #[test]
+    fn test_texture_slot_rebinding() {
+        let mut state = RenderState::default();
+
+        // Bind initial texture
+        state.texture_slots[0] = TextureHandle(1);
+        assert_eq!(state.texture_slots[0], TextureHandle(1));
+
+        // Rebind to different texture
+        state.texture_slots[0] = TextureHandle(2);
+        assert_eq!(state.texture_slots[0], TextureHandle(2));
+
+        // Unbind (set to invalid)
+        state.texture_slots[0] = TextureHandle::INVALID;
+        assert_eq!(state.texture_slots[0], TextureHandle::INVALID);
+    }
+
+    #[test]
+    fn test_texture_slots_all_bound() {
+        let mut state = RenderState::default();
+
+        // Bind all 4 slots
+        for slot in 0..4 {
+            state.texture_slots[slot] = TextureHandle((slot + 1) as u32);
+        }
+
+        // Verify all slots
+        for slot in 0..4 {
+            assert_eq!(state.texture_slots[slot], TextureHandle((slot + 1) as u32));
+        }
+    }
+
+    #[test]
+    fn test_draw_command_captures_texture_slots() {
+        let mut cb = CommandBuffer::new();
+        let mut state = RenderState::default();
+
+        // Bind textures before draw
+        state.texture_slots[0] = TextureHandle(10);
+        state.texture_slots[1] = TextureHandle(20);
+
+        let vertices = [0.0f32, 0.0, 0.0, 1.0, 0.0, 0.0, 0.5, 1.0, 0.0];
+        cb.add_vertices(0, &vertices, Mat4::IDENTITY, &state);
+
+        // Command should capture the texture slots
+        assert_eq!(cb.commands()[0].texture_slots[0], TextureHandle(10));
+        assert_eq!(cb.commands()[0].texture_slots[1], TextureHandle(20));
+        assert_eq!(cb.commands()[0].texture_slots[2], TextureHandle::INVALID);
+    }
+
+    // ========================================================================
+    // Render State Switching Tests
+    // ========================================================================
+
+    #[test]
+    fn test_render_state_depth_test_toggle() {
+        let mut state = RenderState::default();
+
+        // Default is depth test enabled
+        assert!(state.depth_test);
+
+        // Disable depth test
+        state.depth_test = false;
+        assert!(!state.depth_test);
+
+        // Re-enable
+        state.depth_test = true;
+        assert!(state.depth_test);
+    }
+
+    #[test]
+    fn test_render_state_cull_mode_switching() {
+        let mut state = RenderState::default();
+
+        // Default is back-face culling
+        assert_eq!(state.cull_mode, CullMode::Back);
+
+        // Switch to front culling
+        state.cull_mode = CullMode::Front;
+        assert_eq!(state.cull_mode, CullMode::Front);
+
+        // Disable culling
+        state.cull_mode = CullMode::None;
+        assert_eq!(state.cull_mode, CullMode::None);
+
+        // Back to back
+        state.cull_mode = CullMode::Back;
+        assert_eq!(state.cull_mode, CullMode::Back);
+    }
+
+    #[test]
+    fn test_render_state_blend_mode_switching() {
+        let mut state = RenderState::default();
+
+        // Default is no blending
+        assert_eq!(state.blend_mode, BlendMode::None);
+
+        // Switch through all modes
+        state.blend_mode = BlendMode::Alpha;
+        assert_eq!(state.blend_mode, BlendMode::Alpha);
+
+        state.blend_mode = BlendMode::Additive;
+        assert_eq!(state.blend_mode, BlendMode::Additive);
+
+        state.blend_mode = BlendMode::Multiply;
+        assert_eq!(state.blend_mode, BlendMode::Multiply);
+
+        state.blend_mode = BlendMode::None;
+        assert_eq!(state.blend_mode, BlendMode::None);
+    }
+
+    #[test]
+    fn test_render_state_color_changes() {
+        let mut state = RenderState::default();
+
+        // Default is white
+        assert_eq!(state.color, 0xFFFFFFFF);
+
+        // Change to red
+        state.color = 0xFF0000FF;
+        let v = state.color_vec4();
+        assert!((v.x - 1.0).abs() < 0.01);       // R = 0xFF
+        assert!((v.y - 0.0).abs() < 0.01);       // G = 0x00
+        assert!((v.z - 0.0).abs() < 0.01);       // B = 0x00
+        assert!((v.w - 1.0).abs() < 0.01);       // A = 0xFF
+
+        // Change to transparent
+        state.color = 0x00000000;
+        let v = state.color_vec4();
+        assert!((v.x - 0.0).abs() < 0.01);
+        assert!((v.y - 0.0).abs() < 0.01);
+        assert!((v.z - 0.0).abs() < 0.01);
+        assert!((v.w - 0.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_render_state_texture_filter_switching() {
+        let mut state = RenderState::default();
+
+        // Default is nearest
+        assert_eq!(state.texture_filter, TextureFilter::Nearest);
+
+        // Switch to linear
+        state.texture_filter = TextureFilter::Linear;
+        assert_eq!(state.texture_filter, TextureFilter::Linear);
+        assert_eq!(state.texture_filter.to_wgpu(), wgpu::FilterMode::Linear);
+
+        // Back to nearest
+        state.texture_filter = TextureFilter::Nearest;
+        assert_eq!(state.texture_filter, TextureFilter::Nearest);
+        assert_eq!(state.texture_filter.to_wgpu(), wgpu::FilterMode::Nearest);
+    }
+
+    #[test]
+    fn test_draw_commands_capture_render_state() {
+        let mut cb = CommandBuffer::new();
+        let vertices = [0.0f32, 0.0, 0.0, 1.0, 0.0, 0.0, 0.5, 1.0, 0.0];
+
+        // Draw with default state
+        let state1 = RenderState::default();
+        cb.add_vertices(0, &vertices, Mat4::IDENTITY, &state1);
+
+        // Draw with modified state
+        let state2 = RenderState {
+            color: 0xFF0000FF,
+            depth_test: false,
+            cull_mode: CullMode::None,
+            blend_mode: BlendMode::Alpha,
+            texture_filter: TextureFilter::Linear,
+            texture_slots: [TextureHandle(1), TextureHandle::INVALID, TextureHandle::INVALID, TextureHandle::INVALID],
+        };
+        cb.add_vertices(0, &vertices, Mat4::IDENTITY, &state2);
+
+        // Verify first command has default state
+        assert_eq!(cb.commands()[0].color, 0xFFFFFFFF);
+        assert!(cb.commands()[0].depth_test);
+        assert_eq!(cb.commands()[0].cull_mode, CullMode::Back);
+        assert_eq!(cb.commands()[0].blend_mode, BlendMode::None);
+
+        // Verify second command has modified state
+        assert_eq!(cb.commands()[1].color, 0xFF0000FF);
+        assert!(!cb.commands()[1].depth_test);
+        assert_eq!(cb.commands()[1].cull_mode, CullMode::None);
+        assert_eq!(cb.commands()[1].blend_mode, BlendMode::Alpha);
+        assert_eq!(cb.commands()[1].texture_slots[0], TextureHandle(1));
+    }
+
+    #[test]
+    fn test_render_state_equality() {
+        let state1 = RenderState::default();
+        let state2 = RenderState::default();
+        let state3 = RenderState {
+            color: 0xFF0000FF,
+            ..Default::default()
+        };
+
+        assert_eq!(state1, state2);
+        assert_ne!(state1, state3);
+    }
+
+    #[test]
+    fn test_render_state_clone() {
+        let state1 = RenderState {
+            color: 0x12345678,
+            depth_test: false,
+            cull_mode: CullMode::Front,
+            blend_mode: BlendMode::Additive,
+            texture_filter: TextureFilter::Linear,
+            texture_slots: [TextureHandle(1), TextureHandle(2), TextureHandle(3), TextureHandle(4)],
+        };
+
+        let state2 = state1;
+        assert_eq!(state1.color, state2.color);
+        assert_eq!(state1.depth_test, state2.depth_test);
+        assert_eq!(state1.cull_mode, state2.cull_mode);
+        assert_eq!(state1.blend_mode, state2.blend_mode);
+        assert_eq!(state1.texture_filter, state2.texture_filter);
+        assert_eq!(state1.texture_slots, state2.texture_slots);
+    }
 }
