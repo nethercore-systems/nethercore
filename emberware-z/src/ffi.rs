@@ -74,6 +74,13 @@ pub fn register_z_ffi(linker: &mut Linker<GameState>) -> Result<()> {
     linker.func_wrap("env", "draw_billboard", draw_billboard)?;
     linker.func_wrap("env", "draw_billboard_region", draw_billboard_region)?;
 
+    // 2D drawing (screen space)
+    linker.func_wrap("env", "draw_sprite", draw_sprite)?;
+    linker.func_wrap("env", "draw_sprite_region", draw_sprite_region)?;
+    linker.func_wrap("env", "draw_sprite_ex", draw_sprite_ex)?;
+    linker.func_wrap("env", "draw_rect", draw_rect)?;
+    linker.func_wrap("env", "draw_text", draw_text)?;
+
     Ok(())
 }
 
@@ -1523,6 +1530,217 @@ fn draw_billboard_region(
         cull_mode: state.render_state.cull_mode,
         blend_mode: state.render_state.blend_mode,
         bound_textures: state.render_state.bound_textures,
+    });
+}
+
+// ============================================================================
+// 2D Drawing (Screen Space)
+// ============================================================================
+
+/// Draw a sprite with the bound texture
+///
+/// # Arguments
+/// * `x` — Screen X coordinate in pixels (0 = left edge)
+/// * `y` — Screen Y coordinate in pixels (0 = top edge)
+/// * `w` — Sprite width in pixels
+/// * `h` — Sprite height in pixels
+/// * `color` — Color tint (0xRRGGBBAA)
+///
+/// Draws the full texture (UV 0,0 to 1,1) as a quad in screen space.
+/// Uses current blend mode and bound texture (slot 0).
+fn draw_sprite(mut caller: Caller<'_, GameState>, x: f32, y: f32, w: f32, h: f32, color: u32) {
+    let state = caller.data_mut();
+
+    state.draw_commands.push(DrawCommand::DrawSprite {
+        x,
+        y,
+        width: w,
+        height: h,
+        uv_rect: None, // Full texture (0,0,1,1)
+        origin: None,  // No rotation
+        rotation: 0.0,
+        color,
+        blend_mode: state.render_state.blend_mode,
+        bound_textures: state.render_state.bound_textures,
+    });
+}
+
+/// Draw a region of a sprite sheet
+///
+/// # Arguments
+/// * `x` — Screen X coordinate in pixels (0 = left edge)
+/// * `y` — Screen Y coordinate in pixels (0 = top edge)
+/// * `w` — Sprite width in pixels
+/// * `h` — Sprite height in pixels
+/// * `src_x` — Source texture X coordinate (0.0-1.0)
+/// * `src_y` — Source texture Y coordinate (0.0-1.0)
+/// * `src_w` — Source texture width (0.0-1.0)
+/// * `src_h` — Source texture height (0.0-1.0)
+/// * `color` — Color tint (0xRRGGBBAA)
+///
+/// Useful for sprite sheets and texture atlases.
+fn draw_sprite_region(
+    mut caller: Caller<'_, GameState>,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    src_x: f32,
+    src_y: f32,
+    src_w: f32,
+    src_h: f32,
+    color: u32,
+) {
+    let state = caller.data_mut();
+
+    state.draw_commands.push(DrawCommand::DrawSprite {
+        x,
+        y,
+        width: w,
+        height: h,
+        uv_rect: Some((src_x, src_y, src_w, src_h)),
+        origin: None,  // No rotation
+        rotation: 0.0,
+        color,
+        blend_mode: state.render_state.blend_mode,
+        bound_textures: state.render_state.bound_textures,
+    });
+}
+
+/// Draw a sprite with full control (rotation, origin, UV region)
+///
+/// # Arguments
+/// * `x` — Screen X coordinate in pixels (0 = left edge)
+/// * `y` — Screen Y coordinate in pixels (0 = top edge)
+/// * `w` — Sprite width in pixels
+/// * `h` — Sprite height in pixels
+/// * `src_x` — Source texture X coordinate (0.0-1.0)
+/// * `src_y` — Source texture Y coordinate (0.0-1.0)
+/// * `src_w` — Source texture width (0.0-1.0)
+/// * `src_h` — Source texture height (0.0-1.0)
+/// * `origin_x` — Origin X offset in pixels (0 = left edge of sprite)
+/// * `origin_y` — Origin Y offset in pixels (0 = top edge of sprite)
+/// * `angle_deg` — Rotation angle in degrees (clockwise)
+/// * `color` — Color tint (0xRRGGBBAA)
+///
+/// The sprite rotates around the origin point. For center rotation, use (w/2, h/2).
+fn draw_sprite_ex(
+    mut caller: Caller<'_, GameState>,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    src_x: f32,
+    src_y: f32,
+    src_w: f32,
+    src_h: f32,
+    origin_x: f32,
+    origin_y: f32,
+    angle_deg: f32,
+    color: u32,
+) {
+    let state = caller.data_mut();
+
+    state.draw_commands.push(DrawCommand::DrawSprite {
+        x,
+        y,
+        width: w,
+        height: h,
+        uv_rect: Some((src_x, src_y, src_w, src_h)),
+        origin: Some((origin_x, origin_y)),
+        rotation: angle_deg,
+        color,
+        blend_mode: state.render_state.blend_mode,
+        bound_textures: state.render_state.bound_textures,
+    });
+}
+
+/// Draw a solid color rectangle
+///
+/// # Arguments
+/// * `x` — Screen X coordinate in pixels (0 = left edge)
+/// * `y` — Screen Y coordinate in pixels (0 = top edge)
+/// * `w` — Rectangle width in pixels
+/// * `h` — Rectangle height in pixels
+/// * `color` — Fill color (0xRRGGBBAA)
+///
+/// Draws an untextured quad. Useful for UI backgrounds, health bars, etc.
+fn draw_rect(mut caller: Caller<'_, GameState>, x: f32, y: f32, w: f32, h: f32, color: u32) {
+    let state = caller.data_mut();
+
+    state.draw_commands.push(DrawCommand::DrawRect {
+        x,
+        y,
+        width: w,
+        height: h,
+        color,
+        blend_mode: state.render_state.blend_mode,
+    });
+}
+
+/// Draw text with the built-in font
+///
+/// # Arguments
+/// * `ptr` — Pointer to UTF-8 string data
+/// * `len` — Length of string in bytes
+/// * `x` — Screen X coordinate in pixels (0 = left edge)
+/// * `y` — Screen Y coordinate in pixels (baseline)
+/// * `size` — Font size in pixels
+/// * `color` — Text color (0xRRGGBBAA)
+///
+/// Supports full UTF-8 encoding. Text is left-aligned with no wrapping.
+fn draw_text(
+    mut caller: Caller<'_, GameState>,
+    ptr: u32,
+    len: u32,
+    x: f32,
+    y: f32,
+    size: f32,
+    color: u32,
+) {
+    // Read UTF-8 string from WASM memory
+    let memory = match caller.data().memory {
+        Some(m) => m,
+        None => {
+            warn!("draw_text: no WASM memory available");
+            return;
+        }
+    };
+
+    let text_string = {
+        let mem_data = memory.data(&caller);
+        let ptr = ptr as usize;
+        let len = len as usize;
+
+        if ptr + len > mem_data.len() {
+            warn!(
+                "draw_text: string data ({} bytes at {}) exceeds memory bounds ({})",
+                len,
+                ptr,
+                mem_data.len()
+            );
+            return;
+        }
+
+        let bytes = &mem_data[ptr..ptr + len];
+        match std::str::from_utf8(bytes) {
+            Ok(s) => s.to_string(),
+            Err(e) => {
+                warn!("draw_text: invalid UTF-8 string: {}", e);
+                return;
+            }
+        }
+    };
+
+    let state = caller.data_mut();
+
+    state.draw_commands.push(DrawCommand::DrawText {
+        text: text_string,
+        x,
+        y,
+        size,
+        color,
+        blend_mode: state.render_state.blend_mode,
     });
 }
 

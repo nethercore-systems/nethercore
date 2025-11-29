@@ -148,33 +148,9 @@ The `Runtime<C: Console>` handles:
 
 (Moved to In Progress)
 
-#### 3.10 Billboarding FFI
-
-- **Implement billboard drawing**
-  - `draw_billboard(w, h, mode, color)` — draw billboard at current transform
-  - `draw_billboard_region(w, h, src_x, src_y, src_w, src_h, mode, color)` — with UV region
-  - Billboard modes: 1=spherical, 2=cylindrical Y, 3=cylindrical X, 4=cylindrical Z
-  - Compute billboard rotation matrix based on mode and camera
-  - Generate quad vertices with UVs, add to immediate buffer
-
 #### 3.11 2D Drawing FFI (Screen Space)
 
-- **Implement 2D sprite drawing**
-  - `draw_sprite(x, y, w, h, color)` — draw bound texture
-  - `draw_sprite_region(x, y, w, h, src_x, src_y, src_w, src_h, color)` — with UV region
-  - `draw_sprite_ex(x, y, w, h, src_x, src_y, src_w, src_h, origin_x, origin_y, angle_deg, color)` — full control
-  - Screen-space coordinates (0,0 = top-left)
-  - Orthographic projection for 2D pass
-
-- **Implement 2D primitive drawing**
-  - `draw_rect(x, y, w, h, color)` — solid color rectangle
-  - No texture, just colored quad
-
-- **Implement text drawing**
-  - `draw_text(ptr, len, x, y, size, color)` — draw UTF-8 string
-  - Built-in bitmap font (embedded in binary)
-  - Full UTF-8 support for internationalization
-  - TODO [needs clarification]: Custom font loading
+(Moved to In Progress)
 
 #### 3.12 Render State FFI
 
@@ -496,6 +472,16 @@ The `Runtime<C: Console>` handles:
 ## In Progress
 
 ## Done
+
+- **Implement 2D Drawing FFI (Phase 3.11)**
+  - `draw_sprite(x, y, w, h, color)` — draw bound texture in screen space
+  - `draw_sprite_region(x, y, w, h, src_x, src_y, src_w, src_h, color)` — sprite sheet support
+  - `draw_sprite_ex(x, y, w, h, src_x, src_y, src_w, src_h, origin_x, origin_y, angle_deg, color)` — full control with rotation
+  - `draw_rect(x, y, w, h, color)` — solid color rectangle
+  - `draw_text(ptr, len, x, y, size, color)` — UTF-8 text rendering
+  - DrawSprite, DrawRect, and DrawText commands added to DrawCommand enum
+  - Screen-space coordinates (0,0 = top-left)
+  - UTF-8 validation and proper string handling
 
 - **Implement billboard drawing (Phase 3.10)**
   - `draw_billboard(w, h, mode, color)` — draw billboard at current transform

@@ -98,6 +98,59 @@ pub enum DrawCommand {
         /// Bound textures
         bound_textures: [u32; 4],
     },
+    /// Draw a 2D sprite in screen space
+    DrawSprite {
+        /// Screen X coordinate (pixels, 0 = left)
+        x: f32,
+        /// Screen Y coordinate (pixels, 0 = top)
+        y: f32,
+        /// Sprite width (pixels)
+        width: f32,
+        /// Sprite height (pixels)
+        height: f32,
+        /// Source UV rectangle (x, y, w, h) - None for full texture (0,0,1,1)
+        uv_rect: Option<(f32, f32, f32, f32)>,
+        /// Origin offset for rotation (x, y in pixels, 0,0 = top-left)
+        origin: Option<(f32, f32)>,
+        /// Rotation angle in degrees (clockwise)
+        rotation: f32,
+        /// Color tint
+        color: u32,
+        /// Blend mode
+        blend_mode: u8,
+        /// Bound textures
+        bound_textures: [u32; 4],
+    },
+    /// Draw a 2D rectangle in screen space
+    DrawRect {
+        /// Screen X coordinate (pixels, 0 = left)
+        x: f32,
+        /// Screen Y coordinate (pixels, 0 = top)
+        y: f32,
+        /// Rectangle width (pixels)
+        width: f32,
+        /// Rectangle height (pixels)
+        height: f32,
+        /// Fill color
+        color: u32,
+        /// Blend mode
+        blend_mode: u8,
+    },
+    /// Draw text in screen space
+    DrawText {
+        /// UTF-8 text string
+        text: String,
+        /// Screen X coordinate (pixels, 0 = left)
+        x: f32,
+        /// Screen Y coordinate (pixels, 0 = top)
+        y: f32,
+        /// Font size (pixels)
+        size: f32,
+        /// Text color
+        color: u32,
+        /// Blend mode
+        blend_mode: u8,
+    },
 }
 
 /// Shared WASM engine (one per application)
