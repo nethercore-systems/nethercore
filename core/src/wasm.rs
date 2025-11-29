@@ -21,6 +21,15 @@ pub const MAX_SAVE_SLOTS: usize = 8;
 /// Maximum save data size per slot (64KB)
 pub const MAX_SAVE_SIZE: usize = 64 * 1024;
 
+/// Pending texture load request
+#[derive(Debug, Clone)]
+pub struct PendingTexture {
+    pub handle: u32,
+    pub width: u32,
+    pub height: u32,
+    pub data: Vec<u8>,
+}
+
 /// Shared WASM engine (one per application)
 pub struct WasmEngine {
     engine: Engine,
@@ -103,6 +112,12 @@ pub struct GameState {
 
     /// Quit requested by game
     pub quit_requested: bool,
+
+    /// Next texture handle to allocate
+    pub next_texture_handle: u32,
+
+    /// Pending texture loads (filled by FFI, consumed by graphics backend)
+    pub pending_textures: Vec<PendingTexture>,
 }
 
 impl GameState {
@@ -126,6 +141,8 @@ impl GameState {
             input_curr: [InputState::default(); MAX_PLAYERS],
             save_data: Default::default(),
             quit_requested: false,
+            next_texture_handle: 1, // 0 is reserved for invalid/unbound
+            pending_textures: Vec::new(),
         }
     }
 

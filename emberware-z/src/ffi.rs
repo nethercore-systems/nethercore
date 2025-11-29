@@ -8,7 +8,7 @@ use glam::{Mat4, Vec3};
 use tracing::{info, warn};
 use wasmtime::{Caller, Linker};
 
-use emberware_core::wasm::{GameState, MAX_TRANSFORM_STACK};
+use emberware_core::wasm::{GameState, PendingTexture, MAX_PLAYERS, MAX_TRANSFORM_STACK};
 
 use crate::console::{RESOLUTIONS, TICK_RATES};
 
@@ -32,6 +32,34 @@ pub fn register_z_ffi(linker: &mut Linker<GameState>) -> Result<()> {
     linker.func_wrap("env", "transform_push", transform_push)?;
     linker.func_wrap("env", "transform_pop", transform_pop)?;
     linker.func_wrap("env", "transform_set", transform_set)?;
+
+    // Input functions
+    linker.func_wrap("env", "button_held", button_held)?;
+    linker.func_wrap("env", "button_pressed", button_pressed)?;
+    linker.func_wrap("env", "button_released", button_released)?;
+    linker.func_wrap("env", "buttons_held", buttons_held)?;
+    linker.func_wrap("env", "buttons_pressed", buttons_pressed)?;
+    linker.func_wrap("env", "buttons_released", buttons_released)?;
+    linker.func_wrap("env", "left_stick_x", left_stick_x)?;
+    linker.func_wrap("env", "left_stick_y", left_stick_y)?;
+    linker.func_wrap("env", "right_stick_x", right_stick_x)?;
+    linker.func_wrap("env", "right_stick_y", right_stick_y)?;
+    linker.func_wrap("env", "left_stick", left_stick)?;
+    linker.func_wrap("env", "right_stick", right_stick)?;
+    linker.func_wrap("env", "trigger_left", trigger_left)?;
+    linker.func_wrap("env", "trigger_right", trigger_right)?;
+
+    // Render state functions
+    linker.func_wrap("env", "set_color", set_color)?;
+    linker.func_wrap("env", "depth_test", depth_test)?;
+    linker.func_wrap("env", "cull_mode", cull_mode)?;
+    linker.func_wrap("env", "blend_mode", blend_mode)?;
+    linker.func_wrap("env", "texture_filter", texture_filter)?;
+
+    // Texture functions
+    linker.func_wrap("env", "load_texture", load_texture)?;
+    linker.func_wrap("env", "texture_bind", texture_bind)?;
+    linker.func_wrap("env", "texture_bind_slot", texture_bind_slot)?;
 
     Ok(())
 }
@@ -348,6 +376,540 @@ fn transform_set(mut caller: Caller<'_, GameState>, matrix_ptr: u32) {
     let matrix: [f32; 16] = floats.try_into().expect("slice with incorrect length");
     let state = caller.data_mut();
     state.current_transform = Mat4::from_cols_array(&matrix);
+}
+
+// ============================================================================
+// Input Functions
+// ============================================================================
+
+/// Check if a button is currently held for a player
+///
+/// # Arguments
+/// * `player` — Player index (0-3)
+/// * `button` — Button index (see Button enum: UP=0, DOWN=1, ..., SELECT=13)
+///
+/// Returns 1 if held, 0 otherwise.
+fn button_held(caller: Caller<'_, GameState>, player: u32, button: u32) -> u32 {
+    let state = caller.data();
+    let player = player as usize;
+
+    if player >= MAX_PLAYERS {
+        warn!("button_held: invalid player {} (max {})", player, MAX_PLAYERS - 1);
+        return 0;
+    }
+
+    if button > 13 {
+        warn!("button_held: invalid button {} (max 13)", button);
+        return 0;
+    }
+
+    let mask = 1u16 << button;
+    if (state.input_curr[player].buttons & mask) != 0 {
+        1
+    } else {
+        0
+    }
+}
+
+/// Check if a button was just pressed this tick
+///
+/// # Arguments
+/// * `player` — Player index (0-3)
+/// * `button` — Button index (see Button enum)
+///
+/// Returns 1 if just pressed (not held last tick, held this tick), 0 otherwise.
+fn button_pressed(caller: Caller<'_, GameState>, player: u32, button: u32) -> u32 {
+    let state = caller.data();
+    let player = player as usize;
+
+    if player >= MAX_PLAYERS {
+        warn!("button_pressed: invalid player {} (max {})", player, MAX_PLAYERS - 1);
+        return 0;
+    }
+
+    if button > 13 {
+        warn!("button_pressed: invalid button {} (max 13)", button);
+        return 0;
+    }
+
+    let mask = 1u16 << button;
+    let was_held = (state.input_prev[player].buttons & mask) != 0;
+    let is_held = (state.input_curr[player].buttons & mask) != 0;
+
+    if is_held && !was_held {
+        1
+    } else {
+        0
+    }
+}
+
+/// Check if a button was just released this tick
+///
+/// # Arguments
+/// * `player` — Player index (0-3)
+/// * `button` — Button index (see Button enum)
+///
+/// Returns 1 if just released (held last tick, not held this tick), 0 otherwise.
+fn button_released(caller: Caller<'_, GameState>, player: u32, button: u32) -> u32 {
+    let state = caller.data();
+    let player = player as usize;
+
+    if player >= MAX_PLAYERS {
+        warn!("button_released: invalid player {} (max {})", player, MAX_PLAYERS - 1);
+        return 0;
+    }
+
+    if button > 13 {
+        warn!("button_released: invalid button {} (max 13)", button);
+        return 0;
+    }
+
+    let mask = 1u16 << button;
+    let was_held = (state.input_prev[player].buttons & mask) != 0;
+    let is_held = (state.input_curr[player].buttons & mask) != 0;
+
+    if was_held && !is_held {
+        1
+    } else {
+        0
+    }
+}
+
+/// Get bitmask of all held buttons for a player
+///
+/// # Arguments
+/// * `player` — Player index (0-3)
+///
+/// Returns a bitmask where each bit represents a button state.
+fn buttons_held(caller: Caller<'_, GameState>, player: u32) -> u32 {
+    let state = caller.data();
+    let player = player as usize;
+
+    if player >= MAX_PLAYERS {
+        warn!("buttons_held: invalid player {} (max {})", player, MAX_PLAYERS - 1);
+        return 0;
+    }
+
+    state.input_curr[player].buttons as u32
+}
+
+/// Get bitmask of all buttons just pressed this tick
+///
+/// # Arguments
+/// * `player` — Player index (0-3)
+///
+/// Returns a bitmask of buttons that are held now but were not held last tick.
+fn buttons_pressed(caller: Caller<'_, GameState>, player: u32) -> u32 {
+    let state = caller.data();
+    let player = player as usize;
+
+    if player >= MAX_PLAYERS {
+        warn!("buttons_pressed: invalid player {} (max {})", player, MAX_PLAYERS - 1);
+        return 0;
+    }
+
+    let prev = state.input_prev[player].buttons;
+    let curr = state.input_curr[player].buttons;
+
+    // Pressed = held now AND not held before
+    (curr & !prev) as u32
+}
+
+/// Get bitmask of all buttons just released this tick
+///
+/// # Arguments
+/// * `player` — Player index (0-3)
+///
+/// Returns a bitmask of buttons that were held last tick but are not held now.
+fn buttons_released(caller: Caller<'_, GameState>, player: u32) -> u32 {
+    let state = caller.data();
+    let player = player as usize;
+
+    if player >= MAX_PLAYERS {
+        warn!("buttons_released: invalid player {} (max {})", player, MAX_PLAYERS - 1);
+        return 0;
+    }
+
+    let prev = state.input_prev[player].buttons;
+    let curr = state.input_curr[player].buttons;
+
+    // Released = held before AND not held now
+    (prev & !curr) as u32
+}
+
+/// Get left stick X axis value
+///
+/// # Arguments
+/// * `player` — Player index (0-3)
+///
+/// Returns value from -1.0 to 1.0 (0.0 if invalid player).
+fn left_stick_x(caller: Caller<'_, GameState>, player: u32) -> f32 {
+    let state = caller.data();
+    let player = player as usize;
+
+    if player >= MAX_PLAYERS {
+        warn!("left_stick_x: invalid player {} (max {})", player, MAX_PLAYERS - 1);
+        return 0.0;
+    }
+
+    state.input_curr[player].left_stick_x as f32 / 127.0
+}
+
+/// Get left stick Y axis value
+///
+/// # Arguments
+/// * `player` — Player index (0-3)
+///
+/// Returns value from -1.0 to 1.0 (0.0 if invalid player).
+fn left_stick_y(caller: Caller<'_, GameState>, player: u32) -> f32 {
+    let state = caller.data();
+    let player = player as usize;
+
+    if player >= MAX_PLAYERS {
+        warn!("left_stick_y: invalid player {} (max {})", player, MAX_PLAYERS - 1);
+        return 0.0;
+    }
+
+    state.input_curr[player].left_stick_y as f32 / 127.0
+}
+
+/// Get right stick X axis value
+///
+/// # Arguments
+/// * `player` — Player index (0-3)
+///
+/// Returns value from -1.0 to 1.0 (0.0 if invalid player).
+fn right_stick_x(caller: Caller<'_, GameState>, player: u32) -> f32 {
+    let state = caller.data();
+    let player = player as usize;
+
+    if player >= MAX_PLAYERS {
+        warn!("right_stick_x: invalid player {} (max {})", player, MAX_PLAYERS - 1);
+        return 0.0;
+    }
+
+    state.input_curr[player].right_stick_x as f32 / 127.0
+}
+
+/// Get right stick Y axis value
+///
+/// # Arguments
+/// * `player` — Player index (0-3)
+///
+/// Returns value from -1.0 to 1.0 (0.0 if invalid player).
+fn right_stick_y(caller: Caller<'_, GameState>, player: u32) -> f32 {
+    let state = caller.data();
+    let player = player as usize;
+
+    if player >= MAX_PLAYERS {
+        warn!("right_stick_y: invalid player {} (max {})", player, MAX_PLAYERS - 1);
+        return 0.0;
+    }
+
+    state.input_curr[player].right_stick_y as f32 / 127.0
+}
+
+/// Get both left stick axes at once
+///
+/// # Arguments
+/// * `player` — Player index (0-3)
+/// * `out_x` — Pointer to write X axis value (-1.0 to 1.0)
+/// * `out_y` — Pointer to write Y axis value (-1.0 to 1.0)
+///
+/// More efficient than two separate calls for the same player.
+fn left_stick(mut caller: Caller<'_, GameState>, player: u32, out_x: u32, out_y: u32) {
+    let (x, y) = {
+        let state = caller.data();
+        let player = player as usize;
+
+        if player >= MAX_PLAYERS {
+            warn!("left_stick: invalid player {} (max {})", player, MAX_PLAYERS - 1);
+            (0.0f32, 0.0f32)
+        } else {
+            let input = &state.input_curr[player];
+            (
+                input.left_stick_x as f32 / 127.0,
+                input.left_stick_y as f32 / 127.0,
+            )
+        }
+    };
+
+    // Write results to WASM memory
+    let memory = match caller.data().memory {
+        Some(m) => m,
+        None => {
+            warn!("left_stick: no WASM memory available");
+            return;
+        }
+    };
+
+    let mem_data = memory.data_mut(&mut caller);
+    let x_ptr = out_x as usize;
+    let y_ptr = out_y as usize;
+
+    if x_ptr + 4 > mem_data.len() || y_ptr + 4 > mem_data.len() {
+        warn!("left_stick: output pointers out of bounds");
+        return;
+    }
+
+    mem_data[x_ptr..x_ptr + 4].copy_from_slice(&x.to_le_bytes());
+    mem_data[y_ptr..y_ptr + 4].copy_from_slice(&y.to_le_bytes());
+}
+
+/// Get both right stick axes at once
+///
+/// # Arguments
+/// * `player` — Player index (0-3)
+/// * `out_x` — Pointer to write X axis value (-1.0 to 1.0)
+/// * `out_y` — Pointer to write Y axis value (-1.0 to 1.0)
+///
+/// More efficient than two separate calls for the same player.
+fn right_stick(mut caller: Caller<'_, GameState>, player: u32, out_x: u32, out_y: u32) {
+    let (x, y) = {
+        let state = caller.data();
+        let player = player as usize;
+
+        if player >= MAX_PLAYERS {
+            warn!("right_stick: invalid player {} (max {})", player, MAX_PLAYERS - 1);
+            (0.0f32, 0.0f32)
+        } else {
+            let input = &state.input_curr[player];
+            (
+                input.right_stick_x as f32 / 127.0,
+                input.right_stick_y as f32 / 127.0,
+            )
+        }
+    };
+
+    // Write results to WASM memory
+    let memory = match caller.data().memory {
+        Some(m) => m,
+        None => {
+            warn!("right_stick: no WASM memory available");
+            return;
+        }
+    };
+
+    let mem_data = memory.data_mut(&mut caller);
+    let x_ptr = out_x as usize;
+    let y_ptr = out_y as usize;
+
+    if x_ptr + 4 > mem_data.len() || y_ptr + 4 > mem_data.len() {
+        warn!("right_stick: output pointers out of bounds");
+        return;
+    }
+
+    mem_data[x_ptr..x_ptr + 4].copy_from_slice(&x.to_le_bytes());
+    mem_data[y_ptr..y_ptr + 4].copy_from_slice(&y.to_le_bytes());
+}
+
+/// Get left trigger value
+///
+/// # Arguments
+/// * `player` — Player index (0-3)
+///
+/// Returns value from 0.0 to 1.0 (0.0 if invalid player).
+fn trigger_left(caller: Caller<'_, GameState>, player: u32) -> f32 {
+    let state = caller.data();
+    let player = player as usize;
+
+    if player >= MAX_PLAYERS {
+        warn!("trigger_left: invalid player {} (max {})", player, MAX_PLAYERS - 1);
+        return 0.0;
+    }
+
+    state.input_curr[player].left_trigger as f32 / 255.0
+}
+
+/// Get right trigger value
+///
+/// # Arguments
+/// * `player` — Player index (0-3)
+///
+/// Returns value from 0.0 to 1.0 (0.0 if invalid player).
+fn trigger_right(caller: Caller<'_, GameState>, player: u32) -> f32 {
+    let state = caller.data();
+    let player = player as usize;
+
+    if player >= MAX_PLAYERS {
+        warn!("trigger_right: invalid player {} (max {})", player, MAX_PLAYERS - 1);
+        return 0.0;
+    }
+
+    state.input_curr[player].right_trigger as f32 / 255.0
+}
+
+// ============================================================================
+// Render State Functions
+// ============================================================================
+
+/// Set the uniform tint color
+///
+/// # Arguments
+/// * `color` — Color in 0xRRGGBBAA format
+///
+/// This color is multiplied with vertex colors and textures.
+fn set_color(mut caller: Caller<'_, GameState>, color: u32) {
+    let state = caller.data_mut();
+    state.render_state.color = color;
+}
+
+/// Enable or disable depth testing
+///
+/// # Arguments
+/// * `enabled` — 0 to disable, non-zero to enable
+///
+/// Default: enabled. Disable for 2D overlays or special effects.
+fn depth_test(mut caller: Caller<'_, GameState>, enabled: u32) {
+    let state = caller.data_mut();
+    state.render_state.depth_test = enabled != 0;
+}
+
+/// Set the face culling mode
+///
+/// # Arguments
+/// * `mode` — 0=none (draw both sides), 1=back (default), 2=front
+///
+/// Back-face culling is the default for solid 3D objects.
+fn cull_mode(mut caller: Caller<'_, GameState>, mode: u32) {
+    let state = caller.data_mut();
+
+    if mode > 2 {
+        warn!("cull_mode({}) invalid - must be 0-2, using 0 (none)", mode);
+        state.render_state.cull_mode = 0;
+        return;
+    }
+
+    state.render_state.cull_mode = mode as u8;
+}
+
+/// Set the blend mode for transparent rendering
+///
+/// # Arguments
+/// * `mode` — 0=none (opaque), 1=alpha, 2=additive, 3=multiply
+///
+/// Default: none (opaque). Use alpha for transparent textures.
+fn blend_mode(mut caller: Caller<'_, GameState>, mode: u32) {
+    let state = caller.data_mut();
+
+    if mode > 3 {
+        warn!("blend_mode({}) invalid - must be 0-3, using 0 (none)", mode);
+        state.render_state.blend_mode = 0;
+        return;
+    }
+
+    state.render_state.blend_mode = mode as u8;
+}
+
+/// Set the texture filtering mode
+///
+/// # Arguments
+/// * `filter` — 0=nearest (pixelated, retro), 1=linear (smooth)
+///
+/// Default: nearest for retro aesthetic.
+fn texture_filter(mut caller: Caller<'_, GameState>, filter: u32) {
+    let state = caller.data_mut();
+
+    if filter > 1 {
+        warn!("texture_filter({}) invalid - must be 0-1, using 0 (nearest)", filter);
+        state.render_state.texture_filter = 0;
+        return;
+    }
+
+    state.render_state.texture_filter = filter as u8;
+}
+
+// ============================================================================
+// Texture Functions
+// ============================================================================
+
+/// Load a texture from RGBA pixel data
+///
+/// # Arguments
+/// * `width` — Texture width in pixels
+/// * `height` — Texture height in pixels
+/// * `pixels_ptr` — Pointer to RGBA8 pixel data (width × height × 4 bytes)
+///
+/// Returns texture handle (>0) on success, 0 on failure.
+/// Validates VRAM budget before allocation.
+fn load_texture(mut caller: Caller<'_, GameState>, width: u32, height: u32, pixels_ptr: u32) -> u32 {
+    // Validate dimensions
+    if width == 0 || height == 0 {
+        warn!("load_texture: invalid dimensions {}x{}", width, height);
+        return 0;
+    }
+
+    // Read pixel data from WASM memory
+    let memory = match caller.data().memory {
+        Some(m) => m,
+        None => {
+            warn!("load_texture: no WASM memory available");
+            return 0;
+        }
+    };
+
+    let ptr = pixels_ptr as usize;
+    let size = (width * height * 4) as usize;
+
+    // Copy pixel data while we have the immutable borrow
+    let pixel_data = {
+        let mem_data = memory.data(&caller);
+
+        if ptr + size > mem_data.len() {
+            warn!(
+                "load_texture: pixel data ({} bytes at {}) exceeds memory bounds ({})",
+                size, ptr, mem_data.len()
+            );
+            return 0;
+        }
+
+        mem_data[ptr..ptr + size].to_vec()
+    };
+
+    // Now we can mutably borrow state
+    let state = caller.data_mut();
+
+    // Allocate a texture handle
+    let handle = state.next_texture_handle;
+    state.next_texture_handle += 1;
+
+    // Store the texture data for the graphics backend
+    state.pending_textures.push(PendingTexture {
+        handle,
+        width,
+        height,
+        data: pixel_data,
+    });
+
+    handle
+}
+
+/// Bind a texture to slot 0 (albedo)
+///
+/// # Arguments
+/// * `handle` — Texture handle from load_texture
+///
+/// Equivalent to texture_bind_slot(handle, 0).
+fn texture_bind(mut caller: Caller<'_, GameState>, handle: u32) {
+    let state = caller.data_mut();
+    state.render_state.bound_textures[0] = handle;
+}
+
+/// Bind a texture to a specific slot
+///
+/// # Arguments
+/// * `handle` — Texture handle from load_texture
+/// * `slot` — Slot index (0-3)
+///
+/// Slots: 0=albedo, 1=MRE/matcap, 2=env matcap, 3=matcap
+fn texture_bind_slot(mut caller: Caller<'_, GameState>, handle: u32, slot: u32) {
+    if slot > 3 {
+        warn!("texture_bind_slot: invalid slot {} (max 3)", slot);
+        return;
+    }
+
+    let state = caller.data_mut();
+    state.render_state.bound_textures[slot as usize] = handle;
 }
 
 #[cfg(test)]

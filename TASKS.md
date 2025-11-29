@@ -130,38 +130,11 @@ The `Runtime<C: Console>` handles:
 
 #### 3.5 Input FFI
 
-- **Implement individual button queries**
-  - `button_held(player, button) -> u32` — 1 if held
-  - `button_pressed(player, button) -> u32` — 1 if just pressed this tick
-  - `button_released(player, button) -> u32` — 1 if just released this tick
-  - Button constants: UP(0), DOWN(1), LEFT(2), RIGHT(3), A(4), B(5), X(6), Y(7), LB(8), RB(9), L3(10), R3(11), START(12), SELECT(13)
-
-- **Implement bulk button queries**
-  - `buttons_held(player) -> u32` — bitmask of all held buttons
-  - `buttons_pressed(player) -> u32` — bitmask of all just pressed
-  - `buttons_released(player) -> u32` — bitmask of all just released
-  - Efficient for checking multiple buttons (single FFI call)
-
-- **Implement analog stick queries**
-  - `left_stick_x(player) -> f32` — -1.0 to 1.0
-  - `left_stick_y(player) -> f32` — -1.0 to 1.0
-  - `right_stick_x(player) -> f32` — -1.0 to 1.0
-  - `right_stick_y(player) -> f32` — -1.0 to 1.0
-  - `left_stick(player, out_x, out_y)` — bulk query (both axes)
-  - `right_stick(player, out_x, out_y)` — bulk query (both axes)
-
-- **Implement trigger queries**
-  - `trigger_left(player) -> f32` — 0.0 to 1.0
-  - `trigger_right(player) -> f32` — 0.0 to 1.0
+(Moved to In Progress)
 
 #### 3.6 Texture FFI
 
-- **Implement texture functions**
-  - `load_texture(width, height, pixels) -> u32` — create texture, return handle
-  - `texture_bind(handle)` — bind to slot 0 (albedo)
-  - `texture_bind_slot(handle, slot)` — bind to specific slot (0-3)
-  - Validate VRAM budget on load
-  - Track bound textures per slot for batching
+(Moved to In Progress)
 
 #### 3.7 Mesh FFI (Retained Mode)
 
@@ -219,13 +192,7 @@ The `Runtime<C: Console>` handles:
 
 #### 3.12 Render State FFI
 
-- **Implement render state functions**
-  - `set_color(color: u32)` — uniform tint color (0xRRGGBBAA)
-  - `depth_test(enabled: u32)` — 0=off, 1=on
-  - `cull_mode(mode: u32)` — 0=none, 1=back, 2=front
-  - `blend_mode(mode: u32)` — 0=none, 1=alpha, 2=additive, 3=multiply
-  - `texture_filter(filter: u32)` — 0=nearest, 1=linear
-  - Track state changes for pipeline selection
+(Moved to In Progress)
 
 #### 3.13 Shader Generation System
 
@@ -543,6 +510,29 @@ The `Runtime<C: Console>` handles:
 ## In Progress
 
 ## Done
+
+- **Implement Input FFI functions (Phase 3.5)**
+  - Individual button queries: `button_held`, `button_pressed`, `button_released`
+  - Bulk button queries: `buttons_held`, `buttons_pressed`, `buttons_released`
+  - Analog stick queries: `left_stick_x`, `left_stick_y`, `right_stick_x`, `right_stick_y`
+  - Bulk stick queries: `left_stick`, `right_stick`
+  - Trigger queries: `trigger_left`, `trigger_right`
+  - Full player validation (0-3), button validation (0-13)
+
+- **Implement Texture FFI functions (Phase 3.6)**
+  - `load_texture(width, height, pixels_ptr) -> u32` — creates texture from RGBA data
+  - `texture_bind(handle)` — bind to slot 0
+  - `texture_bind_slot(handle, slot)` — bind to specific slot (0-3)
+  - PendingTexture struct for graphics backend integration
+  - WASM memory bounds validation
+
+- **Implement Render State FFI functions (Phase 3.12)**
+  - `set_color(color)` — uniform tint color (0xRRGGBBAA)
+  - `depth_test(enabled)` — enable/disable depth testing
+  - `cull_mode(mode)` — 0=none, 1=back, 2=front
+  - `blend_mode(mode)` — 0=none, 1=alpha, 2=additive, 3=multiply
+  - `texture_filter(filter)` — 0=nearest, 1=linear
+  - Input validation with warnings for invalid values
 
 - **Implement camera functions (Phase 3.4)**
   - `camera_set(x, y, z, target_x, target_y, target_z)` — look-at camera
