@@ -1,0 +1,10 @@
+[package]
+name = "emberware-shared"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Shared types for Emberware fantasy console platform"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }

@@ -1,0 +1,50 @@
+[package]
+name = "emberware-z"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Emberware Z - Fantasy console runtime"
+
+[[bin]]
+name = "emberware-z"
+path = "src/main.rs"
+
+[dependencies]
+emberware-shared = { path = "../shared" }
+
+# WASM runtime
+wasmtime = "19"
+
+# Graphics
+wgpu = "0.19"
+winit = "0.29"
+
+# Audio
+rodio = "0.17"
+
+# UI (minimal library)
+egui = "0.27"
+egui-wgpu = "0.27"
+egui-winit = "0.27"
+
+# Rollback netcode
+ggrs = "0.10"
+bytemuck = { version = "1", features = ["derive"] }
+
+# Networking
+matchbox_socket = "0.9"
+
+# HTTP (for downloads)
+reqwest = { version = "0.11", features = ["json", "stream"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs"] }
+
+# Utilities
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+directories = "5"
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "1"
+tracing = "0.1"
+tracing-subscriber = "0.3"
