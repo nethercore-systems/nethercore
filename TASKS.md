@@ -114,15 +114,7 @@ The `Runtime<C: Console>` handles:
 
 #### 3.1 Console Setup
 
-- **Create Emberware Z `Console` implementation**
-  - Implement `Console` trait for PS1/N64 aesthetic
-  - Define Z-specific specs:
-    - Resolution: 360p, 540p (default), 720p, 1080p
-    - Tick rate: 24, 30, 60 (default), 120 fps
-    - RAM: 16MB, VRAM: 8MB, ROM: 32MB max
-    - Color depth: RGBA8
-    - CPU budget: 4ms per tick at 60fps
-  - `ZInput` struct (buttons, dual sticks, triggers)
+(Moved to In Progress)
 
 #### 3.2 Graphics Backend (wgpu)
 
@@ -602,6 +594,16 @@ The `Runtime<C: Console>` handles:
 ## In Progress
 
 ## Done
+
+- **Create Emberware Z `Console` implementation**
+  - Implement `Console` trait for PS1/N64 aesthetic
+  - Define Z-specific specs:
+    - Resolution: 360p, 540p (default), 720p, 1080p
+    - Tick rate: 24, 30, 60 (default), 120 fps
+    - RAM: 16MB, VRAM: 8MB, ROM: 32MB max
+    - Color depth: RGBA8
+    - CPU budget: 4ms per tick at 60fps
+  - `ZInput` struct (buttons, dual sticks, triggers)
 
 - **Handle GGRS events**
   - `GGRSRequest::SaveGameState` → serialize WASM state

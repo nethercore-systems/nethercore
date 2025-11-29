@@ -4,11 +4,12 @@ use std::env;
 
 mod app;
 mod config;
+mod console;
 mod deep_link;
 mod download;
 mod library;
-mod ui;
 mod runtime;
+mod ui;
 
 fn main() {
     tracing_subscriber::fmt::init();
