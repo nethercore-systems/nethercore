@@ -227,10 +227,12 @@ fn material_albedo(texture: u32)            // Base color (linear RGB)
 
 Or set directly:
 ```rust
-fn material_metallic(value: f32)            // 0.0 = dielectric, 1.0 = metal
-fn material_roughness(value: f32)           // 0.0 = mirror, 1.0 = rough
-fn material_emissive(value: f32)            // Glow intensity
+fn material_metallic(value: f32)            // 0.0 = dielectric (default), 1.0 = metal
+fn material_roughness(value: f32)           // 0.0 = mirror (default), 1.0 = rough
+fn material_emissive(value: f32)            // Glow intensity (default: 0.0)
 ```
+
+**Material defaults:** All material properties default to 0.0 (dielectric, mirror-smooth, no emissive).
 
 ```
 // Per-light contribution
@@ -277,14 +279,170 @@ final_color = direct + ambient_reflection + emissive
 
 **Note:** All lit modes output linear RGB. The runtime applies tonemapping and gamma correction.
 
+### Vertex Formats
+
+Vertex data is packed `[f32]` arrays. The format is a 3-bit bitmask determining which attributes are present.
+
+```rust
+// Vertex format flags (bitmask)
+const FORMAT_UV: u32 = 1;      // Has UV coordinates
+const FORMAT_COLOR: u32 = 2;   // Has per-vertex color (RGB, 3 floats)
+const FORMAT_NORMAL: u32 = 4;  // Has normals
+
+// All 8 possible combinations:
+const FORMAT_POS: u32 = 0;                    // pos(3) = 12 bytes
+const FORMAT_POS_UV: u32 = 1;                 // pos(3) + uv(2) = 20 bytes
+const FORMAT_POS_COLOR: u32 = 2;              // pos(3) + color(3) = 24 bytes
+const FORMAT_POS_UV_COLOR: u32 = 3;           // pos(3) + uv(2) + color(3) = 32 bytes
+const FORMAT_POS_NORMAL: u32 = 4;             // pos(3) + normal(3) = 24 bytes
+const FORMAT_POS_UV_NORMAL: u32 = 5;          // pos(3) + uv(2) + normal(3) = 32 bytes
+const FORMAT_POS_COLOR_NORMAL: u32 = 6;       // pos(3) + color(3) + normal(3) = 36 bytes
+const FORMAT_POS_UV_COLOR_NORMAL: u32 = 7;    // pos(3) + uv(2) + color(3) + normal(3) = 44 bytes
+```
+
+**Attribute order:** position → uv (if present) → color (if present) → normal (if present)
+
+**Color format:** RGB as 3 floats (0.0-1.0 range)
+
+| Format | Stride | Example Use Case |
+|--------|--------|------------------|
+| POS | 12 | Debug wireframes, solid color shapes |
+| POS_UV | 20 | Textured geometry (unlit) |
+| POS_COLOR | 24 | Vertex-colored geometry (no texture) |
+| POS_UV_COLOR | 32 | Textured + per-vertex tint |
+| POS_NORMAL | 24 | Lit geometry with matcap as albedo (slot 0) |
+| POS_UV_NORMAL | 32 | Standard lit textured geometry |
+| POS_COLOR_NORMAL | 36 | Lit vertex-colored geometry |
+| POS_UV_COLOR_NORMAL | 44 | Full-featured: texture + vertex color + lighting |
+
+**Notes:**
+- Formats without UV can use matcap in slot 0 as base color
+- Formats without COLOR use `set_color()` for uniform tint
+- Formats without NORMAL only work correctly in Mode 0 (Unlit)
+
+### GPU Skinning
+
+Emberware Z supports GPU-based skeletal animation. Developers animate bones on CPU (calculate bone transforms each frame), and the GPU performs skinning (vertex deformation based on bone weights) in the vertex shader.
+
+**Skinned vertex format flag:**
+
+```rust
+const FORMAT_SKINNED: u32 = 8;  // Has bone indices (4 × u8) + bone weights (4 × f32)
+```
+
+When `FORMAT_SKINNED` is set, each vertex includes:
+- `bone_indices`: 4 × u8 (4 bytes packed as one u32) — which bones affect this vertex (indices 0-255)
+- `bone_weights`: 4 × f32 (16 bytes) — weight of each bone's influence (should sum to 1.0)
+
+This adds 20 bytes to the vertex stride. Maximum 256 bones per skeleton. Can combine with other flags:
+
+```rust
+// Skinned mesh with UVs and normals for lit rendering
+const FORMAT_SKINNED_UV_NORMAL: u32 = FORMAT_SKINNED | FORMAT_UV | FORMAT_NORMAL;
+// = 8 | 1 | 4 = 13 → stride = 32 + 20 = 52 bytes
+```
+
+**Attribute order for skinned vertices:**
+position → uv (if present) → color (if present) → normal (if present) → bone_indices → bone_weights
+
+**Bone transform upload:**
+
+```rust
+fn set_bones(matrices: *const f32, count: u32)  // 16 floats per bone (4×4 matrix, column-major)
+```
+
+Call `set_bones()` before `draw_mesh()` or `draw_triangles()` to upload the current bone transforms. Maximum 256 bones per skeleton.
+
+**Workflow:**
+
+1. **In `init()`:** Load skinned mesh with bone indices/weights baked into vertex data
+2. **Each `update()`:** Animate skeleton on CPU (update bone transforms from keyframes/blend trees)
+3. **Each `render()`:** Call `set_bones()` with current transforms, then `draw_mesh()`
+
+**Example:**
+
+```rust
+static mut CHARACTER_MESH: u32 = 0;
+static mut BONE_MATRICES: [f32; 256 * 16] = [0.0; 256 * 16];  // Up to 256 bones
+static mut BONE_COUNT: u32 = 0;
+
+fn init() {
+    unsafe {
+        // Load skinned mesh (pos + uv + normal + bones)
+        CHARACTER_MESH = load_mesh(
+            CHARACTER_VERTS.as_ptr() as *const u8,
+            CHARACTER_VERT_COUNT,
+            FORMAT_UV | FORMAT_NORMAL | FORMAT_SKINNED
+        );
+        BONE_COUNT = 24;  // This character has 24 bones
+
+        // Initialize bone matrices to identity
+        for i in 0..BONE_COUNT as usize {
+            // Column-major identity matrix
+            BONE_MATRICES[i * 16 + 0] = 1.0;  // col0.x
+            BONE_MATRICES[i * 16 + 5] = 1.0;  // col1.y
+            BONE_MATRICES[i * 16 + 10] = 1.0; // col2.z
+            BONE_MATRICES[i * 16 + 15] = 1.0; // col3.w
+        }
+    }
+}
+
+fn update() {
+    unsafe {
+        // Animate bones on CPU (your animation system)
+        // Update BONE_MATRICES with new transforms for each bone
+        animate_skeleton(&mut BONE_MATRICES, elapsed_time());
+    }
+}
+
+fn render() {
+    unsafe {
+        texture_bind(CHARACTER_TEXTURE);
+        set_bones(BONE_MATRICES.as_ptr(), BONE_COUNT);  // Upload bone transforms
+        transform_translate(0.0, 0.0, -5.0);
+        draw_mesh(CHARACTER_MESH);
+    }
+}
+```
+
+**Notes:**
+- Bone matrices are world-space (or object-space if you prefer — just be consistent)
+- The vertex shader computes: `skinned_pos = Σ(bone_weight[i] * bone_matrix[bone_index[i]] * vertex_pos)`
+- Normals are also transformed using the inverse transpose of the bone matrix
+- For best performance, limit to 4 bones per vertex with normalized weights
+- CPU-side animation (keyframes, blend trees, IK) is left to the developer
+
 ### Textures
 
 Games embed assets via `include_bytes!()` and pass raw pixels — no file-based loading. All resources are created in `init()` and automatically cleaned up on game shutdown.
 
 ```rust
-fn texture_create(width: u32, height: u32, pixels: *const u8) -> u32
-fn texture_bind(handle: u32)
+fn load_texture(width: u32, height: u32, pixels: *const u8) -> u32
+fn texture_bind(handle: u32)                    // Bind to slot 0 (albedo)
+fn texture_bind_slot(handle: u32, slot: u32)    // Bind to specific slot
 ```
+
+**Texture slots per render mode:**
+
+| Mode | Slot 0 | Slot 1 | Slot 2 | Slot 3 |
+|------|--------|--------|--------|--------|
+| **0 (Unlit)** | Albedo (UV) | — | — | — |
+| **1 (Matcap)** | Albedo (UV) | Matcap (N) | Matcap (N) | Matcap (N) |
+| **2 (PBR)** | Albedo (UV) | MRE (UV) | Reflection (N) | — |
+| **3 (Hybrid)** | Albedo (UV) | MRE (UV) | Reflection (N) | Matcap (N) |
+
+**(N) = Normal-sampled (requires `FORMAT_NORMAL`), (UV) = UV-sampled (requires `FORMAT_UV`)**
+
+**Fallback rules:**
+- UV-sampled slots with no UVs or no texture → use `set_color()` / `material_*()` uniforms
+- Normal-sampled slots with no texture → use ambient color only
+- Modes 1-3 without `FORMAT_NORMAL` → warning, behaves like Mode 0
+
+**Debug fallback texture:** When a required texture is missing, an 8×8 magenta/black checkerboard is used to make the error visually obvious during development.
+
+**Matcap combination:**
+- Mode 1: Matcaps in slots 1-3 multiply together (more blend modes TBD)
+- Mode 3: Slot 2 (reflection) and slot 3 (matcap) multiply
 
 **Example:**
 ```rust
@@ -292,28 +450,89 @@ static SPRITE_PNG: &[u8] = include_bytes!("assets/sprite.png");
 
 fn init() {
     let (w, h, pixels) = decode_png(SPRITE_PNG);
-    let tex = texture_create(w, h, pixels.as_ptr());
+    let tex = load_texture(w, h, pixels.as_ptr());
 }
 ```
 
-### 3D Drawing
+### Meshes (Retained Mode)
+
+Load meshes in `init()`, draw by handle in `render()`. Specify vertex format when loading.
 
 ```rust
-fn draw_triangle(
-    x0: f32, y0: f32, z0: f32, u0: f32, v0: f32,
-    x1: f32, y1: f32, z1: f32, u1: f32, v1: f32,
-    x2: f32, y2: f32, z2: f32, u2: f32, v2: f32,
-    color: u32
-)
+fn load_mesh(
+    data: *const u8,
+    vertex_count: u32,
+    format: u32              // Vertex format flags
+) -> u32
 
-fn draw_mesh(
-    vertices: *const f32,    // x, y, z, u, v per vertex
+fn load_mesh_indexed(
+    data: *const u8,
     vertex_count: u32,
     indices: *const u16,
     index_count: u32,
-    color: u32
+    format: u32              // Vertex format flags
+) -> u32
+
+fn draw_mesh(handle: u32)
+```
+
+**Example:**
+```rust
+static mut CUBE_MESH: u32 = 0;
+
+// Cube with normals for lighting (pos + uv + normal = 8 floats per vertex)
+static CUBE_VERTS: &[f32] = &[
+    // pos(3), uv(2), normal(3)
+    -1.0, -1.0,  1.0,  0.0, 0.0,  0.0, 0.0, 1.0,  // front face...
+    // ...
+];
+
+fn init() {
+    unsafe {
+        CUBE_MESH = load_mesh_indexed(
+            CUBE_VERTS.as_ptr() as *const u8,
+            24,  // 24 vertices
+            CUBE_INDICES.as_ptr(),
+            36,  // 36 indices
+            FORMAT_UV_NORMAL
+        );
+    }
+}
+
+fn render() {
+    unsafe {
+        texture_bind(CUBE_TEXTURE);
+        set_color(0xFFFFFFFF);  // White tint
+        transform_translate(0.0, 0.0, -5.0);
+        draw_mesh(CUBE_MESH);
+    }
+}
+```
+
+### Immediate Mode 3D
+
+For dynamic geometry, skinned meshes, or prototyping. Push vertices each frame (buffered internally, flushed once per frame).
+
+```rust
+fn draw_triangles(
+    data: *const u8,
+    vertex_count: u32,
+    format: u32              // Vertex format flags
+)
+
+fn draw_triangles_indexed(
+    data: *const u8,
+    vertex_count: u32,
+    indices: *const u16,
+    index_count: u32,
+    format: u32              // Vertex format flags
 )
 ```
+
+**Note:** Immediate mode is convenient but less efficient. Prefer `load_mesh` + `draw_mesh` for static geometry. Use immediate mode for:
+- Skinned/animated meshes (CPU-transformed vertices)
+- Procedural geometry
+- Debug visualization
 
 ### Transform Stack
 
@@ -374,11 +593,18 @@ draw_sprite_ex(100.0, 100.0, 32.0, 32.0, 0.0, 0.0, 32.0, 32.0, 0.5, 0.5, 45.0, 0
 ### Render State
 
 ```rust
+fn set_color(color: u32)                // Tint color (0xRRGGBBAA), multiplied with vertex color
 fn depth_test(enabled: u32)             // 0 = off, 1 = on
 fn cull_mode(mode: u32)                 // 0 = none, 1 = back, 2 = front
 fn blend_mode(mode: u32)                // 0 = none, 1 = alpha, 2 = additive, 3 = multiply
 fn texture_filter(filter: u32)          // 0 = nearest, 1 = linear
 ```
+
+**Color handling:**
+- `set_color()` sets a uniform tint color
+- If vertex format includes COLOR → per-vertex color × uniform color
+- If vertex format has no COLOR → uniform color only
+- Default: white (0xFFFFFFFF)
 
 ---
 

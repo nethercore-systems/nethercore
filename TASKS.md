@@ -8,6 +8,7 @@ These items are marked TODO throughout the document and need decisions before im
 - **Custom fonts** — Allow games to load custom fonts for draw_text?
 - **Spectator support** — GGRS spectator sessions for watching games
 - **Matchmaking** — Handled by platform service, but integration details TBD
+- **Matcap blend modes** — Currently multiply only; future: add, screen, overlay, HSV shift, etc.
 
 ---
 
@@ -186,13 +187,22 @@ The `Runtime<C: Console>` handles:
 
 - [ ] **Implement Z-specific FFI functions**
   - Graphics: `camera_set`, `camera_fov`, `set_clear_color` (init-only)
-  - Textures: `texture_create` (raw RGBA pixels), `texture_bind`
-    - NO texture_load — games embed assets via include_bytes and pass raw pixels
-    - NO texture_free — resources auto-cleaned on shutdown
-  - 3D: `draw_triangle`, `draw_mesh`, `transform_*`
+  - Textures: `load_texture` (raw RGBA pixels), `texture_bind`, `texture_bind_slot`
+  - Meshes: `load_mesh(data, count, format)`, `load_mesh_indexed(data, count, indices, index_count, format)`, `draw_mesh(handle)`
+  - Immediate 3D: `draw_triangles(data, count, format)`, `draw_triangles_indexed(data, count, indices, index_count, format)`
   - 2D: `draw_sprite`, `draw_rect`, `draw_text` (built-in font, UTF-8)
-  - Render state: `depth_test`, `cull_mode`, `blend_mode`, `texture_filter`
+  - Transform: `transform_identity/translate/rotate/scale/push/pop/set`
+  - Render state: `set_color`, `depth_test`, `cull_mode`, `blend_mode`, `texture_filter`
   - Input: `button_held`, `button_pressed`, `button_released`, `left_stick_x/y`, `right_stick_x/y`, `trigger_left`, `trigger_right`
+  - Vertex formats: 3-bit bitmask (`FORMAT_UV`, `FORMAT_COLOR`, `FORMAT_NORMAL`) producing 8 combinations
+  - NO `*_free` functions — resources auto-cleaned on shutdown
+
+- [ ] **Implement GPU skinning**
+  - Add `FORMAT_SKINNED` flag (adds 20 bytes: 4×u8 bone indices + 4×f32 bone weights)
+  - Implement `set_bones(matrices, count)` — upload bone transforms (max 256 bones)
+  - Shader support for weighted bone transform in vertex shader
+  - Works with both retained mode (`load_mesh` + `draw_mesh`) and immediate mode (`draw_triangles`)
+  - CPU-side animation (keyframes, blend trees, IK) left to developers
 
 - [ ] **Implement built-in font for draw_text**
   - Static embedded bitmap/SDF font
@@ -263,6 +273,48 @@ The `Runtime<C: Console>` handles:
   - Render batching
   - Memory pooling
 
+### Phase 6: Emberware Z Examples
+
+- [ ] **Create `triangle` example**
+  - Demonstrates `draw_triangle` (immediate mode 3D)
+  - Spinning colored triangle
+  - Shows transform stack usage (`transform_rotate`)
+  - Minimal no_std WASM game
+
+- [ ] **Create `textured-quad` example**
+  - Demonstrates `load_texture` and `texture_bind`
+  - Embed PNG via `include_bytes!()`, decode, upload
+  - Draw textured sprite with `draw_sprite`
+  - Shows texture coordinates and color tinting
+
+- [ ] **Create `cube` example**
+  - Demonstrates `load_mesh_indexed` and `draw_mesh` (retained mode)
+  - Load cube vertices/indices in `init()`
+  - Draw by handle in `render()`
+  - Camera setup with `camera_set` and `camera_fov`
+  - Interactive rotation via analog stick input
+
+- [ ] **Create `lighting` example**
+  - Demonstrates render modes 1-3 (Matcap, PBR-lite, Hybrid)
+  - Toggle between modes with button press
+  - Show material properties (metallic, roughness, emissive)
+  - Dynamic light positioning
+
+- [ ] **Create `skinned-mesh` example**
+  - Demonstrates GPU skinning with `FORMAT_SKINNED`
+  - Load skinned mesh with bone indices/weights in `init()`
+  - Simple bone hierarchy (e.g., arm with 3 bones)
+  - Animate bones on CPU each frame (sine wave for demo)
+  - Upload bone matrices with `set_bones()`
+  - Shows workflow: CPU animation → GPU skinning
+
+- [ ] **Create `platformer` example**
+  - Full mini-game demonstrating multiple Z features
+  - Textured sprites for player/enemies
+  - Simple physics and collision
+  - Multiple players with analog stick input
+  - Background and foreground layers
+
 ---
 
 ## IN PROGRESS
@@ -307,3 +359,60 @@ The `Runtime<C: Console>` handles:
   - Basic input and rendering
 
 - [x] **Initialize git repository and push to GitHub**
+
+---
+
+## DEFERRED (Emberware Classic)
+
+These tasks are deferred until Emberware Z is complete. Classic shares the core framework but has its own console implementation.
+
+### Classic Console Implementation
+
+- [ ] **Create Emberware Classic `Console` implementation**
+  - Implement `Console` trait for SNES/Genesis aesthetic
+  - Define Classic-specific specs (384×216 default, 60fps, 4MB RAM, 2MB VRAM)
+  - 8 resolution options (4× 16:9 + 4× 4:3, pixel-perfect to 1080p)
+
+- [ ] **Implement Classic graphics backend**
+  - `ClassicGraphics` implementing `Graphics` trait
+  - 2D-only rendering pipeline (no 3D transforms)
+  - Sprite layers (4 layers, back-to-front)
+  - Tilemap system (4 layers with parallax scrolling)
+  - Palette swapping (256-color indexed textures)
+
+- [ ] **Implement Classic-specific FFI functions**
+  - Textures: `load_texture`, `texture_bind`
+  - Sprites: `draw_sprite`, `draw_sprite_region`, `draw_sprite_ex` (with flip)
+  - Sprite control: `sprite_layer`, `draw_sprite_flipped`
+  - Tilemaps: `tilemap_create`, `tilemap_set_texture`, `tilemap_set_tile`, `tilemap_set_tiles`, `tilemap_scroll`
+  - Palettes: `palette_create`, `palette_bind`
+  - Input: `button_held`, `button_pressed`, `button_released`, `dpad_x`, `dpad_y`
+  - Render state: `blend_mode`, `texture_filter`
+
+### Classic Examples
+
+- [ ] **Create `sprites` example (Classic)**
+  - Demonstrates Classic-specific 2D features
+  - Sprite sheets with `draw_sprite_region`
+  - Sprite flipping with `draw_sprite_ex`
+  - Sprite layers and priority
+  - D-pad input for movement
+
+- [ ] **Create `tilemap` example (Classic)**
+  - Demonstrates `tilemap_create` and `tilemap_scroll`
+  - Multiple parallax layers
+  - Tile animation via `tilemap_set_tile`
+  - Sprite/tilemap layer interleaving
+
+- [ ] **Create `palette-swap` example (Classic)**
+  - Demonstrates `palette_create` and `palette_bind`
+  - Enemy color variants from single sprite
+  - Damage flash effect
+  - Dynamic palette cycling
+
+- [ ] **Create `platformer` example (Classic)**
+  - Full mini-game demonstrating Classic features
+  - Tilemap-based levels with scrolling
+  - Animated sprite character
+  - Parallax background layers
+  - 6-button input scheme

@@ -43,12 +43,25 @@ Emberware Classic is a beginner-friendly 2D fantasy console inspired by SNES/Gen
 These settings **must be called in `init()`** — they cannot be changed at runtime.
 
 ```rust
-fn set_resolution(width: u32, height: u32)  // Must match a supported resolution
+fn set_resolution(res: u32)                 // 0-7, see resolution options below
 fn set_tick_rate(fps: u32)                  // 24, 30, 60 (default), or 120
 fn set_clear_color(color: u32)              // 0xRRGGBBAA, default: 0x000000FF (black)
 ```
 
-If not set, defaults to 384×216 (16:9) @ 60fps.
+**Resolution enum values:**
+
+| Value | Resolution | Aspect | Scale |
+|-------|------------|--------|-------|
+| 0 | 320×180 | 16:9 | 6× |
+| 1 | 384×216 | 16:9 | 5× (default) |
+| 2 | 480×270 | 16:9 | 4× |
+| 3 | 640×360 | 16:9 | 3× |
+| 4 | 240×180 | 4:3 | 6× |
+| 5 | 288×216 | 4:3 | 5× |
+| 6 | 360×270 | 4:3 | 4× |
+| 7 | 480×360 | 4:3 | 3× |
+
+If not set, defaults to resolution 1 (384×216, 16:9) @ 60fps.
 
 ---
 
@@ -160,7 +173,7 @@ No manual `frame_begin()`/`frame_end()` calls needed.
 Games embed assets via `include_bytes!()` and pass raw pixels — no file-based loading. All resources are created in `init()` and automatically cleaned up on game shutdown.
 
 ```rust
-fn texture_create(width: u32, height: u32, pixels: *const u8) -> u32
+fn load_texture(width: u32, height: u32, pixels: *const u8) -> u32
 fn texture_bind(handle: u32)
 ```
 

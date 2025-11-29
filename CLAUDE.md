@@ -151,6 +151,135 @@ The console uses GGRS for deterministic rollback netcode. This means:
 - Vertex buffers: one buffer per stride, grows dynamically during init
 - Immediate-mode draws buffered on CPU, flushed once per frame
 
+### Rendering Architecture
+
+#### Shader Generation System
+
+Shaders are generated from templates using flag-based permutations. Each flag combination produces a unique shader variant with only the needed vertex attributes and fragment operations.
+
+```rust
+// Vertex format flags (bitmask)
+pub mod flags {
+    pub const VERTEX_COLOR: u8 = 1;  // Include per-vertex color
+    pub const UV_TEXTURE: u8 = 2;    // Include UV coordinates
+    pub const CUBEMAP: u8 = 4;       // Include cubemap reflection (implies NORMAL)
+    pub const MATCAP: u8 = 8;        // Include matcap sampling (implies NORMAL)
+    // NORMAL is derived: has_normal = has_cubemap || has_matcap
+}
+```
+
+The shader generator replaces placeholders in a template:
+```rust
+pub fn generate_shader(template: &str, flags: u8) -> String {
+    let has_color = flags & flags::VERTEX_COLOR != 0;
+    let has_uv = flags & flags::UV_TEXTURE != 0;
+    let has_cubemap = flags & flags::CUBEMAP != 0;
+    let has_matcap = flags & flags::MATCAP != 0;
+    let has_normal = has_cubemap || has_matcap;
+
+    // Replace placeholders like //VIN_COLOR, //VS_COLOR, //FS_COLOR
+    // with actual WGSL code or empty string
+}
+```
+
+Template placeholders:
+- `//VIN_*` - Vertex input attributes
+- `//VOUT_*` - Vertex output (to fragment)
+- `//VS_*` - Vertex shader code
+- `//FS_*` - Fragment shader code
+
+#### Pipeline Entry Structure
+
+Each vertex format gets its own pipeline with dedicated buffers:
+
+```rust
+pub struct RenderPipelineEntry {
+    pub pipeline: wgpu::RenderPipeline,
+    pub bind_group_layout: wgpu::BindGroupLayout,
+    pub vertex_stride: u64,           // Bytes per vertex for this format
+
+    vertex_buffer: GrowableBuffer,    // Auto-growing GPU buffer
+    index_buffer: GrowableBuffer,     // Auto-growing GPU buffer
+    vertex_count: u32,                // For base_vertex in add_mesh
+    index_count: u32,                 // For index_start tracking
+}
+```
+
+#### Texture Slots
+
+Fixed layout per render mode (set in `init()`):
+
+| Mode | Slot 0 | Slot 1 | Slot 2 | Slot 3 |
+|------|--------|--------|--------|--------|
+| 0 (Unlit) | Albedo (UV) | — | — | — |
+| 1 (Matcap) | Albedo (UV) | Matcap (N) | Matcap (N) | Matcap (N) |
+| 2 (PBR) | Albedo (UV) | MRE (UV) | Reflection (N) | — |
+| 3 (Hybrid) | Albedo (UV) | MRE (UV) | Reflection (N) | Matcap (N) |
+
+**(N) = Normal-sampled, (UV) = UV-sampled**
+
+Fallbacks:
+- UV slots without UVs/texture → `set_color()` / `material_*()` uniforms
+- Normal slots without texture → ambient color
+- Modes 1-3 without normals → behaves like Mode 0
+- Missing required textures → 8×8 magenta/black checkerboard (debug visibility)
+
+#### Vertex Color Handling
+
+- If per-vertex color exists in vertex data → use it
+- If not → use uniform color (set via `set_color()`)
+- Both can be combined (uniform tints per-vertex color)
+
+#### Vertex Formats
+
+Vertices are packed `[f32]` arrays. Color is RGB32f (3 floats). Format is a 3-bit bitmask:
+
+```rust
+const FORMAT_UV: u32 = 1;      // Has UV coordinates
+const FORMAT_COLOR: u32 = 2;   // Has per-vertex color (RGB, 3 floats)
+const FORMAT_NORMAL: u32 = 4;  // Has normals
+```
+
+All 8 combinations:
+
+| Format | Value | Components | Stride |
+|--------|-------|------------|--------|
+| POS | 0 | pos(3) | 12 bytes |
+| POS_UV | 1 | pos(3) + uv(2) | 20 bytes |
+| POS_COLOR | 2 | pos(3) + color(3) | 24 bytes |
+| POS_UV_COLOR | 3 | pos(3) + uv(2) + color(3) | 32 bytes |
+| POS_NORMAL | 4 | pos(3) + normal(3) | 24 bytes |
+| POS_UV_NORMAL | 5 | pos(3) + uv(2) + normal(3) | 32 bytes |
+| POS_COLOR_NORMAL | 6 | pos(3) + color(3) + normal(3) | 36 bytes |
+| POS_UV_COLOR_NORMAL | 7 | pos(3) + uv(2) + color(3) + normal(3) | 44 bytes |
+
+#### GPU Skinning
+
+Emberware Z supports GPU-based skeletal animation. Developers animate bones on CPU (update transforms each frame), and the GPU handles skinning (vertex deformation based on bone weights).
+
+**Skinned vertex format flag:**
+```rust
+const FORMAT_SKINNED: u32 = 8;  // Has bone indices (4 u8) + bone weights (4 f32)
+```
+
+When FORMAT_SKINNED is set, each vertex includes:
+- `bone_indices`: 4 × u8 (4 bytes) — which bones affect this vertex
+- `bone_weights`: 4 × f32 (16 bytes) — weight of each bone's influence
+
+This adds 20 bytes to the vertex stride. Can combine with other flags (e.g., FORMAT_UV | FORMAT_NORMAL | FORMAT_SKINNED).
+
+**Bone transform upload:**
+```rust
+fn set_bones(matrices: *const f32, count: u32)  // 16 floats per bone (4x4 matrix)
+```
+
+Called before `draw_mesh()` or `draw_triangles()` to set the current bone transforms (max 256 bones). The vertex shader multiplies position/normal by the weighted sum of bone matrices.
+
+**Workflow:**
+1. In `init()`: Load skinned mesh with bone indices/weights baked into vertices
+2. Each `update()`: Animate skeleton on CPU (update bone transforms)
+3. Each `render()`: Call `set_bones()` then `draw_mesh()`
+
 ### Local Storage
 ```
 ~/.emberware/
