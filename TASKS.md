@@ -303,6 +303,12 @@ The `Runtime<C: Console>` handles:
 
 ## Done
 
+- **Update documentation (Phase 7)**
+  - Fixed save function return value documentation in ffi.md (was "1 on success", now "0 on success, 1 invalid slot, 2 data too large")
+  - Fixed light_set signature in emberware-z.md (removed non-existent light_type parameter)
+  - Fixed Mode 3 (Hybrid) docs to use actual light_set/light_color/light_intensity functions instead of non-existent light_direction/ambient_color
+  - All tests passing (62 tests)
+
 - **Create integration tests (Phase 7)**
   - Added integration.rs module with 24 comprehensive tests
   - **Game lifecycle tests**: Full init/update/render flow, minimal games, state persistence

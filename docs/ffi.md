@@ -229,7 +229,7 @@ Save data is stored locally per-game. Maximum 64KB per save slot, 8 slots (0-7).
 fn save(slot: u32, data_ptr: *const u8, data_len: u32) -> u32
 ```
 
-Saves data to a slot. Returns 1 on success, 0 on failure.
+Saves data to a slot. Returns 0 on success, 1 if invalid slot, 2 if data too large.
 
 ```rust
 let save_data = serialize_save();

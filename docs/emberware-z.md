@@ -221,13 +221,13 @@ Full PBR lighting with up to 4 dynamic lights:
 - Emissive support
 
 ```rust
-fn light_set(index: u32, light_type: u32, x: f32, y: f32, z: f32)  // index 0-3
+fn light_set(index: u32, x: f32, y: f32, z: f32)  // index 0-3, direction vector
 fn light_color(index: u32, r: f32, g: f32, b: f32)
 fn light_intensity(index: u32, intensity: f32)
 fn light_disable(index: u32)
 ```
 
-Light types: 0 = ambient, 1 = directional, 2 = point, 3 = spot (TBD)
+All lights are directional. The `x`, `y`, `z` parameters specify the light direction (normalized internally).
 
 Material properties via MRE texture (R=Metallic, G=Roughness, B=Emissive):
 
@@ -265,16 +265,18 @@ Best of both worlds with constrained lighting:
 // Single matcap for ambient reflections (binds to slot 3)
 fn texture_bind_slot(handle: u32, slot: u32)  // Use slot 3 for matcap
 
-// Single directional light + ambient
-fn light_direction(x: f32, y: f32, z: f32)  // Normalized direction TO light
-fn light_color(r: f32, g: f32, b: f32)      // Linear RGB
-fn ambient_color(r: f32, g: f32, b: f32)    // Linear RGB
+// Single directional light (conventionally light 0)
+fn light_set(0, x: f32, y: f32, z: f32)     // Set light 0 direction
+fn light_color(0, r: f32, g: f32, b: f32)   // Set light 0 color
+fn light_intensity(0, intensity: f32)       // Set light 0 intensity
 
 // PBR material properties
 fn material_metallic(value: f32)
 fn material_roughness(value: f32)
 fn material_emissive(value: f32)
 ```
+
+**Note:** Mode 3 uses the same light functions as Mode 2, but conventionally only uses light 0 as the single directional light. Ambient lighting comes from the matcap in slot 3 combined with the procedural sky.
 
 ```
 // Matcap modulates the ambient/reflection term
