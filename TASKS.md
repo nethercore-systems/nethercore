@@ -361,6 +361,17 @@ The `Runtime<C: Console>` handles:
 
 ## Done
 
+- **Implement Built-in Font (Phase 3.17)**
+  - Created `font.rs` module with 8x8 monospace bitmap font
+  - ASCII 32-126 (95 printable characters) in 128x48 texture atlas
+  - `get_glyph_uv(char_code)` returns normalized UV coordinates
+  - `generate_font_atlas()` creates RGBA8 texture data at runtime
+  - Font texture loaded during ZGraphics initialization
+  - `font_texture()` and `get_font_texture_view()` accessors added
+  - `generate_text_quads(text, x, y, size, color)` generates POS_UV_COLOR vertices
+  - Screen-space text rendering with variable size via scaling
+  - Left-aligned, single-line (no word wrap in v1)
+
 - **Implement GPU Skinning (Phase 3.16)**
   - Bone storage buffer: 256 bones × 4×4 matrices = 16KB
   - `set_bones(matrices_ptr, count)` FFI function implemented and registered

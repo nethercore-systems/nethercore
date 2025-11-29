@@ -1105,6 +1105,9 @@ pub struct ZGraphics {
     fallback_checkerboard: TextureHandle,
     fallback_white: TextureHandle,
 
+    // Built-in font texture
+    font_texture: TextureHandle,
+
     // Samplers
     sampler_nearest: wgpu::Sampler,
     sampler_linear: wgpu::Sampler,
@@ -1286,6 +1289,7 @@ impl ZGraphics {
             vram_used: 0,
             fallback_checkerboard: TextureHandle::INVALID,
             fallback_white: TextureHandle::INVALID,
+            font_texture: TextureHandle::INVALID,
             sampler_nearest,
             sampler_linear,
             render_state: RenderState::default(),
@@ -1366,6 +1370,15 @@ impl ZGraphics {
         self.fallback_white = self
             .load_texture_internal(1, 1, &white_data, false)
             .expect("Failed to create white fallback texture");
+
+        // Load built-in font texture
+        use crate::font;
+        let font_atlas = font::generate_font_atlas();
+        self.font_texture = self
+            .load_texture_internal(font::ATLAS_WIDTH, font::ATLAS_HEIGHT, &font_atlas, false)
+            .expect("Failed to create font texture");
+
+        tracing::debug!("Created font texture: {}x{}", font::ATLAS_WIDTH, font::ATLAS_HEIGHT);
     }
 
     // ========================================================================
@@ -1475,6 +1488,16 @@ impl ZGraphics {
     /// Get fallback white texture view
     pub fn get_fallback_white_view(&self) -> &wgpu::TextureView {
         &self.textures[&self.fallback_white.0].view
+    }
+
+    /// Get font texture handle
+    pub fn font_texture(&self) -> TextureHandle {
+        self.font_texture
+    }
+
+    /// Get font texture view
+    pub fn get_font_texture_view(&self) -> &wgpu::TextureView {
+        &self.textures[&self.font_texture.0].view
     }
 
     /// Get texture view for a slot, returning fallback if unbound
@@ -2255,6 +2278,90 @@ impl ZGraphics {
                 },
             ],
         })
+    }
+
+    // ========================================================================
+    // Text Rendering
+    // ========================================================================
+
+    /// Generate vertex data for rendering text
+    ///
+    /// This method generates quads for each character in the text string.
+    /// The text is rendered in screen space (2D), left-aligned.
+    ///
+    /// # Arguments
+    /// * `text` - UTF-8 text string to render
+    /// * `x` - Screen X coordinate in pixels (0 = left edge)
+    /// * `y` - Screen Y coordinate in pixels (0 = top edge)
+    /// * `size` - Font size in pixels (base size is 8x8, this scales it)
+    /// * `color` - Text color as 0xRRGGBBAA
+    ///
+    /// # Returns
+    /// A tuple of (vertices, indices) for POS_UV_COLOR format (format 3)
+    ///
+    /// # Notes
+    /// - Characters outside ASCII 32-126 are rendered as spaces
+    /// - This is a simple left-to-right, single-line renderer (no word wrap)
+    pub fn generate_text_quads(
+        text: &str,
+        x: f32,
+        y: f32,
+        size: f32,
+        color: u32,
+    ) -> (Vec<f32>, Vec<u32>) {
+        use crate::font;
+
+        // Calculate scale factor (base glyph size is 8x8)
+        let scale = size / font::GLYPH_HEIGHT as f32;
+        let glyph_width = font::GLYPH_WIDTH as f32 * scale;
+        let glyph_height = font::GLYPH_HEIGHT as f32 * scale;
+
+        // Extract color components (0xRRGGBBAA)
+        let r = ((color >> 24) & 0xFF) as f32 / 255.0;
+        let g = ((color >> 16) & 0xFF) as f32 / 255.0;
+        let b = ((color >> 8) & 0xFF) as f32 / 255.0;
+
+        let char_count = text.chars().count();
+        let mut vertices = Vec::with_capacity(char_count * 4 * 8); // 4 verts × 8 floats
+        let mut indices = Vec::with_capacity(char_count * 6); // 6 indices per quad
+
+        let mut cursor_x = x;
+        let mut vertex_index = 0u32;
+
+        for ch in text.chars() {
+            let char_code = ch as u32;
+
+            // Get UV coordinates for this character
+            let (u0, v0, u1, v1) = font::get_glyph_uv(char_code);
+
+            // Screen-space quad vertices (2D)
+            // Format: POS_UV_COLOR (format 3)
+            // Each vertex: [x, y, z, u, v, r, g, b]
+
+            // Top-left
+            vertices.extend_from_slice(&[cursor_x, y, 0.0, u0, v0, r, g, b]);
+            // Top-right
+            vertices.extend_from_slice(&[cursor_x + glyph_width, y, 0.0, u1, v0, r, g, b]);
+            // Bottom-right
+            vertices.extend_from_slice(&[cursor_x + glyph_width, y + glyph_height, 0.0, u1, v1, r, g, b]);
+            // Bottom-left
+            vertices.extend_from_slice(&[cursor_x, y + glyph_height, 0.0, u0, v1, r, g, b]);
+
+            // Indices for two triangles (quad)
+            indices.extend_from_slice(&[
+                vertex_index,
+                vertex_index + 1,
+                vertex_index + 2,
+                vertex_index,
+                vertex_index + 2,
+                vertex_index + 3,
+            ]);
+
+            cursor_x += glyph_width;
+            vertex_index += 4;
+        }
+
+        (vertices, indices)
     }
 }
 

@@ -8,6 +8,7 @@ mod console;
 mod deep_link;
 mod download;
 mod ffi;
+mod font;
 mod graphics;
 mod library;
 mod runtime;
