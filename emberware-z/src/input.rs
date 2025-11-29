@@ -108,8 +108,8 @@ impl<'de> Deserialize<'de> for KeyboardMapping {
 
 /// Input manager handling keyboard and gamepad
 pub struct InputManager {
-    /// Gilrs context for gamepad handling
-    gilrs: Gilrs,
+    /// Gilrs context for gamepad handling (None if initialization failed)
+    gilrs: Option<Gilrs>,
 
     /// Current keyboard state (key -> pressed)
     keyboard_state: HashMap<KeyCode, bool>,
@@ -129,12 +129,13 @@ pub struct InputManager {
 impl InputManager {
     /// Create a new input manager
     pub fn new(config: InputConfig) -> Self {
-        let gilrs = Gilrs::new().unwrap_or_else(|e| {
-            tracing::warn!("Failed to initialize gamepad support: {}", e);
-            // Create a dummy Gilrs context
-            // This will work but won't detect any gamepads
-            Gilrs::new().unwrap()
-        });
+        let gilrs = match Gilrs::new() {
+            Ok(g) => Some(g),
+            Err(e) => {
+                tracing::warn!("Failed to initialize gamepad support: {}. Gamepads will not be available.", e);
+                None
+            }
+        };
 
         Self {
             gilrs,
@@ -152,8 +153,17 @@ impl InputManager {
 
     /// Poll gamepad events and update input state
     pub fn update(&mut self) {
-        // Poll gilrs events
-        while let Some(gilrs::Event { id, event, .. }) = self.gilrs.next_event() {
+        // Collect gilrs events first (if gamepad support is available)
+        let events: Vec<_> = if let Some(ref mut gilrs) = self.gilrs {
+            std::iter::from_fn(|| gilrs.next_event())
+                .map(|e| (e.id, e.event))
+                .collect()
+        } else {
+            Vec::new()
+        };
+
+        // Process collected events
+        for (id, event) in events {
             match event {
                 gilrs::EventType::Connected => {
                     // Assign to next available player slot
@@ -179,10 +189,12 @@ impl InputManager {
             self.player_inputs[0] = self.read_keyboard_input();
         }
 
-        // Update gamepad inputs
-        for (gamepad_id, &player_slot) in &self.gamepad_to_player {
-            let gamepad = self.gilrs.gamepad(*gamepad_id);
-            self.player_inputs[player_slot] = self.read_gamepad_input(&gamepad);
+        // Update gamepad inputs (if gamepad support is available)
+        if let Some(ref gilrs) = self.gilrs {
+            for (gamepad_id, &player_slot) in &self.gamepad_to_player {
+                let gamepad = gilrs.gamepad(*gamepad_id);
+                self.player_inputs[player_slot] = self.read_gamepad_input(&gamepad);
+            }
         }
     }
 

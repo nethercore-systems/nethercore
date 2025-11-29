@@ -419,7 +419,13 @@ fn transform_set(mut caller: Caller<'_, GameState>, matrix_ptr: u32) {
     let floats: &[f32] = bytemuck::cast_slice(bytes);
 
     // Create matrix from column-major array
-    let matrix: [f32; 16] = floats.try_into().expect("slice with incorrect length");
+    let Ok(matrix): Result<[f32; 16], _> = floats.try_into() else {
+        warn!(
+            "transform_set failed: expected 16 floats, got {}",
+            floats.len()
+        );
+        return;
+    };
     let state = caller.data_mut();
     state.current_transform = Mat4::from_cols_array(&matrix);
 }

@@ -107,14 +107,6 @@ The `Runtime<C: Console>` handles:
   - Critical: During GGRS rollback, `advance_frame` requests provide confirmed inputs but these are never passed to the game before calling `update()`. Breaks deterministic rollback netcode.
   - TODO comment exists: "This requires exposing GameState input setters"
 
-- **[STABILITY] Fix potential panic in transform_set()** (`emberware-z/src/ffi.rs:422`)
-  - The `.try_into().expect("slice with incorrect length")` can panic if memory read results in fewer than 16 floats.
-  - Should return early with warning instead of panicking.
-
-- **[STABILITY] Fix gamepad initialization double-panic** (`emberware-z/src/input.rs:132-137`)
-  - After catching first `Gilrs::new()` error and logging it, code retries and immediately unwraps. If second call fails, application panics.
-  - Should gracefully disable gamepad support instead of panicking.
-
 - **[STABILITY] Replace expect() calls in graphics initialization** (`emberware-z/src/graphics.rs:1366,1372,1379`)
   - Creating fallback textures uses `.expect()` which will panic on GPU resource creation failure.
   - Should use `?` operator and propagate errors, or create minimal fallback behavior.
@@ -127,10 +119,6 @@ The `Runtime<C: Console>` handles:
 - **[STABILITY] Implement audio backend** (`emberware-z/src/console.rs:173,177,239`)
   - `ZAudio::play()`, `ZAudio::stop()`, and `create_audio()` are stubs with TODO comments.
   - Games can call sound functions but nothing plays.
-
-- **[STABILITY] Remove outdated TODO comment** (`emberware-z/src/console.rs:225-230`)
-  - Comment lists FFI functions as TODO but they are already registered via `crate::ffi::register_z_ffi()`.
-  - Misleading documentation.
 
 - **[STABILITY] Add keyboard mapping serialization** (`emberware-z/src/input.rs:40`)
   - TODO comment: "Add proper serialization with string-based key names"
@@ -345,6 +333,19 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **[STABILITY] Fix potential panic in transform_set()** (`emberware-z/src/ffi.rs:422`)
+  - Changed `.try_into().expect()` to use `let Ok(matrix) = ... else { warn; return; }` pattern.
+  - Now returns early with warning instead of panicking.
+
+- **[STABILITY] Fix gamepad initialization double-panic** (`emberware-z/src/input.rs:132-137`)
+  - Changed `gilrs` field from `Gilrs` to `Option<Gilrs>`.
+  - Gracefully disables gamepad support if Gilrs::new() fails.
+  - Input polling handles None case by skipping gamepad events.
+
+- **[STABILITY] Remove outdated TODO comment** (`emberware-z/src/console.rs:225-230`)
+  - Removed misleading comment that listed FFI functions as TODO when they were already implemented.
+  - Updated comment to accurately describe what register_ffi does.
 
 - **Create `triangle` example (Phase 6)**
   - Minimal no_std WASM game demonstrating:
