@@ -118,18 +118,7 @@ The `Runtime<C: Console>` handles:
 
 #### 3.2 Graphics Backend (wgpu)
 
-- **Implement vertex buffer architecture**
-  - One vertex buffer per stride (format determines buffer)
-  - `GrowableBuffer` struct for auto-growing GPU buffers
-  - 8 base vertex formats (POS, POS_UV, POS_COLOR, etc.)
-  - 8 skinned variants (each base format + skinning data)
-  - Total: 16 vertex format pipelines per render mode
-
-- **Implement command buffer pattern**
-  - Immediate-mode draws buffered on CPU side
-  - Single flush to GPU per frame (minimize draw calls)
-  - Draw command batching by pipeline/texture state
-  - Retained mesh handles separate from immediate draws
+(Moved to Done)
 
 #### 3.3 Configuration FFI (init-only)
 
@@ -573,6 +562,19 @@ The `Runtime<C: Console>` handles:
 ## In Progress
 
 ## Done
+
+- **Implement vertex buffer architecture**
+  - One vertex buffer per stride (format determines buffer)
+  - `GrowableBuffer` struct for auto-growing GPU buffers
+  - 8 base vertex formats (POS, POS_UV, POS_COLOR, etc.)
+  - 8 skinned variants (each base format + skinning data)
+  - Total: 16 vertex format pipelines per render mode
+
+- **Implement command buffer pattern**
+  - Immediate-mode draws buffered on CPU side
+  - Single flush to GPU per frame (minimize draw calls)
+  - Draw command batching by pipeline/texture state
+  - Retained mesh handles separate from immediate draws
 
 - **Implement wgpu device initialization**
   - `ZGraphics` struct implementing `Graphics` trait
