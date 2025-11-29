@@ -41,8 +41,29 @@ const VS_NORMAL: &str = r#"out.world_normal = normalize(in.normal);
     let view_normal = (view_matrix * vec4<f32>(in.normal, 0.0)).xyz;
     out.view_normal = normalize(view_normal);"#;
 
-const VS_SKINNED: &str = r#"// GPU skinning (placeholder - will be implemented)
-    // TODO: Apply bone transforms to position and normal"#;
+const VS_SKINNED: &str = r#"// GPU skinning: compute skinned position and normal
+    var skinned_pos = vec3<f32>(0.0, 0.0, 0.0);
+    var skinned_normal = vec3<f32>(0.0, 0.0, 0.0);
+
+    for (var i = 0u; i < 4u; i++) {
+        let bone_idx = in.bone_indices[i];
+        let weight = in.bone_weights[i];
+
+        if (weight > 0.0 && bone_idx < 256u) {
+            let bone_matrix = bones[bone_idx];
+            skinned_pos += (bone_matrix * vec4<f32>(in.position, 1.0)).xyz * weight;
+            //VS_SKINNED_NORMAL
+        }
+    }
+
+    let final_position = skinned_pos;
+    //VS_SKINNED_FINAL_NORMAL"#;
+
+const VS_SKINNED_NORMAL: &str = "skinned_normal += (bone_matrix * vec4<f32>(in.normal, 0.0)).xyz * weight;";
+const VS_SKINNED_FINAL_NORMAL: &str = "let final_normal = normalize(skinned_normal);";
+
+const VS_POSITION_SKINNED: &str = "let world_pos = vec4<f32>(final_position, 1.0);";
+const VS_POSITION_UNSKINNED: &str = "let world_pos = vec4<f32>(in.position, 1.0);";
 
 // Fragment shader code (Mode 0)
 const FS_COLOR: &str = "color *= in.color;";
@@ -100,8 +121,31 @@ pub fn generate_shader(mode: u8, format: u8) -> String {
     // Replace vertex shader code placeholders
     shader = shader.replace("//VS_UV", if has_uv { VS_UV } else { "" });
     shader = shader.replace("//VS_COLOR", if has_color { VS_COLOR } else { "" });
-    shader = shader.replace("//VS_NORMAL", if has_normal { VS_NORMAL } else { "" });
-    shader = shader.replace("//VS_SKINNED", if has_skinned { VS_SKINNED } else { "" });
+
+    // Normal handling depends on skinning
+    if has_normal && !has_skinned {
+        shader = shader.replace("//VS_NORMAL", VS_NORMAL);
+    } else if has_normal && has_skinned {
+        // Skinned normals are handled differently
+        let skinned_normal = r#"out.world_normal = normalize(final_normal);
+    let view_normal = (view_matrix * vec4<f32>(final_normal, 0.0)).xyz;
+    out.view_normal = normalize(view_normal);"#;
+        shader = shader.replace("//VS_NORMAL", skinned_normal);
+    } else {
+        shader = shader.replace("//VS_NORMAL", "");
+    }
+
+    // Handle skinning with nested replacements
+    if has_skinned {
+        let mut skinned_code = VS_SKINNED.to_string();
+        skinned_code = skinned_code.replace("//VS_SKINNED_NORMAL", if has_normal { VS_SKINNED_NORMAL } else { "" });
+        skinned_code = skinned_code.replace("//VS_SKINNED_FINAL_NORMAL", if has_normal { VS_SKINNED_FINAL_NORMAL } else { "" });
+        shader = shader.replace("//VS_SKINNED", &skinned_code);
+        shader = shader.replace("//VS_POSITION", VS_POSITION_SKINNED);
+    } else {
+        shader = shader.replace("//VS_SKINNED", "");
+        shader = shader.replace("//VS_POSITION", VS_POSITION_UNSKINNED);
+    }
 
     // Replace fragment shader placeholders (mode-specific)
     match mode {

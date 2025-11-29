@@ -56,6 +56,9 @@ struct LightUniforms {
 // Camera position for view direction
 @group(0) @binding(5) var<uniform> camera_position: vec3<f32>;
 
+// Bone transforms for GPU skinning (up to 256 bones)
+@group(0) @binding(6) var<storage, read> bones: array<mat4x4<f32>, 256>;
+
 // Texture bindings (group 1)
 @group(1) @binding(0) var slot0: texture_2d<f32>;  // Albedo
 @group(1) @binding(1) var slot1: texture_2d<f32>;  // MRE (Metallic-Roughness-Emissive)

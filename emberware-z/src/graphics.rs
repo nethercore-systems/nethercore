@@ -1116,6 +1116,9 @@ pub struct ZGraphics {
     sky_uniforms: SkyUniforms,
     sky_buffer: wgpu::Buffer,
 
+    // Bone system (GPU skinning)
+    bone_buffer: wgpu::Buffer,
+
     // Frame state
     current_frame: Option<wgpu::SurfaceTexture>,
     current_view: Option<wgpu::TextureView>,
@@ -1263,6 +1266,14 @@ impl ZGraphics {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
+        // Create bone storage buffer for GPU skinning (256 bones × 64 bytes = 16KB)
+        let bone_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Bone Storage Buffer"),
+            size: 256 * 64, // 256 matrices × 64 bytes per matrix
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
         let mut graphics = Self {
             surface,
             device,
@@ -1280,6 +1291,7 @@ impl ZGraphics {
             render_state: RenderState::default(),
             sky_uniforms,
             sky_buffer,
+            bone_buffer,
             current_frame: None,
             current_view: None,
             vertex_buffers,
@@ -2081,6 +2093,17 @@ impl ZGraphics {
                         },
                         count: None,
                     },
+                    // Bone storage buffer for GPU skinning
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 4,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
                 ]
             }
             2 | 3 => {
@@ -2147,6 +2170,17 @@ impl ZGraphics {
                         visibility: wgpu::ShaderStages::FRAGMENT,
                         ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // Bone storage buffer for GPU skinning
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 6,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
                             has_dynamic_offset: false,
                             min_binding_size: None,
                         },

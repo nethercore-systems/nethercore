@@ -163,22 +163,7 @@ The `Runtime<C: Console>` handles:
 
 #### 3.16 GPU Skinning
 
-- **Implement bone uniform buffer**
-  - Support up to 256 bones (256 × 4×4 matrices = 16KB)
-  - `set_bones(matrices_ptr, count)` — upload bone transforms
-  - Bone matrices in column-major order (16 floats each)
-
-- **Implement skinned vertex shader**
-  - Read bone indices (4 × u8) and weights (4 × f32) from vertex
-  - Compute skinned position: `Σ(weight[i] * bone_matrix[bone_index[i]] * pos)`
-  - Compute skinned normal: `Σ(weight[i] * inverse_transpose(bone_matrix[i]) * normal)`
-  - Apply before model-view-projection transform
-
-- **Update vertex formats for skinning**
-  - `FORMAT_SKINNED` (8) adds 20 bytes per vertex
-  - Bone indices: 4 bytes (4 × u8)
-  - Bone weights: 16 bytes (4 × f32)
-  - Attribute order: pos → uv → color → normal → bone_indices → bone_weights
+(Moved to In Progress)
 
 #### 3.17 Built-in Font
 
@@ -371,6 +356,25 @@ The `Runtime<C: Console>` handles:
 
 ---
 ## In Progress
+
+### Phase 3.16: GPU Skinning
+
+- **Implement bone uniform buffer**
+  - Support up to 256 bones (256 × 4×4 matrices = 16KB)
+  - `set_bones(matrices_ptr, count)` — upload bone transforms
+  - Bone matrices in column-major order (16 floats each)
+
+- **Implement skinned vertex shader**
+  - Read bone indices (4 × u8) and weights (4 × f32) from vertex
+  - Compute skinned position: `Σ(weight[i] * bone_matrix[bone_index[i]] * pos)`
+  - Compute skinned normal: `Σ(weight[i] * inverse_transpose(bone_matrix[i]) * normal)`
+  - Apply before model-view-projection transform
+
+- **Update vertex formats for skinning**
+  - `FORMAT_SKINNED` (8) adds 20 bytes per vertex
+  - Bone indices: 4 bytes (4 × u8)
+  - Bone weights: 16 bytes (4 × f32)
+  - Attribute order: pos → uv → color → normal → bone_indices → bone_weights
 
 ## Done
 

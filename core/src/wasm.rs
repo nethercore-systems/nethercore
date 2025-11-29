@@ -342,6 +342,9 @@ impl Default for LightState {
     }
 }
 
+/// Maximum number of bones for GPU skinning
+pub const MAX_BONES: usize = 256;
+
 /// Current render state for batching
 #[derive(Debug, Clone)]
 pub struct RenderState {
@@ -367,6 +370,10 @@ pub struct RenderState {
     pub material_emissive: f32,
     /// Light states for Mode 2/3 (4 lights)
     pub lights: [LightState; 4],
+    /// Bone transform matrices for GPU skinning (column-major, up to 256 bones)
+    pub bone_matrices: Vec<Mat4>,
+    /// Number of active bones
+    pub bone_count: u32,
 }
 
 /// Configuration set during init (immutable after init)
@@ -410,6 +417,8 @@ impl Default for RenderState {
             material_roughness: 0.5,
             material_emissive: 0.0,
             lights: [LightState::default(); 4],
+            bone_matrices: Vec::new(),
+            bone_count: 0,
         }
     }
 }

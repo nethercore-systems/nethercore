@@ -8,7 +8,7 @@ use glam::{Mat4, Vec3};
 use tracing::{info, warn};
 use wasmtime::{Caller, Linker};
 
-use emberware_core::wasm::{DrawCommand, GameState, PendingMesh, PendingTexture, MAX_PLAYERS, MAX_TRANSFORM_STACK};
+use emberware_core::wasm::{DrawCommand, GameState, PendingMesh, PendingTexture, MAX_BONES, MAX_PLAYERS, MAX_TRANSFORM_STACK};
 
 use crate::console::{RESOLUTIONS, TICK_RATES};
 
@@ -103,6 +103,9 @@ pub fn register_z_ffi(linker: &mut Linker<GameState>) -> Result<()> {
     // Mode 3 (Hybrid) lighting functions
     // Note: Mode 3 uses the same FFI functions as Mode 2 but conventionally only uses light 0
     // The shader in Mode 3 uses light 0 as the single directional light
+
+    // GPU skinning
+    linker.func_wrap("env", "set_bones", set_bones)?;
 
     Ok(())
 }
@@ -2061,6 +2064,94 @@ fn light_disable(mut caller: Caller<'_, GameState>, index: u32) {
 
     let state = caller.data_mut();
     state.render_state.lights[index as usize].enabled = false;
+}
+
+/// Set bone transform matrices for GPU skinning
+///
+/// # Arguments
+/// * `matrices_ptr` — Pointer to array of bone matrices in WASM memory
+/// * `count` — Number of bones (max 256)
+///
+/// Each bone matrix is 16 floats in column-major order (same as transform_set).
+/// The vertex shader will use these matrices to deform skinned vertices based on
+/// their bone indices and weights.
+///
+/// Call this before drawing skinned meshes (meshes with FORMAT_SKINNED flag).
+/// The bone transforms are typically computed on CPU each frame for skeletal animation.
+fn set_bones(mut caller: Caller<'_, GameState>, matrices_ptr: u32, count: u32) {
+    // Validate bone count
+    if count > MAX_BONES as u32 {
+        warn!(
+            "set_bones: bone count {} exceeds maximum {} - clamping",
+            count, MAX_BONES
+        );
+        return;
+    }
+
+    if count == 0 {
+        // Clear bone data
+        let state = caller.data_mut();
+        state.render_state.bone_matrices.clear();
+        state.render_state.bone_count = 0;
+        return;
+    }
+
+    // Calculate required memory size (16 floats per matrix × 4 bytes per float)
+    let matrix_size = 16 * 4; // 64 bytes per matrix
+    let total_size = count as usize * matrix_size;
+
+    // Get WASM memory
+    let memory = match caller.data().memory {
+        Some(mem) => mem,
+        None => {
+            warn!("set_bones: WASM memory not initialized");
+            return;
+        }
+    };
+
+    // Read matrix data from WASM memory
+    let data = memory.data(&caller);
+    let start = matrices_ptr as usize;
+    let end = start + total_size;
+
+    if end > data.len() {
+        warn!(
+            "set_bones: memory access out of bounds (requested {}-{}, memory size {})",
+            start,
+            end,
+            data.len()
+        );
+        return;
+    }
+
+    // Parse matrices from memory (column-major order)
+    let mut matrices = Vec::with_capacity(count as usize);
+    for i in 0..count as usize {
+        let offset = start + i * matrix_size;
+        let matrix_bytes = &data[offset..offset + matrix_size];
+
+        // Convert bytes to f32 array (16 floats)
+        let mut floats = [0.0f32; 16];
+        for j in 0..16 {
+            let byte_offset = j * 4;
+            let bytes = [
+                matrix_bytes[byte_offset],
+                matrix_bytes[byte_offset + 1],
+                matrix_bytes[byte_offset + 2],
+                matrix_bytes[byte_offset + 3],
+            ];
+            floats[j] = f32::from_le_bytes(bytes);
+        }
+
+        // Create Mat4 from column-major floats
+        let matrix = Mat4::from_cols_array(&floats);
+        matrices.push(matrix);
+    }
+
+    // Store bone matrices in render state
+    let state = caller.data_mut();
+    state.render_state.bone_matrices = matrices;
+    state.render_state.bone_count = count;
 }
 
 #[cfg(test)]

@@ -32,6 +32,9 @@ struct MaterialUniforms {
 
 @group(0) @binding(3) var<uniform> material: MaterialUniforms;
 
+// Bone transforms for GPU skinning (up to 256 bones)
+@group(0) @binding(4) var<storage, read> bones: array<mat4x4<f32>, 256>;
+
 // Texture bindings (group 1)
 @group(1) @binding(0) var slot0: texture_2d<f32>;
 @group(1) @binding(1) var slot1: texture_2d<f32>;
@@ -71,7 +74,7 @@ fn vs(in: VertexIn) -> VertexOut {
 
     // Apply model transform (passed per instance or via push constants)
     // For now, use identity - will be added in later integration
-    let world_pos = vec4<f32>(in.position, 1.0);
+    //VS_POSITION
     out.world_position = world_pos.xyz;
 
     // View-projection transform
