@@ -1,19 +1,27 @@
 # Emberware
 
-A 5th-generation fantasy console targeting PS1/N64/Saturn aesthetics with built-in rollback netcode.
+A fantasy console platform with built-in rollback netcode.
+
+## Consoles
+
+| Console | Generation | Aesthetic | Doc |
+|---------|------------|-----------|-----|
+| **Emberware Z** | 5th gen | PS1/N64/Saturn | [docs/emberware-z.md](./docs/emberware-z.md) |
+| **Emberware Classic** | 4th gen | Genesis/SNES/Neo Geo | [docs/emberware-classic.md](./docs/emberware-classic.md) |
 
 ## What's Here
 
 | Directory | Description |
 |-----------|-------------|
-| `/emberware-z` | Native game runtime (Rust) |
-| `/shared` | Shared types used by Emberware Z and platform |
+| `/core` | Shared console framework (WASM runtime, GGRS rollback) |
+| `/emberware-z` | Emberware Z runtime implementation |
+| `/shared` | API types shared with platform backend |
 | `/docs` | FFI documentation for game developers |
 | `/examples` | Example games |
 
 ## For Game Developers
 
-See [docs/ffi.md](./docs/ffi.md) for the complete FFI API reference.
+See [docs/ffi.md](./docs/ffi.md) for the shared FFI API, then check your target console's specific docs.
 
 ### Quick Start
 
@@ -30,7 +38,7 @@ pub extern "C" fn update() {
 
 #[no_mangle]
 pub extern "C" fn render() {
-    // Called every frame — draw calls (can skip during rollback)
+    // Called every frame — draw calls (skipped during rollback)
 }
 ```
 
@@ -44,17 +52,25 @@ cargo build --target wasm32-unknown-unknown --release
 
 Visit [emberware.io](https://emberware.io) to create an account and upload your game.
 
-## Console Specs
+## Console Specs Comparison
 
-| Spec | Value |
-|------|-------|
-| Resolution | 360p, 540p (default), 720p, 1080p |
-| Tick rate | 24, 30, 60 (default), 120 fps |
-| RAM | 16MB |
-| VRAM | 8MB |
-| CPU budget | 4ms per tick (at 60fps) |
-| ROM size | 32MB max |
-| Netcode | Deterministic rollback via GGRS |
+| Spec | Emberware Z | Emberware Classic |
+|------|-------------|-------------------|
+| Generation | 5th (PS1/N64) | 4th (Genesis/SNES) |
+| Target audience | Experienced devs | Beginners, students |
+| Resolution | 360p-1080p | 8 options (16:9 + 4:3, pixel-perfect) |
+| RAM | 16MB | 4MB |
+| VRAM | 8MB | 2MB |
+| ROM size | 32MB | 16MB |
+| 3D support | Yes | No |
+| Analog input | Sticks + triggers | D-pad only |
+| Face buttons | 4 (A/B/X/Y) | 6 (A/B/C/X/Y/Z) |
+| Tilemap layers | No | Yes (4 layers) |
+| Sprite flip/priority | No | Yes |
+| Palette swapping | No | Yes |
+| Tick rate | 24-120 fps | 24-120 fps |
+| Max players | 4 | 4 |
+| Netcode | Rollback (GGRS) | Rollback (GGRS) |
 
 ## License
 
