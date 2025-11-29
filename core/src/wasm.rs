@@ -30,6 +30,53 @@ pub struct PendingTexture {
     pub data: Vec<u8>,
 }
 
+/// Pending mesh load request (retained mode)
+#[derive(Debug, Clone)]
+pub struct PendingMesh {
+    pub handle: u32,
+    pub format: u8,
+    pub vertex_data: Vec<f32>,
+    pub index_data: Option<Vec<u32>>,
+}
+
+/// Draw command for immediate mode drawing
+#[derive(Debug, Clone)]
+pub enum DrawCommand {
+    /// Draw triangles with immediate data (non-indexed)
+    DrawTriangles {
+        format: u8,
+        vertex_data: Vec<f32>,
+        transform: Mat4,
+        color: u32,
+        depth_test: bool,
+        cull_mode: u8,
+        blend_mode: u8,
+        bound_textures: [u32; 4],
+    },
+    /// Draw indexed triangles with immediate data
+    DrawTrianglesIndexed {
+        format: u8,
+        vertex_data: Vec<f32>,
+        index_data: Vec<u32>,
+        transform: Mat4,
+        color: u32,
+        depth_test: bool,
+        cull_mode: u8,
+        blend_mode: u8,
+        bound_textures: [u32; 4],
+    },
+    /// Draw a retained mesh by handle
+    DrawMesh {
+        handle: u32,
+        transform: Mat4,
+        color: u32,
+        depth_test: bool,
+        cull_mode: u8,
+        blend_mode: u8,
+        bound_textures: [u32; 4],
+    },
+}
+
 /// Shared WASM engine (one per application)
 pub struct WasmEngine {
     engine: Engine,
@@ -118,6 +165,15 @@ pub struct GameState {
 
     /// Pending texture loads (filled by FFI, consumed by graphics backend)
     pub pending_textures: Vec<PendingTexture>,
+
+    /// Next mesh handle to allocate
+    pub next_mesh_handle: u32,
+
+    /// Pending mesh loads (filled by FFI, consumed by graphics backend)
+    pub pending_meshes: Vec<PendingMesh>,
+
+    /// Draw commands for current frame (filled by FFI, consumed by graphics backend)
+    pub draw_commands: Vec<DrawCommand>,
 }
 
 impl GameState {
@@ -143,6 +199,9 @@ impl GameState {
             quit_requested: false,
             next_texture_handle: 1, // 0 is reserved for invalid/unbound
             pending_textures: Vec::new(),
+            next_mesh_handle: 1, // 0 is reserved for invalid
+            pending_meshes: Vec::new(),
+            draw_commands: Vec::new(),
         }
     }
 

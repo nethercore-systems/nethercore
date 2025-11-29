@@ -138,25 +138,11 @@ The `Runtime<C: Console>` handles:
 
 #### 3.7 Mesh FFI (Retained Mode)
 
-- **Implement mesh loading**
-  - `load_mesh(data, vertex_count, format) -> u32` — non-indexed mesh
-  - `load_mesh_indexed(data, vertex_count, indices, index_count, format) -> u32`
-  - Vertex format flags: FORMAT_UV(1), FORMAT_COLOR(2), FORMAT_NORMAL(4), FORMAT_SKINNED(8)
-  - Calculate stride from format, copy to appropriate vertex buffer
-  - Return mesh handle for draw_mesh
-
-- **Implement mesh drawing**
-  - `draw_mesh(handle)` — draw retained mesh with current transform/state
-  - Look up mesh by handle, record draw command
-  - Apply current transform, textures, render state
+(Moved to Done)
 
 #### 3.8 Immediate Mode 3D FFI
 
-- **Implement immediate mode drawing**
-  - `draw_triangles(data, vertex_count, format)` — non-indexed
-  - `draw_triangles_indexed(data, vertex_count, indices, index_count, format)`
-  - Buffer vertices on CPU side (per format)
-  - Flush all immediate draws at frame end
+(Moved to Done)
 
 #### 3.9 Transform Stack FFI
 
@@ -510,6 +496,22 @@ The `Runtime<C: Console>` handles:
 ## In Progress
 
 ## Done
+
+- **Implement Mesh FFI functions (Phase 3.7)**
+  - `load_mesh(data_ptr, vertex_count, format) -> u32` — non-indexed mesh
+  - `load_mesh_indexed(data_ptr, vertex_count, index_ptr, index_count, format) -> u32`
+  - `draw_mesh(handle)` — draw retained mesh with current transform/state
+  - Vertex format validation (0-15)
+  - Stride calculation and memory bounds checking
+  - PendingMesh struct for graphics backend integration
+  - DrawCommand enum for deferred rendering
+
+- **Implement Immediate Mode 3D FFI (Phase 3.8)**
+  - `draw_triangles(data_ptr, vertex_count, format)` — non-indexed immediate draw
+  - `draw_triangles_indexed(data_ptr, vertex_count, index_ptr, index_count, format)`
+  - Vertex format validation and stride calculation
+  - Index bounds checking
+  - Draw commands buffered with current transform and render state
 
 - **Implement Input FFI functions (Phase 3.5)**
   - Individual button queries: `button_held`, `button_pressed`, `button_released`

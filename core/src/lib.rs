@@ -41,7 +41,8 @@ pub mod wasm;
 pub use console::{Audio, Console, ConsoleInput, ConsoleSpecs, Graphics};
 pub use runtime::{Runtime, RuntimeConfig};
 pub use wasm::{
-    CameraState, GameInstance, GameState, WasmEngine, DEFAULT_CAMERA_FOV, MAX_TRANSFORM_STACK,
+    CameraState, DrawCommand, GameInstance, GameState, PendingMesh, WasmEngine,
+    DEFAULT_CAMERA_FOV, MAX_TRANSFORM_STACK,
 };
 
 // Re-export rollback types
