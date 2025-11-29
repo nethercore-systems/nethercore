@@ -12,13 +12,6 @@
 //! 3. Re-run update() for frames N-X to N with corrected inputs
 //! 4. render() only called for final confirmed frame
 
-pub mod wasm;
-pub mod ffi;
-pub mod graphics;
-pub mod audio;
-pub mod input;
-pub mod rollback;
-
 // TODO: Implement runtime modules
 // - wasm.rs: wasmtime setup, memory management, state serialization
 // - ffi.rs: Host functions (clear, draw_*, save_state, load_state, random)

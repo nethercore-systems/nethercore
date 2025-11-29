@@ -17,7 +17,7 @@ fn main() {
 
     let mode = if let Some(uri) = deep_link::parse(&args) {
         tracing::info!("Launched via deep link: {:?}", uri);
-        app::AppMode::Play { game_id: uri.game_id }
+        app::AppMode::Playing { game_id: uri.game_id }
     } else {
         tracing::info!("Launched directly, showing library");
         app::AppMode::Library
