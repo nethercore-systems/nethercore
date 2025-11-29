@@ -40,7 +40,9 @@ pub mod wasm;
 // Re-export core traits and types
 pub use console::{Audio, Console, ConsoleInput, ConsoleSpecs, Graphics};
 pub use runtime::{Runtime, RuntimeConfig};
-pub use wasm::{GameInstance, GameState, WasmEngine};
+pub use wasm::{
+    CameraState, GameInstance, GameState, WasmEngine, DEFAULT_CAMERA_FOV, MAX_TRANSFORM_STACK,
+};
 
 // Re-export rollback types
 pub use rollback::{

@@ -3,7 +3,7 @@
 //! Provides abstractions over wasmtime for loading and executing game WASM modules.
 
 use anyhow::{Context, Result};
-use glam::Mat4;
+use glam::{Mat4, Vec3};
 use wasmtime::{Engine, Instance, Linker, Memory, Module, Store, TypedFunc};
 
 /// Maximum transform stack depth
@@ -11,6 +11,9 @@ pub const MAX_TRANSFORM_STACK: usize = 16;
 
 /// Maximum number of players
 pub const MAX_PLAYERS: usize = 4;
+
+/// Default camera field of view in degrees
+pub const DEFAULT_CAMERA_FOV: f32 = 60.0;
 
 /// Maximum number of save slots
 pub const MAX_SAVE_SLOTS: usize = 8;
@@ -79,6 +82,9 @@ pub struct GameState {
     /// Current transform matrix
     pub current_transform: Mat4,
 
+    /// Camera state
+    pub camera: CameraState,
+
     /// RNG state for deterministic random
     pub rng_state: u64,
 
@@ -112,6 +118,7 @@ impl GameState {
             in_init: true,
             transform_stack: Vec::with_capacity(MAX_TRANSFORM_STACK),
             current_transform: Mat4::IDENTITY,
+            camera: CameraState::default(),
             rng_state: 0,
             render_state: RenderState::default(),
             init_config: InitConfig::default(),
@@ -223,6 +230,50 @@ pub struct InputState {
     pub left_trigger: u8,
     /// Right trigger (0-255)
     pub right_trigger: u8,
+}
+
+/// Camera state for 3D rendering
+#[derive(Debug, Clone, Copy)]
+pub struct CameraState {
+    /// Camera position in world space
+    pub position: Vec3,
+    /// Camera target (look-at point) in world space
+    pub target: Vec3,
+    /// Field of view in degrees
+    pub fov: f32,
+    /// Near clipping plane
+    pub near: f32,
+    /// Far clipping plane
+    pub far: f32,
+}
+
+impl Default for CameraState {
+    fn default() -> Self {
+        Self {
+            position: Vec3::new(0.0, 0.0, 5.0),
+            target: Vec3::ZERO,
+            fov: DEFAULT_CAMERA_FOV,
+            near: 0.1,
+            far: 1000.0,
+        }
+    }
+}
+
+impl CameraState {
+    /// Compute the view matrix (world-to-camera transform)
+    pub fn view_matrix(&self) -> Mat4 {
+        Mat4::look_at_rh(self.position, self.target, Vec3::Y)
+    }
+
+    /// Compute the projection matrix for a given aspect ratio
+    pub fn projection_matrix(&self, aspect_ratio: f32) -> Mat4 {
+        Mat4::perspective_rh(self.fov.to_radians(), aspect_ratio, self.near, self.far)
+    }
+
+    /// Compute the combined view-projection matrix
+    pub fn view_projection_matrix(&self, aspect_ratio: f32) -> Mat4 {
+        self.projection_matrix(aspect_ratio) * self.view_matrix()
+    }
 }
 
 /// A loaded and instantiated game

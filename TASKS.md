@@ -126,12 +126,7 @@ The `Runtime<C: Console>` handles:
 
 #### 3.4 Camera FFI
 
-- **Implement camera functions**
-  - `camera_set(x, y, z, target_x, target_y, target_z)` — look-at camera
-  - `camera_fov(fov_degrees: f32)` — field of view (default 60°)
-  - View matrix calculation
-  - Projection matrix calculation
-  - Camera uniform buffer upload
+(Moved to In Progress)
 
 #### 3.5 Input FFI
 
@@ -192,16 +187,7 @@ The `Runtime<C: Console>` handles:
 
 #### 3.9 Transform Stack FFI
 
-- **Implement transform functions**
-  - `transform_identity()` — reset to identity matrix
-  - `transform_translate(x, y, z)` — translate
-  - `transform_rotate(angle_deg, x, y, z)` — rotate around axis
-  - `transform_scale(x, y, z)` — scale
-  - `transform_push()` — push current matrix to stack
-  - `transform_pop()` — pop matrix from stack
-  - `transform_set(matrix_ptr)` — set from 16 floats (column-major)
-  - Stack depth: 16 matrices
-  - Matrix math using glam
+(Moved to In Progress)
 
 #### 3.10 Billboarding FFI
 
@@ -557,6 +543,25 @@ The `Runtime<C: Console>` handles:
 ## In Progress
 
 ## Done
+
+- **Implement camera functions (Phase 3.4)**
+  - `camera_set(x, y, z, target_x, target_y, target_z)` — look-at camera
+  - `camera_fov(fov_degrees: f32)` — field of view (default 60°)
+  - View matrix calculation
+  - Projection matrix calculation
+  - CameraState struct with view_matrix(), projection_matrix(), view_projection_matrix()
+
+- **Implement transform stack functions (Phase 3.9)**
+  - `transform_identity()` — reset to identity matrix
+  - `transform_translate(x, y, z)` — translate
+  - `transform_rotate(angle_deg, x, y, z)` — rotate around axis
+  - `transform_scale(x, y, z)` — scale
+  - `transform_push()` — push current matrix to stack (returns 1/0)
+  - `transform_pop()` — pop matrix from stack (returns 1/0)
+  - `transform_set(matrix_ptr)` — set from 16 floats (column-major)
+  - Stack depth: 16 matrices
+  - Matrix math using glam
+
 
 - **Implement configuration functions (Phase 3.3)**
   - `set_resolution(res: u32)` — 0=360p, 1=540p, 2=720p, 3=1080p
