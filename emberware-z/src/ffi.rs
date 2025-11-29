@@ -81,6 +81,9 @@ pub fn register_z_ffi(linker: &mut Linker<GameState>) -> Result<()> {
     linker.func_wrap("env", "draw_rect", draw_rect)?;
     linker.func_wrap("env", "draw_text", draw_text)?;
 
+    // Sky system
+    linker.func_wrap("env", "set_sky", set_sky)?;
+
     Ok(())
 }
 
@@ -1742,6 +1745,66 @@ fn draw_text(
         color,
         blend_mode: state.render_state.blend_mode,
     });
+}
+
+// ============================================================================
+// Sky System
+// ============================================================================
+
+/// Set procedural sky parameters
+///
+/// # Arguments
+/// * `horizon_r` — Horizon color red (0.0-1.0)
+/// * `horizon_g` — Horizon color green (0.0-1.0)
+/// * `horizon_b` — Horizon color blue (0.0-1.0)
+/// * `zenith_r` — Zenith (top) color red (0.0-1.0)
+/// * `zenith_g` — Zenith (top) color green (0.0-1.0)
+/// * `zenith_b` — Zenith (top) color blue (0.0-1.0)
+/// * `sun_dir_x` — Sun direction X (will be normalized)
+/// * `sun_dir_y` — Sun direction Y (will be normalized)
+/// * `sun_dir_z` — Sun direction Z (will be normalized)
+/// * `sun_r` — Sun color red (0.0-1.0+)
+/// * `sun_g` — Sun color green (0.0-1.0+)
+/// * `sun_b` — Sun color blue (0.0-1.0+)
+/// * `sun_sharpness` — Sun sharpness (typically 32-256, higher = sharper sun)
+///
+/// Configures the procedural sky system for background rendering and ambient lighting.
+/// Default is all zeros (black sky, no sun, no lighting).
+fn set_sky(
+    mut caller: Caller<'_, GameState>,
+    horizon_r: f32,
+    horizon_g: f32,
+    horizon_b: f32,
+    zenith_r: f32,
+    zenith_g: f32,
+    zenith_b: f32,
+    sun_dir_x: f32,
+    sun_dir_y: f32,
+    sun_dir_z: f32,
+    sun_r: f32,
+    sun_g: f32,
+    sun_b: f32,
+    sun_sharpness: f32,
+) {
+    let state = caller.data_mut();
+
+    // Record sky configuration as a draw command
+    state.draw_commands.push(DrawCommand::SetSky {
+        horizon_color: [horizon_r, horizon_g, horizon_b],
+        zenith_color: [zenith_r, zenith_g, zenith_b],
+        sun_direction: [sun_dir_x, sun_dir_y, sun_dir_z],
+        sun_color: [sun_r, sun_g, sun_b],
+        sun_sharpness,
+    });
+
+    info!(
+        "set_sky: horizon=({:.2},{:.2},{:.2}), zenith=({:.2},{:.2},{:.2}), sun_dir=({:.2},{:.2},{:.2}), sun_color=({:.2},{:.2},{:.2}), sharpness={:.1}",
+        horizon_r, horizon_g, horizon_b,
+        zenith_r, zenith_g, zenith_b,
+        sun_dir_x, sun_dir_y, sun_dir_z,
+        sun_r, sun_g, sun_b,
+        sun_sharpness
+    );
 }
 
 #[cfg(test)]

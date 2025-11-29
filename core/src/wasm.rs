@@ -151,6 +151,19 @@ pub enum DrawCommand {
         /// Blend mode
         blend_mode: u8,
     },
+    /// Set procedural sky parameters
+    SetSky {
+        /// Horizon color (RGB, linear)
+        horizon_color: [f32; 3],
+        /// Zenith (top) color (RGB, linear)
+        zenith_color: [f32; 3],
+        /// Sun direction (will be normalized)
+        sun_direction: [f32; 3],
+        /// Sun color (RGB, linear)
+        sun_color: [f32; 3],
+        /// Sun sharpness (higher = sharper sun, typically 32-256)
+        sun_sharpness: f32,
+    },
 }
 
 /// Shared WASM engine (one per application)

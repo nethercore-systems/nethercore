@@ -22,7 +22,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use glam::{Mat4, Vec4};
+use glam::{Mat4, Vec3, Vec4};
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
@@ -951,6 +951,51 @@ impl TextureFilter {
 }
 
 // ============================================================================
+// Sky Uniforms
+// ============================================================================
+
+/// Sky rendering parameters for procedural sky system
+///
+/// All zeros = black sky (no sun, no lighting)
+/// Call set_sky() in init() to configure
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct SkyUniforms {
+    /// Horizon color (RGB, linear)
+    pub horizon_color: [f32; 3],
+    pub _pad0: f32,
+    /// Zenith color (RGB, linear)
+    pub zenith_color: [f32; 3],
+    pub _pad1: f32,
+    /// Sun direction (normalized vector)
+    pub sun_direction: [f32; 3],
+    pub _pad2: f32,
+    /// Sun color (RGB, linear)
+    pub sun_color: [f32; 3],
+    /// Sun sharpness (higher = sharper sun)
+    pub sun_sharpness: f32,
+}
+
+impl Default for SkyUniforms {
+    fn default() -> Self {
+        Self {
+            horizon_color: [0.0, 0.0, 0.0],
+            _pad0: 0.0,
+            zenith_color: [0.0, 0.0, 0.0],
+            _pad1: 0.0,
+            sun_direction: [0.0, 1.0, 0.0], // Up by default
+            _pad2: 0.0,
+            sun_color: [0.0, 0.0, 0.0],
+            sun_sharpness: 0.0,
+        }
+    }
+}
+
+// Safety: SkyUniforms is POD (plain old data)
+unsafe impl bytemuck::Pod for SkyUniforms {}
+unsafe impl bytemuck::Zeroable for SkyUniforms {}
+
+// ============================================================================
 // Render State
 // ============================================================================
 
@@ -1066,6 +1111,10 @@ pub struct ZGraphics {
 
     // Current render state
     render_state: RenderState,
+
+    // Sky system
+    sky_uniforms: SkyUniforms,
+    sky_buffer: wgpu::Buffer,
 
     // Frame state
     current_frame: Option<wgpu::SurfaceTexture>,
@@ -1206,6 +1255,14 @@ impl ZGraphics {
             )
         });
 
+        // Create sky uniform buffer
+        let sky_uniforms = SkyUniforms::default();
+        let sky_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Sky Uniform Buffer"),
+            contents: bytemuck::cast_slice(&[sky_uniforms]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
         let mut graphics = Self {
             surface,
             device,
@@ -1221,6 +1278,8 @@ impl ZGraphics {
             sampler_nearest,
             sampler_linear,
             render_state: RenderState::default(),
+            sky_uniforms,
+            sky_buffer,
             current_frame: None,
             current_view: None,
             vertex_buffers,
@@ -1479,6 +1538,62 @@ impl ZGraphics {
             TextureFilter::Nearest => &self.sampler_nearest,
             TextureFilter::Linear => &self.sampler_linear,
         }
+    }
+
+    // ========================================================================
+    // Sky System
+    // ========================================================================
+
+    /// Set sky parameters for procedural sky rendering
+    ///
+    /// Parameters:
+    /// - horizon_rgb: Horizon color (RGB, linear, 3 floats)
+    /// - zenith_rgb: Zenith (top) color (RGB, linear, 3 floats)
+    /// - sun_dir: Sun direction (normalized, XYZ, 3 floats)
+    /// - sun_rgb: Sun color (RGB, linear, 3 floats)
+    /// - sun_sharpness: Sun sharpness (higher = sharper sun, typically 32-256)
+    pub fn set_sky(
+        &mut self,
+        horizon_rgb: [f32; 3],
+        zenith_rgb: [f32; 3],
+        sun_dir: [f32; 3],
+        sun_rgb: [f32; 3],
+        sun_sharpness: f32,
+    ) {
+        // Normalize sun direction
+        let sun_vec = Vec3::from_array(sun_dir);
+        let sun_normalized = if sun_vec.length() > 0.0001 {
+            sun_vec.normalize()
+        } else {
+            Vec3::Y // Default to up if zero vector
+        };
+
+        self.sky_uniforms = SkyUniforms {
+            horizon_color: horizon_rgb,
+            _pad0: 0.0,
+            zenith_color: zenith_rgb,
+            _pad1: 0.0,
+            sun_direction: sun_normalized.to_array(),
+            _pad2: 0.0,
+            sun_color: sun_rgb,
+            sun_sharpness,
+        };
+
+        // Upload to GPU
+        self.queue.write_buffer(&self.sky_buffer, 0, bytemuck::cast_slice(&[self.sky_uniforms]));
+
+        tracing::debug!("Set sky: horizon={:?}, zenith={:?}, sun_dir={:?}, sun_color={:?}, sharpness={}",
+            horizon_rgb, zenith_rgb, sun_normalized.to_array(), sun_rgb, sun_sharpness);
+    }
+
+    /// Get current sky uniforms
+    pub fn sky_uniforms(&self) -> &SkyUniforms {
+        &self.sky_uniforms
+    }
+
+    /// Get sky uniform buffer for binding
+    pub fn sky_buffer(&self) -> &wgpu::Buffer {
+        &self.sky_buffer
     }
 
     // ========================================================================

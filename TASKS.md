@@ -156,30 +156,6 @@ The `Runtime<C: Console>` handles:
 
 (Moved to In Progress)
 
-#### 3.14 Procedural Sky System
-
-- **Implement sky uniform buffer**
-  - `SkyUniforms` struct: horizon_color, zenith_color, sun_direction, sun_color, sun_sharpness
-  - Default: all zeros (black sky, no lighting until configured)
-  - Upload sky uniforms to GPU each frame
-
-- **Implement `set_sky()` FFI**
-  - `set_sky(horizon_rgb, zenith_rgb, sun_dir_xyz, sun_rgb, sharpness)`
-  - 13 f32 parameters total
-  - Validate sun direction is normalized (or normalize internally)
-  - Store in sky uniform buffer
-
-- **Implement sky background rendering**
-  - Fullscreen triangle at far plane (depth = 1.0)
-  - Vertex shader: compute view ray from clip position
-  - Fragment shader: `sample_sky(normalize(view_ray))`
-  - Render before all geometry (or use clear color for solid backgrounds)
-
-- **Implement `sample_sky()` shader function**
-  - Gradient: `lerp(horizon, zenith, direction.y * 0.5 + 0.5)`
-  - Sun: `sun_color * pow(max(0, dot(direction, sun_direction)), sharpness)`
-  - Return: `gradient + sun`
-  - Used for: background, reflections (Mode 2/3), ambient (Mode 0 with normals)
 
 #### 3.15 Mode-Specific Lighting FFI
 
@@ -421,6 +397,17 @@ The `Runtime<C: Console>` handles:
 ## In Progress
 
 ## Done
+
+- **Implement Procedural Sky System (Phase 3.14)**
+  - Created `SkyUniforms` struct with horizon_color, zenith_color, sun_direction, sun_color, sun_sharpness
+  - Implemented sky uniform buffer with GPU upload
+  - Added `set_sky()` FFI function with 13 f32 parameters
+  - Sun direction automatically normalized
+  - `sample_sky()` shader function implemented in all shader templates
+  - Gradient interpolation: `mix(horizon, zenith, direction.y * 0.5 + 0.5)`
+  - Sun calculation: `sun_color * pow(max(0, dot(direction, sun_direction)), sharpness)`
+  - Integrated with all render modes (0-3) for ambient lighting and reflections
+  - Default: all zeros (black sky, no sun, no lighting until configured via set_sky())
 
 - **Implement Shader Generation System (Phase 3.13)**
   - Created 4 shader mode templates: mode0_unlit.wgsl, mode1_matcap.wgsl, mode2_pbr.wgsl, mode3_hybrid.wgsl
