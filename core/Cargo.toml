@@ -1,0 +1,40 @@
+[package]
+name = "emberware-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Core framework for Emberware fantasy console platform"
+
+[dependencies]
+# WASM execution
+wasmtime = "27"
+
+# Rollback netcode
+ggrs = "0.10"
+
+# WebRTC P2P networking
+matchbox_socket = "0.10"
+
+# Windowing
+winit = "0.30"
+
+# Math
+glam = { version = "0.29", features = ["bytemuck"] }
+
+# Serialization for input/state
+bytemuck = { version = "1", features = ["derive"] }
+
+# Async runtime for networking
+tokio = { version = "1", features = ["rt", "sync"] }
+
+# Error handling
+anyhow = "1"
+thiserror = "2"
+
+# Logging
+log = "0.4"
+
+# Random number generation (deterministic)
+rand = "0.8"
+rand_pcg = "0.3"

@@ -51,8 +51,6 @@ pub trait Console: Send + 'static {
 pub trait ConsoleInput: Clone + Copy + Default + bytemuck::Pod + bytemuck::Zeroable {}
 
 pub trait Graphics: Send {
-    fn begin_frame(&mut self);
-    fn end_frame(&mut self);
     fn resize(&mut self, width: u32, height: u32);
     // Console calls into this during render via FFI
 }
@@ -103,11 +101,6 @@ The `Runtime<C: Console>` handles:
 
 ## TODO
 ### Phase 1: Core Framework Foundation
-
-- **Create `core` crate with workspace configuration**
-  - Add `core/Cargo.toml` with wasmtime, ggrs, matchbox_socket, winit
-  - Update root `Cargo.toml` workspace members
-  - Define core module structure: `lib.rs`, `console.rs`, `runtime.rs`, `wasm.rs`, `ffi.rs`, `rollback.rs`
 
 - **Define `Console` trait and associated types**
   - `Console` trait with specs, FFI registration, graphics/audio factory methods
@@ -676,3 +669,8 @@ The `Runtime<C: Console>` handles:
 ## In Progress
 
 ## Done
+
+- **Create `core` crate with workspace configuration**
+  - Add `core/Cargo.toml` with wasmtime, ggrs, matchbox_socket, winit
+  - Update root `Cargo.toml` workspace members
+  - Define core module structure: `lib.rs`, `console.rs`, `runtime.rs`, `wasm.rs`, `ffi.rs`, `rollback.rs`
