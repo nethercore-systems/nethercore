@@ -44,10 +44,11 @@ pub use wasm::{GameInstance, GameState, WasmEngine};
 
 // Re-export rollback types
 pub use rollback::{
-    EmberwareConfig, GameStateSnapshot, LoadStateError, NetworkInput, RollbackSession,
-    RollbackStateManager, SaveStateError, SessionConfig, SessionError, SessionType, StatePool,
-    DEFAULT_INPUT_DELAY, DEFAULT_ONLINE_INPUT_DELAY, MAX_INPUT_DELAY, MAX_ROLLBACK_FRAMES,
-    MAX_STATE_SIZE, STATE_POOL_SIZE,
+    ConnectionQuality, EmberwareConfig, GameStateSnapshot, LoadStateError, NetworkInput,
+    PlayerNetworkStats, RollbackSession, RollbackStateManager, SaveStateError, SessionConfig,
+    SessionError, SessionEvent, SessionType, StatePool, DEFAULT_INPUT_DELAY,
+    DEFAULT_ONLINE_INPUT_DELAY, MAX_INPUT_DELAY, MAX_ROLLBACK_FRAMES, MAX_STATE_SIZE,
+    STATE_POOL_SIZE,
 };
 
 // Re-export GGRS types for convenience

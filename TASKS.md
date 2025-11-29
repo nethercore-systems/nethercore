@@ -603,6 +603,13 @@ The `Runtime<C: Console>` handles:
 
 ## Done
 
+- **Handle GGRS events**
+  - `GGRSRequest::SaveGameState` → serialize WASM state
+  - `GGRSRequest::LoadGameState` → deserialize WASM state
+  - `GGRSRequest::AdvanceFrame` → run `update()` with confirmed inputs
+  - Connection quality events (desync detection, frame advantage warnings)
+  - Audio muting during rollback replay
+
 - **Integrate GGRS session into runtime**
   - Local session (single player or local multiplayer, no rollback)
   - P2P session with matchbox_socket (WebRTC)
