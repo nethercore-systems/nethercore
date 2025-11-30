@@ -213,16 +213,7 @@ The `Runtime<C: Console>` handles:
 
 (Moved to Done/In Progress)
 
-- **Create `platformer` example**
-  - Full mini-game demonstrating multiple Z features:
-    - 2D gameplay using 3D renderer
-    - Textured sprites for player/enemies
-    - Billboarded sprites in 3D space
-    - Simple physics and collision (AABB)
-    - Multiple players with analog stick input
-    - 2D UI overlay with `draw_text()`, `draw_rect()`
-    - Sky background with `set_sky()`
-    - Demonstrates rollback-safe game state
+(Moved to In Progress)
 
 ### Phase 7: Testing & Documentation
 
@@ -248,6 +239,21 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **Create `platformer` example (Phase 6)**
+  - Full mini-game demonstrating multiple Z features:
+    - 2D gameplay using 3D renderer (side-scrolling platformer)
+    - Textured sprites for player (8x8 character silhouette)
+    - Platform tiles (8x8 brick pattern)
+    - Collectible coins (8x8 golden circle with highlight)
+    - Billboarded sprites in 3D space (MODE_CYLINDRICAL_Y for upright sprites)
+    - Simple physics (gravity, friction, variable jump height)
+    - AABB collision detection (platforms, collectibles)
+    - Multiple players (up to 4) with analog stick input
+    - 2D UI overlay with `draw_text()`, `draw_rect()` (scores, controls, game over)
+    - Sky background with `set_sky()` (sunny day preset)
+    - Rollback-safe game state via `save_state()`/`load_state()`
+  - ~700 lines of Rust code
 
 - **Create `billboard` example (Phase 6)**
   - Demonstrates billboard drawing:
