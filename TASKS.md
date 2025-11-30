@@ -108,9 +108,8 @@ The `Runtime<C: Console>` handles:
 
 #### Medium Priority
 
-- **[STABILITY] Split large files into modules** (graphics.rs, rollback.rs, wasm.rs)
+- **[STABILITY] Split large files into modules** (graphics.rs, wasm.rs)
   - `graphics.rs`: 3114 lines → split into pipeline, vertex, command_buffer, resources
-  - `rollback.rs`: 1843 lines → split into session, state, config modules
   - `wasm.rs`: 1681 lines → split by responsibility (game state, camera, render)
 
 #### Low Priority
@@ -239,6 +238,16 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **[STABILITY] Split rollback.rs into modules** (`core/src/rollback.rs`)
+  - Extracted ~1846 lines into 4 submodules:
+    - `config.rs`: GGRS configuration, SessionConfig, constants (127 lines)
+    - `player.rs`: PlayerSessionConfig for local/remote player management (267 lines)
+    - `state.rs`: GameStateSnapshot, StatePool, RollbackStateManager, error types (240 lines)
+    - `session.rs`: RollbackSession, SessionEvent, SessionError, network stats (563 lines)
+    - `mod.rs`: Module re-exports and documentation (50 lines)
+  - All 159 core tests passing
+  - All public API preserved via re-exports in lib.rs
 
 - **[STABILITY] Split ffi.rs input functions into separate module** (`emberware-z/src/ffi.rs`)
   - Extracted input FFI functions (14 functions, ~350 lines) to `ffi/input.rs`
