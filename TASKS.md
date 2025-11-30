@@ -114,12 +114,6 @@ The `Runtime<C: Console>` handles:
   - Bone matrix skinning system is untested.
   - Should add tests for `set_bones()`, skinned vertex format validation.
 
-- **[STABILITY] Add tests for input system** (`emberware-z/src/input.rs`)
-  - `InputManager` and `KeyboardMapping` lack tests for:
-    - Gamepad connection/disconnection edge cases
-    - Deadzone application correctness
-    - Player slot assignment logic
-
 ### Phase 2: GGRS Rollback Integration
 
 (Moved to In Progress)
@@ -311,6 +305,15 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **[STABILITY] Add tests for input system** (`emberware-z/src/input.rs`)
+  - Added 22 new tests (32 total input tests, up from 10):
+  - **Player slot assignment tests**: Sequential assignment, all full, gaps, disconnect freeing slots
+  - **Deadzone edge cases**: Negative values, max values, zero deadzone, boundary conditions
+  - **Get player input tests**: Valid range, out of range bounds checking
+  - **Keyboard input tests**: D-pad, face buttons, start/select, analog is zero, custom mapping
+  - **InputConfig tests**: Default values, partial deserialization
+  - **KeyCode roundtrip**: Comprehensive test of all supported key types
 
 - **[STABILITY] Implement settings web link** (`emberware-z/src/app.rs:269`)
   - Added `open` crate dependency for cross-platform browser opening.
