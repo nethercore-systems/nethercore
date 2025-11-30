@@ -115,7 +115,7 @@ auto_approve = true
 continue_on_retry = true
 
 # Experimental: maintain session across different tasks (can save tokens but may accumulate stale context)
-maintain_session = false
+maintain_session = true
 
 
 [usage]
