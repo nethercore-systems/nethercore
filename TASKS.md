@@ -102,9 +102,38 @@ The `Runtime<C: Console>` handles:
 
 ## TODO
 
-### Stability (Shelved)
+### Stability
 
 - **[STABILITY] Implement audio backend** — See "Needs Clarification" section above
+
+- **[STABILITY] Fix potential panic in calculate_fps on empty frame_times buffer**
+  - `emberware-z/src/app.rs:371-372`: `.unwrap()` on `frame_times.last()` and `frame_times.first()` without checking buffer length
+  - Should check `frame_times.len() >= 2` before accessing
+
+- **[STABILITY] Replace unwrap with error return in save_data access**
+  - `core/src/ffi.rs:406`: `.as_ref().unwrap()` assumes save slot has data
+  - Should return proper FFI error code (0) instead of panicking
+
+- **[STABILITY] Add tests for untested modules**
+  - `emberware-z/src/deep_link.rs`: No test module — deep link parsing untested
+  - `emberware-z/src/font.rs`: No test module — font rendering untested
+  - `core/src/console.rs`: No test module — Console trait implementations not tested directly
+
+- **[STABILITY] Add doc comments to Graphics and Audio trait methods**
+  - `core/src/console.rs`: Graphics trait methods lack individual doc comments (only trait-level docs)
+  - `core/src/console.rs`: Audio trait methods lack doc comments
+  - `core/src/console.rs`: SoundHandle type lacks documentation
+
+- **[STABILITY] Add doc comments to Runtime public methods**
+  - `core/src/runtime.rs`: Public methods `update_frame()`, `advance_session()`, `handle_requests()` lack doc comments
+
+- **[STABILITY] Replace test unwrap() calls with descriptive expect() messages**
+  - `core/src/wasm/mod.rs:284-390`: Test helper functions use plain unwrap() — should use `.expect()` with descriptive messages
+  - `emberware-z/src/library.rs:158-175`: Test helper `create_test_game()` uses unwrap on filesystem operations
+
+- **[STABILITY] Consider removing unsafe transmute workaround**
+  - `emberware-z/src/app.rs:635-637`: Unsafe transmute works around egui-wgpu 0.30 API limitation
+  - Review when upgrading egui-wgpu to see if workaround can be removed
 
 ### Phase 5: Networking & Polish
 
