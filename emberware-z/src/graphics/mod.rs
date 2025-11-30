@@ -1277,18 +1277,78 @@ impl ZGraphics {
                     y,
                     size,
                     color,
-                    blend_mode: _,
+                    blend_mode,
+                    font,
                 } => {
-                    // TODO: Implement text rendering using font system
+                    // Render text using built-in or custom font
                     let text_str = std::str::from_utf8(&text).unwrap_or("");
-                    tracing::trace!(
-                        "Text: '{}' at ({},{}) size={} color={:08x}",
-                        text_str,
-                        x,
-                        y,
-                        size,
-                        color
-                    );
+
+                    // Skip empty text
+                    if text_str.is_empty() {
+                        continue;
+                    }
+
+                    // Look up custom font if font handle != 0
+                    let font_opt = if font == 0 {
+                        None
+                    } else {
+                        let font_index = (font - 1) as usize;
+                        z_state.fonts.get(font_index)
+                    };
+
+                    // Generate text quads (POS_UV_COLOR format = 3)
+                    let (vertices, indices) =
+                        Self::generate_text_quads(text_str, x, y, size, color, font_opt);
+
+                    // Skip if no vertices generated
+                    if vertices.is_empty() || indices.is_empty() {
+                        continue;
+                    }
+
+                    // Determine which texture to use
+                    let font_texture = if let Some(custom_font) = font_opt {
+                        // Use custom font's texture
+                        if let Some(&graphics_handle) = texture_map.get(&custom_font.texture) {
+                            graphics_handle
+                        } else {
+                            tracing::warn!(
+                                "Custom font texture handle {} not found, using built-in font",
+                                custom_font.texture
+                            );
+                            self.font_texture
+                        }
+                    } else {
+                        // Use built-in font texture
+                        self.font_texture
+                    };
+
+                    // Text uses POS_UV_COLOR format (format 3)
+                    const TEXT_FORMAT: u8 = 3; // FORMAT_UV | FORMAT_COLOR
+
+                    // Append vertex and index data
+                    let base_vertex = self.command_buffer.append_vertex_data(TEXT_FORMAT, &vertices);
+                    let first_index = self.command_buffer.append_index_data(TEXT_FORMAT, &indices);
+
+                    // Create texture slots with font texture in slot 0
+                    let mut texture_slots = [TextureHandle::INVALID; 4];
+                    texture_slots[0] = font_texture;
+
+                    // Add draw command for text rendering
+                    // Text is always rendered in 2D screen space with identity transform
+                    self.command_buffer.add_command(command_buffer::DrawCommand {
+                        format: TEXT_FORMAT,
+                        transform: Mat4::IDENTITY,
+                        vertex_count: (vertices.len() / 8) as u32, // 8 floats per vertex
+                        index_count: indices.len() as u32,
+                        base_vertex,
+                        first_index,
+                        texture_slots,
+                        color: 0xFFFFFFFF, // Color already baked into vertices
+                        depth_test: false, // 2D text doesn't use depth test
+                        cull_mode: CullMode::None,
+                        blend_mode: Self::convert_blend_mode(blend_mode),
+                        matcap_blend_modes,
+                    });
                 }
                 ZDrawCommand::SetSky {
                     horizon_color,
@@ -1511,13 +1571,9 @@ impl ZGraphics {
         y: f32,
         size: f32,
         color: u32,
+        font_opt: Option<&crate::state::Font>,
     ) -> (Vec<f32>, Vec<u32>) {
         use crate::font;
-
-        // Calculate scale factor (base glyph size is 8x8)
-        let scale = size / font::GLYPH_HEIGHT as f32;
-        let glyph_width = font::GLYPH_WIDTH as f32 * scale;
-        let glyph_height = font::GLYPH_HEIGHT as f32 * scale;
 
         // Extract color components (0xRRGGBBAA)
         let r = ((color >> 24) & 0xFF) as f32 / 255.0;
@@ -1531,46 +1587,139 @@ impl ZGraphics {
         let mut cursor_x = x;
         let mut vertex_index = 0u32;
 
-        for ch in text.chars() {
-            let char_code = ch as u32;
+        if let Some(custom_font) = font_opt {
+            // Custom font rendering
+            let scale = size / custom_font.char_height as f32;
+            let glyph_height = custom_font.char_height as f32 * scale;
 
-            // Get UV coordinates for this character
-            let (u0, v0, u1, v1) = font::get_glyph_uv(char_code);
+            // Calculate texture atlas grid dimensions
+            // Glyphs are arranged left-to-right, top-to-bottom in a 16-column grid
+            let glyphs_per_row = 16;
+            let max_glyph_width = custom_font
+                .char_widths
+                .as_ref()
+                .map(|widths| *widths.iter().max().unwrap_or(&custom_font.char_width))
+                .unwrap_or(custom_font.char_width);
 
-            // Screen-space quad vertices (2D)
-            // Format: POS_UV_COLOR (format 3)
-            // Each vertex: [x, y, z, u, v, r, g, b]
+            let atlas_width = glyphs_per_row * max_glyph_width as usize;
+            let atlas_height = ((custom_font.char_count as usize + glyphs_per_row - 1)
+                / glyphs_per_row)
+                * custom_font.char_height as usize;
 
-            // Top-left
-            vertices.extend_from_slice(&[cursor_x, y, 0.0, u0, v0, r, g, b]);
-            // Top-right
-            vertices.extend_from_slice(&[cursor_x + glyph_width, y, 0.0, u1, v0, r, g, b]);
-            // Bottom-right
-            vertices.extend_from_slice(&[
-                cursor_x + glyph_width,
-                y + glyph_height,
-                0.0,
-                u1,
-                v1,
-                r,
-                g,
-                b,
-            ]);
-            // Bottom-left
-            vertices.extend_from_slice(&[cursor_x, y + glyph_height, 0.0, u0, v1, r, g, b]);
+            for ch in text.chars() {
+                let char_code = ch as u32;
 
-            // Indices for two triangles (quad)
-            indices.extend_from_slice(&[
-                vertex_index,
-                vertex_index + 1,
-                vertex_index + 2,
-                vertex_index,
-                vertex_index + 2,
-                vertex_index + 3,
-            ]);
+                // Map character to glyph index
+                let glyph_index = if char_code >= custom_font.first_codepoint
+                    && char_code < custom_font.first_codepoint + custom_font.char_count
+                {
+                    (char_code - custom_font.first_codepoint) as usize
+                } else {
+                    0 // Fallback to first character
+                };
 
-            cursor_x += glyph_width;
-            vertex_index += 4;
+                // Get glyph width
+                let glyph_width_px = custom_font
+                    .char_widths
+                    .as_ref()
+                    .and_then(|widths| widths.get(glyph_index).copied())
+                    .unwrap_or(custom_font.char_width);
+                let glyph_width = glyph_width_px as f32 * scale;
+
+                // Calculate UV coordinates
+                let col = glyph_index % glyphs_per_row;
+                let row = glyph_index / glyphs_per_row;
+
+                let u0 = (col * max_glyph_width as usize) as f32 / atlas_width as f32;
+                let v0 = (row * custom_font.char_height as usize) as f32 / atlas_height as f32;
+                let u1 =
+                    ((col * max_glyph_width as usize) + glyph_width_px as usize) as f32
+                        / atlas_width as f32;
+                let v1 = ((row + 1) * custom_font.char_height as usize) as f32
+                    / atlas_height as f32;
+
+                // Screen-space quad vertices (2D)
+                // Format: POS_UV_COLOR (format 3)
+                // Each vertex: [x, y, z, u, v, r, g, b]
+
+                // Top-left
+                vertices.extend_from_slice(&[cursor_x, y, 0.0, u0, v0, r, g, b]);
+                // Top-right
+                vertices.extend_from_slice(&[cursor_x + glyph_width, y, 0.0, u1, v0, r, g, b]);
+                // Bottom-right
+                vertices.extend_from_slice(&[
+                    cursor_x + glyph_width,
+                    y + glyph_height,
+                    0.0,
+                    u1,
+                    v1,
+                    r,
+                    g,
+                    b,
+                ]);
+                // Bottom-left
+                vertices.extend_from_slice(&[cursor_x, y + glyph_height, 0.0, u0, v1, r, g, b]);
+
+                // Indices for two triangles (quad)
+                indices.extend_from_slice(&[
+                    vertex_index,
+                    vertex_index + 1,
+                    vertex_index + 2,
+                    vertex_index,
+                    vertex_index + 2,
+                    vertex_index + 3,
+                ]);
+
+                cursor_x += glyph_width;
+                vertex_index += 4;
+            }
+        } else {
+            // Built-in font rendering (8x8 monospace)
+            let scale = size / font::GLYPH_HEIGHT as f32;
+            let glyph_width = font::GLYPH_WIDTH as f32 * scale;
+            let glyph_height = font::GLYPH_HEIGHT as f32 * scale;
+
+            for ch in text.chars() {
+                let char_code = ch as u32;
+
+                // Get UV coordinates for this character
+                let (u0, v0, u1, v1) = font::get_glyph_uv(char_code);
+
+                // Screen-space quad vertices (2D)
+                // Format: POS_UV_COLOR (format 3)
+                // Each vertex: [x, y, z, u, v, r, g, b]
+
+                // Top-left
+                vertices.extend_from_slice(&[cursor_x, y, 0.0, u0, v0, r, g, b]);
+                // Top-right
+                vertices.extend_from_slice(&[cursor_x + glyph_width, y, 0.0, u1, v0, r, g, b]);
+                // Bottom-right
+                vertices.extend_from_slice(&[
+                    cursor_x + glyph_width,
+                    y + glyph_height,
+                    0.0,
+                    u1,
+                    v1,
+                    r,
+                    g,
+                    b,
+                ]);
+                // Bottom-left
+                vertices.extend_from_slice(&[cursor_x, y + glyph_height, 0.0, u0, v1, r, g, b]);
+
+                // Indices for two triangles (quad)
+                indices.extend_from_slice(&[
+                    vertex_index,
+                    vertex_index + 1,
+                    vertex_index + 2,
+                    vertex_index,
+                    vertex_index + 2,
+                    vertex_index + 3,
+                ]);
+
+                cursor_x += glyph_width;
+                vertex_index += 4;
+            }
         }
 
         (vertices, indices)
@@ -2086,14 +2235,14 @@ mod tests {
 
     #[test]
     fn test_generate_text_quads_empty() {
-        let (vertices, indices) = ZGraphics::generate_text_quads("", 0.0, 0.0, 16.0, 0xFFFFFFFF);
+        let (vertices, indices) = ZGraphics::generate_text_quads("", 0.0, 0.0, 16.0, 0xFFFFFFFF, None);
         assert!(vertices.is_empty());
         assert!(indices.is_empty());
     }
 
     #[test]
     fn test_generate_text_quads_single_char() {
-        let (vertices, indices) = ZGraphics::generate_text_quads("A", 0.0, 0.0, 16.0, 0xFFFFFFFF);
+        let (vertices, indices) = ZGraphics::generate_text_quads("A", 0.0, 0.0, 16.0, 0xFFFFFFFF, None);
         assert_eq!(vertices.len(), 32);
         assert_eq!(indices.len(), 6);
     }
@@ -2101,14 +2250,14 @@ mod tests {
     #[test]
     fn test_generate_text_quads_multiple_chars() {
         let (vertices, indices) =
-            ZGraphics::generate_text_quads("Hello", 0.0, 0.0, 8.0, 0xFFFFFFFF);
+            ZGraphics::generate_text_quads("Hello", 0.0, 0.0, 8.0, 0xFFFFFFFF, None);
         assert_eq!(vertices.len(), 160);
         assert_eq!(indices.len(), 30);
     }
 
     #[test]
     fn test_generate_text_quads_color() {
-        let (vertices, _) = ZGraphics::generate_text_quads("X", 0.0, 0.0, 8.0, 0xFF0000FF);
+        let (vertices, _) = ZGraphics::generate_text_quads("X", 0.0, 0.0, 8.0, 0xFF0000FF, None);
         assert!((vertices[5] - 1.0).abs() < 0.01);
         assert!((vertices[6] - 0.0).abs() < 0.01);
         assert!((vertices[7] - 0.0).abs() < 0.01);
@@ -2116,7 +2265,7 @@ mod tests {
 
     #[test]
     fn test_generate_text_quads_position() {
-        let (vertices, _) = ZGraphics::generate_text_quads("A", 100.0, 50.0, 16.0, 0xFFFFFFFF);
+        let (vertices, _) = ZGraphics::generate_text_quads("A", 100.0, 50.0, 16.0, 0xFFFFFFFF, None);
         assert!((vertices[0] - 100.0).abs() < 0.01);
         assert!((vertices[1] - 50.0).abs() < 0.01);
         assert!((vertices[2] - 0.0).abs() < 0.01);
@@ -2124,7 +2273,7 @@ mod tests {
 
     #[test]
     fn test_generate_text_quads_indices_valid() {
-        let (_, indices) = ZGraphics::generate_text_quads("AB", 0.0, 0.0, 8.0, 0xFFFFFFFF);
+        let (_, indices) = ZGraphics::generate_text_quads("AB", 0.0, 0.0, 8.0, 0xFFFFFFFF, None);
         assert_eq!(indices[0..6], [0, 1, 2, 0, 2, 3]);
         assert_eq!(indices[6..12], [4, 5, 6, 4, 6, 7]);
     }

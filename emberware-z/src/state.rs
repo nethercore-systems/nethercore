@@ -95,6 +95,27 @@ impl Default for LightState {
 }
 
 // ============================================================================
+// Font System
+// ============================================================================
+
+/// Custom bitmap font definition
+#[derive(Debug, Clone)]
+pub struct Font {
+    /// Texture handle for the font atlas
+    pub texture: u32,
+    /// Width of each glyph in pixels (for fixed-width fonts)
+    pub char_width: u8,
+    /// Height of each glyph in pixels
+    pub char_height: u8,
+    /// First codepoint in the font
+    pub first_codepoint: u32,
+    /// Number of characters in the font
+    pub char_count: u32,
+    /// Optional per-character widths for variable-width fonts (None = fixed-width)
+    pub char_widths: Option<Vec<u8>>,
+}
+
+// ============================================================================
 // Pending Resources (moved from core/src/wasm/draw.rs)
 // ============================================================================
 
@@ -199,6 +220,7 @@ pub enum ZDrawCommand {
         size: f32,
         color: u32,
         blend_mode: u8,
+        font: u32, // 0 = built-in font, >0 = custom font handle
     },
     /// Set procedural sky parameters
     SetSky {
@@ -289,6 +311,11 @@ pub struct ZFFIState {
     // Resource handle allocation
     pub next_texture_handle: u32,
     pub next_mesh_handle: u32,
+    pub next_font_handle: u32,
+
+    // Font system
+    pub fonts: Vec<Font>,
+    pub current_font: u32,
 
     // Init configuration
     pub init_config: ZInitConfig,
@@ -319,6 +346,9 @@ impl Default for ZFFIState {
             pending_meshes: Vec::new(),
             next_texture_handle: 1, // 0 reserved for invalid
             next_mesh_handle: 1,
+            next_font_handle: 1,
+            fonts: Vec::new(),
+            current_font: 0, // 0 = built-in font
             init_config: ZInitConfig::default(),
         }
     }

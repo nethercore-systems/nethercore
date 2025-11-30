@@ -18,7 +18,7 @@ use emberware_core::wasm::GameStateWithConsole;
 use crate::console::{ZInput, RESOLUTIONS, TICK_RATES};
 use crate::graphics::vertex_stride;
 use crate::state::{
-    PendingMesh, PendingTexture, ZDrawCommand, ZFFIState, MAX_BONES, MAX_TRANSFORM_STACK,
+    Font, PendingMesh, PendingTexture, ZDrawCommand, ZFFIState, MAX_BONES, MAX_TRANSFORM_STACK,
 };
 
 /// Register all Emberware Z FFI functions with the linker
@@ -90,6 +90,11 @@ pub fn register_z_ffi(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState
     linker.func_wrap("env", "draw_sprite_ex", draw_sprite_ex)?;
     linker.func_wrap("env", "draw_rect", draw_rect)?;
     linker.func_wrap("env", "draw_text", draw_text)?;
+
+    // Font loading
+    linker.func_wrap("env", "load_font", load_font)?;
+    linker.func_wrap("env", "load_font_ex", load_font_ex)?;
+    linker.func_wrap("env", "font_bind", font_bind)?;
 
     // Sky system
     linker.func_wrap("env", "set_sky", set_sky)?;
@@ -1569,7 +1574,199 @@ fn draw_text(
         size,
         color,
         blend_mode: state.blend_mode,
+        font: state.current_font,
     });
+}
+
+/// Load a fixed-width bitmap font from a texture atlas
+///
+/// The texture must contain a grid of glyphs arranged left-to-right, top-to-bottom.
+/// Each glyph occupies char_width × char_height pixels.
+///
+/// # Arguments
+/// * `texture` — Handle to the texture atlas
+/// * `char_width` — Width of each glyph in pixels
+/// * `char_height` — Height of each glyph in pixels
+/// * `first_codepoint` — Unicode codepoint of the first glyph
+/// * `char_count` — Number of glyphs in the font
+///
+/// # Returns
+/// Handle to the loaded font (use with `font_bind()`)
+///
+/// # Notes
+/// - Call this in `init()` - font loading is not allowed during gameplay
+/// - All glyphs in a fixed-width font have the same width
+/// - The texture must have enough space for char_count glyphs
+#[inline]
+fn load_font(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    texture: u32,
+    char_width: u32,
+    char_height: u32,
+    first_codepoint: u32,
+    char_count: u32,
+) -> u32 {
+    // Only allow during init
+    if !caller.data().game.in_init {
+        warn!("load_font: can only be called during init()");
+        return 0;
+    }
+
+    // Validate parameters
+    if texture == 0 {
+        warn!("load_font: invalid texture handle 0");
+        return 0;
+    }
+    if char_width == 0 || char_width > 255 {
+        warn!("load_font: char_width must be 1-255");
+        return 0;
+    }
+    if char_height == 0 || char_height > 255 {
+        warn!("load_font: char_height must be 1-255");
+        return 0;
+    }
+    if char_count == 0 {
+        warn!("load_font: char_count must be > 0");
+        return 0;
+    }
+
+    let state = &mut caller.data_mut().console;
+
+    // Allocate font handle
+    let handle = state.next_font_handle;
+    state.next_font_handle += 1;
+
+    // Create font descriptor
+    let font = Font {
+        texture,
+        char_width: char_width as u8,
+        char_height: char_height as u8,
+        first_codepoint,
+        char_count,
+        char_widths: None, // Fixed-width
+    };
+
+    state.fonts.push(font);
+    handle
+}
+
+/// Load a variable-width bitmap font from a texture atlas
+///
+/// Like `load_font()`, but allows each glyph to have a different width.
+///
+/// # Arguments
+/// * `texture` — Handle to the texture atlas
+/// * `widths_ptr` — Pointer to array of char_count u8 widths
+/// * `char_height` — Height of each glyph in pixels
+/// * `first_codepoint` — Unicode codepoint of the first glyph
+/// * `char_count` — Number of glyphs in the font
+///
+/// # Returns
+/// Handle to the loaded font (use with `font_bind()`)
+///
+/// # Notes
+/// - Call this in `init()` - font loading is not allowed during gameplay
+/// - The widths array must have exactly char_count entries
+/// - Glyphs are still arranged in a grid, but can have custom widths
+#[inline]
+fn load_font_ex(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    texture: u32,
+    widths_ptr: u32,
+    char_height: u32,
+    first_codepoint: u32,
+    char_count: u32,
+) -> u32 {
+    // Only allow during init
+    if !caller.data().game.in_init {
+        warn!("load_font_ex: can only be called during init()");
+        return 0;
+    }
+
+    // Validate parameters
+    if texture == 0 {
+        warn!("load_font_ex: invalid texture handle 0");
+        return 0;
+    }
+    if char_height == 0 || char_height > 255 {
+        warn!("load_font_ex: char_height must be 1-255");
+        return 0;
+    }
+    if char_count == 0 {
+        warn!("load_font_ex: char_count must be > 0");
+        return 0;
+    }
+
+    // Read widths array from WASM memory
+    let memory = match caller.data().game.memory {
+        Some(m) => m,
+        None => {
+            warn!("load_font_ex: no WASM memory available");
+            return 0;
+        }
+    };
+
+    let widths = {
+        let mem_data = memory.data(&caller);
+        let ptr = widths_ptr as usize;
+        let len = char_count as usize;
+
+        if ptr + len > mem_data.len() {
+            warn!(
+                "load_font_ex: widths array ({} bytes at {}) exceeds memory bounds ({})",
+                len,
+                ptr,
+                mem_data.len()
+            );
+            return 0;
+        }
+
+        mem_data[ptr..ptr + len].to_vec()
+    };
+
+    let state = &mut caller.data_mut().console;
+
+    // Allocate font handle
+    let handle = state.next_font_handle;
+    state.next_font_handle += 1;
+
+    // Create font descriptor
+    let font = Font {
+        texture,
+        char_width: 0, // Not used for variable-width
+        char_height: char_height as u8,
+        first_codepoint,
+        char_count,
+        char_widths: Some(widths),
+    };
+
+    state.fonts.push(font);
+    handle
+}
+
+/// Bind a font for subsequent draw_text() calls
+///
+/// # Arguments
+/// * `font_handle` — Font handle from load_font() or load_font_ex(), or 0 for built-in font
+///
+/// # Notes
+/// - Font 0 is the built-in 8×8 monospace font (default)
+/// - Custom fonts persist for all subsequent draw_text() calls until changed
+#[inline]
+fn font_bind(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, font_handle: u32) {
+    let state = &mut caller.data_mut().console;
+
+    // Validate font handle (0 is always valid = built-in)
+    if font_handle != 0 {
+        // Check if handle is valid (font exists)
+        let font_index = (font_handle - 1) as usize;
+        if font_index >= state.fonts.len() {
+            warn!("font_bind: invalid font handle {}", font_handle);
+            return;
+        }
+    }
+
+    state.current_font = font_handle;
 }
 
 // ============================================================================
@@ -2649,6 +2846,7 @@ mod tests {
             y: 200.0,
             size: 16.0,
             color: 0x000000FF,
+            font: 0,
             blend_mode: 1,
         });
 
