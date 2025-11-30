@@ -225,12 +225,6 @@ The `Runtime<C: Console>` handles:
 
 (Moved to Done)
 
-- **Create developer guide**
-  - Getting started tutorial
-  - Best practices for rollback-safe code
-  - Asset pipeline recommendations
-  - Debugging tips
-
 ---
 ## In Progress
 
@@ -239,6 +233,12 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **Create developer guide (Phase 7)**
+  - Getting started tutorial: Step-by-step first game walkthrough
+  - Best practices for rollback-safe code: Determinism checklist, RNG usage, state management
+  - Asset pipeline recommendations: Embedding assets, image conversion, texture guidelines
+  - Debugging tips: log() usage, F3 overlay, common issues table, WASM size optimization
 
 - **Create `platformer` example (Phase 6)**
   - Full mini-game demonstrating multiple Z features:
