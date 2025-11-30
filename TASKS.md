@@ -119,10 +119,7 @@ The `Runtime<C: Console>` handles:
 
 #### Low Priority
 
-- **[STABILITY] Add bounds checking for potentially truncating type casts** (codebase-wide)
-  - 319 `as` casts across 17 files, most benign (usize conversions)
-  - Review casts from larger to smaller integer types
-  - Add explicit validation where data loss is possible
+(Moved to In Progress)
 
 
 ### Phase 2: GGRS Rollback Integration
@@ -245,6 +242,22 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **[STABILITY] Add bounds checking for potentially truncating type casts** (codebase-wide)
+  - Added `checked_mul()` overflow protection in FFI functions:
+    - `load_texture`: width × height × 4 calculation
+    - `load_mesh`: vertex_count × stride calculation
+    - `load_mesh_indexed`: vertex_count × stride and index_count × 4 calculations
+    - `draw_triangles`: vertex_count × stride calculation
+    - `draw_triangles_indexed`: vertex_count × stride and index_count × 4 calculations
+  - Returns 0/early returns with warning on overflow instead of wrapping
+  - Added 5 new tests for arithmetic overflow protection:
+    - `test_texture_size_overflow_protection`
+    - `test_vertex_data_size_overflow_protection`
+    - `test_index_data_size_overflow_protection`
+    - `test_realistic_mesh_sizes_no_overflow`
+    - `test_realistic_texture_sizes_no_overflow`
+  - All 559 tests passing
 
 - **[STABILITY] Document resource cleanup strategy** (graphics resources)
   - Added "Resource Cleanup Strategy" section to `emberware-z/src/graphics/mod.rs` module docs

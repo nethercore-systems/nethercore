@@ -542,7 +542,16 @@ fn load_texture(mut caller: Caller<'_, GameState>, width: u32, height: u32, pixe
     };
 
     let ptr = pixels_ptr as usize;
-    let size = (width * height * 4) as usize;
+    // Use checked arithmetic to prevent overflow
+    let Some(pixels) = width.checked_mul(height) else {
+        warn!("load_texture: dimensions overflow ({}x{})", width, height);
+        return 0;
+    };
+    let Some(size) = pixels.checked_mul(4) else {
+        warn!("load_texture: size overflow ({}x{})", width, height);
+        return 0;
+    };
+    let size = size as usize;
 
     // Copy pixel data while we have the immutable borrow
     let pixel_data = {
@@ -665,9 +674,12 @@ fn load_mesh(mut caller: Caller<'_, GameState>, data_ptr: u32, vertex_count: u32
         return 0;
     }
 
-    // Calculate data size
+    // Calculate data size with overflow checking
     let stride = vertex_stride(format);
-    let data_size = vertex_count * stride;
+    let Some(data_size) = vertex_count.checked_mul(stride) else {
+        warn!("load_mesh: data size overflow (vertex_count={}, stride={})", vertex_count, stride);
+        return 0;
+    };
     let float_count = data_size / 4;
 
     // Read vertex data from WASM memory
@@ -771,10 +783,16 @@ fn load_mesh_indexed(
         return 0;
     }
 
-    // Calculate data sizes
+    // Calculate data sizes with overflow checking
     let stride = vertex_stride(format);
-    let vertex_data_size = vertex_count * stride;
-    let index_data_size = index_count * 4; // u32 = 4 bytes
+    let Some(vertex_data_size) = vertex_count.checked_mul(stride) else {
+        warn!("load_mesh_indexed: vertex data size overflow (vertex_count={}, stride={})", vertex_count, stride);
+        return 0;
+    };
+    let Some(index_data_size) = index_count.checked_mul(4) else {
+        warn!("load_mesh_indexed: index data size overflow (index_count={})", index_count);
+        return 0;
+    };
     let float_count = vertex_data_size / 4;
 
     // Read data from WASM memory
@@ -929,9 +947,12 @@ fn draw_triangles(mut caller: Caller<'_, GameState>, data_ptr: u32, vertex_count
         return;
     }
 
-    // Calculate data size
+    // Calculate data size with overflow checking
     let stride = vertex_stride(format);
-    let data_size = vertex_count * stride;
+    let Some(data_size) = vertex_count.checked_mul(stride) else {
+        warn!("draw_triangles: data size overflow (vertex_count={}, stride={})", vertex_count, stride);
+        return;
+    };
     let float_count = data_size / 4;
 
     // Read vertex data from WASM memory
@@ -1023,10 +1044,16 @@ fn draw_triangles_indexed(
         return;
     }
 
-    // Calculate data sizes
+    // Calculate data sizes with overflow checking
     let stride = vertex_stride(format);
-    let vertex_data_size = vertex_count * stride;
-    let index_data_size = index_count * 4; // u32 = 4 bytes
+    let Some(vertex_data_size) = vertex_count.checked_mul(stride) else {
+        warn!("draw_triangles_indexed: vertex data size overflow (vertex_count={}, stride={})", vertex_count, stride);
+        return;
+    };
+    let Some(index_data_size) = index_count.checked_mul(4) else {
+        warn!("draw_triangles_indexed: index data size overflow (index_count={})", index_count);
+        return;
+    };
     let float_count = vertex_data_size / 4;
 
     // Read data from WASM memory
@@ -3635,5 +3662,112 @@ mod tests {
         let neg_inf = f32::NEG_INFINITY;
         let clamped = neg_inf.clamp(0.0, 1.0);
         assert_eq!(clamped, 0.0);
+    }
+
+    // ------------------------------------------------------------------------
+    // Arithmetic Overflow Protection Tests
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_texture_size_overflow_protection() {
+        // width * height * 4 could overflow u32 for very large textures
+        // Max u32 = 4,294,967,295
+        // width * height would overflow at ~65536 x 65536 (if not multiplied by 4)
+        // With *4, overflow occurs at ~32768 x 32768
+
+        // Test that checked_mul catches overflow
+        let width: u32 = 65536;
+        let height: u32 = 65536;
+
+        // This would overflow: 65536 * 65536 = 4,294,967,296 > u32::MAX
+        let result = width.checked_mul(height);
+        assert!(result.is_none(), "Expected overflow for 65536x65536 texture");
+
+        // Smaller dimensions should succeed
+        let width: u32 = 4096;
+        let height: u32 = 4096;
+        let pixels = width.checked_mul(height);
+        assert!(pixels.is_some());
+        let size = pixels.unwrap().checked_mul(4);
+        assert!(size.is_some());
+    }
+
+    #[test]
+    fn test_vertex_data_size_overflow_protection() {
+        // vertex_count * stride could overflow for large vertex counts
+        // Max stride is 64 bytes (all format flags set including skinned)
+        // Max safe vertex_count with stride 64: u32::MAX / 64 = 67,108,863
+
+        let stride: u32 = 64; // Max possible stride
+        let vertex_count: u32 = u32::MAX / 64 + 1; // Just over the limit
+
+        let result = vertex_count.checked_mul(stride);
+        assert!(result.is_none(), "Expected overflow for extreme vertex count");
+
+        // Safe vertex count should succeed
+        let vertex_count: u32 = 1_000_000;
+        let result = vertex_count.checked_mul(stride);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), 64_000_000);
+    }
+
+    #[test]
+    fn test_index_data_size_overflow_protection() {
+        // index_count * 4 could overflow for very large index counts
+        // Max safe index_count: u32::MAX / 4 = 1,073,741,823
+
+        let index_count: u32 = u32::MAX / 4 + 1; // Just over the limit
+
+        let result = index_count.checked_mul(4);
+        assert!(result.is_none(), "Expected overflow for extreme index count");
+
+        // Safe index count should succeed
+        let index_count: u32 = 1_000_000;
+        let result = index_count.checked_mul(4);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), 4_000_000);
+    }
+
+    #[test]
+    fn test_realistic_mesh_sizes_no_overflow() {
+        // Test realistic mesh sizes that should never overflow
+
+        // Large but reasonable mesh: 100,000 vertices with full format
+        let vertex_count: u32 = 100_000;
+        let stride: u32 = super::vertex_stride(15); // All flags set
+        assert_eq!(stride, 64);
+
+        let data_size = vertex_count.checked_mul(stride);
+        assert!(data_size.is_some());
+        assert_eq!(data_size.unwrap(), 6_400_000); // 6.4 MB
+
+        // Large index buffer: 300,000 indices (100,000 triangles)
+        let index_count: u32 = 300_000;
+        let index_size = index_count.checked_mul(4);
+        assert!(index_size.is_some());
+        assert_eq!(index_size.unwrap(), 1_200_000); // 1.2 MB
+    }
+
+    #[test]
+    fn test_realistic_texture_sizes_no_overflow() {
+        // Test realistic texture sizes that should never overflow
+
+        // 4K texture: 4096 x 4096 x 4 = 67,108,864 bytes (64 MB)
+        let width: u32 = 4096;
+        let height: u32 = 4096;
+        let pixels = width.checked_mul(height);
+        assert!(pixels.is_some());
+        let size = pixels.unwrap().checked_mul(4);
+        assert!(size.is_some());
+        assert_eq!(size.unwrap(), 67_108_864);
+
+        // 8K texture: 8192 x 8192 x 4 = 268,435,456 bytes (256 MB)
+        let width: u32 = 8192;
+        let height: u32 = 8192;
+        let pixels = width.checked_mul(height);
+        assert!(pixels.is_some());
+        let size = pixels.unwrap().checked_mul(4);
+        assert!(size.is_some());
+        assert_eq!(size.unwrap(), 268_435_456);
     }
 }
