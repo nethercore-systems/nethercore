@@ -13,7 +13,7 @@ Emberware Z is a 5th-generation fantasy console targeting PS1/N64/Saturn aesthet
 | **RAM** | 4MB |
 | **VRAM** | 4MB |
 | **CPU budget** | 4ms per tick (at 60fps) |
-| **ROM size** | 8MB max (uncompressed) |
+| **ROM size** | 12MB max (uncompressed) |
 | **Netcode** | Deterministic rollback via GGRS |
 | **Max players** | 4 (any mix of local + remote) |
 

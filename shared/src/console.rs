@@ -58,7 +58,7 @@ pub fn emberware_z_specs() -> ConsoleSpecs {
         default_tick_rate: 2, // 60 fps
         ram_limit: 4 * 1024 * 1024,   // 4MB
         vram_limit: EMBERWARE_Z_VRAM_LIMIT,
-        rom_limit: 8 * 1024 * 1024,   // 8MB (uncompressed)
+        rom_limit: 12 * 1024 * 1024,   // 12MB (uncompressed)
         cpu_budget_us: 4000,          // 4ms per tick at 60fps
     }
 }

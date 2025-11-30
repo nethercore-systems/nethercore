@@ -397,7 +397,7 @@ mod tests {
         assert_eq!(specs.tick_rates[specs.default_tick_rate], 60);
         assert_eq!(specs.ram_limit, 4 * 1024 * 1024);
         assert_eq!(specs.vram_limit, 4 * 1024 * 1024);
-        assert_eq!(specs.rom_limit, 8 * 1024 * 1024);
+        assert_eq!(specs.rom_limit, 12 * 1024 * 1024);
         assert_eq!(specs.cpu_budget_us, 4000);
     }
 }

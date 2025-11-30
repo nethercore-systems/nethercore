@@ -11,6 +11,7 @@ Complete development history of Emberware Z fantasy console.
 - Removed unused `emberware-z/pbr-lite.wgsl` (duplicate of code in mode2_pbr.wgsl)
 - Removed unused `shader_gen_example/` directory (reference code from different project)
 - Verified stub files are intentional: `download.rs`, `runtime/mod.rs`
+- Adjusted Z's max rom size to 12mb.
 - All 573 tests passing
 
 ### [STABILITY] Fix clippy warnings in test code
