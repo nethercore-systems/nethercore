@@ -213,15 +213,6 @@ The `Runtime<C: Console>` handles:
 
 (Moved to Done)
 
-- **Create `cube` example**
-  - Demonstrates retained mode 3D:
-    - `load_mesh_indexed()` in init()
-    - `draw_mesh()` in render()
-    - Vertex format: POS_UV_NORMAL (format 5)
-    - Camera setup: `camera_set()`, `camera_fov()`
-    - Interactive rotation via analog stick
-    - Mode 0 with normals (simple Lambert)
-
 - **Create `lighting` example**
   - Demonstrates all render modes (0-3):
     - Toggle between modes with button press
@@ -291,6 +282,18 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **Create `cube` example (Phase 6)**
+  - Demonstrates retained mode 3D:
+    - `load_mesh_indexed()` in init()
+    - `draw_mesh()` in render()
+    - Vertex format: POS_UV_NORMAL (format 5)
+    - Camera setup: `camera_set()`, `camera_fov()`
+    - Interactive rotation via analog stick
+    - Mode 0 with normals (simple Lambert)
+    - Procedural sky via `set_sky()` for lighting
+    - 8x8 checkerboard texture with nearest-neighbor filtering
+  - ~200 lines of Rust code
 
 - **Create `textured-quad` example (Phase 6)**
   - Demonstrates texture loading and 2D drawing:
