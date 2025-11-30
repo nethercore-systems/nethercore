@@ -1186,7 +1186,7 @@ impl ZGraphics {
             return;
         }
 
-        // Create uniform buffers for view and projection matrices
+        // OPTIMIZATION 1: Create frame-level uniform buffers ONCE (not per-command)
         let view_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("View Matrix Buffer"),
             contents: bytemuck::cast_slice(&view_matrix.to_cols_array()),
@@ -1214,6 +1214,39 @@ impl ZGraphics {
                 self.index_buffers[format as usize].write_at(&self.queue, 0, index_bytes);
             }
         }
+
+        // OPTIMIZATION 3: Sort draw commands IN-PLACE by (pipeline_key, texture_slots) to minimize state changes
+        // Commands are reset at the start of next frame, so no need to preserve original order or clone
+        self.command_buffer.commands_mut().sort_unstable_by_key(|cmd| {
+            // Sort key: (render_mode, format, blend_mode, depth_test, cull_mode, texture_slots)
+            // This groups commands by pipeline first, then by textures
+            let state = RenderState {
+                color: cmd.color,
+                depth_test: cmd.depth_test,
+                cull_mode: cmd.cull_mode,
+                blend_mode: cmd.blend_mode,
+                texture_filter: self.render_state.texture_filter,
+                texture_slots: cmd.texture_slots,
+            };
+            let pipeline_key = PipelineKey::new(self.current_render_mode, cmd.format, &state);
+            (
+                pipeline_key.render_mode,
+                pipeline_key.vertex_format,
+                pipeline_key.blend_mode,
+                pipeline_key.depth_test as u8,
+                pipeline_key.cull_mode,
+                cmd.texture_slots[0].0,
+                cmd.texture_slots[1].0,
+                cmd.texture_slots[2].0,
+                cmd.texture_slots[3].0,
+            )
+        });
+
+        // OPTIMIZATION 2: Cache bind groups to avoid creating duplicates
+        // Material bind group cache: color -> uniform buffer
+        let mut material_buffers: HashMap<u32, wgpu::Buffer> = HashMap::new();
+        // Texture bind group cache: texture_slots -> bind group
+        let mut texture_bind_groups: HashMap<[TextureHandle; 4], wgpu::BindGroup> = HashMap::new();
 
         // Render pass
         {
@@ -1269,23 +1302,28 @@ impl ZGraphics {
                 }
                 let pipeline_entry = &self.pipelines[&pipeline_key];
 
-                // Create material uniform buffer (color as vec4)
-                let color_vec = state.color_vec4();
-                #[repr(C)]
-                #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-                struct MaterialUniforms {
-                    color: [f32; 4],
-                }
-                let material = MaterialUniforms {
-                    color: [color_vec.x, color_vec.y, color_vec.z, color_vec.w],
-                };
-                let material_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("Material Buffer"),
-                    contents: bytemuck::cast_slice(&[material]),
-                    usage: wgpu::BufferUsages::UNIFORM,
+                // Get or create material uniform buffer (cached by color)
+                let material_buffer = material_buffers.entry(cmd.color).or_insert_with(|| {
+                    let color_vec = state.color_vec4();
+                    #[repr(C)]
+                    #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+                    struct MaterialUniforms {
+                        color: [f32; 4],
+                    }
+                    let material = MaterialUniforms {
+                        color: [color_vec.x, color_vec.y, color_vec.z, color_vec.w],
+                    };
+                    self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Material Buffer"),
+                        contents: bytemuck::cast_slice(&[material]),
+                        usage: wgpu::BufferUsages::UNIFORM,
+                    })
                 });
 
                 // Create frame bind group (group 0)
+                // Note: This contains the material buffer which varies per-command,
+                // so we can't easily cache it. However, we've eliminated redundant
+                // material buffer creation via the cache above.
                 let frame_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some("Frame Bind Group"),
                     layout: &pipeline_entry.bind_group_layout_frame,
@@ -1313,64 +1351,66 @@ impl ZGraphics {
                     ],
                 });
 
-                // Get texture views for this command's bound textures
-                let tex_view_0 = if cmd.texture_slots[0] == TextureHandle::INVALID {
-                    self.get_fallback_white_view()
-                } else {
-                    self.get_texture_view(cmd.texture_slots[0])
-                        .unwrap_or_else(|| self.get_fallback_checkerboard_view())
-                };
-                let tex_view_1 = if cmd.texture_slots[1] == TextureHandle::INVALID {
-                    self.get_fallback_white_view()
-                } else {
-                    self.get_texture_view(cmd.texture_slots[1])
-                        .unwrap_or_else(|| self.get_fallback_checkerboard_view())
-                };
-                let tex_view_2 = if cmd.texture_slots[2] == TextureHandle::INVALID {
-                    self.get_fallback_white_view()
-                } else {
-                    self.get_texture_view(cmd.texture_slots[2])
-                        .unwrap_or_else(|| self.get_fallback_checkerboard_view())
-                };
-                let tex_view_3 = if cmd.texture_slots[3] == TextureHandle::INVALID {
-                    self.get_fallback_white_view()
-                } else {
-                    self.get_texture_view(cmd.texture_slots[3])
-                        .unwrap_or_else(|| self.get_fallback_checkerboard_view())
-                };
+                // Get or create texture bind group (cached by texture slots)
+                let texture_bind_group = texture_bind_groups.entry(cmd.texture_slots).or_insert_with(|| {
+                    // Get texture views for this command's bound textures
+                    let tex_view_0 = if cmd.texture_slots[0] == TextureHandle::INVALID {
+                        self.get_fallback_white_view()
+                    } else {
+                        self.get_texture_view(cmd.texture_slots[0])
+                            .unwrap_or_else(|| self.get_fallback_checkerboard_view())
+                    };
+                    let tex_view_1 = if cmd.texture_slots[1] == TextureHandle::INVALID {
+                        self.get_fallback_white_view()
+                    } else {
+                        self.get_texture_view(cmd.texture_slots[1])
+                            .unwrap_or_else(|| self.get_fallback_checkerboard_view())
+                    };
+                    let tex_view_2 = if cmd.texture_slots[2] == TextureHandle::INVALID {
+                        self.get_fallback_white_view()
+                    } else {
+                        self.get_texture_view(cmd.texture_slots[2])
+                            .unwrap_or_else(|| self.get_fallback_checkerboard_view())
+                    };
+                    let tex_view_3 = if cmd.texture_slots[3] == TextureHandle::INVALID {
+                        self.get_fallback_white_view()
+                    } else {
+                        self.get_texture_view(cmd.texture_slots[3])
+                            .unwrap_or_else(|| self.get_fallback_checkerboard_view())
+                    };
 
-                // Create texture bind group (group 1)
-                let texture_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("Texture Bind Group"),
-                    layout: &pipeline_entry.bind_group_layout_textures,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: wgpu::BindingResource::TextureView(tex_view_0),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: wgpu::BindingResource::TextureView(tex_view_1),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 2,
-                            resource: wgpu::BindingResource::TextureView(tex_view_2),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 3,
-                            resource: wgpu::BindingResource::TextureView(tex_view_3),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 4,
-                            resource: wgpu::BindingResource::Sampler(self.current_sampler()),
-                        },
-                    ],
+                    self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                        label: Some("Texture Bind Group"),
+                        layout: &pipeline_entry.bind_group_layout_textures,
+                        entries: &[
+                            wgpu::BindGroupEntry {
+                                binding: 0,
+                                resource: wgpu::BindingResource::TextureView(tex_view_0),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 1,
+                                resource: wgpu::BindingResource::TextureView(tex_view_1),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 2,
+                                resource: wgpu::BindingResource::TextureView(tex_view_2),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 3,
+                                resource: wgpu::BindingResource::TextureView(tex_view_3),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 4,
+                                resource: wgpu::BindingResource::Sampler(self.current_sampler()),
+                            },
+                        ],
+                    })
                 });
 
                 // Set pipeline and bind groups
                 render_pass.set_pipeline(&pipeline_entry.pipeline);
                 render_pass.set_bind_group(0, &frame_bind_group, &[]);
-                render_pass.set_bind_group(1, &texture_bind_group, &[]);
+                render_pass.set_bind_group(1, &*texture_bind_group, &[]);
 
                 // Set vertex buffer
                 if let Some(buffer) = self.vertex_buffers[cmd.format as usize].buffer() {

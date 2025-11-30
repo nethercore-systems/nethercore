@@ -228,6 +228,54 @@ The `Runtime<C: Console>` handles:
 
 ---
 
+### **[NEEDS CLARIFICATION] Define and enforce console runtime limits**
+
+**Current State:** Partial limit enforcement - VRAM tracking (8MB), vertex format validation, memory bounds checking. No enforcement for draw calls, vertex counts, mesh counts, or CPU budget per frame.
+
+**Why This Matters:**
+- Enforces fantasy console authenticity (PS1/N64 had strict hardware limits)
+- Prevents performance issues from runaway resource usage
+- Helps developers understand and work within platform constraints
+- Maintains consistent performance across games
+
+**Potential Limits to Enforce:**
+
+| Limit | Suggested Value | Rationale |
+|-------|----------------|-----------|
+| Max draw calls/frame | 512 | PS1/N64 could handle ~500-1000 triangles/sec at 30fps |
+| Max vertices/frame (immediate) | 100,000 | Reasonable for fantasy console aesthetic |
+| Max retained meshes | 256 | Encourages efficient resource management |
+| Max vertices per mesh | 65,536 | u16 index limit, PS1-era constraint |
+| CPU budget per tick | 4ms @ 60fps | Console spec already defines this, needs enforcement |
+| RAM limit (WASM heap) | 16MB | Console spec defines this, not currently enforced |
+
+**Questions to Resolve:**
+1. Should limits be enforced at runtime with warnings/errors, or just tracked for debugging?
+2. Should limits be per-console (Z has different limits than Classic)?
+3. How to handle limit violations - reject draw calls, log warnings, or hard error?
+4. Should some limits be configurable in debug mode for development?
+5. Do we need separate limits for 2D vs 3D draws (e.g., UI overlay doesn't count toward 3D limits)?
+
+**Implementation Approach (Once Clarified):**
+1. Add limit constants to `ConsoleSpecs` struct
+2. Add runtime tracking counters (reset per frame):
+   - `draw_calls_this_frame: usize`
+   - `immediate_vertices_this_frame: usize`
+3. Validate against limits in FFI functions (`draw_triangles`, `draw_mesh`, etc.)
+4. Add warnings/errors when limits exceeded
+5. Expose stats via debug overlay (show current/max for each limit)
+6. Document limits in console documentation
+
+**Files to Modify:**
+- `core/src/console.rs` - Add limit fields to `ConsoleSpecs`
+- `emberware-z/src/console.rs` - Define Z-specific limits
+- `emberware-z/src/graphics/mod.rs` - Track draw calls, vertices per frame
+- `emberware-z/src/ffi/mod.rs` - Validate limits in draw functions
+- `emberware-z/src/app.rs` - Display stats in debug overlay
+- `docs/emberware-z.md` - Document console limits
+
+---
+
 ### **[FEATURE] Implement audio backend**
 
 PS1/N64-style audio system with fire-and-forget sounds and managed channels for positional audio.

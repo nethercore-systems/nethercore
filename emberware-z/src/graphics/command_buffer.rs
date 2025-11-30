@@ -140,6 +140,11 @@ impl CommandBuffer {
         &self.commands
     }
 
+    /// Get mutable access to accumulated commands (for in-place sorting)
+    pub fn commands_mut(&mut self) -> &mut [DrawCommand] {
+        &mut self.commands
+    }
+
     /// Get vertex data for a format
     pub fn vertex_data(&self, format: u8) -> &[u8] {
         &self.vertex_data[format as usize]
