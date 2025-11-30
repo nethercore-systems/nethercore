@@ -97,6 +97,11 @@ The `Runtime<C: Console>` handles:
 
 ## TODO
 
+### Core RenderState is specific to EmberwareZ
+- EmberwareZ Specific rendering data exists in the wasm/render.rs file
+- This needs to be removed and made generic.
+- Refactor the application so that RenderState uses the proper EmberwareZ one.
+
 ### **[NEEDS CLARIFICATION] Define and enforce console runtime limits**
 
 **Current State:** Partial limit enforcement - VRAM tracking (8MB), vertex format validation, memory bounds checking. No enforcement for draw calls, vertex counts, mesh counts, or CPU budget per frame.
@@ -1133,6 +1138,33 @@ KEYCODE_TO_BUTTON.get(&(keycode as u32)).copied()
 ## In Progress
 
 ## Done
+
+### **[FEATURE] Implement matcap blend modes** (Partial - FFI only)
+
+**Status:** Partially completed - FFI function working, shader integration pending
+
+**Completed:**
+1. ✓ Added `MatcapBlendMode` enum to `emberware-z/src/graphics/render_state.rs`
+2. ✓ Added `matcap_blend_modes: [MatcapBlendMode; 4]` field to emberware-z's RenderState
+3. ✓ Added `matcap_blend_modes: [u8; 4]` field to core's RenderState
+4. ✓ Implemented `matcap_blend_mode(slot: u32, mode: u32)` FFI function with validation
+5. ✓ Registered FFI function in linker
+6. ✓ All 571 tests passing
+
+**Remaining work:**
+- Update DrawCommand structs to include matcap_blend_modes field
+- Update all DrawCommand construction sites to pass matcap_blend_modes
+- Update MaterialUniforms in shader to include blend modes
+- Update Mode 1 shader with blend_colors function and rgb_to_hsv/hsv_to_rgb helpers
+- Update material buffer creation to pack blend modes into uniforms
+- Update cache key to include blend modes
+
+**Notes:**
+- FFI function is fully functional and can be called from games
+- State is tracked in RenderState but not yet passed to GPU
+- Next implementer should update shader uniforms and material buffer logic
+
+---
 
 ### **[POLISH] Performance Optimizations - Replace manual padding with Vec4 types in uniforms**
 **Status:** Completed
