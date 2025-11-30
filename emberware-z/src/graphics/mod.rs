@@ -1439,7 +1439,8 @@ impl ZGraphics {
 
         // OPTIMIZATION 2: Cache bind groups to avoid creating duplicates
         // Material bind group cache: color -> uniform buffer
-        let mut material_buffers: HashMap<u32, wgpu::Buffer> = HashMap::new();
+        // Cache material buffers by (color, metallic_bits, roughness_bits, emissive_bits)
+        let mut material_buffers: HashMap<(u32, u32, u32, u32), wgpu::Buffer> = HashMap::new();
         // Texture bind group cache: texture_slots -> bind group
         let mut texture_bind_groups: HashMap<[TextureHandle; 4], wgpu::BindGroup> = HashMap::new();
 
@@ -1498,16 +1499,31 @@ impl ZGraphics {
                 }
                 let pipeline_entry = &self.pipelines[&pipeline_key];
 
-                // Get or create material uniform buffer (cached by color)
-                let material_buffer = material_buffers.entry(cmd.color).or_insert_with(|| {
+                // Get or create material uniform buffer (cached by color + properties)
+                // Cache key combines color with material properties
+                let material_key = (
+                    cmd.color,
+                    self.material_uniforms.properties[0].to_bits(),
+                    self.material_uniforms.properties[1].to_bits(),
+                    self.material_uniforms.properties[2].to_bits(),
+                );
+                let material_buffer = material_buffers.entry(material_key).or_insert_with(|| {
                     let color_vec = state.color_vec4();
                     #[repr(C)]
                     #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
                     struct MaterialUniforms {
                         color: [f32; 4],
+                        metallic: f32,
+                        roughness: f32,
+                        emissive: f32,
+                        _pad: f32,
                     }
                     let material = MaterialUniforms {
                         color: [color_vec.x, color_vec.y, color_vec.z, color_vec.w],
+                        metallic: self.material_uniforms.properties[0],
+                        roughness: self.material_uniforms.properties[1],
+                        emissive: self.material_uniforms.properties[2],
+                        _pad: 0.0,
                     };
                     self.device
                         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -1521,32 +1537,103 @@ impl ZGraphics {
                 // Note: This contains the material buffer which varies per-command,
                 // so we can't easily cache it. However, we've eliminated redundant
                 // material buffer creation via the cache above.
-                let frame_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("Frame Bind Group"),
-                    layout: &pipeline_entry.bind_group_layout_frame,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: view_buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: proj_buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 2,
-                            resource: self.sky_buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 3,
-                            resource: material_buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 4,
-                            resource: self.bone_buffer.as_entire_binding(),
-                        },
-                    ],
-                });
+                let frame_bind_group = match self.current_render_mode {
+                    0 | 1 => {
+                        // Mode 0 (Unlit) and Mode 1 (Matcap): Basic bindings
+                        self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                            label: Some("Frame Bind Group"),
+                            layout: &pipeline_entry.bind_group_layout_frame,
+                            entries: &[
+                                wgpu::BindGroupEntry {
+                                    binding: 0,
+                                    resource: view_buffer.as_entire_binding(),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 1,
+                                    resource: proj_buffer.as_entire_binding(),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 2,
+                                    resource: self.sky_buffer.as_entire_binding(),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 3,
+                                    resource: material_buffer.as_entire_binding(),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 4,
+                                    resource: self.bone_buffer.as_entire_binding(),
+                                },
+                            ],
+                        })
+                    }
+                    2 | 3 => {
+                        // Mode 2 (PBR) and Mode 3 (Hybrid): Additional lighting uniforms
+                        self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                            label: Some("Frame Bind Group"),
+                            layout: &pipeline_entry.bind_group_layout_frame,
+                            entries: &[
+                                wgpu::BindGroupEntry {
+                                    binding: 0,
+                                    resource: view_buffer.as_entire_binding(),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 1,
+                                    resource: proj_buffer.as_entire_binding(),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 2,
+                                    resource: self.sky_buffer.as_entire_binding(),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 3,
+                                    resource: material_buffer.as_entire_binding(),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 4,
+                                    resource: self.lights_buffer.as_entire_binding(),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 5,
+                                    resource: self.camera_buffer.as_entire_binding(),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 6,
+                                    resource: self.bone_buffer.as_entire_binding(),
+                                },
+                            ],
+                        })
+                    }
+                    _ => {
+                        // Fallback - same as mode 0/1
+                        self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                            label: Some("Frame Bind Group"),
+                            layout: &pipeline_entry.bind_group_layout_frame,
+                            entries: &[
+                                wgpu::BindGroupEntry {
+                                    binding: 0,
+                                    resource: view_buffer.as_entire_binding(),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 1,
+                                    resource: proj_buffer.as_entire_binding(),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 2,
+                                    resource: self.sky_buffer.as_entire_binding(),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 3,
+                                    resource: material_buffer.as_entire_binding(),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 4,
+                                    resource: self.bone_buffer.as_entire_binding(),
+                                },
+                            ],
+                        })
+                    }
+                };
 
                 // Get or create texture bind group (cached by texture slots)
                 let texture_bind_group = texture_bind_groups

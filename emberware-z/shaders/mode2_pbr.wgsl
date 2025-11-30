@@ -37,17 +37,15 @@ struct MaterialUniforms {
 
 // Light uniform
 struct Light {
-    direction: vec3<f32>,  // Directional light (normalized)
-    enabled: u32,
-    color: vec3<f32>,
-    intensity: f32,
+    direction_and_enabled: vec4<f32>,  // .xyz = direction (normalized), .w = enabled (0 or 1)
+    color_and_intensity: vec4<f32>,    // .xyz = color, .w = intensity
 }
 
 struct LightUniforms {
     lights: array<Light, 4>,
 }
 
-@group(0) @binding(4) var<uniform> lights: LightUniforms;
+@group(0) @binding(4) var<uniform> lights_uniforms: LightUniforms;
 
 // Camera position for view direction
 @group(0) @binding(5) var<uniform> camera_position: vec3<f32>;
@@ -194,16 +192,21 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     let ambient = sample_sky(in.world_normal) * 0.3;
 
     for (var i = 0u; i < 4u; i++) {
-        if (lights.lights[i].enabled != 0u) {
+        let light = lights_uniforms.lights[i];
+        // Check if enabled (light.direction_and_enabled.w != 0)
+        if (light.direction_and_enabled.w != 0.0) {
+            let light_direction = light.direction_and_enabled.xyz;
+            let light_color = light.color_and_intensity.xyz * light.color_and_intensity.w;
+
             final_color += pbr_lite(
                 in.world_normal,
                 view_dir,
-                lights.lights[i].direction,
+                light_direction,
                 albedo,
                 mre.r,  // metallic
                 mre.g,  // roughness
                 mre.b,  // emissive
-                lights.lights[i].color * lights.lights[i].intensity,
+                light_color,
                 ambient
             );
         }

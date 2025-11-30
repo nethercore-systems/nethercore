@@ -35,15 +35,17 @@ struct MaterialUniforms {
 
 @group(0) @binding(3) var<uniform> material: MaterialUniforms;
 
-// Directional light (single light for hybrid mode)
-struct DirectionalLight {
-    direction: vec3<f32>,  // Normalized
-    _pad0: f32,
-    color: vec3<f32>,
-    intensity: f32,
+// Light uniform (same structure as Mode 2, but hybrid mode uses only the first light)
+struct Light {
+    direction_and_enabled: vec4<f32>,  // .xyz = direction (normalized), .w = enabled (0 or 1)
+    color_and_intensity: vec4<f32>,    // .xyz = color, .w = intensity
 }
 
-@group(0) @binding(4) var<uniform> light: DirectionalLight;
+struct LightUniforms {
+    lights: array<Light, 4>,
+}
+
+@group(0) @binding(4) var<uniform> lights_uniforms: LightUniforms;
 
 // Camera position for view direction
 @group(0) @binding(5) var<uniform> camera_position: vec3<f32>;
@@ -179,15 +181,20 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     // View direction
     let view_dir = normalize(camera_position - in.world_position);
 
-    // Direct lighting from single directional light (sun)
+    // Direct lighting from first directional light (sun)
+    // Hybrid mode uses only lights_uniforms.lights[0]
+    let light0 = lights_uniforms.lights[0];
+    let light_direction = light0.direction_and_enabled.xyz;
+    let light_color = light0.color_and_intensity.xyz * light0.color_and_intensity.w;
+
     let direct = pbr_direct(
         in.world_normal,
         view_dir,
-        light.direction,
+        light_direction,
         albedo,
         mre.r,  // metallic
         mre.g,  // roughness
-        light.color * light.intensity
+        light_color
     );
 
     // Environment reflection: sky × env matcap (slot 2)

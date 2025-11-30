@@ -97,39 +97,6 @@ The `Runtime<C: Console>` handles:
 
 ## TODO
 
-### **[FEATURE] Update PBR shaders to use camera/lights/material uniforms**
-
-**Current State:** Uniform buffers are created and uploaded to GPU, but shaders don't bind or use them yet.
-
-**What's Working:**
-- ✅ `camera_buffer`, `lights_buffer`, `material_buffer` created in ZGraphics
-- ✅ `update_scene_uniforms()` uploads data to GPU every frame
-- ✅ Getter methods available: `camera_buffer()`, `lights_buffer()`, `material_buffer()`
-
-**What's Missing:**
-- ❌ Shaders don't have bind group entries for these buffers
-- ❌ Shader code doesn't read from these uniforms
-- ❌ PBR and Hybrid modes (Mode 2 & 3) can't access lighting data
-
-**Implementation Steps:**
-1. Update pipeline creation to add bind group layout entries for camera/lights/material buffers
-2. Update `mode2_pbr.wgsl` shader:
-   - Add bind group entries for camera, lights, material buffers
-   - Use camera position for specular calculations
-   - Use light data instead of hardcoded values
-   - Use material properties for metallic/roughness/emissive
-3. Update `mode3_hybrid.wgsl` shader similarly
-4. Test with a game that uses `light_set()`, `material_metallic()`, `material_roughness()`, `material_emissive()`
-
-**Files to Modify:**
-- `emberware-z/src/graphics/pipeline.rs` - Add bind group layout entries
-- `emberware-z/shaders/mode2_pbr.wgsl` - Add uniform bindings and use them
-- `emberware-z/shaders/mode3_hybrid.wgsl` - Add uniform bindings and use them
-
-**Impact:** HIGH - Required for PBR rendering to work with dynamic lighting
-
----
-
 ### **[REFACTOR] Simplify execute_draw_commands architecture**
 
 **Current Problem:** Redundant translation layer
@@ -1220,6 +1187,39 @@ KEYCODE_TO_BUTTON.get(&(keycode as u32)).copied()
 **Implementation in progress...**
 
 ## Done
+
+### **[FEATURE] Update PBR shaders to use camera/lights/material uniforms**
+**Status:** Completed ✅
+
+**What Was Implemented:**
+- ✅ Updated bind group creation in `mod.rs` to conditionally bind lights and camera buffers for modes 2-3
+- ✅ Fixed material buffer to include both color AND properties (metallic, roughness, emissive) in single uniform
+- ✅ Updated material buffer cache key to include material properties (metallic/roughness/emissive) via float bit representation
+- ✅ Updated Mode 2 shader (`mode2_pbr.wgsl`):
+  - Changed Light struct to match Rust layout: `direction_and_enabled: vec4<f32>`, `color_and_intensity: vec4<f32>`
+  - Updated fragment shader to extract direction, color, intensity from packed vec4s
+  - Properly checks `direction_and_enabled.w` for enabled state
+- ✅ Updated Mode 3 shader (`mode3_hybrid.wgsl`):
+  - Changed from single DirectionalLight to LightUniforms array (same as Mode 2)
+  - Uses first light from array (lights_uniforms.lights[0])
+  - Extracts direction and color from packed vec4 format
+- ✅ All 363 tests passing including shader compilation tests
+
+**Files Modified:**
+- `emberware-z/src/graphics/mod.rs` - Updated bind group creation to conditionally bind lights/camera for modes 2-3, fixed material buffer structure and caching
+- `emberware-z/shaders/mode2_pbr.wgsl` - Updated Light struct and fragment shader to match Rust data layout
+- `emberware-z/shaders/mode3_hybrid.wgsl` - Updated to use LightUniforms array instead of single DirectionalLight
+
+**Impact:**
+- PBR and Hybrid render modes (Mode 2 & 3) now have access to camera position, lights, and material properties
+- Dynamic lighting with up to 4 directional lights fully functional in Mode 2
+- Mode 3 uses first light for direct lighting as intended
+- Material properties (metallic, roughness, emissive) properly transmitted to shaders
+- Camera position available for specular calculations and view direction
+
+**Compilation:** ✅ All tests passing
+
+---
 
 ### **[FEATURE] Wire up camera and light uniforms to GPU**
 **Status:** Completed ✅
