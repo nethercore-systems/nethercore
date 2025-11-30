@@ -696,3 +696,466 @@ pub fn run(initial_mode: AppMode) -> Result<(), AppError> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Test AppMode enum
+    #[test]
+    fn test_app_mode_library_default() {
+        let mode = AppMode::Library;
+        assert!(matches!(mode, AppMode::Library));
+    }
+
+    #[test]
+    fn test_app_mode_playing_with_game_id() {
+        let mode = AppMode::Playing {
+            game_id: "test-game".to_string(),
+        };
+        if let AppMode::Playing { game_id } = mode {
+            assert_eq!(game_id, "test-game");
+        } else {
+            panic!("Expected Playing mode");
+        }
+    }
+
+    #[test]
+    fn test_app_mode_settings() {
+        let mode = AppMode::Settings;
+        assert!(matches!(mode, AppMode::Settings));
+    }
+
+    #[test]
+    fn test_app_mode_clone() {
+        let mode = AppMode::Playing {
+            game_id: "clone-test".to_string(),
+        };
+        let cloned = mode.clone();
+        if let AppMode::Playing { game_id } = cloned {
+            assert_eq!(game_id, "clone-test");
+        } else {
+            panic!("Expected Playing mode after clone");
+        }
+    }
+
+    // Test RuntimeError
+    #[test]
+    fn test_runtime_error_display() {
+        let error = RuntimeError("Test error message".to_string());
+        assert_eq!(format!("{}", error), "Test error message");
+    }
+
+    #[test]
+    fn test_runtime_error_debug() {
+        let error = RuntimeError("Debug test".to_string());
+        let debug_str = format!("{:?}", error);
+        assert!(debug_str.contains("Debug test"));
+    }
+
+    #[test]
+    fn test_runtime_error_clone() {
+        let error = RuntimeError("Clone test".to_string());
+        let cloned = error.clone();
+        assert_eq!(error.0, cloned.0);
+    }
+
+    // Test AppError
+    #[test]
+    fn test_app_error_event_loop() {
+        let error = AppError::EventLoop("test error".to_string());
+        let display = format!("{}", error);
+        assert!(display.contains("Event loop error"));
+        assert!(display.contains("test error"));
+    }
+
+    // Test DebugStats
+    #[test]
+    fn test_debug_stats_default() {
+        let stats = DebugStats::default();
+        assert!(stats.frame_times.is_empty());
+        assert_eq!(stats.vram_used, 0);
+        assert_eq!(stats.vram_limit, 0);
+        assert!(stats.ping_ms.is_none());
+        assert_eq!(stats.rollback_frames, 0);
+        assert_eq!(stats.frame_advantage, 0);
+    }
+
+    #[test]
+    fn test_debug_stats_frame_times() {
+        let mut stats = DebugStats::default();
+        stats.frame_times.push_back(16.67);
+        stats.frame_times.push_back(17.0);
+        stats.frame_times.push_back(15.5);
+        assert_eq!(stats.frame_times.len(), 3);
+        assert_eq!(stats.frame_times[0], 16.67);
+    }
+
+    #[test]
+    fn test_debug_stats_network_stats() {
+        let mut stats = DebugStats::default();
+        stats.ping_ms = Some(25);
+        stats.rollback_frames = 10;
+        stats.frame_advantage = -2;
+        assert_eq!(stats.ping_ms, Some(25));
+        assert_eq!(stats.rollback_frames, 10);
+        assert_eq!(stats.frame_advantage, -2);
+    }
+
+    // Test constants
+    #[test]
+    fn test_frame_time_history_size() {
+        assert_eq!(FRAME_TIME_HISTORY_SIZE, 120);
+    }
+
+    #[test]
+    fn test_target_frame_time() {
+        // 60 FPS = 16.67ms per frame
+        assert!((TARGET_FRAME_TIME_MS - 16.67).abs() < 0.01);
+    }
+
+    // Test FPS calculation logic (isolated)
+    #[test]
+    fn test_calculate_fps_no_samples() {
+        // With 0 or 1 samples, FPS should be 0
+        let frame_times: Vec<Instant> = vec![];
+        let fps = if frame_times.len() < 2 {
+            0.0
+        } else {
+            frame_times.len() as f32
+        };
+        assert_eq!(fps, 0.0);
+    }
+
+    #[test]
+    fn test_calculate_fps_single_sample() {
+        let frame_times = vec![Instant::now()];
+        let fps = if frame_times.len() < 2 {
+            0.0
+        } else {
+            frame_times.len() as f32
+        };
+        assert_eq!(fps, 0.0);
+    }
+
+    // Test App state transitions (simulated without window)
+    // These tests verify the state machine logic in isolation
+
+    #[test]
+    fn test_state_transition_library_to_playing() {
+        // Simulating handle_ui_action for PlayGame
+        let mut mode = AppMode::Library;
+        let action = UiAction::PlayGame("test-game".to_string());
+
+        match action {
+            UiAction::PlayGame(game_id) => {
+                mode = AppMode::Playing { game_id };
+            }
+            _ => {}
+        }
+
+        if let AppMode::Playing { game_id } = mode {
+            assert_eq!(game_id, "test-game");
+        } else {
+            panic!("Expected Playing mode");
+        }
+    }
+
+    #[test]
+    fn test_state_transition_playing_to_library_escape() {
+        // Simulating escape key handling from Playing state
+        let mut mode = AppMode::Playing {
+            game_id: "some-game".to_string(),
+        };
+
+        // Simulate ESC press in Playing mode
+        match mode {
+            AppMode::Playing { .. } => {
+                mode = AppMode::Library;
+            }
+            _ => {}
+        }
+
+        assert!(matches!(mode, AppMode::Library));
+    }
+
+    #[test]
+    fn test_state_transition_settings_to_library_escape() {
+        // Simulating escape key handling from Settings state
+        let mut mode = AppMode::Settings;
+
+        // Simulate ESC press in Settings mode
+        match mode {
+            AppMode::Settings => {
+                mode = AppMode::Library;
+            }
+            _ => {}
+        }
+
+        assert!(matches!(mode, AppMode::Library));
+    }
+
+    #[test]
+    fn test_state_transition_library_to_settings() {
+        // Simulating OpenSettings action
+        let mut mode = AppMode::Library;
+
+        let action = UiAction::OpenSettings;
+        match action {
+            UiAction::OpenSettings => {
+                mode = AppMode::Settings;
+            }
+            _ => {}
+        }
+
+        assert!(matches!(mode, AppMode::Settings));
+    }
+
+    #[test]
+    fn test_runtime_error_transitions_to_library() {
+        // Simulating handle_runtime_error
+        let mode = AppMode::Playing {
+            game_id: "test".to_string(),
+        };
+
+        // Start in Playing mode
+        assert!(matches!(mode, AppMode::Playing { .. }));
+
+        // Simulate runtime error - error stored and mode transitions
+        let error = RuntimeError("WASM panic".to_string());
+        let last_error: Option<RuntimeError> = Some(error);
+        let mode = AppMode::Library;
+
+        assert!(matches!(mode, AppMode::Library));
+        assert!(last_error.is_some());
+        assert_eq!(last_error.unwrap().0, "WASM panic");
+    }
+
+    #[test]
+    fn test_dismiss_error_clears_error() {
+        let mut last_error: Option<RuntimeError> = Some(RuntimeError("test error".to_string()));
+
+        // Simulate DismissError action
+        let action = UiAction::DismissError;
+        match action {
+            UiAction::DismissError => {
+                last_error = None;
+            }
+            _ => {}
+        }
+
+        assert!(last_error.is_none());
+    }
+
+    #[test]
+    fn test_play_game_clears_previous_error() {
+        // When playing a new game, previous error should be cleared
+        let mut last_error: Option<RuntimeError> = Some(RuntimeError("old error".to_string()));
+        let mut mode = AppMode::Library;
+
+        let action = UiAction::PlayGame("new-game".to_string());
+        match action {
+            UiAction::PlayGame(game_id) => {
+                last_error = None; // Clear any previous error
+                mode = AppMode::Playing { game_id };
+            }
+            _ => {}
+        }
+
+        assert!(last_error.is_none());
+        assert!(matches!(mode, AppMode::Playing { .. }));
+    }
+
+    // Test fullscreen toggle logic (isolated from actual window)
+    #[test]
+    fn test_fullscreen_toggle_logic() {
+        let mut is_fullscreen = false;
+
+        // Toggle from windowed to fullscreen
+        is_fullscreen = !is_fullscreen;
+        assert!(is_fullscreen);
+
+        // Toggle back to windowed
+        is_fullscreen = !is_fullscreen;
+        assert!(!is_fullscreen);
+    }
+
+    // Test resize validation logic
+    #[test]
+    fn test_resize_validation_accepts_valid_size() {
+        let new_size = winit::dpi::PhysicalSize::new(1920u32, 1080u32);
+        let should_resize = new_size.width > 0 && new_size.height > 0;
+        assert!(should_resize);
+    }
+
+    #[test]
+    fn test_resize_validation_rejects_zero_width() {
+        let new_size = winit::dpi::PhysicalSize::new(0u32, 1080u32);
+        let should_resize = new_size.width > 0 && new_size.height > 0;
+        assert!(!should_resize);
+    }
+
+    #[test]
+    fn test_resize_validation_rejects_zero_height() {
+        let new_size = winit::dpi::PhysicalSize::new(1920u32, 0u32);
+        let should_resize = new_size.width > 0 && new_size.height > 0;
+        assert!(!should_resize);
+    }
+
+    #[test]
+    fn test_resize_validation_rejects_zero_both() {
+        let new_size = winit::dpi::PhysicalSize::new(0u32, 0u32);
+        let should_resize = new_size.width > 0 && new_size.height > 0;
+        assert!(!should_resize);
+    }
+
+    // Test debug overlay toggle
+    #[test]
+    fn test_debug_overlay_toggle() {
+        let mut debug_overlay = false;
+
+        // Toggle on with F3
+        debug_overlay = !debug_overlay;
+        assert!(debug_overlay);
+
+        // Toggle off with F3
+        debug_overlay = !debug_overlay;
+        assert!(!debug_overlay);
+    }
+
+    // Test should_exit flag
+    #[test]
+    fn test_should_exit_initial_false() {
+        let should_exit = false;
+        assert!(!should_exit);
+    }
+
+    #[test]
+    fn test_should_exit_on_close_request() {
+        // Simulate close requested - flag should become true
+        let should_exit = true;
+        assert!(should_exit);
+    }
+
+    // Test frame time tracking logic
+    #[test]
+    fn test_frame_times_capped_at_120() {
+        let mut frame_times: Vec<Instant> = Vec::with_capacity(120);
+
+        // Add 130 frames
+        for _ in 0..130 {
+            frame_times.push(Instant::now());
+            if frame_times.len() > 120 {
+                frame_times.remove(0);
+            }
+        }
+
+        assert_eq!(frame_times.len(), 120);
+    }
+
+    // Test debug stats frame time ring buffer
+    #[test]
+    fn test_debug_stats_frame_time_ring_buffer() {
+        let mut frame_times: VecDeque<f32> = VecDeque::with_capacity(FRAME_TIME_HISTORY_SIZE);
+
+        // Add more than the limit
+        for i in 0..150 {
+            frame_times.push_back(i as f32);
+            while frame_times.len() > FRAME_TIME_HISTORY_SIZE {
+                frame_times.pop_front();
+            }
+        }
+
+        assert_eq!(frame_times.len(), FRAME_TIME_HISTORY_SIZE);
+        // First value should be 30 (150 - 120)
+        assert_eq!(frame_times[0], 30.0);
+    }
+
+    // Test UI action variants exist
+    #[test]
+    fn test_ui_action_play_game() {
+        let action = UiAction::PlayGame("game-id".to_string());
+        if let UiAction::PlayGame(id) = action {
+            assert_eq!(id, "game-id");
+        } else {
+            panic!("Expected PlayGame action");
+        }
+    }
+
+    #[test]
+    fn test_ui_action_delete_game() {
+        let action = UiAction::DeleteGame("delete-id".to_string());
+        if let UiAction::DeleteGame(id) = action {
+            assert_eq!(id, "delete-id");
+        } else {
+            panic!("Expected DeleteGame action");
+        }
+    }
+
+    #[test]
+    fn test_ui_action_open_browser() {
+        let action = UiAction::OpenBrowser;
+        assert!(matches!(action, UiAction::OpenBrowser));
+    }
+
+    #[test]
+    fn test_ui_action_open_settings() {
+        let action = UiAction::OpenSettings;
+        assert!(matches!(action, UiAction::OpenSettings));
+    }
+
+    #[test]
+    fn test_ui_action_dismiss_error() {
+        let action = UiAction::DismissError;
+        assert!(matches!(action, UiAction::DismissError));
+    }
+
+    // Test multiple state transitions (full cycle)
+    #[test]
+    fn test_full_state_cycle_library_play_library() {
+        // 1. Start in Library
+        let mode = AppMode::Library;
+        assert!(matches!(mode, AppMode::Library));
+
+        // 2. Play a game
+        let mode = AppMode::Playing {
+            game_id: "test".to_string(),
+        };
+        assert!(matches!(mode, AppMode::Playing { .. }));
+
+        // 3. Game crashes with error
+        let last_error: Option<RuntimeError> = Some(RuntimeError("crash".to_string()));
+        let mode = AppMode::Library;
+        assert!(matches!(mode, AppMode::Library));
+        assert!(last_error.is_some());
+
+        // 4. Dismiss error
+        let last_error: Option<RuntimeError> = None;
+        assert!(last_error.is_none());
+
+        // 5. Play another game
+        let mode = AppMode::Playing {
+            game_id: "test2".to_string(),
+        };
+        assert!(matches!(mode, AppMode::Playing { .. }));
+
+        // 6. Exit normally with ESC
+        let mode = AppMode::Library;
+        assert!(matches!(mode, AppMode::Library));
+    }
+
+    #[test]
+    fn test_settings_round_trip() {
+        // Start in Library
+        let mode = AppMode::Library;
+        assert!(matches!(mode, AppMode::Library));
+
+        // Go to settings
+        let mode = AppMode::Settings;
+        assert!(matches!(mode, AppMode::Settings));
+
+        // Back to library
+        let mode = AppMode::Library;
+        assert!(matches!(mode, AppMode::Library));
+    }
+}

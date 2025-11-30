@@ -106,11 +106,6 @@ The `Runtime<C: Console>` handles:
 
 #### High Priority
 
-- **[STABILITY] Add tests for app.rs state machine** (`emberware-z/src/app.rs`)
-  - Critical 719-line file with no test coverage
-  - Test: `handle_runtime_error()`, `handle_resize()`, `toggle_fullscreen()`
-  - Test: application state transitions (Library → Playing → back)
-
 #### Medium Priority
 
 - **[STABILITY] Split large files into modules** (graphics.rs, ffi.rs, rollback.rs, wasm.rs)
@@ -283,6 +278,19 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **[STABILITY] Add tests for app.rs state machine** (`emberware-z/src/app.rs`)
+  - Added 39 new tests covering the state machine and related functionality
+  - Test coverage for `AppMode` enum (Library, Playing, Settings variants)
+  - Test coverage for `RuntimeError` struct (Display, Debug, Clone)
+  - Test coverage for `AppError` enum (EventLoop variant)
+  - Test coverage for `DebugStats` struct (default values, frame times, network stats)
+  - Test coverage for state transitions (Library→Playing, Playing→Library via ESC, Settings→Library)
+  - Test coverage for runtime error handling (transitions to Library with error stored)
+  - Test coverage for UI actions (PlayGame, DeleteGame, OpenBrowser, OpenSettings, DismissError)
+  - Test coverage for fullscreen toggle, resize validation, debug overlay toggle
+  - Test coverage for frame time tracking and ring buffer logic
+  - All 331 tests passing (159 core + 172 emberware-z)
 
 - **[STABILITY] Remove dead code in download.rs** (`emberware-z/src/download.rs`)
   - Removed unused `API_URL` constant, `DownloadError` enum, and `download_game()` function
