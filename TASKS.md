@@ -104,7 +104,88 @@ The `Runtime<C: Console>` handles:
 
 ### Stability
 
-(All stability tasks are either done or need clarification)
+#### High Priority
+
+- **[STABILITY] Replace panic! calls in shader_gen.rs with Result returns** (`emberware-z/src/shader_gen.rs:89, 96, 185, 326-338`)
+  - Multiple `panic!()` calls for invalid render modes and format validation
+  - Should return `Result<String>` and handle errors gracefully with fallback shaders
+  - Currently crashes application on invalid shader configuration
+
+- **[STABILITY] Document all unsafe blocks with SAFETY comments** (46 blocks across codebase)
+  - 49 total unsafe blocks, only 3 have SAFETY comments
+  - Add comments explaining why each unsafe block is safe
+  - Key files: `graphics.rs`, `ffi.rs`, `rollback.rs`, `wasm.rs`
+
+- **[STABILITY] Add tests for app.rs state machine** (`emberware-z/src/app.rs`)
+  - Critical 719-line file with no test coverage
+  - Test: `handle_runtime_error()`, `handle_resize()`, `toggle_fullscreen()`
+  - Test: application state transitions (Library → Playing → back)
+
+- **[STABILITY] Remove or implement dead code in download.rs** (`emberware-z/src/download.rs`)
+  - `API_URL` constant never used (line 7)
+  - `DownloadError` enum never used (line 10)
+  - `download_game()` function never used (line 21)
+  - Either implement the downloading feature or remove the scaffolding
+
+#### Medium Priority
+
+- **[STABILITY] Split large files into modules** (graphics.rs, ffi.rs, rollback.rs, wasm.rs)
+  - `graphics.rs`: 3114 lines → split into pipeline, vertex, command_buffer, resources
+  - `ffi.rs` (emberware-z): 2447 lines → extract input functions to separate module
+  - `rollback.rs`: 1843 lines → split into session, state, config modules
+  - `wasm.rs`: 1681 lines → split by responsibility (game state, camera, render)
+
+- **[STABILITY] Add missing documentation for public APIs**
+  - `graphics.rs:139-148`: `vertex_buffer_layout()`, `build_attributes()` lack docs
+  - `ui.rs`: `LibraryUi`, `UiAction` lack documentation
+  - `library.rs`: `get_local_games()` lacks documentation
+  - `config.rs`: Config loading/saving functions need documentation
+
+- **[STABILITY] Remove dead code variants in app.rs** (`emberware-z/src/app.rs`)
+  - Line 26: `AppMode::Downloading` variant never constructed
+  - Lines 34, 36, 38: `AppError::Window`, `Graphics`, `Runtime` never constructed
+  - Lines 47-53: `RuntimeError` variants never constructed (`WasmPanic`, `NetworkDisconnect`, `OutOfMemory`, `Other`)
+  - Line 165: `handle_runtime_error()` method never used
+
+- **[STABILITY] Add tests for FFI validation** (`emberware-z/src/ffi.rs`)
+  - 2447-line file with many FFI functions lacking direct unit tests
+  - Test input validation edge cases and error handling
+  - Currently only tested through integration tests
+
+- **[STABILITY] Add tests for graphics pipeline** (`emberware-z/src/graphics.rs`)
+  - 3114-line file with limited test coverage
+  - Test render pipeline creation, texture management
+  - Test draw command processing
+
+#### Low Priority
+
+- **[STABILITY] Reduce DRY violations in vertex attribute generation** (`emberware-z/src/graphics.rs:154-520`)
+  - Massive match statement with 16 nearly identical cases
+  - Use macro or builder pattern to reduce duplication
+
+- **[STABILITY] Fix unclosed HTML tag documentation warning** (`emberware-z/`)
+  - Warning: "unclosed HTML tag `u8`"
+  - Escape HTML-like syntax in doc comments using backticks
+
+- **[STABILITY] Remove unused helper methods in console.rs** (`emberware-z/src/console.rs`)
+  - Lines 135, 141: `right_stick_x_f32()`, `right_stick_y_f32()` never used
+  - Remove or mark as `#[allow(dead_code)]` if planned for future
+
+- **[STABILITY] Add tests for download.rs** (`emberware-z/src/download.rs`)
+  - `download_game()` function has no tests
+  - Add tests with mocked HTTP client (once feature is implemented)
+
+- **[STABILITY] Add tests for config.rs** (`emberware-z/src/config.rs`)
+  - Config loading/saving functions lack tests
+  - Add tests for config persistence and validation
+
+- **[STABILITY] Add tests for library.rs** (`emberware-z/src/library.rs`)
+  - `get_local_games()` function has no tests
+  - Add filesystem tests with temp directories
+
+- **[STABILITY] Add tests for ui.rs** (`emberware-z/src/ui.rs`)
+  - Library UI has no tests
+  - Add tests for UI action handling
 
 
 
