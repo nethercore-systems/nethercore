@@ -10,6 +10,8 @@
 //! - 2D UI overlay with `draw_text()`, `draw_rect()`
 //! - Sky background with `set_sky()`
 //! - Rollback-safe game state (all state in statics)
+//!
+//! Note: Rollback state is automatic (entire WASM memory is snapshotted). No save_state/load_state needed.
 
 #![no_std]
 #![no_main]
