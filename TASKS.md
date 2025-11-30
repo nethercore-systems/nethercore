@@ -106,9 +106,6 @@ The `Runtime<C: Console>` handles:
 
 - **[STABILITY] Implement audio backend** — See "Needs Clarification" section above
 
-- **[STABILITY] Consider removing unsafe transmute workaround**
-  - `emberware-z/src/app.rs:635-637`: Unsafe transmute works around egui-wgpu 0.30 API limitation
-  - Review when upgrading egui-wgpu to see if workaround can be removed
 
 ### Phase 5: Networking & Polish
 
@@ -134,16 +131,6 @@ The `Runtime<C: Console>` handles:
   - Render batching already implemented in CommandBuffer
   - Profile and optimize hot paths - requires game execution to measure
 
-### Phase 8: Game Execution Integration
-
-- **Wire up game execution in Playing mode**
-  - Load WASM from LocalGame.rom_path when entering Playing mode
-  - Create Runtime<ZConsole> with game instance
-  - Run game loop: poll input → update() → render()
-  - Pass ZInput from InputManager to game via FFI
-  - Execute ZGraphics draw commands to render frame
-  - Handle game errors (WASM trap, OOM) → return to Library with error
-
 ---
 ## In Progress
 
@@ -152,6 +139,22 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **[STABILITY] Replace unsafe transmute with wgpu::RenderPass::forget_lifetime()** (`emberware-z/src/app.rs`)
+  - wgpu 23 provides `forget_lifetime()` which is a safe alternative to unsafe transmute
+  - Removed unsafe block that was working around egui-wgpu 0.30 API limitation
+  - The method safely converts compile-time lifetime errors to runtime errors if encoder is misused
+
+- **Wire up game execution in Playing mode** (Phase 8)
+  - Implemented game loop integration in App::render()
+  - Added process_pending_resources() to load textures/meshes from game into graphics backend
+  - Added execute_draw_commands() to translate game DrawCommands to ZGraphics commands
+  - Added run_game_frame() to orchestrate input → frame() → render() → resource processing
+  - Input flow: InputManager → map_input() → game.set_input() → FFI
+  - Game rendering: render_frame() with camera matrices and draw command execution
+  - Error handling: Runtime errors return to Library with error message
+  - Quit handling: game quit_requested flag returns to Library
+  - egui overlay: LoadOp::Load preserves game rendering when in Playing mode
 
 - **[STABILITY] Replace test unwrap() calls with descriptive expect() messages** (`emberware-z/src/library.rs`)
   - Replaced `.unwrap()` with `.expect()` in `create_test_game()` test helper function

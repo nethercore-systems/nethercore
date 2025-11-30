@@ -13,12 +13,14 @@ use winit::{
 };
 
 use crate::config::{self, Config};
-use crate::console::VRAM_LIMIT;
-use crate::graphics::ZGraphics;
+use crate::console::{EmberwareZ, VRAM_LIMIT};
+use crate::graphics::{BlendMode, CullMode, TextureHandle, ZGraphics};
 use crate::input::InputManager;
 use crate::library::{self, LocalGame};
 use crate::ui::{LibraryUi, UiAction};
-use emberware_core::console::Graphics;
+use emberware_core::console::{Console, ConsoleInput, Graphics};
+use emberware_core::runtime::Runtime;
+use emberware_core::wasm::{DrawCommand as GameDrawCommand, WasmEngine};
 
 #[derive(Debug, Clone)]
 pub enum AppMode {
@@ -68,6 +70,16 @@ pub struct DebugStats {
     pub frame_advantage: i32,
 }
 
+/// Active game session holding runtime state
+pub struct GameSession {
+    /// The runtime managing game execution
+    pub runtime: Runtime<EmberwareZ>,
+    /// Mapping from game texture handles to graphics texture handles
+    texture_map: std::collections::HashMap<u32, TextureHandle>,
+    /// Mapping from game mesh handles to graphics mesh handles
+    mesh_map: std::collections::HashMap<u32, crate::graphics::MeshHandle>,
+}
+
 /// Application state
 pub struct App {
     /// Current application mode
@@ -102,6 +114,10 @@ pub struct App {
     debug_stats: DebugStats,
     /// Last runtime error (for displaying error in library)
     last_error: Option<RuntimeError>,
+    /// WASM engine (shared across all games)
+    wasm_engine: Option<WasmEngine>,
+    /// Active game session (only present in Playing mode)
+    game_session: Option<GameSession>,
 }
 
 impl App {
@@ -116,6 +132,18 @@ impl App {
         let local_games = library::get_local_games();
 
         let now = Instant::now();
+
+        // Initialize WASM engine (may fail on unsupported platforms)
+        let wasm_engine = match WasmEngine::new() {
+            Ok(engine) => {
+                tracing::info!("WASM engine initialized");
+                Some(engine)
+            }
+            Err(e) => {
+                tracing::error!("Failed to initialize WASM engine: {}", e);
+                None
+            }
+        };
 
         Self {
             mode: initial_mode,
@@ -138,6 +166,8 @@ impl App {
                 ..Default::default()
             },
             last_error: None,
+            wasm_engine,
+            game_session: None,
         }
     }
 
@@ -146,12 +176,414 @@ impl App {
     /// Called when the game runtime encounters an error (WASM panic, network
     /// disconnect, out of memory, etc). Transitions back to library and displays
     /// the error message to the user.
-    #[allow(dead_code)] // Infrastructure for future game runtime error handling
     fn handle_runtime_error(&mut self, error: RuntimeError) {
         tracing::error!("Runtime error: {}", error);
+        self.game_session = None; // Clean up game session
         self.last_error = Some(error);
         self.mode = AppMode::Library;
         self.local_games = library::get_local_games();
+    }
+
+    /// Process pending resources from game state into graphics backend
+    ///
+    /// Loads textures and meshes that were requested by the game during init()
+    /// or render() into the graphics backend.
+    fn process_pending_resources(&mut self) {
+        let (Some(session), Some(graphics)) = (&mut self.game_session, &mut self.graphics) else {
+            return;
+        };
+
+        let game = match session.runtime.game_mut() {
+            Some(g) => g,
+            None => return,
+        };
+
+        let state = game.state_mut();
+
+        // Process pending textures
+        for pending in state.pending_textures.drain(..) {
+            match graphics.load_texture(pending.width, pending.height, &pending.data) {
+                Ok(handle) => {
+                    session.texture_map.insert(pending.handle, handle);
+                    tracing::debug!(
+                        "Loaded texture: game_handle={} -> graphics_handle={:?}",
+                        pending.handle,
+                        handle
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to load texture {}: {}", pending.handle, e);
+                }
+            }
+        }
+
+        // Process pending meshes
+        for pending in state.pending_meshes.drain(..) {
+            let result = if let Some(indices) = pending.index_data {
+                graphics.load_mesh_indexed(&pending.vertex_data, &indices, pending.format)
+            } else {
+                graphics.load_mesh(&pending.vertex_data, pending.format)
+            };
+
+            match result {
+                Ok(handle) => {
+                    session.mesh_map.insert(pending.handle, handle);
+                    tracing::debug!(
+                        "Loaded mesh: game_handle={} -> graphics_handle={:?}",
+                        pending.handle,
+                        handle
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to load mesh {}: {}", pending.handle, e);
+                }
+            }
+        }
+    }
+
+    /// Execute draw commands from game state
+    ///
+    /// Translates game draw commands to ZGraphics draw calls and buffers them
+    /// for rendering.
+    fn execute_draw_commands(&mut self) {
+        let (Some(session), Some(graphics)) = (&mut self.game_session, &mut self.graphics) else {
+            return;
+        };
+
+        let game = match session.runtime.game_mut() {
+            Some(g) => g,
+            None => return,
+        };
+
+        let state = game.state_mut();
+
+        // Apply init config to graphics (render mode, etc.)
+        graphics.set_render_mode(state.init_config.render_mode);
+
+        // Process draw commands
+        for cmd in state.draw_commands.drain(..) {
+            match cmd {
+                GameDrawCommand::DrawTriangles {
+                    format,
+                    vertex_data,
+                    transform,
+                    color,
+                    depth_test,
+                    cull_mode,
+                    blend_mode,
+                    bound_textures,
+                } => {
+                    // Apply state
+                    graphics.set_color(color);
+                    graphics.set_depth_test(depth_test);
+                    graphics.set_cull_mode(Self::convert_cull_mode(cull_mode));
+                    graphics.set_blend_mode(Self::convert_blend_mode(blend_mode));
+                    Self::bind_textures(graphics, &session.texture_map, &bound_textures);
+                    graphics.transform_set(&transform.to_cols_array());
+
+                    // Draw
+                    graphics.draw_triangles(&vertex_data, format);
+                }
+                GameDrawCommand::DrawTrianglesIndexed {
+                    format,
+                    vertex_data,
+                    index_data,
+                    transform,
+                    color,
+                    depth_test,
+                    cull_mode,
+                    blend_mode,
+                    bound_textures,
+                } => {
+                    // Apply state
+                    graphics.set_color(color);
+                    graphics.set_depth_test(depth_test);
+                    graphics.set_cull_mode(Self::convert_cull_mode(cull_mode));
+                    graphics.set_blend_mode(Self::convert_blend_mode(blend_mode));
+                    Self::bind_textures(graphics, &session.texture_map, &bound_textures);
+                    graphics.transform_set(&transform.to_cols_array());
+
+                    // Draw
+                    graphics.draw_triangles_indexed(&vertex_data, &index_data, format);
+                }
+                GameDrawCommand::DrawMesh {
+                    handle,
+                    transform,
+                    color,
+                    depth_test,
+                    cull_mode,
+                    blend_mode,
+                    bound_textures,
+                } => {
+                    // Apply state
+                    graphics.set_color(color);
+                    graphics.set_depth_test(depth_test);
+                    graphics.set_cull_mode(Self::convert_cull_mode(cull_mode));
+                    graphics.set_blend_mode(Self::convert_blend_mode(blend_mode));
+                    Self::bind_textures(graphics, &session.texture_map, &bound_textures);
+                    graphics.transform_set(&transform.to_cols_array());
+
+                    // Look up mesh handle and draw
+                    if let Some(&mesh_handle) = session.mesh_map.get(&handle) {
+                        if let Some(mesh) = graphics.get_mesh(mesh_handle) {
+                            // Draw the retained mesh by adding its data to command buffer
+                            // Note: This is a simplified approach - retained meshes need
+                            // proper integration with the command buffer system
+                            tracing::trace!("Drawing mesh handle {} ({} vertices)", handle, mesh.vertex_count);
+                            // TODO: Implement retained mesh drawing in command buffer
+                        }
+                    } else {
+                        tracing::warn!("Mesh handle {} not found", handle);
+                    }
+                }
+                GameDrawCommand::DrawBillboard {
+                    width,
+                    height,
+                    mode: _,
+                    uv_rect: _,
+                    transform,
+                    color,
+                    depth_test,
+                    cull_mode,
+                    blend_mode,
+                    bound_textures,
+                } => {
+                    // TODO: Implement billboard rendering
+                    // For now, just log that we received the command
+                    tracing::trace!(
+                        "Billboard: {}x{} at {:?} color={:08x}",
+                        width,
+                        height,
+                        transform,
+                        color
+                    );
+                    let _ = (depth_test, cull_mode, blend_mode, bound_textures);
+                }
+                GameDrawCommand::DrawSprite {
+                    x,
+                    y,
+                    width,
+                    height,
+                    uv_rect: _,
+                    origin: _,
+                    rotation: _,
+                    color,
+                    blend_mode: _,
+                    bound_textures: _,
+                } => {
+                    // TODO: Implement 2D sprite rendering
+                    tracing::trace!(
+                        "Sprite: {}x{} at ({},{}) color={:08x}",
+                        width,
+                        height,
+                        x,
+                        y,
+                        color
+                    );
+                }
+                GameDrawCommand::DrawRect {
+                    x,
+                    y,
+                    width,
+                    height,
+                    color,
+                    blend_mode: _,
+                } => {
+                    // TODO: Implement 2D rectangle rendering
+                    tracing::trace!(
+                        "Rect: {}x{} at ({},{}) color={:08x}",
+                        width,
+                        height,
+                        x,
+                        y,
+                        color
+                    );
+                }
+                GameDrawCommand::DrawText {
+                    text,
+                    x,
+                    y,
+                    size,
+                    color,
+                    blend_mode: _,
+                } => {
+                    // TODO: Implement text rendering using font system
+                    tracing::trace!(
+                        "Text: '{}' at ({},{}) size={} color={:08x}",
+                        text,
+                        x,
+                        y,
+                        size,
+                        color
+                    );
+                }
+                GameDrawCommand::SetSky {
+                    horizon_color,
+                    zenith_color,
+                    sun_direction,
+                    sun_color,
+                    sun_sharpness,
+                } => {
+                    graphics.set_sky(
+                        horizon_color,
+                        zenith_color,
+                        sun_direction,
+                        sun_color,
+                        sun_sharpness,
+                    );
+                }
+            }
+        }
+    }
+
+    /// Convert game cull mode to graphics cull mode
+    fn convert_cull_mode(mode: u8) -> CullMode {
+        match mode {
+            0 => CullMode::None,
+            1 => CullMode::Back,
+            2 => CullMode::Front,
+            _ => CullMode::None,
+        }
+    }
+
+    /// Convert game blend mode to graphics blend mode
+    fn convert_blend_mode(mode: u8) -> BlendMode {
+        match mode {
+            0 => BlendMode::None,
+            1 => BlendMode::Alpha,
+            2 => BlendMode::Additive,
+            3 => BlendMode::Multiply,
+            _ => BlendMode::None,
+        }
+    }
+
+    /// Bind textures from game handles to graphics slots
+    fn bind_textures(
+        graphics: &mut ZGraphics,
+        texture_map: &std::collections::HashMap<u32, TextureHandle>,
+        bound_textures: &[u32; 4],
+    ) {
+        for (slot, &game_handle) in bound_textures.iter().enumerate() {
+            if game_handle == 0 {
+                graphics.bind_texture_slot(TextureHandle::INVALID, slot);
+            } else if let Some(&graphics_handle) = texture_map.get(&game_handle) {
+                graphics.bind_texture_slot(graphics_handle, slot);
+            } else {
+                graphics.bind_texture_slot(TextureHandle::INVALID, slot);
+            }
+        }
+    }
+
+    /// Run one game frame (update + render)
+    ///
+    /// Returns true if the game is still running, false if it should exit.
+    fn run_game_frame(&mut self) -> Result<bool, RuntimeError> {
+        // First, update input from InputManager
+        if let (Some(session), Some(input_manager)) = (&mut self.game_session, &self.input_manager) {
+            let console = session.runtime.console();
+
+            // Get input for each local player and set it on the game
+            // For now, we support 1 local player (keyboard/gamepad)
+            let raw_input = input_manager.get_player_input(0);
+            let z_input = console.map_input(&raw_input);
+
+            if let Some(game) = session.runtime.game_mut() {
+                game.set_input(0, z_input.to_input_state());
+            }
+        }
+
+        // Run the game frame (fixed timestep updates)
+        let session = self.game_session.as_mut().ok_or_else(|| {
+            RuntimeError("No game session".to_string())
+        })?;
+
+        let (ticks, _alpha) = session.runtime.frame().map_err(|e| {
+            RuntimeError(format!("Game frame error: {}", e))
+        })?;
+
+        if ticks > 0 {
+            tracing::trace!("Ran {} game ticks", ticks);
+        }
+
+        // Render the game (calls game's render() function)
+        session.runtime.render().map_err(|e| {
+            RuntimeError(format!("Game render error: {}", e))
+        })?;
+
+        // Check if game requested quit
+        if let Some(game) = session.runtime.game_mut() {
+            if game.state().quit_requested {
+                return Ok(false);
+            }
+        }
+
+        Ok(true)
+    }
+
+    /// Start a game by loading its WASM and initializing the runtime
+    fn start_game(&mut self, game_id: &str) -> Result<(), RuntimeError> {
+        // Find the game in local games
+        let game = self
+            .local_games
+            .iter()
+            .find(|g| g.id == game_id)
+            .ok_or_else(|| RuntimeError(format!("Game not found: {}", game_id)))?;
+
+        // Ensure WASM engine is available
+        let wasm_engine = self
+            .wasm_engine
+            .as_ref()
+            .ok_or_else(|| RuntimeError("WASM engine not initialized".to_string()))?;
+
+        // Load the ROM file
+        let rom_bytes = std::fs::read(&game.rom_path).map_err(|e| {
+            RuntimeError(format!("Failed to read ROM file: {}", e))
+        })?;
+
+        // Load the WASM module
+        let module = wasm_engine.load_module(&rom_bytes).map_err(|e| {
+            RuntimeError(format!("Failed to load WASM module: {}", e))
+        })?;
+
+        // Create a linker and register FFI functions
+        let mut linker = wasmtime::Linker::new(wasm_engine.engine());
+
+        // Register common FFI functions
+        emberware_core::ffi::register_common_ffi(&mut linker).map_err(|e| {
+            RuntimeError(format!("Failed to register common FFI: {}", e))
+        })?;
+
+        // Create the console instance
+        let console = EmberwareZ::new();
+
+        // Register console-specific FFI functions
+        console.register_ffi(&mut linker).map_err(|e| {
+            RuntimeError(format!("Failed to register Z FFI: {}", e))
+        })?;
+
+        // Create the game instance
+        let game_instance =
+            emberware_core::wasm::GameInstance::new(wasm_engine, &module, &linker)
+                .map_err(|e| RuntimeError(format!("Failed to instantiate game: {}", e)))?;
+
+        // Create the runtime
+        let mut runtime = Runtime::new(console);
+        runtime.load_game(game_instance);
+
+        // Initialize the game (calls game's init() function)
+        runtime.init_game().map_err(|e| {
+            RuntimeError(format!("Failed to initialize game: {}", e))
+        })?;
+
+        // Store the session with empty resource maps
+        self.game_session = Some(GameSession {
+            runtime,
+            texture_map: std::collections::HashMap::new(),
+            mesh_map: std::collections::HashMap::new(),
+        });
+
+        tracing::info!("Game started: {}", game_id);
+        Ok(())
     }
 
     /// Handle window resize
@@ -239,7 +671,16 @@ impl App {
             UiAction::PlayGame(game_id) => {
                 tracing::info!("Playing game: {}", game_id);
                 self.last_error = None; // Clear any previous error
-                self.mode = AppMode::Playing { game_id };
+
+                // Try to start the game
+                match self.start_game(&game_id) {
+                    Ok(()) => {
+                        self.mode = AppMode::Playing { game_id };
+                    }
+                    Err(e) => {
+                        self.handle_runtime_error(e);
+                    }
+                }
             }
             UiAction::DeleteGame(game_id) => {
                 tracing::info!("Deleting game: {}", game_id);
@@ -299,6 +740,32 @@ impl App {
             self.debug_stats.frame_times.pop_front();
         }
 
+        // Handle Playing mode: run game frame first
+        if matches!(self.mode, AppMode::Playing { .. }) {
+            // Run game frame (update + render)
+            let game_running = match self.run_game_frame() {
+                Ok(running) => {
+                    // Process any resources the game created
+                    self.process_pending_resources();
+                    // Execute draw commands to graphics
+                    self.execute_draw_commands();
+                    running
+                }
+                Err(e) => {
+                    self.handle_runtime_error(e);
+                    return;
+                }
+            };
+
+            // If game requested quit, return to library
+            if !game_running {
+                self.game_session = None;
+                self.mode = AppMode::Library;
+                self.local_games = library::get_local_games();
+                return;
+            }
+        }
+
         // Pre-collect values to avoid borrow conflicts
         let mode = self.mode.clone();
         let debug_overlay = self.debug_overlay;
@@ -338,6 +805,36 @@ impl App {
         };
 
         let view = surface_texture.texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        // If in Playing mode, render game first
+        if matches!(mode, AppMode::Playing { .. }) {
+            // Get camera matrices from game state
+            let (view_matrix, projection_matrix, clear_color) = {
+                if let Some(session) = &self.game_session {
+                    if let Some(game) = session.runtime.game() {
+                        let state = game.state();
+                        let clear = state.init_config.clear_color;
+                        let clear_r = ((clear >> 24) & 0xFF) as f32 / 255.0;
+                        let clear_g = ((clear >> 16) & 0xFF) as f32 / 255.0;
+                        let clear_b = ((clear >> 8) & 0xFF) as f32 / 255.0;
+                        let clear_a = (clear & 0xFF) as f32 / 255.0;
+                        let aspect_ratio = graphics.width() as f32 / graphics.height() as f32;
+                        (
+                            state.camera.view_matrix(),
+                            state.camera.projection_matrix(aspect_ratio),
+                            [clear_r, clear_g, clear_b, clear_a],
+                        )
+                    } else {
+                        (glam::Mat4::IDENTITY, glam::Mat4::IDENTITY, [0.1, 0.1, 0.1, 1.0])
+                    }
+                } else {
+                    (glam::Mat4::IDENTITY, glam::Mat4::IDENTITY, [0.1, 0.1, 0.1, 1.0])
+                }
+            };
+
+            // Render game frame
+            graphics.render_frame(&view, view_matrix, projection_matrix, clear_color);
+        }
 
         // Start egui frame
         let raw_input = egui_state.take_egui_input(&window);
@@ -386,11 +883,9 @@ impl App {
                     });
                 }
                 AppMode::Playing { ref game_id } => {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        ui.heading(format!("Playing: {}", game_id));
-                        ui.label("Game rendering not yet implemented");
-                        ui.label("Press ESC to return to library");
-                    });
+                    // Game is rendered before egui, so we don't need a central panel
+                    // Just show debug info if overlay is enabled
+                    let _ = game_id; // Used in debug overlay
                 }
             }
 
@@ -509,21 +1004,28 @@ impl App {
         };
 
         // Create render pass and render egui
-        // Note: egui-wgpu 0.30 expects RenderPass<'static> which is a known API issue.
-        // We use a scoped block and unsafe transmute to work around this.
+        // When in Playing mode, use Load to preserve game rendering.
+        // Otherwise, clear with a dark background color.
+        let is_playing = matches!(mode, AppMode::Playing { .. });
         {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            let load_op = if is_playing {
+                wgpu::LoadOp::Load
+            } else {
+                wgpu::LoadOp::Clear(wgpu::Color {
+                    r: 0.1,
+                    g: 0.1,
+                    b: 0.1,
+                    a: 1.0,
+                })
+            };
+
+            let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Egui Render Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
-                            g: 0.1,
-                            b: 0.1,
-                            a: 1.0,
-                        }),
+                        load: load_op,
                         store: wgpu::StoreOp::Store,
                     },
                 })],
@@ -532,14 +1034,12 @@ impl App {
                 occlusion_query_set: None,
             });
 
-            // SAFETY: The render_pass lives for this entire block. egui-wgpu 0.30 has
-            // an API bug requiring 'static lifetime, but the pass is only used within
-            // this scope. This was fixed in later versions.
-            let render_pass_static: &mut wgpu::RenderPass<'static> = unsafe {
-                std::mem::transmute(&mut render_pass)
-            };
+            // egui-wgpu 0.30 requires RenderPass<'static>. wgpu's forget_lifetime()
+            // safely removes the lifetime constraint, converting compile-time errors
+            // to runtime errors if the encoder is misused while the pass is active.
+            let mut render_pass_static = render_pass.forget_lifetime();
 
-            egui_renderer.render(render_pass_static, &tris, &screen_descriptor);
+            egui_renderer.render(&mut render_pass_static, &tris, &screen_descriptor);
         }
 
         // Submit commands
