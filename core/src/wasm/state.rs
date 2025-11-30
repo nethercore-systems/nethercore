@@ -1,17 +1,10 @@
 //! Game state types
 //!
-//! Provides the main game state structure that holds all per-game mutable state.
+//! Minimal core game state - console-agnostic.
 
-use glam::Mat4;
 use wasmtime::Memory;
 
-use super::camera::CameraState;
-use super::draw::{DrawCommand, PendingMesh, PendingTexture};
-use super::input::InputState;
-use super::render::{InitConfig, RenderState};
-
-/// Maximum transform stack depth
-pub const MAX_TRANSFORM_STACK: usize = 16;
+use crate::console::ConsoleInput;
 
 /// Maximum number of players
 pub const MAX_PLAYERS: usize = 4;
@@ -22,30 +15,18 @@ pub const MAX_SAVE_SLOTS: usize = 8;
 /// Maximum save data size per slot (64KB)
 pub const MAX_SAVE_SIZE: usize = 64 * 1024;
 
-/// Per-game state stored in the wasmtime Store
+/// Minimal core game state (console-agnostic)
 ///
-/// Contains all mutable state for a single game instance, including
-/// FFI context, input state, and render state.
+/// This struct contains ONLY core WASM execution state:
+/// - WASM memory
+/// - Game loop timing
+/// - Player input (generic over console type)
+/// - RNG
+/// - Save data
 ///
-/// # Resource Lifecycle
-///
-/// This struct owns transient game state. Resources created during a game session:
-///
-/// - **Pending Textures/Meshes**: Filled by FFI calls during `init()`, consumed by the
-///   graphics backend to create GPU resources. These Vec collections are cleared after
-///   the graphics backend processes them.
-///
-/// - **Draw Commands**: Filled during `render()`, consumed by graphics backend each frame,
-///   then cleared.
-///
-/// - **Save Data**: Persisted in memory during the session. Save/load operations are
-///   synchronous. Data is lost when GameState is dropped (persistent storage handled
-///   by the platform layer).
-///
-/// When a `GameInstance` is dropped, this `GameState` is dropped along with the
-/// wasmtime `Store`, releasing all memory. GPU resources (textures, meshes) live
-/// separately in the graphics backend and are managed by its cleanup strategy.
-pub struct GameState {
+/// Rendering state (camera, transforms, draw commands, etc.) is stored
+/// in console-specific state via the Console::State associated type.
+pub struct GameState<I: ConsoleInput> {
     /// WASM linear memory (set after instantiation)
     pub memory: Option<Memory>,
 
@@ -67,51 +48,38 @@ pub struct GameState {
     /// Whether we're currently in init phase
     pub in_init: bool,
 
-    /// Transform stack
-    pub transform_stack: Vec<Mat4>,
-
-    /// Current transform matrix
-    pub current_transform: Mat4,
-
-    /// Camera state
-    pub camera: CameraState,
-
     /// RNG state for deterministic random
     pub rng_state: u64,
 
-    /// Current render state
-    pub render_state: RenderState,
-
-    /// Init-time configuration (locked after init completes)
-    pub init_config: InitConfig,
-
     /// Input state for all players (previous and current frame)
-    pub input_prev: [InputState; MAX_PLAYERS],
-    pub input_curr: [InputState; MAX_PLAYERS],
+    pub input_prev: [I; MAX_PLAYERS],
+    pub input_curr: [I; MAX_PLAYERS],
 
     /// Save data slots (8 slots × 64KB max each)
     pub save_data: [Option<Vec<u8>>; MAX_SAVE_SLOTS],
 
     /// Quit requested by game
     pub quit_requested: bool,
-
-    /// Next texture handle to allocate
-    pub next_texture_handle: u32,
-
-    /// Pending texture loads (filled by FFI, consumed by graphics backend)
-    pub pending_textures: Vec<PendingTexture>,
-
-    /// Next mesh handle to allocate
-    pub next_mesh_handle: u32,
-
-    /// Pending mesh loads (filled by FFI, consumed by graphics backend)
-    pub pending_meshes: Vec<PendingMesh>,
-
-    /// Draw commands for current frame (filled by FFI, consumed by graphics backend)
-    pub draw_commands: Vec<DrawCommand>,
 }
 
-impl GameState {
+/// Wrapper combining core GameState and console-specific state
+pub struct GameStateWithConsole<I: ConsoleInput, S> {
+    /// Core game state (input, timing, RNG, saves)
+    pub game: GameState<I>,
+    /// Console-specific state (rendering, transforms, etc.)
+    pub console: S,
+}
+
+impl<I: ConsoleInput, S: Default> GameStateWithConsole<I, S> {
+    pub fn new() -> Self {
+        Self {
+            game: GameState::new(),
+            console: S::default(),
+        }
+    }
+}
+
+impl<I: ConsoleInput> GameState<I> {
     /// Create new game state with default values
     pub fn new() -> Self {
         Self {
@@ -122,21 +90,11 @@ impl GameState {
             player_count: 1,
             local_player_mask: 1,
             in_init: true,
-            transform_stack: Vec::with_capacity(MAX_TRANSFORM_STACK),
-            current_transform: Mat4::IDENTITY,
-            camera: CameraState::default(),
             rng_state: 0,
-            render_state: RenderState::default(),
-            init_config: InitConfig::default(),
-            input_prev: [InputState::default(); MAX_PLAYERS],
-            input_curr: [InputState::default(); MAX_PLAYERS],
+            input_prev: [I::default(); MAX_PLAYERS],
+            input_curr: [I::default(); MAX_PLAYERS],
             save_data: Default::default(),
             quit_requested: false,
-            next_texture_handle: 1, // 0 is reserved for invalid/unbound
-            pending_textures: Vec::new(),
-            next_mesh_handle: 1, // 0 is reserved for invalid
-            pending_meshes: Vec::new(),
-            draw_commands: Vec::new(),
         }
     }
 
@@ -158,53 +116,8 @@ impl GameState {
     }
 }
 
-impl Default for GameState {
+impl<I: ConsoleInput> Default for GameState<I> {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_game_state_new() {
-        let state = GameState::new();
-        assert!(state.memory.is_none());
-        assert_eq!(state.tick_count, 0);
-        assert_eq!(state.elapsed_time, 0.0);
-        assert_eq!(state.delta_time, 0.0);
-        assert_eq!(state.player_count, 1);
-        assert_eq!(state.local_player_mask, 1);
-        assert!(state.in_init);
-        assert!(state.transform_stack.is_empty());
-        assert_eq!(state.current_transform, Mat4::IDENTITY);
-        assert!(!state.quit_requested);
-        assert_eq!(state.next_texture_handle, 1);
-        assert_eq!(state.next_mesh_handle, 1);
-    }
-
-    #[test]
-    fn test_game_state_default() {
-        let state1 = GameState::new();
-        let state2 = GameState::default();
-        // Both should have same initial values
-        assert_eq!(state1.tick_count, state2.tick_count);
-        assert_eq!(state1.player_count, state2.player_count);
-    }
-
-    #[test]
-    fn test_game_state_transform_stack_capacity() {
-        let state = GameState::new();
-        assert!(state.transform_stack.capacity() >= MAX_TRANSFORM_STACK);
-    }
-
-    #[test]
-    fn test_constants() {
-        assert_eq!(MAX_TRANSFORM_STACK, 16);
-        assert_eq!(MAX_PLAYERS, 4);
-        assert_eq!(MAX_SAVE_SLOTS, 8);
-        assert_eq!(MAX_SAVE_SIZE, 64 * 1024);
     }
 }

@@ -4,33 +4,24 @@
 //!
 //! # Module Organization
 //!
-//! - [`camera`] - Camera state with view/projection matrix calculations
-//! - [`draw`] - Draw commands and pending resource structures
-//! - [`input`] - Player input state
-//! - [`render`] - Render state, lighting, and init-time configuration
-//! - [`state`] - Main game state structure
+//! - [`state`] - Core game state structure (console-agnostic)
 //!
 //! # Key Types
 //!
 //! - [`WasmEngine`] - Shared WASM engine (one per application)
 //! - [`GameInstance`] - Loaded and instantiated game
-//! - [`GameState`] - Per-game mutable state stored in wasmtime Store
+//! - [`GameState`] - Minimal core state (input, timing, RNG, saves)
+//! - [`GameStateWithConsole`] - Wrapper combining core + console state
 
-pub mod camera;
-pub mod draw;
-pub mod input;
-pub mod render;
 pub mod state;
 
 use anyhow::{Context, Result};
 use wasmtime::{Engine, Instance, Linker, Module, Store, TypedFunc};
 
-// Re-export all public types from submodules
-pub use camera::{CameraState, DEFAULT_CAMERA_FOV};
-pub use draw::{DrawCommand, PendingMesh, PendingTexture};
-pub use input::InputState;
-pub use render::{InitConfig, LightState, RenderState, MAX_BONES};
-pub use state::{GameState, MAX_PLAYERS, MAX_SAVE_SIZE, MAX_SAVE_SLOTS, MAX_TRANSFORM_STACK};
+use crate::console::ConsoleInput;
+
+// Re-export public types from state module
+pub use state::{GameState, GameStateWithConsole, MAX_PLAYERS, MAX_SAVE_SIZE, MAX_SAVE_SLOTS};
 
 /// Shared WASM engine (one per application)
 pub struct WasmEngine {
@@ -61,8 +52,9 @@ impl WasmEngine {
 // returns Result<Self> which properly propagates initialization errors.
 
 /// A loaded and instantiated game
-pub struct GameInstance {
-    store: Store<GameState>,
+/// A loaded and instantiated game
+pub struct GameInstance<I: ConsoleInput, S: Send + Default + 'static> {
+    store: Store<GameStateWithConsole<I, S>>,
     /// The WASM instance.
     /// Not directly used after initialization, but must be kept alive to maintain
     /// the lifetime of exported functions and memory references.
@@ -73,17 +65,21 @@ pub struct GameInstance {
     render_fn: Option<TypedFunc<(), ()>>,
 }
 
-impl GameInstance {
+impl<I: ConsoleInput, S: Send + Default + 'static> GameInstance<I, S> {
     /// Create a new game instance from a module
-    pub fn new(engine: &WasmEngine, module: &Module, linker: &Linker<GameState>) -> Result<Self> {
-        let mut store = Store::new(engine.engine(), GameState::new());
+    pub fn new(
+        engine: &WasmEngine,
+        module: &Module,
+        linker: &Linker<GameStateWithConsole<I, S>>,
+    ) -> Result<Self> {
+        let mut store = Store::new(engine.engine(), GameStateWithConsole::new());
         let instance = linker
             .instantiate(&mut store, module)
             .context("Failed to instantiate WASM module")?;
 
         // Get the memory export
         if let Some(memory) = instance.get_memory(&mut store, "memory") {
-            store.data_mut().memory = Some(memory);
+            store.data_mut().game.memory = Some(memory);
         }
 
         // Look up exported functions
@@ -102,19 +98,19 @@ impl GameInstance {
 
     /// Call the game's init function
     pub fn init(&mut self) -> Result<()> {
-        self.store.data_mut().in_init = true;
+        self.store.data_mut().game.in_init = true;
         if let Some(init) = &self.init_fn {
             init.call(&mut self.store, ())
                 .context("Failed to call init()")?;
         }
-        self.store.data_mut().in_init = false;
+        self.store.data_mut().game.in_init = false;
         Ok(())
     }
 
     /// Call the game's update function
     pub fn update(&mut self, delta_time: f32) -> Result<()> {
         {
-            let state = self.store.data_mut();
+            let state = &mut self.store.data_mut().game;
             state.delta_time = delta_time;
             state.elapsed_time += delta_time;
             state.tick_count += 1;
@@ -125,7 +121,7 @@ impl GameInstance {
                 .context("Failed to call update()")?;
         }
         // Rotate input state
-        let state = self.store.data_mut();
+        let state = &mut self.store.data_mut().game;
         state.input_prev = state.input_curr;
         Ok(())
     }
@@ -144,8 +140,17 @@ impl GameInstance {
     ///
     /// This snapshots the entire WASM linear memory transparently. Games do not need
     /// to implement manual serialization - the entire memory is saved for rollback.
+    /// Save entire WASM linear memory to a vector (automatic snapshotting)
+    ///
+    /// This snapshots the entire WASM linear memory transparently. Games do not need
+    /// to implement manual serialization - the entire memory is saved for rollback.
     pub fn save_state(&mut self) -> Result<Vec<u8>> {
-        let memory = self.store.data().memory.context("No memory export found")?;
+        let memory = self
+            .store
+            .data()
+            .game
+            .memory
+            .context("No memory export found")?;
         let mem_data = memory.data(&self.store);
         Ok(mem_data.to_vec())
     }
@@ -155,7 +160,12 @@ impl GameInstance {
     /// Restores the entire WASM linear memory from a previous snapshot.
     /// This is the inverse of `save_state()`.
     pub fn load_state(&mut self, snapshot: &[u8]) -> Result<()> {
-        let memory = self.store.data().memory.context("No memory export found")?;
+        let memory = self
+            .store
+            .data()
+            .game
+            .memory
+            .context("No memory export found")?;
         let mem_data = memory.data_mut(&mut self.store);
         anyhow::ensure!(
             snapshot.len() == mem_data.len(),
@@ -168,29 +178,39 @@ impl GameInstance {
     }
 
     /// Get mutable reference to the store
-    pub fn store_mut(&mut self) -> &mut Store<GameState> {
+    pub fn store_mut(&mut self) -> &mut Store<GameStateWithConsole<I, S>> {
         &mut self.store
     }
 
     /// Get reference to the store
-    pub fn store(&self) -> &Store<GameState> {
+    pub fn store(&self) -> &Store<GameStateWithConsole<I, S>> {
         &self.store
     }
 
     /// Get mutable reference to game state
-    pub fn state_mut(&mut self) -> &mut GameState {
-        self.store.data_mut()
+    pub fn state_mut(&mut self) -> &mut GameState<I> {
+        &mut self.store.data_mut().game
     }
 
     /// Get reference to game state
-    pub fn state(&self) -> &GameState {
-        self.store.data()
+    pub fn state(&self) -> &GameState<I> {
+        &self.store.data().game
+    }
+
+    /// Get mutable reference to console-specific state
+    pub fn console_state_mut(&mut self) -> &mut S {
+        &mut self.store.data_mut().console
+    }
+
+    /// Get reference to console-specific state
+    pub fn console_state(&self) -> &S {
+        &self.store.data().console
     }
 
     /// Set input for a player
-    pub fn set_input(&mut self, player: usize, input: InputState) {
+    pub fn set_input(&mut self, player: usize, input: I) {
         if player < MAX_PLAYERS {
-            self.store.data_mut().input_curr[player] = input;
+            self.store.data_mut().game.input_curr[player] = input;
         }
     }
 
@@ -213,7 +233,7 @@ impl GameInstance {
     /// game.configure_session(4, 0b0011);
     /// ```
     pub fn configure_session(&mut self, player_count: u32, local_player_mask: u32) {
-        let state = self.store.data_mut();
+        let state = &mut self.store.data_mut().game;
         state.player_count = player_count.min(MAX_PLAYERS as u32);
         state.local_player_mask = local_player_mask;
     }
@@ -224,6 +244,15 @@ mod tests {
     use super::*;
     use glam::{Mat4, Vec3};
     use std::f32::consts::PI;
+
+    use bytemuck::{Pod, Zeroable};
+
+    #[repr(C)]
+    #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Pod, Zeroable)]
+    struct TestInput {
+        buttons: u16,
+    }
+    impl ConsoleInput for TestInput {}
 
     // ============================================================================
     // WasmEngine Tests
@@ -272,7 +301,7 @@ mod tests {
         let module = engine.load_module(&wasm).unwrap();
         let linker = Linker::new(engine.engine());
 
-        let result = GameInstance::new(&engine, &module, &linker);
+        let result = GameInstance::<TestInput, ()>::new(&engine, &module, &linker);
         assert!(result.is_ok());
     }
 
@@ -291,7 +320,7 @@ mod tests {
         let module = engine.load_module(&wasm).unwrap();
         let linker = Linker::new(engine.engine());
 
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
         let result = game.init();
         assert!(result.is_ok());
         // in_init should be false after init completes
@@ -313,7 +342,7 @@ mod tests {
         let module = engine.load_module(&wasm).unwrap();
         let linker = Linker::new(engine.engine());
 
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
         let delta = 1.0 / 60.0;
         let result = game.update(delta);
         assert!(result.is_ok());
@@ -336,7 +365,7 @@ mod tests {
         let module = engine.load_module(&wasm).unwrap();
         let linker = Linker::new(engine.engine());
 
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
         for i in 1..=5 {
             game.update(1.0 / 60.0).unwrap();
@@ -359,7 +388,7 @@ mod tests {
         let module = engine.load_module(&wasm).unwrap();
         let linker = Linker::new(engine.engine());
 
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
         let delta = 0.016; // ~60fps
 
         game.update(delta).unwrap();
@@ -384,7 +413,7 @@ mod tests {
         let module = engine.load_module(&wasm).unwrap();
         let linker = Linker::new(engine.engine());
 
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
         let result = game.render();
         assert!(result.is_ok());
     }
@@ -403,22 +432,12 @@ mod tests {
         let module = engine.load_module(&wasm).unwrap();
         let linker = Linker::new(engine.engine());
 
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
-        let input = InputState {
-            buttons: 0x00FF,
-            left_stick_x: 100,
-            left_stick_y: -50,
-            right_stick_x: 25,
-            right_stick_y: -25,
-            left_trigger: 200,
-            right_trigger: 100,
-        };
+        let input = TestInput { buttons: 0x00FF };
 
         game.set_input(0, input);
         assert_eq!(game.state().input_curr[0].buttons, 0x00FF);
-        assert_eq!(game.state().input_curr[0].left_stick_x, 100);
-        assert_eq!(game.state().input_curr[0].left_trigger, 200);
     }
 
     #[test]
@@ -435,10 +454,10 @@ mod tests {
         let module = engine.load_module(&wasm).unwrap();
         let linker = Linker::new(engine.engine());
 
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
         // Should not panic for invalid player index
-        game.set_input(10, InputState::default());
+        game.set_input(10, TestInput::default());
     }
 
     #[test]
@@ -456,12 +475,11 @@ mod tests {
         let module = engine.load_module(&wasm).unwrap();
         let linker = Linker::new(engine.engine());
 
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
         // Set input for player 0
-        let input1 = InputState {
+        let input1 = TestInput {
             buttons: 0x0001,
-            ..Default::default()
         };
         game.set_input(0, input1);
 
@@ -472,9 +490,8 @@ mod tests {
         assert_eq!(game.state().input_prev[0].buttons, 0x0001);
 
         // Set new input
-        let input2 = InputState {
+        let input2 = TestInput {
             buttons: 0x0002,
-            ..Default::default()
         };
         game.set_input(0, input2);
 
@@ -496,7 +513,7 @@ mod tests {
         let module = engine.load_module(&wasm).unwrap();
         let linker = Linker::new(engine.engine());
 
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
         // Test mutable access
         game.state_mut().player_count = 4;

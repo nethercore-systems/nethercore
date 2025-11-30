@@ -8,7 +8,7 @@ use winit::window::Window;
 use crate::console::{
     Audio, Console, ConsoleInput, ConsoleSpecs, Graphics, RawInput, SoundHandle,
 };
-use crate::wasm::{GameState, InputState};
+use crate::wasm::{GameStateWithConsole};
 
 // ============================================================================
 // Test Console Implementation
@@ -62,21 +62,13 @@ pub struct TestInput {
 // All bit patterns are valid for these types, satisfying Pod and Zeroable requirements.
 unsafe impl Pod for TestInput {}
 unsafe impl Zeroable for TestInput {}
-impl ConsoleInput for TestInput {
-    fn to_input_state(&self) -> InputState {
-        InputState {
-            buttons: self.buttons,
-            left_stick_x: self.x,
-            left_stick_y: self.y,
-            ..Default::default()
-        }
-    }
-}
+impl ConsoleInput for TestInput {}
 
 impl Console for TestConsole {
     type Graphics = TestGraphics;
     type Audio = TestAudio;
     type Input = TestInput;
+    type State = ();
 
     fn specs(&self) -> &'static ConsoleSpecs {
         &ConsoleSpecs {
@@ -92,7 +84,10 @@ impl Console for TestConsole {
         }
     }
 
-    fn register_ffi(&self, _linker: &mut Linker<GameState>) -> anyhow::Result<()> {
+    fn register_ffi(
+        &self,
+        _linker: &mut Linker<GameStateWithConsole<TestInput, ()>>,
+    ) -> anyhow::Result<()> {
         Ok(())
     }
 

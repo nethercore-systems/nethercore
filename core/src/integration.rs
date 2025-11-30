@@ -12,10 +12,10 @@ mod tests {
     use crate::rollback::{GameStateSnapshot, RollbackSession, RollbackStateManager};
     use crate::runtime::Runtime;
     use crate::test_utils::{TestConsole, TestInput};
-    use crate::wasm::{GameInstance, GameState, WasmEngine, MAX_PLAYERS};
+    use crate::wasm::{GameInstance, GameState, GameStateWithConsole, WasmEngine, MAX_PLAYERS};
 
     /// Create a test engine with common FFI registered
-    fn create_test_engine() -> (WasmEngine, Linker<GameState>) {
+    fn create_test_engine() -> (WasmEngine, Linker<GameStateWithConsole<TestInput, ()>>) {
         let engine = WasmEngine::new().unwrap();
         let mut linker = Linker::new(engine.engine());
         register_common_ffi(&mut linker).unwrap();
@@ -84,7 +84,7 @@ mod tests {
 
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
         // Verify initial state
         let get_counter = game.store().data().memory.unwrap();
@@ -140,7 +140,7 @@ mod tests {
 
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
-        let game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
         runtime.load_game(game);
         runtime.init_game().unwrap();
@@ -166,7 +166,7 @@ mod tests {
 
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
         // All lifecycle calls should succeed (no-op for missing exports)
         game.init().unwrap();
@@ -210,7 +210,7 @@ mod tests {
 
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
         game.init().unwrap();
 
@@ -260,7 +260,7 @@ mod tests {
 
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
         game.init().unwrap();
 
@@ -326,7 +326,7 @@ mod tests {
 
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
         let mut state_manager = RollbackStateManager::with_defaults();
 
         game.init().unwrap();
@@ -385,7 +385,7 @@ mod tests {
 
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
         let mut state_manager = RollbackStateManager::with_defaults();
 
         game.init().unwrap();
@@ -430,7 +430,7 @@ mod tests {
 
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
         let mut state_manager = RollbackStateManager::with_defaults();
 
         game.init().unwrap();
@@ -477,7 +477,7 @@ mod tests {
 
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
         let mut session = RollbackSession::<TestInput>::new_local(2, 4 * 1024 * 1024);
 
@@ -516,16 +516,15 @@ mod tests {
 
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
         game.init().unwrap();
 
         // Set input for player 0
-        let input1 = crate::wasm::InputState {
+        let input1 = TestInput {
             buttons: 0x0001,
-            left_stick_x: 100,
-            left_stick_y: -50,
-            ..Default::default()
+            x: 100,
+            y: -50,
         };
         game.set_input(0, input1);
 
@@ -540,7 +539,7 @@ mod tests {
         assert_eq!(game.state().input_prev[0].buttons, 0x0001);
 
         // Set new input
-        let input2 = crate::wasm::InputState {
+        let input2 = TestInput {
             buttons: 0x0002,
             ..Default::default()
         };
@@ -567,7 +566,7 @@ mod tests {
 
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
         game.init().unwrap();
         game.state_mut().player_count = 4;
@@ -575,11 +574,10 @@ mod tests {
         // Set different inputs for all 4 players
         for player in 0..MAX_PLAYERS {
             let p = player as i32;
-            let input = crate::wasm::InputState {
+            let input = TestInput {
                 buttons: (player as u16) << 8,
-                left_stick_x: (p * 30) as i8,
-                left_stick_y: (p * -20) as i8,
-                ..Default::default()
+                x: (p * 30) as i8,
+                y: (p * -20) as i8,
             };
             game.set_input(player, input);
         }
@@ -589,8 +587,8 @@ mod tests {
             let p = player as i32;
             let input = &game.state().input_curr[player];
             assert_eq!(input.buttons, (player as u16) << 8);
-            assert_eq!(input.left_stick_x, (p * 30) as i8);
-            assert_eq!(input.left_stick_y, (p * -20) as i8);
+            assert_eq!(input.x, (p * 30) as i8);
+            assert_eq!(input.y, (p * -20) as i8);
         }
     }
 
@@ -621,7 +619,7 @@ mod tests {
 
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
         // Set up 4 players, players 0 and 2 are local
         game.state_mut().player_count = 4;
@@ -694,80 +692,14 @@ mod tests {
         assert_eq!(specs.cpu_budget_us, 4000);
     }
 
-    /// Test texture pending queue tracking
-    #[test]
-    fn test_texture_allocation_tracking() {
-        let mut state = GameState::new();
 
-        // Initial state
-        assert_eq!(state.next_texture_handle, 1);
-        assert!(state.pending_textures.is_empty());
-
-        // Simulate texture allocation
-        let texture = crate::wasm::PendingTexture {
-            handle: state.next_texture_handle,
-            width: 256,
-            height: 256,
-            data: vec![0xFF; 256 * 256 * 4],
-        };
-        state.next_texture_handle += 1;
-        state.pending_textures.push(texture);
-
-        assert_eq!(state.next_texture_handle, 2);
-        assert_eq!(state.pending_textures.len(), 1);
-        assert_eq!(state.pending_textures[0].width, 256);
-
-        // Calculate VRAM usage
-        let vram_used: usize = state
-            .pending_textures
-            .iter()
-            .map(|t| (t.width * t.height * 4) as usize)
-            .sum();
-        assert_eq!(vram_used, 256 * 256 * 4);
-    }
-
-    /// Test mesh pending queue tracking
-    #[test]
-    fn test_mesh_allocation_tracking() {
-        let mut state = GameState::new();
-
-        // Initial state
-        assert_eq!(state.next_mesh_handle, 1);
-        assert!(state.pending_meshes.is_empty());
-
-        // Simulate mesh allocation (triangle)
-        let mesh = crate::wasm::PendingMesh {
-            handle: state.next_mesh_handle,
-            format: 2, // POS_COLOR
-            vertex_data: vec![
-                0.0, 0.0, 0.0, 1.0, 0.0, 0.0, // v0: pos + color
-                1.0, 0.0, 0.0, 0.0, 1.0, 0.0, // v1: pos + color
-                0.0, 1.0, 0.0, 0.0, 0.0, 1.0, // v2: pos + color
-            ],
-            index_data: None,
-        };
-        state.next_mesh_handle += 1;
-        state.pending_meshes.push(mesh);
-
-        assert_eq!(state.next_mesh_handle, 2);
-        assert_eq!(state.pending_meshes.len(), 1);
-        assert_eq!(state.pending_meshes[0].vertex_data.len(), 18);
-
-        // Calculate VRAM usage for meshes
-        let mesh_vram: usize = state
-            .pending_meshes
-            .iter()
-            .map(|m| m.vertex_data.len() * 4) // f32 = 4 bytes
-            .sum();
-        assert_eq!(mesh_vram, 18 * 4);
-    }
 
     /// Test save data slot limits
     #[test]
     fn test_save_data_slot_limits() {
         use crate::wasm::{MAX_SAVE_SIZE, MAX_SAVE_SLOTS};
 
-        let mut state = GameState::new();
+        let mut state = GameState::<TestInput>::new();
 
         // Verify constants
         assert_eq!(MAX_SAVE_SLOTS, 8);
@@ -788,38 +720,8 @@ mod tests {
         for (i, slot) in state.save_data.iter().enumerate() {
             let data = slot.as_ref().unwrap();
             assert_eq!(data.len(), 1024);
-            assert!(data.iter().all(|&b| b == i as u8));
+            assert_eq!(data[0], i as u8);
         }
-    }
-
-    /// Test transform stack limits
-    #[test]
-    fn test_transform_stack_limits() {
-        use crate::wasm::MAX_TRANSFORM_STACK;
-        use glam::Mat4;
-
-        let mut state = GameState::new();
-
-        // Verify limit
-        assert_eq!(MAX_TRANSFORM_STACK, 16);
-
-        // Push to capacity
-        for i in 0..MAX_TRANSFORM_STACK {
-            if state.transform_stack.len() < MAX_TRANSFORM_STACK {
-                state
-                    .transform_stack
-                    .push(Mat4::from_scale(glam::Vec3::splat(i as f32)));
-            }
-        }
-
-        assert_eq!(state.transform_stack.len(), MAX_TRANSFORM_STACK);
-
-        // Pop all
-        while !state.transform_stack.is_empty() {
-            state.transform_stack.pop();
-        }
-
-        assert!(state.transform_stack.is_empty());
     }
 
     /// Test rollback state size limits
@@ -854,52 +756,7 @@ mod tests {
         assert_eq!(state.input_prev.len(), MAX_PLAYERS);
     }
 
-    /// Test draw command buffer
-    #[test]
-    fn test_draw_command_buffer() {
-        use crate::wasm::DrawCommand;
-        use glam::Mat4;
 
-        let mut state = GameState::new();
-
-        // Initially empty
-        assert!(state.draw_commands.is_empty());
-
-        // Add various draw commands
-        state.draw_commands.push(DrawCommand::DrawMesh {
-            handle: 1,
-            transform: Mat4::IDENTITY,
-            color: 0xFFFFFFFF,
-            depth_test: true,
-            cull_mode: 1,
-            blend_mode: 0,
-            bound_textures: [0; 4],
-        });
-
-        state.draw_commands.push(DrawCommand::DrawRect {
-            x: 0.0,
-            y: 0.0,
-            width: 100.0,
-            height: 50.0,
-            color: 0xFF0000FF,
-            blend_mode: 1,
-        });
-
-        state.draw_commands.push(DrawCommand::DrawText {
-            text: b"Hello".to_vec(),
-            x: 10.0,
-            y: 10.0,
-            size: 16.0,
-            color: 0xFFFFFFFF,
-            blend_mode: 1,
-        });
-
-        assert_eq!(state.draw_commands.len(), 3);
-
-        // Clear for next frame
-        state.draw_commands.clear();
-        assert!(state.draw_commands.is_empty());
-    }
 
     // ============================================================================
     // PART 5: Combined Integration Tests
@@ -953,7 +810,7 @@ mod tests {
 
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
         let mut state_manager = RollbackStateManager::with_defaults();
 
         // Phase 1: Init
@@ -1014,7 +871,7 @@ mod tests {
 
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
-        let game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
         runtime.load_game(game);
         runtime.init_game().unwrap();

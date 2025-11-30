@@ -97,6 +97,80 @@ The `Runtime<C: Console>` handles:
 
 ## TODO
 
+### **[FEATURE] Update PBR shaders to use camera/lights/material uniforms**
+
+**Current State:** Uniform buffers are created and uploaded to GPU, but shaders don't bind or use them yet.
+
+**What's Working:**
+- ✅ `camera_buffer`, `lights_buffer`, `material_buffer` created in ZGraphics
+- ✅ `update_scene_uniforms()` uploads data to GPU every frame
+- ✅ Getter methods available: `camera_buffer()`, `lights_buffer()`, `material_buffer()`
+
+**What's Missing:**
+- ❌ Shaders don't have bind group entries for these buffers
+- ❌ Shader code doesn't read from these uniforms
+- ❌ PBR and Hybrid modes (Mode 2 & 3) can't access lighting data
+
+**Implementation Steps:**
+1. Update pipeline creation to add bind group layout entries for camera/lights/material buffers
+2. Update `mode2_pbr.wgsl` shader:
+   - Add bind group entries for camera, lights, material buffers
+   - Use camera position for specular calculations
+   - Use light data instead of hardcoded values
+   - Use material properties for metallic/roughness/emissive
+3. Update `mode3_hybrid.wgsl` shader similarly
+4. Test with a game that uses `light_set()`, `material_metallic()`, `material_roughness()`, `material_emissive()`
+
+**Files to Modify:**
+- `emberware-z/src/graphics/pipeline.rs` - Add bind group layout entries
+- `emberware-z/shaders/mode2_pbr.wgsl` - Add uniform bindings and use them
+- `emberware-z/shaders/mode3_hybrid.wgsl` - Add uniform bindings and use them
+
+**Impact:** HIGH - Required for PBR rendering to work with dynamic lighting
+
+---
+
+### **[REFACTOR] Simplify execute_draw_commands architecture**
+
+**Current Problem:** Redundant translation layer
+
+**Current Flow:**
+1. WASM FFI → ZFFIState (creates `ZDrawCommand` structs)
+2. `execute_draw_commands()` → unpacks each `ZDrawCommand` → calls individual ZGraphics setters
+3. ZGraphics → re-packs into command buffer
+
+**Why This Is Bad:**
+- Unnecessary unpacking/repacking of the same data
+- More code to maintain
+- Potential performance overhead
+
+**Proposed Fix:**
+```rust
+// Instead of unpacking in app.rs:
+impl ZGraphics {
+    pub fn render_frame(&mut self, z_state: &mut ZFFIState) {
+        // Directly consume draw commands without unpacking/repacking
+        for cmd in &z_state.draw_commands {
+            self.execute_draw_command(cmd);
+        }
+        z_state.clear_frame();
+    }
+}
+```
+
+**Benefits:**
+- Simpler code (remove entire execute_draw_commands function)
+- Better performance (no intermediate translations)
+- Clearer architecture (ZGraphics directly consumes ZFFIState)
+
+**Files to Modify:**
+- `emberware-z/src/app.rs` - Replace execute_draw_commands() with graphics.render_frame(&mut z_state)
+- `emberware-z/src/graphics/mod.rs` - Add render_frame() and execute_draw_command() methods
+
+**Impact:** MEDIUM - Cleaner architecture, easier maintenance
+
+---
+
 ### Core Structs are specific to EmberwareZ
 - EmberwareZ Specific rendering data exists in the wasm/render.rs file
 - In fact, the wasm/input.rs is also tied.
@@ -1152,6 +1226,37 @@ KEYCODE_TO_BUTTON.get(&(keycode as u32)).copied()
 **Implementation in progress...**
 
 ## Done
+
+### **[FEATURE] Wire up camera and light uniforms to GPU**
+**Status:** Completed ✅
+
+**What Was Implemented:**
+- ✅ Added `CameraUniforms`, `LightUniform`, `LightsUniforms`, and `MaterialUniforms` structs to `render_state.rs`
+- ✅ Added `camera_buffer`, `lights_buffer`, and `material_buffer` to ZGraphics
+- ✅ Initialized all three uniform buffers in `ZGraphics::new()`
+- ✅ Implemented `update_scene_uniforms()` method that:
+  - Computes view and projection matrices from camera state
+  - Uploads camera position (for specular calculations in PBR)
+  - Uploads 4 directional lights (direction, color, intensity, enabled flag)
+  - Uploads material properties (metallic, roughness, emissive)
+- ✅ Updated `app.rs` to call `update_scene_uniforms()` before processing draw commands
+- ✅ All fields properly initialized with bytemuck Pod/Zeroable traits for GPU upload
+
+**Files Modified:**
+- `emberware-z/src/graphics/render_state.rs` - Added uniform structs (CameraUniforms, LightUniform, LightsUniforms, MaterialUniforms)
+- `emberware-z/src/graphics/mod.rs` - Added buffers, initialization, update_scene_uniforms() method, and buffer getters
+- `emberware-z/src/app.rs` - Added call to update_scene_uniforms() before execute_draw_commands()
+
+**Impact:**
+- Camera position, view, and projection are now uploaded to GPU every frame
+- Lights (4 directional) are now uploaded to GPU every frame
+- Material properties (metallic, roughness, emissive) are now uploaded to GPU every frame
+- PBR and Hybrid render modes (Mode 2 & 3) can now access lighting data
+- **Note:** Shaders still need to be updated to bind and use these buffers (future task)
+
+**Compilation:** ✅ Successful with only harmless dead code warnings
+
+---
 
 ### **[FEATURE] Implement matcap blend modes** (Partial - FFI only)
 

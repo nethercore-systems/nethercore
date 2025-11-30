@@ -2,6 +2,7 @@
 //!
 //! Provides state snapshot and buffer pool functionality for GGRS rollback.
 
+use crate::console::ConsoleInput;
 use crate::wasm::GameInstance;
 
 use super::config::MAX_STATE_SIZE;
@@ -201,9 +202,9 @@ impl RollbackStateManager {
     ///
     /// Calls `game.save_state()` to snapshot the entire WASM linear memory.
     /// Returns a `GameStateSnapshot` with checksum.
-    pub fn save_state(
+    pub fn save_state<I: ConsoleInput, S: Send + Default + 'static>(
         &mut self,
-        game: &mut GameInstance,
+        game: &mut GameInstance<I, S>,
         frame: i32,
     ) -> Result<GameStateSnapshot, SaveStateError> {
         // Snapshot entire WASM linear memory
@@ -225,9 +226,9 @@ impl RollbackStateManager {
     /// Load a game state from a snapshot
     ///
     /// Calls `game.load_state()` to restore the game to the saved state.
-    pub fn load_state(
+    pub fn load_state<I: ConsoleInput, S: Send + Default + 'static>(
         &mut self,
-        game: &mut GameInstance,
+        game: &mut GameInstance<I, S>,
         snapshot: &GameStateSnapshot,
     ) -> Result<(), LoadStateError> {
         if snapshot.is_empty() {

@@ -13,6 +13,7 @@ mod graphics;
 mod input;
 mod library;
 mod shader_gen;
+mod state;
 mod ui;
 
 fn main() {

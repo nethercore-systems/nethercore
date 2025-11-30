@@ -8,7 +8,9 @@
 use tracing::warn;
 use wasmtime::Caller;
 
-use emberware_core::wasm::{GameState, MAX_PLAYERS};
+use emberware_core::wasm::{GameStateWithConsole, MAX_PLAYERS};
+use crate::console::ZInput;
+use crate::state::ZFFIState;
 
 // ============================================================================
 // Button Functions
@@ -22,8 +24,8 @@ use emberware_core::wasm::{GameState, MAX_PLAYERS};
 ///
 /// Returns 1 if held, 0 otherwise.
 #[inline]
-pub fn button_held(caller: Caller<'_, GameState>, player: u32, button: u32) -> u32 {
-    let state = caller.data();
+pub fn button_held(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, player: u32, button: u32) -> u32 {
+    let state = &caller.data().game;
     let player = player as usize;
 
     if player >= MAX_PLAYERS {
@@ -56,8 +58,8 @@ pub fn button_held(caller: Caller<'_, GameState>, player: u32, button: u32) -> u
 ///
 /// Returns 1 if just pressed (not held last tick, held this tick), 0 otherwise.
 #[inline]
-pub fn button_pressed(caller: Caller<'_, GameState>, player: u32, button: u32) -> u32 {
-    let state = caller.data();
+pub fn button_pressed(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, player: u32, button: u32) -> u32 {
+    let state = &caller.data().game;
     let player = player as usize;
 
     if player >= MAX_PLAYERS {
@@ -93,8 +95,8 @@ pub fn button_pressed(caller: Caller<'_, GameState>, player: u32, button: u32) -
 ///
 /// Returns 1 if just released (held last tick, not held this tick), 0 otherwise.
 #[inline]
-pub fn button_released(caller: Caller<'_, GameState>, player: u32, button: u32) -> u32 {
-    let state = caller.data();
+pub fn button_released(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, player: u32, button: u32) -> u32 {
+    let state = &caller.data().game;
     let player = player as usize;
 
     if player >= MAX_PLAYERS {
@@ -129,8 +131,8 @@ pub fn button_released(caller: Caller<'_, GameState>, player: u32, button: u32) 
 ///
 /// Returns a bitmask where each bit represents a button state.
 #[inline]
-pub fn buttons_held(caller: Caller<'_, GameState>, player: u32) -> u32 {
-    let state = caller.data();
+pub fn buttons_held(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, player: u32) -> u32 {
+    let state = &caller.data().game;
     let player = player as usize;
 
     if player >= MAX_PLAYERS {
@@ -152,8 +154,8 @@ pub fn buttons_held(caller: Caller<'_, GameState>, player: u32) -> u32 {
 ///
 /// Returns a bitmask of buttons that are held now but were not held last tick.
 #[inline]
-pub fn buttons_pressed(caller: Caller<'_, GameState>, player: u32) -> u32 {
-    let state = caller.data();
+pub fn buttons_pressed(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, player: u32) -> u32 {
+    let state = &caller.data().game;
     let player = player as usize;
 
     if player >= MAX_PLAYERS {
@@ -179,8 +181,8 @@ pub fn buttons_pressed(caller: Caller<'_, GameState>, player: u32) -> u32 {
 ///
 /// Returns a bitmask of buttons that were held last tick but are not held now.
 #[inline]
-pub fn buttons_released(caller: Caller<'_, GameState>, player: u32) -> u32 {
-    let state = caller.data();
+pub fn buttons_released(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, player: u32) -> u32 {
+    let state = &caller.data().game;
     let player = player as usize;
 
     if player >= MAX_PLAYERS {
@@ -210,8 +212,8 @@ pub fn buttons_released(caller: Caller<'_, GameState>, player: u32) -> u32 {
 ///
 /// Returns value from -1.0 to 1.0 (0.0 if invalid player).
 #[inline]
-pub fn left_stick_x(caller: Caller<'_, GameState>, player: u32) -> f32 {
-    let state = caller.data();
+pub fn left_stick_x(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, player: u32) -> f32 {
+    let state = &caller.data().game;
     let player = player as usize;
 
     if player >= MAX_PLAYERS {
@@ -233,8 +235,8 @@ pub fn left_stick_x(caller: Caller<'_, GameState>, player: u32) -> f32 {
 ///
 /// Returns value from -1.0 to 1.0 (0.0 if invalid player).
 #[inline]
-pub fn left_stick_y(caller: Caller<'_, GameState>, player: u32) -> f32 {
-    let state = caller.data();
+pub fn left_stick_y(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, player: u32) -> f32 {
+    let state = &caller.data().game;
     let player = player as usize;
 
     if player >= MAX_PLAYERS {
@@ -256,8 +258,8 @@ pub fn left_stick_y(caller: Caller<'_, GameState>, player: u32) -> f32 {
 ///
 /// Returns value from -1.0 to 1.0 (0.0 if invalid player).
 #[inline]
-pub fn right_stick_x(caller: Caller<'_, GameState>, player: u32) -> f32 {
-    let state = caller.data();
+pub fn right_stick_x(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, player: u32) -> f32 {
+    let state = &caller.data().game;
     let player = player as usize;
 
     if player >= MAX_PLAYERS {
@@ -279,8 +281,8 @@ pub fn right_stick_x(caller: Caller<'_, GameState>, player: u32) -> f32 {
 ///
 /// Returns value from -1.0 to 1.0 (0.0 if invalid player).
 #[inline]
-pub fn right_stick_y(caller: Caller<'_, GameState>, player: u32) -> f32 {
-    let state = caller.data();
+pub fn right_stick_y(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, player: u32) -> f32 {
+    let state = &caller.data().game;
     let player = player as usize;
 
     if player >= MAX_PLAYERS {
@@ -304,9 +306,9 @@ pub fn right_stick_y(caller: Caller<'_, GameState>, player: u32) -> f32 {
 ///
 /// More efficient than two separate calls for the same player.
 #[inline]
-pub fn left_stick(mut caller: Caller<'_, GameState>, player: u32, out_x: u32, out_y: u32) {
+pub fn left_stick(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, player: u32, out_x: u32, out_y: u32) {
     let (x, y) = {
-        let state = caller.data();
+        let state = &caller.data().game;
         let player = player as usize;
 
         if player >= MAX_PLAYERS {
@@ -326,7 +328,7 @@ pub fn left_stick(mut caller: Caller<'_, GameState>, player: u32, out_x: u32, ou
     };
 
     // Write results to WASM memory
-    let memory = match caller.data().memory {
+    let memory = match caller.data().game.memory {
         Some(m) => m,
         None => {
             warn!("left_stick: no WASM memory available");
@@ -356,9 +358,9 @@ pub fn left_stick(mut caller: Caller<'_, GameState>, player: u32, out_x: u32, ou
 ///
 /// More efficient than two separate calls for the same player.
 #[inline]
-pub fn right_stick(mut caller: Caller<'_, GameState>, player: u32, out_x: u32, out_y: u32) {
+pub fn right_stick(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, player: u32, out_x: u32, out_y: u32) {
     let (x, y) = {
-        let state = caller.data();
+        let state = &caller.data().game;
         let player = player as usize;
 
         if player >= MAX_PLAYERS {
@@ -378,7 +380,7 @@ pub fn right_stick(mut caller: Caller<'_, GameState>, player: u32, out_x: u32, o
     };
 
     // Write results to WASM memory
-    let memory = match caller.data().memory {
+    let memory = match caller.data().game.memory {
         Some(m) => m,
         None => {
             warn!("right_stick: no WASM memory available");
@@ -410,8 +412,8 @@ pub fn right_stick(mut caller: Caller<'_, GameState>, player: u32, out_x: u32, o
 ///
 /// Returns value from 0.0 to 1.0 (0.0 if invalid player).
 #[inline]
-pub fn trigger_left(caller: Caller<'_, GameState>, player: u32) -> f32 {
-    let state = caller.data();
+pub fn trigger_left(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, player: u32) -> f32 {
+    let state = &caller.data().game;
     let player = player as usize;
 
     if player >= MAX_PLAYERS {
@@ -433,8 +435,8 @@ pub fn trigger_left(caller: Caller<'_, GameState>, player: u32) -> f32 {
 ///
 /// Returns value from 0.0 to 1.0 (0.0 if invalid player).
 #[inline]
-pub fn trigger_right(caller: Caller<'_, GameState>, player: u32) -> f32 {
-    let state = caller.data();
+pub fn trigger_right(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, player: u32) -> f32 {
+    let state = &caller.data().game;
     let player = player as usize;
 
     if player >= MAX_PLAYERS {

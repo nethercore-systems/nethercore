@@ -18,10 +18,12 @@ use crate::graphics::{BlendMode, CullMode, TextureHandle, ZGraphics};
 use crate::input::InputManager;
 use crate::library::{self, LocalGame};
 use crate::ui::{LibraryUi, UiAction};
-use emberware_core::console::{Console, ConsoleInput, Graphics};
+use emberware_core::console::{Console, Graphics};
 use emberware_core::rollback::{SessionEvent, SessionType};
 use emberware_core::runtime::Runtime;
-use emberware_core::wasm::{DrawCommand as GameDrawCommand, WasmEngine};
+use emberware_core::wasm::WasmEngine;
+
+use crate::state::ZDrawCommand;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppMode {
@@ -203,10 +205,10 @@ impl App {
             None => return,
         };
 
-        let state = game.state_mut();
+        let z_state = game.console_state_mut();
 
         // Process pending textures
-        for pending in state.pending_textures.drain(..) {
+        for pending in z_state.pending_textures.drain(..) {
             match graphics.load_texture(pending.width, pending.height, &pending.data) {
                 Ok(handle) => {
                     session.texture_map.insert(pending.handle, handle);
@@ -223,8 +225,8 @@ impl App {
         }
 
         // Process pending meshes
-        for pending in state.pending_meshes.drain(..) {
-            let result = if let Some(indices) = pending.index_data {
+        for pending in z_state.pending_meshes.drain(..) {
+            let result = if let Some(ref indices) = pending.index_data {
                 graphics.load_mesh_indexed(&pending.vertex_data, &indices, pending.format)
             } else {
                 graphics.load_mesh(&pending.vertex_data, pending.format)
@@ -260,15 +262,32 @@ impl App {
             None => return,
         };
 
-        let state = game.state_mut();
+        let z_state = game.console_state_mut();
 
         // Apply init config to graphics (render mode, etc.)
-        graphics.set_render_mode(state.init_config.render_mode);
+        graphics.set_render_mode(z_state.init_config.render_mode);
+
+        // Update scene uniforms (camera, lights, materials) for PBR rendering
+        // Get aspect ratio from window
+        let aspect_ratio = if let Some(window) = &self.window {
+            let size = window.inner_size();
+            size.width as f32 / size.height.max(1) as f32
+        } else {
+            16.0 / 9.0 // Default aspect ratio if no window
+        };
+        graphics.update_scene_uniforms(
+            &z_state.camera,
+            &z_state.lights,
+            aspect_ratio,
+            z_state.material_metallic,
+            z_state.material_roughness,
+            z_state.material_emissive,
+        );
 
         // Process draw commands
-        for cmd in state.draw_commands.drain(..) {
+        for cmd in z_state.draw_commands.drain(..) {
             match cmd {
-                GameDrawCommand::DrawTriangles {
+                ZDrawCommand::DrawTriangles {
                     format,
                     vertex_data,
                     transform,
@@ -289,7 +308,7 @@ impl App {
                     // Draw
                     graphics.draw_triangles(&vertex_data, format);
                 }
-                GameDrawCommand::DrawTrianglesIndexed {
+                ZDrawCommand::DrawTrianglesIndexed {
                     format,
                     vertex_data,
                     index_data,
@@ -311,7 +330,7 @@ impl App {
                     // Draw
                     graphics.draw_triangles_indexed(&vertex_data, &index_data, format);
                 }
-                GameDrawCommand::DrawMesh {
+                ZDrawCommand::DrawMesh {
                     handle,
                     transform,
                     color,
@@ -345,7 +364,7 @@ impl App {
                         tracing::warn!("Mesh handle {} not found", handle);
                     }
                 }
-                GameDrawCommand::DrawBillboard {
+                ZDrawCommand::DrawBillboard {
                     width,
                     height,
                     mode: _,
@@ -368,7 +387,7 @@ impl App {
                     );
                     let _ = (depth_test, cull_mode, blend_mode, bound_textures);
                 }
-                GameDrawCommand::DrawSprite {
+                ZDrawCommand::DrawSprite {
                     x,
                     y,
                     width,
@@ -390,7 +409,7 @@ impl App {
                         color
                     );
                 }
-                GameDrawCommand::DrawRect {
+                ZDrawCommand::DrawRect {
                     x,
                     y,
                     width,
@@ -408,7 +427,7 @@ impl App {
                         color
                     );
                 }
-                GameDrawCommand::DrawText {
+                ZDrawCommand::DrawText {
                     text,
                     x,
                     y,
@@ -427,7 +446,7 @@ impl App {
                         color
                     );
                 }
-                GameDrawCommand::SetSky {
+                ZDrawCommand::SetSky {
                     horizon_color,
                     zenith_color,
                     sun_direction,
@@ -444,6 +463,10 @@ impl App {
                 }
             }
         }
+
+        // Clear FFI staging state for next frame
+        // Note: draw_commands, pending_textures, pending_meshes were already drained above
+        z_state.clear_frame();
     }
 
     /// Convert game cull mode to graphics cull mode
@@ -626,7 +649,7 @@ impl App {
             let z_input = console.map_input(&raw_input);
 
             if let Some(game) = session.runtime.game_mut() {
-                game.set_input(0, z_input.to_input_state());
+                game.set_input(0, z_input);
             }
         }
 
@@ -966,16 +989,16 @@ impl App {
             let (view_matrix, projection_matrix, clear_color) = {
                 if let Some(session) = &self.game_session {
                     if let Some(game) = session.runtime.game() {
-                        let state = game.state();
-                        let clear = state.init_config.clear_color;
+                        let z_state = game.console_state();
+                        let clear = z_state.init_config.clear_color;
                         let clear_r = ((clear >> 24) & 0xFF) as f32 / 255.0;
                         let clear_g = ((clear >> 16) & 0xFF) as f32 / 255.0;
                         let clear_b = ((clear >> 8) & 0xFF) as f32 / 255.0;
                         let clear_a = (clear & 0xFF) as f32 / 255.0;
                         let aspect_ratio = graphics.width() as f32 / graphics.height() as f32;
                         (
-                            state.camera.view_matrix(),
-                            state.camera.projection_matrix(aspect_ratio),
+                            z_state.camera.view_matrix(),
+                            z_state.camera.projection_matrix(aspect_ratio),
                             [clear_r, clear_g, clear_b, clear_a],
                         )
                     } else {

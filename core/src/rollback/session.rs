@@ -90,7 +90,7 @@ const FRAME_ADVANTAGE_WARNING_THRESHOLD: i32 = 4;
 /// Wraps GGRS session types and provides a unified interface for
 /// local, sync-test, and P2P sessions. Handles state management
 /// and input processing.
-pub struct RollbackSession<I: ConsoleInput> {
+pub struct RollbackSession<I: ConsoleInput, S: Send + Default + 'static> {
     inner: SessionInner<I>,
     session_type: SessionType,
     config: SessionConfig,
@@ -109,9 +109,10 @@ pub struct RollbackSession<I: ConsoleInput> {
     last_frame_advantage: i32,
     /// Whether a desync has been detected
     desync_detected: bool,
+    _phantom: std::marker::PhantomData<S>,
 }
 
-impl<I: ConsoleInput> RollbackSession<I> {
+impl<I: ConsoleInput, S: Send + Default + 'static> RollbackSession<I, S> {
     /// Create a new local session (no rollback)
     ///
     /// Local sessions run without GGRS - updates execute immediately
@@ -152,6 +153,7 @@ impl<I: ConsoleInput> RollbackSession<I> {
             total_rollback_frames: 0,
             last_frame_advantage: 0,
             desync_detected: false,
+            _phantom: std::marker::PhantomData,
         }
     }
 
@@ -199,6 +201,7 @@ impl<I: ConsoleInput> RollbackSession<I> {
             total_rollback_frames: 0,
             last_frame_advantage: 0,
             desync_detected: false,
+            _phantom: std::marker::PhantomData,
         })
     }
 
@@ -212,14 +215,14 @@ impl<I: ConsoleInput> RollbackSession<I> {
     /// - Remote players are those with `PlayerType::Remote`
     ///
     /// `max_state_size` should match the console's RAM limit (e.g., `console.specs().ram_limit`).
-    pub fn new_p2p<S>(
+    pub fn new_p2p<Sock>(
         config: SessionConfig,
-        socket: S,
+        socket: Sock,
         players: Vec<(usize, PlayerType<String>)>,
         max_state_size: usize,
     ) -> Result<Self, GgrsError>
     where
-        S: NonBlockingSocket<String> + 'static,
+        Sock: NonBlockingSocket<String> + 'static,
     {
         // Build player config from the players list
         let mut local_mask = 0u32;
@@ -239,15 +242,15 @@ impl<I: ConsoleInput> RollbackSession<I> {
     /// The `players` parameter still specifies the GGRS player types.
     ///
     /// `max_state_size` should match the console's RAM limit (e.g., `console.specs().ram_limit`).
-    pub fn new_p2p_with_config<S>(
+    pub fn new_p2p_with_config<Sock>(
         config: SessionConfig,
         player_config: PlayerSessionConfig,
-        socket: S,
+        socket: Sock,
         players: Vec<(usize, PlayerType<String>)>,
         max_state_size: usize,
     ) -> Result<Self, GgrsError>
     where
-        S: NonBlockingSocket<String> + 'static,
+        Sock: NonBlockingSocket<String> + 'static,
     {
         let mut builder = SessionBuilder::<EmberwareConfig<I>>::new()
             .with_num_players(config.num_players)
@@ -288,6 +291,7 @@ impl<I: ConsoleInput> RollbackSession<I> {
             total_rollback_frames: 0,
             last_frame_advantage: 0,
             desync_detected: false,
+            _phantom: std::marker::PhantomData,
         })
     }
 
@@ -591,7 +595,7 @@ impl<I: ConsoleInput> RollbackSession<I> {
     /// be muted. Check `is_rolling_back()` before playing sounds.
     pub fn handle_requests(
         &mut self,
-        game: &mut GameInstance,
+        game: &mut GameInstance<I, S>,
         requests: Vec<GgrsRequest<EmberwareConfig<I>>>,
     ) -> Result<Vec<Vec<(I, InputStatus)>>, SessionError> {
         let mut advance_inputs = Vec::new();
@@ -644,7 +648,7 @@ impl<I: ConsoleInput> RollbackSession<I> {
     /// Save game state (convenience wrapper)
     pub fn save_game_state(
         &mut self,
-        game: &mut GameInstance,
+        game: &mut GameInstance<I, S>,
         frame: i32,
     ) -> Result<GameStateSnapshot, SaveStateError> {
         self.state_manager.save_state(game, frame)
@@ -653,7 +657,7 @@ impl<I: ConsoleInput> RollbackSession<I> {
     /// Load game state (convenience wrapper)
     pub fn load_game_state(
         &mut self,
-        game: &mut GameInstance,
+        game: &mut GameInstance<I, S>,
         snapshot: &GameStateSnapshot,
     ) -> Result<(), LoadStateError> {
         self.state_manager.load_state(game, snapshot)

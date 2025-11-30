@@ -3,6 +3,15 @@
 //! Implements the `Graphics` trait from emberware-core with a wgpu-based
 //! renderer featuring PS1/N64 aesthetic (vertex jitter, affine textures).
 //!
+//! # Architecture
+//!
+//! **ZFFIState** (staging) → **ZGraphics** (GPU execution)
+//!
+//! - FFI functions write draw commands, transforms, and render state to ZFFIState
+//! - App.rs passes ZFFIState to ZGraphics each frame
+//! - ZGraphics consumes commands and executes them on the GPU
+//! - ZGraphics owns all actual GPU resources (textures, meshes, buffers, pipelines)
+//!
 //! Note: Many public APIs here are designed for game rendering and are not yet
 //! fully wired up. Dead code warnings are suppressed at module level.
 //!
@@ -75,7 +84,8 @@ use crate::console::VRAM_LIMIT;
 pub use buffer::{GrowableBuffer, MeshHandle, RetainedMesh};
 pub use command_buffer::CommandBuffer;
 pub use render_state::{
-    BlendMode, CullMode, MatcapBlendMode, RenderState, SkyUniforms, TextureFilter, TextureHandle,
+    BlendMode, CameraUniforms, CullMode, LightUniform, LightsUniforms, MatcapBlendMode,
+    MaterialUniforms, RenderState, SkyUniforms, TextureFilter, TextureHandle,
 };
 pub use vertex::{
     vertex_stride, VertexFormatInfo, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV,
@@ -139,6 +149,18 @@ pub struct ZGraphics {
     // Sky system
     sky_uniforms: SkyUniforms,
     sky_buffer: wgpu::Buffer,
+
+    // Camera system (view/projection + position for specular)
+    camera_uniforms: CameraUniforms,
+    camera_buffer: wgpu::Buffer,
+
+    // Lighting system (4 directional lights for PBR)
+    lights_uniforms: LightsUniforms,
+    lights_buffer: wgpu::Buffer,
+
+    // Material system (global metallic/roughness/emissive)
+    material_uniforms: MaterialUniforms,
+    material_buffer: wgpu::Buffer,
 
     // Bone system (GPU skinning)
     bone_buffer: wgpu::Buffer,
@@ -290,6 +312,30 @@ impl ZGraphics {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
+        // Create camera uniform buffer (view/projection + position)
+        let camera_uniforms = CameraUniforms::default();
+        let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Camera Uniform Buffer"),
+            contents: bytemuck::cast_slice(&[camera_uniforms]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        // Create lights uniform buffer (4 directional lights)
+        let lights_uniforms = LightsUniforms::default();
+        let lights_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Lights Uniform Buffer"),
+            contents: bytemuck::cast_slice(&[lights_uniforms]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        // Create material uniform buffer (metallic/roughness/emissive)
+        let material_uniforms = MaterialUniforms::default();
+        let material_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Material Uniform Buffer"),
+            contents: bytemuck::cast_slice(&[material_uniforms]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
         // Create bone storage buffer for GPU skinning (256 bones × 64 bytes = 16KB)
         let bone_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Bone Storage Buffer"),
@@ -316,6 +362,12 @@ impl ZGraphics {
             render_state: RenderState::default(),
             sky_uniforms,
             sky_buffer,
+            camera_uniforms,
+            camera_buffer,
+            lights_uniforms,
+            lights_buffer,
+            material_uniforms,
+            material_buffer,
             bone_buffer,
             current_frame: None,
             current_view: None,
@@ -683,6 +735,124 @@ impl ZGraphics {
     /// Get sky uniform buffer for binding
     pub fn sky_buffer(&self) -> &wgpu::Buffer {
         &self.sky_buffer
+    }
+
+    // ========================================================================
+    // Scene Uniforms (Camera, Lights, Materials)
+    // ========================================================================
+
+    /// Update scene uniforms (camera, lights, materials) and upload to GPU
+    ///
+    /// This should be called once per frame before rendering to ensure PBR
+    /// shaders have up-to-date camera position (for specular), lights, and
+    /// material properties.
+    ///
+    /// # Arguments
+    /// * `camera` - Camera state from ZFFIState
+    /// * `lights` - Array of 4 light states from ZFFIState
+    /// * `aspect_ratio` - Screen aspect ratio (width/height)
+    /// * `metallic` - Global metallic value (0.0 = non-metallic, 1.0 = fully metallic)
+    /// * `roughness` - Global roughness value (0.0 = smooth, 1.0 = rough)
+    /// * `emissive` - Global emissive intensity (0.0 = no emission, 1.0+ = glowing)
+    pub fn update_scene_uniforms(
+        &mut self,
+        camera: &crate::state::CameraState,
+        lights: &[crate::state::LightState; 4],
+        aspect_ratio: f32,
+        metallic: f32,
+        roughness: f32,
+        emissive: f32,
+    ) {
+        // Update camera uniforms
+        let view = camera.view_matrix();
+        let proj = camera.projection_matrix(aspect_ratio);
+
+        self.camera_uniforms = CameraUniforms {
+            view: view.to_cols_array_2d(),
+            projection: proj.to_cols_array_2d(),
+            position: [camera.position.x, camera.position.y, camera.position.z, 0.0],
+        };
+
+        self.queue.write_buffer(
+            &self.camera_buffer,
+            0,
+            bytemuck::cast_slice(&[self.camera_uniforms]),
+        );
+
+        // Update lights uniforms
+        for (i, light) in lights.iter().enumerate() {
+            // Normalize light direction
+            let dir = Vec3::from_array(light.direction);
+            let dir_normalized = if dir.length() > 0.0001 {
+                dir.normalize()
+            } else {
+                Vec3::new(0.0, -1.0, 0.0) // Default: downward
+            };
+
+            self.lights_uniforms.lights[i] = LightUniform {
+                direction_and_enabled: [
+                    dir_normalized.x,
+                    dir_normalized.y,
+                    dir_normalized.z,
+                    if light.enabled { 1.0 } else { 0.0 },
+                ],
+                color_and_intensity: [
+                    light.color[0],
+                    light.color[1],
+                    light.color[2],
+                    light.intensity,
+                ],
+            };
+        }
+
+        self.queue.write_buffer(
+            &self.lights_buffer,
+            0,
+            bytemuck::cast_slice(&[self.lights_uniforms]),
+        );
+
+        // Update material uniforms
+        self.material_uniforms = MaterialUniforms {
+            properties: [
+                metallic.clamp(0.0, 1.0),
+                roughness.clamp(0.0, 1.0),
+                emissive.max(0.0),
+                0.0, // .w unused
+            ],
+        };
+
+        self.queue.write_buffer(
+            &self.material_buffer,
+            0,
+            bytemuck::cast_slice(&[self.material_uniforms]),
+        );
+
+        tracing::trace!(
+            "Updated scene uniforms: camera_pos={:?}, lights_enabled={}/{}/{}/{}, material=M{:.2}/R{:.2}/E{:.2}",
+            camera.position,
+            lights[0].enabled,
+            lights[1].enabled,
+            lights[2].enabled,
+            lights[3].enabled,
+            metallic,
+            roughness,
+            emissive
+        );
+    }
+
+    /// Get camera uniform buffer for binding
+    pub fn camera_buffer(&self) -> &wgpu::Buffer {
+        &self.camera_buffer
+    }
+
+    /// Get lights uniform buffer for binding
+    pub fn lights_buffer(&self) -> &wgpu::Buffer {
+        &self.lights_buffer
+    }
+
+    /// Get material uniform buffer for binding
+    pub fn material_buffer(&self) -> &wgpu::Buffer {
+        &self.material_buffer
     }
 
     // ========================================================================

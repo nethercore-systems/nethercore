@@ -166,6 +166,102 @@ impl Default for SkyUniforms {
 unsafe impl bytemuck::Pod for SkyUniforms {}
 unsafe impl bytemuck::Zeroable for SkyUniforms {}
 
+/// Camera uniforms for view/projection and specular calculations
+///
+/// Provides view matrix, projection matrix, and camera position for PBR rendering
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct CameraUniforms {
+    /// View matrix (world-to-camera transform)
+    pub view: [[f32; 4]; 4],
+    /// Projection matrix
+    pub projection: [[f32; 4]; 4],
+    /// Camera world position - .xyz = position, .w unused
+    pub position: [f32; 4],
+}
+
+impl Default for CameraUniforms {
+    fn default() -> Self {
+        Self {
+            view: [[0.0; 4]; 4],
+            projection: [[0.0; 4]; 4],
+            position: [0.0, 0.0, 0.0, 0.0],
+        }
+    }
+}
+
+// SAFETY: CameraUniforms is #[repr(C)] with only primitive types (f32 arrays).
+// All bit patterns are valid for f32, satisfying Pod and Zeroable requirements.
+unsafe impl bytemuck::Pod for CameraUniforms {}
+unsafe impl bytemuck::Zeroable for CameraUniforms {}
+
+/// Single light uniform (directional light)
+///
+/// Used in array of 4 lights for PBR rendering
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct LightUniform {
+    /// Light direction (normalized) - .xyz = direction, .w = enabled (1.0 or 0.0)
+    pub direction_and_enabled: [f32; 4],
+    /// Light color and intensity - .xyz = color (RGB, linear), .w = intensity
+    pub color_and_intensity: [f32; 4],
+}
+
+impl Default for LightUniform {
+    fn default() -> Self {
+        Self {
+            direction_and_enabled: [0.0, -1.0, 0.0, 0.0], // Downward, disabled
+            color_and_intensity: [1.0, 1.0, 1.0, 1.0],     // White, full intensity
+        }
+    }
+}
+
+// SAFETY: LightUniform is #[repr(C)] with only primitive types (f32 arrays).
+unsafe impl bytemuck::Pod for LightUniform {}
+unsafe impl bytemuck::Zeroable for LightUniform {}
+
+/// Lights uniforms buffer (4 directional lights for PBR)
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct LightsUniforms {
+    /// Array of 4 directional lights
+    pub lights: [LightUniform; 4],
+}
+
+impl Default for LightsUniforms {
+    fn default() -> Self {
+        Self {
+            lights: [LightUniform::default(); 4],
+        }
+    }
+}
+
+// SAFETY: LightsUniforms is #[repr(C)] with array of Pod types.
+unsafe impl bytemuck::Pod for LightsUniforms {}
+unsafe impl bytemuck::Zeroable for LightsUniforms {}
+
+/// Material properties for PBR rendering
+///
+/// Stores global material properties (metallic, roughness, emissive)
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct MaterialUniforms {
+    /// Material properties - .x = metallic, .y = roughness, .z = emissive, .w unused
+    pub properties: [f32; 4],
+}
+
+impl Default for MaterialUniforms {
+    fn default() -> Self {
+        Self {
+            properties: [0.0, 0.5, 0.0, 0.0], // Non-metallic, medium roughness, no emissive
+        }
+    }
+}
+
+// SAFETY: MaterialUniforms is #[repr(C)] with only primitive types (f32 arrays).
+unsafe impl bytemuck::Pod for MaterialUniforms {}
+unsafe impl bytemuck::Zeroable for MaterialUniforms {}
+
 /// Matcap blend mode (Mode 1 only, slots 1-3)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[repr(u8)]
@@ -192,8 +288,8 @@ impl MatcapBlendMode {
 
 /// Current render state (tracks what needs pipeline changes)
 #[derive(Debug, Clone, Copy, PartialEq)]
+/// Uniform tint color (0xRRGGBBAA)
 pub struct RenderState {
-    /// Uniform tint color (0xRRGGBBAA)
     pub color: u32,
     /// Depth test enabled
     pub depth_test: bool,

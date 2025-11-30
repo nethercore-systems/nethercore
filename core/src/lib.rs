@@ -9,27 +9,6 @@
 //! - [`Runtime`] - Game loop orchestration with fixed timestep updates
 //! - [`GameInstance`] - WASM game loaded and instantiated
 //! - [`RollbackSession`] - GGRS integration for rollback netcode
-//!
-//! # Example
-//!
-//! ```ignore
-//! // Create a runtime for a specific console
-//! let console = EmberwareZ::new();
-//! let mut runtime = Runtime::new(console);
-//!
-//! // Load and initialize a game
-//! let engine = WasmEngine::new()?;
-//! let module = engine.load_module(wasm_bytes)?;
-//! let game = GameInstance::new(&engine, &module, &linker)?;
-//! runtime.load_game(game);
-//! runtime.init_game()?;
-//!
-//! // Main loop
-//! loop {
-//!     let (ticks, alpha) = runtime.frame()?;
-//!     runtime.render()?;
-//! }
-//! ```
 
 pub mod console;
 pub mod ffi;
@@ -45,9 +24,8 @@ pub mod wasm;
 pub use console::{Audio, Console, ConsoleInput, ConsoleSpecs, Graphics};
 pub use runtime::{Runtime, RuntimeConfig};
 pub use wasm::{
-    CameraState, DrawCommand, GameInstance, GameState, InitConfig, InputState, LightState,
-    PendingMesh, PendingTexture, RenderState, WasmEngine, DEFAULT_CAMERA_FOV, MAX_BONES,
-    MAX_PLAYERS, MAX_SAVE_SIZE, MAX_SAVE_SLOTS, MAX_TRANSFORM_STACK,
+    GameInstance, GameState, GameStateWithConsole, WasmEngine, MAX_PLAYERS, MAX_SAVE_SIZE,
+    MAX_SAVE_SLOTS,
 };
 
 // Re-export rollback types

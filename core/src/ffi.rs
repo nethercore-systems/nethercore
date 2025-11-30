@@ -6,10 +6,13 @@
 use anyhow::Result;
 use wasmtime::{Caller, Linker};
 
-use crate::wasm::{GameState, MAX_SAVE_SIZE, MAX_SAVE_SLOTS};
+use crate::console::ConsoleInput;
+use crate::wasm::{GameStateWithConsole, MAX_SAVE_SIZE, MAX_SAVE_SLOTS};
 
 /// Register common FFI functions with the linker
-pub fn register_common_ffi(linker: &mut Linker<GameState>) -> Result<()> {
+pub fn register_common_ffi<I: ConsoleInput, S: Send + Default + 'static>(
+    linker: &mut Linker<GameStateWithConsole<I, S>>,
+) -> Result<()> {
     // System functions
     linker.func_wrap("env", "delta_time", delta_time)?;
     linker.func_wrap("env", "elapsed_time", elapsed_time)?;
@@ -33,23 +36,23 @@ pub fn register_common_ffi(linker: &mut Linker<GameState>) -> Result<()> {
 }
 
 /// Get delta time since last tick (seconds)
-fn delta_time(caller: Caller<'_, GameState>) -> f32 {
-    caller.data().delta_time
+fn delta_time<I: ConsoleInput, S>(caller: Caller<'_, GameStateWithConsole<I, S>>) -> f32 {
+    caller.data().game.delta_time
 }
 
 /// Get elapsed time since game start (seconds)
-fn elapsed_time(caller: Caller<'_, GameState>) -> f32 {
-    caller.data().elapsed_time
+fn elapsed_time<I: ConsoleInput, S>(caller: Caller<'_, GameStateWithConsole<I, S>>) -> f32 {
+    caller.data().game.elapsed_time
 }
 
 /// Get current tick number
-fn tick_count(caller: Caller<'_, GameState>) -> u64 {
-    caller.data().tick_count
+fn tick_count<I: ConsoleInput, S>(caller: Caller<'_, GameStateWithConsole<I, S>>) -> u64 {
+    caller.data().game.tick_count
 }
 
 /// Log a message from WASM
-fn log_message(caller: Caller<'_, GameState>, ptr: u32, len: u32) {
-    if let Some(memory) = caller.data().memory {
+fn log_message<I: ConsoleInput, S>(caller: Caller<'_, GameStateWithConsole<I, S>>, ptr: u32, len: u32) {
+    if let Some(memory) = caller.data().game.memory {
         let data = memory.data(&caller);
         let ptr = ptr as usize;
         let len = len as usize;
@@ -62,14 +65,22 @@ fn log_message(caller: Caller<'_, GameState>, ptr: u32, len: u32) {
 }
 
 /// Request to quit to the library
-fn quit(mut caller: Caller<'_, GameState>) {
-    caller.data_mut().quit_requested = true;
+fn quit<I: ConsoleInput, S>(mut caller: Caller<'_, GameStateWithConsole<I, S>>) {
+    caller.data_mut().game.quit_requested = true;
 }
 
 /// Save data to a slot (0-7)
 ///
 /// Returns: 0 = success, 1 = invalid slot, 2 = data too large
-fn save(mut caller: Caller<'_, GameState>, slot: u32, data_ptr: u32, data_len: u32) -> u32 {
+/// Save data to a slot (0-7)
+///
+/// Returns: 0 = success, 1 = invalid slot, 2 = data too large
+fn save<I: ConsoleInput, S>(
+    mut caller: Caller<'_, GameStateWithConsole<I, S>>,
+    slot: u32,
+    data_ptr: u32,
+    data_len: u32,
+) -> u32 {
     let slot = slot as usize;
     let data_len = data_len as usize;
 
@@ -84,7 +95,7 @@ fn save(mut caller: Caller<'_, GameState>, slot: u32, data_ptr: u32, data_len: u
     }
 
     // Read data from WASM memory
-    let data = if let Some(memory) = caller.data().memory {
+    let data = if let Some(memory) = caller.data().game.memory {
         let mem_data = memory.data(&caller);
         let ptr = data_ptr as usize;
         if ptr + data_len <= mem_data.len() {
@@ -97,14 +108,22 @@ fn save(mut caller: Caller<'_, GameState>, slot: u32, data_ptr: u32, data_len: u
     };
 
     // Store the data
-    caller.data_mut().save_data[slot] = Some(data);
+    caller.data_mut().game.save_data[slot] = Some(data);
     0
 }
 
 /// Load data from a slot (0-7)
 ///
 /// Returns: bytes read, or 0 if slot is empty/invalid
-fn load(mut caller: Caller<'_, GameState>, slot: u32, data_ptr: u32, max_len: u32) -> u32 {
+/// Load data from a slot (0-7)
+///
+/// Returns: bytes read, or 0 if slot is empty/invalid
+fn load<I: ConsoleInput, S>(
+    mut caller: Caller<'_, GameStateWithConsole<I, S>>,
+    slot: u32,
+    data_ptr: u32,
+    max_len: u32,
+) -> u32 {
     let slot = slot as usize;
     let max_len = max_len as usize;
     let ptr = data_ptr as usize;
@@ -115,7 +134,7 @@ fn load(mut caller: Caller<'_, GameState>, slot: u32, data_ptr: u32, max_len: u3
     }
 
     // Get memory first, then access save data through split borrow
-    let memory = match caller.data().memory {
+    let memory = match caller.data().game.memory {
         Some(m) => m,
         None => return 0,
     };
@@ -125,7 +144,7 @@ fn load(mut caller: Caller<'_, GameState>, slot: u32, data_ptr: u32, max_len: u3
     let (mem_data, store) = memory.data_and_store_mut(&mut caller);
 
     // Get save data reference (now we have access to store)
-    let data = match &store.save_data[slot] {
+    let data = match &store.game.save_data[slot] {
         Some(d) => d,
         None => return 0,
     };
@@ -145,7 +164,10 @@ fn load(mut caller: Caller<'_, GameState>, slot: u32, data_ptr: u32, max_len: u3
 /// Delete data in a slot (0-7)
 ///
 /// Returns: 0 = success, 1 = invalid slot
-fn delete(mut caller: Caller<'_, GameState>, slot: u32) -> u32 {
+/// Delete data in a slot (0-7)
+///
+/// Returns: 0 = success, 1 = invalid slot
+fn delete<I: ConsoleInput, S>(mut caller: Caller<'_, GameStateWithConsole<I, S>>, slot: u32) -> u32 {
     let slot = slot as usize;
 
     // Validate slot
@@ -153,28 +175,29 @@ fn delete(mut caller: Caller<'_, GameState>, slot: u32) -> u32 {
         return 1;
     }
 
-    caller.data_mut().save_data[slot] = None;
+    caller.data_mut().game.save_data[slot] = None;
     0
 }
 
 /// Generate deterministic random u32
-fn random(mut caller: Caller<'_, GameState>) -> u32 {
-    caller.data_mut().random()
+fn random<I: ConsoleInput, S>(mut caller: Caller<'_, GameStateWithConsole<I, S>>) -> u32 {
+    caller.data_mut().game.random()
 }
 
 /// Get number of players in session
-fn player_count(caller: Caller<'_, GameState>) -> u32 {
-    caller.data().player_count
+fn player_count<I: ConsoleInput, S>(caller: Caller<'_, GameStateWithConsole<I, S>>) -> u32 {
+    caller.data().game.player_count
 }
 
 /// Get bitmask of local players
-fn local_player_mask(caller: Caller<'_, GameState>) -> u32 {
-    caller.data().local_player_mask
+fn local_player_mask<I: ConsoleInput, S>(caller: Caller<'_, GameStateWithConsole<I, S>>) -> u32 {
+    caller.data().game.local_player_mask
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::TestInput;
     use wasmtime::{Engine, Store};
 
     // ============================================================================
@@ -222,7 +245,7 @@ mod tests {
         let wasm = wat::parse_str(wat).unwrap();
         let module = wasmtime::Module::new(&engine, wasm).unwrap();
 
-        let mut store = Store::new(&engine, GameState::new());
+        let mut store = Store::new(&engine, GameStateWithConsole::<TestInput, ()>::new());
         let result = linker.instantiate(&mut store, &module);
         assert!(result.is_ok());
     }
@@ -246,8 +269,8 @@ mod tests {
         let wasm = wat::parse_str(wat).unwrap();
         let module = wasmtime::Module::new(&engine, wasm).unwrap();
 
-        let mut store = Store::new(&engine, GameState::new());
-        store.data_mut().seed_rng(42);
+        let mut store = Store::new(&engine, GameStateWithConsole::<TestInput, ()>::new());
+        store.data_mut().game.seed_rng(42);
 
         let instance = linker.instantiate(&mut store, &module).unwrap();
         let get_random = instance
@@ -281,8 +304,8 @@ mod tests {
         let wasm = wat::parse_str(wat).unwrap();
         let module = wasmtime::Module::new(&engine, wasm).unwrap();
 
-        let mut store = Store::new(&engine, GameState::new());
-        assert!(!store.data().quit_requested);
+        let mut store = Store::new(&engine, GameStateWithConsole::<TestInput, ()>::new());
+        assert!(!store.data().game.quit_requested);
 
         let instance = linker.instantiate(&mut store, &module).unwrap();
         let request_quit = instance
@@ -290,7 +313,7 @@ mod tests {
             .unwrap();
 
         request_quit.call(&mut store, ()).unwrap();
-        assert!(store.data().quit_requested);
+        assert!(store.data().game.quit_requested);
     }
 
     // ============================================================================
@@ -299,8 +322,8 @@ mod tests {
 
     #[test]
     fn test_rng_determinism() {
-        let mut state1 = GameState::new();
-        let mut state2 = GameState::new();
+        let mut state1 = GameState::<TestInput>::new();
+        let mut state2 = GameState::<TestInput>::new();
 
         state1.seed_rng(12345);
         state2.seed_rng(12345);
@@ -312,8 +335,8 @@ mod tests {
 
     #[test]
     fn test_rng_different_seeds() {
-        let mut state1 = GameState::new();
-        let mut state2 = GameState::new();
+        let mut state1 = GameState::<TestInput>::new();
+        let mut state2 = GameState::<TestInput>::new();
 
         state1.seed_rng(12345);
         state2.seed_rng(67890);
@@ -330,7 +353,7 @@ mod tests {
 
     #[test]
     fn test_rng_sequence_reproducible() {
-        let mut state = GameState::new();
+        let mut state = GameState::<TestInput>::new();
         state.seed_rng(999);
 
         let sequence1: Vec<u32> = (0..10).map(|_| state.random()).collect();
@@ -344,7 +367,7 @@ mod tests {
 
     #[test]
     fn test_rng_zero_seed() {
-        let mut state = GameState::new();
+        let mut state = GameState::<TestInput>::new();
         state.seed_rng(0);
 
         // Should still produce values (zero seed is valid)
@@ -355,7 +378,7 @@ mod tests {
 
     #[test]
     fn test_rng_max_seed() {
-        let mut state = GameState::new();
+        let mut state = GameState::<TestInput>::new();
         state.seed_rng(u64::MAX);
 
         // Should work with maximum seed value
@@ -370,7 +393,7 @@ mod tests {
 
     #[test]
     fn test_save_data_slots() {
-        let mut state = GameState::new();
+        let mut state = GameState::<TestInput>::new();
 
         // Initially all slots are empty
         for slot in 0..MAX_SAVE_SLOTS {
@@ -394,7 +417,7 @@ mod tests {
 
     #[test]
     fn test_save_data_all_slots() {
-        let mut state = GameState::new();
+        let mut state = GameState::<TestInput>::new();
 
         // Fill all slots
         for slot in 0..MAX_SAVE_SLOTS {
@@ -411,7 +434,7 @@ mod tests {
 
     #[test]
     fn test_save_data_overwrite() {
-        let mut state = GameState::new();
+        let mut state = GameState::<TestInput>::new();
 
         state.save_data[0] = Some(vec![1, 2, 3]);
         assert_eq!(state.save_data[0], Some(vec![1, 2, 3]));
@@ -427,7 +450,7 @@ mod tests {
 
     #[test]
     fn test_quit_requested() {
-        let mut state = GameState::new();
+        let mut state = GameState::<TestInput>::new();
         assert!(!state.quit_requested);
 
         state.quit_requested = true;
@@ -440,7 +463,7 @@ mod tests {
 
     #[test]
     fn test_initial_timing_values() {
-        let state = GameState::new();
+        let state = GameState::<TestInput>::new();
         assert_eq!(state.tick_count, 0);
         assert_eq!(state.elapsed_time, 0.0);
         assert_eq!(state.delta_time, 0.0);
@@ -448,14 +471,14 @@ mod tests {
 
     #[test]
     fn test_player_info_defaults() {
-        let state = GameState::new();
+        let state = GameState::<TestInput>::new();
         assert_eq!(state.player_count, 1);
         assert_eq!(state.local_player_mask, 1); // Player 0 is local
     }
 
     #[test]
     fn test_player_info_multiplayer() {
-        let mut state = GameState::new();
+        let mut state = GameState::<TestInput>::new();
         state.player_count = 4;
         state.local_player_mask = 0b0101; // Players 0 and 2 are local
 
@@ -491,11 +514,11 @@ mod tests {
         let wasm = wat::parse_str(wat).unwrap();
         let module = wasmtime::Module::new(&engine, wasm).unwrap();
 
-        let mut store = Store::new(&engine, GameState::new());
+        let mut store = Store::new(&engine, GameStateWithConsole::<TestInput, ()>::new());
         // Set up memory reference
         let instance = linker.instantiate(&mut store, &module).unwrap();
         if let Some(memory) = instance.get_memory(&mut store, "memory") {
-            store.data_mut().memory = Some(memory);
+            store.data_mut().game.memory = Some(memory);
         }
 
         let test_oob_log = instance
@@ -734,13 +757,13 @@ mod tests {
         let wasm = wat::parse_str(wat).unwrap();
         let module = wasmtime::Module::new(&engine, wasm).unwrap();
 
-        let mut store = Store::new(&engine, GameState::new());
+        let mut store = Store::new(&engine, GameStateWithConsole::<TestInput, ()>::new());
         let instance = linker.instantiate(&mut store, &module).unwrap();
         if let Some(memory) = instance.get_memory(&mut store, "memory") {
-            store.data_mut().memory = Some(memory);
+            store.data_mut().game.memory = Some(memory);
         }
         // Pre-populate slot 0 with 100 bytes of data
-        store.data_mut().save_data[0] = Some(vec![0xAB; 100]);
+        store.data_mut().game.save_data[0] = Some(vec![0xAB; 100]);
 
         let test_fn = instance
             .get_typed_func::<(), i32>(&mut store, "test_oob_load")

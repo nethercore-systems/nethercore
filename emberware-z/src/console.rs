@@ -11,8 +11,10 @@ use winit::window::Window;
 
 use emberware_core::{
     console::{Audio, Console, ConsoleInput, ConsoleSpecs, RawInput, SoundHandle},
-    wasm::{GameState, InputState},
+    wasm::GameStateWithConsole,
 };
+
+use crate::state::ZFFIState;
 
 use crate::graphics::ZGraphics;
 
@@ -138,19 +140,7 @@ impl ZInput {
     }
 }
 
-impl ConsoleInput for ZInput {
-    fn to_input_state(&self) -> InputState {
-        InputState {
-            buttons: self.buttons,
-            left_stick_x: self.left_stick_x,
-            left_stick_y: self.left_stick_y,
-            right_stick_x: self.right_stick_x,
-            right_stick_y: self.right_stick_y,
-            left_trigger: self.left_trigger,
-            right_trigger: self.right_trigger,
-        }
-    }
-}
+impl ConsoleInput for ZInput {}
 
 // ZGraphics is now implemented in graphics.rs
 
@@ -203,12 +193,16 @@ impl Console for EmberwareZ {
     type Graphics = ZGraphics;
     type Audio = ZAudio;
     type Input = ZInput;
+    type State = ZFFIState;
 
     fn specs(&self) -> &'static ConsoleSpecs {
         z_specs()
     }
 
-    fn register_ffi(&self, linker: &mut Linker<GameState>) -> Result<()> {
+    fn register_ffi(
+        &self,
+        linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>,
+    ) -> Result<()> {
         // Register all Z-specific FFI functions (graphics, input, transforms, camera, etc.)
         crate::ffi::register_z_ffi(linker)?;
         Ok(())

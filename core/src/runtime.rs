@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 use ggrs::GgrsError;
 
-use crate::console::{Audio, Console, ConsoleInput};
+use crate::console::{Audio, Console};
 use crate::rollback::{RollbackSession, SessionEvent};
 use crate::wasm::GameInstance;
 
@@ -44,8 +44,8 @@ pub struct Runtime<C: Console> {
     #[allow(dead_code)]
     console: C,
     config: RuntimeConfig,
-    game: Option<GameInstance>,
-    session: Option<RollbackSession<C::Input>>,
+    game: Option<GameInstance<C::Input, C::State>>,
+    session: Option<RollbackSession<C::Input, C::State>>,
     audio: Option<C::Audio>,
     accumulator: Duration,
     last_update: Option<Instant>,
@@ -77,14 +77,14 @@ impl<C: Console> Runtime<C> {
     }
 
     /// Load a game instance
-    pub fn load_game(&mut self, game: GameInstance) {
+    pub fn load_game(&mut self, game: GameInstance<C::Input, C::State>) {
         self.game = Some(game);
         self.accumulator = Duration::ZERO;
         self.last_update = None;
     }
 
     /// Set the rollback session
-    pub fn set_session(&mut self, session: RollbackSession<C::Input>) {
+    pub fn set_session(&mut self, session: RollbackSession<C::Input, C::State>) {
         self.session = Some(session);
     }
 
@@ -186,7 +186,7 @@ impl<C: Console> Runtime<C> {
                         // Set inputs in GameState for FFI access
                         // Each entry is (input, status) for one player
                         for (player_idx, (input, _status)) in inputs.iter().enumerate() {
-                            game.set_input(player_idx, input.to_input_state());
+                            game.set_input(player_idx, *input);
                         }
                         game.update(self.tick_duration.as_secs_f32())?;
                         ticks += 1;
@@ -244,12 +244,12 @@ impl<C: Console> Runtime<C> {
     }
 
     /// Get a reference to the loaded game
-    pub fn game(&self) -> Option<&GameInstance> {
+    pub fn game(&self) -> Option<&GameInstance<C::Input, C::State>> {
         self.game.as_ref()
     }
 
     /// Get a mutable reference to the loaded game
-    pub fn game_mut(&mut self) -> Option<&mut GameInstance> {
+    pub fn game_mut(&mut self) -> Option<&mut GameInstance<C::Input, C::State>> {
         self.game.as_mut()
     }
 
@@ -264,12 +264,12 @@ impl<C: Console> Runtime<C> {
     }
 
     /// Get a reference to the rollback session
-    pub fn session(&self) -> Option<&RollbackSession<C::Input>> {
+    pub fn session(&self) -> Option<&RollbackSession<C::Input, C::State>> {
         self.session.as_ref()
     }
 
     /// Get a mutable reference to the rollback session
-    pub fn session_mut(&mut self) -> Option<&mut RollbackSession<C::Input>> {
+    pub fn session_mut(&mut self) -> Option<&mut RollbackSession<C::Input, C::State>> {
         self.session.as_mut()
     }
 
@@ -360,7 +360,7 @@ mod tests {
         .unwrap();
         let module = engine.load_module(&wasm).unwrap();
         let linker = Linker::new(engine.engine());
-        let game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
         runtime.load_game(game);
         assert!(runtime.game().is_some());
@@ -383,7 +383,7 @@ mod tests {
         .unwrap();
         let module = engine.load_module(&wasm).unwrap();
         let linker = Linker::new(engine.engine());
-        let game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
         runtime.load_game(game);
         let result = runtime.init_game();
@@ -409,7 +409,7 @@ mod tests {
         let console = TestConsole;
         let mut runtime = Runtime::<TestConsole>::new(console);
 
-        let session = crate::rollback::RollbackSession::new_local(2, 4 * 1024 * 1024);
+        let session = crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, 4 * 1024 * 1024);
         runtime.set_session(session);
 
         assert!(runtime.session().is_some());
@@ -421,7 +421,7 @@ mod tests {
         let console = TestConsole;
         let mut runtime = Runtime::<TestConsole>::new(console);
 
-        let session = crate::rollback::RollbackSession::new_local(2, 4 * 1024 * 1024);
+        let session = crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, 4 * 1024 * 1024);
         runtime.set_session(session);
 
         // Verify mutable access
@@ -494,7 +494,7 @@ mod tests {
         .unwrap();
         let module = engine.load_module(&wasm).unwrap();
         let linker = Linker::new(engine.engine());
-        let game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
         runtime.load_game(game);
         let result = runtime.render();
@@ -520,7 +520,7 @@ mod tests {
         let console = TestConsole;
         let mut runtime = Runtime::<TestConsole>::new(console);
 
-        let session = crate::rollback::RollbackSession::new_local(2, 4 * 1024 * 1024);
+        let session = crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, 4 * 1024 * 1024);
         runtime.set_session(session);
 
         // Local sessions don't use GGRS input, so this should succeed
@@ -546,7 +546,7 @@ mod tests {
         let console = TestConsole;
         let mut runtime = Runtime::<TestConsole>::new(console);
 
-        let session = crate::rollback::RollbackSession::new_local(2, 4 * 1024 * 1024);
+        let session = crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, 4 * 1024 * 1024);
         runtime.set_session(session);
 
         // Local sessions don't produce events
@@ -572,7 +572,7 @@ mod tests {
         let console = TestConsole;
         let mut runtime = Runtime::<TestConsole>::new(console);
 
-        let session = crate::rollback::RollbackSession::new_local(2, 4 * 1024 * 1024);
+        let session = crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, 4 * 1024 * 1024);
         runtime.set_session(session);
 
         // Should not panic (no-op for local sessions)

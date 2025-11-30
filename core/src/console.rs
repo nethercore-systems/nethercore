@@ -11,14 +11,15 @@ use glam::Mat4;
 use wasmtime::Linker;
 use winit::window::Window;
 
-use crate::wasm::{GameState, InputState};
+use crate::wasm::GameStateWithConsole;
 
 // Re-export ConsoleSpecs from shared crate for convenience
 pub use emberware_shared::ConsoleSpecs;
 
 /// Trait for fantasy console implementations
 ///
-/// Each console defines its own graphics backend, audio backend, and input layout.
+/// Each console defines its own graphics backend, audio backend, input layout,
+/// and console-specific FFI staging state.
 /// The core runtime is generic over this trait, allowing shared WASM execution
 /// and rollback netcode across all consoles.
 pub trait Console: Send + 'static {
@@ -28,12 +29,21 @@ pub trait Console: Send + 'static {
     type Audio: Audio;
     /// Console-specific input type (must be POD for GGRS serialization)
     type Input: ConsoleInput;
+    /// Console-specific FFI staging state
+    ///
+    /// This state is written to by FFI functions and consumed by Graphics/Audio backends.
+    /// It is rebuilt each frame and is NOT part of rollback state (only GameState is rolled back).
+    /// For example, Emberware Z uses ZFFIState which holds draw commands, camera, transforms, etc.
+    type State: Default + Send + 'static;
 
     /// Get console specifications
     fn specs(&self) -> &'static ConsoleSpecs;
 
     /// Register console-specific FFI functions with the WASM linker
-    fn register_ffi(&self, linker: &mut Linker<GameState>) -> Result<()>;
+    fn register_ffi(
+        &self,
+        linker: &mut Linker<GameStateWithConsole<Self::Input, Self::State>>,
+    ) -> Result<()>;
 
     /// Create the graphics backend for this console
     fn create_graphics(&self, window: Arc<Window>) -> Result<Self::Graphics>;
@@ -49,17 +59,9 @@ pub trait Console: Send + 'static {
 ///
 /// Must be POD (Plain Old Data) for efficient serialization over the network
 /// and for GGRS rollback state management.
-///
-/// Implementors must provide a conversion to `InputState` which is the common
-/// format used by the FFI layer for input queries.
 pub trait ConsoleInput:
     Clone + Copy + Default + PartialEq + Pod + Zeroable + Send + Sync + 'static
 {
-    /// Convert console-specific input to the common `InputState` format.
-    ///
-    /// This is called during GGRS rollback to pass confirmed inputs to the game
-    /// before each `update()` call.
-    fn to_input_state(&self) -> InputState;
 }
 
 /// Raw input from physical devices
