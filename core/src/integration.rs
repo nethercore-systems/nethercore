@@ -86,7 +86,7 @@ mod tests {
         type Audio = TestAudio;
         type Input = TestInput;
 
-        fn specs() -> &'static ConsoleSpecs {
+        fn specs(&self) -> &'static ConsoleSpecs {
             &ConsoleSpecs {
                 name: "Test Console",
                 resolutions: &[(320, 240), (640, 480)],

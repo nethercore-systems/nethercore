@@ -30,7 +30,7 @@ pub trait Console: Send + 'static {
     type Input: ConsoleInput;
 
     /// Get console specifications
-    fn specs() -> &'static ConsoleSpecs;
+    fn specs(&self) -> &'static ConsoleSpecs;
 
     /// Register console-specific FFI functions with the WASM linker
     fn register_ffi(&self, linker: &mut Linker<GameState>) -> Result<()>;

@@ -204,7 +204,7 @@ impl Console for EmberwareZ {
     type Audio = ZAudio;
     type Input = ZInput;
 
-    fn specs() -> &'static ConsoleSpecs {
+    fn specs(&self) -> &'static ConsoleSpecs {
         z_specs()
     }
 
@@ -383,7 +383,8 @@ mod tests {
 
     #[test]
     fn test_specs() {
-        let specs = EmberwareZ::specs();
+        let console = EmberwareZ::new();
+        let specs = console.specs();
 
         assert_eq!(specs.name, "Emberware Z");
         assert_eq!(specs.resolutions.len(), 4);

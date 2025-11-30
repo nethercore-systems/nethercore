@@ -82,10 +82,10 @@ pub const fn emberware_classic_specs() -> &'static ConsoleSpecs {
         ],
         default_resolution: 5, // 288×216 (4:3)
         tick_rates: &[30, 60],
-        default_tick_rate: 1,        // 60 fps
-        ram_limit: 1024 * 1024,  // 1MB
-        vram_limit: 1024 * 1024, // 1MB
-        rom_limit: 4 * 1024 * 1024,  // 4MB (uncompressed)
-        cpu_budget_us: 4000,         // 4ms per tick at 60fps
+        default_tick_rate: 1,       // 60 fps
+        ram_limit: 1024 * 1024,     // 1MB
+        vram_limit: 1024 * 1024,    // 1MB
+        rom_limit: 4 * 1024 * 1024, // 4MB (uncompressed)
+        cpu_budget_us: 4000,        // 4ms per tick at 60fps
     }
 }
