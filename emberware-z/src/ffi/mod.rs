@@ -1997,12 +1997,16 @@ fn set_bones(
 
 #[cfg(test)]
 mod tests {
-    use emberware_core::wasm::{CameraState, GameState, DEFAULT_CAMERA_FOV, MAX_TRANSFORM_STACK};
+    use crate::graphics::{vertex_stride, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV};
+    use crate::state::{
+        CameraState, LightState, PendingMesh, PendingTexture, ZDrawCommand, ZFFIState,
+        DEFAULT_CAMERA_FOV, MAX_BONES, MAX_TRANSFORM_STACK,
+    };
     use glam::{Mat4, Vec3};
 
     #[test]
     fn test_init_config_defaults() {
-        let state = GameState::new();
+        let state = ZFFIState::new();
         assert_eq!(state.init_config.resolution_index, 1); // 540p
         assert_eq!(state.init_config.tick_rate_index, 2); // 60 fps
         assert_eq!(state.init_config.clear_color, 0x000000FF); // Black
@@ -2055,7 +2059,7 @@ mod tests {
 
     #[test]
     fn test_game_state_camera_initialized() {
-        let state = GameState::new();
+        let state = ZFFIState::new();
         assert_eq!(state.camera.fov, DEFAULT_CAMERA_FOV);
         assert_eq!(state.camera.position, Vec3::new(0.0, 0.0, 5.0));
     }
@@ -2066,20 +2070,20 @@ mod tests {
 
     #[test]
     fn test_transform_stack_defaults() {
-        let state = GameState::new();
+        let state = ZFFIState::new();
         assert_eq!(state.current_transform, Mat4::IDENTITY);
         assert!(state.transform_stack.is_empty());
     }
 
     #[test]
     fn test_transform_stack_capacity() {
-        let state = GameState::new();
+        let state = ZFFIState::new();
         assert!(state.transform_stack.capacity() >= MAX_TRANSFORM_STACK);
     }
 
     #[test]
     fn test_transform_operations_on_game_state() {
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
 
         // Test translation
         state.current_transform *= Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0));
@@ -2108,7 +2112,7 @@ mod tests {
 
     #[test]
     fn test_transform_push_pop() {
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
 
         // Set up initial transform
         state.current_transform = Mat4::from_translation(Vec3::new(1.0, 0.0, 0.0));
@@ -2130,7 +2134,7 @@ mod tests {
 
     #[test]
     fn test_transform_stack_max_depth() {
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
 
         // Fill the stack to max
         for i in 0..MAX_TRANSFORM_STACK {
@@ -2147,31 +2151,26 @@ mod tests {
     // GPU Skinning FFI Tests
     // ========================================================================
 
-    use emberware_core::wasm::MAX_BONES;
-
     #[test]
     fn test_vertex_stride_skinned_constant() {
         // Skinning adds: 4 u8 bone indices (4 bytes) + 4 f32 bone weights (16 bytes) = 20 bytes
         const SKINNING_OVERHEAD: u32 = 20;
 
         // Test base format + skinning
-        assert_eq!(
-            super::vertex_stride(super::FORMAT_SKINNED),
-            12 + SKINNING_OVERHEAD
-        ); // 32
+        assert_eq!(vertex_stride(FORMAT_SKINNED), 12 + SKINNING_OVERHEAD); // 32
     }
 
     #[test]
     fn test_vertex_stride_all_skinned_formats() {
         // All 8 skinned format combinations
-        assert_eq!(super::vertex_stride(8), 32); // POS_SKINNED
-        assert_eq!(super::vertex_stride(9), 40); // POS_UV_SKINNED
-        assert_eq!(super::vertex_stride(10), 44); // POS_COLOR_SKINNED
-        assert_eq!(super::vertex_stride(11), 52); // POS_UV_COLOR_SKINNED
-        assert_eq!(super::vertex_stride(12), 44); // POS_NORMAL_SKINNED
-        assert_eq!(super::vertex_stride(13), 52); // POS_UV_NORMAL_SKINNED
-        assert_eq!(super::vertex_stride(14), 56); // POS_COLOR_NORMAL_SKINNED
-        assert_eq!(super::vertex_stride(15), 64); // POS_UV_COLOR_NORMAL_SKINNED
+        assert_eq!(vertex_stride(8), 32); // POS_SKINNED
+        assert_eq!(vertex_stride(9), 40); // POS_UV_SKINNED
+        assert_eq!(vertex_stride(10), 44); // POS_COLOR_SKINNED
+        assert_eq!(vertex_stride(11), 52); // POS_UV_COLOR_SKINNED
+        assert_eq!(vertex_stride(12), 44); // POS_NORMAL_SKINNED
+        assert_eq!(vertex_stride(13), 52); // POS_UV_NORMAL_SKINNED
+        assert_eq!(vertex_stride(14), 56); // POS_COLOR_NORMAL_SKINNED
+        assert_eq!(vertex_stride(15), 64); // POS_UV_COLOR_NORMAL_SKINNED
     }
 
     #[test]
@@ -2182,14 +2181,14 @@ mod tests {
 
     #[test]
     fn test_render_state_bone_matrices_default() {
-        let state = GameState::new();
+        let state = ZFFIState::new();
         assert!(state.bone_matrices.is_empty());
         assert_eq!(state.bone_count, 0);
     }
 
     #[test]
     fn test_render_state_bone_matrices_mutation() {
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
 
         // Add bone matrices
         let bone = Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0));
@@ -2203,7 +2202,7 @@ mod tests {
 
     #[test]
     fn test_render_state_bone_matrices_clear() {
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
 
         // Add some bones
         for _ in 0..10 {
@@ -2221,7 +2220,7 @@ mod tests {
 
     #[test]
     fn test_render_state_bone_matrices_max_count() {
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
 
         // Fill with MAX_BONES matrices
         for i in 0..MAX_BONES {
@@ -2237,7 +2236,7 @@ mod tests {
     #[test]
     fn test_skinned_format_flag_value() {
         // FORMAT_SKINNED should be 8 (bit 3)
-        assert_eq!(super::FORMAT_SKINNED, 8);
+        assert_eq!(FORMAT_SKINNED, 8);
     }
 
     #[test]
@@ -2295,30 +2294,30 @@ mod tests {
 
     #[test]
     fn test_vertex_format_constants() {
-        assert_eq!(super::FORMAT_UV, 1);
-        assert_eq!(super::FORMAT_COLOR, 2);
-        assert_eq!(super::FORMAT_NORMAL, 4);
-        assert_eq!(super::FORMAT_SKINNED, 8);
+        assert_eq!(FORMAT_UV, 1);
+        assert_eq!(FORMAT_COLOR, 2);
+        assert_eq!(FORMAT_NORMAL, 4);
+        assert_eq!(FORMAT_SKINNED, 8);
     }
 
     #[test]
     fn test_vertex_stride_base_formats() {
         // Base formats without skinning
-        assert_eq!(super::vertex_stride(0), 12); // POS: 3 floats = 12 bytes
-        assert_eq!(super::vertex_stride(1), 20); // POS_UV: 3 + 2 floats = 20 bytes
-        assert_eq!(super::vertex_stride(2), 24); // POS_COLOR: 3 + 3 floats = 24 bytes
-        assert_eq!(super::vertex_stride(3), 32); // POS_UV_COLOR: 3 + 2 + 3 floats = 32 bytes
-        assert_eq!(super::vertex_stride(4), 24); // POS_NORMAL: 3 + 3 floats = 24 bytes
-        assert_eq!(super::vertex_stride(5), 32); // POS_UV_NORMAL: 3 + 2 + 3 floats = 32 bytes
-        assert_eq!(super::vertex_stride(6), 36); // POS_COLOR_NORMAL: 3 + 3 + 3 floats = 36 bytes
-        assert_eq!(super::vertex_stride(7), 44); // POS_UV_COLOR_NORMAL: 3 + 2 + 3 + 3 floats = 44 bytes
+        assert_eq!(vertex_stride(0), 12); // POS: 3 floats = 12 bytes
+        assert_eq!(vertex_stride(1), 20); // POS_UV: 3 + 2 floats = 20 bytes
+        assert_eq!(vertex_stride(2), 24); // POS_COLOR: 3 + 3 floats = 24 bytes
+        assert_eq!(vertex_stride(3), 32); // POS_UV_COLOR: 3 + 2 + 3 floats = 32 bytes
+        assert_eq!(vertex_stride(4), 24); // POS_NORMAL: 3 + 3 floats = 24 bytes
+        assert_eq!(vertex_stride(5), 32); // POS_UV_NORMAL: 3 + 2 + 3 floats = 32 bytes
+        assert_eq!(vertex_stride(6), 36); // POS_COLOR_NORMAL: 3 + 3 + 3 floats = 36 bytes
+        assert_eq!(vertex_stride(7), 44); // POS_UV_COLOR_NORMAL: 3 + 2 + 3 + 3 floats = 44 bytes
     }
 
     #[test]
     fn test_vertex_stride_all_format_combinations() {
         // Verify all 16 format combinations have correct stride
         for format in 0..=15u8 {
-            let stride = super::vertex_stride(format);
+            let stride = vertex_stride(format);
             // Minimum is 12 (POS only), maximum is 64 (all attributes + skinning)
             assert!(stride >= 12);
             assert!(stride <= 64);
@@ -2330,7 +2329,7 @@ mod tests {
         // MAX_VERTEX_FORMAT is 15, all format bits set
         assert_eq!(
             super::MAX_VERTEX_FORMAT,
-            super::FORMAT_UV | super::FORMAT_COLOR | super::FORMAT_NORMAL | super::FORMAT_SKINNED
+            FORMAT_UV | FORMAT_COLOR | FORMAT_NORMAL | FORMAT_SKINNED
         );
     }
 
@@ -2340,7 +2339,7 @@ mod tests {
 
     #[test]
     fn test_render_state_defaults() {
-        let state = GameState::new();
+        let state = ZFFIState::new();
         assert_eq!(state.color, 0xFFFFFFFF); // White
         assert!(state.depth_test); // Enabled
         assert_eq!(state.cull_mode, 1); // Back-face culling
@@ -2350,13 +2349,13 @@ mod tests {
 
     #[test]
     fn test_render_state_texture_slots_default() {
-        let state = GameState::new();
+        let state = ZFFIState::new();
         assert_eq!(state.bound_textures, [0; 4]); // All slots unbound
     }
 
     #[test]
     fn test_render_state_material_defaults() {
-        let state = GameState::new();
+        let state = ZFFIState::new();
         assert_eq!(state.material_metallic, 0.0);
         assert_eq!(state.material_roughness, 0.5);
         assert_eq!(state.material_emissive, 0.0);
@@ -2364,7 +2363,7 @@ mod tests {
 
     #[test]
     fn test_render_state_lights_default() {
-        let state = GameState::new();
+        let state = ZFFIState::new();
         for i in 0..4 {
             assert!(!state.lights[i].enabled);
             assert_eq!(state.lights[i].direction, [0.0, -1.0, 0.0]);
@@ -2405,45 +2404,32 @@ mod tests {
     }
 
     // ========================================================================
-    // Input State Tests
+    // Input State Tests (moved to console.rs - ZInput tests)
     // ========================================================================
 
-    use emberware_core::wasm::{InputState, MAX_PLAYERS};
+    use crate::console::ZInput;
+    use emberware_core::wasm::MAX_PLAYERS;
 
     #[test]
-    fn test_input_state_defaults() {
-        let state = GameState::new();
-        for i in 0..MAX_PLAYERS {
-            assert_eq!(state.input_curr[i].buttons, 0);
-            assert_eq!(state.input_curr[i].left_stick_x, 0);
-            assert_eq!(state.input_curr[i].left_stick_y, 0);
-            assert_eq!(state.input_curr[i].right_stick_x, 0);
-            assert_eq!(state.input_curr[i].right_stick_y, 0);
-            assert_eq!(state.input_curr[i].left_trigger, 0);
-            assert_eq!(state.input_curr[i].right_trigger, 0);
-        }
-    }
-
-    #[test]
-    fn test_input_state_button_bitmask() {
+    fn test_zinput_button_bitmask() {
         // Verify button bitmask layout
 
         // Button 0 (UP) should be bit 0
-        let input = InputState {
+        let input = ZInput {
             buttons: 1 << 0,
             ..Default::default()
         };
         assert_eq!(input.buttons & (1 << 0), 1);
 
         // Button 13 (SELECT) should be bit 13
-        let input = InputState {
+        let input = ZInput {
             buttons: 1 << 13,
             ..Default::default()
         };
         assert_eq!(input.buttons & (1 << 13), 1 << 13);
 
         // All buttons set
-        let input = InputState {
+        let input = ZInput {
             buttons: 0x3FFF, // 14 buttons (0-13)
             ..Default::default()
         };
@@ -2453,9 +2439,9 @@ mod tests {
     }
 
     #[test]
-    fn test_input_state_stick_range() {
+    fn test_zinput_stick_range() {
         // Sticks are i8 (-128 to 127)
-        let input = InputState {
+        let input = ZInput {
             buttons: 0,
             left_stick_x: -128,
             left_stick_y: 127,
@@ -2472,9 +2458,9 @@ mod tests {
     }
 
     #[test]
-    fn test_input_state_trigger_range() {
+    fn test_zinput_trigger_range() {
         // Triggers are u8 (0 to 255)
-        let input = InputState {
+        let input = ZInput {
             buttons: 0,
             left_stick_x: 0,
             left_stick_y: 0,
@@ -2490,18 +2476,6 @@ mod tests {
     }
 
     #[test]
-    fn test_input_prev_curr_independence() {
-        let mut state = GameState::new();
-
-        // Modify current input
-        state.input_curr[0].buttons = 0xFF;
-        state.input_prev[0].buttons = 0x00;
-
-        // They should be independent
-        assert_ne!(state.input_curr[0].buttons, state.input_prev[0].buttons);
-    }
-
-    #[test]
     fn test_max_players_constant() {
         assert_eq!(MAX_PLAYERS, 4);
     }
@@ -2510,17 +2484,15 @@ mod tests {
     // Draw Command Tests
     // ========================================================================
 
-    use emberware_core::wasm::DrawCommand;
-
     #[test]
     fn test_draw_commands_initially_empty() {
-        let state = GameState::new();
+        let state = ZFFIState::new();
         assert!(state.draw_commands.is_empty());
     }
 
     #[test]
     fn test_draw_commands_can_be_added() {
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
 
         state.draw_commands.push(ZDrawCommand::DrawRect {
             x: 0.0,
@@ -2536,7 +2508,7 @@ mod tests {
 
     #[test]
     fn test_draw_command_mesh_captures_state() {
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
 
         // Set up render state
         state.color = 0x00FF00FF;
@@ -2582,7 +2554,7 @@ mod tests {
 
     #[test]
     fn test_draw_command_triangles_format() {
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
 
         state.draw_commands.push(ZDrawCommand::DrawTriangles {
             format: 7,                        // POS_UV_COLOR_NORMAL
@@ -2627,7 +2599,7 @@ mod tests {
 
     #[test]
     fn test_draw_command_sprite_with_uv_rect() {
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
 
         state.draw_commands.push(ZDrawCommand::DrawSprite {
             x: 10.0,
@@ -2669,7 +2641,7 @@ mod tests {
 
     #[test]
     fn test_draw_command_text() {
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
 
         state.draw_commands.push(ZDrawCommand::DrawText {
             text: b"Hello".to_vec(),
@@ -2690,7 +2662,7 @@ mod tests {
 
     #[test]
     fn test_draw_command_set_sky() {
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
 
         state.draw_commands.push(ZDrawCommand::SetSky {
             horizon_color: [0.5, 0.6, 0.7],
@@ -2722,17 +2694,15 @@ mod tests {
     // Pending Resource Tests
     // ========================================================================
 
-    use emberware_core::wasm::{PendingMesh, PendingTexture};
-
     #[test]
     fn test_pending_textures_initially_empty() {
-        let state = GameState::new();
+        let state = ZFFIState::new();
         assert!(state.pending_textures.is_empty());
     }
 
     #[test]
     fn test_pending_meshes_initially_empty() {
-        let state = GameState::new();
+        let state = ZFFIState::new();
         assert!(state.pending_meshes.is_empty());
     }
 
@@ -2782,7 +2752,7 @@ mod tests {
 
     #[test]
     fn test_next_texture_handle_increments() {
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
         let initial = state.next_texture_handle;
 
         state.next_texture_handle += 1;
@@ -2794,7 +2764,7 @@ mod tests {
 
     #[test]
     fn test_next_mesh_handle_increments() {
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
         let initial = state.next_mesh_handle;
 
         state.next_mesh_handle += 1;
@@ -2804,8 +2774,6 @@ mod tests {
     // ========================================================================
     // Light State Tests
     // ========================================================================
-
-    use emberware_core::wasm::LightState;
 
     #[test]
     fn test_light_state_default() {
@@ -2833,38 +2801,8 @@ mod tests {
 
     #[test]
     fn test_four_light_slots() {
-        let state = GameState::new();
+        let state = ZFFIState::new();
         assert_eq!(state.lights.len(), 4);
-    }
-
-    // ========================================================================
-    // Save Data Tests
-    // ========================================================================
-
-    use emberware_core::wasm::MAX_SAVE_SLOTS;
-
-    #[test]
-    fn test_save_slots_constant() {
-        assert_eq!(MAX_SAVE_SLOTS, 8);
-    }
-
-    #[test]
-    fn test_save_data_initially_none() {
-        let state = GameState::new();
-        for i in 0..MAX_SAVE_SLOTS {
-            assert!(state.save_data[i].is_none());
-        }
-    }
-
-    #[test]
-    fn test_save_data_can_store_bytes() {
-        let mut state = GameState::new();
-        state.save_data[0] = Some(vec![0xDE, 0xAD, 0xBE, 0xEF]);
-
-        assert!(state.save_data[0].is_some());
-        let data = state.save_data[0].as_ref().unwrap();
-        assert_eq!(data.len(), 4);
-        assert_eq!(data[0], 0xDE);
     }
 
     // ========================================================================
@@ -2932,58 +2870,6 @@ mod tests {
     }
 
     // ========================================================================
-    // Game State Lifecycle Tests
-    // ========================================================================
-
-    #[test]
-    fn test_in_init_flag_default() {
-        // GameState::new() starts with in_init = true so init-only FFI functions work
-        let state = GameState::new();
-        assert!(state.in_init);
-    }
-
-    #[test]
-    fn test_quit_requested_flag_default() {
-        let state = GameState::new();
-        assert!(!state.quit_requested);
-    }
-
-    #[test]
-    fn test_tick_count_default() {
-        let state = GameState::new();
-        assert_eq!(state.tick_count, 0);
-    }
-
-    #[test]
-    fn test_elapsed_time_default() {
-        let state = GameState::new();
-        assert_eq!(state.elapsed_time, 0.0);
-    }
-
-    #[test]
-    fn test_delta_time_default() {
-        let state = GameState::new();
-        assert_eq!(state.delta_time, 0.0);
-    }
-
-    // ========================================================================
-    // RNG Tests
-    // ========================================================================
-
-    #[test]
-    fn test_rng_seed_default() {
-        let state = GameState::new();
-        assert_eq!(state.rng_state, 0);
-    }
-
-    #[test]
-    fn test_rng_seed_can_be_set() {
-        let mut state = GameState::new();
-        state.rng_state = 12345;
-        assert_eq!(state.rng_state, 12345);
-    }
-
-    // ========================================================================
     // Negative Test Cases for FFI Error Conditions
     // ========================================================================
     //
@@ -3001,7 +2887,7 @@ mod tests {
     fn test_texture_bind_invalid_handle_zero() {
         // Handle 0 is reserved/invalid - binding it should still set the slot
         // (validation happens at draw time, not bind time)
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
         state.bound_textures[0] = 0;
         assert_eq!(state.bound_textures[0], 0);
     }
@@ -3010,7 +2896,7 @@ mod tests {
     fn test_texture_bind_handle_not_loaded() {
         // Handle 999 doesn't exist but binding should still succeed
         // (validation is deferred to graphics backend)
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
         state.bound_textures[0] = 999;
         assert_eq!(state.bound_textures[0], 999);
     }
@@ -3018,7 +2904,7 @@ mod tests {
     #[test]
     fn test_texture_bind_slot_invalid_index() {
         // Slot index > 3 is invalid
-        let state = GameState::new();
+        let state = ZFFIState::new();
         // Verify only 4 slots exist
         assert_eq!(state.bound_textures.len(), 4);
     }
@@ -3026,7 +2912,7 @@ mod tests {
     #[test]
     fn test_texture_bind_all_slots_independently() {
         // Test that binding to one slot doesn't affect others
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
         state.bound_textures[0] = 1;
         state.bound_textures[1] = 2;
         state.bound_textures[2] = 3;
@@ -3046,7 +2932,7 @@ mod tests {
     fn test_draw_mesh_handle_zero_produces_no_command() {
         // Handle 0 is invalid - draw_mesh should reject it
         // Simulate what draw_mesh does: it checks handle == 0 and returns early
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
         let handle = 0u32;
 
         // Simulate the validation in draw_mesh
@@ -3072,7 +2958,7 @@ mod tests {
     fn test_mesh_handle_not_loaded() {
         // Handle 999 doesn't exist - draw command is still queued
         // (validation is deferred to graphics backend)
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
         state.draw_commands.push(ZDrawCommand::DrawMesh {
             handle: 999,
             transform: Mat4::IDENTITY,
@@ -3185,7 +3071,7 @@ mod tests {
     #[test]
     fn test_cull_mode_invalid_resets_to_default() {
         // When an invalid cull mode is set, it should reset to 0 (none)
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
 
         // Simulate invalid mode handling
         let mode = 5u32;
@@ -3223,7 +3109,7 @@ mod tests {
     #[test]
     fn test_blend_mode_invalid_resets_to_default() {
         // When an invalid blend mode is set, it should reset to 0 (none)
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
 
         // Simulate invalid mode handling
         let mode = 5u32;
@@ -3261,7 +3147,7 @@ mod tests {
     #[test]
     fn test_texture_filter_invalid_resets_to_default() {
         // When an invalid filter is set, it should reset to 0 (nearest)
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
 
         // Simulate invalid filter handling
         let filter = 5u32;
@@ -3360,7 +3246,7 @@ mod tests {
     #[test]
     fn test_light_index_boundary_valid() {
         // Valid indices are 0-3
-        let state = GameState::new();
+        let state = ZFFIState::new();
         assert_eq!(state.lights.len(), 4);
 
         for i in 0..4 {
@@ -3561,7 +3447,7 @@ mod tests {
 
     #[test]
     fn test_transform_stack_overflow_detection() {
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
 
         // Fill stack to max
         for _ in 0..MAX_TRANSFORM_STACK {
@@ -3577,7 +3463,7 @@ mod tests {
 
     #[test]
     fn test_transform_stack_underflow_detection() {
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
 
         // Stack is empty
         assert!(state.transform_stack.is_empty());
@@ -3592,7 +3478,7 @@ mod tests {
 
     #[test]
     fn test_bone_count_zero_clears_matrices() {
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
 
         // Add some bones first
         state.bone_matrices.push(Mat4::IDENTITY);
@@ -3627,7 +3513,7 @@ mod tests {
     #[test]
     fn test_draw_triangles_vertex_count_zero() {
         // Vertex count 0 should produce no draw command
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
         let vertex_count = 0u32;
 
         if vertex_count == 0 {
@@ -3719,31 +3605,12 @@ mod tests {
     }
 
     // ------------------------------------------------------------------------
-    // Edge Case Tests: Init-Only Functions Called Outside Init
-    // ------------------------------------------------------------------------
-
-    #[test]
-    fn test_init_only_guard_inside_init() {
-        let state = GameState::new();
-        // By default, in_init is true
-        assert!(state.in_init);
-    }
-
-    #[test]
-    fn test_init_only_guard_outside_init() {
-        let mut state = GameState::new();
-        state.in_init = false;
-        // After init phase, in_init should be false
-        assert!(!state.in_init);
-    }
-
-    // ------------------------------------------------------------------------
     // Edge Case Tests: Draw Command Buffer Growth
     // ------------------------------------------------------------------------
 
     #[test]
     fn test_draw_commands_grow_dynamically() {
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
 
         // Add many draw commands
         for i in 0..1000 {
@@ -3766,7 +3633,7 @@ mod tests {
 
     #[test]
     fn test_pending_textures_grow_dynamically() {
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
 
         for i in 0..100 {
             state.pending_textures.push(PendingTexture {
@@ -3782,7 +3649,7 @@ mod tests {
 
     #[test]
     fn test_pending_meshes_grow_dynamically() {
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
 
         for i in 0..100 {
             state.pending_meshes.push(PendingMesh {
@@ -3802,7 +3669,7 @@ mod tests {
 
     #[test]
     fn test_texture_handle_wrapping() {
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
 
         // Set handle near max
         state.next_texture_handle = u32::MAX - 1;
@@ -3821,7 +3688,7 @@ mod tests {
 
     #[test]
     fn test_mesh_handle_wrapping() {
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
 
         // Set handle near max
         state.next_mesh_handle = u32::MAX;
@@ -3949,7 +3816,7 @@ mod tests {
 
         // Large but reasonable mesh: 100,000 vertices with full format
         let vertex_count: u32 = 100_000;
-        let stride: u32 = super::vertex_stride(15); // All flags set
+        let stride: u32 = vertex_stride(15); // All flags set
         assert_eq!(stride, 64);
 
         let data_size = vertex_count.checked_mul(stride);

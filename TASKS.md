@@ -171,12 +171,6 @@ impl ZGraphics {
 
 ---
 
-### Core Structs are specific to EmberwareZ
-- EmberwareZ Specific rendering data exists in the wasm/render.rs file
-- In fact, the wasm/input.rs is also tied.
-- This needs to be removed and made generic, other consoles (like the future Emberware Classic) will have their own invocation.
-- Please check the project architecture, and likely refactor many of the wasm/ folder so that it is console agnostic.
-
 ### **[NEEDS CLARIFICATION] Define and enforce console runtime limits**
 
 **Current State:** Partial limit enforcement - VRAM tracking (8MB), vertex format validation, memory bounds checking. No enforcement for draw calls, vertex counts, mesh counts, or CPU budget per frame.

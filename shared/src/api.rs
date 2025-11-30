@@ -26,11 +26,11 @@ pub struct Game {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub icon_url: Option<String>,
     /// URLs to screenshot images (up to 5, 1280x720 PNG recommended).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub screenshots: Option<Vec<String>>,
+    /// Empty vec if no screenshots available.
+    pub screenshots: Vec<String>,
     /// ROM file size in bytes (for download progress).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub rom_size: Option<u64>,
+    pub rom_size: Option<i64>,
     /// Semantic version of the current ROM (e.g., "1.2.3").
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rom_version: Option<String>,
@@ -50,7 +50,7 @@ pub struct GamesResponse {
     /// Games on the current page.
     pub games: Vec<Game>,
     /// Total number of games matching the query.
-    pub total: u32,
+    pub total: i64,
     /// Current page number (1-indexed).
     pub page: u32,
     /// Maximum games per page.
@@ -69,8 +69,9 @@ pub struct RomUrlResponse {
 /// Current version information for a game's ROM.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VersionResponse {
-    /// Semantic version string (e.g., "1.2.3").
-    pub version: String,
+    /// Semantic version string (e.g., "1.2.3"), or None if no ROM uploaded yet.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
     /// ROM file size in bytes.
-    pub rom_size: u64,
+    pub rom_size: i64,
 }
