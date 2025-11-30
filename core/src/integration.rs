@@ -1118,7 +1118,7 @@ mod tests {
             game.update(1.0 / 60.0).unwrap();
             game.render().unwrap();
             if frame == 3 {
-                frame3_snapshot = Some(state_manager.save_state(&mut game, frame as i32).unwrap());
+                frame3_snapshot = Some(state_manager.save_state(&mut game, frame).unwrap());
             }
         }
 

@@ -66,6 +66,9 @@ unsafe impl<I: ConsoleInput> Zeroable for NetworkInput<I> {}
 // ============================================================================
 
 /// Inner session types for different modes
+///
+/// Note: P2P variant is boxed to reduce overall enum size, as P2PSession is
+/// significantly larger than other variants (~440 bytes vs ~228 bytes).
 enum SessionInner<I: ConsoleInput> {
     /// Local session - no GGRS, just direct execution
     Local {
@@ -77,8 +80,8 @@ enum SessionInner<I: ConsoleInput> {
         session: SyncTestSession<EmberwareConfig<I>>,
         current_frame: i32,
     },
-    /// P2P session with rollback
-    P2P(P2PSession<EmberwareConfig<I>>),
+    /// P2P session with rollback (boxed to reduce enum size)
+    P2P(Box<P2PSession<EmberwareConfig<I>>>),
 }
 
 /// Frame advantage threshold for warning events
@@ -261,7 +264,7 @@ impl<I: ConsoleInput> RollbackSession<I> {
             .collect();
 
         Ok(Self {
-            inner: SessionInner::P2P(session),
+            inner: SessionInner::P2P(Box::new(session)),
             session_type: SessionType::P2P,
             config,
             player_config,
@@ -556,7 +559,7 @@ impl<I: ConsoleInput> RollbackSession<I> {
             }
 
             // Get GGRS network stats for this player
-            if let Some(ref ggrs_stat) = ggrs_stats.get(player_handle).and_then(|s| s.as_ref()) {
+            if let Some(ggrs_stat) = ggrs_stats.get(player_handle).and_then(|s| s.as_ref()) {
                 stats.ping_ms = ggrs_stat.ping as u32;
                 stats.local_frames_ahead = ggrs_stat.local_frames_behind;
                 stats.remote_frames_ahead = ggrs_stat.remote_frames_behind;
@@ -898,12 +901,12 @@ mod tests {
 
     #[test]
     fn test_connection_quality_assessment() {
-        let mut stats = PlayerNetworkStats::default();
-        stats.connected = true;
-
-        // Test excellent quality
-        stats.ping_ms = 30;
-        stats.local_frames_ahead = 1;
+        let mut stats = PlayerNetworkStats {
+            connected: true,
+            ping_ms: 30,
+            local_frames_ahead: 1,
+            ..Default::default()
+        };
         stats.assess_quality();
         assert_eq!(stats.quality, ConnectionQuality::Excellent);
 

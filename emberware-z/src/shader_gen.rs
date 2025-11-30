@@ -340,7 +340,7 @@ mod tests {
 
     #[test]
     fn test_total_shader_count() {
-        let total: usize = (0..4).map(|m| shader_count_for_mode(m)).sum();
+        let total: usize = (0..4).map(shader_count_for_mode).sum();
         assert_eq!(total, 40);  // 16 + 8 + 8 + 8 = 40
     }
 

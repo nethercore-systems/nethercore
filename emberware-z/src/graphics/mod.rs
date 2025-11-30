@@ -67,7 +67,8 @@ use crate::console::VRAM_LIMIT;
 
 // Re-export public types from submodules
 pub use buffer::{GrowableBuffer, MeshHandle, RetainedMesh};
-pub use command_buffer::{CommandBuffer, DrawCommand};
+pub use command_buffer::CommandBuffer;
+pub(crate) use command_buffer::DrawCommand;
 pub use render_state::{BlendMode, CullMode, RenderState, SkyUniforms, TextureFilter, TextureHandle};
 pub use vertex::{
     vertex_stride, VertexFormatInfo, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED,

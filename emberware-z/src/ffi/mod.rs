@@ -2436,7 +2436,7 @@ mod tests {
             };
 
             if let DrawCommand::DrawBillboard { mode: m, .. } = cmd {
-                assert!(m >= 1 && m <= 4);
+                assert!((1..=4).contains(&m));
             }
         }
     }
@@ -3107,7 +3107,7 @@ mod tests {
         // Valid modes are 1-4
         let valid_modes = [1u8, 2, 3, 4];
         for mode in valid_modes {
-            assert!(mode >= 1 && mode <= 4);
+            assert!((1..=4).contains(&mode));
         }
     }
 
@@ -3136,7 +3136,7 @@ mod tests {
         // Valid slots are 1-3 (slot 0 is albedo)
         let valid_slots = [1u32, 2, 3];
         for slot in valid_slots {
-            assert!(slot >= 1 && slot <= 3);
+            assert!((1..=3).contains(&slot));
         }
     }
 
@@ -3189,7 +3189,7 @@ mod tests {
         // Valid FOV is 1-179 degrees
         let valid_fovs = [1.0f32, 45.0, 60.0, 90.0, 120.0, 179.0];
         for fov in valid_fovs {
-            assert!(fov >= 1.0 && fov <= 179.0);
+            assert!((1.0..=179.0).contains(&fov));
         }
     }
 

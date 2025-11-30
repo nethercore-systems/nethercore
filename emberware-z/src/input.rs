@@ -742,12 +742,7 @@ mod tests {
     /// Helper to test find_free_player_slot logic
     /// Since GamepadId is opaque, we extract the pure slot-finding logic for testing
     fn find_free_slot_from_occupied(occupied_slots: &[usize]) -> Option<usize> {
-        for slot in 0..4 {
-            if !occupied_slots.contains(&slot) {
-                return Some(slot);
-            }
-        }
-        None
+        (0..4).find(|slot| !occupied_slots.contains(slot))
     }
 
     #[test]

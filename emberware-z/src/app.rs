@@ -1329,7 +1329,7 @@ mod tests {
 
     #[test]
     fn test_calculate_fps_single_sample() {
-        let frame_times = vec![Instant::now()];
+        let frame_times = [Instant::now()];
         let fps = if frame_times.len() < 2 {
             0.0
         } else {
