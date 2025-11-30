@@ -417,9 +417,10 @@ impl App {
                     blend_mode: _,
                 } => {
                     // TODO: Implement text rendering using font system
+                    let text_str = std::str::from_utf8(&text).unwrap_or("");
                     tracing::trace!(
                         "Text: '{}' at ({},{}) size={} color={:08x}",
-                        text,
+                        text_str,
                         x,
                         y,
                         size,

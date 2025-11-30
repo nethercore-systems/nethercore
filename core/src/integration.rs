@@ -886,7 +886,7 @@ mod tests {
         });
 
         state.draw_commands.push(DrawCommand::DrawText {
-            text: "Hello".to_string(),
+            text: b"Hello".to_vec(),
             x: 10.0,
             y: 10.0,
             size: 16.0,

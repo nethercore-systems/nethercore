@@ -5,7 +5,7 @@
 use glam::Mat4;
 
 /// Pending texture load request
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct PendingTexture {
     pub handle: u32,
     pub width: u32,
@@ -14,7 +14,7 @@ pub struct PendingTexture {
 }
 
 /// Pending mesh load request (retained mode)
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct PendingMesh {
     pub handle: u32,
     pub format: u8,
@@ -121,8 +121,8 @@ pub enum DrawCommand {
     },
     /// Draw text in screen space
     DrawText {
-        /// UTF-8 text string
-        text: String,
+        /// UTF-8 text bytes (decoded during rendering)
+        text: Vec<u8>,
         /// Screen X coordinate (pixels, 0 = left)
         x: f32,
         /// Screen Y coordinate (pixels, 0 = top)
@@ -342,7 +342,7 @@ mod tests {
     #[test]
     fn test_draw_command_text() {
         let cmd = DrawCommand::DrawText {
-            text: "Hello World".to_string(),
+            text: b"Hello World".to_vec(),
             x: 10.0,
             y: 20.0,
             size: 16.0,
@@ -351,7 +351,7 @@ mod tests {
         };
         match cmd {
             DrawCommand::DrawText { text, size, .. } => {
-                assert_eq!(text, "Hello World");
+                assert_eq!(std::str::from_utf8(&text).unwrap(), "Hello World");
                 assert_eq!(size, 16.0);
             }
             _ => panic!("Expected DrawText"),

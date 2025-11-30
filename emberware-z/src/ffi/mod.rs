@@ -1483,7 +1483,7 @@ fn draw_text(
         }
     };
 
-    let text_string = {
+    let text_bytes = {
         let mem_data = memory.data(&caller);
         let ptr = ptr as usize;
         let len = len as usize;
@@ -1499,19 +1499,18 @@ fn draw_text(
         }
 
         let bytes = &mem_data[ptr..ptr + len];
-        match std::str::from_utf8(bytes) {
-            Ok(s) => s.to_string(),
-            Err(e) => {
-                warn!("draw_text: invalid UTF-8 string: {}", e);
-                return;
-            }
+        // Validate UTF-8 to catch errors early
+        if std::str::from_utf8(bytes).is_err() {
+            warn!("draw_text: invalid UTF-8 string");
+            return;
         }
+        bytes.to_vec()
     };
 
     let state = caller.data_mut();
 
     state.draw_commands.push(DrawCommand::DrawText {
-        text: text_string,
+        text: text_bytes,
         x,
         y,
         size,
@@ -2596,7 +2595,7 @@ mod tests {
         let mut state = GameState::new();
 
         state.draw_commands.push(DrawCommand::DrawText {
-            text: "Hello".to_string(),
+            text: b"Hello".to_vec(),
             x: 100.0,
             y: 200.0,
             size: 16.0,
@@ -2605,7 +2604,7 @@ mod tests {
         });
 
         if let DrawCommand::DrawText { text, size, .. } = &state.draw_commands[0] {
-            assert_eq!(text, "Hello");
+            assert_eq!(std::str::from_utf8(text).unwrap(), "Hello");
             assert_eq!(*size, 16.0);
         } else {
             panic!("Expected DrawText command");

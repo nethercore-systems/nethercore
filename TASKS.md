@@ -1134,6 +1134,20 @@ KEYCODE_TO_BUTTON.get(&(keycode as u32)).copied()
 
 ## Done
 
+### **[POLISH] Performance Optimizations - Quick Wins**
+**Status:** Completed
+**Changes Made:**
+- Task #3: `DrawCommand::DrawText` already stores `Vec<u8>` instead of `String`, eliminating String allocation
+- Task #5: Added `#[inline]` attribute to all input FFI hot path functions:
+  - `right_stick_x`, `right_stick_y` (were missing inline)
+  - `left_stick`, `right_stick` (were missing inline)
+  - `trigger_left`, `trigger_right` (were missing inline)
+  - Other input functions already had `#[inline]` applied
+- Task #6: Removed `Clone` derive from `PendingTexture` and `PendingMesh` structs
+  - These are moved via `.drain()`, not cloned
+  - Prevents accidental expensive clones of large resource data
+- All 571 tests passing ✓ (194 in core + 377 in emberware-z)
+
 ### **[STABILITY] Refactor rollback to use automatic WASM linear memory snapshotting**
 **Status:** Completed
 **Changes Made:**
