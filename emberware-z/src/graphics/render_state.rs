@@ -139,39 +139,30 @@ impl TextureFilter {
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct SkyUniforms {
-    /// Horizon color (RGB, linear)
-    pub horizon_color: [f32; 3],
-    pub _pad0: f32,
-    /// Zenith color (RGB, linear)
-    pub zenith_color: [f32; 3],
-    pub _pad1: f32,
-    /// Sun direction (normalized vector)
-    pub sun_direction: [f32; 3],
-    pub _pad2: f32,
-    /// Sun color (RGB, linear)
-    pub sun_color: [f32; 3],
-    /// Sun sharpness (higher = sharper sun)
-    pub sun_sharpness: f32,
+    /// Horizon color (RGB, linear) - .w unused
+    pub horizon_color: [f32; 4],
+    /// Zenith color (RGB, linear) - .w unused
+    pub zenith_color: [f32; 4],
+    /// Sun direction (normalized vector) - .w unused
+    pub sun_direction: [f32; 4],
+    /// Sun color and sharpness - .xyz = color (RGB, linear), .w = sharpness
+    pub sun_color_and_sharpness: [f32; 4],
 }
 
 impl Default for SkyUniforms {
     fn default() -> Self {
         Self {
-            horizon_color: [0.0, 0.0, 0.0],
-            _pad0: 0.0,
-            zenith_color: [0.0, 0.0, 0.0],
-            _pad1: 0.0,
-            sun_direction: [0.0, 1.0, 0.0], // Up by default
-            _pad2: 0.0,
-            sun_color: [0.0, 0.0, 0.0],
-            sun_sharpness: 0.0,
+            horizon_color: [0.0, 0.0, 0.0, 0.0],
+            zenith_color: [0.0, 0.0, 0.0, 0.0],
+            sun_direction: [0.0, 1.0, 0.0, 0.0], // Up by default, .w unused
+            sun_color_and_sharpness: [0.0, 0.0, 0.0, 0.0],
         }
     }
 }
 
-// SAFETY: SkyUniforms is #[repr(C)] with only primitive types (f32 arrays and floats).
+// SAFETY: SkyUniforms is #[repr(C)] with only primitive types (f32 arrays).
 // All bit patterns are valid for f32, satisfying Pod and Zeroable requirements.
-// Padding fields ensure proper GPU alignment (16-byte boundaries for vec3).
+// Vec4 types ensure proper GPU alignment (16-byte boundaries).
 unsafe impl bytemuck::Pod for SkyUniforms {}
 unsafe impl bytemuck::Zeroable for SkyUniforms {}
 
@@ -289,28 +280,23 @@ mod tests {
     #[test]
     fn test_sky_uniforms_default() {
         let sky = SkyUniforms::default();
-        assert_eq!(sky.horizon_color, [0.0, 0.0, 0.0]);
-        assert_eq!(sky.zenith_color, [0.0, 0.0, 0.0]);
-        assert_eq!(sky.sun_direction, [0.0, 1.0, 0.0]);
-        assert_eq!(sky.sun_color, [0.0, 0.0, 0.0]);
-        assert_eq!(sky.sun_sharpness, 0.0);
+        assert_eq!(sky.horizon_color, [0.0, 0.0, 0.0, 0.0]);
+        assert_eq!(sky.zenith_color, [0.0, 0.0, 0.0, 0.0]);
+        assert_eq!(sky.sun_direction, [0.0, 1.0, 0.0, 0.0]);
+        assert_eq!(sky.sun_color_and_sharpness, [0.0, 0.0, 0.0, 0.0]);
     }
 
     #[test]
     fn test_sky_uniforms_custom() {
         let sky = SkyUniforms {
-            horizon_color: [1.0, 0.5, 0.2],
-            _pad0: 0.0,
-            zenith_color: [0.2, 0.4, 1.0],
-            _pad1: 0.0,
-            sun_direction: [0.577, 0.577, 0.577],
-            _pad2: 0.0,
-            sun_color: [1.5, 1.4, 1.0],
-            sun_sharpness: 64.0,
+            horizon_color: [1.0, 0.5, 0.2, 0.0],
+            zenith_color: [0.2, 0.4, 1.0, 0.0],
+            sun_direction: [0.577, 0.577, 0.577, 0.0],
+            sun_color_and_sharpness: [1.5, 1.4, 1.0, 64.0],
         };
-        assert_eq!(sky.horizon_color, [1.0, 0.5, 0.2]);
-        assert_eq!(sky.zenith_color, [0.2, 0.4, 1.0]);
-        assert_eq!(sky.sun_sharpness, 64.0);
+        assert_eq!(sky.horizon_color, [1.0, 0.5, 0.2, 0.0]);
+        assert_eq!(sky.zenith_color, [0.2, 0.4, 1.0, 0.0]);
+        assert_eq!(sky.sun_color_and_sharpness[3], 64.0);
     }
 
     #[test]

@@ -1134,6 +1134,33 @@ KEYCODE_TO_BUTTON.get(&(keycode as u32)).copied()
 
 ## Done
 
+### **[POLISH] Performance Optimizations - Replace manual padding with Vec4 types in uniforms**
+**Status:** Completed
+**Changes Made:**
+- Updated SkyUniforms struct in all 4 shader files (mode0, mode1, mode2, mode3):
+  - Replaced `vec3<f32>` + manual `_pad` fields with `vec4<f32>`
+  - Renamed `sun_color` and `sun_sharpness` to `sun_color_and_sharpness: vec4<f32>` (.xyz = color, .w = sharpness)
+- Updated shader code to access new fields:
+  - `sky.horizon_color` → `sky.horizon_color.xyz`
+  - `sky.sun_direction` → `sky.sun_direction.xyz`
+  - `sky.sun_color` → `sky.sun_color_and_sharpness.xyz`
+  - `sky.sun_sharpness` → `sky.sun_color_and_sharpness.w`
+- Updated Rust SkyUniforms struct in `emberware-z/src/graphics/render_state.rs`:
+  - Changed all fields from `[f32; 3] + _pad` to `[f32; 4]`
+  - Updated Default impl to use vec4 layout
+  - Updated safety comments to reflect new structure
+- Updated `set_sky()` in `emberware-z/src/graphics/mod.rs` to pack data into vec4 fields
+- Updated tests to use new field structure
+- All 571 tests passing ✓ (194 in core + 377 in emberware-z)
+
+**Impact:**
+- Improved code readability - no more manual padding fields
+- Eliminates manual padding errors
+- Makes future uniform additions easier
+- Same memory layout (64 bytes) and performance
+
+---
+
 ### **[POLISH] Performance Optimizations - Additional Quick Wins**
 **Status:** Completed
 **Changes Made:**

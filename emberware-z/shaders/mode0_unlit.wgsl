@@ -13,14 +13,10 @@
 
 // Sky uniforms for lighting
 struct SkyUniforms {
-    horizon_color: vec3<f32>,
-    _pad0: f32,
-    zenith_color: vec3<f32>,
-    _pad1: f32,
-    sun_direction: vec3<f32>,
-    _pad2: f32,
-    sun_color: vec3<f32>,
-    sun_sharpness: f32,
+    horizon_color: vec4<f32>,
+    zenith_color: vec4<f32>,
+    sun_direction: vec4<f32>,
+    sun_color_and_sharpness: vec4<f32>,  // .xyz = color, .w = sharpness
 }
 
 @group(0) @binding(2) var<uniform> sky: SkyUniforms;
@@ -93,8 +89,8 @@ fn vs(in: VertexIn) -> VertexOut {
 
 // Simple Lambert shading using sky sun (when normals available)
 fn sky_lambert(normal: vec3<f32>) -> vec3<f32> {
-    let n_dot_l = max(0.0, dot(normal, sky.sun_direction));
-    let direct = sky.sun_color * n_dot_l;
+    let n_dot_l = max(0.0, dot(normal, sky.sun_direction.xyz));
+    let direct = sky.sun_color_and_sharpness.xyz * n_dot_l;
     let ambient = sample_sky(normal) * 0.3;
     return direct + ambient;
 }
@@ -102,9 +98,9 @@ fn sky_lambert(normal: vec3<f32>) -> vec3<f32> {
 // Sample procedural sky
 fn sample_sky(direction: vec3<f32>) -> vec3<f32> {
     let up_factor = direction.y * 0.5 + 0.5;
-    let gradient = mix(sky.horizon_color, sky.zenith_color, up_factor);
-    let sun_dot = max(0.0, dot(direction, sky.sun_direction));
-    let sun = sky.sun_color * pow(sun_dot, sky.sun_sharpness);
+    let gradient = mix(sky.horizon_color.xyz, sky.zenith_color.xyz, up_factor);
+    let sun_dot = max(0.0, dot(direction, sky.sun_direction.xyz));
+    let sun = sky.sun_color_and_sharpness.xyz * pow(sun_dot, sky.sun_color_and_sharpness.w);
     return gradient + sun;
 }
 
