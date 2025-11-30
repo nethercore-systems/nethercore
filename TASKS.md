@@ -95,6 +95,10 @@ The `Runtime<C: Console>` handles:
 
 ---
 
+## In Progress
+
+---
+
 ## TODO
 
 ### **[NEEDS CLARIFICATION] Define and enforce console runtime limits**
@@ -697,6 +701,34 @@ KEYCODE_TO_BUTTON.get(&(keycode as u32)).copied()
 ---
 
 ## Done
+
+### **[REFACTOR] Eliminate redundant state mutation in draw command processing**
+**Status:** Completed ✅
+
+**What Was Implemented:**
+- ✅ Added `CommandBuffer::append_vertex_data()` method to append vertex data and return base_vertex index
+- ✅ Added `CommandBuffer::append_index_data()` method to append index data and return first_index
+- ✅ Added `CommandBuffer::add_command()` method to directly push DrawCommand to the commands vec
+- ✅ Refactored `process_draw_commands()` to directly convert ZDrawCommand → DrawCommand without state mutation
+- ✅ Added helper functions `convert_matcap_blend_mode()` and `map_texture_handles()` for clean conversion
+- ✅ Deleted obsolete methods: `execute_draw_command()`, `draw_triangles()`, `draw_triangles_indexed()`, `bind_textures_from_game()`
+- ✅ All 518 tests passing (155 in core + 363 in emberware-z)
+
+**Files Modified:**
+- `emberware-z/src/graphics/command_buffer.rs` - Added append_vertex_data, append_index_data, add_command methods
+- `emberware-z/src/graphics/mod.rs` - Refactored process_draw_commands to eliminate unpack-set-read-repack cycle, deleted obsolete methods
+
+**Impact:**
+- 🚀 Eliminates wasteful unpack-set-read-repack cycle in draw command processing
+- 🚀 Fewer function calls per draw command (direct data flow)
+- 🚀 No state mutations on ZGraphics (better for future multi-threading)
+- 🚀 More cache-friendly (direct data flow, no intermediate state)
+- 🧹 Cleaner architecture (one-to-one ZDrawCommand → DrawCommand mapping)
+- 🧹 ~150 lines of obsolete code removed
+
+**Compilation:** ✅ All tests passing
+
+---
 
 ### **[FEATURE] Implement matcap blend modes**
 **Status:** Completed ✅

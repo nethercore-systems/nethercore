@@ -1038,46 +1038,8 @@ impl ZGraphics {
     }
 
     // ========================================================================
-    // Immediate Mode Drawing
+    // Command Buffer Access
     // ========================================================================
-
-    /// Draw triangles immediately (non-indexed)
-    ///
-    /// Vertices are buffered on the CPU and flushed at frame end.
-    pub fn draw_triangles(&mut self, vertices: &[f32], format: u8) {
-        if format as usize >= VERTEX_FORMAT_COUNT {
-            tracing::warn!("Invalid vertex format for draw_triangles: {}", format);
-            return;
-        }
-
-        self.command_buffer.add_vertices(
-            format,
-            vertices,
-            self.current_transform,
-            &self.render_state,
-        );
-    }
-
-    /// Draw indexed triangles immediately
-    ///
-    /// Vertices and indices are buffered on the CPU and flushed at frame end.
-    pub fn draw_triangles_indexed(&mut self, vertices: &[f32], indices: &[u32], format: u8) {
-        if format as usize >= VERTEX_FORMAT_COUNT {
-            tracing::warn!(
-                "Invalid vertex format for draw_triangles_indexed: {}",
-                format
-            );
-            return;
-        }
-
-        self.command_buffer.add_vertices_indexed(
-            format,
-            vertices,
-            indices,
-            self.current_transform,
-            &self.render_state,
-        );
-    }
 
     /// Get the command buffer (for flush/rendering)
     pub fn command_buffer(&self) -> &CommandBuffer {
@@ -1115,6 +1077,8 @@ impl ZGraphics {
         texture_map: &std::collections::HashMap<u32, TextureHandle>,
         mesh_map: &std::collections::HashMap<u32, MeshHandle>,
     ) {
+        use crate::state::ZDrawCommand;
+
         // Apply init config to graphics (render mode, etc.)
         self.set_render_mode(z_state.init_config.render_mode);
 
@@ -1122,203 +1086,256 @@ impl ZGraphics {
         // Note: aspect ratio is computed in app.rs and passed via update_scene_uniforms
         // This is kept separate as it needs window size which ZGraphics doesn't have
 
-        // Process all draw commands
+        // Convert matcap blend modes from u8 to MatcapBlendMode
+        let matcap_blend_modes = [
+            Self::convert_matcap_blend_mode(z_state.matcap_blend_modes[0]),
+            Self::convert_matcap_blend_mode(z_state.matcap_blend_modes[1]),
+            Self::convert_matcap_blend_mode(z_state.matcap_blend_modes[2]),
+            Self::convert_matcap_blend_mode(z_state.matcap_blend_modes[3]),
+        ];
+
+        // Process all draw commands by directly converting to internal DrawCommand
         for cmd in z_state.draw_commands.drain(..) {
-            self.execute_draw_command(&cmd, texture_map, mesh_map);
+            match cmd {
+                ZDrawCommand::DrawTriangles {
+                    format,
+                    vertex_data,
+                    transform,
+                    color,
+                    depth_test,
+                    cull_mode,
+                    blend_mode,
+                    bound_textures,
+                } => {
+                    // Validate format
+                    if format as usize >= VERTEX_FORMAT_COUNT {
+                        tracing::warn!("Invalid vertex format for draw_triangles: {}", format);
+                        continue;
+                    }
+
+                    // Map game texture handles to graphics texture handles
+                    let texture_slots = Self::map_texture_handles(texture_map, &bound_textures);
+
+                    // Calculate vertex count
+                    let stride = vertex_stride(format) as usize;
+                    let vertex_count = (vertex_data.len() * 4) / stride;
+
+                    // Append vertex data and get base_vertex
+                    let base_vertex = self.command_buffer.append_vertex_data(format, &vertex_data);
+
+                    // Add draw command directly
+                    self.command_buffer.add_command(command_buffer::DrawCommand {
+                        format,
+                        transform,
+                        vertex_count: vertex_count as u32,
+                        index_count: 0,
+                        base_vertex,
+                        first_index: 0,
+                        texture_slots,
+                        color,
+                        depth_test,
+                        cull_mode: Self::convert_cull_mode(cull_mode),
+                        blend_mode: Self::convert_blend_mode(blend_mode),
+                        matcap_blend_modes,
+                    });
+                }
+                ZDrawCommand::DrawTrianglesIndexed {
+                    format,
+                    vertex_data,
+                    index_data,
+                    transform,
+                    color,
+                    depth_test,
+                    cull_mode,
+                    blend_mode,
+                    bound_textures,
+                } => {
+                    // Validate format
+                    if format as usize >= VERTEX_FORMAT_COUNT {
+                        tracing::warn!(
+                            "Invalid vertex format for draw_triangles_indexed: {}",
+                            format
+                        );
+                        continue;
+                    }
+
+                    // Map game texture handles to graphics texture handles
+                    let texture_slots = Self::map_texture_handles(texture_map, &bound_textures);
+
+                    // Calculate vertex count
+                    let stride = vertex_stride(format) as usize;
+                    let vertex_count = (vertex_data.len() * 4) / stride;
+
+                    // Append vertex and index data
+                    let base_vertex = self.command_buffer.append_vertex_data(format, &vertex_data);
+                    let first_index = self.command_buffer.append_index_data(format, &index_data);
+
+                    // Add draw command directly
+                    self.command_buffer.add_command(command_buffer::DrawCommand {
+                        format,
+                        transform,
+                        vertex_count: vertex_count as u32,
+                        index_count: index_data.len() as u32,
+                        base_vertex,
+                        first_index,
+                        texture_slots,
+                        color,
+                        depth_test,
+                        cull_mode: Self::convert_cull_mode(cull_mode),
+                        blend_mode: Self::convert_blend_mode(blend_mode),
+                        matcap_blend_modes,
+                    });
+                }
+                ZDrawCommand::DrawMesh {
+                    handle,
+                    transform: _,
+                    color: _,
+                    depth_test: _,
+                    cull_mode: _,
+                    blend_mode: _,
+                    bound_textures: _,
+                } => {
+                    // Look up mesh handle
+                    if let Some(&mesh_handle) = mesh_map.get(&handle) {
+                        if let Some(mesh) = self.get_mesh(mesh_handle) {
+                            // Draw the retained mesh
+                            tracing::trace!(
+                                "Drawing mesh handle {} ({} vertices)",
+                                handle,
+                                mesh.vertex_count
+                            );
+                            // TODO: Implement retained mesh drawing in command buffer
+                        }
+                    } else {
+                        tracing::warn!("Mesh handle {} not found", handle);
+                    }
+                }
+                ZDrawCommand::DrawBillboard {
+                    width,
+                    height,
+                    mode: _,
+                    uv_rect: _,
+                    transform,
+                    color,
+                    depth_test: _,
+                    cull_mode: _,
+                    blend_mode: _,
+                    bound_textures: _,
+                } => {
+                    // TODO: Implement billboard rendering
+                    tracing::trace!(
+                        "Billboard: {}x{} at {:?} color={:08x}",
+                        width,
+                        height,
+                        transform,
+                        color
+                    );
+                }
+                ZDrawCommand::DrawSprite {
+                    x,
+                    y,
+                    width,
+                    height,
+                    uv_rect: _,
+                    origin: _,
+                    rotation: _,
+                    color,
+                    blend_mode: _,
+                    bound_textures: _,
+                } => {
+                    // TODO: Implement 2D sprite rendering
+                    tracing::trace!(
+                        "Sprite: {}x{} at ({},{}) color={:08x}",
+                        width,
+                        height,
+                        x,
+                        y,
+                        color
+                    );
+                }
+                ZDrawCommand::DrawRect {
+                    x,
+                    y,
+                    width,
+                    height,
+                    color,
+                    blend_mode: _,
+                } => {
+                    // TODO: Implement 2D rectangle rendering
+                    tracing::trace!(
+                        "Rect: {}x{} at ({},{}) color={:08x}",
+                        width,
+                        height,
+                        x,
+                        y,
+                        color
+                    );
+                }
+                ZDrawCommand::DrawText {
+                    text,
+                    x,
+                    y,
+                    size,
+                    color,
+                    blend_mode: _,
+                } => {
+                    // TODO: Implement text rendering using font system
+                    let text_str = std::str::from_utf8(&text).unwrap_or("");
+                    tracing::trace!(
+                        "Text: '{}' at ({},{}) size={} color={:08x}",
+                        text_str,
+                        x,
+                        y,
+                        size,
+                        color
+                    );
+                }
+                ZDrawCommand::SetSky {
+                    horizon_color,
+                    zenith_color,
+                    sun_direction,
+                    sun_color,
+                    sun_sharpness,
+                } => {
+                    self.set_sky(
+                        horizon_color,
+                        zenith_color,
+                        sun_direction,
+                        sun_color,
+                        sun_sharpness,
+                    );
+                }
+            }
         }
 
         // Clear FFI staging state for next frame
         z_state.clear_frame();
     }
 
-    /// Execute a single draw command
-    ///
-    /// Helper method that processes one ZDrawCommand by setting render state
-    /// and calling the appropriate draw method.
-    fn execute_draw_command(
-        &mut self,
-        cmd: &crate::state::ZDrawCommand,
+    /// Convert game matcap blend mode to graphics matcap blend mode
+    fn convert_matcap_blend_mode(mode: u8) -> MatcapBlendMode {
+        match mode {
+            0 => MatcapBlendMode::Multiply,
+            1 => MatcapBlendMode::Add,
+            2 => MatcapBlendMode::HsvModulate,
+            _ => MatcapBlendMode::Multiply,
+        }
+    }
+
+    /// Map game texture handles to graphics texture handles
+    fn map_texture_handles(
         texture_map: &std::collections::HashMap<u32, TextureHandle>,
-        mesh_map: &std::collections::HashMap<u32, MeshHandle>,
-    ) {
-        use crate::state::ZDrawCommand;
-
-        match cmd {
-            ZDrawCommand::DrawTriangles {
-                format,
-                vertex_data,
-                transform,
-                color,
-                depth_test,
-                cull_mode,
-                blend_mode,
-                bound_textures,
-            } => {
-                // Apply state
-                self.set_color(*color);
-                self.set_depth_test(*depth_test);
-                self.set_cull_mode(Self::convert_cull_mode(*cull_mode));
-                self.set_blend_mode(Self::convert_blend_mode(*blend_mode));
-                self.bind_textures_from_game(texture_map, bound_textures);
-                self.transform_set(&transform.to_cols_array());
-
-                // Draw
-                self.draw_triangles(vertex_data, *format);
-            }
-            ZDrawCommand::DrawTrianglesIndexed {
-                format,
-                vertex_data,
-                index_data,
-                transform,
-                color,
-                depth_test,
-                cull_mode,
-                blend_mode,
-                bound_textures,
-            } => {
-                // Apply state
-                self.set_color(*color);
-                self.set_depth_test(*depth_test);
-                self.set_cull_mode(Self::convert_cull_mode(*cull_mode));
-                self.set_blend_mode(Self::convert_blend_mode(*blend_mode));
-                self.bind_textures_from_game(texture_map, bound_textures);
-                self.transform_set(&transform.to_cols_array());
-
-                // Draw
-                self.draw_triangles_indexed(vertex_data, index_data, *format);
-            }
-            ZDrawCommand::DrawMesh {
-                handle,
-                transform,
-                color,
-                depth_test,
-                cull_mode,
-                blend_mode,
-                bound_textures,
-            } => {
-                // Apply state
-                self.set_color(*color);
-                self.set_depth_test(*depth_test);
-                self.set_cull_mode(Self::convert_cull_mode(*cull_mode));
-                self.set_blend_mode(Self::convert_blend_mode(*blend_mode));
-                self.bind_textures_from_game(texture_map, bound_textures);
-                self.transform_set(&transform.to_cols_array());
-
-                // Look up mesh handle and draw
-                if let Some(&mesh_handle) = mesh_map.get(handle) {
-                    if let Some(mesh) = self.get_mesh(mesh_handle) {
-                        // Draw the retained mesh by adding its data to command buffer
-                        // Note: This is a simplified approach - retained meshes need
-                        // proper integration with the command buffer system
-                        tracing::trace!(
-                            "Drawing mesh handle {} ({} vertices)",
-                            handle,
-                            mesh.vertex_count
-                        );
-                        // TODO: Implement retained mesh drawing in command buffer
-                    }
-                } else {
-                    tracing::warn!("Mesh handle {} not found", handle);
+        bound_textures: &[u32; 4],
+    ) -> [TextureHandle; 4] {
+        let mut texture_slots = [TextureHandle::INVALID; 4];
+        for (slot, &game_handle) in bound_textures.iter().enumerate() {
+            if game_handle != 0 {
+                if let Some(&graphics_handle) = texture_map.get(&game_handle) {
+                    texture_slots[slot] = graphics_handle;
                 }
             }
-            ZDrawCommand::DrawBillboard {
-                width,
-                height,
-                mode: _,
-                uv_rect: _,
-                transform,
-                color,
-                depth_test,
-                cull_mode,
-                blend_mode,
-                bound_textures,
-            } => {
-                // TODO: Implement billboard rendering
-                // For now, just log that we received the command
-                tracing::trace!(
-                    "Billboard: {}x{} at {:?} color={:08x}",
-                    width,
-                    height,
-                    transform,
-                    color
-                );
-                let _ = (depth_test, cull_mode, blend_mode, bound_textures);
-            }
-            ZDrawCommand::DrawSprite {
-                x,
-                y,
-                width,
-                height,
-                uv_rect: _,
-                origin: _,
-                rotation: _,
-                color,
-                blend_mode: _,
-                bound_textures: _,
-            } => {
-                // TODO: Implement 2D sprite rendering
-                tracing::trace!(
-                    "Sprite: {}x{} at ({},{}) color={:08x}",
-                    width,
-                    height,
-                    x,
-                    y,
-                    color
-                );
-            }
-            ZDrawCommand::DrawRect {
-                x,
-                y,
-                width,
-                height,
-                color,
-                blend_mode: _,
-            } => {
-                // TODO: Implement 2D rectangle rendering
-                tracing::trace!(
-                    "Rect: {}x{} at ({},{}) color={:08x}",
-                    width,
-                    height,
-                    x,
-                    y,
-                    color
-                );
-            }
-            ZDrawCommand::DrawText {
-                text,
-                x,
-                y,
-                size,
-                color,
-                blend_mode: _,
-            } => {
-                // TODO: Implement text rendering using font system
-                let text_str = std::str::from_utf8(text).unwrap_or("");
-                tracing::trace!(
-                    "Text: '{}' at ({},{}) size={} color={:08x}",
-                    text_str,
-                    x,
-                    y,
-                    size,
-                    color
-                );
-            }
-            ZDrawCommand::SetSky {
-                horizon_color,
-                zenith_color,
-                sun_direction,
-                sun_color,
-                sun_sharpness,
-            } => {
-                self.set_sky(
-                    *horizon_color,
-                    *zenith_color,
-                    *sun_direction,
-                    *sun_color,
-                    *sun_sharpness,
-                );
-            }
         }
+        texture_slots
     }
 
     /// Convert game cull mode to graphics cull mode
@@ -1339,23 +1356,6 @@ impl ZGraphics {
             2 => BlendMode::Additive,
             3 => BlendMode::Multiply,
             _ => BlendMode::None,
-        }
-    }
-
-    /// Bind textures from game handles to graphics slots
-    fn bind_textures_from_game(
-        &mut self,
-        texture_map: &std::collections::HashMap<u32, TextureHandle>,
-        bound_textures: &[u32; 4],
-    ) {
-        for (slot, &game_handle) in bound_textures.iter().enumerate() {
-            if game_handle == 0 {
-                self.bind_texture_slot(TextureHandle::INVALID, slot);
-            } else if let Some(&graphics_handle) = texture_map.get(&game_handle) {
-                self.bind_texture_slot(graphics_handle, slot);
-            } else {
-                self.bind_texture_slot(TextureHandle::INVALID, slot);
-            }
         }
     }
 

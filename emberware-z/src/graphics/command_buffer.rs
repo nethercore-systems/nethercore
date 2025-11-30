@@ -155,6 +155,44 @@ impl CommandBuffer {
         &mut self.commands
     }
 
+    /// Append vertex data to buffer and return base_vertex index
+    ///
+    /// Used for direct conversion from ZDrawCommand without state mutation.
+    pub fn append_vertex_data(&mut self, format: u8, data: &[f32]) -> u32 {
+        let format_idx = format as usize;
+        let stride = vertex_stride(format) as usize;
+        let vertex_count = (data.len() * 4) / stride;
+        let base_vertex = self.vertex_counts[format_idx];
+
+        // Append vertex data
+        let byte_data = bytemuck::cast_slice(data);
+        self.vertex_data[format_idx].extend_from_slice(byte_data);
+        self.vertex_counts[format_idx] += vertex_count as u32;
+
+        base_vertex
+    }
+
+    /// Append index data to buffer and return first_index
+    ///
+    /// Used for direct conversion from ZDrawCommand without state mutation.
+    pub fn append_index_data(&mut self, format: u8, data: &[u32]) -> u32 {
+        let format_idx = format as usize;
+        let first_index = self.index_counts[format_idx];
+
+        // Append index data
+        self.index_data[format_idx].extend_from_slice(data);
+        self.index_counts[format_idx] += data.len() as u32;
+
+        first_index
+    }
+
+    /// Add a draw command directly
+    ///
+    /// Used for direct conversion from ZDrawCommand without state mutation.
+    pub fn add_command(&mut self, cmd: DrawCommand) {
+        self.commands.push(cmd);
+    }
+
     /// Get vertex data for a format
     pub fn vertex_data(&self, format: u8) -> &[u8] {
         &self.vertex_data[format as usize]
