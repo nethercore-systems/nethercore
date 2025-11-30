@@ -22,13 +22,20 @@ pub const DEFAULT_INPUT_DELAY: usize = 0;
 /// Default input delay for online play (balance between responsiveness and rollbacks)
 pub const DEFAULT_ONLINE_INPUT_DELAY: usize = 2;
 
-/// Maximum state buffer size (16MB - full WASM linear memory snapshot)
-/// WASM games typically use 64KB-16MB of memory. This limit accommodates
-/// the largest games while preventing excessive memory usage.
+/// Default maximum state buffer size (16MB - full WASM linear memory snapshot)
+///
+/// **IMPORTANT**: This is a default fallback value. Consoles should use their
+/// specific RAM limit from `ConsoleSpecs::ram_limit` when creating rollback sessions.
+/// For example:
+/// - Emberware Z: 4MB (ConsoleSpecs::ram_limit)
+/// - Emberware Classic: 1MB (ConsoleSpecs::ram_limit)
+///
+/// To use console-specific limits, create the RollbackStateManager with:
+/// ```ignore
+/// let max_state_size = console.specs().ram_limit;
+/// let state_manager = RollbackStateManager::new(max_state_size);
+/// ```
 pub const MAX_STATE_SIZE: usize = 16 * 1024 * 1024;
-
-/// Number of pre-allocated state buffers in the pool
-pub const STATE_POOL_SIZE: usize = MAX_ROLLBACK_FRAMES + 2;
 
 /// GGRS configuration for Emberware
 ///

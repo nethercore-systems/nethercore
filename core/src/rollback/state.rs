@@ -171,14 +171,30 @@ impl Default for StatePool {
 pub struct RollbackStateManager {
     /// Pre-allocated buffer pool
     pool: StatePool,
+    /// Maximum state size in bytes (should match console's RAM limit)
+    max_state_size: usize,
 }
 
 impl RollbackStateManager {
-    /// Create a new rollback state manager
-    pub fn new() -> Self {
+    /// Create a new rollback state manager with specified max state size
+    ///
+    /// The `max_state_size` should match the console's RAM limit from `ConsoleSpecs::ram_limit`.
+    /// For example:
+    /// - Emberware Z: 4MB
+    /// - Emberware Classic: 1MB
+    pub fn new(max_state_size: usize) -> Self {
         Self {
-            pool: StatePool::with_defaults(),
+            pool: StatePool::new(max_state_size, STATE_POOL_SIZE),
+            max_state_size,
         }
+    }
+
+    /// Create a rollback state manager with default settings
+    ///
+    /// Uses [`MAX_STATE_SIZE`](super::config::MAX_STATE_SIZE) (16MB) as the default.
+    /// **Prefer using `new(console.specs().ram_limit)` to respect console limits.**
+    pub fn with_defaults() -> Self {
+        Self::new(MAX_STATE_SIZE)
     }
 
     /// Save the current game state
@@ -195,10 +211,10 @@ impl RollbackStateManager {
             .save_state()
             .map_err(|e| SaveStateError::WasmError(e.to_string()))?;
 
-        if snapshot_data.len() > MAX_STATE_SIZE {
+        if snapshot_data.len() > self.max_state_size {
             return Err(SaveStateError::StateTooLarge {
                 size: snapshot_data.len(),
-                max: MAX_STATE_SIZE,
+                max: self.max_state_size,
             });
         }
 
@@ -235,7 +251,7 @@ impl RollbackStateManager {
 
 impl Default for RollbackStateManager {
     fn default() -> Self {
-        Self::new()
+        Self::with_defaults()
     }
 }
 

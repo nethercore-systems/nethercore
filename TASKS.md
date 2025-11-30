@@ -1144,3 +1144,15 @@ KEYCODE_TO_BUTTON.get(&(keycode as u32)).copied()
 **Implementation in progress...**
 
 ## Done
+
+### Remove reliance on MAX_STATE_SIZE and use console spec provided RAM to limit
+**Status:** Completed
+**Changes Made:**
+- Updated `RollbackStateManager::new(max_state_size)` to accept console-specific RAM limit
+- Added `RollbackStateManager::with_defaults()` for backward compatibility
+- Updated all `RollbackSession` constructors to accept `max_state_size` parameter
+- Added documentation to `MAX_STATE_SIZE` constant explaining it's a fallback
+- Consoles now use `console.specs().ram_limit` when creating rollback sessions:
+  - Emberware Z: 4MB
+  - Emberware Classic: 1MB
+- All tests passing ✓

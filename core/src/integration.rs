@@ -445,7 +445,7 @@ mod tests {
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
         let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
-        let mut state_manager = RollbackStateManager::new();
+        let mut state_manager = RollbackStateManager::with_defaults();
 
         game.init().unwrap();
 
@@ -504,7 +504,7 @@ mod tests {
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
         let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
-        let mut state_manager = RollbackStateManager::new();
+        let mut state_manager = RollbackStateManager::with_defaults();
 
         game.init().unwrap();
 
@@ -549,7 +549,7 @@ mod tests {
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
         let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
-        let mut state_manager = RollbackStateManager::new();
+        let mut state_manager = RollbackStateManager::with_defaults();
 
         game.init().unwrap();
 
@@ -597,7 +597,7 @@ mod tests {
         let module = engine.load_module(&wasm).unwrap();
         let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
 
-        let mut session = RollbackSession::<TestInput>::new_local(2);
+        let mut session = RollbackSession::<TestInput>::new_local(2, 4 * 1024 * 1024);
 
         game.init().unwrap();
 
@@ -755,7 +755,7 @@ mod tests {
     /// Test RollbackSession input handling
     #[test]
     fn test_rollback_session_input() {
-        let mut session = RollbackSession::<TestInput>::new_local(2);
+        let mut session = RollbackSession::<TestInput>::new_local(2, 4 * 1024 * 1024);
 
         // Add input for local players
         let input0 = TestInput {
@@ -1072,7 +1072,7 @@ mod tests {
         let wasm = wat::parse_str(wat).unwrap();
         let module = engine.load_module(&wasm).unwrap();
         let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
-        let mut state_manager = RollbackStateManager::new();
+        let mut state_manager = RollbackStateManager::with_defaults();
 
         // Phase 1: Init
         game.init().unwrap();
@@ -1138,7 +1138,7 @@ mod tests {
         runtime.init_game().unwrap();
 
         // Set up 4-player local session
-        let session = RollbackSession::<TestInput>::new_local(4);
+        let session = RollbackSession::<TestInput>::new_local(4, 4 * 1024 * 1024);
         runtime.set_session(session);
 
         // Verify session is set

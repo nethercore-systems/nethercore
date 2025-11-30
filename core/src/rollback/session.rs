@@ -119,9 +119,11 @@ impl<I: ConsoleInput> RollbackSession<I> {
     /// or local multiplayer on the same machine.
     ///
     /// All players are assumed to be local.
-    pub fn new_local(num_players: usize) -> Self {
+    ///
+    /// `max_state_size` should match the console's RAM limit (e.g., `console.specs().ram_limit`).
+    pub fn new_local(num_players: usize, max_state_size: usize) -> Self {
         let player_config = PlayerSessionConfig::all_local(num_players as u32);
-        Self::new_local_with_config(player_config)
+        Self::new_local_with_config(player_config, max_state_size)
     }
 
     /// Create a new local session with explicit player configuration
@@ -129,7 +131,9 @@ impl<I: ConsoleInput> RollbackSession<I> {
     /// This allows specifying which players are local vs remote.
     /// For local sessions, all players should typically be local,
     /// but this method allows flexibility for testing or special scenarios.
-    pub fn new_local_with_config(player_config: PlayerSessionConfig) -> Self {
+    ///
+    /// `max_state_size` should match the console's RAM limit (e.g., `console.specs().ram_limit`).
+    pub fn new_local_with_config(player_config: PlayerSessionConfig, max_state_size: usize) -> Self {
         let num_players = player_config.num_players() as usize;
         let local_players = player_config.local_player_indices();
 
@@ -141,7 +145,7 @@ impl<I: ConsoleInput> RollbackSession<I> {
             session_type: SessionType::Local,
             config: SessionConfig::local(num_players),
             player_config,
-            state_manager: RollbackStateManager::new(),
+            state_manager: RollbackStateManager::new(max_state_size),
             rolling_back: false,
             local_players,
             network_stats: Vec::new(), // No network stats for local
@@ -156,15 +160,20 @@ impl<I: ConsoleInput> RollbackSession<I> {
     /// Sync test sessions simulate rollback every frame to verify
     /// the game state is deterministic. Use this during development
     /// to catch non-determinism bugs.
-    pub fn new_sync_test(config: SessionConfig) -> Result<Self, GgrsError> {
+    ///
+    /// `max_state_size` should match the console's RAM limit (e.g., `console.specs().ram_limit`).
+    pub fn new_sync_test(config: SessionConfig, max_state_size: usize) -> Result<Self, GgrsError> {
         let player_config = PlayerSessionConfig::all_local(config.num_players as u32);
-        Self::new_sync_test_with_config(config, player_config)
+        Self::new_sync_test_with_config(config, player_config, max_state_size)
     }
 
     /// Create a new sync test session with explicit player configuration
+    ///
+    /// `max_state_size` should match the console's RAM limit (e.g., `console.specs().ram_limit`).
     pub fn new_sync_test_with_config(
         config: SessionConfig,
         player_config: PlayerSessionConfig,
+        max_state_size: usize,
     ) -> Result<Self, GgrsError> {
         let session = SessionBuilder::<EmberwareConfig<I>>::new()
             .with_num_players(config.num_players)
@@ -183,7 +192,7 @@ impl<I: ConsoleInput> RollbackSession<I> {
             session_type: SessionType::SyncTest,
             config,
             player_config,
-            state_manager: RollbackStateManager::new(),
+            state_manager: RollbackStateManager::new(max_state_size),
             rolling_back: false,
             local_players,
             network_stats: Vec::new(), // No network stats for sync test
@@ -201,10 +210,13 @@ impl<I: ConsoleInput> RollbackSession<I> {
     /// The player configuration is derived from the `players` parameter:
     /// - Local players are those with `PlayerType::Local`
     /// - Remote players are those with `PlayerType::Remote`
+    ///
+    /// `max_state_size` should match the console's RAM limit (e.g., `console.specs().ram_limit`).
     pub fn new_p2p<S>(
         config: SessionConfig,
         socket: S,
         players: Vec<(usize, PlayerType<String>)>,
+        max_state_size: usize,
     ) -> Result<Self, GgrsError>
     where
         S: NonBlockingSocket<String> + 'static,
@@ -218,18 +230,21 @@ impl<I: ConsoleInput> RollbackSession<I> {
         }
         let player_config = PlayerSessionConfig::new(config.num_players as u32, local_mask);
 
-        Self::new_p2p_with_config(config, player_config, socket, players)
+        Self::new_p2p_with_config(config, player_config, socket, players, max_state_size)
     }
 
     /// Create a new P2P session with explicit player configuration
     ///
     /// This allows full control over the player session configuration.
     /// The `players` parameter still specifies the GGRS player types.
+    ///
+    /// `max_state_size` should match the console's RAM limit (e.g., `console.specs().ram_limit`).
     pub fn new_p2p_with_config<S>(
         config: SessionConfig,
         player_config: PlayerSessionConfig,
         socket: S,
         players: Vec<(usize, PlayerType<String>)>,
+        max_state_size: usize,
     ) -> Result<Self, GgrsError>
     where
         S: NonBlockingSocket<String> + 'static,
@@ -266,7 +281,7 @@ impl<I: ConsoleInput> RollbackSession<I> {
             session_type: SessionType::P2P,
             config,
             player_config,
-            state_manager: RollbackStateManager::new(),
+            state_manager: RollbackStateManager::new(max_state_size),
             rolling_back: false,
             local_players,
             network_stats,
@@ -833,7 +848,7 @@ mod tests {
 
     #[test]
     fn test_rollback_session_local() {
-        let session = RollbackSession::<TestInput>::new_local(2);
+        let session = RollbackSession::<TestInput>::new_local(2, 4 * 1024 * 1024);
         assert_eq!(session.session_type(), SessionType::Local);
         assert_eq!(session.config().num_players, 2);
         assert_eq!(session.current_frame(), 0);
@@ -843,13 +858,13 @@ mod tests {
     #[test]
     fn test_rollback_session_sync_test() {
         let config = SessionConfig::sync_test();
-        let session = RollbackSession::<TestInput>::new_sync_test(config).unwrap();
+        let session = RollbackSession::<TestInput>::new_sync_test(config, 4 * 1024 * 1024).unwrap();
         assert_eq!(session.session_type(), SessionType::SyncTest);
     }
 
     #[test]
     fn test_local_session_advance() {
-        let mut session = RollbackSession::<TestInput>::new_local(2);
+        let mut session = RollbackSession::<TestInput>::new_local(2, 4 * 1024 * 1024);
         assert_eq!(session.current_frame(), 0);
 
         let requests = session.advance_frame().unwrap();
@@ -966,26 +981,26 @@ mod tests {
 
     #[test]
     fn test_local_session_has_no_network_stats() {
-        let session = RollbackSession::<TestInput>::new_local(2);
+        let session = RollbackSession::<TestInput>::new_local(2, 4 * 1024 * 1024);
         assert!(session.all_player_stats().is_empty());
         assert!(session.player_stats(0).is_none());
     }
 
     #[test]
     fn test_local_session_no_desync() {
-        let session = RollbackSession::<TestInput>::new_local(2);
+        let session = RollbackSession::<TestInput>::new_local(2, 4 * 1024 * 1024);
         assert!(!session.has_desync());
     }
 
     #[test]
     fn test_local_session_total_rollback_frames() {
-        let session = RollbackSession::<TestInput>::new_local(2);
+        let session = RollbackSession::<TestInput>::new_local(2, 4 * 1024 * 1024);
         assert_eq!(session.total_rollback_frames(), 0);
     }
 
     #[test]
     fn test_local_session_handle_events_empty() {
-        let mut session = RollbackSession::<TestInput>::new_local(2);
+        let mut session = RollbackSession::<TestInput>::new_local(2, 4 * 1024 * 1024);
         let events = session.handle_events();
         // Local sessions don't produce events
         assert!(events.is_empty());
@@ -1023,7 +1038,7 @@ mod tests {
 
     #[test]
     fn test_rollback_session_local_has_player_config() {
-        let session = RollbackSession::<TestInput>::new_local(2);
+        let session = RollbackSession::<TestInput>::new_local(2, 4 * 1024 * 1024);
         let player_config = session.player_config();
         assert_eq!(player_config.num_players(), 2);
         assert_eq!(player_config.local_player_count(), 2);
@@ -1035,7 +1050,7 @@ mod tests {
     fn test_rollback_session_local_with_config() {
         // Create a local session with custom player config
         let player_config = PlayerSessionConfig::new(4, 0b0011); // Only players 0, 1 local
-        let session = RollbackSession::<TestInput>::new_local_with_config(player_config);
+        let session = RollbackSession::<TestInput>::new_local_with_config(player_config, 4 * 1024 * 1024);
 
         assert_eq!(session.player_config().num_players(), 4);
         assert_eq!(session.player_config().local_player_mask(), 0b0011);
@@ -1045,7 +1060,7 @@ mod tests {
     #[test]
     fn test_rollback_session_sync_test_has_player_config() {
         let config = SessionConfig::sync_test();
-        let session = RollbackSession::<TestInput>::new_sync_test(config).unwrap();
+        let session = RollbackSession::<TestInput>::new_sync_test(config, 4 * 1024 * 1024).unwrap();
         let player_config = session.player_config();
         assert_eq!(player_config.num_players(), 1);
         assert!(player_config.is_local_player(0));

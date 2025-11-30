@@ -52,7 +52,7 @@ mod state;
 // Re-export public types from config
 pub use config::{
     EmberwareConfig, SessionConfig, DEFAULT_INPUT_DELAY, DEFAULT_ONLINE_INPUT_DELAY,
-    MAX_INPUT_DELAY, MAX_ROLLBACK_FRAMES, MAX_STATE_SIZE, STATE_POOL_SIZE,
+    MAX_INPUT_DELAY, MAX_ROLLBACK_FRAMES, MAX_STATE_SIZE,
 };
 
 // Re-export public types from player
@@ -61,6 +61,7 @@ pub use player::{PlayerSessionConfig, MAX_PLAYERS};
 // Re-export public types from state
 pub use state::{
     GameStateSnapshot, LoadStateError, RollbackStateManager, SaveStateError, StatePool,
+    STATE_POOL_SIZE,
 };
 
 // Re-export public types from session
