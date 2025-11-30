@@ -661,6 +661,30 @@ impl GameInstance {
             self.store.data_mut().input_curr[player] = input;
         }
     }
+
+    /// Configure the session's player count and local player mask
+    ///
+    /// This should be called before `init()` to set up multiplayer state.
+    /// The game can query these values via the `player_count()` and
+    /// `local_player_mask()` FFI functions.
+    ///
+    /// # Arguments
+    /// * `player_count` - Number of players in session (1-4)
+    /// * `local_player_mask` - Bitmask of local players (bit N = player N is local)
+    ///
+    /// # Example
+    /// ```ignore
+    /// // 2 players, only player 0 is local (standard online play)
+    /// game.configure_session(2, 0b0001);
+    ///
+    /// // 4 players, players 0 and 1 are local (2 local + 2 remote)
+    /// game.configure_session(4, 0b0011);
+    /// ```
+    pub fn configure_session(&mut self, player_count: u32, local_player_mask: u32) {
+        let state = self.store.data_mut();
+        state.player_count = player_count.min(MAX_PLAYERS as u32);
+        state.local_player_mask = local_player_mask;
+    }
 }
 
 #[cfg(test)]
@@ -1382,6 +1406,52 @@ mod tests {
         // Should return Ok when load_state is not exported
         let result = game.load_state(&[1, 2, 3, 4]);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_game_instance_configure_session() {
+        let engine = WasmEngine::new().unwrap();
+        let wasm = wat::parse_str(r#"
+            (module
+                (memory (export "memory") 1)
+            )
+        "#).unwrap();
+        let module = engine.load_module(&wasm).unwrap();
+        let linker = Linker::new(engine.engine());
+
+        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+
+        // Default values
+        assert_eq!(game.state().player_count, 1);
+        assert_eq!(game.state().local_player_mask, 1);
+
+        // Configure for 4 players, only player 0 is local
+        game.configure_session(4, 0b0001);
+        assert_eq!(game.state().player_count, 4);
+        assert_eq!(game.state().local_player_mask, 0b0001);
+
+        // Configure for 2 players, both local
+        game.configure_session(2, 0b0011);
+        assert_eq!(game.state().player_count, 2);
+        assert_eq!(game.state().local_player_mask, 0b0011);
+    }
+
+    #[test]
+    fn test_game_instance_configure_session_clamps_players() {
+        let engine = WasmEngine::new().unwrap();
+        let wasm = wat::parse_str(r#"
+            (module
+                (memory (export "memory") 1)
+            )
+        "#).unwrap();
+        let module = engine.load_module(&wasm).unwrap();
+        let linker = Linker::new(engine.engine());
+
+        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+
+        // Try to set more than MAX_PLAYERS
+        game.configure_session(100, 0xFFFF);
+        assert_eq!(game.state().player_count, 4); // Clamped to MAX_PLAYERS
     }
 
     // ============================================================================

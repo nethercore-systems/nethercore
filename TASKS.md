@@ -173,12 +173,7 @@ The `Runtime<C: Console>` handles:
 
 ### Phase 5: Networking & Polish
 
-- **Implement multiplayer player model**
-  - Max 4 players total (any mix of local + remote)
-  - Examples: 4 local, 1 local + 3 remote, 2 local + 2 remote
-  - Each local player maps to a physical input device
-  - GGRS handles all players uniformly
-  - Player slot assignment
+(Moved to Done: multiplayer player model)
 
 - **Implement matchbox signaling connection**
   - Connect to matchbox signaling server
@@ -233,6 +228,17 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **Implement multiplayer player model (Phase 5)**
+  - Added `PlayerSessionConfig` struct for configuring local vs remote players
+  - Max 4 players total with flexible local/remote assignment via bitmask
+  - Constructors: `all_local(n)`, `one_local(n)`, `with_local_players(n, &[])`, `new(n, mask)`
+  - Methods: `is_local_player()`, `local_player_count()`, `remote_player_count()`, `local_player_indices()`, `remote_player_indices()`
+  - Added `configure_session(player_count, local_player_mask)` to `GameInstance`
+  - Updated `RollbackSession` to store and expose `PlayerSessionConfig`
+  - Added `new_local_with_config()`, `new_sync_test_with_config()`, `new_p2p_with_config()` constructors
+  - Added `player_config()` accessor on `RollbackSession`
+  - 24 new tests for PlayerSessionConfig and integration with RollbackSession
 
 - **Create developer guide (Phase 7)**
   - Getting started tutorial: Step-by-step first game walkthrough
