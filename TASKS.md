@@ -109,6 +109,41 @@ The `Runtime<C: Console>` handles:
 
 ### Phase 5: Networking & Polish
 
+- **Implement synchronized save slots (VMU-style memory cards)**
+
+  Similar to Dreamcast VMUs, each player "brings" their own save data to a networked session.
+  This enables fighting games with unlocked characters, RPGs with player stats, etc.
+
+  **Design:**
+  1. Each player has their own "memory card" (save slot) that travels with their controller
+  2. During P2P session setup, save data is exchanged before `init()` runs
+  3. All clients receive identical slot layout: slot 0 = P1's data, slot 1 = P2's data, etc.
+  4. Games use `player_count()` and `local_player_mask()` to know which slot is "theirs"
+  5. Save data is raw bytes - games handle serialization/deserialization
+
+  **Implementation steps:**
+  1. Add `save_data_limit: usize` to `ConsoleSpecs` (e.g., 64KB per player for Emberware Z)
+  2. Add `SessionSaveData` struct to hold per-player save buffers
+  3. Modify session setup to exchange save data via signaling/WebRTC data channel:
+     - Before GGRS session starts, exchange save buffers
+     - Use a simple protocol: `[player_index: u8][length: u32][data: [u8; length]]`
+     - All players must receive all save data before proceeding
+  4. Populate `GameState.save_data[player_index]` slots identically on all clients
+  5. Call `init()` only after save data is synchronized
+  6. For local sessions: load save data from disk into slot 0 before init
+  7. Existing `save()`/`load()`/`delete()` FFI works unchanged - just reads from synchronized slots
+
+  **Platform integration:**
+  - Platform layer loads player's save from `~/.emberware/games/{game_id}/saves/player.sav`
+  - On session end, local player's slot is written back to disk
+  - Save data versioning/migration is game's responsibility
+
+  **Edge cases:**
+  - Player without save data: slot contains empty buffer (len=0)
+  - Save data too large: reject during session setup, show error
+  - Player disconnect during exchange: abort session, show error
+  - Spectators: receive all save data but don't contribute a slot
+
 - **Implement matchbox signaling connection** [NEEDS CLARIFICATION]
   - Connect to matchbox signaling server
   - WebRTC peer connection establishment
