@@ -53,6 +53,8 @@ impl std::fmt::Display for RuntimeError {
 const FRAME_TIME_HISTORY_SIZE: usize = 120;
 /// Target frame time for reference line (60 FPS = 16.67ms)
 const TARGET_FRAME_TIME_MS: f32 = 16.67;
+/// Maximum frame time shown in graph (30 FPS = 33.33ms, 2x target)
+const GRAPH_MAX_FRAME_TIME_MS: f32 = 33.33;
 
 /// Debug statistics for overlay
 #[derive(Debug, Default)]
@@ -1059,7 +1061,7 @@ impl App {
                             painter.rect_filled(rect, 2.0, egui::Color32::from_gray(30));
 
                             // Target line (16.67ms for 60 FPS)
-                            let target_y = rect.bottom() - (TARGET_FRAME_TIME_MS / 33.33 * graph_height);
+                            let target_y = rect.bottom() - (TARGET_FRAME_TIME_MS / GRAPH_MAX_FRAME_TIME_MS * graph_height);
                             painter.hline(
                                 rect.left()..=rect.right(),
                                 target_y,
@@ -1071,8 +1073,8 @@ impl App {
                                 let bar_width = rect.width() / FRAME_TIME_HISTORY_SIZE as f32;
                                 for (i, &time_ms) in debug_stats.frame_times.iter().enumerate() {
                                     let x = rect.left() + i as f32 * bar_width;
-                                    // Scale: 0-33.33ms maps to full height
-                                    let height = (time_ms / 33.33 * graph_height).min(graph_height);
+                                    // Scale: 0-GRAPH_MAX_FRAME_TIME_MS maps to full height
+                                    let height = (time_ms / GRAPH_MAX_FRAME_TIME_MS * graph_height).min(graph_height);
                                     let bar_rect = egui::Rect::from_min_max(
                                         egui::pos2(x, rect.bottom() - height),
                                         egui::pos2(x + bar_width - 1.0, rect.bottom()),
@@ -1081,7 +1083,7 @@ impl App {
                                     // Color based on frame time
                                     let color = if time_ms <= TARGET_FRAME_TIME_MS {
                                         egui::Color32::from_rgb(100, 200, 100) // Green
-                                    } else if time_ms <= 33.33 {
+                                    } else if time_ms <= GRAPH_MAX_FRAME_TIME_MS {
                                         egui::Color32::from_rgb(200, 200, 100) // Yellow
                                     } else {
                                         egui::Color32::from_rgb(200, 100, 100) // Red
