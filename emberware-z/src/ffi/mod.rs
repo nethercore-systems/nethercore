@@ -68,6 +68,7 @@ pub fn register_z_ffi(linker: &mut Linker<GameState>) -> Result<()> {
     linker.func_wrap("env", "load_texture", load_texture)?;
     linker.func_wrap("env", "texture_bind", texture_bind)?;
     linker.func_wrap("env", "texture_bind_slot", texture_bind_slot)?;
+    linker.func_wrap("env", "matcap_blend_mode", matcap_blend_mode)?;
 
     // Mesh functions (retained mode)
     linker.func_wrap("env", "load_mesh", load_mesh)?;
@@ -631,6 +632,35 @@ fn texture_bind_slot(mut caller: Caller<'_, GameState>, handle: u32, slot: u32) 
 
     let state = caller.data_mut();
     state.render_state.bound_textures[slot as usize] = handle;
+}
+
+/// Set matcap blend mode for a texture slot (Mode 1 only)
+///
+/// # Arguments
+/// * `slot` — Matcap slot index (1-3, slot 0 is albedo and does not support blend modes)
+/// * `mode` — Blend mode (0=Multiply, 1=Add, 2=HSV Modulate)
+///
+/// Mode 0 (Multiply): Standard matcap blending (default)
+/// Mode 1 (Add): Additive blending for glow/emission effects
+/// Mode 2 (HSV Modulate): Hue shifting and iridescence effects
+fn matcap_blend_mode(mut caller: Caller<'_, GameState>, slot: u32, mode: u32) {
+    use crate::graphics::MatcapBlendMode;
+
+    if slot < 1 || slot > 3 {
+        warn!("matcap_blend_mode: invalid slot {} (must be 1-3)", slot);
+        return;
+    }
+
+    let blend_mode = match MatcapBlendMode::from_u32(mode) {
+        Some(m) => m,
+        None => {
+            warn!("matcap_blend_mode: invalid mode {} (must be 0-2)", mode);
+            return;
+        }
+    };
+
+    let state = caller.data_mut();
+    state.render_state.matcap_blend_modes[slot as usize] = blend_mode as u8;
 }
 
 // ============================================================================

@@ -46,6 +46,9 @@ pub struct RenderState {
     pub texture_filter: u8,
     /// Bound texture handles per slot
     pub bound_textures: [u32; 4],
+    /// Matcap blend modes for slots 1-3 (Mode 1 only, [0] unused)
+    /// Values: 0=Multiply, 1=Add, 2=HSV Modulate
+    pub matcap_blend_modes: [u8; 4],
     /// Current render mode (0-3)
     pub render_mode: u8,
     /// Material metallic value (0.0-1.0, default 0.0)
@@ -71,6 +74,7 @@ impl Default for RenderState {
             blend_mode: 0,
             texture_filter: 0, // Nearest by default (retro look)
             bound_textures: [0; 4],
+            matcap_blend_modes: [0; 4], // Multiply by default
             render_mode: 0,
             material_metallic: 0.0,
             material_roughness: 0.5,
