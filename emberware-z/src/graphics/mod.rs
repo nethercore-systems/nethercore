@@ -1683,7 +1683,7 @@ impl ZGraphics {
                     blend_mode: cmd.blend_mode,
                     texture_filter: self.render_state.texture_filter,
                     texture_slots: cmd.texture_slots,
-                    matcap_blend_modes: [MatcapBlendMode::Multiply; 4],
+                    matcap_blend_modes: cmd.matcap_blend_modes,
                 };
                 let pipeline_key = PipelineKey::new(self.current_render_mode, cmd.format, &state);
                 (
@@ -1701,8 +1701,8 @@ impl ZGraphics {
 
         // OPTIMIZATION 2: Cache bind groups to avoid creating duplicates
         // Material bind group cache: color -> uniform buffer
-        // Cache material buffers by (color, metallic_bits, roughness_bits, emissive_bits)
-        let mut material_buffers: HashMap<(u32, u32, u32, u32), wgpu::Buffer> = HashMap::new();
+        // Cache material buffers by (color, metallic_bits, roughness_bits, emissive_bits, matcap_modes)
+        let mut material_buffers: HashMap<(u32, u32, u32, u32, (u32, u32, u32, u32)), wgpu::Buffer> = HashMap::new();
         // Texture bind group cache: texture_slots -> bind group
         let mut texture_bind_groups: HashMap<[TextureHandle; 4], wgpu::BindGroup> = HashMap::new();
 
@@ -1744,7 +1744,7 @@ impl ZGraphics {
                     blend_mode: cmd.blend_mode,
                     texture_filter: self.render_state.texture_filter,
                     texture_slots: cmd.texture_slots,
-                    matcap_blend_modes: [MatcapBlendMode::Multiply; 4],
+                    matcap_blend_modes: cmd.matcap_blend_modes,
                 };
 
                 // Get/create pipeline
@@ -1761,13 +1761,20 @@ impl ZGraphics {
                 }
                 let pipeline_entry = &self.pipelines[&pipeline_key];
 
-                // Get or create material uniform buffer (cached by color + properties)
-                // Cache key combines color with material properties
+                // Get or create material uniform buffer (cached by color + properties + blend modes)
+                // Cache key combines color with material properties and matcap blend modes
+                let matcap_key = (
+                    state.matcap_blend_modes[0] as u32,
+                    state.matcap_blend_modes[1] as u32,
+                    state.matcap_blend_modes[2] as u32,
+                    state.matcap_blend_modes[3] as u32,
+                );
                 let material_key = (
                     cmd.color,
                     self.material_uniforms.properties[0].to_bits(),
                     self.material_uniforms.properties[1].to_bits(),
                     self.material_uniforms.properties[2].to_bits(),
+                    matcap_key,
                 );
                 let material_buffer = material_buffers.entry(material_key).or_insert_with(|| {
                     let color_vec = state.color_vec4();
@@ -1775,17 +1782,16 @@ impl ZGraphics {
                     #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
                     struct MaterialUniforms {
                         color: [f32; 4],
-                        metallic: f32,
-                        roughness: f32,
-                        emissive: f32,
-                        _pad: f32,
+                        matcap_blend_modes: [u32; 4],
                     }
                     let material = MaterialUniforms {
                         color: [color_vec.x, color_vec.y, color_vec.z, color_vec.w],
-                        metallic: self.material_uniforms.properties[0],
-                        roughness: self.material_uniforms.properties[1],
-                        emissive: self.material_uniforms.properties[2],
-                        _pad: 0.0,
+                        matcap_blend_modes: [
+                            state.matcap_blend_modes[0] as u32,
+                            state.matcap_blend_modes[1] as u32,
+                            state.matcap_blend_modes[2] as u32,
+                            state.matcap_blend_modes[3] as u32,
+                        ],
                     };
                     self.device
                         .create_buffer_init(&wgpu::util::BufferInitDescriptor {

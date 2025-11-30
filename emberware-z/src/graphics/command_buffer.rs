@@ -5,7 +5,7 @@
 
 use glam::Mat4;
 
-use super::render_state::{BlendMode, CullMode, RenderState, TextureHandle};
+use super::render_state::{BlendMode, CullMode, MatcapBlendMode, RenderState, TextureHandle};
 use super::vertex::{vertex_stride, VERTEX_FORMAT_COUNT};
 
 /// A draw command for batching
@@ -31,6 +31,8 @@ pub struct DrawCommand {
     pub depth_test: bool,
     pub cull_mode: CullMode,
     pub blend_mode: BlendMode,
+    /// Matcap blend modes for slots 1-3 (Mode 1 only)
+    pub matcap_blend_modes: [MatcapBlendMode; 4],
 }
 
 /// Command buffer for batching immediate-mode draws
@@ -92,6 +94,7 @@ impl CommandBuffer {
             depth_test: state.depth_test,
             cull_mode: state.cull_mode,
             blend_mode: state.blend_mode,
+            matcap_blend_modes: state.matcap_blend_modes,
         });
 
         base_vertex
@@ -136,6 +139,7 @@ impl CommandBuffer {
             depth_test: state.depth_test,
             cull_mode: state.cull_mode,
             blend_mode: state.blend_mode,
+            matcap_blend_modes: state.matcap_blend_modes,
         });
 
         (base_vertex, first_index)
@@ -279,6 +283,7 @@ mod tests {
             depth_test: true,
             cull_mode: CullMode::Back,
             blend_mode: BlendMode::None,
+            matcap_blend_modes: [MatcapBlendMode::Multiply; 4],
         };
         assert_eq!(cmd.format, FORMAT_UV);
         assert_eq!(cmd.vertex_count, 3);
@@ -304,6 +309,7 @@ mod tests {
             depth_test: false,
             cull_mode: CullMode::None,
             blend_mode: BlendMode::Alpha,
+            matcap_blend_modes: [MatcapBlendMode::Multiply; 4],
         };
         let cloned = cmd.clone();
         assert_eq!(cloned.format, cmd.format);
