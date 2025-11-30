@@ -107,14 +107,6 @@ The `Runtime<C: Console>` handles:
   - Critical: During GGRS rollback, `advance_frame` requests provide confirmed inputs but these are never passed to the game before calling `update()`. Breaks deterministic rollback netcode.
   - TODO comment exists: "This requires exposing GameState input setters"
 
-- **[STABILITY] Replace expect() calls in graphics initialization** (`emberware-z/src/graphics.rs:1366,1372,1379`)
-  - Creating fallback textures uses `.expect()` which will panic on GPU resource creation failure.
-  - Should use `?` operator and propagate errors, or create minimal fallback behavior.
-
-- **[STABILITY] Fix WasmEngine::Default panic** (`core/src/wasm.rs:194`)
-  - `Default` implementation panics if WASM engine fails to initialize.
-  - Violates Rust conventions where `Default` should not panic.
-  - Consider removing `Default` impl or documenting the panic.
 
 - **[STABILITY] Implement audio backend** (`emberware-z/src/console.rs:173,177,239`)
   - `ZAudio::play()`, `ZAudio::stop()`, and `create_audio()` are stubs with TODO comments.
@@ -128,9 +120,6 @@ The `Runtime<C: Console>` handles:
   - TODO: "Open web browser to platform website"
   - Settings UI doesn't open a web link as intended.
 
-- **[STABILITY] Add comments to dead_code suppressions** (`core/src/runtime.rs:41`, `core/src/wasm.rs:492`)
-  - `#[allow(dead_code)]` on `console` and `instance` fields lack explanation.
-  - Should document they're kept for lifetime management.
 
 - **[STABILITY] Add tests for GPU skinning** (`emberware-z/src/graphics.rs`)
   - Bone matrix skinning system is untested.
@@ -333,6 +322,20 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **[STABILITY] Replace expect() calls in graphics initialization** (`emberware-z/src/graphics.rs`)
+  - Changed `create_fallback_textures()` to return `Result<()>` and propagate errors.
+  - Uses `.context()` instead of `.expect()` for proper error context.
+  - Errors now bubble up through `ZGraphics::new()` for graceful handling.
+
+- **[STABILITY] Fix WasmEngine::Default panic** (`core/src/wasm.rs`)
+  - Removed `Default` impl which violated Rust conventions (panicked on failure).
+  - Added documentation explaining why `Default` is not implemented.
+  - Callers should use `WasmEngine::new()` which returns `Result<Self>`.
+
+- **[STABILITY] Add comments to dead_code suppressions** (`core/src/runtime.rs`, `core/src/wasm.rs`)
+  - Added doc comments explaining `console` field in `Runtime` is kept for future use.
+  - Added doc comments explaining `instance` field in `GameInstance` is required for lifetime.
 
 - **[STABILITY] Fix potential panic in transform_set()** (`emberware-z/src/ffi.rs:422`)
   - Changed `.try_into().expect()` to use `let Ok(matrix) = ... else { warn; return; }` pattern.

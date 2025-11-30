@@ -1310,7 +1310,7 @@ impl ZGraphics {
         };
 
         // Create fallback textures
-        graphics.create_fallback_textures();
+        graphics.create_fallback_textures()?;
 
         Ok(graphics)
     }
@@ -1340,8 +1340,11 @@ impl ZGraphics {
         (texture, view)
     }
 
-    /// Create fallback textures (checkerboard and white)
-    fn create_fallback_textures(&mut self) {
+    /// Create fallback textures (checkerboard, white, and font)
+    ///
+    /// These textures are essential for rendering - errors are propagated
+    /// to allow graceful initialization failure.
+    fn create_fallback_textures(&mut self) -> Result<()> {
         // 8x8 magenta/black checkerboard for missing textures
         let mut checkerboard_data = vec![0u8; 8 * 8 * 4];
         for y in 0..8 {
@@ -1363,22 +1366,23 @@ impl ZGraphics {
         }
         self.fallback_checkerboard = self
             .load_texture_internal(8, 8, &checkerboard_data, false)
-            .expect("Failed to create checkerboard fallback texture");
+            .context("Failed to create checkerboard fallback texture")?;
 
         // 1x1 white texture for untextured draws
         let white_data = [255u8, 255, 255, 255];
         self.fallback_white = self
             .load_texture_internal(1, 1, &white_data, false)
-            .expect("Failed to create white fallback texture");
+            .context("Failed to create white fallback texture")?;
 
         // Load built-in font texture
         use crate::font;
         let font_atlas = font::generate_font_atlas();
         self.font_texture = self
             .load_texture_internal(font::ATLAS_WIDTH, font::ATLAS_HEIGHT, &font_atlas, false)
-            .expect("Failed to create font texture");
+            .context("Failed to create font texture")?;
 
         tracing::debug!("Created font texture: {}x{}", font::ATLAS_WIDTH, font::ATLAS_HEIGHT);
+        Ok(())
     }
 
     // ========================================================================

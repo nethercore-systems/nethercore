@@ -189,11 +189,10 @@ impl WasmEngine {
     }
 }
 
-impl Default for WasmEngine {
-    fn default() -> Self {
-        Self::new().expect("Failed to create WASM engine")
-    }
-}
+// NOTE: WasmEngine intentionally does not implement Default.
+// The WASM engine initialization is fallible (wasmtime::Engine::default() can fail
+// on unsupported platforms or with invalid configuration). Using WasmEngine::new()
+// returns Result<Self> which properly propagates initialization errors.
 
 /// Per-game state stored in the wasmtime Store
 ///
@@ -489,6 +488,9 @@ impl CameraState {
 /// A loaded and instantiated game
 pub struct GameInstance {
     store: Store<GameState>,
+    /// The WASM instance.
+    /// Not directly used after initialization, but must be kept alive to maintain
+    /// the lifetime of exported functions and memory references.
     #[allow(dead_code)]
     instance: Instance,
     init_fn: Option<TypedFunc<(), ()>>,
@@ -676,11 +678,8 @@ mod tests {
         assert!(engine.is_ok());
     }
 
-    #[test]
-    fn test_wasm_engine_default() {
-        // Default should not panic
-        let _engine = WasmEngine::default();
-    }
+    // NOTE: WasmEngine does not implement Default because engine initialization
+    // is fallible. Use WasmEngine::new() which returns Result<Self>.
 
     #[test]
     fn test_wasm_engine_load_invalid_module() {

@@ -38,6 +38,9 @@ impl Default for RuntimeConfig {
 /// Generic over the console type to support different fantasy consoles
 /// while sharing the core game loop and rollback infrastructure.
 pub struct Runtime<C: Console> {
+    /// The console implementation.
+    /// Kept for future use (e.g., accessing console-specific features) and to maintain
+    /// ownership of the console instance for the runtime's lifetime.
     #[allow(dead_code)]
     console: C,
     config: RuntimeConfig,
