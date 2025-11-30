@@ -75,7 +75,7 @@ use crate::console::VRAM_LIMIT;
 pub use buffer::{GrowableBuffer, MeshHandle, RetainedMesh};
 pub use command_buffer::CommandBuffer;
 pub use render_state::{
-    BlendMode, CullMode, RenderState, SkyUniforms, TextureFilter, TextureHandle,
+    BlendMode, CullMode, MatcapBlendMode, RenderState, SkyUniforms, TextureFilter, TextureHandle,
 };
 pub use vertex::{
     vertex_stride, VertexFormatInfo, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV,
@@ -1256,6 +1256,7 @@ impl ZGraphics {
                     blend_mode: cmd.blend_mode,
                     texture_filter: self.render_state.texture_filter,
                     texture_slots: cmd.texture_slots,
+                    matcap_blend_modes: [MatcapBlendMode::Multiply; 4],
                 };
                 let pipeline_key = PipelineKey::new(self.current_render_mode, cmd.format, &state);
                 (
@@ -1315,6 +1316,7 @@ impl ZGraphics {
                     blend_mode: cmd.blend_mode,
                     texture_filter: self.render_state.texture_filter,
                     texture_slots: cmd.texture_slots,
+                    matcap_blend_modes: [MatcapBlendMode::Multiply; 4],
                 };
 
                 // Get/create pipeline
