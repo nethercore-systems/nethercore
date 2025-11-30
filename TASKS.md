@@ -1131,15 +1131,18 @@ KEYCODE_TO_BUTTON.get(&(keycode as u32)).copied()
 
 ---
 ## In Progress
-### **[STABILITY] Refactor rollback to use automatic WASM linear memory snapshotting**
-
-**Current State:** Games manually serialize state via FFI callbacks (`save_state(ptr, max_len) -> len` and `load_state(ptr, len)`). This requires boilerplate in every game and is error-prone.
-
-**Target State:** Automatic memory snapshotting as described in [docs/rollback-architecture.md](docs/rollback-architecture.md). The host snapshots entire WASM linear memory transparently. Games require zero serialization code.
-
-**Implementation in progress...**
 
 ## Done
+
+### **[STABILITY] Refactor rollback to use automatic WASM linear memory snapshotting**
+**Status:** Completed
+**Changes Made:**
+- Implemented automatic WASM linear memory snapshotting in `GameInstance::save_state()` and `GameInstance::load_state()`
+- Games no longer need to implement manual serialization callbacks
+- Host snapshots entire WASM linear memory transparently
+- Comprehensive test coverage for memory snapshotting
+- Documentation updated in rollback-architecture.md
+- All tests passing ✓
 
 ### Remove duplicate TestConsole definitions
 **Status:** Completed

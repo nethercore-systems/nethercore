@@ -25,6 +25,15 @@ pub struct AuthResponse {
     pub user: User,
 }
 
+/// Console linking code response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LinkCodeResponse {
+    /// 6-character code for linking console to account.
+    pub code: String,
+    /// ISO 8601 timestamp when the code expires.
+    pub expires_at: String,
+}
+
 /// API error response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiError {
