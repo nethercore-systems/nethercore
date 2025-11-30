@@ -1135,6 +1135,12 @@ KEYCODE_TO_BUTTON.get(&(keycode as u32)).copied()
 
 ---
 ## In Progress
+
+### Remove reliance on MAX_STATE_SIZE and instead use console spec provided RAM to limit
+- Rollback config.rs has defined MAX_STATE_SIZE, this may change per console Z, Class, or others
+- We have a ConsoleSpecs trait which defines the maximum RAM via ram_limit
+- Ram limit should be used to determine the MAX_STATE_SIZE, not some hardcoded magic number
+
 ### **[STABILITY] Refactor rollback to use automatic WASM linear memory snapshotting**
 
 **Current State:** Games manually serialize state via FFI callbacks (`save_state(ptr, max_len) -> len` and `load_state(ptr, len)`). This requires boilerplate in every game and is error-prone.
