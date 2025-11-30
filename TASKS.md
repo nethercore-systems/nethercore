@@ -116,11 +116,15 @@ The `Runtime<C: Console>` handles:
   - Connection timeout handling
   - Matchmaking handled by platform service - integration details TBD
 
-- **Implement netplay session management**
-  - Host/join game flow via platform deep links
-  - Connection quality display (ping bars)
-  - Disconnect handling (return to library)
-  - Session cleanup on exit
+- **Implement host/join game flow** [NEEDS CLARIFICATION]
+  - Requires matchbox signaling connection to be implemented first
+  - Host game via deep link: `emberware://host/{game_id}`
+  - Join game via deep link: `emberware://join/{game_id}?token=...`
+  - Integration with platform matchmaking TBD
+
+- **Add session cleanup on exit**
+  - Explicit session cleanup when exiting Playing mode (ESC or quit)
+  - Graceful cleanup of game_session resources
 
 
 - **Performance optimization**
@@ -135,6 +139,18 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **Integrate session events into app** (disconnect handling)
+  - Added `handle_session_events()` method to App that polls `Runtime::handle_session_events()` each frame
+  - `SessionEvent::Disconnected` → transitions to Library with "Player X disconnected" error
+  - `SessionEvent::Desync` → transitions to Library with desync error showing frame number
+  - `SessionEvent::NetworkInterrupted` → sets `DebugStats.network_interrupted` for UI warning
+  - `SessionEvent::NetworkResumed` → clears network interrupted warning
+  - Added `update_session_stats()` method that populates `DebugStats.ping_ms`, `rollback_frames`, and `frame_advantage` from P2P session
+  - Added `network_interrupted: Option<u64>` field to `DebugStats` for connection timeout display
+  - Updated debug overlay Network section to show connection interrupted warning with yellow label
+  - All session events (Synchronized, FrameAdvantageWarning, TimeSync, WaitingForPlayers) are logged appropriately
+  - 2 new tests for network_interrupted field
 
 - **Implement local network testing**
   - Created `LocalSocket` UDP wrapper implementing GGRS `NonBlockingSocket<String>` trait

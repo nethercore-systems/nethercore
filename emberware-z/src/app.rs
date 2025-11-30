@@ -19,6 +19,7 @@ use crate::input::InputManager;
 use crate::library::{self, LocalGame};
 use crate::ui::{LibraryUi, UiAction};
 use emberware_core::console::{Console, ConsoleInput, Graphics};
+use emberware_core::rollback::{SessionEvent, SessionType};
 use emberware_core::runtime::Runtime;
 use emberware_core::wasm::{DrawCommand as GameDrawCommand, WasmEngine};
 
@@ -68,6 +69,8 @@ pub struct DebugStats {
     pub rollback_frames: u64,
     /// Frame advantage (how far ahead of opponent)
     pub frame_advantage: i32,
+    /// Network interrupted warning (disconnect timeout in ms, None if connected)
+    pub network_interrupted: Option<u64>,
 }
 
 /// Active game session holding runtime state
@@ -474,6 +477,133 @@ impl App {
         }
     }
 
+    /// Handle session events from the rollback session
+    ///
+    /// Processes network events like disconnect, desync, and network interruption.
+    /// Returns an error if a critical event occurs that should terminate the session.
+    fn handle_session_events(&mut self) -> Result<(), RuntimeError> {
+        let session = match &mut self.game_session {
+            Some(s) => s,
+            None => return Ok(()),
+        };
+
+        // Poll remote clients for network messages (P2P sessions only)
+        session.runtime.poll_remote_clients();
+
+        // Get session events
+        let events = session.runtime.handle_session_events();
+
+        // Clear network interrupted flag - will be set again if still interrupted
+        self.debug_stats.network_interrupted = None;
+
+        for event in events {
+            match event {
+                SessionEvent::Disconnected { player_handle } => {
+                    tracing::warn!("Player {} disconnected", player_handle);
+                    return Err(RuntimeError(format!(
+                        "Player {} disconnected from session",
+                        player_handle
+                    )));
+                }
+                SessionEvent::Desync {
+                    frame,
+                    local_checksum,
+                    remote_checksum,
+                } => {
+                    tracing::error!(
+                        "Desync detected at frame {}: local={:#x}, remote={:#x}",
+                        frame,
+                        local_checksum,
+                        remote_checksum
+                    );
+                    return Err(RuntimeError(format!(
+                        "Desync detected at frame {} (states diverged)",
+                        frame
+                    )));
+                }
+                SessionEvent::NetworkInterrupted {
+                    player_handle,
+                    disconnect_timeout_ms,
+                } => {
+                    tracing::warn!(
+                        "Network interrupted for player {}, disconnect in {}ms",
+                        player_handle,
+                        disconnect_timeout_ms
+                    );
+                    self.debug_stats.network_interrupted = Some(disconnect_timeout_ms);
+                }
+                SessionEvent::NetworkResumed { player_handle } => {
+                    tracing::info!("Network resumed for player {}", player_handle);
+                    self.debug_stats.network_interrupted = None;
+                }
+                SessionEvent::Synchronized { player_handle } => {
+                    tracing::info!("Synchronized with player {}", player_handle);
+                }
+                SessionEvent::FrameAdvantageWarning { frames_ahead } => {
+                    tracing::debug!("Frame advantage warning: {} frames ahead", frames_ahead);
+                }
+                SessionEvent::TimeSync { frames_to_skip } => {
+                    tracing::debug!("Time sync: skip {} frames", frames_to_skip);
+                }
+                SessionEvent::WaitingForPlayers => {
+                    tracing::trace!("Waiting for remote player input");
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Update debug stats from the current session
+    ///
+    /// Populates network statistics in DebugStats from the rollback session.
+    fn update_session_stats(&mut self) {
+        let session = match &self.game_session {
+            Some(s) => s,
+            None => {
+                // Clear network stats when no session
+                self.debug_stats.ping_ms = None;
+                self.debug_stats.rollback_frames = 0;
+                self.debug_stats.frame_advantage = 0;
+                return;
+            }
+        };
+
+        // Get session reference
+        let rollback_session = match session.runtime.session() {
+            Some(s) => s,
+            None => {
+                self.debug_stats.ping_ms = None;
+                self.debug_stats.rollback_frames = 0;
+                self.debug_stats.frame_advantage = 0;
+                return;
+            }
+        };
+
+        // Only show network stats for P2P sessions
+        if rollback_session.session_type() != SessionType::P2P {
+            self.debug_stats.ping_ms = None;
+            self.debug_stats.rollback_frames = 0;
+            self.debug_stats.frame_advantage = 0;
+            return;
+        }
+
+        // Get stats from the first remote player
+        let player_stats = rollback_session.all_player_stats();
+        let local_players = rollback_session.local_players();
+
+        // Find first remote player's stats
+        for (idx, stats) in player_stats.iter().enumerate() {
+            if !local_players.contains(&idx) {
+                self.debug_stats.ping_ms = Some(stats.ping_ms);
+                break;
+            }
+        }
+
+        self.debug_stats.rollback_frames = rollback_session.total_rollback_frames();
+        self.debug_stats.frame_advantage = rollback_session.frames_ahead();
+    }
+
     /// Run one game frame (update + render)
     ///
     /// Returns true if the game is still running, false if it should exit.
@@ -742,6 +872,15 @@ impl App {
 
         // Handle Playing mode: run game frame first
         if matches!(self.mode, AppMode::Playing { .. }) {
+            // Handle session events (disconnect, desync, network interruption)
+            if let Err(e) = self.handle_session_events() {
+                self.handle_runtime_error(e);
+                return;
+            }
+
+            // Update debug stats from session
+            self.update_session_stats();
+
             // Run game frame (update + render)
             let game_running = match self.run_game_frame() {
                 Ok(running) => {
@@ -850,6 +989,7 @@ impl App {
             ping_ms: self.debug_stats.ping_ms,
             rollback_frames: self.debug_stats.rollback_frames,
             frame_advantage: self.debug_stats.frame_advantage,
+            network_interrupted: self.debug_stats.network_interrupted,
         };
 
         let full_output = self.egui_ctx.run(raw_input, |ctx| {
@@ -977,6 +1117,15 @@ impl App {
                             ui.label(format!("Ping: {}ms", ping));
                             ui.label(format!("Rollback frames: {}", debug_stats.rollback_frames));
                             ui.label(format!("Frame advantage: {}", debug_stats.frame_advantage));
+
+                            // Network interrupted warning
+                            if let Some(timeout_ms) = debug_stats.network_interrupted {
+                                ui.add_space(4.0);
+                                ui.colored_label(
+                                    egui::Color32::from_rgb(255, 200, 50),
+                                    format!("⚠ Connection interrupted ({}ms)", timeout_ms),
+                                );
+                            }
                         } else {
                             ui.label("No network session");
                         }
@@ -1279,6 +1428,7 @@ mod tests {
         assert!(stats.ping_ms.is_none());
         assert_eq!(stats.rollback_frames, 0);
         assert_eq!(stats.frame_advantage, 0);
+        assert!(stats.network_interrupted.is_none());
     }
 
     #[test]
@@ -1300,6 +1450,20 @@ mod tests {
         assert_eq!(stats.ping_ms, Some(25));
         assert_eq!(stats.rollback_frames, 10);
         assert_eq!(stats.frame_advantage, -2);
+    }
+
+    #[test]
+    fn test_debug_stats_network_interrupted() {
+        let mut stats = DebugStats::default();
+        assert!(stats.network_interrupted.is_none());
+
+        // Set network interrupted
+        stats.network_interrupted = Some(3000);
+        assert_eq!(stats.network_interrupted, Some(3000));
+
+        // Clear network interrupted
+        stats.network_interrupted = None;
+        assert!(stats.network_interrupted.is_none());
     }
 
     // Test constants
