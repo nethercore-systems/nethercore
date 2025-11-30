@@ -1455,6 +1455,242 @@ mod tests {
     }
 
     // ============================================================================
+    // WASM Memory Error Path Tests
+    // ============================================================================
+
+    #[test]
+    fn test_game_instance_save_state_returns_invalid_length() {
+        let engine = WasmEngine::new().unwrap();
+        // Module with save_state that returns a length larger than the buffer
+        let wasm = wat::parse_str(r#"
+            (module
+                (memory (export "memory") 1)
+                (func (export "save_state") (param i32 i32) (result i32)
+                    ;; Return more than the max_len provided
+                    (i32.const 99999)
+                )
+            )
+        "#).unwrap();
+        let module = engine.load_module(&wasm).unwrap();
+        let linker = Linker::new(engine.engine());
+
+        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut buffer = vec![0u8; 100];
+
+        // save_state should fail because returned length > buffer.len()
+        let result = game.save_state(&mut buffer);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("invalid length"));
+    }
+
+    #[test]
+    fn test_game_instance_save_state_oob_ptr() {
+        let engine = WasmEngine::new().unwrap();
+        // Module with save_state that writes past memory bounds
+        // ptr=0 but length exceeds memory
+        let wasm = wat::parse_str(r#"
+            (module
+                (memory (export "memory") 1)
+                (func (export "save_state") (param i32 i32) (result i32)
+                    ;; Return a length that would read past memory end at ptr=0
+                    ;; Memory is 65536 bytes, return 100000
+                    (i32.const 100000)
+                )
+            )
+        "#).unwrap();
+        let module = engine.load_module(&wasm).unwrap();
+        let linker = Linker::new(engine.engine());
+
+        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut buffer = vec![0u8; 100001];
+
+        // Should fail due to out-of-bounds read
+        let result = game.save_state(&mut buffer);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_game_instance_load_state_too_large() {
+        let engine = WasmEngine::new().unwrap();
+        // Module with load_state
+        let wasm = wat::parse_str(r#"
+            (module
+                (memory (export "memory") 1)
+                (func (export "load_state") (param i32 i32))
+            )
+        "#).unwrap();
+        let module = engine.load_module(&wasm).unwrap();
+        let linker = Linker::new(engine.engine());
+
+        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+
+        // Try to load more data than fits in memory (1 page = 65536 bytes)
+        let large_buffer = vec![0u8; 100000];
+        let result = game.load_state(&large_buffer);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("too large"));
+    }
+
+    #[test]
+    fn test_game_instance_load_state_no_memory() {
+        let engine = WasmEngine::new().unwrap();
+        // Module without memory export
+        let wasm = wat::parse_str(r#"
+            (module
+                (func (export "load_state") (param i32 i32))
+            )
+        "#).unwrap();
+        let module = engine.load_module(&wasm).unwrap();
+        let linker = Linker::new(engine.engine());
+
+        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+
+        // Should fail because no memory is available
+        let result = game.load_state(&[1, 2, 3, 4]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("No memory"));
+    }
+
+    #[test]
+    fn test_game_instance_save_state_no_memory() {
+        let engine = WasmEngine::new().unwrap();
+        // Module without memory export but with save_state
+        let wasm = wat::parse_str(r#"
+            (module
+                (func (export "save_state") (param i32 i32) (result i32)
+                    (i32.const 10)
+                )
+            )
+        "#).unwrap();
+        let module = engine.load_module(&wasm).unwrap();
+        let linker = Linker::new(engine.engine());
+
+        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut buffer = vec![0u8; 1024];
+
+        // Should fail because no memory is available
+        let result = game.save_state(&mut buffer);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("No memory"));
+    }
+
+    #[test]
+    fn test_game_instance_save_state_valid() {
+        let engine = WasmEngine::new().unwrap();
+        // Module that writes valid data at ptr and returns the length
+        let wasm = wat::parse_str(r#"
+            (module
+                (memory (export "memory") 1)
+                ;; Initialize first 8 bytes with a pattern
+                (data (i32.const 0) "\01\02\03\04\05\06\07\08")
+                (func (export "save_state") (param $ptr i32) (param $max_len i32) (result i32)
+                    ;; Return 8 bytes written at ptr=0
+                    (i32.const 8)
+                )
+            )
+        "#).unwrap();
+        let module = engine.load_module(&wasm).unwrap();
+        let linker = Linker::new(engine.engine());
+
+        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut buffer = vec![0u8; 100];
+
+        let result = game.save_state(&mut buffer);
+        assert!(result.is_ok());
+        let len = result.unwrap();
+        assert_eq!(len, 8);
+        assert_eq!(&buffer[..8], &[1, 2, 3, 4, 5, 6, 7, 8]);
+    }
+
+    #[test]
+    fn test_game_instance_load_state_valid() {
+        let engine = WasmEngine::new().unwrap();
+        // Module that just accepts load_state
+        let wasm = wat::parse_str(r#"
+            (module
+                (memory (export "memory") 1)
+                (func (export "load_state") (param $ptr i32) (param $len i32)
+                    ;; Do nothing - just accept the call
+                )
+            )
+        "#).unwrap();
+        let module = engine.load_module(&wasm).unwrap();
+        let linker = Linker::new(engine.engine());
+
+        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+
+        let data = vec![0xDE, 0xAD, 0xBE, 0xEF];
+        let result = game.load_state(&data);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_game_instance_init_trap_propagates() {
+        let engine = WasmEngine::new().unwrap();
+        // Module with init that traps (unreachable instruction)
+        let wasm = wat::parse_str(r#"
+            (module
+                (memory (export "memory") 1)
+                (func (export "init")
+                    (unreachable)
+                )
+            )
+        "#).unwrap();
+        let module = engine.load_module(&wasm).unwrap();
+        let linker = Linker::new(engine.engine());
+
+        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+
+        // Trap should propagate as an error
+        let result = game.init();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_game_instance_update_trap_propagates() {
+        let engine = WasmEngine::new().unwrap();
+        // Module with update that traps
+        let wasm = wat::parse_str(r#"
+            (module
+                (memory (export "memory") 1)
+                (func (export "update")
+                    (unreachable)
+                )
+            )
+        "#).unwrap();
+        let module = engine.load_module(&wasm).unwrap();
+        let linker = Linker::new(engine.engine());
+
+        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+
+        // Trap should propagate as an error
+        let result = game.update(1.0 / 60.0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_game_instance_render_trap_propagates() {
+        let engine = WasmEngine::new().unwrap();
+        // Module with render that traps
+        let wasm = wat::parse_str(r#"
+            (module
+                (memory (export "memory") 1)
+                (func (export "render")
+                    (unreachable)
+                )
+            )
+        "#).unwrap();
+        let module = engine.load_module(&wasm).unwrap();
+        let linker = Linker::new(engine.engine());
+
+        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+
+        // Trap should propagate as an error
+        let result = game.render();
+        assert!(result.is_err());
+    }
+
+    // ============================================================================
     // Transform Matrix Tests
     // ============================================================================
 

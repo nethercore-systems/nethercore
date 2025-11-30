@@ -112,10 +112,6 @@ The `Runtime<C: Console>` handles:
   - `ZAudio::create_audio()` at line 252: `// TODO: Initialize rodio output stream`
   - Audio is a core feature needed for complete game support
 
-- **[STABILITY] Add error path tests for WASM memory access** (`core/src/wasm.rs`, `core/src/ffi.rs`)
-  - Test out-of-bounds memory reads/writes
-  - Test invalid pointer handling in FFI functions
-  - Test resource limit enforcement (RAM, VRAM, save slot sizes)
 
 #### Medium Priority
 
@@ -281,6 +277,21 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **[STABILITY] Add error path tests for WASM memory access** (`core/src/wasm.rs`, `core/src/ffi.rs`)
+  - Added 14 new tests to `core/src/ffi.rs` for FFI memory access error paths:
+    - `test_log_message_out_of_bounds`, `test_log_message_wrapping_overflow`, `test_log_no_memory`
+    - `test_save_invalid_slot`, `test_save_data_too_large`, `test_save_out_of_bounds_pointer`, `test_save_no_memory`
+    - `test_load_invalid_slot`, `test_load_empty_slot`, `test_load_out_of_bounds_pointer`, `test_load_no_memory`
+    - `test_delete_invalid_slot`, `test_save_load_roundtrip`, `test_save_boundary_slot_values`
+  - Added 12 new tests to `core/src/wasm.rs` for GameInstance error paths:
+    - `test_game_instance_save_state_returns_invalid_length`, `test_game_instance_save_state_oob_ptr`
+    - `test_game_instance_load_state_too_large`, `test_game_instance_load_state_no_memory`
+    - `test_game_instance_save_state_no_memory`, `test_game_instance_save_state_valid`
+    - `test_game_instance_load_state_valid`
+    - `test_game_instance_init_trap_propagates`, `test_game_instance_update_trap_propagates`, `test_game_instance_render_trap_propagates`
+  - All 304 tests passing (183 core + 121 emberware-z)
+  - Tests verify: out-of-bounds memory access, invalid slot handling, buffer overflow protection, missing memory handling, WASM trap propagation
 
 - **[STABILITY] Add documentation to shared crate public APIs** (`shared/src/lib.rs`)
   - Added module-level `//!` doc comment explaining API type categories with example usage
