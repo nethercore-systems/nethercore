@@ -773,6 +773,8 @@ impl App {
                         // Return to library when in game
                         match self.mode {
                             AppMode::Playing { .. } => {
+                                tracing::info!("Exiting game via ESC");
+                                self.game_session = None; // Clean up game session
                                 self.mode = AppMode::Library;
                                 self.local_games = library::get_local_games();
                             }

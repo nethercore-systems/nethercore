@@ -122,11 +122,6 @@ The `Runtime<C: Console>` handles:
   - Join game via deep link: `emberware://join/{game_id}?token=...`
   - Integration with platform matchmaking TBD
 
-- **Add session cleanup on exit**
-  - Explicit session cleanup when exiting Playing mode (ESC or quit)
-  - Graceful cleanup of game_session resources
-
-
 - **Performance optimization**
   - Render batching already implemented in CommandBuffer
   - Profile and optimize hot paths - requires game execution to measure
@@ -139,6 +134,16 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **Add session cleanup on exit**
+  - Added explicit `game_session = None` cleanup when exiting Playing mode via ESC key
+  - Logs "Exiting game via ESC" for debugging
+  - Ensures game_session is properly dropped, which:
+    - Drops the `Runtime<EmberwareZ>` containing the game instance
+    - Drops the `RollbackSession` which cleans up GGRS P2P connections via Drop
+    - Releases all game resources (textures, meshes, audio)
+  - Already handled for quit_requested and runtime error paths
+  - All 573 tests passing (196 core + 377 emberware-z)
 
 - **Integrate session events into app** (disconnect handling)
   - Added `handle_session_events()` method to App that polls `Runtime::handle_session_events()` each frame
