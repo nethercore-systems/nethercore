@@ -352,41 +352,32 @@ mod tests {
     // ============================================================================
 
     /// Test basic save and load state functionality
+    ///
+    /// The new save_state API snapshots entire WASM linear memory automatically.
+    /// State must be stored in memory (not globals) for rollback to work.
     #[test]
     fn test_rollback_save_load_basic() {
         let (engine, linker) = create_test_engine();
 
+        // Store value at memory address 0 (not in a global)
         let wat = r#"
             (module
                 (memory (export "memory") 1)
-                (global $value (mut i32) (i32.const 0))
 
-                (func (export "init"))
+                (func (export "init")
+                    ;; Initialize value at address 0 to 0
+                    (i32.store (i32.const 0) (i32.const 0))
+                )
                 (func (export "update")
-                    (global.set $value (i32.add (global.get $value) (i32.const 10)))
+                    ;; value += 10
+                    (i32.store (i32.const 0)
+                        (i32.add (i32.load (i32.const 0)) (i32.const 10))
+                    )
                 )
                 (func (export "render"))
 
-                (func (export "save_state") (param $ptr i32) (param $max_len i32) (result i32)
-                    (if (i32.ge_u (local.get $max_len) (i32.const 4))
-                        (then
-                            (i32.store (local.get $ptr) (global.get $value))
-                            (return (i32.const 4))
-                        )
-                    )
-                    (i32.const 0)
-                )
-
-                (func (export "load_state") (param $ptr i32) (param $len i32)
-                    (if (i32.ge_u (local.get $len) (i32.const 4))
-                        (then
-                            (global.set $value (i32.load (local.get $ptr)))
-                        )
-                    )
-                )
-
                 (func (export "get_value") (result i32)
-                    (global.get $value)
+                    (i32.load (i32.const 0))
                 )
             )
         "#;
@@ -402,10 +393,10 @@ mod tests {
         game.update(1.0 / 60.0).unwrap();
         game.update(1.0 / 60.0).unwrap();
 
-        // Save state
-        let mut buffer = vec![0u8; 1024];
-        let len = game.save_state(&mut buffer).unwrap();
-        assert_eq!(len, 4);
+        // Save state - snapshots entire WASM memory
+        let snapshot = game.save_state().unwrap();
+        // Memory is 1 page = 64KB
+        assert_eq!(snapshot.len(), 65536);
 
         // Update more (value = 60)
         game.update(1.0 / 60.0).unwrap();
@@ -413,13 +404,12 @@ mod tests {
         game.update(1.0 / 60.0).unwrap();
 
         // Load saved state (value should be 30 again)
-        game.load_state(&buffer[..len]).unwrap();
+        game.load_state(&snapshot).unwrap();
 
         // Verify state was restored by saving again and comparing
-        let mut buffer2 = vec![0u8; 1024];
-        let len2 = game.save_state(&mut buffer2).unwrap();
-        assert_eq!(len, len2);
-        assert_eq!(&buffer[..len], &buffer2[..len2]);
+        let snapshot2 = game.save_state().unwrap();
+        assert_eq!(snapshot.len(), snapshot2.len());
+        assert_eq!(snapshot, snapshot2);
     }
 
     /// Test rollback with RollbackStateManager
@@ -492,38 +482,28 @@ mod tests {
     }
 
     /// Test that checksum detects state differences
+    ///
+    /// State must be stored in memory (not globals) for rollback to work.
     #[test]
     fn test_rollback_checksum_detection() {
         let (engine, linker) = create_test_engine();
 
+        // Store counter at memory address 0 (not in a global)
         let wat = r#"
             (module
                 (memory (export "memory") 1)
-                (global $counter (mut i32) (i32.const 0))
 
-                (func (export "init"))
+                (func (export "init")
+                    ;; Initialize counter at address 0 to 0
+                    (i32.store (i32.const 0) (i32.const 0))
+                )
                 (func (export "update")
-                    (global.set $counter (i32.add (global.get $counter) (i32.const 1)))
+                    ;; counter += 1
+                    (i32.store (i32.const 0)
+                        (i32.add (i32.load (i32.const 0)) (i32.const 1))
+                    )
                 )
                 (func (export "render"))
-
-                (func (export "save_state") (param $ptr i32) (param $max_len i32) (result i32)
-                    (if (i32.ge_u (local.get $max_len) (i32.const 4))
-                        (then
-                            (i32.store (local.get $ptr) (global.get $counter))
-                            (return (i32.const 4))
-                        )
-                    )
-                    (i32.const 0)
-                )
-
-                (func (export "load_state") (param $ptr i32) (param $len i32)
-                    (if (i32.ge_u (local.get $len) (i32.const 4))
-                        (then
-                            (global.set $counter (i32.load (local.get $ptr)))
-                        )
-                    )
-                )
             )
         "#;
 
@@ -541,44 +521,34 @@ mod tests {
         game.update(1.0 / 60.0).unwrap();
         let snapshot2 = state_manager.save_state(&mut game, 1).unwrap();
 
-        // Checksums should be different
+        // Checksums should be different (memory changed)
         assert_ne!(snapshot1.checksum, snapshot2.checksum);
         assert_ne!(snapshot1.data, snapshot2.data);
     }
 
     /// Test rollback simulation with multiple save points
+    ///
+    /// State must be stored in memory (not globals) for rollback to work.
     #[test]
     fn test_rollback_multiple_save_points() {
         let (engine, linker) = create_test_engine();
 
+        // Store counter at memory address 0 (not in a global)
         let wat = r#"
             (module
                 (memory (export "memory") 1)
-                (global $counter (mut i32) (i32.const 0))
 
-                (func (export "init"))
+                (func (export "init")
+                    ;; Initialize counter at address 0 to 0
+                    (i32.store (i32.const 0) (i32.const 0))
+                )
                 (func (export "update")
-                    (global.set $counter (i32.add (global.get $counter) (i32.const 1)))
+                    ;; counter += 1
+                    (i32.store (i32.const 0)
+                        (i32.add (i32.load (i32.const 0)) (i32.const 1))
+                    )
                 )
                 (func (export "render"))
-
-                (func (export "save_state") (param $ptr i32) (param $max_len i32) (result i32)
-                    (if (i32.ge_u (local.get $max_len) (i32.const 4))
-                        (then
-                            (i32.store (local.get $ptr) (global.get $counter))
-                            (return (i32.const 4))
-                        )
-                    )
-                    (i32.const 0)
-                )
-
-                (func (export "load_state") (param $ptr i32) (param $len i32)
-                    (if (i32.ge_u (local.get $len) (i32.const 4))
-                        (then
-                            (global.set $counter (i32.load (local.get $ptr)))
-                        )
-                    )
-                )
             )
         "#;
 
@@ -598,7 +568,7 @@ mod tests {
             game.update(1.0 / 60.0).unwrap();
         }
 
-        // All snapshots should have different checksums
+        // All snapshots should have different checksums (memory changed each update)
         for i in 0..snapshots.len() {
             for j in (i + 1)..snapshots.len() {
                 assert_ne!(

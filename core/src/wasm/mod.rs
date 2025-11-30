@@ -549,7 +549,7 @@ mod tests {
     }
 
     #[test]
-    fn test_game_instance_save_state_no_function() {
+    fn test_game_instance_save_state_basic() {
         let engine = WasmEngine::new().unwrap();
         let wasm = wat::parse_str(
             r#"
@@ -563,16 +563,16 @@ mod tests {
         let linker = Linker::new(engine.engine());
 
         let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
-        let mut buffer = vec![0u8; 1024];
 
-        // Should return Ok(0) when save_state is not exported
-        let result = game.save_state(&mut buffer);
+        // save_state returns entire WASM memory (1 page = 64KB)
+        let result = game.save_state();
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), 0);
+        let snapshot = result.unwrap();
+        assert_eq!(snapshot.len(), 65536); // 1 WASM page
     }
 
     #[test]
-    fn test_game_instance_load_state_no_function() {
+    fn test_game_instance_load_state_basic() {
         let engine = WasmEngine::new().unwrap();
         let wasm = wat::parse_str(
             r#"
@@ -587,8 +587,9 @@ mod tests {
 
         let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
 
-        // Should return Ok when load_state is not exported
-        let result = game.load_state(&[1, 2, 3, 4]);
+        // load_state requires exact memory size match
+        let snapshot = vec![0u8; 65536]; // 1 WASM page
+        let result = game.load_state(&snapshot);
         assert!(result.is_ok());
     }
 
@@ -649,71 +650,12 @@ mod tests {
     // ============================================================================
 
     #[test]
-    fn test_game_instance_save_state_returns_invalid_length() {
+    fn test_game_instance_load_state_size_mismatch() {
         let engine = WasmEngine::new().unwrap();
-        // Module with save_state that returns a length larger than the buffer
         let wasm = wat::parse_str(
             r#"
             (module
                 (memory (export "memory") 1)
-                (func (export "save_state") (param i32 i32) (result i32)
-                    ;; Return more than the max_len provided
-                    (i32.const 99999)
-                )
-            )
-        "#,
-        )
-        .unwrap();
-        let module = engine.load_module(&wasm).unwrap();
-        let linker = Linker::new(engine.engine());
-
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
-        let mut buffer = vec![0u8; 100];
-
-        // save_state should fail because returned length > buffer.len()
-        let result = game.save_state(&mut buffer);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("invalid length"));
-    }
-
-    #[test]
-    fn test_game_instance_save_state_oob_ptr() {
-        let engine = WasmEngine::new().unwrap();
-        // Module with save_state that writes past memory bounds
-        // ptr=0 but length exceeds memory
-        let wasm = wat::parse_str(
-            r#"
-            (module
-                (memory (export "memory") 1)
-                (func (export "save_state") (param i32 i32) (result i32)
-                    ;; Return a length that would read past memory end at ptr=0
-                    ;; Memory is 65536 bytes, return 100000
-                    (i32.const 100000)
-                )
-            )
-        "#,
-        )
-        .unwrap();
-        let module = engine.load_module(&wasm).unwrap();
-        let linker = Linker::new(engine.engine());
-
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
-        let mut buffer = vec![0u8; 100001];
-
-        // Should fail due to out-of-bounds read
-        let result = game.save_state(&mut buffer);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_game_instance_load_state_too_large() {
-        let engine = WasmEngine::new().unwrap();
-        // Module with load_state
-        let wasm = wat::parse_str(
-            r#"
-            (module
-                (memory (export "memory") 1)
-                (func (export "load_state") (param i32 i32))
             )
         "#,
         )
@@ -723,11 +665,11 @@ mod tests {
 
         let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
 
-        // Try to load more data than fits in memory (1 page = 65536 bytes)
-        let large_buffer = vec![0u8; 100000];
-        let result = game.load_state(&large_buffer);
+        // Try to load with wrong size (memory is 65536, we pass 100)
+        let small_buffer = vec![0u8; 100];
+        let result = game.load_state(&small_buffer);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("too large"));
+        assert!(result.unwrap_err().to_string().contains("mismatch"));
     }
 
     #[test]
@@ -737,7 +679,7 @@ mod tests {
         let wasm = wat::parse_str(
             r#"
             (module
-                (func (export "load_state") (param i32 i32))
+                (func (export "init"))
             )
         "#,
         )
@@ -756,13 +698,11 @@ mod tests {
     #[test]
     fn test_game_instance_save_state_no_memory() {
         let engine = WasmEngine::new().unwrap();
-        // Module without memory export but with save_state
+        // Module without memory export
         let wasm = wat::parse_str(
             r#"
             (module
-                (func (export "save_state") (param i32 i32) (result i32)
-                    (i32.const 10)
-                )
+                (func (export "init"))
             )
         "#,
         )
@@ -771,28 +711,23 @@ mod tests {
         let linker = Linker::new(engine.engine());
 
         let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
-        let mut buffer = vec![0u8; 1024];
 
         // Should fail because no memory is available
-        let result = game.save_state(&mut buffer);
+        let result = game.save_state();
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("No memory"));
     }
 
     #[test]
-    fn test_game_instance_save_state_valid() {
+    fn test_game_instance_save_state_with_data() {
         let engine = WasmEngine::new().unwrap();
-        // Module that writes valid data at ptr and returns the length
+        // Module that has initialized data in memory
         let wasm = wat::parse_str(
             r#"
             (module
                 (memory (export "memory") 1)
                 ;; Initialize first 8 bytes with a pattern
                 (data (i32.const 0) "\01\02\03\04\05\06\07\08")
-                (func (export "save_state") (param $ptr i32) (param $max_len i32) (result i32)
-                    ;; Return 8 bytes written at ptr=0
-                    (i32.const 8)
-                )
             )
         "#,
         )
@@ -801,26 +736,21 @@ mod tests {
         let linker = Linker::new(engine.engine());
 
         let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
-        let mut buffer = vec![0u8; 100];
 
-        let result = game.save_state(&mut buffer);
+        let result = game.save_state();
         assert!(result.is_ok());
-        let len = result.unwrap();
-        assert_eq!(len, 8);
-        assert_eq!(&buffer[..8], &[1, 2, 3, 4, 5, 6, 7, 8]);
+        let snapshot = result.unwrap();
+        assert_eq!(snapshot.len(), 65536); // Full memory
+        assert_eq!(&snapshot[..8], &[1, 2, 3, 4, 5, 6, 7, 8]); // Check initialized data
     }
 
     #[test]
-    fn test_game_instance_load_state_valid() {
+    fn test_game_instance_load_state_restores_data() {
         let engine = WasmEngine::new().unwrap();
-        // Module that just accepts load_state
         let wasm = wat::parse_str(
             r#"
             (module
                 (memory (export "memory") 1)
-                (func (export "load_state") (param $ptr i32) (param $len i32)
-                    ;; Do nothing - just accept the call
-                )
             )
         "#,
         )
@@ -830,9 +760,16 @@ mod tests {
 
         let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
 
-        let data = vec![0xDE, 0xAD, 0xBE, 0xEF];
-        let result = game.load_state(&data);
+        // Create a snapshot with specific data
+        let mut snapshot = vec![0u8; 65536]; // 1 page
+        snapshot[0..4].copy_from_slice(&[0xDE, 0xAD, 0xBE, 0xEF]);
+
+        let result = game.load_state(&snapshot);
         assert!(result.is_ok());
+
+        // Verify data was restored by saving state again
+        let restored = game.save_state().unwrap();
+        assert_eq!(&restored[..4], &[0xDE, 0xAD, 0xBE, 0xEF]);
     }
 
     #[test]
