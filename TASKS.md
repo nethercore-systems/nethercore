@@ -211,15 +211,7 @@ The `Runtime<C: Console>` handles:
 
 ### Phase 6: Emberware Z Examples
 
-(Moved to Done)
-
-- **Create `billboard` example**
-  - Demonstrates billboard drawing:
-    - `draw_billboard()` with different modes (1-4)
-    - Sprite-based character (cylindrical Y)
-    - Particle system (spherical)
-    - Tree/foliage sprites (cylindrical Y)
-    - Comparison of billboard modes side-by-side
+(Moved to Done/In Progress)
 
 - **Create `platformer` example**
   - Full mini-game demonstrating multiple Z features:
@@ -256,6 +248,17 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **Create `billboard` example (Phase 6)**
+  - Demonstrates billboard drawing:
+    - `draw_billboard()` with different modes (1-4)
+    - Side-by-side comparison of all 4 modes (spherical, cylindrical Y/X/Z)
+    - Particle system with spherical billboards (always face camera)
+    - Tree/foliage sprites with cylindrical Y (stay upright)
+    - Ground markers to show depth
+    - Interactive camera rotation via analog stick
+    - UI overlay with controls and mode labels
+  - ~450 lines of Rust code
 
 - **Update documentation (Phase 7)**
   - Fixed `delete` return value in ffi.md (was "1 on success", now "0 on success, 1 if invalid slot")
