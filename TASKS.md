@@ -97,10 +97,11 @@ The `Runtime<C: Console>` handles:
 
 ## TODO
 
-### Core RenderState is specific to EmberwareZ
+### Core Structs are specific to EmberwareZ
 - EmberwareZ Specific rendering data exists in the wasm/render.rs file
-- This needs to be removed and made generic.
-- Refactor the application so that RenderState uses the proper EmberwareZ one.
+- In fact, the wasm/input.rs is also tied.
+- This needs to be removed and made generic, other consoles (like the future Emberware Classic) will have their own invocation.
+- Please check the project architecture, and likely refactor many of the wasm/ folder so that it is console agnostic.
 
 ### **[NEEDS CLARIFICATION] Define and enforce console runtime limits**
 
