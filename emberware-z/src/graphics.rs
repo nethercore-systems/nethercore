@@ -991,7 +991,9 @@ impl Default for SkyUniforms {
     }
 }
 
-// Safety: SkyUniforms is POD (plain old data)
+// SAFETY: SkyUniforms is #[repr(C)] with only primitive types (f32 arrays and floats).
+// All bit patterns are valid for f32, satisfying Pod and Zeroable requirements.
+// Padding fields ensure proper GPU alignment (16-byte boundaries for vec3).
 unsafe impl bytemuck::Pod for SkyUniforms {}
 unsafe impl bytemuck::Zeroable for SkyUniforms {}
 

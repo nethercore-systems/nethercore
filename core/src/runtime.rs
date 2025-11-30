@@ -325,6 +325,8 @@ mod tests {
         buttons: u16,
     }
 
+    // SAFETY: TestInput is #[repr(C)] with only a primitive type (u16).
+    // All bit patterns are valid for u16, satisfying Pod and Zeroable requirements.
     unsafe impl Pod for TestInput {}
     unsafe impl Zeroable for TestInput {}
     impl crate::console::ConsoleInput for TestInput {

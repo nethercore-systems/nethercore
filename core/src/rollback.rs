@@ -617,7 +617,8 @@ impl<I: ConsoleInput> NetworkInput<I> {
     }
 }
 
-// Safety: I is required to be Pod + Zeroable by ConsoleInput trait bounds
+// SAFETY: I is required to be Pod + Zeroable by ConsoleInput trait bounds.
+// NetworkInput is a #[repr(transparent)] wrapper, so it has the same layout as I.
 unsafe impl<I: ConsoleInput> Pod for NetworkInput<I> {}
 unsafe impl<I: ConsoleInput> Zeroable for NetworkInput<I> {}
 
@@ -1376,6 +1377,8 @@ mod tests {
         y: i8,
     }
 
+    // SAFETY: TestInput is #[repr(C)] with only primitive types (u16, i8, i8).
+    // All bit patterns are valid for these types, satisfying Pod and Zeroable requirements.
     unsafe impl Pod for TestInput {}
     unsafe impl Zeroable for TestInput {}
     impl ConsoleInput for TestInput {

@@ -106,11 +106,6 @@ The `Runtime<C: Console>` handles:
 
 #### High Priority
 
-- **[STABILITY] Document all unsafe blocks with SAFETY comments** (46 blocks across codebase)
-  - 49 total unsafe blocks, only 3 have SAFETY comments
-  - Add comments explaining why each unsafe block is safe
-  - Key files: `graphics.rs`, `ffi.rs`, `rollback.rs`, `wasm.rs`
-
 - **[STABILITY] Add tests for app.rs state machine** (`emberware-z/src/app.rs`)
   - Critical 719-line file with no test coverage
   - Test: `handle_runtime_error()`, `handle_resize()`, `toggle_fullscreen()`
@@ -304,6 +299,16 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **[STABILITY] Document all unsafe blocks with SAFETY comments** (46 blocks across codebase)
+  - Added SAFETY comments to all unsafe impl blocks in core and emberware-z
+  - core/src/integration.rs: TestInput Pod/Zeroable impls
+  - core/src/rollback.rs: NetworkInput and TestInput Pod/Zeroable impls
+  - core/src/runtime.rs: TestInput Pod/Zeroable impls
+  - emberware-z/src/graphics.rs: SkyUniforms Pod/Zeroable impls with GPU alignment explanation
+  - emberware-z/src/app.rs: Already had SAFETY comment for transmute (egui-wgpu 0.30 API bug)
+  - All unsafe blocks now explain why they are safe (#[repr(C)] POD types, transparent wrappers, scoped transmute)
+  - All tests passing (292 total: 159 core + 133 emberware-z)
 
 - **[STABILITY] Replace panic! calls in shader_gen.rs with Result returns** (`emberware-z/src/shader_gen.rs`)
   - Added `ShaderGenError` enum with `InvalidRenderMode` and `MissingNormalFlag` variants

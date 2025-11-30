@@ -64,6 +64,8 @@ mod tests {
         y: i8,
     }
 
+    // SAFETY: TestInput is #[repr(C)] with only primitive types (u16, i8, i8).
+    // All bit patterns are valid for these types, satisfying Pod and Zeroable requirements.
     unsafe impl Pod for TestInput {}
     unsafe impl Zeroable for TestInput {}
     impl ConsoleInput for TestInput {
