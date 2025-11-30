@@ -2301,4 +2301,147 @@ mod tests {
 
         assert_eq!(state.transform_stack.len(), MAX_TRANSFORM_STACK);
     }
+
+    // ========================================================================
+    // GPU Skinning FFI Tests
+    // ========================================================================
+
+    use emberware_core::wasm::MAX_BONES;
+
+    #[test]
+    fn test_vertex_stride_skinned_constant() {
+        // Skinning adds: 4 u8 bone indices (4 bytes) + 4 f32 bone weights (16 bytes) = 20 bytes
+        const SKINNING_OVERHEAD: u32 = 20;
+
+        // Test base format + skinning
+        assert_eq!(super::vertex_stride(super::FORMAT_SKINNED), 12 + SKINNING_OVERHEAD); // 32
+    }
+
+    #[test]
+    fn test_vertex_stride_all_skinned_formats() {
+        // All 8 skinned format combinations
+        assert_eq!(super::vertex_stride(8), 32);   // POS_SKINNED
+        assert_eq!(super::vertex_stride(9), 40);   // POS_UV_SKINNED
+        assert_eq!(super::vertex_stride(10), 44);  // POS_COLOR_SKINNED
+        assert_eq!(super::vertex_stride(11), 52);  // POS_UV_COLOR_SKINNED
+        assert_eq!(super::vertex_stride(12), 44);  // POS_NORMAL_SKINNED
+        assert_eq!(super::vertex_stride(13), 52);  // POS_UV_NORMAL_SKINNED
+        assert_eq!(super::vertex_stride(14), 56);  // POS_COLOR_NORMAL_SKINNED
+        assert_eq!(super::vertex_stride(15), 64);  // POS_UV_COLOR_NORMAL_SKINNED
+    }
+
+    #[test]
+    fn test_max_bones_constant() {
+        // MAX_BONES should be 256 for GPU skinning
+        assert_eq!(MAX_BONES, 256);
+    }
+
+    #[test]
+    fn test_render_state_bone_matrices_default() {
+        let state = GameState::new();
+        assert!(state.render_state.bone_matrices.is_empty());
+        assert_eq!(state.render_state.bone_count, 0);
+    }
+
+    #[test]
+    fn test_render_state_bone_matrices_mutation() {
+        let mut state = GameState::new();
+
+        // Add bone matrices
+        let bone = Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0));
+        state.render_state.bone_matrices.push(bone);
+        state.render_state.bone_count = 1;
+
+        assert_eq!(state.render_state.bone_matrices.len(), 1);
+        assert_eq!(state.render_state.bone_count, 1);
+        assert_eq!(state.render_state.bone_matrices[0], bone);
+    }
+
+    #[test]
+    fn test_render_state_bone_matrices_clear() {
+        let mut state = GameState::new();
+
+        // Add some bones
+        for _ in 0..10 {
+            state.render_state.bone_matrices.push(Mat4::IDENTITY);
+        }
+        state.render_state.bone_count = 10;
+
+        // Clear
+        state.render_state.bone_matrices.clear();
+        state.render_state.bone_count = 0;
+
+        assert!(state.render_state.bone_matrices.is_empty());
+        assert_eq!(state.render_state.bone_count, 0);
+    }
+
+    #[test]
+    fn test_render_state_bone_matrices_max_count() {
+        let mut state = GameState::new();
+
+        // Fill with MAX_BONES matrices
+        for i in 0..MAX_BONES {
+            let bone = Mat4::from_translation(Vec3::new(i as f32, 0.0, 0.0));
+            state.render_state.bone_matrices.push(bone);
+        }
+        state.render_state.bone_count = MAX_BONES as u32;
+
+        assert_eq!(state.render_state.bone_matrices.len(), MAX_BONES);
+        assert_eq!(state.render_state.bone_count, MAX_BONES as u32);
+    }
+
+    #[test]
+    fn test_skinned_format_flag_value() {
+        // FORMAT_SKINNED should be 8 (bit 3)
+        assert_eq!(super::FORMAT_SKINNED, 8);
+    }
+
+    #[test]
+    fn test_max_vertex_format_includes_skinned() {
+        // MAX_VERTEX_FORMAT should be 15 (all flags set: UV=1 | COLOR=2 | NORMAL=4 | SKINNED=8)
+        assert_eq!(super::MAX_VERTEX_FORMAT, 15);
+    }
+
+    #[test]
+    fn test_bone_matrix_identity_transform() {
+        // Verify identity bone matrix doesn't transform a vertex
+        let bone = Mat4::IDENTITY;
+        let vertex = Vec3::new(1.0, 2.0, 3.0);
+        let transformed = bone.transform_point3(vertex);
+
+        assert_eq!(transformed, vertex);
+    }
+
+    #[test]
+    fn test_bone_matrix_translation() {
+        let bone = Mat4::from_translation(Vec3::new(5.0, 0.0, 0.0));
+        let vertex = Vec3::ZERO;
+        let transformed = bone.transform_point3(vertex);
+
+        assert!((transformed.x - 5.0).abs() < 0.0001);
+        assert!(transformed.y.abs() < 0.0001);
+        assert!(transformed.z.abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_bone_matrix_column_major_layout() {
+        // Verify glam uses column-major layout (same as WGSL/wgpu)
+        let translation = Mat4::from_translation(Vec3::new(10.0, 20.0, 30.0));
+        let cols = translation.to_cols_array();
+
+        // Column 3 (indices 12-15) contains translation
+        assert_eq!(cols[12], 10.0); // x translation
+        assert_eq!(cols[13], 20.0); // y translation
+        assert_eq!(cols[14], 30.0); // z translation
+        assert_eq!(cols[15], 1.0);  // w = 1
+    }
+
+    #[test]
+    fn test_bone_weights_sum_to_one() {
+        // In GPU skinning, bone weights should sum to 1.0
+        // This is a convention test - games should ensure this
+        let weights = [0.5f32, 0.3, 0.15, 0.05];
+        let sum: f32 = weights.iter().sum();
+        assert!((sum - 1.0).abs() < 0.0001);
+    }
 }

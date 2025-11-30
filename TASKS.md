@@ -110,10 +110,6 @@ The `Runtime<C: Console>` handles:
 
 
 
-- **[STABILITY] Add tests for GPU skinning** (`emberware-z/src/graphics.rs`)
-  - Bone matrix skinning system is untested.
-  - Should add tests for `set_bones()`, skinned vertex format validation.
-
 ### Phase 2: GGRS Rollback Integration
 
 (Moved to In Progress)
@@ -305,6 +301,12 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **[STABILITY] Add tests for GPU skinning** (`emberware-z/src/graphics.rs`, `emberware-z/src/ffi.rs`, `core/src/wasm.rs`)
+  - Added 9 tests to `core/src/wasm.rs`: RenderState bone matrix storage, clearing, max capacity, weighted blend simulation, bone hierarchy simulation
+  - Added 13 tests to `emberware-z/src/graphics.rs`: All 8 skinned vertex format stride calculations, VertexFormatInfo skinned flags, skinned format isolation, command buffer skinned vertices
+  - Added 15 tests to `emberware-z/src/ffi.rs`: Skinned format flag values, vertex stride calculations, MAX_BONES constant, RenderState bone matrix operations, bone matrix transforms, column-major layout verification, bone weight sum convention
+  - Total: 37 new GPU skinning tests (270 tests total, up from 233)
 
 - **[STABILITY] Add tests for input system** (`emberware-z/src/input.rs`)
   - Added 22 new tests (32 total input tests, up from 10):

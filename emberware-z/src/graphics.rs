@@ -2977,4 +2977,138 @@ mod tests {
         assert_eq!(state1.texture_filter, state2.texture_filter);
         assert_eq!(state1.texture_slots, state2.texture_slots);
     }
+
+    // ========================================================================
+    // GPU Skinning Vertex Format Tests
+    // ========================================================================
+
+    #[test]
+    fn test_vertex_stride_pos_uv_skinned() {
+        // POS + UV + SKINNED: 12 + 8 + 20 = 40 bytes
+        assert_eq!(vertex_stride(FORMAT_UV | FORMAT_SKINNED), 40);
+    }
+
+    #[test]
+    fn test_vertex_stride_pos_color_skinned() {
+        // POS + COLOR + SKINNED: 12 + 12 + 20 = 44 bytes
+        assert_eq!(vertex_stride(FORMAT_COLOR | FORMAT_SKINNED), 44);
+    }
+
+    #[test]
+    fn test_vertex_stride_pos_normal_skinned() {
+        // POS + NORMAL + SKINNED: 12 + 12 + 20 = 44 bytes
+        assert_eq!(vertex_stride(FORMAT_NORMAL | FORMAT_SKINNED), 44);
+    }
+
+    #[test]
+    fn test_vertex_stride_pos_uv_color_skinned() {
+        // POS + UV + COLOR + SKINNED: 12 + 8 + 12 + 20 = 52 bytes
+        assert_eq!(vertex_stride(FORMAT_UV | FORMAT_COLOR | FORMAT_SKINNED), 52);
+    }
+
+    #[test]
+    fn test_vertex_stride_pos_uv_normal_skinned() {
+        // POS + UV + NORMAL + SKINNED: 12 + 8 + 12 + 20 = 52 bytes
+        assert_eq!(vertex_stride(FORMAT_UV | FORMAT_NORMAL | FORMAT_SKINNED), 52);
+    }
+
+    #[test]
+    fn test_vertex_stride_pos_color_normal_skinned() {
+        // POS + COLOR + NORMAL + SKINNED: 12 + 12 + 12 + 20 = 56 bytes
+        assert_eq!(vertex_stride(FORMAT_COLOR | FORMAT_NORMAL | FORMAT_SKINNED), 56);
+    }
+
+    #[test]
+    fn test_skinned_vertex_format_info() {
+        let format = VertexFormatInfo::for_format(FORMAT_SKINNED);
+        assert!(!format.has_uv());
+        assert!(!format.has_color());
+        assert!(!format.has_normal());
+        assert!(format.has_skinned());
+        assert_eq!(format.name, "POS_SKINNED");
+        assert_eq!(format.stride, 32); // 12 + 20
+    }
+
+    #[test]
+    fn test_skinned_full_vertex_format_info() {
+        let format = VertexFormatInfo::for_format(FORMAT_ALL);
+        assert!(format.has_uv());
+        assert!(format.has_color());
+        assert!(format.has_normal());
+        assert!(format.has_skinned());
+        assert_eq!(format.name, "POS_UV_COLOR_NORMAL_SKINNED");
+        assert_eq!(format.stride, 64); // 12 + 8 + 12 + 12 + 20
+    }
+
+    #[test]
+    fn test_all_skinned_vertex_format_strides() {
+        // Verify all 8 skinned variants have correct strides
+        // Base strides (without skinning):
+        // POS=12, POS_UV=20, POS_COLOR=24, POS_UV_COLOR=32
+        // POS_NORMAL=24, POS_UV_NORMAL=32, POS_COLOR_NORMAL=36, POS_UV_COLOR_NORMAL=44
+        // Skinning adds 20 bytes (4 u8 bone indices + 4 f32 weights)
+
+        assert_eq!(vertex_stride(FORMAT_SKINNED), 12 + 20);                                   // 32
+        assert_eq!(vertex_stride(FORMAT_UV | FORMAT_SKINNED), 20 + 20);                       // 40
+        assert_eq!(vertex_stride(FORMAT_COLOR | FORMAT_SKINNED), 24 + 20);                    // 44
+        assert_eq!(vertex_stride(FORMAT_UV | FORMAT_COLOR | FORMAT_SKINNED), 32 + 20);        // 52
+        assert_eq!(vertex_stride(FORMAT_NORMAL | FORMAT_SKINNED), 24 + 20);                   // 44
+        assert_eq!(vertex_stride(FORMAT_UV | FORMAT_NORMAL | FORMAT_SKINNED), 32 + 20);       // 52
+        assert_eq!(vertex_stride(FORMAT_COLOR | FORMAT_NORMAL | FORMAT_SKINNED), 36 + 20);    // 56
+        assert_eq!(vertex_stride(FORMAT_ALL), 44 + 20);                                       // 64
+    }
+
+    #[test]
+    fn test_skinned_format_flags_isolation() {
+        // Verify FORMAT_SKINNED doesn't interfere with other flags
+        for base_format in 0..8u8 {
+            let skinned_format = base_format | FORMAT_SKINNED;
+            let base_info = VertexFormatInfo::for_format(base_format);
+            let skinned_info = VertexFormatInfo::for_format(skinned_format);
+
+            // UV, color, normal flags should be preserved
+            assert_eq!(base_info.has_uv(), skinned_info.has_uv());
+            assert_eq!(base_info.has_color(), skinned_info.has_color());
+            assert_eq!(base_info.has_normal(), skinned_info.has_normal());
+
+            // Skinned flag should be set
+            assert!(!base_info.has_skinned());
+            assert!(skinned_info.has_skinned());
+
+            // Stride should increase by 20 bytes
+            assert_eq!(skinned_info.stride, base_info.stride + 20);
+        }
+    }
+
+    #[test]
+    fn test_command_buffer_skinned_vertices() {
+        let mut cb = CommandBuffer::new();
+        let state = RenderState::default();
+
+        // Skinned triangle: POS_SKINNED format (3 vertices)
+        // Each vertex: pos(3 floats) + bone_indices(4 bytes as 1 u32) + weights(4 floats)
+        // = 12 + 4 + 16 = 32 bytes = 8 floats per vertex
+        let vertices = [
+            // vertex 0: pos + 1 u32 worth of bone indices (as float) + 4 weights
+            0.0, 0.0, 0.0, f32::from_bits(0x03020100), 1.0, 0.0, 0.0, 0.0,
+            // vertex 1
+            1.0, 0.0, 0.0, f32::from_bits(0x03020100), 1.0, 0.0, 0.0, 0.0,
+            // vertex 2
+            0.5, 1.0, 0.0, f32::from_bits(0x03020100), 1.0, 0.0, 0.0, 0.0,
+        ];
+
+        let base = cb.add_vertices(FORMAT_SKINNED, &vertices, Mat4::IDENTITY, &state);
+
+        assert_eq!(base, 0);
+        assert_eq!(cb.commands().len(), 1);
+        assert_eq!(cb.commands()[0].vertex_count, 3);
+        assert_eq!(cb.commands()[0].format, FORMAT_SKINNED);
+    }
+
+    #[test]
+    fn test_format_all_includes_skinned() {
+        // FORMAT_ALL should be the combination of all flags
+        assert_eq!(FORMAT_ALL, FORMAT_UV | FORMAT_COLOR | FORMAT_NORMAL | FORMAT_SKINNED);
+        assert_eq!(FORMAT_ALL, 15);
+    }
 }

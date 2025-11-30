@@ -1461,4 +1461,151 @@ mod tests {
         assert_eq!(MAX_SAVE_SIZE, 64 * 1024);
         assert_eq!(MAX_BONES, 256);
     }
+
+    // ============================================================================
+    // GPU Skinning Tests
+    // ============================================================================
+
+    #[test]
+    fn test_render_state_bone_matrices_empty_by_default() {
+        let state = RenderState::default();
+        assert!(state.bone_matrices.is_empty());
+        assert_eq!(state.bone_count, 0);
+    }
+
+    #[test]
+    fn test_render_state_bone_matrices_can_store_bones() {
+        let mut state = RenderState::default();
+
+        // Add some bone matrices
+        let bone1 = Mat4::from_translation(Vec3::new(1.0, 0.0, 0.0));
+        let bone2 = Mat4::from_rotation_y(PI / 4.0);
+        let bone3 = Mat4::from_scale(Vec3::splat(2.0));
+
+        state.bone_matrices.push(bone1);
+        state.bone_matrices.push(bone2);
+        state.bone_matrices.push(bone3);
+        state.bone_count = 3;
+
+        assert_eq!(state.bone_matrices.len(), 3);
+        assert_eq!(state.bone_count, 3);
+
+        // Verify matrices are stored correctly
+        assert_eq!(state.bone_matrices[0], bone1);
+        assert_eq!(state.bone_matrices[1], bone2);
+        assert_eq!(state.bone_matrices[2], bone3);
+    }
+
+    #[test]
+    fn test_render_state_bone_matrices_max_capacity() {
+        let mut state = RenderState::default();
+
+        // Add MAX_BONES matrices
+        for i in 0..MAX_BONES {
+            let translation = Vec3::new(i as f32, 0.0, 0.0);
+            state.bone_matrices.push(Mat4::from_translation(translation));
+        }
+        state.bone_count = MAX_BONES as u32;
+
+        assert_eq!(state.bone_matrices.len(), MAX_BONES);
+        assert_eq!(state.bone_count, MAX_BONES as u32);
+
+        // Verify first and last bones
+        let expected_first = Mat4::from_translation(Vec3::new(0.0, 0.0, 0.0));
+        let expected_last = Mat4::from_translation(Vec3::new((MAX_BONES - 1) as f32, 0.0, 0.0));
+        assert_eq!(state.bone_matrices[0], expected_first);
+        assert_eq!(state.bone_matrices[MAX_BONES - 1], expected_last);
+    }
+
+    #[test]
+    fn test_render_state_bone_matrices_clear() {
+        let mut state = RenderState::default();
+
+        // Add bones
+        state.bone_matrices.push(Mat4::IDENTITY);
+        state.bone_matrices.push(Mat4::IDENTITY);
+        state.bone_count = 2;
+
+        // Clear bones
+        state.bone_matrices.clear();
+        state.bone_count = 0;
+
+        assert!(state.bone_matrices.is_empty());
+        assert_eq!(state.bone_count, 0);
+    }
+
+    #[test]
+    fn test_render_state_bone_matrices_replace() {
+        let mut state = RenderState::default();
+
+        // Add initial bones
+        state.bone_matrices.push(Mat4::IDENTITY);
+        state.bone_matrices.push(Mat4::IDENTITY);
+        state.bone_count = 2;
+
+        // Replace with new bones
+        let new_bone = Mat4::from_translation(Vec3::new(5.0, 5.0, 5.0));
+        state.bone_matrices.clear();
+        state.bone_matrices.push(new_bone);
+        state.bone_count = 1;
+
+        assert_eq!(state.bone_matrices.len(), 1);
+        assert_eq!(state.bone_count, 1);
+        assert_eq!(state.bone_matrices[0], new_bone);
+    }
+
+    #[test]
+    fn test_render_state_bone_matrix_identity_transform() {
+        // Verify identity matrix doesn't transform a vertex
+        let identity = Mat4::IDENTITY;
+        let vertex = Vec3::new(1.0, 2.0, 3.0);
+        let transformed = identity.transform_point3(vertex);
+
+        assert_eq!(transformed, vertex);
+    }
+
+    #[test]
+    fn test_render_state_bone_matrix_weighted_blend() {
+        // Simulate GPU skinning blend: position = sum(weight_i * bone_i * position)
+        let bone1 = Mat4::from_translation(Vec3::new(10.0, 0.0, 0.0));
+        let bone2 = Mat4::from_translation(Vec3::new(0.0, 10.0, 0.0));
+
+        let vertex = Vec3::ZERO;
+        let weight1 = 0.5f32;
+        let weight2 = 0.5f32;
+
+        // Transform by each bone
+        let t1 = bone1.transform_point3(vertex);
+        let t2 = bone2.transform_point3(vertex);
+
+        // Weighted blend
+        let blended = Vec3::new(
+            t1.x * weight1 + t2.x * weight2,
+            t1.y * weight1 + t2.y * weight2,
+            t1.z * weight1 + t2.z * weight2,
+        );
+
+        // 50% of (10, 0, 0) + 50% of (0, 10, 0) = (5, 5, 0)
+        assert!((blended.x - 5.0).abs() < 0.0001);
+        assert!((blended.y - 5.0).abs() < 0.0001);
+        assert!(blended.z.abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_render_state_bone_matrix_hierarchy() {
+        // Simulate bone hierarchy: parent -> child
+        let parent_bone = Mat4::from_translation(Vec3::new(5.0, 0.0, 0.0));
+        let child_local = Mat4::from_translation(Vec3::new(0.0, 3.0, 0.0));
+
+        // Child's world transform = parent * child_local
+        let child_world = parent_bone * child_local;
+
+        let vertex = Vec3::ZERO;
+        let transformed = child_world.transform_point3(vertex);
+
+        // Origin should be at (5, 3, 0) in world space
+        assert!((transformed.x - 5.0).abs() < 0.0001);
+        assert!((transformed.y - 3.0).abs() < 0.0001);
+        assert!(transformed.z.abs() < 0.0001);
+    }
 }
