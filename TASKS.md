@@ -103,10 +103,6 @@ The `Runtime<C: Console>` handles:
 
 ### Stability
 
-- **[STABILITY] Fix input not passed to game during rollback** (`core/src/runtime.rs:178`)
-  - Critical: During GGRS rollback, `advance_frame` requests provide confirmed inputs but these are never passed to the game before calling `update()`. Breaks deterministic rollback netcode.
-  - TODO comment exists: "This requires exposing GameState input setters"
-
 
 - **[STABILITY] Implement audio backend** (`emberware-z/src/console.rs:173,177,239`)
   - `ZAudio::play()`, `ZAudio::stop()`, and `create_audio()` are stubs with TODO comments.
@@ -322,6 +318,12 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **[STABILITY] Fix input not passed to game during rollback** (`core/src/runtime.rs:178`)
+  - Added `to_input_state()` method to `ConsoleInput` trait for converting console-specific inputs to common `InputState`.
+  - Implemented `to_input_state()` for `ZInput` in emberware-z.
+  - Updated runtime to pass GGRS confirmed inputs to game before calling `update()` during rollback.
+  - Enables deterministic rollback netcode: games now receive correct inputs during replay.
 
 - **[STABILITY] Replace expect() calls in graphics initialization** (`emberware-z/src/graphics.rs`)
   - Changed `create_fallback_textures()` to return `Result<()>` and propagate errors.

@@ -1125,6 +1125,7 @@ impl From<GgrsError> for SessionError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::wasm::InputState;
 
     // Test input type for unit tests
     #[repr(C)]
@@ -1137,7 +1138,16 @@ mod tests {
 
     unsafe impl Pod for TestInput {}
     unsafe impl Zeroable for TestInput {}
-    impl ConsoleInput for TestInput {}
+    impl ConsoleInput for TestInput {
+        fn to_input_state(&self) -> InputState {
+            InputState {
+                buttons: self.buttons,
+                left_stick_x: self.x,
+                left_stick_y: self.y,
+                ..Default::default()
+            }
+        }
+    }
 
     #[test]
     fn test_session_config_default() {

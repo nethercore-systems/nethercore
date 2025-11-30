@@ -14,7 +14,7 @@ mod tests {
     use crate::ffi::register_common_ffi;
     use crate::rollback::{GameStateSnapshot, RollbackSession, RollbackStateManager};
     use crate::runtime::Runtime;
-    use crate::wasm::{GameInstance, GameState, WasmEngine, MAX_PLAYERS};
+    use crate::wasm::{GameInstance, GameState, InputState, WasmEngine, MAX_PLAYERS};
 
     // ============================================================================
     // Test Console Implementation
@@ -66,7 +66,16 @@ mod tests {
 
     unsafe impl Pod for TestInput {}
     unsafe impl Zeroable for TestInput {}
-    impl ConsoleInput for TestInput {}
+    impl ConsoleInput for TestInput {
+        fn to_input_state(&self) -> InputState {
+            InputState {
+                buttons: self.buttons,
+                left_stick_x: self.x,
+                left_stick_y: self.y,
+                ..Default::default()
+            }
+        }
+    }
 
     impl Console for TestConsole {
         type Graphics = TestGraphics;

@@ -11,7 +11,7 @@ use winit::window::Window;
 
 use emberware_core::{
     console::{Audio, Console, ConsoleInput, ConsoleSpecs, RawInput, SoundHandle},
-    wasm::GameState,
+    wasm::{GameState, InputState},
 };
 
 use crate::graphics::ZGraphics;
@@ -155,7 +155,19 @@ impl ZInput {
     }
 }
 
-impl ConsoleInput for ZInput {}
+impl ConsoleInput for ZInput {
+    fn to_input_state(&self) -> InputState {
+        InputState {
+            buttons: self.buttons,
+            left_stick_x: self.left_stick_x,
+            left_stick_y: self.left_stick_y,
+            right_stick_x: self.right_stick_x,
+            right_stick_y: self.right_stick_y,
+            left_trigger: self.left_trigger,
+            right_trigger: self.right_trigger,
+        }
+    }
+}
 
 // ZGraphics is now implemented in graphics.rs
 

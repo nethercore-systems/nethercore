@@ -11,7 +11,7 @@ use glam::Mat4;
 use wasmtime::Linker;
 use winit::window::Window;
 
-use crate::wasm::GameState;
+use crate::wasm::{GameState, InputState};
 
 /// Specifications for a fantasy console
 #[derive(Debug, Clone)]
@@ -72,9 +72,17 @@ pub trait Console: Send + 'static {
 ///
 /// Must be POD (Plain Old Data) for efficient serialization over the network
 /// and for GGRS rollback state management.
+///
+/// Implementors must provide a conversion to `InputState` which is the common
+/// format used by the FFI layer for input queries.
 pub trait ConsoleInput:
     Clone + Copy + Default + PartialEq + Pod + Zeroable + Send + Sync + 'static
 {
+    /// Convert console-specific input to the common `InputState` format.
+    ///
+    /// This is called during GGRS rollback to pass confirmed inputs to the game
+    /// before each `update()` call.
+    fn to_input_state(&self) -> InputState;
 }
 
 /// Raw input from physical devices

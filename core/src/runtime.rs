@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 use ggrs::GgrsError;
 
-use crate::console::{Audio, Console};
+use crate::console::{Audio, Console, ConsoleInput};
 use crate::rollback::{RollbackSession, SessionEvent};
 use crate::wasm::GameInstance;
 
@@ -176,10 +176,12 @@ impl<C: Console> Runtime<C> {
                     }
 
                     // Execute each AdvanceFrame with its inputs
-                    for _inputs in advance_inputs {
+                    for inputs in advance_inputs {
                         // Set inputs in GameState for FFI access
-                        // TODO: This requires exposing GameState input setters
-                        // For now, we just call update()
+                        // Each entry is (input, status) for one player
+                        for (player_idx, (input, _status)) in inputs.iter().enumerate() {
+                            game.set_input(player_idx, input.to_input_state());
+                        }
                         game.update(self.tick_duration.as_secs_f32())?;
                         ticks += 1;
                     }
@@ -285,7 +287,7 @@ mod tests {
     use winit::window::Window;
 
     use crate::console::{ConsoleSpecs, Graphics, RawInput, SoundHandle};
-    use crate::wasm::{GameInstance, GameState, WasmEngine};
+    use crate::wasm::{GameInstance, GameState, InputState, WasmEngine};
 
     // ============================================================================
     // Test Console Implementation
@@ -325,7 +327,14 @@ mod tests {
 
     unsafe impl Pod for TestInput {}
     unsafe impl Zeroable for TestInput {}
-    impl crate::console::ConsoleInput for TestInput {}
+    impl crate::console::ConsoleInput for TestInput {
+        fn to_input_state(&self) -> InputState {
+            InputState {
+                buttons: self.buttons,
+                ..Default::default()
+            }
+        }
+    }
 
     impl Console for TestConsole {
         type Graphics = TestGraphics;
