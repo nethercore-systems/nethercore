@@ -860,7 +860,7 @@ impl App {
 
         // Update frame timing
         self.frame_times.push(now);
-        if self.frame_times.len() > 120 {
+        if self.frame_times.len() > FRAME_TIME_HISTORY_SIZE {
             self.frame_times.remove(0);
         }
         let frame_time_ms = now.duration_since(self.last_frame).as_secs_f32() * 1000.0;
@@ -1689,17 +1689,17 @@ mod tests {
     // Test frame time tracking logic
     #[test]
     fn test_frame_times_capped_at_120() {
-        let mut frame_times: Vec<Instant> = Vec::with_capacity(120);
+        let mut frame_times: Vec<Instant> = Vec::with_capacity(FRAME_TIME_HISTORY_SIZE);
 
         // Add 130 frames
         for _ in 0..130 {
             frame_times.push(Instant::now());
-            if frame_times.len() > 120 {
+            if frame_times.len() > FRAME_TIME_HISTORY_SIZE {
                 frame_times.remove(0);
             }
         }
 
-        assert_eq!(frame_times.len(), 120);
+        assert_eq!(frame_times.len(), FRAME_TIME_HISTORY_SIZE);
     }
 
     // Test debug stats frame time ring buffer
