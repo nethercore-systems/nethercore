@@ -45,6 +45,12 @@ pub const ROM_LIMIT: usize = 32 * 1024 * 1024;
 /// CPU budget per tick at 60fps (4ms = 4000 microseconds)
 pub const CPU_BUDGET_US: u64 = 4000;
 
+/// Maximum value for analog stick conversion (i8 range: -128 to 127)
+const STICK_SCALE: f32 = 127.0;
+
+/// Maximum value for trigger conversion (u8 range: 0 to 255)
+const TRIGGER_SCALE: f32 = 255.0;
+
 /// Emberware Z console specifications
 pub static Z_SPECS: ConsoleSpecs = ConsoleSpecs {
     name: "Emberware Z",
@@ -129,37 +135,37 @@ impl ZInput {
     /// Get left stick X as float (-1.0 to 1.0)
     #[inline]
     pub fn left_stick_x_f32(&self) -> f32 {
-        self.left_stick_x as f32 / 127.0
+        self.left_stick_x as f32 / STICK_SCALE
     }
 
     /// Get left stick Y as float (-1.0 to 1.0)
     #[inline]
     pub fn left_stick_y_f32(&self) -> f32 {
-        self.left_stick_y as f32 / 127.0
+        self.left_stick_y as f32 / STICK_SCALE
     }
 
     /// Get right stick X as float (-1.0 to 1.0)
     #[inline]
     pub fn right_stick_x_f32(&self) -> f32 {
-        self.right_stick_x as f32 / 127.0
+        self.right_stick_x as f32 / STICK_SCALE
     }
 
     /// Get right stick Y as float (-1.0 to 1.0)
     #[inline]
     pub fn right_stick_y_f32(&self) -> f32 {
-        self.right_stick_y as f32 / 127.0
+        self.right_stick_y as f32 / STICK_SCALE
     }
 
     /// Get left trigger as float (0.0 to 1.0)
     #[inline]
     pub fn left_trigger_f32(&self) -> f32 {
-        self.left_trigger as f32 / 255.0
+        self.left_trigger as f32 / TRIGGER_SCALE
     }
 
     /// Get right trigger as float (0.0 to 1.0)
     #[inline]
     pub fn right_trigger_f32(&self) -> f32 {
-        self.right_trigger as f32 / 255.0
+        self.right_trigger as f32 / TRIGGER_SCALE
     }
 }
 
@@ -310,14 +316,14 @@ impl Console for EmberwareZ {
         }
 
         // Map analog sticks (f32 -1.0..1.0 to i8 -128..127)
-        let left_stick_x = (raw.left_stick_x.clamp(-1.0, 1.0) * 127.0) as i8;
-        let left_stick_y = (raw.left_stick_y.clamp(-1.0, 1.0) * 127.0) as i8;
-        let right_stick_x = (raw.right_stick_x.clamp(-1.0, 1.0) * 127.0) as i8;
-        let right_stick_y = (raw.right_stick_y.clamp(-1.0, 1.0) * 127.0) as i8;
+        let left_stick_x = (raw.left_stick_x.clamp(-1.0, 1.0) * STICK_SCALE) as i8;
+        let left_stick_y = (raw.left_stick_y.clamp(-1.0, 1.0) * STICK_SCALE) as i8;
+        let right_stick_x = (raw.right_stick_x.clamp(-1.0, 1.0) * STICK_SCALE) as i8;
+        let right_stick_y = (raw.right_stick_y.clamp(-1.0, 1.0) * STICK_SCALE) as i8;
 
         // Map triggers (f32 0.0..1.0 to u8 0..255)
-        let left_trigger = (raw.left_trigger.clamp(0.0, 1.0) * 255.0) as u8;
-        let right_trigger = (raw.right_trigger.clamp(0.0, 1.0) * 255.0) as u8;
+        let left_trigger = (raw.left_trigger.clamp(0.0, 1.0) * TRIGGER_SCALE) as u8;
+        let right_trigger = (raw.right_trigger.clamp(0.0, 1.0) * TRIGGER_SCALE) as u8;
 
         ZInput {
             buttons,
