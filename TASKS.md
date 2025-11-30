@@ -108,9 +108,8 @@ The `Runtime<C: Console>` handles:
 
 #### Medium Priority
 
-- **[STABILITY] Split large files into modules** (graphics.rs, ffi.rs, rollback.rs, wasm.rs)
+- **[STABILITY] Split large files into modules** (graphics.rs, rollback.rs, wasm.rs)
   - `graphics.rs`: 3114 lines → split into pipeline, vertex, command_buffer, resources
-  - `ffi.rs` (emberware-z): 2447 lines → extract input functions to separate module
   - `rollback.rs`: 1843 lines → split into session, state, config modules
   - `wasm.rs`: 1681 lines → split by responsibility (game state, camera, render)
 
@@ -240,6 +239,13 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **[STABILITY] Split ffi.rs input functions into separate module** (`emberware-z/src/ffi.rs`)
+  - Extracted input FFI functions (14 functions, ~350 lines) to `ffi/input.rs`
+  - Created `ffi/mod.rs` to organize FFI module with public submodule
+  - Functions extracted: `button_held`, `button_pressed`, `button_released`, `buttons_held`, `buttons_pressed`, `buttons_released`, `left_stick_x`, `left_stick_y`, `right_stick_x`, `right_stick_y`, `left_stick`, `right_stick`, `trigger_left`, `trigger_right`
+  - All 463 tests passing (159 core + 304 emberware-z)
+  - `ffi.rs` reduced from 3120 lines to 2250 lines (mod.rs) + 310 lines (input.rs)
 
 - **[STABILITY] Add tests for graphics pipeline** (`emberware-z/src/graphics.rs`)
   - Added 32 new tests (98 total graphics tests, up from 66)
