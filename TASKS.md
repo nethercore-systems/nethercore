@@ -132,9 +132,6 @@ The `Runtime<C: Console>` handles:
   - Use macro or builder pattern to reduce duplication
 
 
-- **[STABILITY] Add tests for config.rs** (`emberware-z/src/config.rs`)
-  - Config loading/saving functions lack tests
-  - Add tests for config persistence and validation
 
 - **[STABILITY] Add tests for library.rs** (`emberware-z/src/library.rs`)
   - `get_local_games()` function has no tests
@@ -264,6 +261,15 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **[STABILITY] Add tests for config.rs** (`emberware-z/src/config.rs`)
+  - Added 21 new tests for config persistence and validation
+  - **Default value tests**: Config, VideoConfig, AudioConfig, helper functions
+  - **TOML serialization tests**: Serialize roundtrip, deserialize empty, partial video/audio
+  - **Edge case tests**: Volume 0/1, resolution scale values
+  - **Directory function tests**: config_dir/data_dir consistency
+  - **Trait tests**: Clone, Debug formatting
+  - **Load function tests**: Returns valid config without panic
 
 - **[STABILITY] Add tests for FFI validation** (`emberware-z/src/ffi.rs`)
   - Added 57 new tests (72 total FFI tests) covering FFI validation and edge cases
