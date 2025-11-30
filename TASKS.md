@@ -671,6 +671,57 @@ KEYCODE_TO_BUTTON.get(&(keycode as u32)).copied()
 
 ## Done
 
+### **[FEATURE] Implement audio backend**
+**Status:** Completed ✅
+
+**What Was Implemented:**
+- ✅ Added `Sound` struct to hold PCM audio data (22.05kHz, 16-bit signed, mono)
+- ✅ Added `AudioCommand` enum for buffered audio operations (PlaySound, ChannelPlay, ChannelSet, ChannelStop, MusicPlay, MusicStop, MusicSetVolume)
+- ✅ Added audio-related fields to ZFFIState:
+  - `sounds: Vec<Sound>` - Loaded sound data
+  - `audio_commands: Vec<AudioCommand>` - Buffered commands per frame
+  - `next_sound_handle: u32` - Handle allocation counter
+- ✅ Implemented `ZAudio` backend with rodio:
+  - 16 managed channels for sound effects and positional audio
+  - Dedicated music channel with looping
+  - Rollback-aware command processing (discards play commands during rollback, keeps parameter updates)
+  - WAV encoding for PCM samples (rodio compatibility)
+  - Channel management with volume and pan control
+- ✅ Implemented FFI functions:
+  - `load_sound(data_ptr, byte_len)` - Load raw PCM data (init-only)
+  - `play_sound(sound, volume, pan)` - Fire-and-forget one-shot sounds
+  - `channel_play(channel, sound, volume, pan, looping)` - Managed channel playback
+  - `channel_set(channel, volume, pan)` - Update channel parameters (for positional audio)
+  - `channel_stop(channel)` - Stop a channel
+  - `music_play(sound, volume)` - Play looping music
+  - `music_stop()` - Stop music
+  - `music_set_volume(volume)` - Adjust music volume
+- ✅ Integrated audio processing in app.rs:
+  - Calls `audio.process_commands()` after each confirmed frame
+  - Sets rollback mode based on GGRS state
+  - Commands processed only when not rolling back
+- ✅ All 518 tests passing (155 in core + 363 in emberware-z)
+
+**Files Modified:**
+- `emberware-z/src/state.rs` - Added Sound struct, AudioCommand enum, audio fields to ZFFIState
+- `emberware-z/src/audio.rs` - New file with ZAudio backend implementation
+- `emberware-z/src/console.rs` - Updated create_audio() to use new ZAudio::new()
+- `emberware-z/src/main.rs` - Added audio module declaration
+- `emberware-z/src/ffi/mod.rs` - Registered and implemented all 8 audio FFI functions
+- `emberware-z/src/app.rs` - Added audio command processing after draw commands
+
+**Impact:**
+- Game developers can now load and play audio in their games
+- PS1/N64-authentic 22.05kHz mono audio
+- 16 channels for simultaneous sound effects
+- Positional audio support via channel_set() for dynamic pan/volume
+- Rollback-safe audio (commands discarded during rollback replay)
+- Music layer separate from SFX for continuous background audio
+
+**Compilation:** ✅ All tests passing
+
+---
+
 ### **[FEATURE] Implement custom font loading**
 **Status:** Completed ✅
 
