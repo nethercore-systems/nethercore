@@ -946,7 +946,7 @@ mod tests {
         use crate::rollback::MAX_STATE_SIZE;
 
         // Verify limit
-        assert_eq!(MAX_STATE_SIZE, 1024 * 1024); // 1MB
+        assert_eq!(MAX_STATE_SIZE, 16 * 1024 * 1024); // 16MB
 
         // Create a snapshot at the limit
         let data = vec![0u8; MAX_STATE_SIZE];
