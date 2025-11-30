@@ -1134,6 +1134,24 @@ KEYCODE_TO_BUTTON.get(&(keycode as u32)).copied()
 
 ## Done
 
+### **[POLISH] Performance Optimizations - Additional Improvements**
+**Status:** Completed
+**Changes Made:**
+- Task #3: Verified `DrawCommand::DrawText` already stores `Vec<u8>` instead of `String` - no changes needed
+- Task #5: Verified all input FFI functions already have `#[inline]` attribute - no changes needed
+- Task #6: Removed `Clone` derive from `PendingTexture` and `PendingMesh` structs in `emberware-z/src/state.rs`
+  - Also removed `Clone` from `ZFFIState` and `ZDrawCommand` to maintain consistency
+  - Verified none of these structs are cloned anywhere in the codebase
+  - Prevents accidental expensive clones of large resource data (textures can be MB-sized)
+- All 518 tests passing ✓ (155 in core + 363 in emberware-z)
+
+**Impact:**
+- Documents intent that these resource structures are moved to GPU, not copied
+- Prevents accidental performance issues from cloning large vertex/texture data
+- Compiler will now error if anyone tries to clone these structures accidentally
+
+---
+
 ### **[REFACTOR] Simplify execute_draw_commands architecture**
 **Status:** Completed ✅
 

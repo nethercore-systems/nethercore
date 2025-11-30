@@ -99,7 +99,7 @@ impl Default for LightState {
 // ============================================================================
 
 /// Pending texture load request
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct PendingTexture {
     pub handle: u32,
     pub width: u32,
@@ -108,7 +108,7 @@ pub struct PendingTexture {
 }
 
 /// Pending mesh load request (retained mode)
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct PendingMesh {
     pub handle: u32,
     pub format: u8,
@@ -121,7 +121,7 @@ pub struct PendingMesh {
 // ============================================================================
 
 /// Draw command for Z-specific immediate mode drawing
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum ZDrawCommand {
     /// Draw triangles with immediate data (non-indexed)
     DrawTriangles {
@@ -248,7 +248,7 @@ impl Default for ZInitConfig {
 /// rendering and does not persist between frames.
 ///
 /// This is NOT serialized for rollback - only core GameState is rolled back.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ZFFIState {
     // 3D Camera
     pub camera: CameraState,
