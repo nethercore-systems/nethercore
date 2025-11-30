@@ -11,22 +11,26 @@ name = "emberware-z"
 path = "src/main.rs"
 
 [dependencies]
+emberware-core = { path = "../core" }
 emberware-shared = { path = "../shared" }
 
 # WASM runtime
-wasmtime = "19"
+wasmtime = "27"
 
 # Graphics
-wgpu = "0.19"
-winit = "0.29"
+wgpu = "23"
+winit = "0.30"
 
 # Audio
 rodio = "0.17"
 
+# Input
+gilrs = "0.11"
+
 # UI (minimal library)
-egui = "0.27"
-egui-wgpu = "0.27"
-egui-winit = "0.27"
+egui = "0.30"
+egui-wgpu = "0.30"
+egui-winit = "0.30"
 
 # Rollback netcode
 ggrs = "0.10"
@@ -39,6 +43,9 @@ matchbox_socket = "0.9"
 reqwest = { version = "0.11", features = ["json", "stream"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs"] }
 
+# Math
+glam = { version = "0.29", features = ["bytemuck"] }
+
 # Utilities
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -48,3 +55,10 @@ chrono = { version = "0.4", features = ["serde"] }
 thiserror = "1"
 tracing = "0.1"
 tracing-subscriber = "0.3"
+anyhow = "1"
+pollster = "0.4"
+open = "5"
+
+[dev-dependencies]
+naga = { version = "23", features = ["wgsl-in"] }
+tempfile = "3"

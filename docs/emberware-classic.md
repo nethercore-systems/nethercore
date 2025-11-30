@@ -10,11 +10,11 @@ Emberware Classic is a beginner-friendly 2D fantasy console inspired by SNES/Gen
 | **Resolution** | 8 options: 4× 16:9, 4× 4:3 (see below) |
 | **Scaling** | Pixel-perfect to 1080p |
 | **Color depth** | RGBA8 |
-| **Tick rate** | 24, 30, 60 (default), 120 fps |
-| **RAM** | 4MB |
-| **VRAM** | 2MB |
+| **Tick rate** | 30, 60 (default) fps |
+| **RAM** | 1MB |
+| **VRAM** | 1MB |
 | **CPU budget** | 4ms per tick (at 60fps) |
-| **ROM size** | 16MB max |
+| **ROM size** | 4MB max (uncompressed) |
 | **Netcode** | Deterministic rollback via GGRS |
 | **Max players** | 4 (any mix of local + remote) |
 
@@ -53,15 +53,15 @@ fn set_clear_color(color: u32)              // 0xRRGGBBAA, default: 0x000000FF (
 | Value | Resolution | Aspect | Scale |
 |-------|------------|--------|-------|
 | 0 | 320×180 | 16:9 | 6× |
-| 1 | 384×216 | 16:9 | 5× (default) |
+| 1 | 384×216 | 16:9 | 5× |
 | 2 | 480×270 | 16:9 | 4× |
 | 3 | 640×360 | 16:9 | 3× |
 | 4 | 240×180 | 4:3 | 6× |
-| 5 | 288×216 | 4:3 | 5× |
+| 5 | 288×216 | 4:3 | 5× (default) |
 | 6 | 360×270 | 4:3 | 4× |
 | 7 | 480×360 | 4:3 | 3× |
 
-If not set, defaults to resolution 1 (384×216, 16:9) @ 60fps.
+If not set, defaults to resolution 5 (288×216, 4:3) @ 60fps.
 
 ---
 
@@ -369,9 +369,9 @@ pub extern "C" fn render() {
 | Target audience | Experienced devs | Beginners, students |
 | Generation | 5th (PS1/N64) | 4th (SNES/Genesis) |
 | Resolution | 360p-1080p | 320×180 to 640×360 (pixel-perfect) |
-| RAM | 16MB | 4MB |
-| VRAM | 8MB | 2MB |
-| ROM size | 32MB | 16MB |
+| RAM | 4MB | 1MB |
+| VRAM | 4MB | 1MB |
+| ROM size | 8MB | 4MB |
 | 3D support | Yes | No |
 | Analog sticks | 2 | None |
 | Analog triggers | 2 | None |

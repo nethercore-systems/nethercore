@@ -10,10 +10,10 @@ Emberware Z is a 5th-generation fantasy console targeting PS1/N64/Saturn aesthet
 | **Resolution** | 360p, 540p (default), 720p, 1080p |
 | **Color depth** | RGBA8 |
 | **Tick rate** | 24, 30, 60 (default), 120 fps |
-| **RAM** | 16MB |
-| **VRAM** | 8MB |
+| **RAM** | 4MB |
+| **VRAM** | 4MB |
 | **CPU budget** | 4ms per tick (at 60fps) |
-| **ROM size** | 32MB max |
+| **ROM size** | 8MB max (uncompressed) |
 | **Netcode** | Deterministic rollback via GGRS |
 | **Max players** | 4 (any mix of local + remote) |
 
@@ -221,13 +221,13 @@ Full PBR lighting with up to 4 dynamic lights:
 - Emissive support
 
 ```rust
-fn light_set(index: u32, light_type: u32, x: f32, y: f32, z: f32)  // index 0-3
+fn light_set(index: u32, x: f32, y: f32, z: f32)  // index 0-3, direction vector
 fn light_color(index: u32, r: f32, g: f32, b: f32)
 fn light_intensity(index: u32, intensity: f32)
 fn light_disable(index: u32)
 ```
 
-Light types: 0 = ambient, 1 = directional, 2 = point, 3 = spot (TBD)
+All lights are directional. The `x`, `y`, `z` parameters specify the light direction (normalized internally).
 
 Material properties via MRE texture (R=Metallic, G=Roughness, B=Emissive):
 
@@ -265,16 +265,18 @@ Best of both worlds with constrained lighting:
 // Single matcap for ambient reflections (binds to slot 3)
 fn texture_bind_slot(handle: u32, slot: u32)  // Use slot 3 for matcap
 
-// Single directional light + ambient
-fn light_direction(x: f32, y: f32, z: f32)  // Normalized direction TO light
-fn light_color(r: f32, g: f32, b: f32)      // Linear RGB
-fn ambient_color(r: f32, g: f32, b: f32)    // Linear RGB
+// Single directional light (conventionally light 0)
+fn light_set(0, x: f32, y: f32, z: f32)     // Set light 0 direction
+fn light_color(0, r: f32, g: f32, b: f32)   // Set light 0 color
+fn light_intensity(0, intensity: f32)       // Set light 0 intensity
 
 // PBR material properties
 fn material_metallic(value: f32)
 fn material_roughness(value: f32)
 fn material_emissive(value: f32)
 ```
+
+**Note:** Mode 3 uses the same light functions as Mode 2, but conventionally only uses light 0 as the single directional light. Ambient lighting comes from the matcap in slot 3 combined with the procedural sky.
 
 ```
 // Matcap modulates the ambient/reflection term
@@ -749,7 +751,7 @@ use core::panic::PanicInfo;
 #[panic_handler]
 fn panic(_: &PanicInfo) -> ! { loop {} }
 
-#[link(wasm_import_module = "emberware")]
+#[link(wasm_import_module = "env")]
 extern "C" {
     fn set_clear_color(color: u32);
     fn left_stick_x(player: u32) -> f32;
@@ -802,3 +804,176 @@ pub extern "C" fn render() {
     }
 }
 ```
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+#### FFI functions not found
+
+**Symptom:** WASM module fails to instantiate with "unknown import" errors.
+
+**Cause:** Using the wrong import module name.
+
+**Fix:** Use `#[link(wasm_import_module = "env")]` for all FFI imports:
+
+```rust
+#[link(wasm_import_module = "env")]
+extern "C" {
+    fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32);
+}
+```
+
+#### Configuration functions ignored
+
+**Symptom:** `set_resolution()`, `set_tick_rate()`, `render_mode()`, or `set_clear_color()` have no effect.
+
+**Cause:** Calling these functions outside of `init()`.
+
+**Fix:** These are init-only functions. Call them only in your `init()` function:
+
+```rust
+#[no_mangle]
+pub extern "C" fn init() {
+    unsafe {
+        set_resolution(2);        // 720p
+        set_tick_rate(2);         // 60fps
+        render_mode(2);           // PBR
+        set_clear_color(0x1a1a2eFF);
+    }
+}
+```
+
+#### Textures appear as magenta/black checkerboard
+
+**Symptom:** Geometry renders with a magenta/black checkerboard pattern instead of your texture.
+
+**Cause:** Texture handle is invalid or texture wasn't loaded properly.
+
+**Fix:**
+1. Verify `load_texture()` returns a non-zero handle
+2. Ensure you call `texture_bind()` before drawing
+3. Check that pixel data pointer and dimensions are correct
+
+```rust
+let handle = load_texture(width, height, pixels.as_ptr());
+if handle == 0 {
+    // Handle error - texture failed to load
+}
+texture_bind(handle);
+draw_mesh(mesh);
+```
+
+#### Lighting not working in Mode 0
+
+**Symptom:** Objects appear flat/unlit even though you called `set_sky()`.
+
+**Cause:** Vertex format doesn't include normals.
+
+**Fix:** Use a vertex format with `FORMAT_NORMAL` flag:
+
+```rust
+// Use format 5 (POS_UV_NORMAL) instead of format 1 (POS_UV)
+load_mesh(data.as_ptr(), count, 5);
+```
+
+#### Transform stack overflow
+
+**Symptom:** `transform_push()` returns 0.
+
+**Cause:** Stack depth exceeded (max 16 entries).
+
+**Fix:** Ensure every `transform_push()` has a matching `transform_pop()`:
+
+```rust
+for obj in objects {
+    if transform_push() != 0 {
+        transform_translate(obj.x, obj.y, obj.z);
+        draw_mesh(obj.mesh);
+        transform_pop();
+    }
+}
+```
+
+#### Rollback desync in multiplayer
+
+**Symptom:** Players see different game states during netplay.
+
+**Cause:** Non-deterministic code in `update()`.
+
+**Fix:**
+1. Always use `random()` instead of external RNG
+2. Avoid floating-point operations that differ across platforms
+3. Don't use system time or external state in `update()`
+4. Ensure `save_state`/`load_state` capture all game state
+
+#### GPU skinning not deforming mesh
+
+**Symptom:** Skinned mesh renders but bones have no effect.
+
+**Cause:** Bone matrices not uploaded or vertex format incorrect.
+
+**Fix:**
+1. Include `FORMAT_SKINNED` (8) in your vertex format
+2. Call `set_bones()` before `draw_mesh()` each frame
+3. Ensure bone indices in vertices are valid (0-255)
+4. Verify bone weights sum to approximately 1.0
+
+---
+
+## Performance Tips
+
+### Vertex Formats
+
+- Use the **smallest vertex format** that meets your needs
+- Format 0 (POS only) is 12 bytes, format 7 (POS_UV_COLOR_NORMAL) is 44 bytes
+- Adding FORMAT_SKINNED increases stride by 20 bytes per vertex
+
+### Retained vs Immediate Mode
+
+- **Prefer `load_mesh()` + `draw_mesh()`** for static geometry
+- Use `draw_triangles()` only for dynamic/procedural geometry
+- Retained meshes are stored on GPU; immediate mode uploads each frame
+
+### Batching
+
+- Minimize texture binding changes between draw calls
+- Group objects by material/texture when possible
+- Use texture atlases to reduce bind calls
+
+### Transform Stack
+
+- Avoid deep nesting of `transform_push()`/`transform_pop()`
+- Compute final transforms in `update()` when possible
+- Use `transform_set()` for pre-computed matrices
+
+### Render Modes
+
+| Mode | Cost | Use Case |
+|------|------|----------|
+| 0 (Unlit) | Lowest | UI, particles, stylized games |
+| 1 (Matcap) | Low | Stylized 3D, no dynamic lighting needed |
+| 2 (PBR) | High | Realistic lighting, multiple light sources |
+| 3 (Hybrid) | Medium | Balanced quality/performance |
+
+### Texture Guidelines
+
+- Use power-of-two dimensions when possible
+- Keep textures small (256×256 or less for retro aesthetic)
+- Use nearest-neighbor filtering (`texture_filter(0)`) for sharp pixels
+- VRAM budget is 4MB — monitor usage during development
+
+### CPU Budget
+
+- Target 4ms per tick at 60fps (update + save_state overhead)
+- Profile your `update()` function if rollback causes stuttering
+- Keep game state small for faster save/load during rollback
+- Use fixed-point math where precision allows for determinism
+
+### Billboards
+
+- Use billboards for large numbers of similar objects (particles, foliage)
+- Cylindrical Y mode is cheaper than spherical for upright sprites
+- Batch multiple billboards in a single draw when possible

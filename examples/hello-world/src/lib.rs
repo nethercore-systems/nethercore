@@ -1,17 +1,21 @@
+//! Hello World Example
+//!
+//! Demonstrates basic 2D drawing with text and rectangles.
+//! Use D-pad to move the square, A button to reset position.
+
 #![no_std]
 #![no_main]
 
 use core::panic::PanicInfo;
 
 #[panic_handler]
-fn panic(_: &PanicInfo) -> ! { loop {} }
+fn panic(_: &PanicInfo) -> ! {
+    loop {}
+}
 
-#[link(wasm_import_module = "emberware")]
+#[link(wasm_import_module = "env")]
 extern "C" {
-    fn clear(color: u32);
-    fn frame_begin();
-    fn frame_end();
-    fn delta_time() -> f32;
+    fn set_clear_color(color: u32);
     fn button_pressed(player: u32, button: u32) -> u32;
     fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
     fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32);
@@ -20,14 +24,25 @@ extern "C" {
 static mut Y_POS: f32 = 120.0;
 
 #[no_mangle]
-pub extern "C" fn init() {}
+pub extern "C" fn init() {
+    unsafe {
+        // Dark blue-gray background
+        set_clear_color(0x1a1a2eFF);
+    }
+}
 
 #[no_mangle]
 pub extern "C" fn update() {
     unsafe {
-        if button_pressed(0, 0) != 0 { Y_POS -= 10.0; } // UP
-        if button_pressed(0, 1) != 0 { Y_POS += 10.0; } // DOWN
-        if button_pressed(0, 4) != 0 { Y_POS = 120.0; } // A
+        if button_pressed(0, 0) != 0 {
+            Y_POS -= 10.0;
+        } // UP
+        if button_pressed(0, 1) != 0 {
+            Y_POS += 10.0;
+        } // DOWN
+        if button_pressed(0, 4) != 0 {
+            Y_POS = 120.0;
+        } // A
         Y_POS = Y_POS.clamp(20.0, 200.0);
     }
 }
@@ -35,11 +50,15 @@ pub extern "C" fn update() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
-        frame_begin();
-        clear(0x1a1a2eFF);
         let title = b"Hello Emberware!";
-        draw_text(title.as_ptr(), title.len() as u32, 80.0, 30.0, 16.0, 0xFFFFFFFF);
+        draw_text(
+            title.as_ptr(),
+            title.len() as u32,
+            80.0,
+            30.0,
+            16.0,
+            0xFFFFFFFF,
+        );
         draw_rect(140.0, Y_POS, 40.0, 40.0, 0xFF6B6BFF);
-        frame_end();
     }
 }

@@ -1,14 +1,10 @@
 # Emberware Development Tasks
 
-## Needs Clarification
-
-These items are marked TODO throughout the document and need decisions before implementation:
-
-- **Audio system** — Architecture, formats, sample rates, channel count (shelved for now)
-- **Custom fonts** — Allow games to load custom fonts for draw_text?
-- **Spectator support** — GGRS spectator sessions for watching games
-- **Matchmaking** — Handled by platform service, but integration details TBD
-- **Matcap blend modes** — Currently multiply only; future: add, screen, overlay, HSV shift, etc.
+**Task Status Tags:**
+- `[STABILITY]` — Robustness, error handling, testing, safety improvements
+- `[FEATURE]` — New functionality for game developers
+- `[NETWORKING]` — P2P, matchmaking, rollback netcode
+- `[POLISH]` — UX improvements, optimization, documentation
 
 ---
 
@@ -51,8 +47,6 @@ pub trait Console: Send + 'static {
 pub trait ConsoleInput: Clone + Copy + Default + bytemuck::Pod + bytemuck::Zeroable {}
 
 pub trait Graphics: Send {
-    fn begin_frame(&mut self);
-    fn end_frame(&mut self);
     fn resize(&mut self, width: u32, height: u32);
     // Console calls into this during render via FFI
 }
@@ -103,620 +97,470 @@ The `Runtime<C: Console>` handles:
 
 ## TODO
 
-### Phase 1: Core Framework Foundation
-
-- [ ] **Create `core` crate with workspace configuration**
-  - Add `core/Cargo.toml` with wasmtime, ggrs, matchbox_socket, winit
-  - Update root `Cargo.toml` workspace members
-  - Define core module structure: `lib.rs`, `console.rs`, `runtime.rs`, `wasm.rs`, `ffi.rs`, `rollback.rs`
-
-- [ ] **Define `Console` trait and associated types**
-  - `Console` trait with specs, FFI registration, graphics/audio factory methods
-  - `Graphics` trait for rendering backend abstraction
-  - `Audio` trait for audio backend abstraction
-  - `ConsoleInput` trait with bytemuck requirements for GGRS serialization
-  - `ConsoleSpecs` struct (resolutions, tick rates, RAM/VRAM limits, ROM size)
-
-- [ ] **Implement `GameState` for WASM instance**
-  - Wasmtime `Store` data structure containing all per-game state
-  - Memory management with RAM limit enforcement (16MB for Z)
-  - FFI context: graphics command buffer, audio commands, RNG state
-  - Input state for all 4 players
-  - Transform stack (16 matrices deep)
-  - Current render state (color, blend mode, depth test, cull mode, filter)
-
-- [ ] **Implement WASM runtime wrapper**
-  - `WasmEngine` — shared wasmtime `Engine` (one per app)
-  - `GameInstance` — loaded game with `Module`, `Instance`, `Store`
-  - Export function bindings: `init()`, `update()`, `render()`
-  - Export function bindings: `save_state(ptr, max_len) -> len`, `load_state(ptr, len)`
-  - Memory access helpers for FFI string/buffer passing
-  - WASM memory bounds checking and validation
-
-- [ ] **Implement common FFI host functions**
-  - System functions:
-    - `delta_time() -> f32` — time since last tick
-    - `elapsed_time() -> f32` — total time since game start
-    - `tick_count() -> u64` — current tick number
-    - `log(ptr, len)` — debug output to console
-    - `quit()` — exit to library
-  - Rollback functions:
-    - `random() -> u32` — deterministic seeded RNG (PCG or similar)
-  - Save data functions:
-    - `save(slot, data_ptr, data_len) -> u32` — save to slot (0-7), max 64KB
-    - `load(slot, data_ptr, max_len) -> u32` — load from slot, returns bytes read
-    - `delete(slot) -> u32` — delete save slot
-  - Session functions:
-    - `player_count() -> u32` — number of players (1-4)
-    - `local_player_mask() -> u32` — bitmask of local players
-
-- [ ] **Implement game loop orchestration**
-  - Fixed timestep update loop (configurable tick rate: 24, 30, 60, 120)
-  - Variable render rate with interpolation support (uncapped frame rate)
-  - Frame timing and delta time calculation
-  - Update/render separation (render skipped during rollback replay)
-  - CPU budget enforcement (4ms per tick at 60fps, warn on exceed)
-
-### Phase 2: GGRS Rollback Integration
-
-- [ ] **Define GGRS config and input types**
-  - `GGRSConfig` implementing `ggrs::Config` trait
-  - Generic input type parameterized by console's `ConsoleInput`
-  - Input serialization for network (bytemuck Pod)
-  - Input delay and frame advantage settings
-
-- [ ] **Implement rollback state management**
-  - `save_game_state()` — call WASM `save_state`, store snapshot with checksum
-  - `load_game_state()` — call WASM `load_state`, restore snapshot
-  - State buffer pool for efficient rollback (avoid allocations in hot path)
-  - State compression (optional, for network sync)
-
-- [ ] **Integrate GGRS session into runtime**
-  - Local session (single player or local multiplayer, no rollback)
-  - P2P session with matchbox_socket (WebRTC)
-  - `advance_frame()` with GGRS requests handling
-  - Synchronization test mode for local debugging
-  - TODO [needs clarification]: Spectator session support
-
-- [ ] **Handle GGRS events**
-  - `GGRSRequest::SaveGameState` → serialize WASM state
-  - `GGRSRequest::LoadGameState` → deserialize WASM state
-  - `GGRSRequest::AdvanceFrame` → run `update()` with confirmed inputs
-  - Connection quality events (desync detection, frame advantage warnings)
-  - Audio muting during rollback replay
-
-### Phase 3: Emberware Z Implementation
-
-#### 3.1 Console Setup
-
-- [ ] **Create Emberware Z `Console` implementation**
-  - Implement `Console` trait for PS1/N64 aesthetic
-  - Define Z-specific specs:
-    - Resolution: 360p, 540p (default), 720p, 1080p
-    - Tick rate: 24, 30, 60 (default), 120 fps
-    - RAM: 16MB, VRAM: 8MB, ROM: 32MB max
-    - Color depth: RGBA8
-    - CPU budget: 4ms per tick at 60fps
-  - `ZInput` struct (buttons, dual sticks, triggers)
-
-#### 3.2 Graphics Backend (wgpu)
-
-- [ ] **Implement wgpu device initialization**
-  - `ZGraphics` struct implementing `Graphics` trait
-  - wgpu `Instance`, `Adapter`, `Device`, `Queue` setup
-  - Surface configuration for window
-  - Resize handling with surface reconfiguration
-
-- [ ] **Implement vertex buffer architecture**
-  - One vertex buffer per stride (format determines buffer)
-  - `GrowableBuffer` struct for auto-growing GPU buffers
-  - 8 base vertex formats (POS, POS_UV, POS_COLOR, etc.)
-  - 8 skinned variants (each base format + skinning data)
-  - Total: 16 vertex format pipelines per render mode
-
-- [ ] **Implement texture management**
-  - `TextureHandle` allocation and tracking
-  - `load_texture(width, height, pixels)` — create RGBA8 texture
-  - VRAM budget tracking (8MB limit)
-  - Fallback textures: 8×8 magenta/black checkerboard, 1×1 white
-  - Sampler creation (nearest, linear filters)
-
-- [ ] **Implement render state management**
-  - Current color (uniform tint)
-  - Depth test enable/disable
-  - Cull mode (none, back, front)
-  - Blend mode (none, alpha, additive, multiply)
-  - Texture filter (nearest, linear)
-  - Currently bound textures (slots 0-3)
-
-- [ ] **Implement command buffer pattern**
-  - Immediate-mode draws buffered on CPU side
-  - Single flush to GPU per frame (minimize draw calls)
-  - Draw command batching by pipeline/texture state
-  - Retained mesh handles separate from immediate draws
-
-#### 3.3 Configuration FFI (init-only)
-
-- [ ] **Implement configuration functions**
-  - `set_resolution(res: u32)` — 0=360p, 1=540p, 2=720p, 3=1080p
-  - `set_tick_rate(fps: u32)` — 24, 30, 60, 120
-  - `set_clear_color(color: u32)` — 0xRRGGBBAA background color
-  - `render_mode(mode: u32)` — 0-3 (Unlit, Matcap, PBR, Hybrid)
-  - Enforce init-only: error/warning if called outside `init()`
-
-#### 3.4 Camera FFI
-
-- [ ] **Implement camera functions**
-  - `camera_set(x, y, z, target_x, target_y, target_z)` — look-at camera
-  - `camera_fov(fov_degrees: f32)` — field of view (default 60°)
-  - View matrix calculation
-  - Projection matrix calculation
-  - Camera uniform buffer upload
-
-#### 3.5 Input FFI
-
-- [ ] **Implement individual button queries**
-  - `button_held(player, button) -> u32` — 1 if held
-  - `button_pressed(player, button) -> u32` — 1 if just pressed this tick
-  - `button_released(player, button) -> u32` — 1 if just released this tick
-  - Button constants: UP(0), DOWN(1), LEFT(2), RIGHT(3), A(4), B(5), X(6), Y(7), LB(8), RB(9), L3(10), R3(11), START(12), SELECT(13)
-
-- [ ] **Implement bulk button queries**
-  - `buttons_held(player) -> u32` — bitmask of all held buttons
-  - `buttons_pressed(player) -> u32` — bitmask of all just pressed
-  - `buttons_released(player) -> u32` — bitmask of all just released
-  - Efficient for checking multiple buttons (single FFI call)
-
-- [ ] **Implement analog stick queries**
-  - `left_stick_x(player) -> f32` — -1.0 to 1.0
-  - `left_stick_y(player) -> f32` — -1.0 to 1.0
-  - `right_stick_x(player) -> f32` — -1.0 to 1.0
-  - `right_stick_y(player) -> f32` — -1.0 to 1.0
-  - `left_stick(player, out_x, out_y)` — bulk query (both axes)
-  - `right_stick(player, out_x, out_y)` — bulk query (both axes)
-
-- [ ] **Implement trigger queries**
-  - `trigger_left(player) -> f32` — 0.0 to 1.0
-  - `trigger_right(player) -> f32` — 0.0 to 1.0
-
-#### 3.6 Texture FFI
-
-- [ ] **Implement texture functions**
-  - `load_texture(width, height, pixels) -> u32` — create texture, return handle
-  - `texture_bind(handle)` — bind to slot 0 (albedo)
-  - `texture_bind_slot(handle, slot)` — bind to specific slot (0-3)
-  - Validate VRAM budget on load
-  - Track bound textures per slot for batching
-
-#### 3.7 Mesh FFI (Retained Mode)
-
-- [ ] **Implement mesh loading**
-  - `load_mesh(data, vertex_count, format) -> u32` — non-indexed mesh
-  - `load_mesh_indexed(data, vertex_count, indices, index_count, format) -> u32`
-  - Vertex format flags: FORMAT_UV(1), FORMAT_COLOR(2), FORMAT_NORMAL(4), FORMAT_SKINNED(8)
-  - Calculate stride from format, copy to appropriate vertex buffer
-  - Return mesh handle for draw_mesh
-
-- [ ] **Implement mesh drawing**
-  - `draw_mesh(handle)` — draw retained mesh with current transform/state
-  - Look up mesh by handle, record draw command
-  - Apply current transform, textures, render state
-
-#### 3.8 Immediate Mode 3D FFI
-
-- [ ] **Implement immediate mode drawing**
-  - `draw_triangles(data, vertex_count, format)` — non-indexed
-  - `draw_triangles_indexed(data, vertex_count, indices, index_count, format)`
-  - Buffer vertices on CPU side (per format)
-  - Flush all immediate draws at frame end
-
-#### 3.9 Transform Stack FFI
-
-- [ ] **Implement transform functions**
-  - `transform_identity()` — reset to identity matrix
-  - `transform_translate(x, y, z)` — translate
-  - `transform_rotate(angle_deg, x, y, z)` — rotate around axis
-  - `transform_scale(x, y, z)` — scale
-  - `transform_push()` — push current matrix to stack
-  - `transform_pop()` — pop matrix from stack
-  - `transform_set(matrix_ptr)` — set from 16 floats (column-major)
-  - Stack depth: 16 matrices
-  - Matrix math using glam
-
-#### 3.10 Billboarding FFI
-
-- [ ] **Implement billboard drawing**
-  - `draw_billboard(w, h, mode, color)` — draw billboard at current transform
-  - `draw_billboard_region(w, h, src_x, src_y, src_w, src_h, mode, color)` — with UV region
-  - Billboard modes: 1=spherical, 2=cylindrical Y, 3=cylindrical X, 4=cylindrical Z
-  - Compute billboard rotation matrix based on mode and camera
-  - Generate quad vertices with UVs, add to immediate buffer
-
-#### 3.11 2D Drawing FFI (Screen Space)
-
-- [ ] **Implement 2D sprite drawing**
-  - `draw_sprite(x, y, w, h, color)` — draw bound texture
-  - `draw_sprite_region(x, y, w, h, src_x, src_y, src_w, src_h, color)` — with UV region
-  - `draw_sprite_ex(x, y, w, h, src_x, src_y, src_w, src_h, origin_x, origin_y, angle_deg, color)` — full control
-  - Screen-space coordinates (0,0 = top-left)
-  - Orthographic projection for 2D pass
-
-- [ ] **Implement 2D primitive drawing**
-  - `draw_rect(x, y, w, h, color)` — solid color rectangle
-  - No texture, just colored quad
-
-- [ ] **Implement text drawing**
-  - `draw_text(ptr, len, x, y, size, color)` — draw UTF-8 string
-  - Built-in bitmap font (embedded in binary)
-  - Full UTF-8 support for internationalization
-  - TODO [needs clarification]: Custom font loading
-
-#### 3.12 Render State FFI
-
-- [ ] **Implement render state functions**
-  - `set_color(color: u32)` — uniform tint color (0xRRGGBBAA)
-  - `depth_test(enabled: u32)` — 0=off, 1=on
-  - `cull_mode(mode: u32)` — 0=none, 1=back, 2=front
-  - `blend_mode(mode: u32)` — 0=none, 1=alpha, 2=additive, 3=multiply
-  - `texture_filter(filter: u32)` — 0=nearest, 1=linear
-  - Track state changes for pipeline selection
-
-#### 3.13 Shader Generation System
-
-- [ ] **Implement shader template system**
-  - 4 mode templates: mode0_unlit.wgsl, mode1_matcap.wgsl, mode2_pbr.wgsl, mode3_hybrid.wgsl
-  - Placeholder categories: `//VIN_*`, `//VOUT_*`, `//VS_*`, `//FS_*`
-  - Template replacement function: `generate_shader(template, mode, format)`
-
-- [ ] **Generate vertex format permutations**
-  - `//VIN_UV` — UV input struct field
-  - `//VIN_COLOR` — Color input struct field
-  - `//VIN_NORMAL` — Normal input struct field
-  - `//VIN_SKINNED` — Bone indices/weights input fields
-  - `//VOUT_*` — Corresponding output struct fields
-  - `//VS_*` — Vertex shader attribute passing, skinning transform, normal transform
-
-- [ ] **Generate Mode 0 (Unlit) shaders**
-  - 16 permutations (all vertex formats)
-  - Without normals: `final = albedo * vertex_color`
-  - With normals: Simple Lambert using sky sun direction
-  - `//FS_UV` — texture sample
-  - `//FS_NORMAL` — Lambert shading: `sky_lambert(normal)`
-
-- [ ] **Generate Mode 1 (Matcap) shaders**
-  - 8 permutations (only formats with NORMAL)
-  - Matcap UV from view-space normal: `uv = normal.xy * 0.5 + 0.5`
-  - Multiply matcaps from slots 1-3
-  - Unused slots default to white (1×1 white texture)
-
-- [ ] **Generate Mode 2 (PBR-lite) shaders**
-  - 8 permutations (only formats with NORMAL)
-  - GGX specular distribution (D term)
-  - Schlick fresnel approximation (F term)
-  - Energy-conserving Lambert diffuse
-  - MRE texture in slot 1 (R=Metallic, G=Roughness, B=Emissive)
-  - Env matcap in slot 2 multiplies with sky reflection
-  - Up to 4 dynamic lights
-  - Reference: `emberware-z/pbr-lite.wgsl`
-
-- [ ] **Generate Mode 3 (Hybrid) shaders**
-  - 8 permutations (only formats with NORMAL)
-  - PBR direct lighting from single directional light
-  - Matcap (slot 3) for ambient/stylized reflections
-  - Env matcap (slot 2) multiplies with sky reflection
-  - Single directional light + ambient color
-
-- [ ] **Implement shader compilation and caching**
-  - Compile all 40 shaders at startup (16 + 8 + 8 + 8)
-  - Create render pipelines for each shader
-  - Cache pipelines by (mode, format, blend_mode, depth_test, cull_mode)
-  - Hot-reload shaders in debug builds (optional)
-
-#### 3.14 Procedural Sky System
-
-- [ ] **Implement sky uniform buffer**
-  - `SkyUniforms` struct: horizon_color, zenith_color, sun_direction, sun_color, sun_sharpness
-  - Default: all zeros (black sky, no lighting until configured)
-  - Upload sky uniforms to GPU each frame
-
-- [ ] **Implement `set_sky()` FFI**
-  - `set_sky(horizon_rgb, zenith_rgb, sun_dir_xyz, sun_rgb, sharpness)`
-  - 13 f32 parameters total
-  - Validate sun direction is normalized (or normalize internally)
-  - Store in sky uniform buffer
-
-- [ ] **Implement sky background rendering**
-  - Fullscreen triangle at far plane (depth = 1.0)
-  - Vertex shader: compute view ray from clip position
-  - Fragment shader: `sample_sky(normalize(view_ray))`
-  - Render before all geometry (or use clear color for solid backgrounds)
-
-- [ ] **Implement `sample_sky()` shader function**
-  - Gradient: `lerp(horizon, zenith, direction.y * 0.5 + 0.5)`
-  - Sun: `sun_color * pow(max(0, dot(direction, sun_direction)), sharpness)`
-  - Return: `gradient + sun`
-  - Used for: background, reflections (Mode 2/3), ambient (Mode 0 with normals)
-
-#### 3.15 Mode-Specific Lighting FFI
-
-- [ ] **Implement Mode 1 (Matcap) functions**
-  - `matcap_set(slot, texture)` — bind matcap to slot 1-3
-  - Validate slot is 1-3, warn otherwise
-
-- [ ] **Implement Mode 2 (PBR) lighting functions**
-  - `light_set(index, light_type, x, y, z)` — position/direction for light 0-3
-  - `light_color(index, r, g, b)` — set light color (linear RGB)
-  - `light_intensity(index, intensity)` — set light intensity multiplier
-  - `light_disable(index)` — disable light
-  - Light types: 0=ambient, 1=directional, 2=point, 3=spot (TBD)
-  - Light uniform buffer with 4 light slots
-
-- [ ] **Implement Mode 3 (Hybrid) lighting functions**
-  - `light_direction(x, y, z)` — single directional light direction
-  - `light_color(r, g, b)` — directional light color (overloaded)
-  - `ambient_color(r, g, b)` — ambient light color
-  - Simpler than Mode 2 (single light + ambient)
-
-- [ ] **Implement material functions**
-  - `material_mre(texture)` — bind MRE texture (R=Metallic, G=Roughness, B=Emissive)
-  - `material_albedo(texture)` — bind albedo texture (alternative to slot 0)
-  - `material_metallic(value)` — set metallic (0.0-1.0, default 0.0)
-  - `material_roughness(value)` — set roughness (0.0-1.0, default 0.0)
-  - `material_emissive(value)` — set emissive intensity (default 0.0)
-  - Material uniform buffer
-
-#### 3.16 GPU Skinning
-
-- [ ] **Implement bone uniform buffer**
-  - Support up to 256 bones (256 × 4×4 matrices = 16KB)
-  - `set_bones(matrices_ptr, count)` — upload bone transforms
-  - Bone matrices in column-major order (16 floats each)
-
-- [ ] **Implement skinned vertex shader**
-  - Read bone indices (4 × u8) and weights (4 × f32) from vertex
-  - Compute skinned position: `Σ(weight[i] * bone_matrix[bone_index[i]] * pos)`
-  - Compute skinned normal: `Σ(weight[i] * inverse_transpose(bone_matrix[i]) * normal)`
-  - Apply before model-view-projection transform
-
-- [ ] **Update vertex formats for skinning**
-  - `FORMAT_SKINNED` (8) adds 20 bytes per vertex
-  - Bone indices: 4 bytes (4 × u8)
-  - Bone weights: 16 bytes (4 × f32)
-  - Attribute order: pos → uv → color → normal → bone_indices → bone_weights
-
-#### 3.17 Built-in Font
-
-- [ ] **Create embedded bitmap font**
-  - ASCII + extended Latin characters minimum
-  - Full UTF-8 support for CJK and other scripts (or subset)
-  - Single texture atlas with glyph metrics
-  - Embed via `include_bytes!()` in binary
-
-- [ ] **Implement text rendering**
-  - Parse UTF-8 string, look up glyph metrics
-  - Generate quads for each character
-  - Support variable size via scaling
-  - Left-aligned, single line (no word wrap in v1)
-  - TODO [needs clarification]: Custom font loading
-
-### Phase 4: Application Shell
-
-- [ ] **Implement winit window management**
-  - Window creation with configurable resolution
-  - Fullscreen toggle (F11 or Alt+Enter)
-  - Event loop integration
-  - Window resize handling
-  - DPI/scale factor handling
-
-- [ ] **Implement egui integration for library UI**
-  - egui-wgpu renderer setup
-  - Library screen (game list with thumbnails)
-  - Game actions: play, view info, delete
-  - Settings screen (video, audio, controls)
-  - Download progress UI with cancel option
-
-- [ ] **Implement application state machine**
-  - States: Library → Downloading → Playing → back to Library
-  - Error handling:
-    - CPU exceeded → log warning, skip frame
-    - OOM → crash with error message
-    - WASM panic → return to library with error
-    - Network disconnect → return to library
-
-- [ ] **Implement keyboard/gamepad input**
-  - Keyboard mapping to virtual controller (configurable)
-  - Gamepad support via gilrs
-  - Multiple local players (keyboard + gamepads)
-  - Input config persistence in config.toml
-  - Deadzone and sensitivity settings
-
-- [ ] **Implement debug overlay (console-wide)**
-  - FPS counter (update and render rates)
-  - Memory usage (RAM/VRAM current and limit)
-  - Network stats (ping, rollback frames, frame advantage)
-  - Toggle via hotkey (F3 or similar)
-  - Optional: frame time graph
-
-### Phase 5: Networking & Polish
-
-- [ ] **Implement multiplayer player model**
-  - Max 4 players total (any mix of local + remote)
-  - Examples: 4 local, 1 local + 3 remote, 2 local + 2 remote
-  - Each local player maps to a physical input device
-  - GGRS handles all players uniformly
-  - Player slot assignment
-
-- [ ] **Implement matchbox signaling connection**
-  - Connect to matchbox signaling server
-  - WebRTC peer connection establishment
-  - ICE candidate exchange
-  - Connection timeout handling
-  - TODO [needs clarification]: Matchmaking handled by platform service
-
-- [ ] **Implement netplay session management**
-  - Host/join game flow via platform deep links
-  - Connection quality display (ping bars)
-  - Disconnect handling (return to library)
-  - Session cleanup on exit
-
-- [ ] **Implement local network testing**
-  - Multiple instances on same machine via localhost
-  - Connect via `127.0.0.1:port` for local testing
-  - Debug mode: disable matchbox, use direct connections
-
-- [ ] **Add input delay configuration**
-  - Local input delay setting (0-10 frames)
-  - Frame delay vs rollback tradeoff UI
-  - Persist per-game or globally
-
-- [ ] **Performance optimization**
-  - State serialization optimization (avoid allocations)
-  - Render batching (minimize state changes)
-  - Memory pooling for rollback buffers
-  - Profile and optimize hot paths
-
-### Phase 6: Emberware Z Examples
-
-- [ ] **Create `triangle` example**
-  - Minimal no_std WASM game demonstrating:
-    - `draw_triangles()` (immediate mode 3D)
-    - Vertex format: POS_COLOR (format 2)
-    - Transform stack: `transform_rotate()` for spinning
-    - Game lifecycle: init/update/render
-  - ~50 lines of Rust code
-
-- [ ] **Create `textured-quad` example**
-  - Demonstrates texture loading and 2D drawing:
-    - `include_bytes!()` for embedded PNG
-    - PNG decoding (minipng or similar)
-    - `load_texture()` and `texture_bind()`
-    - `draw_sprite()` for 2D rendering
-    - `set_color()` for tinting
-
-- [ ] **Create `cube` example**
-  - Demonstrates retained mode 3D:
-    - `load_mesh_indexed()` in init()
-    - `draw_mesh()` in render()
-    - Vertex format: POS_UV_NORMAL (format 5)
-    - Camera setup: `camera_set()`, `camera_fov()`
-    - Interactive rotation via analog stick
-    - Mode 0 with normals (simple Lambert)
-
-- [ ] **Create `lighting` example**
-  - Demonstrates all render modes (0-3):
-    - Toggle between modes with button press
-    - Mode 0: Unlit/Lambert
-    - Mode 1: Matcap (load 3 matcap textures)
-    - Mode 2: PBR with 4 lights
-    - Mode 3: Hybrid (1 light + matcap ambient)
-    - Material properties: `material_metallic()`, `material_roughness()`, `material_emissive()`
-    - Dynamic light positioning
-    - `set_sky()` for procedural sky
-
-- [ ] **Create `skinned-mesh` example**
-  - Demonstrates GPU skinning:
-    - Load skinned mesh with FORMAT_SKINNED | FORMAT_UV | FORMAT_NORMAL
-    - Simple bone hierarchy (e.g., arm with 3 bones)
-    - CPU-side bone animation (sine wave for demo)
-    - `set_bones()` to upload bone matrices each frame
-    - Shows workflow: CPU animation → GPU skinning
-
-- [ ] **Create `billboard` example**
-  - Demonstrates billboard drawing:
-    - `draw_billboard()` with different modes (1-4)
-    - Sprite-based character (cylindrical Y)
-    - Particle system (spherical)
-    - Tree/foliage sprites (cylindrical Y)
-    - Comparison of billboard modes side-by-side
-
-- [ ] **Create `platformer` example**
-  - Full mini-game demonstrating multiple Z features:
-    - 2D gameplay using 3D renderer
-    - Textured sprites for player/enemies
-    - Billboarded sprites in 3D space
-    - Simple physics and collision (AABB)
-    - Multiple players with analog stick input
-    - 2D UI overlay with `draw_text()`, `draw_rect()`
-    - Sky background with `set_sky()`
-    - Demonstrates rollback-safe game state
-
-### Phase 7: Testing & Documentation
-
-- [ ] **Create unit tests for core framework**
-  - WASM loading and execution tests
-  - FFI function binding tests
-  - Input serialization tests (bytemuck roundtrip)
-  - State save/load tests
-
-- [ ] **Create integration tests**
-  - Full game lifecycle test (init → update → render)
-  - Rollback simulation test (save → modify → load → verify)
-  - Multi-player input synchronization test
-  - Resource limit enforcement test (RAM/VRAM)
-
-- [ ] **Create graphics tests**
-  - Shader compilation tests (all 40 shaders)
-  - Vertex format stride validation
-  - Texture loading and binding tests
-  - Render state switching tests
-
-- [ ] **Update documentation**
-  - Ensure docs/ffi.md matches implementation
-  - Ensure docs/emberware-z.md matches implementation
-  - Add troubleshooting section
-  - Add performance tips section
-  - API versioning documentation
-
-- [ ] **Create developer guide**
-  - Getting started tutorial
-  - Best practices for rollback-safe code
-  - Asset pipeline recommendations
-  - Debugging tips
+### **[STABILITY] Refactor rollback to use automatic WASM linear memory snapshotting**
+
+**Current State:** Games manually serialize state via FFI callbacks (`save_state(ptr, max_len) -> len` and `load_state(ptr, len)`). This requires boilerplate in every game and is error-prone.
+
+**Target State:** Automatic memory snapshotting as described in [docs/rollback-architecture.md](docs/rollback-architecture.md). The host snapshots entire WASM linear memory transparently. Games require zero serialization code.
+
+**Why This Matters:**
+- ✅ Zero boilerplate for game developers
+- ✅ Can't forget to serialize fields (entire memory is saved)
+- ✅ Works naturally with any data structures (hash maps, dynamic arrays, custom allocators)
+- ✅ Smaller effective snapshots (only game state, resources stay in GPU memory)
+
+**Implementation Steps:**
+
+1. **Modify `GameInstance` to snapshot WASM linear memory directly**
+   - Location: [core/src/wasm/mod.rs:158-183](core/src/wasm/mod.rs#L158-L183)
+   - Change `GameInstance::save_state(&mut self, buffer: &mut [u8]) -> Result<usize>` to:
+     ```rust
+     pub fn save_state(&mut self) -> Result<Vec<u8>> {
+         let memory = self.store.data().memory.context("No memory export")?;
+         let mem_data = memory.data(&self.store);
+         Ok(mem_data.to_vec())  // Copy entire linear memory
+     }
+     ```
+   - Change `GameInstance::load_state(&mut self, buffer: &[u8]) -> Result<()>` to:
+     ```rust
+     pub fn load_state(&mut self, snapshot: &[u8]) -> Result<()> {
+         let memory = self.store.data().memory.context("No memory export")?;
+         let mem_data = memory.data_mut(&mut self.store);
+         anyhow::ensure!(snapshot.len() == mem_data.len(),
+             "Snapshot size mismatch: {} vs {}", snapshot.len(), mem_data.len());
+         mem_data.copy_from_slice(snapshot);
+         Ok(())
+     }
+     ```
+   - Remove `save_state_fn` and `load_state_fn` fields from `GameInstance` struct
+   - Remove lookup of save_state/load_state exports in `GameInstance::new()`
+
+2. **Update `RollbackStateManager` to use new memory snapshot API**
+   - Location: [core/src/rollback/state.rs:188-235](core/src/rollback/state.rs#L188-L235)
+   - Change `save_state()` to call `game.save_state()` directly (no buffer passing)
+   - Update `MAX_STATE_SIZE` constant to be WASM memory size (typically 1-16MB, configurable)
+   - Consider adaptive pool buffer sizing based on actual memory size
+   - Ensure `StatePool` buffers are sized appropriately for full memory snapshots
+
+3. **Update `EmberwareConfig` GGRS state type**
+   - Location: [core/src/rollback/config.rs:40-44](core/src/rollback/config.rs#L40-L44)
+   - `GameStateSnapshot` is already the state type - no changes needed
+   - Verify `MAX_STATE_SIZE` is appropriate for WASM memory (update from 1MB default)
+
+4. **Remove FFI save_state/load_state from ALL game examples**
+   - Primary location: [examples/platformer/src/lib.rs:746-835](examples/platformer/src/lib.rs#L746-L835)
+   - Search all example games for `save_state` and `load_state` exports:
+     - `examples/hello-world/src/lib.rs`
+     - `examples/triangle/src/lib.rs`
+     - `examples/textured-quad/src/lib.rs`
+     - `examples/cube/src/lib.rs`
+     - `examples/lighting/src/lib.rs`
+     - `examples/skinned-mesh/src/lib.rs`
+     - `examples/billboard/src/lib.rs`
+     - `examples/platformer/src/lib.rs`
+   - Delete entire `save_state()` and `load_state()` export functions from any that have them
+   - Add comment to each example's lib.rs: `// Note: Rollback state is automatic (entire WASM memory is snapshotted). No save_state/load_state needed.`
+   - Verify platformer still works with rollback (netcode integration tests)
+   - Test that examples compile and run correctly after removal
+
+5. **Update FFI documentation**
+   - Location: [docs/ffi.md](docs/ffi.md)
+   - Remove `save_state(ptr: *mut u8, max_len: u32) -> u32` from save data section
+   - Remove `load_state(ptr: *const u8, len: u32)` from save data section
+   - Add note: "Rollback state is automatically saved/restored by snapshotting WASM linear memory. Games do not need to implement serialization."
+   - Clarify that `save(slot, ptr, len)` and `load(slot, ptr, len)` are for persistent save files, NOT rollback
+
+6. **Update developer guide**
+   - Location: [docs/developer-guide.md](docs/developer-guide.md)
+   - Update "Best practices for rollback-safe code" section
+   - Remove any mention of manual state serialization
+   - Explain that all game state in WASM linear memory is automatically rolled back
+   - Add guidance: "Resources (textures, meshes, sounds) are loaded during init() and stay in GPU/host memory. Only their handles (IDs) are in WASM memory, which get snapshotted correctly."
+   - Add note about determinism: "Rollback works transparently as long as your update() is deterministic (same inputs → same outputs). Use the provided RNG, don't use external time sources."
+
+7. **Update rollback architecture documentation**
+   - Location: [docs/rollback-architecture.md](docs/rollback-architecture.md)
+   - Add "Implementation Status" section at top noting this is now the actual implementation
+   - Add note about WASM memory size configuration and snapshot size implications
+   - Document that this approach is fully transparent to game developers
+
+8. **Add integration test for automatic rollback**
+   - Location: [core/src/integration.rs](core/src/integration.rs) or new test file
+   - Create test game that allocates dynamic memory (Vec, HashMap, etc.)
+   - Verify state is correctly saved and restored without any game-side serialization
+   - Test with different memory sizes and allocation patterns
+   - Verify resource handles (texture IDs, mesh IDs) survive rollback correctly
+
+9. **Update WASM memory allocation strategy documentation**
+   - Add to CLAUDE.md or developer docs
+   - Explain WASM linear memory starts small (64KB default) and grows via `memory.grow`
+   - Document that snapshot size = current allocated linear memory size (not max)
+   - Note: Rust's allocator will call `memory.grow` automatically as needed
+   - Recommend games pre-allocate stable working set in init() for predictable snapshot sizes
+
+10. **Performance testing and optimization**
+    - Profile snapshot/restore performance with realistic game state sizes
+    - Measure memory copy overhead (expect ~1-5ms for 1-4MB on modern CPUs)
+    - Consider incremental/delta snapshots if full copy becomes bottleneck (deferred optimization)
+    - Document expected rollback performance characteristics
+
+**Files to Modify:**
+- `core/src/wasm/mod.rs` (GameInstance save/load methods)
+- `core/src/rollback/state.rs` (RollbackStateManager integration)
+- `core/src/rollback/config.rs` (MAX_STATE_SIZE constant)
+- `examples/platformer/src/lib.rs` (remove save_state/load_state exports)
+- `examples/*/src/lib.rs` (remove save_state/load_state from all examples if present)
+- `docs/ffi.md` (remove save_state/load_state from API reference)
+- `docs/developer-guide.md` (update rollback best practices)
+- `docs/rollback-architecture.md` (mark as implemented)
+
+**Testing Strategy:**
+- Verify all existing integration tests still pass
+- Run platformer example in local P2P session and trigger rollbacks
+- Monitor snapshot sizes and performance
+- Test edge cases: empty memory, large allocations, fragmented heap
+
+**Breaking Changes:**
+- Games that export `save_state`/`load_state` will have those exports ignored
+- This is a **breaking change** for any games relying on partial state serialization
+- Migration path: Remove save_state/load_state exports entirely - rollback is now automatic
+- Persistent save files (save()/load() FFI) are unaffected
+
+---
+
+### **[NEEDS CLARIFICATION] Define and enforce console runtime limits**
+
+**Current State:** Partial limit enforcement - VRAM tracking (8MB), vertex format validation, memory bounds checking. No enforcement for draw calls, vertex counts, mesh counts, or CPU budget per frame.
+
+**Why This Matters:**
+- Enforces fantasy console authenticity (PS1/N64 had strict hardware limits)
+- Prevents performance issues from runaway resource usage
+- Helps developers understand and work within platform constraints
+- Maintains consistent performance across games
+
+**Potential Limits to Enforce:**
+
+| Limit | Suggested Value | Rationale |
+|-------|----------------|-----------|
+| Max draw calls/frame | 512 | PS1/N64 could handle ~500-1000 triangles/sec at 30fps |
+| Max vertices/frame (immediate) | 100,000 | Reasonable for fantasy console aesthetic |
+| Max retained meshes | 256 | Encourages efficient resource management |
+| Max vertices per mesh | 65,536 | u16 index limit, PS1-era constraint |
+| CPU budget per tick | 4ms @ 60fps | Console spec already defines this, needs enforcement |
+| RAM limit (WASM heap) | 16MB | Console spec defines this, not currently enforced |
+
+**Questions to Resolve:**
+1. Should limits be enforced at runtime with warnings/errors, or just tracked for debugging?
+2. Should limits be per-console (Z has different limits than Classic)?
+3. How to handle limit violations - reject draw calls, log warnings, or hard error?
+4. Should some limits be configurable in debug mode for development?
+5. Do we need separate limits for 2D vs 3D draws (e.g., UI overlay doesn't count toward 3D limits)?
+
+**Implementation Approach (Once Clarified):**
+1. Add limit constants to `ConsoleSpecs` struct
+2. Add runtime tracking counters (reset per frame):
+   - `draw_calls_this_frame: usize`
+   - `immediate_vertices_this_frame: usize`
+3. Validate against limits in FFI functions (`draw_triangles`, `draw_mesh`, etc.)
+4. Add warnings/errors when limits exceeded
+5. Expose stats via debug overlay (show current/max for each limit)
+6. Document limits in console documentation
+
+**Files to Modify:**
+- `core/src/console.rs` - Add limit fields to `ConsoleSpecs`
+- `emberware-z/src/console.rs` - Define Z-specific limits
+- `emberware-z/src/graphics/mod.rs` - Track draw calls, vertices per frame
+- `emberware-z/src/ffi/mod.rs` - Validate limits in draw functions
+- `emberware-z/src/app.rs` - Display stats in debug overlay
+- `docs/emberware-z.md` - Document console limits
+
+---
+
+### **[FEATURE] Implement audio backend**
+
+PS1/N64-style audio system with fire-and-forget sounds and managed channels for positional audio.
+
+**Console Audio Specs:**
+| Spec | Value | Rationale |
+|------|-------|-----------|
+| Sample rate | 22,050 Hz | Authentic PS1/N64, half the ROM space |
+| Bit depth | 16-bit signed | Standard, good dynamic range |
+| Format | Mono, raw PCM (s16le) | Zero parsing, stereo via pan param |
+| Managed channels | 16 | PS1/N64 typical (8 SFX + 8 music/ambient) |
+
+**Rollback Behavior & Caveats:**
+
+Audio is NOT part of rollback state. This is industry standard (GGPO, Rollback Netcode) because:
+- Sound already left the speakers - can't "un-play" it
+- Rewinding audio sounds terrible
+- Users tolerate audio glitches better than visual desyncs
+
+**How it works:**
+1. Game calls audio FFI functions during `update()`
+2. Commands are buffered in `audio_commands: Vec<AudioCommand>`
+3. After GGRS confirms the frame, commands are sent to `ZAudio` for playback
+4. During rollback replay (`set_rollback_mode(true)`), commands are DISCARDED
+5. After rollback, game re-executes with corrected inputs, re-issuing audio commands
+
+**Edge cases implementers must handle:**
+
+| Scenario | What happens | Mitigation |
+|----------|--------------|------------|
+| Sound triggers, then rollback | Sound already playing, might re-trigger | Discard commands during replay |
+| Looping sound starts, then rollback | Loop continues, game might call channel_play again | channel_play on occupied channel should update params, not restart |
+| Positional sound panning | Pan was wrong during misprediction | Game must call channel_set() EVERY frame, not just on start |
+| Music playing during rollback | Music continues uninterrupted | Music is never affected by rollback - it's "UI layer" |
+| Sound should have played but didn't (prediction missed trigger) | Silence where sound should be | Unavoidable - accept it |
+| load_sound() called in update() | Would re-load during replay! | Enforce init-only for load_sound() |
+
+**Critical implementation details:**
+
+1. **Discard vs mute**: When `set_rollback_mode(true)`, DISCARD all audio commands entirely.
+   Don't just mute output - if you mute and still process commands, channel state diverges.
+
+2. **channel_play on occupied channel**: If channel 5 is playing sound A and game calls
+   `channel_play(5, A, vol, pan, loop)` again, DON'T restart the sound. Just update vol/pan.
+   This handles the "looping sound survives rollback" case gracefully.
+
+3. **channel_set during rollback**: These SHOULD still be processed (not discarded) so that
+   when rollback ends, positional sounds have correct pan/volume immediately.
+   Only play_sound/channel_play/music_play are discarded.
+
+4. **In-flight sounds**: Sounds that started before rollback continue playing to completion.
+   Don't stop them on rollback start - that sounds jarring. Let them finish naturally.
+
+5. **Audio buffer latency**: Hardware audio has ~20-50ms latency. Audio is always slightly
+   "behind" visuals. This is fine - humans don't notice small audio/visual desync.
+
+**Game developer guidance (for docs):**
+- Use `play_sound()` for one-shots (hits, jumps, pickups) - fire and forget
+- Use `channel_play()` + `channel_set()` every frame for positional sounds (engines, footsteps)
+- Don't rely on frame-perfect audio sync in networked games
+- Keep sound effects short (<1 sec) so mispredictions are less noticeable
+- Music should be ambient/looping, not synced to gameplay events
+
+**FFI Functions:**
+```rust
+// Load raw PCM sound data (22.05kHz, 16-bit signed, mono)
+load_sound(data_ptr: *const u8, byte_len: u32) -> u32
+
+// Fire-and-forget (one-shot sounds: gunshots, jumps, coins)
+play_sound(sound: u32, volume: f32, pan: f32)  // uses next free channel
+
+// Managed channels (positional/looping: engines, ambient, footsteps)
+channel_play(channel: u32, sound: u32, volume: f32, pan: f32, looping: bool)
+channel_set(channel: u32, volume: f32, pan: f32)  // update each frame for positional
+channel_stop(channel: u32)
+
+// Music (dedicated, always loops)
+music_play(sound: u32, volume: f32)
+music_stop()
+music_set_volume(volume: f32)
+```
+
+**Implementation steps:**
+1. Add `Sound` struct and `sounds: Vec<Sound>` to GameState
+2. Add `AudioCommand` enum (Play, ChannelPlay, ChannelSet, ChannelStop, MusicPlay, etc.)
+3. Add `audio_commands: Vec<AudioCommand>` to GameState (buffered per frame)
+4. Implement `ZAudio` with rodio backend:
+   - 16 channel mixer
+   - Dedicated music channel
+   - `process_commands()` called after confirmed frames
+5. Wire up `Audio::set_rollback_mode()` to discard commands during replay
+6. Register FFI functions
+
+**Stubs to replace:** `emberware-z/src/console.rs` - `ZAudio::play()`, `ZAudio::stop()`, `create_audio()`
+
+---
+
+### **[FEATURE] Implement custom font loading**
+
+Allow games to load bitmap fonts for `draw_text()` beyond the built-in 8x8 ASCII font.
+
+**Design (PS1/N64 style - bitmap font atlases):**
+- Games embed font textures with glyph grids
+- Fixed-width and variable-width support
+- UTF-8 compatible (game provides glyphs for any codepoints they need)
+- Built-in font (already implemented) remains default for quick debugging
+
+**FFI Functions:**
+```rust
+// Fixed-width bitmap font
+load_font(texture: u32, char_width: u8, char_height: u8, first_codepoint: u32, char_count: u32) -> u32
+
+// Variable-width bitmap font (widths array has char_count entries)
+load_font_ex(texture: u32, widths_ptr: *const u8, char_height: u8, first_codepoint: u32, char_count: u32) -> u32
+
+// Bind font for subsequent draw_text calls (0 = built-in)
+font_bind(font_handle: u32)
+```
+
+**Implementation steps:**
+1. Add `Font` struct with texture handle, glyph dimensions, codepoint range, optional width array
+2. Add `fonts: Vec<Font>` to GameState
+3. Add `current_font: u32` to RenderState (0 = built-in)
+4. Modify `draw_text` to look up glyphs from current font
+5. Update `generate_text_quads()` to handle variable-width fonts
+
+---
+
+### **[FEATURE] Implement matcap blend modes**
+
+Extend matcap system (Mode 1) with multiple blend modes for artistic flexibility.
+
+**Supported modes:**
+| Value | Mode | Effect |
+|-------|------|--------|
+| 0 | Multiply | Standard matcap (current behavior) |
+| 1 | Add | Glow/emission effects |
+| 2 | HSV Modulate | Hue shifting, iridescence |
+
+**FFI Function:**
+```rust
+matcap_blend_mode(slot: u32, mode: u32)  // slot 1-3, mode 0-2
+```
+
+**Implementation steps:**
+1. Add `blend_mode: u8` field to matcap slot tracking in RenderState
+2. Add `matcap_blend_mode` FFI function with validation
+3. Update Mode 1 shader template with blend_colors switch statement
+4. Add rgb_to_hsv/hsv_to_rgb helper functions to shader
+
+---
+
+### **[NETWORKING] Implement synchronized save slots (VMU-style memory cards)**
+
+Similar to Dreamcast VMUs, each player "brings" their own save data to a networked session.
+This enables fighting games with unlocked characters, RPGs with player stats, etc.
+
+**Design:**
+1. Each player has their own "memory card" (save slot) that travels with their controller
+2. During P2P session setup, save data is exchanged before `init()` runs
+3. All clients receive identical slot layout: slot 0 = P1's data, slot 1 = P2's data, etc.
+4. Games use `player_count()` and `local_player_mask()` to know which slot is "theirs"
+5. Save data is raw bytes - games handle serialization/deserialization
+
+**Implementation steps:**
+1. Add `save_data_limit: usize` to `ConsoleSpecs` (e.g., 64KB per player for Emberware Z)
+2. Add `SessionSaveData` struct to hold per-player save buffers
+3. Modify session setup to exchange save data via signaling/WebRTC data channel:
+   - Before GGRS session starts, exchange save buffers
+   - Use a simple protocol: `[player_index: u8][length: u32][data: [u8; length]]`
+   - All players must receive all save data before proceeding
+4. Populate `GameState.save_data[player_index]` slots identically on all clients
+5. Call `init()` only after save data is synchronized
+6. For local sessions: load save data from disk into slot 0 before init
+7. Existing `save()`/`load()`/`delete()` FFI works unchanged - just reads from synchronized slots
+
+**Platform integration:**
+- Platform layer loads player's save from `~/.emberware/games/{game_id}/saves/player.sav`
+- On session end, local player's slot is written back to disk
+- Save data versioning/migration is game's responsibility
+
+**Edge cases:**
+- Player without save data: slot contains empty buffer (len=0)
+- Save data too large: reject during session setup, show error
+- Player disconnect during exchange: abort session, show error
+- Spectators: receive all save data but don't contribute a slot
+
+---
+
+### **[NETWORKING] Implement matchbox signaling connection**
+
+**Status:** Needs clarification - matchmaking handled by platform service, integration details TBD
+
+- Connect to matchbox signaling server
+- WebRTC peer connection establishment
+- ICE candidate exchange
+- Connection timeout handling
+- Matchmaking handled by platform service - integration details TBD
+
+---
+
+### **[NETWORKING] Implement host/join game flow**
+
+**Status:** Needs clarification - requires matchbox signaling connection to be implemented first
+
+- Requires matchbox signaling connection to be implemented first
+- Host game via deep link: `emberware://host/{game_id}`
+- Join game via deep link: `emberware://join/{game_id}?token=...`
+- Integration with platform matchmaking TBD
+
+---
+
+### **[POLISH] Performance optimization**
+
+- Render batching already implemented in CommandBuffer
+- Profile and optimize hot paths - requires game execution to measure
 
 ---
 
 ## IN PROGRESS
 
-(None currently)
+(empty)
 
 ---
 
-## DONE
+## DONE (Recent)
 
-- [x] **Create repository structure**
-  - Root Cargo.toml workspace
-  - README.md with project overview
-  - CLAUDE.md with development instructions
-  - .gitignore and LICENSE
+See [CHANGELOG.md](CHANGELOG.md) for full development history. Recent completions:
 
-- [x] **Create `shared` crate**
-  - API types: Game, Author, User, Auth responses
-  - Request/response types for platform API
-  - LocalGameManifest for downloaded games
-  - Error types and codes
+- **Codebase cleanup** (2025-11-30)
+  - Removed unused `emberware-z/pbr-lite.wgsl` (duplicate of code in mode2_pbr.wgsl)
+  - Removed unused `shader_gen_example/` directory (reference code from different project)
+  - Verified stub files are intentional: `download.rs`, `runtime/mod.rs`
+  - All 573 tests passing
 
-- [x] **Create `emberware-z` crate skeleton**
-  - Cargo.toml with dependencies
-  - main.rs entry point
-  - app.rs application state
-  - config.rs configuration management
-  - deep_link.rs URL parsing
-  - download.rs ROM fetching
-  - library.rs local game management
-  - ui.rs egui library interface
-  - runtime/mod.rs module declaration (stubs)
+- **[STABILITY] Fix clippy warnings in test code**
+  - Fixed 13 clippy warnings across test code in app.rs and ffi/mod.rs
+  - All 573 tests passing (196 core + 377 emberware-z)
 
-- [x] **Create FFI documentation**
-  - docs/ffi.md with complete API reference
-  - All function signatures and examples
-  - Console specs and lifecycle documentation
+- **[STABILITY] Add session cleanup on exit**
+  - Added explicit `game_session = None` cleanup when exiting Playing mode via ESC key
+  - Ensures proper drop of Runtime, RollbackSession, and game resources
 
-- [x] **Create hello-world example**
-  - Minimal no_std WASM game
-  - Demonstrates init/update/render lifecycle
-  - Basic input and rendering
+- **[STABILITY] Integrate session events into app** (disconnect handling)
+  - Added `handle_session_events()` method to App that polls `Runtime::handle_session_events()` each frame
+  - `SessionEvent::Disconnected` → transitions to Library with error message
+  - `SessionEvent::Desync` → transitions to Library with desync error
+  - Network interruption warnings in debug overlay
 
-- [x] **Initialize git repository and push to GitHub**
+- **[STABILITY] Implement local network testing**
+  - Created `LocalSocket` UDP wrapper implementing GGRS `NonBlockingSocket<String>` trait
+  - Allows P2P sessions without matchbox signaling server
+  - 12 new tests for socket binding, connecting, and UDP communication
+
+- **[STABILITY] Replace unsafe transmute with wgpu::RenderPass::forget_lifetime()**
+  - wgpu 23 provides safe alternative to unsafe transmute
+  - Removed unsafe block from `emberware-z/src/app.rs`
+
+- **Wire up game execution in Playing mode**
+  - Implemented game loop integration in App::render()
+  - Added process_pending_resources() and execute_draw_commands()
+  - Input flow: InputManager → map_input() → game.set_input() → FFI
+  - Error handling: Runtime errors return to Library with error message
+
+- **[STABILITY] Add comprehensive test coverage**
+  - 573 total tests (196 core + 377 emberware-z)
+  - Integration tests for game lifecycle, rollback, multi-player input, resource limits
+  - FFI validation tests covering all error conditions and edge cases
+  - Graphics pipeline tests (shader compilation, vertex formats, texture binding, render state)
+  - Input system tests (deadzone, player slots, keyboard mapping)
+
+- **Implement multiplayer player model**
+  - Added `PlayerSessionConfig` struct for configuring local vs remote players
+  - Max 4 players total with flexible local/remote assignment via bitmask
+  - Integration with `RollbackSession`
+
+- **Create comprehensive examples**
+  - `hello-world` — Minimal no_std WASM game
+  - `triangle` — Immediate mode 3D with transforms
+  - `textured-quad` — Texture loading and 2D sprites
+  - `cube` — Retained mode 3D with indexed meshes
+  - `lighting` — PBR lighting with dynamic lights
+  - `skinned-mesh` — GPU skeletal animation
+  - `billboard` — Billboard sprites in 3D space
+  - `platformer` — Full mini-game with rollback netcode
 
 ---
 
@@ -726,19 +570,19 @@ These tasks are deferred until Emberware Z is complete. Classic shares the core 
 
 ### Classic Console Implementation
 
-- [ ] **Create Emberware Classic `Console` implementation**
+- **Create Emberware Classic `Console` implementation**
   - Implement `Console` trait for SNES/Genesis aesthetic
   - Define Classic-specific specs (384×216 default, 60fps, 4MB RAM, 2MB VRAM)
   - 8 resolution options (4× 16:9 + 4× 4:3, pixel-perfect to 1080p)
 
-- [ ] **Implement Classic graphics backend**
+- **Implement Classic graphics backend**
   - `ClassicGraphics` implementing `Graphics` trait
   - 2D-only rendering pipeline (no 3D transforms)
   - Sprite layers (4 layers, back-to-front)
   - Tilemap system (4 layers with parallax scrolling)
   - Palette swapping (256-color indexed textures)
 
-- [ ] **Implement Classic-specific FFI functions**
+- **Implement Classic-specific FFI functions**
   - Textures: `load_texture`, `texture_bind`
   - Sprites: `draw_sprite`, `draw_sprite_region`, `draw_sprite_ex` (with flip)
   - Sprite control: `sprite_layer`, `draw_sprite_flipped`
@@ -749,26 +593,25 @@ These tasks are deferred until Emberware Z is complete. Classic shares the core 
 
 ### Classic Examples
 
-- [ ] **Create `sprites` example (Classic)**
-  - Demonstrates Classic-specific 2D features
+- **Create `sprites` example (Classic)**
   - Sprite sheets with `draw_sprite_region`
   - Sprite flipping with `draw_sprite_ex`
   - Sprite layers and priority
   - D-pad input for movement
 
-- [ ] **Create `tilemap` example (Classic)**
+- **Create `tilemap` example (Classic)**
   - Demonstrates `tilemap_create` and `tilemap_scroll`
   - Multiple parallax layers
   - Tile animation via `tilemap_set_tile`
   - Sprite/tilemap layer interleaving
 
-- [ ] **Create `palette-swap` example (Classic)**
+- **Create `palette-swap` example (Classic)**
   - Demonstrates `palette_create` and `palette_bind`
   - Enemy color variants from single sprite
   - Damage flash effect
   - Dynamic palette cycling
 
-- [ ] **Create `platformer` example (Classic)**
+- **Create `platformer` example (Classic)**
   - Full mini-game demonstrating Classic features
   - Tilemap-based levels with scrolling
   - Animated sprite character
