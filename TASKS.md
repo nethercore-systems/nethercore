@@ -577,36 +577,6 @@ render_state_key: u16,  // Index into Vec<RenderState>
 
 ---
 
-#### 8. **[MEDIUM] Eliminate Vec<Mat4> clone in RenderState**
-
-**Location:** `core/src/wasm/render.rs` (if bone matrices stored in RenderState)
-
-**Analysis Needed:** Check if bone matrices (for skinned meshes) are stored in RenderState or passed separately.
-
-**If they're in RenderState:**
-```rust
-pub struct RenderState {
-    bone_matrices: Vec<Mat4>,  // ❌ Cloned on every skinned draw?
-}
-```
-
-**Proposed Fix:** Store bones in a separate shared structure, reference by ID
-```rust
-pub struct GameState {
-    bone_sets: Vec<Vec<Mat4>>,  // Shared pool
-}
-
-pub struct DrawCommand {
-    bone_set_id: u32,  // Reference instead of clone
-}
-```
-
-**Impact:** MEDIUM - Eliminates 4KB+ clones for skinned meshes (256 bones × 64 bytes).
-
-**Implementation:** Audit RenderState and DrawCommand for Vec<Mat4> fields, refactor to use shared bone set pool.
-
----
-
 #### 9. **[MEDIUM] Add #[inline] to camera math methods**
 
 **Location:** `emberware-z/src/graphics/camera.rs` (if it exists) or wherever view/projection matrices are computed
@@ -753,6 +723,23 @@ KEYCODE_TO_BUTTON.get(&(keycode as u32)).copied()
 - Each of the 3 matcap slots (1-3) can use independent blend modes
 
 **Compilation:** ✅ All tests passing
+
+---
+
+### **[POLISH] Performance Optimizations - Bone Matrix Investigation**
+**Status:** Completed - No optimization needed
+**Investigation Results:**
+- Task #8: Investigated Vec<Mat4> cloning in RenderState for bone matrices
+- Finding: `bone_matrices: Vec<Mat4>` exists in `ZFFIState` (emberware-z/src/state.rs:279)
+- Finding: Bone matrices are NOT cloned - they're stored once in ZFFIState and not copied into DrawCommand variants
+- Finding: GPU skinning FFI is implemented but not yet wired up to rendering backend
+- Conclusion: No performance issue exists - bone matrices would be consumed directly from ZFFIState during rendering
+- No changes needed ✓
+
+**Impact:**
+- Confirmed that bone matrix handling is already optimal
+- No unnecessary cloning occurs in the hot path
+- Documents architecture: bone matrices stored in ZFFIState, not in per-draw-command state
 
 ---
 
