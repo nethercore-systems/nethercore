@@ -61,6 +61,7 @@ impl CameraState {
 
     /// Compute the combined view-projection matrix
     #[inline]
+    #[allow(dead_code)] // Public API for games, currently unused internally
     pub fn view_projection_matrix(&self, aspect_ratio: f32) -> Mat4 {
         self.projection_matrix(aspect_ratio) * self.view_matrix()
     }
@@ -288,7 +289,6 @@ pub struct ZFFIState {
     pub bound_textures: [u32; 4],
 
     // Z-specific rendering modes
-    pub render_mode: u8,
     pub matcap_blend_modes: [u8; 4],
     pub material_metallic: f32,
     pub material_roughness: f32,
@@ -333,7 +333,6 @@ impl Default for ZFFIState {
             blend_mode: 0,
             texture_filter: 0, // Nearest
             bound_textures: [0; 4],
-            render_mode: 0,
             matcap_blend_modes: [0; 4],
             material_metallic: 0.0,
             material_roughness: 0.5,
@@ -355,7 +354,8 @@ impl Default for ZFFIState {
 }
 
 impl ZFFIState {
-    /// Create new FFI state with default values
+    /// Create new FFI state with default values (test helper)
+    #[cfg(test)]
     pub fn new() -> Self {
         Self::default()
     }

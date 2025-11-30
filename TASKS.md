@@ -383,3 +383,17 @@ This enables fighting games with unlocked characters, RPGs with player stats, et
 
 ---
 
+### **[STABILITY] Fix compiler warnings for unused code**
+
+**Completed:** Fixed warnings in `emberware-z/src/state.rs`
+
+**Implementation:**
+- Marked `CameraState::view_projection_matrix()` with `#[allow(dead_code)]` - public API method for games
+- Removed redundant `render_mode` field from `ZFFIState` (render mode stored in `init_config.render_mode`)
+- Marked `ZFFIState::new()` with `#[cfg(test)]` - only used in test code
+
+**Files Modified:**
+- `emberware-z/src/state.rs` - Removed dead code and marked public API appropriately
+
+---
+
