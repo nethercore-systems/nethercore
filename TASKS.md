@@ -140,10 +140,6 @@ The `Runtime<C: Console>` handles:
   - Warning: "unclosed HTML tag `u8`"
   - Escape HTML-like syntax in doc comments using backticks
 
-- **[STABILITY] Remove unused helper methods in console.rs** (`emberware-z/src/console.rs`)
-  - Lines 135, 141: `right_stick_x_f32()`, `right_stick_y_f32()` never used
-  - Remove or mark as `#[allow(dead_code)]` if planned for future
-
 - **[STABILITY] Add tests for config.rs** (`emberware-z/src/config.rs`)
   - Config loading/saving functions lack tests
   - Add tests for config persistence and validation
@@ -278,6 +274,11 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **[STABILITY] Suppress dead_code warnings for public API helpers in console.rs** (`emberware-z/src/console.rs`)
+  - Added `#[allow(dead_code)]` to `Button` enum, `Button::mask()`, and `ZInput` helper methods
+  - These are public API items for console-side code, used by tests but not by FFI (WASM games use FFI)
+  - Added documentation explaining why dead_code is allowed
 
 - **[STABILITY] Add tests for app.rs state machine** (`emberware-z/src/app.rs`)
   - Added 39 new tests covering the state machine and related functionality

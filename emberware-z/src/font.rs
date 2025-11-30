@@ -41,7 +41,7 @@ pub fn get_glyph_uv(char_code: u32) -> (f32, f32, f32, f32) {
 
 /// Generate the font atlas texture data (RGBA8)
 ///
-/// Returns a Vec<u8> of size ATLAS_WIDTH * ATLAS_HEIGHT * 4
+/// Returns a `Vec<u8>` of size `ATLAS_WIDTH * ATLAS_HEIGHT * 4`
 pub fn generate_font_atlas() -> Vec<u8> {
     let width = ATLAS_WIDTH as usize;
     let height = ATLAS_HEIGHT as usize;
