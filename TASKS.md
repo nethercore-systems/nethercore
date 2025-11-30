@@ -133,10 +133,6 @@ The `Runtime<C: Console>` handles:
 
 
 
-- **[STABILITY] Add tests for library.rs** (`emberware-z/src/library.rs`)
-  - `get_local_games()` function has no tests
-  - Add filesystem tests with temp directories
-
 - **[STABILITY] Add tests for ui.rs** (`emberware-z/src/ui.rs`)
   - Library UI has no tests
   - Add tests for UI action handling
@@ -261,6 +257,17 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **[STABILITY] Add tests for library.rs** (`emberware-z/src/library.rs`)
+  - Added 24 new tests for library management functions
+  - **LocalGame struct tests**: Clone, Debug trait implementations
+  - **get_games_from_dir tests**: Empty dir, nonexistent dir, single game, multiple games, skips files, skips missing/invalid/incomplete manifests, correct rom_path
+  - **is_cached_in_dir tests**: Not present, directory only, with rom, complete game
+  - **delete_game_in_dir tests**: Nonexistent game, existing game, removes all contents, leaves other games intact
+  - **Edge case tests**: Full workflow (add/list/delete), special characters in game ID, unicode in metadata, empty strings, very long game ID
+  - Added documentation for `LocalGame`, `get_local_games()`, `is_cached()`, `delete_game()` public APIs
+  - Extracted internal testable functions (`get_games_from_dir`, `is_cached_in_dir`, `delete_game_in_dir`) for filesystem testing with temp directories
+  - Added `tempfile` as dev-dependency
 
 - **[STABILITY] Add tests for config.rs** (`emberware-z/src/config.rs`)
   - Added 21 new tests for config persistence and validation

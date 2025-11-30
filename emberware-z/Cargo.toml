@@ -61,3 +61,4 @@ open = "5"
 
 [dev-dependencies]
 naga = { version = "23", features = ["wgsl-in"] }
+tempfile = "3"
