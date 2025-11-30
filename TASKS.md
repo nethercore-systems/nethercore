@@ -101,50 +101,6 @@ The `Runtime<C: Console>` handles:
 
 ## TODO
 
-### **[FEATURE] Implement retained mesh drawing**
-
-**Status:** Not implemented - TODO exists in code
-
-**Current State:**
-- FFI function `draw_mesh()` exists and buffers the draw command
-- Command is recognized in `process_draw_commands()` but actual rendering is skipped
-- TODO comment at [graphics/mod.rs:1207](emberware-z/src/graphics/mod.rs#L1207)
-
-**What's Needed:**
-- Implement actual mesh drawing in command buffer system
-- Retrieve mesh vertex/index data from retained mesh storage
-- Submit draw call with proper vertex format and transform
-
-**Files to Modify:**
-- `emberware-z/src/graphics/mod.rs` - Implement ZDrawCommand::DrawMesh case in process_draw_commands()
-
----
-
-### **[FEATURE] Implement billboard rendering**
-
-**Status:** Not implemented - TODO exists in code
-
-**Current State:**
-- FFI functions `draw_billboard()` and `draw_billboard_region()` exist and buffer commands
-- Command is recognized in `process_draw_commands()` but rendering is skipped
-- TODO comment at [graphics/mod.rs:1225](emberware-z/src/graphics/mod.rs#L1225)
-
-**What's Needed:**
-- Generate camera-facing quad geometry based on billboard mode:
-  - Mode 1: Spherical (faces camera completely)
-  - Mode 2: Cylindrical Y-axis (rotates around Y, used for trees/characters)
-  - Mode 3: Cylindrical X-axis
-  - Mode 4: Cylindrical Z-axis
-- Apply current transform to position the billboard in world space
-- Generate vertices in POS_UV_COLOR format (or POS_UV_COLOR_NORMAL if lighting needed)
-- Submit as indexed triangles with proper texture and blend mode
-
-**Files to Modify:**
-- `emberware-z/src/graphics/mod.rs` - Implement ZDrawCommand::DrawBillboard case in process_draw_commands()
-- Consider adding helper function `generate_billboard_quad()` similar to `generate_text_quads()`
-
----
-
 ### **[FEATURE] Implement audio backend**
 
 PS1/N64-style audio system with fire-and-forget sounds and managed channels for positional audio.
@@ -355,4 +311,39 @@ This enables fighting games with unlocked characters, RPGs with player stats, et
 ---
 
 ## Done
+
+### **[FEATURE] Implement retained mesh drawing**
+
+**Completed:** Implemented in `emberware-z/src/graphics/mod.rs`
+
+**Implementation:**
+- Retrieves mesh data from retained mesh storage using mesh handle
+- Converts byte offsets to vertex/index counts for draw commands
+- Submits draw calls with proper vertex format and transform
+- Supports both indexed and non-indexed meshes
+
+**Files Modified:**
+- `emberware-z/src/graphics/mod.rs` - Implemented ZDrawCommand::DrawMesh case in process_draw_commands()
+
+---
+
+### **[FEATURE] Implement billboard rendering**
+
+**Completed:** Implemented in `emberware-z/src/graphics/mod.rs`
+
+**Implementation:**
+- Generates camera-facing quad geometry based on billboard mode:
+  - Mode 1: Spherical (faces camera completely using view matrix)
+  - Mode 2: Cylindrical Y-axis (rotates around Y to face camera)
+  - Mode 3: Cylindrical X-axis (rotates around X to face camera)
+  - Mode 4: Cylindrical Z-axis (rotates around Z to face camera)
+- Extracts position from transform matrix
+- Calculates right and up vectors based on camera orientation
+- Generates quad vertices in POS_UV_COLOR format with proper UV mapping
+- Submits as indexed triangles (2 triangles, 6 indices)
+
+**Files Modified:**
+- `emberware-z/src/graphics/mod.rs` - Implemented ZDrawCommand::DrawBillboard case in process_draw_commands()
+
+---
 

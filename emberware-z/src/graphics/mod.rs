@@ -1188,12 +1188,12 @@ impl ZGraphics {
                 }
                 ZDrawCommand::DrawMesh {
                     handle,
-                    transform: _,
-                    color: _,
-                    depth_test: _,
-                    cull_mode: _,
-                    blend_mode: _,
-                    bound_textures: _,
+                    transform,
+                    color,
+                    depth_test,
+                    cull_mode,
+                    blend_mode,
+                    bound_textures,
                 } => {
                     // Look up mesh handle
                     if let Some(&mesh_handle) = mesh_map.get(&handle) {
@@ -1204,7 +1204,41 @@ impl ZGraphics {
                                 handle,
                                 mesh.vertex_count
                             );
-                            // TODO: Implement retained mesh drawing in command buffer
+
+                            // Validate format
+                            if mesh.format as usize >= VERTEX_FORMAT_COUNT {
+                                tracing::warn!("Invalid vertex format for mesh: {}", mesh.format);
+                                continue;
+                            }
+
+                            // Map game texture handles to graphics texture handles
+                            let texture_slots =
+                                Self::map_texture_handles(texture_map, &bound_textures);
+
+                            // Convert byte offsets to vertex/index counts
+                            let stride = vertex_stride(mesh.format) as u64;
+                            let base_vertex = (mesh.vertex_offset / stride) as u32;
+                            let first_index = if mesh.index_count > 0 {
+                                (mesh.index_offset / 4) as u32 // u32 indices are 4 bytes each
+                            } else {
+                                0
+                            };
+
+                            // Add draw command for the retained mesh
+                            self.command_buffer.add_command(command_buffer::DrawCommand {
+                                format: mesh.format,
+                                transform,
+                                vertex_count: mesh.vertex_count,
+                                index_count: mesh.index_count,
+                                base_vertex,
+                                first_index,
+                                texture_slots,
+                                color,
+                                depth_test,
+                                cull_mode: Self::convert_cull_mode(cull_mode),
+                                blend_mode: Self::convert_blend_mode(blend_mode),
+                                matcap_blend_modes,
+                            });
                         }
                     } else {
                         tracing::warn!("Mesh handle {} not found", handle);
@@ -1213,23 +1247,127 @@ impl ZGraphics {
                 ZDrawCommand::DrawBillboard {
                     width,
                     height,
-                    mode: _,
-                    uv_rect: _,
+                    mode,
+                    uv_rect,
                     transform,
                     color,
-                    depth_test: _,
-                    cull_mode: _,
-                    blend_mode: _,
-                    bound_textures: _,
+                    depth_test,
+                    cull_mode,
+                    blend_mode,
+                    bound_textures,
                 } => {
-                    // TODO: Implement billboard rendering
+                    // Generate billboard quad geometry
                     tracing::trace!(
-                        "Billboard: {}x{} at {:?} color={:08x}",
+                        "Billboard: {}x{} mode={} at {:?} color={:08x}",
                         width,
                         height,
+                        mode,
                         transform,
                         color
                     );
+
+                    // Validate mode
+                    if mode < 1 || mode > 4 {
+                        tracing::warn!("Invalid billboard mode: {} (must be 1-4)", mode);
+                        continue;
+                    }
+
+                    // Map game texture handles to graphics texture handles
+                    let texture_slots = Self::map_texture_handles(texture_map, &bound_textures);
+
+                    // Extract position from transform (last column)
+                    let position = transform.w_axis.truncate();
+
+                    // Calculate camera direction
+                    let camera_pos = z_state.camera.position;
+                    let to_camera = (camera_pos - position).normalize();
+
+                    // Generate billboard orientation based on mode
+                    let (right, up) = match mode {
+                        1 => {
+                            // Spherical: fully face camera
+                            let view_matrix = z_state.camera.view_matrix();
+                            let right = view_matrix.x_axis.truncate();
+                            let up = view_matrix.y_axis.truncate();
+                            (right, up)
+                        }
+                        2 => {
+                            // Cylindrical Y-axis: rotate around Y to face camera
+                            let right = glam::Vec3::Y.cross(to_camera).normalize();
+                            let up = glam::Vec3::Y;
+                            (right, up)
+                        }
+                        3 => {
+                            // Cylindrical X-axis: rotate around X to face camera
+                            let up = to_camera.cross(glam::Vec3::X).normalize();
+                            let right = glam::Vec3::X;
+                            (right, up)
+                        }
+                        4 => {
+                            // Cylindrical Z-axis: rotate around Z to face camera
+                            let right = glam::Vec3::Z.cross(to_camera).normalize();
+                            let up = to_camera.cross(right).normalize();
+                            (right, up)
+                        }
+                        _ => unreachable!(),
+                    };
+
+                    // Calculate UV coordinates
+                    let (u0, v0, u1, v1) = uv_rect.unwrap_or((0.0, 0.0, 1.0, 1.0));
+
+                    // Generate quad vertices (POS_UV_COLOR format = 3)
+                    // Position (3) + UV (2) + Color (3) = 8 floats per vertex
+                    let half_w = width * 0.5;
+                    let half_h = height * 0.5;
+
+                    // Extract color components (RGBA)
+                    let r = ((color >> 24) & 0xFF) as f32 / 255.0;
+                    let g = ((color >> 16) & 0xFF) as f32 / 255.0;
+                    let b = ((color >> 8) & 0xFF) as f32 / 255.0;
+
+                    // Four corners of the billboard
+                    let v0_pos = position - right * half_w - up * half_h;
+                    let v1_pos = position + right * half_w - up * half_h;
+                    let v2_pos = position + right * half_w + up * half_h;
+                    let v3_pos = position - right * half_w + up * half_h;
+
+                    #[rustfmt::skip]
+                    let vertices = vec![
+                        // Vertex 0 (bottom-left)
+                        v0_pos.x, v0_pos.y, v0_pos.z, u0, v1, r, g, b,
+                        // Vertex 1 (bottom-right)
+                        v1_pos.x, v1_pos.y, v1_pos.z, u1, v1, r, g, b,
+                        // Vertex 2 (top-right)
+                        v2_pos.x, v2_pos.y, v2_pos.z, u1, v0, r, g, b,
+                        // Vertex 3 (top-left)
+                        v3_pos.x, v3_pos.y, v3_pos.z, u0, v0, r, g, b,
+                    ];
+
+                    // Two triangles (CCW winding)
+                    let indices = vec![0, 1, 2, 0, 2, 3];
+
+                    // POS_UV_COLOR format
+                    let format = 3;
+
+                    // Append vertex and index data
+                    let base_vertex = self.command_buffer.append_vertex_data(format, &vertices);
+                    let first_index = self.command_buffer.append_index_data(format, &indices);
+
+                    // Add draw command with identity transform (positions are in world space)
+                    self.command_buffer.add_command(command_buffer::DrawCommand {
+                        format,
+                        transform: glam::Mat4::IDENTITY,
+                        vertex_count: 4,
+                        index_count: 6,
+                        base_vertex,
+                        first_index,
+                        texture_slots,
+                        color: 0xFFFFFFFF, // White (color already in vertices)
+                        depth_test,
+                        cull_mode: Self::convert_cull_mode(cull_mode),
+                        blend_mode: Self::convert_blend_mode(blend_mode),
+                        matcap_blend_modes,
+                    });
                 }
                 ZDrawCommand::DrawSprite {
                     x,
