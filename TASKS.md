@@ -1134,6 +1134,28 @@ KEYCODE_TO_BUTTON.get(&(keycode as u32)).copied()
 
 ## Done
 
+### **[FEATURE] Implement matcap blend modes (Partial - GPU Integration)**
+**Status:** GPU integration complete, shader implementation pending
+**Changes Made:**
+- ✅ Added `matcap_blend_modes: [MatcapBlendMode; 4]` field to DrawCommand struct
+- ✅ Updated command buffer to capture matcap blend modes from RenderState
+- ✅ Updated material buffer structure to include `matcap_blend_modes: [u32; 4]`
+- ✅ Updated material buffer cache key to include blend modes (5-tuple)
+- ✅ All 518 tests passing ✓ (155 in core + 363 in emberware-z)
+
+**Remaining work:**
+- Update Mode 1 shader (mode1_matcap.wgsl) to use blend modes:
+  - Add `matcap_blend_modes: vec4<u32>` field to MaterialUniforms struct
+  - Add `rgb_to_hsv()` and `hsv_to_rgb()` helper functions
+  - Add `blend_colors()` function supporting modes 0-2 (Multiply/Add/HSV Modulate)
+  - Update fragment shader to use `blend_colors()` instead of direct multiplication
+
+**Files Modified:**
+- `emberware-z/src/graphics/command_buffer.rs` - Added matcap_blend_modes field to DrawCommand
+- `emberware-z/src/graphics/mod.rs` - Updated material buffer creation and cache key
+
+---
+
 ### **[POLISH] Performance Optimizations - Additional Improvements**
 **Status:** Completed
 **Changes Made:**
