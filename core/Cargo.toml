@@ -39,6 +39,9 @@ log = "0.4"
 rand = "0.8"
 rand_pcg = "0.3"
 
+# Serialization for network messages
+bincode = "1"
+
 [dev-dependencies]
 # WAT text format parser for test WASM modules
 wat = "1"

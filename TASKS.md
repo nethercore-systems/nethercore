@@ -122,10 +122,6 @@ The `Runtime<C: Console>` handles:
   - Disconnect handling (return to library)
   - Session cleanup on exit
 
-- **Implement local network testing**
-  - Multiple instances on same machine via localhost
-  - Connect via `127.0.0.1:port` for local testing
-  - Debug mode: disable matchbox, use direct connections
 
 - **Performance optimization**
   - Render batching already implemented in CommandBuffer
@@ -139,6 +135,15 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **Implement local network testing**
+  - Created `LocalSocket` UDP wrapper implementing GGRS `NonBlockingSocket<String>` trait
+  - Allows P2P sessions without matchbox signaling server
+  - Bind to any port with `LocalSocket::bind("127.0.0.1:0")` or specific port
+  - Connect to peer with `socket.connect("127.0.0.1:port")`
+  - Usage: Run two instances, each bound to different ports, each connecting to the other
+  - 12 new tests for socket binding, connecting, and UDP communication
+  - Exports: `LocalSocket`, `LocalSocketError`, `DEFAULT_LOCAL_PORT` from `emberware_core`
 
 - **[STABILITY] Replace unsafe transmute with wgpu::RenderPass::forget_lifetime()** (`emberware-z/src/app.rs`)
   - wgpu 23 provides `forget_lifetime()` which is a safe alternative to unsafe transmute
