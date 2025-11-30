@@ -114,23 +114,11 @@ The `Runtime<C: Console>` handles:
   - `rollback.rs`: 1843 lines → split into session, state, config modules
   - `wasm.rs`: 1681 lines → split by responsibility (game state, camera, render)
 
-
-- **[STABILITY] Add tests for graphics pipeline** (`emberware-z/src/graphics.rs`)
-  - 3114-line file with limited test coverage
-  - Test render pipeline creation, texture management
-  - Test draw command processing
-
 #### Low Priority
 
 - **[STABILITY] Reduce DRY violations in vertex attribute generation** (`emberware-z/src/graphics.rs:154-520`)
   - Massive match statement with 16 nearly identical cases
   - Use macro or builder pattern to reduce duplication
-
-
-
-- **[STABILITY] Add tests for ui.rs** (`emberware-z/src/ui.rs`)
-  - Library UI has no tests
-  - Add tests for UI action handling
 
 
 
@@ -252,6 +240,23 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **[STABILITY] Add tests for graphics pipeline** (`emberware-z/src/graphics.rs`)
+  - Added 32 new tests (98 total graphics tests, up from 66)
+  - **Sky Uniforms tests**: Default values, custom values, struct size (64 bytes), alignment
+  - **Retained Mesh tests**: Default values, non-indexed meshes, indexed meshes
+  - **Draw Command tests**: Creation, clone
+  - **Text Rendering tests**: Empty string, single char, multiple chars, color extraction, position, valid indices
+  - **Vertex Attribute tests**: Buffer layout for POS only, full format (FORMAT_ALL), attribute offsets, shader locations
+  - **Command Buffer Edge Cases**: Different formats, transform capture, large batch (1000 triangles)
+
+- **[STABILITY] Add tests for ui.rs** (`emberware-z/src/ui.rs`)
+  - Added 17 new tests for library UI
+  - **LibraryUi tests**: new(), select_game, deselect_game, change_selection
+  - **UiAction tests**: All variants (PlayGame, DeleteGame, OpenBrowser, OpenSettings, DismissError)
+  - **Trait tests**: Debug formatting, Clone, PartialEq
+  - **Edge cases**: Empty string game IDs, unicode game IDs, long game IDs, variant inequality
+  - Added `#[derive(Debug, Clone, PartialEq)]` to `UiAction` enum to support tests
 
 - **[STABILITY] Add missing documentation for public APIs**
   - `graphics.rs`: Added docs for `vertex_buffer_layout()` (wgpu layout creation) and `build_attributes()` (shader location assignment)

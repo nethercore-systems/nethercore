@@ -3140,4 +3140,297 @@ mod tests {
         assert_eq!(FORMAT_ALL, FORMAT_UV | FORMAT_COLOR | FORMAT_NORMAL | FORMAT_SKINNED);
         assert_eq!(FORMAT_ALL, 15);
     }
+
+    // ========================================================================
+    // Sky Uniforms Tests
+    // ========================================================================
+
+    #[test]
+    fn test_sky_uniforms_default() {
+        let sky = SkyUniforms::default();
+        assert_eq!(sky.horizon_color, [0.0, 0.0, 0.0]);
+        assert_eq!(sky.zenith_color, [0.0, 0.0, 0.0]);
+        assert_eq!(sky.sun_direction, [0.0, 1.0, 0.0]); // Default up
+        assert_eq!(sky.sun_color, [0.0, 0.0, 0.0]);
+        assert_eq!(sky.sun_sharpness, 0.0);
+    }
+
+    #[test]
+    fn test_sky_uniforms_custom() {
+        let sky = SkyUniforms {
+            horizon_color: [1.0, 0.5, 0.2],
+            _pad0: 0.0,
+            zenith_color: [0.2, 0.4, 1.0],
+            _pad1: 0.0,
+            sun_direction: [0.577, 0.577, 0.577], // Normalized (1,1,1)
+            _pad2: 0.0,
+            sun_color: [1.5, 1.4, 1.0], // HDR sun
+            sun_sharpness: 64.0,
+        };
+        assert_eq!(sky.horizon_color, [1.0, 0.5, 0.2]);
+        assert_eq!(sky.zenith_color, [0.2, 0.4, 1.0]);
+        assert_eq!(sky.sun_sharpness, 64.0);
+    }
+
+    #[test]
+    fn test_sky_uniforms_size() {
+        // Verify struct size for GPU alignment
+        // 3+1 + 3+1 + 3+1 + 3+1 = 16 floats = 64 bytes
+        assert_eq!(std::mem::size_of::<SkyUniforms>(), 64);
+    }
+
+    #[test]
+    fn test_sky_uniforms_alignment() {
+        // Verify alignment requirements for GPU uniform buffers
+        assert!(std::mem::align_of::<SkyUniforms>() <= 16);
+    }
+
+    // ========================================================================
+    // Retained Mesh Tests
+    // ========================================================================
+
+    #[test]
+    fn test_retained_mesh_default_values() {
+        let mesh = RetainedMesh {
+            format: 0,
+            vertex_count: 100,
+            index_count: 150,
+            vertex_offset: 0,
+            index_offset: 0,
+        };
+        assert_eq!(mesh.format, 0);
+        assert_eq!(mesh.vertex_count, 100);
+        assert_eq!(mesh.index_count, 150);
+        assert_eq!(mesh.vertex_offset, 0);
+        assert_eq!(mesh.index_offset, 0);
+    }
+
+    #[test]
+    fn test_retained_mesh_non_indexed() {
+        let mesh = RetainedMesh {
+            format: FORMAT_UV | FORMAT_NORMAL,
+            vertex_count: 36, // 12 triangles
+            index_count: 0,   // Non-indexed
+            vertex_offset: 1024,
+            index_offset: 0,
+        };
+        assert_eq!(mesh.format, FORMAT_UV | FORMAT_NORMAL);
+        assert_eq!(mesh.index_count, 0);
+    }
+
+    #[test]
+    fn test_retained_mesh_indexed() {
+        let mesh = RetainedMesh {
+            format: FORMAT_COLOR,
+            vertex_count: 8,    // Cube has 8 vertices
+            index_count: 36,    // 12 triangles × 3 = 36 indices
+            vertex_offset: 0,
+            index_offset: 512,
+        };
+        assert_eq!(mesh.vertex_count, 8);
+        assert_eq!(mesh.index_count, 36);
+    }
+
+    // ========================================================================
+    // Draw Command Tests
+    // ========================================================================
+
+    #[test]
+    fn test_draw_command_creation() {
+        let cmd = DrawCommand {
+            format: FORMAT_UV,
+            transform: Mat4::IDENTITY,
+            vertex_count: 3,
+            index_count: 0,
+            base_vertex: 0,
+            first_index: 0,
+            texture_slots: [TextureHandle::INVALID; 4],
+            color: 0xFFFFFFFF,
+            depth_test: true,
+            cull_mode: CullMode::Back,
+            blend_mode: BlendMode::None,
+        };
+        assert_eq!(cmd.format, FORMAT_UV);
+        assert_eq!(cmd.vertex_count, 3);
+        assert_eq!(cmd.color, 0xFFFFFFFF);
+    }
+
+    #[test]
+    fn test_draw_command_clone() {
+        let cmd = DrawCommand {
+            format: FORMAT_COLOR | FORMAT_NORMAL,
+            transform: Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0)),
+            vertex_count: 100,
+            index_count: 150,
+            base_vertex: 50,
+            first_index: 75,
+            texture_slots: [TextureHandle(1), TextureHandle(2), TextureHandle::INVALID, TextureHandle::INVALID],
+            color: 0xFF0000FF,
+            depth_test: false,
+            cull_mode: CullMode::None,
+            blend_mode: BlendMode::Alpha,
+        };
+        let cloned = cmd.clone();
+        assert_eq!(cloned.format, cmd.format);
+        assert_eq!(cloned.vertex_count, cmd.vertex_count);
+        assert_eq!(cloned.texture_slots, cmd.texture_slots);
+    }
+
+    // ========================================================================
+    // Text Rendering Tests
+    // ========================================================================
+
+    #[test]
+    fn test_generate_text_quads_empty() {
+        let (vertices, indices) = ZGraphics::generate_text_quads("", 0.0, 0.0, 16.0, 0xFFFFFFFF);
+        assert!(vertices.is_empty());
+        assert!(indices.is_empty());
+    }
+
+    #[test]
+    fn test_generate_text_quads_single_char() {
+        let (vertices, indices) = ZGraphics::generate_text_quads("A", 0.0, 0.0, 16.0, 0xFFFFFFFF);
+        // 1 char = 4 vertices × 8 floats = 32 floats
+        assert_eq!(vertices.len(), 32);
+        // 1 char = 6 indices (2 triangles)
+        assert_eq!(indices.len(), 6);
+    }
+
+    #[test]
+    fn test_generate_text_quads_multiple_chars() {
+        let (vertices, indices) = ZGraphics::generate_text_quads("Hello", 0.0, 0.0, 8.0, 0xFFFFFFFF);
+        // 5 chars × 4 vertices × 8 floats = 160 floats
+        assert_eq!(vertices.len(), 160);
+        // 5 chars × 6 indices = 30 indices
+        assert_eq!(indices.len(), 30);
+    }
+
+    #[test]
+    fn test_generate_text_quads_color() {
+        let (vertices, _) = ZGraphics::generate_text_quads("X", 0.0, 0.0, 8.0, 0xFF0000FF);
+        // Color should be R=1.0, G=0.0, B=0.0 (at indices 5,6,7 of each vertex)
+        assert!((vertices[5] - 1.0).abs() < 0.01); // R
+        assert!((vertices[6] - 0.0).abs() < 0.01); // G
+        assert!((vertices[7] - 0.0).abs() < 0.01); // B
+    }
+
+    #[test]
+    fn test_generate_text_quads_position() {
+        let (vertices, _) = ZGraphics::generate_text_quads("A", 100.0, 50.0, 16.0, 0xFFFFFFFF);
+        // First vertex (top-left) should be at (100, 50, 0)
+        assert!((vertices[0] - 100.0).abs() < 0.01); // x
+        assert!((vertices[1] - 50.0).abs() < 0.01);  // y
+        assert!((vertices[2] - 0.0).abs() < 0.01);   // z
+    }
+
+    #[test]
+    fn test_generate_text_quads_indices_valid() {
+        let (_, indices) = ZGraphics::generate_text_quads("AB", 0.0, 0.0, 8.0, 0xFFFFFFFF);
+        // Check that indices form valid triangles
+        // First quad: 0,1,2 and 0,2,3
+        assert_eq!(indices[0..6], [0, 1, 2, 0, 2, 3]);
+        // Second quad: 4,5,6 and 4,6,7
+        assert_eq!(indices[6..12], [4, 5, 6, 4, 6, 7]);
+    }
+
+    // ========================================================================
+    // Vertex Attribute Tests
+    // ========================================================================
+
+    #[test]
+    fn test_vertex_buffer_layout_pos_only() {
+        let info = VertexFormatInfo::for_format(0);
+        let layout = info.vertex_buffer_layout();
+        assert_eq!(layout.array_stride, 12);
+        assert_eq!(layout.attributes.len(), 1);
+        assert_eq!(layout.attributes[0].shader_location, 0); // Position
+    }
+
+    #[test]
+    fn test_vertex_buffer_layout_full() {
+        let info = VertexFormatInfo::for_format(FORMAT_ALL);
+        let layout = info.vertex_buffer_layout();
+        assert_eq!(layout.array_stride, 64);
+        // POS + UV + COLOR + NORMAL + BONE_INDICES + BONE_WEIGHTS = 6 attributes
+        assert_eq!(layout.attributes.len(), 6);
+    }
+
+    #[test]
+    fn test_vertex_attribute_offsets_pos_uv_color_normal() {
+        let info = VertexFormatInfo::for_format(FORMAT_UV | FORMAT_COLOR | FORMAT_NORMAL);
+        let layout = info.vertex_buffer_layout();
+        // Position at 0, UV at 12, Color at 20, Normal at 32
+        assert_eq!(layout.attributes[0].offset, 0);  // Position
+        assert_eq!(layout.attributes[1].offset, 12); // UV
+        assert_eq!(layout.attributes[2].offset, 20); // Color
+        assert_eq!(layout.attributes[3].offset, 32); // Normal
+    }
+
+    #[test]
+    fn test_vertex_attribute_shader_locations() {
+        // Position always at 0, UV at 1, Color at 2, Normal at 3, Bone indices at 4, Weights at 5
+        let info = VertexFormatInfo::for_format(FORMAT_UV | FORMAT_NORMAL);
+        let layout = info.vertex_buffer_layout();
+        assert_eq!(layout.attributes[0].shader_location, 0); // Position
+        assert_eq!(layout.attributes[1].shader_location, 1); // UV
+        assert_eq!(layout.attributes[2].shader_location, 3); // Normal (skips 2 for color)
+    }
+
+    // ========================================================================
+    // Command Buffer Edge Cases
+    // ========================================================================
+
+    #[test]
+    fn test_command_buffer_different_formats() {
+        let mut cb = CommandBuffer::new();
+        let state = RenderState::default();
+
+        // Add vertices with different formats
+        let v_pos = [0.0f32, 0.0, 0.0, 1.0, 0.0, 0.0, 0.5, 1.0, 0.0]; // 3 verts, format 0
+        let v_pos_uv = [
+            0.0, 0.0, 0.0, 0.0, 0.0, // vertex 0
+            1.0, 0.0, 0.0, 1.0, 0.0, // vertex 1
+            0.5, 1.0, 0.0, 0.5, 1.0, // vertex 2
+        ]; // 3 verts, format 1
+
+        cb.add_vertices(0, &v_pos, Mat4::IDENTITY, &state);
+        cb.add_vertices(FORMAT_UV, &v_pos_uv, Mat4::IDENTITY, &state);
+
+        assert_eq!(cb.commands().len(), 2);
+        assert_eq!(cb.commands()[0].format, 0);
+        assert_eq!(cb.commands()[1].format, FORMAT_UV);
+    }
+
+    #[test]
+    fn test_command_buffer_transform_capture() {
+        let mut cb = CommandBuffer::new();
+        let state = RenderState::default();
+        let vertices = [0.0f32, 0.0, 0.0, 1.0, 0.0, 0.0, 0.5, 1.0, 0.0];
+
+        let transform1 = Mat4::IDENTITY;
+        let transform2 = Mat4::from_translation(Vec3::new(10.0, 20.0, 30.0));
+
+        cb.add_vertices(0, &vertices, transform1, &state);
+        cb.add_vertices(0, &vertices, transform2, &state);
+
+        assert_eq!(cb.commands()[0].transform, transform1);
+        assert_eq!(cb.commands()[1].transform, transform2);
+    }
+
+    #[test]
+    fn test_command_buffer_large_batch() {
+        let mut cb = CommandBuffer::new();
+        let state = RenderState::default();
+
+        // Create a large number of vertices (1000 triangles = 3000 vertices)
+        let triangle = [0.0f32, 0.0, 0.0, 1.0, 0.0, 0.0, 0.5, 1.0, 0.0];
+        let mut large_data = Vec::with_capacity(9000);
+        for _ in 0..1000 {
+            large_data.extend_from_slice(&triangle);
+        }
+
+        let base = cb.add_vertices(0, &large_data, Mat4::IDENTITY, &state);
+        assert_eq!(base, 0);
+        assert_eq!(cb.commands()[0].vertex_count, 3000);
+    }
 }
