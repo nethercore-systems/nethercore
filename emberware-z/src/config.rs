@@ -1,32 +1,48 @@
 //! Configuration management (~/.emberware/config.toml)
+//!
+//! Handles loading, saving, and providing defaults for application settings.
+//! Settings are stored in TOML format in the platform-specific config directory.
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 use crate::input::InputConfig;
 
+/// Application configuration.
+///
+/// Contains all user-configurable settings organized into sections.
+/// Serialized to/from TOML format for persistence.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
+    /// Video/graphics settings
     #[serde(default)]
     pub video: VideoConfig,
+    /// Audio settings
     #[serde(default)]
     pub audio: AudioConfig,
+    /// Input/controller settings
     #[serde(default)]
     pub input: InputConfig,
 }
 
+/// Video and graphics configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VideoConfig {
+    /// Whether to run in fullscreen mode (default: false)
     #[serde(default)]
     pub fullscreen: bool,
+    /// Whether to enable vertical sync (default: true)
     #[serde(default = "default_true")]
     pub vsync: bool,
+    /// Resolution scale multiplier (default: 2, range: 1-4)
     #[serde(default = "default_scale")]
     pub resolution_scale: u32,
 }
 
+/// Audio configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AudioConfig {
+    /// Master volume level (default: 0.8, range: 0.0-1.0)
     #[serde(default = "default_volume")]
     pub master_volume: f32,
 }
@@ -63,16 +79,35 @@ impl Default for AudioConfig {
     }
 }
 
+/// Returns the platform-specific configuration directory.
+///
+/// On Windows: `%APPDATA%\emberware\emberware\config`
+/// On macOS: `~/Library/Application Support/io.emberware.emberware`
+/// On Linux: `~/.config/emberware`
+///
+/// Returns `None` if the home directory cannot be determined.
 pub fn config_dir() -> Option<PathBuf> {
     directories::ProjectDirs::from("io", "emberware", "emberware")
         .map(|dirs| dirs.config_dir().to_path_buf())
 }
 
+/// Returns the platform-specific data directory for game storage.
+///
+/// On Windows: `%APPDATA%\emberware\emberware\data`
+/// On macOS: `~/Library/Application Support/io.emberware.emberware`
+/// On Linux: `~/.local/share/emberware`
+///
+/// This is where downloaded games and save data are stored.
+/// Returns `None` if the home directory cannot be determined.
 pub fn data_dir() -> Option<PathBuf> {
     directories::ProjectDirs::from("io", "emberware", "emberware")
         .map(|dirs| dirs.data_dir().to_path_buf())
 }
 
+/// Loads the configuration from disk.
+///
+/// Reads `config.toml` from the platform's configuration directory.
+/// Returns default values if the file doesn't exist or cannot be parsed.
 pub fn load() -> Config {
     config_dir()
         .and_then(|dir| std::fs::read_to_string(dir.join("config.toml")).ok())
@@ -80,6 +115,15 @@ pub fn load() -> Config {
         .unwrap_or_default()
 }
 
+/// Saves the configuration to disk.
+///
+/// Writes `config.toml` to the platform's configuration directory.
+/// Creates the directory if it doesn't exist.
+///
+/// # Errors
+///
+/// Returns an error if the directory cannot be created or the file
+/// cannot be written.
 pub fn save(config: &Config) -> std::io::Result<()> {
     if let Some(dir) = config_dir() {
         std::fs::create_dir_all(&dir)?;

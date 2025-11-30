@@ -1,18 +1,38 @@
 //! Minimal egui library UI
+//!
+//! Provides the game library interface using egui for rendering.
+//! The UI displays locally cached games and allows users to play,
+//! delete, or browse for more games online.
 
 use crate::library::LocalGame;
 
+/// The game library UI state and rendering.
+///
+/// Displays a list of locally cached games with options to play or delete them.
+/// Handles game selection and returns user actions for the application to process.
 pub struct LibraryUi {
+    /// Currently selected game ID, if any
     pub selected_game: Option<String>,
 }
 
 impl LibraryUi {
+    /// Creates a new library UI with no game selected.
     pub fn new() -> Self {
         Self {
             selected_game: None,
         }
     }
 
+    /// Renders the library UI and returns any user action.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The egui context for rendering
+    /// * `games` - List of locally cached games to display
+    ///
+    /// # Returns
+    ///
+    /// An optional [`UiAction`] if the user triggered an action this frame.
     pub fn show(&mut self, ctx: &egui::Context, games: &[LocalGame]) -> Option<UiAction> {
         let mut action = None;
 
@@ -68,10 +88,19 @@ impl LibraryUi {
     }
 }
 
+/// Actions the user can trigger from the library UI.
+///
+/// Returned by [`LibraryUi::show`] when the user interacts with the interface.
+/// The application handles these actions to transition between states.
 pub enum UiAction {
+    /// Start playing a game with the given ID
     PlayGame(String),
+    /// Delete a cached game with the given ID
     DeleteGame(String),
+    /// Open the game browser in a web browser
     OpenBrowser,
+    /// Open the settings screen
     OpenSettings,
+    /// Dismiss the current error message and return to library
     DismissError,
 }

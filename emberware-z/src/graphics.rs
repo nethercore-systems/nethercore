@@ -135,7 +135,14 @@ impl VertexFormatInfo {
         self.format & FORMAT_SKINNED != 0
     }
 
-    /// Create wgpu vertex buffer layout for this format
+    /// Creates a wgpu vertex buffer layout descriptor for this format.
+    ///
+    /// Returns a layout with:
+    /// - `array_stride` set to this format's stride in bytes
+    /// - `step_mode` set to per-vertex stepping
+    /// - `attributes` built from the format flags
+    ///
+    /// The returned layout can be used when creating render pipelines.
     pub fn vertex_buffer_layout(&self) -> wgpu::VertexBufferLayout<'static> {
         // Build attribute list based on format
         let attributes = Self::build_attributes(self.format);
@@ -147,7 +154,15 @@ impl VertexFormatInfo {
         }
     }
 
-    /// Build vertex attributes for a format (returns static slice)
+    /// Builds vertex attributes for a format, returning a static slice.
+    ///
+    /// Shader locations are assigned in order:
+    /// - Location 0: Position (always present, Float32x3)
+    /// - Location 1: UV (if FORMAT_UV, Float32x2)
+    /// - Location 2: Color (if FORMAT_COLOR, Float32x3)
+    /// - Location 3: Normal (if FORMAT_NORMAL, Float32x3)
+    /// - Location 4: Bone indices (if FORMAT_SKINNED, Uint8x4)
+    /// - Location 5: Bone weights (if FORMAT_SKINNED, Float32x4)
     fn build_attributes(format: u8) -> &'static [wgpu::VertexAttribute] {
         // Pre-computed attribute arrays for each format
         // Position is always at location 0

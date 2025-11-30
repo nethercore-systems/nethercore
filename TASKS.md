@@ -114,11 +114,6 @@ The `Runtime<C: Console>` handles:
   - `rollback.rs`: 1843 lines → split into session, state, config modules
   - `wasm.rs`: 1681 lines → split by responsibility (game state, camera, render)
 
-- **[STABILITY] Add missing documentation for public APIs**
-  - `graphics.rs:139-148`: `vertex_buffer_layout()`, `build_attributes()` lack docs
-  - `ui.rs`: `LibraryUi`, `UiAction` lack documentation
-  - `library.rs`: `get_local_games()` lacks documentation
-  - `config.rs`: Config loading/saving functions need documentation
 
 - **[STABILITY] Add tests for graphics pipeline** (`emberware-z/src/graphics.rs`)
   - 3114-line file with limited test coverage
@@ -257,6 +252,11 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **[STABILITY] Add missing documentation for public APIs**
+  - `graphics.rs`: Added docs for `vertex_buffer_layout()` (wgpu layout creation) and `build_attributes()` (shader location assignment)
+  - `ui.rs`: Added docs for `LibraryUi` struct, `show()` method, and `UiAction` enum with all variants
+  - `config.rs`: Added module-level docs, struct docs for `Config`/`VideoConfig`/`AudioConfig`, and docs for `config_dir()`, `data_dir()`, `load()`, `save()` functions with platform-specific path examples
 
 - **[STABILITY] Add tests for library.rs** (`emberware-z/src/library.rs`)
   - Added 24 new tests for library management functions
