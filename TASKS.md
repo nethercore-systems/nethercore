@@ -101,7 +101,29 @@ The `Runtime<C: Console>` handles:
 
 ## TODO
 
-### **[FEATURE] Implement audio backend**
+### **[FEATURE] Complete audio backend playback**
+
+The audio infrastructure is in place, but actual audio playback needs implementation.
+
+**Current State:**
+- Audio module created with Sound and AudioCommand types
+- ZAudio backend created with command buffering
+- Audio state added to ZFFIState (sounds, audio_commands)
+- Rollback-aware command processing structure in place
+
+**What's Needed:**
+- Thread-safe audio playback using rodio
+- Audio server thread with message passing (to satisfy Send requirement)
+- Actual sound playback implementation
+- FFI functions for load_sound, play_sound, channel_play, etc.
+
+**Implementation Approach:**
+Create an audio server thread that owns the rodio OutputStream/Sinks, and communicate
+via channels. This satisfies the Send requirement while still using rodio for playback.
+
+---
+
+### **[FEATURE] Implement audio backend** (INFRASTRUCTURE COMPLETE)
 
 PS1/N64-style audio system with fire-and-forget sounds and managed channels for positional audio.
 
@@ -195,6 +217,8 @@ music_set_volume(volume: f32)
 6. Register FFI functions
 
 **Stubs to replace:** `emberware-z/src/console.rs` - `ZAudio::play()`, `ZAudio::stop()`, `create_audio()`
+
+**Status:** Infrastructure completed. See "Complete audio backend playback" in TODO for remaining work.
 
 ---
 
@@ -415,6 +439,38 @@ This enables fighting games with unlocked characters, RPGs with player stats, et
 - `emberware-z/src/ffi/mod.rs` - Used range contains
 - `emberware-z/src/graphics/mod.rs` - Used range contains, div_ceil, allowed type complexity
 - `emberware-z/src/graphics/render_state.rs` - Derived Default
+
+---
+
+### **[FEATURE] Implement audio backend infrastructure**
+
+**Completed:** Audio infrastructure in place (playback implementation pending)
+
+**Implementation:**
+- Created `audio.rs` module with Sound and AudioCommand types
+- Implemented ZAudio backend with rollback-aware command buffering
+- Added audio state to ZFFIState (sounds, audio_commands, next_sound_handle)
+- Integrated ZAudio with Console trait via create_audio()
+- Commands are buffered per frame and cleared after processing
+- Rollback mode support (commands discarded during replay)
+
+**What Was Completed:**
+1. ✅ Sound struct and sounds Vec<Option<Sound>>
+2. ✅ AudioCommand enum with all command types
+3. ✅ audio_commands Vec buffering in ZFFIState
+4. ✅ ZAudio with process_commands() and set_rollback_mode()
+5. ✅ Integration with console initialization
+
+**What Remains (see TODO):**
+- Thread-safe rodio integration (audio server thread + channels)
+- Actual audio playback implementation
+- FFI functions (load_sound, play_sound, channel_*, music_*)
+
+**Files Modified:**
+- `emberware-z/src/audio.rs` - New module with audio infrastructure
+- `emberware-z/src/main.rs` - Added audio module
+- `emberware-z/src/console.rs` - Updated ZAudio impl and create_audio()
+- `emberware-z/src/state.rs` - Added audio fields to ZFFIState
 
 ---
 

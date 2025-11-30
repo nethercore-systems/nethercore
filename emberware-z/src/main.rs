@@ -3,6 +3,7 @@
 use std::env;
 
 mod app;
+mod audio;
 mod config;
 mod console;
 mod deep_link;

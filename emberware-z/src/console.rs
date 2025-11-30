@@ -144,25 +144,21 @@ impl ConsoleInput for ZInput {}
 
 // ZGraphics is now implemented in graphics.rs
 
-/// Emberware Z audio backend (placeholder until rodio implementation)
-pub struct ZAudio {
-    /// Whether audio is muted during rollback
-    rollback_mode: bool,
-}
+/// Re-export ZAudio from audio module
+pub use crate::audio::ZAudio;
 
 impl Audio for ZAudio {
     fn play(&mut self, _handle: SoundHandle, _volume: f32, _looping: bool) {
-        if self.rollback_mode { // Don't play audio during rollback
-        }
-        // TODO: Play sound via rodio
+        // Legacy Audio trait - not used in Z console
+        // Audio is handled via AudioCommand buffering system
     }
 
     fn stop(&mut self, _handle: SoundHandle) {
-        // TODO: Stop sound via rodio
+        // Legacy Audio trait - not used in Z console
     }
 
     fn set_rollback_mode(&mut self, rolling_back: bool) {
-        self.rollback_mode = rolling_back;
+        ZAudio::set_rollback_mode(self, rolling_back);
     }
 }
 
@@ -213,10 +209,7 @@ impl Console for EmberwareZ {
     }
 
     fn create_audio(&self) -> Result<Self::Audio> {
-        // TODO: Initialize rodio output stream
-        Ok(ZAudio {
-            rollback_mode: false,
-        })
+        ZAudio::new().map_err(|e| anyhow::anyhow!("Failed to create audio: {}", e))
     }
 
     fn map_input(&self, raw: &RawInput) -> Self::Input {

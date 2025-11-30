@@ -317,6 +317,11 @@ pub struct ZFFIState {
     pub fonts: Vec<Font>,
     pub current_font: u32,
 
+    // Audio system
+    pub sounds: Vec<Option<crate::audio::Sound>>,
+    pub audio_commands: Vec<crate::audio::AudioCommand>,
+    pub next_sound_handle: u32,
+
     // Init configuration
     pub init_config: ZInitConfig,
 }
@@ -348,6 +353,9 @@ impl Default for ZFFIState {
             next_font_handle: 1,
             fonts: Vec::new(),
             current_font: 0, // 0 = built-in font
+            sounds: Vec::new(),
+            audio_commands: Vec::new(),
+            next_sound_handle: 1, // 0 reserved for invalid
             init_config: ZInitConfig::default(),
         }
     }
@@ -365,6 +373,7 @@ impl ZFFIState {
         self.draw_commands.clear();
         self.pending_textures.clear();
         self.pending_meshes.clear();
+        self.audio_commands.clear();
         // Note: Camera, transforms, render state persist between clear_frame calls
         // within a single frame, but the entire ZFFIState is rebuilt each game frame
     }
