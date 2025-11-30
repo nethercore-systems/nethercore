@@ -149,103 +149,6 @@ The `Runtime<C: Console>` handles:
 
 ---
 
-### **[FEATURE] Implement audio backend**
-
-PS1/N64-style audio system with fire-and-forget sounds and managed channels for positional audio.
-
-**Console Audio Specs:**
-| Spec | Value | Rationale |
-|------|-------|-----------|
-| Sample rate | 22,050 Hz | Authentic PS1/N64, half the ROM space |
-| Bit depth | 16-bit signed | Standard, good dynamic range |
-| Format | Mono, raw PCM (s16le) | Zero parsing, stereo via pan param |
-| Managed channels | 16 | PS1/N64 typical (8 SFX + 8 music/ambient) |
-
-**Rollback Behavior & Caveats:**
-
-Audio is NOT part of rollback state. This is industry standard (GGPO, Rollback Netcode) because:
-- Sound already left the speakers - can't "un-play" it
-- Rewinding audio sounds terrible
-- Users tolerate audio glitches better than visual desyncs
-
-**How it works:**
-1. Game calls audio FFI functions during `update()`
-2. Commands are buffered in `audio_commands: Vec<AudioCommand>`
-3. After GGRS confirms the frame, commands are sent to `ZAudio` for playback
-4. During rollback replay (`set_rollback_mode(true)`), commands are DISCARDED
-5. After rollback, game re-executes with corrected inputs, re-issuing audio commands
-
-**Edge cases implementers must handle:**
-
-| Scenario | What happens | Mitigation |
-|----------|--------------|------------|
-| Sound triggers, then rollback | Sound already playing, might re-trigger | Discard commands during replay |
-| Looping sound starts, then rollback | Loop continues, game might call channel_play again | channel_play on occupied channel should update params, not restart |
-| Positional sound panning | Pan was wrong during misprediction | Game must call channel_set() EVERY frame, not just on start |
-| Music playing during rollback | Music continues uninterrupted | Music is never affected by rollback - it's "UI layer" |
-| Sound should have played but didn't (prediction missed trigger) | Silence where sound should be | Unavoidable - accept it |
-| load_sound() called in update() | Would re-load during replay! | Enforce init-only for load_sound() |
-
-**Critical implementation details:**
-
-1. **Discard vs mute**: When `set_rollback_mode(true)`, DISCARD all audio commands entirely.
-   Don't just mute output - if you mute and still process commands, channel state diverges.
-
-2. **channel_play on occupied channel**: If channel 5 is playing sound A and game calls
-   `channel_play(5, A, vol, pan, loop)` again, DON'T restart the sound. Just update vol/pan.
-   This handles the "looping sound survives rollback" case gracefully.
-
-3. **channel_set during rollback**: These SHOULD still be processed (not discarded) so that
-   when rollback ends, positional sounds have correct pan/volume immediately.
-   Only play_sound/channel_play/music_play are discarded.
-
-4. **In-flight sounds**: Sounds that started before rollback continue playing to completion.
-   Don't stop them on rollback start - that sounds jarring. Let them finish naturally.
-
-5. **Audio buffer latency**: Hardware audio has ~20-50ms latency. Audio is always slightly
-   "behind" visuals. This is fine - humans don't notice small audio/visual desync.
-
-**Game developer guidance (for docs):**
-- Use `play_sound()` for one-shots (hits, jumps, pickups) - fire and forget
-- Use `channel_play()` + `channel_set()` every frame for positional sounds (engines, footsteps)
-- Don't rely on frame-perfect audio sync in networked games
-- Keep sound effects short (<1 sec) so mispredictions are less noticeable
-- Music should be ambient/looping, not synced to gameplay events
-
-**FFI Functions:**
-```rust
-// Load raw PCM sound data (22.05kHz, 16-bit signed, mono)
-load_sound(data_ptr: *const u8, byte_len: u32) -> u32
-
-// Fire-and-forget (one-shot sounds: gunshots, jumps, coins)
-play_sound(sound: u32, volume: f32, pan: f32)  // uses next free channel
-
-// Managed channels (positional/looping: engines, ambient, footsteps)
-channel_play(channel: u32, sound: u32, volume: f32, pan: f32, looping: bool)
-channel_set(channel: u32, volume: f32, pan: f32)  // update each frame for positional
-channel_stop(channel: u32)
-
-// Music (dedicated, always loops)
-music_play(sound: u32, volume: f32)
-music_stop()
-music_set_volume(volume: f32)
-```
-
-**Implementation steps:**
-1. Add `Sound` struct and `sounds: Vec<Sound>` to GameState
-2. Add `AudioCommand` enum (Play, ChannelPlay, ChannelSet, ChannelStop, MusicPlay, etc.)
-3. Add `audio_commands: Vec<AudioCommand>` to GameState (buffered per frame)
-4. Implement `ZAudio` with rodio backend:
-   - 16 channel mixer
-   - Dedicated music channel
-   - `process_commands()` called after confirmed frames
-5. Wire up `Audio::set_rollback_mode()` to discard commands during replay
-6. Register FFI functions
-
-**Stubs to replace:** `emberware-z/src/console.rs` - `ZAudio::play()`, `ZAudio::stop()`, `create_audio()`
-
----
-
 ### **[NETWORKING] Implement synchronized save slots (VMU-style memory cards)**
 
 Similar to Dreamcast VMUs, each player "brings" their own save data to a networked session.
@@ -306,370 +209,62 @@ This enables fighting games with unlocked characters, RPGs with player stats, et
 
 ---
 
-### **[POLISH] Performance Optimizations**
-
-Quick wins for reducing allocations, copies, and overhead in hot paths.
-
----
-
-#### 1. **[HIGH] Replace manual padding with Vec4 types in uniforms**
-
-**Location:** Shader files and Rust uniform structs
-- `emberware-z/shaders/mode1_matcap.wgsl:14-23`
-- `emberware-z/shaders/mode2_pbr.wgsl` (similar)
-- `emberware-z/shaders/mode3_hybrid.wgsl` (similar)
-- `emberware-z/src/graphics/mod.rs` (SkyUniforms Rust struct)
-
-**Current Code (UGLY):**
-```wgsl
-struct SkyUniforms {
-    horizon_color: vec3<f32>,
-    _pad0: f32,              // Manual padding
-    zenith_color: vec3<f32>,
-    _pad1: f32,              // Manual padding
-    sun_direction: vec3<f32>,
-    _pad2: f32,              // Manual padding
-    sun_color: vec3<f32>,
-    sun_sharpness: f32,
-}
-```
-
-**Proposed Fix (CLEAN):**
-```wgsl
-struct SkyUniforms {
-    horizon_color: vec4<f32>,      // .w unused but clean
-    zenith_color: vec4<f32>,
-    sun_direction: vec4<f32>,
-    sun_color_and_sharpness: vec4<f32>,  // .xyz = color, .w = sharpness
-}
-```
-
-**Impact:** HIGH - Improves code readability, eliminates manual padding errors, makes future uniform additions easier.
-
-**Implementation:**
-1. Update SkyUniforms struct in all 3 shader templates (mode1, mode2, mode3)
-2. Update Rust-side SkyUniforms struct in `emberware-z/src/graphics/mod.rs` to match
-3. Update `set_sky()` FFI to pack sun_sharpness into sun_color.w
-4. Update shader code that reads `sky.sun_sharpness` to `sky.sun_color_and_sharpness.w`
-5. Search for other uniform structs with `_pad` fields and apply same pattern
-
----
-
-#### 2. **[HIGH] Eliminate array copy in sprite/billboard functions**
-
-**Location:** `emberware-z/src/ffi/mod.rs:1357` and similar lines in draw_billboard, draw_sprite_region, etc.
-
-**Current Code:**
-```rust
-state.draw_commands.push(DrawCommand::DrawSprite {
-    // ... other fields
-    bound_textures: state.render_state.bound_textures,  // Copies [u32; 4]
-});
-```
-
-**Issue:** Every draw call copies the 16-byte texture slot array. Called 100+ times per frame.
-
-**Proposed Fix:** Store a reference/index to render state instead of copying fields
-```rust
-// Option A: Store render state index/hash (if render states are deduplicated)
-bound_textures_key: u32,  // Index into deduped render states
-
-// Option B: Accept the copy (it's only 16 bytes and likely in cache)
-// Keep as-is, this is a micro-optimization
-```
-
-**Impact:** MEDIUM - 1.6KB saved per 100 draw calls. Likely not worth refactoring unless profiling shows it's hot.
-
-**Recommendation:** Defer until profiling shows this matters. The copy is cheap (16 bytes, stack-to-stack).
-
----
-
-#### 3. **[HIGH] Eliminate String allocation in draw_text()**
-
-**Location:** `emberware-z/src/ffi/mod.rs:1430`
-
-**Current Code:**
-```rust
-let text_string = match std::str::from_utf8(bytes) {
-    Ok(s) => s.to_string(),  // ❌ Allocates String on every call
-    Err(e) => {
-        warn!("draw_text: invalid UTF-8 string: {}", e);
-        return;
-    }
-};
-```
-
-**Proposed Fix:** Change DrawCommand::DrawText to store bytes + validate later
-```rust
-// In FFI:
-let text_bytes = bytes.to_vec();  // Already a copy, unavoidable
-state.draw_commands.push(DrawCommand::DrawText {
-    text: text_bytes,  // Vec<u8> instead of String
-    // ...
-});
-
-// In graphics backend when rendering:
-let text_str = std::str::from_utf8(&cmd.text).unwrap_or("");
-```
-
-**Impact:** HIGH - Eliminates allocation for every draw_text() call. Common in UI-heavy games.
-
-**Implementation:**
-1. Change `DrawCommand::DrawText::text` from `String` to `Vec<u8>`
-2. Update FFI to store bytes directly (remove `to_string()`)
-3. Update graphics backend to decode UTF-8 during rendering (one-time per text draw)
-
----
-
-#### 4. **[HIGH] Reduce Vec clones in DrawCommand variants**
-
-**Location:** `core/src/wasm/draw.rs:29-50`
-
-**Current Code:**
-```rust
-#[derive(Debug, Clone)]  // ❌ Clones Vec<f32> and Vec<u32>
-pub enum DrawCommand {
-    DrawTriangles {
-        vertex_data: Vec<f32>,   // Cloned if DrawCommand is cloned
-        // ...
-    },
-    DrawTrianglesIndexed {
-        vertex_data: Vec<f32>,
-        index_data: Vec<u32>,    // Cloned if DrawCommand is cloned
-        // ...
-    },
-    // ...
-}
-```
-
-**Issue:** If DrawCommand is ever cloned (e.g., during state sorting), large vertex buffers get deep-copied.
-
-**Analysis:** After optimization #3 in previous session, we sort commands in-place, so DrawCommand is NEVER cloned in hot path. The `Clone` derive is only used for debugging/tests.
-
-**Proposed Fix:** None needed - sorting is already in-place. Keep `Clone` for flexibility.
-
-**Impact:** LOW - Not an issue in current implementation. Monitor if DrawCommand cloning appears in profiles.
-
----
-
-#### 5. **[MEDIUM-HIGH] Add #[inline] to input FFI hot path functions**
-
-**Location:** `emberware-z/src/ffi/mod.rs` - input functions
-
-**Current Code:**
-```rust
-fn button_held(mut caller: Caller<'_, GameState>, player: u32, button: u32) -> u32 {
-    // Called 10-20 times per frame per player
-}
-
-fn stick_axis(mut caller: Caller<'_, GameState>, player: u32, axis: u32) -> f32 {
-    // Called 2-4 times per frame per player
-}
-```
-
-**Proposed Fix:**
-```rust
-#[inline]
-fn button_held(mut caller: Caller<'_, GameState>, player: u32, button: u32) -> u32 {
-    // ...
-}
-
-#[inline]
-fn stick_axis(mut caller: Caller<'_, GameState>, player: u32, axis: u32) -> f32 {
-    // ...
-}
-```
-
-**Impact:** MEDIUM-HIGH - Input functions are called many times per frame. Inlining reduces call overhead.
-
-**Implementation:** Add `#[inline]` to all input FFI functions (button_held, button_pressed, button_released, stick_axis, trigger_value, etc.)
-
----
-
-#### 6. **[MEDIUM] Remove Clone derive from PendingTexture and PendingMesh**
-
-**Location:** `core/src/wasm/draw.rs:8, 17`
-
-**Current Code:**
-```rust
-#[derive(Debug, Clone)]  // ❌ Unnecessary - these are never cloned
-pub struct PendingTexture {
-    pub data: Vec<u8>,  // Can be MB-sized texture data
-}
-
-#[derive(Debug, Clone)]  // ❌ Unnecessary
-pub struct PendingMesh {
-    pub vertex_data: Vec<f32>,
-    pub index_data: Option<Vec<u32>>,
-}
-```
-
-**Proposed Fix:**
-```rust
-#[derive(Debug)]  // Remove Clone - these are moved, not cloned
-pub struct PendingTexture { /* ... */ }
-
-#[derive(Debug)]
-pub struct PendingMesh { /* ... */ }
-```
-
-**Impact:** MEDIUM - Prevents accidental clones of large resource data. Documents intent (these are moved to GPU, not copied).
-
-**Verification:** Search codebase for `.clone()` calls on PendingTexture/PendingMesh - should be none.
-
----
-
-#### 7. **[MEDIUM] Reduce render state field copying**
-
-**Location:** `core/src/wasm/render.rs:48-77`
-
-**Current Code:** Every DrawCommand copies multiple RenderState fields:
-```rust
-state.draw_commands.push(DrawCommand::DrawMesh {
-    color: state.render_state.color,
-    depth_test: state.render_state.depth_test,
-    cull_mode: state.render_state.cull_mode,
-    blend_mode: state.render_state.blend_mode,
-    bound_textures: state.render_state.bound_textures,
-    // ...
-});
-```
-
-**Proposed Fix:** Store a snapshot of RenderState or index into deduped states
-```rust
-// Option A: Store RenderState snapshot
-render_state: RenderState,  // 32 bytes total
-
-// Option B: Dedupe and store index
-render_state_key: u16,  // Index into Vec<RenderState>
-```
-
-**Impact:** MEDIUM - Simplifies DrawCommand variants, reduces field duplication. Trade-off: adds indirection during rendering.
-
-**Recommendation:** Defer - current approach is simple and performant. Only optimize if profiling shows issue.
-
----
-
-#### 9. **[MEDIUM] Add #[inline] to camera math methods**
-
-**Location:** `emberware-z/src/graphics/camera.rs` (if it exists) or wherever view/projection matrices are computed
-
-**Current Code:**
-```rust
-impl Camera {
-    pub fn view_matrix(&self) -> Mat4 {
-        // Matrix math
-    }
-
-    pub fn projection_matrix(&self) -> Mat4 {
-        // Matrix math
-    }
-}
-```
-
-**Proposed Fix:**
-```rust
-impl Camera {
-    #[inline]
-    pub fn view_matrix(&self) -> Mat4 { /* ... */ }
-
-    #[inline]
-    pub fn projection_matrix(&self) -> Mat4 { /* ... */ }
-}
-```
-
-**Impact:** MEDIUM - Called once per frame, but inlining helps with register allocation for matrix math.
-
-**Implementation:** Add `#[inline]` to camera methods and other hot math helpers (transform composition, etc.)
-
----
-
-#### 10. **[LOW] Remove duplicate vertex_stride() function**
-
-**Location:** Search for `fn vertex_stride` across codebase
-
-**Issue:** If vertex_stride is defined in multiple places (e.g., graphics/vertex.rs and graphics/buffer.rs), consolidate to single source.
-
-**Proposed Fix:**
-```rust
-// In graphics/vertex.rs (canonical location):
-pub const fn vertex_stride(format: u8) -> u32 {
-    // Canonical implementation
-}
-
-// Remove from other files, import this one
-```
-
-**Impact:** LOW - Reduces code duplication, ensures consistency.
-
-**Verification:** `rg "fn vertex_stride"` should show only ONE definition.
-
----
-
-#### 11. **[LOW-MEDIUM] Optimize keycode matching**
-
-**Location:** `emberware-z/src/input.rs` (keyboard to button mapping)
-
-**Current Code (hypothetical):**
-```rust
-match keycode {
-    KeyCode::KeyW => Some(BUTTON_DPAD_UP),
-    KeyCode::KeyS => Some(BUTTON_DPAD_DOWN),
-    KeyCode::KeyA => Some(BUTTON_DPAD_LEFT),
-    KeyCode::KeyD => Some(BUTTON_DPAD_RIGHT),
-    // ... 20+ more cases
-    _ => None,
-}
-```
-
-**Proposed Fix:** Use a lookup table (array or phf) instead of match
-```rust
-// At compile time:
-static KEYCODE_TO_BUTTON: phf::Map<u32, u16> = phf_map! {
-    KeyCode::KeyW as u32 => BUTTON_DPAD_UP,
-    // ...
-};
-
-// At runtime:
-KEYCODE_TO_BUTTON.get(&(keycode as u32)).copied()
-```
-
-**Impact:** LOW-MEDIUM - Reduces match overhead. Only matters if keyboard input is polled frequently (not typical for controller-primary games).
-
-**Recommendation:** Defer - match is already fast for ~20 cases. Only optimize if profiling shows this in hot path.
-
----
-
-**Summary:**
-
-| Priority | Optimization | Estimated Savings | Effort |
-|----------|-------------|-------------------|--------|
-| HIGH | Vec4 padding (#1) | Readability + future-proofing | Medium |
-| HIGH | draw_text String (#3) | 1 alloc per text draw | Low |
-| MEDIUM-HIGH | #[inline] input (#5) | 5-10% input overhead | Low |
-| MEDIUM | Remove Clone on Pending (#6) | Safety + clarity | Low |
-| MEDIUM | #[inline] camera (#9) | Minor perf gain | Low |
-| LOW | Dedupe vertex_stride (#10) | Code quality | Low |
-| DEFER | Array copy (#2) | Negligible (16 bytes) | N/A |
-| DEFER | Vec clone (#4) | Not cloned in hot path | N/A |
-| DEFER | RenderState copy (#7) | Complex refactor, unclear gain | N/A |
-| DEFER | Bone matrix clone (#8) | Needs investigation first | N/A |
-| DEFER | Keycode matching (#11) | Unlikely bottleneck | N/A |
-
-**Implementation Order:**
-1. #3 (draw_text String) - Quick win, high impact
-2. #5 (#[inline] input) - Quick win, medium impact
-3. #6 (Remove Clone) - Quick win, safety improvement
-4. #9 (#[inline] camera) - Quick win
-5. #10 (Dedupe vertex_stride) - Code quality
-6. #1 (Vec4 padding) - Larger refactor, but improves maintainability
-
----
 ## In Progress
 
 ---
 
 ## Done
+
+### **[POLISH] Performance Optimizations**
+**Status:** Completed ✅
+
+**What Was Implemented:**
+All high-priority and medium-priority performance optimizations have been completed:
+
+1. ✅ **Vec4 padding (#1)** - Replaced manual padding with vec4 types in SkyUniforms across all shaders
+   - Updated all 4 shader files (mode0, mode1, mode2, mode3)
+   - Updated Rust SkyUniforms struct to match
+   - Eliminates manual padding errors, improves maintainability
+
+2. ✅ **draw_text String allocation (#3)** - Already stores Vec<u8> instead of String
+   - No String allocation on every draw_text() call
+   - UTF-8 validation deferred to render time
+
+3. ✅ **#[inline] input functions (#5)** - Added to all input FFI hot path functions
+   - button_held, button_pressed, button_released
+   - stick_axis, left_stick, right_stick
+   - trigger_left, trigger_right
+   - Reduces call overhead for frequently-called input functions
+
+4. ✅ **Remove Clone from PendingTexture/PendingMesh (#6)** - Prevents accidental clones
+   - Removed Clone derive from resource structs
+   - Documents intent (resources are moved, not copied)
+   - Prevents expensive clones of MB-sized texture data
+
+5. ✅ **#[inline] camera math (#9)** - Added to view/projection matrix methods
+   - view_matrix(), projection_matrix(), view_projection_matrix()
+   - Helps with register allocation for matrix math
+
+6. ✅ **Dedupe vertex_stride (#10)** - Removed duplicate implementations
+   - Consolidated to single canonical implementation
+   - Removed duplicate FORMAT constants
+   - Ensures consistency across codebase
+
+**Deferred Optimizations:**
+- #2 (Array copy) - Negligible impact (16 bytes)
+- #4 (Vec clone) - Not cloned in hot path
+- #7 (RenderState copy) - Complex refactor, unclear gain
+- #11 (Keycode matching) - Unlikely bottleneck
+
+**Impact:**
+- Eliminated allocations in hot paths
+- Reduced function call overhead
+- Improved code maintainability and readability
+- Prevented accidental expensive operations
+
+**Compilation:** ✅ All tests passing
+
+---
 
 ### **[FEATURE] Implement audio backend**
 **Status:** Completed ✅
