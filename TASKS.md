@@ -242,13 +242,6 @@ The `Runtime<C: Console>` handles:
 
 (Moved to Done)
 
-- **Update documentation**
-  - Ensure docs/ffi.md matches implementation
-  - Ensure docs/emberware-z.md matches implementation
-  - Add troubleshooting section
-  - Add performance tips section
-  - API versioning documentation
-
 - **Create developer guide**
   - Getting started tutorial
   - Best practices for rollback-safe code
@@ -263,6 +256,12 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **Update documentation (Phase 7)**
+  - Fixed `delete` return value in ffi.md (was "1 on success", now "0 on success, 1 if invalid slot")
+  - Fixed WASM import module name in emberware-z.md example (was "emberware", now "env")
+  - Added troubleshooting section with 7 common issues and solutions
+  - Added performance tips section covering vertex formats, batching, render modes, textures, and CPU budget
 
 - **Create `skinned-mesh` example (Phase 6)**
   - Demonstrates GPU skinning:

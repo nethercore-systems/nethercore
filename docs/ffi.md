@@ -262,7 +262,7 @@ if len > 0 {
 fn delete(slot: u32) -> u32
 ```
 
-Deletes a save slot. Returns 1 on success, 0 on failure.
+Deletes a save slot. Returns 0 on success, 1 if invalid slot.
 
 ---
 
