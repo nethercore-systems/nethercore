@@ -136,9 +136,6 @@ The `Runtime<C: Console>` handles:
   - Massive match statement with 16 nearly identical cases
   - Use macro or builder pattern to reduce duplication
 
-- **[STABILITY] Fix unclosed HTML tag documentation warning** (`emberware-z/`)
-  - Warning: "unclosed HTML tag `u8`"
-  - Escape HTML-like syntax in doc comments using backticks
 
 - **[STABILITY] Add tests for config.rs** (`emberware-z/src/config.rs`)
   - Config loading/saving functions lack tests
@@ -269,11 +266,13 @@ The `Runtime<C: Console>` handles:
 ---
 ## In Progress
 
-(No tasks currently in progress)
-
 ---
 
 ## Done
+
+- **[STABILITY] Fix unclosed HTML tag documentation warning** (`emberware-z/`)
+  - Verified: No HTML tag warnings exist. `cargo doc --no-deps` builds cleanly with `RUSTDOCFLAGS="-D warnings"`.
+  - All generic type references in doc comments are properly escaped with backticks.
 
 - **[STABILITY] Suppress dead_code warnings for public API helpers in console.rs** (`emberware-z/src/console.rs`)
   - Added `#[allow(dead_code)]` to `Button` enum, `Button::mask()`, and `ZInput` helper methods
