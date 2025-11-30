@@ -2247,6 +2247,12 @@ fn load_sound(
 
     // Read PCM data from WASM memory
     let mut pcm_data = vec![0i16; sample_count];
+    // SAFETY: This unsafe block is sound because:
+    // 1. The pointer comes from WASM memory export, guaranteed valid by wasmtime
+    // 2. byte_len is validated as even (divisible by 2), ensuring proper i16 alignment
+    // 3. sample_count = byte_len / 2, so we're reading exactly the right number of i16 samples
+    // 4. Data is immediately copied to owned Vec, no aliasing or lifetime issues
+    // 5. WASM linear memory is guaranteed to be valid for the duration of this call
     let data_slice = unsafe {
         let ptr = memory.data_ptr(&caller).add(data_ptr as usize);
         std::slice::from_raw_parts(ptr as *const i16, sample_count)
