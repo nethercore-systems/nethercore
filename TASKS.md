@@ -119,12 +119,6 @@ The `Runtime<C: Console>` handles:
 
 #### Medium Priority
 
-- **[STABILITY] Add documentation to shared crate public APIs** (`shared/src/lib.rs`)
-  - Add module-level `//!` doc comment explaining the API types
-  - Document all public structs: `Author`, `Game`, `GamesResponse`, `RomUrlResponse`, `VersionResponse`
-  - Document auth types: `User`, `AuthResponse`, `ApiError`
-  - Document request types: `LocalGameManifest`, request/response structs
-
 - **[STABILITY] Review dead_code allowances** (multiple files)
   - `core/src/wasm.rs:494`: Verify if dead code is needed or can be removed
   - `core/src/runtime.rs:44`: `console` field marked for future use - document or use
@@ -287,6 +281,15 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **[STABILITY] Add documentation to shared crate public APIs** (`shared/src/lib.rs`)
+  - Added module-level `//!` doc comment explaining API type categories with example usage
+  - Documented all API response structs: `Author`, `Game`, `GamesResponse`, `RomUrlResponse`, `VersionResponse`
+  - Documented auth types: `User`, `AuthResponse`, `ApiError` with working doctests
+  - Documented `error_codes` module constants
+  - Documented local types: `LocalGameManifest` with storage location info
+  - Documented request types: `RegisterRequest`, `LoginRequest`, `CreateGameRequest`, `UpdateGameRequest`, `CreateGameResponse`, `UploadUrls`, `SuccessResponse`
+  - All 463 tests passing
 
 - **[STABILITY] Split rollback.rs into modules** (`core/src/rollback.rs`)
   - Extracted ~1846 lines into 4 submodules:
