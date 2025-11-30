@@ -213,14 +213,6 @@ The `Runtime<C: Console>` handles:
 
 (Moved to Done)
 
-- **Create `skinned-mesh` example**
-  - Demonstrates GPU skinning:
-    - Load skinned mesh with FORMAT_SKINNED | FORMAT_UV | FORMAT_NORMAL
-    - Simple bone hierarchy (e.g., arm with 3 bones)
-    - CPU-side bone animation (sine wave for demo)
-    - `set_bones()` to upload bone matrices each frame
-    - Shows workflow: CPU animation → GPU skinning
-
 - **Create `billboard` example**
   - Demonstrates billboard drawing:
     - `draw_billboard()` with different modes (1-4)
@@ -271,6 +263,17 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **Create `skinned-mesh` example (Phase 6)**
+  - Demonstrates GPU skinning:
+    - Load skinned mesh with FORMAT_NORMAL | FORMAT_SKINNED (format 12)
+    - 3-bone arm hierarchy with smooth weight blending
+    - CPU-side bone animation (sine wave for wave-like bending)
+    - `set_bones()` to upload bone matrices each frame
+    - Shows workflow: CPU animation → GPU skinning
+    - Interactive controls: L-stick rotate view, A pause, D-pad speed
+    - Generates cylindrical arm mesh procedurally with vertex weights
+  - ~520 lines of Rust code
 
 - **Create `lighting` example (Phase 6)**
   - Demonstrates PBR lighting (render mode 2):
