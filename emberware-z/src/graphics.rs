@@ -2003,8 +2003,20 @@ impl ZGraphics {
     fn create_pipeline(&self, format: u8, state: &RenderState) -> PipelineEntry {
         use crate::shader_gen::generate_shader;
 
-        // Generate shader source
-        let shader_source = generate_shader(self.current_render_mode, format);
+        // Generate shader source, falling back to Mode 0 if the requested mode/format is invalid
+        let shader_source = match generate_shader(self.current_render_mode, format) {
+            Ok(source) => source,
+            Err(e) => {
+                tracing::warn!(
+                    "Shader generation failed for mode {} format {}: {}. Falling back to Mode 0 (unlit).",
+                    self.current_render_mode,
+                    format,
+                    e
+                );
+                // Fallback to Mode 0 (unlit) which supports all formats
+                generate_shader(0, format).expect("Mode 0 should support all vertex formats")
+            }
+        };
 
         // Create shader module
         let shader_module = self.device.create_shader_module(wgpu::ShaderModuleDescriptor {

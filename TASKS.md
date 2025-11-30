@@ -106,11 +106,6 @@ The `Runtime<C: Console>` handles:
 
 #### High Priority
 
-- **[STABILITY] Replace panic! calls in shader_gen.rs with Result returns** (`emberware-z/src/shader_gen.rs:89, 96, 185, 326-338`)
-  - Multiple `panic!()` calls for invalid render modes and format validation
-  - Should return `Result<String>` and handle errors gracefully with fallback shaders
-  - Currently crashes application on invalid shader configuration
-
 - **[STABILITY] Document all unsafe blocks with SAFETY comments** (46 blocks across codebase)
   - 49 total unsafe blocks, only 3 have SAFETY comments
   - Add comments explaining why each unsafe block is safe
@@ -309,6 +304,15 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **[STABILITY] Replace panic! calls in shader_gen.rs with Result returns** (`emberware-z/src/shader_gen.rs`)
+  - Added `ShaderGenError` enum with `InvalidRenderMode` and `MissingNormalFlag` variants
+  - Changed `generate_shader()` to return `Result<String, ShaderGenError>`
+  - Changed `get_template()` to return `Result<&'static str, ShaderGenError>`
+  - Updated `graphics.rs` to handle errors gracefully with fallback to Mode 0 (unlit)
+  - Updated all tests to handle Result types properly
+  - Added new tests: `test_mode1_without_normals_returns_error`, `test_invalid_render_mode_returns_error`, `test_get_template_returns_error_for_invalid_mode`
+  - All 17 shader_gen tests passing
 
 - **Implement multiplayer player model (Phase 5)**
   - Added `PlayerSessionConfig` struct for configuring local vs remote players

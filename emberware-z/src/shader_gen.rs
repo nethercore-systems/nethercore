@@ -9,6 +9,39 @@
 //! - Modes 1-3: 8 shaders each (only formats with NORMAL flag)
 
 use crate::graphics::{FORMAT_UV, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED};
+use std::fmt;
+
+// ============================================================================
+// Error Types
+// ============================================================================
+
+/// Error type for shader generation failures
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ShaderGenError {
+    /// Invalid render mode (must be 0-3)
+    InvalidRenderMode(u8),
+    /// Render mode requires NORMAL flag but format doesn't have it
+    MissingNormalFlag { mode: u8, format: u8 },
+}
+
+impl fmt::Display for ShaderGenError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ShaderGenError::InvalidRenderMode(mode) => {
+                write!(f, "Invalid render mode: {} (must be 0-3)", mode)
+            }
+            ShaderGenError::MissingNormalFlag { mode, format } => {
+                write!(
+                    f,
+                    "Render mode {} requires NORMAL flag, but format {} doesn't have it",
+                    mode, format
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for ShaderGenError {}
 
 // ============================================================================
 // Shader Templates (embedded at compile time)
@@ -79,21 +112,26 @@ const FS_ALBEDO_UV: &str = "albedo *= textureSample(slot0, tex_sampler, in.uv).r
 // ============================================================================
 
 /// Generate a shader from a template for a specific vertex format
-pub fn generate_shader(mode: u8, format: u8) -> String {
+///
+/// # Errors
+///
+/// Returns `ShaderGenError::InvalidRenderMode` if mode is not 0-3.
+/// Returns `ShaderGenError::MissingNormalFlag` if modes 1-3 are used without NORMAL flag.
+pub fn generate_shader(mode: u8, format: u8) -> Result<String, ShaderGenError> {
     // Get the appropriate template
     let template = match mode {
         0 => TEMPLATE_MODE0,
         1 => TEMPLATE_MODE1,
         2 => TEMPLATE_MODE2,
         3 => TEMPLATE_MODE3,
-        _ => panic!("Invalid render mode: {}", mode),
+        _ => return Err(ShaderGenError::InvalidRenderMode(mode)),
     };
 
     // Check if this format is valid for the mode
     // Modes 1-3 require normals
     let has_normal = format & FORMAT_NORMAL != 0;
     if mode > 0 && !has_normal {
-        panic!("Render mode {} requires NORMAL flag, but format {} doesn't have it", mode, format);
+        return Err(ShaderGenError::MissingNormalFlag { mode, format });
     }
 
     // Extract format flags
@@ -172,17 +210,21 @@ pub fn generate_shader(mode: u8, format: u8) -> String {
         _ => {}
     }
 
-    shader
+    Ok(shader)
 }
 
 /// Get the template for a given render mode (for debugging/inspection)
-pub fn get_template(mode: u8) -> &'static str {
+///
+/// # Errors
+///
+/// Returns `ShaderGenError::InvalidRenderMode` if mode is not 0-3.
+pub fn get_template(mode: u8) -> Result<&'static str, ShaderGenError> {
     match mode {
-        0 => TEMPLATE_MODE0,
-        1 => TEMPLATE_MODE1,
-        2 => TEMPLATE_MODE2,
-        3 => TEMPLATE_MODE3,
-        _ => panic!("Invalid render mode: {}", mode),
+        0 => Ok(TEMPLATE_MODE0),
+        1 => Ok(TEMPLATE_MODE1),
+        2 => Ok(TEMPLATE_MODE2),
+        3 => Ok(TEMPLATE_MODE3),
+        _ => Err(ShaderGenError::InvalidRenderMode(mode)),
     }
 }
 
@@ -230,7 +272,7 @@ mod tests {
     fn test_shader_generation_mode0() {
         // Mode 0 should support all 16 formats
         for format in 0..16 {
-            let shader = generate_shader(0, format);
+            let shader = generate_shader(0, format).expect("Mode 0 should support all formats");
             assert!(!shader.is_empty());
             assert!(shader.contains("@vertex"));
             assert!(shader.contains("@fragment"));
@@ -241,23 +283,47 @@ mod tests {
     fn test_shader_generation_mode1() {
         // Mode 1 should only support formats with NORMAL
         for format in valid_formats_for_mode(1) {
-            let shader = generate_shader(1, format);
+            let shader = generate_shader(1, format).expect("Mode 1 should support formats with NORMAL");
             assert!(!shader.is_empty());
             assert!(shader.contains("matcap"));
         }
     }
 
     #[test]
-    #[should_panic]
-    fn test_mode1_without_normals_panics() {
-        // Mode 1 without normals should panic
-        generate_shader(1, 0);  // Format 0 has no NORMAL flag
+    fn test_mode1_without_normals_returns_error() {
+        // Mode 1 without normals should return an error
+        let result = generate_shader(1, 0);  // Format 0 has no NORMAL flag
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err(),
+            ShaderGenError::MissingNormalFlag { mode: 1, format: 0 }
+        );
+    }
+
+    #[test]
+    fn test_invalid_render_mode_returns_error() {
+        // Invalid render modes should return an error
+        let result = generate_shader(4, 0);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), ShaderGenError::InvalidRenderMode(4));
+
+        let result = generate_shader(255, 0);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), ShaderGenError::InvalidRenderMode(255));
+    }
+
+    #[test]
+    fn test_get_template_returns_error_for_invalid_mode() {
+        assert!(get_template(0).is_ok());
+        assert!(get_template(3).is_ok());
+        assert_eq!(get_template(4).unwrap_err(), ShaderGenError::InvalidRenderMode(4));
+        assert_eq!(get_template(100).unwrap_err(), ShaderGenError::InvalidRenderMode(100));
     }
 
     #[test]
     fn test_placeholder_replacement() {
         // Test that placeholders are replaced correctly
-        let shader = generate_shader(0, FORMAT_UV | FORMAT_COLOR);
+        let shader = generate_shader(0, FORMAT_UV | FORMAT_COLOR).unwrap();
         assert!(shader.contains("@location(1) uv"));
         assert!(shader.contains("@location(2) color"));
         assert!(!shader.contains("//VIN_UV"));
@@ -284,7 +350,8 @@ mod tests {
 
     /// Helper to compile a WGSL shader and validate it using naga
     fn compile_and_validate_shader(mode: u8, format: u8) -> Result<(), String> {
-        let shader_source = generate_shader(mode, format);
+        let shader_source = generate_shader(mode, format)
+            .map_err(|e| format!("Shader generation error for mode {} format {}: {}", mode, format, e))?;
 
         // Parse the WGSL source
         let module = naga::front::wgsl::parse_str(&shader_source)
@@ -385,7 +452,7 @@ mod tests {
     fn test_shader_has_vertex_entry() {
         for mode in 0u8..=3 {
             for format in valid_formats_for_mode(mode) {
-                let shader = generate_shader(mode, format);
+                let shader = generate_shader(mode, format).unwrap();
                 assert!(
                     shader.contains("fn vs("),
                     "Mode {} format {} missing vertex entry point 'vs'",
@@ -399,7 +466,7 @@ mod tests {
     fn test_shader_has_fragment_entry() {
         for mode in 0u8..=3 {
             for format in valid_formats_for_mode(mode) {
-                let shader = generate_shader(mode, format);
+                let shader = generate_shader(mode, format).unwrap();
                 assert!(
                     shader.contains("fn fs("),
                     "Mode {} format {} missing fragment entry point 'fs'",
@@ -413,7 +480,7 @@ mod tests {
     fn test_no_unreplaced_placeholders() {
         for mode in 0u8..=3 {
             for format in valid_formats_for_mode(mode) {
-                let shader = generate_shader(mode, format);
+                let shader = generate_shader(mode, format).unwrap();
                 let placeholders = [
                     "//VIN_UV", "//VIN_COLOR", "//VIN_NORMAL", "//VIN_SKINNED",
                     "//VOUT_UV", "//VOUT_COLOR", "//VOUT_NORMAL",
