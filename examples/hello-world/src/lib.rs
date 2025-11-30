@@ -2,6 +2,8 @@
 //!
 //! Demonstrates basic 2D drawing with text and rectangles.
 //! Use D-pad to move the square, A button to reset position.
+//!
+//! Note: Rollback state is automatic (entire WASM memory is snapshotted). No save_state/load_state needed.
 
 #![no_std]
 #![no_main]

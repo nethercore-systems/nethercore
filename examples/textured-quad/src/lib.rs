@@ -8,6 +8,8 @@
 //!
 //! A simple 8x8 checkerboard texture is rendered at screen center,
 //! with a color tint that cycles over time.
+//!
+//! Note: Rollback state is automatic (entire WASM memory is snapshotted). No save_state/load_state needed.
 
 #![no_std]
 #![no_main]

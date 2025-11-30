@@ -13,6 +13,8 @@
 //! Note: render_mode is init-only (cannot change at runtime).
 //! To see other modes, change RENDER_MODE constant and rebuild.
 //!
+//! Note: Rollback state is automatic (entire WASM memory is snapshotted). No save_state/load_state needed.
+//!
 //! Controls:
 //! - Left stick: Rotate sphere
 //! - Right stick: Move primary light (X/Y)
