@@ -2,6 +2,8 @@
 //!
 //! Minimal example demonstrating immediate mode 3D drawing with `draw_triangles`.
 //! A colorful triangle spins around the Y axis.
+//!
+//! Note: Rollback state is automatic (entire WASM memory is snapshotted). No save_state/load_state needed.
 
 #![no_std]
 #![no_main]

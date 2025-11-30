@@ -71,8 +71,6 @@ pub struct GameInstance {
     init_fn: Option<TypedFunc<(), ()>>,
     update_fn: Option<TypedFunc<(), ()>>,
     render_fn: Option<TypedFunc<(), ()>>,
-    save_state_fn: Option<TypedFunc<(u32, u32), u32>>,
-    load_state_fn: Option<TypedFunc<(u32, u32), ()>>,
 }
 
 impl GameInstance {
@@ -96,12 +94,6 @@ impl GameInstance {
         let render_fn = instance
             .get_typed_func::<(), ()>(&mut store, "render")
             .ok();
-        let save_state_fn = instance
-            .get_typed_func::<(u32, u32), u32>(&mut store, "save_state")
-            .ok();
-        let load_state_fn = instance
-            .get_typed_func::<(u32, u32), ()>(&mut store, "load_state")
-            .ok();
 
         Ok(Self {
             store,
@@ -109,8 +101,6 @@ impl GameInstance {
             init_fn,
             update_fn,
             render_fn,
-            save_state_fn,
-            load_state_fn,
         })
     }
 
@@ -154,57 +144,38 @@ impl GameInstance {
         Ok(())
     }
 
-    /// Save game state to a buffer
-    pub fn save_state(&mut self, buffer: &mut [u8]) -> Result<usize> {
-        if let Some(save_state) = &self.save_state_fn {
-            let memory = self
-                .store
-                .data()
-                .memory
-                .context("No memory export found")?;
-            let ptr = 0u32; // Use start of memory for now (games should allocate)
-            let max_len = buffer.len() as u32;
-
-            let len = save_state
-                .call(&mut self.store, (ptr, max_len))
-                .context("Failed to call save_state()")?;
-
-            let mem_data = memory.data(&self.store);
-            let len = len as usize;
-            if len <= buffer.len() && (ptr as usize + len) <= mem_data.len() {
-                buffer[..len].copy_from_slice(&mem_data[ptr as usize..ptr as usize + len]);
-                Ok(len)
-            } else {
-                anyhow::bail!("save_state returned invalid length")
-            }
-        } else {
-            Ok(0)
-        }
+    /// Save entire WASM linear memory to a vector (automatic snapshotting)
+    ///
+    /// This snapshots the entire WASM linear memory transparently. Games do not need
+    /// to implement manual serialization - the entire memory is saved for rollback.
+    pub fn save_state(&mut self) -> Result<Vec<u8>> {
+        let memory = self
+            .store
+            .data()
+            .memory
+            .context("No memory export found")?;
+        let mem_data = memory.data(&self.store);
+        Ok(mem_data.to_vec())
     }
 
-    /// Load game state from a buffer
-    pub fn load_state(&mut self, buffer: &[u8]) -> Result<()> {
-        if let Some(load_state) = &self.load_state_fn {
-            let memory = self
-                .store
-                .data()
-                .memory
-                .context("No memory export found")?;
-            let ptr = 0u32;
-            let len = buffer.len() as u32;
-
-            // Copy buffer into WASM memory
-            let mem_data = memory.data_mut(&mut self.store);
-            if (ptr as usize + buffer.len()) <= mem_data.len() {
-                mem_data[ptr as usize..ptr as usize + buffer.len()].copy_from_slice(buffer);
-            } else {
-                anyhow::bail!("Buffer too large for WASM memory");
-            }
-
-            load_state
-                .call(&mut self.store, (ptr, len))
-                .context("Failed to call load_state()")?;
-        }
+    /// Load entire WASM linear memory from a snapshot (automatic snapshotting)
+    ///
+    /// Restores the entire WASM linear memory from a previous snapshot.
+    /// This is the inverse of `save_state()`.
+    pub fn load_state(&mut self, snapshot: &[u8]) -> Result<()> {
+        let memory = self
+            .store
+            .data()
+            .memory
+            .context("No memory export found")?;
+        let mem_data = memory.data_mut(&mut self.store);
+        anyhow::ensure!(
+            snapshot.len() == mem_data.len(),
+            "Snapshot size mismatch: {} vs {}",
+            snapshot.len(),
+            mem_data.len()
+        );
+        mem_data.copy_from_slice(snapshot);
         Ok(())
     }
 

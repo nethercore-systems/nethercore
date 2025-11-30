@@ -11,6 +11,8 @@
 //! - Interactive rotation via analog stick
 //! - Mode 0 with normals for simple Lambert shading
 //! - Procedural sky via `set_sky()`
+//!
+//! Note: Rollback state is automatic (entire WASM memory is snapshotted). No save_state/load_state needed.
 
 #![no_std]
 #![no_main]

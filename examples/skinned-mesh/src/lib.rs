@@ -13,6 +13,8 @@
 //! 2. Each update(): Animate skeleton on CPU (update bone transforms)
 //! 3. Each render(): Call set_bones() then draw_mesh()
 //!
+//! Note: Rollback state is automatic (entire WASM memory is snapshotted). No save_state/load_state needed.
+//!
 //! Controls:
 //! - Left stick: Rotate view
 //! - A button: Toggle animation pause

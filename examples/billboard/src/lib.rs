@@ -13,6 +13,8 @@
 //! - Particle system with spherical billboards
 //! - Tree/foliage with cylindrical Y billboards
 //! - Interactive camera via analog stick
+//!
+//! Note: Rollback state is automatic (entire WASM memory is snapshotted). No save_state/load_state needed.
 
 #![no_std]
 #![no_main]

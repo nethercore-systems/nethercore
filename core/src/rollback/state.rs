@@ -183,38 +183,27 @@ impl RollbackStateManager {
 
     /// Save the current game state
     ///
-    /// Calls `game.save_state()` and returns a `GameStateSnapshot` with checksum.
-    /// Uses the internal buffer pool to avoid allocations.
+    /// Calls `game.save_state()` to snapshot the entire WASM linear memory.
+    /// Returns a `GameStateSnapshot` with checksum.
     pub fn save_state(
         &mut self,
         game: &mut GameInstance,
         frame: i32,
     ) -> Result<GameStateSnapshot, SaveStateError> {
-        // Acquire buffer from pool
-        let mut buffer = self.pool.acquire();
-        buffer.resize(MAX_STATE_SIZE, 0);
-
-        // Call into WASM to save state
-        let len = game
-            .save_state(&mut buffer)
+        // Snapshot entire WASM linear memory
+        let snapshot_data = game
+            .save_state()
             .map_err(|e| SaveStateError::WasmError(e.to_string()))?;
 
-        if len == 0 {
-            // Game doesn't implement save_state, return empty snapshot
-            self.pool.release(buffer);
-            return Ok(GameStateSnapshot::new());
-        }
-
-        if len > MAX_STATE_SIZE {
-            self.pool.release(buffer);
+        if snapshot_data.len() > MAX_STATE_SIZE {
             return Err(SaveStateError::StateTooLarge {
-                size: len,
+                size: snapshot_data.len(),
                 max: MAX_STATE_SIZE,
             });
         }
 
-        // Create snapshot from buffer
-        Ok(GameStateSnapshot::from_buffer(&mut buffer, len, frame))
+        // Create snapshot with checksum
+        Ok(GameStateSnapshot::from_data(snapshot_data, frame))
     }
 
     /// Load a game state from a snapshot
