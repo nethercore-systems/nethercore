@@ -22,6 +22,8 @@ pub struct Game {
     pub slug: String,
     /// Full game description (Markdown supported).
     pub description: String,
+    /// Console type ("classic" or "z").
+    pub console_type: String,
     /// URL to the game's icon image (64x64 PNG recommended).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub icon_url: Option<String>,

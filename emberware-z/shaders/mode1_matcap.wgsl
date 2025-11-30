@@ -22,7 +22,8 @@ struct SkyUniforms {
 
 // Material uniforms
 struct MaterialUniforms {
-    color: vec4<f32>,  // RGBA tint color
+    color: vec4<f32>,              // RGBA tint color
+    matcap_blend_modes: vec4<u32>, // Blend modes for slots 0-3 (0=Multiply, 1=Add, 2=HSV Modulate)
 }
 
 @group(0) @binding(3) var<uniform> material: MaterialUniforms;
@@ -106,6 +107,96 @@ fn sample_sky(direction: vec3<f32>) -> vec3<f32> {
     return gradient + sun;
 }
 
+// Convert RGB to HSV
+fn rgb_to_hsv(rgb: vec3<f32>) -> vec3<f32> {
+    let cmax = max(max(rgb.r, rgb.g), rgb.b);
+    let cmin = min(min(rgb.r, rgb.g), rgb.b);
+    let delta = cmax - cmin;
+
+    var h: f32 = 0.0;
+    var s: f32 = 0.0;
+    let v: f32 = cmax;
+
+    if (delta > 0.00001) {
+        s = delta / cmax;
+
+        if (rgb.r >= cmax) {
+            h = (rgb.g - rgb.b) / delta;
+        } else if (rgb.g >= cmax) {
+            h = 2.0 + (rgb.b - rgb.r) / delta;
+        } else {
+            h = 4.0 + (rgb.r - rgb.g) / delta;
+        }
+
+        h = h / 6.0;
+        if (h < 0.0) {
+            h = h + 1.0;
+        }
+    }
+
+    return vec3<f32>(h, s, v);
+}
+
+// Convert HSV to RGB
+fn hsv_to_rgb(hsv: vec3<f32>) -> vec3<f32> {
+    let h = hsv.x * 6.0;
+    let s = hsv.y;
+    let v = hsv.z;
+
+    let c = v * s;
+    let x = c * (1.0 - abs((h % 2.0) - 1.0));
+    let m = v - c;
+
+    var rgb: vec3<f32>;
+
+    if (h < 1.0) {
+        rgb = vec3<f32>(c, x, 0.0);
+    } else if (h < 2.0) {
+        rgb = vec3<f32>(x, c, 0.0);
+    } else if (h < 3.0) {
+        rgb = vec3<f32>(0.0, c, x);
+    } else if (h < 4.0) {
+        rgb = vec3<f32>(0.0, x, c);
+    } else if (h < 5.0) {
+        rgb = vec3<f32>(x, 0.0, c);
+    } else {
+        rgb = vec3<f32>(c, 0.0, x);
+    }
+
+    return rgb + vec3<f32>(m, m, m);
+}
+
+// Blend two colors based on mode
+// mode: 0=Multiply, 1=Add, 2=HSV Modulate
+fn blend_colors(base: vec3<f32>, blend: vec3<f32>, mode: u32) -> vec3<f32> {
+    switch (mode) {
+        case 0u: {
+            // Multiply (default matcap behavior)
+            return base * blend;
+        }
+        case 1u: {
+            // Add (for glow/emission effects)
+            return base + blend;
+        }
+        case 2u: {
+            // HSV Modulate (hue shifting, iridescence)
+            let base_hsv = rgb_to_hsv(base);
+            let blend_hsv = rgb_to_hsv(blend);
+            // Modulate hue and saturation, multiply value
+            let result_hsv = vec3<f32>(
+                fract(base_hsv.x + blend_hsv.x),  // Add hues (wrapping)
+                base_hsv.y * blend_hsv.y,          // Multiply saturation
+                base_hsv.z * blend_hsv.z           // Multiply value
+            );
+            return hsv_to_rgb(result_hsv);
+        }
+        default: {
+            // Fallback to multiply
+            return base * blend;
+        }
+    }
+}
+
 @fragment
 fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     // Start with material color (uniform tint)
@@ -117,11 +208,17 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     // Compute matcap UV once for all matcaps
     let matcap_uv = compute_matcap_uv(in.view_normal);
 
-    // Sample and multiply matcaps from slots 1-3
+    // Sample and blend matcaps from slots 1-3 using their blend modes
+    // Slot 0 is for albedo (used in FS_UV), slots 1-3 are matcaps
     // Slots default to 1×1 white texture if not bound
-    color *= textureSample(slot1, tex_sampler, matcap_uv).rgb;
-    color *= textureSample(slot2, tex_sampler, matcap_uv).rgb;
-    color *= textureSample(slot3, tex_sampler, matcap_uv).rgb;
+    let matcap1 = textureSample(slot1, tex_sampler, matcap_uv).rgb;
+    color = blend_colors(color, matcap1, material.matcap_blend_modes.y);
+
+    let matcap2 = textureSample(slot2, tex_sampler, matcap_uv).rgb;
+    color = blend_colors(color, matcap2, material.matcap_blend_modes.z);
+
+    let matcap3 = textureSample(slot3, tex_sampler, matcap_uv).rgb;
+    color = blend_colors(color, matcap3, material.matcap_blend_modes.w);
 
     return vec4<f32>(color, material.color.a);
 }

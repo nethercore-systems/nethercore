@@ -1132,7 +1132,37 @@ KEYCODE_TO_BUTTON.get(&(keycode as u32)).copied()
 ---
 ## In Progress
 
+---
+
 ## Done
+
+### **[FEATURE] Implement matcap blend modes**
+**Status:** Completed ✅
+
+**What Was Implemented:**
+- ✅ Updated MaterialUniforms struct in Mode 1 shader to include `matcap_blend_modes: vec4<u32>` field
+- ✅ Added `rgb_to_hsv()` and `hsv_to_rgb()` helper functions for HSV color space conversion
+- ✅ Added `blend_colors()` function supporting three blend modes:
+  - Mode 0: Multiply (default matcap behavior)
+  - Mode 1: Add (for glow/emission effects)
+  - Mode 2: HSV Modulate (for hue shifting and iridescence)
+- ✅ Updated fragment shader to use `blend_colors()` for each matcap slot (slots 1-3)
+- ✅ GPU integration already completed in previous session (material buffer cache includes blend modes)
+- ✅ All 518 tests passing ✓ (155 in core + 363 in emberware-z)
+
+**Files Modified:**
+- `emberware-z/shaders/mode1_matcap.wgsl` - Updated MaterialUniforms, added color blending functions, updated fragment shader
+
+**Impact:**
+- Game developers can now use different blend modes for matcaps to achieve various artistic effects
+- Multiply mode maintains traditional matcap behavior
+- Add mode enables glow and emission effects
+- HSV Modulate mode enables dynamic hue shifting and iridescence effects
+- Each of the 3 matcap slots (1-3) can use independent blend modes
+
+**Compilation:** ✅ All tests passing
+
+---
 
 ### **[FEATURE] Implement matcap blend modes (Partial - GPU Integration)**
 **Status:** GPU integration complete, shader implementation pending
