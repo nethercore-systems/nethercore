@@ -35,25 +35,35 @@ impl Default for InputConfig {
     }
 }
 
-/// Keyboard to virtual controller mapping
-/// Note: We don't serialize the actual mapping yet, just use defaults.
-/// TODO: Add proper serialization with string-based key names
-#[derive(Debug, Clone)]
+/// Keyboard to virtual controller mapping with string-based serialization
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyboardMapping {
+    #[serde(serialize_with = "serialize_keycode", deserialize_with = "deserialize_keycode")]
     pub dpad_up: KeyCode,
+    #[serde(serialize_with = "serialize_keycode", deserialize_with = "deserialize_keycode")]
     pub dpad_down: KeyCode,
+    #[serde(serialize_with = "serialize_keycode", deserialize_with = "deserialize_keycode")]
     pub dpad_left: KeyCode,
+    #[serde(serialize_with = "serialize_keycode", deserialize_with = "deserialize_keycode")]
     pub dpad_right: KeyCode,
 
+    #[serde(serialize_with = "serialize_keycode", deserialize_with = "deserialize_keycode")]
     pub button_a: KeyCode,
+    #[serde(serialize_with = "serialize_keycode", deserialize_with = "deserialize_keycode")]
     pub button_b: KeyCode,
+    #[serde(serialize_with = "serialize_keycode", deserialize_with = "deserialize_keycode")]
     pub button_x: KeyCode,
+    #[serde(serialize_with = "serialize_keycode", deserialize_with = "deserialize_keycode")]
     pub button_y: KeyCode,
 
+    #[serde(serialize_with = "serialize_keycode", deserialize_with = "deserialize_keycode")]
     pub left_bumper: KeyCode,
+    #[serde(serialize_with = "serialize_keycode", deserialize_with = "deserialize_keycode")]
     pub right_bumper: KeyCode,
 
+    #[serde(serialize_with = "serialize_keycode", deserialize_with = "deserialize_keycode")]
     pub start: KeyCode,
+    #[serde(serialize_with = "serialize_keycode", deserialize_with = "deserialize_keycode")]
     pub select: KeyCode,
 }
 
@@ -83,27 +93,262 @@ impl Default for KeyboardMapping {
     }
 }
 
-// Custom serialization for KeyboardMapping (for now, just skip it)
-impl Serialize for KeyboardMapping {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        // Skip serialization for now - use defaults on load
-        use serde::ser::SerializeStruct;
-        let state = serializer.serialize_struct("KeyboardMapping", 0)?;
-        state.end()
+/// Convert KeyCode to a human-readable string name
+fn keycode_to_string(key: &KeyCode) -> &'static str {
+    match key {
+        // Letters
+        KeyCode::KeyA => "A",
+        KeyCode::KeyB => "B",
+        KeyCode::KeyC => "C",
+        KeyCode::KeyD => "D",
+        KeyCode::KeyE => "E",
+        KeyCode::KeyF => "F",
+        KeyCode::KeyG => "G",
+        KeyCode::KeyH => "H",
+        KeyCode::KeyI => "I",
+        KeyCode::KeyJ => "J",
+        KeyCode::KeyK => "K",
+        KeyCode::KeyL => "L",
+        KeyCode::KeyM => "M",
+        KeyCode::KeyN => "N",
+        KeyCode::KeyO => "O",
+        KeyCode::KeyP => "P",
+        KeyCode::KeyQ => "Q",
+        KeyCode::KeyR => "R",
+        KeyCode::KeyS => "S",
+        KeyCode::KeyT => "T",
+        KeyCode::KeyU => "U",
+        KeyCode::KeyV => "V",
+        KeyCode::KeyW => "W",
+        KeyCode::KeyX => "X",
+        KeyCode::KeyY => "Y",
+        KeyCode::KeyZ => "Z",
+
+        // Numbers
+        KeyCode::Digit0 => "0",
+        KeyCode::Digit1 => "1",
+        KeyCode::Digit2 => "2",
+        KeyCode::Digit3 => "3",
+        KeyCode::Digit4 => "4",
+        KeyCode::Digit5 => "5",
+        KeyCode::Digit6 => "6",
+        KeyCode::Digit7 => "7",
+        KeyCode::Digit8 => "8",
+        KeyCode::Digit9 => "9",
+
+        // Arrow keys
+        KeyCode::ArrowUp => "ArrowUp",
+        KeyCode::ArrowDown => "ArrowDown",
+        KeyCode::ArrowLeft => "ArrowLeft",
+        KeyCode::ArrowRight => "ArrowRight",
+
+        // Function keys
+        KeyCode::F1 => "F1",
+        KeyCode::F2 => "F2",
+        KeyCode::F3 => "F3",
+        KeyCode::F4 => "F4",
+        KeyCode::F5 => "F5",
+        KeyCode::F6 => "F6",
+        KeyCode::F7 => "F7",
+        KeyCode::F8 => "F8",
+        KeyCode::F9 => "F9",
+        KeyCode::F10 => "F10",
+        KeyCode::F11 => "F11",
+        KeyCode::F12 => "F12",
+
+        // Modifiers
+        KeyCode::ShiftLeft => "ShiftLeft",
+        KeyCode::ShiftRight => "ShiftRight",
+        KeyCode::ControlLeft => "ControlLeft",
+        KeyCode::ControlRight => "ControlRight",
+        KeyCode::AltLeft => "AltLeft",
+        KeyCode::AltRight => "AltRight",
+
+        // Special keys
+        KeyCode::Space => "Space",
+        KeyCode::Enter => "Enter",
+        KeyCode::Escape => "Escape",
+        KeyCode::Backspace => "Backspace",
+        KeyCode::Tab => "Tab",
+        KeyCode::Insert => "Insert",
+        KeyCode::Delete => "Delete",
+        KeyCode::Home => "Home",
+        KeyCode::End => "End",
+        KeyCode::PageUp => "PageUp",
+        KeyCode::PageDown => "PageDown",
+
+        // Punctuation
+        KeyCode::Comma => "Comma",
+        KeyCode::Period => "Period",
+        KeyCode::Slash => "Slash",
+        KeyCode::Backslash => "Backslash",
+        KeyCode::Semicolon => "Semicolon",
+        KeyCode::Quote => "Quote",
+        KeyCode::BracketLeft => "BracketLeft",
+        KeyCode::BracketRight => "BracketRight",
+        KeyCode::Backquote => "Backquote",
+        KeyCode::Minus => "Minus",
+        KeyCode::Equal => "Equal",
+
+        // Numpad
+        KeyCode::Numpad0 => "Numpad0",
+        KeyCode::Numpad1 => "Numpad1",
+        KeyCode::Numpad2 => "Numpad2",
+        KeyCode::Numpad3 => "Numpad3",
+        KeyCode::Numpad4 => "Numpad4",
+        KeyCode::Numpad5 => "Numpad5",
+        KeyCode::Numpad6 => "Numpad6",
+        KeyCode::Numpad7 => "Numpad7",
+        KeyCode::Numpad8 => "Numpad8",
+        KeyCode::Numpad9 => "Numpad9",
+        KeyCode::NumpadAdd => "NumpadAdd",
+        KeyCode::NumpadSubtract => "NumpadSubtract",
+        KeyCode::NumpadMultiply => "NumpadMultiply",
+        KeyCode::NumpadDivide => "NumpadDivide",
+        KeyCode::NumpadEnter => "NumpadEnter",
+        KeyCode::NumpadDecimal => "NumpadDecimal",
+
+        // Default for unsupported keys
+        _ => "Unknown",
     }
 }
 
-impl<'de> Deserialize<'de> for KeyboardMapping {
-    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        // Always use default mapping for now
-        Ok(KeyboardMapping::default())
+/// Convert a string name back to KeyCode
+fn string_to_keycode(s: &str) -> Option<KeyCode> {
+    match s {
+        // Letters
+        "A" => Some(KeyCode::KeyA),
+        "B" => Some(KeyCode::KeyB),
+        "C" => Some(KeyCode::KeyC),
+        "D" => Some(KeyCode::KeyD),
+        "E" => Some(KeyCode::KeyE),
+        "F" => Some(KeyCode::KeyF),
+        "G" => Some(KeyCode::KeyG),
+        "H" => Some(KeyCode::KeyH),
+        "I" => Some(KeyCode::KeyI),
+        "J" => Some(KeyCode::KeyJ),
+        "K" => Some(KeyCode::KeyK),
+        "L" => Some(KeyCode::KeyL),
+        "M" => Some(KeyCode::KeyM),
+        "N" => Some(KeyCode::KeyN),
+        "O" => Some(KeyCode::KeyO),
+        "P" => Some(KeyCode::KeyP),
+        "Q" => Some(KeyCode::KeyQ),
+        "R" => Some(KeyCode::KeyR),
+        "S" => Some(KeyCode::KeyS),
+        "T" => Some(KeyCode::KeyT),
+        "U" => Some(KeyCode::KeyU),
+        "V" => Some(KeyCode::KeyV),
+        "W" => Some(KeyCode::KeyW),
+        "X" => Some(KeyCode::KeyX),
+        "Y" => Some(KeyCode::KeyY),
+        "Z" => Some(KeyCode::KeyZ),
+
+        // Numbers
+        "0" => Some(KeyCode::Digit0),
+        "1" => Some(KeyCode::Digit1),
+        "2" => Some(KeyCode::Digit2),
+        "3" => Some(KeyCode::Digit3),
+        "4" => Some(KeyCode::Digit4),
+        "5" => Some(KeyCode::Digit5),
+        "6" => Some(KeyCode::Digit6),
+        "7" => Some(KeyCode::Digit7),
+        "8" => Some(KeyCode::Digit8),
+        "9" => Some(KeyCode::Digit9),
+
+        // Arrow keys
+        "ArrowUp" => Some(KeyCode::ArrowUp),
+        "ArrowDown" => Some(KeyCode::ArrowDown),
+        "ArrowLeft" => Some(KeyCode::ArrowLeft),
+        "ArrowRight" => Some(KeyCode::ArrowRight),
+
+        // Function keys
+        "F1" => Some(KeyCode::F1),
+        "F2" => Some(KeyCode::F2),
+        "F3" => Some(KeyCode::F3),
+        "F4" => Some(KeyCode::F4),
+        "F5" => Some(KeyCode::F5),
+        "F6" => Some(KeyCode::F6),
+        "F7" => Some(KeyCode::F7),
+        "F8" => Some(KeyCode::F8),
+        "F9" => Some(KeyCode::F9),
+        "F10" => Some(KeyCode::F10),
+        "F11" => Some(KeyCode::F11),
+        "F12" => Some(KeyCode::F12),
+
+        // Modifiers
+        "ShiftLeft" => Some(KeyCode::ShiftLeft),
+        "ShiftRight" => Some(KeyCode::ShiftRight),
+        "ControlLeft" => Some(KeyCode::ControlLeft),
+        "ControlRight" => Some(KeyCode::ControlRight),
+        "AltLeft" => Some(KeyCode::AltLeft),
+        "AltRight" => Some(KeyCode::AltRight),
+
+        // Special keys
+        "Space" => Some(KeyCode::Space),
+        "Enter" => Some(KeyCode::Enter),
+        "Escape" => Some(KeyCode::Escape),
+        "Backspace" => Some(KeyCode::Backspace),
+        "Tab" => Some(KeyCode::Tab),
+        "Insert" => Some(KeyCode::Insert),
+        "Delete" => Some(KeyCode::Delete),
+        "Home" => Some(KeyCode::Home),
+        "End" => Some(KeyCode::End),
+        "PageUp" => Some(KeyCode::PageUp),
+        "PageDown" => Some(KeyCode::PageDown),
+
+        // Punctuation
+        "Comma" => Some(KeyCode::Comma),
+        "Period" => Some(KeyCode::Period),
+        "Slash" => Some(KeyCode::Slash),
+        "Backslash" => Some(KeyCode::Backslash),
+        "Semicolon" => Some(KeyCode::Semicolon),
+        "Quote" => Some(KeyCode::Quote),
+        "BracketLeft" => Some(KeyCode::BracketLeft),
+        "BracketRight" => Some(KeyCode::BracketRight),
+        "Backquote" => Some(KeyCode::Backquote),
+        "Minus" => Some(KeyCode::Minus),
+        "Equal" => Some(KeyCode::Equal),
+
+        // Numpad
+        "Numpad0" => Some(KeyCode::Numpad0),
+        "Numpad1" => Some(KeyCode::Numpad1),
+        "Numpad2" => Some(KeyCode::Numpad2),
+        "Numpad3" => Some(KeyCode::Numpad3),
+        "Numpad4" => Some(KeyCode::Numpad4),
+        "Numpad5" => Some(KeyCode::Numpad5),
+        "Numpad6" => Some(KeyCode::Numpad6),
+        "Numpad7" => Some(KeyCode::Numpad7),
+        "Numpad8" => Some(KeyCode::Numpad8),
+        "Numpad9" => Some(KeyCode::Numpad9),
+        "NumpadAdd" => Some(KeyCode::NumpadAdd),
+        "NumpadSubtract" => Some(KeyCode::NumpadSubtract),
+        "NumpadMultiply" => Some(KeyCode::NumpadMultiply),
+        "NumpadDivide" => Some(KeyCode::NumpadDivide),
+        "NumpadEnter" => Some(KeyCode::NumpadEnter),
+        "NumpadDecimal" => Some(KeyCode::NumpadDecimal),
+
+        _ => None,
     }
+}
+
+/// Serialize a KeyCode as a string
+fn serialize_keycode<S>(key: &KeyCode, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    serializer.serialize_str(keycode_to_string(key))
+}
+
+/// Deserialize a KeyCode from a string
+fn deserialize_keycode<'de, D>(deserializer: D) -> Result<KeyCode, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    string_to_keycode(&s).ok_or_else(|| {
+        serde::de::Error::custom(format!("Unknown key name: '{}'. Using default.", s))
+    })
 }
 
 /// Input manager handling keyboard and gamepad
@@ -340,5 +585,152 @@ impl InputManager {
             // Scale to full range after deadzone
             (value - deadzone) / (1.0 - deadzone)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_keycode_to_string_letters() {
+        assert_eq!(keycode_to_string(&KeyCode::KeyA), "A");
+        assert_eq!(keycode_to_string(&KeyCode::KeyZ), "Z");
+    }
+
+    #[test]
+    fn test_keycode_to_string_arrows() {
+        assert_eq!(keycode_to_string(&KeyCode::ArrowUp), "ArrowUp");
+        assert_eq!(keycode_to_string(&KeyCode::ArrowDown), "ArrowDown");
+        assert_eq!(keycode_to_string(&KeyCode::ArrowLeft), "ArrowLeft");
+        assert_eq!(keycode_to_string(&KeyCode::ArrowRight), "ArrowRight");
+    }
+
+    #[test]
+    fn test_keycode_to_string_special() {
+        assert_eq!(keycode_to_string(&KeyCode::Enter), "Enter");
+        assert_eq!(keycode_to_string(&KeyCode::ShiftLeft), "ShiftLeft");
+        assert_eq!(keycode_to_string(&KeyCode::Space), "Space");
+    }
+
+    #[test]
+    fn test_string_to_keycode_letters() {
+        assert_eq!(string_to_keycode("A"), Some(KeyCode::KeyA));
+        assert_eq!(string_to_keycode("Z"), Some(KeyCode::KeyZ));
+    }
+
+    #[test]
+    fn test_string_to_keycode_arrows() {
+        assert_eq!(string_to_keycode("ArrowUp"), Some(KeyCode::ArrowUp));
+        assert_eq!(string_to_keycode("ArrowDown"), Some(KeyCode::ArrowDown));
+    }
+
+    #[test]
+    fn test_string_to_keycode_unknown() {
+        assert_eq!(string_to_keycode("InvalidKey"), None);
+        assert_eq!(string_to_keycode(""), None);
+    }
+
+    #[test]
+    fn test_keyboard_mapping_roundtrip() {
+        let mapping = KeyboardMapping::default();
+
+        // Serialize to TOML
+        let toml_str = toml::to_string(&mapping).expect("serialize");
+
+        // Should contain human-readable key names
+        assert!(toml_str.contains("ArrowUp"));
+        assert!(toml_str.contains("ArrowDown"));
+        assert!(toml_str.contains("Enter"));
+        assert!(toml_str.contains("ShiftLeft"));
+
+        // Deserialize back
+        let mapping2: KeyboardMapping = toml::from_str(&toml_str).expect("deserialize");
+
+        // Verify roundtrip
+        assert_eq!(mapping.dpad_up, mapping2.dpad_up);
+        assert_eq!(mapping.dpad_down, mapping2.dpad_down);
+        assert_eq!(mapping.button_a, mapping2.button_a);
+        assert_eq!(mapping.button_b, mapping2.button_b);
+        assert_eq!(mapping.start, mapping2.start);
+        assert_eq!(mapping.select, mapping2.select);
+    }
+
+    #[test]
+    fn test_keyboard_mapping_custom_keys() {
+        let toml_str = r#"
+            dpad_up = "W"
+            dpad_down = "S"
+            dpad_left = "A"
+            dpad_right = "D"
+            button_a = "J"
+            button_b = "K"
+            button_x = "L"
+            button_y = "I"
+            left_bumper = "U"
+            right_bumper = "O"
+            start = "Enter"
+            select = "Backspace"
+        "#;
+
+        let mapping: KeyboardMapping = toml::from_str(toml_str).expect("deserialize");
+
+        assert_eq!(mapping.dpad_up, KeyCode::KeyW);
+        assert_eq!(mapping.dpad_down, KeyCode::KeyS);
+        assert_eq!(mapping.dpad_left, KeyCode::KeyA);
+        assert_eq!(mapping.dpad_right, KeyCode::KeyD);
+        assert_eq!(mapping.button_a, KeyCode::KeyJ);
+        assert_eq!(mapping.button_b, KeyCode::KeyK);
+        assert_eq!(mapping.button_x, KeyCode::KeyL);
+        assert_eq!(mapping.button_y, KeyCode::KeyI);
+        assert_eq!(mapping.select, KeyCode::Backspace);
+    }
+
+    #[test]
+    fn test_input_config_roundtrip() {
+        let config = InputConfig::default();
+
+        // Serialize to TOML
+        let toml_str = toml::to_string(&config).expect("serialize");
+
+        // Should contain keyboard section with human-readable keys
+        assert!(toml_str.contains("[keyboard]"));
+
+        // Deserialize back
+        let config2: InputConfig = toml::from_str(&toml_str).expect("deserialize");
+
+        // Verify keyboard mapping preserved
+        assert_eq!(config.keyboard.dpad_up, config2.keyboard.dpad_up);
+        assert_eq!(config.keyboard.button_a, config2.keyboard.button_a);
+        assert_eq!(config.stick_deadzone, config2.stick_deadzone);
+        assert_eq!(config.trigger_deadzone, config2.trigger_deadzone);
+    }
+
+    #[test]
+    fn test_deadzone_application() {
+        let config = InputConfig {
+            stick_deadzone: 0.2,
+            trigger_deadzone: 0.1,
+            ..Default::default()
+        };
+
+        // Create a minimal manager to test deadzone
+        let manager = InputManager::new(config);
+
+        // Values within deadzone should return 0
+        assert_eq!(manager.apply_stick_deadzone(0.1), 0.0);
+        assert_eq!(manager.apply_stick_deadzone(-0.1), 0.0);
+
+        // Values at deadzone boundary
+        assert_eq!(manager.apply_stick_deadzone(0.2), 0.0);
+
+        // Values outside deadzone should be scaled
+        let result = manager.apply_stick_deadzone(0.6);
+        assert!(result > 0.0 && result <= 1.0);
+
+        // Trigger deadzone
+        assert_eq!(manager.apply_trigger_deadzone(0.05), 0.0);
+        let trigger_result = manager.apply_trigger_deadzone(0.5);
+        assert!(trigger_result > 0.0 && trigger_result <= 1.0);
     }
 }

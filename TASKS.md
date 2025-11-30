@@ -108,13 +108,6 @@ The `Runtime<C: Console>` handles:
   - `ZAudio::play()`, `ZAudio::stop()`, and `create_audio()` are stubs with TODO comments.
   - Games can call sound functions but nothing plays.
 
-- **[STABILITY] Add keyboard mapping serialization** (`emberware-z/src/input.rs:40`)
-  - TODO comment: "Add proper serialization with string-based key names"
-  - Custom key bindings are lost on restart.
-
-- **[STABILITY] Implement settings web link** (`emberware-z/src/app.rs:269`)
-  - TODO: "Open web browser to platform website"
-  - Settings UI doesn't open a web link as intended.
 
 
 - **[STABILITY] Add tests for GPU skinning** (`emberware-z/src/graphics.rs`)
@@ -318,6 +311,18 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **[STABILITY] Implement settings web link** (`emberware-z/src/app.rs:269`)
+  - Added `open` crate dependency for cross-platform browser opening.
+  - `UiAction::OpenBrowser` now opens https://emberware.io in the default browser.
+  - Error handling with tracing for failed browser open.
+
+- **[STABILITY] Add keyboard mapping serialization** (`emberware-z/src/input.rs:40`)
+  - Implemented string-based KeyCode serialization (`keycode_to_string`, `string_to_keycode`).
+  - `KeyboardMapping` now derives `Serialize`/`Deserialize` with serde attributes.
+  - Supports 80+ key names (letters, numbers, arrows, function keys, modifiers, punctuation, numpad).
+  - Human-readable TOML config: `dpad_up = "ArrowUp"` instead of internal enum values.
+  - 10 new tests for serialization roundtrip, custom key parsing, and deadzone application.
 
 - **[STABILITY] Fix input not passed to game during rollback** (`core/src/runtime.rs:178`)
   - Added `to_input_state()` method to `ConsoleInput` trait for converting console-specific inputs to common `InputState`.

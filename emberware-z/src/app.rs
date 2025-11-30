@@ -265,8 +265,11 @@ impl App {
                 self.library_ui.selected_game = None;
             }
             UiAction::OpenBrowser => {
-                tracing::info!("Opening browser...");
-                // TODO: Open web browser to platform website
+                const PLATFORM_URL: &str = "https://emberware.io";
+                tracing::info!("Opening browser to {}", PLATFORM_URL);
+                if let Err(e) = open::that(PLATFORM_URL) {
+                    tracing::error!("Failed to open browser: {}", e);
+                }
             }
             UiAction::OpenSettings => {
                 tracing::info!("Opening settings...");
