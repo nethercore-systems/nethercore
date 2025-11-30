@@ -15,20 +15,24 @@ use std::sync::Arc;
 use tracing::warn;
 
 /// Maximum number of sound effect channels
+#[allow(dead_code)] // Used in full audio implementation
 pub const MAX_CHANNELS: usize = 16;
 
 /// Audio sample rate (22.05 kHz - PS1/N64 authentic)
+#[allow(dead_code)] // Used in full audio implementation
 pub const SAMPLE_RATE: u32 = 22_050;
 
 /// Sound data (raw PCM)
 #[derive(Clone, Debug)]
 pub struct Sound {
     /// Raw PCM data (16-bit signed, mono, 22.05kHz)
+    #[allow(dead_code)] // Used in full audio implementation
     pub data: Arc<Vec<i16>>,
 }
 
 /// Audio commands buffered per frame
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // Used in full audio implementation
 pub enum AudioCommand {
     /// Play sound on next available channel
     PlaySound {
@@ -88,6 +92,7 @@ impl ZAudio {
     }
 
     /// Process buffered audio commands
+    #[allow(dead_code)] // Used in full audio implementation
     pub fn process_commands(&mut self, commands: &[AudioCommand], _sounds: &[Option<Sound>]) {
         if self.rollback_mode {
             // Discard playback commands during rollback

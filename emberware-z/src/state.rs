@@ -318,8 +318,10 @@ pub struct ZFFIState {
     pub current_font: u32,
 
     // Audio system
+    #[allow(dead_code)] // Used in full audio implementation
     pub sounds: Vec<Option<crate::audio::Sound>>,
     pub audio_commands: Vec<crate::audio::AudioCommand>,
+    #[allow(dead_code)] // Used in full audio implementation
     pub next_sound_handle: u32,
 
     // Init configuration

@@ -336,6 +336,22 @@ This enables fighting games with unlocked characters, RPGs with player stats, et
 
 ## Done
 
+### **[STABILITY] Suppress audio stub warnings**
+
+**Completed:** Suppressed dead code warnings for audio infrastructure stub
+
+Audio infrastructure items (constants, fields, methods) are unused in the stub implementation
+but will be used once full rodio playback is implemented. Added `#[allow(dead_code)]` attributes
+with explanatory comments to maintain clean build while documenting future use.
+
+**Files Modified:**
+- `emberware-z/src/audio.rs` - Suppressed MAX_CHANNELS, SAMPLE_RATE, Sound.data, AudioCommand variants, process_commands
+- `emberware-z/src/state.rs` - Suppressed sounds and next_sound_handle fields
+
+**Test Results:** 520 tests passing, zero compiler warnings
+
+---
+
 ### **[FEATURE] Implement retained mesh drawing**
 
 **Completed:** Implemented in `emberware-z/src/graphics/mod.rs`
