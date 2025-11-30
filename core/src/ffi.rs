@@ -834,7 +834,10 @@ mod tests {
         // Verify the data was loaded correctly at address 100
         let memory = instance.get_memory(&mut store, "memory").unwrap();
         let mem_data = memory.data(&store);
-        assert_eq!(&mem_data[100..108], &[0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE]);
+        assert_eq!(
+            &mem_data[100..108],
+            &[0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE]
+        );
     }
 
     #[test]

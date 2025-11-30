@@ -179,9 +179,9 @@ use some_rng_crate::Rng;
 let x = rng.gen::<f32>() * 320.0;
 ```
 
-### DO: Keep All State in Global Variables
+### DO: Keep All State in WASM Memory
 
-All game state must be capturable by `save_state`/`load_state`:
+All game state in WASM linear memory is automatically saved and restored during rollback. No manual serialization needed!
 
 ```rust
 static mut GAME_STATE: GameState = GameState::new();
@@ -189,33 +189,18 @@ static mut GAME_STATE: GameState = GameState::new();
 fn update() {
     unsafe {
         // Modify GAME_STATE
+        // All changes are automatically captured for rollback
     }
 }
 
-#[no_mangle]
-pub extern "C" fn save_state(ptr: *mut u8, max_len: u32) -> u32 {
-    unsafe {
-        let bytes = core::slice::from_raw_parts(
-            &GAME_STATE as *const _ as *const u8,
-            core::mem::size_of::<GameState>()
-        );
-        if bytes.len() <= max_len as usize {
-            core::ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, bytes.len());
-            bytes.len() as u32
-        } else {
-            0
-        }
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn load_state(ptr: *const u8, len: u32) {
-    unsafe {
-        let dest = &mut GAME_STATE as *mut _ as *mut u8;
-        core::ptr::copy_nonoverlapping(ptr, dest, len as usize);
-    }
-}
+// No save_state/load_state needed - the host snapshots entire WASM memory!
 ```
+
+**How it works:**
+- The host automatically snapshots your entire WASM linear memory during rollback
+- All static variables, heap allocations (if used), and stack state are preserved
+- Resources (textures, meshes, sounds) stay in GPU/host memory - only their handles (IDs) in WASM memory are snapshotted
+- This works transparently - you never need to write serialization code
 
 ### DON'T: Use Floating Point Carefully
 
@@ -263,10 +248,12 @@ struct Player {
 ### Rollback Checklist
 
 - [ ] `update()` uses only `random()` for RNG
-- [ ] No heap allocations (no `Vec`, `String`, `Box`)
+- [ ] No heap allocations (no `Vec`, `String`, `Box`) - recommended for simplicity
 - [ ] No reading from external sources (time, files, network)
-- [ ] `save_state`/`load_state` capture ALL game state
+- [ ] All game state lives in WASM memory (static variables, globals)
 - [ ] Fixed-point math for determinism (optional but safer)
+
+**Note:** Heap allocations (Vec, Box, etc.) ARE automatically captured by memory snapshotting, but avoiding them keeps your code simpler and state size predictable.
 
 ---
 

@@ -110,9 +110,7 @@ impl LocalSocket {
             .map_err(|e| LocalSocketError::NonBlocking(e.to_string()))?;
 
         // Set a short read timeout for non-blocking behavior
-        socket
-            .set_read_timeout(Some(Duration::from_millis(1)))
-            .ok(); // Ignore error, nonblocking mode takes precedence
+        socket.set_read_timeout(Some(Duration::from_millis(1))).ok(); // Ignore error, nonblocking mode takes precedence
 
         let local_addr = socket
             .local_addr()
@@ -301,7 +299,10 @@ mod tests {
         assert!(socket.peer_addr_string().is_none());
 
         socket.connect("127.0.0.1:8888").unwrap();
-        assert_eq!(socket.peer_addr_string(), Some("127.0.0.1:8888".to_string()));
+        assert_eq!(
+            socket.peer_addr_string(),
+            Some("127.0.0.1:8888".to_string())
+        );
     }
 
     #[test]
@@ -390,7 +391,11 @@ mod tests {
 
         assert!(messages.is_empty());
         // Should return almost immediately (< 100ms)
-        assert!(elapsed.as_millis() < 100, "Socket blocked for {}ms", elapsed.as_millis());
+        assert!(
+            elapsed.as_millis() < 100,
+            "Socket blocked for {}ms",
+            elapsed.as_millis()
+        );
     }
 
     #[test]

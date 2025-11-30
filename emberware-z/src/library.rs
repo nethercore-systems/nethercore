@@ -159,8 +159,7 @@ mod tests {
 
     fn create_test_game(games_dir: &Path, id: &str, title: &str, author: &str, version: &str) {
         let game_dir = games_dir.join(id);
-        fs::create_dir_all(&game_dir)
-            .expect("failed to create test game directory");
+        fs::create_dir_all(&game_dir).expect("failed to create test game directory");
 
         let manifest = serde_json::json!({
             "id": id,
@@ -232,7 +231,13 @@ mod tests {
     #[test]
     fn test_get_games_skips_files_not_directories() {
         let temp_dir = TempDir::new().unwrap();
-        create_test_game(temp_dir.path(), "valid-game", "Valid Game", "Author", "1.0.0");
+        create_test_game(
+            temp_dir.path(),
+            "valid-game",
+            "Valid Game",
+            "Author",
+            "1.0.0",
+        );
 
         // Create a file (not a directory) in the games dir
         fs::write(temp_dir.path().join("not-a-dir.txt"), "some content").unwrap();
@@ -245,7 +250,13 @@ mod tests {
     #[test]
     fn test_get_games_skips_missing_manifest() {
         let temp_dir = TempDir::new().unwrap();
-        create_test_game(temp_dir.path(), "valid-game", "Valid Game", "Author", "1.0.0");
+        create_test_game(
+            temp_dir.path(),
+            "valid-game",
+            "Valid Game",
+            "Author",
+            "1.0.0",
+        );
 
         // Create a game directory without manifest
         let invalid_dir = temp_dir.path().join("invalid-game");
@@ -260,7 +271,13 @@ mod tests {
     #[test]
     fn test_get_games_skips_invalid_json_manifest() {
         let temp_dir = TempDir::new().unwrap();
-        create_test_game(temp_dir.path(), "valid-game", "Valid Game", "Author", "1.0.0");
+        create_test_game(
+            temp_dir.path(),
+            "valid-game",
+            "Valid Game",
+            "Author",
+            "1.0.0",
+        );
 
         // Create a game directory with invalid JSON manifest
         let invalid_dir = temp_dir.path().join("invalid-json");
@@ -275,7 +292,13 @@ mod tests {
     #[test]
     fn test_get_games_skips_incomplete_manifest() {
         let temp_dir = TempDir::new().unwrap();
-        create_test_game(temp_dir.path(), "valid-game", "Valid Game", "Author", "1.0.0");
+        create_test_game(
+            temp_dir.path(),
+            "valid-game",
+            "Valid Game",
+            "Author",
+            "1.0.0",
+        );
 
         // Create a game directory with incomplete manifest (missing required fields)
         let invalid_dir = temp_dir.path().join("incomplete");
@@ -336,7 +359,13 @@ mod tests {
     #[test]
     fn test_is_cached_complete_game() {
         let temp_dir = TempDir::new().unwrap();
-        create_test_game(temp_dir.path(), "complete-game", "Complete", "Author", "1.0.0");
+        create_test_game(
+            temp_dir.path(),
+            "complete-game",
+            "Complete",
+            "Author",
+            "1.0.0",
+        );
 
         assert!(is_cached_in_dir(temp_dir.path(), "complete-game"));
     }
@@ -393,7 +422,13 @@ mod tests {
     fn test_delete_leaves_other_games_intact() {
         let temp_dir = TempDir::new().unwrap();
         create_test_game(temp_dir.path(), "keep-this", "Keep This", "Author", "1.0.0");
-        create_test_game(temp_dir.path(), "delete-this", "Delete This", "Author", "1.0.0");
+        create_test_game(
+            temp_dir.path(),
+            "delete-this",
+            "Delete This",
+            "Author",
+            "1.0.0",
+        );
 
         // Delete one game
         let result = delete_game_in_dir(temp_dir.path(), "delete-this");
@@ -438,8 +473,20 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         // Game IDs with various characters (avoiding path separators)
-        create_test_game(temp_dir.path(), "game-with-dashes", "Dashes", "Author", "1.0.0");
-        create_test_game(temp_dir.path(), "game_with_underscores", "Underscores", "Author", "1.0.0");
+        create_test_game(
+            temp_dir.path(),
+            "game-with-dashes",
+            "Dashes",
+            "Author",
+            "1.0.0",
+        );
+        create_test_game(
+            temp_dir.path(),
+            "game_with_underscores",
+            "Underscores",
+            "Author",
+            "1.0.0",
+        );
         create_test_game(temp_dir.path(), "game.with.dots", "Dots", "Author", "1.0.0");
 
         let games = get_games_from_dir(temp_dir.path());
@@ -513,13 +560,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let long_id = "a".repeat(200);
 
-        create_test_game(
-            temp_dir.path(),
-            &long_id,
-            "Long ID Game",
-            "Author",
-            "1.0.0",
-        );
+        create_test_game(temp_dir.path(), &long_id, "Long ID Game", "Author", "1.0.0");
 
         let games = get_games_from_dir(temp_dir.path());
         assert_eq!(games.len(), 1);

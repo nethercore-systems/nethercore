@@ -26,7 +26,11 @@ pub fn button_held(caller: Caller<'_, GameState>, player: u32, button: u32) -> u
     let player = player as usize;
 
     if player >= MAX_PLAYERS {
-        warn!("button_held: invalid player {} (max {})", player, MAX_PLAYERS - 1);
+        warn!(
+            "button_held: invalid player {} (max {})",
+            player,
+            MAX_PLAYERS - 1
+        );
         return 0;
     }
 
@@ -55,7 +59,11 @@ pub fn button_pressed(caller: Caller<'_, GameState>, player: u32, button: u32) -
     let player = player as usize;
 
     if player >= MAX_PLAYERS {
-        warn!("button_pressed: invalid player {} (max {})", player, MAX_PLAYERS - 1);
+        warn!(
+            "button_pressed: invalid player {} (max {})",
+            player,
+            MAX_PLAYERS - 1
+        );
         return 0;
     }
 
@@ -87,7 +95,11 @@ pub fn button_released(caller: Caller<'_, GameState>, player: u32, button: u32) 
     let player = player as usize;
 
     if player >= MAX_PLAYERS {
-        warn!("button_released: invalid player {} (max {})", player, MAX_PLAYERS - 1);
+        warn!(
+            "button_released: invalid player {} (max {})",
+            player,
+            MAX_PLAYERS - 1
+        );
         return 0;
     }
 
@@ -118,7 +130,11 @@ pub fn buttons_held(caller: Caller<'_, GameState>, player: u32) -> u32 {
     let player = player as usize;
 
     if player >= MAX_PLAYERS {
-        warn!("buttons_held: invalid player {} (max {})", player, MAX_PLAYERS - 1);
+        warn!(
+            "buttons_held: invalid player {} (max {})",
+            player,
+            MAX_PLAYERS - 1
+        );
         return 0;
     }
 
@@ -136,7 +152,11 @@ pub fn buttons_pressed(caller: Caller<'_, GameState>, player: u32) -> u32 {
     let player = player as usize;
 
     if player >= MAX_PLAYERS {
-        warn!("buttons_pressed: invalid player {} (max {})", player, MAX_PLAYERS - 1);
+        warn!(
+            "buttons_pressed: invalid player {} (max {})",
+            player,
+            MAX_PLAYERS - 1
+        );
         return 0;
     }
 
@@ -158,7 +178,11 @@ pub fn buttons_released(caller: Caller<'_, GameState>, player: u32) -> u32 {
     let player = player as usize;
 
     if player >= MAX_PLAYERS {
-        warn!("buttons_released: invalid player {} (max {})", player, MAX_PLAYERS - 1);
+        warn!(
+            "buttons_released: invalid player {} (max {})",
+            player,
+            MAX_PLAYERS - 1
+        );
         return 0;
     }
 
@@ -184,7 +208,11 @@ pub fn left_stick_x(caller: Caller<'_, GameState>, player: u32) -> f32 {
     let player = player as usize;
 
     if player >= MAX_PLAYERS {
-        warn!("left_stick_x: invalid player {} (max {})", player, MAX_PLAYERS - 1);
+        warn!(
+            "left_stick_x: invalid player {} (max {})",
+            player,
+            MAX_PLAYERS - 1
+        );
         return 0.0;
     }
 
@@ -202,7 +230,11 @@ pub fn left_stick_y(caller: Caller<'_, GameState>, player: u32) -> f32 {
     let player = player as usize;
 
     if player >= MAX_PLAYERS {
-        warn!("left_stick_y: invalid player {} (max {})", player, MAX_PLAYERS - 1);
+        warn!(
+            "left_stick_y: invalid player {} (max {})",
+            player,
+            MAX_PLAYERS - 1
+        );
         return 0.0;
     }
 
@@ -220,7 +252,11 @@ pub fn right_stick_x(caller: Caller<'_, GameState>, player: u32) -> f32 {
     let player = player as usize;
 
     if player >= MAX_PLAYERS {
-        warn!("right_stick_x: invalid player {} (max {})", player, MAX_PLAYERS - 1);
+        warn!(
+            "right_stick_x: invalid player {} (max {})",
+            player,
+            MAX_PLAYERS - 1
+        );
         return 0.0;
     }
 
@@ -238,7 +274,11 @@ pub fn right_stick_y(caller: Caller<'_, GameState>, player: u32) -> f32 {
     let player = player as usize;
 
     if player >= MAX_PLAYERS {
-        warn!("right_stick_y: invalid player {} (max {})", player, MAX_PLAYERS - 1);
+        warn!(
+            "right_stick_y: invalid player {} (max {})",
+            player,
+            MAX_PLAYERS - 1
+        );
         return 0.0;
     }
 
@@ -259,7 +299,11 @@ pub fn left_stick(mut caller: Caller<'_, GameState>, player: u32, out_x: u32, ou
         let player = player as usize;
 
         if player >= MAX_PLAYERS {
-            warn!("left_stick: invalid player {} (max {})", player, MAX_PLAYERS - 1);
+            warn!(
+                "left_stick: invalid player {} (max {})",
+                player,
+                MAX_PLAYERS - 1
+            );
             (0.0f32, 0.0f32)
         } else {
             let input = &state.input_curr[player];
@@ -306,7 +350,11 @@ pub fn right_stick(mut caller: Caller<'_, GameState>, player: u32, out_x: u32, o
         let player = player as usize;
 
         if player >= MAX_PLAYERS {
-            warn!("right_stick: invalid player {} (max {})", player, MAX_PLAYERS - 1);
+            warn!(
+                "right_stick: invalid player {} (max {})",
+                player,
+                MAX_PLAYERS - 1
+            );
             (0.0f32, 0.0f32)
         } else {
             let input = &state.input_curr[player];
@@ -354,7 +402,11 @@ pub fn trigger_left(caller: Caller<'_, GameState>, player: u32) -> f32 {
     let player = player as usize;
 
     if player >= MAX_PLAYERS {
-        warn!("trigger_left: invalid player {} (max {})", player, MAX_PLAYERS - 1);
+        warn!(
+            "trigger_left: invalid player {} (max {})",
+            player,
+            MAX_PLAYERS - 1
+        );
         return 0.0;
     }
 
@@ -372,7 +424,11 @@ pub fn trigger_right(caller: Caller<'_, GameState>, player: u32) -> f32 {
     let player = player as usize;
 
     if player >= MAX_PLAYERS {
-        warn!("trigger_right: invalid player {} (max {})", player, MAX_PLAYERS - 1);
+        warn!(
+            "trigger_right: invalid player {} (max {})",
+            player,
+            MAX_PLAYERS - 1
+        );
         return 0.0;
     }
 

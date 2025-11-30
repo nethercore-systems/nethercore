@@ -412,7 +412,12 @@ mod tests {
             cull_mode: CullMode::Front,
             blend_mode: BlendMode::Additive,
             texture_filter: TextureFilter::Linear,
-            texture_slots: [TextureHandle(1), TextureHandle(2), TextureHandle(3), TextureHandle(4)],
+            texture_slots: [
+                TextureHandle(1),
+                TextureHandle(2),
+                TextureHandle(3),
+                TextureHandle(4),
+            ],
         };
 
         let state2 = state1;

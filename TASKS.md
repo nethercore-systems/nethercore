@@ -96,136 +96,10 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## TODO
-### **[STABILITY] Refactor rollback to use automatic WASM linear memory snapshotting**
 
-**Current State:** Games manually serialize state via FFI callbacks (`save_state(ptr, max_len) -> len` and `load_state(ptr, len)`). This requires boilerplate in every game and is error-prone.
-
-**Target State:** Automatic memory snapshotting as described in [docs/rollback-architecture.md](docs/rollback-architecture.md). The host snapshots entire WASM linear memory transparently. Games require zero serialization code.
-
-**Why This Matters:**
-- ✅ Zero boilerplate for game developers
-- ✅ Can't forget to serialize fields (entire memory is saved)
-- ✅ Works naturally with any data structures (hash maps, dynamic arrays, custom allocators)
-- ✅ Smaller effective snapshots (only game state, resources stay in GPU memory)
-
-**Implementation Steps:**
-
-1. **Modify `GameInstance` to snapshot WASM linear memory directly**
-   - Location: [core/src/wasm/mod.rs:158-183](core/src/wasm/mod.rs#L158-L183)
-   - Change `GameInstance::save_state(&mut self, buffer: &mut [u8]) -> Result<usize>` to:
-     ```rust
-     pub fn save_state(&mut self) -> Result<Vec<u8>> {
-         let memory = self.store.data().memory.context("No memory export")?;
-         let mem_data = memory.data(&self.store);
-         Ok(mem_data.to_vec())  // Copy entire linear memory
-     }
-     ```
-   - Change `GameInstance::load_state(&mut self, buffer: &[u8]) -> Result<()>` to:
-     ```rust
-     pub fn load_state(&mut self, snapshot: &[u8]) -> Result<()> {
-         let memory = self.store.data().memory.context("No memory export")?;
-         let mem_data = memory.data_mut(&mut self.store);
-         anyhow::ensure!(snapshot.len() == mem_data.len(),
-             "Snapshot size mismatch: {} vs {}", snapshot.len(), mem_data.len());
-         mem_data.copy_from_slice(snapshot);
-         Ok(())
-     }
-     ```
-   - Remove `save_state_fn` and `load_state_fn` fields from `GameInstance` struct
-   - Remove lookup of save_state/load_state exports in `GameInstance::new()`
-
-2. **Update `RollbackStateManager` to use new memory snapshot API**
-   - Location: [core/src/rollback/state.rs:188-235](core/src/rollback/state.rs#L188-L235)
-   - Change `save_state()` to call `game.save_state()` directly (no buffer passing)
-   - Update `MAX_STATE_SIZE` constant to be WASM memory size (typically 1-16MB, configurable)
-   - Consider adaptive pool buffer sizing based on actual memory size
-   - Ensure `StatePool` buffers are sized appropriately for full memory snapshots
-
-3. **Update `EmberwareConfig` GGRS state type**
-   - Location: [core/src/rollback/config.rs:40-44](core/src/rollback/config.rs#L40-L44)
-   - `GameStateSnapshot` is already the state type - no changes needed
-   - Verify `MAX_STATE_SIZE` is appropriate for WASM memory (update from 1MB default)
-
-4. **Remove FFI save_state/load_state from ALL game examples**
-   - Primary location: [examples/platformer/src/lib.rs:746-835](examples/platformer/src/lib.rs#L746-L835)
-   - Search all example games for `save_state` and `load_state` exports:
-     - `examples/hello-world/src/lib.rs`
-     - `examples/triangle/src/lib.rs`
-     - `examples/textured-quad/src/lib.rs`
-     - `examples/cube/src/lib.rs`
-     - `examples/lighting/src/lib.rs`
-     - `examples/skinned-mesh/src/lib.rs`
-     - `examples/billboard/src/lib.rs`
-     - `examples/platformer/src/lib.rs`
-   - Delete entire `save_state()` and `load_state()` export functions from any that have them
-   - Add comment to each example's lib.rs: `// Note: Rollback state is automatic (entire WASM memory is snapshotted). No save_state/load_state needed.`
-   - Verify platformer still works with rollback (netcode integration tests)
-   - Test that examples compile and run correctly after removal
-
-5. **Update FFI documentation**
-   - Location: [docs/ffi.md](docs/ffi.md)
-   - Remove `save_state(ptr: *mut u8, max_len: u32) -> u32` from save data section
-   - Remove `load_state(ptr: *const u8, len: u32)` from save data section
-   - Add note: "Rollback state is automatically saved/restored by snapshotting WASM linear memory. Games do not need to implement serialization."
-   - Clarify that `save(slot, ptr, len)` and `load(slot, ptr, len)` are for persistent save files, NOT rollback
-
-6. **Update developer guide**
-   - Location: [docs/developer-guide.md](docs/developer-guide.md)
-   - Update "Best practices for rollback-safe code" section
-   - Remove any mention of manual state serialization
-   - Explain that all game state in WASM linear memory is automatically rolled back
-   - Add guidance: "Resources (textures, meshes, sounds) are loaded during init() and stay in GPU/host memory. Only their handles (IDs) are in WASM memory, which get snapshotted correctly."
-   - Add note about determinism: "Rollback works transparently as long as your update() is deterministic (same inputs → same outputs). Use the provided RNG, don't use external time sources."
-
-7. **Update rollback architecture documentation**
-   - Location: [docs/rollback-architecture.md](docs/rollback-architecture.md)
-   - Add "Implementation Status" section at top noting this is now the actual implementation
-   - Add note about WASM memory size configuration and snapshot size implications
-   - Document that this approach is fully transparent to game developers
-
-8. **Add integration test for automatic rollback**
-   - Location: [core/src/integration.rs](core/src/integration.rs) or new test file
-   - Create test game that allocates dynamic memory (Vec, HashMap, etc.)
-   - Verify state is correctly saved and restored without any game-side serialization
-   - Test with different memory sizes and allocation patterns
-   - Verify resource handles (texture IDs, mesh IDs) survive rollback correctly
-
-9. **Update WASM memory allocation strategy documentation**
-   - Add to CLAUDE.md or developer docs
-   - Explain WASM linear memory starts small (64KB default) and grows via `memory.grow`
-   - Document that snapshot size = current allocated linear memory size (not max)
-   - Note: Rust's allocator will call `memory.grow` automatically as needed
-   - Recommend games pre-allocate stable working set in init() for predictable snapshot sizes
-
-10. **Performance testing and optimization**
-    - Profile snapshot/restore performance with realistic game state sizes
-    - Measure memory copy overhead (expect ~1-5ms for 1-4MB on modern CPUs)
-    - Consider incremental/delta snapshots if full copy becomes bottleneck (deferred optimization)
-    - Document expected rollback performance characteristics
-
-**Files to Modify:**
-- `core/src/wasm/mod.rs` (GameInstance save/load methods)
-- `core/src/rollback/state.rs` (RollbackStateManager integration)
-- `core/src/rollback/config.rs` (MAX_STATE_SIZE constant)
-- `examples/platformer/src/lib.rs` (remove save_state/load_state exports)
-- `examples/*/src/lib.rs` (remove save_state/load_state from all examples if present)
-- `docs/ffi.md` (remove save_state/load_state from API reference)
-- `docs/developer-guide.md` (update rollback best practices)
-- `docs/rollback-architecture.md` (mark as implemented)
-
-**Testing Strategy:**
-- Verify all existing integration tests still pass
-- Run platformer example in local P2P session and trigger rollbacks
-- Monitor snapshot sizes and performance
-- Test edge cases: empty memory, large allocations, fragmented heap
-
-**Breaking Changes:**
-- Games that export `save_state`/`load_state` will have those exports ignored
-- This is a **breaking change** for any games relying on partial state serialization
-- Migration path: Remove save_state/load_state exports entirely - rollback is now automatic
-- Persistent save files (save()/load() FFI) are unaffected
-
----
+### Remove Duplicate Testing Code
+- TestConsole is defined in both integration.rs and runtime.rs
+- This wastes space and makes Agentic AI less efficient
 
 ### **[NEEDS CLARIFICATION] Define and enforce console runtime limits**
 
@@ -1261,5 +1135,12 @@ KEYCODE_TO_BUTTON.get(&(keycode as u32)).copied()
 
 ---
 ## In Progress
+### **[STABILITY] Refactor rollback to use automatic WASM linear memory snapshotting**
+
+**Current State:** Games manually serialize state via FFI callbacks (`save_state(ptr, max_len) -> len` and `load_state(ptr, len)`). This requires boilerplate in every game and is error-prone.
+
+**Target State:** Automatic memory snapshotting as described in [docs/rollback-architecture.md](docs/rollback-architecture.md). The host snapshots entire WASM linear memory transparently. Games require zero serialization code.
+
+**Implementation in progress...**
 
 ## Done

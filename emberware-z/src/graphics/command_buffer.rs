@@ -62,7 +62,13 @@ impl CommandBuffer {
     /// Add vertices for immediate drawing (non-indexed)
     ///
     /// Returns the base vertex index for this batch.
-    pub fn add_vertices(&mut self, format: u8, vertices: &[f32], transform: Mat4, state: &RenderState) -> u32 {
+    pub fn add_vertices(
+        &mut self,
+        format: u8,
+        vertices: &[f32],
+        transform: Mat4,
+        state: &RenderState,
+    ) -> u32 {
         let format_idx = format as usize;
         let stride = vertex_stride(format) as usize;
         let vertex_count = (vertices.len() * 4) / stride;
@@ -197,9 +203,8 @@ mod tests {
         let state = RenderState::default();
 
         let vertices = [
-            0.0, 0.0, 0.0, 1.0, 0.0, 0.0,
-            1.0, 0.0, 0.0, 0.0, 1.0, 0.0,
-            0.5, 1.0, 0.0, 0.0, 0.0, 1.0,
+            0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.5, 1.0, 0.0, 0.0, 0.0,
+            1.0,
         ];
 
         let base = cb.add_vertices(FORMAT_COLOR, &vertices, Mat4::IDENTITY, &state);
@@ -215,15 +220,11 @@ mod tests {
         let mut cb = CommandBuffer::new();
         let state = RenderState::default();
 
-        let vertices = [
-            0.0, 0.0, 0.0,
-            1.0, 0.0, 0.0,
-            1.0, 1.0, 0.0,
-            0.0, 1.0, 0.0,
-        ];
+        let vertices = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0];
         let indices = [0u32, 1, 2, 0, 2, 3];
 
-        let (base_vertex, first_index) = cb.add_vertices_indexed(0, &vertices, &indices, Mat4::IDENTITY, &state);
+        let (base_vertex, first_index) =
+            cb.add_vertices_indexed(0, &vertices, &indices, Mat4::IDENTITY, &state);
 
         assert_eq!(base_vertex, 0);
         assert_eq!(first_index, 0);
@@ -293,7 +294,12 @@ mod tests {
             index_count: 150,
             base_vertex: 50,
             first_index: 75,
-            texture_slots: [TextureHandle(1), TextureHandle(2), TextureHandle::INVALID, TextureHandle::INVALID],
+            texture_slots: [
+                TextureHandle(1),
+                TextureHandle(2),
+                TextureHandle::INVALID,
+                TextureHandle::INVALID,
+            ],
             color: 0xFF0000FF,
             depth_test: false,
             cull_mode: CullMode::None,
@@ -356,9 +362,7 @@ mod tests {
 
         let v_pos = [0.0f32, 0.0, 0.0, 1.0, 0.0, 0.0, 0.5, 1.0, 0.0];
         let v_pos_uv = [
-            0.0, 0.0, 0.0, 0.0, 0.0,
-            1.0, 0.0, 0.0, 1.0, 0.0,
-            0.5, 1.0, 0.0, 0.5, 1.0,
+            0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.5, 1.0, 0.0, 0.5, 1.0,
         ];
 
         cb.add_vertices(0, &v_pos, Mat4::IDENTITY, &state);
@@ -407,9 +411,30 @@ mod tests {
         let state = RenderState::default();
 
         let vertices = [
-            0.0, 0.0, 0.0, f32::from_bits(0x03020100), 1.0, 0.0, 0.0, 0.0,
-            1.0, 0.0, 0.0, f32::from_bits(0x03020100), 1.0, 0.0, 0.0, 0.0,
-            0.5, 1.0, 0.0, f32::from_bits(0x03020100), 1.0, 0.0, 0.0, 0.0,
+            0.0,
+            0.0,
+            0.0,
+            f32::from_bits(0x03020100),
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            f32::from_bits(0x03020100),
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.5,
+            1.0,
+            0.0,
+            f32::from_bits(0x03020100),
+            1.0,
+            0.0,
+            0.0,
+            0.0,
         ];
 
         let base = cb.add_vertices(FORMAT_SKINNED, &vertices, Mat4::IDENTITY, &state);

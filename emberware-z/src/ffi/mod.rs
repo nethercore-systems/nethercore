@@ -13,7 +13,9 @@ use glam::{Mat4, Vec3};
 use tracing::{info, warn};
 use wasmtime::{Caller, Linker};
 
-use emberware_core::wasm::{DrawCommand, GameState, PendingMesh, PendingTexture, MAX_BONES, MAX_TRANSFORM_STACK};
+use emberware_core::wasm::{
+    DrawCommand, GameState, PendingMesh, PendingTexture, MAX_BONES, MAX_TRANSFORM_STACK,
+};
 
 use crate::console::{RESOLUTIONS, TICK_RATES};
 
@@ -363,7 +365,10 @@ fn transform_push(mut caller: Caller<'_, GameState>) -> u32 {
     let state = caller.data_mut();
 
     if state.transform_stack.len() >= MAX_TRANSFORM_STACK {
-        warn!("transform_push failed: stack full (max {} entries)", MAX_TRANSFORM_STACK);
+        warn!(
+            "transform_push failed: stack full (max {} entries)",
+            MAX_TRANSFORM_STACK
+        );
         return 0;
     }
 
@@ -507,7 +512,10 @@ fn texture_filter(mut caller: Caller<'_, GameState>, filter: u32) {
     let state = caller.data_mut();
 
     if filter > 1 {
-        warn!("texture_filter({}) invalid - must be 0-1, using 0 (nearest)", filter);
+        warn!(
+            "texture_filter({}) invalid - must be 0-1, using 0 (nearest)",
+            filter
+        );
         state.render_state.texture_filter = 0;
         return;
     }
@@ -528,7 +536,12 @@ fn texture_filter(mut caller: Caller<'_, GameState>, filter: u32) {
 ///
 /// Returns texture handle (>0) on success, 0 on failure.
 /// Validates VRAM budget before allocation.
-fn load_texture(mut caller: Caller<'_, GameState>, width: u32, height: u32, pixels_ptr: u32) -> u32 {
+fn load_texture(
+    mut caller: Caller<'_, GameState>,
+    width: u32,
+    height: u32,
+    pixels_ptr: u32,
+) -> u32 {
     // Validate dimensions
     if width == 0 || height == 0 {
         warn!("load_texture: invalid dimensions {}x{}", width, height);
@@ -563,7 +576,9 @@ fn load_texture(mut caller: Caller<'_, GameState>, width: u32, height: u32, pixe
         if ptr + size > mem_data.len() {
             warn!(
                 "load_texture: pixel data ({} bytes at {}) exceeds memory bounds ({})",
-                size, ptr, mem_data.len()
+                size,
+                ptr,
+                mem_data.len()
             );
             return 0;
         }
@@ -663,10 +678,18 @@ const fn vertex_stride(format: u8) -> u32 {
 /// - FORMAT_SKINNED (8): Has bone indices/weights (4 u8 + 4 floats)
 ///
 /// Returns mesh handle (>0) on success, 0 on failure.
-fn load_mesh(mut caller: Caller<'_, GameState>, data_ptr: u32, vertex_count: u32, format: u32) -> u32 {
+fn load_mesh(
+    mut caller: Caller<'_, GameState>,
+    data_ptr: u32,
+    vertex_count: u32,
+    format: u32,
+) -> u32 {
     // Validate format
     if format > MAX_VERTEX_FORMAT as u32 {
-        warn!("load_mesh: invalid format {} (max {})", format, MAX_VERTEX_FORMAT);
+        warn!(
+            "load_mesh: invalid format {} (max {})",
+            format, MAX_VERTEX_FORMAT
+        );
         return 0;
     }
     let format = format as u8;
@@ -680,7 +703,10 @@ fn load_mesh(mut caller: Caller<'_, GameState>, data_ptr: u32, vertex_count: u32
     // Calculate data size with overflow checking
     let stride = vertex_stride(format);
     let Some(data_size) = vertex_count.checked_mul(stride) else {
-        warn!("load_mesh: data size overflow (vertex_count={}, stride={})", vertex_count, stride);
+        warn!(
+            "load_mesh: data size overflow (vertex_count={}, stride={})",
+            vertex_count, stride
+        );
         return 0;
     };
     let float_count = data_size / 4;
@@ -704,7 +730,9 @@ fn load_mesh(mut caller: Caller<'_, GameState>, data_ptr: u32, vertex_count: u32
         if ptr + byte_size > mem_data.len() {
             warn!(
                 "load_mesh: vertex data ({} bytes at {}) exceeds memory bounds ({})",
-                byte_size, ptr, mem_data.len()
+                byte_size,
+                ptr,
+                mem_data.len()
             );
             return 0;
         }
@@ -767,7 +795,10 @@ fn load_mesh_indexed(
 ) -> u32 {
     // Validate format
     if format > MAX_VERTEX_FORMAT as u32 {
-        warn!("load_mesh_indexed: invalid format {} (max {})", format, MAX_VERTEX_FORMAT);
+        warn!(
+            "load_mesh_indexed: invalid format {} (max {})",
+            format, MAX_VERTEX_FORMAT
+        );
         return 0;
     }
     let format = format as u8;
@@ -782,18 +813,27 @@ fn load_mesh_indexed(
         return 0;
     }
     if !index_count.is_multiple_of(3) {
-        warn!("load_mesh_indexed: index_count {} is not a multiple of 3", index_count);
+        warn!(
+            "load_mesh_indexed: index_count {} is not a multiple of 3",
+            index_count
+        );
         return 0;
     }
 
     // Calculate data sizes with overflow checking
     let stride = vertex_stride(format);
     let Some(vertex_data_size) = vertex_count.checked_mul(stride) else {
-        warn!("load_mesh_indexed: vertex data size overflow (vertex_count={}, stride={})", vertex_count, stride);
+        warn!(
+            "load_mesh_indexed: vertex data size overflow (vertex_count={}, stride={})",
+            vertex_count, stride
+        );
         return 0;
     };
     let Some(index_data_size) = index_count.checked_mul(4) else {
-        warn!("load_mesh_indexed: index data size overflow (index_count={})", index_count);
+        warn!(
+            "load_mesh_indexed: index data size overflow (index_count={})",
+            index_count
+        );
         return 0;
     };
     let float_count = vertex_data_size / 4;
@@ -819,7 +859,9 @@ fn load_mesh_indexed(
         if vertex_ptr + vertex_byte_size > mem_data.len() {
             warn!(
                 "load_mesh_indexed: vertex data ({} bytes at {}) exceeds memory bounds ({})",
-                vertex_byte_size, vertex_ptr, mem_data.len()
+                vertex_byte_size,
+                vertex_ptr,
+                mem_data.len()
             );
             return 0;
         }
@@ -827,7 +869,9 @@ fn load_mesh_indexed(
         if idx_ptr + index_byte_size > mem_data.len() {
             warn!(
                 "load_mesh_indexed: index data ({} bytes at {}) exceeds memory bounds ({})",
-                index_byte_size, idx_ptr, mem_data.len()
+                index_byte_size,
+                idx_ptr,
+                mem_data.len()
             );
             return 0;
         }
@@ -933,10 +977,18 @@ fn draw_mesh(mut caller: Caller<'_, GameState>, handle: u32) {
 ///
 /// Vertices are buffered on the CPU and flushed at frame end.
 /// Uses current transform and render state.
-fn draw_triangles(mut caller: Caller<'_, GameState>, data_ptr: u32, vertex_count: u32, format: u32) {
+fn draw_triangles(
+    mut caller: Caller<'_, GameState>,
+    data_ptr: u32,
+    vertex_count: u32,
+    format: u32,
+) {
     // Validate format
     if format > MAX_VERTEX_FORMAT as u32 {
-        warn!("draw_triangles: invalid format {} (max {})", format, MAX_VERTEX_FORMAT);
+        warn!(
+            "draw_triangles: invalid format {} (max {})",
+            format, MAX_VERTEX_FORMAT
+        );
         return;
     }
     let format = format as u8;
@@ -946,14 +998,20 @@ fn draw_triangles(mut caller: Caller<'_, GameState>, data_ptr: u32, vertex_count
         return; // Nothing to draw
     }
     if !vertex_count.is_multiple_of(3) {
-        warn!("draw_triangles: vertex_count {} is not a multiple of 3", vertex_count);
+        warn!(
+            "draw_triangles: vertex_count {} is not a multiple of 3",
+            vertex_count
+        );
         return;
     }
 
     // Calculate data size with overflow checking
     let stride = vertex_stride(format);
     let Some(data_size) = vertex_count.checked_mul(stride) else {
-        warn!("draw_triangles: data size overflow (vertex_count={}, stride={})", vertex_count, stride);
+        warn!(
+            "draw_triangles: data size overflow (vertex_count={}, stride={})",
+            vertex_count, stride
+        );
         return;
     };
     let float_count = data_size / 4;
@@ -977,7 +1035,9 @@ fn draw_triangles(mut caller: Caller<'_, GameState>, data_ptr: u32, vertex_count
         if ptr + byte_size > mem_data.len() {
             warn!(
                 "draw_triangles: vertex data ({} bytes at {}) exceeds memory bounds ({})",
-                byte_size, ptr, mem_data.len()
+                byte_size,
+                ptr,
+                mem_data.len()
             );
             return;
         }
@@ -1033,7 +1093,10 @@ fn draw_triangles_indexed(
 ) {
     // Validate format
     if format > MAX_VERTEX_FORMAT as u32 {
-        warn!("draw_triangles_indexed: invalid format {} (max {})", format, MAX_VERTEX_FORMAT);
+        warn!(
+            "draw_triangles_indexed: invalid format {} (max {})",
+            format, MAX_VERTEX_FORMAT
+        );
         return;
     }
     let format = format as u8;
@@ -1043,18 +1106,27 @@ fn draw_triangles_indexed(
         return; // Nothing to draw
     }
     if !index_count.is_multiple_of(3) {
-        warn!("draw_triangles_indexed: index_count {} is not a multiple of 3", index_count);
+        warn!(
+            "draw_triangles_indexed: index_count {} is not a multiple of 3",
+            index_count
+        );
         return;
     }
 
     // Calculate data sizes with overflow checking
     let stride = vertex_stride(format);
     let Some(vertex_data_size) = vertex_count.checked_mul(stride) else {
-        warn!("draw_triangles_indexed: vertex data size overflow (vertex_count={}, stride={})", vertex_count, stride);
+        warn!(
+            "draw_triangles_indexed: vertex data size overflow (vertex_count={}, stride={})",
+            vertex_count, stride
+        );
         return;
     };
     let Some(index_data_size) = index_count.checked_mul(4) else {
-        warn!("draw_triangles_indexed: index data size overflow (index_count={})", index_count);
+        warn!(
+            "draw_triangles_indexed: index data size overflow (index_count={})",
+            index_count
+        );
         return;
     };
     let float_count = vertex_data_size / 4;
@@ -1074,44 +1146,45 @@ fn draw_triangles_indexed(
     let index_byte_size = index_data_size as usize;
 
     // Copy data
-    let (vertex_data, index_data): (Vec<f32>, Vec<u32>) = {
-        let mem_data = memory.data(&caller);
+    let (vertex_data, index_data): (Vec<f32>, Vec<u32>) =
+        {
+            let mem_data = memory.data(&caller);
 
-        if vertex_ptr + vertex_byte_size > mem_data.len() {
-            warn!(
+            if vertex_ptr + vertex_byte_size > mem_data.len() {
+                warn!(
                 "draw_triangles_indexed: vertex data ({} bytes at {}) exceeds memory bounds ({})",
                 vertex_byte_size, vertex_ptr, mem_data.len()
             );
-            return;
-        }
+                return;
+            }
 
-        if idx_ptr + index_byte_size > mem_data.len() {
-            warn!(
+            if idx_ptr + index_byte_size > mem_data.len() {
+                warn!(
                 "draw_triangles_indexed: index data ({} bytes at {}) exceeds memory bounds ({})",
                 index_byte_size, idx_ptr, mem_data.len()
             );
-            return;
-        }
-
-        let vertex_bytes = &mem_data[vertex_ptr..vertex_ptr + vertex_byte_size];
-        let floats: &[f32] = bytemuck::cast_slice(vertex_bytes);
-
-        let index_bytes = &mem_data[idx_ptr..idx_ptr + index_byte_size];
-        let indices: &[u32] = bytemuck::cast_slice(index_bytes);
-
-        // Validate indices are within bounds
-        for &idx in indices {
-            if idx >= vertex_count {
-                warn!(
-                    "draw_triangles_indexed: index {} out of bounds (vertex_count = {})",
-                    idx, vertex_count
-                );
                 return;
             }
-        }
 
-        (floats.to_vec(), indices.to_vec())
-    };
+            let vertex_bytes = &mem_data[vertex_ptr..vertex_ptr + vertex_byte_size];
+            let floats: &[f32] = bytemuck::cast_slice(vertex_bytes);
+
+            let index_bytes = &mem_data[idx_ptr..idx_ptr + index_byte_size];
+            let indices: &[u32] = bytemuck::cast_slice(index_bytes);
+
+            // Validate indices are within bounds
+            for &idx in indices {
+                if idx >= vertex_count {
+                    warn!(
+                        "draw_triangles_indexed: index {} out of bounds (vertex_count = {})",
+                        idx, vertex_count
+                    );
+                    return;
+                }
+            }
+
+            (floats.to_vec(), indices.to_vec())
+        };
 
     // Verify data lengths
     if vertex_data.len() != float_count as usize {
@@ -1302,7 +1375,7 @@ fn draw_sprite_region(
         width: w,
         height: h,
         uv_rect: Some((src_x, src_y, src_w, src_h)),
-        origin: None,  // No rotation
+        origin: None, // No rotation
         rotation: 0.0,
         color,
         blend_mode: state.render_state.blend_mode,
@@ -1571,7 +1644,10 @@ fn material_metallic(mut caller: Caller<'_, GameState>, value: f32) {
     let clamped = value.clamp(0.0, 1.0);
 
     if (value - clamped).abs() > 0.001 {
-        warn!("material_metallic: value {} out of range, clamped to {}", value, clamped);
+        warn!(
+            "material_metallic: value {} out of range, clamped to {}",
+            value, clamped
+        );
     }
 
     state.render_state.material_metallic = clamped;
@@ -1589,7 +1665,10 @@ fn material_roughness(mut caller: Caller<'_, GameState>, value: f32) {
     let clamped = value.clamp(0.0, 1.0);
 
     if (value - clamped).abs() > 0.001 {
-        warn!("material_roughness: value {} out of range, clamped to {}", value, clamped);
+        warn!(
+            "material_roughness: value {} out of range, clamped to {}",
+            value, clamped
+        );
     }
 
     state.render_state.material_roughness = clamped;
@@ -1607,7 +1686,10 @@ fn material_emissive(mut caller: Caller<'_, GameState>, value: f32) {
 
     // No clamping for emissive - allow HDR values
     if value < 0.0 {
-        warn!("material_emissive: negative value {} not allowed, using 0.0", value);
+        warn!(
+            "material_emissive: negative value {} not allowed, using 0.0",
+            value
+        );
         state.render_state.material_emissive = 0.0;
     } else {
         state.render_state.material_emissive = value;
@@ -1708,13 +1790,19 @@ fn light_color(mut caller: Caller<'_, GameState>, index: u32, r: f32, g: f32, b:
 fn light_intensity(mut caller: Caller<'_, GameState>, index: u32, intensity: f32) {
     // Validate index
     if index > 3 {
-        warn!("light_intensity: invalid light index {} (must be 0-3)", index);
+        warn!(
+            "light_intensity: invalid light index {} (must be 0-3)",
+            index
+        );
         return;
     }
 
     // Validate intensity (allow > 1.0, but clamp negative to 0.0)
     let intensity = if intensity < 0.0 {
-        warn!("light_intensity: negative intensity {}, clamping to 0.0", intensity);
+        warn!(
+            "light_intensity: negative intensity {}, clamping to 0.0",
+            intensity
+        );
         0.0
     } else {
         intensity
@@ -1926,7 +2014,9 @@ mod tests {
         state.current_transform = Mat4::IDENTITY;
         let angle = std::f32::consts::FRAC_PI_2; // 90 degrees
         state.current_transform *= Mat4::from_rotation_y(angle);
-        let point = state.current_transform.transform_point3(Vec3::new(1.0, 0.0, 0.0));
+        let point = state
+            .current_transform
+            .transform_point3(Vec3::new(1.0, 0.0, 0.0));
         // Rotating (1,0,0) 90 degrees around Y should give (0,0,-1)
         assert!((point.x).abs() < 0.001);
         assert!((point.z + 1.0).abs() < 0.001);
@@ -1934,7 +2024,9 @@ mod tests {
         // Reset and test scale
         state.current_transform = Mat4::IDENTITY;
         state.current_transform *= Mat4::from_scale(Vec3::new(2.0, 3.0, 4.0));
-        let point = state.current_transform.transform_point3(Vec3::new(1.0, 1.0, 1.0));
+        let point = state
+            .current_transform
+            .transform_point3(Vec3::new(1.0, 1.0, 1.0));
         assert!((point - Vec3::new(2.0, 3.0, 4.0)).length() < 0.001);
     }
 
@@ -1967,7 +2059,9 @@ mod tests {
         // Fill the stack to max
         for i in 0..MAX_TRANSFORM_STACK {
             assert!(state.transform_stack.len() < MAX_TRANSFORM_STACK);
-            state.transform_stack.push(Mat4::from_translation(Vec3::new(i as f32, 0.0, 0.0)));
+            state
+                .transform_stack
+                .push(Mat4::from_translation(Vec3::new(i as f32, 0.0, 0.0)));
         }
 
         assert_eq!(state.transform_stack.len(), MAX_TRANSFORM_STACK);
@@ -1985,20 +2079,23 @@ mod tests {
         const SKINNING_OVERHEAD: u32 = 20;
 
         // Test base format + skinning
-        assert_eq!(super::vertex_stride(super::FORMAT_SKINNED), 12 + SKINNING_OVERHEAD); // 32
+        assert_eq!(
+            super::vertex_stride(super::FORMAT_SKINNED),
+            12 + SKINNING_OVERHEAD
+        ); // 32
     }
 
     #[test]
     fn test_vertex_stride_all_skinned_formats() {
         // All 8 skinned format combinations
-        assert_eq!(super::vertex_stride(8), 32);   // POS_SKINNED
-        assert_eq!(super::vertex_stride(9), 40);   // POS_UV_SKINNED
-        assert_eq!(super::vertex_stride(10), 44);  // POS_COLOR_SKINNED
-        assert_eq!(super::vertex_stride(11), 52);  // POS_UV_COLOR_SKINNED
-        assert_eq!(super::vertex_stride(12), 44);  // POS_NORMAL_SKINNED
-        assert_eq!(super::vertex_stride(13), 52);  // POS_UV_NORMAL_SKINNED
-        assert_eq!(super::vertex_stride(14), 56);  // POS_COLOR_NORMAL_SKINNED
-        assert_eq!(super::vertex_stride(15), 64);  // POS_UV_COLOR_NORMAL_SKINNED
+        assert_eq!(super::vertex_stride(8), 32); // POS_SKINNED
+        assert_eq!(super::vertex_stride(9), 40); // POS_UV_SKINNED
+        assert_eq!(super::vertex_stride(10), 44); // POS_COLOR_SKINNED
+        assert_eq!(super::vertex_stride(11), 52); // POS_UV_COLOR_SKINNED
+        assert_eq!(super::vertex_stride(12), 44); // POS_NORMAL_SKINNED
+        assert_eq!(super::vertex_stride(13), 52); // POS_UV_NORMAL_SKINNED
+        assert_eq!(super::vertex_stride(14), 56); // POS_COLOR_NORMAL_SKINNED
+        assert_eq!(super::vertex_stride(15), 64); // POS_UV_COLOR_NORMAL_SKINNED
     }
 
     #[test]
@@ -2104,7 +2201,7 @@ mod tests {
         assert_eq!(cols[12], 10.0); // x translation
         assert_eq!(cols[13], 20.0); // y translation
         assert_eq!(cols[14], 30.0); // z translation
-        assert_eq!(cols[15], 1.0);  // w = 1
+        assert_eq!(cols[15], 1.0); // w = 1
     }
 
     #[test]
@@ -2131,14 +2228,14 @@ mod tests {
     #[test]
     fn test_vertex_stride_base_formats() {
         // Base formats without skinning
-        assert_eq!(super::vertex_stride(0), 12);  // POS: 3 floats = 12 bytes
-        assert_eq!(super::vertex_stride(1), 20);  // POS_UV: 3 + 2 floats = 20 bytes
-        assert_eq!(super::vertex_stride(2), 24);  // POS_COLOR: 3 + 3 floats = 24 bytes
-        assert_eq!(super::vertex_stride(3), 32);  // POS_UV_COLOR: 3 + 2 + 3 floats = 32 bytes
-        assert_eq!(super::vertex_stride(4), 24);  // POS_NORMAL: 3 + 3 floats = 24 bytes
-        assert_eq!(super::vertex_stride(5), 32);  // POS_UV_NORMAL: 3 + 2 + 3 floats = 32 bytes
-        assert_eq!(super::vertex_stride(6), 36);  // POS_COLOR_NORMAL: 3 + 3 + 3 floats = 36 bytes
-        assert_eq!(super::vertex_stride(7), 44);  // POS_UV_COLOR_NORMAL: 3 + 2 + 3 + 3 floats = 44 bytes
+        assert_eq!(super::vertex_stride(0), 12); // POS: 3 floats = 12 bytes
+        assert_eq!(super::vertex_stride(1), 20); // POS_UV: 3 + 2 floats = 20 bytes
+        assert_eq!(super::vertex_stride(2), 24); // POS_COLOR: 3 + 3 floats = 24 bytes
+        assert_eq!(super::vertex_stride(3), 32); // POS_UV_COLOR: 3 + 2 + 3 floats = 32 bytes
+        assert_eq!(super::vertex_stride(4), 24); // POS_NORMAL: 3 + 3 floats = 24 bytes
+        assert_eq!(super::vertex_stride(5), 32); // POS_UV_NORMAL: 3 + 2 + 3 floats = 32 bytes
+        assert_eq!(super::vertex_stride(6), 36); // POS_COLOR_NORMAL: 3 + 3 + 3 floats = 36 bytes
+        assert_eq!(super::vertex_stride(7), 44); // POS_UV_COLOR_NORMAL: 3 + 2 + 3 + 3 floats = 44 bytes
     }
 
     #[test]
@@ -2208,9 +2305,9 @@ mod tests {
     fn test_init_config_resolution_values() {
         use crate::console::RESOLUTIONS;
         // Verify resolution indices map to expected values
-        assert_eq!(RESOLUTIONS[0], (640, 360));   // 360p
-        assert_eq!(RESOLUTIONS[1], (960, 540));   // 540p (default)
-        assert_eq!(RESOLUTIONS[2], (1280, 720));  // 720p
+        assert_eq!(RESOLUTIONS[0], (640, 360)); // 360p
+        assert_eq!(RESOLUTIONS[1], (960, 540)); // 540p (default)
+        assert_eq!(RESOLUTIONS[2], (1280, 720)); // 720p
         assert_eq!(RESOLUTIONS[3], (1920, 1080)); // 1080p
     }
 
@@ -2218,9 +2315,9 @@ mod tests {
     fn test_init_config_tick_rate_values() {
         use crate::console::TICK_RATES;
         // Verify tick rate indices map to expected values
-        assert_eq!(TICK_RATES[0], 24);  // 24 fps
-        assert_eq!(TICK_RATES[1], 30);  // 30 fps
-        assert_eq!(TICK_RATES[2], 60);  // 60 fps (default)
+        assert_eq!(TICK_RATES[0], 24); // 24 fps
+        assert_eq!(TICK_RATES[1], 30); // 30 fps
+        assert_eq!(TICK_RATES[2], 60); // 60 fps (default)
         assert_eq!(TICK_RATES[3], 120); // 120 fps
     }
 
@@ -2412,7 +2509,7 @@ mod tests {
         let mut state = GameState::new();
 
         state.draw_commands.push(DrawCommand::DrawTriangles {
-            format: 7, // POS_UV_COLOR_NORMAL
+            format: 7,                        // POS_UV_COLOR_NORMAL
             vertex_data: vec![1.0, 2.0, 3.0], // Minimal data for test
             transform: Mat4::IDENTITY,
             color: 0xFFFFFFFF,
@@ -2469,7 +2566,13 @@ mod tests {
             bound_textures: [0; 4],
         });
 
-        if let DrawCommand::DrawSprite { uv_rect, origin, rotation, .. } = &state.draw_commands[0] {
+        if let DrawCommand::DrawSprite {
+            uv_rect,
+            origin,
+            rotation,
+            ..
+        } = &state.draw_commands[0]
+        {
             assert!(uv_rect.is_some());
             let (u, v, w, h) = uv_rect.unwrap();
             assert_eq!(u, 0.0);
@@ -2521,7 +2624,14 @@ mod tests {
             sun_sharpness: 64.0,
         });
 
-        if let DrawCommand::SetSky { horizon_color, zenith_color, sun_direction, sun_color, sun_sharpness } = &state.draw_commands[0] {
+        if let DrawCommand::SetSky {
+            horizon_color,
+            zenith_color,
+            sun_direction,
+            sun_color,
+            sun_sharpness,
+        } = &state.draw_commands[0]
+        {
             assert_eq!(horizon_color[0], 0.5);
             assert_eq!(zenith_color[2], 0.8);
             assert_eq!(sun_direction[1], 1.0);
@@ -2569,7 +2679,7 @@ mod tests {
     fn test_pending_mesh_non_indexed() {
         let mesh = PendingMesh {
             handle: 1,
-            format: 0, // POS only
+            format: 0,                                                      // POS only
             vertex_data: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], // 3 vertices
             index_data: None,
         };
@@ -2583,8 +2693,8 @@ mod tests {
     fn test_pending_mesh_indexed() {
         let mesh = PendingMesh {
             handle: 2,
-            format: 5, // POS_UV_NORMAL
-            vertex_data: vec![0.0; 8 * 4], // 4 vertices
+            format: 5,                                // POS_UV_NORMAL
+            vertex_data: vec![0.0; 8 * 4],            // 4 vertices
             index_data: Some(vec![0, 1, 2, 0, 2, 3]), // 2 triangles
         };
 
@@ -3299,11 +3409,11 @@ mod tests {
     fn test_material_emissive_no_upper_clamp() {
         // Emissive allows HDR values (> 1.0), only negative is clamped
         let test_cases = [
-            (-1.0f32, 0.0f32),  // Clamped to 0
+            (-1.0f32, 0.0f32), // Clamped to 0
             (0.0, 0.0),
             (1.0, 1.0),
-            (2.0, 2.0),        // Allowed
-            (10.0, 10.0),      // Allowed for HDR
+            (2.0, 2.0),   // Allowed
+            (10.0, 10.0), // Allowed for HDR
         ];
 
         for (input, expected) in test_cases {
@@ -3324,7 +3434,7 @@ mod tests {
             (-0.5, 0.0),
             (0.0, 0.0),
             (1.0, 1.0),
-            (2.0, 2.0),  // HDR allowed
+            (2.0, 2.0), // HDR allowed
         ];
 
         for (input, expected) in test_cases {
@@ -3340,7 +3450,7 @@ mod tests {
             (-1.0f32, 0.0f32),
             (0.0, 0.0),
             (1.0, 1.0),
-            (10.0, 10.0),  // High intensity allowed
+            (10.0, 10.0), // High intensity allowed
         ];
 
         for (input, expected) in test_cases {
@@ -3519,7 +3629,14 @@ mod tests {
 
     #[test]
     fn test_texture_dimensions_valid() {
-        let valid_dimensions = [(1u32, 1u32), (8, 8), (64, 64), (256, 256), (1024, 1024), (4096, 4096)];
+        let valid_dimensions = [
+            (1u32, 1u32),
+            (8, 8),
+            (64, 64),
+            (256, 256),
+            (1024, 1024),
+            (4096, 4096),
+        ];
         for (w, h) in valid_dimensions {
             assert!(w > 0 && h > 0);
         }
@@ -3694,7 +3811,10 @@ mod tests {
 
         // This would overflow: 65536 * 65536 = 4,294,967,296 > u32::MAX
         let result = width.checked_mul(height);
-        assert!(result.is_none(), "Expected overflow for 65536x65536 texture");
+        assert!(
+            result.is_none(),
+            "Expected overflow for 65536x65536 texture"
+        );
 
         // Smaller dimensions should succeed
         let width: u32 = 4096;
@@ -3715,7 +3835,10 @@ mod tests {
         let vertex_count: u32 = u32::MAX / 64 + 1; // Just over the limit
 
         let result = vertex_count.checked_mul(stride);
-        assert!(result.is_none(), "Expected overflow for extreme vertex count");
+        assert!(
+            result.is_none(),
+            "Expected overflow for extreme vertex count"
+        );
 
         // Safe vertex count should succeed
         let vertex_count: u32 = 1_000_000;
@@ -3732,7 +3855,10 @@ mod tests {
         let index_count: u32 = u32::MAX / 4 + 1; // Just over the limit
 
         let result = index_count.checked_mul(4);
-        assert!(result.is_none(), "Expected overflow for extreme index count");
+        assert!(
+            result.is_none(),
+            "Expected overflow for extreme index count"
+        );
 
         // Safe index count should succeed
         let index_count: u32 = 1_000_000;

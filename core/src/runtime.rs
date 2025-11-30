@@ -104,7 +104,11 @@ impl<C: Console> Runtime<C> {
     /// Add local input for a player
     ///
     /// Input should be added before calling `frame()` each render loop.
-    pub fn add_local_input(&mut self, player_handle: usize, input: C::Input) -> Result<(), GgrsError> {
+    pub fn add_local_input(
+        &mut self,
+        player_handle: usize,
+        input: C::Input,
+    ) -> Result<(), GgrsError> {
         if let Some(session) = &mut self.session {
             session.add_local_input(player_handle, input)?;
         }
@@ -162,12 +166,14 @@ impl<C: Console> Runtime<C> {
                 let tick_start = Instant::now();
 
                 // Advance GGRS frame and get requests
-                let requests = session.advance_frame()
+                let requests = session
+                    .advance_frame()
                     .map_err(|e| anyhow::anyhow!("GGRS advance_frame failed: {}", e))?;
 
                 // Handle all requests (SaveGameState, LoadGameState, AdvanceFrame)
                 if let Some(game) = &mut self.game {
-                    let advance_inputs = session.handle_requests(game, requests)
+                    let advance_inputs = session
+                        .handle_requests(game, requests)
                         .map_err(|e| anyhow::anyhow!("GGRS handle_requests failed: {}", e))?;
 
                     // Update audio rollback mode
@@ -343,16 +349,12 @@ mod tests {
         type Audio = TestAudio;
         type Input = TestInput;
 
-        fn name(&self) -> &'static str {
-            "Test Console"
-        }
-
-        fn specs(&self) -> ConsoleSpecs {
-            ConsoleSpecs {
-                name: "Test Console".to_string(),
-                resolutions: vec![(320, 240), (640, 480)],
+        fn specs() -> &'static ConsoleSpecs {
+            &ConsoleSpecs {
+                name: "Test Console",
+                resolutions: &[(320, 240), (640, 480)],
                 default_resolution: 0,
-                tick_rates: vec![30, 60],
+                tick_rates: &[30, 60],
                 default_tick_rate: 1,
                 ram_limit: 1024 * 1024,
                 vram_limit: 512 * 1024,
@@ -370,7 +372,9 @@ mod tests {
         }
 
         fn create_audio(&self) -> Result<Self::Audio> {
-            Ok(TestAudio { rollback_mode: false })
+            Ok(TestAudio {
+                rollback_mode: false,
+            })
         }
 
         fn map_input(&self, raw: &RawInput) -> Self::Input {
@@ -442,11 +446,14 @@ mod tests {
         let mut runtime = Runtime::new(console);
 
         let engine = WasmEngine::new().unwrap();
-        let wasm = wat::parse_str(r#"
+        let wasm = wat::parse_str(
+            r#"
             (module
                 (memory (export "memory") 1)
             )
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
         let module = engine.load_module(&wasm).unwrap();
         let linker = Linker::new(engine.engine());
         let game = GameInstance::new(&engine, &module, &linker).unwrap();
@@ -461,12 +468,15 @@ mod tests {
         let mut runtime = Runtime::new(console);
 
         let engine = WasmEngine::new().unwrap();
-        let wasm = wat::parse_str(r#"
+        let wasm = wat::parse_str(
+            r#"
             (module
                 (memory (export "memory") 1)
                 (func (export "init"))
             )
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
         let module = engine.load_module(&wasm).unwrap();
         let linker = Linker::new(engine.engine());
         let game = GameInstance::new(&engine, &module, &linker).unwrap();
@@ -523,7 +533,9 @@ mod tests {
         let console = TestConsole;
         let mut runtime = Runtime::new(console);
 
-        let audio = TestAudio { rollback_mode: false };
+        let audio = TestAudio {
+            rollback_mode: false,
+        };
         runtime.set_audio(audio);
 
         assert!(runtime.audio().is_some());
@@ -534,7 +546,9 @@ mod tests {
         let console = TestConsole;
         let mut runtime = Runtime::new(console);
 
-        let audio = TestAudio { rollback_mode: false };
+        let audio = TestAudio {
+            rollback_mode: false,
+        };
         runtime.set_audio(audio);
 
         // Verify mutable access
@@ -561,12 +575,15 @@ mod tests {
         let mut runtime = Runtime::new(console);
 
         let engine = WasmEngine::new().unwrap();
-        let wasm = wat::parse_str(r#"
+        let wasm = wat::parse_str(
+            r#"
             (module
                 (memory (export "memory") 1)
                 (func (export "render"))
             )
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
         let module = engine.load_module(&wasm).unwrap();
         let linker = Linker::new(engine.engine());
         let game = GameInstance::new(&engine, &module, &linker).unwrap();

@@ -334,7 +334,11 @@ impl App {
                             // Draw the retained mesh by adding its data to command buffer
                             // Note: This is a simplified approach - retained meshes need
                             // proper integration with the command buffer system
-                            tracing::trace!("Drawing mesh handle {} ({} vertices)", handle, mesh.vertex_count);
+                            tracing::trace!(
+                                "Drawing mesh handle {} ({} vertices)",
+                                handle,
+                                mesh.vertex_count
+                            );
                             // TODO: Implement retained mesh drawing in command buffer
                         }
                     } else {
@@ -611,7 +615,8 @@ impl App {
     /// Returns true if the game is still running, false if it should exit.
     fn run_game_frame(&mut self) -> Result<bool, RuntimeError> {
         // First, update input from InputManager
-        if let (Some(session), Some(input_manager)) = (&mut self.game_session, &self.input_manager) {
+        if let (Some(session), Some(input_manager)) = (&mut self.game_session, &self.input_manager)
+        {
             let console = session.runtime.console();
 
             // Get input for each local player and set it on the game
@@ -625,22 +630,25 @@ impl App {
         }
 
         // Run the game frame (fixed timestep updates)
-        let session = self.game_session.as_mut().ok_or_else(|| {
-            RuntimeError("No game session".to_string())
-        })?;
+        let session = self
+            .game_session
+            .as_mut()
+            .ok_or_else(|| RuntimeError("No game session".to_string()))?;
 
-        let (ticks, _alpha) = session.runtime.frame().map_err(|e| {
-            RuntimeError(format!("Game frame error: {}", e))
-        })?;
+        let (ticks, _alpha) = session
+            .runtime
+            .frame()
+            .map_err(|e| RuntimeError(format!("Game frame error: {}", e)))?;
 
         if ticks > 0 {
             tracing::trace!("Ran {} game ticks", ticks);
         }
 
         // Render the game (calls game's render() function)
-        session.runtime.render().map_err(|e| {
-            RuntimeError(format!("Game render error: {}", e))
-        })?;
+        session
+            .runtime
+            .render()
+            .map_err(|e| RuntimeError(format!("Game render error: {}", e)))?;
 
         // Check if game requested quit
         if let Some(game) = session.runtime.game_mut() {
@@ -668,44 +676,41 @@ impl App {
             .ok_or_else(|| RuntimeError("WASM engine not initialized".to_string()))?;
 
         // Load the ROM file
-        let rom_bytes = std::fs::read(&game.rom_path).map_err(|e| {
-            RuntimeError(format!("Failed to read ROM file: {}", e))
-        })?;
+        let rom_bytes = std::fs::read(&game.rom_path)
+            .map_err(|e| RuntimeError(format!("Failed to read ROM file: {}", e)))?;
 
         // Load the WASM module
-        let module = wasm_engine.load_module(&rom_bytes).map_err(|e| {
-            RuntimeError(format!("Failed to load WASM module: {}", e))
-        })?;
+        let module = wasm_engine
+            .load_module(&rom_bytes)
+            .map_err(|e| RuntimeError(format!("Failed to load WASM module: {}", e)))?;
 
         // Create a linker and register FFI functions
         let mut linker = wasmtime::Linker::new(wasm_engine.engine());
 
         // Register common FFI functions
-        emberware_core::ffi::register_common_ffi(&mut linker).map_err(|e| {
-            RuntimeError(format!("Failed to register common FFI: {}", e))
-        })?;
+        emberware_core::ffi::register_common_ffi(&mut linker)
+            .map_err(|e| RuntimeError(format!("Failed to register common FFI: {}", e)))?;
 
         // Create the console instance
         let console = EmberwareZ::new();
 
         // Register console-specific FFI functions
-        console.register_ffi(&mut linker).map_err(|e| {
-            RuntimeError(format!("Failed to register Z FFI: {}", e))
-        })?;
+        console
+            .register_ffi(&mut linker)
+            .map_err(|e| RuntimeError(format!("Failed to register Z FFI: {}", e)))?;
 
         // Create the game instance
-        let game_instance =
-            emberware_core::wasm::GameInstance::new(wasm_engine, &module, &linker)
-                .map_err(|e| RuntimeError(format!("Failed to instantiate game: {}", e)))?;
+        let game_instance = emberware_core::wasm::GameInstance::new(wasm_engine, &module, &linker)
+            .map_err(|e| RuntimeError(format!("Failed to instantiate game: {}", e)))?;
 
         // Create the runtime
         let mut runtime = Runtime::new(console);
         runtime.load_game(game_instance);
 
         // Initialize the game (calls game's init() function)
-        runtime.init_game().map_err(|e| {
-            RuntimeError(format!("Failed to initialize game: {}", e))
-        })?;
+        runtime
+            .init_game()
+            .map_err(|e| RuntimeError(format!("Failed to initialize game: {}", e)))?;
 
         // Store the session with empty resource maps
         self.game_session = Some(GameSession {
@@ -846,7 +851,10 @@ impl App {
         if self.frame_times.len() < 2 {
             return 0.0;
         }
-        let elapsed = self.frame_times.last().unwrap()
+        let elapsed = self
+            .frame_times
+            .last()
+            .unwrap()
             .duration_since(*self.frame_times.first().unwrap())
             .as_secs_f32();
         if elapsed > 0.0 {
@@ -947,7 +955,9 @@ impl App {
             }
         };
 
-        let view = surface_texture.texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let view = surface_texture
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
 
         // If in Playing mode, render game first
         if matches!(mode, AppMode::Playing { .. }) {
@@ -968,10 +978,18 @@ impl App {
                             [clear_r, clear_g, clear_b, clear_a],
                         )
                     } else {
-                        (glam::Mat4::IDENTITY, glam::Mat4::IDENTITY, [0.1, 0.1, 0.1, 1.0])
+                        (
+                            glam::Mat4::IDENTITY,
+                            glam::Mat4::IDENTITY,
+                            [0.1, 0.1, 0.1, 1.0],
+                        )
                     }
                 } else {
-                    (glam::Mat4::IDENTITY, glam::Mat4::IDENTITY, [0.1, 0.1, 0.1, 1.0])
+                    (
+                        glam::Mat4::IDENTITY,
+                        glam::Mat4::IDENTITY,
+                        [0.1, 0.1, 0.1, 1.0],
+                    )
                 }
             };
 
@@ -1061,7 +1079,8 @@ impl App {
                             painter.rect_filled(rect, 2.0, egui::Color32::from_gray(30));
 
                             // Target line (16.67ms for 60 FPS)
-                            let target_y = rect.bottom() - (TARGET_FRAME_TIME_MS / GRAPH_MAX_FRAME_TIME_MS * graph_height);
+                            let target_y = rect.bottom()
+                                - (TARGET_FRAME_TIME_MS / GRAPH_MAX_FRAME_TIME_MS * graph_height);
                             painter.hline(
                                 rect.left()..=rect.right(),
                                 target_y,
@@ -1074,7 +1093,8 @@ impl App {
                                 for (i, &time_ms) in debug_stats.frame_times.iter().enumerate() {
                                     let x = rect.left() + i as f32 * bar_width;
                                     // Scale: 0-GRAPH_MAX_FRAME_TIME_MS maps to full height
-                                    let height = (time_ms / GRAPH_MAX_FRAME_TIME_MS * graph_height).min(graph_height);
+                                    let height = (time_ms / GRAPH_MAX_FRAME_TIME_MS * graph_height)
+                                        .min(graph_height);
                                     let bar_rect = egui::Rect::from_min_max(
                                         egui::pos2(x, rect.bottom() - height),
                                         egui::pos2(x + bar_width - 1.0, rect.bottom()),
@@ -1110,7 +1130,12 @@ impl App {
                         let vram_mb = debug_stats.vram_used as f32 / (1024.0 * 1024.0);
                         let vram_limit_mb = debug_stats.vram_limit as f32 / (1024.0 * 1024.0);
                         let vram_pct = debug_stats.vram_used as f32 / debug_stats.vram_limit as f32;
-                        ui.label(format!("VRAM: {:.2} / {:.2} MB ({:.1}%)", vram_mb, vram_limit_mb, vram_pct * 100.0));
+                        ui.label(format!(
+                            "VRAM: {:.2} / {:.2} MB ({:.1}%)",
+                            vram_mb,
+                            vram_limit_mb,
+                            vram_pct * 100.0
+                        ));
                         ui.add(egui::ProgressBar::new(vram_pct).show_percentage());
 
                         ui.separator();
@@ -1139,7 +1164,9 @@ impl App {
 
         egui_state.handle_platform_output(&window, full_output.platform_output);
 
-        let tris = self.egui_ctx.tessellate(full_output.shapes, full_output.pixels_per_point);
+        let tris = self
+            .egui_ctx
+            .tessellate(full_output.shapes, full_output.pixels_per_point);
 
         // Upload egui textures
         for (id, image_delta) in &full_output.textures_delta.set {
@@ -1147,9 +1174,12 @@ impl App {
         }
 
         // Create command encoder
-        let mut encoder = graphics.device().create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Render Encoder"),
-        });
+        let mut encoder =
+            graphics
+                .device()
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("Render Encoder"),
+                });
 
         let screen_descriptor = egui_wgpu::ScreenDescriptor {
             size_in_pixels: [graphics.width(), graphics.height()],
@@ -1308,7 +1338,9 @@ impl ApplicationHandler for App {
                 tracing::debug!("DPI scale factor changed to {}", scale_factor);
                 // Window resize event will follow, which will trigger handle_resize
             }
-            WindowEvent::KeyboardInput { event: key_event, .. } => {
+            WindowEvent::KeyboardInput {
+                event: key_event, ..
+            } => {
                 self.handle_key_input(key_event);
             }
             WindowEvent::RedrawRequested => {

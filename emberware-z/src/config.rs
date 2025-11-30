@@ -12,8 +12,7 @@ use crate::input::InputConfig;
 ///
 /// Contains all user-configurable settings organized into sections.
 /// Serialized to/from TOML format for persistence.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
     /// Video/graphics settings
     #[serde(default)]
@@ -48,10 +47,15 @@ pub struct AudioConfig {
     pub master_volume: f32,
 }
 
-fn default_true() -> bool { true }
-fn default_scale() -> u32 { 2 }
-fn default_volume() -> f32 { 0.8 }
-
+fn default_true() -> bool {
+    true
+}
+fn default_scale() -> u32 {
+    2
+}
+fn default_volume() -> f32 {
+    0.8
+}
 
 impl Default for VideoConfig {
     fn default() -> Self {
@@ -65,9 +69,7 @@ impl Default for VideoConfig {
 
 impl Default for AudioConfig {
     fn default() -> Self {
-        Self {
-            master_volume: 0.8,
-        }
+        Self { master_volume: 0.8 }
     }
 }
 
@@ -175,9 +177,7 @@ mod tests {
                 vsync: false,
                 resolution_scale: 3,
             },
-            audio: AudioConfig {
-                master_volume: 0.5,
-            },
+            audio: AudioConfig { master_volume: 0.5 },
             input: InputConfig::default(),
         };
 
@@ -240,9 +240,7 @@ master_volume = 0.3
 
     #[test]
     fn test_audio_config_serialize() {
-        let audio = AudioConfig {
-            master_volume: 1.0,
-        };
+        let audio = AudioConfig { master_volume: 1.0 };
         let toml_str = toml::to_string(&audio).unwrap();
         assert!(toml_str.contains("master_volume = 1.0"));
     }

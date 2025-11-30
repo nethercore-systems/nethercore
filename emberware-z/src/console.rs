@@ -17,14 +17,13 @@ use emberware_core::{
 use crate::graphics::ZGraphics;
 
 /// Get Emberware Z console specifications
-pub fn z_specs() -> ConsoleSpecs {
+pub const fn z_specs() -> &'static ConsoleSpecs {
     emberware_shared::emberware_z_specs()
 }
 
 // Re-export constants for FFI validation
 pub use emberware_shared::{
-    EMBERWARE_Z_RESOLUTIONS as RESOLUTIONS,
-    EMBERWARE_Z_TICK_RATES as TICK_RATES,
+    EMBERWARE_Z_RESOLUTIONS as RESOLUTIONS, EMBERWARE_Z_TICK_RATES as TICK_RATES,
     EMBERWARE_Z_VRAM_LIMIT as VRAM_LIMIT,
 };
 
@@ -163,7 +162,7 @@ pub struct ZAudio {
 
 impl Audio for ZAudio {
     fn play(&mut self, _handle: SoundHandle, _volume: f32, _looping: bool) {
-        if self.rollback_mode {// Don't play audio during rollback
+        if self.rollback_mode { // Don't play audio during rollback
         }
         // TODO: Play sound via rodio
     }
@@ -205,11 +204,7 @@ impl Console for EmberwareZ {
     type Audio = ZAudio;
     type Input = ZInput;
 
-    fn name(&self) -> &'static str {
-        "Emberware Z"
-    }
-
-    fn specs(&self) -> ConsoleSpecs {
+    fn specs() -> &'static ConsoleSpecs {
         z_specs()
     }
 
@@ -388,8 +383,7 @@ mod tests {
 
     #[test]
     fn test_specs() {
-        let console = EmberwareZ::new();
-        let specs = console.specs();
+        let specs = EmberwareZ::specs();
 
         assert_eq!(specs.name, "Emberware Z");
         assert_eq!(specs.resolutions.len(), 4);

@@ -145,7 +145,7 @@ const SIZE_UV: u64 = 8; // Float32x2
 const SIZE_COLOR: u64 = 12; // Float32x3
 const SIZE_NORMAL: u64 = 12; // Float32x3
 const SIZE_BONE_INDICES: u64 = 4; // Uint8x4
-// Note: SIZE_BONE_WEIGHTS (16 bytes) is not needed since bone weights is always last
+                                  // Note: SIZE_BONE_WEIGHTS (16 bytes) is not needed since bone weights is always last
 
 /// Shader locations for each attribute type
 const LOC_POS: u32 = 0;
@@ -222,7 +222,11 @@ static VERTEX_ATTRIBUTES: [&[wgpu::VertexAttribute]; 16] = [
     // Format 2: POS_COLOR
     &[attr_pos(), attr_color(SIZE_POS)],
     // Format 3: POS_UV_COLOR
-    &[attr_pos(), attr_uv(SIZE_POS), attr_color(SIZE_POS + SIZE_UV)],
+    &[
+        attr_pos(),
+        attr_uv(SIZE_POS),
+        attr_color(SIZE_POS + SIZE_UV),
+    ],
     // Format 4: POS_NORMAL
     &[attr_pos(), attr_normal(SIZE_POS)],
     // Format 5: POS_UV_NORMAL
@@ -382,7 +386,10 @@ mod tests {
         assert_eq!(VertexFormatInfo::for_format(6).name, "POS_COLOR_NORMAL");
         assert_eq!(VertexFormatInfo::for_format(7).name, "POS_UV_COLOR_NORMAL");
         assert_eq!(VertexFormatInfo::for_format(8).name, "POS_SKINNED");
-        assert_eq!(VertexFormatInfo::for_format(15).name, "POS_UV_COLOR_NORMAL_SKINNED");
+        assert_eq!(
+            VertexFormatInfo::for_format(15).name,
+            "POS_UV_COLOR_NORMAL_SKINNED"
+        );
     }
 
     #[test]
@@ -399,8 +406,18 @@ mod tests {
         // Verify all 16 formats have valid strides
         for i in 0..VERTEX_FORMAT_COUNT {
             let info = VertexFormatInfo::for_format(i as u8);
-            assert!(info.stride >= 12, "Format {} has stride {} < 12", i, info.stride);
-            assert!(info.stride <= 64, "Format {} has stride {} > 64", i, info.stride);
+            assert!(
+                info.stride >= 12,
+                "Format {} has stride {} < 12",
+                i,
+                info.stride
+            );
+            assert!(
+                info.stride <= 64,
+                "Format {} has stride {} > 64",
+                i,
+                info.stride
+            );
         }
     }
 
@@ -431,13 +448,19 @@ mod tests {
     #[test]
     fn test_vertex_stride_pos_uv_normal_skinned() {
         // POS + UV + NORMAL + SKINNED: 12 + 8 + 12 + 20 = 52 bytes
-        assert_eq!(vertex_stride(FORMAT_UV | FORMAT_NORMAL | FORMAT_SKINNED), 52);
+        assert_eq!(
+            vertex_stride(FORMAT_UV | FORMAT_NORMAL | FORMAT_SKINNED),
+            52
+        );
     }
 
     #[test]
     fn test_vertex_stride_pos_color_normal_skinned() {
         // POS + COLOR + NORMAL + SKINNED: 12 + 12 + 12 + 20 = 56 bytes
-        assert_eq!(vertex_stride(FORMAT_COLOR | FORMAT_NORMAL | FORMAT_SKINNED), 56);
+        assert_eq!(
+            vertex_stride(FORMAT_COLOR | FORMAT_NORMAL | FORMAT_SKINNED),
+            56
+        );
     }
 
     #[test]
@@ -468,10 +491,19 @@ mod tests {
         assert_eq!(vertex_stride(FORMAT_SKINNED), 12 + 20);
         assert_eq!(vertex_stride(FORMAT_UV | FORMAT_SKINNED), 20 + 20);
         assert_eq!(vertex_stride(FORMAT_COLOR | FORMAT_SKINNED), 24 + 20);
-        assert_eq!(vertex_stride(FORMAT_UV | FORMAT_COLOR | FORMAT_SKINNED), 32 + 20);
+        assert_eq!(
+            vertex_stride(FORMAT_UV | FORMAT_COLOR | FORMAT_SKINNED),
+            32 + 20
+        );
         assert_eq!(vertex_stride(FORMAT_NORMAL | FORMAT_SKINNED), 24 + 20);
-        assert_eq!(vertex_stride(FORMAT_UV | FORMAT_NORMAL | FORMAT_SKINNED), 32 + 20);
-        assert_eq!(vertex_stride(FORMAT_COLOR | FORMAT_NORMAL | FORMAT_SKINNED), 36 + 20);
+        assert_eq!(
+            vertex_stride(FORMAT_UV | FORMAT_NORMAL | FORMAT_SKINNED),
+            32 + 20
+        );
+        assert_eq!(
+            vertex_stride(FORMAT_COLOR | FORMAT_NORMAL | FORMAT_SKINNED),
+            36 + 20
+        );
         assert_eq!(vertex_stride(FORMAT_ALL), 44 + 20);
     }
 
@@ -496,7 +528,10 @@ mod tests {
 
     #[test]
     fn test_format_all_includes_skinned() {
-        assert_eq!(FORMAT_ALL, FORMAT_UV | FORMAT_COLOR | FORMAT_NORMAL | FORMAT_SKINNED);
+        assert_eq!(
+            FORMAT_ALL,
+            FORMAT_UV | FORMAT_COLOR | FORMAT_NORMAL | FORMAT_SKINNED
+        );
         assert_eq!(FORMAT_ALL, 15);
     }
 

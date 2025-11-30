@@ -24,15 +24,15 @@
 //! ```
 
 // Module declarations
-pub mod console;
 pub mod api;
 pub mod auth;
+pub mod console;
 pub mod local;
 pub mod requests;
 
 // Re-export all public items for convenience
-pub use console::*;
 pub use api::*;
 pub use auth::*;
+pub use console::*;
 pub use local::*;
 pub use requests::*;

@@ -22,8 +22,12 @@ pub struct InputConfig {
     pub trigger_deadzone: f32,
 }
 
-fn default_deadzone() -> f32 { 0.15 }
-fn default_trigger_deadzone() -> f32 { 0.1 }
+fn default_deadzone() -> f32 {
+    0.15
+}
+fn default_trigger_deadzone() -> f32 {
+    0.1
+}
 
 impl Default for InputConfig {
     fn default() -> Self {
@@ -38,32 +42,68 @@ impl Default for InputConfig {
 /// Keyboard to virtual controller mapping with string-based serialization
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyboardMapping {
-    #[serde(serialize_with = "serialize_keycode", deserialize_with = "deserialize_keycode")]
+    #[serde(
+        serialize_with = "serialize_keycode",
+        deserialize_with = "deserialize_keycode"
+    )]
     pub dpad_up: KeyCode,
-    #[serde(serialize_with = "serialize_keycode", deserialize_with = "deserialize_keycode")]
+    #[serde(
+        serialize_with = "serialize_keycode",
+        deserialize_with = "deserialize_keycode"
+    )]
     pub dpad_down: KeyCode,
-    #[serde(serialize_with = "serialize_keycode", deserialize_with = "deserialize_keycode")]
+    #[serde(
+        serialize_with = "serialize_keycode",
+        deserialize_with = "deserialize_keycode"
+    )]
     pub dpad_left: KeyCode,
-    #[serde(serialize_with = "serialize_keycode", deserialize_with = "deserialize_keycode")]
+    #[serde(
+        serialize_with = "serialize_keycode",
+        deserialize_with = "deserialize_keycode"
+    )]
     pub dpad_right: KeyCode,
 
-    #[serde(serialize_with = "serialize_keycode", deserialize_with = "deserialize_keycode")]
+    #[serde(
+        serialize_with = "serialize_keycode",
+        deserialize_with = "deserialize_keycode"
+    )]
     pub button_a: KeyCode,
-    #[serde(serialize_with = "serialize_keycode", deserialize_with = "deserialize_keycode")]
+    #[serde(
+        serialize_with = "serialize_keycode",
+        deserialize_with = "deserialize_keycode"
+    )]
     pub button_b: KeyCode,
-    #[serde(serialize_with = "serialize_keycode", deserialize_with = "deserialize_keycode")]
+    #[serde(
+        serialize_with = "serialize_keycode",
+        deserialize_with = "deserialize_keycode"
+    )]
     pub button_x: KeyCode,
-    #[serde(serialize_with = "serialize_keycode", deserialize_with = "deserialize_keycode")]
+    #[serde(
+        serialize_with = "serialize_keycode",
+        deserialize_with = "deserialize_keycode"
+    )]
     pub button_y: KeyCode,
 
-    #[serde(serialize_with = "serialize_keycode", deserialize_with = "deserialize_keycode")]
+    #[serde(
+        serialize_with = "serialize_keycode",
+        deserialize_with = "deserialize_keycode"
+    )]
     pub left_bumper: KeyCode,
-    #[serde(serialize_with = "serialize_keycode", deserialize_with = "deserialize_keycode")]
+    #[serde(
+        serialize_with = "serialize_keycode",
+        deserialize_with = "deserialize_keycode"
+    )]
     pub right_bumper: KeyCode,
 
-    #[serde(serialize_with = "serialize_keycode", deserialize_with = "deserialize_keycode")]
+    #[serde(
+        serialize_with = "serialize_keycode",
+        deserialize_with = "deserialize_keycode"
+    )]
     pub start: KeyCode,
-    #[serde(serialize_with = "serialize_keycode", deserialize_with = "deserialize_keycode")]
+    #[serde(
+        serialize_with = "serialize_keycode",
+        deserialize_with = "deserialize_keycode"
+    )]
     pub select: KeyCode,
 }
 
@@ -377,7 +417,10 @@ impl InputManager {
         let gilrs = match Gilrs::new() {
             Ok(g) => Some(g),
             Err(e) => {
-                tracing::warn!("Failed to initialize gamepad support: {}. Gamepads will not be available.", e);
+                tracing::warn!(
+                    "Failed to initialize gamepad support: {}. Gamepads will not be available.",
+                    e
+                );
                 None
             }
         };
@@ -465,9 +508,8 @@ impl InputManager {
 
     /// Read keyboard input and map to RawInput
     fn read_keyboard_input(&self) -> RawInput {
-        let is_pressed = |key: KeyCode| -> bool {
-            self.keyboard_state.get(&key).copied().unwrap_or(false)
-        };
+        let is_pressed =
+            |key: KeyCode| -> bool { self.keyboard_state.get(&key).copied().unwrap_or(false) };
 
         let mapping = &self.config.keyboard;
 
@@ -504,9 +546,7 @@ impl InputManager {
     /// Read gamepad input and map to RawInput
     fn read_gamepad_input(&self, gamepad: &gilrs::Gamepad) -> RawInput {
         // Read buttons
-        let btn = |button: Button| -> bool {
-            gamepad.is_pressed(button)
-        };
+        let btn = |button: Button| -> bool { gamepad.is_pressed(button) };
 
         // Read axes with deadzone
         let axis = |axis: Axis| -> f32 {
@@ -816,11 +856,19 @@ mod tests {
 
         // At max input (1.0), should get 1.0 output
         let result = manager.apply_stick_deadzone(1.0);
-        assert!((result - 1.0).abs() < 0.001, "Expected ~1.0, got {}", result);
+        assert!(
+            (result - 1.0).abs() < 0.001,
+            "Expected ~1.0, got {}",
+            result
+        );
 
         // At max negative input (-1.0), should get -1.0 output
         let result = manager.apply_stick_deadzone(-1.0);
-        assert!((result - (-1.0)).abs() < 0.001, "Expected ~-1.0, got {}", result);
+        assert!(
+            (result - (-1.0)).abs() < 0.001,
+            "Expected ~-1.0, got {}",
+            result
+        );
     }
 
     #[test]
@@ -846,7 +894,11 @@ mod tests {
 
         // At max input (1.0), should get 1.0 output
         let result = manager.apply_trigger_deadzone(1.0);
-        assert!((result - 1.0).abs() < 0.001, "Expected ~1.0, got {}", result);
+        assert!(
+            (result - 1.0).abs() < 0.001,
+            "Expected ~1.0, got {}",
+            result
+        );
     }
 
     #[test]
@@ -862,7 +914,11 @@ mod tests {
 
         // Just above the deadzone should return a small positive value
         let result = manager.apply_trigger_deadzone(0.11);
-        assert!(result > 0.0 && result < 0.1, "Expected small positive, got {}", result);
+        assert!(
+            result > 0.0 && result < 0.1,
+            "Expected small positive, got {}",
+            result
+        );
     }
 
     // === Get Player Input Tests ===
@@ -1034,29 +1090,56 @@ mod tests {
         // Test a representative sample of all key categories
         let keys_to_test = vec![
             // Letters
-            KeyCode::KeyA, KeyCode::KeyZ,
+            KeyCode::KeyA,
+            KeyCode::KeyZ,
             // Numbers
-            KeyCode::Digit0, KeyCode::Digit9,
+            KeyCode::Digit0,
+            KeyCode::Digit9,
             // Arrows
-            KeyCode::ArrowUp, KeyCode::ArrowDown, KeyCode::ArrowLeft, KeyCode::ArrowRight,
+            KeyCode::ArrowUp,
+            KeyCode::ArrowDown,
+            KeyCode::ArrowLeft,
+            KeyCode::ArrowRight,
             // Function keys
-            KeyCode::F1, KeyCode::F12,
+            KeyCode::F1,
+            KeyCode::F12,
             // Modifiers
-            KeyCode::ShiftLeft, KeyCode::ShiftRight, KeyCode::ControlLeft, KeyCode::AltLeft,
+            KeyCode::ShiftLeft,
+            KeyCode::ShiftRight,
+            KeyCode::ControlLeft,
+            KeyCode::AltLeft,
             // Special
-            KeyCode::Space, KeyCode::Enter, KeyCode::Escape, KeyCode::Tab, KeyCode::Backspace,
+            KeyCode::Space,
+            KeyCode::Enter,
+            KeyCode::Escape,
+            KeyCode::Tab,
+            KeyCode::Backspace,
             // Punctuation
-            KeyCode::Comma, KeyCode::Period, KeyCode::Slash,
+            KeyCode::Comma,
+            KeyCode::Period,
+            KeyCode::Slash,
             // Numpad
-            KeyCode::Numpad0, KeyCode::NumpadAdd, KeyCode::NumpadEnter,
+            KeyCode::Numpad0,
+            KeyCode::NumpadAdd,
+            KeyCode::NumpadEnter,
         ];
 
         for key in keys_to_test {
             let str_repr = keycode_to_string(&key);
-            assert_ne!(str_repr, "Unknown", "Key {:?} should have a string representation", key);
+            assert_ne!(
+                str_repr, "Unknown",
+                "Key {:?} should have a string representation",
+                key
+            );
 
             let parsed = string_to_keycode(str_repr);
-            assert_eq!(parsed, Some(key), "Key {:?} -> '{}' should roundtrip", key, str_repr);
+            assert_eq!(
+                parsed,
+                Some(key),
+                "Key {:?} -> '{}' should roundtrip",
+                key,
+                str_repr
+            );
         }
     }
 }

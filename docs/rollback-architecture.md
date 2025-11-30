@@ -1,5 +1,17 @@
 # Emberware Rollback Netcode Architecture
 
+## Implementation Status
+
+✅ **FULLY IMPLEMENTED** — Automatic WASM memory snapshotting is the current production approach.
+
+Games do NOT need to implement `save_state`/`load_state` exports. The host automatically snapshots the entire WASM linear memory for rollback. This is transparent to game developers.
+
+**Memory Size:** WASM linear memory typically ranges from 64KB (1 page) to 16MB. Snapshot size = current allocated memory size (not max). The host supports up to 16MB snapshots.
+
+**Performance:** Memory copying is ~1-5ms for 1-4MB on modern CPUs. GGRS rollback typically needs 2-8 saved states in the pool.
+
+---
+
 ## Core Principle
 
 **Snapshot WASM linear memory for rollback. Keep resources in GPU memory.**

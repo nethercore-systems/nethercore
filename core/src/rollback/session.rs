@@ -15,9 +15,7 @@ use crate::wasm::GameInstance;
 
 use super::config::{EmberwareConfig, SessionConfig};
 use super::player::{PlayerSessionConfig, MAX_PLAYERS};
-use super::state::{
-    GameStateSnapshot, LoadStateError, RollbackStateManager, SaveStateError,
-};
+use super::state::{GameStateSnapshot, LoadStateError, RollbackStateManager, SaveStateError};
 
 // ============================================================================
 // Session Types
@@ -619,7 +617,9 @@ impl<I: ConsoleInput> RollbackSession<I> {
         // Update rollback stats for all players
         if rollback_frames_this_call > 0 {
             for stats in &mut self.network_stats {
-                stats.rollback_frames = stats.rollback_frames.saturating_add(rollback_frames_this_call);
+                stats.rollback_frames = stats
+                    .rollback_frames
+                    .saturating_add(rollback_frames_this_call);
             }
         }
 

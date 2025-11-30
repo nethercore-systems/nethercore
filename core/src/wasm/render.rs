@@ -214,7 +214,9 @@ mod tests {
         // Add MAX_BONES matrices
         for i in 0..MAX_BONES {
             let translation = Vec3::new(i as f32, 0.0, 0.0);
-            state.bone_matrices.push(Mat4::from_translation(translation));
+            state
+                .bone_matrices
+                .push(Mat4::from_translation(translation));
         }
         state.bone_count = MAX_BONES as u32;
 

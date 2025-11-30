@@ -74,10 +74,12 @@ use crate::console::VRAM_LIMIT;
 // Re-export public types from submodules
 pub use buffer::{GrowableBuffer, MeshHandle, RetainedMesh};
 pub use command_buffer::CommandBuffer;
-pub use render_state::{BlendMode, CullMode, RenderState, SkyUniforms, TextureFilter, TextureHandle};
+pub use render_state::{
+    BlendMode, CullMode, RenderState, SkyUniforms, TextureFilter, TextureHandle,
+};
 pub use vertex::{
-    vertex_stride, VertexFormatInfo, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED,
-    FORMAT_UV, VERTEX_FORMAT_COUNT,
+    vertex_stride, VertexFormatInfo, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV,
+    VERTEX_FORMAT_COUNT,
 };
 
 // Re-export for crate-internal use
@@ -419,7 +421,12 @@ impl ZGraphics {
     /// Load a texture from RGBA8 pixel data
     ///
     /// Returns a TextureHandle or an error if VRAM budget is exceeded.
-    pub fn load_texture(&mut self, width: u32, height: u32, pixels: &[u8]) -> Result<TextureHandle> {
+    pub fn load_texture(
+        &mut self,
+        width: u32,
+        height: u32,
+        pixels: &[u8],
+    ) -> Result<TextureHandle> {
         self.load_texture_internal(width, height, pixels, true)
     }
 
@@ -1037,8 +1044,13 @@ impl ZGraphics {
             state.cull_mode
         );
 
-        let entry =
-            pipeline::create_pipeline(&self.device, self.config.format, self.current_render_mode, format, state);
+        let entry = pipeline::create_pipeline(
+            &self.device,
+            self.config.format,
+            self.current_render_mode,
+            format,
+            state,
+        );
         self.pipelines.insert(key, entry);
         &self.pipelines[&key]
     }
@@ -1065,7 +1077,13 @@ impl ZGraphics {
     /// # Notes
     /// - Characters outside ASCII 32-126 are rendered as spaces
     /// - This is a simple left-to-right, single-line renderer (no word wrap)
-    pub fn generate_text_quads(text: &str, x: f32, y: f32, size: f32, color: u32) -> (Vec<f32>, Vec<u32>) {
+    pub fn generate_text_quads(
+        text: &str,
+        x: f32,
+        y: f32,
+        size: f32,
+        color: u32,
+    ) -> (Vec<f32>, Vec<u32>) {
         use crate::font;
 
         // Calculate scale factor (base glyph size is 8x8)
@@ -1148,9 +1166,11 @@ impl ZGraphics {
         clear_color: [f32; 4],
     ) {
         // Create command encoder
-        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Game Render Encoder"),
-        });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Game Render Encoder"),
+            });
 
         // If no commands, just clear and return
         if self.command_buffer.commands().is_empty() {
@@ -1187,60 +1207,68 @@ impl ZGraphics {
         }
 
         // OPTIMIZATION 1: Create frame-level uniform buffers ONCE (not per-command)
-        let view_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("View Matrix Buffer"),
-            contents: bytemuck::cast_slice(&view_matrix.to_cols_array()),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
+        let view_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("View Matrix Buffer"),
+                contents: bytemuck::cast_slice(&view_matrix.to_cols_array()),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
 
-        let proj_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Projection Matrix Buffer"),
-            contents: bytemuck::cast_slice(&projection_matrix.to_cols_array()),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
+        let proj_buffer = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Projection Matrix Buffer"),
+                contents: bytemuck::cast_slice(&projection_matrix.to_cols_array()),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
 
         // Upload vertex/index data from command buffer to GPU buffers
         for format in 0..VERTEX_FORMAT_COUNT as u8 {
             let vertex_data = self.command_buffer.vertex_data(format);
             if !vertex_data.is_empty() {
-                self.vertex_buffers[format as usize].ensure_capacity(&self.device, vertex_data.len() as u64);
+                self.vertex_buffers[format as usize]
+                    .ensure_capacity(&self.device, vertex_data.len() as u64);
                 self.vertex_buffers[format as usize].write_at(&self.queue, 0, vertex_data);
             }
 
             let index_data = self.command_buffer.index_data(format);
             if !index_data.is_empty() {
                 let index_bytes: &[u8] = bytemuck::cast_slice(index_data);
-                self.index_buffers[format as usize].ensure_capacity(&self.device, index_bytes.len() as u64);
+                self.index_buffers[format as usize]
+                    .ensure_capacity(&self.device, index_bytes.len() as u64);
                 self.index_buffers[format as usize].write_at(&self.queue, 0, index_bytes);
             }
         }
 
         // OPTIMIZATION 3: Sort draw commands IN-PLACE by (pipeline_key, texture_slots) to minimize state changes
         // Commands are reset at the start of next frame, so no need to preserve original order or clone
-        self.command_buffer.commands_mut().sort_unstable_by_key(|cmd| {
-            // Sort key: (render_mode, format, blend_mode, depth_test, cull_mode, texture_slots)
-            // This groups commands by pipeline first, then by textures
-            let state = RenderState {
-                color: cmd.color,
-                depth_test: cmd.depth_test,
-                cull_mode: cmd.cull_mode,
-                blend_mode: cmd.blend_mode,
-                texture_filter: self.render_state.texture_filter,
-                texture_slots: cmd.texture_slots,
-            };
-            let pipeline_key = PipelineKey::new(self.current_render_mode, cmd.format, &state);
-            (
-                pipeline_key.render_mode,
-                pipeline_key.vertex_format,
-                pipeline_key.blend_mode,
-                pipeline_key.depth_test as u8,
-                pipeline_key.cull_mode,
-                cmd.texture_slots[0].0,
-                cmd.texture_slots[1].0,
-                cmd.texture_slots[2].0,
-                cmd.texture_slots[3].0,
-            )
-        });
+        self.command_buffer
+            .commands_mut()
+            .sort_unstable_by_key(|cmd| {
+                // Sort key: (render_mode, format, blend_mode, depth_test, cull_mode, texture_slots)
+                // This groups commands by pipeline first, then by textures
+                let state = RenderState {
+                    color: cmd.color,
+                    depth_test: cmd.depth_test,
+                    cull_mode: cmd.cull_mode,
+                    blend_mode: cmd.blend_mode,
+                    texture_filter: self.render_state.texture_filter,
+                    texture_slots: cmd.texture_slots,
+                };
+                let pipeline_key = PipelineKey::new(self.current_render_mode, cmd.format, &state);
+                (
+                    pipeline_key.render_mode,
+                    pipeline_key.vertex_format,
+                    pipeline_key.blend_mode,
+                    pipeline_key.depth_test as u8,
+                    pipeline_key.cull_mode,
+                    cmd.texture_slots[0].0,
+                    cmd.texture_slots[1].0,
+                    cmd.texture_slots[2].0,
+                    cmd.texture_slots[3].0,
+                )
+            });
 
         // OPTIMIZATION 2: Cache bind groups to avoid creating duplicates
         // Material bind group cache: color -> uniform buffer
@@ -1313,11 +1341,12 @@ impl ZGraphics {
                     let material = MaterialUniforms {
                         color: [color_vec.x, color_vec.y, color_vec.z, color_vec.w],
                     };
-                    self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("Material Buffer"),
-                        contents: bytemuck::cast_slice(&[material]),
-                        usage: wgpu::BufferUsages::UNIFORM,
-                    })
+                    self.device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("Material Buffer"),
+                            contents: bytemuck::cast_slice(&[material]),
+                            usage: wgpu::BufferUsages::UNIFORM,
+                        })
                 });
 
                 // Create frame bind group (group 0)
@@ -1352,60 +1381,64 @@ impl ZGraphics {
                 });
 
                 // Get or create texture bind group (cached by texture slots)
-                let texture_bind_group = texture_bind_groups.entry(cmd.texture_slots).or_insert_with(|| {
-                    // Get texture views for this command's bound textures
-                    let tex_view_0 = if cmd.texture_slots[0] == TextureHandle::INVALID {
-                        self.get_fallback_white_view()
-                    } else {
-                        self.get_texture_view(cmd.texture_slots[0])
-                            .unwrap_or_else(|| self.get_fallback_checkerboard_view())
-                    };
-                    let tex_view_1 = if cmd.texture_slots[1] == TextureHandle::INVALID {
-                        self.get_fallback_white_view()
-                    } else {
-                        self.get_texture_view(cmd.texture_slots[1])
-                            .unwrap_or_else(|| self.get_fallback_checkerboard_view())
-                    };
-                    let tex_view_2 = if cmd.texture_slots[2] == TextureHandle::INVALID {
-                        self.get_fallback_white_view()
-                    } else {
-                        self.get_texture_view(cmd.texture_slots[2])
-                            .unwrap_or_else(|| self.get_fallback_checkerboard_view())
-                    };
-                    let tex_view_3 = if cmd.texture_slots[3] == TextureHandle::INVALID {
-                        self.get_fallback_white_view()
-                    } else {
-                        self.get_texture_view(cmd.texture_slots[3])
-                            .unwrap_or_else(|| self.get_fallback_checkerboard_view())
-                    };
+                let texture_bind_group = texture_bind_groups
+                    .entry(cmd.texture_slots)
+                    .or_insert_with(|| {
+                        // Get texture views for this command's bound textures
+                        let tex_view_0 = if cmd.texture_slots[0] == TextureHandle::INVALID {
+                            self.get_fallback_white_view()
+                        } else {
+                            self.get_texture_view(cmd.texture_slots[0])
+                                .unwrap_or_else(|| self.get_fallback_checkerboard_view())
+                        };
+                        let tex_view_1 = if cmd.texture_slots[1] == TextureHandle::INVALID {
+                            self.get_fallback_white_view()
+                        } else {
+                            self.get_texture_view(cmd.texture_slots[1])
+                                .unwrap_or_else(|| self.get_fallback_checkerboard_view())
+                        };
+                        let tex_view_2 = if cmd.texture_slots[2] == TextureHandle::INVALID {
+                            self.get_fallback_white_view()
+                        } else {
+                            self.get_texture_view(cmd.texture_slots[2])
+                                .unwrap_or_else(|| self.get_fallback_checkerboard_view())
+                        };
+                        let tex_view_3 = if cmd.texture_slots[3] == TextureHandle::INVALID {
+                            self.get_fallback_white_view()
+                        } else {
+                            self.get_texture_view(cmd.texture_slots[3])
+                                .unwrap_or_else(|| self.get_fallback_checkerboard_view())
+                        };
 
-                    self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                        label: Some("Texture Bind Group"),
-                        layout: &pipeline_entry.bind_group_layout_textures,
-                        entries: &[
-                            wgpu::BindGroupEntry {
-                                binding: 0,
-                                resource: wgpu::BindingResource::TextureView(tex_view_0),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 1,
-                                resource: wgpu::BindingResource::TextureView(tex_view_1),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 2,
-                                resource: wgpu::BindingResource::TextureView(tex_view_2),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 3,
-                                resource: wgpu::BindingResource::TextureView(tex_view_3),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 4,
-                                resource: wgpu::BindingResource::Sampler(self.current_sampler()),
-                            },
-                        ],
-                    })
-                });
+                        self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                            label: Some("Texture Bind Group"),
+                            layout: &pipeline_entry.bind_group_layout_textures,
+                            entries: &[
+                                wgpu::BindGroupEntry {
+                                    binding: 0,
+                                    resource: wgpu::BindingResource::TextureView(tex_view_0),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 1,
+                                    resource: wgpu::BindingResource::TextureView(tex_view_1),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 2,
+                                    resource: wgpu::BindingResource::TextureView(tex_view_2),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 3,
+                                    resource: wgpu::BindingResource::TextureView(tex_view_3),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 4,
+                                    resource: wgpu::BindingResource::Sampler(
+                                        self.current_sampler(),
+                                    ),
+                                },
+                            ],
+                        })
+                    });
 
                 // Set pipeline and bind groups
                 render_pass.set_pipeline(&pipeline_entry.pipeline);
@@ -1544,7 +1577,8 @@ mod tests {
 
     #[test]
     fn test_generate_text_quads_multiple_chars() {
-        let (vertices, indices) = ZGraphics::generate_text_quads("Hello", 0.0, 0.0, 8.0, 0xFFFFFFFF);
+        let (vertices, indices) =
+            ZGraphics::generate_text_quads("Hello", 0.0, 0.0, 8.0, 0xFFFFFFFF);
         assert_eq!(vertices.len(), 160);
         assert_eq!(indices.len(), 30);
     }

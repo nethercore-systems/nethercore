@@ -69,7 +69,7 @@ pub fn generate_font_atlas() -> Vec<u8> {
 
                 let pixel = bitmap[y * GLYPH_WIDTH as usize + x];
                 // White text, alpha = pixel value
-                pixels[atlas_idx] = 255;     // R
+                pixels[atlas_idx] = 255; // R
                 pixels[atlas_idx + 1] = 255; // G
                 pixels[atlas_idx + 2] = 255; // B
                 pixels[atlas_idx + 3] = pixel; // A

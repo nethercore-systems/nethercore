@@ -29,11 +29,8 @@ pub trait Console: Send + 'static {
     /// Console-specific input type (must be POD for GGRS serialization)
     type Input: ConsoleInput;
 
-    /// Get console name
-    fn name(&self) -> &'static str;
-
     /// Get console specifications
-    fn specs(&self) -> ConsoleSpecs;
+    fn specs() -> &'static ConsoleSpecs;
 
     /// Register console-specific FFI functions with the WASM linker
     fn register_ffi(&self, linker: &mut Linker<GameState>) -> Result<()>;

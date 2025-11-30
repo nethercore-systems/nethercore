@@ -88,12 +88,8 @@ impl GameInstance {
 
         // Look up exported functions
         let init_fn = instance.get_typed_func::<(), ()>(&mut store, "init").ok();
-        let update_fn = instance
-            .get_typed_func::<(), ()>(&mut store, "update")
-            .ok();
-        let render_fn = instance
-            .get_typed_func::<(), ()>(&mut store, "render")
-            .ok();
+        let update_fn = instance.get_typed_func::<(), ()>(&mut store, "update").ok();
+        let render_fn = instance.get_typed_func::<(), ()>(&mut store, "render").ok();
 
         Ok(Self {
             store,
@@ -149,11 +145,7 @@ impl GameInstance {
     /// This snapshots the entire WASM linear memory transparently. Games do not need
     /// to implement manual serialization - the entire memory is saved for rollback.
     pub fn save_state(&mut self) -> Result<Vec<u8>> {
-        let memory = self
-            .store
-            .data()
-            .memory
-            .context("No memory export found")?;
+        let memory = self.store.data().memory.context("No memory export found")?;
         let mem_data = memory.data(&self.store);
         Ok(mem_data.to_vec())
     }
@@ -163,11 +155,7 @@ impl GameInstance {
     /// Restores the entire WASM linear memory from a previous snapshot.
     /// This is the inverse of `save_state()`.
     pub fn load_state(&mut self, snapshot: &[u8]) -> Result<()> {
-        let memory = self
-            .store
-            .data()
-            .memory
-            .context("No memory export found")?;
+        let memory = self.store.data().memory.context("No memory export found")?;
         let mem_data = memory.data_mut(&mut self.store);
         anyhow::ensure!(
             snapshot.len() == mem_data.len(),

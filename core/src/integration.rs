@@ -10,7 +10,9 @@ mod tests {
     use wasmtime::Linker;
     use winit::window::Window;
 
-    use crate::console::{Audio, Console, ConsoleInput, ConsoleSpecs, Graphics, RawInput, SoundHandle};
+    use crate::console::{
+        Audio, Console, ConsoleInput, ConsoleSpecs, Graphics, RawInput, SoundHandle,
+    };
     use crate::ffi::register_common_ffi;
     use crate::rollback::{GameStateSnapshot, RollbackSession, RollbackStateManager};
     use crate::runtime::Runtime;
@@ -84,20 +86,16 @@ mod tests {
         type Audio = TestAudio;
         type Input = TestInput;
 
-        fn name(&self) -> &'static str {
-            "Test Console"
-        }
-
-        fn specs(&self) -> ConsoleSpecs {
-            ConsoleSpecs {
-                name: "Test Console".to_string(),
-                resolutions: vec![(320, 240), (640, 480)],
+        fn specs() -> &'static ConsoleSpecs {
+            &ConsoleSpecs {
+                name: "Test Console",
+                resolutions: &[(320, 240), (640, 480)],
                 default_resolution: 0,
-                tick_rates: vec![30, 60],
+                tick_rates: &[30, 60],
                 default_tick_rate: 1,
-                ram_limit: 16 * 1024 * 1024,    // 16MB
-                vram_limit: 8 * 1024 * 1024,     // 8MB
-                rom_limit: 32 * 1024 * 1024,     // 32MB
+                ram_limit: 16 * 1024 * 1024, // 16MB
+                vram_limit: 8 * 1024 * 1024, // 8MB
+                rom_limit: 32 * 1024 * 1024, // 32MB
                 cpu_budget_us: 4000,
             }
         }
@@ -212,11 +210,7 @@ mod tests {
 
         // Get helper functions
         let instance = game.store_mut();
-        let get_initialized = instance
-            .data()
-            .memory
-            .unwrap()
-            .data(&instance);
+        let get_initialized = instance.data().memory.unwrap().data(&instance);
         let _ = get_initialized; // Memory is accessible
 
         // Test init
@@ -798,8 +792,8 @@ mod tests {
 
         let mapped = console.map_input(&raw);
         assert_eq!(mapped.buttons, 1); // A pressed
-        assert_eq!(mapped.x, 63);      // 0.5 * 127 ≈ 63
-        assert_eq!(mapped.y, -31);     // -0.25 * 127 ≈ -31
+        assert_eq!(mapped.x, 63); // 0.5 * 127 ≈ 63
+        assert_eq!(mapped.y, -31); // -0.25 * 127 ≈ -31
     }
 
     // ============================================================================
@@ -930,7 +924,9 @@ mod tests {
         // Push to capacity
         for i in 0..MAX_TRANSFORM_STACK {
             if state.transform_stack.len() < MAX_TRANSFORM_STACK {
-                state.transform_stack.push(Mat4::from_scale(glam::Vec3::splat(i as f32)));
+                state
+                    .transform_stack
+                    .push(Mat4::from_scale(glam::Vec3::splat(i as f32)));
             }
         }
 

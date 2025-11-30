@@ -1,22 +1,20 @@
 //! Console specifications for Emberware fantasy consoles.
 
-use serde::{Deserialize, Serialize};
-
 /// Specifications for a fantasy console.
 ///
 /// Defines the hardware limits and capabilities of a fantasy console
 /// (e.g., Emberware Z, Emberware Classic). Used by both the platform
 /// backend for validation and the console clients for enforcement.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct ConsoleSpecs {
     /// Console name (e.g., "Emberware Z")
-    pub name: String,
+    pub name: &'static str,
     /// Available resolutions (width, height)
-    pub resolutions: Vec<(u32, u32)>,
+    pub resolutions: &'static [(u32, u32)],
     /// Default resolution index
     pub default_resolution: usize,
     /// Available tick rates in Hz
-    pub tick_rates: Vec<u32>,
+    pub tick_rates: &'static [u32],
     /// Default tick rate index
     pub default_tick_rate: usize,
     /// Maximum RAM in bytes
@@ -49,17 +47,17 @@ pub const EMBERWARE_Z_VRAM_LIMIT: usize = 4 * 1024 * 1024;
 ///
 /// PS1/N64-era aesthetic with modern 3D rendering capabilities.
 /// Supports PBR lighting, GPU skinning, and 4-player local/online multiplayer.
-pub fn emberware_z_specs() -> ConsoleSpecs {
-    ConsoleSpecs {
-        name: "Emberware Z".to_string(),
-        resolutions: EMBERWARE_Z_RESOLUTIONS.to_vec(),
+pub const fn emberware_z_specs() -> &'static ConsoleSpecs {
+    &ConsoleSpecs {
+        name: "Emberware Z",
+        resolutions: EMBERWARE_Z_RESOLUTIONS,
         default_resolution: 1, // 540p
-        tick_rates: EMBERWARE_Z_TICK_RATES.to_vec(),
-        default_tick_rate: 2, // 60 fps
-        ram_limit: 4 * 1024 * 1024,   // 4MB
+        tick_rates: EMBERWARE_Z_TICK_RATES,
+        default_tick_rate: 2,       // 60 fps
+        ram_limit: 4 * 1024 * 1024, // 4MB
         vram_limit: EMBERWARE_Z_VRAM_LIMIT,
-        rom_limit: 12 * 1024 * 1024,   // 12MB (uncompressed)
-        cpu_budget_us: 4000,          // 4ms per tick at 60fps
+        rom_limit: 12 * 1024 * 1024, // 12MB (uncompressed)
+        cpu_budget_us: 4000,         // 4ms per tick at 60fps
     }
 }
 
@@ -69,10 +67,10 @@ pub fn emberware_z_specs() -> ConsoleSpecs {
 ///
 /// SNES/Genesis-era aesthetic with 2D-only rendering, tilemaps,
 /// sprite layers, and palette swapping.
-pub fn emberware_classic_specs() -> ConsoleSpecs {
-    ConsoleSpecs {
-        name: "Emberware Classic".to_string(),
-        resolutions: vec![
+pub const fn emberware_classic_specs() -> &'static ConsoleSpecs {
+    &ConsoleSpecs {
+        name: "Emberware Classic",
+        resolutions: &[
             (320, 180), // 0: 16:9, 6× scale to 1080p
             (384, 216), // 1: 16:9, 5× scale to 1080p
             (480, 270), // 2: 16:9, 4× scale to 1080p
@@ -83,11 +81,11 @@ pub fn emberware_classic_specs() -> ConsoleSpecs {
             (480, 360), // 7: 4:3, 3× scale to 1080p
         ],
         default_resolution: 5, // 288×216 (4:3)
-        tick_rates: vec![30, 60],
-        default_tick_rate: 1, // 60 fps
-        ram_limit: 1 * 1024 * 1024,   // 1MB
-        vram_limit: 1 * 1024 * 1024,  // 1MB
-        rom_limit: 4 * 1024 * 1024,   // 4MB (uncompressed)
-        cpu_budget_us: 4000,          // 4ms per tick at 60fps
+        tick_rates: &[30, 60],
+        default_tick_rate: 1,        // 60 fps
+        ram_limit: 1024 * 1024,  // 1MB
+        vram_limit: 1024 * 1024, // 1MB
+        rom_limit: 4 * 1024 * 1024,  // 4MB (uncompressed)
+        cpu_budget_us: 4000,         // 4ms per tick at 60fps
     }
 }
