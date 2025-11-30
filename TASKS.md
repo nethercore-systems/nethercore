@@ -149,6 +149,14 @@ The `Runtime<C: Console>` handles:
 
 ## Done
 
+- **Add render_frame method to ZGraphics** (Phase 8)
+  - Core GPU rendering pipeline for executing buffered draw commands
+  - Creates render pass with depth buffer attachment
+  - Uploads vertex/index data to GPU buffers per vertex format
+  - Creates pipelines on-demand with proper bind groups
+  - Executes draw calls with material uniforms and texture bindings
+  - Added write_at method to GrowableBuffer for direct offset writes
+
 - **Add input delay configuration** (Phase 5)
   - `NetplayConfig` struct with `input_delay: u8` (0-10 frames, default 2)
   - Settings UI with slider and explanatory text
