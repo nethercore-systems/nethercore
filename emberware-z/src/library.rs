@@ -155,7 +155,8 @@ mod tests {
 
     fn create_test_game(games_dir: &Path, id: &str, title: &str, author: &str, version: &str) {
         let game_dir = games_dir.join(id);
-        fs::create_dir_all(&game_dir).unwrap();
+        fs::create_dir_all(&game_dir)
+            .expect("failed to create test game directory");
 
         let manifest = serde_json::json!({
             "id": id,
@@ -167,12 +168,13 @@ mod tests {
 
         fs::write(
             game_dir.join("manifest.json"),
-            serde_json::to_string(&manifest).unwrap(),
+            serde_json::to_string(&manifest).expect("failed to serialize test manifest"),
         )
-        .unwrap();
+        .expect("failed to write test manifest.json");
 
         // Create a dummy ROM file
-        fs::write(game_dir.join("rom.wasm"), b"dummy wasm content").unwrap();
+        fs::write(game_dir.join("rom.wasm"), b"dummy wasm content")
+            .expect("failed to write test rom.wasm");
     }
 
     // =============================================================
