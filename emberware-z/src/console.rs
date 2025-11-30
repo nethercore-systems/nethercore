@@ -16,53 +16,23 @@ use emberware_core::{
 
 use crate::graphics::ZGraphics;
 
-/// Emberware Z resolutions (16:9)
-pub const RESOLUTIONS: &[(u32, u32)] = &[
-    (640, 360),   // 360p
-    (960, 540),   // 540p (default)
-    (1280, 720),  // 720p
-    (1920, 1080), // 1080p
-];
+/// Get Emberware Z console specifications
+pub fn z_specs() -> ConsoleSpecs {
+    emberware_shared::emberware_z_specs()
+}
 
-/// Available tick rates
-pub const TICK_RATES: &[u32] = &[24, 30, 60, 120];
-
-/// Default resolution index (540p)
-pub const DEFAULT_RESOLUTION: usize = 1;
-
-/// Default tick rate index (60 fps)
-pub const DEFAULT_TICK_RATE: usize = 2;
-
-/// RAM limit (16 MB)
-pub const RAM_LIMIT: usize = 16 * 1024 * 1024;
-
-/// VRAM limit (8 MB)
-pub const VRAM_LIMIT: usize = 8 * 1024 * 1024;
-
-/// ROM size limit (32 MB)
-pub const ROM_LIMIT: usize = 32 * 1024 * 1024;
-
-/// CPU budget per tick at 60fps (4ms = 4000 microseconds)
-pub const CPU_BUDGET_US: u64 = 4000;
+// Re-export constants for FFI validation
+pub use emberware_shared::{
+    EMBERWARE_Z_RESOLUTIONS as RESOLUTIONS,
+    EMBERWARE_Z_TICK_RATES as TICK_RATES,
+    EMBERWARE_Z_VRAM_LIMIT as VRAM_LIMIT,
+};
 
 /// Maximum value for analog stick conversion (i8 range: -128 to 127)
 const STICK_SCALE: f32 = 127.0;
 
 /// Maximum value for trigger conversion (u8 range: 0 to 255)
 const TRIGGER_SCALE: f32 = 255.0;
-
-/// Emberware Z console specifications
-pub static Z_SPECS: ConsoleSpecs = ConsoleSpecs {
-    name: "Emberware Z",
-    resolutions: RESOLUTIONS,
-    default_resolution: DEFAULT_RESOLUTION,
-    tick_rates: TICK_RATES,
-    default_tick_rate: DEFAULT_TICK_RATE,
-    ram_limit: RAM_LIMIT,
-    vram_limit: VRAM_LIMIT,
-    rom_limit: ROM_LIMIT,
-    cpu_budget_us: CPU_BUDGET_US,
-};
 
 /// Button indices for ZInput
 ///
@@ -239,8 +209,8 @@ impl Console for EmberwareZ {
         "Emberware Z"
     }
 
-    fn specs(&self) -> &ConsoleSpecs {
-        &Z_SPECS
+    fn specs(&self) -> ConsoleSpecs {
+        z_specs()
     }
 
     fn register_ffi(&self, linker: &mut Linker<GameState>) -> Result<()> {
@@ -425,9 +395,9 @@ mod tests {
         assert_eq!(specs.resolutions.len(), 4);
         assert_eq!(specs.resolutions[specs.default_resolution], (960, 540));
         assert_eq!(specs.tick_rates[specs.default_tick_rate], 60);
-        assert_eq!(specs.ram_limit, 16 * 1024 * 1024);
-        assert_eq!(specs.vram_limit, 8 * 1024 * 1024);
-        assert_eq!(specs.rom_limit, 32 * 1024 * 1024);
+        assert_eq!(specs.ram_limit, 4 * 1024 * 1024);
+        assert_eq!(specs.vram_limit, 4 * 1024 * 1024);
+        assert_eq!(specs.rom_limit, 8 * 1024 * 1024);
         assert_eq!(specs.cpu_budget_us, 4000);
     }
 }

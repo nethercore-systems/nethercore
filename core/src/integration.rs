@@ -88,19 +88,18 @@ mod tests {
             "Test Console"
         }
 
-        fn specs(&self) -> &ConsoleSpecs {
-            static SPECS: ConsoleSpecs = ConsoleSpecs {
-                name: "Test Console",
-                resolutions: &[(320, 240), (640, 480)],
+        fn specs(&self) -> ConsoleSpecs {
+            ConsoleSpecs {
+                name: "Test Console".to_string(),
+                resolutions: vec![(320, 240), (640, 480)],
                 default_resolution: 0,
-                tick_rates: &[30, 60],
+                tick_rates: vec![30, 60],
                 default_tick_rate: 1,
                 ram_limit: 16 * 1024 * 1024,    // 16MB
                 vram_limit: 8 * 1024 * 1024,     // 8MB
                 rom_limit: 32 * 1024 * 1024,     // 32MB
                 cpu_budget_us: 4000,
-            };
-            &SPECS
+            }
         }
 
         fn register_ffi(&self, _linker: &mut Linker<GameState>) -> anyhow::Result<()> {

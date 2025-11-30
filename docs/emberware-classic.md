@@ -10,11 +10,11 @@ Emberware Classic is a beginner-friendly 2D fantasy console inspired by SNES/Gen
 | **Resolution** | 8 options: 4× 16:9, 4× 4:3 (see below) |
 | **Scaling** | Pixel-perfect to 1080p |
 | **Color depth** | RGBA8 |
-| **Tick rate** | 24, 30, 60 (default), 120 fps |
+| **Tick rate** | 30, 60 (default) fps |
 | **RAM** | 1MB |
 | **VRAM** | 1MB |
 | **CPU budget** | 4ms per tick (at 60fps) |
-| **ROM size** | 4MB max |
+| **ROM size** | 4MB max (uncompressed) |
 | **Netcode** | Deterministic rollback via GGRS |
 | **Max players** | 4 (any mix of local + remote) |
 

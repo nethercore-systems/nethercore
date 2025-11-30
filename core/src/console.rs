@@ -13,28 +13,8 @@ use winit::window::Window;
 
 use crate::wasm::{GameState, InputState};
 
-/// Specifications for a fantasy console
-#[derive(Debug, Clone)]
-pub struct ConsoleSpecs {
-    /// Console name (e.g., "Emberware Z")
-    pub name: &'static str,
-    /// Available resolutions (width, height)
-    pub resolutions: &'static [(u32, u32)],
-    /// Default resolution index
-    pub default_resolution: usize,
-    /// Available tick rates
-    pub tick_rates: &'static [u32],
-    /// Default tick rate index
-    pub default_tick_rate: usize,
-    /// Maximum RAM in bytes
-    pub ram_limit: usize,
-    /// Maximum VRAM in bytes
-    pub vram_limit: usize,
-    /// Maximum ROM size in bytes
-    pub rom_limit: usize,
-    /// CPU budget per tick in microseconds
-    pub cpu_budget_us: u64,
-}
+// Re-export ConsoleSpecs from shared crate for convenience
+pub use emberware_shared::ConsoleSpecs;
 
 /// Trait for fantasy console implementations
 ///
@@ -53,7 +33,7 @@ pub trait Console: Send + 'static {
     fn name(&self) -> &'static str;
 
     /// Get console specifications
-    fn specs(&self) -> &ConsoleSpecs;
+    fn specs(&self) -> ConsoleSpecs;
 
     /// Register console-specific FFI functions with the WASM linker
     fn register_ffi(&self, linker: &mut Linker<GameState>) -> Result<()>;
