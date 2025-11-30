@@ -67,17 +67,17 @@ unsafe impl<I: ConsoleInput> Zeroable for NetworkInput<I> {}
 
 /// Inner session types for different modes
 ///
-/// Note: P2P variant is boxed to reduce overall enum size, as P2PSession is
-/// significantly larger than other variants (~440 bytes vs ~228 bytes).
+/// Note: SyncTest and P2P variants are boxed to reduce overall enum size,
+/// as their GGRS sessions are significantly larger than the Local variant.
 enum SessionInner<I: ConsoleInput> {
     /// Local session - no GGRS, just direct execution
     Local {
         num_players: usize,
         current_frame: i32,
     },
-    /// Sync test session for determinism testing
+    /// Sync test session for determinism testing (boxed to reduce enum size)
     SyncTest {
-        session: SyncTestSession<EmberwareConfig<I>>,
+        session: Box<SyncTestSession<EmberwareConfig<I>>>,
         current_frame: i32,
     },
     /// P2P session with rollback (boxed to reduce enum size)
@@ -179,7 +179,7 @@ impl<I: ConsoleInput> RollbackSession<I> {
 
         Ok(Self {
             inner: SessionInner::SyncTest {
-                session,
+                session: Box::new(session),
                 current_frame: 0,
             },
             session_type: SessionType::SyncTest,

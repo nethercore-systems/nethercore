@@ -17,6 +17,7 @@ pub struct LocalGame {
     /// Game author's name
     pub author: String,
     /// Version string (semantic versioning recommended)
+    #[allow(dead_code)] // Will be displayed in UI
     pub version: String,
     /// Path to the WASM ROM file
     pub rom_path: PathBuf,
@@ -68,6 +69,7 @@ fn get_games_from_dir(games_dir: &Path) -> Vec<LocalGame> {
 /// Checks if a game is cached locally.
 ///
 /// Returns `true` if the game's ROM file exists at the expected path.
+#[allow(dead_code)] // Public API for download flow
 pub fn is_cached(game_id: &str) -> bool {
     crate::config::data_dir()
         .map(|dir| dir.join("games").join(game_id).join("rom.wasm").exists())
@@ -76,6 +78,7 @@ pub fn is_cached(game_id: &str) -> bool {
 
 /// Internal: Check if a game is cached in a specific directory.
 /// Extracted for testability.
+#[cfg(test)]
 fn is_cached_in_dir(games_dir: &Path, game_id: &str) -> bool {
     games_dir.join(game_id).join("rom.wasm").exists()
 }
@@ -96,6 +99,7 @@ pub fn delete_game(game_id: &str) -> std::io::Result<()> {
 
 /// Internal: Delete a game from a specific directory.
 /// Extracted for testability.
+#[cfg(test)]
 fn delete_game_in_dir(games_dir: &Path, game_id: &str) -> std::io::Result<()> {
     let game_dir = games_dir.join(game_id);
     if game_dir.exists() {

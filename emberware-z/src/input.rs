@@ -453,18 +453,14 @@ impl InputManager {
     }
 
     /// Get all player inputs
+    #[allow(dead_code)] // Public API for rollback netcode, not yet wired up
     pub fn get_all_inputs(&self) -> [RawInput; 4] {
         self.player_inputs
     }
 
     /// Find the next free player slot (0-3)
     fn find_free_player_slot(&self) -> Option<usize> {
-        for slot in 0..4 {
-            if !self.gamepad_to_player.values().any(|&s| s == slot) {
-                return Some(slot);
-            }
-        }
-        None
+        (0..4).find(|&slot| !self.gamepad_to_player.values().any(|&s| s == slot))
     }
 
     /// Read keyboard input and map to RawInput

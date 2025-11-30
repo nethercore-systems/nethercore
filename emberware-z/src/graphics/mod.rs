@@ -3,6 +3,9 @@
 //! Implements the `Graphics` trait from emberware-core with a wgpu-based
 //! renderer featuring PS1/N64 aesthetic (vertex jitter, affine textures).
 //!
+//! Note: Many public APIs here are designed for game rendering and are not yet
+//! fully wired up. Dead code warnings are suppressed at module level.
+//!
 //! # Vertex Buffer Architecture
 //!
 //! Each vertex format gets its own buffer to avoid padding waste:
@@ -47,6 +50,9 @@
 //! session), this is acceptable. Future versions may add explicit resource invalidation on
 //! game switch if memory pressure becomes a concern.
 
+// Many public APIs are designed for game rendering but not yet fully wired up
+#![allow(dead_code)]
+
 mod buffer;
 mod command_buffer;
 mod pipeline;
@@ -68,7 +74,6 @@ use crate::console::VRAM_LIMIT;
 // Re-export public types from submodules
 pub use buffer::{GrowableBuffer, MeshHandle, RetainedMesh};
 pub use command_buffer::CommandBuffer;
-pub(crate) use command_buffer::DrawCommand;
 pub use render_state::{BlendMode, CullMode, RenderState, SkyUniforms, TextureFilter, TextureHandle};
 pub use vertex::{
     vertex_stride, VertexFormatInfo, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED,
@@ -81,6 +86,10 @@ pub(crate) use pipeline::PipelineEntry;
 use pipeline::PipelineKey;
 
 /// Internal texture data
+///
+/// Fields tracked for debugging and VRAM accounting.
+/// Will be read when render_frame() processes draw commands.
+#[allow(dead_code)]
 struct TextureEntry {
     texture: wgpu::Texture,
     view: wgpu::TextureView,
@@ -679,20 +688,19 @@ impl ZGraphics {
 
     /// Translate the current transform
     pub fn transform_translate(&mut self, x: f32, y: f32, z: f32) {
-        self.current_transform =
-            self.current_transform * Mat4::from_translation(glam::vec3(x, y, z));
+        self.current_transform *= Mat4::from_translation(glam::vec3(x, y, z));
     }
 
     /// Rotate the current transform around an axis (angle in degrees)
     pub fn transform_rotate(&mut self, angle_deg: f32, x: f32, y: f32, z: f32) {
         let axis = glam::vec3(x, y, z).normalize();
         let angle_rad = angle_deg.to_radians();
-        self.current_transform = self.current_transform * Mat4::from_axis_angle(axis, angle_rad);
+        self.current_transform *= Mat4::from_axis_angle(axis, angle_rad);
     }
 
     /// Scale the current transform
     pub fn transform_scale(&mut self, x: f32, y: f32, z: f32) {
-        self.current_transform = self.current_transform * Mat4::from_scale(glam::vec3(x, y, z));
+        self.current_transform *= Mat4::from_scale(glam::vec3(x, y, z));
     }
 
     /// Push the current transform onto the stack

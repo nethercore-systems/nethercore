@@ -3,6 +3,8 @@
 //! Simple 8x8 monospace font covering ASCII 32-126 (printable characters).
 //! This is a minimal font suitable for debug text and simple UI.
 
+#![allow(dead_code)] // Public API for text rendering, not yet wired up
+
 /// Width of each glyph in pixels
 pub const GLYPH_WIDTH: u32 = 8;
 /// Height of each glyph in pixels
@@ -22,7 +24,7 @@ pub const ATLAS_HEIGHT: u32 = 8 * 6; // 6 rows (95 chars / 16 = 5.9375 -> 6 rows
 ///
 /// Returns (u0, v0, u1, v1) in normalized coordinates [0, 1]
 pub fn get_glyph_uv(char_code: u32) -> (f32, f32, f32, f32) {
-    if char_code < FIRST_CHAR || char_code > LAST_CHAR {
+    if !(FIRST_CHAR..=LAST_CHAR).contains(&char_code) {
         // Return space character for unknown chars
         return get_glyph_uv(FIRST_CHAR);
     }

@@ -218,6 +218,7 @@ pub fn generate_shader(mode: u8, format: u8) -> Result<String, ShaderGenError> {
 /// # Errors
 ///
 /// Returns `ShaderGenError::InvalidRenderMode` if mode is not 0-3.
+#[allow(dead_code)] // Debugging/inspection helper
 pub fn get_template(mode: u8) -> Result<&'static str, ShaderGenError> {
     match mode {
         0 => Ok(TEMPLATE_MODE0),
@@ -240,6 +241,7 @@ pub fn mode_name(mode: u8) -> &'static str {
 }
 
 /// Get the number of shader permutations for a render mode
+#[allow(dead_code)] // Debugging/testing helper
 pub fn shader_count_for_mode(mode: u8) -> usize {
     match mode {
         0 => 16,  // All vertex formats
@@ -249,6 +251,7 @@ pub fn shader_count_for_mode(mode: u8) -> usize {
 }
 
 /// Get all valid vertex formats for a render mode
+#[allow(dead_code)] // Debugging/testing helper
 pub fn valid_formats_for_mode(mode: u8) -> Vec<u8> {
     match mode {
         0 => (0..16).collect(),  // All formats

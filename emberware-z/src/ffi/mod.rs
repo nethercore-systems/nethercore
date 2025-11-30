@@ -2,6 +2,9 @@
 //!
 //! Console-specific FFI functions for the PS1/N64 aesthetic fantasy console.
 //! These functions are registered with the WASM linker and called by games.
+//!
+//! Note: FFI functions have many parameters because they match WebAssembly signatures.
+#![allow(clippy::too_many_arguments)]
 
 mod input;
 
@@ -280,7 +283,7 @@ fn camera_fov(mut caller: Caller<'_, GameState>, fov_degrees: f32) {
     let state = caller.data_mut();
 
     // Validate FOV range
-    let clamped_fov = if fov_degrees < 1.0 || fov_degrees > 179.0 {
+    let clamped_fov = if !(1.0..=179.0).contains(&fov_degrees) {
         let clamped = fov_degrees.clamp(1.0, 179.0);
         warn!(
             "camera_fov({}) out of range (1-179), clamped to {}",
@@ -315,7 +318,7 @@ fn transform_identity(mut caller: Caller<'_, GameState>) {
 /// The translation is applied to the current transform (post-multiplication).
 fn transform_translate(mut caller: Caller<'_, GameState>, x: f32, y: f32, z: f32) {
     let state = caller.data_mut();
-    state.current_transform = state.current_transform * Mat4::from_translation(Vec3::new(x, y, z));
+    state.current_transform *= Mat4::from_translation(Vec3::new(x, y, z));
 }
 
 /// Rotate the current transform around an axis
@@ -338,7 +341,7 @@ fn transform_rotate(mut caller: Caller<'_, GameState>, angle_deg: f32, x: f32, y
 
     let axis = axis.normalize();
     let angle_rad = angle_deg.to_radians();
-    state.current_transform = state.current_transform * Mat4::from_axis_angle(axis, angle_rad);
+    state.current_transform *= Mat4::from_axis_angle(axis, angle_rad);
 }
 
 /// Scale the current transform
@@ -349,7 +352,7 @@ fn transform_rotate(mut caller: Caller<'_, GameState>, angle_deg: f32, x: f32, y
 /// The scale is applied to the current transform (post-multiplication).
 fn transform_scale(mut caller: Caller<'_, GameState>, x: f32, y: f32, z: f32) {
     let state = caller.data_mut();
-    state.current_transform = state.current_transform * Mat4::from_scale(Vec3::new(x, y, z));
+    state.current_transform *= Mat4::from_scale(Vec3::new(x, y, z));
 }
 
 /// Push the current transform onto the stack
@@ -778,7 +781,7 @@ fn load_mesh_indexed(
         warn!("load_mesh_indexed: index_count cannot be 0");
         return 0;
     }
-    if index_count % 3 != 0 {
+    if !index_count.is_multiple_of(3) {
         warn!("load_mesh_indexed: index_count {} is not a multiple of 3", index_count);
         return 0;
     }
@@ -942,7 +945,7 @@ fn draw_triangles(mut caller: Caller<'_, GameState>, data_ptr: u32, vertex_count
     if vertex_count == 0 {
         return; // Nothing to draw
     }
-    if vertex_count % 3 != 0 {
+    if !vertex_count.is_multiple_of(3) {
         warn!("draw_triangles: vertex_count {} is not a multiple of 3", vertex_count);
         return;
     }
@@ -1039,7 +1042,7 @@ fn draw_triangles_indexed(
     if vertex_count == 0 || index_count == 0 {
         return; // Nothing to draw
     }
-    if index_count % 3 != 0 {
+    if !index_count.is_multiple_of(3) {
         warn!("draw_triangles_indexed: index_count {} is not a multiple of 3", index_count);
         return;
     }
@@ -1164,7 +1167,7 @@ fn draw_triangles_indexed(
 /// - 4 (cylindrical Z): Rotates around Z axis only
 fn draw_billboard(mut caller: Caller<'_, GameState>, w: f32, h: f32, mode: u32, color: u32) {
     // Validate mode
-    if mode < 1 || mode > 4 {
+    if !(1..=4).contains(&mode) {
         warn!("draw_billboard: invalid mode {} (must be 1-4)", mode);
         return;
     }
@@ -1211,7 +1214,7 @@ fn draw_billboard_region(
     color: u32,
 ) {
     // Validate mode
-    if mode < 1 || mode > 4 {
+    if !(1..=4).contains(&mode) {
         warn!("draw_billboard_region: invalid mode {} (must be 1-4)", mode);
         return;
     }
@@ -1519,7 +1522,7 @@ fn set_sky(
 /// Using this function in other modes is allowed but has no effect.
 fn matcap_set(mut caller: Caller<'_, GameState>, slot: u32, texture: u32) {
     // Validate slot range (1-3 for matcaps)
-    if slot < 1 || slot > 3 {
+    if !(1..=3).contains(&slot) {
         warn!("matcap_set: invalid slot {} (must be 1-3)", slot);
         return;
     }
@@ -1806,7 +1809,7 @@ fn set_bones(mut caller: Caller<'_, GameState>, matrices_ptr: u32, count: u32) {
 
         // Convert bytes to f32 array (16 floats)
         let mut floats = [0.0f32; 16];
-        for j in 0..16 {
+        for (j, float) in floats.iter_mut().enumerate() {
             let byte_offset = j * 4;
             let bytes = [
                 matrix_bytes[byte_offset],
@@ -1814,7 +1817,7 @@ fn set_bones(mut caller: Caller<'_, GameState>, matrices_ptr: u32, count: u32) {
                 matrix_bytes[byte_offset + 2],
                 matrix_bytes[byte_offset + 3],
             ];
-            floats[j] = f32::from_le_bytes(bytes);
+            *float = f32::from_le_bytes(bytes);
         }
 
         // Create Mat4 from column-major floats

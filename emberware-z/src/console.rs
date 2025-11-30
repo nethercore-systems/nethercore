@@ -187,8 +187,7 @@ pub struct ZAudio {
 
 impl Audio for ZAudio {
     fn play(&mut self, _handle: SoundHandle, _volume: f32, _looping: bool) {
-        if self.rollback_mode {
-            return; // Don't play audio during rollback
+        if self.rollback_mode {// Don't play audio during rollback
         }
         // TODO: Play sound via rodio
     }

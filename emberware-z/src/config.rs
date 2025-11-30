@@ -13,6 +13,7 @@ use crate::input::InputConfig;
 /// Contains all user-configurable settings organized into sections.
 /// Serialized to/from TOML format for persistence.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct Config {
     /// Video/graphics settings
     #[serde(default)]
@@ -51,15 +52,6 @@ fn default_true() -> bool { true }
 fn default_scale() -> u32 { 2 }
 fn default_volume() -> f32 { 0.8 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            video: VideoConfig::default(),
-            audio: AudioConfig::default(),
-            input: InputConfig::default(),
-        }
-    }
-}
 
 impl Default for VideoConfig {
     fn default() -> Self {
