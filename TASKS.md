@@ -2,14 +2,12 @@
 
 ## Needs Clarification
 
-These items are marked TODO throughout the document and need decisions before implementation:
+(None currently - all items resolved or deferred)
 
-- **[STABILITY] Audio backend** — Architecture, formats, sample rates, channel count (shelved for now)
-  - `ZAudio::play()`, `ZAudio::stop()`, and `create_audio()` are stubs in `emberware-z/src/console.rs`
-- **Custom fonts** — Allow games to load custom fonts for draw_text?
-- **Spectator support** — GGRS spectator sessions for watching games
-- **Matchmaking** — Handled by platform service, but integration details TBD
-- **Matcap blend modes** — Currently multiply only; future: add, screen, overlay, HSV shift, etc.
+### Deferred (Platform Integration)
+
+- **Spectator support** — GGRS spectator sessions for watching games (deferred until core networking complete)
+- **Matchmaking** — Handled by platform service (deferred until emberware-platform is ready)
 
 ---
 
@@ -104,8 +102,153 @@ The `Runtime<C: Console>` handles:
 
 ### Stability
 
-- **[STABILITY] Implement audio backend** — See "Needs Clarification" section above
+- **Implement audio backend**
 
+  PS1/N64-style audio system with fire-and-forget sounds and managed channels for positional audio.
+
+  **Console Audio Specs:**
+  | Spec | Value | Rationale |
+  |------|-------|-----------|
+  | Sample rate | 22,050 Hz | Authentic PS1/N64, half the ROM space |
+  | Bit depth | 16-bit signed | Standard, good dynamic range |
+  | Format | Mono, raw PCM (s16le) | Zero parsing, stereo via pan param |
+  | Managed channels | 16 | PS1/N64 typical (8 SFX + 8 music/ambient) |
+
+  **Rollback Behavior & Caveats:**
+
+  Audio is NOT part of rollback state. This is industry standard (GGPO, Rollback Netcode) because:
+  - Sound already left the speakers - can't "un-play" it
+  - Rewinding audio sounds terrible
+  - Users tolerate audio glitches better than visual desyncs
+
+  **How it works:**
+  1. Game calls audio FFI functions during `update()`
+  2. Commands are buffered in `audio_commands: Vec<AudioCommand>`
+  3. After GGRS confirms the frame, commands are sent to `ZAudio` for playback
+  4. During rollback replay (`set_rollback_mode(true)`), commands are DISCARDED
+  5. After rollback, game re-executes with corrected inputs, re-issuing audio commands
+
+  **Edge cases implementers must handle:**
+
+  | Scenario | What happens | Mitigation |
+  |----------|--------------|------------|
+  | Sound triggers, then rollback | Sound already playing, might re-trigger | Discard commands during replay |
+  | Looping sound starts, then rollback | Loop continues, game might call channel_play again | channel_play on occupied channel should update params, not restart |
+  | Positional sound panning | Pan was wrong during misprediction | Game must call channel_set() EVERY frame, not just on start |
+  | Music playing during rollback | Music continues uninterrupted | Music is never affected by rollback - it's "UI layer" |
+  | Sound should have played but didn't (prediction missed trigger) | Silence where sound should be | Unavoidable - accept it |
+  | load_sound() called in update() | Would re-load during replay! | Enforce init-only for load_sound() |
+
+  **Critical implementation details:**
+
+  1. **Discard vs mute**: When `set_rollback_mode(true)`, DISCARD all audio commands entirely.
+     Don't just mute output - if you mute and still process commands, channel state diverges.
+
+  2. **channel_play on occupied channel**: If channel 5 is playing sound A and game calls
+     `channel_play(5, A, vol, pan, loop)` again, DON'T restart the sound. Just update vol/pan.
+     This handles the "looping sound survives rollback" case gracefully.
+
+  3. **channel_set during rollback**: These SHOULD still be processed (not discarded) so that
+     when rollback ends, positional sounds have correct pan/volume immediately.
+     Only play_sound/channel_play/music_play are discarded.
+
+  4. **In-flight sounds**: Sounds that started before rollback continue playing to completion.
+     Don't stop them on rollback start - that sounds jarring. Let them finish naturally.
+
+  5. **Audio buffer latency**: Hardware audio has ~20-50ms latency. Audio is always slightly
+     "behind" visuals. This is fine - humans don't notice small audio/visual desync.
+
+  **Game developer guidance (for docs):**
+  - Use `play_sound()` for one-shots (hits, jumps, pickups) - fire and forget
+  - Use `channel_play()` + `channel_set()` every frame for positional sounds (engines, footsteps)
+  - Don't rely on frame-perfect audio sync in networked games
+  - Keep sound effects short (<1 sec) so mispredictions are less noticeable
+  - Music should be ambient/looping, not synced to gameplay events
+
+  **FFI Functions:**
+  ```rust
+  // Load raw PCM sound data (22.05kHz, 16-bit signed, mono)
+  load_sound(data_ptr: *const u8, byte_len: u32) -> u32
+
+  // Fire-and-forget (one-shot sounds: gunshots, jumps, coins)
+  play_sound(sound: u32, volume: f32, pan: f32)  // uses next free channel
+
+  // Managed channels (positional/looping: engines, ambient, footsteps)
+  channel_play(channel: u32, sound: u32, volume: f32, pan: f32, looping: bool)
+  channel_set(channel: u32, volume: f32, pan: f32)  // update each frame for positional
+  channel_stop(channel: u32)
+
+  // Music (dedicated, always loops)
+  music_play(sound: u32, volume: f32)
+  music_stop()
+  music_set_volume(volume: f32)
+  ```
+
+  **Implementation steps:**
+  1. Add `Sound` struct and `sounds: Vec<Sound>` to GameState
+  2. Add `AudioCommand` enum (Play, ChannelPlay, ChannelSet, ChannelStop, MusicPlay, etc.)
+  3. Add `audio_commands: Vec<AudioCommand>` to GameState (buffered per frame)
+  4. Implement `ZAudio` with rodio backend:
+     - 16 channel mixer
+     - Dedicated music channel
+     - `process_commands()` called after confirmed frames
+  5. Wire up `Audio::set_rollback_mode()` to discard commands during replay
+  6. Register FFI functions
+
+  **Stubs to replace:** `emberware-z/src/console.rs` - `ZAudio::play()`, `ZAudio::stop()`, `create_audio()`
+
+### Features
+
+- **Implement custom font loading**
+
+  Allow games to load bitmap fonts for `draw_text()` beyond the built-in 8x8 ASCII font.
+
+  **Design (PS1/N64 style - bitmap font atlases):**
+  - Games embed font textures with glyph grids
+  - Fixed-width and variable-width support
+  - UTF-8 compatible (game provides glyphs for any codepoints they need)
+  - Built-in font (already implemented) remains default for quick debugging
+
+  **FFI Functions:**
+  ```rust
+  // Fixed-width bitmap font
+  load_font(texture: u32, char_width: u8, char_height: u8, first_codepoint: u32, char_count: u32) -> u32
+
+  // Variable-width bitmap font (widths array has char_count entries)
+  load_font_ex(texture: u32, widths_ptr: *const u8, char_height: u8, first_codepoint: u32, char_count: u32) -> u32
+
+  // Bind font for subsequent draw_text calls (0 = built-in)
+  font_bind(font_handle: u32)
+  ```
+
+  **Implementation steps:**
+  1. Add `Font` struct with texture handle, glyph dimensions, codepoint range, optional width array
+  2. Add `fonts: Vec<Font>` to GameState
+  3. Add `current_font: u32` to RenderState (0 = built-in)
+  4. Modify `draw_text` to look up glyphs from current font
+  5. Update `generate_text_quads()` to handle variable-width fonts
+
+- **Implement matcap blend modes**
+
+  Extend matcap system (Mode 1) with multiple blend modes for artistic flexibility.
+
+  **Supported modes:**
+  | Value | Mode | Effect |
+  |-------|------|--------|
+  | 0 | Multiply | Standard matcap (current behavior) |
+  | 1 | Add | Glow/emission effects |
+  | 2 | HSV Modulate | Hue shifting, iridescence |
+
+  **FFI Function:**
+  ```rust
+  matcap_blend_mode(slot: u32, mode: u32)  // slot 1-3, mode 0-2
+  ```
+
+  **Implementation steps:**
+  1. Add `blend_mode: u8` field to matcap slot tracking in RenderState
+  2. Add `matcap_blend_mode` FFI function with validation
+  3. Update Mode 1 shader template with blend_colors switch statement
+  4. Add rgb_to_hsv/hsv_to_rgb helper functions to shader
 
 ### Phase 5: Networking & Polish
 
