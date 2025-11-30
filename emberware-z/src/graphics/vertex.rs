@@ -133,348 +133,178 @@ impl VertexFormatInfo {
     /// - Location 4: Bone indices (if FORMAT_SKINNED, Uint8x4)
     /// - Location 5: Bone weights (if FORMAT_SKINNED, Float32x4)
     fn build_attributes(format: u8) -> &'static [wgpu::VertexAttribute] {
-        // Pre-computed attribute arrays for each format
-        // Position is always at location 0
-        match format {
-            0 => &[
-                // POS only
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 0,
-                    shader_location: 0,
-                },
-            ],
-            1 => &[
-                // POS_UV
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 0,
-                    shader_location: 0,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x2,
-                    offset: 12,
-                    shader_location: 1,
-                },
-            ],
-            2 => &[
-                // POS_COLOR
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 0,
-                    shader_location: 0,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 12,
-                    shader_location: 2,
-                },
-            ],
-            3 => &[
-                // POS_UV_COLOR
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 0,
-                    shader_location: 0,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x2,
-                    offset: 12,
-                    shader_location: 1,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 20,
-                    shader_location: 2,
-                },
-            ],
-            4 => &[
-                // POS_NORMAL
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 0,
-                    shader_location: 0,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 12,
-                    shader_location: 3,
-                },
-            ],
-            5 => &[
-                // POS_UV_NORMAL
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 0,
-                    shader_location: 0,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x2,
-                    offset: 12,
-                    shader_location: 1,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 20,
-                    shader_location: 3,
-                },
-            ],
-            6 => &[
-                // POS_COLOR_NORMAL
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 0,
-                    shader_location: 0,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 12,
-                    shader_location: 2,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 24,
-                    shader_location: 3,
-                },
-            ],
-            7 => &[
-                // POS_UV_COLOR_NORMAL
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 0,
-                    shader_location: 0,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x2,
-                    offset: 12,
-                    shader_location: 1,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 20,
-                    shader_location: 2,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 32,
-                    shader_location: 3,
-                },
-            ],
-            8 => &[
-                // POS_SKINNED
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 0,
-                    shader_location: 0,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Uint8x4,
-                    offset: 12,
-                    shader_location: 4,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x4,
-                    offset: 16,
-                    shader_location: 5,
-                },
-            ],
-            9 => &[
-                // POS_UV_SKINNED
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 0,
-                    shader_location: 0,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x2,
-                    offset: 12,
-                    shader_location: 1,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Uint8x4,
-                    offset: 20,
-                    shader_location: 4,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x4,
-                    offset: 24,
-                    shader_location: 5,
-                },
-            ],
-            10 => &[
-                // POS_COLOR_SKINNED
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 0,
-                    shader_location: 0,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 12,
-                    shader_location: 2,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Uint8x4,
-                    offset: 24,
-                    shader_location: 4,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x4,
-                    offset: 28,
-                    shader_location: 5,
-                },
-            ],
-            11 => &[
-                // POS_UV_COLOR_SKINNED
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 0,
-                    shader_location: 0,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x2,
-                    offset: 12,
-                    shader_location: 1,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 20,
-                    shader_location: 2,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Uint8x4,
-                    offset: 32,
-                    shader_location: 4,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x4,
-                    offset: 36,
-                    shader_location: 5,
-                },
-            ],
-            12 => &[
-                // POS_NORMAL_SKINNED
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 0,
-                    shader_location: 0,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 12,
-                    shader_location: 3,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Uint8x4,
-                    offset: 24,
-                    shader_location: 4,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x4,
-                    offset: 28,
-                    shader_location: 5,
-                },
-            ],
-            13 => &[
-                // POS_UV_NORMAL_SKINNED
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 0,
-                    shader_location: 0,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x2,
-                    offset: 12,
-                    shader_location: 1,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 20,
-                    shader_location: 3,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Uint8x4,
-                    offset: 32,
-                    shader_location: 4,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x4,
-                    offset: 36,
-                    shader_location: 5,
-                },
-            ],
-            14 => &[
-                // POS_COLOR_NORMAL_SKINNED
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 0,
-                    shader_location: 0,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 12,
-                    shader_location: 2,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 24,
-                    shader_location: 3,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Uint8x4,
-                    offset: 36,
-                    shader_location: 4,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x4,
-                    offset: 40,
-                    shader_location: 5,
-                },
-            ],
-            15 => &[
-                // POS_UV_COLOR_NORMAL_SKINNED
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 0,
-                    shader_location: 0,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x2,
-                    offset: 12,
-                    shader_location: 1,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 20,
-                    shader_location: 2,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 32,
-                    shader_location: 3,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Uint8x4,
-                    offset: 44,
-                    shader_location: 4,
-                },
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x4,
-                    offset: 48,
-                    shader_location: 5,
-                },
-            ],
-            _ => &[
-                // Fallback: POS only
-                wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x3,
-                    offset: 0,
-                    shader_location: 0,
-                },
-            ],
-        }
+        // Index into pre-computed attribute table by format (0-15)
+        // Invalid formats (>15) fall back to POS only (format 0)
+        VERTEX_ATTRIBUTES[(format & 0x0F) as usize]
     }
 }
+
+/// Attribute sizes in bytes for offset calculation
+const SIZE_POS: u64 = 12; // Float32x3
+const SIZE_UV: u64 = 8; // Float32x2
+const SIZE_COLOR: u64 = 12; // Float32x3
+const SIZE_NORMAL: u64 = 12; // Float32x3
+const SIZE_BONE_INDICES: u64 = 4; // Uint8x4
+// Note: SIZE_BONE_WEIGHTS (16 bytes) is not needed since bone weights is always last
+
+/// Shader locations for each attribute type
+const LOC_POS: u32 = 0;
+const LOC_UV: u32 = 1;
+const LOC_COLOR: u32 = 2;
+const LOC_NORMAL: u32 = 3;
+const LOC_BONE_INDICES: u32 = 4;
+const LOC_BONE_WEIGHTS: u32 = 5;
+
+/// Creates a position attribute at offset 0
+const fn attr_pos() -> wgpu::VertexAttribute {
+    wgpu::VertexAttribute {
+        format: wgpu::VertexFormat::Float32x3,
+        offset: 0,
+        shader_location: LOC_POS,
+    }
+}
+
+/// Creates a UV attribute at the given offset
+const fn attr_uv(offset: u64) -> wgpu::VertexAttribute {
+    wgpu::VertexAttribute {
+        format: wgpu::VertexFormat::Float32x2,
+        offset,
+        shader_location: LOC_UV,
+    }
+}
+
+/// Creates a color attribute at the given offset
+const fn attr_color(offset: u64) -> wgpu::VertexAttribute {
+    wgpu::VertexAttribute {
+        format: wgpu::VertexFormat::Float32x3,
+        offset,
+        shader_location: LOC_COLOR,
+    }
+}
+
+/// Creates a normal attribute at the given offset
+const fn attr_normal(offset: u64) -> wgpu::VertexAttribute {
+    wgpu::VertexAttribute {
+        format: wgpu::VertexFormat::Float32x3,
+        offset,
+        shader_location: LOC_NORMAL,
+    }
+}
+
+/// Creates bone indices attribute at the given offset
+const fn attr_bone_indices(offset: u64) -> wgpu::VertexAttribute {
+    wgpu::VertexAttribute {
+        format: wgpu::VertexFormat::Uint8x4,
+        offset,
+        shader_location: LOC_BONE_INDICES,
+    }
+}
+
+/// Creates bone weights attribute at the given offset
+const fn attr_bone_weights(offset: u64) -> wgpu::VertexAttribute {
+    wgpu::VertexAttribute {
+        format: wgpu::VertexFormat::Float32x4,
+        offset,
+        shader_location: LOC_BONE_WEIGHTS,
+    }
+}
+
+/// Pre-computed vertex attribute arrays for all 16 formats.
+///
+/// Vertex layout order: Position → UV → Color → Normal → Bone Indices → Bone Weights
+/// Each attribute is only present if its corresponding flag is set.
+/// Offsets are computed based on which attributes precede each one.
+static VERTEX_ATTRIBUTES: [&[wgpu::VertexAttribute]; 16] = [
+    // Format 0: POS
+    &[attr_pos()],
+    // Format 1: POS_UV
+    &[attr_pos(), attr_uv(SIZE_POS)],
+    // Format 2: POS_COLOR
+    &[attr_pos(), attr_color(SIZE_POS)],
+    // Format 3: POS_UV_COLOR
+    &[attr_pos(), attr_uv(SIZE_POS), attr_color(SIZE_POS + SIZE_UV)],
+    // Format 4: POS_NORMAL
+    &[attr_pos(), attr_normal(SIZE_POS)],
+    // Format 5: POS_UV_NORMAL
+    &[
+        attr_pos(),
+        attr_uv(SIZE_POS),
+        attr_normal(SIZE_POS + SIZE_UV),
+    ],
+    // Format 6: POS_COLOR_NORMAL
+    &[
+        attr_pos(),
+        attr_color(SIZE_POS),
+        attr_normal(SIZE_POS + SIZE_COLOR),
+    ],
+    // Format 7: POS_UV_COLOR_NORMAL
+    &[
+        attr_pos(),
+        attr_uv(SIZE_POS),
+        attr_color(SIZE_POS + SIZE_UV),
+        attr_normal(SIZE_POS + SIZE_UV + SIZE_COLOR),
+    ],
+    // Format 8: POS_SKINNED
+    &[
+        attr_pos(),
+        attr_bone_indices(SIZE_POS),
+        attr_bone_weights(SIZE_POS + SIZE_BONE_INDICES),
+    ],
+    // Format 9: POS_UV_SKINNED
+    &[
+        attr_pos(),
+        attr_uv(SIZE_POS),
+        attr_bone_indices(SIZE_POS + SIZE_UV),
+        attr_bone_weights(SIZE_POS + SIZE_UV + SIZE_BONE_INDICES),
+    ],
+    // Format 10: POS_COLOR_SKINNED
+    &[
+        attr_pos(),
+        attr_color(SIZE_POS),
+        attr_bone_indices(SIZE_POS + SIZE_COLOR),
+        attr_bone_weights(SIZE_POS + SIZE_COLOR + SIZE_BONE_INDICES),
+    ],
+    // Format 11: POS_UV_COLOR_SKINNED
+    &[
+        attr_pos(),
+        attr_uv(SIZE_POS),
+        attr_color(SIZE_POS + SIZE_UV),
+        attr_bone_indices(SIZE_POS + SIZE_UV + SIZE_COLOR),
+        attr_bone_weights(SIZE_POS + SIZE_UV + SIZE_COLOR + SIZE_BONE_INDICES),
+    ],
+    // Format 12: POS_NORMAL_SKINNED
+    &[
+        attr_pos(),
+        attr_normal(SIZE_POS),
+        attr_bone_indices(SIZE_POS + SIZE_NORMAL),
+        attr_bone_weights(SIZE_POS + SIZE_NORMAL + SIZE_BONE_INDICES),
+    ],
+    // Format 13: POS_UV_NORMAL_SKINNED
+    &[
+        attr_pos(),
+        attr_uv(SIZE_POS),
+        attr_normal(SIZE_POS + SIZE_UV),
+        attr_bone_indices(SIZE_POS + SIZE_UV + SIZE_NORMAL),
+        attr_bone_weights(SIZE_POS + SIZE_UV + SIZE_NORMAL + SIZE_BONE_INDICES),
+    ],
+    // Format 14: POS_COLOR_NORMAL_SKINNED
+    &[
+        attr_pos(),
+        attr_color(SIZE_POS),
+        attr_normal(SIZE_POS + SIZE_COLOR),
+        attr_bone_indices(SIZE_POS + SIZE_COLOR + SIZE_NORMAL),
+        attr_bone_weights(SIZE_POS + SIZE_COLOR + SIZE_NORMAL + SIZE_BONE_INDICES),
+    ],
+    // Format 15: POS_UV_COLOR_NORMAL_SKINNED
+    &[
+        attr_pos(),
+        attr_uv(SIZE_POS),
+        attr_color(SIZE_POS + SIZE_UV),
+        attr_normal(SIZE_POS + SIZE_UV + SIZE_COLOR),
+        attr_bone_indices(SIZE_POS + SIZE_UV + SIZE_COLOR + SIZE_NORMAL),
+        attr_bone_weights(SIZE_POS + SIZE_UV + SIZE_COLOR + SIZE_NORMAL + SIZE_BONE_INDICES),
+    ],
+];
 
 #[cfg(test)]
 mod tests {

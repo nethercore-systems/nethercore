@@ -115,14 +115,9 @@ The `Runtime<C: Console>` handles:
 
 #### Medium Priority
 
-- **[STABILITY] Split wasm.rs into modules** (`core/src/wasm.rs`)
-  - `wasm.rs`: 1681 lines → split by responsibility (game state, camera, render)
+(Moved to In Progress)
 
 #### Low Priority
-
-- **[STABILITY] Reduce DRY violations in vertex attribute generation** (`emberware-z/src/graphics.rs:154-520`)
-  - Massive match statement with 16 nearly identical cases
-  - Use macro or builder pattern to reduce duplication
 
 - **[STABILITY] Review clone operations for optimization** (multiple files)
   - `core/src/ffi.rs:118`: Clone save data to avoid borrow issues
@@ -258,9 +253,33 @@ The `Runtime<C: Console>` handles:
 ---
 ## In Progress
 
+(empty)
+
 ---
 
 ## Done
+
+- **[STABILITY] Reduce DRY violations in vertex attribute generation** (`emberware-z/src/graphics/vertex.rs`)
+  - Replaced 340-line match statement with data-driven static array
+  - Created helper functions: `attr_pos()`, `attr_uv()`, `attr_color()`, `attr_normal()`, `attr_bone_indices()`, `attr_bone_weights()`
+  - Added size constants: `SIZE_POS`, `SIZE_UV`, `SIZE_COLOR`, `SIZE_NORMAL`, `SIZE_BONE_INDICES`
+  - Added shader location constants: `LOC_POS`, `LOC_UV`, `LOC_COLOR`, `LOC_NORMAL`, `LOC_BONE_INDICES`, `LOC_BONE_WEIGHTS`
+  - `VERTEX_ATTRIBUTES` static array holds pre-computed attribute slices for all 16 formats
+  - `build_attributes()` now just indexes into the array
+  - Reduced code from ~340 lines to ~170 lines (50% reduction)
+  - All 554 tests passing
+
+- **[STABILITY] Split wasm.rs into modules** (`core/src/wasm.rs`)
+  - Split 1917 lines into 5 submodules:
+    - `camera.rs`: CameraState, DEFAULT_CAMERA_FOV (~115 lines)
+    - `draw.rs`: DrawCommand, PendingTexture, PendingMesh (~380 lines)
+    - `input.rs`: InputState (~75 lines)
+    - `render.rs`: LightState, RenderState, InitConfig, MAX_BONES (~240 lines)
+    - `state.rs`: GameState, MAX_* constants (~160 lines)
+    - `mod.rs`: WasmEngine, GameInstance, re-exports (~970 lines)
+  - All 183 core tests passing
+  - All public API preserved via re-exports
+
 
 - **[STABILITY] Split graphics.rs into modules** (`emberware-z/src/graphics.rs`)
   - Split 3436 lines into 5 submodules:
