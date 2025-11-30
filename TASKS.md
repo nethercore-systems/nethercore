@@ -213,17 +213,6 @@ The `Runtime<C: Console>` handles:
 
 (Moved to Done)
 
-- **Create `lighting` example**
-  - Demonstrates all render modes (0-3):
-    - Toggle between modes with button press
-    - Mode 0: Unlit/Lambert
-    - Mode 1: Matcap (load 3 matcap textures)
-    - Mode 2: PBR with 4 lights
-    - Mode 3: Hybrid (1 light + matcap ambient)
-    - Material properties: `material_metallic()`, `material_roughness()`, `material_emissive()`
-    - Dynamic light positioning
-    - `set_sky()` for procedural sky
-
 - **Create `skinned-mesh` example**
   - Demonstrates GPU skinning:
     - Load skinned mesh with FORMAT_SKINNED | FORMAT_UV | FORMAT_NORMAL
@@ -282,6 +271,20 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **Create `lighting` example (Phase 6)**
+  - Demonstrates PBR lighting (render mode 2):
+    - `render_mode()` to select PBR mode
+    - `set_sky()` for procedural sky lighting
+    - `light_set()`, `light_color()`, `light_intensity()`, `light_disable()` for 4 dynamic lights
+    - `material_metallic()`, `material_roughness()` for PBR materials
+    - Interactive light positioning via analog sticks
+    - Material property adjustment via triggers
+    - Light toggling via face buttons
+    - Icosphere mesh for demonstrating lighting
+    - UI overlay showing current settings
+  - Note: render_mode is init-only, so mode selection is a compile-time constant
+  - ~400 lines of Rust code
 
 - **Create `cube` example (Phase 6)**
   - Demonstrates retained mode 3D:

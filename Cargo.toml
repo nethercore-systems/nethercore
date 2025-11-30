@@ -1,6 +1,6 @@
 [workspace]
 members = ["core", "emberware-z", "shared"]
-exclude = ["examples/hello-world", "examples/triangle", "examples/textured-quad", "examples/cube"]
+exclude = ["examples/hello-world", "examples/triangle", "examples/textured-quad", "examples/cube", "examples/lighting"]
 resolver = "2"
 
 [workspace.package]
