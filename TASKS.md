@@ -115,8 +115,7 @@ The `Runtime<C: Console>` handles:
 
 #### Medium Priority
 
-- **[STABILITY] Split large files into modules** (graphics.rs, wasm.rs)
-  - `graphics.rs`: 3436 lines → split into pipeline, vertex, command_buffer, resources
+- **[STABILITY] Split wasm.rs into modules** (`core/src/wasm.rs`)
   - `wasm.rs`: 1681 lines → split by responsibility (game state, camera, render)
 
 #### Low Priority
@@ -262,6 +261,17 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **[STABILITY] Split graphics.rs into modules** (`emberware-z/src/graphics.rs`)
+  - Split 3436 lines into 5 submodules:
+    - `vertex.rs`: Vertex format constants, VertexFormatInfo, stride calculations (~600 lines)
+    - `buffer.rs`: GrowableBuffer, MeshHandle, RetainedMesh (~180 lines)
+    - `render_state.rs`: CullMode, BlendMode, TextureFilter, SkyUniforms, RenderState, TextureHandle (~470 lines)
+    - `command_buffer.rs`: DrawCommand, CommandBuffer (~270 lines)
+    - `pipeline.rs`: PipelineKey, PipelineEntry, create_pipeline, bind group layouts (~290 lines)
+    - `mod.rs`: ZGraphics struct, core methods, re-exports (~1050 lines)
+  - All 371 tests passing
+  - All public API preserved via re-exports
 
 - **[STABILITY] Add negative test cases for FFI error conditions** (`emberware-z/src/ffi/mod.rs`)
   - Added 67 new tests (139 total FFI tests, up from 72)
