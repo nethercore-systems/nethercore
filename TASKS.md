@@ -115,11 +115,6 @@ The `Runtime<C: Console>` handles:
 
 #### Medium Priority
 
-- **[STABILITY] Review dead_code allowances** (multiple files)
-  - `core/src/wasm.rs:494`: Verify if dead code is needed or can be removed
-  - `core/src/runtime.rs:44`: `console` field marked for future use - document or use
-  - `emberware-z/src/app.rs:149`: `handle_runtime_error` infrastructure - verify needed
-  - `emberware-z/src/console.rs:67,85,121`: Button enum helpers - verify test-only or public API
 
 - **[STABILITY] Add negative test cases for FFI error conditions** (`emberware-z/src/ffi/mod.rs`)
   - Test invalid texture handles
@@ -148,9 +143,6 @@ The `Runtime<C: Console>` handles:
   - Review casts from larger to smaller integer types
   - Add explicit validation where data loss is possible
 
-- **[STABILITY] Clarify runtime TODO comment** (`emberware-z/src/runtime/mod.rs:15`)
-  - `// TODO: Implement runtime modules`
-  - Determine if this is needed or can be removed
 
 - **[STABILITY] Document resource cleanup strategy** (graphics resources)
   - Textures and meshes documented as "auto-cleaned on game shutdown"
@@ -277,6 +269,18 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **[STABILITY] Review dead_code allowances** (multiple files)
+  - Verified all 4 dead_code allowances are properly documented and necessary:
+  - `core/src/wasm.rs:494`: `instance` field must be kept alive for WASM function lifetimes
+  - `core/src/runtime.rs:44`: `console` field kept for future console-specific features
+  - `emberware-z/src/app.rs:149`: `handle_runtime_error` is infrastructure for future use
+  - `emberware-z/src/console.rs:67,85,121`: Button enum/helpers are public API for tests and console-side code
+
+- **[STABILITY] Clarify runtime TODO comment** (`emberware-z/src/runtime/mod.rs:15`)
+  - Replaced outdated TODO with accurate module layout documentation
+  - Now lists actual file locations for all runtime components across core and emberware-z
+  - References TASKS.md for unimplemented audio feature
 
 - **[STABILITY] Add error path tests for WASM memory access** (`core/src/wasm.rs`, `core/src/ffi.rs`)
   - Added 14 new tests to `core/src/ffi.rs` for FFI memory access error paths:
