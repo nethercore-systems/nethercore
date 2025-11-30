@@ -347,3 +347,39 @@ This enables fighting games with unlocked characters, RPGs with player stats, et
 
 ---
 
+### **[FEATURE] Implement 2D sprite rendering**
+
+**Completed:** Implemented in `emberware-z/src/graphics/mod.rs`
+
+**Implementation:**
+- Generates quad geometry in screen space (pixel coordinates)
+- Supports optional UV rectangles for texture atlas usage
+- Supports optional origin offset for rotation pivot
+- Supports rotation around origin point
+- Applies color tint from RGBA value
+- Uses POS_UV_COLOR format (format 3)
+- Renders with identity transform and no depth test (2D overlay)
+- Submits as indexed triangles (4 vertices, 6 indices)
+
+**Files Modified:**
+- `emberware-z/src/graphics/mod.rs` - Implemented ZDrawCommand::DrawSprite case in process_draw_commands()
+
+---
+
+### **[FEATURE] Implement 2D rectangle rendering**
+
+**Completed:** Implemented in `emberware-z/src/graphics/mod.rs`
+
+**Implementation:**
+- Generates solid color quad in screen space (pixel coordinates)
+- No texture - uses vertex color only
+- Uses POS_COLOR format (format 2, no UV)
+- Applies color from RGBA value
+- Renders with identity transform and no depth test (2D overlay)
+- Submits as indexed triangles (4 vertices, 6 indices)
+
+**Files Modified:**
+- `emberware-z/src/graphics/mod.rs` - Implemented ZDrawCommand::DrawRect case in process_draw_commands()
+
+---
+

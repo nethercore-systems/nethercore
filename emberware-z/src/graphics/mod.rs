@@ -1374,14 +1374,14 @@ impl ZGraphics {
                     y,
                     width,
                     height,
-                    uv_rect: _,
-                    origin: _,
-                    rotation: _,
+                    uv_rect,
+                    origin,
+                    rotation,
                     color,
-                    blend_mode: _,
-                    bound_textures: _,
+                    blend_mode,
+                    bound_textures,
                 } => {
-                    // TODO: Implement 2D sprite rendering
+                    // 2D sprite rendering in screen space
                     tracing::trace!(
                         "Sprite: {}x{} at ({},{}) color={:08x}",
                         width,
@@ -1390,6 +1390,97 @@ impl ZGraphics {
                         y,
                         color
                     );
+
+                    // Map game texture handles to graphics texture handles
+                    let texture_slots = Self::map_texture_handles(texture_map, &bound_textures);
+
+                    // Extract color components (RGBA: 0xRRGGBBAA)
+                    let r = ((color >> 24) & 0xFF) as f32 / 255.0;
+                    let g = ((color >> 16) & 0xFF) as f32 / 255.0;
+                    let b = ((color >> 8) & 0xFF) as f32 / 255.0;
+
+                    // Get UV coordinates
+                    let (u0, v0, u1, v1) = uv_rect.unwrap_or((0.0, 0.0, 1.0, 1.0));
+
+                    // Get origin offset (default to top-left)
+                    let (origin_x, origin_y) = origin.unwrap_or((0.0, 0.0));
+
+                    // Calculate corner positions with origin offset
+                    let x0 = x - origin_x;
+                    let y0 = y - origin_y;
+                    let x1 = x0 + width;
+                    let y1 = y0 + height;
+
+                    // Generate quad vertices
+                    // If rotation is non-zero, rotate around the sprite's origin point
+                    let vertices = if rotation.abs() > 0.0001 {
+                        // Rotate around (x, y) which is the sprite's anchor point
+                        let cos_r = rotation.cos();
+                        let sin_r = rotation.sin();
+
+                        // Transform each corner relative to rotation center (x, y)
+                        let rotate_point = |px: f32, py: f32| -> (f32, f32) {
+                            let dx = px - x;
+                            let dy = py - y;
+                            let rx = dx * cos_r - dy * sin_r;
+                            let ry = dx * sin_r + dy * cos_r;
+                            (x + rx, y + ry)
+                        };
+
+                        let (rx0, ry0) = rotate_point(x0, y0);
+                        let (rx1, ry1) = rotate_point(x1, y0);
+                        let (rx2, ry2) = rotate_point(x1, y1);
+                        let (rx3, ry3) = rotate_point(x0, y1);
+
+                        vec![
+                            // Top-left
+                            rx0, ry0, 0.0, u0, v0, r, g, b,
+                            // Top-right
+                            rx1, ry1, 0.0, u1, v0, r, g, b,
+                            // Bottom-right
+                            rx2, ry2, 0.0, u1, v1, r, g, b,
+                            // Bottom-left
+                            rx3, ry3, 0.0, u0, v1, r, g, b,
+                        ]
+                    } else {
+                        // No rotation - simple quad
+                        vec![
+                            // Top-left
+                            x0, y0, 0.0, u0, v0, r, g, b,
+                            // Top-right
+                            x1, y0, 0.0, u1, v0, r, g, b,
+                            // Bottom-right
+                            x1, y1, 0.0, u1, v1, r, g, b,
+                            // Bottom-left
+                            x0, y1, 0.0, u0, v1, r, g, b,
+                        ]
+                    };
+
+                    // Two triangles (6 indices)
+                    let indices = vec![0, 1, 2, 0, 2, 3];
+
+                    // POS_UV_COLOR format
+                    const SPRITE_FORMAT: u8 = 3;
+
+                    // Append vertex and index data
+                    let base_vertex = self.command_buffer.append_vertex_data(SPRITE_FORMAT, &vertices);
+                    let first_index = self.command_buffer.append_index_data(SPRITE_FORMAT, &indices);
+
+                    // Add draw command with identity transform (screen space)
+                    self.command_buffer.add_command(command_buffer::DrawCommand {
+                        format: SPRITE_FORMAT,
+                        transform: Mat4::IDENTITY,
+                        vertex_count: 4,
+                        index_count: 6,
+                        base_vertex,
+                        first_index,
+                        texture_slots,
+                        color: 0xFFFFFFFF, // Color already in vertices
+                        depth_test: false,  // 2D sprites don't use depth test
+                        cull_mode: CullMode::None,
+                        blend_mode: Self::convert_blend_mode(blend_mode),
+                        matcap_blend_modes,
+                    });
                 }
                 ZDrawCommand::DrawRect {
                     x,
@@ -1397,9 +1488,9 @@ impl ZGraphics {
                     width,
                     height,
                     color,
-                    blend_mode: _,
+                    blend_mode,
                 } => {
-                    // TODO: Implement 2D rectangle rendering
+                    // 2D rectangle rendering in screen space (solid color, no texture)
                     tracing::trace!(
                         "Rect: {}x{} at ({},{}) color={:08x}",
                         width,
@@ -1408,6 +1499,55 @@ impl ZGraphics {
                         y,
                         color
                     );
+
+                    // Extract color components (RGBA: 0xRRGGBBAA)
+                    let r = ((color >> 24) & 0xFF) as f32 / 255.0;
+                    let g = ((color >> 16) & 0xFF) as f32 / 255.0;
+                    let b = ((color >> 8) & 0xFF) as f32 / 255.0;
+
+                    // Calculate corner positions
+                    let x1 = x + width;
+                    let y1 = y + height;
+
+                    // Generate quad vertices (POS_COLOR format = 2)
+                    // Format: [x, y, z, r, g, b]
+                    #[rustfmt::skip]
+                    let vertices = vec![
+                        // Top-left
+                        x, y, 0.0, r, g, b,
+                        // Top-right
+                        x1, y, 0.0, r, g, b,
+                        // Bottom-right
+                        x1, y1, 0.0, r, g, b,
+                        // Bottom-left
+                        x, y1, 0.0, r, g, b,
+                    ];
+
+                    // Two triangles (6 indices)
+                    let indices = vec![0, 1, 2, 0, 2, 3];
+
+                    // POS_COLOR format (no UV)
+                    const RECT_FORMAT: u8 = 2;
+
+                    // Append vertex and index data
+                    let base_vertex = self.command_buffer.append_vertex_data(RECT_FORMAT, &vertices);
+                    let first_index = self.command_buffer.append_index_data(RECT_FORMAT, &indices);
+
+                    // Add draw command with identity transform (screen space)
+                    self.command_buffer.add_command(command_buffer::DrawCommand {
+                        format: RECT_FORMAT,
+                        transform: Mat4::IDENTITY,
+                        vertex_count: 4,
+                        index_count: 6,
+                        base_vertex,
+                        first_index,
+                        texture_slots: [TextureHandle::INVALID; 4],
+                        color: 0xFFFFFFFF, // Color already in vertices
+                        depth_test: false,  // 2D rectangles don't use depth test
+                        cull_mode: CullMode::None,
+                        blend_mode: Self::convert_blend_mode(blend_mode),
+                        matcap_blend_modes,
+                    });
                 }
                 ZDrawCommand::DrawText {
                     text,
