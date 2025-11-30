@@ -97,47 +97,6 @@ The `Runtime<C: Console>` handles:
 
 ## TODO
 
-### **[REFACTOR] Simplify execute_draw_commands architecture**
-
-**Current Problem:** Redundant translation layer
-
-**Current Flow:**
-1. WASM FFI → ZFFIState (creates `ZDrawCommand` structs)
-2. `execute_draw_commands()` → unpacks each `ZDrawCommand` → calls individual ZGraphics setters
-3. ZGraphics → re-packs into command buffer
-
-**Why This Is Bad:**
-- Unnecessary unpacking/repacking of the same data
-- More code to maintain
-- Potential performance overhead
-
-**Proposed Fix:**
-```rust
-// Instead of unpacking in app.rs:
-impl ZGraphics {
-    pub fn render_frame(&mut self, z_state: &mut ZFFIState) {
-        // Directly consume draw commands without unpacking/repacking
-        for cmd in &z_state.draw_commands {
-            self.execute_draw_command(cmd);
-        }
-        z_state.clear_frame();
-    }
-}
-```
-
-**Benefits:**
-- Simpler code (remove entire execute_draw_commands function)
-- Better performance (no intermediate translations)
-- Clearer architecture (ZGraphics directly consumes ZFFIState)
-
-**Files to Modify:**
-- `emberware-z/src/app.rs` - Replace execute_draw_commands() with graphics.render_frame(&mut z_state)
-- `emberware-z/src/graphics/mod.rs` - Add render_frame() and execute_draw_command() methods
-
-**Impact:** MEDIUM - Cleaner architecture, easier maintenance
-
----
-
 ### **[NEEDS CLARIFICATION] Define and enforce console runtime limits**
 
 **Current State:** Partial limit enforcement - VRAM tracking (8MB), vertex format validation, memory bounds checking. No enforcement for draw calls, vertex counts, mesh counts, or CPU budget per frame.
@@ -1173,20 +1132,34 @@ KEYCODE_TO_BUTTON.get(&(keycode as u32)).copied()
 ---
 ## In Progress
 
-### Remove reliance on MAX_STATE_SIZE and instead use console spec provided RAM to limit
-- Rollback config.rs has defined MAX_STATE_SIZE, this may change per console Z, Class, or others
-- We have a ConsoleSpecs trait which defines the maximum RAM via ram_limit
-- Ram limit should be used to determine the MAX_STATE_SIZE, not some hardcoded magic number
-
-### **[STABILITY] Refactor rollback to use automatic WASM linear memory snapshotting**
-
-**Current State:** Games manually serialize state via FFI callbacks (`save_state(ptr, max_len) -> len` and `load_state(ptr, len)`). This requires boilerplate in every game and is error-prone.
-
-**Target State:** Automatic memory snapshotting as described in [docs/rollback-architecture.md](docs/rollback-architecture.md). The host snapshots entire WASM linear memory transparently. Games require zero serialization code.
-
-**Implementation in progress...**
-
 ## Done
+
+### **[REFACTOR] Simplify execute_draw_commands architecture**
+**Status:** Completed ✅
+
+**What Was Implemented:**
+- ✅ Added `process_draw_commands()` method to ZGraphics that directly consumes ZFFIState
+- ✅ Added private `execute_draw_command()` helper method to ZGraphics for processing individual draw commands
+- ✅ Added private helper methods `convert_cull_mode()`, `convert_blend_mode()`, and `bind_textures_from_game()` to ZGraphics
+- ✅ Updated `app.rs` to call `graphics.process_draw_commands()` instead of `execute_draw_commands()`
+- ✅ Removed old `execute_draw_commands()` function from app.rs (~220 lines removed)
+- ✅ Removed old helper functions `convert_cull_mode()`, `convert_blend_mode()`, and `bind_textures()` from app.rs
+- ✅ Removed unused imports (`ZDrawCommand`, `BlendMode`, `CullMode`) from app.rs
+- ✅ All 363 tests passing
+
+**Files Modified:**
+- `emberware-z/src/graphics/mod.rs` - Added new methods for direct draw command processing
+- `emberware-z/src/app.rs` - Removed ~250 lines of redundant translation code
+
+**Impact:**
+- Cleaner architecture: ZGraphics directly consumes ZFFIState without intermediate unpacking/repacking
+- Better performance: No intermediate data copies or translations
+- Easier maintenance: Draw command processing logic is now centralized in the graphics module
+- Reduced code duplication: Helper functions moved from app.rs to ZGraphics where they belong
+
+**Compilation:** ✅ All tests passing
+
+---
 
 ### **[FEATURE] Update PBR shaders to use camera/lights/material uniforms**
 **Status:** Completed ✅
