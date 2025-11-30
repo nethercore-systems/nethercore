@@ -102,14 +102,29 @@ impl GrowableBuffer {
         offset
     }
 
+    /// Write data to the buffer at a specific offset
+    ///
+    /// Updates the used counter if this write extends past the current end.
+    /// Panics if offset + data.len > capacity.
+    pub fn write_at(&self, queue: &wgpu::Queue, offset: u64, data: &[u8]) {
+        assert!(
+            offset + data.len() as u64 <= self.capacity,
+            "Buffer overflow: {} + {} > {}",
+            offset,
+            data.len(),
+            self.capacity
+        );
+        queue.write_buffer(&self.buffer, offset, data);
+    }
+
     /// Reset the used counter (for per-frame immediate mode buffers)
     pub fn reset(&mut self) {
         self.used = 0;
     }
 
-    /// Get the underlying wgpu buffer
-    pub fn buffer(&self) -> &wgpu::Buffer {
-        &self.buffer
+    /// Get the underlying wgpu buffer, if it exists
+    pub fn buffer(&self) -> Option<&wgpu::Buffer> {
+        Some(&self.buffer)
     }
 
     /// Get current used bytes

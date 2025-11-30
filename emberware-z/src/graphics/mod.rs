@@ -1120,6 +1120,275 @@ impl ZGraphics {
 
         (vertices, indices)
     }
+
+    /// Render the command buffer contents to a texture view
+    ///
+    /// This is the core rendering function that takes buffered draw commands
+    /// and issues GPU draw calls.
+    ///
+    /// # Arguments
+    /// * `view` - The texture view to render to
+    /// * `view_matrix` - Camera view matrix
+    /// * `projection_matrix` - Camera projection matrix
+    /// * `clear_color` - Background clear color (RGBA 0-1)
+    pub fn render_frame(
+        &mut self,
+        view: &wgpu::TextureView,
+        view_matrix: Mat4,
+        projection_matrix: Mat4,
+        clear_color: [f32; 4],
+    ) {
+        // Create command encoder
+        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Game Render Encoder"),
+        });
+
+        // If no commands, just clear and return
+        if self.command_buffer.commands().is_empty() {
+            {
+                let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("Clear Pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color {
+                                r: clear_color[0] as f64,
+                                g: clear_color[1] as f64,
+                                b: clear_color[2] as f64,
+                                a: clear_color[3] as f64,
+                            }),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                        view: &self.depth_view,
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(1.0),
+                            store: wgpu::StoreOp::Store,
+                        }),
+                        stencil_ops: None,
+                    }),
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+            }
+            self.queue.submit(std::iter::once(encoder.finish()));
+            return;
+        }
+
+        // Create uniform buffers for view and projection matrices
+        let view_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("View Matrix Buffer"),
+            contents: bytemuck::cast_slice(&view_matrix.to_cols_array()),
+            usage: wgpu::BufferUsages::UNIFORM,
+        });
+
+        let proj_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Projection Matrix Buffer"),
+            contents: bytemuck::cast_slice(&projection_matrix.to_cols_array()),
+            usage: wgpu::BufferUsages::UNIFORM,
+        });
+
+        // Upload vertex/index data from command buffer to GPU buffers
+        for format in 0..VERTEX_FORMAT_COUNT as u8 {
+            let vertex_data = self.command_buffer.vertex_data(format);
+            if !vertex_data.is_empty() {
+                self.vertex_buffers[format as usize].ensure_capacity(&self.device, vertex_data.len() as u64);
+                self.vertex_buffers[format as usize].write_at(&self.queue, 0, vertex_data);
+            }
+
+            let index_data = self.command_buffer.index_data(format);
+            if !index_data.is_empty() {
+                let index_bytes: &[u8] = bytemuck::cast_slice(index_data);
+                self.index_buffers[format as usize].ensure_capacity(&self.device, index_bytes.len() as u64);
+                self.index_buffers[format as usize].write_at(&self.queue, 0, index_bytes);
+            }
+        }
+
+        // Render pass
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Game Render Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: clear_color[0] as f64,
+                            g: clear_color[1] as f64,
+                            b: clear_color[2] as f64,
+                            a: clear_color[3] as f64,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.depth_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            for cmd in self.command_buffer.commands() {
+                // Create render state from command
+                let state = RenderState {
+                    color: cmd.color,
+                    depth_test: cmd.depth_test,
+                    cull_mode: cmd.cull_mode,
+                    blend_mode: cmd.blend_mode,
+                    texture_filter: self.render_state.texture_filter,
+                    texture_slots: cmd.texture_slots,
+                };
+
+                // Get/create pipeline
+                let pipeline_key = PipelineKey::new(self.current_render_mode, cmd.format, &state);
+                if !self.pipelines.contains_key(&pipeline_key) {
+                    let entry = pipeline::create_pipeline(
+                        &self.device,
+                        self.config.format,
+                        self.current_render_mode,
+                        cmd.format,
+                        &state,
+                    );
+                    self.pipelines.insert(pipeline_key, entry);
+                }
+                let pipeline_entry = &self.pipelines[&pipeline_key];
+
+                // Create material uniform buffer (color as vec4)
+                let color_vec = state.color_vec4();
+                #[repr(C)]
+                #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+                struct MaterialUniforms {
+                    color: [f32; 4],
+                }
+                let material = MaterialUniforms {
+                    color: [color_vec.x, color_vec.y, color_vec.z, color_vec.w],
+                };
+                let material_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Material Buffer"),
+                    contents: bytemuck::cast_slice(&[material]),
+                    usage: wgpu::BufferUsages::UNIFORM,
+                });
+
+                // Create frame bind group (group 0)
+                let frame_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("Frame Bind Group"),
+                    layout: &pipeline_entry.bind_group_layout_frame,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: view_buffer.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: proj_buffer.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: self.sky_buffer.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 3,
+                            resource: material_buffer.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 4,
+                            resource: self.bone_buffer.as_entire_binding(),
+                        },
+                    ],
+                });
+
+                // Get texture views for this command's bound textures
+                let tex_view_0 = if cmd.texture_slots[0] == TextureHandle::INVALID {
+                    self.get_fallback_white_view()
+                } else {
+                    self.get_texture_view(cmd.texture_slots[0])
+                        .unwrap_or_else(|| self.get_fallback_checkerboard_view())
+                };
+                let tex_view_1 = if cmd.texture_slots[1] == TextureHandle::INVALID {
+                    self.get_fallback_white_view()
+                } else {
+                    self.get_texture_view(cmd.texture_slots[1])
+                        .unwrap_or_else(|| self.get_fallback_checkerboard_view())
+                };
+                let tex_view_2 = if cmd.texture_slots[2] == TextureHandle::INVALID {
+                    self.get_fallback_white_view()
+                } else {
+                    self.get_texture_view(cmd.texture_slots[2])
+                        .unwrap_or_else(|| self.get_fallback_checkerboard_view())
+                };
+                let tex_view_3 = if cmd.texture_slots[3] == TextureHandle::INVALID {
+                    self.get_fallback_white_view()
+                } else {
+                    self.get_texture_view(cmd.texture_slots[3])
+                        .unwrap_or_else(|| self.get_fallback_checkerboard_view())
+                };
+
+                // Create texture bind group (group 1)
+                let texture_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("Texture Bind Group"),
+                    layout: &pipeline_entry.bind_group_layout_textures,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(tex_view_0),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::TextureView(tex_view_1),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: wgpu::BindingResource::TextureView(tex_view_2),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 3,
+                            resource: wgpu::BindingResource::TextureView(tex_view_3),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 4,
+                            resource: wgpu::BindingResource::Sampler(self.current_sampler()),
+                        },
+                    ],
+                });
+
+                // Set pipeline and bind groups
+                render_pass.set_pipeline(&pipeline_entry.pipeline);
+                render_pass.set_bind_group(0, &frame_bind_group, &[]);
+                render_pass.set_bind_group(1, &texture_bind_group, &[]);
+
+                // Set vertex buffer
+                if let Some(buffer) = self.vertex_buffers[cmd.format as usize].buffer() {
+                    render_pass.set_vertex_buffer(0, buffer.slice(..));
+                }
+
+                // Draw
+                if cmd.index_count > 0 {
+                    // Indexed draw
+                    if let Some(buffer) = self.index_buffers[cmd.format as usize].buffer() {
+                        render_pass.set_index_buffer(buffer.slice(..), wgpu::IndexFormat::Uint32);
+                        render_pass.draw_indexed(
+                            cmd.first_index..cmd.first_index + cmd.index_count,
+                            cmd.base_vertex as i32,
+                            0..1,
+                        );
+                    }
+                } else {
+                    // Non-indexed draw
+                    render_pass.draw(cmd.base_vertex..cmd.base_vertex + cmd.vertex_count, 0..1);
+                }
+            }
+        }
+
+        // Submit commands
+        self.queue.submit(std::iter::once(encoder.finish()));
+    }
 }
 
 impl Graphics for ZGraphics {
