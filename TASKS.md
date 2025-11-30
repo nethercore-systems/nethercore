@@ -106,10 +106,39 @@ The `Runtime<C: Console>` handles:
 
 #### High Priority
 
+- **[STABILITY] Implement audio backend** (`emberware-z/src/console.rs`)
+  - `ZAudio::play()` at line 193: `// TODO: Play sound via rodio`
+  - `ZAudio::stop()` at line 197: `// TODO: Stop sound via rodio`
+  - `ZAudio::create_audio()` at line 252: `// TODO: Initialize rodio output stream`
+  - Audio is a core feature needed for complete game support
+
+- **[STABILITY] Add error path tests for WASM memory access** (`core/src/wasm.rs`, `core/src/ffi.rs`)
+  - Test out-of-bounds memory reads/writes
+  - Test invalid pointer handling in FFI functions
+  - Test resource limit enforcement (RAM, VRAM, save slot sizes)
+
 #### Medium Priority
 
+- **[STABILITY] Add documentation to shared crate public APIs** (`shared/src/lib.rs`)
+  - Add module-level `//!` doc comment explaining the API types
+  - Document all public structs: `Author`, `Game`, `GamesResponse`, `RomUrlResponse`, `VersionResponse`
+  - Document auth types: `User`, `AuthResponse`, `ApiError`
+  - Document request types: `LocalGameManifest`, request/response structs
+
+- **[STABILITY] Review dead_code allowances** (multiple files)
+  - `core/src/wasm.rs:494`: Verify if dead code is needed or can be removed
+  - `core/src/runtime.rs:44`: `console` field marked for future use - document or use
+  - `emberware-z/src/app.rs:149`: `handle_runtime_error` infrastructure - verify needed
+  - `emberware-z/src/console.rs:67,85,121`: Button enum helpers - verify test-only or public API
+
+- **[STABILITY] Add negative test cases for FFI error conditions** (`emberware-z/src/ffi/mod.rs`)
+  - Test invalid texture handles
+  - Test invalid mesh handles
+  - Test out-of-range parameters
+  - Test edge cases for all FFI functions
+
 - **[STABILITY] Split large files into modules** (graphics.rs, wasm.rs)
-  - `graphics.rs`: 3114 lines → split into pipeline, vertex, command_buffer, resources
+  - `graphics.rs`: 3436 lines → split into pipeline, vertex, command_buffer, resources
   - `wasm.rs`: 1681 lines → split by responsibility (game state, camera, render)
 
 #### Low Priority
@@ -117,6 +146,26 @@ The `Runtime<C: Console>` handles:
 - **[STABILITY] Reduce DRY violations in vertex attribute generation** (`emberware-z/src/graphics.rs:154-520`)
   - Massive match statement with 16 nearly identical cases
   - Use macro or builder pattern to reduce duplication
+
+- **[STABILITY] Review clone operations for optimization** (multiple files)
+  - `core/src/ffi.rs:118`: Clone save data to avoid borrow issues
+  - `emberware-z/src/app.rs:303,306,308`: Cloning mode, error, window
+  - `emberware-z/src/graphics.rs:3273`: Clone draw command
+  - Consider if references or moves could work instead
+
+- **[STABILITY] Add bounds checking for potentially truncating type casts** (codebase-wide)
+  - 319 `as` casts across 17 files, most benign (usize conversions)
+  - Review casts from larger to smaller integer types
+  - Add explicit validation where data loss is possible
+
+- **[STABILITY] Clarify runtime TODO comment** (`emberware-z/src/runtime/mod.rs:15`)
+  - `// TODO: Implement runtime modules`
+  - Determine if this is needed or can be removed
+
+- **[STABILITY] Document resource cleanup strategy** (graphics resources)
+  - Textures and meshes documented as "auto-cleaned on game shutdown"
+  - Verify and document Drop implementations or explicit cleanup paths
+  - Ensure no resource leaks on game unload
 
 
 
