@@ -1267,7 +1267,7 @@ impl ZGraphics {
                     );
 
                     // Validate mode
-                    if mode < 1 || mode > 4 {
+                    if !(1..=4).contains(&mode) {
                         tracing::warn!("Invalid billboard mode: {} (must be 1-4)", mode);
                         continue;
                     }
@@ -1880,8 +1880,8 @@ impl ZGraphics {
                 .unwrap_or(custom_font.char_width);
 
             let atlas_width = glyphs_per_row * max_glyph_width as usize;
-            let atlas_height = ((custom_font.char_count as usize + glyphs_per_row - 1)
-                / glyphs_per_row)
+            let atlas_height = (custom_font.char_count as usize)
+                .div_ceil(glyphs_per_row)
                 * custom_font.char_height as usize;
 
             for ch in text.chars() {
@@ -2129,6 +2129,7 @@ impl ZGraphics {
         // OPTIMIZATION 2: Cache bind groups to avoid creating duplicates
         // Material bind group cache: color -> uniform buffer
         // Cache material buffers by (color, metallic_bits, roughness_bits, emissive_bits, matcap_modes)
+        #[allow(clippy::type_complexity)]
         let mut material_buffers: HashMap<(u32, u32, u32, u32, (u32, u32, u32, u32)), wgpu::Buffer> = HashMap::new();
         // Texture bind group cache: texture_slots -> bind group
         let mut texture_bind_groups: HashMap<[TextureHandle; 4], wgpu::BindGroup> = HashMap::new();

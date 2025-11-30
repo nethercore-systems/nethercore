@@ -225,7 +225,7 @@ impl App {
         // Process pending meshes
         for pending in z_state.pending_meshes.drain(..) {
             let result = if let Some(ref indices) = pending.index_data {
-                graphics.load_mesh_indexed(&pending.vertex_data, &indices, pending.format)
+                graphics.load_mesh_indexed(&pending.vertex_data, indices, pending.format)
             } else {
                 graphics.load_mesh(&pending.vertex_data, pending.format)
             };

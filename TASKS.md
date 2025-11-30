@@ -397,3 +397,24 @@ This enables fighting games with unlocked characters, RPGs with player stats, et
 
 ---
 
+### **[STABILITY] Fix clippy warnings for code quality**
+
+**Completed:** Addressed clippy warnings across the codebase
+
+**Implementation:**
+- Added `Default` derive and implementation for `GameStateWithConsole` (suggested by clippy)
+- Removed needless borrow in mesh loading code
+- Replaced manual range checks with `.contains()` for cleaner code (2 instances)
+- Used `#[derive(Default)]` instead of manual impl for `LightsUniforms`
+- Replaced manual div_ceil with `.div_ceil()` method
+- Allowed complex type for local HashMap cache (local optimization, no benefit to type alias)
+
+**Files Modified:**
+- `core/src/wasm/state.rs` - Added Default implementation
+- `emberware-z/src/app.rs` - Removed needless borrow
+- `emberware-z/src/ffi/mod.rs` - Used range contains
+- `emberware-z/src/graphics/mod.rs` - Used range contains, div_ceil, allowed type complexity
+- `emberware-z/src/graphics/render_state.rs` - Derived Default
+
+---
+

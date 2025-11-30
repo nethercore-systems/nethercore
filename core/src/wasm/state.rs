@@ -70,12 +70,18 @@ pub struct GameStateWithConsole<I: ConsoleInput, S> {
     pub console: S,
 }
 
-impl<I: ConsoleInput, S: Default> GameStateWithConsole<I, S> {
-    pub fn new() -> Self {
+impl<I: ConsoleInput, S: Default> Default for GameStateWithConsole<I, S> {
+    fn default() -> Self {
         Self {
             game: GameState::new(),
             console: S::default(),
         }
+    }
+}
+
+impl<I: ConsoleInput, S: Default> GameStateWithConsole<I, S> {
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 

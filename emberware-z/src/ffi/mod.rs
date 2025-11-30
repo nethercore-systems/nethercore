@@ -676,7 +676,7 @@ fn matcap_blend_mode(
 ) {
     use crate::graphics::MatcapBlendMode;
 
-    if slot < 1 || slot > 3 {
+    if !(1..=3).contains(&slot) {
         warn!("matcap_blend_mode: invalid slot {} (must be 1-3)", slot);
         return;
     }

@@ -222,18 +222,10 @@ unsafe impl bytemuck::Zeroable for LightUniform {}
 
 /// Lights uniforms buffer (4 directional lights for PBR)
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct LightsUniforms {
     /// Array of 4 directional lights
     pub lights: [LightUniform; 4],
-}
-
-impl Default for LightsUniforms {
-    fn default() -> Self {
-        Self {
-            lights: [LightUniform::default(); 4],
-        }
-    }
 }
 
 // SAFETY: LightsUniforms is #[repr(C)] with array of Pod types.
