@@ -23,46 +23,26 @@ use emberware_core::console::Graphics;
 #[derive(Debug, Clone)]
 pub enum AppMode {
     Library,
-    Downloading { game_id: String, progress: f32 },
     Playing { game_id: String },
     Settings,
 }
 
 #[derive(Error, Debug)]
 pub enum AppError {
-    #[error("Window creation failed: {0}")]
-    Window(String),
-    #[error("Graphics initialization failed: {0}")]
-    Graphics(String),
-    #[error("Runtime error: {0}")]
-    Runtime(String),
     #[error("Event loop error: {0}")]
     EventLoop(String),
 }
 
-/// Runtime error types for state machine transitions
+/// Runtime error for state machine transitions
+///
+/// Stores an error message that is displayed to the user when returning
+/// to the library screen after a runtime error occurs.
 #[derive(Debug, Clone)]
-pub enum RuntimeError {
-    /// WASM game panicked
-    WasmPanic(String),
-    /// Network disconnected
-    NetworkDisconnect,
-    /// Out of memory (RAM or VRAM)
-    OutOfMemory { resource: String, used: usize, limit: usize },
-    /// Generic runtime error
-    Other(String),
-}
+pub struct RuntimeError(pub String);
 
 impl std::fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::WasmPanic(msg) => write!(f, "Game crashed: {}", msg),
-            Self::NetworkDisconnect => write!(f, "Network disconnected"),
-            Self::OutOfMemory { resource, used, limit } => {
-                write!(f, "Out of {}: {} / {} bytes", resource, used, limit)
-            }
-            Self::Other(msg) => write!(f, "{}", msg),
-        }
+        write!(f, "{}", self.0)
     }
 }
 
@@ -162,6 +142,11 @@ impl App {
     }
 
     /// Handle a runtime error by transitioning back to library
+    ///
+    /// Called when the game runtime encounters an error (WASM panic, network
+    /// disconnect, out of memory, etc). Transitions back to library and displays
+    /// the error message to the user.
+    #[allow(dead_code)] // Infrastructure for future game runtime error handling
     fn handle_runtime_error(&mut self, error: RuntimeError) {
         tracing::error!("Runtime error: {}", error);
         self.last_error = Some(error);
@@ -405,12 +390,6 @@ impl App {
                         ui.heading(format!("Playing: {}", game_id));
                         ui.label("Game rendering not yet implemented");
                         ui.label("Press ESC to return to library");
-                    });
-                }
-                AppMode::Downloading { ref game_id, progress } => {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        ui.heading(format!("Downloading: {}", game_id));
-                        ui.add(egui::ProgressBar::new(*progress).show_percentage());
                     });
                 }
             }

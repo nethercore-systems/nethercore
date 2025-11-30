@@ -111,12 +111,6 @@ The `Runtime<C: Console>` handles:
   - Test: `handle_runtime_error()`, `handle_resize()`, `toggle_fullscreen()`
   - Test: application state transitions (Library → Playing → back)
 
-- **[STABILITY] Remove or implement dead code in download.rs** (`emberware-z/src/download.rs`)
-  - `API_URL` constant never used (line 7)
-  - `DownloadError` enum never used (line 10)
-  - `download_game()` function never used (line 21)
-  - Either implement the downloading feature or remove the scaffolding
-
 #### Medium Priority
 
 - **[STABILITY] Split large files into modules** (graphics.rs, ffi.rs, rollback.rs, wasm.rs)
@@ -130,12 +124,6 @@ The `Runtime<C: Console>` handles:
   - `ui.rs`: `LibraryUi`, `UiAction` lack documentation
   - `library.rs`: `get_local_games()` lacks documentation
   - `config.rs`: Config loading/saving functions need documentation
-
-- **[STABILITY] Remove dead code variants in app.rs** (`emberware-z/src/app.rs`)
-  - Line 26: `AppMode::Downloading` variant never constructed
-  - Lines 34, 36, 38: `AppError::Window`, `Graphics`, `Runtime` never constructed
-  - Lines 47-53: `RuntimeError` variants never constructed (`WasmPanic`, `NetworkDisconnect`, `OutOfMemory`, `Other`)
-  - Line 165: `handle_runtime_error()` method never used
 
 - **[STABILITY] Add tests for FFI validation** (`emberware-z/src/ffi.rs`)
   - 2447-line file with many FFI functions lacking direct unit tests
@@ -160,10 +148,6 @@ The `Runtime<C: Console>` handles:
 - **[STABILITY] Remove unused helper methods in console.rs** (`emberware-z/src/console.rs`)
   - Lines 135, 141: `right_stick_x_f32()`, `right_stick_y_f32()` never used
   - Remove or mark as `#[allow(dead_code)]` if planned for future
-
-- **[STABILITY] Add tests for download.rs** (`emberware-z/src/download.rs`)
-  - `download_game()` function has no tests
-  - Add tests with mocked HTTP client (once feature is implemented)
 
 - **[STABILITY] Add tests for config.rs** (`emberware-z/src/config.rs`)
   - Config loading/saving functions lack tests
@@ -299,6 +283,17 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **[STABILITY] Remove dead code in download.rs** (`emberware-z/src/download.rs`)
+  - Removed unused `API_URL` constant, `DownloadError` enum, and `download_game()` function
+  - Replaced with minimal stub module with doc comment explaining download is not yet implemented
+  - Removed related "Add tests for download.rs" task as it's no longer applicable
+
+- **[STABILITY] Remove dead code variants in app.rs** (`emberware-z/src/app.rs`)
+  - Removed `AppMode::Downloading` variant and its render handling (download feature not implemented)
+  - Removed unused `AppError` variants (`Window`, `Graphics`, `Runtime`) - only `EventLoop` is used
+  - Simplified `RuntimeError` from enum with unused variants to simple `String` wrapper struct
+  - Added `#[allow(dead_code)]` with explanation to `handle_runtime_error()` (infrastructure for future use)
 
 - **[STABILITY] Document all unsafe blocks with SAFETY comments** (46 blocks across codebase)
   - Added SAFETY comments to all unsafe impl blocks in core and emberware-z
