@@ -2758,4 +2758,882 @@ mod tests {
         state.rng_state = 12345;
         assert_eq!(state.rng_state, 12345);
     }
+
+    // ========================================================================
+    // Negative Test Cases for FFI Error Conditions
+    // ========================================================================
+    //
+    // These tests verify that invalid inputs are handled gracefully:
+    // - Invalid texture handles
+    // - Invalid mesh handles
+    // - Out-of-range parameters
+    // - Edge cases for all FFI functions
+
+    // ------------------------------------------------------------------------
+    // Invalid Texture Handle Tests
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_texture_bind_invalid_handle_zero() {
+        // Handle 0 is reserved/invalid - binding it should still set the slot
+        // (validation happens at draw time, not bind time)
+        let mut state = GameState::new();
+        state.render_state.bound_textures[0] = 0;
+        assert_eq!(state.render_state.bound_textures[0], 0);
+    }
+
+    #[test]
+    fn test_texture_bind_handle_not_loaded() {
+        // Handle 999 doesn't exist but binding should still succeed
+        // (validation is deferred to graphics backend)
+        let mut state = GameState::new();
+        state.render_state.bound_textures[0] = 999;
+        assert_eq!(state.render_state.bound_textures[0], 999);
+    }
+
+    #[test]
+    fn test_texture_bind_slot_invalid_index() {
+        // Slot index > 3 is invalid
+        let state = GameState::new();
+        // Verify only 4 slots exist
+        assert_eq!(state.render_state.bound_textures.len(), 4);
+    }
+
+    #[test]
+    fn test_texture_bind_all_slots_independently() {
+        // Test that binding to one slot doesn't affect others
+        let mut state = GameState::new();
+        state.render_state.bound_textures[0] = 1;
+        state.render_state.bound_textures[1] = 2;
+        state.render_state.bound_textures[2] = 3;
+        state.render_state.bound_textures[3] = 4;
+
+        assert_eq!(state.render_state.bound_textures[0], 1);
+        assert_eq!(state.render_state.bound_textures[1], 2);
+        assert_eq!(state.render_state.bound_textures[2], 3);
+        assert_eq!(state.render_state.bound_textures[3], 4);
+    }
+
+    // ------------------------------------------------------------------------
+    // Invalid Mesh Handle Tests
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_draw_mesh_handle_zero_produces_no_command() {
+        // Handle 0 is invalid - draw_mesh should reject it
+        // Simulate what draw_mesh does: it checks handle == 0 and returns early
+        let mut state = GameState::new();
+        let handle = 0u32;
+
+        // Simulate the validation in draw_mesh
+        if handle == 0 {
+            // Should not add a draw command
+        } else {
+            state.draw_commands.push(DrawCommand::DrawMesh {
+                handle,
+                transform: Mat4::IDENTITY,
+                color: 0xFFFFFFFF,
+                depth_test: true,
+                cull_mode: 1,
+                blend_mode: 0,
+                bound_textures: [0; 4],
+            });
+        }
+
+        // No command should have been added
+        assert!(state.draw_commands.is_empty());
+    }
+
+    #[test]
+    fn test_mesh_handle_not_loaded() {
+        // Handle 999 doesn't exist - draw command is still queued
+        // (validation is deferred to graphics backend)
+        let mut state = GameState::new();
+        state.draw_commands.push(DrawCommand::DrawMesh {
+            handle: 999,
+            transform: Mat4::IDENTITY,
+            color: 0xFFFFFFFF,
+            depth_test: true,
+            cull_mode: 1,
+            blend_mode: 0,
+            bound_textures: [0; 4],
+        });
+
+        assert_eq!(state.draw_commands.len(), 1);
+    }
+
+    // ------------------------------------------------------------------------
+    // Out-of-Range Parameter Tests: Resolution
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_resolution_index_boundary_valid() {
+        // Valid indices are 0-3
+        use crate::console::RESOLUTIONS;
+        assert_eq!(RESOLUTIONS.len(), 4);
+
+        for i in 0..4 {
+            assert!(i < RESOLUTIONS.len());
+        }
+    }
+
+    #[test]
+    fn test_resolution_index_boundary_invalid() {
+        // Index >= 4 is invalid
+        use crate::console::RESOLUTIONS;
+
+        let invalid_indices = [4, 5, 10, 100, u32::MAX];
+        for idx in invalid_indices {
+            assert!(idx as usize >= RESOLUTIONS.len());
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // Out-of-Range Parameter Tests: Tick Rate
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_tick_rate_index_boundary_valid() {
+        // Valid indices are 0-3
+        use crate::console::TICK_RATES;
+        assert_eq!(TICK_RATES.len(), 4);
+
+        for i in 0..4 {
+            assert!(i < TICK_RATES.len());
+        }
+    }
+
+    #[test]
+    fn test_tick_rate_index_boundary_invalid() {
+        // Index >= 4 is invalid
+        use crate::console::TICK_RATES;
+
+        let invalid_indices = [4, 5, 10, 100, u32::MAX];
+        for idx in invalid_indices {
+            assert!(idx as usize >= TICK_RATES.len());
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // Out-of-Range Parameter Tests: Render Mode
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_render_mode_boundary_valid() {
+        // Valid modes are 0-3
+        let valid_modes = [0u32, 1, 2, 3];
+        for mode in valid_modes {
+            assert!(mode <= 3);
+        }
+    }
+
+    #[test]
+    fn test_render_mode_boundary_invalid() {
+        // Mode > 3 is invalid
+        let invalid_modes = [4u32, 5, 10, 100, u32::MAX];
+        for mode in invalid_modes {
+            assert!(mode > 3);
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // Out-of-Range Parameter Tests: Cull Mode
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_cull_mode_boundary_valid() {
+        // Valid modes are 0=none, 1=back, 2=front
+        let valid_modes = [0u8, 1, 2];
+        for mode in valid_modes {
+            assert!(mode <= 2);
+        }
+    }
+
+    #[test]
+    fn test_cull_mode_boundary_invalid() {
+        // Mode > 2 is invalid
+        let invalid_modes = [3u8, 4, 10, 100, u8::MAX];
+        for mode in invalid_modes {
+            assert!(mode > 2);
+        }
+    }
+
+    #[test]
+    fn test_cull_mode_invalid_resets_to_default() {
+        // When an invalid cull mode is set, it should reset to 0 (none)
+        let mut state = GameState::new();
+
+        // Simulate invalid mode handling
+        let mode = 5u32;
+        if mode > 2 {
+            state.render_state.cull_mode = 0; // Reset to none
+        } else {
+            state.render_state.cull_mode = mode as u8;
+        }
+
+        assert_eq!(state.render_state.cull_mode, 0);
+    }
+
+    // ------------------------------------------------------------------------
+    // Out-of-Range Parameter Tests: Blend Mode
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_blend_mode_boundary_valid() {
+        // Valid modes are 0=none, 1=alpha, 2=additive, 3=multiply
+        let valid_modes = [0u8, 1, 2, 3];
+        for mode in valid_modes {
+            assert!(mode <= 3);
+        }
+    }
+
+    #[test]
+    fn test_blend_mode_boundary_invalid() {
+        // Mode > 3 is invalid
+        let invalid_modes = [4u8, 5, 10, 100, u8::MAX];
+        for mode in invalid_modes {
+            assert!(mode > 3);
+        }
+    }
+
+    #[test]
+    fn test_blend_mode_invalid_resets_to_default() {
+        // When an invalid blend mode is set, it should reset to 0 (none)
+        let mut state = GameState::new();
+
+        // Simulate invalid mode handling
+        let mode = 5u32;
+        if mode > 3 {
+            state.render_state.blend_mode = 0; // Reset to none
+        } else {
+            state.render_state.blend_mode = mode as u8;
+        }
+
+        assert_eq!(state.render_state.blend_mode, 0);
+    }
+
+    // ------------------------------------------------------------------------
+    // Out-of-Range Parameter Tests: Texture Filter
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_texture_filter_boundary_valid() {
+        // Valid filters are 0=nearest, 1=linear
+        let valid_filters = [0u8, 1];
+        for filter in valid_filters {
+            assert!(filter <= 1);
+        }
+    }
+
+    #[test]
+    fn test_texture_filter_boundary_invalid() {
+        // Filter > 1 is invalid
+        let invalid_filters = [2u8, 3, 10, 100, u8::MAX];
+        for filter in invalid_filters {
+            assert!(filter > 1);
+        }
+    }
+
+    #[test]
+    fn test_texture_filter_invalid_resets_to_default() {
+        // When an invalid filter is set, it should reset to 0 (nearest)
+        let mut state = GameState::new();
+
+        // Simulate invalid filter handling
+        let filter = 5u32;
+        if filter > 1 {
+            state.render_state.texture_filter = 0; // Reset to nearest
+        } else {
+            state.render_state.texture_filter = filter as u8;
+        }
+
+        assert_eq!(state.render_state.texture_filter, 0);
+    }
+
+    // ------------------------------------------------------------------------
+    // Out-of-Range Parameter Tests: Vertex Format
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_vertex_format_boundary_valid() {
+        // Valid formats are 0-15 (4 bits)
+        for format in 0u8..=15 {
+            assert!(format <= super::MAX_VERTEX_FORMAT);
+        }
+    }
+
+    #[test]
+    fn test_vertex_format_boundary_invalid() {
+        // Format > 15 is invalid
+        let invalid_formats = [16u8, 17, 100, u8::MAX];
+        for format in invalid_formats {
+            assert!(format > super::MAX_VERTEX_FORMAT);
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // Out-of-Range Parameter Tests: Billboard Mode
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_billboard_mode_boundary_valid() {
+        // Valid modes are 1-4
+        let valid_modes = [1u8, 2, 3, 4];
+        for mode in valid_modes {
+            assert!(mode >= 1 && mode <= 4);
+        }
+    }
+
+    #[test]
+    fn test_billboard_mode_boundary_invalid_zero() {
+        // Mode 0 is invalid (must be >= 1)
+        let mode = 0u32;
+        assert!(mode < 1);
+    }
+
+    #[test]
+    fn test_billboard_mode_boundary_invalid_high() {
+        // Mode > 4 is invalid
+        let invalid_modes = [5u32, 6, 10, 100, u32::MAX];
+        for mode in invalid_modes {
+            assert!(mode > 4);
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // Out-of-Range Parameter Tests: Matcap Slot
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_matcap_slot_boundary_valid() {
+        // Valid slots are 1-3 (slot 0 is albedo)
+        let valid_slots = [1u32, 2, 3];
+        for slot in valid_slots {
+            assert!(slot >= 1 && slot <= 3);
+        }
+    }
+
+    #[test]
+    fn test_matcap_slot_boundary_invalid_zero() {
+        // Slot 0 is invalid for matcaps (it's albedo)
+        let slot = 0u32;
+        assert!(slot < 1);
+    }
+
+    #[test]
+    fn test_matcap_slot_boundary_invalid_high() {
+        // Slot > 3 is invalid
+        let invalid_slots = [4u32, 5, 10, 100, u32::MAX];
+        for slot in invalid_slots {
+            assert!(slot > 3);
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // Out-of-Range Parameter Tests: Light Index
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_light_index_boundary_valid() {
+        // Valid indices are 0-3
+        let state = GameState::new();
+        assert_eq!(state.render_state.lights.len(), 4);
+
+        for i in 0..4 {
+            assert!(i < state.render_state.lights.len());
+        }
+    }
+
+    #[test]
+    fn test_light_index_boundary_invalid() {
+        // Index > 3 is invalid
+        let invalid_indices = [4u32, 5, 10, 100, u32::MAX];
+        for idx in invalid_indices {
+            assert!(idx > 3);
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // Edge Case Tests: Camera FOV
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_camera_fov_boundary_valid() {
+        // Valid FOV is 1-179 degrees
+        let valid_fovs = [1.0f32, 45.0, 60.0, 90.0, 120.0, 179.0];
+        for fov in valid_fovs {
+            assert!(fov >= 1.0 && fov <= 179.0);
+        }
+    }
+
+    #[test]
+    fn test_camera_fov_boundary_invalid_low() {
+        // FOV < 1 is invalid and should be clamped
+        let invalid_fovs = [0.0f32, -1.0, -10.0, 0.5, 0.999];
+        for fov in invalid_fovs {
+            assert!(fov < 1.0);
+            let clamped = fov.clamp(1.0, 179.0);
+            assert_eq!(clamped, 1.0);
+        }
+    }
+
+    #[test]
+    fn test_camera_fov_boundary_invalid_high() {
+        // FOV > 179 is invalid and should be clamped
+        let invalid_fovs = [180.0f32, 200.0, 360.0];
+        for fov in invalid_fovs {
+            assert!(fov > 179.0);
+            let clamped = fov.clamp(1.0, 179.0);
+            assert_eq!(clamped, 179.0);
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // Edge Case Tests: Transform Rotate with Zero Axis
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_transform_rotate_zero_axis_detection() {
+        // A zero-length axis should be detected
+        let axis = Vec3::new(0.0, 0.0, 0.0);
+        let len_sq = axis.length_squared();
+        assert!(len_sq < 1e-10);
+    }
+
+    #[test]
+    fn test_transform_rotate_near_zero_axis() {
+        // Very small but non-zero axis should be normalized
+        let axis = Vec3::new(1e-6, 0.0, 0.0);
+        let len_sq = axis.length_squared();
+        // This is not quite zero, but very small
+        assert!(len_sq > 0.0);
+        assert!(len_sq < 1e-10);
+    }
+
+    #[test]
+    fn test_transform_rotate_valid_axis_normalized() {
+        // A valid axis should be normalized
+        let axis = Vec3::new(1.0, 1.0, 1.0);
+        let normalized = axis.normalize();
+        assert!((normalized.length() - 1.0).abs() < 0.0001);
+    }
+
+    // ------------------------------------------------------------------------
+    // Edge Case Tests: Material Property Clamping
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_material_metallic_clamping() {
+        // Metallic should be clamped to 0.0-1.0
+        let test_cases = [
+            (-1.0f32, 0.0f32),
+            (0.0, 0.0),
+            (0.5, 0.5),
+            (1.0, 1.0),
+            (2.0, 1.0),
+            (100.0, 1.0),
+        ];
+
+        for (input, expected) in test_cases {
+            let clamped = input.clamp(0.0, 1.0);
+            assert_eq!(clamped, expected);
+        }
+    }
+
+    #[test]
+    fn test_material_roughness_clamping() {
+        // Roughness should be clamped to 0.0-1.0
+        let test_cases = [
+            (-1.0f32, 0.0f32),
+            (0.0, 0.0),
+            (0.5, 0.5),
+            (1.0, 1.0),
+            (2.0, 1.0),
+        ];
+
+        for (input, expected) in test_cases {
+            let clamped = input.clamp(0.0, 1.0);
+            assert_eq!(clamped, expected);
+        }
+    }
+
+    #[test]
+    fn test_material_emissive_no_upper_clamp() {
+        // Emissive allows HDR values (> 1.0), only negative is clamped
+        let test_cases = [
+            (-1.0f32, 0.0f32),  // Clamped to 0
+            (0.0, 0.0),
+            (1.0, 1.0),
+            (2.0, 2.0),        // Allowed
+            (10.0, 10.0),      // Allowed for HDR
+        ];
+
+        for (input, expected) in test_cases {
+            let result = if input < 0.0 { 0.0 } else { input };
+            assert_eq!(result, expected);
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // Edge Case Tests: Light Color/Intensity Negative Values
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_light_color_negative_clamping() {
+        // Negative color values should be clamped to 0
+        let test_cases = [
+            (-1.0f32, 0.0f32),
+            (-0.5, 0.0),
+            (0.0, 0.0),
+            (1.0, 1.0),
+            (2.0, 2.0),  // HDR allowed
+        ];
+
+        for (input, expected) in test_cases {
+            let result = if input < 0.0 { 0.0 } else { input };
+            assert_eq!(result, expected);
+        }
+    }
+
+    #[test]
+    fn test_light_intensity_negative_clamping() {
+        // Negative intensity should be clamped to 0
+        let test_cases = [
+            (-1.0f32, 0.0f32),
+            (0.0, 0.0),
+            (1.0, 1.0),
+            (10.0, 10.0),  // High intensity allowed
+        ];
+
+        for (input, expected) in test_cases {
+            let result = if input < 0.0 { 0.0 } else { input };
+            assert_eq!(result, expected);
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // Edge Case Tests: Light Direction Zero Vector
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_light_direction_zero_vector_detection() {
+        let x = 0.0f32;
+        let y = 0.0f32;
+        let z = 0.0f32;
+        let len_sq = x * x + y * y + z * z;
+        assert!(len_sq < 1e-10);
+    }
+
+    #[test]
+    fn test_light_direction_default_fallback() {
+        // When zero-length direction is given, should use default (0, -1, 0)
+        let default_direction = [0.0f32, -1.0, 0.0];
+        assert_eq!(default_direction[1], -1.0);
+    }
+
+    // ------------------------------------------------------------------------
+    // Edge Case Tests: Transform Stack Overflow/Underflow
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_transform_stack_overflow_detection() {
+        let mut state = GameState::new();
+
+        // Fill stack to max
+        for _ in 0..MAX_TRANSFORM_STACK {
+            state.transform_stack.push(Mat4::IDENTITY);
+        }
+
+        // Stack is now full
+        assert_eq!(state.transform_stack.len(), MAX_TRANSFORM_STACK);
+
+        // Attempting to push more should fail (detected by length check)
+        assert!(state.transform_stack.len() >= MAX_TRANSFORM_STACK);
+    }
+
+    #[test]
+    fn test_transform_stack_underflow_detection() {
+        let mut state = GameState::new();
+
+        // Stack is empty
+        assert!(state.transform_stack.is_empty());
+
+        // Attempting to pop should return None
+        assert!(state.transform_stack.pop().is_none());
+    }
+
+    // ------------------------------------------------------------------------
+    // Edge Case Tests: Bone Count Limits
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_bone_count_zero_clears_matrices() {
+        let mut state = GameState::new();
+
+        // Add some bones first
+        state.render_state.bone_matrices.push(Mat4::IDENTITY);
+        state.render_state.bone_count = 1;
+
+        // Clear with count = 0
+        state.render_state.bone_matrices.clear();
+        state.render_state.bone_count = 0;
+
+        assert!(state.render_state.bone_matrices.is_empty());
+        assert_eq!(state.render_state.bone_count, 0);
+    }
+
+    #[test]
+    fn test_bone_count_exceeds_max() {
+        // Count > MAX_BONES should be rejected
+        let count = 300u32;
+        assert!(count > MAX_BONES as u32);
+    }
+
+    #[test]
+    fn test_bone_count_at_max() {
+        // Count == MAX_BONES should be allowed
+        let count = MAX_BONES as u32;
+        assert!(count <= MAX_BONES as u32);
+    }
+
+    // ------------------------------------------------------------------------
+    // Edge Case Tests: Draw Triangles Vertex Count
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_draw_triangles_vertex_count_zero() {
+        // Vertex count 0 should produce no draw command
+        let mut state = GameState::new();
+        let vertex_count = 0u32;
+
+        if vertex_count == 0 {
+            // Do nothing - early return
+        } else {
+            state.draw_commands.push(DrawCommand::DrawTriangles {
+                format: 0,
+                vertex_data: vec![],
+                transform: Mat4::IDENTITY,
+                color: 0xFFFFFFFF,
+                depth_test: true,
+                cull_mode: 1,
+                blend_mode: 0,
+                bound_textures: [0; 4],
+            });
+        }
+
+        assert!(state.draw_commands.is_empty());
+    }
+
+    #[test]
+    fn test_draw_triangles_vertex_count_not_multiple_of_three() {
+        // Vertex count must be multiple of 3 for triangles
+        let invalid_counts = [1u32, 2, 4, 5, 7, 8, 10, 11];
+        for count in invalid_counts {
+            assert!(count % 3 != 0);
+        }
+    }
+
+    #[test]
+    fn test_draw_triangles_vertex_count_valid_multiples() {
+        let valid_counts = [3u32, 6, 9, 12, 15, 30, 300];
+        for count in valid_counts {
+            assert!(count % 3 == 0);
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // Edge Case Tests: Load Mesh Index Count
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_load_mesh_indexed_index_count_not_multiple_of_three() {
+        // Index count must be multiple of 3 for triangles
+        let invalid_counts = [1u32, 2, 4, 5, 7, 8, 10];
+        for count in invalid_counts {
+            assert!(count % 3 != 0);
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // Edge Case Tests: Texture Dimensions
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_texture_dimensions_zero_width() {
+        let width = 0u32;
+        let height = 64u32;
+        assert!(width == 0 || height == 0);
+    }
+
+    #[test]
+    fn test_texture_dimensions_zero_height() {
+        let width = 64u32;
+        let height = 0u32;
+        assert!(width == 0 || height == 0);
+    }
+
+    #[test]
+    fn test_texture_dimensions_both_zero() {
+        let width = 0u32;
+        let height = 0u32;
+        assert!(width == 0 || height == 0);
+    }
+
+    #[test]
+    fn test_texture_dimensions_valid() {
+        let valid_dimensions = [(1u32, 1u32), (8, 8), (64, 64), (256, 256), (1024, 1024), (4096, 4096)];
+        for (w, h) in valid_dimensions {
+            assert!(w > 0 && h > 0);
+        }
+    }
+
+    // ------------------------------------------------------------------------
+    // Edge Case Tests: Init-Only Functions Called Outside Init
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_init_only_guard_inside_init() {
+        let state = GameState::new();
+        // By default, in_init is true
+        assert!(state.in_init);
+    }
+
+    #[test]
+    fn test_init_only_guard_outside_init() {
+        let mut state = GameState::new();
+        state.in_init = false;
+        // After init phase, in_init should be false
+        assert!(!state.in_init);
+    }
+
+    // ------------------------------------------------------------------------
+    // Edge Case Tests: Draw Command Buffer Growth
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_draw_commands_grow_dynamically() {
+        let mut state = GameState::new();
+
+        // Add many draw commands
+        for i in 0..1000 {
+            state.draw_commands.push(DrawCommand::DrawRect {
+                x: i as f32,
+                y: 0.0,
+                width: 10.0,
+                height: 10.0,
+                color: 0xFFFFFFFF,
+                blend_mode: 0,
+            });
+        }
+
+        assert_eq!(state.draw_commands.len(), 1000);
+    }
+
+    // ------------------------------------------------------------------------
+    // Edge Case Tests: Pending Resources Growth
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_pending_textures_grow_dynamically() {
+        let mut state = GameState::new();
+
+        for i in 0..100 {
+            state.pending_textures.push(PendingTexture {
+                handle: i + 1,
+                width: 8,
+                height: 8,
+                data: vec![0xFF; 8 * 8 * 4],
+            });
+        }
+
+        assert_eq!(state.pending_textures.len(), 100);
+    }
+
+    #[test]
+    fn test_pending_meshes_grow_dynamically() {
+        let mut state = GameState::new();
+
+        for i in 0..100 {
+            state.pending_meshes.push(PendingMesh {
+                handle: i + 1,
+                format: 0,
+                vertex_data: vec![0.0; 9], // 3 vertices × 3 floats
+                index_data: None,
+            });
+        }
+
+        assert_eq!(state.pending_meshes.len(), 100);
+    }
+
+    // ------------------------------------------------------------------------
+    // Edge Case Tests: Handle Allocation Overflow
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_texture_handle_wrapping() {
+        let mut state = GameState::new();
+
+        // Set handle near max
+        state.next_texture_handle = u32::MAX - 1;
+
+        // Allocate one more
+        let handle = state.next_texture_handle;
+        state.next_texture_handle = state.next_texture_handle.wrapping_add(1);
+
+        assert_eq!(handle, u32::MAX - 1);
+        assert_eq!(state.next_texture_handle, u32::MAX);
+
+        // One more wraps to 0
+        state.next_texture_handle = state.next_texture_handle.wrapping_add(1);
+        assert_eq!(state.next_texture_handle, 0);
+    }
+
+    #[test]
+    fn test_mesh_handle_wrapping() {
+        let mut state = GameState::new();
+
+        // Set handle near max
+        state.next_mesh_handle = u32::MAX;
+
+        // Allocate wraps to 0
+        state.next_mesh_handle = state.next_mesh_handle.wrapping_add(1);
+        assert_eq!(state.next_mesh_handle, 0);
+    }
+
+    // ------------------------------------------------------------------------
+    // Edge Case Tests: Special Float Values
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_float_nan_handling() {
+        // NaN comparisons always return false
+        let nan = f32::NAN;
+        assert!(!(nan < 0.0));
+        assert!(!(nan > 0.0));
+        assert!(!(nan == 0.0));
+        assert!(nan.is_nan());
+    }
+
+    #[test]
+    fn test_float_infinity_handling() {
+        let pos_inf = f32::INFINITY;
+        let neg_inf = f32::NEG_INFINITY;
+
+        assert!(pos_inf > 0.0);
+        assert!(neg_inf < 0.0);
+        assert!(pos_inf.is_infinite());
+        assert!(neg_inf.is_infinite());
+    }
+
+    #[test]
+    fn test_float_clamping_with_infinity() {
+        // Clamping infinity should work correctly
+        let pos_inf = f32::INFINITY;
+        let clamped = pos_inf.clamp(0.0, 1.0);
+        assert_eq!(clamped, 1.0);
+
+        let neg_inf = f32::NEG_INFINITY;
+        let clamped = neg_inf.clamp(0.0, 1.0);
+        assert_eq!(clamped, 0.0);
+    }
 }

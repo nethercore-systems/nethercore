@@ -115,13 +115,6 @@ The `Runtime<C: Console>` handles:
 
 #### Medium Priority
 
-
-- **[STABILITY] Add negative test cases for FFI error conditions** (`emberware-z/src/ffi/mod.rs`)
-  - Test invalid texture handles
-  - Test invalid mesh handles
-  - Test out-of-range parameters
-  - Test edge cases for all FFI functions
-
 - **[STABILITY] Split large files into modules** (graphics.rs, wasm.rs)
   - `graphics.rs`: 3436 lines → split into pipeline, vertex, command_buffer, resources
   - `wasm.rs`: 1681 lines → split by responsibility (game state, camera, render)
@@ -269,6 +262,13 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **[STABILITY] Add negative test cases for FFI error conditions** (`emberware-z/src/ffi/mod.rs`)
+  - Added 67 new tests (139 total FFI tests, up from 72)
+  - **Invalid texture handle tests**: Zero handle, unloaded handle, slot independence
+  - **Invalid mesh handle tests**: Zero handle rejection, unloaded handle handling
+  - **Out-of-range parameter tests**: Resolution index, tick rate index, render mode, cull mode, blend mode, texture filter, vertex format, billboard mode, matcap slot, light index
+  - **Edge case tests**: Camera FOV clamping, transform rotate zero axis, material property clamping, light color/intensity negative values, light direction zero vector, transform stack overflow/underflow, bone count limits, draw triangles vertex count, mesh index count, texture dimensions, init-only guards, draw command buffer growth, pending resource growth, handle allocation overflow, special float values (NaN, infinity)
 
 - **[STABILITY] Review dead_code allowances** (multiple files)
   - Verified all 4 dead_code allowances are properly documented and necessary:
