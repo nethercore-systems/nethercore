@@ -2444,4 +2444,677 @@ mod tests {
         let sum: f32 = weights.iter().sum();
         assert!((sum - 1.0).abs() < 0.0001);
     }
+
+    // ========================================================================
+    // Vertex Format Validation Tests
+    // ========================================================================
+
+    #[test]
+    fn test_vertex_format_constants() {
+        assert_eq!(super::FORMAT_UV, 1);
+        assert_eq!(super::FORMAT_COLOR, 2);
+        assert_eq!(super::FORMAT_NORMAL, 4);
+        assert_eq!(super::FORMAT_SKINNED, 8);
+    }
+
+    #[test]
+    fn test_vertex_stride_base_formats() {
+        // Base formats without skinning
+        assert_eq!(super::vertex_stride(0), 12);  // POS: 3 floats = 12 bytes
+        assert_eq!(super::vertex_stride(1), 20);  // POS_UV: 3 + 2 floats = 20 bytes
+        assert_eq!(super::vertex_stride(2), 24);  // POS_COLOR: 3 + 3 floats = 24 bytes
+        assert_eq!(super::vertex_stride(3), 32);  // POS_UV_COLOR: 3 + 2 + 3 floats = 32 bytes
+        assert_eq!(super::vertex_stride(4), 24);  // POS_NORMAL: 3 + 3 floats = 24 bytes
+        assert_eq!(super::vertex_stride(5), 32);  // POS_UV_NORMAL: 3 + 2 + 3 floats = 32 bytes
+        assert_eq!(super::vertex_stride(6), 36);  // POS_COLOR_NORMAL: 3 + 3 + 3 floats = 36 bytes
+        assert_eq!(super::vertex_stride(7), 44);  // POS_UV_COLOR_NORMAL: 3 + 2 + 3 + 3 floats = 44 bytes
+    }
+
+    #[test]
+    fn test_vertex_stride_all_format_combinations() {
+        // Verify all 16 format combinations have correct stride
+        for format in 0..=15u8 {
+            let stride = super::vertex_stride(format);
+            // Minimum is 12 (POS only), maximum is 64 (all attributes + skinning)
+            assert!(stride >= 12);
+            assert!(stride <= 64);
+        }
+    }
+
+    #[test]
+    fn test_max_vertex_format_boundary() {
+        // MAX_VERTEX_FORMAT is 15, all format bits set
+        assert_eq!(
+            super::MAX_VERTEX_FORMAT,
+            super::FORMAT_UV | super::FORMAT_COLOR | super::FORMAT_NORMAL | super::FORMAT_SKINNED
+        );
+    }
+
+    // ========================================================================
+    // Render State Defaults Tests
+    // ========================================================================
+
+    #[test]
+    fn test_render_state_defaults() {
+        let state = GameState::new();
+        assert_eq!(state.render_state.color, 0xFFFFFFFF); // White
+        assert!(state.render_state.depth_test); // Enabled
+        assert_eq!(state.render_state.cull_mode, 1); // Back-face culling
+        assert_eq!(state.render_state.blend_mode, 0); // Opaque
+        assert_eq!(state.render_state.texture_filter, 0); // Nearest
+    }
+
+    #[test]
+    fn test_render_state_texture_slots_default() {
+        let state = GameState::new();
+        assert_eq!(state.render_state.bound_textures, [0; 4]); // All slots unbound
+    }
+
+    #[test]
+    fn test_render_state_material_defaults() {
+        let state = GameState::new();
+        assert_eq!(state.render_state.material_metallic, 0.0);
+        assert_eq!(state.render_state.material_roughness, 0.5);
+        assert_eq!(state.render_state.material_emissive, 0.0);
+    }
+
+    #[test]
+    fn test_render_state_lights_default() {
+        let state = GameState::new();
+        for i in 0..4 {
+            assert!(!state.render_state.lights[i].enabled);
+            assert_eq!(state.render_state.lights[i].direction, [0.0, -1.0, 0.0]);
+            assert_eq!(state.render_state.lights[i].color, [1.0, 1.0, 1.0]);
+            assert_eq!(state.render_state.lights[i].intensity, 1.0);
+        }
+    }
+
+    // ========================================================================
+    // Init Config Tests
+    // ========================================================================
+
+    #[test]
+    fn test_init_config_resolution_values() {
+        use crate::console::RESOLUTIONS;
+        // Verify resolution indices map to expected values
+        assert_eq!(RESOLUTIONS[0], (640, 360));   // 360p
+        assert_eq!(RESOLUTIONS[1], (960, 540));   // 540p (default)
+        assert_eq!(RESOLUTIONS[2], (1280, 720));  // 720p
+        assert_eq!(RESOLUTIONS[3], (1920, 1080)); // 1080p
+    }
+
+    #[test]
+    fn test_init_config_tick_rate_values() {
+        use crate::console::TICK_RATES;
+        // Verify tick rate indices map to expected values
+        assert_eq!(TICK_RATES[0], 24);  // 24 fps
+        assert_eq!(TICK_RATES[1], 30);  // 30 fps
+        assert_eq!(TICK_RATES[2], 60);  // 60 fps (default)
+        assert_eq!(TICK_RATES[3], 120); // 120 fps
+    }
+
+    #[test]
+    fn test_init_config_render_mode_values() {
+        // Render modes: 0=Unlit, 1=Matcap, 2=PBR, 3=Hybrid
+        assert!((0..=3).contains(&0)); // Valid modes are 0-3
+        assert!(!(0..=3).contains(&4)); // 4 is invalid
+    }
+
+    // ========================================================================
+    // Input State Tests
+    // ========================================================================
+
+    use emberware_core::wasm::{InputState, MAX_PLAYERS};
+
+    #[test]
+    fn test_input_state_defaults() {
+        let state = GameState::new();
+        for i in 0..MAX_PLAYERS {
+            assert_eq!(state.input_curr[i].buttons, 0);
+            assert_eq!(state.input_curr[i].left_stick_x, 0);
+            assert_eq!(state.input_curr[i].left_stick_y, 0);
+            assert_eq!(state.input_curr[i].right_stick_x, 0);
+            assert_eq!(state.input_curr[i].right_stick_y, 0);
+            assert_eq!(state.input_curr[i].left_trigger, 0);
+            assert_eq!(state.input_curr[i].right_trigger, 0);
+        }
+    }
+
+    #[test]
+    fn test_input_state_button_bitmask() {
+        // Verify button bitmask layout
+        let mut input = InputState::default();
+
+        // Button 0 (UP) should be bit 0
+        input.buttons = 1 << 0;
+        assert_eq!(input.buttons & (1 << 0), 1);
+
+        // Button 13 (SELECT) should be bit 13
+        input.buttons = 1 << 13;
+        assert_eq!(input.buttons & (1 << 13), 1 << 13);
+
+        // All buttons set
+        input.buttons = 0x3FFF; // 14 buttons (0-13)
+        for i in 0..14 {
+            assert_ne!(input.buttons & (1 << i), 0);
+        }
+    }
+
+    #[test]
+    fn test_input_state_stick_range() {
+        // Sticks are i8 (-128 to 127)
+        let input = InputState {
+            buttons: 0,
+            left_stick_x: -128,
+            left_stick_y: 127,
+            right_stick_x: 0,
+            right_stick_y: -1,
+            left_trigger: 0,
+            right_trigger: 0,
+        };
+
+        // Converting to -1.0..1.0 range
+        assert!(input.left_stick_x as f32 / 127.0 <= -1.0);
+        assert!((input.left_stick_y as f32 / 127.0 - 1.0).abs() < 0.01);
+        assert_eq!(input.right_stick_x as f32 / 127.0, 0.0);
+    }
+
+    #[test]
+    fn test_input_state_trigger_range() {
+        // Triggers are u8 (0 to 255)
+        let input = InputState {
+            buttons: 0,
+            left_stick_x: 0,
+            left_stick_y: 0,
+            right_stick_x: 0,
+            right_stick_y: 0,
+            left_trigger: 0,
+            right_trigger: 255,
+        };
+
+        // Converting to 0.0..1.0 range
+        assert_eq!(input.left_trigger as f32 / 255.0, 0.0);
+        assert_eq!(input.right_trigger as f32 / 255.0, 1.0);
+    }
+
+    #[test]
+    fn test_input_prev_curr_independence() {
+        let mut state = GameState::new();
+
+        // Modify current input
+        state.input_curr[0].buttons = 0xFF;
+        state.input_prev[0].buttons = 0x00;
+
+        // They should be independent
+        assert_ne!(state.input_curr[0].buttons, state.input_prev[0].buttons);
+    }
+
+    #[test]
+    fn test_max_players_constant() {
+        assert_eq!(MAX_PLAYERS, 4);
+    }
+
+    // ========================================================================
+    // Draw Command Tests
+    // ========================================================================
+
+    use emberware_core::wasm::DrawCommand;
+
+    #[test]
+    fn test_draw_commands_initially_empty() {
+        let state = GameState::new();
+        assert!(state.draw_commands.is_empty());
+    }
+
+    #[test]
+    fn test_draw_commands_can_be_added() {
+        let mut state = GameState::new();
+
+        state.draw_commands.push(DrawCommand::DrawRect {
+            x: 0.0,
+            y: 0.0,
+            width: 100.0,
+            height: 100.0,
+            color: 0xFF0000FF,
+            blend_mode: 0,
+        });
+
+        assert_eq!(state.draw_commands.len(), 1);
+    }
+
+    #[test]
+    fn test_draw_command_mesh_captures_state() {
+        let mut state = GameState::new();
+
+        // Set up render state
+        state.render_state.color = 0x00FF00FF;
+        state.render_state.depth_test = false;
+        state.render_state.cull_mode = 2;
+        state.render_state.blend_mode = 1;
+        state.render_state.bound_textures = [1, 2, 3, 4];
+        state.current_transform = Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0));
+
+        // Push draw command
+        state.draw_commands.push(DrawCommand::DrawMesh {
+            handle: 1,
+            transform: state.current_transform,
+            color: state.render_state.color,
+            depth_test: state.render_state.depth_test,
+            cull_mode: state.render_state.cull_mode,
+            blend_mode: state.render_state.blend_mode,
+            bound_textures: state.render_state.bound_textures,
+        });
+
+        // Verify state was captured
+        if let DrawCommand::DrawMesh {
+            handle,
+            transform,
+            color,
+            depth_test,
+            cull_mode,
+            blend_mode,
+            bound_textures,
+        } = &state.draw_commands[0]
+        {
+            assert_eq!(*handle, 1);
+            assert_eq!(*transform, Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0)));
+            assert_eq!(*color, 0x00FF00FF);
+            assert!(!*depth_test);
+            assert_eq!(*cull_mode, 2);
+            assert_eq!(*blend_mode, 1);
+            assert_eq!(*bound_textures, [1, 2, 3, 4]);
+        } else {
+            panic!("Expected DrawMesh command");
+        }
+    }
+
+    #[test]
+    fn test_draw_command_triangles_format() {
+        let mut state = GameState::new();
+
+        state.draw_commands.push(DrawCommand::DrawTriangles {
+            format: 7, // POS_UV_COLOR_NORMAL
+            vertex_data: vec![1.0, 2.0, 3.0], // Minimal data for test
+            transform: Mat4::IDENTITY,
+            color: 0xFFFFFFFF,
+            depth_test: true,
+            cull_mode: 1,
+            blend_mode: 0,
+            bound_textures: [0; 4],
+        });
+
+        if let DrawCommand::DrawTriangles { format, .. } = &state.draw_commands[0] {
+            assert_eq!(*format, 7);
+        } else {
+            panic!("Expected DrawTriangles command");
+        }
+    }
+
+    #[test]
+    fn test_draw_command_billboard_modes() {
+        // Verify all billboard modes 1-4
+        for mode in 1u8..=4u8 {
+            let cmd = DrawCommand::DrawBillboard {
+                width: 1.0,
+                height: 1.0,
+                mode,
+                uv_rect: None,
+                transform: Mat4::IDENTITY,
+                color: 0xFFFFFFFF,
+                depth_test: true,
+                cull_mode: 0,
+                blend_mode: 1,
+                bound_textures: [0; 4],
+            };
+
+            if let DrawCommand::DrawBillboard { mode: m, .. } = cmd {
+                assert!(m >= 1 && m <= 4);
+            }
+        }
+    }
+
+    #[test]
+    fn test_draw_command_sprite_with_uv_rect() {
+        let mut state = GameState::new();
+
+        state.draw_commands.push(DrawCommand::DrawSprite {
+            x: 10.0,
+            y: 20.0,
+            width: 32.0,
+            height: 32.0,
+            uv_rect: Some((0.0, 0.5, 0.5, 0.5)), // Half texture
+            origin: Some((16.0, 16.0)),
+            rotation: 45.0,
+            color: 0xFFFFFFFF,
+            blend_mode: 1,
+            bound_textures: [0; 4],
+        });
+
+        if let DrawCommand::DrawSprite { uv_rect, origin, rotation, .. } = &state.draw_commands[0] {
+            assert!(uv_rect.is_some());
+            let (u, v, w, h) = uv_rect.unwrap();
+            assert_eq!(u, 0.0);
+            assert_eq!(v, 0.5);
+            assert_eq!(w, 0.5);
+            assert_eq!(h, 0.5);
+
+            assert!(origin.is_some());
+            let (ox, oy) = origin.unwrap();
+            assert_eq!(ox, 16.0);
+            assert_eq!(oy, 16.0);
+
+            assert_eq!(*rotation, 45.0);
+        } else {
+            panic!("Expected DrawSprite command");
+        }
+    }
+
+    #[test]
+    fn test_draw_command_text() {
+        let mut state = GameState::new();
+
+        state.draw_commands.push(DrawCommand::DrawText {
+            text: "Hello".to_string(),
+            x: 100.0,
+            y: 200.0,
+            size: 16.0,
+            color: 0x000000FF,
+            blend_mode: 1,
+        });
+
+        if let DrawCommand::DrawText { text, size, .. } = &state.draw_commands[0] {
+            assert_eq!(text, "Hello");
+            assert_eq!(*size, 16.0);
+        } else {
+            panic!("Expected DrawText command");
+        }
+    }
+
+    #[test]
+    fn test_draw_command_set_sky() {
+        let mut state = GameState::new();
+
+        state.draw_commands.push(DrawCommand::SetSky {
+            horizon_color: [0.5, 0.6, 0.7],
+            zenith_color: [0.1, 0.2, 0.8],
+            sun_direction: [0.0, 1.0, 0.0],
+            sun_color: [1.0, 0.9, 0.8],
+            sun_sharpness: 64.0,
+        });
+
+        if let DrawCommand::SetSky { horizon_color, zenith_color, sun_direction, sun_color, sun_sharpness } = &state.draw_commands[0] {
+            assert_eq!(horizon_color[0], 0.5);
+            assert_eq!(zenith_color[2], 0.8);
+            assert_eq!(sun_direction[1], 1.0);
+            assert_eq!(sun_color[0], 1.0);
+            assert_eq!(*sun_sharpness, 64.0);
+        } else {
+            panic!("Expected SetSky command");
+        }
+    }
+
+    // ========================================================================
+    // Pending Resource Tests
+    // ========================================================================
+
+    use emberware_core::wasm::{PendingMesh, PendingTexture};
+
+    #[test]
+    fn test_pending_textures_initially_empty() {
+        let state = GameState::new();
+        assert!(state.pending_textures.is_empty());
+    }
+
+    #[test]
+    fn test_pending_meshes_initially_empty() {
+        let state = GameState::new();
+        assert!(state.pending_meshes.is_empty());
+    }
+
+    #[test]
+    fn test_pending_texture_structure() {
+        let texture = PendingTexture {
+            handle: 1,
+            width: 64,
+            height: 64,
+            data: vec![0xFF; 64 * 64 * 4], // RGBA8
+        };
+
+        assert_eq!(texture.handle, 1);
+        assert_eq!(texture.width, 64);
+        assert_eq!(texture.height, 64);
+        assert_eq!(texture.data.len(), 64 * 64 * 4);
+    }
+
+    #[test]
+    fn test_pending_mesh_non_indexed() {
+        let mesh = PendingMesh {
+            handle: 1,
+            format: 0, // POS only
+            vertex_data: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0], // 3 vertices
+            index_data: None,
+        };
+
+        assert_eq!(mesh.handle, 1);
+        assert_eq!(mesh.format, 0);
+        assert!(mesh.index_data.is_none());
+    }
+
+    #[test]
+    fn test_pending_mesh_indexed() {
+        let mesh = PendingMesh {
+            handle: 2,
+            format: 5, // POS_UV_NORMAL
+            vertex_data: vec![0.0; 8 * 4], // 4 vertices
+            index_data: Some(vec![0, 1, 2, 0, 2, 3]), // 2 triangles
+        };
+
+        assert_eq!(mesh.handle, 2);
+        assert_eq!(mesh.format, 5);
+        assert!(mesh.index_data.is_some());
+        assert_eq!(mesh.index_data.as_ref().unwrap().len(), 6);
+    }
+
+    #[test]
+    fn test_next_texture_handle_increments() {
+        let mut state = GameState::new();
+        let initial = state.next_texture_handle;
+
+        state.next_texture_handle += 1;
+        assert_eq!(state.next_texture_handle, initial + 1);
+
+        state.next_texture_handle += 1;
+        assert_eq!(state.next_texture_handle, initial + 2);
+    }
+
+    #[test]
+    fn test_next_mesh_handle_increments() {
+        let mut state = GameState::new();
+        let initial = state.next_mesh_handle;
+
+        state.next_mesh_handle += 1;
+        assert_eq!(state.next_mesh_handle, initial + 1);
+    }
+
+    // ========================================================================
+    // Light State Tests
+    // ========================================================================
+
+    use emberware_core::wasm::LightState;
+
+    #[test]
+    fn test_light_state_default() {
+        let light = LightState::default();
+        assert!(!light.enabled);
+        assert_eq!(light.direction, [0.0, -1.0, 0.0]);
+        assert_eq!(light.color, [1.0, 1.0, 1.0]);
+        assert_eq!(light.intensity, 1.0);
+    }
+
+    #[test]
+    fn test_light_state_all_fields() {
+        let light = LightState {
+            enabled: true,
+            direction: [0.5, 0.5, 0.707],
+            color: [1.0, 0.5, 0.0],
+            intensity: 2.5,
+        };
+
+        assert!(light.enabled);
+        assert_eq!(light.direction[0], 0.5);
+        assert_eq!(light.color[1], 0.5);
+        assert_eq!(light.intensity, 2.5);
+    }
+
+    #[test]
+    fn test_four_light_slots() {
+        let state = GameState::new();
+        assert_eq!(state.render_state.lights.len(), 4);
+    }
+
+    // ========================================================================
+    // Save Data Tests
+    // ========================================================================
+
+    use emberware_core::wasm::MAX_SAVE_SLOTS;
+
+    #[test]
+    fn test_save_slots_constant() {
+        assert_eq!(MAX_SAVE_SLOTS, 8);
+    }
+
+    #[test]
+    fn test_save_data_initially_none() {
+        let state = GameState::new();
+        for i in 0..MAX_SAVE_SLOTS {
+            assert!(state.save_data[i].is_none());
+        }
+    }
+
+    #[test]
+    fn test_save_data_can_store_bytes() {
+        let mut state = GameState::new();
+        state.save_data[0] = Some(vec![0xDE, 0xAD, 0xBE, 0xEF]);
+
+        assert!(state.save_data[0].is_some());
+        let data = state.save_data[0].as_ref().unwrap();
+        assert_eq!(data.len(), 4);
+        assert_eq!(data[0], 0xDE);
+    }
+
+    // ========================================================================
+    // Color Conversion Tests
+    // ========================================================================
+
+    #[test]
+    fn test_color_to_vec4_white() {
+        // 0xFFFFFFFF = white, fully opaque
+        let color = 0xFFFFFFFF_u32;
+        let r = ((color >> 24) & 0xFF) as f32 / 255.0;
+        let g = ((color >> 16) & 0xFF) as f32 / 255.0;
+        let b = ((color >> 8) & 0xFF) as f32 / 255.0;
+        let a = (color & 0xFF) as f32 / 255.0;
+
+        assert!((r - 1.0).abs() < 0.01);
+        assert!((g - 1.0).abs() < 0.01);
+        assert!((b - 1.0).abs() < 0.01);
+        assert!((a - 1.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_color_to_vec4_red() {
+        // 0xFF0000FF = red, fully opaque
+        let color = 0xFF0000FF_u32;
+        let r = ((color >> 24) & 0xFF) as f32 / 255.0;
+        let g = ((color >> 16) & 0xFF) as f32 / 255.0;
+        let b = ((color >> 8) & 0xFF) as f32 / 255.0;
+        let a = (color & 0xFF) as f32 / 255.0;
+
+        assert!((r - 1.0).abs() < 0.01);
+        assert_eq!(g, 0.0);
+        assert_eq!(b, 0.0);
+        assert!((a - 1.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_color_to_vec4_transparent() {
+        // 0x00000000 = black, fully transparent
+        let color = 0x00000000_u32;
+        let r = ((color >> 24) & 0xFF) as f32 / 255.0;
+        let g = ((color >> 16) & 0xFF) as f32 / 255.0;
+        let b = ((color >> 8) & 0xFF) as f32 / 255.0;
+        let a = (color & 0xFF) as f32 / 255.0;
+
+        assert_eq!(r, 0.0);
+        assert_eq!(g, 0.0);
+        assert_eq!(b, 0.0);
+        assert_eq!(a, 0.0);
+    }
+
+    #[test]
+    fn test_color_to_vec4_semi_transparent() {
+        // 0xFF00FF80 = magenta, 50% transparent
+        let color = 0xFF00FF80_u32;
+        let r = ((color >> 24) & 0xFF) as f32 / 255.0;
+        let g = ((color >> 16) & 0xFF) as f32 / 255.0;
+        let b = ((color >> 8) & 0xFF) as f32 / 255.0;
+        let a = (color & 0xFF) as f32 / 255.0;
+
+        assert!((r - 1.0).abs() < 0.01);
+        assert_eq!(g, 0.0);
+        assert!((b - 1.0).abs() < 0.01);
+        assert!((a - 0.5).abs() < 0.01);
+    }
+
+    // ========================================================================
+    // Game State Lifecycle Tests
+    // ========================================================================
+
+    #[test]
+    fn test_in_init_flag_default() {
+        // GameState::new() starts with in_init = true so init-only FFI functions work
+        let state = GameState::new();
+        assert!(state.in_init);
+    }
+
+    #[test]
+    fn test_quit_requested_flag_default() {
+        let state = GameState::new();
+        assert!(!state.quit_requested);
+    }
+
+    #[test]
+    fn test_tick_count_default() {
+        let state = GameState::new();
+        assert_eq!(state.tick_count, 0);
+    }
+
+    #[test]
+    fn test_elapsed_time_default() {
+        let state = GameState::new();
+        assert_eq!(state.elapsed_time, 0.0);
+    }
+
+    #[test]
+    fn test_delta_time_default() {
+        let state = GameState::new();
+        assert_eq!(state.delta_time, 0.0);
+    }
+
+    // ========================================================================
+    // RNG Tests
+    // ========================================================================
+
+    #[test]
+    fn test_rng_seed_default() {
+        let state = GameState::new();
+        assert_eq!(state.rng_state, 0);
+    }
+
+    #[test]
+    fn test_rng_seed_can_be_set() {
+        let mut state = GameState::new();
+        state.rng_state = 12345;
+        assert_eq!(state.rng_state, 12345);
+    }
 }

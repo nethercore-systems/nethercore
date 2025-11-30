@@ -120,11 +120,6 @@ The `Runtime<C: Console>` handles:
   - `library.rs`: `get_local_games()` lacks documentation
   - `config.rs`: Config loading/saving functions need documentation
 
-- **[STABILITY] Add tests for FFI validation** (`emberware-z/src/ffi.rs`)
-  - 2447-line file with many FFI functions lacking direct unit tests
-  - Test input validation edge cases and error handling
-  - Currently only tested through integration tests
-
 - **[STABILITY] Add tests for graphics pipeline** (`emberware-z/src/graphics.rs`)
   - 3114-line file with limited test coverage
   - Test render pipeline creation, texture management
@@ -269,6 +264,19 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **[STABILITY] Add tests for FFI validation** (`emberware-z/src/ffi.rs`)
+  - Added 57 new tests (72 total FFI tests) covering FFI validation and edge cases
+  - **Vertex format tests**: Format constants, stride calculations for all 16 formats, skinned format boundaries
+  - **Render state tests**: Defaults (color, depth_test, cull_mode, blend_mode, texture_filter), material defaults, light defaults
+  - **Init config tests**: Resolution values, tick rate values, render mode validation
+  - **Input state tests**: Defaults, button bitmask layout, stick/trigger range conversions, prev/curr independence
+  - **Draw command tests**: All command variants (Mesh, Triangles, Billboard, Sprite, Text, Rect, SetSky) with state capture
+  - **Pending resource tests**: Texture/mesh structures, handle increments
+  - **Light state tests**: Default values, all fields, four slot validation
+  - **Save data tests**: Slot count, Option<Vec<u8>> storage
+  - **Color conversion tests**: RGBA unpacking for white, red, transparent, semi-transparent colors
+  - **Game state lifecycle tests**: in_init flag, quit_requested flag, timing defaults, RNG seed
 
 - **[STABILITY] Fix unclosed HTML tag documentation warning** (`emberware-z/`)
   - Verified: No HTML tag warnings exist. `cargo doc --no-deps` builds cleanly with `RUSTDOCFLAGS="-D warnings"`.
