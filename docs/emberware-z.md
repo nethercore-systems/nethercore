@@ -10,10 +10,10 @@ Emberware Z is a 5th-generation fantasy console targeting PS1/N64/Saturn aesthet
 | **Resolution** | 360p, 540p (default), 720p, 1080p |
 | **Color depth** | RGBA8 |
 | **Tick rate** | 24, 30, 60 (default), 120 fps |
-| **RAM** | 16MB |
-| **VRAM** | 8MB |
+| **RAM** | 4MB |
+| **VRAM** | 4MB |
 | **CPU budget** | 4ms per tick (at 60fps) |
-| **ROM size** | 32MB max |
+| **ROM size** | 8MB max |
 | **Netcode** | Deterministic rollback via GGRS |
 | **Max players** | 4 (any mix of local + remote) |
 
@@ -963,7 +963,7 @@ for obj in objects {
 - Use power-of-two dimensions when possible
 - Keep textures small (256×256 or less for retro aesthetic)
 - Use nearest-neighbor filtering (`texture_filter(0)`) for sharp pixels
-- VRAM budget is 8MB — monitor usage during development
+- VRAM budget is 4MB — monitor usage during development
 
 ### CPU Budget
 
