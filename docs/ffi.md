@@ -62,24 +62,11 @@ Emberware uses GGRS for deterministic rollback netcode. Key rules:
 
 - `update()` **MUST** be deterministic (same inputs → same state)
 - Use `random()` for RNG — never external random sources
-- `save_state`/`load_state` are called by the host during rollback
+- Game state is **automatically snapshotted** by the host during rollback (entire WASM linear memory)
 - `render()` is skipped during rollback replay
 - Tick rate is separate from frame rate
 
-Games must also export state serialization functions:
-
-```rust
-#[no_mangle]
-pub extern "C" fn save_state(ptr: *mut u8, max_len: u32) -> u32 {
-    // Serialize your game state to the buffer
-    // Return number of bytes written
-}
-
-#[no_mangle]
-pub extern "C" fn load_state(ptr: *const u8, len: u32) {
-    // Deserialize and restore game state from the buffer
-}
-```
+**No manual serialization needed!** All game state in WASM linear memory is automatically saved and restored by the host. Your `update()` function just needs to be deterministic — resources (textures, meshes, sounds) stay in GPU/host memory and are never rolled back, only the game state handles in WASM memory.
 
 ---
 
