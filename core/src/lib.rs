@@ -37,6 +37,8 @@ pub mod ffi;
 mod integration;
 pub mod rollback;
 pub mod runtime;
+#[cfg(test)]
+pub mod test_utils;
 pub mod wasm;
 
 // Re-export core traits and types

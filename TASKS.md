@@ -97,10 +97,6 @@ The `Runtime<C: Console>` handles:
 
 ## TODO
 
-### Remove Duplicate Testing Code
-- TestConsole is defined in both integration.rs and runtime.rs
-- This wastes space and makes Agentic AI less efficient
-
 ### **[NEEDS CLARIFICATION] Define and enforce console runtime limits**
 
 **Current State:** Partial limit enforcement - VRAM tracking (8MB), vertex format validation, memory bounds checking. No enforcement for draw calls, vertex counts, mesh counts, or CPU budget per frame.
@@ -1144,6 +1140,15 @@ KEYCODE_TO_BUTTON.get(&(keycode as u32)).copied()
 **Implementation in progress...**
 
 ## Done
+
+### Remove duplicate TestConsole definitions
+**Status:** Completed
+**Changes Made:**
+- Created shared `test_utils.rs` module with common test utilities
+- Moved TestConsole, TestGraphics, TestAudio, and TestInput to shared module
+- Updated integration.rs to use shared test utilities (removed 120+ lines)
+- Updated runtime.rs to use shared test utilities (removed 90+ lines)
+- All 194 tests passing ✓
 
 ### Remove reliance on MAX_STATE_SIZE and use console spec provided RAM to limit
 **Status:** Completed

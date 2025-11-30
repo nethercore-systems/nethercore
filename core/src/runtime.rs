@@ -287,107 +287,11 @@ impl<C: Console> Runtime<C> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bytemuck::{Pod, Zeroable};
-    use std::sync::Arc;
     use wasmtime::Linker;
-    use winit::window::Window;
 
-    use crate::console::{ConsoleSpecs, Graphics, RawInput, SoundHandle};
-    use crate::wasm::{GameInstance, GameState, InputState, WasmEngine};
-
-    // ============================================================================
-    // Test Console Implementation
-    // ============================================================================
-
-    /// Test console for unit tests
-    struct TestConsole;
-
-    /// Test graphics backend (no-op)
-    struct TestGraphics;
-
-    impl Graphics for TestGraphics {
-        fn resize(&mut self, _width: u32, _height: u32) {}
-        fn begin_frame(&mut self) {}
-        fn end_frame(&mut self) {}
-    }
-
-    /// Test audio backend (no-op)
-    struct TestAudio {
-        rollback_mode: bool,
-    }
-
-    impl crate::console::Audio for TestAudio {
-        fn play(&mut self, _handle: SoundHandle, _volume: f32, _looping: bool) {}
-        fn stop(&mut self, _handle: SoundHandle) {}
-        fn set_rollback_mode(&mut self, rolling_back: bool) {
-            self.rollback_mode = rolling_back;
-        }
-    }
-
-    /// Test input type
-    #[repr(C)]
-    #[derive(Clone, Copy, Default, PartialEq, Debug)]
-    struct TestInput {
-        buttons: u16,
-    }
-
-    // SAFETY: TestInput is #[repr(C)] with only a primitive type (u16).
-    // All bit patterns are valid for u16, satisfying Pod and Zeroable requirements.
-    unsafe impl Pod for TestInput {}
-    unsafe impl Zeroable for TestInput {}
-    impl crate::console::ConsoleInput for TestInput {
-        fn to_input_state(&self) -> InputState {
-            InputState {
-                buttons: self.buttons,
-                ..Default::default()
-            }
-        }
-    }
-
-    impl Console for TestConsole {
-        type Graphics = TestGraphics;
-        type Audio = TestAudio;
-        type Input = TestInput;
-
-        fn specs(&self) -> &'static ConsoleSpecs {
-            &ConsoleSpecs {
-                name: "Test Console",
-                resolutions: &[(320, 240), (640, 480)],
-                default_resolution: 0,
-                tick_rates: &[30, 60],
-                default_tick_rate: 1,
-                ram_limit: 1024 * 1024,
-                vram_limit: 512 * 1024,
-                rom_limit: 512 * 1024,
-                cpu_budget_us: 4000,
-            }
-        }
-
-        fn register_ffi(&self, _linker: &mut Linker<GameState>) -> Result<()> {
-            Ok(())
-        }
-
-        fn create_graphics(&self, _window: Arc<Window>) -> Result<Self::Graphics> {
-            Ok(TestGraphics)
-        }
-
-        fn create_audio(&self) -> Result<Self::Audio> {
-            Ok(TestAudio {
-                rollback_mode: false,
-            })
-        }
-
-        fn map_input(&self, raw: &RawInput) -> Self::Input {
-            let mut buttons = 0u16;
-            if raw.button_a {
-                buttons |= 1;
-            }
-            if raw.button_b {
-                buttons |= 2;
-            }
-            TestInput { buttons }
-        }
-    }
+    use crate::console::{Console, RawInput};
+    use crate::test_utils::{TestAudio, TestConsole, TestInput};
+    use crate::wasm::{GameInstance, WasmEngine};
 
     // ============================================================================
     // RuntimeConfig Tests
@@ -535,6 +439,8 @@ mod tests {
 
         let audio = TestAudio {
             rollback_mode: false,
+            play_count: 0,
+            stop_count: 0,
         };
         runtime.set_audio(audio);
 
@@ -548,6 +454,8 @@ mod tests {
 
         let audio = TestAudio {
             rollback_mode: false,
+            play_count: 0,
+            stop_count: 0,
         };
         runtime.set_audio(audio);
 
@@ -603,7 +511,7 @@ mod tests {
         let mut runtime = Runtime::<TestConsole>::new(console);
 
         // Should succeed even without a session
-        let result = runtime.add_local_input(0, TestInput { buttons: 0 });
+        let result = runtime.add_local_input(0, TestInput { buttons: 0, x: 0, y: 0 });
         assert!(result.is_ok());
     }
 
@@ -616,7 +524,7 @@ mod tests {
         runtime.set_session(session);
 
         // Local sessions don't use GGRS input, so this should succeed
-        let result = runtime.add_local_input(0, TestInput { buttons: 1 });
+        let result = runtime.add_local_input(0, TestInput { buttons: 1, x: 0, y: 0 });
         assert!(result.is_ok());
     }
 
@@ -683,7 +591,7 @@ mod tests {
         assert_eq!(specs.name, "Test Console");
         assert_eq!(specs.resolutions.len(), 2);
         assert_eq!(specs.tick_rates.len(), 2);
-        assert_eq!(specs.ram_limit, 1024 * 1024);
+        assert_eq!(specs.ram_limit, 16 * 1024 * 1024); // Shared TestConsole has 16MB
     }
 
     #[test]
