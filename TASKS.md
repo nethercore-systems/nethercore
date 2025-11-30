@@ -4,7 +4,8 @@
 
 These items are marked TODO throughout the document and need decisions before implementation:
 
-- **Audio system** — Architecture, formats, sample rates, channel count (shelved for now)
+- **[STABILITY] Audio backend** — Architecture, formats, sample rates, channel count (shelved for now)
+  - `ZAudio::play()`, `ZAudio::stop()`, and `create_audio()` are stubs in `emberware-z/src/console.rs`
 - **Custom fonts** — Allow games to load custom fonts for draw_text?
 - **Spectator support** — GGRS spectator sessions for watching games
 - **Matchmaking** — Handled by platform service, but integration details TBD
@@ -103,10 +104,7 @@ The `Runtime<C: Console>` handles:
 
 ### Stability
 
-
-- **[STABILITY] Implement audio backend** (`emberware-z/src/console.rs:173,177,239`)
-  - `ZAudio::play()`, `ZAudio::stop()`, and `create_audio()` are stubs with TODO comments.
-  - Games can call sound functions but nothing plays.
+(All stability tasks are either done or need clarification)
 
 
 
@@ -213,15 +211,7 @@ The `Runtime<C: Console>` handles:
 
 ### Phase 6: Emberware Z Examples
 
-- **(Moved to In Progress)** Create `triangle` example
-
-- **Create `textured-quad` example**
-  - Demonstrates texture loading and 2D drawing:
-    - `include_bytes!()` for embedded PNG
-    - PNG decoding (minipng or similar)
-    - `load_texture()` and `texture_bind()`
-    - `draw_sprite()` for 2D rendering
-    - `set_color()` for tinting
+(Moved to Done)
 
 - **Create `cube` example**
   - Demonstrates retained mode 3D:
@@ -301,6 +291,18 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **Create `textured-quad` example (Phase 6)**
+  - Demonstrates texture loading and 2D drawing:
+    - `load_texture()` to create a texture from RGBA pixel data
+    - `texture_bind()` to bind the texture for drawing
+    - `draw_sprite()` for 2D sprite rendering
+    - `set_color()` for tinting with color cycling animation
+    - `texture_filter()` for nearest-neighbor filtering
+  - 8x8 checkerboard pattern (cyan/magenta) generated at compile time
+  - Triangle wave color animation (no libm required for no_std)
+  - Added to workspace exclude list
+  - ~125 lines of Rust code
 
 - **[STABILITY] Add tests for GPU skinning** (`emberware-z/src/graphics.rs`, `emberware-z/src/ffi.rs`, `core/src/wasm.rs`)
   - Added 9 tests to `core/src/wasm.rs`: RenderState bone matrix storage, clearing, max capacity, weighted blend simulation, bone hierarchy simulation
