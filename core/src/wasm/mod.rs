@@ -478,9 +478,7 @@ mod tests {
         let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
         // Set input for player 0
-        let input1 = TestInput {
-            buttons: 0x0001,
-        };
+        let input1 = TestInput { buttons: 0x0001 };
         game.set_input(0, input1);
 
         // Call update (which rotates input_prev = input_curr)
@@ -490,9 +488,7 @@ mod tests {
         assert_eq!(game.state().input_prev[0].buttons, 0x0001);
 
         // Set new input
-        let input2 = TestInput {
-            buttons: 0x0002,
-        };
+        let input2 = TestInput { buttons: 0x0002 };
         game.set_input(0, input2);
 
         // Current should have new input

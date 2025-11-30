@@ -134,7 +134,10 @@ impl<I: ConsoleInput, S: Send + Default + 'static> RollbackSession<I, S> {
     /// but this method allows flexibility for testing or special scenarios.
     ///
     /// `max_state_size` should match the console's RAM limit (e.g., `console.specs().ram_limit`).
-    pub fn new_local_with_config(player_config: PlayerSessionConfig, max_state_size: usize) -> Self {
+    pub fn new_local_with_config(
+        player_config: PlayerSessionConfig,
+        max_state_size: usize,
+    ) -> Self {
         let num_players = player_config.num_players() as usize;
         let local_players = player_config.local_player_indices();
 
@@ -1054,7 +1057,8 @@ mod tests {
     fn test_rollback_session_local_with_config() {
         // Create a local session with custom player config
         let player_config = PlayerSessionConfig::new(4, 0b0011); // Only players 0, 1 local
-        let session = RollbackSession::<TestInput>::new_local_with_config(player_config, 4 * 1024 * 1024);
+        let session =
+            RollbackSession::<TestInput>::new_local_with_config(player_config, 4 * 1024 * 1024);
 
         assert_eq!(session.player_config().num_players(), 4);
         assert_eq!(session.player_config().local_player_mask(), 0b0011);

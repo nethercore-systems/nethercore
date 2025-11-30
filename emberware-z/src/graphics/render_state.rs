@@ -211,7 +211,7 @@ impl Default for LightUniform {
     fn default() -> Self {
         Self {
             direction_and_enabled: [0.0, -1.0, 0.0, 0.0], // Downward, disabled
-            color_and_intensity: [1.0, 1.0, 1.0, 1.0],     // White, full intensity
+            color_and_intensity: [1.0, 1.0, 1.0, 1.0],    // White, full intensity
         }
     }
 }

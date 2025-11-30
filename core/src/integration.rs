@@ -692,8 +692,6 @@ mod tests {
         assert_eq!(specs.cpu_budget_us, 4000);
     }
 
-
-
     /// Test save data slot limits
     #[test]
     fn test_save_data_slot_limits() {
@@ -755,8 +753,6 @@ mod tests {
         assert_eq!(state.input_curr.len(), MAX_PLAYERS);
         assert_eq!(state.input_prev.len(), MAX_PLAYERS);
     }
-
-
 
     // ============================================================================
     // PART 5: Combined Integration Tests

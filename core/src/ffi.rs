@@ -51,7 +51,11 @@ fn tick_count<I: ConsoleInput, S>(caller: Caller<'_, GameStateWithConsole<I, S>>
 }
 
 /// Log a message from WASM
-fn log_message<I: ConsoleInput, S>(caller: Caller<'_, GameStateWithConsole<I, S>>, ptr: u32, len: u32) {
+fn log_message<I: ConsoleInput, S>(
+    caller: Caller<'_, GameStateWithConsole<I, S>>,
+    ptr: u32,
+    len: u32,
+) {
     if let Some(memory) = caller.data().game.memory {
         let data = memory.data(&caller);
         let ptr = ptr as usize;
@@ -167,7 +171,10 @@ fn load<I: ConsoleInput, S>(
 /// Delete data in a slot (0-7)
 ///
 /// Returns: 0 = success, 1 = invalid slot
-fn delete<I: ConsoleInput, S>(mut caller: Caller<'_, GameStateWithConsole<I, S>>, slot: u32) -> u32 {
+fn delete<I: ConsoleInput, S>(
+    mut caller: Caller<'_, GameStateWithConsole<I, S>>,
+    slot: u32,
+) -> u32 {
     let slot = slot as usize;
 
     // Validate slot

@@ -16,8 +16,10 @@ use wasmtime::{Caller, Linker};
 use emberware_core::wasm::GameStateWithConsole;
 
 use crate::console::{ZInput, RESOLUTIONS, TICK_RATES};
-use crate::state::{ZFFIState, ZDrawCommand, PendingMesh, PendingTexture, MAX_BONES, MAX_TRANSFORM_STACK};
 use crate::graphics::vertex_stride;
+use crate::state::{
+    PendingMesh, PendingTexture, ZDrawCommand, ZFFIState, MAX_BONES, MAX_TRANSFORM_STACK,
+};
 
 /// Register all Emberware Z FFI functions with the linker
 pub fn register_z_ffi(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
@@ -319,7 +321,12 @@ fn transform_identity(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFISt
 /// * `x, y, z` — Translation amounts in world units
 ///
 /// The translation is applied to the current transform (post-multiplication).
-fn transform_translate(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, x: f32, y: f32, z: f32) {
+fn transform_translate(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    x: f32,
+    y: f32,
+    z: f32,
+) {
     let state = &mut caller.data_mut().console;
     state.current_transform *= Mat4::from_translation(Vec3::new(x, y, z));
 }
@@ -332,7 +339,13 @@ fn transform_translate(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIS
 ///
 /// The rotation is applied to the current transform (post-multiplication).
 /// Common axes: (1,0,0)=X, (0,1,0)=Y, (0,0,1)=Z
-fn transform_rotate(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, angle_deg: f32, x: f32, y: f32, z: f32) {
+fn transform_rotate(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    angle_deg: f32,
+    x: f32,
+    y: f32,
+    z: f32,
+) {
     let state = &mut caller.data_mut().console;
     let axis = Vec3::new(x, y, z);
 
@@ -353,7 +366,12 @@ fn transform_rotate(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIStat
 /// * `x, y, z` — Scale factors for each axis (1.0 = no change)
 ///
 /// The scale is applied to the current transform (post-multiplication).
-fn transform_scale(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, x: f32, y: f32, z: f32) {
+fn transform_scale(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    x: f32,
+    y: f32,
+    z: f32,
+) {
     let state = &mut caller.data_mut().console;
     state.current_transform *= Mat4::from_scale(Vec3::new(x, y, z));
 }
@@ -623,7 +641,11 @@ fn texture_bind(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
 /// * `slot` — Slot index (0-3)
 ///
 /// Slots: 0=albedo, 1=MRE/matcap, 2=env matcap, 3=matcap
-fn texture_bind_slot(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, handle: u32, slot: u32) {
+fn texture_bind_slot(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    handle: u32,
+    slot: u32,
+) {
     if slot > 3 {
         warn!("texture_bind_slot: invalid slot {} (max 3)", slot);
         return;
@@ -642,7 +664,11 @@ fn texture_bind_slot(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFISta
 /// Mode 0 (Multiply): Standard matcap blending (default)
 /// Mode 1 (Add): Additive blending for glow/emission effects
 /// Mode 2 (HSV Modulate): Hue shifting and iridescence effects
-fn matcap_blend_mode(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, slot: u32, mode: u32) {
+fn matcap_blend_mode(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    slot: u32,
+    mode: u32,
+) {
     use crate::graphics::MatcapBlendMode;
 
     if slot < 1 || slot > 3 {
@@ -1212,17 +1238,19 @@ fn draw_triangles_indexed(
     let state = &mut caller.data_mut().console;
 
     // Record draw command with current state
-    state.draw_commands.push(ZDrawCommand::DrawTrianglesIndexed {
-        format,
-        vertex_data,
-        index_data,
-        transform: state.current_transform,
-        color: state.color,
-        depth_test: state.depth_test,
-        cull_mode: state.cull_mode,
-        blend_mode: state.blend_mode,
-        bound_textures: state.bound_textures,
-    });
+    state
+        .draw_commands
+        .push(ZDrawCommand::DrawTrianglesIndexed {
+            format,
+            vertex_data,
+            index_data,
+            transform: state.current_transform,
+            color: state.color,
+            depth_test: state.depth_test,
+            cull_mode: state.cull_mode,
+            blend_mode: state.blend_mode,
+            bound_textures: state.bound_textures,
+        });
 }
 
 // ============================================================================
@@ -1243,7 +1271,13 @@ fn draw_triangles_indexed(
 /// - 2 (cylindrical Y): Rotates around Y axis only (stays upright)
 /// - 3 (cylindrical X): Rotates around X axis only
 /// - 4 (cylindrical Z): Rotates around Z axis only
-fn draw_billboard(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, w: f32, h: f32, mode: u32, color: u32) {
+fn draw_billboard(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    w: f32,
+    h: f32,
+    mode: u32,
+    color: u32,
+) {
     // Validate mode
     if !(1..=4).contains(&mode) {
         warn!("draw_billboard: invalid mode {} (must be 1-4)", mode);
@@ -1329,7 +1363,14 @@ fn draw_billboard_region(
 ///
 /// Draws the full texture (UV 0,0 to 1,1) as a quad in screen space.
 /// Uses current blend mode and bound texture (slot 0).
-fn draw_sprite(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, x: f32, y: f32, w: f32, h: f32, color: u32) {
+fn draw_sprite(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    color: u32,
+) {
     let state = &mut caller.data_mut().console;
 
     state.draw_commands.push(ZDrawCommand::DrawSprite {
@@ -1446,7 +1487,14 @@ fn draw_sprite_ex(
 /// * `color` — Fill color (0xRRGGBBAA)
 ///
 /// Draws an untextured quad. Useful for UI backgrounds, health bars, etc.
-fn draw_rect(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, x: f32, y: f32, w: f32, h: f32, color: u32) {
+fn draw_rect(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    color: u32,
+) {
     let state = &mut caller.data_mut().console;
 
     state.draw_commands.push(ZDrawCommand::DrawRect {
@@ -1597,7 +1645,11 @@ fn set_sky(
 /// In Mode 1 (Matcap), slots 1-3 are used for matcap textures that multiply together.
 /// Slot 0 is reserved for albedo texture.
 /// Using this function in other modes is allowed but has no effect.
-fn matcap_set(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, slot: u32, texture: u32) {
+fn matcap_set(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    slot: u32,
+    texture: u32,
+) {
     // Validate slot range (1-3 for matcaps)
     if !(1..=3).contains(&slot) {
         warn!("matcap_set: invalid slot {} (must be 1-3)", slot);
@@ -1716,7 +1768,13 @@ fn material_emissive(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFISta
 /// The direction vector will be automatically normalized by the graphics backend.
 /// For Mode 2 (PBR), all lights are directional.
 /// Use `light_color()` and `light_intensity()` to set color and brightness.
-fn light_set(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, index: u32, x: f32, y: f32, z: f32) {
+fn light_set(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    index: u32,
+    x: f32,
+    y: f32,
+    z: f32,
+) {
     // Validate index
     if index > 3 {
         warn!("light_set: invalid light index {} (must be 0-3)", index);
@@ -1752,7 +1810,13 @@ fn light_set(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, in
 /// Sets the color for a light.
 /// Colors can exceed 1.0 for brighter lights (HDR-like effects).
 /// Negative values are clamped to 0.0.
-fn light_color(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, index: u32, r: f32, g: f32, b: f32) {
+fn light_color(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    index: u32,
+    r: f32,
+    g: f32,
+    b: f32,
+) {
     // Validate index
     if index > 3 {
         warn!("light_color: invalid light index {} (must be 0-3)", index);
@@ -1791,7 +1855,11 @@ fn light_color(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, 
 ///
 /// Sets the intensity multiplier for a light. The final light contribution is color × intensity.
 /// Negative values are clamped to 0.0.
-fn light_intensity(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, index: u32, intensity: f32) {
+fn light_intensity(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    index: u32,
+    intensity: f32,
+) {
     // Validate index
     if index > 3 {
         warn!(
@@ -1847,7 +1915,11 @@ fn light_disable(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>
 ///
 /// Call this before drawing skinned meshes (meshes with FORMAT_SKINNED flag).
 /// The bone transforms are typically computed on CPU each frame for skeletal animation.
-fn set_bones(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, matrices_ptr: u32, count: u32) {
+fn set_bones(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    matrices_ptr: u32,
+    count: u32,
+) {
     // Validate bone count
     if count > MAX_BONES as u32 {
         warn!(

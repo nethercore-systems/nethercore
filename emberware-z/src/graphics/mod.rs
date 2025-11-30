@@ -701,12 +701,7 @@ impl ZGraphics {
         self.sky_uniforms = SkyUniforms {
             horizon_color: [horizon_rgb[0], horizon_rgb[1], horizon_rgb[2], 0.0],
             zenith_color: [zenith_rgb[0], zenith_rgb[1], zenith_rgb[2], 0.0],
-            sun_direction: [
-                sun_normalized.x,
-                sun_normalized.y,
-                sun_normalized.z,
-                0.0,
-            ],
+            sun_direction: [sun_normalized.x, sun_normalized.y, sun_normalized.z, 0.0],
             sun_color_and_sharpness: [sun_rgb[0], sun_rgb[1], sun_rgb[2], sun_sharpness],
         };
 

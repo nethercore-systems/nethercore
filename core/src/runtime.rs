@@ -409,7 +409,8 @@ mod tests {
         let console = TestConsole;
         let mut runtime = Runtime::<TestConsole>::new(console);
 
-        let session = crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, 4 * 1024 * 1024);
+        let session =
+            crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, 4 * 1024 * 1024);
         runtime.set_session(session);
 
         assert!(runtime.session().is_some());
@@ -421,7 +422,8 @@ mod tests {
         let console = TestConsole;
         let mut runtime = Runtime::<TestConsole>::new(console);
 
-        let session = crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, 4 * 1024 * 1024);
+        let session =
+            crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, 4 * 1024 * 1024);
         runtime.set_session(session);
 
         // Verify mutable access
@@ -511,7 +513,14 @@ mod tests {
         let mut runtime = Runtime::<TestConsole>::new(console);
 
         // Should succeed even without a session
-        let result = runtime.add_local_input(0, TestInput { buttons: 0, x: 0, y: 0 });
+        let result = runtime.add_local_input(
+            0,
+            TestInput {
+                buttons: 0,
+                x: 0,
+                y: 0,
+            },
+        );
         assert!(result.is_ok());
     }
 
@@ -520,11 +529,19 @@ mod tests {
         let console = TestConsole;
         let mut runtime = Runtime::<TestConsole>::new(console);
 
-        let session = crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, 4 * 1024 * 1024);
+        let session =
+            crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, 4 * 1024 * 1024);
         runtime.set_session(session);
 
         // Local sessions don't use GGRS input, so this should succeed
-        let result = runtime.add_local_input(0, TestInput { buttons: 1, x: 0, y: 0 });
+        let result = runtime.add_local_input(
+            0,
+            TestInput {
+                buttons: 1,
+                x: 0,
+                y: 0,
+            },
+        );
         assert!(result.is_ok());
     }
 
@@ -546,7 +563,8 @@ mod tests {
         let console = TestConsole;
         let mut runtime = Runtime::<TestConsole>::new(console);
 
-        let session = crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, 4 * 1024 * 1024);
+        let session =
+            crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, 4 * 1024 * 1024);
         runtime.set_session(session);
 
         // Local sessions don't produce events
@@ -572,7 +590,8 @@ mod tests {
         let console = TestConsole;
         let mut runtime = Runtime::<TestConsole>::new(console);
 
-        let session = crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, 4 * 1024 * 1024);
+        let session =
+            crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, 4 * 1024 * 1024);
         runtime.set_session(session);
 
         // Should not panic (no-op for local sessions)

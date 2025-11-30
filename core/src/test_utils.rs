@@ -5,10 +5,8 @@ use std::sync::Arc;
 use wasmtime::Linker;
 use winit::window::Window;
 
-use crate::console::{
-    Audio, Console, ConsoleInput, ConsoleSpecs, Graphics, RawInput, SoundHandle,
-};
-use crate::wasm::{GameStateWithConsole};
+use crate::console::{Audio, Console, ConsoleInput, ConsoleSpecs, Graphics, RawInput, SoundHandle};
+use crate::wasm::GameStateWithConsole;
 
 // ============================================================================
 // Test Console Implementation
