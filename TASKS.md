@@ -101,6 +101,106 @@ The `Runtime<C: Console>` handles:
 
 ## TODO
 
+
+---
+
+### **[FEATURE] Implement audio backend**
+
+PS1/N64-style audio system with fire-and-forget sounds and managed channels for positional audio.
+
+**Console Audio Specs:**
+| Spec | Value | Rationale |
+|------|-------|-----------|
+| Sample rate | 22,050 Hz | Authentic PS1/N64, half the ROM space |
+| Bit depth | 16-bit signed | Standard, good dynamic range |
+| Format | Mono, raw PCM (s16le) | Zero parsing, stereo via pan param |
+| Managed channels | 16 | PS1/N64 typical (8 SFX + 8 music/ambient) |
+
+**Rollback Behavior & Caveats:**
+
+Audio is NOT part of rollback state. This is industry standard (GGPO, Rollback Netcode) because:
+- Sound already left the speakers - can't "un-play" it
+- Rewinding audio sounds terrible
+- Users tolerate audio glitches better than visual desyncs
+
+**How it works:**
+1. Game calls audio FFI functions during `update()`
+2. Commands are buffered in `audio_commands: Vec<AudioCommand>`
+3. After GGRS confirms the frame, commands are sent to `ZAudio` for playback
+4. During rollback replay (`set_rollback_mode(true)`), commands are DISCARDED
+5. After rollback, game re-executes with corrected inputs, re-issuing audio commands
+
+**Edge cases implementers must handle:**
+
+| Scenario | What happens | Mitigation |
+|----------|--------------|------------|
+| Sound triggers, then rollback | Sound already playing, might re-trigger | Discard commands during replay |
+| Looping sound starts, then rollback | Loop continues, game might call channel_play again | channel_play on occupied channel should update params, not restart |
+| Positional sound panning | Pan was wrong during misprediction | Game must call channel_set() EVERY frame, not just on start |
+| Music playing during rollback | Music continues uninterrupted | Music is never affected by rollback - it's "UI layer" |
+| Sound should have played but didn't (prediction missed trigger) | Silence where sound should be | Unavoidable - accept it |
+| load_sound() called in update() | Would re-load during replay! | Enforce init-only for load_sound() |
+
+**Critical implementation details:**
+
+1. **Discard vs mute**: When `set_rollback_mode(true)`, DISCARD all audio commands entirely.
+   Don't just mute output - if you mute and still process commands, channel state diverges.
+
+2. **channel_play on occupied channel**: If channel 5 is playing sound A and game calls
+   `channel_play(5, A, vol, pan, loop)` again, DON'T restart the sound. Just update vol/pan.
+   This handles the "looping sound survives rollback" case gracefully.
+
+3. **channel_set during rollback**: These SHOULD still be processed (not discarded) so that
+   when rollback ends, positional sounds have correct pan/volume immediately.
+   Only play_sound/channel_play/music_play are discarded.
+
+4. **In-flight sounds**: Sounds that started before rollback continue playing to completion.
+   Don't stop them on rollback start - that sounds jarring. Let them finish naturally.
+
+5. **Audio buffer latency**: Hardware audio has ~20-50ms latency. Audio is always slightly
+   "behind" visuals. This is fine - humans don't notice small audio/visual desync.
+
+**Game developer guidance (for docs):**
+- Use `play_sound()` for one-shots (hits, jumps, pickups) - fire and forget
+- Use `channel_play()` + `channel_set()` every frame for positional sounds (engines, footsteps)
+- Don't rely on frame-perfect audio sync in networked games
+- Keep sound effects short (<1 sec) so mispredictions are less noticeable
+- Music should be ambient/looping, not synced to gameplay events
+
+**FFI Functions:**
+```rust
+// Load raw PCM sound data (22.05kHz, 16-bit signed, mono)
+load_sound(data_ptr: *const u8, byte_len: u32) -> u32
+
+// Fire-and-forget (one-shot sounds: gunshots, jumps, coins)
+play_sound(sound: u32, volume: f32, pan: f32)  // uses next free channel
+
+// Managed channels (positional/looping: engines, ambient, footsteps)
+channel_play(channel: u32, sound: u32, volume: f32, pan: f32, looping: bool)
+channel_set(channel: u32, volume: f32, pan: f32)  // update each frame for positional
+channel_stop(channel: u32)
+
+// Music (dedicated, always loops)
+music_play(sound: u32, volume: f32)
+music_stop()
+music_set_volume(volume: f32)
+```
+
+**Implementation steps:**
+1. Add `Sound` struct and `sounds: Vec<Sound>` to GameState
+2. Add `AudioCommand` enum (Play, ChannelPlay, ChannelSet, ChannelStop, MusicPlay, etc.)
+3. Add `audio_commands: Vec<AudioCommand>` to GameState (buffered per frame)
+4. Implement `ZAudio` with rodio backend:
+   - 16 channel mixer
+   - Dedicated music channel
+   - `process_commands()` called after confirmed frames
+5. Wire up `Audio::set_rollback_mode()` to discard commands during replay
+6. Register FFI functions
+
+**Stubs to replace:** `emberware-z/src/console.rs` - `ZAudio::play()`, `ZAudio::stop()`, `create_audio()`
+
+---
+
 ### **[NEEDS CLARIFICATION] Define and enforce console runtime limits**
 
 **Current State:** Partial limit enforcement - VRAM tracking (8MB), vertex format validation, memory bounds checking. No enforcement for draw calls, vertex counts, mesh counts, or CPU budget per frame.
@@ -261,57 +361,6 @@ All high-priority and medium-priority performance optimizations have been comple
 - Reduced function call overhead
 - Improved code maintainability and readability
 - Prevented accidental expensive operations
-
-**Compilation:** ✅ All tests passing
-
----
-
-### **[FEATURE] Implement audio backend**
-**Status:** Completed ✅
-
-**What Was Implemented:**
-- ✅ Added `Sound` struct to hold PCM audio data (22.05kHz, 16-bit signed, mono)
-- ✅ Added `AudioCommand` enum for buffered audio operations (PlaySound, ChannelPlay, ChannelSet, ChannelStop, MusicPlay, MusicStop, MusicSetVolume)
-- ✅ Added audio-related fields to ZFFIState:
-  - `sounds: Vec<Sound>` - Loaded sound data
-  - `audio_commands: Vec<AudioCommand>` - Buffered commands per frame
-  - `next_sound_handle: u32` - Handle allocation counter
-- ✅ Implemented `ZAudio` backend with rodio:
-  - 16 managed channels for sound effects and positional audio
-  - Dedicated music channel with looping
-  - Rollback-aware command processing (discards play commands during rollback, keeps parameter updates)
-  - WAV encoding for PCM samples (rodio compatibility)
-  - Channel management with volume and pan control
-- ✅ Implemented FFI functions:
-  - `load_sound(data_ptr, byte_len)` - Load raw PCM data (init-only)
-  - `play_sound(sound, volume, pan)` - Fire-and-forget one-shot sounds
-  - `channel_play(channel, sound, volume, pan, looping)` - Managed channel playback
-  - `channel_set(channel, volume, pan)` - Update channel parameters (for positional audio)
-  - `channel_stop(channel)` - Stop a channel
-  - `music_play(sound, volume)` - Play looping music
-  - `music_stop()` - Stop music
-  - `music_set_volume(volume)` - Adjust music volume
-- ✅ Integrated audio processing in app.rs:
-  - Calls `audio.process_commands()` after each confirmed frame
-  - Sets rollback mode based on GGRS state
-  - Commands processed only when not rolling back
-- ✅ All 518 tests passing (155 in core + 363 in emberware-z)
-
-**Files Modified:**
-- `emberware-z/src/state.rs` - Added Sound struct, AudioCommand enum, audio fields to ZFFIState
-- `emberware-z/src/audio.rs` - New file with ZAudio backend implementation
-- `emberware-z/src/console.rs` - Updated create_audio() to use new ZAudio::new()
-- `emberware-z/src/main.rs` - Added audio module declaration
-- `emberware-z/src/ffi/mod.rs` - Registered and implemented all 8 audio FFI functions
-- `emberware-z/src/app.rs` - Added audio command processing after draw commands
-
-**Impact:**
-- Game developers can now load and play audio in their games
-- PS1/N64-authentic 22.05kHz mono audio
-- 16 channels for simultaneous sound effects
-- Positional audio support via channel_set() for dynamic pan/volume
-- Rollback-safe audio (commands discarded during rollback replay)
-- Music layer separate from SFX for continuous background audio
 
 **Compilation:** ✅ All tests passing
 
