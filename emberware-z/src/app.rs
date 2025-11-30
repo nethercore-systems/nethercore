@@ -23,7 +23,7 @@ use emberware_core::rollback::{SessionEvent, SessionType};
 use emberware_core::runtime::Runtime;
 use emberware_core::wasm::{DrawCommand as GameDrawCommand, WasmEngine};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum AppMode {
     Library,
     Playing { game_id: String },
@@ -1445,10 +1445,12 @@ mod tests {
 
     #[test]
     fn test_debug_stats_network_stats() {
-        let mut stats = DebugStats::default();
-        stats.ping_ms = Some(25);
-        stats.rollback_frames = 10;
-        stats.frame_advantage = -2;
+        let stats = DebugStats {
+            ping_ms: Some(25),
+            rollback_frames: 10,
+            frame_advantage: -2,
+            ..Default::default()
+        };
         assert_eq!(stats.ping_ms, Some(25));
         assert_eq!(stats.rollback_frames, 10);
         assert_eq!(stats.frame_advantage, -2);
@@ -1513,11 +1515,8 @@ mod tests {
         let mut mode = AppMode::Library;
         let action = UiAction::PlayGame("test-game".to_string());
 
-        match action {
-            UiAction::PlayGame(game_id) => {
-                mode = AppMode::Playing { game_id };
-            }
-            _ => {}
+        if let UiAction::PlayGame(game_id) = action {
+            mode = AppMode::Playing { game_id };
         }
 
         if let AppMode::Playing { game_id } = mode {
@@ -1535,11 +1534,8 @@ mod tests {
         };
 
         // Simulate ESC press in Playing mode
-        match mode {
-            AppMode::Playing { .. } => {
-                mode = AppMode::Library;
-            }
-            _ => {}
+        if let AppMode::Playing { .. } = mode {
+            mode = AppMode::Library;
         }
 
         assert!(matches!(mode, AppMode::Library));
@@ -1551,11 +1547,8 @@ mod tests {
         let mut mode = AppMode::Settings;
 
         // Simulate ESC press in Settings mode
-        match mode {
-            AppMode::Settings => {
-                mode = AppMode::Library;
-            }
-            _ => {}
+        if mode == AppMode::Settings {
+            mode = AppMode::Library;
         }
 
         assert!(matches!(mode, AppMode::Library));
@@ -1567,11 +1560,8 @@ mod tests {
         let mut mode = AppMode::Library;
 
         let action = UiAction::OpenSettings;
-        match action {
-            UiAction::OpenSettings => {
-                mode = AppMode::Settings;
-            }
-            _ => {}
+        if action == UiAction::OpenSettings {
+            mode = AppMode::Settings;
         }
 
         assert!(matches!(mode, AppMode::Settings));
@@ -1589,12 +1579,11 @@ mod tests {
 
         // Simulate runtime error - error stored and mode transitions
         let error = RuntimeError("WASM panic".to_string());
-        let last_error: Option<RuntimeError> = Some(error);
+        let last_error = error;
         let mode = AppMode::Library;
 
         assert!(matches!(mode, AppMode::Library));
-        assert!(last_error.is_some());
-        assert_eq!(last_error.unwrap().0, "WASM panic");
+        assert_eq!(last_error.0, "WASM panic");
     }
 
     #[test]
@@ -1603,11 +1592,8 @@ mod tests {
 
         // Simulate DismissError action
         let action = UiAction::DismissError;
-        match action {
-            UiAction::DismissError => {
-                last_error = None;
-            }
-            _ => {}
+        if action == UiAction::DismissError {
+            last_error = None;
         }
 
         assert!(last_error.is_none());
@@ -1620,12 +1606,9 @@ mod tests {
         let mut mode = AppMode::Library;
 
         let action = UiAction::PlayGame("new-game".to_string());
-        match action {
-            UiAction::PlayGame(game_id) => {
-                last_error = None; // Clear any previous error
-                mode = AppMode::Playing { game_id };
-            }
-            _ => {}
+        if let UiAction::PlayGame(game_id) = action {
+            last_error = None; // Clear any previous error
+            mode = AppMode::Playing { game_id };
         }
 
         assert!(last_error.is_none());

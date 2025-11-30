@@ -1918,14 +1918,14 @@ mod tests {
         let mut state = GameState::new();
 
         // Test translation
-        state.current_transform = state.current_transform * Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0));
+        state.current_transform *= Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0));
         let point = state.current_transform.transform_point3(Vec3::ZERO);
         assert!((point - Vec3::new(1.0, 2.0, 3.0)).length() < 0.001);
 
         // Reset and test rotation
         state.current_transform = Mat4::IDENTITY;
         let angle = std::f32::consts::FRAC_PI_2; // 90 degrees
-        state.current_transform = state.current_transform * Mat4::from_rotation_y(angle);
+        state.current_transform *= Mat4::from_rotation_y(angle);
         let point = state.current_transform.transform_point3(Vec3::new(1.0, 0.0, 0.0));
         // Rotating (1,0,0) 90 degrees around Y should give (0,0,-1)
         assert!((point.x).abs() < 0.001);
@@ -1933,7 +1933,7 @@ mod tests {
 
         // Reset and test scale
         state.current_transform = Mat4::IDENTITY;
-        state.current_transform = state.current_transform * Mat4::from_scale(Vec3::new(2.0, 3.0, 4.0));
+        state.current_transform *= Mat4::from_scale(Vec3::new(2.0, 3.0, 4.0));
         let point = state.current_transform.transform_point3(Vec3::new(1.0, 1.0, 1.0));
         assert!((point - Vec3::new(2.0, 3.0, 4.0)).length() < 0.001);
     }
@@ -1951,7 +1951,7 @@ mod tests {
         assert_eq!(state.transform_stack.len(), 1);
 
         // Modify current transform
-        state.current_transform = state.current_transform * Mat4::from_translation(Vec3::new(0.0, 1.0, 0.0));
+        state.current_transform *= Mat4::from_translation(Vec3::new(0.0, 1.0, 0.0));
         assert_ne!(state.current_transform, original);
 
         // Pop
@@ -2254,18 +2254,26 @@ mod tests {
     #[test]
     fn test_input_state_button_bitmask() {
         // Verify button bitmask layout
-        let mut input = InputState::default();
 
         // Button 0 (UP) should be bit 0
-        input.buttons = 1 << 0;
+        let input = InputState {
+            buttons: 1 << 0,
+            ..Default::default()
+        };
         assert_eq!(input.buttons & (1 << 0), 1);
 
         // Button 13 (SELECT) should be bit 13
-        input.buttons = 1 << 13;
+        let input = InputState {
+            buttons: 1 << 13,
+            ..Default::default()
+        };
         assert_eq!(input.buttons & (1 << 13), 1 << 13);
 
         // All buttons set
-        input.buttons = 0x3FFF; // 14 buttons (0-13)
+        let input = InputState {
+            buttons: 0x3FFF, // 14 buttons (0-13)
+            ..Default::default()
+        };
         for i in 0..14 {
             assert_ne!(input.buttons & (1 << i), 0);
         }
@@ -3636,12 +3644,14 @@ mod tests {
 
     #[test]
     fn test_float_nan_handling() {
-        // NaN comparisons always return false
+        // NaN comparisons always return false (using partial_cmp for clarity)
         let nan = f32::NAN;
-        assert!(!(nan < 0.0));
-        assert!(!(nan > 0.0));
-        assert!(!(nan == 0.0));
+        assert!(nan.partial_cmp(&0.0).is_none());
         assert!(nan.is_nan());
+        #[allow(clippy::eq_op)]
+        {
+            assert!(nan != nan); // NaN is not equal to itself
+        }
     }
 
     #[test]

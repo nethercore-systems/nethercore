@@ -135,6 +135,17 @@ The `Runtime<C: Console>` handles:
 
 ## Done
 
+- **Fix clippy warnings in test code**
+  - Fixed 13 clippy warnings across test code in app.rs and ffi/mod.rs
+  - app.rs: Replaced field_reassign_with_default with struct initialization
+  - app.rs: Replaced single_match patterns with if-let and equality checks
+  - app.rs: Removed redundant unwrap on Some value
+  - app.rs: Added PartialEq derive to AppMode enum for cleaner tests
+  - ffi/mod.rs: Replaced assign_op_pattern (a = a * b) with compound assignment (a *= b)
+  - ffi/mod.rs: Replaced field_reassign_with_default with struct initialization
+  - ffi/mod.rs: Replaced neg_cmp_op_on_partial_ord with partial_cmp for NaN handling
+  - All 573 tests passing (196 core + 377 emberware-z)
+
 - **Add session cleanup on exit**
   - Added explicit `game_session = None` cleanup when exiting Playing mode via ESC key
   - Logs "Exiting game via ESC" for debugging
