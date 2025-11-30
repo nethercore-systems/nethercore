@@ -1134,6 +1134,20 @@ KEYCODE_TO_BUTTON.get(&(keycode as u32)).copied()
 
 ## Done
 
+### **[POLISH] Performance Optimizations - Additional Quick Wins**
+**Status:** Completed
+**Changes Made:**
+- Task #9: Added `#[inline]` attribute to camera math methods in `core/src/wasm/camera.rs`:
+  - `view_matrix()` - Called once per frame for view transform
+  - `projection_matrix()` - Called once per frame for projection
+  - `view_projection_matrix()` - Computes combined VP matrix
+- Task #10: Removed duplicate `vertex_stride()` function and FORMAT constants from `emberware-z/src/ffi/mod.rs`:
+  - Removed duplicate `vertex_stride()` implementation (lines 648-665)
+  - Removed duplicate FORMAT_UV, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED constants
+  - Added import from `crate::graphics` to use canonical implementations from `vertex.rs`
+  - Kept MAX_VERTEX_FORMAT constant as it's used for validation
+- All 571 tests passing ✓ (194 in core + 377 in emberware-z)
+
 ### **[POLISH] Performance Optimizations - Quick Wins**
 **Status:** Completed
 **Changes Made:**

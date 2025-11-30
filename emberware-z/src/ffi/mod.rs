@@ -18,6 +18,7 @@ use emberware_core::wasm::{
 };
 
 use crate::console::{RESOLUTIONS, TICK_RATES};
+use crate::graphics::{vertex_stride, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV};
 
 /// Register all Emberware Z FFI functions with the linker
 pub fn register_z_ffi(linker: &mut Linker<GameState>) -> Result<()> {
@@ -636,33 +637,8 @@ fn texture_bind_slot(mut caller: Caller<'_, GameState>, handle: u32, slot: u32) 
 // Mesh Functions (Retained Mode)
 // ============================================================================
 
-/// Vertex format flags
-const FORMAT_UV: u8 = 1;
-const FORMAT_COLOR: u8 = 2;
-const FORMAT_NORMAL: u8 = 4;
-const FORMAT_SKINNED: u8 = 8;
+/// Maximum vertex format value (all flags set: UV | COLOR | NORMAL | SKINNED)
 const MAX_VERTEX_FORMAT: u8 = 15;
-
-/// Calculate vertex stride in bytes for a given format
-#[inline]
-const fn vertex_stride(format: u8) -> u32 {
-    let mut stride = 3 * 4; // Position: 3 floats = 12 bytes
-
-    if format & FORMAT_UV != 0 {
-        stride += 2 * 4; // UV: 2 floats = 8 bytes
-    }
-    if format & FORMAT_COLOR != 0 {
-        stride += 3 * 4; // Color: 3 floats = 12 bytes
-    }
-    if format & FORMAT_NORMAL != 0 {
-        stride += 3 * 4; // Normal: 3 floats = 12 bytes
-    }
-    if format & FORMAT_SKINNED != 0 {
-        stride += 4 + 4 * 4; // Bone indices (4 u8 = 4 bytes) + weights (4 floats = 16 bytes) = 20 bytes
-    }
-
-    stride
-}
 
 /// Load a non-indexed mesh (retained mode)
 ///

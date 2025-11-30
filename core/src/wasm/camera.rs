@@ -36,16 +36,19 @@ impl Default for CameraState {
 
 impl CameraState {
     /// Compute the view matrix (world-to-camera transform)
+    #[inline]
     pub fn view_matrix(&self) -> Mat4 {
         Mat4::look_at_rh(self.position, self.target, Vec3::Y)
     }
 
     /// Compute the projection matrix for a given aspect ratio
+    #[inline]
     pub fn projection_matrix(&self, aspect_ratio: f32) -> Mat4 {
         Mat4::perspective_rh(self.fov.to_radians(), aspect_ratio, self.near, self.far)
     }
 
     /// Compute the combined view-projection matrix
+    #[inline]
     pub fn view_projection_matrix(&self, aspect_ratio: f32) -> Mat4 {
         self.projection_matrix(aspect_ratio) * self.view_matrix()
     }
