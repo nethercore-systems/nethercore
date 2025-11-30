@@ -102,99 +102,18 @@ The `Runtime<C: Console>` handles:
 
 ## TODO
 
-### Stability
+### Stability (Shelved)
 
-#### High Priority
-
-- **[STABILITY] Implement audio backend** (`emberware-z/src/console.rs`)
-  - `ZAudio::play()` at line 193: `// TODO: Play sound via rodio`
-  - `ZAudio::stop()` at line 197: `// TODO: Stop sound via rodio`
-  - `ZAudio::create_audio()` at line 252: `// TODO: Initialize rodio output stream`
-  - Audio is a core feature needed for complete game support
-
-
-#### Medium Priority
-
-(Moved to In Progress)
-
-#### Low Priority
-
-(Moved to In Progress)
-
-
-### Phase 2: GGRS Rollback Integration
-
-(Moved to In Progress)
-
-### Phase 3: Emberware Z Implementation
-
-#### 3.1 Console Setup
-
-(Moved to In Progress)
-
-#### 3.2 Graphics Backend (wgpu)
-
-(Moved to Done)
-
-#### 3.3 Configuration FFI (init-only)
-
-(Moved to In Progress)
-
-#### 3.4 Camera FFI
-
-(Moved to In Progress)
-
-#### 3.5 Input FFI
-
-(Moved to In Progress)
-
-#### 3.6 Texture FFI
-
-(Moved to In Progress)
-
-#### 3.7 Mesh FFI (Retained Mode)
-
-(Moved to Done)
-
-#### 3.8 Immediate Mode 3D FFI
-
-(Moved to Done)
-
-#### 3.9 Transform Stack FFI
-
-(Moved to In Progress)
-
-#### 3.11 2D Drawing FFI (Screen Space)
-
-(Moved to In Progress)
-
-#### 3.12 Render State FFI
-
-(Moved to In Progress)
-
-
-#### 3.15 Mode-Specific Lighting FFI
-
-(Moved to In Progress)
-
-#### 3.16 GPU Skinning
-
-(Moved to In Progress)
-
-### Phase 4: Application Shell
-
-(Moved to In Progress)
+- **[STABILITY] Implement audio backend** — See "Needs Clarification" section above
 
 ### Phase 5: Networking & Polish
 
-(Moved to Done: multiplayer player model)
-
-- **Implement matchbox signaling connection**
+- **Implement matchbox signaling connection** [NEEDS CLARIFICATION]
   - Connect to matchbox signaling server
   - WebRTC peer connection establishment
   - ICE candidate exchange
   - Connection timeout handling
-  - TODO [needs clarification]: Matchmaking handled by platform service
+  - Matchmaking handled by platform service - integration details TBD
 
 - **Implement netplay session management**
   - Host/join game flow via platform deep links
@@ -207,32 +126,19 @@ The `Runtime<C: Console>` handles:
   - Connect via `127.0.0.1:port` for local testing
   - Debug mode: disable matchbox, use direct connections
 
-- **Add input delay configuration**
-  - Local input delay setting (0-10 frames)
-  - Frame delay vs rollback tradeoff UI
-  - Persist per-game or globally
-
 - **Performance optimization**
-  - State serialization optimization (avoid allocations)
-  - Render batching (minimize state changes)
-  - Memory pooling for rollback buffers
-  - Profile and optimize hot paths
+  - Render batching already implemented in CommandBuffer
+  - Profile and optimize hot paths - requires game execution to measure
 
-### Phase 6: Emberware Z Examples
+### Phase 8: Game Execution Integration
 
-(Moved to Done/In Progress)
-
-(Moved to In Progress)
-
-### Phase 7: Testing & Documentation
-
-- **Create integration tests**
-  - Full game lifecycle test (init → update → render)
-  - Rollback simulation test (save → modify → load → verify)
-  - Multi-player input synchronization test
-  - Resource limit enforcement test (RAM/VRAM)
-
-(Moved to Done)
+- **Wire up game execution in Playing mode**
+  - Load WASM from LocalGame.rom_path when entering Playing mode
+  - Create Runtime<ZConsole> with game instance
+  - Run game loop: poll input → update() → render()
+  - Pass ZInput from InputManager to game via FFI
+  - Execute ZGraphics draw commands to render frame
+  - Handle game errors (WASM trap, OOM) → return to Library with error
 
 ---
 ## In Progress
@@ -242,6 +148,18 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **Add input delay configuration** (Phase 5)
+  - `NetplayConfig` struct with `input_delay: u8` (0-10 frames, default 2)
+  - Settings UI with slider and explanatory text
+  - Auto-saves to config.toml on change
+  - Already integrated with `SessionConfig` in core (uses `with_input_delay()`)
+
+- **Rollback state memory optimization** (Phase 5)
+  - `StatePool` with pre-allocated buffers to avoid allocations in hot path
+  - Buffer acquire/release pattern with automatic recycling
+  - Oversized buffers discarded to prevent memory bloat
+  - Pool exhaustion handled gracefully with new allocation and warning
 
 - **[STABILITY] Add bounds checking for potentially truncating type casts** (codebase-wide)
   - Added `checked_mul()` overflow protection in FFI functions:
