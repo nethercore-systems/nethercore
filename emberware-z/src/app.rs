@@ -450,6 +450,18 @@ impl App {
             .render()
             .map_err(|e| RuntimeError(format!("Game render error: {}", e)))?;
 
+        // Process audio commands after rendering
+        // Clone the audio commands and sounds to avoid double mutable borrow
+        if let Some(game) = session.runtime.game_mut() {
+            let console_state = game.console_state();
+            let audio_commands = console_state.audio_commands.clone();
+            let sounds = console_state.sounds.clone();
+
+            if let Some(audio) = session.runtime.audio_mut() {
+                audio.process_commands(&audio_commands, &sounds);
+            }
+        }
+
         // Check if game requested quit
         if let Some(game) = session.runtime.game_mut() {
             if game.state().quit_requested {

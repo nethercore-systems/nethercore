@@ -101,29 +101,7 @@ The `Runtime<C: Console>` handles:
 
 ## TODO
 
-### **[FEATURE] Complete audio backend playback**
-
-The audio infrastructure is in place, but actual audio playback needs implementation.
-
-**Current State:**
-- Audio module created with Sound and AudioCommand types
-- ZAudio backend created with command buffering
-- Audio state added to ZFFIState (sounds, audio_commands)
-- Rollback-aware command processing structure in place
-
-**What's Needed:**
-- Thread-safe audio playback using rodio
-- Audio server thread with message passing (to satisfy Send requirement)
-- Actual sound playback implementation
-- FFI functions for load_sound, play_sound, channel_play, etc.
-
-**Implementation Approach:**
-Create an audio server thread that owns the rodio OutputStream/Sinks, and communicate
-via channels. This satisfies the Send requirement while still using rodio for playback.
-
----
-
-### **[FEATURE] Implement audio backend** (INFRASTRUCTURE COMPLETE)
+### **[FEATURE] Implement audio backend** (COMPLETE - See Done section)
 
 PS1/N64-style audio system with fire-and-forget sounds and managed channels for positional audio.
 
@@ -336,6 +314,41 @@ This enables fighting games with unlocked characters, RPGs with player stats, et
 
 ## Done
 
+### **[FEATURE] Complete audio backend playback**
+
+**Completed:** Full PS1/N64-style audio system with thread-safe rodio playback
+
+Implemented complete audio backend with:
+- **Audio server thread**: Background thread owns rodio OutputStream/Sinks, satisfies Send requirement
+- **16 sound effect channels**: Independent volume and pan control per channel
+- **Dedicated music channel**: Always loops, separate from SFX channels
+- **Rollback-aware**: Commands discarded during rollback replay (industry standard)
+- **Channel state tracking**: Same sound playing doesn't restart (rollback-friendly)
+- **8 FFI functions**: load_sound, play_sound, channel_play/set/stop, music_play/stop/set_volume
+
+**Architecture:**
+- Main thread buffers AudioCommands during update/render
+- Commands sent to audio server via mpsc channel after rendering
+- Audio server processes commands on background thread
+- Sounds are Arc<Vec<i16>> for efficient cloning across thread boundary
+
+**Implementation Details:**
+- Custom rodio Source implementation for raw PCM playback
+- 22,050 Hz sample rate (PS1/N64 authentic)
+- Mono 16-bit signed PCM format
+- Looping via rodio's repeat_infinite()
+- Volume clamping to 0.0-1.0 range
+- Pan parameter accepted but not yet implemented (rodio limitation)
+
+**Files Modified:**
+- `emberware-z/src/audio.rs` - Full rewrite: AudioServer, ZAudio, SoundSource implementation
+- `emberware-z/src/ffi/mod.rs` - Added 8 audio FFI functions (load_sound, play_sound, etc.)
+- `emberware-z/src/app.rs` - Process audio commands after rendering each frame
+
+**Test Results:** 520 tests passing
+
+---
+
 ### **[STABILITY] Suppress audio stub warnings**
 
 **Completed:** Suppressed dead code warnings for audio infrastructure stub
@@ -349,6 +362,8 @@ with explanatory comments to maintain clean build while documenting future use.
 - `emberware-z/src/state.rs` - Suppressed sounds and next_sound_handle fields
 
 **Test Results:** 520 tests passing, zero compiler warnings
+
+**NOTE:** This task was superseded by "Complete audio backend playback" which removed the stub and implemented full audio.
 
 ---
 
