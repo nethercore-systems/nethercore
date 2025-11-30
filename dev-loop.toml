@@ -32,7 +32,7 @@ checkpoint_interval = 25
 
 [tasks]
 # Max retries per task before skipping
-max_attempts = 2
+max_attempts = 3
 
 # Prefix for stability/maintenance tasks
 stability_prefix = "[STABILITY]"
@@ -106,7 +106,7 @@ cooldown_after_empty = 300
 
 [claude]
 # Extra flags to pass to claude CLI (e.g., ["--model", "opus"])
-extra_flags = []
+extra_flags = ["--model", "sonnet"]
 
 # Skip permission prompts for autonomous operation (required for unattended runs)
 auto_approve = true
