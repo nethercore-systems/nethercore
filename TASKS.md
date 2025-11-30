@@ -119,23 +119,10 @@ The `Runtime<C: Console>` handles:
 
 #### Low Priority
 
-- **[STABILITY] Review clone operations for optimization** (multiple files)
-  - `core/src/ffi.rs:118`: Clone save data to avoid borrow issues
-  - `emberware-z/src/app.rs:303,306,308`: Cloning mode, error, window
-  - `emberware-z/src/graphics.rs:3273`: Clone draw command
-  - Consider if references or moves could work instead
-
 - **[STABILITY] Add bounds checking for potentially truncating type casts** (codebase-wide)
   - 319 `as` casts across 17 files, most benign (usize conversions)
   - Review casts from larger to smaller integer types
   - Add explicit validation where data loss is possible
-
-
-- **[STABILITY] Document resource cleanup strategy** (graphics resources)
-  - Textures and meshes documented as "auto-cleaned on game shutdown"
-  - Verify and document Drop implementations or explicit cleanup paths
-  - Ensure no resource leaks on game unload
-
 
 
 ### Phase 2: GGRS Rollback Integration
@@ -258,6 +245,27 @@ The `Runtime<C: Console>` handles:
 ---
 
 ## Done
+
+- **[STABILITY] Document resource cleanup strategy** (graphics resources)
+  - Added "Resource Cleanup Strategy" section to `emberware-z/src/graphics/mod.rs` module docs
+  - Documented cleanup behavior for: Textures, Retained Meshes, Vertex/Index Buffers, Pipelines, Per-Frame Resources
+  - Added "Resource Lifecycle" section to `core/src/wasm/state.rs` GameState docs
+  - Documented: Pending Textures/Meshes, Draw Commands, Save Data lifecycle
+  - Key findings:
+    - All wgpu types (Texture, Buffer, Pipeline) auto-cleanup via Drop trait
+    - ZGraphics persists across game switches to avoid expensive reinitialization
+    - GPU resources from previous games remain until app exit (acceptable for single-game sessions)
+    - No custom Drop implementations needed - Rust's RAII handles cleanup
+  - All 554 tests passing
+
+- **[STABILITY] Review clone operations for optimization** (multiple files)
+  - Optimized `core/src/ffi.rs:118`: Used `data_and_store_mut()` to eliminate O(n) Vec clone in save data load
+  - Analyzed `emberware-z/src/app.rs:303,306,308`: Clones are necessary due to borrow checker constraints with egui closures
+    - `mode.clone()` - enum clone, O(1) or O(n) for game_id string, unavoidable
+    - `last_error.clone()` - only allocates when there's an error, rare path
+    - `window.clone()` - Arc<Window> increment, O(1), already optimal
+  - Analyzed `emberware-z/src/graphics/command_buffer.rs:297`: Test code only, not production
+  - All 554 tests passing
 
 - **[STABILITY] Reduce DRY violations in vertex attribute generation** (`emberware-z/src/graphics/vertex.rs`)
   - Replaced 340-line match statement with data-driven static array

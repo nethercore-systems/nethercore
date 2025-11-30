@@ -107,31 +107,36 @@ fn save(mut caller: Caller<'_, GameState>, slot: u32, data_ptr: u32, data_len: u
 fn load(mut caller: Caller<'_, GameState>, slot: u32, data_ptr: u32, max_len: u32) -> u32 {
     let slot = slot as usize;
     let max_len = max_len as usize;
+    let ptr = data_ptr as usize;
 
     // Validate slot
     if slot >= MAX_SAVE_SLOTS {
         return 0;
     }
 
-    // Get saved data (clone to avoid borrow issues)
-    let data = match &caller.data().save_data[slot] {
-        Some(d) => d.clone(),
+    // Get memory first, then access save data through split borrow
+    let memory = match caller.data().memory {
+        Some(m) => m,
+        None => return 0,
+    };
+
+    // Use data_and_store_mut to get both memory data and store access simultaneously.
+    // This avoids cloning the save data by allowing us to access both in one operation.
+    let (mem_data, store) = memory.data_and_store_mut(&mut caller);
+
+    // Get save data reference (now we have access to store)
+    let data = match &store.save_data[slot] {
+        Some(d) => d,
         None => return 0,
     };
 
     // Calculate actual length to copy
     let copy_len = data.len().min(max_len);
 
-    // Write data to WASM memory
-    if let Some(memory) = caller.data().memory {
-        let mem_data = memory.data_mut(&mut caller);
-        let ptr = data_ptr as usize;
-        if ptr + copy_len <= mem_data.len() {
-            mem_data[ptr..ptr + copy_len].copy_from_slice(&data[..copy_len]);
-            copy_len as u32
-        } else {
-            0
-        }
+    // Validate memory bounds and copy
+    if ptr + copy_len <= mem_data.len() {
+        mem_data[ptr..ptr + copy_len].copy_from_slice(&data[..copy_len]);
+        copy_len as u32
     } else {
         0
     }

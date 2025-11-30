@@ -17,6 +17,35 @@
 //!
 //! Immediate-mode draws are buffered on the CPU side and flushed once per frame
 //! to minimize draw calls. Retained meshes are stored separately.
+//!
+//! # Resource Cleanup Strategy
+//!
+//! Graphics resources are automatically cleaned up when the owning structures are dropped:
+//!
+//! - **Textures** (`TextureEntry`): Stored in `ZGraphics::textures` HashMap. When the
+//!   HashMap entry is removed or ZGraphics is dropped, wgpu::Texture/TextureView implement
+//!   Drop and release GPU resources automatically.
+//!
+//! - **Retained Meshes** (`RetainedMesh`): Stored in `ZGraphics::retained_meshes` HashMap.
+//!   Mesh data lives in shared vertex/index buffers per format, so individual mesh removal
+//!   doesn't free GPU memory (buffer compaction not implemented). Full cleanup occurs when
+//!   ZGraphics is dropped.
+//!
+//! - **Vertex/Index Buffers** (`GrowableBuffer`): One per vertex format (16 total).
+//!   Automatically dropped when ZGraphics is dropped; wgpu::Buffer implements Drop.
+//!
+//! - **Pipelines**: Cached in `ZGraphics::pipelines` HashMap. Dropped when ZGraphics drops.
+//!
+//! - **Per-Frame Resources**: Command buffer resets each frame via `reset_command_buffer()`.
+//!   No GPU allocations for immediate-mode draws between frames.
+//!
+//! **Game Lifecycle**: When a game exits (mode changes from Playing to Library), the game's
+//! `GameInstance` is dropped, which clears pending textures/meshes in `GameState`. However,
+//! ZGraphics remains alive across game switches to avoid expensive GPU reinitialization.
+//! This means textures/meshes loaded by a previous game persist in GPU memory until
+//! explicitly removed or the application exits. For the intended use case (single game per
+//! session), this is acceptable. Future versions may add explicit resource invalidation on
+//! game switch if memory pressure becomes a concern.
 
 mod buffer;
 mod command_buffer;
