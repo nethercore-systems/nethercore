@@ -663,6 +663,11 @@ impl App {
             UiAction::DismissError => {
                 self.last_error = None;
             }
+            UiAction::RefreshLibrary => {
+                tracing::info!("Refreshing game library");
+                self.local_games = library::get_local_games();
+                self.library_ui.selected_game = None;
+            }
         }
     }
 

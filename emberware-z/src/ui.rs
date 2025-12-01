@@ -79,9 +79,14 @@ impl LibraryUi {
             }
 
             ui.separator();
-            if ui.button("Settings").clicked() {
-                action = Some(UiAction::OpenSettings);
-            }
+            ui.horizontal(|ui| {
+                if ui.button("🔄 Refresh").clicked() {
+                    action = Some(UiAction::RefreshLibrary);
+                }
+                if ui.button("Settings").clicked() {
+                    action = Some(UiAction::OpenSettings);
+                }
+            });
         });
 
         action
@@ -104,6 +109,8 @@ pub enum UiAction {
     OpenSettings,
     /// Dismiss the current error message and return to library
     DismissError,
+    /// Refresh the game library
+    RefreshLibrary,
 }
 
 #[cfg(test)]
