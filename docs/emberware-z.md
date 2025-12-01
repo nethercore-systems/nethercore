@@ -580,6 +580,8 @@ fn load_mesh_indexed(
 fn draw_mesh(handle: u32)
 ```
 
+**Index Format:** Indices are **u16** (16-bit), supporting up to 65,536 vertices per mesh. This is appropriate for fantasy console aesthetics (PS1/N64 era) and provides 50% memory savings compared to u32 indices.
+
 **Example:**
 ```rust
 static mut CUBE_MESH: u32 = 0;
@@ -632,6 +634,8 @@ fn draw_triangles_indexed(
     format: u32              // Vertex format flags
 )
 ```
+
+**Index Format:** Like retained meshes, indices are **u16** (16-bit) for memory efficiency.
 
 **Note:** Immediate mode is convenient but less efficient. Prefer `load_mesh` + `draw_mesh` for static geometry. Use immediate mode for:
 - Skinned/animated meshes (CPU-transformed vertices)

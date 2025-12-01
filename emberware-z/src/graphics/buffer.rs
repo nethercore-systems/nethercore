@@ -177,10 +177,14 @@ pub struct RetainedMesh {
 ///
 /// Handles buffer allocation, growth, and mesh storage.
 pub struct BufferManager {
-    /// Per-format vertex buffers (one for each of 16 vertex formats)
+    /// Per-format vertex buffers for immediate mode (rewritten each frame)
     vertex_buffers: [GrowableBuffer; VERTEX_FORMAT_COUNT],
-    /// Per-format index buffers
+    /// Per-format index buffers for immediate mode (rewritten each frame)
     index_buffers: [GrowableBuffer; VERTEX_FORMAT_COUNT],
+    /// Per-format vertex buffers for retained meshes (uploaded once)
+    retained_vertex_buffers: [GrowableBuffer; VERTEX_FORMAT_COUNT],
+    /// Per-format index buffers for retained meshes (uploaded once)
+    retained_index_buffers: [GrowableBuffer; VERTEX_FORMAT_COUNT],
     /// Retained mesh storage
     retained_meshes: HashMap<u32, RetainedMesh>,
     /// Next mesh ID to assign
@@ -190,27 +194,47 @@ pub struct BufferManager {
 impl BufferManager {
     /// Create a new buffer manager with pre-allocated buffers for all formats
     pub fn new(device: &wgpu::Device) -> Self {
-        // Create vertex buffers for each format
+        // Create immediate mode vertex buffers for each format
         let vertex_buffers = std::array::from_fn(|i| {
             GrowableBuffer::new(
                 device,
                 wgpu::BufferUsages::VERTEX,
-                &format!("Vertex Buffer Format {}", i),
+                &format!("Immediate Vertex Buffer Format {}", i),
             )
         });
 
-        // Create index buffers for each format
+        // Create immediate mode index buffers for each format
         let index_buffers = std::array::from_fn(|i| {
             GrowableBuffer::new(
                 device,
                 wgpu::BufferUsages::INDEX,
-                &format!("Index Buffer Format {}", i),
+                &format!("Immediate Index Buffer Format {}", i),
+            )
+        });
+
+        // Create retained mesh vertex buffers for each format
+        let retained_vertex_buffers = std::array::from_fn(|i| {
+            GrowableBuffer::new(
+                device,
+                wgpu::BufferUsages::VERTEX,
+                &format!("Retained Vertex Buffer Format {}", i),
+            )
+        });
+
+        // Create retained mesh index buffers for each format
+        let retained_index_buffers = std::array::from_fn(|i| {
+            GrowableBuffer::new(
+                device,
+                wgpu::BufferUsages::INDEX,
+                &format!("Retained Index Buffer Format {}", i),
             )
         });
 
         Self {
             vertex_buffers,
             index_buffers,
+            retained_vertex_buffers,
+            retained_index_buffers,
             retained_meshes: HashMap::new(),
             next_mesh_id: 1, // 0 is reserved for INVALID
         }
@@ -244,11 +268,11 @@ impl BufferManager {
             );
         }
 
-        // Ensure buffer has capacity
-        self.vertex_buffers[format_idx].ensure_capacity(device, byte_data.len() as u64);
+        // Ensure retained buffer has capacity
+        self.retained_vertex_buffers[format_idx].ensure_capacity(device, byte_data.len() as u64);
 
-        // Write to buffer
-        let vertex_offset = self.vertex_buffers[format_idx].write(queue, byte_data);
+        // Write to retained buffer
+        let vertex_offset = self.retained_vertex_buffers[format_idx].write(queue, byte_data);
 
         // Create mesh handle
         let handle = MeshHandle(self.next_mesh_id);
@@ -284,7 +308,7 @@ impl BufferManager {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         data: &[f32],
-        indices: &[u32],
+        indices: &[u16],
         format: u8,
     ) -> Result<MeshHandle> {
         let format_idx = format as usize;
@@ -304,16 +328,16 @@ impl BufferManager {
             );
         }
 
-        // Ensure vertex buffer has capacity
-        self.vertex_buffers[format_idx].ensure_capacity(device, byte_data.len() as u64);
+        // Ensure retained vertex buffer has capacity
+        self.retained_vertex_buffers[format_idx].ensure_capacity(device, byte_data.len() as u64);
 
-        // Ensure index buffer has capacity
+        // Ensure retained index buffer has capacity
         let index_byte_data: &[u8] = bytemuck::cast_slice(indices);
-        self.index_buffers[format_idx].ensure_capacity(device, index_byte_data.len() as u64);
+        self.retained_index_buffers[format_idx].ensure_capacity(device, index_byte_data.len() as u64);
 
-        // Write to buffers
-        let vertex_offset = self.vertex_buffers[format_idx].write(queue, byte_data);
-        let index_offset = self.index_buffers[format_idx].write(queue, index_byte_data);
+        // Write to retained buffers
+        let vertex_offset = self.retained_vertex_buffers[format_idx].write(queue, byte_data);
+        let index_offset = self.retained_index_buffers[format_idx].write(queue, index_byte_data);
 
         // Create mesh handle
         let handle = MeshHandle(self.next_mesh_id);
@@ -364,6 +388,16 @@ impl BufferManager {
     /// Get mutable index buffer for a format
     pub fn index_buffer_mut(&mut self, format: u8) -> &mut GrowableBuffer {
         &mut self.index_buffers[format as usize]
+    }
+
+    /// Get retained vertex buffer for a format
+    pub fn retained_vertex_buffer(&self, format: u8) -> &GrowableBuffer {
+        &self.retained_vertex_buffers[format as usize]
+    }
+
+    /// Get retained index buffer for a format
+    pub fn retained_index_buffer(&self, format: u8) -> &GrowableBuffer {
+        &self.retained_index_buffers[format as usize]
     }
 }
 

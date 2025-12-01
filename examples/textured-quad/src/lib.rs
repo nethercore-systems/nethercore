@@ -3,8 +3,7 @@
 //! Demonstrates texture loading and 2D drawing:
 //! - `load_texture()` to create a texture from RGBA pixel data
 //! - `texture_bind()` to bind the texture for drawing
-//! - `draw_sprite()` for basic 2D sprite rendering
-//! - `set_color()` for tinting sprites
+//! - `draw_sprite()` for basic 2D sprite rendering with color tinting
 //!
 //! A simple 8x8 checkerboard texture is rendered at screen center,
 //! with a color tint that cycles over time.
@@ -27,7 +26,6 @@ extern "C" {
     fn elapsed_time() -> f32;
     fn load_texture(width: u32, height: u32, pixels: *const u8) -> u32;
     fn texture_bind(handle: u32);
-    fn set_color(color: u32);
     fn draw_sprite(x: f32, y: f32, w: f32, h: f32, color: u32);
     fn texture_filter(filter: u32);
 }
@@ -113,12 +111,10 @@ pub extern "C" fn render() {
         let x = (960.0 - sprite_size) / 2.0;
         let y = (540.0 - sprite_size) / 2.0;
 
-        // Draw with color tint
-        set_color(tint);
-        draw_sprite(x, y, sprite_size, sprite_size, 0xFFFFFFFF);
+        // Draw with color tint (pass tint directly to draw_sprite)
+        draw_sprite(x, y, sprite_size, sprite_size, tint);
 
-        // Draw a few more at corners to show multiple sprites
-        set_color(0xFFFFFFFF); // White (no tint)
+        // Draw a few more at corners to show multiple sprites (white, no tint)
         draw_sprite(16.0, 16.0, 64.0, 64.0, 0xFFFFFFFF);
         draw_sprite(960.0 - 80.0, 16.0, 64.0, 64.0, 0xFFFFFFFF);
         draw_sprite(16.0, 540.0 - 80.0, 64.0, 64.0, 0xFFFFFFFF);

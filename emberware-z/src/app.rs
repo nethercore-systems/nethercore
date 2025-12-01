@@ -290,7 +290,7 @@ impl App {
         );
 
         // Process draw commands - ZGraphics consumes draw commands directly
-        graphics.process_draw_commands(z_state, &session.texture_map, &session.mesh_map);
+        graphics.process_draw_commands(z_state, &session.texture_map);
     }
 
 

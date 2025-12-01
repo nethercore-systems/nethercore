@@ -135,7 +135,7 @@ pub struct PendingMesh {
     pub handle: u32,
     pub format: u8,
     pub vertex_data: Vec<f32>,
-    pub index_data: Option<Vec<u32>>,
+    pub index_data: Option<Vec<u16>>,
 }
 
 // ============================================================================

@@ -9,6 +9,15 @@ use glam::Mat4;
 use super::render_state::{BlendMode, CullMode, MatcapBlendMode, RenderState, TextureHandle};
 use super::vertex::{vertex_stride, VERTEX_FORMAT_COUNT};
 
+/// Specifies which buffer the geometry data comes from
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BufferSource {
+    /// Dynamic geometry uploaded each frame (sprites, billboards, draw_triangles)
+    Immediate,
+    /// Static geometry uploaded once (load_mesh_indexed, draw_mesh)
+    Retained,
+}
+
 /// Virtual Render Pass Command
 ///
 /// Represents a single draw call with all necessary state captured.
@@ -23,10 +32,12 @@ pub struct VRPCommand {
     pub vertex_count: u32,
     /// Number of indices (0 for non-indexed)
     pub index_count: u32,
-    /// Base vertex index in the immediate buffer
+    /// Base vertex index in the buffer
     pub base_vertex: u32,
-    /// First index in the immediate index buffer
+    /// First index in the index buffer
     pub first_index: u32,
+    /// Which buffer contains this geometry's data
+    pub buffer_source: BufferSource,
     /// Texture slots bound for this draw
     pub texture_slots: [TextureHandle; 4],
     /// Uniform color
@@ -49,8 +60,8 @@ pub struct VirtualRenderPass {
     commands: Vec<VRPCommand>,
     /// Per-format immediate vertex data (CPU side)
     vertex_data: [Vec<u8>; VERTEX_FORMAT_COUNT],
-    /// Per-format immediate index data (CPU side)
-    index_data: [Vec<u32>; VERTEX_FORMAT_COUNT],
+    /// Per-format immediate index data (CPU side, u16 for memory efficiency)
+    index_data: [Vec<u16>; VERTEX_FORMAT_COUNT],
     /// Per-format vertex counts for base_vertex calculation
     vertex_counts: [u32; VERTEX_FORMAT_COUNT],
     /// Per-format index counts
@@ -97,6 +108,7 @@ impl VirtualRenderPass {
             index_count: 0,
             base_vertex,
             first_index: 0,
+            buffer_source: BufferSource::Immediate,
             texture_slots: state.texture_slots,
             color: state.color,
             depth_test: state.depth_test,
@@ -115,7 +127,7 @@ impl VirtualRenderPass {
         &mut self,
         format: u8,
         vertices: &[f32],
-        indices: &[u32],
+        indices: &[u16],
         transform: Mat4,
         state: &RenderState,
     ) -> (u32, u32) {
@@ -142,6 +154,7 @@ impl VirtualRenderPass {
             index_count: indices.len() as u32,
             base_vertex,
             first_index,
+            buffer_source: BufferSource::Immediate,
             texture_slots: state.texture_slots,
             color: state.color,
             depth_test: state.depth_test,
@@ -183,7 +196,7 @@ impl VirtualRenderPass {
     /// Append index data to buffer and return first_index
     ///
     /// Used for direct conversion from ZVRPCommand without state mutation.
-    pub fn append_index_data(&mut self, format: u8, data: &[u32]) -> u32 {
+    pub fn append_index_data(&mut self, format: u8, data: &[u16]) -> u32 {
         let format_idx = format as usize;
         let first_index = self.index_counts[format_idx];
 
@@ -231,6 +244,7 @@ impl VirtualRenderPass {
             index_count: 0,
             base_vertex,
             first_index: 0,
+            buffer_source: BufferSource::Immediate,
             texture_slots,
             color,
             depth_test,
@@ -245,7 +259,7 @@ impl VirtualRenderPass {
         &mut self,
         format: u8,
         vertex_data: &[f32],
-        index_data: &[u32],
+        index_data: &[u16],
         transform: Mat4,
         color: u32,
         depth_test: bool,
@@ -275,6 +289,7 @@ impl VirtualRenderPass {
             index_count: index_data.len() as u32,
             base_vertex,
             first_index,
+            buffer_source: BufferSource::Immediate,
             texture_slots,
             color,
             depth_test,
@@ -303,7 +318,7 @@ impl VirtualRenderPass {
         let stride = vertex_stride(mesh_format) as u64;
         let base_vertex = (mesh_vertex_offset / stride) as u32;
         let first_index = if mesh_index_count > 0 {
-            (mesh_index_offset / 4) as u32
+            (mesh_index_offset / 2) as u32  // u16 indices are 2 bytes each
         } else {
             0
         };
@@ -315,6 +330,7 @@ impl VirtualRenderPass {
             index_count: mesh_index_count,
             base_vertex,
             first_index,
+            buffer_source: BufferSource::Retained,
             texture_slots,
             color,
             depth_test,
@@ -330,7 +346,7 @@ impl VirtualRenderPass {
     }
 
     /// Get index data for a format
-    pub fn index_data(&self, format: u8) -> &[u32] {
+    pub fn index_data(&self, format: u8) -> &[u16] {
         &self.index_data[format as usize]
     }
 
@@ -394,7 +410,7 @@ mod tests {
         let state = RenderState::default();
 
         let vertices = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0];
-        let indices = [0u32, 1, 2, 0, 2, 3];
+        let indices = [0u16, 1, 2, 0, 2, 3];
 
         let (base_vertex, first_index) =
             cb.add_vertices_indexed(0, &vertices, &indices, Mat4::IDENTITY, &state);
@@ -447,6 +463,7 @@ mod tests {
             index_count: 0,
             base_vertex: 0,
             first_index: 0,
+            buffer_source: BufferSource::Immediate,
             texture_slots: [TextureHandle::INVALID; 4],
             color: 0xFFFFFFFF,
             depth_test: true,
@@ -468,6 +485,7 @@ mod tests {
             index_count: 150,
             base_vertex: 50,
             first_index: 75,
+            buffer_source: BufferSource::Retained,
             texture_slots: [
                 TextureHandle(1),
                 TextureHandle(2),

@@ -18,6 +18,65 @@
 
 ## TODO
 
+### **[FEATURE] Direct game launch via command-line argument**
+
+**Status:** Not yet implemented
+
+**Current State:**
+- `cargo run` always launches to the game library UI
+- Users must click on a game to launch it
+- No way to directly launch a specific game from command line
+
+**What's Needed:**
+Add command-line argument support to launch games directly, skipping the library screen.
+
+**Usage Examples:**
+```bash
+cargo run platformer    # Launch platformer directly
+cargo run cube          # Launch cube example directly
+cargo run -- lighting   # Alternative syntax
+```
+
+**Implementation Plan:**
+
+1. **Parse command-line arguments** in `main.rs`:
+   - Check for first argument after program name
+   - If argument provided, treat as game name
+   - If no argument, launch library as normal
+
+2. **Game name resolution**:
+   - Match argument against game IDs in library
+   - Support both full game IDs and partial matches (e.g., "platform" matches "platformer")
+   - Show error if game not found or multiple matches
+
+3. **Direct launch flow**:
+   - Skip `UiMode::Library` and go straight to `UiMode::Loading`
+   - Use provided game name to construct ROM path
+   - Load and run game immediately
+
+4. **Error handling**:
+   - Game not found: Print error and show library
+   - ROM missing: Print error and show library
+   - Invalid game name: Show available games and exit
+
+**Files to Modify:**
+- `emberware-z/src/main.rs` - Parse command-line args, implement game resolution logic
+- `emberware-z/src/app.rs` - Support initial mode as Loading instead of Library
+
+**User Benefit:**
+- Faster iteration during development (no UI navigation)
+- Scriptable game launching for testing
+- Better developer experience for example testing
+
+---
+
+### **[POLISH] PERF: Store MeshId, TextureId (and other ID)s in ZGraphics as a Vec<T> instead of a HashMap<usize, T>
+- Assets can never be unloaded
+- Keys are always inserted via incrementing values
+- No reason to waste CPU cycles with Hashing
+- "Fallack" error mesh at index 0 will not cause out of bounds issues.
+
+
 ### **[POLISH] BUG: Window Size scaling issues**
 - When loading a game, black bars appear on the sides. The inner window should "snap" to the nearest perfect integer scaling of the window (in integer scaling mode), or just stay at that size for stretch
 - We are not able to resize the window to a size equal to the fantasy console (and game ROMs) initialized resolution. We should be able to scale down to a 1x scaling, but not any smaller to prevent a crash

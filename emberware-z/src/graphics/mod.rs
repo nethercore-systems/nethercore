@@ -81,7 +81,7 @@ use emberware_core::console::Graphics;
 
 // Re-export public types from submodules
 pub use buffer::{BufferManager, GrowableBuffer, MeshHandle, RetainedMesh};
-pub use command_buffer::VirtualRenderPass;
+pub use command_buffer::{BufferSource, VirtualRenderPass};
 pub use render_state::{
     BlendMode, CameraUniforms, CullMode, LightUniform, LightsUniforms, MatcapBlendMode,
     MaterialUniforms, RenderState, SkyUniforms, TextureFilter, TextureHandle,
@@ -1073,7 +1073,7 @@ impl ZGraphics {
     pub fn load_mesh_indexed(
         &mut self,
         data: &[f32],
-        indices: &[u32],
+        indices: &[u16],
         format: u8,
     ) -> Result<MeshHandle> {
         self.buffer_manager
@@ -1131,7 +1131,6 @@ impl ZGraphics {
         &mut self,
         z_state: &mut crate::state::ZFFIState,
         texture_map: &hashbrown::HashMap<u32, TextureHandle>,
-        _mesh_map: &hashbrown::HashMap<u32, MeshHandle>,
     ) {
         use crate::state::DeferredCommand;
         use crate::console::RESOLUTIONS;
@@ -1305,6 +1304,7 @@ impl ZGraphics {
                         index_count: 6,
                         base_vertex,
                         first_index,
+                        buffer_source: BufferSource::Immediate,
                         texture_slots,
                         color: 0xFFFFFFFF, // White (color already in vertices)
                         depth_test,
@@ -1425,6 +1425,7 @@ impl ZGraphics {
                         index_count: 6,
                         base_vertex,
                         first_index,
+                        buffer_source: BufferSource::Immediate,
                         texture_slots,
                         color: 0xFFFFFFFF, // Color already in vertices
                         depth_test: false, // 2D sprites don't use depth test
@@ -1494,6 +1495,7 @@ impl ZGraphics {
                         index_count: 6,
                         base_vertex,
                         first_index,
+                        buffer_source: BufferSource::Immediate,
                         texture_slots: [TextureHandle::INVALID; 4],
                         color: 0xFFFFFFFF, // Color already in vertices
                         depth_test: false, // 2D rectangles don't use depth test
@@ -1575,6 +1577,7 @@ impl ZGraphics {
                         index_count: indices.len() as u32,
                         base_vertex,
                         first_index,
+                        buffer_source: BufferSource::Immediate,
                         texture_slots,
                         color: 0xFFFFFFFF, // Color already baked into vertices
                         depth_test: false, // 2D text doesn't use depth test
@@ -1788,7 +1791,7 @@ impl ZGraphics {
         font_opt: Option<&crate::state::Font>,
         render_width: f32,
         render_height: f32,
-    ) -> (Vec<f32>, Vec<u32>) {
+    ) -> (Vec<f32>, Vec<u16>) {
         use crate::font;
 
         // Extract color components (0xRRGGBBAA)
@@ -1798,10 +1801,10 @@ impl ZGraphics {
 
         let char_count = text.chars().count();
         let mut vertices = Vec::with_capacity(char_count * 4 * 8); // 4 verts × 8 floats
-        let mut indices = Vec::with_capacity(char_count * 6); // 6 indices per quad
+        let mut indices: Vec<u16> = Vec::with_capacity(char_count * 6); // 6 indices per quad
 
         let mut cursor_x = x;
-        let mut vertex_index = 0u32;
+        let mut vertex_index = 0u16;
 
         if let Some(custom_font) = font_opt {
             // Custom font rendering
@@ -2173,7 +2176,7 @@ impl ZGraphics {
             let mut bound_pipeline: Option<PipelineKey> = None;
             let mut bound_frame_group: Option<u64> = None;
             let mut bound_texture_slots: Option<[TextureHandle; 4]> = None;
-            let mut bound_vertex_format: Option<u8> = None;
+            let mut bound_vertex_format: Option<(u8, BufferSource)> = None;
 
             for cmd in self.command_buffer.commands() {
                 // Create render state from command
@@ -2425,19 +2428,27 @@ impl ZGraphics {
                     bound_texture_slots = Some(cmd.texture_slots);
                 }
 
-                // Set vertex buffer (only if format changed)
-                if bound_vertex_format != Some(cmd.format) {
-                    if let Some(buffer) = self.buffer_manager.vertex_buffer(cmd.format).buffer() {
+                // Set vertex buffer (only if format or buffer source changed)
+                if bound_vertex_format != Some((cmd.format, cmd.buffer_source)) {
+                    let vertex_buffer = match cmd.buffer_source {
+                        BufferSource::Immediate => self.buffer_manager.vertex_buffer(cmd.format),
+                        BufferSource::Retained => self.buffer_manager.retained_vertex_buffer(cmd.format),
+                    };
+                    if let Some(buffer) = vertex_buffer.buffer() {
                         render_pass.set_vertex_buffer(0, buffer.slice(..));
                     }
-                    bound_vertex_format = Some(cmd.format);
+                    bound_vertex_format = Some((cmd.format, cmd.buffer_source));
                 }
 
                 // Draw
                 if cmd.index_count > 0 {
-                    // Indexed draw
-                    if let Some(buffer) = self.buffer_manager.index_buffer(cmd.format).buffer() {
-                        render_pass.set_index_buffer(buffer.slice(..), wgpu::IndexFormat::Uint32);
+                    // Indexed draw - both immediate and retained use u16 indices
+                    let index_buffer = match cmd.buffer_source {
+                        BufferSource::Immediate => self.buffer_manager.index_buffer(cmd.format),
+                        BufferSource::Retained => self.buffer_manager.retained_index_buffer(cmd.format),
+                    };
+                    if let Some(buffer) = index_buffer.buffer() {
+                        render_pass.set_index_buffer(buffer.slice(..), wgpu::IndexFormat::Uint16);
                         render_pass.draw_indexed(
                             cmd.first_index..cmd.first_index + cmd.index_count,
                             cmd.base_vertex as i32,
