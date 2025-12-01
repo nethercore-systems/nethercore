@@ -142,42 +142,17 @@ pub struct PendingMesh {
 // Draw Commands (moved from core/src/wasm/draw.rs)
 // ============================================================================
 
-/// Draw command for Z-specific immediate mode drawing
+// ============================================================================
+// Draw Commands (moved from core/src/wasm/draw.rs)
+// ============================================================================
+
+/// Deferred draw command for special objects (billboards, sprites, text)
+///
+/// These commands generate geometry at render time (need camera info for billboards,
+/// screen size for sprites) or are 2D overlays. They are processed after the
+/// main 3D render pass.
 #[derive(Debug)]
-pub enum ZDrawCommand {
-    /// Draw triangles with immediate data (non-indexed)
-    DrawTriangles {
-        format: u8,
-        vertex_data: Vec<f32>,
-        transform: Mat4,
-        color: u32,
-        depth_test: bool,
-        cull_mode: u8,
-        blend_mode: u8,
-        bound_textures: [u32; 4],
-    },
-    /// Draw indexed triangles with immediate data
-    DrawTrianglesIndexed {
-        format: u8,
-        vertex_data: Vec<f32>,
-        index_data: Vec<u32>,
-        transform: Mat4,
-        color: u32,
-        depth_test: bool,
-        cull_mode: u8,
-        blend_mode: u8,
-        bound_textures: [u32; 4],
-    },
-    /// Draw a retained mesh by handle
-    DrawMesh {
-        handle: u32,
-        transform: Mat4,
-        color: u32,
-        depth_test: bool,
-        cull_mode: u8,
-        blend_mode: u8,
-        bound_textures: [u32; 4],
-    },
+pub enum DeferredCommand {
     /// Draw a billboard (camera-facing quad)
     DrawBillboard {
         width: f32,
@@ -301,8 +276,15 @@ pub struct ZFFIState {
     pub bone_matrices: Vec<Mat4>,
     pub bone_count: u32,
 
-    // Draw commands for this frame
-    pub draw_commands: Vec<ZDrawCommand>,
+    // Virtual Render Pass (direct recording)
+    pub render_pass: crate::graphics::VirtualRenderPass,
+
+    // Deferred commands (billboards, sprites, text)
+    pub deferred_commands: Vec<DeferredCommand>,
+
+    // Resource mappings (injected by App before frame)
+    pub texture_map: std::collections::HashMap<u32, crate::graphics::TextureHandle>,
+    pub mesh_map: std::collections::HashMap<u32, crate::graphics::RetainedMesh>,
 
     // Pending resource uploads
     pub pending_textures: Vec<PendingTexture>,
@@ -347,7 +329,10 @@ impl Default for ZFFIState {
             lights: [LightState::default(); 4],
             bone_matrices: Vec::new(),
             bone_count: 0,
-            draw_commands: Vec::new(),
+            render_pass: crate::graphics::VirtualRenderPass::new(),
+            deferred_commands: Vec::new(),
+            texture_map: std::collections::HashMap::new(),
+            mesh_map: std::collections::HashMap::new(),
             pending_textures: Vec::new(),
             pending_meshes: Vec::new(),
             next_texture_handle: 1, // 0 reserved for invalid
@@ -372,7 +357,8 @@ impl ZFFIState {
 
     /// Clear all commands and reset for next frame
     pub fn clear_frame(&mut self) {
-        self.draw_commands.clear();
+        self.render_pass.reset();
+        self.deferred_commands.clear();
         self.pending_textures.clear();
         self.pending_meshes.clear();
         self.audio_commands.clear();

@@ -159,7 +159,7 @@ impl MeshHandle {
 }
 
 /// Stored mesh data for retained mode drawing
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RetainedMesh {
     /// Vertex format flags
     pub format: u8,

@@ -2,8 +2,8 @@
 
 use emberware_core::console::RawInput;
 use gilrs::{Axis, Button, Gilrs};
+use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use winit::keyboard::KeyCode;
 
 /// Input configuration

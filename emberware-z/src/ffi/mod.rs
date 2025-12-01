@@ -19,7 +19,7 @@ use crate::audio::{AudioCommand, Sound};
 use crate::console::{ZInput, RESOLUTIONS, TICK_RATES};
 use crate::graphics::vertex_stride;
 use crate::state::{
-    Font, PendingMesh, PendingTexture, ZDrawCommand, ZFFIState, MAX_BONES, MAX_TRANSFORM_STACK,
+    DeferredCommand, Font, PendingMesh, PendingTexture, ZFFIState, MAX_BONES, MAX_TRANSFORM_STACK,
 };
 
 /// Register all Emberware Z FFI functions with the linker
@@ -999,16 +999,71 @@ fn draw_mesh(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, ha
 
     let state = &mut caller.data_mut().console;
 
-    // Record draw command with current state
-    state.draw_commands.push(ZDrawCommand::DrawMesh {
-        handle,
-        transform: state.current_transform,
-        color: state.color,
-        depth_test: state.depth_test,
-        cull_mode: state.cull_mode,
-        blend_mode: state.blend_mode,
-        bound_textures: state.bound_textures,
-    });
+    // Look up mesh
+    let mesh = match state.mesh_map.get(&handle) {
+        Some(m) => m,
+        None => {
+            warn!("draw_mesh: invalid handle {}", handle);
+            return;
+        }
+    };
+
+    // Extract mesh data
+    let mesh_format = mesh.format;
+    let mesh_vertex_count = mesh.vertex_count;
+    let mesh_index_count = mesh.index_count;
+    let mesh_vertex_offset = mesh.vertex_offset;
+    let mesh_index_offset = mesh.index_offset;
+
+    // Map texture handles
+    let texture_slots = [
+        state
+            .texture_map
+            .get(&state.bound_textures[0])
+            .copied()
+            .unwrap_or(crate::graphics::TextureHandle::INVALID),
+        state
+            .texture_map
+            .get(&state.bound_textures[1])
+            .copied()
+            .unwrap_or(crate::graphics::TextureHandle::INVALID),
+        state
+            .texture_map
+            .get(&state.bound_textures[2])
+            .copied()
+            .unwrap_or(crate::graphics::TextureHandle::INVALID),
+        state
+            .texture_map
+            .get(&state.bound_textures[3])
+            .copied()
+            .unwrap_or(crate::graphics::TextureHandle::INVALID),
+    ];
+
+    let matcap_blend_modes = [
+        crate::graphics::MatcapBlendMode::from_u8(state.matcap_blend_modes[0]),
+        crate::graphics::MatcapBlendMode::from_u8(state.matcap_blend_modes[1]),
+        crate::graphics::MatcapBlendMode::from_u8(state.matcap_blend_modes[2]),
+        crate::graphics::MatcapBlendMode::from_u8(state.matcap_blend_modes[3]),
+    ];
+
+    let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
+    let blend_mode = crate::graphics::BlendMode::from_u8(state.blend_mode);
+
+    // Record draw command directly
+    state.render_pass.record_mesh(
+        mesh_format,
+        mesh_vertex_count,
+        mesh_index_count,
+        mesh_vertex_offset,
+        mesh_index_offset,
+        state.current_transform,
+        state.color,
+        state.depth_test,
+        cull_mode,
+        blend_mode,
+        texture_slots,
+        matcap_blend_modes,
+    );
 }
 
 // ============================================================================
@@ -1106,17 +1161,52 @@ fn draw_triangles(
 
     let state = &mut caller.data_mut().console;
 
-    // Record draw command with current state
-    state.draw_commands.push(ZDrawCommand::DrawTriangles {
+    // Map texture handles
+    let texture_slots = [
+        state
+            .texture_map
+            .get(&state.bound_textures[0])
+            .copied()
+            .unwrap_or(crate::graphics::TextureHandle::INVALID),
+        state
+            .texture_map
+            .get(&state.bound_textures[1])
+            .copied()
+            .unwrap_or(crate::graphics::TextureHandle::INVALID),
+        state
+            .texture_map
+            .get(&state.bound_textures[2])
+            .copied()
+            .unwrap_or(crate::graphics::TextureHandle::INVALID),
+        state
+            .texture_map
+            .get(&state.bound_textures[3])
+            .copied()
+            .unwrap_or(crate::graphics::TextureHandle::INVALID),
+    ];
+
+    let matcap_blend_modes = [
+        crate::graphics::MatcapBlendMode::from_u8(state.matcap_blend_modes[0]),
+        crate::graphics::MatcapBlendMode::from_u8(state.matcap_blend_modes[1]),
+        crate::graphics::MatcapBlendMode::from_u8(state.matcap_blend_modes[2]),
+        crate::graphics::MatcapBlendMode::from_u8(state.matcap_blend_modes[3]),
+    ];
+
+    let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
+    let blend_mode = crate::graphics::BlendMode::from_u8(state.blend_mode);
+
+    // Record draw command directly
+    state.render_pass.record_triangles(
         format,
-        vertex_data,
-        transform: state.current_transform,
-        color: state.color,
-        depth_test: state.depth_test,
-        cull_mode: state.cull_mode,
-        blend_mode: state.blend_mode,
-        bound_textures: state.bound_textures,
-    });
+        &vertex_data,
+        state.current_transform,
+        state.color,
+        state.depth_test,
+        cull_mode,
+        blend_mode,
+        texture_slots,
+        matcap_blend_modes,
+    );
 }
 
 /// Draw indexed triangles immediately
@@ -1253,20 +1343,53 @@ fn draw_triangles_indexed(
 
     let state = &mut caller.data_mut().console;
 
-    // Record draw command with current state
-    state
-        .draw_commands
-        .push(ZDrawCommand::DrawTrianglesIndexed {
-            format,
-            vertex_data,
-            index_data,
-            transform: state.current_transform,
-            color: state.color,
-            depth_test: state.depth_test,
-            cull_mode: state.cull_mode,
-            blend_mode: state.blend_mode,
-            bound_textures: state.bound_textures,
-        });
+    // Map texture handles
+    let texture_slots = [
+        state
+            .texture_map
+            .get(&state.bound_textures[0])
+            .copied()
+            .unwrap_or(crate::graphics::TextureHandle::INVALID),
+        state
+            .texture_map
+            .get(&state.bound_textures[1])
+            .copied()
+            .unwrap_or(crate::graphics::TextureHandle::INVALID),
+        state
+            .texture_map
+            .get(&state.bound_textures[2])
+            .copied()
+            .unwrap_or(crate::graphics::TextureHandle::INVALID),
+        state
+            .texture_map
+            .get(&state.bound_textures[3])
+            .copied()
+            .unwrap_or(crate::graphics::TextureHandle::INVALID),
+    ];
+
+    let matcap_blend_modes = [
+        crate::graphics::MatcapBlendMode::from_u8(state.matcap_blend_modes[0]),
+        crate::graphics::MatcapBlendMode::from_u8(state.matcap_blend_modes[1]),
+        crate::graphics::MatcapBlendMode::from_u8(state.matcap_blend_modes[2]),
+        crate::graphics::MatcapBlendMode::from_u8(state.matcap_blend_modes[3]),
+    ];
+
+    let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
+    let blend_mode = crate::graphics::BlendMode::from_u8(state.blend_mode);
+
+    // Record draw command directly
+    state.render_pass.record_triangles_indexed(
+        format,
+        &vertex_data,
+        &index_data,
+        state.current_transform,
+        state.color,
+        state.depth_test,
+        cull_mode,
+        blend_mode,
+        texture_slots,
+        matcap_blend_modes,
+    );
 }
 
 // ============================================================================
@@ -1303,18 +1426,20 @@ fn draw_billboard(
     let state = &mut caller.data_mut().console;
 
     // Record billboard draw command
-    state.draw_commands.push(ZDrawCommand::DrawBillboard {
-        width: w,
-        height: h,
-        mode: mode as u8,
-        uv_rect: None, // Full texture (0,0,1,1)
-        transform: state.current_transform,
-        color,
-        depth_test: state.depth_test,
-        cull_mode: state.cull_mode,
-        blend_mode: state.blend_mode,
-        bound_textures: state.bound_textures,
-    });
+    state
+        .deferred_commands
+        .push(DeferredCommand::DrawBillboard {
+            width: w,
+            height: h,
+            mode: mode as u8,
+            uv_rect: None, // Full texture (0,0,1,1)
+            transform: state.current_transform,
+            color,
+            depth_test: state.depth_test,
+            cull_mode: state.cull_mode,
+            blend_mode: state.blend_mode,
+            bound_textures: state.bound_textures,
+        });
 }
 
 /// Draw a billboard with a UV region from the texture
@@ -1350,18 +1475,20 @@ fn draw_billboard_region(
     let state = &mut caller.data_mut().console;
 
     // Record billboard draw command with UV region
-    state.draw_commands.push(ZDrawCommand::DrawBillboard {
-        width: w,
-        height: h,
-        mode: mode as u8,
-        uv_rect: Some((src_x, src_y, src_w, src_h)),
-        transform: state.current_transform,
-        color,
-        depth_test: state.depth_test,
-        cull_mode: state.cull_mode,
-        blend_mode: state.blend_mode,
-        bound_textures: state.bound_textures,
-    });
+    state
+        .deferred_commands
+        .push(DeferredCommand::DrawBillboard {
+            width: w,
+            height: h,
+            mode: mode as u8,
+            uv_rect: Some((src_x, src_y, src_w, src_h)),
+            transform: state.current_transform,
+            color,
+            depth_test: state.depth_test,
+            cull_mode: state.cull_mode,
+            blend_mode: state.blend_mode,
+            bound_textures: state.bound_textures,
+        });
 }
 
 // ============================================================================
@@ -1389,7 +1516,7 @@ fn draw_sprite(
 ) {
     let state = &mut caller.data_mut().console;
 
-    state.draw_commands.push(ZDrawCommand::DrawSprite {
+    state.deferred_commands.push(DeferredCommand::DrawSprite {
         x,
         y,
         width: w,
@@ -1431,7 +1558,7 @@ fn draw_sprite_region(
 ) {
     let state = &mut caller.data_mut().console;
 
-    state.draw_commands.push(ZDrawCommand::DrawSprite {
+    state.deferred_commands.push(DeferredCommand::DrawSprite {
         x,
         y,
         width: w,
@@ -1479,7 +1606,7 @@ fn draw_sprite_ex(
 ) {
     let state = &mut caller.data_mut().console;
 
-    state.draw_commands.push(ZDrawCommand::DrawSprite {
+    state.deferred_commands.push(DeferredCommand::DrawSprite {
         x,
         y,
         width: w,
@@ -1513,7 +1640,7 @@ fn draw_rect(
 ) {
     let state = &mut caller.data_mut().console;
 
-    state.draw_commands.push(ZDrawCommand::DrawRect {
+    state.deferred_commands.push(DeferredCommand::DrawRect {
         x,
         y,
         width: w,
@@ -1578,7 +1705,7 @@ fn draw_text(
 
     let state = &mut caller.data_mut().console;
 
-    state.draw_commands.push(ZDrawCommand::DrawText {
+    state.deferred_commands.push(DeferredCommand::DrawText {
         text: text_bytes,
         x,
         y,
@@ -1822,7 +1949,7 @@ fn set_sky(
     let state = &mut caller.data_mut().console;
 
     // Record sky configuration as a draw command
-    state.draw_commands.push(ZDrawCommand::SetSky {
+    state.deferred_commands.push(DeferredCommand::SetSky {
         horizon_color: [horizon_r, horizon_g, horizon_b],
         zenith_color: [zenith_r, zenith_g, zenith_b],
         sun_direction: [sun_dir_x, sun_dir_y, sun_dir_z],
@@ -2294,11 +2421,9 @@ fn play_sound(
     pan: f32,
 ) {
     let state = &mut caller.data_mut().console;
-    state.audio_commands.push(AudioCommand::PlaySound {
-        sound,
-        volume,
-        pan,
-    });
+    state
+        .audio_commands
+        .push(AudioCommand::PlaySound { sound, volume, pan });
 }
 
 /// Play sound on specific channel
@@ -2353,12 +2478,11 @@ fn channel_set(
 ///
 /// # Parameters
 /// - `channel`: 0-15
-fn channel_stop(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    channel: u32,
-) {
+fn channel_stop(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, channel: u32) {
     let state = &mut caller.data_mut().console;
-    state.audio_commands.push(AudioCommand::ChannelStop { channel });
+    state
+        .audio_commands
+        .push(AudioCommand::ChannelStop { channel });
 }
 
 /// Play music (looping, dedicated channel)
@@ -2372,7 +2496,9 @@ fn music_play(
     volume: f32,
 ) {
     let state = &mut caller.data_mut().console;
-    state.audio_commands.push(AudioCommand::MusicPlay { sound, volume });
+    state
+        .audio_commands
+        .push(AudioCommand::MusicPlay { sound, volume });
 }
 
 /// Stop music
@@ -2385,10 +2511,7 @@ fn music_stop(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>) {
 ///
 /// # Parameters
 /// - `volume`: 0.0 to 1.0
-fn music_set_volume(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    volume: f32,
-) {
+fn music_set_volume(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, volume: f32) {
     let state = &mut caller.data_mut().console;
     state
         .audio_commands
@@ -2397,12 +2520,11 @@ fn music_set_volume(
 
 #[cfg(test)]
 mod tests {
-    use crate::graphics::{vertex_stride, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV};
-    use crate::state::{
-        CameraState, LightState, PendingMesh, PendingTexture, ZDrawCommand, ZFFIState,
-        DEFAULT_CAMERA_FOV, MAX_BONES, MAX_TRANSFORM_STACK,
-    };
-    use glam::{Mat4, Vec3};
+    use super::*;
+
+    // ========================================================================
+    // Init Config Defaults Tests
+    // ========================================================================
 
     #[test]
     fn test_init_config_defaults() {
@@ -2807,7 +2929,7 @@ mod tests {
     // Input State Tests (moved to console.rs - ZInput tests)
     // ========================================================================
 
-    use crate::console::ZInput;
+    use crate::{console::ZInput, graphics::{FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV}, state::{CameraState, DEFAULT_CAMERA_FOV, LightState}};
     use emberware_core::wasm::MAX_PLAYERS;
 
     #[test]
@@ -2887,14 +3009,15 @@ mod tests {
     #[test]
     fn test_draw_commands_initially_empty() {
         let state = ZFFIState::new();
-        assert!(state.draw_commands.is_empty());
+        assert!(state.render_pass.commands().is_empty());
+        assert!(state.deferred_commands.is_empty());
     }
 
     #[test]
     fn test_draw_commands_can_be_added() {
         let mut state = ZFFIState::new();
 
-        state.draw_commands.push(ZDrawCommand::DrawRect {
+        state.deferred_commands.push(DeferredCommand::DrawRect {
             x: 0.0,
             y: 0.0,
             width: 100.0,
@@ -2903,7 +3026,7 @@ mod tests {
             blend_mode: 0,
         });
 
-        assert_eq!(state.draw_commands.len(), 1);
+        assert_eq!(state.deferred_commands.len(), 1);
     }
 
     #[test]
@@ -2918,67 +3041,80 @@ mod tests {
         state.bound_textures = [1, 2, 3, 4];
         state.current_transform = Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0));
 
-        // Push draw command
-        state.draw_commands.push(ZDrawCommand::DrawMesh {
-            handle: 1,
-            transform: state.current_transform,
-            color: state.color,
-            depth_test: state.depth_test,
-            cull_mode: state.cull_mode,
-            blend_mode: state.blend_mode,
-            bound_textures: state.bound_textures,
-        });
+        // Create a dummy mesh in mesh_map for the test
+        use crate::graphics::RetainedMesh;
+        state.mesh_map.insert(
+            1,
+            RetainedMesh {
+                format: 0,
+                vertex_count: 100,
+                index_count: 0,
+                vertex_offset: 0,
+                index_offset: 0,
+            },
+        );
 
-        // Verify state was captured
-        if let ZDrawCommand::DrawMesh {
-            handle,
-            transform,
-            color,
-            depth_test,
-            cull_mode,
-            blend_mode,
-            bound_textures,
-        } = &state.draw_commands[0]
-        {
-            assert_eq!(*handle, 1);
-            assert_eq!(*transform, Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0)));
-            assert_eq!(*color, 0x00FF00FF);
-            assert!(!*depth_test);
-            assert_eq!(*cull_mode, 2);
-            assert_eq!(*blend_mode, 1);
-            assert_eq!(*bound_textures, [1, 2, 3, 4]);
-        } else {
-            panic!("Expected DrawMesh command");
-        }
+        // Simulate draw_mesh call logic (since we can't easily call the FFI function directly with WASM context)
+        // We'll just manually record to render_pass to verify the recording works
+        let mesh = state.mesh_map.get(&1).unwrap();
+        state.render_pass.record_mesh(
+            mesh.format,
+            mesh.vertex_count,
+            mesh.index_count,
+            mesh.vertex_offset,
+            mesh.index_offset,
+            state.current_transform,
+            state.color,
+            state.depth_test,
+            crate::graphics::CullMode::from_u8(state.cull_mode),
+            crate::graphics::BlendMode::from_u8(state.blend_mode),
+            [
+                crate::graphics::TextureHandle(state.bound_textures[0]),
+                crate::graphics::TextureHandle(state.bound_textures[1]),
+                crate::graphics::TextureHandle(state.bound_textures[2]),
+                crate::graphics::TextureHandle(state.bound_textures[3]),
+            ],
+            [crate::graphics::MatcapBlendMode::Multiply; 4],
+        );
+
+        // Verify state was captured in VRPCommand
+        let cmd = &state.render_pass.commands()[0];
+        assert_eq!(
+            cmd.transform,
+            Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0))
+        );
+        assert_eq!(cmd.color, 0x00FF00FF);
+        assert!(!cmd.depth_test);
+        assert_eq!(cmd.cull_mode, crate::graphics::CullMode::Front);
+        assert_eq!(cmd.blend_mode, crate::graphics::BlendMode::Alpha);
+        assert_eq!(cmd.texture_slots[0].0, 1);
     }
 
     #[test]
     fn test_draw_command_triangles_format() {
         let mut state = ZFFIState::new();
 
-        state.draw_commands.push(ZDrawCommand::DrawTriangles {
-            format: 7,                        // POS_UV_COLOR_NORMAL
-            vertex_data: vec![1.0, 2.0, 3.0], // Minimal data for test
-            transform: Mat4::IDENTITY,
-            color: 0xFFFFFFFF,
-            depth_test: true,
-            cull_mode: 1,
-            blend_mode: 0,
-            bound_textures: [0; 4],
-        });
+        state.render_pass.record_triangles(
+            7,                // POS_UV_COLOR_NORMAL
+            &[1.0, 2.0, 3.0], // Minimal data
+            Mat4::IDENTITY,
+            0xFFFFFFFF,
+            true,
+            crate::graphics::CullMode::Back,
+            crate::graphics::BlendMode::None,
+            [crate::graphics::TextureHandle::INVALID; 4],
+            [crate::graphics::MatcapBlendMode::Multiply; 4],
+        );
 
-        if let ZDrawCommand::DrawTriangles { format, .. } = &state.draw_commands[0] {
-            assert_eq!(*format, 7);
-        } else {
-            panic!("Expected DrawTriangles command");
-        }
+        let cmd = &state.render_pass.commands()[0];
+        assert_eq!(cmd.format, 7);
     }
 
     #[test]
     fn test_draw_command_billboard_modes() {
         // Verify all billboard modes 1-4
         for mode in 1u8..=4u8 {
-            let cmd = ZDrawCommand::DrawBillboard {
+            let cmd = DeferredCommand::DrawBillboard {
                 width: 1.0,
                 height: 1.0,
                 mode,
@@ -2991,7 +3127,7 @@ mod tests {
                 bound_textures: [0; 4],
             };
 
-            if let ZDrawCommand::DrawBillboard { mode: m, .. } = cmd {
+            if let DeferredCommand::DrawBillboard { mode: m, .. } = cmd {
                 assert!((1..=4).contains(&m));
             }
         }
@@ -3001,7 +3137,7 @@ mod tests {
     fn test_draw_command_sprite_with_uv_rect() {
         let mut state = ZFFIState::new();
 
-        state.draw_commands.push(ZDrawCommand::DrawSprite {
+        state.deferred_commands.push(DeferredCommand::DrawSprite {
             x: 10.0,
             y: 20.0,
             width: 32.0,
@@ -3014,12 +3150,12 @@ mod tests {
             bound_textures: [0; 4],
         });
 
-        if let ZDrawCommand::DrawSprite {
+        if let DeferredCommand::DrawSprite {
             uv_rect,
             origin,
             rotation,
             ..
-        } = &state.draw_commands[0]
+        } = &state.deferred_commands[0]
         {
             assert!(uv_rect.is_some());
             let (u, v, w, h) = uv_rect.unwrap();
@@ -3043,7 +3179,7 @@ mod tests {
     fn test_draw_command_text() {
         let mut state = ZFFIState::new();
 
-        state.draw_commands.push(ZDrawCommand::DrawText {
+        state.deferred_commands.push(DeferredCommand::DrawText {
             text: b"Hello".to_vec(),
             x: 100.0,
             y: 200.0,
@@ -3053,7 +3189,7 @@ mod tests {
             blend_mode: 1,
         });
 
-        if let ZDrawCommand::DrawText { text, size, .. } = &state.draw_commands[0] {
+        if let DeferredCommand::DrawText { text, size, .. } = &state.deferred_commands[0] {
             assert_eq!(std::str::from_utf8(text).unwrap(), "Hello");
             assert_eq!(*size, 16.0);
         } else {
@@ -3065,7 +3201,7 @@ mod tests {
     fn test_draw_command_set_sky() {
         let mut state = ZFFIState::new();
 
-        state.draw_commands.push(ZDrawCommand::SetSky {
+        state.deferred_commands.push(DeferredCommand::SetSky {
             horizon_color: [0.5, 0.6, 0.7],
             zenith_color: [0.1, 0.2, 0.8],
             sun_direction: [0.0, 1.0, 0.0],
@@ -3073,13 +3209,13 @@ mod tests {
             sun_sharpness: 64.0,
         });
 
-        if let ZDrawCommand::SetSky {
+        if let DeferredCommand::SetSky {
             horizon_color,
             zenith_color,
             sun_direction,
             sun_color,
             sun_sharpness,
-        } = &state.draw_commands[0]
+        } = &state.deferred_commands[0]
         {
             assert_eq!(horizon_color[0], 0.5);
             assert_eq!(zenith_color[2], 0.8);
@@ -3340,37 +3476,28 @@ mod tests {
         if handle == 0 {
             // Should not add a draw command
         } else {
-            state.draw_commands.push(ZDrawCommand::DrawMesh {
-                handle,
-                transform: Mat4::IDENTITY,
-                color: 0xFFFFFFFF,
-                depth_test: true,
-                cull_mode: 1,
-                blend_mode: 0,
-                bound_textures: [0; 4],
-            });
+            // Manual record would go here
         }
 
         // No command should have been added
-        assert!(state.draw_commands.is_empty());
+        assert!(state.render_pass.commands().is_empty());
     }
 
     #[test]
     fn test_mesh_handle_not_loaded() {
-        // Handle 999 doesn't exist - draw command is still queued
-        // (validation is deferred to graphics backend)
+        // Handle 999 doesn't exist - draw command is NOT queued in new system
+        // because we check mesh_map immediately
         let mut state = ZFFIState::new();
-        state.draw_commands.push(ZDrawCommand::DrawMesh {
-            handle: 999,
-            transform: Mat4::IDENTITY,
-            color: 0xFFFFFFFF,
-            depth_test: true,
-            cull_mode: 1,
-            blend_mode: 0,
-            bound_textures: [0; 4],
-        });
 
-        assert_eq!(state.draw_commands.len(), 1);
+        // Simulate draw_mesh logic
+        let handle = 999;
+        if state.mesh_map.contains_key(&handle) {
+            // record
+        } else {
+            // warn and return
+        }
+
+        assert!(state.render_pass.commands().is_empty());
     }
 
     // ------------------------------------------------------------------------

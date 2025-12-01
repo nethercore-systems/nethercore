@@ -3,7 +3,7 @@
 //! Handles shader compilation, pipeline caching, and bind group layout creation
 //! for all render mode and vertex format combinations.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 use super::render_state::RenderState;
 use super::vertex::VertexFormatInfo;

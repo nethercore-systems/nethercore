@@ -43,6 +43,7 @@ pub struct VRPCommand {
 ///
 /// Accumulates draw commands and vertex/index data during the frame,
 /// providing everything needed for GPU execution at frame end.
+#[derive(Debug)]
 pub struct VirtualRenderPass {
     /// Draw commands accumulated this frame
     commands: Vec<VRPCommand>,
@@ -200,6 +201,129 @@ impl VirtualRenderPass {
         self.commands.push(cmd);
     }
 
+    /// Record a non-indexed triangle draw (called from FFI)
+    pub fn record_triangles(
+        &mut self,
+        format: u8,
+        vertex_data: &[f32],
+        transform: Mat4,
+        color: u32,
+        depth_test: bool,
+        cull_mode: CullMode,
+        blend_mode: BlendMode,
+        texture_slots: [TextureHandle; 4],
+        matcap_blend_modes: [MatcapBlendMode; 4],
+    ) {
+        let format_idx = format as usize;
+        let stride = vertex_stride(format) as usize;
+        let vertex_count = (vertex_data.len() * 4) / stride;
+        let base_vertex = self.vertex_counts[format_idx];
+
+        // Write directly to buffer (no intermediate Vec)
+        let byte_data = bytemuck::cast_slice(vertex_data);
+        self.vertex_data[format_idx].extend_from_slice(byte_data);
+        self.vertex_counts[format_idx] += vertex_count as u32;
+
+        self.commands.push(VRPCommand {
+            format,
+            transform,
+            vertex_count: vertex_count as u32,
+            index_count: 0,
+            base_vertex,
+            first_index: 0,
+            texture_slots,
+            color,
+            depth_test,
+            cull_mode,
+            blend_mode,
+            matcap_blend_modes,
+        });
+    }
+
+    /// Record an indexed triangle draw (called from FFI)
+    pub fn record_triangles_indexed(
+        &mut self,
+        format: u8,
+        vertex_data: &[f32],
+        index_data: &[u32],
+        transform: Mat4,
+        color: u32,
+        depth_test: bool,
+        cull_mode: CullMode,
+        blend_mode: BlendMode,
+        texture_slots: [TextureHandle; 4],
+        matcap_blend_modes: [MatcapBlendMode; 4],
+    ) {
+        let format_idx = format as usize;
+        let stride = vertex_stride(format) as usize;
+        let vertex_count = (vertex_data.len() * 4) / stride;
+        let base_vertex = self.vertex_counts[format_idx];
+        let first_index = self.index_counts[format_idx];
+
+        // Write directly to buffers
+        let byte_data = bytemuck::cast_slice(vertex_data);
+        self.vertex_data[format_idx].extend_from_slice(byte_data);
+        self.vertex_counts[format_idx] += vertex_count as u32;
+
+        self.index_data[format_idx].extend_from_slice(index_data);
+        self.index_counts[format_idx] += index_data.len() as u32;
+
+        self.commands.push(VRPCommand {
+            format,
+            transform,
+            vertex_count: vertex_count as u32,
+            index_count: index_data.len() as u32,
+            base_vertex,
+            first_index,
+            texture_slots,
+            color,
+            depth_test,
+            cull_mode,
+            blend_mode,
+            matcap_blend_modes,
+        });
+    }
+
+    /// Record a mesh draw (called from FFI)
+    pub fn record_mesh(
+        &mut self,
+        mesh_format: u8,
+        mesh_vertex_count: u32,
+        mesh_index_count: u32,
+        mesh_vertex_offset: u64,
+        mesh_index_offset: u64,
+        transform: Mat4,
+        color: u32,
+        depth_test: bool,
+        cull_mode: CullMode,
+        blend_mode: BlendMode,
+        texture_slots: [TextureHandle; 4],
+        matcap_blend_modes: [MatcapBlendMode; 4],
+    ) {
+        let stride = vertex_stride(mesh_format) as u64;
+        let base_vertex = (mesh_vertex_offset / stride) as u32;
+        let first_index = if mesh_index_count > 0 {
+            (mesh_index_offset / 4) as u32
+        } else {
+            0
+        };
+
+        self.commands.push(VRPCommand {
+            format: mesh_format,
+            transform,
+            vertex_count: mesh_vertex_count,
+            index_count: mesh_index_count,
+            base_vertex,
+            first_index,
+            texture_slots,
+            color,
+            depth_test,
+            cull_mode,
+            blend_mode,
+            matcap_blend_modes,
+        });
+    }
+
     /// Get vertex data for a format
     pub fn vertex_data(&self, format: u8) -> &[u8] {
         &self.vertex_data[format as usize]
@@ -238,7 +362,7 @@ mod tests {
 
     #[test]
     fn test_command_buffer_new() {
-        let cb = CommandBuffer::new();
+        let cb = VirtualRenderPass::new();
         assert!(cb.commands().is_empty());
         for i in 0..VERTEX_FORMAT_COUNT {
             assert!(cb.vertex_data(i as u8).is_empty());
@@ -248,7 +372,7 @@ mod tests {
 
     #[test]
     fn test_command_buffer_add_vertices() {
-        let mut cb = CommandBuffer::new();
+        let mut cb = VirtualRenderPass::new();
         let state = RenderState::default();
 
         let vertices = [
@@ -266,7 +390,7 @@ mod tests {
 
     #[test]
     fn test_command_buffer_add_vertices_indexed() {
-        let mut cb = CommandBuffer::new();
+        let mut cb = VirtualRenderPass::new();
         let state = RenderState::default();
 
         let vertices = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0];
@@ -284,7 +408,7 @@ mod tests {
 
     #[test]
     fn test_command_buffer_reset() {
-        let mut cb = CommandBuffer::new();
+        let mut cb = VirtualRenderPass::new();
         let state = RenderState::default();
 
         let vertices = [0.0f32, 0.0, 0.0, 1.0, 0.0, 0.0, 0.5, 1.0, 0.0];
@@ -300,7 +424,7 @@ mod tests {
 
     #[test]
     fn test_command_buffer_multiple_batches() {
-        let mut cb = CommandBuffer::new();
+        let mut cb = VirtualRenderPass::new();
         let state = RenderState::default();
 
         let v1 = [0.0f32, 0.0, 0.0, 1.0, 0.0, 0.0, 0.5, 1.0, 0.0];
@@ -364,7 +488,7 @@ mod tests {
 
     #[test]
     fn test_draw_command_captures_texture_slots() {
-        let mut cb = CommandBuffer::new();
+        let mut cb = VirtualRenderPass::new();
         let mut state = RenderState::default();
 
         state.texture_slots[0] = TextureHandle(10);
@@ -380,7 +504,7 @@ mod tests {
 
     #[test]
     fn test_draw_commands_capture_render_state() {
-        let mut cb = CommandBuffer::new();
+        let mut cb = VirtualRenderPass::new();
         let vertices = [0.0f32, 0.0, 0.0, 1.0, 0.0, 0.0, 0.5, 1.0, 0.0];
 
         let state1 = RenderState::default();
@@ -408,7 +532,7 @@ mod tests {
 
     #[test]
     fn test_command_buffer_different_formats() {
-        let mut cb = CommandBuffer::new();
+        let mut cb = VirtualRenderPass::new();
         let state = RenderState::default();
 
         let v_pos = [0.0f32, 0.0, 0.0, 1.0, 0.0, 0.0, 0.5, 1.0, 0.0];
@@ -426,7 +550,7 @@ mod tests {
 
     #[test]
     fn test_command_buffer_transform_capture() {
-        let mut cb = CommandBuffer::new();
+        let mut cb = VirtualRenderPass::new();
         let state = RenderState::default();
         let vertices = [0.0f32, 0.0, 0.0, 1.0, 0.0, 0.0, 0.5, 1.0, 0.0];
 
@@ -442,7 +566,7 @@ mod tests {
 
     #[test]
     fn test_command_buffer_large_batch() {
-        let mut cb = CommandBuffer::new();
+        let mut cb = VirtualRenderPass::new();
         let state = RenderState::default();
 
         let triangle = [0.0f32, 0.0, 0.0, 1.0, 0.0, 0.0, 0.5, 1.0, 0.0];
@@ -458,7 +582,7 @@ mod tests {
 
     #[test]
     fn test_command_buffer_skinned_vertices() {
-        let mut cb = CommandBuffer::new();
+        let mut cb = VirtualRenderPass::new();
         let state = RenderState::default();
 
         let vertices = [

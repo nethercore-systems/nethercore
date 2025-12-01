@@ -69,7 +69,7 @@ mod render_state;
 mod texture_manager;
 mod vertex;
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -81,14 +81,13 @@ use emberware_core::console::Graphics;
 
 // Re-export public types from submodules
 pub use buffer::{BufferManager, GrowableBuffer, MeshHandle, RetainedMesh};
-pub use command_buffer::{VRPCommand, VirtualRenderPass};
+pub use command_buffer::VirtualRenderPass;
 pub use render_state::{
     BlendMode, CameraUniforms, CullMode, LightUniform, LightsUniforms, MatcapBlendMode,
     MaterialUniforms, RenderState, SkyUniforms, TextureFilter, TextureHandle,
 };
 pub use vertex::{
-    vertex_stride, VertexFormatInfo, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV,
-    VERTEX_FORMAT_COUNT,
+    vertex_stride, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV, VERTEX_FORMAT_COUNT,
 };
 
 // Re-export for crate-internal use
@@ -270,7 +269,7 @@ impl ZGraphics {
             present_mode: wgpu::PresentMode::AutoVsync,
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
-            desired_maximum_frame_latency: 2,
+            desired_maximum_frame_latency: 1,
         };
         surface.configure(&device, &config);
 
@@ -857,13 +856,21 @@ impl ZGraphics {
     ///
     /// This replaces the previous execute_draw_commands() function in app.rs,
     /// eliminating redundant data translation and simplifying the architecture.
+    /// Process all draw commands from ZFFIState and execute them
+    ///
+    /// This method consumes draw commands from the ZFFIState and executes them
+    /// on the GPU, directly translating FFI state into graphics calls without
+    /// an intermediate unpacking/repacking step.
+    ///
+    /// This replaces the previous execute_draw_commands() function in app.rs,
+    /// eliminating redundant data translation and simplifying the architecture.
     pub fn process_draw_commands(
         &mut self,
         z_state: &mut crate::state::ZFFIState,
-        texture_map: &std::collections::HashMap<u32, TextureHandle>,
-        mesh_map: &std::collections::HashMap<u32, MeshHandle>,
+        texture_map: &hashbrown::HashMap<u32, TextureHandle>,
+        _mesh_map: &hashbrown::HashMap<u32, MeshHandle>,
     ) {
-        use crate::state::ZDrawCommand;
+        use crate::state::DeferredCommand;
 
         // Apply init config to graphics (render mode, etc.)
         self.set_render_mode(z_state.init_config.render_mode);
@@ -880,157 +887,17 @@ impl ZGraphics {
             Self::convert_matcap_blend_mode(z_state.matcap_blend_modes[3]),
         ];
 
-        // Process all draw commands by directly converting to internal DrawCommand
-        for cmd in z_state.draw_commands.drain(..) {
+        // 1. Swap the FFI-populated render pass into our command buffer
+        // This efficiently transfers all immediate geometry (triangles, meshes)
+        // without copying vectors. The old command buffer (now in z_state.render_pass)
+        // will be cleared when z_state.clear_frame() is called.
+        std::mem::swap(&mut self.command_buffer, &mut z_state.render_pass);
+
+        // 2. Process deferred commands (billboards, sprites, text, sky)
+        // These require additional processing or generation of geometry
+        for cmd in z_state.deferred_commands.drain(..) {
             match cmd {
-                ZDrawCommand::DrawTriangles {
-                    format,
-                    vertex_data,
-                    transform,
-                    color,
-                    depth_test,
-                    cull_mode,
-                    blend_mode,
-                    bound_textures,
-                } => {
-                    // Validate format
-                    if format as usize >= VERTEX_FORMAT_COUNT {
-                        tracing::warn!("Invalid vertex format for draw_triangles: {}", format);
-                        continue;
-                    }
-
-                    // Map game texture handles to graphics texture handles
-                    let texture_slots = Self::map_texture_handles(texture_map, &bound_textures);
-
-                    // Calculate vertex count
-                    let stride = vertex_stride(format) as usize;
-                    let vertex_count = (vertex_data.len() * 4) / stride;
-
-                    // Append vertex data and get base_vertex
-                    let base_vertex = self.command_buffer.append_vertex_data(format, &vertex_data);
-
-                    // Add draw command directly
-                    self.command_buffer.add_command(command_buffer::VRPCommand {
-                        format,
-                        transform,
-                        vertex_count: vertex_count as u32,
-                        index_count: 0,
-                        base_vertex,
-                        first_index: 0,
-                        texture_slots,
-                        color,
-                        depth_test,
-                        cull_mode: Self::convert_cull_mode(cull_mode),
-                        blend_mode: Self::convert_blend_mode(blend_mode),
-                        matcap_blend_modes,
-                    });
-                }
-                ZDrawCommand::DrawTrianglesIndexed {
-                    format,
-                    vertex_data,
-                    index_data,
-                    transform,
-                    color,
-                    depth_test,
-                    cull_mode,
-                    blend_mode,
-                    bound_textures,
-                } => {
-                    // Validate format
-                    if format as usize >= VERTEX_FORMAT_COUNT {
-                        tracing::warn!(
-                            "Invalid vertex format for draw_triangles_indexed: {}",
-                            format
-                        );
-                        continue;
-                    }
-
-                    // Map game texture handles to graphics texture handles
-                    let texture_slots = Self::map_texture_handles(texture_map, &bound_textures);
-
-                    // Calculate vertex count
-                    let stride = vertex_stride(format) as usize;
-                    let vertex_count = (vertex_data.len() * 4) / stride;
-
-                    // Append vertex and index data
-                    let base_vertex = self.command_buffer.append_vertex_data(format, &vertex_data);
-                    let first_index = self.command_buffer.append_index_data(format, &index_data);
-
-                    // Add draw command directly
-                    self.command_buffer.add_command(command_buffer::VRPCommand {
-                        format,
-                        transform,
-                        vertex_count: vertex_count as u32,
-                        index_count: index_data.len() as u32,
-                        base_vertex,
-                        first_index,
-                        texture_slots,
-                        color,
-                        depth_test,
-                        cull_mode: Self::convert_cull_mode(cull_mode),
-                        blend_mode: Self::convert_blend_mode(blend_mode),
-                        matcap_blend_modes,
-                    });
-                }
-                ZDrawCommand::DrawMesh {
-                    handle,
-                    transform,
-                    color,
-                    depth_test,
-                    cull_mode,
-                    blend_mode,
-                    bound_textures,
-                } => {
-                    // Look up mesh handle
-                    if let Some(&mesh_handle) = mesh_map.get(&handle) {
-                        if let Some(mesh) = self.get_mesh(mesh_handle) {
-                            // Draw the retained mesh
-                            tracing::trace!(
-                                "Drawing mesh handle {} ({} vertices)",
-                                handle,
-                                mesh.vertex_count
-                            );
-
-                            // Validate format
-                            if mesh.format as usize >= VERTEX_FORMAT_COUNT {
-                                tracing::warn!("Invalid vertex format for mesh: {}", mesh.format);
-                                continue;
-                            }
-
-                            // Map game texture handles to graphics texture handles
-                            let texture_slots =
-                                Self::map_texture_handles(texture_map, &bound_textures);
-
-                            // Convert byte offsets to vertex/index counts
-                            let stride = vertex_stride(mesh.format) as u64;
-                            let base_vertex = (mesh.vertex_offset / stride) as u32;
-                            let first_index = if mesh.index_count > 0 {
-                                (mesh.index_offset / 4) as u32 // u32 indices are 4 bytes each
-                            } else {
-                                0
-                            };
-
-                            // Add draw command for the retained mesh
-                            self.command_buffer.add_command(command_buffer::VRPCommand {
-                                format: mesh.format,
-                                transform,
-                                vertex_count: mesh.vertex_count,
-                                index_count: mesh.index_count,
-                                base_vertex,
-                                first_index,
-                                texture_slots,
-                                color,
-                                depth_test,
-                                cull_mode: Self::convert_cull_mode(cull_mode),
-                                blend_mode: Self::convert_blend_mode(blend_mode),
-                                matcap_blend_modes,
-                            });
-                        }
-                    } else {
-                        tracing::warn!("Mesh handle {} not found", handle);
-                    }
-                }
-                ZDrawCommand::DrawBillboard {
+                DeferredCommand::DrawBillboard {
                     width,
                     height,
                     mode,
@@ -1155,7 +1022,7 @@ impl ZGraphics {
                         matcap_blend_modes,
                     });
                 }
-                ZDrawCommand::DrawSprite {
+                DeferredCommand::DrawSprite {
                     x,
                     y,
                     width,
@@ -1220,24 +1087,18 @@ impl ZGraphics {
 
                         vec![
                             // Top-left
-                            rx0, ry0, 0.0, u0, v0, r, g, b,
-                            // Top-right
-                            rx1, ry1, 0.0, u1, v0, r, g, b,
-                            // Bottom-right
-                            rx2, ry2, 0.0, u1, v1, r, g, b,
-                            // Bottom-left
+                            rx0, ry0, 0.0, u0, v0, r, g, b, // Top-right
+                            rx1, ry1, 0.0, u1, v0, r, g, b, // Bottom-right
+                            rx2, ry2, 0.0, u1, v1, r, g, b, // Bottom-left
                             rx3, ry3, 0.0, u0, v1, r, g, b,
                         ]
                     } else {
                         // No rotation - simple quad
                         vec![
                             // Top-left
-                            x0, y0, 0.0, u0, v0, r, g, b,
-                            // Top-right
-                            x1, y0, 0.0, u1, v0, r, g, b,
-                            // Bottom-right
-                            x1, y1, 0.0, u1, v1, r, g, b,
-                            // Bottom-left
+                            x0, y0, 0.0, u0, v0, r, g, b, // Top-right
+                            x1, y0, 0.0, u1, v0, r, g, b, // Bottom-right
+                            x1, y1, 0.0, u1, v1, r, g, b, // Bottom-left
                             x0, y1, 0.0, u0, v1, r, g, b,
                         ]
                     };
@@ -1249,8 +1110,12 @@ impl ZGraphics {
                     const SPRITE_FORMAT: u8 = 3;
 
                     // Append vertex and index data
-                    let base_vertex = self.command_buffer.append_vertex_data(SPRITE_FORMAT, &vertices);
-                    let first_index = self.command_buffer.append_index_data(SPRITE_FORMAT, &indices);
+                    let base_vertex = self
+                        .command_buffer
+                        .append_vertex_data(SPRITE_FORMAT, &vertices);
+                    let first_index = self
+                        .command_buffer
+                        .append_index_data(SPRITE_FORMAT, &indices);
 
                     // Add draw command with identity transform (screen space)
                     self.command_buffer.add_command(command_buffer::VRPCommand {
@@ -1262,13 +1127,13 @@ impl ZGraphics {
                         first_index,
                         texture_slots,
                         color: 0xFFFFFFFF, // Color already in vertices
-                        depth_test: false,  // 2D sprites don't use depth test
+                        depth_test: false, // 2D sprites don't use depth test
                         cull_mode: CullMode::None,
                         blend_mode: Self::convert_blend_mode(blend_mode),
                         matcap_blend_modes,
                     });
                 }
-                ZDrawCommand::DrawRect {
+                DeferredCommand::DrawRect {
                     x,
                     y,
                     width,
@@ -1316,7 +1181,9 @@ impl ZGraphics {
                     const RECT_FORMAT: u8 = 2;
 
                     // Append vertex and index data
-                    let base_vertex = self.command_buffer.append_vertex_data(RECT_FORMAT, &vertices);
+                    let base_vertex = self
+                        .command_buffer
+                        .append_vertex_data(RECT_FORMAT, &vertices);
                     let first_index = self.command_buffer.append_index_data(RECT_FORMAT, &indices);
 
                     // Add draw command with identity transform (screen space)
@@ -1329,13 +1196,13 @@ impl ZGraphics {
                         first_index,
                         texture_slots: [TextureHandle::INVALID; 4],
                         color: 0xFFFFFFFF, // Color already in vertices
-                        depth_test: false,  // 2D rectangles don't use depth test
+                        depth_test: false, // 2D rectangles don't use depth test
                         cull_mode: CullMode::None,
                         blend_mode: Self::convert_blend_mode(blend_mode),
                         matcap_blend_modes,
                     });
                 }
-                ZDrawCommand::DrawText {
+                DeferredCommand::DrawText {
                     text,
                     x,
                     y,
@@ -1390,7 +1257,9 @@ impl ZGraphics {
                     const TEXT_FORMAT: u8 = 3; // FORMAT_UV | FORMAT_COLOR
 
                     // Append vertex and index data
-                    let base_vertex = self.command_buffer.append_vertex_data(TEXT_FORMAT, &vertices);
+                    let base_vertex = self
+                        .command_buffer
+                        .append_vertex_data(TEXT_FORMAT, &vertices);
                     let first_index = self.command_buffer.append_index_data(TEXT_FORMAT, &indices);
 
                     // Create texture slots with font texture in slot 0
@@ -1414,7 +1283,7 @@ impl ZGraphics {
                         matcap_blend_modes,
                     });
                 }
-                ZDrawCommand::SetSky {
+                DeferredCommand::SetSky {
                     horizon_color,
                     zenith_color,
                     sun_direction,
@@ -1448,7 +1317,7 @@ impl ZGraphics {
 
     /// Map game texture handles to graphics texture handles
     fn map_texture_handles(
-        texture_map: &std::collections::HashMap<u32, TextureHandle>,
+        texture_map: &hashbrown::HashMap<u32, TextureHandle>,
         bound_textures: &[u32; 4],
     ) -> [TextureHandle; 4] {
         let mut texture_slots = [TextureHandle::INVALID; 4];
@@ -1647,8 +1516,7 @@ impl ZGraphics {
                 .unwrap_or(custom_font.char_width);
 
             let atlas_width = glyphs_per_row * max_glyph_width as usize;
-            let atlas_height = (custom_font.char_count as usize)
-                .div_ceil(glyphs_per_row)
+            let atlas_height = (custom_font.char_count as usize).div_ceil(glyphs_per_row)
                 * custom_font.char_height as usize;
 
             for ch in text.chars() {
@@ -1677,11 +1545,10 @@ impl ZGraphics {
 
                 let u0 = (col * max_glyph_width as usize) as f32 / atlas_width as f32;
                 let v0 = (row * custom_font.char_height as usize) as f32 / atlas_height as f32;
-                let u1 =
-                    ((col * max_glyph_width as usize) + glyph_width_px as usize) as f32
-                        / atlas_width as f32;
-                let v1 = ((row + 1) * custom_font.char_height as usize) as f32
-                    / atlas_height as f32;
+                let u1 = ((col * max_glyph_width as usize) + glyph_width_px as usize) as f32
+                    / atlas_width as f32;
+                let v1 =
+                    ((row + 1) * custom_font.char_height as usize) as f32 / atlas_height as f32;
 
                 // Screen-space quad vertices (2D)
                 // Format: POS_UV_COLOR (format 3)
@@ -1950,7 +1817,10 @@ impl ZGraphics {
 
                 // Get/create pipeline (using contains + get pattern to avoid borrow issues)
                 let pipeline_key = PipelineKey::new(self.current_render_mode, cmd.format, &state);
-                if !self.pipeline_cache.contains(self.current_render_mode, cmd.format, &state) {
+                if !self
+                    .pipeline_cache
+                    .contains(self.current_render_mode, cmd.format, &state)
+                {
                     // Create and insert pipeline if it doesn't exist
                     self.pipeline_cache.get_or_create(
                         &self.device,
@@ -1961,7 +1831,10 @@ impl ZGraphics {
                     );
                 }
                 // Safe to unwrap since we just ensured it exists
-                let pipeline_entry = self.pipeline_cache.get(self.current_render_mode, cmd.format, &state).unwrap();
+                let pipeline_entry = self
+                    .pipeline_cache
+                    .get(self.current_render_mode, cmd.format, &state)
+                    .unwrap();
 
                 // Get or create material uniform buffer (cached by color + properties + blend modes)
                 let material_key = MaterialCacheKey::new(
@@ -1998,106 +1871,109 @@ impl ZGraphics {
 
                 // Get or create frame bind group (group 0) - CACHED by material buffer
                 // Uses material buffer pointer address as cache key to avoid recreating bind groups
-                let material_buffer_addr = material_buffer.as_entire_buffer_binding().buffer as *const _ as u64;
-                let frame_bind_group = frame_bind_groups.entry(material_buffer_addr).or_insert_with(|| {
-                    match self.current_render_mode {
-                    0 | 1 => {
-                        // Mode 0 (Unlit) and Mode 1 (Matcap): Basic bindings
-                        self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                            label: Some("Frame Bind Group"),
-                            layout: &pipeline_entry.bind_group_layout_frame,
-                            entries: &[
-                                wgpu::BindGroupEntry {
-                                    binding: 0,
-                                    resource: self.view_buffer.as_entire_binding(),
-                                },
-                                wgpu::BindGroupEntry {
-                                    binding: 1,
-                                    resource: self.proj_buffer.as_entire_binding(),
-                                },
-                                wgpu::BindGroupEntry {
-                                    binding: 2,
-                                    resource: self.sky_buffer.as_entire_binding(),
-                                },
-                                wgpu::BindGroupEntry {
-                                    binding: 3,
-                                    resource: material_buffer.as_entire_binding(),
-                                },
-                                wgpu::BindGroupEntry {
-                                    binding: 4,
-                                    resource: self.bone_buffer.as_entire_binding(),
-                                },
-                            ],
-                        })
-                    }
-                    2 | 3 => {
-                        // Mode 2 (PBR) and Mode 3 (Hybrid): Additional lighting uniforms
-                        self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                            label: Some("Frame Bind Group"),
-                            layout: &pipeline_entry.bind_group_layout_frame,
-                            entries: &[
-                                wgpu::BindGroupEntry {
-                                    binding: 0,
-                                    resource: self.view_buffer.as_entire_binding(),
-                                },
-                                wgpu::BindGroupEntry {
-                                    binding: 1,
-                                    resource: self.proj_buffer.as_entire_binding(),
-                                },
-                                wgpu::BindGroupEntry {
-                                    binding: 2,
-                                    resource: self.sky_buffer.as_entire_binding(),
-                                },
-                                wgpu::BindGroupEntry {
-                                    binding: 3,
-                                    resource: material_buffer.as_entire_binding(),
-                                },
-                                wgpu::BindGroupEntry {
-                                    binding: 4,
-                                    resource: self.lights_buffer.as_entire_binding(),
-                                },
-                                wgpu::BindGroupEntry {
-                                    binding: 5,
-                                    resource: self.camera_buffer.as_entire_binding(),
-                                },
-                                wgpu::BindGroupEntry {
-                                    binding: 6,
-                                    resource: self.bone_buffer.as_entire_binding(),
-                                },
-                            ],
-                        })
-                    }
-                    _ => {
-                        // Fallback - same as mode 0/1
-                        self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                            label: Some("Frame Bind Group"),
-                            layout: &pipeline_entry.bind_group_layout_frame,
-                            entries: &[
-                                wgpu::BindGroupEntry {
-                                    binding: 0,
-                                    resource: self.view_buffer.as_entire_binding(),
-                                },
-                                wgpu::BindGroupEntry {
-                                    binding: 1,
-                                    resource: self.proj_buffer.as_entire_binding(),
-                                },
-                                wgpu::BindGroupEntry {
-                                    binding: 2,
-                                    resource: self.sky_buffer.as_entire_binding(),
-                                },
-                                wgpu::BindGroupEntry {
-                                    binding: 3,
-                                    resource: material_buffer.as_entire_binding(),
-                                },
-                                wgpu::BindGroupEntry {
-                                    binding: 4,
-                                    resource: self.bone_buffer.as_entire_binding(),
-                                },
-                            ],
-                        })
-                    }
-                }
-                });
+                let material_buffer_addr =
+                    material_buffer.as_entire_buffer_binding().buffer as *const _ as u64;
+                let frame_bind_group = frame_bind_groups
+                    .entry(material_buffer_addr)
+                    .or_insert_with(|| {
+                        match self.current_render_mode {
+                            0 | 1 => {
+                                // Mode 0 (Unlit) and Mode 1 (Matcap): Basic bindings
+                                self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                                    label: Some("Frame Bind Group"),
+                                    layout: &pipeline_entry.bind_group_layout_frame,
+                                    entries: &[
+                                        wgpu::BindGroupEntry {
+                                            binding: 0,
+                                            resource: self.view_buffer.as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 1,
+                                            resource: self.proj_buffer.as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 2,
+                                            resource: self.sky_buffer.as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 3,
+                                            resource: material_buffer.as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 4,
+                                            resource: self.bone_buffer.as_entire_binding(),
+                                        },
+                                    ],
+                                })
+                            }
+                            2 | 3 => {
+                                // Mode 2 (PBR) and Mode 3 (Hybrid): Additional lighting uniforms
+                                self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                                    label: Some("Frame Bind Group"),
+                                    layout: &pipeline_entry.bind_group_layout_frame,
+                                    entries: &[
+                                        wgpu::BindGroupEntry {
+                                            binding: 0,
+                                            resource: self.view_buffer.as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 1,
+                                            resource: self.proj_buffer.as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 2,
+                                            resource: self.sky_buffer.as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 3,
+                                            resource: material_buffer.as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 4,
+                                            resource: self.lights_buffer.as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 5,
+                                            resource: self.camera_buffer.as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 6,
+                                            resource: self.bone_buffer.as_entire_binding(),
+                                        },
+                                    ],
+                                })
+                            }
+                            _ => {
+                                // Fallback - same as mode 0/1
+                                self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                                    label: Some("Frame Bind Group"),
+                                    layout: &pipeline_entry.bind_group_layout_frame,
+                                    entries: &[
+                                        wgpu::BindGroupEntry {
+                                            binding: 0,
+                                            resource: self.view_buffer.as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 1,
+                                            resource: self.proj_buffer.as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 2,
+                                            resource: self.sky_buffer.as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 3,
+                                            resource: material_buffer.as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 4,
+                                            resource: self.bone_buffer.as_entire_binding(),
+                                        },
+                                    ],
+                                })
+                            }
+                        }
+                    });
 
                 // Get or create texture bind group (cached by texture slots)
                 let texture_bind_group = texture_bind_groups
@@ -2303,14 +2179,16 @@ mod tests {
 
     #[test]
     fn test_generate_text_quads_empty() {
-        let (vertices, indices) = ZGraphics::generate_text_quads("", 0.0, 0.0, 16.0, 0xFFFFFFFF, None);
+        let (vertices, indices) =
+            ZGraphics::generate_text_quads("", 0.0, 0.0, 16.0, 0xFFFFFFFF, None);
         assert!(vertices.is_empty());
         assert!(indices.is_empty());
     }
 
     #[test]
     fn test_generate_text_quads_single_char() {
-        let (vertices, indices) = ZGraphics::generate_text_quads("A", 0.0, 0.0, 16.0, 0xFFFFFFFF, None);
+        let (vertices, indices) =
+            ZGraphics::generate_text_quads("A", 0.0, 0.0, 16.0, 0xFFFFFFFF, None);
         assert_eq!(vertices.len(), 32);
         assert_eq!(indices.len(), 6);
     }
@@ -2333,7 +2211,8 @@ mod tests {
 
     #[test]
     fn test_generate_text_quads_position() {
-        let (vertices, _) = ZGraphics::generate_text_quads("A", 100.0, 50.0, 16.0, 0xFFFFFFFF, None);
+        let (vertices, _) =
+            ZGraphics::generate_text_quads("A", 100.0, 50.0, 16.0, 0xFFFFFFFF, None);
         assert!((vertices[0] - 100.0).abs() < 0.01);
         assert!((vertices[1] - 50.0).abs() < 0.01);
         assert!((vertices[2] - 0.0).abs() < 0.01);

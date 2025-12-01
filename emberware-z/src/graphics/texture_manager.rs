@@ -2,7 +2,7 @@
 //!
 //! Handles texture loading, VRAM tracking, and fallback textures.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 use anyhow::Result;
 use wgpu::util::DeviceExt;
@@ -89,7 +89,9 @@ impl TextureManager {
         }
         self.fallback_checkerboard = self
             .load_texture_internal(device, queue, 8, 8, &checkerboard_data, false)
-            .map_err(|e| anyhow::anyhow!("Failed to create checkerboard fallback texture: {}", e))?;
+            .map_err(|e| {
+                anyhow::anyhow!("Failed to create checkerboard fallback texture: {}", e)
+            })?;
 
         // 1x1 white texture for untextured draws
         let white_data = [255u8, 255, 255, 255];

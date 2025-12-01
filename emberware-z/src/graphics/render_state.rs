@@ -37,6 +37,15 @@ impl CullMode {
         }
     }
 
+    pub fn from_u8(value: u8) -> Self {
+        match value {
+            0 => CullMode::None,
+            1 => CullMode::Back,
+            2 => CullMode::Front,
+            _ => CullMode::None,
+        }
+    }
+
     pub fn to_wgpu(self) -> Option<wgpu::Face> {
         match self {
             CullMode::None => None,
@@ -63,6 +72,16 @@ pub enum BlendMode {
 
 impl BlendMode {
     pub fn from_u32(value: u32) -> Self {
+        match value {
+            0 => BlendMode::None,
+            1 => BlendMode::Alpha,
+            2 => BlendMode::Additive,
+            3 => BlendMode::Multiply,
+            _ => BlendMode::None,
+        }
+    }
+
+    pub fn from_u8(value: u8) -> Self {
         match value {
             0 => BlendMode::None,
             1 => BlendMode::Alpha,
@@ -117,6 +136,14 @@ pub enum TextureFilter {
 
 impl TextureFilter {
     pub fn from_u32(value: u32) -> Self {
+        match value {
+            0 => TextureFilter::Nearest,
+            1 => TextureFilter::Linear,
+            _ => TextureFilter::Nearest,
+        }
+    }
+
+    pub fn from_u8(value: u8) -> Self {
         match value {
             0 => TextureFilter::Nearest,
             1 => TextureFilter::Linear,
@@ -274,6 +301,15 @@ impl MatcapBlendMode {
             1 => Some(MatcapBlendMode::Add),
             2 => Some(MatcapBlendMode::HsvModulate),
             _ => None,
+        }
+    }
+
+    pub fn from_u8(value: u8) -> Self {
+        match value {
+            0 => MatcapBlendMode::Multiply,
+            1 => MatcapBlendMode::Add,
+            2 => MatcapBlendMode::HsvModulate,
+            _ => MatcapBlendMode::Multiply,
         }
     }
 }

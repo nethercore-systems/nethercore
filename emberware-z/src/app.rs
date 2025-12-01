@@ -80,9 +80,9 @@ pub struct GameSession {
     /// The runtime managing game execution
     pub runtime: Runtime<EmberwareZ>,
     /// Mapping from game texture handles to graphics texture handles
-    texture_map: std::collections::HashMap<u32, TextureHandle>,
+    texture_map: hashbrown::HashMap<u32, TextureHandle>,
     /// Mapping from game mesh handles to graphics mesh handles
-    mesh_map: std::collections::HashMap<u32, crate::graphics::MeshHandle>,
+    mesh_map: hashbrown::HashMap<u32, crate::graphics::MeshHandle>,
 }
 
 /// Application state
@@ -233,6 +233,14 @@ impl App {
             match result {
                 Ok(handle) => {
                     session.mesh_map.insert(pending.handle, handle);
+
+                    // Also store RetainedMesh metadata in z_state.mesh_map for FFI access
+                    if let Some(retained_mesh) = graphics.get_mesh(handle) {
+                        z_state
+                            .mesh_map
+                            .insert(pending.handle, retained_mesh.clone());
+                    }
+
                     tracing::debug!(
                         "Loaded mesh: game_handle={} -> graphics_handle={:?}",
                         pending.handle,
@@ -527,8 +535,8 @@ impl App {
         // Store the session with empty resource maps
         self.game_session = Some(GameSession {
             runtime,
-            texture_map: std::collections::HashMap::new(),
-            mesh_map: std::collections::HashMap::new(),
+            texture_map: hashbrown::HashMap::new(),
+            mesh_map: hashbrown::HashMap::new(),
         });
 
         tracing::info!("Game started: {}", game_id);
@@ -998,11 +1006,22 @@ impl App {
             pixels_per_point: window.scale_factor() as f32,
         };
 
-        // Create render pass and render egui
+        // Update egui buffers (allocate vertex/index buffers for this frame)
+        for mesh in &tris {
+            egui_renderer.update_buffers(
+                graphics.device(),
+                graphics.queue(),
+                &mut encoder,
+                &[mesh.clone()],
+                &screen_descriptor,
+            );
+        }
+
+        // Create render pass and render egui (only if there are triangles to render)
         // When in Playing mode, use Load to preserve game rendering.
         // Otherwise, clear with a dark background color.
         let is_playing = matches!(mode, AppMode::Playing { .. });
-        {
+        if !tris.is_empty() {
             let load_op = if is_playing {
                 wgpu::LoadOp::Load
             } else {
@@ -1035,6 +1054,27 @@ impl App {
             let mut render_pass_static = render_pass.forget_lifetime();
 
             egui_renderer.render(&mut render_pass_static, &tris, &screen_descriptor);
+        } else if !is_playing {
+            // If no egui content but not in playing mode, we still need to clear the screen
+            let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Clear Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.1,
+                            g: 0.1,
+                            b: 0.1,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
         }
 
         // Submit commands
@@ -1071,7 +1111,7 @@ impl ApplicationHandler for App {
         // Create window
         let window_attributes = Window::default_attributes()
             .with_title("Emberware Z")
-            .with_inner_size(winit::dpi::LogicalSize::new(1920, 1080));
+            .with_inner_size(winit::dpi::LogicalSize::new(1280, 720));
 
         let window = match event_loop.create_window(window_attributes) {
             Ok(w) => Arc::new(w),
