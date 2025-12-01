@@ -111,6 +111,42 @@ struct TextureEntry {
     size_bytes: usize,
 }
 
+/// Material cache key for deduplicating material uniform buffers
+///
+/// Combines all material properties that affect the uniform buffer contents.
+/// Used as HashMap key to avoid creating duplicate buffers for identical materials.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct MaterialCacheKey {
+    color: u32,
+    metallic_bits: u32,
+    roughness_bits: u32,
+    emissive_bits: u32,
+    matcap_blend_modes: [u32; 4],
+}
+
+impl MaterialCacheKey {
+    fn new(
+        color: u32,
+        metallic: f32,
+        roughness: f32,
+        emissive: f32,
+        matcap_blend_modes: [MatcapBlendMode; 4],
+    ) -> Self {
+        Self {
+            color,
+            metallic_bits: metallic.to_bits(),
+            roughness_bits: roughness.to_bits(),
+            emissive_bits: emissive.to_bits(),
+            matcap_blend_modes: [
+                matcap_blend_modes[0] as u32,
+                matcap_blend_modes[1] as u32,
+                matcap_blend_modes[2] as u32,
+                matcap_blend_modes[3] as u32,
+            ],
+        }
+    }
+}
+
 /// Emberware Z graphics backend
 ///
 /// Manages wgpu device, textures, render state, and frame presentation.
@@ -164,6 +200,15 @@ pub struct ZGraphics {
 
     // Bone system (GPU skinning)
     bone_buffer: wgpu::Buffer,
+
+    // Frame-level uniform buffers (reused every frame)
+    view_buffer: wgpu::Buffer,
+    proj_buffer: wgpu::Buffer,
+
+    // Bind group caches (cleared and repopulated each frame)
+    material_buffers: HashMap<MaterialCacheKey, wgpu::Buffer>,
+    texture_bind_groups: HashMap<[TextureHandle; 4], wgpu::BindGroup>,
+    frame_bind_groups: HashMap<u64, wgpu::BindGroup>,
 
     // Frame state
     current_frame: Option<wgpu::SurfaceTexture>,
@@ -344,6 +389,21 @@ impl ZGraphics {
             mapped_at_creation: false,
         });
 
+        // Create frame-level uniform buffers (reused every frame, written with new data)
+        let view_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("View Matrix Buffer"),
+            size: 64, // Mat4 = 16 × f32 = 64 bytes
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let proj_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Projection Matrix Buffer"),
+            size: 64, // Mat4 = 16 × f32 = 64 bytes
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
         let mut graphics = Self {
             surface,
             device,
@@ -369,6 +429,11 @@ impl ZGraphics {
             material_uniforms,
             material_buffer,
             bone_buffer,
+            view_buffer,
+            proj_buffer,
+            material_buffers: HashMap::new(),
+            texture_bind_groups: HashMap::new(),
+            frame_bind_groups: HashMap::new(),
             current_frame: None,
             current_view: None,
             vertex_buffers,
@@ -2061,22 +2126,17 @@ impl ZGraphics {
             return;
         }
 
-        // OPTIMIZATION 1: Create frame-level uniform buffers ONCE (not per-command)
-        let view_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("View Matrix Buffer"),
-                contents: bytemuck::cast_slice(&view_matrix.to_cols_array()),
-                usage: wgpu::BufferUsages::UNIFORM,
-            });
-
-        let proj_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Projection Matrix Buffer"),
-                contents: bytemuck::cast_slice(&projection_matrix.to_cols_array()),
-                usage: wgpu::BufferUsages::UNIFORM,
-            });
+        // OPTIMIZATION 1: Write to persistent frame-level uniform buffers (not create new ones!)
+        self.queue.write_buffer(
+            &self.view_buffer,
+            0,
+            bytemuck::cast_slice(&view_matrix.to_cols_array()),
+        );
+        self.queue.write_buffer(
+            &self.proj_buffer,
+            0,
+            bytemuck::cast_slice(&projection_matrix.to_cols_array()),
+        );
 
         // Upload vertex/index data from command buffer to GPU buffers
         for format in 0..VERTEX_FORMAT_COUNT as u8 {
@@ -2126,16 +2186,14 @@ impl ZGraphics {
                 )
             });
 
-        // OPTIMIZATION 2: Cache bind groups to avoid creating duplicates
-        // Material bind group cache: color -> uniform buffer
-        // Cache material buffers by (color, metallic_bits, roughness_bits, emissive_bits, matcap_modes)
-        #[allow(clippy::type_complexity)]
-        let mut material_buffers: HashMap<(u32, u32, u32, u32, (u32, u32, u32, u32)), wgpu::Buffer> = HashMap::new();
-        // Texture bind group cache: texture_slots -> bind group
-        let mut texture_bind_groups: HashMap<[TextureHandle; 4], wgpu::BindGroup> = HashMap::new();
-        // Frame bind group cache: material_buffer address -> bind group
-        // This avoids recreating bind groups for every draw call with the same material
-        let mut frame_bind_groups: HashMap<wgpu::BufferAddress, wgpu::BindGroup> = HashMap::new();
+        // OPTIMIZATION 2: Take caches out of self temporarily to avoid nested mutable borrows
+        // We clear them, use them, then move them back - preserving HashMap allocations
+        let mut material_buffers = std::mem::take(&mut self.material_buffers);
+        let mut texture_bind_groups = std::mem::take(&mut self.texture_bind_groups);
+        let mut frame_bind_groups = std::mem::take(&mut self.frame_bind_groups);
+        material_buffers.clear();
+        texture_bind_groups.clear();
+        frame_bind_groups.clear();
 
         // Render pass
         {
@@ -2193,19 +2251,12 @@ impl ZGraphics {
                 let pipeline_entry = &self.pipelines[&pipeline_key];
 
                 // Get or create material uniform buffer (cached by color + properties + blend modes)
-                // Cache key combines color with material properties and matcap blend modes
-                let matcap_key = (
-                    state.matcap_blend_modes[0] as u32,
-                    state.matcap_blend_modes[1] as u32,
-                    state.matcap_blend_modes[2] as u32,
-                    state.matcap_blend_modes[3] as u32,
-                );
-                let material_key = (
+                let material_key = MaterialCacheKey::new(
                     cmd.color,
-                    self.material_uniforms.properties[0].to_bits(),
-                    self.material_uniforms.properties[1].to_bits(),
-                    self.material_uniforms.properties[2].to_bits(),
-                    matcap_key,
+                    self.material_uniforms.properties[0],
+                    self.material_uniforms.properties[1],
+                    self.material_uniforms.properties[2],
+                    state.matcap_blend_modes,
                 );
                 let material_buffer = material_buffers.entry(material_key).or_insert_with(|| {
                     let color_vec = state.color_vec4();
@@ -2245,11 +2296,11 @@ impl ZGraphics {
                             entries: &[
                                 wgpu::BindGroupEntry {
                                     binding: 0,
-                                    resource: view_buffer.as_entire_binding(),
+                                    resource: self.view_buffer.as_entire_binding(),
                                 },
                                 wgpu::BindGroupEntry {
                                     binding: 1,
-                                    resource: proj_buffer.as_entire_binding(),
+                                    resource: self.proj_buffer.as_entire_binding(),
                                 },
                                 wgpu::BindGroupEntry {
                                     binding: 2,
@@ -2274,11 +2325,11 @@ impl ZGraphics {
                             entries: &[
                                 wgpu::BindGroupEntry {
                                     binding: 0,
-                                    resource: view_buffer.as_entire_binding(),
+                                    resource: self.view_buffer.as_entire_binding(),
                                 },
                                 wgpu::BindGroupEntry {
                                     binding: 1,
-                                    resource: proj_buffer.as_entire_binding(),
+                                    resource: self.proj_buffer.as_entire_binding(),
                                 },
                                 wgpu::BindGroupEntry {
                                     binding: 2,
@@ -2311,11 +2362,11 @@ impl ZGraphics {
                             entries: &[
                                 wgpu::BindGroupEntry {
                                     binding: 0,
-                                    resource: view_buffer.as_entire_binding(),
+                                    resource: self.view_buffer.as_entire_binding(),
                                 },
                                 wgpu::BindGroupEntry {
                                     binding: 1,
-                                    resource: proj_buffer.as_entire_binding(),
+                                    resource: self.proj_buffer.as_entire_binding(),
                                 },
                                 wgpu::BindGroupEntry {
                                     binding: 2,
@@ -2422,6 +2473,11 @@ impl ZGraphics {
                 }
             }
         }
+
+        // Move caches back into self (preserving allocations for next frame)
+        self.material_buffers = material_buffers;
+        self.texture_bind_groups = texture_bind_groups;
+        self.frame_bind_groups = frame_bind_groups;
 
         // Submit commands
         self.queue.submit(std::iter::once(encoder.finish()));
