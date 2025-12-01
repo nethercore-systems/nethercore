@@ -122,6 +122,137 @@ Expand texture filtering documentation:
 
 ---
 
+### **[PERFORMANCE] Cache frame bind groups to avoid recreation per draw call**
+
+**Status:** Major performance issue - bind groups created every draw command
+
+**Current State:**
+- Material buffers ARE cached ✅ (line 2207 in graphics/mod.rs)
+- Texture bind groups ARE cached ✅ (line 2135 in graphics/mod.rs)
+- **Frame bind groups are created EVERY DRAW CALL** ❌ (lines 2236-2305)
+
+**Problem:**
+The frame bind group contains:
+- view_buffer (same for entire frame)
+- proj_buffer (same for entire frame)
+- sky_buffer (same for entire frame)
+- material_buffer (varies per unique material)
+- bone_buffer (changes when set_bones called)
+- lights_buffer (same for entire frame)
+- material_props_buffer (same for entire frame)
+
+Currently creating a new bind group for EVERY draw command, even though most bindings are identical.
+
+**Impact:**
+- Expensive GPU resource creation in hot path
+- Hundreds/thousands of bind group allocations per frame
+- Major performance bottleneck for scenes with many draw calls
+
+**Solution Options:**
+1. **Cache frame bind groups by material_buffer** (recommended)
+   - HashMap<BufferAddress, BindGroup>
+   - Most scenes have few unique materials
+   - ~10-20 bind groups per frame instead of hundreds
+
+2. **Use push constants for material data** (ideal, but requires shader changes)
+   - Eliminate material_buffer from bind group
+   - Push 32 bytes per draw call
+   - Single frame bind group for entire frame
+   - Requires WGSL shader updates
+
+**Recommended Approach:**
+Start with option 1 (cache by material_buffer) - easy win with minimal code changes.
+
+**Files to Modify:**
+- `emberware-z/src/graphics/mod.rs` - Add `frame_bind_group_cache: HashMap<...>` at line 2135
+
+---
+
+### **[OPTIMIZATION] Share quad index buffer for sprites and billboards**
+
+**Status:** Minor optimization opportunity
+
+**Current State:**
+- Every sprite/billboard allocates a new `Vec<u32>` for indices (line 1347, 1460)
+- Indices are always the same: `[0, 1, 2, 0, 2, 3]`
+- Hundreds of redundant allocations per frame
+
+**Impact:**
+- Modest: ~24 bytes allocated per sprite/billboard
+- Adds up with particle systems (100+ sprites = 2.4KB of redundant allocations)
+
+**Solution:**
+Pre-allocate shared quad index buffer at init time:
+```rust
+// In ZGraphics::new()
+let quad_indices: &[u32] = &[0, 1, 2, 0, 2, 3];
+self.shared_quad_index_offset = self.command_buffer.append_index_data(SPRITE_FORMAT, quad_indices);
+```
+
+Then use it in sprite/billboard generation (no allocation):
+```rust
+let first_index = self.shared_quad_index_offset;  // Reuse
+```
+
+**Trade-off:**
+- Simple implementation (10 lines of code)
+- Small memory win
+- Not a huge perf gain, but good hygiene
+
+**Files to Modify:**
+- `emberware-z/src/graphics/mod.rs` - Add shared index buffer in new(), use in process_draw_commands()
+
+---
+
+### **[EXAMPLES] Create comprehensive example suite**
+
+**Status:** Examples exist but coverage gaps
+
+**Current Examples (8):**
+1. ✅ hello-world - 2D text + rectangles, basic input
+2. ✅ triangle - Immediate mode 3D (POS_COLOR)
+3. ✅ textured-quad - Textured geometry
+4. ✅ cube - 3D cube mesh
+5. ✅ lighting - PBR mode (mode 2), dynamic lights
+6. ✅ billboard - All 4 billboard modes
+7. ✅ skinned-mesh - GPU skinning demo
+8. ✅ platformer - 2D platformer game
+
+**Missing Examples:**
+- ❌ **Mode 0 (Unlit)** example - No example demonstrates unlit rendering
+- ❌ **Mode 1 (Matcap)** example - No matcap rendering demo
+- ❌ **Mode 3 (Hybrid)** example - No hybrid PBR+matcap demo
+- ❌ **Matcap blend modes** - No demo of multiply/add/HSV modulate
+- ❌ **Audio system** - NO AUDIO EXAMPLES AT ALL despite fully working audio!
+- ❌ **Custom fonts** - No font loading demo
+- ❌ **Sprite batching** - No sprite-heavy 2D demo
+- ❌ **Blend modes** - No demo of alpha/additive/multiply blending
+- ❌ **Depth test** - No demo of depth buffer usage
+- ❌ **Cull mode** - No demo of face culling
+- ❌ **Transform stack** - No demo of push/pop transforms
+- ❌ **Multiplayer input** - No demo of 2-4 player local input
+
+**Recommended New Examples:**
+1. **matcap-showcase** - All 3 matcap slots with blend modes (mode 1)
+2. **unlit-lowpoly** - PS1-style low-poly with vertex colors (mode 0)
+3. **hybrid-character** - Character with matcap ambient + PBR lighting (mode 3)
+4. **audio-test** - Sound effects, music, channels (CRITICAL - audio undocumented!)
+5. **custom-font** - Load bitmap font, render styled text
+6. **particle-system** - Hundreds of sprites, blend modes
+7. **multiplayer-pong** - 2-player local, demonstrates player_count/local_player_mask
+
+**Example Location:**
+- Move from `/examples` to `/emberware-z/examples` (they're Z-specific, not core)
+- Update Cargo workspace to reflect new location
+- Update README to point to new location
+
+**Files to Modify:**
+- Create 7 new example projects
+- Move existing examples to emberware-z/examples/
+- Update root Cargo.toml workspace members
+
+---
+
 ### **[NEEDS CLARIFICATION] Define and enforce console runtime limits**
 
 **Current State:** Partial limit enforcement - VRAM tracking (8MB), vertex format validation, memory bounds checking. No enforcement for draw calls, vertex counts, mesh counts, or CPU budget per frame.
