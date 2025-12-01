@@ -7,7 +7,8 @@
       "Bash(cargo run:*)",
       "Bash(git checkout:*)",
       "Bash(cargo xtask build-examples:*)",
-      "Bash(cargo build:*)"
+      "Bash(cargo build:*)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []

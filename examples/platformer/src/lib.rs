@@ -604,8 +604,8 @@ fn render_platforms() {
 
             // Draw platform as multiple billboards (tiled)
             let tile_size = 1.0;
-            let tiles_x = (platform.width / tile_size).ceil() as i32;
-            let tiles_y = (platform.height / tile_size).ceil() as i32;
+            let tiles_x = libm::ceilf(platform.width / tile_size) as i32;
+            let tiles_y = libm::ceilf(platform.height / tile_size) as i32;
 
             for ty in 0..tiles_y {
                 for tx in 0..tiles_x {
@@ -666,12 +666,12 @@ fn render_players() {
 fn render_ui() {
     unsafe {
         // Background panel for scores
-        draw_rect(10.0, 10.0, 200.0, 30.0 + (player_count() as f32 * 25.0), 0x000000AA);
+        draw_rect(10.0, 10.0, 300.0, 80.0 + (player_count() as f32 * 70.0), 0x000000AA);
 
-        draw_text_str("PLATFORMER", 20.0, 30.0, 16.0, 0xFFFFFFFF);
+        draw_text_str("PLATFORMER", 20.0, 30.0, 64.0, 0xFFFFFFFF);
 
         // Player scores
-        let mut y_offset = 55.0;
+        let mut y_offset = 100.0;
         for (i, player) in PLAYERS.iter().enumerate() {
             if !player.active {
                 continue;
@@ -694,9 +694,9 @@ fn render_ui() {
                 _ => b"P4: ",
             };
 
-            draw_text(label.as_ptr(), 4, 20.0, y_offset, 14.0, PLAYER_COLORS[i]);
-            draw_text(digits.as_ptr(), 4, 60.0, y_offset, 14.0, 0xFFFFFFFF);
-            y_offset += 25.0;
+            draw_text(label.as_ptr(), 4, 20.0, y_offset, 56.0, PLAYER_COLORS[i]);
+            draw_text(digits.as_ptr(), 4, 100.0, y_offset, 56.0, 0xFFFFFFFF);
+            y_offset += 70.0;
         }
 
         // Coin counter
@@ -711,18 +711,18 @@ fn render_ui() {
             b'C', b'o', b'i', b'n', b's', b':', b' ',
             b'0' + (coins_left % 10) as u8,
         ];
-        draw_text(coins_text.as_ptr(), 8, 20.0, y_offset + 10.0, 12.0, 0xFFD700FF);
+        draw_text(coins_text.as_ptr(), 8, 20.0, y_offset + 20.0, 48.0, 0xFFD700FF);
 
         // Controls hint
-        draw_rect(10.0, 520.0, 280.0, 50.0, 0x000000AA);
-        draw_text_str("L-Stick: Move  A: Jump", 20.0, 540.0, 12.0, 0xCCCCCCFF);
-        draw_text_str("Collect all coins!", 20.0, 558.0, 12.0, 0xFFD700FF);
+        draw_rect(10.0, 480.0, 480.0, 90.0, 0x000000AA);
+        draw_text_str("L-Stick: Move  A: Jump", 20.0, 500.0, 48.0, 0xCCCCCCFF);
+        draw_text_str("Collect all coins!", 20.0, 540.0, 48.0, 0xFFD700FF);
 
         // Game over overlay
         if GAME_OVER {
-            draw_rect(300.0, 250.0, 360.0, 100.0, 0x000000DD);
-            draw_text_str("ALL COINS COLLECTED!", 340.0, 285.0, 20.0, 0xFFD700FF);
-            draw_text_str("Press START to restart", 360.0, 320.0, 14.0, 0xCCCCCCFF);
+            draw_rect(150.0, 200.0, 660.0, 140.0, 0x000000DD);
+            draw_text_str("ALL COINS COLLECTED!", 200.0, 240.0, 80.0, 0xFFD700FF);
+            draw_text_str("Press START to restart", 240.0, 290.0, 56.0, 0xCCCCCCFF);
         }
     }
 }

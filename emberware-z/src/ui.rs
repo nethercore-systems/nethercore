@@ -111,6 +111,10 @@ pub enum UiAction {
     DismissError,
     /// Refresh the game library
     RefreshLibrary,
+    /// Save settings and apply changes
+    SaveSettings(crate::config::Config),
+    /// Set scale mode immediately (for preview)
+    SetScaleMode(crate::config::ScaleMode),
 }
 
 #[cfg(test)]

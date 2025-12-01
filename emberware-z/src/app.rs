@@ -107,6 +107,8 @@ pub struct App {
     egui_renderer: Option<egui_wgpu::Renderer>,
     /// Library UI state
     library_ui: LibraryUi,
+    /// Settings UI state
+    settings_ui: crate::settings_ui::SettingsUi,
     /// Cached local games list
     local_games: Vec<LocalGame>,
     /// Debug overlay enabled (F3)
@@ -152,6 +154,7 @@ impl App {
 
         Self {
             mode: initial_mode,
+            settings_ui: crate::settings_ui::SettingsUi::new(&config),
             config,
             window: None,
             graphics: None,
@@ -539,6 +542,26 @@ impl App {
             mesh_map: hashbrown::HashMap::new(),
         });
 
+        // Update render target resolution and window minimum size based on game's init config
+        if let Some(session) = &self.game_session {
+            if let Some(game) = session.runtime.game() {
+                let z_state = game.console_state();
+                let resolution_index = z_state.init_config.resolution_index as u8;
+
+                // Update graphics render target to match game resolution
+                if let Some(graphics) = &mut self.graphics {
+                    graphics.update_resolution(resolution_index);
+
+                    // Update window minimum size to match game resolution
+                    if let Some(window) = &self.window {
+                        let min_size =
+                            winit::dpi::PhysicalSize::new(graphics.width(), graphics.height());
+                        window.set_min_inner_size(Some(min_size));
+                    }
+                }
+            }
+        }
+
         tracing::info!("Game started: {}", game_id);
         Ok(())
     }
@@ -578,6 +601,14 @@ impl App {
 
         // Update input manager with key state
         if let PhysicalKey::Code(key_code) = key_event.physical_key {
+            // Handle key remapping in Settings mode first
+            if pressed && matches!(self.mode, AppMode::Settings) {
+                // Let settings UI handle the key press for remapping
+                self.settings_ui.handle_key_press(key_code);
+                // Don't process other key logic when remapping
+                return;
+            }
+
             if let Some(input_manager) = &mut self.input_manager {
                 input_manager.update_keyboard(key_code, pressed);
             }
@@ -597,7 +628,7 @@ impl App {
                         // For now, we use F11 as the primary method
                     }
                     KeyCode::Escape => {
-                        // Return to library when in game
+                        // Return to library when in game or settings
                         match self.mode {
                             AppMode::Playing { .. } => {
                                 tracing::info!("Exiting game via ESC");
@@ -606,7 +637,10 @@ impl App {
                                 self.local_games = library::get_local_games();
                             }
                             AppMode::Settings => {
-                                self.mode = AppMode::Library;
+                                // If waiting for key binding, cancel it; otherwise return to library
+                                if !self.settings_ui.handle_key_press(key_code) {
+                                    self.mode = AppMode::Library;
+                                }
                             }
                             _ => {}
                         }
@@ -657,8 +691,19 @@ impl App {
                 }
             }
             UiAction::OpenSettings => {
-                tracing::info!("Opening settings...");
-                self.mode = AppMode::Settings;
+                // Toggle between Library and Settings
+                self.mode = match self.mode {
+                    AppMode::Settings => {
+                        tracing::info!("Returning to library");
+                        AppMode::Library
+                    }
+                    _ => {
+                        tracing::info!("Opening settings");
+                        // Update settings UI with current config
+                        self.settings_ui.update_temp_config(&self.config);
+                        AppMode::Settings
+                    }
+                };
             }
             UiAction::DismissError => {
                 self.last_error = None;
@@ -667,6 +712,36 @@ impl App {
                 tracing::info!("Refreshing game library");
                 self.local_games = library::get_local_games();
                 self.library_ui.selected_game = None;
+            }
+            UiAction::SaveSettings(new_config) => {
+                tracing::info!("Saving settings...");
+                self.config = new_config.clone();
+
+                // Save to disk
+                if let Err(e) = config::save(&self.config) {
+                    tracing::error!("Failed to save config: {}", e);
+                } else {
+                    tracing::info!("Settings saved successfully");
+                }
+
+                // Apply changes to input manager (recreate with new config)
+                self.input_manager = Some(InputManager::new(self.config.input.clone()));
+
+                if let Some(graphics) = &mut self.graphics {
+                    graphics.set_scale_mode(self.config.video.scale_mode);
+                }
+
+                // Update settings UI temp config
+                self.settings_ui.update_temp_config(&self.config);
+
+                // Return to library
+                self.mode = AppMode::Library;
+            }
+            UiAction::SetScaleMode(scale_mode) => {
+                // Preview scale mode change
+                if let Some(graphics) = &mut self.graphics {
+                    graphics.set_scale_mode(scale_mode);
+                }
             }
         }
     }
@@ -791,6 +866,7 @@ impl App {
                 if let Some(session) = &self.game_session {
                     if let Some(game) = session.runtime.game() {
                         let z_state = game.console_state();
+
                         let clear = z_state.init_config.clear_color;
                         let clear_r = ((clear >> 24) & 0xFF) as f32 / 255.0;
                         let clear_g = ((clear >> 16) & 0xFF) as f32 / 255.0;
@@ -859,15 +935,9 @@ impl App {
                     }
                 }
                 AppMode::Settings => {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        ui.heading("Settings");
-                        ui.separator();
-                        ui.label("Settings UI not yet implemented");
-                        ui.add_space(20.0);
-                        if ui.button("Back to Library").clicked() {
-                            ui_action = Some(UiAction::OpenSettings); // Signal to go back
-                        }
-                    });
+                    if let Some(action) = self.settings_ui.show(ctx) {
+                        ui_action = Some(action);
+                    }
                 }
                 AppMode::Playing { ref game_id } => {
                     // Game is rendered before egui, so we don't need a central panel
@@ -1012,15 +1082,14 @@ impl App {
         };
 
         // Update egui buffers (allocate vertex/index buffers for this frame)
-        for mesh in &tris {
-            egui_renderer.update_buffers(
-                graphics.device(),
-                graphics.queue(),
-                &mut encoder,
-                &[mesh.clone()],
-                &screen_descriptor,
-            );
-        }
+        // IMPORTANT: Call once with all meshes, not once per mesh
+        egui_renderer.update_buffers(
+            graphics.device(),
+            graphics.queue(),
+            &mut encoder,
+            &tris,
+            &screen_descriptor,
+        );
 
         // Create render pass and render egui (only if there are triangles to render)
         // When in Playing mode, use Load to preserve game rendering.
@@ -1114,9 +1183,10 @@ impl ApplicationHandler for App {
         }
 
         // Create window
+        // Default to 960×540 (default game resolution)
         let window_attributes = Window::default_attributes()
             .with_title("Emberware Z")
-            .with_inner_size(winit::dpi::LogicalSize::new(1280, 720));
+            .with_inner_size(winit::dpi::LogicalSize::new(960, 540));
 
         let window = match event_loop.create_window(window_attributes) {
             Ok(w) => Arc::new(w),
@@ -1133,7 +1203,7 @@ impl ApplicationHandler for App {
         }
 
         // Initialize graphics backend
-        let graphics = match pollster::block_on(ZGraphics::new(window.clone())) {
+        let mut graphics = match pollster::block_on(ZGraphics::new(window.clone())) {
             Ok(g) => g,
             Err(e) => {
                 tracing::error!("Failed to initialize graphics: {}", e);
@@ -1141,6 +1211,9 @@ impl ApplicationHandler for App {
                 return;
             }
         };
+
+        // Apply scale mode from config
+        graphics.set_scale_mode(self.config.video.scale_mode);
 
         // Initialize egui-winit state
         let egui_state = egui_winit::State::new(

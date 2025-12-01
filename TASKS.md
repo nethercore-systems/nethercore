@@ -18,129 +18,50 @@
 
 ## TODO
 
-### **[FEATURE] Implement offscreen render target for fixed internal resolution**
+### **[POLISH] Add axis-to-keyboard binding support**
 
-**Status:** Text rendering now works with dynamic resolution, but needs render-to-texture for proper fantasy console behavior
+**Status:** Not yet implemented
 
 **Current State:**
-- ✅ 2D elements (text, sprites, rects) convert pixel coordinates to NDC using game's configured resolution
-- ✅ Dynamic resolution support from `init_config.resolution_index` (640×360, 960×540, 1280×720, 1920×1080)
-- ✅ `pixel_to_ndc()` function updated to accept resolution parameters
-- ❌ Still rendering directly to window surface - window resizing changes the game's viewport
-- ❌ No aspect ratio preservation or letterboxing/pillarboxing
+- Keyboard bindings only support button presses (digital input)
+- Analog sticks and triggers cannot be controlled via keyboard
+- Settings UI has deadzone sliders for analog inputs
 
-**Problem:**
-Games currently render at window resolution rather than their configured internal resolution. Resizing the window shows more/less of the game world instead of scaling the fixed-resolution framebuffer. This breaks the fantasy console aesthetic where games have a fixed internal resolution that scales to fit the display.
-
-**Solution:**
-Implement render-to-texture system:
-1. Create offscreen framebuffer (color + depth) at game's resolution from `init_config`
-2. Render all game content to this offscreen target
-3. Blit/scale the framebuffer to window with aspect ratio preservation
-4. Add letterboxing (black bars) or pillarboxing when window aspect doesn't match
+**What's Needed:**
+Allow users to bind keyboard keys to simulate analog stick axes and triggers.
 
 **Implementation Plan:**
 
-1. **Create render target textures** in `ZGraphics::new()`:
-   ```rust
-   struct RenderTarget {
-       texture: wgpu::Texture,
-       view: wgpu::TextureView,
-       depth_texture: wgpu::Texture,
-       depth_view: wgpu::TextureView,
-       width: u32,
-       height: u32,
-   }
-   ```
-   - Initially create at default resolution (960×540)
-   - Recreate when `init_config.resolution_index` changes
+1. **Extend KeyboardMapping struct** in `input.rs`:
+   - Add fields for axis bindings (e.g., `left_stick_up_key`, `left_stick_down_key`, etc.)
+   - Each axis direction gets its own key binding
+   - When pressed, outputs 0 or 1 (binary analog values)
 
-2. **Update `render_frame()` to render to offscreen target**:
-   - Replace `view` parameter with internal render target view
-   - Clear and render all game content to offscreen framebuffer
-   - Keep existing render logic unchanged
+2. **Update InputManager**:
+   - Check axis key bindings in addition to button bindings
+   - Combine axis keys to generate stick/trigger values
+   - Examples:
+     - Left stick: W/S for Y axis (-1/+1), A/D for X axis (-1/+1)
+     - Triggers: Q/E for left/right trigger (0 or 255)
 
-3. **Add blit pass to scale framebuffer to window**:
-   - Create full-screen quad pipeline with simple texture sampling shader
-   - Bind offscreen color texture as input
-   - Calculate letterbox/pillarbox viewport to preserve aspect ratio
-   - Render scaled quad to window surface
-   - Optional: Add pixel-perfect integer scaling mode (1×, 2×, 3×, etc.)
+3. **Settings UI additions** in `settings_ui.rs`:
+   - Add "Analog Sticks" section to Controls tab
+   - Add "Triggers" section to Controls tab
+   - Each axis gets 4 key bindings (left stick: up/down/left/right)
+   - Triggers get 2 key bindings (left trigger, right trigger)
+   - Use same click-to-rebind UX as existing button bindings
 
-4. **Handle resolution changes**:
-   - Detect when `init_config.modified` is true and resolution changed
-   - Recreate render target textures at new resolution
-   - Update projection matrix to match new aspect ratio
-
-**Benefits:**
-- True fantasy console behavior - fixed internal resolution scales to display
-- Window resize doesn't change game viewport
-- Pixel-perfect scaling at integer multiples
-- Easy to add CRT filters, scanlines, or other post-processing effects
-- Consistent with PS1/N64/Dreamcast behavior
+4. **Config serialization**:
+   - Update serde derives to include new axis binding fields
+   - Provide sensible defaults (e.g., WASD for left stick, arrows for right stick)
 
 **Files to Modify:**
-- `emberware-z/src/graphics/mod.rs` - Add RenderTarget struct, create offscreen textures, implement blit pass
-- `emberware-z/src/app.rs` - Handle resolution changes, pass render target to render_frame
-- Add `shaders/blit.wgsl` - Simple fullscreen quad shader for texture scaling
+- `emberware-z/src/input.rs` - Add axis binding fields to KeyboardMapping
+- `emberware-z/src/settings_ui.rs` - Add axis remapping UI sections
+- `emberware-z/src/config.rs` - Ensure new fields serialize correctly
 
 **User Benefit:**
-Games render at their chosen resolution and scale perfectly to any window size, maintaining the authentic fantasy console experience.
-
----
-
-### **[POLISH] Implement Settings UI with input remapping**
-
-**Status:** Settings button exists but UI not implemented
-
-**Current State:**
-- Settings button in library UI switches to `AppMode::Settings` ([ui.rs:86](emberware-z/src/ui.rs#L86))
-- Settings mode shows placeholder "Settings UI not yet implemented" ([app.rs:861-870](emberware-z/src/app.rs#L861-L870))
-- Config infrastructure fully functional: `Config` struct with video/audio/input sections
-- Input remapping infrastructure exists: `KeyboardMapping` with serialization support
-- Config save/load works: `config::load()` and `config::save()` ([config.rs](emberware-z/src/config.rs))
-
-**What's Missing:**
-The actual Settings UI to modify and save configuration values.
-
-**Implementation Plan:**
-
-1. **Create Settings UI sections** (egui panels):
-   - Video settings: fullscreen, vsync, resolution_scale (1-4)
-   - Audio settings: master_volume slider (0.0-1.0)
-   - Input settings: keyboard remapping for all buttons
-
-2. **Input remapping UX**:
-   - Display current key bindings in a list
-   - "Remap" button next to each binding
-   - Click to enter "listening" mode: "Press any key..."
-   - Capture next key press and update mapping
-   - Prevent duplicate key assignments (show warning)
-   - "Reset to defaults" button
-
-3. **Settings persistence**:
-   - Track if config is "dirty" (modified)
-   - "Save" button writes to disk via `config::save()`
-   - "Cancel" button discards changes and returns to library
-   - "Apply" button saves and applies without leaving settings
-
-4. **Live updates**:
-   - Video settings require window recreation (notify user restart may be needed)
-   - Audio volume can be applied immediately
-   - Input remapping takes effect immediately for new input
-
-5. **Validation**:
-   - Clamp resolution_scale to 1-4 range
-   - Clamp master_volume to 0.0-1.0 range
-   - Ensure all keyboard mappings are unique
-
-**Files to Modify:**
-- `emberware-z/src/app.rs` - Replace placeholder with settings UI logic, handle config updates
-- `emberware-z/src/ui.rs` - May need helper UI components for key remapping
-- Consider creating `emberware-z/src/ui/settings.rs` if UI becomes complex
-
-**User Benefit:**
-Players can customize controls to their preference (WASD vs arrows, button layouts), adjust audio levels, and configure video settings without editing TOML files manually.
+Keyboard players can use analog stick inputs in games, enabling full control without a gamepad.
 
 ---
 
@@ -646,6 +567,127 @@ with explanatory comments to maintain clean build while documenting future use.
 - `emberware-z/src/main.rs` - Added audio module
 - `emberware-z/src/console.rs` - Updated ZAudio impl and create_audio()
 - `emberware-z/src/state.rs` - Added audio fields to ZFFIState
+
+---
+
+## DONE
+
+### **[FEATURE] Implement offscreen render target for fixed internal resolution**
+
+**Status:** ✅ Completed - Games now render at fixed resolution with automatic scaling
+
+**What Was Implemented:**
+
+1. ✅ **RenderTarget struct** - Offscreen color + depth textures at game resolution
+2. ✅ **Blit shader** (`shaders/blit.wgsl`) - Fullscreen triangle for texture scaling
+3. ✅ **Blit pipeline** - Nearest-neighbor sampling for pixel-perfect look
+4. ✅ **render_frame() updated** - Game content renders to offscreen target, then blits to window
+5. ✅ **Resolution change detection** - `graphics.update_resolution()` called each frame
+6. ✅ **Dynamic render target recreation** - Automatically recreates when resolution changes
+7. ✅ **ScaleMode config setting** - Added to `VideoConfig` (Stretch, PixelPerfect)
+8. ✅ **PixelPerfect scaling mode** - Integer scaling with letterboxing and centered viewport
+
+**Current State:**
+- ✅ 2D elements (text, sprites, rects) convert pixel coordinates to NDC using game's configured resolution
+- ✅ Dynamic resolution support from `init_config.resolution_index` (640×360, 960×540, 1280×720, 1920×1080)
+- ✅ Games render to offscreen target at fixed resolution
+- ✅ Render target automatically recreated when game changes resolution
+- ✅ Window resizing no longer affects game viewport
+- ✅ Stretch mode works (fills window, may distort aspect ratio)
+- ✅ PixelPerfect mode works (integer scaling with black bars for pixel-perfect display)
+
+**Benefits Achieved:**
+- ✅ True fantasy console behavior - fixed internal resolution scales to display
+- ✅ Window resize doesn't change game viewport anymore
+- ✅ Games can switch resolution at runtime (e.g., 360p for menus, 1080p for gameplay)
+- ✅ Easy to add CRT filters, scanlines, or other post-processing effects in blit shader
+- ✅ Consistent with PS1/N64/Dreamcast behavior
+
+**Files Modified:**
+- `emberware-z/src/graphics/mod.rs` - Added RenderTarget struct, `create_render_target()`, `create_blit_pipeline()`, `update_resolution()`, `recreate_render_target()`, `set_scale_mode()`, viewport calculation in `render_frame()` for both Stretch and PixelPerfect modes
+- `emberware-z/src/app.rs` - Added `graphics.update_resolution()` and `graphics.set_scale_mode()` calls
+- `emberware-z/src/config.rs` - Added ScaleMode enum and `scale_mode` field to VideoConfig, updated tests
+- `emberware-z/shaders/blit.wgsl` - New fullscreen triangle shader for texture scaling
+
+---
+
+### **[POLISH] Implement Settings UI with input remapping**
+
+**Status:** ✅ Completed
+
+**What Was Implemented:**
+
+1. ✅ **SettingsUi struct** - Created `settings_ui.rs` with tab-based interface (Video, Audio, Controls)
+2. ✅ **Key remapping system** - Click-to-rebind interface with waiting state and ESC to cancel
+3. ✅ **Video settings** - Fullscreen, V-Sync, and Scale Mode (Stretch/PixelPerfect) with live preview
+4. ✅ **Audio settings** - Master volume slider with percentage display
+5. ✅ **Controls settings** - Keyboard remapping for all buttons (D-Pad, Face Buttons, Shoulder Buttons, System Buttons)
+6. ✅ **Deadzone settings** - Stick and trigger deadzone sliders
+7. ✅ **Config persistence** - Apply & Save button writes to disk, Reset to Defaults button
+8. ✅ **Temporary config editing** - Changes aren't applied until user clicks Apply & Save
+9. ✅ **Integration with app.rs** - Settings mode fully functional, key press handling for remapping
+
+**Files Created:**
+- `emberware-z/src/settings_ui.rs` - Complete settings UI implementation
+
+**Files Modified:**
+- `emberware-z/src/ui.rs` - Added SaveSettings and SetScaleMode actions
+- `emberware-z/src/app.rs` - Integrated SettingsUi, added key press handler, save/apply logic
+- `emberware-z/src/config.rs` - Added PartialEq derives for comparison
+- `emberware-z/src/input.rs` - Added PartialEq derives
+- `emberware-z/src/main.rs` - Registered settings_ui module
+
+**User Benefit:**
+Players can customize controls, adjust audio levels, and configure video settings through an intuitive UI without editing TOML files manually.
+
+---
+
+### **[POLISH] Scale bitmap font for better readability**
+
+**Status:** ✅ Completed
+
+**Problem:**
+Text in examples was very small and difficult to read at higher resolutions.
+
+**Solution:**
+Implemented 2x scaling of the bitmap font from 8x8 to 16x16 using nearest-neighbor upscaling.
+
+**What Was Implemented:**
+1. ✅ Added `FONT_SCALE` constant (set to 2)
+2. ✅ Separated source glyph size (8x8) from output glyph size (16x16)
+3. ✅ Modified atlas generation to perform nearest-neighbor scaling
+4. ✅ Each source pixel becomes a FONT_SCALE × FONT_SCALE block in output
+5. ✅ Maintains crisp bitmap font aesthetic while being more readable
+
+**Files Modified:**
+- `emberware-z/src/font.rs` - Added scaling constants and modified `generate_font_atlas()`
+
+**User Benefit:**
+Text is now 2x larger (16x16 instead of 8x8), making it much more readable in UI and debug displays.
+
+---
+
+### **[STABILITY] Fix window resize panic in pixel-perfect mode**
+
+**Status:** ✅ Completed
+
+**Problem:**
+When using integer scaling mode, resizing the window smaller than the game's render resolution caused a panic due to invalid viewport calculations (negative or zero viewport dimensions).
+
+**Solution:**
+Dynamically set window minimum size based on the game's current render resolution, preventing the window from becoming too small.
+
+**What Was Implemented:**
+1. ✅ Added dynamic `set_min_inner_size()` call in render loop
+2. ✅ Minimum size updates whenever game resolution changes via `update_resolution()`
+3. ✅ Uses `PhysicalSize::new(graphics.width(), graphics.height())` for minimum
+4. ✅ Prevents viewport panic by ensuring window is always >= render resolution
+
+**Files Modified:**
+- `emberware-z/src/app.rs` - Added dynamic window minimum size constraint
+
+**User Benefit:**
+Application no longer crashes when resizing window in pixel-perfect scaling mode. Window size is constrained to prevent invalid viewport calculations.
 
 ---
 

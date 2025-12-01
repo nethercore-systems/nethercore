@@ -146,6 +146,16 @@ impl MaterialCacheKey {
 /// Manages wgpu device, textures, render state, and frame presentation.
 /// Implements the vertex buffer architecture with one buffer per stride
 /// and command buffer pattern for draw batching.
+/// Offscreen render target for fixed internal resolution
+struct RenderTarget {
+    color_texture: wgpu::Texture,
+    color_view: wgpu::TextureView,
+    depth_texture: wgpu::Texture,
+    depth_view: wgpu::TextureView,
+    width: u32,
+    height: u32,
+}
+
 pub struct ZGraphics {
     // Core wgpu objects
     surface: wgpu::Surface<'static>,
@@ -153,7 +163,15 @@ pub struct ZGraphics {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
 
-    // Depth buffer
+    // Offscreen render target (game renders at fixed resolution)
+    render_target: RenderTarget,
+
+    // Blit pipeline (for scaling render target to window)
+    blit_pipeline: wgpu::RenderPipeline,
+    blit_bind_group: wgpu::BindGroup,
+    blit_sampler: wgpu::Sampler,
+
+    // Depth buffer (for window-sized UI rendering, no longer used for game content)
     depth_texture: wgpu::Texture,
     depth_view: wgpu::TextureView,
 
@@ -213,6 +231,12 @@ pub struct ZGraphics {
     // Shader and pipeline cache
     pipeline_cache: PipelineCache,
     current_render_mode: u8,
+
+    // Current render target resolution (for detecting changes)
+    current_resolution_index: u8,
+
+    // Scaling mode for render target to window
+    scale_mode: crate::config::ScaleMode,
 }
 
 impl ZGraphics {
@@ -369,11 +393,22 @@ impl ZGraphics {
         // Create texture manager (handles fallback textures)
         let texture_manager = TextureManager::new(&device, &queue)?;
 
+        // Create offscreen render target at default resolution (960×540)
+        let render_target = Self::create_render_target(&device, 960, 540, surface_format);
+
+        // Create blit pipeline for scaling render target to window
+        let (blit_pipeline, blit_bind_group, blit_sampler) =
+            Self::create_blit_pipeline(&device, surface_format, &render_target);
+
         let graphics = Self {
             surface,
             device,
             queue,
             config,
+            render_target,
+            blit_pipeline,
+            blit_bind_group,
+            blit_sampler,
             depth_texture,
             depth_view,
             texture_manager,
@@ -402,6 +437,8 @@ impl ZGraphics {
             transform_stack: Vec::with_capacity(16),
             pipeline_cache: PipelineCache::new(),
             current_render_mode: 0, // Default to Mode 0 (Unlit)
+            current_resolution_index: 1, // 960×540 (default)
+            scale_mode: crate::config::ScaleMode::default(), // Stretch by default
         };
 
         Ok(graphics)
@@ -434,6 +471,223 @@ impl ZGraphics {
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         (texture, view)
+    }
+
+    /// Create offscreen render target at specified resolution
+    fn create_render_target(device: &wgpu::Device, width: u32, height: u32, surface_format: wgpu::TextureFormat) -> RenderTarget {
+        // Create color texture (render target)
+        let color_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Render Target Color"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: surface_format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let color_view = color_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        // Create depth texture for render target
+        let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Render Target Depth"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Depth32Float,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        });
+        let depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        RenderTarget {
+            color_texture,
+            color_view,
+            depth_texture,
+            depth_view,
+            width,
+            height,
+        }
+    }
+
+    /// Create blit pipeline and resources for scaling render target to window
+    fn create_blit_pipeline(
+        device: &wgpu::Device,
+        surface_format: wgpu::TextureFormat,
+        render_target: &RenderTarget,
+    ) -> (wgpu::RenderPipeline, wgpu::BindGroup, wgpu::Sampler) {
+        // Create sampler for render target (nearest neighbor for pixel-perfect scaling)
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("Blit Sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
+
+        // Load blit shader
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Blit Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("../../shaders/blit.wgsl").into()),
+        });
+
+        // Create bind group layout
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Blit Bind Group Layout"),
+            entries: &[
+                // Render target texture
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                // Sampler
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+        });
+
+        // Create bind group
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Blit Bind Group"),
+            layout: &bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&render_target.color_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+        });
+
+        // Create pipeline layout
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Blit Pipeline Layout"),
+            bind_group_layouts: &[&bind_group_layout],
+            push_constant_ranges: &[],
+        });
+
+        // Create render pipeline
+        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Blit Pipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                buffers: &[],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: surface_format,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: Default::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: None,
+                unclipped_depth: false,
+                polygon_mode: wgpu::PolygonMode::Fill,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+            cache: None,
+        });
+
+        (pipeline, bind_group, sampler)
+    }
+
+    /// Update render target resolution if changed
+    ///
+    /// Called by app layer when init_config.resolution_index changes
+    pub fn update_resolution(&mut self, resolution_index: u8) {
+        if resolution_index != self.current_resolution_index {
+            self.recreate_render_target(resolution_index);
+        }
+    }
+
+    /// Update scaling mode for render target to window
+    ///
+    /// Called by app layer when config.video.scale_mode changes
+    pub fn set_scale_mode(&mut self, scale_mode: crate::config::ScaleMode) {
+        self.scale_mode = scale_mode;
+    }
+
+    /// Recreate render target at new resolution
+    ///
+    /// Called when game changes resolution via init_config.resolution_index
+    fn recreate_render_target(&mut self, resolution_index: u8) {
+        use crate::console::RESOLUTIONS;
+
+        let (width, height) = RESOLUTIONS
+            .get(resolution_index as usize)
+            .copied()
+            .unwrap_or((960, 540)); // Fallback to default
+
+        tracing::info!(
+            "Recreating render target: {}×{} (index {})",
+            width,
+            height,
+            resolution_index
+        );
+
+        // Create new render target
+        self.render_target = Self::create_render_target(&self.device, width, height, self.config.format);
+
+        // Recreate blit bind group with new render target texture
+        let bind_group_layout = self.blit_pipeline.get_bind_group_layout(0);
+        self.blit_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Blit Bind Group"),
+            layout: &bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&self.render_target.color_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.blit_sampler),
+                },
+            ],
+        });
+
+        self.current_resolution_index = resolution_index;
     }
 
     // ========================================================================
@@ -1620,7 +1874,7 @@ impl ZGraphics {
                 vertex_index += 4;
             }
         } else {
-            // Built-in font rendering (8x8 monospace)
+            // Built-in font rendering (scaled monospace)
             let scale = size / font::GLYPH_HEIGHT as f32;
             let glyph_width = font::GLYPH_WIDTH as f32 * scale;
             let glyph_height = font::GLYPH_HEIGHT as f32 * scale;
@@ -1699,13 +1953,13 @@ impl ZGraphics {
                 label: Some("Game Render Encoder"),
             });
 
-        // If no commands, just clear and return
+        // If no commands, just clear render target and blit to window
         if self.command_buffer.commands().is_empty() {
             {
                 let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("Clear Pass"),
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view,
+                        view: &self.render_target.color_view,
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -1718,7 +1972,7 @@ impl ZGraphics {
                         },
                     })],
                     depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                        view: &self.depth_view,
+                        view: &self.render_target.depth_view,
                         depth_ops: Some(wgpu::Operations {
                             load: wgpu::LoadOp::Clear(1.0),
                             store: wgpu::StoreOp::Store,
@@ -1728,6 +1982,68 @@ impl ZGraphics {
                     timestamp_writes: None,
                     occlusion_query_set: None,
                 });
+            }
+
+            // Calculate viewport based on scale mode
+            let (viewport_x, viewport_y, viewport_width, viewport_height) = match self.scale_mode {
+                crate::config::ScaleMode::Stretch => {
+                    // Stretch to fill window (may distort aspect ratio)
+                    (0.0, 0.0, self.config.width as f32, self.config.height as f32)
+                }
+                crate::config::ScaleMode::PixelPerfect => {
+                    // Integer scaling with letterboxing (pixel-perfect)
+                    let render_width = self.render_target.width as f32;
+                    let render_height = self.render_target.height as f32;
+                    let window_width = self.config.width as f32;
+                    let window_height = self.config.height as f32;
+
+                    // Calculate largest integer scale that fits in window
+                    let scale_x = (window_width / render_width).floor();
+                    let scale_y = (window_height / render_height).floor();
+                    let scale = scale_x.min(scale_y).max(1.0); // At least 1x
+
+                    // Calculate scaled dimensions
+                    let scaled_width = render_width * scale;
+                    let scaled_height = render_height * scale;
+
+                    // Center the viewport
+                    let x = (window_width - scaled_width) / 2.0;
+                    let y = (window_height - scaled_height) / 2.0;
+
+                    (x, y, scaled_width, scaled_height)
+                }
+            };
+
+            // Blit to window
+            {
+                let mut blit_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("Blit Pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+                blit_pass.set_pipeline(&self.blit_pipeline);
+                blit_pass.set_bind_group(0, &self.blit_bind_group, &[]);
+
+                // Set viewport for scaling mode
+                blit_pass.set_viewport(
+                    viewport_x,
+                    viewport_y,
+                    viewport_width,
+                    viewport_height,
+                    0.0,
+                    1.0,
+                );
+
+                blit_pass.draw(0..3, 0..1);
             }
             self.queue.submit(std::iter::once(encoder.finish()));
             return;
@@ -1806,12 +2122,12 @@ impl ZGraphics {
         let mut texture_bind_groups = std::mem::take(&mut self.texture_bind_groups);
         let mut frame_bind_groups = std::mem::take(&mut self.frame_bind_groups);
 
-        // Render pass
+        // Render pass - render game content to offscreen target
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Game Render Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view,
+                    view: &self.render_target.color_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -1824,7 +2140,7 @@ impl ZGraphics {
                     },
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.depth_view,
+                    view: &self.render_target.depth_view,
                     depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Clear(1.0),
                         store: wgpu::StoreOp::Store,
@@ -2121,6 +2437,69 @@ impl ZGraphics {
         self.material_buffers = material_buffers;
         self.texture_bind_groups = texture_bind_groups;
         self.frame_bind_groups = frame_bind_groups;
+
+        // Calculate viewport based on scale mode
+        let (viewport_x, viewport_y, viewport_width, viewport_height) = match self.scale_mode {
+            crate::config::ScaleMode::Stretch => {
+                // Stretch to fill window (may distort aspect ratio)
+                (0.0, 0.0, self.config.width as f32, self.config.height as f32)
+            }
+            crate::config::ScaleMode::PixelPerfect => {
+                // Integer scaling with letterboxing (pixel-perfect)
+                let render_width = self.render_target.width as f32;
+                let render_height = self.render_target.height as f32;
+                let window_width = self.config.width as f32;
+                let window_height = self.config.height as f32;
+
+                // Calculate largest integer scale that fits in window
+                let scale_x = (window_width / render_width).floor();
+                let scale_y = (window_height / render_height).floor();
+                let scale = scale_x.min(scale_y).max(1.0); // At least 1x
+
+                // Calculate scaled dimensions
+                let scaled_width = render_width * scale;
+                let scaled_height = render_height * scale;
+
+                // Center the viewport
+                let x = (window_width - scaled_width) / 2.0;
+                let y = (window_height - scaled_height) / 2.0;
+
+                (x, y, scaled_width, scaled_height)
+            }
+        };
+
+        // Blit pass - scale render target to window surface
+        {
+            let mut blit_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Blit Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            blit_pass.set_pipeline(&self.blit_pipeline);
+            blit_pass.set_bind_group(0, &self.blit_bind_group, &[]);
+
+            // Set viewport for scaling mode
+            blit_pass.set_viewport(
+                viewport_x,
+                viewport_y,
+                viewport_width,
+                viewport_height,
+                0.0,
+                1.0,
+            );
+
+            blit_pass.draw(0..3, 0..1); // Fullscreen triangle
+        }
 
         // Submit commands
         self.queue.submit(std::iter::once(encoder.finish()));

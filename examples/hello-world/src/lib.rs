@@ -58,7 +58,7 @@ pub extern "C" fn render() {
             title.len() as u32,
             80.0,
             30.0,
-            16.0,
+            64.0,
             0xFFFFFFFF,
         );
         draw_rect(140.0, Y_POS, 40.0, 40.0, 0xFF6B6BFF);

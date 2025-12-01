@@ -13,6 +13,7 @@ mod font;
 mod graphics;
 mod input;
 mod library;
+mod settings_ui;
 mod shader_gen;
 mod state;
 mod ui;

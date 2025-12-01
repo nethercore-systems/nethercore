@@ -415,8 +415,8 @@ pub extern "C" fn render() {
         draw_mesh(SPHERE_MESH);
 
         // Draw UI overlay
-        let y = 10.0;
-        let line_h = 16.0;
+        let y = 20.0;
+        let line_h = 50.0;
 
         // Mode indicator
         let mode_text = match RENDER_MODE {
@@ -426,7 +426,7 @@ pub extern "C" fn render() {
             3 => b"Mode 3: Hybrid" as &[u8],
             _ => b"Unknown Mode" as &[u8],
         };
-        draw_text(mode_text.as_ptr(), mode_text.len() as u32, 10.0, y, 12.0, 0xFFFFFFFF);
+        draw_text(mode_text.as_ptr(), mode_text.len() as u32, 20.0, y, 48.0, 0xFFFFFFFF);
 
         // Material properties
         let mut buf = [0u8; 32];
@@ -435,27 +435,27 @@ pub extern "C" fn render() {
         let prefix = b"Metallic (LT): ";
         let len = format_float(METALLIC, &mut buf[prefix.len()..]);
         buf[..prefix.len()].copy_from_slice(prefix);
-        draw_text(buf.as_ptr(), (prefix.len() + len) as u32, 10.0, y + line_h, 10.0, 0xCCCCCCFF);
+        draw_text(buf.as_ptr(), (prefix.len() + len) as u32, 20.0, y + line_h, 40.0, 0xCCCCCCFF);
 
         // Roughness
         let prefix = b"Roughness (RT): ";
         let len = format_float(ROUGHNESS, &mut buf[prefix.len()..]);
         buf[..prefix.len()].copy_from_slice(prefix);
-        draw_text(buf.as_ptr(), (prefix.len() + len) as u32, 10.0, y + line_h * 2.0, 10.0, 0xCCCCCCFF);
+        draw_text(buf.as_ptr(), (prefix.len() + len) as u32, 20.0, y + line_h * 2.0, 40.0, 0xCCCCCCFF);
 
         // Intensity
         let prefix = b"Intensity (D-pad): ";
         let len = format_float(LIGHT_INTENSITY, &mut buf[prefix.len()..]);
         buf[..prefix.len()].copy_from_slice(prefix);
-        draw_text(buf.as_ptr(), (prefix.len() + len) as u32, 10.0, y + line_h * 3.0, 10.0, 0xCCCCCCFF);
+        draw_text(buf.as_ptr(), (prefix.len() + len) as u32, 20.0, y + line_h * 3.0, 40.0, 0xCCCCCCFF);
 
         // Light status
         let lights_label = b"Lights (A/B/X/Y):";
-        draw_text(lights_label.as_ptr(), lights_label.len() as u32, 10.0, y + line_h * 4.5, 10.0, 0xCCCCCCFF);
+        draw_text(lights_label.as_ptr(), lights_label.len() as u32, 20.0, y + line_h * 4.5, 40.0, 0xCCCCCCFF);
 
         // Draw light indicators
         for i in 0..4 {
-            let x = 10.0 + (i as f32) * 25.0;
+            let x = 20.0 + (i as f32) * 50.0;
             let color = if LIGHT_ENABLED[i] {
                 // Convert light color to packed format
                 let r = (LIGHT_COLORS[i][0] * 255.0) as u32;
@@ -465,11 +465,11 @@ pub extern "C" fn render() {
             } else {
                 0x404040FF // Dim gray when off
             };
-            draw_rect(x, y + line_h * 5.5, 20.0, 12.0, color);
+            draw_rect(x, y + line_h * 5.5, 40.0, 30.0, color);
         }
 
         // Controls hint
         let hint = b"L-Stick: Rotate  R-Stick: Move Light";
-        draw_text(hint.as_ptr(), hint.len() as u32, 10.0, y + line_h * 7.0, 8.0, 0x888888FF);
+        draw_text(hint.as_ptr(), hint.len() as u32, 20.0, y + line_h * 7.0, 32.0, 0x888888FF);
     }
 }

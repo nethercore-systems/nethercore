@@ -494,11 +494,11 @@ pub extern "C" fn render() {
         draw_mesh(ARM_MESH);
 
         // Draw UI
-        let y = 10.0;
-        let line_h = 14.0;
+        let y = 20.0;
+        let line_h = 50.0;
 
         let title = b"GPU Skinning Demo";
-        draw_text(title.as_ptr(), title.len() as u32, 10.0, y, 12.0, 0xFFFFFFFF);
+        draw_text(title.as_ptr(), title.len() as u32, 20.0, y, 48.0, 0xFFFFFFFF);
 
         let mut buf = [0u8; 32];
 
@@ -506,18 +506,18 @@ pub extern "C" fn render() {
         let prefix = b"Speed (D-pad): ";
         let len = format_float(ANIM_SPEED, &mut buf[prefix.len()..]);
         buf[..prefix.len()].copy_from_slice(prefix);
-        draw_text(buf.as_ptr(), (prefix.len() + len) as u32, 10.0, y + line_h, 10.0, 0xCCCCCCFF);
+        draw_text(buf.as_ptr(), (prefix.len() + len) as u32, 20.0, y + line_h, 40.0, 0xCCCCCCFF);
 
         // Pause status
         let status = if PAUSED { b"Status: PAUSED (A)" as &[u8] } else { b"Status: Playing (A)" as &[u8] };
-        draw_text(status.as_ptr(), status.len() as u32, 10.0, y + line_h * 2.0, 10.0, 0xCCCCCCFF);
+        draw_text(status.as_ptr(), status.len() as u32, 20.0, y + line_h * 2.0, 40.0, 0xCCCCCCFF);
 
         // Bone info
         let bones_label = b"3 bones, smooth weight blending";
-        draw_text(bones_label.as_ptr(), bones_label.len() as u32, 10.0, y + line_h * 3.5, 9.0, 0x888888FF);
+        draw_text(bones_label.as_ptr(), bones_label.len() as u32, 20.0, y + line_h * 3.5, 36.0, 0x888888FF);
 
         // Controls hint
         let hint = b"L-Stick: Rotate view";
-        draw_text(hint.as_ptr(), hint.len() as u32, 10.0, y + line_h * 4.5, 8.0, 0x666666FF);
+        draw_text(hint.as_ptr(), hint.len() as u32, 20.0, y + line_h * 4.5, 32.0, 0x666666FF);
     }
 }

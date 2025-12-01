@@ -12,7 +12,7 @@ use crate::input::InputConfig;
 ///
 /// Contains all user-configurable settings organized into sections.
 /// Serialized to/from TOML format for persistence.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Config {
     /// Video/graphics settings
     #[serde(default)]
@@ -25,8 +25,23 @@ pub struct Config {
     pub input: InputConfig,
 }
 
+/// Scaling mode for render target to window
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ScaleMode {
+    /// Stretch to fill window (may distort aspect ratio)
+    Stretch,
+    /// Integer scaling for pixel-perfect rendering (adds black bars)
+    PixelPerfect,
+}
+
+impl Default for ScaleMode {
+    fn default() -> Self {
+        ScaleMode::Stretch
+    }
+}
+
 /// Video and graphics configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct VideoConfig {
     /// Whether to run in fullscreen mode (default: false)
     #[serde(default)]
@@ -37,10 +52,13 @@ pub struct VideoConfig {
     /// Resolution scale multiplier (default: 2, range: 1-4)
     #[serde(default = "default_scale")]
     pub resolution_scale: u32,
+    /// Scaling mode for game framebuffer (default: Stretch)
+    #[serde(default)]
+    pub scale_mode: ScaleMode,
 }
 
 /// Audio configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AudioConfig {
     /// Master volume level (default: 0.8, range: 0.0-1.0)
     #[serde(default = "default_volume")]
@@ -63,6 +81,7 @@ impl Default for VideoConfig {
             fullscreen: false,
             vsync: true,
             resolution_scale: 2,
+            scale_mode: ScaleMode::default(),
         }
     }
 }
@@ -176,6 +195,7 @@ mod tests {
                 fullscreen: true,
                 vsync: false,
                 resolution_scale: 3,
+                scale_mode: ScaleMode::PixelPerfect,
             },
             audio: AudioConfig { master_volume: 0.5 },
             input: InputConfig::default(),
@@ -187,6 +207,7 @@ mod tests {
         assert!(parsed.video.fullscreen);
         assert!(!parsed.video.vsync);
         assert_eq!(parsed.video.resolution_scale, 3);
+        assert_eq!(parsed.video.scale_mode, ScaleMode::PixelPerfect);
         assert!((parsed.audio.master_volume - 0.5).abs() < f32::EPSILON);
     }
 
@@ -231,6 +252,7 @@ master_volume = 0.3
             fullscreen: true,
             vsync: true,
             resolution_scale: 4,
+            scale_mode: ScaleMode::Stretch,
         };
         let toml_str = toml::to_string(&video).unwrap();
         assert!(toml_str.contains("fullscreen = true"));
@@ -272,6 +294,7 @@ master_volume = 0.3
                 fullscreen: false,
                 vsync: true,
                 resolution_scale: scale,
+                scale_mode: ScaleMode::default(),
             };
             let toml_str = toml::to_string(&video).unwrap();
             let parsed: VideoConfig = toml::from_str(&toml_str).unwrap();

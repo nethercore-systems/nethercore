@@ -508,19 +508,19 @@ pub extern "C" fn render() {
         }
 
         // === Draw UI overlay ===
-        draw_rect(10.0, 10.0, 280.0, 140.0, 0x000000AA);
+        draw_rect(10.0, 10.0, 560.0, 240.0, 0x000000AA);
 
-        draw_text_str("Billboard Demo", 20.0, 25.0, 16.0, 0xFFFFFFFF);
-        draw_text_str("L-Stick: Rotate camera", 20.0, 50.0, 12.0, 0xCCCCCCFF);
-        draw_text_str("A: Pause/Resume", 20.0, 68.0, 12.0, 0xCCCCCCFF);
+        draw_text_str("Billboard Demo", 20.0, 30.0, 64.0, 0xFFFFFFFF);
+        draw_text_str("L-Stick: Rotate camera", 20.0, 100.0, 48.0, 0xCCCCCCFF);
+        draw_text_str("A: Pause/Resume", 20.0, 145.0, 48.0, 0xCCCCCCFF);
 
         // Mode labels at top
-        draw_text_str("Compare billboard modes (top row):", 20.0, 95.0, 12.0, 0xFFDD88FF);
-        draw_text_str("1=Spherical 2=CylY 3=CylX 4=CylZ", 20.0, 113.0, 12.0, 0xAAAAAAFF);
+        draw_text_str("Compare billboard modes (top row):", 20.0, 190.0, 48.0, 0xFFDD88FF);
+        draw_text_str("1=Spherical 2=CylY 3=CylX 4=CylZ", 20.0, 235.0, 48.0, 0xAAAAAAFF);
 
         if PAUSED {
-            draw_rect(400.0, 250.0, 160.0, 40.0, 0x000000CC);
-            draw_text_str("PAUSED", 440.0, 278.0, 24.0, 0xFFFF00FF);
+            draw_rect(340.0, 240.0, 280.0, 120.0, 0x000000CC);
+            draw_text_str("PAUSED", 380.0, 280.0, 96.0, 0xFFFF00FF);
         }
     }
 }
