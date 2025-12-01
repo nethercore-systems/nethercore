@@ -66,6 +66,7 @@ mod buffer;
 mod command_buffer;
 mod pipeline;
 mod render_state;
+mod texture_manager;
 mod vertex;
 
 use std::collections::HashMap;
@@ -78,11 +79,9 @@ use winit::window::Window;
 
 use emberware_core::console::Graphics;
 
-use crate::console::VRAM_LIMIT;
-
 // Re-export public types from submodules
-pub use buffer::{GrowableBuffer, MeshHandle, RetainedMesh};
-pub use command_buffer::CommandBuffer;
+pub use buffer::{BufferManager, GrowableBuffer, MeshHandle, RetainedMesh};
+pub use command_buffer::{VRPCommand, VirtualRenderPass};
 pub use render_state::{
     BlendMode, CameraUniforms, CullMode, LightUniform, LightsUniforms, MatcapBlendMode,
     MaterialUniforms, RenderState, SkyUniforms, TextureFilter, TextureHandle,
@@ -95,21 +94,8 @@ pub use vertex::{
 // Re-export for crate-internal use
 pub(crate) use pipeline::PipelineEntry;
 
-use pipeline::PipelineKey;
-
-/// Internal texture data
-///
-/// Fields tracked for debugging and VRAM accounting.
-/// Will be read when render_frame() processes draw commands.
-#[allow(dead_code)]
-struct TextureEntry {
-    texture: wgpu::Texture,
-    view: wgpu::TextureView,
-    width: u32,
-    height: u32,
-    /// Size in bytes (for VRAM tracking)
-    size_bytes: usize,
-}
+use pipeline::{PipelineCache, PipelineKey};
+use texture_manager::TextureManager;
 
 /// Material cache key for deduplicating material uniform buffers
 ///
@@ -163,17 +149,8 @@ pub struct ZGraphics {
     depth_texture: wgpu::Texture,
     depth_view: wgpu::TextureView,
 
-    // Texture management
-    textures: HashMap<u32, TextureEntry>,
-    next_texture_id: u32,
-    vram_used: usize,
-
-    // Fallback textures
-    fallback_checkerboard: TextureHandle,
-    fallback_white: TextureHandle,
-
-    // Built-in font texture
-    font_texture: TextureHandle,
+    // Texture management (extracted to separate module)
+    texture_manager: TextureManager,
 
     // Samplers
     sampler_nearest: wgpu::Sampler,
@@ -214,18 +191,11 @@ pub struct ZGraphics {
     current_frame: Option<wgpu::SurfaceTexture>,
     current_view: Option<wgpu::TextureView>,
 
-    // Vertex buffer architecture
-    // Per-format vertex buffers (one for each of 16 vertex formats)
-    vertex_buffers: [GrowableBuffer; VERTEX_FORMAT_COUNT],
-    // Per-format index buffers
-    index_buffers: [GrowableBuffer; VERTEX_FORMAT_COUNT],
-
-    // Retained mesh storage
-    retained_meshes: HashMap<u32, RetainedMesh>,
-    next_mesh_id: u32,
+    // Buffer management (vertex/index buffers and retained meshes)
+    buffer_manager: BufferManager,
 
     // Command buffer for immediate mode draws
-    command_buffer: CommandBuffer,
+    command_buffer: VirtualRenderPass,
 
     // Current transform matrix (model transform)
     current_transform: Mat4,
@@ -233,7 +203,7 @@ pub struct ZGraphics {
     transform_stack: Vec<Mat4>,
 
     // Shader and pipeline cache
-    pipelines: HashMap<PipelineKey, PipelineEntry>,
+    pipeline_cache: PipelineCache,
     current_render_mode: u8,
 }
 
@@ -330,24 +300,8 @@ impl ZGraphics {
             ..Default::default()
         });
 
-        // Create per-format vertex and index buffers
-        let vertex_buffers = std::array::from_fn(|i| {
-            let info = VertexFormatInfo::for_format(i as u8);
-            GrowableBuffer::new(
-                &device,
-                wgpu::BufferUsages::VERTEX,
-                &format!("Vertex Buffer {}", info.name),
-            )
-        });
-
-        let index_buffers = std::array::from_fn(|i| {
-            let info = VertexFormatInfo::for_format(i as u8);
-            GrowableBuffer::new(
-                &device,
-                wgpu::BufferUsages::INDEX,
-                &format!("Index Buffer {}", info.name),
-            )
-        });
+        // Create buffer manager (vertex/index buffers and mesh storage)
+        let buffer_manager = BufferManager::new(&device);
 
         // Create sky uniform buffer
         let sky_uniforms = SkyUniforms::default();
@@ -404,19 +358,17 @@ impl ZGraphics {
             mapped_at_creation: false,
         });
 
-        let mut graphics = Self {
+        // Create texture manager (handles fallback textures)
+        let texture_manager = TextureManager::new(&device, &queue)?;
+
+        let graphics = Self {
             surface,
             device,
             queue,
             config,
             depth_texture,
             depth_view,
-            textures: HashMap::new(),
-            next_texture_id: 1, // 0 is reserved for INVALID
-            vram_used: 0,
-            fallback_checkerboard: TextureHandle::INVALID,
-            fallback_white: TextureHandle::INVALID,
-            font_texture: TextureHandle::INVALID,
+            texture_manager,
             sampler_nearest,
             sampler_linear,
             render_state: RenderState::default(),
@@ -436,19 +388,13 @@ impl ZGraphics {
             frame_bind_groups: HashMap::new(),
             current_frame: None,
             current_view: None,
-            vertex_buffers,
-            index_buffers,
-            retained_meshes: HashMap::new(),
-            next_mesh_id: 1, // 0 is reserved for INVALID
-            command_buffer: CommandBuffer::new(),
+            buffer_manager,
+            command_buffer: VirtualRenderPass::new(),
             current_transform: Mat4::IDENTITY,
             transform_stack: Vec::with_capacity(16),
-            pipelines: HashMap::new(),
+            pipeline_cache: PipelineCache::new(),
             current_render_mode: 0, // Default to Mode 0 (Unlit)
         };
-
-        // Create fallback textures
-        graphics.create_fallback_textures()?;
 
         Ok(graphics)
     }
@@ -482,57 +428,8 @@ impl ZGraphics {
         (texture, view)
     }
 
-    /// Create fallback textures (checkerboard, white, and font)
-    ///
-    /// These textures are essential for rendering - errors are propagated
-    /// to allow graceful initialization failure.
-    fn create_fallback_textures(&mut self) -> Result<()> {
-        // 8x8 magenta/black checkerboard for missing textures
-        let mut checkerboard_data = vec![0u8; 8 * 8 * 4];
-        for y in 0..8 {
-            for x in 0..8 {
-                let idx = (y * 8 + x) * 4;
-                let is_magenta = (x + y) % 2 == 0;
-                if is_magenta {
-                    checkerboard_data[idx] = 255; // R
-                    checkerboard_data[idx + 1] = 0; // G
-                    checkerboard_data[idx + 2] = 255; // B
-                    checkerboard_data[idx + 3] = 255; // A
-                } else {
-                    checkerboard_data[idx] = 0; // R
-                    checkerboard_data[idx + 1] = 0; // G
-                    checkerboard_data[idx + 2] = 0; // B
-                    checkerboard_data[idx + 3] = 255; // A
-                }
-            }
-        }
-        self.fallback_checkerboard = self
-            .load_texture_internal(8, 8, &checkerboard_data, false)
-            .context("Failed to create checkerboard fallback texture")?;
-
-        // 1x1 white texture for untextured draws
-        let white_data = [255u8, 255, 255, 255];
-        self.fallback_white = self
-            .load_texture_internal(1, 1, &white_data, false)
-            .context("Failed to create white fallback texture")?;
-
-        // Load built-in font texture
-        use crate::font;
-        let font_atlas = font::generate_font_atlas();
-        self.font_texture = self
-            .load_texture_internal(font::ATLAS_WIDTH, font::ATLAS_HEIGHT, &font_atlas, false)
-            .context("Failed to create font texture")?;
-
-        tracing::debug!(
-            "Created font texture: {}x{}",
-            font::ATLAS_WIDTH,
-            font::ATLAS_HEIGHT
-        );
-        Ok(())
-    }
-
     // ========================================================================
-    // Texture Management
+    // Texture Management (delegated to TextureManager)
     // ========================================================================
 
     /// Load a texture from RGBA8 pixel data
@@ -544,115 +441,33 @@ impl ZGraphics {
         height: u32,
         pixels: &[u8],
     ) -> Result<TextureHandle> {
-        self.load_texture_internal(width, height, pixels, true)
-    }
-
-    /// Internal texture loading (optionally tracks VRAM)
-    fn load_texture_internal(
-        &mut self,
-        width: u32,
-        height: u32,
-        pixels: &[u8],
-        track_vram: bool,
-    ) -> Result<TextureHandle> {
-        let expected_size = (width * height * 4) as usize;
-        if pixels.len() != expected_size {
-            anyhow::bail!(
-                "Pixel data size mismatch: expected {} bytes, got {}",
-                expected_size,
-                pixels.len()
-            );
-        }
-
-        let size_bytes = expected_size;
-
-        // Check VRAM budget
-        if track_vram && self.vram_used + size_bytes > VRAM_LIMIT {
-            anyhow::bail!(
-                "VRAM budget exceeded: {} + {} > {} bytes",
-                self.vram_used,
-                size_bytes,
-                VRAM_LIMIT
-            );
-        }
-
-        // Create texture
-        let texture = self.device.create_texture_with_data(
-            &self.queue,
-            &wgpu::TextureDescriptor {
-                label: Some("Game Texture"),
-                size: wgpu::Extent3d {
-                    width,
-                    height,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                view_formats: &[],
-            },
-            wgpu::util::TextureDataOrder::LayerMajor,
-            pixels,
-        );
-
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-        let handle = TextureHandle(self.next_texture_id);
-        self.next_texture_id += 1;
-
-        self.textures.insert(
-            handle.0,
-            TextureEntry {
-                texture,
-                view,
-                width,
-                height,
-                size_bytes,
-            },
-        );
-
-        if track_vram {
-            self.vram_used += size_bytes;
-        }
-
-        tracing::debug!(
-            "Loaded texture {}: {}x{}, {} bytes (VRAM: {}/{})",
-            handle.0,
-            width,
-            height,
-            size_bytes,
-            self.vram_used,
-            VRAM_LIMIT
-        );
-
-        Ok(handle)
+        self.texture_manager
+            .load_texture(&self.device, &self.queue, width, height, pixels)
     }
 
     /// Get texture view by handle
     pub fn get_texture_view(&self, handle: TextureHandle) -> Option<&wgpu::TextureView> {
-        self.textures.get(&handle.0).map(|t| &t.view)
+        self.texture_manager.get_texture_view(handle)
     }
 
     /// Get fallback checkerboard texture view
     pub fn get_fallback_checkerboard_view(&self) -> &wgpu::TextureView {
-        &self.textures[&self.fallback_checkerboard.0].view
+        self.texture_manager.get_fallback_checkerboard_view()
     }
 
     /// Get fallback white texture view
     pub fn get_fallback_white_view(&self) -> &wgpu::TextureView {
-        &self.textures[&self.fallback_white.0].view
+        self.texture_manager.get_fallback_white_view()
     }
 
     /// Get font texture handle
     pub fn font_texture(&self) -> TextureHandle {
-        self.font_texture
+        self.texture_manager.font_texture()
     }
 
     /// Get font texture view
     pub fn get_font_texture_view(&self) -> &wgpu::TextureView {
-        &self.textures[&self.font_texture.0].view
+        self.texture_manager.get_font_texture_view()
     }
 
     /// Get texture view for a slot, returning fallback if unbound
@@ -673,12 +488,12 @@ impl ZGraphics {
 
     /// Get VRAM usage in bytes
     pub fn vram_used(&self) -> usize {
-        self.vram_used
+        self.texture_manager.vram_used()
     }
 
     /// Get VRAM limit in bytes
     pub fn vram_limit(&self) -> usize {
-        VRAM_LIMIT
+        self.texture_manager.vram_limit()
     }
 
     // ========================================================================
@@ -977,7 +792,7 @@ impl ZGraphics {
     }
 
     // ========================================================================
-    // Retained Mesh Loading
+    // Retained Mesh Loading (delegated to BufferManager)
     // ========================================================================
 
     /// Load a non-indexed mesh (retained mode)
@@ -985,52 +800,8 @@ impl ZGraphics {
     /// The mesh is stored in the appropriate vertex buffer based on format.
     /// Returns a MeshHandle for use with draw_mesh().
     pub fn load_mesh(&mut self, data: &[f32], format: u8) -> Result<MeshHandle> {
-        let format_idx = format as usize;
-        if format_idx >= VERTEX_FORMAT_COUNT {
-            anyhow::bail!("Invalid vertex format: {}", format);
-        }
-
-        let stride = vertex_stride(format) as usize;
-        let byte_data = bytemuck::cast_slice(data);
-        let vertex_count = byte_data.len() / stride;
-
-        if byte_data.len() % stride != 0 {
-            anyhow::bail!(
-                "Vertex data size {} is not a multiple of stride {}",
-                byte_data.len(),
-                stride
-            );
-        }
-
-        // Ensure buffer has capacity
-        self.vertex_buffers[format_idx].ensure_capacity(&self.device, byte_data.len() as u64);
-
-        // Write to buffer
-        let vertex_offset = self.vertex_buffers[format_idx].write(&self.queue, byte_data);
-
-        // Create mesh handle
-        let handle = MeshHandle(self.next_mesh_id);
-        self.next_mesh_id += 1;
-
-        self.retained_meshes.insert(
-            handle.0,
-            RetainedMesh {
-                format,
-                vertex_count: vertex_count as u32,
-                index_count: 0,
-                vertex_offset,
-                index_offset: 0,
-            },
-        );
-
-        tracing::debug!(
-            "Loaded mesh {}: {} vertices, format {}",
-            handle.0,
-            vertex_count,
-            VertexFormatInfo::for_format(format).name
-        );
-
-        Ok(handle)
+        self.buffer_manager
+            .load_mesh(&self.device, &self.queue, data, format)
     }
 
     /// Load an indexed mesh (retained mode)
@@ -1043,63 +814,13 @@ impl ZGraphics {
         indices: &[u32],
         format: u8,
     ) -> Result<MeshHandle> {
-        let format_idx = format as usize;
-        if format_idx >= VERTEX_FORMAT_COUNT {
-            anyhow::bail!("Invalid vertex format: {}", format);
-        }
-
-        let stride = vertex_stride(format) as usize;
-        let byte_data = bytemuck::cast_slice(data);
-        let vertex_count = byte_data.len() / stride;
-
-        if byte_data.len() % stride != 0 {
-            anyhow::bail!(
-                "Vertex data size {} is not a multiple of stride {}",
-                byte_data.len(),
-                stride
-            );
-        }
-
-        // Ensure vertex buffer has capacity
-        self.vertex_buffers[format_idx].ensure_capacity(&self.device, byte_data.len() as u64);
-
-        // Ensure index buffer has capacity
-        let index_byte_data: &[u8] = bytemuck::cast_slice(indices);
-        self.index_buffers[format_idx].ensure_capacity(&self.device, index_byte_data.len() as u64);
-
-        // Write to buffers
-        let vertex_offset = self.vertex_buffers[format_idx].write(&self.queue, byte_data);
-        let index_offset = self.index_buffers[format_idx].write(&self.queue, index_byte_data);
-
-        // Create mesh handle
-        let handle = MeshHandle(self.next_mesh_id);
-        self.next_mesh_id += 1;
-
-        self.retained_meshes.insert(
-            handle.0,
-            RetainedMesh {
-                format,
-                vertex_count: vertex_count as u32,
-                index_count: indices.len() as u32,
-                vertex_offset,
-                index_offset,
-            },
-        );
-
-        tracing::debug!(
-            "Loaded indexed mesh {}: {} vertices, {} indices, format {}",
-            handle.0,
-            vertex_count,
-            indices.len(),
-            VertexFormatInfo::for_format(format).name
-        );
-
-        Ok(handle)
+        self.buffer_manager
+            .load_mesh_indexed(&self.device, &self.queue, data, indices, format)
     }
 
     /// Get mesh info by handle
     pub fn get_mesh(&self, handle: MeshHandle) -> Option<&RetainedMesh> {
-        self.retained_meshes.get(&handle.0)
+        self.buffer_manager.get_mesh(handle)
     }
 
     // ========================================================================
@@ -1107,12 +828,12 @@ impl ZGraphics {
     // ========================================================================
 
     /// Get the command buffer (for flush/rendering)
-    pub fn command_buffer(&self) -> &CommandBuffer {
+    pub fn command_buffer(&self) -> &VirtualRenderPass {
         &self.command_buffer
     }
 
     /// Get mutable command buffer
-    pub fn command_buffer_mut(&mut self) -> &mut CommandBuffer {
+    pub fn command_buffer_mut(&mut self) -> &mut VirtualRenderPass {
         &mut self.command_buffer
     }
 
@@ -1189,7 +910,7 @@ impl ZGraphics {
                     let base_vertex = self.command_buffer.append_vertex_data(format, &vertex_data);
 
                     // Add draw command directly
-                    self.command_buffer.add_command(command_buffer::DrawCommand {
+                    self.command_buffer.add_command(command_buffer::VRPCommand {
                         format,
                         transform,
                         vertex_count: vertex_count as u32,
@@ -1236,7 +957,7 @@ impl ZGraphics {
                     let first_index = self.command_buffer.append_index_data(format, &index_data);
 
                     // Add draw command directly
-                    self.command_buffer.add_command(command_buffer::DrawCommand {
+                    self.command_buffer.add_command(command_buffer::VRPCommand {
                         format,
                         transform,
                         vertex_count: vertex_count as u32,
@@ -1290,7 +1011,7 @@ impl ZGraphics {
                             };
 
                             // Add draw command for the retained mesh
-                            self.command_buffer.add_command(command_buffer::DrawCommand {
+                            self.command_buffer.add_command(command_buffer::VRPCommand {
                                 format: mesh.format,
                                 transform,
                                 vertex_count: mesh.vertex_count,
@@ -1419,7 +1140,7 @@ impl ZGraphics {
                     let first_index = self.command_buffer.append_index_data(format, &indices);
 
                     // Add draw command with identity transform (positions are in world space)
-                    self.command_buffer.add_command(command_buffer::DrawCommand {
+                    self.command_buffer.add_command(command_buffer::VRPCommand {
                         format,
                         transform: glam::Mat4::IDENTITY,
                         vertex_count: 4,
@@ -1532,7 +1253,7 @@ impl ZGraphics {
                     let first_index = self.command_buffer.append_index_data(SPRITE_FORMAT, &indices);
 
                     // Add draw command with identity transform (screen space)
-                    self.command_buffer.add_command(command_buffer::DrawCommand {
+                    self.command_buffer.add_command(command_buffer::VRPCommand {
                         format: SPRITE_FORMAT,
                         transform: Mat4::IDENTITY,
                         vertex_count: 4,
@@ -1599,7 +1320,7 @@ impl ZGraphics {
                     let first_index = self.command_buffer.append_index_data(RECT_FORMAT, &indices);
 
                     // Add draw command with identity transform (screen space)
-                    self.command_buffer.add_command(command_buffer::DrawCommand {
+                    self.command_buffer.add_command(command_buffer::VRPCommand {
                         format: RECT_FORMAT,
                         transform: Mat4::IDENTITY,
                         vertex_count: 4,
@@ -1658,11 +1379,11 @@ impl ZGraphics {
                                 "Custom font texture handle {} not found, using built-in font",
                                 custom_font.texture
                             );
-                            self.font_texture
+                            self.font_texture()
                         }
                     } else {
                         // Use built-in font texture
-                        self.font_texture
+                        self.font_texture()
                     };
 
                     // Text uses POS_UV_COLOR format (format 3)
@@ -1678,7 +1399,7 @@ impl ZGraphics {
 
                     // Add draw command for text rendering
                     // Text is always rendered in 2D screen space with identity transform
-                    self.command_buffer.add_command(command_buffer::DrawCommand {
+                    self.command_buffer.add_command(command_buffer::VRPCommand {
                         format: TEXT_FORMAT,
                         transform: Mat4::IDENTITY,
                         vertex_count: (vertices.len() / 8) as u32, // 8 floats per vertex
@@ -1763,17 +1484,17 @@ impl ZGraphics {
     }
 
     // ========================================================================
-    // Buffer Access (for rendering)
+    // Buffer Access (delegated to BufferManager)
     // ========================================================================
 
     /// Get vertex buffer for a format
     pub fn vertex_buffer(&self, format: u8) -> &GrowableBuffer {
-        &self.vertex_buffers[format as usize]
+        self.buffer_manager.vertex_buffer(format)
     }
 
     /// Get index buffer for a format
     pub fn index_buffer(&self, format: u8) -> &GrowableBuffer {
-        &self.index_buffers[format as usize]
+        self.buffer_manager.index_buffer(format)
     }
 
     // ========================================================================
@@ -1858,32 +1579,13 @@ impl ZGraphics {
     ///
     /// This caches pipelines to avoid recompilation.
     pub fn get_pipeline(&mut self, format: u8, state: &RenderState) -> &PipelineEntry {
-        let key = PipelineKey::new(self.current_render_mode, format, state);
-
-        // Return existing pipeline if cached
-        if self.pipelines.contains_key(&key) {
-            return &self.pipelines[&key];
-        }
-
-        // Otherwise, create a new pipeline
-        tracing::debug!(
-            "Creating pipeline: mode={}, format={}, blend={:?}, depth={}, cull={:?}",
-            self.current_render_mode,
-            format,
-            state.blend_mode,
-            state.depth_test,
-            state.cull_mode
-        );
-
-        let entry = pipeline::create_pipeline(
+        self.pipeline_cache.get_or_create(
             &self.device,
             self.config.format,
             self.current_render_mode,
             format,
             state,
-        );
-        self.pipelines.insert(key, entry);
-        &self.pipelines[&key]
+        )
     }
 
     // ========================================================================
@@ -2142,17 +1844,23 @@ impl ZGraphics {
         for format in 0..VERTEX_FORMAT_COUNT as u8 {
             let vertex_data = self.command_buffer.vertex_data(format);
             if !vertex_data.is_empty() {
-                self.vertex_buffers[format as usize]
+                self.buffer_manager
+                    .vertex_buffer_mut(format)
                     .ensure_capacity(&self.device, vertex_data.len() as u64);
-                self.vertex_buffers[format as usize].write_at(&self.queue, 0, vertex_data);
+                self.buffer_manager
+                    .vertex_buffer(format)
+                    .write_at(&self.queue, 0, vertex_data);
             }
 
             let index_data = self.command_buffer.index_data(format);
             if !index_data.is_empty() {
                 let index_bytes: &[u8] = bytemuck::cast_slice(index_data);
-                self.index_buffers[format as usize]
+                self.buffer_manager
+                    .index_buffer_mut(format)
                     .ensure_capacity(&self.device, index_bytes.len() as u64);
-                self.index_buffers[format as usize].write_at(&self.queue, 0, index_bytes);
+                self.buffer_manager
+                    .index_buffer(format)
+                    .write_at(&self.queue, 0, index_bytes);
             }
         }
 
@@ -2186,14 +1894,12 @@ impl ZGraphics {
                 )
             });
 
-        // OPTIMIZATION 2: Take caches out of self temporarily to avoid nested mutable borrows
-        // We clear them, use them, then move them back - preserving HashMap allocations
+        // Take caches out of self temporarily to avoid nested mutable borrows during render pass.
+        // Caches are persistent across frames - entries are reused when keys match.
+        // Cache growth is bounded by unique (material, texture) combinations used.
         let mut material_buffers = std::mem::take(&mut self.material_buffers);
         let mut texture_bind_groups = std::mem::take(&mut self.texture_bind_groups);
         let mut frame_bind_groups = std::mem::take(&mut self.frame_bind_groups);
-        material_buffers.clear();
-        texture_bind_groups.clear();
-        frame_bind_groups.clear();
 
         // Render pass
         {
@@ -2224,6 +1930,12 @@ impl ZGraphics {
                 occlusion_query_set: None,
             });
 
+            // State tracking to skip redundant GPU calls (commands are sorted by pipeline/texture)
+            let mut bound_pipeline: Option<PipelineKey> = None;
+            let mut bound_frame_group: Option<u64> = None;
+            let mut bound_texture_slots: Option<[TextureHandle; 4]> = None;
+            let mut bound_vertex_format: Option<u8> = None;
+
             for cmd in self.command_buffer.commands() {
                 // Create render state from command
                 let state = RenderState {
@@ -2236,19 +1948,20 @@ impl ZGraphics {
                     matcap_blend_modes: cmd.matcap_blend_modes,
                 };
 
-                // Get/create pipeline
+                // Get/create pipeline (using contains + get pattern to avoid borrow issues)
                 let pipeline_key = PipelineKey::new(self.current_render_mode, cmd.format, &state);
-                if !self.pipelines.contains_key(&pipeline_key) {
-                    let entry = pipeline::create_pipeline(
+                if !self.pipeline_cache.contains(self.current_render_mode, cmd.format, &state) {
+                    // Create and insert pipeline if it doesn't exist
+                    self.pipeline_cache.get_or_create(
                         &self.device,
                         self.config.format,
                         self.current_render_mode,
                         cmd.format,
                         &state,
                     );
-                    self.pipelines.insert(pipeline_key, entry);
                 }
-                let pipeline_entry = &self.pipelines[&pipeline_key];
+                // Safe to unwrap since we just ensured it exists
+                let pipeline_entry = self.pipeline_cache.get(self.current_render_mode, cmd.format, &state).unwrap();
 
                 // Get or create material uniform buffer (cached by color + properties + blend modes)
                 let material_key = MaterialCacheKey::new(
@@ -2446,20 +2159,36 @@ impl ZGraphics {
                         })
                     });
 
-                // Set pipeline and bind groups
-                render_pass.set_pipeline(&pipeline_entry.pipeline);
-                render_pass.set_bind_group(0, &*frame_bind_group, &[]);
-                render_pass.set_bind_group(1, &*texture_bind_group, &[]);
+                // Set pipeline (only if changed)
+                if bound_pipeline != Some(pipeline_key) {
+                    render_pass.set_pipeline(&pipeline_entry.pipeline);
+                    bound_pipeline = Some(pipeline_key);
+                }
 
-                // Set vertex buffer
-                if let Some(buffer) = self.vertex_buffers[cmd.format as usize].buffer() {
-                    render_pass.set_vertex_buffer(0, buffer.slice(..));
+                // Set frame bind group (only if changed)
+                if bound_frame_group != Some(material_buffer_addr) {
+                    render_pass.set_bind_group(0, &*frame_bind_group, &[]);
+                    bound_frame_group = Some(material_buffer_addr);
+                }
+
+                // Set texture bind group (only if changed)
+                if bound_texture_slots != Some(cmd.texture_slots) {
+                    render_pass.set_bind_group(1, &*texture_bind_group, &[]);
+                    bound_texture_slots = Some(cmd.texture_slots);
+                }
+
+                // Set vertex buffer (only if format changed)
+                if bound_vertex_format != Some(cmd.format) {
+                    if let Some(buffer) = self.buffer_manager.vertex_buffer(cmd.format).buffer() {
+                        render_pass.set_vertex_buffer(0, buffer.slice(..));
+                    }
+                    bound_vertex_format = Some(cmd.format);
                 }
 
                 // Draw
                 if cmd.index_count > 0 {
                     // Indexed draw
-                    if let Some(buffer) = self.index_buffers[cmd.format as usize].buffer() {
+                    if let Some(buffer) = self.buffer_manager.index_buffer(cmd.format).buffer() {
                         render_pass.set_index_buffer(buffer.slice(..), wgpu::IndexFormat::Uint32);
                         render_pass.draw_indexed(
                             cmd.first_index..cmd.first_index + cmd.index_count,

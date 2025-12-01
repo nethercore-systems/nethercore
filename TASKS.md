@@ -18,6 +18,15 @@
 
 ## TODO
 
+### **[STABILITY]** CRITICAL HIGH PRIORITY - Crate Dependencies to Workspace Dependencies
+- We have a few dependencies in the Emberware Z and Shared folders which should just be a workspace level dependency, and imported via { workspace = true }
+- This will make maintaining dependencies and updates easier.
+
+### **[STABILITY]** CRITICAL HIGH PRIORITY - Change all instances of std::collections::HashMap or HashSet to hashbrown or any other faster hashing algorithm
+- std::collections::HashMap and HashSet are slow due to needing security checks
+- We should easily optimize this by converting to another drop-in hashmap or hashset implementation, such as hashbrown or something else
+- Ideally, zero hash or perfect hash would be possible for many of these use cases.
+
 ### **[OPTIMIZATION] Share quad index buffer for sprites and billboards**
 
 **Status:** Minor optimization opportunity

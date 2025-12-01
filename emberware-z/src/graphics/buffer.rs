@@ -3,6 +3,12 @@
 //! Provides auto-growing buffers for efficient GPU memory management
 //! and retained mesh storage.
 
+use std::collections::HashMap;
+
+use anyhow::Result;
+
+use super::vertex::{vertex_stride, VertexFormatInfo, VERTEX_FORMAT_COUNT};
+
 /// Initial buffer size (64KB)
 const INITIAL_BUFFER_SIZE: u64 = 64 * 1024;
 
@@ -165,6 +171,200 @@ pub struct RetainedMesh {
     pub vertex_offset: u64,
     /// Byte offset into the format's index buffer (if indexed)
     pub index_offset: u64,
+}
+
+/// Manages vertex/index buffers and retained meshes
+///
+/// Handles buffer allocation, growth, and mesh storage.
+pub struct BufferManager {
+    /// Per-format vertex buffers (one for each of 16 vertex formats)
+    vertex_buffers: [GrowableBuffer; VERTEX_FORMAT_COUNT],
+    /// Per-format index buffers
+    index_buffers: [GrowableBuffer; VERTEX_FORMAT_COUNT],
+    /// Retained mesh storage
+    retained_meshes: HashMap<u32, RetainedMesh>,
+    /// Next mesh ID to assign
+    next_mesh_id: u32,
+}
+
+impl BufferManager {
+    /// Create a new buffer manager with pre-allocated buffers for all formats
+    pub fn new(device: &wgpu::Device) -> Self {
+        // Create vertex buffers for each format
+        let vertex_buffers = std::array::from_fn(|i| {
+            GrowableBuffer::new(
+                device,
+                wgpu::BufferUsages::VERTEX,
+                &format!("Vertex Buffer Format {}", i),
+            )
+        });
+
+        // Create index buffers for each format
+        let index_buffers = std::array::from_fn(|i| {
+            GrowableBuffer::new(
+                device,
+                wgpu::BufferUsages::INDEX,
+                &format!("Index Buffer Format {}", i),
+            )
+        });
+
+        Self {
+            vertex_buffers,
+            index_buffers,
+            retained_meshes: HashMap::new(),
+            next_mesh_id: 1, // 0 is reserved for INVALID
+        }
+    }
+
+    /// Load a non-indexed mesh (retained mode)
+    ///
+    /// The mesh is stored in the appropriate vertex buffer based on format.
+    /// Returns a MeshHandle for use with draw_mesh().
+    pub fn load_mesh(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        data: &[f32],
+        format: u8,
+    ) -> Result<MeshHandle> {
+        let format_idx = format as usize;
+        if format_idx >= VERTEX_FORMAT_COUNT {
+            anyhow::bail!("Invalid vertex format: {}", format);
+        }
+
+        let stride = vertex_stride(format) as usize;
+        let byte_data = bytemuck::cast_slice(data);
+        let vertex_count = byte_data.len() / stride;
+
+        if byte_data.len() % stride != 0 {
+            anyhow::bail!(
+                "Vertex data size {} is not a multiple of stride {}",
+                byte_data.len(),
+                stride
+            );
+        }
+
+        // Ensure buffer has capacity
+        self.vertex_buffers[format_idx].ensure_capacity(device, byte_data.len() as u64);
+
+        // Write to buffer
+        let vertex_offset = self.vertex_buffers[format_idx].write(queue, byte_data);
+
+        // Create mesh handle
+        let handle = MeshHandle(self.next_mesh_id);
+        self.next_mesh_id += 1;
+
+        self.retained_meshes.insert(
+            handle.0,
+            RetainedMesh {
+                format,
+                vertex_count: vertex_count as u32,
+                index_count: 0,
+                vertex_offset,
+                index_offset: 0,
+            },
+        );
+
+        tracing::debug!(
+            "Loaded mesh {}: {} vertices, format {}",
+            handle.0,
+            vertex_count,
+            VertexFormatInfo::for_format(format).name
+        );
+
+        Ok(handle)
+    }
+
+    /// Load an indexed mesh (retained mode)
+    ///
+    /// The mesh is stored in the appropriate vertex and index buffers based on format.
+    /// Returns a MeshHandle for use with draw_mesh().
+    pub fn load_mesh_indexed(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        data: &[f32],
+        indices: &[u32],
+        format: u8,
+    ) -> Result<MeshHandle> {
+        let format_idx = format as usize;
+        if format_idx >= VERTEX_FORMAT_COUNT {
+            anyhow::bail!("Invalid vertex format: {}", format);
+        }
+
+        let stride = vertex_stride(format) as usize;
+        let byte_data = bytemuck::cast_slice(data);
+        let vertex_count = byte_data.len() / stride;
+
+        if byte_data.len() % stride != 0 {
+            anyhow::bail!(
+                "Vertex data size {} is not a multiple of stride {}",
+                byte_data.len(),
+                stride
+            );
+        }
+
+        // Ensure vertex buffer has capacity
+        self.vertex_buffers[format_idx].ensure_capacity(device, byte_data.len() as u64);
+
+        // Ensure index buffer has capacity
+        let index_byte_data: &[u8] = bytemuck::cast_slice(indices);
+        self.index_buffers[format_idx].ensure_capacity(device, index_byte_data.len() as u64);
+
+        // Write to buffers
+        let vertex_offset = self.vertex_buffers[format_idx].write(queue, byte_data);
+        let index_offset = self.index_buffers[format_idx].write(queue, index_byte_data);
+
+        // Create mesh handle
+        let handle = MeshHandle(self.next_mesh_id);
+        self.next_mesh_id += 1;
+
+        self.retained_meshes.insert(
+            handle.0,
+            RetainedMesh {
+                format,
+                vertex_count: vertex_count as u32,
+                index_count: indices.len() as u32,
+                vertex_offset,
+                index_offset,
+            },
+        );
+
+        tracing::debug!(
+            "Loaded indexed mesh {}: {} vertices, {} indices, format {}",
+            handle.0,
+            vertex_count,
+            indices.len(),
+            VertexFormatInfo::for_format(format).name
+        );
+
+        Ok(handle)
+    }
+
+    /// Get mesh info by handle
+    pub fn get_mesh(&self, handle: MeshHandle) -> Option<&RetainedMesh> {
+        self.retained_meshes.get(&handle.0)
+    }
+
+    /// Get vertex buffer for a format
+    pub fn vertex_buffer(&self, format: u8) -> &GrowableBuffer {
+        &self.vertex_buffers[format as usize]
+    }
+
+    /// Get mutable vertex buffer for a format
+    pub fn vertex_buffer_mut(&mut self, format: u8) -> &mut GrowableBuffer {
+        &mut self.vertex_buffers[format as usize]
+    }
+
+    /// Get index buffer for a format
+    pub fn index_buffer(&self, format: u8) -> &GrowableBuffer {
+        &self.index_buffers[format as usize]
+    }
+
+    /// Get mutable index buffer for a format
+    pub fn index_buffer_mut(&mut self, format: u8) -> &mut GrowableBuffer {
+        &mut self.index_buffers[format as usize]
+    }
 }
 
 #[cfg(test)]

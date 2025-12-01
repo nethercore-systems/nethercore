@@ -3,6 +3,8 @@
 //! Handles shader compilation, pipeline caching, and bind group layout creation
 //! for all render mode and vertex format combinations.
 
+use std::collections::HashMap;
+
 use super::render_state::RenderState;
 use super::vertex::VertexFormatInfo;
 
@@ -350,4 +352,72 @@ fn create_texture_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLay
             },
         ],
     })
+}
+
+/// Cache for render pipelines
+///
+/// Stores compiled pipelines keyed by their render state configuration.
+/// Pipelines are created on-demand and reused across frames.
+pub struct PipelineCache {
+    pipelines: HashMap<PipelineKey, PipelineEntry>,
+}
+
+impl PipelineCache {
+    /// Create an empty pipeline cache
+    pub fn new() -> Self {
+        Self {
+            pipelines: HashMap::new(),
+        }
+    }
+
+    /// Get or create a pipeline for the given state
+    ///
+    /// Returns a reference to the cached pipeline, creating it if necessary.
+    pub fn get_or_create(
+        &mut self,
+        device: &wgpu::Device,
+        surface_format: wgpu::TextureFormat,
+        render_mode: u8,
+        format: u8,
+        state: &RenderState,
+    ) -> &PipelineEntry {
+        let key = PipelineKey::new(render_mode, format, state);
+
+        // Return existing pipeline if cached
+        if self.pipelines.contains_key(&key) {
+            return &self.pipelines[&key];
+        }
+
+        // Otherwise, create a new pipeline
+        tracing::debug!(
+            "Creating pipeline: mode={}, format={}, blend={:?}, depth={}, cull={:?}",
+            render_mode,
+            format,
+            state.blend_mode,
+            state.depth_test,
+            state.cull_mode
+        );
+
+        let entry = create_pipeline(device, surface_format, render_mode, format, state);
+        self.pipelines.insert(key, entry);
+        &self.pipelines[&key]
+    }
+
+    /// Check if a pipeline exists in the cache
+    pub fn contains(&self, render_mode: u8, format: u8, state: &RenderState) -> bool {
+        let key = PipelineKey::new(render_mode, format, state);
+        self.pipelines.contains_key(&key)
+    }
+
+    /// Get a pipeline if it exists
+    pub fn get(&self, render_mode: u8, format: u8, state: &RenderState) -> Option<&PipelineEntry> {
+        let key = PipelineKey::new(render_mode, format, state);
+        self.pipelines.get(&key)
+    }
+}
+
+impl Default for PipelineCache {
+    fn default() -> Self {
+        Self::new()
+    }
 }

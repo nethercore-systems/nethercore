@@ -1,16 +1,20 @@
-//! Command buffer for batching draw calls
+//! Virtual Render Pass for batching draw calls
 //!
 //! Accumulates draw commands during the frame and provides vertex/index data
-//! for flushing to the GPU at frame end.
+//! for flushing to the GPU at frame end. This serves as an intermediate
+//! representation between FFI commands and GPU execution.
 
 use glam::Mat4;
 
 use super::render_state::{BlendMode, CullMode, MatcapBlendMode, RenderState, TextureHandle};
 use super::vertex::{vertex_stride, VERTEX_FORMAT_COUNT};
 
-/// A draw command for batching
+/// Virtual Render Pass Command
+///
+/// Represents a single draw call with all necessary state captured.
+/// Named VRPCommand to clearly indicate it's part of the Virtual Render Pass system.
 #[derive(Debug, Clone)]
-pub struct DrawCommand {
+pub struct VRPCommand {
     /// Vertex format
     pub format: u8,
     /// Model transform matrix
@@ -35,10 +39,13 @@ pub struct DrawCommand {
     pub matcap_blend_modes: [MatcapBlendMode; 4],
 }
 
-/// Command buffer for batching immediate-mode draws
-pub struct CommandBuffer {
+/// Virtual Render Pass for batching immediate-mode draws
+///
+/// Accumulates draw commands and vertex/index data during the frame,
+/// providing everything needed for GPU execution at frame end.
+pub struct VirtualRenderPass {
     /// Draw commands accumulated this frame
-    commands: Vec<DrawCommand>,
+    commands: Vec<VRPCommand>,
     /// Per-format immediate vertex data (CPU side)
     vertex_data: [Vec<u8>; VERTEX_FORMAT_COUNT],
     /// Per-format immediate index data (CPU side)
@@ -49,7 +56,7 @@ pub struct CommandBuffer {
     index_counts: [u32; VERTEX_FORMAT_COUNT],
 }
 
-impl CommandBuffer {
+impl VirtualRenderPass {
     /// Create a new command buffer
     pub fn new() -> Self {
         Self {
@@ -82,7 +89,7 @@ impl CommandBuffer {
         self.vertex_counts[format_idx] += vertex_count as u32;
 
         // Record draw command
-        self.commands.push(DrawCommand {
+        self.commands.push(VRPCommand {
             format,
             transform,
             vertex_count: vertex_count as u32,
@@ -127,7 +134,7 @@ impl CommandBuffer {
         self.index_counts[format_idx] += indices.len() as u32;
 
         // Record draw command
-        self.commands.push(DrawCommand {
+        self.commands.push(VRPCommand {
             format,
             transform,
             vertex_count: vertex_count as u32,
@@ -146,18 +153,18 @@ impl CommandBuffer {
     }
 
     /// Get accumulated commands
-    pub fn commands(&self) -> &[DrawCommand] {
+    pub fn commands(&self) -> &[VRPCommand] {
         &self.commands
     }
 
     /// Get mutable access to accumulated commands (for in-place sorting)
-    pub fn commands_mut(&mut self) -> &mut [DrawCommand] {
+    pub fn commands_mut(&mut self) -> &mut [VRPCommand] {
         &mut self.commands
     }
 
     /// Append vertex data to buffer and return base_vertex index
     ///
-    /// Used for direct conversion from ZDrawCommand without state mutation.
+    /// Used for direct conversion from ZVRPCommand without state mutation.
     pub fn append_vertex_data(&mut self, format: u8, data: &[f32]) -> u32 {
         let format_idx = format as usize;
         let stride = vertex_stride(format) as usize;
@@ -174,7 +181,7 @@ impl CommandBuffer {
 
     /// Append index data to buffer and return first_index
     ///
-    /// Used for direct conversion from ZDrawCommand without state mutation.
+    /// Used for direct conversion from ZVRPCommand without state mutation.
     pub fn append_index_data(&mut self, format: u8, data: &[u32]) -> u32 {
         let format_idx = format as usize;
         let first_index = self.index_counts[format_idx];
@@ -188,8 +195,8 @@ impl CommandBuffer {
 
     /// Add a draw command directly
     ///
-    /// Used for direct conversion from ZDrawCommand without state mutation.
-    pub fn add_command(&mut self, cmd: DrawCommand) {
+    /// Used for direct conversion from ZVRPCommand without state mutation.
+    pub fn add_command(&mut self, cmd: VRPCommand) {
         self.commands.push(cmd);
     }
 
@@ -217,7 +224,7 @@ impl CommandBuffer {
     }
 }
 
-impl Default for CommandBuffer {
+impl Default for VirtualRenderPass {
     fn default() -> Self {
         Self::new()
     }
@@ -309,7 +316,7 @@ mod tests {
 
     #[test]
     fn test_draw_command_creation() {
-        let cmd = DrawCommand {
+        let cmd = VRPCommand {
             format: FORMAT_UV,
             transform: Mat4::IDENTITY,
             vertex_count: 3,
@@ -330,7 +337,7 @@ mod tests {
 
     #[test]
     fn test_draw_command_clone() {
-        let cmd = DrawCommand {
+        let cmd = VRPCommand {
             format: FORMAT_COLOR,
             transform: Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0)),
             vertex_count: 100,
