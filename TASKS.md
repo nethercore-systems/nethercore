@@ -18,6 +18,14 @@
 
 ## TODO
 
+### **[POLISH] BUG: Window Size scaling issues**
+- When loading a game, black bars appear on the sides. The inner window should "snap" to the nearest perfect integer scaling of the window (in integer scaling mode), or just stay at that size for stretch
+- We are not able to resize the window to a size equal to the fantasy console (and game ROMs) initialized resolution. We should be able to scale down to a 1x scaling, but not any smaller to prevent a crash
+- These problems may be due to some kind of egui scaling based on the OS scaling rules.
+
+### **[POLISH] Document ALL FFI Functions **
+- We need to know these at a quick glance so developers can copy paste a "cheat sheet" into their games before working
+
 ### **[POLISH] Add axis-to-keyboard binding support**
 
 **Status:** Not yet implemented
