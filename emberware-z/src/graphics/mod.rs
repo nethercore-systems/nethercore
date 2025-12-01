@@ -1204,36 +1204,54 @@ impl ZGraphics {
                     // Extract position from transform (last column)
                     let position = transform.w_axis.truncate();
 
-                    // Calculate camera direction
-                    let camera_pos = z_state.camera.position;
-                    let to_camera = (camera_pos - position).normalize();
+                    // Get direction from billboard to camera (same for all billboards)
+                    // view_matrix.z_axis points backward (toward camera), which is what we want
+                    let view_matrix = z_state.camera.view_matrix();
+                    let to_camera = view_matrix.z_axis.truncate();
 
                     // Generate billboard orientation based on mode
                     let (right, up) = match mode {
                         1 => {
-                            // Spherical: fully face camera
-                            let view_matrix = z_state.camera.view_matrix();
+                            // Spherical: fully face camera (use view matrix axes directly)
                             let right = view_matrix.x_axis.truncate();
                             let up = view_matrix.y_axis.truncate();
                             (right, up)
                         }
                         2 => {
-                            // Cylindrical Y-axis: rotate around Y to face camera
-                            let right = glam::Vec3::Y.cross(to_camera).normalize();
-                            let up = glam::Vec3::Y;
-                            (right, up)
+                            // Cylindrical Y-axis: all billboards face same direction (projected to XZ plane)
+                            let to_camera_xz = glam::Vec3::new(to_camera.x, 0.0, to_camera.z);
+                            if to_camera_xz.length_squared() > 0.0001 {
+                                let to_camera_xz = to_camera_xz.normalize();
+                                let right = glam::Vec3::Y.cross(to_camera_xz);
+                                (right, glam::Vec3::Y)
+                            } else {
+                                // Camera pointing straight up/down - default orientation
+                                (glam::Vec3::X, glam::Vec3::Y)
+                            }
                         }
                         3 => {
-                            // Cylindrical X-axis: rotate around X to face camera
-                            let up = to_camera.cross(glam::Vec3::X).normalize();
-                            let right = glam::Vec3::X;
-                            (right, up)
+                            // Cylindrical X-axis: all billboards face same direction (projected to YZ plane)
+                            let to_camera_yz = glam::Vec3::new(0.0, to_camera.y, to_camera.z);
+                            if to_camera_yz.length_squared() > 0.0001 {
+                                let to_camera_yz = to_camera_yz.normalize();
+                                let up = to_camera_yz.cross(glam::Vec3::X);
+                                (glam::Vec3::X, up)
+                            } else {
+                                // Camera aligned with X-axis - default orientation
+                                (glam::Vec3::X, glam::Vec3::Y)
+                            }
                         }
                         4 => {
-                            // Cylindrical Z-axis: rotate around Z to face camera
-                            let right = glam::Vec3::Z.cross(to_camera).normalize();
-                            let up = to_camera.cross(right).normalize();
-                            (right, up)
+                            // Cylindrical Z-axis: all billboards face same direction (projected to XY plane)
+                            let to_camera_xy = glam::Vec3::new(to_camera.x, to_camera.y, 0.0);
+                            if to_camera_xy.length_squared() > 0.0001 {
+                                let to_camera_xy = to_camera_xy.normalize();
+                                let right = glam::Vec3::Z.cross(to_camera_xy);
+                                (right, glam::Vec3::Z)
+                            } else {
+                                // Camera aligned with Z-axis - default orientation
+                                (glam::Vec3::X, glam::Vec3::Y)
+                            }
                         }
                         _ => unreachable!(),
                     };
@@ -2597,7 +2615,7 @@ mod tests {
     #[test]
     fn test_generate_text_quads_empty() {
         let (vertices, indices) =
-            ZGraphics::generate_text_quads("", 0.0, 0.0, 16.0, 0xFFFFFFFF, None);
+            ZGraphics::generate_text_quads("", 0.0, 0.0, 16.0, 0xFFFFFFFF, None, 960.0, 540.0);
         assert!(vertices.is_empty());
         assert!(indices.is_empty());
     }
@@ -2605,7 +2623,7 @@ mod tests {
     #[test]
     fn test_generate_text_quads_single_char() {
         let (vertices, indices) =
-            ZGraphics::generate_text_quads("A", 0.0, 0.0, 16.0, 0xFFFFFFFF, None);
+            ZGraphics::generate_text_quads("A", 0.0, 0.0, 16.0, 0xFFFFFFFF, None, 960.0, 540.0);
         assert_eq!(vertices.len(), 32);
         assert_eq!(indices.len(), 6);
     }
@@ -2613,14 +2631,14 @@ mod tests {
     #[test]
     fn test_generate_text_quads_multiple_chars() {
         let (vertices, indices) =
-            ZGraphics::generate_text_quads("Hello", 0.0, 0.0, 8.0, 0xFFFFFFFF, None);
+            ZGraphics::generate_text_quads("Hello", 0.0, 0.0, 8.0, 0xFFFFFFFF, None, 960.0, 540.0);
         assert_eq!(vertices.len(), 160);
         assert_eq!(indices.len(), 30);
     }
 
     #[test]
     fn test_generate_text_quads_color() {
-        let (vertices, _) = ZGraphics::generate_text_quads("X", 0.0, 0.0, 8.0, 0xFF0000FF, None);
+        let (vertices, _) = ZGraphics::generate_text_quads("X", 0.0, 0.0, 8.0, 0xFF0000FF, None, 960.0, 540.0);
         assert!((vertices[5] - 1.0).abs() < 0.01);
         assert!((vertices[6] - 0.0).abs() < 0.01);
         assert!((vertices[7] - 0.0).abs() < 0.01);
@@ -2629,7 +2647,7 @@ mod tests {
     #[test]
     fn test_generate_text_quads_position() {
         let (vertices, _) =
-            ZGraphics::generate_text_quads("A", 100.0, 50.0, 16.0, 0xFFFFFFFF, None);
+            ZGraphics::generate_text_quads("A", 100.0, 50.0, 16.0, 0xFFFFFFFF, None, 960.0, 540.0);
         assert!((vertices[0] - 100.0).abs() < 0.01);
         assert!((vertices[1] - 50.0).abs() < 0.01);
         assert!((vertices[2] - 0.0).abs() < 0.01);
@@ -2637,7 +2655,7 @@ mod tests {
 
     #[test]
     fn test_generate_text_quads_indices_valid() {
-        let (_, indices) = ZGraphics::generate_text_quads("AB", 0.0, 0.0, 8.0, 0xFFFFFFFF, None);
+        let (_, indices) = ZGraphics::generate_text_quads("AB", 0.0, 0.0, 8.0, 0xFFFFFFFF, None, 960.0, 540.0);
         assert_eq!(indices[0..6], [0, 1, 2, 0, 2, 3]);
         assert_eq!(indices[6..12], [4, 5, 6, 4, 6, 7]);
     }
