@@ -18,14 +18,60 @@
 
 ## TODO
 
-### **[STABILITY]** CRITICAL HIGH PRIORITY - Crate Dependencies to Workspace Dependencies
-- We have a few dependencies in the Emberware Z and Shared folders which should just be a workspace level dependency, and imported via { workspace = true }
-- This will make maintaining dependencies and updates easier.
+### **[POLISH] Implement Settings UI with input remapping**
 
-### **[STABILITY]** CRITICAL HIGH PRIORITY - Change all instances of std::collections::HashMap or HashSet to hashbrown or any other faster hashing algorithm
-- std::collections::HashMap and HashSet are slow due to needing security checks
-- We should easily optimize this by converting to another drop-in hashmap or hashset implementation, such as hashbrown or something else
-- Ideally, zero hash or perfect hash would be possible for many of these use cases.
+**Status:** Settings button exists but UI not implemented
+
+**Current State:**
+- Settings button in library UI switches to `AppMode::Settings` ([ui.rs:86](emberware-z/src/ui.rs#L86))
+- Settings mode shows placeholder "Settings UI not yet implemented" ([app.rs:861-870](emberware-z/src/app.rs#L861-L870))
+- Config infrastructure fully functional: `Config` struct with video/audio/input sections
+- Input remapping infrastructure exists: `KeyboardMapping` with serialization support
+- Config save/load works: `config::load()` and `config::save()` ([config.rs](emberware-z/src/config.rs))
+
+**What's Missing:**
+The actual Settings UI to modify and save configuration values.
+
+**Implementation Plan:**
+
+1. **Create Settings UI sections** (egui panels):
+   - Video settings: fullscreen, vsync, resolution_scale (1-4)
+   - Audio settings: master_volume slider (0.0-1.0)
+   - Input settings: keyboard remapping for all buttons
+
+2. **Input remapping UX**:
+   - Display current key bindings in a list
+   - "Remap" button next to each binding
+   - Click to enter "listening" mode: "Press any key..."
+   - Capture next key press and update mapping
+   - Prevent duplicate key assignments (show warning)
+   - "Reset to defaults" button
+
+3. **Settings persistence**:
+   - Track if config is "dirty" (modified)
+   - "Save" button writes to disk via `config::save()`
+   - "Cancel" button discards changes and returns to library
+   - "Apply" button saves and applies without leaving settings
+
+4. **Live updates**:
+   - Video settings require window recreation (notify user restart may be needed)
+   - Audio volume can be applied immediately
+   - Input remapping takes effect immediately for new input
+
+5. **Validation**:
+   - Clamp resolution_scale to 1-4 range
+   - Clamp master_volume to 0.0-1.0 range
+   - Ensure all keyboard mappings are unique
+
+**Files to Modify:**
+- `emberware-z/src/app.rs` - Replace placeholder with settings UI logic, handle config updates
+- `emberware-z/src/ui.rs` - May need helper UI components for key remapping
+- Consider creating `emberware-z/src/ui/settings.rs` if UI becomes complex
+
+**User Benefit:**
+Players can customize controls to their preference (WASD vs arrows, button layouts), adjust audio levels, and configure video settings without editing TOML files manually.
+
+---
 
 ### **[OPTIMIZATION] Share quad index buffer for sprites and billboards**
 
@@ -194,33 +240,6 @@ This enables fighting games with unlocked characters, RPGs with player stats, et
 - Save data too large: reject during session setup, show error
 - Player disconnect during exchange: abort session, show error
 - Spectators: receive all save data but don't contribute a slot
-
----
-
-### **[NETWORKING] Implement matchbox signaling connection**
-
-**Status:** Needs clarification - matchmaking handled by platform service, integration details TBD
-
-- Connect to matchbox signaling server
-- WebRTC peer connection establishment
-- ICE candidate exchange
-- Connection timeout handling
-- Matchmaking handled by platform service - integration details TBD
-
----
-
-### **[NETWORKING] Implement host/join game flow**
-
-**Status:** Needs clarification - requires matchbox signaling connection to be implemented first
-
-- Requires matchbox signaling connection to be implemented first
-- Host game via deep link: `emberware://host/{game_id}`
-- Join game via deep link: `emberware://join/{game_id}?token=...`
-- Integration with platform matchmaking TBD
-
----
-
-## In Progress
 
 ---
 
