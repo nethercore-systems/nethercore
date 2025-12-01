@@ -18,156 +18,6 @@
 
 ## TODO
 
-### **[POLISH] Document audio system in docs/emberware-z.md**
-
-**Status:** Audio is FULLY IMPLEMENTED but documentation says it's "shelved"
-
-**Current State:**
-- Audio backend is 100% complete with rodio playback
-- 8 FFI functions fully working: `load_sound`, `play_sound`, `channel_play`, `channel_set`, `channel_stop`, `music_play`, `music_stop`, `music_set_volume`
-- 16 sound effect channels + dedicated music channel
-- Thread-safe implementation with audio server
-- Rollback-aware (commands discarded during replay)
-- 22,050 Hz, 16-bit signed PCM, mono
-- **BUT:** [docs/emberware-z.md:739](docs/emberware-z.md#L739) says "TODO [needs clarification]: Audio system is shelved for initial implementation"
-
-**What's Needed:**
-1. Remove "shelved" notice from docs/emberware-z.md line 739
-2. Add complete audio FFI documentation section with:
-   - Sound loading (load_sound) - init-only, raw PCM format
-   - Fire-and-forget sounds (play_sound) - one-shot SFX
-   - Managed channels (channel_play, channel_set, channel_stop) - for positional/looping sounds
-   - Music system (music_play, music_stop, music_set_volume) - dedicated looping channel
-   - Rollback behavior explanation
-   - Audio format specs (22,050 Hz, 16-bit signed PCM, mono)
-   - Example code showing typical usage
-
-**Files to Update:**
-- `docs/emberware-z.md` - Replace "shelved" notice with complete audio documentation
-
----
-
-### **[POLISH] Document custom font loading in docs/emberware-z.md**
-
-**Status:** Fully implemented but completely undocumented
-
-**Current State:**
-- Custom bitmap font loading is fully working
-- 3 FFI functions: `load_font`, `load_font_ex`, `font_bind`
-- Supports both fixed-width and variable-width bitmap fonts
-- UTF-8 compatible with codepoint ranges
-- Fonts arranged in 16-column grids in texture atlas
-- Built-in 8×8 font available as handle 0
-- **BUT:** No mention anywhere in docs/emberware-z.md
-
-**What's Needed:**
-Add font loading documentation section with:
-- `load_font(texture: u32, char_width: u32, char_height: u32, first_char: u32, char_count: u32) -> u32`
-- `load_font_ex(texture: u32, char_widths: *const u32, char_height: u32, first_char: u32, char_count: u32) -> u32`
-- `font_bind(font_handle: u32)` - Set active font for draw_text
-- Explanation of fixed vs variable width fonts
-- Texture atlas layout (16-column grid)
-- Codepoint ranges (first_char + char_count)
-- Example showing how to load a custom font texture
-
-**Files to Update:**
-- `docs/emberware-z.md` - Add "### Custom Fonts" section after the "### 2D Drawing" section
-
----
-
-### **[POLISH] Document matcap blend modes in docs/emberware-z.md**
-
-**Status:** Implemented but undocumented
-
-**Current State:**
-- Matcap blend modes are fully implemented in shaders and FFI
-- FFI function: `matcap_blend_mode(slot: u32, mode: u32)`
-- 3 modes: 0=Multiply (default), 1=Add (glow), 2=HSV Modulate (hue shift/iridescence)
-- Shader implementation complete with rgb_to_hsv, hsv_to_rgb, blend_colors functions
-- **BUT:** Only `matcap_set` is documented, not `matcap_blend_mode`
-
-**What's Needed:**
-Update Mode 1 (Matcap) documentation section to include:
-- `matcap_blend_mode(slot: u32, mode: u32)` function signature
-- Mode 0: Multiply - traditional matcap behavior
-- Mode 1: Add - for glow/emission effects
-- Mode 2: HSV Modulate - for hue shifting and iridescence
-- Explanation that each slot (1-3) can have independent blend mode
-- Example showing artistic effects (glowing character with additive matcap)
-
-**Files to Update:**
-- `docs/emberware-z.md` - Expand Mode 1 section to document matcap_blend_mode
-
----
-
-### **[POLISH] Document texture filtering in docs/emberware-z.md**
-
-**Status:** Implemented but barely documented
-
-**Current State:**
-- FFI function exists: `texture_filter(filter: u32)` // 0 = nearest, 1 = linear
-- Mentioned once in passing at line 726
-- No explanation of when to use each mode
-- No example code
-
-**What's Needed:**
-Expand texture filtering documentation:
-- Clear explanation: 0 = nearest neighbor (pixel-perfect, retro), 1 = bilinear (smooth)
-- When to use each mode (pixel art vs smooth textures)
-- Example showing how to set filter mode
-- Note that it affects all currently bound textures
-
-**Files to Update:**
-- `docs/emberware-z.md` - Expand "### Render State" section with texture_filter details
-
----
-
-### **[PERFORMANCE] Cache frame bind groups to avoid recreation per draw call**
-
-**Status:** Major performance issue - bind groups created every draw command
-
-**Current State:**
-- Material buffers ARE cached ✅ (line 2207 in graphics/mod.rs)
-- Texture bind groups ARE cached ✅ (line 2135 in graphics/mod.rs)
-- **Frame bind groups are created EVERY DRAW CALL** ❌ (lines 2236-2305)
-
-**Problem:**
-The frame bind group contains:
-- view_buffer (same for entire frame)
-- proj_buffer (same for entire frame)
-- sky_buffer (same for entire frame)
-- material_buffer (varies per unique material)
-- bone_buffer (changes when set_bones called)
-- lights_buffer (same for entire frame)
-- material_props_buffer (same for entire frame)
-
-Currently creating a new bind group for EVERY draw command, even though most bindings are identical.
-
-**Impact:**
-- Expensive GPU resource creation in hot path
-- Hundreds/thousands of bind group allocations per frame
-- Major performance bottleneck for scenes with many draw calls
-
-**Solution Options:**
-1. **Cache frame bind groups by material_buffer** (recommended)
-   - HashMap<BufferAddress, BindGroup>
-   - Most scenes have few unique materials
-   - ~10-20 bind groups per frame instead of hundreds
-
-2. **Use push constants for material data** (ideal, but requires shader changes)
-   - Eliminate material_buffer from bind group
-   - Push 32 bytes per draw call
-   - Single frame bind group for entire frame
-   - Requires WGSL shader updates
-
-**Recommended Approach:**
-Start with option 1 (cache by material_buffer) - easy win with minimal code changes.
-
-**Files to Modify:**
-- `emberware-z/src/graphics/mod.rs` - Add `frame_bind_group_cache: HashMap<...>` at line 2135
-
----
-
 ### **[OPTIMIZATION] Share quad index buffer for sprites and billboards**
 
 **Status:** Minor optimization opportunity
@@ -366,6 +216,109 @@ This enables fighting games with unlocked characters, RPGs with player stats, et
 ---
 
 ## Done
+
+### **[PERFORMANCE] Cache frame bind groups to avoid recreation per draw call**
+
+**Completed:** Implemented bind group caching to eliminate redundant GPU resource creation
+
+**Implementation:**
+- Added `HashMap<u64, wgpu::BindGroup>` to cache frame bind groups by material buffer pointer address
+- Frame bind groups now created once per unique material per frame instead of per draw call
+- Used `.entry().or_insert_with()` pattern for efficient lazy initialization
+- Cache key is material buffer pointer address (stable within a frame)
+- Eliminates hundreds/thousands of bind group allocations per frame for typical scenes
+
+**Performance Impact:**
+- Before: New bind group created for every draw call (worst case: 1000 draw calls = 1000 allocations)
+- After: Bind groups cached by material (typical case: 1000 draw calls with 10 materials = 10 allocations)
+- ~100× reduction in bind group creation for material-heavy scenes
+
+**Files Modified:**
+- `emberware-z/src/graphics/mod.rs` - Added frame bind group cache (lines 2136-2336)
+
+---
+
+### **[POLISH] Document audio system in docs/emberware-z.md**
+
+**Completed:** Replaced "shelved" notice with comprehensive audio documentation
+
+**Documentation Added:**
+- Removed misleading "Audio system is shelved" notice
+- Documented all 8 audio FFI functions with signatures, parameters, examples:
+  - `load_sound` - Load 16-bit PCM sound data (init-only)
+  - `play_sound` - Fire-and-forget playback for one-shot SFX
+  - `channel_play` - Managed channel playback with looping support
+  - `channel_set` - Real-time volume/pan updates for positional audio
+  - `channel_stop` - Stop channel playback
+  - `music_play` - Looping background music
+  - `music_stop` - Stop music
+  - `music_set_volume` - Adjust music volume
+- Documented audio specs (22,050 Hz, 16-bit signed PCM, mono)
+- Added best practices for channel allocation strategy
+- Included ffmpeg conversion command for asset preparation
+- Provided positional audio example with distance attenuation
+
+**Files Modified:**
+- `docs/emberware-z.md` - Added complete Audio FFI section (lines 898-1003)
+
+---
+
+### **[POLISH] Document custom font loading in docs/emberware-z.md**
+
+**Completed:** Added comprehensive custom font system documentation
+
+**Documentation Added:**
+- `load_font` - Fixed-width bitmap fonts from texture atlas
+- `load_font_ex` - Variable-width bitmap fonts with per-glyph widths
+- `font_bind` - Switch active font for draw_text calls
+- Texture atlas layout explanation (grid-based arrangement)
+- Examples for both fixed and variable-width fonts
+- Best practices for atlas preparation and character coverage
+- Performance notes (font textures loaded once in init)
+- Styling tips (outline/shadow pre-baked, size scaling via draw_text parameter)
+
+**Files Modified:**
+- `docs/emberware-z.md` - Added Custom Fonts section (lines 806-933)
+
+---
+
+### **[POLISH] Document matcap blend modes in docs/emberware-z.md**
+
+**Completed:** Enhanced Mode 1 (Matcap) documentation with blend mode details
+
+**Documentation Added:**
+- `matcap_blend_mode(slot, mode)` function signature
+- Three blend modes explained:
+  - Mode 0 (Multiply) - Standard matcap behavior, darkens
+  - Mode 1 (Add) - Additive blending for glow/emission effects
+  - Mode 2 (HSV Modulate) - Hue shift for iridescence effects
+- Use cases for each mode (lighting, rim lights, beetle shell iridescence)
+- Example combining all three slots with different blend modes
+- Performance note (all modes identical cost)
+
+**Files Modified:**
+- `docs/emberware-z.md` - Expanded Mode 1 section (lines 209-242)
+
+---
+
+### **[POLISH] Document texture filtering in docs/emberware-z.md**
+
+**Completed:** Expanded texture filtering documentation with practical guidance
+
+**Documentation Added:**
+- Detailed explanation of nearest (0) vs linear (1) filtering
+- Visual differences (pixelated vs smooth)
+- When to use each mode (pixel art vs 3D textures, UI vs models)
+- Performance notes (negligible difference, choose based on visual needs)
+- PS1/N64 authenticity tip (use nearest for true 5th-gen look)
+- Default mode (nearest)
+- Example showing how to mix filter modes per-texture within a frame
+- Note about filter mode persistence
+
+**Files Modified:**
+- `docs/emberware-z.md` - Expanded Render State section (lines 770-802)
+
+---
 
 ### **[STABILITY] Add safety documentation to unsafe blocks**
 

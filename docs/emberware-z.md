@@ -204,7 +204,42 @@ matcap_uv = view_normal.xy * 0.5 + 0.5
 final_color = albedo * vertex_color * matcap1 * matcap2 * matcap3
 ```
 
-Matcaps in slots 1-3 multiply together. Unused slots default to white (no effect).
+Matcaps in slots 1-3 multiply together by default. Unused slots default to white (no effect).
+
+**Blend Modes:**
+
+By default, matcaps multiply together. You can change how each matcap slot blends using:
+
+```rust
+fn matcap_blend_mode(slot: u32, mode: u32)  // slot 1-3, mode 0-2
+```
+
+**Available modes:**
+- `0` = **Multiply** (default) — Standard matcap behavior, darkens
+- `1` = **Add** — Additive blending, creates glow/emission effects
+- `2` = **HSV Modulate** — Hue shift/iridescence, preserves luminance
+
+**Example:**
+```rust
+// Slot 1: Base material (multiply)
+matcap_set(1, base_matcap);
+matcap_blend_mode(1, 0);  // Multiply (default)
+
+// Slot 2: Rim light effect (add)
+matcap_set(2, rim_matcap);
+matcap_blend_mode(2, 1);  // Add for glow
+
+// Slot 3: Iridescent overlay (HSV modulate)
+matcap_set(3, rainbow_matcap);
+matcap_blend_mode(3, 2);  // HSV modulate for color shift
+```
+
+**Use cases:**
+- **Multiply**: Standard lighting, shadows, metallic reflections
+- **Add**: Rim lights, glows, magical effects, highlights
+- **HSV Modulate**: Iridescence (beetle shells, soap bubbles), hue tinting, color variation
+
+**Performance:** All blend modes have identical cost. Choose based on visual needs.
 
 Good for:
 - Stylized/toon rendering
@@ -732,11 +767,430 @@ fn texture_filter(filter: u32)          // 0 = nearest, 1 = linear
 - If vertex format has no COLOR → uniform color only
 - Default: white (0xFFFFFFFF)
 
+**Texture filtering:**
+
+Controls how textures are sampled when scaled or viewed at an angle:
+
+- `0` = **Nearest** (point sampling) — Sharp, pixelated, retro look
+- `1` = **Linear** (bilinear filtering) — Smooth, blurred when scaled
+
+**When to use:**
+- **Nearest**: Pixel art, retro aesthetics, UI elements, text (keeps crisp edges)
+- **Linear**: 3D models, photographs, natural textures (reduces aliasing)
+
+**Visual differences:**
+- Nearest: Each texel maps to a square block of pixels (no interpolation)
+- Linear: Texels blend smoothly with neighbors (2×2 interpolation)
+
+**Performance:** Nearest is slightly faster but difference is negligible on modern GPUs. Choose based on visual needs.
+
+**PS1/N64 authenticity:** Use nearest filtering for true 5th-gen look. Linear was available but rarely used.
+
+**Default:** Nearest (0)
+
+**Example:**
+```rust
+// Pixel art textures
+texture_bind(pixel_art_texture);
+texture_filter(0);  // Nearest — keep sharp pixels
+
+// Smooth 3D textures
+texture_bind(rock_texture);
+texture_filter(1);  // Linear — reduce aliasing
+```
+
+**Note:** Filter mode applies to the currently bound texture and persists until changed. You can mix filter modes within a single frame by calling `texture_filter()` before each draw.
+
+---
+
+## Custom Fonts
+
+Emberware Z supports custom bitmap fonts for text rendering. By default, `draw_text()` uses a built-in 8×8 monospace font. You can load custom fonts from texture atlases for unique visual styles.
+
+### load_font
+
+```rust
+fn load_font(
+    texture: u32,
+    char_width: u32,
+    char_height: u32,
+    first_codepoint: u32,
+    char_count: u32
+) -> u32
+```
+
+Loads a fixed-width bitmap font from a texture atlas. **Must be called in `init()` only.**
+
+**Parameters:**
+- `texture`: Texture handle containing the font atlas
+- `char_width`: Width of each glyph in pixels (1-255)
+- `char_height`: Height of each glyph in pixels (1-255)
+- `first_codepoint`: Unicode codepoint of the first glyph (e.g., 32 for space)
+- `char_count`: Number of consecutive glyphs in the font
+
+**Returns:** Font handle (use with `font_bind()`)
+
+**Texture atlas layout:**
+- Glyphs arranged left-to-right, top-to-bottom in a grid
+- Each glyph occupies a `char_width × char_height` cell
+- Grid cells are calculated automatically based on texture width
+- Atlas width must be divisible by `char_width`
+
+**Example:**
+```rust
+// Texture: 128×64, glyphs 8×8, ASCII 32-127 (96 chars)
+// Layout: 16 glyphs per row (128 / 8), 6 rows needed (96 / 16)
+static FONT_PNG: &[u8] = include_bytes!("assets/font.png");
+
+fn init() {
+    let font_tex = load_texture(FONT_PNG.as_ptr(), FONT_PNG.len() as u32);
+    let font = load_font(
+        font_tex,
+        8,   // char_width
+        8,   // char_height
+        32,  // first_codepoint (space)
+        96   // char_count (space through tilde)
+    );
+    font_bind(font);  // Use for all subsequent draw_text()
+}
+```
+
+---
+
+### load_font_ex
+
+```rust
+fn load_font_ex(
+    texture: u32,
+    widths_ptr: *const u8,
+    char_height: u32,
+    first_codepoint: u32,
+    char_count: u32
+) -> u32
+```
+
+Loads a variable-width bitmap font from a texture atlas. Like `load_font()`, but each glyph can have a different width. **Must be called in `init()` only.**
+
+**Parameters:**
+- `texture`: Texture handle containing the font atlas
+- `widths_ptr`: Pointer to array of `char_count` u8 values (one width per glyph)
+- `char_height`: Height of each glyph in pixels (1-255)
+- `first_codepoint`: Unicode codepoint of the first glyph
+- `char_count`: Number of glyphs in the font
+
+**Returns:** Font handle (use with `font_bind()`)
+
+**Texture atlas layout:**
+- Glyphs still arranged in a grid based on the **maximum width** in the widths array
+- Each glyph's actual width is read from the widths array
+- Unused pixels on the right of narrow glyphs are ignored
+
+**Example:**
+```rust
+static FONT_PNG: &[u8] = include_bytes!("assets/vfont.png");
+static WIDTHS: &[u8] = &[
+    4, 2, 5, 6, 6, 8, 7, 2,  // Widths for chars 32-39 (space, !, ", #, ...)
+    // ... 88 more widths
+];
+
+fn init() {
+    let font_tex = load_texture(FONT_PNG.as_ptr(), FONT_PNG.len() as u32);
+    let font = load_font_ex(
+        font_tex,
+        WIDTHS.as_ptr(),
+        12,  // char_height
+        32,  // first_codepoint (space)
+        96   // char_count
+    );
+    font_bind(font);
+}
+```
+
+**Use case:** Proportional fonts for better readability and visual polish. "i" can be narrower than "w".
+
+---
+
+### font_bind
+
+```rust
+fn font_bind(font_handle: u32)
+```
+
+Sets the active font for all subsequent `draw_text()` calls.
+
+**Parameters:**
+- `font_handle`: Font handle from `load_font()` or `load_font_ex()`, or `0` for built-in font
+
+**Font 0:** The built-in 8×8 monospace font (default). Supports ASCII printable characters (32-126).
+
+**Example:**
+```rust
+fn render() {
+    font_bind(custom_font);  // Switch to custom font
+    draw_text(b"Score: 1000", 10.0, 10.0, 1.0, 0xFFFFFFFF);
+
+    font_bind(0);  // Switch back to built-in font
+    draw_text(b"Debug: FPS 60", 10.0, 30.0, 1.0, 0xFF00FFFF);
+}
+```
+
+**Note:** Font binding persists across frames. Call `font_bind(0)` to reset to the built-in font.
+
+---
+
+### Custom Font Best Practices
+
+**Atlas preparation:**
+1. Create your font bitmap in an image editor (each glyph in a grid)
+2. Export as PNG or JPEG
+3. Embed in WASM with `include_bytes!("font.png")`
+4. Load texture and font in `init()`
+
+**Character coverage:**
+- Minimum: ASCII printable (32-126, 95 characters)
+- Extended: Add accented characters, symbols as needed
+- Unicode support: Use Unicode codepoints in `first_codepoint`
+
+**Performance:**
+- Font textures are loaded into VRAM once during `init()`
+- `draw_text()` generates quads dynamically each frame (immediate mode)
+- Keep font atlases reasonably sized (< 512×512 for most cases)
+- Variable-width fonts have ~same performance as fixed-width
+
+**Styling:**
+- Color: Pass color to `draw_text()`
+- Outline/shadow: Pre-bake into font atlas texture
+- Size scaling: Use `size` parameter in `draw_text()` (e.g., 2.0 = 2× larger)
+
 ---
 
 ## Audio FFI
 
-> **TODO [needs clarification]:** Audio system is shelved for initial implementation.
+Emberware Z includes a fully functional audio system with support for sound effects and background music.
+
+**Audio Specs:**
+- Sample rate: 22,050 Hz (22.05 kHz)
+- Format: 16-bit signed PCM, mono
+- Channels: 16 simultaneous sound channels (0-15) + dedicated music channel
+- All sounds must be embedded as raw PCM data at compile time
+
+### load_sound
+
+```rust
+fn load_sound(data_ptr: *const i16, byte_len: u32) -> u32
+```
+
+Loads raw PCM sound data and returns a sound handle. **Must be called in `init()` only.**
+
+**Parameters:**
+- `data_ptr`: Pointer to raw i16 PCM data in WASM memory
+- `byte_len`: Length in **bytes** (must be even, since each sample is 2 bytes)
+
+**Returns:** Sound handle (use with play_sound, channel_play, music_play)
+
+**Example:**
+```rust
+static JUMP_SFX: &[u8] = include_bytes!("assets/jump.pcm");  // Raw 16-bit PCM mono @ 22,050 Hz
+
+fn init() {
+    let jump_sound = load_sound(
+        JUMP_SFX.as_ptr() as *const i16,
+        JUMP_SFX.len() as u32
+    );
+}
+```
+
+**Note:** Sounds are embedded at compile time. Use tools like Audacity (export as "RAW (header-less)", signed 16-bit PCM, 22050 Hz, mono) or ffmpeg to convert audio files:
+
+```bash
+ffmpeg -i input.wav -ar 22050 -ac 1 -f s16le output.pcm
+```
+
+---
+
+### play_sound
+
+```rust
+fn play_sound(sound: u32, volume: f32, pan: f32)
+```
+
+Fire-and-forget sound playback. Plays on the next available channel. Best for one-shot sounds: gunshots, jumps, coins, UI clicks.
+
+**Parameters:**
+- `sound`: Sound handle from `load_sound()`
+- `volume`: 0.0 to 1.0
+- `pan`: -1.0 (left) to 1.0 (right), 0.0 = center
+
+**Example:**
+```rust
+fn update() {
+    if button_pressed(0, BUTTON_A) {
+        play_sound(jump_sound, 0.8, 0.0);  // Play at 80% volume, centered
+    }
+}
+```
+
+---
+
+### channel_play
+
+```rust
+fn channel_play(channel: u32, sound: u32, volume: f32, pan: f32, looping: u32)
+```
+
+Plays sound on a specific channel (0-15). Use for managed channels: positional audio, looping ambient sounds, engine sounds, footsteps.
+
+**Parameters:**
+- `channel`: 0-15
+- `sound`: Sound handle from `load_sound()`
+- `volume`: 0.0 to 1.0
+- `pan`: -1.0 (left) to 1.0 (right), 0.0 = center
+- `looping`: 1 = loop continuously, 0 = play once
+
+**Example:**
+```rust
+// Start looping engine sound on channel 0
+channel_play(0, engine_sound, 0.5, 0.0, 1);
+
+// Play footstep on channel 1 (one-shot)
+channel_play(1, footstep_sound, 0.6, 0.0, 0);
+```
+
+---
+
+### channel_set
+
+```rust
+fn channel_set(channel: u32, volume: f32, pan: f32)
+```
+
+Updates channel volume/pan in real-time. Call every frame for positional audio (update pan based on object position relative to listener).
+
+**Parameters:**
+- `channel`: 0-15
+- `volume`: 0.0 to 1.0
+- `pan`: -1.0 (left) to 1.0 (right), 0.0 = center
+
+**Example:**
+```rust
+fn render() {
+    // Update positional audio for enemy on channel 2
+    let listener_x = camera.position.x;
+    let enemy_x = enemy.position.x;
+    let distance = (enemy_x - listener_x).abs();
+
+    // Simple distance attenuation
+    let volume = (1.0 - (distance / 100.0).min(1.0)).max(0.0);
+
+    // Pan based on horizontal offset
+    let pan = ((enemy_x - listener_x) / 50.0).clamp(-1.0, 1.0);
+
+    channel_set(2, volume, pan);
+}
+```
+
+---
+
+### channel_stop
+
+```rust
+fn channel_stop(channel: u32)
+```
+
+Stops playback on a specific channel.
+
+**Parameters:**
+- `channel`: 0-15
+
+**Example:**
+```rust
+// Stop engine sound when landing
+channel_stop(0);
+```
+
+---
+
+### music_play
+
+```rust
+fn music_play(sound: u32, volume: f32)
+```
+
+Plays looping background music on the dedicated music channel. Automatically loops. Only one music track can play at a time.
+
+**Parameters:**
+- `sound`: Sound handle from `load_sound()`
+- `volume`: 0.0 to 1.0
+
+**Example:**
+```rust
+fn init() {
+    let bgm = load_sound(MUSIC_DATA.as_ptr() as *const i16, MUSIC_DATA.len() as u32);
+    music_play(bgm, 0.7);  // Play at 70% volume, looping
+}
+```
+
+---
+
+### music_stop
+
+```rust
+fn music_stop()
+```
+
+Stops background music playback.
+
+**Example:**
+```rust
+// Stop music when entering pause menu
+music_stop();
+```
+
+---
+
+### music_set_volume
+
+```rust
+fn music_set_volume(volume: f32)
+```
+
+Adjusts music volume in real-time without restarting playback.
+
+**Parameters:**
+- `volume`: 0.0 to 1.0
+
+**Example:**
+```rust
+// Fade out music
+fn update() {
+    if fading_out {
+        music_volume -= 0.01;
+        music_set_volume(music_volume.max(0.0));
+    }
+}
+```
+
+---
+
+### Audio Best Practices
+
+**Channel allocation strategy:**
+- Channels 0-7: Looping sounds (engines, ambient, persistent effects)
+- Channels 8-15: One-shot sounds (footsteps, impacts, short effects)
+- Use `play_sound()` for truly one-shot sounds (gunshots, jumps, coins)
+- Use `channel_play()` when you need control (positional audio, looping, manual stop)
+
+**Memory considerations:**
+- Sounds are loaded into RAM at startup (16-bit × sample count × 2 bytes)
+- A 1-second sound at 22,050 Hz = ~44 KB
+- Keep individual sounds short (< 5 seconds for SFX, up to 2 minutes for music)
+- Use looping for longer ambient sounds instead of embedding long files
+
+**Positional audio:**
+- Emberware Z provides stereo panning only (no HRTF or 3D audio)
+- Calculate pan manually: `pan = (object_x - listener_x) / max_distance`
+- Clamp pan to -1.0 to 1.0
+- Update with `channel_set()` every frame for moving objects
 
 ---
 

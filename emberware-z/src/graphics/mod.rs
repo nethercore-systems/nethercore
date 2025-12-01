@@ -2133,6 +2133,9 @@ impl ZGraphics {
         let mut material_buffers: HashMap<(u32, u32, u32, u32, (u32, u32, u32, u32)), wgpu::Buffer> = HashMap::new();
         // Texture bind group cache: texture_slots -> bind group
         let mut texture_bind_groups: HashMap<[TextureHandle; 4], wgpu::BindGroup> = HashMap::new();
+        // Frame bind group cache: material_buffer address -> bind group
+        // This avoids recreating bind groups for every draw call with the same material
+        let mut frame_bind_groups: HashMap<wgpu::BufferAddress, wgpu::BindGroup> = HashMap::new();
 
         // Render pass
         {
@@ -2229,11 +2232,11 @@ impl ZGraphics {
                         })
                 });
 
-                // Create frame bind group (group 0)
-                // Note: This contains the material buffer which varies per-command,
-                // so we can't easily cache it. However, we've eliminated redundant
-                // material buffer creation via the cache above.
-                let frame_bind_group = match self.current_render_mode {
+                // Get or create frame bind group (group 0) - CACHED by material buffer
+                // Uses material buffer pointer address as cache key to avoid recreating bind groups
+                let material_buffer_addr = material_buffer.as_entire_buffer_binding().buffer as *const _ as u64;
+                let frame_bind_group = frame_bind_groups.entry(material_buffer_addr).or_insert_with(|| {
+                    match self.current_render_mode {
                     0 | 1 => {
                         // Mode 0 (Unlit) and Mode 1 (Matcap): Basic bindings
                         self.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -2329,7 +2332,8 @@ impl ZGraphics {
                             ],
                         })
                     }
-                };
+                }
+                });
 
                 // Get or create texture bind group (cached by texture slots)
                 let texture_bind_group = texture_bind_groups
@@ -2393,7 +2397,7 @@ impl ZGraphics {
 
                 // Set pipeline and bind groups
                 render_pass.set_pipeline(&pipeline_entry.pipeline);
-                render_pass.set_bind_group(0, &frame_bind_group, &[]);
+                render_pass.set_bind_group(0, &*frame_bind_group, &[]);
                 render_pass.set_bind_group(1, &*texture_bind_group, &[]);
 
                 // Set vertex buffer
