@@ -18,6 +18,110 @@
 
 ## TODO
 
+### **[POLISH] Document audio system in docs/emberware-z.md**
+
+**Status:** Audio is FULLY IMPLEMENTED but documentation says it's "shelved"
+
+**Current State:**
+- Audio backend is 100% complete with rodio playback
+- 8 FFI functions fully working: `load_sound`, `play_sound`, `channel_play`, `channel_set`, `channel_stop`, `music_play`, `music_stop`, `music_set_volume`
+- 16 sound effect channels + dedicated music channel
+- Thread-safe implementation with audio server
+- Rollback-aware (commands discarded during replay)
+- 22,050 Hz, 16-bit signed PCM, mono
+- **BUT:** [docs/emberware-z.md:739](docs/emberware-z.md#L739) says "TODO [needs clarification]: Audio system is shelved for initial implementation"
+
+**What's Needed:**
+1. Remove "shelved" notice from docs/emberware-z.md line 739
+2. Add complete audio FFI documentation section with:
+   - Sound loading (load_sound) - init-only, raw PCM format
+   - Fire-and-forget sounds (play_sound) - one-shot SFX
+   - Managed channels (channel_play, channel_set, channel_stop) - for positional/looping sounds
+   - Music system (music_play, music_stop, music_set_volume) - dedicated looping channel
+   - Rollback behavior explanation
+   - Audio format specs (22,050 Hz, 16-bit signed PCM, mono)
+   - Example code showing typical usage
+
+**Files to Update:**
+- `docs/emberware-z.md` - Replace "shelved" notice with complete audio documentation
+
+---
+
+### **[POLISH] Document custom font loading in docs/emberware-z.md**
+
+**Status:** Fully implemented but completely undocumented
+
+**Current State:**
+- Custom bitmap font loading is fully working
+- 3 FFI functions: `load_font`, `load_font_ex`, `font_bind`
+- Supports both fixed-width and variable-width bitmap fonts
+- UTF-8 compatible with codepoint ranges
+- Fonts arranged in 16-column grids in texture atlas
+- Built-in 8×8 font available as handle 0
+- **BUT:** No mention anywhere in docs/emberware-z.md
+
+**What's Needed:**
+Add font loading documentation section with:
+- `load_font(texture: u32, char_width: u32, char_height: u32, first_char: u32, char_count: u32) -> u32`
+- `load_font_ex(texture: u32, char_widths: *const u32, char_height: u32, first_char: u32, char_count: u32) -> u32`
+- `font_bind(font_handle: u32)` - Set active font for draw_text
+- Explanation of fixed vs variable width fonts
+- Texture atlas layout (16-column grid)
+- Codepoint ranges (first_char + char_count)
+- Example showing how to load a custom font texture
+
+**Files to Update:**
+- `docs/emberware-z.md` - Add "### Custom Fonts" section after the "### 2D Drawing" section
+
+---
+
+### **[POLISH] Document matcap blend modes in docs/emberware-z.md**
+
+**Status:** Implemented but undocumented
+
+**Current State:**
+- Matcap blend modes are fully implemented in shaders and FFI
+- FFI function: `matcap_blend_mode(slot: u32, mode: u32)`
+- 3 modes: 0=Multiply (default), 1=Add (glow), 2=HSV Modulate (hue shift/iridescence)
+- Shader implementation complete with rgb_to_hsv, hsv_to_rgb, blend_colors functions
+- **BUT:** Only `matcap_set` is documented, not `matcap_blend_mode`
+
+**What's Needed:**
+Update Mode 1 (Matcap) documentation section to include:
+- `matcap_blend_mode(slot: u32, mode: u32)` function signature
+- Mode 0: Multiply - traditional matcap behavior
+- Mode 1: Add - for glow/emission effects
+- Mode 2: HSV Modulate - for hue shifting and iridescence
+- Explanation that each slot (1-3) can have independent blend mode
+- Example showing artistic effects (glowing character with additive matcap)
+
+**Files to Update:**
+- `docs/emberware-z.md` - Expand Mode 1 section to document matcap_blend_mode
+
+---
+
+### **[POLISH] Document texture filtering in docs/emberware-z.md**
+
+**Status:** Implemented but barely documented
+
+**Current State:**
+- FFI function exists: `texture_filter(filter: u32)` // 0 = nearest, 1 = linear
+- Mentioned once in passing at line 726
+- No explanation of when to use each mode
+- No example code
+
+**What's Needed:**
+Expand texture filtering documentation:
+- Clear explanation: 0 = nearest neighbor (pixel-perfect, retro), 1 = bilinear (smooth)
+- When to use each mode (pixel art vs smooth textures)
+- Example showing how to set filter mode
+- Note that it affects all currently bound textures
+
+**Files to Update:**
+- `docs/emberware-z.md` - Expand "### Render State" section with texture_filter details
+
+---
+
 ### **[NEEDS CLARIFICATION] Define and enforce console runtime limits**
 
 **Current State:** Partial limit enforcement - VRAM tracking (8MB), vertex format validation, memory bounds checking. No enforcement for draw calls, vertex counts, mesh counts, or CPU budget per frame.
