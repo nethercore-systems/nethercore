@@ -96,6 +96,15 @@ pub(crate) use pipeline::PipelineEntry;
 use pipeline::{PipelineCache, PipelineKey};
 use texture_manager::TextureManager;
 
+/// Convert pixel coordinates to NDC (Normalized Device Coordinates)
+/// NDC range is -1 to 1 for both X and Y
+#[inline]
+fn pixel_to_ndc(pixel_x: f32, pixel_y: f32, width: f32, height: f32) -> (f32, f32) {
+    let ndc_x = (pixel_x / (width * 0.5)) - 1.0;
+    let ndc_y = 1.0 - (pixel_y / (height * 0.5));
+    (ndc_x, ndc_y)
+}
+
 /// Material cache key for deduplicating material uniform buffers
 ///
 /// Combines all material properties that affect the uniform buffer contents.
@@ -871,9 +880,19 @@ impl ZGraphics {
         _mesh_map: &hashbrown::HashMap<u32, MeshHandle>,
     ) {
         use crate::state::DeferredCommand;
+        use crate::console::RESOLUTIONS;
 
         // Apply init config to graphics (render mode, etc.)
         self.set_render_mode(z_state.init_config.render_mode);
+
+        // Get the game's internal render resolution
+        let res_idx = z_state.init_config.resolution_index as usize;
+        let (render_width, render_height) = RESOLUTIONS
+            .get(res_idx)
+            .copied()
+            .unwrap_or((960, 540)); // Default to 540p if invalid
+        let render_width_f = render_width as f32;
+        let render_height_f = render_height as f32;
 
         // Update scene uniforms (camera, lights, materials) for PBR rendering
         // Note: aspect ratio is computed in app.rs and passed via update_scene_uniforms
@@ -1085,21 +1104,30 @@ impl ZGraphics {
                         let (rx2, ry2) = rotate_point(x1, y1);
                         let (rx3, ry3) = rotate_point(x0, y1);
 
+                        // Convert rotated pixel coordinates to NDC
+                        let (rx0_ndc, ry0_ndc) = pixel_to_ndc(rx0, ry0, render_width_f, render_height_f);
+                        let (rx1_ndc, ry1_ndc) = pixel_to_ndc(rx1, ry1, render_width_f, render_height_f);
+                        let (rx2_ndc, ry2_ndc) = pixel_to_ndc(rx2, ry2, render_width_f, render_height_f);
+                        let (rx3_ndc, ry3_ndc) = pixel_to_ndc(rx3, ry3, render_width_f, render_height_f);
+
                         vec![
                             // Top-left
-                            rx0, ry0, 0.0, u0, v0, r, g, b, // Top-right
-                            rx1, ry1, 0.0, u1, v0, r, g, b, // Bottom-right
-                            rx2, ry2, 0.0, u1, v1, r, g, b, // Bottom-left
-                            rx3, ry3, 0.0, u0, v1, r, g, b,
+                            rx0_ndc, ry0_ndc, 0.0, u0, v0, r, g, b, // Top-right
+                            rx1_ndc, ry1_ndc, 0.0, u1, v0, r, g, b, // Bottom-right
+                            rx2_ndc, ry2_ndc, 0.0, u1, v1, r, g, b, // Bottom-left
+                            rx3_ndc, ry3_ndc, 0.0, u0, v1, r, g, b,
                         ]
                     } else {
-                        // No rotation - simple quad
+                        // No rotation - simple quad, convert pixel coordinates to NDC
+                        let (x0_ndc, y0_ndc) = pixel_to_ndc(x0, y0, render_width_f, render_height_f);
+                        let (x1_ndc, y1_ndc) = pixel_to_ndc(x1, y1, render_width_f, render_height_f);
+
                         vec![
                             // Top-left
-                            x0, y0, 0.0, u0, v0, r, g, b, // Top-right
-                            x1, y0, 0.0, u1, v0, r, g, b, // Bottom-right
-                            x1, y1, 0.0, u1, v1, r, g, b, // Bottom-left
-                            x0, y1, 0.0, u0, v1, r, g, b,
+                            x0_ndc, y0_ndc, 0.0, u0, v0, r, g, b, // Top-right
+                            x1_ndc, y0_ndc, 0.0, u1, v0, r, g, b, // Bottom-right
+                            x1_ndc, y1_ndc, 0.0, u1, v1, r, g, b, // Bottom-left
+                            x0_ndc, y1_ndc, 0.0, u0, v1, r, g, b,
                         ]
                     };
 
@@ -1156,22 +1184,22 @@ impl ZGraphics {
                     let g = ((color >> 16) & 0xFF) as f32 / 255.0;
                     let b = ((color >> 8) & 0xFF) as f32 / 255.0;
 
-                    // Calculate corner positions
-                    let x1 = x + width;
-                    let y1 = y + height;
+                    // Convert pixel coordinates to NDC
+                    let (x0_ndc, y0_ndc) = pixel_to_ndc(x, y, render_width_f, render_height_f);
+                    let (x1_ndc, y1_ndc) = pixel_to_ndc(x + width, y + height, render_width_f, render_height_f);
 
-                    // Generate quad vertices (POS_COLOR format = 2)
+                    // Generate quad vertices (POS_COLOR format = 2) in NDC coordinates
                     // Format: [x, y, z, r, g, b]
                     #[rustfmt::skip]
                     let vertices = vec![
                         // Top-left
-                        x, y, 0.0, r, g, b,
+                        x0_ndc, y0_ndc, 0.0, r, g, b,
                         // Top-right
-                        x1, y, 0.0, r, g, b,
+                        x1_ndc, y0_ndc, 0.0, r, g, b,
                         // Bottom-right
-                        x1, y1, 0.0, r, g, b,
+                        x1_ndc, y1_ndc, 0.0, r, g, b,
                         // Bottom-left
-                        x, y1, 0.0, r, g, b,
+                        x0_ndc, y1_ndc, 0.0, r, g, b,
                     ];
 
                     // Two triangles (6 indices)
@@ -1229,7 +1257,7 @@ impl ZGraphics {
 
                     // Generate text quads (POS_UV_COLOR format = 3)
                     let (vertices, indices) =
-                        Self::generate_text_quads(text_str, x, y, size, color, font_opt);
+                        Self::generate_text_quads(text_str, x, y, size, color, font_opt, render_width_f, render_height_f);
 
                     // Skip if no vertices generated
                     if vertices.is_empty() || indices.is_empty() {
@@ -1486,6 +1514,8 @@ impl ZGraphics {
         size: f32,
         color: u32,
         font_opt: Option<&crate::state::Font>,
+        render_width: f32,
+        render_height: f32,
     ) -> (Vec<f32>, Vec<u32>) {
         use crate::font;
 
@@ -1550,18 +1580,22 @@ impl ZGraphics {
                 let v1 =
                     ((row + 1) * custom_font.char_height as usize) as f32 / atlas_height as f32;
 
-                // Screen-space quad vertices (2D)
+                // Convert pixel coordinates to NDC
+                let (x0_ndc, y0_ndc) = pixel_to_ndc(cursor_x, y, render_width, render_height);
+                let (x1_ndc, y1_ndc) = pixel_to_ndc(cursor_x + glyph_width, y + glyph_height, render_width, render_height);
+
+                // Screen-space quad vertices (2D) in NDC coordinates
                 // Format: POS_UV_COLOR (format 3)
                 // Each vertex: [x, y, z, u, v, r, g, b]
 
                 // Top-left
-                vertices.extend_from_slice(&[cursor_x, y, 0.0, u0, v0, r, g, b]);
+                vertices.extend_from_slice(&[x0_ndc, y0_ndc, 0.0, u0, v0, r, g, b]);
                 // Top-right
-                vertices.extend_from_slice(&[cursor_x + glyph_width, y, 0.0, u1, v0, r, g, b]);
+                vertices.extend_from_slice(&[x1_ndc, y0_ndc, 0.0, u1, v0, r, g, b]);
                 // Bottom-right
                 vertices.extend_from_slice(&[
-                    cursor_x + glyph_width,
-                    y + glyph_height,
+                    x1_ndc,
+                    y1_ndc,
                     0.0,
                     u1,
                     v1,
@@ -1570,7 +1604,7 @@ impl ZGraphics {
                     b,
                 ]);
                 // Bottom-left
-                vertices.extend_from_slice(&[cursor_x, y + glyph_height, 0.0, u0, v1, r, g, b]);
+                vertices.extend_from_slice(&[x0_ndc, y1_ndc, 0.0, u0, v1, r, g, b]);
 
                 // Indices for two triangles (quad)
                 indices.extend_from_slice(&[
@@ -1597,18 +1631,22 @@ impl ZGraphics {
                 // Get UV coordinates for this character
                 let (u0, v0, u1, v1) = font::get_glyph_uv(char_code);
 
-                // Screen-space quad vertices (2D)
+                // Convert pixel coordinates to NDC
+                let (x0_ndc, y0_ndc) = pixel_to_ndc(cursor_x, y, render_width, render_height);
+                let (x1_ndc, y1_ndc) = pixel_to_ndc(cursor_x + glyph_width, y + glyph_height, render_width, render_height);
+
+                // Screen-space quad vertices (2D) in NDC coordinates
                 // Format: POS_UV_COLOR (format 3)
                 // Each vertex: [x, y, z, u, v, r, g, b]
 
                 // Top-left
-                vertices.extend_from_slice(&[cursor_x, y, 0.0, u0, v0, r, g, b]);
+                vertices.extend_from_slice(&[x0_ndc, y0_ndc, 0.0, u0, v0, r, g, b]);
                 // Top-right
-                vertices.extend_from_slice(&[cursor_x + glyph_width, y, 0.0, u1, v0, r, g, b]);
+                vertices.extend_from_slice(&[x1_ndc, y0_ndc, 0.0, u1, v0, r, g, b]);
                 // Bottom-right
                 vertices.extend_from_slice(&[
-                    cursor_x + glyph_width,
-                    y + glyph_height,
+                    x1_ndc,
+                    y1_ndc,
                     0.0,
                     u1,
                     v1,
@@ -1617,7 +1655,7 @@ impl ZGraphics {
                     b,
                 ]);
                 // Bottom-left
-                vertices.extend_from_slice(&[cursor_x, y + glyph_height, 0.0, u0, v1, r, g, b]);
+                vertices.extend_from_slice(&[x0_ndc, y1_ndc, 0.0, u0, v1, r, g, b]);
 
                 // Indices for two triangles (quad)
                 indices.extend_from_slice(&[

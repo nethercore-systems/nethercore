@@ -148,18 +148,7 @@ fn project_root() -> PathBuf {
 }
 
 fn get_games_dir() -> Result<PathBuf> {
-    #[cfg(target_os = "macos")]
-    {
-        let home = env::var("HOME").context("HOME not set")?;
-        Ok(PathBuf::from(home)
-            .join("Library/Application Support/io.emberware.emberware/games"))
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let home = env::var("HOME")
-            .or_else(|_| env::var("USERPROFILE"))
-            .context("HOME or USERPROFILE not set")?;
-        Ok(PathBuf::from(home).join(".emberware/games"))
-    }
+    directories::ProjectDirs::from("io", "emberware", "emberware")
+        .map(|dirs| dirs.data_dir().join("games"))
+        .context("Failed to determine data directory")
 }

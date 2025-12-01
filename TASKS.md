@@ -18,6 +18,77 @@
 
 ## TODO
 
+### **[FEATURE] Implement offscreen render target for fixed internal resolution**
+
+**Status:** Text rendering now works with dynamic resolution, but needs render-to-texture for proper fantasy console behavior
+
+**Current State:**
+- ✅ 2D elements (text, sprites, rects) convert pixel coordinates to NDC using game's configured resolution
+- ✅ Dynamic resolution support from `init_config.resolution_index` (640×360, 960×540, 1280×720, 1920×1080)
+- ✅ `pixel_to_ndc()` function updated to accept resolution parameters
+- ❌ Still rendering directly to window surface - window resizing changes the game's viewport
+- ❌ No aspect ratio preservation or letterboxing/pillarboxing
+
+**Problem:**
+Games currently render at window resolution rather than their configured internal resolution. Resizing the window shows more/less of the game world instead of scaling the fixed-resolution framebuffer. This breaks the fantasy console aesthetic where games have a fixed internal resolution that scales to fit the display.
+
+**Solution:**
+Implement render-to-texture system:
+1. Create offscreen framebuffer (color + depth) at game's resolution from `init_config`
+2. Render all game content to this offscreen target
+3. Blit/scale the framebuffer to window with aspect ratio preservation
+4. Add letterboxing (black bars) or pillarboxing when window aspect doesn't match
+
+**Implementation Plan:**
+
+1. **Create render target textures** in `ZGraphics::new()`:
+   ```rust
+   struct RenderTarget {
+       texture: wgpu::Texture,
+       view: wgpu::TextureView,
+       depth_texture: wgpu::Texture,
+       depth_view: wgpu::TextureView,
+       width: u32,
+       height: u32,
+   }
+   ```
+   - Initially create at default resolution (960×540)
+   - Recreate when `init_config.resolution_index` changes
+
+2. **Update `render_frame()` to render to offscreen target**:
+   - Replace `view` parameter with internal render target view
+   - Clear and render all game content to offscreen framebuffer
+   - Keep existing render logic unchanged
+
+3. **Add blit pass to scale framebuffer to window**:
+   - Create full-screen quad pipeline with simple texture sampling shader
+   - Bind offscreen color texture as input
+   - Calculate letterbox/pillarbox viewport to preserve aspect ratio
+   - Render scaled quad to window surface
+   - Optional: Add pixel-perfect integer scaling mode (1×, 2×, 3×, etc.)
+
+4. **Handle resolution changes**:
+   - Detect when `init_config.modified` is true and resolution changed
+   - Recreate render target textures at new resolution
+   - Update projection matrix to match new aspect ratio
+
+**Benefits:**
+- True fantasy console behavior - fixed internal resolution scales to display
+- Window resize doesn't change game viewport
+- Pixel-perfect scaling at integer multiples
+- Easy to add CRT filters, scanlines, or other post-processing effects
+- Consistent with PS1/N64/Dreamcast behavior
+
+**Files to Modify:**
+- `emberware-z/src/graphics/mod.rs` - Add RenderTarget struct, create offscreen textures, implement blit pass
+- `emberware-z/src/app.rs` - Handle resolution changes, pass render target to render_frame
+- Add `shaders/blit.wgsl` - Simple fullscreen quad shader for texture scaling
+
+**User Benefit:**
+Games render at their chosen resolution and scale perfectly to any window size, maintaining the authentic fantasy console experience.
+
+---
+
 ### **[POLISH] Implement Settings UI with input remapping**
 
 **Status:** Settings button exists but UI not implemented
