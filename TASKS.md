@@ -42,43 +42,6 @@
 
 ---
 
-### **CRITICAL: Refactor Material and Uniforms System**
-- Material Data is all over the place! 
-- RenderState has MatcapBlendModes and TextureHandles, which should be material properties
-- ZFFIState camera should just be removed, developers should handle their own view & projection matrices
-- ZFFIState has pending meshes/textures, but those should exist in ZInitConfig or some ZInitState struct (they cant change during runtime)
-- VRPCommand has uniform color, texture slots, and blend modes, which should all just tie into a material.
-- update_scene_uniforms forces metallic, roughness, emissive to be scene wide, not a per-material basis, and should be removed.
-- Lights and Sky need to follow the "immediate mode" style rendering (not per frame), which allows a game to support up to any number of lights as long as developers manage the rendering system correctly. For example, they could have 5 lights (a, b, c, d, e), and draw a mesh with lights abcd, swap light d to light e, and then render another mesh with abce.
-- Basically, developers should be able to draw many meshes each with their own metallic, roughness, emissive levels.
-- Same logic applies to Lights and Sky in theory.
-- Material Buffer caching and bind groups are inefficient
-
-```rust
-    material_buffers: HashMap<MaterialCacheKey, wgpu::Buffer>,
-    texture_bind_groups: HashMap<[TextureHandle; 4], wgpu::BindGroup>,
-    frame_bind_groups: HashMap<MaterialCacheKey, wgpu::BindGroup>,
-```
-
-- A new Material struct should probably be created as follows
-
-```rust
-pub struct Material {
-   metallic: f32,
-   roughness: f32,
-   emissive: f32,
-   textures: [TextureHandle; 4],
-   matcap_blend_modes: [MatcapBlendMode; 4],
-}
-```
-
-- I guess other data like Sky state and Light state could even be there. So we could name it something else like a generic UniformState instead.
-- This is a large refactor which will span multiple files, it may be benefecial to scan all the changes first before starting to implement it.
-- Should this be the Render State? Perhaps the draw commands should copy the render state? and then we can cache via RenderState?
-- I'm not sure, this architecture is crazy so it needs to be simplified and improved dramatically.
-- One option is to actually just buffer the FFI commands as they are called, and then "replay" them, this way the initial state is consistent and "rebuilt" every time, which may be faster than copying the RenderState/MaterialState on each call. So every FFI function simply just pushes the parameters onto a RenderCommandBuffer and we iterate through it while rendering.
-- For performance, we need to cache anything which exists as part of a bind group: which is only TextureHandles.
-- So this means that metallic, roughness, emissive, and matcap blend modes, can all be part of some kind of uniform.
 
 ---
 
