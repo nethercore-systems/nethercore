@@ -18,6 +18,10 @@
 
 ## TODO
 
+### **CRITICAL PERFORMANCE: Extremely high GPU usage, even on library sreen **
+- Running the app, just the default screen is taking something like 30% gpu usage for a single egui window.
+- This is absolutely terrible performance and needs to be resolved immediately.
+
 ### **CRITICAL BUG: Shaders mode1, mode2, and mode3 don't use sky lambert shading **
 - Currently, only mode0_unlit.wgsl is properly using sky lambert.
 - Lambert shading using sun as a directional light should be implemented for mode1, mode2, and mode3 as well.
@@ -56,19 +60,36 @@ fn compute_matcap_uv(view_position: vec3<f32>, view_normal: vec3<f32>) -> vec2<f
 ```
 - Function is provided as above
 
-### **[POLISH] CRITICAL: Refactor Material Bufferes**
-- Material data is split between these two bind groups.
-- Should all exist as a single bind group, since the properties like metallic, roughness, emissive, matcap blend groups, and texture handles, all related to an objects material properties.
-- Update this to be a single buffer, called material_buffers
-- Update MaterialCacheKey to include the [TextureHandle; 4]
-- render function will need to be updated to properly handle these changes
-- shaders will need to be updated to use the proper bind groups.
-
+### **CRITICAL: Refactor Material and Uniforms System**
+- Material Data is all over the place! 
+- RenderState has MatcapBlendModes and TextureHandles, which should be material properties
+- ZFFIState camera should just be removed, developers should handle their own view & projection matrices
+- ZFFIState has pending meshes/textures, but those should exist in ZInitConfig or some ZInitState struct (they cant change during runtime)
+- VRPCommand has uniform color, texture slots, and blend modes, which should all just tie into a material.
+- update_scene_uniforms forces metallic, roughness, emissive to be scene wide, not a per-material basis, and should be removed.
+- Lights and Sky need to follow the "immediate mode" style rendering (not per frame), which allows a game to support up to any number of lights as long as developers manage the rendering system correctly.
+- Basically, developers should be able to draw many meshes each with their own metallic, roughness, emissive levels.
+- Same logic applies to Lights and Sky in theory.
+- Material Buffer caching and bind groups are inefficient
 ```rust
     material_buffers: HashMap<MaterialCacheKey, wgpu::Buffer>,
     texture_bind_groups: HashMap<[TextureHandle; 4], wgpu::BindGroup>,
     frame_bind_groups: HashMap<MaterialCacheKey, wgpu::BindGroup>,
 ```
+- A new Material struct should probably be created as follows
+```rust
+pub struct Material {
+   metallic: f32,
+   roughness: f32,
+   emissive: f32,
+   textures: [TextureHandle; 4],
+   matcap_blend_modes: [MatcapBlendMode; 4],
+}
+```
+- I guess other data like Sky state and Light state could even be there. So we could name it something else like a generic UniformState instead.
+- This is a large refactor which will span multiple files, it may be benefecial to scan all the changes first before starting to implement it.
+- Should this be the Render State? Perhaps the draw commands should copy the render state? and then we can cache via RenderState?
+- I'm not sure, this architecture is crazy so it needs to be simplified and improved dramatically.
 
 ### **[FEATURE] Support multiple view/projection matrices for split-screen rendering**
 
