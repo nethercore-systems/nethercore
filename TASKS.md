@@ -21,21 +21,6 @@
 2. Split files into smaller focused ones.
 - Any file which is longer than 2000 lines MUST be made smaller, preferrably under 1000 lines each.
 
-### **[REFACTOR] CRITICAL Refactor Render Architecture**
-- Current render architecture is wrong and segregated. State exists in ZFFIState, RenderState, and other places. It's extremely to parse and reason about.
-- Items which should be per-draw uniforms are per-frame uniforms, for example update_scene_uniforms receives camera, lights, sky, and even material properties like metallic, roughness, emissive. This is wrong and needs to change. There should be no scene_uniforms in the entire renderer architecture (see below point about removing camera).
-- See render-architecture.md file for full scope of changes.
-
----
-
-### **[REFACTOR] CRITICAL Refactor model/view/projection Matrices**
-- Current render system forces a singular Camera concept on games.
-- Cannot have multiple view or projection matrices per-frame.
-- These matrices and buffers do NOT count against VRAM usage, but should be growable buffers anyway.
-- See matrix-index-packing.md for full scope of changes.
-
----
-
 ### **CRITICAL MISSING FEATURE: Shaders mode1, mode2, and mode3 don't use sky lambert shading **
 - Currently, only mode0_unlit.wgsl is properly using sky lambert.
 - Lambert shading using sun as a directional light should be implemented for mode1, mode2, and mode3 as well.
@@ -79,9 +64,135 @@ fn compute_matcap_uv(view_position: vec3<f32>, view_normal: vec3<f32>) -> vec2<f
 
 ---
 
-### **CRITICAL PERFORMANCE: Extremely high GPU usage, even on library sreen **
-- Running the app, just the default screen is taking something like 30% gpu usage for a single egui window.
-- This is absolutely terrible performance and needs to be resolved immediately.
+### **CRITICAL PERFORMANCE TASK: Optimize Render Loop & Reduce Idle GPU Usage (WGPU + Egui)**
+
+**Context**
+
+Our application currently consumes **~30% GPU** even when idle (e.g., in the game library UI).
+Profiling and review of the render loop indicate **multiple systemic issues** that cause unnecessary GPU work each frame:
+
+* Multiple command encoders and command buffer submissions per frame
+* Possible double presentation of the surface texture
+* Game rendering and UI rendering split across separate encoders
+* Forced maximum-framerate redraw loop (`window.request_redraw()` every frame)
+* Egui meshes and buffers rebuilt every frame even when unchanged
+* Potential redundant clear/load passes
+* CPU-side debug/UI work performed even when invisible
+
+These collectively cause high GPU load when nothing is happening.
+
+---
+
+**Goal**
+
+Reduce idle GPU utilization in the library UI from ~30% → **<5%** (target matching typical WGPU idle loads) by restructuring the rendering pipeline.
+
+---
+
+**Action Plan**
+
+**1. Unify GPU work into a single CommandEncoder per frame**
+
+Currently:
+
+* `graphics.render_frame()` likely creates its own encoder + submit
+* UI rendering creates another encoder + submit
+
+Required:
+
+* Main frame loop creates **ONE** `CommandEncoder`
+* Pass this encoder to all rendering subsystems
+* Remove internal submits from `graphics.render_frame()`
+* Game rendering becomes a *pass* inside this single encoder
+* UI/egui rendering becomes another pass inside the same encoder
+* Only the main render loop may call `queue.submit()`
+
+**Deliverables:**
+
+* Updated API for `graphics.render_frame(&mut encoder, &view, ...)`
+
+**2. Ensure exactly ONE surface texture present() per frame**
+
+Currently the surface texture may be used or presented by the game renderer.
+Required:
+
+* The main render loop obtains the surface texture
+* Pass the texture view into game and UI render passes
+* Only the main render loop calls `surface_texture.present()`
+
+**3. Remove per-frame forced redraw (`window.request_redraw()`)**
+
+Currently the loop redraws at maximum (hundreds/thousands FPS).
+Required:
+
+* Redraw only when:
+
+  * Input events arrive
+  * Game is running (Playing mode)
+  * Egui reports needing animation
+* Implement Winit redraw scheduling (not forced loops)
+
+*4. Avoid rebuilding Egui meshes/buffers every frame when static**
+
+Currently we always do:
+
+```rust
+let tris = ctx.tessellate(...)
+egui_renderer.update_buffers(...)
+```
+
+Even when no UI changed.
+Required:
+
+* Only update buffers when `full_output.shapes` or textures changed
+* Cache previous meshes and reuse when unchanged
+
+5. Reduce redundant CPU-side debug/UI work**
+
+Examples:
+
+* Cloning `frame_times` every frame
+* Repainting debug graphs constantly
+* Rebuilding local vectors
+
+Required:
+
+* Update debug UI only when overlay is visible
+* Avoid cloning large vectors constantly
+* Use ring-buffer references instead of copies
+
+**6. Confirm render passes do not double-clear the frame**
+
+* Game renderer may clear the screen
+* UI pass may clear again (when not in Play mode)
+
+Required:
+
+* Only clear once per frame
+* If game rendered first, UI must use `LoadOp::Load`
+
+**Acceptance Criteria**
+
+A pull request is complete when all of the following are true:
+
+Rendering Architecture
+
+* [ ] Only **one** `CommandEncoder` is created per frame
+* [ ] Only **one** `queue.submit()` is called per frame
+* [ ] Only **one** `surface_texture.present()` is called per frame
+* [ ] Game renderer no longer manages its own encoder or present
+* [ ] Game and UI rendering occur sequentially inside the same encoder
+
+Egui Improvements
+
+* [ ] Egui meshes are only rebuilt when shapes change
+* [ ] Egui buffers updated only when mesh changes
+* [ ] UI redraw is event-driven, not frame-driven
+
+Performance
+
+* [ ] Idle GPU usage in library mode is reduced from ~30% to **<5%** on midrange hardware
+* [ ] No visual glitches (tests: Library UI → Settings → Playing → back to Library)
 
 ---
 
