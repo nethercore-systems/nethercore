@@ -14,6 +14,13 @@
 
 ---
 
+### **[CRITICAL] STABILITY Codebase is huge and clunky**
+- Lots of files are extremely long (2k+)
+- We must go through the entire repository and clean this up. Some ways we can accomplish this are
+1. Refactor heavily duplicated code to prevent copy paste
+2. Split files into smaller focused ones.
+- Any file which is longer than 2000 lines MUST be made smaller, preferrably under 1000 lines each.
+
 ### **[REFACTOR] CRITICAL Refactor Render Architecture**
 - Current render architecture is wrong and segregated. State exists in ZFFIState, RenderState, and other places. It's extremely to parse and reason about.
 - Items which should be per-draw uniforms are per-frame uniforms, for example update_scene_uniforms receives camera, lights, sky, and even material properties like metallic, roughness, emissive. This is wrong and needs to change. There should be no scene_uniforms in the entire renderer architecture (see below point about removing camera).
@@ -43,6 +50,7 @@ fn sky_lambert(normal: vec3<f32>) -> vec3<f32> {
 ```
 - Function already exists and defined as in mode0_unlit.wgsl (same as above)
 - Implement and include this lambert shading for the mode1, mode2, mode3 shaders.
+- CAUTION: Actual shaders are generated via shader_gen.rs, hence the string tags like //VS_POSITION around the functions. These tags will be replaced with relevant shader code to implement the actual variants that are used at runtime.
 
 ---
 
