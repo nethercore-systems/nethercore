@@ -67,7 +67,7 @@ fn compute_matcap_uv(view_position: vec3<f32>, view_normal: vec3<f32>) -> vec2<f
 - ZFFIState has pending meshes/textures, but those should exist in ZInitConfig or some ZInitState struct (they cant change during runtime)
 - VRPCommand has uniform color, texture slots, and blend modes, which should all just tie into a material.
 - update_scene_uniforms forces metallic, roughness, emissive to be scene wide, not a per-material basis, and should be removed.
-- Lights and Sky need to follow the "immediate mode" style rendering (not per frame), which allows a game to support up to any number of lights as long as developers manage the rendering system correctly.
+- Lights and Sky need to follow the "immediate mode" style rendering (not per frame), which allows a game to support up to any number of lights as long as developers manage the rendering system correctly. For example, they could have 5 lights (a, b, c, d, e), and draw a mesh with lights abcd, swap light d to light e, and then render another mesh with abce.
 - Basically, developers should be able to draw many meshes each with their own metallic, roughness, emissive levels.
 - Same logic applies to Lights and Sky in theory.
 - Material Buffer caching and bind groups are inefficient
@@ -90,6 +90,7 @@ pub struct Material {
 - This is a large refactor which will span multiple files, it may be benefecial to scan all the changes first before starting to implement it.
 - Should this be the Render State? Perhaps the draw commands should copy the render state? and then we can cache via RenderState?
 - I'm not sure, this architecture is crazy so it needs to be simplified and improved dramatically.
+- One option is to actually just buffer the FFI commands as they are called, and then "replay" them, this way the initial state is consistent and "rebuilt" every time, which may be faster than copying the RenderState/MaterialState on each call, but the downside is maybe we cant cache them on our end. But this could actually be fine and just be an optimization needed on the developers side? So every FFI function simply just pushes the parameters onto a RenderCommandBuffer and we iterate through it while rendering.
 
 ### **[FEATURE] Support multiple view/projection matrices for split-screen rendering**
 
