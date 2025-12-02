@@ -2739,10 +2739,9 @@ mod tests {
 
     use crate::{
         console::ZInput,
-        graphics::{FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV},
+        graphics::FORMAT_SKINNED,
         state::{CameraState, LightState, DEFAULT_CAMERA_FOV},
     };
-    use emberware_core::wasm::MAX_PLAYERS;
 
     #[test]
     fn test_zinput_button_bitmask() {
@@ -3260,7 +3259,7 @@ mod tests {
     fn test_draw_mesh_handle_zero_produces_no_command() {
         // Handle 0 is invalid - draw_mesh should reject it
         // Simulate what draw_mesh does: it checks handle == 0 and returns early
-        let mut state = ZFFIState::new();
+        let state = ZFFIState::new();
         let handle = 0u32;
 
         // Simulate the validation in draw_mesh
@@ -3278,7 +3277,7 @@ mod tests {
     fn test_mesh_handle_not_loaded() {
         // Handle 999 doesn't exist - draw command is NOT queued in new system
         // because we check mesh_map immediately
-        let mut state = ZFFIState::new();
+        let state = ZFFIState::new();
 
         // Simulate draw_mesh logic
         let handle = 999;

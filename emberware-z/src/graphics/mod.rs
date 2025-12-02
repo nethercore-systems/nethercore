@@ -2761,8 +2761,11 @@ mod tests {
     fn test_generate_text_quads_position() {
         let (vertices, _) =
             ZGraphics::generate_text_quads("A", 100.0, 50.0, 16.0, 0xFFFFFFFF, None, 960.0, 540.0);
-        assert!((vertices[0] - 100.0).abs() < 0.01);
-        assert!((vertices[1] - 50.0).abs() < 0.01);
+        // Vertices are in NDC (Normalized Device Coordinates), not pixel coordinates
+        // x: (100.0 / (960.0 * 0.5)) - 1.0 ≈ -0.7917
+        // y: 1.0 - (50.0 / (540.0 * 0.5)) ≈ 0.8148
+        assert!((vertices[0] - (-0.7917)).abs() < 0.01);
+        assert!((vertices[1] - 0.8148).abs() < 0.01);
         assert!((vertices[2] - 0.0).abs() < 0.01);
     }
 

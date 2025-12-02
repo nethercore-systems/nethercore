@@ -14,36 +14,22 @@
 
 ---
 
-### **[FEATURE] Support multiple view/projection matrices for split-screen rendering**
-
-**Status:** Enhancement - Current implementation works for single camera per frame
-
-**Current State:**
-- Single view matrix per frame (uniform buffer)
-- Single projection matrix per frame (uniform buffer)
-- Array of model matrices (storage buffer, instanced rendering)
-
-**Problem:**
-- Cannot render from multiple cameras in a single frame
-- Prevents split-screen gameplay
-- Prevents picture-in-picture effects (minimap, rear-view mirror, etc.)
-
-**Solution:**
-Option 2: View/projection arrays (like model matrices)
-- Change view_matrix and projection_matrix to storage buffer arrays
-- Add camera_index to draw commands (or FFI state)
-- Shaders use @builtin(camera_index) or similar
-- Pro: More efficient batching
-- Con: Requires FFI redesign, adds complexity to all shaders
-
-**Files to Consider:**
-- `emberware-z/src/graphics/mod.rs` - Viewport/scissor support for multiple cameras
-- `emberware-z/src/graphics/ffi.rs` - Camera/viewport management FFI
-- All shader files
+### **[REFACTOR] CRITICAL Refactor Render Architecture**
+- Current render architecture is wrong and segregated. State exists in ZFFIState, RenderState, and other places. It's extremely to parse and reason about.
+- Items which should be per-draw uniforms are per-frame uniforms, for example update_scene_uniforms receives camera, lights, sky, and even material properties like metallic, roughness, emissive. This is wrong and needs to change. There should be no scene_uniforms in the entire renderer architecture (see below point about removing camera).
+- See render-architecture.md file for full scope of changes.
 
 ---
 
-### **CRITICAL BUG: Shaders mode1, mode2, and mode3 don't use sky lambert shading **
+### **[REFACTOR] CRITICAL Refactor model/view/projection Matrices**
+- Current render system forces a singular Camera concept on games.
+- Cannot have multiple view or projection matrices per-frame.
+- These matrices and buffers do NOT count against VRAM usage, but should be growable buffers anyway.
+- See matrix-index-packing.md for full scope of changes.
+
+---
+
+### **CRITICAL MISSING FEATURE: Shaders mode1, mode2, and mode3 don't use sky lambert shading **
 - Currently, only mode0_unlit.wgsl is properly using sky lambert.
 - Lambert shading using sun as a directional light should be implemented for mode1, mode2, and mode3 as well.
 ```
@@ -60,7 +46,7 @@ fn sky_lambert(normal: vec3<f32>) -> vec3<f32> {
 
 ---
 
-### **CRITICAL BUG: Matcap shaders should use perspective correct UV sampling **
+### **CRITICAL POLISH: Matcap shaders should use perspective correct UV sampling **
 - Currently, matcaps are using the simple uv lookup
 ```
 // Compute matcap UV from view-space normal
