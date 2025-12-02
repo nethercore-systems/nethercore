@@ -364,11 +364,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_texture_handle_invalid() {
-        assert_eq!(TextureHandle::INVALID, TextureHandle(0));
-    }
-
-    #[test]
     fn test_render_state_default() {
         let state = RenderState::default();
         assert_eq!(state.color, 0xFFFFFFFF);
@@ -451,16 +446,6 @@ mod tests {
     }
 
     #[test]
-    fn test_sky_uniforms_size() {
-        assert_eq!(std::mem::size_of::<SkyUniforms>(), 64);
-    }
-
-    #[test]
-    fn test_sky_uniforms_alignment() {
-        assert!(std::mem::align_of::<SkyUniforms>() <= 16);
-    }
-
-    #[test]
     fn test_render_state_depth_test_toggle() {
         let mut state = RenderState::default();
         assert!(state.depth_test);
@@ -539,32 +524,6 @@ mod tests {
 
         assert_eq!(state1, state2);
         assert_ne!(state1, state3);
-    }
-
-    #[test]
-    fn test_render_state_clone() {
-        let state1 = RenderState {
-            color: 0x12345678,
-            depth_test: false,
-            cull_mode: CullMode::Front,
-            blend_mode: BlendMode::Additive,
-            texture_filter: TextureFilter::Linear,
-            texture_slots: [
-                TextureHandle(1),
-                TextureHandle(2),
-                TextureHandle(3),
-                TextureHandle(4),
-            ],
-            matcap_blend_modes: [MatcapBlendMode::Multiply; 4],
-        };
-
-        let state2 = state1;
-        assert_eq!(state1.color, state2.color);
-        assert_eq!(state1.depth_test, state2.depth_test);
-        assert_eq!(state1.cull_mode, state2.cull_mode);
-        assert_eq!(state1.blend_mode, state2.blend_mode);
-        assert_eq!(state1.texture_filter, state2.texture_filter);
-        assert_eq!(state1.texture_slots, state2.texture_slots);
     }
 
     #[test]

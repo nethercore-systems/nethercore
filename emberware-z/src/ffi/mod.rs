@@ -2609,85 +2609,6 @@ mod tests {
     // Transform Stack Tests
     // ========================================================================
 
-    #[test]
-    fn test_transform_stack_defaults() {
-        let state = ZFFIState::new();
-        assert_eq!(state.current_transform, Mat4::IDENTITY);
-        assert!(state.transform_stack.is_empty());
-    }
-
-    #[test]
-    fn test_transform_stack_capacity() {
-        let state = ZFFIState::new();
-        assert!(state.transform_stack.capacity() >= MAX_TRANSFORM_STACK);
-    }
-
-    #[test]
-    fn test_transform_operations_on_game_state() {
-        let mut state = ZFFIState::new();
-
-        // Test translation
-        state.current_transform *= Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0));
-        let point = state.current_transform.transform_point3(Vec3::ZERO);
-        assert!((point - Vec3::new(1.0, 2.0, 3.0)).length() < 0.001);
-
-        // Reset and test rotation
-        state.current_transform = Mat4::IDENTITY;
-        let angle = std::f32::consts::FRAC_PI_2; // 90 degrees
-        state.current_transform *= Mat4::from_rotation_y(angle);
-        let point = state
-            .current_transform
-            .transform_point3(Vec3::new(1.0, 0.0, 0.0));
-        // Rotating (1,0,0) 90 degrees around Y should give (0,0,-1)
-        assert!((point.x).abs() < 0.001);
-        assert!((point.z + 1.0).abs() < 0.001);
-
-        // Reset and test scale
-        state.current_transform = Mat4::IDENTITY;
-        state.current_transform *= Mat4::from_scale(Vec3::new(2.0, 3.0, 4.0));
-        let point = state
-            .current_transform
-            .transform_point3(Vec3::new(1.0, 1.0, 1.0));
-        assert!((point - Vec3::new(2.0, 3.0, 4.0)).length() < 0.001);
-    }
-
-    #[test]
-    fn test_transform_push_pop() {
-        let mut state = ZFFIState::new();
-
-        // Set up initial transform
-        state.current_transform = Mat4::from_translation(Vec3::new(1.0, 0.0, 0.0));
-        let original = state.current_transform;
-
-        // Push
-        state.transform_stack.push(state.current_transform);
-        assert_eq!(state.transform_stack.len(), 1);
-
-        // Modify current transform
-        state.current_transform *= Mat4::from_translation(Vec3::new(0.0, 1.0, 0.0));
-        assert_ne!(state.current_transform, original);
-
-        // Pop
-        state.current_transform = state.transform_stack.pop().unwrap();
-        assert_eq!(state.current_transform, original);
-        assert!(state.transform_stack.is_empty());
-    }
-
-    #[test]
-    fn test_transform_stack_max_depth() {
-        let mut state = ZFFIState::new();
-
-        // Fill the stack to max
-        for i in 0..MAX_TRANSFORM_STACK {
-            assert!(state.transform_stack.len() < MAX_TRANSFORM_STACK);
-            state
-                .transform_stack
-                .push(Mat4::from_translation(Vec3::new(i as f32, 0.0, 0.0)));
-        }
-
-        assert_eq!(state.transform_stack.len(), MAX_TRANSFORM_STACK);
-    }
-
     // ========================================================================
     // GPU Skinning FFI Tests
     // ========================================================================
@@ -2715,131 +2636,15 @@ mod tests {
     }
 
     #[test]
-    fn test_max_bones_constant() {
-        // MAX_BONES should be 256 for GPU skinning
-        assert_eq!(MAX_BONES, 256);
-    }
-
-    #[test]
     fn test_render_state_bone_matrices_default() {
         let state = ZFFIState::new();
         assert!(state.bone_matrices.is_empty());
         assert_eq!(state.bone_count, 0);
     }
 
-    #[test]
-    fn test_render_state_bone_matrices_mutation() {
-        let mut state = ZFFIState::new();
-
-        // Add bone matrices
-        let bone = Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0));
-        state.bone_matrices.push(bone);
-        state.bone_count = 1;
-
-        assert_eq!(state.bone_matrices.len(), 1);
-        assert_eq!(state.bone_count, 1);
-        assert_eq!(state.bone_matrices[0], bone);
-    }
-
-    #[test]
-    fn test_render_state_bone_matrices_clear() {
-        let mut state = ZFFIState::new();
-
-        // Add some bones
-        for _ in 0..10 {
-            state.bone_matrices.push(Mat4::IDENTITY);
-        }
-        state.bone_count = 10;
-
-        // Clear
-        state.bone_matrices.clear();
-        state.bone_count = 0;
-
-        assert!(state.bone_matrices.is_empty());
-        assert_eq!(state.bone_count, 0);
-    }
-
-    #[test]
-    fn test_render_state_bone_matrices_max_count() {
-        let mut state = ZFFIState::new();
-
-        // Fill with MAX_BONES matrices
-        for i in 0..MAX_BONES {
-            let bone = Mat4::from_translation(Vec3::new(i as f32, 0.0, 0.0));
-            state.bone_matrices.push(bone);
-        }
-        state.bone_count = MAX_BONES as u32;
-
-        assert_eq!(state.bone_matrices.len(), MAX_BONES);
-        assert_eq!(state.bone_count, MAX_BONES as u32);
-    }
-
-    #[test]
-    fn test_skinned_format_flag_value() {
-        // FORMAT_SKINNED should be 8 (bit 3)
-        assert_eq!(FORMAT_SKINNED, 8);
-    }
-
-    #[test]
-    fn test_max_vertex_format_includes_skinned() {
-        // MAX_VERTEX_FORMAT should be 15 (all flags set: UV=1 | COLOR=2 | NORMAL=4 | SKINNED=8)
-        assert_eq!(super::MAX_VERTEX_FORMAT, 15);
-    }
-
-    #[test]
-    fn test_bone_matrix_identity_transform() {
-        // Verify identity bone matrix doesn't transform a vertex
-        let bone = Mat4::IDENTITY;
-        let vertex = Vec3::new(1.0, 2.0, 3.0);
-        let transformed = bone.transform_point3(vertex);
-
-        assert_eq!(transformed, vertex);
-    }
-
-    #[test]
-    fn test_bone_matrix_translation() {
-        let bone = Mat4::from_translation(Vec3::new(5.0, 0.0, 0.0));
-        let vertex = Vec3::ZERO;
-        let transformed = bone.transform_point3(vertex);
-
-        assert!((transformed.x - 5.0).abs() < 0.0001);
-        assert!(transformed.y.abs() < 0.0001);
-        assert!(transformed.z.abs() < 0.0001);
-    }
-
-    #[test]
-    fn test_bone_matrix_column_major_layout() {
-        // Verify glam uses column-major layout (same as WGSL/wgpu)
-        let translation = Mat4::from_translation(Vec3::new(10.0, 20.0, 30.0));
-        let cols = translation.to_cols_array();
-
-        // Column 3 (indices 12-15) contains translation
-        assert_eq!(cols[12], 10.0); // x translation
-        assert_eq!(cols[13], 20.0); // y translation
-        assert_eq!(cols[14], 30.0); // z translation
-        assert_eq!(cols[15], 1.0); // w = 1
-    }
-
-    #[test]
-    fn test_bone_weights_sum_to_one() {
-        // In GPU skinning, bone weights should sum to 1.0
-        // This is a convention test - games should ensure this
-        let weights = [0.5f32, 0.3, 0.15, 0.05];
-        let sum: f32 = weights.iter().sum();
-        assert!((sum - 1.0).abs() < 0.0001);
-    }
-
     // ========================================================================
     // Vertex Format Validation Tests
     // ========================================================================
-
-    #[test]
-    fn test_vertex_format_constants() {
-        assert_eq!(FORMAT_UV, 1);
-        assert_eq!(FORMAT_COLOR, 2);
-        assert_eq!(FORMAT_NORMAL, 4);
-        assert_eq!(FORMAT_SKINNED, 8);
-    }
 
     #[test]
     fn test_vertex_stride_base_formats() {
@@ -2863,15 +2668,6 @@ mod tests {
             assert!(stride >= 12);
             assert!(stride <= 64);
         }
-    }
-
-    #[test]
-    fn test_max_vertex_format_boundary() {
-        // MAX_VERTEX_FORMAT is 15, all format bits set
-        assert_eq!(
-            super::MAX_VERTEX_FORMAT,
-            FORMAT_UV | FORMAT_COLOR | FORMAT_NORMAL | FORMAT_SKINNED
-        );
     }
 
     // ========================================================================
@@ -2935,13 +2731,6 @@ mod tests {
         assert_eq!(TICK_RATES[1], 30); // 30 fps
         assert_eq!(TICK_RATES[2], 60); // 60 fps (default)
         assert_eq!(TICK_RATES[3], 120); // 120 fps
-    }
-
-    #[test]
-    fn test_init_config_render_mode_values() {
-        // Render modes: 0=Unlit, 1=Matcap, 2=PBR, 3=Hybrid
-        assert!((0..=3).contains(&0)); // Valid modes are 0-3
-        assert!(!(0..=3).contains(&4)); // 4 is invalid
     }
 
     // ========================================================================
@@ -3020,11 +2809,6 @@ mod tests {
         assert_eq!(input.right_trigger as f32 / 255.0, 1.0);
     }
 
-    #[test]
-    fn test_max_players_constant() {
-        assert_eq!(MAX_PLAYERS, 4);
-    }
-
     // ========================================================================
     // Draw Command Tests
     // ========================================================================
@@ -3034,22 +2818,6 @@ mod tests {
         let state = ZFFIState::new();
         assert!(state.render_pass.commands().is_empty());
         assert!(state.deferred_commands.is_empty());
-    }
-
-    #[test]
-    fn test_draw_commands_can_be_added() {
-        let mut state = ZFFIState::new();
-
-        state.deferred_commands.push(DeferredCommand::DrawRect {
-            x: 0.0,
-            y: 0.0,
-            width: 100.0,
-            height: 100.0,
-            color: 0xFF0000FF,
-            blend_mode: 0,
-        });
-
-        assert_eq!(state.deferred_commands.len(), 1);
     }
 
     #[test]
@@ -4114,60 +3882,9 @@ mod tests {
     // Edge Case Tests: Draw Command Buffer Growth
     // ------------------------------------------------------------------------
 
-    #[test]
-    fn test_draw_commands_grow_dynamically() {
-        let mut state = ZFFIState::new();
-
-        // Add many draw commands
-        for i in 0..1000 {
-            state.draw_commands.push(ZDrawCommand::DrawRect {
-                x: i as f32,
-                y: 0.0,
-                width: 10.0,
-                height: 10.0,
-                color: 0xFFFFFFFF,
-                blend_mode: 0,
-            });
-        }
-
-        assert_eq!(state.draw_commands.len(), 1000);
-    }
-
     // ------------------------------------------------------------------------
     // Edge Case Tests: Pending Resources Growth
     // ------------------------------------------------------------------------
-
-    #[test]
-    fn test_pending_textures_grow_dynamically() {
-        let mut state = ZFFIState::new();
-
-        for i in 0..100 {
-            state.pending_textures.push(PendingTexture {
-                handle: i + 1,
-                width: 8,
-                height: 8,
-                data: vec![0xFF; 8 * 8 * 4],
-            });
-        }
-
-        assert_eq!(state.pending_textures.len(), 100);
-    }
-
-    #[test]
-    fn test_pending_meshes_grow_dynamically() {
-        let mut state = ZFFIState::new();
-
-        for i in 0..100 {
-            state.pending_meshes.push(PendingMesh {
-                handle: i + 1,
-                format: 0,
-                vertex_data: vec![0.0; 9], // 3 vertices × 3 floats
-                index_data: None,
-            });
-        }
-
-        assert_eq!(state.pending_meshes.len(), 100);
-    }
 
     // ------------------------------------------------------------------------
     // Edge Case Tests: Handle Allocation Overflow

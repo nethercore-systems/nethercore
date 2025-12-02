@@ -294,20 +294,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_zinput_size() {
-        // ZInput should be 8 bytes for efficient network serialization
-        assert_eq!(std::mem::size_of::<ZInput>(), 8);
-    }
-
-    #[test]
-    fn test_zinput_pod() {
-        // Verify ZInput is POD (bytemuck requirements)
-        let input = ZInput::default();
-        let bytes = bytemuck::bytes_of(&input);
-        assert_eq!(bytes.len(), 8);
-    }
-
-    #[test]
     fn test_button_mask() {
         assert_eq!(Button::Up.mask(), 0x0001);
         assert_eq!(Button::Down.mask(), 0x0002);

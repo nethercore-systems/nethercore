@@ -408,27 +408,6 @@ mod tests {
     use crate::graphics::vertex::{FORMAT_COLOR, FORMAT_NORMAL, FORMAT_UV};
 
     #[test]
-    fn test_mesh_handle_invalid() {
-        assert_eq!(MeshHandle::INVALID, MeshHandle(0));
-    }
-
-    #[test]
-    fn test_retained_mesh_default_values() {
-        let mesh = RetainedMesh {
-            format: 0,
-            vertex_count: 100,
-            index_count: 150,
-            vertex_offset: 0,
-            index_offset: 0,
-        };
-        assert_eq!(mesh.format, 0);
-        assert_eq!(mesh.vertex_count, 100);
-        assert_eq!(mesh.index_count, 150);
-        assert_eq!(mesh.vertex_offset, 0);
-        assert_eq!(mesh.index_offset, 0);
-    }
-
-    #[test]
     fn test_retained_mesh_non_indexed() {
         let mesh = RetainedMesh {
             format: FORMAT_UV | FORMAT_NORMAL,

@@ -177,13 +177,6 @@ mod tests {
         assert!((audio.master_volume - 0.8).abs() < f32::EPSILON);
     }
 
-    #[test]
-    fn test_default_helper_functions() {
-        assert!(default_true());
-        assert_eq!(default_scale(), 2);
-        assert!((default_volume() - 0.8).abs() < f32::EPSILON);
-    }
-
     // =============================================================
     // TOML serialization tests
     // =============================================================
@@ -305,72 +298,6 @@ master_volume = 0.3
     // =============================================================
     // Directory function tests
     // =============================================================
-
-    #[test]
-    fn test_config_dir_returns_some() {
-        // On most systems, config_dir should return Some
-        // (might fail in unusual environments, but generally works)
-        let dir = config_dir();
-        // We just check it's consistent with itself
-        assert_eq!(dir, config_dir());
-    }
-
-    #[test]
-    fn test_data_dir_returns_some() {
-        let dir = data_dir();
-        assert_eq!(dir, data_dir());
-    }
-
-    #[test]
-    fn test_config_and_data_dirs_differ() {
-        // config_dir and data_dir should typically be different paths
-        let config = config_dir();
-        let data = data_dir();
-        if let (Some(c), Some(d)) = (config, data) {
-            // They might be the same on some platforms, but typically differ
-            // Just verify they're both valid paths
-            assert!(c.to_string_lossy().contains("emberware"));
-            assert!(d.to_string_lossy().contains("emberware"));
-        }
-    }
-
-    // =============================================================
-    // Clone and Debug trait tests
-    // =============================================================
-
-    #[test]
-    fn test_config_clone() {
-        let config = Config::default();
-        let cloned = config.clone();
-        assert_eq!(cloned.video.fullscreen, config.video.fullscreen);
-        assert_eq!(cloned.video.vsync, config.video.vsync);
-        assert_eq!(cloned.video.resolution_scale, config.video.resolution_scale);
-    }
-
-    #[test]
-    fn test_config_debug() {
-        let config = Config::default();
-        let debug_str = format!("{:?}", config);
-        assert!(debug_str.contains("Config"));
-        assert!(debug_str.contains("video"));
-        assert!(debug_str.contains("audio"));
-    }
-
-    #[test]
-    fn test_video_config_debug() {
-        let video = VideoConfig::default();
-        let debug_str = format!("{:?}", video);
-        assert!(debug_str.contains("VideoConfig"));
-        assert!(debug_str.contains("fullscreen"));
-    }
-
-    #[test]
-    fn test_audio_config_debug() {
-        let audio = AudioConfig::default();
-        let debug_str = format!("{:?}", audio);
-        assert!(debug_str.contains("AudioConfig"));
-        assert!(debug_str.contains("master_volume"));
-    }
 
     // =============================================================
     // Load function tests (without filesystem access)

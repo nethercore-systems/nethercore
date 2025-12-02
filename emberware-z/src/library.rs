@@ -115,45 +115,6 @@ mod tests {
     use tempfile::TempDir;
 
     // =============================================================
-    // LocalGame struct tests
-    // =============================================================
-
-    #[test]
-    fn test_local_game_clone() {
-        let game = LocalGame {
-            id: "test-game".to_string(),
-            title: "Test Game".to_string(),
-            author: "Test Author".to_string(),
-            version: "1.0.0".to_string(),
-            rom_path: PathBuf::from("/path/to/rom.wasm"),
-        };
-
-        let cloned = game.clone();
-        assert_eq!(cloned.id, "test-game");
-        assert_eq!(cloned.title, "Test Game");
-        assert_eq!(cloned.author, "Test Author");
-        assert_eq!(cloned.version, "1.0.0");
-        assert_eq!(cloned.rom_path, PathBuf::from("/path/to/rom.wasm"));
-    }
-
-    #[test]
-    fn test_local_game_debug() {
-        let game = LocalGame {
-            id: "debug-test".to_string(),
-            title: "Debug Test".to_string(),
-            author: "Author".to_string(),
-            version: "0.1.0".to_string(),
-            rom_path: PathBuf::from("/test/rom.wasm"),
-        };
-
-        let debug_str = format!("{:?}", game);
-        assert!(debug_str.contains("debug-test"));
-        assert!(debug_str.contains("Debug Test"));
-        assert!(debug_str.contains("Author"));
-        assert!(debug_str.contains("0.1.0"));
-    }
-
-    // =============================================================
     // Helper function to create a test game directory
     // =============================================================
 

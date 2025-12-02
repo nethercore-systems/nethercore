@@ -12,37 +12,6 @@
 
 ## TODO
 
-### **CRITICAL STABILITY: Lots of useless tests **
-- Lots of tests exist for the project which don't do anything useful. For example:
-```rust
-    #[test]
-    fn test_texture_dimensions_zero_width() {
-        let width = 0u32;
-        let height = 64u32;
-        assert!(width == 0 || height == 0);
-    }
-
-    #[test]
-    fn test_texture_dimensions_zero_height() {
-        let width = 64u32;
-        let height = 0u32;
-        assert!(width == 0 || height == 0);
-    }
-
-    #[test]
-    fn test_texture_dimensions_both_zero() {
-        let width = 0u32;
-        let height = 0u32;
-        assert!(width == 0 || height == 0);
-    }
-```
-- These are basically testing that rust works.
-- Please delete all useless tests like this, a test is only useful if it calls some kind of other function or side effect, and we need to verify correctness there.
-- This should help reduce file size and save on token costs when editing files.
-
----
-
-
 ---
 
 ### **[FEATURE] Support multiple view/projection matrices for split-screen rendering**
