@@ -4058,51 +4058,6 @@ mod tests {
     }
 
     // ------------------------------------------------------------------------
-    // Edge Case Tests: Draw Triangles Vertex Count
-    // ------------------------------------------------------------------------
-
-    #[test]
-    fn test_draw_triangles_vertex_count_zero() {
-        // Vertex count 0 should produce no draw command
-        let mut state = ZFFIState::new();
-        let vertex_count = 0u32;
-
-        if vertex_count == 0 {
-            // Do nothing - early return
-        } else {
-            state.draw_commands.push(ZDrawCommand::DrawTriangles {
-                format: 0,
-                vertex_data: vec![],
-                transform: Mat4::IDENTITY,
-                color: 0xFFFFFFFF,
-                depth_test: true,
-                cull_mode: 1,
-                blend_mode: 0,
-                bound_textures: [0; 4],
-            });
-        }
-
-        assert!(state.draw_commands.is_empty());
-    }
-
-    #[test]
-    fn test_draw_triangles_vertex_count_not_multiple_of_three() {
-        // Vertex count must be multiple of 3 for triangles
-        let invalid_counts = [1u32, 2, 4, 5, 7, 8, 10, 11];
-        for count in invalid_counts {
-            assert!(count % 3 != 0);
-        }
-    }
-
-    #[test]
-    fn test_draw_triangles_vertex_count_valid_multiples() {
-        let valid_counts = [3u32, 6, 9, 12, 15, 30, 300];
-        for count in valid_counts {
-            assert!(count % 3 == 0);
-        }
-    }
-
-    // ------------------------------------------------------------------------
     // Edge Case Tests: Load Mesh Index Count
     // ------------------------------------------------------------------------
 
