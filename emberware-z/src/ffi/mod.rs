@@ -2948,7 +2948,11 @@ mod tests {
     // Input State Tests (moved to console.rs - ZInput tests)
     // ========================================================================
 
-    use crate::{console::ZInput, graphics::{FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV}, state::{CameraState, DEFAULT_CAMERA_FOV, LightState}};
+    use crate::{
+        console::ZInput,
+        graphics::{FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV},
+        state::{CameraState, LightState, DEFAULT_CAMERA_FOV},
+    };
     use emberware_core::wasm::MAX_PLAYERS;
 
     #[test]

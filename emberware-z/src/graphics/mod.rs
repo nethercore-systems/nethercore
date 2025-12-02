@@ -451,7 +451,7 @@ impl ZGraphics {
             current_transform: Mat4::IDENTITY,
             transform_stack: Vec::with_capacity(16),
             pipeline_cache: PipelineCache::new(),
-            current_render_mode: 0, // Default to Mode 0 (Unlit)
+            current_render_mode: 0,      // Default to Mode 0 (Unlit)
             current_resolution_index: 1, // 960×540 (default)
             scale_mode: crate::config::ScaleMode::default(), // Stretch by default
         };
@@ -489,7 +489,12 @@ impl ZGraphics {
     }
 
     /// Create offscreen render target at specified resolution
-    fn create_render_target(device: &wgpu::Device, width: u32, height: u32, surface_format: wgpu::TextureFormat) -> RenderTarget {
+    fn create_render_target(
+        device: &wgpu::Device,
+        width: u32,
+        height: u32,
+        surface_format: wgpu::TextureFormat,
+    ) -> RenderTarget {
         // Create color texture (render target)
         let color_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Render Target Color"),
@@ -683,7 +688,8 @@ impl ZGraphics {
         );
 
         // Create new render target
-        self.render_target = Self::create_render_target(&self.device, width, height, self.config.format);
+        self.render_target =
+            Self::create_render_target(&self.device, width, height, self.config.format);
 
         // Recreate blit bind group with new render target texture
         let bind_group_layout = self.blit_pipeline.get_bind_group_layout(0);
@@ -1147,18 +1153,15 @@ impl ZGraphics {
         z_state: &mut crate::state::ZFFIState,
         texture_map: &hashbrown::HashMap<u32, TextureHandle>,
     ) {
-        use crate::state::DeferredCommand;
         use crate::console::RESOLUTIONS;
+        use crate::state::DeferredCommand;
 
         // Apply init config to graphics (render mode, etc.)
         self.set_render_mode(z_state.init_config.render_mode);
 
         // Get the game's internal render resolution
         let res_idx = z_state.init_config.resolution_index as usize;
-        let (render_width, render_height) = RESOLUTIONS
-            .get(res_idx)
-            .copied()
-            .unwrap_or((960, 540)); // Default to 540p if invalid
+        let (render_width, render_height) = RESOLUTIONS.get(res_idx).copied().unwrap_or((960, 540)); // Default to 540p if invalid
         let render_width_f = render_width as f32;
         let render_height_f = render_height as f32;
 
@@ -1392,10 +1395,14 @@ impl ZGraphics {
                         let (rx3, ry3) = rotate_point(x0, y1);
 
                         // Convert rotated pixel coordinates to NDC
-                        let (rx0_ndc, ry0_ndc) = pixel_to_ndc(rx0, ry0, render_width_f, render_height_f);
-                        let (rx1_ndc, ry1_ndc) = pixel_to_ndc(rx1, ry1, render_width_f, render_height_f);
-                        let (rx2_ndc, ry2_ndc) = pixel_to_ndc(rx2, ry2, render_width_f, render_height_f);
-                        let (rx3_ndc, ry3_ndc) = pixel_to_ndc(rx3, ry3, render_width_f, render_height_f);
+                        let (rx0_ndc, ry0_ndc) =
+                            pixel_to_ndc(rx0, ry0, render_width_f, render_height_f);
+                        let (rx1_ndc, ry1_ndc) =
+                            pixel_to_ndc(rx1, ry1, render_width_f, render_height_f);
+                        let (rx2_ndc, ry2_ndc) =
+                            pixel_to_ndc(rx2, ry2, render_width_f, render_height_f);
+                        let (rx3_ndc, ry3_ndc) =
+                            pixel_to_ndc(rx3, ry3, render_width_f, render_height_f);
 
                         vec![
                             // Top-left
@@ -1406,8 +1413,10 @@ impl ZGraphics {
                         ]
                     } else {
                         // No rotation - simple quad, convert pixel coordinates to NDC
-                        let (x0_ndc, y0_ndc) = pixel_to_ndc(x0, y0, render_width_f, render_height_f);
-                        let (x1_ndc, y1_ndc) = pixel_to_ndc(x1, y1, render_width_f, render_height_f);
+                        let (x0_ndc, y0_ndc) =
+                            pixel_to_ndc(x0, y0, render_width_f, render_height_f);
+                        let (x1_ndc, y1_ndc) =
+                            pixel_to_ndc(x1, y1, render_width_f, render_height_f);
 
                         vec![
                             // Top-left
@@ -1474,7 +1483,8 @@ impl ZGraphics {
 
                     // Convert pixel coordinates to NDC
                     let (x0_ndc, y0_ndc) = pixel_to_ndc(x, y, render_width_f, render_height_f);
-                    let (x1_ndc, y1_ndc) = pixel_to_ndc(x + width, y + height, render_width_f, render_height_f);
+                    let (x1_ndc, y1_ndc) =
+                        pixel_to_ndc(x + width, y + height, render_width_f, render_height_f);
 
                     // Generate quad vertices (POS_COLOR format = 2) in NDC coordinates
                     // Format: [x, y, z, r, g, b]
@@ -1545,8 +1555,16 @@ impl ZGraphics {
                     };
 
                     // Generate text quads (POS_UV_COLOR format = 3)
-                    let (vertices, indices) =
-                        Self::generate_text_quads(text_str, x, y, size, color, font_opt, render_width_f, render_height_f);
+                    let (vertices, indices) = Self::generate_text_quads(
+                        text_str,
+                        x,
+                        y,
+                        size,
+                        color,
+                        font_opt,
+                        render_width_f,
+                        render_height_f,
+                    );
 
                     // Skip if no vertices generated
                     if vertices.is_empty() || indices.is_empty() {
@@ -1872,7 +1890,12 @@ impl ZGraphics {
 
                 // Convert pixel coordinates to NDC
                 let (x0_ndc, y0_ndc) = pixel_to_ndc(cursor_x, y, render_width, render_height);
-                let (x1_ndc, y1_ndc) = pixel_to_ndc(cursor_x + glyph_width, y + glyph_height, render_width, render_height);
+                let (x1_ndc, y1_ndc) = pixel_to_ndc(
+                    cursor_x + glyph_width,
+                    y + glyph_height,
+                    render_width,
+                    render_height,
+                );
 
                 // Screen-space quad vertices (2D) in NDC coordinates
                 // Format: POS_UV_COLOR (format 3)
@@ -1883,16 +1906,7 @@ impl ZGraphics {
                 // Top-right
                 vertices.extend_from_slice(&[x1_ndc, y0_ndc, 0.0, u1, v0, r, g, b]);
                 // Bottom-right
-                vertices.extend_from_slice(&[
-                    x1_ndc,
-                    y1_ndc,
-                    0.0,
-                    u1,
-                    v1,
-                    r,
-                    g,
-                    b,
-                ]);
+                vertices.extend_from_slice(&[x1_ndc, y1_ndc, 0.0, u1, v1, r, g, b]);
                 // Bottom-left
                 vertices.extend_from_slice(&[x0_ndc, y1_ndc, 0.0, u0, v1, r, g, b]);
 
@@ -1923,7 +1937,12 @@ impl ZGraphics {
 
                 // Convert pixel coordinates to NDC
                 let (x0_ndc, y0_ndc) = pixel_to_ndc(cursor_x, y, render_width, render_height);
-                let (x1_ndc, y1_ndc) = pixel_to_ndc(cursor_x + glyph_width, y + glyph_height, render_width, render_height);
+                let (x1_ndc, y1_ndc) = pixel_to_ndc(
+                    cursor_x + glyph_width,
+                    y + glyph_height,
+                    render_width,
+                    render_height,
+                );
 
                 // Screen-space quad vertices (2D) in NDC coordinates
                 // Format: POS_UV_COLOR (format 3)
@@ -1934,16 +1953,7 @@ impl ZGraphics {
                 // Top-right
                 vertices.extend_from_slice(&[x1_ndc, y0_ndc, 0.0, u1, v0, r, g, b]);
                 // Bottom-right
-                vertices.extend_from_slice(&[
-                    x1_ndc,
-                    y1_ndc,
-                    0.0,
-                    u1,
-                    v1,
-                    r,
-                    g,
-                    b,
-                ]);
+                vertices.extend_from_slice(&[x1_ndc, y1_ndc, 0.0, u1, v1, r, g, b]);
                 // Bottom-left
                 vertices.extend_from_slice(&[x0_ndc, y1_ndc, 0.0, u0, v1, r, g, b]);
 
@@ -2024,7 +2034,12 @@ impl ZGraphics {
             let (viewport_x, viewport_y, viewport_width, viewport_height) = match self.scale_mode {
                 crate::config::ScaleMode::Stretch => {
                     // Stretch to fill window (may distort aspect ratio)
-                    (0.0, 0.0, self.config.width as f32, self.config.height as f32)
+                    (
+                        0.0,
+                        0.0,
+                        self.config.width as f32,
+                        self.config.height as f32,
+                    )
                 }
                 crate::config::ScaleMode::PixelPerfect => {
                     // Integer scaling with letterboxing (pixel-perfect)
@@ -2301,117 +2316,125 @@ impl ZGraphics {
                 // Create frame bind group (group 0) - Now reusable across draws since model matrices are in storage buffer!
                 // Frame bind groups cached by material (since material buffer is the only per-draw varying resource)
                 let frame_bind_group_key = material_key; // Reuse material_key as frame bind group key
-                let frame_bind_group = frame_bind_groups.entry(frame_bind_group_key).or_insert_with(|| {
-                    match self.current_render_mode {
-                        0 | 1 => {
-                            // Mode 0 (Unlit) and Mode 1 (Matcap): Basic bindings
-                            self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                                label: Some("Frame Bind Group"),
-                                layout: &pipeline_entry.bind_group_layout_frame,
-                                entries: &[
-                                    wgpu::BindGroupEntry {
-                                        binding: 0,
-                                        resource: self.model_matrices_buffer.as_entire_binding(),
-                                    },
-                                    wgpu::BindGroupEntry {
-                                        binding: 1,
-                                        resource: self.view_buffer.as_entire_binding(),
-                                    },
-                                    wgpu::BindGroupEntry {
-                                        binding: 2,
-                                        resource: self.proj_buffer.as_entire_binding(),
-                                    },
-                                    wgpu::BindGroupEntry {
-                                        binding: 3,
-                                        resource: self.sky_buffer.as_entire_binding(),
-                                    },
-                                    wgpu::BindGroupEntry {
-                                        binding: 4,
-                                        resource: material_buffer.as_entire_binding(),
-                                    },
-                                    wgpu::BindGroupEntry {
-                                        binding: 5,
-                                        resource: self.bone_buffer.as_entire_binding(),
-                                    },
-                                ],
-                            })
+                let frame_bind_group = frame_bind_groups
+                    .entry(frame_bind_group_key)
+                    .or_insert_with(|| {
+                        match self.current_render_mode {
+                            0 | 1 => {
+                                // Mode 0 (Unlit) and Mode 1 (Matcap): Basic bindings
+                                self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                                    label: Some("Frame Bind Group"),
+                                    layout: &pipeline_entry.bind_group_layout_frame,
+                                    entries: &[
+                                        wgpu::BindGroupEntry {
+                                            binding: 0,
+                                            resource: self
+                                                .model_matrices_buffer
+                                                .as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 1,
+                                            resource: self.view_buffer.as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 2,
+                                            resource: self.proj_buffer.as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 3,
+                                            resource: self.sky_buffer.as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 4,
+                                            resource: material_buffer.as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 5,
+                                            resource: self.bone_buffer.as_entire_binding(),
+                                        },
+                                    ],
+                                })
+                            }
+                            2 | 3 => {
+                                // Mode 2 (PBR) and Mode 3 (Hybrid): Additional lighting uniforms
+                                self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                                    label: Some("Frame Bind Group"),
+                                    layout: &pipeline_entry.bind_group_layout_frame,
+                                    entries: &[
+                                        wgpu::BindGroupEntry {
+                                            binding: 0,
+                                            resource: self
+                                                .model_matrices_buffer
+                                                .as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 1,
+                                            resource: self.view_buffer.as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 2,
+                                            resource: self.proj_buffer.as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 3,
+                                            resource: self.sky_buffer.as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 4,
+                                            resource: material_buffer.as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 5,
+                                            resource: self.lights_buffer.as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 6,
+                                            resource: self.camera_buffer.as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 7,
+                                            resource: self.bone_buffer.as_entire_binding(),
+                                        },
+                                    ],
+                                })
+                            }
+                            _ => {
+                                // Fallback - same as mode 0/1
+                                self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                                    label: Some("Frame Bind Group"),
+                                    layout: &pipeline_entry.bind_group_layout_frame,
+                                    entries: &[
+                                        wgpu::BindGroupEntry {
+                                            binding: 0,
+                                            resource: self
+                                                .model_matrices_buffer
+                                                .as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 1,
+                                            resource: self.view_buffer.as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 2,
+                                            resource: self.proj_buffer.as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 3,
+                                            resource: self.sky_buffer.as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 4,
+                                            resource: material_buffer.as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 5,
+                                            resource: self.bone_buffer.as_entire_binding(),
+                                        },
+                                    ],
+                                })
+                            }
                         }
-                        2 | 3 => {
-                            // Mode 2 (PBR) and Mode 3 (Hybrid): Additional lighting uniforms
-                            self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                                label: Some("Frame Bind Group"),
-                                layout: &pipeline_entry.bind_group_layout_frame,
-                                entries: &[
-                                    wgpu::BindGroupEntry {
-                                        binding: 0,
-                                        resource: self.model_matrices_buffer.as_entire_binding(),
-                                    },
-                                    wgpu::BindGroupEntry {
-                                        binding: 1,
-                                        resource: self.view_buffer.as_entire_binding(),
-                                    },
-                                    wgpu::BindGroupEntry {
-                                        binding: 2,
-                                        resource: self.proj_buffer.as_entire_binding(),
-                                    },
-                                    wgpu::BindGroupEntry {
-                                        binding: 3,
-                                        resource: self.sky_buffer.as_entire_binding(),
-                                    },
-                                    wgpu::BindGroupEntry {
-                                        binding: 4,
-                                        resource: material_buffer.as_entire_binding(),
-                                    },
-                                    wgpu::BindGroupEntry {
-                                        binding: 5,
-                                        resource: self.lights_buffer.as_entire_binding(),
-                                    },
-                                    wgpu::BindGroupEntry {
-                                        binding: 6,
-                                        resource: self.camera_buffer.as_entire_binding(),
-                                    },
-                                    wgpu::BindGroupEntry {
-                                        binding: 7,
-                                        resource: self.bone_buffer.as_entire_binding(),
-                                    },
-                                ],
-                            })
-                        }
-                        _ => {
-                            // Fallback - same as mode 0/1
-                            self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                                label: Some("Frame Bind Group"),
-                                layout: &pipeline_entry.bind_group_layout_frame,
-                                entries: &[
-                                    wgpu::BindGroupEntry {
-                                        binding: 0,
-                                        resource: self.model_matrices_buffer.as_entire_binding(),
-                                    },
-                                    wgpu::BindGroupEntry {
-                                        binding: 1,
-                                        resource: self.view_buffer.as_entire_binding(),
-                                    },
-                                    wgpu::BindGroupEntry {
-                                        binding: 2,
-                                        resource: self.proj_buffer.as_entire_binding(),
-                                    },
-                                    wgpu::BindGroupEntry {
-                                        binding: 3,
-                                        resource: self.sky_buffer.as_entire_binding(),
-                                    },
-                                    wgpu::BindGroupEntry {
-                                        binding: 4,
-                                        resource: material_buffer.as_entire_binding(),
-                                    },
-                                    wgpu::BindGroupEntry {
-                                        binding: 5,
-                                        resource: self.bone_buffer.as_entire_binding(),
-                                    },
-                                ],
-                            })
-                        }
-                    }
-                });
+                    });
 
                 // Get or create texture bind group (cached by texture slots)
                 let texture_bind_group = texture_bind_groups
@@ -2495,7 +2518,9 @@ impl ZGraphics {
                 if bound_vertex_format != Some((cmd.format, cmd.buffer_source)) {
                     let vertex_buffer = match cmd.buffer_source {
                         BufferSource::Immediate => self.buffer_manager.vertex_buffer(cmd.format),
-                        BufferSource::Retained => self.buffer_manager.retained_vertex_buffer(cmd.format),
+                        BufferSource::Retained => {
+                            self.buffer_manager.retained_vertex_buffer(cmd.format)
+                        }
                     };
                     if let Some(buffer) = vertex_buffer.buffer() {
                         render_pass.set_vertex_buffer(0, buffer.slice(..));
@@ -2508,7 +2533,9 @@ impl ZGraphics {
                     // Indexed draw - both immediate and retained use u16 indices
                     let index_buffer = match cmd.buffer_source {
                         BufferSource::Immediate => self.buffer_manager.index_buffer(cmd.format),
-                        BufferSource::Retained => self.buffer_manager.retained_index_buffer(cmd.format),
+                        BufferSource::Retained => {
+                            self.buffer_manager.retained_index_buffer(cmd.format)
+                        }
                     };
                     if let Some(buffer) = index_buffer.buffer() {
                         render_pass.set_index_buffer(buffer.slice(..), wgpu::IndexFormat::Uint16);
@@ -2540,7 +2567,12 @@ impl ZGraphics {
         let (viewport_x, viewport_y, viewport_width, viewport_height) = match self.scale_mode {
             crate::config::ScaleMode::Stretch => {
                 // Stretch to fill window (may distort aspect ratio)
-                (0.0, 0.0, self.config.width as f32, self.config.height as f32)
+                (
+                    0.0,
+                    0.0,
+                    self.config.width as f32,
+                    self.config.height as f32,
+                )
             }
             crate::config::ScaleMode::PixelPerfect => {
                 // Integer scaling with letterboxing (pixel-perfect)
@@ -2718,7 +2750,8 @@ mod tests {
 
     #[test]
     fn test_generate_text_quads_color() {
-        let (vertices, _) = ZGraphics::generate_text_quads("X", 0.0, 0.0, 8.0, 0xFF0000FF, None, 960.0, 540.0);
+        let (vertices, _) =
+            ZGraphics::generate_text_quads("X", 0.0, 0.0, 8.0, 0xFF0000FF, None, 960.0, 540.0);
         assert!((vertices[5] - 1.0).abs() < 0.01);
         assert!((vertices[6] - 0.0).abs() < 0.01);
         assert!((vertices[7] - 0.0).abs() < 0.01);
@@ -2735,7 +2768,8 @@ mod tests {
 
     #[test]
     fn test_generate_text_quads_indices_valid() {
-        let (_, indices) = ZGraphics::generate_text_quads("AB", 0.0, 0.0, 8.0, 0xFFFFFFFF, None, 960.0, 540.0);
+        let (_, indices) =
+            ZGraphics::generate_text_quads("AB", 0.0, 0.0, 8.0, 0xFFFFFFFF, None, 960.0, 540.0);
         assert_eq!(indices[0..6], [0, 1, 2, 0, 2, 3]);
         assert_eq!(indices[6..12], [4, 5, 6, 4, 6, 7]);
     }

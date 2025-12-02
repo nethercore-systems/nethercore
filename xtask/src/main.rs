@@ -29,8 +29,7 @@ fn build_examples() -> Result<()> {
     let games_dir = get_games_dir()?;
 
     // Ensure games directory exists
-    fs::create_dir_all(&games_dir)
-        .context("Failed to create games directory")?;
+    fs::create_dir_all(&games_dir).context("Failed to create games directory")?;
 
     println!("Games directory: {}", games_dir.display());
     println!();
@@ -67,18 +66,15 @@ fn build_examples() -> Result<()> {
                 // Find the built WASM file
                 let target_dir = example.path().join("target/wasm32-unknown-unknown/release");
 
-                let wasm_file = fs::read_dir(&target_dir)
-                    .ok()
-                    .and_then(|entries| {
-                        entries
-                            .filter_map(|e| e.ok())
-                            .find(|e| {
-                                e.path().extension()
-                                    .and_then(|ext| ext.to_str())
-                                    .map(|ext| ext == "wasm")
-                                    .unwrap_or(false)
-                            })
-                    });
+                let wasm_file = fs::read_dir(&target_dir).ok().and_then(|entries| {
+                    entries.filter_map(|e| e.ok()).find(|e| {
+                        e.path()
+                            .extension()
+                            .and_then(|ext| ext.to_str())
+                            .map(|ext| ext == "wasm")
+                            .unwrap_or(false)
+                    })
+                });
 
                 if let Some(wasm_file) = wasm_file {
                     // Create game directory
@@ -87,8 +83,7 @@ fn build_examples() -> Result<()> {
 
                     // Copy WASM file to rom.wasm
                     let rom_path = game_dir.join("rom.wasm");
-                    fs::copy(wasm_file.path(), &rom_path)
-                        .context("Failed to copy WASM file")?;
+                    fs::copy(wasm_file.path(), &rom_path).context("Failed to copy WASM file")?;
 
                     // Create manifest.json
                     let title = example_name_str
@@ -133,7 +128,10 @@ fn build_examples() -> Result<()> {
     }
 
     println!();
-    println!("Done! Built {} examples ({} failed)", success_count, fail_count);
+    println!(
+        "Done! Built {} examples ({} failed)",
+        success_count, fail_count
+    );
     println!("Examples installed to: {}", games_dir.display());
     println!("You can now run 'cargo run' to play them in Emberware Z.");
 

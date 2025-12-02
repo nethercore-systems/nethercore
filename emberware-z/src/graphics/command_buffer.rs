@@ -318,7 +318,7 @@ impl VirtualRenderPass {
         let stride = vertex_stride(mesh_format) as u64;
         let base_vertex = (mesh_vertex_offset / stride) as u32;
         let first_index = if mesh_index_count > 0 {
-            (mesh_index_offset / 2) as u32  // u16 indices are 2 bytes each
+            (mesh_index_offset / 2) as u32 // u16 indices are 2 bytes each
         } else {
             0
         };

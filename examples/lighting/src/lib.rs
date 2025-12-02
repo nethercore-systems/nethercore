@@ -64,6 +64,7 @@ extern "C" {
     fn light_color(index: u32, r: f32, g: f32, b: f32);
     fn light_intensity(index: u32, intensity: f32);
     fn light_disable(index: u32);
+    fn light_enable(index: u32);
 
     // Materials (Mode 2/3)
     fn material_metallic(value: f32);

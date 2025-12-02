@@ -293,7 +293,6 @@ impl App {
         graphics.process_draw_commands(z_state, &session.texture_map);
     }
 
-
     /// Handle session events from the rollback session
     ///
     /// Processes network events like disconnect, desync, and network interruption.

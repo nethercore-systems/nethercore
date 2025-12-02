@@ -283,8 +283,8 @@ pub struct ZFFIState {
     pub deferred_commands: Vec<DeferredCommand>,
 
     // Resource mappings (injected by App before frame)
-    pub texture_map: std::collections::HashMap<u32, crate::graphics::TextureHandle>,
-    pub mesh_map: std::collections::HashMap<u32, crate::graphics::RetainedMesh>,
+    pub texture_map: hashbrown::HashMap<u32, crate::graphics::TextureHandle>,
+    pub mesh_map: hashbrown::HashMap<u32, crate::graphics::RetainedMesh>,
 
     // Pending resource uploads
     pub pending_textures: Vec<PendingTexture>,
@@ -331,8 +331,8 @@ impl Default for ZFFIState {
             bone_count: 0,
             render_pass: crate::graphics::VirtualRenderPass::new(),
             deferred_commands: Vec::new(),
-            texture_map: std::collections::HashMap::new(),
-            mesh_map: std::collections::HashMap::new(),
+            texture_map: hashbrown::HashMap::new(),
+            mesh_map: hashbrown::HashMap::new(),
             pending_textures: Vec::new(),
             pending_meshes: Vec::new(),
             next_texture_handle: 1, // 0 reserved for invalid

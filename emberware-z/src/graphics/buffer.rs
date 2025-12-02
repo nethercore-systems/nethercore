@@ -3,7 +3,7 @@
 //! Provides auto-growing buffers for efficient GPU memory management
 //! and retained mesh storage.
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 use anyhow::Result;
 
@@ -333,7 +333,8 @@ impl BufferManager {
 
         // Ensure retained index buffer has capacity
         let index_byte_data: &[u8] = bytemuck::cast_slice(indices);
-        self.retained_index_buffers[format_idx].ensure_capacity(device, index_byte_data.len() as u64);
+        self.retained_index_buffers[format_idx]
+            .ensure_capacity(device, index_byte_data.len() as u64);
 
         // Write to retained buffers
         let vertex_offset = self.retained_vertex_buffers[format_idx].write(queue, byte_data);

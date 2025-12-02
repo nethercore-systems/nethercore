@@ -18,6 +18,58 @@
 
 ## TODO
 
+### **CRITICAL BUG: Shaders mode1, mode2, and mode3 don't use sky lambert shading **
+- Currently, only mode0_unlit.wgsl is properly using sky lambert.
+- Lambert shading using sun as a directional light should be implemented for mode1, mode2, and mode3 as well.
+```
+// Simple Lambert shading using sky sun (when normals available)
+fn sky_lambert(normal: vec3<f32>) -> vec3<f32> {
+    let n_dot_l = max(0.0, dot(normal, sky.sun_direction.xyz));
+    let direct = sky.sun_color_and_sharpness.xyz * n_dot_l;
+    let ambient = sample_sky(normal) * 0.3;
+    return direct + ambient;
+}
+```
+- Function already exists and defined as in mode0_unlit.wgsl (same as above)
+- Implement and include this lambert shading for the mode1, mode2, mode3 shaders.
+
+### **CRITICAL BUG: Matcap shaders should use perspective correct UV sampling **
+- Currently, matcaps are using the simple uv lookup
+```
+// Compute matcap UV from view-space normal
+fn compute_matcap_uv(view_normal: vec3<f32>) -> vec2<f32> {
+    return view_normal.xy * 0.5 + 0.5;
+}
+```
+- This should be adjusted to a perspective correct view space normal
+- May need to calculate the view_space position
+```
+fn compute_matcap_uv(view_position: vec3<f32>, view_normal: vec3<f32>) -> vec2<f32> {
+  let inv_depth = 1.0 / (1.0 + view_position.z);
+  let proj_factor = -view_position.x * view_position.y * inv_depth;
+  let basis1 = vec3(1.0 - view_position.x * view_position.x * inv_depth, proj_factor, -view_position.x);
+  let basis2 = vec3(proj_factor, 1.0 - view_position.y * view_position.y * inv_depth, -view_position.y);
+  let matcap_uv = vec2(dot(basis1, view_normal), dot(basis2, view_normal));
+
+  return matcap_uv * vec2(0.5, -0.5) + 0.5;
+}
+```
+- Function is provided as above
+
+### **[POLISH] CRITICAL: Refactor Material Bufferes**
+- Material data is split between these two bind groups.
+- Should all exist as a single bind group, since the properties like metallic, roughness, emissive, matcap blend groups, and texture handles, all related to an objects material properties.
+- Update this to be a single buffer, called material_buffers
+- Update MaterialCacheKey to include the [TextureHandle; 4]
+- render function will need to be updated to properly handle these changes
+- shaders will need to be updated to use the proper bind groups.
+
+```rust
+    material_buffers: HashMap<MaterialCacheKey, wgpu::Buffer>,
+    texture_bind_groups: HashMap<[TextureHandle; 4], wgpu::BindGroup>,
+    frame_bind_groups: HashMap<MaterialCacheKey, wgpu::BindGroup>,
+```
+
 ### **[FEATURE] Support multiple view/projection matrices for split-screen rendering**
 
 **Status:** Enhancement - Current implementation works for single camera per frame

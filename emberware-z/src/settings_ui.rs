@@ -143,17 +143,15 @@ impl SettingsUi {
             ui.add_space(10.0);
 
             // Show selected tab content
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                match self.selected_tab {
-                    SettingsTab::Video => {
-                        action = self.show_video_tab(ui);
-                    }
-                    SettingsTab::Audio => {
-                        self.show_audio_tab(ui);
-                    }
-                    SettingsTab::Controls => {
-                        self.show_controls_tab(ui);
-                    }
+            egui::ScrollArea::vertical().show(ui, |ui| match self.selected_tab {
+                SettingsTab::Video => {
+                    action = self.show_video_tab(ui);
+                }
+                SettingsTab::Audio => {
+                    self.show_audio_tab(ui);
+                }
+                SettingsTab::Controls => {
+                    self.show_controls_tab(ui);
                 }
             });
 
@@ -212,8 +210,16 @@ impl SettingsUi {
                 ScaleMode::PixelPerfect => "Pixel Perfect (Integer Scaling)",
             })
             .show_ui(ui, |ui| {
-                ui.selectable_value(&mut video.scale_mode, ScaleMode::Stretch, "Stretch (Fill Window)");
-                ui.selectable_value(&mut video.scale_mode, ScaleMode::PixelPerfect, "Pixel Perfect (Integer Scaling)");
+                ui.selectable_value(
+                    &mut video.scale_mode,
+                    ScaleMode::Stretch,
+                    "Stretch (Fill Window)",
+                );
+                ui.selectable_value(
+                    &mut video.scale_mode,
+                    ScaleMode::PixelPerfect,
+                    "Pixel Perfect (Integer Scaling)",
+                );
             });
 
         // Show description
@@ -240,10 +246,12 @@ impl SettingsUi {
         ui.heading("Volume");
         ui.add_space(10.0);
 
-        ui.add(Slider::new(&mut audio.master_volume, 0.0..=1.0)
-            .text("Master Volume")
-            .suffix("%")
-            .custom_formatter(|n, _| format!("{:.0}", n * 100.0)));
+        ui.add(
+            Slider::new(&mut audio.master_volume, 0.0..=1.0)
+                .text("Master Volume")
+                .suffix("%")
+                .custom_formatter(|n, _| format!("{:.0}", n * 100.0)),
+        );
 
         ui.add_space(5.0);
         ui.label("   🔊 Controls the overall volume level");
@@ -317,22 +325,31 @@ impl SettingsUi {
         ui.add_space(5.0);
 
         let input = &mut self.temp_config.input;
-        ui.add(Slider::new(&mut input.stick_deadzone, 0.0..=0.5)
-            .text("Stick Deadzone")
-            .suffix("%")
-            .custom_formatter(|n, _| format!("{:.0}", n * 100.0)));
+        ui.add(
+            Slider::new(&mut input.stick_deadzone, 0.0..=0.5)
+                .text("Stick Deadzone")
+                .suffix("%")
+                .custom_formatter(|n, _| format!("{:.0}", n * 100.0)),
+        );
         ui.label("   Minimum stick movement to register");
 
         ui.add_space(5.0);
 
-        ui.add(Slider::new(&mut input.trigger_deadzone, 0.0..=0.5)
-            .text("Trigger Deadzone")
-            .suffix("%")
-            .custom_formatter(|n, _| format!("{:.0}", n * 100.0)));
+        ui.add(
+            Slider::new(&mut input.trigger_deadzone, 0.0..=0.5)
+                .text("Trigger Deadzone")
+                .suffix("%")
+                .custom_formatter(|n, _| format!("{:.0}", n * 100.0)),
+        );
         ui.label("   Minimum trigger press to register");
     }
 
-    fn show_key_binding(&mut self, ui: &mut egui::Ui, button: InputButton, mapping: &KeyboardMapping) {
+    fn show_key_binding(
+        &mut self,
+        ui: &mut egui::Ui,
+        button: InputButton,
+        mapping: &KeyboardMapping,
+    ) {
         ui.horizontal(|ui| {
             ui.label(format!("{:16}", button.name()));
 
@@ -340,11 +357,7 @@ impl SettingsUi {
             let key_name = keycode_to_display_string(key);
 
             let is_waiting = self.waiting_for_key == Some(button);
-            let button_text = if is_waiting {
-                "⌨ ..."
-            } else {
-                &key_name
-            };
+            let button_text = if is_waiting { "⌨ ..." } else { &key_name };
 
             if ui.button(button_text).clicked() {
                 self.waiting_for_key = Some(button);

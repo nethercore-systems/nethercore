@@ -12,10 +12,10 @@
 //! - Main thread sends commands via mpsc channel
 //! - Rollback-aware: commands discarded during replay
 
+use rodio::{OutputStream, Sink, Source};
 use std::sync::{mpsc, Arc};
 use std::thread;
-use rodio::{OutputStream, Sink, Source};
-use tracing::{warn, error, trace};
+use tracing::{error, trace, warn};
 
 /// Maximum number of sound effect channels
 pub const MAX_CHANNELS: usize = 16;
@@ -84,11 +84,7 @@ impl Source for SoundSource {
 #[derive(Debug, Clone)]
 pub enum AudioCommand {
     /// Play sound on next available channel
-    PlaySound {
-        sound: u32,
-        volume: f32,
-        pan: f32,
-    },
+    PlaySound { sound: u32, volume: f32, pan: f32 },
     /// Play sound on specific channel
     ChannelPlay {
         channel: u32,
@@ -98,26 +94,15 @@ pub enum AudioCommand {
         looping: bool,
     },
     /// Update channel parameters
-    ChannelSet {
-        channel: u32,
-        volume: f32,
-        pan: f32,
-    },
+    ChannelSet { channel: u32, volume: f32, pan: f32 },
     /// Stop channel
-    ChannelStop {
-        channel: u32,
-    },
+    ChannelStop { channel: u32 },
     /// Play music (looping)
-    MusicPlay {
-        sound: u32,
-        volume: f32,
-    },
+    MusicPlay { sound: u32, volume: f32 },
     /// Stop music
     MusicStop,
     /// Set music volume
-    MusicSetVolume {
-        volume: f32,
-    },
+    MusicSetVolume { volume: f32 },
 }
 
 /// Internal command sent to audio server thread
@@ -198,10 +183,20 @@ impl AudioServer {
                 AudioCommand::PlaySound { sound, volume, pan } => {
                     self.play_sound(*sound, *volume, *pan, sounds);
                 }
-                AudioCommand::ChannelPlay { channel, sound, volume, pan, looping } => {
+                AudioCommand::ChannelPlay {
+                    channel,
+                    sound,
+                    volume,
+                    pan,
+                    looping,
+                } => {
                     self.channel_play(*channel, *sound, *volume, *pan, *looping, sounds);
                 }
-                AudioCommand::ChannelSet { channel, volume, pan } => {
+                AudioCommand::ChannelSet {
+                    channel,
+                    volume,
+                    pan,
+                } => {
                     self.channel_set(*channel, *volume, *pan);
                 }
                 AudioCommand::ChannelStop { channel } => {
@@ -352,7 +347,8 @@ impl AudioServer {
         // Stop current music and play new one
         self.music_sink.stop();
         self.music_sink.set_volume(volume.clamp(0.0, 1.0));
-        self.music_sink.append(sound_data.to_source().repeat_infinite());
+        self.music_sink
+            .append(sound_data.to_source().repeat_infinite());
         self.current_music = Some(sound);
     }
 
@@ -384,15 +380,13 @@ impl ZAudio {
         let (tx, rx) = mpsc::channel();
 
         // Spawn audio server thread
-        let thread = thread::spawn(move || {
-            match AudioServer::new() {
-                Ok(server) => {
-                    trace!("Audio server started");
-                    server.run(rx);
-                }
-                Err(e) => {
-                    error!("Failed to initialize audio server: {}", e);
-                }
+        let thread = thread::spawn(move || match AudioServer::new() {
+            Ok(server) => {
+                trace!("Audio server started");
+                server.run(rx);
+            }
+            Err(e) => {
+                error!("Failed to initialize audio server: {}", e);
             }
         });
 

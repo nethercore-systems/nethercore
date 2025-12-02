@@ -76,7 +76,7 @@ fn vs(in: VertexIn, @builtin(instance_index) instance_index: u32) -> VertexOut {
     let model_matrix = model_matrices[instance_index];
 
     // Apply model transform
-    let world_pos = vec4<f32>(in.position, 1.0);
+    //VS_POSITION
     let model_pos = model_matrix * world_pos;
     out.world_position = model_pos.xyz;
 
