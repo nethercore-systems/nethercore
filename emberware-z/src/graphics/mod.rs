@@ -64,6 +64,7 @@
 
 mod buffer;
 mod command_buffer;
+mod matrix_packing;
 mod pipeline;
 mod render_state;
 mod texture_manager;
@@ -82,6 +83,7 @@ use emberware_core::console::Graphics;
 // Re-export public types from submodules
 pub use buffer::{BufferManager, GrowableBuffer, MeshHandle, RetainedMesh};
 pub use command_buffer::{BufferSource, VirtualRenderPass};
+pub use matrix_packing::MvpIndex;
 pub use render_state::{
     BlendMode, CameraUniforms, CullMode, LightUniform, LightsUniforms, MatcapBlendMode,
     MaterialUniforms, RenderState, SkyUniforms, TextureFilter, TextureHandle,
@@ -93,6 +95,7 @@ pub use vertex::{
 // Re-export for crate-internal use
 pub(crate) use pipeline::PipelineEntry;
 
+use matrix_packing::MvpIndex;
 use pipeline::{PipelineCache, PipelineKey};
 use texture_manager::TextureManager;
 
@@ -208,9 +211,11 @@ pub struct ZGraphics {
     model_matrices_buffer: wgpu::Buffer,
     model_matrices_capacity: usize,
 
-    // Frame-level uniform buffers (reused every frame)
-    view_buffer: wgpu::Buffer,
-    proj_buffer: wgpu::Buffer,
+    // View and projection matrices storage buffers (support arrays)
+    view_matrices_buffer: wgpu::Buffer,
+    view_matrices_capacity: usize,
+    proj_matrices_buffer: wgpu::Buffer,
+    proj_matrices_capacity: usize,
 
     // Bind group caches (cleared and repopulated each frame)
     material_buffers: HashMap<MaterialCacheKey, wgpu::Buffer>,
@@ -388,18 +393,20 @@ impl ZGraphics {
             mapped_at_creation: false,
         });
 
-        // Create frame-level uniform buffers (reused every frame, written with new data)
-        let view_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("View Matrix Buffer"),
-            size: 64, // Mat4 = 16 × f32 = 64 bytes
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        // Create view and projection matrices storage buffers (support arrays)
+        const INITIAL_VIEW_MATRIX_CAPACITY: usize = 16;
+        let view_matrices_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("View Matrices Storage Buffer"),
+            size: (INITIAL_VIEW_MATRIX_CAPACITY * 64) as u64, // 64 bytes per mat4x4
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
-        let proj_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Projection Matrix Buffer"),
-            size: 64, // Mat4 = 16 × f32 = 64 bytes
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        const INITIAL_PROJ_MATRIX_CAPACITY: usize = 16;
+        let proj_matrices_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Projection Matrices Storage Buffer"),
+            size: (INITIAL_PROJ_MATRIX_CAPACITY * 64) as u64, // 64 bytes per mat4x4
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
@@ -439,8 +446,10 @@ impl ZGraphics {
             bone_buffer,
             model_matrices_buffer,
             model_matrices_capacity: INITIAL_MODEL_MATRIX_CAPACITY,
-            view_buffer,
-            proj_buffer,
+            view_matrices_buffer,
+            view_matrices_capacity: INITIAL_VIEW_MATRIX_CAPACITY,
+            proj_matrices_buffer,
+            proj_matrices_capacity: INITIAL_PROJ_MATRIX_CAPACITY,
             material_buffers: HashMap::new(),
             texture_bind_groups: HashMap::new(),
             frame_bind_groups: HashMap::new(),
@@ -709,6 +718,30 @@ impl ZGraphics {
         });
 
         self.current_resolution_index = resolution_index;
+    }
+
+    /// Ensure model matrix buffer has sufficient capacity
+    ///
+    /// Called before uploading matrices to GPU. Grows buffer if needed.
+    fn ensure_model_buffer_capacity(&mut self, count: usize) {
+        if count <= self.model_matrices_capacity {
+            return;
+        }
+
+        let new_capacity = (count * 2).next_power_of_two();
+        tracing::debug!(
+            "Growing model matrix buffer: {} → {} matrices",
+            self.model_matrices_capacity,
+            new_capacity
+        );
+
+        self.model_matrices_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Model Matrices Storage Buffer"),
+            size: (new_capacity * std::mem::size_of::<Mat4>()) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        self.model_matrices_capacity = new_capacity;
     }
 
     // ========================================================================
@@ -1314,10 +1347,14 @@ impl ZGraphics {
                     let base_vertex = self.command_buffer.append_vertex_data(format, &vertices);
                     let first_index = self.command_buffer.append_index_data(format, &indices);
 
-                    // Add draw command with identity transform (positions are in world space)
+                    // Add transform to model matrix pool and pack MVP indices
+                    let model_idx = z_state.add_model_matrix(transform);
+                    let mvp_index = MvpIndex::new(model_idx, z_state.current_view_idx, z_state.current_proj_idx);
+
+                    // Add draw command
                     self.command_buffer.add_command(command_buffer::VRPCommand {
                         format,
-                        transform: glam::Mat4::IDENTITY,
+                        mvp_index,
                         vertex_count: 4,
                         index_count: 6,
                         base_vertex,
@@ -1441,10 +1478,14 @@ impl ZGraphics {
                         .command_buffer
                         .append_index_data(SPRITE_FORMAT, &indices);
 
-                    // Add draw command with identity transform (screen space)
+                    // Add identity transform to model matrix pool and pack MVP indices
+                    let model_idx = z_state.add_model_matrix(Mat4::IDENTITY);
+                    let mvp_index = MvpIndex::new(model_idx, z_state.current_view_idx, z_state.current_proj_idx);
+
+                    // Add draw command (screen space)
                     self.command_buffer.add_command(command_buffer::VRPCommand {
                         format: SPRITE_FORMAT,
-                        transform: Mat4::IDENTITY,
+                        mvp_index,
                         vertex_count: 4,
                         index_count: 6,
                         base_vertex,
@@ -1512,10 +1553,14 @@ impl ZGraphics {
                         .append_vertex_data(RECT_FORMAT, &vertices);
                     let first_index = self.command_buffer.append_index_data(RECT_FORMAT, &indices);
 
-                    // Add draw command with identity transform (screen space)
+                    // Add identity transform to model matrix pool and pack MVP indices
+                    let model_idx = z_state.add_model_matrix(Mat4::IDENTITY);
+                    let mvp_index = MvpIndex::new(model_idx, z_state.current_view_idx, z_state.current_proj_idx);
+
+                    // Add draw command (screen space)
                     self.command_buffer.add_command(command_buffer::VRPCommand {
                         format: RECT_FORMAT,
-                        transform: Mat4::IDENTITY,
+                        mvp_index,
                         vertex_count: 4,
                         index_count: 6,
                         base_vertex,
@@ -1601,11 +1646,14 @@ impl ZGraphics {
                     let mut texture_slots = [TextureHandle::INVALID; 4];
                     texture_slots[0] = font_texture;
 
-                    // Add draw command for text rendering
-                    // Text is always rendered in 2D screen space with identity transform
+                    // Add identity transform to model matrix pool and pack MVP indices
+                    let model_idx = z_state.add_model_matrix(Mat4::IDENTITY);
+                    let mvp_index = MvpIndex::new(model_idx, z_state.current_view_idx, z_state.current_proj_idx);
+
+                    // Add draw command for text rendering (screen space)
                     self.command_buffer.add_command(command_buffer::VRPCommand {
                         format: TEXT_FORMAT,
-                        transform: Mat4::IDENTITY,
+                        mvp_index,
                         vertex_count: (vertices.len() / 8) as u32, // 8 floats per vertex
                         index_count: indices.len() as u32,
                         base_vertex,
@@ -2101,13 +2149,14 @@ impl ZGraphics {
         }
 
         // OPTIMIZATION 1: Write to persistent frame-level uniform buffers (not create new ones!)
+        // TODO: This will be updated in Phase 4 to write arrays of matrices
         self.queue.write_buffer(
-            &self.view_buffer,
+            &self.view_matrices_buffer,
             0,
             bytemuck::cast_slice(&view_matrix.to_cols_array()),
         );
         self.queue.write_buffer(
-            &self.proj_buffer,
+            &self.proj_matrices_buffer,
             0,
             bytemuck::cast_slice(&projection_matrix.to_cols_array()),
         );
@@ -2334,11 +2383,11 @@ impl ZGraphics {
                                         },
                                         wgpu::BindGroupEntry {
                                             binding: 1,
-                                            resource: self.view_buffer.as_entire_binding(),
+                                            resource: self.view_matrices_buffer.as_entire_binding(),
                                         },
                                         wgpu::BindGroupEntry {
                                             binding: 2,
-                                            resource: self.proj_buffer.as_entire_binding(),
+                                            resource: self.proj_matrices_buffer.as_entire_binding(),
                                         },
                                         wgpu::BindGroupEntry {
                                             binding: 3,
@@ -2369,11 +2418,11 @@ impl ZGraphics {
                                         },
                                         wgpu::BindGroupEntry {
                                             binding: 1,
-                                            resource: self.view_buffer.as_entire_binding(),
+                                            resource: self.view_matrices_buffer.as_entire_binding(),
                                         },
                                         wgpu::BindGroupEntry {
                                             binding: 2,
-                                            resource: self.proj_buffer.as_entire_binding(),
+                                            resource: self.proj_matrices_buffer.as_entire_binding(),
                                         },
                                         wgpu::BindGroupEntry {
                                             binding: 3,
@@ -2412,11 +2461,11 @@ impl ZGraphics {
                                         },
                                         wgpu::BindGroupEntry {
                                             binding: 1,
-                                            resource: self.view_buffer.as_entire_binding(),
+                                            resource: self.view_matrices_buffer.as_entire_binding(),
                                         },
                                         wgpu::BindGroupEntry {
                                             binding: 2,
-                                            resource: self.proj_buffer.as_entire_binding(),
+                                            resource: self.proj_matrices_buffer.as_entire_binding(),
                                         },
                                         wgpu::BindGroupEntry {
                                             binding: 3,

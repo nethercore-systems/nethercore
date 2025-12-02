@@ -6,6 +6,7 @@
 
 use glam::Mat4;
 
+use super::matrix_packing::MvpIndex;
 use super::render_state::{BlendMode, CullMode, MatcapBlendMode, RenderState, TextureHandle};
 use super::vertex::{vertex_stride, VERTEX_FORMAT_COUNT};
 
@@ -26,8 +27,8 @@ pub enum BufferSource {
 pub struct VRPCommand {
     /// Vertex format
     pub format: u8,
-    /// Model transform matrix
-    pub transform: Mat4,
+    /// Packed MVP matrix indices (model: 16 bits, view: 8 bits, proj: 8 bits)
+    pub mvp_index: MvpIndex,
     /// Number of vertices to draw
     pub vertex_count: u32,
     /// Number of indices (0 for non-indexed)
@@ -87,7 +88,7 @@ impl VirtualRenderPass {
         &mut self,
         format: u8,
         vertices: &[f32],
-        transform: Mat4,
+        mvp_index: MvpIndex,
         state: &RenderState,
     ) -> u32 {
         let format_idx = format as usize;
@@ -103,7 +104,7 @@ impl VirtualRenderPass {
         // Record draw command
         self.commands.push(VRPCommand {
             format,
-            transform,
+            mvp_index,
             vertex_count: vertex_count as u32,
             index_count: 0,
             base_vertex,
@@ -128,7 +129,7 @@ impl VirtualRenderPass {
         format: u8,
         vertices: &[f32],
         indices: &[u16],
-        transform: Mat4,
+        mvp_index: MvpIndex,
         state: &RenderState,
     ) -> (u32, u32) {
         let format_idx = format as usize;
@@ -149,7 +150,7 @@ impl VirtualRenderPass {
         // Record draw command
         self.commands.push(VRPCommand {
             format,
-            transform,
+            mvp_index,
             vertex_count: vertex_count as u32,
             index_count: indices.len() as u32,
             base_vertex,
@@ -219,7 +220,7 @@ impl VirtualRenderPass {
         &mut self,
         format: u8,
         vertex_data: &[f32],
-        transform: Mat4,
+        mvp_index: MvpIndex,
         color: u32,
         depth_test: bool,
         cull_mode: CullMode,
@@ -239,7 +240,7 @@ impl VirtualRenderPass {
 
         self.commands.push(VRPCommand {
             format,
-            transform,
+            mvp_index,
             vertex_count: vertex_count as u32,
             index_count: 0,
             base_vertex,
@@ -260,7 +261,7 @@ impl VirtualRenderPass {
         format: u8,
         vertex_data: &[f32],
         index_data: &[u16],
-        transform: Mat4,
+        mvp_index: MvpIndex,
         color: u32,
         depth_test: bool,
         cull_mode: CullMode,
@@ -284,7 +285,7 @@ impl VirtualRenderPass {
 
         self.commands.push(VRPCommand {
             format,
-            transform,
+            mvp_index,
             vertex_count: vertex_count as u32,
             index_count: index_data.len() as u32,
             base_vertex,
@@ -307,7 +308,7 @@ impl VirtualRenderPass {
         mesh_index_count: u32,
         mesh_vertex_offset: u64,
         mesh_index_offset: u64,
-        transform: Mat4,
+        mvp_index: MvpIndex,
         color: u32,
         depth_test: bool,
         cull_mode: CullMode,
@@ -325,7 +326,7 @@ impl VirtualRenderPass {
 
         self.commands.push(VRPCommand {
             format: mesh_format,
-            transform,
+            mvp_index,
             vertex_count: mesh_vertex_count,
             index_count: mesh_index_count,
             base_vertex,
@@ -396,7 +397,8 @@ mod tests {
             1.0,
         ];
 
-        let base = cb.add_vertices(FORMAT_COLOR, &vertices, Mat4::IDENTITY, &state);
+        let mvp_index = MvpIndex::new(0, 0, 0);
+        let base = cb.add_vertices(FORMAT_COLOR, &vertices, mvp_index, &state);
 
         assert_eq!(base, 0);
         assert_eq!(cb.commands().len(), 1);
@@ -412,8 +414,9 @@ mod tests {
         let vertices = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0];
         let indices = [0u16, 1, 2, 0, 2, 3];
 
+        let mvp_index = MvpIndex::new(0, 0, 0);
         let (base_vertex, first_index) =
-            cb.add_vertices_indexed(0, &vertices, &indices, Mat4::IDENTITY, &state);
+            cb.add_vertices_indexed(0, &vertices, &indices, mvp_index, &state);
 
         assert_eq!(base_vertex, 0);
         assert_eq!(first_index, 0);
@@ -428,7 +431,8 @@ mod tests {
         let state = RenderState::default();
 
         let vertices = [0.0f32, 0.0, 0.0, 1.0, 0.0, 0.0, 0.5, 1.0, 0.0];
-        cb.add_vertices(0, &vertices, Mat4::IDENTITY, &state);
+        let mvp_index = MvpIndex::new(0, 0, 0);
+        cb.add_vertices(0, &vertices, mvp_index, &state);
 
         assert!(!cb.commands().is_empty());
 
@@ -444,10 +448,11 @@ mod tests {
         let state = RenderState::default();
 
         let v1 = [0.0f32, 0.0, 0.0, 1.0, 0.0, 0.0, 0.5, 1.0, 0.0];
-        let base1 = cb.add_vertices(0, &v1, Mat4::IDENTITY, &state);
+        let mvp_index = MvpIndex::new(0, 0, 0);
+        let base1 = cb.add_vertices(0, &v1, mvp_index, &state);
 
         let v2 = [2.0f32, 0.0, 0.0, 3.0, 0.0, 0.0, 2.5, 1.0, 0.0];
-        let base2 = cb.add_vertices(0, &v2, Mat4::IDENTITY, &state);
+        let base2 = cb.add_vertices(0, &v2, mvp_index, &state);
 
         assert_eq!(base1, 0);
         assert_eq!(base2, 3);
@@ -458,7 +463,7 @@ mod tests {
     fn test_draw_command_creation() {
         let cmd = VRPCommand {
             format: FORMAT_UV,
-            transform: Mat4::IDENTITY,
+            mvp_index: MvpIndex::new(0, 0, 0),
             vertex_count: 3,
             index_count: 0,
             base_vertex: 0,
@@ -480,7 +485,7 @@ mod tests {
     fn test_draw_command_clone() {
         let cmd = VRPCommand {
             format: FORMAT_COLOR,
-            transform: Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0)),
+            mvp_index: MvpIndex::new(10, 1, 1),
             vertex_count: 100,
             index_count: 150,
             base_vertex: 50,
@@ -513,7 +518,8 @@ mod tests {
         state.texture_slots[1] = TextureHandle(20);
 
         let vertices = [0.0f32, 0.0, 0.0, 1.0, 0.0, 0.0, 0.5, 1.0, 0.0];
-        cb.add_vertices(0, &vertices, Mat4::IDENTITY, &state);
+        let mvp_index = MvpIndex::new(0, 0, 0);
+        cb.add_vertices(0, &vertices, mvp_index, &state);
 
         assert_eq!(cb.commands()[0].texture_slots[0], TextureHandle(10));
         assert_eq!(cb.commands()[0].texture_slots[1], TextureHandle(20));
@@ -526,7 +532,8 @@ mod tests {
         let vertices = [0.0f32, 0.0, 0.0, 1.0, 0.0, 0.0, 0.5, 1.0, 0.0];
 
         let state1 = RenderState::default();
-        cb.add_vertices(0, &vertices, Mat4::IDENTITY, &state1);
+        let mvp_index = MvpIndex::new(0, 0, 0);
+        cb.add_vertices(0, &vertices, mvp_index, &state1);
 
         let state2 = RenderState {
             color: 0xFF0000FF,
@@ -535,7 +542,7 @@ mod tests {
             blend_mode: BlendMode::Alpha,
             ..Default::default()
         };
-        cb.add_vertices(0, &vertices, Mat4::IDENTITY, &state2);
+        cb.add_vertices(0, &vertices, mvp_index, &state2);
 
         assert_eq!(cb.commands()[0].color, 0xFFFFFFFF);
         assert!(cb.commands()[0].depth_test);
@@ -558,8 +565,9 @@ mod tests {
             0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.5, 1.0, 0.0, 0.5, 1.0,
         ];
 
-        cb.add_vertices(0, &v_pos, Mat4::IDENTITY, &state);
-        cb.add_vertices(FORMAT_UV, &v_pos_uv, Mat4::IDENTITY, &state);
+        let mvp_index = MvpIndex::new(0, 0, 0);
+        cb.add_vertices(0, &v_pos, mvp_index, &state);
+        cb.add_vertices(FORMAT_UV, &v_pos_uv, mvp_index, &state);
 
         assert_eq!(cb.commands().len(), 2);
         assert_eq!(cb.commands()[0].format, 0);
@@ -567,19 +575,19 @@ mod tests {
     }
 
     #[test]
-    fn test_command_buffer_transform_capture() {
+    fn test_command_buffer_mvp_index_capture() {
         let mut cb = VirtualRenderPass::new();
         let state = RenderState::default();
         let vertices = [0.0f32, 0.0, 0.0, 1.0, 0.0, 0.0, 0.5, 1.0, 0.0];
 
-        let transform1 = Mat4::IDENTITY;
-        let transform2 = Mat4::from_translation(Vec3::new(10.0, 20.0, 30.0));
+        let mvp_index1 = MvpIndex::new(0, 0, 0);
+        let mvp_index2 = MvpIndex::new(10, 1, 1);
 
-        cb.add_vertices(0, &vertices, transform1, &state);
-        cb.add_vertices(0, &vertices, transform2, &state);
+        cb.add_vertices(0, &vertices, mvp_index1, &state);
+        cb.add_vertices(0, &vertices, mvp_index2, &state);
 
-        assert_eq!(cb.commands()[0].transform, transform1);
-        assert_eq!(cb.commands()[1].transform, transform2);
+        assert_eq!(cb.commands()[0].mvp_index, mvp_index1);
+        assert_eq!(cb.commands()[1].mvp_index, mvp_index2);
     }
 
     #[test]
@@ -593,7 +601,8 @@ mod tests {
             large_data.extend_from_slice(&triangle);
         }
 
-        let base = cb.add_vertices(0, &large_data, Mat4::IDENTITY, &state);
+        let mvp_index = MvpIndex::new(0, 0, 0);
+        let base = cb.add_vertices(0, &large_data, mvp_index, &state);
         assert_eq!(base, 0);
         assert_eq!(cb.commands()[0].vertex_count, 3000);
     }
@@ -630,7 +639,8 @@ mod tests {
             0.0,
         ];
 
-        let base = cb.add_vertices(FORMAT_SKINNED, &vertices, Mat4::IDENTITY, &state);
+        let mvp_index = MvpIndex::new(0, 0, 0);
+        let base = cb.add_vertices(FORMAT_SKINNED, &vertices, mvp_index, &state);
 
         assert_eq!(base, 0);
         assert_eq!(cb.commands().len(), 1);

@@ -255,6 +255,16 @@ pub struct ZFFIState {
     pub transform_stack: Vec<Mat4>,
     pub current_transform: Mat4,
 
+    // Matrix pools for packed MVP indices (reset each frame)
+    pub model_matrices: Vec<Mat4>,
+    pub view_matrices: Vec<Mat4>,
+    pub proj_matrices: Vec<Mat4>,
+
+    // Current matrix indices
+    pub current_model_idx: u32,
+    pub current_view_idx: u32,
+    pub current_proj_idx: u32,
+
     // Render state
     pub color: u32,
     pub depth_test: bool,
@@ -316,6 +326,12 @@ impl Default for ZFFIState {
             camera: CameraState::default(),
             transform_stack: Vec::with_capacity(MAX_TRANSFORM_STACK),
             current_transform: Mat4::IDENTITY,
+            model_matrices: Vec::with_capacity(256),
+            view_matrices: Vec::with_capacity(4),
+            proj_matrices: Vec::with_capacity(4),
+            current_model_idx: 0,
+            current_view_idx: 0,
+            current_proj_idx: 0,
             color: 0xFFFFFFFF,
             depth_test: true,
             cull_mode: 1, // Back-face culling
@@ -364,5 +380,36 @@ impl ZFFIState {
         self.audio_commands.clear();
         // Note: Camera, transforms, render state persist between clear_frame calls
         // within a single frame, but the entire ZFFIState is rebuilt each game frame
+    }
+
+    /// Add a model matrix to the pool and return its index
+    ///
+    /// If the pool is full (65,536 matrices), returns the maximum valid index
+    /// and logs a warning.
+    pub fn add_model_matrix(&mut self, matrix: Mat4) -> u32 {
+        let idx = self.model_matrices.len() as u32;
+        if idx >= 65536 {
+            tracing::warn!("Model matrix pool overflow (max 65536)");
+            return 65535; // Return max valid index
+        }
+        self.model_matrices.push(matrix);
+        idx
+    }
+
+    /// Pack current matrix indices into MvpIndex
+    pub fn pack_current_mvp(&self) -> crate::graphics::MvpIndex {
+        crate::graphics::MvpIndex::new(
+            self.current_model_idx,
+            self.current_view_idx,
+            self.current_proj_idx,
+        )
+    }
+
+    /// Reset matrix pools at start of frame
+    pub fn reset_matrix_pools(&mut self) {
+        self.model_matrices.clear();
+        // View and proj matrices typically persist, but clear if needed
+        // self.view_matrices.clear();
+        // self.proj_matrices.clear();
     }
 }

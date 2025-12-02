@@ -1050,6 +1050,11 @@ fn draw_mesh(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, ha
     let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
     let blend_mode = crate::graphics::BlendMode::from_u8(state.blend_mode);
 
+    // Add current transform to model matrix pool and pack MVP indices
+    let model_idx = state.add_model_matrix(state.current_transform);
+    state.current_model_idx = model_idx;
+    let mvp_index = state.pack_current_mvp();
+
     // Record draw command directly
     state.render_pass.record_mesh(
         mesh_format,
@@ -1057,7 +1062,7 @@ fn draw_mesh(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, ha
         mesh_index_count,
         mesh_vertex_offset,
         mesh_index_offset,
-        state.current_transform,
+        mvp_index,
         state.color,
         state.depth_test,
         cull_mode,
@@ -1196,11 +1201,16 @@ fn draw_triangles(
     let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
     let blend_mode = crate::graphics::BlendMode::from_u8(state.blend_mode);
 
+    // Add current transform to model matrix pool and pack MVP indices
+    let model_idx = state.add_model_matrix(state.current_transform);
+    state.current_model_idx = model_idx;
+    let mvp_index = state.pack_current_mvp();
+
     // Record draw command directly
     state.render_pass.record_triangles(
         format,
         &vertex_data,
-        state.current_transform,
+        mvp_index,
         state.color,
         state.depth_test,
         cull_mode,
@@ -1378,12 +1388,17 @@ fn draw_triangles_indexed(
     let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
     let blend_mode = crate::graphics::BlendMode::from_u8(state.blend_mode);
 
+    // Add current transform to model matrix pool and pack MVP indices
+    let model_idx = state.add_model_matrix(state.current_transform);
+    state.current_model_idx = model_idx;
+    let mvp_index = state.pack_current_mvp();
+
     // Record draw command directly
     state.render_pass.record_triangles_indexed(
         format,
         &vertex_data,
         &index_data,
-        state.current_transform,
+        mvp_index,
         state.color,
         state.depth_test,
         cull_mode,
