@@ -860,41 +860,48 @@ impl App {
 
         // If in Playing mode, render game first
         if matches!(mode, AppMode::Playing { .. }) {
-            // Get camera matrices from game state
-            let (view_matrix, projection_matrix, clear_color) = {
-                if let Some(session) = &self.game_session {
-                    if let Some(game) = session.runtime.game() {
-                        let z_state = game.console_state();
+            if let Some(session) = &mut self.game_session {
+                if let Some(game) = session.runtime.game_mut() {
+                    // First, populate matrix pools (need mutable access)
+                    {
+                        let z_state = game.console_state_mut();
 
-                        let clear = z_state.init_config.clear_color;
-                        let clear_r = ((clear >> 24) & 0xFF) as f32 / 255.0;
-                        let clear_g = ((clear >> 16) & 0xFF) as f32 / 255.0;
-                        let clear_b = ((clear >> 8) & 0xFF) as f32 / 255.0;
-                        let clear_a = (clear & 0xFF) as f32 / 255.0;
+                        // Compute matrices
                         let aspect_ratio = graphics.width() as f32 / graphics.height() as f32;
-                        (
-                            z_state.camera.view_matrix(),
-                            z_state.camera.projection_matrix(aspect_ratio),
-                            [clear_r, clear_g, clear_b, clear_a],
-                        )
-                    } else {
-                        (
-                            glam::Mat4::IDENTITY,
-                            glam::Mat4::IDENTITY,
-                            [0.1, 0.1, 0.1, 1.0],
-                        )
-                    }
-                } else {
-                    (
-                        glam::Mat4::IDENTITY,
-                        glam::Mat4::IDENTITY,
-                        [0.1, 0.1, 0.1, 1.0],
-                    )
-                }
-            };
+                        let view_matrix = z_state.camera.view_matrix();
+                        let projection_matrix = z_state.camera.projection_matrix(aspect_ratio);
 
-            // Render game frame
-            graphics.render_frame(&view, view_matrix, projection_matrix, clear_color);
+                        // Populate view/proj pools (always at index 0 for now)
+                        if z_state.view_matrices.is_empty() {
+                            z_state.view_matrices.push(view_matrix);
+                        } else {
+                            z_state.view_matrices[0] = view_matrix;
+                        }
+                        z_state.current_view_idx = 0;
+
+                        if z_state.proj_matrices.is_empty() {
+                            z_state.proj_matrices.push(projection_matrix);
+                        } else {
+                            z_state.proj_matrices[0] = projection_matrix;
+                        }
+                        z_state.current_proj_idx = 0;
+                    }
+
+                    // Then, render frame (need immutable access)
+                    {
+                        let z_state = game.console_state();
+                        let clear = z_state.init_config.clear_color;
+                        let clear_color = [
+                            ((clear >> 24) & 0xFF) as f32 / 255.0,
+                            ((clear >> 16) & 0xFF) as f32 / 255.0,
+                            ((clear >> 8) & 0xFF) as f32 / 255.0,
+                            (clear & 0xFF) as f32 / 255.0,
+                        ];
+
+                        graphics.render_frame(&view, z_state, clear_color);
+                    }
+                }
+            }
         }
 
         // Start egui frame

@@ -4,8 +4,6 @@
 //! for flushing to the GPU at frame end. This serves as an intermediate
 //! representation between FFI commands and GPU execution.
 
-use glam::Mat4;
-
 use super::matrix_packing::MvpIndex;
 use super::render_state::{BlendMode, CullMode, MatcapBlendMode, RenderState, TextureHandle};
 use super::vertex::{vertex_stride, VERTEX_FORMAT_COUNT};

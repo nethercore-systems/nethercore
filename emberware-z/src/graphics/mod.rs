@@ -95,7 +95,6 @@ pub use vertex::{
 // Re-export for crate-internal use
 pub(crate) use pipeline::PipelineEntry;
 
-use matrix_packing::MvpIndex;
 use pipeline::{PipelineCache, PipelineKey};
 use texture_manager::TextureManager;
 
@@ -216,6 +215,10 @@ pub struct ZGraphics {
     view_matrices_capacity: usize,
     proj_matrices_buffer: wgpu::Buffer,
     proj_matrices_capacity: usize,
+
+    // MVP indices buffer (per-draw u32 packed indices)
+    mvp_indices_buffer: wgpu::Buffer,
+    mvp_indices_capacity: usize,
 
     // Bind group caches (cleared and repopulated each frame)
     material_buffers: HashMap<MaterialCacheKey, wgpu::Buffer>,
@@ -410,6 +413,15 @@ impl ZGraphics {
             mapped_at_creation: false,
         });
 
+        // Create MVP indices storage buffer (u32 per draw call)
+        const INITIAL_MVP_INDICES_CAPACITY: usize = 1024;
+        let mvp_indices_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("MVP Indices Storage Buffer"),
+            size: (INITIAL_MVP_INDICES_CAPACITY * 4) as u64, // 4 bytes per u32
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
         // Create texture manager (handles fallback textures)
         let texture_manager = TextureManager::new(&device, &queue)?;
 
@@ -450,6 +462,8 @@ impl ZGraphics {
             view_matrices_capacity: INITIAL_VIEW_MATRIX_CAPACITY,
             proj_matrices_buffer,
             proj_matrices_capacity: INITIAL_PROJ_MATRIX_CAPACITY,
+            mvp_indices_buffer,
+            mvp_indices_capacity: INITIAL_MVP_INDICES_CAPACITY,
             material_buffers: HashMap::new(),
             texture_bind_groups: HashMap::new(),
             frame_bind_groups: HashMap::new(),
@@ -1218,7 +1232,9 @@ impl ZGraphics {
 
         // 2. Process deferred commands (billboards, sprites, text, sky)
         // These require additional processing or generation of geometry
-        for cmd in z_state.deferred_commands.drain(..) {
+        // Collect into temporary vector to avoid holding mutable borrow during processing
+        let deferred_cmds: Vec<_> = z_state.deferred_commands.drain(..).collect();
+        for cmd in deferred_cmds {
             match cmd {
                 DeferredCommand::DrawBillboard {
                     width,
@@ -2030,14 +2046,12 @@ impl ZGraphics {
     ///
     /// # Arguments
     /// * `view` - The texture view to render to
-    /// * `view_matrix` - Camera view matrix
-    /// * `projection_matrix` - Camera projection matrix
+    /// * `z_state` - FFI state containing matrix pools
     /// * `clear_color` - Background clear color (RGBA 0-1)
     pub fn render_frame(
         &mut self,
         view: &wgpu::TextureView,
-        view_matrix: Mat4,
-        projection_matrix: Mat4,
+        z_state: &crate::state::ZFFIState,
         clear_color: [f32; 4],
     ) {
         // Create command encoder
@@ -2148,18 +2162,55 @@ impl ZGraphics {
             return;
         }
 
-        // OPTIMIZATION 1: Write to persistent frame-level uniform buffers (not create new ones!)
-        // TODO: This will be updated in Phase 4 to write arrays of matrices
-        self.queue.write_buffer(
-            &self.view_matrices_buffer,
-            0,
-            bytemuck::cast_slice(&view_matrix.to_cols_array()),
-        );
-        self.queue.write_buffer(
-            &self.proj_matrices_buffer,
-            0,
-            bytemuck::cast_slice(&projection_matrix.to_cols_array()),
-        );
+        // Phase 4: Upload model, view, and projection matrices from z_state pools
+
+        // 1. Upload model matrices
+        if !z_state.model_matrices.is_empty() {
+            self.ensure_model_buffer_capacity(z_state.model_matrices.len());
+            let data = bytemuck::cast_slice(&z_state.model_matrices);
+            self.queue.write_buffer(&self.model_matrices_buffer, 0, data);
+        }
+
+        // 2. Upload view matrices
+        if !z_state.view_matrices.is_empty() {
+            let data = bytemuck::cast_slice(&z_state.view_matrices);
+            self.queue.write_buffer(&self.view_matrices_buffer, 0, data);
+        }
+
+        // 3. Upload projection matrices
+        if !z_state.proj_matrices.is_empty() {
+            let data = bytemuck::cast_slice(&z_state.proj_matrices);
+            self.queue.write_buffer(&self.proj_matrices_buffer, 0, data);
+        }
+
+        // 4. Upload MVP indices (collect from all commands)
+        let command_count = self.command_buffer.commands().len();
+        if command_count > 0 {
+            // Collect MVP indices from all commands
+            let mvp_indices: Vec<u32> = self
+                .command_buffer
+                .commands()
+                .iter()
+                .map(|cmd| cmd.mvp_index.0)
+                .collect();
+
+            // Ensure buffer capacity
+            if command_count > self.mvp_indices_capacity {
+                let new_capacity = command_count.next_power_of_two();
+                self.mvp_indices_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("MVP Indices Storage Buffer"),
+                    size: (new_capacity * 4) as u64, // 4 bytes per u32
+                    usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
+                });
+                self.mvp_indices_capacity = new_capacity;
+                tracing::debug!("Resized MVP indices buffer to {} entries", new_capacity);
+            }
+
+            // Upload MVP indices
+            let data = bytemuck::cast_slice(&mvp_indices);
+            self.queue.write_buffer(&self.mvp_indices_buffer, 0, data);
+        }
 
         // Upload vertex/index data from command buffer to GPU buffers
         for format in 0..VERTEX_FORMAT_COUNT as u8 {
@@ -2214,42 +2265,6 @@ impl ZGraphics {
                     cmd.texture_slots[3].0,
                 )
             });
-
-        // OPTIMIZATION 2: Collect all model matrices (AFTER sorting!) and upload to storage buffer ONCE per frame
-        let commands = self.command_buffer.commands();
-        let num_transforms = commands.len();
-
-        // Ensure storage buffer has enough capacity
-        if num_transforms > self.model_matrices_capacity {
-            // Grow buffer to next power of 2
-            let new_capacity = num_transforms.next_power_of_two();
-            self.model_matrices_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("Model Matrices Storage Buffer"),
-                size: (new_capacity * 64) as u64,
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
-            self.model_matrices_capacity = new_capacity;
-            tracing::debug!(
-                "Grew model matrices storage buffer to {} transforms",
-                new_capacity
-            );
-        }
-
-        // Collect all transforms into a contiguous array (in sorted command order)
-        let mut all_transforms = Vec::with_capacity(num_transforms);
-        for cmd in commands.iter() {
-            all_transforms.extend_from_slice(cmd.transform.as_ref());
-        }
-
-        // Upload all matrices in one write
-        if !all_transforms.is_empty() {
-            self.queue.write_buffer(
-                &self.model_matrices_buffer,
-                0,
-                bytemuck::cast_slice(&all_transforms),
-            );
-        }
 
         // Take caches out of self temporarily to avoid nested mutable borrows during render pass.
         // Caches are persistent across frames - entries are reused when keys match.
@@ -2401,6 +2416,10 @@ impl ZGraphics {
                                             binding: 5,
                                             resource: self.bone_buffer.as_entire_binding(),
                                         },
+                                        wgpu::BindGroupEntry {
+                                            binding: 6,
+                                            resource: self.mvp_indices_buffer.as_entire_binding(),
+                                        },
                                     ],
                                 })
                             }
@@ -2444,6 +2463,10 @@ impl ZGraphics {
                                             binding: 7,
                                             resource: self.bone_buffer.as_entire_binding(),
                                         },
+                                        wgpu::BindGroupEntry {
+                                            binding: 8,
+                                            resource: self.mvp_indices_buffer.as_entire_binding(),
+                                        },
                                     ],
                                 })
                             }
@@ -2478,6 +2501,10 @@ impl ZGraphics {
                                         wgpu::BindGroupEntry {
                                             binding: 5,
                                             resource: self.bone_buffer.as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 6,
+                                            resource: self.mvp_indices_buffer.as_entire_binding(),
                                         },
                                     ],
                                 })

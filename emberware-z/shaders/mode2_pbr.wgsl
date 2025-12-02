@@ -10,12 +10,10 @@ const PI: f32 = 3.14159265359;
 // Uniforms and Bindings
 // ============================================================================
 
-// Per-frame storage buffer - all model matrices for the frame
+// Per-frame storage buffers - matrix arrays
 @group(0) @binding(0) var<storage, read> model_matrices: array<mat4x4<f32>>;
-
-// Per-frame uniforms (group 0)
-@group(0) @binding(1) var<uniform> view_matrix: mat4x4<f32>;
-@group(0) @binding(2) var<uniform> projection_matrix: mat4x4<f32>;
+@group(0) @binding(1) var<storage, read> view_matrices: array<mat4x4<f32>>;
+@group(0) @binding(2) var<storage, read> proj_matrices: array<mat4x4<f32>>;
 
 // Sky uniforms
 struct SkyUniforms {
@@ -56,6 +54,9 @@ struct LightUniforms {
 // Bone transforms for GPU skinning (up to 256 bones)
 @group(0) @binding(7) var<storage, read> bones: array<mat4x4<f32>, 256>;
 
+// MVP indices storage buffer (per-draw packed indices)
+@group(0) @binding(8) var<storage, read> mvp_indices: array<u32>;
+
 // Texture bindings (group 1)
 @group(1) @binding(0) var slot0: texture_2d<f32>;  // Albedo
 @group(1) @binding(1) var slot1: texture_2d<f32>;  // MRE (Metallic-Roughness-Emissive)
@@ -85,6 +86,18 @@ struct VertexOut {
 }
 
 // ============================================================================
+// Helper Functions
+// ============================================================================
+
+// Unpack MVP index from packed u32 (model: 16 bits, view: 8 bits, proj: 8 bits)
+fn unpack_mvp(packed: u32) -> vec3<u32> {
+    let model_idx = packed & 0xFFFFu;
+    let view_idx = (packed >> 16u) & 0xFFu;
+    let proj_idx = (packed >> 24u) & 0xFFu;
+    return vec3<u32>(model_idx, view_idx, proj_idx);
+}
+
+// ============================================================================
 // Vertex Shader
 // ============================================================================
 
@@ -94,8 +107,13 @@ fn vs(in: VertexIn, @builtin(instance_index) instance_index: u32) -> VertexOut {
 
     //VS_SKINNED
 
-    // Get model matrix from storage buffer using instance index
-    let model_matrix = model_matrices[instance_index];
+    // Fetch MVP index from instance buffer and unpack
+    let mvp_packed = mvp_indices[instance_index];
+    let mvp = unpack_mvp(mvp_packed);
+
+    let model_matrix = model_matrices[mvp.x];
+    let view_matrix = view_matrices[mvp.y];
+    let projection_matrix = proj_matrices[mvp.z];
 
     // Apply model transform
     //VS_POSITION

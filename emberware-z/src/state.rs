@@ -378,6 +378,11 @@ impl ZFFIState {
         self.pending_textures.clear();
         self.pending_meshes.clear();
         self.audio_commands.clear();
+
+        // Clear model matrix pool for next frame
+        // (view/proj matrices persist and are updated in place by app.rs)
+        self.model_matrices.clear();
+
         // Note: Camera, transforms, render state persist between clear_frame calls
         // within a single frame, but the entire ZFFIState is rebuilt each game frame
     }
@@ -403,13 +408,5 @@ impl ZFFIState {
             self.current_view_idx,
             self.current_proj_idx,
         )
-    }
-
-    /// Reset matrix pools at start of frame
-    pub fn reset_matrix_pools(&mut self) {
-        self.model_matrices.clear();
-        // View and proj matrices typically persist, but clear if needed
-        // self.view_matrices.clear();
-        // self.proj_matrices.clear();
     }
 }
