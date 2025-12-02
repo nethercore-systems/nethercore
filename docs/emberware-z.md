@@ -259,6 +259,7 @@ Full PBR lighting with up to 4 dynamic lights:
 fn light_set(index: u32, x: f32, y: f32, z: f32)  // index 0-3, direction vector
 fn light_color(index: u32, r: f32, g: f32, b: f32)
 fn light_intensity(index: u32, intensity: f32)
+fn light_enable(index: u32)
 fn light_disable(index: u32)
 ```
 

@@ -114,6 +114,7 @@ pub fn register_z_ffi(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState
     linker.func_wrap("env", "light_set", light_set)?;
     linker.func_wrap("env", "light_color", light_color)?;
     linker.func_wrap("env", "light_intensity", light_intensity)?;
+    linker.func_wrap("env", "light_enable", light_enable)?;
     linker.func_wrap("env", "light_disable", light_disable)?;
 
     // Mode 3 (Hybrid) lighting functions
@@ -2217,6 +2218,24 @@ fn light_intensity(
 
     let state = &mut caller.data_mut().console;
     state.lights[index as usize].intensity = intensity;
+}
+
+/// Enable a light
+///
+/// # Arguments
+/// * `index` — Light index (0-3)
+///
+/// Enables a previously disabled light so it contributes to the scene.
+/// The light will use its current direction, color, and intensity settings.
+fn light_enable(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, index: u32) {
+    // Validate index
+    if index > 3 {
+        warn!("light_enable: invalid light index {} (must be 0-3)", index);
+        return;
+    }
+
+    let state = &mut caller.data_mut().console;
+    state.lights[index as usize].enabled = true;
 }
 
 /// Disable a light
