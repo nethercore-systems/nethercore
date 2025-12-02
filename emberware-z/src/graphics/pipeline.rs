@@ -146,18 +146,18 @@ fn create_frame_bind_group_layout(device: &wgpu::Device, render_mode: u8) -> wgp
         0 | 1 => {
             // Mode 0 (Unlit) and Mode 1 (Matcap): Basic uniforms
             vec![
-                // View matrix
+                // Model matrices storage buffer (per-frame array)
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::VERTEX,
                     ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
                         has_dynamic_offset: false,
                         min_binding_size: None,
                     },
                     count: None,
                 },
-                // Projection matrix
+                // View matrix
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStages::VERTEX,
@@ -168,10 +168,10 @@ fn create_frame_bind_group_layout(device: &wgpu::Device, render_mode: u8) -> wgp
                     },
                     count: None,
                 },
-                // Sky uniforms
+                // Projection matrix
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    visibility: wgpu::ShaderStages::VERTEX,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -179,7 +179,7 @@ fn create_frame_bind_group_layout(device: &wgpu::Device, render_mode: u8) -> wgp
                     },
                     count: None,
                 },
-                // Material uniforms
+                // Sky uniforms
                 wgpu::BindGroupLayoutEntry {
                     binding: 3,
                     visibility: wgpu::ShaderStages::FRAGMENT,
@@ -190,9 +190,20 @@ fn create_frame_bind_group_layout(device: &wgpu::Device, render_mode: u8) -> wgp
                     },
                     count: None,
                 },
-                // Bone storage buffer for GPU skinning
+                // Material uniforms
                 wgpu::BindGroupLayoutEntry {
                     binding: 4,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                // Bone storage buffer for GPU skinning
+                wgpu::BindGroupLayoutEntry {
+                    binding: 5,
                     visibility: wgpu::ShaderStages::VERTEX,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Storage { read_only: true },
@@ -206,18 +217,18 @@ fn create_frame_bind_group_layout(device: &wgpu::Device, render_mode: u8) -> wgp
         2 | 3 => {
             // Mode 2 (PBR) and Mode 3 (Hybrid): Additional lighting uniforms
             vec![
-                // View matrix
+                // Model matrices storage buffer (per-frame array)
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::VERTEX,
                     ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
                         has_dynamic_offset: false,
                         min_binding_size: None,
                     },
                     count: None,
                 },
-                // Projection matrix
+                // View matrix
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStages::VERTEX,
@@ -228,10 +239,10 @@ fn create_frame_bind_group_layout(device: &wgpu::Device, render_mode: u8) -> wgp
                     },
                     count: None,
                 },
-                // Sky uniforms
+                // Projection matrix
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    visibility: wgpu::ShaderStages::VERTEX,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -239,7 +250,7 @@ fn create_frame_bind_group_layout(device: &wgpu::Device, render_mode: u8) -> wgp
                     },
                     count: None,
                 },
-                // Material uniforms
+                // Sky uniforms
                 wgpu::BindGroupLayoutEntry {
                     binding: 3,
                     visibility: wgpu::ShaderStages::FRAGMENT,
@@ -250,7 +261,7 @@ fn create_frame_bind_group_layout(device: &wgpu::Device, render_mode: u8) -> wgp
                     },
                     count: None,
                 },
-                // Light uniforms
+                // Material uniforms
                 wgpu::BindGroupLayoutEntry {
                     binding: 4,
                     visibility: wgpu::ShaderStages::FRAGMENT,
@@ -261,7 +272,7 @@ fn create_frame_bind_group_layout(device: &wgpu::Device, render_mode: u8) -> wgp
                     },
                     count: None,
                 },
-                // Camera position
+                // Light uniforms
                 wgpu::BindGroupLayoutEntry {
                     binding: 5,
                     visibility: wgpu::ShaderStages::FRAGMENT,
@@ -272,9 +283,20 @@ fn create_frame_bind_group_layout(device: &wgpu::Device, render_mode: u8) -> wgp
                     },
                     count: None,
                 },
-                // Bone storage buffer for GPU skinning
+                // Camera position
                 wgpu::BindGroupLayoutEntry {
                     binding: 6,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                // Bone storage buffer for GPU skinning
+                wgpu::BindGroupLayoutEntry {
+                    binding: 7,
                     visibility: wgpu::ShaderStages::VERTEX,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Storage { read_only: true },

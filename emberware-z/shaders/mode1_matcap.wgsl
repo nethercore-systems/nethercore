@@ -6,9 +6,12 @@
 // Uniforms and Bindings
 // ============================================================================
 
+// Per-frame storage buffer - all model matrices for the frame
+@group(0) @binding(0) var<storage, read> model_matrices: array<mat4x4<f32>>;
+
 // Per-frame uniforms (group 0)
-@group(0) @binding(0) var<uniform> view_matrix: mat4x4<f32>;
-@group(0) @binding(1) var<uniform> projection_matrix: mat4x4<f32>;
+@group(0) @binding(1) var<uniform> view_matrix: mat4x4<f32>;
+@group(0) @binding(2) var<uniform> projection_matrix: mat4x4<f32>;
 
 // Sky uniforms (for ambient)
 struct SkyUniforms {
@@ -18,7 +21,7 @@ struct SkyUniforms {
     sun_color_and_sharpness: vec4<f32>,  // .xyz = color, .w = sharpness
 }
 
-@group(0) @binding(2) var<uniform> sky: SkyUniforms;
+@group(0) @binding(3) var<uniform> sky: SkyUniforms;
 
 // Material uniforms
 struct MaterialUniforms {
@@ -26,10 +29,10 @@ struct MaterialUniforms {
     matcap_blend_modes: vec4<u32>, // Blend modes for slots 0-3 (0=Multiply, 1=Add, 2=HSV Modulate)
 }
 
-@group(0) @binding(3) var<uniform> material: MaterialUniforms;
+@group(0) @binding(4) var<uniform> material: MaterialUniforms;
 
 // Bone transforms for GPU skinning (up to 256 bones)
-@group(0) @binding(4) var<storage, read> bones: array<mat4x4<f32>, 256>;
+@group(0) @binding(5) var<storage, read> bones: array<mat4x4<f32>, 256>;
 
 // Texture bindings (group 1)
 @group(1) @binding(0) var slot0: texture_2d<f32>;  // Albedo (UV-sampled)
@@ -64,24 +67,29 @@ struct VertexOut {
 // ============================================================================
 
 @vertex
-fn vs(in: VertexIn) -> VertexOut {
+fn vs(in: VertexIn, @builtin(instance_index) instance_index: u32) -> VertexOut {
     var out: VertexOut;
 
     //VS_SKINNED
 
-    // Apply model transform (will be integrated later)
-    let world_pos = vec4<f32>(in.position, 1.0);
-    out.world_position = world_pos.xyz;
+    // Get model matrix from storage buffer using instance index
+    let model_matrix = model_matrices[instance_index];
 
-    // Transform normal to world space (will use model matrix later)
-    out.world_normal = normalize(in.normal);
+    // Apply model transform
+    let world_pos = vec4<f32>(in.position, 1.0);
+    let model_pos = model_matrix * world_pos;
+    out.world_position = model_pos.xyz;
+
+    // Transform normal to world space (using model matrix for orthogonal transforms)
+    let model_normal = (model_matrix * vec4<f32>(in.normal, 0.0)).xyz;
+    out.world_normal = normalize(model_normal);
 
     // Transform normal to view space for matcap UV computation
     let view_normal = (view_matrix * vec4<f32>(out.world_normal, 0.0)).xyz;
     out.view_normal = normalize(view_normal);
 
     // View-projection transform
-    out.clip_position = projection_matrix * view_matrix * world_pos;
+    out.clip_position = projection_matrix * view_matrix * model_pos;
 
     //VS_UV
     //VS_COLOR

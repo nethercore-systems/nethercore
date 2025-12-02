@@ -18,6 +18,133 @@
 
 ## TODO
 
+### **[FEATURE] Support multiple view/projection matrices for split-screen rendering**
+
+**Status:** Enhancement - Current implementation works for single camera per frame
+
+**Current State:**
+- Single view matrix per frame (uniform buffer)
+- Single projection matrix per frame (uniform buffer)
+- Array of model matrices (storage buffer, instanced rendering)
+
+**Problem:**
+- Cannot render from multiple cameras in a single frame
+- Prevents split-screen gameplay
+- Prevents picture-in-picture effects (minimap, rear-view mirror, etc.)
+
+**Solution:**
+Option 2: View/projection arrays (like model matrices)
+- Change view_matrix and projection_matrix to storage buffer arrays
+- Add camera_index to draw commands (or FFI state)
+- Shaders use @builtin(camera_index) or similar
+- Pro: More efficient batching
+- Con: Requires FFI redesign, adds complexity to all shaders
+
+**Files to Consider:**
+- `emberware-z/src/graphics/mod.rs` - Viewport/scissor support for multiple cameras
+- `emberware-z/src/graphics/ffi.rs` - Camera/viewport management FFI
+- All shader files
+
+---
+
+### **[POLISH] PERF: Pack vertex data to reduce memory/bandwidth**
+
+**Status:** Future optimization
+
+**Current State:**
+All vertex attributes use f32 components (4 bytes each), resulting in large vertex buffers:
+- Position: 3x f32 = 12 bytes
+- Normal: 3x f32 = 12 bytes
+- UV: 2x f32 = 8 bytes
+- Color: 3x f32 = 12 bytes
+- Bone indices: 4x u32 = 16 bytes (stored as f32 in shader)
+- Bone weights: 4x f32 = 16 bytes
+
+**Proposed Packed Format:**
+Use hardware-accelerated packed formats for significant memory savings:
+
+| Attribute    | Current   | Packed       | Savings     | Notes                              |
+| ------------ | --------- | ------------ | ----------- | ---------------------------------- |
+| Position     | f32x3     | f16x4        | 12→8 bytes  | Last component padded/ignored      |
+| Normal       | f32x3     | snorm16x4    | 12→8 bytes  | Normalized to [-1,1], last ignored |
+| UV           | f32x2     | unorm16x2    | 8→4 bytes   | Normalized to [0,1]                |
+| Vertex color | f32x3     | unorm8x4     | 12→4 bytes  | Standard RGBA8                     |
+| Bone indices | u32x4     | uint8x4      | 16→4 bytes  | Max 256 bones                      |
+| Bone weights | f32x4     | unorm8x4     | 16→4 bytes  | Normalized to [0,1]                |
+
+**Example Savings:**
+- POS_UV_NORMAL: 32 bytes → 20 bytes (37% reduction)
+- POS_UV_NORMAL_COLOR_SKINNED: 76 bytes → 32 bytes (58% reduction!)
+
+**Benefits:**
+- Reduced VRAM usage (important for low-end GPUs)
+- Faster vertex fetch (less memory bandwidth)
+- Authentic PS1/N64 precision (f16 positions match era)
+- GPU automatically unpacks to f32 in shader (zero cost)
+
+**Implementation Plan:**
+1. Update `VertexFormatInfo` in `vertex.rs` with packed formats
+2. Modify vertex buffer layout descriptors
+3. Update FFI to accept packed data (or pack on upload)
+4. Test precision loss is acceptable for retro aesthetic
+5. Update examples to use new vertex formats
+
+**Considerations:**
+- f16 position precision: ±65504 range, good for typical game worlds
+- snorm16 normal precision: 1/32767 ≈ 0.00003 angular precision (overkill)
+- May need to adjust vertex data generation in examples
+
+---
+
+### **[POLISH] PERF: Store bone matrices as 3x4 instead of 4x4**
+
+**Status:** Future optimization (dependent on GPU skinning)
+
+**Current State:**
+- Bone matrices stored as `mat4x4<f32>` (16 floats = 64 bytes each)
+- 4th row always `[0, 0, 0, 1]` for affine transforms (wasted space)
+- Storage buffer: `array<mat4x4<f32>, 256>` = 16 KB
+
+**Proposed Optimization:**
+Store as 3x4 matrices (row-major):
+```wgsl
+// CPU side: Upload as [f32; 12] per bone (48 bytes)
+// GPU side: Reconstruct 4x4 in shader
+struct BoneMatrix3x4 {
+    row0: vec4<f32>,  // [m00, m01, m02, m03]
+    row1: vec4<f32>,  // [m10, m11, m12, m13]
+    row2: vec4<f32>,  // [m20, m21, m22, m23]
+    // row3 is implicitly [0, 0, 0, 1]
+}
+
+fn expand_bone_matrix(bone: BoneMatrix3x4) -> mat4x4<f32> {
+    return mat4x4<f32>(
+        bone.row0.xyz, 0.0,
+        bone.row1.xyz, 0.0,
+        bone.row2.xyz, 0.0,
+        bone.row0.w, bone.row1.w, bone.row2.w, 1.0
+    );
+}
+```
+
+**Savings:**
+- Per bone: 64 bytes → 48 bytes (25% reduction)
+- 256 bones: 16 KB → 12 KB (4 KB saved)
+- GPU memory bandwidth reduced by 25% during skinning
+
+**Benefits:**
+- Standard practice in production engines (UE, Unity use 3x4)
+- Negligible shader cost (one-time reconstruction per vertex)
+- Allows more bones or higher vertex counts within bandwidth budget
+
+**Implementation:**
+1. Update `set_bones()` FFI to accept 12 floats per bone
+2. Change storage buffer layout in shaders
+3. Add expand_bone_matrix() helper in skinning code
+4. Update skinned-mesh example to provide 3x4 data
+
+---
+
 ### **[FEATURE] Direct game launch via command-line argument**
 
 **Status:** Not yet implemented

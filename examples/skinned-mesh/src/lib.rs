@@ -192,7 +192,7 @@ fn mat4_multiply(out: &mut [f32; 16], a: &[f32; 16], b: &[f32; 16]) {
 /// - Segment 0: primarily bone 0, blended with bone 1 at the joint
 /// - Segment 1: primarily bone 1, blended with bones 0 and 2 at joints
 /// - Segment 2: primarily bone 2, blended with bone 1 at the joint
-fn generate_arm_mesh() -> ([f32; 360 * 11], [u16; 324]) {
+fn generate_arm_mesh() -> ([f32; 60 * 11], [u16; 324]) {
     // Cylinder parameters
     const SEGMENTS: usize = 6;   // Around circumference
     const RINGS: usize = 10;     // Along length (including end caps)
@@ -201,8 +201,8 @@ fn generate_arm_mesh() -> ([f32; 360 * 11], [u16; 324]) {
 
     // Vertex layout: pos(3) + normal(3) + bone_indices(4u8 as 1f32) + bone_weights(4)
     // Total: 11 floats per vertex
-    let mut vertices = [0.0f32; 360 * 11];  // 6 segments * 10 rings * 6 verts = 360 verts
-    let mut indices = [0u16; 324];          // (SEGMENTS * (RINGS-1) * 2 * 3) triangles
+    let mut vertices = [0.0f32; 60 * 11];  // 6 segments * 10 rings = 60 verts, 11 floats each
+    let mut indices = [0u16; 324];         // (SEGMENTS * (RINGS-1) * 2 * 3) triangles
 
     let mut v_idx = 0;
     let mut i_idx = 0;

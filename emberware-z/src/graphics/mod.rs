@@ -204,6 +204,10 @@ pub struct ZGraphics {
     // Bone system (GPU skinning)
     bone_buffer: wgpu::Buffer,
 
+    // Model matrices storage buffer (per-frame array of all transforms)
+    model_matrices_buffer: wgpu::Buffer,
+    model_matrices_capacity: usize,
+
     // Frame-level uniform buffers (reused every frame)
     view_buffer: wgpu::Buffer,
     proj_buffer: wgpu::Buffer,
@@ -211,7 +215,7 @@ pub struct ZGraphics {
     // Bind group caches (cleared and repopulated each frame)
     material_buffers: HashMap<MaterialCacheKey, wgpu::Buffer>,
     texture_bind_groups: HashMap<[TextureHandle; 4], wgpu::BindGroup>,
-    frame_bind_groups: HashMap<u64, wgpu::BindGroup>,
+    frame_bind_groups: HashMap<MaterialCacheKey, wgpu::BindGroup>,
 
     // Frame state
     current_frame: Option<wgpu::SurfaceTexture>,
@@ -375,6 +379,15 @@ impl ZGraphics {
             mapped_at_creation: false,
         });
 
+        // Create model matrices storage buffer (per-frame array of all transforms)
+        const INITIAL_MODEL_MATRIX_CAPACITY: usize = 1024;
+        let model_matrices_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Model Matrices Storage Buffer"),
+            size: (INITIAL_MODEL_MATRIX_CAPACITY * 64) as u64, // 64 bytes per mat4x4
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
         // Create frame-level uniform buffers (reused every frame, written with new data)
         let view_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("View Matrix Buffer"),
@@ -424,6 +437,8 @@ impl ZGraphics {
             material_uniforms,
             material_buffer,
             bone_buffer,
+            model_matrices_buffer,
+            model_matrices_capacity: INITIAL_MODEL_MATRIX_CAPACITY,
             view_buffer,
             proj_buffer,
             material_buffers: HashMap::new(),
@@ -2136,6 +2151,42 @@ impl ZGraphics {
                 )
             });
 
+        // OPTIMIZATION 2: Collect all model matrices (AFTER sorting!) and upload to storage buffer ONCE per frame
+        let commands = self.command_buffer.commands();
+        let num_transforms = commands.len();
+
+        // Ensure storage buffer has enough capacity
+        if num_transforms > self.model_matrices_capacity {
+            // Grow buffer to next power of 2
+            let new_capacity = num_transforms.next_power_of_two();
+            self.model_matrices_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Model Matrices Storage Buffer"),
+                size: (new_capacity * 64) as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            self.model_matrices_capacity = new_capacity;
+            tracing::debug!(
+                "Grew model matrices storage buffer to {} transforms",
+                new_capacity
+            );
+        }
+
+        // Collect all transforms into a contiguous array (in sorted command order)
+        let mut all_transforms = Vec::with_capacity(num_transforms);
+        for cmd in commands.iter() {
+            all_transforms.extend_from_slice(cmd.transform.as_ref());
+        }
+
+        // Upload all matrices in one write
+        if !all_transforms.is_empty() {
+            self.queue.write_buffer(
+                &self.model_matrices_buffer,
+                0,
+                bytemuck::cast_slice(&all_transforms),
+            );
+        }
+
         // Take caches out of self temporarily to avoid nested mutable borrows during render pass.
         // Caches are persistent across frames - entries are reused when keys match.
         // Cache growth is bounded by unique (material, texture) combinations used.
@@ -2174,9 +2225,12 @@ impl ZGraphics {
 
             // State tracking to skip redundant GPU calls (commands are sorted by pipeline/texture)
             let mut bound_pipeline: Option<PipelineKey> = None;
-            let mut bound_frame_group: Option<u64> = None;
             let mut bound_texture_slots: Option<[TextureHandle; 4]> = None;
             let mut bound_vertex_format: Option<(u8, BufferSource)> = None;
+            let mut bound_material: Option<MaterialCacheKey> = None;
+
+            // Instance index for accessing model matrices in storage buffer
+            let mut instance_index: u32 = 0;
 
             for cmd in self.command_buffer.commands() {
                 // Create render state from command
@@ -2244,111 +2298,120 @@ impl ZGraphics {
                         })
                 });
 
-                // Get or create frame bind group (group 0) - CACHED by material buffer
-                // Uses material buffer pointer address as cache key to avoid recreating bind groups
-                let material_buffer_addr =
-                    material_buffer.as_entire_buffer_binding().buffer as *const _ as u64;
-                let frame_bind_group = frame_bind_groups
-                    .entry(material_buffer_addr)
-                    .or_insert_with(|| {
-                        match self.current_render_mode {
-                            0 | 1 => {
-                                // Mode 0 (Unlit) and Mode 1 (Matcap): Basic bindings
-                                self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                                    label: Some("Frame Bind Group"),
-                                    layout: &pipeline_entry.bind_group_layout_frame,
-                                    entries: &[
-                                        wgpu::BindGroupEntry {
-                                            binding: 0,
-                                            resource: self.view_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 1,
-                                            resource: self.proj_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 2,
-                                            resource: self.sky_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 3,
-                                            resource: material_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 4,
-                                            resource: self.bone_buffer.as_entire_binding(),
-                                        },
-                                    ],
-                                })
-                            }
-                            2 | 3 => {
-                                // Mode 2 (PBR) and Mode 3 (Hybrid): Additional lighting uniforms
-                                self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                                    label: Some("Frame Bind Group"),
-                                    layout: &pipeline_entry.bind_group_layout_frame,
-                                    entries: &[
-                                        wgpu::BindGroupEntry {
-                                            binding: 0,
-                                            resource: self.view_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 1,
-                                            resource: self.proj_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 2,
-                                            resource: self.sky_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 3,
-                                            resource: material_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 4,
-                                            resource: self.lights_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 5,
-                                            resource: self.camera_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 6,
-                                            resource: self.bone_buffer.as_entire_binding(),
-                                        },
-                                    ],
-                                })
-                            }
-                            _ => {
-                                // Fallback - same as mode 0/1
-                                self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                                    label: Some("Frame Bind Group"),
-                                    layout: &pipeline_entry.bind_group_layout_frame,
-                                    entries: &[
-                                        wgpu::BindGroupEntry {
-                                            binding: 0,
-                                            resource: self.view_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 1,
-                                            resource: self.proj_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 2,
-                                            resource: self.sky_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 3,
-                                            resource: material_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 4,
-                                            resource: self.bone_buffer.as_entire_binding(),
-                                        },
-                                    ],
-                                })
-                            }
+                // Create frame bind group (group 0) - Now reusable across draws since model matrices are in storage buffer!
+                // Frame bind groups cached by material (since material buffer is the only per-draw varying resource)
+                let frame_bind_group_key = material_key; // Reuse material_key as frame bind group key
+                let frame_bind_group = frame_bind_groups.entry(frame_bind_group_key).or_insert_with(|| {
+                    match self.current_render_mode {
+                        0 | 1 => {
+                            // Mode 0 (Unlit) and Mode 1 (Matcap): Basic bindings
+                            self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                                label: Some("Frame Bind Group"),
+                                layout: &pipeline_entry.bind_group_layout_frame,
+                                entries: &[
+                                    wgpu::BindGroupEntry {
+                                        binding: 0,
+                                        resource: self.model_matrices_buffer.as_entire_binding(),
+                                    },
+                                    wgpu::BindGroupEntry {
+                                        binding: 1,
+                                        resource: self.view_buffer.as_entire_binding(),
+                                    },
+                                    wgpu::BindGroupEntry {
+                                        binding: 2,
+                                        resource: self.proj_buffer.as_entire_binding(),
+                                    },
+                                    wgpu::BindGroupEntry {
+                                        binding: 3,
+                                        resource: self.sky_buffer.as_entire_binding(),
+                                    },
+                                    wgpu::BindGroupEntry {
+                                        binding: 4,
+                                        resource: material_buffer.as_entire_binding(),
+                                    },
+                                    wgpu::BindGroupEntry {
+                                        binding: 5,
+                                        resource: self.bone_buffer.as_entire_binding(),
+                                    },
+                                ],
+                            })
                         }
-                    });
+                        2 | 3 => {
+                            // Mode 2 (PBR) and Mode 3 (Hybrid): Additional lighting uniforms
+                            self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                                label: Some("Frame Bind Group"),
+                                layout: &pipeline_entry.bind_group_layout_frame,
+                                entries: &[
+                                    wgpu::BindGroupEntry {
+                                        binding: 0,
+                                        resource: self.model_matrices_buffer.as_entire_binding(),
+                                    },
+                                    wgpu::BindGroupEntry {
+                                        binding: 1,
+                                        resource: self.view_buffer.as_entire_binding(),
+                                    },
+                                    wgpu::BindGroupEntry {
+                                        binding: 2,
+                                        resource: self.proj_buffer.as_entire_binding(),
+                                    },
+                                    wgpu::BindGroupEntry {
+                                        binding: 3,
+                                        resource: self.sky_buffer.as_entire_binding(),
+                                    },
+                                    wgpu::BindGroupEntry {
+                                        binding: 4,
+                                        resource: material_buffer.as_entire_binding(),
+                                    },
+                                    wgpu::BindGroupEntry {
+                                        binding: 5,
+                                        resource: self.lights_buffer.as_entire_binding(),
+                                    },
+                                    wgpu::BindGroupEntry {
+                                        binding: 6,
+                                        resource: self.camera_buffer.as_entire_binding(),
+                                    },
+                                    wgpu::BindGroupEntry {
+                                        binding: 7,
+                                        resource: self.bone_buffer.as_entire_binding(),
+                                    },
+                                ],
+                            })
+                        }
+                        _ => {
+                            // Fallback - same as mode 0/1
+                            self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                                label: Some("Frame Bind Group"),
+                                layout: &pipeline_entry.bind_group_layout_frame,
+                                entries: &[
+                                    wgpu::BindGroupEntry {
+                                        binding: 0,
+                                        resource: self.model_matrices_buffer.as_entire_binding(),
+                                    },
+                                    wgpu::BindGroupEntry {
+                                        binding: 1,
+                                        resource: self.view_buffer.as_entire_binding(),
+                                    },
+                                    wgpu::BindGroupEntry {
+                                        binding: 2,
+                                        resource: self.proj_buffer.as_entire_binding(),
+                                    },
+                                    wgpu::BindGroupEntry {
+                                        binding: 3,
+                                        resource: self.sky_buffer.as_entire_binding(),
+                                    },
+                                    wgpu::BindGroupEntry {
+                                        binding: 4,
+                                        resource: material_buffer.as_entire_binding(),
+                                    },
+                                    wgpu::BindGroupEntry {
+                                        binding: 5,
+                                        resource: self.bone_buffer.as_entire_binding(),
+                                    },
+                                ],
+                            })
+                        }
+                    }
+                });
 
                 // Get or create texture bind group (cached by texture slots)
                 let texture_bind_group = texture_bind_groups
@@ -2416,10 +2479,10 @@ impl ZGraphics {
                     bound_pipeline = Some(pipeline_key);
                 }
 
-                // Set frame bind group (only if changed)
-                if bound_frame_group != Some(material_buffer_addr) {
+                // Set frame bind group (only if material changed, since model matrices are in storage buffer)
+                if bound_material != Some(material_key) {
                     render_pass.set_bind_group(0, &*frame_bind_group, &[]);
-                    bound_frame_group = Some(material_buffer_addr);
+                    bound_material = Some(material_key);
                 }
 
                 // Set texture bind group (only if changed)
@@ -2440,7 +2503,7 @@ impl ZGraphics {
                     bound_vertex_format = Some((cmd.format, cmd.buffer_source));
                 }
 
-                // Draw
+                // Draw using instanced rendering with base_instance to access correct model matrix
                 if cmd.index_count > 0 {
                     // Indexed draw - both immediate and retained use u16 indices
                     let index_buffer = match cmd.buffer_source {
@@ -2452,13 +2515,19 @@ impl ZGraphics {
                         render_pass.draw_indexed(
                             cmd.first_index..cmd.first_index + cmd.index_count,
                             cmd.base_vertex as i32,
-                            0..1,
+                            instance_index..instance_index + 1,
                         );
                     }
                 } else {
                     // Non-indexed draw
-                    render_pass.draw(cmd.base_vertex..cmd.base_vertex + cmd.vertex_count, 0..1);
+                    render_pass.draw(
+                        cmd.base_vertex..cmd.base_vertex + cmd.vertex_count,
+                        instance_index..instance_index + 1,
+                    );
                 }
+
+                // Increment instance index for next draw
+                instance_index += 1;
             }
         }
 
