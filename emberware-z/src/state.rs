@@ -383,6 +383,11 @@ impl ZFFIState {
         // (view/proj matrices persist and are updated in place by app.rs)
         self.model_matrices.clear();
 
+        // Reset matrix indices (will be set properly by app.rs for view/proj, and by FFI for model)
+        self.current_model_idx = 0;
+        self.current_view_idx = 0;
+        self.current_proj_idx = 0;
+
         // Note: Camera, transforms, render state persist between clear_frame calls
         // within a single frame, but the entire ZFFIState is rebuilt each game frame
     }

@@ -373,7 +373,6 @@ impl Default for VirtualRenderPass {
 mod tests {
     use super::*;
     use crate::graphics::vertex::{FORMAT_COLOR, FORMAT_SKINNED, FORMAT_UV};
-    use glam::Vec3;
 
     #[test]
     fn test_command_buffer_new() {

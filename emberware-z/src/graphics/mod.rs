@@ -1234,6 +1234,7 @@ impl ZGraphics {
         // These require additional processing or generation of geometry
         // Collect into temporary vector to avoid holding mutable borrow during processing
         let deferred_cmds: Vec<_> = z_state.deferred_commands.drain(..).collect();
+
         for cmd in deferred_cmds {
             match cmd {
                 DeferredCommand::DrawBillboard {
@@ -1363,8 +1364,9 @@ impl ZGraphics {
                     let base_vertex = self.command_buffer.append_vertex_data(format, &vertices);
                     let first_index = self.command_buffer.append_index_data(format, &indices);
 
-                    // Add transform to model matrix pool and pack MVP indices
-                    let model_idx = z_state.add_model_matrix(transform);
+                    // Billboard vertices are already in world space, so use identity matrix
+                    // (they were positioned during vertex generation using position + right/up)
+                    let model_idx = z_state.add_model_matrix(Mat4::IDENTITY);
                     let mvp_index = MvpIndex::new(model_idx, z_state.current_view_idx, z_state.current_proj_idx);
 
                     // Add draw command
@@ -1701,8 +1703,13 @@ impl ZGraphics {
             }
         }
 
-        // Clear FFI staging state for next frame
-        z_state.clear_frame();
+        tracing::debug!(
+            "After deferred processing: model={}, command_buffer has {} commands total",
+            z_state.model_matrices.len(),
+            self.command_buffer.commands().len()
+        );
+
+        // Note: clear_frame() is now called at the end of render_frame() after rendering completes
     }
 
     /// Convert game matcap blend mode to graphics matcap blend mode
@@ -2164,6 +2171,18 @@ impl ZGraphics {
 
         // Phase 4: Upload model, view, and projection matrices from z_state pools
 
+        // Verify matrix state - warn if pools are empty
+        let command_count = self.command_buffer.commands().len();
+        if z_state.model_matrices.is_empty() && command_count > 0 {
+            tracing::warn!("Rendering {} commands with EMPTY model_matrices!", command_count);
+        }
+        if z_state.view_matrices.is_empty() && command_count > 0 {
+            tracing::error!("Rendering with EMPTY view_matrices!");
+        }
+        if z_state.proj_matrices.is_empty() && command_count > 0 {
+            tracing::error!("Rendering with EMPTY proj_matrices!");
+        }
+
         // 1. Upload model matrices
         if !z_state.model_matrices.is_empty() {
             self.ensure_model_buffer_capacity(z_state.model_matrices.len());
@@ -2184,7 +2203,6 @@ impl ZGraphics {
         }
 
         // 4. Upload MVP indices (collect from all commands)
-        let command_count = self.command_buffer.commands().len();
         if command_count > 0 {
             // Collect MVP indices from all commands
             let mvp_indices: Vec<u32> = self
@@ -2709,6 +2727,12 @@ impl ZGraphics {
 
         // Submit commands
         self.queue.submit(std::iter::once(encoder.finish()));
+
+        // Clear FFI staging state for next frame (after rendering completes)
+        // This clears model_matrices, deferred_commands, etc.
+        // Note: view/proj matrices persist and are updated in place each frame
+        // SAFETY: We can't get z_state here since render_frame takes &ZFFIState immutably.
+        // The caller (app.rs render()) must call z_state.clear_frame() after this returns.
     }
 }
 

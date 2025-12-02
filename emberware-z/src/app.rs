@@ -289,6 +289,25 @@ impl App {
             z_state.material_emissive,
         );
 
+        // Populate view/proj matrix pools BEFORE processing draw commands
+        // This ensures deferred commands (billboards, sprites) use correct indices
+        let view_matrix = z_state.camera.view_matrix();
+        let projection_matrix = z_state.camera.projection_matrix(aspect_ratio);
+
+        if z_state.view_matrices.is_empty() {
+            z_state.view_matrices.push(view_matrix);
+        } else {
+            z_state.view_matrices[0] = view_matrix;
+        }
+        z_state.current_view_idx = 0;
+
+        if z_state.proj_matrices.is_empty() {
+            z_state.proj_matrices.push(projection_matrix);
+        } else {
+            z_state.proj_matrices[0] = projection_matrix;
+        }
+        z_state.current_proj_idx = 0;
+
         // Process draw commands - ZGraphics consumes draw commands directly
         graphics.process_draw_commands(z_state, &session.texture_map);
     }
@@ -862,32 +881,7 @@ impl App {
         if matches!(mode, AppMode::Playing { .. }) {
             if let Some(session) = &mut self.game_session {
                 if let Some(game) = session.runtime.game_mut() {
-                    // First, populate matrix pools (need mutable access)
-                    {
-                        let z_state = game.console_state_mut();
-
-                        // Compute matrices
-                        let aspect_ratio = graphics.width() as f32 / graphics.height() as f32;
-                        let view_matrix = z_state.camera.view_matrix();
-                        let projection_matrix = z_state.camera.projection_matrix(aspect_ratio);
-
-                        // Populate view/proj pools (always at index 0 for now)
-                        if z_state.view_matrices.is_empty() {
-                            z_state.view_matrices.push(view_matrix);
-                        } else {
-                            z_state.view_matrices[0] = view_matrix;
-                        }
-                        z_state.current_view_idx = 0;
-
-                        if z_state.proj_matrices.is_empty() {
-                            z_state.proj_matrices.push(projection_matrix);
-                        } else {
-                            z_state.proj_matrices[0] = projection_matrix;
-                        }
-                        z_state.current_proj_idx = 0;
-                    }
-
-                    // Then, render frame (need immutable access)
+                    // Render frame (view/proj matrices already populated in execute_draw_commands_new)
                     {
                         let z_state = game.console_state();
                         let clear = z_state.init_config.clear_color;
@@ -899,6 +893,12 @@ impl App {
                         ];
 
                         graphics.render_frame(&view, z_state, clear_color);
+                    }
+
+                    // Clear frame state after rendering completes
+                    {
+                        let z_state = game.console_state_mut();
+                        z_state.clear_frame();
                     }
                 }
             }

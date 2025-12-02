@@ -6,6 +6,10 @@ license.workspace = true
 repository.workspace = true
 description = "Emberware Z - Fantasy console runtime"
 
+[lib]
+name = "emberware_z"
+path = "src/lib.rs"
+
 [[bin]]
 name = "emberware-z"
 path = "src/main.rs"
