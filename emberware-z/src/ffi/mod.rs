@@ -34,6 +34,10 @@ pub fn register_z_ffi(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState
     linker.func_wrap("env", "camera_set", camera_set)?;
     linker.func_wrap("env", "camera_fov", camera_fov)?;
 
+    // Advanced matrix functions
+    linker.func_wrap("env", "push_view_matrix", push_view_matrix)?;
+    linker.func_wrap("env", "push_projection_matrix", push_projection_matrix)?;
+
     // Transform stack functions
     linker.func_wrap("env", "transform_identity", transform_identity)?;
     linker.func_wrap("env", "transform_translate", transform_translate)?;
@@ -293,6 +297,38 @@ fn camera_set(
     let state = &mut caller.data_mut().console;
     state.camera.position = Vec3::new(x, y, z);
     state.camera.target = Vec3::new(target_x, target_y, target_z);
+
+    // Build view matrix
+    let view = Mat4::look_at_rh(
+        state.camera.position,
+        state.camera.target,
+        Vec3::Y,
+    );
+
+    // Update view matrix pool (always index 0 for convenience)
+    if state.view_matrices.is_empty() {
+        state.view_matrices.push(view);
+    } else {
+        state.view_matrices[0] = view;
+    }
+    state.current_view_idx = 0;
+
+    // Build projection matrix
+    let aspect = 16.0 / 9.0; // TODO: Get from actual viewport
+    let proj = Mat4::perspective_rh(
+        state.camera.fov.to_radians(),
+        aspect,
+        state.camera.near,
+        state.camera.far,
+    );
+
+    // Update projection matrix pool (always index 0 for convenience)
+    if state.proj_matrices.is_empty() {
+        state.proj_matrices.push(proj);
+    } else {
+        state.proj_matrices[0] = proj;
+    }
+    state.current_proj_idx = 0;
 }
 
 /// Set the camera field of view
@@ -317,6 +353,78 @@ fn camera_fov(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, f
     };
 
     state.camera.fov = clamped_fov;
+}
+
+/// Push a custom view matrix to the pool, returning its index
+///
+/// For advanced rendering techniques (multiple cameras, render-to-texture, etc.)
+/// Most users should use camera_set() instead.
+///
+/// # Arguments
+/// * `m0-m15` — Matrix elements in column-major order
+///
+/// # Returns
+/// The index of the newly added view matrix (0-255)
+fn push_view_matrix(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    m0: f32, m1: f32, m2: f32, m3: f32,
+    m4: f32, m5: f32, m6: f32, m7: f32,
+    m8: f32, m9: f32, m10: f32, m11: f32,
+    m12: f32, m13: f32, m14: f32, m15: f32,
+) -> u32 {
+    let state = &mut caller.data_mut().console;
+
+    let matrix = Mat4::from_cols_array(&[
+        m0, m1, m2, m3,
+        m4, m5, m6, m7,
+        m8, m9, m10, m11,
+        m12, m13, m14, m15,
+    ]);
+
+    let idx = state.view_matrices.len() as u32;
+    if idx >= 256 {
+        panic!("View matrix pool overflow! Maximum 256 view matrices per frame.");
+    }
+
+    state.view_matrices.push(matrix);
+    state.current_view_idx = idx;
+    idx
+}
+
+/// Push a custom projection matrix to the pool, returning its index
+///
+/// For advanced rendering techniques (custom projections, orthographic, etc.)
+/// Most users should use camera_set() instead.
+///
+/// # Arguments
+/// * `m0-m15` — Matrix elements in column-major order
+///
+/// # Returns
+/// The index of the newly added projection matrix (0-255)
+fn push_projection_matrix(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    m0: f32, m1: f32, m2: f32, m3: f32,
+    m4: f32, m5: f32, m6: f32, m7: f32,
+    m8: f32, m9: f32, m10: f32, m11: f32,
+    m12: f32, m13: f32, m14: f32, m15: f32,
+) -> u32 {
+    let state = &mut caller.data_mut().console;
+
+    let matrix = Mat4::from_cols_array(&[
+        m0, m1, m2, m3,
+        m4, m5, m6, m7,
+        m8, m9, m10, m11,
+        m12, m13, m14, m15,
+    ]);
+
+    let idx = state.proj_matrices.len() as u32;
+    if idx >= 256 {
+        panic!("Projection matrix pool overflow! Maximum 256 projection matrices per frame.");
+    }
+
+    state.proj_matrices.push(matrix);
+    state.current_proj_idx = idx;
+    idx
 }
 
 // ============================================================================
@@ -1050,6 +1158,17 @@ fn draw_mesh(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, ha
     let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
     let blend_mode = crate::graphics::BlendMode::from_u8(state.blend_mode);
 
+    // Add current transform to model matrix pool
+    let model_idx = state.add_model_matrix(state.current_transform)
+        .expect("Model matrix pool overflow");
+
+    // Pack matrix indices
+    let mvp_index = crate::graphics::MvpIndex::new(
+        model_idx,
+        state.current_view_idx,
+        state.current_proj_idx,
+    );
+
     // Record draw command directly
     state.render_pass.record_mesh(
         mesh_format,
@@ -1057,7 +1176,7 @@ fn draw_mesh(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, ha
         mesh_index_count,
         mesh_vertex_offset,
         mesh_index_offset,
-        state.current_transform,
+        mvp_index,
         state.color,
         state.depth_test,
         cull_mode,
@@ -1196,11 +1315,22 @@ fn draw_triangles(
     let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
     let blend_mode = crate::graphics::BlendMode::from_u8(state.blend_mode);
 
+    // Add current transform to model matrix pool
+    let model_idx = state.add_model_matrix(state.current_transform)
+        .expect("Model matrix pool overflow");
+
+    // Pack matrix indices
+    let mvp_index = crate::graphics::MvpIndex::new(
+        model_idx,
+        state.current_view_idx,
+        state.current_proj_idx,
+    );
+
     // Record draw command directly
     state.render_pass.record_triangles(
         format,
         &vertex_data,
-        state.current_transform,
+        mvp_index,
         state.color,
         state.depth_test,
         cull_mode,
@@ -1378,12 +1508,23 @@ fn draw_triangles_indexed(
     let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
     let blend_mode = crate::graphics::BlendMode::from_u8(state.blend_mode);
 
+    // Add current transform to model matrix pool
+    let model_idx = state.add_model_matrix(state.current_transform)
+        .expect("Model matrix pool overflow");
+
+    // Pack matrix indices
+    let mvp_index = crate::graphics::MvpIndex::new(
+        model_idx,
+        state.current_view_idx,
+        state.current_proj_idx,
+    );
+
     // Record draw command directly
     state.render_pass.record_triangles_indexed(
         format,
         &vertex_data,
         &index_data,
-        state.current_transform,
+        mvp_index,
         state.color,
         state.depth_test,
         cull_mode,
@@ -2846,6 +2987,15 @@ mod tests {
 
         // Simulate draw_mesh call logic (since we can't easily call the FFI function directly with WASM context)
         // We'll just manually record to render_pass to verify the recording works
+
+        // Add model matrix to pool and create MvpIndex
+        let model_idx = state.add_model_matrix(state.current_transform).unwrap();
+        let mvp_index = crate::graphics::MvpIndex::new(
+            model_idx,
+            state.current_view_idx,
+            state.current_proj_idx,
+        );
+
         let mesh = state.mesh_map.get(&1).unwrap();
         state.render_pass.record_mesh(
             mesh.format,
@@ -2853,7 +3003,7 @@ mod tests {
             mesh.index_count,
             mesh.vertex_offset,
             mesh.index_offset,
-            state.current_transform,
+            mvp_index,
             state.color,
             state.depth_test,
             crate::graphics::CullMode::from_u8(state.cull_mode),
@@ -2869,10 +3019,7 @@ mod tests {
 
         // Verify state was captured in VRPCommand
         let cmd = &state.render_pass.commands()[0];
-        assert_eq!(
-            cmd.transform,
-            Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0))
-        );
+        assert_eq!(cmd.mvp_index, mvp_index);
         assert_eq!(cmd.color, 0x00FF00FF);
         assert!(!cmd.depth_test);
         assert_eq!(cmd.cull_mode, crate::graphics::CullMode::Front);
@@ -2884,10 +3031,18 @@ mod tests {
     fn test_draw_command_triangles_format() {
         let mut state = ZFFIState::new();
 
+        // Add identity transform to model matrix pool
+        let model_idx = state.add_model_matrix(Mat4::IDENTITY).unwrap();
+        let mvp_index = crate::graphics::MvpIndex::new(
+            model_idx,
+            state.current_view_idx,
+            state.current_proj_idx,
+        );
+
         state.render_pass.record_triangles(
             7,                // POS_UV_COLOR_NORMAL
             &[1.0, 2.0, 3.0], // Minimal data
-            Mat4::IDENTITY,
+            mvp_index,
             0xFFFFFFFF,
             true,
             crate::graphics::CullMode::Back,

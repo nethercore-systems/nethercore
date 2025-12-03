@@ -860,8 +860,8 @@ impl App {
 
         // If in Playing mode, render game first
         if matches!(mode, AppMode::Playing { .. }) {
-            // Get camera matrices from game state
-            let (view_matrix, projection_matrix, clear_color) = {
+            // Get clear color from game state
+            let clear_color = {
                 if let Some(session) = &self.game_session {
                     if let Some(game) = session.runtime.game() {
                         let z_state = game.console_state();
@@ -871,30 +871,25 @@ impl App {
                         let clear_g = ((clear >> 16) & 0xFF) as f32 / 255.0;
                         let clear_b = ((clear >> 8) & 0xFF) as f32 / 255.0;
                         let clear_a = (clear & 0xFF) as f32 / 255.0;
-                        let aspect_ratio = graphics.width() as f32 / graphics.height() as f32;
-                        (
-                            z_state.camera.view_matrix(),
-                            z_state.camera.projection_matrix(aspect_ratio),
-                            [clear_r, clear_g, clear_b, clear_a],
-                        )
+                        [clear_r, clear_g, clear_b, clear_a]
                     } else {
-                        (
-                            glam::Mat4::IDENTITY,
-                            glam::Mat4::IDENTITY,
-                            [0.1, 0.1, 0.1, 1.0],
-                        )
+                        [0.1, 0.1, 0.1, 1.0]
                     }
                 } else {
-                    (
-                        glam::Mat4::IDENTITY,
-                        glam::Mat4::IDENTITY,
-                        [0.1, 0.1, 0.1, 1.0],
-                    )
+                    [0.1, 0.1, 0.1, 1.0]
                 }
             };
 
             // Render game frame
-            graphics.render_frame(&view, view_matrix, projection_matrix, clear_color);
+            if let Some(session) = &mut self.game_session {
+                if let Some(game) = session.runtime.game_mut() {
+                    let z_state = game.console_state_mut();
+                    graphics.render_frame(&view, z_state, clear_color);
+
+                    // Centralized per-frame cleanup after GPU upload completes
+                    z_state.clear_frame();
+                }
+            }
         }
 
         // Start egui frame

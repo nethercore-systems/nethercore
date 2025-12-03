@@ -1,6 +1,6 @@
 # Implementation Plan: Matrix Index Packing
 
-**Status:** Not Started
+**Status:** Completed
 **Estimated Effort:** 3-5 days
 **Priority:** High (implement first)
 **Related:** [matrix-index-packing.md](./matrix-index-packing.md), [rendering-architecture.md](./rendering-architecture.md)
@@ -15,9 +15,14 @@ Replace per-draw 64-byte Mat4 storage with 4-byte packed matrix indices, uploadi
 - **16× reduction** in transform storage (64 → 4 bytes per draw)
 - Zero per-draw matrix uploads
 - Scales to tens of thousands of instances
-- Cross-backend compatible
+- Cross-backend compatible (works on GPUs without push constants support)
 
-**Approach:** Push constants for matrix indices (4 bytes per draw, reserves space for future unified shading state index)
+**Approach:** Instance index indirection through MVP indices storage buffer. Each draw uses `instance_index` to fetch packed matrix indices from a storage buffer, then unpacks to get model/view/proj indices for accessing the matrix storage buffers. This approach:
+- Works on all hardware (no push constants required)
+- Adds only one additional indirection (instance_id → MVP indices buffer → matrix buffers)
+- Preserves all memory and bandwidth benefits of the packing optimization
+
+**Implementation Note:** This document originally described using push constants for matrix indices (16 bytes per draw). However, during implementation we discovered the target GPU doesn't support push constants (limit = 0 bytes). We pivoted to using instance indices with an MVP indices storage buffer instead, which provides the same benefits while maintaining broader hardware compatibility. See the actual implementation in the shader files for the correct approach.
 
 ---
 
