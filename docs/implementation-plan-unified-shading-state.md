@@ -1,9 +1,9 @@
 # Implementation Plan: Unified Shading State
 
 **Status:** Not Started (implement after matrix packing)
-**Estimated Effort:** 5-7 days
+**Estimated Effort:** 4-6 days
 **Priority:** Medium (implement second)
-**Depends On:** Matrix index packing (recommended)
+**Depends On:** Matrix index packing (required - uses push constants slot)
 **Related:** [proposed-render-architecture.md](./proposed-render-architecture.md), [rendering-architecture.md](./rendering-architecture.md)
 
 ---
@@ -18,6 +18,8 @@ Quantize all per-draw material state into a hashable POD structure (`PackedUnifi
 - Better command sorting by material
 - Reduced VRPCommand size (remove separate state fields)
 - All per-draw state packaged together (self-contained)
+
+**Approach:** Storage buffer + push constants (integrates with matrix packing's existing push constant infrastructure)
 
 **Complexity:** High - touches FFI, command recording, shaders, and GPU upload
 
@@ -257,6 +259,10 @@ impl ShadingStateCache {
 
         // Allocate new handle
         let handle = UnifiedShadingStateHandle(self.states.len() as u32);
+        if handle.0 >= 65536 {
+            panic!("Shading state cache overflow! Maximum 65,536 unique states per frame.");
+        }
+
         self.states.push(state);
         self.cache.insert(state, handle);
         self.dirty = true;
@@ -307,7 +313,7 @@ impl ShadingStateCache {
         self.states.get(handle.0 as usize)
     }
 
-    /// Clear cache (optional, for per-frame reset)
+    /// Clear cache (called per frame)
     pub fn clear(&mut self) {
         self.cache.clear();
         self.states.clear();
@@ -372,19 +378,18 @@ pub struct VRPCommand {
     // NEW: Single handle to interned shading state
     pub shading_state_handle: UnifiedShadingStateHandle,
 
+    // Keep these for pipeline selection (not in shading state)
+    pub depth_test: bool,
+    pub cull_mode: CullMode,
+
     // REMOVED (now in PackedUnifiedShadingState):
     // pub color: u32,
-    // pub depth_test: bool,
-    // pub cull_mode: CullMode,
     // pub blend_mode: BlendMode,
     // pub matcap_blend_modes: [MatcapBlendMode; 4],
 }
 ```
 
-**Note:** `depth_test` and `cull_mode` may still be needed for pipeline selection. Options:
-1. Keep them separate (for pipeline cache key)
-2. Extract from shading state during render
-3. Add to pipeline key extraction logic
+**Note:** `depth_test` and `cull_mode` affect pipeline selection, so they remain separate.
 
 #### 3.2: Update VirtualRenderPass Methods
 
@@ -396,11 +401,35 @@ pub fn record_triangles(
     mvp_index: MvpIndex,
     texture_slots: [TextureHandle; 4],
     shading_state_handle: UnifiedShadingStateHandle,  // NEW
-    depth_test: bool,    // Keep for pipeline key (or extract later)
-    cull_mode: CullMode, // Keep for pipeline key (or extract later)
+    depth_test: bool,    // Keep for pipeline key
+    cull_mode: CullMode, // Keep for pipeline key
 ) {
-    // ... implementation
+    let format_idx = format as usize;
+    let stride = vertex_stride(format) as usize;
+    let vertex_count = (vertex_data.len() * 4) / stride;
+    let base_vertex = self.vertex_counts[format_idx];
+
+    // Write vertex data
+    let byte_data = bytemuck::cast_slice(vertex_data);
+    self.vertex_data[format_idx].extend_from_slice(byte_data);
+    self.vertex_counts[format_idx] += vertex_count as u32;
+
+    self.commands.push(VRPCommand {
+        format,
+        mvp_index,
+        vertex_count: vertex_count as u32,
+        index_count: 0,
+        base_vertex,
+        first_index: 0,
+        buffer_source: BufferSource::Immediate,
+        texture_slots,
+        shading_state_handle,
+        depth_test,
+        cull_mode,
+    });
 }
+
+// Similar updates for record_triangles_indexed, record_mesh, etc.
 ```
 
 ---
@@ -430,16 +459,13 @@ pub struct ZFFIState {
     pub color: u32,
     pub matcap_blend_modes: [MatcapBlendMode; 4],
 
-    // Sky and lights (existing, already tracked)
+    // Sky and lights (already exist, no changes needed)
     pub sky: Sky,
     pub lights: [Light; 4],
-
-    // NEW: Shading state cache reference (or access via ZGraphics)
-    // (Will access via ZGraphics during render, not stored in ZFFIState)
 }
 
-impl ZFFIState {
-    pub fn new(...) -> Self {
+impl Default for ZFFIState {
+    fn default() -> Self {
         Self {
             // Existing initialization...
             metallic: 0.0,
@@ -450,7 +476,9 @@ impl ZFFIState {
             // sky, lights already initialized
         }
     }
+}
 
+impl ZFFIState {
     /// Pack current shading state for interning
     pub fn pack_current_shading_state(&self) -> PackedUnifiedShadingState {
         PackedUnifiedShadingState::from_render_state(
@@ -494,31 +522,16 @@ fn material_emissive(mut caller: Caller, value: f32) {
 // Sky and light setters update state.sky, state.lights (no changes needed)
 ```
 
-#### 4.3: Update Draw Commands to Intern State
+#### 4.3: Update Draw Commands to Defer Shading State Packing
 
-**Challenge:** FFI functions don't have direct access to `ZGraphics::shading_state_cache`.
+**Challenge:** FFI functions don't have access to `ZGraphics::shading_state_cache` for interning.
 
-**Solution:** Pass shading state to command recording, intern during `process_draw_commands()`.
-
-**Updated approach:**
-
-1. **Record commands with unquantized state** (temporary structure)
-2. **Intern during `process_draw_commands()`** when we have access to ZGraphics
+**Solution:** Store unquantized state in VRPCommand temporarily, intern during `process_draw_commands()`.
 
 **File:** `emberware-z/src/graphics/command_buffer.rs`
 
 ```rust
-// Temporary: Store unquantized state in VRPCommand during recording
-pub struct VRPCommand {
-    // ... existing fields
-
-    // Temporary: Store unquantized state during FFI recording
-    pub temp_shading_state: Option<UnquantizedShadingState>,
-
-    // Final: Interned handle (set during process_draw_commands)
-    pub shading_state_handle: Option<UnifiedShadingStateHandle>,
-}
-
+/// Temporary storage for unquantized shading state during FFI recording
 pub struct UnquantizedShadingState {
     pub color: u32,
     pub metallic: f32,
@@ -528,12 +541,27 @@ pub struct UnquantizedShadingState {
     pub sky: Sky,
     pub lights: [Light; 4],
 }
+
+pub struct VRPCommand {
+    // ... existing fields
+
+    // Temporary: Store unquantized state during FFI recording
+    pub temp_shading_state: Option<UnquantizedShadingState>,
+
+    // Final: Interned handle (set during process_draw_commands)
+    pub shading_state_handle: UnifiedShadingStateHandle,
+}
 ```
 
 **File:** `emberware-z/src/ffi/mod.rs`
 
 ```rust
-fn draw_triangles(...) -> Result<(), Trap> {
+fn draw_triangles(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    format: u32,
+    ptr: u32,
+    vertex_count: u32,
+) -> Result<(), Trap> {
     let state = &mut caller.data_mut().console;
 
     // ... existing vertex data copy, matrix index packing
@@ -582,11 +610,11 @@ pub fn process_draw_commands(&mut self, z_state: &mut ZFFIState) {
                 &temp_state.sky,
                 &temp_state.lights,
             );
-            cmd.shading_state_handle = Some(self.shading_state_cache.intern(packed));
+            cmd.shading_state_handle = self.shading_state_cache.intern(packed);
         }
     }
 
-    // Process deferred commands (billboards, sprites)
+    // Process deferred commands (billboards, sprites, text)
     // ... (also intern shading states for these)
 }
 ```
@@ -628,7 +656,7 @@ pub fn render_frame(&mut self, ...) -> Result<()> {
 ```rust
 fn sort_commands(&mut self) {
     self.command_buffer.commands_mut().sort_unstable_by_key(|cmd| {
-        let shading_state = cmd.shading_state_handle.unwrap_or(UnifiedShadingStateHandle::INVALID);
+        let shading_state = cmd.shading_state_handle;
         let packed_state = self.shading_state_cache.get(shading_state);
 
         // Extract blend mode for pipeline key
@@ -649,23 +677,27 @@ fn sort_commands(&mut self) {
 }
 ```
 
-#### 5.3: Track Bound Shading State
+#### 5.3: Update Push Constants to Include Shading State Index
+
+**File:** `emberware-z/src/graphics/mod.rs` (in render pass loop)
 
 ```rust
-let mut bound_shading_state: Option<UnifiedShadingStateHandle> = None;
-
 for cmd in self.command_buffer.commands() {
-    // Extract shading state
-    let shading_state_handle = cmd.shading_state_handle.unwrap();
+    // ... pipeline and bind group setup
 
-    // Bind shading state buffer (only if changed)
-    if bound_shading_state != Some(shading_state_handle) {
-        // Note: Shading state is in storage buffer at binding X
-        // Actual binding happens via bind group 0
-        // (No per-draw binding needed if using storage buffer indexing)
-
-        bound_shading_state = Some(shading_state_handle);
-    }
+    // Set push constants with matrix + shading indices
+    let (model_idx, view_idx, proj_idx) = cmd.mvp_index.unpack();
+    let push_constants = [
+        model_idx,
+        view_idx,
+        proj_idx,
+        cmd.shading_state_handle.0,  // NEW: shading state index
+    ];
+    render_pass.set_push_constants(
+        wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,  // NOTE: Fragment needs it too!
+        0,
+        bytemuck::cast_slice(&push_constants),
+    );
 
     // ... rest of render pass execution
 }
@@ -688,123 +720,71 @@ for cmd in self.command_buffer.commands() {
 #### 6.1: Add Shading State Buffer Binding
 
 ```wgsl
-// Packed structures (must match Rust layout)
+// Push constants (updated from matrix packing)
+struct PushConstants {
+    model_index: u32,
+    view_index: u32,
+    proj_index: u32,
+    shading_state_index: u32,  // NEW: for unified shading state
+}
+
+var<push_constant> pc: PushConstants;
+
+// Packed structures (must match Rust layout EXACTLY)
 struct PackedSky {
-    horizon_color: vec4<f32>,           // RGBA8 unpacked by GPU
-    zenith_color: vec4<f32>,
-    sun_direction: vec4<f32>,           // snorm16 unpacked
-    sun_color_and_sharpness: vec4<f32>,
+    horizon_color: u32,           // Will be unpacked to vec4<f32>
+    zenith_color: u32,
+    sun_direction_x: i32,         // snorm16 (low 16 bits)
+    sun_direction_yz: i32,        // snorm16 (x: y, y: z)
+    sun_color_and_sharpness: u32,
 }
 
 struct PackedLight {
-    direction: vec4<f32>,               // snorm16 unpacked
-    color_and_intensity: vec4<f32>,
+    direction_xy: i32,            // snorm16 (x: x, y: y)
+    direction_z_enabled: i32,     // snorm16 (x: z, y: enabled)
+    color_and_intensity: u32,
 }
 
 struct UnifiedShadingState {
-    metallic: f32,          // u8 unpacked to f32 (0-1)
-    roughness: f32,
-    emissive: f32,
-    _pad0: f32,
+    // First 4 bytes: metallic, roughness, emissive, pad
+    params_packed: u32,
 
-    color: vec4<f32>,       // RGBA8 unpacked
-    blend_modes: vec4<u32>, // 4× u8 as u32 components
+    color_rgba8: u32,
+    blend_modes: u32,
+    _pad: u32,  // Alignment to 16 bytes
 
-    sky: PackedSky,
-    lights: array<PackedLight, 4>,
+    // Sky (16 bytes)
+    sky_horizon: u32,
+    sky_zenith: u32,
+    sky_sun_dir: vec2<i32>,
+    sky_sun_color: u32,
+    _pad_sky: u32,
+
+    // Lights (64 bytes = 16 bytes × 4)
+    light0_dir: vec2<i32>,
+    light0_color: u32,
+    _pad_l0: u32,
+
+    light1_dir: vec2<i32>,
+    light1_color: u32,
+    _pad_l1: u32,
+
+    light2_dir: vec2<i32>,
+    light2_color: u32,
+    _pad_l2: u32,
+
+    light3_dir: vec2<i32>,
+    light3_color: u32,
+    _pad_l3: u32,
 }
 
-// Shading state buffer (group 0, binding X)
-@group(0) @binding(X) var<storage, read> shading_states: array<UnifiedShadingState>;
+// Shading state buffer (group 0, binding 6 - after bones at binding 5)
+@group(0) @binding(6) var<storage, read> shading_states: array<UnifiedShadingState>;
 ```
 
-#### 6.2: Update Vertex Shader
+#### 6.2: Add Unpacking Helpers
 
 ```wgsl
-struct VertexInput {
-    @location(0) position: vec3<f32>,
-    // ... other vertex attributes
-    @location(10) mvp_index: u32,              // From matrix packing
-    @location(11) shading_state_index: u32,    // NEW
-}
-
-struct VertexOutput {
-    @builtin(position) position: vec4<f32>,
-    @location(0) @interpolate(flat) shading_state_index: u32,  // Pass to fragment
-    // ... other outputs
-}
-
-@vertex
-fn vs(in: VertexInput) -> VertexOutput {
-    // Unpack MVP (from matrix packing refactor)
-    let indices = unpack_mvp(in.mvp_index);
-    let model = model_matrices[indices.x];
-    let view = view_matrices[indices.y];
-    let proj = proj_matrices[indices.z];
-
-    // Transform vertex
-    let world_pos = model * vec4(in.position, 1.0);
-    let clip_pos = proj * view * world_pos;
-
-    var out: VertexOutput;
-    out.position = clip_pos;
-    out.shading_state_index = in.shading_state_index;  // Pass through
-    // ... other outputs
-
-    return out;
-}
-```
-
-#### 6.3: Update Fragment Shader
-
-```wgsl
-@fragment
-fn fs(in: VertexOutput) -> @location(0) vec4<f32> {
-    // Fetch shading state for this draw
-    let state = shading_states[in.shading_state_index];
-
-    // Use state values
-    let base_color = state.color;
-    let metallic = state.metallic;
-    let roughness = state.roughness;
-    let emissive = state.emissive;
-
-    // Sample texture (if UV present)
-    //FS_SAMPLE_ALBEDO
-
-    // Apply color tint
-    var albedo = base_color;
-    //FS_APPLY_TEXTURE
-
-    // Lighting (use state.lights, state.sky)
-    let light0 = state.lights[0];
-    let light_dir = normalize(light0.direction.xyz);
-    let light_color = light0.color_and_intensity.rgb;
-    let light_intensity = light0.color_and_intensity.a;
-
-    // ... rest of fragment shader (lighting, PBR, etc.)
-
-    return final_color;
-}
-```
-
-#### 6.4: Add Unpacking Helpers
-
-```wgsl
-// Convert u8 (0-255) to f32 (0-1)
-fn unpack_u8_to_f32(value: u32) -> f32 {
-    return f32(value) / 255.0;
-}
-
-// Convert snorm16 to f32 (-1 to 1)
-fn unpack_snorm16(packed: vec4<i32>) -> vec3<f32> {
-    return vec3<f32>(
-        f32(packed.x) / 32767.0,
-        f32(packed.y) / 32767.0,
-        f32(packed.z) / 32767.0,
-    );
-}
-
 // Unpack RGBA8 from u32
 fn unpack_rgba8(packed: u32) -> vec4<f32> {
     let r = f32((packed >> 24u) & 0xFFu) / 255.0;
@@ -813,20 +793,172 @@ fn unpack_rgba8(packed: u32) -> vec4<f32> {
     let a = f32(packed & 0xFFu) / 255.0;
     return vec4<f32>(r, g, b, a);
 }
+
+// Unpack RGB8 from u32 (alpha is something else)
+fn unpack_rgb8(packed: u32) -> vec3<f32> {
+    let r = f32((packed >> 24u) & 0xFFu) / 255.0;
+    let g = f32((packed >> 16u) & 0xFFu) / 255.0;
+    let b = f32((packed >> 8u) & 0xFFu) / 255.0;
+    return vec3<f32>(r, g, b);
+}
+
+// Extract alpha channel (used for scalar values)
+fn unpack_alpha(packed: u32) -> f32 {
+    return f32(packed & 0xFFu) / 255.0;
+}
+
+// Convert snorm16 to f32 (-1 to 1)
+fn unpack_snorm16(packed: i32, which: u32) -> f32 {
+    let value = select(
+        (packed & 0xFFFF),        // Low 16 bits (which == 0)
+        (packed >> 16) & 0xFFFF,  // High 16 bits (which == 1)
+        which == 1u
+    );
+    // Sign extend from 16 bits
+    let signed = select(value, value | 0xFFFF0000, (value & 0x8000u) != 0u);
+    return f32(signed) / 32767.0;
+}
+
+// Unpack vec3 from two i32s
+fn unpack_snorm16_vec3(xy: i32, z_w: i32) -> vec3<f32> {
+    return vec3<f32>(
+        unpack_snorm16(xy, 0u),
+        unpack_snorm16(xy, 1u),
+        unpack_snorm16(z_w, 0u)
+    );
+}
+
+// Check if light is enabled (w component of direction)
+fn is_light_enabled(z_enabled: i32) -> bool {
+    let enabled = unpack_snorm16(z_enabled, 1u);
+    return enabled > 0.0;
+}
 ```
+
+#### 6.3: Update Fragment Shader
+
+```wgsl
+@fragment
+fn fs(in: VertexOutput) -> @location(0) vec4<f32> {
+    // Fetch shading state for this draw (via push constants)
+    let state = shading_states[pc.shading_state_index];
+
+    // Unpack PBR params
+    let params = state.params_packed;
+    let metallic = f32((params >> 24u) & 0xFFu) / 255.0;
+    let roughness = f32((params >> 16u) & 0xFFu) / 255.0;
+    let emissive = f32((params >> 8u) & 0xFFu) / 255.0;
+
+    // Unpack base color
+    let base_color = unpack_rgba8(state.color_rgba8);
+
+    // Sample texture (if UV present)
+    //FS_SAMPLE_ALBEDO
+
+    // Apply color tint
+    var albedo = base_color;
+    //FS_APPLY_TEXTURE
+
+    // Unpack sky
+    let sky_horizon = unpack_rgba8(state.sky_horizon);
+    let sky_zenith = unpack_rgba8(state.sky_zenith);
+    let sky_sun_dir = normalize(unpack_snorm16_vec3(state.sky_sun_dir.x, state.sky_sun_dir.y));
+    let sky_sun_color = unpack_rgb8(state.sky_sun_color);
+    let sky_sun_sharpness = unpack_alpha(state.sky_sun_color);
+
+    // Unpack lights
+    let light0_dir = unpack_snorm16_vec3(state.light0_dir.x, state.light0_dir.y);
+    let light0_enabled = is_light_enabled(state.light0_dir.y);
+    let light0_color = unpack_rgb8(state.light0_color);
+    let light0_intensity = unpack_alpha(state.light0_color);
+
+    // ... similar for light1, light2, light3
+
+    // Lighting calculations (use unpacked values)
+    //FS_LIGHTING
+
+    return final_color;
+}
+```
+
+**Note:** The exact unpacking logic must match the packing in Rust EXACTLY. Test thoroughly!
 
 ---
 
-## Phase 7: Update Pipeline Extraction
+## Phase 7: Update Bind Group Layouts
 
 **Estimated Time:** 2-3 hours
 
 ### Files to Modify
 - `emberware-z/src/graphics/pipeline.rs`
+- `emberware-z/src/graphics/mod.rs`
 
 ### Changes
 
-#### 7.1: Extract Pipeline State from Shading State
+#### 7.1: Add Shading State Buffer to Bind Group 0
+
+**File:** `emberware-z/src/graphics/pipeline.rs`
+
+```rust
+let bind_group_layout_0 = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+    label: Some("Frame Uniforms"),
+    entries: &[
+        // Bindings 0-2: Matrix storage buffers (from matrix packing)
+        // Binding 3: Sky uniforms
+        // Binding 4: Material uniforms
+        // Binding 5: Bone buffer
+
+        // Binding 6: Shading states (NEW)
+        BindGroupLayoutEntry {
+            binding: 6,
+            visibility: ShaderStages::FRAGMENT,  // Fragment shader reads this
+            ty: BindingType::Buffer {
+                ty: BufferBindingType::Storage { read_only: true },
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        },
+    ],
+});
+```
+
+#### 7.2: Create Bind Group with Shading State Buffer
+
+**File:** `emberware-z/src/graphics/mod.rs`
+
+```rust
+fn create_frame_bind_group(&self) -> wgpu::BindGroup {
+    self.device.create_bind_group(&BindGroupDescriptor {
+        label: Some("Frame Uniforms"),
+        layout: &self.frame_bind_group_layout,
+        entries: &[
+            // Bindings 0-5: Existing (matrices, sky, material, lights, bones)
+            // ...
+
+            // Binding 6: Shading states
+            BindGroupEntry {
+                binding: 6,
+                resource: self.shading_state_cache.buffer().as_entire_binding(),
+            },
+        ],
+    })
+}
+```
+
+---
+
+## Phase 8: Update Pipeline Extraction
+
+**Estimated Time:** 2-3 hours
+
+### Files to Modify
+- `emberware-z/src/graphics/pipeline.rs`
+- `emberware-z/src/graphics/mod.rs`
+
+### Changes
+
+#### 8.1: Extract Pipeline State from Shading State
 
 ```rust
 fn extract_pipeline_key(
@@ -836,7 +968,7 @@ fn extract_pipeline_key(
 ) -> PipelineKey {
     // Get actual shading state from cache
     let shading_state = shading_cache
-        .get(cmd.shading_state_handle.unwrap())
+        .get(cmd.shading_state_handle)
         .expect("Shading state handle not found in cache");
 
     // Extract blend mode from packed state
@@ -846,15 +978,15 @@ fn extract_pipeline_key(
         render_mode,
         vertex_format: cmd.format,
         blend_mode,
-        depth_test: cmd.depth_test,  // Still separate, or extract from state
-        cull_mode: cmd.cull_mode,    // Still separate, or extract from state
+        depth_test: cmd.depth_test,
+        cull_mode: cmd.cull_mode,
     }
 }
 ```
 
 ---
 
-## Phase 8: Testing and Validation
+## Phase 9: Testing and Validation
 
 **Estimated Time:** 6-8 hours
 
@@ -885,18 +1017,19 @@ fn extract_pipeline_key(
    - Verify shaders access state correctly
    - Visual: Each mode renders correctly
 
-6. **Cache Persistence**
+6. **Cache Efficiency**
    - Draw same materials across multiple frames
-   - Verify cache doesn't clear unnecessarily (or does, if designed that way)
-   - Performance: No redundant uploads
+   - Verify cache clears/rebuilds each frame
+   - Verify high hit rate for repeated materials
 
 ### Validation Checklist
 
-- [ ] Visual: All test cases match old renderer (within quantization tolerance)
-- [ ] Performance: Measure reduction in uniform uploads
-- [ ] Memory: Shading state cache size is reasonable (<10KB typical game)
+- [ ] Visual: All test cases match pre-refactor renderer (within quantization tolerance)
+- [ ] Performance: Measure reduction in state changes
+- [ ] Memory: VRPCommand size reduced significantly
 - [ ] Cache efficiency: High hit rate for repeated materials
 - [ ] Quantization: No visible artifacts from u8/snorm16 precision
+- [ ] Push constants: Verify 16-byte total (4 × u32)
 
 ### Performance Metrics
 
@@ -912,7 +1045,7 @@ tracing::debug!(
 ```
 
 **Expected improvements:**
-- VRPCommand size: ~120 bytes → ~60 bytes (50% reduction)
+- VRPCommand size: ~120 bytes → ~40 bytes (67% reduction)
 - Material uploads: Reduced by deduplication ratio (depends on game)
 - Command sorting: Better batching by material handle
 
@@ -920,28 +1053,22 @@ tracing::debug!(
 
 ## Rollout Strategy
 
-### 1. Feature Flag
-
-```rust
-pub struct ZGraphics {
-    use_unified_shading_state: bool,  // Toggle during testing
-}
-```
-
-### 2. Incremental Deployment
+### 1. Incremental Deployment
 
 1. **Day 1-2:** Phases 1-3 (structures, cache, VRPCommand)
 2. **Day 3-4:** Phase 4 (FFI layer, state quantization)
-3. **Day 5:** Phase 5 (render pass execution)
-4. **Day 6:** Phase 6 (shaders)
-5. **Day 7:** Phases 7-8 (pipeline extraction, testing)
+3. **Day 5:** Phases 5, 7-8 (render execution, bind groups, pipeline)
+4. **Day 6:** Phase 6 (shaders - most complex)
+5. **Day 7:** Phase 9 (testing and validation)
 
-### 3. Fallback Plan
+### 2. Breaking Changes
 
-If quantization causes visual issues:
-- Use `u16` instead of `u8` for critical params (metallic, roughness)
-- Use `f16` instead of `snorm16` for directions (if supported)
-- Keep high-precision fallback path for quality-sensitive draws
+This refactor includes breaking changes:
+- VRPCommand structure changes (depends on matrix packing)
+- Shader binding layout changes (new binding 6)
+- Push constants usage (VERTEX + FRAGMENT stages)
+
+**Impact:** Must implement after matrix packing. All pipelines regenerated. Acceptable pre-release.
 
 ---
 
@@ -949,20 +1076,20 @@ If quantization causes visual issues:
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|------------|--------|------------|
-| Quantization artifacts | Medium | Medium | Visual testing, adjust precision (u16/f16) |
-| Cache bloat | Low | Medium | Monitor size, implement LRU eviction |
-| Complex debugging | High | Medium | Add debug views, unpacking helpers |
-| Shader complexity | Medium | Low | Thorough review, extensive testing |
+| Quantization artifacts | Medium | Medium | Visual testing, adjust precision if needed |
+| Shader unpacking bugs | High | High | Thorough testing, exact Rust/WGSL layout matching |
+| Cache bloat | Low | Medium | Monitor size, typical games have few unique materials |
+| Complex debugging | High | Medium | Add debug views, unpacking validation tests |
 | Performance regression | Low | High | Benchmark before/after, profile |
 
 ---
 
 ## Success Criteria
 
-- ✅ Visual quality matches old renderer (within quantization tolerance)
-- ✅ VRPCommand size reduced by ~50%
-- ✅ Material uploads reduced (measure actual reduction in real games)
-- ✅ Better command batching (fewer pipeline/texture changes)
+- ✅ Visual quality matches pre-refactor (within quantization tolerance)
+- ✅ VRPCommand size reduced by ~67%
+- ✅ Material state uploads reduced (measure deduplication ratio)
+- ✅ Better command batching (fewer state changes)
 - ✅ No crashes or glitches
 - ✅ Shading state cache is efficient (high hit rate)
 
@@ -970,10 +1097,34 @@ If quantization causes visual issues:
 
 ## Follow-Up Work
 
-1. **WebGL fallback** - If storage buffers unsupported, use per-draw uniforms
-2. **Cache eviction** - LRU policy if cache grows too large
+1. **Cache persistence** - Consider keeping cache across frames for static materials
+2. **Quantization tuning** - Adjust precision based on visual testing (u16/f16 if needed)
 3. **Shader optimization** - Profile GPU performance after refactor
-4. **Quantization tuning** - Adjust precision based on visual testing
+4. **WebGL fallback** - TODO: Per-draw uniforms if storage buffers unsupported
+
+---
+
+## Integration with Matrix Packing
+
+This refactor **requires** matrix packing to be implemented first, as it:
+- Uses the 4th push constant slot reserved by matrix packing
+- Depends on VRPCommand having `mvp_index` instead of `transform`
+- Leverages the same push constant infrastructure
+
+**Push constants structure (shared):**
+```wgsl
+struct PushConstants {
+    model_index: u32,           // Matrix packing
+    view_index: u32,            // Matrix packing
+    proj_index: u32,            // Matrix packing
+    shading_state_index: u32,   // Unified shading state (THIS refactor)
+}
+```
+
+**Key difference from original plan:**
+- ✅ Uses push constants (simpler than vertex attributes/instance buffers)
+- ✅ No per-draw instance buffer management
+- ✅ All per-draw indices in one place (push constants)
 
 ---
 

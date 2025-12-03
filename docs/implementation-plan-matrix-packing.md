@@ -15,9 +15,9 @@ Replace per-draw 64-byte Mat4 storage with 4-byte packed matrix indices, uploadi
 - **16× reduction** in transform storage (64 → 4 bytes per draw)
 - Zero per-draw matrix uploads
 - Scales to tens of thousands of instances
-- Cross-backend compatible (no push constants needed)
+- Cross-backend compatible
 
-**Approach:** Instance buffer (Option A) for maximum compatibility
+**Approach:** Push constants for matrix indices (4 bytes per draw, reserves space for future unified shading state index)
 
 ---
 
@@ -94,29 +94,40 @@ pub struct ZFFIState {
     pub current_proj_idx: u32,
 }
 
-impl ZFFIState {
-    pub fn new(...) -> Self {
+impl Default for ZFFIState {
+    fn default() -> Self {
+        let mut view_matrices = Vec::with_capacity(4);
+        let mut proj_matrices = Vec::with_capacity(4);
+
+        // Default view: camera at (0, 0, 5) looking at origin
+        view_matrices.push(Mat4::look_at_rh(Vec3::new(0.0, 0.0, 5.0), Vec3::ZERO, Vec3::Y));
+
+        // Default projection: 60° FOV, 16:9 aspect
+        proj_matrices.push(Mat4::perspective_rh(60f32.to_radians(), 16.0/9.0, 0.1, 1000.0));
+
         Self {
             // Existing initialization...
 
             model_matrices: Vec::with_capacity(256),
-            view_matrices: Vec::with_capacity(4),
-            proj_matrices: Vec::with_capacity(4),
+            view_matrices,
+            proj_matrices,
             current_model_idx: 0,
             current_view_idx: 0,
             current_proj_idx: 0,
         }
     }
+}
 
+impl ZFFIState {
     /// Add a model matrix to the pool and return its index
-    pub fn add_model_matrix(&mut self, matrix: Mat4) -> u32 {
+    pub fn add_model_matrix(&mut self, matrix: Mat4) -> Option<u32> {
         let idx = self.model_matrices.len() as u32;
         if idx >= 65536 {
-            tracing::warn!("Model matrix pool overflow (max 65536)");
-            return 65535; // Return max valid index
+            // Panic in all builds - this is a programming error
+            panic!("Model matrix pool overflow! Maximum 65,536 matrices per frame.");
         }
         self.model_matrices.push(matrix);
-        idx
+        Some(idx)
     }
 
     /// Pack current matrix indices into MvpIndex
@@ -129,11 +140,15 @@ impl ZFFIState {
     }
 
     /// Reset matrix pools at start of frame
-    pub fn reset_matrix_pools(&mut self) {
+    pub fn clear_frame(&mut self) {
+        self.render_pass.reset();
         self.model_matrices.clear();
-        // View and proj matrices typically persist, but clear if needed
-        // self.view_matrices.clear();
-        // self.proj_matrices.clear();
+        // View and proj typically have defaults and persist, but we keep them
+        // They will be repopulated by camera_set or push_*_matrix calls
+        self.deferred_commands.clear();
+        self.pending_textures.clear();
+        self.pending_meshes.clear();
+        self.audio_commands.clear();
     }
 }
 ```
@@ -213,6 +228,42 @@ impl ZGraphics {
         });
         self.model_matrix_capacity = new_capacity;
     }
+
+    /// Ensure view matrix buffer has sufficient capacity
+    fn ensure_view_buffer_capacity(&mut self, count: usize) {
+        if count <= self.view_matrix_capacity {
+            return;
+        }
+
+        let new_capacity = (count * 2).next_power_of_two();
+        tracing::debug!("Growing view matrix buffer: {} → {}", self.view_matrix_capacity, new_capacity);
+
+        self.view_matrix_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("View Matrices"),
+            size: (new_capacity * std::mem::size_of::<Mat4>()) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        self.view_matrix_capacity = new_capacity;
+    }
+
+    /// Ensure projection matrix buffer has sufficient capacity
+    fn ensure_proj_buffer_capacity(&mut self, count: usize) {
+        if count <= self.proj_matrix_capacity {
+            return;
+        }
+
+        let new_capacity = (count * 2).next_power_of_two();
+        tracing::debug!("Growing projection matrix buffer: {} → {}", self.proj_matrix_capacity, new_capacity);
+
+        self.proj_matrix_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Projection Matrices"),
+            size: (new_capacity * std::mem::size_of::<Mat4>()) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        self.proj_matrix_capacity = new_capacity;
+    }
 }
 ```
 
@@ -234,7 +285,7 @@ impl ZGraphics {
 ```rust
 pub struct VRPCommand {
     pub format: u8,
-    pub mvp_index: MvpIndex,         // New: 4 bytes
+    pub mvp_index: MvpIndex,         // New: 4 bytes (packed indices)
     // REMOVED: pub transform: Mat4, // Old: 64 bytes
     pub vertex_count: u32,
     pub index_count: u32,
@@ -324,13 +375,13 @@ fn camera_set(
         Vec3::Y,
     );
 
-    // Update view matrix pool
+    // Update view matrix pool (always index 0 for convenience)
     if state.view_matrices.is_empty() {
         state.view_matrices.push(view);
-        state.current_view_idx = 0;
     } else {
         state.view_matrices[0] = view;
     }
+    state.current_view_idx = 0;
 
     // Build projection matrix
     let aspect = state.viewport_width as f32 / state.viewport_height as f32;
@@ -341,17 +392,97 @@ fn camera_set(
         far,
     );
 
-    // Update projection matrix pool
+    // Update projection matrix pool (always index 0 for convenience)
     if state.proj_matrices.is_empty() {
         state.proj_matrices.push(proj);
-        state.current_proj_idx = 0;
     } else {
         state.proj_matrices[0] = proj;
     }
+    state.current_proj_idx = 0;
 }
 ```
 
-#### 3.2: Update Draw Commands
+#### 3.2: Add Advanced Matrix Functions (NEW)
+
+**For advanced users who want direct control over view/projection matrices:**
+
+```rust
+/// Push a custom view matrix to the pool, returning its index
+///
+/// For advanced rendering techniques (multiple cameras, render-to-texture, etc.)
+/// Most users should use camera_set() instead.
+fn push_view_matrix(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    m0: f32, m1: f32, m2: f32, m3: f32,
+    m4: f32, m5: f32, m6: f32, m7: f32,
+    m8: f32, m9: f32, m10: f32, m11: f32,
+    m12: f32, m13: f32, m14: f32, m15: f32,
+) -> u32 {
+    let state = &mut caller.data_mut().console;
+
+    let matrix = Mat4::from_cols_array(&[
+        m0, m1, m2, m3,
+        m4, m5, m6, m7,
+        m8, m9, m10, m11,
+        m12, m13, m14, m15,
+    ]);
+
+    let idx = state.view_matrices.len() as u32;
+    if idx >= 256 {
+        panic!("View matrix pool overflow! Maximum 256 view matrices per frame.");
+    }
+
+    state.view_matrices.push(matrix);
+    state.current_view_idx = idx;
+    idx
+}
+
+/// Push a custom projection matrix to the pool, returning its index
+///
+/// For advanced rendering techniques (custom projections, orthographic, etc.)
+/// Most users should use camera_set() instead.
+fn push_projection_matrix(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    m0: f32, m1: f32, m2: f32, m3: f32,
+    m4: f32, m5: f32, m6: f32, m7: f32,
+    m8: f32, m9: f32, m10: f32, m11: f32,
+    m12: f32, m13: f32, m14: f32, m15: f32,
+) -> u32 {
+    let state = &mut caller.data_mut().console;
+
+    let matrix = Mat4::from_cols_array(&[
+        m0, m1, m2, m3,
+        m4, m5, m6, m7,
+        m8, m9, m10, m11,
+        m12, m13, m14, m15,
+    ]);
+
+    let idx = state.proj_matrices.len() as u32;
+    if idx >= 256 {
+        panic!("Projection matrix pool overflow! Maximum 256 projection matrices per frame.");
+    }
+
+    state.proj_matrices.push(matrix);
+    state.current_proj_idx = idx;
+    idx
+}
+```
+
+**Register new functions:**
+
+```rust
+pub fn register_z_ffi(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
+    // ... existing registrations
+
+    // Advanced matrix functions
+    linker.func_wrap("env", "push_view_matrix", push_view_matrix)?;
+    linker.func_wrap("env", "push_projection_matrix", push_projection_matrix)?;
+
+    // ... rest
+}
+```
+
+#### 3.3: Update Draw Commands
 
 **Example: `draw_triangles`**
 
@@ -368,7 +499,8 @@ fn draw_triangles(
     let vertex_data: Vec<f32> = { /* ... */ };
 
     // Add current transform to model matrix pool
-    let model_idx = state.add_model_matrix(state.current_transform);
+    let model_idx = state.add_model_matrix(state.current_transform)
+        .expect("Model matrix pool overflow");
 
     // Pack matrix indices
     let mvp_index = MvpIndex::new(
@@ -434,12 +566,14 @@ pub fn render_frame(
 
     // 2. Upload view matrices
     if !z_state.view_matrices.is_empty() {
+        self.ensure_view_buffer_capacity(z_state.view_matrices.len());
         let data = bytemuck::cast_slice(&z_state.view_matrices);
         self.queue.write_buffer(&self.view_matrix_buffer, 0, data);
     }
 
     // 3. Upload projection matrices
     if !z_state.proj_matrices.is_empty() {
+        self.ensure_proj_buffer_capacity(z_state.proj_matrices.len());
         let data = bytemuck::cast_slice(&z_state.proj_matrices);
         self.queue.write_buffer(&self.proj_matrix_buffer, 0, data);
     }
@@ -449,21 +583,6 @@ pub fn render_frame(
 
     // 5. Sort and execute commands
     // ... (existing code)
-}
-```
-
-#### 4.2: Reset Matrix Pools After Frame
-
-**File:** `emberware-z/src/graphics/mod.rs` or `emberware-z/src/app.rs`
-
-```rust
-pub fn begin_frame(&mut self, z_state: &mut ZFFIState) {
-    z_state.render_pass.reset();
-    z_state.current_transform = Mat4::IDENTITY;
-    z_state.transform_stack.clear();
-
-    // Reset model matrix pool
-    z_state.reset_matrix_pools();
 }
 ```
 
@@ -481,13 +600,12 @@ pub fn begin_frame(&mut self, z_state: &mut ZFFIState) {
 
 ### Changes (Apply to All 4 Templates)
 
-#### 5.1: Replace Uniform Matrices with Storage Buffers
+#### 5.1: Replace Uniforms with Storage Buffers
 
 ```wgsl
-// OLD: Individual uniforms
-@group(0) @binding(0) var<storage, read> model_matrices_old: array<mat4x4<f32>>;  // Was per-instance
-@group(0) @binding(1) var<uniform> view: mat4x4<f32>;
-@group(0) @binding(2) var<uniform> projection: mat4x4<f32>;
+// OLD: Single uniform matrices per draw
+// @group(0) @binding(1) var<uniform> view: mat4x4<f32>;
+// @group(0) @binding(2) var<uniform> projection: mat4x4<f32>;
 
 // NEW: All matrices in storage buffers
 @group(0) @binding(0) var<storage, read> model_matrices: array<mat4x4<f32>>;
@@ -495,60 +613,64 @@ pub fn begin_frame(&mut self, z_state: &mut ZFFIState) {
 @group(0) @binding(2) var<storage, read> proj_matrices: array<mat4x4<f32>>;
 ```
 
-#### 5.2: Add Unpacking Function
+#### 5.2: Add Push Constants
 
 ```wgsl
-/// Unpack MvpIndex into (model, view, proj) indices
-fn unpack_mvp(key: u32) -> vec3<u32> {
-    let model = key & 0xFFFFu;
-    let view = (key >> 16u) & 0xFFu;
-    let proj = (key >> 24u) & 0xFFu;
-    return vec3<u32>(model, view, proj);
+/// Per-draw push constants (16 bytes)
+/// Contains indices into the matrix storage buffers
+struct PushConstants {
+    model_index: u32,
+    view_index: u32,
+    proj_index: u32,
+    shading_state_index: u32,  // Reserved for unified shading state (Phase 2)
 }
+
+var<push_constant> pc: PushConstants;
 ```
 
 #### 5.3: Update Vertex Shader
 
 ```wgsl
-struct VertexInput {
+struct VertexIn {
     @location(0) position: vec3<f32>,
-    // ... other vertex attributes
-    @location(10) mvp_index: u32,  // From instance buffer
+    //VIN_UV
+    //VIN_COLOR
+    //VIN_NORMAL
+    //VIN_SKINNED
 }
 
 @vertex
-fn vs(in: VertexInput) -> VertexOutput {
-    // Unpack matrix indices
-    let indices = unpack_mvp(in.mvp_index);
+fn vs(in: VertexIn) -> VertexOut {
+    var out: VertexOut;
 
-    // Fetch matrices
-    let model = model_matrices[indices.x];
-    let view = view_matrices[indices.y];
-    let proj = proj_matrices[indices.z];
+    //VS_SKINNED
 
-    // Transform vertex
-    let world_pos = model * vec4(in.position, 1.0);
-    let view_pos = view * world_pos;
-    let clip_pos = proj * view_pos;
+    // Fetch matrices using push constant indices
+    let model = model_matrices[pc.model_index];
+    let view = view_matrices[pc.view_index];
+    let proj = proj_matrices[pc.proj_index];
 
-    var out: VertexOutput;
-    out.position = clip_pos;
+    // Apply transforms
+    //VS_POSITION
+    let model_pos = model * world_pos;
+    out.world_position = model_pos.xyz;
 
-    // Transform normals (if FORMAT_NORMAL)
-    //VIN_NORMAL
-    //VS_TRANSFORM_NORMAL
+    // View-projection transform
+    out.clip_position = proj * view * model_pos;
 
-    // Pass through other attributes
-    //VS_PASSTHROUGH_UV
-    //VS_PASSTHROUGH_COLOR
+    //VS_UV
+    //VS_COLOR
+    //VS_NORMAL
 
     return out;
 }
 ```
 
+**Note:** Update ALL 4 shader templates (mode0, mode1, mode2, mode3) with these changes.
+
 ---
 
-## Phase 6: Update Bind Group Layouts
+## Phase 6: Update Bind Group Layouts and Push Constants
 
 **Estimated Time:** 3-4 hours
 
@@ -604,7 +726,24 @@ let bind_group_layout_0 = device.create_bind_group_layout(&BindGroupLayoutDescri
 });
 ```
 
-#### 6.2: Create Bind Group with Matrix Buffers
+#### 6.2: Add Push Constant Range to Pipeline Layout
+
+**File:** `emberware-z/src/graphics/pipeline.rs`
+
+```rust
+let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+    label: Some("Render Pipeline Layout"),
+    bind_group_layouts: &[&bind_group_layout_0, &bind_group_layout_1],
+    push_constant_ranges: &[
+        PushConstantRange {
+            stages: ShaderStages::VERTEX,
+            range: 0..16,  // 4 × u32 = 16 bytes (model, view, proj, shading indices)
+        }
+    ],
+});
+```
+
+#### 6.3: Create Bind Group with Matrix Buffers
 
 **File:** `emberware-z/src/graphics/mod.rs`
 
@@ -632,164 +771,61 @@ fn create_frame_bind_group(&self) -> wgpu::BindGroup {
 }
 ```
 
----
+#### 6.4: Set Push Constants Per Draw
 
-## Phase 7: Instance Data for MVP Keys
-
-**Estimated Time:** 4-6 hours
-
-**Selected Approach:** Instance buffer (ensures cross-backend compatibility)
-
-### Files to Modify
-- `emberware-z/src/graphics/buffer.rs`
-- `emberware-z/src/graphics/mod.rs`
-- `emberware-z/src/graphics/pipeline.rs`
-
-### Changes
-
-#### 7.1: Add Instance Buffer to BufferManager
-
-**File:** `emberware-z/src/graphics/buffer.rs`
+**File:** `emberware-z/src/graphics/mod.rs` (in render pass loop)
 
 ```rust
-pub struct BufferManager {
-    // Existing fields...
+for cmd in self.command_buffer.commands() {
+    // ... pipeline and bind group setup
 
-    // New: Instance buffer for MVP indices
-    instance_buffer: GrowableBuffer,
-}
+    // Set push constants with matrix indices
+    let (model_idx, view_idx, proj_idx) = cmd.mvp_index.unpack();
+    let push_constants = [
+        model_idx,
+        view_idx,
+        proj_idx,
+        0u32,  // Reserved for shading_state_index (unified shading state refactor)
+    ];
+    render_pass.set_push_constants(
+        wgpu::ShaderStages::VERTEX,
+        0,
+        bytemuck::cast_slice(&push_constants),
+    );
 
-impl BufferManager {
-    pub fn new(device: &wgpu::Device) -> Self {
-        let instance_buffer = GrowableBuffer::new(
-            device,
-            "Instance Buffer (MVP Indices)",
-            4096,  // Initial capacity: 1024 instances
-            wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        );
-
-        Self {
-            // Existing fields...
-            instance_buffer,
-        }
-    }
-
-    pub fn instance_buffer(&self) -> &wgpu::Buffer {
-        self.instance_buffer.buffer()
-    }
-}
-```
-
-#### 7.2: Populate Instance Buffer During Render
-
-**File:** `emberware-z/src/graphics/mod.rs`
-
-```rust
-pub fn render_frame(&mut self, ...) -> Result<()> {
-    // 1. Upload matrices (from Phase 4)
-    // ...
-
-    // 2. Collect MVP indices from commands
-    let mvp_indices: Vec<u32> = self.command_buffer.commands()
-        .iter()
-        .map(|cmd| cmd.mvp_index.0)  // Extract inner u32 from MvpIndex newtype
-        .collect();
-
-    // 3. Upload to instance buffer
-    if !mvp_indices.is_empty() {
-        let byte_size = (mvp_indices.len() * std::mem::size_of::<u32>()) as u64;
-        self.buffer_manager.instance_buffer
-            .ensure_capacity(&self.device, byte_size);
-
-        self.buffer_manager.instance_buffer
-            .write_at(&self.queue, 0, bytemuck::cast_slice(&mvp_indices));
-    }
-
-    // 4. Sort commands
-    // ...
-
-    // 5. Execute render pass
-    // ...
-}
-```
-
-#### 7.3: Set Instance Buffer in Render Pass
-
-**File:** `emberware-z/src/graphics/mod.rs` (in render pass execution loop)
-
-```rust
-let mut render_pass = encoder.begin_render_pass(...);
-
-for (instance_index, cmd) in self.command_buffer.commands().iter().enumerate() {
-    // Set vertex buffer (vertex data)
+    // Set vertex buffer
     let vertex_buffer = match cmd.buffer_source {
         BufferSource::Immediate => self.buffer_manager.vertex_buffer(cmd.format),
         BufferSource::Retained => self.buffer_manager.retained_vertex_buffer(cmd.format),
     };
     render_pass.set_vertex_buffer(0, vertex_buffer.slice(..));
 
-    // Set instance buffer (MVP indices)
-    let instance_offset = (instance_index * std::mem::size_of::<u32>()) as u64;
-    render_pass.set_vertex_buffer(
-        1,
-        self.buffer_manager.instance_buffer()
-            .slice(instance_offset..instance_offset + 4)
-    );
-
-    // Set index buffer (if indexed)
+    // Draw
     if cmd.index_count > 0 {
-        // ...
-    }
-
-    // Draw with instancing (instance count = 1)
-    if cmd.index_count > 0 {
-        render_pass.draw_indexed(
-            cmd.first_index..cmd.first_index + cmd.index_count,
-            cmd.base_vertex as i32,
-            0..1,  // Instance range
-        );
+        let index_buffer = match cmd.buffer_source {
+            BufferSource::Immediate => self.buffer_manager.index_buffer(cmd.format),
+            BufferSource::Retained => self.buffer_manager.retained_index_buffer(cmd.format),
+        };
+        if let Some(buffer) = index_buffer.buffer() {
+            render_pass.set_index_buffer(buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(
+                cmd.first_index..cmd.first_index + cmd.index_count,
+                cmd.base_vertex as i32,
+                0..1,  // Single instance
+            );
+        }
     } else {
         render_pass.draw(
             cmd.base_vertex..cmd.base_vertex + cmd.vertex_count,
-            0..1,  // Instance range
+            0..1,  // Single instance
         );
     }
-}
-```
-
-#### 7.4: Update Vertex Buffer Layout for Instance Data
-
-**File:** `emberware-z/src/graphics/pipeline.rs`
-
-```rust
-fn create_vertex_buffer_layouts(format: u8) -> Vec<VertexBufferLayout<'static>> {
-    vec![
-        // Buffer 0: Per-vertex data (position, UV, color, normal, etc.)
-        VertexBufferLayout {
-            array_stride: vertex_stride(format) as u64,
-            step_mode: VertexStepMode::Vertex,
-            attributes: &vertex_attributes(format),  // Locations 0-5
-        },
-
-        // Buffer 1: Per-instance data (MVP index)
-        VertexBufferLayout {
-            array_stride: 4,  // sizeof(u32)
-            step_mode: VertexStepMode::Instance,
-            attributes: &[
-                VertexAttribute {
-                    format: VertexFormat::Uint32,
-                    offset: 0,
-                    shader_location: 10,  // High location to avoid conflicts
-                },
-            ],
-        },
-    ]
 }
 ```
 
 ---
 
-## Phase 8: Testing and Validation
+## Phase 7: Testing and Validation
 
 **Estimated Time:** 4-6 hours
 
@@ -802,7 +838,7 @@ fn create_vertex_buffer_layouts(format: u8) -> Vec<VertexBufferLayout<'static>> 
 
 2. **Multiple Draws, Same Transform**
    - Render 100 triangles with identity transform
-   - Verify model matrices deduplicated (or 100 entries if no dedup)
+   - Verify 100 model matrices (no deduplication yet)
    - Visual: All render correctly
 
 3. **Stress Test (1000+ draws)**
@@ -825,13 +861,18 @@ fn create_vertex_buffer_layouts(format: u8) -> Vec<VertexBufferLayout<'static>> 
    - Verify both use matrix packing correctly
    - Visual: Both render correctly
 
+7. **Multiple Cameras (Advanced)**
+   - Use `push_view_matrix()` and `push_projection_matrix()`
+   - Verify multiple views per frame work
+   - Visual: Correct rendering with different cameras
+
 ### Validation Checklist
 
 - [ ] Visual: All test cases match old renderer pixel-for-pixel
 - [ ] Performance: Measure draw call overhead (should decrease)
-- [ ] Memory: Matrix pool size is reasonable (<100KB typical game)
-- [ ] Capacity: Warn/handle gracefully at 65,536 model matrices
-- [ ] Cross-platform: Test on WebGPU, native, WebGL (if supported)
+- [ ] Memory: VRPCommand size reduced (64 bytes saved per command)
+- [ ] Capacity: Panic gracefully at 65,536 model matrices
+- [ ] Push constants: Verify 16-byte limit is sufficient
 
 ### Performance Metrics to Track
 
@@ -847,7 +888,7 @@ tracing::debug!(
 ```
 
 **Expected improvements:**
-- Command size: ~120 bytes → ~60 bytes (50% reduction)
+- VRPCommand size: ~120 bytes → ~60 bytes (50% reduction)
 - Matrix uploads: Per-draw → Once per frame
 - Memory bandwidth: Reduced by ~16× for transforms
 
@@ -855,30 +896,21 @@ tracing::debug!(
 
 ## Rollout Strategy
 
-### 1. Feature Flag (Optional)
-
-Add a runtime flag to switch between old and new systems during transition:
-
-```rust
-pub struct ZGraphics {
-    use_matrix_packing: bool,  // Toggle during testing
-}
-```
-
-### 2. Incremental Deployment
+### 1. Incremental Deployment
 
 1. **Day 1-2:** Implement phases 1-3 (infrastructure + FFI)
-2. **Day 3:** Implement phases 4-6 (GPU upload + shaders)
-3. **Day 4:** Implement phase 7 (instance buffer)
+2. **Day 3:** Implement phases 4-5 (GPU upload + shaders)
+3. **Day 4:** Implement phase 6 (push constants + bind groups)
 4. **Day 5:** Testing and validation
 
-### 3. Fallback Plan
+### 2. Breaking Changes
 
-If issues arise:
-- Keep old `VRPCommand` structure with `transform: Mat4`
-- Add new field `mvp_index: Option<MvpIndex>`
-- Gradually migrate FFI calls to use packed indices
-- Remove old field once fully migrated
+This refactor includes breaking changes:
+- Shader binding layout changes (bindings 0-2)
+- Pipeline layout changes (push constants)
+- VRPCommand structure changes
+
+**Impact:** All pipelines must be regenerated. This is acceptable pre-release.
 
 ---
 
@@ -886,10 +918,9 @@ If issues arise:
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|------------|--------|------------|
-| WebGL storage buffer incompatibility | Medium | High | Use uniform buffer with smaller capacity (256 models) |
-| Instance buffer overhead | Low | Low | 4 bytes per draw is negligible |
-| Matrix pool overflow (>65,536) | Low | Medium | Warn and cap, unlikely in fantasy console |
-| Shader unpacking bugs | Medium | High | Thorough testing, visual validation |
+| Push constant size limit | Low | Medium | 16 bytes well within 128-byte minimum guarantee |
+| Storage buffer bugs | Medium | High | Thorough testing, visual validation |
+| Matrix pool overflow | Low | Low | Panic on overflow (programming error) |
 | Performance regression | Low | Medium | Benchmark before/after, profile bottlenecks |
 
 ---
@@ -897,21 +928,42 @@ If issues arise:
 ## Success Criteria
 
 - ✅ All visual tests pass (pixel-perfect match)
-- ✅ Memory usage reduced by ~50% for commands
+- ✅ VRPCommand memory reduced by ~50%
 - ✅ Matrix uploads reduced to once per frame
 - ✅ No performance regressions
 - ✅ No crashes or rendering glitches
 - ✅ Handles 10,000+ draws without issues
+- ✅ Advanced matrix functions work (push_view_matrix, push_projection_matrix)
 
 ---
 
 ## Follow-Up Work
 
 After completion:
-1. **Unified Shading State** - Next refactor (see separate plan)
-2. **WebGL fallback** - If storage buffers unsupported, use uniform buffers
+1. **Unified Shading State** - Use 4th push constant slot for shading state index
+2. **WebGL fallback** - TODO: If storage buffers unsupported, use uniform buffers with capacity limits
 3. **Matrix deduplication** - Optional: Hash and dedupe identical transforms
 4. **Profiling** - Measure actual performance gains in real games
+
+---
+
+## Integration with Unified Shading State
+
+This refactor reserves the 4th u32 in push constants for the unified shading state index:
+
+```wgsl
+struct PushConstants {
+    model_index: u32,
+    view_index: u32,
+    proj_index: u32,
+    shading_state_index: u32,  // ← Used by unified shading state refactor
+}
+```
+
+When implementing unified shading state:
+- Update push constant write to include `shading_state_index`
+- Shader reads from `shading_states[pc.shading_state_index]`
+- Total push constant size remains 16 bytes
 
 ---
 
