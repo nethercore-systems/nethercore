@@ -2863,9 +2863,21 @@ mod tests {
         // We'll just manually record to render_pass to verify the recording works
 
         // Copy mesh data to avoid borrow conflicts
-        let (mesh_format, mesh_vertex_count, mesh_index_count, mesh_vertex_offset, mesh_index_offset) = {
+        let (
+            mesh_format,
+            mesh_vertex_count,
+            mesh_index_count,
+            mesh_vertex_offset,
+            mesh_index_offset,
+        ) = {
             let mesh = state.mesh_map.get(&1).unwrap();
-            (mesh.format, mesh.vertex_count, mesh.index_count, mesh.vertex_offset, mesh.index_offset)
+            (
+                mesh.format,
+                mesh.vertex_count,
+                mesh.index_count,
+                mesh.vertex_offset,
+                mesh.index_offset,
+            )
         };
 
         // Add current transform to model pool and pack MVP

@@ -1367,7 +1367,11 @@ impl ZGraphics {
                     // Billboard vertices are already in world space, so use identity matrix
                     // (they were positioned during vertex generation using position + right/up)
                     let model_idx = z_state.add_model_matrix(Mat4::IDENTITY);
-                    let mvp_index = MvpIndex::new(model_idx, z_state.current_view_idx, z_state.current_proj_idx);
+                    let mvp_index = MvpIndex::new(
+                        model_idx,
+                        z_state.current_view_idx,
+                        z_state.current_proj_idx,
+                    );
 
                     // Add draw command
                     self.command_buffer.add_command(command_buffer::VRPCommand {
@@ -1498,7 +1502,11 @@ impl ZGraphics {
 
                     // Add identity transform to model matrix pool and pack MVP indices
                     let model_idx = z_state.add_model_matrix(Mat4::IDENTITY);
-                    let mvp_index = MvpIndex::new(model_idx, z_state.current_view_idx, z_state.current_proj_idx);
+                    let mvp_index = MvpIndex::new(
+                        model_idx,
+                        z_state.current_view_idx,
+                        z_state.current_proj_idx,
+                    );
 
                     // Add draw command (screen space)
                     self.command_buffer.add_command(command_buffer::VRPCommand {
@@ -1573,7 +1581,11 @@ impl ZGraphics {
 
                     // Add identity transform to model matrix pool and pack MVP indices
                     let model_idx = z_state.add_model_matrix(Mat4::IDENTITY);
-                    let mvp_index = MvpIndex::new(model_idx, z_state.current_view_idx, z_state.current_proj_idx);
+                    let mvp_index = MvpIndex::new(
+                        model_idx,
+                        z_state.current_view_idx,
+                        z_state.current_proj_idx,
+                    );
 
                     // Add draw command (screen space)
                     self.command_buffer.add_command(command_buffer::VRPCommand {
@@ -1666,7 +1678,11 @@ impl ZGraphics {
 
                     // Add identity transform to model matrix pool and pack MVP indices
                     let model_idx = z_state.add_model_matrix(Mat4::IDENTITY);
-                    let mvp_index = MvpIndex::new(model_idx, z_state.current_view_idx, z_state.current_proj_idx);
+                    let mvp_index = MvpIndex::new(
+                        model_idx,
+                        z_state.current_view_idx,
+                        z_state.current_proj_idx,
+                    );
 
                     // Add draw command for text rendering (screen space)
                     self.command_buffer.add_command(command_buffer::VRPCommand {
@@ -2174,7 +2190,10 @@ impl ZGraphics {
         // Verify matrix state - warn if pools are empty
         let command_count = self.command_buffer.commands().len();
         if z_state.model_matrices.is_empty() && command_count > 0 {
-            tracing::warn!("Rendering {} commands with EMPTY model_matrices!", command_count);
+            tracing::warn!(
+                "Rendering {} commands with EMPTY model_matrices!",
+                command_count
+            );
         }
         if z_state.view_matrices.is_empty() && command_count > 0 {
             tracing::error!("Rendering with EMPTY view_matrices!");
@@ -2187,7 +2206,8 @@ impl ZGraphics {
         if !z_state.model_matrices.is_empty() {
             self.ensure_model_buffer_capacity(z_state.model_matrices.len());
             let data = bytemuck::cast_slice(&z_state.model_matrices);
-            self.queue.write_buffer(&self.model_matrices_buffer, 0, data);
+            self.queue
+                .write_buffer(&self.model_matrices_buffer, 0, data);
         }
 
         // 2. Upload view matrices

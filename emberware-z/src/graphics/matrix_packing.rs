@@ -25,9 +25,17 @@ impl MvpIndex {
     /// - view must be < 256 (8 bits)
     /// - proj must be < 256 (8 bits)
     pub fn new(model: u32, view: u32, proj: u32) -> Self {
-        debug_assert!(model < 65536, "Model index must fit in 16 bits (got {})", model);
+        debug_assert!(
+            model < 65536,
+            "Model index must fit in 16 bits (got {})",
+            model
+        );
         debug_assert!(view < 256, "View index must fit in 8 bits (got {})", view);
-        debug_assert!(proj < 256, "Projection index must fit in 8 bits (got {})", proj);
+        debug_assert!(
+            proj < 256,
+            "Projection index must fit in 8 bits (got {})",
+            proj
+        );
 
         Self((model & 0xFFFF) | ((view & 0xFF) << 16) | ((proj & 0xFF) << 24))
     }
