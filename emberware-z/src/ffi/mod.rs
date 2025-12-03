@@ -1964,7 +1964,14 @@ fn set_sky(
 ) {
     let state = &mut caller.data_mut().console;
 
-    // Record sky configuration as a draw command
+    // Store sky state for unified shading state
+    state.sky_horizon_color = [horizon_r, horizon_g, horizon_b];
+    state.sky_zenith_color = [zenith_r, zenith_g, zenith_b];
+    state.sky_sun_direction = [sun_dir_x, sun_dir_y, sun_dir_z];
+    state.sky_sun_color = [sun_r, sun_g, sun_b];
+    state.sky_sun_sharpness = sun_sharpness;
+
+    // Record sky configuration as a draw command (for legacy rendering)
     state.deferred_commands.push(DeferredCommand::SetSky {
         horizon_color: [horizon_r, horizon_g, horizon_b],
         zenith_color: [zenith_r, zenith_g, zenith_b],

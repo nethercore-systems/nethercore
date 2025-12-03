@@ -1,10 +1,62 @@
 # Implementation Plan: Unified Shading State
 
-**Status:** Not Started (implement after matrix packing)
+**Status:** Phase 1-4 Complete (Core infrastructure implemented)
 **Estimated Effort:** 5-7 days
 **Priority:** Medium (implement second)
 **Depends On:** Matrix index packing (recommended)
 **Related:** [proposed-render-architecture.md](./proposed-render-architecture.md), [rendering-architecture.md](./rendering-architecture.md)
+
+---
+
+## Implementation Progress
+
+### ✅ Completed Phases
+
+**Phase 1: Define Packed State Structures** ✅
+- Created `unified_shading_state.rs` module with all packed structures
+- Implemented `PackedUnifiedShadingState`, `PackedSky`, `PackedLight`
+- Added quantization helpers for f32→u8, Vec3→snorm16, color packing
+- All structures are POD, hashable, and GPU-ready
+
+**Phase 2: Implement Shading State Cache** ✅
+- Implemented `ShadingStateCache` with HashMap-based interning
+- Added GPU buffer management with automatic growth
+- Implemented upload logic with dirty tracking
+- Integrated cache into `ZGraphics` struct
+
+**Phase 3: Update VRPCommand Structure** ✅
+- Added `shading_state_handle: Option<UnifiedShadingStateHandle>` to `VRPCommand`
+- Updated all command recording methods to initialize handle as `None`
+- Kept legacy fields for backward compatibility during transition
+
+**Phase 4: Update FFI Layer to Track State** ✅
+- Added sky state fields to `ZFFIState` (horizon, zenith, sun direction, color, sharpness)
+- Updated `set_sky()` FFI function to store state in `ZFFIState`
+- Implemented `pack_current_shading_state()` helper method
+- Added shading state interning in command processing (after swap)
+- All commands now receive interned shading state handles
+
+**Phase 5: Upload Shading States Before Rendering** ✅
+- Added `shading_state_cache.upload()` call in `render_frame()`
+- Upload happens after matrix uploads, before rendering
+- Dirty tracking ensures efficient uploads
+
+### 🚧 Remaining Work
+
+**Phase 6: Update Shaders to Read Shading States** (Not Started)
+- Need to add shading state buffer binding to all 4 shader templates
+- Update vertex shaders to pass shading_state_index to fragment
+- Update fragment shaders to fetch and use shading state
+- Add unpacking helpers for quantized data
+
+**Phase 7: Update Pipeline Extraction** (Not Started)
+- Extract blend mode from shading state for pipeline key
+- Update command sorting to use shading state handle
+
+**Phase 8: Testing and Validation** (Not Started)
+- Visual testing across all 4 render modes
+- Performance benchmarking
+- Cache efficiency metrics
 
 ---
 

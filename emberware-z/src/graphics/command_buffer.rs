@@ -39,7 +39,13 @@ pub struct VRPCommand {
     pub buffer_source: BufferSource,
     /// Texture slots bound for this draw
     pub texture_slots: [TextureHandle; 4],
-    /// Uniform color
+    
+    // Unified shading state (NEW)
+    /// Handle to interned shading state (contains color, material, lights, sky)
+    pub shading_state_handle: Option<super::unified_shading_state::UnifiedShadingStateHandle>,
+    
+    // Legacy fields (kept for backward compatibility during transition)
+    /// Uniform color (will be moved to shading state)
     pub color: u32,
     /// Render state at time of draw
     pub depth_test: bool,
@@ -109,6 +115,7 @@ impl VirtualRenderPass {
             first_index: 0,
             buffer_source: BufferSource::Immediate,
             texture_slots: state.texture_slots,
+            shading_state_handle: None, // Will be set during process_draw_commands
             color: state.color,
             depth_test: state.depth_test,
             cull_mode: state.cull_mode,
@@ -155,6 +162,7 @@ impl VirtualRenderPass {
             first_index,
             buffer_source: BufferSource::Immediate,
             texture_slots: state.texture_slots,
+            shading_state_handle: None, // Will be set during process_draw_commands
             color: state.color,
             depth_test: state.depth_test,
             cull_mode: state.cull_mode,
@@ -245,6 +253,7 @@ impl VirtualRenderPass {
             first_index: 0,
             buffer_source: BufferSource::Immediate,
             texture_slots,
+            shading_state_handle: None, // Will be set during process_draw_commands
             color,
             depth_test,
             cull_mode,
@@ -290,6 +299,7 @@ impl VirtualRenderPass {
             first_index,
             buffer_source: BufferSource::Immediate,
             texture_slots,
+            shading_state_handle: None, // Will be set during process_draw_commands
             color,
             depth_test,
             cull_mode,
@@ -331,6 +341,7 @@ impl VirtualRenderPass {
             first_index,
             buffer_source: BufferSource::Retained,
             texture_slots,
+            shading_state_handle: None, // Will be set during process_draw_commands
             color,
             depth_test,
             cull_mode,
@@ -467,6 +478,7 @@ mod tests {
             first_index: 0,
             buffer_source: BufferSource::Immediate,
             texture_slots: [TextureHandle::INVALID; 4],
+            shading_state_handle: None,
             color: 0xFFFFFFFF,
             depth_test: true,
             cull_mode: CullMode::Back,
@@ -494,6 +506,7 @@ mod tests {
                 TextureHandle::INVALID,
                 TextureHandle::INVALID,
             ],
+            shading_state_handle: None,
             color: 0xFF0000FF,
             depth_test: false,
             cull_mode: CullMode::None,

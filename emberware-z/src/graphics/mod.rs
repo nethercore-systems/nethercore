@@ -68,6 +68,7 @@ mod matrix_packing;
 mod pipeline;
 mod render_state;
 mod texture_manager;
+mod unified_shading_state;
 mod vertex;
 
 use hashbrown::HashMap;
@@ -87,6 +88,9 @@ pub use matrix_packing::MvpIndex;
 pub use render_state::{
     BlendMode, CameraUniforms, CullMode, LightUniform, LightsUniforms, MatcapBlendMode,
     MaterialUniforms, RenderState, SkyUniforms, TextureFilter, TextureHandle,
+};
+pub use unified_shading_state::{
+    PackedUnifiedShadingState, ShadingStateCache, Sky,
 };
 pub use vertex::{
     vertex_stride, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV, VERTEX_FORMAT_COUNT,
@@ -249,6 +253,9 @@ pub struct ZGraphics {
 
     // Scaling mode for render target to window
     scale_mode: crate::config::ScaleMode,
+
+    // Unified shading state cache
+    shading_state_cache: ShadingStateCache,
 }
 
 impl ZGraphics {
@@ -432,6 +439,9 @@ impl ZGraphics {
         let (blit_pipeline, blit_bind_group, blit_sampler) =
             Self::create_blit_pipeline(&device, surface_format, &render_target);
 
+        // Create shading state cache
+        let shading_state_cache = ShadingStateCache::new(&device);
+
         let graphics = Self {
             surface,
             device,
@@ -477,6 +487,7 @@ impl ZGraphics {
             current_render_mode: 0,      // Default to Mode 0 (Unlit)
             current_resolution_index: 1, // 960×540 (default)
             scale_mode: crate::config::ScaleMode::default(), // Stretch by default
+            shading_state_cache,
         };
 
         Ok(graphics)
@@ -1230,6 +1241,18 @@ impl ZGraphics {
         // will be cleared when z_state.clear_frame() is called.
         std::mem::swap(&mut self.command_buffer, &mut z_state.render_pass);
 
+        // 1.5. Intern shading states for all commands
+        // Pack the current shading state from ZFFIState and intern it for all commands
+        let packed_state = z_state.pack_current_shading_state();
+        let shading_handle = self.shading_state_cache.intern(packed_state);
+        
+        // Assign the shading state handle to all commands that don't have one
+        for cmd in self.command_buffer.commands_mut() {
+            if cmd.shading_state_handle.is_none() {
+                cmd.shading_state_handle = Some(shading_handle);
+            }
+        }
+
         // 2. Process deferred commands (billboards, sprites, text, sky)
         // These require additional processing or generation of geometry
         // Collect into temporary vector to avoid holding mutable borrow during processing
@@ -1383,6 +1406,7 @@ impl ZGraphics {
                         first_index,
                         buffer_source: BufferSource::Immediate,
                         texture_slots,
+                        shading_state_handle: Some(shading_handle),
                         color: 0xFFFFFFFF, // White (color already in vertices)
                         depth_test,
                         cull_mode: Self::convert_cull_mode(cull_mode),
@@ -1518,6 +1542,7 @@ impl ZGraphics {
                         first_index,
                         buffer_source: BufferSource::Immediate,
                         texture_slots,
+                        shading_state_handle: Some(shading_handle),
                         color: 0xFFFFFFFF, // Color already in vertices
                         depth_test: false, // 2D sprites don't use depth test
                         cull_mode: CullMode::None,
@@ -1597,6 +1622,7 @@ impl ZGraphics {
                         first_index,
                         buffer_source: BufferSource::Immediate,
                         texture_slots: [TextureHandle::INVALID; 4],
+                        shading_state_handle: Some(shading_handle),
                         color: 0xFFFFFFFF, // Color already in vertices
                         depth_test: false, // 2D rectangles don't use depth test
                         cull_mode: CullMode::None,
@@ -1694,6 +1720,7 @@ impl ZGraphics {
                         first_index,
                         buffer_source: BufferSource::Immediate,
                         texture_slots,
+                        shading_state_handle: Some(shading_handle),
                         color: 0xFFFFFFFF, // Color already baked into vertices
                         depth_test: false, // 2D text doesn't use depth test
                         cull_mode: CullMode::None,
@@ -2221,6 +2248,9 @@ impl ZGraphics {
             let data = bytemuck::cast_slice(&z_state.proj_matrices);
             self.queue.write_buffer(&self.proj_matrices_buffer, 0, data);
         }
+
+        // 4. Upload shading states
+        self.shading_state_cache.upload(&self.device, &self.queue);
 
         // 4. Upload MVP indices (collect from all commands)
         if command_count > 0 {

@@ -282,6 +282,13 @@ pub struct ZFFIState {
     // PBR lighting
     pub lights: [LightState; 4],
 
+    // Sky state (for unified shading state)
+    pub sky_horizon_color: [f32; 3],
+    pub sky_zenith_color: [f32; 3],
+    pub sky_sun_direction: [f32; 3],
+    pub sky_sun_color: [f32; 3],
+    pub sky_sun_sharpness: f32,
+
     // GPU skinning
     pub bone_matrices: Vec<Mat4>,
     pub bone_count: u32,
@@ -343,6 +350,11 @@ impl Default for ZFFIState {
             material_roughness: 0.5,
             material_emissive: 0.0,
             lights: [LightState::default(); 4],
+            sky_horizon_color: [0.0, 0.0, 0.0],
+            sky_zenith_color: [0.0, 0.0, 0.0],
+            sky_sun_direction: [0.0, 1.0, 0.0],
+            sky_sun_color: [0.0, 0.0, 0.0],
+            sky_sun_sharpness: 0.0,
             bone_matrices: Vec::new(),
             bone_count: 0,
             render_pass: crate::graphics::VirtualRenderPass::new(),
@@ -412,6 +424,47 @@ impl ZFFIState {
             self.current_model_idx,
             self.current_view_idx,
             self.current_proj_idx,
+        )
+    }
+
+    /// Pack current shading state for interning
+    pub fn pack_current_shading_state(&self) -> crate::graphics::PackedUnifiedShadingState {
+        use crate::graphics::{MatcapBlendMode, PackedUnifiedShadingState, Sky};
+        use glam::{Vec3, Vec4};
+
+        let sky = Sky {
+            horizon_color: Vec4::new(
+                self.sky_horizon_color[0],
+                self.sky_horizon_color[1],
+                self.sky_horizon_color[2],
+                0.0,
+            ),
+            zenith_color: Vec4::new(
+                self.sky_zenith_color[0],
+                self.sky_zenith_color[1],
+                self.sky_zenith_color[2],
+                0.0,
+            ),
+            sun_direction: Vec3::from_array(self.sky_sun_direction),
+            sun_color: Vec3::from_array(self.sky_sun_color),
+            sun_sharpness: self.sky_sun_sharpness,
+        };
+
+        let matcap_blend_modes = [
+            MatcapBlendMode::from_u8(self.matcap_blend_modes[0]),
+            MatcapBlendMode::from_u8(self.matcap_blend_modes[1]),
+            MatcapBlendMode::from_u8(self.matcap_blend_modes[2]),
+            MatcapBlendMode::from_u8(self.matcap_blend_modes[3]),
+        ];
+
+        PackedUnifiedShadingState::from_render_state(
+            self.color,
+            self.material_metallic,
+            self.material_roughness,
+            self.material_emissive,
+            &matcap_blend_modes,
+            &sky,
+            &self.lights,
         )
     }
 }
