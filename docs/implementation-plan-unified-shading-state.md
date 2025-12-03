@@ -2,26 +2,32 @@
 
 **Status:** Not Started (implement after matrix packing)
 **Estimated Effort:** 4-6 days
-**Priority:** Medium (implement second)
-**Depends On:** Matrix index packing (required - uses push constants slot)
+**Priority:** High (bug fix - current implementation is wrong)
+**Depends On:** Matrix index packing (required - uses second u32 in mvp_indices buffer)
 **Related:** [proposed-render-architecture.md](./proposed-render-architecture.md), [rendering-architecture.md](./rendering-architecture.md)
 
 ---
 
 ## Overview
 
-Quantize all per-draw material state into a hashable POD structure (`PackedUnifiedShadingState`), implement interning to deduplicate identical materials, and enable better batching/sorting.
+**This is a bug fix, not just an optimization.** The current implementation uses frame-wide uniforms for material properties (metallic, roughness, emissive, lights, sky), but users need to set these **per-draw**. This implementation fixes that by quantizing per-draw shading state and storing it in a GPU buffer.
+
+Quantize all per-draw shading state into a hashable POD structure (`PackedUnifiedShadingState`), implement interning to deduplicate identical states, and enable per-draw material control.
 
 **Benefits:**
+- **FIX:** Per-draw material properties instead of incorrect frame-wide uniforms
 - Material state becomes hashable and comparable
-- Same material used across draws = one GPU upload
+- Same material used across draws = one GPU upload (deduplication)
 - Better command sorting by material
 - Reduced VRPCommand size (remove separate state fields)
-- All per-draw state packaged together (self-contained)
 
-**Approach:** Storage buffer + push constants (integrates with matrix packing's existing push constant infrastructure)
+**Approach:** Storage buffer indexed via instance index (extends existing MVP indices buffer)
 
-**Complexity:** High - touches FFI, command recording, shaders, and GPU upload
+The MVP indices buffer is already `array<vec2<u32>>` where:
+- `.x` = packed MVP indices (model: 16 bits, view: 8 bits, proj: 8 bits)
+- `.y` = unified shading state index (reserved for this implementation)
+
+**Complexity:** Medium-High - touches FFI, command recording, shaders, and GPU upload, but leverages existing infrastructure
 
 ---
 
@@ -210,146 +216,93 @@ fn pack_blend_modes(modes: &[MatcapBlendMode; 4]) -> u32 {
 
 ### Changes
 
-#### 2.1: Add Cache Structure
+#### 2.1: Add Shading State Pool to ZFFIState
 
-**File:** `emberware-z/src/graphics/unified_shading_state.rs`
+**File:** `emberware-z/src/state.rs`
 
 ```rust
 use hashbrown::HashMap;
-use wgpu::{Buffer, BufferDescriptor, BufferUsages, Device, Queue};
 
-pub struct ShadingStateCache {
-    // Map: packed state → handle
-    cache: HashMap<PackedUnifiedShadingState, UnifiedShadingStateHandle>,
+pub struct ZFFIState {
+    // Existing fields...
 
-    // All unique states (indexed by handle)
-    states: Vec<PackedUnifiedShadingState>,
+    // Current unquantized shading state (set by FFI functions)
+    pub metallic: f32,
+    pub roughness: f32,
+    pub emissive: f32,
+    pub matcap_blend_modes: [MatcapBlendMode; 4],
+    // sky, lights already exist
 
-    // GPU buffer
-    states_buffer: Buffer,
-    buffer_capacity: usize,
-    dirty: bool,
+    // Shading state pool (reset each frame, similar to model_matrices)
+    pub shading_states: Vec<PackedUnifiedShadingState>,
+    shading_state_cache: HashMap<PackedUnifiedShadingState, u32>,  // For deduplication
 }
 
-impl ShadingStateCache {
-    pub fn new(device: &Device) -> Self {
-        let initial_capacity = 256;
-        let states_buffer = device.create_buffer(&BufferDescriptor {
-            label: Some("Shading States"),
-            size: (initial_capacity * std::mem::size_of::<PackedUnifiedShadingState>()) as u64,
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
+impl Default for ZFFIState {
+    fn default() -> Self {
         Self {
-            cache: HashMap::new(),
-            states: Vec::new(),
-            states_buffer,
-            buffer_capacity: initial_capacity,
-            dirty: false,
+            // Existing initialization...
+            metallic: 0.0,
+            roughness: 1.0,
+            emissive: 0.0,
+            matcap_blend_modes: [MatcapBlendMode::Multiply; 4],
+            shading_states: Vec::with_capacity(256),
+            shading_state_cache: HashMap::new(),
         }
     }
+}
 
-    /// Intern a shading state, returning its handle
-    pub fn intern(&mut self, state: PackedUnifiedShadingState) -> UnifiedShadingStateHandle {
-        // Check if already cached
-        if let Some(&handle) = self.cache.get(&state) {
-            return handle;
+impl ZFFIState {
+    /// Pack current shading state and add to pool (with deduplication)
+    /// Returns the index into shading_states
+    pub fn add_shading_state(&mut self) -> u32 {
+        let packed = PackedUnifiedShadingState::from_render_state(
+            self.color,
+            self.metallic,
+            self.roughness,
+            self.emissive,
+            &self.matcap_blend_modes,
+            &self.sky,
+            &self.lights,
+        );
+
+        // Check if already in pool (deduplication)
+        if let Some(&idx) = self.shading_state_cache.get(&packed) {
+            return idx;
         }
 
-        // Allocate new handle
-        let handle = UnifiedShadingStateHandle(self.states.len() as u32);
-        if handle.0 >= 65536 {
-            panic!("Shading state cache overflow! Maximum 65,536 unique states per frame.");
+        // Add to pool
+        let idx = self.shading_states.len() as u32;
+        if idx >= 65536 {
+            panic!("Shading state pool overflow! Maximum 65,536 unique states per frame.");
         }
 
-        self.states.push(state);
-        self.cache.insert(state, handle);
-        self.dirty = true;
-
-        tracing::trace!("Interned new shading state: {:?}", handle);
-        handle
-    }
-
-    /// Upload dirty states to GPU
-    pub fn upload(&mut self, device: &Device, queue: &Queue) {
-        if !self.dirty {
-            return;
-        }
-
-        // Grow buffer if needed
-        if self.states.len() > self.buffer_capacity {
-            let new_capacity = (self.states.len() * 2).next_power_of_two();
-            tracing::debug!(
-                "Growing shading state buffer: {} → {} states",
-                self.buffer_capacity,
-                new_capacity
-            );
-
-            self.states_buffer = device.create_buffer(&BufferDescriptor {
-                label: Some("Shading States"),
-                size: (new_capacity * std::mem::size_of::<PackedUnifiedShadingState>()) as u64,
-                usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
-            self.buffer_capacity = new_capacity;
-        }
-
-        // Upload all states
-        let data = bytemuck::cast_slice(&self.states);
-        queue.write_buffer(&self.states_buffer, 0, data);
-
-        self.dirty = false;
-        tracing::debug!("Uploaded {} shading states to GPU", self.states.len());
-    }
-
-    /// Get GPU buffer
-    pub fn buffer(&self) -> &Buffer {
-        &self.states_buffer
-    }
-
-    /// Get state by handle (for pipeline extraction)
-    pub fn get(&self, handle: UnifiedShadingStateHandle) -> Option<&PackedUnifiedShadingState> {
-        self.states.get(handle.0 as usize)
-    }
-
-    /// Clear cache (called per frame)
-    pub fn clear(&mut self) {
-        self.cache.clear();
-        self.states.clear();
-        self.dirty = true;
-    }
-
-    /// Get stats for debugging
-    pub fn stats(&self) -> (usize, usize) {
-        (self.states.len(), self.buffer_capacity)
+        self.shading_states.push(packed);
+        self.shading_state_cache.insert(packed, idx);
+        idx
     }
 }
 ```
 
-#### 2.2: Add to ZGraphics
+#### 2.2: Update clear_frame to Reset Shading State Pool
 
-**File:** `emberware-z/src/graphics/mod.rs`
+**File:** `emberware-z/src/state.rs`
 
 ```rust
-pub struct ZGraphics {
-    // Existing fields...
-    shading_state_cache: ShadingStateCache,
-}
+pub fn clear_frame(&mut self) {
+    self.render_pass.reset();
+    self.model_matrices.clear();
+    self.model_matrices.push(Mat4::IDENTITY);
+    self.deferred_commands.clear();
+    self.audio_commands.clear();
 
-impl ZGraphics {
-    pub fn new(...) -> Result<Self> {
-        // Existing initialization...
-
-        let shading_state_cache = ShadingStateCache::new(&device);
-
-        Ok(Self {
-            // Existing fields...
-            shading_state_cache,
-        })
-    }
+    // NEW: Clear shading state pool
+    self.shading_states.clear();
+    self.shading_state_cache.clear();
 }
 ```
+
+**Note:** No separate cache in ZGraphics needed - everything is in ZFFIState, just like matrices!
 
 ---
 
@@ -375,8 +328,8 @@ pub struct VRPCommand {
     pub buffer_source: BufferSource,
     pub texture_slots: [TextureHandle; 4],
 
-    // NEW: Single handle to interned shading state
-    pub shading_state_handle: UnifiedShadingStateHandle,
+    // NEW: Index into ZFFIState::shading_states
+    pub shading_state_index: u32,
 
     // Keep these for pipeline selection (not in shading state)
     pub depth_test: bool,
@@ -389,7 +342,9 @@ pub struct VRPCommand {
 }
 ```
 
-**Note:** `depth_test` and `cull_mode` affect pipeline selection, so they remain separate.
+**Note:**
+- `depth_test` and `cull_mode` affect pipeline selection, so they remain separate
+- `shading_state_index` is just a u32 index, not a handle type (simpler, consistent with matrix approach)
 
 #### 3.2: Update VirtualRenderPass Methods
 
@@ -400,9 +355,9 @@ pub fn record_triangles(
     vertex_data: &[f32],
     mvp_index: MvpIndex,
     texture_slots: [TextureHandle; 4],
-    shading_state_handle: UnifiedShadingStateHandle,  // NEW
-    depth_test: bool,    // Keep for pipeline key
-    cull_mode: CullMode, // Keep for pipeline key
+    shading_state_index: u32,  // NEW: index into shading_states pool
+    depth_test: bool,          // Keep for pipeline key
+    cull_mode: CullMode,       // Keep for pipeline key
 ) {
     let format_idx = format as usize;
     let stride = vertex_stride(format) as usize;
@@ -423,7 +378,7 @@ pub fn record_triangles(
         first_index: 0,
         buffer_source: BufferSource::Immediate,
         texture_slots,
-        shading_state_handle,
+        shading_state_index,
         depth_test,
         cull_mode,
     });
@@ -444,116 +399,11 @@ pub fn record_triangles(
 
 ### Changes
 
-#### 4.1: Add Current Shading State to ZFFIState
-
-**File:** `emberware-z/src/state.rs`
-
-```rust
-pub struct ZFFIState {
-    // Existing fields...
-
-    // NEW: Current shading state (built incrementally by FFI setters)
-    pub metallic: f32,
-    pub roughness: f32,
-    pub emissive: f32,
-    pub color: u32,
-    pub matcap_blend_modes: [MatcapBlendMode; 4],
-
-    // Sky and lights (already exist, no changes needed)
-    pub sky: Sky,
-    pub lights: [Light; 4],
-}
-
-impl Default for ZFFIState {
-    fn default() -> Self {
-        Self {
-            // Existing initialization...
-            metallic: 0.0,
-            roughness: 1.0,
-            emissive: 0.0,
-            color: 0xFFFFFFFF,
-            matcap_blend_modes: [MatcapBlendMode::Multiply; 4],
-            // sky, lights already initialized
-        }
-    }
-}
-
-impl ZFFIState {
-    /// Pack current shading state for interning
-    pub fn pack_current_shading_state(&self) -> PackedUnifiedShadingState {
-        PackedUnifiedShadingState::from_render_state(
-            self.color,
-            self.metallic,
-            self.roughness,
-            self.emissive,
-            &self.matcap_blend_modes,
-            &self.sky,
-            &self.lights,
-        )
-    }
-}
-```
-
-#### 4.2: Update FFI Setters
+#### 4.1: Update FFI Draw Functions
 
 **File:** `emberware-z/src/ffi/mod.rs`
 
-```rust
-fn set_color(mut caller: Caller, color: u32) {
-    let state = &mut caller.data_mut().console;
-    state.color = color;
-}
-
-fn material_metallic(mut caller: Caller, value: f32) {
-    let state = &mut caller.data_mut().console;
-    state.metallic = value.clamp(0.0, 1.0);
-}
-
-fn material_roughness(mut caller: Caller, value: f32) {
-    let state = &mut caller.data_mut().console;
-    state.roughness = value.clamp(0.0, 1.0);
-}
-
-fn material_emissive(mut caller: Caller, value: f32) {
-    let state = &mut caller.data_mut().console;
-    state.emissive = value.clamp(0.0, 1.0);
-}
-
-// Sky and light setters update state.sky, state.lights (no changes needed)
-```
-
-#### 4.3: Update Draw Commands to Defer Shading State Packing
-
-**Challenge:** FFI functions don't have access to `ZGraphics::shading_state_cache` for interning.
-
-**Solution:** Store unquantized state in VRPCommand temporarily, intern during `process_draw_commands()`.
-
-**File:** `emberware-z/src/graphics/command_buffer.rs`
-
-```rust
-/// Temporary storage for unquantized shading state during FFI recording
-pub struct UnquantizedShadingState {
-    pub color: u32,
-    pub metallic: f32,
-    pub roughness: f32,
-    pub emissive: f32,
-    pub matcap_blend_modes: [MatcapBlendMode; 4],
-    pub sky: Sky,
-    pub lights: [Light; 4],
-}
-
-pub struct VRPCommand {
-    // ... existing fields
-
-    // Temporary: Store unquantized state during FFI recording
-    pub temp_shading_state: Option<UnquantizedShadingState>,
-
-    // Final: Interned handle (set during process_draw_commands)
-    pub shading_state_handle: UnifiedShadingStateHandle,
-}
-```
-
-**File:** `emberware-z/src/ffi/mod.rs`
+The pattern is simple - just add current shading state to the pool before recording the draw command:
 
 ```rust
 fn draw_triangles(
@@ -564,25 +414,27 @@ fn draw_triangles(
 ) -> Result<(), Trap> {
     let state = &mut caller.data_mut().console;
 
-    // ... existing vertex data copy, matrix index packing
+    // ... existing vertex data copy
 
-    // Pack unquantized shading state
-    let temp_shading_state = UnquantizedShadingState {
-        color: state.color,
-        metallic: state.metallic,
-        roughness: state.roughness,
-        emissive: state.emissive,
-        matcap_blend_modes: state.matcap_blend_modes,
-        sky: state.sky.clone(),
-        lights: state.lights.clone(),
-    };
+    // Pack current transform into model matrix pool
+    let model_idx = state.add_model_matrix(state.current_transform)
+        .expect("Model matrix pool overflow");
 
-    state.render_pass.record_triangles_with_temp_state(
+    let mvp_index = crate::graphics::MvpIndex::new(
+        model_idx,
+        state.current_view_idx,
+        state.current_proj_idx,
+    );
+
+    // NEW: Pack current shading state into pool (with deduplication)
+    let shading_state_idx = state.add_shading_state();
+
+    state.render_pass.record_triangles(
         format as u8,
         &vertex_data,
         mvp_index,
         state.texture_slots,
-        temp_shading_state,
+        shading_state_idx,  // NEW: pass shading state index
         state.depth_test,
         state.cull_mode,
     );
@@ -591,33 +443,7 @@ fn draw_triangles(
 }
 ```
 
-**File:** `emberware-z/src/graphics/mod.rs` (in `process_draw_commands`)
-
-```rust
-pub fn process_draw_commands(&mut self, z_state: &mut ZFFIState) {
-    // Swap command buffer from FFI state
-    std::mem::swap(&mut self.command_buffer, &mut z_state.render_pass);
-
-    // Intern all temporary shading states
-    for cmd in self.command_buffer.commands_mut() {
-        if let Some(temp_state) = cmd.temp_shading_state.take() {
-            let packed = PackedUnifiedShadingState::from_render_state(
-                temp_state.color,
-                temp_state.metallic,
-                temp_state.roughness,
-                temp_state.emissive,
-                &temp_state.matcap_blend_modes,
-                &temp_state.sky,
-                &temp_state.lights,
-            );
-            cmd.shading_state_handle = self.shading_state_cache.intern(packed);
-        }
-    }
-
-    // Process deferred commands (billboards, sprites, text)
-    // ... (also intern shading states for these)
-}
-```
+**Note:** This mirrors the matrix packing pattern exactly! No temporary storage or deferred processing needed.
 
 ---
 
@@ -632,21 +458,42 @@ pub fn process_draw_commands(&mut self, z_state: &mut ZFFIState) {
 
 #### 5.1: Upload Shading States Before Rendering
 
+**File:** `emberware-z/src/graphics/mod.rs`
+
 ```rust
-pub fn render_frame(&mut self, ...) -> Result<()> {
-    // 1. Upload matrices (from matrix packing refactor)
+pub fn render_frame(&mut self, view: &TextureView, z_state: &mut ZFFIState, clear_color: [f32; 4]) -> Result<()> {
+    // 1. Upload matrices
+    let matrix_data = bytemuck::cast_slice(&z_state.model_matrices);
+    self.queue.write_buffer(&self.model_matrix_buffer, 0, matrix_data);
+
+    let view_data = bytemuck::cast_slice(&z_state.view_matrices);
+    self.queue.write_buffer(&self.view_matrix_buffer, 0, view_data);
+
+    let proj_data = bytemuck::cast_slice(&z_state.proj_matrices);
+    self.queue.write_buffer(&self.proj_matrix_buffer, 0, proj_data);
+
+    // 2. Upload shading states (NEW)
+    let shading_data = bytemuck::cast_slice(&z_state.shading_states);
+    self.queue.write_buffer(&self.shading_state_buffer, 0, shading_data);
+
+    // 3. Upload MVP + shading state indices
+    let mut mvp_shading_indices = Vec::with_capacity(self.command_buffer.commands().len());
+    for cmd in self.command_buffer.commands() {
+        mvp_shading_indices.push([
+            cmd.mvp_index.0,           // .x: packed MVP
+            cmd.shading_state_index,   // .y: shading state index
+        ]);
+    }
+    let indices_data = bytemuck::cast_slice(&mvp_shading_indices);
+    self.queue.write_buffer(&self.mvp_indices_buffer, 0, indices_data);
+
+    // 4. Upload immediate vertex/index data
     // ...
 
-    // 2. Upload shading state buffer
-    self.shading_state_cache.upload(&self.device, &self.queue);
-
-    // 3. Upload immediate vertex/index data
-    // ...
-
-    // 4. Sort commands
+    // 5. Sort commands
     self.sort_commands();
 
-    // 5. Execute render pass
+    // 6. Execute render pass
     // ...
 }
 ```
@@ -654,13 +501,10 @@ pub fn render_frame(&mut self, ...) -> Result<()> {
 #### 5.2: Update Command Sorting
 
 ```rust
-fn sort_commands(&mut self) {
+fn sort_commands(&mut self, z_state: &ZFFIState) {
     self.command_buffer.commands_mut().sort_unstable_by_key(|cmd| {
-        let shading_state = cmd.shading_state_handle;
-        let packed_state = self.shading_state_cache.get(shading_state);
-
-        // Extract blend mode for pipeline key
-        let blend_mode = if let Some(state) = packed_state {
+        // Extract blend mode from shading state
+        let blend_mode = if let Some(state) = z_state.shading_states.get(cmd.shading_state_index as usize) {
             (state.blend_modes & 0xFF) as u8
         } else {
             0
@@ -671,37 +515,35 @@ fn sort_commands(&mut self) {
             cmd.format,                 // Vertex format (0-15)
             blend_mode,                 // Blend mode (extracted from shading state)
             cmd.texture_slots[0].0,     // Primary texture
-            shading_state.0,            // Material (NEW: sort by shading state handle)
+            cmd.shading_state_index,    // Material (NEW: sort by shading state index)
         )
     });
 }
 ```
 
-#### 5.3: Update Push Constants to Include Shading State Index
+**Note:** Pass `z_state` to `sort_commands` to access the shading states pool.
 
-**File:** `emberware-z/src/graphics/mod.rs` (in render pass loop)
+#### 5.3: Upload MVP + Shading State Indices Buffer
+
+**File:** `emberware-z/src/graphics/mod.rs` (in `render_frame`)
 
 ```rust
+// Build combined MVP + shading state indices buffer
+let mut mvp_shading_indices = Vec::with_capacity(self.command_buffer.commands().len());
 for cmd in self.command_buffer.commands() {
-    // ... pipeline and bind group setup
-
-    // Set push constants with matrix + shading indices
-    let (model_idx, view_idx, proj_idx) = cmd.mvp_index.unpack();
-    let push_constants = [
-        model_idx,
-        view_idx,
-        proj_idx,
-        cmd.shading_state_handle.0,  // NEW: shading state index
-    ];
-    render_pass.set_push_constants(
-        wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,  // NOTE: Fragment needs it too!
-        0,
-        bytemuck::cast_slice(&push_constants),
-    );
-
-    // ... rest of render pass execution
+    // Each entry is vec2<u32>: [packed_mvp, shading_state_index]
+    mvp_shading_indices.push([
+        cmd.mvp_index.0,                    // .x: packed MVP indices
+        cmd.shading_state_handle.0,         // .y: shading state index
+    ]);
 }
+
+// Upload to GPU (replaces existing MVP indices upload)
+let indices_data = bytemuck::cast_slice(&mvp_shading_indices);
+self.queue.write_buffer(&self.mvp_indices_buffer, 0, indices_data);
 ```
+
+**Note:** This replaces the existing MVP indices upload. The buffer size calculation remains the same since we were already using `vec2<u32>`.
 
 ---
 
@@ -717,18 +559,12 @@ for cmd in self.command_buffer.commands() {
 
 ### Changes (Apply to All 4 Templates)
 
-#### 6.1: Add Shading State Buffer Binding
+#### 6.1: Rename MVP Indices Buffer and Add Shading State Buffer
 
 ```wgsl
-// Push constants (updated from matrix packing)
-struct PushConstants {
-    model_index: u32,
-    view_index: u32,
-    proj_index: u32,
-    shading_state_index: u32,  // NEW: for unified shading state
-}
-
-var<push_constant> pc: PushConstants;
+// Per-frame storage buffer - packed MVP + shading state indices
+// Each entry is 2 × u32: [packed_mvp, shading_state_index]
+@group(0) @binding(3) var<storage, read> mvp_shading_indices: array<vec2<u32>>;
 
 // Packed structures (must match Rust layout EXACTLY)
 struct PackedSky {
@@ -778,9 +614,15 @@ struct UnifiedShadingState {
     _pad_l3: u32,
 }
 
-// Shading state buffer (group 0, binding 6 - after bones at binding 5)
-@group(0) @binding(6) var<storage, read> shading_states: array<UnifiedShadingState>;
+// Shading state buffer (binding varies by mode)
+// Mode 0/1: @group(0) @binding(7) (after bones at 6)
+// Mode 2/3: @group(0) @binding(9) (after bones at 8)
+@group(0) @binding(BINDING_SHADING_STATE) var<storage, read> shading_states: array<UnifiedShadingState>;
 ```
+
+**Note:** Use the correct binding number for each shader template:
+- `mode0_unlit.wgsl` and `mode1_matcap.wgsl`: binding 7
+- `mode2_pbr.wgsl` and `mode3_hybrid.wgsl`: binding 9
 
 #### 6.2: Add Unpacking Helpers
 
@@ -835,13 +677,42 @@ fn is_light_enabled(z_enabled: i32) -> bool {
 }
 ```
 
-#### 6.3: Update Fragment Shader
+#### 6.3: Update Vertex Shader to Pass Shading State Index
+
+```wgsl
+@vertex
+fn vs(in: VertexIn, @builtin(instance_index) instance_index: u32) -> VertexOut {
+    var out: VertexOut;
+
+    //VS_SKINNED
+
+    // Get packed MVP indices from storage buffer using instance index
+    let indices = mvp_shading_indices[instance_index];
+    let mvp_packed = indices.x;
+    let shading_state_idx = indices.y;  // NEW: extract shading state index
+
+    let model_idx = mvp_packed & 0xFFFFu;
+    let view_idx = (mvp_packed >> 16u) & 0xFFu;
+    let proj_idx = (mvp_packed >> 24u) & 0xFFu;
+
+    // ... rest of vertex shader
+
+    // Pass shading state index to fragment shader
+    out.shading_state_index = shading_state_idx;  // NEW: add to VertexOut
+
+    return out;
+}
+```
+
+**Note:** Add `shading_state_index: u32` to the `VertexOut` struct (use `@location(N)` with appropriate N for each shader).
+
+#### 6.4: Update Fragment Shader
 
 ```wgsl
 @fragment
 fn fs(in: VertexOutput) -> @location(0) vec4<f32> {
-    // Fetch shading state for this draw (via push constants)
-    let state = shading_states[pc.shading_state_index];
+    // Fetch shading state for this draw (via vertex shader)
+    let state = shading_states[in.shading_state_index];
 
     // Unpack PBR params
     let params = state.params_packed;
@@ -899,51 +770,68 @@ fn fs(in: VertexOutput) -> @location(0) vec4<f32> {
 
 **File:** `emberware-z/src/graphics/pipeline.rs`
 
-```rust
-let bind_group_layout_0 = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-    label: Some("Frame Uniforms"),
-    entries: &[
-        // Bindings 0-2: Matrix storage buffers (from matrix packing)
-        // Binding 3: Sky uniforms
-        // Binding 4: Material uniforms
-        // Binding 5: Bone buffer
+Update `create_frame_bind_group_layout` for each render mode:
 
-        // Binding 6: Shading states (NEW)
-        BindGroupLayoutEntry {
-            binding: 6,
-            visibility: ShaderStages::FRAGMENT,  // Fragment shader reads this
-            ty: BindingType::Buffer {
-                ty: BufferBindingType::Storage { read_only: true },
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        },
-    ],
-});
+**Mode 0/1 (Unlit, Matcap):**
+```rust
+// Existing bindings 0-6 (model, view, proj, mvp_indices, sky, material, bones)
+
+// Binding 7: Shading states (NEW)
+BindGroupLayoutEntry {
+    binding: 7,
+    visibility: ShaderStages::FRAGMENT,  // Fragment shader reads this
+    ty: BindingType::Buffer {
+        ty: BufferBindingType::Storage { read_only: true },
+        has_dynamic_offset: false,
+        min_binding_size: None,
+    },
+    count: None,
+},
+```
+
+**Mode 2/3 (PBR, Hybrid):**
+```rust
+// Existing bindings 0-8 (model, view, proj, mvp_indices, sky, material, lights, camera, bones)
+
+// Binding 9: Shading states (NEW)
+BindGroupLayoutEntry {
+    binding: 9,
+    visibility: ShaderStages::FRAGMENT,  // Fragment shader reads this
+    ty: BindingType::Buffer {
+        ty: BufferBindingType::Storage { read_only: true },
+        has_dynamic_offset: false,
+        min_binding_size: None,
+    },
+    count: None,
+},
 ```
 
 #### 7.2: Create Bind Group with Shading State Buffer
 
 **File:** `emberware-z/src/graphics/mod.rs`
 
-```rust
-fn create_frame_bind_group(&self) -> wgpu::BindGroup {
-    self.device.create_bind_group(&BindGroupDescriptor {
-        label: Some("Frame Uniforms"),
-        layout: &self.frame_bind_group_layout,
-        entries: &[
-            // Bindings 0-5: Existing (matrices, sky, material, lights, bones)
-            // ...
+Update the bind group creation in `render_frame` to include the shading state buffer:
 
-            // Binding 6: Shading states
-            BindGroupEntry {
-                binding: 6,
-                resource: self.shading_state_cache.buffer().as_entire_binding(),
-            },
-        ],
-    })
-}
+**Mode 0/1:**
+```rust
+// ... existing bindings 0-6
+
+// Binding 7: Shading states
+BindGroupEntry {
+    binding: 7,
+    resource: self.shading_state_cache.buffer().as_entire_binding(),
+},
+```
+
+**Mode 2/3:**
+```rust
+// ... existing bindings 0-8
+
+// Binding 9: Shading states
+BindGroupEntry {
+    binding: 9,
+    resource: self.shading_state_cache.buffer().as_entire_binding(),
+},
 ```
 
 ---
@@ -963,13 +851,11 @@ fn create_frame_bind_group(&self) -> wgpu::BindGroup {
 ```rust
 fn extract_pipeline_key(
     cmd: &VRPCommand,
-    shading_cache: &ShadingStateCache,
+    z_state: &ZFFIState,
     render_mode: u8,
 ) -> PipelineKey {
-    // Get actual shading state from cache
-    let shading_state = shading_cache
-        .get(cmd.shading_state_handle)
-        .expect("Shading state handle not found in cache");
+    // Get actual shading state from pool
+    let shading_state = &z_state.shading_states[cmd.shading_state_index as usize];
 
     // Extract blend mode from packed state
     let blend_mode = (shading_state.blend_modes & 0xFF) as u8;
@@ -1029,18 +915,19 @@ fn extract_pipeline_key(
 - [ ] Memory: VRPCommand size reduced significantly
 - [ ] Cache efficiency: High hit rate for repeated materials
 - [ ] Quantization: No visible artifacts from u8/snorm16 precision
-- [ ] Push constants: Verify 16-byte total (4 × u32)
+- [ ] Per-draw materials: Verify different draws can have different material properties
+- [ ] MVP + shading indices buffer: Verify correct packing and upload
 
 ### Performance Metrics
 
 ```rust
-// Log cache stats
-let (state_count, capacity) = self.shading_state_cache.stats();
+// Log shading state stats (in ZGraphics or app.rs)
+let state_count = z_state.shading_states.len();
+let state_bytes = state_count * std::mem::size_of::<PackedUnifiedShadingState>();
 tracing::debug!(
-    "Shading state cache: {} states, {} capacity ({} KB)",
+    "Shading states: {} unique states ({} KB)",
     state_count,
-    capacity,
-    (state_count * std::mem::size_of::<PackedUnifiedShadingState>()) / 1024
+    state_bytes / 1024
 );
 ```
 
@@ -1107,26 +994,40 @@ This refactor includes breaking changes:
 ## Integration with Matrix Packing
 
 This refactor **requires** matrix packing to be implemented first, as it:
-- Uses the 4th push constant slot reserved by matrix packing
+- Uses the second u32 in the `mvp_indices` buffer (already allocated as `vec2<u32>`)
 - Depends on VRPCommand having `mvp_index` instead of `transform`
-- Leverages the same push constant infrastructure
+- Leverages the same instance index indirection infrastructure
 
-**Push constants structure (shared):**
+**Storage buffer structure (shared):**
 ```wgsl
-struct PushConstants {
-    model_index: u32,           // Matrix packing
-    view_index: u32,            // Matrix packing
-    proj_index: u32,            // Matrix packing
-    shading_state_index: u32,   // Unified shading state (THIS refactor)
-}
+// Per-frame storage buffer - packed MVP + shading state indices
+@group(0) @binding(3) var<storage, read> mvp_shading_indices: array<vec2<u32>>;
+
+// In vertex shader:
+let indices = mvp_shading_indices[instance_index];
+let mvp_packed = indices.x;          // Matrix packing uses .x
+let shading_state_idx = indices.y;   // Unified shading state uses .y
 ```
 
-**Key difference from original plan:**
-- ✅ Uses push constants (simpler than vertex attributes/instance buffers)
-- ✅ No per-draw instance buffer management
-- ✅ All per-draw indices in one place (push constants)
+**Key implementation details:**
+- ✅ No push constants required (GPU doesn't support them)
+- ✅ Uses existing instance index indirection
+- ✅ Single storage buffer for all per-draw indices
+- ✅ Shading state index passed from vertex → fragment shader via interpolator
 
 ---
 
-**Last Updated:** December 2024
+**Last Updated:** December 2024 (Major revision - simplified approach)
 **Status:** Ready for implementation (after matrix packing)
+
+---
+
+## Implementation Summary
+
+This plan was significantly simplified from the original by:
+1. **No push constants** - Uses instance index indirection via existing `vec2<u32>` storage buffer
+2. **Shading state pool in ZFFIState** - Mirrors matrix packing approach, no separate cache in ZGraphics
+3. **Automatic deduplication** - Hash-based deduplication happens in `add_shading_state()`
+4. **Consistent with matrix packing** - Same pattern, same infrastructure, same cleanup
+
+The key insight: the `mvp_indices` buffer was always `vec2<u32>` with the second u32 reserved for exactly this purpose. This implementation simply uses that reserved slot.
