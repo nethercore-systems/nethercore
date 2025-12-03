@@ -544,6 +544,11 @@ impl App {
         let game_instance = emberware_core::wasm::GameInstance::new(wasm_engine, &module, &linker)
             .map_err(|e| RuntimeError(format!("Failed to instantiate game: {}", e)))?;
 
+        // Reset graphics state for new game
+        if let Some(graphics) = &mut self.graphics {
+            graphics.reset_for_new_game();
+        }
+
         // Create the runtime
         let mut runtime = Runtime::new(console);
         runtime.load_game(game_instance);

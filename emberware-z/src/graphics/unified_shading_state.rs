@@ -32,7 +32,7 @@ pub struct PackedLight {
 
 /// Unified per-draw shading state (~96 bytes, POD, hashable)
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Pod, Zeroable)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Pod, Zeroable)]
 pub struct PackedUnifiedShadingState {
     // PBR params (4 bytes)
     pub metallic: u8,
@@ -45,6 +45,21 @@ pub struct PackedUnifiedShadingState {
 
     pub sky: PackedSky,       // 16 bytes
     pub lights: [PackedLight; 4], // 64 bytes
+}
+
+impl Default for PackedUnifiedShadingState {
+    fn default() -> Self {
+        Self {
+            metallic: 0,
+            roughness: 128, // 0.5 in u8
+            emissive: 0,
+            pad0: 0,
+            color_rgba8: 0xFFFFFFFF, // White, fully opaque
+            blend_modes: 0,
+            sky: PackedSky::default(),
+            lights: [PackedLight::default(); 4],
+        }
+    }
 }
 
 /// Handle to interned shading state
@@ -225,7 +240,7 @@ impl ShadingStateCache {
 
         Self {
             cache: HashMap::new(),
-            states: Vec::new(),
+            states: Vec::new(), // Start empty - states will be added at indices 0, 1, 2...
             states_buffer,
             buffer_capacity: initial_capacity,
             dirty: false,
@@ -236,6 +251,7 @@ impl ShadingStateCache {
     pub fn intern(&mut self, state: PackedUnifiedShadingState) -> UnifiedShadingStateHandle {
         // Check if already cached
         if let Some(&handle) = self.cache.get(&state) {
+            tracing::debug!("Reusing cached shading state: handle={:?}", handle);
             return handle;
         }
 
@@ -245,13 +261,24 @@ impl ShadingStateCache {
         self.cache.insert(state, handle);
         self.dirty = true;
 
-        tracing::trace!("Interned new shading state: {:?}", handle);
+        tracing::info!(
+            "Interned NEW shading state: handle={:?}, color=0x{:08X}, states.len()={}",
+            handle,
+            state.color_rgba8,
+            self.states.len()
+        );
         handle
     }
 
     /// Upload dirty states to GPU
     pub fn upload(&mut self, device: &Device, queue: &Queue) {
         if !self.dirty {
+            tracing::warn!("Shading state upload skipped - not dirty!");
+            return;
+        }
+
+        if self.states.is_empty() {
+            tracing::error!("Shading state upload - states vector is EMPTY!");
             return;
         }
 
@@ -278,7 +305,11 @@ impl ShadingStateCache {
         queue.write_buffer(&self.states_buffer, 0, data);
 
         self.dirty = false;
-        tracing::debug!("Uploaded {} shading states to GPU", self.states.len());
+        tracing::info!(
+            "✓ Uploaded {} shading states to GPU (first color: 0x{:08X})",
+            self.states.len(),
+            self.states.first().map(|s| s.color_rgba8).unwrap_or(0)
+        );
     }
 
     /// Get GPU buffer
@@ -291,11 +322,12 @@ impl ShadingStateCache {
         self.states.get(handle.0 as usize)
     }
 
-    /// Clear cache (optional, for per-frame reset)
-    #[allow(dead_code)]
+    /// Clear cache for per-frame reset
     pub fn clear(&mut self) {
+        tracing::info!("Clearing shading state cache (had {} states)", self.states.len());
         self.cache.clear();
         self.states.clear();
+        // Don't add default state - let states start at index 0
         self.dirty = true;
     }
 

@@ -69,6 +69,9 @@ mod pipeline;
 mod render_state;
 mod texture_manager;
 mod unified_shading_state;
+#[cfg(test)]
+#[path = "unified_shading_state_test.rs"]
+mod unified_shading_state_test;
 mod vertex;
 
 use hashbrown::HashMap;
@@ -223,6 +226,10 @@ pub struct ZGraphics {
     // MVP indices buffer (per-draw u32 packed indices)
     mvp_indices_buffer: wgpu::Buffer,
     mvp_indices_capacity: usize,
+    
+    // Shading state indices buffer (per-draw u32 indices)
+    shading_indices_buffer: wgpu::Buffer,
+    shading_indices_capacity: usize,
 
     // Bind group caches (cleared and repopulated each frame)
     material_buffers: HashMap<MaterialCacheKey, wgpu::Buffer>,
@@ -428,6 +435,14 @@ impl ZGraphics {
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
+        
+        // Create shading state indices storage buffer (u32 per draw call)
+        let shading_indices_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Shading State Indices Storage Buffer"),
+            size: (INITIAL_MVP_INDICES_CAPACITY * 4) as u64, // 4 bytes per u32
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
 
         // Create texture manager (handles fallback textures)
         let texture_manager = TextureManager::new(&device, &queue)?;
@@ -474,6 +489,8 @@ impl ZGraphics {
             proj_matrices_capacity: INITIAL_PROJ_MATRIX_CAPACITY,
             mvp_indices_buffer,
             mvp_indices_capacity: INITIAL_MVP_INDICES_CAPACITY,
+            shading_indices_buffer,
+            shading_indices_capacity: INITIAL_MVP_INDICES_CAPACITY,
             material_buffers: HashMap::new(),
             texture_bind_groups: HashMap::new(),
             frame_bind_groups: HashMap::new(),
@@ -1184,6 +1201,21 @@ impl ZGraphics {
     /// manually if needed.
     pub fn reset_command_buffer(&mut self) {
         self.command_buffer.reset();
+        // Clear shading state cache for next frame
+        self.shading_state_cache.clear();
+    }
+
+    /// Reset all per-game state (called when loading a new game)
+    pub fn reset_for_new_game(&mut self) {
+        tracing::info!("Resetting graphics for new game");
+        self.command_buffer.reset();
+        self.shading_state_cache.clear();
+        self.current_transform = Mat4::IDENTITY;
+        self.transform_stack.clear();
+        // Clear bind group caches
+        self.material_buffers.clear();
+        self.texture_bind_groups.clear();
+        self.frame_bind_groups.clear();
     }
 
     // ========================================================================
@@ -1235,6 +1267,9 @@ impl ZGraphics {
             Self::convert_matcap_blend_mode(z_state.matcap_blend_modes[3]),
         ];
 
+        // 0. Clear shading state cache from previous frame
+        self.shading_state_cache.clear();
+
         // 1. Swap the FFI-populated render pass into our command buffer
         // This efficiently transfers all immediate geometry (triangles, meshes)
         // without copying vectors. The old command buffer (now in z_state.render_pass)
@@ -1242,16 +1277,83 @@ impl ZGraphics {
         std::mem::swap(&mut self.command_buffer, &mut z_state.render_pass);
 
         // 1.5. Intern shading states for all commands
-        // Pack the current shading state from ZFFIState and intern it for all commands
-        let packed_state = z_state.pack_current_shading_state();
-        let shading_handle = self.shading_state_cache.intern(packed_state);
+        // Pack each command's state individually (they may have different colors, materials, etc.)
+        use crate::graphics::{PackedUnifiedShadingState, Sky};
+        use glam::{Vec3, Vec4};
         
-        // Assign the shading state handle to all commands that don't have one
-        for cmd in self.command_buffer.commands_mut() {
+        tracing::info!("Processing {} commands for shading state interning", self.command_buffer.commands().len());
+        
+        for (cmd_idx, cmd) in self.command_buffer.commands_mut().iter_mut().enumerate() {
             if cmd.shading_state_handle.is_none() {
-                cmd.shading_state_handle = Some(shading_handle);
+                tracing::debug!("Command {}: color=0x{:08X}", cmd_idx, cmd.color);
+                // Pack this command's specific state
+                let sky = Sky {
+                    horizon_color: Vec4::new(
+                        z_state.sky_horizon_color[0],
+                        z_state.sky_horizon_color[1],
+                        z_state.sky_horizon_color[2],
+                        0.0,
+                    ),
+                    zenith_color: Vec4::new(
+                        z_state.sky_zenith_color[0],
+                        z_state.sky_zenith_color[1],
+                        z_state.sky_zenith_color[2],
+                        0.0,
+                    ),
+                    sun_direction: Vec3::from_array(z_state.sky_sun_direction),
+                    sun_color: Vec3::from_array(z_state.sky_sun_color),
+                    sun_sharpness: z_state.sky_sun_sharpness,
+                };
+
+                let packed_state = PackedUnifiedShadingState::from_render_state(
+                    cmd.color,  // Use command's color, not ZFFIState's
+                    z_state.material_metallic,
+                    z_state.material_roughness,
+                    z_state.material_emissive,
+                    &cmd.matcap_blend_modes,  // Use command's blend modes
+                    &sky,
+                    &z_state.lights,
+                );
+                
+                cmd.shading_state_handle = Some(self.shading_state_cache.intern(packed_state));
             }
         }
+
+        // Helper function to pack and intern a shading state for deferred commands
+        let pack_and_intern_state = |cache: &mut ShadingStateCache, 
+                                      color: u32,
+                                      matcap_blend_modes: &[MatcapBlendMode; 4],
+                                      z_state: &crate::state::ZFFIState| {
+            let sky = Sky {
+                horizon_color: Vec4::new(
+                    z_state.sky_horizon_color[0],
+                    z_state.sky_horizon_color[1],
+                    z_state.sky_horizon_color[2],
+                    0.0,
+                ),
+                zenith_color: Vec4::new(
+                    z_state.sky_zenith_color[0],
+                    z_state.sky_zenith_color[1],
+                    z_state.sky_zenith_color[2],
+                    0.0,
+                ),
+                sun_direction: Vec3::from_array(z_state.sky_sun_direction),
+                sun_color: Vec3::from_array(z_state.sky_sun_color),
+                sun_sharpness: z_state.sky_sun_sharpness,
+            };
+
+            let packed_state = PackedUnifiedShadingState::from_render_state(
+                color,
+                z_state.material_metallic,
+                z_state.material_roughness,
+                z_state.material_emissive,
+                matcap_blend_modes,
+                &sky,
+                &z_state.lights,
+            );
+            
+            cache.intern(packed_state)
+        };
 
         // 2. Process deferred commands (billboards, sprites, text, sky)
         // These require additional processing or generation of geometry
@@ -1272,16 +1374,6 @@ impl ZGraphics {
                     blend_mode,
                     bound_textures,
                 } => {
-                    // Generate billboard quad geometry
-                    tracing::trace!(
-                        "Billboard: {}x{} mode={} at {:?} color={:08x}",
-                        width,
-                        height,
-                        mode,
-                        transform,
-                        color
-                    );
-
                     // Validate mode
                     if !(1..=4).contains(&mode) {
                         tracing::warn!("Invalid billboard mode: {} (must be 1-4)", mode);
@@ -1293,6 +1385,16 @@ impl ZGraphics {
 
                     // Extract position from transform (last column)
                     let position = transform.w_axis.truncate();
+                    
+                    // Generate billboard quad geometry
+                    tracing::debug!(
+                        "Billboard: {}x{} mode={} pos=({:.2},{:.2},{:.2}) color={:08x}",
+                        width,
+                        height,
+                        mode,
+                        position.x, position.y, position.z,
+                        color
+                    );
 
                     // Get direction from billboard to camera (same for all billboards)
                     // view_matrix.z_axis points backward (toward camera), which is what we want
@@ -1394,6 +1496,22 @@ impl ZGraphics {
                         model_idx,
                         z_state.current_view_idx,
                         z_state.current_proj_idx,
+                    );
+                    
+                    // Debug: log MVP indices for first few billboards
+                    if model_idx < 5 {
+                        tracing::info!(
+                            "Billboard MVP: model_idx={}, view_idx={}, proj_idx={}, packed=0x{:08X}",
+                            model_idx, z_state.current_view_idx, z_state.current_proj_idx, mvp_index.0
+                        );
+                    }
+
+                    // Pack and intern shading state for this billboard
+                    let shading_handle = pack_and_intern_state(
+                        &mut self.shading_state_cache,
+                        color,  // Use the billboard's color
+                        &matcap_blend_modes,
+                        z_state,
                     );
 
                     // Add draw command
@@ -1532,6 +1650,14 @@ impl ZGraphics {
                         z_state.current_proj_idx,
                     );
 
+                    // Pack and intern shading state for this sprite
+                    let shading_handle = pack_and_intern_state(
+                        &mut self.shading_state_cache,
+                        color,  // Use the sprite's color
+                        &matcap_blend_modes,
+                        z_state,
+                    );
+
                     // Add draw command (screen space)
                     self.command_buffer.add_command(command_buffer::VRPCommand {
                         format: SPRITE_FORMAT,
@@ -1610,6 +1736,14 @@ impl ZGraphics {
                         model_idx,
                         z_state.current_view_idx,
                         z_state.current_proj_idx,
+                    );
+
+                    // Pack and intern shading state for this rect
+                    let shading_handle = pack_and_intern_state(
+                        &mut self.shading_state_cache,
+                        color,  // Use the rect's color
+                        &matcap_blend_modes,
+                        z_state,
                     );
 
                     // Add draw command (screen space)
@@ -1720,7 +1854,12 @@ impl ZGraphics {
                         first_index,
                         buffer_source: BufferSource::Immediate,
                         texture_slots,
-                        shading_state_handle: Some(shading_handle),
+                        shading_state_handle: Some(pack_and_intern_state(
+                            &mut self.shading_state_cache,
+                            color,  // Use the text's color
+                            &matcap_blend_modes,
+                            z_state,
+                        )),
                         color: 0xFFFFFFFF, // Color already baked into vertices
                         depth_test: false, // 2D text doesn't use depth test
                         cull_mode: CullMode::None,
@@ -2251,35 +2390,7 @@ impl ZGraphics {
 
         // 4. Upload shading states
         self.shading_state_cache.upload(&self.device, &self.queue);
-
-        // 4. Upload MVP indices (collect from all commands)
-        if command_count > 0 {
-            // Collect MVP indices from all commands
-            let mvp_indices: Vec<u32> = self
-                .command_buffer
-                .commands()
-                .iter()
-                .map(|cmd| cmd.mvp_index.0)
-                .collect();
-
-            // Ensure buffer capacity
-            if command_count > self.mvp_indices_capacity {
-                let new_capacity = command_count.next_power_of_two();
-                self.mvp_indices_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-                    label: Some("MVP Indices Storage Buffer"),
-                    size: (new_capacity * 4) as u64, // 4 bytes per u32
-                    usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-                    mapped_at_creation: false,
-                });
-                self.mvp_indices_capacity = new_capacity;
-                tracing::debug!("Resized MVP indices buffer to {} entries", new_capacity);
-            }
-
-            // Upload MVP indices
-            let data = bytemuck::cast_slice(&mvp_indices);
-            self.queue.write_buffer(&self.mvp_indices_buffer, 0, data);
-        }
-
+        
         // Upload vertex/index data from command buffer to GPU buffers
         for format in 0..VERTEX_FORMAT_COUNT as u8 {
             let vertex_data = self.command_buffer.vertex_data(format);
@@ -2306,6 +2417,7 @@ impl ZGraphics {
 
         // OPTIMIZATION 3: Sort draw commands IN-PLACE by (pipeline_key, texture_slots) to minimize state changes
         // Commands are reset at the start of next frame, so no need to preserve original order or clone
+        // NOTE: Must sort BEFORE collecting MVP indices!
         self.command_buffer
             .commands_mut()
             .sort_unstable_by_key(|cmd| {
@@ -2340,6 +2452,70 @@ impl ZGraphics {
                     cmd.texture_slots[3].0,
                 )
             });
+
+        // 6. Upload MVP indices and shading state indices (collect from all commands AFTER sorting)
+        if command_count > 0 {
+            // Collect MVP indices from all commands in their SORTED order
+            let mvp_indices: Vec<u32> = self
+                .command_buffer
+                .commands()
+                .iter()
+                .map(|cmd| cmd.mvp_index.0)
+                .collect();
+
+            // Collect shading state handles from all commands in their SORTED order
+            let shading_indices: Vec<u32> = self
+                .command_buffer
+                .commands()
+                .iter()
+                .map(|cmd| cmd.shading_state_handle.map(|h| h.0).unwrap_or(0))
+                .collect();
+            
+
+
+            // Ensure buffer capacity
+            if command_count > self.mvp_indices_capacity {
+                let new_capacity = command_count.next_power_of_two();
+                self.mvp_indices_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("MVP Indices Storage Buffer"),
+                    size: (new_capacity * 4) as u64, // 4 bytes per u32
+                    usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
+                });
+                self.mvp_indices_capacity = new_capacity;
+                tracing::debug!("Resized MVP indices buffer to {} entries", new_capacity);
+            }
+
+            // Ensure shading indices buffer capacity
+            if command_count > self.shading_indices_capacity {
+                let new_capacity = command_count.next_power_of_two();
+                self.shading_indices_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("Shading State Indices Storage Buffer"),
+                    size: (new_capacity * 4) as u64,
+                    usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
+                });
+                self.shading_indices_capacity = new_capacity;
+            }
+
+            // Upload MVP indices
+            let data = bytemuck::cast_slice(&mvp_indices);
+            self.queue.write_buffer(&self.mvp_indices_buffer, 0, data);
+            
+            // Upload shading state indices
+            let shading_data = bytemuck::cast_slice(&shading_indices);
+            self.queue.write_buffer(&self.shading_indices_buffer, 0, shading_data);
+            
+            // Debug: Verify first few entries
+            tracing::info!("First 5 commands after sort:");
+            for i in 0..5.min(command_count) {
+                if let Some(cmd) = self.command_buffer.commands().get(i) {
+                    let shading_idx = shading_indices.get(i).copied().unwrap_or(999);
+                    tracing::info!("  Cmd[{}]: shading_handle={:?}, shading_indices[{}]={}", 
+                        i, cmd.shading_state_handle, i, shading_idx);
+                }
+            }
+        }
 
         // Take caches out of self temporarily to avoid nested mutable borrows during render pass.
         // Caches are persistent across frames - entries are reused when keys match.
@@ -2487,20 +2663,20 @@ impl ZGraphics {
                                             resource: self.proj_matrices_buffer.as_entire_binding(),
                                         },
                                         wgpu::BindGroupEntry {
-                                            binding: 3,
-                                            resource: self.sky_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 4,
-                                            resource: material_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
                                             binding: 5,
                                             resource: self.bone_buffer.as_entire_binding(),
                                         },
                                         wgpu::BindGroupEntry {
                                             binding: 6,
                                             resource: self.mvp_indices_buffer.as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 7,
+                                            resource: self.shading_state_cache.buffer().as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 8,
+                                            resource: self.shading_indices_buffer.as_entire_binding(),
                                         },
                                     ],
                                 })
@@ -2549,6 +2725,14 @@ impl ZGraphics {
                                             binding: 8,
                                             resource: self.mvp_indices_buffer.as_entire_binding(),
                                         },
+                                        wgpu::BindGroupEntry {
+                                            binding: 9,
+                                            resource: self.shading_state_cache.buffer().as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 10,
+                                            resource: self.shading_indices_buffer.as_entire_binding(),
+                                        },
                                     ],
                                 })
                             }
@@ -2573,20 +2757,20 @@ impl ZGraphics {
                                             resource: self.proj_matrices_buffer.as_entire_binding(),
                                         },
                                         wgpu::BindGroupEntry {
-                                            binding: 3,
-                                            resource: self.sky_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 4,
-                                            resource: material_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
                                             binding: 5,
                                             resource: self.bone_buffer.as_entire_binding(),
                                         },
                                         wgpu::BindGroupEntry {
                                             binding: 6,
                                             resource: self.mvp_indices_buffer.as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 7,
+                                            resource: self.shading_state_cache.buffer().as_entire_binding(),
+                                        },
+                                        wgpu::BindGroupEntry {
+                                            binding: 8,
+                                            resource: self.shading_indices_buffer.as_entire_binding(),
                                         },
                                     ],
                                 })
@@ -2697,6 +2881,7 @@ impl ZGraphics {
                     };
                     if let Some(buffer) = index_buffer.buffer() {
                         render_pass.set_index_buffer(buffer.slice(..), wgpu::IndexFormat::Uint16);
+                        
                         render_pass.draw_indexed(
                             cmd.first_index..cmd.first_index + cmd.index_count,
                             cmd.base_vertex as i32,

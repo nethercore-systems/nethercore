@@ -57,6 +57,35 @@ struct LightUniforms {
 // MVP indices storage buffer (per-draw packed indices)
 @group(0) @binding(8) var<storage, read> mvp_indices: array<u32>;
 
+// Unified shading states storage buffer (NEW)
+struct PackedSky {
+    horizon_color: u32,
+    zenith_color: u32,
+    sun_direction: vec4<i32>,
+    sun_color_and_sharpness: u32,
+}
+
+struct PackedLight {
+    direction: vec4<i32>,
+    color_and_intensity: u32,
+}
+
+struct UnifiedShadingState {
+    metallic: u32,
+    roughness: u32,
+    emissive: u32,
+    pad0: u32,
+    color_rgba8: u32,
+    blend_modes: u32,
+    sky: PackedSky,
+    lights: array<PackedLight, 4>,
+}
+
+@group(0) @binding(9) var<storage, read> shading_states: array<UnifiedShadingState>;
+
+// Shading state indices storage buffer (per-draw u32 indices)
+@group(0) @binding(10) var<storage, read> shading_indices: array<u32>;
+
 // Texture bindings (group 1)
 @group(1) @binding(0) var slot0: texture_2d<f32>;  // Albedo
 @group(1) @binding(1) var slot1: texture_2d<f32>;  // MRE (Metallic-Roughness-Emissive)
@@ -83,6 +112,7 @@ struct VertexOut {
     @location(2) view_normal: vec3<f32>,
     //VOUT_UV
     //VOUT_COLOR
+    @location(20) @interpolate(flat) shading_state_index: u32,
 }
 
 // ============================================================================
@@ -95,6 +125,26 @@ fn unpack_mvp(packed: u32) -> vec3<u32> {
     let view_idx = (packed >> 16u) & 0xFFu;
     let proj_idx = (packed >> 24u) & 0xFFu;
     return vec3<u32>(model_idx, view_idx, proj_idx);
+}
+
+fn unpack_rgba8(packed: u32) -> vec4<f32> {
+    let r = f32((packed >> 24u) & 0xFFu) / 255.0;
+    let g = f32((packed >> 16u) & 0xFFu) / 255.0;
+    let b = f32((packed >> 8u) & 0xFFu) / 255.0;
+    let a = f32(packed & 0xFFu) / 255.0;
+    return vec4<f32>(r, g, b, a);
+}
+
+fn unpack_u8_to_f32(packed: u32) -> f32 {
+    return f32(packed & 0xFFu) / 255.0;
+}
+
+fn unpack_snorm16(packed: vec4<i32>) -> vec3<f32> {
+    return vec3<f32>(
+        f32(packed.x) / 32767.0,
+        f32(packed.y) / 32767.0,
+        f32(packed.z) / 32767.0,
+    );
 }
 
 // ============================================================================
@@ -133,6 +183,9 @@ fn vs(in: VertexIn, @builtin(instance_index) instance_index: u32) -> VertexOut {
 
     //VS_UV
     //VS_COLOR
+
+    // Pass shading state index (read from buffer after sorting)
+    out.shading_state_index = shading_indices[instance_index];
 
     return out;
 }
@@ -201,33 +254,45 @@ fn pbr_lite(
 
 @fragment
 fn fs(in: VertexOut) -> @location(0) vec4<f32> {
-    // Get albedo
-    var albedo = material.color.rgb;
+    // Fetch shading state for this draw (NEW)
+    let state = shading_states[in.shading_state_index];
+    let base_color = unpack_rgba8(state.color_rgba8);
+    
+    // Get albedo from shading state
+    var albedo = base_color.rgb;
+    var alpha = base_color.a;
     //FS_COLOR
     //FS_UV
 
+    // Get material properties from shading state
+    let metallic = unpack_u8_to_f32(state.metallic);
+    let roughness = unpack_u8_to_f32(state.roughness);
+    let emissive = unpack_u8_to_f32(state.emissive);
+    
     // Sample MRE texture (defaults to correct values if not bound)
-    var mre = vec3<f32>(material.metallic, material.roughness, material.emissive);
+    var mre = vec3<f32>(metallic, roughness, emissive);
     //FS_MRE
 
     // View direction
     let view_dir = normalize(camera_position - in.world_position);
 
-    // Accumulate lighting from all enabled lights
+    // Accumulate lighting from all enabled lights (from shading state)
     var final_color = vec3<f32>(0.0);
     let ambient = sample_sky(in.world_normal) * 0.3;
 
     for (var i = 0u; i < 4u; i++) {
-        let light = lights_uniforms.lights[i];
-        // Check if enabled (light.direction_and_enabled.w != 0)
-        if (light.direction_and_enabled.w != 0.0) {
-            let light_direction = light.direction_and_enabled.xyz;
-            let light_color = light.color_and_intensity.xyz * light.color_and_intensity.w;
+        let packed_light = state.lights[i];
+        let light_dir = normalize(unpack_snorm16(packed_light.direction));
+        let enabled = packed_light.direction.w != 0;
+        
+        if (enabled) {
+            let light_color_packed = unpack_rgba8(packed_light.color_and_intensity);
+            let light_color = light_color_packed.rgb * light_color_packed.a;
 
             final_color += pbr_lite(
                 in.world_normal,
                 view_dir,
-                light_direction,
+                light_dir,
                 albedo,
                 mre.r,  // metallic
                 mre.g,  // roughness
@@ -246,5 +311,5 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
 
     final_color += env_reflection;
 
-    return vec4<f32>(final_color, material.color.a);
+    return vec4<f32>(final_color, alpha);
 }

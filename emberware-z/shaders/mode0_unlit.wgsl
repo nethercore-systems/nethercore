@@ -12,28 +12,43 @@
 @group(0) @binding(1) var<storage, read> view_matrices: array<mat4x4<f32>>;
 @group(0) @binding(2) var<storage, read> proj_matrices: array<mat4x4<f32>>;
 
-// Sky uniforms for lighting
-struct SkyUniforms {
-    horizon_color: vec4<f32>,
-    zenith_color: vec4<f32>,
-    sun_direction: vec4<f32>,
-    sun_color_and_sharpness: vec4<f32>,  // .xyz = color, .w = sharpness
-}
-
-@group(0) @binding(3) var<uniform> sky: SkyUniforms;
-
-// Material uniforms
-struct MaterialUniforms {
-    color: vec4<f32>,  // RGBA tint color
-}
-
-@group(0) @binding(4) var<uniform> material: MaterialUniforms;
-
 // Bone transforms for GPU skinning (up to 256 bones)
 @group(0) @binding(5) var<storage, read> bones: array<mat4x4<f32>, 256>;
 
 // MVP indices storage buffer (per-draw packed indices)
 @group(0) @binding(6) var<storage, read> mvp_indices: array<u32>;
+
+// Unified shading states storage buffer (NEW)
+// Each draw references a shading state by index
+struct PackedSky {
+    horizon_color: u32,           // RGBA8 packed
+    zenith_color: u32,            // RGBA8 packed
+    sun_direction: vec4<i32>,     // snorm16x4 (w unused)
+    sun_color_and_sharpness: u32, // RGB8 + sharpness u8
+}
+
+struct PackedLight {
+    direction: vec4<i32>,      // snorm16x4 (w = enabled flag)
+    color_and_intensity: u32,  // RGB8 + intensity u8
+}
+
+struct UnifiedShadingState {
+    metallic: u32,        // u8 packed (will unpack to f32)
+    roughness: u32,       // u8 packed
+    emissive: u32,        // u8 packed
+    pad0: u32,            // padding
+    
+    color_rgba8: u32,     // Base color RGBA8 packed
+    blend_modes: u32,     // 4× u8 packed
+    
+    sky: PackedSky,       // 16 bytes
+    lights: array<PackedLight, 4>, // 64 bytes
+}
+
+@group(0) @binding(7) var<storage, read> shading_states: array<UnifiedShadingState>;
+
+// Shading state indices storage buffer (per-draw u32 indices)
+@group(0) @binding(8) var<storage, read> shading_indices: array<u32>;
 
 // Texture bindings (group 1)
 @group(1) @binding(0) var slot0: texture_2d<f32>;
@@ -60,6 +75,7 @@ struct VertexOut {
     //VOUT_UV
     //VOUT_COLOR
     //VOUT_NORMAL
+    @location(20) @interpolate(flat) shading_state_index: u32,  // NEW: Pass shading state index to fragment
 }
 
 // ============================================================================
@@ -72,6 +88,29 @@ fn unpack_mvp(packed: u32) -> vec3<u32> {
     let view_idx = (packed >> 16u) & 0xFFu;
     let proj_idx = (packed >> 24u) & 0xFFu;
     return vec3<u32>(model_idx, view_idx, proj_idx);
+}
+
+// Unpack RGBA8 from u32 to vec4<f32>
+fn unpack_rgba8(packed: u32) -> vec4<f32> {
+    let r = f32((packed >> 24u) & 0xFFu) / 255.0;
+    let g = f32((packed >> 16u) & 0xFFu) / 255.0;
+    let b = f32((packed >> 8u) & 0xFFu) / 255.0;
+    let a = f32(packed & 0xFFu) / 255.0;
+    return vec4<f32>(r, g, b, a);
+}
+
+// Unpack u8 to f32 (0-255 -> 0.0-1.0)
+fn unpack_u8_to_f32(packed: u32) -> f32 {
+    return f32(packed & 0xFFu) / 255.0;
+}
+
+// Unpack snorm16 to vec3<f32> (-32767 to 32767 -> -1.0 to 1.0)
+fn unpack_snorm16(packed: vec4<i32>) -> vec3<f32> {
+    return vec3<f32>(
+        f32(packed.x) / 32767.0,
+        f32(packed.y) / 32767.0,
+        f32(packed.z) / 32767.0,
+    );
 }
 
 // ============================================================================
@@ -104,6 +143,9 @@ fn vs(in: VertexIn, @builtin(instance_index) instance_index: u32) -> VertexOut {
     //VS_COLOR
     //VS_NORMAL
 
+    // Pass shading state index to fragment shader (read from buffer after sorting)
+    out.shading_state_index = shading_indices[instance_index];
+
     return out;
 }
 
@@ -112,30 +154,49 @@ fn vs(in: VertexIn, @builtin(instance_index) instance_index: u32) -> VertexOut {
 // ============================================================================
 
 // Simple Lambert shading using sky sun (when normals available)
-fn sky_lambert(normal: vec3<f32>) -> vec3<f32> {
-    let n_dot_l = max(0.0, dot(normal, sky.sun_direction.xyz));
-    let direct = sky.sun_color_and_sharpness.xyz * n_dot_l;
-    let ambient = sample_sky(normal) * 0.3;
+fn sky_lambert(normal: vec3<f32>, state: UnifiedShadingState) -> vec3<f32> {
+    // Unpack sky data from shading state
+    let sun_dir = normalize(unpack_snorm16(state.sky.sun_direction));
+    let sun_color = unpack_rgba8(state.sky.sun_color_and_sharpness).rgb;
+    
+    let n_dot_l = max(0.0, dot(normal, sun_dir));
+    let direct = sun_color * n_dot_l;
+    let ambient = sample_sky(normal, state) * 0.3;
     return direct + ambient;
 }
 
 // Sample procedural sky
-fn sample_sky(direction: vec3<f32>) -> vec3<f32> {
+fn sample_sky(direction: vec3<f32>, state: UnifiedShadingState) -> vec3<f32> {
+    // Unpack sky colors from shading state
+    let horizon = unpack_rgba8(state.sky.horizon_color).rgb;
+    let zenith = unpack_rgba8(state.sky.zenith_color).rgb;
+    let sun_dir = normalize(unpack_snorm16(state.sky.sun_direction));
+    let sun_color = unpack_rgba8(state.sky.sun_color_and_sharpness).rgb;
+    let sun_sharpness = unpack_u8_to_f32(state.sky.sun_color_and_sharpness) * 256.0; // Scale back to original range
+    
     let up_factor = direction.y * 0.5 + 0.5;
-    let gradient = mix(sky.horizon_color.xyz, sky.zenith_color.xyz, up_factor);
-    let sun_dot = max(0.0, dot(direction, sky.sun_direction.xyz));
-    let sun = sky.sun_color_and_sharpness.xyz * pow(sun_dot, sky.sun_color_and_sharpness.w);
+    let gradient = mix(horizon, zenith, up_factor);
+    let sun_dot = max(0.0, dot(direction, sun_dir));
+    let sun = sun_color * pow(sun_dot, sun_sharpness);
     return gradient + sun;
 }
 
 @fragment
 fn fs(in: VertexOut) -> @location(0) vec4<f32> {
-    // Start with material color (uniform tint)
-    var color = material.color.rgb;
+    // Fetch shading state for this draw (NEW)
+    let state = shading_states[in.shading_state_index];
+    let base_color = unpack_rgba8(state.color_rgba8);
+    
+    // DEBUG: Visualize shading state index as color
+    return vec4<f32>(f32(in.shading_state_index) / 38.0, 0.0, 0.0, 1.0);
+    
+    // Start with base color from shading state
+    var color = base_color.rgb;
+    var alpha = base_color.a;
 
     //FS_COLOR
     //FS_UV
     //FS_NORMAL
 
-    return vec4<f32>(color, material.color.a);
+    return vec4<f32>(color, alpha);
 }

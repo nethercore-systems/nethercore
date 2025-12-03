@@ -1,6 +1,7 @@
 //! Emberware Z - Fantasy console runtime
 
 use std::env;
+use tracing_subscriber::EnvFilter;
 
 mod app;
 mod audio;
@@ -19,7 +20,10 @@ mod state;
 mod ui;
 
 fn main() {
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .init();
+    tracing::debug!("DEBUG TEST");
 
     let args: Vec<String> = env::args().collect();
 

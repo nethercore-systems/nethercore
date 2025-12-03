@@ -41,22 +41,36 @@
 - Upload happens after matrix uploads, before rendering
 - Dirty tracking ensures efficient uploads
 
+**Phase 6: Update Shaders to Read Shading States** ✅
+- Added shading state buffer binding (@binding(7) for modes 0-1, @binding(9) for modes 2-3)
+- Updated all 4 shader templates (mode0-3) with `UnifiedShadingState` struct
+- Added unpacking helper functions (unpack_rgba8, unpack_u8_to_f32, unpack_snorm16)
+- Updated vertex shaders to pass `shading_state_index` via @location(20)
+- Updated fragment shaders to fetch and use shading state
+- Mode 0 (Unlit): Uses base color and sky from shading state
+- Mode 1 (Matcap): Uses base color and blend modes from shading state
+- Mode 2 (PBR): Uses material properties and lights from shading state
+- Mode 3 (Hybrid): Uses material properties and first light from shading state
+- **GPU Integration**: Added shading state buffer to bind group layouts and bind groups
+  - Updated `create_frame_bind_group_layout()` in pipeline.rs
+  - Updated bind group creation in render loop for all modes
+  - Shading state buffer now properly bound and accessible to shaders
+
+**Phase 7: Update Pipeline Extraction and Command Sorting** ✅
+- Created shading_indices_buffer to map instance_index → shading_state_index after sorting
+- Commands are sorted by pipeline key (render_mode, format, blend_mode, depth_test, textures)
+- Shading indices buffer populated after sorting and uploaded to GPU
+- Shaders read: `shading_states[shading_indices[instance_index]]` for correct indirection
+- All bind group layouts updated to include shading_indices buffer
+- Verified data flow: commands → sort → collect indices → upload → shader reads correctly
+
 ### 🚧 Remaining Work
 
-**Phase 6: Update Shaders to Read Shading States** (Not Started)
-- Need to add shading state buffer binding to all 4 shader templates
-- Update vertex shaders to pass shading_state_index to fragment
-- Update fragment shaders to fetch and use shading state
-- Add unpacking helpers for quantized data
-
-**Phase 7: Update Pipeline Extraction** (Not Started)
-- Extract blend mode from shading state for pipeline key
-- Update command sorting to use shading state handle
-
-**Phase 8: Testing and Validation** (Not Started)
+**Phase 8: Testing and Validation** (In Progress)
 - Visual testing across all 4 render modes
 - Performance benchmarking
 - Cache efficiency metrics
+- Verify all billboard/sprite rendering works correctly
 
 ---
 
