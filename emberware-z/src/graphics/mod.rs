@@ -223,7 +223,7 @@ pub struct ZGraphics {
     // Bind group caches (cleared and repopulated each frame)
     material_buffers: HashMap<MaterialCacheKey, wgpu::Buffer>,
     texture_bind_groups: HashMap<[TextureHandle; 4], wgpu::BindGroup>,
-    frame_bind_groups: HashMap<MaterialCacheKey, wgpu::BindGroup>,
+    frame_bind_groups: HashMap<(MaterialCacheKey, u8), wgpu::BindGroup>,
 
     // Frame state
     current_frame: Option<wgpu::SurfaceTexture>,
@@ -2290,7 +2290,14 @@ impl ZGraphics {
                     texture_slots: cmd.texture_slots,
                     matcap_blend_modes: cmd.matcap_blend_modes,
                 };
-                let pipeline_key = PipelineKey::new(self.current_render_mode, cmd.format, &state);
+                // Formats without normals must use Unlit mode
+                let format_has_normals = (cmd.format & 4) != 0;
+                let render_mode = if !format_has_normals && self.current_render_mode > 0 {
+                    0
+                } else {
+                    self.current_render_mode
+                };
+                let pipeline_key = PipelineKey::new(render_mode, cmd.format, &state);
                 (
                     pipeline_key.render_mode,
                     pipeline_key.vertex_format,
@@ -2344,7 +2351,7 @@ impl ZGraphics {
             let mut bound_pipeline: Option<PipelineKey> = None;
             let mut bound_texture_slots: Option<[TextureHandle; 4]> = None;
             let mut bound_vertex_format: Option<(u8, BufferSource)> = None;
-            let mut bound_material: Option<MaterialCacheKey> = None;
+            let mut bound_material: Option<(MaterialCacheKey, u8)> = None;
 
             for (instance_index, cmd) in (0_u32..).zip(self.command_buffer.commands().iter()) {
                 // Create render state from command
@@ -2358,17 +2365,27 @@ impl ZGraphics {
                     matcap_blend_modes: cmd.matcap_blend_modes,
                 };
 
+                // Determine render mode for this command
+                // Formats without normals (0-3, 8-11) must use Unlit mode (0)
+                // even if the game is using a lighting mode (1-3)
+                let format_has_normals = (cmd.format & 4) != 0; // FORMAT_NORMAL flag
+                let render_mode = if !format_has_normals && self.current_render_mode > 0 {
+                    0 // Force Unlit mode for formats without normals
+                } else {
+                    self.current_render_mode
+                };
+
                 // Get/create pipeline (using contains + get pattern to avoid borrow issues)
-                let pipeline_key = PipelineKey::new(self.current_render_mode, cmd.format, &state);
+                let pipeline_key = PipelineKey::new(render_mode, cmd.format, &state);
                 if !self
                     .pipeline_cache
-                    .contains(self.current_render_mode, cmd.format, &state)
+                    .contains(render_mode, cmd.format, &state)
                 {
                     // Create and insert pipeline if it doesn't exist
                     self.pipeline_cache.get_or_create(
                         &self.device,
                         self.config.format,
-                        self.current_render_mode,
+                        render_mode,
                         cmd.format,
                         &state,
                     );
@@ -2376,7 +2393,7 @@ impl ZGraphics {
                 // Safe to unwrap since we just ensured it exists
                 let pipeline_entry = self
                     .pipeline_cache
-                    .get(self.current_render_mode, cmd.format, &state)
+                    .get(render_mode, cmd.format, &state)
                     .unwrap();
 
                 // Get or create material uniform buffer (cached by color + properties + blend modes)
@@ -2413,12 +2430,12 @@ impl ZGraphics {
                 });
 
                 // Create frame bind group (group 0) - Now reusable across draws since model matrices are in storage buffer!
-                // Frame bind groups cached by material (since material buffer is the only per-draw varying resource)
-                let frame_bind_group_key = material_key; // Reuse material_key as frame bind group key
+                // Frame bind groups cached by material AND render mode (since different modes have different layouts)
+                let frame_bind_group_key = (material_key, render_mode);
                 let frame_bind_group = frame_bind_groups
                     .entry(frame_bind_group_key)
                     .or_insert_with(|| {
-                        match self.current_render_mode {
+                        match render_mode {
                             0 | 1 => {
                                 // Mode 0 (Unlit) and Mode 1 (Matcap): Basic bindings
                                 self.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -2613,10 +2630,10 @@ impl ZGraphics {
                     bound_pipeline = Some(pipeline_key);
                 }
 
-                // Set frame bind group (only if material changed, since model matrices are in storage buffer)
-                if bound_material != Some(material_key) {
+                // Set frame bind group (only if material or render mode changed, since model matrices are in storage buffer)
+                if bound_material != Some(frame_bind_group_key) {
                     render_pass.set_bind_group(0, &*frame_bind_group, &[]);
-                    bound_material = Some(material_key);
+                    bound_material = Some(frame_bind_group_key);
                 }
 
                 // Set texture bind group (only if changed)
