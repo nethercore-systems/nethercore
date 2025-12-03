@@ -26,8 +26,7 @@ pub struct Config {
 }
 
 /// Scaling mode for render target to window
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum ScaleMode {
     /// Stretch to fill window (may distort aspect ratio)
     #[default]
@@ -35,7 +34,6 @@ pub enum ScaleMode {
     /// Integer scaling for pixel-perfect rendering (adds black bars)
     PixelPerfect,
 }
-
 
 /// Video and graphics configuration.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

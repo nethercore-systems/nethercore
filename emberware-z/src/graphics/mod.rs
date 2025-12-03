@@ -1870,7 +1870,7 @@ impl ZGraphics {
     /// Get or create a pipeline for the given state
     ///
     /// This caches pipelines to avoid recompilation.
-    pub fn get_pipeline(&mut self, format: u8, state: &RenderState) -> &PipelineEntry {
+    pub(crate) fn get_pipeline(&mut self, format: u8, state: &RenderState) -> &PipelineEntry {
         self.pipeline_cache.get_or_create(
             &self.device,
             self.config.format,
@@ -2346,10 +2346,7 @@ impl ZGraphics {
             let mut bound_vertex_format: Option<(u8, BufferSource)> = None;
             let mut bound_material: Option<MaterialCacheKey> = None;
 
-            // Instance index for accessing model matrices in storage buffer
-            let mut instance_index: u32 = 0;
-
-            for cmd in self.command_buffer.commands() {
+            for (instance_index, cmd) in (0_u32..).zip(self.command_buffer.commands().iter()) {
                 // Create render state from command
                 let state = RenderState {
                     color: cmd.color,
@@ -2666,9 +2663,6 @@ impl ZGraphics {
                         instance_index..instance_index + 1,
                     );
                 }
-
-                // Increment instance index for next draw
-                instance_index += 1;
             }
         }
 
