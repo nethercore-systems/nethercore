@@ -2483,6 +2483,8 @@ impl ZGraphics {
                     mapped_at_creation: false,
                 });
                 self.mvp_indices_capacity = new_capacity;
+                // Clear bind group cache since buffer was recreated
+                self.frame_bind_groups.clear();
                 tracing::debug!("Resized MVP indices buffer to {} entries", new_capacity);
             }
 
@@ -2496,6 +2498,8 @@ impl ZGraphics {
                     mapped_at_creation: false,
                 });
                 self.shading_indices_capacity = new_capacity;
+                // Clear bind group cache since buffer was recreated
+                self.frame_bind_groups.clear();
             }
 
             // Upload MVP indices
@@ -2505,16 +2509,6 @@ impl ZGraphics {
             // Upload shading state indices
             let shading_data = bytemuck::cast_slice(&shading_indices);
             self.queue.write_buffer(&self.shading_indices_buffer, 0, shading_data);
-            
-            // Debug: Verify first few entries
-            tracing::info!("First 5 commands after sort:");
-            for i in 0..5.min(command_count) {
-                if let Some(cmd) = self.command_buffer.commands().get(i) {
-                    let shading_idx = shading_indices.get(i).copied().unwrap_or(999);
-                    tracing::info!("  Cmd[{}]: shading_handle={:?}, shading_indices[{}]={}", 
-                        i, cmd.shading_state_handle, i, shading_idx);
-                }
-            }
         }
 
         // Take caches out of self temporarily to avoid nested mutable borrows during render pass.

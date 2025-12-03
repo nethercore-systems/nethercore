@@ -34,11 +34,11 @@ pub struct PackedLight {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Pod, Zeroable)]
 pub struct PackedUnifiedShadingState {
-    // PBR params (4 bytes)
-    pub metallic: u8,
-    pub roughness: u8,
-    pub emissive: u8,
-    pub pad0: u8,
+    // PBR params (16 bytes) - u32 to match WGSL alignment
+    pub metallic: u32,    // u8 value stored in u32
+    pub roughness: u32,   // u8 value stored in u32
+    pub emissive: u32,    // u8 value stored in u32
+    pub pad0: u32,        // padding
 
     pub color_rgba8: u32,     // Base color (4 bytes)
     pub blend_modes: u32,     // 4× u8 packed (4 bytes)
@@ -192,9 +192,9 @@ impl PackedUnifiedShadingState {
         lights: &[LightState; 4],
     ) -> Self {
         Self {
-            metallic: quantize_f32_to_u8(metallic),
-            roughness: quantize_f32_to_u8(roughness),
-            emissive: quantize_f32_to_u8(emissive),
+            metallic: quantize_f32_to_u8(metallic) as u32,  // Store u8 in u32
+            roughness: quantize_f32_to_u8(roughness) as u32,
+            emissive: quantize_f32_to_u8(emissive) as u32,
             pad0: 0,
 
             color_rgba8: color,

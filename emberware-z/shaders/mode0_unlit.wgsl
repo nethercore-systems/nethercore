@@ -183,12 +183,9 @@ fn sample_sky(direction: vec3<f32>, state: UnifiedShadingState) -> vec3<f32> {
 
 @fragment
 fn fs(in: VertexOut) -> @location(0) vec4<f32> {
-    // Fetch shading state for this draw (NEW)
+    // Fetch shading state for this draw
     let state = shading_states[in.shading_state_index];
     let base_color = unpack_rgba8(state.color_rgba8);
-    
-    // DEBUG: Visualize shading state index as color
-    return vec4<f32>(f32(in.shading_state_index) / 38.0, 0.0, 0.0, 1.0);
     
     // Start with base color from shading state
     var color = base_color.rgb;
