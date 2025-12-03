@@ -48,20 +48,15 @@ pub(crate) fn create_pipeline(
 ) -> PipelineEntry {
     use crate::shader_gen::generate_shader;
 
-    // Generate shader source, falling back to Mode 0 if the requested mode/format is invalid
-    let shader_source = match generate_shader(render_mode, format) {
-        Ok(source) => source,
-        Err(e) => {
-            tracing::warn!(
-                "Shader generation failed for mode {} format {}: {}. Falling back to Mode 0 (unlit).",
-                render_mode,
-                format,
-                e
-            );
-            // Fallback to Mode 0 (unlit) which supports all formats
-            generate_shader(0, format).expect("Mode 0 should support all vertex formats")
-        }
-    };
+    // Generate shader source - panic on invalid mode/format combinations
+    // Invalid combinations indicate developer error and should fail fast
+    let shader_source = generate_shader(render_mode, format).unwrap_or_else(|e| {
+        panic!(
+            "Invalid render mode/format combination: mode={}, format={}, error={}. \n\
+                 Modes 1-3 require NORMAL flag (formats 4-7, 12-15).",
+            render_mode, format, e
+        )
+    });
 
     // Create shader module
     let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -297,7 +292,7 @@ fn create_frame_bind_group_layout(device: &wgpu::Device, render_mode: u8) -> wgp
                 // Camera position
                 wgpu::BindGroupLayoutEntry {
                     binding: 6,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
