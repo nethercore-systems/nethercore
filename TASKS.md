@@ -14,6 +14,10 @@
 
 ---
 
+### **[POLISH] Implement ARE YOU SURE? Dialog before deleting a game rom**
+- Delete works, but if you click it on accident, the file is deleted with no warning
+- We need some kind of popup or dialog box asking "are you sure?" before actually deleting the file from the user's disk.
+
 ### **[CRITICAL] STABILITY Codebase is huge and clunky**
 - Lots of files are extremely long (2k+)
 - We must go through the entire repository and clean this up. Some ways we can accomplish this are
