@@ -55,7 +55,7 @@ fn build_examples() -> Result<()> {
 
         // Build the example to WASM
         let status = Command::new("cargo")
-            .args(&["build", "--target", "wasm32-unknown-unknown", "--release"])
+            .args(["build", "--target", "wasm32-unknown-unknown", "--release"])
             .current_dir(example.path())
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
