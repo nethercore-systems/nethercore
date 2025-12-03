@@ -85,7 +85,10 @@ pub(crate) fn create_pipeline(
         vertex: wgpu::VertexState {
             module: &shader_module,
             entry_point: Some("vs"),
-            buffers: &[vertex_info.vertex_buffer_layout()],
+            buffers: &[
+                vertex_info.vertex_buffer_layout(),
+                super::InstanceData::layout(),
+            ],
             compilation_options: Default::default(),
         },
         fragment: Some(wgpu::FragmentState {
@@ -185,31 +188,9 @@ fn create_frame_bind_group_layout(device: &wgpu::Device, render_mode: u8) -> wgp
                     },
                     count: None,
                 },
-                // MVP indices storage buffer (per-draw packed indices)
+                // Unified shading states storage buffer
                 wgpu::BindGroupLayoutEntry {
                     binding: 6,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                // Unified shading states storage buffer (NEW)
-                wgpu::BindGroupLayoutEntry {
-                    binding: 7,
-                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                // Shading state indices storage buffer (per-draw u32 indices)
-                wgpu::BindGroupLayoutEntry {
-                    binding: 8,
                     visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Storage { read_only: true },
@@ -311,31 +292,9 @@ fn create_frame_bind_group_layout(device: &wgpu::Device, render_mode: u8) -> wgp
                     },
                     count: None,
                 },
-                // MVP indices storage buffer (per-draw packed indices)
+                // Unified shading states storage buffer
                 wgpu::BindGroupLayoutEntry {
                     binding: 8,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                // Unified shading states storage buffer (NEW)
-                wgpu::BindGroupLayoutEntry {
-                    binding: 9,
-                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                // Shading state indices storage buffer (per-draw u32 indices)
-                wgpu::BindGroupLayoutEntry {
-                    binding: 10,
                     visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Storage { read_only: true },

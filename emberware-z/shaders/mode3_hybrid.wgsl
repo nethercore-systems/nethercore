@@ -54,10 +54,7 @@ struct LightUniforms {
 // Bone transforms for GPU skinning (up to 256 bones)
 @group(0) @binding(7) var<storage, read> bones: array<mat4x4<f32>, 256>;
 
-// MVP indices storage buffer (per-draw packed indices)
-@group(0) @binding(8) var<storage, read> mvp_indices: array<u32>;
-
-// Unified shading states storage buffer (NEW)
+// Unified shading states storage buffer
 struct PackedSky {
     horizon_color: u32,
     zenith_color: u32,
@@ -81,10 +78,7 @@ struct UnifiedShadingState {
     lights: array<PackedLight, 4>,
 }
 
-@group(0) @binding(9) var<storage, read> shading_states: array<UnifiedShadingState>;
-
-// Shading state indices storage buffer (per-draw u32 indices)
-@group(0) @binding(10) var<storage, read> shading_indices: array<u32>;
+@group(0) @binding(8) var<storage, read> shading_states: array<UnifiedShadingState>;
 
 // Texture bindings (group 1)
 @group(1) @binding(0) var slot0: texture_2d<f32>;  // Albedo
@@ -103,6 +97,12 @@ struct VertexIn {
     //VIN_COLOR
     @location(3) normal: vec3<f32>,  // Required
     //VIN_SKINNED
+}
+
+// Instance data (per-draw indices)
+struct InstanceIn {
+    @location(10) mvp_index: u32,
+    @location(11) shading_index: u32,
 }
 
 struct VertexOut {
@@ -152,14 +152,13 @@ fn unpack_snorm16(packed: vec4<i32>) -> vec3<f32> {
 // ============================================================================
 
 @vertex
-fn vs(in: VertexIn, @builtin(instance_index) instance_index: u32) -> VertexOut {
+fn vs(in: VertexIn, instance: InstanceIn) -> VertexOut {
     var out: VertexOut;
 
     //VS_SKINNED
 
-    // Fetch MVP index from instance buffer and unpack
-    let mvp_packed = mvp_indices[instance_index];
-    let mvp = unpack_mvp(mvp_packed);
+    // Unpack MVP indices from instance data
+    let mvp = unpack_mvp(instance.mvp_index);
 
     let model_matrix = model_matrices[mvp.x];
     let view_matrix = view_matrices[mvp.y];
@@ -184,8 +183,8 @@ fn vs(in: VertexIn, @builtin(instance_index) instance_index: u32) -> VertexOut {
     //VS_UV
     //VS_COLOR
 
-    // Pass shading state index (read from buffer after sorting)
-    out.shading_state_index = shading_indices[instance_index];
+    // Pass shading state index from instance data
+    out.shading_state_index = instance.shading_index;
 
     return out;
 }

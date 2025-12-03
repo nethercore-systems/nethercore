@@ -64,6 +64,7 @@
 
 mod buffer;
 mod command_buffer;
+mod instance_data;
 mod matrix_packing;
 mod pipeline;
 mod render_state;
@@ -87,6 +88,7 @@ use emberware_core::console::Graphics;
 // Re-export public types from submodules
 pub use buffer::{BufferManager, GrowableBuffer, MeshHandle, RetainedMesh};
 pub use command_buffer::{BufferSource, VirtualRenderPass};
+pub use instance_data::InstanceData;
 pub use matrix_packing::MvpIndex;
 pub use render_state::{
     BlendMode, CameraUniforms, CullMode, LightUniform, LightsUniforms, MatcapBlendMode,
@@ -223,13 +225,9 @@ pub struct ZGraphics {
     proj_matrices_buffer: wgpu::Buffer,
     proj_matrices_capacity: usize,
 
-    // MVP indices buffer (per-draw u32 packed indices)
-    mvp_indices_buffer: wgpu::Buffer,
-    mvp_indices_capacity: usize,
-    
-    // Shading state indices buffer (per-draw u32 indices)
-    shading_indices_buffer: wgpu::Buffer,
-    shading_indices_capacity: usize,
+    // Instance data buffer (per-draw instance with MVP and shading indices)
+    instance_buffer: wgpu::Buffer,
+    instance_capacity: usize,
 
     // Bind group caches (cleared and repopulated each frame)
     material_buffers: HashMap<MaterialCacheKey, wgpu::Buffer>,
@@ -427,20 +425,12 @@ impl ZGraphics {
             mapped_at_creation: false,
         });
 
-        // Create MVP indices storage buffer (u32 per draw call)
-        const INITIAL_MVP_INDICES_CAPACITY: usize = 1024;
-        let mvp_indices_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("MVP Indices Storage Buffer"),
-            size: (INITIAL_MVP_INDICES_CAPACITY * 4) as u64, // 4 bytes per u32
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        
-        // Create shading state indices storage buffer (u32 per draw call)
-        let shading_indices_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Shading State Indices Storage Buffer"),
-            size: (INITIAL_MVP_INDICES_CAPACITY * 4) as u64, // 4 bytes per u32
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        // Create instance data buffer (8 bytes per instance: mvp_index + shading_index)
+        const INITIAL_INSTANCE_CAPACITY: usize = 1024;
+        let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Instance Data Buffer"),
+            size: (INITIAL_INSTANCE_CAPACITY * std::mem::size_of::<InstanceData>()) as u64,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
@@ -487,10 +477,8 @@ impl ZGraphics {
             view_matrices_capacity: INITIAL_VIEW_MATRIX_CAPACITY,
             proj_matrices_buffer,
             proj_matrices_capacity: INITIAL_PROJ_MATRIX_CAPACITY,
-            mvp_indices_buffer,
-            mvp_indices_capacity: INITIAL_MVP_INDICES_CAPACITY,
-            shading_indices_buffer,
-            shading_indices_capacity: INITIAL_MVP_INDICES_CAPACITY,
+            instance_buffer,
+            instance_capacity: INITIAL_INSTANCE_CAPACITY,
             material_buffers: HashMap::new(),
             texture_bind_groups: HashMap::new(),
             frame_bind_groups: HashMap::new(),
@@ -2453,62 +2441,39 @@ impl ZGraphics {
                 )
             });
 
-        // 6. Upload MVP indices and shading state indices (collect from all commands AFTER sorting)
+        // 6. Build instance data buffer (collect from all commands AFTER sorting)
         if command_count > 0 {
-            // Collect MVP indices from all commands in their SORTED order
-            let mvp_indices: Vec<u32> = self
+            // Build instance data from all commands in their SORTED order
+            let instance_data: Vec<InstanceData> = self
                 .command_buffer
                 .commands()
                 .iter()
-                .map(|cmd| cmd.mvp_index.0)
+                .map(|cmd| {
+                    InstanceData::new(
+                        cmd.mvp_index.0,
+                        cmd.shading_state_handle.map(|h| h.0).unwrap_or(0),
+                    )
+                })
                 .collect();
-
-            // Collect shading state handles from all commands in their SORTED order
-            let shading_indices: Vec<u32> = self
-                .command_buffer
-                .commands()
-                .iter()
-                .map(|cmd| cmd.shading_state_handle.map(|h| h.0).unwrap_or(0))
-                .collect();
-            
-
 
             // Ensure buffer capacity
-            if command_count > self.mvp_indices_capacity {
+            if command_count > self.instance_capacity {
                 let new_capacity = command_count.next_power_of_two();
-                self.mvp_indices_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-                    label: Some("MVP Indices Storage Buffer"),
-                    size: (new_capacity * 4) as u64, // 4 bytes per u32
-                    usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                self.instance_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("Instance Data Buffer"),
+                    size: (new_capacity * std::mem::size_of::<InstanceData>()) as u64,
+                    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
                     mapped_at_creation: false,
                 });
-                self.mvp_indices_capacity = new_capacity;
+                self.instance_capacity = new_capacity;
                 // Clear bind group cache since buffer was recreated
                 self.frame_bind_groups.clear();
-                tracing::debug!("Resized MVP indices buffer to {} entries", new_capacity);
+                tracing::debug!("Resized instance buffer to {} entries", new_capacity);
             }
 
-            // Ensure shading indices buffer capacity
-            if command_count > self.shading_indices_capacity {
-                let new_capacity = command_count.next_power_of_two();
-                self.shading_indices_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-                    label: Some("Shading State Indices Storage Buffer"),
-                    size: (new_capacity * 4) as u64,
-                    usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-                    mapped_at_creation: false,
-                });
-                self.shading_indices_capacity = new_capacity;
-                // Clear bind group cache since buffer was recreated
-                self.frame_bind_groups.clear();
-            }
-
-            // Upload MVP indices
-            let data = bytemuck::cast_slice(&mvp_indices);
-            self.queue.write_buffer(&self.mvp_indices_buffer, 0, data);
-            
-            // Upload shading state indices
-            let shading_data = bytemuck::cast_slice(&shading_indices);
-            self.queue.write_buffer(&self.shading_indices_buffer, 0, shading_data);
+            // Upload instance data
+            let data = bytemuck::cast_slice(&instance_data);
+            self.queue.write_buffer(&self.instance_buffer, 0, data);
         }
 
         // Take caches out of self temporarily to avoid nested mutable borrows during render pass.
@@ -2662,15 +2627,7 @@ impl ZGraphics {
                                         },
                                         wgpu::BindGroupEntry {
                                             binding: 6,
-                                            resource: self.mvp_indices_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 7,
                                             resource: self.shading_state_cache.buffer().as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 8,
-                                            resource: self.shading_indices_buffer.as_entire_binding(),
                                         },
                                     ],
                                 })
@@ -2717,15 +2674,7 @@ impl ZGraphics {
                                         },
                                         wgpu::BindGroupEntry {
                                             binding: 8,
-                                            resource: self.mvp_indices_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 9,
                                             resource: self.shading_state_cache.buffer().as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 10,
-                                            resource: self.shading_indices_buffer.as_entire_binding(),
                                         },
                                     ],
                                 })
@@ -2756,15 +2705,7 @@ impl ZGraphics {
                                         },
                                         wgpu::BindGroupEntry {
                                             binding: 6,
-                                            resource: self.mvp_indices_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 7,
                                             resource: self.shading_state_cache.buffer().as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 8,
-                                            resource: self.shading_indices_buffer.as_entire_binding(),
                                         },
                                     ],
                                 })
@@ -2861,10 +2802,12 @@ impl ZGraphics {
                     if let Some(buffer) = vertex_buffer.buffer() {
                         render_pass.set_vertex_buffer(0, buffer.slice(..));
                     }
+                    // Set instance buffer (slot 1)
+                    render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
                     bound_vertex_format = Some((cmd.format, cmd.buffer_source));
                 }
 
-                // Draw using instanced rendering with base_instance to access correct model matrix
+                // Draw using instanced rendering with sequential instance_index
                 if cmd.index_count > 0 {
                     // Indexed draw - both immediate and retained use u16 indices
                     let index_buffer = match cmd.buffer_source {
