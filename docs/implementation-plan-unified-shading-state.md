@@ -16,10 +16,12 @@ Quantize all per-draw shading state into a hashable POD structure (`PackedUnifie
 
 **Benefits:**
 - **FIX:** Per-draw material properties instead of incorrect frame-wide uniforms
+- **HUGE SIMPLIFICATION:** All render modes use the SAME binding layout (0-5)
 - Material state becomes hashable and comparable
 - Same material used across draws = one GPU upload (deduplication)
 - Better command sorting by material
 - Reduced VRPCommand size (remove separate state fields)
+- Eliminates off-by-N binding errors between modes
 
 **Approach:** Storage buffer indexed via instance index (extends existing MVP indices buffer)
 
@@ -28,6 +30,33 @@ The MVP indices buffer is already `array<vec2<u32>>` where:
 - `.y` = unified shading state index (reserved for this implementation)
 
 **Complexity:** Medium-High - touches FFI, command recording, shaders, and GPU upload, but leverages existing infrastructure
+
+---
+
+## Key Architectural Insight
+
+**All render modes now use the SAME binding layout:**
+
+| Binding | Contents | Used By |
+|---------|----------|---------|
+| 0 | `model_matrices: array<mat4x4<f32>>` | Vertex shader |
+| 1 | `view_matrices: array<mat4x4<f32>>` | Vertex shader |
+| 2 | `proj_matrices: array<mat4x4<f32>>` | Vertex shader |
+| 3 | `shading_states: array<UnifiedShadingState>` | Fragment shader (vertex passes index) |
+| 4 | `mvp_shading_indices: array<vec2<u32>>` | Vertex shader |
+| 5 | `bones: array<mat4x4<f32>>` | Vertex shader (optional) |
+
+**Logical grouping:**
+- **Bindings 0-3:** Data buffers (matrices, shading states)
+- **Bindings 4-5:** Indices/structural (per-draw indices, bones)
+
+**What happened to sky, material, lights, camera?**
+- ✅ **Sky** → Contained in `shading_states`
+- ✅ **Material** → Contained in `shading_states`
+- ✅ **Lights** → Contained in `shading_states`
+- ✅ **Camera position** → Derivable from view matrix in `shading_states`
+
+This eliminates 4 separate uniform bindings and makes all modes use the exact same shader interface!
 
 ---
 
@@ -559,28 +588,33 @@ self.queue.write_buffer(&self.mvp_indices_buffer, 0, indices_data);
 
 ### Changes (Apply to All 4 Templates)
 
-#### 6.1: Rename MVP Indices Buffer and Add Shading State Buffer
+#### 6.1: Unified Binding Layout (ALL MODES)
+
+All 4 render modes now use the **same binding layout**:
 
 ```wgsl
-// Per-frame storage buffer - packed MVP + shading state indices
-// Each entry is 2 × u32: [packed_mvp, shading_state_index]
-@group(0) @binding(3) var<storage, read> mvp_shading_indices: array<vec2<u32>>;
+// Bindings 0-2: Matrix pools (per-frame arrays)
+@group(0) @binding(0) var<storage, read> model_matrices: array<mat4x4<f32>>;
+@group(0) @binding(1) var<storage, read> view_matrices: array<mat4x4<f32>>;
+@group(0) @binding(2) var<storage, read> proj_matrices: array<mat4x4<f32>>;
 
-// Packed structures (must match Rust layout EXACTLY)
-struct PackedSky {
-    horizon_color: u32,           // Will be unpacked to vec4<f32>
-    zenith_color: u32,
-    sun_direction_x: i32,         // snorm16 (low 16 bits)
-    sun_direction_yz: i32,        // snorm16 (x: y, y: z)
-    sun_color_and_sharpness: u32,
-}
+// Binding 3: Shading states pool (per-frame array, contains sky/lights/material)
+@group(0) @binding(3) var<storage, read> shading_states: array<UnifiedShadingState>;
 
-struct PackedLight {
-    direction_xy: i32,            // snorm16 (x: x, y: y)
-    direction_z_enabled: i32,     // snorm16 (x: z, y: enabled)
-    color_and_intensity: u32,
-}
+// Binding 4: Per-draw indices (2 × u32: [packed_mvp, shading_state_index])
+@group(0) @binding(4) var<storage, read> mvp_shading_indices: array<vec2<u32>>;
 
+// Binding 5: Bone matrices pool (per-frame array, optional for skinning)
+@group(0) @binding(5) var<storage, read> bones: array<mat4x4<f32>>;
+```
+
+**Logical grouping:**
+- **Bindings 0-3:** Data buffers (matrices, shading states)
+- **Bindings 4-5:** Indices/structural (per-draw indices, bones)
+
+**Packed structures (must match Rust layout EXACTLY):**
+
+```wgsl
 struct UnifiedShadingState {
     // First 4 bytes: metallic, roughness, emissive, pad
     params_packed: u32,
@@ -613,16 +647,14 @@ struct UnifiedShadingState {
     light3_color: u32,
     _pad_l3: u32,
 }
-
-// Shading state buffer (binding varies by mode)
-// Mode 0/1: @group(0) @binding(7) (after bones at 6)
-// Mode 2/3: @group(0) @binding(9) (after bones at 8)
-@group(0) @binding(BINDING_SHADING_STATE) var<storage, read> shading_states: array<UnifiedShadingState>;
 ```
 
-**Note:** Use the correct binding number for each shader template:
-- `mode0_unlit.wgsl` and `mode1_matcap.wgsl`: binding 7
-- `mode2_pbr.wgsl` and `mode3_hybrid.wgsl`: binding 9
+**Key benefits:**
+- ✅ Same binding layout for ALL modes (0-3)
+- ✅ No off-by-N errors between modes
+- ✅ Bones always at binding 5 (consistent)
+- ✅ Sky, material, lights, camera all contained in shading_states
+- ✅ No redundant uniform bindings
 
 #### 6.2: Add Unpacking Helpers
 
@@ -766,73 +798,149 @@ fn fs(in: VertexOutput) -> @location(0) vec4<f32> {
 
 ### Changes
 
-#### 7.1: Add Shading State Buffer to Bind Group 0
+#### 7.1: Unified Bind Group Layout (ALL MODES)
 
 **File:** `emberware-z/src/graphics/pipeline.rs`
 
-Update `create_frame_bind_group_layout` for each render mode:
+**Replace** the entire `create_frame_bind_group_layout` function with a unified layout that works for all modes:
 
-**Mode 0/1 (Unlit, Matcap):**
 ```rust
-// Existing bindings 0-6 (model, view, proj, mvp_indices, sky, material, bones)
-
-// Binding 7: Shading states (NEW)
-BindGroupLayoutEntry {
-    binding: 7,
-    visibility: ShaderStages::FRAGMENT,  // Fragment shader reads this
-    ty: BindingType::Buffer {
-        ty: BufferBindingType::Storage { read_only: true },
-        has_dynamic_offset: false,
-        min_binding_size: None,
-    },
-    count: None,
-},
+/// Create bind group layout for per-frame uniforms (group 0)
+/// This layout is now IDENTICAL for all render modes!
+fn create_frame_bind_group_layout(device: &wgpu::Device, _render_mode: u8) -> wgpu::BindGroupLayout {
+    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("Frame Bind Group Layout"),
+        entries: &[
+            // Binding 0: Model matrices storage buffer
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            // Binding 1: View matrices storage buffer
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            // Binding 2: Projection matrices storage buffer
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            // Binding 3: Shading states storage buffer (contains sky, lights, material)
+            wgpu::BindGroupLayoutEntry {
+                binding: 3,
+                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,  // Fragment reads, vertex passes index
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            // Binding 4: MVP + shading state indices storage buffer
+            wgpu::BindGroupLayoutEntry {
+                binding: 4,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            // Binding 5: Bone matrices storage buffer (for GPU skinning)
+            wgpu::BindGroupLayoutEntry {
+                binding: 5,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+        ],
+    })
+}
 ```
 
-**Mode 2/3 (PBR, Hybrid):**
-```rust
-// Existing bindings 0-8 (model, view, proj, mvp_indices, sky, material, lights, camera, bones)
+**Key changes:**
+- ✅ Removed render_mode switch - ALL modes use same layout now!
+- ✅ Bindings 0-2: Matrix pools
+- ✅ Binding 3: Shading states (NEW - replaces sky/material/lights/camera)
+- ✅ Binding 4: MVP + shading indices (swapped from binding 3)
+- ✅ Binding 5: Bones (consistent across all modes)
+- ✅ Removed bindings 6-9 entirely (redundant)
 
-// Binding 9: Shading states (NEW)
-BindGroupLayoutEntry {
-    binding: 9,
-    visibility: ShaderStages::FRAGMENT,  // Fragment shader reads this
-    ty: BindingType::Buffer {
-        ty: BufferBindingType::Storage { read_only: true },
-        has_dynamic_offset: false,
-        min_binding_size: None,
-    },
-    count: None,
-},
-```
-
-#### 7.2: Create Bind Group with Shading State Buffer
+#### 7.2: Create Unified Bind Group (ALL MODES)
 
 **File:** `emberware-z/src/graphics/mod.rs`
 
-Update the bind group creation in `render_frame` to include the shading state buffer:
+Update the bind group creation in `render_frame` - now **identical for all modes**:
 
-**Mode 0/1:**
 ```rust
-// ... existing bindings 0-6
-
-// Binding 7: Shading states
-BindGroupEntry {
-    binding: 7,
-    resource: self.shading_state_cache.buffer().as_entire_binding(),
-},
+// Create bind group 0 (per-frame uniforms)
+let bind_group_frame = device.create_bind_group(&wgpu::BindGroupDescriptor {
+    label: Some("Frame Bind Group"),
+    layout: &pipeline_entry.bind_group_layout_frame,
+    entries: &[
+        // Binding 0: Model matrices
+        wgpu::BindGroupEntry {
+            binding: 0,
+            resource: self.model_matrix_buffer.as_entire_binding(),
+        },
+        // Binding 1: View matrices
+        wgpu::BindGroupEntry {
+            binding: 1,
+            resource: self.view_matrix_buffer.as_entire_binding(),
+        },
+        // Binding 2: Projection matrices
+        wgpu::BindGroupEntry {
+            binding: 2,
+            resource: self.proj_matrix_buffer.as_entire_binding(),
+        },
+        // Binding 3: Shading states (NEW)
+        wgpu::BindGroupEntry {
+            binding: 3,
+            resource: self.shading_state_buffer.as_entire_binding(),
+        },
+        // Binding 4: MVP + shading state indices
+        wgpu::BindGroupEntry {
+            binding: 4,
+            resource: self.mvp_indices_buffer.as_entire_binding(),
+        },
+        // Binding 5: Bones
+        wgpu::BindGroupEntry {
+            binding: 5,
+            resource: self.bone_buffer.as_entire_binding(),
+        },
+    ],
+});
 ```
 
-**Mode 2/3:**
-```rust
-// ... existing bindings 0-8
-
-// Binding 9: Shading states
-BindGroupEntry {
-    binding: 9,
-    resource: self.shading_state_cache.buffer().as_entire_binding(),
-},
-```
+**Key changes:**
+- ✅ No render_mode switch needed!
+- ✅ All 6 bindings present for all modes
+- ✅ Binding 3 is the new shading_state_buffer
+- ✅ Binding 4 is the mvp_indices_buffer (swapped)
 
 ---
 
@@ -988,6 +1096,63 @@ This refactor includes breaking changes:
 2. **Quantization tuning** - Adjust precision based on visual testing (u16/f16 if needed)
 3. **Shader optimization** - Profile GPU performance after refactor
 4. **WebGL fallback** - TODO: Per-draw uniforms if storage buffers unsupported
+
+---
+
+## Performance Considerations
+
+### Why Packed GPU Unpacking?
+
+The current plan unpacks quantized data on the GPU. Alternative approaches considered:
+
+**Option 1: Packed + GPU Unpack (CURRENT PLAN)**
+- ✅ Small GPU buffer (96 bytes/state vs ~200 bytes)
+- ✅ Better deduplication (quantized → more exact matches)
+- ✅ Less GPU memory bandwidth
+- ✅ Unpacking is **once per draw** (not per fragment!)
+- ✅ Modern GPUs cache unpacked values in registers
+- ⚠️ Unpacking overhead (minimal - simple bit shifts)
+
+**Option 2: Unpack on CPU, Send Full Floats**
+- ✅ No GPU unpacking overhead
+- ✅ Simpler shader code
+- ❌ 2× larger GPU buffer (~200 bytes/state)
+- ❌ Less deduplication (f32 precision → fewer matches)
+- ❌ More GPU memory bandwidth
+- ❌ Still need to upload every frame anyway
+
+**Option 3: Compute Shader Pre-Unpack**
+- ✅ Best of both worlds (compact storage + pre-unpacked)
+- ❌ Extra GPU pass complexity
+- ❌ Overkill for once-per-draw unpacking
+- ❌ Harder to debug
+
+**Decision:** Option 1 (packed) is optimal because:
+1. Deduplication is critical (many draws share materials)
+2. GPU unpacking is **once per draw**, cached for all fragments
+3. Memory bandwidth savings are significant
+4. Simpler architecture (no extra passes)
+
+### Unpacking Frequency Clarification
+
+**Q: Does unpacking happen per-fragment?**
+**A: No! It happens once per draw.**
+
+Here's why:
+1. Vertex shader passes `shading_state_index` with `@interpolate(flat)`
+2. This means the index is **constant** across all fragments in a triangle
+3. Fragment shader reads `shading_states[in.shading_state_index]`
+4. GPU detects constant index → caches fetched data in registers
+5. Unpacked values are reused for all fragments in the draw
+
+**Effective cost:** One storage buffer read + unpacking per draw (negligible).
+
+### Future Optimizations (if profiling shows need)
+
+1. **Hybrid approach:** Keep common states unpacked in a separate buffer
+2. **Texture-based storage:** Use texture fetch instead of storage buffer
+3. **Compute pre-pass:** Unpack in compute shader to separate buffer (overkill)
+4. **CPU-side unpacking:** Trade deduplication for simpler shaders (not recommended)
 
 ---
 
