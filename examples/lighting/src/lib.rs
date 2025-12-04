@@ -37,13 +37,6 @@ extern "C" {
     // Configuration (init-only)
     fn set_clear_color(color: u32);
     fn render_mode(mode: u32);
-    fn set_sky(
-        horizon_r: f32, horizon_g: f32, horizon_b: f32,
-        zenith_r: f32, zenith_g: f32, zenith_b: f32,
-        sun_dir_x: f32, sun_dir_y: f32, sun_dir_z: f32,
-        sun_r: f32, sun_g: f32, sun_b: f32,
-        sun_sharpness: f32,
-    );
 
     // Camera
     fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
@@ -82,7 +75,6 @@ extern "C" {
 
     // Transform
     fn transform_identity();
-    fn transform_rotate(angle_deg: f32, x: f32, y: f32, z: f32);
 
     // Render state
     fn set_color(color: u32);
@@ -379,21 +371,14 @@ fn find_or_add_vertex(verts: &mut [f32], vert_count: &mut usize, pos: [f32; 3]) 
 #[no_mangle]
 pub extern "C" fn init() {
     unsafe {
-        // Dark background (visible behind sky)
+        // Dark background
         set_clear_color(0x101020FF);
 
         // Set render mode (PBR)
         render_mode(RENDER_MODE);
 
-        // Set up procedural sky
-        // Midday sky with warm sun for nice PBR lighting
-        set_sky(
-            0.5, 0.6, 0.7,      // horizon color (light blue-gray)
-            0.2, 0.4, 0.8,      // zenith color (deeper blue)
-            0.5, 0.8, 0.3,      // sun direction (normalized)
-            1.5, 1.4, 1.2,      // sun color (warm white, HDR)
-            200.0,              // sun sharpness
-        );
+        // Note: Sky uses reasonable defaults (blue gradient with sun) from the renderer
+        // No need to set sky explicitly unless you want custom sky settings
 
         // Set up camera
         camera_set(0.0, 0.0, 4.0, 0.0, 0.0, 0.0);
@@ -575,10 +560,9 @@ fn format_float(val: f32, buf: &mut [u8]) -> usize {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
-        // Draw the sphere
+        // Draw the sphere (no rotation for now - add your own matrix math!)
         transform_identity();
-        transform_rotate(ROTATION_X, 1.0, 0.0, 0.0);
-        transform_rotate(ROTATION_Y, 0.0, 1.0, 0.0);
+        // TODO: Build rotation matrices for ROTATION_X and ROTATION_Y and call transform_set()
 
         set_color(0xFFFFFFFF);
         draw_mesh(SPHERE_MESH);

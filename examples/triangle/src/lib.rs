@@ -61,12 +61,8 @@ pub extern "C" fn update() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
-        // Reset transform to identity
+        // Reset transform to identity (no rotation for now - add your own matrix math!)
         transform_identity();
-
-        // Rotate around Y axis based on elapsed time (60 degrees per second)
-        let angle = elapsed_time() * 60.0;
-        transform_rotate(angle, 0.0, 1.0, 0.0);
 
         // Draw the triangle with POS_COLOR format
         draw_triangles(TRIANGLE.as_ptr(), 3, FORMAT_POS_COLOR);

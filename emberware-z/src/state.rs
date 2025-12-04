@@ -14,29 +14,8 @@ pub const MAX_BONES: usize = 256;
 // Lighting (moved from core/src/wasm/render.rs)
 // ============================================================================
 
-/// Light state for Mode 2/3 (PBR/Hybrid)
-#[derive(Debug, Clone, Copy)]
-pub struct LightState {
-    /// Light enabled
-    pub enabled: bool,
-    /// Light direction (normalized)
-    pub direction: [f32; 3],
-    /// Light color (RGB, linear)
-    pub color: [f32; 3],
-    /// Light intensity multiplier
-    pub intensity: f32,
-}
-
-impl Default for LightState {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            direction: [0.0, -1.0, 0.0], // Default: downward
-            color: [1.0, 1.0, 1.0],      // Default: white
-            intensity: 1.0,
-        }
-    }
-}
+// LightState removed - obsolete with unified shading state system.
+// Lighting data now stored in PackedLight within PackedUnifiedShadingState.
 
 // ============================================================================
 // Font System
@@ -106,7 +85,6 @@ pub enum DeferredCommand {
         color: u32,
         depth_test: bool,
         cull_mode: u8,
-        blend_mode: u8,
         bound_textures: [u32; 4],
     },
     /// Draw a 2D sprite in screen space
@@ -119,7 +97,6 @@ pub enum DeferredCommand {
         origin: Option<(f32, f32)>,
         rotation: f32,
         color: u32,
-        blend_mode: u8,
         bound_textures: [u32; 4],
     },
     /// Draw a 2D rectangle in screen space
@@ -129,7 +106,6 @@ pub enum DeferredCommand {
         width: f32,
         height: f32,
         color: u32,
-        blend_mode: u8,
     },
     /// Draw text in screen space
     DrawText {
@@ -138,7 +114,6 @@ pub enum DeferredCommand {
         y: f32,
         size: f32,
         color: u32,
-        blend_mode: u8,
         font: u32, // 0 = built-in font, >0 = custom font handle
     },
 }
@@ -187,18 +162,11 @@ pub struct ZFFIState {
     pub current_transform: Mat4,
 
     // Render state
-    pub color: u32,
     pub depth_test: bool,
     pub cull_mode: u8,
     pub blend_mode: u8,
     pub texture_filter: u8,
     pub bound_textures: [u32; 4],
-
-    // Z-specific rendering (staging - synced to current_shading_state when modified)
-    pub matcap_blend_modes: [u8; 4],
-
-    // PBR lighting (staging - synced to current_shading_state when modified)
-    pub lights: [LightState; 4],
 
     // GPU skinning
     pub bone_matrices: Vec<Mat4>,
@@ -272,14 +240,11 @@ impl Default for ZFFIState {
 
         Self {
             current_transform: Mat4::IDENTITY,
-            color: 0xFFFFFFFF,
             depth_test: true,
             cull_mode: 1, // Back-face culling
             blend_mode: 0,
             texture_filter: 0, // Nearest
             bound_textures: [0; 4],
-            matcap_blend_modes: [0; 4],
-            lights: [LightState::default(); 4],
             bone_matrices: Vec::new(),
             bone_count: 0,
             render_pass: crate::graphics::VirtualRenderPass::new(),
@@ -329,20 +294,6 @@ impl ZFFIState {
         Some(idx)
     }
 
-    /// Pack current matrix indices into MvpIndex
-    #[allow(dead_code)] // Reserved for future advanced matrix management
-    pub fn pack_current_mvp(&self) -> crate::graphics::MvpIndex {
-        crate::graphics::MvpIndex::new(
-            self.current_model_idx,
-            self.current_view_idx,
-            self.current_proj_idx,
-        )
-    }
-
-    /// Mark the current shading state as dirty (needs to be added to pool on next draw)
-    pub fn mark_shading_state_dirty(&mut self) {
-        self.shading_state_dirty = true;
-    }
 
     /// Update material property in current shading state (with quantization check)
     pub fn update_material_metallic(&mut self, value: f32) {
@@ -443,18 +394,15 @@ impl ZFFIState {
         }
     }
 
-    /// Update matcap blend modes in current shading state (from staging array)
-    pub fn sync_matcap_blend_modes(&mut self) {
-        use crate::graphics::{pack_matcap_blend_modes, MatcapBlendMode};
+    /// Update a single matcap blend mode slot in current shading state
+    pub fn update_matcap_blend_mode(&mut self, slot: usize, mode: crate::graphics::MatcapBlendMode) {
+        use crate::graphics::{unpack_matcap_blend_modes, pack_matcap_blend_modes};
 
-        let modes = [
-            MatcapBlendMode::from_u8(self.matcap_blend_modes[0]),
-            MatcapBlendMode::from_u8(self.matcap_blend_modes[1]),
-            MatcapBlendMode::from_u8(self.matcap_blend_modes[2]),
-            MatcapBlendMode::from_u8(self.matcap_blend_modes[3]),
-        ];
-
+        // Unpack current modes, modify one slot, repack
+        let mut modes = unpack_matcap_blend_modes(self.current_shading_state.matcap_blend_modes);
+        modes[slot] = mode;
         let packed = pack_matcap_blend_modes(modes);
+
         if self.current_shading_state.matcap_blend_modes != packed {
             self.current_shading_state.matcap_blend_modes = packed;
             self.shading_state_dirty = true;

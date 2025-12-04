@@ -75,8 +75,7 @@ use hashbrown::HashMap;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use glam::{Mat4, Vec3};
-use wgpu::util::DeviceExt;
+use glam::Mat4;
 use winit::window::Window;
 
 use emberware_core::console::Graphics;
@@ -86,12 +85,12 @@ pub use buffer::{BufferManager, GrowableBuffer, MeshHandle, RetainedMesh};
 pub use command_buffer::{BufferSource, VirtualRenderPass};
 pub use matrix_packing::MvpIndex;
 pub use render_state::{
-    BlendMode, CameraUniforms, CullMode, LightUniform, LightsUniforms, MatcapBlendMode,
-    MaterialUniforms, RenderState, SkyUniforms, TextureFilter, TextureHandle,
+    BlendMode, CullMode, MatcapBlendMode,
+    RenderState, TextureFilter, TextureHandle,
 };
 pub use unified_shading_state::{
-    pack_direction3, pack_matcap_blend_modes, pack_rgb8, pack_unorm8, PackedLight,
-    PackedUnifiedShadingState, ShadingStateIndex,
+    pack_direction3, pack_matcap_blend_modes, pack_rgb8, pack_unorm8, unpack_matcap_blend_modes,
+    PackedLight, PackedUnifiedShadingState, ShadingStateIndex,
 };
 pub use vertex::{
     vertex_stride, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV, VERTEX_FORMAT_COUNT,
@@ -112,41 +111,8 @@ fn pixel_to_ndc(pixel_x: f32, pixel_y: f32, width: f32, height: f32) -> (f32, f3
     (ndc_x, ndc_y)
 }
 
-/// Material cache key for deduplicating material uniform buffers
-///
-/// Combines all material properties that affect the uniform buffer contents.
-/// Used as HashMap key to avoid creating duplicate buffers for identical materials.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-struct MaterialCacheKey {
-    color: u32,
-    metallic_bits: u32,
-    roughness_bits: u32,
-    emissive_bits: u32,
-    matcap_blend_modes: [u32; 4],
-}
-
-impl MaterialCacheKey {
-    fn new(
-        color: u32,
-        metallic: f32,
-        roughness: f32,
-        emissive: f32,
-        matcap_blend_modes: [MatcapBlendMode; 4],
-    ) -> Self {
-        Self {
-            color,
-            metallic_bits: metallic.to_bits(),
-            roughness_bits: roughness.to_bits(),
-            emissive_bits: emissive.to_bits(),
-            matcap_blend_modes: [
-                matcap_blend_modes[0] as u32,
-                matcap_blend_modes[1] as u32,
-                matcap_blend_modes[2] as u32,
-                matcap_blend_modes[3] as u32,
-            ],
-        }
-    }
-}
+// MaterialCacheKey removed - obsolete with unified shading state system.
+// Frame bind group is now identical for all draws (contains only buffers, no per-draw material data).
 
 /// Emberware Z graphics backend
 ///
@@ -192,22 +158,6 @@ pub struct ZGraphics {
     // Current render state
     render_state: RenderState,
 
-    // Sky system
-    sky_uniforms: SkyUniforms,
-    sky_buffer: wgpu::Buffer,
-
-    // Camera system (view/projection + position for specular)
-    camera_uniforms: CameraUniforms,
-    camera_buffer: wgpu::Buffer,
-
-    // Lighting system (4 directional lights for PBR)
-    lights_uniforms: LightsUniforms,
-    lights_buffer: wgpu::Buffer,
-
-    // Material system (global metallic/roughness/emissive)
-    material_uniforms: MaterialUniforms,
-    material_buffer: wgpu::Buffer,
-
     // Bone system (GPU skinning)
     bone_buffer: wgpu::Buffer,
 
@@ -221,10 +171,13 @@ pub struct ZGraphics {
     proj_matrix_capacity: usize,
     mvp_indices_capacity: usize,
 
+    // Shading state storage buffer (per-frame array)
+    shading_state_buffer: wgpu::Buffer,
+    shading_state_capacity: usize,
+
     // Bind group caches (cleared and repopulated each frame)
-    material_buffers: HashMap<MaterialCacheKey, wgpu::Buffer>,
     texture_bind_groups: HashMap<[TextureHandle; 4], wgpu::BindGroup>,
-    frame_bind_groups: HashMap<MaterialCacheKey, wgpu::BindGroup>,
+    frame_bind_group: Option<wgpu::BindGroup>,  // Single bind group for entire frame (no per-draw variation)
 
     // Frame state
     current_frame: Option<wgpu::SurfaceTexture>,
@@ -348,38 +301,6 @@ impl ZGraphics {
         // Create buffer manager (vertex/index buffers and mesh storage)
         let buffer_manager = BufferManager::new(&device);
 
-        // Create sky uniform buffer
-        let sky_uniforms = SkyUniforms::default();
-        let sky_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Sky Uniform Buffer"),
-            contents: bytemuck::cast_slice(&[sky_uniforms]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
-        // Create camera uniform buffer (view/projection + position)
-        let camera_uniforms = CameraUniforms::default();
-        let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Camera Uniform Buffer"),
-            contents: bytemuck::cast_slice(&[camera_uniforms]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
-        // Create lights uniform buffer (4 directional lights)
-        let lights_uniforms = LightsUniforms::default();
-        let lights_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Lights Uniform Buffer"),
-            contents: bytemuck::cast_slice(&[lights_uniforms]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
-        // Create material uniform buffer (metallic/roughness/emissive)
-        let material_uniforms = MaterialUniforms::default();
-        let material_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Material Uniform Buffer"),
-            contents: bytemuck::cast_slice(&[material_uniforms]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
         // Create bone storage buffer for GPU skinning (256 bones × 64 bytes = 16KB)
         let bone_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Bone Storage Buffer"),
@@ -413,11 +334,20 @@ impl ZGraphics {
             mapped_at_creation: false,
         });
 
-        // Create MVP indices buffer (2 × u32 per entry: packed MVP + reserved)
+        // Create MVP indices buffer (2 × u32 per entry: packed MVP + shading_state_index)
         let mvp_indices_capacity = 1024;
         let mvp_indices_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("MVP Indices"),
             size: (mvp_indices_capacity * 2 * std::mem::size_of::<u32>()) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        // Create shading state buffer (per-frame array of PackedUnifiedShadingState)
+        let shading_state_capacity = 256;
+        let shading_state_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Shading States"),
+            size: (shading_state_capacity * std::mem::size_of::<PackedUnifiedShadingState>()) as u64,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -447,14 +377,6 @@ impl ZGraphics {
             sampler_nearest,
             sampler_linear,
             render_state: RenderState::default(),
-            sky_uniforms,
-            sky_buffer,
-            camera_uniforms,
-            camera_buffer,
-            lights_uniforms,
-            lights_buffer,
-            material_uniforms,
-            material_buffer,
             bone_buffer,
             model_matrix_buffer,
             view_matrix_buffer,
@@ -464,9 +386,10 @@ impl ZGraphics {
             view_matrix_capacity,
             proj_matrix_capacity,
             mvp_indices_capacity,
-            material_buffers: HashMap::new(),
+            shading_state_buffer,
+            shading_state_capacity,
             texture_bind_groups: HashMap::new(),
-            frame_bind_groups: HashMap::new(),
+            frame_bind_group: None,
             current_frame: None,
             current_view: None,
             buffer_manager,
@@ -776,14 +699,9 @@ impl ZGraphics {
         self.texture_manager.get_font_texture_view()
     }
 
-    /// Get texture view for a slot, returning fallback if unbound
-    pub fn get_slot_texture_view(&self, slot: usize) -> &wgpu::TextureView {
-        let handle = self
-            .render_state
-            .texture_slots
-            .get(slot)
-            .copied()
-            .unwrap_or(TextureHandle::INVALID);
+    /// Get texture view for a handle, returning fallback if invalid
+    /// Note: Texture binding is now managed in ZFFIState.bound_textures
+    pub fn get_texture_view_or_fallback(&self, handle: TextureHandle) -> &wgpu::TextureView {
         if handle == TextureHandle::INVALID {
             self.get_fallback_white_view()
         } else {
@@ -805,11 +723,8 @@ impl ZGraphics {
     // ========================================================================
     // Render State
     // ========================================================================
-
-    /// Set uniform tint color (0xRRGGBBAA)
-    pub fn set_color(&mut self, color: u32) {
-        self.render_state.color = color;
-    }
+    // Note: Color and texture binding are now managed in ZFFIState
+    // These methods have been removed as they're redundant with FFI layer state management
 
     /// Enable or disable depth testing
     pub fn set_depth_test(&mut self, enabled: bool) {
@@ -831,18 +746,6 @@ impl ZGraphics {
         self.render_state.texture_filter = filter;
     }
 
-    /// Bind texture to slot 0 (albedo)
-    pub fn bind_texture(&mut self, handle: TextureHandle) {
-        self.bind_texture_slot(handle, 0);
-    }
-
-    /// Bind texture to a specific slot (0-3)
-    pub fn bind_texture_slot(&mut self, handle: TextureHandle, slot: usize) {
-        if slot < 4 {
-            self.render_state.texture_slots[slot] = handle;
-        }
-    }
-
     /// Get current render state
     pub fn render_state(&self) -> &RenderState {
         &self.render_state
@@ -858,182 +761,6 @@ impl ZGraphics {
 
     // ========================================================================
     // Sky System
-    // ========================================================================
-
-    /// Set sky parameters for procedural sky rendering
-    ///
-    /// Parameters:
-    /// - horizon_rgb: Horizon color (RGB, linear, 3 floats)
-    /// - zenith_rgb: Zenith (top) color (RGB, linear, 3 floats)
-    /// - sun_dir: Sun direction (normalized, XYZ, 3 floats)
-    /// - sun_rgb: Sun color (RGB, linear, 3 floats)
-    /// - sun_sharpness: Sun sharpness (higher = sharper sun, typically 32-256)
-    pub fn set_sky(
-        &mut self,
-        horizon_rgb: [f32; 3],
-        zenith_rgb: [f32; 3],
-        sun_dir: [f32; 3],
-        sun_rgb: [f32; 3],
-        sun_sharpness: f32,
-    ) {
-        // Normalize sun direction
-        let sun_vec = Vec3::from_array(sun_dir);
-        let sun_normalized = if sun_vec.length() > 0.0001 {
-            sun_vec.normalize()
-        } else {
-            Vec3::Y // Default to up if zero vector
-        };
-
-        self.sky_uniforms = SkyUniforms {
-            horizon_color: [horizon_rgb[0], horizon_rgb[1], horizon_rgb[2], 0.0],
-            zenith_color: [zenith_rgb[0], zenith_rgb[1], zenith_rgb[2], 0.0],
-            sun_direction: [sun_normalized.x, sun_normalized.y, sun_normalized.z, 0.0],
-            sun_color_and_sharpness: [sun_rgb[0], sun_rgb[1], sun_rgb[2], sun_sharpness],
-        };
-
-        // Upload to GPU
-        self.queue.write_buffer(
-            &self.sky_buffer,
-            0,
-            bytemuck::cast_slice(&[self.sky_uniforms]),
-        );
-
-        tracing::debug!(
-            "Set sky: horizon={:?}, zenith={:?}, sun_dir={:?}, sun_color={:?}, sharpness={}",
-            horizon_rgb,
-            zenith_rgb,
-            sun_normalized.to_array(),
-            sun_rgb,
-            sun_sharpness
-        );
-    }
-
-    /// Get current sky uniforms
-    pub fn sky_uniforms(&self) -> &SkyUniforms {
-        &self.sky_uniforms
-    }
-
-    /// Get sky uniform buffer for binding
-    pub fn sky_buffer(&self) -> &wgpu::Buffer {
-        &self.sky_buffer
-    }
-
-    // ========================================================================
-    // Scene Uniforms (Camera, Lights, Materials)
-    // ========================================================================
-
-    /// Update scene uniforms (camera, lights, materials) and upload to GPU
-    ///
-    /// This should be called once per frame before rendering to ensure PBR
-    /// shaders have up-to-date camera position (for specular), lights, and
-    /// material properties.
-    ///
-    /// # Arguments
-    /// * `camera` - Camera state from ZFFIState
-    /// * `lights` - Array of 4 light states from ZFFIState
-    /// * `aspect_ratio` - Screen aspect ratio (width/height)
-    /// * `metallic` - Global metallic value (0.0 = non-metallic, 1.0 = fully metallic)
-    /// * `roughness` - Global roughness value (0.0 = smooth, 1.0 = rough)
-    /// * `emissive` - Global emissive intensity (0.0 = no emission, 1.0+ = glowing)
-    pub fn update_scene_uniforms(
-        &mut self,
-        view_matrix: Mat4,
-        proj_matrix: Mat4,
-        camera_position: Vec3,
-        lights: &[crate::state::LightState; 4],
-        metallic: f32,
-        roughness: f32,
-        emissive: f32,
-    ) {
-        // Update camera uniforms
-        self.camera_uniforms = CameraUniforms {
-            view: view_matrix.to_cols_array_2d(),
-            projection: proj_matrix.to_cols_array_2d(),
-            position: [camera_position.x, camera_position.y, camera_position.z, 0.0],
-        };
-
-        self.queue.write_buffer(
-            &self.camera_buffer,
-            0,
-            bytemuck::cast_slice(&[self.camera_uniforms]),
-        );
-
-        // Update lights uniforms
-        for (i, light) in lights.iter().enumerate() {
-            // Normalize light direction
-            let dir = Vec3::from_array(light.direction);
-            let dir_normalized = if dir.length() > 0.0001 {
-                dir.normalize()
-            } else {
-                Vec3::new(0.0, -1.0, 0.0) // Default: downward
-            };
-
-            self.lights_uniforms.lights[i] = LightUniform {
-                direction_and_enabled: [
-                    dir_normalized.x,
-                    dir_normalized.y,
-                    dir_normalized.z,
-                    if light.enabled { 1.0 } else { 0.0 },
-                ],
-                color_and_intensity: [
-                    light.color[0],
-                    light.color[1],
-                    light.color[2],
-                    light.intensity,
-                ],
-            };
-        }
-
-        self.queue.write_buffer(
-            &self.lights_buffer,
-            0,
-            bytemuck::cast_slice(&[self.lights_uniforms]),
-        );
-
-        // Update material uniforms
-        self.material_uniforms = MaterialUniforms {
-            properties: [
-                metallic.clamp(0.0, 1.0),
-                roughness.clamp(0.0, 1.0),
-                emissive.max(0.0),
-                0.0, // .w unused
-            ],
-        };
-
-        self.queue.write_buffer(
-            &self.material_buffer,
-            0,
-            bytemuck::cast_slice(&[self.material_uniforms]),
-        );
-
-        tracing::trace!(
-            "Updated scene uniforms: camera_pos={:?}, lights_enabled={}/{}/{}/{}, material=M{:.2}/R{:.2}/E{:.2}",
-            camera_position,
-            lights[0].enabled,
-            lights[1].enabled,
-            lights[2].enabled,
-            lights[3].enabled,
-            metallic,
-            roughness,
-            emissive
-        );
-    }
-
-    /// Get camera uniform buffer for binding
-    pub fn camera_buffer(&self) -> &wgpu::Buffer {
-        &self.camera_buffer
-    }
-
-    /// Get lights uniform buffer for binding
-    pub fn lights_buffer(&self) -> &wgpu::Buffer {
-        &self.lights_buffer
-    }
-
-    /// Get material uniform buffer for binding
-    pub fn material_buffer(&self) -> &wgpu::Buffer {
-        &self.material_buffer
-    }
-
     // ========================================================================
     // Transform Stack
     // ========================================================================
@@ -1186,18 +913,6 @@ impl ZGraphics {
         let render_width_f = render_width as f32;
         let render_height_f = render_height as f32;
 
-        // Update scene uniforms (camera, lights, materials) for PBR rendering
-        // Note: aspect ratio is computed in app.rs and passed via update_scene_uniforms
-        // This is kept separate as it needs window size which ZGraphics doesn't have
-
-        // Convert matcap blend modes from u8 to MatcapBlendMode
-        let matcap_blend_modes = [
-            Self::convert_matcap_blend_mode(z_state.matcap_blend_modes[0]),
-            Self::convert_matcap_blend_mode(z_state.matcap_blend_modes[1]),
-            Self::convert_matcap_blend_mode(z_state.matcap_blend_modes[2]),
-            Self::convert_matcap_blend_mode(z_state.matcap_blend_modes[3]),
-        ];
-
         // 1. Swap the FFI-populated render pass into our command buffer
         // This efficiently transfers all immediate geometry (triangles, meshes)
         // without copying vectors. The old command buffer (now in z_state.render_pass)
@@ -1217,7 +932,6 @@ impl ZGraphics {
                     color,
                     depth_test,
                     cull_mode,
-                    blend_mode,
                     bound_textures,
                 } => {
                     // Generate billboard quad geometry
@@ -1365,7 +1079,6 @@ impl ZGraphics {
                     origin,
                     rotation,
                     color,
-                    blend_mode,
                     bound_textures,
                 } => {
                     // 2D sprite rendering in screen space
@@ -1488,7 +1201,6 @@ impl ZGraphics {
                     width,
                     height,
                     color,
-                    blend_mode,
                 } => {
                     // 2D rectangle rendering in screen space (solid color, no texture)
                     tracing::trace!(
@@ -1558,7 +1270,6 @@ impl ZGraphics {
                     y,
                     size,
                     color,
-                    blend_mode,
                     font,
                 } => {
                     // Render text using built-in or custom font
@@ -2071,6 +1782,27 @@ impl ZGraphics {
         self.mvp_indices_capacity = new_capacity;
     }
 
+    fn ensure_shading_state_buffer_capacity(&mut self, count: usize) {
+        if count <= self.shading_state_capacity {
+            return;
+        }
+
+        let new_capacity = (count * 2).next_power_of_two();
+        tracing::debug!(
+            "Growing shading state buffer: {} → {}",
+            self.shading_state_capacity,
+            new_capacity
+        );
+
+        self.shading_state_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Shading States"),
+            size: (new_capacity * std::mem::size_of::<PackedUnifiedShadingState>()) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        self.shading_state_capacity = new_capacity;
+    }
+
     /// Render the command buffer contents to a texture view
     ///
     /// This is the core rendering function that takes buffered draw commands
@@ -2220,21 +1952,22 @@ impl ZGraphics {
 
         // OPTIMIZATION 3: Sort draw commands IN-PLACE by (pipeline_key, texture_slots) to minimize state changes
         // Commands are reset at the start of next frame, so no need to preserve original order or clone
-        // TODO: Phase 8 - Extract blend_mode from shading state instead of using placeholder
         self.command_buffer
             .commands_mut()
             .sort_unstable_by_key(|cmd| {
+                // Extract blend mode from shading state for sorting
+                let shading_state = z_state.shading_states.get(cmd.shading_state_index.0 as usize)
+                    .expect("Invalid shading_state_index in VRPCommand - this indicates a bug in state tracking");
+                let blend_mode = BlendMode::from_u8((shading_state.blend_mode & 0xFF) as u8);
+
                 // Sort key: (render_mode, format, blend_mode, depth_test, cull_mode, texture_slots)
                 // This groups commands by pipeline first, then by textures
-                // TEMPORARY: Using default render state until Phase 5/8 implement shading state lookup
+                // Note: color, texture_slots, and matcap_blend_modes removed from RenderState
                 let state = RenderState {
-                    color: 0xFFFFFFFF,  // Placeholder - will come from shading state
                     depth_test: cmd.depth_test,
                     cull_mode: cmd.cull_mode,
-                    blend_mode: BlendMode::Alpha,  // Placeholder - will come from shading state
+                    blend_mode,
                     texture_filter: self.render_state.texture_filter,
-                    texture_slots: cmd.texture_slots,
-                    matcap_blend_modes: [MatcapBlendMode::Multiply; 4],  // Placeholder
                 };
                 let pipeline_key = PipelineKey::new(self.current_render_mode, cmd.format, &state);
                 (
@@ -2272,15 +2005,22 @@ impl ZGraphics {
             self.queue.write_buffer(&self.proj_matrix_buffer, 0, data);
         }
 
-        // 4. Collect and upload MVP indices from command buffer
-        // Each entry is 2 × u32: [packed_mvp, reserved]
+        // 4. Upload shading states (NEW - Phase 5)
+        if !z_state.shading_states.is_empty() {
+            self.ensure_shading_state_buffer_capacity(z_state.shading_states.len());
+            let data = bytemuck::cast_slice(&z_state.shading_states);
+            self.queue.write_buffer(&self.shading_state_buffer, 0, data);
+        }
+
+        // 5. Collect and upload MVP + shading state indices from command buffer
+        // Each entry is 2 × u32: [packed_mvp, shading_state_index]
         let command_count = self.command_buffer.commands().len();
         if command_count > 0 {
-            // Collect MVP indices first
+            // Collect MVP + shading state indices
             let mut mvp_indices_data = Vec::with_capacity(command_count * 2);
             for cmd in self.command_buffer.commands() {
-                mvp_indices_data.push(cmd.mvp_index.0); // Packed MVP
-                mvp_indices_data.push(0u32);            // Reserved
+                mvp_indices_data.push(cmd.mvp_index.0);             // .x: Packed MVP
+                mvp_indices_data.push(cmd.shading_state_index.0);   // .y: Shading state index
             }
 
             // Ensure capacity and upload
@@ -2291,10 +2031,9 @@ impl ZGraphics {
 
         // Take caches out of self temporarily to avoid nested mutable borrows during render pass.
         // Caches are persistent across frames - entries are reused when keys match.
-        // Cache growth is bounded by unique (material, texture) combinations used.
-        let mut material_buffers = std::mem::take(&mut self.material_buffers);
+        // Cache growth is bounded by unique (texture) combinations used.
         let mut texture_bind_groups = std::mem::take(&mut self.texture_bind_groups);
-        let mut frame_bind_groups = std::mem::take(&mut self.frame_bind_groups);
+        let mut frame_bind_group = std::mem::take(&mut self.frame_bind_group);
 
         // Render pass - render game content to offscreen target
         {
@@ -2329,22 +2068,34 @@ impl ZGraphics {
             let mut bound_pipeline: Option<PipelineKey> = None;
             let mut bound_texture_slots: Option<[TextureHandle; 4]> = None;
             let mut bound_vertex_format: Option<(u8, BufferSource)> = None;
-            let mut bound_material: Option<MaterialCacheKey> = None;
+            let mut frame_bind_group_set = false;
 
             // Instance index for accessing MVP indices in storage buffer
             let mut instance_index: u32 = 0;
 
             for cmd in self.command_buffer.commands() {
-                // Create render state from command
-                // TODO: Phase 5/8 - Extract color, blend_mode, matcap_blend_modes from shading state
+                // Extract shading state for this draw
+                let shading_state = z_state.shading_states.get(cmd.shading_state_index.0 as usize)
+                    .expect("Invalid shading_state_index in VRPCommand during render - this indicates a bug in state tracking");
+
+                // Extract blend mode from packed shading state
+                let blend_mode = BlendMode::from_u8((shading_state.blend_mode & 0xFF) as u8);
+
+                // Extract matcap blend modes from packed shading state (currently unused, reserved for future shader use)
+                let _matcap_blend_modes = [
+                    MatcapBlendMode::from_u8((shading_state.matcap_blend_modes & 0xFF) as u8),
+                    MatcapBlendMode::from_u8(((shading_state.matcap_blend_modes >> 8) & 0xFF) as u8),
+                    MatcapBlendMode::from_u8(((shading_state.matcap_blend_modes >> 16) & 0xFF) as u8),
+                    MatcapBlendMode::from_u8(((shading_state.matcap_blend_modes >> 24) & 0xFF) as u8),
+                ];
+
+                // Create render state from command + shading state
+                // Note: color, texture_slots, and matcap_blend_modes are now in shading state
                 let state = RenderState {
-                    color: 0xFFFFFFFF,  // Placeholder - will come from shading state
                     depth_test: cmd.depth_test,
                     cull_mode: cmd.cull_mode,
-                    blend_mode: BlendMode::Alpha,  // Placeholder - will come from shading state
+                    blend_mode,
                     texture_filter: self.render_state.texture_filter,
-                    texture_slots: cmd.texture_slots,
-                    matcap_blend_modes: [MatcapBlendMode::Multiply; 4],  // Placeholder
                 };
 
                 // Get/create pipeline (using contains + get pattern to avoid borrow issues)
@@ -2368,169 +2119,40 @@ impl ZGraphics {
                     .get(self.current_render_mode, cmd.format, &state)
                     .unwrap();
 
-                // Get or create material uniform buffer (cached by color + properties + blend modes)
-                // TODO: Phase 5 - Get values from shading state instead of placeholders
-                let material_key = MaterialCacheKey::new(
-                    0xFFFFFFFF,  // Placeholder - will come from shading state
-                    self.material_uniforms.properties[0],
-                    self.material_uniforms.properties[1],
-                    self.material_uniforms.properties[2],
-                    state.matcap_blend_modes,
-                );
-                let material_buffer = material_buffers.entry(material_key).or_insert_with(|| {
-                    let color_vec = state.color_vec4();
-                    #[repr(C)]
-                    #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-                    struct MaterialUniforms {
-                        color: [f32; 4],
-                        matcap_blend_modes: [u32; 4],
-                    }
-                    let material = MaterialUniforms {
-                        color: [color_vec.x, color_vec.y, color_vec.z, color_vec.w],
-                        matcap_blend_modes: [
-                            state.matcap_blend_modes[0] as u32,
-                            state.matcap_blend_modes[1] as u32,
-                            state.matcap_blend_modes[2] as u32,
-                            state.matcap_blend_modes[3] as u32,
-                        ],
-                    };
-                    self.device
-                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                            label: Some("Material Buffer"),
-                            contents: bytemuck::cast_slice(&[material]),
-                            usage: wgpu::BufferUsages::UNIFORM,
+                // Create frame bind group (group 0) once per frame - reusable across all draws
+                // Contains only buffers that don't vary per-draw: matrices, MVP indices, shading states, bones
+                frame_bind_group.get_or_insert_with(|| {
+                        // Unified binding layout (0-5) - same for all modes
+                        self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                            label: Some("Frame Bind Group (Unified)"),
+                            layout: &pipeline_entry.bind_group_layout_frame,
+                            entries: &[
+                                wgpu::BindGroupEntry {
+                                    binding: 0,
+                                    resource: self.model_matrix_buffer.as_entire_binding(),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 1,
+                                    resource: self.view_matrix_buffer.as_entire_binding(),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 2,
+                                    resource: self.proj_matrix_buffer.as_entire_binding(),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 3,
+                                    resource: self.shading_state_buffer.as_entire_binding(),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 4,
+                                    resource: self.mvp_indices_buffer.as_entire_binding(),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 5,
+                                    resource: self.bone_buffer.as_entire_binding(),
+                                },
+                            ],
                         })
-                });
-
-                // Create frame bind group (group 0) - Now reusable across draws since model matrices are in storage buffer!
-                // Frame bind groups cached by material (since material buffer is the only per-draw varying resource)
-                let frame_bind_group_key = material_key; // Reuse material_key as frame bind group key
-                let frame_bind_group = frame_bind_groups
-                    .entry(frame_bind_group_key)
-                    .or_insert_with(|| {
-                        match self.current_render_mode {
-                            0 | 1 => {
-                                // Mode 0 (Unlit) and Mode 1 (Matcap): Basic bindings
-                                self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                                    label: Some("Frame Bind Group"),
-                                    layout: &pipeline_entry.bind_group_layout_frame,
-                                    entries: &[
-                                        wgpu::BindGroupEntry {
-                                            binding: 0,
-                                            resource: self
-                                                .model_matrix_buffer
-                                                .as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 1,
-                                            resource: self.view_matrix_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 2,
-                                            resource: self.proj_matrix_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 3,
-                                            resource: self.mvp_indices_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 4,
-                                            resource: self.sky_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 5,
-                                            resource: material_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 6,
-                                            resource: self.bone_buffer.as_entire_binding(),
-                                        },
-                                    ],
-                                })
-                            }
-                            2 | 3 => {
-                                // Mode 2 (PBR) and Mode 3 (Hybrid): Additional lighting uniforms
-                                self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                                    label: Some("Frame Bind Group"),
-                                    layout: &pipeline_entry.bind_group_layout_frame,
-                                    entries: &[
-                                        wgpu::BindGroupEntry {
-                                            binding: 0,
-                                            resource: self
-                                                .model_matrix_buffer
-                                                .as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 1,
-                                            resource: self.view_matrix_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 2,
-                                            resource: self.proj_matrix_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 3,
-                                            resource: self.mvp_indices_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 4,
-                                            resource: self.sky_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 5,
-                                            resource: material_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 6,
-                                            resource: self.lights_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 7,
-                                            resource: self.camera_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 8,
-                                            resource: self.bone_buffer.as_entire_binding(),
-                                        },
-                                    ],
-                                })
-                            }
-                            _ => {
-                                // Fallback - same as mode 0/1
-                                self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                                    label: Some("Frame Bind Group"),
-                                    layout: &pipeline_entry.bind_group_layout_frame,
-                                    entries: &[
-                                        wgpu::BindGroupEntry {
-                                            binding: 0,
-                                            resource: self
-                                                .model_matrix_buffer
-                                                .as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 1,
-                                            resource: self.view_matrix_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 2,
-                                            resource: self.proj_matrix_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 3,
-                                            resource: self.sky_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 4,
-                                            resource: material_buffer.as_entire_binding(),
-                                        },
-                                        wgpu::BindGroupEntry {
-                                            binding: 5,
-                                            resource: self.bone_buffer.as_entire_binding(),
-                                        },
-                                    ],
-                                })
-                            }
-                        }
                     });
 
                 // Get or create texture bind group (cached by texture slots)
@@ -2599,10 +2221,10 @@ impl ZGraphics {
                     bound_pipeline = Some(pipeline_key);
                 }
 
-                // Set frame bind group (only if material changed, since model matrices are in storage buffer)
-                if bound_material != Some(material_key) {
-                    render_pass.set_bind_group(0, &*frame_bind_group, &[]);
-                    bound_material = Some(material_key);
+                // Set frame bind group once (unified across all draws)
+                if !frame_bind_group_set {
+                    render_pass.set_bind_group(0, frame_bind_group.as_ref().unwrap(), &[]);
+                    frame_bind_group_set = true;
                 }
 
                 // Set texture bind group (only if changed)
@@ -2656,9 +2278,8 @@ impl ZGraphics {
         }
 
         // Move caches back into self (preserving allocations for next frame)
-        self.material_buffers = material_buffers;
         self.texture_bind_groups = texture_bind_groups;
-        self.frame_bind_groups = frame_bind_groups;
+        self.frame_bind_group = frame_bind_group;
 
         // Calculate viewport based on scale mode
         let (viewport_x, viewport_y, viewport_width, viewport_height) = match self.scale_mode {

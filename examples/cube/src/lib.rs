@@ -28,13 +28,6 @@ fn panic(_: &PanicInfo) -> ! {
 extern "C" {
     // Configuration
     fn set_clear_color(color: u32);
-    fn set_sky(
-        horizon_r: f32, horizon_g: f32, horizon_b: f32,
-        zenith_r: f32, zenith_g: f32, zenith_b: f32,
-        sun_dir_x: f32, sun_dir_y: f32, sun_dir_z: f32,
-        sun_r: f32, sun_g: f32, sun_b: f32,
-        sun_sharpness: f32,
-    );
 
     // Camera
     fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
@@ -61,7 +54,6 @@ extern "C" {
 
     // Transform
     fn transform_identity();
-    fn transform_rotate(angle_deg: f32, x: f32, y: f32, z: f32);
 
     // Render state
     fn set_color(color: u32);
@@ -164,18 +156,11 @@ const CHECKERBOARD: [u8; 8 * 8 * 4] = {
 #[no_mangle]
 pub extern "C" fn init() {
     unsafe {
-        // Dark blue background (visible if sky isn't rendered)
+        // Dark blue background
         set_clear_color(0x1a1a2eFF);
 
-        // Set up procedural sky for Lambert lighting
-        // Midday sky: blue gradient with bright sun
-        set_sky(
-            0.6, 0.7, 0.8,      // horizon color (light blue-gray)
-            0.3, 0.5, 0.9,      // zenith color (deeper blue)
-            0.5, 0.8, 0.3,      // sun direction (normalized: upper-right-front)
-            1.5, 1.4, 1.3,      // sun color (warm white, slightly HDR)
-            150.0,              // sun sharpness
-        );
+        // Note: Sky uses reasonable defaults (blue gradient with sun) from the renderer
+        // No need to set sky explicitly unless you want custom sky settings
 
         // Set up camera
         camera_set(0.0, 0.0, 5.0, 0.0, 0.0, 0.0);
@@ -221,12 +206,8 @@ pub extern "C" fn update() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
-        // Reset transform
+        // Reset transform (no rotation for now - add your own matrix math!)
         transform_identity();
-
-        // Apply rotations
-        transform_rotate(ROTATION_X, 1.0, 0.0, 0.0);
-        transform_rotate(ROTATION_Y, 0.0, 1.0, 0.0);
 
         // Bind texture and set color
         texture_bind(TEXTURE);

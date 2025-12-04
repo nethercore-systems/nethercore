@@ -34,13 +34,6 @@ fn panic(_: &PanicInfo) -> ! {
 extern "C" {
     // Configuration
     fn set_clear_color(color: u32);
-    fn set_sky(
-        horizon_r: f32, horizon_g: f32, horizon_b: f32,
-        zenith_r: f32, zenith_g: f32, zenith_b: f32,
-        sun_dir_x: f32, sun_dir_y: f32, sun_dir_z: f32,
-        sun_r: f32, sun_g: f32, sun_b: f32,
-        sun_sharpness: f32,
-    );
 
     // Camera
     fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
@@ -67,7 +60,6 @@ extern "C" {
 
     // Transform
     fn transform_identity();
-    fn transform_rotate(angle_deg: f32, x: f32, y: f32, z: f32);
 
     // Render state
     fn set_color(color: u32);
@@ -368,14 +360,8 @@ pub extern "C" fn init() {
         // Dark background
         set_clear_color(0x1a1a2eFF);
 
-        // Set up procedural sky for lighting
-        set_sky(
-            0.5, 0.6, 0.7,      // horizon color
-            0.2, 0.4, 0.8,      // zenith color
-            0.5, 0.8, 0.3,      // sun direction
-            1.5, 1.4, 1.2,      // sun color (HDR)
-            200.0,              // sun sharpness
-        );
+        // Note: Sky uses reasonable defaults (blue gradient with sun) from the renderer
+        // No need to set sky explicitly unless you want custom sky settings
 
         // Set up camera
         camera_set(0.0, 1.0, 8.0, 0.0, 0.0, 0.0);
@@ -484,10 +470,9 @@ pub extern "C" fn render() {
         // Upload bone matrices to GPU before drawing
         set_bones(BONE_MATRICES.as_ptr(), NUM_BONES as u32);
 
-        // Apply view rotation
+        // Apply view rotation (no rotation for now - add your own matrix math!)
         transform_identity();
-        transform_rotate(VIEW_ROTATION_X, 1.0, 0.0, 0.0);
-        transform_rotate(VIEW_ROTATION_Y, 0.0, 1.0, 0.0);
+        // TODO: Build rotation matrices for VIEW_ROTATION_X and VIEW_ROTATION_Y and call transform_set()
 
         // Draw the arm mesh
         set_color(0xE0C090FF); // Warm skin-like color

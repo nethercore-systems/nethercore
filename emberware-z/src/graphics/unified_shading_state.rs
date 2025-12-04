@@ -23,7 +23,7 @@ pub struct PackedLight {
 
 /// Unified per-draw shading state (96 bytes, POD, hashable)
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Pod, Zeroable)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Pod, Zeroable)]
 pub struct PackedUnifiedShadingState {
     pub metallic: u8,
     pub roughness: u8,
@@ -35,6 +35,32 @@ pub struct PackedUnifiedShadingState {
     pub pad1: u32,
     pub sky: PackedSky,                  // 16 bytes
     pub lights: [PackedLight; 4],        // 64 bytes
+}
+
+impl Default for PackedUnifiedShadingState {
+    fn default() -> Self {
+        // Reasonable defaults: blue sky gradient, white sun pointing down-right
+        let sky = PackedSky::from_floats(
+            Vec3::new(0.5, 0.7, 1.0),    // Horizon: light blue
+            Vec3::new(0.1, 0.3, 0.8),    // Zenith: darker blue
+            Vec3::new(0.3, -0.5, 0.4).normalize(),  // Sun direction: down and to the side
+            Vec3::new(1.0, 0.95, 0.9),   // Sun color: warm white
+            0.95,                        // Sun sharpness: fairly sharp (maps to ~242/255)
+        );
+
+        Self {
+            metallic: 0,                 // Non-metallic
+            roughness: 128,              // Medium roughness (0.5)
+            emissive: 0,                 // No emission
+            pad0: 0,
+            color_rgba8: 0xFFFFFFFF,     // White
+            blend_mode: BlendMode::Alpha as u32,
+            matcap_blend_modes: 0,       // All Multiply (0)
+            pad1: 0,
+            sky,
+            lights: [PackedLight::default(); 4],  // All lights disabled
+        }
+    }
 }
 
 /// Handle to interned shading state (newtype for clarity and type safety)
@@ -55,10 +81,22 @@ pub fn pack_unorm8(value: f32) -> u8 {
     (value.clamp(0.0, 1.0) * 255.0).round() as u8
 }
 
+/// Unpack u8 [0, 255] to f32 [0.0, 1.0]
+#[inline]
+pub fn unpack_unorm8(value: u8) -> f32 {
+    value as f32 / 255.0
+}
+
 /// Pack an f32 normalized value [-1.0, 1.0] to i16 snorm16 [-32767, 32767]
 #[inline]
 pub fn pack_snorm16(value: f32) -> i16 {
     (value.clamp(-1.0, 1.0) * 32767.0).round() as i16
+}
+
+/// Unpack snorm16 [-32767, 32767] to f32 [-1.0, 1.0]
+#[inline]
+pub fn unpack_snorm16(value: i16) -> f32 {
+    value as f32 / 32767.0
 }
 
 /// Pack RGBA f32 [0.0, 1.0] to u32 RGBA8
@@ -101,6 +139,16 @@ pub fn pack_matcap_blend_modes(modes: [MatcapBlendMode; 4]) -> u32 {
         | ((modes[1] as u32) << 8)
         | ((modes[2] as u32) << 16)
         | ((modes[3] as u32) << 24)
+}
+
+/// Unpack matcap blend modes from u32
+pub fn unpack_matcap_blend_modes(packed: u32) -> [MatcapBlendMode; 4] {
+    [
+        MatcapBlendMode::from_u8((packed & 0xFF) as u8),
+        MatcapBlendMode::from_u8(((packed >> 8) & 0xFF) as u8),
+        MatcapBlendMode::from_u8(((packed >> 16) & 0xFF) as u8),
+        MatcapBlendMode::from_u8(((packed >> 24) & 0xFF) as u8),
+    ]
 }
 
 // ============================================================================
@@ -167,6 +215,32 @@ impl PackedLight {
     /// Create a disabled light (all zeros)
     pub fn disabled() -> Self {
         Self::default()
+    }
+
+    /// Extract direction as f32 array
+    pub fn get_direction(&self) -> [f32; 3] {
+        let x = unpack_snorm16(self.direction[0]);
+        let y = unpack_snorm16(self.direction[1]);
+        let z = unpack_snorm16(self.direction[2]);
+        [x, y, z]
+    }
+
+    /// Extract color as f32 array
+    pub fn get_color(&self) -> [f32; 3] {
+        let r = unpack_unorm8((self.color_and_intensity & 0xFF) as u8);
+        let g = unpack_unorm8(((self.color_and_intensity >> 8) & 0xFF) as u8);
+        let b = unpack_unorm8(((self.color_and_intensity >> 16) & 0xFF) as u8);
+        [r, g, b]
+    }
+
+    /// Extract intensity as f32
+    pub fn get_intensity(&self) -> f32 {
+        unpack_unorm8(((self.color_and_intensity >> 24) & 0xFF) as u8)
+    }
+
+    /// Check if light is enabled
+    pub fn is_enabled(&self) -> bool {
+        self.direction[3] != 0
     }
 }
 

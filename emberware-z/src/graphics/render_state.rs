@@ -3,7 +3,6 @@
 //! Defines render state enums (cull mode, blend mode, texture filter),
 //! texture handles, sky uniforms, and the overall render state struct.
 
-use glam::Vec4;
 
 /// Handle to a loaded texture
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -316,9 +315,7 @@ impl MatcapBlendMode {
 
 /// Current render state (tracks what needs pipeline changes)
 #[derive(Debug, Clone, Copy, PartialEq)]
-/// Uniform tint color (0xRRGGBBAA)
 pub struct RenderState {
-    pub color: u32,
     /// Depth test enabled
     pub depth_test: bool,
     /// Face culling mode
@@ -327,35 +324,16 @@ pub struct RenderState {
     pub blend_mode: BlendMode,
     /// Texture filter mode
     pub texture_filter: TextureFilter,
-    /// Bound textures per slot (0-3)
-    pub texture_slots: [TextureHandle; 4],
-    /// Matcap blend modes for slots 1-3 (Mode 1 only, [0] unused)
-    pub matcap_blend_modes: [MatcapBlendMode; 4],
 }
 
 impl Default for RenderState {
     fn default() -> Self {
         Self {
-            color: 0xFFFFFFFF, // White, fully opaque
             depth_test: true,
             cull_mode: CullMode::Back,
             blend_mode: BlendMode::None,
             texture_filter: TextureFilter::Nearest,
-            texture_slots: [TextureHandle::INVALID; 4],
-            matcap_blend_modes: [MatcapBlendMode::Multiply; 4],
         }
-    }
-}
-
-impl RenderState {
-    /// Get color as Vec4 (RGBA, 0.0-1.0)
-    pub fn color_vec4(&self) -> Vec4 {
-        Vec4::new(
-            ((self.color >> 24) & 0xFF) as f32 / 255.0,
-            ((self.color >> 16) & 0xFF) as f32 / 255.0,
-            ((self.color >> 8) & 0xFF) as f32 / 255.0,
-            (self.color & 0xFF) as f32 / 255.0,
-        )
     }
 }
 
@@ -366,25 +344,10 @@ mod tests {
     #[test]
     fn test_render_state_default() {
         let state = RenderState::default();
-        assert_eq!(state.color, 0xFFFFFFFF);
         assert!(state.depth_test);
         assert_eq!(state.cull_mode, CullMode::Back);
         assert_eq!(state.blend_mode, BlendMode::None);
         assert_eq!(state.texture_filter, TextureFilter::Nearest);
-        assert_eq!(state.texture_slots, [TextureHandle::INVALID; 4]);
-    }
-
-    #[test]
-    fn test_render_state_color_vec4() {
-        let state = RenderState {
-            color: 0xFF8040C0,
-            ..Default::default()
-        };
-        let v = state.color_vec4();
-        assert!((v.x - 1.0).abs() < 0.01);
-        assert!((v.y - 0.502).abs() < 0.01);
-        assert!((v.z - 0.251).abs() < 0.01);
-        assert!((v.w - 0.753).abs() < 0.01);
     }
 
     #[test]
@@ -481,25 +444,6 @@ mod tests {
         assert_eq!(state.blend_mode, BlendMode::None);
     }
 
-    #[test]
-    fn test_render_state_color_changes() {
-        let mut state = RenderState::default();
-        assert_eq!(state.color, 0xFFFFFFFF);
-
-        state.color = 0xFF0000FF;
-        let v = state.color_vec4();
-        assert!((v.x - 1.0).abs() < 0.01);
-        assert!((v.y - 0.0).abs() < 0.01);
-        assert!((v.z - 0.0).abs() < 0.01);
-        assert!((v.w - 1.0).abs() < 0.01);
-
-        state.color = 0x00000000;
-        let v = state.color_vec4();
-        assert!((v.x - 0.0).abs() < 0.01);
-        assert!((v.y - 0.0).abs() < 0.01);
-        assert!((v.z - 0.0).abs() < 0.01);
-        assert!((v.w - 0.0).abs() < 0.01);
-    }
 
     #[test]
     fn test_render_state_texture_filter_switching() {
@@ -518,54 +462,11 @@ mod tests {
         let state1 = RenderState::default();
         let state2 = RenderState::default();
         let state3 = RenderState {
-            color: 0xFF0000FF,
+            blend_mode: BlendMode::Alpha,
             ..Default::default()
         };
 
         assert_eq!(state1, state2);
         assert_ne!(state1, state3);
-    }
-
-    #[test]
-    fn test_texture_slot_binding() {
-        let mut state = RenderState::default();
-
-        for slot in 0..4 {
-            assert_eq!(state.texture_slots[slot], TextureHandle::INVALID);
-        }
-
-        state.texture_slots[0] = TextureHandle(1);
-        assert_eq!(state.texture_slots[0], TextureHandle(1));
-        assert_eq!(state.texture_slots[1], TextureHandle::INVALID);
-
-        state.texture_slots[2] = TextureHandle(5);
-        assert_eq!(state.texture_slots[2], TextureHandle(5));
-    }
-
-    #[test]
-    fn test_texture_slot_rebinding() {
-        let mut state = RenderState::default();
-
-        state.texture_slots[0] = TextureHandle(1);
-        assert_eq!(state.texture_slots[0], TextureHandle(1));
-
-        state.texture_slots[0] = TextureHandle(2);
-        assert_eq!(state.texture_slots[0], TextureHandle(2));
-
-        state.texture_slots[0] = TextureHandle::INVALID;
-        assert_eq!(state.texture_slots[0], TextureHandle::INVALID);
-    }
-
-    #[test]
-    fn test_texture_slots_all_bound() {
-        let mut state = RenderState::default();
-
-        for slot in 0..4 {
-            state.texture_slots[slot] = TextureHandle((slot + 1) as u32);
-        }
-
-        for slot in 0..4 {
-            assert_eq!(state.texture_slots[slot], TextureHandle((slot + 1) as u32));
-        }
     }
 }

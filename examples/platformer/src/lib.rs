@@ -27,13 +27,6 @@ fn panic(_: &PanicInfo) -> ! {
 extern "C" {
     // Configuration
     fn set_clear_color(color: u32);
-    fn set_sky(
-        horizon_r: f32, horizon_g: f32, horizon_b: f32,
-        zenith_r: f32, zenith_g: f32, zenith_b: f32,
-        sun_dir_x: f32, sun_dir_y: f32, sun_dir_z: f32,
-        sun_r: f32, sun_g: f32, sun_b: f32,
-        sun_sharpness: f32,
-    );
 
     // Camera
     fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
@@ -53,7 +46,6 @@ extern "C" {
 
     // Transform
     fn transform_identity();
-    fn transform_translate(x: f32, y: f32, z: f32);
 
     // Billboard drawing
     fn draw_billboard(w: f32, h: f32, mode: u32, color: u32);
@@ -407,14 +399,8 @@ pub extern "C" fn init() {
         // Sky blue clear color
         set_clear_color(0x87CEEBFF);
 
-        // Set up procedural sky (sunny day)
-        set_sky(
-            0.7, 0.85, 1.0,     // horizon (light blue)
-            0.3, 0.5, 0.9,      // zenith (deeper blue)
-            0.5, 0.8, 0.3,      // sun direction
-            1.5, 1.4, 1.2,      // sun color (warm)
-            150.0,              // sun sharpness
-        );
+        // Note: Sky uses reasonable defaults (blue gradient with sun) from the renderer
+        // No need to set sky explicitly unless you want custom sky settings
 
         // Set up camera (side view for platformer)
         camera_set(0.0, 2.0, 15.0, 0.0, 2.0, 0.0);
@@ -613,7 +599,7 @@ fn render_platforms() {
                     let tile_y = platform.y + (ty as f32 + 0.5) * tile_size;
 
                     transform_identity();
-                    transform_translate(tile_x, tile_y, 0.0);
+                    // TODO: Build translation matrix for (tile_x, tile_y, 0.0) and call transform_set()
                     draw_billboard(tile_size, tile_size, MODE_CYLINDRICAL_Y, 0xFFFFFFFF);
                 }
             }
@@ -636,7 +622,7 @@ fn render_collectibles() {
             let bob = sin_approx(time * 3.0 + collectible.bob_offset) * 0.15;
 
             transform_identity();
-            transform_translate(collectible.x, collectible.y + bob, 0.1);
+            // TODO: Build translation matrix for (collectible.x, collectible.y + bob, 0.1) and call transform_set()
             draw_billboard(0.6, 0.6, MODE_CYLINDRICAL_Y, 0xFFFFFFFF);
         }
     }
@@ -655,7 +641,7 @@ fn render_players() {
             let scale_x = if player.facing_right { PLAYER_WIDTH } else { -PLAYER_WIDTH };
 
             transform_identity();
-            transform_translate(player.x, player.y + PLAYER_HEIGHT / 2.0, 0.2);
+            // TODO: Build translation matrix for (player.x, player.y + PLAYER_HEIGHT/2, 0.2) and call transform_set()
 
             // Use player color as tint
             draw_billboard(scale_x, PLAYER_HEIGHT, MODE_CYLINDRICAL_Y, PLAYER_COLORS[i]);

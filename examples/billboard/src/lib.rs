@@ -30,13 +30,6 @@ fn panic(_: &PanicInfo) -> ! {
 extern "C" {
     // Configuration
     fn set_clear_color(color: u32);
-    fn set_sky(
-        horizon_r: f32, horizon_g: f32, horizon_b: f32,
-        zenith_r: f32, zenith_g: f32, zenith_b: f32,
-        sun_dir_x: f32, sun_dir_y: f32, sun_dir_z: f32,
-        sun_r: f32, sun_g: f32, sun_b: f32,
-        sun_sharpness: f32,
-    );
 
     // Camera
     fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
@@ -54,8 +47,7 @@ extern "C" {
 
     // Transform
     fn transform_identity();
-    fn transform_translate(x: f32, y: f32, z: f32);
-    fn transform_rotate(angle_deg: f32, x: f32, y: f32, z: f32);
+    fn transform_set(matrix_ptr: u32);
 
     // Billboard drawing
     fn draw_billboard(w: f32, h: f32, mode: u32, color: u32);
@@ -331,14 +323,8 @@ pub extern "C" fn init() {
         // Dark blue-gray background
         set_clear_color(0x2a2a3aFF);
 
-        // Set up procedural sky
-        set_sky(
-            0.5, 0.6, 0.7,      // horizon (blue-gray)
-            0.2, 0.3, 0.5,      // zenith (deeper blue)
-            0.5, 0.8, 0.3,      // sun direction
-            1.2, 1.1, 1.0,      // sun color
-            100.0,              // sun sharpness
-        );
+        // Note: Sky uses reasonable defaults (blue gradient with sun) from the renderer
+        // No need to set sky explicitly unless you want custom sky settings
 
         // Set up camera
         update_camera();
@@ -449,11 +435,15 @@ pub extern "C" fn render() {
             (spacing * 1.5, 0.0, 0.0, MODE_CYLINDRICAL_Z, "Cylindrical Z"),
         ];
 
+        // TODO: This example needs matrix math to position billboards!
+        // Use transform_set() with your own matrix calculations for translations/rotations
+        // For now, everything draws at origin (identity transform)
+
         // Draw mode comparison sprites
         texture_bind(SPRITE_TEXTURE);
         for &(x, y, z, mode, _) in &positions {
             transform_identity();
-            transform_translate(x, y + 3.0, z);
+            // TODO: Build translation matrix for (x, y+3.0, z) and call transform_set()
             draw_billboard(1.5, 1.5, mode, 0xFFFFFFFF);
         }
 
@@ -470,7 +460,7 @@ pub extern "C" fn render() {
 
         for &(x, _y, z) in &tree_positions {
             transform_identity();
-            transform_translate(x, 1.0, z); // Trees are 2 units tall, centered at 1.0
+            // TODO: Build translation matrix for (x, 1.0, z) and call transform_set()
             draw_billboard(2.0, 2.0, MODE_CYLINDRICAL_Y, 0xFFFFFFFF);
         }
 
@@ -480,7 +470,7 @@ pub extern "C" fn render() {
             let p = &PARTICLES[i];
             if p.is_alive() {
                 transform_identity();
-                transform_translate(p.x, p.y, p.z);
+                // TODO: Build translation matrix for (p.x, p.y, p.z) and call transform_set()
 
                 // Apply alpha to color
                 let alpha = p.alpha();
@@ -502,8 +492,7 @@ pub extern "C" fn render() {
 
         for &(x, y, z) in &ground_markers {
             transform_identity();
-            transform_translate(x, y, z);
-            transform_rotate(90.0, 1.0, 0.0, 0.0); // Lay flat on ground
+            // TODO: Build translation * rotation matrix and call transform_set()
             draw_billboard(0.5, 0.5, MODE_SPHERICAL, 0x88888888);
         }
 

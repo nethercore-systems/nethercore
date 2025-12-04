@@ -38,7 +38,9 @@ pub fn register_z_ffi(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState
     linker.func_wrap("env", "push_view_matrix", push_view_matrix)?;
     linker.func_wrap("env", "push_projection_matrix", push_projection_matrix)?;
 
-    // Transform stack functions (legacy removed - use push_model_matrix instead)
+    // Transform functions
+    // Note: Only identity and set are provided - games should do matrix math in WASM
+    // and use transform_set() to avoid FFI overhead per operation
     linker.func_wrap("env", "transform_identity", transform_identity)?;
     linker.func_wrap("env", "transform_set", transform_set)?;
 
@@ -97,6 +99,9 @@ pub fn register_z_ffi(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState
     linker.func_wrap("env", "font_bind", font_bind)?;
 
     // Sky system
+    linker.func_wrap("env", "sky_set_colors", sky_set_colors)?;
+    linker.func_wrap("env", "sky_set_sun", sky_set_sun)?;
+
     // Mode 1 (Matcap) functions
     linker.func_wrap("env", "matcap_set", matcap_set)?;
 
@@ -483,7 +488,7 @@ fn transform_set(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>
 /// This color is multiplied with vertex colors and textures.
 fn set_color(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, color: u32) {
     let state = &mut caller.data_mut().console;
-    state.color = color;
+    state.update_color(color);
 }
 
 /// Enable or disable depth testing
@@ -522,15 +527,19 @@ fn cull_mode(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, mo
 ///
 /// Default: none (opaque). Use alpha for transparent textures.
 fn blend_mode(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, mode: u32) {
+    use crate::graphics::BlendMode;
+
     let state = &mut caller.data_mut().console;
 
     if mode > 3 {
         warn!("blend_mode({}) invalid - must be 0-3, using 0 (none)", mode);
         state.blend_mode = 0;
+        state.update_blend_mode(BlendMode::None); // Sync to current_shading_state
         return;
     }
 
     state.blend_mode = mode as u8;
+    state.update_blend_mode(BlendMode::from_u8(mode as u8)); // Sync to current_shading_state
 }
 
 /// Set the texture filtering mode
@@ -697,7 +706,7 @@ fn matcap_blend_mode(
     };
 
     let state = &mut caller.data_mut().console;
-    state.matcap_blend_modes[slot as usize] = blend_mode as u8;
+    state.update_matcap_blend_mode(slot as usize, blend_mode); // Update single slot in unified state
 }
 
 // ============================================================================
@@ -1445,7 +1454,6 @@ fn draw_billboard(
             color,
             depth_test: state.depth_test,
             cull_mode: state.cull_mode,
-            blend_mode: state.blend_mode,
             bound_textures: state.bound_textures,
         });
 }
@@ -1494,7 +1502,6 @@ fn draw_billboard_region(
             color,
             depth_test: state.depth_test,
             cull_mode: state.cull_mode,
-            blend_mode: state.blend_mode,
             bound_textures: state.bound_textures,
         });
 }
@@ -1533,7 +1540,6 @@ fn draw_sprite(
         origin: None,  // No rotation
         rotation: 0.0,
         color,
-        blend_mode: state.blend_mode,
         bound_textures: state.bound_textures,
     });
 }
@@ -1575,7 +1581,6 @@ fn draw_sprite_region(
         origin: None, // No rotation
         rotation: 0.0,
         color,
-        blend_mode: state.blend_mode,
         bound_textures: state.bound_textures,
     });
 }
@@ -1623,7 +1628,6 @@ fn draw_sprite_ex(
         origin: Some((origin_x, origin_y)),
         rotation: angle_deg,
         color,
-        blend_mode: state.blend_mode,
         bound_textures: state.bound_textures,
     });
 }
@@ -1654,7 +1658,6 @@ fn draw_rect(
         width: w,
         height: h,
         color,
-        blend_mode: state.blend_mode,
     });
 }
 
@@ -1719,7 +1722,6 @@ fn draw_text(
         y,
         size,
         color,
-        blend_mode: state.blend_mode,
         font: state.current_font,
     });
 }
@@ -1962,6 +1964,73 @@ fn matcap_set(
 }
 
 // ============================================================================
+// Sky Functions
+// ============================================================================
+
+/// Set sky gradient colors
+///
+/// # Arguments
+/// * `horizon_r` — Horizon color red (0.0-1.0)
+/// * `horizon_g` — Horizon color green (0.0-1.0)
+/// * `horizon_b` — Horizon color blue (0.0-1.0)
+/// * `zenith_r` — Zenith color red (0.0-1.0)
+/// * `zenith_g` — Zenith color green (0.0-1.0)
+/// * `zenith_b` — Zenith color blue (0.0-1.0)
+///
+/// Sets the procedural sky gradient. Horizon is the color at eye level,
+/// zenith is the color directly overhead. The gradient interpolates smoothly between them.
+/// Works in all render modes (provides ambient lighting in PBR/Hybrid modes).
+fn sky_set_colors(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    horizon_r: f32,
+    horizon_g: f32,
+    horizon_b: f32,
+    zenith_r: f32,
+    zenith_g: f32,
+    zenith_b: f32,
+) {
+    let state = &mut caller.data_mut().console;
+    state.update_sky_colors([horizon_r, horizon_g, horizon_b], [zenith_r, zenith_g, zenith_b]);
+}
+
+/// Set sky sun properties
+///
+/// # Arguments
+/// * `dir_x` — Sun direction X component (will be normalized)
+/// * `dir_y` — Sun direction Y component (will be normalized)
+/// * `dir_z` — Sun direction Z component (will be normalized)
+/// * `color_r` — Sun color red (0.0-1.0)
+/// * `color_g` — Sun color green (0.0-1.0)
+/// * `color_b` — Sun color blue (0.0-1.0)
+/// * `sharpness` — Sun sharpness (0.0-1.0, higher = smaller/sharper sun disc)
+///
+/// Sets the procedural sky sun. The sun appears as a bright disc in the sky gradient
+/// and provides specular highlights in PBR/Hybrid modes.
+/// Direction will be automatically normalized by the graphics backend.
+fn sky_set_sun(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    dir_x: f32,
+    dir_y: f32,
+    dir_z: f32,
+    color_r: f32,
+    color_g: f32,
+    color_b: f32,
+    sharpness: f32,
+) {
+    let state = &mut caller.data_mut().console;
+
+    // Validate direction vector (warn if zero-length)
+    let len_sq = dir_x * dir_x + dir_y * dir_y + dir_z * dir_z;
+    if len_sq < 1e-10 {
+        warn!("sky_set_sun: zero-length direction vector, using default (0, 1, 0)");
+        state.update_sky_sun([0.0, 1.0, 0.0], [color_r, color_g, color_b], sharpness);
+        return;
+    }
+
+    state.update_sky_sun([dir_x, dir_y, dir_z], [color_r, color_g, color_b], sharpness);
+}
+
+// ============================================================================
 // Material Functions
 // ============================================================================
 
@@ -2089,41 +2158,28 @@ fn light_set(
 
     // Validate direction vector (warn if zero-length)
     let len_sq = x * x + y * y + z * z;
+    let state = &mut caller.data_mut().console;
+
     if len_sq < 1e-10 {
         warn!("light_set: zero-length direction vector, using default (0, -1, 0)");
-        let state = &mut caller.data_mut().console;
-        state.lights[index as usize].direction = [0.0, -1.0, 0.0];
-        state.lights[index as usize].enabled = true;
 
-        // Update quantized shading state
-        state.update_light(
-            index as usize,
-            [0.0, -1.0, 0.0],
-            state.lights[index as usize].color,
-            state.lights[index as usize].intensity,
-            true
-        );
+        // Extract current light state
+        let light = &state.current_shading_state.lights[index as usize];
+        let color = light.get_color();
+        let intensity = light.get_intensity();
+
+        // Update with default direction
+        state.update_light(index as usize, [0.0, -1.0, 0.0], color, intensity, true);
         return;
     }
 
-    let state = &mut caller.data_mut().console;
+    // Extract current light state
+    let light = &state.current_shading_state.lights[index as usize];
+    let color = light.get_color();
+    let intensity = light.get_intensity();
 
-    // Update staging light state
-    state.lights[index as usize].direction = [x, y, z];
-    state.lights[index as usize].enabled = true;
-
-    // Copy values for quantized state (avoid borrow conflict)
-    let color = state.lights[index as usize].color;
-    let intensity = state.lights[index as usize].intensity;
-
-    // Update quantized shading state
-    state.update_light(
-        index as usize,
-        [x, y, z],
-        color,
-        intensity,
-        true
-    );
+    // Update with new direction
+    state.update_light(index as usize, [x, y, z], color, intensity, true);
 }
 
 /// Set light color
@@ -2171,7 +2227,15 @@ fn light_color(
     };
 
     let state = &mut caller.data_mut().console;
-    state.lights[index as usize].color = [r, g, b];
+
+    // Extract current light state
+    let light = &state.current_shading_state.lights[index as usize];
+    let direction = light.get_direction();
+    let intensity = light.get_intensity();
+    let enabled = light.is_enabled();
+
+    // Update with new color
+    state.update_light(index as usize, direction, [r, g, b], intensity, enabled);
 }
 
 /// Set light intensity multiplier
@@ -2208,7 +2272,15 @@ fn light_intensity(
     };
 
     let state = &mut caller.data_mut().console;
-    state.lights[index as usize].intensity = intensity;
+
+    // Extract current light state
+    let light = &state.current_shading_state.lights[index as usize];
+    let direction = light.get_direction();
+    let color = light.get_color();
+    let enabled = light.is_enabled();
+
+    // Update with new intensity
+    state.update_light(index as usize, direction, color, intensity, enabled);
 }
 
 /// Enable a light
@@ -2226,7 +2298,15 @@ fn light_enable(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
     }
 
     let state = &mut caller.data_mut().console;
-    state.lights[index as usize].enabled = true;
+
+    // Extract current light state
+    let light = &state.current_shading_state.lights[index as usize];
+    let direction = light.get_direction();
+    let color = light.get_color();
+    let intensity = light.get_intensity();
+
+    // Enable light
+    state.update_light(index as usize, direction, color, intensity, true);
 }
 
 /// Disable a light
@@ -2245,7 +2325,15 @@ fn light_disable(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>
     }
 
     let state = &mut caller.data_mut().console;
-    state.lights[index as usize].enabled = false;
+
+    // Extract current light state
+    let light = &state.current_shading_state.lights[index as usize];
+    let direction = light.get_direction();
+    let color = light.get_color();
+    let intensity = light.get_intensity();
+
+    // Disable light
+    state.update_light(index as usize, direction, color, intensity, false);
 }
 
 /// Set bone transform matrices for GPU skinning
@@ -2668,7 +2756,7 @@ mod tests {
     #[test]
     fn test_render_state_defaults() {
         let state = ZFFIState::new();
-        assert_eq!(state.color, 0xFFFFFFFF); // White
+        assert_eq!(state.current_shading_state.color_rgba8, 0xFFFFFFFF); // White
         assert!(state.depth_test); // Enabled
         assert_eq!(state.cull_mode, 1); // Back-face culling
         assert_eq!(state.blend_mode, 0); // Opaque
@@ -2692,11 +2780,10 @@ mod tests {
     #[test]
     fn test_render_state_lights_default() {
         let state = ZFFIState::new();
+        // Lights now stored in current_shading_state
         for i in 0..4 {
-            assert!(!state.lights[i].enabled);
-            assert_eq!(state.lights[i].direction, [0.0, -1.0, 0.0]);
-            assert_eq!(state.lights[i].color, [1.0, 1.0, 1.0]);
-            assert_eq!(state.lights[i].intensity, 1.0);
+            let light = &state.current_shading_state.lights[i];
+            assert!(!light.is_enabled());
         }
     }
 
@@ -2815,7 +2902,7 @@ mod tests {
         let mut state = ZFFIState::new();
 
         // Set up render state
-        state.color = 0x00FF00FF;
+        state.update_color(0x00FF00FF);
         state.depth_test = false;
         state.cull_mode = 2;
         state.blend_mode = 1;
@@ -2854,7 +2941,7 @@ mod tests {
             mesh.vertex_offset,
             mesh.index_offset,
             mvp_index,
-            state.color,
+            state.current_shading_state.color_rgba8,
             state.depth_test,
             crate::graphics::CullMode::from_u8(state.cull_mode),
             crate::graphics::BlendMode::from_u8(state.blend_mode),
@@ -2918,7 +3005,6 @@ mod tests {
                 color: 0xFFFFFFFF,
                 depth_test: true,
                 cull_mode: 0,
-                blend_mode: 1,
                 bound_textures: [0; 4],
             };
 
@@ -3134,7 +3220,8 @@ mod tests {
     #[test]
     fn test_four_light_slots() {
         let state = ZFFIState::new();
-        assert_eq!(state.lights.len(), 4);
+        // Lights now stored in current_shading_state
+        assert_eq!(state.current_shading_state.lights.len(), 4);
     }
 
     // ========================================================================

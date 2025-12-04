@@ -16,7 +16,6 @@ use crate::config::{self, Config};
 use crate::console::{EmberwareZ, VRAM_LIMIT};
 use crate::graphics::{TextureHandle, ZGraphics};
 use crate::input::InputManager;
-use glam::{Mat4, Vec3};
 use crate::library::{self, LocalGame};
 use crate::ui::{LibraryUi, UiAction};
 use emberware_core::console::{Console, Graphics};
@@ -273,29 +272,6 @@ impl App {
         };
 
         let z_state = game.console_state_mut();
-
-        // Update scene uniforms (camera, lights, materials) before rendering
-        let view_matrix = z_state.view_matrices.get(z_state.current_view_idx as usize)
-            .copied()
-            .unwrap_or(Mat4::IDENTITY);
-        let proj_matrix = z_state.proj_matrices.get(z_state.current_proj_idx as usize)
-            .copied()
-            .unwrap_or(Mat4::IDENTITY);
-
-        // Extract camera position from inverse of view matrix
-        let camera_position = view_matrix.inverse().transform_point3(Vec3::ZERO);
-
-        // TODO: Phase 5 will refactor this to upload per-draw shading states
-        // For now, pass default material values (will be replaced with per-draw state)
-        graphics.update_scene_uniforms(
-            view_matrix,
-            proj_matrix,
-            camera_position,
-            &z_state.lights,
-            0.0,  // Default metallic (unused after Phase 5)
-            0.5,  // Default roughness (unused after Phase 5)
-            0.0,  // Default emissive (unused after Phase 5)
-        );
 
         // Process draw commands - ZGraphics consumes draw commands directly
         graphics.process_draw_commands(z_state, &session.texture_map);
