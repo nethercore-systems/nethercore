@@ -47,6 +47,7 @@ extern "C" {
 
     // Transform
     fn push_identity();
+    fn push_translate(x: f32, y: f32, z: f32);
     fn transform_set(matrix_ptr: u32);
 
     // Billboard drawing
@@ -435,15 +436,11 @@ pub extern "C" fn render() {
             (spacing * 1.5, 0.0, 0.0, MODE_CYLINDRICAL_Z, "Cylindrical Z"),
         ];
 
-        // TODO: This example needs matrix math to position billboards!
-        // Use transform_set() with your own matrix calculations for translations/rotations
-        // For now, everything draws at origin (identity transform)
-
         // Draw mode comparison sprites
         texture_bind(SPRITE_TEXTURE);
         for &(x, y, z, mode, _) in &positions {
             push_identity();
-            // TODO: Build translation matrix for (x, y+3.0, z) and call transform_set()
+            push_translate(x, y + 3.0, z);
             draw_billboard(1.5, 1.5, mode, 0xFFFFFFFF);
         }
 
@@ -460,7 +457,7 @@ pub extern "C" fn render() {
 
         for &(x, _y, z) in &tree_positions {
             push_identity();
-            // TODO: Build translation matrix for (x, 1.0, z) and call transform_set()
+            push_translate(x, 1.0, z);
             draw_billboard(2.0, 2.0, MODE_CYLINDRICAL_Y, 0xFFFFFFFF);
         }
 
@@ -470,7 +467,7 @@ pub extern "C" fn render() {
             let p = &PARTICLES[i];
             if p.is_alive() {
                 push_identity();
-                // TODO: Build translation matrix for (p.x, p.y, p.z) and call transform_set()
+                push_translate(p.x, p.y, p.z);
 
                 // Apply alpha to color
                 let alpha = p.alpha();
@@ -492,7 +489,7 @@ pub extern "C" fn render() {
 
         for &(x, y, z) in &ground_markers {
             push_identity();
-            // TODO: Build translation * rotation matrix and call transform_set()
+            push_translate(x, y, z);
             draw_billboard(0.5, 0.5, MODE_SPHERICAL, 0x88888888);
         }
 

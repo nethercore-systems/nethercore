@@ -60,14 +60,6 @@ pub struct PendingMesh {
     pub index_data: Option<Vec<u16>>,
 }
 
-// ============================================================================
-// Draw Commands (moved from core/src/wasm/draw.rs)
-// ============================================================================
-
-// ============================================================================
-// Draw Commands (moved from core/src/wasm/draw.rs)
-// ============================================================================
-
 /// Deferred draw command for text rendering
 ///
 /// Text rendering requires CPU-side geometry generation (glyph layout, atlas UVs).
@@ -142,8 +134,7 @@ pub struct ZFFIState {
     // Deferred commands (billboards, sprites, text)
     pub deferred_commands: Vec<DeferredCommand>,
 
-    // Resource mappings (injected by App before frame)
-    pub texture_map: hashbrown::HashMap<u32, crate::graphics::TextureHandle>,
+    // Mesh metadata mapping (for FFI access to mesh info)
     pub mesh_map: hashbrown::HashMap<u32, crate::graphics::RetainedMesh>,
 
     // Pending resource uploads
@@ -225,7 +216,6 @@ impl Default for ZFFIState {
             bone_count: 0,
             render_pass: crate::graphics::VirtualRenderPass::new(),
             deferred_commands: Vec::new(),
-            texture_map: hashbrown::HashMap::new(),
             mesh_map: hashbrown::HashMap::new(),
             pending_textures: Vec::new(),
             pending_meshes: Vec::new(),

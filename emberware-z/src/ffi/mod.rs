@@ -1195,28 +1195,13 @@ fn draw_mesh(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, ha
     let mesh_vertex_offset = mesh.vertex_offset;
     let mesh_index_offset = mesh.index_offset;
 
-    // Map texture handles
+    // Texture mapping happens in process_draw_commands() using session.texture_map
+    // FFI doesn't have access to the texture map, so we use placeholders here
     let texture_slots = [
-        state
-            .texture_map
-            .get(&state.bound_textures[0])
-            .copied()
-            .unwrap_or(crate::graphics::TextureHandle::INVALID),
-        state
-            .texture_map
-            .get(&state.bound_textures[1])
-            .copied()
-            .unwrap_or(crate::graphics::TextureHandle::INVALID),
-        state
-            .texture_map
-            .get(&state.bound_textures[2])
-            .copied()
-            .unwrap_or(crate::graphics::TextureHandle::INVALID),
-        state
-            .texture_map
-            .get(&state.bound_textures[3])
-            .copied()
-            .unwrap_or(crate::graphics::TextureHandle::INVALID),
+        crate::graphics::TextureHandle::INVALID,
+        crate::graphics::TextureHandle::INVALID,
+        crate::graphics::TextureHandle::INVALID,
+        crate::graphics::TextureHandle::INVALID,
     ];
 
     let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
@@ -1341,28 +1326,13 @@ fn draw_triangles(
 
     let state = &mut caller.data_mut().console;
 
-    // Map texture handles
+    // Texture mapping happens in process_draw_commands() using session.texture_map
+    // FFI doesn't have access to the texture map, so we use placeholders here
     let texture_slots = [
-        state
-            .texture_map
-            .get(&state.bound_textures[0])
-            .copied()
-            .unwrap_or(crate::graphics::TextureHandle::INVALID),
-        state
-            .texture_map
-            .get(&state.bound_textures[1])
-            .copied()
-            .unwrap_or(crate::graphics::TextureHandle::INVALID),
-        state
-            .texture_map
-            .get(&state.bound_textures[2])
-            .copied()
-            .unwrap_or(crate::graphics::TextureHandle::INVALID),
-        state
-            .texture_map
-            .get(&state.bound_textures[3])
-            .copied()
-            .unwrap_or(crate::graphics::TextureHandle::INVALID),
+        crate::graphics::TextureHandle::INVALID,
+        crate::graphics::TextureHandle::INVALID,
+        crate::graphics::TextureHandle::INVALID,
+        crate::graphics::TextureHandle::INVALID,
     ];
 
     let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
@@ -1523,28 +1493,13 @@ fn draw_triangles_indexed(
 
     let state = &mut caller.data_mut().console;
 
-    // Map texture handles
+    // Texture mapping happens in process_draw_commands() using session.texture_map
+    // FFI doesn't have access to the texture map, so we use placeholders here
     let texture_slots = [
-        state
-            .texture_map
-            .get(&state.bound_textures[0])
-            .copied()
-            .unwrap_or(crate::graphics::TextureHandle::INVALID),
-        state
-            .texture_map
-            .get(&state.bound_textures[1])
-            .copied()
-            .unwrap_or(crate::graphics::TextureHandle::INVALID),
-        state
-            .texture_map
-            .get(&state.bound_textures[2])
-            .copied()
-            .unwrap_or(crate::graphics::TextureHandle::INVALID),
-        state
-            .texture_map
-            .get(&state.bound_textures[3])
-            .copied()
-            .unwrap_or(crate::graphics::TextureHandle::INVALID),
+        crate::graphics::TextureHandle::INVALID,
+        crate::graphics::TextureHandle::INVALID,
+        crate::graphics::TextureHandle::INVALID,
+        crate::graphics::TextureHandle::INVALID,
     ];
 
     let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
