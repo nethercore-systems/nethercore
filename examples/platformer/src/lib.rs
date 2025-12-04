@@ -45,7 +45,7 @@ extern "C" {
     fn texture_filter(filter: u32);
 
     // Transform
-    fn transform_identity();
+    fn push_identity();
 
     // Billboard drawing
     fn draw_billboard(w: f32, h: f32, mode: u32, color: u32);
@@ -598,7 +598,7 @@ fn render_platforms() {
                     let tile_x = platform.x + (tx as f32 + 0.5) * tile_size;
                     let tile_y = platform.y + (ty as f32 + 0.5) * tile_size;
 
-                    transform_identity();
+                    push_identity();
                     // TODO: Build translation matrix for (tile_x, tile_y, 0.0) and call transform_set()
                     draw_billboard(tile_size, tile_size, MODE_CYLINDRICAL_Y, 0xFFFFFFFF);
                 }
@@ -621,7 +621,7 @@ fn render_collectibles() {
             // Bob up and down
             let bob = sin_approx(time * 3.0 + collectible.bob_offset) * 0.15;
 
-            transform_identity();
+            push_identity();
             // TODO: Build translation matrix for (collectible.x, collectible.y + bob, 0.1) and call transform_set()
             draw_billboard(0.6, 0.6, MODE_CYLINDRICAL_Y, 0xFFFFFFFF);
         }
@@ -640,7 +640,7 @@ fn render_players() {
             // Flip sprite based on facing direction
             let scale_x = if player.facing_right { PLAYER_WIDTH } else { -PLAYER_WIDTH };
 
-            transform_identity();
+            push_identity();
             // TODO: Build translation matrix for (player.x, player.y + PLAYER_HEIGHT/2, 0.2) and call transform_set()
 
             // Use player color as tint

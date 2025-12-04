@@ -68,45 +68,12 @@ pub struct PendingMesh {
 // Draw Commands (moved from core/src/wasm/draw.rs)
 // ============================================================================
 
-/// Deferred draw command for special objects (billboards, sprites, text)
+/// Deferred draw command for text rendering
 ///
-/// These commands generate geometry at render time (need camera info for billboards,
-/// screen size for sprites) or are 2D overlays. They are processed after the
-/// main 3D render pass.
+/// Text rendering requires CPU-side geometry generation (glyph layout, atlas UVs).
+/// Billboards/sprites/rects now use GPU-instanced QuadInstance instead.
 #[derive(Debug)]
 pub enum DeferredCommand {
-    /// Draw a billboard (camera-facing quad)
-    DrawBillboard {
-        width: f32,
-        height: f32,
-        mode: u8,
-        uv_rect: Option<(f32, f32, f32, f32)>,
-        transform: Mat4,
-        color: u32,
-        depth_test: bool,
-        cull_mode: u8,
-        bound_textures: [u32; 4],
-    },
-    /// Draw a 2D sprite in screen space
-    DrawSprite {
-        x: f32,
-        y: f32,
-        width: f32,
-        height: f32,
-        uv_rect: Option<(f32, f32, f32, f32)>,
-        origin: Option<(f32, f32)>,
-        rotation: f32,
-        color: u32,
-        bound_textures: [u32; 4],
-    },
-    /// Draw a 2D rectangle in screen space
-    DrawRect {
-        x: f32,
-        y: f32,
-        width: f32,
-        height: f32,
-        color: u32,
-    },
     /// Draw text in screen space
     DrawText {
         text: Vec<u8>,
@@ -158,9 +125,6 @@ impl Default for ZInitConfig {
 /// This is NOT serialized for rollback - only core GameState is rolled back.
 #[derive(Debug)]
 pub struct ZFFIState {
-    // Current transform (for immediate mode draws)
-    pub current_transform: Mat4,
-
     // Render state
     pub depth_test: bool,
     pub cull_mode: u8,
@@ -252,7 +216,6 @@ impl Default for ZFFIState {
         ));
 
         Self {
-            current_transform: Mat4::IDENTITY,
             depth_test: true,
             cull_mode: 1, // Back-face culling
             blend_mode: 0,

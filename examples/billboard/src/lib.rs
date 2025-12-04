@@ -46,7 +46,7 @@ extern "C" {
     fn texture_filter(filter: u32);
 
     // Transform
-    fn transform_identity();
+    fn push_identity();
     fn transform_set(matrix_ptr: u32);
 
     // Billboard drawing
@@ -442,7 +442,7 @@ pub extern "C" fn render() {
         // Draw mode comparison sprites
         texture_bind(SPRITE_TEXTURE);
         for &(x, y, z, mode, _) in &positions {
-            transform_identity();
+            push_identity();
             // TODO: Build translation matrix for (x, y+3.0, z) and call transform_set()
             draw_billboard(1.5, 1.5, mode, 0xFFFFFFFF);
         }
@@ -459,7 +459,7 @@ pub extern "C" fn render() {
         ];
 
         for &(x, _y, z) in &tree_positions {
-            transform_identity();
+            push_identity();
             // TODO: Build translation matrix for (x, 1.0, z) and call transform_set()
             draw_billboard(2.0, 2.0, MODE_CYLINDRICAL_Y, 0xFFFFFFFF);
         }
@@ -469,7 +469,7 @@ pub extern "C" fn render() {
         for i in 0..MAX_PARTICLES {
             let p = &PARTICLES[i];
             if p.is_alive() {
-                transform_identity();
+                push_identity();
                 // TODO: Build translation matrix for (p.x, p.y, p.z) and call transform_set()
 
                 // Apply alpha to color
@@ -491,7 +491,7 @@ pub extern "C" fn render() {
         ];
 
         for &(x, y, z) in &ground_markers {
-            transform_identity();
+            push_identity();
             // TODO: Build translation * rotation matrix and call transform_set()
             draw_billboard(0.5, 0.5, MODE_SPHERICAL, 0x88888888);
         }

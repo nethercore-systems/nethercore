@@ -37,10 +37,15 @@ pub fn register_z_ffi(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState
     linker.func_wrap("env", "push_projection_matrix", push_projection_matrix)?;
 
     // Transform functions
-    // Note: Only identity and set are provided - games should do matrix math in WASM
-    // and use transform_set() to avoid FFI overhead per operation
-    linker.func_wrap("env", "transform_identity", transform_identity)?;
+    linker.func_wrap("env", "push_identity", push_identity)?;
     linker.func_wrap("env", "transform_set", transform_set)?;
+    linker.func_wrap("env", "push_translate", push_translate)?;
+    linker.func_wrap("env", "push_rotate_x", push_rotate_x)?;
+    linker.func_wrap("env", "push_rotate_y", push_rotate_y)?;
+    linker.func_wrap("env", "push_rotate_z", push_rotate_z)?;
+    linker.func_wrap("env", "push_rotate", push_rotate)?;
+    linker.func_wrap("env", "push_scale", push_scale)?;
+    linker.func_wrap("env", "push_scale_uniform", push_scale_uniform)?;
 
     // Input functions (from input submodule)
     linker.func_wrap("env", "button_held", input::button_held)?;
@@ -435,13 +440,17 @@ fn push_projection_matrix(
 // Transform Stack Functions
 // ============================================================================
 
-/// Reset the current transform to identity matrix
+/// Push identity matrix onto the transform stack
 ///
-/// After calling this, the transform represents no transformation
+/// After calling this, subsequent draws will use identity transformation
 /// (objects will be drawn at their original position/rotation/scale).
-fn transform_identity(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>) {
+/// This is typically called at the start of rendering to reset the transform stack.
+fn push_identity(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>) {
     let state = &mut caller.data_mut().console;
-    state.current_transform = Mat4::IDENTITY;
+    let new_idx = state
+        .add_model_matrix(Mat4::IDENTITY)
+        .expect("Model matrix pool overflow");
+    state.current_model_idx = new_idx;
 }
 
 /// Set the current transform from a 4x4 matrix
@@ -489,7 +498,157 @@ fn transform_set(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>
         return;
     };
     let state = &mut caller.data_mut().console;
-    state.current_transform = Mat4::from_cols_array(&matrix);
+    let new_matrix = Mat4::from_cols_array(&matrix);
+    let new_idx = state
+        .add_model_matrix(new_matrix)
+        .expect("Model matrix pool overflow");
+    state.current_model_idx = new_idx;
+}
+
+/// Push a translated transform onto the stack
+///
+/// # Arguments
+/// * `x`, `y`, `z` — Translation amounts
+///
+/// Reads the current transform, applies translation, and pushes the result.
+fn push_translate(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    x: f32,
+    y: f32,
+    z: f32,
+) {
+    let state = &mut caller.data_mut().console;
+    let current_matrix = state.model_matrices[state.current_model_idx as usize];
+    let new_matrix = current_matrix * Mat4::from_translation(Vec3::new(x, y, z));
+    let new_idx = state
+        .add_model_matrix(new_matrix)
+        .expect("Model matrix pool overflow");
+    state.current_model_idx = new_idx;
+}
+
+/// Push a rotated transform onto the stack (X axis)
+///
+/// # Arguments
+/// * `angle_deg` — Rotation angle in degrees
+///
+/// Reads the current transform, applies rotation, and pushes the result.
+fn push_rotate_x(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    angle_deg: f32,
+) {
+    let state = &mut caller.data_mut().console;
+    let current_matrix = state.model_matrices[state.current_model_idx as usize];
+    let angle_rad = angle_deg.to_radians();
+    let new_matrix = current_matrix * Mat4::from_rotation_x(angle_rad);
+    let new_idx = state
+        .add_model_matrix(new_matrix)
+        .expect("Model matrix pool overflow");
+    state.current_model_idx = new_idx;
+}
+
+/// Push a rotated transform onto the stack (Y axis)
+///
+/// # Arguments
+/// * `angle_deg` — Rotation angle in degrees
+///
+/// Reads the current transform, applies rotation, and pushes the result.
+fn push_rotate_y(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    angle_deg: f32,
+) {
+    let state = &mut caller.data_mut().console;
+    let current_matrix = state.model_matrices[state.current_model_idx as usize];
+    let angle_rad = angle_deg.to_radians();
+    let new_matrix = current_matrix * Mat4::from_rotation_y(angle_rad);
+    let new_idx = state
+        .add_model_matrix(new_matrix)
+        .expect("Model matrix pool overflow");
+    state.current_model_idx = new_idx;
+}
+
+/// Push a rotated transform onto the stack (Z axis)
+///
+/// # Arguments
+/// * `angle_deg` — Rotation angle in degrees
+///
+/// Reads the current transform, applies rotation, and pushes the result.
+fn push_rotate_z(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    angle_deg: f32,
+) {
+    let state = &mut caller.data_mut().console;
+    let current_matrix = state.model_matrices[state.current_model_idx as usize];
+    let angle_rad = angle_deg.to_radians();
+    let new_matrix = current_matrix * Mat4::from_rotation_z(angle_rad);
+    let new_idx = state
+        .add_model_matrix(new_matrix)
+        .expect("Model matrix pool overflow");
+    state.current_model_idx = new_idx;
+}
+
+/// Push a rotated transform onto the stack (arbitrary axis)
+///
+/// # Arguments
+/// * `angle_deg` — Rotation angle in degrees
+/// * `axis_x`, `axis_y`, `axis_z` — Rotation axis (will be normalized)
+///
+/// Reads the current transform, applies rotation, and pushes the result.
+fn push_rotate(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    angle_deg: f32,
+    axis_x: f32,
+    axis_y: f32,
+    axis_z: f32,
+) {
+    let state = &mut caller.data_mut().console;
+    let current_matrix = state.model_matrices[state.current_model_idx as usize];
+    let angle_rad = angle_deg.to_radians();
+    let axis = Vec3::new(axis_x, axis_y, axis_z).normalize();
+    let new_matrix = current_matrix * Mat4::from_axis_angle(axis, angle_rad);
+    let new_idx = state
+        .add_model_matrix(new_matrix)
+        .expect("Model matrix pool overflow");
+    state.current_model_idx = new_idx;
+}
+
+/// Push a scaled transform onto the stack
+///
+/// # Arguments
+/// * `x`, `y`, `z` — Scale factors for each axis
+///
+/// Reads the current transform, applies scale, and pushes the result.
+fn push_scale(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    x: f32,
+    y: f32,
+    z: f32,
+) {
+    let state = &mut caller.data_mut().console;
+    let current_matrix = state.model_matrices[state.current_model_idx as usize];
+    let new_matrix = current_matrix * Mat4::from_scale(Vec3::new(x, y, z));
+    let new_idx = state
+        .add_model_matrix(new_matrix)
+        .expect("Model matrix pool overflow");
+    state.current_model_idx = new_idx;
+}
+
+/// Push a uniformly scaled transform onto the stack
+///
+/// # Arguments
+/// * `s` — Uniform scale factor
+///
+/// Reads the current transform, applies scale, and pushes the result.
+fn push_scale_uniform(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    s: f32,
+) {
+    let state = &mut caller.data_mut().console;
+    let current_matrix = state.model_matrices[state.current_model_idx as usize];
+    let new_matrix = current_matrix * Mat4::from_scale(Vec3::splat(s));
+    let new_idx = state
+        .add_model_matrix(new_matrix)
+        .expect("Model matrix pool overflow");
+    state.current_model_idx = new_idx;
 }
 
 // ============================================================================
@@ -1062,10 +1221,8 @@ fn draw_mesh(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, ha
 
     let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
 
-    // Add current transform to model matrix pool
-    let model_idx = state
-        .add_model_matrix(state.current_transform)
-        .expect("Model matrix pool overflow");
+    // Use current model matrix index from the transform stack
+    let model_idx = state.current_model_idx;
 
     // Pack matrix indices
     let mvp_index =
@@ -1210,10 +1367,8 @@ fn draw_triangles(
 
     let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
 
-    // Add current transform to model matrix pool
-    let model_idx = state
-        .add_model_matrix(state.current_transform)
-        .expect("Model matrix pool overflow");
+    // Use current model matrix index from the transform stack
+    let model_idx = state.current_model_idx;
 
     // Pack matrix indices
     let mvp_index =
@@ -1394,10 +1549,8 @@ fn draw_triangles_indexed(
 
     let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
 
-    // Add current transform to model matrix pool
-    let model_idx = state
-        .add_model_matrix(state.current_transform)
-        .expect("Model matrix pool overflow");
+    // Use current model matrix index from the transform stack
+    let model_idx = state.current_model_idx;
 
     // Pack matrix indices
     let mvp_index =
@@ -1464,11 +1617,12 @@ fn draw_billboard(
         _ => unreachable!(), // Already validated above
     };
 
-    // Extract world position from current transform
+    // Extract world position from current model matrix
+    let current_matrix = state.model_matrices[state.current_model_idx as usize];
     let position = [
-        state.current_transform.w_axis.x,
-        state.current_transform.w_axis.y,
-        state.current_transform.w_axis.z,
+        current_matrix.w_axis.x,
+        current_matrix.w_axis.y,
+        current_matrix.w_axis.z,
     ];
 
     // Create quad instance (full texture UV: 0,0,1,1)
@@ -1530,11 +1684,12 @@ fn draw_billboard_region(
         _ => unreachable!(), // Already validated above
     };
 
-    // Extract world position from current transform
+    // Extract world position from current model matrix
+    let current_matrix = state.model_matrices[state.current_model_idx as usize];
     let position = [
-        state.current_transform.w_axis.x,
-        state.current_transform.w_axis.y,
-        state.current_transform.w_axis.z,
+        current_matrix.w_axis.x,
+        current_matrix.w_axis.y,
+        current_matrix.w_axis.z,
     ];
 
     // Create quad instance with UV region
@@ -1577,17 +1732,23 @@ fn draw_sprite(
 ) {
     let state = &mut caller.data_mut().console;
 
-    state.deferred_commands.push(DeferredCommand::DrawSprite {
+    // Get shading state index
+    let shading_state_index = state.add_shading_state();
+
+    // Create screen-space quad instance
+    let instance = crate::graphics::QuadInstance::sprite(
         x,
         y,
-        width: w,
-        height: h,
-        uv_rect: None, // Full texture (0,0,1,1)
-        origin: None,  // No rotation
-        rotation: 0.0,
+        w,
+        h,
+        0.0,                   // No rotation
+        [0.0, 0.0, 1.0, 1.0],  // Full texture UV
         color,
-        bound_textures: state.bound_textures,
-    });
+        shading_state_index.0,
+        state.current_view_idx as u32,
+    );
+
+    state.quad_instances.push(instance);
 }
 
 /// Draw a region of a sprite sheet
@@ -1618,17 +1779,29 @@ fn draw_sprite_region(
 ) {
     let state = &mut caller.data_mut().console;
 
-    state.deferred_commands.push(DeferredCommand::DrawSprite {
+    // Get shading state index
+    let shading_state_index = state.add_shading_state();
+
+    // Calculate UV coordinates (convert from src_x,src_y,src_w,src_h to u0,v0,u1,v1)
+    let u0 = src_x;
+    let v0 = src_y;
+    let u1 = src_x + src_w;
+    let v1 = src_y + src_h;
+
+    // Create screen-space quad instance
+    let instance = crate::graphics::QuadInstance::sprite(
         x,
         y,
-        width: w,
-        height: h,
-        uv_rect: Some((src_x, src_y, src_w, src_h)),
-        origin: None, // No rotation
-        rotation: 0.0,
+        w,
+        h,
+        0.0,             // No rotation
+        [u0, v0, u1, v1], // Texture UV region
         color,
-        bound_textures: state.bound_textures,
-    });
+        shading_state_index.0,
+        state.current_view_idx as u32,
+    );
+
+    state.quad_instances.push(instance);
 }
 
 /// Draw a sprite with full control (rotation, origin, UV region)
@@ -1665,17 +1838,33 @@ fn draw_sprite_ex(
 ) {
     let state = &mut caller.data_mut().console;
 
-    state.deferred_commands.push(DeferredCommand::DrawSprite {
-        x,
-        y,
-        width: w,
-        height: h,
-        uv_rect: Some((src_x, src_y, src_w, src_h)),
-        origin: Some((origin_x, origin_y)),
-        rotation: angle_deg,
+    // Get shading state index
+    let shading_state_index = state.add_shading_state();
+
+    // Calculate UV coordinates
+    let u0 = src_x;
+    let v0 = src_y;
+    let u1 = src_x + src_w;
+    let v1 = src_y + src_h;
+
+    // Apply origin offset to position
+    let adjusted_x = x - origin_x;
+    let adjusted_y = y - origin_y;
+
+    // Create screen-space quad instance with rotation
+    let instance = crate::graphics::QuadInstance::sprite(
+        adjusted_x,
+        adjusted_y,
+        w,
+        h,
+        angle_deg.to_radians(),  // Convert degrees to radians
+        [u0, v0, u1, v1],
         color,
-        bound_textures: state.bound_textures,
-    });
+        shading_state_index.0,
+        state.current_view_idx as u32,
+    );
+
+    state.quad_instances.push(instance);
 }
 
 /// Draw a solid color rectangle
@@ -1698,13 +1887,23 @@ fn draw_rect(
 ) {
     let state = &mut caller.data_mut().console;
 
-    state.deferred_commands.push(DeferredCommand::DrawRect {
+    // Get shading state index
+    let shading_state_index = state.add_shading_state();
+
+    // Create screen-space quad instance (rects use white/fallback texture)
+    let instance = crate::graphics::QuadInstance::sprite(
         x,
         y,
-        width: w,
-        height: h,
+        w,
+        h,
+        0.0,                   // No rotation
+        [0.0, 0.0, 1.0, 1.0],  // Full texture UV (will use fallback white texture)
         color,
-    });
+        shading_state_index.0,
+        state.current_view_idx as u32,
+    );
+
+    state.quad_instances.push(instance);
 }
 
 /// Draw text with the built-in font

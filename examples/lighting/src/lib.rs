@@ -74,7 +74,7 @@ extern "C" {
     fn draw_mesh(handle: u32);
 
     // Transform
-    fn transform_identity();
+    fn push_identity();
 
     // Render state
     fn set_color(color: u32);
@@ -561,7 +561,7 @@ fn format_float(val: f32, buf: &mut [u8]) -> usize {
 pub extern "C" fn render() {
     unsafe {
         // Draw the sphere (no rotation for now - add your own matrix math!)
-        transform_identity();
+        push_identity();
         // TODO: Build rotation matrices for ROTATION_X and ROTATION_Y and call transform_set()
 
         set_color(0xFFFFFFFF);

@@ -53,7 +53,9 @@ extern "C" {
     fn draw_mesh(handle: u32);
 
     // Transform
-    fn transform_identity();
+    fn push_identity();
+    fn push_rotate_x(angle_deg: f32);
+    fn push_rotate_y(angle_deg: f32);
 
     // Render state
     fn set_color(color: u32);
@@ -206,8 +208,10 @@ pub extern "C" fn update() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
-        // Reset transform (no rotation for now - add your own matrix math!)
-        transform_identity();
+        // Apply rotation accumulated in update()
+        push_identity();
+        push_rotate_y(ROTATION_Y);
+        push_rotate_x(ROTATION_X);
 
         // Bind texture and set color
         texture_bind(TEXTURE);
