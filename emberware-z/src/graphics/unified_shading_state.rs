@@ -4,24 +4,27 @@ use glam::{Vec3, Vec4};
 use super::render_state::{BlendMode, MatcapBlendMode};
 
 /// Quantized sky data for GPU upload (16 bytes)
+/// Sun direction uses 2D octahedral mapping: XY stored, Z reconstructed in shader
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Pod, Zeroable)]
 pub struct PackedSky {
-    pub horizon_color: u32,              // RGBA8 packed
-    pub zenith_color: u32,               // RGBA8 packed
-    pub sun_direction: [i16; 4],         // snorm16x4 (w unused, set to 0)
-    pub sun_color_and_sharpness: u32,    // RGB8 + sharpness u8
+    pub horizon_color: u32,              // RGBA8 packed (4 bytes)
+    pub zenith_color: u32,               // RGBA8 packed (4 bytes)
+    pub sun_direction_xy: u32,           // xy as snorm16 packed (x: i16, y: i16) - z reconstructed
+    pub sun_color_and_sharpness: u32,    // RGB8 + sharpness u8 (4 bytes)
 }
 
-/// One packed light (16 bytes)
+/// One packed light (16 bytes with explicit padding for GPU alignment)
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Pod, Zeroable)]
 pub struct PackedLight {
-    pub direction: [i16; 4],             // snorm16x4 (w = enabled flag: 0x7FFF if enabled, 0 if disabled)
-    pub color_and_intensity: u32,        // RGB8 + intensity u8
+    pub direction: [i16; 4],             // snorm16x4 (w = enabled flag: 0x7FFF if enabled, 0 if disabled) - 8 bytes
+    pub color_and_intensity: u32,        // RGB8 + intensity u8 - 4 bytes
+    pub _pad: u32,                       // padding to 16 bytes for GPU vec4 alignment - 4 bytes
 }
 
-/// Unified per-draw shading state (96 bytes, POD, hashable)
+/// Unified per-draw shading state (100 bytes, POD, hashable)
+/// Size breakdown: 20 bytes (header) + 16 bytes (sky) + 64 bytes (4 × 16-byte lights)
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Pod, Zeroable)]
 pub struct PackedUnifiedShadingState {
@@ -34,7 +37,7 @@ pub struct PackedUnifiedShadingState {
     pub matcap_blend_modes: u32,         // 4x MatcapBlendMode packed as u8s
     pub pad1: u32,
     pub sky: PackedSky,                  // 16 bytes
-    pub lights: [PackedLight; 4],        // 64 bytes
+    pub lights: [PackedLight; 4],        // 64 bytes (4 × 16-byte lights)
 }
 
 impl Default for PackedUnifiedShadingState {
@@ -121,14 +124,35 @@ pub fn pack_rgba8_vec4(color: Vec4) -> u32 {
     pack_rgba8(color.x, color.y, color.z, color.w)
 }
 
-/// Pack Vec3 direction [-1.0, 1.0] to [i16; 4] snorm16 (w = 0)
+/// Pack Vec3 direction [-1.0, 1.0] to u32 with XY components only (snorm16 each)
+/// Z component is reconstructed in shader using: z = sqrt(1 - x^2 - y^2)
 #[inline]
-pub fn pack_direction3(dir: Vec3) -> [i16; 4] {
+pub fn pack_direction_xy_u32(dir: Vec3) -> u32 {
+    let dir = dir.normalize_or_zero();
+    let x = pack_snorm16(dir.x);
+    let y = pack_snorm16(dir.y);
+    // Pack as [x: i16 low][y: i16 high]
+    (x as u16 as u32) | ((y as u16 as u32) << 16)
+}
+
+/// Pack Vec3 direction [-1.0, 1.0] to [i16; 3] snorm16
+#[inline]
+pub fn pack_direction3(dir: Vec3) -> [i16; 3] {
     [
         pack_snorm16(dir.x),
         pack_snorm16(dir.y),
         pack_snorm16(dir.z),
-        0,
+    ]
+}
+
+/// Pack Vec3 direction [-1.0, 1.0] to [i16; 4] snorm16 with enabled flag in w component
+#[inline]
+pub fn pack_direction4_with_flag(dir: Vec3, enabled: bool) -> [i16; 4] {
+    [
+        pack_snorm16(dir.x),
+        pack_snorm16(dir.y),
+        pack_snorm16(dir.z),
+        if enabled { 0x7FFF } else { 0 },
     ]
 }
 
@@ -166,7 +190,7 @@ impl PackedSky {
     ) -> Self {
         let horizon_rgba = pack_rgb8(horizon_color);
         let zenith_rgba = pack_rgb8(zenith_color);
-        let sun_dir_packed = pack_direction3(sun_direction.normalize_or_zero());
+        let sun_dir_xy = pack_direction_xy_u32(sun_direction);
 
         let sun_r = pack_unorm8(sun_color.x);
         let sun_g = pack_unorm8(sun_color.y);
@@ -180,7 +204,7 @@ impl PackedSky {
         Self {
             horizon_color: horizon_rgba,
             zenith_color: zenith_rgba,
-            sun_direction: sun_dir_packed,
+            sun_direction_xy: sun_dir_xy,
             sun_color_and_sharpness,
         }
     }
@@ -193,9 +217,7 @@ impl PackedSky {
 impl PackedLight {
     /// Create a PackedLight from f32 parameters
     pub fn from_floats(direction: Vec3, color: Vec3, intensity: f32, enabled: bool) -> Self {
-        let mut dir_packed = pack_direction3(direction.normalize_or_zero());
-        // Use w component as enabled flag: 0x7FFF if enabled, 0 if disabled
-        dir_packed[3] = if enabled { 0x7FFF } else { 0 };
+        let dir_packed = pack_direction4_with_flag(direction.normalize_or_zero(), enabled);
 
         let r = pack_unorm8(color.x);
         let g = pack_unorm8(color.y);
@@ -209,6 +231,7 @@ impl PackedLight {
         Self {
             direction: dir_packed,
             color_and_intensity,
+            _pad: 0,
         }
     }
 
@@ -284,7 +307,7 @@ mod tests {
     fn test_packed_sizes() {
         assert_eq!(std::mem::size_of::<PackedSky>(), 16);
         assert_eq!(std::mem::size_of::<PackedLight>(), 16);
-        assert_eq!(std::mem::size_of::<PackedUnifiedShadingState>(), 96);
+        assert_eq!(std::mem::size_of::<PackedUnifiedShadingState>(), 100);
     }
 
     #[test]
@@ -312,7 +335,7 @@ mod tests {
         let sky = PackedSky::default();
         assert_eq!(sky.horizon_color, 0);
         assert_eq!(sky.zenith_color, 0);
-        assert_eq!(sky.sun_direction, [0, 0, 0, 0]);
+        assert_eq!(sky.sun_direction_xy, 0);
         assert_eq!(sky.sun_color_and_sharpness, 0);
     }
 
@@ -321,5 +344,6 @@ mod tests {
         let light = PackedLight::disabled();
         assert_eq!(light.direction, [0, 0, 0, 0]);
         assert_eq!(light.color_and_intensity, 0);
+        assert_eq!(light._pad, 0);
     }
 }

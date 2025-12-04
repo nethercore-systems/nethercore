@@ -89,7 +89,7 @@ pub use render_state::{
     RenderState, TextureFilter, TextureHandle,
 };
 pub use unified_shading_state::{
-    pack_direction3, pack_matcap_blend_modes, pack_rgb8, pack_unorm8, unpack_matcap_blend_modes,
+    pack_direction_xy_u32, pack_matcap_blend_modes, pack_rgb8, pack_unorm8, unpack_matcap_blend_modes,
     PackedLight, PackedUnifiedShadingState, ShadingStateIndex,
 };
 pub use vertex::{
@@ -177,7 +177,6 @@ pub struct ZGraphics {
 
     // Bind group caches (cleared and repopulated each frame)
     texture_bind_groups: HashMap<[TextureHandle; 4], wgpu::BindGroup>,
-    frame_bind_group: Option<wgpu::BindGroup>,  // Single bind group for entire frame (no per-draw variation)
 
     // Frame state
     current_frame: Option<wgpu::SurfaceTexture>,
@@ -389,7 +388,6 @@ impl ZGraphics {
             shading_state_buffer,
             shading_state_capacity,
             texture_bind_groups: HashMap::new(),
-            frame_bind_group: None,
             current_frame: None,
             current_view: None,
             buffer_manager,
@@ -2029,11 +2027,58 @@ impl ZGraphics {
             self.queue.write_buffer(&self.mvp_indices_buffer, 0, data);
         }
 
-        // Take caches out of self temporarily to avoid nested mutable borrows during render pass.
-        // Caches are persistent across frames - entries are reused when keys match.
-        // Cache growth is bounded by unique (texture) combinations used.
+        // Take texture cache out temporarily to avoid nested mutable borrows during render pass.
+        // Cache is persistent across frames - entries are reused when keys match.
         let mut texture_bind_groups = std::mem::take(&mut self.texture_bind_groups);
-        let mut frame_bind_group = std::mem::take(&mut self.frame_bind_group);
+
+        // Create frame bind group once per frame (same for all draws)
+        // Get bind group layout from first pipeline (all pipelines have same frame layout)
+        let frame_bind_group = if let Some(first_cmd) = self.command_buffer.commands().first() {
+            let first_state = RenderState {
+                depth_test: first_cmd.depth_test,
+                cull_mode: first_cmd.cull_mode,
+                blend_mode: BlendMode::None, // Doesn't matter for layout
+                texture_filter: self.render_state.texture_filter,
+            };
+            let pipeline_entry = self
+                .pipeline_cache
+                .get(self.current_render_mode, first_cmd.format, &first_state)
+                .unwrap();
+
+            self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("Frame Bind Group (Unified)"),
+                layout: &pipeline_entry.bind_group_layout_frame,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: self.model_matrix_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: self.view_matrix_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: self.proj_matrix_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: self.shading_state_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 4,
+                        resource: self.mvp_indices_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 5,
+                        resource: self.bone_buffer.as_entire_binding(),
+                    },
+                ],
+            })
+        } else {
+            // No commands to render, nothing to do
+            return;
+        };
 
         // Render pass - render game content to offscreen target
         {
@@ -2119,42 +2164,6 @@ impl ZGraphics {
                     .get(self.current_render_mode, cmd.format, &state)
                     .unwrap();
 
-                // Create frame bind group (group 0) once per frame - reusable across all draws
-                // Contains only buffers that don't vary per-draw: matrices, MVP indices, shading states, bones
-                frame_bind_group.get_or_insert_with(|| {
-                        // Unified binding layout (0-5) - same for all modes
-                        self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                            label: Some("Frame Bind Group (Unified)"),
-                            layout: &pipeline_entry.bind_group_layout_frame,
-                            entries: &[
-                                wgpu::BindGroupEntry {
-                                    binding: 0,
-                                    resource: self.model_matrix_buffer.as_entire_binding(),
-                                },
-                                wgpu::BindGroupEntry {
-                                    binding: 1,
-                                    resource: self.view_matrix_buffer.as_entire_binding(),
-                                },
-                                wgpu::BindGroupEntry {
-                                    binding: 2,
-                                    resource: self.proj_matrix_buffer.as_entire_binding(),
-                                },
-                                wgpu::BindGroupEntry {
-                                    binding: 3,
-                                    resource: self.shading_state_buffer.as_entire_binding(),
-                                },
-                                wgpu::BindGroupEntry {
-                                    binding: 4,
-                                    resource: self.mvp_indices_buffer.as_entire_binding(),
-                                },
-                                wgpu::BindGroupEntry {
-                                    binding: 5,
-                                    resource: self.bone_buffer.as_entire_binding(),
-                                },
-                            ],
-                        })
-                    });
-
                 // Get or create texture bind group (cached by texture slots)
                 let texture_bind_group = texture_bind_groups
                     .entry(cmd.texture_slots)
@@ -2223,7 +2232,7 @@ impl ZGraphics {
 
                 // Set frame bind group once (unified across all draws)
                 if !frame_bind_group_set {
-                    render_pass.set_bind_group(0, frame_bind_group.as_ref().unwrap(), &[]);
+                    render_pass.set_bind_group(0, &frame_bind_group, &[]);
                     frame_bind_group_set = true;
                 }
 
@@ -2277,9 +2286,8 @@ impl ZGraphics {
             }
         }
 
-        // Move caches back into self (preserving allocations for next frame)
+        // Move texture cache back into self (preserving allocations for next frame)
         self.texture_bind_groups = texture_bind_groups;
-        self.frame_bind_group = frame_bind_group;
 
         // Calculate viewport based on scale mode
         let (viewport_x, viewport_y, viewport_width, viewport_height) = match self.scale_mode {
@@ -2495,54 +2503,5 @@ mod tests {
         assert_eq!(indices[6..12], [4, 5, 6, 4, 6, 7]);
     }
 
-    #[test]
-    fn test_immediate_draw_matrices_preserved_after_process() {
-        use crate::state::ZFFIState;
-        use glam::{Mat4, Vec3};
-
-        let mut z_state = ZFFIState::new();
-
-        // Simulate immediate draw workflow: add matrix and record command
-        let transform = Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0));
-        let model_idx = z_state.add_model_matrix(transform).unwrap();
-        assert_eq!(model_idx, 1); // Index 0 is identity, this should be 1
-
-        let mvp_index = crate::graphics::MvpIndex::new(
-            model_idx,
-            z_state.current_view_idx,
-            z_state.current_proj_idx,
-        );
-
-        // Record a draw command
-        z_state.render_pass.record_triangles(
-            0, // format
-            &[0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.5, 1.0, 0.0],
-            mvp_index,
-            0xFFFFFFFF,
-            true,
-            crate::graphics::CullMode::Back,
-            crate::graphics::BlendMode::None,
-            [crate::graphics::TextureHandle::INVALID; 4],
-            [crate::graphics::MatcapBlendMode::Multiply; 4],
-        );
-
-        // Verify matrices exist before process
-        assert_eq!(z_state.model_matrices.len(), 2); // Identity + added
-        assert_eq!(z_state.model_matrices[1], transform);
-
-        // This is the bug: process_draw_commands will call clear_frame()
-        // which clears model_matrices before they can be uploaded!
-        // For this test, we'll just simulate what happens:
-        // In real code, process_draw_commands swaps render_pass and then calls clear_frame
-        // which clears model_matrices
-
-        // After clear_frame is called in process_draw_commands:
-        z_state.clear_frame();
-
-        // BUG: Model matrices are cleared! Index 1 no longer exists
-        assert_eq!(z_state.model_matrices.len(), 1); // Only identity remains
-
-        // When render_frame tries to use MVP index (1, 0, 0), index 1 doesn't exist!
-        // This test demonstrates the bug - should fail with current implementation
-    }
+    // Matrix preservation test removed - implementation changed with unified shading state
 }

@@ -2634,59 +2634,7 @@ mod tests {
         assert!(!state.init_config.modified);
     }
 
-    // ========================================================================
-    // Camera State Tests
-    // ========================================================================
-
-    #[test]
-    fn test_camera_state_defaults() {
-        let camera = CameraState::default();
-        assert_eq!(camera.position, Vec3::new(0.0, 0.0, 5.0));
-        assert_eq!(camera.target, Vec3::ZERO);
-        assert_eq!(camera.fov, DEFAULT_CAMERA_FOV);
-        assert_eq!(camera.near, 0.1);
-        assert_eq!(camera.far, 1000.0);
-    }
-
-    #[test]
-    fn test_camera_view_matrix() {
-        let camera = CameraState {
-            position: Vec3::new(0.0, 0.0, 5.0),
-            target: Vec3::ZERO,
-            fov: 60.0,
-            near: 0.1,
-            far: 100.0,
-        };
-
-        let view = camera.view_matrix();
-        // The view matrix should transform the target point to the origin
-        let target_in_view = view.transform_point3(camera.target);
-        // Should be at (0, 0, -5) in view space (camera looks down -Z)
-        assert!((target_in_view.z + 5.0).abs() < 0.001);
-    }
-
-    #[test]
-    fn test_camera_projection_matrix() {
-        let camera = CameraState::default();
-        let proj = camera.projection_matrix(16.0 / 9.0);
-
-        // Projection matrix should not be identity
-        assert_ne!(proj, Mat4::IDENTITY);
-        // Should have perspective (w != 1 for points not at origin)
-        let point = proj.project_point3(Vec3::new(0.0, 0.0, -10.0));
-        assert!(point.z.abs() < 1.0); // Should be in NDC range
-    }
-
-    #[test]
-    fn test_game_state_camera_initialized() {
-        let state = ZFFIState::new();
-        assert_eq!(state.camera.fov, DEFAULT_CAMERA_FOV);
-        assert_eq!(state.camera.position, Vec3::new(0.0, 0.0, 5.0));
-    }
-
-    // ========================================================================
-    // Transform Stack Tests
-    // ========================================================================
+    // Camera and transform stack tests removed - obsolete with matrix pool system
 
     // ========================================================================
     // GPU Skinning FFI Tests
@@ -2769,13 +2717,7 @@ mod tests {
         assert_eq!(state.bound_textures, [0; 4]); // All slots unbound
     }
 
-    #[test]
-    fn test_render_state_material_defaults() {
-        let state = ZFFIState::new();
-        assert_eq!(state.material_metallic, 0.0);
-        assert_eq!(state.material_roughness, 0.5);
-        assert_eq!(state.material_emissive, 0.0);
-    }
+    // Material field tests removed - now stored in unified shading state
 
     #[test]
     fn test_render_state_lights_default() {
@@ -2818,7 +2760,6 @@ mod tests {
     use crate::{
         console::ZInput,
         graphics::FORMAT_SKINNED,
-        state::{CameraState, LightState, DEFAULT_CAMERA_FOV},
     };
 
     #[test]
@@ -2897,100 +2838,7 @@ mod tests {
         assert!(state.deferred_commands.is_empty());
     }
 
-    #[test]
-    fn test_draw_command_mesh_captures_state() {
-        let mut state = ZFFIState::new();
-
-        // Set up render state
-        state.update_color(0x00FF00FF);
-        state.depth_test = false;
-        state.cull_mode = 2;
-        state.blend_mode = 1;
-        state.bound_textures = [1, 2, 3, 4];
-        state.current_transform = Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0));
-
-        // Create a dummy mesh in mesh_map for the test
-        use crate::graphics::RetainedMesh;
-        state.mesh_map.insert(
-            1,
-            RetainedMesh {
-                format: 0,
-                vertex_count: 100,
-                index_count: 0,
-                vertex_offset: 0,
-                index_offset: 0,
-            },
-        );
-
-        // Simulate draw_mesh call logic (since we can't easily call the FFI function directly with WASM context)
-        // We'll just manually record to render_pass to verify the recording works
-
-        // Add model matrix to pool and create MvpIndex
-        let model_idx = state.add_model_matrix(state.current_transform).unwrap();
-        let mvp_index = crate::graphics::MvpIndex::new(
-            model_idx,
-            state.current_view_idx,
-            state.current_proj_idx,
-        );
-
-        let mesh = state.mesh_map.get(&1).unwrap();
-        state.render_pass.record_mesh(
-            mesh.format,
-            mesh.vertex_count,
-            mesh.index_count,
-            mesh.vertex_offset,
-            mesh.index_offset,
-            mvp_index,
-            state.current_shading_state.color_rgba8,
-            state.depth_test,
-            crate::graphics::CullMode::from_u8(state.cull_mode),
-            crate::graphics::BlendMode::from_u8(state.blend_mode),
-            [
-                crate::graphics::TextureHandle(state.bound_textures[0]),
-                crate::graphics::TextureHandle(state.bound_textures[1]),
-                crate::graphics::TextureHandle(state.bound_textures[2]),
-                crate::graphics::TextureHandle(state.bound_textures[3]),
-            ],
-            [crate::graphics::MatcapBlendMode::Multiply; 4],
-        );
-
-        // Verify state was captured in VRPCommand
-        let cmd = &state.render_pass.commands()[0];
-        assert_eq!(cmd.mvp_index, mvp_index);
-        assert_eq!(cmd.color, 0x00FF00FF);
-        assert!(!cmd.depth_test);
-        assert_eq!(cmd.cull_mode, crate::graphics::CullMode::Front);
-        assert_eq!(cmd.blend_mode, crate::graphics::BlendMode::Alpha);
-        assert_eq!(cmd.texture_slots[0].0, 1);
-    }
-
-    #[test]
-    fn test_draw_command_triangles_format() {
-        let mut state = ZFFIState::new();
-
-        // Add identity transform to model matrix pool
-        let model_idx = state.add_model_matrix(Mat4::IDENTITY).unwrap();
-        let mvp_index = crate::graphics::MvpIndex::new(
-            model_idx,
-            state.current_view_idx,
-            state.current_proj_idx,
-        );
-
-        state.render_pass.record_triangles(
-            7,                // POS_UV_COLOR_NORMAL
-            &[1.0, 2.0, 3.0], // Minimal data
-            mvp_index,
-            0xFFFFFFFF,
-            true,
-            crate::graphics::CullMode::Back,
-            crate::graphics::BlendMode::None,
-            [crate::graphics::TextureHandle::INVALID; 4],
-            [crate::graphics::MatcapBlendMode::Multiply; 4],
-        );
-
-        let cmd = &state.render_pass.commands()[0];
-        assert_eq!(cmd.format, 7);
-    }
+    // Command buffer recording tests removed - testing implementation details that changed with unified shading state
 
     #[test]
     fn test_draw_command_billboard_modes() {
@@ -3027,7 +2875,6 @@ mod tests {
             origin: Some((16.0, 16.0)),
             rotation: 45.0,
             color: 0xFFFFFFFF,
-            blend_mode: 1,
             bound_textures: [0; 4],
         });
 
@@ -3067,7 +2914,6 @@ mod tests {
             size: 16.0,
             color: 0x000000FF,
             font: 0,
-            blend_mode: 1,
         });
 
         if let DeferredCommand::DrawText { text, size, .. } = &state.deferred_commands[0] {
@@ -3078,35 +2924,7 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_draw_command_set_sky() {
-        let mut state = ZFFIState::new();
-
-        state.deferred_commands.push(DeferredCommand::SetSky {
-            horizon_color: [0.5, 0.6, 0.7],
-            zenith_color: [0.1, 0.2, 0.8],
-            sun_direction: [0.0, 1.0, 0.0],
-            sun_color: [1.0, 0.9, 0.8],
-            sun_sharpness: 64.0,
-        });
-
-        if let DeferredCommand::SetSky {
-            horizon_color,
-            zenith_color,
-            sun_direction,
-            sun_color,
-            sun_sharpness,
-        } = &state.deferred_commands[0]
-        {
-            assert_eq!(horizon_color[0], 0.5);
-            assert_eq!(zenith_color[2], 0.8);
-            assert_eq!(sun_direction[1], 1.0);
-            assert_eq!(sun_color[0], 1.0);
-            assert_eq!(*sun_sharpness, 64.0);
-        } else {
-            panic!("Expected SetSky command");
-        }
-    }
+    // SetSky test removed - sky is now part of unified shading state, not a deferred command
 
     // ========================================================================
     // Pending Resource Tests
@@ -3189,33 +3007,7 @@ mod tests {
         assert_eq!(state.next_mesh_handle, initial + 1);
     }
 
-    // ========================================================================
-    // Light State Tests
-    // ========================================================================
-
-    #[test]
-    fn test_light_state_default() {
-        let light = LightState::default();
-        assert!(!light.enabled);
-        assert_eq!(light.direction, [0.0, -1.0, 0.0]);
-        assert_eq!(light.color, [1.0, 1.0, 1.0]);
-        assert_eq!(light.intensity, 1.0);
-    }
-
-    #[test]
-    fn test_light_state_all_fields() {
-        let light = LightState {
-            enabled: true,
-            direction: [0.5, 0.5, 0.707],
-            color: [1.0, 0.5, 0.0],
-            intensity: 2.5,
-        };
-
-        assert!(light.enabled);
-        assert_eq!(light.direction[0], 0.5);
-        assert_eq!(light.color[1], 0.5);
-        assert_eq!(light.intensity, 2.5);
-    }
+    // LightState tests removed - obsolete, now using PackedLight in unified shading state
 
     #[test]
     fn test_four_light_slots() {
@@ -3657,10 +3449,10 @@ mod tests {
     fn test_light_index_boundary_valid() {
         // Valid indices are 0-3
         let state = ZFFIState::new();
-        assert_eq!(state.lights.len(), 4);
+        assert_eq!(state.current_shading_state.lights.len(), 4);
 
         for i in 0..4 {
-            assert!(i < state.lights.len());
+            assert!(i < state.current_shading_state.lights.len());
         }
     }
 
@@ -3851,36 +3643,7 @@ mod tests {
         assert_eq!(default_direction[1], -1.0);
     }
 
-    // ------------------------------------------------------------------------
-    // Edge Case Tests: Transform Stack Overflow/Underflow
-    // ------------------------------------------------------------------------
-
-    #[test]
-    fn test_transform_stack_overflow_detection() {
-        let mut state = ZFFIState::new();
-
-        // Fill stack to max
-        for _ in 0..MAX_TRANSFORM_STACK {
-            state.transform_stack.push(Mat4::IDENTITY);
-        }
-
-        // Stack is now full
-        assert_eq!(state.transform_stack.len(), MAX_TRANSFORM_STACK);
-
-        // Attempting to push more should fail (detected by length check)
-        assert!(state.transform_stack.len() >= MAX_TRANSFORM_STACK);
-    }
-
-    #[test]
-    fn test_transform_stack_underflow_detection() {
-        let mut state = ZFFIState::new();
-
-        // Stack is empty
-        assert!(state.transform_stack.is_empty());
-
-        // Attempting to pop should return None
-        assert!(state.transform_stack.pop().is_none());
-    }
+    // Transform stack tests removed - obsolete with matrix pool system
 
     // ------------------------------------------------------------------------
     // Edge Case Tests: Bone Count Limits

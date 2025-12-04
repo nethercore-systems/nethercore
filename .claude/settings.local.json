@@ -1,15 +1,16 @@
 {
   "permissions": {
     "allow": [
-      "Bash(cargo check:*)",
-      "Bash(find:*)",
-      "Bash(cargo test:*)",
-      "Bash(cargo run:*)",
-      "Bash(git checkout:*)",
-      "Bash(cargo xtask build-examples:*)",
-      "Bash(cargo build:*)",
       "Bash(cat:*)",
-      "Bash(cargo fix:*)"
+      "Bash(cargo build:*)",
+      "Bash(cargo check:*)",
+      "Bash(cargo fix:*)",
+      "Bash(cargo run:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo xtask build-examples:*)",
+      "Bash(find:*)",
+      "Bash(git checkout:*)",
+      "Bash(grep:*)"
     ],
     "deny": [],
     "ask": []

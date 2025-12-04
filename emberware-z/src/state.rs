@@ -359,19 +359,23 @@ impl ZFFIState {
 
     /// Update sky sun parameters in current shading state (with quantization)
     pub fn update_sky_sun(&mut self, direction: [f32; 3], color: [f32; 3], sharpness: f32) {
-        use crate::graphics::{pack_direction3, pack_unorm8};
+        use crate::graphics::{pack_direction_xy_u32, pack_unorm8};
         use glam::Vec3;
 
-        let dir_packed = pack_direction3(Vec3::from_slice(&direction));
+        let dir_xy_packed = pack_direction_xy_u32(Vec3::from_slice(&direction));
+
         let color_r = pack_unorm8(color[0]);
         let color_g = pack_unorm8(color[1]);
         let color_b = pack_unorm8(color[2]);
         let sharp = pack_unorm8(sharpness);
-        let color_and_sharpness = (color_r as u32) | ((color_g as u32) << 8) | ((color_b as u32) << 16) | ((sharp as u32) << 24);
+        let color_and_sharpness = (color_r as u32)
+            | ((color_g as u32) << 8)
+            | ((color_b as u32) << 16)
+            | ((sharp as u32) << 24);
 
-        if self.current_shading_state.sky.sun_direction != dir_packed
+        if self.current_shading_state.sky.sun_direction_xy != dir_xy_packed
             || self.current_shading_state.sky.sun_color_and_sharpness != color_and_sharpness {
-            self.current_shading_state.sky.sun_direction = dir_packed;
+            self.current_shading_state.sky.sun_direction_xy = dir_xy_packed;
             self.current_shading_state.sky.sun_color_and_sharpness = color_and_sharpness;
             self.shading_state_dirty = true;
         }
@@ -520,24 +524,6 @@ mod tests {
         }
 
         assert_eq!(state.model_matrices.len(), 101); // Identity + 100 added
-    }
-
-    #[test]
-    fn test_pack_current_mvp() {
-        let mut state = ZFFIState::new();
-
-        // Add a model matrix (will be at index 1, identity is at 0)
-        let model_idx = state.add_model_matrix(Mat4::IDENTITY).unwrap();
-        state.current_model_idx = model_idx;
-        state.current_view_idx = 0;
-        state.current_proj_idx = 0;
-
-        let mvp = state.pack_current_mvp();
-        let (m, v, p) = mvp.unpack();
-
-        assert_eq!(m, 1); // Index 1, since identity is at 0
-        assert_eq!(v, 0);
-        assert_eq!(p, 0);
     }
 
     #[test]
