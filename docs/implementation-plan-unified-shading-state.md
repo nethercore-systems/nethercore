@@ -255,12 +255,16 @@ use hashbrown::HashMap;
 pub struct ZFFIState {
     // Existing fields...
 
-    // Current unquantized shading state (set by FFI functions)
+    // Current unquantized shading state (set by FFI functions, easy to manipulate)
     pub metallic: f32,
     pub roughness: f32,
     pub emissive: f32,
     pub matcap_blend_modes: [MatcapBlendMode; 4],
     // sky, lights already exist
+
+    // Current PACKED shading state (updated when FFI functions modify state)
+    // This avoids re-quantizing on every draw!
+    current_packed_shading_state: PackedUnifiedShadingState,
 
     // Shading state pool (reset each frame, similar to model_matrices)
     pub shading_states: Vec<PackedUnifiedShadingState>,
@@ -275,6 +279,7 @@ impl Default for ZFFIState {
             roughness: 1.0,
             emissive: 0.0,
             matcap_blend_modes: [MatcapBlendMode::Multiply; 4],
+            current_packed_shading_state: PackedUnifiedShadingState::default(),
             shading_states: Vec::with_capacity(256),
             shading_state_cache: HashMap::new(),
         }
@@ -282,10 +287,10 @@ impl Default for ZFFIState {
 }
 
 impl ZFFIState {
-    /// Pack current shading state and add to pool (with deduplication)
-    /// Returns the index into shading_states
-    pub fn add_shading_state(&mut self) -> u32 {
-        let packed = PackedUnifiedShadingState::from_render_state(
+    /// Mark current shading state as dirty (needs re-packing)
+    /// Call this from FFI functions that modify material/sky/lights
+    fn mark_shading_state_dirty(&mut self) {
+        self.current_packed_shading_state = PackedUnifiedShadingState::from_render_state(
             self.color,
             self.metallic,
             self.roughness,
@@ -294,6 +299,13 @@ impl ZFFIState {
             &self.sky,
             &self.lights,
         );
+    }
+
+    /// Add current shading state to pool (with deduplication)
+    /// Returns the index into shading_states
+    /// Uses the pre-packed state to avoid re-quantizing!
+    pub fn add_shading_state(&mut self) -> u32 {
+        let packed = self.current_packed_shading_state;
 
         // Check if already in pool (deduplication)
         if let Some(&idx) = self.shading_state_cache.get(&packed) {
@@ -313,6 +325,16 @@ impl ZFFIState {
 }
 ```
 
+**Key Architecture Decision:**
+
+Both the shading state **pool** and the **current packed state** MUST live in `ZFFIState` because:
+
+1. **Pool in ZFFIState:** The `shading_states` vector is reset each frame (like `model_matrices`)
+2. **Current packed state in ZFFIState:** We quantize once when state changes, not on every draw
+3. **Why necessary:** FFI functions need access to both unquantized (for manipulation) and packed (for pooling) state
+
+This mirrors the matrix packing pattern exactly - ZFFIState owns both the pools and the current state.
+
 #### 2.2: Update clear_frame to Reset Shading State Pool
 
 **File:** `emberware-z/src/state.rs`
@@ -331,7 +353,13 @@ pub fn clear_frame(&mut self) {
 }
 ```
 
-**Note:** No separate cache in ZGraphics needed - everything is in ZFFIState, just like matrices!
+**Note:** Everything lives in ZFFIState (not ZGraphics), just like matrices! This includes:
+- ✅ `shading_states: Vec<PackedUnifiedShadingState>` - The per-frame pool
+- ✅ `shading_state_cache: HashMap<...>` - Deduplication map
+- ✅ `current_packed_shading_state: PackedUnifiedShadingState` - Pre-packed current state
+- ✅ Unquantized fields (`metallic`, `roughness`, `sky`, `lights`, etc.) - Easy FFI access
+
+This is **necessary** because FFI functions need direct access to both unquantized (for manipulation) and packed (for pooling) state.
 
 ---
 
@@ -428,11 +456,61 @@ pub fn record_triangles(
 
 ### Changes
 
-#### 4.1: Update FFI Draw Functions
+#### 4.1: Add `mark_shading_state_dirty()` Calls
 
 **File:** `emberware-z/src/ffi/mod.rs`
 
-The pattern is simple - just add current shading state to the pool before recording the draw command:
+First, update all FFI functions that modify shading state to call `mark_shading_state_dirty()`:
+
+```rust
+// Material property setters
+fn material_set_metallic(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, metallic: f32) {
+    let state = &mut caller.data_mut().console;
+    state.metallic = metallic;
+    state.mark_shading_state_dirty();  // ✅ NEW
+}
+
+fn material_set_roughness(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, roughness: f32) {
+    let state = &mut caller.data_mut().console;
+    state.roughness = roughness;
+    state.mark_shading_state_dirty();  // ✅ NEW
+}
+
+// Sky setters
+fn sky_set_colors(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, horizon: u32, zenith: u32) {
+    let state = &mut caller.data_mut().console;
+    state.sky.horizon_color = unpack_rgba8(horizon);
+    state.sky.zenith_color = unpack_rgba8(zenith);
+    state.mark_shading_state_dirty();  // ✅ NEW
+}
+
+// Light setters
+fn light_set(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, index: u32, /* ... */) {
+    let state = &mut caller.data_mut().console;
+    state.lights[index as usize] = /* ... */;
+    state.mark_shading_state_dirty();  // ✅ NEW
+}
+
+// Matcap blend mode setters
+fn matcap_set_blend_mode(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, slot: u32, mode: u32) {
+    let state = &mut caller.data_mut().console;
+    state.matcap_blend_modes[slot as usize] = MatcapBlendMode::from(mode);
+    state.mark_shading_state_dirty();  // ✅ NEW
+}
+```
+
+**Functions that need `mark_shading_state_dirty()`:**
+- All `material_*` setters (metallic, roughness, emissive)
+- All `sky_*` setters (colors, sun direction/color/sharpness)
+- All `light_*` setters (direction, color, intensity, enabled)
+- All `matcap_*` blend mode setters
+- Any other function that modifies material/sky/lights state
+
+#### 4.2: Update FFI Draw Functions
+
+**File:** `emberware-z/src/ffi/mod.rs`
+
+The pattern is simple - just add current shading state to the pool before recording the draw command (uses the pre-packed state):
 
 ```rust
 fn draw_triangles(
