@@ -12,10 +12,12 @@ use super::vertex::{vertex_stride, VERTEX_FORMAT_COUNT};
 /// Specifies which buffer the geometry data comes from
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BufferSource {
-    /// Dynamic geometry uploaded each frame (sprites, billboards, draw_triangles)
+    /// Dynamic geometry uploaded each frame (draw_triangles)
     Immediate,
     /// Static geometry uploaded once (load_mesh_indexed, draw_mesh)
     Retained,
+    /// GPU-instanced quads (billboards, sprites, draw_rect)
+    Quad,
 }
 
 /// Virtual Render Pass Command
@@ -38,6 +40,8 @@ pub struct VRPCommand {
     pub first_index: u32,
     /// Which buffer contains this geometry's data
     pub buffer_source: BufferSource,
+    /// Instance count for GPU instancing (0 or 1 = non-instanced, >1 = instanced draw)
+    pub instance_count: u32,
     /// Texture slots bound for this draw
     pub texture_slots: [TextureHandle; 4],
     /// Index into shading state buffer (contains color, blend mode, lights, sky, etc.)
@@ -108,6 +112,7 @@ impl VirtualRenderPass {
             base_vertex,
             first_index: 0,
             buffer_source: BufferSource::Immediate,
+            instance_count: 1, // Non-instanced draw
             texture_slots,
             shading_state_index,
             depth_test: state.depth_test,
@@ -154,6 +159,7 @@ impl VirtualRenderPass {
             base_vertex,
             first_index,
             buffer_source: BufferSource::Immediate,
+            instance_count: 1, // Non-instanced draw
             texture_slots,
             shading_state_index,
             depth_test: state.depth_test,
@@ -240,6 +246,7 @@ impl VirtualRenderPass {
             base_vertex,
             first_index: 0,
             buffer_source: BufferSource::Immediate,
+            instance_count: 1, // Non-instanced draw
             texture_slots,
             shading_state_index,
             depth_test,
@@ -281,6 +288,7 @@ impl VirtualRenderPass {
             base_vertex,
             first_index,
             buffer_source: BufferSource::Immediate,
+            instance_count: 1, // Non-instanced draw
             texture_slots,
             shading_state_index,
             depth_test,
@@ -318,6 +326,7 @@ impl VirtualRenderPass {
             base_vertex,
             first_index,
             buffer_source: BufferSource::Retained,
+            instance_count: 1, // Non-instanced draw
             texture_slots,
             shading_state_index,
             depth_test,

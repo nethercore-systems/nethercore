@@ -10,23 +10,39 @@ use super::vertex::VertexFormatInfo;
 
 /// Key for pipeline cache lookup
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct PipelineKey {
-    pub render_mode: u8,
-    pub vertex_format: u8,
-    pub blend_mode: u8,
-    pub depth_test: bool,
-    pub cull_mode: u8,
+pub(crate) enum PipelineKey {
+    /// Regular mesh rendering pipeline
+    Regular {
+        render_mode: u8,
+        vertex_format: u8,
+        blend_mode: u8,
+        depth_test: bool,
+        cull_mode: u8,
+    },
+    /// GPU-instanced quad rendering pipeline (billboards, sprites)
+    Quad {
+        blend_mode: u8,
+        depth_test: bool,
+    },
 }
 
 impl PipelineKey {
-    /// Create a new pipeline key from render state
+    /// Create a new regular pipeline key from render state
     pub fn new(render_mode: u8, format: u8, state: &RenderState) -> Self {
-        Self {
+        Self::Regular {
             render_mode,
             vertex_format: format,
             blend_mode: state.blend_mode as u8,
             depth_test: state.depth_test,
             cull_mode: state.cull_mode as u8,
+        }
+    }
+
+    /// Create a quad pipeline key
+    pub fn quad(state: &RenderState) -> Self {
+        Self::Quad {
+            blend_mode: state.blend_mode as u8,
+            depth_test: state.depth_test,
         }
     }
 }
@@ -139,6 +155,93 @@ pub(crate) fn create_pipeline(
     }
 }
 
+/// Create a quad pipeline for GPU-instanced rendering
+pub(crate) fn create_quad_pipeline(
+    device: &wgpu::Device,
+    surface_format: wgpu::TextureFormat,
+    state: &RenderState,
+) -> PipelineEntry {
+    // Load quad shader
+    const QUAD_SHADER_SOURCE: &str = include_str!("../../shaders/quad_unlit.wgsl");
+
+    // Create shader module
+    let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("Quad Shader"),
+        source: wgpu::ShaderSource::Wgsl(QUAD_SHADER_SOURCE.into()),
+    });
+
+    // Create bind group layouts (same as regular pipelines)
+    let bind_group_layout_frame = create_frame_bind_group_layout(device, 0);
+    let bind_group_layout_textures = create_texture_bind_group_layout(device);
+
+    // Create pipeline layout
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("Quad Pipeline Layout"),
+        bind_group_layouts: &[&bind_group_layout_frame, &bind_group_layout_textures],
+        push_constant_ranges: &[],
+    });
+
+    // Define quad vertex format (POS_UV_COLOR: position, uv, color)
+    use super::vertex::{FORMAT_UV, FORMAT_COLOR};
+    let quad_format = FORMAT_UV | FORMAT_COLOR;
+    let vertex_info = VertexFormatInfo::for_format(quad_format);
+
+    // Create render pipeline
+    let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("Quad Pipeline"),
+        layout: Some(&pipeline_layout),
+        vertex: wgpu::VertexState {
+            module: &shader_module,
+            entry_point: Some("vs"),
+            buffers: &[vertex_info.vertex_buffer_layout()],
+            compilation_options: Default::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &shader_module,
+            entry_point: Some("fs"),
+            targets: &[Some(wgpu::ColorTargetState {
+                format: surface_format,
+                blend: state.blend_mode.to_wgpu(),
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+            compilation_options: Default::default(),
+        }),
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::TriangleList,
+            strip_index_format: None,
+            front_face: wgpu::FrontFace::Ccw,
+            cull_mode: None,  // Quads are always double-sided
+            unclipped_depth: false,
+            polygon_mode: wgpu::PolygonMode::Fill,
+            conservative: false,
+        },
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: wgpu::TextureFormat::Depth32Float,
+            depth_write_enabled: state.depth_test,
+            depth_compare: if state.depth_test {
+                wgpu::CompareFunction::Less
+            } else {
+                wgpu::CompareFunction::Always
+            },
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
+        multisample: wgpu::MultisampleState {
+            count: 1,
+            mask: !0,
+            alpha_to_coverage_enabled: false,
+        },
+        multiview: None,
+        cache: None,
+    });
+
+    PipelineEntry {
+        pipeline,
+        bind_group_layout_frame,
+        bind_group_layout_textures,
+    }
+}
+
 /// Create bind group layout for per-frame uniforms (group 0)
 /// Unified layout for all render modes (0-3)
 fn create_frame_bind_group_layout(
@@ -205,6 +308,17 @@ fn create_frame_bind_group_layout(
         // Binding 5: Bone storage buffer for GPU skinning
         wgpu::BindGroupLayoutEntry {
             binding: 5,
+            visibility: wgpu::ShaderStages::VERTEX,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        },
+        // Binding 6: Quad instances storage buffer (for GPU-instanced quad rendering)
+        wgpu::BindGroupLayoutEntry {
+            binding: 6,
             visibility: wgpu::ShaderStages::VERTEX,
             ty: wgpu::BindingType::Buffer {
                 ty: wgpu::BufferBindingType::Storage { read_only: true },
@@ -340,6 +454,39 @@ impl PipelineCache {
     pub fn get(&self, render_mode: u8, format: u8, state: &RenderState) -> Option<&PipelineEntry> {
         let key = PipelineKey::new(render_mode, format, state);
         self.pipelines.get(&key)
+    }
+
+    /// Get or create a quad pipeline
+    ///
+    /// Returns a reference to the cached quad pipeline, creating it if necessary.
+    pub fn get_or_create_quad(
+        &mut self,
+        device: &wgpu::Device,
+        surface_format: wgpu::TextureFormat,
+        state: &RenderState,
+    ) -> &PipelineEntry {
+        let key = PipelineKey::quad(state);
+
+        // Return existing pipeline if cached
+        if self.pipelines.contains_key(&key) {
+            return &self.pipelines[&key];
+        }
+
+        // Otherwise, create a new quad pipeline
+        tracing::debug!(
+            "Creating quad pipeline: blend={:?}, depth={}",
+            state.blend_mode,
+            state.depth_test
+        );
+
+        let entry = create_quad_pipeline(device, surface_format, state);
+        self.pipelines.insert(key, entry);
+        &self.pipelines[&key]
+    }
+
+    /// Get a pipeline by key (works for both Regular and Quad)
+    pub fn get_by_key(&self, key: &PipelineKey) -> Option<&PipelineEntry> {
+        self.pipelines.get(key)
     }
 }
 

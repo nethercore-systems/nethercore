@@ -189,6 +189,8 @@ pub struct BufferManager {
     retained_meshes: HashMap<u32, RetainedMesh>,
     /// Next mesh ID to assign
     next_mesh_id: u32,
+    /// Instance buffer for quad rendering (rewritten each frame)
+    quad_instance_buffer: GrowableBuffer,
 }
 
 impl BufferManager {
@@ -230,6 +232,13 @@ impl BufferManager {
             )
         });
 
+        // Create instance buffer for quad rendering (storage buffer for GPU lookup)
+        let quad_instance_buffer = GrowableBuffer::new(
+            device,
+            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            "Quad Instance Storage Buffer",
+        );
+
         Self {
             vertex_buffers,
             index_buffers,
@@ -237,6 +246,7 @@ impl BufferManager {
             retained_index_buffers,
             retained_meshes: HashMap::new(),
             next_mesh_id: 1, // 0 is reserved for INVALID
+            quad_instance_buffer,
         }
     }
 
@@ -396,9 +406,41 @@ impl BufferManager {
         &self.retained_vertex_buffers[format as usize]
     }
 
+    /// Get retained vertex buffer for a format (mutable)
+    pub fn retained_vertex_buffer_mut(&mut self, format: u8) -> &mut GrowableBuffer {
+        &mut self.retained_vertex_buffers[format as usize]
+    }
+
     /// Get retained index buffer for a format
     pub fn retained_index_buffer(&self, format: u8) -> &GrowableBuffer {
         &self.retained_index_buffers[format as usize]
+    }
+
+    /// Get retained index buffer for a format (mutable)
+    pub fn retained_index_buffer_mut(&mut self, format: u8) -> &mut GrowableBuffer {
+        &mut self.retained_index_buffers[format as usize]
+    }
+
+    /// Upload quad instances to the instance buffer
+    ///
+    /// Returns Ok(()) on success.
+    pub fn upload_quad_instances(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        instances: &[crate::graphics::QuadInstance],
+    ) -> Result<()> {
+        let byte_data = bytemuck::cast_slice(instances);
+        self.quad_instance_buffer.ensure_capacity(device, byte_data.len() as u64);
+        // Reset used before writing new frame data
+        self.quad_instance_buffer.reset();
+        self.quad_instance_buffer.write(queue, byte_data);
+        Ok(())
+    }
+
+    /// Get the quad instance buffer
+    pub fn quad_instance_buffer(&self) -> &wgpu::Buffer {
+        self.quad_instance_buffer.buffer().expect("Quad instance buffer should always exist")
     }
 }
 

@@ -222,6 +222,9 @@ pub struct ZFFIState {
         HashMap<crate::graphics::PackedUnifiedShadingState, crate::graphics::ShadingStateIndex>,
     pub current_shading_state: crate::graphics::PackedUnifiedShadingState,
     pub shading_state_dirty: bool,
+
+    // GPU-instanced quad rendering
+    pub quad_instances: Vec<crate::graphics::QuadInstance>,
 }
 
 impl Default for ZFFIState {
@@ -282,6 +285,7 @@ impl Default for ZFFIState {
             shading_state_map: HashMap::new(),
             current_shading_state: crate::graphics::PackedUnifiedShadingState::default(),
             shading_state_dirty: true, // Start dirty so first draw creates state 0
+            quad_instances: Vec::with_capacity(256),
         }
     }
 }
@@ -491,6 +495,9 @@ impl ZFFIState {
         self.shading_states.clear();
         self.shading_state_map.clear();
         self.shading_state_dirty = true; // Mark dirty so first draw creates state 0
+
+        // Clear GPU-instanced quads for next frame
+        self.quad_instances.clear();
 
         // Note: Render state (color, blend_mode, etc.) persists between frames
     }

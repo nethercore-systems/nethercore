@@ -1452,20 +1452,38 @@ fn draw_billboard(
 
     let state = &mut caller.data_mut().console;
 
-    // Record billboard draw command
-    state
-        .deferred_commands
-        .push(DeferredCommand::DrawBillboard {
-            width: w,
-            height: h,
-            mode: mode as u8,
-            uv_rect: None, // Full texture (0,0,1,1)
-            transform: state.current_transform,
-            color,
-            depth_test: state.depth_test,
-            cull_mode: state.cull_mode,
-            bound_textures: state.bound_textures,
-        });
+    // Get shading state index IMMEDIATELY (while current_shading_state is valid)
+    let shading_state_index = state.add_shading_state();
+
+    // Convert FFI mode (1-4) to QuadMode enum (0-3)
+    let quad_mode = match mode {
+        1 => crate::graphics::QuadMode::BillboardSpherical,
+        2 => crate::graphics::QuadMode::BillboardCylindricalY,
+        3 => crate::graphics::QuadMode::BillboardCylindricalX,
+        4 => crate::graphics::QuadMode::BillboardCylindricalZ,
+        _ => unreachable!(), // Already validated above
+    };
+
+    // Extract world position from current transform
+    let position = [
+        state.current_transform.w_axis.x,
+        state.current_transform.w_axis.y,
+        state.current_transform.w_axis.z,
+    ];
+
+    // Create quad instance (full texture UV: 0,0,1,1)
+    let instance = crate::graphics::QuadInstance::billboard(
+        position,
+        w,
+        h,
+        quad_mode,
+        [0.0, 0.0, 1.0, 1.0], // Full texture
+        color,
+        shading_state_index.0,
+        state.current_view_idx as u32,
+    );
+
+    state.quad_instances.push(instance);
 }
 
 /// Draw a billboard with a UV region from the texture
@@ -1500,20 +1518,38 @@ fn draw_billboard_region(
 
     let state = &mut caller.data_mut().console;
 
-    // Record billboard draw command with UV region
-    state
-        .deferred_commands
-        .push(DeferredCommand::DrawBillboard {
-            width: w,
-            height: h,
-            mode: mode as u8,
-            uv_rect: Some((src_x, src_y, src_w, src_h)),
-            transform: state.current_transform,
-            color,
-            depth_test: state.depth_test,
-            cull_mode: state.cull_mode,
-            bound_textures: state.bound_textures,
-        });
+    // Get shading state index IMMEDIATELY (while current_shading_state is valid)
+    let shading_state_index = state.add_shading_state();
+
+    // Convert FFI mode (1-4) to QuadMode enum (0-3)
+    let quad_mode = match mode {
+        1 => crate::graphics::QuadMode::BillboardSpherical,
+        2 => crate::graphics::QuadMode::BillboardCylindricalY,
+        3 => crate::graphics::QuadMode::BillboardCylindricalX,
+        4 => crate::graphics::QuadMode::BillboardCylindricalZ,
+        _ => unreachable!(), // Already validated above
+    };
+
+    // Extract world position from current transform
+    let position = [
+        state.current_transform.w_axis.x,
+        state.current_transform.w_axis.y,
+        state.current_transform.w_axis.z,
+    ];
+
+    // Create quad instance with UV region
+    let instance = crate::graphics::QuadInstance::billboard(
+        position,
+        w,
+        h,
+        quad_mode,
+        [src_x, src_y, src_x + src_w, src_y + src_h], // UV rect
+        color,
+        shading_state_index.0,
+        state.current_view_idx as u32,
+    );
+
+    state.quad_instances.push(instance);
 }
 
 // ============================================================================

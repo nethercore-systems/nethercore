@@ -10,7 +10,8 @@
       "Bash(cargo xtask build-examples:*)",
       "Bash(find:*)",
       "Bash(git checkout:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(timeout 5 cargo run:*)"
     ],
     "deny": [],
     "ask": []

@@ -66,6 +66,7 @@ mod buffer;
 mod command_buffer;
 mod matrix_packing;
 mod pipeline;
+mod quad_instance;
 mod render_state;
 mod texture_manager;
 mod unified_shading_state;
@@ -84,6 +85,7 @@ use emberware_core::console::Graphics;
 pub use buffer::{BufferManager, GrowableBuffer, MeshHandle, RetainedMesh};
 pub use command_buffer::{BufferSource, VirtualRenderPass};
 pub use matrix_packing::MvpIndex;
+pub use quad_instance::{QuadInstance, QuadMode};
 pub use render_state::{
     BlendMode, CullMode, MatcapBlendMode, RenderState, TextureFilter, TextureHandle,
 };
@@ -201,6 +203,12 @@ pub struct ZGraphics {
 
     // Scaling mode for render target to window
     scale_mode: crate::config::ScaleMode,
+
+    // Unit quad mesh for GPU-instanced rendering (billboards, sprites, etc.)
+    unit_quad_format: u8,
+    unit_quad_base_vertex: u32,
+    unit_quad_first_index: u32,
+    unit_quad_index_count: u32,
 }
 
 impl ZGraphics {
@@ -297,7 +305,7 @@ impl ZGraphics {
         });
 
         // Create buffer manager (vertex/index buffers and mesh storage)
-        let buffer_manager = BufferManager::new(&device);
+        let mut buffer_manager = BufferManager::new(&device);
 
         // Create bone storage buffer for GPU skinning (256 bones × 64 bytes = 16KB)
         let bone_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -361,6 +369,55 @@ impl ZGraphics {
         let (blit_pipeline, blit_bind_group, blit_sampler) =
             Self::create_blit_pipeline(&device, surface_format, &render_target);
 
+        // Create static unit quad mesh for GPU-instanced rendering
+        // Format: POS_UV_COLOR (format bits: UV | COLOR = 0b011 = 3)
+        use crate::graphics::vertex::{FORMAT_UV, FORMAT_COLOR, vertex_stride};
+        let unit_quad_format = FORMAT_UV | FORMAT_COLOR;
+
+        let unit_quad_vertices: Vec<f32> = vec![
+            // pos_x, pos_y, pos_z, uv_u, uv_v, color_r, color_g, color_b
+            -0.5, -0.5, 0.0,  0.0, 0.0,  1.0, 1.0, 1.0,  // Bottom-left
+             0.5, -0.5, 0.0,  1.0, 0.0,  1.0, 1.0, 1.0,  // Bottom-right
+             0.5,  0.5, 0.0,  1.0, 1.0,  1.0, 1.0, 1.0,  // Top-right
+            -0.5,  0.5, 0.0,  0.0, 1.0,  1.0, 1.0, 1.0,  // Top-left
+        ];
+
+        let unit_quad_indices: Vec<u16> = vec![
+            0, 1, 2,  // First triangle
+            0, 2, 3,  // Second triangle
+        ];
+
+        // Upload unit quad to retained vertex buffer
+        let vertex_bytes = bytemuck::cast_slice(&unit_quad_vertices);
+        let stride = vertex_stride(unit_quad_format);
+
+        // Get the current position in the vertex buffer (this will be our base_vertex)
+        let unit_quad_base_vertex = {
+            let retained_vertex_buf = buffer_manager.retained_vertex_buffer(unit_quad_format);
+            (retained_vertex_buf.used() / stride as u64) as u32
+        };
+
+        // Write vertex data to buffer
+        let retained_vertex_buf_mut = buffer_manager.retained_vertex_buffer_mut(unit_quad_format);
+        retained_vertex_buf_mut.ensure_capacity(&device, vertex_bytes.len() as u64);
+        retained_vertex_buf_mut.write(&queue, vertex_bytes);
+
+        // Upload unit quad to retained index buffer
+        let index_bytes = bytemuck::cast_slice(&unit_quad_indices);
+
+        // Get the current position in the index buffer (this will be our first_index)
+        let unit_quad_first_index = {
+            let retained_index_buf = buffer_manager.retained_index_buffer(unit_quad_format);
+            (retained_index_buf.used() / 2) as u32 // u16 = 2 bytes
+        };
+
+        // Write index data to buffer
+        let retained_index_buf_mut = buffer_manager.retained_index_buffer_mut(unit_quad_format);
+        retained_index_buf_mut.ensure_capacity(&device, index_bytes.len() as u64);
+        retained_index_buf_mut.write(&queue, index_bytes);
+
+        let unit_quad_index_count = 6;
+
         let graphics = Self {
             surface,
             device,
@@ -398,6 +455,10 @@ impl ZGraphics {
             current_render_mode: 0,      // Default to Mode 0 (Unlit)
             current_resolution_index: 1, // 960×540 (default)
             scale_mode: crate::config::ScaleMode::default(), // Stretch by default
+            unit_quad_format,
+            unit_quad_base_vertex,
+            unit_quad_first_index,
+            unit_quad_index_count,
         };
 
         Ok(graphics)
@@ -917,6 +978,49 @@ impl ZGraphics {
         // will be cleared when z_state.clear_frame() is called.
         std::mem::swap(&mut self.command_buffer, &mut z_state.render_pass);
 
+        // Ensure default shading state exists for deferred commands.
+        // Deferred commands (billboards, sprites, text) use ShadingStateIndex(0) by default.
+        // If the game only uses deferred drawing and never calls draw_mesh/draw_triangles,
+        // the shading state pool would be empty (cleared by clear_frame), causing panics
+        // during command sorting/rendering when accessing state 0.
+        //
+        // This ensures state 0 always exists, using the current render state defaults
+        // (color, blend mode, material properties, etc.) from z_state.current_shading_state.
+        if z_state.shading_states.is_empty() {
+            z_state.add_shading_state();
+        }
+
+        // 1.5. Process GPU-instanced quads (billboards, sprites)
+        // Upload quad instances to GPU and create instanced draw command
+        if !z_state.quad_instances.is_empty() {
+            // Upload instance data to GPU
+            self.buffer_manager
+                .upload_quad_instances(&self.device, &self.queue, &z_state.quad_instances)
+                .expect("Failed to upload quad instances to GPU");
+
+            // Create instanced draw command using the unit quad mesh
+            // The GPU vertex shader will expand each instance into a quad
+            let instance_count = z_state.quad_instances.len() as u32;
+
+            // Note: Quad instances contain their own shading_state_index, but VRPCommand requires one.
+            // We use ShadingStateIndex(0) as a placeholder - the vertex shader will read the actual
+            // index from the instance data. This is a limitation of the current VRPCommand structure.
+            self.command_buffer.add_command(command_buffer::VRPCommand {
+                format: self.unit_quad_format,
+                mvp_index: MvpIndex::new(0, 0, 0), // Identity - quads handle transforms in shader
+                vertex_count: 4, // Unit quad has 4 vertices
+                index_count: 6,  // 2 triangles = 6 indices
+                base_vertex: self.unit_quad_base_vertex,
+                first_index: self.unit_quad_first_index,
+                buffer_source: BufferSource::Quad, // GPU-instanced quads (separate from MVP instancing)
+                instance_count,
+                texture_slots: [TextureHandle::INVALID; 4], // Instances specify their own textures (TODO)
+                shading_state_index: ShadingStateIndex(0), // Placeholder (see note above)
+                depth_test: true, // Billboards typically use depth test (TODO: per-instance?)
+                cull_mode: CullMode::None, // Quads are double-sided
+            });
+        }
+
         // 2. Process deferred commands (billboards, sprites, text, sky)
         // These require additional processing or generation of geometry
         for cmd in z_state.deferred_commands.drain(..) {
@@ -1064,6 +1168,7 @@ impl ZGraphics {
                         base_vertex,
                         first_index,
                         buffer_source: BufferSource::Immediate,
+                        instance_count: 1, // Non-instanced draw
                         texture_slots,
                         shading_state_index: ShadingStateIndex(0), // Placeholder for Phase 5
                         depth_test,
@@ -1189,6 +1294,7 @@ impl ZGraphics {
                         base_vertex,
                         first_index,
                         buffer_source: BufferSource::Immediate,
+                        instance_count: 1, // Non-instanced draw
                         texture_slots,
                         shading_state_index: ShadingStateIndex(0), // Placeholder for Phase 5
                         depth_test: false, // 2D sprites don't use depth test
@@ -1258,6 +1364,7 @@ impl ZGraphics {
                         base_vertex,
                         first_index,
                         buffer_source: BufferSource::Immediate,
+                        instance_count: 1, // Non-instanced draw
                         texture_slots: [TextureHandle::INVALID; 4],
                         shading_state_index: ShadingStateIndex(0), // Placeholder for Phase 5
                         depth_test: false, // 2D rectangles don't use depth test
@@ -1346,6 +1453,7 @@ impl ZGraphics {
                         base_vertex,
                         first_index,
                         buffer_source: BufferSource::Immediate,
+                        instance_count: 1, // Non-instanced draw
                         texture_slots,
                         shading_state_index: ShadingStateIndex(0), // Placeholder for Phase 5
                         depth_test: false,                         // 2D text doesn't use depth test
@@ -1969,13 +2077,35 @@ impl ZGraphics {
                     blend_mode,
                     texture_filter: self.render_state.texture_filter,
                 };
-                let pipeline_key = PipelineKey::new(self.current_render_mode, cmd.format, &state);
+
+                // Create sort key based on pipeline type (Regular vs Quad)
+                let (render_mode, vertex_format, blend_mode_u8, depth_test_u8, cull_mode_u8) =
+                    if cmd.buffer_source == BufferSource::Quad {
+                        // Quad pipeline: Use special values to group separately
+                        let pipeline_key = PipelineKey::quad(&state);
+                        match pipeline_key {
+                            PipelineKey::Quad { blend_mode, depth_test } => {
+                                (255u8, 255u8, blend_mode, depth_test as u8, 0u8)
+                            }
+                            _ => unreachable!(),
+                        }
+                    } else {
+                        // Regular pipeline: Use actual values
+                        let pipeline_key = PipelineKey::new(self.current_render_mode, cmd.format, &state);
+                        match pipeline_key {
+                            PipelineKey::Regular { render_mode, vertex_format, blend_mode, depth_test, cull_mode } => {
+                                (render_mode, vertex_format, blend_mode, depth_test as u8, cull_mode)
+                            }
+                            _ => unreachable!(),
+                        }
+                    };
+
                 (
-                    pipeline_key.render_mode,
-                    pipeline_key.vertex_format,
-                    pipeline_key.blend_mode,
-                    pipeline_key.depth_test as u8,
-                    pipeline_key.cull_mode,
+                    render_mode,
+                    vertex_format,
+                    blend_mode_u8,
+                    depth_test_u8,
+                    cull_mode_u8,
                     cmd.texture_slots[0].0,
                     cmd.texture_slots[1].0,
                     cmd.texture_slots[2].0,
@@ -2042,10 +2172,13 @@ impl ZGraphics {
                 blend_mode: BlendMode::None, // Doesn't matter for layout
                 texture_filter: self.render_state.texture_filter,
             };
-            let pipeline_entry = self
-                .pipeline_cache
-                .get(self.current_render_mode, first_cmd.format, &first_state)
-                .unwrap();
+            let pipeline_entry = self.pipeline_cache.get_or_create(
+                &self.device,
+                self.config.format,
+                self.current_render_mode,
+                first_cmd.format,
+                &first_state,
+            );
 
             self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("Frame Bind Group (Unified)"),
@@ -2074,6 +2207,10 @@ impl ZGraphics {
                     wgpu::BindGroupEntry {
                         binding: 5,
                         resource: self.bone_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 6,
+                        resource: self.buffer_manager.quad_instance_buffer().as_entire_binding(),
                     },
                 ],
             })
@@ -2151,26 +2288,39 @@ impl ZGraphics {
                     texture_filter: self.render_state.texture_filter,
                 };
 
-                // Get/create pipeline (using contains + get pattern to avoid borrow issues)
-                let pipeline_key = PipelineKey::new(self.current_render_mode, cmd.format, &state);
-                if !self
-                    .pipeline_cache
-                    .contains(self.current_render_mode, cmd.format, &state)
-                {
-                    // Create and insert pipeline if it doesn't exist
-                    self.pipeline_cache.get_or_create(
+                // Get/create pipeline - use quad pipeline for quad rendering, regular for others
+                if cmd.buffer_source == BufferSource::Quad {
+                    // Quad rendering: Ensure quad pipeline exists
+                    self.pipeline_cache.get_or_create_quad(
                         &self.device,
                         self.config.format,
-                        self.current_render_mode,
-                        cmd.format,
                         &state,
                     );
+                } else {
+                    // Regular mesh rendering: Ensure format-specific pipeline exists
+                    if !self
+                        .pipeline_cache
+                        .contains(self.current_render_mode, cmd.format, &state)
+                    {
+                        self.pipeline_cache.get_or_create(
+                            &self.device,
+                            self.config.format,
+                            self.current_render_mode,
+                            cmd.format,
+                            &state,
+                        );
+                    }
                 }
-                // Safe to unwrap since we just ensured it exists
-                let pipeline_entry = self
-                    .pipeline_cache
-                    .get(self.current_render_mode, cmd.format, &state)
-                    .unwrap();
+
+                // Now get immutable reference to pipeline entry (avoiding borrow issues)
+                let pipeline_key = if cmd.buffer_source == BufferSource::Quad {
+                    PipelineKey::quad(&state)
+                } else {
+                    PipelineKey::new(self.current_render_mode, cmd.format, &state)
+                };
+
+                let pipeline_entry = self.pipeline_cache.get_by_key(&pipeline_key)
+                    .expect("Pipeline should exist after get_or_create");
 
                 // Get or create texture bind group (cached by texture slots)
                 let texture_bind_group = texture_bind_groups
@@ -2257,6 +2407,10 @@ impl ZGraphics {
                         BufferSource::Retained => {
                             self.buffer_manager.retained_vertex_buffer(cmd.format)
                         }
+                        BufferSource::Quad => {
+                            // Quad instancing uses unit quad mesh (format: POS_UV_COLOR)
+                            self.buffer_manager.retained_vertex_buffer(self.unit_quad_format)
+                        }
                     };
                     if let Some(buffer) = vertex_buffer.buffer() {
                         render_pass.set_vertex_buffer(0, buffer.slice(..));
@@ -2264,33 +2418,57 @@ impl ZGraphics {
                     bound_vertex_format = Some((cmd.format, cmd.buffer_source));
                 }
 
-                // Draw using instanced rendering - instance_index fetches MVP indices from storage buffer
-                if cmd.index_count > 0 {
-                    // Indexed draw - both immediate and retained use u16 indices
-                    let index_buffer = match cmd.buffer_source {
-                        BufferSource::Immediate => self.buffer_manager.index_buffer(cmd.format),
-                        BufferSource::Retained => {
-                            self.buffer_manager.retained_index_buffer(cmd.format)
-                        }
-                    };
-                    if let Some(buffer) = index_buffer.buffer() {
-                        render_pass.set_index_buffer(buffer.slice(..), wgpu::IndexFormat::Uint16);
-                        render_pass.draw_indexed(
-                            cmd.first_index..cmd.first_index + cmd.index_count,
-                            cmd.base_vertex as i32,
-                            instance_index..instance_index + 1,
-                        );
-                    }
-                } else {
-                    // Non-indexed draw
-                    render_pass.draw(
-                        cmd.base_vertex..cmd.base_vertex + cmd.vertex_count,
-                        instance_index..instance_index + 1,
-                    );
-                }
+                // Handle two separate rendering paths based on BufferSource:
+                // 1. Quad: GPU instancing with storage buffer lookup (@binding(6))
+                // 2. Immediate/Retained: MVP instancing with storage buffer lookup (@binding(4))
+                match cmd.buffer_source {
+                    BufferSource::Quad => {
+                        // Quad rendering: Instance data comes from storage buffer binding(6)
+                        // The quad shader reads QuadInstance data via @builtin(instance_index)
+                        // No per-instance vertex attributes needed (unlike old approach)
 
-                // Increment instance index for next draw
-                instance_index += 1;
+                        // Indexed draw with GPU instancing (quads always use indices)
+                        let index_buffer = self.buffer_manager.retained_index_buffer(self.unit_quad_format);
+                        if let Some(buffer) = index_buffer.buffer() {
+                            render_pass.set_index_buffer(buffer.slice(..), wgpu::IndexFormat::Uint16);
+                            render_pass.draw_indexed(
+                                self.unit_quad_first_index..self.unit_quad_first_index + self.unit_quad_index_count,
+                                self.unit_quad_base_vertex as i32,
+                                0..cmd.instance_count,
+                            );
+                        }
+                    }
+                    BufferSource::Immediate | BufferSource::Retained => {
+                        // MVP instancing: Use storage buffer for matrix lookup
+                        if cmd.index_count > 0 {
+                            // Indexed draw
+                            let index_buffer = match cmd.buffer_source {
+                                BufferSource::Immediate => self.buffer_manager.index_buffer(cmd.format),
+                                BufferSource::Retained => {
+                                    self.buffer_manager.retained_index_buffer(cmd.format)
+                                }
+                                BufferSource::Quad => unreachable!(),
+                            };
+                            if let Some(buffer) = index_buffer.buffer() {
+                                render_pass.set_index_buffer(buffer.slice(..), wgpu::IndexFormat::Uint16);
+                                render_pass.draw_indexed(
+                                    cmd.first_index..cmd.first_index + cmd.index_count,
+                                    cmd.base_vertex as i32,
+                                    instance_index..instance_index + 1,
+                                );
+                            }
+                        } else {
+                            // Non-indexed draw
+                            render_pass.draw(
+                                cmd.base_vertex..cmd.base_vertex + cmd.vertex_count,
+                                instance_index..instance_index + 1,
+                            );
+                        }
+
+                        // Increment instance index for MVP-based draws
+                        instance_index += 1;
+                    }
+                }
             }
         }
 
