@@ -376,10 +376,10 @@ impl ZFFIState {
 
     /// Update sky sun parameters in current shading state (with quantization)
     pub fn update_sky_sun(&mut self, direction: [f32; 3], color: [f32; 3], sharpness: f32) {
-        use crate::graphics::{pack_direction_xy_u32, pack_unorm8};
+        use crate::graphics::{pack_octahedral_u32, pack_unorm8};
         use glam::Vec3;
 
-        let dir_xy_packed = pack_direction_xy_u32(Vec3::from_slice(&direction));
+        let dir_oct_packed = pack_octahedral_u32(Vec3::from_slice(&direction));
 
         let color_r = pack_unorm8(color[0]);
         let color_g = pack_unorm8(color[1]);
@@ -390,10 +390,10 @@ impl ZFFIState {
             | ((color_b as u32) << 16)
             | ((sharp as u32) << 24);
 
-        if self.current_shading_state.sky.sun_direction_xy != dir_xy_packed
+        if self.current_shading_state.sky.sun_direction_oct != dir_oct_packed
             || self.current_shading_state.sky.sun_color_and_sharpness != color_and_sharpness
         {
-            self.current_shading_state.sky.sun_direction_xy = dir_xy_packed;
+            self.current_shading_state.sky.sun_direction_oct = dir_oct_packed;
             self.current_shading_state.sky.sun_color_and_sharpness = color_and_sharpness;
             self.shading_state_dirty = true;
         }

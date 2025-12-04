@@ -88,7 +88,7 @@ pub use render_state::{
     BlendMode, CullMode, MatcapBlendMode, RenderState, TextureFilter, TextureHandle,
 };
 pub use unified_shading_state::{
-    pack_direction_xy_u32, pack_matcap_blend_modes, pack_rgb8, pack_unorm8,
+    pack_matcap_blend_modes, pack_octahedral_u32, pack_rgb8, pack_unorm8,
     unpack_matcap_blend_modes, PackedLight, PackedUnifiedShadingState, ShadingStateIndex,
 };
 pub use vertex::{

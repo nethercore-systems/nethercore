@@ -19,28 +19,24 @@ const PI: f32 = 3.14159265359;
 struct PackedSky {
     horizon_color: u32,              // RGBA8 packed
     zenith_color: u32,               // RGBA8 packed
-    sun_direction: vec4<i16>,        // snorm16x4 (w unused)
+    sun_direction_oct: u32,          // Octahedral encoding (2x snorm16)
     sun_color_and_sharpness: u32,    // RGB8 + sharpness u8
 }
 
-// Packed light data (16 bytes)
+// Packed light data (8 bytes)
 struct PackedLight {
-    direction: vec4<i16>,            // snorm16x4 (w = enabled flag: 0x7FFF if enabled, 0 if disabled)
-    color_and_intensity: u32,        // RGB8 + intensity u8
+    direction_oct: u32,              // Octahedral encoding (2x snorm16)
+    color_and_intensity: u32,        // RGB8 + intensity u8 (intensity=0 means disabled)
 }
 
-// Unified per-draw shading state (96 bytes)
+// Unified per-draw shading state (64 bytes)
 struct PackedUnifiedShadingState {
-    metallic: u8,
-    roughness: u8,
-    emissive: u8,
-    pad0_byte: u8,
+    metallic_roughness_emissive_pad: u32,  // 4x u8 packed: [metallic, roughness, emissive, pad]
     color_rgba8: u32,
     blend_mode: u32,
     matcap_blend_modes: u32,
-    pad1: u32,
     sky: PackedSky,                  // 16 bytes
-    lights: array<PackedLight, 4>,   // 64 bytes
+    lights: array<PackedLight, 4>,   // 32 bytes (4 × 8-byte lights)
 }
 
 // Per-frame storage buffer - array of shading states
@@ -64,11 +60,6 @@ struct PackedUnifiedShadingState {
 // Unpacking Helper Functions
 // ============================================================================
 
-// Unpack u8 to f32 [0.0, 1.0]
-fn unpack_unorm8(packed: u8) -> f32 {
-    return f32(packed) / 255.0;
-}
-
 // Unpack u8 from low byte of u32 to f32 [0.0, 1.0]
 fn unpack_unorm8_from_u32(packed: u32) -> f32 {
     return f32(packed & 0xFFu) / 255.0;
@@ -88,18 +79,31 @@ fn unpack_rgb8(packed: u32) -> vec3<f32> {
     return unpack_rgba8(packed).rgb;
 }
 
-// Unpack snorm16 to f32 [-1.0, 1.0]
-fn unpack_snorm16(packed: i16) -> f32 {
-    return f32(packed) / 32767.0;
-}
+// Decode octahedral encoding to normalized direction
+// Uses signed octahedral mapping for uniform precision distribution
+fn unpack_octahedral(packed: u32) -> vec3<f32> {
+    // Extract i16 components with sign extension
+    let u_i16 = i32((packed & 0xFFFFu) << 16u) >> 16;  // Sign-extend low 16 bits
+    let v_i16 = i32(packed) >> 16;                      // Arithmetic shift sign-extends
 
-// Unpack vec4<i16> direction to vec3<f32>
-fn unpack_direction(packed: vec4<i16>) -> vec3<f32> {
-    return vec3<f32>(
-        unpack_snorm16(packed.x),
-        unpack_snorm16(packed.y),
-        unpack_snorm16(packed.z)
-    );
+    // Convert snorm16 to float [-1, 1]
+    let u = f32(u_i16) / 32767.0;
+    let v = f32(v_i16) / 32767.0;
+
+    // Reconstruct 3D direction
+    var dir: vec3<f32>;
+    dir.x = u;
+    dir.y = v;
+    dir.z = 1.0 - abs(u) - abs(v);
+
+    // Unfold lower hemisphere (z < 0 case)
+    if (dir.z < 0.0) {
+        let old_x = dir.x;
+        dir.x = (1.0 - abs(dir.y)) * select(-1.0, 1.0, old_x >= 0.0);
+        dir.y = (1.0 - abs(old_x)) * select(-1.0, 1.0, dir.y >= 0.0);
+    }
+
+    return normalize(dir);
 }
 
 // Unpack PackedSky to usable values
@@ -115,7 +119,7 @@ fn unpack_sky(packed: PackedSky) -> SkyData {
     var sky: SkyData;
     sky.horizon_color = unpack_rgb8(packed.horizon_color);
     sky.zenith_color = unpack_rgb8(packed.zenith_color);
-    sky.sun_direction = unpack_direction(packed.sun_direction);
+    sky.sun_direction = unpack_octahedral(packed.sun_direction_oct);
     let sun_packed = packed.sun_color_and_sharpness;
     sky.sun_color = unpack_rgb8(sun_packed);
     sky.sun_sharpness = unpack_unorm8_from_u32(sun_packed >> 24u);
@@ -132,8 +136,8 @@ struct LightData {
 
 fn unpack_light(packed: PackedLight) -> LightData {
     var light: LightData;
-    light.direction = unpack_direction(packed.direction);
-    light.enabled = packed.direction.w != 0;  // 0x7FFF if enabled, 0 if disabled
+    light.direction = unpack_octahedral(packed.direction_oct);
+    light.enabled = (packed.color_and_intensity >> 24u) != 0u;  // intensity byte != 0
     let color_intensity = packed.color_and_intensity;
     light.color = unpack_rgb8(color_intensity);
     light.intensity = unpack_unorm8_from_u32(color_intensity >> 24u);
@@ -275,10 +279,11 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     let material_color = unpack_rgba8(shading.color_rgba8);
     let sky = unpack_sky(shading.sky);
 
-    // Unpack material properties
-    let metallic = unpack_unorm8(shading.metallic);
-    let roughness = unpack_unorm8(shading.roughness);
-    let emissive_strength = unpack_unorm8(shading.emissive);
+    // Unpack material properties from packed u32
+    let mre_packed = shading.metallic_roughness_emissive_pad;
+    let metallic = unpack_unorm8_from_u32(mre_packed & 0xFFu);
+    let roughness = unpack_unorm8_from_u32((mre_packed >> 8u) & 0xFFu);
+    let emissive_strength = unpack_unorm8_from_u32((mre_packed >> 16u) & 0xFFu);
 
     // Get albedo
     var albedo = material_color.rgb;
