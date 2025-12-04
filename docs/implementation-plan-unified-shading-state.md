@@ -33,6 +33,58 @@ The MVP indices buffer is already `array<vec2<u32>>` where:
 
 ---
 
+## Critical Clarifications (December 2024)
+
+### Current Codebase State vs Plan Assumptions
+
+**Q: Are transform_stack, current_transform, and camera fields still in ZFFIState?**
+**A: YES, but they should be REMOVED in this refactor.**
+- These fields exist in current code (lines 252-256 in state.rs)
+- FFI functions like `push_transform()`, `pop_transform()`, `translate()`, etc. use them
+- **Decision:** Remove these fields and their associated FFI functions (they're not used in actual game logic)
+- The matrix pool system (`model_matrices`, `view_matrices`, `proj_matrices`) fully replaces them
+
+**Q: How are lights currently stored in ZFFIState?**
+**A: As floating-point `[LightState; 4]`, NOT as `[PackedLight; 4]`**
+- Current: `pub lights: [LightState; 4]` with `[f32; 3]` arrays for direction/color
+- Plan expects: `pub lights: [PackedLight; 4]` (quantized)
+- **Quantization point:** At FFI barrier - user passes f32, we quantize to snorm16/u8, store quantized, handle dirty flags
+- This is consistent with how metallic/roughness/emissive work (unquantized in state, quantized when marked dirty)
+
+**Q: What about mvp_indices buffer .y field?**
+**A: Currently UNUSED - left as breadcrumbs for this refactor**
+- Buffer is already allocated as `vec2<u32>` (line 213 in graphics/mod.rs)
+- Currently only `.x` is populated with packed MVP indices
+- `.y` is undefined/zero - this refactor will populate it with shading_state_index
+
+**Q: How do shader binding layouts differ between modes?**
+**A: See [binding-layout-migration.md](./binding-layout-migration.md) and [shader-gen-changes.md](./shader-gen-changes.md)**
+- Current: Mode 0/1 use bindings 0-6, Mode 2/3 use bindings 0-8 (inconsistent)
+- Target: All modes use bindings 0-5 (unified)
+- Bones move from binding 6/8 → binding 5 (consistent across all modes)
+
+**Q: What about DeferredCommand::SetSky?**
+**A: EXISTS and should be REMOVED**
+- Current: Sky is set via `DeferredCommand::SetSky` (frame-wide state)
+- Target: Sky is per-draw state (part of UnifiedShadingState)
+- Remove `SetSky` variant from `DeferredCommand` enum
+- Remove FFI function `set_sky()` that creates this variant
+
+**Q: Default sky value?**
+**A: All zeros (black sky, no sun)**
+- `PackedSky::default()` returns all zeros
+- Games can set sky in init() via material setters (will be added)
+- Sky is always per-draw, not frame-wide
+
+**Q: matcap_blend_modes type - [u8; 4] or [MatcapBlendMode; 4]?**
+**A: [MatcapBlendMode; 4] (enum array)**
+- Current code has `[u8; 4]` in ZFFIState
+- Should be `[MatcapBlendMode; 4]` for type safety
+- Each enum variant maps to u8 value (0-2)
+- Will be updated during this refactor
+
+---
+
 ## Key Architectural Insight
 
 **All render modes now use the SAME binding layout:**
@@ -112,11 +164,11 @@ pub struct PackedUnifiedShadingState {
     pub lights: [PackedLight; 4],        // 64 bytes
 }
 
-/// Handle to interned shading state
+/// Handle to interned shading state (newtype for clarity and type safety)
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct UnifiedShadingStateHandle(pub u32);
+pub struct ShadingStateIndex(pub u32);
 
-impl UnifiedShadingStateHandle {
+impl ShadingStateIndex {
     pub const INVALID: Self = Self(0);
 }
 ```
@@ -132,8 +184,8 @@ impl PackedUnifiedShadingState {
         roughness: f32,
         emissive: f32,
         matcap_blend_modes: &[MatcapBlendMode; 4],
-        sky: &Sky,
-        lights: &[Light; 4],
+        sky: &PackedSky,
+        lights: &[PackedLight; 4],
     ) -> Self {
         Self {
             metallic: quantize_f32_to_u8(metallic),
@@ -144,42 +196,41 @@ impl PackedUnifiedShadingState {
             color_rgba8: color,
             blend_modes: pack_blend_modes(matcap_blend_modes),
 
-            sky: PackedSky::from_sky(sky),
-            lights: [
-                PackedLight::from_light(&lights[0]),
-                PackedLight::from_light(&lights[1]),
-                PackedLight::from_light(&lights[2]),
-                PackedLight::from_light(&lights[3]),
-            ],
+            sky: *sky,
+            lights: *lights,
         }
     }
 }
 
 impl PackedSky {
-    pub fn from_sky(sky: &Sky) -> Self {
+    /// Create from unquantized float values (called from FFI setters)
+    pub fn from_floats(
+        horizon_color: Vec3,
+        zenith_color: Vec3,
+        sun_direction: Vec3,
+        sun_color: Vec3,
+        sun_sharpness: f32,
+    ) -> Self {
         Self {
-            horizon_color: pack_rgba8_from_vec4(sky.horizon_color),
-            zenith_color: pack_rgba8_from_vec4(sky.zenith_color),
-            sun_direction: quantize_vec3_to_snorm16(sky.sun_direction),
-            sun_color_and_sharpness: pack_color_and_scalar(
-                sky.sun_color,
-                sky.sun_sharpness,
-            ),
+            horizon_color: pack_rgb8_to_u32(horizon_color),
+            zenith_color: pack_rgb8_to_u32(zenith_color),
+            sun_direction: quantize_vec3_to_snorm16(sun_direction),
+            sun_color_and_sharpness: pack_color_and_scalar(sun_color, sun_sharpness),
         }
     }
 }
 
 impl PackedLight {
-    pub fn from_light(light: &Light) -> Self {
+    /// Create from unquantized float values (called from FFI setters)
+    pub fn from_floats(
+        direction: Vec3,
+        color: Vec3,
+        intensity: f32,
+        enabled: bool,
+    ) -> Self {
         Self {
-            direction: quantize_vec3_to_snorm16_with_flag(
-                light.direction,
-                light.enabled,
-            ),
-            color_and_intensity: pack_color_and_scalar(
-                light.color,
-                light.intensity,
-            ),
+            direction: quantize_vec3_to_snorm16_with_flag(direction, enabled),
+            color_and_intensity: pack_color_and_scalar(color, intensity),
         }
     }
 }
@@ -209,12 +260,12 @@ fn quantize_vec3_to_snorm16_with_flag(v: Vec3, enabled: bool) -> [i16; 4] {
     ]
 }
 
-fn pack_rgba8_from_vec4(color: Vec4) -> u32 {
+fn pack_rgb8_to_u32(color: Vec3) -> u32 {
     let r = (color.x.clamp(0.0, 1.0) * 255.0).round() as u32;
     let g = (color.y.clamp(0.0, 1.0) * 255.0).round() as u32;
     let b = (color.z.clamp(0.0, 1.0) * 255.0).round() as u32;
-    let a = (color.w.clamp(0.0, 1.0) * 255.0).round() as u32;
-    (r << 24) | (g << 16) | (b << 8) | a
+    // Alpha is always 255 for sky colors
+    (r << 24) | (g << 16) | (b << 8) | 0xFF
 }
 
 fn pack_color_and_scalar(color: Vec3, scalar: f32) -> u32 {
@@ -235,6 +286,75 @@ fn pack_blend_modes(modes: &[MatcapBlendMode; 4]) -> u32 {
 
 ---
 
+## Phase 1.5: Remove Legacy Transform System
+
+**Estimated Time:** 2-3 hours
+
+### Files to Modify
+- `emberware-z/src/state.rs`
+- `emberware-z/src/ffi/mod.rs`
+
+### Changes
+
+#### 1.5.1: Remove Transform Stack Fields from ZFFIState
+
+**File:** `emberware-z/src/state.rs`
+
+Remove the following fields:
+```rust
+// REMOVE THESE:
+pub camera: CameraState,           // ❌ Replaced by view/proj matrices
+pub transform_stack: Vec<Mat4>,    // ❌ Replaced by model matrix pool
+pub current_transform: Mat4,       // ❌ Replaced by model matrix pool
+```
+
+**Rationale:** The matrix pool system (`model_matrices`, `view_matrices`, `proj_matrices`) fully replaces these legacy fields. The transform stack was used for hierarchical transformations, but this is now handled by explicitly managing model matrices via FFI.
+
+#### 1.5.2: Remove Transform Stack FFI Functions
+
+**File:** `emberware-z/src/ffi/mod.rs`
+
+Remove the following FFI functions (if they exist):
+- `push_transform()` - No longer needed (use matrix pool instead)
+- `pop_transform()` - No longer needed
+- `translate()` - No longer needed (construct matrices explicitly)
+- `rotate()` - No longer needed
+- `scale()` - No longer needed
+- Any other transform stack manipulation functions
+
+**Note:** These functions are not used in actual game logic and were legacy from the old transform system.
+
+#### 1.5.3: Remove Camera FFI Functions
+
+Remove camera-related FFI functions that manipulate `CameraState`:
+- `camera_set()` or similar
+- Camera position/target setters
+
+**Replacement:** Games use `view_set()` and `proj_set()` to set view and projection matrices directly.
+
+#### 1.5.4: Remove DeferredCommand::SetSky Variant
+
+**File:** `emberware-z/src/state.rs`
+
+Remove the `SetSky` variant from the `DeferredCommand` enum:
+```rust
+pub enum DeferredCommand {
+    DrawBillboard { /* ... */ },
+    DrawSprite { /* ... */ },
+    DrawRect { /* ... */ },
+    DrawText { /* ... */ },
+    // SetSky { /* ... */ },  ← REMOVE THIS VARIANT
+}
+```
+
+**File:** `emberware-z/src/ffi/mod.rs`
+
+Remove the `set_sky()` FFI function that creates this variant.
+
+**Rationale:** Sky is now per-draw state (part of UnifiedShadingState), not frame-wide deferred state.
+
+---
+
 ## Phase 2: Implement Shading State Cache
 
 **Estimated Time:** 4-6 hours
@@ -242,6 +362,7 @@ fn pack_blend_modes(modes: &[MatcapBlendMode; 4]) -> u32 {
 ### Files to Modify
 - `emberware-z/src/graphics/unified_shading_state.rs` (extend)
 - `emberware-z/src/graphics/mod.rs`
+- `emberware-z/src/state.rs`
 
 ### Changes
 
@@ -253,14 +374,24 @@ fn pack_blend_modes(modes: &[MatcapBlendMode; 4]) -> u32 {
 use hashbrown::HashMap;
 
 pub struct ZFFIState {
-    // Existing fields...
+    // Existing fields REMOVED (Phase 1.5):
+    // - transform_stack: Vec<Mat4>  ❌ REMOVED (replaced by model matrix system)
+    // - current_transform: Mat4      ❌ REMOVED (replaced by model matrix system)
+    // - camera: CameraState          ❌ REMOVED (replaced by view/proj matrices)
 
-    // Current unquantized shading state (set by FFI functions, easy to manipulate)
+    // Existing fields UPDATED:
+    // - matcap_blend_modes: [u8; 4] → [MatcapBlendMode; 4]  (type safety)
+    // - lights: [LightState; 4] → [PackedLight; 4]  (quantized storage)
+
+    // Material properties (unquantized f32 for easy manipulation)
     pub metallic: f32,
     pub roughness: f32,
     pub emissive: f32,
     pub matcap_blend_modes: [MatcapBlendMode; 4],
-    // sky, lights already exist
+
+    // Sky and lights stored QUANTIZED (updated immediately at FFI barrier)
+    pub sky: PackedSky,
+    pub lights: [PackedLight; 4],
 
     // Current PACKED shading state (updated when FFI functions modify state)
     // This avoids re-quantizing on every draw!
@@ -273,12 +404,20 @@ pub struct ZFFIState {
 
 impl Default for ZFFIState {
     fn default() -> Self {
+        // Default sky: black (all zeros)
+        let default_sky = PackedSky::default();
+
+        // Default lights: all disabled
+        let default_lights = [PackedLight::default(); 4];
+
         Self {
             // Existing initialization...
             metallic: 0.0,
             roughness: 1.0,
             emissive: 0.0,
             matcap_blend_modes: [MatcapBlendMode::Multiply; 4],
+            sky: default_sky,
+            lights: default_lights,
             current_packed_shading_state: PackedUnifiedShadingState::default(),
             shading_states: Vec::with_capacity(256),
             shading_state_cache: HashMap::new(),
@@ -385,8 +524,8 @@ pub struct VRPCommand {
     pub buffer_source: BufferSource,
     pub texture_slots: [TextureHandle; 4],
 
-    // NEW: Index into ZFFIState::shading_states
-    pub shading_state_index: u32,
+    // NEW: Index into ZFFIState::shading_states (newtype for clarity)
+    pub shading_state_index: ShadingStateIndex,
 
     // Keep these for pipeline selection (not in shading state)
     pub depth_test: bool,
@@ -401,7 +540,7 @@ pub struct VRPCommand {
 
 **Note:**
 - `depth_test` and `cull_mode` affect pipeline selection, so they remain separate
-- `shading_state_index` is just a u32 index, not a handle type (simpler, consistent with matrix approach)
+- `shading_state_index` is a newtype for type safety (consistent with other handle types)
 
 #### 3.2: Update VirtualRenderPass Methods
 
@@ -412,7 +551,7 @@ pub fn record_triangles(
     vertex_data: &[f32],
     mvp_index: MvpIndex,
     texture_slots: [TextureHandle; 4],
-    shading_state_index: u32,  // NEW: index into shading_states pool
+    shading_state_index: ShadingStateIndex,  // NEW: index into shading_states pool
     depth_test: bool,          // Keep for pipeline key
     cull_mode: CullMode,       // Keep for pipeline key
 ) {
@@ -460,51 +599,100 @@ pub fn record_triangles(
 
 **File:** `emberware-z/src/ffi/mod.rs`
 
-First, update all FFI functions that modify shading state to call `mark_shading_state_dirty()`:
+**IMPORTANT: FFI functions quantize float inputs immediately and store quantized values in ZFFIState.**
 
 ```rust
-// Material property setters
+// Material property setters (quantize on input)
 fn material_set_metallic(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, metallic: f32) {
     let state = &mut caller.data_mut().console;
-    state.metallic = metallic;
-    state.mark_shading_state_dirty();  // ✅ NEW
+    let quantized = (metallic.clamp(0.0, 1.0) * 255.0).round() as u8;
+
+    // Only update if quantized value changed (avoids redundant packing)
+    if (state.metallic * 255.0).round() as u8 != quantized {
+        state.metallic = metallic;
+        state.mark_shading_state_dirty();
+    }
 }
 
 fn material_set_roughness(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, roughness: f32) {
     let state = &mut caller.data_mut().console;
-    state.roughness = roughness;
-    state.mark_shading_state_dirty();  // ✅ NEW
+    let quantized = (roughness.clamp(0.0, 1.0) * 255.0).round() as u8;
+
+    if (state.roughness * 255.0).round() as u8 != quantized {
+        state.roughness = roughness;
+        state.mark_shading_state_dirty();
+    }
 }
 
-// Sky setters
-fn sky_set_colors(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, horizon: u32, zenith: u32) {
+// Sky setters (quantize Vec3 inputs, store in PackedSky)
+fn sky_set_colors(
+    caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    horizon_r: f32, horizon_g: f32, horizon_b: f32,
+    zenith_r: f32, zenith_g: f32, zenith_b: f32,
+) {
     let state = &mut caller.data_mut().console;
-    state.sky.horizon_color = unpack_rgba8(horizon);
-    state.sky.zenith_color = unpack_rgba8(zenith);
-    state.mark_shading_state_dirty();  // ✅ NEW
+
+    let new_horizon = pack_rgb8_to_u32(Vec3::new(horizon_r, horizon_g, horizon_b));
+    let new_zenith = pack_rgb8_to_u32(Vec3::new(zenith_r, zenith_g, zenith_b));
+
+    // Only update if quantized values changed
+    if state.sky.horizon_color != new_horizon || state.sky.zenith_color != new_zenith {
+        state.sky.horizon_color = new_horizon;
+        state.sky.zenith_color = new_zenith;
+        state.mark_shading_state_dirty();
+    }
 }
 
-// Light setters
-fn light_set(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, index: u32, /* ... */) {
+// Light setters (quantize inputs, store in PackedLight)
+fn light_set(
+    caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    index: u32,
+    dir_x: f32, dir_y: f32, dir_z: f32,
+    color_r: f32, color_g: f32, color_b: f32,
+    intensity: f32,
+    enabled: u32,
+) {
     let state = &mut caller.data_mut().console;
-    state.lights[index as usize] = /* ... */;
-    state.mark_shading_state_dirty();  // ✅ NEW
+    let idx = index as usize;
+
+    let new_light = PackedLight::from_floats(
+        Vec3::new(dir_x, dir_y, dir_z),
+        Vec3::new(color_r, color_g, color_b),
+        intensity,
+        enabled != 0,
+    );
+
+    // Only update if quantized values changed
+    if state.lights[idx] != new_light {
+        state.lights[idx] = new_light;
+        state.mark_shading_state_dirty();
+    }
 }
 
-// Matcap blend mode setters
+// Matcap blend mode setters (already discrete, just check equality)
 fn matcap_set_blend_mode(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, slot: u32, mode: u32) {
     let state = &mut caller.data_mut().console;
-    state.matcap_blend_modes[slot as usize] = MatcapBlendMode::from(mode);
-    state.mark_shading_state_dirty();  // ✅ NEW
+    let new_mode = MatcapBlendMode::from_u32(mode).unwrap_or(MatcapBlendMode::Multiply);
+
+    if state.matcap_blend_modes[slot as usize] != new_mode {
+        state.matcap_blend_modes[slot as usize] = new_mode;
+        state.mark_shading_state_dirty();
+    }
 }
 ```
+
+**Key Architecture Change:**
+
+- **FFI functions receive floats** (developer-friendly API)
+- **FFI functions quantize immediately** (store quantized in ZFFIState)
+- **Only mark dirty if quantized values changed** (avoids redundant packing)
+- **Remove `DeferredCommand::SetSky`** (sky is now per-draw state, not deferred)
 
 **Functions that need `mark_shading_state_dirty()`:**
 - All `material_*` setters (metallic, roughness, emissive)
 - All `sky_*` setters (colors, sun direction/color/sharpness)
 - All `light_*` setters (direction, color, intensity, enabled)
 - All `matcap_*` blend mode setters
-- Any other function that modifies material/sky/lights state
 
 #### 4.2: Update FFI Draw Functions
 
@@ -541,7 +729,7 @@ fn draw_triangles(
         &vertex_data,
         mvp_index,
         state.texture_slots,
-        shading_state_idx,  // NEW: pass shading state index
+        ShadingStateIndex(shading_state_idx),  // NEW: pass shading state index
         state.depth_test,
         state.cull_mode,
     );
@@ -587,8 +775,8 @@ pub fn render_frame(&mut self, view: &TextureView, z_state: &mut ZFFIState, clea
     let mut mvp_shading_indices = Vec::with_capacity(self.command_buffer.commands().len());
     for cmd in self.command_buffer.commands() {
         mvp_shading_indices.push([
-            cmd.mvp_index.0,           // .x: packed MVP
-            cmd.shading_state_index,   // .y: shading state index
+            cmd.mvp_index.0,                // .x: packed MVP
+            cmd.shading_state_index.0,      // .y: shading state index
         ]);
     }
     let indices_data = bytemuck::cast_slice(&mvp_shading_indices);
@@ -611,18 +799,18 @@ pub fn render_frame(&mut self, view: &TextureView, z_state: &mut ZFFIState, clea
 fn sort_commands(&mut self, z_state: &ZFFIState) {
     self.command_buffer.commands_mut().sort_unstable_by_key(|cmd| {
         // Extract blend mode from shading state
-        let blend_mode = if let Some(state) = z_state.shading_states.get(cmd.shading_state_index as usize) {
+        let blend_mode = if let Some(state) = z_state.shading_states.get(cmd.shading_state_index.0 as usize) {
             (state.blend_modes & 0xFF) as u8
         } else {
             0
         };
 
         (
-            self.render_mode,           // Mode (0-3)
-            cmd.format,                 // Vertex format (0-15)
-            blend_mode,                 // Blend mode (extracted from shading state)
-            cmd.texture_slots[0].0,     // Primary texture
-            cmd.shading_state_index,    // Material (NEW: sort by shading state index)
+            self.render_mode,              // Mode (0-3)
+            cmd.format,                    // Vertex format (0-15)
+            blend_mode,                    // Blend mode (extracted from shading state)
+            cmd.texture_slots[0].0,        // Primary texture
+            cmd.shading_state_index.0,     // Material (NEW: sort by shading state index)
         )
     });
 }
@@ -641,7 +829,7 @@ for cmd in self.command_buffer.commands() {
     // Each entry is vec2<u32>: [packed_mvp, shading_state_index]
     mvp_shading_indices.push([
         cmd.mvp_index.0,                    // .x: packed MVP indices
-        cmd.shading_state_handle.0,         // .y: shading state index
+        cmd.shading_state_index.0,          // .y: shading state index
     ]);
 }
 
@@ -1041,7 +1229,7 @@ fn extract_pipeline_key(
     render_mode: u8,
 ) -> PipelineKey {
     // Get actual shading state from pool
-    let shading_state = &z_state.shading_states[cmd.shading_state_index as usize];
+    let shading_state = &z_state.shading_states[cmd.shading_state_index.0 as usize];
 
     // Extract blend mode from packed state
     let blend_mode = (shading_state.blend_modes & 0xFF) as u8;
@@ -1138,8 +1326,10 @@ tracing::debug!(
 
 This refactor includes breaking changes:
 - VRPCommand structure changes (depends on matrix packing)
-- Shader binding layout changes (new binding 6)
-- Push constants usage (VERTEX + FRAGMENT stages)
+- Shader binding layout changes (unified bindings 0-5 for all modes)
+- ZFFIState structure changes (removal of transform_stack, current_transform, camera)
+- Removal of `DeferredCommand::SetSky` (sky is now per-draw state)
+- FFI function signatures (sky/light setters quantize immediately)
 
 **Impact:** Must implement after matrix packing. All pipelines regenerated. Acceptable pre-release.
 
@@ -1272,5 +1462,43 @@ This plan was significantly simplified from the original by:
 2. **Shading state pool in ZFFIState** - Mirrors matrix packing approach, no separate cache in ZGraphics
 3. **Automatic deduplication** - Hash-based deduplication happens in `add_shading_state()`
 4. **Consistent with matrix packing** - Same pattern, same infrastructure, same cleanup
+5. **Quantized storage in ZFFIState** - Sky and lights stored as `PackedSky`/`PackedLight` directly
+6. **FFI quantization** - FFI functions quantize float inputs immediately, check for changes before marking dirty
 
-The key insight: the `mvp_indices` buffer was always `vec2<u32>` with the second u32 reserved for exactly this purpose. This implementation simply uses that reserved slot.
+### Key Architecture Decisions
+
+1. **Why store PackedSky/PackedLight in ZFFIState?**
+   - FFI functions quantize once on input (not on every draw)
+   - Only mark dirty if quantized values actually changed
+   - Avoids redundant quantization when state doesn't change
+   - Simpler than maintaining parallel unquantized + quantized state
+   - **Quantization point:** At FFI barrier (user passes f32, we store snorm16/u8)
+
+2. **Why keep metallic/roughness/emissive as f32 but lights/sky as packed?**
+   - **Material scalars (f32):** Small, easy to compare, quantized only during `mark_dirty`
+   - **Lights/sky (packed):** Complex structures, quantize at FFI barrier for consistency
+   - Both approaches avoid redundant packing - just at different points
+
+3. **Why remove transform_stack and camera?**
+   - Replaced by matrix pool system (model_matrices, view_matrices, proj_matrices)
+   - Cleaner separation: transformations via matrices, not separate camera struct
+   - Consistent with matrix packing refactor
+   - **Not used in actual game logic** - legacy from old system
+
+4. **Why remove DeferredCommand::SetSky?**
+   - Sky is now per-draw state (part of UnifiedShadingState)
+   - Each draw command can have different sky parameters
+   - Eliminates frame-wide sky state (was a bug - should be per-draw)
+   - Default sky is all zeros (black, no sun) - games set in init via FFI
+
+5. **Why use ShadingStateIndex newtype?**
+   - Type safety: prevents mixing up shading state indices with other u32 values
+   - Consistent with other handle types (TextureHandle, MvpIndex)
+   - Makes code more self-documenting
+
+6. **Why unified binding layout (0-5) for all modes?**
+   - Eliminates off-by-N errors (bones at 6 vs 8 in different modes)
+   - Simpler maintenance (one bind group layout instead of mode-specific)
+   - See [binding-layout-migration.md](./binding-layout-migration.md) for details
+
+The key insight: the `mvp_indices` buffer was always `vec2<u32>` with the second u32 reserved for exactly this purpose (left as breadcrumbs). This implementation simply populates `.y` with shading_state_index.
