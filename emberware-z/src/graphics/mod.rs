@@ -90,7 +90,8 @@ pub use render_state::{
     MaterialUniforms, RenderState, SkyUniforms, TextureFilter, TextureHandle,
 };
 pub use unified_shading_state::{
-    PackedLight, PackedSky, PackedUnifiedShadingState, ShadingStateIndex,
+    pack_direction3, pack_matcap_blend_modes, pack_rgb8, pack_unorm8, PackedLight,
+    PackedUnifiedShadingState, ShadingStateIndex,
 };
 pub use vertex::{
     vertex_stride, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV, VERTEX_FORMAT_COUNT,
@@ -1339,6 +1340,8 @@ impl ZGraphics {
                     let first_index = self.command_buffer.append_index_data(format, &indices);
 
                     // Add draw command with identity matrix indices (positions are in world space)
+                    // TODO: Phase 5 - DeferredCommand should store shading_state_index instead of blend_mode
+                    // For now, use placeholder index 0 (will be fixed when deferred commands are refactored)
                     self.command_buffer.add_command(command_buffer::VRPCommand {
                         format,
                         mvp_index: MvpIndex::new(0, 0, 0), // Identity transform at index 0
@@ -1348,11 +1351,9 @@ impl ZGraphics {
                         first_index,
                         buffer_source: BufferSource::Immediate,
                         texture_slots,
-                        color: 0xFFFFFFFF, // White (color already in vertices)
+                        shading_state_index: ShadingStateIndex(0), // Placeholder for Phase 5
                         depth_test,
                         cull_mode: Self::convert_cull_mode(cull_mode),
-                        blend_mode: Self::convert_blend_mode(blend_mode),
-                        matcap_blend_modes,
                     });
                 }
                 DeferredCommand::DrawSprite {
@@ -1466,6 +1467,7 @@ impl ZGraphics {
                         .append_index_data(SPRITE_FORMAT, &indices);
 
                     // Add draw command with identity transform (screen space)
+                    // TODO: Phase 5 - DeferredCommand should store shading_state_index
                     self.command_buffer.add_command(command_buffer::VRPCommand {
                         format: SPRITE_FORMAT,
                         mvp_index: MvpIndex::new(0, 0, 0),
@@ -1475,11 +1477,9 @@ impl ZGraphics {
                         first_index,
                         buffer_source: BufferSource::Immediate,
                         texture_slots,
-                        color: 0xFFFFFFFF, // Color already in vertices
+                        shading_state_index: ShadingStateIndex(0), // Placeholder for Phase 5
                         depth_test: false, // 2D sprites don't use depth test
                         cull_mode: CullMode::None,
-                        blend_mode: Self::convert_blend_mode(blend_mode),
-                        matcap_blend_modes,
                     });
                 }
                 DeferredCommand::DrawRect {
@@ -1537,6 +1537,7 @@ impl ZGraphics {
                     let first_index = self.command_buffer.append_index_data(RECT_FORMAT, &indices);
 
                     // Add draw command with identity transform (screen space)
+                    // TODO: Phase 5 - DeferredCommand should store shading_state_index
                     self.command_buffer.add_command(command_buffer::VRPCommand {
                         format: RECT_FORMAT,
                         mvp_index: MvpIndex::new(0, 0, 0),
@@ -1546,11 +1547,9 @@ impl ZGraphics {
                         first_index,
                         buffer_source: BufferSource::Immediate,
                         texture_slots: [TextureHandle::INVALID; 4],
-                        color: 0xFFFFFFFF, // Color already in vertices
+                        shading_state_index: ShadingStateIndex(0), // Placeholder for Phase 5
                         depth_test: false, // 2D rectangles don't use depth test
                         cull_mode: CullMode::None,
-                        blend_mode: Self::convert_blend_mode(blend_mode),
-                        matcap_blend_modes,
                     });
                 }
                 DeferredCommand::DrawText {
@@ -1627,6 +1626,7 @@ impl ZGraphics {
 
                     // Add draw command for text rendering
                     // Text is always rendered in 2D screen space with identity transform
+                    // TODO: Phase 5 - DeferredCommand should store shading_state_index
                     self.command_buffer.add_command(command_buffer::VRPCommand {
                         format: TEXT_FORMAT,
                         mvp_index: MvpIndex::new(0, 0, 0),
@@ -1636,11 +1636,9 @@ impl ZGraphics {
                         first_index,
                         buffer_source: BufferSource::Immediate,
                         texture_slots,
-                        color: 0xFFFFFFFF, // Color already baked into vertices
+                        shading_state_index: ShadingStateIndex(0), // Placeholder for Phase 5
                         depth_test: false, // 2D text doesn't use depth test
                         cull_mode: CullMode::None,
-                        blend_mode: Self::convert_blend_mode(blend_mode),
-                        matcap_blend_modes,
                     });
                 }
             }
@@ -2222,19 +2220,21 @@ impl ZGraphics {
 
         // OPTIMIZATION 3: Sort draw commands IN-PLACE by (pipeline_key, texture_slots) to minimize state changes
         // Commands are reset at the start of next frame, so no need to preserve original order or clone
+        // TODO: Phase 8 - Extract blend_mode from shading state instead of using placeholder
         self.command_buffer
             .commands_mut()
             .sort_unstable_by_key(|cmd| {
                 // Sort key: (render_mode, format, blend_mode, depth_test, cull_mode, texture_slots)
                 // This groups commands by pipeline first, then by textures
+                // TEMPORARY: Using default render state until Phase 5/8 implement shading state lookup
                 let state = RenderState {
-                    color: cmd.color,
+                    color: 0xFFFFFFFF,  // Placeholder - will come from shading state
                     depth_test: cmd.depth_test,
                     cull_mode: cmd.cull_mode,
-                    blend_mode: cmd.blend_mode,
+                    blend_mode: BlendMode::Alpha,  // Placeholder - will come from shading state
                     texture_filter: self.render_state.texture_filter,
                     texture_slots: cmd.texture_slots,
-                    matcap_blend_modes: cmd.matcap_blend_modes,
+                    matcap_blend_modes: [MatcapBlendMode::Multiply; 4],  // Placeholder
                 };
                 let pipeline_key = PipelineKey::new(self.current_render_mode, cmd.format, &state);
                 (
@@ -2336,14 +2336,15 @@ impl ZGraphics {
 
             for cmd in self.command_buffer.commands() {
                 // Create render state from command
+                // TODO: Phase 5/8 - Extract color, blend_mode, matcap_blend_modes from shading state
                 let state = RenderState {
-                    color: cmd.color,
+                    color: 0xFFFFFFFF,  // Placeholder - will come from shading state
                     depth_test: cmd.depth_test,
                     cull_mode: cmd.cull_mode,
-                    blend_mode: cmd.blend_mode,
+                    blend_mode: BlendMode::Alpha,  // Placeholder - will come from shading state
                     texture_filter: self.render_state.texture_filter,
                     texture_slots: cmd.texture_slots,
-                    matcap_blend_modes: cmd.matcap_blend_modes,
+                    matcap_blend_modes: [MatcapBlendMode::Multiply; 4],  // Placeholder
                 };
 
                 // Get/create pipeline (using contains + get pattern to avoid borrow issues)
@@ -2368,8 +2369,9 @@ impl ZGraphics {
                     .unwrap();
 
                 // Get or create material uniform buffer (cached by color + properties + blend modes)
+                // TODO: Phase 5 - Get values from shading state instead of placeholders
                 let material_key = MaterialCacheKey::new(
-                    cmd.color,
+                    0xFFFFFFFF,  // Placeholder - will come from shading state
                     self.material_uniforms.properties[0],
                     self.material_uniforms.properties[1],
                     self.material_uniforms.properties[2],

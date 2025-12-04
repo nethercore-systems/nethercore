@@ -1035,15 +1035,7 @@ fn draw_mesh(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, ha
             .unwrap_or(crate::graphics::TextureHandle::INVALID),
     ];
 
-    let matcap_blend_modes = [
-        crate::graphics::MatcapBlendMode::from_u8(state.matcap_blend_modes[0]),
-        crate::graphics::MatcapBlendMode::from_u8(state.matcap_blend_modes[1]),
-        crate::graphics::MatcapBlendMode::from_u8(state.matcap_blend_modes[2]),
-        crate::graphics::MatcapBlendMode::from_u8(state.matcap_blend_modes[3]),
-    ];
-
     let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
-    let blend_mode = crate::graphics::BlendMode::from_u8(state.blend_mode);
 
     // Add current transform to model matrix pool
     let model_idx = state.add_model_matrix(state.current_transform)
@@ -1056,6 +1048,9 @@ fn draw_mesh(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, ha
         state.current_proj_idx,
     );
 
+    // Add shading state to pool (with deduplication)
+    let shading_state_index = state.add_shading_state();
+
     // Record draw command directly
     state.render_pass.record_mesh(
         mesh_format,
@@ -1064,12 +1059,10 @@ fn draw_mesh(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, ha
         mesh_vertex_offset,
         mesh_index_offset,
         mvp_index,
-        state.color,
+        shading_state_index,
+        texture_slots,
         state.depth_test,
         cull_mode,
-        blend_mode,
-        texture_slots,
-        matcap_blend_modes,
     );
 }
 
@@ -1192,15 +1185,7 @@ fn draw_triangles(
             .unwrap_or(crate::graphics::TextureHandle::INVALID),
     ];
 
-    let matcap_blend_modes = [
-        crate::graphics::MatcapBlendMode::from_u8(state.matcap_blend_modes[0]),
-        crate::graphics::MatcapBlendMode::from_u8(state.matcap_blend_modes[1]),
-        crate::graphics::MatcapBlendMode::from_u8(state.matcap_blend_modes[2]),
-        crate::graphics::MatcapBlendMode::from_u8(state.matcap_blend_modes[3]),
-    ];
-
     let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
-    let blend_mode = crate::graphics::BlendMode::from_u8(state.blend_mode);
 
     // Add current transform to model matrix pool
     let model_idx = state.add_model_matrix(state.current_transform)
@@ -1213,17 +1198,18 @@ fn draw_triangles(
         state.current_proj_idx,
     );
 
+    // Add shading state to pool (with deduplication)
+    let shading_state_index = state.add_shading_state();
+
     // Record draw command directly
     state.render_pass.record_triangles(
         format,
         &vertex_data,
         mvp_index,
-        state.color,
+        shading_state_index,
+        texture_slots,
         state.depth_test,
         cull_mode,
-        blend_mode,
-        texture_slots,
-        matcap_blend_modes,
     );
 }
 
@@ -1385,15 +1371,7 @@ fn draw_triangles_indexed(
             .unwrap_or(crate::graphics::TextureHandle::INVALID),
     ];
 
-    let matcap_blend_modes = [
-        crate::graphics::MatcapBlendMode::from_u8(state.matcap_blend_modes[0]),
-        crate::graphics::MatcapBlendMode::from_u8(state.matcap_blend_modes[1]),
-        crate::graphics::MatcapBlendMode::from_u8(state.matcap_blend_modes[2]),
-        crate::graphics::MatcapBlendMode::from_u8(state.matcap_blend_modes[3]),
-    ];
-
     let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
-    let blend_mode = crate::graphics::BlendMode::from_u8(state.blend_mode);
 
     // Add current transform to model matrix pool
     let model_idx = state.add_model_matrix(state.current_transform)
@@ -1406,18 +1384,19 @@ fn draw_triangles_indexed(
         state.current_proj_idx,
     );
 
+    // Add shading state to pool (with deduplication)
+    let shading_state_index = state.add_shading_state();
+
     // Record draw command directly
     state.render_pass.record_triangles_indexed(
         format,
         &vertex_data,
         &index_data,
         mvp_index,
-        state.color,
+        shading_state_index,
+        texture_slots,
         state.depth_test,
         cull_mode,
-        blend_mode,
-        texture_slots,
-        matcap_blend_modes,
     );
 }
 
@@ -2028,7 +2007,8 @@ fn material_metallic(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFISta
         );
     }
 
-    state.material_metallic = clamped;
+    // Quantize and store only in current_shading_state
+    state.update_material_metallic(clamped);
 }
 
 /// Set the material roughness value
@@ -2049,7 +2029,8 @@ fn material_roughness(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFISt
         );
     }
 
-    state.material_roughness = clamped;
+    // Quantize and store only in current_shading_state
+    state.update_material_roughness(clamped);
 }
 
 /// Set the material emissive intensity
@@ -2063,15 +2044,18 @@ fn material_emissive(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFISta
     let state = &mut caller.data_mut().console;
 
     // No clamping for emissive - allow HDR values
-    if value < 0.0 {
+    let clamped = if value < 0.0 {
         warn!(
             "material_emissive: negative value {} not allowed, using 0.0",
             value
         );
-        state.material_emissive = 0.0;
+        0.0
     } else {
-        state.material_emissive = value;
-    }
+        value
+    };
+
+    // Quantize and store only in current_shading_state
+    state.update_material_emissive(clamped);
 }
 
 // ============================================================================
@@ -2110,15 +2094,36 @@ fn light_set(
         let state = &mut caller.data_mut().console;
         state.lights[index as usize].direction = [0.0, -1.0, 0.0];
         state.lights[index as usize].enabled = true;
+
+        // Update quantized shading state
+        state.update_light(
+            index as usize,
+            [0.0, -1.0, 0.0],
+            state.lights[index as usize].color,
+            state.lights[index as usize].intensity,
+            true
+        );
         return;
     }
 
     let state = &mut caller.data_mut().console;
-    let light = &mut state.lights[index as usize];
 
-    // Set direction (will be normalized by graphics backend) and enable
-    light.direction = [x, y, z];
-    light.enabled = true;
+    // Update staging light state
+    state.lights[index as usize].direction = [x, y, z];
+    state.lights[index as usize].enabled = true;
+
+    // Copy values for quantized state (avoid borrow conflict)
+    let color = state.lights[index as usize].color;
+    let intensity = state.lights[index as usize].intensity;
+
+    // Update quantized shading state
+    state.update_light(
+        index as usize,
+        [x, y, z],
+        color,
+        intensity,
+        true
+    );
 }
 
 /// Set light color

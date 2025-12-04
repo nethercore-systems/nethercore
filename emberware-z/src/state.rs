@@ -194,13 +194,10 @@ pub struct ZFFIState {
     pub texture_filter: u8,
     pub bound_textures: [u32; 4],
 
-    // Z-specific rendering modes
+    // Z-specific rendering (staging - synced to current_shading_state when modified)
     pub matcap_blend_modes: [u8; 4],
-    pub material_metallic: f32,
-    pub material_roughness: f32,
-    pub material_emissive: f32,
 
-    // PBR lighting
+    // PBR lighting (staging - synced to current_shading_state when modified)
     pub lights: [LightState; 4],
 
     // GPU skinning
@@ -282,9 +279,6 @@ impl Default for ZFFIState {
             texture_filter: 0, // Nearest
             bound_textures: [0; 4],
             matcap_blend_modes: [0; 4],
-            material_metallic: 0.0,
-            material_roughness: 0.5,
-            material_emissive: 0.0,
             lights: [LightState::default(); 4],
             bone_matrices: Vec::new(),
             bone_count: 0,
@@ -348,6 +342,123 @@ impl ZFFIState {
     /// Mark the current shading state as dirty (needs to be added to pool on next draw)
     pub fn mark_shading_state_dirty(&mut self) {
         self.shading_state_dirty = true;
+    }
+
+    /// Update material property in current shading state (with quantization check)
+    pub fn update_material_metallic(&mut self, value: f32) {
+        use crate::graphics::pack_unorm8;
+        let quantized = pack_unorm8(value);
+        if self.current_shading_state.metallic != quantized {
+            self.current_shading_state.metallic = quantized;
+            self.shading_state_dirty = true;
+        }
+    }
+
+    pub fn update_material_roughness(&mut self, value: f32) {
+        use crate::graphics::pack_unorm8;
+        let quantized = pack_unorm8(value);
+        if self.current_shading_state.roughness != quantized {
+            self.current_shading_state.roughness = quantized;
+            self.shading_state_dirty = true;
+        }
+    }
+
+    pub fn update_material_emissive(&mut self, value: f32) {
+        use crate::graphics::pack_unorm8;
+        let quantized = pack_unorm8(value);
+        if self.current_shading_state.emissive != quantized {
+            self.current_shading_state.emissive = quantized;
+            self.shading_state_dirty = true;
+        }
+    }
+
+    /// Update light in current shading state (with quantization)
+    pub fn update_light(&mut self, index: usize, direction: [f32; 3], color: [f32; 3], intensity: f32, enabled: bool) {
+        use crate::graphics::PackedLight;
+        use glam::Vec3;
+
+        let new_light = PackedLight::from_floats(
+            Vec3::from_slice(&direction),
+            Vec3::from_slice(&color),
+            intensity,
+            enabled,
+        );
+
+        if self.current_shading_state.lights[index] != new_light {
+            self.current_shading_state.lights[index] = new_light;
+            self.shading_state_dirty = true;
+        }
+    }
+
+    /// Update sky colors in current shading state (with quantization)
+    pub fn update_sky_colors(&mut self, horizon: [f32; 3], zenith: [f32; 3]) {
+        use crate::graphics::pack_rgb8;
+        use glam::Vec3;
+
+        let horizon_packed = pack_rgb8(Vec3::from_slice(&horizon));
+        let zenith_packed = pack_rgb8(Vec3::from_slice(&zenith));
+
+        if self.current_shading_state.sky.horizon_color != horizon_packed
+            || self.current_shading_state.sky.zenith_color != zenith_packed {
+            self.current_shading_state.sky.horizon_color = horizon_packed;
+            self.current_shading_state.sky.zenith_color = zenith_packed;
+            self.shading_state_dirty = true;
+        }
+    }
+
+    /// Update sky sun parameters in current shading state (with quantization)
+    pub fn update_sky_sun(&mut self, direction: [f32; 3], color: [f32; 3], sharpness: f32) {
+        use crate::graphics::{pack_direction3, pack_unorm8};
+        use glam::Vec3;
+
+        let dir_packed = pack_direction3(Vec3::from_slice(&direction));
+        let color_r = pack_unorm8(color[0]);
+        let color_g = pack_unorm8(color[1]);
+        let color_b = pack_unorm8(color[2]);
+        let sharp = pack_unorm8(sharpness);
+        let color_and_sharpness = (color_r as u32) | ((color_g as u32) << 8) | ((color_b as u32) << 16) | ((sharp as u32) << 24);
+
+        if self.current_shading_state.sky.sun_direction != dir_packed
+            || self.current_shading_state.sky.sun_color_and_sharpness != color_and_sharpness {
+            self.current_shading_state.sky.sun_direction = dir_packed;
+            self.current_shading_state.sky.sun_color_and_sharpness = color_and_sharpness;
+            self.shading_state_dirty = true;
+        }
+    }
+
+    /// Update color in current shading state (no quantization - already u32 RGBA8)
+    pub fn update_color(&mut self, color: u32) {
+        if self.current_shading_state.color_rgba8 != color {
+            self.current_shading_state.color_rgba8 = color;
+            self.shading_state_dirty = true;
+        }
+    }
+
+    /// Update blend mode in current shading state
+    pub fn update_blend_mode(&mut self, blend_mode: crate::graphics::BlendMode) {
+        let blend_u32 = blend_mode as u32;
+        if self.current_shading_state.blend_mode != blend_u32 {
+            self.current_shading_state.blend_mode = blend_u32;
+            self.shading_state_dirty = true;
+        }
+    }
+
+    /// Update matcap blend modes in current shading state (from staging array)
+    pub fn sync_matcap_blend_modes(&mut self) {
+        use crate::graphics::{pack_matcap_blend_modes, MatcapBlendMode};
+
+        let modes = [
+            MatcapBlendMode::from_u8(self.matcap_blend_modes[0]),
+            MatcapBlendMode::from_u8(self.matcap_blend_modes[1]),
+            MatcapBlendMode::from_u8(self.matcap_blend_modes[2]),
+            MatcapBlendMode::from_u8(self.matcap_blend_modes[3]),
+        ];
+
+        let packed = pack_matcap_blend_modes(modes);
+        if self.current_shading_state.matcap_blend_modes != packed {
+            self.current_shading_state.matcap_blend_modes = packed;
+            self.shading_state_dirty = true;
+        }
     }
 
     /// Add current shading state to the pool if dirty, returning its index

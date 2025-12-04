@@ -285,14 +285,16 @@ impl App {
         // Extract camera position from inverse of view matrix
         let camera_position = view_matrix.inverse().transform_point3(Vec3::ZERO);
 
+        // TODO: Phase 5 will refactor this to upload per-draw shading states
+        // For now, pass default material values (will be replaced with per-draw state)
         graphics.update_scene_uniforms(
             view_matrix,
             proj_matrix,
             camera_position,
             &z_state.lights,
-            z_state.material_metallic,
-            z_state.material_roughness,
-            z_state.material_emissive,
+            0.0,  // Default metallic (unused after Phase 5)
+            0.5,  // Default roughness (unused after Phase 5)
+            0.0,  // Default emissive (unused after Phase 5)
         );
 
         // Process draw commands - ZGraphics consumes draw commands directly

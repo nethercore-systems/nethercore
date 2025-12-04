@@ -1,6 +1,6 @@
 # Implementation Plan: Unified Shading State
 
-**Status:** Phase 1-2 Complete, 3 Partial
+**Status:** Phase 1-42 Complete
 **Estimated Effort:** 4-6 days
 **Priority:** High (bug fix - current implementation is wrong)
 **Depends On:** Matrix index packing (required - uses second u32 in mvp_indices buffer)
@@ -376,78 +376,63 @@ use hashbrown::HashMap;
 pub struct ZFFIState {
     // Existing fields REMOVED (Phase 1.5):
     // - transform_stack: Vec<Mat4>  ❌ REMOVED (replaced by model matrix system)
-    // - current_transform: Mat4      ❌ REMOVED (replaced by model matrix system)
     // - camera: CameraState          ❌ REMOVED (replaced by view/proj matrices)
+    // Note: current_transform kept for immediate mode draws
 
-    // Existing fields UPDATED:
-    // - matcap_blend_modes: [u8; 4] → [MatcapBlendMode; 4]  (type safety)
-    // - lights: [LightState; 4] → [PackedLight; 4]  (quantized storage)
+    // Staging fields for partial updates (lights can be set piecemeal via separate FFI calls)
+    pub matcap_blend_modes: [u8; 4],        // Staging - synced to current_shading_state when modified
+    pub lights: [LightState; 4],            // Staging - synced to current_shading_state when modified
 
-    // Material properties (unquantized f32 for easy manipulation)
-    pub metallic: f32,
-    pub roughness: f32,
-    pub emissive: f32,
-    pub matcap_blend_modes: [MatcapBlendMode; 4],
-
-    // Sky and lights stored QUANTIZED (updated immediately at FFI barrier)
-    pub sky: PackedSky,
-    pub lights: [PackedLight; 4],
-
-    // Current PACKED shading state (updated when FFI functions modify state)
-    // This avoids re-quantizing on every draw!
-    current_packed_shading_state: PackedUnifiedShadingState,
+    // ALL shading state stored QUANTIZED in current_shading_state
+    // NO separate f32 fields for metallic/roughness/emissive/sky!
+    // FFI setters quantize immediately and update current_shading_state directly
+    pub current_shading_state: PackedUnifiedShadingState,
+    pub shading_state_dirty: bool,
 
     // Shading state pool (reset each frame, similar to model_matrices)
     pub shading_states: Vec<PackedUnifiedShadingState>,
-    shading_state_cache: HashMap<PackedUnifiedShadingState, u32>,  // For deduplication
+    pub shading_state_map: HashMap<PackedUnifiedShadingState, ShadingStateIndex>,  // For deduplication
 }
 
 impl Default for ZFFIState {
     fn default() -> Self {
-        // Default sky: black (all zeros)
-        let default_sky = PackedSky::default();
-
-        // Default lights: all disabled
-        let default_lights = [PackedLight::default(); 4];
-
         Self {
             // Existing initialization...
-            metallic: 0.0,
-            roughness: 1.0,
-            emissive: 0.0,
-            matcap_blend_modes: [MatcapBlendMode::Multiply; 4],
-            sky: default_sky,
-            lights: default_lights,
-            current_packed_shading_state: PackedUnifiedShadingState::default(),
+            matcap_blend_modes: [0; 4],  // Staging for matcap modes
+            lights: [LightState::default(); 4],  // Staging for lights
+            current_shading_state: PackedUnifiedShadingState::default(),
+            shading_state_dirty: true,  // Start dirty so first draw creates state 0
             shading_states: Vec::with_capacity(256),
-            shading_state_cache: HashMap::new(),
+            shading_state_map: HashMap::new(),
         }
     }
 }
 
 impl ZFFIState {
-    /// Mark current shading state as dirty (needs re-packing)
-    /// Call this from FFI functions that modify material/sky/lights
-    fn mark_shading_state_dirty(&mut self) {
-        self.current_packed_shading_state = PackedUnifiedShadingState::from_render_state(
-            self.color,
-            self.metallic,
-            self.roughness,
-            self.emissive,
-            &self.matcap_blend_modes,
-            &self.sky,
-            &self.lights,
-        );
+    /// Update material metallic in current_shading_state (quantizes and marks dirty if changed)
+    pub fn update_material_metallic(&mut self, value: f32) {
+        use crate::graphics::pack_unorm8;
+        let quantized = pack_unorm8(value);
+        if self.current_shading_state.metallic != quantized {
+            self.current_shading_state.metallic = quantized;
+            self.shading_state_dirty = true;
+        }
     }
+
+    // Similar for roughness, emissive, sky, lights, etc.
+    // See state.rs for full implementation
 
     /// Add current shading state to pool (with deduplication)
     /// Returns the index into shading_states
-    /// Uses the pre-packed state to avoid re-quantizing!
-    pub fn add_shading_state(&mut self) -> u32 {
-        let packed = self.current_packed_shading_state;
+    pub fn add_shading_state(&mut self) -> ShadingStateIndex {
+        // If not dirty, return last added state
+        if !self.shading_state_dirty && !self.shading_states.is_empty() {
+            return ShadingStateIndex(self.shading_states.len() as u32 - 1);
+        }
 
         // Check if already in pool (deduplication)
-        if let Some(&idx) = self.shading_state_cache.get(&packed) {
+        if let Some(&idx) = self.shading_state_map.get(&self.current_shading_state) {
+            self.shading_state_dirty = false;
             return idx;
         }
 
@@ -457,22 +442,30 @@ impl ZFFIState {
             panic!("Shading state pool overflow! Maximum 65,536 unique states per frame.");
         }
 
-        self.shading_states.push(packed);
-        self.shading_state_cache.insert(packed, idx);
-        idx
+        let shading_idx = ShadingStateIndex(idx);
+        self.shading_states.push(self.current_shading_state);
+        self.shading_state_map.insert(self.current_shading_state, shading_idx);
+        self.shading_state_dirty = false;
+
+        shading_idx
     }
 }
 ```
 
 **Key Architecture Decision:**
 
-Both the shading state **pool** and the **current packed state** MUST live in `ZFFIState` because:
+**ALL shading state is stored QUANTIZED in `current_shading_state` - NO separate unquantized storage!**
 
-1. **Pool in ZFFIState:** The `shading_states` vector is reset each frame (like `model_matrices`)
-2. **Current packed state in ZFFIState:** We quantize once when state changes, not on every draw
-3. **Why necessary:** FFI functions need access to both unquantized (for manipulation) and packed (for pooling) state
+1. **Material properties (metallic, roughness, emissive):** Quantized IMMEDIATELY by FFI setters, stored directly in `current_shading_state.metallic/roughness/emissive` as u8
+2. **Sky data:** Quantized IMMEDIATELY by FFI setters, stored directly in `current_shading_state.sky` as PackedSky
+3. **Lights:** Kept as `lights: [LightState; 4]` staging array ONLY because light setters are piecemeal (separate direction/color/intensity calls), then quantized to `current_shading_state.lights[]` when modified
+4. **Matcap blend modes:** Kept as `matcap_blend_modes: [u8; 4]` staging array, synced to `current_shading_state.matcap_blend_modes` when modified
 
-This mirrors the matrix packing pattern exactly - ZFFIState owns both the pools and the current state.
+**Why this approach:**
+- Avoids redundant quantization on every draw
+- FFI setters only mark dirty if quantized value actually changed
+- Deduplication works on quantized values (what GPU sees)
+- No parallel unquantized/quantized state to keep in sync
 
 #### 2.2: Update clear_frame to Reset Shading State Pool
 
@@ -486,19 +479,22 @@ pub fn clear_frame(&mut self) {
     self.deferred_commands.clear();
     self.audio_commands.clear();
 
-    // NEW: Clear shading state pool
+    // Clear shading state pool
     self.shading_states.clear();
-    self.shading_state_cache.clear();
+    self.shading_state_map.clear();
+    self.shading_state_dirty = true;  // Mark dirty so first draw creates state 0
+
+    // Note: Render state (color, blend_mode, lights, matcap_blend_modes) persists between frames
 }
 ```
 
 **Note:** Everything lives in ZFFIState (not ZGraphics), just like matrices! This includes:
 - ✅ `shading_states: Vec<PackedUnifiedShadingState>` - The per-frame pool
-- ✅ `shading_state_cache: HashMap<...>` - Deduplication map
-- ✅ `current_packed_shading_state: PackedUnifiedShadingState` - Pre-packed current state
-- ✅ Unquantized fields (`metallic`, `roughness`, `sky`, `lights`, etc.) - Easy FFI access
+- ✅ `shading_state_map: HashMap<...>` - Deduplication map
+- ✅ `current_shading_state: PackedUnifiedShadingState` - Current quantized state
+- ✅ Staging fields (`lights`, `matcap_blend_modes`) - For piecemeal FFI updates
 
-This is **necessary** because FFI functions need direct access to both unquantized (for manipulation) and packed (for pooling) state.
+**IMPORTANT:** Material properties (metallic/roughness/emissive) and sky have NO separate storage - they exist ONLY as quantized values in `current_shading_state`!
 
 ---
 
@@ -595,36 +591,37 @@ pub fn record_triangles(
 
 ### Changes
 
-#### 4.1: Add `mark_shading_state_dirty()` Calls
+#### 4.1: Update Material/Sky/Light Setters
 
 **File:** `emberware-z/src/ffi/mod.rs`
 
-**IMPORTANT: FFI functions quantize float inputs immediately and store quantized values in ZFFIState.**
+**CRITICAL: FFI functions quantize float inputs immediately and store ONLY quantized values in `current_shading_state`.**
 
 ```rust
-// Material property setters (quantize on input)
-fn material_set_metallic(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, metallic: f32) {
+// Material property setters (quantize immediately, store directly in current_shading_state)
+fn material_metallic(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, value: f32) {
     let state = &mut caller.data_mut().console;
-    let quantized = (metallic.clamp(0.0, 1.0) * 255.0).round() as u8;
+    let clamped = value.clamp(0.0, 1.0);
 
-    // Only update if quantized value changed (avoids redundant packing)
-    if (state.metallic * 255.0).round() as u8 != quantized {
-        state.metallic = metallic;
-        state.mark_shading_state_dirty();
-    }
+    // Quantize and update current_shading_state directly (marks dirty if changed)
+    state.update_material_metallic(clamped);
 }
 
-fn material_set_roughness(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, roughness: f32) {
+fn material_roughness(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, value: f32) {
     let state = &mut caller.data_mut().console;
-    let quantized = (roughness.clamp(0.0, 1.0) * 255.0).round() as u8;
+    let clamped = value.clamp(0.0, 1.0);
 
-    if (state.roughness * 255.0).round() as u8 != quantized {
-        state.roughness = roughness;
-        state.mark_shading_state_dirty();
-    }
+    state.update_material_roughness(clamped);
 }
 
-// Sky setters (quantize Vec3 inputs, store in PackedSky)
+fn material_emissive(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, value: f32) {
+    let state = &mut caller.data_mut().console;
+    let clamped = value.max(0.0);  // Allow HDR values
+
+    state.update_material_emissive(clamped);
+}
+
+// Sky setters (quantize immediately, store directly in current_shading_state.sky)
 fn sky_set_colors(
     caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
     horizon_r: f32, horizon_g: f32, horizon_b: f32,
@@ -632,67 +629,49 @@ fn sky_set_colors(
 ) {
     let state = &mut caller.data_mut().console;
 
-    let new_horizon = pack_rgb8_to_u32(Vec3::new(horizon_r, horizon_g, horizon_b));
-    let new_zenith = pack_rgb8_to_u32(Vec3::new(zenith_r, zenith_g, zenith_b));
-
-    // Only update if quantized values changed
-    if state.sky.horizon_color != new_horizon || state.sky.zenith_color != new_zenith {
-        state.sky.horizon_color = new_horizon;
-        state.sky.zenith_color = new_zenith;
-        state.mark_shading_state_dirty();
-    }
+    // Quantize and update current_shading_state.sky directly
+    state.update_sky_colors([horizon_r, horizon_g, horizon_b], [zenith_r, zenith_g, zenith_b]);
 }
 
-// Light setters (quantize inputs, store in PackedLight)
+// Light setters (update staging, then quantize to current_shading_state)
+// Note: Lights use staging array because setters are piecemeal (direction/color/intensity separate)
 fn light_set(
     caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
     index: u32,
-    dir_x: f32, dir_y: f32, dir_z: f32,
-    color_r: f32, color_g: f32, color_b: f32,
-    intensity: f32,
-    enabled: u32,
+    x: f32, y: f32, z: f32,
 ) {
     let state = &mut caller.data_mut().console;
     let idx = index as usize;
 
-    let new_light = PackedLight::from_floats(
-        Vec3::new(dir_x, dir_y, dir_z),
-        Vec3::new(color_r, color_g, color_b),
-        intensity,
-        enabled != 0,
-    );
+    // Update staging
+    state.lights[idx].direction = [x, y, z];
+    state.lights[idx].enabled = true;
 
-    // Only update if quantized values changed
-    if state.lights[idx] != new_light {
-        state.lights[idx] = new_light;
-        state.mark_shading_state_dirty();
-    }
+    // Quantize to current_shading_state
+    state.update_light(idx, [x, y, z], state.lights[idx].color, state.lights[idx].intensity, true);
 }
 
-// Matcap blend mode setters (already discrete, just check equality)
-fn matcap_set_blend_mode(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, slot: u32, mode: u32) {
+fn light_color(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, index: u32, r: f32, g: f32, b: f32) {
     let state = &mut caller.data_mut().console;
-    let new_mode = MatcapBlendMode::from_u32(mode).unwrap_or(MatcapBlendMode::Multiply);
+    let idx = index as usize;
 
-    if state.matcap_blend_modes[slot as usize] != new_mode {
-        state.matcap_blend_modes[slot as usize] = new_mode;
-        state.mark_shading_state_dirty();
-    }
+    // Update staging
+    state.lights[idx].color = [r.max(0.0), g.max(0.0), b.max(0.0)];
+
+    // Quantize to current_shading_state
+    state.update_light(idx, state.lights[idx].direction, [r, g, b], state.lights[idx].intensity, state.lights[idx].enabled);
 }
+
+// Similar for light_intensity, light_enable, light_disable...
 ```
 
-**Key Architecture Change:**
+**Key Architecture:**
 
 - **FFI functions receive floats** (developer-friendly API)
-- **FFI functions quantize immediately** (store quantized in ZFFIState)
-- **Only mark dirty if quantized values changed** (avoids redundant packing)
-- **Remove `DeferredCommand::SetSky`** (sky is now per-draw state, not deferred)
-
-**Functions that need `mark_shading_state_dirty()`:**
-- All `material_*` setters (metallic, roughness, emissive)
-- All `sky_*` setters (colors, sun direction/color/sharpness)
-- All `light_*` setters (direction, color, intensity, enabled)
-- All `matcap_*` blend mode setters
+- **Material/sky setters:** Quantize IMMEDIATELY, store ONLY in `current_shading_state` (NO separate f32 storage!)
+- **Light setters:** Update `lights: [LightState; 4]` staging array (piecemeal updates), then quantize to `current_shading_state.lights[]`
+- **Matcap blend modes:** Update `matcap_blend_modes: [u8; 4]` staging array, sync when modified
+- **Only mark dirty if quantized values changed** (avoids redundant work)
 
 #### 4.2: Update FFI Draw Functions
 
@@ -1467,17 +1446,17 @@ This plan was significantly simplified from the original by:
 
 ### Key Architecture Decisions
 
-1. **Why store PackedSky/PackedLight in ZFFIState?**
-   - FFI functions quantize once on input (not on every draw)
-   - Only mark dirty if quantized values actually changed
-   - Avoids redundant quantization when state doesn't change
-   - Simpler than maintaining parallel unquantized + quantized state
-   - **Quantization point:** At FFI barrier (user passes f32, we store snorm16/u8)
+1. **Why store ONLY quantized values in `current_shading_state`?**
+   - **Material properties (metallic/roughness/emissive):** NO separate f32 storage! FFI setters quantize immediately, store directly in `current_shading_state.metallic/roughness/emissive` as u8
+   - **Sky data:** NO separate storage! FFI setters quantize immediately, store directly in `current_shading_state.sky` as PackedSky
+   - **Avoids redundant quantization:** Check quantized values before marking dirty
+   - **No dual storage headache:** Single source of truth for all shading state
+   - **Deduplication on GPU values:** HashMap deduplicates based on what GPU actually sees
 
-2. **Why keep metallic/roughness/emissive as f32 but lights/sky as packed?**
-   - **Material scalars (f32):** Small, easy to compare, quantized only during `mark_dirty`
-   - **Lights/sky (packed):** Complex structures, quantize at FFI barrier for consistency
-   - Both approaches avoid redundant packing - just at different points
+2. **Why keep staging arrays for lights and matcap blend modes?**
+   - **Lights:** Light setters are piecemeal (`light_set()`, `light_color()`, `light_intensity()` are separate calls) - need staging to accumulate partial updates, then quantize to `current_shading_state.lights[]`
+   - **Matcap blend modes:** Similar - can be set per-slot, need staging array, sync to `current_shading_state.matcap_blend_modes` when modified
+   - **Everything else:** NO staging - quantize immediately to `current_shading_state`
 
 3. **Why remove transform_stack and camera?**
    - Replaced by matrix pool system (model_matrices, view_matrices, proj_matrices)

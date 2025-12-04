@@ -5,7 +5,7 @@
 //! representation between FFI commands and GPU execution.
 
 use super::matrix_packing::MvpIndex;
-use super::render_state::{BlendMode, CullMode, MatcapBlendMode, RenderState, TextureHandle};
+use super::render_state::{CullMode, RenderState, TextureHandle};
 use super::unified_shading_state::ShadingStateIndex;
 use super::vertex::{vertex_stride, VERTEX_FORMAT_COUNT};
 
@@ -215,12 +215,10 @@ impl VirtualRenderPass {
         format: u8,
         vertex_data: &[f32],
         mvp_index: MvpIndex,
-        color: u32,
+        shading_state_index: ShadingStateIndex,
+        texture_slots: [TextureHandle; 4],
         depth_test: bool,
         cull_mode: CullMode,
-        blend_mode: BlendMode,
-        texture_slots: [TextureHandle; 4],
-        matcap_blend_modes: [MatcapBlendMode; 4],
     ) {
         let format_idx = format as usize;
         let stride = vertex_stride(format) as usize;
@@ -241,11 +239,9 @@ impl VirtualRenderPass {
             first_index: 0,
             buffer_source: BufferSource::Immediate,
             texture_slots,
-            color,
+            shading_state_index,
             depth_test,
             cull_mode,
-            blend_mode,
-            matcap_blend_modes,
         });
     }
 
@@ -256,12 +252,10 @@ impl VirtualRenderPass {
         vertex_data: &[f32],
         index_data: &[u16],
         mvp_index: MvpIndex,
-        color: u32,
+        shading_state_index: ShadingStateIndex,
+        texture_slots: [TextureHandle; 4],
         depth_test: bool,
         cull_mode: CullMode,
-        blend_mode: BlendMode,
-        texture_slots: [TextureHandle; 4],
-        matcap_blend_modes: [MatcapBlendMode; 4],
     ) {
         let format_idx = format as usize;
         let stride = vertex_stride(format) as usize;
@@ -286,11 +280,9 @@ impl VirtualRenderPass {
             first_index,
             buffer_source: BufferSource::Immediate,
             texture_slots,
-            color,
+            shading_state_index,
             depth_test,
             cull_mode,
-            blend_mode,
-            matcap_blend_modes,
         });
     }
 
@@ -303,12 +295,10 @@ impl VirtualRenderPass {
         mesh_vertex_offset: u64,
         mesh_index_offset: u64,
         mvp_index: MvpIndex,
-        color: u32,
+        shading_state_index: ShadingStateIndex,
+        texture_slots: [TextureHandle; 4],
         depth_test: bool,
         cull_mode: CullMode,
-        blend_mode: BlendMode,
-        texture_slots: [TextureHandle; 4],
-        matcap_blend_modes: [MatcapBlendMode; 4],
     ) {
         let stride = vertex_stride(mesh_format) as u64;
         let base_vertex = (mesh_vertex_offset / stride) as u32;
@@ -327,11 +317,9 @@ impl VirtualRenderPass {
             first_index,
             buffer_source: BufferSource::Retained,
             texture_slots,
-            color,
+            shading_state_index,
             depth_test,
             cull_mode,
-            blend_mode,
-            matcap_blend_modes,
         });
     }
 
