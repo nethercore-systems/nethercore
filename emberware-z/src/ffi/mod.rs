@@ -18,9 +18,7 @@ use emberware_core::wasm::GameStateWithConsole;
 use crate::audio::{AudioCommand, Sound};
 use crate::console::{ZInput, RESOLUTIONS, TICK_RATES};
 use crate::graphics::vertex_stride;
-use crate::state::{
-    DeferredCommand, Font, PendingMesh, PendingTexture, ZFFIState, MAX_BONES,
-};
+use crate::state::{DeferredCommand, Font, PendingMesh, PendingTexture, ZFFIState, MAX_BONES};
 
 /// Register all Emberware Z FFI functions with the linker
 pub fn register_z_ffi(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
@@ -355,18 +353,27 @@ fn camera_fov(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, f
 /// The index of the newly added view matrix (0-255)
 fn push_view_matrix(
     mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    m0: f32, m1: f32, m2: f32, m3: f32,
-    m4: f32, m5: f32, m6: f32, m7: f32,
-    m8: f32, m9: f32, m10: f32, m11: f32,
-    m12: f32, m13: f32, m14: f32, m15: f32,
+    m0: f32,
+    m1: f32,
+    m2: f32,
+    m3: f32,
+    m4: f32,
+    m5: f32,
+    m6: f32,
+    m7: f32,
+    m8: f32,
+    m9: f32,
+    m10: f32,
+    m11: f32,
+    m12: f32,
+    m13: f32,
+    m14: f32,
+    m15: f32,
 ) -> u32 {
     let state = &mut caller.data_mut().console;
 
     let matrix = Mat4::from_cols_array(&[
-        m0, m1, m2, m3,
-        m4, m5, m6, m7,
-        m8, m9, m10, m11,
-        m12, m13, m14, m15,
+        m0, m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15,
     ]);
 
     let idx = state.view_matrices.len() as u32;
@@ -391,18 +398,27 @@ fn push_view_matrix(
 /// The index of the newly added projection matrix (0-255)
 fn push_projection_matrix(
     mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    m0: f32, m1: f32, m2: f32, m3: f32,
-    m4: f32, m5: f32, m6: f32, m7: f32,
-    m8: f32, m9: f32, m10: f32, m11: f32,
-    m12: f32, m13: f32, m14: f32, m15: f32,
+    m0: f32,
+    m1: f32,
+    m2: f32,
+    m3: f32,
+    m4: f32,
+    m5: f32,
+    m6: f32,
+    m7: f32,
+    m8: f32,
+    m9: f32,
+    m10: f32,
+    m11: f32,
+    m12: f32,
+    m13: f32,
+    m14: f32,
+    m15: f32,
 ) -> u32 {
     let state = &mut caller.data_mut().console;
 
     let matrix = Mat4::from_cols_array(&[
-        m0, m1, m2, m3,
-        m4, m5, m6, m7,
-        m8, m9, m10, m11,
-        m12, m13, m14, m15,
+        m0, m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15,
     ]);
 
     let idx = state.proj_matrices.len() as u32;
@@ -1047,15 +1063,13 @@ fn draw_mesh(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, ha
     let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
 
     // Add current transform to model matrix pool
-    let model_idx = state.add_model_matrix(state.current_transform)
+    let model_idx = state
+        .add_model_matrix(state.current_transform)
         .expect("Model matrix pool overflow");
 
     // Pack matrix indices
-    let mvp_index = crate::graphics::MvpIndex::new(
-        model_idx,
-        state.current_view_idx,
-        state.current_proj_idx,
-    );
+    let mvp_index =
+        crate::graphics::MvpIndex::new(model_idx, state.current_view_idx, state.current_proj_idx);
 
     // Add shading state to pool (with deduplication)
     let shading_state_index = state.add_shading_state();
@@ -1197,15 +1211,13 @@ fn draw_triangles(
     let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
 
     // Add current transform to model matrix pool
-    let model_idx = state.add_model_matrix(state.current_transform)
+    let model_idx = state
+        .add_model_matrix(state.current_transform)
         .expect("Model matrix pool overflow");
 
     // Pack matrix indices
-    let mvp_index = crate::graphics::MvpIndex::new(
-        model_idx,
-        state.current_view_idx,
-        state.current_proj_idx,
-    );
+    let mvp_index =
+        crate::graphics::MvpIndex::new(model_idx, state.current_view_idx, state.current_proj_idx);
 
     // Add shading state to pool (with deduplication)
     let shading_state_index = state.add_shading_state();
@@ -1383,15 +1395,13 @@ fn draw_triangles_indexed(
     let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
 
     // Add current transform to model matrix pool
-    let model_idx = state.add_model_matrix(state.current_transform)
+    let model_idx = state
+        .add_model_matrix(state.current_transform)
         .expect("Model matrix pool overflow");
 
     // Pack matrix indices
-    let mvp_index = crate::graphics::MvpIndex::new(
-        model_idx,
-        state.current_view_idx,
-        state.current_proj_idx,
-    );
+    let mvp_index =
+        crate::graphics::MvpIndex::new(model_idx, state.current_view_idx, state.current_proj_idx);
 
     // Add shading state to pool (with deduplication)
     let shading_state_index = state.add_shading_state();
@@ -1990,7 +2000,10 @@ fn sky_set_colors(
     zenith_b: f32,
 ) {
     let state = &mut caller.data_mut().console;
-    state.update_sky_colors([horizon_r, horizon_g, horizon_b], [zenith_r, zenith_g, zenith_b]);
+    state.update_sky_colors(
+        [horizon_r, horizon_g, horizon_b],
+        [zenith_r, zenith_g, zenith_b],
+    );
 }
 
 /// Set sky sun properties
@@ -2027,7 +2040,11 @@ fn sky_set_sun(
         return;
     }
 
-    state.update_sky_sun([dir_x, dir_y, dir_z], [color_r, color_g, color_b], sharpness);
+    state.update_sky_sun(
+        [dir_x, dir_y, dir_z],
+        [color_r, color_g, color_b],
+        sharpness,
+    );
 }
 
 // ============================================================================
@@ -2757,10 +2774,7 @@ mod tests {
     // Input State Tests (moved to console.rs - ZInput tests)
     // ========================================================================
 
-    use crate::{
-        console::ZInput,
-        graphics::FORMAT_SKINNED,
-    };
+    use crate::{console::ZInput, graphics::FORMAT_SKINNED};
 
     #[test]
     fn test_zinput_button_bitmask() {

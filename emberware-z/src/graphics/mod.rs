@@ -85,12 +85,11 @@ pub use buffer::{BufferManager, GrowableBuffer, MeshHandle, RetainedMesh};
 pub use command_buffer::{BufferSource, VirtualRenderPass};
 pub use matrix_packing::MvpIndex;
 pub use render_state::{
-    BlendMode, CullMode, MatcapBlendMode,
-    RenderState, TextureFilter, TextureHandle,
+    BlendMode, CullMode, MatcapBlendMode, RenderState, TextureFilter, TextureHandle,
 };
 pub use unified_shading_state::{
-    pack_direction_xy_u32, pack_matcap_blend_modes, pack_rgb8, pack_unorm8, unpack_matcap_blend_modes,
-    PackedLight, PackedUnifiedShadingState, ShadingStateIndex,
+    pack_direction_xy_u32, pack_matcap_blend_modes, pack_rgb8, pack_unorm8,
+    unpack_matcap_blend_modes, PackedLight, PackedUnifiedShadingState, ShadingStateIndex,
 };
 pub use vertex::{
     vertex_stride, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV, VERTEX_FORMAT_COUNT,
@@ -346,7 +345,8 @@ impl ZGraphics {
         let shading_state_capacity = 256;
         let shading_state_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Shading States"),
-            size: (shading_state_capacity * std::mem::size_of::<PackedUnifiedShadingState>()) as u64,
+            size: (shading_state_capacity * std::mem::size_of::<PackedUnifiedShadingState>())
+                as u64,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -956,7 +956,9 @@ impl ZGraphics {
 
                     // Get direction from billboard to camera (same for all billboards)
                     // Get view matrix from pool
-                    let view_matrix = z_state.view_matrices.get(z_state.current_view_idx as usize)
+                    let view_matrix = z_state
+                        .view_matrices
+                        .get(z_state.current_view_idx as usize)
                         .copied()
                         .unwrap_or(Mat4::IDENTITY);
 
@@ -1346,7 +1348,7 @@ impl ZGraphics {
                         buffer_source: BufferSource::Immediate,
                         texture_slots,
                         shading_state_index: ShadingStateIndex(0), // Placeholder for Phase 5
-                        depth_test: false, // 2D text doesn't use depth test
+                        depth_test: false,                         // 2D text doesn't use depth test
                         cull_mode: CullMode::None,
                     });
                 }
@@ -2017,8 +2019,8 @@ impl ZGraphics {
             // Collect MVP + shading state indices
             let mut mvp_indices_data = Vec::with_capacity(command_count * 2);
             for cmd in self.command_buffer.commands() {
-                mvp_indices_data.push(cmd.mvp_index.0);             // .x: Packed MVP
-                mvp_indices_data.push(cmd.shading_state_index.0);   // .y: Shading state index
+                mvp_indices_data.push(cmd.mvp_index.0); // .x: Packed MVP
+                mvp_indices_data.push(cmd.shading_state_index.0); // .y: Shading state index
             }
 
             // Ensure capacity and upload
@@ -2129,9 +2131,15 @@ impl ZGraphics {
                 // Extract matcap blend modes from packed shading state (currently unused, reserved for future shader use)
                 let _matcap_blend_modes = [
                     MatcapBlendMode::from_u8((shading_state.matcap_blend_modes & 0xFF) as u8),
-                    MatcapBlendMode::from_u8(((shading_state.matcap_blend_modes >> 8) & 0xFF) as u8),
-                    MatcapBlendMode::from_u8(((shading_state.matcap_blend_modes >> 16) & 0xFF) as u8),
-                    MatcapBlendMode::from_u8(((shading_state.matcap_blend_modes >> 24) & 0xFF) as u8),
+                    MatcapBlendMode::from_u8(
+                        ((shading_state.matcap_blend_modes >> 8) & 0xFF) as u8,
+                    ),
+                    MatcapBlendMode::from_u8(
+                        ((shading_state.matcap_blend_modes >> 16) & 0xFF) as u8,
+                    ),
+                    MatcapBlendMode::from_u8(
+                        ((shading_state.matcap_blend_modes >> 24) & 0xFF) as u8,
+                    ),
                 ];
 
                 // Create render state from command + shading state

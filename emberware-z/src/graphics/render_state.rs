@@ -3,7 +3,6 @@
 //! Defines render state enums (cull mode, blend mode, texture filter),
 //! texture handles, sky uniforms, and the overall render state struct.
 
-
 /// Handle to a loaded texture
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TextureHandle(pub u32);
@@ -443,7 +442,6 @@ mod tests {
         state.blend_mode = BlendMode::None;
         assert_eq!(state.blend_mode, BlendMode::None);
     }
-
 
     #[test]
     fn test_render_state_texture_filter_switching() {

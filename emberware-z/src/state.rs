@@ -218,7 +218,8 @@ pub struct ZFFIState {
 
     // Unified shading state system (deduplication + dirty tracking)
     pub shading_states: Vec<crate::graphics::PackedUnifiedShadingState>,
-    pub shading_state_map: HashMap<crate::graphics::PackedUnifiedShadingState, crate::graphics::ShadingStateIndex>,
+    pub shading_state_map:
+        HashMap<crate::graphics::PackedUnifiedShadingState, crate::graphics::ShadingStateIndex>,
     pub current_shading_state: crate::graphics::PackedUnifiedShadingState,
     pub shading_state_dirty: bool,
 }
@@ -233,10 +234,19 @@ impl Default for ZFFIState {
         model_matrices.push(Mat4::IDENTITY);
 
         // Default view: camera at (0, 0, 5) looking at origin
-        view_matrices.push(Mat4::look_at_rh(Vec3::new(0.0, 0.0, 5.0), Vec3::ZERO, Vec3::Y));
+        view_matrices.push(Mat4::look_at_rh(
+            Vec3::new(0.0, 0.0, 5.0),
+            Vec3::ZERO,
+            Vec3::Y,
+        ));
 
         // Default projection: 60° FOV, 16:9 aspect
-        proj_matrices.push(Mat4::perspective_rh(60f32.to_radians(), 16.0 / 9.0, 0.1, 1000.0));
+        proj_matrices.push(Mat4::perspective_rh(
+            60f32.to_radians(),
+            16.0 / 9.0,
+            0.1,
+            1000.0,
+        ));
 
         Self {
             current_transform: Mat4::IDENTITY,
@@ -294,7 +304,6 @@ impl ZFFIState {
         Some(idx)
     }
 
-
     /// Update material property in current shading state (with quantization check)
     pub fn update_material_metallic(&mut self, value: f32) {
         use crate::graphics::pack_unorm8;
@@ -324,7 +333,14 @@ impl ZFFIState {
     }
 
     /// Update light in current shading state (with quantization)
-    pub fn update_light(&mut self, index: usize, direction: [f32; 3], color: [f32; 3], intensity: f32, enabled: bool) {
+    pub fn update_light(
+        &mut self,
+        index: usize,
+        direction: [f32; 3],
+        color: [f32; 3],
+        intensity: f32,
+        enabled: bool,
+    ) {
         use crate::graphics::PackedLight;
         use glam::Vec3;
 
@@ -350,7 +366,8 @@ impl ZFFIState {
         let zenith_packed = pack_rgb8(Vec3::from_slice(&zenith));
 
         if self.current_shading_state.sky.horizon_color != horizon_packed
-            || self.current_shading_state.sky.zenith_color != zenith_packed {
+            || self.current_shading_state.sky.zenith_color != zenith_packed
+        {
             self.current_shading_state.sky.horizon_color = horizon_packed;
             self.current_shading_state.sky.zenith_color = zenith_packed;
             self.shading_state_dirty = true;
@@ -374,7 +391,8 @@ impl ZFFIState {
             | ((sharp as u32) << 24);
 
         if self.current_shading_state.sky.sun_direction_xy != dir_xy_packed
-            || self.current_shading_state.sky.sun_color_and_sharpness != color_and_sharpness {
+            || self.current_shading_state.sky.sun_color_and_sharpness != color_and_sharpness
+        {
             self.current_shading_state.sky.sun_direction_xy = dir_xy_packed;
             self.current_shading_state.sky.sun_color_and_sharpness = color_and_sharpness;
             self.shading_state_dirty = true;
@@ -399,8 +417,12 @@ impl ZFFIState {
     }
 
     /// Update a single matcap blend mode slot in current shading state
-    pub fn update_matcap_blend_mode(&mut self, slot: usize, mode: crate::graphics::MatcapBlendMode) {
-        use crate::graphics::{unpack_matcap_blend_modes, pack_matcap_blend_modes};
+    pub fn update_matcap_blend_mode(
+        &mut self,
+        slot: usize,
+        mode: crate::graphics::MatcapBlendMode,
+    ) {
+        use crate::graphics::{pack_matcap_blend_modes, unpack_matcap_blend_modes};
 
         // Unpack current modes, modify one slot, repack
         let mut modes = unpack_matcap_blend_modes(self.current_shading_state.matcap_blend_modes);
@@ -437,7 +459,8 @@ impl ZFFIState {
 
         let shading_idx = crate::graphics::ShadingStateIndex(idx);
         self.shading_states.push(self.current_shading_state);
-        self.shading_state_map.insert(self.current_shading_state, shading_idx);
+        self.shading_state_map
+            .insert(self.current_shading_state, shading_idx);
         self.shading_state_dirty = false;
 
         shading_idx

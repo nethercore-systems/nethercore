@@ -141,7 +141,10 @@ pub(crate) fn create_pipeline(
 
 /// Create bind group layout for per-frame uniforms (group 0)
 /// Unified layout for all render modes (0-3)
-fn create_frame_bind_group_layout(device: &wgpu::Device, _render_mode: u8) -> wgpu::BindGroupLayout {
+fn create_frame_bind_group_layout(
+    device: &wgpu::Device,
+    _render_mode: u8,
+) -> wgpu::BindGroupLayout {
     // Unified binding layout (0-5) - same for all modes
     let bindings = vec![
         // Binding 0: Model matrices storage buffer (per-frame array)

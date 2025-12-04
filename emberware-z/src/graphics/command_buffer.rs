@@ -380,7 +380,14 @@ mod tests {
             1.0,
         ];
 
-        let base = cb.add_vertices(FORMAT_COLOR, &vertices, MvpIndex::INVALID, ShadingStateIndex(0), [TextureHandle::INVALID; 4], &state);
+        let base = cb.add_vertices(
+            FORMAT_COLOR,
+            &vertices,
+            MvpIndex::INVALID,
+            ShadingStateIndex(0),
+            [TextureHandle::INVALID; 4],
+            &state,
+        );
 
         assert_eq!(base, 0);
         assert_eq!(cb.commands().len(), 1);
@@ -396,8 +403,15 @@ mod tests {
         let vertices = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0];
         let indices = [0u16, 1, 2, 0, 2, 3];
 
-        let (base_vertex, first_index) =
-            cb.add_vertices_indexed(0, &vertices, &indices, MvpIndex::INVALID, ShadingStateIndex(0), [TextureHandle::INVALID; 4], &state);
+        let (base_vertex, first_index) = cb.add_vertices_indexed(
+            0,
+            &vertices,
+            &indices,
+            MvpIndex::INVALID,
+            ShadingStateIndex(0),
+            [TextureHandle::INVALID; 4],
+            &state,
+        );
 
         assert_eq!(base_vertex, 0);
         assert_eq!(first_index, 0);
@@ -412,7 +426,14 @@ mod tests {
         let state = RenderState::default();
 
         let vertices = [0.0f32, 0.0, 0.0, 1.0, 0.0, 0.0, 0.5, 1.0, 0.0];
-        cb.add_vertices(0, &vertices, MvpIndex::INVALID, ShadingStateIndex(0), [TextureHandle::INVALID; 4], &state);
+        cb.add_vertices(
+            0,
+            &vertices,
+            MvpIndex::INVALID,
+            ShadingStateIndex(0),
+            [TextureHandle::INVALID; 4],
+            &state,
+        );
 
         assert!(!cb.commands().is_empty());
 
@@ -439,8 +460,22 @@ mod tests {
             0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.5, 1.0, 0.0, 0.5, 1.0,
         ];
 
-        cb.add_vertices(0, &v_pos, MvpIndex::INVALID, ShadingStateIndex(0), [TextureHandle::INVALID; 4], &state);
-        cb.add_vertices(FORMAT_UV, &v_pos_uv, MvpIndex::INVALID, ShadingStateIndex(0), [TextureHandle::INVALID; 4], &state);
+        cb.add_vertices(
+            0,
+            &v_pos,
+            MvpIndex::INVALID,
+            ShadingStateIndex(0),
+            [TextureHandle::INVALID; 4],
+            &state,
+        );
+        cb.add_vertices(
+            FORMAT_UV,
+            &v_pos_uv,
+            MvpIndex::INVALID,
+            ShadingStateIndex(0),
+            [TextureHandle::INVALID; 4],
+            &state,
+        );
 
         assert_eq!(cb.commands().len(), 2);
         assert_eq!(cb.commands()[0].format, 0);
@@ -456,8 +491,22 @@ mod tests {
         let mvp_index1 = MvpIndex::INVALID;
         let mvp_index2 = MvpIndex::new(10, 1, 0);
 
-        cb.add_vertices(0, &vertices, mvp_index1, ShadingStateIndex(0), [TextureHandle::INVALID; 4], &state);
-        cb.add_vertices(0, &vertices, mvp_index2, ShadingStateIndex(0), [TextureHandle::INVALID; 4], &state);
+        cb.add_vertices(
+            0,
+            &vertices,
+            mvp_index1,
+            ShadingStateIndex(0),
+            [TextureHandle::INVALID; 4],
+            &state,
+        );
+        cb.add_vertices(
+            0,
+            &vertices,
+            mvp_index2,
+            ShadingStateIndex(0),
+            [TextureHandle::INVALID; 4],
+            &state,
+        );
 
         assert_eq!(cb.commands()[0].mvp_index, mvp_index1);
         assert_eq!(cb.commands()[1].mvp_index, mvp_index2);
@@ -474,7 +523,14 @@ mod tests {
             large_data.extend_from_slice(&triangle);
         }
 
-        let base = cb.add_vertices(0, &large_data, MvpIndex::INVALID, ShadingStateIndex(0), [TextureHandle::INVALID; 4], &state);
+        let base = cb.add_vertices(
+            0,
+            &large_data,
+            MvpIndex::INVALID,
+            ShadingStateIndex(0),
+            [TextureHandle::INVALID; 4],
+            &state,
+        );
         assert_eq!(base, 0);
         assert_eq!(cb.commands()[0].vertex_count, 3000);
     }
@@ -511,7 +567,14 @@ mod tests {
             0.0,
         ];
 
-        let base = cb.add_vertices(FORMAT_SKINNED, &vertices, MvpIndex::INVALID, ShadingStateIndex(0), [TextureHandle::INVALID; 4], &state);
+        let base = cb.add_vertices(
+            FORMAT_SKINNED,
+            &vertices,
+            MvpIndex::INVALID,
+            ShadingStateIndex(0),
+            [TextureHandle::INVALID; 4],
+            &state,
+        );
 
         assert_eq!(base, 0);
         assert_eq!(cb.commands().len(), 1);

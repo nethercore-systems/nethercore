@@ -8,19 +8,19 @@ use super::render_state::{BlendMode, MatcapBlendMode};
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Pod, Zeroable)]
 pub struct PackedSky {
-    pub horizon_color: u32,              // RGBA8 packed (4 bytes)
-    pub zenith_color: u32,               // RGBA8 packed (4 bytes)
-    pub sun_direction_xy: u32,           // xy as snorm16 packed (x: i16, y: i16) - z reconstructed
-    pub sun_color_and_sharpness: u32,    // RGB8 + sharpness u8 (4 bytes)
+    pub horizon_color: u32,           // RGBA8 packed (4 bytes)
+    pub zenith_color: u32,            // RGBA8 packed (4 bytes)
+    pub sun_direction_xy: u32,        // xy as snorm16 packed (x: i16, y: i16) - z reconstructed
+    pub sun_color_and_sharpness: u32, // RGB8 + sharpness u8 (4 bytes)
 }
 
 /// One packed light (16 bytes with explicit padding for GPU alignment)
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Pod, Zeroable)]
 pub struct PackedLight {
-    pub direction: [i16; 4],             // snorm16x4 (w = enabled flag: 0x7FFF if enabled, 0 if disabled) - 8 bytes
-    pub color_and_intensity: u32,        // RGB8 + intensity u8 - 4 bytes
-    pub _pad: u32,                       // padding to 16 bytes for GPU vec4 alignment - 4 bytes
+    pub direction: [i16; 4], // snorm16x4 (w = enabled flag: 0x7FFF if enabled, 0 if disabled) - 8 bytes
+    pub color_and_intensity: u32, // RGB8 + intensity u8 - 4 bytes
+    pub _pad: u32,           // padding to 16 bytes for GPU vec4 alignment - 4 bytes
 }
 
 /// Unified per-draw shading state (100 bytes, POD, hashable)
@@ -33,35 +33,35 @@ pub struct PackedUnifiedShadingState {
     pub emissive: u8,
     pub pad0: u8,
     pub color_rgba8: u32,
-    pub blend_mode: u32,                 // BlendMode as u32
-    pub matcap_blend_modes: u32,         // 4x MatcapBlendMode packed as u8s
+    pub blend_mode: u32,         // BlendMode as u32
+    pub matcap_blend_modes: u32, // 4x MatcapBlendMode packed as u8s
     pub pad1: u32,
-    pub sky: PackedSky,                  // 16 bytes
-    pub lights: [PackedLight; 4],        // 64 bytes (4 × 16-byte lights)
+    pub sky: PackedSky,           // 16 bytes
+    pub lights: [PackedLight; 4], // 64 bytes (4 × 16-byte lights)
 }
 
 impl Default for PackedUnifiedShadingState {
     fn default() -> Self {
         // Reasonable defaults: blue sky gradient, white sun pointing down-right
         let sky = PackedSky::from_floats(
-            Vec3::new(0.5, 0.7, 1.0),    // Horizon: light blue
-            Vec3::new(0.1, 0.3, 0.8),    // Zenith: darker blue
-            Vec3::new(0.3, -0.5, 0.4).normalize(),  // Sun direction: down and to the side
-            Vec3::new(1.0, 0.95, 0.9),   // Sun color: warm white
-            0.95,                        // Sun sharpness: fairly sharp (maps to ~242/255)
+            Vec3::new(0.5, 0.7, 1.0),              // Horizon: light blue
+            Vec3::new(0.1, 0.3, 0.8),              // Zenith: darker blue
+            Vec3::new(0.3, -0.5, 0.4).normalize(), // Sun direction: down and to the side
+            Vec3::new(1.0, 0.95, 0.9),             // Sun color: warm white
+            0.95,                                  // Sun sharpness: fairly sharp (maps to ~242/255)
         );
 
         Self {
-            metallic: 0,                 // Non-metallic
-            roughness: 128,              // Medium roughness (0.5)
-            emissive: 0,                 // No emission
+            metallic: 0,    // Non-metallic
+            roughness: 128, // Medium roughness (0.5)
+            emissive: 0,    // No emission
             pad0: 0,
-            color_rgba8: 0xFFFFFFFF,     // White
+            color_rgba8: 0xFFFFFFFF, // White
             blend_mode: BlendMode::Alpha as u32,
-            matcap_blend_modes: 0,       // All Multiply (0)
+            matcap_blend_modes: 0, // All Multiply (0)
             pad1: 0,
             sky,
-            lights: [PackedLight::default(); 4],  // All lights disabled
+            lights: [PackedLight::default(); 4], // All lights disabled
         }
     }
 }
@@ -223,10 +223,8 @@ impl PackedLight {
         let g = pack_unorm8(color.y);
         let b = pack_unorm8(color.z);
         let intens = pack_unorm8(intensity);
-        let color_and_intensity = (r as u32)
-            | ((g as u32) << 8)
-            | ((b as u32) << 16)
-            | ((intens as u32) << 24);
+        let color_and_intensity =
+            (r as u32) | ((g as u32) << 8) | ((b as u32) << 16) | ((intens as u32) << 24);
 
         Self {
             direction: dir_packed,
@@ -324,10 +322,10 @@ mod tests {
     #[test]
     fn test_pack_rgba8() {
         let packed = pack_rgba8(1.0, 0.5, 0.25, 1.0);
-        assert_eq!(packed & 0xFF, 255);           // R
-        assert_eq!((packed >> 8) & 0xFF, 128);    // G
-        assert_eq!((packed >> 16) & 0xFF, 64);    // B
-        assert_eq!((packed >> 24) & 0xFF, 255);   // A
+        assert_eq!(packed & 0xFF, 255); // R
+        assert_eq!((packed >> 8) & 0xFF, 128); // G
+        assert_eq!((packed >> 16) & 0xFF, 64); // B
+        assert_eq!((packed >> 24) & 0xFF, 255); // A
     }
 
     #[test]
