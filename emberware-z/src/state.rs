@@ -5,67 +5,10 @@
 //! It is NOT part of rollback state - only GameState is rolled back.
 
 use glam::{Mat4, Vec3};
+use hashbrown::HashMap;
 
 /// Maximum number of bones for GPU skinning
 pub const MAX_BONES: usize = 256;
-
-/// Maximum transform stack depth
-pub const MAX_TRANSFORM_STACK: usize = 32;
-
-// ============================================================================
-// Camera (moved from core/src/wasm/camera.rs)
-// ============================================================================
-
-/// Default camera field of view in degrees
-pub const DEFAULT_CAMERA_FOV: f32 = 60.0;
-
-/// Camera state for 3D rendering
-#[derive(Debug, Clone, Copy)]
-pub struct CameraState {
-    /// Camera position in world space
-    pub position: Vec3,
-    /// Camera target (look-at point) in world space
-    pub target: Vec3,
-    /// Field of view in degrees
-    pub fov: f32,
-    /// Near clipping plane
-    pub near: f32,
-    /// Far clipping plane
-    pub far: f32,
-}
-
-impl Default for CameraState {
-    fn default() -> Self {
-        Self {
-            position: Vec3::new(0.0, 0.0, 5.0),
-            target: Vec3::ZERO,
-            fov: DEFAULT_CAMERA_FOV,
-            near: 0.1,
-            far: 1000.0,
-        }
-    }
-}
-
-impl CameraState {
-    /// Compute the view matrix (world-to-camera transform)
-    #[inline]
-    pub fn view_matrix(&self) -> Mat4 {
-        Mat4::look_at_rh(self.position, self.target, Vec3::Y)
-    }
-
-    /// Compute the projection matrix for a given aspect ratio
-    #[inline]
-    pub fn projection_matrix(&self, aspect_ratio: f32) -> Mat4 {
-        Mat4::perspective_rh(self.fov.to_radians(), aspect_ratio, self.near, self.far)
-    }
-
-    /// Compute the combined view-projection matrix
-    #[inline]
-    #[allow(dead_code)] // Public API for games, currently unused internally
-    pub fn view_projection_matrix(&self, aspect_ratio: f32) -> Mat4 {
-        self.projection_matrix(aspect_ratio) * self.view_matrix()
-    }
-}
 
 // ============================================================================
 // Lighting (moved from core/src/wasm/render.rs)
@@ -198,14 +141,6 @@ pub enum DeferredCommand {
         blend_mode: u8,
         font: u32, // 0 = built-in font, >0 = custom font handle
     },
-    /// Set procedural sky parameters
-    SetSky {
-        horizon_color: [f32; 3],
-        zenith_color: [f32; 3],
-        sun_direction: [f32; 3],
-        sun_color: [f32; 3],
-        sun_sharpness: f32,
-    },
 }
 
 // ============================================================================
@@ -248,11 +183,7 @@ impl Default for ZInitConfig {
 /// This is NOT serialized for rollback - only core GameState is rolled back.
 #[derive(Debug)]
 pub struct ZFFIState {
-    // 3D Camera
-    pub camera: CameraState,
-
-    // 3D Transform stack
-    pub transform_stack: Vec<Mat4>,
+    // Current transform (for immediate mode draws)
     pub current_transform: Mat4,
 
     // Render state
@@ -319,6 +250,12 @@ pub struct ZFFIState {
     pub current_model_idx: u32,
     pub current_view_idx: u32,
     pub current_proj_idx: u32,
+
+    // Unified shading state system (deduplication + dirty tracking)
+    pub shading_states: Vec<crate::graphics::PackedUnifiedShadingState>,
+    pub shading_state_map: HashMap<crate::graphics::PackedUnifiedShadingState, crate::graphics::ShadingStateIndex>,
+    pub current_shading_state: crate::graphics::PackedUnifiedShadingState,
+    pub shading_state_dirty: bool,
 }
 
 impl Default for ZFFIState {
@@ -337,8 +274,6 @@ impl Default for ZFFIState {
         proj_matrices.push(Mat4::perspective_rh(60f32.to_radians(), 16.0 / 9.0, 0.1, 1000.0));
 
         Self {
-            camera: CameraState::default(),
-            transform_stack: Vec::with_capacity(MAX_TRANSFORM_STACK),
             current_transform: Mat4::IDENTITY,
             color: 0xFFFFFFFF,
             depth_test: true,
@@ -374,6 +309,10 @@ impl Default for ZFFIState {
             current_model_idx: 0,
             current_view_idx: 0,
             current_proj_idx: 0,
+            shading_states: Vec::new(),
+            shading_state_map: HashMap::new(),
+            current_shading_state: crate::graphics::PackedUnifiedShadingState::default(),
+            shading_state_dirty: true, // Start dirty so first draw creates state 0
         }
     }
 }
@@ -406,6 +345,41 @@ impl ZFFIState {
         )
     }
 
+    /// Mark the current shading state as dirty (needs to be added to pool on next draw)
+    pub fn mark_shading_state_dirty(&mut self) {
+        self.shading_state_dirty = true;
+    }
+
+    /// Add current shading state to the pool if dirty, returning its index
+    ///
+    /// Uses deduplication via HashMap - if this exact state already exists, returns existing index.
+    /// Otherwise adds a new entry.
+    pub fn add_shading_state(&mut self) -> crate::graphics::ShadingStateIndex {
+        // If not dirty, return the last added state (should be at index states.len() - 1)
+        if !self.shading_state_dirty && !self.shading_states.is_empty() {
+            return crate::graphics::ShadingStateIndex(self.shading_states.len() as u32 - 1);
+        }
+
+        // Check if this state already exists (deduplication)
+        if let Some(&existing_idx) = self.shading_state_map.get(&self.current_shading_state) {
+            self.shading_state_dirty = false;
+            return existing_idx;
+        }
+
+        // Add new state
+        let idx = self.shading_states.len() as u32;
+        if idx >= 65536 {
+            panic!("Shading state pool overflow! Maximum 65,536 unique states per frame.");
+        }
+
+        let shading_idx = crate::graphics::ShadingStateIndex(idx);
+        self.shading_states.push(self.current_shading_state);
+        self.shading_state_map.insert(self.current_shading_state, shading_idx);
+        self.shading_state_dirty = false;
+
+        shading_idx
+    }
+
     /// Clear all per-frame commands and reset for next frame
     ///
     /// Called once per frame in app.rs after render_frame() completes.
@@ -426,7 +400,13 @@ impl ZFFIState {
         self.model_matrices.push(Mat4::IDENTITY);
         self.deferred_commands.clear();
         self.audio_commands.clear();
-        // Note: Camera, transforms, render state persist between frames
+
+        // Reset shading state pool for next frame
+        self.shading_states.clear();
+        self.shading_state_map.clear();
+        self.shading_state_dirty = true; // Mark dirty so first draw creates state 0
+
+        // Note: Render state (color, blend_mode, etc.) persists between frames
     }
 }
 

@@ -6,6 +6,7 @@
 
 use super::matrix_packing::MvpIndex;
 use super::render_state::{BlendMode, CullMode, MatcapBlendMode, RenderState, TextureHandle};
+use super::unified_shading_state::ShadingStateIndex;
 use super::vertex::{vertex_stride, VERTEX_FORMAT_COUNT};
 
 /// Specifies which buffer the geometry data comes from
@@ -39,14 +40,11 @@ pub struct VRPCommand {
     pub buffer_source: BufferSource,
     /// Texture slots bound for this draw
     pub texture_slots: [TextureHandle; 4],
-    /// Uniform color
-    pub color: u32,
+    /// Index into shading state buffer (contains color, blend mode, lights, sky, etc.)
+    pub shading_state_index: ShadingStateIndex,
     /// Render state at time of draw
     pub depth_test: bool,
     pub cull_mode: CullMode,
-    pub blend_mode: BlendMode,
-    /// Matcap blend modes for slots 1-3 (Mode 1 only)
-    pub matcap_blend_modes: [MatcapBlendMode; 4],
 }
 
 /// Virtual Render Pass for batching immediate-mode draws
@@ -87,6 +85,7 @@ impl VirtualRenderPass {
         format: u8,
         vertices: &[f32],
         mvp_index: MvpIndex,
+        shading_state_index: ShadingStateIndex,
         state: &RenderState,
     ) -> u32 {
         let format_idx = format as usize;
@@ -109,11 +108,9 @@ impl VirtualRenderPass {
             first_index: 0,
             buffer_source: BufferSource::Immediate,
             texture_slots: state.texture_slots,
-            color: state.color,
+            shading_state_index,
             depth_test: state.depth_test,
             cull_mode: state.cull_mode,
-            blend_mode: state.blend_mode,
-            matcap_blend_modes: state.matcap_blend_modes,
         });
 
         base_vertex
@@ -128,6 +125,7 @@ impl VirtualRenderPass {
         vertices: &[f32],
         indices: &[u16],
         mvp_index: MvpIndex,
+        shading_state_index: ShadingStateIndex,
         state: &RenderState,
     ) -> (u32, u32) {
         let format_idx = format as usize;
@@ -155,11 +153,9 @@ impl VirtualRenderPass {
             first_index,
             buffer_source: BufferSource::Immediate,
             texture_slots: state.texture_slots,
-            color: state.color,
+            shading_state_index,
             depth_test: state.depth_test,
             cull_mode: state.cull_mode,
-            blend_mode: state.blend_mode,
-            matcap_blend_modes: state.matcap_blend_modes,
         });
 
         (base_vertex, first_index)

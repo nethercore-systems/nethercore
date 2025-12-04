@@ -16,6 +16,7 @@ use crate::config::{self, Config};
 use crate::console::{EmberwareZ, VRAM_LIMIT};
 use crate::graphics::{TextureHandle, ZGraphics};
 use crate::input::InputManager;
+use glam::{Mat4, Vec3};
 use crate::library::{self, LocalGame};
 use crate::ui::{LibraryUi, UiAction};
 use emberware_core::console::{Console, Graphics};
@@ -274,16 +275,21 @@ impl App {
         let z_state = game.console_state_mut();
 
         // Update scene uniforms (camera, lights, materials) before rendering
-        let aspect_ratio = if let Some(window) = &self.window {
-            let size = window.inner_size();
-            size.width as f32 / size.height.max(1) as f32
-        } else {
-            16.0 / 9.0 // Default aspect ratio if no window
-        };
+        let view_matrix = z_state.view_matrices.get(z_state.current_view_idx as usize)
+            .copied()
+            .unwrap_or(Mat4::IDENTITY);
+        let proj_matrix = z_state.proj_matrices.get(z_state.current_proj_idx as usize)
+            .copied()
+            .unwrap_or(Mat4::IDENTITY);
+
+        // Extract camera position from inverse of view matrix
+        let camera_position = view_matrix.inverse().transform_point3(Vec3::ZERO);
+
         graphics.update_scene_uniforms(
-            &z_state.camera,
+            view_matrix,
+            proj_matrix,
+            camera_position,
             &z_state.lights,
-            aspect_ratio,
             z_state.material_metallic,
             z_state.material_roughness,
             z_state.material_emissive,

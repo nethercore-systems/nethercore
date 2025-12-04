@@ -19,7 +19,7 @@ use crate::audio::{AudioCommand, Sound};
 use crate::console::{ZInput, RESOLUTIONS, TICK_RATES};
 use crate::graphics::vertex_stride;
 use crate::state::{
-    DeferredCommand, Font, PendingMesh, PendingTexture, ZFFIState, MAX_BONES, MAX_TRANSFORM_STACK,
+    DeferredCommand, Font, PendingMesh, PendingTexture, ZFFIState, MAX_BONES,
 };
 
 /// Register all Emberware Z FFI functions with the linker
@@ -38,13 +38,8 @@ pub fn register_z_ffi(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState
     linker.func_wrap("env", "push_view_matrix", push_view_matrix)?;
     linker.func_wrap("env", "push_projection_matrix", push_projection_matrix)?;
 
-    // Transform stack functions
+    // Transform stack functions (legacy removed - use push_model_matrix instead)
     linker.func_wrap("env", "transform_identity", transform_identity)?;
-    linker.func_wrap("env", "transform_translate", transform_translate)?;
-    linker.func_wrap("env", "transform_rotate", transform_rotate)?;
-    linker.func_wrap("env", "transform_scale", transform_scale)?;
-    linker.func_wrap("env", "transform_push", transform_push)?;
-    linker.func_wrap("env", "transform_pop", transform_pop)?;
     linker.func_wrap("env", "transform_set", transform_set)?;
 
     // Input functions (from input submodule)
@@ -102,8 +97,6 @@ pub fn register_z_ffi(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState
     linker.func_wrap("env", "font_bind", font_bind)?;
 
     // Sky system
-    linker.func_wrap("env", "set_sky", set_sky)?;
-
     // Mode 1 (Matcap) functions
     linker.func_wrap("env", "matcap_set", matcap_set)?;
 
@@ -295,15 +288,11 @@ fn camera_set(
     target_z: f32,
 ) {
     let state = &mut caller.data_mut().console;
-    state.camera.position = Vec3::new(x, y, z);
-    state.camera.target = Vec3::new(target_x, target_y, target_z);
 
-    // Build view matrix
-    let view = Mat4::look_at_rh(
-        state.camera.position,
-        state.camera.target,
-        Vec3::Y,
-    );
+    // Build view matrix from position and target
+    let position = Vec3::new(x, y, z);
+    let target = Vec3::new(target_x, target_y, target_z);
+    let view = Mat4::look_at_rh(position, target, Vec3::Y);
 
     // Update view matrix pool (always index 0 for convenience)
     if state.view_matrices.is_empty() {
@@ -312,23 +301,6 @@ fn camera_set(
         state.view_matrices[0] = view;
     }
     state.current_view_idx = 0;
-
-    // Build projection matrix
-    let aspect = 16.0 / 9.0; // TODO: Get from actual viewport
-    let proj = Mat4::perspective_rh(
-        state.camera.fov.to_radians(),
-        aspect,
-        state.camera.near,
-        state.camera.far,
-    );
-
-    // Update projection matrix pool (always index 0 for convenience)
-    if state.proj_matrices.is_empty() {
-        state.proj_matrices.push(proj);
-    } else {
-        state.proj_matrices[0] = proj;
-    }
-    state.current_proj_idx = 0;
 }
 
 /// Set the camera field of view
@@ -337,6 +309,7 @@ fn camera_set(
 /// * `fov_degrees` — Field of view in degrees (typically 45-90, default 60)
 ///
 /// Values outside 1-179 degrees are clamped with a warning.
+/// Rebuilds the projection matrix at index 0 with default parameters (16:9 aspect, 0.1 near, 1000 far).
 fn camera_fov(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, fov_degrees: f32) {
     let state = &mut caller.data_mut().console;
 
@@ -352,7 +325,17 @@ fn camera_fov(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, f
         fov_degrees
     };
 
-    state.camera.fov = clamped_fov;
+    // Rebuild projection matrix with new FOV
+    let aspect = 16.0 / 9.0; // TODO: Get from actual viewport
+    let proj = Mat4::perspective_rh(clamped_fov.to_radians(), aspect, 0.1, 1000.0);
+
+    // Update projection matrix pool (always index 0 for convenience)
+    if state.proj_matrices.is_empty() {
+        state.proj_matrices.push(proj);
+    } else {
+        state.proj_matrices[0] = proj;
+    }
+    state.current_proj_idx = 0;
 }
 
 /// Push a custom view matrix to the pool, returning its index
@@ -438,102 +421,6 @@ fn push_projection_matrix(
 fn transform_identity(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>) {
     let state = &mut caller.data_mut().console;
     state.current_transform = Mat4::IDENTITY;
-}
-
-/// Translate the current transform
-///
-/// # Arguments
-/// * `x, y, z` — Translation amounts in world units
-///
-/// The translation is applied to the current transform (post-multiplication).
-fn transform_translate(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    x: f32,
-    y: f32,
-    z: f32,
-) {
-    let state = &mut caller.data_mut().console;
-    state.current_transform *= Mat4::from_translation(Vec3::new(x, y, z));
-}
-
-/// Rotate the current transform around an axis
-///
-/// # Arguments
-/// * `angle_deg` — Rotation angle in degrees
-/// * `x, y, z` — Rotation axis (will be normalized internally)
-///
-/// The rotation is applied to the current transform (post-multiplication).
-/// Common axes: (1,0,0)=X, (0,1,0)=Y, (0,0,1)=Z
-fn transform_rotate(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    angle_deg: f32,
-    x: f32,
-    y: f32,
-    z: f32,
-) {
-    let state = &mut caller.data_mut().console;
-    let axis = Vec3::new(x, y, z);
-
-    // Handle zero-length axis
-    if axis.length_squared() < 1e-10 {
-        warn!("transform_rotate called with zero-length axis, ignored");
-        return;
-    }
-
-    let axis = axis.normalize();
-    let angle_rad = angle_deg.to_radians();
-    state.current_transform *= Mat4::from_axis_angle(axis, angle_rad);
-}
-
-/// Scale the current transform
-///
-/// # Arguments
-/// * `x, y, z` — Scale factors for each axis (1.0 = no change)
-///
-/// The scale is applied to the current transform (post-multiplication).
-fn transform_scale(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    x: f32,
-    y: f32,
-    z: f32,
-) {
-    let state = &mut caller.data_mut().console;
-    state.current_transform *= Mat4::from_scale(Vec3::new(x, y, z));
-}
-
-/// Push the current transform onto the stack
-///
-/// Returns 1 on success, 0 if the stack is full (max 16 entries).
-/// Use this before making temporary transform changes that should be undone later.
-fn transform_push(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>) -> u32 {
-    let state = &mut caller.data_mut().console;
-
-    if state.transform_stack.len() >= MAX_TRANSFORM_STACK {
-        warn!(
-            "transform_push failed: stack full (max {} entries)",
-            MAX_TRANSFORM_STACK
-        );
-        return 0;
-    }
-
-    state.transform_stack.push(state.current_transform);
-    1
-}
-
-/// Pop the transform from the stack
-///
-/// Returns 1 on success, 0 if the stack is empty.
-/// Restores the transform that was active before the matching push.
-fn transform_pop(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>) -> u32 {
-    let state = &mut caller.data_mut().console;
-
-    if let Some(transform) = state.transform_stack.pop() {
-        state.current_transform = transform;
-        1
-    } else {
-        warn!("transform_pop failed: stack empty");
-        0
-    }
 }
 
 /// Set the current transform from a 4x4 matrix
@@ -2067,48 +1954,6 @@ fn font_bind(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, fo
 /// * `sun_dir_z` — Sun direction Z (will be normalized)
 /// * `sun_r` — Sun color red (0.0-1.0+)
 /// * `sun_g` — Sun color green (0.0-1.0+)
-/// * `sun_b` — Sun color blue (0.0-1.0+)
-/// * `sun_sharpness` — Sun sharpness (typically 32-256, higher = sharper sun)
-///
-/// Configures the procedural sky system for background rendering and ambient lighting.
-/// Default is all zeros (black sky, no sun, no lighting).
-fn set_sky(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    horizon_r: f32,
-    horizon_g: f32,
-    horizon_b: f32,
-    zenith_r: f32,
-    zenith_g: f32,
-    zenith_b: f32,
-    sun_dir_x: f32,
-    sun_dir_y: f32,
-    sun_dir_z: f32,
-    sun_r: f32,
-    sun_g: f32,
-    sun_b: f32,
-    sun_sharpness: f32,
-) {
-    let state = &mut caller.data_mut().console;
-
-    // Record sky configuration as a draw command
-    state.deferred_commands.push(DeferredCommand::SetSky {
-        horizon_color: [horizon_r, horizon_g, horizon_b],
-        zenith_color: [zenith_r, zenith_g, zenith_b],
-        sun_direction: [sun_dir_x, sun_dir_y, sun_dir_z],
-        sun_color: [sun_r, sun_g, sun_b],
-        sun_sharpness,
-    });
-
-    info!(
-        "set_sky: horizon=({:.2},{:.2},{:.2}), zenith=({:.2},{:.2},{:.2}), sun_dir=({:.2},{:.2},{:.2}), sun_color=({:.2},{:.2},{:.2}), sharpness={:.1}",
-        horizon_r, horizon_g, horizon_b,
-        zenith_r, zenith_g, zenith_b,
-        sun_dir_x, sun_dir_y, sun_dir_z,
-        sun_r, sun_g, sun_b,
-        sun_sharpness
-    );
-}
-
 // ============================================================================
 // Mode 1 (Matcap) Functions
 // ============================================================================

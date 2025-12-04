@@ -68,6 +68,7 @@ mod matrix_packing;
 mod pipeline;
 mod render_state;
 mod texture_manager;
+mod unified_shading_state;
 mod vertex;
 
 use hashbrown::HashMap;
@@ -87,6 +88,9 @@ pub use matrix_packing::MvpIndex;
 pub use render_state::{
     BlendMode, CameraUniforms, CullMode, LightUniform, LightsUniforms, MatcapBlendMode,
     MaterialUniforms, RenderState, SkyUniforms, TextureFilter, TextureHandle,
+};
+pub use unified_shading_state::{
+    PackedLight, PackedSky, PackedUnifiedShadingState, ShadingStateIndex,
 };
 pub use vertex::{
     vertex_stride, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV, VERTEX_FORMAT_COUNT,
@@ -932,21 +936,19 @@ impl ZGraphics {
     /// * `emissive` - Global emissive intensity (0.0 = no emission, 1.0+ = glowing)
     pub fn update_scene_uniforms(
         &mut self,
-        camera: &crate::state::CameraState,
+        view_matrix: Mat4,
+        proj_matrix: Mat4,
+        camera_position: Vec3,
         lights: &[crate::state::LightState; 4],
-        aspect_ratio: f32,
         metallic: f32,
         roughness: f32,
         emissive: f32,
     ) {
         // Update camera uniforms
-        let view = camera.view_matrix();
-        let proj = camera.projection_matrix(aspect_ratio);
-
         self.camera_uniforms = CameraUniforms {
-            view: view.to_cols_array_2d(),
-            projection: proj.to_cols_array_2d(),
-            position: [camera.position.x, camera.position.y, camera.position.z, 0.0],
+            view: view_matrix.to_cols_array_2d(),
+            projection: proj_matrix.to_cols_array_2d(),
+            position: [camera_position.x, camera_position.y, camera_position.z, 0.0],
         };
 
         self.queue.write_buffer(
@@ -1005,7 +1007,7 @@ impl ZGraphics {
 
         tracing::trace!(
             "Updated scene uniforms: camera_pos={:?}, lights_enabled={}/{}/{}/{}, material=M{:.2}/R{:.2}/E{:.2}",
-            camera.position,
+            camera_position,
             lights[0].enabled,
             lights[1].enabled,
             lights[2].enabled,
@@ -1240,8 +1242,12 @@ impl ZGraphics {
                     let position = transform.w_axis.truncate();
 
                     // Get direction from billboard to camera (same for all billboards)
+                    // Get view matrix from pool
+                    let view_matrix = z_state.view_matrices.get(z_state.current_view_idx as usize)
+                        .copied()
+                        .unwrap_or(Mat4::IDENTITY);
+
                     // view_matrix.z_axis points backward (toward camera), which is what we want
-                    let view_matrix = z_state.camera.view_matrix();
                     let to_camera = view_matrix.z_axis.truncate();
 
                     // Generate billboard orientation based on mode
@@ -1636,21 +1642,6 @@ impl ZGraphics {
                         blend_mode: Self::convert_blend_mode(blend_mode),
                         matcap_blend_modes,
                     });
-                }
-                DeferredCommand::SetSky {
-                    horizon_color,
-                    zenith_color,
-                    sun_direction,
-                    sun_color,
-                    sun_sharpness,
-                } => {
-                    self.set_sky(
-                        horizon_color,
-                        zenith_color,
-                        sun_direction,
-                        sun_color,
-                        sun_sharpness,
-                    );
                 }
             }
         }

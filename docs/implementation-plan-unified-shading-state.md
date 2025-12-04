@@ -1,6 +1,6 @@
 # Implementation Plan: Unified Shading State
 
-**Status:** Not Started (implement after matrix packing)
+**Status:** Phase 1-2 Complete, 3 Partial
 **Estimated Effort:** 4-6 days
 **Priority:** High (bug fix - current implementation is wrong)
 **Depends On:** Matrix index packing (required - uses second u32 in mvp_indices buffer)
