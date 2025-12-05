@@ -339,25 +339,79 @@ The shader generation system needs several updates:
 
 ### 5.2 Unified Shading State Changes
 
-The `PackedUnifiedShadingState` currently stores:
+**Material Property Architecture:**
+
+Mode 3 uses a texture-based workflow (like Mode 2) with uniform fallbacks:
+
+| Property | Source | Fallback |
+|----------|--------|----------|
+| **Specular color** (RGB) | Slot 1 texture (RGB channels) | Uniform (3 bytes) |
+| **Shininess** | Slot 1 texture (A channel) | Uniform (1 byte) |
+| **Rim intensity** | Uniform only | — |
+| **Rim power** | Uniform only | — |
+| **Emissive** | Slot 0 texture (A channel) | Uniform (1 byte) |
+
+**Current `PackedUnifiedShadingState` layout:**
 ```rust
-pub metallic: u8,
+pub metallic: u8,              // 4 bytes
 pub roughness: u8,
 pub emissive: u8,
+pub pad0: u8,
+pub color_rgba8: u32,          // 4 bytes (used by all modes)
+pub blend_mode: u32,           // 4 bytes (used by all modes)
+pub matcap_blend_modes: u32,   // 4 bytes (Mode 1 only)
+pub sky: PackedSky,            // 16 bytes
+pub lights: [PackedLight; 4],  // 32 bytes
 ```
 
-For Mode 3 Blinn-Phong, we need additional material properties. **Options:**
+**Proposed: Mode-Specific Field Interpretation**
 
-**Option A**: Reuse existing fields (simpler, no struct changes)
-- `metallic` → `rim_intensity` (0-255 maps to 0.0-1.0)
-- `roughness` → `rim_power` (0-255 maps to 1.0-32.0)
-- `emissive` → keep as emissive
+Reuse existing fields with different meanings per mode (no struct changes):
 
-**Option B**: Add new fields (cleaner, requires struct resize)
-- Add `specular_r`, `specular_g`, `specular_b`, `shininess`, `rim_intensity`, `rim_power`
-- Increases struct size, may affect cache/alignment
+```rust
+// Fields 0-3: Mode-specific material properties
+pub material_param_0: u8,  // Mode 2: metallic,    Mode 3: specular_r
+pub material_param_1: u8,  // Mode 2: roughness,   Mode 3: specular_g
+pub material_param_2: u8,  // Mode 2: emissive,    Mode 3: specular_b
+pub material_param_3: u8,  // Mode 2: pad (unused), Mode 3: shininess
 
-**Recommendation**: Start with Option A (reuse fields). Mode 3 games won't use PBR-specific metallic/roughness anyway.
+// Bytes from matcap_blend_modes (Mode 1 only, Mode 3 can repurpose)
+// matcap_blend_modes: u32 (byte layout: [mode1, mode2, mode3, mode4])
+//   Mode 3 uses bytes 0-1: rim_intensity (byte 0), rim_power (byte 1)
+//   Mode 1 uses all 4 bytes for matcap blend modes
+```
+
+**In shader code:**
+
+```wgsl
+// Mode 3 unpacking in fragment shader:
+let shading = shading_states[in.shading_state_index];
+
+// Unpack specular color + shininess (uniform defaults)
+let specular_r = unpack_unorm8_from_u32(shading.material_param_0);
+let specular_g = unpack_unorm8_from_u32(shading.material_param_1);
+let specular_b = unpack_unorm8_from_u32(shading.material_param_2);
+let shininess_uniform = unpack_unorm8_from_u32(shading.material_param_3);
+
+var specular_color = vec3<f32>(specular_r, specular_g, specular_b);
+var shininess_raw = shininess_uniform;
+
+// Texture overrides (from Slot 1 if UV format present)
+//FS_SPECULAR_SHININESS  // Replaces specular_color and shininess_raw
+
+// Map shininess 0-1 → 1-256
+let shininess = mix(1.0, 256.0, shininess_raw);
+
+// Unpack rim parameters (from matcap_blend_modes bytes 0-1)
+let rim_intensity = unpack_unorm8_from_u32(shading.matcap_blend_modes & 0xFFu);
+let rim_power = unpack_unorm8_from_u32((shading.matcap_blend_modes >> 8u) & 0xFFu) * 32.0;  // Map to 0-32 range
+```
+
+**Benefits:**
+- ✅ No struct size change
+- ✅ Zero runtime cost
+- ✅ Clear separation: texture = primary, uniform = fallback
+- ✅ Rim parameters stay uniform-only (no texture complexity)
 
 ### 5.3 Texture Slot Usage
 
@@ -373,17 +427,33 @@ The white fallback texture (value `1.0` in all channels) ensures unused slots do
 
 ### 5.4 FFI Function Changes
 
-Add material control functions for Mode 3:
+**New functions for Mode 3 material control:**
+
 ```rust
-fn material_specular(r: f32, g: f32, b: f32)  // Specular color
-fn material_shininess(value: f32)              // Shininess 0.0-1.0 → 1-256
-fn material_rim(intensity: f32, power: f32)    // Rim lighting control
+/// Set specular color (uniform fallback, overridden by Slot 1 texture RGB)
+fn material_specular(r: f32, g: f32, b: f32);
+
+/// Set shininess (uniform fallback, overridden by Slot 1 texture A)
+/// Maps 0.0-1.0 to shininess range 1-256
+fn material_shininess(value: f32);
+
+/// Set rim lighting parameters (uniform-only, no texture override)
+/// intensity: 0.0-1.0, power: 0.0-1.0 (mapped to 0-32 internally)
+fn material_rim(intensity: f32, power: f32);
 ```
 
-Alternatively, repurpose existing functions:
-- `material_metallic()` → controls rim_intensity in Mode 3
-- `material_roughness()` → controls rim_power in Mode 3
-- `material_emissive()` → unchanged
+**How they map to `PackedUnifiedShadingState`:**
+
+| FFI Function | Field | Mode 2 Meaning | Mode 3 Meaning |
+|--------------|-------|----------------|----------------|
+| `material_metallic(v)` | `material_param_0` | Metallic | Specular R (if `material_specular` not called) |
+| `material_roughness(v)` | `material_param_1` | Roughness | Specular G (if `material_specular` not called) |
+| `material_emissive(v)` | `material_param_2` | Emissive | Specular B (if `material_specular` not called) |
+| `material_specular(r,g,b)` | `material_param_0-2` | N/A | Specular RGB (Mode 3 only) |
+| `material_shininess(v)` | `material_param_3` | N/A | Shininess (Mode 3 only) |
+| `material_rim(i, p)` | `matcap_blend_modes` bytes 0-1 | N/A | Rim intensity/power (Mode 3 only) |
+
+**Recommendation:** Add Mode 3-specific functions for clarity. Developers calling `material_specular()` in Mode 3 is clearer than repurposing `material_metallic()`.
 
 ---
 
@@ -587,12 +657,13 @@ examples/blinn-phong/
   - [ ] Lighting section
 
 ### Material System (Required)
-- [ ] Decide on material property storage (Option A vs B)
-- [ ] Update `emberware-z/src/graphics/unified_shading_state.rs` if needed
+- [ ] Implement mode-specific field interpretation (Section 5.2)
+  - [ ] Mode 2: metallic/roughness/emissive interpretation
+  - [ ] Mode 3: specular RGB/shininess interpretation + rim from matcap_blend_modes
 - [ ] Add FFI functions to `emberware-z/src/ffi/mod.rs`:
-  - [ ] `material_specular(r, g, b)` or repurpose existing
-  - [ ] `material_shininess(value)` or repurpose existing
-  - [ ] `material_rim(intensity, power)` or repurpose existing
+  - [ ] `material_specular(r: f32, g: f32, b: f32)` - sets specular color uniform
+  - [ ] `material_shininess(value: f32)` - sets shininess uniform (0.0-1.0)
+  - [ ] `material_rim(intensity: f32, power: f32)` - sets rim parameters
 
 ### Example Game (Required)
 - [ ] Create `examples/blinn-phong/` directory structure
