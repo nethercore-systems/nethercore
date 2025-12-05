@@ -11,7 +11,8 @@
       "Bash(find:*)",
       "Bash(git checkout:*)",
       "Bash(grep:*)",
-      "Bash(timeout 5 cargo run:*)"
+      "Bash(timeout 5 cargo run:*)",
+      "Bash(timeout 60 cargo check:*)"
     ],
     "deny": [],
     "ask": []

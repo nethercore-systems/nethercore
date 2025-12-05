@@ -46,14 +46,14 @@ struct PackedUnifiedShadingState {
 @group(0) @binding(3) var<storage, read> shading_states: array<PackedUnifiedShadingState>;
 
 // UNUSED - Quads get shading_state_index from QuadInstance, not from MVP indices
-@group(0) @binding(4) var<storage, read> _unused_mvp_shading_indices: array<vec2<u32>>;
+@group(0) @binding(4) var<storage, read> _unused_mvp_shading_indices: array<vec4<u32>>;
 
 // UNUSED - Quads don't use GPU skinning
 @group(0) @binding(5) var<storage, read> _unused_bones: array<mat4x4<f32>, 256>;
 
-// Quad instance data (56 bytes per instance)
+// Quad instance data (64 bytes per instance, 16-byte aligned)
 struct QuadInstance {
-    position: vec3<f32>,           // 12 bytes - world-space or screen-space position
+    position: vec4<f32>,           // 16 bytes - world/screen position (xyz used, w padding)
     size: vec2<f32>,               // 8 bytes - width, height
     rotation: f32,                 // 4 bytes - rotation in radians (for screen-space)
     mode: u32,                     // 4 bytes - QuadMode enum value
@@ -226,7 +226,7 @@ fn vs(in: VertexIn, @builtin(instance_index) instance_idx: u32) -> VertexOut {
         let ndc_z = instance.position.z;  // Depth [0, 1]
 
         out.clip_position = vec4<f32>(ndc_x, ndc_y, ndc_z, 1.0);
-        out.world_position = instance.position;  // Not actually world position for screen-space
+        out.world_position = instance.position.xyz;  // Not actually world position for screen-space
     }
     else if (instance.mode == WORLD_SPACE) {
         // World-space quad (uses model matrix if needed)
@@ -236,14 +236,14 @@ fn vs(in: VertexIn, @builtin(instance_index) instance_idx: u32) -> VertexOut {
             in.position.y * instance.size.y,
             0.0
         );
-        world_pos = instance.position + scaled_pos;
+        world_pos = instance.position.xyz + scaled_pos;
         out.world_position = world_pos;
         out.clip_position = projection_matrix * view_matrix * vec4<f32>(world_pos, 1.0);
     }
     else {
         // Billboard modes (SPHERICAL, CYLINDRICAL_Y/X/Z)
         let billboard_offset = apply_billboard(in.position.xy, instance.size, instance.mode, view_matrix);
-        world_pos = instance.position + billboard_offset;
+        world_pos = instance.position.xyz + billboard_offset;
         out.world_position = world_pos;
         out.clip_position = projection_matrix * view_matrix * vec4<f32>(world_pos, 1.0);
     }

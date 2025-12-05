@@ -4,19 +4,20 @@
 //! for flushing to the GPU at frame end. This serves as an intermediate
 //! representation between FFI commands and GPU execution.
 
-use super::matrix_packing::MvpIndex;
 use super::render_state::{CullMode, RenderState, TextureHandle};
-use super::unified_shading_state::ShadingStateIndex;
 use super::vertex::{vertex_stride, VERTEX_FORMAT_COUNT};
 
 /// Specifies which buffer the geometry data comes from
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BufferSource {
     /// Dynamic geometry uploaded each frame (draw_triangles)
-    Immediate,
+    /// Contains buffer_index into mvp_shading_states
+    Immediate(u32),
     /// Static geometry uploaded once (load_mesh_indexed, draw_mesh)
-    Retained,
+    /// Contains buffer_index into mvp_shading_states
+    Retained(u32),
     /// GPU-instanced quads (billboards, sprites, draw_rect)
+    /// No buffer index - quads store shading state in instance data
     Quad,
 }
 
@@ -24,31 +25,44 @@ pub enum BufferSource {
 ///
 /// Represents a single draw call with all necessary state captured.
 /// Named VRPCommand to clearly indicate it's part of the Virtual Render Pass system.
+///
+/// Variants correspond to different rendering paths:
+/// - Mesh: Non-indexed draws (draw_triangles)
+/// - IndexedMesh: Indexed draws (draw_mesh, load_mesh_indexed)
+/// - Quad: GPU-instanced quads (billboards, sprites, text)
 #[derive(Debug, Clone)]
-pub struct VRPCommand {
-    /// Vertex format
-    pub format: u8,
-    /// Packed MVP matrix indices (model: 16 bits, view: 8 bits, proj: 8 bits)
-    pub mvp_index: MvpIndex,
-    /// Number of vertices to draw
-    pub vertex_count: u32,
-    /// Number of indices (0 for non-indexed)
-    pub index_count: u32,
-    /// Base vertex index in the buffer
-    pub base_vertex: u32,
-    /// First index in the index buffer
-    pub first_index: u32,
-    /// Which buffer contains this geometry's data
-    pub buffer_source: BufferSource,
-    /// Instance count for GPU instancing (0 or 1 = non-instanced, >1 = instanced draw)
-    pub instance_count: u32,
-    /// Texture slots bound for this draw
-    pub texture_slots: [TextureHandle; 4],
-    /// Index into shading state buffer (contains color, blend mode, lights, sky, etc.)
-    pub shading_state_index: ShadingStateIndex,
-    /// Render state at time of draw
-    pub depth_test: bool,
-    pub cull_mode: CullMode,
+pub enum VRPCommand {
+    /// Non-indexed mesh draw (draw_triangles, immediate geometry)
+    Mesh {
+        format: u8,
+        vertex_count: u32,
+        base_vertex: u32,
+        buffer_index: u32,
+        texture_slots: [TextureHandle; 4],
+        depth_test: bool,
+        cull_mode: CullMode,
+    },
+    /// Indexed mesh draw (draw_mesh, load_mesh_indexed)
+    IndexedMesh {
+        format: u8,
+        index_count: u32,
+        base_vertex: u32,
+        first_index: u32,
+        buffer_index: u32,
+        texture_slots: [TextureHandle; 4],
+        depth_test: bool,
+        cull_mode: CullMode,
+    },
+    /// GPU-instanced quad draw (billboards, sprites, text, rects)
+    /// All quads share a single unit quad mesh (4 vertices, 6 indices)
+    Quad {
+        base_vertex: u32,    // Unit quad base vertex in buffer
+        first_index: u32,    // Unit quad first index in buffer
+        instance_count: u32, // Number of quad instances to draw
+        texture_slots: [TextureHandle; 4],
+        depth_test: bool,
+        cull_mode: CullMode,
+    },
 }
 
 /// Virtual Render Pass for batching immediate-mode draws
@@ -88,8 +102,7 @@ impl VirtualRenderPass {
         &mut self,
         format: u8,
         vertices: &[f32],
-        mvp_index: MvpIndex,
-        shading_state_index: ShadingStateIndex,
+        buffer_index: u32,
         texture_slots: [TextureHandle; 4],
         state: &RenderState,
     ) -> u32 {
@@ -104,17 +117,12 @@ impl VirtualRenderPass {
         self.vertex_counts[format_idx] += vertex_count as u32;
 
         // Record draw command
-        self.commands.push(VRPCommand {
+        self.commands.push(VRPCommand::Mesh {
             format,
-            mvp_index,
             vertex_count: vertex_count as u32,
-            index_count: 0,
             base_vertex,
-            first_index: 0,
-            buffer_source: BufferSource::Immediate,
-            instance_count: 1, // Non-instanced draw
+            buffer_index,
             texture_slots,
-            shading_state_index,
             depth_test: state.depth_test,
             cull_mode: state.cull_mode,
         });
@@ -130,8 +138,7 @@ impl VirtualRenderPass {
         format: u8,
         vertices: &[f32],
         indices: &[u16],
-        mvp_index: MvpIndex,
-        shading_state_index: ShadingStateIndex,
+        buffer_index: u32,
         texture_slots: [TextureHandle; 4],
         state: &RenderState,
     ) -> (u32, u32) {
@@ -151,17 +158,13 @@ impl VirtualRenderPass {
         self.index_counts[format_idx] += indices.len() as u32;
 
         // Record draw command
-        self.commands.push(VRPCommand {
+        self.commands.push(VRPCommand::IndexedMesh {
             format,
-            mvp_index,
-            vertex_count: vertex_count as u32,
             index_count: indices.len() as u32,
             base_vertex,
             first_index,
-            buffer_source: BufferSource::Immediate,
-            instance_count: 1, // Non-instanced draw
+            buffer_index,
             texture_slots,
-            shading_state_index,
             depth_test: state.depth_test,
             cull_mode: state.cull_mode,
         });
@@ -222,8 +225,7 @@ impl VirtualRenderPass {
         &mut self,
         format: u8,
         vertex_data: &[f32],
-        mvp_index: MvpIndex,
-        shading_state_index: ShadingStateIndex,
+        buffer_index: u32,
         texture_slots: [TextureHandle; 4],
         depth_test: bool,
         cull_mode: CullMode,
@@ -238,17 +240,12 @@ impl VirtualRenderPass {
         self.vertex_data[format_idx].extend_from_slice(byte_data);
         self.vertex_counts[format_idx] += vertex_count as u32;
 
-        self.commands.push(VRPCommand {
+        self.commands.push(VRPCommand::Mesh {
             format,
-            mvp_index,
             vertex_count: vertex_count as u32,
-            index_count: 0,
             base_vertex,
-            first_index: 0,
-            buffer_source: BufferSource::Immediate,
-            instance_count: 1, // Non-instanced draw
+            buffer_index,
             texture_slots,
-            shading_state_index,
             depth_test,
             cull_mode,
         });
@@ -260,8 +257,7 @@ impl VirtualRenderPass {
         format: u8,
         vertex_data: &[f32],
         index_data: &[u16],
-        mvp_index: MvpIndex,
-        shading_state_index: ShadingStateIndex,
+        buffer_index: u32,
         texture_slots: [TextureHandle; 4],
         depth_test: bool,
         cull_mode: CullMode,
@@ -280,17 +276,13 @@ impl VirtualRenderPass {
         self.index_data[format_idx].extend_from_slice(index_data);
         self.index_counts[format_idx] += index_data.len() as u32;
 
-        self.commands.push(VRPCommand {
+        self.commands.push(VRPCommand::IndexedMesh {
             format,
-            mvp_index,
-            vertex_count: vertex_count as u32,
             index_count: index_data.len() as u32,
             base_vertex,
             first_index,
-            buffer_source: BufferSource::Immediate,
-            instance_count: 1, // Non-instanced draw
+            buffer_index,
             texture_slots,
-            shading_state_index,
             depth_test,
             cull_mode,
         });
@@ -304,34 +296,38 @@ impl VirtualRenderPass {
         mesh_index_count: u32,
         mesh_vertex_offset: u64,
         mesh_index_offset: u64,
-        mvp_index: MvpIndex,
-        shading_state_index: ShadingStateIndex,
+        buffer_index: u32,
         texture_slots: [TextureHandle; 4],
         depth_test: bool,
         cull_mode: CullMode,
     ) {
         let stride = vertex_stride(mesh_format) as u64;
         let base_vertex = (mesh_vertex_offset / stride) as u32;
-        let first_index = if mesh_index_count > 0 {
-            (mesh_index_offset / 2) as u32 // u16 indices are 2 bytes each
-        } else {
-            0
-        };
 
-        self.commands.push(VRPCommand {
-            format: mesh_format,
-            mvp_index,
-            vertex_count: mesh_vertex_count,
-            index_count: mesh_index_count,
-            base_vertex,
-            first_index,
-            buffer_source: BufferSource::Retained,
-            instance_count: 1, // Non-instanced draw
-            texture_slots,
-            shading_state_index,
-            depth_test,
-            cull_mode,
-        });
+        // Choose variant based on whether mesh is indexed
+        if mesh_index_count > 0 {
+            let first_index = (mesh_index_offset / 2) as u32; // u16 indices are 2 bytes each
+            self.commands.push(VRPCommand::IndexedMesh {
+                format: mesh_format,
+                index_count: mesh_index_count,
+                base_vertex,
+                first_index,
+                buffer_index,
+                texture_slots,
+                depth_test,
+                cull_mode,
+            });
+        } else {
+            self.commands.push(VRPCommand::Mesh {
+                format: mesh_format,
+                vertex_count: mesh_vertex_count,
+                base_vertex,
+                buffer_index,
+                texture_slots,
+                depth_test,
+                cull_mode,
+            });
+        }
     }
 
     /// Get vertex data for a format
@@ -392,16 +388,20 @@ mod tests {
         let base = cb.add_vertices(
             FORMAT_COLOR,
             &vertices,
-            MvpIndex::INVALID,
-            ShadingStateIndex(0),
+            0,  // buffer_index
             [TextureHandle::INVALID; 4],
             &state,
         );
 
         assert_eq!(base, 0);
         assert_eq!(cb.commands().len(), 1);
-        assert_eq!(cb.commands()[0].vertex_count, 3);
-        assert_eq!(cb.commands()[0].format, FORMAT_COLOR);
+        match &cb.commands()[0] {
+            VRPCommand::Mesh { vertex_count, format, .. } => {
+                assert_eq!(*vertex_count, 3);
+                assert_eq!(*format, FORMAT_COLOR);
+            }
+            _ => panic!("Expected Mesh variant"),
+        }
     }
 
     #[test]
@@ -416,8 +416,7 @@ mod tests {
             0,
             &vertices,
             &indices,
-            MvpIndex::INVALID,
-            ShadingStateIndex(0),
+            0,  // buffer_index
             [TextureHandle::INVALID; 4],
             &state,
         );
@@ -425,8 +424,12 @@ mod tests {
         assert_eq!(base_vertex, 0);
         assert_eq!(first_index, 0);
         assert_eq!(cb.commands().len(), 1);
-        assert_eq!(cb.commands()[0].vertex_count, 4);
-        assert_eq!(cb.commands()[0].index_count, 6);
+        match &cb.commands()[0] {
+            VRPCommand::IndexedMesh { index_count, .. } => {
+                assert_eq!(*index_count, 6);
+            }
+            _ => panic!("Expected IndexedMesh variant"),
+        }
     }
 
     #[test]
@@ -438,8 +441,7 @@ mod tests {
         cb.add_vertices(
             0,
             &vertices,
-            MvpIndex::INVALID,
-            ShadingStateIndex(0),
+            0,  // buffer_index
             [TextureHandle::INVALID; 4],
             &state,
         );
@@ -472,23 +474,27 @@ mod tests {
         cb.add_vertices(
             0,
             &v_pos,
-            MvpIndex::INVALID,
-            ShadingStateIndex(0),
+            0,  // buffer_index
             [TextureHandle::INVALID; 4],
             &state,
         );
         cb.add_vertices(
             FORMAT_UV,
             &v_pos_uv,
-            MvpIndex::INVALID,
-            ShadingStateIndex(0),
+            0,  // buffer_index
             [TextureHandle::INVALID; 4],
             &state,
         );
 
         assert_eq!(cb.commands().len(), 2);
-        assert_eq!(cb.commands()[0].format, 0);
-        assert_eq!(cb.commands()[1].format, FORMAT_UV);
+        match &cb.commands()[0] {
+            VRPCommand::Mesh { format, .. } => assert_eq!(*format, 0),
+            _ => panic!("Expected Mesh variant"),
+        }
+        match &cb.commands()[1] {
+            VRPCommand::Mesh { format, .. } => assert_eq!(*format, FORMAT_UV),
+            _ => panic!("Expected Mesh variant"),
+        }
     }
 
     #[test]
@@ -497,28 +503,32 @@ mod tests {
         let state = RenderState::default();
         let vertices = [0.0f32, 0.0, 0.0, 1.0, 0.0, 0.0, 0.5, 1.0, 0.0];
 
-        let mvp_index1 = MvpIndex::INVALID;
-        let mvp_index2 = MvpIndex::new(10, 1, 0);
+        let buffer_index1 = 0;
+        let buffer_index2 = 1;
 
         cb.add_vertices(
             0,
             &vertices,
-            mvp_index1,
-            ShadingStateIndex(0),
+            buffer_index1,
             [TextureHandle::INVALID; 4],
             &state,
         );
         cb.add_vertices(
             0,
             &vertices,
-            mvp_index2,
-            ShadingStateIndex(0),
+            buffer_index2,
             [TextureHandle::INVALID; 4],
             &state,
         );
 
-        assert_eq!(cb.commands()[0].mvp_index, mvp_index1);
-        assert_eq!(cb.commands()[1].mvp_index, mvp_index2);
+        match &cb.commands()[0] {
+            VRPCommand::Mesh { buffer_index, .. } => assert_eq!(*buffer_index, buffer_index1),
+            _ => panic!("Expected Mesh variant"),
+        }
+        match &cb.commands()[1] {
+            VRPCommand::Mesh { buffer_index, .. } => assert_eq!(*buffer_index, buffer_index2),
+            _ => panic!("Expected Mesh variant"),
+        }
     }
 
     #[test]
@@ -535,13 +545,15 @@ mod tests {
         let base = cb.add_vertices(
             0,
             &large_data,
-            MvpIndex::INVALID,
-            ShadingStateIndex(0),
+            0,  // buffer_index
             [TextureHandle::INVALID; 4],
             &state,
         );
         assert_eq!(base, 0);
-        assert_eq!(cb.commands()[0].vertex_count, 3000);
+        match &cb.commands()[0] {
+            VRPCommand::Mesh { vertex_count, .. } => assert_eq!(*vertex_count, 3000),
+            _ => panic!("Expected Mesh variant"),
+        }
     }
 
     #[test]
@@ -579,15 +591,19 @@ mod tests {
         let base = cb.add_vertices(
             FORMAT_SKINNED,
             &vertices,
-            MvpIndex::INVALID,
-            ShadingStateIndex(0),
+            0,  // buffer_index
             [TextureHandle::INVALID; 4],
             &state,
         );
 
         assert_eq!(base, 0);
         assert_eq!(cb.commands().len(), 1);
-        assert_eq!(cb.commands()[0].vertex_count, 3);
-        assert_eq!(cb.commands()[0].format, FORMAT_SKINNED);
+        match &cb.commands()[0] {
+            VRPCommand::Mesh { vertex_count, format, .. } => {
+                assert_eq!(*vertex_count, 3);
+                assert_eq!(*format, FORMAT_SKINNED);
+            }
+            _ => panic!("Expected Mesh variant"),
+        }
     }
 }

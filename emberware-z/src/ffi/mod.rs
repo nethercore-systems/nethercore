@@ -302,13 +302,8 @@ fn camera_set(
     let target = Vec3::new(target_x, target_y, target_z);
     let view = Mat4::look_at_rh(position, target, Vec3::Y);
 
-    // Update view matrix pool (always index 0 for convenience)
-    if state.view_matrices.is_empty() {
-        state.view_matrices.push(view);
-    } else {
-        state.view_matrices[0] = view;
-    }
-    state.current_view_idx = 0;
+    // Set current view matrix (will be pushed to pool on next draw)
+    state.current_view_matrix = Some(view);
 }
 
 /// Set the camera field of view
@@ -337,13 +332,8 @@ fn camera_fov(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, f
     let aspect = 16.0 / 9.0; // TODO: Get from actual viewport
     let proj = Mat4::perspective_rh(clamped_fov.to_radians(), aspect, 0.1, 1000.0);
 
-    // Update projection matrix pool (always index 0 for convenience)
-    if state.proj_matrices.is_empty() {
-        state.proj_matrices.push(proj);
-    } else {
-        state.proj_matrices[0] = proj;
-    }
-    state.current_proj_idx = 0;
+    // Set current projection matrix (will be pushed to pool on next draw)
+    state.current_proj_matrix = Some(proj);
 }
 
 /// Push a custom view matrix to the pool, returning its index
@@ -374,21 +364,14 @@ fn push_view_matrix(
     m13: f32,
     m14: f32,
     m15: f32,
-) -> u32 {
+) {
     let state = &mut caller.data_mut().console;
 
     let matrix = Mat4::from_cols_array(&[
         m0, m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15,
     ]);
 
-    let idx = state.view_matrices.len() as u32;
-    if idx >= 256 {
-        panic!("View matrix pool overflow! Maximum 256 view matrices per frame.");
-    }
-
-    state.view_matrices.push(matrix);
-    state.current_view_idx = idx;
-    idx
+    state.current_view_matrix = Some(matrix);
 }
 
 /// Push a custom projection matrix to the pool, returning its index
@@ -399,8 +382,7 @@ fn push_view_matrix(
 /// # Arguments
 /// * `m0-m15` — Matrix elements in column-major order
 ///
-/// # Returns
-/// The index of the newly added projection matrix (0-255)
+/// Sets the current projection matrix (no return value - uses lazy allocation)
 fn push_projection_matrix(
     mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
     m0: f32,
@@ -419,21 +401,14 @@ fn push_projection_matrix(
     m13: f32,
     m14: f32,
     m15: f32,
-) -> u32 {
+) {
     let state = &mut caller.data_mut().console;
 
     let matrix = Mat4::from_cols_array(&[
         m0, m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15,
     ]);
 
-    let idx = state.proj_matrices.len() as u32;
-    if idx >= 256 {
-        panic!("Projection matrix pool overflow! Maximum 256 projection matrices per frame.");
-    }
-
-    state.proj_matrices.push(matrix);
-    state.current_proj_idx = idx;
-    idx
+    state.current_proj_matrix = Some(matrix);
 }
 
 // ============================================================================
@@ -447,10 +422,7 @@ fn push_projection_matrix(
 /// This is typically called at the start of rendering to reset the transform stack.
 fn push_identity(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>) {
     let state = &mut caller.data_mut().console;
-    let new_idx = state
-        .add_model_matrix(Mat4::IDENTITY)
-        .expect("Model matrix pool overflow");
-    state.current_model_idx = new_idx;
+    state.current_model_matrix = Some(Mat4::IDENTITY);
 }
 
 /// Set the current transform from a 4x4 matrix
@@ -499,10 +471,7 @@ fn transform_set(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>
     };
     let state = &mut caller.data_mut().console;
     let new_matrix = Mat4::from_cols_array(&matrix);
-    let new_idx = state
-        .add_model_matrix(new_matrix)
-        .expect("Model matrix pool overflow");
-    state.current_model_idx = new_idx;
+    state.current_model_matrix = Some(new_matrix);  // Pending matrix
 }
 
 /// Push a translated transform onto the stack
@@ -518,12 +487,11 @@ fn push_translate(
     z: f32,
 ) {
     let state = &mut caller.data_mut().console;
-    let current_matrix = state.model_matrices[state.current_model_idx as usize];
-    let new_matrix = current_matrix * Mat4::from_translation(Vec3::new(x, y, z));
-    let new_idx = state
-        .add_model_matrix(new_matrix)
-        .expect("Model matrix pool overflow");
-    state.current_model_idx = new_idx;
+    let current = state.current_model_matrix.unwrap_or_else(|| {
+        state.model_matrices.last().copied().unwrap_or(Mat4::IDENTITY)
+    });
+    let new_matrix = current * Mat4::from_translation(Vec3::new(x, y, z));
+    state.current_model_matrix = Some(new_matrix);
 }
 
 /// Push a rotated transform onto the stack (X axis)
@@ -537,13 +505,12 @@ fn push_rotate_x(
     angle_deg: f32,
 ) {
     let state = &mut caller.data_mut().console;
-    let current_matrix = state.model_matrices[state.current_model_idx as usize];
+    let current = state.current_model_matrix.unwrap_or_else(|| {
+        state.model_matrices.last().copied().unwrap_or(Mat4::IDENTITY)
+    });
     let angle_rad = angle_deg.to_radians();
-    let new_matrix = current_matrix * Mat4::from_rotation_x(angle_rad);
-    let new_idx = state
-        .add_model_matrix(new_matrix)
-        .expect("Model matrix pool overflow");
-    state.current_model_idx = new_idx;
+    let new_matrix = current * Mat4::from_rotation_x(angle_rad);
+    state.current_model_matrix = Some(new_matrix);
 }
 
 /// Push a rotated transform onto the stack (Y axis)
@@ -557,13 +524,12 @@ fn push_rotate_y(
     angle_deg: f32,
 ) {
     let state = &mut caller.data_mut().console;
-    let current_matrix = state.model_matrices[state.current_model_idx as usize];
+    let current = state.current_model_matrix.unwrap_or_else(|| {
+        state.model_matrices.last().copied().unwrap_or(Mat4::IDENTITY)
+    });
     let angle_rad = angle_deg.to_radians();
-    let new_matrix = current_matrix * Mat4::from_rotation_y(angle_rad);
-    let new_idx = state
-        .add_model_matrix(new_matrix)
-        .expect("Model matrix pool overflow");
-    state.current_model_idx = new_idx;
+    let new_matrix = current * Mat4::from_rotation_y(angle_rad);
+    state.current_model_matrix = Some(new_matrix);
 }
 
 /// Push a rotated transform onto the stack (Z axis)
@@ -577,13 +543,12 @@ fn push_rotate_z(
     angle_deg: f32,
 ) {
     let state = &mut caller.data_mut().console;
-    let current_matrix = state.model_matrices[state.current_model_idx as usize];
+    let current = state.current_model_matrix.unwrap_or_else(|| {
+        state.model_matrices.last().copied().unwrap_or(Mat4::IDENTITY)
+    });
     let angle_rad = angle_deg.to_radians();
-    let new_matrix = current_matrix * Mat4::from_rotation_z(angle_rad);
-    let new_idx = state
-        .add_model_matrix(new_matrix)
-        .expect("Model matrix pool overflow");
-    state.current_model_idx = new_idx;
+    let new_matrix = current * Mat4::from_rotation_z(angle_rad);
+    state.current_model_matrix = Some(new_matrix);
 }
 
 /// Push a rotated transform onto the stack (arbitrary axis)
@@ -601,14 +566,13 @@ fn push_rotate(
     axis_z: f32,
 ) {
     let state = &mut caller.data_mut().console;
-    let current_matrix = state.model_matrices[state.current_model_idx as usize];
+    let current = state.current_model_matrix.unwrap_or_else(|| {
+        state.model_matrices.last().copied().unwrap_or(Mat4::IDENTITY)
+    });
     let angle_rad = angle_deg.to_radians();
     let axis = Vec3::new(axis_x, axis_y, axis_z).normalize();
-    let new_matrix = current_matrix * Mat4::from_axis_angle(axis, angle_rad);
-    let new_idx = state
-        .add_model_matrix(new_matrix)
-        .expect("Model matrix pool overflow");
-    state.current_model_idx = new_idx;
+    let new_matrix = current * Mat4::from_axis_angle(axis, angle_rad);
+    state.current_model_matrix = Some(new_matrix);
 }
 
 /// Push a scaled transform onto the stack
@@ -624,12 +588,11 @@ fn push_scale(
     z: f32,
 ) {
     let state = &mut caller.data_mut().console;
-    let current_matrix = state.model_matrices[state.current_model_idx as usize];
-    let new_matrix = current_matrix * Mat4::from_scale(Vec3::new(x, y, z));
-    let new_idx = state
-        .add_model_matrix(new_matrix)
-        .expect("Model matrix pool overflow");
-    state.current_model_idx = new_idx;
+    let current = state.current_model_matrix.unwrap_or_else(|| {
+        state.model_matrices.last().copied().unwrap_or(Mat4::IDENTITY)
+    });
+    let new_matrix = current * Mat4::from_scale(Vec3::new(x, y, z));
+    state.current_model_matrix = Some(new_matrix);
 }
 
 /// Push a uniformly scaled transform onto the stack
@@ -643,12 +606,11 @@ fn push_scale_uniform(
     s: f32,
 ) {
     let state = &mut caller.data_mut().console;
-    let current_matrix = state.model_matrices[state.current_model_idx as usize];
-    let new_matrix = current_matrix * Mat4::from_scale(Vec3::splat(s));
-    let new_idx = state
-        .add_model_matrix(new_matrix)
-        .expect("Model matrix pool overflow");
-    state.current_model_idx = new_idx;
+    let current = state.current_model_matrix.unwrap_or_else(|| {
+        state.model_matrices.last().copied().unwrap_or(Mat4::IDENTITY)
+    });
+    let new_matrix = current * Mat4::from_scale(Vec3::splat(s));
+    state.current_model_matrix = Some(new_matrix);
 }
 
 // ============================================================================
@@ -1206,15 +1168,8 @@ fn draw_mesh(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, ha
 
     let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
 
-    // Use current model matrix index from the transform stack
-    let model_idx = state.current_model_idx;
-
-    // Pack matrix indices
-    let mvp_index =
-        crate::graphics::MvpIndex::new(model_idx, state.current_view_idx, state.current_proj_idx);
-
-    // Add shading state to pool (with deduplication)
-    let shading_state_index = state.add_shading_state();
+    // Allocate combined MVP+shading buffer index (lazy allocation with deduplication)
+    let buffer_index = state.add_mvp_shading_state();
 
     // Record draw command directly
     state.render_pass.record_mesh(
@@ -1223,8 +1178,7 @@ fn draw_mesh(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, ha
         mesh_index_count,
         mesh_vertex_offset,
         mesh_index_offset,
-        mvp_index,
-        shading_state_index,
+        buffer_index,
         texture_slots,
         state.depth_test,
         cull_mode,
@@ -1337,22 +1291,14 @@ fn draw_triangles(
 
     let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
 
-    // Use current model matrix index from the transform stack
-    let model_idx = state.current_model_idx;
-
-    // Pack matrix indices
-    let mvp_index =
-        crate::graphics::MvpIndex::new(model_idx, state.current_view_idx, state.current_proj_idx);
-
-    // Add shading state to pool (with deduplication)
-    let shading_state_index = state.add_shading_state();
+    // Allocate combined MVP+shading buffer index (lazy allocation with deduplication)
+    let buffer_index = state.add_mvp_shading_state();
 
     // Record draw command directly
     state.render_pass.record_triangles(
         format,
         &vertex_data,
-        mvp_index,
-        shading_state_index,
+        buffer_index,
         texture_slots,
         state.depth_test,
         cull_mode,
@@ -1504,23 +1450,15 @@ fn draw_triangles_indexed(
 
     let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
 
-    // Use current model matrix index from the transform stack
-    let model_idx = state.current_model_idx;
-
-    // Pack matrix indices
-    let mvp_index =
-        crate::graphics::MvpIndex::new(model_idx, state.current_view_idx, state.current_proj_idx);
-
-    // Add shading state to pool (with deduplication)
-    let shading_state_index = state.add_shading_state();
+    // Allocate combined MVP+shading buffer index (lazy allocation with deduplication)
+    let buffer_index = state.add_mvp_shading_state();
 
     // Record draw command directly
     state.render_pass.record_triangles_indexed(
         format,
         &vertex_data,
         &index_data,
-        mvp_index,
-        shading_state_index,
+        buffer_index,
         texture_slots,
         state.depth_test,
         cull_mode,
@@ -1573,12 +1511,18 @@ fn draw_billboard(
     };
 
     // Extract world position from current model matrix
-    let current_matrix = state.model_matrices[state.current_model_idx as usize];
+    // Get current model matrix (from Option or last in pool)
+    let current_matrix = state.current_model_matrix.unwrap_or_else(|| {
+        state.model_matrices.last().copied().unwrap_or(Mat4::IDENTITY)
+    });
     let position = [
         current_matrix.w_axis.x,
         current_matrix.w_axis.y,
         current_matrix.w_axis.z,
     ];
+
+    // Get current view index (last in pool, following Option pattern)
+    let view_idx = (state.view_matrices.len() - 1) as u32;
 
     // Create quad instance (full texture UV: 0,0,1,1)
     let instance = crate::graphics::QuadInstance::billboard(
@@ -1589,7 +1533,7 @@ fn draw_billboard(
         [0.0, 0.0, 1.0, 1.0], // Full texture
         color,
         shading_state_index.0,
-        state.current_view_idx as u32,
+        view_idx,
     );
 
     state.quad_instances.push(instance);
@@ -1640,12 +1584,18 @@ fn draw_billboard_region(
     };
 
     // Extract world position from current model matrix
-    let current_matrix = state.model_matrices[state.current_model_idx as usize];
+    // Get current model matrix (from Option or last in pool)
+    let current_matrix = state.current_model_matrix.unwrap_or_else(|| {
+        state.model_matrices.last().copied().unwrap_or(Mat4::IDENTITY)
+    });
     let position = [
         current_matrix.w_axis.x,
         current_matrix.w_axis.y,
         current_matrix.w_axis.z,
     ];
+
+    // Get current view index (last in pool, following Option pattern)
+    let view_idx = (state.view_matrices.len() - 1) as u32;
 
     // Create quad instance with UV region
     let instance = crate::graphics::QuadInstance::billboard(
@@ -1656,7 +1606,7 @@ fn draw_billboard_region(
         [src_x, src_y, src_x + src_w, src_y + src_h], // UV rect
         color,
         shading_state_index.0,
-        state.current_view_idx as u32,
+        view_idx,
     );
 
     state.quad_instances.push(instance);
@@ -1690,6 +1640,9 @@ fn draw_sprite(
     // Get shading state index
     let shading_state_index = state.add_shading_state();
 
+    // Get current view index (last in pool, following Option pattern)
+    let view_idx = (state.view_matrices.len() - 1) as u32;
+
     // Create screen-space quad instance
     let instance = crate::graphics::QuadInstance::sprite(
         x,
@@ -1700,7 +1653,7 @@ fn draw_sprite(
         [0.0, 0.0, 1.0, 1.0],  // Full texture UV
         color,
         shading_state_index.0,
-        state.current_view_idx as u32,
+        view_idx,
     );
 
     state.quad_instances.push(instance);
@@ -1753,7 +1706,7 @@ fn draw_sprite_region(
         [u0, v0, u1, v1], // Texture UV region
         color,
         shading_state_index.0,
-        state.current_view_idx as u32,
+        (state.view_matrices.len() - 1) as u32,
     );
 
     state.quad_instances.push(instance);
@@ -1816,7 +1769,7 @@ fn draw_sprite_ex(
         [u0, v0, u1, v1],
         color,
         shading_state_index.0,
-        state.current_view_idx as u32,
+        (state.view_matrices.len() - 1) as u32,
     );
 
     state.quad_instances.push(instance);
@@ -1855,7 +1808,7 @@ fn draw_rect(
         [0.0, 0.0, 1.0, 1.0],  // Full texture UV (will use fallback white texture)
         color,
         shading_state_index.0,
-        state.current_view_idx as u32,
+        (state.view_matrices.len() - 1) as u32,
     );
 
     state.quad_instances.push(instance);
@@ -3043,69 +2996,6 @@ mod tests {
     }
 
     // Command buffer recording tests removed - testing implementation details that changed with unified shading state
-
-    #[test]
-    fn test_draw_command_billboard_modes() {
-        // Verify all billboard modes 1-4
-        for mode in 1u8..=4u8 {
-            let cmd = DeferredCommand::DrawBillboard {
-                width: 1.0,
-                height: 1.0,
-                mode,
-                uv_rect: None,
-                transform: Mat4::IDENTITY,
-                color: 0xFFFFFFFF,
-                depth_test: true,
-                cull_mode: 0,
-                bound_textures: [0; 4],
-            };
-
-            if let DeferredCommand::DrawBillboard { mode: m, .. } = cmd {
-                assert!((1..=4).contains(&m));
-            }
-        }
-    }
-
-    #[test]
-    fn test_draw_command_sprite_with_uv_rect() {
-        let mut state = ZFFIState::new();
-
-        state.deferred_commands.push(DeferredCommand::DrawSprite {
-            x: 10.0,
-            y: 20.0,
-            width: 32.0,
-            height: 32.0,
-            uv_rect: Some((0.0, 0.5, 0.5, 0.5)), // Half texture
-            origin: Some((16.0, 16.0)),
-            rotation: 45.0,
-            color: 0xFFFFFFFF,
-            bound_textures: [0; 4],
-        });
-
-        if let DeferredCommand::DrawSprite {
-            uv_rect,
-            origin,
-            rotation,
-            ..
-        } = &state.deferred_commands[0]
-        {
-            assert!(uv_rect.is_some());
-            let (u, v, w, h) = uv_rect.unwrap();
-            assert_eq!(u, 0.0);
-            assert_eq!(v, 0.5);
-            assert_eq!(w, 0.5);
-            assert_eq!(h, 0.5);
-
-            assert!(origin.is_some());
-            let (ox, oy) = origin.unwrap();
-            assert_eq!(ox, 16.0);
-            assert_eq!(oy, 16.0);
-
-            assert_eq!(*rotation, 45.0);
-        } else {
-            panic!("Expected DrawSprite command");
-        }
-    }
 
     #[test]
     fn test_draw_command_text() {

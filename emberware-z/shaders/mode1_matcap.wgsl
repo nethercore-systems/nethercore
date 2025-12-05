@@ -38,9 +38,9 @@ struct PackedUnifiedShadingState {
 // Per-frame storage buffer - array of shading states
 @group(0) @binding(3) var<storage, read> shading_states: array<PackedUnifiedShadingState>;
 
-// Per-frame storage buffer - packed MVP + shading indices (model: 16 bits, view: 8 bits, proj: 8 bits, shading_state_index: 32 bits)
-// Each entry is 2 × u32: [packed_mvp, shading_state_index]
-@group(0) @binding(4) var<storage, read> mvp_shading_indices: array<vec2<u32>>;
+// Per-frame storage buffer - unpacked MVP + shading indices (no bit-packing!)
+// Each entry is 4 × u32: [model_idx, view_idx, proj_idx, shading_idx]
+@group(0) @binding(4) var<storage, read> mvp_shading_indices: array<vec4<u32>>;
 
 // Bone transforms for GPU skinning (up to 256 bones)
 @group(0) @binding(5) var<storage, read> bones: array<mat4x4<f32>, 256>;
@@ -154,17 +154,14 @@ fn vs(in: VertexIn, @builtin(instance_index) instance_index: u32) -> VertexOut {
 
     //VS_SKINNED
 
-    // Get packed MVP indices and shading state index from storage buffer
-    let mvp_data = mvp_shading_indices[instance_index];
-    let mvp_packed = mvp_data.x;
-    let shading_state_idx = mvp_data.y;
+    // Get unpacked MVP + shading indices from storage buffer (no bit-packing!)
+    let indices = mvp_shading_indices[instance_index];
+    let model_idx = indices.x;
+    let view_idx = indices.y;
+    let proj_idx = indices.z;
+    let shading_state_idx = indices.w;
 
-    // Unpack MVP indices
-    let model_idx = mvp_packed & 0xFFFFu;           // Lower 16 bits
-    let view_idx = (mvp_packed >> 16u) & 0xFFu;     // Next 8 bits
-    let proj_idx = (mvp_packed >> 24u) & 0xFFu;     // Top 8 bits
-
-    // Get matrices from storage buffers using unpacked indices
+    // Get matrices from storage buffers using indices
     let model_matrix = model_matrices[model_idx];
     let view_matrix = view_matrices[view_idx];
     let projection_matrix = proj_matrices[proj_idx];

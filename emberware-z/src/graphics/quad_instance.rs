@@ -23,16 +23,17 @@ pub enum QuadMode {
 
 /// Per-instance quad data uploaded to GPU
 ///
-/// Total size: 60 bytes (16-byte aligned for GPU compatibility)
+/// Total size: 64 bytes (16-byte aligned for GPU compatibility)
 /// Used with a static unit quad mesh for instanced rendering.
 ///
-/// IMPORTANT: WGSL vec3<f32> is 16-byte aligned, so we need padding after position!
+/// IMPORTANT: position is [f32; 4] to match WGSL vec4<f32> 16-byte alignment naturally
+/// IMPORTANT: Array elements in WGSL must be 16-byte aligned, so we need final padding to reach 64 bytes!
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct QuadInstance {
     /// Position in world-space (billboards/world quads) or screen-space (sprites)
-    pub position: [f32; 3], // 12 bytes
-    pub _padding1: f32, // 4 bytes padding (WGSL vec3 is 16-byte aligned!)
+    /// Fourth component (w) is unused padding for WGSL vec4 alignment
+    pub position: [f32; 4], // 16 bytes (xyz used, w = padding)
 
     /// Quad size (width, height in world units or screen pixels)
     pub size: [f32; 2], // 8 bytes
@@ -54,6 +55,9 @@ pub struct QuadInstance {
 
     /// Index into view_matrices buffer for billboard math
     pub view_index: u32, // 4 bytes
+
+    /// Final padding to align struct to 16 bytes (WGSL array elements must be 16-byte aligned)
+    pub _padding2: [u32; 1], // 4 bytes padding (60 -> 64 bytes)
 }
 
 // Safety: QuadInstance is repr(C) with only primitive types and explicit padding
@@ -72,8 +76,7 @@ impl QuadInstance {
         view_index: u32,
     ) -> Self {
         Self {
-            position,
-            _padding1: 0.0,
+            position: [position[0], position[1], position[2], 0.0], // w = padding
             size,
             rotation: 0.0,
             mode: mode as u32,
@@ -81,6 +84,7 @@ impl QuadInstance {
             color,
             shading_state_index,
             view_index,
+            _padding2: [0],
         }
     }
 
@@ -111,8 +115,7 @@ impl QuadInstance {
         view_index: u32,
     ) -> Self {
         Self {
-            position: [screen_x, screen_y, 0.0],
-            _padding1: 0.0,
+            position: [screen_x, screen_y, 0.0, 0.0], // w = padding
             size: [width, height],
             rotation,
             mode: QuadMode::ScreenSpace as u32,
@@ -120,6 +123,7 @@ impl QuadInstance {
             color,
             shading_state_index,
             view_index,
+            _padding2: [0],
         }
     }
 }
@@ -132,13 +136,12 @@ mod tests {
     #[test]
     fn test_quad_instance_layout() {
         // WGSL struct QuadInstance has specific alignment requirements:
-        // - vec3<f32>: 16-byte aligned (12 bytes data + 4 bytes padding)
+        // - vec4<f32>: 16-byte aligned
         // - vec2<f32>: 8-byte aligned
         // - f32/u32: 4-byte aligned
-        // - vec4<f32>: 16-byte aligned
         //
         // Expected layout:
-        // offset  0: position vec3<f32> (12 bytes + 4 padding) = 16 bytes
+        // offset  0: position vec4<f32> (16 bytes, w unused) = 16 bytes
         // offset 16: size vec2<f32> (8 bytes) = 8 bytes
         // offset 24: rotation f32 (4 bytes) = 4 bytes
         // offset 28: mode u32 (4 bytes) = 4 bytes
@@ -146,12 +149,13 @@ mod tests {
         // offset 48: color u32 (4 bytes) = 4 bytes
         // offset 52: shading_state_index u32 (4 bytes) = 4 bytes
         // offset 56: view_index u32 (4 bytes) = 4 bytes
-        // Total: 60 bytes
+        // offset 60: _padding2 u32 (4 bytes) = 4 bytes
+        // Total: 64 bytes (16-byte aligned)
 
         assert_eq!(
             mem::size_of::<QuadInstance>(),
-            60,
-            "QuadInstance size must be 60 bytes to match WGSL struct with vec3 padding"
+            64,
+            "QuadInstance size must be 64 bytes (16-byte aligned for WGSL array elements)"
         );
 
         // Verify field offsets match WGSL alignment
@@ -175,15 +179,9 @@ mod tests {
         );
 
         assert_eq!(
-            &instance._padding1 as *const _ as usize - base_ptr,
-            12,
-            "_padding1 must be at offset 12"
-        );
-
-        assert_eq!(
             &instance.size as *const _ as usize - base_ptr,
             16,
-            "size must be at offset 16 (after vec3 padding)"
+            "size must be at offset 16 (after vec4 position)"
         );
 
         assert_eq!(
