@@ -21,24 +21,6 @@
 2. Split files into smaller focused ones.
 - Any file which is longer than 2000 lines MUST be made smaller, preferrably under 1000 lines each.
 
-### **CRITICAL MISSING FEATURE: Shaders mode1, mode2, and mode3 don't use sky lambert shading **
-- Currently, only mode0_unlit.wgsl is properly using sky lambert.
-- Lambert shading using sun as a directional light should be implemented for mode1, mode2, and mode3 as well.
-```
-// Simple Lambert shading using sky sun (when normals available)
-fn sky_lambert(normal: vec3<f32>) -> vec3<f32> {
-    let n_dot_l = max(0.0, dot(normal, sky.sun_direction.xyz));
-    let direct = sky.sun_color_and_sharpness.xyz * n_dot_l;
-    let ambient = sample_sky(normal) * 0.3;
-    return direct + ambient;
-}
-```
-- Function already exists and defined as in mode0_unlit.wgsl (same as above)
-- Implement and include this lambert shading for the mode1, mode2, mode3 shaders.
-- CAUTION: Actual shaders are generated via shader_gen.rs, hence the string tags like //VS_POSITION around the functions. These tags will be replaced with relevant shader code to implement the actual variants that are used at runtime.
-
----
-
 ### **CRITICAL POLISH: Matcap shaders should use perspective correct UV sampling **
 - Currently, matcaps are using the simple uv lookup
 ```
