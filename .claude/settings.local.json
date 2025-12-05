@@ -14,7 +14,7 @@
       "Bash(timeout 5 cargo run:*)",
       "Bash(timeout 60 cargo check:*)",
       "Bash(rustc:*)",
-      "Bash(./test_octahedral:*)"
+      "Bash(wc:*)"
     ],
     "deny": [],
     "ask": []

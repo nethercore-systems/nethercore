@@ -21,29 +21,6 @@
 2. Split files into smaller focused ones.
 - Any file which is longer than 2000 lines MUST be made smaller, preferrably under 1000 lines each.
 
-### **CRITICAL POLISH: Matcap shaders should use perspective correct UV sampling **
-- Currently, matcaps are using the simple uv lookup
-```
-// Compute matcap UV from view-space normal
-fn compute_matcap_uv(view_normal: vec3<f32>) -> vec2<f32> {
-    return view_normal.xy * 0.5 + 0.5;
-}
-```
-- This should be adjusted to a perspective correct view space normal
-- May need to calculate the view_space position
-```
-fn compute_matcap_uv(view_position: vec3<f32>, view_normal: vec3<f32>) -> vec2<f32> {
-  let inv_depth = 1.0 / (1.0 + view_position.z);
-  let proj_factor = -view_position.x * view_position.y * inv_depth;
-  let basis1 = vec3(1.0 - view_position.x * view_position.x * inv_depth, proj_factor, -view_position.x);
-  let basis2 = vec3(proj_factor, 1.0 - view_position.y * view_position.y * inv_depth, -view_position.y);
-  let matcap_uv = vec2(dot(basis1, view_normal), dot(basis2, view_normal));
-
-  return matcap_uv * vec2(0.5, -0.5) + 0.5;
-}
-```
-- Function is provided as above
-
 ---
 
 ### **CRITICAL PERFORMANCE TASK: Optimize Render Loop & Reduce Idle GPU Usage (WGPU + Egui)**
@@ -175,6 +152,31 @@ Performance
 
 * [ ] Idle GPU usage in library mode is reduced from ~30% to **<5%** on midrange hardware
 * [ ] No visual glitches (tests: Library UI → Settings → Playing → back to Library)
+
+---
+
+### **CRITICAL POLISH: Matcap shaders should use perspective correct UV sampling **
+- Currently, matcaps are using the simple uv lookup
+```
+// Compute matcap UV from view-space normal
+fn compute_matcap_uv(view_normal: vec3<f32>) -> vec2<f32> {
+    return view_normal.xy * 0.5 + 0.5;
+}
+```
+- This should be adjusted to a perspective correct view space normal
+- May need to calculate the view_space position
+```
+fn compute_matcap_uv(view_position: vec3<f32>, view_normal: vec3<f32>) -> vec2<f32> {
+  let inv_depth = 1.0 / (1.0 + view_position.z);
+  let proj_factor = -view_position.x * view_position.y * inv_depth;
+  let basis1 = vec3(1.0 - view_position.x * view_position.x * inv_depth, proj_factor, -view_position.x);
+  let basis2 = vec3(proj_factor, 1.0 - view_position.y * view_position.y * inv_depth, -view_position.y);
+  let matcap_uv = vec2(dot(basis1, view_normal), dot(basis2, view_normal));
+
+  return matcap_uv * vec2(0.5, -0.5) + 0.5;
+}
+```
+- Function is provided as above
 
 ---
 
