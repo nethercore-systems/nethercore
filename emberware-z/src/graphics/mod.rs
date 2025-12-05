@@ -60,8 +60,6 @@
 //! game switch if memory pressure becomes a concern.
 
 // Many public APIs are designed for game rendering but not yet fully wired up
-#![allow(dead_code)]
-
 mod buffer;
 mod command_buffer;
 mod matrix_packing;
@@ -78,13 +76,14 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use glam::Mat4;
 use winit::window::Window;
+use wgpu::util::DeviceExt;
 
 use emberware_core::console::Graphics;
 
 // Re-export public types from submodules
 pub use buffer::{BufferManager, GrowableBuffer, MeshHandle, RetainedMesh};
 pub use command_buffer::{BufferSource, VirtualRenderPass};
-pub use matrix_packing::{MvpIndex, MvpShadingIndices};
+pub use matrix_packing::MvpShadingIndices;
 pub use quad_instance::{QuadInstance, QuadMode};
 pub use render_state::{
     BlendMode, CullMode, MatcapBlendMode, RenderState, TextureFilter, TextureHandle,
@@ -102,15 +101,6 @@ pub(crate) use pipeline::PipelineEntry;
 
 use pipeline::{PipelineCache, PipelineKey};
 use texture_manager::TextureManager;
-
-/// Convert pixel coordinates to NDC (Normalized Device Coordinates)
-/// NDC range is -1 to 1 for both X and Y
-#[inline]
-fn pixel_to_ndc(pixel_x: f32, pixel_y: f32, width: f32, height: f32) -> (f32, f32) {
-    let ndc_x = (pixel_x / (width * 0.5)) - 1.0;
-    let ndc_y = 1.0 - (pixel_y / (height * 0.5));
-    (ndc_x, ndc_y)
-}
 
 // MaterialCacheKey removed - obsolete with unified shading state system.
 // Frame bind group is now identical for all draws (contains only buffers, no per-draw material data).
@@ -204,6 +194,9 @@ pub struct ZGraphics {
     unit_quad_base_vertex: u32,
     unit_quad_first_index: u32,
     unit_quad_index_count: u32,
+
+    // Screen dimensions uniform for screen-space quads (part of bind group 0)
+    screen_dims_buffer: wgpu::Buffer,
 }
 
 impl ZGraphics {
@@ -360,6 +353,14 @@ impl ZGraphics {
         // Create offscreen render target at default resolution (960×540)
         let render_target = Self::create_render_target(&device, 960, 540, surface_format);
 
+        // Create screen dimensions uniform buffer (for screen-space quad rendering)
+        let screen_dims_data: [f32; 2] = [render_target.width as f32, render_target.height as f32];
+        let screen_dims_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Screen Dimensions Uniform"),
+            contents: bytemuck::cast_slice(&screen_dims_data),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
         // Create blit pipeline for scaling render target to window
         let (blit_pipeline, blit_bind_group, blit_sampler) =
             Self::create_blit_pipeline(&device, surface_format, &render_target);
@@ -452,6 +453,7 @@ impl ZGraphics {
             unit_quad_base_vertex,
             unit_quad_first_index,
             unit_quad_index_count,
+            screen_dims_buffer,
         };
 
         Ok(graphics)
@@ -689,6 +691,10 @@ impl ZGraphics {
         self.render_target =
             Self::create_render_target(&self.device, width, height, self.config.format);
 
+        // Update screen dimensions uniform buffer
+        let screen_dims_data: [f32; 2] = [width as f32, height as f32];
+        self.queue.write_buffer(&self.screen_dims_buffer, 0, bytemuck::cast_slice(&screen_dims_data));
+
         // Recreate blit bind group with new render target texture
         let bind_group_layout = self.blit_pipeline.get_bind_group_layout(0);
         self.blit_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -890,17 +896,8 @@ impl ZGraphics {
         z_state: &mut crate::state::ZFFIState,
         texture_map: &hashbrown::HashMap<u32, TextureHandle>,
     ) {
-        use crate::console::RESOLUTIONS;
-        use crate::state::DeferredCommand;
-
         // Apply init config to graphics (render mode, etc.)
         self.set_render_mode(z_state.init_config.render_mode);
-
-        // Get the game's internal render resolution
-        let res_idx = z_state.init_config.resolution_index as usize;
-        let (render_width, render_height) = RESOLUTIONS.get(res_idx).copied().unwrap_or((960, 540)); // Default to 540p if invalid
-        let render_width_f = render_width as f32;
-        let render_height_f = render_height as f32;
 
         // 1. Swap the FFI-populated render pass into our command buffer
         // This efficiently transfers all immediate geometry (triangles, meshes)
@@ -953,13 +950,6 @@ impl ZGraphics {
             z_state.add_shading_state();
         }
 
-        // IMPORTANT: Ensure mvp_shading_states has at least one entry (index 0)
-        // This is needed for text rendering and other deferred commands that use placeholder buffer_index 0.
-        // Without this, sorting/rendering would panic when trying to access mvp_shading_states[0].
-        if z_state.mvp_shading_states.is_empty() {
-            z_state.add_mvp_shading_state();
-        }
-
         // 1.5. Process GPU-instanced quads (billboards, sprites)
         // Upload quad instances to GPU and create instanced draw command
         if !z_state.quad_instances.is_empty() {
@@ -995,12 +985,22 @@ impl ZGraphics {
                 texture_map.len()
             );
 
+            // DEBUG: Check if handle 0 is in map
+            if z_state.bound_textures[0] == 0 {
+                let mapped = texture_map.get(&0);
+                tracing::error!("TEXT DEBUG: Looking up handle 0 in texture_map: {:?}", mapped);
+                tracing::error!("TEXT DEBUG: Font texture handle from graphics: {:?}", self.font_texture());
+            }
+
             // Map FFI texture handles to graphics texture handles
             let texture_slots = [
                 texture_map
                     .get(&z_state.bound_textures[0])
                     .copied()
-                    .unwrap_or(TextureHandle::INVALID),
+                    .unwrap_or_else(|| {
+                        tracing::error!("TEXT DEBUG: Failed to map texture handle {}, using INVALID", z_state.bound_textures[0]);
+                        TextureHandle::INVALID
+                    }),
                 texture_map
                     .get(&z_state.bound_textures[1])
                     .copied()
@@ -1022,104 +1022,13 @@ impl ZGraphics {
                 first_index: self.unit_quad_first_index,
                 instance_count,
                 texture_slots,
+                blend_mode: BlendMode::Alpha, // Enable alpha blending for text/sprites
                 depth_test: true, // Billboards typically use depth test (TODO: per-instance?)
                 cull_mode: CullMode::None, // Quads are double-sided
             });
         }
 
-        // 2. Process deferred commands (text only - billboards/sprites/rects now use QuadInstance)
-        for cmd in z_state.deferred_commands.drain(..) {
-            match cmd {
-                DeferredCommand::DrawText {
-                    text,
-                    x,
-                    y,
-                    size,
-                    color,
-                    font,
-                } => {
-                    // Render text using built-in or custom font
-                    let text_str = std::str::from_utf8(&text).unwrap_or("");
-
-                    // Skip empty text
-                    if text_str.is_empty() {
-                        continue;
-                    }
-
-                    // Look up custom font if font handle != 0
-                    let font_opt = if font == 0 {
-                        None
-                    } else {
-                        let font_index = (font - 1) as usize;
-                        z_state.fonts.get(font_index)
-                    };
-
-                    // Generate text quads (POS_UV_COLOR format = 3)
-                    let (vertices, indices) = Self::generate_text_quads(
-                        text_str,
-                        x,
-                        y,
-                        size,
-                        color,
-                        font_opt,
-                        render_width_f,
-                        render_height_f,
-                    );
-
-                    // Skip if no vertices generated
-                    if vertices.is_empty() || indices.is_empty() {
-                        continue;
-                    }
-
-                    // Determine which texture to use
-                    let font_texture = if let Some(custom_font) = font_opt {
-                        // Use custom font's texture
-                        if let Some(&graphics_handle) = texture_map.get(&custom_font.texture) {
-                            graphics_handle
-                        } else {
-                            tracing::warn!(
-                                "Custom font texture handle {} not found, using built-in font",
-                                custom_font.texture
-                            );
-                            self.font_texture()
-                        }
-                    } else {
-                        // Use built-in font texture
-                        self.font_texture()
-                    };
-
-                    // Text uses POS_UV_COLOR format (format 3)
-                    const TEXT_FORMAT: u8 = 3; // FORMAT_UV | FORMAT_COLOR
-
-                    // Append vertex and index data
-                    let base_vertex = self
-                        .command_buffer
-                        .append_vertex_data(TEXT_FORMAT, &vertices);
-                    let first_index = self.command_buffer.append_index_data(TEXT_FORMAT, &indices);
-
-                    // Create texture slots with font texture in slot 0
-                    let mut texture_slots = [TextureHandle::INVALID; 4];
-                    texture_slots[0] = font_texture;
-
-                    // Add draw command for text rendering
-                    // Text is always rendered in 2D screen space with identity transform
-                    // Uses buffer_index 0 which is guaranteed to exist (safety check in render_frame)
-                    // This works because we ensure mvp_shading_states has at least one entry before rendering
-                    self.command_buffer.add_command(command_buffer::VRPCommand::IndexedMesh {
-                        format: TEXT_FORMAT,
-                        index_count: indices.len() as u32,
-                        base_vertex,
-                        first_index,
-                        buffer_index: 0,
-                        texture_slots,
-                        depth_test: false, // 2D text doesn't use depth test
-                        cull_mode: CullMode::None,
-                    });
-                }
-            }
-        }
-
-        // Note: All per-frame cleanup (model_matrices, audio_commands, render_pass, deferred_commands)
+        // Note: All per-frame cleanup (model_matrices, audio_commands, render_pass)
         // happens AFTER render_frame completes in app.rs via z_state.clear_frame()
         // This keeps cleanup centralized and ensures matrices survive until GPU upload
     }
@@ -1298,166 +1207,6 @@ impl ZGraphics {
     /// # Notes
     /// - Characters outside ASCII 32-126 are rendered as spaces
     /// - This is a simple left-to-right, single-line renderer (no word wrap)
-    pub fn generate_text_quads(
-        text: &str,
-        x: f32,
-        y: f32,
-        size: f32,
-        color: u32,
-        font_opt: Option<&crate::state::Font>,
-        render_width: f32,
-        render_height: f32,
-    ) -> (Vec<f32>, Vec<u16>) {
-        use crate::font;
-
-        // Extract color components (0xRRGGBBAA)
-        let r = ((color >> 24) & 0xFF) as f32 / 255.0;
-        let g = ((color >> 16) & 0xFF) as f32 / 255.0;
-        let b = ((color >> 8) & 0xFF) as f32 / 255.0;
-
-        let char_count = text.chars().count();
-        let mut vertices = Vec::with_capacity(char_count * 4 * 8); // 4 verts × 8 floats
-        let mut indices: Vec<u16> = Vec::with_capacity(char_count * 6); // 6 indices per quad
-
-        let mut cursor_x = x;
-        let mut vertex_index = 0u16;
-
-        if let Some(custom_font) = font_opt {
-            // Custom font rendering
-            let scale = size / custom_font.char_height as f32;
-            let glyph_height = custom_font.char_height as f32 * scale;
-
-            // Calculate texture atlas grid dimensions
-            // Glyphs are arranged left-to-right, top-to-bottom in a 16-column grid
-            let glyphs_per_row = 16;
-            let max_glyph_width = custom_font
-                .char_widths
-                .as_ref()
-                .map(|widths| *widths.iter().max().unwrap_or(&custom_font.char_width))
-                .unwrap_or(custom_font.char_width);
-
-            let atlas_width = glyphs_per_row * max_glyph_width as usize;
-            let atlas_height = (custom_font.char_count as usize).div_ceil(glyphs_per_row)
-                * custom_font.char_height as usize;
-
-            for ch in text.chars() {
-                let char_code = ch as u32;
-
-                // Map character to glyph index
-                let glyph_index = if char_code >= custom_font.first_codepoint
-                    && char_code < custom_font.first_codepoint + custom_font.char_count
-                {
-                    (char_code - custom_font.first_codepoint) as usize
-                } else {
-                    0 // Fallback to first character
-                };
-
-                // Get glyph width
-                let glyph_width_px = custom_font
-                    .char_widths
-                    .as_ref()
-                    .and_then(|widths| widths.get(glyph_index).copied())
-                    .unwrap_or(custom_font.char_width);
-                let glyph_width = glyph_width_px as f32 * scale;
-
-                // Calculate UV coordinates
-                let col = glyph_index % glyphs_per_row;
-                let row = glyph_index / glyphs_per_row;
-
-                let u0 = (col * max_glyph_width as usize) as f32 / atlas_width as f32;
-                let v0 = (row * custom_font.char_height as usize) as f32 / atlas_height as f32;
-                let u1 = ((col * max_glyph_width as usize) + glyph_width_px as usize) as f32
-                    / atlas_width as f32;
-                let v1 =
-                    ((row + 1) * custom_font.char_height as usize) as f32 / atlas_height as f32;
-
-                // Convert pixel coordinates to NDC
-                let (x0_ndc, y0_ndc) = pixel_to_ndc(cursor_x, y, render_width, render_height);
-                let (x1_ndc, y1_ndc) = pixel_to_ndc(
-                    cursor_x + glyph_width,
-                    y + glyph_height,
-                    render_width,
-                    render_height,
-                );
-
-                // Screen-space quad vertices (2D) in NDC coordinates
-                // Format: POS_UV_COLOR (format 3)
-                // Each vertex: [x, y, z, u, v, r, g, b]
-
-                // Top-left
-                vertices.extend_from_slice(&[x0_ndc, y0_ndc, 0.0, u0, v0, r, g, b]);
-                // Top-right
-                vertices.extend_from_slice(&[x1_ndc, y0_ndc, 0.0, u1, v0, r, g, b]);
-                // Bottom-right
-                vertices.extend_from_slice(&[x1_ndc, y1_ndc, 0.0, u1, v1, r, g, b]);
-                // Bottom-left
-                vertices.extend_from_slice(&[x0_ndc, y1_ndc, 0.0, u0, v1, r, g, b]);
-
-                // Indices for two triangles (quad)
-                indices.extend_from_slice(&[
-                    vertex_index,
-                    vertex_index + 1,
-                    vertex_index + 2,
-                    vertex_index,
-                    vertex_index + 2,
-                    vertex_index + 3,
-                ]);
-
-                cursor_x += glyph_width;
-                vertex_index += 4;
-            }
-        } else {
-            // Built-in font rendering (scaled monospace)
-            let scale = size / font::GLYPH_HEIGHT as f32;
-            let glyph_width = font::GLYPH_WIDTH as f32 * scale;
-            let glyph_height = font::GLYPH_HEIGHT as f32 * scale;
-
-            for ch in text.chars() {
-                let char_code = ch as u32;
-
-                // Get UV coordinates for this character
-                let (u0, v0, u1, v1) = font::get_glyph_uv(char_code);
-
-                // Convert pixel coordinates to NDC
-                let (x0_ndc, y0_ndc) = pixel_to_ndc(cursor_x, y, render_width, render_height);
-                let (x1_ndc, y1_ndc) = pixel_to_ndc(
-                    cursor_x + glyph_width,
-                    y + glyph_height,
-                    render_width,
-                    render_height,
-                );
-
-                // Screen-space quad vertices (2D) in NDC coordinates
-                // Format: POS_UV_COLOR (format 3)
-                // Each vertex: [x, y, z, u, v, r, g, b]
-
-                // Top-left
-                vertices.extend_from_slice(&[x0_ndc, y0_ndc, 0.0, u0, v0, r, g, b]);
-                // Top-right
-                vertices.extend_from_slice(&[x1_ndc, y0_ndc, 0.0, u1, v0, r, g, b]);
-                // Bottom-right
-                vertices.extend_from_slice(&[x1_ndc, y1_ndc, 0.0, u1, v1, r, g, b]);
-                // Bottom-left
-                vertices.extend_from_slice(&[x0_ndc, y1_ndc, 0.0, u0, v1, r, g, b]);
-
-                // Indices for two triangles (quad)
-                indices.extend_from_slice(&[
-                    vertex_index,
-                    vertex_index + 1,
-                    vertex_index + 2,
-                    vertex_index,
-                    vertex_index + 2,
-                    vertex_index + 3,
-                ]);
-
-                cursor_x += glyph_width;
-                vertex_index += 4;
-            }
-        }
-
-        (vertices, indices)
-    }
-
     /// Ensure model matrix buffer has sufficient capacity
     fn ensure_model_buffer_capacity(&mut self, count: usize) {
         if count <= self.model_matrix_capacity {
@@ -1742,8 +1491,11 @@ impl ZGraphics {
                         .expect("Invalid shading_state_index - this indicates a bug in state tracking");
                     BlendMode::from_u8((shading_state.blend_mode & 0xFF) as u8)
                 } else {
-                    // Quads store shading state in instance data, assume default blend mode for sorting
-                    BlendMode::None
+                    // Quads have blend_mode in the command itself
+                    match cmd {
+                        command_buffer::VRPCommand::Quad { blend_mode, .. } => *blend_mode,
+                        _ => BlendMode::None, // Shouldn't reach here if buffer_index is None for non-Quad
+                    }
                 };
 
                 // Sort key: (render_mode, format, blend_mode, depth_test, cull_mode, texture_slots)
@@ -1889,6 +1641,10 @@ impl ZGraphics {
                         binding: 6,
                         resource: self.buffer_manager.quad_instance_buffer().as_entire_binding(),
                     },
+                    wgpu::BindGroupEntry {
+                        binding: 7,
+                        resource: self.screen_dims_buffer.as_entire_binding(),
+                    },
                 ],
             })
         } else {
@@ -1933,21 +1689,21 @@ impl ZGraphics {
 
             for cmd in self.command_buffer.commands() {
                 // Destructure command variant to extract common fields
-                let (format, depth_test, cull_mode, texture_slots, buffer_source, is_quad) = match cmd {
+                let (format, depth_test, cull_mode, texture_slots, buffer_source, is_quad, cmd_blend_mode) = match cmd {
                     command_buffer::VRPCommand::Mesh { format, depth_test, cull_mode, texture_slots, buffer_index, .. } => {
-                        (*format, *depth_test, *cull_mode, *texture_slots, BufferSource::Immediate(*buffer_index), false)
+                        (*format, *depth_test, *cull_mode, *texture_slots, BufferSource::Immediate(*buffer_index), false, None)
                     }
                     command_buffer::VRPCommand::IndexedMesh { format, depth_test, cull_mode, texture_slots, buffer_index, .. } => {
-                        (*format, *depth_test, *cull_mode, *texture_slots, BufferSource::Retained(*buffer_index), false)
+                        (*format, *depth_test, *cull_mode, *texture_slots, BufferSource::Retained(*buffer_index), false, None)
                     }
-                    command_buffer::VRPCommand::Quad { depth_test, cull_mode, texture_slots, .. } => {
-                        (self.unit_quad_format, *depth_test, *cull_mode, *texture_slots, BufferSource::Quad, true)
+                    command_buffer::VRPCommand::Quad { depth_test, cull_mode, blend_mode, texture_slots, .. } => {
+                        (self.unit_quad_format, *depth_test, *cull_mode, *texture_slots, BufferSource::Quad, true, Some(*blend_mode))
                     }
                 };
 
                 // Extract blend mode from shading state for rendering
                 // For Immediate/Retained, get from mvp_shading_states buffer
-                // For Quad, assume default (quads store shading in instance data)
+                // For Quad, use the blend_mode from the command itself
                 let blend_mode = match buffer_source {
                     BufferSource::Immediate(buffer_idx) | BufferSource::Retained(buffer_idx) => {
                         let indices = z_state.mvp_shading_states
@@ -1957,7 +1713,7 @@ impl ZGraphics {
                             .expect("Invalid shading_state_index - this indicates a bug in state tracking");
                         BlendMode::from_u8((shading_state.blend_mode & 0xFF) as u8)
                     }
-                    BufferSource::Quad => BlendMode::None, // Placeholder for quads
+                    BufferSource::Quad => cmd_blend_mode.expect("Quad command should have blend_mode"),
                 };
 
                 // Create render state from command + blend mode

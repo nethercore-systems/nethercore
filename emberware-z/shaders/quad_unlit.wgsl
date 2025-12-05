@@ -61,10 +61,18 @@ struct QuadInstance {
     color: u32,                    // 4 bytes - packed RGBA8
     shading_state_index: u32,      // 4 bytes - index into shading_states
     view_index: u32,               // 4 bytes - index into view_matrices for billboard math
+    _padding: u32,                 // 4 bytes - padding to reach 64 bytes (16-byte aligned)
 }
 
 // Per-frame storage buffer - array of quad instances
 @group(0) @binding(6) var<storage, read> quad_instances: array<QuadInstance>;
+
+// Screen dimensions uniform (set once at startup)
+struct ScreenDimensions {
+    width: f32,
+    height: f32,
+}
+@group(0) @binding(7) var<uniform> screen_dims: ScreenDimensions;
 
 // Texture bindings (group 1)
 // USED - Albedo/sprite texture
@@ -220,9 +228,9 @@ fn vs(in: VertexIn, @builtin(instance_index) instance_idx: u32) -> VertexOut {
         let screen_offset = apply_screen_space(in.position.xy, instance.size, instance.rotation);
 
         // Convert screen position to NDC
-        // Assume instance.position.xy is in screen pixels, instance.position.z is depth
-        let ndc_x = (instance.position.x + screen_offset.x) / 640.0 * 2.0 - 1.0;  // TODO: Use actual screen size
-        let ndc_y = 1.0 - (instance.position.y + screen_offset.y) / 360.0 * 2.0; // TODO: Use actual screen size
+        // instance.position.xy is in screen pixels, instance.position.z is depth
+        let ndc_x = (instance.position.x + screen_offset.x) / screen_dims.width * 2.0 - 1.0;
+        let ndc_y = 1.0 - (instance.position.y + screen_offset.y) / screen_dims.height * 2.0;
         let ndc_z = instance.position.z;  // Depth [0, 1]
 
         out.clip_position = vec4<f32>(ndc_x, ndc_y, ndc_z, 1.0);

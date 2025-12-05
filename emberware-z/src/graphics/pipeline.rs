@@ -327,6 +327,17 @@ fn create_frame_bind_group_layout(
             },
             count: None,
         },
+        // Binding 7: Screen dimensions uniform (for screen-space quad NDC conversion)
+        wgpu::BindGroupLayoutEntry {
+            binding: 7,
+            visibility: wgpu::ShaderStages::VERTEX,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: wgpu::BufferSize::new(8), // 2 × f32 = 8 bytes
+            },
+            count: None,
+        },
     ];
 
     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {

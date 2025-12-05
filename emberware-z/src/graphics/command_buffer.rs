@@ -4,7 +4,7 @@
 //! for flushing to the GPU at frame end. This serves as an intermediate
 //! representation between FFI commands and GPU execution.
 
-use super::render_state::{CullMode, RenderState, TextureHandle};
+use super::render_state::{BlendMode, CullMode, RenderState, TextureHandle};
 use super::vertex::{vertex_stride, VERTEX_FORMAT_COUNT};
 
 /// Specifies which buffer the geometry data comes from
@@ -60,6 +60,7 @@ pub enum VRPCommand {
         first_index: u32,    // Unit quad first index in buffer
         instance_count: u32, // Number of quad instances to draw
         texture_slots: [TextureHandle; 4],
+        blend_mode: BlendMode,
         depth_test: bool,
         cull_mode: CullMode,
     },

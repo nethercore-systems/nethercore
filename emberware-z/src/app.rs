@@ -518,12 +518,19 @@ impl App {
             .init_game()
             .map_err(|e| RuntimeError(format!("Failed to initialize game: {}", e)))?;
 
-        // Store the session with empty resource maps
+        // Store the session with empty resource maps (font texture added below)
         self.game_session = Some(GameSession {
             runtime,
             texture_map: hashbrown::HashMap::new(),
             mesh_map: hashbrown::HashMap::new(),
         });
+
+        // Add built-in font texture to texture map (handle 0)
+        if let (Some(session), Some(graphics)) = (&mut self.game_session, &self.graphics) {
+            let font_texture_handle = graphics.font_texture();
+            session.texture_map.insert(0, font_texture_handle);
+            tracing::info!("Initialized font texture in texture_map: handle 0 -> {:?}", font_texture_handle);
+        }
 
         // Update render target resolution and window minimum size based on game's init config
         if let Some(session) = &self.game_session {
@@ -1217,6 +1224,14 @@ impl ApplicationHandler for App {
         self.egui_renderer = Some(egui_renderer);
         self.graphics = Some(graphics);
         self.window = Some(window);
+
+        // If a game session exists, add the font texture to its texture map
+        // (game session may have been created before graphics was initialized)
+        if let (Some(session), Some(graphics)) = (&mut self.game_session, &self.graphics) {
+            let font_texture_handle = graphics.font_texture();
+            session.texture_map.insert(0, font_texture_handle);
+            tracing::info!("Added font texture to existing game session: handle 0 -> {:?}", font_texture_handle);
+        }
     }
 
     fn window_event(

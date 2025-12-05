@@ -18,7 +18,7 @@ use emberware_core::wasm::GameStateWithConsole;
 use crate::audio::{AudioCommand, Sound};
 use crate::console::{ZInput, RESOLUTIONS, TICK_RATES};
 use crate::graphics::vertex_stride;
-use crate::state::{DeferredCommand, Font, PendingMesh, PendingTexture, ZFFIState, MAX_BONES};
+use crate::state::{Font, PendingMesh, PendingTexture, ZFFIState, MAX_BONES};
 
 /// Register all Emberware Z FFI functions with the linker
 pub fn register_z_ffi(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
@@ -1521,7 +1521,12 @@ fn draw_billboard(
         current_matrix.w_axis.z,
     ];
 
-    // Get current view index (last in pool, following Option pattern)
+    // Force lazy push of view matrix if pending (fixes cylindrical billboard bug)
+    if let Some(mat) = state.current_view_matrix.take() {
+        state.view_matrices.push(mat);
+    }
+
+    // Get current view index (after any pending push)
     let view_idx = (state.view_matrices.len() - 1) as u32;
 
     // Create quad instance (full texture UV: 0,0,1,1)
@@ -1594,7 +1599,12 @@ fn draw_billboard_region(
         current_matrix.w_axis.z,
     ];
 
-    // Get current view index (last in pool, following Option pattern)
+    // Force lazy push of view matrix if pending (fixes cylindrical billboard bug)
+    if let Some(mat) = state.current_view_matrix.take() {
+        state.view_matrices.push(mat);
+    }
+
+    // Get current view index (after any pending push)
     let view_idx = (state.view_matrices.len() - 1) as u32;
 
     // Create quad instance with UV region
@@ -1843,7 +1853,7 @@ fn draw_text(
         }
     };
 
-    let text_bytes = {
+    let text_str = {
         let mem_data = memory.data(&caller);
         let ptr = ptr as usize;
         let len = len as usize;
@@ -1859,24 +1869,142 @@ fn draw_text(
         }
 
         let bytes = &mem_data[ptr..ptr + len];
-        // Validate UTF-8 to catch errors early
-        if std::str::from_utf8(bytes).is_err() {
-            warn!("draw_text: invalid UTF-8 string");
-            return;
+        // Validate UTF-8 and copy to owned string
+        match std::str::from_utf8(bytes) {
+            Ok(s) => s.to_string(), // Convert to owned String
+            Err(_) => {
+                warn!("draw_text: invalid UTF-8 string");
+                return;
+            }
         }
-        bytes.to_vec()
     };
+
+    // Skip empty text
+    if text_str.is_empty() {
+        return;
+    }
 
     let state = &mut caller.data_mut().console;
 
-    state.deferred_commands.push(DeferredCommand::DrawText {
-        text: text_bytes,
-        x,
-        y,
-        size,
-        color,
-        font: state.current_font,
-    });
+    // Ensure material color is white so it doesn't interfere with text instance color
+    // (Text color is passed via the color parameter and stored in instance.color)
+    state.update_color(0xFFFFFFFF);
+
+    // Get shading state index
+    let shading_state_index = state.add_shading_state();
+
+    // Force lazy push of view matrix if pending
+    if let Some(mat) = state.current_view_matrix.take() {
+        state.view_matrices.push(mat);
+    }
+    let view_idx = (state.view_matrices.len() - 1) as u32;
+
+    // Determine which font to use
+    let font_handle = state.current_font;
+
+    // Look up custom font if font_handle != 0
+    let custom_font = if font_handle == 0 {
+        None
+    } else {
+        let font_index = (font_handle - 1) as usize;
+        state.fonts.get(font_index)
+    };
+
+    // Bind the appropriate font texture to slot 0
+    if let Some(font) = custom_font {
+        state.bound_textures[0] = font.texture;
+    } else {
+        // For built-in font, use handle 0 (special case handled in rendering)
+        // The rendering code will map handle 0 to the actual built-in font texture
+        state.bound_textures[0] = 0;
+    }
+
+    // Generate quad instances for each character
+    let mut cursor_x = x;
+
+    if let Some(font) = custom_font {
+        // Custom font rendering
+        let scale = size / font.char_height as f32;
+        let glyph_height = size;
+
+        // Calculate atlas dimensions
+        let texture_width = 1024; // TODO: Get actual texture dimensions
+        let texture_height = 1024;
+
+        let max_glyph_width = font.char_width as u32;
+        let glyphs_per_row = texture_width / max_glyph_width;
+
+        for ch in text_str.chars() {
+            let char_code = ch as u32;
+
+            // Calculate glyph index
+            if char_code < font.first_codepoint || char_code >= font.first_codepoint + font.char_count {
+                // Character not in font, skip or use replacement
+                continue;
+            }
+            let glyph_index = (char_code - font.first_codepoint) as usize;
+
+            // Get glyph width (variable or fixed)
+            let glyph_width_px = font.char_widths
+                .as_ref()
+                .and_then(|widths| widths.get(glyph_index).copied())
+                .unwrap_or(font.char_width);
+            let glyph_width = glyph_width_px as f32 * scale;
+
+            // Calculate UV coordinates
+            let col = glyph_index % glyphs_per_row as usize;
+            let row = glyph_index / glyphs_per_row as usize;
+
+            let u0 = (col * max_glyph_width as usize) as f32 / texture_width as f32;
+            let v0 = (row * font.char_height as usize) as f32 / texture_height as f32;
+            let u1 = ((col * max_glyph_width as usize) + glyph_width_px as usize) as f32 / texture_width as f32;
+            let v1 = ((row + 1) * font.char_height as usize) as f32 / texture_height as f32;
+
+            // Create quad instance for this glyph
+            let instance = crate::graphics::QuadInstance::sprite(
+                cursor_x,
+                y,
+                glyph_width,
+                glyph_height,
+                0.0, // no rotation
+                [u0, v0, u1, v1],
+                color,
+                shading_state_index.0,
+                view_idx,
+            );
+            state.quad_instances.push(instance);
+
+            cursor_x += glyph_width;
+        }
+    } else {
+        // Built-in font rendering
+        let scale = size / crate::font::GLYPH_HEIGHT as f32;
+        let glyph_width = crate::font::GLYPH_WIDTH as f32 * scale;
+        let glyph_height = crate::font::GLYPH_HEIGHT as f32 * scale;
+
+        for ch in text_str.chars() {
+            let char_code = ch as u32;
+
+            // Get UV coordinates for this character
+            let (u0, v0, u1, v1) = crate::font::get_glyph_uv(char_code);
+
+            // Create quad instance for this glyph
+            let instance = crate::graphics::QuadInstance::sprite(
+                cursor_x,
+                y,
+                glyph_width,
+                glyph_height,
+                0.0, // no rotation
+                [u0, v0, u1, v1],
+                color,
+                shading_state_index.0,
+                view_idx,
+            );
+            state.quad_instances.push(instance);
+
+            cursor_x += glyph_width;
+        }
+    }
 }
 
 /// Load a fixed-width bitmap font from a texture atlas

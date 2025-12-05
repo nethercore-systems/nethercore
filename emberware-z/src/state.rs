@@ -60,23 +60,6 @@ pub struct PendingMesh {
     pub index_data: Option<Vec<u16>>,
 }
 
-/// Deferred draw command for text rendering
-///
-/// Text rendering requires CPU-side geometry generation (glyph layout, atlas UVs).
-/// Billboards/sprites/rects now use GPU-instanced QuadInstance instead.
-#[derive(Debug)]
-pub enum DeferredCommand {
-    /// Draw text in screen space
-    DrawText {
-        text: Vec<u8>,
-        x: f32,
-        y: f32,
-        size: f32,
-        color: u32,
-        font: u32, // 0 = built-in font, >0 = custom font handle
-    },
-}
-
 // ============================================================================
 // Z-Specific State
 // ============================================================================
@@ -130,9 +113,6 @@ pub struct ZFFIState {
 
     // Virtual Render Pass (direct recording)
     pub render_pass: crate::graphics::VirtualRenderPass,
-
-    // Deferred commands (billboards, sprites, text)
-    pub deferred_commands: Vec<DeferredCommand>,
 
     // Mesh metadata mapping (for FFI access to mesh info)
     pub mesh_map: hashbrown::HashMap<u32, crate::graphics::RetainedMesh>,
@@ -220,7 +200,6 @@ impl Default for ZFFIState {
             bone_matrices: Vec::new(),
             bone_count: 0,
             render_pass: crate::graphics::VirtualRenderPass::new(),
-            deferred_commands: Vec::new(),
             mesh_map: hashbrown::HashMap::new(),
             pending_textures: Vec::new(),
             pending_meshes: Vec::new(),
@@ -531,7 +510,6 @@ impl ZFFIState {
         self.mvp_shading_states.clear();
         self.mvp_shading_map.clear();
 
-        self.deferred_commands.clear();
         self.audio_commands.clear();
 
         // Reset shading state pool for next frame
