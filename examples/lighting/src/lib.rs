@@ -579,7 +579,7 @@ pub extern "C" fn render() {
             3 => b"Mode 3: Hybrid" as &[u8],
             _ => b"Unknown Mode" as &[u8],
         };
-        draw_text(mode_text.as_ptr(), mode_text.len() as u32, 20.0, y, 48.0, 0xFFFFFFFF);
+        draw_text(mode_text.as_ptr(), mode_text.len() as u32, 20.0, y, 20.0, 0xFFFFFFFF);
 
         // Material properties
         let mut buf = [0u8; 32];
@@ -588,23 +588,23 @@ pub extern "C" fn render() {
         let prefix = b"Metallic (LT): ";
         let len = format_float(METALLIC, &mut buf[prefix.len()..]);
         buf[..prefix.len()].copy_from_slice(prefix);
-        draw_text(buf.as_ptr(), (prefix.len() + len) as u32, 20.0, y + line_h, 40.0, 0xCCCCCCFF);
+        draw_text(buf.as_ptr(), (prefix.len() + len) as u32, 20.0, y + line_h, 16.0, 0xCCCCCCFF);
 
         // Roughness
         let prefix = b"Roughness (RT): ";
         let len = format_float(ROUGHNESS, &mut buf[prefix.len()..]);
         buf[..prefix.len()].copy_from_slice(prefix);
-        draw_text(buf.as_ptr(), (prefix.len() + len) as u32, 20.0, y + line_h * 2.0, 40.0, 0xCCCCCCFF);
+        draw_text(buf.as_ptr(), (prefix.len() + len) as u32, 20.0, y + line_h * 2.0, 16.0, 0xCCCCCCFF);
 
         // Intensity
         let prefix = b"Intensity (D-pad): ";
         let len = format_float(LIGHT_INTENSITY, &mut buf[prefix.len()..]);
         buf[..prefix.len()].copy_from_slice(prefix);
-        draw_text(buf.as_ptr(), (prefix.len() + len) as u32, 20.0, y + line_h * 3.0, 40.0, 0xCCCCCCFF);
+        draw_text(buf.as_ptr(), (prefix.len() + len) as u32, 20.0, y + line_h * 3.0, 16.0, 0xCCCCCCFF);
 
         // Light status
         let lights_label = b"Lights (A/B/X/Y):";
-        draw_text(lights_label.as_ptr(), lights_label.len() as u32, 20.0, y + line_h * 4.5, 40.0, 0xCCCCCCFF);
+        draw_text(lights_label.as_ptr(), lights_label.len() as u32, 20.0, y + line_h * 4.5, 16.0, 0xCCCCCCFF);
 
         // Draw light indicators
         for i in 0..4 {
@@ -623,6 +623,6 @@ pub extern "C" fn render() {
 
         // Controls hint
         let hint = b"L-Stick: Rotate  R-Stick: Move Light";
-        draw_text(hint.as_ptr(), hint.len() as u32, 20.0, y + line_h * 7.0, 32.0, 0x888888FF);
+        draw_text(hint.as_ptr(), hint.len() as u32, 20.0, y + line_h * 7.0, 14.0, 0x888888FF);
     }
 }
