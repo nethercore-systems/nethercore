@@ -95,6 +95,35 @@ fn fast_inv_sqrt(x: f32) -> f32 {
     y * (1.5 - half_x * y * y) // One Newton-Raphson iteration
 }
 
+/// Fast sine approximation using Bhaskara I's formula
+/// Input: angle in radians (works best for -PI to PI)
+/// Accurate to about 0.0016 max error
+fn fast_sin(x: f32) -> f32 {
+    const PI: f32 = 3.14159265359;
+
+    // Wrap to -PI..PI range
+    let mut x = x;
+    while x > PI {
+        x -= 2.0 * PI;
+    }
+    while x < -PI {
+        x += 2.0 * PI;
+    }
+
+    // Bhaskara approximation: sin(x) ≈ 16x(π - |x|) / (5π² - 4|x|(π - |x|))
+    // Valid for -π ≤ x ≤ π
+    let abs_x = if x < 0.0 { -x } else { x };
+    let num = 16.0 * x * (PI - abs_x);
+    let den = 5.0 * PI * PI - 4.0 * abs_x * (PI - abs_x);
+    num / den
+}
+
+/// Fast cosine approximation (using sin identity: cos(x) = sin(x + π/2))
+fn fast_cos(x: f32) -> f32 {
+    const HALF_PI: f32 = 1.57079632679;
+    fast_sin(x + HALF_PI)
+}
+
 // Button constants
 const BUTTON_UP: u32 = 0;
 const BUTTON_DOWN: u32 = 1;
@@ -116,6 +145,9 @@ static mut SPHERE_MESH: u32 = 0;
 /// Current rotation angles (degrees)
 static mut ROTATION_X: f32 = 0.0;
 static mut ROTATION_Y: f32 = 0.0;
+
+/// Camera orbit angle (degrees) - auto-rotates around the sphere
+static mut CAMERA_ORBIT_ANGLE: f32 = 0.0;
 
 /// Light positions (normalized direction vectors)
 static mut LIGHT_DIRS: [[f32; 3]; 4] = [
@@ -140,8 +172,8 @@ static LIGHT_COLORS: [[f32; 3]; 4] = [
 static mut LIGHT_INTENSITY: f32 = 1.5;
 
 /// Material properties
-static mut METALLIC: f32 = 0.0;
-static mut ROUGHNESS: f32 = 0.3;
+static mut METALLIC: f32 = 1.0;
+static mut ROUGHNESS: f32 = 0.4;  // Lower = shinier surface with visible specular highlights
 
 /// Subdivision level for icosphere (0 = 12 verts, 1 = 42 verts, 2 = 162 verts, 3 = 642 verts)
 const SUBDIVISION_LEVEL: usize = 2;
@@ -431,6 +463,12 @@ pub extern "C" fn update() {
             ROTATION_Y += 0.3;
         }
 
+        // Orbit camera around the sphere for better highlight visibility
+        CAMERA_ORBIT_ANGLE += 0.5;
+        if CAMERA_ORBIT_ANGLE >= 360.0 {
+            CAMERA_ORBIT_ANGLE -= 360.0;
+        }
+
         // Move primary light with right stick
         let right_x = right_stick_x(0);
         let right_y = right_stick_y(0);
@@ -560,6 +598,18 @@ fn format_float(val: f32, buf: &mut [u8]) -> usize {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
+        // Update camera position to orbit around the sphere
+        let orbit_radius = 4.0;
+        let angle_rad = CAMERA_ORBIT_ANGLE * 0.0174533; // Convert degrees to radians (PI / 180)
+
+        // Calculate camera position in a circle (Y stays constant for horizontal orbit)
+        let cam_x = fast_sin(angle_rad) * orbit_radius;
+        let cam_y = 1.0; // Slightly elevated view
+        let cam_z = fast_cos(angle_rad) * orbit_radius;
+
+        // Camera looks at the sphere at origin
+        camera_set(cam_x, cam_y, cam_z, 0.0, 0.0, 0.0);
+
         // Draw the sphere (no rotation for now - add your own matrix math!)
         push_identity();
         // TODO: Build rotation matrices for ROTATION_X and ROTATION_Y and call transform_set()

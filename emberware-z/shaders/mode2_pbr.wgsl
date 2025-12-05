@@ -162,8 +162,35 @@ struct VertexOut {
     @location(1) world_normal: vec3<f32>,
     @location(2) view_normal: vec3<f32>,
     @location(3) @interpolate(flat) shading_state_index: u32,
+    @location(4) @interpolate(flat) camera_position: vec3<f32>,  // Camera position in world space (flat, not interpolated)
     //VOUT_UV
     //VOUT_COLOR
+}
+
+// ============================================================================
+// Camera Position Extraction
+// ============================================================================
+
+// Extract camera position from view matrix
+// View matrix transforms world→view, so camera is at origin in view space
+// Camera position in world space = -R^T * translation_part
+fn extract_camera_position(view_matrix: mat4x4<f32>) -> vec3<f32> {
+    // Extract rotation part (upper 3x3) - matrices are column-major in WGSL
+    let r00 = view_matrix[0][0]; let r10 = view_matrix[0][1]; let r20 = view_matrix[0][2];
+    let r01 = view_matrix[1][0]; let r11 = view_matrix[1][1]; let r21 = view_matrix[1][2];
+    let r02 = view_matrix[2][0]; let r12 = view_matrix[2][1]; let r22 = view_matrix[2][2];
+
+    // Extract translation part (4th column, first 3 rows)
+    let tx = view_matrix[3][0];
+    let ty = view_matrix[3][1];
+    let tz = view_matrix[3][2];
+
+    // Camera position = -R^T * t
+    return -vec3<f32>(
+        r00 * tx + r10 * ty + r20 * tz,
+        r01 * tx + r11 * ty + r21 * tz,
+        r02 * tx + r12 * ty + r22 * tz
+    );
 }
 
 // ============================================================================
@@ -204,6 +231,9 @@ fn vs(in: VertexIn, @builtin(instance_index) instance_index: u32) -> VertexOut {
     // View-projection transform
     out.clip_position = projection_matrix * view_matrix * model_pos;
 
+    // Extract camera position from view matrix (for correct specular calculations)
+    out.camera_position = extract_camera_position(view_matrix);
+
     // Pass shading state index to fragment shader
     out.shading_state_index = shading_state_idx;
 
@@ -221,7 +251,8 @@ fn vs(in: VertexIn, @builtin(instance_index) instance_index: u32) -> VertexOut {
 fn sample_sky(direction: vec3<f32>, sky: SkyData) -> vec3<f32> {
     let up_factor = direction.y * 0.5 + 0.5;
     let gradient = mix(sky.horizon_color, sky.zenith_color, up_factor);
-    let sun_dot = max(0.0, dot(direction, sky.sun_direction));
+    // Negate sun_direction: it's direction rays travel, not direction to sun
+    let sun_dot = max(0.0, dot(direction, -sky.sun_direction));
     let sun = sky.sun_color * pow(sun_dot, sky.sun_sharpness);
     return gradient + sun;
 }
@@ -231,48 +262,48 @@ fn compute_matcap_uv(view_normal: vec3<f32>) -> vec2<f32> {
     return view_normal.xy * 0.5 + 0.5;
 }
 
-// PBR-lite: Single light + ambient + emissive
+// PBR-lite: Per-light direct lighting only
+// Convention: light_dir = direction rays travel (negate for lighting calculations)
+// NOTE: Emissive should be added ONCE in main shader, not per-light!
 fn pbr_lite(
     surface_normal: vec3<f32>,
     view_dir: vec3<f32>,       // surface TO camera
-    light_dir: vec3<f32>,      // surface TO light
+    light_dir: vec3<f32>,      // direction rays travel
     albedo: vec3<f32>,
     metallic: f32,
     roughness: f32,
-    emissive: f32,
     light_color: vec3<f32>,
-    ambient_color: vec3<f32>
 ) -> vec3<f32> {
     let alpha = roughness * roughness;
     let alpha2 = alpha * alpha;
 
-    let half_vec = normalize(light_dir + view_dir);
-    let n_dot_l = max(dot(surface_normal, light_dir), 0.0);
-    let n_dot_h = dot(surface_normal, half_vec);
+    // Negate light_dir because it represents "direction rays travel", not "direction to light"
+    let to_light = -light_dir;
+    let half_vec = normalize(to_light + view_dir);
+    let n_dot_l = max(dot(surface_normal, to_light), 0.0);
+    let n_dot_h = max(dot(surface_normal, half_vec), 0.0);
     let v_dot_h = max(dot(view_dir, half_vec), 0.0);
 
     // F0: 4% for dielectrics, albedo for metals
     let f0 = mix(vec3<f32>(0.04), albedo, metallic);
 
-    // D: GGX distribution
+    // D: GGX distribution with exp2 approximation (5th gen console charm!)
+    // This adds subtle artifacts at grazing angles for that retro console feel
+    // Based on Hammon 2017 "PBR Diffuse Lighting for GGX+Smith Microsurfaces"
     let d = n_dot_h * n_dot_h * (alpha2 - 1.0) + 1.0;
-    let D = alpha2 / (PI * d * d);
+    let D = (alpha2 / PI) * exp2(-2.0 * log2(d));
 
     // F: Schlick fresnel (Karis exp2 approximation)
     let F = f0 + (1.0 - f0) * exp2((-5.55473 * v_dot_h - 6.98316) * v_dot_h);
 
     // Specular (G term omitted)
-    let specular = D * F;
+    let specular = (D * F) / 4.0;
 
     // Diffuse: energy-conserving Lambert
     let diffuse = (1.0 - f0) * (1.0 - metallic) * albedo / PI;
 
-    // Combine
-    let direct = (diffuse + specular) * light_color * n_dot_l;
-    let ambient = ambient_color * albedo * (1.0 - metallic * 0.9);
-    let glow = albedo * emissive;
-
-    return direct + ambient + glow;
+    // Direct lighting only (no emissive - that's a material property, not lighting)
+    return (diffuse + specular) * light_color * n_dot_l;
 }
 
 @fragment
@@ -297,16 +328,34 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     var mre = vec3<f32>(metallic, roughness, emissive);
     //FS_MRE
 
-    // View direction - calculate from world position to camera
-    // Camera position derived from view matrix would require passing view index,
-    // so we use world_position directly (view_dir points from surface toward camera)
-    // For now, use a simple approximation: view direction from world pos
-    let view_dir = normalize(-in.world_position);  // Assumes camera near origin
+    // View direction - from surface to camera (for specular calculations)
+    // Camera position extracted from view matrix in vertex shader
+    let view_dir = normalize(in.camera_position - in.world_position);
 
-    // Accumulate lighting from all enabled lights
-    var final_color = vec3<f32>(0.0);
-    let ambient = sample_sky(in.world_normal, sky) * 0.3;
+    // DIFFUSE IRRADIANCE (ambient): Sample sky based on surface normal
+    // This approximates hemispherical irradiance - varies with surface orientation
+    // Top faces receive zenith color, sides/bottom receive horizon color
+    // Only affects non-metals (metals have zero diffuse)
+    let ambient_color = sample_sky(in.world_normal, sky);
+    let ambient = ambient_color * albedo * (1.0 - mre.r);  // Zero for full metal
+    let glow = albedo * mre.b;  // Emissive
 
+    // Start with ambient + emissive (always visible)
+    var final_color = ambient + glow;
+
+    // Add sun as directional light
+    // User controls brightness via sun_color (255,255,255 = full sun, 10,10,10 = dim moon)
+    final_color += pbr_lite(
+        in.world_normal,
+        view_dir,
+        sky.sun_direction,  // Sun direction (already negated in pbr_lite)
+        albedo,
+        mre.r,
+        mre.g,
+        sky.sun_color  // User controls intensity via color brightness
+    );
+
+    // Add contribution from each enabled dynamic light
     for (var i = 0u; i < 4u; i++) {
         let packed_light = shading.lights[i];
         let light = unpack_light(packed_light);
@@ -314,6 +363,7 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
         if (light.enabled) {
             let light_color = light.color * light.intensity;
 
+            // Add direct lighting
             final_color += pbr_lite(
                 in.world_normal,
                 view_dir,
@@ -321,18 +371,21 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
                 albedo,
                 mre.r,  // metallic
                 mre.g,  // roughness
-                mre.b,  // emissive
-                light_color,
-                ambient
+                light_color
             );
         }
     }
 
-    // Environment reflection: sky × env matcap (slot 2)
+    // SPECULAR IBL (environment reflection): Directional sky sampling + matcap
+    // This is the IBL specular substitute - samples sky gradient in reflection direction
+    // Dominant term for metals, weak for non-metals
     let reflection_dir = reflect(-view_dir, in.world_normal);
     let env_matcap_uv = compute_matcap_uv(in.view_normal);
     let env_matcap = textureSample(slot2, tex_sampler, env_matcap_uv).rgb;
-    let env_reflection = sample_sky(reflection_dir, sky) * env_matcap * mre.r;
+    // Reflection strength = metallic * (1 - roughness)
+    // Full metal + shiny = 1.0, full metal + rough = 0.0, non-metal = 0.0
+    let reflection_strength = mre.r * (1.0 - mre.g);
+    let env_reflection = sample_sky(reflection_dir, sky) * env_matcap * reflection_strength;
 
     final_color += env_reflection;
 

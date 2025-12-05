@@ -221,7 +221,8 @@ fn vs(in: VertexIn, @builtin(instance_index) instance_index: u32) -> VertexOut {
 fn sample_sky(direction: vec3<f32>, sky: SkyData) -> vec3<f32> {
     let up_factor = direction.y * 0.5 + 0.5;
     let gradient = mix(sky.horizon_color, sky.zenith_color, up_factor);
-    let sun_dot = max(0.0, dot(direction, sky.sun_direction));
+    // Negate sun_direction: it's direction rays travel, not direction to sun
+    let sun_dot = max(0.0, dot(direction, -sky.sun_direction));
     let sun = sky.sun_color * pow(sun_dot, sky.sun_sharpness);
     return gradient + sun;
 }
@@ -232,6 +233,7 @@ fn compute_matcap_uv(view_normal: vec3<f32>) -> vec2<f32> {
 }
 
 // PBR-lite for direct lighting only
+// Convention: light_dir = direction rays travel (negate for lighting calculations)
 fn pbr_direct(
     surface_normal: vec3<f32>,
     view_dir: vec3<f32>,
@@ -244,9 +246,11 @@ fn pbr_direct(
     let alpha = roughness * roughness;
     let alpha2 = alpha * alpha;
 
-    let half_vec = normalize(light_dir + view_dir);
-    let n_dot_l = max(dot(surface_normal, light_dir), 0.0);
-    let n_dot_h = dot(surface_normal, half_vec);
+    // Negate light_dir because it represents "direction rays travel", not "direction to light"
+    let to_light = -light_dir;
+    let half_vec = normalize(to_light + view_dir);
+    let n_dot_l = max(dot(surface_normal, to_light), 0.0);
+    let n_dot_h = max(dot(surface_normal, half_vec), 0.0);
     let v_dot_h = max(dot(view_dir, half_vec), 0.0);
 
     // F0: 4% for dielectrics, albedo for metals
@@ -259,8 +263,8 @@ fn pbr_direct(
     // F: Schlick fresnel
     let F = f0 + (1.0 - f0) * exp2((-5.55473 * v_dot_h - 6.98316) * v_dot_h);
 
-    // Specular
-    let specular = D * F;
+    // Specular (with 4.0 divisor for better energy conservation)
+    let specular = (D * F) / 4.0;
 
     // Diffuse: energy-conserving Lambert
     let diffuse = (1.0 - f0) * (1.0 - metallic) * albedo / PI;

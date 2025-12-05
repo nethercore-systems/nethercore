@@ -189,8 +189,9 @@ fn vs(in: VertexIn, @builtin(instance_index) instance_index: u32) -> VertexOut {
 // ============================================================================
 
 // Simple Lambert shading using sky sun (when normals available)
+// Convention: light direction = direction rays travel (negate for dot product)
 fn sky_lambert(normal: vec3<f32>, sky: SkyData) -> vec3<f32> {
-    let n_dot_l = max(0.0, dot(normal, sky.sun_direction));
+    let n_dot_l = max(0.0, dot(normal, -sky.sun_direction));
     let direct = sky.sun_color * n_dot_l;
     let ambient = sample_sky(normal, sky) * 0.3;
     return direct + ambient;
@@ -200,7 +201,8 @@ fn sky_lambert(normal: vec3<f32>, sky: SkyData) -> vec3<f32> {
 fn sample_sky(direction: vec3<f32>, sky: SkyData) -> vec3<f32> {
     let up_factor = direction.y * 0.5 + 0.5;
     let gradient = mix(sky.horizon_color, sky.zenith_color, up_factor);
-    let sun_dot = max(0.0, dot(direction, sky.sun_direction));
+    // Negate sun_direction: it's direction rays travel, not direction to sun
+    let sun_dot = max(0.0, dot(direction, -sky.sun_direction));
     let sun = sky.sun_color * pow(sun_dot, sky.sun_sharpness);
     return gradient + sun;
 }

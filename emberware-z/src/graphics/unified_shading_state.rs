@@ -40,12 +40,14 @@ pub struct PackedUnifiedShadingState {
 
 impl Default for PackedUnifiedShadingState {
     fn default() -> Self {
-        // Reasonable defaults: blue sky gradient, white sun pointing down-right
+        // Reasonable defaults: pleasant outdoor lighting with visible dynamic lights
+        // Convention: light direction = direction rays travel (physically correct)
+        // Users can customize via sky_set_gradient() and sky_set_sun() FFI calls
         let sky = PackedSky::from_floats(
-            Vec3::new(0.5, 0.7, 1.0),              // Horizon: light blue
-            Vec3::new(0.1, 0.3, 0.8),              // Zenith: darker blue
-            Vec3::new(0.3, -0.5, 0.4).normalize(), // Sun direction: down and to the side
-            Vec3::new(1.0, 0.95, 0.9),             // Sun color: warm white
+            Vec3::new(0.3, 0.4, 0.5),              // Horizon: pleasant blue ambient
+            Vec3::new(0.1, 0.2, 0.4),              // Zenith: darker blue sky
+            Vec3::new(-0.3, -0.5, -0.4).normalize(), // Sun direction: rays travel down-left-forward
+            Vec3::new(0.7, 0.65, 0.6),             // Sun color: warm daylight
             0.95,                                  // Sun sharpness: fairly sharp (maps to ~242/255)
         );
 
@@ -159,6 +161,37 @@ pub fn pack_octahedral_u32(dir: Vec3) -> u32 {
     (u_snorm as u16 as u32) | ((v_snorm as u16 as u32) << 16)
 }
 
+/// Decode octahedral coordinates in [-1, 1]² back to normalized direction
+/// Reverses the encoding operation to reconstruct the 3D direction vector.
+#[inline]
+pub fn decode_octahedral(u: f32, v: f32) -> Vec3 {
+    let mut dir = Vec3::new(u, v, 1.0 - u.abs() - v.abs());
+
+    // Unfold lower hemisphere (z < 0 case)
+    if dir.z < 0.0 {
+        let old_x = dir.x;
+        dir.x = (1.0 - dir.y.abs()) * if old_x >= 0.0 { 1.0 } else { -1.0 };
+        dir.y = (1.0 - old_x.abs()) * if dir.y >= 0.0 { 1.0 } else { -1.0 };
+    }
+
+    dir.normalize_or_zero()
+}
+
+/// Unpack u32 to Vec3 direction using octahedral decoding (2x snorm16)
+/// Reverses pack_octahedral_u32() to extract the original direction.
+#[inline]
+pub fn unpack_octahedral_u32(packed: u32) -> Vec3 {
+    // Extract i16 components with sign extension
+    let u_i16 = ((packed & 0xFFFF) as i16) as i32;
+    let v_i16 = ((packed >> 16) as i16) as i32;
+
+    // Convert snorm16 to float [-1, 1]
+    let u = unpack_snorm16(u_i16 as i16);
+    let v = unpack_snorm16(v_i16 as i16);
+
+    decode_octahedral(u, v)
+}
+
 /// Pack 4x MatcapBlendMode into u32 (4 bytes)
 #[inline]
 pub fn pack_matcap_blend_modes(modes: [MatcapBlendMode; 4]) -> u32 {
@@ -243,12 +276,10 @@ impl PackedLight {
     }
 
     /// Extract direction as f32 array
-    /// Note: CPU-side octahedral decode not implemented - returns placeholder
-    /// Use GPU shader for actual decoding
+    /// Decodes the octahedral-encoded direction stored in the packed light.
     pub fn get_direction(&self) -> [f32; 3] {
-        // Could implement decode_octahedral() here if needed for CPU-side inspection
-        // For now, return a safe placeholder since this is rarely used
-        [0.0, 0.0, 1.0]
+        let dir = unpack_octahedral_u32(self.direction_oct);
+        [dir.x, dir.y, dir.z]
     }
 
     /// Extract color as f32 array

@@ -2597,7 +2597,9 @@ fn light_intensity(
     let light = &state.current_shading_state.lights[index as usize];
     let direction = light.get_direction();
     let color = light.get_color();
-    let enabled = light.is_enabled();
+
+    // Setting non-zero intensity automatically enables the light
+    let enabled = intensity > 0.0;
 
     // Update with new intensity
     state.update_light(index as usize, direction, color, intensity, enabled);
@@ -2623,7 +2625,12 @@ fn light_enable(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
     let light = &state.current_shading_state.lights[index as usize];
     let direction = light.get_direction();
     let color = light.get_color();
-    let intensity = light.get_intensity();
+    let mut intensity = light.get_intensity();
+
+    // If intensity is 0, set to default so light is actually visible when enabled
+    if intensity == 0.0 {
+        intensity = 1.0;
+    }
 
     // Enable light
     state.update_light(index as usize, direction, color, intensity, true);

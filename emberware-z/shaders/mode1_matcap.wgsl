@@ -204,7 +204,8 @@ fn compute_matcap_uv(view_normal: vec3<f32>) -> vec2<f32> {
 fn sample_sky(direction: vec3<f32>, sky: SkyData) -> vec3<f32> {
     let up_factor = direction.y * 0.5 + 0.5;
     let gradient = mix(sky.horizon_color, sky.zenith_color, up_factor);
-    let sun_dot = max(0.0, dot(direction, sky.sun_direction));
+    // Negate sun_direction: it's direction rays travel, not direction to sun
+    let sun_dot = max(0.0, dot(direction, -sky.sun_direction));
     let sun = sky.sun_color * pow(sun_dot, sky.sun_sharpness);
     return gradient + sun;
 }

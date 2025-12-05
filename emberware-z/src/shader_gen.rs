@@ -72,8 +72,9 @@ const VOUT_NORMAL: &str =
 // Vertex shader code
 const VS_UV: &str = "out.uv = in.uv;";
 const VS_COLOR: &str = "out.color = in.color;";
-const VS_NORMAL: &str = r#"out.world_normal = normalize(in.normal);
-    let view_normal = (view_matrix * vec4<f32>(in.normal, 0.0)).xyz;
+const VS_NORMAL: &str = r#"let world_normal_raw = (model_matrix * vec4<f32>(in.normal, 0.0)).xyz;
+    out.world_normal = normalize(world_normal_raw);
+    let view_normal = (view_matrix * vec4<f32>(world_normal_raw, 0.0)).xyz;
     out.view_normal = normalize(view_normal);"#;
 
 const VS_SKINNED: &str = r#"// GPU skinning: compute skinned position and normal
