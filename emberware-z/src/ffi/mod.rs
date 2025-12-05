@@ -471,7 +471,7 @@ fn transform_set(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>
     };
     let state = &mut caller.data_mut().console;
     let new_matrix = Mat4::from_cols_array(&matrix);
-    state.current_model_matrix = Some(new_matrix);  // Pending matrix
+    state.current_model_matrix = Some(new_matrix); // Pending matrix
 }
 
 /// Push a translated transform onto the stack
@@ -488,7 +488,11 @@ fn push_translate(
 ) {
     let state = &mut caller.data_mut().console;
     let current = state.current_model_matrix.unwrap_or_else(|| {
-        state.model_matrices.last().copied().unwrap_or(Mat4::IDENTITY)
+        state
+            .model_matrices
+            .last()
+            .copied()
+            .unwrap_or(Mat4::IDENTITY)
     });
     let new_matrix = current * Mat4::from_translation(Vec3::new(x, y, z));
     state.current_model_matrix = Some(new_matrix);
@@ -500,13 +504,14 @@ fn push_translate(
 /// * `angle_deg` — Rotation angle in degrees
 ///
 /// Reads the current transform, applies rotation, and pushes the result.
-fn push_rotate_x(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    angle_deg: f32,
-) {
+fn push_rotate_x(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, angle_deg: f32) {
     let state = &mut caller.data_mut().console;
     let current = state.current_model_matrix.unwrap_or_else(|| {
-        state.model_matrices.last().copied().unwrap_or(Mat4::IDENTITY)
+        state
+            .model_matrices
+            .last()
+            .copied()
+            .unwrap_or(Mat4::IDENTITY)
     });
     let angle_rad = angle_deg.to_radians();
     let new_matrix = current * Mat4::from_rotation_x(angle_rad);
@@ -519,13 +524,14 @@ fn push_rotate_x(
 /// * `angle_deg` — Rotation angle in degrees
 ///
 /// Reads the current transform, applies rotation, and pushes the result.
-fn push_rotate_y(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    angle_deg: f32,
-) {
+fn push_rotate_y(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, angle_deg: f32) {
     let state = &mut caller.data_mut().console;
     let current = state.current_model_matrix.unwrap_or_else(|| {
-        state.model_matrices.last().copied().unwrap_or(Mat4::IDENTITY)
+        state
+            .model_matrices
+            .last()
+            .copied()
+            .unwrap_or(Mat4::IDENTITY)
     });
     let angle_rad = angle_deg.to_radians();
     let new_matrix = current * Mat4::from_rotation_y(angle_rad);
@@ -538,13 +544,14 @@ fn push_rotate_y(
 /// * `angle_deg` — Rotation angle in degrees
 ///
 /// Reads the current transform, applies rotation, and pushes the result.
-fn push_rotate_z(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    angle_deg: f32,
-) {
+fn push_rotate_z(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, angle_deg: f32) {
     let state = &mut caller.data_mut().console;
     let current = state.current_model_matrix.unwrap_or_else(|| {
-        state.model_matrices.last().copied().unwrap_or(Mat4::IDENTITY)
+        state
+            .model_matrices
+            .last()
+            .copied()
+            .unwrap_or(Mat4::IDENTITY)
     });
     let angle_rad = angle_deg.to_radians();
     let new_matrix = current * Mat4::from_rotation_z(angle_rad);
@@ -567,7 +574,11 @@ fn push_rotate(
 ) {
     let state = &mut caller.data_mut().console;
     let current = state.current_model_matrix.unwrap_or_else(|| {
-        state.model_matrices.last().copied().unwrap_or(Mat4::IDENTITY)
+        state
+            .model_matrices
+            .last()
+            .copied()
+            .unwrap_or(Mat4::IDENTITY)
     });
     let angle_rad = angle_deg.to_radians();
     let axis = Vec3::new(axis_x, axis_y, axis_z).normalize();
@@ -589,7 +600,11 @@ fn push_scale(
 ) {
     let state = &mut caller.data_mut().console;
     let current = state.current_model_matrix.unwrap_or_else(|| {
-        state.model_matrices.last().copied().unwrap_or(Mat4::IDENTITY)
+        state
+            .model_matrices
+            .last()
+            .copied()
+            .unwrap_or(Mat4::IDENTITY)
     });
     let new_matrix = current * Mat4::from_scale(Vec3::new(x, y, z));
     state.current_model_matrix = Some(new_matrix);
@@ -601,13 +616,14 @@ fn push_scale(
 /// * `s` — Uniform scale factor
 ///
 /// Reads the current transform, applies scale, and pushes the result.
-fn push_scale_uniform(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    s: f32,
-) {
+fn push_scale_uniform(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, s: f32) {
     let state = &mut caller.data_mut().console;
     let current = state.current_model_matrix.unwrap_or_else(|| {
-        state.model_matrices.last().copied().unwrap_or(Mat4::IDENTITY)
+        state
+            .model_matrices
+            .last()
+            .copied()
+            .unwrap_or(Mat4::IDENTITY)
     });
     let new_matrix = current * Mat4::from_scale(Vec3::splat(s));
     state.current_model_matrix = Some(new_matrix);
@@ -1513,7 +1529,11 @@ fn draw_billboard(
     // Extract world position from current model matrix
     // Get current model matrix (from Option or last in pool)
     let current_matrix = state.current_model_matrix.unwrap_or_else(|| {
-        state.model_matrices.last().copied().unwrap_or(Mat4::IDENTITY)
+        state
+            .model_matrices
+            .last()
+            .copied()
+            .unwrap_or(Mat4::IDENTITY)
     });
     let position = [
         current_matrix.w_axis.x,
@@ -1591,7 +1611,11 @@ fn draw_billboard_region(
     // Extract world position from current model matrix
     // Get current model matrix (from Option or last in pool)
     let current_matrix = state.current_model_matrix.unwrap_or_else(|| {
-        state.model_matrices.last().copied().unwrap_or(Mat4::IDENTITY)
+        state
+            .model_matrices
+            .last()
+            .copied()
+            .unwrap_or(Mat4::IDENTITY)
     });
     let position = [
         current_matrix.w_axis.x,
@@ -1659,8 +1683,8 @@ fn draw_sprite(
         y,
         w,
         h,
-        0.0,                   // No rotation
-        [0.0, 0.0, 1.0, 1.0],  // Full texture UV
+        0.0,                  // No rotation
+        [0.0, 0.0, 1.0, 1.0], // Full texture UV
         color,
         shading_state_index.0,
         view_idx,
@@ -1712,7 +1736,7 @@ fn draw_sprite_region(
         y,
         w,
         h,
-        0.0,             // No rotation
+        0.0,              // No rotation
         [u0, v0, u1, v1], // Texture UV region
         color,
         shading_state_index.0,
@@ -1775,7 +1799,7 @@ fn draw_sprite_ex(
         adjusted_y,
         w,
         h,
-        angle_deg.to_radians(),  // Convert degrees to radians
+        angle_deg.to_radians(), // Convert degrees to radians
         [u0, v0, u1, v1],
         color,
         shading_state_index.0,
@@ -1817,8 +1841,8 @@ fn draw_rect(
         y,
         w,
         h,
-        0.0,                   // No rotation
-        [0.0, 0.0, 1.0, 1.0],  // Full texture UV (white texture is 1x1, so any UV works)
+        0.0,                  // No rotation
+        [0.0, 0.0, 1.0, 1.0], // Full texture UV (white texture is 1x1, so any UV works)
         color,
         shading_state_index.0,
         (state.view_matrices.len() - 1) as u32,
@@ -1942,14 +1966,17 @@ fn draw_text(
             let char_code = ch as u32;
 
             // Calculate glyph index
-            if char_code < font.first_codepoint || char_code >= font.first_codepoint + font.char_count {
+            if char_code < font.first_codepoint
+                || char_code >= font.first_codepoint + font.char_count
+            {
                 // Character not in font, skip or use replacement
                 continue;
             }
             let glyph_index = (char_code - font.first_codepoint) as usize;
 
             // Get glyph width (variable or fixed)
-            let glyph_width_px = font.char_widths
+            let glyph_width_px = font
+                .char_widths
                 .as_ref()
                 .and_then(|widths| widths.get(glyph_index).copied())
                 .unwrap_or(font.char_width);
@@ -1961,7 +1988,8 @@ fn draw_text(
 
             let u0 = (col * max_glyph_width as usize) as f32 / texture_width as f32;
             let v0 = (row * font.char_height as usize) as f32 / texture_height as f32;
-            let u1 = ((col * max_glyph_width as usize) + glyph_width_px as usize) as f32 / texture_width as f32;
+            let u1 = ((col * max_glyph_width as usize) + glyph_width_px as usize) as f32
+                / texture_width as f32;
             let v1 = ((row + 1) * font.char_height as usize) as f32 / texture_height as f32;
 
             // Create quad instance for this glyph

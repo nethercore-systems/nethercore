@@ -530,11 +530,17 @@ impl App {
         if let (Some(session), Some(graphics)) = (&mut self.game_session, &self.graphics) {
             let font_texture_handle = graphics.font_texture();
             session.texture_map.insert(0, font_texture_handle);
-            tracing::info!("Initialized font texture in texture_map: handle 0 -> {:?}", font_texture_handle);
+            tracing::info!(
+                "Initialized font texture in texture_map: handle 0 -> {:?}",
+                font_texture_handle
+            );
 
             let white_texture_handle = graphics.white_texture();
             session.texture_map.insert(u32::MAX, white_texture_handle);
-            tracing::info!("Initialized white texture in texture_map: handle 0xFFFFFFFF -> {:?}", white_texture_handle);
+            tracing::info!(
+                "Initialized white texture in texture_map: handle 0xFFFFFFFF -> {:?}",
+                white_texture_handle
+            );
         }
 
         // Update render target resolution and window minimum size based on game's init config
@@ -1235,11 +1241,17 @@ impl ApplicationHandler for App {
         if let (Some(session), Some(graphics)) = (&mut self.game_session, &self.graphics) {
             let font_texture_handle = graphics.font_texture();
             session.texture_map.insert(0, font_texture_handle);
-            tracing::info!("Added font texture to existing game session: handle 0 -> {:?}", font_texture_handle);
+            tracing::info!(
+                "Added font texture to existing game session: handle 0 -> {:?}",
+                font_texture_handle
+            );
 
             let white_texture_handle = graphics.white_texture();
             session.texture_map.insert(u32::MAX, white_texture_handle);
-            tracing::info!("Added white texture to existing game session: handle 0xFFFFFFFF -> {:?}", white_texture_handle);
+            tracing::info!(
+                "Added white texture to existing game session: handle 0xFFFFFFFF -> {:?}",
+                white_texture_handle
+            );
         }
     }
 

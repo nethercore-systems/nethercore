@@ -20,10 +20,7 @@ pub(crate) enum PipelineKey {
         cull_mode: u8,
     },
     /// GPU-instanced quad rendering pipeline (billboards, sprites)
-    Quad {
-        blend_mode: u8,
-        depth_test: bool,
-    },
+    Quad { blend_mode: u8, depth_test: bool },
 }
 
 impl PipelineKey {
@@ -182,7 +179,7 @@ pub(crate) fn create_quad_pipeline(
     });
 
     // Define quad vertex format (POS_UV_COLOR: position, uv, color)
-    use super::vertex::{FORMAT_UV, FORMAT_COLOR};
+    use super::vertex::{FORMAT_COLOR, FORMAT_UV};
     let quad_format = FORMAT_UV | FORMAT_COLOR;
     let vertex_info = VertexFormatInfo::for_format(quad_format);
 
@@ -210,7 +207,7 @@ pub(crate) fn create_quad_pipeline(
             topology: wgpu::PrimitiveTopology::TriangleList,
             strip_index_format: None,
             front_face: wgpu::FrontFace::Ccw,
-            cull_mode: None,  // Quads are always double-sided
+            cull_mode: None, // Quads are always double-sided
             unclipped_depth: false,
             polygon_mode: wgpu::PolygonMode::Fill,
             conservative: false,

@@ -99,7 +99,15 @@ impl QuadInstance {
         shading_state_index: u32,
         view_index: u32,
     ) -> Self {
-        Self::new(position, [width, height], mode, uv, color, shading_state_index, view_index)
+        Self::new(
+            position,
+            [width, height],
+            mode,
+            uv,
+            color,
+            shading_state_index,
+            view_index,
+        )
     }
 
     /// Create a screen-space sprite instance

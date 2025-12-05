@@ -416,7 +416,8 @@ impl BufferManager {
         instances: &[crate::graphics::QuadInstance],
     ) -> Result<()> {
         let byte_data = bytemuck::cast_slice(instances);
-        self.quad_instance_buffer.ensure_capacity(device, byte_data.len() as u64);
+        self.quad_instance_buffer
+            .ensure_capacity(device, byte_data.len() as u64);
         // Reset used before writing new frame data
         self.quad_instance_buffer.reset();
         self.quad_instance_buffer.write(queue, byte_data);
@@ -425,7 +426,9 @@ impl BufferManager {
 
     /// Get the quad instance buffer
     pub fn quad_instance_buffer(&self) -> &wgpu::Buffer {
-        self.quad_instance_buffer.buffer().expect("Quad instance buffer should always exist")
+        self.quad_instance_buffer
+            .buffer()
+            .expect("Quad instance buffer should always exist")
     }
 }
 

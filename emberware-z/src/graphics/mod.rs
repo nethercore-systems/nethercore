@@ -75,8 +75,8 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use glam::Mat4;
-use winit::window::Window;
 use wgpu::util::DeviceExt;
+use winit::window::Window;
 
 use emberware_core::console::Graphics;
 
@@ -366,20 +366,20 @@ impl ZGraphics {
 
         // Create static unit quad mesh for GPU-instanced rendering
         // Format: POS_UV_COLOR (format bits: UV | COLOR = 0b011 = 3)
-        use crate::graphics::vertex::{FORMAT_UV, FORMAT_COLOR, vertex_stride};
+        use crate::graphics::vertex::{vertex_stride, FORMAT_COLOR, FORMAT_UV};
         let unit_quad_format = FORMAT_UV | FORMAT_COLOR;
 
         let unit_quad_vertices: Vec<f32> = vec![
             // pos_x, pos_y, pos_z, uv_u, uv_v, color_r, color_g, color_b
-            -0.5, -0.5, 0.0,  0.0, 0.0,  1.0, 1.0, 1.0,  // Bottom-left
-             0.5, -0.5, 0.0,  1.0, 0.0,  1.0, 1.0, 1.0,  // Bottom-right
-             0.5,  0.5, 0.0,  1.0, 1.0,  1.0, 1.0, 1.0,  // Top-right
-            -0.5,  0.5, 0.0,  0.0, 1.0,  1.0, 1.0, 1.0,  // Top-left
+            -0.5, -0.5, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, // Bottom-left
+            0.5, -0.5, 0.0, 1.0, 0.0, 1.0, 1.0, 1.0, // Bottom-right
+            0.5, 0.5, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, // Top-right
+            -0.5, 0.5, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, // Top-left
         ];
 
         let unit_quad_indices: Vec<u16> = vec![
-            0, 1, 2,  // First triangle
-            0, 2, 3,  // Second triangle
+            0, 1, 2, // First triangle
+            0, 2, 3, // Second triangle
         ];
 
         // Upload unit quad to retained vertex buffer
@@ -689,7 +689,11 @@ impl ZGraphics {
 
         // Update screen dimensions uniform buffer
         let screen_dims_data: [f32; 2] = [width as f32, height as f32];
-        self.queue.write_buffer(&self.screen_dims_buffer, 0, bytemuck::cast_slice(&screen_dims_data));
+        self.queue.write_buffer(
+            &self.screen_dims_buffer,
+            0,
+            bytemuck::cast_slice(&screen_dims_data),
+        );
 
         // Recreate blit bind group with new render target texture
         let bind_group_layout = self.blit_pipeline.get_bind_group_layout(0);
@@ -954,13 +958,21 @@ impl ZGraphics {
         // 1.5. Process GPU-instanced quads (billboards, sprites)
         // Accumulate all instances and upload once, then create batched draw commands
         if !z_state.quad_batches.is_empty() {
-            let total_instances: usize = z_state.quad_batches.iter().map(|b| b.instances.len()).sum();
-            tracing::info!("Processing {} quad batches with {} total instances", z_state.quad_batches.len(), total_instances);
+            let total_instances: usize =
+                z_state.quad_batches.iter().map(|b| b.instances.len()).sum();
+            tracing::info!(
+                "Processing {} quad batches with {} total instances",
+                z_state.quad_batches.len(),
+                total_instances
+            );
 
             // DEBUG: Log view/projection matrices
             if !z_state.view_matrices.is_empty() && !z_state.proj_matrices.is_empty() {
-                tracing::info!("  View matrix count: {}, Proj matrix count: {}",
-                    z_state.view_matrices.len(), z_state.proj_matrices.len());
+                tracing::info!(
+                    "  View matrix count: {}, Proj matrix count: {}",
+                    z_state.view_matrices.len(),
+                    z_state.proj_matrices.len()
+                );
                 tracing::info!("  View[0]: {:?}", z_state.view_matrices[0]);
                 tracing::info!("  Proj[0]: {:?}", z_state.proj_matrices[0]);
             }
@@ -988,7 +1000,10 @@ impl ZGraphics {
 
             // Upload all instances once to GPU
             if !all_instances.is_empty() {
-                tracing::info!("Uploading {} total quad instances to GPU", all_instances.len());
+                tracing::info!(
+                    "Uploading {} total quad instances to GPU",
+                    all_instances.len()
+                );
                 self.buffer_manager
                     .upload_quad_instances(&self.device, &self.queue, &all_instances)
                     .expect("Failed to upload quad instances to GPU");
@@ -1026,16 +1041,17 @@ impl ZGraphics {
 
                 // Note: Quad instances contain their own shading_state_index in the instance data.
                 // BufferSource::Quad has no buffer_index - quads read transforms and shading from instance data.
-                self.command_buffer.add_command(command_buffer::VRPCommand::Quad {
-                    base_vertex: self.unit_quad_base_vertex,
-                    first_index: self.unit_quad_first_index,
-                    base_instance,
-                    instance_count,
-                    texture_slots,
-                    blend_mode: BlendMode::Alpha, // Enable alpha blending for text/sprites
-                    depth_test: true, // Billboards typically use depth test (TODO: per-instance?)
-                    cull_mode: CullMode::None, // Quads are double-sided
-                });
+                self.command_buffer
+                    .add_command(command_buffer::VRPCommand::Quad {
+                        base_vertex: self.unit_quad_base_vertex,
+                        first_index: self.unit_quad_first_index,
+                        base_instance,
+                        instance_count,
+                        texture_slots,
+                        blend_mode: BlendMode::Alpha, // Enable alpha blending for text/sprites
+                        depth_test: true, // Billboards typically use depth test (TODO: per-instance?)
+                        cull_mode: CullMode::None, // Quads are double-sided
+                    });
             }
         }
 
@@ -1601,9 +1617,23 @@ impl ZGraphics {
         let frame_bind_group = if let Some(first_cmd) = self.command_buffer.commands().first() {
             // Extract fields from first command variant
             let (format, depth_test, cull_mode) = match first_cmd {
-                command_buffer::VRPCommand::Mesh { format, depth_test, cull_mode, .. } => (*format, *depth_test, *cull_mode),
-                command_buffer::VRPCommand::IndexedMesh { format, depth_test, cull_mode, .. } => (*format, *depth_test, *cull_mode),
-                command_buffer::VRPCommand::Quad { depth_test, cull_mode, .. } => (self.unit_quad_format, *depth_test, *cull_mode),
+                command_buffer::VRPCommand::Mesh {
+                    format,
+                    depth_test,
+                    cull_mode,
+                    ..
+                } => (*format, *depth_test, *cull_mode),
+                command_buffer::VRPCommand::IndexedMesh {
+                    format,
+                    depth_test,
+                    cull_mode,
+                    ..
+                } => (*format, *depth_test, *cull_mode),
+                command_buffer::VRPCommand::Quad {
+                    depth_test,
+                    cull_mode,
+                    ..
+                } => (self.unit_quad_format, *depth_test, *cull_mode),
             };
 
             let first_state = RenderState {
@@ -1650,7 +1680,10 @@ impl ZGraphics {
                     },
                     wgpu::BindGroupEntry {
                         binding: 6,
-                        resource: self.buffer_manager.quad_instance_buffer().as_entire_binding(),
+                        resource: self
+                            .buffer_manager
+                            .quad_instance_buffer()
+                            .as_entire_binding(),
                     },
                     wgpu::BindGroupEntry {
                         binding: 7,
@@ -1700,16 +1733,62 @@ impl ZGraphics {
 
             for cmd in self.command_buffer.commands() {
                 // Destructure command variant to extract common fields
-                let (format, depth_test, cull_mode, texture_slots, buffer_source, is_quad, cmd_blend_mode) = match cmd {
-                    command_buffer::VRPCommand::Mesh { format, depth_test, cull_mode, texture_slots, buffer_index, .. } => {
-                        (*format, *depth_test, *cull_mode, *texture_slots, BufferSource::Immediate(*buffer_index), false, None)
-                    }
-                    command_buffer::VRPCommand::IndexedMesh { format, depth_test, cull_mode, texture_slots, buffer_index, .. } => {
-                        (*format, *depth_test, *cull_mode, *texture_slots, BufferSource::Retained(*buffer_index), false, None)
-                    }
-                    command_buffer::VRPCommand::Quad { depth_test, cull_mode, blend_mode, texture_slots, .. } => {
-                        (self.unit_quad_format, *depth_test, *cull_mode, *texture_slots, BufferSource::Quad, true, Some(*blend_mode))
-                    }
+                let (
+                    format,
+                    depth_test,
+                    cull_mode,
+                    texture_slots,
+                    buffer_source,
+                    is_quad,
+                    cmd_blend_mode,
+                ) = match cmd {
+                    command_buffer::VRPCommand::Mesh {
+                        format,
+                        depth_test,
+                        cull_mode,
+                        texture_slots,
+                        buffer_index,
+                        ..
+                    } => (
+                        *format,
+                        *depth_test,
+                        *cull_mode,
+                        *texture_slots,
+                        BufferSource::Immediate(*buffer_index),
+                        false,
+                        None,
+                    ),
+                    command_buffer::VRPCommand::IndexedMesh {
+                        format,
+                        depth_test,
+                        cull_mode,
+                        texture_slots,
+                        buffer_index,
+                        ..
+                    } => (
+                        *format,
+                        *depth_test,
+                        *cull_mode,
+                        *texture_slots,
+                        BufferSource::Retained(*buffer_index),
+                        false,
+                        None,
+                    ),
+                    command_buffer::VRPCommand::Quad {
+                        depth_test,
+                        cull_mode,
+                        blend_mode,
+                        texture_slots,
+                        ..
+                    } => (
+                        self.unit_quad_format,
+                        *depth_test,
+                        *cull_mode,
+                        *texture_slots,
+                        BufferSource::Quad,
+                        true,
+                        Some(*blend_mode),
+                    ),
                 };
 
                 // Extract blend mode from shading state for rendering
@@ -1724,7 +1803,9 @@ impl ZGraphics {
                             .expect("Invalid shading_state_index - this indicates a bug in state tracking");
                         BlendMode::from_u8((shading_state.blend_mode & 0xFF) as u8)
                     }
-                    BufferSource::Quad => cmd_blend_mode.expect("Quad command should have blend_mode"),
+                    BufferSource::Quad => {
+                        cmd_blend_mode.expect("Quad command should have blend_mode")
+                    }
                 };
 
                 // Create render state from command + blend mode
@@ -1766,13 +1847,14 @@ impl ZGraphics {
                     PipelineKey::new(self.current_render_mode, format, &state)
                 };
 
-                let pipeline_entry = self.pipeline_cache.get_by_key(&pipeline_key)
+                let pipeline_entry = self
+                    .pipeline_cache
+                    .get_by_key(&pipeline_key)
                     .expect("Pipeline should exist after get_or_create");
 
                 // Get or create texture bind group (cached by texture slots)
-                let texture_bind_group = texture_bind_groups
-                    .entry(texture_slots)
-                    .or_insert_with(|| {
+                let texture_bind_group =
+                    texture_bind_groups.entry(texture_slots).or_insert_with(|| {
                         // Get texture views for this command's bound textures
                         let tex_view_0 = if texture_slots[0] == TextureHandle::INVALID {
                             self.get_fallback_white_view()
@@ -1843,7 +1925,11 @@ impl ZGraphics {
 
                 // Set texture bind group (only if changed)
                 if bound_texture_slots != Some(texture_slots) {
-                    tracing::info!("Setting texture bind group: {:?} (was: {:?})", texture_slots, bound_texture_slots);
+                    tracing::info!(
+                        "Setting texture bind group: {:?} (was: {:?})",
+                        texture_slots,
+                        bound_texture_slots
+                    );
                     render_pass.set_bind_group(1, &*texture_bind_group, &[]);
                     bound_texture_slots = Some(texture_slots);
                 } else {
@@ -1859,7 +1945,8 @@ impl ZGraphics {
                         }
                         BufferSource::Quad => {
                             // Quad instancing uses unit quad mesh (format: POS_UV_COLOR)
-                            self.buffer_manager.retained_vertex_buffer(self.unit_quad_format)
+                            self.buffer_manager
+                                .retained_vertex_buffer(self.unit_quad_format)
                         }
                     };
                     if let Some(buffer) = vertex_buffer.buffer() {
@@ -1870,7 +1957,13 @@ impl ZGraphics {
 
                 // Handle different rendering paths based on command variant
                 match cmd {
-                    command_buffer::VRPCommand::Quad { instance_count, base_instance, base_vertex, first_index, .. } => {
+                    command_buffer::VRPCommand::Quad {
+                        instance_count,
+                        base_instance,
+                        base_vertex,
+                        first_index,
+                        ..
+                    } => {
                         // Quad rendering: Instance data comes from storage buffer binding(6)
                         // The quad shader reads QuadInstance data via @builtin(instance_index)
                         // No per-instance vertex attributes needed (unlike old approach)
@@ -1889,9 +1982,12 @@ impl ZGraphics {
                         );
 
                         // Indexed draw with GPU instancing (quads always use indices)
-                        let index_buffer = self.buffer_manager.retained_index_buffer(self.unit_quad_format);
+                        let index_buffer = self
+                            .buffer_manager
+                            .retained_index_buffer(self.unit_quad_format);
                         if let Some(buffer) = index_buffer.buffer() {
-                            render_pass.set_index_buffer(buffer.slice(..), wgpu::IndexFormat::Uint16);
+                            render_pass
+                                .set_index_buffer(buffer.slice(..), wgpu::IndexFormat::Uint16);
                             render_pass.draw_indexed(
                                 *first_index..*first_index + UNIT_QUAD_INDEX_COUNT,
                                 *base_vertex as i32,
@@ -1901,7 +1997,13 @@ impl ZGraphics {
                             tracing::error!("Quad index buffer is None!");
                         }
                     }
-                    command_buffer::VRPCommand::IndexedMesh { index_count, base_vertex, first_index, buffer_index, .. } => {
+                    command_buffer::VRPCommand::IndexedMesh {
+                        index_count,
+                        base_vertex,
+                        first_index,
+                        buffer_index,
+                        ..
+                    } => {
                         // Indexed mesh: MVP instancing with storage buffer lookup
                         let index_buffer = match buffer_source {
                             BufferSource::Immediate(_) => self.buffer_manager.index_buffer(format),
@@ -1911,7 +2013,8 @@ impl ZGraphics {
                             BufferSource::Quad => unreachable!(),
                         };
                         if let Some(buffer) = index_buffer.buffer() {
-                            render_pass.set_index_buffer(buffer.slice(..), wgpu::IndexFormat::Uint16);
+                            render_pass
+                                .set_index_buffer(buffer.slice(..), wgpu::IndexFormat::Uint16);
                             render_pass.draw_indexed(
                                 *first_index..*first_index + *index_count,
                                 *base_vertex as i32,
@@ -1919,7 +2022,12 @@ impl ZGraphics {
                             );
                         }
                     }
-                    command_buffer::VRPCommand::Mesh { vertex_count, base_vertex, buffer_index, .. } => {
+                    command_buffer::VRPCommand::Mesh {
+                        vertex_count,
+                        base_vertex,
+                        buffer_index,
+                        ..
+                    } => {
                         // Non-indexed mesh: MVP instancing with storage buffer lookup
                         render_pass.draw(
                             *base_vertex..*base_vertex + *vertex_count,

@@ -164,7 +164,7 @@ pub struct ZFFIState {
     // Combined MVP+Shading state pool with deduplication
     // Each entry contains unpacked indices (model, view, proj, shading) - 16 bytes, maps to vec4<u32> in WGSL
     pub mvp_shading_states: Vec<crate::graphics::MvpShadingIndices>,
-    pub mvp_shading_map: HashMap<crate::graphics::MvpShadingIndices, u32>,  // indices -> buffer_index
+    pub mvp_shading_map: HashMap<crate::graphics::MvpShadingIndices, u32>, // indices -> buffer_index
 
     // Unified shading state system (deduplication + dirty tracking)
     pub shading_states: Vec<crate::graphics::PackedUnifiedShadingState>,
@@ -225,7 +225,7 @@ impl Default for ZFFIState {
             model_matrices: model_matrices.clone(),
             view_matrices: view_matrices.clone(),
             proj_matrices: proj_matrices.clone(),
-            current_model_matrix: None,  // Start with None = use pool index 0
+            current_model_matrix: None, // Start with None = use pool index 0
             current_view_matrix: None,
             current_proj_matrix: None,
             mvp_shading_states: Vec::with_capacity(256),
@@ -244,17 +244,6 @@ impl ZFFIState {
     #[cfg(test)]
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// Add a model matrix to the pool and return its index
-    pub fn add_model_matrix(&mut self, matrix: Mat4) -> Option<u32> {
-        let idx = self.model_matrices.len() as u32;
-        if idx >= 65536 {
-            // Panic in all builds - this is a programming error
-            panic!("Model matrix pool overflow! Maximum 65,536 matrices per frame.");
-        }
-        self.model_matrices.push(matrix);
-        Some(idx)
     }
 
     /// Update material property in current shading state (with quantization check)
@@ -534,8 +523,8 @@ impl ZFFIState {
 
         // Reset current MVP state to defaults
         self.current_model_matrix = None; // Will use last in pool (IDENTITY)
-        self.current_view_matrix = None;  // Will use last in pool (default view)
-        self.current_proj_matrix = None;  // Will use last in pool (default proj)
+        self.current_view_matrix = None; // Will use last in pool (default view)
+        self.current_proj_matrix = None; // Will use last in pool (default proj)
 
         // Clear combined MVP+shading state pool
         self.mvp_shading_states.clear();
@@ -575,58 +564,6 @@ mod tests {
         assert_eq!(state.current_model_matrix, None);
         assert_eq!(state.current_view_matrix, None);
         assert_eq!(state.current_proj_matrix, None);
-    }
-
-    #[test]
-    fn test_add_model_matrix() {
-        let mut state = ZFFIState::new();
-
-        let matrix1 = Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0));
-        let matrix2 = Mat4::from_translation(Vec3::new(4.0, 5.0, 6.0));
-
-        let idx1 = state.add_model_matrix(matrix1);
-        let idx2 = state.add_model_matrix(matrix2);
-
-        assert_eq!(idx1, Some(1)); // Index 0 is identity
-        assert_eq!(idx2, Some(2));
-        assert_eq!(state.model_matrices.len(), 3); // Identity + 2 added
-        assert_eq!(state.model_matrices[0], Mat4::IDENTITY);
-        assert_eq!(state.model_matrices[1], matrix1);
-        assert_eq!(state.model_matrices[2], matrix2);
-    }
-
-    #[test]
-    fn test_add_many_model_matrices() {
-        let mut state = ZFFIState::new();
-
-        // Add 100 matrices (identity at 0, so these will be indices 1-100)
-        for i in 0..100 {
-            let matrix = Mat4::from_translation(Vec3::new(i as f32, 0.0, 0.0));
-            let idx = state.add_model_matrix(matrix);
-            assert_eq!(idx, Some(i + 1)); // +1 because index 0 is identity
-        }
-
-        assert_eq!(state.model_matrices.len(), 101); // Identity + 100 added
-    }
-
-    #[test]
-    fn test_clear_frame_resets_model_matrices() {
-        let mut state = ZFFIState::new();
-
-        // Add some model matrices (identity already at 0)
-        state.add_model_matrix(Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0)));
-        state.add_model_matrix(Mat4::from_translation(Vec3::new(4.0, 5.0, 6.0)));
-        assert_eq!(state.model_matrices.len(), 3); // Identity + 2 added
-
-        // Clear frame
-        state.clear_frame();
-
-        // Model matrices should be cleared and reset to just identity at index 0
-        assert_eq!(state.model_matrices.len(), 1);
-        assert_eq!(state.model_matrices[0], Mat4::IDENTITY);
-        // View and proj should still exist
-        assert_eq!(state.view_matrices.len(), 1);
-        assert_eq!(state.proj_matrices.len(), 1);
     }
 
     // ========================================================================

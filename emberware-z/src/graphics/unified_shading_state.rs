@@ -32,8 +32,8 @@ pub struct PackedUnifiedShadingState {
     pub emissive: u8,
     pub pad0: u8,
     pub color_rgba8: u32,
-    pub blend_mode: u32,         // BlendMode as u32
-    pub matcap_blend_modes: u32, // 4x MatcapBlendMode packed as u8s
+    pub blend_mode: u32,          // BlendMode as u32
+    pub matcap_blend_modes: u32,  // 4x MatcapBlendMode packed as u8s
     pub sky: PackedSky,           // 16 bytes
     pub lights: [PackedLight; 4], // 32 bytes (4 × 8-byte lights)
 }
@@ -145,7 +145,7 @@ pub fn encode_octahedral(dir: Vec3) -> (f32, f32) {
         v = (1.0 - u_abs) * if v >= 0.0 { 1.0 } else { -1.0 };
     }
 
-    (u, v)  // Both in [-1, 1]
+    (u, v) // Both in [-1, 1]
 }
 
 /// Pack Vec3 direction to u32 using octahedral encoding (2x snorm16)
@@ -276,7 +276,6 @@ impl PackedLight {
 
 impl PackedUnifiedShadingState {
     /// Create from all f32 parameters (used during FFI calls)
-    #[allow(clippy::too_many_arguments)]
     pub fn from_floats(
         metallic: f32,
         roughness: f32,
@@ -308,8 +307,8 @@ mod tests {
     #[test]
     fn test_packed_sizes() {
         assert_eq!(std::mem::size_of::<PackedSky>(), 16);
-        assert_eq!(std::mem::size_of::<PackedLight>(), 8);  // Was 16, now 8 (50% reduction!)
-        assert_eq!(std::mem::size_of::<PackedUnifiedShadingState>(), 64);  // Was 100, now 64 (16 + 16 + 32)
+        assert_eq!(std::mem::size_of::<PackedLight>(), 8); // Was 16, now 8 (50% reduction!)
+        assert_eq!(std::mem::size_of::<PackedUnifiedShadingState>(), 64); // Was 100, now 64 (16 + 16 + 32)
     }
 
     #[test]
@@ -327,12 +326,12 @@ mod tests {
     fn test_octahedral_cardinals() {
         // Test that cardinal directions encode/decode correctly
         let tests = [
-            Vec3::new(1.0, 0.0, 0.0),   // +X
-            Vec3::new(-1.0, 0.0, 0.0),  // -X
-            Vec3::new(0.0, 1.0, 0.0),   // +Y
-            Vec3::new(0.0, -1.0, 0.0),  // -Y
-            Vec3::new(0.0, 0.0, 1.0),   // +Z
-            Vec3::new(0.0, 0.0, -1.0),  // -Z
+            Vec3::new(1.0, 0.0, 0.0),  // +X
+            Vec3::new(-1.0, 0.0, 0.0), // -X
+            Vec3::new(0.0, 1.0, 0.0),  // +Y
+            Vec3::new(0.0, -1.0, 0.0), // -Y
+            Vec3::new(0.0, 0.0, 1.0),  // +Z
+            Vec3::new(0.0, 0.0, -1.0), // -Z
         ];
 
         for dir in &tests {
