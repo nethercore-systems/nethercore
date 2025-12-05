@@ -193,7 +193,6 @@ pub struct ZGraphics {
     unit_quad_format: u8,
     unit_quad_base_vertex: u32,
     unit_quad_first_index: u32,
-    unit_quad_index_count: u32,
 
     // Screen dimensions uniform for screen-space quads (part of bind group 0)
     screen_dims_buffer: wgpu::Buffer,
@@ -412,8 +411,6 @@ impl ZGraphics {
         retained_index_buf_mut.ensure_capacity(&device, index_bytes.len() as u64);
         retained_index_buf_mut.write(&queue, index_bytes);
 
-        let unit_quad_index_count = 6;
-
         let graphics = Self {
             surface,
             device,
@@ -452,7 +449,6 @@ impl ZGraphics {
             unit_quad_format,
             unit_quad_base_vertex,
             unit_quad_first_index,
-            unit_quad_index_count,
             screen_dims_buffer,
         };
 
@@ -752,6 +748,11 @@ impl ZGraphics {
         self.texture_manager.font_texture()
     }
 
+    /// Get white fallback texture handle
+    pub fn white_texture(&self) -> TextureHandle {
+        self.texture_manager.white_texture()
+    }
+
     /// Get font texture view
     pub fn get_font_texture_view(&self) -> &wgpu::TextureView {
         self.texture_manager.get_font_texture_view()
@@ -951,16 +952,10 @@ impl ZGraphics {
         }
 
         // 1.5. Process GPU-instanced quads (billboards, sprites)
-        // Upload quad instances to GPU and create instanced draw command
-        if !z_state.quad_instances.is_empty() {
-            tracing::info!("Processing {} quad instances", z_state.quad_instances.len());
-
-            // DEBUG: Log first few instances to verify data
-            for (i, inst) in z_state.quad_instances.iter().take(3).enumerate() {
-                tracing::info!("  Instance[{}]: pos=({},{},{}), size=({},{}), mode={}, view_idx={}",
-                    i, inst.position[0], inst.position[1], inst.position[2],
-                    inst.size[0], inst.size[1], inst.mode, inst.view_index);
-            }
+        // Accumulate all instances and upload once, then create batched draw commands
+        if !z_state.quad_batches.is_empty() {
+            let total_instances: usize = z_state.quad_batches.iter().map(|b| b.instances.len()).sum();
+            tracing::info!("Processing {} quad batches with {} total instances", z_state.quad_batches.len(), total_instances);
 
             // DEBUG: Log view/projection matrices
             if !z_state.view_matrices.is_empty() && !z_state.proj_matrices.is_empty() {
@@ -970,62 +965,78 @@ impl ZGraphics {
                 tracing::info!("  Proj[0]: {:?}", z_state.proj_matrices[0]);
             }
 
-            // Upload instance data to GPU
-            self.buffer_manager
-                .upload_quad_instances(&self.device, &self.queue, &z_state.quad_instances)
-                .expect("Failed to upload quad instances to GPU");
+            // Accumulate all instances into one buffer and track batch offsets
+            let mut all_instances = Vec::with_capacity(total_instances);
+            let mut batch_info = Vec::new(); // (base_instance, instance_count, textures)
 
-            // Create instanced draw command using the unit quad mesh
-            // The GPU vertex shader will expand each instance into a quad
-            let instance_count = z_state.quad_instances.len() as u32;
+            for batch in &z_state.quad_batches {
+                if batch.instances.is_empty() {
+                    continue;
+                }
 
-            tracing::info!(
-                "Quad texture state: bound_textures={:?}, texture_map has {} entries",
-                z_state.bound_textures,
-                texture_map.len()
-            );
+                let base_instance = all_instances.len() as u32;
+                all_instances.extend_from_slice(&batch.instances);
+                batch_info.push((base_instance, batch.instances.len() as u32, batch.textures));
 
-            // DEBUG: Check if handle 0 is in map
-            if z_state.bound_textures[0] == 0 {
-                let mapped = texture_map.get(&0);
-                tracing::error!("TEXT DEBUG: Looking up handle 0 in texture_map: {:?}", mapped);
-                tracing::error!("TEXT DEBUG: Font texture handle from graphics: {:?}", self.font_texture());
+                tracing::info!(
+                    "  Batch: base_instance={}, count={}, textures={:?}",
+                    base_instance,
+                    batch.instances.len(),
+                    batch.textures
+                );
             }
 
-            // Map FFI texture handles to graphics texture handles
-            let texture_slots = [
-                texture_map
-                    .get(&z_state.bound_textures[0])
-                    .copied()
-                    .unwrap_or_else(|| {
-                        tracing::error!("TEXT DEBUG: Failed to map texture handle {}, using INVALID", z_state.bound_textures[0]);
-                        TextureHandle::INVALID
-                    }),
-                texture_map
-                    .get(&z_state.bound_textures[1])
-                    .copied()
-                    .unwrap_or(TextureHandle::INVALID),
-                texture_map
-                    .get(&z_state.bound_textures[2])
-                    .copied()
-                    .unwrap_or(TextureHandle::INVALID),
-                texture_map
-                    .get(&z_state.bound_textures[3])
-                    .copied()
-                    .unwrap_or(TextureHandle::INVALID),
-            ];
+            // Upload all instances once to GPU
+            if !all_instances.is_empty() {
+                tracing::info!("Uploading {} total quad instances to GPU", all_instances.len());
+                self.buffer_manager
+                    .upload_quad_instances(&self.device, &self.queue, &all_instances)
+                    .expect("Failed to upload quad instances to GPU");
+            }
 
-            // Note: Quad instances contain their own shading_state_index in the instance data.
-            // BufferSource::Quad has no buffer_index - quads read transforms and shading from instance data.
-            self.command_buffer.add_command(command_buffer::VRPCommand::Quad {
-                base_vertex: self.unit_quad_base_vertex,
-                first_index: self.unit_quad_first_index,
-                instance_count,
-                texture_slots,
-                blend_mode: BlendMode::Alpha, // Enable alpha blending for text/sprites
-                depth_test: true, // Billboards typically use depth test (TODO: per-instance?)
-                cull_mode: CullMode::None, // Quads are double-sided
-            });
+            // Create draw commands for each batch with correct base_instance
+            for (base_instance, instance_count, textures) in batch_info {
+                // Map FFI texture handles to graphics texture handles for this batch
+                let texture_slots = [
+                    texture_map
+                        .get(&textures[0])
+                        .copied()
+                        .unwrap_or(TextureHandle::INVALID),
+                    texture_map
+                        .get(&textures[1])
+                        .copied()
+                        .unwrap_or(TextureHandle::INVALID),
+                    texture_map
+                        .get(&textures[2])
+                        .copied()
+                        .unwrap_or(TextureHandle::INVALID),
+                    texture_map
+                        .get(&textures[3])
+                        .copied()
+                        .unwrap_or(TextureHandle::INVALID),
+                ];
+
+                tracing::info!(
+                    "Quad draw command: base_instance={}, count={}, textures={:?} -> {:?}",
+                    base_instance,
+                    instance_count,
+                    textures,
+                    texture_slots
+                );
+
+                // Note: Quad instances contain their own shading_state_index in the instance data.
+                // BufferSource::Quad has no buffer_index - quads read transforms and shading from instance data.
+                self.command_buffer.add_command(command_buffer::VRPCommand::Quad {
+                    base_vertex: self.unit_quad_base_vertex,
+                    first_index: self.unit_quad_first_index,
+                    base_instance,
+                    instance_count,
+                    texture_slots,
+                    blend_mode: BlendMode::Alpha, // Enable alpha blending for text/sprites
+                    depth_test: true, // Billboards typically use depth test (TODO: per-instance?)
+                    cull_mode: CullMode::None, // Quads are double-sided
+                });
+            }
         }
 
         // Note: All per-frame cleanup (model_matrices, audio_commands, render_pass)
@@ -1832,8 +1843,11 @@ impl ZGraphics {
 
                 // Set texture bind group (only if changed)
                 if bound_texture_slots != Some(texture_slots) {
+                    tracing::info!("Setting texture bind group: {:?} (was: {:?})", texture_slots, bound_texture_slots);
                     render_pass.set_bind_group(1, &*texture_bind_group, &[]);
                     bound_texture_slots = Some(texture_slots);
+                } else {
+                    tracing::trace!("Skipping bind group set (unchanged): {:?}", texture_slots);
                 }
 
                 // Set vertex buffer (only if format or buffer source changed)
@@ -1856,7 +1870,7 @@ impl ZGraphics {
 
                 // Handle different rendering paths based on command variant
                 match cmd {
-                    command_buffer::VRPCommand::Quad { instance_count, base_vertex, first_index, .. } => {
+                    command_buffer::VRPCommand::Quad { instance_count, base_instance, base_vertex, first_index, .. } => {
                         // Quad rendering: Instance data comes from storage buffer binding(6)
                         // The quad shader reads QuadInstance data via @builtin(instance_index)
                         // No per-instance vertex attributes needed (unlike old approach)
@@ -1865,8 +1879,9 @@ impl ZGraphics {
                         const UNIT_QUAD_INDEX_COUNT: u32 = 6;
 
                         tracing::info!(
-                            "Drawing {} quad instances (indices {}..{}, base_vertex {}, textures: {:?})",
+                            "Drawing {} quad instances at base_instance {} (indices {}..{}, base_vertex {}, textures: {:?})",
                             instance_count,
+                            base_instance,
                             first_index,
                             first_index + UNIT_QUAD_INDEX_COUNT,
                             base_vertex,
@@ -1880,7 +1895,7 @@ impl ZGraphics {
                             render_pass.draw_indexed(
                                 *first_index..*first_index + UNIT_QUAD_INDEX_COUNT,
                                 *base_vertex as i32,
-                                0..*instance_count,
+                                *base_instance..*base_instance + *instance_count,
                             );
                         } else {
                             tracing::error!("Quad index buffer is None!");

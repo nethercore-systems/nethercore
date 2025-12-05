@@ -461,12 +461,6 @@ impl PipelineCache {
         self.pipelines.contains_key(&key)
     }
 
-    /// Get a pipeline if it exists
-    pub fn get(&self, render_mode: u8, format: u8, state: &RenderState) -> Option<&PipelineEntry> {
-        let key = PipelineKey::new(render_mode, format, state);
-        self.pipelines.get(&key)
-    }
-
     /// Get or create a quad pipeline
     ///
     /// Returns a reference to the cached quad pipeline, creating it if necessary.

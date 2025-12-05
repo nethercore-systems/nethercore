@@ -240,6 +240,11 @@ impl TextureManager {
         self.font_texture
     }
 
+    /// Get white fallback texture handle
+    pub fn white_texture(&self) -> TextureHandle {
+        self.fallback_white
+    }
+
     /// Get font texture view
     pub fn get_font_texture_view(&self) -> &wgpu::TextureView {
         &self.textures[&self.font_texture.0].view

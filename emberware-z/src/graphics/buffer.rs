@@ -137,26 +137,11 @@ impl GrowableBuffer {
     pub fn used(&self) -> u64 {
         self.used
     }
-
-    /// Get current capacity in bytes
-    pub fn capacity(&self) -> u64 {
-        self.capacity
-    }
-
-    /// Get a buffer slice for the used portion
-    pub fn slice(&self) -> wgpu::BufferSlice<'_> {
-        self.buffer.slice(0..self.used)
-    }
 }
 
 /// Handle to a retained mesh
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct MeshHandle(pub u32);
-
-impl MeshHandle {
-    /// Invalid/null mesh handle
-    pub const INVALID: MeshHandle = MeshHandle(0);
-}
 
 /// Stored mesh data for retained mode drawing
 #[derive(Debug, Clone)]

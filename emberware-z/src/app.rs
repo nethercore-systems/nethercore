@@ -526,10 +526,15 @@ impl App {
         });
 
         // Add built-in font texture to texture map (handle 0)
+        // Add white fallback texture to texture map (handle 0xFFFFFFFF)
         if let (Some(session), Some(graphics)) = (&mut self.game_session, &self.graphics) {
             let font_texture_handle = graphics.font_texture();
             session.texture_map.insert(0, font_texture_handle);
             tracing::info!("Initialized font texture in texture_map: handle 0 -> {:?}", font_texture_handle);
+
+            let white_texture_handle = graphics.white_texture();
+            session.texture_map.insert(u32::MAX, white_texture_handle);
+            tracing::info!("Initialized white texture in texture_map: handle 0xFFFFFFFF -> {:?}", white_texture_handle);
         }
 
         // Update render target resolution and window minimum size based on game's init config
@@ -1225,12 +1230,16 @@ impl ApplicationHandler for App {
         self.graphics = Some(graphics);
         self.window = Some(window);
 
-        // If a game session exists, add the font texture to its texture map
+        // If a game session exists, add the font and white textures to its texture map
         // (game session may have been created before graphics was initialized)
         if let (Some(session), Some(graphics)) = (&mut self.game_session, &self.graphics) {
             let font_texture_handle = graphics.font_texture();
             session.texture_map.insert(0, font_texture_handle);
             tracing::info!("Added font texture to existing game session: handle 0 -> {:?}", font_texture_handle);
+
+            let white_texture_handle = graphics.white_texture();
+            session.texture_map.insert(u32::MAX, white_texture_handle);
+            tracing::info!("Added white texture to existing game session: handle 0xFFFFFFFF -> {:?}", white_texture_handle);
         }
     }
 

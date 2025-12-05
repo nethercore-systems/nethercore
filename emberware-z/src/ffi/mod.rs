@@ -1541,7 +1541,7 @@ fn draw_billboard(
         view_idx,
     );
 
-    state.quad_instances.push(instance);
+    state.add_quad_instance(instance);
 }
 
 /// Draw a billboard with a UV region from the texture
@@ -1619,7 +1619,7 @@ fn draw_billboard_region(
         view_idx,
     );
 
-    state.quad_instances.push(instance);
+    state.add_quad_instance(instance);
 }
 
 // ============================================================================
@@ -1666,7 +1666,7 @@ fn draw_sprite(
         view_idx,
     );
 
-    state.quad_instances.push(instance);
+    state.add_quad_instance(instance);
 }
 
 /// Draw a region of a sprite sheet
@@ -1719,7 +1719,7 @@ fn draw_sprite_region(
         (state.view_matrices.len() - 1) as u32,
     );
 
-    state.quad_instances.push(instance);
+    state.add_quad_instance(instance);
 }
 
 /// Draw a sprite with full control (rotation, origin, UV region)
@@ -1782,7 +1782,7 @@ fn draw_sprite_ex(
         (state.view_matrices.len() - 1) as u32,
     );
 
-    state.quad_instances.push(instance);
+    state.add_quad_instance(instance);
 }
 
 /// Draw a solid color rectangle
@@ -1805,6 +1805,9 @@ fn draw_rect(
 ) {
     let state = &mut caller.data_mut().console;
 
+    // Bind white texture (handle 0xFFFFFFFF) to slot 0
+    state.bound_textures[0] = u32::MAX;
+
     // Get shading state index
     let shading_state_index = state.add_shading_state();
 
@@ -1815,13 +1818,13 @@ fn draw_rect(
         w,
         h,
         0.0,                   // No rotation
-        [0.0, 0.0, 1.0, 1.0],  // Full texture UV (will use fallback white texture)
+        [0.0, 0.0, 1.0, 1.0],  // Full texture UV (white texture is 1x1, so any UV works)
         color,
         shading_state_index.0,
         (state.view_matrices.len() - 1) as u32,
     );
 
-    state.quad_instances.push(instance);
+    state.add_quad_instance(instance);
 }
 
 /// Draw text with the built-in font
@@ -1903,15 +1906,16 @@ fn draw_text(
     let font_handle = state.current_font;
 
     // Look up custom font if font_handle != 0
+    // Clone the font to avoid holding a borrow across add_quad_instance calls
     let custom_font = if font_handle == 0 {
         None
     } else {
         let font_index = (font_handle - 1) as usize;
-        state.fonts.get(font_index)
+        state.fonts.get(font_index).cloned()
     };
 
     // Bind the appropriate font texture to slot 0
-    if let Some(font) = custom_font {
+    if let Some(ref font) = custom_font {
         state.bound_textures[0] = font.texture;
     } else {
         // For built-in font, use handle 0 (special case handled in rendering)
@@ -1922,7 +1926,7 @@ fn draw_text(
     // Generate quad instances for each character
     let mut cursor_x = x;
 
-    if let Some(font) = custom_font {
+    if let Some(ref font) = custom_font {
         // Custom font rendering
         let scale = size / font.char_height as f32;
         let glyph_height = size;
@@ -1972,7 +1976,7 @@ fn draw_text(
                 shading_state_index.0,
                 view_idx,
             );
-            state.quad_instances.push(instance);
+            state.add_quad_instance(instance);
 
             cursor_x += glyph_width;
         }
@@ -2000,7 +2004,7 @@ fn draw_text(
                 shading_state_index.0,
                 view_idx,
             );
-            state.quad_instances.push(instance);
+            state.add_quad_instance(instance);
 
             cursor_x += glyph_width;
         }

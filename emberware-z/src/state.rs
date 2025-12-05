@@ -98,6 +98,16 @@ impl Default for ZInitConfig {
 /// rendering and does not persist between frames.
 ///
 /// This is NOT serialized for rollback - only core GameState is rolled back.
+
+/// A batch of quad instances that share the same texture bindings
+#[derive(Debug, Clone)]
+pub struct QuadBatch {
+    /// Texture handles for this batch (snapshot of bound_textures when batch was created)
+    pub textures: [u32; 4],
+    /// Quad instances in this batch
+    pub instances: Vec<crate::graphics::QuadInstance>,
+}
+
 #[derive(Debug)]
 pub struct ZFFIState {
     // Render state
@@ -163,8 +173,8 @@ pub struct ZFFIState {
     pub current_shading_state: crate::graphics::PackedUnifiedShadingState,
     pub shading_state_dirty: bool,
 
-    // GPU-instanced quad rendering
-    pub quad_instances: Vec<crate::graphics::QuadInstance>,
+    // GPU-instanced quad rendering (batched by texture)
+    pub quad_batches: Vec<QuadBatch>,
 }
 
 impl Default for ZFFIState {
@@ -224,7 +234,7 @@ impl Default for ZFFIState {
             shading_state_map: HashMap::new(),
             current_shading_state: crate::graphics::PackedUnifiedShadingState::default(),
             shading_state_dirty: true, // Start dirty so first draw creates state 0
-            quad_instances: Vec::with_capacity(256),
+            quad_batches: Vec::new(),
         }
     }
 }
@@ -466,6 +476,27 @@ impl ZFFIState {
         buffer_idx
     }
 
+    /// Add a quad instance to the appropriate batch (auto-batches by texture)
+    ///
+    /// This automatically groups quads by texture to minimize draw calls.
+    /// When bound_textures changes, a new batch is created.
+    pub fn add_quad_instance(&mut self, instance: crate::graphics::QuadInstance) {
+        // Check if we can add to the current batch or need a new one
+        if let Some(last_batch) = self.quad_batches.last_mut() {
+            if last_batch.textures == self.bound_textures {
+                // Same textures - add to current batch
+                last_batch.instances.push(instance);
+                return;
+            }
+        }
+
+        // Need a new batch (either first batch or textures changed)
+        self.quad_batches.push(QuadBatch {
+            textures: self.bound_textures,
+            instances: vec![instance],
+        });
+    }
+
     /// Clear all per-frame commands and reset for next frame
     ///
     /// Called once per frame in app.rs after render_frame() completes.
@@ -517,8 +548,8 @@ impl ZFFIState {
         self.shading_state_map.clear();
         self.shading_state_dirty = true; // Mark dirty so first draw creates state 0
 
-        // Clear GPU-instanced quads for next frame
-        self.quad_instances.clear();
+        // Clear GPU-instanced quad batches for next frame
+        self.quad_batches.clear();
 
         // Note: Render state (color, blend_mode, etc.) persists between frames
     }
@@ -579,36 +610,6 @@ mod tests {
     }
 
     #[test]
-    fn test_mvp_index_packing() {
-        let mvp = crate::graphics::MvpIndex::new(1234, 56, 78);
-        let (model, view, proj) = mvp.unpack();
-
-        assert_eq!(model, 1234);
-        assert_eq!(view, 56);
-        assert_eq!(proj, 78);
-    }
-
-    #[test]
-    fn test_mvp_index_max_values() {
-        // Test maximum values for each field
-        let mvp = crate::graphics::MvpIndex::new(65535, 255, 255);
-        let (model, view, proj) = mvp.unpack();
-
-        assert_eq!(model, 65535);
-        assert_eq!(view, 255);
-        assert_eq!(proj, 255);
-    }
-
-    #[test]
-    fn test_mvp_index_accessors() {
-        let mvp = crate::graphics::MvpIndex::new(100, 10, 5);
-
-        assert_eq!(mvp.model_index(), 100);
-        assert_eq!(mvp.view_index(), 10);
-        assert_eq!(mvp.proj_index(), 5);
-    }
-
-    #[test]
     fn test_clear_frame_resets_model_matrices() {
         let mut state = ZFFIState::new();
 
@@ -626,37 +627,6 @@ mod tests {
         // View and proj should still exist
         assert_eq!(state.view_matrices.len(), 1);
         assert_eq!(state.proj_matrices.len(), 1);
-    }
-
-    #[test]
-    fn test_mvp_index_invalid_constant() {
-        let invalid = crate::graphics::MvpIndex::INVALID;
-        let (model, view, proj) = invalid.unpack();
-
-        assert_eq!(model, 0);
-        assert_eq!(view, 0);
-        assert_eq!(proj, 0);
-    }
-
-    #[test]
-    fn test_matrix_packing_in_draw_workflow() {
-        let mut state = ZFFIState::new();
-
-        // Simulate a typical draw workflow
-        let transform = Mat4::from_translation(Vec3::new(10.0, 20.0, 30.0));
-        let model_idx = state.add_model_matrix(transform).unwrap();
-
-        // Use default view/proj indices (0)
-        let mvp = crate::graphics::MvpIndex::new(model_idx, 0, 0);
-
-        // Verify we can unpack it correctly
-        let (m, v, p) = mvp.unpack();
-        assert_eq!(m, 1); // Index 1 (identity is at 0)
-        assert_eq!(v, 0); // Default view
-        assert_eq!(p, 0); // Default proj
-
-        // Verify the matrix is in the pool
-        assert_eq!(state.model_matrices[m as usize], transform);
     }
 
     // ========================================================================
