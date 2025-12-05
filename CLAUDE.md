@@ -178,8 +178,38 @@ The console uses GGRS for deterministic rollback netcode. This means:
 │   └── saves/
 ```
 
-## Deep Links
+## Launching Games
+
+### Deep Links
 `emberware://play/{game_id}` — Download if needed, then play
+
+### Command-Line Arguments
+Games can be launched directly from the command line, bypassing the library UI:
+
+```bash
+# Launch by exact game ID
+cargo run -- platformer
+
+# Launch by prefix (case-insensitive, must be unique)
+cargo run -- plat        # Matches "platformer"
+cargo run -- CUBE        # Matches "cube"
+
+# No argument launches the library UI
+cargo run
+```
+
+**Priority order:** Deep links → CLI arguments → Library UI
+
+**Game resolution features:**
+- Exact case-sensitive matching (fast path)
+- Case-insensitive matching
+- Prefix matching (if unique)
+- Levenshtein distance suggestions for typos
+- Helpful error messages listing available games
+
+**Implementation:**
+- `emberware-z/src/game_resolver.rs` - Game ID resolution logic
+- `emberware-z/src/main.rs` - CLI argument parsing
 
 ## Related
 - `emberware-platform` (private) — Backend API, web frontend

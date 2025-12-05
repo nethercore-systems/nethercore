@@ -69,10 +69,22 @@ This will:
 
 **Run the examples:**
 ```bash
+# Launch game library UI
 cargo run
+
+# Or launch a game directly (faster for development)
+cargo run -- platformer      # Launch by full name
+cargo run -- plat            # Launch by prefix match
+cargo run -- CUBE            # Case-insensitive
 ```
 
 The examples will appear in the Emberware Z game library. Use the refresh button if you add new games while the app is running.
+
+**CLI Launch Features:**
+- **Exact matching**: `cargo run -- cube` launches cube
+- **Prefix matching**: `cargo run -- plat` launches platformer (if unique)
+- **Case-insensitive**: `CUBE`, `Cube`, and `cube` all work
+- **Error messages**: Invalid games show suggestions and available games list
 
 **Available examples:** hello-world, triangle, textured-quad, cube, lighting, skinned-mesh, billboard, platformer
 

@@ -279,57 +279,6 @@ fn expand_bone_matrix(bone: BoneMatrix3x4) -> mat4x4<f32> {
 
 ---
 
-### **[FEATURE] Direct game launch via command-line argument**
-
-**Status:** Not yet implemented
-
-**Current State:**
-- `cargo run` always launches to the game library UI
-- Users must click on a game to launch it
-- No way to directly launch a specific game from command line
-
-**What's Needed:**
-Add command-line argument support to launch games directly, skipping the library screen.
-
-**Usage Examples:**
-```bash
-cargo run platformer    # Launch platformer directly
-cargo run cube          # Launch cube example directly
-cargo run -- lighting   # Alternative syntax
-```
-
-**Implementation Plan:**
-
-1. **Parse command-line arguments** in `main.rs`:
-   - Check for first argument after program name
-   - If argument provided, treat as game name
-   - If no argument, launch library as normal
-
-2. **Game name resolution**:
-   - Match argument against game IDs in library
-   - Support both full game IDs and partial matches (e.g., "platform" matches "platformer")
-   - Show error if game not found or multiple matches
-
-3. **Direct launch flow**:
-   - Skip `UiMode::Library` and go straight to `UiMode::Loading`
-   - Use provided game name to construct ROM path
-   - Load and run game immediately
-
-4. **Error handling**:
-   - Game not found: Print error and show library
-   - ROM missing: Print error and show library
-   - Invalid game name: Show available games and exit
-
-**Files to Modify:**
-- `emberware-z/src/main.rs` - Parse command-line args, implement game resolution logic
-- `emberware-z/src/app.rs` - Support initial mode as Loading instead of Library
-
-**User Benefit:**
-- Faster iteration during development (no UI navigation)
-- Scriptable game launching for testing
-- Better developer experience for example testing
-
----
 
 ### **[POLISH] PERF: Store MeshId, TextureId (and other ID)s in ZGraphics as a Vec<T> instead of a HashMap<usize, T>
 - This task may need to be updated if ZGraphics is refactored to something else.
@@ -565,3 +514,39 @@ This enables fighting games with unlocked characters, RPGs with player stats, et
 ---
 
 ## Done
+
+---
+
+### **[FEATURE] Direct game launch via command-line argument** ✅
+
+**Completed:** 2025-12-05
+
+**Implementation:**
+Added command-line argument support to launch games directly, bypassing the library UI.
+
+**Features:**
+- **Exact matching**: `cargo run -- cube` launches cube
+- **Case-insensitive matching**: `cargo run -- CUBE` also works
+- **Prefix matching**: `cargo run -- plat` launches platformer (if unique)
+- **Smart error handling**: Shows suggestions using Levenshtein distance for typos
+- **Helpful messages**: Lists available games when game not found
+- **Priority system**: Deep links → CLI args → Library UI
+
+**Usage Examples:**
+```bash
+cargo run -- platformer      # Launch by full name
+cargo run -- plat            # Launch by prefix (if unique)
+cargo run -- CUBE            # Case-insensitive
+cargo run -- platfrm         # Typo → suggests "platformer"
+```
+
+**Files Modified:**
+- `emberware-z/src/game_resolver.rs` (new) - Game ID resolution with fuzzy matching
+- `emberware-z/src/main.rs` - CLI argument parsing and game resolution
+
+**Benefits:**
+- Faster iteration during development (no UI navigation)
+- Scriptable game launching for testing
+- Better developer experience with smart matching
+
+---
