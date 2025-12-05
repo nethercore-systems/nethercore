@@ -118,6 +118,27 @@ normalization = shininess × 0.0397436 + 0.0856832
 
 ## 3. Shader Implementation
 
+### Binding Structure
+
+All modes share the same binding layout for consistency:
+
+```wgsl
+// Group 0: Per-frame uniforms (same as mode2_pbr.wgsl)
+@group(0) @binding(0) var<storage, read> model_matrices: array<mat4x4<f32>>;
+@group(0) @binding(1) var<storage, read> view_matrices: array<mat4x4<f32>>;
+@group(0) @binding(2) var<storage, read> proj_matrices: array<mat4x4<f32>>;
+@group(0) @binding(3) var<storage, read> shading_states: array<PackedUnifiedShadingState>;
+@group(0) @binding(4) var<storage, read> mvp_shading_indices: array<vec4<u32>>;
+@group(0) @binding(5) var<storage, read> bones: array<mat4x4<f32>, 256>;
+
+// Group 1: Textures (shared sampler for all slots)
+@group(1) @binding(0) var slot0: texture_2d<f32>;  // Albedo + Emissive (Mode 3)
+@group(1) @binding(1) var slot1: texture_2d<f32>;  // Specular + Shininess (Mode 3)
+@group(1) @binding(2) var slot2: texture_2d<f32>;  // Unused (white fallback)
+@group(1) @binding(3) var slot3: texture_2d<f32>;  // Unused (white fallback)
+@group(1) @binding(4) var tex_sampler: sampler;
+```
+
 ### Core Functions (WGSL)
 
 ```wgsl
@@ -161,27 +182,29 @@ fn rim_lighting(
 }
 ```
 
-### Fragment Shader
+### Fragment Shader (Sketch - see Section 5 for complete details)
+
+**Note:** This is a conceptual overview. Actual implementation must match the binding structure in existing shaders (see `mode2_pbr.wgsl` for reference).
 
 ```wgsl
 @fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+fn fs(in: VertexOutput) -> @location(0) vec4<f32> {
     let N = normalize(in.world_normal);
-    let V = normalize(camera.position - in.world_position);
-    
+    let V = normalize(in.camera_position - in.world_position);
+
     // ===== TEXTURE SAMPLING =====
-    
+
     // Slot 0: Albedo RGB + Emissive A
-    let albedo_e = textureSample(slot0_texture, slot0_sampler, in.uv);
-    var albedo = albedo_e.rgb;
-    let emissive_intensity = albedo_e.a;
-    
+    let albedo_sample = textureSample(slot0, tex_sampler, in.uv);
+    var albedo = albedo_sample.rgb;
+    let emissive_tex = albedo_sample.a;
+
     // Apply vertex color to albedo (same as all other modes)
-    //FS_VERTEX_COLOR: albedo *= in.vertex_color.rgb;
-    
+    //FS_COLOR: albedo *= in.color;
+
     // Slot 1: Specular RGB + Shininess A
-    let spec_shin = textureSample(slot1_texture, slot1_sampler, in.uv);
-    let specular_color = spec_shin.rgb;
+    let spec_shin = textureSample(slot1, tex_sampler, in.uv);
+    var specular_color = spec_shin.rgb;
     let shininess_raw = spec_shin.a;
     
     // Linear mapping: 0→1, 0.5→128, 1→256
@@ -218,15 +241,17 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let ambient = albedo * sample_sky(N) * 0.3;
     
     // Rim lighting (uses sun color)
+    // Note: rim_intensity and rim_power come from unpacked shading state
+    // See Section 5.2 for material property storage details
     let rim = rim_lighting(
         N, V,
         sky.sun_color,
-        bp_material.rim_intensity,
-        bp_material.rim_power
+        rim_intensity,  // From shading state (see Section 5.2)
+        rim_power       // From shading state (see Section 5.2)
     );
-    
+
     // Emissive: Albedo × intensity (self-illumination)
-    let emissive = albedo * emissive_intensity;
+    let emissive = albedo * emissive_tex;
     
     // ===== COMBINE =====
     
@@ -284,14 +309,33 @@ The shader generation system needs several updates:
    3 => "Blinn-Phong",  // Changed from "Hybrid"
    ```
 
-6. **Add placeholder replacement for Mode 3** (in generate_shader function):
+6. **Add placeholder replacement for Mode 3** (in generate_shader function around line 212):
    ```rust
-   3 => {
+   2 | 3 => {
+       // Mode 2 (PBR) and Mode 3 (Blinn-Phong) - use "albedo" variable
        shader = shader.replace("//FS_COLOR", if has_color { FS_ALBEDO_COLOR } else { "" });
        shader = shader.replace("//FS_UV", if has_uv { FS_ALBEDO_UV } else { "" });
-       shader = shader.replace("//FS_SPECULAR_SHININESS", if has_uv { FS_SPECULAR_SHININESS } else { "" });
+
+       // Mode-specific texture sampling
+       if mode == 2 {
+           // Mode 2: MR texture (Metallic-Roughness)
+           if has_uv {
+               shader = shader.replace("//FS_MR", "let mr_sample = textureSample(slot1, tex_sampler, in.uv);\n    mr.x = mr_sample.r;\n    mr.y = mr_sample.g;");
+           } else {
+               shader = shader.replace("//FS_MR", "");
+           }
+       } else {
+           // Mode 3: Specular-Shininess texture
+           if has_uv {
+               shader = shader.replace("//FS_SPECULAR_SHININESS", FS_SPECULAR_SHININESS);
+           } else {
+               shader = shader.replace("//FS_SPECULAR_SHININESS", "");
+           }
+       }
    }
    ```
+
+   **Note:** This replaces the old Mode 2/3 block that used `//FS_MRE`.
 
 ### 5.2 Unified Shading State Changes
 
@@ -315,7 +359,19 @@ For Mode 3 Blinn-Phong, we need additional material properties. **Options:**
 
 **Recommendation**: Start with Option A (reuse fields). Mode 3 games won't use PBR-specific metallic/roughness anyway.
 
-### 5.3 FFI Function Changes
+### 5.3 Texture Slot Usage
+
+Mode 3 only uses Slots 0 and 1. However, the binding layout (see `create_texture_bind_group_layout` in `pipeline.rs`) requires all 4 texture slots to be bound.
+
+**Solution:** Bind white 1×1 fallback textures to unused slots:
+
+| Mode | Slot 0 | Slot 1 | Slot 2 | Slot 3 |
+|------|--------|--------|--------|--------|
+| **3 (Blinn-Phong)** | Albedo+Emissive (UV) | Specular+Shininess (UV) | White fallback | White fallback |
+
+The white fallback texture (value `1.0` in all channels) ensures unused slots don't affect rendering. This matches the existing pattern used in Mode 0 and Mode 2.
+
+### 5.4 FFI Function Changes
 
 Add material control functions for Mode 3:
 ```rust
@@ -388,19 +444,27 @@ if has_uv {
 
 3. **Update fragment shader sampling**:
    ```wgsl
+   // Unpack material properties from shading state
+   let metallic = unpack_unorm8_from_u32(mre_packed & 0xFFu);
+   let roughness = unpack_unorm8_from_u32((mre_packed >> 8u) & 0xFFu);
+   let emissive = unpack_unorm8_from_u32((mre_packed >> 16u) & 0xFFu);
+
    // Get albedo + emissive from Slot 0
-   let albedo_sample = textureSample(slot0, tex_sampler, in.uv);
-   var albedo = albedo_sample.rgb;
-   let emissive_tex = albedo_sample.a;  // NEW: Extract emissive from alpha
+   var albedo = material_color.rgb;
    //FS_COLOR
+   //FS_UV  // This now extracts emissive_tex from Slot 0.A
 
-   // Sample MR texture (no longer MRE)
-   var mr = vec2<f32>(metallic, roughness);  // Only M and R, not E
-   //FS_MR  // NEW placeholder name (was FS_MRE)
+   // Sample MR texture (Metallic-Roughness only, no Emissive)
+   var mr = vec2<f32>(metallic, roughness);
+   //FS_MR  // NEW placeholder (was FS_MRE): only overrides mr.r and mr.g
 
-   // Use emissive from Slot 0.A instead of Slot 1.B
-   let glow = albedo * max(emissive_tex, mre.b);  // Texture overrides uniform if present
+   // Emissive: texture overrides uniform if present
+   // emissive_tex comes from FS_UV snippet extracting Slot 0.A
+   let emissive_final = max(emissive, emissive_tex);
+   let glow = albedo * emissive_final;
    ```
+
+   **Note:** The `emissive_tex` variable is created by the updated `FS_ALBEDO_UV` snippet (see Section 5.1).
 
 ---
 
