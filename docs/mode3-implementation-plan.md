@@ -22,7 +22,7 @@ Replace Mode 3 (Hybrid: Matcap + PBR) with Mode 3 (Classic Lit: Normalized Blinn
 **Key Design Decisions:**
 
 - **Emissive stays in Slot 1.B** for both Mode 2 (MRE) and Mode 3 (RSE) - no migration!
-- **Specular color** comes ONLY from Slot 2 RGB (defaults to white, no uniform)
+- **Specular color** comes ONLY from Slot 2 RGB (defaults to light color, no uniform)
 - **Mode-specific interpretation**: Same struct fields mean different things per mode
 - **Rim power**: Uniform-only (stored in `matcap_blend_modes` byte 0)
 
@@ -382,7 +382,7 @@ Mode 3 uses a texture-based workflow (like Mode 2) with uniform fallbacks:
 
 | Property | Source | Fallback | Notes |
 |----------|--------|----------|-------|
-| **Specular color** (RGB) | Slot 2 RGB | White (1.0, 1.0, 1.0) default | No uniform - defaults to white for neutral highlights |
+| **Specular color** (RGB) | Slot 2 RGB | Light color (from lighting) | No uniform - defaults to light color |
 | **Shininess** | Slot 1 G | Uniform (1 byte) | Shared slot with rim & emissive |
 | **Rim intensity** | Slot 1 R | Uniform (1 byte) | Shared slot with shininess & emissive |
 | **Rim power** | Uniform only | — | Controls rim falloff curve |
@@ -421,7 +421,7 @@ The same struct fields are interpreted differently per render mode (no struct ch
 **Key insights:**
 1. **Emissive stays in Slot 1.B for both modes** - no migration needed!
 2. Mode 3 reinterprets `metallic` → `rim_intensity` and `roughness` → `shininess`
-3. Specular color comes ONLY from Slot 2 RGB (defaults to white if not bound)
+3. Specular color comes ONLY from Slot 2 RGB (defaults to light color if not bound)
 4. Rim power is uniform-only (stored in `matcap_blend_modes` byte 0)
 
 **Shader unpacking for Mode 3** (in `mode3_blinnphong.wgsl`):
@@ -439,7 +439,7 @@ let emissive_uniform = unpack_unorm8_from_u32(shading.emissive);       // Same m
 var rim_intensity = rim_intensity_uniform;
 var shininess_raw = shininess_uniform;
 var emissive = emissive_uniform;
-var specular_color = vec3<f32>(1.0, 1.0, 1.0);  // Default to white
+var specular_color = vec3<f32>(1.0, 1.0, 1.0);  // Will be multiplied by light color (defaults to white base)
 
 // Texture sampling (if UV format present)
 //FS_MODE3_SLOT1  // Overrides rim_intensity, shininess_raw, emissive from Slot 1 RGB
@@ -458,7 +458,7 @@ let rim_power = rim_power_raw * 32.0;  // Map 0-1 → 0-32 range
 - ✅ Zero runtime cost (just different field interpretation)
 - ✅ Emissive stays in Slot 1.B for both modes (no Mode 2 changes!)
 - ✅ Clear texture-first workflow with uniform fallbacks
-- ✅ Specular defaults to white (neutral highlights) when Slot 2 not bound
+- ✅ Specular defaults to light color when Slot 2 not bound (natural behavior)
 
 ### 5.3 Texture Slot Usage
 
@@ -474,13 +474,13 @@ Mode 3 uses 3 texture slots (0, 1, 2). The binding layout (see `create_texture_b
 **Default texture behavior:**
 - **Slot 0** (Albedo): Defaults to white (1.0, 1.0, 1.0) if not bound → uses material color
 - **Slot 1** (Mode 3: RSE): Defaults to white (1.0, 1.0, 1.0) if not bound → uses uniform fallbacks
-- **Slot 2** (Mode 3: Specular): Defaults to white (1.0, 1.0, 1.0) if not bound → neutral white specular highlights
+- **Slot 2** (Mode 3: Specular): Defaults to white (1.0, 1.0, 1.0) if not bound → **specular = light color** (natural highlights)
 - **Slot 3**: Always white fallback (unused by Modes 2 & 3)
 
 The white fallback texture (value `1.0` in all channels) ensures:
 - Textures multiply cleanly (white = no effect)
 - Missing textures fall back to uniform values
-- Specular highlights remain neutral when Slot 2 is not set
+- **Specular reflects light color when Slot 2 is not set** (white × light_color = light_color)
 
 This matches the existing pattern used in Mode 0 and Mode 1.
 
@@ -528,8 +528,8 @@ fn material_shininess(value: f32);
 
 **Specular color in Mode 3:**
 - Comes ONLY from Slot 2 RGB texture
-- No uniform fallback (defaults to white if Slot 2 not bound)
-- No FFI function needed (texture-only)
+- No uniform fallback (defaults to light color if Slot 2 not bound)
+- No FFI function needed (texture-only, white texture × light color = light color)
 
 **Recommendation:** Mode 3 code should use the new `material_rim()` and `material_shininess()` functions for clarity, though `material_metallic()` and `material_roughness()` will work (field reinterpretation).
 
@@ -668,7 +668,7 @@ The old Mode 3 used a hybrid approach with matcaps + PBR direct lighting. The ne
 **Slot 2 (Matcap → Specular):**
 - Delete environment matcap texture
 - Create new specular color texture (e.g., warm orange for gold, neutral white for silver)
-- Or leave unbound for default white specular
+- Or leave unbound for default light-colored specular (white texture × light color)
 
 **Slot 3:**
 - Delete ambient matcap texture (unused in new Mode 3)
@@ -699,7 +699,7 @@ No changes needed - Mode 3 reinterprets existing fields:
 - [ ] Vertex color multiplies albedo correctly
 - [ ] Formats without normals fall back to Mode 0 with warning
 - [ ] Gold material looks warm/orange (not PBR-derived metallic)
-- [ ] White fallback for Slot 2 produces neutral white specular
+- [ ] **White fallback for Slot 2 produces specular = light color** (natural behavior)
 - [ ] All 8 Mode 3 shader permutations compile successfully (naga validation)
 
 ### Mode 2 (PBR) Regression Tests
