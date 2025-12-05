@@ -287,20 +287,23 @@ fn pbr_lite(
     // F0: 4% for dielectrics, albedo for metals
     let f0 = mix(vec3<f32>(0.04), albedo, metallic);
 
-    // D: GGX distribution with exp2 approximation (5th gen console charm!)
-    // This adds subtle artifacts at grazing angles for that retro console feel
-    // Based on Hammon 2017 "PBR Diffuse Lighting for GGX+Smith Microsurfaces"
+    // D: GGX distribution with exp2 approximation
+    // Standard GGX: alpha2 / (PI * d^2) where d = n_dot_h^2 * (alpha2 - 1) + 1
+    // Using exp2 for performance: exp2(-2.0 * log2(d)) = d^-2 = 1 / d^2
     let d = n_dot_h * n_dot_h * (alpha2 - 1.0) + 1.0;
     let D = (alpha2 / PI) * exp2(-2.0 * log2(d));
 
     // F: Schlick fresnel (Karis exp2 approximation)
     let F = f0 + (1.0 - f0) * exp2((-5.55473 * v_dot_h - 6.98316) * v_dot_h);
 
-    // Specular (G term omitted)
+    // Specular (G term and proper visibility omitted for "lite" version)
+    // Using simplified denominator to avoid grazing angle explosion
     let specular = (D * F) / 4.0;
 
     // Diffuse: energy-conserving Lambert
-    let diffuse = (1.0 - f0) * (1.0 - metallic) * albedo / PI;
+    // kD = amount of light that diffuses (not reflected as specular)
+    let kD = (1.0 - F) * (1.0 - metallic);
+    let diffuse = kD * albedo / PI;
 
     // Direct lighting only (no emissive - that's a material property, not lighting)
     return (diffuse + specular) * light_color * n_dot_l;
