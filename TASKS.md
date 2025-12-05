@@ -37,6 +37,7 @@ Profiling and review of the render loop indicate **multiple systemic issues** th
 * Egui meshes and buffers rebuilt every frame even when unchanged
 * Potential redundant clear/load passes
 * CPU-side debug/UI work performed even when invisible
+* This is also effectively a bug, as it may be causing the game to run at a rate faster than the designated frame rate!
 
 These collectively cause high GPU load when nothing is happening.
 
@@ -44,7 +45,7 @@ These collectively cause high GPU load when nothing is happening.
 
 **Goal**
 
-Reduce idle GPU utilization in the library UI from ~30% → **<5%** (target matching typical WGPU idle loads) by restructuring the rendering pipeline.
+Reduce idle GPU utilization in the library UI from ~30% → **<5%** (target matching typical WGPU idle loads) by restructuring the rendering pipeline. Separate UI and Game rendering ticks to only render when something has changed (game update called, or UI event)
 
 ---
 
