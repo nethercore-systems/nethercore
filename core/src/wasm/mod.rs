@@ -534,7 +534,7 @@ mod tests {
         let module = engine.load_module(&wasm).unwrap();
         let linker = Linker::new(engine.engine());
 
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
         // save_state returns entire WASM memory (1 page = 64KB)
         let result = game.save_state();
@@ -557,7 +557,7 @@ mod tests {
         let module = engine.load_module(&wasm).unwrap();
         let linker = Linker::new(engine.engine());
 
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
         // load_state requires exact memory size match
         let snapshot = vec![0u8; 65536]; // 1 WASM page
@@ -579,7 +579,7 @@ mod tests {
         let module = engine.load_module(&wasm).unwrap();
         let linker = Linker::new(engine.engine());
 
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
         // Default values
         assert_eq!(game.state().player_count, 1);
@@ -610,7 +610,7 @@ mod tests {
         let module = engine.load_module(&wasm).unwrap();
         let linker = Linker::new(engine.engine());
 
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
         // Try to set more than MAX_PLAYERS
         game.configure_session(100, 0xFFFF);
@@ -635,7 +635,7 @@ mod tests {
         let module = engine.load_module(&wasm).unwrap();
         let linker = Linker::new(engine.engine());
 
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
         // Try to load with wrong size (memory is 65536, we pass 100)
         let small_buffer = vec![0u8; 100];
@@ -659,7 +659,7 @@ mod tests {
         let module = engine.load_module(&wasm).unwrap();
         let linker = Linker::new(engine.engine());
 
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
         // Should fail because no memory is available
         let result = game.load_state(&[1, 2, 3, 4]);
@@ -682,7 +682,7 @@ mod tests {
         let module = engine.load_module(&wasm).unwrap();
         let linker = Linker::new(engine.engine());
 
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
         // Should fail because no memory is available
         let result = game.save_state();
@@ -707,7 +707,7 @@ mod tests {
         let module = engine.load_module(&wasm).unwrap();
         let linker = Linker::new(engine.engine());
 
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
         let result = game.save_state();
         assert!(result.is_ok());
@@ -730,7 +730,7 @@ mod tests {
         let module = engine.load_module(&wasm).unwrap();
         let linker = Linker::new(engine.engine());
 
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
         // Create a snapshot with specific data
         let mut snapshot = vec![0u8; 65536]; // 1 page
@@ -762,7 +762,7 @@ mod tests {
         let module = engine.load_module(&wasm).unwrap();
         let linker = Linker::new(engine.engine());
 
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
         // Trap should propagate as an error
         let result = game.init();
@@ -787,7 +787,7 @@ mod tests {
         let module = engine.load_module(&wasm).unwrap();
         let linker = Linker::new(engine.engine());
 
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
         // Trap should propagate as an error
         let result = game.update(1.0 / 60.0);
@@ -812,7 +812,7 @@ mod tests {
         let module = engine.load_module(&wasm).unwrap();
         let linker = Linker::new(engine.engine());
 
-        let mut game = GameInstance::new(&engine, &module, &linker).unwrap();
+        let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
         // Trap should propagate as an error
         let result = game.render();

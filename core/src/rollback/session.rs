@@ -827,7 +827,6 @@ impl From<GgrsError> for SessionError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wasm::InputState;
 
     // Test input type for unit tests
     #[repr(C)]
@@ -842,20 +841,11 @@ mod tests {
     // All bit patterns are valid for these types, satisfying Pod and Zeroable requirements.
     unsafe impl Pod for TestInput {}
     unsafe impl Zeroable for TestInput {}
-    impl ConsoleInput for TestInput {
-        fn to_input_state(&self) -> InputState {
-            InputState {
-                buttons: self.buttons,
-                left_stick_x: self.x,
-                left_stick_y: self.y,
-                ..Default::default()
-            }
-        }
-    }
+    impl ConsoleInput for TestInput {}
 
     #[test]
     fn test_rollback_session_local() {
-        let session = RollbackSession::<TestInput>::new_local(2, 4 * 1024 * 1024);
+        let session = RollbackSession::<TestInput, ()>::new_local(2, 4 * 1024 * 1024);
         assert_eq!(session.session_type(), SessionType::Local);
         assert_eq!(session.config().num_players, 2);
         assert_eq!(session.current_frame(), 0);
@@ -865,13 +855,14 @@ mod tests {
     #[test]
     fn test_rollback_session_sync_test() {
         let config = SessionConfig::sync_test();
-        let session = RollbackSession::<TestInput>::new_sync_test(config, 4 * 1024 * 1024).unwrap();
+        let session =
+            RollbackSession::<TestInput, ()>::new_sync_test(config, 4 * 1024 * 1024).unwrap();
         assert_eq!(session.session_type(), SessionType::SyncTest);
     }
 
     #[test]
     fn test_local_session_advance() {
-        let mut session = RollbackSession::<TestInput>::new_local(2, 4 * 1024 * 1024);
+        let mut session = RollbackSession::<TestInput, ()>::new_local(2, 4 * 1024 * 1024);
         assert_eq!(session.current_frame(), 0);
 
         let requests = session.advance_frame().unwrap();
@@ -988,26 +979,26 @@ mod tests {
 
     #[test]
     fn test_local_session_has_no_network_stats() {
-        let session = RollbackSession::<TestInput>::new_local(2, 4 * 1024 * 1024);
+        let session = RollbackSession::<TestInput, ()>::new_local(2, 4 * 1024 * 1024);
         assert!(session.all_player_stats().is_empty());
         assert!(session.player_stats(0).is_none());
     }
 
     #[test]
     fn test_local_session_no_desync() {
-        let session = RollbackSession::<TestInput>::new_local(2, 4 * 1024 * 1024);
+        let session = RollbackSession::<TestInput, ()>::new_local(2, 4 * 1024 * 1024);
         assert!(!session.has_desync());
     }
 
     #[test]
     fn test_local_session_total_rollback_frames() {
-        let session = RollbackSession::<TestInput>::new_local(2, 4 * 1024 * 1024);
+        let session = RollbackSession::<TestInput, ()>::new_local(2, 4 * 1024 * 1024);
         assert_eq!(session.total_rollback_frames(), 0);
     }
 
     #[test]
     fn test_local_session_handle_events_empty() {
-        let mut session = RollbackSession::<TestInput>::new_local(2, 4 * 1024 * 1024);
+        let mut session = RollbackSession::<TestInput, ()>::new_local(2, 4 * 1024 * 1024);
         let events = session.handle_events();
         // Local sessions don't produce events
         assert!(events.is_empty());
@@ -1045,7 +1036,7 @@ mod tests {
 
     #[test]
     fn test_rollback_session_local_has_player_config() {
-        let session = RollbackSession::<TestInput>::new_local(2, 4 * 1024 * 1024);
+        let session = RollbackSession::<TestInput, ()>::new_local(2, 4 * 1024 * 1024);
         let player_config = session.player_config();
         assert_eq!(player_config.num_players(), 2);
         assert_eq!(player_config.local_player_count(), 2);
@@ -1058,7 +1049,7 @@ mod tests {
         // Create a local session with custom player config
         let player_config = PlayerSessionConfig::new(4, 0b0011); // Only players 0, 1 local
         let session =
-            RollbackSession::<TestInput>::new_local_with_config(player_config, 4 * 1024 * 1024);
+            RollbackSession::<TestInput, ()>::new_local_with_config(player_config, 4 * 1024 * 1024);
 
         assert_eq!(session.player_config().num_players(), 4);
         assert_eq!(session.player_config().local_player_mask(), 0b0011);
@@ -1068,7 +1059,8 @@ mod tests {
     #[test]
     fn test_rollback_session_sync_test_has_player_config() {
         let config = SessionConfig::sync_test();
-        let session = RollbackSession::<TestInput>::new_sync_test(config, 4 * 1024 * 1024).unwrap();
+        let session =
+            RollbackSession::<TestInput, ()>::new_sync_test(config, 4 * 1024 * 1024).unwrap();
         let player_config = session.player_config();
         assert_eq!(player_config.num_players(), 1);
         assert!(player_config.is_local_player(0));

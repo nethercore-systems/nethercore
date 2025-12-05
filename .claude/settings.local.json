@@ -1,9 +1,20 @@
 {
   "permissions": {
     "allow": [
+      "Bash(cat:*)",
+      "Bash(cargo build:*)",
       "Bash(cargo check:*)",
+      "Bash(cargo fix:*)",
+      "Bash(cargo run:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo xtask build-examples:*)",
       "Bash(find:*)",
-      "Bash(cargo test:*)"
+      "Bash(git checkout:*)",
+      "Bash(grep:*)",
+      "Bash(timeout 5 cargo run:*)",
+      "Bash(timeout 60 cargo check:*)",
+      "Bash(rustc:*)",
+      "Bash(./test_octahedral:*)"
     ],
     "deny": [],
     "ask": []

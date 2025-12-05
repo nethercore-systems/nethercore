@@ -20,8 +20,8 @@ extern "C" {
     fn set_clear_color(color: u32);
     fn elapsed_time() -> f32;
     fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
-    fn transform_identity();
-    fn transform_rotate(angle_deg: f32, x: f32, y: f32, z: f32);
+    fn push_identity();
+    fn push_rotate(angle_deg: f32, x: f32, y: f32, z: f32);
     fn draw_triangles(data: *const f32, vertex_count: u32, format: u32);
 }
 
@@ -61,12 +61,11 @@ pub extern "C" fn update() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
-        // Reset transform to identity
-        transform_identity();
-
-        // Rotate around Y axis based on elapsed time (60 degrees per second)
-        let angle = elapsed_time() * 60.0;
-        transform_rotate(angle, 0.0, 1.0, 0.0);
+        // Rotate triangle around Y axis based on elapsed time
+        push_identity();
+        let time = elapsed_time();
+        let rotation_speed = 45.0; // degrees per second
+        push_rotate(time * rotation_speed, 0.0, 1.0, 0.0);
 
         // Draw the triangle with POS_COLOR format
         draw_triangles(TRIANGLE.as_ptr(), 3, FORMAT_POS_COLOR);

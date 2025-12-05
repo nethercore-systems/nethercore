@@ -14,7 +14,7 @@ use winit::{
 
 use crate::config::{self, Config};
 use crate::console::{EmberwareZ, VRAM_LIMIT};
-use crate::graphics::{BlendMode, CullMode, TextureHandle, ZGraphics};
+use crate::graphics::{TextureHandle, ZGraphics};
 use crate::input::InputManager;
 use crate::library::{self, LocalGame};
 use crate::ui::{LibraryUi, UiAction};
@@ -22,8 +22,6 @@ use emberware_core::console::{Console, Graphics};
 use emberware_core::rollback::{SessionEvent, SessionType};
 use emberware_core::runtime::Runtime;
 use emberware_core::wasm::WasmEngine;
-
-use crate::state::ZDrawCommand;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppMode {
@@ -82,9 +80,9 @@ pub struct GameSession {
     /// The runtime managing game execution
     pub runtime: Runtime<EmberwareZ>,
     /// Mapping from game texture handles to graphics texture handles
-    texture_map: std::collections::HashMap<u32, TextureHandle>,
+    texture_map: hashbrown::HashMap<u32, TextureHandle>,
     /// Mapping from game mesh handles to graphics mesh handles
-    mesh_map: std::collections::HashMap<u32, crate::graphics::MeshHandle>,
+    mesh_map: hashbrown::HashMap<u32, crate::graphics::MeshHandle>,
 }
 
 /// Application state
@@ -109,6 +107,8 @@ pub struct App {
     egui_renderer: Option<egui_wgpu::Renderer>,
     /// Library UI state
     library_ui: LibraryUi,
+    /// Settings UI state
+    settings_ui: crate::settings_ui::SettingsUi,
     /// Cached local games list
     local_games: Vec<LocalGame>,
     /// Debug overlay enabled (F3)
@@ -154,6 +154,7 @@ impl App {
 
         Self {
             mode: initial_mode,
+            settings_ui: crate::settings_ui::SettingsUi::new(&config),
             config,
             window: None,
             graphics: None,
@@ -227,7 +228,7 @@ impl App {
         // Process pending meshes
         for pending in z_state.pending_meshes.drain(..) {
             let result = if let Some(ref indices) = pending.index_data {
-                graphics.load_mesh_indexed(&pending.vertex_data, &indices, pending.format)
+                graphics.load_mesh_indexed(&pending.vertex_data, indices, pending.format)
             } else {
                 graphics.load_mesh(&pending.vertex_data, pending.format)
             };
@@ -235,6 +236,14 @@ impl App {
             match result {
                 Ok(handle) => {
                     session.mesh_map.insert(pending.handle, handle);
+
+                    // Also store RetainedMesh metadata in z_state.mesh_map for FFI access
+                    if let Some(retained_mesh) = graphics.get_mesh(handle) {
+                        z_state
+                            .mesh_map
+                            .insert(pending.handle, retained_mesh.clone());
+                    }
+
                     tracing::debug!(
                         "Loaded mesh: game_handle={} -> graphics_handle={:?}",
                         pending.handle,
@@ -248,11 +257,11 @@ impl App {
         }
     }
 
-    /// Execute draw commands from game state
+    /// Execute draw commands using new architecture
     ///
-    /// Translates game draw commands to ZGraphics draw calls and buffers them
-    /// for rendering.
-    fn execute_draw_commands(&mut self) {
+    /// Passes ZFFIState directly to ZGraphics which consumes it without
+    /// unpacking/repacking. This replaces the old execute_draw_commands().
+    fn execute_draw_commands_new(&mut self) {
         let (Some(session), Some(graphics)) = (&mut self.game_session, &mut self.graphics) else {
             return;
         };
@@ -264,247 +273,8 @@ impl App {
 
         let z_state = game.console_state_mut();
 
-        // Apply init config to graphics (render mode, etc.)
-        graphics.set_render_mode(z_state.init_config.render_mode);
-
-        // Update scene uniforms (camera, lights, materials) for PBR rendering
-        // Get aspect ratio from window
-        let aspect_ratio = if let Some(window) = &self.window {
-            let size = window.inner_size();
-            size.width as f32 / size.height.max(1) as f32
-        } else {
-            16.0 / 9.0 // Default aspect ratio if no window
-        };
-        graphics.update_scene_uniforms(
-            &z_state.camera,
-            &z_state.lights,
-            aspect_ratio,
-            z_state.material_metallic,
-            z_state.material_roughness,
-            z_state.material_emissive,
-        );
-
-        // Process draw commands
-        for cmd in z_state.draw_commands.drain(..) {
-            match cmd {
-                ZDrawCommand::DrawTriangles {
-                    format,
-                    vertex_data,
-                    transform,
-                    color,
-                    depth_test,
-                    cull_mode,
-                    blend_mode,
-                    bound_textures,
-                } => {
-                    // Apply state
-                    graphics.set_color(color);
-                    graphics.set_depth_test(depth_test);
-                    graphics.set_cull_mode(Self::convert_cull_mode(cull_mode));
-                    graphics.set_blend_mode(Self::convert_blend_mode(blend_mode));
-                    Self::bind_textures(graphics, &session.texture_map, &bound_textures);
-                    graphics.transform_set(&transform.to_cols_array());
-
-                    // Draw
-                    graphics.draw_triangles(&vertex_data, format);
-                }
-                ZDrawCommand::DrawTrianglesIndexed {
-                    format,
-                    vertex_data,
-                    index_data,
-                    transform,
-                    color,
-                    depth_test,
-                    cull_mode,
-                    blend_mode,
-                    bound_textures,
-                } => {
-                    // Apply state
-                    graphics.set_color(color);
-                    graphics.set_depth_test(depth_test);
-                    graphics.set_cull_mode(Self::convert_cull_mode(cull_mode));
-                    graphics.set_blend_mode(Self::convert_blend_mode(blend_mode));
-                    Self::bind_textures(graphics, &session.texture_map, &bound_textures);
-                    graphics.transform_set(&transform.to_cols_array());
-
-                    // Draw
-                    graphics.draw_triangles_indexed(&vertex_data, &index_data, format);
-                }
-                ZDrawCommand::DrawMesh {
-                    handle,
-                    transform,
-                    color,
-                    depth_test,
-                    cull_mode,
-                    blend_mode,
-                    bound_textures,
-                } => {
-                    // Apply state
-                    graphics.set_color(color);
-                    graphics.set_depth_test(depth_test);
-                    graphics.set_cull_mode(Self::convert_cull_mode(cull_mode));
-                    graphics.set_blend_mode(Self::convert_blend_mode(blend_mode));
-                    Self::bind_textures(graphics, &session.texture_map, &bound_textures);
-                    graphics.transform_set(&transform.to_cols_array());
-
-                    // Look up mesh handle and draw
-                    if let Some(&mesh_handle) = session.mesh_map.get(&handle) {
-                        if let Some(mesh) = graphics.get_mesh(mesh_handle) {
-                            // Draw the retained mesh by adding its data to command buffer
-                            // Note: This is a simplified approach - retained meshes need
-                            // proper integration with the command buffer system
-                            tracing::trace!(
-                                "Drawing mesh handle {} ({} vertices)",
-                                handle,
-                                mesh.vertex_count
-                            );
-                            // TODO: Implement retained mesh drawing in command buffer
-                        }
-                    } else {
-                        tracing::warn!("Mesh handle {} not found", handle);
-                    }
-                }
-                ZDrawCommand::DrawBillboard {
-                    width,
-                    height,
-                    mode: _,
-                    uv_rect: _,
-                    transform,
-                    color,
-                    depth_test,
-                    cull_mode,
-                    blend_mode,
-                    bound_textures,
-                } => {
-                    // TODO: Implement billboard rendering
-                    // For now, just log that we received the command
-                    tracing::trace!(
-                        "Billboard: {}x{} at {:?} color={:08x}",
-                        width,
-                        height,
-                        transform,
-                        color
-                    );
-                    let _ = (depth_test, cull_mode, blend_mode, bound_textures);
-                }
-                ZDrawCommand::DrawSprite {
-                    x,
-                    y,
-                    width,
-                    height,
-                    uv_rect: _,
-                    origin: _,
-                    rotation: _,
-                    color,
-                    blend_mode: _,
-                    bound_textures: _,
-                } => {
-                    // TODO: Implement 2D sprite rendering
-                    tracing::trace!(
-                        "Sprite: {}x{} at ({},{}) color={:08x}",
-                        width,
-                        height,
-                        x,
-                        y,
-                        color
-                    );
-                }
-                ZDrawCommand::DrawRect {
-                    x,
-                    y,
-                    width,
-                    height,
-                    color,
-                    blend_mode: _,
-                } => {
-                    // TODO: Implement 2D rectangle rendering
-                    tracing::trace!(
-                        "Rect: {}x{} at ({},{}) color={:08x}",
-                        width,
-                        height,
-                        x,
-                        y,
-                        color
-                    );
-                }
-                ZDrawCommand::DrawText {
-                    text,
-                    x,
-                    y,
-                    size,
-                    color,
-                    blend_mode: _,
-                } => {
-                    // TODO: Implement text rendering using font system
-                    let text_str = std::str::from_utf8(&text).unwrap_or("");
-                    tracing::trace!(
-                        "Text: '{}' at ({},{}) size={} color={:08x}",
-                        text_str,
-                        x,
-                        y,
-                        size,
-                        color
-                    );
-                }
-                ZDrawCommand::SetSky {
-                    horizon_color,
-                    zenith_color,
-                    sun_direction,
-                    sun_color,
-                    sun_sharpness,
-                } => {
-                    graphics.set_sky(
-                        horizon_color,
-                        zenith_color,
-                        sun_direction,
-                        sun_color,
-                        sun_sharpness,
-                    );
-                }
-            }
-        }
-
-        // Clear FFI staging state for next frame
-        // Note: draw_commands, pending_textures, pending_meshes were already drained above
-        z_state.clear_frame();
-    }
-
-    /// Convert game cull mode to graphics cull mode
-    fn convert_cull_mode(mode: u8) -> CullMode {
-        match mode {
-            0 => CullMode::None,
-            1 => CullMode::Back,
-            2 => CullMode::Front,
-            _ => CullMode::None,
-        }
-    }
-
-    /// Convert game blend mode to graphics blend mode
-    fn convert_blend_mode(mode: u8) -> BlendMode {
-        match mode {
-            0 => BlendMode::None,
-            1 => BlendMode::Alpha,
-            2 => BlendMode::Additive,
-            3 => BlendMode::Multiply,
-            _ => BlendMode::None,
-        }
-    }
-
-    /// Bind textures from game handles to graphics slots
-    fn bind_textures(
-        graphics: &mut ZGraphics,
-        texture_map: &std::collections::HashMap<u32, TextureHandle>,
-        bound_textures: &[u32; 4],
-    ) {
-        for (slot, &game_handle) in bound_textures.iter().enumerate() {
-            if game_handle == 0 {
-                graphics.bind_texture_slot(TextureHandle::INVALID, slot);
-            } else if let Some(&graphics_handle) = texture_map.get(&game_handle) {
-                graphics.bind_texture_slot(graphics_handle, slot);
-            } else {
-                graphics.bind_texture_slot(TextureHandle::INVALID, slot);
-            }
-        }
+        // Process draw commands - ZGraphics consumes draw commands directly
+        graphics.process_draw_commands(z_state, &session.texture_map);
     }
 
     /// Handle session events from the rollback session
@@ -674,6 +444,18 @@ impl App {
             .render()
             .map_err(|e| RuntimeError(format!("Game render error: {}", e)))?;
 
+        // Process audio commands after rendering
+        // Clone the audio commands and sounds to avoid double mutable borrow
+        if let Some(game) = session.runtime.game_mut() {
+            let console_state = game.console_state();
+            let audio_commands = console_state.audio_commands.clone();
+            let sounds = console_state.sounds.clone();
+
+            if let Some(audio) = session.runtime.audio_mut() {
+                audio.process_commands(&audio_commands, &sounds);
+            }
+        }
+
         // Check if game requested quit
         if let Some(game) = session.runtime.game_mut() {
             if game.state().quit_requested {
@@ -736,12 +518,50 @@ impl App {
             .init_game()
             .map_err(|e| RuntimeError(format!("Failed to initialize game: {}", e)))?;
 
-        // Store the session with empty resource maps
+        // Store the session with empty resource maps (font texture added below)
         self.game_session = Some(GameSession {
             runtime,
-            texture_map: std::collections::HashMap::new(),
-            mesh_map: std::collections::HashMap::new(),
+            texture_map: hashbrown::HashMap::new(),
+            mesh_map: hashbrown::HashMap::new(),
         });
+
+        // Add built-in font texture to texture map (handle 0)
+        // Add white fallback texture to texture map (handle 0xFFFFFFFF)
+        if let (Some(session), Some(graphics)) = (&mut self.game_session, &self.graphics) {
+            let font_texture_handle = graphics.font_texture();
+            session.texture_map.insert(0, font_texture_handle);
+            tracing::info!(
+                "Initialized font texture in texture_map: handle 0 -> {:?}",
+                font_texture_handle
+            );
+
+            let white_texture_handle = graphics.white_texture();
+            session.texture_map.insert(u32::MAX, white_texture_handle);
+            tracing::info!(
+                "Initialized white texture in texture_map: handle 0xFFFFFFFF -> {:?}",
+                white_texture_handle
+            );
+        }
+
+        // Update render target resolution and window minimum size based on game's init config
+        if let Some(session) = &self.game_session {
+            if let Some(game) = session.runtime.game() {
+                let z_state = game.console_state();
+                let resolution_index = z_state.init_config.resolution_index as u8;
+
+                // Update graphics render target to match game resolution
+                if let Some(graphics) = &mut self.graphics {
+                    graphics.update_resolution(resolution_index);
+
+                    // Update window minimum size to match game resolution
+                    if let Some(window) = &self.window {
+                        let min_size =
+                            winit::dpi::PhysicalSize::new(graphics.width(), graphics.height());
+                        window.set_min_inner_size(Some(min_size));
+                    }
+                }
+            }
+        }
 
         tracing::info!("Game started: {}", game_id);
         Ok(())
@@ -782,6 +602,14 @@ impl App {
 
         // Update input manager with key state
         if let PhysicalKey::Code(key_code) = key_event.physical_key {
+            // Handle key remapping in Settings mode first
+            if pressed && matches!(self.mode, AppMode::Settings) {
+                // Let settings UI handle the key press for remapping
+                self.settings_ui.handle_key_press(key_code);
+                // Don't process other key logic when remapping
+                return;
+            }
+
             if let Some(input_manager) = &mut self.input_manager {
                 input_manager.update_keyboard(key_code, pressed);
             }
@@ -801,7 +629,7 @@ impl App {
                         // For now, we use F11 as the primary method
                     }
                     KeyCode::Escape => {
-                        // Return to library when in game
+                        // Return to library when in game or settings
                         match self.mode {
                             AppMode::Playing { .. } => {
                                 tracing::info!("Exiting game via ESC");
@@ -810,7 +638,10 @@ impl App {
                                 self.local_games = library::get_local_games();
                             }
                             AppMode::Settings => {
-                                self.mode = AppMode::Library;
+                                // If waiting for key binding, cancel it; otherwise return to library
+                                if !self.settings_ui.handle_key_press(key_code) {
+                                    self.mode = AppMode::Library;
+                                }
                             }
                             _ => {}
                         }
@@ -861,11 +692,57 @@ impl App {
                 }
             }
             UiAction::OpenSettings => {
-                tracing::info!("Opening settings...");
-                self.mode = AppMode::Settings;
+                // Toggle between Library and Settings
+                self.mode = match self.mode {
+                    AppMode::Settings => {
+                        tracing::info!("Returning to library");
+                        AppMode::Library
+                    }
+                    _ => {
+                        tracing::info!("Opening settings");
+                        // Update settings UI with current config
+                        self.settings_ui.update_temp_config(&self.config);
+                        AppMode::Settings
+                    }
+                };
             }
             UiAction::DismissError => {
                 self.last_error = None;
+            }
+            UiAction::RefreshLibrary => {
+                tracing::info!("Refreshing game library");
+                self.local_games = library::get_local_games();
+                self.library_ui.selected_game = None;
+            }
+            UiAction::SaveSettings(new_config) => {
+                tracing::info!("Saving settings...");
+                self.config = new_config.clone();
+
+                // Save to disk
+                if let Err(e) = config::save(&self.config) {
+                    tracing::error!("Failed to save config: {}", e);
+                } else {
+                    tracing::info!("Settings saved successfully");
+                }
+
+                // Apply changes to input manager (recreate with new config)
+                self.input_manager = Some(InputManager::new(self.config.input.clone()));
+
+                if let Some(graphics) = &mut self.graphics {
+                    graphics.set_scale_mode(self.config.video.scale_mode);
+                }
+
+                // Update settings UI temp config
+                self.settings_ui.update_temp_config(&self.config);
+
+                // Return to library
+                self.mode = AppMode::Library;
+            }
+            UiAction::SetScaleMode(scale_mode) => {
+                // Preview scale mode change
+                if let Some(graphics) = &mut self.graphics {
+                    graphics.set_scale_mode(scale_mode);
+                }
             }
         }
     }
@@ -922,8 +799,8 @@ impl App {
                 Ok(running) => {
                     // Process any resources the game created
                     self.process_pending_resources();
-                    // Execute draw commands to graphics
-                    self.execute_draw_commands();
+                    // Execute draw commands by passing ZFFIState directly to graphics
+                    self.execute_draw_commands_new();
                     running
                 }
                 Err(e) => {
@@ -985,40 +862,36 @@ impl App {
 
         // If in Playing mode, render game first
         if matches!(mode, AppMode::Playing { .. }) {
-            // Get camera matrices from game state
-            let (view_matrix, projection_matrix, clear_color) = {
+            // Get clear color from game state
+            let clear_color = {
                 if let Some(session) = &self.game_session {
                     if let Some(game) = session.runtime.game() {
                         let z_state = game.console_state();
+
                         let clear = z_state.init_config.clear_color;
                         let clear_r = ((clear >> 24) & 0xFF) as f32 / 255.0;
                         let clear_g = ((clear >> 16) & 0xFF) as f32 / 255.0;
                         let clear_b = ((clear >> 8) & 0xFF) as f32 / 255.0;
                         let clear_a = (clear & 0xFF) as f32 / 255.0;
-                        let aspect_ratio = graphics.width() as f32 / graphics.height() as f32;
-                        (
-                            z_state.camera.view_matrix(),
-                            z_state.camera.projection_matrix(aspect_ratio),
-                            [clear_r, clear_g, clear_b, clear_a],
-                        )
+                        [clear_r, clear_g, clear_b, clear_a]
                     } else {
-                        (
-                            glam::Mat4::IDENTITY,
-                            glam::Mat4::IDENTITY,
-                            [0.1, 0.1, 0.1, 1.0],
-                        )
+                        [0.1, 0.1, 0.1, 1.0]
                     }
                 } else {
-                    (
-                        glam::Mat4::IDENTITY,
-                        glam::Mat4::IDENTITY,
-                        [0.1, 0.1, 0.1, 1.0],
-                    )
+                    [0.1, 0.1, 0.1, 1.0]
                 }
             };
 
             // Render game frame
-            graphics.render_frame(&view, view_matrix, projection_matrix, clear_color);
+            if let Some(session) = &mut self.game_session {
+                if let Some(game) = session.runtime.game_mut() {
+                    let z_state = game.console_state_mut();
+                    graphics.render_frame(&view, z_state, clear_color);
+
+                    // Centralized per-frame cleanup after GPU upload completes
+                    z_state.clear_frame();
+                }
+            }
         }
 
         // Start egui frame
@@ -1058,15 +931,9 @@ impl App {
                     }
                 }
                 AppMode::Settings => {
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        ui.heading("Settings");
-                        ui.separator();
-                        ui.label("Settings UI not yet implemented");
-                        ui.add_space(20.0);
-                        if ui.button("Back to Library").clicked() {
-                            ui_action = Some(UiAction::OpenSettings); // Signal to go back
-                        }
-                    });
+                    if let Some(action) = self.settings_ui.show(ctx) {
+                        ui_action = Some(action);
+                    }
                 }
                 AppMode::Playing { ref game_id } => {
                     // Game is rendered before egui, so we don't need a central panel
@@ -1210,11 +1077,21 @@ impl App {
             pixels_per_point: window.scale_factor() as f32,
         };
 
-        // Create render pass and render egui
+        // Update egui buffers (allocate vertex/index buffers for this frame)
+        // IMPORTANT: Call once with all meshes, not once per mesh
+        egui_renderer.update_buffers(
+            graphics.device(),
+            graphics.queue(),
+            &mut encoder,
+            &tris,
+            &screen_descriptor,
+        );
+
+        // Create render pass and render egui (only if there are triangles to render)
         // When in Playing mode, use Load to preserve game rendering.
         // Otherwise, clear with a dark background color.
         let is_playing = matches!(mode, AppMode::Playing { .. });
-        {
+        if !tris.is_empty() {
             let load_op = if is_playing {
                 wgpu::LoadOp::Load
             } else {
@@ -1247,6 +1124,27 @@ impl App {
             let mut render_pass_static = render_pass.forget_lifetime();
 
             egui_renderer.render(&mut render_pass_static, &tris, &screen_descriptor);
+        } else if !is_playing {
+            // If no egui content but not in playing mode, we still need to clear the screen
+            let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Clear Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.1,
+                            g: 0.1,
+                            b: 0.1,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
         }
 
         // Submit commands
@@ -1281,9 +1179,10 @@ impl ApplicationHandler for App {
         }
 
         // Create window
+        // Default to 960×540 (default game resolution)
         let window_attributes = Window::default_attributes()
             .with_title("Emberware Z")
-            .with_inner_size(winit::dpi::LogicalSize::new(1920, 1080));
+            .with_inner_size(winit::dpi::LogicalSize::new(960, 540));
 
         let window = match event_loop.create_window(window_attributes) {
             Ok(w) => Arc::new(w),
@@ -1300,7 +1199,7 @@ impl ApplicationHandler for App {
         }
 
         // Initialize graphics backend
-        let graphics = match pollster::block_on(ZGraphics::new(window.clone())) {
+        let mut graphics = match pollster::block_on(ZGraphics::new(window.clone())) {
             Ok(g) => g,
             Err(e) => {
                 tracing::error!("Failed to initialize graphics: {}", e);
@@ -1308,6 +1207,9 @@ impl ApplicationHandler for App {
                 return;
             }
         };
+
+        // Apply scale mode from config
+        graphics.set_scale_mode(self.config.video.scale_mode);
 
         // Initialize egui-winit state
         let egui_state = egui_winit::State::new(
@@ -1333,6 +1235,24 @@ impl ApplicationHandler for App {
         self.egui_renderer = Some(egui_renderer);
         self.graphics = Some(graphics);
         self.window = Some(window);
+
+        // If a game session exists, add the font and white textures to its texture map
+        // (game session may have been created before graphics was initialized)
+        if let (Some(session), Some(graphics)) = (&mut self.game_session, &self.graphics) {
+            let font_texture_handle = graphics.font_texture();
+            session.texture_map.insert(0, font_texture_handle);
+            tracing::info!(
+                "Added font texture to existing game session: handle 0 -> {:?}",
+                font_texture_handle
+            );
+
+            let white_texture_handle = graphics.white_texture();
+            session.texture_map.insert(u32::MAX, white_texture_handle);
+            tracing::info!(
+                "Added white texture to existing game session: handle 0xFFFFFFFF -> {:?}",
+                white_texture_handle
+            );
+        }
     }
 
     fn window_event(

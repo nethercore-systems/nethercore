@@ -30,13 +30,6 @@ fn panic(_: &PanicInfo) -> ! {
 extern "C" {
     // Configuration
     fn set_clear_color(color: u32);
-    fn set_sky(
-        horizon_r: f32, horizon_g: f32, horizon_b: f32,
-        zenith_r: f32, zenith_g: f32, zenith_b: f32,
-        sun_dir_x: f32, sun_dir_y: f32, sun_dir_z: f32,
-        sun_r: f32, sun_g: f32, sun_b: f32,
-        sun_sharpness: f32,
-    );
 
     // Camera
     fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
@@ -53,9 +46,9 @@ extern "C" {
     fn texture_filter(filter: u32);
 
     // Transform
-    fn transform_identity();
-    fn transform_translate(x: f32, y: f32, z: f32);
-    fn transform_rotate(angle_deg: f32, x: f32, y: f32, z: f32);
+    fn push_identity();
+    fn push_translate(x: f32, y: f32, z: f32);
+    fn transform_set(matrix_ptr: u32);
 
     // Billboard drawing
     fn draw_billboard(w: f32, h: f32, mode: u32, color: u32);
@@ -331,14 +324,8 @@ pub extern "C" fn init() {
         // Dark blue-gray background
         set_clear_color(0x2a2a3aFF);
 
-        // Set up procedural sky
-        set_sky(
-            0.5, 0.6, 0.7,      // horizon (blue-gray)
-            0.2, 0.3, 0.5,      // zenith (deeper blue)
-            0.5, 0.8, 0.3,      // sun direction
-            1.2, 1.1, 1.0,      // sun color
-            100.0,              // sun sharpness
-        );
+        // Note: Sky uses reasonable defaults (blue gradient with sun) from the renderer
+        // No need to set sky explicitly unless you want custom sky settings
 
         // Set up camera
         update_camera();
@@ -452,8 +439,8 @@ pub extern "C" fn render() {
         // Draw mode comparison sprites
         texture_bind(SPRITE_TEXTURE);
         for &(x, y, z, mode, _) in &positions {
-            transform_identity();
-            transform_translate(x, y + 3.0, z);
+            push_identity();
+            push_translate(x, y + 3.0, z);
             draw_billboard(1.5, 1.5, mode, 0xFFFFFFFF);
         }
 
@@ -469,8 +456,8 @@ pub extern "C" fn render() {
         ];
 
         for &(x, _y, z) in &tree_positions {
-            transform_identity();
-            transform_translate(x, 1.0, z); // Trees are 2 units tall, centered at 1.0
+            push_identity();
+            push_translate(x, 1.0, z);
             draw_billboard(2.0, 2.0, MODE_CYLINDRICAL_Y, 0xFFFFFFFF);
         }
 
@@ -479,8 +466,8 @@ pub extern "C" fn render() {
         for i in 0..MAX_PARTICLES {
             let p = &PARTICLES[i];
             if p.is_alive() {
-                transform_identity();
-                transform_translate(p.x, p.y, p.z);
+                push_identity();
+                push_translate(p.x, p.y, p.z);
 
                 // Apply alpha to color
                 let alpha = p.alpha();
@@ -501,26 +488,25 @@ pub extern "C" fn render() {
         ];
 
         for &(x, y, z) in &ground_markers {
-            transform_identity();
-            transform_translate(x, y, z);
-            transform_rotate(90.0, 1.0, 0.0, 0.0); // Lay flat on ground
+            push_identity();
+            push_translate(x, y, z);
             draw_billboard(0.5, 0.5, MODE_SPHERICAL, 0x88888888);
         }
 
         // === Draw UI overlay ===
-        draw_rect(10.0, 10.0, 280.0, 140.0, 0x000000AA);
+        draw_rect(10.0, 10.0, 560.0, 240.0, 0x000000AA);
 
-        draw_text_str("Billboard Demo", 20.0, 25.0, 16.0, 0xFFFFFFFF);
-        draw_text_str("L-Stick: Rotate camera", 20.0, 50.0, 12.0, 0xCCCCCCFF);
-        draw_text_str("A: Pause/Resume", 20.0, 68.0, 12.0, 0xCCCCCCFF);
+        draw_text_str("Billboard Demo", 20.0, 30.0, 24.0, 0xFFFFFFFF);
+        draw_text_str("L-Stick: Rotate camera", 20.0, 100.0, 16.0, 0xCCCCCCFF);
+        draw_text_str("A: Pause/Resume", 20.0, 145.0, 16.0, 0xCCCCCCFF);
 
         // Mode labels at top
-        draw_text_str("Compare billboard modes (top row):", 20.0, 95.0, 12.0, 0xFFDD88FF);
-        draw_text_str("1=Spherical 2=CylY 3=CylX 4=CylZ", 20.0, 113.0, 12.0, 0xAAAAAAFF);
+        draw_text_str("Compare billboard modes (top row):", 20.0, 190.0, 16.0, 0xFFDD88FF);
+        draw_text_str("1=Spherical 2=CylY 3=CylX 4=CylZ", 20.0, 235.0, 16.0, 0xAAAAAAFF);
 
         if PAUSED {
-            draw_rect(400.0, 250.0, 160.0, 40.0, 0x000000CC);
-            draw_text_str("PAUSED", 440.0, 278.0, 24.0, 0xFFFF00FF);
+            draw_rect(340.0, 240.0, 280.0, 120.0, 0x000000CC);
+            draw_text_str("PAUSED", 380.0, 280.0, 32.0, 0xFFFF00FF);
         }
     }
 }

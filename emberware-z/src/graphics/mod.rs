@@ -60,62 +60,66 @@
 //! game switch if memory pressure becomes a concern.
 
 // Many public APIs are designed for game rendering but not yet fully wired up
-#![allow(dead_code)]
-
 mod buffer;
 mod command_buffer;
+mod matrix_packing;
 mod pipeline;
+mod quad_instance;
 mod render_state;
+mod texture_manager;
+mod unified_shading_state;
 mod vertex;
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use glam::{Mat4, Vec3};
+use glam::Mat4;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
 use emberware_core::console::Graphics;
 
-use crate::console::VRAM_LIMIT;
-
 // Re-export public types from submodules
-pub use buffer::{GrowableBuffer, MeshHandle, RetainedMesh};
-pub use command_buffer::CommandBuffer;
+pub use buffer::{BufferManager, GrowableBuffer, MeshHandle, RetainedMesh};
+pub use command_buffer::{BufferSource, VirtualRenderPass};
+pub use matrix_packing::MvpShadingIndices;
+pub use quad_instance::{QuadInstance, QuadMode};
 pub use render_state::{
-    BlendMode, CameraUniforms, CullMode, LightUniform, LightsUniforms, MatcapBlendMode,
-    MaterialUniforms, RenderState, SkyUniforms, TextureFilter, TextureHandle,
+    BlendMode, CullMode, MatcapBlendMode, RenderState, TextureFilter, TextureHandle,
+};
+pub use unified_shading_state::{
+    pack_matcap_blend_modes, pack_octahedral_u32, pack_rgb8, pack_unorm8,
+    unpack_matcap_blend_modes, PackedLight, PackedUnifiedShadingState, ShadingStateIndex,
 };
 pub use vertex::{
-    vertex_stride, VertexFormatInfo, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV,
-    VERTEX_FORMAT_COUNT,
+    vertex_stride, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV, VERTEX_FORMAT_COUNT,
 };
 
 // Re-export for crate-internal use
 pub(crate) use pipeline::PipelineEntry;
 
-use pipeline::PipelineKey;
+use pipeline::{PipelineCache, PipelineKey};
+use texture_manager::TextureManager;
 
-/// Internal texture data
-///
-/// Fields tracked for debugging and VRAM accounting.
-/// Will be read when render_frame() processes draw commands.
-#[allow(dead_code)]
-struct TextureEntry {
-    texture: wgpu::Texture,
-    view: wgpu::TextureView,
-    width: u32,
-    height: u32,
-    /// Size in bytes (for VRAM tracking)
-    size_bytes: usize,
-}
+// MaterialCacheKey removed - obsolete with unified shading state system.
+// Frame bind group is now identical for all draws (contains only buffers, no per-draw material data).
 
 /// Emberware Z graphics backend
 ///
 /// Manages wgpu device, textures, render state, and frame presentation.
 /// Implements the vertex buffer architecture with one buffer per stride
 /// and command buffer pattern for draw batching.
+/// Offscreen render target for fixed internal resolution
+struct RenderTarget {
+    color_texture: wgpu::Texture,
+    color_view: wgpu::TextureView,
+    depth_texture: wgpu::Texture,
+    depth_view: wgpu::TextureView,
+    width: u32,
+    height: u32,
+}
+
 pub struct ZGraphics {
     // Core wgpu objects
     surface: wgpu::Surface<'static>,
@@ -123,21 +127,20 @@ pub struct ZGraphics {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
 
-    // Depth buffer
+    // Offscreen render target (game renders at fixed resolution)
+    render_target: RenderTarget,
+
+    // Blit pipeline (for scaling render target to window)
+    blit_pipeline: wgpu::RenderPipeline,
+    blit_bind_group: wgpu::BindGroup,
+    blit_sampler: wgpu::Sampler,
+
+    // Depth buffer (for window-sized UI rendering, no longer used for game content)
     depth_texture: wgpu::Texture,
     depth_view: wgpu::TextureView,
 
-    // Texture management
-    textures: HashMap<u32, TextureEntry>,
-    next_texture_id: u32,
-    vram_used: usize,
-
-    // Fallback textures
-    fallback_checkerboard: TextureHandle,
-    fallback_white: TextureHandle,
-
-    // Built-in font texture
-    font_texture: TextureHandle,
+    // Texture management (extracted to separate module)
+    texture_manager: TextureManager,
 
     // Samplers
     sampler_nearest: wgpu::Sampler,
@@ -146,50 +149,53 @@ pub struct ZGraphics {
     // Current render state
     render_state: RenderState,
 
-    // Sky system
-    sky_uniforms: SkyUniforms,
-    sky_buffer: wgpu::Buffer,
-
-    // Camera system (view/projection + position for specular)
-    camera_uniforms: CameraUniforms,
-    camera_buffer: wgpu::Buffer,
-
-    // Lighting system (4 directional lights for PBR)
-    lights_uniforms: LightsUniforms,
-    lights_buffer: wgpu::Buffer,
-
-    // Material system (global metallic/roughness/emissive)
-    material_uniforms: MaterialUniforms,
-    material_buffer: wgpu::Buffer,
-
     // Bone system (GPU skinning)
     bone_buffer: wgpu::Buffer,
+
+    // Matrix storage buffers (per-frame arrays)
+    model_matrix_buffer: wgpu::Buffer,
+    view_matrix_buffer: wgpu::Buffer,
+    proj_matrix_buffer: wgpu::Buffer,
+    mvp_indices_buffer: wgpu::Buffer,
+    model_matrix_capacity: usize,
+    view_matrix_capacity: usize,
+    proj_matrix_capacity: usize,
+    mvp_indices_capacity: usize,
+
+    // Shading state storage buffer (per-frame array)
+    shading_state_buffer: wgpu::Buffer,
+    shading_state_capacity: usize,
+
+    // Bind group caches (cleared and repopulated each frame)
+    texture_bind_groups: HashMap<[TextureHandle; 4], wgpu::BindGroup>,
 
     // Frame state
     current_frame: Option<wgpu::SurfaceTexture>,
     current_view: Option<wgpu::TextureView>,
 
-    // Vertex buffer architecture
-    // Per-format vertex buffers (one for each of 16 vertex formats)
-    vertex_buffers: [GrowableBuffer; VERTEX_FORMAT_COUNT],
-    // Per-format index buffers
-    index_buffers: [GrowableBuffer; VERTEX_FORMAT_COUNT],
-
-    // Retained mesh storage
-    retained_meshes: HashMap<u32, RetainedMesh>,
-    next_mesh_id: u32,
+    // Buffer management (vertex/index buffers and retained meshes)
+    buffer_manager: BufferManager,
 
     // Command buffer for immediate mode draws
-    command_buffer: CommandBuffer,
-
-    // Current transform matrix (model transform)
-    current_transform: Mat4,
-    // Transform stack for push/pop
-    transform_stack: Vec<Mat4>,
+    command_buffer: VirtualRenderPass,
 
     // Shader and pipeline cache
-    pipelines: HashMap<PipelineKey, PipelineEntry>,
+    pipeline_cache: PipelineCache,
     current_render_mode: u8,
+
+    // Current render target resolution (for detecting changes)
+    current_resolution_index: u8,
+
+    // Scaling mode for render target to window
+    scale_mode: crate::config::ScaleMode,
+
+    // Unit quad mesh for GPU-instanced rendering (billboards, sprites, etc.)
+    unit_quad_format: u8,
+    unit_quad_base_vertex: u32,
+    unit_quad_first_index: u32,
+
+    // Screen dimensions uniform for screen-space quads (part of bind group 0)
+    screen_dims_buffer: wgpu::Buffer,
 }
 
 impl ZGraphics {
@@ -229,7 +235,7 @@ impl ZGraphics {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: Some("Emberware Z Device"),
-                    required_features: wgpu::Features::empty(),
+                    required_features: wgpu::Features::default(),
                     required_limits: wgpu::Limits::default(),
                     memory_hints: wgpu::MemoryHints::Performance,
                 },
@@ -255,7 +261,7 @@ impl ZGraphics {
             present_mode: wgpu::PresentMode::AutoVsync,
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
-            desired_maximum_frame_latency: 2,
+            desired_maximum_frame_latency: 1,
         };
         surface.configure(&device, &config);
 
@@ -285,56 +291,8 @@ impl ZGraphics {
             ..Default::default()
         });
 
-        // Create per-format vertex and index buffers
-        let vertex_buffers = std::array::from_fn(|i| {
-            let info = VertexFormatInfo::for_format(i as u8);
-            GrowableBuffer::new(
-                &device,
-                wgpu::BufferUsages::VERTEX,
-                &format!("Vertex Buffer {}", info.name),
-            )
-        });
-
-        let index_buffers = std::array::from_fn(|i| {
-            let info = VertexFormatInfo::for_format(i as u8);
-            GrowableBuffer::new(
-                &device,
-                wgpu::BufferUsages::INDEX,
-                &format!("Index Buffer {}", info.name),
-            )
-        });
-
-        // Create sky uniform buffer
-        let sky_uniforms = SkyUniforms::default();
-        let sky_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Sky Uniform Buffer"),
-            contents: bytemuck::cast_slice(&[sky_uniforms]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
-        // Create camera uniform buffer (view/projection + position)
-        let camera_uniforms = CameraUniforms::default();
-        let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Camera Uniform Buffer"),
-            contents: bytemuck::cast_slice(&[camera_uniforms]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
-        // Create lights uniform buffer (4 directional lights)
-        let lights_uniforms = LightsUniforms::default();
-        let lights_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Lights Uniform Buffer"),
-            contents: bytemuck::cast_slice(&[lights_uniforms]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
-        // Create material uniform buffer (metallic/roughness/emissive)
-        let material_uniforms = MaterialUniforms::default();
-        let material_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Material Uniform Buffer"),
-            contents: bytemuck::cast_slice(&[material_uniforms]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
+        // Create buffer manager (vertex/index buffers and mesh storage)
+        let mut buffer_manager = BufferManager::new(&device);
 
         // Create bone storage buffer for GPU skinning (256 bones × 64 bytes = 16KB)
         let bone_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -344,46 +302,155 @@ impl ZGraphics {
             mapped_at_creation: false,
         });
 
-        let mut graphics = Self {
+        // Create matrix storage buffers (per-frame arrays)
+        let model_matrix_capacity = 1024;
+        let model_matrix_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Model Matrices"),
+            size: (model_matrix_capacity * std::mem::size_of::<Mat4>()) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let view_matrix_capacity = 16;
+        let view_matrix_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("View Matrices"),
+            size: (view_matrix_capacity * std::mem::size_of::<Mat4>()) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let proj_matrix_capacity = 16;
+        let proj_matrix_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Projection Matrices"),
+            size: (proj_matrix_capacity * std::mem::size_of::<Mat4>()) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        // Create MVP indices buffer (2 × u32 per entry: packed MVP + shading_state_index)
+        let mvp_indices_capacity = 1024;
+        let mvp_indices_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("MVP Indices"),
+            size: (mvp_indices_capacity * 2 * std::mem::size_of::<u32>()) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        // Create shading state buffer (per-frame array of PackedUnifiedShadingState)
+        let shading_state_capacity = 256;
+        let shading_state_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Shading States"),
+            size: (shading_state_capacity * std::mem::size_of::<PackedUnifiedShadingState>())
+                as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        // Create texture manager (handles fallback textures)
+        let texture_manager = TextureManager::new(&device, &queue)?;
+
+        // Create offscreen render target at default resolution (960×540)
+        let render_target = Self::create_render_target(&device, 960, 540, surface_format);
+
+        // Create screen dimensions uniform buffer (for screen-space quad rendering)
+        let screen_dims_data: [f32; 2] = [render_target.width as f32, render_target.height as f32];
+        let screen_dims_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Screen Dimensions Uniform"),
+            contents: bytemuck::cast_slice(&screen_dims_data),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        // Create blit pipeline for scaling render target to window
+        let (blit_pipeline, blit_bind_group, blit_sampler) =
+            Self::create_blit_pipeline(&device, surface_format, &render_target);
+
+        // Create static unit quad mesh for GPU-instanced rendering
+        // Format: POS_UV_COLOR (format bits: UV | COLOR = 0b011 = 3)
+        use crate::graphics::vertex::{vertex_stride, FORMAT_COLOR, FORMAT_UV};
+        let unit_quad_format = FORMAT_UV | FORMAT_COLOR;
+
+        let unit_quad_vertices: Vec<f32> = vec![
+            // pos_x, pos_y, pos_z, uv_u, uv_v, color_r, color_g, color_b
+            -0.5, -0.5, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, // Bottom-left
+            0.5, -0.5, 0.0, 1.0, 0.0, 1.0, 1.0, 1.0, // Bottom-right
+            0.5, 0.5, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, // Top-right
+            -0.5, 0.5, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, // Top-left
+        ];
+
+        let unit_quad_indices: Vec<u16> = vec![
+            0, 1, 2, // First triangle
+            0, 2, 3, // Second triangle
+        ];
+
+        // Upload unit quad to retained vertex buffer
+        let vertex_bytes = bytemuck::cast_slice(&unit_quad_vertices);
+        let stride = vertex_stride(unit_quad_format);
+
+        // Get the current position in the vertex buffer (this will be our base_vertex)
+        let unit_quad_base_vertex = {
+            let retained_vertex_buf = buffer_manager.retained_vertex_buffer(unit_quad_format);
+            (retained_vertex_buf.used() / stride as u64) as u32
+        };
+
+        // Write vertex data to buffer
+        let retained_vertex_buf_mut = buffer_manager.retained_vertex_buffer_mut(unit_quad_format);
+        retained_vertex_buf_mut.ensure_capacity(&device, vertex_bytes.len() as u64);
+        retained_vertex_buf_mut.write(&queue, vertex_bytes);
+
+        // Upload unit quad to retained index buffer
+        let index_bytes = bytemuck::cast_slice(&unit_quad_indices);
+
+        // Get the current position in the index buffer (this will be our first_index)
+        let unit_quad_first_index = {
+            let retained_index_buf = buffer_manager.retained_index_buffer(unit_quad_format);
+            (retained_index_buf.used() / 2) as u32 // u16 = 2 bytes
+        };
+
+        // Write index data to buffer
+        let retained_index_buf_mut = buffer_manager.retained_index_buffer_mut(unit_quad_format);
+        retained_index_buf_mut.ensure_capacity(&device, index_bytes.len() as u64);
+        retained_index_buf_mut.write(&queue, index_bytes);
+
+        let graphics = Self {
             surface,
             device,
             queue,
             config,
+            render_target,
+            blit_pipeline,
+            blit_bind_group,
+            blit_sampler,
             depth_texture,
             depth_view,
-            textures: HashMap::new(),
-            next_texture_id: 1, // 0 is reserved for INVALID
-            vram_used: 0,
-            fallback_checkerboard: TextureHandle::INVALID,
-            fallback_white: TextureHandle::INVALID,
-            font_texture: TextureHandle::INVALID,
+            texture_manager,
             sampler_nearest,
             sampler_linear,
             render_state: RenderState::default(),
-            sky_uniforms,
-            sky_buffer,
-            camera_uniforms,
-            camera_buffer,
-            lights_uniforms,
-            lights_buffer,
-            material_uniforms,
-            material_buffer,
             bone_buffer,
+            model_matrix_buffer,
+            view_matrix_buffer,
+            proj_matrix_buffer,
+            mvp_indices_buffer,
+            model_matrix_capacity,
+            view_matrix_capacity,
+            proj_matrix_capacity,
+            mvp_indices_capacity,
+            shading_state_buffer,
+            shading_state_capacity,
+            texture_bind_groups: HashMap::new(),
             current_frame: None,
             current_view: None,
-            vertex_buffers,
-            index_buffers,
-            retained_meshes: HashMap::new(),
-            next_mesh_id: 1, // 0 is reserved for INVALID
-            command_buffer: CommandBuffer::new(),
-            current_transform: Mat4::IDENTITY,
-            transform_stack: Vec::with_capacity(16),
-            pipelines: HashMap::new(),
-            current_render_mode: 0, // Default to Mode 0 (Unlit)
+            buffer_manager,
+            command_buffer: VirtualRenderPass::new(),
+            pipeline_cache: PipelineCache::new(),
+            current_render_mode: 0,      // Default to Mode 0 (Unlit)
+            current_resolution_index: 1, // 960×540 (default)
+            scale_mode: crate::config::ScaleMode::default(), // Stretch by default
+            unit_quad_format,
+            unit_quad_base_vertex,
+            unit_quad_first_index,
+            screen_dims_buffer,
         };
-
-        // Create fallback textures
-        graphics.create_fallback_textures()?;
 
         Ok(graphics)
     }
@@ -417,57 +484,239 @@ impl ZGraphics {
         (texture, view)
     }
 
-    /// Create fallback textures (checkerboard, white, and font)
-    ///
-    /// These textures are essential for rendering - errors are propagated
-    /// to allow graceful initialization failure.
-    fn create_fallback_textures(&mut self) -> Result<()> {
-        // 8x8 magenta/black checkerboard for missing textures
-        let mut checkerboard_data = vec![0u8; 8 * 8 * 4];
-        for y in 0..8 {
-            for x in 0..8 {
-                let idx = (y * 8 + x) * 4;
-                let is_magenta = (x + y) % 2 == 0;
-                if is_magenta {
-                    checkerboard_data[idx] = 255; // R
-                    checkerboard_data[idx + 1] = 0; // G
-                    checkerboard_data[idx + 2] = 255; // B
-                    checkerboard_data[idx + 3] = 255; // A
-                } else {
-                    checkerboard_data[idx] = 0; // R
-                    checkerboard_data[idx + 1] = 0; // G
-                    checkerboard_data[idx + 2] = 0; // B
-                    checkerboard_data[idx + 3] = 255; // A
-                }
-            }
+    /// Create offscreen render target at specified resolution
+    fn create_render_target(
+        device: &wgpu::Device,
+        width: u32,
+        height: u32,
+        surface_format: wgpu::TextureFormat,
+    ) -> RenderTarget {
+        // Create color texture (render target)
+        let color_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Render Target Color"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: surface_format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let color_view = color_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        // Create depth texture for render target
+        let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Render Target Depth"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Depth32Float,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        });
+        let depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        RenderTarget {
+            color_texture,
+            color_view,
+            depth_texture,
+            depth_view,
+            width,
+            height,
         }
-        self.fallback_checkerboard = self
-            .load_texture_internal(8, 8, &checkerboard_data, false)
-            .context("Failed to create checkerboard fallback texture")?;
+    }
 
-        // 1x1 white texture for untextured draws
-        let white_data = [255u8, 255, 255, 255];
-        self.fallback_white = self
-            .load_texture_internal(1, 1, &white_data, false)
-            .context("Failed to create white fallback texture")?;
+    /// Create blit pipeline and resources for scaling render target to window
+    fn create_blit_pipeline(
+        device: &wgpu::Device,
+        surface_format: wgpu::TextureFormat,
+        render_target: &RenderTarget,
+    ) -> (wgpu::RenderPipeline, wgpu::BindGroup, wgpu::Sampler) {
+        // Create sampler for render target (nearest neighbor for pixel-perfect scaling)
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("Blit Sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        });
 
-        // Load built-in font texture
-        use crate::font;
-        let font_atlas = font::generate_font_atlas();
-        self.font_texture = self
-            .load_texture_internal(font::ATLAS_WIDTH, font::ATLAS_HEIGHT, &font_atlas, false)
-            .context("Failed to create font texture")?;
+        // Load blit shader
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Blit Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("../../shaders/blit.wgsl").into()),
+        });
 
-        tracing::debug!(
-            "Created font texture: {}x{}",
-            font::ATLAS_WIDTH,
-            font::ATLAS_HEIGHT
+        // Create bind group layout
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Blit Bind Group Layout"),
+            entries: &[
+                // Render target texture
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                // Sampler
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+        });
+
+        // Create bind group
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Blit Bind Group"),
+            layout: &bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&render_target.color_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+        });
+
+        // Create pipeline layout
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Blit Pipeline Layout"),
+            bind_group_layouts: &[&bind_group_layout],
+            push_constant_ranges: &[],
+        });
+
+        // Create render pipeline
+        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Blit Pipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                buffers: &[],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: surface_format,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: Default::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: None,
+                unclipped_depth: false,
+                polygon_mode: wgpu::PolygonMode::Fill,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+            cache: None,
+        });
+
+        (pipeline, bind_group, sampler)
+    }
+
+    /// Update render target resolution if changed
+    ///
+    /// Called by app layer when init_config.resolution_index changes
+    pub fn update_resolution(&mut self, resolution_index: u8) {
+        if resolution_index != self.current_resolution_index {
+            self.recreate_render_target(resolution_index);
+        }
+    }
+
+    /// Update scaling mode for render target to window
+    ///
+    /// Called by app layer when config.video.scale_mode changes
+    pub fn set_scale_mode(&mut self, scale_mode: crate::config::ScaleMode) {
+        self.scale_mode = scale_mode;
+    }
+
+    /// Recreate render target at new resolution
+    ///
+    /// Called when game changes resolution via init_config.resolution_index
+    fn recreate_render_target(&mut self, resolution_index: u8) {
+        use crate::console::RESOLUTIONS;
+
+        let (width, height) = RESOLUTIONS
+            .get(resolution_index as usize)
+            .copied()
+            .unwrap_or((960, 540)); // Fallback to default
+
+        tracing::info!(
+            "Recreating render target: {}×{} (index {})",
+            width,
+            height,
+            resolution_index
         );
-        Ok(())
+
+        // Create new render target
+        self.render_target =
+            Self::create_render_target(&self.device, width, height, self.config.format);
+
+        // Update screen dimensions uniform buffer
+        let screen_dims_data: [f32; 2] = [width as f32, height as f32];
+        self.queue.write_buffer(
+            &self.screen_dims_buffer,
+            0,
+            bytemuck::cast_slice(&screen_dims_data),
+        );
+
+        // Recreate blit bind group with new render target texture
+        let bind_group_layout = self.blit_pipeline.get_bind_group_layout(0);
+        self.blit_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Blit Bind Group"),
+            layout: &bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&self.render_target.color_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.blit_sampler),
+                },
+            ],
+        });
+
+        self.current_resolution_index = resolution_index;
     }
 
     // ========================================================================
-    // Texture Management
+    // Texture Management (delegated to TextureManager)
     // ========================================================================
 
     /// Load a texture from RGBA8 pixel data
@@ -479,125 +728,43 @@ impl ZGraphics {
         height: u32,
         pixels: &[u8],
     ) -> Result<TextureHandle> {
-        self.load_texture_internal(width, height, pixels, true)
-    }
-
-    /// Internal texture loading (optionally tracks VRAM)
-    fn load_texture_internal(
-        &mut self,
-        width: u32,
-        height: u32,
-        pixels: &[u8],
-        track_vram: bool,
-    ) -> Result<TextureHandle> {
-        let expected_size = (width * height * 4) as usize;
-        if pixels.len() != expected_size {
-            anyhow::bail!(
-                "Pixel data size mismatch: expected {} bytes, got {}",
-                expected_size,
-                pixels.len()
-            );
-        }
-
-        let size_bytes = expected_size;
-
-        // Check VRAM budget
-        if track_vram && self.vram_used + size_bytes > VRAM_LIMIT {
-            anyhow::bail!(
-                "VRAM budget exceeded: {} + {} > {} bytes",
-                self.vram_used,
-                size_bytes,
-                VRAM_LIMIT
-            );
-        }
-
-        // Create texture
-        let texture = self.device.create_texture_with_data(
-            &self.queue,
-            &wgpu::TextureDescriptor {
-                label: Some("Game Texture"),
-                size: wgpu::Extent3d {
-                    width,
-                    height,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                view_formats: &[],
-            },
-            wgpu::util::TextureDataOrder::LayerMajor,
-            pixels,
-        );
-
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-        let handle = TextureHandle(self.next_texture_id);
-        self.next_texture_id += 1;
-
-        self.textures.insert(
-            handle.0,
-            TextureEntry {
-                texture,
-                view,
-                width,
-                height,
-                size_bytes,
-            },
-        );
-
-        if track_vram {
-            self.vram_used += size_bytes;
-        }
-
-        tracing::debug!(
-            "Loaded texture {}: {}x{}, {} bytes (VRAM: {}/{})",
-            handle.0,
-            width,
-            height,
-            size_bytes,
-            self.vram_used,
-            VRAM_LIMIT
-        );
-
-        Ok(handle)
+        self.texture_manager
+            .load_texture(&self.device, &self.queue, width, height, pixels)
     }
 
     /// Get texture view by handle
     pub fn get_texture_view(&self, handle: TextureHandle) -> Option<&wgpu::TextureView> {
-        self.textures.get(&handle.0).map(|t| &t.view)
+        self.texture_manager.get_texture_view(handle)
     }
 
     /// Get fallback checkerboard texture view
     pub fn get_fallback_checkerboard_view(&self) -> &wgpu::TextureView {
-        &self.textures[&self.fallback_checkerboard.0].view
+        self.texture_manager.get_fallback_checkerboard_view()
     }
 
     /// Get fallback white texture view
     pub fn get_fallback_white_view(&self) -> &wgpu::TextureView {
-        &self.textures[&self.fallback_white.0].view
+        self.texture_manager.get_fallback_white_view()
     }
 
     /// Get font texture handle
     pub fn font_texture(&self) -> TextureHandle {
-        self.font_texture
+        self.texture_manager.font_texture()
+    }
+
+    /// Get white fallback texture handle
+    pub fn white_texture(&self) -> TextureHandle {
+        self.texture_manager.white_texture()
     }
 
     /// Get font texture view
     pub fn get_font_texture_view(&self) -> &wgpu::TextureView {
-        &self.textures[&self.font_texture.0].view
+        self.texture_manager.get_font_texture_view()
     }
 
-    /// Get texture view for a slot, returning fallback if unbound
-    pub fn get_slot_texture_view(&self, slot: usize) -> &wgpu::TextureView {
-        let handle = self
-            .render_state
-            .texture_slots
-            .get(slot)
-            .copied()
-            .unwrap_or(TextureHandle::INVALID);
+    /// Get texture view for a handle, returning fallback if invalid
+    /// Note: Texture binding is now managed in ZFFIState.bound_textures
+    pub fn get_texture_view_or_fallback(&self, handle: TextureHandle) -> &wgpu::TextureView {
         if handle == TextureHandle::INVALID {
             self.get_fallback_white_view()
         } else {
@@ -608,22 +775,19 @@ impl ZGraphics {
 
     /// Get VRAM usage in bytes
     pub fn vram_used(&self) -> usize {
-        self.vram_used
+        self.texture_manager.vram_used()
     }
 
     /// Get VRAM limit in bytes
     pub fn vram_limit(&self) -> usize {
-        VRAM_LIMIT
+        self.texture_manager.vram_limit()
     }
 
     // ========================================================================
     // Render State
     // ========================================================================
-
-    /// Set uniform tint color (0xRRGGBBAA)
-    pub fn set_color(&mut self, color: u32) {
-        self.render_state.color = color;
-    }
+    // Note: Color and texture binding are now managed in ZFFIState
+    // These methods have been removed as they're redundant with FFI layer state management
 
     /// Enable or disable depth testing
     pub fn set_depth_test(&mut self, enabled: bool) {
@@ -645,18 +809,6 @@ impl ZGraphics {
         self.render_state.texture_filter = filter;
     }
 
-    /// Bind texture to slot 0 (albedo)
-    pub fn bind_texture(&mut self, handle: TextureHandle) {
-        self.bind_texture_slot(handle, 0);
-    }
-
-    /// Bind texture to a specific slot (0-3)
-    pub fn bind_texture_slot(&mut self, handle: TextureHandle, slot: usize) {
-        if slot < 4 {
-            self.render_state.texture_slots[slot] = handle;
-        }
-    }
-
     /// Get current render state
     pub fn render_state(&self) -> &RenderState {
         &self.render_state
@@ -671,248 +823,7 @@ impl ZGraphics {
     }
 
     // ========================================================================
-    // Sky System
-    // ========================================================================
-
-    /// Set sky parameters for procedural sky rendering
-    ///
-    /// Parameters:
-    /// - horizon_rgb: Horizon color (RGB, linear, 3 floats)
-    /// - zenith_rgb: Zenith (top) color (RGB, linear, 3 floats)
-    /// - sun_dir: Sun direction (normalized, XYZ, 3 floats)
-    /// - sun_rgb: Sun color (RGB, linear, 3 floats)
-    /// - sun_sharpness: Sun sharpness (higher = sharper sun, typically 32-256)
-    pub fn set_sky(
-        &mut self,
-        horizon_rgb: [f32; 3],
-        zenith_rgb: [f32; 3],
-        sun_dir: [f32; 3],
-        sun_rgb: [f32; 3],
-        sun_sharpness: f32,
-    ) {
-        // Normalize sun direction
-        let sun_vec = Vec3::from_array(sun_dir);
-        let sun_normalized = if sun_vec.length() > 0.0001 {
-            sun_vec.normalize()
-        } else {
-            Vec3::Y // Default to up if zero vector
-        };
-
-        self.sky_uniforms = SkyUniforms {
-            horizon_color: [horizon_rgb[0], horizon_rgb[1], horizon_rgb[2], 0.0],
-            zenith_color: [zenith_rgb[0], zenith_rgb[1], zenith_rgb[2], 0.0],
-            sun_direction: [sun_normalized.x, sun_normalized.y, sun_normalized.z, 0.0],
-            sun_color_and_sharpness: [sun_rgb[0], sun_rgb[1], sun_rgb[2], sun_sharpness],
-        };
-
-        // Upload to GPU
-        self.queue.write_buffer(
-            &self.sky_buffer,
-            0,
-            bytemuck::cast_slice(&[self.sky_uniforms]),
-        );
-
-        tracing::debug!(
-            "Set sky: horizon={:?}, zenith={:?}, sun_dir={:?}, sun_color={:?}, sharpness={}",
-            horizon_rgb,
-            zenith_rgb,
-            sun_normalized.to_array(),
-            sun_rgb,
-            sun_sharpness
-        );
-    }
-
-    /// Get current sky uniforms
-    pub fn sky_uniforms(&self) -> &SkyUniforms {
-        &self.sky_uniforms
-    }
-
-    /// Get sky uniform buffer for binding
-    pub fn sky_buffer(&self) -> &wgpu::Buffer {
-        &self.sky_buffer
-    }
-
-    // ========================================================================
-    // Scene Uniforms (Camera, Lights, Materials)
-    // ========================================================================
-
-    /// Update scene uniforms (camera, lights, materials) and upload to GPU
-    ///
-    /// This should be called once per frame before rendering to ensure PBR
-    /// shaders have up-to-date camera position (for specular), lights, and
-    /// material properties.
-    ///
-    /// # Arguments
-    /// * `camera` - Camera state from ZFFIState
-    /// * `lights` - Array of 4 light states from ZFFIState
-    /// * `aspect_ratio` - Screen aspect ratio (width/height)
-    /// * `metallic` - Global metallic value (0.0 = non-metallic, 1.0 = fully metallic)
-    /// * `roughness` - Global roughness value (0.0 = smooth, 1.0 = rough)
-    /// * `emissive` - Global emissive intensity (0.0 = no emission, 1.0+ = glowing)
-    pub fn update_scene_uniforms(
-        &mut self,
-        camera: &crate::state::CameraState,
-        lights: &[crate::state::LightState; 4],
-        aspect_ratio: f32,
-        metallic: f32,
-        roughness: f32,
-        emissive: f32,
-    ) {
-        // Update camera uniforms
-        let view = camera.view_matrix();
-        let proj = camera.projection_matrix(aspect_ratio);
-
-        self.camera_uniforms = CameraUniforms {
-            view: view.to_cols_array_2d(),
-            projection: proj.to_cols_array_2d(),
-            position: [camera.position.x, camera.position.y, camera.position.z, 0.0],
-        };
-
-        self.queue.write_buffer(
-            &self.camera_buffer,
-            0,
-            bytemuck::cast_slice(&[self.camera_uniforms]),
-        );
-
-        // Update lights uniforms
-        for (i, light) in lights.iter().enumerate() {
-            // Normalize light direction
-            let dir = Vec3::from_array(light.direction);
-            let dir_normalized = if dir.length() > 0.0001 {
-                dir.normalize()
-            } else {
-                Vec3::new(0.0, -1.0, 0.0) // Default: downward
-            };
-
-            self.lights_uniforms.lights[i] = LightUniform {
-                direction_and_enabled: [
-                    dir_normalized.x,
-                    dir_normalized.y,
-                    dir_normalized.z,
-                    if light.enabled { 1.0 } else { 0.0 },
-                ],
-                color_and_intensity: [
-                    light.color[0],
-                    light.color[1],
-                    light.color[2],
-                    light.intensity,
-                ],
-            };
-        }
-
-        self.queue.write_buffer(
-            &self.lights_buffer,
-            0,
-            bytemuck::cast_slice(&[self.lights_uniforms]),
-        );
-
-        // Update material uniforms
-        self.material_uniforms = MaterialUniforms {
-            properties: [
-                metallic.clamp(0.0, 1.0),
-                roughness.clamp(0.0, 1.0),
-                emissive.max(0.0),
-                0.0, // .w unused
-            ],
-        };
-
-        self.queue.write_buffer(
-            &self.material_buffer,
-            0,
-            bytemuck::cast_slice(&[self.material_uniforms]),
-        );
-
-        tracing::trace!(
-            "Updated scene uniforms: camera_pos={:?}, lights_enabled={}/{}/{}/{}, material=M{:.2}/R{:.2}/E{:.2}",
-            camera.position,
-            lights[0].enabled,
-            lights[1].enabled,
-            lights[2].enabled,
-            lights[3].enabled,
-            metallic,
-            roughness,
-            emissive
-        );
-    }
-
-    /// Get camera uniform buffer for binding
-    pub fn camera_buffer(&self) -> &wgpu::Buffer {
-        &self.camera_buffer
-    }
-
-    /// Get lights uniform buffer for binding
-    pub fn lights_buffer(&self) -> &wgpu::Buffer {
-        &self.lights_buffer
-    }
-
-    /// Get material uniform buffer for binding
-    pub fn material_buffer(&self) -> &wgpu::Buffer {
-        &self.material_buffer
-    }
-
-    // ========================================================================
-    // Transform Stack
-    // ========================================================================
-
-    /// Reset transform to identity matrix
-    pub fn transform_identity(&mut self) {
-        self.current_transform = Mat4::IDENTITY;
-    }
-
-    /// Translate the current transform
-    pub fn transform_translate(&mut self, x: f32, y: f32, z: f32) {
-        self.current_transform *= Mat4::from_translation(glam::vec3(x, y, z));
-    }
-
-    /// Rotate the current transform around an axis (angle in degrees)
-    pub fn transform_rotate(&mut self, angle_deg: f32, x: f32, y: f32, z: f32) {
-        let axis = glam::vec3(x, y, z).normalize();
-        let angle_rad = angle_deg.to_radians();
-        self.current_transform *= Mat4::from_axis_angle(axis, angle_rad);
-    }
-
-    /// Scale the current transform
-    pub fn transform_scale(&mut self, x: f32, y: f32, z: f32) {
-        self.current_transform *= Mat4::from_scale(glam::vec3(x, y, z));
-    }
-
-    /// Push the current transform onto the stack
-    ///
-    /// Returns false if the stack is full (max 16 entries)
-    pub fn transform_push(&mut self) -> bool {
-        if self.transform_stack.len() >= 16 {
-            tracing::warn!("Transform stack overflow (max 16)");
-            return false;
-        }
-        self.transform_stack.push(self.current_transform);
-        true
-    }
-
-    /// Pop the transform from the stack
-    ///
-    /// Returns false if the stack is empty
-    pub fn transform_pop(&mut self) -> bool {
-        if let Some(transform) = self.transform_stack.pop() {
-            self.current_transform = transform;
-            true
-        } else {
-            tracing::warn!("Transform stack underflow");
-            false
-        }
-    }
-
-    /// Set the current transform from a 4x4 matrix (16 floats, column-major)
-    pub fn transform_set(&mut self, matrix: &[f32; 16]) {
-        self.current_transform = Mat4::from_cols_array(matrix);
-    }
-
-    /// Get the current transform matrix
-    pub fn current_transform(&self) -> Mat4 {
-        self.current_transform
-    }
-
-    // ========================================================================
-    // Retained Mesh Loading
+    // Retained Mesh Loading (delegated to BufferManager)
     // ========================================================================
 
     /// Load a non-indexed mesh (retained mode)
@@ -920,52 +831,8 @@ impl ZGraphics {
     /// The mesh is stored in the appropriate vertex buffer based on format.
     /// Returns a MeshHandle for use with draw_mesh().
     pub fn load_mesh(&mut self, data: &[f32], format: u8) -> Result<MeshHandle> {
-        let format_idx = format as usize;
-        if format_idx >= VERTEX_FORMAT_COUNT {
-            anyhow::bail!("Invalid vertex format: {}", format);
-        }
-
-        let stride = vertex_stride(format) as usize;
-        let byte_data = bytemuck::cast_slice(data);
-        let vertex_count = byte_data.len() / stride;
-
-        if byte_data.len() % stride != 0 {
-            anyhow::bail!(
-                "Vertex data size {} is not a multiple of stride {}",
-                byte_data.len(),
-                stride
-            );
-        }
-
-        // Ensure buffer has capacity
-        self.vertex_buffers[format_idx].ensure_capacity(&self.device, byte_data.len() as u64);
-
-        // Write to buffer
-        let vertex_offset = self.vertex_buffers[format_idx].write(&self.queue, byte_data);
-
-        // Create mesh handle
-        let handle = MeshHandle(self.next_mesh_id);
-        self.next_mesh_id += 1;
-
-        self.retained_meshes.insert(
-            handle.0,
-            RetainedMesh {
-                format,
-                vertex_count: vertex_count as u32,
-                index_count: 0,
-                vertex_offset,
-                index_offset: 0,
-            },
-        );
-
-        tracing::debug!(
-            "Loaded mesh {}: {} vertices, format {}",
-            handle.0,
-            vertex_count,
-            VertexFormatInfo::for_format(format).name
-        );
-
-        Ok(handle)
+        self.buffer_manager
+            .load_mesh(&self.device, &self.queue, data, format)
     }
 
     /// Load an indexed mesh (retained mode)
@@ -975,117 +842,29 @@ impl ZGraphics {
     pub fn load_mesh_indexed(
         &mut self,
         data: &[f32],
-        indices: &[u32],
+        indices: &[u16],
         format: u8,
     ) -> Result<MeshHandle> {
-        let format_idx = format as usize;
-        if format_idx >= VERTEX_FORMAT_COUNT {
-            anyhow::bail!("Invalid vertex format: {}", format);
-        }
-
-        let stride = vertex_stride(format) as usize;
-        let byte_data = bytemuck::cast_slice(data);
-        let vertex_count = byte_data.len() / stride;
-
-        if byte_data.len() % stride != 0 {
-            anyhow::bail!(
-                "Vertex data size {} is not a multiple of stride {}",
-                byte_data.len(),
-                stride
-            );
-        }
-
-        // Ensure vertex buffer has capacity
-        self.vertex_buffers[format_idx].ensure_capacity(&self.device, byte_data.len() as u64);
-
-        // Ensure index buffer has capacity
-        let index_byte_data: &[u8] = bytemuck::cast_slice(indices);
-        self.index_buffers[format_idx].ensure_capacity(&self.device, index_byte_data.len() as u64);
-
-        // Write to buffers
-        let vertex_offset = self.vertex_buffers[format_idx].write(&self.queue, byte_data);
-        let index_offset = self.index_buffers[format_idx].write(&self.queue, index_byte_data);
-
-        // Create mesh handle
-        let handle = MeshHandle(self.next_mesh_id);
-        self.next_mesh_id += 1;
-
-        self.retained_meshes.insert(
-            handle.0,
-            RetainedMesh {
-                format,
-                vertex_count: vertex_count as u32,
-                index_count: indices.len() as u32,
-                vertex_offset,
-                index_offset,
-            },
-        );
-
-        tracing::debug!(
-            "Loaded indexed mesh {}: {} vertices, {} indices, format {}",
-            handle.0,
-            vertex_count,
-            indices.len(),
-            VertexFormatInfo::for_format(format).name
-        );
-
-        Ok(handle)
+        self.buffer_manager
+            .load_mesh_indexed(&self.device, &self.queue, data, indices, format)
     }
 
     /// Get mesh info by handle
     pub fn get_mesh(&self, handle: MeshHandle) -> Option<&RetainedMesh> {
-        self.retained_meshes.get(&handle.0)
+        self.buffer_manager.get_mesh(handle)
     }
 
     // ========================================================================
-    // Immediate Mode Drawing
+    // Command Buffer Access
     // ========================================================================
-
-    /// Draw triangles immediately (non-indexed)
-    ///
-    /// Vertices are buffered on the CPU and flushed at frame end.
-    pub fn draw_triangles(&mut self, vertices: &[f32], format: u8) {
-        if format as usize >= VERTEX_FORMAT_COUNT {
-            tracing::warn!("Invalid vertex format for draw_triangles: {}", format);
-            return;
-        }
-
-        self.command_buffer.add_vertices(
-            format,
-            vertices,
-            self.current_transform,
-            &self.render_state,
-        );
-    }
-
-    /// Draw indexed triangles immediately
-    ///
-    /// Vertices and indices are buffered on the CPU and flushed at frame end.
-    pub fn draw_triangles_indexed(&mut self, vertices: &[f32], indices: &[u32], format: u8) {
-        if format as usize >= VERTEX_FORMAT_COUNT {
-            tracing::warn!(
-                "Invalid vertex format for draw_triangles_indexed: {}",
-                format
-            );
-            return;
-        }
-
-        self.command_buffer.add_vertices_indexed(
-            format,
-            vertices,
-            indices,
-            self.current_transform,
-            &self.render_state,
-        );
-    }
 
     /// Get the command buffer (for flush/rendering)
-    pub fn command_buffer(&self) -> &CommandBuffer {
+    pub fn command_buffer(&self) -> &VirtualRenderPass {
         &self.command_buffer
     }
 
     /// Get mutable command buffer
-    pub fn command_buffer_mut(&mut self) -> &mut CommandBuffer {
+    pub fn command_buffer_mut(&mut self) -> &mut VirtualRenderPass {
         &mut self.command_buffer
     }
 
@@ -1098,17 +877,248 @@ impl ZGraphics {
     }
 
     // ========================================================================
-    // Buffer Access (for rendering)
+    // Draw Command Processing
+    // ========================================================================
+
+    /// Process all draw commands from ZFFIState and execute them
+    ///
+    /// This method consumes draw commands from the ZFFIState and executes them
+    /// on the GPU, directly translating FFI state into graphics calls without
+    /// an intermediate unpacking/repacking step.
+    ///
+    /// This replaces the previous execute_draw_commands() function in app.rs,
+    /// eliminating redundant data translation and simplifying the architecture.
+    /// Process all draw commands from ZFFIState and execute them
+    ///
+    /// This method consumes draw commands from the ZFFIState and executes them
+    /// on the GPU, directly translating FFI state into graphics calls without
+    /// an intermediate unpacking/repacking step.
+    ///
+    /// This replaces the previous execute_draw_commands() function in app.rs,
+    /// eliminating redundant data translation and simplifying the architecture.
+    pub fn process_draw_commands(
+        &mut self,
+        z_state: &mut crate::state::ZFFIState,
+        texture_map: &hashbrown::HashMap<u32, TextureHandle>,
+    ) {
+        // Apply init config to graphics (render mode, etc.)
+        self.set_render_mode(z_state.init_config.render_mode);
+
+        // 1. Swap the FFI-populated render pass into our command buffer
+        // This efficiently transfers all immediate geometry (triangles, meshes)
+        // without copying vectors. The old command buffer (now in z_state.render_pass)
+        // will be cleared when z_state.clear_frame() is called.
+        std::mem::swap(&mut self.command_buffer, &mut z_state.render_pass);
+
+        // 1.1. Remap texture handles from FFI handles to graphics handles
+        // FFI functions (draw_triangles, draw_mesh) store INVALID placeholders because they
+        // don't have access to session.texture_map. Now we remap them using bound_textures.
+        for cmd in self.command_buffer.commands_mut() {
+            // Get mutable reference to texture_slots based on variant
+            let texture_slots = match cmd {
+                command_buffer::VRPCommand::Mesh { texture_slots, .. } => texture_slots,
+                command_buffer::VRPCommand::IndexedMesh { texture_slots, .. } => texture_slots,
+                command_buffer::VRPCommand::Quad { texture_slots, .. } => texture_slots,
+            };
+
+            if texture_slots[0] == TextureHandle::INVALID {
+                *texture_slots = [
+                    texture_map
+                        .get(&z_state.bound_textures[0])
+                        .copied()
+                        .unwrap_or(TextureHandle::INVALID),
+                    texture_map
+                        .get(&z_state.bound_textures[1])
+                        .copied()
+                        .unwrap_or(TextureHandle::INVALID),
+                    texture_map
+                        .get(&z_state.bound_textures[2])
+                        .copied()
+                        .unwrap_or(TextureHandle::INVALID),
+                    texture_map
+                        .get(&z_state.bound_textures[3])
+                        .copied()
+                        .unwrap_or(TextureHandle::INVALID),
+                ];
+            }
+        }
+
+        // Ensure default shading state exists for deferred commands.
+        // Deferred commands (billboards, sprites, text) use ShadingStateIndex(0) by default.
+        // If the game only uses deferred drawing and never calls draw_mesh/draw_triangles,
+        // the shading state pool would be empty (cleared by clear_frame), causing panics
+        // during command sorting/rendering when accessing state 0.
+        //
+        // This ensures state 0 always exists, using the current render state defaults
+        // (color, blend mode, material properties, etc.) from z_state.current_shading_state.
+        if z_state.shading_states.is_empty() {
+            z_state.add_shading_state();
+        }
+
+        // 1.5. Process GPU-instanced quads (billboards, sprites)
+        // Accumulate all instances and upload once, then create batched draw commands
+        if !z_state.quad_batches.is_empty() {
+            let total_instances: usize =
+                z_state.quad_batches.iter().map(|b| b.instances.len()).sum();
+            tracing::info!(
+                "Processing {} quad batches with {} total instances",
+                z_state.quad_batches.len(),
+                total_instances
+            );
+
+            // DEBUG: Log view/projection matrices
+            if !z_state.view_matrices.is_empty() && !z_state.proj_matrices.is_empty() {
+                tracing::info!(
+                    "  View matrix count: {}, Proj matrix count: {}",
+                    z_state.view_matrices.len(),
+                    z_state.proj_matrices.len()
+                );
+                tracing::info!("  View[0]: {:?}", z_state.view_matrices[0]);
+                tracing::info!("  Proj[0]: {:?}", z_state.proj_matrices[0]);
+            }
+
+            // Accumulate all instances into one buffer and track batch offsets
+            let mut all_instances = Vec::with_capacity(total_instances);
+            let mut batch_info = Vec::new(); // (base_instance, instance_count, textures)
+
+            for batch in &z_state.quad_batches {
+                if batch.instances.is_empty() {
+                    continue;
+                }
+
+                let base_instance = all_instances.len() as u32;
+                all_instances.extend_from_slice(&batch.instances);
+                batch_info.push((base_instance, batch.instances.len() as u32, batch.textures));
+
+                tracing::info!(
+                    "  Batch: base_instance={}, count={}, textures={:?}",
+                    base_instance,
+                    batch.instances.len(),
+                    batch.textures
+                );
+            }
+
+            // Upload all instances once to GPU
+            if !all_instances.is_empty() {
+                tracing::info!(
+                    "Uploading {} total quad instances to GPU",
+                    all_instances.len()
+                );
+                self.buffer_manager
+                    .upload_quad_instances(&self.device, &self.queue, &all_instances)
+                    .expect("Failed to upload quad instances to GPU");
+            }
+
+            // Create draw commands for each batch with correct base_instance
+            for (base_instance, instance_count, textures) in batch_info {
+                // Map FFI texture handles to graphics texture handles for this batch
+                let texture_slots = [
+                    texture_map
+                        .get(&textures[0])
+                        .copied()
+                        .unwrap_or(TextureHandle::INVALID),
+                    texture_map
+                        .get(&textures[1])
+                        .copied()
+                        .unwrap_or(TextureHandle::INVALID),
+                    texture_map
+                        .get(&textures[2])
+                        .copied()
+                        .unwrap_or(TextureHandle::INVALID),
+                    texture_map
+                        .get(&textures[3])
+                        .copied()
+                        .unwrap_or(TextureHandle::INVALID),
+                ];
+
+                tracing::info!(
+                    "Quad draw command: base_instance={}, count={}, textures={:?} -> {:?}",
+                    base_instance,
+                    instance_count,
+                    textures,
+                    texture_slots
+                );
+
+                // Note: Quad instances contain their own shading_state_index in the instance data.
+                // BufferSource::Quad has no buffer_index - quads read transforms and shading from instance data.
+                self.command_buffer
+                    .add_command(command_buffer::VRPCommand::Quad {
+                        base_vertex: self.unit_quad_base_vertex,
+                        first_index: self.unit_quad_first_index,
+                        base_instance,
+                        instance_count,
+                        texture_slots,
+                        blend_mode: BlendMode::Alpha, // Enable alpha blending for text/sprites
+                        depth_test: true, // Billboards typically use depth test (TODO: per-instance?)
+                        cull_mode: CullMode::None, // Quads are double-sided
+                    });
+            }
+        }
+
+        // Note: All per-frame cleanup (model_matrices, audio_commands, render_pass)
+        // happens AFTER render_frame completes in app.rs via z_state.clear_frame()
+        // This keeps cleanup centralized and ensures matrices survive until GPU upload
+    }
+
+    /// Convert game matcap blend mode to graphics matcap blend mode
+    fn convert_matcap_blend_mode(mode: u8) -> MatcapBlendMode {
+        match mode {
+            0 => MatcapBlendMode::Multiply,
+            1 => MatcapBlendMode::Add,
+            2 => MatcapBlendMode::HsvModulate,
+            _ => MatcapBlendMode::Multiply,
+        }
+    }
+
+    /// Map game texture handles to graphics texture handles
+    fn map_texture_handles(
+        texture_map: &hashbrown::HashMap<u32, TextureHandle>,
+        bound_textures: &[u32; 4],
+    ) -> [TextureHandle; 4] {
+        let mut texture_slots = [TextureHandle::INVALID; 4];
+        for (slot, &game_handle) in bound_textures.iter().enumerate() {
+            if game_handle != 0 {
+                if let Some(&graphics_handle) = texture_map.get(&game_handle) {
+                    texture_slots[slot] = graphics_handle;
+                }
+            }
+        }
+        texture_slots
+    }
+
+    /// Convert game cull mode to graphics cull mode
+    fn convert_cull_mode(mode: u8) -> CullMode {
+        match mode {
+            0 => CullMode::None,
+            1 => CullMode::Back,
+            2 => CullMode::Front,
+            _ => CullMode::None,
+        }
+    }
+
+    /// Convert game blend mode to graphics blend mode
+    fn convert_blend_mode(mode: u8) -> BlendMode {
+        match mode {
+            0 => BlendMode::None,
+            1 => BlendMode::Alpha,
+            2 => BlendMode::Additive,
+            3 => BlendMode::Multiply,
+            _ => BlendMode::None,
+        }
+    }
+
+    // ========================================================================
+    // Buffer Access (delegated to BufferManager)
     // ========================================================================
 
     /// Get vertex buffer for a format
     pub fn vertex_buffer(&self, format: u8) -> &GrowableBuffer {
-        &self.vertex_buffers[format as usize]
+        self.buffer_manager.vertex_buffer(format)
     }
 
     /// Get index buffer for a format
     pub fn index_buffer(&self, format: u8) -> &GrowableBuffer {
-        &self.index_buffers[format as usize]
+        self.buffer_manager.index_buffer(format)
     }
 
     // ========================================================================
@@ -1193,32 +1203,13 @@ impl ZGraphics {
     ///
     /// This caches pipelines to avoid recompilation.
     pub fn get_pipeline(&mut self, format: u8, state: &RenderState) -> &PipelineEntry {
-        let key = PipelineKey::new(self.current_render_mode, format, state);
-
-        // Return existing pipeline if cached
-        if self.pipelines.contains_key(&key) {
-            return &self.pipelines[&key];
-        }
-
-        // Otherwise, create a new pipeline
-        tracing::debug!(
-            "Creating pipeline: mode={}, format={}, blend={:?}, depth={}, cull={:?}",
-            self.current_render_mode,
-            format,
-            state.blend_mode,
-            state.depth_test,
-            state.cull_mode
-        );
-
-        let entry = pipeline::create_pipeline(
+        self.pipeline_cache.get_or_create(
             &self.device,
             self.config.format,
             self.current_render_mode,
             format,
             state,
-        );
-        self.pipelines.insert(key, entry);
-        &self.pipelines[&key]
+        )
     }
 
     // ========================================================================
@@ -1243,75 +1234,113 @@ impl ZGraphics {
     /// # Notes
     /// - Characters outside ASCII 32-126 are rendered as spaces
     /// - This is a simple left-to-right, single-line renderer (no word wrap)
-    pub fn generate_text_quads(
-        text: &str,
-        x: f32,
-        y: f32,
-        size: f32,
-        color: u32,
-    ) -> (Vec<f32>, Vec<u32>) {
-        use crate::font;
-
-        // Calculate scale factor (base glyph size is 8x8)
-        let scale = size / font::GLYPH_HEIGHT as f32;
-        let glyph_width = font::GLYPH_WIDTH as f32 * scale;
-        let glyph_height = font::GLYPH_HEIGHT as f32 * scale;
-
-        // Extract color components (0xRRGGBBAA)
-        let r = ((color >> 24) & 0xFF) as f32 / 255.0;
-        let g = ((color >> 16) & 0xFF) as f32 / 255.0;
-        let b = ((color >> 8) & 0xFF) as f32 / 255.0;
-
-        let char_count = text.chars().count();
-        let mut vertices = Vec::with_capacity(char_count * 4 * 8); // 4 verts × 8 floats
-        let mut indices = Vec::with_capacity(char_count * 6); // 6 indices per quad
-
-        let mut cursor_x = x;
-        let mut vertex_index = 0u32;
-
-        for ch in text.chars() {
-            let char_code = ch as u32;
-
-            // Get UV coordinates for this character
-            let (u0, v0, u1, v1) = font::get_glyph_uv(char_code);
-
-            // Screen-space quad vertices (2D)
-            // Format: POS_UV_COLOR (format 3)
-            // Each vertex: [x, y, z, u, v, r, g, b]
-
-            // Top-left
-            vertices.extend_from_slice(&[cursor_x, y, 0.0, u0, v0, r, g, b]);
-            // Top-right
-            vertices.extend_from_slice(&[cursor_x + glyph_width, y, 0.0, u1, v0, r, g, b]);
-            // Bottom-right
-            vertices.extend_from_slice(&[
-                cursor_x + glyph_width,
-                y + glyph_height,
-                0.0,
-                u1,
-                v1,
-                r,
-                g,
-                b,
-            ]);
-            // Bottom-left
-            vertices.extend_from_slice(&[cursor_x, y + glyph_height, 0.0, u0, v1, r, g, b]);
-
-            // Indices for two triangles (quad)
-            indices.extend_from_slice(&[
-                vertex_index,
-                vertex_index + 1,
-                vertex_index + 2,
-                vertex_index,
-                vertex_index + 2,
-                vertex_index + 3,
-            ]);
-
-            cursor_x += glyph_width;
-            vertex_index += 4;
+    /// Ensure model matrix buffer has sufficient capacity
+    fn ensure_model_buffer_capacity(&mut self, count: usize) {
+        if count <= self.model_matrix_capacity {
+            return;
         }
 
-        (vertices, indices)
+        let new_capacity = (count * 2).next_power_of_two();
+        tracing::debug!(
+            "Growing model matrix buffer: {} → {}",
+            self.model_matrix_capacity,
+            new_capacity
+        );
+
+        self.model_matrix_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Model Matrices"),
+            size: (new_capacity * std::mem::size_of::<Mat4>()) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        self.model_matrix_capacity = new_capacity;
+    }
+
+    /// Ensure view matrix buffer has sufficient capacity
+    fn ensure_view_buffer_capacity(&mut self, count: usize) {
+        if count <= self.view_matrix_capacity {
+            return;
+        }
+
+        let new_capacity = (count * 2).next_power_of_two();
+        tracing::debug!(
+            "Growing view matrix buffer: {} → {}",
+            self.view_matrix_capacity,
+            new_capacity
+        );
+
+        self.view_matrix_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("View Matrices"),
+            size: (new_capacity * std::mem::size_of::<Mat4>()) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        self.view_matrix_capacity = new_capacity;
+    }
+
+    /// Ensure projection matrix buffer has sufficient capacity
+    fn ensure_proj_buffer_capacity(&mut self, count: usize) {
+        if count <= self.proj_matrix_capacity {
+            return;
+        }
+
+        let new_capacity = (count * 2).next_power_of_two();
+        tracing::debug!(
+            "Growing projection matrix buffer: {} → {}",
+            self.proj_matrix_capacity,
+            new_capacity
+        );
+
+        self.proj_matrix_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Projection Matrices"),
+            size: (new_capacity * std::mem::size_of::<Mat4>()) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        self.proj_matrix_capacity = new_capacity;
+    }
+
+    /// Ensure MVP indices buffer has sufficient capacity
+    fn ensure_mvp_indices_buffer_capacity(&mut self, count: usize) {
+        if count <= self.mvp_indices_capacity {
+            return;
+        }
+
+        let new_capacity = (count * 2).next_power_of_two();
+        tracing::debug!(
+            "Growing MVP indices buffer: {} → {}",
+            self.mvp_indices_capacity,
+            new_capacity
+        );
+
+        self.mvp_indices_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("MVP Indices"),
+            size: (new_capacity * 2 * std::mem::size_of::<u32>()) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        self.mvp_indices_capacity = new_capacity;
+    }
+
+    fn ensure_shading_state_buffer_capacity(&mut self, count: usize) {
+        if count <= self.shading_state_capacity {
+            return;
+        }
+
+        let new_capacity = (count * 2).next_power_of_two();
+        tracing::debug!(
+            "Growing shading state buffer: {} → {}",
+            self.shading_state_capacity,
+            new_capacity
+        );
+
+        self.shading_state_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Shading States"),
+            size: (new_capacity * std::mem::size_of::<PackedUnifiedShadingState>()) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        self.shading_state_capacity = new_capacity;
     }
 
     /// Render the command buffer contents to a texture view
@@ -1321,14 +1350,12 @@ impl ZGraphics {
     ///
     /// # Arguments
     /// * `view` - The texture view to render to
-    /// * `view_matrix` - Camera view matrix
-    /// * `projection_matrix` - Camera projection matrix
+    /// * `z_state` - The Z console FFI state containing matrix pools
     /// * `clear_color` - Background clear color (RGBA 0-1)
     pub fn render_frame(
         &mut self,
         view: &wgpu::TextureView,
-        view_matrix: Mat4,
-        projection_matrix: Mat4,
+        z_state: &crate::state::ZFFIState,
         clear_color: [f32; 4],
     ) {
         // Create command encoder
@@ -1338,13 +1365,13 @@ impl ZGraphics {
                 label: Some("Game Render Encoder"),
             });
 
-        // If no commands, just clear and return
+        // If no commands, just clear render target and blit to window
         if self.command_buffer.commands().is_empty() {
             {
                 let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("Clear Pass"),
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view,
+                        view: &self.render_target.color_view,
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -1357,7 +1384,7 @@ impl ZGraphics {
                         },
                     })],
                     depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                        view: &self.depth_view,
+                        view: &self.render_target.depth_view,
                         depth_ops: Some(wgpu::Operations {
                             load: wgpu::LoadOp::Clear(1.0),
                             store: wgpu::StoreOp::Store,
@@ -1368,42 +1395,98 @@ impl ZGraphics {
                     occlusion_query_set: None,
                 });
             }
+
+            // Calculate viewport based on scale mode
+            let (viewport_x, viewport_y, viewport_width, viewport_height) = match self.scale_mode {
+                crate::config::ScaleMode::Stretch => {
+                    // Stretch to fill window (may distort aspect ratio)
+                    (
+                        0.0,
+                        0.0,
+                        self.config.width as f32,
+                        self.config.height as f32,
+                    )
+                }
+                crate::config::ScaleMode::PixelPerfect => {
+                    // Integer scaling with letterboxing (pixel-perfect)
+                    let render_width = self.render_target.width as f32;
+                    let render_height = self.render_target.height as f32;
+                    let window_width = self.config.width as f32;
+                    let window_height = self.config.height as f32;
+
+                    // Calculate largest integer scale that fits in window
+                    let scale_x = (window_width / render_width).floor();
+                    let scale_y = (window_height / render_height).floor();
+                    let scale = scale_x.min(scale_y).max(1.0); // At least 1x
+
+                    // Calculate scaled dimensions
+                    let scaled_width = render_width * scale;
+                    let scaled_height = render_height * scale;
+
+                    // Center the viewport
+                    let x = (window_width - scaled_width) / 2.0;
+                    let y = (window_height - scaled_height) / 2.0;
+
+                    (x, y, scaled_width, scaled_height)
+                }
+            };
+
+            // Blit to window
+            {
+                let mut blit_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("Blit Pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+                blit_pass.set_pipeline(&self.blit_pipeline);
+                blit_pass.set_bind_group(0, &self.blit_bind_group, &[]);
+
+                // Set viewport for scaling mode
+                blit_pass.set_viewport(
+                    viewport_x,
+                    viewport_y,
+                    viewport_width,
+                    viewport_height,
+                    0.0,
+                    1.0,
+                );
+
+                blit_pass.draw(0..3, 0..1);
+            }
             self.queue.submit(std::iter::once(encoder.finish()));
             return;
         }
-
-        // OPTIMIZATION 1: Create frame-level uniform buffers ONCE (not per-command)
-        let view_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("View Matrix Buffer"),
-                contents: bytemuck::cast_slice(&view_matrix.to_cols_array()),
-                usage: wgpu::BufferUsages::UNIFORM,
-            });
-
-        let proj_buffer = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Projection Matrix Buffer"),
-                contents: bytemuck::cast_slice(&projection_matrix.to_cols_array()),
-                usage: wgpu::BufferUsages::UNIFORM,
-            });
 
         // Upload vertex/index data from command buffer to GPU buffers
         for format in 0..VERTEX_FORMAT_COUNT as u8 {
             let vertex_data = self.command_buffer.vertex_data(format);
             if !vertex_data.is_empty() {
-                self.vertex_buffers[format as usize]
+                self.buffer_manager
+                    .vertex_buffer_mut(format)
                     .ensure_capacity(&self.device, vertex_data.len() as u64);
-                self.vertex_buffers[format as usize].write_at(&self.queue, 0, vertex_data);
+                self.buffer_manager
+                    .vertex_buffer(format)
+                    .write_at(&self.queue, 0, vertex_data);
             }
 
             let index_data = self.command_buffer.index_data(format);
             if !index_data.is_empty() {
                 let index_bytes: &[u8] = bytemuck::cast_slice(index_data);
-                self.index_buffers[format as usize]
+                self.buffer_manager
+                    .index_buffer_mut(format)
                     .ensure_capacity(&self.device, index_bytes.len() as u64);
-                self.index_buffers[format as usize].write_at(&self.queue, 0, index_bytes);
+                self.buffer_manager
+                    .index_buffer(format)
+                    .write_at(&self.queue, 0, index_bytes);
             }
         }
 
@@ -1412,43 +1495,213 @@ impl ZGraphics {
         self.command_buffer
             .commands_mut()
             .sort_unstable_by_key(|cmd| {
+                // Extract fields from command variant
+                let (format, depth_test, cull_mode, texture_slots, buffer_index, is_quad) = match cmd {
+                    command_buffer::VRPCommand::Mesh { format, depth_test, cull_mode, texture_slots, buffer_index, .. } => {
+                        (*format, *depth_test, *cull_mode, *texture_slots, Some(*buffer_index), false)
+                    }
+                    command_buffer::VRPCommand::IndexedMesh { format, depth_test, cull_mode, texture_slots, buffer_index, .. } => {
+                        (*format, *depth_test, *cull_mode, *texture_slots, Some(*buffer_index), false)
+                    }
+                    command_buffer::VRPCommand::Quad { depth_test, cull_mode, texture_slots, .. } => {
+                        (self.unit_quad_format, *depth_test, *cull_mode, *texture_slots, None, true)
+                    }
+                };
+
+                // Extract blend mode from shading state for sorting
+                let blend_mode = if let Some(buffer_idx) = buffer_index {
+                    // Get shading index from mvp_shading_states buffer (second element of tuple)
+                    let indices = z_state.mvp_shading_states
+                        .get(buffer_idx as usize)
+                        .expect("Invalid buffer_index in VRPCommand - this indicates a bug in state tracking");
+                    let shading_state = z_state.shading_states.get(indices.shading_idx as usize)
+                        .expect("Invalid shading_state_index - this indicates a bug in state tracking");
+                    BlendMode::from_u8((shading_state.blend_mode & 0xFF) as u8)
+                } else {
+                    // Quads have blend_mode in the command itself
+                    match cmd {
+                        command_buffer::VRPCommand::Quad { blend_mode, .. } => *blend_mode,
+                        _ => BlendMode::None, // Shouldn't reach here if buffer_index is None for non-Quad
+                    }
+                };
+
                 // Sort key: (render_mode, format, blend_mode, depth_test, cull_mode, texture_slots)
                 // This groups commands by pipeline first, then by textures
                 let state = RenderState {
-                    color: cmd.color,
-                    depth_test: cmd.depth_test,
-                    cull_mode: cmd.cull_mode,
-                    blend_mode: cmd.blend_mode,
+                    depth_test,
+                    cull_mode,
+                    blend_mode,
                     texture_filter: self.render_state.texture_filter,
-                    texture_slots: cmd.texture_slots,
-                    matcap_blend_modes: [MatcapBlendMode::Multiply; 4],
                 };
-                let pipeline_key = PipelineKey::new(self.current_render_mode, cmd.format, &state);
+
+                // Create sort key based on pipeline type (Regular vs Quad)
+                let (render_mode, vertex_format, blend_mode_u8, depth_test_u8, cull_mode_u8) =
+                    if is_quad {
+                        // Quad pipeline: Use special values to group separately
+                        let pipeline_key = PipelineKey::quad(&state);
+                        match pipeline_key {
+                            PipelineKey::Quad { blend_mode, depth_test } => {
+                                (255u8, 255u8, blend_mode, depth_test as u8, 0u8)
+                            }
+                            _ => unreachable!(),
+                        }
+                    } else {
+                        // Regular pipeline: Use actual values
+                        let pipeline_key = PipelineKey::new(self.current_render_mode, format, &state);
+                        match pipeline_key {
+                            PipelineKey::Regular { render_mode, vertex_format, blend_mode, depth_test, cull_mode } => {
+                                (render_mode, vertex_format, blend_mode, depth_test as u8, cull_mode)
+                            }
+                            _ => unreachable!(),
+                        }
+                    };
+
                 (
-                    pipeline_key.render_mode,
-                    pipeline_key.vertex_format,
-                    pipeline_key.blend_mode,
-                    pipeline_key.depth_test as u8,
-                    pipeline_key.cull_mode,
-                    cmd.texture_slots[0].0,
-                    cmd.texture_slots[1].0,
-                    cmd.texture_slots[2].0,
-                    cmd.texture_slots[3].0,
+                    render_mode,
+                    vertex_format,
+                    blend_mode_u8,
+                    depth_test_u8,
+                    cull_mode_u8,
+                    texture_slots[0].0,
+                    texture_slots[1].0,
+                    texture_slots[2].0,
+                    texture_slots[3].0,
                 )
             });
 
-        // OPTIMIZATION 2: Cache bind groups to avoid creating duplicates
-        // Material bind group cache: color -> uniform buffer
-        let mut material_buffers: HashMap<u32, wgpu::Buffer> = HashMap::new();
-        // Texture bind group cache: texture_slots -> bind group
-        let mut texture_bind_groups: HashMap<[TextureHandle; 4], wgpu::BindGroup> = HashMap::new();
+        // Upload matrices from z_state to GPU storage buffers
+        // 1. Upload model matrices
+        if !z_state.model_matrices.is_empty() {
+            self.ensure_model_buffer_capacity(z_state.model_matrices.len());
+            let data = bytemuck::cast_slice(&z_state.model_matrices);
+            self.queue.write_buffer(&self.model_matrix_buffer, 0, data);
+        }
 
-        // Render pass
+        // 2. Upload view matrices
+        if !z_state.view_matrices.is_empty() {
+            self.ensure_view_buffer_capacity(z_state.view_matrices.len());
+            let data = bytemuck::cast_slice(&z_state.view_matrices);
+            self.queue.write_buffer(&self.view_matrix_buffer, 0, data);
+        }
+
+        // 3. Upload projection matrices
+        if !z_state.proj_matrices.is_empty() {
+            self.ensure_proj_buffer_capacity(z_state.proj_matrices.len());
+            let data = bytemuck::cast_slice(&z_state.proj_matrices);
+            self.queue.write_buffer(&self.proj_matrix_buffer, 0, data);
+        }
+
+        // 4. Upload shading states (NEW - Phase 5)
+        if !z_state.shading_states.is_empty() {
+            self.ensure_shading_state_buffer_capacity(z_state.shading_states.len());
+            let data = bytemuck::cast_slice(&z_state.shading_states);
+            self.queue.write_buffer(&self.shading_state_buffer, 0, data);
+        }
+
+        // 5. Upload MVP + shading state indices (already deduplicated by add_mvp_shading_state)
+        // WGSL: array<vec4<u32>> - unpacked indices use all 4 fields naturally (no bit-packing!)
+        // Each entry is 4 × u32: [model_idx, view_idx, proj_idx, shading_idx]
+        let state_count = z_state.mvp_shading_states.len();
+        if state_count > 0 {
+            self.ensure_mvp_indices_buffer_capacity(state_count);
+            let data = bytemuck::cast_slice(&z_state.mvp_shading_states);
+            self.queue.write_buffer(&self.mvp_indices_buffer, 0, data);
+        }
+
+        // Take texture cache out temporarily to avoid nested mutable borrows during render pass.
+        // Cache is persistent across frames - entries are reused when keys match.
+        let mut texture_bind_groups = std::mem::take(&mut self.texture_bind_groups);
+
+        // Create frame bind group once per frame (same for all draws)
+        // Get bind group layout from first pipeline (all pipelines have same frame layout)
+        let frame_bind_group = if let Some(first_cmd) = self.command_buffer.commands().first() {
+            // Extract fields from first command variant
+            let (format, depth_test, cull_mode) = match first_cmd {
+                command_buffer::VRPCommand::Mesh {
+                    format,
+                    depth_test,
+                    cull_mode,
+                    ..
+                } => (*format, *depth_test, *cull_mode),
+                command_buffer::VRPCommand::IndexedMesh {
+                    format,
+                    depth_test,
+                    cull_mode,
+                    ..
+                } => (*format, *depth_test, *cull_mode),
+                command_buffer::VRPCommand::Quad {
+                    depth_test,
+                    cull_mode,
+                    ..
+                } => (self.unit_quad_format, *depth_test, *cull_mode),
+            };
+
+            let first_state = RenderState {
+                depth_test,
+                cull_mode,
+                blend_mode: BlendMode::None, // Doesn't matter for layout
+                texture_filter: self.render_state.texture_filter,
+            };
+            let pipeline_entry = self.pipeline_cache.get_or_create(
+                &self.device,
+                self.config.format,
+                self.current_render_mode,
+                format,
+                &first_state,
+            );
+
+            self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("Frame Bind Group (Unified)"),
+                layout: &pipeline_entry.bind_group_layout_frame,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: self.model_matrix_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: self.view_matrix_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: self.proj_matrix_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: self.shading_state_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 4,
+                        resource: self.mvp_indices_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 5,
+                        resource: self.bone_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 6,
+                        resource: self
+                            .buffer_manager
+                            .quad_instance_buffer()
+                            .as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 7,
+                        resource: self.screen_dims_buffer.as_entire_binding(),
+                    },
+                ],
+            })
+        } else {
+            // No commands to render, nothing to do
+            return;
+        };
+
+        // Render pass - render game content to offscreen target
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Game Render Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view,
+                    view: &self.render_target.color_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -1461,7 +1714,7 @@ impl ZGraphics {
                     },
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.depth_view,
+                    view: &self.render_target.depth_view,
                     depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Clear(1.0),
                         store: wgpu::StoreOp::Store,
@@ -1472,109 +1725,159 @@ impl ZGraphics {
                 occlusion_query_set: None,
             });
 
+            // State tracking to skip redundant GPU calls (commands are sorted by pipeline/texture)
+            let mut bound_pipeline: Option<PipelineKey> = None;
+            let mut bound_texture_slots: Option<[TextureHandle; 4]> = None;
+            let mut bound_vertex_format: Option<(u8, BufferSource)> = None;
+            let mut frame_bind_group_set = false;
+
             for cmd in self.command_buffer.commands() {
-                // Create render state from command
-                let state = RenderState {
-                    color: cmd.color,
-                    depth_test: cmd.depth_test,
-                    cull_mode: cmd.cull_mode,
-                    blend_mode: cmd.blend_mode,
-                    texture_filter: self.render_state.texture_filter,
-                    texture_slots: cmd.texture_slots,
-                    matcap_blend_modes: [MatcapBlendMode::Multiply; 4],
+                // Destructure command variant to extract common fields
+                let (
+                    format,
+                    depth_test,
+                    cull_mode,
+                    texture_slots,
+                    buffer_source,
+                    is_quad,
+                    cmd_blend_mode,
+                ) = match cmd {
+                    command_buffer::VRPCommand::Mesh {
+                        format,
+                        depth_test,
+                        cull_mode,
+                        texture_slots,
+                        buffer_index,
+                        ..
+                    } => (
+                        *format,
+                        *depth_test,
+                        *cull_mode,
+                        *texture_slots,
+                        BufferSource::Immediate(*buffer_index),
+                        false,
+                        None,
+                    ),
+                    command_buffer::VRPCommand::IndexedMesh {
+                        format,
+                        depth_test,
+                        cull_mode,
+                        texture_slots,
+                        buffer_index,
+                        ..
+                    } => (
+                        *format,
+                        *depth_test,
+                        *cull_mode,
+                        *texture_slots,
+                        BufferSource::Retained(*buffer_index),
+                        false,
+                        None,
+                    ),
+                    command_buffer::VRPCommand::Quad {
+                        depth_test,
+                        cull_mode,
+                        blend_mode,
+                        texture_slots,
+                        ..
+                    } => (
+                        self.unit_quad_format,
+                        *depth_test,
+                        *cull_mode,
+                        *texture_slots,
+                        BufferSource::Quad,
+                        true,
+                        Some(*blend_mode),
+                    ),
                 };
 
-                // Get/create pipeline
-                let pipeline_key = PipelineKey::new(self.current_render_mode, cmd.format, &state);
-                if !self.pipelines.contains_key(&pipeline_key) {
-                    let entry = pipeline::create_pipeline(
+                // Extract blend mode from shading state for rendering
+                // For Immediate/Retained, get from mvp_shading_states buffer
+                // For Quad, use the blend_mode from the command itself
+                let blend_mode = match buffer_source {
+                    BufferSource::Immediate(buffer_idx) | BufferSource::Retained(buffer_idx) => {
+                        let indices = z_state.mvp_shading_states
+                            .get(buffer_idx as usize)
+                            .expect("Invalid buffer_index in VRPCommand - this indicates a bug in state tracking");
+                        let shading_state = z_state.shading_states.get(indices.shading_idx as usize)
+                            .expect("Invalid shading_state_index - this indicates a bug in state tracking");
+                        BlendMode::from_u8((shading_state.blend_mode & 0xFF) as u8)
+                    }
+                    BufferSource::Quad => {
+                        cmd_blend_mode.expect("Quad command should have blend_mode")
+                    }
+                };
+
+                // Create render state from command + blend mode
+                let state = RenderState {
+                    depth_test,
+                    cull_mode,
+                    blend_mode,
+                    texture_filter: self.render_state.texture_filter,
+                };
+
+                // Get/create pipeline - use quad pipeline for quad rendering, regular for others
+                if is_quad {
+                    // Quad rendering: Ensure quad pipeline exists
+                    self.pipeline_cache.get_or_create_quad(
                         &self.device,
                         self.config.format,
-                        self.current_render_mode,
-                        cmd.format,
                         &state,
                     );
-                    self.pipelines.insert(pipeline_key, entry);
-                }
-                let pipeline_entry = &self.pipelines[&pipeline_key];
-
-                // Get or create material uniform buffer (cached by color)
-                let material_buffer = material_buffers.entry(cmd.color).or_insert_with(|| {
-                    let color_vec = state.color_vec4();
-                    #[repr(C)]
-                    #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-                    struct MaterialUniforms {
-                        color: [f32; 4],
+                } else {
+                    // Regular mesh rendering: Ensure format-specific pipeline exists
+                    if !self
+                        .pipeline_cache
+                        .contains(self.current_render_mode, format, &state)
+                    {
+                        self.pipeline_cache.get_or_create(
+                            &self.device,
+                            self.config.format,
+                            self.current_render_mode,
+                            format,
+                            &state,
+                        );
                     }
-                    let material = MaterialUniforms {
-                        color: [color_vec.x, color_vec.y, color_vec.z, color_vec.w],
-                    };
-                    self.device
-                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                            label: Some("Material Buffer"),
-                            contents: bytemuck::cast_slice(&[material]),
-                            usage: wgpu::BufferUsages::UNIFORM,
-                        })
-                });
+                }
 
-                // Create frame bind group (group 0)
-                // Note: This contains the material buffer which varies per-command,
-                // so we can't easily cache it. However, we've eliminated redundant
-                // material buffer creation via the cache above.
-                let frame_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("Frame Bind Group"),
-                    layout: &pipeline_entry.bind_group_layout_frame,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: view_buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: proj_buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 2,
-                            resource: self.sky_buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 3,
-                            resource: material_buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 4,
-                            resource: self.bone_buffer.as_entire_binding(),
-                        },
-                    ],
-                });
+                // Now get immutable reference to pipeline entry (avoiding borrow issues)
+                let pipeline_key = if is_quad {
+                    PipelineKey::quad(&state)
+                } else {
+                    PipelineKey::new(self.current_render_mode, format, &state)
+                };
+
+                let pipeline_entry = self
+                    .pipeline_cache
+                    .get_by_key(&pipeline_key)
+                    .expect("Pipeline should exist after get_or_create");
 
                 // Get or create texture bind group (cached by texture slots)
-                let texture_bind_group = texture_bind_groups
-                    .entry(cmd.texture_slots)
-                    .or_insert_with(|| {
+                let texture_bind_group =
+                    texture_bind_groups.entry(texture_slots).or_insert_with(|| {
                         // Get texture views for this command's bound textures
-                        let tex_view_0 = if cmd.texture_slots[0] == TextureHandle::INVALID {
+                        let tex_view_0 = if texture_slots[0] == TextureHandle::INVALID {
                             self.get_fallback_white_view()
                         } else {
-                            self.get_texture_view(cmd.texture_slots[0])
+                            self.get_texture_view(texture_slots[0])
                                 .unwrap_or_else(|| self.get_fallback_checkerboard_view())
                         };
-                        let tex_view_1 = if cmd.texture_slots[1] == TextureHandle::INVALID {
+                        let tex_view_1 = if texture_slots[1] == TextureHandle::INVALID {
                             self.get_fallback_white_view()
                         } else {
-                            self.get_texture_view(cmd.texture_slots[1])
+                            self.get_texture_view(texture_slots[1])
                                 .unwrap_or_else(|| self.get_fallback_checkerboard_view())
                         };
-                        let tex_view_2 = if cmd.texture_slots[2] == TextureHandle::INVALID {
+                        let tex_view_2 = if texture_slots[2] == TextureHandle::INVALID {
                             self.get_fallback_white_view()
                         } else {
-                            self.get_texture_view(cmd.texture_slots[2])
+                            self.get_texture_view(texture_slots[2])
                                 .unwrap_or_else(|| self.get_fallback_checkerboard_view())
                         };
-                        let tex_view_3 = if cmd.texture_slots[3] == TextureHandle::INVALID {
+                        let tex_view_3 = if texture_slots[3] == TextureHandle::INVALID {
                             self.get_fallback_white_view()
                         } else {
-                            self.get_texture_view(cmd.texture_slots[3])
+                            self.get_texture_view(texture_slots[3])
                                 .unwrap_or_else(|| self.get_fallback_checkerboard_view())
                         };
 
@@ -1608,32 +1911,202 @@ impl ZGraphics {
                         })
                     });
 
-                // Set pipeline and bind groups
-                render_pass.set_pipeline(&pipeline_entry.pipeline);
-                render_pass.set_bind_group(0, &frame_bind_group, &[]);
-                render_pass.set_bind_group(1, &*texture_bind_group, &[]);
-
-                // Set vertex buffer
-                if let Some(buffer) = self.vertex_buffers[cmd.format as usize].buffer() {
-                    render_pass.set_vertex_buffer(0, buffer.slice(..));
+                // Set pipeline (only if changed)
+                if bound_pipeline != Some(pipeline_key) {
+                    render_pass.set_pipeline(&pipeline_entry.pipeline);
+                    bound_pipeline = Some(pipeline_key);
                 }
 
-                // Draw
-                if cmd.index_count > 0 {
-                    // Indexed draw
-                    if let Some(buffer) = self.index_buffers[cmd.format as usize].buffer() {
-                        render_pass.set_index_buffer(buffer.slice(..), wgpu::IndexFormat::Uint32);
-                        render_pass.draw_indexed(
-                            cmd.first_index..cmd.first_index + cmd.index_count,
-                            cmd.base_vertex as i32,
-                            0..1,
+                // Set frame bind group once (unified across all draws)
+                if !frame_bind_group_set {
+                    render_pass.set_bind_group(0, &frame_bind_group, &[]);
+                    frame_bind_group_set = true;
+                }
+
+                // Set texture bind group (only if changed)
+                if bound_texture_slots != Some(texture_slots) {
+                    tracing::info!(
+                        "Setting texture bind group: {:?} (was: {:?})",
+                        texture_slots,
+                        bound_texture_slots
+                    );
+                    render_pass.set_bind_group(1, &*texture_bind_group, &[]);
+                    bound_texture_slots = Some(texture_slots);
+                } else {
+                    tracing::trace!("Skipping bind group set (unchanged): {:?}", texture_slots);
+                }
+
+                // Set vertex buffer (only if format or buffer source changed)
+                if bound_vertex_format != Some((format, buffer_source)) {
+                    let vertex_buffer = match buffer_source {
+                        BufferSource::Immediate(_) => self.buffer_manager.vertex_buffer(format),
+                        BufferSource::Retained(_) => {
+                            self.buffer_manager.retained_vertex_buffer(format)
+                        }
+                        BufferSource::Quad => {
+                            // Quad instancing uses unit quad mesh (format: POS_UV_COLOR)
+                            self.buffer_manager
+                                .retained_vertex_buffer(self.unit_quad_format)
+                        }
+                    };
+                    if let Some(buffer) = vertex_buffer.buffer() {
+                        render_pass.set_vertex_buffer(0, buffer.slice(..));
+                    }
+                    bound_vertex_format = Some((format, buffer_source));
+                }
+
+                // Handle different rendering paths based on command variant
+                match cmd {
+                    command_buffer::VRPCommand::Quad {
+                        instance_count,
+                        base_instance,
+                        base_vertex,
+                        first_index,
+                        ..
+                    } => {
+                        // Quad rendering: Instance data comes from storage buffer binding(6)
+                        // The quad shader reads QuadInstance data via @builtin(instance_index)
+                        // No per-instance vertex attributes needed (unlike old approach)
+                        // Unit quad: 4 vertices, 6 indices (2 triangles)
+
+                        const UNIT_QUAD_INDEX_COUNT: u32 = 6;
+
+                        tracing::info!(
+                            "Drawing {} quad instances at base_instance {} (indices {}..{}, base_vertex {}, textures: {:?})",
+                            instance_count,
+                            base_instance,
+                            first_index,
+                            first_index + UNIT_QUAD_INDEX_COUNT,
+                            base_vertex,
+                            texture_slots
+                        );
+
+                        // Indexed draw with GPU instancing (quads always use indices)
+                        let index_buffer = self
+                            .buffer_manager
+                            .retained_index_buffer(self.unit_quad_format);
+                        if let Some(buffer) = index_buffer.buffer() {
+                            render_pass
+                                .set_index_buffer(buffer.slice(..), wgpu::IndexFormat::Uint16);
+                            render_pass.draw_indexed(
+                                *first_index..*first_index + UNIT_QUAD_INDEX_COUNT,
+                                *base_vertex as i32,
+                                *base_instance..*base_instance + *instance_count,
+                            );
+                        } else {
+                            tracing::error!("Quad index buffer is None!");
+                        }
+                    }
+                    command_buffer::VRPCommand::IndexedMesh {
+                        index_count,
+                        base_vertex,
+                        first_index,
+                        buffer_index,
+                        ..
+                    } => {
+                        // Indexed mesh: MVP instancing with storage buffer lookup
+                        let index_buffer = match buffer_source {
+                            BufferSource::Immediate(_) => self.buffer_manager.index_buffer(format),
+                            BufferSource::Retained(_) => {
+                                self.buffer_manager.retained_index_buffer(format)
+                            }
+                            BufferSource::Quad => unreachable!(),
+                        };
+                        if let Some(buffer) = index_buffer.buffer() {
+                            render_pass
+                                .set_index_buffer(buffer.slice(..), wgpu::IndexFormat::Uint16);
+                            render_pass.draw_indexed(
+                                *first_index..*first_index + *index_count,
+                                *base_vertex as i32,
+                                *buffer_index..*buffer_index + 1,
+                            );
+                        }
+                    }
+                    command_buffer::VRPCommand::Mesh {
+                        vertex_count,
+                        base_vertex,
+                        buffer_index,
+                        ..
+                    } => {
+                        // Non-indexed mesh: MVP instancing with storage buffer lookup
+                        render_pass.draw(
+                            *base_vertex..*base_vertex + *vertex_count,
+                            *buffer_index..*buffer_index + 1,
                         );
                     }
-                } else {
-                    // Non-indexed draw
-                    render_pass.draw(cmd.base_vertex..cmd.base_vertex + cmd.vertex_count, 0..1);
                 }
             }
+        }
+
+        // Move texture cache back into self (preserving allocations for next frame)
+        self.texture_bind_groups = texture_bind_groups;
+
+        // Calculate viewport based on scale mode
+        let (viewport_x, viewport_y, viewport_width, viewport_height) = match self.scale_mode {
+            crate::config::ScaleMode::Stretch => {
+                // Stretch to fill window (may distort aspect ratio)
+                (
+                    0.0,
+                    0.0,
+                    self.config.width as f32,
+                    self.config.height as f32,
+                )
+            }
+            crate::config::ScaleMode::PixelPerfect => {
+                // Integer scaling with letterboxing (pixel-perfect)
+                let render_width = self.render_target.width as f32;
+                let render_height = self.render_target.height as f32;
+                let window_width = self.config.width as f32;
+                let window_height = self.config.height as f32;
+
+                // Calculate largest integer scale that fits in window
+                let scale_x = (window_width / render_width).floor();
+                let scale_y = (window_height / render_height).floor();
+                let scale = scale_x.min(scale_y).max(1.0); // At least 1x
+
+                // Calculate scaled dimensions
+                let scaled_width = render_width * scale;
+                let scaled_height = render_height * scale;
+
+                // Center the viewport
+                let x = (window_width - scaled_width) / 2.0;
+                let y = (window_height - scaled_height) / 2.0;
+
+                (x, y, scaled_width, scaled_height)
+            }
+        };
+
+        // Blit pass - scale render target to window surface
+        {
+            let mut blit_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Blit Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            blit_pass.set_pipeline(&self.blit_pipeline);
+            blit_pass.set_bind_group(0, &self.blit_bind_group, &[]);
+
+            // Set viewport for scaling mode
+            blit_pass.set_viewport(
+                viewport_x,
+                viewport_y,
+                viewport_width,
+                viewport_height,
+                0.0,
+                1.0,
+            );
+
+            blit_pass.draw(0..3, 0..1); // Fullscreen triangle
         }
 
         // Submit commands
@@ -1662,10 +2135,6 @@ impl Graphics for ZGraphics {
     fn begin_frame(&mut self) {
         // Reset command buffer for new frame
         self.command_buffer.reset();
-
-        // Reset transform to identity
-        self.current_transform = Mat4::IDENTITY;
-        self.transform_stack.clear();
 
         // Acquire next frame
         let frame = match self.surface.get_current_texture() {
@@ -1731,14 +2200,16 @@ mod tests {
 
     #[test]
     fn test_generate_text_quads_empty() {
-        let (vertices, indices) = ZGraphics::generate_text_quads("", 0.0, 0.0, 16.0, 0xFFFFFFFF);
+        let (vertices, indices) =
+            ZGraphics::generate_text_quads("", 0.0, 0.0, 16.0, 0xFFFFFFFF, None, 960.0, 540.0);
         assert!(vertices.is_empty());
         assert!(indices.is_empty());
     }
 
     #[test]
     fn test_generate_text_quads_single_char() {
-        let (vertices, indices) = ZGraphics::generate_text_quads("A", 0.0, 0.0, 16.0, 0xFFFFFFFF);
+        let (vertices, indices) =
+            ZGraphics::generate_text_quads("A", 0.0, 0.0, 16.0, 0xFFFFFFFF, None, 960.0, 540.0);
         assert_eq!(vertices.len(), 32);
         assert_eq!(indices.len(), 6);
     }
@@ -1746,14 +2217,15 @@ mod tests {
     #[test]
     fn test_generate_text_quads_multiple_chars() {
         let (vertices, indices) =
-            ZGraphics::generate_text_quads("Hello", 0.0, 0.0, 8.0, 0xFFFFFFFF);
+            ZGraphics::generate_text_quads("Hello", 0.0, 0.0, 8.0, 0xFFFFFFFF, None, 960.0, 540.0);
         assert_eq!(vertices.len(), 160);
         assert_eq!(indices.len(), 30);
     }
 
     #[test]
     fn test_generate_text_quads_color() {
-        let (vertices, _) = ZGraphics::generate_text_quads("X", 0.0, 0.0, 8.0, 0xFF0000FF);
+        let (vertices, _) =
+            ZGraphics::generate_text_quads("X", 0.0, 0.0, 8.0, 0xFF0000FF, None, 960.0, 540.0);
         assert!((vertices[5] - 1.0).abs() < 0.01);
         assert!((vertices[6] - 0.0).abs() < 0.01);
         assert!((vertices[7] - 0.0).abs() < 0.01);
@@ -1761,16 +2233,23 @@ mod tests {
 
     #[test]
     fn test_generate_text_quads_position() {
-        let (vertices, _) = ZGraphics::generate_text_quads("A", 100.0, 50.0, 16.0, 0xFFFFFFFF);
-        assert!((vertices[0] - 100.0).abs() < 0.01);
-        assert!((vertices[1] - 50.0).abs() < 0.01);
+        let (vertices, _) =
+            ZGraphics::generate_text_quads("A", 100.0, 50.0, 16.0, 0xFFFFFFFF, None, 960.0, 540.0);
+        // Vertices are in NDC (Normalized Device Coordinates), not pixel coordinates
+        // x: (100.0 / (960.0 * 0.5)) - 1.0 ≈ -0.7917
+        // y: 1.0 - (50.0 / (540.0 * 0.5)) ≈ 0.8148
+        assert!((vertices[0] - (-0.7917)).abs() < 0.01);
+        assert!((vertices[1] - 0.8148).abs() < 0.01);
         assert!((vertices[2] - 0.0).abs() < 0.01);
     }
 
     #[test]
     fn test_generate_text_quads_indices_valid() {
-        let (_, indices) = ZGraphics::generate_text_quads("AB", 0.0, 0.0, 8.0, 0xFFFFFFFF);
+        let (_, indices) =
+            ZGraphics::generate_text_quads("AB", 0.0, 0.0, 8.0, 0xFFFFFFFF, None, 960.0, 540.0);
         assert_eq!(indices[0..6], [0, 1, 2, 0, 2, 3]);
         assert_eq!(indices[6..12], [4, 5, 6, 4, 6, 7]);
     }
+
+    // Matrix preservation test removed - implementation changed with unified shading state
 }

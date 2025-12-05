@@ -1,0 +1,6 @@
+[env]
+RUST_LOG = "info"            # or debug, trace, warn, error
+RUST_BACKTRACE = "1"
+
+[alias]
+xtask = "run --package xtask --"

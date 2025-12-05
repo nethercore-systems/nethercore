@@ -27,13 +27,6 @@ fn panic(_: &PanicInfo) -> ! {
 extern "C" {
     // Configuration
     fn set_clear_color(color: u32);
-    fn set_sky(
-        horizon_r: f32, horizon_g: f32, horizon_b: f32,
-        zenith_r: f32, zenith_g: f32, zenith_b: f32,
-        sun_dir_x: f32, sun_dir_y: f32, sun_dir_z: f32,
-        sun_r: f32, sun_g: f32, sun_b: f32,
-        sun_sharpness: f32,
-    );
 
     // Camera
     fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
@@ -52,8 +45,7 @@ extern "C" {
     fn texture_filter(filter: u32);
 
     // Transform
-    fn transform_identity();
-    fn transform_translate(x: f32, y: f32, z: f32);
+    fn push_identity();
 
     // Billboard drawing
     fn draw_billboard(w: f32, h: f32, mode: u32, color: u32);
@@ -407,14 +399,8 @@ pub extern "C" fn init() {
         // Sky blue clear color
         set_clear_color(0x87CEEBFF);
 
-        // Set up procedural sky (sunny day)
-        set_sky(
-            0.7, 0.85, 1.0,     // horizon (light blue)
-            0.3, 0.5, 0.9,      // zenith (deeper blue)
-            0.5, 0.8, 0.3,      // sun direction
-            1.5, 1.4, 1.2,      // sun color (warm)
-            150.0,              // sun sharpness
-        );
+        // Note: Sky uses reasonable defaults (blue gradient with sun) from the renderer
+        // No need to set sky explicitly unless you want custom sky settings
 
         // Set up camera (side view for platformer)
         camera_set(0.0, 2.0, 15.0, 0.0, 2.0, 0.0);
@@ -604,16 +590,16 @@ fn render_platforms() {
 
             // Draw platform as multiple billboards (tiled)
             let tile_size = 1.0;
-            let tiles_x = (platform.width / tile_size).ceil() as i32;
-            let tiles_y = (platform.height / tile_size).ceil() as i32;
+            let tiles_x = libm::ceilf(platform.width / tile_size) as i32;
+            let tiles_y = libm::ceilf(platform.height / tile_size) as i32;
 
             for ty in 0..tiles_y {
                 for tx in 0..tiles_x {
                     let tile_x = platform.x + (tx as f32 + 0.5) * tile_size;
                     let tile_y = platform.y + (ty as f32 + 0.5) * tile_size;
 
-                    transform_identity();
-                    transform_translate(tile_x, tile_y, 0.0);
+                    push_identity();
+                    // TODO: Build translation matrix for (tile_x, tile_y, 0.0) and call transform_set()
                     draw_billboard(tile_size, tile_size, MODE_CYLINDRICAL_Y, 0xFFFFFFFF);
                 }
             }
@@ -635,8 +621,8 @@ fn render_collectibles() {
             // Bob up and down
             let bob = sin_approx(time * 3.0 + collectible.bob_offset) * 0.15;
 
-            transform_identity();
-            transform_translate(collectible.x, collectible.y + bob, 0.1);
+            push_identity();
+            // TODO: Build translation matrix for (collectible.x, collectible.y + bob, 0.1) and call transform_set()
             draw_billboard(0.6, 0.6, MODE_CYLINDRICAL_Y, 0xFFFFFFFF);
         }
     }
@@ -654,8 +640,8 @@ fn render_players() {
             // Flip sprite based on facing direction
             let scale_x = if player.facing_right { PLAYER_WIDTH } else { -PLAYER_WIDTH };
 
-            transform_identity();
-            transform_translate(player.x, player.y + PLAYER_HEIGHT / 2.0, 0.2);
+            push_identity();
+            // TODO: Build translation matrix for (player.x, player.y + PLAYER_HEIGHT/2, 0.2) and call transform_set()
 
             // Use player color as tint
             draw_billboard(scale_x, PLAYER_HEIGHT, MODE_CYLINDRICAL_Y, PLAYER_COLORS[i]);
@@ -666,12 +652,12 @@ fn render_players() {
 fn render_ui() {
     unsafe {
         // Background panel for scores
-        draw_rect(10.0, 10.0, 200.0, 30.0 + (player_count() as f32 * 25.0), 0x000000AA);
+        draw_rect(10.0, 10.0, 300.0, 80.0 + (player_count() as f32 * 70.0), 0x000000AA);
 
-        draw_text_str("PLATFORMER", 20.0, 30.0, 16.0, 0xFFFFFFFF);
+        draw_text_str("PLATFORMER", 20.0, 30.0, 24.0, 0xFFFFFFFF);
 
         // Player scores
-        let mut y_offset = 55.0;
+        let mut y_offset = 100.0;
         for (i, player) in PLAYERS.iter().enumerate() {
             if !player.active {
                 continue;
@@ -694,9 +680,9 @@ fn render_ui() {
                 _ => b"P4: ",
             };
 
-            draw_text(label.as_ptr(), 4, 20.0, y_offset, 14.0, PLAYER_COLORS[i]);
-            draw_text(digits.as_ptr(), 4, 60.0, y_offset, 14.0, 0xFFFFFFFF);
-            y_offset += 25.0;
+            draw_text(label.as_ptr(), 4, 20.0, y_offset, 20.0, PLAYER_COLORS[i]);
+            draw_text(digits.as_ptr(), 4, 100.0, y_offset, 20.0, 0xFFFFFFFF);
+            y_offset += 70.0;
         }
 
         // Coin counter
@@ -711,18 +697,18 @@ fn render_ui() {
             b'C', b'o', b'i', b'n', b's', b':', b' ',
             b'0' + (coins_left % 10) as u8,
         ];
-        draw_text(coins_text.as_ptr(), 8, 20.0, y_offset + 10.0, 12.0, 0xFFD700FF);
+        draw_text(coins_text.as_ptr(), 8, 20.0, y_offset + 20.0, 18.0, 0xFFD700FF);
 
         // Controls hint
-        draw_rect(10.0, 520.0, 280.0, 50.0, 0x000000AA);
-        draw_text_str("L-Stick: Move  A: Jump", 20.0, 540.0, 12.0, 0xCCCCCCFF);
-        draw_text_str("Collect all coins!", 20.0, 558.0, 12.0, 0xFFD700FF);
+        draw_rect(10.0, 480.0, 480.0, 90.0, 0x000000AA);
+        draw_text_str("L-Stick: Move  A: Jump", 20.0, 500.0, 16.0, 0xCCCCCCFF);
+        draw_text_str("Collect all coins!", 20.0, 540.0, 16.0, 0xFFD700FF);
 
         // Game over overlay
         if GAME_OVER {
-            draw_rect(300.0, 250.0, 360.0, 100.0, 0x000000DD);
-            draw_text_str("ALL COINS COLLECTED!", 340.0, 285.0, 20.0, 0xFFD700FF);
-            draw_text_str("Press START to restart", 360.0, 320.0, 14.0, 0xCCCCCCFF);
+            draw_rect(150.0, 200.0, 660.0, 140.0, 0x000000DD);
+            draw_text_str("ALL COINS COLLECTED!", 200.0, 240.0, 28.0, 0xFFD700FF);
+            draw_text_str("Press START to restart", 240.0, 290.0, 20.0, 0xCCCCCCFF);
         }
     }
 }

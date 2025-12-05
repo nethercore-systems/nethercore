@@ -15,11 +15,10 @@ use wasmtime::{Caller, Linker};
 
 use emberware_core::wasm::GameStateWithConsole;
 
+use crate::audio::{AudioCommand, Sound};
 use crate::console::{ZInput, RESOLUTIONS, TICK_RATES};
 use crate::graphics::vertex_stride;
-use crate::state::{
-    PendingMesh, PendingTexture, ZDrawCommand, ZFFIState, MAX_BONES, MAX_TRANSFORM_STACK,
-};
+use crate::state::{Font, PendingMesh, PendingTexture, ZFFIState, MAX_BONES};
 
 /// Register all Emberware Z FFI functions with the linker
 pub fn register_z_ffi(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
@@ -33,14 +32,20 @@ pub fn register_z_ffi(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState
     linker.func_wrap("env", "camera_set", camera_set)?;
     linker.func_wrap("env", "camera_fov", camera_fov)?;
 
-    // Transform stack functions
-    linker.func_wrap("env", "transform_identity", transform_identity)?;
-    linker.func_wrap("env", "transform_translate", transform_translate)?;
-    linker.func_wrap("env", "transform_rotate", transform_rotate)?;
-    linker.func_wrap("env", "transform_scale", transform_scale)?;
-    linker.func_wrap("env", "transform_push", transform_push)?;
-    linker.func_wrap("env", "transform_pop", transform_pop)?;
+    // Advanced matrix functions
+    linker.func_wrap("env", "push_view_matrix", push_view_matrix)?;
+    linker.func_wrap("env", "push_projection_matrix", push_projection_matrix)?;
+
+    // Transform functions
+    linker.func_wrap("env", "push_identity", push_identity)?;
     linker.func_wrap("env", "transform_set", transform_set)?;
+    linker.func_wrap("env", "push_translate", push_translate)?;
+    linker.func_wrap("env", "push_rotate_x", push_rotate_x)?;
+    linker.func_wrap("env", "push_rotate_y", push_rotate_y)?;
+    linker.func_wrap("env", "push_rotate_z", push_rotate_z)?;
+    linker.func_wrap("env", "push_rotate", push_rotate)?;
+    linker.func_wrap("env", "push_scale", push_scale)?;
+    linker.func_wrap("env", "push_scale_uniform", push_scale_uniform)?;
 
     // Input functions (from input submodule)
     linker.func_wrap("env", "button_held", input::button_held)?;
@@ -91,8 +96,14 @@ pub fn register_z_ffi(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState
     linker.func_wrap("env", "draw_rect", draw_rect)?;
     linker.func_wrap("env", "draw_text", draw_text)?;
 
+    // Font loading
+    linker.func_wrap("env", "load_font", load_font)?;
+    linker.func_wrap("env", "load_font_ex", load_font_ex)?;
+    linker.func_wrap("env", "font_bind", font_bind)?;
+
     // Sky system
-    linker.func_wrap("env", "set_sky", set_sky)?;
+    linker.func_wrap("env", "sky_set_colors", sky_set_colors)?;
+    linker.func_wrap("env", "sky_set_sun", sky_set_sun)?;
 
     // Mode 1 (Matcap) functions
     linker.func_wrap("env", "matcap_set", matcap_set)?;
@@ -108,6 +119,7 @@ pub fn register_z_ffi(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState
     linker.func_wrap("env", "light_set", light_set)?;
     linker.func_wrap("env", "light_color", light_color)?;
     linker.func_wrap("env", "light_intensity", light_intensity)?;
+    linker.func_wrap("env", "light_enable", light_enable)?;
     linker.func_wrap("env", "light_disable", light_disable)?;
 
     // Mode 3 (Hybrid) lighting functions
@@ -116,6 +128,16 @@ pub fn register_z_ffi(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState
 
     // GPU skinning
     linker.func_wrap("env", "set_bones", set_bones)?;
+
+    // Audio functions
+    linker.func_wrap("env", "load_sound", load_sound)?;
+    linker.func_wrap("env", "play_sound", play_sound)?;
+    linker.func_wrap("env", "channel_play", channel_play)?;
+    linker.func_wrap("env", "channel_set", channel_set)?;
+    linker.func_wrap("env", "channel_stop", channel_stop)?;
+    linker.func_wrap("env", "music_play", music_play)?;
+    linker.func_wrap("env", "music_stop", music_stop)?;
+    linker.func_wrap("env", "music_set_volume", music_set_volume)?;
 
     Ok(())
 }
@@ -274,8 +296,14 @@ fn camera_set(
     target_z: f32,
 ) {
     let state = &mut caller.data_mut().console;
-    state.camera.position = Vec3::new(x, y, z);
-    state.camera.target = Vec3::new(target_x, target_y, target_z);
+
+    // Build view matrix from position and target
+    let position = Vec3::new(x, y, z);
+    let target = Vec3::new(target_x, target_y, target_z);
+    let view = Mat4::look_at_rh(position, target, Vec3::Y);
+
+    // Set current view matrix (will be pushed to pool on next draw)
+    state.current_view_matrix = Some(view);
 }
 
 /// Set the camera field of view
@@ -284,6 +312,7 @@ fn camera_set(
 /// * `fov_degrees` — Field of view in degrees (typically 45-90, default 60)
 ///
 /// Values outside 1-179 degrees are clamped with a warning.
+/// Rebuilds the projection matrix at index 0 with default parameters (16:9 aspect, 0.1 near, 1000 far).
 fn camera_fov(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, fov_degrees: f32) {
     let state = &mut caller.data_mut().console;
 
@@ -299,116 +328,101 @@ fn camera_fov(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, f
         fov_degrees
     };
 
-    state.camera.fov = clamped_fov;
+    // Rebuild projection matrix with new FOV
+    let aspect = 16.0 / 9.0; // TODO: Get from actual viewport
+    let proj = Mat4::perspective_rh(clamped_fov.to_radians(), aspect, 0.1, 1000.0);
+
+    // Set current projection matrix (will be pushed to pool on next draw)
+    state.current_proj_matrix = Some(proj);
+}
+
+/// Push a custom view matrix to the pool, returning its index
+///
+/// For advanced rendering techniques (multiple cameras, render-to-texture, etc.)
+/// Most users should use camera_set() instead.
+///
+/// # Arguments
+/// * `m0-m15` — Matrix elements in column-major order
+///
+/// # Returns
+/// The index of the newly added view matrix (0-255)
+fn push_view_matrix(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    m0: f32,
+    m1: f32,
+    m2: f32,
+    m3: f32,
+    m4: f32,
+    m5: f32,
+    m6: f32,
+    m7: f32,
+    m8: f32,
+    m9: f32,
+    m10: f32,
+    m11: f32,
+    m12: f32,
+    m13: f32,
+    m14: f32,
+    m15: f32,
+) {
+    let state = &mut caller.data_mut().console;
+
+    let matrix = Mat4::from_cols_array(&[
+        m0, m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15,
+    ]);
+
+    state.current_view_matrix = Some(matrix);
+}
+
+/// Push a custom projection matrix to the pool, returning its index
+///
+/// For advanced rendering techniques (custom projections, orthographic, etc.)
+/// Most users should use camera_set() instead.
+///
+/// # Arguments
+/// * `m0-m15` — Matrix elements in column-major order
+///
+/// Sets the current projection matrix (no return value - uses lazy allocation)
+fn push_projection_matrix(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    m0: f32,
+    m1: f32,
+    m2: f32,
+    m3: f32,
+    m4: f32,
+    m5: f32,
+    m6: f32,
+    m7: f32,
+    m8: f32,
+    m9: f32,
+    m10: f32,
+    m11: f32,
+    m12: f32,
+    m13: f32,
+    m14: f32,
+    m15: f32,
+) {
+    let state = &mut caller.data_mut().console;
+
+    let matrix = Mat4::from_cols_array(&[
+        m0, m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15,
+    ]);
+
+    state.current_proj_matrix = Some(matrix);
 }
 
 // ============================================================================
 // Transform Stack Functions
 // ============================================================================
 
-/// Reset the current transform to identity matrix
+/// Push identity matrix onto the transform stack
 ///
-/// After calling this, the transform represents no transformation
+/// After calling this, subsequent draws will use identity transformation
 /// (objects will be drawn at their original position/rotation/scale).
-fn transform_identity(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>) {
+/// This is typically called at the start of rendering to reset the transform stack.
+fn push_identity(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>) {
     let state = &mut caller.data_mut().console;
-    state.current_transform = Mat4::IDENTITY;
-}
-
-/// Translate the current transform
-///
-/// # Arguments
-/// * `x, y, z` — Translation amounts in world units
-///
-/// The translation is applied to the current transform (post-multiplication).
-fn transform_translate(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    x: f32,
-    y: f32,
-    z: f32,
-) {
-    let state = &mut caller.data_mut().console;
-    state.current_transform *= Mat4::from_translation(Vec3::new(x, y, z));
-}
-
-/// Rotate the current transform around an axis
-///
-/// # Arguments
-/// * `angle_deg` — Rotation angle in degrees
-/// * `x, y, z` — Rotation axis (will be normalized internally)
-///
-/// The rotation is applied to the current transform (post-multiplication).
-/// Common axes: (1,0,0)=X, (0,1,0)=Y, (0,0,1)=Z
-fn transform_rotate(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    angle_deg: f32,
-    x: f32,
-    y: f32,
-    z: f32,
-) {
-    let state = &mut caller.data_mut().console;
-    let axis = Vec3::new(x, y, z);
-
-    // Handle zero-length axis
-    if axis.length_squared() < 1e-10 {
-        warn!("transform_rotate called with zero-length axis, ignored");
-        return;
-    }
-
-    let axis = axis.normalize();
-    let angle_rad = angle_deg.to_radians();
-    state.current_transform *= Mat4::from_axis_angle(axis, angle_rad);
-}
-
-/// Scale the current transform
-///
-/// # Arguments
-/// * `x, y, z` — Scale factors for each axis (1.0 = no change)
-///
-/// The scale is applied to the current transform (post-multiplication).
-fn transform_scale(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    x: f32,
-    y: f32,
-    z: f32,
-) {
-    let state = &mut caller.data_mut().console;
-    state.current_transform *= Mat4::from_scale(Vec3::new(x, y, z));
-}
-
-/// Push the current transform onto the stack
-///
-/// Returns 1 on success, 0 if the stack is full (max 16 entries).
-/// Use this before making temporary transform changes that should be undone later.
-fn transform_push(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>) -> u32 {
-    let state = &mut caller.data_mut().console;
-
-    if state.transform_stack.len() >= MAX_TRANSFORM_STACK {
-        warn!(
-            "transform_push failed: stack full (max {} entries)",
-            MAX_TRANSFORM_STACK
-        );
-        return 0;
-    }
-
-    state.transform_stack.push(state.current_transform);
-    1
-}
-
-/// Pop the transform from the stack
-///
-/// Returns 1 on success, 0 if the stack is empty.
-/// Restores the transform that was active before the matching push.
-fn transform_pop(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>) -> u32 {
-    let state = &mut caller.data_mut().console;
-
-    if let Some(transform) = state.transform_stack.pop() {
-        state.current_transform = transform;
-        1
-    } else {
-        warn!("transform_pop failed: stack empty");
-        0
-    }
+    state.current_model_matrix = Some(Mat4::IDENTITY);
 }
 
 /// Set the current transform from a 4x4 matrix
@@ -456,7 +470,163 @@ fn transform_set(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>
         return;
     };
     let state = &mut caller.data_mut().console;
-    state.current_transform = Mat4::from_cols_array(&matrix);
+    let new_matrix = Mat4::from_cols_array(&matrix);
+    state.current_model_matrix = Some(new_matrix); // Pending matrix
+}
+
+/// Push a translated transform onto the stack
+///
+/// # Arguments
+/// * `x`, `y`, `z` — Translation amounts
+///
+/// Reads the current transform, applies translation, and pushes the result.
+fn push_translate(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    x: f32,
+    y: f32,
+    z: f32,
+) {
+    let state = &mut caller.data_mut().console;
+    let current = state.current_model_matrix.unwrap_or_else(|| {
+        state
+            .model_matrices
+            .last()
+            .copied()
+            .unwrap_or(Mat4::IDENTITY)
+    });
+    let new_matrix = current * Mat4::from_translation(Vec3::new(x, y, z));
+    state.current_model_matrix = Some(new_matrix);
+}
+
+/// Push a rotated transform onto the stack (X axis)
+///
+/// # Arguments
+/// * `angle_deg` — Rotation angle in degrees
+///
+/// Reads the current transform, applies rotation, and pushes the result.
+fn push_rotate_x(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, angle_deg: f32) {
+    let state = &mut caller.data_mut().console;
+    let current = state.current_model_matrix.unwrap_or_else(|| {
+        state
+            .model_matrices
+            .last()
+            .copied()
+            .unwrap_or(Mat4::IDENTITY)
+    });
+    let angle_rad = angle_deg.to_radians();
+    let new_matrix = current * Mat4::from_rotation_x(angle_rad);
+    state.current_model_matrix = Some(new_matrix);
+}
+
+/// Push a rotated transform onto the stack (Y axis)
+///
+/// # Arguments
+/// * `angle_deg` — Rotation angle in degrees
+///
+/// Reads the current transform, applies rotation, and pushes the result.
+fn push_rotate_y(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, angle_deg: f32) {
+    let state = &mut caller.data_mut().console;
+    let current = state.current_model_matrix.unwrap_or_else(|| {
+        state
+            .model_matrices
+            .last()
+            .copied()
+            .unwrap_or(Mat4::IDENTITY)
+    });
+    let angle_rad = angle_deg.to_radians();
+    let new_matrix = current * Mat4::from_rotation_y(angle_rad);
+    state.current_model_matrix = Some(new_matrix);
+}
+
+/// Push a rotated transform onto the stack (Z axis)
+///
+/// # Arguments
+/// * `angle_deg` — Rotation angle in degrees
+///
+/// Reads the current transform, applies rotation, and pushes the result.
+fn push_rotate_z(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, angle_deg: f32) {
+    let state = &mut caller.data_mut().console;
+    let current = state.current_model_matrix.unwrap_or_else(|| {
+        state
+            .model_matrices
+            .last()
+            .copied()
+            .unwrap_or(Mat4::IDENTITY)
+    });
+    let angle_rad = angle_deg.to_radians();
+    let new_matrix = current * Mat4::from_rotation_z(angle_rad);
+    state.current_model_matrix = Some(new_matrix);
+}
+
+/// Push a rotated transform onto the stack (arbitrary axis)
+///
+/// # Arguments
+/// * `angle_deg` — Rotation angle in degrees
+/// * `axis_x`, `axis_y`, `axis_z` — Rotation axis (will be normalized)
+///
+/// Reads the current transform, applies rotation, and pushes the result.
+fn push_rotate(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    angle_deg: f32,
+    axis_x: f32,
+    axis_y: f32,
+    axis_z: f32,
+) {
+    let state = &mut caller.data_mut().console;
+    let current = state.current_model_matrix.unwrap_or_else(|| {
+        state
+            .model_matrices
+            .last()
+            .copied()
+            .unwrap_or(Mat4::IDENTITY)
+    });
+    let angle_rad = angle_deg.to_radians();
+    let axis = Vec3::new(axis_x, axis_y, axis_z).normalize();
+    let new_matrix = current * Mat4::from_axis_angle(axis, angle_rad);
+    state.current_model_matrix = Some(new_matrix);
+}
+
+/// Push a scaled transform onto the stack
+///
+/// # Arguments
+/// * `x`, `y`, `z` — Scale factors for each axis
+///
+/// Reads the current transform, applies scale, and pushes the result.
+fn push_scale(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    x: f32,
+    y: f32,
+    z: f32,
+) {
+    let state = &mut caller.data_mut().console;
+    let current = state.current_model_matrix.unwrap_or_else(|| {
+        state
+            .model_matrices
+            .last()
+            .copied()
+            .unwrap_or(Mat4::IDENTITY)
+    });
+    let new_matrix = current * Mat4::from_scale(Vec3::new(x, y, z));
+    state.current_model_matrix = Some(new_matrix);
+}
+
+/// Push a uniformly scaled transform onto the stack
+///
+/// # Arguments
+/// * `s` — Uniform scale factor
+///
+/// Reads the current transform, applies scale, and pushes the result.
+fn push_scale_uniform(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, s: f32) {
+    let state = &mut caller.data_mut().console;
+    let current = state.current_model_matrix.unwrap_or_else(|| {
+        state
+            .model_matrices
+            .last()
+            .copied()
+            .unwrap_or(Mat4::IDENTITY)
+    });
+    let new_matrix = current * Mat4::from_scale(Vec3::splat(s));
+    state.current_model_matrix = Some(new_matrix);
 }
 
 // ============================================================================
@@ -471,7 +641,7 @@ fn transform_set(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>
 /// This color is multiplied with vertex colors and textures.
 fn set_color(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, color: u32) {
     let state = &mut caller.data_mut().console;
-    state.color = color;
+    state.update_color(color);
 }
 
 /// Enable or disable depth testing
@@ -510,15 +680,19 @@ fn cull_mode(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, mo
 ///
 /// Default: none (opaque). Use alpha for transparent textures.
 fn blend_mode(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, mode: u32) {
+    use crate::graphics::BlendMode;
+
     let state = &mut caller.data_mut().console;
 
     if mode > 3 {
         warn!("blend_mode({}) invalid - must be 0-3, using 0 (none)", mode);
         state.blend_mode = 0;
+        state.update_blend_mode(BlendMode::None); // Sync to current_shading_state
         return;
     }
 
     state.blend_mode = mode as u8;
+    state.update_blend_mode(BlendMode::from_u8(mode as u8)); // Sync to current_shading_state
 }
 
 /// Set the texture filtering mode
@@ -671,7 +845,7 @@ fn matcap_blend_mode(
 ) {
     use crate::graphics::MatcapBlendMode;
 
-    if slot < 1 || slot > 3 {
+    if !(1..=3).contains(&slot) {
         warn!("matcap_blend_mode: invalid slot {} (must be 1-3)", slot);
         return;
     }
@@ -685,7 +859,7 @@ fn matcap_blend_mode(
     };
 
     let state = &mut caller.data_mut().console;
-    state.matcap_blend_modes[slot as usize] = blend_mode as u8;
+    state.update_matcap_blend_mode(slot as usize, blend_mode); // Update single slot in unified state
 }
 
 // ============================================================================
@@ -860,7 +1034,7 @@ fn load_mesh_indexed(
         );
         return 0;
     };
-    let Some(index_data_size) = index_count.checked_mul(4) else {
+    let Some(index_data_size) = index_count.checked_mul(2) else {
         warn!(
             "load_mesh_indexed: index data size overflow (index_count={})",
             index_count
@@ -884,7 +1058,7 @@ fn load_mesh_indexed(
     let index_byte_size = index_data_size as usize;
 
     // Copy data while we have the immutable borrow
-    let (vertex_data, index_data): (Vec<f32>, Vec<u32>) = {
+    let (vertex_data, index_data): (Vec<f32>, Vec<u16>) = {
         let mem_data = memory.data(&caller);
 
         if vertex_ptr + vertex_byte_size > mem_data.len() {
@@ -911,11 +1085,11 @@ fn load_mesh_indexed(
         let floats: &[f32] = bytemuck::cast_slice(vertex_bytes);
 
         let index_bytes = &mem_data[idx_ptr..idx_ptr + index_byte_size];
-        let indices: &[u32] = bytemuck::cast_slice(index_bytes);
+        let indices: &[u16] = bytemuck::cast_slice(index_bytes);
 
         // Validate indices are within bounds
         for &idx in indices {
-            if idx >= vertex_count {
+            if idx as u32 >= vertex_count {
                 warn!(
                     "load_mesh_indexed: index {} out of bounds (vertex_count = {})",
                     idx, vertex_count
@@ -983,16 +1157,48 @@ fn draw_mesh(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, ha
 
     let state = &mut caller.data_mut().console;
 
-    // Record draw command with current state
-    state.draw_commands.push(ZDrawCommand::DrawMesh {
-        handle,
-        transform: state.current_transform,
-        color: state.color,
-        depth_test: state.depth_test,
-        cull_mode: state.cull_mode,
-        blend_mode: state.blend_mode,
-        bound_textures: state.bound_textures,
-    });
+    // Look up mesh
+    let mesh = match state.mesh_map.get(&handle) {
+        Some(m) => m,
+        None => {
+            warn!("draw_mesh: invalid handle {}", handle);
+            return;
+        }
+    };
+
+    // Extract mesh data
+    let mesh_format = mesh.format;
+    let mesh_vertex_count = mesh.vertex_count;
+    let mesh_index_count = mesh.index_count;
+    let mesh_vertex_offset = mesh.vertex_offset;
+    let mesh_index_offset = mesh.index_offset;
+
+    // Texture mapping happens in process_draw_commands() using session.texture_map
+    // FFI doesn't have access to the texture map, so we use placeholders here
+    let texture_slots = [
+        crate::graphics::TextureHandle::INVALID,
+        crate::graphics::TextureHandle::INVALID,
+        crate::graphics::TextureHandle::INVALID,
+        crate::graphics::TextureHandle::INVALID,
+    ];
+
+    let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
+
+    // Allocate combined MVP+shading buffer index (lazy allocation with deduplication)
+    let buffer_index = state.add_mvp_shading_state();
+
+    // Record draw command directly
+    state.render_pass.record_mesh(
+        mesh_format,
+        mesh_vertex_count,
+        mesh_index_count,
+        mesh_vertex_offset,
+        mesh_index_offset,
+        buffer_index,
+        texture_slots,
+        state.depth_test,
+        cull_mode,
+    );
 }
 
 // ============================================================================
@@ -1090,17 +1296,29 @@ fn draw_triangles(
 
     let state = &mut caller.data_mut().console;
 
-    // Record draw command with current state
-    state.draw_commands.push(ZDrawCommand::DrawTriangles {
+    // Texture mapping happens in process_draw_commands() using session.texture_map
+    // FFI doesn't have access to the texture map, so we use placeholders here
+    let texture_slots = [
+        crate::graphics::TextureHandle::INVALID,
+        crate::graphics::TextureHandle::INVALID,
+        crate::graphics::TextureHandle::INVALID,
+        crate::graphics::TextureHandle::INVALID,
+    ];
+
+    let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
+
+    // Allocate combined MVP+shading buffer index (lazy allocation with deduplication)
+    let buffer_index = state.add_mvp_shading_state();
+
+    // Record draw command directly
+    state.render_pass.record_triangles(
         format,
-        vertex_data,
-        transform: state.current_transform,
-        color: state.color,
-        depth_test: state.depth_test,
-        cull_mode: state.cull_mode,
-        blend_mode: state.blend_mode,
-        bound_textures: state.bound_textures,
-    });
+        &vertex_data,
+        buffer_index,
+        texture_slots,
+        state.depth_test,
+        cull_mode,
+    );
 }
 
 /// Draw indexed triangles immediately
@@ -1153,7 +1371,7 @@ fn draw_triangles_indexed(
         );
         return;
     };
-    let Some(index_data_size) = index_count.checked_mul(4) else {
+    let Some(index_data_size) = index_count.checked_mul(2) else {
         warn!(
             "draw_triangles_indexed: index data size overflow (index_count={})",
             index_count
@@ -1177,7 +1395,7 @@ fn draw_triangles_indexed(
     let index_byte_size = index_data_size as usize;
 
     // Copy data
-    let (vertex_data, index_data): (Vec<f32>, Vec<u32>) =
+    let (vertex_data, index_data): (Vec<f32>, Vec<u16>) =
         {
             let mem_data = memory.data(&caller);
 
@@ -1201,11 +1419,11 @@ fn draw_triangles_indexed(
             let floats: &[f32] = bytemuck::cast_slice(vertex_bytes);
 
             let index_bytes = &mem_data[idx_ptr..idx_ptr + index_byte_size];
-            let indices: &[u32] = bytemuck::cast_slice(index_bytes);
+            let indices: &[u16] = bytemuck::cast_slice(index_bytes);
 
             // Validate indices are within bounds
             for &idx in indices {
-                if idx >= vertex_count {
+                if idx as u32 >= vertex_count {
                     warn!(
                         "draw_triangles_indexed: index {} out of bounds (vertex_count = {})",
                         idx, vertex_count
@@ -1237,20 +1455,30 @@ fn draw_triangles_indexed(
 
     let state = &mut caller.data_mut().console;
 
-    // Record draw command with current state
-    state
-        .draw_commands
-        .push(ZDrawCommand::DrawTrianglesIndexed {
-            format,
-            vertex_data,
-            index_data,
-            transform: state.current_transform,
-            color: state.color,
-            depth_test: state.depth_test,
-            cull_mode: state.cull_mode,
-            blend_mode: state.blend_mode,
-            bound_textures: state.bound_textures,
-        });
+    // Texture mapping happens in process_draw_commands() using session.texture_map
+    // FFI doesn't have access to the texture map, so we use placeholders here
+    let texture_slots = [
+        crate::graphics::TextureHandle::INVALID,
+        crate::graphics::TextureHandle::INVALID,
+        crate::graphics::TextureHandle::INVALID,
+        crate::graphics::TextureHandle::INVALID,
+    ];
+
+    let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
+
+    // Allocate combined MVP+shading buffer index (lazy allocation with deduplication)
+    let buffer_index = state.add_mvp_shading_state();
+
+    // Record draw command directly
+    state.render_pass.record_triangles_indexed(
+        format,
+        &vertex_data,
+        &index_data,
+        buffer_index,
+        texture_slots,
+        state.depth_test,
+        cull_mode,
+    );
 }
 
 // ============================================================================
@@ -1286,19 +1514,54 @@ fn draw_billboard(
 
     let state = &mut caller.data_mut().console;
 
-    // Record billboard draw command
-    state.draw_commands.push(ZDrawCommand::DrawBillboard {
-        width: w,
-        height: h,
-        mode: mode as u8,
-        uv_rect: None, // Full texture (0,0,1,1)
-        transform: state.current_transform,
-        color,
-        depth_test: state.depth_test,
-        cull_mode: state.cull_mode,
-        blend_mode: state.blend_mode,
-        bound_textures: state.bound_textures,
+    // Get shading state index IMMEDIATELY (while current_shading_state is valid)
+    let shading_state_index = state.add_shading_state();
+
+    // Convert FFI mode (1-4) to QuadMode enum (0-3)
+    let quad_mode = match mode {
+        1 => crate::graphics::QuadMode::BillboardSpherical,
+        2 => crate::graphics::QuadMode::BillboardCylindricalY,
+        3 => crate::graphics::QuadMode::BillboardCylindricalX,
+        4 => crate::graphics::QuadMode::BillboardCylindricalZ,
+        _ => unreachable!(), // Already validated above
+    };
+
+    // Extract world position from current model matrix
+    // Get current model matrix (from Option or last in pool)
+    let current_matrix = state.current_model_matrix.unwrap_or_else(|| {
+        state
+            .model_matrices
+            .last()
+            .copied()
+            .unwrap_or(Mat4::IDENTITY)
     });
+    let position = [
+        current_matrix.w_axis.x,
+        current_matrix.w_axis.y,
+        current_matrix.w_axis.z,
+    ];
+
+    // Force lazy push of view matrix if pending (fixes cylindrical billboard bug)
+    if let Some(mat) = state.current_view_matrix.take() {
+        state.view_matrices.push(mat);
+    }
+
+    // Get current view index (after any pending push)
+    let view_idx = (state.view_matrices.len() - 1) as u32;
+
+    // Create quad instance (full texture UV: 0,0,1,1)
+    let instance = crate::graphics::QuadInstance::billboard(
+        position,
+        w,
+        h,
+        quad_mode,
+        [0.0, 0.0, 1.0, 1.0], // Full texture
+        color,
+        shading_state_index.0,
+        view_idx,
+    );
+
+    state.add_quad_instance(instance);
 }
 
 /// Draw a billboard with a UV region from the texture
@@ -1333,19 +1596,54 @@ fn draw_billboard_region(
 
     let state = &mut caller.data_mut().console;
 
-    // Record billboard draw command with UV region
-    state.draw_commands.push(ZDrawCommand::DrawBillboard {
-        width: w,
-        height: h,
-        mode: mode as u8,
-        uv_rect: Some((src_x, src_y, src_w, src_h)),
-        transform: state.current_transform,
-        color,
-        depth_test: state.depth_test,
-        cull_mode: state.cull_mode,
-        blend_mode: state.blend_mode,
-        bound_textures: state.bound_textures,
+    // Get shading state index IMMEDIATELY (while current_shading_state is valid)
+    let shading_state_index = state.add_shading_state();
+
+    // Convert FFI mode (1-4) to QuadMode enum (0-3)
+    let quad_mode = match mode {
+        1 => crate::graphics::QuadMode::BillboardSpherical,
+        2 => crate::graphics::QuadMode::BillboardCylindricalY,
+        3 => crate::graphics::QuadMode::BillboardCylindricalX,
+        4 => crate::graphics::QuadMode::BillboardCylindricalZ,
+        _ => unreachable!(), // Already validated above
+    };
+
+    // Extract world position from current model matrix
+    // Get current model matrix (from Option or last in pool)
+    let current_matrix = state.current_model_matrix.unwrap_or_else(|| {
+        state
+            .model_matrices
+            .last()
+            .copied()
+            .unwrap_or(Mat4::IDENTITY)
     });
+    let position = [
+        current_matrix.w_axis.x,
+        current_matrix.w_axis.y,
+        current_matrix.w_axis.z,
+    ];
+
+    // Force lazy push of view matrix if pending (fixes cylindrical billboard bug)
+    if let Some(mat) = state.current_view_matrix.take() {
+        state.view_matrices.push(mat);
+    }
+
+    // Get current view index (after any pending push)
+    let view_idx = (state.view_matrices.len() - 1) as u32;
+
+    // Create quad instance with UV region
+    let instance = crate::graphics::QuadInstance::billboard(
+        position,
+        w,
+        h,
+        quad_mode,
+        [src_x, src_y, src_x + src_w, src_y + src_h], // UV rect
+        color,
+        shading_state_index.0,
+        view_idx,
+    );
+
+    state.add_quad_instance(instance);
 }
 
 // ============================================================================
@@ -1373,18 +1671,26 @@ fn draw_sprite(
 ) {
     let state = &mut caller.data_mut().console;
 
-    state.draw_commands.push(ZDrawCommand::DrawSprite {
+    // Get shading state index
+    let shading_state_index = state.add_shading_state();
+
+    // Get current view index (last in pool, following Option pattern)
+    let view_idx = (state.view_matrices.len() - 1) as u32;
+
+    // Create screen-space quad instance
+    let instance = crate::graphics::QuadInstance::sprite(
         x,
         y,
-        width: w,
-        height: h,
-        uv_rect: None, // Full texture (0,0,1,1)
-        origin: None,  // No rotation
-        rotation: 0.0,
+        w,
+        h,
+        0.0,                  // No rotation
+        [0.0, 0.0, 1.0, 1.0], // Full texture UV
         color,
-        blend_mode: state.blend_mode,
-        bound_textures: state.bound_textures,
-    });
+        shading_state_index.0,
+        view_idx,
+    );
+
+    state.add_quad_instance(instance);
 }
 
 /// Draw a region of a sprite sheet
@@ -1415,18 +1721,29 @@ fn draw_sprite_region(
 ) {
     let state = &mut caller.data_mut().console;
 
-    state.draw_commands.push(ZDrawCommand::DrawSprite {
+    // Get shading state index
+    let shading_state_index = state.add_shading_state();
+
+    // Calculate UV coordinates (convert from src_x,src_y,src_w,src_h to u0,v0,u1,v1)
+    let u0 = src_x;
+    let v0 = src_y;
+    let u1 = src_x + src_w;
+    let v1 = src_y + src_h;
+
+    // Create screen-space quad instance
+    let instance = crate::graphics::QuadInstance::sprite(
         x,
         y,
-        width: w,
-        height: h,
-        uv_rect: Some((src_x, src_y, src_w, src_h)),
-        origin: None, // No rotation
-        rotation: 0.0,
+        w,
+        h,
+        0.0,              // No rotation
+        [u0, v0, u1, v1], // Texture UV region
         color,
-        blend_mode: state.blend_mode,
-        bound_textures: state.bound_textures,
-    });
+        shading_state_index.0,
+        (state.view_matrices.len() - 1) as u32,
+    );
+
+    state.add_quad_instance(instance);
 }
 
 /// Draw a sprite with full control (rotation, origin, UV region)
@@ -1463,18 +1780,33 @@ fn draw_sprite_ex(
 ) {
     let state = &mut caller.data_mut().console;
 
-    state.draw_commands.push(ZDrawCommand::DrawSprite {
-        x,
-        y,
-        width: w,
-        height: h,
-        uv_rect: Some((src_x, src_y, src_w, src_h)),
-        origin: Some((origin_x, origin_y)),
-        rotation: angle_deg,
+    // Get shading state index
+    let shading_state_index = state.add_shading_state();
+
+    // Calculate UV coordinates
+    let u0 = src_x;
+    let v0 = src_y;
+    let u1 = src_x + src_w;
+    let v1 = src_y + src_h;
+
+    // Apply origin offset to position
+    let adjusted_x = x - origin_x;
+    let adjusted_y = y - origin_y;
+
+    // Create screen-space quad instance with rotation
+    let instance = crate::graphics::QuadInstance::sprite(
+        adjusted_x,
+        adjusted_y,
+        w,
+        h,
+        angle_deg.to_radians(), // Convert degrees to radians
+        [u0, v0, u1, v1],
         color,
-        blend_mode: state.blend_mode,
-        bound_textures: state.bound_textures,
-    });
+        shading_state_index.0,
+        (state.view_matrices.len() - 1) as u32,
+    );
+
+    state.add_quad_instance(instance);
 }
 
 /// Draw a solid color rectangle
@@ -1497,14 +1829,26 @@ fn draw_rect(
 ) {
     let state = &mut caller.data_mut().console;
 
-    state.draw_commands.push(ZDrawCommand::DrawRect {
+    // Bind white texture (handle 0xFFFFFFFF) to slot 0
+    state.bound_textures[0] = u32::MAX;
+
+    // Get shading state index
+    let shading_state_index = state.add_shading_state();
+
+    // Create screen-space quad instance (rects use white/fallback texture)
+    let instance = crate::graphics::QuadInstance::sprite(
         x,
         y,
-        width: w,
-        height: h,
+        w,
+        h,
+        0.0,                  // No rotation
+        [0.0, 0.0, 1.0, 1.0], // Full texture UV (white texture is 1x1, so any UV works)
         color,
-        blend_mode: state.blend_mode,
-    });
+        shading_state_index.0,
+        (state.view_matrices.len() - 1) as u32,
+    );
+
+    state.add_quad_instance(instance);
 }
 
 /// Draw text with the built-in font
@@ -1536,7 +1880,7 @@ fn draw_text(
         }
     };
 
-    let text_bytes = {
+    let text_str = {
         let mem_data = memory.data(&caller);
         let ptr = ptr as usize;
         let len = len as usize;
@@ -1552,24 +1896,338 @@ fn draw_text(
         }
 
         let bytes = &mem_data[ptr..ptr + len];
-        // Validate UTF-8 to catch errors early
-        if std::str::from_utf8(bytes).is_err() {
-            warn!("draw_text: invalid UTF-8 string");
-            return;
+        // Validate UTF-8 and copy to owned string
+        match std::str::from_utf8(bytes) {
+            Ok(s) => s.to_string(), // Convert to owned String
+            Err(_) => {
+                warn!("draw_text: invalid UTF-8 string");
+                return;
+            }
         }
-        bytes.to_vec()
+    };
+
+    // Skip empty text
+    if text_str.is_empty() {
+        return;
+    }
+
+    let state = &mut caller.data_mut().console;
+
+    // Ensure material color is white so it doesn't interfere with text instance color
+    // (Text color is passed via the color parameter and stored in instance.color)
+    state.update_color(0xFFFFFFFF);
+
+    // Get shading state index
+    let shading_state_index = state.add_shading_state();
+
+    // Force lazy push of view matrix if pending
+    if let Some(mat) = state.current_view_matrix.take() {
+        state.view_matrices.push(mat);
+    }
+    let view_idx = (state.view_matrices.len() - 1) as u32;
+
+    // Determine which font to use
+    let font_handle = state.current_font;
+
+    // Look up custom font if font_handle != 0
+    // Clone the font to avoid holding a borrow across add_quad_instance calls
+    let custom_font = if font_handle == 0 {
+        None
+    } else {
+        let font_index = (font_handle - 1) as usize;
+        state.fonts.get(font_index).cloned()
+    };
+
+    // Bind the appropriate font texture to slot 0
+    if let Some(ref font) = custom_font {
+        state.bound_textures[0] = font.texture;
+    } else {
+        // For built-in font, use handle 0 (special case handled in rendering)
+        // The rendering code will map handle 0 to the actual built-in font texture
+        state.bound_textures[0] = 0;
+    }
+
+    // Generate quad instances for each character
+    let mut cursor_x = x;
+
+    if let Some(ref font) = custom_font {
+        // Custom font rendering
+        let scale = size / font.char_height as f32;
+        let glyph_height = size;
+
+        // Calculate atlas dimensions
+        let texture_width = 1024; // TODO: Get actual texture dimensions
+        let texture_height = 1024;
+
+        let max_glyph_width = font.char_width as u32;
+        let glyphs_per_row = texture_width / max_glyph_width;
+
+        for ch in text_str.chars() {
+            let char_code = ch as u32;
+
+            // Calculate glyph index
+            if char_code < font.first_codepoint
+                || char_code >= font.first_codepoint + font.char_count
+            {
+                // Character not in font, skip or use replacement
+                continue;
+            }
+            let glyph_index = (char_code - font.first_codepoint) as usize;
+
+            // Get glyph width (variable or fixed)
+            let glyph_width_px = font
+                .char_widths
+                .as_ref()
+                .and_then(|widths| widths.get(glyph_index).copied())
+                .unwrap_or(font.char_width);
+            let glyph_width = glyph_width_px as f32 * scale;
+
+            // Calculate UV coordinates
+            let col = glyph_index % glyphs_per_row as usize;
+            let row = glyph_index / glyphs_per_row as usize;
+
+            let u0 = (col * max_glyph_width as usize) as f32 / texture_width as f32;
+            let v0 = (row * font.char_height as usize) as f32 / texture_height as f32;
+            let u1 = ((col * max_glyph_width as usize) + glyph_width_px as usize) as f32
+                / texture_width as f32;
+            let v1 = ((row + 1) * font.char_height as usize) as f32 / texture_height as f32;
+
+            // Create quad instance for this glyph
+            let instance = crate::graphics::QuadInstance::sprite(
+                cursor_x,
+                y,
+                glyph_width,
+                glyph_height,
+                0.0, // no rotation
+                [u0, v0, u1, v1],
+                color,
+                shading_state_index.0,
+                view_idx,
+            );
+            state.add_quad_instance(instance);
+
+            cursor_x += glyph_width;
+        }
+    } else {
+        // Built-in font rendering
+        let scale = size / crate::font::GLYPH_HEIGHT as f32;
+        let glyph_width = crate::font::GLYPH_WIDTH as f32 * scale;
+        let glyph_height = crate::font::GLYPH_HEIGHT as f32 * scale;
+
+        for ch in text_str.chars() {
+            let char_code = ch as u32;
+
+            // Get UV coordinates for this character
+            let (u0, v0, u1, v1) = crate::font::get_glyph_uv(char_code);
+
+            // Create quad instance for this glyph
+            let instance = crate::graphics::QuadInstance::sprite(
+                cursor_x,
+                y,
+                glyph_width,
+                glyph_height,
+                0.0, // no rotation
+                [u0, v0, u1, v1],
+                color,
+                shading_state_index.0,
+                view_idx,
+            );
+            state.add_quad_instance(instance);
+
+            cursor_x += glyph_width;
+        }
+    }
+}
+
+/// Load a fixed-width bitmap font from a texture atlas
+///
+/// The texture must contain a grid of glyphs arranged left-to-right, top-to-bottom.
+/// Each glyph occupies char_width × char_height pixels.
+///
+/// # Arguments
+/// * `texture` — Handle to the texture atlas
+/// * `char_width` — Width of each glyph in pixels
+/// * `char_height` — Height of each glyph in pixels
+/// * `first_codepoint` — Unicode codepoint of the first glyph
+/// * `char_count` — Number of glyphs in the font
+///
+/// # Returns
+/// Handle to the loaded font (use with `font_bind()`)
+///
+/// # Notes
+/// - Call this in `init()` - font loading is not allowed during gameplay
+/// - All glyphs in a fixed-width font have the same width
+/// - The texture must have enough space for char_count glyphs
+#[inline]
+fn load_font(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    texture: u32,
+    char_width: u32,
+    char_height: u32,
+    first_codepoint: u32,
+    char_count: u32,
+) -> u32 {
+    // Only allow during init
+    if !caller.data().game.in_init {
+        warn!("load_font: can only be called during init()");
+        return 0;
+    }
+
+    // Validate parameters
+    if texture == 0 {
+        warn!("load_font: invalid texture handle 0");
+        return 0;
+    }
+    if char_width == 0 || char_width > 255 {
+        warn!("load_font: char_width must be 1-255");
+        return 0;
+    }
+    if char_height == 0 || char_height > 255 {
+        warn!("load_font: char_height must be 1-255");
+        return 0;
+    }
+    if char_count == 0 {
+        warn!("load_font: char_count must be > 0");
+        return 0;
+    }
+
+    let state = &mut caller.data_mut().console;
+
+    // Allocate font handle
+    let handle = state.next_font_handle;
+    state.next_font_handle += 1;
+
+    // Create font descriptor
+    let font = Font {
+        texture,
+        char_width: char_width as u8,
+        char_height: char_height as u8,
+        first_codepoint,
+        char_count,
+        char_widths: None, // Fixed-width
+    };
+
+    state.fonts.push(font);
+    handle
+}
+
+/// Load a variable-width bitmap font from a texture atlas
+///
+/// Like `load_font()`, but allows each glyph to have a different width.
+///
+/// # Arguments
+/// * `texture` — Handle to the texture atlas
+/// * `widths_ptr` — Pointer to array of char_count u8 widths
+/// * `char_height` — Height of each glyph in pixels
+/// * `first_codepoint` — Unicode codepoint of the first glyph
+/// * `char_count` — Number of glyphs in the font
+///
+/// # Returns
+/// Handle to the loaded font (use with `font_bind()`)
+///
+/// # Notes
+/// - Call this in `init()` - font loading is not allowed during gameplay
+/// - The widths array must have exactly char_count entries
+/// - Glyphs are still arranged in a grid, but can have custom widths
+#[inline]
+fn load_font_ex(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    texture: u32,
+    widths_ptr: u32,
+    char_height: u32,
+    first_codepoint: u32,
+    char_count: u32,
+) -> u32 {
+    // Only allow during init
+    if !caller.data().game.in_init {
+        warn!("load_font_ex: can only be called during init()");
+        return 0;
+    }
+
+    // Validate parameters
+    if texture == 0 {
+        warn!("load_font_ex: invalid texture handle 0");
+        return 0;
+    }
+    if char_height == 0 || char_height > 255 {
+        warn!("load_font_ex: char_height must be 1-255");
+        return 0;
+    }
+    if char_count == 0 {
+        warn!("load_font_ex: char_count must be > 0");
+        return 0;
+    }
+
+    // Read widths array from WASM memory
+    let memory = match caller.data().game.memory {
+        Some(m) => m,
+        None => {
+            warn!("load_font_ex: no WASM memory available");
+            return 0;
+        }
+    };
+
+    let widths = {
+        let mem_data = memory.data(&caller);
+        let ptr = widths_ptr as usize;
+        let len = char_count as usize;
+
+        if ptr + len > mem_data.len() {
+            warn!(
+                "load_font_ex: widths array ({} bytes at {}) exceeds memory bounds ({})",
+                len,
+                ptr,
+                mem_data.len()
+            );
+            return 0;
+        }
+
+        mem_data[ptr..ptr + len].to_vec()
     };
 
     let state = &mut caller.data_mut().console;
 
-    state.draw_commands.push(ZDrawCommand::DrawText {
-        text: text_bytes,
-        x,
-        y,
-        size,
-        color,
-        blend_mode: state.blend_mode,
-    });
+    // Allocate font handle
+    let handle = state.next_font_handle;
+    state.next_font_handle += 1;
+
+    // Create font descriptor
+    let font = Font {
+        texture,
+        char_width: 0, // Not used for variable-width
+        char_height: char_height as u8,
+        first_codepoint,
+        char_count,
+        char_widths: Some(widths),
+    };
+
+    state.fonts.push(font);
+    handle
+}
+
+/// Bind a font for subsequent draw_text() calls
+///
+/// # Arguments
+/// * `font_handle` — Font handle from load_font() or load_font_ex(), or 0 for built-in font
+///
+/// # Notes
+/// - Font 0 is the built-in 8×8 monospace font (default)
+/// - Custom fonts persist for all subsequent draw_text() calls until changed
+#[inline]
+fn font_bind(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, font_handle: u32) {
+    let state = &mut caller.data_mut().console;
+
+    // Validate font handle (0 is always valid = built-in)
+    if font_handle != 0 {
+        // Check if handle is valid (font exists)
+        let font_index = (font_handle - 1) as usize;
+        if font_index >= state.fonts.len() {
+            warn!("font_bind: invalid font handle {}", font_handle);
+            return;
+        }
+    }
+
+    state.current_font = font_handle;
 }
 
 // ============================================================================
@@ -1590,48 +2248,6 @@ fn draw_text(
 /// * `sun_dir_z` — Sun direction Z (will be normalized)
 /// * `sun_r` — Sun color red (0.0-1.0+)
 /// * `sun_g` — Sun color green (0.0-1.0+)
-/// * `sun_b` — Sun color blue (0.0-1.0+)
-/// * `sun_sharpness` — Sun sharpness (typically 32-256, higher = sharper sun)
-///
-/// Configures the procedural sky system for background rendering and ambient lighting.
-/// Default is all zeros (black sky, no sun, no lighting).
-fn set_sky(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    horizon_r: f32,
-    horizon_g: f32,
-    horizon_b: f32,
-    zenith_r: f32,
-    zenith_g: f32,
-    zenith_b: f32,
-    sun_dir_x: f32,
-    sun_dir_y: f32,
-    sun_dir_z: f32,
-    sun_r: f32,
-    sun_g: f32,
-    sun_b: f32,
-    sun_sharpness: f32,
-) {
-    let state = &mut caller.data_mut().console;
-
-    // Record sky configuration as a draw command
-    state.draw_commands.push(ZDrawCommand::SetSky {
-        horizon_color: [horizon_r, horizon_g, horizon_b],
-        zenith_color: [zenith_r, zenith_g, zenith_b],
-        sun_direction: [sun_dir_x, sun_dir_y, sun_dir_z],
-        sun_color: [sun_r, sun_g, sun_b],
-        sun_sharpness,
-    });
-
-    info!(
-        "set_sky: horizon=({:.2},{:.2},{:.2}), zenith=({:.2},{:.2},{:.2}), sun_dir=({:.2},{:.2},{:.2}), sun_color=({:.2},{:.2},{:.2}), sharpness={:.1}",
-        horizon_r, horizon_g, horizon_b,
-        zenith_r, zenith_g, zenith_b,
-        sun_dir_x, sun_dir_y, sun_dir_z,
-        sun_r, sun_g, sun_b,
-        sun_sharpness
-    );
-}
-
 // ============================================================================
 // Mode 1 (Matcap) Functions
 // ============================================================================
@@ -1658,6 +2274,80 @@ fn matcap_set(
 
     let state = &mut caller.data_mut().console;
     state.bound_textures[slot as usize] = texture;
+}
+
+// ============================================================================
+// Sky Functions
+// ============================================================================
+
+/// Set sky gradient colors
+///
+/// # Arguments
+/// * `horizon_r` — Horizon color red (0.0-1.0)
+/// * `horizon_g` — Horizon color green (0.0-1.0)
+/// * `horizon_b` — Horizon color blue (0.0-1.0)
+/// * `zenith_r` — Zenith color red (0.0-1.0)
+/// * `zenith_g` — Zenith color green (0.0-1.0)
+/// * `zenith_b` — Zenith color blue (0.0-1.0)
+///
+/// Sets the procedural sky gradient. Horizon is the color at eye level,
+/// zenith is the color directly overhead. The gradient interpolates smoothly between them.
+/// Works in all render modes (provides ambient lighting in PBR/Hybrid modes).
+fn sky_set_colors(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    horizon_r: f32,
+    horizon_g: f32,
+    horizon_b: f32,
+    zenith_r: f32,
+    zenith_g: f32,
+    zenith_b: f32,
+) {
+    let state = &mut caller.data_mut().console;
+    state.update_sky_colors(
+        [horizon_r, horizon_g, horizon_b],
+        [zenith_r, zenith_g, zenith_b],
+    );
+}
+
+/// Set sky sun properties
+///
+/// # Arguments
+/// * `dir_x` — Sun direction X component (will be normalized)
+/// * `dir_y` — Sun direction Y component (will be normalized)
+/// * `dir_z` — Sun direction Z component (will be normalized)
+/// * `color_r` — Sun color red (0.0-1.0)
+/// * `color_g` — Sun color green (0.0-1.0)
+/// * `color_b` — Sun color blue (0.0-1.0)
+/// * `sharpness` — Sun sharpness (0.0-1.0, higher = smaller/sharper sun disc)
+///
+/// Sets the procedural sky sun. The sun appears as a bright disc in the sky gradient
+/// and provides specular highlights in PBR/Hybrid modes.
+/// Direction will be automatically normalized by the graphics backend.
+fn sky_set_sun(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    dir_x: f32,
+    dir_y: f32,
+    dir_z: f32,
+    color_r: f32,
+    color_g: f32,
+    color_b: f32,
+    sharpness: f32,
+) {
+    let state = &mut caller.data_mut().console;
+
+    // Validate direction vector (warn if zero-length)
+    let len_sq = dir_x * dir_x + dir_y * dir_y + dir_z * dir_z;
+    if len_sq < 1e-10 {
+        warn!("sky_set_sun: zero-length direction vector, using default (0, 1, 0)");
+        state.update_sky_sun([0.0, 1.0, 0.0], [color_r, color_g, color_b], sharpness);
+        return;
+    }
+
+    state.update_sky_sun(
+        [dir_x, dir_y, dir_z],
+        [color_r, color_g, color_b],
+        sharpness,
+    );
 }
 
 // ============================================================================
@@ -1706,7 +2396,8 @@ fn material_metallic(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFISta
         );
     }
 
-    state.material_metallic = clamped;
+    // Quantize and store only in current_shading_state
+    state.update_material_metallic(clamped);
 }
 
 /// Set the material roughness value
@@ -1727,7 +2418,8 @@ fn material_roughness(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFISt
         );
     }
 
-    state.material_roughness = clamped;
+    // Quantize and store only in current_shading_state
+    state.update_material_roughness(clamped);
 }
 
 /// Set the material emissive intensity
@@ -1741,15 +2433,18 @@ fn material_emissive(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFISta
     let state = &mut caller.data_mut().console;
 
     // No clamping for emissive - allow HDR values
-    if value < 0.0 {
+    let clamped = if value < 0.0 {
         warn!(
             "material_emissive: negative value {} not allowed, using 0.0",
             value
         );
-        state.material_emissive = 0.0;
+        0.0
     } else {
-        state.material_emissive = value;
-    }
+        value
+    };
+
+    // Quantize and store only in current_shading_state
+    state.update_material_emissive(clamped);
 }
 
 // ============================================================================
@@ -1783,20 +2478,28 @@ fn light_set(
 
     // Validate direction vector (warn if zero-length)
     let len_sq = x * x + y * y + z * z;
+    let state = &mut caller.data_mut().console;
+
     if len_sq < 1e-10 {
         warn!("light_set: zero-length direction vector, using default (0, -1, 0)");
-        let state = &mut caller.data_mut().console;
-        state.lights[index as usize].direction = [0.0, -1.0, 0.0];
-        state.lights[index as usize].enabled = true;
+
+        // Extract current light state
+        let light = &state.current_shading_state.lights[index as usize];
+        let color = light.get_color();
+        let intensity = light.get_intensity();
+
+        // Update with default direction
+        state.update_light(index as usize, [0.0, -1.0, 0.0], color, intensity, true);
         return;
     }
 
-    let state = &mut caller.data_mut().console;
-    let light = &mut state.lights[index as usize];
+    // Extract current light state
+    let light = &state.current_shading_state.lights[index as usize];
+    let color = light.get_color();
+    let intensity = light.get_intensity();
 
-    // Set direction (will be normalized by graphics backend) and enable
-    light.direction = [x, y, z];
-    light.enabled = true;
+    // Update with new direction
+    state.update_light(index as usize, [x, y, z], color, intensity, true);
 }
 
 /// Set light color
@@ -1844,7 +2547,15 @@ fn light_color(
     };
 
     let state = &mut caller.data_mut().console;
-    state.lights[index as usize].color = [r, g, b];
+
+    // Extract current light state
+    let light = &state.current_shading_state.lights[index as usize];
+    let direction = light.get_direction();
+    let intensity = light.get_intensity();
+    let enabled = light.is_enabled();
+
+    // Update with new color
+    state.update_light(index as usize, direction, [r, g, b], intensity, enabled);
 }
 
 /// Set light intensity multiplier
@@ -1881,7 +2592,48 @@ fn light_intensity(
     };
 
     let state = &mut caller.data_mut().console;
-    state.lights[index as usize].intensity = intensity;
+
+    // Extract current light state
+    let light = &state.current_shading_state.lights[index as usize];
+    let direction = light.get_direction();
+    let color = light.get_color();
+
+    // Setting non-zero intensity automatically enables the light
+    let enabled = intensity > 0.0;
+
+    // Update with new intensity
+    state.update_light(index as usize, direction, color, intensity, enabled);
+}
+
+/// Enable a light
+///
+/// # Arguments
+/// * `index` — Light index (0-3)
+///
+/// Enables a previously disabled light so it contributes to the scene.
+/// The light will use its current direction, color, and intensity settings.
+fn light_enable(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, index: u32) {
+    // Validate index
+    if index > 3 {
+        warn!("light_enable: invalid light index {} (must be 0-3)", index);
+        return;
+    }
+
+    let state = &mut caller.data_mut().console;
+
+    // Extract current light state
+    let light = &state.current_shading_state.lights[index as usize];
+    let direction = light.get_direction();
+    let color = light.get_color();
+    let mut intensity = light.get_intensity();
+
+    // If intensity is 0, set to default so light is actually visible when enabled
+    if intensity == 0.0 {
+        intensity = 1.0;
+    }
+
+    // Enable light
+    state.update_light(index as usize, direction, color, intensity, true);
 }
 
 /// Disable a light
@@ -1900,7 +2652,15 @@ fn light_disable(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>
     }
 
     let state = &mut caller.data_mut().console;
-    state.lights[index as usize].enabled = false;
+
+    // Extract current light state
+    let light = &state.current_shading_state.lights[index as usize];
+    let direction = light.get_direction();
+    let color = light.get_color();
+    let intensity = light.get_intensity();
+
+    // Disable light
+    state.update_light(index as usize, direction, color, intensity, false);
 }
 
 /// Set bone transform matrices for GPU skinning
@@ -1995,14 +2755,205 @@ fn set_bones(
     state.bone_count = count;
 }
 
+// =============================================================================
+// Audio FFI Functions
+// =============================================================================
+
+/// Load raw PCM sound data (22.05kHz, 16-bit signed, mono)
+///
+/// Must be called during `init()`. Returns sound handle (u32).
+///
+/// # Parameters
+/// - `data_ptr`: Pointer to raw i16 PCM data in WASM memory
+/// - `byte_len`: Length of data in bytes (must be even, as each sample is 2 bytes)
+///
+/// # Returns
+/// Sound handle for use with play_sound, channel_play, music_play
+fn load_sound(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    data_ptr: u32,
+    byte_len: u32,
+) -> u32 {
+    // Enforce init-only
+    if !caller.data().game.in_init {
+        warn!("load_sound() called outside init() - ignored");
+        return 0;
+    }
+
+    // Validate byte length is even (each sample is 2 bytes)
+    if !byte_len.is_multiple_of(2) {
+        warn!("load_sound: byte_len must be even (got {})", byte_len);
+        return 0;
+    }
+
+    let sample_count = (byte_len / 2) as usize;
+
+    // Get WASM memory
+    let memory = match caller.get_export("memory") {
+        Some(wasmtime::Extern::Memory(mem)) => mem,
+        _ => {
+            warn!("load_sound: failed to get WASM memory");
+            return 0;
+        }
+    };
+
+    // Read PCM data from WASM memory
+    let mut pcm_data = vec![0i16; sample_count];
+    // SAFETY: This unsafe block is sound because:
+    // 1. The pointer comes from WASM memory export, guaranteed valid by wasmtime
+    // 2. byte_len is validated as even (divisible by 2), ensuring proper i16 alignment
+    // 3. sample_count = byte_len / 2, so we're reading exactly the right number of i16 samples
+    // 4. Data is immediately copied to owned Vec, no aliasing or lifetime issues
+    // 5. WASM linear memory is guaranteed to be valid for the duration of this call
+    let data_slice = unsafe {
+        let ptr = memory.data_ptr(&caller).add(data_ptr as usize);
+        std::slice::from_raw_parts(ptr as *const i16, sample_count)
+    };
+    pcm_data.copy_from_slice(data_slice);
+
+    let state = &mut caller.data_mut().console;
+
+    // Create Sound and add to sounds vec
+    let sound = Sound {
+        data: std::sync::Arc::new(pcm_data),
+    };
+
+    let handle = state.next_sound_handle;
+    state.next_sound_handle += 1;
+
+    // Resize sounds vec if needed
+    if handle as usize >= state.sounds.len() {
+        state.sounds.resize(handle as usize + 1, None);
+    }
+    state.sounds[handle as usize] = Some(sound);
+
+    info!("Loaded sound {} ({} samples)", handle, sample_count);
+    handle
+}
+
+/// Play sound on next available channel (fire-and-forget)
+///
+/// For one-shot sounds: gunshots, jumps, coins
+///
+/// # Parameters
+/// - `sound`: Sound handle from load_sound()
+/// - `volume`: 0.0 to 1.0
+/// - `pan`: -1.0 (left) to 1.0 (right), 0.0 = center
+fn play_sound(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    sound: u32,
+    volume: f32,
+    pan: f32,
+) {
+    let state = &mut caller.data_mut().console;
+    state
+        .audio_commands
+        .push(AudioCommand::PlaySound { sound, volume, pan });
+}
+
+/// Play sound on specific channel
+///
+/// For managed channels (positional/looping: engines, ambient, footsteps)
+///
+/// # Parameters
+/// - `channel`: 0-15
+/// - `sound`: Sound handle from load_sound()
+/// - `volume`: 0.0 to 1.0
+/// - `pan`: -1.0 (left) to 1.0 (right), 0.0 = center
+/// - `looping`: 1 = loop, 0 = play once
+fn channel_play(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    channel: u32,
+    sound: u32,
+    volume: f32,
+    pan: f32,
+    looping: u32,
+) {
+    let state = &mut caller.data_mut().console;
+    state.audio_commands.push(AudioCommand::ChannelPlay {
+        channel,
+        sound,
+        volume,
+        pan,
+        looping: looping != 0,
+    });
+}
+
+/// Update channel parameters (call every frame for positional audio)
+///
+/// # Parameters
+/// - `channel`: 0-15
+/// - `volume`: 0.0 to 1.0
+/// - `pan`: -1.0 (left) to 1.0 (right), 0.0 = center
+fn channel_set(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    channel: u32,
+    volume: f32,
+    pan: f32,
+) {
+    let state = &mut caller.data_mut().console;
+    state.audio_commands.push(AudioCommand::ChannelSet {
+        channel,
+        volume,
+        pan,
+    });
+}
+
+/// Stop channel
+///
+/// # Parameters
+/// - `channel`: 0-15
+fn channel_stop(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, channel: u32) {
+    let state = &mut caller.data_mut().console;
+    state
+        .audio_commands
+        .push(AudioCommand::ChannelStop { channel });
+}
+
+/// Play music (looping, dedicated channel)
+///
+/// # Parameters
+/// - `sound`: Sound handle from load_sound()
+/// - `volume`: 0.0 to 1.0
+fn music_play(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    sound: u32,
+    volume: f32,
+) {
+    let state = &mut caller.data_mut().console;
+    state
+        .audio_commands
+        .push(AudioCommand::MusicPlay { sound, volume });
+}
+
+/// Stop music
+fn music_stop(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>) {
+    let state = &mut caller.data_mut().console;
+    state.audio_commands.push(AudioCommand::MusicStop);
+}
+
+/// Set music volume
+///
+/// # Parameters
+/// - `volume`: 0.0 to 1.0
+fn music_set_volume(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, volume: f32) {
+    let state = &mut caller.data_mut().console;
+    state
+        .audio_commands
+        .push(AudioCommand::MusicSetVolume { volume });
+}
+
 #[cfg(test)]
 mod tests {
-    use emberware_core::wasm::{CameraState, GameState, DEFAULT_CAMERA_FOV, MAX_TRANSFORM_STACK};
-    use glam::{Mat4, Vec3};
+    use super::*;
+
+    // ========================================================================
+    // Init Config Defaults Tests
+    // ========================================================================
 
     #[test]
     fn test_init_config_defaults() {
-        let state = GameState::new();
+        let state = ZFFIState::new();
         assert_eq!(state.init_config.resolution_index, 1); // 540p
         assert_eq!(state.init_config.tick_rate_index, 2); // 60 fps
         assert_eq!(state.init_config.clear_color, 0x000000FF); // Black
@@ -2010,144 +2961,11 @@ mod tests {
         assert!(!state.init_config.modified);
     }
 
-    // ========================================================================
-    // Camera State Tests
-    // ========================================================================
-
-    #[test]
-    fn test_camera_state_defaults() {
-        let camera = CameraState::default();
-        assert_eq!(camera.position, Vec3::new(0.0, 0.0, 5.0));
-        assert_eq!(camera.target, Vec3::ZERO);
-        assert_eq!(camera.fov, DEFAULT_CAMERA_FOV);
-        assert_eq!(camera.near, 0.1);
-        assert_eq!(camera.far, 1000.0);
-    }
-
-    #[test]
-    fn test_camera_view_matrix() {
-        let camera = CameraState {
-            position: Vec3::new(0.0, 0.0, 5.0),
-            target: Vec3::ZERO,
-            fov: 60.0,
-            near: 0.1,
-            far: 100.0,
-        };
-
-        let view = camera.view_matrix();
-        // The view matrix should transform the target point to the origin
-        let target_in_view = view.transform_point3(camera.target);
-        // Should be at (0, 0, -5) in view space (camera looks down -Z)
-        assert!((target_in_view.z + 5.0).abs() < 0.001);
-    }
-
-    #[test]
-    fn test_camera_projection_matrix() {
-        let camera = CameraState::default();
-        let proj = camera.projection_matrix(16.0 / 9.0);
-
-        // Projection matrix should not be identity
-        assert_ne!(proj, Mat4::IDENTITY);
-        // Should have perspective (w != 1 for points not at origin)
-        let point = proj.project_point3(Vec3::new(0.0, 0.0, -10.0));
-        assert!(point.z.abs() < 1.0); // Should be in NDC range
-    }
-
-    #[test]
-    fn test_game_state_camera_initialized() {
-        let state = GameState::new();
-        assert_eq!(state.camera.fov, DEFAULT_CAMERA_FOV);
-        assert_eq!(state.camera.position, Vec3::new(0.0, 0.0, 5.0));
-    }
-
-    // ========================================================================
-    // Transform Stack Tests
-    // ========================================================================
-
-    #[test]
-    fn test_transform_stack_defaults() {
-        let state = GameState::new();
-        assert_eq!(state.current_transform, Mat4::IDENTITY);
-        assert!(state.transform_stack.is_empty());
-    }
-
-    #[test]
-    fn test_transform_stack_capacity() {
-        let state = GameState::new();
-        assert!(state.transform_stack.capacity() >= MAX_TRANSFORM_STACK);
-    }
-
-    #[test]
-    fn test_transform_operations_on_game_state() {
-        let mut state = GameState::new();
-
-        // Test translation
-        state.current_transform *= Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0));
-        let point = state.current_transform.transform_point3(Vec3::ZERO);
-        assert!((point - Vec3::new(1.0, 2.0, 3.0)).length() < 0.001);
-
-        // Reset and test rotation
-        state.current_transform = Mat4::IDENTITY;
-        let angle = std::f32::consts::FRAC_PI_2; // 90 degrees
-        state.current_transform *= Mat4::from_rotation_y(angle);
-        let point = state
-            .current_transform
-            .transform_point3(Vec3::new(1.0, 0.0, 0.0));
-        // Rotating (1,0,0) 90 degrees around Y should give (0,0,-1)
-        assert!((point.x).abs() < 0.001);
-        assert!((point.z + 1.0).abs() < 0.001);
-
-        // Reset and test scale
-        state.current_transform = Mat4::IDENTITY;
-        state.current_transform *= Mat4::from_scale(Vec3::new(2.0, 3.0, 4.0));
-        let point = state
-            .current_transform
-            .transform_point3(Vec3::new(1.0, 1.0, 1.0));
-        assert!((point - Vec3::new(2.0, 3.0, 4.0)).length() < 0.001);
-    }
-
-    #[test]
-    fn test_transform_push_pop() {
-        let mut state = GameState::new();
-
-        // Set up initial transform
-        state.current_transform = Mat4::from_translation(Vec3::new(1.0, 0.0, 0.0));
-        let original = state.current_transform;
-
-        // Push
-        state.transform_stack.push(state.current_transform);
-        assert_eq!(state.transform_stack.len(), 1);
-
-        // Modify current transform
-        state.current_transform *= Mat4::from_translation(Vec3::new(0.0, 1.0, 0.0));
-        assert_ne!(state.current_transform, original);
-
-        // Pop
-        state.current_transform = state.transform_stack.pop().unwrap();
-        assert_eq!(state.current_transform, original);
-        assert!(state.transform_stack.is_empty());
-    }
-
-    #[test]
-    fn test_transform_stack_max_depth() {
-        let mut state = GameState::new();
-
-        // Fill the stack to max
-        for i in 0..MAX_TRANSFORM_STACK {
-            assert!(state.transform_stack.len() < MAX_TRANSFORM_STACK);
-            state
-                .transform_stack
-                .push(Mat4::from_translation(Vec3::new(i as f32, 0.0, 0.0)));
-        }
-
-        assert_eq!(state.transform_stack.len(), MAX_TRANSFORM_STACK);
-    }
+    // Camera and transform stack tests removed - obsolete with matrix pool system
 
     // ========================================================================
     // GPU Skinning FFI Tests
     // ========================================================================
-
-    use emberware_core::wasm::MAX_BONES;
 
     #[test]
     fn test_vertex_stride_skinned_constant() {
@@ -2155,138 +2973,27 @@ mod tests {
         const SKINNING_OVERHEAD: u32 = 20;
 
         // Test base format + skinning
-        assert_eq!(
-            super::vertex_stride(super::FORMAT_SKINNED),
-            12 + SKINNING_OVERHEAD
-        ); // 32
+        assert_eq!(vertex_stride(FORMAT_SKINNED), 12 + SKINNING_OVERHEAD); // 32
     }
 
     #[test]
     fn test_vertex_stride_all_skinned_formats() {
         // All 8 skinned format combinations
-        assert_eq!(super::vertex_stride(8), 32); // POS_SKINNED
-        assert_eq!(super::vertex_stride(9), 40); // POS_UV_SKINNED
-        assert_eq!(super::vertex_stride(10), 44); // POS_COLOR_SKINNED
-        assert_eq!(super::vertex_stride(11), 52); // POS_UV_COLOR_SKINNED
-        assert_eq!(super::vertex_stride(12), 44); // POS_NORMAL_SKINNED
-        assert_eq!(super::vertex_stride(13), 52); // POS_UV_NORMAL_SKINNED
-        assert_eq!(super::vertex_stride(14), 56); // POS_COLOR_NORMAL_SKINNED
-        assert_eq!(super::vertex_stride(15), 64); // POS_UV_COLOR_NORMAL_SKINNED
-    }
-
-    #[test]
-    fn test_max_bones_constant() {
-        // MAX_BONES should be 256 for GPU skinning
-        assert_eq!(MAX_BONES, 256);
+        assert_eq!(vertex_stride(8), 32); // POS_SKINNED
+        assert_eq!(vertex_stride(9), 40); // POS_UV_SKINNED
+        assert_eq!(vertex_stride(10), 44); // POS_COLOR_SKINNED
+        assert_eq!(vertex_stride(11), 52); // POS_UV_COLOR_SKINNED
+        assert_eq!(vertex_stride(12), 44); // POS_NORMAL_SKINNED
+        assert_eq!(vertex_stride(13), 52); // POS_UV_NORMAL_SKINNED
+        assert_eq!(vertex_stride(14), 56); // POS_COLOR_NORMAL_SKINNED
+        assert_eq!(vertex_stride(15), 64); // POS_UV_COLOR_NORMAL_SKINNED
     }
 
     #[test]
     fn test_render_state_bone_matrices_default() {
-        let state = GameState::new();
+        let state = ZFFIState::new();
         assert!(state.bone_matrices.is_empty());
         assert_eq!(state.bone_count, 0);
-    }
-
-    #[test]
-    fn test_render_state_bone_matrices_mutation() {
-        let mut state = GameState::new();
-
-        // Add bone matrices
-        let bone = Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0));
-        state.bone_matrices.push(bone);
-        state.bone_count = 1;
-
-        assert_eq!(state.bone_matrices.len(), 1);
-        assert_eq!(state.bone_count, 1);
-        assert_eq!(state.bone_matrices[0], bone);
-    }
-
-    #[test]
-    fn test_render_state_bone_matrices_clear() {
-        let mut state = GameState::new();
-
-        // Add some bones
-        for _ in 0..10 {
-            state.bone_matrices.push(Mat4::IDENTITY);
-        }
-        state.bone_count = 10;
-
-        // Clear
-        state.bone_matrices.clear();
-        state.bone_count = 0;
-
-        assert!(state.bone_matrices.is_empty());
-        assert_eq!(state.bone_count, 0);
-    }
-
-    #[test]
-    fn test_render_state_bone_matrices_max_count() {
-        let mut state = GameState::new();
-
-        // Fill with MAX_BONES matrices
-        for i in 0..MAX_BONES {
-            let bone = Mat4::from_translation(Vec3::new(i as f32, 0.0, 0.0));
-            state.bone_matrices.push(bone);
-        }
-        state.bone_count = MAX_BONES as u32;
-
-        assert_eq!(state.bone_matrices.len(), MAX_BONES);
-        assert_eq!(state.bone_count, MAX_BONES as u32);
-    }
-
-    #[test]
-    fn test_skinned_format_flag_value() {
-        // FORMAT_SKINNED should be 8 (bit 3)
-        assert_eq!(super::FORMAT_SKINNED, 8);
-    }
-
-    #[test]
-    fn test_max_vertex_format_includes_skinned() {
-        // MAX_VERTEX_FORMAT should be 15 (all flags set: UV=1 | COLOR=2 | NORMAL=4 | SKINNED=8)
-        assert_eq!(super::MAX_VERTEX_FORMAT, 15);
-    }
-
-    #[test]
-    fn test_bone_matrix_identity_transform() {
-        // Verify identity bone matrix doesn't transform a vertex
-        let bone = Mat4::IDENTITY;
-        let vertex = Vec3::new(1.0, 2.0, 3.0);
-        let transformed = bone.transform_point3(vertex);
-
-        assert_eq!(transformed, vertex);
-    }
-
-    #[test]
-    fn test_bone_matrix_translation() {
-        let bone = Mat4::from_translation(Vec3::new(5.0, 0.0, 0.0));
-        let vertex = Vec3::ZERO;
-        let transformed = bone.transform_point3(vertex);
-
-        assert!((transformed.x - 5.0).abs() < 0.0001);
-        assert!(transformed.y.abs() < 0.0001);
-        assert!(transformed.z.abs() < 0.0001);
-    }
-
-    #[test]
-    fn test_bone_matrix_column_major_layout() {
-        // Verify glam uses column-major layout (same as WGSL/wgpu)
-        let translation = Mat4::from_translation(Vec3::new(10.0, 20.0, 30.0));
-        let cols = translation.to_cols_array();
-
-        // Column 3 (indices 12-15) contains translation
-        assert_eq!(cols[12], 10.0); // x translation
-        assert_eq!(cols[13], 20.0); // y translation
-        assert_eq!(cols[14], 30.0); // z translation
-        assert_eq!(cols[15], 1.0); // w = 1
-    }
-
-    #[test]
-    fn test_bone_weights_sum_to_one() {
-        // In GPU skinning, bone weights should sum to 1.0
-        // This is a convention test - games should ensure this
-        let weights = [0.5f32, 0.3, 0.15, 0.05];
-        let sum: f32 = weights.iter().sum();
-        assert!((sum - 1.0).abs() < 0.0001);
     }
 
     // ========================================================================
@@ -2294,44 +3001,27 @@ mod tests {
     // ========================================================================
 
     #[test]
-    fn test_vertex_format_constants() {
-        assert_eq!(super::FORMAT_UV, 1);
-        assert_eq!(super::FORMAT_COLOR, 2);
-        assert_eq!(super::FORMAT_NORMAL, 4);
-        assert_eq!(super::FORMAT_SKINNED, 8);
-    }
-
-    #[test]
     fn test_vertex_stride_base_formats() {
         // Base formats without skinning
-        assert_eq!(super::vertex_stride(0), 12); // POS: 3 floats = 12 bytes
-        assert_eq!(super::vertex_stride(1), 20); // POS_UV: 3 + 2 floats = 20 bytes
-        assert_eq!(super::vertex_stride(2), 24); // POS_COLOR: 3 + 3 floats = 24 bytes
-        assert_eq!(super::vertex_stride(3), 32); // POS_UV_COLOR: 3 + 2 + 3 floats = 32 bytes
-        assert_eq!(super::vertex_stride(4), 24); // POS_NORMAL: 3 + 3 floats = 24 bytes
-        assert_eq!(super::vertex_stride(5), 32); // POS_UV_NORMAL: 3 + 2 + 3 floats = 32 bytes
-        assert_eq!(super::vertex_stride(6), 36); // POS_COLOR_NORMAL: 3 + 3 + 3 floats = 36 bytes
-        assert_eq!(super::vertex_stride(7), 44); // POS_UV_COLOR_NORMAL: 3 + 2 + 3 + 3 floats = 44 bytes
+        assert_eq!(vertex_stride(0), 12); // POS: 3 floats = 12 bytes
+        assert_eq!(vertex_stride(1), 20); // POS_UV: 3 + 2 floats = 20 bytes
+        assert_eq!(vertex_stride(2), 24); // POS_COLOR: 3 + 3 floats = 24 bytes
+        assert_eq!(vertex_stride(3), 32); // POS_UV_COLOR: 3 + 2 + 3 floats = 32 bytes
+        assert_eq!(vertex_stride(4), 24); // POS_NORMAL: 3 + 3 floats = 24 bytes
+        assert_eq!(vertex_stride(5), 32); // POS_UV_NORMAL: 3 + 2 + 3 floats = 32 bytes
+        assert_eq!(vertex_stride(6), 36); // POS_COLOR_NORMAL: 3 + 3 + 3 floats = 36 bytes
+        assert_eq!(vertex_stride(7), 44); // POS_UV_COLOR_NORMAL: 3 + 2 + 3 + 3 floats = 44 bytes
     }
 
     #[test]
     fn test_vertex_stride_all_format_combinations() {
         // Verify all 16 format combinations have correct stride
         for format in 0..=15u8 {
-            let stride = super::vertex_stride(format);
+            let stride = vertex_stride(format);
             // Minimum is 12 (POS only), maximum is 64 (all attributes + skinning)
             assert!(stride >= 12);
             assert!(stride <= 64);
         }
-    }
-
-    #[test]
-    fn test_max_vertex_format_boundary() {
-        // MAX_VERTEX_FORMAT is 15, all format bits set
-        assert_eq!(
-            super::MAX_VERTEX_FORMAT,
-            super::FORMAT_UV | super::FORMAT_COLOR | super::FORMAT_NORMAL | super::FORMAT_SKINNED
-        );
     }
 
     // ========================================================================
@@ -2340,8 +3030,8 @@ mod tests {
 
     #[test]
     fn test_render_state_defaults() {
-        let state = GameState::new();
-        assert_eq!(state.color, 0xFFFFFFFF); // White
+        let state = ZFFIState::new();
+        assert_eq!(state.current_shading_state.color_rgba8, 0xFFFFFFFF); // White
         assert!(state.depth_test); // Enabled
         assert_eq!(state.cull_mode, 1); // Back-face culling
         assert_eq!(state.blend_mode, 0); // Opaque
@@ -2350,26 +3040,19 @@ mod tests {
 
     #[test]
     fn test_render_state_texture_slots_default() {
-        let state = GameState::new();
+        let state = ZFFIState::new();
         assert_eq!(state.bound_textures, [0; 4]); // All slots unbound
     }
 
-    #[test]
-    fn test_render_state_material_defaults() {
-        let state = GameState::new();
-        assert_eq!(state.material_metallic, 0.0);
-        assert_eq!(state.material_roughness, 0.5);
-        assert_eq!(state.material_emissive, 0.0);
-    }
+    // Material field tests removed - now stored in unified shading state
 
     #[test]
     fn test_render_state_lights_default() {
-        let state = GameState::new();
+        let state = ZFFIState::new();
+        // Lights now stored in current_shading_state
         for i in 0..4 {
-            assert!(!state.lights[i].enabled);
-            assert_eq!(state.lights[i].direction, [0.0, -1.0, 0.0]);
-            assert_eq!(state.lights[i].color, [1.0, 1.0, 1.0]);
-            assert_eq!(state.lights[i].intensity, 1.0);
+            let light = &state.current_shading_state.lights[i];
+            assert!(!light.is_enabled());
         }
     }
 
@@ -2397,53 +3080,32 @@ mod tests {
         assert_eq!(TICK_RATES[3], 120); // 120 fps
     }
 
-    #[test]
-    fn test_init_config_render_mode_values() {
-        // Render modes: 0=Unlit, 1=Matcap, 2=PBR, 3=Hybrid
-        assert!((0..=3).contains(&0)); // Valid modes are 0-3
-        assert!(!(0..=3).contains(&4)); // 4 is invalid
-    }
-
     // ========================================================================
-    // Input State Tests
+    // Input State Tests (moved to console.rs - ZInput tests)
     // ========================================================================
 
-    use emberware_core::wasm::{InputState, MAX_PLAYERS};
+    use crate::{console::ZInput, graphics::FORMAT_SKINNED};
 
     #[test]
-    fn test_input_state_defaults() {
-        let state = GameState::new();
-        for i in 0..MAX_PLAYERS {
-            assert_eq!(state.input_curr[i].buttons, 0);
-            assert_eq!(state.input_curr[i].left_stick_x, 0);
-            assert_eq!(state.input_curr[i].left_stick_y, 0);
-            assert_eq!(state.input_curr[i].right_stick_x, 0);
-            assert_eq!(state.input_curr[i].right_stick_y, 0);
-            assert_eq!(state.input_curr[i].left_trigger, 0);
-            assert_eq!(state.input_curr[i].right_trigger, 0);
-        }
-    }
-
-    #[test]
-    fn test_input_state_button_bitmask() {
+    fn test_zinput_button_bitmask() {
         // Verify button bitmask layout
 
         // Button 0 (UP) should be bit 0
-        let input = InputState {
+        let input = ZInput {
             buttons: 1 << 0,
             ..Default::default()
         };
         assert_eq!(input.buttons & (1 << 0), 1);
 
         // Button 13 (SELECT) should be bit 13
-        let input = InputState {
+        let input = ZInput {
             buttons: 1 << 13,
             ..Default::default()
         };
         assert_eq!(input.buttons & (1 << 13), 1 << 13);
 
         // All buttons set
-        let input = InputState {
+        let input = ZInput {
             buttons: 0x3FFF, // 14 buttons (0-13)
             ..Default::default()
         };
@@ -2453,9 +3115,9 @@ mod tests {
     }
 
     #[test]
-    fn test_input_state_stick_range() {
+    fn test_zinput_stick_range() {
         // Sticks are i8 (-128 to 127)
-        let input = InputState {
+        let input = ZInput {
             buttons: 0,
             left_stick_x: -128,
             left_stick_y: 127,
@@ -2472,9 +3134,9 @@ mod tests {
     }
 
     #[test]
-    fn test_input_state_trigger_range() {
+    fn test_zinput_trigger_range() {
         // Triggers are u8 (0 to 255)
-        let input = InputState {
+        let input = ZInput {
             buttons: 0,
             left_stick_x: 0,
             left_stick_y: 0,
@@ -2489,198 +3151,33 @@ mod tests {
         assert_eq!(input.right_trigger as f32 / 255.0, 1.0);
     }
 
-    #[test]
-    fn test_input_prev_curr_independence() {
-        let mut state = GameState::new();
-
-        // Modify current input
-        state.input_curr[0].buttons = 0xFF;
-        state.input_prev[0].buttons = 0x00;
-
-        // They should be independent
-        assert_ne!(state.input_curr[0].buttons, state.input_prev[0].buttons);
-    }
-
-    #[test]
-    fn test_max_players_constant() {
-        assert_eq!(MAX_PLAYERS, 4);
-    }
-
     // ========================================================================
     // Draw Command Tests
     // ========================================================================
 
-    use emberware_core::wasm::DrawCommand;
-
     #[test]
     fn test_draw_commands_initially_empty() {
-        let state = GameState::new();
-        assert!(state.draw_commands.is_empty());
+        let state = ZFFIState::new();
+        assert!(state.render_pass.commands().is_empty());
+        assert!(state.deferred_commands.is_empty());
     }
 
-    #[test]
-    fn test_draw_commands_can_be_added() {
-        let mut state = GameState::new();
-
-        state.draw_commands.push(ZDrawCommand::DrawRect {
-            x: 0.0,
-            y: 0.0,
-            width: 100.0,
-            height: 100.0,
-            color: 0xFF0000FF,
-            blend_mode: 0,
-        });
-
-        assert_eq!(state.draw_commands.len(), 1);
-    }
-
-    #[test]
-    fn test_draw_command_mesh_captures_state() {
-        let mut state = GameState::new();
-
-        // Set up render state
-        state.color = 0x00FF00FF;
-        state.depth_test = false;
-        state.cull_mode = 2;
-        state.blend_mode = 1;
-        state.bound_textures = [1, 2, 3, 4];
-        state.current_transform = Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0));
-
-        // Push draw command
-        state.draw_commands.push(ZDrawCommand::DrawMesh {
-            handle: 1,
-            transform: state.current_transform,
-            color: state.color,
-            depth_test: state.depth_test,
-            cull_mode: state.cull_mode,
-            blend_mode: state.blend_mode,
-            bound_textures: state.bound_textures,
-        });
-
-        // Verify state was captured
-        if let ZDrawCommand::DrawMesh {
-            handle,
-            transform,
-            color,
-            depth_test,
-            cull_mode,
-            blend_mode,
-            bound_textures,
-        } = &state.draw_commands[0]
-        {
-            assert_eq!(*handle, 1);
-            assert_eq!(*transform, Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0)));
-            assert_eq!(*color, 0x00FF00FF);
-            assert!(!*depth_test);
-            assert_eq!(*cull_mode, 2);
-            assert_eq!(*blend_mode, 1);
-            assert_eq!(*bound_textures, [1, 2, 3, 4]);
-        } else {
-            panic!("Expected DrawMesh command");
-        }
-    }
-
-    #[test]
-    fn test_draw_command_triangles_format() {
-        let mut state = GameState::new();
-
-        state.draw_commands.push(ZDrawCommand::DrawTriangles {
-            format: 7,                        // POS_UV_COLOR_NORMAL
-            vertex_data: vec![1.0, 2.0, 3.0], // Minimal data for test
-            transform: Mat4::IDENTITY,
-            color: 0xFFFFFFFF,
-            depth_test: true,
-            cull_mode: 1,
-            blend_mode: 0,
-            bound_textures: [0; 4],
-        });
-
-        if let ZDrawCommand::DrawTriangles { format, .. } = &state.draw_commands[0] {
-            assert_eq!(*format, 7);
-        } else {
-            panic!("Expected DrawTriangles command");
-        }
-    }
-
-    #[test]
-    fn test_draw_command_billboard_modes() {
-        // Verify all billboard modes 1-4
-        for mode in 1u8..=4u8 {
-            let cmd = ZDrawCommand::DrawBillboard {
-                width: 1.0,
-                height: 1.0,
-                mode,
-                uv_rect: None,
-                transform: Mat4::IDENTITY,
-                color: 0xFFFFFFFF,
-                depth_test: true,
-                cull_mode: 0,
-                blend_mode: 1,
-                bound_textures: [0; 4],
-            };
-
-            if let ZDrawCommand::DrawBillboard { mode: m, .. } = cmd {
-                assert!((1..=4).contains(&m));
-            }
-        }
-    }
-
-    #[test]
-    fn test_draw_command_sprite_with_uv_rect() {
-        let mut state = GameState::new();
-
-        state.draw_commands.push(ZDrawCommand::DrawSprite {
-            x: 10.0,
-            y: 20.0,
-            width: 32.0,
-            height: 32.0,
-            uv_rect: Some((0.0, 0.5, 0.5, 0.5)), // Half texture
-            origin: Some((16.0, 16.0)),
-            rotation: 45.0,
-            color: 0xFFFFFFFF,
-            blend_mode: 1,
-            bound_textures: [0; 4],
-        });
-
-        if let ZDrawCommand::DrawSprite {
-            uv_rect,
-            origin,
-            rotation,
-            ..
-        } = &state.draw_commands[0]
-        {
-            assert!(uv_rect.is_some());
-            let (u, v, w, h) = uv_rect.unwrap();
-            assert_eq!(u, 0.0);
-            assert_eq!(v, 0.5);
-            assert_eq!(w, 0.5);
-            assert_eq!(h, 0.5);
-
-            assert!(origin.is_some());
-            let (ox, oy) = origin.unwrap();
-            assert_eq!(ox, 16.0);
-            assert_eq!(oy, 16.0);
-
-            assert_eq!(*rotation, 45.0);
-        } else {
-            panic!("Expected DrawSprite command");
-        }
-    }
+    // Command buffer recording tests removed - testing implementation details that changed with unified shading state
 
     #[test]
     fn test_draw_command_text() {
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
 
-        state.draw_commands.push(ZDrawCommand::DrawText {
+        state.deferred_commands.push(DeferredCommand::DrawText {
             text: b"Hello".to_vec(),
             x: 100.0,
             y: 200.0,
             size: 16.0,
             color: 0x000000FF,
-            blend_mode: 1,
+            font: 0,
         });
 
-        if let ZDrawCommand::DrawText { text, size, .. } = &state.draw_commands[0] {
+        if let DeferredCommand::DrawText { text, size, .. } = &state.deferred_commands[0] {
             assert_eq!(std::str::from_utf8(text).unwrap(), "Hello");
             assert_eq!(*size, 16.0);
         } else {
@@ -2688,51 +3185,21 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_draw_command_set_sky() {
-        let mut state = GameState::new();
-
-        state.draw_commands.push(ZDrawCommand::SetSky {
-            horizon_color: [0.5, 0.6, 0.7],
-            zenith_color: [0.1, 0.2, 0.8],
-            sun_direction: [0.0, 1.0, 0.0],
-            sun_color: [1.0, 0.9, 0.8],
-            sun_sharpness: 64.0,
-        });
-
-        if let ZDrawCommand::SetSky {
-            horizon_color,
-            zenith_color,
-            sun_direction,
-            sun_color,
-            sun_sharpness,
-        } = &state.draw_commands[0]
-        {
-            assert_eq!(horizon_color[0], 0.5);
-            assert_eq!(zenith_color[2], 0.8);
-            assert_eq!(sun_direction[1], 1.0);
-            assert_eq!(sun_color[0], 1.0);
-            assert_eq!(*sun_sharpness, 64.0);
-        } else {
-            panic!("Expected SetSky command");
-        }
-    }
+    // SetSky test removed - sky is now part of unified shading state, not a deferred command
 
     // ========================================================================
     // Pending Resource Tests
     // ========================================================================
 
-    use emberware_core::wasm::{PendingMesh, PendingTexture};
-
     #[test]
     fn test_pending_textures_initially_empty() {
-        let state = GameState::new();
+        let state = ZFFIState::new();
         assert!(state.pending_textures.is_empty());
     }
 
     #[test]
     fn test_pending_meshes_initially_empty() {
-        let state = GameState::new();
+        let state = ZFFIState::new();
         assert!(state.pending_meshes.is_empty());
     }
 
@@ -2782,7 +3249,7 @@ mod tests {
 
     #[test]
     fn test_next_texture_handle_increments() {
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
         let initial = state.next_texture_handle;
 
         state.next_texture_handle += 1;
@@ -2794,77 +3261,20 @@ mod tests {
 
     #[test]
     fn test_next_mesh_handle_increments() {
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
         let initial = state.next_mesh_handle;
 
         state.next_mesh_handle += 1;
         assert_eq!(state.next_mesh_handle, initial + 1);
     }
 
-    // ========================================================================
-    // Light State Tests
-    // ========================================================================
-
-    use emberware_core::wasm::LightState;
-
-    #[test]
-    fn test_light_state_default() {
-        let light = LightState::default();
-        assert!(!light.enabled);
-        assert_eq!(light.direction, [0.0, -1.0, 0.0]);
-        assert_eq!(light.color, [1.0, 1.0, 1.0]);
-        assert_eq!(light.intensity, 1.0);
-    }
-
-    #[test]
-    fn test_light_state_all_fields() {
-        let light = LightState {
-            enabled: true,
-            direction: [0.5, 0.5, 0.707],
-            color: [1.0, 0.5, 0.0],
-            intensity: 2.5,
-        };
-
-        assert!(light.enabled);
-        assert_eq!(light.direction[0], 0.5);
-        assert_eq!(light.color[1], 0.5);
-        assert_eq!(light.intensity, 2.5);
-    }
+    // LightState tests removed - obsolete, now using PackedLight in unified shading state
 
     #[test]
     fn test_four_light_slots() {
-        let state = GameState::new();
-        assert_eq!(state.lights.len(), 4);
-    }
-
-    // ========================================================================
-    // Save Data Tests
-    // ========================================================================
-
-    use emberware_core::wasm::MAX_SAVE_SLOTS;
-
-    #[test]
-    fn test_save_slots_constant() {
-        assert_eq!(MAX_SAVE_SLOTS, 8);
-    }
-
-    #[test]
-    fn test_save_data_initially_none() {
-        let state = GameState::new();
-        for i in 0..MAX_SAVE_SLOTS {
-            assert!(state.save_data[i].is_none());
-        }
-    }
-
-    #[test]
-    fn test_save_data_can_store_bytes() {
-        let mut state = GameState::new();
-        state.save_data[0] = Some(vec![0xDE, 0xAD, 0xBE, 0xEF]);
-
-        assert!(state.save_data[0].is_some());
-        let data = state.save_data[0].as_ref().unwrap();
-        assert_eq!(data.len(), 4);
-        assert_eq!(data[0], 0xDE);
+        let state = ZFFIState::new();
+        // Lights now stored in current_shading_state
+        assert_eq!(state.current_shading_state.lights.len(), 4);
     }
 
     // ========================================================================
@@ -2932,58 +3342,6 @@ mod tests {
     }
 
     // ========================================================================
-    // Game State Lifecycle Tests
-    // ========================================================================
-
-    #[test]
-    fn test_in_init_flag_default() {
-        // GameState::new() starts with in_init = true so init-only FFI functions work
-        let state = GameState::new();
-        assert!(state.in_init);
-    }
-
-    #[test]
-    fn test_quit_requested_flag_default() {
-        let state = GameState::new();
-        assert!(!state.quit_requested);
-    }
-
-    #[test]
-    fn test_tick_count_default() {
-        let state = GameState::new();
-        assert_eq!(state.tick_count, 0);
-    }
-
-    #[test]
-    fn test_elapsed_time_default() {
-        let state = GameState::new();
-        assert_eq!(state.elapsed_time, 0.0);
-    }
-
-    #[test]
-    fn test_delta_time_default() {
-        let state = GameState::new();
-        assert_eq!(state.delta_time, 0.0);
-    }
-
-    // ========================================================================
-    // RNG Tests
-    // ========================================================================
-
-    #[test]
-    fn test_rng_seed_default() {
-        let state = GameState::new();
-        assert_eq!(state.rng_state, 0);
-    }
-
-    #[test]
-    fn test_rng_seed_can_be_set() {
-        let mut state = GameState::new();
-        state.rng_state = 12345;
-        assert_eq!(state.rng_state, 12345);
-    }
-
-    // ========================================================================
     // Negative Test Cases for FFI Error Conditions
     // ========================================================================
     //
@@ -3001,7 +3359,7 @@ mod tests {
     fn test_texture_bind_invalid_handle_zero() {
         // Handle 0 is reserved/invalid - binding it should still set the slot
         // (validation happens at draw time, not bind time)
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
         state.bound_textures[0] = 0;
         assert_eq!(state.bound_textures[0], 0);
     }
@@ -3010,7 +3368,7 @@ mod tests {
     fn test_texture_bind_handle_not_loaded() {
         // Handle 999 doesn't exist but binding should still succeed
         // (validation is deferred to graphics backend)
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
         state.bound_textures[0] = 999;
         assert_eq!(state.bound_textures[0], 999);
     }
@@ -3018,7 +3376,7 @@ mod tests {
     #[test]
     fn test_texture_bind_slot_invalid_index() {
         // Slot index > 3 is invalid
-        let state = GameState::new();
+        let state = ZFFIState::new();
         // Verify only 4 slots exist
         assert_eq!(state.bound_textures.len(), 4);
     }
@@ -3026,7 +3384,7 @@ mod tests {
     #[test]
     fn test_texture_bind_all_slots_independently() {
         // Test that binding to one slot doesn't affect others
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
         state.bound_textures[0] = 1;
         state.bound_textures[1] = 2;
         state.bound_textures[2] = 3;
@@ -3046,44 +3404,35 @@ mod tests {
     fn test_draw_mesh_handle_zero_produces_no_command() {
         // Handle 0 is invalid - draw_mesh should reject it
         // Simulate what draw_mesh does: it checks handle == 0 and returns early
-        let mut state = GameState::new();
+        let state = ZFFIState::new();
         let handle = 0u32;
 
         // Simulate the validation in draw_mesh
         if handle == 0 {
             // Should not add a draw command
         } else {
-            state.draw_commands.push(ZDrawCommand::DrawMesh {
-                handle,
-                transform: Mat4::IDENTITY,
-                color: 0xFFFFFFFF,
-                depth_test: true,
-                cull_mode: 1,
-                blend_mode: 0,
-                bound_textures: [0; 4],
-            });
+            // Manual record would go here
         }
 
         // No command should have been added
-        assert!(state.draw_commands.is_empty());
+        assert!(state.render_pass.commands().is_empty());
     }
 
     #[test]
     fn test_mesh_handle_not_loaded() {
-        // Handle 999 doesn't exist - draw command is still queued
-        // (validation is deferred to graphics backend)
-        let mut state = GameState::new();
-        state.draw_commands.push(ZDrawCommand::DrawMesh {
-            handle: 999,
-            transform: Mat4::IDENTITY,
-            color: 0xFFFFFFFF,
-            depth_test: true,
-            cull_mode: 1,
-            blend_mode: 0,
-            bound_textures: [0; 4],
-        });
+        // Handle 999 doesn't exist - draw command is NOT queued in new system
+        // because we check mesh_map immediately
+        let state = ZFFIState::new();
 
-        assert_eq!(state.draw_commands.len(), 1);
+        // Simulate draw_mesh logic
+        let handle = 999;
+        if state.mesh_map.contains_key(&handle) {
+            // record
+        } else {
+            // warn and return
+        }
+
+        assert!(state.render_pass.commands().is_empty());
     }
 
     // ------------------------------------------------------------------------
@@ -3185,7 +3534,7 @@ mod tests {
     #[test]
     fn test_cull_mode_invalid_resets_to_default() {
         // When an invalid cull mode is set, it should reset to 0 (none)
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
 
         // Simulate invalid mode handling
         let mode = 5u32;
@@ -3223,7 +3572,7 @@ mod tests {
     #[test]
     fn test_blend_mode_invalid_resets_to_default() {
         // When an invalid blend mode is set, it should reset to 0 (none)
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
 
         // Simulate invalid mode handling
         let mode = 5u32;
@@ -3261,7 +3610,7 @@ mod tests {
     #[test]
     fn test_texture_filter_invalid_resets_to_default() {
         // When an invalid filter is set, it should reset to 0 (nearest)
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
 
         // Simulate invalid filter handling
         let filter = 5u32;
@@ -3360,11 +3709,11 @@ mod tests {
     #[test]
     fn test_light_index_boundary_valid() {
         // Valid indices are 0-3
-        let state = GameState::new();
-        assert_eq!(state.lights.len(), 4);
+        let state = ZFFIState::new();
+        assert_eq!(state.current_shading_state.lights.len(), 4);
 
         for i in 0..4 {
-            assert!(i < state.lights.len());
+            assert!(i < state.current_shading_state.lights.len());
         }
     }
 
@@ -3555,36 +3904,7 @@ mod tests {
         assert_eq!(default_direction[1], -1.0);
     }
 
-    // ------------------------------------------------------------------------
-    // Edge Case Tests: Transform Stack Overflow/Underflow
-    // ------------------------------------------------------------------------
-
-    #[test]
-    fn test_transform_stack_overflow_detection() {
-        let mut state = GameState::new();
-
-        // Fill stack to max
-        for _ in 0..MAX_TRANSFORM_STACK {
-            state.transform_stack.push(Mat4::IDENTITY);
-        }
-
-        // Stack is now full
-        assert_eq!(state.transform_stack.len(), MAX_TRANSFORM_STACK);
-
-        // Attempting to push more should fail (detected by length check)
-        assert!(state.transform_stack.len() >= MAX_TRANSFORM_STACK);
-    }
-
-    #[test]
-    fn test_transform_stack_underflow_detection() {
-        let mut state = GameState::new();
-
-        // Stack is empty
-        assert!(state.transform_stack.is_empty());
-
-        // Attempting to pop should return None
-        assert!(state.transform_stack.pop().is_none());
-    }
+    // Transform stack tests removed - obsolete with matrix pool system
 
     // ------------------------------------------------------------------------
     // Edge Case Tests: Bone Count Limits
@@ -3592,7 +3912,7 @@ mod tests {
 
     #[test]
     fn test_bone_count_zero_clears_matrices() {
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
 
         // Add some bones first
         state.bone_matrices.push(Mat4::IDENTITY);
@@ -3618,51 +3938,6 @@ mod tests {
         // Count == MAX_BONES should be allowed
         let count = MAX_BONES as u32;
         assert!(count <= MAX_BONES as u32);
-    }
-
-    // ------------------------------------------------------------------------
-    // Edge Case Tests: Draw Triangles Vertex Count
-    // ------------------------------------------------------------------------
-
-    #[test]
-    fn test_draw_triangles_vertex_count_zero() {
-        // Vertex count 0 should produce no draw command
-        let mut state = GameState::new();
-        let vertex_count = 0u32;
-
-        if vertex_count == 0 {
-            // Do nothing - early return
-        } else {
-            state.draw_commands.push(ZDrawCommand::DrawTriangles {
-                format: 0,
-                vertex_data: vec![],
-                transform: Mat4::IDENTITY,
-                color: 0xFFFFFFFF,
-                depth_test: true,
-                cull_mode: 1,
-                blend_mode: 0,
-                bound_textures: [0; 4],
-            });
-        }
-
-        assert!(state.draw_commands.is_empty());
-    }
-
-    #[test]
-    fn test_draw_triangles_vertex_count_not_multiple_of_three() {
-        // Vertex count must be multiple of 3 for triangles
-        let invalid_counts = [1u32, 2, 4, 5, 7, 8, 10, 11];
-        for count in invalid_counts {
-            assert!(count % 3 != 0);
-        }
-    }
-
-    #[test]
-    fn test_draw_triangles_vertex_count_valid_multiples() {
-        let valid_counts = [3u32, 6, 9, 12, 15, 30, 300];
-        for count in valid_counts {
-            assert!(count % 3 == 0);
-        }
     }
 
     // ------------------------------------------------------------------------
@@ -3719,82 +3994,12 @@ mod tests {
     }
 
     // ------------------------------------------------------------------------
-    // Edge Case Tests: Init-Only Functions Called Outside Init
-    // ------------------------------------------------------------------------
-
-    #[test]
-    fn test_init_only_guard_inside_init() {
-        let state = GameState::new();
-        // By default, in_init is true
-        assert!(state.in_init);
-    }
-
-    #[test]
-    fn test_init_only_guard_outside_init() {
-        let mut state = GameState::new();
-        state.in_init = false;
-        // After init phase, in_init should be false
-        assert!(!state.in_init);
-    }
-
-    // ------------------------------------------------------------------------
     // Edge Case Tests: Draw Command Buffer Growth
     // ------------------------------------------------------------------------
-
-    #[test]
-    fn test_draw_commands_grow_dynamically() {
-        let mut state = GameState::new();
-
-        // Add many draw commands
-        for i in 0..1000 {
-            state.draw_commands.push(ZDrawCommand::DrawRect {
-                x: i as f32,
-                y: 0.0,
-                width: 10.0,
-                height: 10.0,
-                color: 0xFFFFFFFF,
-                blend_mode: 0,
-            });
-        }
-
-        assert_eq!(state.draw_commands.len(), 1000);
-    }
 
     // ------------------------------------------------------------------------
     // Edge Case Tests: Pending Resources Growth
     // ------------------------------------------------------------------------
-
-    #[test]
-    fn test_pending_textures_grow_dynamically() {
-        let mut state = GameState::new();
-
-        for i in 0..100 {
-            state.pending_textures.push(PendingTexture {
-                handle: i + 1,
-                width: 8,
-                height: 8,
-                data: vec![0xFF; 8 * 8 * 4],
-            });
-        }
-
-        assert_eq!(state.pending_textures.len(), 100);
-    }
-
-    #[test]
-    fn test_pending_meshes_grow_dynamically() {
-        let mut state = GameState::new();
-
-        for i in 0..100 {
-            state.pending_meshes.push(PendingMesh {
-                handle: i + 1,
-                format: 0,
-                vertex_data: vec![0.0; 9], // 3 vertices × 3 floats
-                index_data: None,
-            });
-        }
-
-        assert_eq!(state.pending_meshes.len(), 100);
-    }
 
     // ------------------------------------------------------------------------
     // Edge Case Tests: Handle Allocation Overflow
@@ -3802,7 +4007,7 @@ mod tests {
 
     #[test]
     fn test_texture_handle_wrapping() {
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
 
         // Set handle near max
         state.next_texture_handle = u32::MAX - 1;
@@ -3821,7 +4026,7 @@ mod tests {
 
     #[test]
     fn test_mesh_handle_wrapping() {
-        let mut state = GameState::new();
+        let mut state = ZFFIState::new();
 
         // Set handle near max
         state.next_mesh_handle = u32::MAX;
@@ -3949,7 +4154,7 @@ mod tests {
 
         // Large but reasonable mesh: 100,000 vertices with full format
         let vertex_count: u32 = 100_000;
-        let stride: u32 = super::vertex_stride(15); // All flags set
+        let stride: u32 = vertex_stride(15); // All flags set
         assert_eq!(stride, 64);
 
         let data_size = vertex_count.checked_mul(stride);

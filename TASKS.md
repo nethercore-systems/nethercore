@@ -1,181 +1,498 @@
 # Emberware Development Tasks
 
-**Task Status Tags:**
-- `[STABILITY]` — Robustness, error handling, testing, safety improvements
-- `[FEATURE]` — New functionality for game developers
-- `[NETWORKING]` — P2P, matchmaking, rollback netcode
-- `[POLISH]` — UX improvements, optimization, documentation
+---
+
+**Architecture Overview:** See [CLAUDE.md](./CLAUDE.md) for framework design and Console trait details.
 
 ---
 
-## Architecture Overview
-
-```
-emberware/
-├── shared/           # API types for platform communication
-├── core/             # Console framework, WASM runtime, GGRS rollback
-├── emberware-z/      # PS1/N64 fantasy console implementation
-├── docs/
-└── examples/
-```
-
-### Core Framework Design
-
-The `core` crate provides a generic `Console` trait that each fantasy console implements:
-
-```rust
-pub trait Console: Send + 'static {
-    type Graphics: Graphics;
-    type Audio: Audio;
-    type Input: ConsoleInput;  // Console-specific input layout
-
-    fn name(&self) -> &'static str;
-    fn specs(&self) -> &ConsoleSpecs;
-
-    // FFI registration for console-specific host functions
-    fn register_ffi(&self, linker: &mut Linker<GameState>) -> Result<()>;
-
-    // Create graphics/audio backends
-    fn create_graphics(&self, window: Arc<Window>) -> Result<Self::Graphics>;
-    fn create_audio(&self) -> Result<Self::Audio>;
-
-    // Map physical input to console-specific input
-    fn map_input(&self, raw: &RawInput) -> Self::Input;
-}
-
-// Must be POD for GGRS network serialization
-pub trait ConsoleInput: Clone + Copy + Default + bytemuck::Pod + bytemuck::Zeroable {}
-
-pub trait Graphics: Send {
-    fn resize(&mut self, width: u32, height: u32);
-    // Console calls into this during render via FFI
-}
-
-pub trait Audio: Send {
-    fn play(&mut self, handle: SoundHandle, volume: f32, looping: bool);
-    fn stop(&mut self, handle: SoundHandle);
-    fn set_rollback_mode(&mut self, rolling_back: bool); // Mute during rollback
-}
-```
-
-### Input Abstraction
-
-Each console defines its own input type for GGRS serialization:
-
-```rust
-// Emberware Z (PS2/Xbox style with analog triggers)
-#[repr(C)]
-#[derive(Clone, Copy, Default, Pod, Zeroable)]
-pub struct ZInput {
-    pub buttons: u16,        // D-pad + A/B/X/Y + L/R bumpers + Start/Select + L3/R3
-    pub left_stick_x: i8,
-    pub left_stick_y: i8,
-    pub right_stick_x: i8,
-    pub right_stick_y: i8,
-    pub left_trigger: u8,    // 0..255 analog
-    pub right_trigger: u8,
-}
-
-// Emberware Classic (6-button, no analog)
-#[repr(C)]
-#[derive(Clone, Copy, Default, Pod, Zeroable)]
-pub struct ClassicInput {
-    pub buttons: u16,  // D-pad + A/B/C/X/Y/Z + L/R + Start/Select
-}
-```
-
-Input FFI functions are console-specific (e.g., `trigger_value` only exists on Z).
-
-The `Runtime<C: Console>` handles:
-- WASM loading and execution via wasmtime
-- GGRS rollback session management
-- Game loop timing (fixed tick rate, variable render rate)
-- State serialization for rollback (save_state/load_state calls into WASM)
-- Input synchronization across network
+## In Progress
 
 ---
 
 ## TODO
 
-### **[FEATURE] Update PBR shaders to use camera/lights/material uniforms**
+---
 
-**Current State:** Uniform buffers are created and uploaded to GPU, but shaders don't bind or use them yet.
+### **[CRITICAL] STABILITY Codebase is huge and clunky**
+- Lots of files are extremely long (2k+)
+- We must go through the entire repository and clean this up. Some ways we can accomplish this are
+1. Refactor heavily duplicated code to prevent copy paste
+2. Split files into smaller focused ones.
+- Any file which is longer than 2000 lines MUST be made smaller, preferrably under 1000 lines each.
 
-**What's Working:**
-- ✅ `camera_buffer`, `lights_buffer`, `material_buffer` created in ZGraphics
-- ✅ `update_scene_uniforms()` uploads data to GPU every frame
-- ✅ Getter methods available: `camera_buffer()`, `lights_buffer()`, `material_buffer()`
-
-**What's Missing:**
-- ❌ Shaders don't have bind group entries for these buffers
-- ❌ Shader code doesn't read from these uniforms
-- ❌ PBR and Hybrid modes (Mode 2 & 3) can't access lighting data
-
-**Implementation Steps:**
-1. Update pipeline creation to add bind group layout entries for camera/lights/material buffers
-2. Update `mode2_pbr.wgsl` shader:
-   - Add bind group entries for camera, lights, material buffers
-   - Use camera position for specular calculations
-   - Use light data instead of hardcoded values
-   - Use material properties for metallic/roughness/emissive
-3. Update `mode3_hybrid.wgsl` shader similarly
-4. Test with a game that uses `light_set()`, `material_metallic()`, `material_roughness()`, `material_emissive()`
-
-**Files to Modify:**
-- `emberware-z/src/graphics/pipeline.rs` - Add bind group layout entries
-- `emberware-z/shaders/mode2_pbr.wgsl` - Add uniform bindings and use them
-- `emberware-z/shaders/mode3_hybrid.wgsl` - Add uniform bindings and use them
-
-**Impact:** HIGH - Required for PBR rendering to work with dynamic lighting
+### **CRITICAL MISSING FEATURE: Shaders mode1, mode2, and mode3 don't use sky lambert shading **
+- Currently, only mode0_unlit.wgsl is properly using sky lambert.
+- Lambert shading using sun as a directional light should be implemented for mode1, mode2, and mode3 as well.
+```
+// Simple Lambert shading using sky sun (when normals available)
+fn sky_lambert(normal: vec3<f32>) -> vec3<f32> {
+    let n_dot_l = max(0.0, dot(normal, sky.sun_direction.xyz));
+    let direct = sky.sun_color_and_sharpness.xyz * n_dot_l;
+    let ambient = sample_sky(normal) * 0.3;
+    return direct + ambient;
+}
+```
+- Function already exists and defined as in mode0_unlit.wgsl (same as above)
+- Implement and include this lambert shading for the mode1, mode2, mode3 shaders.
+- CAUTION: Actual shaders are generated via shader_gen.rs, hence the string tags like //VS_POSITION around the functions. These tags will be replaced with relevant shader code to implement the actual variants that are used at runtime.
 
 ---
 
-### **[REFACTOR] Simplify execute_draw_commands architecture**
+### **CRITICAL POLISH: Matcap shaders should use perspective correct UV sampling **
+- Currently, matcaps are using the simple uv lookup
+```
+// Compute matcap UV from view-space normal
+fn compute_matcap_uv(view_normal: vec3<f32>) -> vec2<f32> {
+    return view_normal.xy * 0.5 + 0.5;
+}
+```
+- This should be adjusted to a perspective correct view space normal
+- May need to calculate the view_space position
+```
+fn compute_matcap_uv(view_position: vec3<f32>, view_normal: vec3<f32>) -> vec2<f32> {
+  let inv_depth = 1.0 / (1.0 + view_position.z);
+  let proj_factor = -view_position.x * view_position.y * inv_depth;
+  let basis1 = vec3(1.0 - view_position.x * view_position.x * inv_depth, proj_factor, -view_position.x);
+  let basis2 = vec3(proj_factor, 1.0 - view_position.y * view_position.y * inv_depth, -view_position.y);
+  let matcap_uv = vec2(dot(basis1, view_normal), dot(basis2, view_normal));
 
-**Current Problem:** Redundant translation layer
+  return matcap_uv * vec2(0.5, -0.5) + 0.5;
+}
+```
+- Function is provided as above
 
-**Current Flow:**
-1. WASM FFI → ZFFIState (creates `ZDrawCommand` structs)
-2. `execute_draw_commands()` → unpacks each `ZDrawCommand` → calls individual ZGraphics setters
-3. ZGraphics → re-packs into command buffer
+---
 
-**Why This Is Bad:**
-- Unnecessary unpacking/repacking of the same data
-- More code to maintain
-- Potential performance overhead
+### **CRITICAL PERFORMANCE TASK: Optimize Render Loop & Reduce Idle GPU Usage (WGPU + Egui)**
 
-**Proposed Fix:**
+**Context**
+
+Our application currently consumes **~30% GPU** even when idle (e.g., in the game library UI).
+Profiling and review of the render loop indicate **multiple systemic issues** that cause unnecessary GPU work each frame:
+
+* Multiple command encoders and command buffer submissions per frame
+* Possible double presentation of the surface texture
+* Game rendering and UI rendering split across separate encoders
+* Forced maximum-framerate redraw loop (`window.request_redraw()` every frame)
+* Egui meshes and buffers rebuilt every frame even when unchanged
+* Potential redundant clear/load passes
+* CPU-side debug/UI work performed even when invisible
+
+These collectively cause high GPU load when nothing is happening.
+
+---
+
+**Goal**
+
+Reduce idle GPU utilization in the library UI from ~30% → **<5%** (target matching typical WGPU idle loads) by restructuring the rendering pipeline.
+
+---
+
+**Action Plan**
+
+**1. Unify GPU work into a single CommandEncoder per frame**
+
+Currently:
+
+* `graphics.render_frame()` likely creates its own encoder + submit
+* UI rendering creates another encoder + submit
+
+Required:
+
+* Main frame loop creates **ONE** `CommandEncoder`
+* Pass this encoder to all rendering subsystems
+* Remove internal submits from `graphics.render_frame()`
+* Game rendering becomes a *pass* inside this single encoder
+* UI/egui rendering becomes another pass inside the same encoder
+* Only the main render loop may call `queue.submit()`
+
+**Deliverables:**
+
+* Updated API for `graphics.render_frame(&mut encoder, &view, ...)`
+
+**2. Ensure exactly ONE surface texture present() per frame**
+
+Currently the surface texture may be used or presented by the game renderer.
+Required:
+
+* The main render loop obtains the surface texture
+* Pass the texture view into game and UI render passes
+* Only the main render loop calls `surface_texture.present()`
+
+**3. Remove per-frame forced redraw (`window.request_redraw()`)**
+
+Currently the loop redraws at maximum (hundreds/thousands FPS).
+Required:
+
+* Redraw only when:
+
+  * Input events arrive
+  * Game is running (Playing mode)
+  * Egui reports needing animation
+* Implement Winit redraw scheduling (not forced loops)
+
+*4. Avoid rebuilding Egui meshes/buffers every frame when static**
+
+Currently we always do:
+
 ```rust
-// Instead of unpacking in app.rs:
-impl ZGraphics {
-    pub fn render_frame(&mut self, z_state: &mut ZFFIState) {
-        // Directly consume draw commands without unpacking/repacking
-        for cmd in &z_state.draw_commands {
-            self.execute_draw_command(cmd);
-        }
-        z_state.clear_frame();
-    }
+let tris = ctx.tessellate(...)
+egui_renderer.update_buffers(...)
+```
+
+Even when no UI changed.
+Required:
+
+* Only update buffers when `full_output.shapes` or textures changed
+* Cache previous meshes and reuse when unchanged
+
+5. Reduce redundant CPU-side debug/UI work**
+
+Examples:
+
+* Cloning `frame_times` every frame
+* Repainting debug graphs constantly
+* Rebuilding local vectors
+
+Required:
+
+* Update debug UI only when overlay is visible
+* Avoid cloning large vectors constantly
+* Use ring-buffer references instead of copies
+
+**6. Confirm render passes do not double-clear the frame**
+
+* Game renderer may clear the screen
+* UI pass may clear again (when not in Play mode)
+
+Required:
+
+* Only clear once per frame
+* If game rendered first, UI must use `LoadOp::Load`
+
+**Acceptance Criteria**
+
+A pull request is complete when all of the following are true:
+
+Rendering Architecture
+
+* [ ] Only **one** `CommandEncoder` is created per frame
+* [ ] Only **one** `queue.submit()` is called per frame
+* [ ] Only **one** `surface_texture.present()` is called per frame
+* [ ] Game renderer no longer manages its own encoder or present
+* [ ] Game and UI rendering occur sequentially inside the same encoder
+
+Egui Improvements
+
+* [ ] Egui meshes are only rebuilt when shapes change
+* [ ] Egui buffers updated only when mesh changes
+* [ ] UI redraw is event-driven, not frame-driven
+
+Performance
+
+* [ ] Idle GPU usage in library mode is reduced from ~30% to **<5%** on midrange hardware
+* [ ] No visual glitches (tests: Library UI → Settings → Playing → back to Library)
+
+---
+
+### **[POLISH] PERF: Pack vertex data to reduce memory/bandwidth**
+
+**Status:** Future optimization
+
+**Current State:**
+All vertex attributes use f32 components (4 bytes each), resulting in large vertex buffers:
+- Position: 3x f32 = 12 bytes
+- Normal: 3x f32 = 12 bytes
+- UV: 2x f32 = 8 bytes
+- Color: 3x f32 = 12 bytes
+- Bone indices: 4x u32 = 16 bytes (stored as f32 in shader)
+- Bone weights: 4x f32 = 16 bytes
+
+**Proposed Packed Format:**
+Use hardware-accelerated packed formats for significant memory savings:
+
+| Attribute    | Current   | Packed       | Savings     | Notes                              |
+| ------------ | --------- | ------------ | ----------- | ---------------------------------- |
+| Position     | f32x3     | f16x4        | 12→8 bytes  | Last component padded/ignored      |
+| Normal       | f32x3     | snorm16x4    | 12→8 bytes  | Normalized to [-1,1], last ignored |
+| UV           | f32x2     | unorm16x2    | 8→4 bytes   | Normalized to [0,1]                |
+| Vertex color | f32x3     | unorm8x4     | 12→4 bytes  | Standard RGBA8                     |
+| Bone indices | u32x4     | uint8x4      | 16→4 bytes  | Max 256 bones                      |
+| Bone weights | f32x4     | unorm8x4     | 16→4 bytes  | Normalized to [0,1]                |
+
+**Example Savings:**
+- POS_UV_NORMAL: 32 bytes → 20 bytes (37% reduction)
+- POS_UV_NORMAL_COLOR_SKINNED: 76 bytes → 32 bytes (58% reduction!)
+
+**Benefits:**
+- Reduced VRAM usage (important for low-end GPUs)
+- Faster vertex fetch (less memory bandwidth)
+- Authentic PS1/N64 precision (f16 positions match era)
+- GPU automatically unpacks to f32 in shader (zero cost)
+
+**Implementation Plan:**
+1. Update `VertexFormatInfo` in `vertex.rs` with packed formats
+2. Modify vertex buffer layout descriptors
+3. Update FFI to accept packed data (or pack on upload)
+4. Test precision loss is acceptable for retro aesthetic
+5. Update examples to use new vertex formats
+
+**Considerations:**
+- f16 position precision: ±65504 range, good for typical game worlds
+- snorm16 normal precision: 1/32767 ≈ 0.00003 angular precision (overkill)
+- May need to adjust vertex data generation in examples
+
+---
+
+### **[POLISH] PERF: Store bone matrices as 3x4 instead of 4x4**
+
+**Status:** Future optimization (dependent on GPU skinning)
+
+**Current State:**
+- Bone matrices stored as `mat4x4<f32>` (16 floats = 64 bytes each)
+- 4th row always `[0, 0, 0, 1]` for affine transforms (wasted space)
+- Storage buffer: `array<mat4x4<f32>, 256>` = 16 KB
+
+**Proposed Optimization:**
+Store as 3x4 matrices (row-major):
+```wgsl
+// CPU side: Upload as [f32; 12] per bone (48 bytes)
+// GPU side: Reconstruct 4x4 in shader
+struct BoneMatrix3x4 {
+    row0: vec4<f32>,  // [m00, m01, m02, m03]
+    row1: vec4<f32>,  // [m10, m11, m12, m13]
+    row2: vec4<f32>,  // [m20, m21, m22, m23]
+    // row3 is implicitly [0, 0, 0, 1]
+}
+
+fn expand_bone_matrix(bone: BoneMatrix3x4) -> mat4x4<f32> {
+    return mat4x4<f32>(
+        bone.row0.xyz, 0.0,
+        bone.row1.xyz, 0.0,
+        bone.row2.xyz, 0.0,
+        bone.row0.w, bone.row1.w, bone.row2.w, 1.0
+    );
 }
 ```
 
+**Savings:**
+- Per bone: 64 bytes → 48 bytes (25% reduction)
+- 256 bones: 16 KB → 12 KB (4 KB saved)
+- GPU memory bandwidth reduced by 25% during skinning
+
 **Benefits:**
-- Simpler code (remove entire execute_draw_commands function)
-- Better performance (no intermediate translations)
-- Clearer architecture (ZGraphics directly consumes ZFFIState)
+- Standard practice in production engines (UE, Unity use 3x4)
+- Negligible shader cost (one-time reconstruction per vertex)
+- Allows more bones or higher vertex counts within bandwidth budget
 
-**Files to Modify:**
-- `emberware-z/src/app.rs` - Replace execute_draw_commands() with graphics.render_frame(&mut z_state)
-- `emberware-z/src/graphics/mod.rs` - Add render_frame() and execute_draw_command() methods
-
-**Impact:** MEDIUM - Cleaner architecture, easier maintenance
+**Implementation:**
+1. Update `set_bones()` FFI to accept 12 floats per bone
+2. Change storage buffer layout in shaders
+3. Add expand_bone_matrix() helper in skinning code
+4. Update skinned-mesh example to provide 3x4 data
 
 ---
 
-### Core Structs are specific to EmberwareZ
-- EmberwareZ Specific rendering data exists in the wasm/render.rs file
-- In fact, the wasm/input.rs is also tied.
-- This needs to be removed and made generic, other consoles (like the future Emberware Classic) will have their own invocation.
-- Please check the project architecture, and likely refactor many of the wasm/ folder so that it is console agnostic.
+### **[FEATURE] Direct game launch via command-line argument**
+
+**Status:** Not yet implemented
+
+**Current State:**
+- `cargo run` always launches to the game library UI
+- Users must click on a game to launch it
+- No way to directly launch a specific game from command line
+
+**What's Needed:**
+Add command-line argument support to launch games directly, skipping the library screen.
+
+**Usage Examples:**
+```bash
+cargo run platformer    # Launch platformer directly
+cargo run cube          # Launch cube example directly
+cargo run -- lighting   # Alternative syntax
+```
+
+**Implementation Plan:**
+
+1. **Parse command-line arguments** in `main.rs`:
+   - Check for first argument after program name
+   - If argument provided, treat as game name
+   - If no argument, launch library as normal
+
+2. **Game name resolution**:
+   - Match argument against game IDs in library
+   - Support both full game IDs and partial matches (e.g., "platform" matches "platformer")
+   - Show error if game not found or multiple matches
+
+3. **Direct launch flow**:
+   - Skip `UiMode::Library` and go straight to `UiMode::Loading`
+   - Use provided game name to construct ROM path
+   - Load and run game immediately
+
+4. **Error handling**:
+   - Game not found: Print error and show library
+   - ROM missing: Print error and show library
+   - Invalid game name: Show available games and exit
+
+**Files to Modify:**
+- `emberware-z/src/main.rs` - Parse command-line args, implement game resolution logic
+- `emberware-z/src/app.rs` - Support initial mode as Loading instead of Library
+
+**User Benefit:**
+- Faster iteration during development (no UI navigation)
+- Scriptable game launching for testing
+- Better developer experience for example testing
+
+---
+
+### **[POLISH] PERF: Store MeshId, TextureId (and other ID)s in ZGraphics as a Vec<T> instead of a HashMap<usize, T>
+- This task may need to be updated if ZGraphics is refactored to something else.
+- Assets can never be unloaded
+- Keys are always inserted via incrementing values
+- No reason to waste CPU cycles with Hashing
+- "Fallack" error mesh at index 0 will not cause out of bounds issues.
+
+
+### **[POLISH] BUG: Window Size scaling issues**
+- When loading a game, black bars appear on the sides. The inner window should "snap" to the nearest perfect integer scaling of the window (in integer scaling mode), or just stay at that size for stretch
+- We are not able to resize the window to a size equal to the fantasy console (and game ROMs) initialized resolution. We should be able to scale down to a 1x scaling, but not any smaller to prevent a crash
+- These problems may be due to some kind of egui scaling based on the OS scaling rules.
+
+### **[POLISH] Document ALL FFI Functions **
+- We need to know these at a quick glance so developers can copy paste a "cheat sheet" into their games before working
+
+### **[POLISH] Add axis-to-keyboard binding support**
+
+**Status:** Not yet implemented
+
+**Current State:**
+- Keyboard bindings only support button presses (digital input)
+- Analog sticks and triggers cannot be controlled via keyboard
+- Settings UI has deadzone sliders for analog inputs
+
+**What's Needed:**
+Allow users to bind keyboard keys to simulate analog stick axes and triggers.
+
+**Implementation Plan:**
+
+1. **Extend KeyboardMapping struct** in `input.rs`:
+   - Add fields for axis bindings (e.g., `left_stick_up_key`, `left_stick_down_key`, etc.)
+   - Each axis direction gets its own key binding
+   - When pressed, outputs 0 or 1 (binary analog values)
+
+2. **Update InputManager**:
+   - Check axis key bindings in addition to button bindings
+   - Combine axis keys to generate stick/trigger values
+   - Examples:
+     - Left stick: W/S for Y axis (-1/+1), A/D for X axis (-1/+1)
+     - Triggers: Q/E for left/right trigger (0 or 255)
+
+3. **Settings UI additions** in `settings_ui.rs`:
+   - Add "Analog Sticks" section to Controls tab
+   - Add "Triggers" section to Controls tab
+   - Each axis gets 4 key bindings (left stick: up/down/left/right)
+   - Triggers get 2 key bindings (left trigger, right trigger)
+   - Use same click-to-rebind UX as existing button bindings
+
+4. **Config serialization**:
+   - Update serde derives to include new axis binding fields
+   - Provide sensible defaults (e.g., WASD for left stick, arrows for right stick)
+
+**Files to Modify:**
+- `emberware-z/src/input.rs` - Add axis binding fields to KeyboardMapping
+- `emberware-z/src/settings_ui.rs` - Add axis remapping UI sections
+- `emberware-z/src/config.rs` - Ensure new fields serialize correctly
+
+**User Benefit:**
+Keyboard players can use analog stick inputs in games, enabling full control without a gamepad.
+
+---
+
+### **[OPTIMIZATION] Share quad index buffer for sprites and billboards**
+
+**Status:** Minor optimization opportunity
+
+**Current State:**
+- Every sprite/billboard allocates a new `Vec<u32>` for indices (line 1347, 1460)
+- Indices are always the same: `[0, 1, 2, 0, 2, 3]`
+- Hundreds of redundant allocations per frame
+
+**Impact:**
+- Modest: ~24 bytes allocated per sprite/billboard
+- Adds up with particle systems (100+ sprites = 2.4KB of redundant allocations)
+
+**Solution:**
+Pre-allocate shared quad index buffer at init time:
+```rust
+// In ZGraphics::new()
+let quad_indices: &[u16] = &[0, 1, 2, 0, 2, 3];
+self.shared_quad_index_offset = self.command_buffer.append_index_data(SPRITE_FORMAT, quad_indices);
+```
+
+Then use it in sprite/billboard generation (no allocation):
+```rust
+let first_index = self.shared_quad_index_offset;  // Reuse
+```
+
+**Trade-off:**
+- Simple implementation (10 lines of code)
+- Small memory win
+- Not a huge perf gain, but good hygiene
+
+**Files to Modify:**
+- `emberware-z/src/graphics/mod.rs` - Add shared index buffer in new(), use in process_draw_commands()
+
+---
+
+### **[EXAMPLES] Create comprehensive example suite**
+
+**Status:** Examples exist but coverage gaps
+
+**Current Examples (8):**
+1. ✅ hello-world - 2D text + rectangles, basic input
+2. ✅ triangle - Immediate mode 3D (POS_COLOR)
+3. ✅ textured-quad - Textured geometry
+4. ✅ cube - 3D cube mesh
+5. ✅ lighting - PBR mode (mode 2), dynamic lights
+6. ✅ billboard - All 4 billboard modes
+7. ✅ skinned-mesh - GPU skinning demo
+8. ✅ platformer - 2D platformer game
+
+**Missing Examples:**
+- ❌ **Mode 0 (Unlit)** example - No example demonstrates unlit rendering
+- ❌ **Mode 1 (Matcap)** example - No matcap rendering demo
+- ❌ **Mode 3 (Hybrid)** example - No hybrid PBR+matcap demo
+- ❌ **Matcap blend modes** - No demo of multiply/add/HSV modulate
+- ❌ **Audio system** - NO AUDIO EXAMPLES AT ALL despite fully working audio!
+- ❌ **Custom fonts** - No font loading demo
+- ❌ **Sprite batching** - No sprite-heavy 2D demo
+- ❌ **Blend modes** - No demo of alpha/additive/multiply blending
+- ❌ **Depth test** - No demo of depth buffer usage
+- ❌ **Cull mode** - No demo of face culling
+- ❌ **Transform stack** - No demo of push/pop transforms
+- ❌ **Multiplayer input** - No demo of 2-4 player local input
+
+**Recommended New Examples:**
+1. **matcap-showcase** - All 3 matcap slots with blend modes (mode 1)
+2. **unlit-lowpoly** - PS1-style low-poly with vertex colors (mode 0)
+3. **hybrid-character** - Character with matcap ambient + PBR lighting (mode 3)
+4. **audio-test** - Sound effects, music, channels (CRITICAL - audio undocumented!)
+5. **custom-font** - Load bitmap font, render styled text
+6. **particle-system** - Hundreds of sprites, blend modes
+7. **spatial-audio** - A sound source rotating around a "listener", and audio pans around the object
+
+**Example Location:**
+- Move from `/examples` to `/emberware-z/examples` (they're Z-specific, not core)
+- Update Cargo workspace to reflect new location
+- Update README to point to new location
+
+**Files to Modify:**
+- Create 7 new example projects
+- Move existing examples to emberware-z/examples/
+- Update root Cargo.toml workspace members
+
+---
 
 ### **[NEEDS CLARIFICATION] Define and enforce console runtime limits**
 
@@ -225,158 +542,6 @@ impl ZGraphics {
 
 ---
 
-### **[FEATURE] Implement audio backend**
-
-PS1/N64-style audio system with fire-and-forget sounds and managed channels for positional audio.
-
-**Console Audio Specs:**
-| Spec | Value | Rationale |
-|------|-------|-----------|
-| Sample rate | 22,050 Hz | Authentic PS1/N64, half the ROM space |
-| Bit depth | 16-bit signed | Standard, good dynamic range |
-| Format | Mono, raw PCM (s16le) | Zero parsing, stereo via pan param |
-| Managed channels | 16 | PS1/N64 typical (8 SFX + 8 music/ambient) |
-
-**Rollback Behavior & Caveats:**
-
-Audio is NOT part of rollback state. This is industry standard (GGPO, Rollback Netcode) because:
-- Sound already left the speakers - can't "un-play" it
-- Rewinding audio sounds terrible
-- Users tolerate audio glitches better than visual desyncs
-
-**How it works:**
-1. Game calls audio FFI functions during `update()`
-2. Commands are buffered in `audio_commands: Vec<AudioCommand>`
-3. After GGRS confirms the frame, commands are sent to `ZAudio` for playback
-4. During rollback replay (`set_rollback_mode(true)`), commands are DISCARDED
-5. After rollback, game re-executes with corrected inputs, re-issuing audio commands
-
-**Edge cases implementers must handle:**
-
-| Scenario | What happens | Mitigation |
-|----------|--------------|------------|
-| Sound triggers, then rollback | Sound already playing, might re-trigger | Discard commands during replay |
-| Looping sound starts, then rollback | Loop continues, game might call channel_play again | channel_play on occupied channel should update params, not restart |
-| Positional sound panning | Pan was wrong during misprediction | Game must call channel_set() EVERY frame, not just on start |
-| Music playing during rollback | Music continues uninterrupted | Music is never affected by rollback - it's "UI layer" |
-| Sound should have played but didn't (prediction missed trigger) | Silence where sound should be | Unavoidable - accept it |
-| load_sound() called in update() | Would re-load during replay! | Enforce init-only for load_sound() |
-
-**Critical implementation details:**
-
-1. **Discard vs mute**: When `set_rollback_mode(true)`, DISCARD all audio commands entirely.
-   Don't just mute output - if you mute and still process commands, channel state diverges.
-
-2. **channel_play on occupied channel**: If channel 5 is playing sound A and game calls
-   `channel_play(5, A, vol, pan, loop)` again, DON'T restart the sound. Just update vol/pan.
-   This handles the "looping sound survives rollback" case gracefully.
-
-3. **channel_set during rollback**: These SHOULD still be processed (not discarded) so that
-   when rollback ends, positional sounds have correct pan/volume immediately.
-   Only play_sound/channel_play/music_play are discarded.
-
-4. **In-flight sounds**: Sounds that started before rollback continue playing to completion.
-   Don't stop them on rollback start - that sounds jarring. Let them finish naturally.
-
-5. **Audio buffer latency**: Hardware audio has ~20-50ms latency. Audio is always slightly
-   "behind" visuals. This is fine - humans don't notice small audio/visual desync.
-
-**Game developer guidance (for docs):**
-- Use `play_sound()` for one-shots (hits, jumps, pickups) - fire and forget
-- Use `channel_play()` + `channel_set()` every frame for positional sounds (engines, footsteps)
-- Don't rely on frame-perfect audio sync in networked games
-- Keep sound effects short (<1 sec) so mispredictions are less noticeable
-- Music should be ambient/looping, not synced to gameplay events
-
-**FFI Functions:**
-```rust
-// Load raw PCM sound data (22.05kHz, 16-bit signed, mono)
-load_sound(data_ptr: *const u8, byte_len: u32) -> u32
-
-// Fire-and-forget (one-shot sounds: gunshots, jumps, coins)
-play_sound(sound: u32, volume: f32, pan: f32)  // uses next free channel
-
-// Managed channels (positional/looping: engines, ambient, footsteps)
-channel_play(channel: u32, sound: u32, volume: f32, pan: f32, looping: bool)
-channel_set(channel: u32, volume: f32, pan: f32)  // update each frame for positional
-channel_stop(channel: u32)
-
-// Music (dedicated, always loops)
-music_play(sound: u32, volume: f32)
-music_stop()
-music_set_volume(volume: f32)
-```
-
-**Implementation steps:**
-1. Add `Sound` struct and `sounds: Vec<Sound>` to GameState
-2. Add `AudioCommand` enum (Play, ChannelPlay, ChannelSet, ChannelStop, MusicPlay, etc.)
-3. Add `audio_commands: Vec<AudioCommand>` to GameState (buffered per frame)
-4. Implement `ZAudio` with rodio backend:
-   - 16 channel mixer
-   - Dedicated music channel
-   - `process_commands()` called after confirmed frames
-5. Wire up `Audio::set_rollback_mode()` to discard commands during replay
-6. Register FFI functions
-
-**Stubs to replace:** `emberware-z/src/console.rs` - `ZAudio::play()`, `ZAudio::stop()`, `create_audio()`
-
----
-
-### **[FEATURE] Implement custom font loading**
-
-Allow games to load bitmap fonts for `draw_text()` beyond the built-in 8x8 ASCII font.
-
-**Design (PS1/N64 style - bitmap font atlases):**
-- Games embed font textures with glyph grids
-- Fixed-width and variable-width support
-- UTF-8 compatible (game provides glyphs for any codepoints they need)
-- Built-in font (already implemented) remains default for quick debugging
-
-**FFI Functions:**
-```rust
-// Fixed-width bitmap font
-load_font(texture: u32, char_width: u8, char_height: u8, first_codepoint: u32, char_count: u32) -> u32
-
-// Variable-width bitmap font (widths array has char_count entries)
-load_font_ex(texture: u32, widths_ptr: *const u8, char_height: u8, first_codepoint: u32, char_count: u32) -> u32
-
-// Bind font for subsequent draw_text calls (0 = built-in)
-font_bind(font_handle: u32)
-```
-
-**Implementation steps:**
-1. Add `Font` struct with texture handle, glyph dimensions, codepoint range, optional width array
-2. Add `fonts: Vec<Font>` to GameState
-3. Add `current_font: u32` to RenderState (0 = built-in)
-4. Modify `draw_text` to look up glyphs from current font
-5. Update `generate_text_quads()` to handle variable-width fonts
-
----
-
-### **[FEATURE] Implement matcap blend modes**
-
-Extend matcap system (Mode 1) with multiple blend modes for artistic flexibility.
-
-**Supported modes:**
-| Value | Mode | Effect |
-|-------|------|--------|
-| 0 | Multiply | Standard matcap (current behavior) |
-| 1 | Add | Glow/emission effects |
-| 2 | HSV Modulate | Hue shifting, iridescence |
-
-**FFI Function:**
-```rust
-matcap_blend_mode(slot: u32, mode: u32)  // slot 1-3, mode 0-2
-```
-
-**Implementation steps:**
-1. Add `blend_mode: u8` field to matcap slot tracking in RenderState
-2. Add `matcap_blend_mode` FFI function with validation
-3. Update Mode 1 shader template with blend_colors switch statement
-4. Add rgb_to_hsv/hsv_to_rgb helper functions to shader
-
----
-
 ### **[NETWORKING] Implement synchronized save slots (VMU-style memory cards)**
 
 Similar to Dreamcast VMUs, each player "brings" their own save data to a networked session.
@@ -414,959 +579,4 @@ This enables fighting games with unlocked characters, RPGs with player stats, et
 
 ---
 
-### **[NETWORKING] Implement matchbox signaling connection**
-
-**Status:** Needs clarification - matchmaking handled by platform service, integration details TBD
-
-- Connect to matchbox signaling server
-- WebRTC peer connection establishment
-- ICE candidate exchange
-- Connection timeout handling
-- Matchmaking handled by platform service - integration details TBD
-
----
-
-### **[NETWORKING] Implement host/join game flow**
-
-**Status:** Needs clarification - requires matchbox signaling connection to be implemented first
-
-- Requires matchbox signaling connection to be implemented first
-- Host game via deep link: `emberware://host/{game_id}`
-- Join game via deep link: `emberware://join/{game_id}?token=...`
-- Integration with platform matchmaking TBD
-
----
-
-### **[POLISH] Performance Optimizations**
-
-Quick wins for reducing allocations, copies, and overhead in hot paths.
-
----
-
-#### 1. **[HIGH] Replace manual padding with Vec4 types in uniforms**
-
-**Location:** Shader files and Rust uniform structs
-- `emberware-z/shaders/mode1_matcap.wgsl:14-23`
-- `emberware-z/shaders/mode2_pbr.wgsl` (similar)
-- `emberware-z/shaders/mode3_hybrid.wgsl` (similar)
-- `emberware-z/src/graphics/mod.rs` (SkyUniforms Rust struct)
-
-**Current Code (UGLY):**
-```wgsl
-struct SkyUniforms {
-    horizon_color: vec3<f32>,
-    _pad0: f32,              // Manual padding
-    zenith_color: vec3<f32>,
-    _pad1: f32,              // Manual padding
-    sun_direction: vec3<f32>,
-    _pad2: f32,              // Manual padding
-    sun_color: vec3<f32>,
-    sun_sharpness: f32,
-}
-```
-
-**Proposed Fix (CLEAN):**
-```wgsl
-struct SkyUniforms {
-    horizon_color: vec4<f32>,      // .w unused but clean
-    zenith_color: vec4<f32>,
-    sun_direction: vec4<f32>,
-    sun_color_and_sharpness: vec4<f32>,  // .xyz = color, .w = sharpness
-}
-```
-
-**Impact:** HIGH - Improves code readability, eliminates manual padding errors, makes future uniform additions easier.
-
-**Implementation:**
-1. Update SkyUniforms struct in all 3 shader templates (mode1, mode2, mode3)
-2. Update Rust-side SkyUniforms struct in `emberware-z/src/graphics/mod.rs` to match
-3. Update `set_sky()` FFI to pack sun_sharpness into sun_color.w
-4. Update shader code that reads `sky.sun_sharpness` to `sky.sun_color_and_sharpness.w`
-5. Search for other uniform structs with `_pad` fields and apply same pattern
-
----
-
-#### 2. **[HIGH] Eliminate array copy in sprite/billboard functions**
-
-**Location:** `emberware-z/src/ffi/mod.rs:1357` and similar lines in draw_billboard, draw_sprite_region, etc.
-
-**Current Code:**
-```rust
-state.draw_commands.push(DrawCommand::DrawSprite {
-    // ... other fields
-    bound_textures: state.render_state.bound_textures,  // Copies [u32; 4]
-});
-```
-
-**Issue:** Every draw call copies the 16-byte texture slot array. Called 100+ times per frame.
-
-**Proposed Fix:** Store a reference/index to render state instead of copying fields
-```rust
-// Option A: Store render state index/hash (if render states are deduplicated)
-bound_textures_key: u32,  // Index into deduped render states
-
-// Option B: Accept the copy (it's only 16 bytes and likely in cache)
-// Keep as-is, this is a micro-optimization
-```
-
-**Impact:** MEDIUM - 1.6KB saved per 100 draw calls. Likely not worth refactoring unless profiling shows it's hot.
-
-**Recommendation:** Defer until profiling shows this matters. The copy is cheap (16 bytes, stack-to-stack).
-
----
-
-#### 3. **[HIGH] Eliminate String allocation in draw_text()**
-
-**Location:** `emberware-z/src/ffi/mod.rs:1430`
-
-**Current Code:**
-```rust
-let text_string = match std::str::from_utf8(bytes) {
-    Ok(s) => s.to_string(),  // ❌ Allocates String on every call
-    Err(e) => {
-        warn!("draw_text: invalid UTF-8 string: {}", e);
-        return;
-    }
-};
-```
-
-**Proposed Fix:** Change DrawCommand::DrawText to store bytes + validate later
-```rust
-// In FFI:
-let text_bytes = bytes.to_vec();  // Already a copy, unavoidable
-state.draw_commands.push(DrawCommand::DrawText {
-    text: text_bytes,  // Vec<u8> instead of String
-    // ...
-});
-
-// In graphics backend when rendering:
-let text_str = std::str::from_utf8(&cmd.text).unwrap_or("");
-```
-
-**Impact:** HIGH - Eliminates allocation for every draw_text() call. Common in UI-heavy games.
-
-**Implementation:**
-1. Change `DrawCommand::DrawText::text` from `String` to `Vec<u8>`
-2. Update FFI to store bytes directly (remove `to_string()`)
-3. Update graphics backend to decode UTF-8 during rendering (one-time per text draw)
-
----
-
-#### 4. **[HIGH] Reduce Vec clones in DrawCommand variants**
-
-**Location:** `core/src/wasm/draw.rs:29-50`
-
-**Current Code:**
-```rust
-#[derive(Debug, Clone)]  // ❌ Clones Vec<f32> and Vec<u32>
-pub enum DrawCommand {
-    DrawTriangles {
-        vertex_data: Vec<f32>,   // Cloned if DrawCommand is cloned
-        // ...
-    },
-    DrawTrianglesIndexed {
-        vertex_data: Vec<f32>,
-        index_data: Vec<u32>,    // Cloned if DrawCommand is cloned
-        // ...
-    },
-    // ...
-}
-```
-
-**Issue:** If DrawCommand is ever cloned (e.g., during state sorting), large vertex buffers get deep-copied.
-
-**Analysis:** After optimization #3 in previous session, we sort commands in-place, so DrawCommand is NEVER cloned in hot path. The `Clone` derive is only used for debugging/tests.
-
-**Proposed Fix:** None needed - sorting is already in-place. Keep `Clone` for flexibility.
-
-**Impact:** LOW - Not an issue in current implementation. Monitor if DrawCommand cloning appears in profiles.
-
----
-
-#### 5. **[MEDIUM-HIGH] Add #[inline] to input FFI hot path functions**
-
-**Location:** `emberware-z/src/ffi/mod.rs` - input functions
-
-**Current Code:**
-```rust
-fn button_held(mut caller: Caller<'_, GameState>, player: u32, button: u32) -> u32 {
-    // Called 10-20 times per frame per player
-}
-
-fn stick_axis(mut caller: Caller<'_, GameState>, player: u32, axis: u32) -> f32 {
-    // Called 2-4 times per frame per player
-}
-```
-
-**Proposed Fix:**
-```rust
-#[inline]
-fn button_held(mut caller: Caller<'_, GameState>, player: u32, button: u32) -> u32 {
-    // ...
-}
-
-#[inline]
-fn stick_axis(mut caller: Caller<'_, GameState>, player: u32, axis: u32) -> f32 {
-    // ...
-}
-```
-
-**Impact:** MEDIUM-HIGH - Input functions are called many times per frame. Inlining reduces call overhead.
-
-**Implementation:** Add `#[inline]` to all input FFI functions (button_held, button_pressed, button_released, stick_axis, trigger_value, etc.)
-
----
-
-#### 6. **[MEDIUM] Remove Clone derive from PendingTexture and PendingMesh**
-
-**Location:** `core/src/wasm/draw.rs:8, 17`
-
-**Current Code:**
-```rust
-#[derive(Debug, Clone)]  // ❌ Unnecessary - these are never cloned
-pub struct PendingTexture {
-    pub data: Vec<u8>,  // Can be MB-sized texture data
-}
-
-#[derive(Debug, Clone)]  // ❌ Unnecessary
-pub struct PendingMesh {
-    pub vertex_data: Vec<f32>,
-    pub index_data: Option<Vec<u32>>,
-}
-```
-
-**Proposed Fix:**
-```rust
-#[derive(Debug)]  // Remove Clone - these are moved, not cloned
-pub struct PendingTexture { /* ... */ }
-
-#[derive(Debug)]
-pub struct PendingMesh { /* ... */ }
-```
-
-**Impact:** MEDIUM - Prevents accidental clones of large resource data. Documents intent (these are moved to GPU, not copied).
-
-**Verification:** Search codebase for `.clone()` calls on PendingTexture/PendingMesh - should be none.
-
----
-
-#### 7. **[MEDIUM] Reduce render state field copying**
-
-**Location:** `core/src/wasm/render.rs:48-77`
-
-**Current Code:** Every DrawCommand copies multiple RenderState fields:
-```rust
-state.draw_commands.push(DrawCommand::DrawMesh {
-    color: state.render_state.color,
-    depth_test: state.render_state.depth_test,
-    cull_mode: state.render_state.cull_mode,
-    blend_mode: state.render_state.blend_mode,
-    bound_textures: state.render_state.bound_textures,
-    // ...
-});
-```
-
-**Proposed Fix:** Store a snapshot of RenderState or index into deduped states
-```rust
-// Option A: Store RenderState snapshot
-render_state: RenderState,  // 32 bytes total
-
-// Option B: Dedupe and store index
-render_state_key: u16,  // Index into Vec<RenderState>
-```
-
-**Impact:** MEDIUM - Simplifies DrawCommand variants, reduces field duplication. Trade-off: adds indirection during rendering.
-
-**Recommendation:** Defer - current approach is simple and performant. Only optimize if profiling shows issue.
-
----
-
-#### 8. **[MEDIUM] Eliminate Vec<Mat4> clone in RenderState**
-
-**Location:** `core/src/wasm/render.rs` (if bone matrices stored in RenderState)
-
-**Analysis Needed:** Check if bone matrices (for skinned meshes) are stored in RenderState or passed separately.
-
-**If they're in RenderState:**
-```rust
-pub struct RenderState {
-    bone_matrices: Vec<Mat4>,  // ❌ Cloned on every skinned draw?
-}
-```
-
-**Proposed Fix:** Store bones in a separate shared structure, reference by ID
-```rust
-pub struct GameState {
-    bone_sets: Vec<Vec<Mat4>>,  // Shared pool
-}
-
-pub struct DrawCommand {
-    bone_set_id: u32,  // Reference instead of clone
-}
-```
-
-**Impact:** MEDIUM - Eliminates 4KB+ clones for skinned meshes (256 bones × 64 bytes).
-
-**Implementation:** Audit RenderState and DrawCommand for Vec<Mat4> fields, refactor to use shared bone set pool.
-
----
-
-#### 9. **[MEDIUM] Add #[inline] to camera math methods**
-
-**Location:** `emberware-z/src/graphics/camera.rs` (if it exists) or wherever view/projection matrices are computed
-
-**Current Code:**
-```rust
-impl Camera {
-    pub fn view_matrix(&self) -> Mat4 {
-        // Matrix math
-    }
-
-    pub fn projection_matrix(&self) -> Mat4 {
-        // Matrix math
-    }
-}
-```
-
-**Proposed Fix:**
-```rust
-impl Camera {
-    #[inline]
-    pub fn view_matrix(&self) -> Mat4 { /* ... */ }
-
-    #[inline]
-    pub fn projection_matrix(&self) -> Mat4 { /* ... */ }
-}
-```
-
-**Impact:** MEDIUM - Called once per frame, but inlining helps with register allocation for matrix math.
-
-**Implementation:** Add `#[inline]` to camera methods and other hot math helpers (transform composition, etc.)
-
----
-
-#### 10. **[LOW] Remove duplicate vertex_stride() function**
-
-**Location:** Search for `fn vertex_stride` across codebase
-
-**Issue:** If vertex_stride is defined in multiple places (e.g., graphics/vertex.rs and graphics/buffer.rs), consolidate to single source.
-
-**Proposed Fix:**
-```rust
-// In graphics/vertex.rs (canonical location):
-pub const fn vertex_stride(format: u8) -> u32 {
-    // Canonical implementation
-}
-
-// Remove from other files, import this one
-```
-
-**Impact:** LOW - Reduces code duplication, ensures consistency.
-
-**Verification:** `rg "fn vertex_stride"` should show only ONE definition.
-
----
-
-#### 11. **[LOW-MEDIUM] Optimize keycode matching**
-
-**Location:** `emberware-z/src/input.rs` (keyboard to button mapping)
-
-**Current Code (hypothetical):**
-```rust
-match keycode {
-    KeyCode::KeyW => Some(BUTTON_DPAD_UP),
-    KeyCode::KeyS => Some(BUTTON_DPAD_DOWN),
-    KeyCode::KeyA => Some(BUTTON_DPAD_LEFT),
-    KeyCode::KeyD => Some(BUTTON_DPAD_RIGHT),
-    // ... 20+ more cases
-    _ => None,
-}
-```
-
-**Proposed Fix:** Use a lookup table (array or phf) instead of match
-```rust
-// At compile time:
-static KEYCODE_TO_BUTTON: phf::Map<u32, u16> = phf_map! {
-    KeyCode::KeyW as u32 => BUTTON_DPAD_UP,
-    // ...
-};
-
-// At runtime:
-KEYCODE_TO_BUTTON.get(&(keycode as u32)).copied()
-```
-
-**Impact:** LOW-MEDIUM - Reduces match overhead. Only matters if keyboard input is polled frequently (not typical for controller-primary games).
-
-**Recommendation:** Defer - match is already fast for ~20 cases. Only optimize if profiling shows this in hot path.
-
----
-
-**Summary:**
-
-| Priority | Optimization | Estimated Savings | Effort |
-|----------|-------------|-------------------|--------|
-| HIGH | Vec4 padding (#1) | Readability + future-proofing | Medium |
-| HIGH | draw_text String (#3) | 1 alloc per text draw | Low |
-| MEDIUM-HIGH | #[inline] input (#5) | 5-10% input overhead | Low |
-| MEDIUM | Remove Clone on Pending (#6) | Safety + clarity | Low |
-| MEDIUM | #[inline] camera (#9) | Minor perf gain | Low |
-| LOW | Dedupe vertex_stride (#10) | Code quality | Low |
-| DEFER | Array copy (#2) | Negligible (16 bytes) | N/A |
-| DEFER | Vec clone (#4) | Not cloned in hot path | N/A |
-| DEFER | RenderState copy (#7) | Complex refactor, unclear gain | N/A |
-| DEFER | Bone matrix clone (#8) | Needs investigation first | N/A |
-| DEFER | Keycode matching (#11) | Unlikely bottleneck | N/A |
-
-**Implementation Order:**
-1. #3 (draw_text String) - Quick win, high impact
-2. #5 (#[inline] input) - Quick win, medium impact
-3. #6 (Remove Clone) - Quick win, safety improvement
-4. #9 (#[inline] camera) - Quick win
-5. #10 (Dedupe vertex_stride) - Code quality
-6. #1 (Vec4 padding) - Larger refactor, but improves maintainability
-
----
-
-#### 1. **[HIGH] Replace manual padding with Vec4 types in uniforms**
-
-**Location:** Shader files and Rust uniform structs
-- `emberware-z/shaders/mode1_matcap.wgsl:14-23`
-- `emberware-z/shaders/mode2_pbr.wgsl` (similar)
-- `emberware-z/shaders/mode3_hybrid.wgsl` (similar)
-- `emberware-z/src/graphics/mod.rs` (SkyUniforms Rust struct)
-
-**Current Code (UGLY):**
-```wgsl
-struct SkyUniforms {
-    horizon_color: vec3<f32>,
-    _pad0: f32,              // Manual padding
-    zenith_color: vec3<f32>,
-    _pad1: f32,              // Manual padding
-    sun_direction: vec3<f32>,
-    _pad2: f32,              // Manual padding
-    sun_color: vec3<f32>,
-    sun_sharpness: f32,
-}
-```
-
-**Proposed Fix (CLEAN):**
-```wgsl
-struct SkyUniforms {
-    horizon_color: vec4<f32>,      // .w unused but clean
-    zenith_color: vec4<f32>,
-    sun_direction: vec4<f32>,
-    sun_color_and_sharpness: vec4<f32>,  // .xyz = color, .w = sharpness
-}
-```
-
-**Impact:** HIGH - Improves code readability, eliminates manual padding errors, makes future uniform additions easier.
-
-**Implementation:**
-1. Update SkyUniforms struct in all 3 shader templates (mode1, mode2, mode3)
-2. Update Rust-side SkyUniforms struct in `emberware-z/src/graphics/mod.rs` to match
-3. Update `set_sky()` FFI to pack sun_sharpness into sun_color.w
-4. Update shader code that reads `sky.sun_sharpness` to `sky.sun_color_and_sharpness.w`
-5. Search for other uniform structs with `_pad` fields and apply same pattern
-
----
-
-#### 2. **[HIGH] Eliminate array copy in sprite/billboard functions**
-
-**Location:** `emberware-z/src/ffi/mod.rs:1357` and similar lines in draw_billboard, draw_sprite_region, etc.
-
-**Current Code:**
-```rust
-state.draw_commands.push(DrawCommand::DrawSprite {
-    // ... other fields
-    bound_textures: state.render_state.bound_textures,  // Copies [u32; 4]
-});
-```
-
-**Issue:** Every draw call copies the 16-byte texture slot array. Called 100+ times per frame.
-
-**Proposed Fix:** Store a reference/index to render state instead of copying fields
-```rust
-// Option A: Store render state index/hash (if render states are deduplicated)
-bound_textures_key: u32,  // Index into deduped render states
-
-// Option B: Accept the copy (it's only 16 bytes and likely in cache)
-// Keep as-is, this is a micro-optimization
-```
-
-**Impact:** MEDIUM - 1.6KB saved per 100 draw calls. Likely not worth refactoring unless profiling shows it's hot.
-
-**Recommendation:** Defer until profiling shows this matters. The copy is cheap (16 bytes, stack-to-stack).
-
----
-
-#### 3. **[HIGH] Eliminate String allocation in draw_text()**
-
-**Location:** `emberware-z/src/ffi/mod.rs:1430`
-
-**Current Code:**
-```rust
-let text_string = match std::str::from_utf8(bytes) {
-    Ok(s) => s.to_string(),  // ❌ Allocates String on every call
-    Err(e) => {
-        warn!("draw_text: invalid UTF-8 string: {}", e);
-        return;
-    }
-};
-```
-
-**Proposed Fix:** Change DrawCommand::DrawText to store bytes + validate later
-```rust
-// In FFI:
-let text_bytes = bytes.to_vec();  // Already a copy, unavoidable
-state.draw_commands.push(DrawCommand::DrawText {
-    text: text_bytes,  // Vec<u8> instead of String
-    // ...
-});
-
-// In graphics backend when rendering:
-let text_str = std::str::from_utf8(&cmd.text).unwrap_or("");
-```
-
-**Impact:** HIGH - Eliminates allocation for every draw_text() call. Common in UI-heavy games.
-
-**Implementation:**
-1. Change `DrawCommand::DrawText::text` from `String` to `Vec<u8>`
-2. Update FFI to store bytes directly (remove `to_string()`)
-3. Update graphics backend to decode UTF-8 during rendering (one-time per text draw)
-
----
-
-#### 4. **[HIGH] Reduce Vec clones in DrawCommand variants**
-
-**Location:** `core/src/wasm/draw.rs:29-50`
-
-**Current Code:**
-```rust
-#[derive(Debug, Clone)]  // ❌ Clones Vec<f32> and Vec<u32>
-pub enum DrawCommand {
-    DrawTriangles {
-        vertex_data: Vec<f32>,   // Cloned if DrawCommand is cloned
-        // ...
-    },
-    DrawTrianglesIndexed {
-        vertex_data: Vec<f32>,
-        index_data: Vec<u32>,    // Cloned if DrawCommand is cloned
-        // ...
-    },
-    // ...
-}
-```
-
-**Issue:** If DrawCommand is ever cloned (e.g., during state sorting), large vertex buffers get deep-copied.
-
-**Analysis:** After optimization #3 in previous session, we sort commands in-place, so DrawCommand is NEVER cloned in hot path. The `Clone` derive is only used for debugging/tests.
-
-**Proposed Fix:** None needed - sorting is already in-place. Keep `Clone` for flexibility.
-
-**Impact:** LOW - Not an issue in current implementation. Monitor if DrawCommand cloning appears in profiles.
-
----
-
-#### 5. **[MEDIUM-HIGH] Add #[inline] to input FFI hot path functions**
-
-**Location:** `emberware-z/src/ffi/mod.rs` - input functions
-
-**Current Code:**
-```rust
-fn button_held(mut caller: Caller<'_, GameState>, player: u32, button: u32) -> u32 {
-    // Called 10-20 times per frame per player
-}
-
-fn stick_axis(mut caller: Caller<'_, GameState>, player: u32, axis: u32) -> f32 {
-    // Called 2-4 times per frame per player
-}
-```
-
-**Proposed Fix:**
-```rust
-#[inline]
-fn button_held(mut caller: Caller<'_, GameState>, player: u32, button: u32) -> u32 {
-    // ...
-}
-
-#[inline]
-fn stick_axis(mut caller: Caller<'_, GameState>, player: u32, axis: u32) -> f32 {
-    // ...
-}
-```
-
-**Impact:** MEDIUM-HIGH - Input functions are called many times per frame. Inlining reduces call overhead.
-
-**Implementation:** Add `#[inline]` to all input FFI functions (button_held, button_pressed, button_released, stick_axis, trigger_value, etc.)
-
----
-
-#### 6. **[MEDIUM] Remove Clone derive from PendingTexture and PendingMesh**
-
-**Location:** `core/src/wasm/draw.rs:8, 17`
-
-**Current Code:**
-```rust
-#[derive(Debug, Clone)]  // ❌ Unnecessary - these are never cloned
-pub struct PendingTexture {
-    pub data: Vec<u8>,  // Can be MB-sized texture data
-}
-
-#[derive(Debug, Clone)]  // ❌ Unnecessary
-pub struct PendingMesh {
-    pub vertex_data: Vec<f32>,
-    pub index_data: Option<Vec<u32>>,
-}
-```
-
-**Proposed Fix:**
-```rust
-#[derive(Debug)]  // Remove Clone - these are moved, not cloned
-pub struct PendingTexture { /* ... */ }
-
-#[derive(Debug)]
-pub struct PendingMesh { /* ... */ }
-```
-
-**Impact:** MEDIUM - Prevents accidental clones of large resource data. Documents intent (these are moved to GPU, not copied).
-
-**Verification:** Search codebase for `.clone()` calls on PendingTexture/PendingMesh - should be none.
-
----
-
-#### 7. **[MEDIUM] Reduce render state field copying**
-
-**Location:** `core/src/wasm/render.rs:48-77`
-
-**Current Code:** Every DrawCommand copies multiple RenderState fields:
-```rust
-state.draw_commands.push(DrawCommand::DrawMesh {
-    color: state.render_state.color,
-    depth_test: state.render_state.depth_test,
-    cull_mode: state.render_state.cull_mode,
-    blend_mode: state.render_state.blend_mode,
-    bound_textures: state.render_state.bound_textures,
-    // ...
-});
-```
-
-**Proposed Fix:** Store a snapshot of RenderState or index into deduped states
-```rust
-// Option A: Store RenderState snapshot
-render_state: RenderState,  // 32 bytes total
-
-// Option B: Dedupe and store index
-render_state_key: u16,  // Index into Vec<RenderState>
-```
-
-**Impact:** MEDIUM - Simplifies DrawCommand variants, reduces field duplication. Trade-off: adds indirection during rendering.
-
-**Recommendation:** Defer - current approach is simple and performant. Only optimize if profiling shows issue.
-
----
-
-#### 8. **[MEDIUM] Eliminate Vec<Mat4> clone in RenderState**
-
-**Location:** `core/src/wasm/render.rs` (if bone matrices stored in RenderState)
-
-**Analysis Needed:** Check if bone matrices (for skinned meshes) are stored in RenderState or passed separately.
-
-**If they're in RenderState:**
-```rust
-pub struct RenderState {
-    bone_matrices: Vec<Mat4>,  // ❌ Cloned on every skinned draw?
-}
-```
-
-**Proposed Fix:** Store bones in a separate shared structure, reference by ID
-```rust
-pub struct GameState {
-    bone_sets: Vec<Vec<Mat4>>,  // Shared pool
-}
-
-pub struct DrawCommand {
-    bone_set_id: u32,  // Reference instead of clone
-}
-```
-
-**Impact:** MEDIUM - Eliminates 4KB+ clones for skinned meshes (256 bones × 64 bytes).
-
-**Implementation:** Audit RenderState and DrawCommand for Vec<Mat4> fields, refactor to use shared bone set pool.
-
----
-
-#### 9. **[MEDIUM] Add #[inline] to camera math methods**
-
-**Location:** `emberware-z/src/graphics/camera.rs` (if it exists) or wherever view/projection matrices are computed
-
-**Current Code:**
-```rust
-impl Camera {
-    pub fn view_matrix(&self) -> Mat4 {
-        // Matrix math
-    }
-
-    pub fn projection_matrix(&self) -> Mat4 {
-        // Matrix math
-    }
-}
-```
-
-**Proposed Fix:**
-```rust
-impl Camera {
-    #[inline]
-    pub fn view_matrix(&self) -> Mat4 { /* ... */ }
-
-    #[inline]
-    pub fn projection_matrix(&self) -> Mat4 { /* ... */ }
-}
-```
-
-**Impact:** MEDIUM - Called once per frame, but inlining helps with register allocation for matrix math.
-
-**Implementation:** Add `#[inline]` to camera methods and other hot math helpers (transform composition, etc.)
-
----
-
-#### 10. **[LOW] Remove duplicate vertex_stride() function**
-
-**Location:** Search for `fn vertex_stride` across codebase
-
-**Issue:** If vertex_stride is defined in multiple places (e.g., graphics/vertex.rs and graphics/buffer.rs), consolidate to single source.
-
-**Proposed Fix:**
-```rust
-// In graphics/vertex.rs (canonical location):
-pub const fn vertex_stride(format: u8) -> u32 {
-    // Canonical implementation
-}
-
-// Remove from other files, import this one
-```
-
-**Impact:** LOW - Reduces code duplication, ensures consistency.
-
-**Verification:** `rg "fn vertex_stride"` should show only ONE definition.
-
----
-
-#### 11. **[LOW-MEDIUM] Optimize keycode matching**
-
-**Location:** `emberware-z/src/input.rs` (keyboard to button mapping)
-
-**Current Code (hypothetical):**
-```rust
-match keycode {
-    KeyCode::KeyW => Some(BUTTON_DPAD_UP),
-    KeyCode::KeyS => Some(BUTTON_DPAD_DOWN),
-    KeyCode::KeyA => Some(BUTTON_DPAD_LEFT),
-    KeyCode::KeyD => Some(BUTTON_DPAD_RIGHT),
-    // ... 20+ more cases
-    _ => None,
-}
-```
-
-**Proposed Fix:** Use a lookup table (array or phf) instead of match
-```rust
-// At compile time:
-static KEYCODE_TO_BUTTON: phf::Map<u32, u16> = phf_map! {
-    KeyCode::KeyW as u32 => BUTTON_DPAD_UP,
-    // ...
-};
-
-// At runtime:
-KEYCODE_TO_BUTTON.get(&(keycode as u32)).copied()
-```
-
-**Impact:** LOW-MEDIUM - Reduces match overhead. Only matters if keyboard input is polled frequently (not typical for controller-primary games).
-
-**Recommendation:** Defer - match is already fast for ~20 cases. Only optimize if profiling shows this in hot path.
-
----
-
-**Summary:**
-
-| Priority | Optimization | Estimated Savings | Effort |
-|----------|-------------|-------------------|--------|
-| HIGH | Vec4 padding (#1) | Readability + future-proofing | Medium |
-| HIGH | draw_text String (#3) | 1 alloc per text draw | Low |
-| MEDIUM-HIGH | #[inline] input (#5) | 5-10% input overhead | Low |
-| MEDIUM | Remove Clone on Pending (#6) | Safety + clarity | Low |
-| MEDIUM | #[inline] camera (#9) | Minor perf gain | Low |
-| LOW | Dedupe vertex_stride (#10) | Code quality | Low |
-| DEFER | Array copy (#2) | Negligible (16 bytes) | N/A |
-| DEFER | Vec clone (#4) | Not cloned in hot path | N/A |
-| DEFER | RenderState copy (#7) | Complex refactor, unclear gain | N/A |
-| DEFER | Bone matrix clone (#8) | Needs investigation first | N/A |
-| DEFER | Keycode matching (#11) | Unlikely bottleneck | N/A |
-
-**Implementation Order:**
-1. #3 (draw_text String) - Quick win, high impact
-2. #5 (#[inline] input) - Quick win, medium impact
-3. #6 (Remove Clone) - Quick win, safety improvement
-4. #9 (#[inline] camera) - Quick win
-5. #10 (Dedupe vertex_stride) - Code quality
-6. #1 (Vec4 padding) - Larger refactor, but improves maintainability
-
----
-## In Progress
-
-### Remove reliance on MAX_STATE_SIZE and instead use console spec provided RAM to limit
-- Rollback config.rs has defined MAX_STATE_SIZE, this may change per console Z, Class, or others
-- We have a ConsoleSpecs trait which defines the maximum RAM via ram_limit
-- Ram limit should be used to determine the MAX_STATE_SIZE, not some hardcoded magic number
-
-### **[STABILITY] Refactor rollback to use automatic WASM linear memory snapshotting**
-
-**Current State:** Games manually serialize state via FFI callbacks (`save_state(ptr, max_len) -> len` and `load_state(ptr, len)`). This requires boilerplate in every game and is error-prone.
-
-**Target State:** Automatic memory snapshotting as described in [docs/rollback-architecture.md](docs/rollback-architecture.md). The host snapshots entire WASM linear memory transparently. Games require zero serialization code.
-
-**Implementation in progress...**
-
 ## Done
-
-### **[FEATURE] Wire up camera and light uniforms to GPU**
-**Status:** Completed ✅
-
-**What Was Implemented:**
-- ✅ Added `CameraUniforms`, `LightUniform`, `LightsUniforms`, and `MaterialUniforms` structs to `render_state.rs`
-- ✅ Added `camera_buffer`, `lights_buffer`, and `material_buffer` to ZGraphics
-- ✅ Initialized all three uniform buffers in `ZGraphics::new()`
-- ✅ Implemented `update_scene_uniforms()` method that:
-  - Computes view and projection matrices from camera state
-  - Uploads camera position (for specular calculations in PBR)
-  - Uploads 4 directional lights (direction, color, intensity, enabled flag)
-  - Uploads material properties (metallic, roughness, emissive)
-- ✅ Updated `app.rs` to call `update_scene_uniforms()` before processing draw commands
-- ✅ All fields properly initialized with bytemuck Pod/Zeroable traits for GPU upload
-
-**Files Modified:**
-- `emberware-z/src/graphics/render_state.rs` - Added uniform structs (CameraUniforms, LightUniform, LightsUniforms, MaterialUniforms)
-- `emberware-z/src/graphics/mod.rs` - Added buffers, initialization, update_scene_uniforms() method, and buffer getters
-- `emberware-z/src/app.rs` - Added call to update_scene_uniforms() before execute_draw_commands()
-
-**Impact:**
-- Camera position, view, and projection are now uploaded to GPU every frame
-- Lights (4 directional) are now uploaded to GPU every frame
-- Material properties (metallic, roughness, emissive) are now uploaded to GPU every frame
-- PBR and Hybrid render modes (Mode 2 & 3) can now access lighting data
-- **Note:** Shaders still need to be updated to bind and use these buffers (future task)
-
-**Compilation:** ✅ Successful with only harmless dead code warnings
-
----
-
-### **[FEATURE] Implement matcap blend modes** (Partial - FFI only)
-
-**Status:** Partially completed - FFI function working, shader integration pending
-
-**Completed:**
-1. ✓ Added `MatcapBlendMode` enum to `emberware-z/src/graphics/render_state.rs`
-2. ✓ Added `matcap_blend_modes: [MatcapBlendMode; 4]` field to emberware-z's RenderState
-3. ✓ Added `matcap_blend_modes: [u8; 4]` field to core's RenderState
-4. ✓ Implemented `matcap_blend_mode(slot: u32, mode: u32)` FFI function with validation
-5. ✓ Registered FFI function in linker
-6. ✓ All 571 tests passing
-
-**Remaining work:**
-- Update DrawCommand structs to include matcap_blend_modes field
-- Update all DrawCommand construction sites to pass matcap_blend_modes
-- Update MaterialUniforms in shader to include blend modes
-- Update Mode 1 shader with blend_colors function and rgb_to_hsv/hsv_to_rgb helpers
-- Update material buffer creation to pack blend modes into uniforms
-- Update cache key to include blend modes
-
-**Notes:**
-- FFI function is fully functional and can be called from games
-- State is tracked in RenderState but not yet passed to GPU
-- Next implementer should update shader uniforms and material buffer logic
-
----
-
-### **[POLISH] Performance Optimizations - Replace manual padding with Vec4 types in uniforms**
-**Status:** Completed
-**Changes Made:**
-- Updated SkyUniforms struct in all 4 shader files (mode0, mode1, mode2, mode3):
-  - Replaced `vec3<f32>` + manual `_pad` fields with `vec4<f32>`
-  - Renamed `sun_color` and `sun_sharpness` to `sun_color_and_sharpness: vec4<f32>` (.xyz = color, .w = sharpness)
-- Updated shader code to access new fields:
-  - `sky.horizon_color` → `sky.horizon_color.xyz`
-  - `sky.sun_direction` → `sky.sun_direction.xyz`
-  - `sky.sun_color` → `sky.sun_color_and_sharpness.xyz`
-  - `sky.sun_sharpness` → `sky.sun_color_and_sharpness.w`
-- Updated Rust SkyUniforms struct in `emberware-z/src/graphics/render_state.rs`:
-  - Changed all fields from `[f32; 3] + _pad` to `[f32; 4]`
-  - Updated Default impl to use vec4 layout
-  - Updated safety comments to reflect new structure
-- Updated `set_sky()` in `emberware-z/src/graphics/mod.rs` to pack data into vec4 fields
-- Updated tests to use new field structure
-- All 571 tests passing ✓ (194 in core + 377 in emberware-z)
-
-**Impact:**
-- Improved code readability - no more manual padding fields
-- Eliminates manual padding errors
-- Makes future uniform additions easier
-- Same memory layout (64 bytes) and performance
-
----
-
-### **[POLISH] Performance Optimizations - Additional Quick Wins**
-**Status:** Completed
-**Changes Made:**
-- Task #9: Added `#[inline]` attribute to camera math methods in `core/src/wasm/camera.rs`:
-  - `view_matrix()` - Called once per frame for view transform
-  - `projection_matrix()` - Called once per frame for projection
-  - `view_projection_matrix()` - Computes combined VP matrix
-- Task #10: Removed duplicate `vertex_stride()` function and FORMAT constants from `emberware-z/src/ffi/mod.rs`:
-  - Removed duplicate `vertex_stride()` implementation (lines 648-665)
-  - Removed duplicate FORMAT_UV, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED constants
-  - Added import from `crate::graphics` to use canonical implementations from `vertex.rs`
-  - Kept MAX_VERTEX_FORMAT constant as it's used for validation
-- All 571 tests passing ✓ (194 in core + 377 in emberware-z)
-
-### **[POLISH] Performance Optimizations - Quick Wins**
-**Status:** Completed
-**Changes Made:**
-- Task #3: `DrawCommand::DrawText` already stores `Vec<u8>` instead of `String`, eliminating String allocation
-- Task #5: Added `#[inline]` attribute to all input FFI hot path functions:
-  - `right_stick_x`, `right_stick_y` (were missing inline)
-  - `left_stick`, `right_stick` (were missing inline)
-  - `trigger_left`, `trigger_right` (were missing inline)
-  - Other input functions already had `#[inline]` applied
-- Task #6: Removed `Clone` derive from `PendingTexture` and `PendingMesh` structs
-  - These are moved via `.drain()`, not cloned
-  - Prevents accidental expensive clones of large resource data
-- All 571 tests passing ✓ (194 in core + 377 in emberware-z)
-
-### **[STABILITY] Refactor rollback to use automatic WASM linear memory snapshotting**
-**Status:** Completed
-**Changes Made:**
-- Implemented automatic WASM linear memory snapshotting in `GameInstance::save_state()` and `GameInstance::load_state()`
-- Games no longer need to implement manual serialization callbacks
-- Host snapshots entire WASM linear memory transparently
-- Comprehensive test coverage for memory snapshotting
-- Documentation updated in rollback-architecture.md
-- All tests passing ✓
-
-### Remove duplicate TestConsole definitions
-**Status:** Completed
-**Changes Made:**
-- Created shared `test_utils.rs` module with common test utilities
-- Moved TestConsole, TestGraphics, TestAudio, and TestInput to shared module
-- Updated integration.rs to use shared test utilities (removed 120+ lines)
-- Updated runtime.rs to use shared test utilities (removed 90+ lines)
-- All 194 tests passing ✓
-
-### Remove reliance on MAX_STATE_SIZE and use console spec provided RAM to limit
-**Status:** Completed
-**Changes Made:**
-- Updated `RollbackStateManager::new(max_state_size)` to accept console-specific RAM limit
-- Added `RollbackStateManager::with_defaults()` for backward compatibility
-- Updated all `RollbackSession` constructors to accept `max_state_size` parameter
-- Added documentation to `MAX_STATE_SIZE` constant explaining it's a fallback
-- Consoles now use `console.specs().ram_limit` when creating rollback sessions:
-  - Emberware Z: 4MB
-  - Emberware Classic: 1MB
-- All tests passing ✓

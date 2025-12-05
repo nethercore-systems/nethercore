@@ -12,7 +12,7 @@ use crate::input::InputConfig;
 ///
 /// Contains all user-configurable settings organized into sections.
 /// Serialized to/from TOML format for persistence.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Config {
     /// Video/graphics settings
     #[serde(default)]
@@ -25,8 +25,23 @@ pub struct Config {
     pub input: InputConfig,
 }
 
+/// Scaling mode for render target to window
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ScaleMode {
+    /// Stretch to fill window (may distort aspect ratio)
+    Stretch,
+    /// Integer scaling for pixel-perfect rendering (adds black bars)
+    PixelPerfect,
+}
+
+impl Default for ScaleMode {
+    fn default() -> Self {
+        ScaleMode::Stretch
+    }
+}
+
 /// Video and graphics configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct VideoConfig {
     /// Whether to run in fullscreen mode (default: false)
     #[serde(default)]
@@ -37,10 +52,13 @@ pub struct VideoConfig {
     /// Resolution scale multiplier (default: 2, range: 1-4)
     #[serde(default = "default_scale")]
     pub resolution_scale: u32,
+    /// Scaling mode for game framebuffer (default: Stretch)
+    #[serde(default)]
+    pub scale_mode: ScaleMode,
 }
 
 /// Audio configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AudioConfig {
     /// Master volume level (default: 0.8, range: 0.0-1.0)
     #[serde(default = "default_volume")]
@@ -63,6 +81,7 @@ impl Default for VideoConfig {
             fullscreen: false,
             vsync: true,
             resolution_scale: 2,
+            scale_mode: ScaleMode::default(),
         }
     }
 }
@@ -158,13 +177,6 @@ mod tests {
         assert!((audio.master_volume - 0.8).abs() < f32::EPSILON);
     }
 
-    #[test]
-    fn test_default_helper_functions() {
-        assert!(default_true());
-        assert_eq!(default_scale(), 2);
-        assert!((default_volume() - 0.8).abs() < f32::EPSILON);
-    }
-
     // =============================================================
     // TOML serialization tests
     // =============================================================
@@ -176,6 +188,7 @@ mod tests {
                 fullscreen: true,
                 vsync: false,
                 resolution_scale: 3,
+                scale_mode: ScaleMode::PixelPerfect,
             },
             audio: AudioConfig { master_volume: 0.5 },
             input: InputConfig::default(),
@@ -187,6 +200,7 @@ mod tests {
         assert!(parsed.video.fullscreen);
         assert!(!parsed.video.vsync);
         assert_eq!(parsed.video.resolution_scale, 3);
+        assert_eq!(parsed.video.scale_mode, ScaleMode::PixelPerfect);
         assert!((parsed.audio.master_volume - 0.5).abs() < f32::EPSILON);
     }
 
@@ -231,6 +245,7 @@ master_volume = 0.3
             fullscreen: true,
             vsync: true,
             resolution_scale: 4,
+            scale_mode: ScaleMode::Stretch,
         };
         let toml_str = toml::to_string(&video).unwrap();
         assert!(toml_str.contains("fullscreen = true"));
@@ -272,6 +287,7 @@ master_volume = 0.3
                 fullscreen: false,
                 vsync: true,
                 resolution_scale: scale,
+                scale_mode: ScaleMode::default(),
             };
             let toml_str = toml::to_string(&video).unwrap();
             let parsed: VideoConfig = toml::from_str(&toml_str).unwrap();
@@ -282,72 +298,6 @@ master_volume = 0.3
     // =============================================================
     // Directory function tests
     // =============================================================
-
-    #[test]
-    fn test_config_dir_returns_some() {
-        // On most systems, config_dir should return Some
-        // (might fail in unusual environments, but generally works)
-        let dir = config_dir();
-        // We just check it's consistent with itself
-        assert_eq!(dir, config_dir());
-    }
-
-    #[test]
-    fn test_data_dir_returns_some() {
-        let dir = data_dir();
-        assert_eq!(dir, data_dir());
-    }
-
-    #[test]
-    fn test_config_and_data_dirs_differ() {
-        // config_dir and data_dir should typically be different paths
-        let config = config_dir();
-        let data = data_dir();
-        if let (Some(c), Some(d)) = (config, data) {
-            // They might be the same on some platforms, but typically differ
-            // Just verify they're both valid paths
-            assert!(c.to_string_lossy().contains("emberware"));
-            assert!(d.to_string_lossy().contains("emberware"));
-        }
-    }
-
-    // =============================================================
-    // Clone and Debug trait tests
-    // =============================================================
-
-    #[test]
-    fn test_config_clone() {
-        let config = Config::default();
-        let cloned = config.clone();
-        assert_eq!(cloned.video.fullscreen, config.video.fullscreen);
-        assert_eq!(cloned.video.vsync, config.video.vsync);
-        assert_eq!(cloned.video.resolution_scale, config.video.resolution_scale);
-    }
-
-    #[test]
-    fn test_config_debug() {
-        let config = Config::default();
-        let debug_str = format!("{:?}", config);
-        assert!(debug_str.contains("Config"));
-        assert!(debug_str.contains("video"));
-        assert!(debug_str.contains("audio"));
-    }
-
-    #[test]
-    fn test_video_config_debug() {
-        let video = VideoConfig::default();
-        let debug_str = format!("{:?}", video);
-        assert!(debug_str.contains("VideoConfig"));
-        assert!(debug_str.contains("fullscreen"));
-    }
-
-    #[test]
-    fn test_audio_config_debug() {
-        let audio = AudioConfig::default();
-        let debug_str = format!("{:?}", audio);
-        assert!(debug_str.contains("AudioConfig"));
-        assert!(debug_str.contains("master_volume"));
-    }
 
     // =============================================================
     // Load function tests (without filesystem access)

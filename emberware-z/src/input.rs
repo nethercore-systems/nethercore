@@ -2,12 +2,12 @@
 
 use emberware_core::console::RawInput;
 use gilrs::{Axis, Button, Gilrs};
+use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use winit::keyboard::KeyCode;
 
 /// Input configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct InputConfig {
     /// Keyboard mapping for player 1
     #[serde(default)]
@@ -40,7 +40,7 @@ impl Default for InputConfig {
 }
 
 /// Keyboard to virtual controller mapping with string-based serialization
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct KeyboardMapping {
     #[serde(
         serialize_with = "serialize_keycode",

@@ -34,13 +34,6 @@ fn panic(_: &PanicInfo) -> ! {
 extern "C" {
     // Configuration
     fn set_clear_color(color: u32);
-    fn set_sky(
-        horizon_r: f32, horizon_g: f32, horizon_b: f32,
-        zenith_r: f32, zenith_g: f32, zenith_b: f32,
-        sun_dir_x: f32, sun_dir_y: f32, sun_dir_z: f32,
-        sun_r: f32, sun_g: f32, sun_b: f32,
-        sun_sharpness: f32,
-    );
 
     // Camera
     fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
@@ -67,7 +60,6 @@ extern "C" {
 
     // Transform
     fn transform_identity();
-    fn transform_rotate(angle_deg: f32, x: f32, y: f32, z: f32);
 
     // Render state
     fn set_color(color: u32);
@@ -192,7 +184,7 @@ fn mat4_multiply(out: &mut [f32; 16], a: &[f32; 16], b: &[f32; 16]) {
 /// - Segment 0: primarily bone 0, blended with bone 1 at the joint
 /// - Segment 1: primarily bone 1, blended with bones 0 and 2 at joints
 /// - Segment 2: primarily bone 2, blended with bone 1 at the joint
-fn generate_arm_mesh() -> ([f32; 360 * 11], [u16; 324]) {
+fn generate_arm_mesh() -> ([f32; 60 * 11], [u16; 324]) {
     // Cylinder parameters
     const SEGMENTS: usize = 6;   // Around circumference
     const RINGS: usize = 10;     // Along length (including end caps)
@@ -201,8 +193,8 @@ fn generate_arm_mesh() -> ([f32; 360 * 11], [u16; 324]) {
 
     // Vertex layout: pos(3) + normal(3) + bone_indices(4u8 as 1f32) + bone_weights(4)
     // Total: 11 floats per vertex
-    let mut vertices = [0.0f32; 360 * 11];  // 6 segments * 10 rings * 6 verts = 360 verts
-    let mut indices = [0u16; 324];          // (SEGMENTS * (RINGS-1) * 2 * 3) triangles
+    let mut vertices = [0.0f32; 60 * 11];  // 6 segments * 10 rings = 60 verts, 11 floats each
+    let mut indices = [0u16; 324];         // (SEGMENTS * (RINGS-1) * 2 * 3) triangles
 
     let mut v_idx = 0;
     let mut i_idx = 0;
@@ -368,14 +360,8 @@ pub extern "C" fn init() {
         // Dark background
         set_clear_color(0x1a1a2eFF);
 
-        // Set up procedural sky for lighting
-        set_sky(
-            0.5, 0.6, 0.7,      // horizon color
-            0.2, 0.4, 0.8,      // zenith color
-            0.5, 0.8, 0.3,      // sun direction
-            1.5, 1.4, 1.2,      // sun color (HDR)
-            200.0,              // sun sharpness
-        );
+        // Note: Sky uses reasonable defaults (blue gradient with sun) from the renderer
+        // No need to set sky explicitly unless you want custom sky settings
 
         // Set up camera
         camera_set(0.0, 1.0, 8.0, 0.0, 0.0, 0.0);
@@ -484,21 +470,20 @@ pub extern "C" fn render() {
         // Upload bone matrices to GPU before drawing
         set_bones(BONE_MATRICES.as_ptr(), NUM_BONES as u32);
 
-        // Apply view rotation
+        // Apply view rotation (no rotation for now - add your own matrix math!)
         transform_identity();
-        transform_rotate(VIEW_ROTATION_X, 1.0, 0.0, 0.0);
-        transform_rotate(VIEW_ROTATION_Y, 0.0, 1.0, 0.0);
+        // TODO: Build rotation matrices for VIEW_ROTATION_X and VIEW_ROTATION_Y and call transform_set()
 
         // Draw the arm mesh
         set_color(0xE0C090FF); // Warm skin-like color
         draw_mesh(ARM_MESH);
 
         // Draw UI
-        let y = 10.0;
-        let line_h = 14.0;
+        let y = 20.0;
+        let line_h = 50.0;
 
         let title = b"GPU Skinning Demo";
-        draw_text(title.as_ptr(), title.len() as u32, 10.0, y, 12.0, 0xFFFFFFFF);
+        draw_text(title.as_ptr(), title.len() as u32, 20.0, y, 48.0, 0xFFFFFFFF);
 
         let mut buf = [0u8; 32];
 
@@ -506,18 +491,18 @@ pub extern "C" fn render() {
         let prefix = b"Speed (D-pad): ";
         let len = format_float(ANIM_SPEED, &mut buf[prefix.len()..]);
         buf[..prefix.len()].copy_from_slice(prefix);
-        draw_text(buf.as_ptr(), (prefix.len() + len) as u32, 10.0, y + line_h, 10.0, 0xCCCCCCFF);
+        draw_text(buf.as_ptr(), (prefix.len() + len) as u32, 20.0, y + line_h, 40.0, 0xCCCCCCFF);
 
         // Pause status
         let status = if PAUSED { b"Status: PAUSED (A)" as &[u8] } else { b"Status: Playing (A)" as &[u8] };
-        draw_text(status.as_ptr(), status.len() as u32, 10.0, y + line_h * 2.0, 10.0, 0xCCCCCCFF);
+        draw_text(status.as_ptr(), status.len() as u32, 20.0, y + line_h * 2.0, 40.0, 0xCCCCCCFF);
 
         // Bone info
         let bones_label = b"3 bones, smooth weight blending";
-        draw_text(bones_label.as_ptr(), bones_label.len() as u32, 10.0, y + line_h * 3.5, 9.0, 0x888888FF);
+        draw_text(bones_label.as_ptr(), bones_label.len() as u32, 20.0, y + line_h * 3.5, 36.0, 0x888888FF);
 
         // Controls hint
         let hint = b"L-Stick: Rotate view";
-        draw_text(hint.as_ptr(), hint.len() as u32, 10.0, y + line_h * 4.5, 8.0, 0x666666FF);
+        draw_text(hint.as_ptr(), hint.len() as u32, 20.0, y + line_h * 4.5, 32.0, 0x666666FF);
     }
 }

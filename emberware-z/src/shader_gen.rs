@@ -72,8 +72,9 @@ const VOUT_NORMAL: &str =
 // Vertex shader code
 const VS_UV: &str = "out.uv = in.uv;";
 const VS_COLOR: &str = "out.color = in.color;";
-const VS_NORMAL: &str = r#"out.world_normal = normalize(in.normal);
-    let view_normal = (view_matrix * vec4<f32>(in.normal, 0.0)).xyz;
+const VS_NORMAL: &str = r#"let world_normal_raw = (model_matrix * vec4<f32>(in.normal, 0.0)).xyz;
+    out.world_normal = normalize(world_normal_raw);
+    let view_normal = (view_matrix * vec4<f32>(world_normal_raw, 0.0)).xyz;
     out.view_normal = normalize(view_normal);"#;
 
 const VS_SKINNED: &str = r#"// GPU skinning: compute skinned position and normal
@@ -103,12 +104,12 @@ const VS_POSITION_UNSKINNED: &str = "let world_pos = vec4<f32>(in.position, 1.0)
 
 // Fragment shader code (Mode 0 and Mode 1 - use "color" variable)
 const FS_COLOR: &str = "color *= in.color;";
-const FS_UV: &str = "color *= textureSample(slot0, tex_sampler, in.uv).rgb;";
-const FS_NORMAL: &str = "color *= sky_lambert(in.world_normal);";
+const FS_UV: &str = "let tex_sample = textureSample(slot0, tex_sampler, in.uv); color *= tex_sample.rgb; color *= tex_sample.a;";
+const FS_NORMAL: &str = "color *= sky_lambert(in.world_normal, sky);";
 
 // Fragment shader code (Modes 2-3 - use "albedo" variable)
 const FS_ALBEDO_COLOR: &str = "albedo *= in.color;";
-const FS_ALBEDO_UV: &str = "albedo *= textureSample(slot0, tex_sampler, in.uv).rgb;";
+const FS_ALBEDO_UV: &str = "let albedo_sample = textureSample(slot0, tex_sampler, in.uv); albedo *= albedo_sample.rgb; albedo *= albedo_sample.a;";
 
 // ============================================================================
 // Shader Generation

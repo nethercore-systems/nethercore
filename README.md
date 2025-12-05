@@ -48,6 +48,36 @@ pub extern "C" fn render() {
 cargo build --target wasm32-unknown-unknown --release
 ```
 
+### Testing with Examples
+
+The `/examples` directory contains several example games demonstrating Emberware Z features. To build and test them:
+
+**Prerequisites:**
+```bash
+rustup target add wasm32-unknown-unknown
+```
+
+**Build all examples:**
+```bash
+cargo xtask build-examples
+```
+
+This will:
+1. Compile each example to WASM (targeting `wasm32-unknown-unknown`)
+2. Install them to `~/.emberware/games/` (or platform-specific equivalent)
+3. Generate a manifest for each game
+
+**Run the examples:**
+```bash
+cargo run
+```
+
+The examples will appear in the Emberware Z game library. Use the refresh button if you add new games while the app is running.
+
+**Available examples:** hello-world, triangle, textured-quad, cube, lighting, skinned-mesh, billboard, platformer
+
+For more details, see [examples/README.md](./examples/README.md).
+
 ### Upload
 
 Visit [emberware.io](https://emberware.io) to create an account and upload your game.

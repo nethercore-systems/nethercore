@@ -87,12 +87,12 @@ mod tests {
         let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
         // Verify initial state
-        let get_counter = game.store().data().memory.unwrap();
+        let get_counter = game.store().data().game.memory.unwrap();
         let _ = get_counter; // Just verify memory exists
 
         // Get helper functions
         let instance = game.store_mut();
-        let get_initialized = instance.data().memory.unwrap().data(&instance);
+        let get_initialized = instance.data().game.memory.unwrap().data(&instance);
         let _ = get_initialized; // Memory is accessible
 
         // Test init
@@ -479,7 +479,7 @@ mod tests {
         let module = engine.load_module(&wasm).unwrap();
         let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
-        let mut session = RollbackSession::<TestInput>::new_local(2, 4 * 1024 * 1024);
+        let mut session = RollbackSession::<TestInput, ()>::new_local(2, 4 * 1024 * 1024);
 
         game.init().unwrap();
 
@@ -635,7 +635,7 @@ mod tests {
     /// Test RollbackSession input handling
     #[test]
     fn test_rollback_session_input() {
-        let mut session = RollbackSession::<TestInput>::new_local(2, 4 * 1024 * 1024);
+        let mut session = RollbackSession::<TestInput, ()>::new_local(2, 4 * 1024 * 1024);
 
         // Add input for local players
         let input0 = TestInput {
@@ -741,7 +741,7 @@ mod tests {
     fn test_player_count_limits() {
         assert_eq!(MAX_PLAYERS, 4);
 
-        let mut state = GameState::new();
+        let mut state = GameState::<TestInput>::new();
 
         // Can set up to 4 players
         state.player_count = MAX_PLAYERS as u32;
@@ -873,7 +873,7 @@ mod tests {
         runtime.init_game().unwrap();
 
         // Set up 4-player local session
-        let session = RollbackSession::<TestInput>::new_local(4, 4 * 1024 * 1024);
+        let session = RollbackSession::<TestInput, ()>::new_local(4, 4 * 1024 * 1024);
         runtime.set_session(session);
 
         // Verify session is set
