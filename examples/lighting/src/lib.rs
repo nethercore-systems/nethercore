@@ -176,7 +176,7 @@ static mut METALLIC: f32 = 1.0;
 static mut ROUGHNESS: f32 = 0.4;  // Lower = shinier surface with visible specular highlights
 
 /// Subdivision level for icosphere (0 = 12 verts, 1 = 42 verts, 2 = 162 verts, 3 = 642 verts)
-const SUBDIVISION_LEVEL: usize = 2;
+const SUBDIVISION_LEVEL: usize = 3;
 
 // Maximum vertices and indices for level 3 subdivision
 const MAX_VERTS: usize = 642 * 6; // 642 vertices * 6 floats (pos + normal)
@@ -267,13 +267,12 @@ fn subdivide_icosphere(level: usize) {
         }
         let mut index_count = 60;
 
+        // Temporary storage for new triangles (moved outside loop to reduce stack pressure)
+        let mut new_indices = [0u16; MAX_INDICES];
+
         // Perform subdivision
         for _ in 0..level {
             let old_index_count = index_count;
-            let old_vert_count = vert_count;
-
-            // Create temporary storage for new triangles
-            let mut new_indices = [0u16; MAX_INDICES];
             let mut new_index_count = 0;
 
             // Process each triangle
@@ -343,7 +342,7 @@ fn subdivide_icosphere(level: usize) {
                 indices[i] = new_indices[i];
             }
             index_count = new_index_count;
-            vert_count = old_vert_count + (new_index_count - old_index_count) / 2; // Rough estimate
+            // vert_count is already correctly maintained by find_or_add_vertex
         }
 
         // Copy results to global storage
