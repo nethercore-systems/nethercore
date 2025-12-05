@@ -6,6 +6,29 @@ Replace Mode 3 (Hybrid: Matcap + PBR) with Mode 3 (Classic Lit: Normalized Blinn
 
 ---
 
+## ⚠️ Document Status: UPDATED & CORRECTED
+
+**Last Updated:** 2025-12-05
+
+**Key Corrections from Codebase Review:**
+
+1. **File Paths Corrected**: Shaders are in `emberware-z/shaders/`, NOT `emberware-z/src/graphics/shaders/`
+2. **Shader Generation**: Shaders are generated at compile-time from templates via `shader_gen.rs`
+3. **Emissive Location**: Currently stored in both uniform (`PackedUnifiedShadingState.emissive`) AND texture Slot 1.B (for Mode 2/3)
+4. **Material State**: `PackedUnifiedShadingState` stores material properties as packed u8 values
+5. **Template System**: Must update TEMPLATE_MODE3 reference in `shader_gen.rs` and all related snippets
+6. **Mode 2 Impact**: Moving emissive to Slot 0.A affects BOTH Mode 2 and Mode 3
+7. **Example Required**: Must add `examples/blinn-phong/` to demonstrate new Mode 3
+
+**Additional Files Requiring Updates:**
+- `emberware-z/src/shader_gen.rs` (template reference, snippets, mode name)
+- `emberware-z/src/graphics/unified_shading_state.rs` (material properties)
+- `emberware-z/src/ffi/mod.rs` (new FFI functions)
+- `docs/ffi.md` (document new functions)
+- `docs/emberware-z.md` (texture slot table, Mode 3 description)
+
+---
+
 ## 1. Design Summary
 
 ### Why Blinn-Phong Over Hybrid?
@@ -229,21 +252,189 @@ Mode 3 is significantly cheaper per light than Mode 2.
 
 ---
 
-## 5. Files to Modify
+## 5. Implementation Details
 
-| Action | File | Changes |
-|--------|------|---------|
-| **Create** | `emberware-z/src/graphics/shaders/mode3_blinnphong.wgsl` | New shader |
-| **Modify** | `emberware-z/src/graphics/shaders/mode2_pbr.wgsl` | Move emissive to Slot 0.A |
-| **Modify** | `emberware-z/src/graphics/pipeline.rs` | Shader selection for Mode 3 |
-| **Modify** | `emberware-z/src/graphics/state.rs` | Add BlinnPhong material state |
-| **Delete** | `emberware-z/src/graphics/shaders/mode3_hybrid.wgsl` | Remove old shader |
-| **Modify** | `docs/emberware-z.md` | Update Mode 3 documentation |
-| **Modify** | `CLAUDE.md` | Update shader architecture docs |
+### 5.1 Shader Generator Changes (`shader_gen.rs`)
+
+The shader generation system needs several updates:
+
+1. **Update template reference (line 53)**:
+   ```rust
+   const TEMPLATE_MODE3: &str = include_str!("../shaders/mode3_blinnphong.wgsl");
+   ```
+
+2. **Update FS_ALBEDO_UV snippet (line 112)** to extract emissive from Slot 0 alpha:
+   ```rust
+   const FS_ALBEDO_UV: &str = "let albedo_sample = textureSample(slot0, tex_sampler, in.uv); albedo *= albedo_sample.rgb; let emissive_tex = albedo_sample.a;";
+   ```
+
+3. **Add new snippet for Blinn-Phong texture sampling**:
+   ```rust
+   const FS_SPECULAR_SHININESS: &str = "let spec_shin = textureSample(slot1, tex_sampler, in.uv); specular_color = spec_shin.rgb; shininess_raw = spec_shin.a;";
+   ```
+
+4. **Update FS_MRE snippet (line 219)** - Mode 2 now samples emissive from Slot 0.A instead of Slot 1.B:
+   ```rust
+   // OLD: let mre_sample = textureSample(slot1, tex_sampler, in.uv);\n    mre = vec3<f32>(mre_sample.r, mre_sample.g, mre_sample.b);
+   // NEW: let mre_sample = textureSample(slot1, tex_sampler, in.uv);\n    mre.r = mre_sample.r;\n    mre.g = mre_sample.g;
+   ```
+
+5. **Update mode_name function (line 254)**:
+   ```rust
+   3 => "Blinn-Phong",  // Changed from "Hybrid"
+   ```
+
+6. **Add placeholder replacement for Mode 3** (in generate_shader function):
+   ```rust
+   3 => {
+       shader = shader.replace("//FS_COLOR", if has_color { FS_ALBEDO_COLOR } else { "" });
+       shader = shader.replace("//FS_UV", if has_uv { FS_ALBEDO_UV } else { "" });
+       shader = shader.replace("//FS_SPECULAR_SHININESS", if has_uv { FS_SPECULAR_SHININESS } else { "" });
+   }
+   ```
+
+### 5.2 Unified Shading State Changes
+
+The `PackedUnifiedShadingState` currently stores:
+```rust
+pub metallic: u8,
+pub roughness: u8,
+pub emissive: u8,
+```
+
+For Mode 3 Blinn-Phong, we need additional material properties. **Options:**
+
+**Option A**: Reuse existing fields (simpler, no struct changes)
+- `metallic` → `rim_intensity` (0-255 maps to 0.0-1.0)
+- `roughness` → `rim_power` (0-255 maps to 1.0-32.0)
+- `emissive` → keep as emissive
+
+**Option B**: Add new fields (cleaner, requires struct resize)
+- Add `specular_r`, `specular_g`, `specular_b`, `shininess`, `rim_intensity`, `rim_power`
+- Increases struct size, may affect cache/alignment
+
+**Recommendation**: Start with Option A (reuse fields). Mode 3 games won't use PBR-specific metallic/roughness anyway.
+
+### 5.3 FFI Function Changes
+
+Add material control functions for Mode 3:
+```rust
+fn material_specular(r: f32, g: f32, b: f32)  // Specular color
+fn material_shininess(value: f32)              // Shininess 0.0-1.0 → 1-256
+fn material_rim(intensity: f32, power: f32)    // Rim lighting control
+```
+
+Alternatively, repurpose existing functions:
+- `material_metallic()` → controls rim_intensity in Mode 3
+- `material_roughness()` → controls rim_power in Mode 3
+- `material_emissive()` → unchanged
 
 ---
 
-## 6. Example Materials
+## 6. Files to Modify
+
+| Action | File | Changes |
+|--------|------|---------|
+| **Create** | `emberware-z/shaders/mode3_blinnphong.wgsl` | **NEW** shader template ⚠️ Path corrected! |
+| **Modify** | `emberware-z/shaders/mode2_pbr.wgsl` | Move emissive from Slot 1.B to Slot 0.A ⚠️ Path corrected! |
+| **Modify** | `emberware-z/src/shader_gen.rs` | Update TEMPLATE_MODE3, FS_ALBEDO_UV, FS_MRE snippets, mode_name |
+| **Modify** | `emberware-z/src/graphics/unified_shading_state.rs` | Add BlinnPhong material fields (specular, shininess, rim) |
+| **Modify** | `emberware-z/src/ffi/mod.rs` | Add FFI functions for BP material (rim_intensity, rim_power) |
+| **Delete** | `emberware-z/shaders/mode3_hybrid.wgsl` | Remove old shader ⚠️ Path corrected! |
+| **Modify** | `docs/emberware-z.md` | Update Mode 3 docs, texture slot table (line ~171, ~535) |
+| **Create** | `examples/blinn-phong/` | **NEW** example demonstrating Mode 3 Blinn-Phong |
+| **Modify** | `CLAUDE.md` (optional) | Update if shader architecture is documented |
+
+---
+
+## 7. Mode 2 PBR Changes (Emissive Migration)
+
+Mode 2 must also move emissive from Slot 1.B to Slot 0.A for consistency.
+
+### Current State (Mode 2)
+
+**Emissive is currently:**
+1. Stored in `PackedUnifiedShadingState.emissive` (u8) as a uniform default
+2. Can be overridden by sampling Slot 1.B (MRE texture blue channel)
+3. Applied as `let glow = albedo * mre.b;` where `mre.b` comes from texture or uniform
+
+**How it's sampled currently** (shader_gen.rs line 219):
+```rust
+if has_uv {
+    shader = shader.replace("//FS_MRE",
+        "let mre_sample = textureSample(slot1, tex_sampler, in.uv);\n    mre = vec3<f32>(mre_sample.r, mre_sample.g, mre_sample.b);");
+}
+```
+
+**Why this needs to change:**
+- Slot 0 alpha channel is currently unused (always multiplied as opacity but rarely used)
+- Emissive is more naturally associated with the albedo texture
+- Frees up Slot 1.B for other purposes (though Mode 2 won't use it)
+- Consistency with Mode 3 which needs Slot 1 for specular+shininess
+
+### Shader Changes (`mode2_pbr.wgsl`)
+
+1. **Update comment (line 4)**:
+   ```wgsl
+   // OLD: MRE texture in slot 1 (R=Metallic, G=Roughness, B=Emissive)
+   // NEW: MR texture in slot 1 (R=Metallic, G=Roughness), Emissive in Slot 0.A
+   ```
+
+2. **Update texture binding comment (line 54)**:
+   ```wgsl
+   // OLD: @group(1) @binding(1) var slot1: texture_2d<f32>;  // MRE (Metallic-Roughness-Emissive)
+   // NEW: @group(1) @binding(1) var slot1: texture_2d<f32>;  // MR (Metallic-Roughness)
+   ```
+
+3. **Update fragment shader sampling**:
+   ```wgsl
+   // Get albedo + emissive from Slot 0
+   let albedo_sample = textureSample(slot0, tex_sampler, in.uv);
+   var albedo = albedo_sample.rgb;
+   let emissive_tex = albedo_sample.a;  // NEW: Extract emissive from alpha
+   //FS_COLOR
+
+   // Sample MR texture (no longer MRE)
+   var mr = vec2<f32>(metallic, roughness);  // Only M and R, not E
+   //FS_MR  // NEW placeholder name (was FS_MRE)
+
+   // Use emissive from Slot 0.A instead of Slot 1.B
+   let glow = albedo * max(emissive_tex, mre.b);  // Texture overrides uniform if present
+   ```
+
+---
+
+## 8. Example Game
+
+Create `examples/blinn-phong/` to demonstrate Mode 3:
+
+### Features to Showcase
+
+1. **Specular variation**: Different shininess values (10, 50, 128, 200)
+2. **Specular color**: Gold (warm), silver (neutral), copper (orange-tinted)
+3. **Rim lighting**: Character silhouettes, edge highlights
+4. **Multiple lights**: Demonstrate 4 lights + sun
+5. **Texture control**: Show both uniform and texture-driven specular/shininess
+6. **Material presets**: Wood, metal, plastic, skin, cloth
+
+### Example Structure
+
+```
+examples/blinn-phong/
+├── Cargo.toml
+├── src/
+│   └── lib.rs
+└── assets/
+    ├── sphere.obj
+    ├── character.obj
+    ├── albedo.png       (RGB: diffuse color)
+    ├── specular.png     (RGB: specular color, A: shininess)
+    └── README.md        (Material authoring guide)
+```
+
+---
+
+## 9. Example Materials
 
 ### Authoring Guide
 
@@ -288,24 +479,74 @@ Mode 3 is significantly cheaper per light than Mode 2.
 
 ---
 
-## 8. Testing Checklist
+## 11. Testing Checklist
 
-- [ ] Gotanda normalization produces consistent brightness across shininess range
+### Mode 3 (Blinn-Phong) Tests
+- [ ] Gotanda normalization produces consistent brightness across shininess range (1-256)
 - [ ] No visible energy blow-up at grazing angles (despite no G term)
 - [ ] Rim lighting works independently of specular
 - [ ] All 4 lights + sun contribute correctly
-- [ ] Emissive from Slot 0.A functions correctly
-- [ ] Mode 2 still works after emissive relocation
+- [ ] Emissive from Slot 0.A functions correctly (both uniform and texture)
+- [ ] Specular color variation (gold, silver, copper) displays correctly
+- [ ] Shininess variation (soft to sharp) behaves as expected
 - [ ] Vertex color multiplies albedo correctly
 - [ ] Formats without normals fall back to Mode 0 with warning
-- [ ] Gold material looks warm/orange (not PBR-derived)
-- [ ] Comparison renders show Mode 2 vs Mode 3 are intentionally different
+- [ ] Gold material looks warm/orange (not PBR-derived metallic)
+- [ ] All 40 shader permutations compile successfully (naga validation)
+
+### Mode 2 (PBR) Regression Tests
+- [ ] Mode 2 still works after emissive relocation to Slot 0.A
+- [ ] Emissive from Slot 0.A renders identically to old Slot 1.B
+- [ ] MR texture (no emissive channel) still works correctly
+- [ ] Existing Mode 2 games/examples render unchanged
+
+### Comparison Tests
+- [ ] Mode 2 vs Mode 3 renders show intentional differences (PBR vs Blinn-Phong)
+- [ ] Example game demonstrates all Mode 3 features
 
 ---
 
-## 9. TODO: Future
+## 12. TODO: Implementation Tasks
 
-- [ ] FFI functions for material uniforms (specular_intensity, rim_intensity, rim_power)
-- [ ] Rust uniform struct (BlinnPhongMaterialUniform)
-- [ ] Default values and ranges for uniforms
-- [ ] FFI documentation in docs/ffi.md
+### Core Implementation (Required)
+- [ ] Create `emberware-z/shaders/mode3_blinnphong.wgsl` shader template
+- [ ] Update `emberware-z/shaders/mode2_pbr.wgsl` (emissive → Slot 0.A)
+- [ ] Update `emberware-z/src/shader_gen.rs`:
+  - [ ] TEMPLATE_MODE3 reference
+  - [ ] FS_ALBEDO_UV snippet (extract emissive from alpha)
+  - [ ] FS_MRE → FS_MR rename and update
+  - [ ] FS_SPECULAR_SHININESS snippet (Mode 3)
+  - [ ] mode_name: "Hybrid" → "Blinn-Phong"
+- [ ] Update `docs/emberware-z.md`:
+  - [ ] Mode 3 description (line ~171, ~293)
+  - [ ] Texture slot table (line ~535)
+  - [ ] Lighting section
+
+### Material System (Required)
+- [ ] Decide on material property storage (Option A vs B)
+- [ ] Update `emberware-z/src/graphics/unified_shading_state.rs` if needed
+- [ ] Add FFI functions to `emberware-z/src/ffi/mod.rs`:
+  - [ ] `material_specular(r, g, b)` or repurpose existing
+  - [ ] `material_shininess(value)` or repurpose existing
+  - [ ] `material_rim(intensity, power)` or repurpose existing
+
+### Example Game (Required)
+- [ ] Create `examples/blinn-phong/` directory structure
+- [ ] Implement example showcasing:
+  - [ ] Multiple shininess values
+  - [ ] Specular color variation
+  - [ ] Rim lighting
+  - [ ] 4 lights + sun
+  - [ ] Texture-driven specular/shininess
+- [ ] Add asset files (sphere/character mesh, textures)
+- [ ] Write material authoring guide (README)
+
+### Documentation (Required)
+- [ ] Update `docs/ffi.md` with new material functions
+- [ ] Add migration guide for old Mode 3 users
+- [ ] Update CLAUDE.md if shader architecture is documented
+
+### Cleanup (Required)
+- [ ] Delete `emberware-z/shaders/mode3_hybrid.wgsl`
+- [ ] Run all shader compilation tests
+- [ ] Verify no regressions in existing examples
