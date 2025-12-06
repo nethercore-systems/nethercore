@@ -97,27 +97,37 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     let rim_power_raw = unpack_unorm8_from_u32(shading.matcap_blend_modes >> 24u);
     let rim_power = rim_power_raw * 32.0;
 
-    // Ambient with Gotanda energy conservation
+    // Diffuse factor: Mode 2 reduces diffuse for metallic surfaces (metals don't have diffuse)
+    // Mode 3 has no metallic, so diffuse_factor = 1.0
+    //FS_MODE2_3_DIFFUSE_FACTOR
+
+    let glow = albedo * emissive;
+    var final_color = glow;
+
+    // Indirect ambient: sample sky in direction of surface normal (IBL-lite, no cosine term)
+    // Gotanda normalization reduces ambient as shininess increases (energy conservation)
     let spec_norm = gotanda_normalization(shininess);
     let ambient_factor = 1.0 / sqrt(1.0 + spec_norm);
     let ambient_color = sample_sky(in.world_normal, sky);
-    let ambient = ambient_color * albedo * ambient_factor;
+    final_color += ambient_color * albedo * ambient_factor;
 
-    let glow = albedo * emissive;
-    var final_color = ambient + glow;
+    // Direct sun: sample sky in the direction of the sun (all colors from sky)
+    let sun_color = sample_sky(-sky.sun_direction, sky);
 
-    // Sun diffuse + specular
-    final_color += lambert_diffuse(in.world_normal, sky.sun_direction, albedo, sky.sun_color);
+    // Sun diffuse (direct, with metallic reduction)
+    final_color += lambert_diffuse(in.world_normal, sky.sun_direction, albedo, sun_color) * diffuse_factor;
+
+    // Sun specular
     final_color += normalized_blinn_phong_specular(
-        in.world_normal, view_dir, sky.sun_direction, shininess, specular_color, sky.sun_color
+        in.world_normal, view_dir, sky.sun_direction, shininess, specular_color, sun_color
     );
 
-    // 4 dynamic lights
+    // 4 dynamic lights (direct illumination)
     for (var i = 0u; i < 4u; i++) {
         let light = unpack_light(shading.lights[i]);
         if (light.enabled) {
             let light_color = light.color * light.intensity;
-            final_color += lambert_diffuse(in.world_normal, light.direction, albedo, light_color);
+            final_color += lambert_diffuse(in.world_normal, light.direction, albedo, light_color) * diffuse_factor;
             final_color += normalized_blinn_phong_specular(
                 in.world_normal, view_dir, light.direction, shininess, specular_color, light_color
             );
@@ -125,7 +135,7 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     }
 
     // Rim lighting (always uses rim_intensity from uniform, never from texture)
-    let rim = rim_lighting(in.world_normal, view_dir, sky.sun_color, rim_intensity, rim_power);
+    let rim = rim_lighting(in.world_normal, view_dir, sun_color, rim_intensity, rim_power);
     final_color += rim;
 
     return vec4<f32>(final_color, material_color.a);

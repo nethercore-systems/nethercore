@@ -116,8 +116,8 @@ const VS_POSITION_UNSKINNED: &str = "let world_pos = vec4<f32>(in.position, 1.0)
 // Fragment shader code (Mode 0 and Mode 1 - use "color" variable)
 const FS_COLOR: &str = "color *= in.color;";
 const FS_UV: &str = "let tex_sample = textureSample(slot0, tex_sampler, in.uv); color *= tex_sample.rgb; color *= tex_sample.a;";
-const FS_AMBIENT: &str = "let ambient = color * sample_sky(in.world_normal, sky);";
-const FS_NORMAL: &str = "color = ambient + lambert_diffuse(in.world_normal, sky.sun_direction, color, sky.sun_color);";
+const FS_AMBIENT: &str = "let ambient = color * sample_sky(in.world_normal, sky); let sun_color = sample_sky(-sky.sun_direction, sky);";
+const FS_NORMAL: &str = "color = ambient + lambert_diffuse(in.world_normal, sky.sun_direction, color, sun_color);";
 
 // Fragment shader code (Modes 2-3 - use "albedo" variable)
 const FS_ALBEDO_COLOR: &str = "albedo *= in.color;";
@@ -258,7 +258,10 @@ pub fn generate_shader(mode: u8, format: u8) -> Result<String, ShaderGenError> {
             // Mode 2: Metallic-Roughness Blinn-Phong
             shader = shader.replace("//FS_COLOR", if has_color { FS_ALBEDO_COLOR } else { "" });
             shader = shader.replace("//FS_UV", if has_uv { FS_ALBEDO_UV } else { "" });
-            shader = shader.replace("//FS_AMBIENT", "");  // Modes 2-3 handle ambient internally
+            shader = shader.replace("//FS_AMBIENT", "");  // Modes 2-3 handle lighting internally
+
+            // Diffuse factor: reduce for metallic surfaces (metals don't have diffuse)
+            shader = shader.replace("//FS_MODE2_3_DIFFUSE_FACTOR", "let diffuse_factor = 1.0 - value0;");
 
             // Shininess: Compute from roughness (power curve)
             let mode2_shininess = "let shininess = pow(256.0, 1.0 - value1);";
@@ -279,7 +282,10 @@ pub fn generate_shader(mode: u8, format: u8) -> Result<String, ShaderGenError> {
             // Mode 3: Specular Blinn-Phong
             shader = shader.replace("//FS_COLOR", if has_color { FS_ALBEDO_COLOR } else { "" });
             shader = shader.replace("//FS_UV", if has_uv { FS_ALBEDO_UV } else { "" });
-            shader = shader.replace("//FS_AMBIENT", "");  // Modes 2-3 handle ambient internally
+            shader = shader.replace("//FS_AMBIENT", "");  // Modes 2-3 handle lighting internally
+
+            // Diffuse factor: no reduction (Mode 3 has no metallic parameter)
+            shader = shader.replace("//FS_MODE2_3_DIFFUSE_FACTOR", "let diffuse_factor = 1.0;");
 
             // Shininess: Direct linear mapping (0-1 → 1-256)
             let mode3_shininess = "let shininess = mix(1.0, 256.0, value1);";
@@ -617,6 +623,7 @@ mod tests {
                     "//FS_AMBIENT",
                     "//FS_NORMAL",
                     "//FS_MRE",
+                    "//FS_MODE2_3_DIFFUSE_FACTOR",
                     "//FS_MODE2_3_SHININESS",
                     "//FS_MODE2_3_SPECULAR_COLOR",
                     "//FS_MODE2_3_TEXTURES",
