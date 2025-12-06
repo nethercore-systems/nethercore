@@ -14,7 +14,8 @@
       "Bash(timeout 5 cargo run:*)",
       "Bash(timeout 60 cargo check:*)",
       "Bash(rustc:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(dir:*)"
     ],
     "deny": [],
     "ask": []

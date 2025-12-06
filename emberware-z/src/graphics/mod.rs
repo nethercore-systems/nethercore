@@ -1354,16 +1354,11 @@ impl ZGraphics {
     /// * `clear_color` - Background clear color (RGBA 0-1)
     pub fn render_frame(
         &mut self,
+        encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         z_state: &crate::state::ZFFIState,
         clear_color: [f32; 4],
     ) {
-        // Create command encoder
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Game Render Encoder"),
-            });
 
         // If no commands, just clear render target and blit to window
         if self.command_buffer.commands().is_empty() {
@@ -1462,7 +1457,6 @@ impl ZGraphics {
 
                 blit_pass.draw(0..3, 0..1);
             }
-            self.queue.submit(std::iter::once(encoder.finish()));
             return;
         }
 
@@ -2108,9 +2102,6 @@ impl ZGraphics {
 
             blit_pass.draw(0..3, 0..1); // Fullscreen triangle
         }
-
-        // Submit commands
-        self.queue.submit(std::iter::once(encoder.finish()));
     }
 }
 

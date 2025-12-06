@@ -125,6 +125,14 @@ pub struct App {
     wasm_engine: Option<WasmEngine>,
     /// Active game session (only present in Playing mode)
     game_session: Option<GameSession>,
+    /// Whether a redraw is needed (UI state changed)
+    needs_redraw: bool,
+    // Egui optimization cache
+    cached_egui_shapes: Vec<egui::epaint::ClippedShape>,
+    cached_egui_tris: Vec<egui::ClippedPrimitive>,
+    cached_pixels_per_point: f32,
+    last_mode: AppMode,
+    last_window_size: (u32, u32),
 }
 
 impl App {
@@ -153,7 +161,7 @@ impl App {
         };
 
         Self {
-            mode: initial_mode,
+            mode: initial_mode.clone(),
             settings_ui: crate::settings_ui::SettingsUi::new(&config),
             config,
             window: None,
@@ -176,6 +184,12 @@ impl App {
             last_error: None,
             wasm_engine,
             game_session: None,
+            needs_redraw: true,
+            cached_egui_shapes: Vec::new(),
+            cached_egui_tris: Vec::new(),
+            cached_pixels_per_point: 1.0,
+            last_mode: initial_mode.clone(),
+            last_window_size: (960, 540),
         }
     }
 
@@ -860,6 +874,13 @@ impl App {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
+        // Create SINGLE encoder for entire frame
+        let mut encoder = graphics
+            .device()
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Frame Encoder"),
+            });
+
         // If in Playing mode, render game first
         if matches!(mode, AppMode::Playing { .. }) {
             // Get clear color from game state
@@ -886,7 +907,7 @@ impl App {
             if let Some(session) = &mut self.game_session {
                 if let Some(game) = session.runtime.game_mut() {
                     let z_state = game.console_state_mut();
-                    graphics.render_frame(&view, z_state, clear_color);
+                    graphics.render_frame(&mut encoder, &view, z_state, clear_color);
 
                     // Centralized per-frame cleanup after GPU upload completes
                     z_state.clear_frame();
@@ -1055,37 +1076,101 @@ impl App {
 
         egui_state.handle_platform_output(&window, full_output.platform_output);
 
-        let tris = self
-            .egui_ctx
-            .tessellate(full_output.shapes, full_output.pixels_per_point);
+        // Determine if egui needs update
+        let mut egui_dirty = false;
 
-        // Upload egui textures
-        for (id, image_delta) in &full_output.textures_delta.set {
-            egui_renderer.update_texture(graphics.device(), graphics.queue(), *id, image_delta);
+        // Check 1: First frame
+        if self.cached_egui_shapes.is_empty() {
+            egui_dirty = true;
         }
 
-        // Create command encoder
-        let mut encoder =
-            graphics
-                .device()
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("Render Encoder"),
-                });
+        // Check 2: Mode changed
+        if !egui_dirty && self.last_mode != mode {
+            egui_dirty = true;
+            self.last_mode = mode.clone();
+        }
+
+        // Check 3: Window resized
+        let current_size = (graphics.width(), graphics.height());
+        if !egui_dirty && self.last_window_size != current_size {
+            egui_dirty = true;
+            self.last_window_size = current_size;
+        }
+
+        // Check 4: DPI changed
+        if !egui_dirty
+            && (self.cached_pixels_per_point - full_output.pixels_per_point).abs() > 0.001
+        {
+            egui_dirty = true;
+            self.cached_pixels_per_point = full_output.pixels_per_point;
+        }
+
+        // Check 5: Texture changes
+        if !egui_dirty && !full_output.textures_delta.set.is_empty() {
+            egui_dirty = true;
+        }
+
+        // Check 6: Shapes changed (fast vector comparison)
+        if !egui_dirty {
+            if full_output.shapes.len() != self.cached_egui_shapes.len() {
+                egui_dirty = true;
+            } else {
+                for (new_shape, old_shape) in
+                    full_output.shapes.iter().zip(&self.cached_egui_shapes)
+                {
+                    if new_shape != old_shape {
+                        egui_dirty = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Check 7: Viewport repaint requested
+        if !egui_dirty {
+            for viewport_output in full_output.viewport_output.values() {
+                if viewport_output.repaint_delay.is_zero() {
+                    egui_dirty = true;
+                    break;
+                }
+            }
+        }
 
         let screen_descriptor = egui_wgpu::ScreenDescriptor {
             size_in_pixels: [graphics.width(), graphics.height()],
             pixels_per_point: window.scale_factor() as f32,
         };
 
-        // Update egui buffers (allocate vertex/index buffers for this frame)
-        // IMPORTANT: Call once with all meshes, not once per mesh
-        egui_renderer.update_buffers(
-            graphics.device(),
-            graphics.queue(),
-            &mut encoder,
-            &tris,
-            &screen_descriptor,
-        );
+        // Conditional tessellation and buffer update
+        let tris = if egui_dirty {
+            // Tessellate and cache
+            let new_tris = self
+                .egui_ctx
+                .tessellate(full_output.shapes.clone(), full_output.pixels_per_point);
+
+            // Update cache
+            self.cached_egui_shapes = full_output.shapes;
+            self.cached_egui_tris = new_tris.clone();
+
+            // Update GPU buffers (ONLY when dirty)
+            egui_renderer.update_buffers(
+                graphics.device(),
+                graphics.queue(),
+                &mut encoder,
+                &new_tris,
+                &screen_descriptor,
+            );
+
+            new_tris
+        } else {
+            // Reuse cached triangles
+            self.cached_egui_tris.clone()
+        };
+
+        // Texture updates still happen (already delta-tracked)
+        for (id, image_delta) in &full_output.textures_delta.set {
+            egui_renderer.update_texture(graphics.device(), graphics.queue(), *id, image_delta);
+        }
 
         // Create render pass and render egui (only if there are triangles to render)
         // When in Playing mode, use Load to preserve game rendering.
@@ -1168,7 +1253,28 @@ impl App {
         }
 
         // Request next frame
-        window.request_redraw();
+        self.request_redraw_if_needed();
+    }
+
+    fn request_redraw_if_needed(&mut self) {
+        let needs_redraw =
+            matches!(self.mode, AppMode::Playing { .. }) ||
+            self.egui_ctx.has_requested_repaint() ||
+            self.needs_redraw;
+
+        if needs_redraw {
+            if let Some(window) = &self.window {
+                window.request_redraw();
+            }
+            self.needs_redraw = false;
+        }
+    }
+
+    fn mark_needs_redraw(&mut self) {
+        self.needs_redraw = true;
+        if let Some(window) = &self.window {
+            window.request_redraw();
+        }
     }
 }
 
@@ -1302,10 +1408,8 @@ impl ApplicationHandler for App {
         // Update input state
         self.update_input();
 
-        // Request redraw for continuous rendering
-        if let Some(window) = &self.window {
-            window.request_redraw();
-        }
+        // Conditional redraw based on mode
+        self.request_redraw_if_needed();
     }
 }
 

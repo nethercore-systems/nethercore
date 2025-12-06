@@ -279,8 +279,7 @@ fn expand_bone_matrix(bone: BoneMatrix3x4) -> mat4x4<f32> {
 
 ---
 
-
-### **[POLISH] PERF: Store MeshId, TextureId (and other ID)s in ZGraphics as a Vec<T> instead of a HashMap<usize, T>
+### **[POLISH] PERF: Store MeshId, TextureId (and other ID)s in as a Vec<T> instead of a HashMap<usize, T>
 - This task may need to be updated if ZGraphics is refactored to something else.
 - Assets can never be unloaded
 - Keys are always inserted via incrementing values
