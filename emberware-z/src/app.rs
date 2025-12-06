@@ -968,11 +968,12 @@ impl App {
             .create_view(&wgpu::TextureViewDescriptor::default());
 
         // Create SINGLE encoder for entire frame
-        let mut encoder = graphics
-            .device()
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Frame Encoder"),
-            });
+        let mut encoder =
+            graphics
+                .device()
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("Frame Encoder"),
+                });
 
         // If in Playing mode, render game (only if we generated new content this frame)
         if matches!(mode, AppMode::Playing { .. }) {
@@ -1093,17 +1094,25 @@ impl App {
                             painter.rect_filled(rect, 2.0, egui::Color32::from_gray(30));
 
                             // Choose which times to display based on mode
-                            let (times_to_display, graph_label, graph_max) = if matches!(mode, AppMode::Playing { .. }) {
-                                // Game tick budget visualization - full height = 16.67ms budget
-                                let label = format!("Game tick budget ({:.1}ms target)", TARGET_FRAME_TIME_MS);
-                                (&debug_stats.game_tick_times, label, TARGET_FRAME_TIME_MS)
-                            } else {
-                                (&debug_stats.frame_times, "Frame time (0-33ms)".to_string(), GRAPH_MAX_FRAME_TIME_MS)
-                            };
+                            let (times_to_display, graph_label, graph_max) =
+                                if matches!(mode, AppMode::Playing { .. }) {
+                                    // Game tick budget visualization - full height = 16.67ms budget
+                                    let label = format!(
+                                        "Game tick budget ({:.1}ms target)",
+                                        TARGET_FRAME_TIME_MS
+                                    );
+                                    (&debug_stats.game_tick_times, label, TARGET_FRAME_TIME_MS)
+                                } else {
+                                    (
+                                        &debug_stats.frame_times,
+                                        "Frame time (0-33ms)".to_string(),
+                                        GRAPH_MAX_FRAME_TIME_MS,
+                                    )
+                                };
 
                             // Target line (16.67ms for 60 FPS)
-                            let target_y = rect.bottom()
-                                - (TARGET_FRAME_TIME_MS / graph_max * graph_height);
+                            let target_y =
+                                rect.bottom() - (TARGET_FRAME_TIME_MS / graph_max * graph_height);
                             painter.hline(
                                 rect.left()..=rect.right(),
                                 target_y,
@@ -1122,13 +1131,22 @@ impl App {
 
                                         // Get update and render times for this tick
                                         let update_time = time_ms; // game_tick_times[i]
-                                        let render_time = debug_stats.game_render_times.get(i).copied().unwrap_or(0.0);
+                                        let render_time = debug_stats
+                                            .game_render_times
+                                            .get(i)
+                                            .copied()
+                                            .unwrap_or(0.0);
                                         let total_time = update_time + render_time;
 
                                         // Calculate heights (scaled to budget, capped at 150%)
-                                        let update_height = ((update_time / TARGET_FRAME_TIME_MS).min(1.5) * graph_height);
-                                        let render_height = ((render_time / TARGET_FRAME_TIME_MS).min(1.5) * graph_height);
-                                        let total_height = (update_height + render_height).min(graph_height);
+                                        let update_height = ((update_time / TARGET_FRAME_TIME_MS)
+                                            .min(1.5)
+                                            * graph_height);
+                                        let render_height = ((render_time / TARGET_FRAME_TIME_MS)
+                                            .min(1.5)
+                                            * graph_height);
+                                        let total_height =
+                                            (update_height + render_height).min(graph_height);
 
                                         let bottom_y = rect.bottom();
 
@@ -1164,7 +1182,10 @@ impl App {
                                             painter.rect_filled(
                                                 egui::Rect::from_min_max(
                                                     egui::pos2(x, bottom_y - total_height),
-                                                    egui::pos2(x + bar_width - 1.0, bottom_y - update_height),
+                                                    egui::pos2(
+                                                        x + bar_width - 1.0,
+                                                        bottom_y - update_height,
+                                                    ),
                                                 ),
                                                 0.0,
                                                 egui::Color32::from_rgb(220, 140, 60), // Orange - render time
@@ -1172,7 +1193,8 @@ impl App {
                                         }
                                     } else {
                                         // Standard bars for render times in Library mode
-                                        let height = (time_ms / graph_max * graph_height).min(graph_height);
+                                        let height =
+                                            (time_ms / graph_max * graph_height).min(graph_height);
                                         let bar_rect = egui::Rect::from_min_max(
                                             egui::pos2(x, rect.bottom() - height),
                                             egui::pos2(x + bar_width - 1.0, rect.bottom()),

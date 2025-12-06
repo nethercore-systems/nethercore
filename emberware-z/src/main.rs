@@ -147,11 +147,7 @@ mod tests {
 
     #[test]
     fn test_extract_query_only_flags() {
-        let args = vec![
-            "app".to_string(),
-            "--verbose".to_string(),
-            "-d".to_string(),
-        ];
+        let args = vec!["app".to_string(), "--verbose".to_string(), "-d".to_string()];
         assert!(extract_query_arg(&args).is_none());
     }
 

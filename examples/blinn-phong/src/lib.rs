@@ -33,6 +33,7 @@ fn panic(_info: &PanicInfo) -> ! {
 extern "C" {
     // Configuration
     fn render_mode(mode: u32);
+    fn set_clear_color(color: u32);
 
     // Camera
     fn camera_set(eye_x: f32, eye_y: f32, eye_z: f32, center_x: f32, center_y: f32, center_z: f32);
@@ -49,6 +50,7 @@ extern "C" {
     fn material_rim(intensity: f32, power: f32);
     fn material_shininess(value: f32);
     fn material_emissive(value: f32);
+    fn material_specular(value: u32);
 
     // Sky and lighting
     fn light_set(index: u32, x: f32, y: f32, z: f32);
@@ -85,17 +87,19 @@ const BTN_FACE_UP: u32 = 1 << 3;     // Y/Triangle
 struct Material {
     name: &'static str,
     albedo: [f32; 3],
+    material_specular: [f32; 3],
     shininess: f32,
     rim_intensity: f32,
     rim_power: f32,
     emissive: f32,
 }
 
-const MATERIALS: [Material; 6] = [
+const MATERIALS: [Material; 9] = [
     // Gold armor - warm orange specular, high shininess, subtle rim
     Material {
         name: "Gold Armor",
         albedo: [0.9, 0.6, 0.2],
+        material_specular: [1.0, 0.8, 0.4],
         shininess: 0.8,        // Maps to ~205 (tight highlights)
         rim_intensity: 0.2,
         rim_power: 0.15,       // Maps to ~4.8 (broad rim)
@@ -105,6 +109,7 @@ const MATERIALS: [Material; 6] = [
     Material {
         name: "Silver Metal",
         albedo: [0.9, 0.9, 0.9],
+        material_specular: [0.95, 0.95, 0.95],
         shininess: 0.85,       // Maps to ~217 (very tight highlights)
         rim_intensity: 0.15,
         rim_power: 0.12,       // Maps to ~3.8
@@ -114,6 +119,7 @@ const MATERIALS: [Material; 6] = [
     Material {
         name: "Leather",
         albedo: [0.4, 0.25, 0.15],
+        material_specular: [0.3, 0.25, 0.2],
         shininess: 0.3,        // Maps to ~77 (broad highlights)
         rim_intensity: 0.1,
         rim_power: 0.2,        // Maps to ~6.4
@@ -123,6 +129,7 @@ const MATERIALS: [Material; 6] = [
     Material {
         name: "Wet Skin",
         albedo: [0.85, 0.7, 0.65],
+        material_specular: [0.9, 0.8, 0.75],
         shininess: 0.7,        // Maps to ~179 (medium-tight highlights)
         rim_intensity: 0.3,
         rim_power: 0.25,       // Maps to ~8.0
@@ -132,6 +139,7 @@ const MATERIALS: [Material; 6] = [
     Material {
         name: "Matte Plastic",
         albedo: [0.5, 0.5, 0.55],
+        material_specular: [0.5, 0.5, 0.55],
         shininess: 0.5,        // Maps to ~128 (medium highlights)
         rim_intensity: 0.0,
         rim_power: 0.0,
@@ -141,10 +149,41 @@ const MATERIALS: [Material; 6] = [
     Material {
         name: "Glowing Crystal",
         albedo: [0.3, 0.7, 0.9],
+        material_specular: [0.8, 1.0, 1.0],
         shininess: 0.75,       // Maps to ~192
         rim_intensity: 0.4,
         rim_power: 0.18,       // Maps to ~5.7
         emissive: 0.3,         // Self-illumination
+    },
+    // Brushed copper - warm metallic with directional grain
+    Material {
+        name: "Brushed Copper",
+        albedo: [0.6, 0.35, 0.2],
+        material_specular: [0.8, 0.5, 0.3],  // Warm copper-tinted highlights
+        shininess: 0.65,       // Maps to ~166 (medium highlights, shows brushing)
+        rim_intensity: 0.25,
+        rim_power: 0.16,       // Maps to ~5.1
+        emissive: 0.0,
+    },
+    // Polished steel - cool metallic, very reflective
+    Material {
+        name: "Polished Steel",
+        albedo: [0.3, 0.35, 0.4],
+        material_specular: [0.95, 0.95, 1.0],  // Bright blue-white highlights
+        shininess: 0.88,       // Maps to ~225 (very tight, mirror-like)
+        rim_intensity: 0.2,
+        rim_power: 0.1,        // Maps to ~3.2
+        emissive: 0.0,
+    },
+    // Neon pink - cyberpunk glow
+    Material {
+        name: "Neon Pink",
+        albedo: [0.3, 0.1, 0.2],
+        material_specular: [1.0, 0.3, 0.7],  // Hot pink specular
+        shininess: 0.6,        // Maps to ~154
+        rim_intensity: 0.5,    // Strong rim for that neon effect
+        rim_power: 0.2,        // Maps to ~6.4
+        emissive: 0.4,         // Glowing like the crystal
     },
 ];
 
@@ -174,7 +213,10 @@ const FORMAT_POS_NORMAL: u32 = 0b100; // Position + Normal
 #[no_mangle]
 pub extern "C" fn init() {
     unsafe {
+        // Dark background
+        set_clear_color(0x101020FF);
         // Set Mode 3 (Blinn-Phong)
+
         render_mode(3);
 
 
@@ -183,25 +225,25 @@ pub extern "C" fn init() {
         light_set(0, -0.7, -0.2, -0.7);
         light_color(0, 1.0, 0.3, 0.3);
         light_intensity(0, 0.6);
-        light_enable(0);
+        // light_enable(0);
 
         // Light 1: Green from front-right
         light_set(1, 0.7, -0.2, -0.7);
         light_color(1, 0.3, 1.0, 0.3);
         light_intensity(1, 0.6);
-        light_enable(1);
+        // light_enable(1);
 
         // Light 2: Blue from back-left
         light_set(2, -0.7, -0.2, 0.7);
         light_color(2, 0.3, 0.3, 1.0);
         light_intensity(2, 0.6);
-        light_enable(2);
+        // light_enable(2);
 
         // Light 3: Yellow from back-right
         light_set(3, 0.7, -0.2, 0.7);
         light_color(3, 1.0, 1.0, 0.3);
         light_intensity(3, 0.6);
-        light_enable(3);
+        // light_enable(3);
 
         // Generate icosphere mesh (subdivision level 3)
         let mut vert_count: usize = 0;
@@ -272,7 +314,7 @@ pub extern "C" fn render() {
     unsafe {
 
         camera_set(
-            8.0, 5.0, 8.0,  // eye - reasonable distance to see all 6 spheres
+            0.0, 0.0, 8.0,  // eye - reasonable distance to see all 6 spheres
             0.0, 0.0, 0.0,   // center
         );
         camera_fov(60.0);
@@ -284,6 +326,9 @@ pub extern "C" fn render() {
                 [-spacing, spacing, 0.0],    // Top-left
                 [0.0, spacing, 0.0],          // Top-center
                 [spacing, spacing, 0.0],      // Top-right
+                [-spacing, 0.0, 0.0], // Center-left
+                [0.0, 0.0, 0.0], // Center
+                [spacing, 0.0, 0.0], // Center-right
                 [-spacing, -spacing, 0.0],    // Bottom-left
                 [0.0, -spacing, 0.0],         // Bottom-center
                 [spacing, -spacing, 0.0],     // Bottom-right
@@ -305,7 +350,7 @@ pub extern "C" fn render() {
 // ============================================================================
 
 const fn rgba(r: u8, g: u8, b: u8, a: u8) -> u32 {
-    ((r as u32) << 24) | ((g as u32) << 16) | ((b as u32) << 8) | (a as u32)
+    (r as u32) | ((g as u32) << 8) | ((b as u32) << 16) | ((a as u32) << 24)
 }
 
 fn draw_sphere_with_material(position: [f32; 3], radius: f32, material: &Material) {
@@ -320,6 +365,12 @@ fn draw_sphere_with_material(position: [f32; 3], radius: f32, material: &Materia
         material_shininess(material.shininess);
         material_rim(material.rim_intensity, material.rim_power);
         material_emissive(material.emissive);
+        material_specular(rgba(
+            (material.material_specular[0] * 255.0) as u8,
+            (material.material_specular[1] * 255.0) as u8,
+            (material.material_specular[2] * 255.0) as u8,
+            255,
+        ));
 
         // Set transform and draw mesh
         push_identity();

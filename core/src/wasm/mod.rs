@@ -125,8 +125,11 @@ impl<I: ConsoleInput, S: Send + Default + 'static> GameInstance<I, S> {
         }
         if let Some(update) = &self.update_fn {
             update.call(&mut self.store, ()).map_err(|e| {
-                let error_msg = format!("WASM update() failed at tick {}: {:#}",
-                    self.store.data().game.tick_count, e);
+                let error_msg = format!(
+                    "WASM update() failed at tick {}: {:#}",
+                    self.store.data().game.tick_count,
+                    e
+                );
                 eprintln!("{}", error_msg);
                 anyhow::anyhow!(error_msg)
             })?;

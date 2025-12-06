@@ -72,17 +72,24 @@ pub struct PackedUnifiedShadingState {
     pub lights: [PackedLight; 4], // 32 bytes (4 × 8-byte lights)
 }
 
+// TODO: Optimize matcap_blend_modes:
+// We could explore this fields as embedding the mode123
+// unique values
+// Mode1: Blend Modes [4 of them]
+// Mode2: [Metallic, Roughness, Emissive, _]
+// Mode3: [Rim, Shininess, Emissive, _]
+
 impl Default for PackedUnifiedShadingState {
     fn default() -> Self {
         // Reasonable defaults: pleasant outdoor lighting with visible dynamic lights
         // Convention: light direction = direction rays travel (physically correct)
         // Users can customize via sky_set_gradient() and sky_set_sun() FFI calls
         let sky = PackedSky::from_floats(
-            Vec3::new(0.3, 0.4, 0.5),              // Horizon: pleasant blue ambient
-            Vec3::new(0.1, 0.2, 0.4),              // Zenith: darker blue sky
+            Vec3::new(0.3, 0.4, 0.5),                // Horizon: pleasant blue ambient
+            Vec3::new(0.1, 0.2, 0.4),                // Zenith: darker blue sky
             Vec3::new(-0.3, -0.5, -0.4).normalize(), // Sun direction: rays travel down-left-forward
-            Vec3::new(0.7, 0.65, 0.6),             // Sun color: warm daylight
-            0.95,                                  // Sun sharpness: fairly sharp (maps to ~242/255)
+            Vec3::new(0.7, 0.65, 0.6),               // Sun color: warm daylight
+            0.95, // Sun sharpness: fairly sharp (maps to ~242/255)
         );
 
         Self {

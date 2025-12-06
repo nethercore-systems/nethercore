@@ -333,12 +333,14 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     var rim_intensity = rim_intensity_uniform;
     var shininess_raw = shininess_uniform;
     var emissive = emissive_uniform;
-    var specular_color = vec3<f32>(1.0, 1.0, 1.0);  // Will be multiplied by light color (defaults to white base)
+
+    // Unpack specular color uniform from matcap_blend_modes bytes 0-2
+    var specular_color = unpack_rgb8(shading.matcap_blend_modes);
 
     // Sample RSE texture (Rim-Shininess-Emissive) - overrides uniforms if bound
     //FS_MODE3_SLOT1
 
-    // Sample Specular RGB texture - overrides white default if bound
+    // Sample Specular RGB texture - overrides uniform if bound
     //FS_MODE3_SLOT2
 
     // Map shininess 0-1 → 1-256 (linear mapping)
@@ -351,8 +353,12 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     // AMBIENT IRRADIANCE: Sample sky based on surface normal
     // This approximates hemispherical irradiance - varies with surface orientation
     // Top faces receive zenith color, sides/bottom receive horizon color
+    // Energy partitioning based on Gotanda 2010 normalization (same paper as specular)
+    // As specular normalization increases (shinier material), reduce diffuse ambient
+    let spec_norm = gotanda_normalization(shininess);
+    let ambient_factor = 1.0 / sqrt(1.0 + spec_norm);
     let ambient_color = sample_sky(in.world_normal, sky);
-    let ambient = ambient_color * albedo * 0.3;  // Scale down ambient contribution
+    let ambient = ambient_color * albedo * ambient_factor;
 
     // EMISSIVE: Self-illumination (albedo × emissive intensity)
     let glow = albedo * emissive;

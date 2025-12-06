@@ -310,9 +310,11 @@ mod tests {
         let suggestions = err.suggestion.unwrap();
         // Should suggest cube, tube, lube (all distance 1), max 3 suggestions
         assert!(suggestions.len() <= 3);
-        assert!(suggestions.contains(&"cube".to_string()) ||
-                suggestions.contains(&"tube".to_string()) ||
-                suggestions.contains(&"lube".to_string()));
+        assert!(
+            suggestions.contains(&"cube".to_string())
+                || suggestions.contains(&"tube".to_string())
+                || suggestions.contains(&"lube".to_string())
+        );
     }
 
     #[test]

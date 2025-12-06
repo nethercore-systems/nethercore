@@ -1371,11 +1371,7 @@ impl ZGraphics {
     /// * `clear_color` - Background clear color (RGBA 0-1)
     /// Blit the render target to the window surface
     /// Call this every frame to display the last rendered content
-    pub fn blit_to_window(
-        &self,
-        encoder: &mut wgpu::CommandEncoder,
-        view: &wgpu::TextureView,
-    ) {
+    pub fn blit_to_window(&self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
         // Calculate viewport based on scale mode
         let (viewport_x, viewport_y, viewport_width, viewport_height) = match self.scale_mode {
             crate::config::ScaleMode::Stretch => {
@@ -1450,7 +1446,6 @@ impl ZGraphics {
         z_state: &crate::state::ZFFIState,
         clear_color: [f32; 4],
     ) {
-
         // If no commands, just clear render target
         // (blit is handled separately via blit_to_window())
         if self.command_buffer.commands().is_empty() {

@@ -2463,7 +2463,11 @@ fn material_emissive(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFISta
 /// Used in Mode 3 (Blinn-Phong) for edge lighting effects.
 /// Rim lighting uses the sun color for coherent scene lighting.
 /// Intensity is clamped to 0.0-1.0 range. Power is clamped to 0.0-1.0 and mapped to 0-32.
-fn material_rim(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, intensity: f32, power: f32) {
+fn material_rim(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    intensity: f32,
+    power: f32,
+) {
     let state = &mut caller.data_mut().console;
 
     // Clamp and warn for intensity
@@ -2489,8 +2493,14 @@ fn material_rim(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
 
     // Pack rim_power into matcap_blend_modes byte 3 (maps 0-1 to 0-255)
     let power_u8 = (power_clamped * 255.0) as u8;
-    state.current_shading_state.matcap_blend_modes =
+    let new_value =
         (state.current_shading_state.matcap_blend_modes & 0x00FFFFFF) | ((power_u8 as u32) << 24);
+
+    // Only update if changed
+    if state.current_shading_state.matcap_blend_modes != new_value {
+        state.current_shading_state.matcap_blend_modes = new_value;
+        state.shading_state_dirty = true;
+    }
 }
 
 /// Set shininess (Mode 3 only, alias for material_roughness)
@@ -2506,29 +2516,28 @@ fn material_shininess(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>
 }
 
 /// Set specular color (Mode 3 only)
-/// r, g, b: 0.0-1.0 (uniform fallback for Slot 2 RGB, defaults to white)
-/// White (1.0, 1.0, 1.0) = neutral specular (highlights match light color)
+/// color: RGBA8 packed u32 (RGB used, A ignored)
+/// 0xFFFFFFFF = white (neutral specular - highlights match light color)
 /// Tinted values create colored highlights (e.g., warm gold, cool silver)
-fn material_specular(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, r: f32, g: f32, b: f32) {
+fn material_specular(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, color: u32) {
     let state = &mut caller.data_mut().console;
 
-    // Clamp and warn
-    let r_clamped = r.clamp(0.0, 1.0);
-    let g_clamped = g.clamp(0.0, 1.0);
-    let b_clamped = b.clamp(0.0, 1.0);
-
-    if (r - r_clamped).abs() > 0.001 || (g - g_clamped).abs() > 0.001 || (b - b_clamped).abs() > 0.001 {
-        warn!("material_specular: color {} {} {} out of range, clamped", r, g, b);
-    }
+    // Extract RGB bytes from input (ignore alpha)
+    let r_u8 = (color & 0xFF) as u8;
+    let g_u8 = ((color >> 8) & 0xFF) as u8;
+    let b_u8 = ((color >> 16) & 0xFF) as u8;
 
     // Pack RGB into matcap_blend_modes bytes 0-2 (preserve byte 3 = rim_power)
-    let r_u8 = (r_clamped * 255.0) as u8;
-    let g_u8 = (g_clamped * 255.0) as u8;
-    let b_u8 = (b_clamped * 255.0) as u8;
+    let new_value = (state.current_shading_state.matcap_blend_modes & 0xFF000000)
+        | (r_u8 as u32)
+        | ((g_u8 as u32) << 8)
+        | ((b_u8 as u32) << 16);
 
-    state.current_shading_state.matcap_blend_modes =
-        (state.current_shading_state.matcap_blend_modes & 0xFF000000) |
-        (r_u8 as u32) | ((g_u8 as u32) << 8) | ((b_u8 as u32) << 16);
+    // Only update if changed
+    if state.current_shading_state.matcap_blend_modes != new_value {
+        state.current_shading_state.matcap_blend_modes = new_value;
+        state.shading_state_dirty = true;
+    }
 }
 
 // ============================================================================
