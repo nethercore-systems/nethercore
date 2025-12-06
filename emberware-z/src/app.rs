@@ -431,7 +431,8 @@ impl App {
     /// Run one game frame (update + render)
     ///
     /// Returns true if the game is still running, false if it should exit.
-    fn run_game_frame(&mut self) -> Result<bool, RuntimeError> {
+    /// Returns (game_still_running, did_render_this_frame)
+    fn run_game_frame(&mut self) -> Result<(bool, bool), RuntimeError> {
         // First, update input from InputManager
         if let (Some(session), Some(input_manager)) = (&mut self.game_session, &self.input_manager)
         {
@@ -460,13 +461,17 @@ impl App {
             .map_err(|e| RuntimeError(format!("Game frame error: {}", e)))?;
         let tick_elapsed = tick_start.elapsed();
 
-        // Only render when game logic actually ran (fantasy console: fixed tick rate = fixed render rate)
-        if ticks > 0 {
+        let did_render = if ticks > 0 {
             // Track game tick time for performance graph (average per tick if multiple ran)
             let tick_time_ms = tick_elapsed.as_secs_f32() * 1000.0 / ticks as f32;
             self.debug_stats.game_tick_times.push_back(tick_time_ms);
             while self.debug_stats.game_tick_times.len() > FRAME_TIME_HISTORY_SIZE {
                 self.debug_stats.game_tick_times.pop_front();
+            }
+
+            // Clear previous frame's draw commands before generating new ones
+            if let Some(game) = session.runtime.game_mut() {
+                game.console_state_mut().clear_frame();
             }
 
             // Render the game ONCE per frame (even if multiple ticks ran due to slowdown)
@@ -502,7 +507,11 @@ impl App {
                 }
             }
             self.last_game_tick = now;
-        }
+
+            true // Did render
+        } else {
+            false // No render
+        };
 
         // Process audio commands after rendering
         // Clone the audio commands and sounds to avoid double mutable borrow
@@ -519,11 +528,11 @@ impl App {
         // Check if game requested quit
         if let Some(game) = session.runtime.game_mut() {
             if game.state().quit_requested {
-                return Ok(false);
+                return Ok((false, did_render));
             }
         }
 
-        Ok(true)
+        Ok((true, did_render))
     }
 
     /// Start a game by loading its WASM and initializing the runtime
@@ -862,6 +871,7 @@ impl App {
         }
 
         // Handle Playing mode: run game frame first
+        let mut game_rendered_this_frame = false;
         if matches!(self.mode, AppMode::Playing { .. }) {
             // Handle session events (disconnect, desync, network interruption)
             if let Err(e) = self.handle_session_events() {
@@ -873,19 +883,24 @@ impl App {
             self.update_session_stats();
 
             // Run game frame (update + render)
-            let game_running = match self.run_game_frame() {
-                Ok(running) => {
-                    // Process any resources the game created
-                    self.process_pending_resources();
-                    // Execute draw commands by passing ZFFIState directly to graphics
-                    self.execute_draw_commands_new();
-                    running
+            let (game_running, did_render) = match self.run_game_frame() {
+                Ok((running, rendered)) => {
+                    // Only process resources and execute draw commands if we rendered
+                    if rendered {
+                        // Process any resources the game created
+                        self.process_pending_resources();
+                        // Execute draw commands by passing ZFFIState directly to graphics
+                        self.execute_draw_commands_new();
+                    }
+                    (running, rendered)
                 }
                 Err(e) => {
                     self.handle_runtime_error(e);
                     return;
                 }
             };
+
+            game_rendered_this_frame = did_render;
 
             // If game requested quit, return to library
             if !game_running {
@@ -946,38 +961,40 @@ impl App {
                 label: Some("Frame Encoder"),
             });
 
-        // If in Playing mode, render game first
+        // If in Playing mode, render game (only if we generated new content this frame)
         if matches!(mode, AppMode::Playing { .. }) {
-            // Get clear color from game state
-            let clear_color = {
-                if let Some(session) = &self.game_session {
-                    if let Some(game) = session.runtime.game() {
-                        let z_state = game.console_state();
+            if game_rendered_this_frame {
+                // Get clear color from game state
+                let clear_color = {
+                    if let Some(session) = &self.game_session {
+                        if let Some(game) = session.runtime.game() {
+                            let z_state = game.console_state();
 
-                        let clear = z_state.init_config.clear_color;
-                        let clear_r = ((clear >> 24) & 0xFF) as f32 / 255.0;
-                        let clear_g = ((clear >> 16) & 0xFF) as f32 / 255.0;
-                        let clear_b = ((clear >> 8) & 0xFF) as f32 / 255.0;
-                        let clear_a = (clear & 0xFF) as f32 / 255.0;
-                        [clear_r, clear_g, clear_b, clear_a]
+                            let clear = z_state.init_config.clear_color;
+                            let clear_r = ((clear >> 24) & 0xFF) as f32 / 255.0;
+                            let clear_g = ((clear >> 16) & 0xFF) as f32 / 255.0;
+                            let clear_b = ((clear >> 8) & 0xFF) as f32 / 255.0;
+                            let clear_a = (clear & 0xFF) as f32 / 255.0;
+                            [clear_r, clear_g, clear_b, clear_a]
+                        } else {
+                            [0.1, 0.1, 0.1, 1.0]
+                        }
                     } else {
                         [0.1, 0.1, 0.1, 1.0]
                     }
-                } else {
-                    [0.1, 0.1, 0.1, 1.0]
-                }
-            };
+                };
 
-            // Render game frame
-            if let Some(session) = &mut self.game_session {
-                if let Some(game) = session.runtime.game_mut() {
-                    let z_state = game.console_state_mut();
-                    graphics.render_frame(&mut encoder, &view, z_state, clear_color);
-
-                    // Centralized per-frame cleanup after GPU upload completes
-                    z_state.clear_frame();
+                // Render new game content to render target
+                if let Some(session) = &mut self.game_session {
+                    if let Some(game) = session.runtime.game_mut() {
+                        let z_state = game.console_state_mut();
+                        graphics.render_frame(&mut encoder, &view, z_state, clear_color);
+                    }
                 }
             }
+
+            // Always blit the render target to the window (shows last rendered frame)
+            graphics.blit_to_window(&mut encoder, &view);
         }
 
         // Start egui frame
