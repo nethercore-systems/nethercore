@@ -854,21 +854,52 @@ fn draw_sky()
 **Implementation Plan:**
 
 1. **Sky Rendering Approach:**
-   Option A: Full-screen quad with gradient shader
-   ```rust
-   // Draw quad covering entire screen
-   // Fragment shader interpolates gradient top→bottom
-   // Add sun as bright disc based on view direction
+   Use fullscreen triangle technique with view ray reconstruction:
+   ```wgsl
+   // Based on reference shader code
+   @vertex
+   fn vs_sky(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
+       // Fullscreen triangle (no vertex buffer needed)
+       let x = f32((vertex_index << 1u) & 2u) * 2.0 - 1.0;
+       let y = f32(vertex_index & 2u) * 2.0 - 1.0;
+
+       var output: VertexOutput;
+       output.position = vec4<f32>(x, y, 1.0, 1.0); // At far plane
+
+       // Calculate view ray from inverse projection
+       let clip_pos = vec4<f32>(x, y, 1.0, 1.0);
+       let view_pos = inverse_projection * clip_pos;
+       output.view_ray = (inverse_view * vec4<f32>(view_pos.xyz, 0.0)).xyz;
+
+       return output;
+   }
+
+   @fragment
+   fn fs_sky(in: VertexOutput) -> @location(0) vec4<f32> {
+       let direction = normalize(in.view_ray);
+
+       // Gradient based on Y component (up/down)
+       let sky_color = mix(
+           sky_uniforms.horizon_color,
+           sky_uniforms.zenith_color,
+           clamp(direction.y * 0.5 + 0.5, 0.0, 1.0)
+       );
+
+       // Add sun disc
+       let sun_dot = dot(direction, sky_uniforms.sun_direction);
+       let sun_intensity = smoothstep(0.9995, 0.9999, sun_dot);
+       let sun = sky_uniforms.sun_color * sun_intensity * sky_uniforms.sun_intensity;
+
+       return vec4<f32>(sky_color + sun, 1.0);
+   }
    ```
 
-   Option B: Skybox cube
-   ```rust
-   // Draw inverted cube around camera
-   // Sample gradient based on Y coordinate
-   // Add sun based on cube face
-   ```
-
-   **Recommendation:** Option A (full-screen quad) - simpler, faster, authentic to PS1/N64 era
+   **Performance Notes:**
+   - Fullscreen triangle = 3 vertices (can reuse existing quad rendering logic)
+   - Fragment shader is simple: 1 mix, 1 dot, 1 smoothstep per pixel
+   - No texture sampling needed (pure math)
+   - Depth test disabled, early-z rejected by geometry drawn after
+   - Could optimize further by rendering to low-res texture, then upscale (authentic PS1 feel)
 
 2. **Add to FFI** (in `ffi/draw_3d.rs` or `ffi/mod.rs`):
    ```rust
@@ -891,37 +922,28 @@ fn draw_sky()
    }
    ```
 
-4. **Sky Shader:**
-   ```wgsl
-   // New shader: sky.wgsl
-   @fragment
-   fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
-       // Interpolate gradient based on UV.y
-       let sky_color = mix(
-           sky_uniforms.gradient_bottom,
-           sky_uniforms.gradient_top,
-           uv.y
-       );
-
-       // Add sun disc
-       let view_dir = normalize(vec3(uv * 2.0 - 1.0, -1.0));
-       let sun_dot = dot(view_dir, sky_uniforms.sun_direction);
-       let sun_intensity = smoothstep(0.9995, 0.9999, sun_dot);
-       let sun_contribution = sky_uniforms.sun_color * sun_intensity;
-
-       return vec4(sky_color + sun_contribution, 1.0);
-   }
-   ```
+4. **Reuse Existing Rendering Infrastructure:**
+   - Check if there's existing fullscreen quad/triangle rendering code in sprites or billboards
+   - May be able to share vertex generation or pipeline state
+   - Sky could be special-cased in draw command execution rather than a separate pipeline
+   - Consider: Could sky be rendered as billboard-like but without transforms?
 
 5. **Usage Example:**
    ```rust
    // In game render()
    fn render() {
-       // Configure sky
-       sky_gradient_top(0x87CEEBFF);    // Sky blue
-       sky_gradient_bottom(0xFFE4B5FF); // Moccasin (warm horizon)
-       sky_sun_color(0xFFFAF0FF);       // Floral white
-       sky_sun_direction(0.5, 0.707, 0.5); // 45° elevation
+       // Configure sky colors (horizon RGB, zenith RGB)
+       sky_set_colors(
+           1.0, 0.894, 0.710,  // Horizon: Moccasin (warm)
+           0.529, 0.808, 0.922  // Zenith: Sky blue
+       );
+
+       // Configure sun (direction XYZ, color RGB, intensity)
+       sky_set_sun(
+           0.5, 0.707, 0.5,     // Direction: 45° elevation
+           1.0, 0.98, 0.941,    // Color: Floral white
+           1.0                  // Intensity
+       );
 
        // Draw sky first (before any geometry)
        draw_sky();
