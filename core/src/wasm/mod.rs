@@ -75,6 +75,10 @@ impl<I: ConsoleInput, S: Send + Default + 'static> GameInstance<I, S> {
         let mut store = Store::new(engine.engine(), GameStateWithConsole::new());
         let instance = linker
             .instantiate(&mut store, module)
+            .map_err(|e| {
+                eprintln!("WASM instantiation error: {:#?}", e);
+                e
+            })
             .context("Failed to instantiate WASM module")?;
 
         // Get the memory export
@@ -100,8 +104,12 @@ impl<I: ConsoleInput, S: Send + Default + 'static> GameInstance<I, S> {
     pub fn init(&mut self) -> Result<()> {
         self.store.data_mut().game.in_init = true;
         if let Some(init) = &self.init_fn {
-            init.call(&mut self.store, ())
-                .context("Failed to call init()")?;
+            init.call(&mut self.store, ()).map_err(|e| {
+                // Extract more detailed error information from wasmtime
+                let error_msg = format!("WASM init() failed: {:#}", e);
+                eprintln!("{}", error_msg);
+                anyhow::anyhow!(error_msg)
+            })?;
         }
         self.store.data_mut().game.in_init = false;
         Ok(())
@@ -116,9 +124,12 @@ impl<I: ConsoleInput, S: Send + Default + 'static> GameInstance<I, S> {
             state.tick_count += 1;
         }
         if let Some(update) = &self.update_fn {
-            update
-                .call(&mut self.store, ())
-                .context("Failed to call update()")?;
+            update.call(&mut self.store, ()).map_err(|e| {
+                let error_msg = format!("WASM update() failed at tick {}: {:#}",
+                    self.store.data().game.tick_count, e);
+                eprintln!("{}", error_msg);
+                anyhow::anyhow!(error_msg)
+            })?;
         }
         // Rotate input state
         let state = &mut self.store.data_mut().game;
@@ -129,9 +140,11 @@ impl<I: ConsoleInput, S: Send + Default + 'static> GameInstance<I, S> {
     /// Call the game's render function
     pub fn render(&mut self) -> Result<()> {
         if let Some(render) = &self.render_fn {
-            render
-                .call(&mut self.store, ())
-                .context("Failed to call render()")?;
+            render.call(&mut self.store, ()).map_err(|e| {
+                let error_msg = format!("WASM render() failed: {:#}", e);
+                eprintln!("{}", error_msg);
+                anyhow::anyhow!(error_msg)
+            })?;
         }
         Ok(())
     }

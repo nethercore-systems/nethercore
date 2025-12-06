@@ -168,7 +168,7 @@ fn render_mode(mode: u32)               // 0-3, see below (init-only)
 | 0 | **Unlit** | Sky (if normals) | Texture × vertex color. Simple Lambert if normals present. |
 | 1 | **Matcap** | None (baked) | Adds view-space normal matcap sampling. Stylized, cheap. |
 | 2 | **PBR-lite** | 4 lights | Physically-based rendering. Dynamic lighting, most realistic. |
-| 3 | **Hybrid** | 1 dir + ambient | Matcap for reflections + PBR for direct lighting. |
+| 3 | **Blinn-Phong** | 4 lights + sun | Classic lighting with Gotanda normalization. Era-authentic PS1/N64 aesthetic. |
 
 Each mode builds on the previous — textures and vertex colors always work.
 
@@ -290,40 +290,120 @@ direct = (diffuse + specular) * light_color * NdotL
 final_color = sum(direct) + ambient * albedo + emissive
 ```
 
-#### Mode 3: Hybrid (Matcap + PBR)
+#### Mode 3: Normalized Blinn-Phong (Classic Lit)
 
-Best of both worlds with constrained lighting:
-- **Matcap** provides ambient reflections (replaces environment maps)
-- **PBR** handles direct lighting from 1 directional light + ambient
-- Good balance of quality and performance
+Classic Blinn-Phong lighting with energy-conserving Gotanda normalization. Era-authentic for PS1/N64 aesthetic:
+- **Normalized Blinn-Phong** specular (Gotanda 2010 linear approximation)
+- **Lambert** diffuse lighting
+- **Rim lighting** for edge definition (using sun color)
+- **Emissive** self-illumination
+- **4 dynamic lights + sun** (same count as Mode 2)
+
+**Reference:** Gotanda 2010 - "Practical Implementation at tri-Ace"
+
+**Lighting Functions (same as Mode 2):**
 
 ```rust
-// Single matcap for ambient reflections (binds to slot 3)
-fn texture_bind_slot(handle: u32, slot: u32)  // Use slot 3 for matcap
+// 4 dynamic lights (index 0-3)
+fn light_set(index: u32, x: f32, y: f32, z: f32)
+fn light_color(index: u32, r: f32, g: f32, b: f32)
+fn light_intensity(index: u32, intensity: f32)
+fn light_enable(index: u32)
+fn light_disable(index: u32)
 
-// Single directional light (conventionally light 0)
-fn light_set(0, x: f32, y: f32, z: f32)     // Set light 0 direction
-fn light_color(0, r: f32, g: f32, b: f32)   // Set light 0 color
-fn light_intensity(0, intensity: f32)       // Set light 0 intensity
-
-// PBR material properties
-fn material_metallic(value: f32)
-fn material_roughness(value: f32)
-fn material_emissive(value: f32)
+// Sun lighting comes from procedural sky (sky_set_sun)
 ```
 
-**Note:** Mode 3 uses the same light functions as Mode 2, but conventionally only uses light 0 as the single directional light. Ambient lighting comes from the matcap in slot 3 combined with the procedural sky.
+**Material Properties:**
+
+Mode 3 reinterprets the same struct fields as Mode 2 (no API changes):
+
+```rust
+// Rim lighting (Mode 3 specific)
+fn material_rim(intensity: f32, power: f32)  // intensity: 0-1, power: 0-1 → 0-32 range
+
+// Shininess (Mode 3 alias for material_roughness)
+fn material_shininess(value: f32)            // 0-1 → maps to shininess 1-256
+
+// Emissive (same meaning as Mode 2)
+fn material_emissive(value: f32)             // Glow intensity (default: 0.0)
+```
+
+**Texture Slots:**
+
+| Slot | Purpose | Channels | Fallback |
+|------|---------|----------|----------|
+| 0 | Albedo | RGB: Diffuse color<br>A: Unused | White (uses material color) |
+| 1 | RSE | R: Rim intensity<br>G: Shininess<br>B: Emissive | White (uses uniforms) |
+| 2 | Specular | RGB: Specular highlight color<br>A: Unused | White (light-colored specular) |
+
+**Lighting Algorithm:**
 
 ```
-// Matcap modulates the ambient/reflection term
-matcap = matcap_sample(view_normal)
-ambient_reflection = matcap * ambient_color * albedo
+// Gotanda normalization for energy conservation
+normalization = shininess × 0.0397436 + 0.0856832
 
-// PBR handles direct light
-direct = pbr_direct(light_direction, light_color, material)
+// Blinn-Phong specular (per light)
+H = normalize(L + V)
+NdotH = max(0, dot(N, H))
+NdotL = max(0, dot(N, L))
+specular = specular_color × normalization × pow(NdotH, shininess) × light_color × NdotL
 
-final_color = direct + ambient_reflection + emissive
+// Lambert diffuse (per light)
+diffuse = albedo × light_color × NdotL
+
+// Rim lighting (uses sun color)
+rim_factor = pow(1 - NdotV, rim_power)
+rim = sun_color × rim_factor × rim_intensity
+
+// Ambient from sky
+ambient = albedo × sample_sky(N) × 0.3
+
+// Emissive
+emissive_glow = albedo × emissive
+
+final_color = sum(diffuse + specular) + ambient + rim + emissive_glow
 ```
+
+**Key Features:**
+- **Energy conservation:** Gotanda normalization ensures consistent brightness across shininess 1-256
+- **No geometry term:** Era-authentic, classical Blinn-Phong didn't have it
+- **Rim from sun:** Uses sun color for coherent scene lighting
+- **Artist-friendly:** Direct control over specular color and shininess
+
+**Shininess Mapping:**
+
+| Value | Shininess | Visual | Use For |
+|-------|-----------|--------|---------|
+| 0.0-0.2 | 1-52 | Very broad, soft | Cloth, skin, rough stone |
+| 0.2-0.4 | 52-103 | Broad | Leather, wood, rubber |
+| 0.4-0.6 | 103-154 | Medium | Plastic, painted metal |
+| 0.6-0.8 | 154-205 | Tight | Polished metal, wet surfaces |
+| 0.8-1.0 | 205-256 | Very tight | Chrome, mirrors, glass |
+
+**Example Materials:**
+
+```rust
+// Gold armor
+set_color(0.9, 0.6, 0.2, 1.0);
+material_shininess(0.8);       // Tight highlights
+material_rim(0.2, 0.15);       // Subtle rim
+material_emissive(0.0);
+
+// Wet skin
+set_color(0.85, 0.7, 0.65, 1.0);
+material_shininess(0.7);       // Medium-tight highlights
+material_rim(0.3, 0.25);       // Strong rim
+material_emissive(0.0);
+
+// Glowing crystal
+set_color(0.3, 0.7, 0.9, 1.0);
+material_shininess(0.75);      // Gem-like
+material_rim(0.4, 0.18);       // Magical edge glow
+material_emissive(0.3);        // Self-illumination
+```
+
+**Performance:** Significantly cheaper per light than Mode 2 (no GGX, no Fresnel, no geometry term).
 
 ### Procedural Sky
 
@@ -1208,7 +1288,11 @@ fn update() {
 use core::panic::PanicInfo;
 
 #[panic_handler]
-fn panic(_: &PanicInfo) -> ! { loop {} }
+fn panic(_info: &PanicInfo) -> ! {
+    // Trigger a WASM trap so runtime can catch the error
+    // instead of infinite loop which freezes the game
+    core::arch::wasm32::unreachable()
+}
 
 #[link(wasm_import_module = "env")]
 extern "C" {

@@ -114,6 +114,9 @@ pub fn register_z_ffi(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState
     linker.func_wrap("env", "material_metallic", material_metallic)?;
     linker.func_wrap("env", "material_roughness", material_roughness)?;
     linker.func_wrap("env", "material_emissive", material_emissive)?;
+    linker.func_wrap("env", "material_rim", material_rim)?;
+    linker.func_wrap("env", "material_shininess", material_shininess)?;
+    linker.func_wrap("env", "material_specular", material_specular)?;
 
     // Mode 2 (PBR) lighting functions
     linker.func_wrap("env", "light_set", light_set)?;
@@ -2445,6 +2448,87 @@ fn material_emissive(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFISta
 
     // Quantize and store only in current_shading_state
     state.update_material_emissive(clamped);
+}
+
+// ============================================================================
+// Mode 3 (Blinn-Phong) Material Functions
+// ============================================================================
+
+/// Set rim lighting parameters (Mode 3 only)
+///
+/// # Arguments
+/// * `intensity` — Rim intensity 0.0-1.0 (uniform fallback for Slot 1.R)
+/// * `power` — Rim falloff power 0.0-1.0 (mapped to 0-32 internally, uniform-only, no texture)
+///
+/// Used in Mode 3 (Blinn-Phong) for edge lighting effects.
+/// Rim lighting uses the sun color for coherent scene lighting.
+/// Intensity is clamped to 0.0-1.0 range. Power is clamped to 0.0-1.0 and mapped to 0-32.
+fn material_rim(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, intensity: f32, power: f32) {
+    let state = &mut caller.data_mut().console;
+
+    // Clamp and warn for intensity
+    let intensity_clamped = intensity.clamp(0.0, 1.0);
+    if (intensity - intensity_clamped).abs() > 0.001 {
+        warn!(
+            "material_rim: intensity {} out of range, clamped to {}",
+            intensity, intensity_clamped
+        );
+    }
+
+    // Clamp and warn for power
+    let power_clamped = power.clamp(0.0, 1.0);
+    if (power - power_clamped).abs() > 0.001 {
+        warn!(
+            "material_rim: power {} out of range, clamped to {}",
+            power, power_clamped
+        );
+    }
+
+    // Set rim_intensity (reinterprets metallic field in Mode 3)
+    state.update_material_metallic(intensity_clamped);
+
+    // Pack rim_power into matcap_blend_modes byte 3 (maps 0-1 to 0-255)
+    let power_u8 = (power_clamped * 255.0) as u8;
+    state.current_shading_state.matcap_blend_modes =
+        (state.current_shading_state.matcap_blend_modes & 0x00FFFFFF) | ((power_u8 as u32) << 24);
+}
+
+/// Set shininess (Mode 3 only, alias for material_roughness)
+///
+/// # Arguments
+/// * `value` — Shininess value 0.0-1.0 (mapped to 1-256 range internally)
+///
+/// This is an alias for material_roughness() for clarity when using Mode 3.
+/// Clamped to 0.0-1.0 range. Default is 0.5 (maps to shininess ~128).
+fn material_shininess(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, value: f32) {
+    // Simply calls material_roughness - field reinterpretation happens in the shader
+    material_roughness(caller, value);
+}
+
+/// Set specular color (Mode 3 only)
+/// r, g, b: 0.0-1.0 (uniform fallback for Slot 2 RGB, defaults to white)
+/// White (1.0, 1.0, 1.0) = neutral specular (highlights match light color)
+/// Tinted values create colored highlights (e.g., warm gold, cool silver)
+fn material_specular(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, r: f32, g: f32, b: f32) {
+    let state = &mut caller.data_mut().console;
+
+    // Clamp and warn
+    let r_clamped = r.clamp(0.0, 1.0);
+    let g_clamped = g.clamp(0.0, 1.0);
+    let b_clamped = b.clamp(0.0, 1.0);
+
+    if (r - r_clamped).abs() > 0.001 || (g - g_clamped).abs() > 0.001 || (b - b_clamped).abs() > 0.001 {
+        warn!("material_specular: color {} {} {} out of range, clamped", r, g, b);
+    }
+
+    // Pack RGB into matcap_blend_modes bytes 0-2 (preserve byte 3 = rim_power)
+    let r_u8 = (r_clamped * 255.0) as u8;
+    let g_u8 = (g_clamped * 255.0) as u8;
+    let b_u8 = (b_clamped * 255.0) as u8;
+
+    state.current_shading_state.matcap_blend_modes =
+        (state.current_shading_state.matcap_blend_modes & 0xFF000000) |
+        (r_u8 as u32) | ((g_u8 as u32) << 8) | ((b_u8 as u32) << 16);
 }
 
 // ============================================================================

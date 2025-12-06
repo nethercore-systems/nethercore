@@ -26,10 +26,15 @@
 #![no_main]
 
 use core::panic::PanicInfo;
+use emberware_examples_common::{
+    generate_icosphere, MAX_ICOSPHERE_INDICES_L3, MAX_ICOSPHERE_VERTS_L3,
+};
 
 #[panic_handler]
-fn panic(_: &PanicInfo) -> ! {
-    loop {}
+fn panic(_info: &PanicInfo) -> ! {
+    // Trigger a WASM trap so runtime can catch the error
+    // instead of infinite loop which freezes the game
+    core::arch::wasm32::unreachable()
 }
 
 #[link(wasm_import_module = "env")]
@@ -178,226 +183,11 @@ static mut ROUGHNESS: f32 = 0.4;  // Lower = shinier surface with visible specul
 /// Subdivision level for icosphere (0 = 12 verts, 1 = 42 verts, 2 = 162 verts, 3 = 642 verts)
 const SUBDIVISION_LEVEL: usize = 3;
 
-// Maximum vertices and indices for level 3 subdivision
-const MAX_VERTS: usize = 642 * 6; // 642 vertices * 6 floats (pos + normal)
-const MAX_INDICES: usize = 1280 * 3; // 1280 triangles * 3 indices
-
-/// Subdivided icosphere vertex buffer (populated at init)
-static mut SUBDIVIDED_VERTS: [f32; MAX_VERTS] = [0.0; MAX_VERTS];
-static mut SUBDIVIDED_INDICES: [u16; MAX_INDICES] = [0; MAX_INDICES];
+/// Subdivided icosphere buffers (populated at init, then uploaded to GPU)
+static mut SUBDIVIDED_VERTS: [f32; MAX_ICOSPHERE_VERTS_L3] = [0.0; MAX_ICOSPHERE_VERTS_L3];
+static mut SUBDIVIDED_INDICES: [u16; MAX_ICOSPHERE_INDICES_L3] = [0; MAX_ICOSPHERE_INDICES_L3];
 static mut SUBDIVIDED_VERT_COUNT: usize = 0;
 static mut SUBDIVIDED_INDEX_COUNT: usize = 0;
-
-/// Base icosphere vertices (12 vertices, 20 faces)
-/// Each vertex: [x, y, z, nx, ny, nz] (position = normal for unit sphere)
-static BASE_ICOSPHERE_VERTS: [f32; 12 * 6] = {
-    // Normalize factor for (1, PHI, 0): sqrt(1 + PHI^2) ≈ 1.902
-    // Pre-normalized coordinates
-    const N: f32 = 0.5257311; // 1 / sqrt(1 + PHI^2)
-    const P: f32 = 0.8506508; // PHI / sqrt(1 + PHI^2)
-
-    [
-        // Vertex 0-4: top "cap"
-        -N,  P,  0.0,  -N,  P,  0.0,
-         N,  P,  0.0,   N,  P,  0.0,
-        -N, -P,  0.0,  -N, -P,  0.0,
-         N, -P,  0.0,   N, -P,  0.0,
-
-        // Vertex 4-7: middle ring 1
-         0.0, -N,  P,   0.0, -N,  P,
-         0.0,  N,  P,   0.0,  N,  P,
-         0.0, -N, -P,   0.0, -N, -P,
-         0.0,  N, -P,   0.0,  N, -P,
-
-        // Vertex 8-11: middle ring 2
-         P,  0.0, -N,   P,  0.0, -N,
-         P,  0.0,  N,   P,  0.0,  N,
-        -P,  0.0, -N,  -P,  0.0, -N,
-        -P,  0.0,  N,  -P,  0.0,  N,
-    ]
-};
-
-/// Base icosphere faces (20 triangles, 60 indices)
-static BASE_ICOSPHERE_INDICES: [u16; 60] = [
-    // 5 faces around vertex 0
-    0, 11, 5,
-    0, 5, 1,
-    0, 1, 7,
-    0, 7, 10,
-    0, 10, 11,
-    // 5 adjacent faces
-    1, 5, 9,
-    5, 11, 4,
-    11, 10, 2,
-    10, 7, 6,
-    7, 1, 8,
-    // 5 faces around vertex 3
-    3, 9, 4,
-    3, 4, 2,
-    3, 2, 6,
-    3, 6, 8,
-    3, 8, 9,
-    // 5 adjacent faces
-    4, 9, 5,
-    2, 4, 11,
-    6, 2, 10,
-    8, 6, 7,
-    9, 8, 1,
-];
-
-/// Subdivide icosphere by splitting each triangle into 4 smaller triangles
-/// and projecting new vertices onto the unit sphere
-fn subdivide_icosphere(level: usize) {
-    unsafe {
-        // Start with base icosphere
-        let mut verts = [0.0f32; MAX_VERTS];
-        let mut indices = [0u16; MAX_INDICES];
-
-        // Copy base vertices (position + normal)
-        for i in 0..12 {
-            for j in 0..6 {
-                verts[i * 6 + j] = BASE_ICOSPHERE_VERTS[i * 6 + j];
-            }
-        }
-        let mut vert_count = 12;
-
-        // Copy base indices
-        for i in 0..60 {
-            indices[i] = BASE_ICOSPHERE_INDICES[i];
-        }
-        let mut index_count = 60;
-
-        // Temporary storage for new triangles (moved outside loop to reduce stack pressure)
-        let mut new_indices = [0u16; MAX_INDICES];
-
-        // Perform subdivision
-        for _ in 0..level {
-            let old_index_count = index_count;
-            let mut new_index_count = 0;
-
-            // Process each triangle
-            let mut tri_idx = 0;
-            while tri_idx < old_index_count {
-                let i0 = indices[tri_idx] as usize;
-                let i1 = indices[tri_idx + 1] as usize;
-                let i2 = indices[tri_idx + 2] as usize;
-
-                // Get vertex positions
-                let v0 = [verts[i0 * 6], verts[i0 * 6 + 1], verts[i0 * 6 + 2]];
-                let v1 = [verts[i1 * 6], verts[i1 * 6 + 1], verts[i1 * 6 + 2]];
-                let v2 = [verts[i2 * 6], verts[i2 * 6 + 1], verts[i2 * 6 + 2]];
-
-                // Calculate midpoints
-                let m01 = normalize([
-                    (v0[0] + v1[0]) * 0.5,
-                    (v0[1] + v1[1]) * 0.5,
-                    (v0[2] + v1[2]) * 0.5,
-                ]);
-                let m12 = normalize([
-                    (v1[0] + v2[0]) * 0.5,
-                    (v1[1] + v2[1]) * 0.5,
-                    (v1[2] + v2[2]) * 0.5,
-                ]);
-                let m20 = normalize([
-                    (v2[0] + v0[0]) * 0.5,
-                    (v2[1] + v0[1]) * 0.5,
-                    (v2[2] + v0[2]) * 0.5,
-                ]);
-
-                // Find or create vertex indices for midpoints
-                let i01 = find_or_add_vertex(&mut verts, &mut vert_count, m01);
-                let i12 = find_or_add_vertex(&mut verts, &mut vert_count, m12);
-                let i20 = find_or_add_vertex(&mut verts, &mut vert_count, m20);
-
-                // Create 4 new triangles
-                // Center triangle
-                new_indices[new_index_count] = i01;
-                new_indices[new_index_count + 1] = i12;
-                new_indices[new_index_count + 2] = i20;
-                new_index_count += 3;
-
-                // Corner triangle 0
-                new_indices[new_index_count] = i0 as u16;
-                new_indices[new_index_count + 1] = i01;
-                new_indices[new_index_count + 2] = i20;
-                new_index_count += 3;
-
-                // Corner triangle 1
-                new_indices[new_index_count] = i1 as u16;
-                new_indices[new_index_count + 1] = i12;
-                new_indices[new_index_count + 2] = i01;
-                new_index_count += 3;
-
-                // Corner triangle 2
-                new_indices[new_index_count] = i2 as u16;
-                new_indices[new_index_count + 1] = i20;
-                new_indices[new_index_count + 2] = i12;
-                new_index_count += 3;
-
-                tri_idx += 3;
-            }
-
-            // Copy new indices back
-            for i in 0..new_index_count {
-                indices[i] = new_indices[i];
-            }
-            index_count = new_index_count;
-            // vert_count is already correctly maintained by find_or_add_vertex
-        }
-
-        // Copy results to global storage
-        for i in 0..vert_count * 6 {
-            SUBDIVIDED_VERTS[i] = verts[i];
-        }
-        for i in 0..index_count {
-            SUBDIVIDED_INDICES[i] = indices[i];
-        }
-        SUBDIVIDED_VERT_COUNT = vert_count;
-        SUBDIVIDED_INDEX_COUNT = index_count;
-    }
-}
-
-/// Normalize a vector to unit length
-fn normalize(v: [f32; 3]) -> [f32; 3] {
-    let len_sq = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
-    if len_sq > 0.0001 {
-        let inv_len = fast_inv_sqrt(len_sq);
-        [v[0] * inv_len, v[1] * inv_len, v[2] * inv_len]
-    } else {
-        v
-    }
-}
-
-/// Find existing vertex or add a new one (position = normal for unit sphere)
-fn find_or_add_vertex(verts: &mut [f32], vert_count: &mut usize, pos: [f32; 3]) -> u16 {
-    // For simplicity, always add new vertex (edge sharing handled by proximity check)
-    // In production, use a hashmap for exact deduplication
-    const EPSILON: f32 = 0.0001;
-
-    // Check if vertex already exists (simple linear search)
-    for i in 0..*vert_count {
-        let vx = verts[i * 6];
-        let vy = verts[i * 6 + 1];
-        let vz = verts[i * 6 + 2];
-        let dx = vx - pos[0];
-        let dy = vy - pos[1];
-        let dz = vz - pos[2];
-        if dx * dx + dy * dy + dz * dz < EPSILON {
-            return i as u16;
-        }
-    }
-
-    // Add new vertex
-    let idx = *vert_count;
-    verts[idx * 6] = pos[0];
-    verts[idx * 6 + 1] = pos[1];
-    verts[idx * 6 + 2] = pos[2];
-    verts[idx * 6 + 3] = pos[0]; // Normal = position for unit sphere
-    verts[idx * 6 + 4] = pos[1];
-    verts[idx * 6 + 5] = pos[2];
-    *vert_count += 1;
-    idx as u16
-}
 
 #[no_mangle]
 pub extern "C" fn init() {
@@ -418,14 +208,22 @@ pub extern "C" fn init() {
         // Enable depth testing
         depth_test(1);
 
-        // Generate subdivided icosphere
-        subdivide_icosphere(SUBDIVISION_LEVEL);
+        // Generate subdivided icosphere using shared library
+        generate_icosphere(
+            SUBDIVISION_LEVEL,
+            core::ptr::addr_of_mut!(SUBDIVIDED_VERTS).cast(),
+            MAX_ICOSPHERE_VERTS_L3,
+            core::ptr::addr_of_mut!(SUBDIVIDED_INDICES).cast(),
+            MAX_ICOSPHERE_INDICES_L3,
+            core::ptr::addr_of_mut!(SUBDIVIDED_VERT_COUNT),
+            core::ptr::addr_of_mut!(SUBDIVIDED_INDEX_COUNT),
+        );
 
         // Load the sphere mesh
         SPHERE_MESH = load_mesh_indexed(
-            SUBDIVIDED_VERTS.as_ptr(),
+            core::ptr::addr_of!(SUBDIVIDED_VERTS).cast(),
             SUBDIVIDED_VERT_COUNT as u32,
-            SUBDIVIDED_INDICES.as_ptr(),
+            core::ptr::addr_of!(SUBDIVIDED_INDICES).cast(),
             SUBDIVIDED_INDEX_COUNT as u32,
             FORMAT_POS_NORMAL,
         );

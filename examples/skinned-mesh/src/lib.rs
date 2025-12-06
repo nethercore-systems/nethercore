@@ -26,8 +26,10 @@
 use core::panic::PanicInfo;
 
 #[panic_handler]
-fn panic(_: &PanicInfo) -> ! {
-    loop {}
+fn panic(_info: &PanicInfo) -> ! {
+    // Trigger a WASM trap so runtime can catch the error
+    // instead of infinite loop which freezes the game
+    core::arch::wasm32::unreachable()
 }
 
 #[link(wasm_import_module = "env")]

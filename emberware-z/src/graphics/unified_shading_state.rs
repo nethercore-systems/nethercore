@@ -24,16 +24,50 @@ pub struct PackedLight {
 
 /// Unified per-draw shading state (64 bytes, POD, hashable)
 /// Size breakdown: 16 bytes (header) + 16 bytes (sky) + 32 bytes (4 × 8-byte lights)
+///
+/// # Mode-Specific Field Interpretation
+///
+/// The same struct fields are interpreted differently per render mode (no struct changes needed):
+///
+/// | Field               | Bytes | Mode 2 (PBR)              | Mode 3 (Blinn-Phong)                  |
+/// |---------------------|-------|---------------------------|---------------------------------------|
+/// | `metallic`          | 0     | Metallic                  | **Rim intensity** (Slot 1.R fallback) |
+/// | `roughness`         | 1     | Roughness                 | **Shininess** (Slot 1.G fallback)     |
+/// | `emissive`          | 2     | Emissive                  | **Emissive** (same meaning!)          |
+/// | `pad0`              | 3     | Unused                    | Unused                                |
+/// | `matcap_blend_modes`| 4-7   | Mode 1: 4×matcap modes    | **Specular RGB + Rim power** (Mode 3) |
+/// |                     |       |                           | Bytes 0-2: Specular RGB8              |
+/// |                     |       |                           | Byte 3: Rim power [0-255]→[0-32]      |
+///
+/// **Key insights:**
+/// - **Emissive stays in Slot 1.B for both modes** - no migration needed!
+/// - Mode 3 reinterprets `metallic` → `rim_intensity` and `roughness` → `shininess`
+/// - Specular color (Mode 3) comes from Slot 2 RGB texture OR uniform fallback (bytes 0-2 of `matcap_blend_modes`)
+/// - Rim power (Mode 3) is uniform-only, stored in `matcap_blend_modes` byte 3, range 0-32
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Pod, Zeroable)]
 pub struct PackedUnifiedShadingState {
+    /// Mode 2: Metallic [0-255] → [0.0-1.0]
+    /// Mode 3: Rim intensity [0-255] → [0.0-1.0] (uniform fallback for Slot 1.R)
     pub metallic: u8,
+
+    /// Mode 2: Roughness [0-255] → [0.0-1.0]
+    /// Mode 3: Shininess [0-255] → [0.0-1.0] → [1-256] (uniform fallback for Slot 1.G)
     pub roughness: u8,
+
+    /// Mode 2: Emissive intensity [0-255+] (allows HDR values > 1.0)
+    /// Mode 3: Emissive intensity [0-255+] (same meaning, uniform fallback for Slot 1.B)
     pub emissive: u8,
+
     pub pad0: u8,
     pub color_rgba8: u32,
-    pub blend_mode: u32,          // BlendMode as u32
-    pub matcap_blend_modes: u32,  // 4x MatcapBlendMode packed as u8s
+    pub blend_mode: u32,
+
+    /// Mode 1: 4x MatcapBlendMode packed as u8s
+    /// Mode 3: Bytes 0-2 = Specular RGB8 (uniform fallback for Slot 2 RGB, defaults to white)
+    ///         Byte 3 = rim_power [0-255] → [0.0-1.0] → [0-32] (uniform-only)
+    pub matcap_blend_modes: u32,
+
     pub sky: PackedSky,           // 16 bytes
     pub lights: [PackedLight; 4], // 32 bytes (4 × 8-byte lights)
 }
@@ -58,7 +92,7 @@ impl Default for PackedUnifiedShadingState {
             pad0: 0,
             color_rgba8: 0xFFFFFFFF, // White
             blend_mode: BlendMode::Alpha as u32,
-            matcap_blend_modes: 0, // All Multiply (0)
+            matcap_blend_modes: 0x00FFFFFF, // Mode 1: All Multiply | Mode 3: White specular RGB + rim_power=0
             sky,
             lights: [PackedLight::default(); 4], // All lights disabled
         }

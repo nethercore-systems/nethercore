@@ -50,7 +50,7 @@ impl std::error::Error for ShaderGenError {}
 const TEMPLATE_MODE0: &str = include_str!("../shaders/mode0_unlit.wgsl");
 const TEMPLATE_MODE1: &str = include_str!("../shaders/mode1_matcap.wgsl");
 const TEMPLATE_MODE2: &str = include_str!("../shaders/mode2_pbr.wgsl");
-const TEMPLATE_MODE3: &str = include_str!("../shaders/mode3_hybrid.wgsl");
+const TEMPLATE_MODE3: &str = include_str!("../shaders/mode3_blinnphong.wgsl");
 
 // ============================================================================
 // Placeholder Snippets
@@ -110,6 +110,10 @@ const FS_NORMAL: &str = "color *= sky_lambert(in.world_normal, sky);";
 // Fragment shader code (Modes 2-3 - use "albedo" variable)
 const FS_ALBEDO_COLOR: &str = "albedo *= in.color;";
 const FS_ALBEDO_UV: &str = "let albedo_sample = textureSample(slot0, tex_sampler, in.uv); albedo *= albedo_sample.rgb; albedo *= albedo_sample.a;";
+
+// Fragment shader code (Mode 3 - Blinn-Phong texture sampling)
+const FS_MODE3_SLOT1: &str = "let slot1_sample = textureSample(slot1, tex_sampler, in.uv);\n    rim_intensity = slot1_sample.r;\n    shininess_raw = slot1_sample.g;\n    emissive = slot1_sample.b;";
+const FS_MODE3_SLOT2: &str = "let specular_sample = textureSample(slot2, tex_sampler, in.uv);\n    specular_color = specular_sample.rgb;";
 
 // ============================================================================
 // Shader Generation
@@ -210,15 +214,27 @@ pub fn generate_shader(mode: u8, format: u8) -> Result<String, ShaderGenError> {
             shader = shader.replace("//FS_UV", if has_uv { FS_UV } else { "" });
         }
         2 | 3 => {
-            // Mode 2 (PBR) and Mode 3 (Hybrid) - use "albedo" variable
+            // Mode 2 (PBR) and Mode 3 (Blinn-Phong) - both use "albedo" variable
             shader = shader.replace("//FS_COLOR", if has_color { FS_ALBEDO_COLOR } else { "" });
             shader = shader.replace("//FS_UV", if has_uv { FS_ALBEDO_UV } else { "" });
 
-            // MRE texture sampling (conditionally based on UV)
-            if has_uv {
-                shader = shader.replace("//FS_MRE", "let mre_sample = textureSample(slot1, tex_sampler, in.uv);\n    mre = vec3<f32>(mre_sample.r, mre_sample.g, mre_sample.b);");
+            // Mode-specific texture sampling
+            if mode == 2 {
+                // Mode 2: MRE texture (Metallic-Roughness-Emissive) in Slot 1
+                if has_uv {
+                    shader = shader.replace("//FS_MRE", "let mre_sample = textureSample(slot1, tex_sampler, in.uv);\n    mre = vec3<f32>(mre_sample.r, mre_sample.g, mre_sample.b);");
+                } else {
+                    shader = shader.replace("//FS_MRE", "");
+                }
             } else {
-                shader = shader.replace("//FS_MRE", "");
+                // Mode 3: Slot 1 (RSE: Rim+Shininess+Emissive) + Slot 2 (Specular RGB)
+                if has_uv {
+                    shader = shader.replace("//FS_MODE3_SLOT1", FS_MODE3_SLOT1);
+                    shader = shader.replace("//FS_MODE3_SLOT2", FS_MODE3_SLOT2);
+                } else {
+                    shader = shader.replace("//FS_MODE3_SLOT1", "");
+                    shader = shader.replace("//FS_MODE3_SLOT2", "");
+                }
             }
         }
         _ => {}
@@ -249,7 +265,7 @@ pub fn mode_name(mode: u8) -> &'static str {
         0 => "Unlit",
         1 => "Matcap",
         2 => "PBR",
-        3 => "Hybrid",
+        3 => "Blinn-Phong",
         _ => "Unknown",
     }
 }
@@ -456,7 +472,7 @@ mod tests {
     }
 
     #[test]
-    fn test_compile_mode3_hybrid() {
+    fn test_compile_mode3_blinnphong() {
         for format in valid_formats_for_mode(3) {
             compile_and_validate_shader(3, format).unwrap_or_else(|e| panic!("{}", e));
         }
@@ -530,6 +546,8 @@ mod tests {
                     "//FS_UV",
                     "//FS_NORMAL",
                     "//FS_MRE",
+                    "//FS_MODE3_SLOT1",
+                    "//FS_MODE3_SLOT2",
                 ];
 
                 for placeholder in placeholders {

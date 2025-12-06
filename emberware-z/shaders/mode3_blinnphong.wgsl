@@ -1,8 +1,9 @@
-// Mode 3: Hybrid (PBR direct + matcap ambient)
+// Mode 3: Normalized Blinn-Phong
 // Requires NORMAL flag - only 8 permutations (formats 4-7 and 12-15)
-// PBR direct lighting from single directional light
-// Matcap (slot 3) for ambient/stylized reflections
-// Env matcap (slot 2) for environment reflections
+// Classic Blinn-Phong lighting with Gotanda energy-conserving normalization
+// Reference: Gotanda 2010 - "Practical Implementation at tri-Ace"
+// RSE texture in slot 1 (R=Rim intensity, G=Shininess, B=Emissive)
+// Specular RGB texture in slot 2
 
 const PI: f32 = 3.14159265359;
 
@@ -30,11 +31,12 @@ struct PackedLight {
 }
 
 // Unified per-draw shading state (64 bytes)
+// Mode 3 reinterprets fields: metallic→rim_intensity, roughness→shininess
 struct PackedUnifiedShadingState {
-    metallic_roughness_emissive_pad: u32,  // 4x u8 packed: [metallic, roughness, emissive, pad]
+    metallic_roughness_emissive_pad: u32,  // 4x u8 packed: [rim_intensity, shininess, emissive, pad]
     color_rgba8: u32,
     blend_mode: u32,
-    matcap_blend_modes: u32,
+    matcap_blend_modes: u32,         // Bytes 0-2 = specular_rgb, Byte 3 = rim_power (0-255 → 0-32 range)
     sky: PackedSky,                  // 16 bytes
     lights: array<PackedLight, 4>,   // 32 bytes (4 × 8-byte lights)
 }
@@ -51,9 +53,9 @@ struct PackedUnifiedShadingState {
 
 // Texture bindings (group 1)
 @group(1) @binding(0) var slot0: texture_2d<f32>;  // Albedo
-@group(1) @binding(1) var slot1: texture_2d<f32>;  // MRE (Metallic-Roughness-Emissive)
-@group(1) @binding(2) var slot2: texture_2d<f32>;  // Environment matcap
-@group(1) @binding(3) var slot3: texture_2d<f32>;  // Ambient matcap
+@group(1) @binding(1) var slot1: texture_2d<f32>;  // RSE (Rim-Shininess-Emissive)
+@group(1) @binding(2) var slot2: texture_2d<f32>;  // Specular RGB
+@group(1) @binding(3) var slot3: texture_2d<f32>;  // Unused in Mode 3
 @group(1) @binding(4) var tex_sampler: sampler;
 
 // ============================================================================
@@ -152,7 +154,7 @@ struct VertexIn {
     @location(0) position: vec3<f32>,
     //VIN_UV
     //VIN_COLOR
-    @location(3) normal: vec3<f32>,  // Required
+    @location(3) normal: vec3<f32>,  // Required for Blinn-Phong
     //VIN_SKINNED
 }
 
@@ -162,8 +164,35 @@ struct VertexOut {
     @location(1) world_normal: vec3<f32>,
     @location(2) view_normal: vec3<f32>,
     @location(3) @interpolate(flat) shading_state_index: u32,
+    @location(4) @interpolate(flat) camera_position: vec3<f32>,  // Camera position in world space (flat, not interpolated)
     //VOUT_UV
     //VOUT_COLOR
+}
+
+// ============================================================================
+// Camera Position Extraction
+// ============================================================================
+
+// Extract camera position from view matrix
+// View matrix transforms world→view, so camera is at origin in view space
+// Camera position in world space = -R^T * translation_part
+fn extract_camera_position(view_matrix: mat4x4<f32>) -> vec3<f32> {
+    // Extract rotation part (upper 3x3) - matrices are column-major in WGSL
+    let r00 = view_matrix[0][0]; let r10 = view_matrix[0][1]; let r20 = view_matrix[0][2];
+    let r01 = view_matrix[1][0]; let r11 = view_matrix[1][1]; let r21 = view_matrix[1][2];
+    let r02 = view_matrix[2][0]; let r12 = view_matrix[2][1]; let r22 = view_matrix[2][2];
+
+    // Extract translation part (4th column, first 3 rows)
+    let tx = view_matrix[3][0];
+    let ty = view_matrix[3][1];
+    let tz = view_matrix[3][2];
+
+    // Camera position = -R^T * t
+    return -vec3<f32>(
+        r00 * tx + r10 * ty + r20 * tz,
+        r01 * tx + r11 * ty + r21 * tz,
+        r02 * tx + r12 * ty + r22 * tz
+    );
 }
 
 // ============================================================================
@@ -204,6 +233,9 @@ fn vs(in: VertexIn, @builtin(instance_index) instance_index: u32) -> VertexOut {
     // View-projection transform
     out.clip_position = projection_matrix * view_matrix * model_pos;
 
+    // Extract camera position from view matrix (for correct specular calculations)
+    out.camera_position = extract_camera_position(view_matrix);
+
     // Pass shading state index to fragment shader
     out.shading_state_index = shading_state_idx;
 
@@ -214,7 +246,7 @@ fn vs(in: VertexIn, @builtin(instance_index) instance_index: u32) -> VertexOut {
 }
 
 // ============================================================================
-// Fragment Shader - Hybrid
+// Fragment Shader - Normalized Blinn-Phong
 // ============================================================================
 
 // Sample procedural sky
@@ -227,50 +259,51 @@ fn sample_sky(direction: vec3<f32>, sky: SkyData) -> vec3<f32> {
     return gradient + sun;
 }
 
-// Compute matcap UV from view-space normal
-fn compute_matcap_uv(view_normal: vec3<f32>) -> vec2<f32> {
-    return view_normal.xy * 0.5 + 0.5;
+// Gotanda 2010 linear approximation (Equation 12)
+// Fitted for shininess 0-1000, extrapolates fine beyond
+// Energy-conserving normalization factor for Blinn-Phong BRDF
+fn gotanda_normalization(shininess: f32) -> f32 {
+    return shininess * 0.0397436 + 0.0856832;
 }
 
-// PBR-lite for direct lighting only
+// Normalized Blinn-Phong specular lighting
 // Convention: light_dir = direction rays travel (negate for lighting calculations)
-fn pbr_direct(
-    surface_normal: vec3<f32>,
-    view_dir: vec3<f32>,
-    light_dir: vec3<f32>,
-    albedo: vec3<f32>,
-    metallic: f32,
-    roughness: f32,
-    light_color: vec3<f32>
+// No geometry term - era-authentic, classical Blinn-Phong didn't have it
+fn normalized_blinn_phong_specular(
+    N: vec3<f32>,               // Surface normal (normalized)
+    V: vec3<f32>,               // View direction (normalized, surface TO camera)
+    light_dir: vec3<f32>,       // Light direction (direction rays travel)
+    shininess: f32,             // 1-256 range (mapped from texture)
+    specular_color: vec3<f32>,  // From Slot 2 RGB (or defaults to white)
+    light_color: vec3<f32>,
 ) -> vec3<f32> {
-    let alpha = roughness * roughness;
-    let alpha2 = alpha * alpha;
+    // Negate light_dir because it represents "direction rays travel"
+    let L = -light_dir;
+    let H = normalize(L + V);
 
-    // Negate light_dir because it represents "direction rays travel", not "direction to light"
-    let to_light = -light_dir;
-    let half_vec = normalize(to_light + view_dir);
-    let n_dot_l = max(dot(surface_normal, to_light), 0.0);
-    let n_dot_h = max(dot(surface_normal, half_vec), 0.0);
-    let v_dot_h = max(dot(view_dir, half_vec), 0.0);
+    let NdotH = max(dot(N, H), 0.0);
+    let NdotL = max(dot(N, L), 0.0);
 
-    // F0: 4% for dielectrics, albedo for metals
-    let f0 = mix(vec3<f32>(0.04), albedo, metallic);
+    // Gotanda normalization for energy conservation
+    // No geometry term - era-authentic, classical Blinn-Phong didn't have it
+    let norm = gotanda_normalization(shininess);
+    let spec = norm * pow(NdotH, shininess);
 
-    // D: GGX distribution
-    let d = n_dot_h * n_dot_h * (alpha2 - 1.0) + 1.0;
-    let D = alpha2 / (PI * d * d);
+    return specular_color * spec * light_color * NdotL;
+}
 
-    // F: Schlick fresnel
-    let F = f0 + (1.0 - f0) * exp2((-5.55473 * v_dot_h - 6.98316) * v_dot_h);
-
-    // Specular (with 4.0 divisor for better energy conservation)
-    let specular = (D * F) / 4.0;
-
-    // Diffuse: energy-conserving Lambert
-    let diffuse = (1.0 - f0) * (1.0 - metallic) * albedo / PI;
-
-    // Direct lighting only (no ambient here, matcaps provide it)
-    return (diffuse + specular) * light_color * n_dot_l;
+// Rim lighting (edge highlights)
+// Uses sun color for coherent scene lighting
+fn rim_lighting(
+    N: vec3<f32>,
+    V: vec3<f32>,
+    rim_color: vec3<f32>,
+    rim_intensity: f32,
+    rim_power: f32,
+) -> vec3<f32> {
+    let NdotV = max(dot(N, V), 0.0);
+    let rim_factor = pow(1.0 - NdotV, rim_power);
+    return rim_color * rim_factor * rim_intensity;
 }
 
 @fragment
@@ -281,55 +314,106 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     let sky = unpack_sky(shading.sky);
 
     // Unpack material properties from packed u32
-    let mre_packed = shading.metallic_roughness_emissive_pad;
-    let metallic = unpack_unorm8_from_u32(mre_packed & 0xFFu);
-    let roughness = unpack_unorm8_from_u32((mre_packed >> 8u) & 0xFFu);
-    let emissive_strength = unpack_unorm8_from_u32((mre_packed >> 16u) & 0xFFu);
+    // Mode 3 reinterprets: metallic→rim_intensity, roughness→shininess, emissive→emissive
+    let rse_packed = shading.metallic_roughness_emissive_pad;
+    let rim_intensity_uniform = unpack_unorm8_from_u32(rse_packed & 0xFFu);
+    let shininess_uniform = unpack_unorm8_from_u32((rse_packed >> 8u) & 0xFFu);
+    let emissive_uniform = unpack_unorm8_from_u32((rse_packed >> 16u) & 0xFFu);
+
+    // Unpack rim_power from matcap_blend_modes byte 3 (uniform-only, no texture)
+    let rim_power_raw = unpack_unorm8_from_u32(shading.matcap_blend_modes >> 24u);
+    let rim_power = rim_power_raw * 32.0;  // Map 0-1 → 0-32 range
 
     // Get albedo
     var albedo = material_color.rgb;
     //FS_COLOR
     //FS_UV
 
-    // Sample MRE texture (defaults to material properties if not bound)
-    var mre = vec3<f32>(metallic, roughness, emissive_strength);
-    //FS_MRE
+    // Initialize with uniform defaults
+    var rim_intensity = rim_intensity_uniform;
+    var shininess_raw = shininess_uniform;
+    var emissive = emissive_uniform;
+    var specular_color = vec3<f32>(1.0, 1.0, 1.0);  // Will be multiplied by light color (defaults to white base)
 
-    // View direction - calculate from world position to camera
-    // Camera position derived from view matrix would require passing view index,
-    // so we use world_position directly (view_dir points from surface toward camera)
-    let view_dir = normalize(-in.world_position);  // Assumes camera near origin
+    // Sample RSE texture (Rim-Shininess-Emissive) - overrides uniforms if bound
+    //FS_MODE3_SLOT1
 
-    // Direct lighting from first directional light (sun)
-    // Hybrid mode uses only shading.lights[0]
-    let packed_light0 = shading.lights[0];
-    let light0 = unpack_light(packed_light0);
-    let light_color = light0.color * light0.intensity;
+    // Sample Specular RGB texture - overrides white default if bound
+    //FS_MODE3_SLOT2
 
-    let direct = pbr_direct(
+    // Map shininess 0-1 → 1-256 (linear mapping)
+    let shininess = mix(1.0, 256.0, shininess_raw);
+
+    // View direction - from surface to camera (for specular calculations)
+    // Camera position extracted from view matrix in vertex shader
+    let view_dir = normalize(in.camera_position - in.world_position);
+
+    // AMBIENT IRRADIANCE: Sample sky based on surface normal
+    // This approximates hemispherical irradiance - varies with surface orientation
+    // Top faces receive zenith color, sides/bottom receive horizon color
+    let ambient_color = sample_sky(in.world_normal, sky);
+    let ambient = ambient_color * albedo * 0.3;  // Scale down ambient contribution
+
+    // EMISSIVE: Self-illumination (albedo × emissive intensity)
+    let glow = albedo * emissive;
+
+    // Start with ambient + emissive (always visible)
+    var final_color = ambient + glow;
+
+    // DIFFUSE + SPECULAR contribution from sun
+    // User controls brightness via sun_color (255,255,255 = full sun, 10,10,10 = dim moon)
+    let sun_L = -sky.sun_direction;  // Direction to sun (negated from rays-travel convention)
+    let sun_NdotL = max(dot(in.world_normal, sun_L), 0.0);
+
+    // Diffuse: Lambert (albedo × light_color × N·L)
+    final_color += albedo * sky.sun_color * sun_NdotL;
+
+    // Specular: Normalized Blinn-Phong
+    final_color += normalized_blinn_phong_specular(
         in.world_normal,
         view_dir,
-        light0.direction,
-        albedo,
-        mre.r,  // metallic
-        mre.g,  // roughness
-        light_color
+        sky.sun_direction,  // Direction rays travel (negated in function)
+        shininess,
+        specular_color,
+        sky.sun_color
     );
 
-    // Environment reflection: sky × env matcap (slot 2)
-    let reflection_dir = reflect(-view_dir, in.world_normal);
-    let matcap_uv = compute_matcap_uv(in.view_normal);
-    let env_matcap = textureSample(slot2, tex_sampler, matcap_uv).rgb;
-    let env_reflection = sample_sky(reflection_dir, sky) * env_matcap * mre.r;
+    // Add contribution from each enabled dynamic light (up to 4)
+    for (var i = 0u; i < 4u; i++) {
+        let packed_light = shading.lights[i];
+        let light = unpack_light(packed_light);
 
-    // Ambient from matcap (slot 3) × sky
-    let ambient_matcap = textureSample(slot3, tex_sampler, matcap_uv).rgb;
-    let ambient = ambient_matcap * sample_sky(in.world_normal, sky) * albedo * (1.0 - mre.r);
+        if (light.enabled) {
+            let light_color = light.color * light.intensity;
+            let L = -light.direction;  // Direction to light
+            let NdotL = max(dot(in.world_normal, L), 0.0);
 
-    // Emissive
-    let emissive = albedo * mre.b;
+            // Diffuse
+            final_color += albedo * light_color * NdotL;
 
-    let final_color = direct + env_reflection + ambient + emissive;
+            // Specular
+            final_color += normalized_blinn_phong_specular(
+                in.world_normal,
+                view_dir,
+                light.direction,  // Direction rays travel
+                shininess,
+                specular_color,
+                light_color
+            );
+        }
+    }
+
+    // RIM LIGHTING: Edge highlights using sun color
+    // rim_intensity from Slot 1.R (or uniform), rim_power from uniform (matcap_blend_modes byte 0)
+    let rim = rim_lighting(
+        in.world_normal,
+        view_dir,
+        sky.sun_color,  // Use sun color for coherent scene lighting
+        rim_intensity,
+        rim_power
+    );
+
+    final_color += rim;
 
     return vec4<f32>(final_color, material_color.a);
 }
