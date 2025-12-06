@@ -167,8 +167,8 @@ fn render_mode(mode: u32)               // 0-3, see below (init-only)
 |------|------|--------|-------------|
 | 0 | **Unlit** | Sky (if normals) | Texture × vertex color. Simple Lambert if normals present. |
 | 1 | **Matcap** | None (baked) | Adds view-space normal matcap sampling. Stylized, cheap. |
-| 2 | **PBR-lite** | 4 lights | Physically-based rendering. Dynamic lighting, most realistic. |
-| 3 | **Blinn-Phong** | 4 lights + sun | Classic lighting with Gotanda normalization. Era-authentic PS1/N64 aesthetic. |
+| 2 | **MR-Blinn-Phong** | 4 lights + sun | Metallic-roughness Blinn-Phong. Energy-conserving lighting, physical materials. |
+| 3 | **Blinn-Phong** | 4 lights + sun | Classic lighting with Gotanda normalization. Explicit specular + rim lighting. Era-authentic PS1/N64 aesthetic. |
 
 Each mode builds on the previous — textures and vertex colors always work.
 
@@ -247,13 +247,18 @@ Good for:
 - Consistent look regardless of scene setup
 - Fast performance
 
-#### Mode 2: PBR-lite (4 Lights)
+#### Mode 2: Metallic-Roughness Blinn-Phong (4 Lights + Sun)
 
-Full PBR lighting with up to 4 dynamic lights:
-- GGX specular distribution
-- Schlick fresnel approximation
-- Energy-conserving Lambert diffuse
-- Emissive support
+Normalized Blinn-Phong with metallic-roughness workflow. Energy-conserving lighting for physically-motivated materials:
+- **Normalized Blinn-Phong** specular (Gotanda 2010 linear approximation)
+- **Lambert** diffuse lighting
+- **Metallic-roughness workflow** with derived specular color
+- **Emissive** self-illumination
+- **4 dynamic lights + sun** from procedural sky
+
+**Reference:** Gotanda 2010 - "Practical Implementation at tri-Ace"
+
+**Lighting Functions:**
 
 ```rust
 fn light_set(index: u32, x: f32, y: f32, z: f32)  // index 0-3, direction vector
@@ -261,9 +266,13 @@ fn light_color(index: u32, r: f32, g: f32, b: f32)
 fn light_intensity(index: u32, intensity: f32)
 fn light_enable(index: u32)
 fn light_disable(index: u32)
+
+// Sun comes from procedural sky (set_sky_sun_direction, set_sky_sun_color)
 ```
 
 All lights are directional. The `x`, `y`, `z` parameters specify the light direction (normalized internally).
+
+**Material Properties:**
 
 Material properties via MRE texture (R=Metallic, G=Roughness, B=Emissive):
 
@@ -273,22 +282,80 @@ fn material_albedo(texture: u32)            // Base color (linear RGB)
 ```
 
 Or set directly:
+
 ```rust
 fn material_metallic(value: f32)            // 0.0 = dielectric (default), 1.0 = metal
-fn material_roughness(value: f32)           // 0.0 = mirror (default), 1.0 = rough
+fn material_roughness(value: f32)           // 0.0 = smooth (default), 1.0 = rough
 fn material_emissive(value: f32)            // Glow intensity (default: 0.0)
 ```
 
-**Material defaults:** All material properties default to 0.0 (dielectric, mirror-smooth, no emissive).
+**Material defaults:** All material properties default to 0.0 (dielectric, smooth, no emissive).
+
+**Texture Slots:**
+
+| Slot | Purpose | Channels | Fallback |
+|------|---------|----------|----------|
+| 0 | Albedo | RGB: Diffuse color<br>A: Unused | White (uses material color) |
+| 1 | MRE | R: Metallic<br>G: Roughness<br>B: Emissive | White (uses uniforms) |
+| 2 | Unused | | (Freed up for future use) |
+
+**Lighting Algorithm:**
 
 ```
-// Per-light contribution
-diffuse = (1 - F0) * (1 - metallic) * albedo / PI
-specular = D_GGX * F_schlick
-direct = (diffuse + specular) * light_color * NdotL
+// Roughness → Shininess mapping (power curve)
+shininess = pow(256.0, 1.0 - roughness)  // Range: 256 (smooth) → 1 (rough)
 
-final_color = sum(direct) + ambient * albedo + emissive
+// Specular color derivation (F0 calculation)
+specular_color = mix(vec3(0.04), albedo, metallic)
+                 // F0=0.04 for dielectrics, albedo for metals
+
+// Gotanda normalization for energy conservation
+normalization = shininess × 0.0397436 + 0.0856832
+
+// Blinn-Phong specular (per light)
+H = normalize(L + V)
+NdotH = max(0, dot(N, H))
+spec = normalization × pow(NdotH, shininess)
+specular = specular_color × spec × light_color × NdotL
+
+// Lambert diffuse
+diffuse = albedo × light_color × NdotL
+
+// Ambient with energy conservation
+ambient_factor = 1.0 / sqrt(1.0 + normalization)
+ambient = sample_sky(normal) × albedo × ambient_factor
+
+final_color = sum(diffuse + specular) + ambient + emissive
 ```
+
+**Material Examples:**
+
+- **Polished gold** (metallic=1.0, roughness=0.2): Mirror-like with golden highlights
+- **Rough plastic** (metallic=0.0, roughness=0.6): Matte with soft specular
+- **Glowing crystal** (metallic=0.0, roughness=0.1, emissive=0.5): Bright with sharp highlights
+- **Rusty metal** (metallic=0.8, roughness=0.8): Dull metal surface
+
+**Roughness → Shininess Mapping:**
+
+| Roughness | Shininess | Quality |
+|-----------|-----------|---------|
+| 0.0 | 256 | Mirror/Glass |
+| 0.25 | 128 | Polished metal |
+| 0.5 | 64 | Smooth plastic |
+| 0.75 | 16 | Leather/Matte |
+| 1.0 | 1 | Clay/Powder |
+
+**Compared to Mode 3 (Blinn-Phong):**
+
+| Feature | Mode 2 | Mode 3 |
+|---------|--------|--------|
+| **Specular Model** | Normalized Blinn-Phong | Normalized Blinn-Phong |
+| **Metallic/Roughness** | ✅ MR workflow | ❌ Not available |
+| **Specular Color** | Derived from metallic (F0=0.04) | Explicit (tex2.RGB or uniform) |
+| **Rim Lighting** | ❌ No | ✅ Yes (controllable) |
+| **Environment** | Procedural sky only | Procedural sky only |
+| **Slot 2** | Unused/freed | Specular RGB texture |
+| **Use Case** | Physical materials | Artistic control |
 
 #### Mode 3: Normalized Blinn-Phong (Classic Lit)
 
@@ -334,7 +401,7 @@ fn material_emissive(value: f32)             // Glow intensity (default: 0.0)
 | Slot | Purpose | Channels | Fallback |
 |------|---------|----------|----------|
 | 0 | Albedo | RGB: Diffuse color<br>A: Unused | White (uses material color) |
-| 1 | RSE | R: Rim intensity<br>G: Shininess<br>B: Emissive | White (uses uniforms) |
+| 1 | SSE | R: Specular intensity<br>G: Shininess<br>B: Emissive | White (uses uniforms) |
 | 2 | Specular | RGB: Specular highlight color<br>A: Unused | White (light-colored specular) |
 
 **Lighting Algorithm:**
@@ -342,6 +409,9 @@ fn material_emissive(value: f32)             // Glow intensity (default: 0.0)
 ```
 // Gotanda normalization for energy conservation
 normalization = shininess × 0.0397436 + 0.0856832
+
+// Specular color with intensity modulation
+specular_color = texture_rgb × specular_intensity
 
 // Blinn-Phong specular (per light)
 H = normalize(L + V)
@@ -352,12 +422,14 @@ specular = specular_color × normalization × pow(NdotH, shininess) × light_col
 // Lambert diffuse (per light)
 diffuse = albedo × light_color × NdotL
 
-// Rim lighting (uses sun color)
+// Rim lighting (modulated by specular intensity, uses sun color)
 rim_factor = pow(1 - NdotV, rim_power)
-rim = sun_color × rim_factor × rim_intensity
+rim = sun_color × rim_factor × specular_intensity
 
-// Ambient from sky
-ambient = albedo × sample_sky(N) × 0.3
+// Ambient from sky (Gotanda-based energy conservation)
+spec_norm = gotanda_normalization(shininess)
+ambient_factor = 1.0 / sqrt(1.0 + spec_norm)
+ambient = sample_sky(N) × albedo × ambient_factor
 
 // Emissive
 emissive_glow = albedo × emissive
@@ -403,7 +475,7 @@ material_rim(0.4, 0.18);       // Magical edge glow
 material_emissive(0.3);        // Self-illumination
 ```
 
-**Performance:** Significantly cheaper per light than Mode 2 (no GGX, no Fresnel, no geometry term).
+**Performance:** Both Mode 2 and Mode 3 use normalized Blinn-Phong with no geometry term — same performance, different features.
 
 ### Procedural Sky
 
@@ -423,8 +495,8 @@ fn set_sky(
 
 The sky is used for:
 1. **Background** — Rendered behind all geometry (replaces clear color)
-2. **Environment reflections** — Sampled by Mode 2/3 for metallic surfaces, multiplied with env matcap (slot 2)
-3. **Ambient lighting** — Provides diffuse ambient term in PBR modes
+2. **Ambient lighting** — Provides diffuse ambient term via sky sampling (all lit modes)
+3. **Sun direction/color** — Drives sun specular and rim lighting in Modes 2-3
 
 **Algorithm:**
 ```
@@ -611,23 +683,23 @@ fn texture_bind_slot(handle: u32, slot: u32)    // Bind to specific slot
 |------|--------|--------|--------|--------|
 | **0 (Unlit)** | Albedo (UV) | — | — | — |
 | **1 (Matcap)** | Albedo (UV) | Matcap (N) | Matcap (N) | Matcap (N) |
-| **2 (PBR)** | Albedo (UV) | MRE (UV) | Env Matcap (N) | — |
-| **3 (Hybrid)** | Albedo (UV) | MRE (UV) | Env Matcap (N) | Matcap (N) |
+| **2 (MR-Blinn-Phong)** | Albedo (UV) | MRE (UV) | Unused | — |
+| **3 (Blinn-Phong)** | Albedo (UV) | RSE (UV) | Specular (UV) | — |
 
 **(N) = Normal-sampled (requires `FORMAT_NORMAL`), (UV) = UV-sampled (requires `FORMAT_UV`)**
 
-**Slot 2 "Env Matcap" in Modes 2/3:** Optional matcap that multiplies with procedural sky reflections. Allows stylized reflection highlights on top of the sky. Defaults to white (sky-only reflections).
+**Slot Usage Details:**
+
+- **Mode 2, Slot 1 (MRE):** R=Metallic, G=Roughness, B=Emissive. Defaults to uniforms if texture not bound.
+- **Mode 2, Slot 2:** Unused (freed up for future features). No texture binding needed.
+- **Mode 3, Slot 1 (RSE):** R=Rim intensity, G=Shininess, B=Emissive. Defaults to uniforms if texture not bound.
+- **Mode 3, Slot 2 (Specular):** RGB=Specular highlight color. Defaults to uniform if texture not bound.
 
 **Fallback rules:**
 - UV-sampled slots with no UVs or no texture → use `set_color()` / `material_*()` uniforms
-- Normal-sampled slots with no texture → use ambient color only
 - Modes 1-3 without `FORMAT_NORMAL` → warning, behaves like Mode 0
 
 **Debug fallback texture:** When a required texture is missing, an 8×8 magenta/black checkerboard is used to make the error visually obvious during development.
-
-**Matcap combination:**
-- Mode 1: Matcaps in slots 1-3 multiply together. Unused slots default to white.
-- Mode 3: Single matcap in slot 3, combined with PBR ambient term.
 
 **Example:**
 ```rust
@@ -1383,7 +1455,7 @@ pub extern "C" fn init() {
     unsafe {
         set_resolution(2);        // 720p
         set_tick_rate(2);         // 60fps
-        render_mode(2);           // PBR
+        render_mode(2);           // MR-Blinn-Phong
         set_clear_color(0x1a1a2eFF);
     }
 }
@@ -1498,8 +1570,8 @@ for obj in objects {
 |------|------|----------|
 | 0 (Unlit) | Lowest | UI, particles, stylized games |
 | 1 (Matcap) | Low | Stylized 3D, no dynamic lighting needed |
-| 2 (PBR) | High | Realistic lighting, multiple light sources |
-| 3 (Hybrid) | Medium | Balanced quality/performance |
+| 2 (MR-Blinn-Phong) | Medium | Physical materials, metallic-roughness workflow |
+| 3 (Blinn-Phong) | Medium | Artistic control, rim lighting, explicit specular |
 
 ### Texture Guidelines
 

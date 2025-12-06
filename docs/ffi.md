@@ -56,6 +56,35 @@ If not set, the console uses its defaults (540p @ 60fps for Z, 384×216 @ 60fps 
 - Render mode determines shader pipelines
 - Changing these mid-game would break determinism and netplay
 
+### Mode 2 Migration (2025)
+
+**Emberware Z Mode 2 was migrated from PBR-lite to Metallic-Roughness Blinn-Phong:**
+
+**What changed in the rendering:**
+- Specular model: GGX → Normalized Blinn-Phong (Gotanda 2010)
+- Environment reflections: Removed (slot 2 freed)
+- Specular color: Derived from metallic (F0=0.04 for dielectrics, albedo for metals)
+- Roughness mapping: Power curve `pow(256.0, 1.0 - roughness)` (0→256, 1→1 shininess range)
+- Rim lighting: Added as uniform-only feature (same code as Mode 3)
+- Ambient lighting: Now uses Gotanda-based energy conservation (like Mode 3)
+
+**What stayed the same (no API changes):**
+- FFI functions: `material_metallic()`, `material_roughness()`, `material_emissive()` work identically
+- Texture slot 1: MRE (R=Metallic, G=Roughness, B=Emissive) layout unchanged
+- Light functions: `light_set()`, `light_color()`, `light_intensity()` all work the same
+- Material workflow: Physics-based metallic-roughness still applies
+
+**Mode 3 changes (related):**
+- Texture slot 1, channel R: Changed from "Rim intensity" to "Specular intensity"
+- Rim lighting now modulated by specular intensity (both specular highlights and rim affect each other)
+
+**Migration guide for existing content:**
+- **Roughness adjustment:** If specular highlights look different, try adjusting roughness ±0.1-0.2 for similar sharpness
+- **Slot 2 matcap:** Previously optional for environment reflections — no longer sampled. Remove `texture_bind_slot(2, ...)` calls (safe no-op)
+- **Rim lighting:** Mode 2 now supports rim lighting via `material_rim(intensity, power)` FFI functions (uniform-only, no texture)
+- **Mode 3 assets:** If you have Mode 3 textures, slot 1.R now controls specular intensity instead of rim intensity
+- **Fresnel effects:** View-dependent grazing angle brightening is gone. Accept as design change or adjust roughness values
+
 ### Rollback Netcode
 
 Emberware uses GGRS for deterministic rollback netcode. Key rules:
