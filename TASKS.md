@@ -819,124 +819,141 @@ impl TestEnvironment {
 
 ---
 
-### **[FEATURE] Mesh Manipulation API**
+### **[FEATURE] Add draw_sky() Function**
 
 **Current State:**
-- Meshes can be loaded via `load_mesh()` or procedural API (once implemented)
-- No way to modify meshes after creation
-- No mesh utilities (merge, transform, subdivide, etc.)
-- Games must manually manage vertex data for dynamic meshes
+- Emberware Z has a procedural sky system (gradient + sun)
+- Sky provides ambient lighting and IBL-lite reflections in PBR modes
+- Sky is configured via FFI: `sky_sun_color()`, `sky_gradient_top()`, `sky_gradient_bottom()`, `sky_sun_direction()`
+- **No way to actually draw the sky as geometry** - it only affects lighting
+
+**The Problem:**
+Games that want a visible sky background have to:
+1. Manually create a large sphere mesh
+2. Texture it or use vertex colors to match sky gradient
+3. Position it around the camera
+4. Update it when sky settings change
+
+This is tedious and error-prone. The sky configuration exists but isn't rendered.
 
 **What's Needed:**
-FFI functions to manipulate existing meshes:
+A simple FFI function to render the procedural sky as a background:
 
 ```rust
-// Transform mesh vertices by matrix
-fn mesh_transform(mesh_id: u32, matrix_ptr: u32)
-
-// Merge two meshes into a new mesh
-fn mesh_merge(mesh_a: u32, mesh_b: u32) -> u32
-
-// Duplicate a mesh
-fn mesh_clone(mesh_id: u32) -> u32
-
-// Subdivide mesh (Catmull-Clark or simple midpoint)
-fn mesh_subdivide(mesh_id: u32, iterations: u32) -> u32
-
-// Reverse winding order (flip normals)
-fn mesh_flip_normals(mesh_id: u32)
-
-// Get mesh info (vertex count, bounds)
-fn mesh_vertex_count(mesh_id: u32) -> u32
-fn mesh_bounds(mesh_id: u32, min_ptr: u32, max_ptr: u32)  // Write to WASM memory
+fn draw_sky()
 ```
 
-**Use Cases:**
-
-1. **Procedural Level Generation:**
-   - Generate room mesh, transform, merge into level
-   - Build complex geometry from primitives
-
-2. **Dynamic Terrain:**
-   - Subdivide terrain mesh for detail
-   - Transform heightmap vertices
-
-3. **Animation:**
-   - Clone base mesh, transform vertices per frame
-   - Morph targets
-
-4. **Optimization:**
-   - Merge static geometry into single mesh
-   - Reduce draw calls
+**Expected Behavior:**
+- Draws a full-screen quad or skybox using current sky settings
+- Renders gradient from `sky_gradient_bottom()` (horizon) to `sky_gradient_top()` (zenith)
+- Renders sun disc at `sky_sun_direction()` with `sky_sun_color()`
+- Depth test disabled (always behind everything)
+- No transform required (always fills viewport)
+- Works in all render modes
 
 **Implementation Plan:**
 
-1. **Store Mesh Data in ZGraphics:**
+1. **Sky Rendering Approach:**
+   Option A: Full-screen quad with gradient shader
    ```rust
-   // In graphics/mod.rs or graphics/resources.rs (after refactoring)
-   pub struct RetainedMesh {
-       vertex_range: Range<usize>,
-       index_range: Option<Range<usize>>,
-       format: VertexFormat,
-       vertex_data: Vec<u8>,  // ADD THIS - keep CPU copy for manipulation
-       index_data: Option<Vec<u16>>,  // ADD THIS
+   // Draw quad covering entire screen
+   // Fragment shader interpolates gradient top→bottom
+   // Add sun as bright disc based on view direction
+   ```
+
+   Option B: Skybox cube
+   ```rust
+   // Draw inverted cube around camera
+   // Sample gradient based on Y coordinate
+   // Add sun based on cube face
+   ```
+
+   **Recommendation:** Option A (full-screen quad) - simpler, faster, authentic to PS1/N64 era
+
+2. **Add to FFI** (in `ffi/draw_3d.rs` or `ffi/mod.rs`):
+   ```rust
+   fn draw_sky(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>) {
+       let state = caller.data_mut();
+
+       // Add sky draw command to command buffer
+       state.console_state.draw_commands.push(DrawCommand::Sky);
    }
    ```
 
-2. **Add Mesh Manipulation Functions:**
+3. **Execute in Graphics Backend:**
    ```rust
-   // In procedural.rs or new mesh_utils.rs
-   pub fn transform_vertices(vertices: &mut [Vertex], matrix: &Mat4) {
-       for v in vertices {
-           let pos = Vec3::from_slice(&v.position);
-           let transformed = matrix.transform_point3(pos);
-           v.position = transformed.to_array();
-
-           // Transform normals if present
-           if has_normals {
-               let normal = Vec3::from_slice(&v.normal);
-               let transformed_normal = matrix.transform_vector3(normal).normalize();
-               v.normal = transformed_normal.to_array();
-           }
-       }
-   }
-
-   pub fn merge_meshes(mesh_a: &RetainedMesh, mesh_b: &RetainedMesh) -> RetainedMesh {
-       // Combine vertex/index data
-       // Offset indices of mesh_b
-       // Requires same vertex format
+   // In ZGraphics::render() or draw_executor.rs
+   DrawCommand::Sky => {
+       // Disable depth test/write
+       // Draw full-screen quad
+       // Use sky gradient uniforms
+       // Add sun disc
    }
    ```
 
-3. **Add FFI Wrappers:**
-   ```rust
-   // In ffi/mesh.rs (after refactoring)
-   fn mesh_transform(caller: Caller, mesh_id: u32, matrix_ptr: u32) {
-       let matrix = read_matrix_from_memory(&caller, matrix_ptr);
-       let graphics = &mut caller.data_mut().console_state.graphics;
-       graphics.transform_mesh(mesh_id, &matrix);
+4. **Sky Shader:**
+   ```wgsl
+   // New shader: sky.wgsl
+   @fragment
+   fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
+       // Interpolate gradient based on UV.y
+       let sky_color = mix(
+           sky_uniforms.gradient_bottom,
+           sky_uniforms.gradient_top,
+           uv.y
+       );
+
+       // Add sun disc
+       let view_dir = normalize(vec3(uv * 2.0 - 1.0, -1.0));
+       let sun_dot = dot(view_dir, sky_uniforms.sun_direction);
+       let sun_intensity = smoothstep(0.9995, 0.9999, sun_dot);
+       let sun_contribution = sky_uniforms.sun_color * sun_intensity;
+
+       return vec4(sky_color + sun_contribution, 1.0);
    }
    ```
 
-4. **Handle Vertex Format Compatibility:**
-   - `mesh_merge()` requires matching vertex formats
-   - Return error code if formats incompatible
-   - Document format requirements
+5. **Usage Example:**
+   ```rust
+   // In game render()
+   fn render() {
+       // Configure sky
+       sky_gradient_top(0x87CEEBFF);    // Sky blue
+       sky_gradient_bottom(0xFFE4B5FF); // Moccasin (warm horizon)
+       sky_sun_color(0xFFFAF0FF);       // Floral white
+       sky_sun_direction(0.5, 0.707, 0.5); // 45° elevation
+
+       // Draw sky first (before any geometry)
+       draw_sky();
+
+       // Draw scene geometry
+       draw_mesh(terrain_mesh);
+       draw_mesh(player_mesh);
+   }
+   ```
+
+**Design Decisions:**
+
+1. **Draw order:** Should be called first in render() (before geometry)
+2. **Depth:** Always at infinite depth (depth = 1.0)
+3. **Performance:** Single full-screen quad = 2 triangles (negligible cost)
+4. **Compatibility:** Works with all render modes (unlit, matcap, PBR, hybrid)
 
 **Success Criteria:**
-- ✅ 7 mesh manipulation functions implemented
-- ✅ Works with all vertex formats
-- ✅ Proper normal transformation (inverse transpose for non-uniform scales)
-- ✅ Index buffer handling for indexed meshes
-- ✅ Document in `docs/emberware-z.md`
-- ✅ Create `examples/mesh-manipulation` demo
+- ✅ `draw_sky()` FFI function implemented
+- ✅ Renders gradient from bottom to top color
+- ✅ Renders sun disc at specified direction
+- ✅ No depth conflicts with scene geometry
+- ✅ Documented in `docs/emberware-z.md` under "Sky Functions"
+- ✅ Update existing examples to use `draw_sky()` where appropriate
+- ✅ Add to procedural-shapes example (once created)
 
 **Files to Create/Modify:**
-- Create `emberware-z/src/mesh_utils.rs` (~400 lines)
-- Modify `emberware-z/src/graphics/resources.rs` (store CPU-side mesh data)
-- Modify `emberware-z/src/ffi/mesh.rs` (add 7 FFI wrappers)
-- Update `docs/emberware-z.md` (document new functions)
-- Create `examples/mesh-manipulation/` (demo transforming, merging meshes)
+- Create `emberware-z/shaders/sky.wgsl` (sky rendering shader)
+- Modify `emberware-z/src/ffi/mod.rs` or `ffi/draw_3d.rs` (add draw_sky FFI)
+- Modify `emberware-z/src/graphics/mod.rs` or `draw_executor.rs` (execute sky draw command)
+- Update `docs/emberware-z.md` (document draw_sky function)
+- Update `examples/lighting/src/lib.rs` (demonstrate sky rendering)
 
 ---
 
