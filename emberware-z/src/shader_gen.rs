@@ -263,8 +263,8 @@ pub fn generate_shader(mode: u8, format: u8) -> Result<String, ShaderGenError> {
             // Diffuse factor: reduce for metallic surfaces (metals don't have diffuse)
             shader = shader.replace("//FS_MODE2_3_DIFFUSE_FACTOR", "let diffuse_factor = 1.0 - value0;");
 
-            // Shininess: Compute from roughness (power curve)
-            let mode2_shininess = "let shininess = pow(256.0, 1.0 - value1);";
+            // Shininess: Linear mapping from roughness to 1-256 range (consistent with Mode 3)
+            let mode2_shininess = "let shininess = mix(1.0, 256.0, 1.0 - value1);";
             shader = shader.replace("//FS_MODE2_3_SHININESS", mode2_shininess);
 
             // Specular color: Derive from metallic (F0=0.04 dielectric)

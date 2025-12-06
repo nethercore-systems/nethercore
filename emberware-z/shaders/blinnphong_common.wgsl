@@ -97,19 +97,19 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     let rim_power_raw = unpack_unorm8_from_u32(shading.matcap_blend_modes >> 24u);
     let rim_power = rim_power_raw * 32.0;
 
+    let glow = albedo * emissive;
+    var final_color = glow;
+
     // Diffuse factor: Mode 2 reduces diffuse for metallic surfaces (metals don't have diffuse)
     // Mode 3 has no metallic, so diffuse_factor = 1.0
     //FS_MODE2_3_DIFFUSE_FACTOR
-
-    let glow = albedo * emissive;
-    var final_color = glow;
 
     // Indirect ambient: sample sky in direction of surface normal (IBL-lite, no cosine term)
     // Gotanda normalization reduces ambient as shininess increases (energy conservation)
     let spec_norm = gotanda_normalization(shininess);
     let ambient_factor = 1.0 / sqrt(1.0 + spec_norm);
     let ambient_color = sample_sky(in.world_normal, sky);
-    final_color += ambient_color * albedo * ambient_factor;
+    final_color += ambient_color * albedo * ambient_factor * diffuse_factor;
 
     // Direct sun: sample sky in the direction of the sun (all colors from sky)
     let sun_color = sample_sky(-sky.sun_direction, sky);
