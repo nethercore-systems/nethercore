@@ -3159,33 +3159,9 @@ mod tests {
     fn test_draw_commands_initially_empty() {
         let state = ZFFIState::new();
         assert!(state.render_pass.commands().is_empty());
-        assert!(state.deferred_commands.is_empty());
     }
 
-    // Command buffer recording tests removed - testing implementation details that changed with unified shading state
-
-    #[test]
-    fn test_draw_command_text() {
-        let mut state = ZFFIState::new();
-
-        state.deferred_commands.push(DeferredCommand::DrawText {
-            text: b"Hello".to_vec(),
-            x: 100.0,
-            y: 200.0,
-            size: 16.0,
-            color: 0x000000FF,
-            font: 0,
-        });
-
-        if let DeferredCommand::DrawText { text, size, .. } = &state.deferred_commands[0] {
-            assert_eq!(std::str::from_utf8(text).unwrap(), "Hello");
-            assert_eq!(*size, 16.0);
-        } else {
-            panic!("Expected DrawText command");
-        }
-    }
-
-    // SetSky test removed - sky is now part of unified shading state, not a deferred command
+    // Draw command tests removed - implementation changed with GPU-instanced rendering and unified shading state
 
     // ========================================================================
     // Pending Resource Tests

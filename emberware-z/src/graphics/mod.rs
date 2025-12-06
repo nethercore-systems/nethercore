@@ -111,9 +111,26 @@ use texture_manager::TextureManager;
 /// Implements the vertex buffer architecture with one buffer per stride
 /// and command buffer pattern for draw batching.
 /// Offscreen render target for fixed internal resolution
+///
+/// Game content renders at a fixed resolution (e.g., 960×540) to this target,
+/// then gets scaled/blitted to the window surface (which can be any size).
+///
+/// # Architecture Note
+///
+/// The `color_texture` and `depth_texture` fields are never directly accessed
+/// after creation, but they MUST be stored here because wgpu::TextureView does
+/// not own the underlying texture. Dropping the texture would invalidate the views.
+///
+/// This is separate from `ZGraphics::depth_texture/depth_view` which is used for
+/// window-sized UI rendering (not game content). The separation allows:
+/// - Game renders at fixed resolution (pixel-perfect, stable coordinates)
+/// - UI renders at window resolution (crisp regardless of window size)
+/// - Blit pipeline scales game to window with configurable filtering
 struct RenderTarget {
+    #[allow(dead_code)] // Needed to keep texture alive for color_view
     color_texture: wgpu::Texture,
     color_view: wgpu::TextureView,
+    #[allow(dead_code)] // Needed to keep texture alive for depth_view
     depth_texture: wgpu::Texture,
     depth_view: wgpu::TextureView,
     width: u32,
@@ -1377,7 +1394,7 @@ impl ZGraphics {
                 let window_width = self.config.width as f32;
                 let window_height = self.config.height as f32;
 
-                // Calculate largest integer scale that fits in window
+                // Calculate largest integer scale that fits BOTH dimensions
                 let scale_x = (window_width / render_width).floor();
                 let scale_y = (window_height / render_height).floor();
                 let scale = scale_x.min(scale_y).max(1.0); // At least 1x
@@ -1430,7 +1447,6 @@ impl ZGraphics {
     pub fn render_frame(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
-        view: &wgpu::TextureView,
         z_state: &crate::state::ZFFIState,
         clear_color: [f32; 4],
     ) {
@@ -2130,62 +2146,4 @@ impl Graphics for ZGraphics {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_generate_text_quads_empty() {
-        let (vertices, indices) =
-            ZGraphics::generate_text_quads("", 0.0, 0.0, 16.0, 0xFFFFFFFF, None, 960.0, 540.0);
-        assert!(vertices.is_empty());
-        assert!(indices.is_empty());
-    }
-
-    #[test]
-    fn test_generate_text_quads_single_char() {
-        let (vertices, indices) =
-            ZGraphics::generate_text_quads("A", 0.0, 0.0, 16.0, 0xFFFFFFFF, None, 960.0, 540.0);
-        assert_eq!(vertices.len(), 32);
-        assert_eq!(indices.len(), 6);
-    }
-
-    #[test]
-    fn test_generate_text_quads_multiple_chars() {
-        let (vertices, indices) =
-            ZGraphics::generate_text_quads("Hello", 0.0, 0.0, 8.0, 0xFFFFFFFF, None, 960.0, 540.0);
-        assert_eq!(vertices.len(), 160);
-        assert_eq!(indices.len(), 30);
-    }
-
-    #[test]
-    fn test_generate_text_quads_color() {
-        let (vertices, _) =
-            ZGraphics::generate_text_quads("X", 0.0, 0.0, 8.0, 0xFF0000FF, None, 960.0, 540.0);
-        assert!((vertices[5] - 1.0).abs() < 0.01);
-        assert!((vertices[6] - 0.0).abs() < 0.01);
-        assert!((vertices[7] - 0.0).abs() < 0.01);
-    }
-
-    #[test]
-    fn test_generate_text_quads_position() {
-        let (vertices, _) =
-            ZGraphics::generate_text_quads("A", 100.0, 50.0, 16.0, 0xFFFFFFFF, None, 960.0, 540.0);
-        // Vertices are in NDC (Normalized Device Coordinates), not pixel coordinates
-        // x: (100.0 / (960.0 * 0.5)) - 1.0 ≈ -0.7917
-        // y: 1.0 - (50.0 / (540.0 * 0.5)) ≈ 0.8148
-        assert!((vertices[0] - (-0.7917)).abs() < 0.01);
-        assert!((vertices[1] - 0.8148).abs() < 0.01);
-        assert!((vertices[2] - 0.0).abs() < 0.01);
-    }
-
-    #[test]
-    fn test_generate_text_quads_indices_valid() {
-        let (_, indices) =
-            ZGraphics::generate_text_quads("AB", 0.0, 0.0, 8.0, 0xFFFFFFFF, None, 960.0, 540.0);
-        assert_eq!(indices[0..6], [0, 1, 2, 0, 2, 3]);
-        assert_eq!(indices[6..12], [4, 5, 6, 4, 6, 7]);
-    }
-
-    // Matrix preservation test removed - implementation changed with unified shading state
-}
+// Tests removed - generate_text_quads was replaced by GPU-instanced quad rendering system

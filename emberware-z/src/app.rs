@@ -801,6 +801,19 @@ impl App {
                     graphics.set_scale_mode(self.config.video.scale_mode);
                 }
 
+                // Apply fullscreen setting if changed
+                if let Some(window) = &self.window {
+                    let is_fullscreen = window.fullscreen().is_some();
+                    if is_fullscreen != self.config.video.fullscreen {
+                        let new_fullscreen = if self.config.video.fullscreen {
+                            Some(Fullscreen::Borderless(None))
+                        } else {
+                            None
+                        };
+                        window.set_fullscreen(new_fullscreen);
+                    }
+                }
+
                 // Update settings UI temp config
                 self.settings_ui.update_temp_config(&self.config);
 
@@ -988,7 +1001,7 @@ impl App {
                 if let Some(session) = &mut self.game_session {
                     if let Some(game) = session.runtime.game_mut() {
                         let z_state = game.console_state_mut();
-                        graphics.render_frame(&mut encoder, &view, z_state, clear_color);
+                        graphics.render_frame(&mut encoder, z_state, clear_color);
                     }
                 }
             }
@@ -1111,7 +1124,6 @@ impl App {
                                         let update_time = time_ms; // game_tick_times[i]
                                         let render_time = debug_stats.game_render_times.get(i).copied().unwrap_or(0.0);
                                         let total_time = update_time + render_time;
-                                        let available_time = TARGET_FRAME_TIME_MS - total_time;
 
                                         // Calculate heights (scaled to budget, capped at 150%)
                                         let update_height = ((update_time / TARGET_FRAME_TIME_MS).min(1.5) * graph_height);

@@ -21,6 +21,7 @@ enum SettingsTab {
     Video,
     Audio,
     Controls,
+    Hotkeys,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -137,6 +138,7 @@ impl SettingsUi {
                 ui.selectable_value(&mut self.selected_tab, SettingsTab::Video, "📺 Video");
                 ui.selectable_value(&mut self.selected_tab, SettingsTab::Audio, "🔊 Audio");
                 ui.selectable_value(&mut self.selected_tab, SettingsTab::Controls, "🎮 Controls");
+                ui.selectable_value(&mut self.selected_tab, SettingsTab::Hotkeys, "⌨ Hotkeys");
             });
 
             ui.separator();
@@ -152,6 +154,9 @@ impl SettingsUi {
                 }
                 SettingsTab::Controls => {
                     self.show_controls_tab(ui);
+                }
+                SettingsTab::Hotkeys => {
+                    self.show_hotkeys_tab(ui);
                 }
             });
 
@@ -342,6 +347,45 @@ impl SettingsUi {
                 .custom_formatter(|n, _| format!("{:.0}", n * 100.0)),
         );
         ui.label("   Minimum trigger press to register");
+    }
+
+    fn show_hotkeys_tab(&self, ui: &mut egui::Ui) {
+        ui.heading("System Hotkeys");
+        ui.add_space(5.0);
+        ui.label("These keyboard shortcuts work anywhere in the application:");
+        ui.add_space(10.0);
+
+        // Helper to show a hotkey row
+        let show_hotkey = |ui: &mut egui::Ui, key: &str, description: &str| {
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new(key).monospace().strong());
+                ui.label("—");
+                ui.label(description);
+            });
+        };
+
+        ui.group(|ui| {
+            ui.heading("Display");
+            ui.add_space(5.0);
+            show_hotkey(ui, "F11", "Toggle borderless fullscreen");
+            show_hotkey(ui, "F3", "Toggle debug overlay (FPS, timing, etc.)");
+        });
+
+        ui.add_space(10.0);
+
+        ui.group(|ui| {
+            ui.heading("Navigation");
+            ui.add_space(5.0);
+            show_hotkey(ui, "ESC", "Return to library (when in game or settings)");
+        });
+
+        ui.add_space(15.0);
+
+        ui.heading("Tips");
+        ui.add_space(5.0);
+        ui.label("💡 Use Settings → Video to configure scaling mode");
+        ui.label("💡 Borderless fullscreen (F11) gives the best pixel-perfect scaling");
+        ui.label("💡 Game controls are configured in the Controls tab");
     }
 
     fn show_key_binding(
