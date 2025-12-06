@@ -59,8 +59,12 @@ const GRAPH_MAX_FRAME_TIME_MS: f32 = 33.33;
 /// Debug statistics for overlay
 #[derive(Debug, Default)]
 pub struct DebugStats {
-    /// Frame times ring buffer (milliseconds)
+    /// Frame times ring buffer (milliseconds) - application render times
     pub frame_times: VecDeque<f32>,
+    /// Game tick times ring buffer (milliseconds) - game update() times
+    pub game_tick_times: VecDeque<f32>,
+    /// Game render times ring buffer (milliseconds) - game render() times
+    pub game_render_times: VecDeque<f32>,
     /// VRAM usage in bytes
     pub vram_used: usize,
     /// VRAM limit in bytes
@@ -113,10 +117,14 @@ pub struct App {
     local_games: Vec<LocalGame>,
     /// Debug overlay enabled (F3)
     debug_overlay: bool,
-    /// Frame times for FPS calculation
+    /// Frame times for FPS calculation (render rate)
     frame_times: Vec<Instant>,
     /// Last frame time
     last_frame: Instant,
+    /// Game tick times for game FPS calculation (update rate)
+    game_tick_times: Vec<Instant>,
+    /// Last game tick time
+    last_game_tick: Instant,
     /// Debug statistics
     debug_stats: DebugStats,
     /// Last runtime error (for displaying error in library)
@@ -176,6 +184,8 @@ impl App {
             debug_overlay: false,
             frame_times: Vec::with_capacity(120),
             last_frame: now,
+            game_tick_times: Vec::with_capacity(120),
+            last_game_tick: now,
             debug_stats: DebugStats {
                 frame_times: VecDeque::with_capacity(FRAME_TIME_HISTORY_SIZE),
                 vram_limit: VRAM_LIMIT,
@@ -443,20 +453,56 @@ impl App {
             .as_mut()
             .ok_or_else(|| RuntimeError("No game session".to_string()))?;
 
+        let tick_start = Instant::now();
         let (ticks, _alpha) = session
             .runtime
             .frame()
             .map_err(|e| RuntimeError(format!("Game frame error: {}", e)))?;
+        let tick_elapsed = tick_start.elapsed();
 
+        // Only render when game logic actually ran (fantasy console: fixed tick rate = fixed render rate)
         if ticks > 0 {
-            tracing::trace!("Ran {} game ticks", ticks);
-        }
+            // Track game tick time for performance graph (average per tick if multiple ran)
+            let tick_time_ms = tick_elapsed.as_secs_f32() * 1000.0 / ticks as f32;
+            self.debug_stats.game_tick_times.push_back(tick_time_ms);
+            while self.debug_stats.game_tick_times.len() > FRAME_TIME_HISTORY_SIZE {
+                self.debug_stats.game_tick_times.pop_front();
+            }
 
-        // Render the game (calls game's render() function)
-        session
-            .runtime
-            .render()
-            .map_err(|e| RuntimeError(format!("Game render error: {}", e)))?;
+            // Render the game ONCE per frame (even if multiple ticks ran due to slowdown)
+            let render_start = Instant::now();
+            session
+                .runtime
+                .render()
+                .map_err(|e| RuntimeError(format!("Game render error: {}", e)))?;
+            let render_elapsed = render_start.elapsed();
+            let render_time_ms = render_elapsed.as_secs_f32() * 1000.0;
+
+            // Track game render time
+            self.debug_stats.game_render_times.push_back(render_time_ms);
+            while self.debug_stats.game_render_times.len() > FRAME_TIME_HISTORY_SIZE {
+                self.debug_stats.game_render_times.pop_front();
+            }
+
+            tracing::debug!(
+                "Game tick: {} ticks, update={:.2}ms, render={:.2}ms, total={:.2}ms, buffer size: {}",
+                ticks,
+                tick_time_ms,
+                render_time_ms,
+                tick_time_ms + render_time_ms,
+                self.debug_stats.game_tick_times.len()
+            );
+
+            // Track game tick times for FPS calculation
+            let now = Instant::now();
+            for _ in 0..ticks {
+                self.game_tick_times.push(now);
+                if self.game_tick_times.len() > FRAME_TIME_HISTORY_SIZE {
+                    self.game_tick_times.remove(0);
+                }
+            }
+            self.last_game_tick = now;
+        }
 
         // Process audio commands after rendering
         // Clone the audio commands and sounds to avoid double mutable borrow
@@ -761,7 +807,7 @@ impl App {
         }
     }
 
-    /// Calculate FPS from frame times
+    /// Calculate render FPS from frame times
     fn calculate_fps(&self) -> f32 {
         if self.frame_times.len() < 2 {
             return 0.0;
@@ -774,6 +820,24 @@ impl App {
             .as_secs_f32();
         if elapsed > 0.0 {
             self.frame_times.len() as f32 / elapsed
+        } else {
+            0.0
+        }
+    }
+
+    /// Calculate game tick FPS (actual update rate)
+    fn calculate_game_tick_fps(&self) -> f32 {
+        if self.game_tick_times.len() < 2 {
+            return 0.0;
+        }
+        let elapsed = self
+            .game_tick_times
+            .last()
+            .unwrap()
+            .duration_since(*self.game_tick_times.first().unwrap())
+            .as_secs_f32();
+        if elapsed > 0.0 {
+            self.game_tick_times.len() as f32 / elapsed
         } else {
             0.0
         }
@@ -835,7 +899,8 @@ impl App {
         // Pre-collect values to avoid borrow conflicts
         let mode = self.mode.clone();
         let debug_overlay = self.debug_overlay;
-        let fps = self.calculate_fps();
+        let render_fps = self.calculate_fps();
+        let game_tick_fps = self.calculate_game_tick_fps();
         let last_error = self.last_error.clone();
 
         let window = match self.window.clone() {
@@ -924,6 +989,8 @@ impl App {
         // Collect debug stats for overlay
         let debug_stats = DebugStats {
             frame_times: self.debug_stats.frame_times.clone(),
+            game_tick_times: self.debug_stats.game_tick_times.clone(),
+            game_render_times: self.debug_stats.game_render_times.clone(),
             vram_used: self.debug_stats.vram_used,
             vram_limit: self.debug_stats.vram_limit,
             ping_ms: self.debug_stats.ping_ms,
@@ -972,7 +1039,12 @@ impl App {
                     .show(ctx, |ui| {
                         // Performance section
                         ui.heading("Performance");
-                        ui.label(format!("FPS: {:.1}", fps));
+                        if matches!(mode, AppMode::Playing { .. }) {
+                            ui.label(format!("Game FPS: {:.1}", game_tick_fps));
+                            ui.label(format!("Render FPS: {:.1}", render_fps));
+                        } else {
+                            ui.label(format!("FPS: {:.1}", render_fps));
+                        }
                         ui.label(format!("Frame time: {:.2}ms", frame_time_ms));
                         ui.label(format!("Mode: {:?}", mode));
 
@@ -990,38 +1062,101 @@ impl App {
                             // Background
                             painter.rect_filled(rect, 2.0, egui::Color32::from_gray(30));
 
+                            // Choose which times to display based on mode
+                            let (times_to_display, graph_label, graph_max) = if matches!(mode, AppMode::Playing { .. }) {
+                                // Game tick budget visualization - full height = 16.67ms budget
+                                let label = format!("Game tick budget ({:.1}ms target)", TARGET_FRAME_TIME_MS);
+                                (&debug_stats.game_tick_times, label, TARGET_FRAME_TIME_MS)
+                            } else {
+                                (&debug_stats.frame_times, "Frame time (0-33ms)".to_string(), GRAPH_MAX_FRAME_TIME_MS)
+                            };
+
                             // Target line (16.67ms for 60 FPS)
                             let target_y = rect.bottom()
-                                - (TARGET_FRAME_TIME_MS / GRAPH_MAX_FRAME_TIME_MS * graph_height);
+                                - (TARGET_FRAME_TIME_MS / graph_max * graph_height);
                             painter.hline(
                                 rect.left()..=rect.right(),
                                 target_y,
                                 egui::Stroke::new(1.0, egui::Color32::from_rgb(100, 100, 100)),
                             );
 
-                            // Frame time bars
-                            if !debug_stats.frame_times.is_empty() {
+                            // Budget bars (for game tick times in Playing mode)
+                            let is_playing = matches!(mode, AppMode::Playing { .. });
+                            if !times_to_display.is_empty() {
                                 let bar_width = rect.width() / FRAME_TIME_HISTORY_SIZE as f32;
-                                for (i, &time_ms) in debug_stats.frame_times.iter().enumerate() {
+                                for (i, &time_ms) in times_to_display.iter().enumerate() {
                                     let x = rect.left() + i as f32 * bar_width;
-                                    // Scale: 0-GRAPH_MAX_FRAME_TIME_MS maps to full height
-                                    let height = (time_ms / GRAPH_MAX_FRAME_TIME_MS * graph_height)
-                                        .min(graph_height);
-                                    let bar_rect = egui::Rect::from_min_max(
-                                        egui::pos2(x, rect.bottom() - height),
-                                        egui::pos2(x + bar_width - 1.0, rect.bottom()),
-                                    );
 
-                                    // Color based on frame time
-                                    let color = if time_ms <= TARGET_FRAME_TIME_MS {
-                                        egui::Color32::from_rgb(100, 200, 100) // Green
-                                    } else if time_ms <= GRAPH_MAX_FRAME_TIME_MS {
-                                        egui::Color32::from_rgb(200, 200, 100) // Yellow
+                                    if is_playing {
+                                        // Stacked budget bar: update (blue) + render (orange) + available (green)
+
+                                        // Get update and render times for this tick
+                                        let update_time = time_ms; // game_tick_times[i]
+                                        let render_time = debug_stats.game_render_times.get(i).copied().unwrap_or(0.0);
+                                        let total_time = update_time + render_time;
+                                        let available_time = TARGET_FRAME_TIME_MS - total_time;
+
+                                        // Calculate heights (scaled to budget, capped at 150%)
+                                        let update_height = ((update_time / TARGET_FRAME_TIME_MS).min(1.5) * graph_height);
+                                        let render_height = ((render_time / TARGET_FRAME_TIME_MS).min(1.5) * graph_height);
+                                        let total_height = (update_height + render_height).min(graph_height);
+
+                                        let bottom_y = rect.bottom();
+
+                                        // Draw background (unused budget) - green if under budget, red if over
+                                        let bg_color = if total_time <= TARGET_FRAME_TIME_MS {
+                                            egui::Color32::from_rgb(40, 80, 40) // Dark green - headroom available
+                                        } else {
+                                            egui::Color32::from_rgb(80, 40, 40) // Dark red - over budget
+                                        };
+                                        painter.rect_filled(
+                                            egui::Rect::from_min_max(
+                                                egui::pos2(x, rect.top()),
+                                                egui::pos2(x + bar_width - 1.0, bottom_y),
+                                            ),
+                                            0.0,
+                                            bg_color,
+                                        );
+
+                                        // Draw update time (bottom, blue)
+                                        if update_height > 0.0 {
+                                            painter.rect_filled(
+                                                egui::Rect::from_min_max(
+                                                    egui::pos2(x, bottom_y - update_height),
+                                                    egui::pos2(x + bar_width - 1.0, bottom_y),
+                                                ),
+                                                0.0,
+                                                egui::Color32::from_rgb(80, 120, 200), // Blue - update time
+                                            );
+                                        }
+
+                                        // Draw render time (stacked on top of update, orange)
+                                        if render_height > 0.0 {
+                                            painter.rect_filled(
+                                                egui::Rect::from_min_max(
+                                                    egui::pos2(x, bottom_y - total_height),
+                                                    egui::pos2(x + bar_width - 1.0, bottom_y - update_height),
+                                                ),
+                                                0.0,
+                                                egui::Color32::from_rgb(220, 140, 60), // Orange - render time
+                                            );
+                                        }
                                     } else {
-                                        egui::Color32::from_rgb(200, 100, 100) // Red
-                                    };
+                                        // Standard bars for render times in Library mode
+                                        let height = (time_ms / graph_max * graph_height).min(graph_height);
+                                        let bar_rect = egui::Rect::from_min_max(
+                                            egui::pos2(x, rect.bottom() - height),
+                                            egui::pos2(x + bar_width - 1.0, rect.bottom()),
+                                        );
 
-                                    painter.rect_filled(bar_rect, 0.0, color);
+                                        let color = if time_ms <= TARGET_FRAME_TIME_MS {
+                                            egui::Color32::from_rgb(100, 200, 100)
+                                        } else {
+                                            egui::Color32::from_rgb(200, 200, 100)
+                                        };
+
+                                        painter.rect_filled(bar_rect, 0.0, color);
+                                    }
                                 }
                             }
 
@@ -1029,7 +1164,7 @@ impl App {
                             painter.text(
                                 egui::pos2(rect.left() + 4.0, rect.top() + 2.0),
                                 egui::Align2::LEFT_TOP,
-                                "Frame time (0-33ms)",
+                                graph_label,
                                 egui::FontId::proportional(10.0),
                                 egui::Color32::from_gray(150),
                             );
@@ -1257,10 +1392,10 @@ impl App {
     }
 
     fn request_redraw_if_needed(&mut self) {
-        let needs_redraw =
-            matches!(self.mode, AppMode::Playing { .. }) ||
-            self.egui_ctx.has_requested_repaint() ||
-            self.needs_redraw;
+        // In Playing mode or Library/Settings with Poll control flow,
+        // we request redraws continuously to ensure UI responsiveness.
+        // The egui dirty-checking and mesh caching prevents unnecessary GPU work.
+        let needs_redraw = true;
 
         if needs_redraw {
             if let Some(window) = &self.window {
@@ -1371,6 +1506,7 @@ impl ApplicationHandler for App {
         if let (Some(egui_state), Some(window)) = (&mut self.egui_state, &self.window) {
             let response = egui_state.on_window_event(window, &event);
             if response.consumed {
+                self.mark_needs_redraw();
                 return;
             }
         }
