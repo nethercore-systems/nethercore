@@ -82,12 +82,6 @@ const VS_VIEW_NORMAL: &str =
     "let view_normal = (view_matrix * vec4<f32>(out.world_normal, 0.0)).xyz;\n    out.view_normal = normalize(view_normal);";
 const VS_CAMERA_POS: &str = "out.camera_position = extract_camera_position(view_matrix);";
 
-// Legacy constant (for backward compatibility if needed)
-const VS_NORMAL: &str = r#"let world_normal_raw = (model_matrix * vec4<f32>(in.normal, 0.0)).xyz;
-    out.world_normal = normalize(world_normal_raw);
-    let view_normal = (view_matrix * vec4<f32>(world_normal_raw, 0.0)).xyz;
-    out.view_normal = normalize(view_normal);"#;
-
 const VS_SKINNED: &str = r#"// GPU skinning: compute skinned position and normal
     var skinned_pos = vec3<f32>(0.0, 0.0, 0.0);
     var skinned_normal = vec3<f32>(0.0, 0.0, 0.0);
@@ -117,14 +111,12 @@ const VS_POSITION_UNSKINNED: &str = "let world_pos = vec4<f32>(in.position, 1.0)
 const FS_COLOR: &str = "color *= in.color;";
 const FS_UV: &str = "let tex_sample = textureSample(slot0, tex_sampler, in.uv); color *= tex_sample.rgb; color *= tex_sample.a;";
 const FS_AMBIENT: &str = "let ambient = color * sample_sky(in.world_normal, sky); let sun_color = sample_sky(-sky.sun_direction, sky);";
-const FS_NORMAL: &str = "color = ambient + lambert_diffuse(in.world_normal, sky.sun_direction, color, sun_color);";
+const FS_NORMAL: &str =
+    "color = ambient + lambert_diffuse(in.world_normal, sky.sun_direction, color, sun_color);";
 
 // Fragment shader code (Modes 2-3 - use "albedo" variable)
 const FS_ALBEDO_COLOR: &str = "albedo *= in.color;";
 const FS_ALBEDO_UV: &str = "let albedo_sample = textureSample(slot0, tex_sampler, in.uv); albedo *= albedo_sample.rgb; albedo *= albedo_sample.a;";
-
-// Fragment shader code (Mode 3 - Blinn-Phong texture sampling)
-const FS_MODE3_SLOT1: &str = "let slot1_sample = textureSample(slot1, tex_sampler, in.uv);\n    value0 = slot1_sample.r;\n    value1 = slot1_sample.g;\n    emissive = slot1_sample.b;";
 
 // ============================================================================
 // Shader Generation
@@ -185,9 +177,18 @@ pub fn generate_shader(mode: u8, format: u8) -> Result<String, ShaderGenError> {
     // Replace vertex output placeholders
     shader = shader.replace("//VOUT_UV", if has_uv { VOUT_UV } else { "" });
     shader = shader.replace("//VOUT_COLOR", if has_color { VOUT_COLOR } else { "" });
-    shader = shader.replace("//VOUT_WORLD_NORMAL", if has_normal { VOUT_WORLD_NORMAL } else { "" });
-    shader = shader.replace("//VOUT_VIEW_NORMAL", if has_normal { VOUT_VIEW_NORMAL } else { "" });
-    shader = shader.replace("//VOUT_CAMERA_POS", if mode >= 2 { VOUT_CAMERA_POS } else { "" });
+    shader = shader.replace(
+        "//VOUT_WORLD_NORMAL",
+        if has_normal { VOUT_WORLD_NORMAL } else { "" },
+    );
+    shader = shader.replace(
+        "//VOUT_VIEW_NORMAL",
+        if has_normal { VOUT_VIEW_NORMAL } else { "" },
+    );
+    shader = shader.replace(
+        "//VOUT_CAMERA_POS",
+        if mode >= 2 { VOUT_CAMERA_POS } else { "" },
+    );
 
     // Replace vertex shader code placeholders
     shader = shader.replace("//VS_UV", if has_uv { VS_UV } else { "" });
@@ -199,8 +200,7 @@ pub fn generate_shader(mode: u8, format: u8) -> Result<String, ShaderGenError> {
         shader = shader.replace("//VS_VIEW_NORMAL", VS_VIEW_NORMAL);
     } else if has_normal && has_skinned {
         // Skinned normals: use final_normal from skinning code
-        let skinned_world_normal =
-            "out.world_normal = normalize(final_normal);";
+        let skinned_world_normal = "out.world_normal = normalize(final_normal);";
         let skinned_view_normal =
             "let view_normal = (view_matrix * vec4<f32>(final_normal, 0.0)).xyz;\n    out.view_normal = normalize(view_normal);";
         shader = shader.replace("//VS_WORLD_NORMAL", skinned_world_normal);
@@ -252,16 +252,19 @@ pub fn generate_shader(mode: u8, format: u8) -> Result<String, ShaderGenError> {
             // Mode 1 (Matcap)
             shader = shader.replace("//FS_COLOR", if has_color { FS_COLOR } else { "" });
             shader = shader.replace("//FS_UV", if has_uv { FS_UV } else { "" });
-            shader = shader.replace("//FS_AMBIENT", "");  // Matcap doesn't use ambient
+            shader = shader.replace("//FS_AMBIENT", ""); // Matcap doesn't use ambient
         }
         2 => {
             // Mode 2: Metallic-Roughness Blinn-Phong
             shader = shader.replace("//FS_COLOR", if has_color { FS_ALBEDO_COLOR } else { "" });
             shader = shader.replace("//FS_UV", if has_uv { FS_ALBEDO_UV } else { "" });
-            shader = shader.replace("//FS_AMBIENT", "");  // Modes 2-3 handle lighting internally
+            shader = shader.replace("//FS_AMBIENT", ""); // Modes 2-3 handle lighting internally
 
             // Diffuse factor: reduce for metallic surfaces (metals don't have diffuse)
-            shader = shader.replace("//FS_MODE2_3_DIFFUSE_FACTOR", "let diffuse_factor = 1.0 - value0;");
+            shader = shader.replace(
+                "//FS_MODE2_3_DIFFUSE_FACTOR",
+                "let diffuse_factor = 1.0 - value0;",
+            );
 
             // Shininess: Linear mapping from roughness to 1-256 range (consistent with Mode 3)
             let mode2_shininess = "let shininess = mix(1.0, 256.0, 1.0 - value1);";
@@ -285,7 +288,7 @@ pub fn generate_shader(mode: u8, format: u8) -> Result<String, ShaderGenError> {
             // Mode 3: Specular Blinn-Phong
             shader = shader.replace("//FS_COLOR", if has_color { FS_ALBEDO_COLOR } else { "" });
             shader = shader.replace("//FS_UV", if has_uv { FS_ALBEDO_UV } else { "" });
-            shader = shader.replace("//FS_AMBIENT", "");  // Modes 2-3 handle lighting internally
+            shader = shader.replace("//FS_AMBIENT", ""); // Modes 2-3 handle lighting internally
 
             // Diffuse factor: no reduction (Mode 3 has no metallic parameter)
             shader = shader.replace("//FS_MODE2_3_DIFFUSE_FACTOR", "let diffuse_factor = 1.0;");
@@ -295,7 +298,10 @@ pub fn generate_shader(mode: u8, format: u8) -> Result<String, ShaderGenError> {
             shader = shader.replace("//FS_MODE2_3_SHININESS", mode3_shininess);
 
             // Roughness: Derived from shininess (inverse of the mapping)
-            shader = shader.replace("//FS_MODE2_3_ROUGHNESS", "let roughness = 1.0 - (shininess - 1.0) / 255.0;");
+            shader = shader.replace(
+                "//FS_MODE2_3_ROUGHNESS",
+                "let roughness = 1.0 - (shininess - 1.0) / 255.0;",
+            );
 
             // Specular color: From texture (if UV) or uniform with intensity modulation
             let mode3_specular = if has_uv {
