@@ -267,6 +267,9 @@ pub fn generate_shader(mode: u8, format: u8) -> Result<String, ShaderGenError> {
             let mode2_shininess = "let shininess = mix(1.0, 256.0, 1.0 - value1);";
             shader = shader.replace("//FS_MODE2_3_SHININESS", mode2_shininess);
 
+            // Roughness: Direct from value1 (no round-trip conversion)
+            shader = shader.replace("//FS_MODE2_3_ROUGHNESS", "let roughness = value1;");
+
             // Specular color: Derive from metallic (F0=0.04 dielectric)
             let mode2_specular = "let specular_color = mix(vec3<f32>(0.04), albedo, value0);";
             shader = shader.replace("//FS_MODE2_3_SPECULAR_COLOR", mode2_specular);
@@ -290,6 +293,9 @@ pub fn generate_shader(mode: u8, format: u8) -> Result<String, ShaderGenError> {
             // Shininess: Direct linear mapping (0-1 → 1-256)
             let mode3_shininess = "let shininess = mix(1.0, 256.0, value1);";
             shader = shader.replace("//FS_MODE2_3_SHININESS", mode3_shininess);
+
+            // Roughness: Derived from shininess (inverse of the mapping)
+            shader = shader.replace("//FS_MODE2_3_ROUGHNESS", "let roughness = 1.0 - (shininess - 1.0) / 255.0;");
 
             // Specular color: From texture (if UV) or uniform with intensity modulation
             let mode3_specular = if has_uv {
@@ -627,6 +633,7 @@ mod tests {
                     "//FS_MODE2_3_SHININESS",
                     "//FS_MODE2_3_SPECULAR_COLOR",
                     "//FS_MODE2_3_TEXTURES",
+                    "//FS_MODE2_3_ROUGHNESS",
                 ];
 
                 for placeholder in placeholders {

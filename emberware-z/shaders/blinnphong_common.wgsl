@@ -18,6 +18,11 @@ fn gotanda_normalization(shininess: f32) -> f32 {
     return shininess * 0.0397436 + 0.0856832;
 }
 
+// Spherical Gaussian approximation for Fresnel (faster than pow)
+fn fresnel_schlick_sg(cos_theta: f32, F0: vec3<f32>) -> vec3<f32> {
+    return F0 + (1.0 - F0) * exp2((-5.55473 * cos_theta - 6.98316) * cos_theta);
+}
+
 // Normalized Blinn-Phong specular lighting
 // Convention: light_dir = direction rays travel (negate for lighting calculations)
 // No geometry term - era-authentic, classical Blinn-Phong didn't have it
@@ -104,18 +109,43 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     // Mode 3 has no metallic, so diffuse_factor = 1.0
     //FS_MODE2_3_DIFFUSE_FACTOR
 
-    // Indirect ambient: sample sky in direction of surface normal (IBL-lite, no cosine term)
-    // Gotanda normalization reduces ambient as shininess increases (energy conservation)
+    // === Environment Lighting (IBL-lite) ===
+    let N = in.world_normal;
+    let NdotV = max(dot(N, view_dir), 0.0);
+
+    // Fresnel: F0 = specular_color (works for both MR and SS workflows)
+    let fresnel = fresnel_schlick_sg(NdotV, specular_color);
+    let one_minus_F = vec3<f32>(1.0) - fresnel;  // Energy conservation for diffuse
+
+    // MODE-SPECIFIC: Roughness (injected by shader_gen.rs)
+    // Mode 2: direct from value1, Mode 3: derived from shininess
+    //FS_MODE2_3_ROUGHNESS
+
+    // Diffuse ambient (normal direction)
+    let diffuse_env = sample_sky(N, sky);
+
+    // Specular reflection (reflection direction - sharp, era-authentic)
+    let R = reflect(-view_dir, N);
+    let specular_env = sample_sky(R, sky);
+
+    // Rough surfaces have dimmer reflections (energy scatters)
+    let reflection_strength = (1.0 - roughness) * (1.0 - roughness);  // squared falloff
+
+    // Energy conservation factor
     let spec_norm = gotanda_normalization(shininess);
     let ambient_factor = 1.0 / sqrt(1.0 + spec_norm);
-    let ambient_color = sample_sky(in.world_normal, sky);
-    final_color += ambient_color * albedo * ambient_factor * diffuse_factor;
 
-    // Direct sun: sample sky in the direction of the sun (all colors from sky)
+    // Diffuse ambient (reduced by fresnel - energy conservation)
+    final_color += diffuse_env * albedo * ambient_factor * diffuse_factor * one_minus_F;
+
+    // Specular environment reflection (attenuated by roughness)
+    final_color += specular_env * fresnel * reflection_strength;
+
+    // Direct sun
     let sun_color = sample_sky(-sky.sun_direction, sky);
 
-    // Sun diffuse (direct, with metallic reduction)
-    final_color += lambert_diffuse(in.world_normal, sky.sun_direction, albedo, sun_color) * diffuse_factor;
+    // Sun diffuse (direct, energy conserved)
+    final_color += lambert_diffuse(in.world_normal, sky.sun_direction, albedo, sun_color) * diffuse_factor * one_minus_F;
 
     // Sun specular
     final_color += normalized_blinn_phong_specular(
@@ -127,7 +157,7 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
         let light = unpack_light(shading.lights[i]);
         if (light.enabled) {
             let light_color = light.color * light.intensity;
-            final_color += lambert_diffuse(in.world_normal, light.direction, albedo, light_color) * diffuse_factor;
+            final_color += lambert_diffuse(in.world_normal, light.direction, albedo, light_color) * diffuse_factor * one_minus_F;
             final_color += normalized_blinn_phong_specular(
                 in.world_normal, view_dir, light.direction, shininess, specular_color, light_color
             );
@@ -135,7 +165,9 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     }
 
     // Rim lighting (always uses rim_intensity from uniform, never from texture)
-    let rim = rim_lighting(in.world_normal, view_dir, sun_color, rim_intensity, rim_power);
+    // Rim color from environment behind the object
+    let rim_env_color = sample_sky(-view_dir, sky);
+    let rim = rim_lighting(in.world_normal, view_dir, rim_env_color, rim_intensity, rim_power);
     final_color += rim;
 
     return vec4<f32>(final_color, material_color.a);
