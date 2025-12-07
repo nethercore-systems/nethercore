@@ -11,6 +11,7 @@ mod font;
 mod graphics;
 mod input;
 mod library;
+mod procedural;
 mod resource_manager;
 mod settings_ui;
 mod shader_gen;

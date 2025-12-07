@@ -48,6 +48,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }
 directories = { workspace = true }
+rfd = "0.15"
 chrono = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }

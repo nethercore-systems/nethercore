@@ -768,6 +768,78 @@ fn render() {
 }
 ```
 
+### Procedural Mesh Generation
+
+Emberware Z provides helper functions to generate common 3D primitives procedurally. These functions generate meshes with proper normals and UV mapping, returning mesh handles that can be drawn with `draw_mesh()`.
+
+All procedural meshes use **vertex format 5** (POS_UV_NORMAL): `[x, y, z, u, v, nx, ny, nz]` — 8 floats per vertex. This format works with all render modes (0-3).
+
+```rust
+fn cube(size_x: f32, size_y: f32, size_z: f32) -> u32
+fn sphere(radius: f32, segments: u32, rings: u32) -> u32
+fn cylinder(radius_bottom: f32, radius_top: f32, height: f32, segments: u32) -> u32
+fn plane(size_x: f32, size_z: f32, subdivisions_x: u32, subdivisions_z: u32) -> u32
+fn torus(major_radius: f32, minor_radius: f32, major_segments: u32, minor_segments: u32) -> u32
+fn capsule(radius: f32, height: f32, segments: u32, rings: u32) -> u32
+```
+
+All functions must be called in `init()` (meshes are immutable after initialization). Returns mesh handle (>0) on success, 0 on error.
+
+**Examples:**
+
+**Cube:**
+```rust
+let cube_mesh = cube(1.0, 1.5, 0.5);  // Width=2, Height=3, Depth=1
+```
+Creates a box with 24 vertices (4 per face) and flat normals. UV coordinates map 0-1 on each face for texture tiling. Parameters are half-extents (not full sizes).
+
+**Sphere:**
+```rust
+let sphere_mesh = sphere(2.0, 32, 16);  // Radius=2, 32 segments, 16 rings
+```
+Creates a UV sphere with smooth normals using latitude/longitude grid. Higher segment/ring counts create smoother spheres. Minimum: 3 segments, 2 rings. Maximum: 256 segments/rings.
+
+**Cylinder:**
+```rust
+let cylinder_mesh = cylinder(1.0, 1.0, 3.0, 24);  // Uniform cylinder
+let cone_mesh = cylinder(2.0, 0.0, 3.0, 24);     // Cone (top radius = 0)
+```
+Creates a cylinder or cone with top/bottom caps. If `radius_top != radius_bottom`, creates a tapered cylinder. Caps are omitted if radius is 0. Minimum: 3 segments. Maximum: 256 segments.
+
+**Plane:**
+```rust
+let ground = plane(10.0, 10.0, 4, 4);  // 10×10 plane with 4×4 subdivisions
+```
+Creates a subdivided plane on the XZ plane (Y=0), facing up. Useful for terrain, floors, or quad-based effects. Minimum: 1 subdivision. Maximum: 256 subdivisions per axis.
+
+**Torus:**
+```rust
+let donut = torus(2.0, 0.5, 48, 24);  // Major radius=2, minor=0.5
+```
+Creates a torus (donut shape). `major_radius` is the distance from center to tube center, `minor_radius` is the tube thickness. Minimum: 3 segments. Maximum: 256 segments.
+
+**Capsule:**
+```rust
+let pill = capsule(0.5, 2.0, 16, 8);  // Radius=0.5, cylinder height=2
+```
+Creates a capsule (cylinder with hemispherical ends). Total height = `height + 2 * radius`. Useful for character colliders or pill-shaped objects. If `height` is 0, generates a sphere. Minimum: 3 segments, 1 ring. Maximum: 256 segments, 128 rings.
+
+**UV Mapping:**
+- **Cube:** Box unwrap (0-1 per face)
+- **Sphere:** Equirectangular (latitude/longitude)
+- **Cylinder:** Radial unwrap for body, polar projection for caps
+- **Plane:** Simple 0-1 grid
+- **Torus:** Wrapped both axes
+- **Capsule:** Radial for body, polar for hemispheres
+
+**Normal Generation:**
+- **Cube:** Flat normals (one per face)
+- **Sphere, Torus, Capsule:** Smooth normals
+- **Cylinder:** Smooth for body, flat for caps
+- **Plane:** Flat (pointing up)
+
+**Performance Note:** All geometry generation happens on the CPU during `init()`. The generated vertices are uploaded to GPU buffers and stored as retained meshes. Generation is deterministic and safe for rollback netcode.
+
 ### Immediate Mode 3D
 
 For dynamic geometry, skinned meshes, or prototyping. Push vertices each frame (buffered internally, flushed once per frame).

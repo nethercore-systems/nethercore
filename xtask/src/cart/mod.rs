@@ -5,6 +5,7 @@
 
 pub mod create_z;
 pub mod info;
+pub mod install;
 
 use anyhow::Result;
 use clap::Subcommand;
@@ -18,6 +19,9 @@ pub enum CartCommand {
 
     /// Display ROM metadata and information
     Info(info::InfoArgs),
+
+    /// Install a ROM file to the local game library
+    Install(install::InstallArgs),
 }
 
 /// Execute a cart command
@@ -25,5 +29,6 @@ pub fn execute(cmd: CartCommand) -> Result<()> {
     match cmd {
         CartCommand::CreateZ(args) => create_z::execute(args),
         CartCommand::Info(args) => info::execute(args),
+        CartCommand::Install(args) => install::execute(args),
     }
 }

@@ -15,6 +15,7 @@ pub mod input;
 mod lighting;
 mod material;
 mod mesh;
+mod mesh_generators;
 mod render_state;
 mod skinning;
 mod sky;
@@ -51,6 +52,9 @@ pub fn register_z_ffi(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState
 
     // Mesh functions (retained mode)
     mesh::register(linker)?;
+
+    // Procedural mesh generation
+    mesh_generators::register(linker)?;
 
     // Immediate mode 3D drawing
     draw_3d::register(linker)?;

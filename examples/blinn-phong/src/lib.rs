@@ -2,6 +2,7 @@
 //!
 //! Demonstrates:
 //! - Normalized Blinn-Phong lighting (Gotanda 2010)
+//! - Procedural sphere() for smooth geometry
 //! - Multiple material presets (gold, silver, leather, wet skin, plastic)
 //! - Shininess variation (1-256 range)
 //! - Rim lighting controls
@@ -13,9 +14,6 @@
 
 use core::f32::consts::PI;
 use core::panic::PanicInfo;
-use emberware_examples_common::{
-    generate_icosphere, MAX_ICOSPHERE_INDICES_L3, MAX_ICOSPHERE_VERTS_L3,
-};
 use libm::{cosf, sinf};
 
 #[panic_handler]
@@ -59,14 +57,10 @@ extern "C" {
     fn light_enable(index: u32);
     fn light_disable(index: u32);
 
-    // Drawing
-    fn load_mesh_indexed(
-        data: *const f32,
-        vertex_count: u32,
-        indices: *const u16,
-        index_count: u32,
-        format: u32,
-    ) -> u32;
+    // Procedural mesh generation
+    fn sphere(radius: f32, segments: u32, rings: u32) -> u32;
+
+    // Mesh drawing
     fn draw_mesh(handle: u32);
 
     // Input
@@ -199,13 +193,6 @@ static mut SHOW_ALL_MATERIALS: bool = true;
 /// Sphere mesh handle
 static mut SPHERE_MESH: u32 = 0;
 
-// Icosphere generation buffers (used only during init)
-static mut ICOSPHERE_VERTS: [f32; MAX_ICOSPHERE_VERTS_L3] = [0.0; MAX_ICOSPHERE_VERTS_L3];
-static mut ICOSPHERE_INDICES: [u16; MAX_ICOSPHERE_INDICES_L3] = [0; MAX_ICOSPHERE_INDICES_L3];
-
-// Vertex format constant
-const FORMAT_POS_NORMAL: u32 = 0b100; // Position + Normal
-
 // ============================================================================
 // Public API
 // ============================================================================
@@ -245,27 +232,8 @@ pub extern "C" fn init() {
         light_intensity(3, 0.6);
         // light_enable(3);
 
-        // Generate icosphere mesh (subdivision level 3)
-        let mut vert_count: usize = 0;
-        let mut index_count: usize = 0;
-        generate_icosphere(
-            3,
-            core::ptr::addr_of_mut!(ICOSPHERE_VERTS).cast(),
-            MAX_ICOSPHERE_VERTS_L3,
-            core::ptr::addr_of_mut!(ICOSPHERE_INDICES).cast(),
-            MAX_ICOSPHERE_INDICES_L3,
-            &mut vert_count as *mut usize,
-            &mut index_count as *mut usize,
-        );
-
-        // Upload sphere mesh
-        SPHERE_MESH = load_mesh_indexed(
-            core::ptr::addr_of!(ICOSPHERE_VERTS).cast(),
-            vert_count as u32,
-            core::ptr::addr_of!(ICOSPHERE_INDICES).cast(),
-            index_count as u32,
-            FORMAT_POS_NORMAL,
-        );
+        // Generate smooth sphere procedurally (64x32 segments for high quality)
+        SPHERE_MESH = sphere(1.0, 64, 32);
     }
 }
 

@@ -1,9 +1,13 @@
 //! Local game library management
 //!
 //! This module provides functions for managing locally downloaded games.
-//! Games are stored in the platform's data directory under a `games` subdirectory,
-//! with each game having its own folder containing a `manifest.json` and `rom.wasm`.
+//! Games are stored in the platform's data directory under a `games` subdirectory.
+//!
+//! Supported formats:
+//! - `.ewz` ROM files in the games directory (production, preferred)
+//! - Subdirectories with `manifest.json` and `rom.wasm` (development, backward compatibility)
 
+use emberware_shared::cart::z::ZRom;
 use emberware_shared::LocalGameManifest;
 use std::path::{Path, PathBuf};
 
@@ -42,6 +46,10 @@ pub fn get_local_games(provider: &dyn DataDirProvider) -> Vec<LocalGame> {
 
 /// Internal: Scan a directory for games.
 /// Extracted for testability.
+///
+/// Scans for both:
+/// 1. `.ewz` ROM files (preferred, production)
+/// 2. Directories with `manifest.json` (backward compatibility, development)
 fn get_games_from_dir(games_dir: &Path) -> Vec<LocalGame> {
     let Ok(entries) = std::fs::read_dir(games_dir) else {
         return vec![];
@@ -51,22 +59,40 @@ fn get_games_from_dir(games_dir: &Path) -> Vec<LocalGame> {
         .filter_map(|entry| {
             let entry = entry.ok()?;
             let path = entry.path();
-            if !path.is_dir() {
-                return None;
+
+            // Check if this is a .ewz ROM file
+            if path.is_file() && path.extension().and_then(|e| e.to_str()) == Some("ewz") {
+                // Load ROM metadata
+                let rom_bytes = std::fs::read(&path).ok()?;
+                let rom = ZRom::from_bytes(&rom_bytes).ok()?;
+
+                return Some(LocalGame {
+                    id: rom.metadata.id.clone(),
+                    title: rom.metadata.title.clone(),
+                    author: rom.metadata.author.clone(),
+                    version: rom.metadata.version.clone(),
+                    rom_path: path, // Points directly to the .ewz file
+                    console_type: "z".to_string(),
+                });
             }
 
-            let manifest_path = path.join("manifest.json");
-            let manifest_content = std::fs::read_to_string(manifest_path).ok()?;
-            let manifest: LocalGameManifest = serde_json::from_str(&manifest_content).ok()?;
+            // Backward compatibility: Check if this is a legacy game directory
+            if path.is_dir() {
+                let manifest_path = path.join("manifest.json");
+                let manifest_content = std::fs::read_to_string(manifest_path).ok()?;
+                let manifest: LocalGameManifest = serde_json::from_str(&manifest_content).ok()?;
 
-            Some(LocalGame {
-                id: manifest.id,
-                title: manifest.title,
-                author: manifest.author,
-                version: manifest.version,
-                rom_path: path.join("rom.wasm"),
-                console_type: manifest.console_type,
-            })
+                return Some(LocalGame {
+                    id: manifest.id,
+                    title: manifest.title,
+                    author: manifest.author,
+                    version: manifest.version,
+                    rom_path: path.join("rom.wasm"), // Points to extracted WASM
+                    console_type: manifest.console_type,
+                });
+            }
+
+            None
         })
         .collect()
 }

@@ -287,8 +287,22 @@ impl App {
             .ok_or_else(|| RuntimeError("WASM engine not initialized".to_string()))?;
 
         // Load the ROM file
-        let rom_bytes = std::fs::read(&game.rom_path)
-            .map_err(|e| RuntimeError(format!("Failed to read ROM file: {}", e)))?;
+        // Supports both .ewz ROM files and raw WASM files (for backward compatibility)
+        let rom_bytes = if game.rom_path.extension().and_then(|e| e.to_str()) == Some("ewz") {
+            // Load from .ewz ROM file
+            let ewz_bytes = std::fs::read(&game.rom_path)
+                .map_err(|e| RuntimeError(format!("Failed to read .ewz ROM file: {}", e)))?;
+
+            let rom = emberware_shared::cart::z::ZRom::from_bytes(&ewz_bytes)
+                .map_err(|e| RuntimeError(format!("Failed to parse .ewz ROM: {}", e)))?;
+
+            // Extract WASM code from ROM
+            rom.code
+        } else {
+            // Load raw WASM file (backward compatibility for development)
+            std::fs::read(&game.rom_path)
+                .map_err(|e| RuntimeError(format!("Failed to read ROM file: {}", e)))?
+        };
 
         // Load the WASM module
         let module = wasm_engine

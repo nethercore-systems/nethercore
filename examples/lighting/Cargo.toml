@@ -3,9 +3,6 @@ name = "lighting"
 version = "0.1.0"
 edition = "2021"
 
-[dependencies]
-emberware-examples-common = { path = "../common" }
-
 [lib]
 crate-type = ["cdylib"]
 

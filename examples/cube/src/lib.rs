@@ -1,16 +1,15 @@
 //! Cube Example
 //!
-//! Demonstrates retained mode 3D drawing with `load_mesh_indexed` and `draw_mesh`.
+//! Demonstrates the procedural cube() function and retained mode 3D drawing.
 //! A textured cube rotates based on analog stick input.
 //!
 //! Features:
-//! - `load_mesh_indexed()` to create a mesh in init()
+//! - `cube()` to procedurally generate a cube mesh
 //! - `draw_mesh()` to render the retained mesh
-//! - Vertex format: POS_UV_NORMAL (format 5)
 //! - Camera setup with `camera_set()` and `camera_fov()`
 //! - Interactive rotation via analog stick
 //! - Mode 0 with normals for simple Lambert shading
-//! - Procedural sky via `set_sky()`
+//! - Procedural sky for lighting
 //!
 //! Note: Rollback state is automatic (entire WASM memory is snapshotted). No save_state/load_state needed.
 
@@ -44,14 +43,10 @@ extern "C" {
     fn texture_bind(handle: u32);
     fn texture_filter(filter: u32);
 
-    // Mesh
-    fn load_mesh_indexed(
-        data: *const f32,
-        vertex_count: u32,
-        indices: *const u16,
-        index_count: u32,
-        format: u32,
-    ) -> u32;
+    // Procedural mesh generation
+    fn cube(size_x: f32, size_y: f32, size_z: f32) -> u32;
+
+    // Mesh drawing
     fn draw_mesh(handle: u32);
 
     // Transform
@@ -64,10 +59,6 @@ extern "C" {
     fn depth_test(enabled: u32);
 }
 
-/// Vertex format: POS_UV_NORMAL = 5
-/// Each vertex: position (3) + uv (2) + normal (3) = 8 floats
-const FORMAT_POS_UV_NORMAL: u32 = 5;
-
 /// Cube mesh handle
 static mut CUBE_MESH: u32 = 0;
 
@@ -77,62 +68,6 @@ static mut TEXTURE: u32 = 0;
 /// Current rotation angles (degrees)
 static mut ROTATION_X: f32 = 0.0;
 static mut ROTATION_Y: f32 = 0.0;
-
-/// Cube vertices: 24 vertices (4 per face, for proper normals)
-/// Format: [x, y, z, u, v, nx, ny, nz] per vertex
-static CUBE_VERTICES: [f32; 24 * 8] = [
-    // Front face (z = 1)
-    -1.0, -1.0,  1.0,  0.0, 1.0,  0.0, 0.0, 1.0,
-     1.0, -1.0,  1.0,  1.0, 1.0,  0.0, 0.0, 1.0,
-     1.0,  1.0,  1.0,  1.0, 0.0,  0.0, 0.0, 1.0,
-    -1.0,  1.0,  1.0,  0.0, 0.0,  0.0, 0.0, 1.0,
-
-    // Back face (z = -1)
-     1.0, -1.0, -1.0,  0.0, 1.0,  0.0, 0.0, -1.0,
-    -1.0, -1.0, -1.0,  1.0, 1.0,  0.0, 0.0, -1.0,
-    -1.0,  1.0, -1.0,  1.0, 0.0,  0.0, 0.0, -1.0,
-     1.0,  1.0, -1.0,  0.0, 0.0,  0.0, 0.0, -1.0,
-
-    // Top face (y = 1)
-    -1.0,  1.0,  1.0,  0.0, 1.0,  0.0, 1.0, 0.0,
-     1.0,  1.0,  1.0,  1.0, 1.0,  0.0, 1.0, 0.0,
-     1.0,  1.0, -1.0,  1.0, 0.0,  0.0, 1.0, 0.0,
-    -1.0,  1.0, -1.0,  0.0, 0.0,  0.0, 1.0, 0.0,
-
-    // Bottom face (y = -1)
-    -1.0, -1.0, -1.0,  0.0, 1.0,  0.0, -1.0, 0.0,
-     1.0, -1.0, -1.0,  1.0, 1.0,  0.0, -1.0, 0.0,
-     1.0, -1.0,  1.0,  1.0, 0.0,  0.0, -1.0, 0.0,
-    -1.0, -1.0,  1.0,  0.0, 0.0,  0.0, -1.0, 0.0,
-
-    // Right face (x = 1)
-     1.0, -1.0,  1.0,  0.0, 1.0,  1.0, 0.0, 0.0,
-     1.0, -1.0, -1.0,  1.0, 1.0,  1.0, 0.0, 0.0,
-     1.0,  1.0, -1.0,  1.0, 0.0,  1.0, 0.0, 0.0,
-     1.0,  1.0,  1.0,  0.0, 0.0,  1.0, 0.0, 0.0,
-
-    // Left face (x = -1)
-    -1.0, -1.0, -1.0,  0.0, 1.0,  -1.0, 0.0, 0.0,
-    -1.0, -1.0,  1.0,  1.0, 1.0,  -1.0, 0.0, 0.0,
-    -1.0,  1.0,  1.0,  1.0, 0.0,  -1.0, 0.0, 0.0,
-    -1.0,  1.0, -1.0,  0.0, 0.0,  -1.0, 0.0, 0.0,
-];
-
-/// Cube indices: 6 faces * 2 triangles * 3 vertices = 36 indices
-static CUBE_INDICES: [u16; 36] = [
-    // Front face
-    0, 1, 2, 2, 3, 0,
-    // Back face
-    4, 5, 6, 6, 7, 4,
-    // Top face
-    8, 9, 10, 10, 11, 8,
-    // Bottom face
-    12, 13, 14, 14, 15, 12,
-    // Right face
-    16, 17, 18, 18, 19, 16,
-    // Left face
-    20, 21, 22, 22, 23, 20,
-];
 
 /// 8x8 checkerboard texture (RGBA8)
 const CHECKERBOARD: [u8; 8 * 8 * 4] = {
@@ -177,14 +112,8 @@ pub extern "C" fn init() {
         TEXTURE = load_texture(8, 8, CHECKERBOARD.as_ptr());
         texture_filter(0); // Nearest neighbor for crisp pixels
 
-        // Load the cube mesh
-        CUBE_MESH = load_mesh_indexed(
-            CUBE_VERTICES.as_ptr(),
-            24, // vertex count
-            CUBE_INDICES.as_ptr(),
-            36, // index count
-            FORMAT_POS_UV_NORMAL,
-        );
+        // Generate cube mesh procedurally (2×2×2 cube)
+        CUBE_MESH = cube(1.0, 1.0, 1.0);
     }
 }
 

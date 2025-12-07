@@ -80,6 +80,9 @@ impl LibraryUi {
 
             ui.separator();
             ui.horizontal(|ui| {
+                if ui.button("📁 Import ROM").clicked() {
+                    action = Some(UiAction::ImportRom);
+                }
                 if ui.button("🔄 Refresh").clicked() {
                     action = Some(UiAction::RefreshLibrary);
                 }
@@ -115,6 +118,8 @@ pub enum UiAction {
     SaveSettings(emberware_core::app::config::Config),
     /// Set scale mode immediately (for preview)
     SetScaleMode(emberware_core::app::config::ScaleMode),
+    /// Import a ROM file from disk
+    ImportRom,
 }
 
 #[cfg(test)]

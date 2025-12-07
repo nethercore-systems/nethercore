@@ -4,11 +4,11 @@
 //!
 //! Features demonstrated:
 //! - `render_mode()` to select PBR rendering (mode 2)
+//! - `sphere()` to generate a smooth sphere procedurally
 //! - `set_sky()` for procedural sky lighting
 //! - `light_set()`, `light_color()`, `light_intensity()` for dynamic lights
 //! - `material_metallic()`, `material_roughness()` for PBR materials
 //! - Interactive light positioning via analog sticks
-//! - Sphere mesh for demonstrating lighting
 //!
 //! Note: render_mode is init-only (cannot change at runtime).
 //! To see other modes, change RENDER_MODE constant and rebuild.
@@ -26,9 +26,6 @@
 #![no_main]
 
 use core::panic::PanicInfo;
-use emberware_examples_common::{
-    generate_icosphere, MAX_ICOSPHERE_INDICES_L3, MAX_ICOSPHERE_VERTS_L3,
-};
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
@@ -68,14 +65,10 @@ extern "C" {
     fn material_metallic(value: f32);
     fn material_roughness(value: f32);
 
-    // Mesh
-    fn load_mesh_indexed(
-        data: *const f32,
-        vertex_count: u32,
-        indices: *const u16,
-        index_count: u32,
-        format: u32,
-    ) -> u32;
+    // Procedural mesh generation
+    fn sphere(radius: f32, segments: u32, rings: u32) -> u32;
+
+    // Mesh drawing
     fn draw_mesh(handle: u32);
 
     // Transform
@@ -137,9 +130,6 @@ const BUTTON_B: u32 = 5;
 const BUTTON_X: u32 = 6;
 const BUTTON_Y: u32 = 7;
 
-/// Vertex format: POS_NORMAL = 4 (position + normal, 6 floats per vertex)
-const FORMAT_POS_NORMAL: u32 = 4;
-
 /// Render mode: 0=Unlit, 1=Matcap, 2=PBR, 3=Hybrid
 /// Change this and rebuild to see different modes
 const RENDER_MODE: u32 = 2;
@@ -180,15 +170,6 @@ static mut LIGHT_INTENSITY: f32 = 1.5;
 static mut METALLIC: f32 = 1.0;
 static mut ROUGHNESS: f32 = 0.4;  // Lower = shinier surface with visible specular highlights
 
-/// Subdivision level for icosphere (0 = 12 verts, 1 = 42 verts, 2 = 162 verts, 3 = 642 verts)
-const SUBDIVISION_LEVEL: usize = 3;
-
-/// Subdivided icosphere buffers (populated at init, then uploaded to GPU)
-static mut SUBDIVIDED_VERTS: [f32; MAX_ICOSPHERE_VERTS_L3] = [0.0; MAX_ICOSPHERE_VERTS_L3];
-static mut SUBDIVIDED_INDICES: [u16; MAX_ICOSPHERE_INDICES_L3] = [0; MAX_ICOSPHERE_INDICES_L3];
-static mut SUBDIVIDED_VERT_COUNT: usize = 0;
-static mut SUBDIVIDED_INDEX_COUNT: usize = 0;
-
 #[no_mangle]
 pub extern "C" fn init() {
     unsafe {
@@ -208,25 +189,9 @@ pub extern "C" fn init() {
         // Enable depth testing
         depth_test(1);
 
-        // Generate subdivided icosphere using shared library
-        generate_icosphere(
-            SUBDIVISION_LEVEL,
-            core::ptr::addr_of_mut!(SUBDIVIDED_VERTS).cast(),
-            MAX_ICOSPHERE_VERTS_L3,
-            core::ptr::addr_of_mut!(SUBDIVIDED_INDICES).cast(),
-            MAX_ICOSPHERE_INDICES_L3,
-            core::ptr::addr_of_mut!(SUBDIVIDED_VERT_COUNT),
-            core::ptr::addr_of_mut!(SUBDIVIDED_INDEX_COUNT),
-        );
-
-        // Load the sphere mesh
-        SPHERE_MESH = load_mesh_indexed(
-            core::ptr::addr_of!(SUBDIVIDED_VERTS).cast(),
-            SUBDIVIDED_VERT_COUNT as u32,
-            core::ptr::addr_of!(SUBDIVIDED_INDICES).cast(),
-            SUBDIVIDED_INDEX_COUNT as u32,
-            FORMAT_POS_NORMAL,
-        );
+        // Generate smooth sphere procedurally
+        // Using 64x32 segments for a high-quality sphere (similar to subdivision level 3)
+        SPHERE_MESH = sphere(1.0, 64, 32);
 
         // Initialize lights
         for i in 0..4u32 {

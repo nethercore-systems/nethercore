@@ -1,5 +1,6 @@
 //! UI action handling and input processing
 
+use crate::app::RuntimeError;
 use emberware_core::app::config;
 use emberware_core::app::AppMode;
 use emberware_core::console::Graphics;
@@ -70,6 +71,55 @@ impl App {
                 tracing::info!("Refreshing game library");
                 self.local_games = library::get_local_games(&library::ZDataDirProvider);
                 self.library_ui.selected_game = None;
+            }
+            UiAction::ImportRom => {
+                tracing::info!("Opening file picker for ROM import");
+
+                // Open file picker for .ewz files
+                let file_handle = rfd::FileDialog::new()
+                    .add_filter("Emberware ROM", &["ewz"])
+                    .set_title("Import ROM File")
+                    .pick_file();
+
+                if let Some(source_path) = file_handle {
+                    tracing::info!("Selected ROM file: {}", source_path.display());
+
+                    // Get games directory
+                    if let Some(data_dir) = config::data_dir() {
+                        let games_dir = data_dir.join("games");
+
+                        // Create games directory if it doesn't exist
+                        if let Err(e) = std::fs::create_dir_all(&games_dir) {
+                            tracing::error!("Failed to create games directory: {}", e);
+                            self.last_error = Some(RuntimeError(format!("Failed to create games directory: {}", e)));
+                            return;
+                        }
+
+                        // Get filename from source path
+                        if let Some(filename) = source_path.file_name() {
+                            let dest_path = games_dir.join(filename);
+
+                            // Copy ROM file to games directory
+                            match std::fs::copy(&source_path, &dest_path) {
+                                Ok(_) => {
+                                    tracing::info!("ROM imported successfully to: {}", dest_path.display());
+                                    // Refresh library to show new game
+                                    self.local_games = library::get_local_games(&library::ZDataDirProvider);
+                                }
+                                Err(e) => {
+                                    tracing::error!("Failed to copy ROM file: {}", e);
+                                    self.last_error = Some(RuntimeError(format!("Failed to import ROM: {}", e)));
+                                }
+                            }
+                        } else {
+                            tracing::error!("Invalid file path");
+                            self.last_error = Some(RuntimeError("Invalid file path".to_string()));
+                        }
+                    } else {
+                        tracing::error!("Could not determine data directory");
+                        self.last_error = Some(RuntimeError("Could not determine data directory".to_string()));
+                    }
+                }
             }
             UiAction::SaveSettings(new_config) => {
                 tracing::info!("Saving settings...");

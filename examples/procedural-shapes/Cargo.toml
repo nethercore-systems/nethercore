@@ -1,15 +1,11 @@
 [package]
-name = "blinn-phong"
+name = "procedural-shapes"
 version = "0.1.0"
 edition = "2021"
-
-[dependencies]
-libm = "0.2"
 
 [lib]
 crate-type = ["cdylib"]
 
 [profile.release]
-opt-level = "z"
+opt-level = "s"
 lto = true
-codegen-units = 1
