@@ -303,11 +303,14 @@ pub fn generate_shader(mode: u8, format: u8) -> Result<String, ShaderGenError> {
                 "let roughness = 1.0 - (shininess - 1.0) / 255.0;",
             );
 
-            // Specular color: From texture (if UV) or uniform with intensity modulation
+            // Specular color: From texture (if UV) or uniform
+            // In UV case, value0 comes from slot1.R (specular intensity texture)
+            // In non-UV case, use specular color directly without intensity modulation
+            // (value0 is rim_intensity in non-UV mode 3, not specular intensity)
             let mode3_specular = if has_uv {
                 "var specular_color = textureSample(slot2, tex_sampler, in.uv).rgb;\n    specular_color = specular_color * value0;"
             } else {
-                "var specular_color = unpack_rgb8(shading.matcap_blend_modes);\n    specular_color = specular_color * value0;"
+                "let specular_color = unpack_rgb8(shading.matcap_blend_modes);"
             };
             shader = shader.replace("//FS_MODE2_3_SPECULAR_COLOR", mode3_specular);
 
