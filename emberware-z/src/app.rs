@@ -19,7 +19,6 @@ use crate::library::{self, LocalGame};
 use crate::ui::{LibraryUi, UiAction};
 use emberware_core::app::{
     session::GameSession, AppMode, DebugStats, RuntimeError, FRAME_TIME_HISTORY_SIZE,
-    GRAPH_MAX_FRAME_TIME_MS, TARGET_FRAME_TIME_MS,
 };
 use emberware_core::console::{Audio, Console, ConsoleResourceManager, Graphics, SoundHandle};
 use emberware_core::rollback::{SessionEvent, SessionType};

@@ -108,23 +108,7 @@ fn main() -> Result<()> {
         // TODO: Create unified library UI that shows all console types
         tracing::info!("Launching unified library (defaulting to Z for now)");
 
-        if let Some(z_provider) = registry.available_consoles().iter().find(|&&c| c == "z") {
-            // Launch Z's library
-            let z = registry.available_consoles()
-                .iter()
-                .find(|&&c| c == "z")
-                .map(|_| "z");
-
-            if z.is_some() {
-                // Use Z's library UI as default
-                tracing::info!("Opening Emberware Z library");
-                return emberware_z::app::run(emberware_core::app::types::AppMode::Library)
-                    .map_err(|e| anyhow::anyhow!("Library error: {}", e));
-            }
-        }
-
-        eprintln!("No console implementations available!");
-        std::process::exit(1);
+        registry.launch_library(None)?;
     }
 
     Ok(())
