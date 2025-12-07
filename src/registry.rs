@@ -74,8 +74,7 @@ impl ConsoleType {
                 let mode = AppMode::Playing {
                     game_id: game_id.to_string(),
                 };
-                emberware_z::app::run(mode)
-                    .map_err(|e| anyhow::anyhow!("Z console error: {}", e))
+                emberware_z::app::run(mode).map_err(|e| anyhow::anyhow!("Z console error: {}", e))
             }
         }
     }
@@ -83,10 +82,8 @@ impl ConsoleType {
     /// Launch the library UI for this console type.
     pub fn launch_library(&self) -> Result<()> {
         match self {
-            ConsoleType::Z => {
-                emberware_z::app::run(AppMode::Library)
-                    .map_err(|e| anyhow::anyhow!("Z console error: {}", e))
-            }
+            ConsoleType::Z => emberware_z::app::run(AppMode::Library)
+                .map_err(|e| anyhow::anyhow!("Z console error: {}", e)),
         }
     }
 }
@@ -112,14 +109,13 @@ impl ConsoleRegistry {
     ///
     /// Returns an error if the game's console type is not supported.
     pub fn launch_game(&self, game: &LocalGame) -> Result<()> {
-        let console_type = ConsoleType::from_str(&game.console_type)
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "Unknown console type: '{}'. Supported consoles: {}",
-                    game.console_type,
-                    Self::available_consoles_display()
-                )
-            })?;
+        let console_type = ConsoleType::from_str(&game.console_type).ok_or_else(|| {
+            anyhow::anyhow!(
+                "Unknown console type: '{}'. Supported consoles: {}",
+                game.console_type,
+                Self::available_consoles_display()
+            )
+        })?;
 
         console_type.launch_game(&game.id)
     }
@@ -134,10 +130,7 @@ impl ConsoleRegistry {
 
     /// Get all available console type strings.
     pub fn available_consoles(&self) -> Vec<&'static str> {
-        ConsoleType::all()
-            .iter()
-            .map(|ct| ct.as_str())
-            .collect()
+        ConsoleType::all().iter().map(|ct| ct.as_str()).collect()
     }
 
     /// Check if a console type is supported.

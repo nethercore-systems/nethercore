@@ -5,7 +5,10 @@ use std::sync::Arc;
 use wasmtime::Linker;
 use winit::window::Window;
 
-use crate::console::{Audio, Console, ConsoleInput, ConsoleResourceManager, ConsoleSpecs, Graphics, RawInput, SoundHandle};
+use crate::console::{
+    Audio, Console, ConsoleInput, ConsoleResourceManager, ConsoleSpecs, Graphics, RawInput,
+    SoundHandle,
+};
 use crate::wasm::GameStateWithConsole;
 
 // ============================================================================
@@ -79,11 +82,7 @@ impl ConsoleResourceManager for TestResourceManager {
         // No-op for tests
     }
 
-    fn execute_draw_commands(
-        &mut self,
-        _graphics: &mut Self::Graphics,
-        _state: &mut Self::State,
-    ) {
+    fn execute_draw_commands(&mut self, _graphics: &mut Self::Graphics, _state: &mut Self::State) {
         // No-op for tests
     }
 }

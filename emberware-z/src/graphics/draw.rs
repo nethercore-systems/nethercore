@@ -1,0 +1,230 @@
+//! Draw command processing
+//!
+//! This module handles processing draw commands from ZFFIState and converting
+//! them into GPU rendering operations.
+
+use super::render_state::{BlendMode, CullMode, MatcapBlendMode, TextureHandle};
+use super::ZGraphics;
+
+impl ZGraphics {
+    /// Process all draw commands from ZFFIState and execute them
+    ///
+    /// This method consumes draw commands from the ZFFIState and executes them
+    /// on the GPU, directly translating FFI state into graphics calls without
+    /// an intermediate unpacking/repacking step.
+    ///
+    /// This replaces the previous execute_draw_commands() function in app.rs,
+    /// eliminating redundant data translation and simplifying the architecture.
+    pub fn process_draw_commands(
+        &mut self,
+        z_state: &mut crate::state::ZFFIState,
+        texture_map: &hashbrown::HashMap<u32, TextureHandle>,
+    ) {
+        // Apply init config to graphics (render mode, etc.)
+        self.set_render_mode(z_state.init_config.render_mode);
+
+        // 1. Swap the FFI-populated render pass into our command buffer
+        // This efficiently transfers all immediate geometry (triangles, meshes)
+        // without copying vectors. The old command buffer (now in z_state.render_pass)
+        // will be cleared when z_state.clear_frame() is called.
+        std::mem::swap(&mut self.command_buffer, &mut z_state.render_pass);
+
+        // 1.1. Remap texture handles from FFI handles to graphics handles
+        // FFI functions (draw_triangles, draw_mesh) store INVALID placeholders because they
+        // don't have access to session.texture_map. Now we remap them using bound_textures.
+        for cmd in self.command_buffer.commands_mut() {
+            // Get mutable reference to texture_slots based on variant
+            let texture_slots = match cmd {
+                super::command_buffer::VRPCommand::Mesh { texture_slots, .. } => texture_slots,
+                super::command_buffer::VRPCommand::IndexedMesh { texture_slots, .. } => {
+                    texture_slots
+                }
+                super::command_buffer::VRPCommand::Quad { texture_slots, .. } => texture_slots,
+            };
+
+            if texture_slots[0] == TextureHandle::INVALID {
+                *texture_slots = [
+                    texture_map
+                        .get(&z_state.bound_textures[0])
+                        .copied()
+                        .unwrap_or(TextureHandle::INVALID),
+                    texture_map
+                        .get(&z_state.bound_textures[1])
+                        .copied()
+                        .unwrap_or(TextureHandle::INVALID),
+                    texture_map
+                        .get(&z_state.bound_textures[2])
+                        .copied()
+                        .unwrap_or(TextureHandle::INVALID),
+                    texture_map
+                        .get(&z_state.bound_textures[3])
+                        .copied()
+                        .unwrap_or(TextureHandle::INVALID),
+                ];
+            }
+        }
+
+        // Ensure default shading state exists for deferred commands.
+        // Deferred commands (billboards, sprites, text) use ShadingStateIndex(0) by default.
+        // If the game only uses deferred drawing and never calls draw_mesh/draw_triangles,
+        // the shading state pool would be empty (cleared by clear_frame), causing panics
+        // during command sorting/rendering when accessing state 0.
+        //
+        // This ensures state 0 always exists, using the current render state defaults
+        // (color, blend mode, material properties, etc.) from z_state.current_shading_state.
+        if z_state.shading_states.is_empty() {
+            z_state.add_shading_state();
+        }
+
+        // 1.5. Process GPU-instanced quads (billboards, sprites)
+        // Accumulate all instances and upload once, then create batched draw commands
+        if !z_state.quad_batches.is_empty() {
+            let total_instances: usize =
+                z_state.quad_batches.iter().map(|b| b.instances.len()).sum();
+            tracing::info!(
+                "Processing {} quad batches with {} total instances",
+                z_state.quad_batches.len(),
+                total_instances
+            );
+
+            // DEBUG: Log view/projection matrices
+            if !z_state.view_matrices.is_empty() && !z_state.proj_matrices.is_empty() {
+                tracing::info!(
+                    "  View matrix count: {}, Proj matrix count: {}",
+                    z_state.view_matrices.len(),
+                    z_state.proj_matrices.len()
+                );
+                tracing::info!("  View[0]: {:?}", z_state.view_matrices[0]);
+                tracing::info!("  Proj[0]: {:?}", z_state.proj_matrices[0]);
+            }
+
+            // Accumulate all instances into one buffer and track batch offsets
+            let mut all_instances = Vec::with_capacity(total_instances);
+            let mut batch_info = Vec::new(); // (base_instance, instance_count, textures)
+
+            for batch in &z_state.quad_batches {
+                if batch.instances.is_empty() {
+                    continue;
+                }
+
+                let base_instance = all_instances.len() as u32;
+                all_instances.extend_from_slice(&batch.instances);
+                batch_info.push((base_instance, batch.instances.len() as u32, batch.textures));
+
+                tracing::info!(
+                    "  Batch: base_instance={}, count={}, textures={:?}",
+                    base_instance,
+                    batch.instances.len(),
+                    batch.textures
+                );
+            }
+
+            // Upload all instances once to GPU
+            if !all_instances.is_empty() {
+                tracing::info!(
+                    "Uploading {} total quad instances to GPU",
+                    all_instances.len()
+                );
+                self.buffer_manager
+                    .upload_quad_instances(&self.device, &self.queue, &all_instances)
+                    .expect("Failed to upload quad instances to GPU");
+            }
+
+            // Create draw commands for each batch with correct base_instance
+            for (base_instance, instance_count, textures) in batch_info {
+                // Map FFI texture handles to graphics texture handles for this batch
+                let texture_slots = [
+                    texture_map
+                        .get(&textures[0])
+                        .copied()
+                        .unwrap_or(TextureHandle::INVALID),
+                    texture_map
+                        .get(&textures[1])
+                        .copied()
+                        .unwrap_or(TextureHandle::INVALID),
+                    texture_map
+                        .get(&textures[2])
+                        .copied()
+                        .unwrap_or(TextureHandle::INVALID),
+                    texture_map
+                        .get(&textures[3])
+                        .copied()
+                        .unwrap_or(TextureHandle::INVALID),
+                ];
+
+                tracing::info!(
+                    "Quad draw command: base_instance={}, count={}, textures={:?} -> {:?}",
+                    base_instance,
+                    instance_count,
+                    textures,
+                    texture_slots
+                );
+
+                // Note: Quad instances contain their own shading_state_index in the instance data.
+                // BufferSource::Quad has no buffer_index - quads read transforms and shading from instance data.
+                self.command_buffer
+                    .add_command(super::command_buffer::VRPCommand::Quad {
+                        base_vertex: self.unit_quad_base_vertex,
+                        first_index: self.unit_quad_first_index,
+                        base_instance,
+                        instance_count,
+                        texture_slots,
+                        blend_mode: BlendMode::Alpha, // Enable alpha blending for text/sprites
+                        depth_test: true, // Billboards typically use depth test (TODO: per-instance?)
+                        cull_mode: CullMode::None, // Quads are double-sided
+                    });
+            }
+        }
+
+        // Note: All per-frame cleanup (model_matrices, audio_commands, render_pass)
+        // happens AFTER render_frame completes in app.rs via z_state.clear_frame()
+        // This keeps cleanup centralized and ensures matrices survive until GPU upload
+    }
+
+    /// Convert game matcap blend mode to graphics matcap blend mode
+    pub(super) fn convert_matcap_blend_mode(mode: u8) -> MatcapBlendMode {
+        match mode {
+            0 => MatcapBlendMode::Multiply,
+            1 => MatcapBlendMode::Add,
+            2 => MatcapBlendMode::HsvModulate,
+            _ => MatcapBlendMode::Multiply,
+        }
+    }
+
+    /// Map game texture handles to graphics texture handles
+    pub(super) fn map_texture_handles(
+        texture_map: &hashbrown::HashMap<u32, TextureHandle>,
+        bound_textures: &[u32; 4],
+    ) -> [TextureHandle; 4] {
+        let mut texture_slots = [TextureHandle::INVALID; 4];
+        for (slot, &game_handle) in bound_textures.iter().enumerate() {
+            if game_handle != 0 {
+                if let Some(&graphics_handle) = texture_map.get(&game_handle) {
+                    texture_slots[slot] = graphics_handle;
+                }
+            }
+        }
+        texture_slots
+    }
+
+    /// Convert game cull mode to graphics cull mode
+    pub(super) fn convert_cull_mode(mode: u8) -> CullMode {
+        match mode {
+            0 => CullMode::None,
+            1 => CullMode::Back,
+            2 => CullMode::Front,
+            _ => CullMode::None,
+        }
+    }
+
+    /// Convert game blend mode to graphics blend mode
+    pub(super) fn convert_blend_mode(mode: u8) -> BlendMode {
+        match mode {
+            0 => BlendMode::None,
+            1 => BlendMode::Alpha,
+            2 => BlendMode::Additive,
+            3 => BlendMode::Multiply,
+            _ => BlendMode::None,
+        }
+    }
+}

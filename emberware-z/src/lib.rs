@@ -5,12 +5,9 @@
 
 pub mod app;
 mod audio;
-mod config;
 pub mod console;
-mod download;
 mod ffi;
 mod font;
-mod game_resolver;
 mod graphics;
 mod input;
 mod library;

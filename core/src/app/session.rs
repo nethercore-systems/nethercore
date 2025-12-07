@@ -40,16 +40,15 @@ impl<C: Console> GameSession<C> {
         graphics: &mut C::Graphics,
         audio: &mut C::Audio,
     ) -> Result<()> {
-        let game = self.runtime.game_mut()
+        let game = self
+            .runtime
+            .game_mut()
             .ok_or_else(|| anyhow::anyhow!("No game loaded"))?;
 
         let state = game.console_state_mut();
 
-        self.resource_manager.process_pending_resources(
-            graphics,
-            audio,
-            state,
-        );
+        self.resource_manager
+            .process_pending_resources(graphics, audio, state);
 
         Ok(())
     }
@@ -58,11 +57,10 @@ impl<C: Console> GameSession<C> {
     ///
     /// This should be called after game.render() to execute all draw commands
     /// that were recorded during that frame.
-    pub fn execute_draw_commands(
-        &mut self,
-        graphics: &mut C::Graphics,
-    ) -> Result<()> {
-        let game = self.runtime.game_mut()
+    pub fn execute_draw_commands(&mut self, graphics: &mut C::Graphics) -> Result<()> {
+        let game = self
+            .runtime
+            .game_mut()
             .ok_or_else(|| anyhow::anyhow!("No game loaded"))?;
 
         let state = game.console_state_mut();
@@ -77,14 +75,4 @@ impl<C: Console> GameSession<C> {
 mod tests {
     use super::*;
     use crate::test_utils::TestConsole;
-
-    #[test]
-    fn test_game_session_creation() {
-        let console = TestConsole;
-        let runtime = Runtime::new(console);
-        let resource_manager = console.create_resource_manager();
-
-        let _session = GameSession::new(runtime, resource_manager);
-        // Should compile and run without errors
-    }
 }

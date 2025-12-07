@@ -499,3 +499,29 @@ pub fn trigger_right(
 
     state.input_curr[player].right_trigger as f32 / 255.0
 }
+
+// ============================================================================
+// Registration
+// ============================================================================
+
+use anyhow::Result;
+use wasmtime::Linker;
+
+/// Register input FFI functions with the linker
+pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
+    linker.func_wrap("env", "button_held", button_held)?;
+    linker.func_wrap("env", "button_pressed", button_pressed)?;
+    linker.func_wrap("env", "button_released", button_released)?;
+    linker.func_wrap("env", "buttons_held", buttons_held)?;
+    linker.func_wrap("env", "buttons_pressed", buttons_pressed)?;
+    linker.func_wrap("env", "buttons_released", buttons_released)?;
+    linker.func_wrap("env", "left_stick_x", left_stick_x)?;
+    linker.func_wrap("env", "left_stick_y", left_stick_y)?;
+    linker.func_wrap("env", "right_stick_x", right_stick_x)?;
+    linker.func_wrap("env", "right_stick_y", right_stick_y)?;
+    linker.func_wrap("env", "left_stick", left_stick)?;
+    linker.func_wrap("env", "right_stick", right_stick)?;
+    linker.func_wrap("env", "trigger_left", trigger_left)?;
+    linker.func_wrap("env", "trigger_right", trigger_right)?;
+    Ok(())
+}

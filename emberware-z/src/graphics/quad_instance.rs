@@ -1,7 +1,7 @@
 //! GPU-instanced quad rendering
 //!
 //! Defines quad instance data and modes for GPU-driven billboard/sprite rendering.
-//! This replaces the problematic DeferredCommand CPU vertex generation approach.
+//! GPU-instanced rendering eliminates per-frame CPU vertex generation overhead.
 
 /// Quad rendering mode for GPU vertex shader expansion
 #[repr(u32)]

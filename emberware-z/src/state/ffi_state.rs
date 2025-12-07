@@ -1,95 +1,9 @@
-//! Emberware Z FFI state and types
-//!
-//! FFI staging state for Emberware Z console.
-//! This state is rebuilt each frame from FFI calls and consumed by ZGraphics.
-//! It is NOT part of rollback state - only GameState is rolled back.
+//! FFI staging state for Emberware Z
 
 use glam::{Mat4, Vec3};
 use hashbrown::HashMap;
 
-/// Maximum number of bones for GPU skinning
-pub const MAX_BONES: usize = 256;
-
-// ============================================================================
-// Lighting (moved from core/src/wasm/render.rs)
-// ============================================================================
-
-// LightState removed - obsolete with unified shading state system.
-// Lighting data now stored in PackedLight within PackedUnifiedShadingState.
-
-// ============================================================================
-// Font System
-// ============================================================================
-
-/// Custom bitmap font definition
-#[derive(Debug, Clone)]
-pub struct Font {
-    /// Texture handle for the font atlas
-    pub texture: u32,
-    /// Width of each glyph in pixels (for fixed-width fonts)
-    pub char_width: u8,
-    /// Height of each glyph in pixels
-    pub char_height: u8,
-    /// First codepoint in the font
-    pub first_codepoint: u32,
-    /// Number of characters in the font
-    pub char_count: u32,
-    /// Optional per-character widths for variable-width fonts (None = fixed-width)
-    pub char_widths: Option<Vec<u8>>,
-}
-
-// ============================================================================
-// Pending Resources (moved from core/src/wasm/draw.rs)
-// ============================================================================
-
-/// Pending texture load request
-#[derive(Debug)]
-pub struct PendingTexture {
-    pub handle: u32,
-    pub width: u32,
-    pub height: u32,
-    pub data: Vec<u8>,
-}
-
-/// Pending mesh load request (retained mode)
-#[derive(Debug)]
-pub struct PendingMesh {
-    pub handle: u32,
-    pub format: u8,
-    pub vertex_data: Vec<f32>,
-    pub index_data: Option<Vec<u16>>,
-}
-
-// ============================================================================
-// Z-Specific State
-// ============================================================================
-
-/// Init-time configuration for Emberware Z
-#[derive(Debug, Clone)]
-pub struct ZInitConfig {
-    /// Resolution index (0-3 for Z: 360p, 540p, 720p, 1080p)
-    pub resolution_index: u32,
-    /// Tick rate index (0-3 for Z: 24, 30, 60, 120 fps)
-    pub tick_rate_index: u32,
-    /// Clear/background color (RGBA: 0xRRGGBBAA)
-    pub clear_color: u32,
-    /// Render mode (0-3: Unlit, Matcap, PBR, Hybrid)
-    pub render_mode: u8,
-    /// Whether any config was changed during init
-    pub modified: bool,
-}
-
-impl Default for ZInitConfig {
-    fn default() -> Self {
-        Self {
-            resolution_index: 1,     // Default 540p
-            tick_rate_index: 2,      // Default 60 fps
-            clear_color: 0x000000FF, // Black, fully opaque
-            render_mode: 0,          // Unlit
-            modified: false,
-        }
-    }
-}
+use super::{Font, PendingMesh, PendingTexture, ZInitConfig};
 
 /// FFI staging state for Emberware Z
 ///
@@ -98,16 +12,6 @@ impl Default for ZInitConfig {
 /// rendering and does not persist between frames.
 ///
 /// This is NOT serialized for rollback - only core GameState is rolled back.
-
-/// A batch of quad instances that share the same texture bindings
-#[derive(Debug, Clone)]
-pub struct QuadBatch {
-    /// Texture handles for this batch (snapshot of bound_textures when batch was created)
-    pub textures: [u32; 4],
-    /// Quad instances in this batch
-    pub instances: Vec<crate::graphics::QuadInstance>,
-}
-
 #[derive(Debug)]
 pub struct ZFFIState {
     // Render state
@@ -174,7 +78,7 @@ pub struct ZFFIState {
     pub shading_state_dirty: bool,
 
     // GPU-instanced quad rendering (batched by texture)
-    pub quad_batches: Vec<QuadBatch>,
+    pub quad_batches: Vec<super::QuadBatch>,
 }
 
 impl Default for ZFFIState {
@@ -480,7 +384,7 @@ impl ZFFIState {
         }
 
         // Need a new batch (either first batch or textures changed)
-        self.quad_batches.push(QuadBatch {
+        self.quad_batches.push(super::QuadBatch {
             textures: self.bound_textures,
             instances: vec![instance],
         });

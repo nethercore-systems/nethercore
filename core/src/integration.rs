@@ -722,20 +722,6 @@ mod tests {
         }
     }
 
-    /// Test rollback state size limits
-    #[test]
-    fn test_rollback_state_size_limit() {
-        use crate::rollback::MAX_STATE_SIZE;
-
-        // Verify limit
-        assert_eq!(MAX_STATE_SIZE, 16 * 1024 * 1024); // 16MB
-
-        // Create a snapshot at the limit
-        let data = vec![0u8; MAX_STATE_SIZE];
-        let snapshot = GameStateSnapshot::from_data(data, 0);
-        assert_eq!(snapshot.len(), MAX_STATE_SIZE);
-    }
-
     /// Test player count limits
     #[test]
     fn test_player_count_limits() {

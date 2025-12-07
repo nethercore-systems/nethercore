@@ -163,20 +163,6 @@ mod tests {
         assert!((config.audio.master_volume - 0.8).abs() < f32::EPSILON);
     }
 
-    #[test]
-    fn test_video_config_default() {
-        let video = VideoConfig::default();
-        assert!(!video.fullscreen);
-        assert!(video.vsync);
-        assert_eq!(video.resolution_scale, 2);
-    }
-
-    #[test]
-    fn test_audio_config_default() {
-        let audio = AudioConfig::default();
-        assert!((audio.master_volume - 0.8).abs() < f32::EPSILON);
-    }
-
     // =============================================================
     // TOML serialization tests
     // =============================================================

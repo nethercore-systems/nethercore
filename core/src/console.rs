@@ -36,10 +36,7 @@ pub trait Console: Send + 'static {
     /// For example, Emberware Z uses ZFFIState which holds draw commands, camera, transforms, etc.
     type State: Default + Send + 'static;
     /// Console-specific resource manager type
-    type ResourceManager: ConsoleResourceManager<
-        Graphics = Self::Graphics,
-        State = Self::State,
-    >;
+    type ResourceManager: ConsoleResourceManager<Graphics = Self::Graphics, State = Self::State>;
 
     /// Get console specifications
     fn specs(&self) -> &'static ConsoleSpecs;
@@ -85,6 +82,7 @@ pub trait ConsoleResourceManager: Send + 'static {
     ///
     /// Called after game.init() and after each game.render() to upload
     /// resources requested during those phases.
+    /// TODO: This should only ever be called after init, not every frame
     fn process_pending_resources(
         &mut self,
         graphics: &mut Self::Graphics,
@@ -96,11 +94,7 @@ pub trait ConsoleResourceManager: Send + 'static {
     ///
     /// Called after game.render() to execute all draw commands that
     /// were recorded during that frame.
-    fn execute_draw_commands(
-        &mut self,
-        graphics: &mut Self::Graphics,
-        state: &mut Self::State,
-    );
+    fn execute_draw_commands(&mut self, graphics: &mut Self::Graphics, state: &mut Self::State);
 }
 
 /// Trait for console input types

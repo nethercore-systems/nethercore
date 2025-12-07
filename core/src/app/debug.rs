@@ -94,11 +94,8 @@ pub fn render_debug_overlay(
 
                             // Get update and render times for this tick
                             let update_time = time_ms; // game_tick_times[i]
-                            let render_time = stats
-                                .game_render_times
-                                .get(i)
-                                .copied()
-                                .unwrap_or(0.0);
+                            let render_time =
+                                stats.game_render_times.get(i).copied().unwrap_or(0.0);
                             let total_time = update_time + render_time;
 
                             // Calculate heights (scaled to budget, capped at 150%)

@@ -1,9 +1,9 @@
 //! Settings UI for configuring video, audio, and input
 
-use crate::config::{Config, ScaleMode};
 use crate::input::KeyboardMapping;
 use crate::ui::UiAction;
 use egui::{ComboBox, Context, Slider};
+use emberware_core::app::config::{Config, ScaleMode};
 use winit::keyboard::KeyCode;
 
 /// Settings UI state

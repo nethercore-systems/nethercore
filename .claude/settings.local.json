@@ -16,7 +16,8 @@
       "Bash(rustc:*)",
       "Bash(wc:*)",
       "Bash(dir:*)",
-      "Bash(cargo clippy:*)"
+      "Bash(cargo clippy:*)",
+      "Bash(tree:*)"
     ],
     "deny": [],
     "ask": []

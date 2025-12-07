@@ -112,9 +112,9 @@ pub enum UiAction {
     /// Refresh the game library
     RefreshLibrary,
     /// Save settings and apply changes
-    SaveSettings(crate::config::Config),
+    SaveSettings(emberware_core::app::config::Config),
     /// Set scale mode immediately (for preview)
-    SetScaleMode(crate::config::ScaleMode),
+    SetScaleMode(emberware_core::app::config::ScaleMode),
 }
 
 #[cfg(test)]

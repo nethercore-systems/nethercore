@@ -16,6 +16,6 @@ pub struct ZDataDirProvider;
 
 impl DataDirProvider for ZDataDirProvider {
     fn data_dir(&self) -> Option<PathBuf> {
-        crate::config::data_dir()
+        emberware_core::app::config::data_dir()
     }
 }

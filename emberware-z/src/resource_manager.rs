@@ -3,9 +3,9 @@
 //! Manages the mapping between game resource handles (u32) and
 //! graphics backend handles (TextureHandle, MeshHandle).
 
-use emberware_core::console::{Audio, ConsoleResourceManager};
-use crate::graphics::{TextureHandle, MeshHandle, ZGraphics};
+use crate::graphics::{MeshHandle, TextureHandle, ZGraphics};
 use crate::state::ZFFIState;
+use emberware_core::console::{Audio, ConsoleResourceManager};
 
 /// Resource manager for Emberware Z
 ///
@@ -85,11 +85,7 @@ impl ConsoleResourceManager for ZResourceManager {
         }
     }
 
-    fn execute_draw_commands(
-        &mut self,
-        graphics: &mut Self::Graphics,
-        state: &mut Self::State,
-    ) {
+    fn execute_draw_commands(&mut self, graphics: &mut Self::Graphics, state: &mut Self::State) {
         // Process draw commands - ZGraphics consumes draw commands directly
         graphics.process_draw_commands(state, &self.texture_map);
     }

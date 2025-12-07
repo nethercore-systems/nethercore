@@ -76,9 +76,6 @@ fn quit<I: ConsoleInput, S>(mut caller: Caller<'_, GameStateWithConsole<I, S>>) 
 /// Save data to a slot (0-7)
 ///
 /// Returns: 0 = success, 1 = invalid slot, 2 = data too large
-/// Save data to a slot (0-7)
-///
-/// Returns: 0 = success, 1 = invalid slot, 2 = data too large
 fn save<I: ConsoleInput, S>(
     mut caller: Caller<'_, GameStateWithConsole<I, S>>,
     slot: u32,
@@ -116,9 +113,6 @@ fn save<I: ConsoleInput, S>(
     0
 }
 
-/// Load data from a slot (0-7)
-///
-/// Returns: bytes read, or 0 if slot is empty/invalid
 /// Load data from a slot (0-7)
 ///
 /// Returns: bytes read, or 0 if slot is empty/invalid
@@ -165,9 +159,6 @@ fn load<I: ConsoleInput, S>(
     }
 }
 
-/// Delete data in a slot (0-7)
-///
-/// Returns: 0 = success, 1 = invalid slot
 /// Delete data in a slot (0-7)
 ///
 /// Returns: 0 = success, 1 = invalid slot

@@ -11,8 +11,8 @@ pub mod session;
 pub mod types;
 
 pub use config::Config;
-pub use event_loop::{run, AppEventHandler, ConsoleApp};
 pub use debug::{calculate_fps, render_debug_overlay, update_frame_times};
+pub use event_loop::{run, AppEventHandler, ConsoleApp};
 pub use input::InputManager;
 pub use session::GameSession;
 pub use types::{
