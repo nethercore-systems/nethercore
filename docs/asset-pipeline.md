@@ -1307,23 +1307,22 @@ fn load_mesh(...) {
 ### Codebase References
 
 **FFI Implementation:**
-- `/home/user/emberware/emberware-z/src/ffi/mod.rs:889-984` - load_mesh()
-- `/home/user/emberware/emberware-z/src/ffi/mod.rs:735-801` - load_texture()
-- `/home/user/emberware/emberware-z/src/ffi/mod.rs:2065-2234` - load_font()
-- `/home/user/emberware/emberware-z/src/ffi/mod.rs:2865-3037` - Audio functions
+- `emberware-z/src/ffi/mesh.rs` - load_mesh()
+- `emberware-z/src/ffi/texture.rs` - load_texture()
+- `emberware-z/src/ffi/draw_2d.rs` - load_font()
+- `emberware-z/src/ffi/audio.rs` - Audio functions
 
 **Vertex Formats:**
-- `/home/user/emberware/emberware-z/src/graphics/vertex.rs:1-100` - Format definitions
-- `/home/user/emberware/emberware-z/src/graphics/vertex.rs:195-310` - Vertex attributes
+- `emberware-z/src/graphics/vertex.rs` - Format definitions and vertex attributes
 
 **Examples:**
-- `/home/user/emberware/examples/cube/src/lib.rs` - Manual vertex data
-- `/home/user/emberware/examples/textured-quad/src/lib.rs` - Procedural texture
-- `/home/user/emberware/examples/skinned-mesh/src/lib.rs` - Bone weight painting
+- `examples/cube/src/lib.rs` - Manual vertex data
+- `examples/textured-quad/src/lib.rs` - Procedural texture
+- `examples/skinned-mesh/src/lib.rs` - Bone weight painting
 
 **Documentation:**
-- `/home/user/emberware/docs/ffi.md` - FFI reference
-- `/home/user/emberware/docs/emberware-z.md` - Z-specific API
+- `docs/ffi.md` - FFI reference
+- `docs/emberware-z.md` - Z-specific API
 
 ---
 

@@ -15,7 +15,6 @@ Emberware is a fantasy console platform with built-in rollback netcode, designed
 - [TASKS.md](./TASKS.md) — Development status and implementation plan
 - [docs/ffi.md](./docs/ffi.md) — Shared FFI API reference
 - [docs/emberware-z.md](./docs/emberware-z.md) — Z-specific API
-- [docs/rendering-architecture.md](./docs/rendering-architecture.md) — Rendering system details
 
 ## Architecture
 
@@ -158,9 +157,7 @@ The console uses GGRS for deterministic rollback netcode. This means:
 
 ### Rendering Architecture (Emberware Z)
 
-**For detailed technical documentation on the rendering system, see [docs/rendering-architecture.md](./docs/rendering-architecture.md).**
-
-**Quick Summary:**
+**Summary:**
 - **4 render modes**: Unlit, Matcap, PBR-lite, Hybrid (set once in `init()`)
 - **8 vertex formats**: Position + optional UV/Color/Normal (runtime permutations)
 - **40 shader permutations**: Generated from templates at compile-time

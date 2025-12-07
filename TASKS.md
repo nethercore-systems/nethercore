@@ -14,242 +14,6 @@
 
 ---
 
-### **[CRITICAL] STABILITY: Refactor ffi/mod.rs (4262 lines → <1000 per file)**
-
-**Current State:**
-`emberware-z/src/ffi/mod.rs` is 4262 lines - the largest file in the codebase. It contains 67 FFI functions covering configuration, camera, transforms, rendering, textures, meshes, lighting, materials, audio, and more. This violates the project's stability requirement that no file exceed 2000 lines.
-
-**Why This Matters:**
-- Difficult to navigate and find specific functions
-- Merge conflicts more likely with single large file
-- Hard to understand function organization
-- Slower compile times when any FFI function changes
-
-**Proposed Module Structure:**
-Split into focused submodules under `emberware-z/src/ffi/`:
-
-```
-ffi/
-├── mod.rs (150 lines) - Module registration and re-exports
-├── input.rs (500 lines) - EXISTING - Button/stick/trigger queries
-├── config.rs (200 lines) - set_resolution, set_tick_rate, set_clear_color, render_mode
-├── camera.rs (150 lines) - camera_set, camera_fov, push_view_matrix, push_projection_matrix
-├── transform.rs (300 lines) - push_identity, transform_set, push_translate, rotate*, scale*
-├── render_state.rs (200 lines) - set_color, depth_test, cull_mode, blend_mode, texture_filter
-├── texture.rs (250 lines) - load_texture, texture_bind*, matcap_blend_mode
-├── mesh.rs (400 lines) - load_mesh*, draw_mesh, draw_triangles*
-├── draw_2d.rs (350 lines) - draw_sprite*, draw_rect, draw_text, load_font, font_size
-├── billboard.rs (200 lines) - draw_billboard*
-├── lighting.rs (300 lines) - light_set, light_color, light_intensity, light_ambient, sky_*
-├── material.rs (250 lines) - material_metallic, material_roughness, material_emissive, material_rim
-├── audio.rs (300 lines) - play_sound, stop_sound, play_music, stop_music, set_volume
-└── skinning.rs (200 lines) - set_bones
-```
-
-**Implementation Steps:**
-1. Create each submodule file under `emberware-z/src/ffi/`
-2. Move related functions from `mod.rs` to appropriate submodules
-3. Keep helper functions (e.g., `read_matrix_from_memory`) with their users
-4. Update `mod.rs` to re-export all functions and call submodule registration
-5. Test that all examples still compile and run correctly
-6. Update `register_z_ffi()` to call submodule registration functions:
-   ```rust
-   pub fn register_z_ffi(linker: &mut Linker<...>) -> Result<()> {
-       config::register(linker)?;
-       camera::register(linker)?;
-       transform::register(linker)?;
-       // ... etc
-   }
-   ```
-
-**Success Criteria:**
-- ✅ No single file exceeds 1000 lines
-- ✅ All 67 FFI functions still work
-- ✅ All examples compile and run without changes
-- ✅ Clear module organization by feature area
-
-**Files to Create/Modify:**
-- Create 13 new files in `emberware-z/src/ffi/`
-- Modify `emberware-z/src/ffi/mod.rs` (4262 → ~150 lines)
-
----
-
-### **[CRITICAL] STABILITY: Refactor graphics/mod.rs (2144 lines → <800 per file)**
-
-**Current State:**
-`emberware-z/src/graphics/mod.rs` is 2144 lines. It contains the entire ZGraphics implementation including initialization, resource management, draw command execution, and frame rendering. Many logical sections are already in separate files (vertex.rs, buffer.rs, pipeline.rs, texture_manager.rs) but the core remains too large.
-
-**Why This Matters:**
-- Hard to understand the rendering pipeline flow
-- Mixes concerns: initialization, command execution, resource management
-- Already has TODO comments like "TODO: Optimize matcap_blend_modes" (line 81 in unified_shading_state.rs suggests more refactoring needed)
-
-**Current Module Structure:**
-```
-graphics/
-├── mod.rs (2144 lines) - ZGraphics implementation, draw execution, frame rendering
-├── buffer.rs (144 lines) - GrowableBuffer, MeshHandle
-├── command_buffer.rs (exists) - CommandBuffer types
-├── matrix_packing.rs (exists) - Matrix compression
-├── pipeline.rs (499 lines) - Pipeline management
-├── quad_instance.rs (exists) - Quad batching
-├── render_state.rs (exists) - RenderState tracking
-├── texture_manager.rs (exists) - TextureManager
-├── unified_shading_state.rs (exists) - UnifiedShadingState
-└── vertex.rs (573 lines) - Vertex formats
-```
-
-**Proposed Refactoring:**
-
-Split `mod.rs` into:
-```
-graphics/
-├── mod.rs (400 lines) - ZGraphics struct, initialization, public API
-├── resources.rs (500 lines) - Mesh/texture loading and management
-├── draw_executor.rs (600 lines) - Execute draw commands (immediate, retained, 2D)
-├── frame.rs (400 lines) - Frame rendering, clear, present
-└── [existing files remain]
-```
-
-**Key Sections to Extract:**
-
-1. **resources.rs** - Move from mod.rs:
-   - `create_texture()` and related texture creation
-   - `create_mesh()` and mesh creation
-   - `RetainedMesh` struct and mesh storage
-   - Resource HashMap management
-
-2. **draw_executor.rs** - Move from mod.rs:
-   - `execute_draw_commands()` function
-   - Immediate mode triangle batching
-   - Retained mesh rendering
-   - Billboard rendering
-   - 2D sprite rendering
-
-3. **frame.rs** - Move from mod.rs:
-   - `render()` function
-   - Frame setup and teardown
-   - Clear operations
-   - Render pass management
-
-4. **mod.rs** keeps:
-   - ZGraphics struct definition
-   - `new()` initialization
-   - Public interface methods
-   - Re-exports from submodules
-
-**Implementation Steps:**
-1. Create `resources.rs`, `draw_executor.rs`, `frame.rs`
-2. Move functions and keep them as `pub(crate)` for internal use
-3. Update ZGraphics methods to call into submodules
-4. Test rendering in all examples (triangle, cube, lighting, billboard, platformer)
-5. Verify performance is unchanged (no extra allocations)
-
-**Success Criteria:**
-- ✅ No file exceeds 800 lines
-- ✅ Clear separation of concerns
-- ✅ All rendering modes work (unlit, matcap, PBR, hybrid)
-- ✅ All examples render correctly
-
-**Files to Create/Modify:**
-- Create `emberware-z/src/graphics/resources.rs`
-- Create `emberware-z/src/graphics/draw_executor.rs`
-- Create `emberware-z/src/graphics/frame.rs`
-- Modify `emberware-z/src/graphics/mod.rs` (2144 → ~400 lines)
-
----
-
-### **[CRITICAL] STABILITY: Refactor app.rs (2079 lines → <700 per file)**
-
-**Current State:**
-`emberware-z/src/app.rs` is 2079 lines. It contains the main application loop, window management, UI rendering (library + settings + in-game), input handling, game lifecycle, and GGRS integration.
-
-**Why This Matters:**
-- Mixes UI, game logic, and platform integration
-- Hard to test individual components
-- UI code (library, settings) dominates the file
-
-**Current Responsibilities:**
-1. Window/event handling (winit)
-2. Library UI (game browser, download manager)
-3. Settings UI (controls, display, audio)
-4. In-game UI (debug overlay, pause menu)
-5. Game lifecycle (init, update, render)
-6. GGRS session management
-7. State transitions (Library → InGame → Settings)
-
-**Proposed Module Structure:**
-Split into focused modules under `emberware-z/src/`:
-
-```
-app/
-├── mod.rs (500 lines) - App struct, event loop, state machine
-├── game_session.rs (400 lines) - Game lifecycle, GGRS integration, update/render loop
-├── ui_library.rs (400 lines) - Move from library.rs (currently 531 lines)
-├── ui_settings.rs (400 lines) - Move from settings_ui.rs (currently 504 lines)
-└── ui_ingame.rs (300 lines) - Debug overlay, pause menu, performance stats
-```
-
-**Key Extractions:**
-
-1. **game_session.rs**:
-   - `run_game_frame()` function
-   - GGRS session handling
-   - Game state management
-   - Update/render dispatch
-
-2. **ui_library.rs** (already exists as `library.rs`):
-   - Rename and move to `app/` module
-   - Game grid rendering
-   - Download manager UI
-   - Game launching
-
-3. **ui_settings.rs** (already exists as `settings_ui.rs`):
-   - Rename and move to `app/` module
-   - Controls tab
-   - Display tab
-   - Audio tab
-
-4. **ui_ingame.rs**:
-   - Extract from app.rs
-   - Debug overlay (FPS, frame time, rollback stats)
-   - Pause menu
-   - Performance graphs
-
-5. **app/mod.rs**:
-   - App struct and AppState enum
-   - Event loop
-   - State transitions
-   - High-level orchestration
-
-**Implementation Steps:**
-1. Create `emberware-z/src/app/` directory
-2. Move `library.rs` → `app/ui_library.rs`
-3. Move `settings_ui.rs` → `app/ui_settings.rs`
-4. Create `app/game_session.rs` and extract game loop code
-5. Create `app/ui_ingame.rs` and extract debug overlay code
-6. Move current `app.rs` → `app/mod.rs` and trim to orchestration only
-7. Update imports throughout codebase
-8. Test all state transitions (library → game → settings → library)
-
-**Success Criteria:**
-- ✅ No file exceeds 700 lines
-- ✅ Clear separation: UI vs game logic vs platform
-- ✅ All UI screens work (library, settings, in-game)
-- ✅ Game launching and state transitions work
-- ✅ GGRS netcode still functions
-
-**Files to Create/Modify:**
-- Create `emberware-z/src/app/` directory
-- Rename `emberware-z/src/app.rs` → `emberware-z/src/app/mod.rs`
-- Move `emberware-z/src/library.rs` → `emberware-z/src/app/ui_library.rs`
-- Move `emberware-z/src/settings_ui.rs` → `emberware-z/src/app/ui_settings.rs`
-- Create `emberware-z/src/app/game_session.rs`
-- Create `emberware-z/src/app/ui_ingame.rs`
-- Update `emberware-z/src/main.rs` imports
-
----
-
 ### **[FEATURE] Procedural Mesh API**
 
 **User Request:** "Create a procedural mesh API. Allow users to call stuff like cube() or sphere() with parameters and return a mesh ID they can draw with."
@@ -1294,239 +1058,6 @@ This is a **breaking API change**. Consider:
 
 ---
 
-### **[RESEARCH] Developer Tooling: Asset Exporters & Converters**
-
-**Goal:**
-Research and design developer tools to export 3D models, images, and other assets to Emberware's native formats.
-
-**Current Situation:**
-- Game developers must manually create vertex data in code
-- No tools to convert glTF/OBJ/FBX → Emberware mesh format
-- No image converter for optimal texture formats
-- No font converter for bitmap fonts
-- Asset pipeline is entirely manual
-
-**Why This Matters:**
-- Lowers barrier to entry for game developers
-- Enables artists to create content without programming
-- Improves iteration speed (export from Blender, test in game)
-- Allows use of industry-standard tools (Blender, Aseprite, etc.)
-
-**Dependencies:**
-- **[POLISH] PERF: Pack vertex data to reduce memory/bandwidth** - Need to finalize vertex format before exporting
-- **[FEATURE] Procedural Mesh API** - Defines what a "mesh" looks like
-
-**Research Areas:**
-
-### 1. **3D Mesh Exporter**
-
-**Input Formats to Support:**
-- glTF 2.0 (.gltf, .glb) - Industry standard, Blender default export
-- Wavefront OBJ (.obj) - Simple, widely supported
-- FBX (.fbx) - Common in game dev (Unity, Unreal)
-- Collada (.dae) - Open format
-
-**Output Format:**
-Custom binary format optimized for Emberware:
-```rust
-// Proposed .embermesh format
-struct EmberMeshFile {
-    magic: [u8; 4],              // "EMSH"
-    version: u32,                 // Format version
-    vertex_format: u32,           // Flags: UV | COLOR | NORMAL | SKINNED
-    vertex_count: u32,
-    index_count: u32,
-    vertices: Vec<u8>,            // Packed vertex data (format-specific)
-    indices: Option<Vec<u16>>,    // Optional index buffer
-    metadata: MeshMetadata,       // Name, bounds, etc.
-}
-
-struct MeshMetadata {
-    name: String,
-    bounds_min: [f32; 3],
-    bounds_max: [f32; 3],
-}
-```
-
-**Exporter Features:**
-- Vertex attribute conversion (positions, normals, UVs, colors)
-- Automatic normal generation if missing
-- Vertex welding/deduplication
-- Triangle mesh only (convert quads/ngons)
-- Material baking (vertex colors from material)
-- LOD generation (optional)
-- Validation (vertex limits, format compatibility)
-
-**Tool Implementation Options:**
-1. **Blender Add-on** (Python):
-   - Most popular tool for indie devs
-   - Direct export from Blender UI
-   - Can batch export entire scene
-
-2. **Standalone CLI Tool** (Rust):
-   - `ember-export mesh input.gltf output.embermesh`
-   - Cross-platform
-   - Can be integrated into build pipelines
-
-3. **Web-based Converter:**
-   - Drag-and-drop interface
-   - No installation required
-   - Preview before export
-
-**Recommendation:** Start with CLI tool, add Blender add-on later.
-
-### 2. **Texture/Image Converter**
-
-**Input Formats:**
-- PNG, JPG, TGA, BMP (via `image` crate)
-- PSD, XCF (Photoshop, GIMP) via plugins
-
-**Output Formats:**
-- Raw RGBA8 (current, simple but large)
-- Palette + index (256 colors, authentic retro)
-- BC1/BC3 compression (GPU-accelerated, 4:1 or 6:1 compression)
-- Custom packed formats (5551, 565, 4444)
-
-**Converter Features:**
-- Resize/downsample to console resolution limits
-- Automatic palette generation (quantization)
-- Dithering options (Floyd-Steinberg, Bayer, none)
-- Mipmap generation
-- Normal map generation from height maps
-- Atlas/sprite sheet packing
-
-**Tool:**
-```bash
-ember-export texture input.png output.embertex --format rgba8
-ember-export texture input.png output.embertex --format palette --colors 256 --dither floyd
-```
-
-### 3. **Font Converter**
-
-**Input Formats:**
-- TrueType (.ttf) / OpenType (.otf)
-- Bitmap fonts (.fnt, BMFont format)
-
-**Output Format:**
-Bitmap font atlas + metadata:
-```rust
-struct EmberFont {
-    atlas_texture: TextureData,   // Single texture with all glyphs
-    glyphs: Vec<GlyphMetadata>,   // Position, size, advance
-    line_height: f32,
-    baseline: f32,
-}
-
-struct GlyphMetadata {
-    codepoint: u32,
-    x: u16, y: u16,             // Position in atlas
-    width: u16, height: u16,
-    offset_x: i16, offset_y: i16,
-    advance: f32,
-}
-```
-
-**Converter Features:**
-- Render TrueType → bitmap at specified size
-- SDF (Signed Distance Field) generation for scalable rendering
-- Subset selection (ASCII only, Latin-1, Unicode ranges)
-- Kerning pairs
-- Fallback glyph handling
-
-**Tool:**
-```bash
-ember-export font input.ttf output.emberfont --size 16 --charset ascii
-```
-
-### 4. **Audio Converter**
-
-**Input Formats:**
-- WAV, MP3, OGG, FLAC
-
-**Output Format:**
-Raw PCM (current: 16-bit mono @ 22,050 Hz)
-
-**Converter Features:**
-- Resample to 22,050 Hz
-- Convert stereo → mono
-- Volume normalization
-- Trim silence
-- Loop point markers
-
-**Tool:**
-```bash
-ember-export audio input.wav output.embersnd --normalize --trim-silence
-```
-
-### 5. **Asset Pipeline Integration**
-
-**Build Script Integration:**
-```toml
-# In game Cargo.toml
-[package.metadata.emberware]
-assets = "assets/"
-
-# Automatically converts:
-# assets/models/*.gltf → rom/meshes/*.embermesh
-# assets/textures/*.png → rom/textures/*.embertex
-# assets/audio/*.wav → rom/sounds/*.embersnd
-```
-
-**Hot Reload Support:**
-- Watch asset directory for changes
-- Auto-reconvert and reload in running game
-- Speeds up iteration for artists
-
-**Research Deliverables:**
-1. **Design Document** (`docs/asset-pipeline.md`):
-   - File format specifications
-   - Tool architecture
-   - Integration guide
-   - Performance considerations
-
-2. **Proof-of-Concept:**
-   - Simple CLI tool for one asset type (mesh exporter)
-   - Demonstrate end-to-end workflow (Blender → Emberware)
-
-3. **Prioritization:**
-   - Which tools provide most value?
-   - Which are easiest to implement?
-   - Suggested implementation order
-
-**Questions to Answer:**
-1. Should assets be embedded in WASM or loaded at runtime?
-2. What's the target workflow: export → copy files, or integrated build?
-3. How do we handle versioning (format changes break old assets)?
-4. Should we use existing formats (glTF as-is) or custom binary?
-5. How to balance file size vs. load time vs. runtime performance?
-
-**Success Criteria:**
-- ✅ Comprehensive design document written
-- ✅ File format specs defined
-- ✅ At least one proof-of-concept tool implemented
-- ✅ Workflow documented with examples
-- ✅ Implementation roadmap created
-
-**Files to Create:**
-- `docs/asset-pipeline.md` (design document)
-- `tools/ember-export/` (CLI tool crate)
-- `tools/blender-addon/` (optional, future)
-
-**Timeline:**
-This is a research task - deliverable is the design document, not full implementation.
-Implementation should be broken into separate tasks based on research findings.
-
----
-
-### **[CRITICAL] STABILITY Codebase is huge and clunky**
-- Lots of files are extremely long (2k+)
-- We must go through the entire repository and clean this up. Some ways we can accomplish this are
-1. Refactor heavily duplicated code to prevent copy paste
-2. Split files into smaller focused ones.
-- Any file which is longer than 2000 lines MUST be made smaller, preferrably under 1000 lines each.
-
----
-
 ### **CRITICAL POLISH: Matcap shaders should use perspective correct UV sampling **
 - Currently, matcaps are using the simple uv lookup
 ```
@@ -1848,3 +1379,108 @@ This enables fighting games with unlocked characters, RPGs with player stats, et
 ---
 
 ## Done
+
+### **[2025-12-07] Asset Pipeline Design**
+Comprehensive research and design for developer tooling to convert industry-standard assets (glTF, PNG, TTF, WAV) to Emberware's native formats.
+
+**Completed:**
+- ✅ Comprehensive design document (1,344 lines)
+- ✅ File format specifications for meshes, textures, fonts, audio
+- ✅ Tool architecture (CLI tool, Blender add-on, web converter)
+- ✅ Integration guide and build pipeline design
+- ✅ Performance analysis (file size vs load time vs runtime)
+- ✅ Implementation roadmap created
+
+**Documentation:** [docs/asset-pipeline.md](docs/asset-pipeline.md)
+
+**Commit:** cb0cab0
+
+---
+
+### **[2025-12-07] ROM Format Specification**
+Defined the .ewz (Emberware Z) ROM binary format for packaging and distributing games.
+
+**Completed:**
+- ✅ ROM binary format specification
+- ✅ Manifest schema (JSON metadata)
+- ✅ Distribution workflow documentation
+- ✅ Local storage structure (`~/.emberware/games/`)
+
+**Documentation:**
+- [docs/rom-format.md](docs/rom-format.md) (436 lines)
+- [docs/distributing-games.md](docs/distributing-games.md)
+
+**Commits:** e9d13bf, 8e05edd
+
+---
+
+### **[2025-01] Console Abstraction - Unified Launcher Architecture**
+Extracted shared application framework logic into `emberware-core` and created a unified launcher supporting multiple console types.
+
+**Completed (All Phases - Beyond Original Plan!):**
+- ✅ Phase 1-2: Created `core/src/app/` shared framework modules (~916 lines)
+  - `event_loop.rs` - Generic event loop with `ConsoleApp<C>` trait
+  - `config.rs` - Configuration management
+  - `session.rs` - Game session orchestration
+  - `debug.rs` - Debug overlay and FPS tracking
+  - `types.rs` - Shared application types
+- ✅ Phase 3: Refactored Emberware Z as a library implementing `ConsoleApp<C>` trait
+- ✅ Phase 4-5: Created unified launcher with console registry (superior to original plan!)
+  - `src/main.rs` - Unified launcher (115 lines)
+  - `src/registry.rs` - Console type registry with static dispatch
+  - Detects console type from game manifest
+  - Single binary can launch games from any console (Z, Classic, etc.)
+
+**Architecture (Superior to Original Plan):**
+- **Original Plan**: Each console → separate binary (~100 lines each)
+- **Actual Implementation**: Single unified launcher with registry pattern
+- Zero-cost abstraction via enum-based static dispatch
+- No vtables, no heap allocations, direct function calls
+
+**Impact:**
+- Unified launcher: 115 lines (vs ~1,300 lines per console)
+- All consoles share framework improvements automatically
+- Adding new consoles only requires implementing `ConsoleApp<C>` trait
+- Consistent behavior across all Emberware console types
+
+**Location:**
+- Shared framework: `core/src/app/*.rs` (~916 lines)
+- Emberware Z implementation: `emberware-z/src/app/*.rs` (~1,848 lines)
+- Unified launcher: `src/main.rs`, `src/registry.rs` (~250 lines total)
+
+**Documentation:** [docs/console-abstraction-plan.md](docs/console-abstraction-plan.md)
+
+**Commit:** 1c91275 (big refactor)
+
+---
+
+### **[2025-01] FFI Module Refactoring**
+Split monolithic `ffi.rs` (4,262 lines) into 16 focused, maintainable modules following the 800-line rule from ARCHITECTURE.md.
+
+**Completed:**
+- ✅ Refactored into organized modules:
+  - `audio.rs` - Audio playback functions
+  - `billboard.rs` - Billboard rendering
+  - `camera.rs` - Camera controls
+  - `config.rs` - Render mode configuration
+  - `draw_2d.rs` - 2D drawing, sprites, text
+  - `draw_3d.rs` - 3D immediate mode drawing
+  - `input.rs` - Input queries
+  - `lighting.rs` - Lights and shadows
+  - `material.rs` - Material properties
+  - `mesh.rs` - Mesh loading and drawing
+  - `render_state.rs` - Blend modes, depth test
+  - `skinning.rs` - Skeletal animation
+  - `sky.rs` - Procedural sky
+  - `texture.rs` - Texture loading
+  - `transform.rs` - Transform stack
+  - `mod.rs` - Module organization
+
+**Impact:**
+- Improved code organization and maintainability
+- Easier to find and modify specific FFI functions
+- Follows architectural best practices
+
+**Location:** `emberware-z/src/ffi/*.rs` (16 files)
+
+**Commit:** 1c91275 (big refactor)

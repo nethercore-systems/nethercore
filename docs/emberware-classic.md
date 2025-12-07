@@ -267,7 +267,10 @@ fn texture_filter(filter: u32)          // 0 = nearest (default), 1 = linear
 
 ## Audio FFI
 
-> **TODO [needs clarification]:** Audio system is shelved for initial implementation.
+> **Status:** Audio system not yet implemented for Emberware Classic.
+>
+> When implemented, will follow similar patterns to Emberware Z.
+> See [emberware-z.md](./emberware-z.md#audio-ffi) for reference.
 
 ---
 
