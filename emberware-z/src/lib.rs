@@ -7,7 +7,6 @@ pub mod app;
 mod audio;
 mod config;
 pub mod console;
-mod deep_link;
 mod download;
 mod ffi;
 mod font;
