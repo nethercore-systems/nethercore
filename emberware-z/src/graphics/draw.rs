@@ -40,6 +40,10 @@ impl ZGraphics {
                     texture_slots
                 }
                 super::command_buffer::VRPCommand::Quad { texture_slots, .. } => texture_slots,
+                super::command_buffer::VRPCommand::Sky { .. } => {
+                    // Sky doesn't use textures, skip remapping
+                    continue;
+                }
             };
 
             if texture_slots[0] == TextureHandle::INVALID {

@@ -56,10 +56,15 @@ extern "C" {
 
     // Lighting (Mode 2/3)
     fn light_set(index: u32, x: f32, y: f32, z: f32);
-    fn light_color(index: u32, r: f32, g: f32, b: f32);
+    fn light_color(index: u32, color: u32);
     fn light_intensity(index: u32, intensity: f32);
     fn light_disable(index: u32);
     fn light_enable(index: u32);
+
+    // Sky (all modes)
+    fn sky_set_colors(horizon_color: u32, zenith_color: u32);
+    fn sky_set_sun(dir_x: f32, dir_y: f32, dir_z: f32, color: u32, sharpness: f32);
+    fn draw_sky();
 
     // Materials (Mode 2/3)
     fn material_metallic(value: f32);
@@ -155,12 +160,12 @@ static mut LIGHT_DIRS: [[f32; 3]; 4] = [
 /// Light enabled states
 static mut LIGHT_ENABLED: [bool; 4] = [true, true, false, false];
 
-/// Light colors (RGB)
-static LIGHT_COLORS: [[f32; 3]; 4] = [
-    [1.0, 0.95, 0.9],  // Light 0: warm white
-    [0.6, 0.7, 1.0],   // Light 1: cool blue
-    [1.0, 0.7, 0.5],   // Light 2: orange
-    [0.7, 1.0, 0.7],   // Light 3: green
+/// Light colors (0xRRGGBBAA)
+static LIGHT_COLORS: [u32; 4] = [
+    0xFFF2E6FF,  // Light 0: warm white
+    0x99B3FFFF,  // Light 1: cool blue
+    0xFFB380FF,  // Light 2: orange
+    0xB3FFB3FF,  // Light 3: green
 ];
 
 /// Light intensity
@@ -198,7 +203,7 @@ pub extern "C" fn init() {
             let dir = LIGHT_DIRS[i as usize];
             light_set(i, dir[0], dir[1], dir[2]);
             let color = LIGHT_COLORS[i as usize];
-            light_color(i, color[0], color[1], color[2]);
+            light_color(i, color);
             light_intensity(i, LIGHT_INTENSITY);
             if !LIGHT_ENABLED[i as usize] {
                 light_disable(i);
@@ -360,6 +365,18 @@ fn format_float(val: f32, buf: &mut [u8]) -> usize {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
+        // Configure and draw sky (always draw first, before any geometry)
+        sky_set_colors(
+            0x99BFD9FF,   // Horizon: light blue
+            0x264D99FF    // Zenith: darker blue
+        );
+        sky_set_sun(
+            0.3, 0.6, 0.4,     // Direction: 45° elevation
+            0xFFFAF0FF,        // Color: warm white
+            0.95               // Sharpness: fairly sharp disc
+        );
+        draw_sky();
+
         // Update camera position to orbit around the sphere
         let orbit_radius = 4.0;
         let angle_rad = CAMERA_ORBIT_ANGLE * 0.0174533; // Convert degrees to radians (PI / 180)
@@ -422,11 +439,7 @@ pub extern "C" fn render() {
         for i in 0..4 {
             let x = 20.0 + (i as f32) * 50.0;
             let color = if LIGHT_ENABLED[i] {
-                // Convert light color to packed format
-                let r = (LIGHT_COLORS[i][0] * 255.0) as u32;
-                let g = (LIGHT_COLORS[i][1] * 255.0) as u32;
-                let b = (LIGHT_COLORS[i][2] * 255.0) as u32;
-                (r << 24) | (g << 16) | (b << 8) | 0xFF
+                LIGHT_COLORS[i]  // Already in packed u32 format
             } else {
                 0x404040FF // Dim gray when off
             };

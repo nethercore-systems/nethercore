@@ -262,12 +262,12 @@ Normalized Blinn-Phong with metallic-roughness workflow. Energy-conserving light
 
 ```rust
 fn light_set(index: u32, x: f32, y: f32, z: f32)  // index 0-3, direction vector
-fn light_color(index: u32, r: f32, g: f32, b: f32)
+fn light_color(index: u32, color: u32)             // 0xRRGGBBAA
 fn light_intensity(index: u32, intensity: f32)
 fn light_enable(index: u32)
 fn light_disable(index: u32)
 
-// Sun comes from procedural sky (set_sky_sun_direction, set_sky_sun_color)
+// Sun comes from procedural sky (sky_set_sun)
 ```
 
 All lights are directional. The `x`, `y`, `z` parameters specify the light direction (normalized internally).
@@ -373,7 +373,7 @@ Classic Blinn-Phong lighting with energy-conserving Gotanda normalization. Era-a
 ```rust
 // 4 dynamic lights (index 0-3)
 fn light_set(index: u32, x: f32, y: f32, z: f32)
-fn light_color(index: u32, r: f32, g: f32, b: f32)
+fn light_color(index: u32, color: u32)  // 0xRRGGBBAA
 fn light_intensity(index: u32, intensity: f32)
 fn light_enable(index: u32)
 fn light_disable(index: u32)
@@ -481,21 +481,30 @@ material_emissive(0.3);        // Self-illumination
 
 Emberware Z includes a procedural sky system for backgrounds and environment lighting. The sky uses a hemispherical gradient with an analytical sun — no texture lookups, minimal GPU cost.
 
+#### Sky Configuration Functions
+
 ```rust
-fn set_sky(
-    horizon_r: f32, horizon_g: f32, horizon_b: f32,  // Horizon color (linear RGB)
-    zenith_r: f32, zenith_g: f32, zenith_b: f32,     // Zenith color (linear RGB)
-    sun_dir_x: f32, sun_dir_y: f32, sun_dir_z: f32,  // Normalized direction TO sun
-    sun_r: f32, sun_g: f32, sun_b: f32,              // Sun color (linear RGB)
-    sun_sharpness: f32                                // Sun disc sharpness (10-1000)
+fn sky_set_colors(
+    horizon_color: u32,  // Horizon color (0xRRGGBBAA)
+    zenith_color: u32    // Zenith color (0xRRGGBBAA)
 )
+
+fn sky_set_sun(
+    dir_x: f32, dir_y: f32, dir_z: f32,  // Sun direction (will be normalized)
+    color: u32,                            // Sun color (0xRRGGBBAA)
+    sharpness: f32                         // Sun disc sharpness (0.0-1.0)
+)
+
+fn draw_sky()
 ```
 
-**Default:** All zeros (black sky, no sun). Call `set_sky()` in `init()` to enable lighting.
+**Default:** All zeros (black sky, no sun). Call `sky_set_colors()` and `sky_set_sun()` in `init()` to configure.
 
-The sky is used for:
-1. **Background** — Rendered behind all geometry (replaces clear color)
-2. **Ambient lighting** — Provides diffuse ambient term via sky sampling (all lit modes)
+#### Sky Usage
+
+The sky can be used for:
+1. **Visible Background** — Call `draw_sky()` to render gradient behind all geometry
+2. **Ambient lighting** — Sky provides diffuse ambient term (all lit modes, automatic)
 3. **Sun direction/color** — Drives sun specular and rim lighting in Modes 2-3
 
 **Algorithm:**
@@ -506,30 +515,77 @@ sun_contribution = sun_color * pow(sun_amount, sun_sharpness)
 final_color = sky_gradient + sun_contribution
 ```
 
-**Recommended:** Use the same `sun_direction` for both `set_sky()` and `light_direction()` to maintain visual consistency.
+**Recommended:** Use the same `sun_direction` for sky and lights to maintain visual consistency.
 
-**Example presets:**
+#### Rendering the Sky
+
+**IMPORTANT:** Call `draw_sky()` **FIRST** in your `render()` function, before any 3D geometry:
+
+```rust
+fn render() {
+    // Step 1: Configure sky colors
+    sky_set_colors(
+        0xB2D8F2FF,   // Horizon: light blue
+        0x3366B2FF    // Zenith: darker blue
+    );
+
+    // Step 2: Configure sun
+    sky_set_sun(
+        0.5, 0.707, 0.5,   // Direction: 45° elevation, southeast
+        0xFFF2E6FF,        // Color: warm white
+        0.98               // Sharpness: fairly sharp disc
+    );
+
+    // Step 3: Draw sky FIRST (before any geometry)
+    draw_sky();
+
+    // Step 4: Set up camera and draw scene
+    camera_set_perspective(60.0, 16.0 / 9.0, 0.1, 1000.0);
+    camera_look_at(
+        player_x, player_y + 5.0, player_z - 10.0,
+        player_x, player_y, player_z,
+        0.0, 1.0, 0.0
+    );
+
+    // Draw scene geometry (appears in front of sky)
+    draw_mesh(terrain);
+    draw_mesh(player);
+}
+```
+
+**Notes:**
+- `draw_sky()` renders a fullscreen gradient at the far plane (always behind geometry)
+- Sky rendering is automatic — just configure colors/sun, then call `draw_sky()`
+- Works in all render modes (0-3)
+- Depth write is disabled, so sky doesn't interfere with depth testing
+- Performance: <1ms GPU time at 1080p (single fullscreen triangle)
+
+#### Example Sky Presets
+
 ```rust
 // Midday
-set_sky(0.7, 0.8, 0.9,  // horizon
-        0.3, 0.5, 0.9,  // zenith
-        0.3, 0.8, 0.5,  // sun direction (normalized)
-        2.0, 1.9, 1.8,  // sun color (HDR)
-        200.0);         // sharpness
+fn init() {
+    sky_set_colors(0xB2CDE6FF, 0x4D80E6FF);  // Light blue → mid blue
+    sky_set_sun(0.3, 0.8, 0.5, 0xFFF2E6FF, 0.98);  // Warm white sun
+}
 
 // Sunset
-set_sky(1.0, 0.5, 0.3,  // horizon (warm)
-        0.3, 0.1, 0.5,  // zenith (purple)
-        0.8, 0.2, 0.0,  // sun direction (low)
-        3.0, 1.8, 0.9,  // sun color (orange HDR)
-        100.0);         // sharpness (softer)
+fn init() {
+    sky_set_colors(0xFF804DFF, 0x4D1A80FF);  // Orange → purple
+    sky_set_sun(0.8, 0.2, 0.0, 0xFFE673FF, 0.95);  // Golden sun
+}
 
-// Overcast (no sun disc)
-set_sky(0.6, 0.6, 0.65, // horizon
-        0.4, 0.4, 0.45, // zenith
-        0.0, 1.0, 0.0,  // sun direction (doesn't matter)
-        0.0, 0.0, 0.0,  // sun color = black (disabled)
-        1.0);           // sharpness (irrelevant)
+// Overcast (no visible sun)
+fn init() {
+    sky_set_colors(0x9999A6FF, 0x666673FF);  // Gray gradient
+    sky_set_sun(0.0, 1.0, 0.0, 0x000000FF, 0.0);  // No sun
+}
+
+// Night Sky
+fn init() {
+    sky_set_colors(0x0D0D1AFF, 0x03030DFF);  // Dark blue gradient
+    sky_set_sun(0.0, -1.0, 0.0, 0x1A1A26FF, 0.5);  // Moon (dim, below horizon)
+}
 ```
 
 **Note:** All lit modes output linear RGB. The runtime applies tonemapping and gamma correction.
@@ -1234,6 +1290,48 @@ fn init() {
 ```bash
 ffmpeg -i input.wav -ar 22050 -ac 1 -f s16le output.pcm
 ```
+
+---
+
+## Stereo Panning
+
+Emberware Z supports stereo panning for all sound playback. Sounds are loaded as mono (single channel) but can be positioned in the stereo field during playback.
+
+### How Panning Works
+
+**Pan Range:** -1.0 (full left) to 1.0 (full right), 0.0 = center
+
+**Equal-Power Panning:** Uses constant-power law to maintain perceived loudness across the stereo field:
+- `pan = -1.0`: 100% left speaker, 0% right speaker
+- `pan = 0.0`: 70.7% left speaker, 70.7% right speaker (center, -3dB each)
+- `pan = +1.0`: 0% left speaker, 100% right speaker
+
+This ensures sounds don't become quieter when centered, providing smooth and natural stereo positioning.
+
+### Positional Audio Example
+
+```rust
+fn update() {
+    // Calculate 2D positional audio for enemy footsteps
+    let listener_x = player.position.x;
+    let enemy_x = enemy.position.x;
+    let offset = enemy_x - listener_x;
+
+    // Pan: -1.0 (left) when enemy is 50+ units left, +1.0 (right) when 50+ units right
+    let pan = (offset / 50.0).clamp(-1.0, 1.0);
+
+    // Volume falloff: silent at 100+ units distance
+    let distance = offset.abs();
+    let volume = (1.0 - (distance / 100.0).min(1.0)).max(0.0);
+
+    channel_set(0, volume, pan);  // Update channel 0 every frame
+}
+```
+
+### Limitations
+
+- **Pan changes on already-playing sounds:** When using `channel_set()` to update pan on a currently-playing sound, the new pan value is stored but won't take effect until the sound finishes or is restarted. This is a limitation of the underlying audio system.
+- **Workaround:** For real-time pan changes, use short looping sounds or restart the sound with `channel_play()` when pan changes significantly.
 
 ---
 

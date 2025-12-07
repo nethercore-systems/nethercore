@@ -6,146 +6,61 @@
 
 ---
 
+## Recently Completed
+
+### **[FEATURE] Procedural Sky Rendering (draw_sky)** ✅
+
+**Completed:** 2025-12-08
+
+Implemented fullscreen procedural sky rendering with gradient + sun disc.
+
+**What Was Added:**
+- `draw_sky()` FFI function for rendering procedural sky
+- `VRPCommand::Sky` variant for sky draw commands
+- `sky.wgsl` shader with fullscreen triangle technique
+- Equal-power gradient interpolation (horizon → zenith)
+- Sun disc rendering with configurable sharpness
+- Works in all render modes (0-3)
+
+**Files Modified:**
+- [emberware-z/src/ffi/sky.rs](emberware-z/src/ffi/sky.rs) - Added draw_sky() FFI
+- [emberware-z/src/graphics/command_buffer.rs](emberware-z/src/graphics/command_buffer.rs) - Added Sky command variant
+- [emberware-z/src/graphics/pipeline.rs](emberware-z/src/graphics/pipeline.rs) - Added sky pipeline
+- [emberware-z/src/graphics/frame.rs](emberware-z/src/graphics/frame.rs) - Sky command sorting and execution
+- [emberware-z/shaders/sky.wgsl](emberware-z/shaders/sky.wgsl) - Sky rendering shader (NEW)
+- [docs/emberware-z.md](docs/emberware-z.md) - Documented sky functions
+- [examples/lighting/src/lib.rs](examples/lighting/src/lib.rs) - Example usage
+
+---
+
+### **[FEATURE] Audio Panning Support** ✅
+
+**Completed:** 2025-12-08
+
+Implemented stereo panning for all audio playback with equal-power panning.
+
+**What Was Added:**
+- `PannedSource<S>` wrapper converting mono → stereo with positional panning
+- Equal-power panning formula (constant-power law) for natural stereo imaging
+- Pan support in `play_sound()`, `channel_play()`, and `channel_set()`
+- Pan state tracking in `ChannelState`
+
+**Technical Details:**
+- Pan range: -1.0 (full left), 0.0 (center), 1.0 (full right)
+- Equal-power formula: pan=0 gives 70.7% on each speaker (no volume drop)
+- Limitation: `channel_set()` pan changes stored but only take effect on sound restart
+
+**Files Modified:**
+- [emberware-z/src/audio.rs](emberware-z/src/audio.rs:83-433) - Added PannedSource and panning logic
+- [docs/emberware-z.md](docs/emberware-z.md:1296-1335) - Added "Stereo Panning" section
+
+---
+
 ## In Progress
 
 ---
 
 ## TODO
-
----
-
-### **[FEATURE] Audio Panning Support**
-
-**Current State:**
-`emberware-z/src/audio.rs` has three TODO comments about panning (lines 235, 281, 310):
-```rust
-// TODO: Implement panning (rodio doesn't have built-in pan control)
-```
-
-The audio system is otherwise complete:
-- 16 sound effect channels
-- Dedicated music channel
-- Volume control per channel
-- Rollback-aware command buffering
-- 22,050 Hz authentic retro audio
-
-**What's Missing:**
-- `pan` parameter accepted by `play_sound()` but ignored
-- No spatial audio (left/right stereo positioning)
-- All sounds play centered
-
-**Why This Matters:**
-- Spatial audio improves game feel (bullets whizzing past, enemies off-screen)
-- Essential for 3D games and atmospheric 2D games
-- Enables directional audio cues (footsteps, voices)
-
-**Implementation Plan:**
-
-Rodio doesn't have built-in panning, so we need to implement it manually:
-
-1. **Pan Implementation (Manual Channel Mixing):**
-   ```rust
-   // In audio.rs, add a PannedSource wrapper
-   struct PannedSource<S> {
-       source: S,
-       pan: f32,  // -1.0 (left) to 1.0 (right)
-   }
-
-   impl<S: Source<Item = i16>> Source for PannedSource<S> {
-       type Item = i16;
-
-       fn channels(&self) -> u16 {
-           2  // Always output stereo
-       }
-
-       fn sample_rate(&self) -> u32 {
-           self.source.sample_rate()
-       }
-   }
-
-   impl<S: Source<Item = i16>> Iterator for PannedSource<S> {
-       type Item = i16;
-
-       fn next(&mut self) -> Option<i16> {
-           let sample = self.source.next()?;
-
-           // Convert pan -1..1 to gain multipliers
-           // pan = -1: left=1.0, right=0.0
-           // pan =  0: left=0.707, right=0.707 (equal power)
-           // pan = +1: left=0.0, right=1.0
-           let angle = (self.pan + 1.0) * 0.25 * PI;  // 0..PI/2
-           let left_gain = angle.cos();
-           let right_gain = angle.sin();
-
-           // Alternate left/right samples for stereo
-           static mut IS_LEFT: bool = true;
-           unsafe {
-               let gain = if IS_LEFT { left_gain } else { right_gain };
-               IS_LEFT = !IS_LEFT;
-               Some((sample as f32 * gain) as i16)
-           }
-       }
-   }
-   ```
-
-2. **Update AudioChannel to Store Pan:**
-   ```rust
-   // In audio.rs
-   struct AudioChannel {
-       sink: Sink,
-       sound_id: Option<u32>,
-       volume: f32,
-       pan: f32,  // ADD THIS
-   }
-   ```
-
-3. **Apply Panning in play_sound():**
-   ```rust
-   // In audio.rs:219, replace TODO with:
-   let source = sound.to_source();
-   let panned = PannedSource { source, pan };
-   sink.append(panned);
-   ```
-
-4. **Add set_pan FFI Function:**
-   ```rust
-   // In ffi/audio.rs (after refactoring) or ffi/mod.rs (current)
-   fn set_pan(caller: Caller, channel: u32, pan: f32) {
-       let state = caller.data_mut();
-       state.console_state.audio_commands.push(AudioCommand::SetPan {
-           channel,
-           pan: pan.clamp(-1.0, 1.0),
-       });
-   }
-   ```
-
-5. **Document in docs/emberware-z.md:**
-   ```markdown
-   ### Audio Functions
-
-   fn play_sound(sound_id: u32, volume: f32, pan: f32) -> u32
-   fn set_pan(channel: u32, pan: f32)
-
-   - `pan`: -1.0 (full left) to 1.0 (full right), 0.0 = center
-   - Uses equal-power panning for smooth stereo image
-   ```
-
-**Alternative: Use Rodio's Spatial Sink (Future):**
-If rodio adds spatial audio in the future, we can switch to `rodio::SpatialSink` with 3D positioning.
-
-**Success Criteria:**
-- ✅ Panning works (-1.0 = left, 0.0 = center, 1.0 = right)
-- ✅ `set_pan()` FFI function implemented
-- ✅ Equal-power panning (no volume drop at center)
-- ✅ Works with existing sound playback
-- ✅ Document in `docs/emberware-z.md`
-- ✅ Update `examples/audio-test` to demonstrate panning (or create if missing)
-
-**Files to Modify:**
-- `emberware-z/src/audio.rs` (add PannedSource, update play_sound/set_pan)
-- `emberware-z/src/ffi/audio.rs` or `ffi/mod.rs` (add set_pan FFI)
-- `docs/emberware-z.md` (document pan parameter)
-- `examples/audio-test/` or create if missing
 
 ---
 
@@ -482,165 +397,6 @@ impl TestEnvironment {
 - Expand `core/src/test_utils.rs` (test harness)
 - Add `build.rs` to compile fixtures to WASM
 
----
-
-### **[FEATURE] Add draw_sky() Function**
-
-**Current State:**
-- Emberware Z has a procedural sky system (gradient + sun)
-- Sky provides ambient lighting and IBL-lite reflections in PBR modes
-- Sky is configured via FFI: `sky_sun_color()`, `sky_gradient_top()`, `sky_gradient_bottom()`, `sky_sun_direction()`
-- **No way to actually draw the sky as geometry** - it only affects lighting
-
-**The Problem:**
-Games that want a visible sky background have to:
-1. Manually create a large sphere mesh
-2. Texture it or use vertex colors to match sky gradient
-3. Position it around the camera
-4. Update it when sky settings change
-
-This is tedious and error-prone. The sky configuration exists but isn't rendered.
-
-**What's Needed:**
-A simple FFI function to render the procedural sky as a background:
-
-```rust
-fn draw_sky()
-```
-
-**Expected Behavior:**
-- Draws a full-screen quad or skybox using current sky settings
-- Renders gradient from `sky_gradient_bottom()` (horizon) to `sky_gradient_top()` (zenith)
-- Renders sun disc at `sky_sun_direction()` with `sky_sun_color()`
-- Depth test disabled (always behind everything)
-- No transform required (always fills viewport)
-- Works in all render modes
-
-**Implementation Plan:**
-
-1. **Sky Rendering Approach:**
-   Use fullscreen triangle technique with view ray reconstruction:
-   ```wgsl
-   // Based on reference shader code
-   @vertex
-   fn vs_sky(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
-       // Fullscreen triangle (no vertex buffer needed)
-       let x = f32((vertex_index << 1u) & 2u) * 2.0 - 1.0;
-       let y = f32(vertex_index & 2u) * 2.0 - 1.0;
-
-       var output: VertexOutput;
-       output.position = vec4<f32>(x, y, 1.0, 1.0); // At far plane
-
-       // Calculate view ray from inverse projection
-       let clip_pos = vec4<f32>(x, y, 1.0, 1.0);
-       let view_pos = inverse_projection * clip_pos;
-       output.view_ray = (inverse_view * vec4<f32>(view_pos.xyz, 0.0)).xyz;
-
-       return output;
-   }
-
-   @fragment
-   fn fs_sky(in: VertexOutput) -> @location(0) vec4<f32> {
-       let direction = normalize(in.view_ray);
-
-       // Gradient based on Y component (up/down)
-       let sky_color = mix(
-           sky_uniforms.horizon_color,
-           sky_uniforms.zenith_color,
-           clamp(direction.y * 0.5 + 0.5, 0.0, 1.0)
-       );
-
-       // Add sun disc
-       let sun_dot = dot(direction, sky_uniforms.sun_direction);
-       let sun_intensity = smoothstep(0.9995, 0.9999, sun_dot);
-       let sun = sky_uniforms.sun_color * sun_intensity * sky_uniforms.sun_intensity;
-
-       return vec4<f32>(sky_color + sun, 1.0);
-   }
-   ```
-
-   **Performance Notes:**
-   - Fullscreen triangle = 3 vertices (can reuse existing quad rendering logic)
-   - Fragment shader is simple: 1 mix, 1 dot, 1 smoothstep per pixel
-   - No texture sampling needed (pure math)
-   - Depth test disabled, early-z rejected by geometry drawn after
-   - Could optimize further by rendering to low-res texture, then upscale (authentic PS1 feel)
-
-2. **Add to FFI** (in `ffi/draw_3d.rs` or `ffi/mod.rs`):
-   ```rust
-   fn draw_sky(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>) {
-       let state = caller.data_mut();
-
-       // Add sky draw command to command buffer
-       state.console_state.draw_commands.push(DrawCommand::Sky);
-   }
-   ```
-
-3. **Execute in Graphics Backend:**
-   ```rust
-   // In ZGraphics::render() or draw_executor.rs
-   DrawCommand::Sky => {
-       // Disable depth test/write
-       // Draw full-screen quad
-       // Use sky gradient uniforms
-       // Add sun disc
-   }
-   ```
-
-4. **Reuse Existing Rendering Infrastructure:**
-   - Check if there's existing fullscreen quad/triangle rendering code in sprites or billboards
-   - May be able to share vertex generation or pipeline state
-   - Sky could be special-cased in draw command execution rather than a separate pipeline
-   - Consider: Could sky be rendered as billboard-like but without transforms?
-
-5. **Usage Example:**
-   ```rust
-   // In game render()
-   fn render() {
-       // Configure sky colors (horizon RGB, zenith RGB)
-       sky_set_colors(
-           1.0, 0.894, 0.710,  // Horizon: Moccasin (warm)
-           0.529, 0.808, 0.922  // Zenith: Sky blue
-       );
-
-       // Configure sun (direction XYZ, color RGB, intensity)
-       sky_set_sun(
-           0.5, 0.707, 0.5,     // Direction: 45° elevation
-           1.0, 0.98, 0.941,    // Color: Floral white
-           1.0                  // Intensity
-       );
-
-       // Draw sky first (before any geometry)
-       draw_sky();
-
-       // Draw scene geometry
-       draw_mesh(terrain_mesh);
-       draw_mesh(player_mesh);
-   }
-   ```
-
-**Design Decisions:**
-
-1. **Draw order:** Should be called first in render() (before geometry)
-2. **Depth:** Always at infinite depth (depth = 1.0)
-3. **Performance:** Single full-screen quad = 2 triangles (negligible cost)
-4. **Compatibility:** Works with all render modes (unlit, matcap, PBR, hybrid)
-
-**Success Criteria:**
-- ✅ `draw_sky()` FFI function implemented
-- ✅ Renders gradient from bottom to top color
-- ✅ Renders sun disc at specified direction
-- ✅ No depth conflicts with scene geometry
-- ✅ Documented in `docs/emberware-z.md` under "Sky Functions"
-- ✅ Update existing examples to use `draw_sky()` where appropriate
-- ✅ Add to procedural-shapes example (once created)
-
-**Files to Create/Modify:**
-- Create `emberware-z/shaders/sky.wgsl` (sky rendering shader)
-- Modify `emberware-z/src/ffi/mod.rs` or `ffi/draw_3d.rs` (add draw_sky FFI)
-- Modify `emberware-z/src/graphics/mod.rs` or `draw_executor.rs` (execute sky draw command)
-- Update `docs/emberware-z.md` (document draw_sky function)
-- Update `examples/lighting/src/lib.rs` (demonstrate sky rendering)
 
 ---
 
@@ -805,157 +561,6 @@ The command-line argument game resolution is not working correctly. Need to inve
 - ✅ Add integration test for CLI argument parsing
 - ✅ Document CLI usage in README.md
 
----
-
-### **[CRITICAL] API: Unify FFI Color Parameters**
-
-**Current State:**
-FFI functions inconsistently use different color formats:
-- Some use `color: u32` (packed 0xRRGGBBAA)
-- Some use `r: f32, g: f32, b: f32` (separate components)
-- Some use `r: f32, g: f32, b: f32, a: f32` (with alpha)
-
-**Examples of Inconsistency:**
-```rust
-// Uses packed u32
-fn set_clear_color(color: u32)          // 0xRRGGBBAA
-fn set_color(color: u32)                // 0xRRGGBBAA
-fn draw_rect(x, y, w, h, color: u32)    // 0xRRGGBBAA
-
-// Uses separate f32 components (assumed, need to verify)
-fn light_color(light_id: u32, r: f32, g: f32, b: f32)
-fn material_emissive(r: f32, g: f32, b: f32)
-fn sky_sun_color(r: f32, g: f32, b: f32)
-```
-
-**Why This Matters:**
-- Inconsistent API is confusing for game developers
-- Hard to remember which functions use which format
-- Copy-paste errors when switching between functions
-- Wastes WASM→host call overhead with multiple parameters
-
-**Proposed Standard:**
-**Use `u32` for all color parameters (0xRRGGBBAA format)**
-
-**Benefits:**
-- Single 4-byte value instead of 3-4 floats (12-16 bytes)
-- Matches web/game dev conventions (hex colors)
-- Easier to work with in code: `0xFF0000FF` (red) vs `1.0, 0.0, 0.0, 1.0`
-- Consistent with existing functions like `set_color()`
-- Less WASM function call overhead (1 param vs 3-4)
-
-**Implementation Plan:**
-
-1. **Audit All FFI Functions:**
-   ```bash
-   # Find all color-related FFI functions
-   grep -n "fn.*color\|fn.*Color" emberware-z/src/ffi/mod.rs
-   ```
-
-2. **Create Color Utility Helpers:**
-   ```rust
-   // In emberware-z/src/ffi/mod.rs or ffi/utils.rs
-
-   /// Convert packed u32 color to f32 components
-   pub fn unpack_color(color: u32) -> (f32, f32, f32, f32) {
-       let r = ((color >> 24) & 0xFF) as f32 / 255.0;
-       let g = ((color >> 16) & 0xFF) as f32 / 255.0;
-       let b = ((color >> 8) & 0xFF) as f32 / 255.0;
-       let a = (color & 0xFF) as f32 / 255.0;
-       (r, g, b, a)
-   }
-
-   /// Convert packed u32 color to RGB only (ignore alpha)
-   pub fn unpack_color_rgb(color: u32) -> (f32, f32, f32) {
-       let (r, g, b, _) = unpack_color(color);
-       (r, g, b)
-   }
-   ```
-
-3. **Update FFI Function Signatures:**
-   ```rust
-   // BEFORE
-   fn light_color(caller: Caller, light_id: u32, r: f32, g: f32, b: f32) { ... }
-
-   // AFTER
-   fn light_color(caller: Caller, light_id: u32, color: u32) {
-       let (r, g, b, _) = unpack_color_rgb(color);
-       // ... rest of implementation
-   }
-   ```
-
-4. **Functions to Update:**
-   - `light_color(light_id, color)` - Currently uses f32 r, g, b
-   - `light_ambient(color)` - Currently uses f32 r, g, b
-   - `material_emissive(color)` - Currently uses f32 r, g, b
-   - `sky_sun_color(color)` - Currently uses f32 r, g, b
-   - `sky_gradient_top(color)` - Currently uses f32 r, g, b
-   - `sky_gradient_bottom(color)` - Currently uses f32 r, g, b
-   - Any other color functions found during audit
-
-5. **Update Documentation:**
-   - Update `docs/emberware-z.md` to show new signatures
-   - Add color format documentation:
-     ```markdown
-     ## Color Format
-
-     All colors use packed u32 format: 0xRRGGBBAA
-     - Red: bits 24-31
-     - Green: bits 16-23
-     - Blue: bits 8-15
-     - Alpha: bits 0-7
-
-     Examples:
-     - Red: 0xFF0000FF
-     - Green: 0x00FF00FF
-     - Blue: 0x0000FFFF
-     - White: 0xFFFFFFFF
-     - Black: 0x000000FF
-     - Transparent: 0x00000000
-     ```
-
-6. **Update Examples:**
-   - Find all examples using the old API
-   - Update to use new packed u32 format
-   - Verify they still render correctly
-
-**Migration Path for Game Developers:**
-```rust
-// Old code (before)
-light_color(0, 1.0, 0.5, 0.0);  // Orange light
-
-// New code (after)
-light_color(0, 0xFF8000FF);     // Orange light (same)
-
-// Helper macro for easier migration
-macro_rules! rgb {
-    ($r:expr, $g:expr, $b:expr) => {
-        ((($r as u32) << 24) | (($g as u32) << 16) | (($b as u32) << 8) | 0xFF)
-    };
-}
-
-light_color(0, rgb!(255, 128, 0));  // Orange
-```
-
-**Success Criteria:**
-- ✅ ALL color parameters use u32 format
-- ✅ Zero functions use separate r,g,b parameters
-- ✅ Documentation updated with color format spec
-- ✅ All examples updated and tested
-- ✅ Color utility helpers provided
-- ✅ Migration guide in docs
-
-**Files to Modify:**
-- Audit and update `emberware-z/src/ffi/*.rs` (all color functions)
-- Update `docs/emberware-z.md` (add color format section)
-- Update all `examples/*/src/lib.rs` (convert color calls)
-- Add migration guide to `docs/ffi.md`
-
-**Breaking Change:**
-This is a **breaking API change**. Consider:
-- Add to changelog
-- Version bump (0.1 → 0.2)
-- Provide migration script or helpers
 
 ---
 

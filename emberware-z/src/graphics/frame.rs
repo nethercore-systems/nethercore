@@ -9,7 +9,7 @@ use glam::Mat4;
 
 use super::command_buffer::{BufferSource, VRPCommand};
 use super::pipeline::PipelineKey;
-use super::render_state::{BlendMode, RenderState, TextureHandle};
+use super::render_state::{BlendMode, CullMode, RenderState, TextureHandle};
 use super::vertex::VERTEX_FORMAT_COUNT;
 use super::ZGraphics;
 
@@ -155,15 +155,19 @@ impl ZGraphics {
             .commands_mut()
             .sort_unstable_by_key(|cmd| {
                 // Extract fields from command variant
-                let (format, depth_test, cull_mode, texture_slots, buffer_index, is_quad) = match cmd {
+                let (format, depth_test, cull_mode, texture_slots, buffer_index, is_quad, is_sky) = match cmd {
                     VRPCommand::Mesh { format, depth_test, cull_mode, texture_slots, buffer_index, .. } => {
-                        (*format, *depth_test, *cull_mode, *texture_slots, Some(*buffer_index), false)
+                        (*format, *depth_test, *cull_mode, *texture_slots, Some(*buffer_index), false, false)
                     }
                     VRPCommand::IndexedMesh { format, depth_test, cull_mode, texture_slots, buffer_index, .. } => {
-                        (*format, *depth_test, *cull_mode, *texture_slots, Some(*buffer_index), false)
+                        (*format, *depth_test, *cull_mode, *texture_slots, Some(*buffer_index), false, false)
                     }
                     VRPCommand::Quad { depth_test, cull_mode, texture_slots, .. } => {
-                        (self.unit_quad_format, *depth_test, *cull_mode, *texture_slots, None, true)
+                        (self.unit_quad_format, *depth_test, *cull_mode, *texture_slots, None, true, false)
+                    }
+                    VRPCommand::Sky { depth_test, .. } => {
+                        // Sky uses unique sort key to render first (before all geometry)
+                        (0, *depth_test, super::render_state::CullMode::None, [TextureHandle::INVALID; 4], None, false, true)
                     }
                 };
 
@@ -193,9 +197,12 @@ impl ZGraphics {
                     texture_filter: self.render_state.texture_filter,
                 };
 
-                // Create sort key based on pipeline type (Regular vs Quad)
+                // Create sort key based on pipeline type (Regular vs Quad vs Sky)
                 let (render_mode, vertex_format, blend_mode_u8, depth_test_u8, cull_mode_u8) =
-                    if is_quad {
+                    if is_sky {
+                        // Sky pipeline: Use lowest sort key to render first (before all geometry)
+                        (0u8, 0u8, 0u8, 0u8, 0u8)
+                    } else if is_quad {
                         // Quad pipeline: Use special values to group separately
                         let pipeline_key = PipelineKey::quad(&state);
                         match pipeline_key {
@@ -293,6 +300,10 @@ impl ZGraphics {
                     cull_mode,
                     ..
                 } => (self.unit_quad_format, *depth_test, *cull_mode),
+                VRPCommand::Sky { depth_test, .. } => {
+                    // Sky uses its own pipeline, but we need values for bind group layout
+                    (0, *depth_test, CullMode::None)
+                }
             };
 
             let first_state = RenderState {
@@ -399,6 +410,7 @@ impl ZGraphics {
                     texture_slots,
                     buffer_source,
                     is_quad,
+                    is_sky,
                     cmd_blend_mode,
                 ) = match cmd {
                     VRPCommand::Mesh {
@@ -414,6 +426,7 @@ impl ZGraphics {
                         *cull_mode,
                         *texture_slots,
                         BufferSource::Immediate(*buffer_index),
+                        false,
                         false,
                         None,
                     ),
@@ -431,6 +444,7 @@ impl ZGraphics {
                         *texture_slots,
                         BufferSource::Retained(*buffer_index),
                         false,
+                        false,
                         None,
                     ),
                     VRPCommand::Quad {
@@ -446,7 +460,18 @@ impl ZGraphics {
                         *texture_slots,
                         BufferSource::Quad,
                         true,
+                        false,
                         Some(*blend_mode),
+                    ),
+                    VRPCommand::Sky { depth_test, .. } => (
+                        0, // Unused for sky
+                        *depth_test,
+                        super::render_state::CullMode::None,
+                        [TextureHandle::INVALID; 4], // Default textures (unused)
+                        BufferSource::Immediate(0), // Unused for sky
+                        false,
+                        true,
+                        None,
                     ),
                 };
 
@@ -475,8 +500,14 @@ impl ZGraphics {
                     texture_filter: self.render_state.texture_filter,
                 };
 
-                // Get/create pipeline - use quad pipeline for quad rendering, regular for others
-                if is_quad {
+                // Get/create pipeline - use sky/quad/regular pipeline based on command type
+                if is_sky {
+                    // Sky rendering: Ensure sky pipeline exists
+                    self.pipeline_cache.get_or_create_sky(
+                        &self.device,
+                        self.config.format,
+                    );
+                } else if is_quad {
                     // Quad rendering: Ensure quad pipeline exists
                     self.pipeline_cache.get_or_create_quad(
                         &self.device,
@@ -500,7 +531,9 @@ impl ZGraphics {
                 }
 
                 // Now get immutable reference to pipeline entry (avoiding borrow issues)
-                let pipeline_key = if is_quad {
+                let pipeline_key = if is_sky {
+                    PipelineKey::Sky
+                } else if is_quad {
                     PipelineKey::quad(&state)
                 } else {
                     PipelineKey::new(self.current_render_mode, format, &state)
@@ -692,6 +725,20 @@ impl ZGraphics {
                             *base_vertex..*base_vertex + *vertex_count,
                             *buffer_index..*buffer_index + 1,
                         );
+                    }
+                    VRPCommand::Sky {
+                        shading_state_index,
+                        ..
+                    } => {
+                        // Sky rendering: Fullscreen triangle with procedural gradient
+                        tracing::info!(
+                            "Drawing sky with shading_state_index {} (vertices 0..3)",
+                            shading_state_index
+                        );
+
+                        // Draw fullscreen triangle (3 vertices, no vertex buffer)
+                        // Uses shading_state_index as instance range to pass index to shader
+                        render_pass.draw(0..3, *shading_state_index..*shading_state_index + 1);
                     }
                 }
             }

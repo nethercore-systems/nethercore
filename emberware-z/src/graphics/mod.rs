@@ -82,7 +82,7 @@ use emberware_core::console::Graphics;
 
 // Re-export public types from submodules
 pub use buffer::{BufferManager, GrowableBuffer, MeshHandle, RetainedMesh};
-pub use command_buffer::VirtualRenderPass;
+pub use command_buffer::{VirtualRenderPass, VRPCommand};
 pub use matrix_packing::MvpShadingIndices;
 pub use quad_instance::{QuadInstance, QuadMode};
 pub use render_state::{

@@ -16,31 +16,37 @@ pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) ->
     linker.func_wrap("env", "sky_set_colors", sky_set_colors)?;
     linker.func_wrap("env", "sky_set_sun", sky_set_sun)?;
     linker.func_wrap("env", "matcap_set", matcap_set)?;
+    linker.func_wrap("env", "draw_sky", draw_sky)?;
     Ok(())
 }
 
 /// Set sky gradient colors
 ///
 /// # Arguments
-/// * `horizon_r` — Horizon color red (0.0-1.0)
-/// * `horizon_g` — Horizon color green (0.0-1.0)
-/// * `horizon_b` — Horizon color blue (0.0-1.0)
-/// * `zenith_r` — Zenith color red (0.0-1.0)
-/// * `zenith_g` — Zenith color green (0.0-1.0)
-/// * `zenith_b` — Zenith color blue (0.0-1.0)
+/// * `horizon_color` — Horizon color (0xRRGGBBAA)
+/// * `zenith_color` — Zenith color (0xRRGGBBAA)
 ///
 /// Sets the procedural sky gradient. Horizon is the color at eye level,
 /// zenith is the color directly overhead. The gradient interpolates smoothly between them.
 /// Works in all render modes (provides ambient lighting in PBR/Hybrid modes).
+///
+/// **Examples:**
+/// - `sky_set_colors(0x87CEEBFF, 0x191970FF)` — Light blue horizon, midnight blue zenith
+/// - `sky_set_colors(0xFF6B6BFF, 0x4A00E0FF)` — Sunset gradient (red to purple)
 fn sky_set_colors(
     mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    horizon_r: f32,
-    horizon_g: f32,
-    horizon_b: f32,
-    zenith_r: f32,
-    zenith_g: f32,
-    zenith_b: f32,
+    horizon_color: u32,
+    zenith_color: u32,
 ) {
+    // Unpack colors from 0xRRGGBBAA to 0.0-1.0 range (ignore alpha)
+    let horizon_r = ((horizon_color >> 24) & 0xFF) as f32 / 255.0;
+    let horizon_g = ((horizon_color >> 16) & 0xFF) as f32 / 255.0;
+    let horizon_b = ((horizon_color >> 8) & 0xFF) as f32 / 255.0;
+
+    let zenith_r = ((zenith_color >> 24) & 0xFF) as f32 / 255.0;
+    let zenith_g = ((zenith_color >> 16) & 0xFF) as f32 / 255.0;
+    let zenith_b = ((zenith_color >> 8) & 0xFF) as f32 / 255.0;
+
     let state = &mut caller.data_mut().console;
     state.update_sky_colors(
         [horizon_r, horizon_g, horizon_b],
@@ -54,24 +60,29 @@ fn sky_set_colors(
 /// * `dir_x` — Sun direction X component (will be normalized)
 /// * `dir_y` — Sun direction Y component (will be normalized)
 /// * `dir_z` — Sun direction Z component (will be normalized)
-/// * `color_r` — Sun color red (0.0-1.0)
-/// * `color_g` — Sun color green (0.0-1.0)
-/// * `color_b` — Sun color blue (0.0-1.0)
+/// * `color` — Sun color (0xRRGGBBAA)
 /// * `sharpness` — Sun sharpness (0.0-1.0, higher = smaller/sharper sun disc)
 ///
 /// Sets the procedural sky sun. The sun appears as a bright disc in the sky gradient
 /// and provides specular highlights in PBR/Hybrid modes.
 /// Direction will be automatically normalized by the graphics backend.
+///
+/// **Examples:**
+/// - `sky_set_sun(0.5, 0.707, 0.5, 0xFFFFFFFF, 0.98)` — White sun at 45° elevation
+/// - `sky_set_sun(0.0, 1.0, 0.0, 0xFFE4B5FF, 0.95)` — Warm sunset sun overhead
 fn sky_set_sun(
     mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
     dir_x: f32,
     dir_y: f32,
     dir_z: f32,
-    color_r: f32,
-    color_g: f32,
-    color_b: f32,
+    color: u32,
     sharpness: f32,
 ) {
+    // Unpack color from 0xRRGGBBAA to 0.0-1.0 range (ignore alpha)
+    let color_r = ((color >> 24) & 0xFF) as f32 / 255.0;
+    let color_g = ((color >> 16) & 0xFF) as f32 / 255.0;
+    let color_b = ((color >> 8) & 0xFF) as f32 / 255.0;
+
     let state = &mut caller.data_mut().console;
 
     // Validate direction vector (warn if zero-length)
@@ -111,4 +122,47 @@ fn matcap_set(
 
     let state = &mut caller.data_mut().console;
     state.bound_textures[slot as usize] = texture;
+}
+
+/// Draw the procedural sky
+///
+/// Renders a fullscreen gradient from horizon to zenith color with sun disc.
+/// Uses current sky configuration set via `sky_set_colors()` and `sky_set_sun()`.
+/// Always renders at far plane (depth=1.0) so geometry appears in front.
+///
+/// # Usage
+/// Call this **first** in your `render()` function, before any 3D geometry:
+/// ```rust
+/// fn render() {
+///     // Configure sky colors and sun
+///     sky_set_colors(0xB2D8F2FF, 0x3366B2FF);  // Light blue → darker blue
+///     sky_set_sun(0.5, 0.707, 0.5, 0xFFF2E6FF, 0.98);  // Warm white sun
+///
+///     // Draw sky first (before geometry)
+///     draw_sky();
+///
+///     // Then draw scene geometry
+///     draw_mesh(terrain);
+///     draw_mesh(player);
+/// }
+/// ```
+///
+/// # Notes
+/// - Works in all render modes (0-3)
+/// - Sky always renders behind all geometry
+/// - Depth test is disabled for sky rendering
+fn draw_sky(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>) {
+    let state = &mut caller.data_mut().console;
+
+    // Get or create shading state index for current sky configuration
+    // This ensures the sky data is uploaded to GPU
+    let shading_idx = state.add_shading_state();
+
+    // Add sky draw command to render pass
+    state
+        .render_pass
+        .add_command(crate::graphics::VRPCommand::Sky {
+            shading_state_index: shading_idx.0,
+            depth_test: false, // Sky always behind geometry
+        });
 }

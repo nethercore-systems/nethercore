@@ -52,7 +52,7 @@ extern "C" {
 
     // Sky and lighting
     fn light_set(index: u32, x: f32, y: f32, z: f32);
-    fn light_color(index: u32, r: f32, g: f32, b: f32);
+    fn light_color(index: u32, color: u32);
     fn light_intensity(index: u32, intensity: f32);
     fn light_enable(index: u32);
     fn light_disable(index: u32);
@@ -210,25 +210,25 @@ pub extern "C" fn init() {
         // Setup 4 dynamic lights in a rotating pattern
         // Light 0: Red from front-left
         light_set(0, -0.7, -0.2, -0.7);
-        light_color(0, 1.0, 0.3, 0.3);
+        light_color(0, 0xFF4D4DFF);  // Red
         light_intensity(0, 0.6);
         // light_enable(0);
 
         // Light 1: Green from front-right
         light_set(1, 0.7, -0.2, -0.7);
-        light_color(1, 0.3, 1.0, 0.3);
+        light_color(1, 0x4DFF4DFF);  // Green
         light_intensity(1, 0.6);
         // light_enable(1);
 
         // Light 2: Blue from back-left
         light_set(2, -0.7, -0.2, 0.7);
-        light_color(2, 0.3, 0.3, 1.0);
+        light_color(2, 0x4D4DFFFF);  // Blue
         light_intensity(2, 0.6);
         // light_enable(2);
 
         // Light 3: Yellow from back-right
         light_set(3, 0.7, -0.2, 0.7);
-        light_color(3, 1.0, 1.0, 0.3);
+        light_color(3, 0xFFFF4DFF);  // Yellow
         light_intensity(3, 0.6);
         // light_enable(3);
 

@@ -1,0 +1,8 @@
+{
+  "id": "audio-demo",
+  "name": "Audio Demo",
+  "author": "Emberware",
+  "version": "0.1.0",
+  "description": "Demonstrates stereo panning and positional audio with moving sound sources",
+  "console": "emberware-z"
+}

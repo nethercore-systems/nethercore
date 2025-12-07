@@ -76,19 +76,20 @@ fn light_set(
 ///
 /// # Arguments
 /// * `index` — Light index (0-3)
-/// * `r` — Red component (0.0-1.0+, can be > 1.0 for HDR-like effects)
-/// * `g` — Green component (0.0-1.0+)
-/// * `b` — Blue component (0.0-1.0+)
+/// * `color` — Light color (0xRRGGBBAA)
 ///
-/// Sets the color for a light.
-/// Colors can exceed 1.0 for brighter lights (HDR-like effects).
-/// Negative values are clamped to 0.0.
+/// Sets the color for a light using packed u32 format.
+/// The RGB values are converted to 0.0-1.0 range for lighting calculations.
+/// Alpha channel is ignored for lights.
+///
+/// **Examples:**
+/// - `0xFF0000FF` — Red light
+/// - `0xFFFFFFFF` — White light
+/// - `0xFFA500FF` — Orange light
 fn light_color(
     mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
     index: u32,
-    r: f32,
-    g: f32,
-    b: f32,
+    color: u32,
 ) {
     // Validate index
     if index > 3 {
@@ -96,25 +97,10 @@ fn light_color(
         return;
     }
 
-    // Validate color values (allow > 1.0 for HDR effects, but clamp negative to 0.0)
-    let r = if r < 0.0 {
-        warn!("light_color: negative red value {}, clamping to 0.0", r);
-        0.0
-    } else {
-        r
-    };
-    let g = if g < 0.0 {
-        warn!("light_color: negative green value {}, clamping to 0.0", g);
-        0.0
-    } else {
-        g
-    };
-    let b = if b < 0.0 {
-        warn!("light_color: negative blue value {}, clamping to 0.0", b);
-        0.0
-    } else {
-        b
-    };
+    // Unpack color from 0xRRGGBBAA to 0.0-1.0 range
+    let r = ((color >> 24) & 0xFF) as f32 / 255.0;
+    let g = ((color >> 16) & 0xFF) as f32 / 255.0;
+    let b = ((color >> 8) & 0xFF) as f32 / 255.0;
 
     let state = &mut caller.data_mut().console;
 

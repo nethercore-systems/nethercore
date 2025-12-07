@@ -21,6 +21,8 @@ pub(crate) enum PipelineKey {
     },
     /// GPU-instanced quad rendering pipeline (billboards, sprites)
     Quad { blend_mode: u8, depth_test: bool },
+    /// Procedural sky rendering pipeline
+    Sky,
 }
 
 impl PipelineKey {
@@ -220,6 +222,83 @@ pub(crate) fn create_quad_pipeline(
             } else {
                 wgpu::CompareFunction::Always
             },
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
+        multisample: wgpu::MultisampleState {
+            count: 1,
+            mask: !0,
+            alpha_to_coverage_enabled: false,
+        },
+        multiview: None,
+        cache: None,
+    });
+
+    PipelineEntry {
+        pipeline,
+        bind_group_layout_frame,
+        bind_group_layout_textures,
+    }
+}
+
+/// Create sky rendering pipeline for fullscreen procedural sky
+pub(crate) fn create_sky_pipeline(
+    device: &wgpu::Device,
+    surface_format: wgpu::TextureFormat,
+) -> PipelineEntry {
+    // Load sky shader
+    const SKY_SHADER_SOURCE: &str = include_str!("../../shaders/sky.wgsl");
+
+    // Create shader module
+    let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("Sky Shader"),
+        source: wgpu::ShaderSource::Wgsl(SKY_SHADER_SOURCE.into()),
+    });
+
+    // Create bind group layouts (same as other pipelines)
+    let bind_group_layout_frame = create_frame_bind_group_layout(device, 0);
+    let bind_group_layout_textures = create_texture_bind_group_layout(device);
+
+    // Create pipeline layout
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("Sky Pipeline Layout"),
+        bind_group_layouts: &[&bind_group_layout_frame, &bind_group_layout_textures],
+        push_constant_ranges: &[],
+    });
+
+    // Create render pipeline
+    let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("Sky Pipeline"),
+        layout: Some(&pipeline_layout),
+        vertex: wgpu::VertexState {
+            module: &shader_module,
+            entry_point: Some("vs"),
+            buffers: &[], // No vertex buffer - generated in shader
+            compilation_options: Default::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &shader_module,
+            entry_point: Some("fs"),
+            targets: &[Some(wgpu::ColorTargetState {
+                format: surface_format,
+                blend: None, // No blending - opaque background
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+            compilation_options: Default::default(),
+        }),
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::TriangleList,
+            strip_index_format: None,
+            front_face: wgpu::FrontFace::Ccw,
+            cull_mode: None, // Fullscreen triangle, no culling needed
+            unclipped_depth: false,
+            polygon_mode: wgpu::PolygonMode::Fill,
+            conservative: false,
+        },
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: wgpu::TextureFormat::Depth32Float,
+            depth_write_enabled: false, // Don't write depth
+            depth_compare: wgpu::CompareFunction::Always, // Always pass
             stencil: wgpu::StencilState::default(),
             bias: wgpu::DepthBiasState::default(),
         }),
@@ -482,6 +561,29 @@ impl PipelineCache {
         );
 
         let entry = create_quad_pipeline(device, surface_format, state);
+        self.pipelines.insert(key, entry);
+        &self.pipelines[&key]
+    }
+
+    /// Get or create a sky pipeline
+    ///
+    /// Returns a reference to the cached sky pipeline, creating it if necessary.
+    pub fn get_or_create_sky(
+        &mut self,
+        device: &wgpu::Device,
+        surface_format: wgpu::TextureFormat,
+    ) -> &PipelineEntry {
+        let key = PipelineKey::Sky;
+
+        // Return existing pipeline if cached
+        if self.pipelines.contains_key(&key) {
+            return &self.pipelines[&key];
+        }
+
+        // Otherwise, create a new sky pipeline
+        tracing::debug!("Creating sky pipeline");
+
+        let entry = create_sky_pipeline(device, surface_format);
         self.pipelines.insert(key, entry);
         &self.pipelines[&key]
     }

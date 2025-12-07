@@ -65,6 +65,11 @@ pub enum VRPCommand {
         depth_test: bool,
         cull_mode: CullMode,
     },
+    /// Sky draw (fullscreen gradient + sun)
+    Sky {
+        shading_state_index: u32,  // Index into shading_states for sky data
+        depth_test: bool,           // Should be false (always behind)
+    },
 }
 
 /// Virtual Render Pass for batching immediate-mode draws

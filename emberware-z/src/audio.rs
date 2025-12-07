@@ -80,6 +80,101 @@ impl Source for SoundSource {
     }
 }
 
+/// Panned audio source wrapper
+///
+/// Converts mono input to stereo with positional panning using equal-power panning.
+/// This ensures constant perceived loudness across the stereo field.
+struct PannedSource<S> {
+    source: S,
+    left_gain: f32,
+    right_gain: f32,
+    current_sample: Option<i16>,  // Cache current mono sample for stereo output
+    is_left_channel: bool,  // Track which stereo channel to output next
+}
+
+impl<S> PannedSource<S>
+where
+    S: Source<Item = i16>,
+{
+    /// Create a new panned source with the given pan value
+    ///
+    /// # Arguments
+    /// * `source` - Mono audio source to pan
+    /// * `pan` - Pan position: -1.0 (full left), 0.0 (center), 1.0 (full right)
+    fn new(source: S, pan: f32) -> Self {
+        // Clamp pan to valid range
+        let pan = pan.clamp(-1.0, 1.0);
+
+        // Equal-power panning formula (constant power law)
+        // Ensures constant perceived loudness across the stereo field
+        // pan = -1: left=1.0, right=0.0 (full left)
+        // pan =  0: left=0.707, right=0.707 (center, -3dB each for equal power)
+        // pan = +1: left=0.0, right=1.0 (full right)
+        let angle = (pan + 1.0) * 0.25 * std::f32::consts::PI;  // Map -1..1 to 0..PI/2
+        let left_gain = angle.cos();
+        let right_gain = angle.sin();
+
+        Self {
+            source,
+            left_gain,
+            right_gain,
+            current_sample: None,
+            is_left_channel: true,
+        }
+    }
+}
+
+impl<S> Iterator for PannedSource<S>
+where
+    S: Source<Item = i16>,
+{
+    type Item = i16;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // For stereo output, we need to output left and right samples alternately.
+        // Each mono input sample is duplicated and scaled by the pan gains.
+
+        if self.is_left_channel {
+            // Fetch next mono sample from source and cache it
+            let sample = self.source.next()?;
+            self.current_sample = Some(sample);
+            self.is_left_channel = false;
+
+            // Output left channel (scaled by left gain)
+            Some((sample as f32 * self.left_gain) as i16)
+        } else {
+            // Use cached sample for right channel
+            let sample = self.current_sample?;
+            self.is_left_channel = true;
+
+            // Output right channel (scaled by right gain)
+            Some((sample as f32 * self.right_gain) as i16)
+        }
+    }
+}
+
+impl<S> Source for PannedSource<S>
+where
+    S: Source<Item = i16>,
+{
+    fn current_frame_len(&self) -> Option<usize> {
+        // Each mono frame becomes 2 stereo samples
+        self.source.current_frame_len().map(|len| len * 2)
+    }
+
+    fn channels(&self) -> u16 {
+        2  // Always output stereo
+    }
+
+    fn sample_rate(&self) -> u32 {
+        self.source.sample_rate()
+    }
+
+    fn total_duration(&self) -> Option<std::time::Duration> {
+        self.source.total_duration()
+    }
+}
+
 /// Audio commands buffered per frame
 #[derive(Debug, Clone)]
 pub enum AudioCommand {
@@ -121,6 +216,7 @@ struct ChannelState {
     sink: Sink,
     current_sound: Option<u32>,
     looping: bool,
+    pan: f32,  // Current pan value (-1.0 to 1.0)
 }
 
 /// Audio server running in background thread
@@ -146,6 +242,7 @@ impl AudioServer {
                 sink,
                 current_sound: None,
                 looping: false,
+                pan: 0.0,  // Center by default
             });
         }
 
@@ -232,13 +329,14 @@ impl AudioServer {
         for channel in &mut self.channels {
             if channel.sink.empty() {
                 channel.sink.set_volume(volume.clamp(0.0, 1.0));
-                // TODO: Implement panning (rodio doesn't have built-in pan control)
-                // For now, just play at center
-                let _ = pan; // Silence unused warning
 
-                channel.sink.append(sound_data.to_source());
+                // Apply panning using PannedSource wrapper
+                let source = PannedSource::new(sound_data.to_source(), pan);
+                channel.sink.append(source);
+
                 channel.current_sound = Some(sound);
                 channel.looping = false;
+                channel.pan = pan;
                 return;
             }
         }
@@ -275,26 +373,29 @@ impl AudioServer {
 
         let ch = &mut self.channels[channel_idx];
 
-        // If same sound already playing, just update params (rollback-friendly)
-        if ch.current_sound == Some(sound) && !ch.sink.empty() {
+        // If same sound already playing with same pan, just update volume (rollback-friendly)
+        // Note: We can't change pan on an already-playing source, so we need to restart if pan changed
+        if ch.current_sound == Some(sound) && !ch.sink.empty() && (ch.pan - pan).abs() < 0.001 {
             ch.sink.set_volume(volume.clamp(0.0, 1.0));
-            // TODO: Update pan
-            let _ = pan;
             return;
         }
 
-        // Stop current sound and play new one
+        // Stop current sound and play new one (or restart with new pan)
         ch.sink.stop();
         ch.sink.set_volume(volume.clamp(0.0, 1.0));
 
+        // Apply panning using PannedSource wrapper
+        let panned_source = PannedSource::new(sound_data.to_source(), pan);
+
         if looping {
-            ch.sink.append(sound_data.to_source().repeat_infinite());
+            ch.sink.append(panned_source.repeat_infinite());
         } else {
-            ch.sink.append(sound_data.to_source());
+            ch.sink.append(panned_source);
         }
 
         ch.current_sound = Some(sound);
         ch.looping = looping;
+        ch.pan = pan;
     }
 
     /// Update channel parameters
@@ -307,8 +408,11 @@ impl AudioServer {
 
         let ch = &mut self.channels[channel_idx];
         ch.sink.set_volume(volume.clamp(0.0, 1.0));
-        // TODO: Set pan
-        let _ = pan;
+
+        // Store pan value for future playback
+        // Note: Pan cannot be changed on already-playing sounds (rodio limitation).
+        // The new pan value will only take effect when the channel plays a new sound.
+        ch.pan = pan;
     }
 
     /// Stop channel
