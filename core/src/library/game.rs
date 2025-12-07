@@ -23,6 +23,8 @@ pub struct LocalGame {
     pub version: String,
     /// Path to the WASM ROM file
     pub rom_path: PathBuf,
+    /// Console type identifier ("z", "classic", etc.)
+    pub console_type: String,
 }
 
 /// Returns all locally cached games.
@@ -63,6 +65,7 @@ fn get_games_from_dir(games_dir: &Path) -> Vec<LocalGame> {
                 author: manifest.author,
                 version: manifest.version,
                 rom_path: path.join("rom.wasm"),
+                console_type: manifest.console_type,
             })
         })
         .collect()
@@ -130,7 +133,8 @@ mod tests {
             "title": title,
             "author": author,
             "version": version,
-            "downloaded_at": "2024-01-01T00:00:00Z"
+            "downloaded_at": "2024-01-01T00:00:00Z",
+            "console_type": "z"
         });
 
         fs::write(

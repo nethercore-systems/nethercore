@@ -147,6 +147,7 @@ mod tests {
             author: "Test Author".to_string(),
             version: "1.0.0".to_string(),
             rom_path: PathBuf::from("dummy.wasm"),
+            console_type: "z".to_string(),
         }
     }
 

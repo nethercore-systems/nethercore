@@ -6,9 +6,9 @@ license.workspace = true
 repository.workspace = true
 description = "Emberware Z - Fantasy console runtime"
 
-[[bin]]
-name = "emberware-z"
-path = "src/main.rs"
+[lib]
+name = "emberware_z"
+path = "src/lib.rs"
 
 [dependencies]
 emberware-core = { path = "../core" }

@@ -1,5 +1,5 @@
 [workspace]
-members = ["core", "emberware-z", "shared", "xtask"]
+members = ["core", "emberware-z", "launcher", "shared", "xtask"]
 exclude = ["examples/hello-world", "examples/triangle", "examples/textured-quad", "examples/cube", "examples/lighting", "examples/skinned-mesh", "examples/billboard", "examples/platformer", "examples/blinn-phong"]
 resolver = "2"
 

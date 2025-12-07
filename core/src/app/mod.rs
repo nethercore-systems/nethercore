@@ -5,11 +5,13 @@
 
 pub mod config;
 pub mod debug;
+pub mod event_loop;
 pub mod input;
 pub mod session;
 pub mod types;
 
 pub use config::Config;
+pub use event_loop::{run, AppEventHandler, ConsoleApp};
 pub use debug::{calculate_fps, render_debug_overlay, update_frame_times};
 pub use input::InputManager;
 pub use session::GameSession;

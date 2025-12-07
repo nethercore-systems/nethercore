@@ -5,11 +5,10 @@ use std::sync::Arc;
 use std::time::Instant;
 use thiserror::Error;
 use winit::{
-    application::ApplicationHandler,
     event::{ElementState, KeyEvent, WindowEvent},
-    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    event_loop::ActiveEventLoop,
     keyboard::{KeyCode, PhysicalKey},
-    window::{Fullscreen, Window, WindowId},
+    window::{Fullscreen, Window},
 };
 
 use crate::config::{self, Config};
@@ -947,200 +946,14 @@ impl App {
 
             // Debug overlay
             if debug_overlay {
-                egui::Window::new("Debug")
-                    .default_pos([10.0, 10.0])
-                    .resizable(true)
-                    .default_width(300.0)
-                    .show(ctx, |ui| {
-                        // Performance section
-                        ui.heading("Performance");
-                        if matches!(mode, AppMode::Playing { .. }) {
-                            ui.label(format!("Game FPS: {:.1}", game_tick_fps));
-                            ui.label(format!("Render FPS: {:.1}", render_fps));
-                        } else {
-                            ui.label(format!("FPS: {:.1}", render_fps));
-                        }
-                        ui.label(format!("Frame time: {:.2}ms", frame_time_ms));
-                        ui.label(format!("Mode: {:?}", mode));
-
-                        // Frame time graph
-                        ui.add_space(4.0);
-                        let graph_height = 60.0;
-                        let (rect, _response) = ui.allocate_exact_size(
-                            egui::vec2(ui.available_width(), graph_height),
-                            egui::Sense::hover(),
-                        );
-
-                        if ui.is_rect_visible(rect) {
-                            let painter = ui.painter_at(rect);
-
-                            // Background
-                            painter.rect_filled(rect, 2.0, egui::Color32::from_gray(30));
-
-                            // Choose which times to display based on mode
-                            let (times_to_display, graph_label, graph_max) =
-                                if matches!(mode, AppMode::Playing { .. }) {
-                                    // Game tick budget visualization - full height = 16.67ms budget
-                                    let label = format!(
-                                        "Game tick budget ({:.1}ms target)",
-                                        TARGET_FRAME_TIME_MS
-                                    );
-                                    (&debug_stats.game_tick_times, label, TARGET_FRAME_TIME_MS)
-                                } else {
-                                    (
-                                        &debug_stats.frame_times,
-                                        "Frame time (0-33ms)".to_string(),
-                                        GRAPH_MAX_FRAME_TIME_MS,
-                                    )
-                                };
-
-                            // Target line (16.67ms for 60 FPS)
-                            let target_y =
-                                rect.bottom() - (TARGET_FRAME_TIME_MS / graph_max * graph_height);
-                            painter.hline(
-                                rect.left()..=rect.right(),
-                                target_y,
-                                egui::Stroke::new(1.0, egui::Color32::from_rgb(100, 100, 100)),
-                            );
-
-                            // Budget bars (for game tick times in Playing mode)
-                            let is_playing = matches!(mode, AppMode::Playing { .. });
-                            if !times_to_display.is_empty() {
-                                let bar_width = rect.width() / FRAME_TIME_HISTORY_SIZE as f32;
-                                for (i, &time_ms) in times_to_display.iter().enumerate() {
-                                    let x = rect.left() + i as f32 * bar_width;
-
-                                    if is_playing {
-                                        // Stacked budget bar: update (blue) + render (orange) + available (green)
-
-                                        // Get update and render times for this tick
-                                        let update_time = time_ms; // game_tick_times[i]
-                                        let render_time = debug_stats
-                                            .game_render_times
-                                            .get(i)
-                                            .copied()
-                                            .unwrap_or(0.0);
-                                        let total_time = update_time + render_time;
-
-                                        // Calculate heights (scaled to budget, capped at 150%)
-                                        let update_height = ((update_time / TARGET_FRAME_TIME_MS)
-                                            .min(1.5)
-                                            * graph_height);
-                                        let render_height = ((render_time / TARGET_FRAME_TIME_MS)
-                                            .min(1.5)
-                                            * graph_height);
-                                        let total_height =
-                                            (update_height + render_height).min(graph_height);
-
-                                        let bottom_y = rect.bottom();
-
-                                        // Draw background (unused budget) - green if under budget, red if over
-                                        let bg_color = if total_time <= TARGET_FRAME_TIME_MS {
-                                            egui::Color32::from_rgb(40, 80, 40) // Dark green - headroom available
-                                        } else {
-                                            egui::Color32::from_rgb(80, 40, 40) // Dark red - over budget
-                                        };
-                                        painter.rect_filled(
-                                            egui::Rect::from_min_max(
-                                                egui::pos2(x, rect.top()),
-                                                egui::pos2(x + bar_width - 1.0, bottom_y),
-                                            ),
-                                            0.0,
-                                            bg_color,
-                                        );
-
-                                        // Draw update time (bottom, blue)
-                                        if update_height > 0.0 {
-                                            painter.rect_filled(
-                                                egui::Rect::from_min_max(
-                                                    egui::pos2(x, bottom_y - update_height),
-                                                    egui::pos2(x + bar_width - 1.0, bottom_y),
-                                                ),
-                                                0.0,
-                                                egui::Color32::from_rgb(80, 120, 200), // Blue - update time
-                                            );
-                                        }
-
-                                        // Draw render time (stacked on top of update, orange)
-                                        if render_height > 0.0 {
-                                            painter.rect_filled(
-                                                egui::Rect::from_min_max(
-                                                    egui::pos2(x, bottom_y - total_height),
-                                                    egui::pos2(
-                                                        x + bar_width - 1.0,
-                                                        bottom_y - update_height,
-                                                    ),
-                                                ),
-                                                0.0,
-                                                egui::Color32::from_rgb(220, 140, 60), // Orange - render time
-                                            );
-                                        }
-                                    } else {
-                                        // Standard bars for render times in Library mode
-                                        let height =
-                                            (time_ms / graph_max * graph_height).min(graph_height);
-                                        let bar_rect = egui::Rect::from_min_max(
-                                            egui::pos2(x, rect.bottom() - height),
-                                            egui::pos2(x + bar_width - 1.0, rect.bottom()),
-                                        );
-
-                                        let color = if time_ms <= TARGET_FRAME_TIME_MS {
-                                            egui::Color32::from_rgb(100, 200, 100)
-                                        } else {
-                                            egui::Color32::from_rgb(200, 200, 100)
-                                        };
-
-                                        painter.rect_filled(bar_rect, 0.0, color);
-                                    }
-                                }
-                            }
-
-                            // Label
-                            painter.text(
-                                egui::pos2(rect.left() + 4.0, rect.top() + 2.0),
-                                egui::Align2::LEFT_TOP,
-                                graph_label,
-                                egui::FontId::proportional(10.0),
-                                egui::Color32::from_gray(150),
-                            );
-                        }
-
-                        ui.separator();
-
-                        // Memory section
-                        ui.heading("Memory");
-                        let vram_mb = debug_stats.vram_used as f32 / (1024.0 * 1024.0);
-                        let vram_limit_mb = debug_stats.vram_limit as f32 / (1024.0 * 1024.0);
-                        let vram_pct = debug_stats.vram_used as f32 / debug_stats.vram_limit as f32;
-                        ui.label(format!(
-                            "VRAM: {:.2} / {:.2} MB ({:.1}%)",
-                            vram_mb,
-                            vram_limit_mb,
-                            vram_pct * 100.0
-                        ));
-                        ui.add(egui::ProgressBar::new(vram_pct).show_percentage());
-
-                        ui.separator();
-
-                        // Network section
-                        ui.heading("Network");
-                        if let Some(ping) = debug_stats.ping_ms {
-                            ui.label(format!("Ping: {}ms", ping));
-                            ui.label(format!("Rollback frames: {}", debug_stats.rollback_frames));
-                            ui.label(format!("Frame advantage: {}", debug_stats.frame_advantage));
-
-                            // Network interrupted warning
-                            if let Some(timeout_ms) = debug_stats.network_interrupted {
-                                ui.add_space(4.0);
-                                ui.colored_label(
-                                    egui::Color32::from_rgb(255, 200, 50),
-                                    format!("⚠ Connection interrupted ({}ms)", timeout_ms),
-                                );
-                            }
-                        } else {
-                            ui.label("No network session");
-                        }
-                    });
+                emberware_core::app::render_debug_overlay(
+                    ctx,
+                    &debug_stats,
+                    matches!(mode, AppMode::Playing { .. }),
+                    frame_time_ms,
+                    render_fps,
+                    game_tick_fps,
+                );
             }
         });
 
@@ -1348,26 +1161,15 @@ impl App {
     }
 }
 
-impl ApplicationHandler for App {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+impl emberware_core::app::ConsoleApp<EmberwareZ> for App {
+    fn on_window_created(
+        &mut self,
+        window: Arc<Window>,
+        _event_loop: &ActiveEventLoop,
+    ) -> anyhow::Result<()> {
         if self.window.is_some() {
-            return;
+            return Ok(()); // Already initialized
         }
-
-        // Create window
-        // Default to 960×540 (default game resolution)
-        let window_attributes = Window::default_attributes()
-            .with_title("Emberware Z")
-            .with_inner_size(winit::dpi::LogicalSize::new(960, 540));
-
-        let window = match event_loop.create_window(window_attributes) {
-            Ok(w) => Arc::new(w),
-            Err(e) => {
-                tracing::error!("Failed to create window: {}", e);
-                self.should_exit = true;
-                return;
-            }
-        };
 
         // Apply fullscreen from config
         if self.config.video.fullscreen {
@@ -1375,14 +1177,7 @@ impl ApplicationHandler for App {
         }
 
         // Initialize graphics backend
-        let mut graphics = match pollster::block_on(ZGraphics::new(window.clone())) {
-            Ok(g) => g,
-            Err(e) => {
-                tracing::error!("Failed to initialize graphics: {}", e);
-                self.should_exit = true;
-                return;
-            }
-        };
+        let mut graphics = pollster::block_on(ZGraphics::new(window.clone()))?;
 
         // Apply scale mode from config
         graphics.set_scale_mode(self.config.video.scale_mode);
@@ -1413,7 +1208,6 @@ impl ApplicationHandler for App {
         self.window = Some(window);
 
         // If a game session exists, add the font and white textures to its texture map
-        // (game session may have been created before graphics was initialized)
         if let (Some(session), Some(graphics)) = (&mut self.game_session, &self.graphics) {
             let font_texture_handle = graphics.font_texture();
             session.resource_manager.texture_map.insert(0, font_texture_handle);
@@ -1429,75 +1223,79 @@ impl ApplicationHandler for App {
                 white_texture_handle
             );
         }
+
+        Ok(())
     }
 
-    fn window_event(
-        &mut self,
-        event_loop: &ActiveEventLoop,
-        _window_id: WindowId,
-        event: WindowEvent,
-    ) {
+    fn render_frame(&mut self) -> anyhow::Result<bool> {
+        self.render();
+        Ok(true) // Always request redraw
+    }
+
+    fn on_window_event(&mut self, event: &WindowEvent) -> bool {
         // Let egui handle the event first
         if let (Some(egui_state), Some(window)) = (&mut self.egui_state, &self.window) {
-            let response = egui_state.on_window_event(window, &event);
+            let response = egui_state.on_window_event(window, event);
             if response.consumed {
                 self.mark_needs_redraw();
-                return;
+                return true; // Event consumed
             }
         }
 
         match event {
-            WindowEvent::CloseRequested => {
-                tracing::info!("Close requested");
-                self.should_exit = true;
-            }
             WindowEvent::Resized(new_size) => {
                 tracing::debug!("Window resized to {:?}", new_size);
-                self.handle_resize(new_size);
+                self.handle_resize(*new_size);
+                false
             }
-            WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-                tracing::debug!("DPI scale factor changed to {}", scale_factor);
-                // Window resize event will follow, which will trigger handle_resize
+            WindowEvent::ScaleFactorChanged { .. } => {
+                tracing::debug!("DPI scale factor changed");
+                false
             }
             WindowEvent::KeyboardInput {
                 event: key_event, ..
             } => {
-                self.handle_key_input(key_event);
+                self.handle_key_input(key_event.clone());
+                false
             }
-            WindowEvent::RedrawRequested => {
-                self.render();
-            }
-            _ => {}
-        }
-
-        if self.should_exit {
-            event_loop.exit();
+            _ => false,
         }
     }
 
-    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        // Update input state
-        self.update_input();
+    fn update_input(&mut self) {
+        if let Some(input_manager) = &mut self.input_manager {
+            input_manager.update();
+        }
+    }
 
-        // Conditional redraw based on mode
-        self.request_redraw_if_needed();
+    fn on_runtime_error(&mut self, error: RuntimeError) {
+        self.handle_runtime_error(error);
+    }
+
+    fn current_mode(&self) -> &AppMode {
+        &self.mode
+    }
+
+    fn should_exit(&self) -> bool {
+        self.should_exit
+    }
+
+    fn request_exit(&mut self) {
+        self.should_exit = true;
+    }
+
+    fn request_redraw(&self) {
+        if let Some(window) = &self.window {
+            window.request_redraw();
+        }
     }
 }
 
 pub fn run(initial_mode: AppMode) -> Result<(), AppError> {
     tracing::info!("Starting with mode: {:?}", initial_mode);
-
-    let event_loop = EventLoop::new()
-        .map_err(|e| AppError::EventLoop(format!("Failed to create event loop: {}", e)))?;
-
-    event_loop.set_control_flow(ControlFlow::Poll);
-
-    let mut app = App::new(initial_mode);
-
-    event_loop
-        .run_app(&mut app)
+    let app = App::new(initial_mode);
+    emberware_core::app::run(app)
         .map_err(|e| AppError::EventLoop(format!("Event loop error: {}", e)))?;
-
     Ok(())
 }
 

@@ -1,0 +1,25 @@
+[package]
+name = "emberware"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "emberware"
+path = "src/main.rs"
+
+[dependencies]
+# Local crates
+emberware-core = { path = "../core" }
+emberware-shared = { path = "../shared" }
+emberware-z = { path = "../emberware-z" }
+
+# Workspace dependencies
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+directories.workspace = true
+
+# For console registry
+hashbrown.workspace = true
