@@ -31,10 +31,10 @@ pub struct PackedLight {
 ///
 /// | Field               | Bytes | Mode 2 (MR-Blinn-Phong)   | Mode 3 (Blinn-Phong)                      |
 /// |---------------------|-------|---------------------------|-------------------------------------------|
-/// | `metallic`          | 0     | Rim intensity (uniform)   | **Specular intensity** (Slot 1.R fallback) |
+/// | `metallic`          | 0     | PBR Metallic (0=diel,1=metal) | **Specular intensity** (Slot 1.R fallback) |
 /// | `roughness`         | 1     | Roughness → Shininess     | **Shininess** (Slot 1.G fallback)          |
 /// | `emissive`          | 2     | Emissive                  | **Emissive** (same meaning!)               |
-/// | `pad0`              | 3     | Unused                    | Unused                                     |
+/// | `pad0`              | 3     | **Rim intensity**         | **Rim intensity**                          |
 /// | `matcap_blend_modes`| 4-7   | Rim power (byte 3 only)   | **Specular RGB + Rim power** (Mode 3)     |
 /// |                     |       |                           | Bytes 0-2: Specular RGB8                   |
 /// |                     |       |                           | Byte 3: Rim power [0-255]→[0-32]           |
@@ -42,16 +42,17 @@ pub struct PackedLight {
 /// **Key insights:**
 /// - **Emissive stays in Slot 1.B for both modes** - no migration needed!
 /// - Mode 2: `roughness` mapped to shininess in shader (power curve: 0→256, 1→1)
-/// - Mode 2: rim lighting uses uniform-only (bytes 0 and 3 of matcap_blend_modes)
+/// - Mode 2: `metallic` is PBR metallic (0=dielectric, 1=metal) for specular F0 calculation
 /// - Mode 3: `roughness` field reinterpreted directly as shininess (linear: 0→1, 1→256)
-/// - Mode 3: slot1.R now specular_intensity (modulates both specular highlights and rim lighting)
+/// - Mode 3: `metallic` is specular_intensity (modulates specular color brightness)
+/// - **Rim intensity (both modes)**: stored in `pad0`, set via `material_rim(intensity, power)`
 /// - Specular color (Mode 2): derived from metallic in shader (F0 = mix(0.04, albedo, metallic))
 /// - Specular color (Mode 3): comes from Slot 2 RGB texture OR uniform fallback (bytes 0-2 of `matcap_blend_modes`)
 /// - Rim power (Modes 2 & 3) is uniform-only, stored in `matcap_blend_modes` byte 3, range 0-32
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Pod, Zeroable)]
 pub struct PackedUnifiedShadingState {
-    /// Mode 2: Rim intensity [0-255] → [0.0-1.0] (uniform-only, no texture)
+    /// Mode 2: PBR Metallic [0-255] → [0.0-1.0] (0=dielectric, 1=metal)
     /// Mode 3: Specular intensity [0-255] → [0.0-1.0] (uniform fallback for Slot 1.R)
     pub metallic: u8,
 
@@ -63,13 +64,14 @@ pub struct PackedUnifiedShadingState {
     /// Mode 3: Emissive intensity [0-255+] (same meaning, uniform fallback for Slot 1.B)
     pub emissive: u8,
 
+    /// Rim intensity [0-255] → [0.0-1.0] for both Mode 2 and Mode 3
+    /// Set via material_rim(intensity, power)
     pub pad0: u8,
     pub color_rgba8: u32,
     pub blend_mode: u32,
 
     /// Mode 1: 4x MatcapBlendMode packed as u8s
-    /// Mode 2: Byte 0 = rim_intensity [0-255] → [0.0-1.0] (uniform-only)
-    ///         Byte 3 = rim_power [0-255] → [0.0-1.0] → [0-32] (uniform-only)
+    /// Mode 2: Byte 3 = rim_power [0-255] → [0.0-1.0] → [0-32] (uniform-only)
     /// Mode 3: Bytes 0-2 = Specular RGB8 (uniform fallback for Slot 2 RGB, defaults to white)
     ///         Byte 3 = rim_power [0-255] → [0.0-1.0] → [0-32] (uniform-only)
     pub matcap_blend_modes: u32,

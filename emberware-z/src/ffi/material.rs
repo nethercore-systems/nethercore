@@ -21,6 +21,11 @@ pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) ->
     linker.func_wrap("env", "material_rim", material_rim)?;
     linker.func_wrap("env", "material_shininess", material_shininess)?;
     linker.func_wrap("env", "material_specular", material_specular)?;
+    linker.func_wrap(
+        "env",
+        "material_specular_intensity",
+        material_specular_intensity,
+    )?;
     Ok(())
 }
 
@@ -151,8 +156,10 @@ fn material_rim(
         );
     }
 
-    // Set rim_intensity (reinterprets metallic field in Mode 3)
-    state.update_material_metallic(intensity_clamped);
+    // Set rim_intensity in the correct storage for each mode:
+    // - Mode 2: matcap_blend_modes byte 0
+    // - Mode 3: pad0 (keeps metallic free for specular_intensity)
+    state.update_rim_intensity(intensity_clamped);
 
     // Pack rim_power into matcap_blend_modes byte 3 (maps 0-1 to 0-255)
     let power_u8 = (power_clamped * 255.0) as u8;
@@ -176,6 +183,24 @@ fn material_rim(
 fn material_shininess(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, value: f32) {
     // Simply calls material_roughness - field reinterpretation happens in the shader
     material_roughness(caller, value);
+}
+
+/// Set specular intensity (Mode 3 only)
+///
+/// # Arguments
+/// * `value` — Specular intensity 0.0-1.0 (multiplies specular color)
+///
+/// Controls the brightness of specular highlights in Mode 3.
+/// This is an alias for material_metallic() - the metallic field is reinterpreted
+/// as specular_intensity in Mode 3.
+///
+/// Default is 0.0 - **call this with 1.0 for full specular intensity in Mode 3!**
+fn material_specular_intensity(
+    caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    value: f32,
+) {
+    // Simply calls material_metallic - field reinterpretation happens in the shader
+    material_metallic(caller, value);
 }
 
 /// Set specular color (Mode 3 only)

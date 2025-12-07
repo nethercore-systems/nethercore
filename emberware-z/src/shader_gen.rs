@@ -260,6 +260,13 @@ pub fn generate_shader(mode: u8, format: u8) -> Result<String, ShaderGenError> {
             shader = shader.replace("//FS_UV", if has_uv { FS_ALBEDO_UV } else { "" });
             shader = shader.replace("//FS_AMBIENT", ""); // Modes 2-3 handle lighting internally
 
+            // Rim intensity: Mode 2 reads from pad0 (byte 3 of packed_values)
+            // This keeps metallic free for PBR formula and avoids conflicts with matcap_blend_modes
+            shader = shader.replace(
+                "//FS_RIM_INTENSITY",
+                "let rim_intensity = unpack_unorm8_from_u32((packed_values >> 24u) & 0xFFu);",
+            );
+
             // Diffuse factor: reduce for metallic surfaces (metals don't have diffuse)
             shader = shader.replace(
                 "//FS_MODE2_3_DIFFUSE_FACTOR",
@@ -290,6 +297,13 @@ pub fn generate_shader(mode: u8, format: u8) -> Result<String, ShaderGenError> {
             shader = shader.replace("//FS_UV", if has_uv { FS_ALBEDO_UV } else { "" });
             shader = shader.replace("//FS_AMBIENT", ""); // Modes 2-3 handle lighting internally
 
+            // Rim intensity: Mode 3 reads from pad0 (byte 3 of packed_values)
+            // This keeps metallic free for specular_intensity
+            shader = shader.replace(
+                "//FS_RIM_INTENSITY",
+                "let rim_intensity = unpack_unorm8_from_u32((packed_values >> 24u) & 0xFFu);",
+            );
+
             // Diffuse factor: no reduction (Mode 3 has no metallic parameter)
             shader = shader.replace("//FS_MODE2_3_DIFFUSE_FACTOR", "let diffuse_factor = 1.0;");
 
@@ -303,14 +317,13 @@ pub fn generate_shader(mode: u8, format: u8) -> Result<String, ShaderGenError> {
                 "let roughness = 1.0 - (shininess - 1.0) / 255.0;",
             );
 
-            // Specular color: From texture (if UV) or uniform
+            // Specular color: From texture (if UV) or uniform, modulated by specular intensity
             // In UV case, value0 comes from slot1.R (specular intensity texture)
-            // In non-UV case, use specular color directly without intensity modulation
-            // (value0 is rim_intensity in non-UV mode 3, not specular intensity)
+            // In non-UV case, value0 is specular_intensity from metallic uniform
             let mode3_specular = if has_uv {
                 "var specular_color = textureSample(slot2, tex_sampler, in.uv).rgb;\n    specular_color = specular_color * value0;"
             } else {
-                "let specular_color = unpack_rgb8(shading.matcap_blend_modes);"
+                "var specular_color = unpack_rgb8(shading.matcap_blend_modes);\n    specular_color = specular_color * value0;"
             };
             shader = shader.replace("//FS_MODE2_3_SPECULAR_COLOR", mode3_specular);
 

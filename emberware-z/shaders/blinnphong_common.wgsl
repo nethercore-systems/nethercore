@@ -82,8 +82,8 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     //FS_COLOR
     //FS_UV
 
-    // Rim intensity always comes from uniform (never overridden by texture)
-    let rim_intensity = uniform0;
+    // Rim intensity source (mode-specific, injected by shader_gen.rs)
+    //FS_RIM_INTENSITY
 
     var value0 = uniform0;  // metallic (mode 2) or specular_intensity (mode 3), may be overridden by texture
     var value1 = uniform1;  // roughness (mode 2) or shininess (mode 3)
