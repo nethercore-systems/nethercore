@@ -14,79 +14,32 @@ use winit::{
 
 use crate::config::{self, Config};
 use crate::console::{EmberwareZ, VRAM_LIMIT};
-use crate::graphics::{TextureHandle, ZGraphics};
+use crate::graphics::ZGraphics;
 use crate::input::InputManager;
 use crate::library::{self, LocalGame};
 use crate::ui::{LibraryUi, UiAction};
-use emberware_core::console::{Console, Graphics};
+use emberware_core::app::{
+    self, calculate_fps, render_debug_overlay, session::GameSession, update_frame_times, AppMode,
+    DebugStats, RuntimeError, FRAME_TIME_HISTORY_SIZE, GRAPH_MAX_FRAME_TIME_MS,
+    TARGET_FRAME_TIME_MS,
+};
+use emberware_core::console::{Audio, Console, ConsoleResourceManager, Graphics, SoundHandle};
 use emberware_core::rollback::{SessionEvent, SessionType};
 use emberware_core::runtime::Runtime;
 use emberware_core::wasm::WasmEngine;
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum AppMode {
-    Library,
-    Playing { game_id: String },
-    Settings,
+/// Dummy audio backend for resource processing (Z resource manager doesn't use audio)
+struct DummyAudio;
+impl Audio for DummyAudio {
+    fn play(&mut self, _handle: SoundHandle, _volume: f32, _looping: bool) {}
+    fn stop(&mut self, _handle: SoundHandle) {}
+    fn set_rollback_mode(&mut self, _rolling_back: bool) {}
 }
 
 #[derive(Error, Debug)]
 pub enum AppError {
     #[error("Event loop error: {0}")]
     EventLoop(String),
-}
-
-/// Runtime error for state machine transitions
-///
-/// Stores an error message that is displayed to the user when returning
-/// to the library screen after a runtime error occurs.
-#[derive(Debug, Clone)]
-pub struct RuntimeError(pub String);
-
-impl std::fmt::Display for RuntimeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-/// Frame time sample for graph
-const FRAME_TIME_HISTORY_SIZE: usize = 120;
-/// Target frame time for reference line (60 FPS = 16.67ms)
-const TARGET_FRAME_TIME_MS: f32 = 16.67;
-/// Maximum frame time shown in graph (30 FPS = 33.33ms, 2x target)
-const GRAPH_MAX_FRAME_TIME_MS: f32 = 33.33;
-
-/// Debug statistics for overlay
-#[derive(Debug, Default)]
-pub struct DebugStats {
-    /// Frame times ring buffer (milliseconds) - application render times
-    pub frame_times: VecDeque<f32>,
-    /// Game tick times ring buffer (milliseconds) - game update() times
-    pub game_tick_times: VecDeque<f32>,
-    /// Game render times ring buffer (milliseconds) - game render() times
-    pub game_render_times: VecDeque<f32>,
-    /// VRAM usage in bytes
-    pub vram_used: usize,
-    /// VRAM limit in bytes
-    pub vram_limit: usize,
-    /// Network stats (when in P2P session)
-    pub ping_ms: Option<u32>,
-    /// Rollback frames this session
-    pub rollback_frames: u64,
-    /// Frame advantage (how far ahead of opponent)
-    pub frame_advantage: i32,
-    /// Network interrupted warning (disconnect timeout in ms, None if connected)
-    pub network_interrupted: Option<u64>,
-}
-
-/// Active game session holding runtime state
-pub struct GameSession {
-    /// The runtime managing game execution
-    pub runtime: Runtime<EmberwareZ>,
-    /// Mapping from game texture handles to graphics texture handles
-    texture_map: hashbrown::HashMap<u32, TextureHandle>,
-    /// Mapping from game mesh handles to graphics mesh handles
-    mesh_map: hashbrown::HashMap<u32, crate::graphics::MeshHandle>,
 }
 
 /// Application state
@@ -132,7 +85,7 @@ pub struct App {
     /// WASM engine (shared across all games)
     wasm_engine: Option<WasmEngine>,
     /// Active game session (only present in Playing mode)
-    game_session: Option<GameSession>,
+    game_session: Option<GameSession<EmberwareZ>>,
     /// Whether a redraw is needed (UI state changed)
     needs_redraw: bool,
     // Egui optimization cache
@@ -216,90 +169,6 @@ impl App {
         self.local_games = library::get_local_games();
     }
 
-    /// Process pending resources from game state into graphics backend
-    ///
-    /// Loads textures and meshes that were requested by the game during init()
-    /// or render() into the graphics backend.
-    fn process_pending_resources(&mut self) {
-        let (Some(session), Some(graphics)) = (&mut self.game_session, &mut self.graphics) else {
-            return;
-        };
-
-        let game = match session.runtime.game_mut() {
-            Some(g) => g,
-            None => return,
-        };
-
-        let z_state = game.console_state_mut();
-
-        // Process pending textures
-        for pending in z_state.pending_textures.drain(..) {
-            match graphics.load_texture(pending.width, pending.height, &pending.data) {
-                Ok(handle) => {
-                    session.texture_map.insert(pending.handle, handle);
-                    tracing::debug!(
-                        "Loaded texture: game_handle={} -> graphics_handle={:?}",
-                        pending.handle,
-                        handle
-                    );
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to load texture {}: {}", pending.handle, e);
-                }
-            }
-        }
-
-        // Process pending meshes
-        for pending in z_state.pending_meshes.drain(..) {
-            let result = if let Some(ref indices) = pending.index_data {
-                graphics.load_mesh_indexed(&pending.vertex_data, indices, pending.format)
-            } else {
-                graphics.load_mesh(&pending.vertex_data, pending.format)
-            };
-
-            match result {
-                Ok(handle) => {
-                    session.mesh_map.insert(pending.handle, handle);
-
-                    // Also store RetainedMesh metadata in z_state.mesh_map for FFI access
-                    if let Some(retained_mesh) = graphics.get_mesh(handle) {
-                        z_state
-                            .mesh_map
-                            .insert(pending.handle, retained_mesh.clone());
-                    }
-
-                    tracing::debug!(
-                        "Loaded mesh: game_handle={} -> graphics_handle={:?}",
-                        pending.handle,
-                        handle
-                    );
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to load mesh {}: {}", pending.handle, e);
-                }
-            }
-        }
-    }
-
-    /// Execute draw commands using new architecture
-    ///
-    /// Passes ZFFIState directly to ZGraphics which consumes it without
-    /// unpacking/repacking. This replaces the old execute_draw_commands().
-    fn execute_draw_commands_new(&mut self) {
-        let (Some(session), Some(graphics)) = (&mut self.game_session, &mut self.graphics) else {
-            return;
-        };
-
-        let game = match session.runtime.game_mut() {
-            Some(g) => g,
-            None => return,
-        };
-
-        let z_state = game.console_state_mut();
-
-        // Process draw commands - ZGraphics consumes draw commands directly
-        graphics.process_draw_commands(z_state, &session.texture_map);
-    }
 
     /// Handle session events from the rollback session
     ///
@@ -587,25 +456,24 @@ impl App {
             .init_game()
             .map_err(|e| RuntimeError(format!("Failed to initialize game: {}", e)))?;
 
-        // Store the session with empty resource maps (font texture added below)
-        self.game_session = Some(GameSession {
-            runtime,
-            texture_map: hashbrown::HashMap::new(),
-            mesh_map: hashbrown::HashMap::new(),
-        });
+        // Create resource manager
+        let resource_manager = EmberwareZ::new().create_resource_manager();
+
+        // Create the game session
+        self.game_session = Some(GameSession::new(runtime, resource_manager));
 
         // Add built-in font texture to texture map (handle 0)
         // Add white fallback texture to texture map (handle 0xFFFFFFFF)
         if let (Some(session), Some(graphics)) = (&mut self.game_session, &self.graphics) {
             let font_texture_handle = graphics.font_texture();
-            session.texture_map.insert(0, font_texture_handle);
+            session.resource_manager.texture_map.insert(0, font_texture_handle);
             tracing::info!(
                 "Initialized font texture in texture_map: handle 0 -> {:?}",
                 font_texture_handle
             );
 
             let white_texture_handle = graphics.white_texture();
-            session.texture_map.insert(u32::MAX, white_texture_handle);
+            session.resource_manager.texture_map.insert(u32::MAX, white_texture_handle);
             tracing::info!(
                 "Initialized white texture in texture_map: handle 0xFFFFFFFF -> {:?}",
                 white_texture_handle
@@ -900,10 +768,27 @@ impl App {
                 Ok((running, rendered)) => {
                     // Only process resources and execute draw commands if we rendered
                     if rendered {
-                        // Process any resources the game created
-                        self.process_pending_resources();
-                        // Execute draw commands by passing ZFFIState directly to graphics
-                        self.execute_draw_commands_new();
+                        if let Some(session) = &mut self.game_session {
+                            if let Some(graphics) = &mut self.graphics {
+                                // Process pending resources by accessing resource manager directly
+                                // Use dummy audio since Z resource manager doesn't use it
+                                let mut dummy_audio = DummyAudio;
+                                {
+                                    if let Some(game) = session.runtime.game_mut() {
+                                        let state = game.console_state_mut();
+                                        session.resource_manager.process_pending_resources(graphics, &mut dummy_audio, state);
+                                    }
+                                }
+
+                                // Execute draw commands
+                                {
+                                    if let Some(game) = session.runtime.game_mut() {
+                                        let state = game.console_state_mut();
+                                        session.resource_manager.execute_draw_commands(graphics, state);
+                                    }
+                                }
+                            }
+                        }
                     }
                     (running, rendered)
                 }
@@ -1532,14 +1417,14 @@ impl ApplicationHandler for App {
         // (game session may have been created before graphics was initialized)
         if let (Some(session), Some(graphics)) = (&mut self.game_session, &self.graphics) {
             let font_texture_handle = graphics.font_texture();
-            session.texture_map.insert(0, font_texture_handle);
+            session.resource_manager.texture_map.insert(0, font_texture_handle);
             tracing::info!(
                 "Added font texture to existing game session: handle 0 -> {:?}",
                 font_texture_handle
             );
 
             let white_texture_handle = graphics.white_texture();
-            session.texture_map.insert(u32::MAX, white_texture_handle);
+            session.resource_manager.texture_map.insert(u32::MAX, white_texture_handle);
             tracing::info!(
                 "Added white texture to existing game session: handle 0xFFFFFFFF -> {:?}",
                 white_texture_handle

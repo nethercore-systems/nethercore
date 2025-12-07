@@ -5,7 +5,7 @@ use std::sync::Arc;
 use wasmtime::Linker;
 use winit::window::Window;
 
-use crate::console::{Audio, Console, ConsoleInput, ConsoleSpecs, Graphics, RawInput, SoundHandle};
+use crate::console::{Audio, Console, ConsoleInput, ConsoleResourceManager, ConsoleSpecs, Graphics, RawInput, SoundHandle};
 use crate::wasm::GameStateWithConsole;
 
 // ============================================================================
@@ -13,6 +13,7 @@ use crate::wasm::GameStateWithConsole;
 // ============================================================================
 
 /// Test console for integration and unit tests
+#[derive(Clone, Copy)]
 pub struct TestConsole;
 
 /// Test graphics backend (no-op)
@@ -62,11 +63,37 @@ unsafe impl Pod for TestInput {}
 unsafe impl Zeroable for TestInput {}
 impl ConsoleInput for TestInput {}
 
+/// Test resource manager (no-op)
+pub struct TestResourceManager;
+
+impl ConsoleResourceManager for TestResourceManager {
+    type Graphics = TestGraphics;
+    type State = ();
+
+    fn process_pending_resources(
+        &mut self,
+        _graphics: &mut Self::Graphics,
+        _audio: &mut dyn Audio,
+        _state: &mut Self::State,
+    ) {
+        // No-op for tests
+    }
+
+    fn execute_draw_commands(
+        &mut self,
+        _graphics: &mut Self::Graphics,
+        _state: &mut Self::State,
+    ) {
+        // No-op for tests
+    }
+}
+
 impl Console for TestConsole {
     type Graphics = TestGraphics;
     type Audio = TestAudio;
     type Input = TestInput;
     type State = ();
+    type ResourceManager = TestResourceManager;
 
     fn specs(&self) -> &'static ConsoleSpecs {
         &ConsoleSpecs {
@@ -114,5 +141,13 @@ impl Console for TestConsole {
             x: (raw.left_stick_x * 127.0) as i8,
             y: (raw.left_stick_y * 127.0) as i8,
         }
+    }
+
+    fn create_resource_manager(&self) -> Self::ResourceManager {
+        TestResourceManager
+    }
+
+    fn window_title(&self) -> &'static str {
+        "Test Console"
     }
 }

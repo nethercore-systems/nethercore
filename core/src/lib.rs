@@ -10,6 +10,7 @@
 //! - [`GameInstance`] - WASM game loaded and instantiated
 //! - [`RollbackSession`] - GGRS integration for rollback netcode
 
+pub mod app;
 pub mod console;
 pub mod ffi;
 #[cfg(test)]

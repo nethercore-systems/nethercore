@@ -1,6 +1,7 @@
 //! Emberware Z - Fantasy console runtime
 
 use std::env;
+use emberware_core::app::AppMode;
 
 mod app;
 mod audio;
@@ -14,6 +15,7 @@ mod game_resolver;
 mod graphics;
 mod input;
 mod library;
+mod resource_manager;
 mod settings_ui;
 mod shader_gen;
 mod state;
@@ -26,15 +28,15 @@ fn main() {
 
     let mode = if let Some(uri) = deep_link::parse(&args) {
         tracing::info!("Launched via deep link: {:?}", uri);
-        app::AppMode::Playing {
+        AppMode::Playing {
             game_id: uri.game_id,
         }
     } else if let Some(game_id) = resolve_cli_arg(&args) {
         tracing::info!("Launched via CLI argument: {}", game_id);
-        app::AppMode::Playing { game_id }
+        AppMode::Playing { game_id }
     } else {
         tracing::info!("Launched directly, showing library");
-        app::AppMode::Library
+        AppMode::Library
     };
 
     if let Err(e) = app::run(mode) {

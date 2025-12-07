@@ -35,6 +35,11 @@ pub trait Console: Send + 'static {
     /// It is rebuilt each frame and is NOT part of rollback state (only GameState is rolled back).
     /// For example, Emberware Z uses ZFFIState which holds draw commands, camera, transforms, etc.
     type State: Default + Send + 'static;
+    /// Console-specific resource manager type
+    type ResourceManager: ConsoleResourceManager<
+        Graphics = Self::Graphics,
+        State = Self::State,
+    >;
 
     /// Get console specifications
     fn specs(&self) -> &'static ConsoleSpecs;
@@ -53,6 +58,49 @@ pub trait Console: Send + 'static {
 
     /// Map raw input to console-specific input format
     fn map_input(&self, raw: &RawInput) -> Self::Input;
+
+    /// Create a resource manager instance for this console
+    ///
+    /// Resource managers handle the mapping between game resource handles (u32)
+    /// and graphics backend handles (console-specific types).
+    fn create_resource_manager(&self) -> Self::ResourceManager;
+
+    /// Get the window title for this console
+    fn window_title(&self) -> &'static str;
+}
+
+/// Trait for console-specific resource management
+///
+/// This abstraction handles the mapping between game resource handles
+/// (u32 IDs) and graphics backend resource handles (console-specific types).
+/// Each console implements this to manage textures, meshes, and other resources.
+pub trait ConsoleResourceManager: Send + 'static {
+    /// Graphics backend type this manager works with
+    type Graphics: Graphics;
+
+    /// Console state type (FFI staging state)
+    type State: Default + Send + 'static;
+
+    /// Process pending texture/mesh/audio resources from game state
+    ///
+    /// Called after game.init() and after each game.render() to upload
+    /// resources requested during those phases.
+    fn process_pending_resources(
+        &mut self,
+        graphics: &mut Self::Graphics,
+        audio: &mut dyn Audio,
+        state: &mut Self::State,
+    );
+
+    /// Execute accumulated draw commands
+    ///
+    /// Called after game.render() to execute all draw commands that
+    /// were recorded during that frame.
+    fn execute_draw_commands(
+        &mut self,
+        graphics: &mut Self::Graphics,
+        state: &mut Self::State,
+    );
 }
 
 /// Trait for console input types

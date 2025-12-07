@@ -42,6 +42,15 @@ rand_pcg = { workspace = true }
 # Serialization for network messages
 bincode = { workspace = true }
 
+# Application framework dependencies (Step 1)
+gilrs = "0.10"                       # Gamepad input
+serde = { workspace = true }
+toml = "0.8"                         # Config file format
+directories = "5"                    # Platform-specific paths
+hashbrown = { workspace = true }     # Fast HashMap
+tracing = { workspace = true }       # Logging
+egui = "0.30"                        # Debug overlay UI
+
 [dev-dependencies]
 # WAT text format parser for test WASM modules
 wat = "1"

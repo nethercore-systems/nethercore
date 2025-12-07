@@ -190,6 +190,7 @@ impl Console for EmberwareZ {
     type Audio = ZAudio;
     type Input = ZInput;
     type State = ZFFIState;
+    type ResourceManager = crate::resource_manager::ZResourceManager;
 
     fn specs(&self) -> &'static ConsoleSpecs {
         z_specs()
@@ -286,6 +287,14 @@ impl Console for EmberwareZ {
             left_trigger,
             right_trigger,
         }
+    }
+
+    fn create_resource_manager(&self) -> Self::ResourceManager {
+        crate::resource_manager::ZResourceManager::new()
+    }
+
+    fn window_title(&self) -> &'static str {
+        "Emberware Z"
     }
 }
 
