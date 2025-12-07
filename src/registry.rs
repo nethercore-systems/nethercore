@@ -62,6 +62,37 @@ impl ConsoleType {
         }
     }
 
+    /// Get the ROM file extension for this console type.
+    ///
+    /// This is used when creating ROM files to determine the file extension.
+    ///
+    /// # Returns
+    ///
+    /// - `"ewz"` for Emberware Z
+    /// - Future: `"ewc"` for Emberware Classic, etc.
+    pub fn rom_extension(&self) -> &'static str {
+        match self {
+            ConsoleType::Z => "ewz",
+        }
+    }
+
+    /// Parse console type from ROM file extension.
+    ///
+    /// This allows detecting the console type from a ROM file's extension
+    /// without needing to read the file contents.
+    ///
+    /// # Returns
+    ///
+    /// - `Some(ConsoleType::Z)` for `.ewz` files
+    /// - `None` for unknown extensions
+    pub fn from_extension(ext: &str) -> Option<Self> {
+        match ext {
+            "ewz" => Some(ConsoleType::Z),
+            // Future: "ewc" => Some(ConsoleType::Classic),
+            _ => None,
+        }
+    }
+
     /// Get all available console types.
     pub fn all() -> &'static [ConsoleType] {
         &[ConsoleType::Z]
@@ -222,5 +253,23 @@ mod tests {
     fn test_registry_default() {
         let registry = ConsoleRegistry::default();
         assert!(registry.supports("z"));
+    }
+
+    #[test]
+    fn test_console_type_rom_extension() {
+        assert_eq!(ConsoleType::Z.rom_extension(), "ewz");
+    }
+
+    #[test]
+    fn test_console_type_from_extension_valid() {
+        assert_eq!(ConsoleType::from_extension("ewz"), Some(ConsoleType::Z));
+    }
+
+    #[test]
+    fn test_console_type_from_extension_invalid() {
+        assert_eq!(ConsoleType::from_extension("invalid"), None);
+        assert_eq!(ConsoleType::from_extension(""), None);
+        assert_eq!(ConsoleType::from_extension("EWZ"), None); // Case-sensitive
+        assert_eq!(ConsoleType::from_extension("ewc"), None); // Not yet implemented
     }
 }

@@ -1,25 +1,38 @@
+mod cart;
+
 use anyhow::{Context, Result};
-use std::env;
+use clap::{Parser, Subcommand};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+/// Emberware build tasks
+#[derive(Parser)]
+#[command(name = "xtask")]
+#[command(about = "Emberware build and development tasks")]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Build and install example games
+    BuildExamples,
+
+    /// Cart management (create, inspect ROMs)
+    Cart {
+        #[command(subcommand)]
+        command: cart::CartCommand,
+    },
+}
+
 fn main() -> Result<()> {
-    let args: Vec<String> = env::args().collect();
+    let cli = Cli::parse();
 
-    if args.len() < 2 {
-        eprintln!("Usage: cargo xtask <command>");
-        eprintln!("Commands:");
-        eprintln!("  build-examples    Build and install example games");
-        std::process::exit(1);
-    }
-
-    match args[1].as_str() {
-        "build-examples" => build_examples(),
-        cmd => {
-            eprintln!("Unknown command: {}", cmd);
-            std::process::exit(1);
-        }
+    match cli.command {
+        Commands::BuildExamples => build_examples(),
+        Commands::Cart { command } => cart::execute(command),
     }
 }
 

@@ -8,3 +8,6 @@ description = "Shared types for Emberware fantasy console platform"
 
 [dependencies]
 serde = { workspace = true }
+bitcode = { workspace = true }
+chrono = { workspace = true }
+anyhow = { workspace = true }

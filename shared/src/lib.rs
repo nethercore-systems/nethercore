@@ -26,6 +26,7 @@
 // Module declarations
 pub mod api;
 pub mod auth;
+pub mod cart;
 pub mod console;
 pub mod local;
 pub mod requests;
@@ -33,6 +34,7 @@ pub mod requests;
 // Re-export all public items for convenience
 pub use api::*;
 pub use auth::*;
+pub use cart::*;
 pub use console::*;
 pub use local::*;
 pub use requests::*;
