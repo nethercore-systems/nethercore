@@ -156,9 +156,8 @@ fn material_rim(
         );
     }
 
-    // Set rim_intensity in the correct storage for each mode:
-    // - Mode 2: matcap_blend_modes byte 0
-    // - Mode 3: pad0 (keeps metallic free for specular_intensity)
+    // Set rim_intensity in the rim_intensity field (byte 3 of packed_values)
+    // This keeps metallic free for PBR metallic (Mode 2) or specular_intensity (Mode 3)
     state.update_rim_intensity(intensity_clamped);
 
     // Pack rim_power into matcap_blend_modes byte 3 (maps 0-1 to 0-255)

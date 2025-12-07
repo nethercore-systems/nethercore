@@ -260,7 +260,7 @@ pub fn generate_shader(mode: u8, format: u8) -> Result<String, ShaderGenError> {
             shader = shader.replace("//FS_UV", if has_uv { FS_ALBEDO_UV } else { "" });
             shader = shader.replace("//FS_AMBIENT", ""); // Modes 2-3 handle lighting internally
 
-            // Rim intensity: Mode 2 reads from pad0 (byte 3 of packed_values)
+            // Rim intensity: Mode 2 reads from rim_intensity (byte 3 of packed_values)
             // This keeps metallic free for PBR formula and avoids conflicts with matcap_blend_modes
             shader = shader.replace(
                 "//FS_RIM_INTENSITY",
@@ -297,7 +297,7 @@ pub fn generate_shader(mode: u8, format: u8) -> Result<String, ShaderGenError> {
             shader = shader.replace("//FS_UV", if has_uv { FS_ALBEDO_UV } else { "" });
             shader = shader.replace("//FS_AMBIENT", ""); // Modes 2-3 handle lighting internally
 
-            // Rim intensity: Mode 3 reads from pad0 (byte 3 of packed_values)
+            // Rim intensity: Mode 3 reads from rim_intensity (byte 3 of packed_values)
             // This keeps metallic free for specular_intensity
             shader = shader.replace(
                 "//FS_RIM_INTENSITY",

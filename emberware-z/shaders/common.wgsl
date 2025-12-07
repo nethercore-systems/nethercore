@@ -28,7 +28,7 @@ struct PackedLight {
 
 // Unified per-draw shading state (64 bytes)
 struct PackedUnifiedShadingState {
-    metallic_roughness_emissive_pad: u32,  // 4x u8 packed: [metallic, roughness, emissive, pad]
+    metallic_roughness_emissive_rim: u32,  // 4x u8 packed: [metallic, roughness, emissive, rim_intensity]
     color_rgba8: u32,
     blend_mode: u32,
     matcap_blend_modes: u32,

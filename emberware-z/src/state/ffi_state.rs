@@ -179,14 +179,14 @@ impl ZFFIState {
     }
 
     /// Update rim intensity in current shading state
-    /// Sets rim_intensity in pad0 (byte 3 of metallic_roughness_emissive_pad)
-    /// Both Mode 2 and Mode 3 shaders read rim_intensity from pad0.
+    /// Sets rim_intensity (byte 3 of metallic_roughness_emissive_rim)
+    /// Both Mode 2 and Mode 3 shaders read rim_intensity from this field.
     pub fn update_rim_intensity(&mut self, value: f32) {
         use crate::graphics::pack_unorm8;
         let quantized = pack_unorm8(value);
 
-        if self.current_shading_state.pad0 != quantized {
-            self.current_shading_state.pad0 = quantized;
+        if self.current_shading_state.rim_intensity != quantized {
+            self.current_shading_state.rim_intensity = quantized;
             self.shading_state_dirty = true;
         }
     }

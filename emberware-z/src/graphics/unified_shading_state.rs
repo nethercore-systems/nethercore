@@ -34,7 +34,7 @@ pub struct PackedLight {
 /// | `metallic`          | 0     | PBR Metallic (0=diel,1=metal) | **Specular intensity** (Slot 1.R fallback) |
 /// | `roughness`         | 1     | Roughness → Shininess     | **Shininess** (Slot 1.G fallback)          |
 /// | `emissive`          | 2     | Emissive                  | **Emissive** (same meaning!)               |
-/// | `pad0`              | 3     | **Rim intensity**         | **Rim intensity**                          |
+/// | `rim_intensity`     | 3     | **Rim intensity**         | **Rim intensity**                          |
 /// | `matcap_blend_modes`| 4-7   | Rim power (byte 3 only)   | **Specular RGB + Rim power** (Mode 3)     |
 /// |                     |       |                           | Bytes 0-2: Specular RGB8                   |
 /// |                     |       |                           | Byte 3: Rim power [0-255]→[0-32]           |
@@ -45,7 +45,7 @@ pub struct PackedLight {
 /// - Mode 2: `metallic` is PBR metallic (0=dielectric, 1=metal) for specular F0 calculation
 /// - Mode 3: `roughness` field reinterpreted directly as shininess (linear: 0→1, 1→256)
 /// - Mode 3: `metallic` is specular_intensity (modulates specular color brightness)
-/// - **Rim intensity (both modes)**: stored in `pad0`, set via `material_rim(intensity, power)`
+/// - **Rim intensity (both modes)**: stored in `rim_intensity`, set via `material_rim(intensity, power)`
 /// - Specular color (Mode 2): derived from metallic in shader (F0 = mix(0.04, albedo, metallic))
 /// - Specular color (Mode 3): comes from Slot 2 RGB texture OR uniform fallback (bytes 0-2 of `matcap_blend_modes`)
 /// - Rim power (Modes 2 & 3) is uniform-only, stored in `matcap_blend_modes` byte 3, range 0-32
@@ -66,7 +66,7 @@ pub struct PackedUnifiedShadingState {
 
     /// Rim intensity [0-255] → [0.0-1.0] for both Mode 2 and Mode 3
     /// Set via material_rim(intensity, power)
-    pub pad0: u8,
+    pub rim_intensity: u8,
     pub color_rgba8: u32,
     pub blend_mode: u32,
 
@@ -101,10 +101,10 @@ impl Default for PackedUnifiedShadingState {
         );
 
         Self {
-            metallic: 0,    // Non-metallic
-            roughness: 128, // Medium roughness (0.5)
-            emissive: 0,    // No emission
-            pad0: 0,
+            metallic: 0,        // Non-metallic
+            roughness: 128,     // Medium roughness (0.5)
+            emissive: 0,        // No emission
+            rim_intensity: 0,   // No rim lighting by default
             color_rgba8: 0xFFFFFFFF, // White
             blend_mode: BlendMode::Alpha as u32,
             matcap_blend_modes: 0x00FFFFFF, // Mode 1: All Multiply | Mode 3: White specular RGB + rim_power=0
@@ -370,7 +370,7 @@ impl PackedUnifiedShadingState {
             metallic: pack_unorm8(metallic),
             roughness: pack_unorm8(roughness),
             emissive: pack_unorm8(emissive),
-            pad0: 0,
+            rim_intensity: 0,
             color_rgba8: color,
             blend_mode: blend_mode as u32,
             matcap_blend_modes: pack_matcap_blend_modes(matcap_blend_modes),
