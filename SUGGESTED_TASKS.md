@@ -8,95 +8,6 @@ This document contains research-backed suggestions for features and improvements
 - [Fantasy Console Features](https://gamefromscratch.com/fantasy-console-development/)
 
 ---
-
-## Critical for Launch
-
-### **[CRITICAL] Web Player for Games**
-
-**Current State:**
-- Games compile to WASM (`wasm32-unknown-unknown` target)
-- Runtime is native only (wasmtime + wgpu)
-- No way to play Emberware games in a browser
-- Games can only be distributed as native executables
-
-**Why This Matters:**
-Fantasy consoles live and die by their community. PICO-8 and TIC-80 both have web players that allow instant play without downloads. According to research, **web playability is essential** for game discovery and sharing.
-
-**What Successful Consoles Do:**
-- **PICO-8**: HTML5 export for embedding games on websites
-- **TIC-80**: Browser-based version, plays .tic carts directly in browser
-- **SCRIPT-8**: Fully browser-based fantasy console
-
-**The Gap:**
-Emberware games run in native wasmtime, but browsers use a different WASM environment (WebAssembly System Interface vs browser APIs). The rendering uses wgpu (native), not WebGL/WebGPU in browser.
-
-**Implementation Approach:**
-
-1. **Dual Runtime Support:**
-   ```rust
-   // Core needs to support both environments
-   #[cfg(target_arch = "wasm32")]  // Browser environment
-   use web_sys;  // Browser APIs
-
-   #[cfg(not(target_arch = "wasm32"))]  // Native environment
-   use wasmtime;  // Current approach
-   ```
-
-2. **Browser Graphics Backend:**
-   - wgpu already supports WebGL/WebGPU backends
-   - Need to compile `emberware-z` or a `emberware-web-player` to WASM
-   - Bundle as JS + WASM that can load game .wasm files
-
-3. **Architecture:**
-   ```
-   Browser Environment:
-   ┌─────────────────────────────────────┐
-   │  index.html + player.js             │
-   │  ┌───────────────────────────────┐  │
-   │  │ emberware-web-player.wasm     │  │
-   │  │  (compiled Rust runtime)      │  │
-   │  │  ┌─────────────────────────┐  │  │
-   │  │  │ game.wasm (user game)   │  │  │
-   │  │  │ (nested WASM module)    │  │  │
-   │  │  └─────────────────────────┘  │  │
-   │  └───────────────────────────────┘  │
-   │  WebGL/WebGPU ←─────────────────────┘
-   └─────────────────────────────────────┘
-   ```
-
-4. **Challenges to Solve:**
-   - **Nested WASM**: Browser needs to run WASM (player) that loads WASM (game)
-     - Solution: Compile wasmtime to WASM, or use wasm3 interpreter
-     - Alternative: Directly link game WASM, no nesting (simpler but less flexible)
-   - **File System**: Browser has no direct file access
-     - Solution: Use IndexedDB for save data, fetch API for ROM loading
-   - **Networking**: GGRS over WebRTC already uses `matchbox_socket`
-     - Should work if matchbox supports WASM target
-   - **Audio**: rodio doesn't support WASM
-     - Solution: Web Audio API backend, or `cpal` (cross-platform audio)
-
-5. **Deliverables:**
-   - `emberware-web-player/` crate (compiles to WASM)
-   - Export tool: `ember-export web game.wasm → game/` (HTML + player + assets)
-   - Hosted player on emberware.io: load any game URL
-
-**Success Criteria:**
-- ✅ Games run in modern browsers (Chrome, Firefox, Safari)
-- ✅ Same FFI API works in browser and native
-- ✅ Save data persists across browser sessions (IndexedDB)
-- ✅ Multiplayer works via WebRTC
-- ✅ Performance: 60fps @ 1080p on mid-range hardware
-- ✅ Embeddable: `<iframe>` support for game hosting sites
-
-**References:**
-- [wgpu WebGL backend](https://wgpu.rs/)
-- [wasmtime in browser](https://github.com/bytecodealliance/wasmtime/issues/1040)
-- [wasm3](https://github.com/wasm3/wasm3) - WASM interpreter that runs in WASM
-
-**Estimated Complexity:** High (4-6 weeks)
-
----
-
 ### **[CRITICAL] Getting Started Experience**
 
 **Current State:**
@@ -183,8 +94,7 @@ First impressions determine if developers stick with a platform. PICO-8's succes
 ### **[CRITICAL] Performance Profiling & Optimization**
 
 **Current State:**
-- No built-in profiling tools
-- No FPS counter (wait, there might be one in debug overlay?)
+- FPS counter in debug overlay
 - No frame time breakdown
 - No way to identify bottlenecks
 - Games can't self-profile
@@ -206,30 +116,10 @@ Performance is a fantasy console's defining characteristic. PICO-8 has a stat() 
    // Get frame time in microseconds
    fn get_frame_time() -> u32
 
-   // Get update() execution time
-   fn get_update_time() -> u32
-
-   // Get render() execution time
-   fn get_render_time() -> u32
-
-   // Get draw call count this frame
-   fn get_draw_calls() -> u32
-
-   // Get vertex count rendered this frame
-   fn get_vertex_count() -> u32
-
-   // Get VRAM usage in bytes
-   fn get_vram_usage() -> u32
    ```
 
-2. **Debug Overlay (Already Exists?):**
-   - Check if `emberware-z/src/app.rs` has debug overlay
-   - If yes, enhance it
-   - If no, create it
-
+2. **Debug Overlay (Already Exists):**
    Should display:
-   - FPS (green if 60+, yellow if 30-60, red if <30)
-   - Frame time graph (last 120 frames)
    - CPU budget: `4ms @ 60fps` with bar
    - Draw calls / frame
    - VRAM: `2.4 MB / 4 MB`
@@ -266,7 +156,6 @@ Performance is a fantasy console's defining characteristic. PICO-8 has a stat() 
    ```
 
 **Success Criteria:**
-- ✅ Games can query performance metrics via FFI
 - ✅ Debug overlay shows real-time stats (toggle with F3 or similar)
 - ✅ Profiler identifies bottlenecks to <100μs precision
 - ✅ Performance budget warnings prevent shipping slow games
@@ -396,11 +285,10 @@ Fantasy consoles use "cartridges" as a distribution format. This enables:
 
 **Implementation:**
 
-1. **EmberCart Format (`.embercart` or `.emc`):**
+1. **EmberwareZCart Format (`.ewz` ):**
    ```rust
    // Binary format
-   struct EmberCart {
-       magic: [u8; 4],           // "ECRT"
+   struct EmberwareZCart {
        version: u32,             // Cart format version
 
        // Metadata
@@ -412,12 +300,8 @@ Fantasy consoles use "cartridges" as a distribution format. This enables:
        created: DateTime,
 
        // Content
-       wasm_module: Vec<u8>,     // Compiled game
-       assets: HashMap<String, Vec<u8>>,  // Embedded assets
-
-       // Requirements
-       console: String,          // "emberware-z" or "emberware-classic"
-       min_version: String,      // Minimum Emberware version
+       code: Vec<u8>,     // Compiled game
+       // Embedded assets - Later
    }
    ```
 
@@ -434,10 +318,10 @@ Fantasy consoles use "cartridges" as a distribution format. This enables:
 
 3. **Cart Loading:**
    ```rust
-   // In emberware-z
-   fn load_cart(path: &Path) -> Result<EmberCart> {
+   // In core, can use bitcode for optimal compressing and faser than serde
+   fn load_cart(path: &Path) -> Result<T> {
        let bytes = fs::read(path)?;
-       EmberCart::deserialize(&bytes)
+       T::deserialize(&bytes)
    }
 
    // Validate and run
@@ -459,11 +343,12 @@ Fantasy consoles use "cartridges" as a distribution format. This enables:
    thumbnail: icon.png
    tags: [platformer, action]
    wasm: game.wasm
-   console: emberware-z
-   min_version: 0.2.0
    ```
 
    Easier for version control, human editing.
+
+6. **Include generics for Console Abstraction**
+   - Reusable loading across different kinds of consoles in future
 
 **Success Criteria:**
 - ✅ Cart format specification document
@@ -473,84 +358,12 @@ Fantasy consoles use "cartridges" as a distribution format. This enables:
 - ✅ Thumbnail, metadata displayed in library UI
 
 **Files to Create:**
-- `shared/src/cart.rs` (cart format definition)
+- `shared/src/cart.rs` (cart format definition, one per console)
 - `xtask/src/cart.rs` (cart builder CLI)
 - Update `emberware-z/src/app.rs` to load .embercart files
 - `docs/cart-format.md` (specification)
 
 **Estimated Complexity:** Medium (1-2 weeks)
-
----
-
-## High Priority
-
-### **[HIGH] Hot Reload for Development**
-
-**Current State:**
-- Modify code → `cargo build --target wasm32-unknown-unknown` → restart Emberware → test
-- Slow iteration cycle (10-30 seconds)
-- No live code updates
-
-**Why This Matters:**
-Fast iteration = more experimentation = better games. Modern dev tools have sub-second reload.
-
-**What Successful Consoles Do:**
-- **PICO-8**: Ctrl+R reloads code instantly (interpreted Lua)
-- **TIC-80**: F5 reloads, instant feedback
-- **Godot**: Hot reload on save
-
-**Implementation:**
-
-1. **Watch Mode:**
-   ```bash
-   ember watch  # Auto-rebuilds on file change
-   ```
-
-   Uses `notify` crate to watch game source directory.
-
-2. **Reload on Rebuild:**
-   ```rust
-   // In Runtime
-   fn check_for_reload(&mut self) {
-       if wasm_file_modified() {
-           self.reload_game()?;
-       }
-   }
-   ```
-
-3. **State Preservation (Advanced):**
-   ```rust
-   // Before reload:
-   let state = self.save_game_state();
-
-   // After reload:
-   self.restore_game_state(state);
-   ```
-
-   Challenges:
-   - Game state structure may change between reloads
-   - Need versioned serialization
-   - Or just restart from init() (simpler)
-
-4. **Incremental Compilation:**
-   ```toml
-   # In game Cargo.toml
-   [profile.dev]
-   incremental = true  # Faster rebuilds
-   ```
-
-**Success Criteria:**
-- ✅ Code change → live update in <2 seconds
-- ✅ Works with `ember watch` command
-- ✅ Optionally preserves game state across reloads
-- ✅ Clear feedback when reload happens (flash screen, sound)
-
-**Files to Modify:**
-- `core/src/runtime.rs` (add reload capability)
-- `emberware-z/src/app.rs` (watch for file changes)
-- `xtask/src/main.rs` (add `watch` subcommand)
-
-**Estimated Complexity:** Medium (1 week)
 
 ---
 
@@ -728,7 +541,7 @@ Crashing the entire console because of a game bug is user-hostile. Games should 
 - No breakpoints or step debugging
 
 **Why This Matters:**
-Debugging is hard without visibility into runtime state.
+Debugging is hard without visibility into runtime state. Must be implemented at generic level.
 
 **What Successful Consoles Do:**
 - **PICO-8**: Immediate mode console, print debugging
@@ -850,8 +663,6 @@ Global audience. Non-English speakers are 75% of potential users.
 
 ---
 
-## Low Priority / Nice to Have
-
 ### **[LOW] Save State / Replay System**
 
 **Current State:**
@@ -878,29 +689,6 @@ fn load_state(slot: u32) {
 ```
 
 **Estimated Complexity:** Low (3-5 days)
-
----
-
-### **[LOW] Built-in Sprite/Map Editors**
-
-**Current State:**
-- No built-in editors
-- Developers use external tools (Aseprite, Tiled, etc.)
-- Asset pipeline is manual
-
-**Why This Matters:**
-Convenience. PICO-8 and TIC-80 have integrated editors.
-
-**Trade-offs:**
-- **Pros**: All-in-one package, beginner-friendly
-- **Cons**: Huge scope, reinventing the wheel
-
-**Recommendation:**
-- **Don't build editors** (too much scope)
-- **Do build integrations** (Aseprite plugin, Tiled loader)
-- **Asset pipeline** is already a research task
-
-**Estimated Complexity:** N/A (defer to asset pipeline task)
 
 ---
 
@@ -944,18 +732,6 @@ Community drives adoption. PICO-8 BBS and itch.io are central to their ecosystem
 | Localization | MEDIUM | Medium | 1-2 weeks | Unicode fonts |
 | Save States | LOW | Low | 3-5 days | None |
 | Social Features | LOW | High | 4-8 weeks | Platform backend |
-
----
-
-## Sources
-
-Research for this document was based on:
-
-- [PICO-8 vs TIC-80 Comparison](https://www.slant.co/versus/9018/22511/~pico-8_vs_tic-80)
-- [Compare Fantasy Consoles](https://nerdyteachers.com/Explain/FantasyConsoles/)
-- [Fantasy Console Development Guide](https://gamefromscratch.com/fantasy-console-development/)
-- [GitHub Fantasy Consoles List](https://github.com/paladin-t/fantasy)
-- Analysis of PICO-8, TIC-80, Pixel Vision 8, and SCRIPT-8 feature sets
 
 ---
 
