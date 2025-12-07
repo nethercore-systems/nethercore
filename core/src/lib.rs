@@ -15,6 +15,7 @@ pub mod console;
 pub mod ffi;
 #[cfg(test)]
 mod integration;
+pub mod library;
 pub mod rollback;
 pub mod runtime;
 #[cfg(test)]

@@ -50,7 +50,9 @@ directories = "5"                    # Platform-specific paths
 hashbrown = { workspace = true }     # Fast HashMap
 tracing = { workspace = true }       # Logging
 egui = "0.30"                        # Debug overlay UI
+serde_json = "1.0"                   # JSON for game manifests
 
 [dev-dependencies]
 # WAT text format parser for test WASM modules
 wat = "1"
+tempfile = "3"                       # Temporary directories for tests

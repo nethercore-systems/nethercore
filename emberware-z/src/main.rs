@@ -54,7 +54,7 @@ fn resolve_cli_arg(args: &[String]) -> Option<String> {
     let query = extract_query_arg(args)?;
 
     // Load available games
-    let games = library::get_local_games();
+    let games = library::get_local_games(&library::ZDataDirProvider);
 
     // Resolve game ID from query
     match game_resolver::resolve_game_id(&query, &games) {

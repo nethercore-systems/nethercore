@@ -19,9 +19,8 @@ use crate::input::InputManager;
 use crate::library::{self, LocalGame};
 use crate::ui::{LibraryUi, UiAction};
 use emberware_core::app::{
-    self, calculate_fps, render_debug_overlay, session::GameSession, update_frame_times, AppMode,
-    DebugStats, RuntimeError, FRAME_TIME_HISTORY_SIZE, GRAPH_MAX_FRAME_TIME_MS,
-    TARGET_FRAME_TIME_MS,
+    session::GameSession, AppMode, DebugStats, RuntimeError, FRAME_TIME_HISTORY_SIZE,
+    GRAPH_MAX_FRAME_TIME_MS, TARGET_FRAME_TIME_MS,
 };
 use emberware_core::console::{Audio, Console, ConsoleResourceManager, Graphics, SoundHandle};
 use emberware_core::rollback::{SessionEvent, SessionType};
@@ -105,7 +104,7 @@ impl App {
         let input_manager = Some(InputManager::new(config.input.clone()));
 
         // Load local games
-        let local_games = library::get_local_games();
+        let local_games = library::get_local_games(&library::ZDataDirProvider);
 
         let now = Instant::now();
 
@@ -166,7 +165,7 @@ impl App {
         self.game_session = None; // Clean up game session
         self.last_error = Some(error);
         self.mode = AppMode::Library;
-        self.local_games = library::get_local_games();
+        self.local_games = library::get_local_games(&library::ZDataDirProvider);
     }
 
 
@@ -572,7 +571,7 @@ impl App {
                                 tracing::info!("Exiting game via ESC");
                                 self.game_session = None; // Clean up game session
                                 self.mode = AppMode::Library;
-                                self.local_games = library::get_local_games();
+                                self.local_games = library::get_local_games(&library::ZDataDirProvider);
                             }
                             AppMode::Settings => {
                                 // If waiting for key binding, cancel it; otherwise return to library
@@ -615,10 +614,10 @@ impl App {
             }
             UiAction::DeleteGame(game_id) => {
                 tracing::info!("Deleting game: {}", game_id);
-                if let Err(e) = library::delete_game(&game_id) {
+                if let Err(e) = library::delete_game(&library::ZDataDirProvider, &game_id) {
                     tracing::error!("Failed to delete game: {}", e);
                 }
-                self.local_games = library::get_local_games();
+                self.local_games = library::get_local_games(&library::ZDataDirProvider);
                 self.library_ui.selected_game = None;
             }
             UiAction::OpenBrowser => {
@@ -648,7 +647,7 @@ impl App {
             }
             UiAction::RefreshLibrary => {
                 tracing::info!("Refreshing game library");
-                self.local_games = library::get_local_games();
+                self.local_games = library::get_local_games(&library::ZDataDirProvider);
                 self.library_ui.selected_game = None;
             }
             UiAction::SaveSettings(new_config) => {
@@ -804,7 +803,7 @@ impl App {
             if !game_running {
                 self.game_session = None;
                 self.mode = AppMode::Library;
-                self.local_games = library::get_local_games();
+                self.local_games = library::get_local_games(&library::ZDataDirProvider);
                 return;
             }
         }
