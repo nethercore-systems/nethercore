@@ -1,39 +1,35 @@
 //! Procedural mesh generation
 //!
-//! Functions for generating common 3D primitives with proper normals and UV mapping.
-//! All meshes use vertex format 5 (POS_UV_NORMAL): [x, y, z, u, v, nx, ny, nz]
+//! Functions for generating common 3D primitives with proper normals.
+//! All meshes use vertex format 4 (POS_NORMAL): [x, y, z, nx, ny, nz]
+//!
+//! Procedural meshes rely on uniform colors from material properties,
+//! not texture sampling.
 
 use glam::Vec3;
 use std::f32::consts::PI;
 use tracing::warn;
 
-/// Vertex with position, UV coordinates, and normal
+/// Vertex with position and normal (no UVs - procedural meshes use uniform colors)
 #[derive(Clone, Copy, Debug)]
 struct Vertex {
     position: Vec3,
-    uv: [f32; 2],
     normal: Vec3,
 }
 
 impl Vertex {
     /// Create a new vertex
-    fn new(position: Vec3, uv: [f32; 2], normal: Vec3) -> Self {
-        Self {
-            position,
-            uv,
-            normal,
-        }
+    fn new(position: Vec3, normal: Vec3) -> Self {
+        Self { position, normal }
     }
 
     /// Convert to flat f32 array for FFI
-    /// Format: [x, y, z, u, v, nx, ny, nz]
-    fn to_floats(&self) -> [f32; 8] {
+    /// Format: [x, y, z, nx, ny, nz]
+    fn to_floats(&self) -> [f32; 6] {
         [
             self.position.x,
             self.position.y,
             self.position.z,
-            self.uv[0],
-            self.uv[1],
             self.normal.x,
             self.normal.y,
             self.normal.z,
@@ -43,7 +39,7 @@ impl Vertex {
 
 /// Generated mesh data (vertices + indices)
 pub struct MeshData {
-    /// Flat vertex data: [x, y, z, u, v, nx, ny, nz] per vertex
+    /// Flat vertex data: [x, y, z, nx, ny, nz] per vertex
     pub vertices: Vec<f32>,
     /// Triangle indices (u16 for GPU compatibility)
     pub indices: Vec<u16>,
@@ -60,7 +56,7 @@ impl MeshData {
 
     /// Add a vertex and return its index
     fn add_vertex(&mut self, vertex: Vertex) -> u16 {
-        let index = (self.vertices.len() / 8) as u16;
+        let index = (self.vertices.len() / 6) as u16;
         self.vertices.extend_from_slice(&vertex.to_floats());
         index
     }
@@ -114,14 +110,14 @@ pub fn generate_cube(size_x: f32, size_y: f32, size_z: f32) -> MeshData {
                     v2: Vec3,
                     v3: Vec3,
                     normal: Vec3| {
-        let i0 = mesh.add_vertex(Vertex::new(v0, [0.0, 1.0], normal));
-        let i1 = mesh.add_vertex(Vertex::new(v1, [1.0, 1.0], normal));
-        let i2 = mesh.add_vertex(Vertex::new(v2, [1.0, 0.0], normal));
-        let i3 = mesh.add_vertex(Vertex::new(v3, [0.0, 0.0], normal));
+        let i0 = mesh.add_vertex(Vertex::new(v0, normal));
+        let i1 = mesh.add_vertex(Vertex::new(v1, normal));
+        let i2 = mesh.add_vertex(Vertex::new(v2, normal));
+        let i3 = mesh.add_vertex(Vertex::new(v3, normal));
 
-        // Two triangles: 0-1-2, 2-3-0
-        mesh.add_triangle(i0, i1, i2);
-        mesh.add_triangle(i2, i3, i0);
+        // Two triangles with CCW winding (right-handed, Y-up)
+        mesh.add_triangle(i0, i2, i1);
+        mesh.add_triangle(i1, i2, i3);
     };
 
     // Front face (z = +size_z, facing +Z)
@@ -223,10 +219,8 @@ pub fn generate_sphere(radius: f32, segments: u32, rings: u32) -> MeshData {
 
             let position = Vec3::new(x, y, z);
             let normal = position.normalize(); // Smooth normals point from center
-            let u = seg as f32 / segments as f32;
-            let v = 1.0 - (ring as f32 / rings as f32); // Invert V so poles are at top/bottom
 
-            mesh.add_vertex(Vertex::new(position, [u, v], normal));
+            mesh.add_vertex(Vertex::new(position, normal));
         }
     }
 
@@ -296,7 +290,7 @@ pub fn generate_plane(
             let pos_z = -size_z * 0.5 + v * size_z;
 
             let position = Vec3::new(pos_x, 0.0, pos_z);
-            mesh.add_vertex(Vertex::new(position, [u, v], normal));
+            mesh.add_vertex(Vertex::new(position, normal));
         }
     }
 
@@ -384,10 +378,8 @@ pub fn generate_cylinder(
         let slope = Vec3::new(0.0, radius_bottom - radius_top, 0.0);
         let normal = (tangent + slope.normalize_or_zero()).normalize();
 
-        let u = i as f32 / segments as f32;
-
-        mesh.add_vertex(Vertex::new(bottom_pos, [u, 0.0], normal));
-        mesh.add_vertex(Vertex::new(top_pos, [u, 1.0], normal));
+        mesh.add_vertex(Vertex::new(bottom_pos, normal));
+        mesh.add_vertex(Vertex::new(top_pos, normal));
     }
 
     // Generate body indices
@@ -408,7 +400,6 @@ pub fn generate_cylinder(
     if radius_bottom > 0.0 {
         let cap_center_index = mesh.add_vertex(Vertex::new(
             Vec3::new(0.0, -half_height, 0.0),
-            [0.5, 0.5],
             Vec3::new(0.0, -1.0, 0.0),
         ));
 
@@ -423,7 +414,6 @@ pub fn generate_cylinder(
                     -half_height,
                     radius_bottom * theta.sin(),
                 ),
-                [0.5 + 0.5 * theta.cos(), 0.5 + 0.5 * theta.sin()],
                 Vec3::new(0.0, -1.0, 0.0),
             ));
 
@@ -433,10 +423,6 @@ pub fn generate_cylinder(
                     -half_height,
                     radius_bottom * next_theta.sin(),
                 ),
-                [
-                    0.5 + 0.5 * next_theta.cos(),
-                    0.5 + 0.5 * next_theta.sin(),
-                ],
                 Vec3::new(0.0, -1.0, 0.0),
             ));
 
@@ -448,7 +434,6 @@ pub fn generate_cylinder(
     if radius_top > 0.0 {
         let cap_center_index = mesh.add_vertex(Vertex::new(
             Vec3::new(0.0, half_height, 0.0),
-            [0.5, 0.5],
             Vec3::new(0.0, 1.0, 0.0),
         ));
 
@@ -463,7 +448,6 @@ pub fn generate_cylinder(
                     half_height,
                     radius_top * theta.sin(),
                 ),
-                [0.5 + 0.5 * theta.cos(), 0.5 + 0.5 * theta.sin()],
                 Vec3::new(0.0, 1.0, 0.0),
             ));
 
@@ -473,10 +457,6 @@ pub fn generate_cylinder(
                     half_height,
                     radius_top * next_theta.sin(),
                 ),
-                [
-                    0.5 + 0.5 * next_theta.cos(),
-                    0.5 + 0.5 * next_theta.sin(),
-                ],
                 Vec3::new(0.0, 1.0, 0.0),
             ));
 
@@ -545,10 +525,7 @@ pub fn generate_torus(
             let tube_center = Vec3::new(major_radius * cos_theta, 0.0, major_radius * sin_theta);
             let normal = (position - tube_center).normalize();
 
-            let u = i as f32 / major_segments as f32;
-            let v = j as f32 / minor_segments as f32;
-
-            mesh.add_vertex(Vertex::new(position, [u, v], normal));
+            mesh.add_vertex(Vertex::new(position, normal));
         }
     }
 
@@ -624,10 +601,8 @@ pub fn generate_capsule(radius: f32, height: f32, segments: u32, rings: u32) -> 
 
         let normal = Vec3::new(cos_theta, 0.0, sin_theta); // Radial normal
 
-        let u = i as f32 / segments as f32;
-
-        mesh.add_vertex(Vertex::new(bottom_pos, [u, 0.33], normal));
-        mesh.add_vertex(Vertex::new(top_pos, [u, 0.67], normal));
+        mesh.add_vertex(Vertex::new(bottom_pos, normal));
+        mesh.add_vertex(Vertex::new(top_pos, normal));
     }
 
     // Generate cylinder body indices
@@ -658,10 +633,7 @@ pub fn generate_capsule(radius: f32, height: f32, segments: u32, rings: u32) -> 
             let sphere_center = Vec3::new(0.0, half_height, 0.0);
             let normal = (position - sphere_center).normalize();
 
-            let u = seg as f32 / segments as f32;
-            let v = 0.67 + 0.33 * (ring as f32 / rings as f32);
-
-            mesh.add_vertex(Vertex::new(position, [u, v], normal));
+            mesh.add_vertex(Vertex::new(position, normal));
         }
     }
 
@@ -697,10 +669,7 @@ pub fn generate_capsule(radius: f32, height: f32, segments: u32, rings: u32) -> 
             let sphere_center = Vec3::new(0.0, -half_height, 0.0);
             let normal = (position - sphere_center).normalize();
 
-            let u = seg as f32 / segments as f32;
-            let v = 0.33 - 0.33 * (ring as f32 / rings as f32);
-
-            mesh.add_vertex(Vertex::new(position, [u, v], normal));
+            mesh.add_vertex(Vertex::new(position, normal));
         }
     }
 
@@ -717,8 +686,8 @@ pub fn generate_capsule(radius: f32, height: f32, segments: u32, rings: u32) -> 
             let i2 = (bottom_hemisphere_start + (ring + 1) * segments + seg) as u16;
             let i3 = (bottom_hemisphere_start + (ring + 1) * segments + next_seg) as u16;
 
-            mesh.add_triangle(i0, i1, i2);
-            mesh.add_triangle(i2, i1, i3);
+            mesh.add_triangle(i0, i2, i1);
+            mesh.add_triangle(i1, i2, i3);
         }
     }
 
@@ -732,7 +701,7 @@ mod tests {
     #[test]
     fn test_cube_counts() {
         let mesh = generate_cube(1.0, 1.0, 1.0);
-        assert_eq!(mesh.vertices.len(), 24 * 8); // 24 vertices × 8 floats
+        assert_eq!(mesh.vertices.len(), 24 * 6); // 24 vertices × 6 floats (POS_NORMAL)
         assert_eq!(mesh.indices.len(), 36); // 6 faces × 2 triangles × 3
     }
 
@@ -741,7 +710,7 @@ mod tests {
         let mesh = generate_sphere(1.0, 16, 8);
         let expected_verts = (8 + 1) * 16; // (rings + 1) × segments
         let expected_indices = 8 * 16 * 6; // rings × segments × 6
-        assert_eq!(mesh.vertices.len(), expected_verts * 8);
+        assert_eq!(mesh.vertices.len(), expected_verts * 6);
         assert_eq!(mesh.indices.len(), expected_indices);
     }
 
@@ -750,7 +719,7 @@ mod tests {
         let mesh = generate_plane(2.0, 2.0, 4, 4);
         let expected_verts = (4 + 1) * (4 + 1); // (subdivisions_x + 1) × (subdivisions_z + 1)
         let expected_indices = 4 * 4 * 6; // subdivisions_x × subdivisions_z × 6
-        assert_eq!(mesh.vertices.len(), expected_verts * 8);
+        assert_eq!(mesh.vertices.len(), expected_verts * 6);
         assert_eq!(mesh.indices.len(), expected_indices);
     }
 
@@ -759,10 +728,10 @@ mod tests {
         let mesh = generate_sphere(1.0, 16, 8);
 
         // Check every normal is unit length
-        for i in (0..mesh.vertices.len()).step_by(8) {
-            let nx = mesh.vertices[i + 5];
-            let ny = mesh.vertices[i + 6];
-            let nz = mesh.vertices[i + 7];
+        for i in (0..mesh.vertices.len()).step_by(6) {
+            let nx = mesh.vertices[i + 3];
+            let ny = mesh.vertices[i + 4];
+            let nz = mesh.vertices[i + 5];
             let length = (nx * nx + ny * ny + nz * nz).sqrt();
             assert!(
                 (length - 1.0).abs() < 0.001,
@@ -778,29 +747,10 @@ mod tests {
 
         // First 4 vertices (front face) should all have normal (0, 0, 1)
         for i in 0..4 {
-            let idx = i * 8;
-            assert!((mesh.vertices[idx + 5] - 0.0).abs() < 0.001); // nx = 0
-            assert!((mesh.vertices[idx + 6] - 0.0).abs() < 0.001); // ny = 0
-            assert!((mesh.vertices[idx + 7] - 1.0).abs() < 0.001); // nz = 1
-        }
-    }
-
-    #[test]
-    fn test_uvs_in_range() {
-        let shapes = vec![
-            generate_cube(1.0, 1.0, 1.0),
-            generate_sphere(1.0, 16, 8),
-            generate_plane(2.0, 2.0, 4, 4),
-            generate_torus(1.0, 0.5, 16, 8),
-        ];
-
-        for mesh in shapes {
-            for i in (0..mesh.vertices.len()).step_by(8) {
-                let u = mesh.vertices[i + 3];
-                let v = mesh.vertices[i + 4];
-                assert!(u >= 0.0 && u <= 1.0, "U out of range: {}", u);
-                assert!(v >= 0.0 && v <= 1.0, "V out of range: {}", v);
-            }
+            let idx = i * 6;
+            assert!((mesh.vertices[idx + 3] - 0.0).abs() < 0.001); // nx = 0
+            assert!((mesh.vertices[idx + 4] - 0.0).abs() < 0.001); // ny = 0
+            assert!((mesh.vertices[idx + 5] - 1.0).abs() < 0.001); // nz = 1
         }
     }
 

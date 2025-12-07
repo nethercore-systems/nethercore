@@ -1,7 +1,7 @@
 //! Procedural mesh generation FFI functions
 //!
 //! These functions generate common 3D primitives and return mesh handles.
-//! All generated meshes use vertex format 5 (POS_UV_NORMAL).
+//! All generated meshes use vertex format 4 (POS_NORMAL) - no UVs, uniform colors only.
 
 use anyhow::Result;
 use tracing::{info, warn};
@@ -10,6 +10,7 @@ use wasmtime::{Caller, Linker};
 use emberware_core::wasm::GameStateWithConsole;
 
 use crate::console::ZInput;
+use crate::graphics::FORMAT_NORMAL;
 use crate::state::{PendingMesh, ZFFIState};
 use crate::procedural;
 
@@ -59,7 +60,7 @@ fn cube(
 
     state.pending_meshes.push(PendingMesh {
         handle,
-        format: 5, // FORMAT_POS_UV_NORMAL
+        format: FORMAT_NORMAL, // POS_NORMAL (no UVs, uniform colors)
         vertex_data: mesh_data.vertices,
         index_data: Some(mesh_data.indices),
     });
@@ -101,7 +102,7 @@ fn sphere(
     // Generate mesh data (clamping happens in procedural function)
     let mesh_data = procedural::generate_sphere(radius, segments, rings);
 
-    let vertex_count = mesh_data.vertices.len() / 8;
+    let vertex_count = mesh_data.vertices.len() / 6;
     let index_count = mesh_data.indices.len();
 
     // Allocate handle and queue mesh
@@ -111,7 +112,7 @@ fn sphere(
 
     state.pending_meshes.push(PendingMesh {
         handle,
-        format: 5,
+        format: FORMAT_NORMAL, // POS_NORMAL (no UVs, uniform colors)
         vertex_data: mesh_data.vertices,
         index_data: Some(mesh_data.indices),
     });
@@ -159,7 +160,7 @@ fn cylinder(
     // Generate mesh data
     let mesh_data = procedural::generate_cylinder(radius_bottom, radius_top, height, segments);
 
-    let vertex_count = mesh_data.vertices.len() / 8;
+    let vertex_count = mesh_data.vertices.len() / 6;
     let index_count = mesh_data.indices.len();
 
     // Allocate handle and queue mesh
@@ -169,7 +170,7 @@ fn cylinder(
 
     state.pending_meshes.push(PendingMesh {
         handle,
-        format: 5,
+        format: FORMAT_NORMAL, // POS_NORMAL (no UVs, uniform colors)
         vertex_data: mesh_data.vertices,
         index_data: Some(mesh_data.indices),
     });
@@ -211,7 +212,7 @@ fn plane(
     // Generate mesh data
     let mesh_data = procedural::generate_plane(size_x, size_z, subdivisions_x, subdivisions_z);
 
-    let vertex_count = mesh_data.vertices.len() / 8;
+    let vertex_count = mesh_data.vertices.len() / 6;
     let index_count = mesh_data.indices.len();
 
     // Allocate handle and queue mesh
@@ -221,7 +222,7 @@ fn plane(
 
     state.pending_meshes.push(PendingMesh {
         handle,
-        format: 5,
+        format: FORMAT_NORMAL, // POS_NORMAL (no UVs, uniform colors)
         vertex_data: mesh_data.vertices,
         index_data: Some(mesh_data.indices),
     });
@@ -264,7 +265,7 @@ fn torus(
     let mesh_data =
         procedural::generate_torus(major_radius, minor_radius, major_segments, minor_segments);
 
-    let vertex_count = mesh_data.vertices.len() / 8;
+    let vertex_count = mesh_data.vertices.len() / 6;
     let index_count = mesh_data.indices.len();
 
     // Allocate handle and queue mesh
@@ -274,7 +275,7 @@ fn torus(
 
     state.pending_meshes.push(PendingMesh {
         handle,
-        format: 5,
+        format: FORMAT_NORMAL, // POS_NORMAL (no UVs, uniform colors)
         vertex_data: mesh_data.vertices,
         index_data: Some(mesh_data.indices),
     });
@@ -319,7 +320,7 @@ fn capsule(
     // Generate mesh data
     let mesh_data = procedural::generate_capsule(radius, height, segments, rings);
 
-    let vertex_count = mesh_data.vertices.len() / 8;
+    let vertex_count = mesh_data.vertices.len() / 6;
     let index_count = mesh_data.indices.len();
 
     // Allocate handle and queue mesh
@@ -329,7 +330,7 @@ fn capsule(
 
     state.pending_meshes.push(PendingMesh {
         handle,
-        format: 5,
+        format: FORMAT_NORMAL, // POS_NORMAL (no UVs, uniform colors)
         vertex_data: mesh_data.vertices,
         index_data: Some(mesh_data.indices),
     });

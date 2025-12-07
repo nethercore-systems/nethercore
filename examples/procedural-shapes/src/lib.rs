@@ -67,21 +67,8 @@ extern "C" {
     fn depth_test(enabled: u32);
 
     // Sky (for lighting)
-    fn set_sky(
-        horizon_r: f32,
-        horizon_g: f32,
-        horizon_b: f32,
-        zenith_r: f32,
-        zenith_g: f32,
-        zenith_b: f32,
-        sun_dir_x: f32,
-        sun_dir_y: f32,
-        sun_dir_z: f32,
-        sun_r: f32,
-        sun_g: f32,
-        sun_b: f32,
-        sun_sharpness: f32,
-    );
+    fn sky_set_colors(horizon_color: u32, zenith_color: u32);
+    fn sky_set_sun(dir_x: f32, dir_y: f32, dir_z: f32, color: u32, sharpness: f32);
 
     // 2D drawing for UI
     fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
@@ -149,12 +136,14 @@ pub extern "C" fn init() {
         depth_test(1); // Enable depth testing
 
         // Set up procedural sky for lighting
-        set_sky(
-            0.7, 0.8, 0.9, // horizon (light blue)
-            0.3, 0.5, 0.9, // zenith (deeper blue)
-            0.3, 0.8, 0.5, // sun direction (from upper-right)
-            2.0, 1.9, 1.8, // sun color (warm white)
-            200.0,         // sun sharpness
+        sky_set_colors(
+            0xB2CCE6FF, // horizon (light blue)
+            0x4D80E6FF, // zenith (deeper blue)
+        );
+        sky_set_sun(
+            0.3, 0.8, 0.5,  // sun direction (from upper-right)
+            0xFFF2E6FF,     // sun color (warm white)
+            0.98,           // sun sharpness
         );
 
         // Set up camera

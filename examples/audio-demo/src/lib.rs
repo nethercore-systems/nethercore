@@ -3,17 +3,19 @@
 
 extern "C" {
     // Camera functions
-    fn camera_perspective(fov: f32, aspect: f32, near: f32, far: f32);
-    fn camera_lookat(eye_x: f32, eye_y: f32, eye_z: f32, target_x: f32, target_y: f32, target_z: f32);
+    fn camera_set(eye_x: f32, eye_y: f32, eye_z: f32, center_x: f32, center_y: f32, center_z: f32);
+    fn camera_fov(fov_degrees: f32);
+
+    // Init config
+    fn set_clear_color(color: u32);
 
     // Input
-    fn button_down(player: u32, button: u32) -> u32;
+    fn button_held(player: u32, button: u32) -> u32;
     fn button_pressed(player: u32, button: u32) -> u32;
 
     // Drawing
-    fn clear(r: f32, g: f32, b: f32);
     fn draw_text(text_ptr: *const u8, text_len: u32, x: f32, y: f32, scale: f32, color: u32);
-    fn draw_quad(x: f32, y: f32, width: f32, height: f32, color: u32);
+    fn draw_rect(x: f32, y: f32, width: f32, height: f32, color: u32);
 
     // Audio
     fn load_sound(data_ptr: *const i16, byte_len: u32) -> u32;
@@ -23,11 +25,11 @@ extern "C" {
     fn channel_stop(channel: u32);
 }
 
-// Button constants
-const BUTTON_LEFT: u32 = 1 << 4;
-const BUTTON_RIGHT: u32 = 1 << 5;
-const BUTTON_A: u32 = 1 << 8;
-const BUTTON_B: u32 = 1 << 9;
+// Button constants (Z input layout)
+const BUTTON_LEFT: u32 = 2;
+const BUTTON_RIGHT: u32 = 3;
+const BUTTON_A: u32 = 4;
+const BUTTON_B: u32 = 5;
 
 // Global state
 static mut BEEP_SOUND: u32 = 0;
@@ -69,6 +71,13 @@ fn generate_beep() -> [i16; 2205] {  // 22050 Hz × 0.1s = 2205 samples
 #[no_mangle]
 pub extern "C" fn init() {
     unsafe {
+        // Set clear color
+        set_clear_color(0x19172AFF); // Dark blue-purple
+
+        // Set up camera
+        camera_set(0.0, 0.0, 3.0, 0.0, 0.0, 0.0);
+        camera_fov(60.0);
+
         // Generate and load beep sound
         let beep_samples = generate_beep();
         BEEP_SOUND = load_sound(
@@ -106,13 +115,13 @@ pub extern "C" fn update() {
             };
         } else {
             // Manual mode: use D-pad to control pan
-            if button_down(0, BUTTON_LEFT) != 0 {
+            if button_held(0, BUTTON_LEFT) != 0 {
                 PAN_POSITION -= 0.02;
                 if PAN_POSITION < -1.0 {
                     PAN_POSITION = -1.0;
                 }
             }
-            if button_down(0, BUTTON_RIGHT) != 0 {
+            if button_held(0, BUTTON_RIGHT) != 0 {
                 PAN_POSITION += 0.02;
                 if PAN_POSITION > 1.0 {
                     PAN_POSITION = 1.0;
@@ -141,12 +150,6 @@ pub extern "C" fn update() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
-        // Set up camera
-        camera_perspective(60.0, 640.0 / 480.0, 0.1, 100.0);
-        camera_lookat(0.0, 0.0, 3.0, 0.0, 0.0, 0.0);
-
-        // Clear background
-        clear(0.1, 0.1, 0.15);
 
         // Title
         let title = b"Audio Panning Demo";
@@ -181,19 +184,19 @@ pub extern "C" fn render() {
         draw_text(line6.as_ptr(), line6.len() as u32, 50.0, 240.0, 1.0, 0xFFFFFFFF);
 
         // Draw pan slider background
-        draw_quad(100.0, 270.0, 440.0, 20.0, 0xFF333333);
+        draw_rect(100.0, 270.0, 440.0, 20.0, 0x333333FF);
 
         // Draw center line
-        draw_quad(318.0, 265.0, 4.0, 30.0, 0xFF666666);
+        draw_rect(318.0, 265.0, 4.0, 30.0, 0x666666FF);
 
         // Draw pan indicator
         let indicator_x = 320.0 + (PAN_POSITION * 220.0);
         let indicator_color = if IS_PLAYING {
-            0xFF00FF00  // Green when playing
+            0x00FF00FF  // Green when playing
         } else {
-            0xFF666666  // Gray when stopped
+            0x666666FF  // Gray when stopped
         };
-        draw_quad(indicator_x - 8.0, 265.0, 16.0, 30.0, indicator_color);
+        draw_rect(indicator_x - 8.0, 265.0, 16.0, 30.0, indicator_color);
 
         // Draw speaker labels
         let left_label = b"L";

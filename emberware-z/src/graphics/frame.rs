@@ -464,11 +464,11 @@ impl ZGraphics {
                         Some(*blend_mode),
                     ),
                     VRPCommand::Sky { depth_test, .. } => (
-                        0, // Unused for sky
+                        self.unit_quad_format, // Sky uses unit quad mesh
                         *depth_test,
                         super::render_state::CullMode::None,
                         [TextureHandle::INVALID; 4], // Default textures (unused)
-                        BufferSource::Immediate(0), // Unused for sky
+                        BufferSource::Quad, // Sky renders as a fullscreen quad
                         false,
                         true,
                         None,
@@ -478,17 +478,23 @@ impl ZGraphics {
                 // Extract blend mode from shading state for rendering
                 // For Immediate/Retained, get from mvp_shading_states buffer
                 // For Quad, use the blend_mode from the command itself
-                let blend_mode = match buffer_source {
-                    BufferSource::Immediate(buffer_idx) | BufferSource::Retained(buffer_idx) => {
-                        let indices = z_state.mvp_shading_states
-                            .get(buffer_idx as usize)
-                            .expect("Invalid buffer_index in VRPCommand - this indicates a bug in state tracking");
-                        let shading_state = z_state.shading_states.get(indices.shading_idx as usize)
-                            .expect("Invalid shading_state_index - this indicates a bug in state tracking");
-                        BlendMode::from_u8((shading_state.blend_mode & 0xFF) as u8)
-                    }
-                    BufferSource::Quad => {
-                        cmd_blend_mode.expect("Quad command should have blend_mode")
+                // For Sky, use default blend mode (Alpha)
+                let blend_mode = if is_sky {
+                    // Sky doesn't use buffer_index, use default alpha blending
+                    BlendMode::Alpha
+                } else {
+                    match buffer_source {
+                        BufferSource::Immediate(buffer_idx) | BufferSource::Retained(buffer_idx) => {
+                            let indices = z_state.mvp_shading_states
+                                .get(buffer_idx as usize)
+                                .expect("Invalid buffer_index in VRPCommand - this indicates a bug in state tracking");
+                            let shading_state = z_state.shading_states.get(indices.shading_idx as usize)
+                                .expect("Invalid shading_state_index - this indicates a bug in state tracking");
+                            BlendMode::from_u8((shading_state.blend_mode & 0xFF) as u8)
+                        }
+                        BufferSource::Quad => {
+                            cmd_blend_mode.expect("Quad command should have blend_mode")
+                        }
                     }
                 };
 
