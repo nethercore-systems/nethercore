@@ -1,60 +1,6 @@
 # Emberware Development Tasks
 
----
-
 **Architecture Overview:** See [CLAUDE.md](./CLAUDE.md) for framework design and Console trait details.
-
----
-
-## Recently Completed
-
-### **[FEATURE] Procedural Sky Rendering (draw_sky)** ✅
-
-**Completed:** 2025-12-08
-
-Implemented fullscreen procedural sky rendering with gradient + sun disc.
-
-**What Was Added:**
-- `draw_sky()` FFI function for rendering procedural sky
-- `VRPCommand::Sky` variant for sky draw commands
-- `sky.wgsl` shader with fullscreen triangle technique
-- Equal-power gradient interpolation (horizon → zenith)
-- Sun disc rendering with configurable sharpness
-- Works in all render modes (0-3)
-
-**Files Modified:**
-- [emberware-z/src/ffi/sky.rs](emberware-z/src/ffi/sky.rs) - Added draw_sky() FFI
-- [emberware-z/src/graphics/command_buffer.rs](emberware-z/src/graphics/command_buffer.rs) - Added Sky command variant
-- [emberware-z/src/graphics/pipeline.rs](emberware-z/src/graphics/pipeline.rs) - Added sky pipeline
-- [emberware-z/src/graphics/frame.rs](emberware-z/src/graphics/frame.rs) - Sky command sorting and execution
-- [emberware-z/shaders/sky.wgsl](emberware-z/shaders/sky.wgsl) - Sky rendering shader (NEW)
-- [docs/emberware-z.md](docs/emberware-z.md) - Documented sky functions
-- [examples/lighting/src/lib.rs](examples/lighting/src/lib.rs) - Example usage
-
----
-
-### **[FEATURE] Audio Panning Support** ✅
-
-**Completed:** 2025-12-08
-
-Implemented stereo panning for all audio playback with equal-power panning.
-
-**What Was Added:**
-- `PannedSource<S>` wrapper converting mono → stereo with positional panning
-- Equal-power panning formula (constant-power law) for natural stereo imaging
-- Pan support in `play_sound()`, `channel_play()`, and `channel_set()`
-- Pan state tracking in `ChannelState`
-
-**Technical Details:**
-- Pan range: -1.0 (full left), 0.0 (center), 1.0 (full right)
-- Equal-power formula: pan=0 gives 70.7% on each speaker (no volume drop)
-- Limitation: `channel_set()` pan changes stored but only take effect on sound restart
-
-**Files Modified:**
-- [emberware-z/src/audio.rs](emberware-z/src/audio.rs:83-433) - Added PannedSource and panning logic
-- [docs/emberware-z.md](docs/emberware-z.md:1296-1335) - Added "Stereo Panning" section
-
----
 
 ## In Progress
 
@@ -63,6 +9,35 @@ Implemented stereo panning for all audio playback with equal-power panning.
 ## TODO
 
 ---
+
+### **[BUG] Unused Blend Mode field in PackedUnifiedState**
+- We have a really complex uniform state, material properties (metallic, roughness, emissive), blend modes, matcap blend modes, specular color, all being packed and used sporatically.
+- We need to clean up this flow to reduce errors.
+- Propose some other nested structure like...
+```rust
+   uniform_set_0: u32,
+   uniform_set_1: u32 
+```
+- Mode0: unused, unused, unused, Rim Intensity, and set1 unused, unused, unused, Rim Power
+- Mode1 (Matcap): BlendMode, BlendMode, BlendMode, BlendMode, set1 unused
+- Mode2 (MR BP): Metallic, Roughness, Emissive, Rim Intensity, and set1 unused, unused, unused, Rim Power
+- Mode3 (SS BP): Spec Intensity, Shininess Emissive, Rim Intensity, and set1 Spec R, Spec G, Spec B, Rim Power
+- This will also allow us to expand the light rules with more data if necessary.
+- Need to update all shaders with this new logic, and probably bind groups too.
+
+
+### **[Bug] BP shading may be lighting triangles with sky**
+- Need to verify diffuse and sky components from sky is properly clamping the dot products for sky/sun coloring
+- Ambient-only light is fine, but diffuse/specular must be dotting everything correctly.
+
+### **[POLISH] Shader Generation should move to Build/Compile time not Runtime**
+- It's a waste to regenerate these each run. We should probably generate them once at build time and pass finished shaders to the application
+- Also makes debugging shader templating easier!
+
+### **[Feature] Add UV-enabled procedural shapes**
+- Add new FFI commands for UV enabled procedural shapes. 
+- Use a smart mapping, like a UV sphere, or a Box cube (not dice faces)
+- These must be different functions, in addition to the provided position + normal ones, these should have position + uv + normals
 
 ### **[STABILITY] Reduce unwrap/expect Usage**
 

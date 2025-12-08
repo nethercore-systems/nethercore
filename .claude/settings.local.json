@@ -17,7 +17,8 @@
       "Bash(wc:*)",
       "Bash(dir:*)",
       "Bash(cargo clippy:*)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(git log:*)"
     ],
     "deny": [],
     "ask": []

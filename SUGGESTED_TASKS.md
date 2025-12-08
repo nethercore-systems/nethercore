@@ -91,86 +91,6 @@ First impressions determine if developers stick with a platform. PICO-8's succes
 
 ---
 
-### **[CRITICAL] Performance Profiling & Optimization**
-
-**Current State:**
-- FPS counter in debug overlay
-- No frame time breakdown
-- No way to identify bottlenecks
-- Games can't self-profile
-
-**Why This Matters:**
-Performance is a fantasy console's defining characteristic. PICO-8 has a stat() function for performance monitoring. Developers MUST be able to hit 60fps.
-
-**What Successful Consoles Do:**
-- **PICO-8**: `stat(1)` returns CPU usage, `stat(7)` returns FPS
-- **TIC-80**: `trace()` for debugging, performance overlay
-
-**What We Need:**
-
-1. **FFI Performance Functions:**
-   ```rust
-   // Get current FPS
-   fn get_fps() -> u32
-
-   // Get frame time in microseconds
-   fn get_frame_time() -> u32
-
-   ```
-
-2. **Debug Overlay (Already Exists):**
-   Should display:
-   - CPU budget: `4ms @ 60fps` with bar
-   - Draw calls / frame
-   - VRAM: `2.4 MB / 4 MB`
-   - Network: rollback frames, ping
-
-3. **Profiler Integration:**
-   ```rust
-   // In core, use `tracing` for structured profiling
-   #[instrument]
-   fn execute_draw_commands() {
-       // Automatically tracked
-   }
-   ```
-
-   Export chrome://tracing format:
-   ```bash
-   RUST_LOG=trace cargo run > trace.json
-   # Open in chrome://tracing
-   ```
-
-4. **Performance Budget Warnings:**
-   ```rust
-   // In Runtime::tick()
-   if update_time > tick_budget {
-       warn!("Update exceeded budget: {}ms > {}ms", update_time, tick_budget);
-       // Optionally: Pause game, show warning to developer
-   }
-   ```
-
-5. **Benchmark Suite:**
-   ```rust
-   // benchmarks/graphics.rs
-   // Measure draw call overhead, triangle throughput, etc.
-   ```
-
-**Success Criteria:**
-- ✅ Debug overlay shows real-time stats (toggle with F3 or similar)
-- ✅ Profiler identifies bottlenecks to <100μs precision
-- ✅ Performance budget warnings prevent shipping slow games
-- ✅ Benchmarks track performance regressions between releases
-
-**Files to Create:**
-- Add FFI functions to `core/src/ffi.rs` or `emberware-z/src/ffi/debug.rs`
-- Create `emberware-z/src/debug_overlay.rs` (if doesn't exist)
-- Create `benchmarks/` directory with criterion benchmarks
-- Update `docs/emberware-z.md` with performance functions
-
-**Estimated Complexity:** Low (1 week)
-
----
-
 ### **[CRITICAL] Comprehensive API Documentation**
 
 **Current State:**
@@ -490,6 +410,7 @@ Debugging is hard without visibility into runtime state. Must be implemented at 
 - ✅ Can watch specific memory addresses
 - ✅ Trace logs visible in overlay and saved to file
 - ✅ Performance impact <5% when debugging disabled
+- Only usable in init, NOT usable in Update or Render (Rollback danger)
 
 **Files to Create:**
 - `emberware-z/src/debug/memory_viewer.rs`
@@ -564,6 +485,7 @@ Global audience. Non-English speakers are 75% of potential users.
 - Games can save data via `save()` / `load()`
 - No automatic save states
 - No replay recording
+- Rollback already implemented anyway
 
 **Why This Matters:**
 - Quality of life for players (save anywhere)
@@ -584,6 +506,9 @@ fn load_state(slot: u32) {
 ```
 
 **Estimated Complexity:** Low (3-5 days)
+
+**Notes:**
+- Not usable in Online Modes! Single player ONLY
 
 ---
 
@@ -608,26 +533,3 @@ Community drives adoption. PICO-8 BBS and itch.io are central to their ecosystem
 **Note:** This is platform work, not core console work.
 
 **Estimated Complexity:** High (4-8 weeks, full-stack)
-
----
-
-## Summary Table
-
-| Task | Priority | Complexity | Est. Time | Blockers |
-|------|----------|------------|-----------|----------|
-| Web Player | CRITICAL | High | 4-6 weeks | wgpu WebGL, nested WASM |
-| Getting Started | CRITICAL | Medium | 2-3 weeks | None |
-| Performance Tools | CRITICAL | Low | 1 week | None |
-| API Docs | CRITICAL | Medium | 2 weeks | None |
-| Cart Format | CRITICAL | Medium | 1-2 weeks | None |
-| Hot Reload | HIGH | Medium | 1 week | None |
-| Screenshot/GIF | HIGH | Low | 3-5 days | None |
-| Error Recovery | HIGH | Medium | 1 week | None |
-| Memory Inspector | MEDIUM | Medium | 1 week | None |
-| Localization | MEDIUM | Medium | 1-2 weeks | Unicode fonts |
-| Save States | LOW | Low | 3-5 days | None |
-| Social Features | LOW | High | 4-8 weeks | Platform backend |
-
----
-
-**Last Updated:** 2025-12-06
