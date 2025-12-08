@@ -1488,11 +1488,35 @@ pub fn generate_capsule_uv(radius: f32, height: f32, segments: u32, rings: u32) 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use half::f16;
+
+    // Helper functions to unpack packed vertex data for testing
+    // Packed format: Position (f16x4, 8 bytes) + Normal (snorm16x4, 8 bytes) = 16 bytes/vertex
+
+    /// Unpack position from packed vertex data
+    fn unpack_position(data: &[u8], vertex_idx: usize) -> [f32; 3] {
+        let base = vertex_idx * 16; // 16 bytes per vertex (POS_NORMAL packed)
+        let pos_bytes = &data[base..base + 8]; // f16x4 position (8 bytes)
+        let pos: &[f16; 4] = bytemuck::from_bytes(&pos_bytes[0..8]);
+        [pos[0].to_f32(), pos[1].to_f32(), pos[2].to_f32()]
+    }
+
+    /// Unpack normal from packed vertex data
+    fn unpack_normal(data: &[u8], vertex_idx: usize) -> [f32; 3] {
+        let base = vertex_idx * 16 + 8; // Skip position (8 bytes)
+        let norm_bytes = &data[base..base + 8]; // snorm16x4 normal (8 bytes)
+        let norm: &[i16; 4] = bytemuck::from_bytes(&norm_bytes[0..8]);
+        [
+            norm[0] as f32 / 32767.0,
+            norm[1] as f32 / 32767.0,
+            norm[2] as f32 / 32767.0,
+        ]
+    }
 
     #[test]
     fn test_cube_counts() {
         let mesh = generate_cube(1.0, 1.0, 1.0);
-        assert_eq!(mesh.vertices.len(), 24 * 6); // 24 vertices × 6 floats (POS_NORMAL)
+        assert_eq!(mesh.vertices.len(), 24 * 16); // 24 vertices × 16 bytes (POS_NORMAL packed)
         assert_eq!(mesh.indices.len(), 36); // 6 faces × 2 triangles × 3
     }
 
@@ -1501,7 +1525,7 @@ mod tests {
         let mesh = generate_sphere(1.0, 16, 8);
         let expected_verts = (8 + 1) * 16; // (rings + 1) × segments
         let expected_indices = 8 * 16 * 6; // rings × segments × 6
-        assert_eq!(mesh.vertices.len(), expected_verts * 6);
+        assert_eq!(mesh.vertices.len(), expected_verts * 16); // 16 bytes per vertex (packed)
         assert_eq!(mesh.indices.len(), expected_indices);
     }
 
@@ -1510,22 +1534,21 @@ mod tests {
         let mesh = generate_plane(2.0, 2.0, 4, 4);
         let expected_verts = (4 + 1) * (4 + 1); // (subdivisions_x + 1) × (subdivisions_z + 1)
         let expected_indices = 4 * 4 * 6; // subdivisions_x × subdivisions_z × 6
-        assert_eq!(mesh.vertices.len(), expected_verts * 6);
+        assert_eq!(mesh.vertices.len(), expected_verts * 16); // 16 bytes per vertex (packed)
         assert_eq!(mesh.indices.len(), expected_indices);
     }
 
     #[test]
     fn test_normals_normalized() {
         let mesh = generate_sphere(1.0, 16, 8);
+        let vertex_count = mesh.vertices.len() / 16; // 16 bytes per vertex
 
         // Check every normal is unit length
-        for i in (0..mesh.vertices.len()).step_by(6) {
-            let nx = mesh.vertices[i + 3];
-            let ny = mesh.vertices[i + 4];
-            let nz = mesh.vertices[i + 5];
-            let length = (nx * nx + ny * ny + nz * nz).sqrt();
+        for i in 0..vertex_count {
+            let normal = unpack_normal(&mesh.vertices, i);
+            let length = (normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]).sqrt();
             assert!(
-                (length - 1.0).abs() < 0.001,
+                (length - 1.0).abs() < 0.02, // Increased tolerance for packed format
                 "Normal not normalized: {}",
                 length
             );
@@ -1538,10 +1561,10 @@ mod tests {
 
         // First 4 vertices (front face) should all have normal (0, 0, 1)
         for i in 0..4 {
-            let idx = i * 6;
-            assert!((mesh.vertices[idx + 3] - 0.0).abs() < 0.001); // nx = 0
-            assert!((mesh.vertices[idx + 4] - 0.0).abs() < 0.001); // ny = 0
-            assert!((mesh.vertices[idx + 5] - 1.0).abs() < 0.001); // nz = 1
+            let normal = unpack_normal(&mesh.vertices, i);
+            assert!((normal[0] - 0.0).abs() < 0.02); // nx = 0
+            assert!((normal[1] - 0.0).abs() < 0.02); // ny = 0
+            assert!((normal[2] - 1.0).abs() < 0.02); // nz = 1
         }
     }
 
@@ -1573,12 +1596,7 @@ mod tests {
 
     /// Helper: extract vertex position from mesh at given index
     fn get_vertex_pos(mesh: &MeshData, vertex_idx: u16) -> [f32; 3] {
-        let base = vertex_idx as usize * 6; // POS_NORMAL format: 6 floats per vertex
-        [
-            mesh.vertices[base],
-            mesh.vertices[base + 1],
-            mesh.vertices[base + 2],
-        ]
+        unpack_position(&mesh.vertices, vertex_idx as usize)
     }
 
     /// Helper: compute cross product of two 3D vectors
@@ -1979,16 +1997,20 @@ mod tests {
     #[test]
     fn test_sphere_vertex_normals_point_outward() {
         let mesh = generate_sphere(1.0, 16, 8);
+        let vertex_count = mesh.vertices.len() / 16; // 16 bytes per vertex (POS_NORMAL packed)
 
         // For a unit sphere centered at origin, the vertex normal should equal
         // the normalized vertex position (pointing outward from center)
-        for i in (0..mesh.vertices.len()).step_by(6) {
-            let px = mesh.vertices[i];
-            let py = mesh.vertices[i + 1];
-            let pz = mesh.vertices[i + 2];
-            let nx = mesh.vertices[i + 3];
-            let ny = mesh.vertices[i + 4];
-            let nz = mesh.vertices[i + 5];
+        for i in 0..vertex_count {
+            let pos = unpack_position(&mesh.vertices, i);
+            let normal = unpack_normal(&mesh.vertices, i);
+
+            let px = pos[0];
+            let py = pos[1];
+            let pz = pos[2];
+            let nx = normal[0];
+            let ny = normal[1];
+            let nz = normal[2];
 
             // Compute expected normal (normalized position for unit sphere at origin)
             let pos_len = (px * px + py * py + pz * pz).sqrt();
@@ -2001,24 +2023,25 @@ mod tests {
             let expected_nz = pz / pos_len;
 
             // Verify stored normal matches expected (points outward)
+            // Increased tolerance for packed format (f16/snorm16)
             assert!(
-                (nx - expected_nx).abs() < 0.01,
+                (nx - expected_nx).abs() < 0.02,
                 "Sphere vertex normal X mismatch at vertex {}: stored={}, expected={}",
-                i / 6,
+                i,
                 nx,
                 expected_nx
             );
             assert!(
-                (ny - expected_ny).abs() < 0.01,
+                (ny - expected_ny).abs() < 0.02,
                 "Sphere vertex normal Y mismatch at vertex {}: stored={}, expected={}",
-                i / 6,
+                i,
                 ny,
                 expected_ny
             );
             assert!(
-                (nz - expected_nz).abs() < 0.01,
+                (nz - expected_nz).abs() < 0.02,
                 "Sphere vertex normal Z mismatch at vertex {}: stored={}, expected={}",
-                i / 6,
+                i,
                 nz,
                 expected_nz
             );
@@ -2028,7 +2051,7 @@ mod tests {
             assert!(
                 dot_product > 0.0,
                 "Sphere vertex {} normal points inward! dot(pos, normal) = {}",
-                i / 6,
+                i,
                 dot_product
             );
         }
@@ -2053,33 +2076,32 @@ mod tests {
         for face in 0..6 {
             let expected = expected_normals[face];
             for vert in 0..4 {
-                let idx = (face * 4 + vert) * 6;
-                let nx = mesh.vertices[idx + 3];
-                let ny = mesh.vertices[idx + 4];
-                let nz = mesh.vertices[idx + 5];
+                let vertex_idx = face * 4 + vert;
+                let normal = unpack_normal(&mesh.vertices, vertex_idx);
 
+                // Increased tolerance for packed format (snorm16)
                 assert!(
-                    (nx - expected[0]).abs() < 0.001,
+                    (normal[0] - expected[0]).abs() < 0.02,
                     "Cube face {} vertex {} normal X mismatch: {} vs expected {}",
                     face,
                     vert,
-                    nx,
+                    normal[0],
                     expected[0]
                 );
                 assert!(
-                    (ny - expected[1]).abs() < 0.001,
+                    (normal[1] - expected[1]).abs() < 0.02,
                     "Cube face {} vertex {} normal Y mismatch: {} vs expected {}",
                     face,
                     vert,
-                    ny,
+                    normal[1],
                     expected[1]
                 );
                 assert!(
-                    (nz - expected[2]).abs() < 0.001,
+                    (normal[2] - expected[2]).abs() < 0.02,
                     "Cube face {} vertex {} normal Z mismatch: {} vs expected {}",
                     face,
                     vert,
-                    nz,
+                    normal[2],
                     expected[2]
                 );
             }

@@ -237,6 +237,9 @@ impl BufferManager {
 
     /// Load a non-indexed mesh (retained mode)
     ///
+    /// Convenience wrapper that accepts unpacked f32 vertex data and packs it internally.
+    /// For procedural meshes or power users with pre-packed data, use load_mesh_packed() instead.
+    ///
     /// The mesh is stored in the appropriate vertex buffer based on format.
     /// Returns a MeshHandle for use with draw_mesh().
     pub fn load_mesh(
@@ -246,28 +249,33 @@ impl BufferManager {
         data: &[f32],
         format: u8,
     ) -> Result<MeshHandle> {
+        use super::packing::pack_vertex_data;
+
         let format_idx = format as usize;
         if format_idx >= VERTEX_FORMAT_COUNT {
             anyhow::bail!("Invalid vertex format: {}", format);
         }
 
-        let stride = vertex_stride(format) as usize;
-        let byte_data = bytemuck::cast_slice(data);
-        let vertex_count = byte_data.len() / stride;
-
-        if byte_data.len() % stride != 0 {
+        // Validate unpacked stride
+        let unpacked_stride_floats = (vertex_stride(format) / 4) as usize;
+        if data.len() % unpacked_stride_floats != 0 {
             anyhow::bail!(
-                "Vertex data size {} is not a multiple of stride {}",
-                byte_data.len(),
-                stride
+                "Vertex data size {} is not a multiple of stride {} floats",
+                data.len(),
+                unpacked_stride_floats
             );
         }
 
-        // Ensure retained buffer has capacity
-        self.retained_vertex_buffers[format_idx].ensure_capacity(device, byte_data.len() as u64);
+        let vertex_count = data.len() / unpacked_stride_floats;
 
-        // Write to retained buffer
-        let vertex_offset = self.retained_vertex_buffers[format_idx].write(queue, byte_data);
+        // Pack f32 data to GPU format (f16/snorm16/unorm8)
+        let packed_data = pack_vertex_data(data, format);
+
+        // Ensure retained buffer has capacity
+        self.retained_vertex_buffers[format_idx].ensure_capacity(device, packed_data.len() as u64);
+
+        // Write packed data to retained buffer
+        let vertex_offset = self.retained_vertex_buffers[format_idx].write(queue, &packed_data);
 
         // Create mesh handle
         let handle = MeshHandle(self.next_mesh_id);
@@ -285,7 +293,7 @@ impl BufferManager {
         );
 
         tracing::debug!(
-            "Loaded mesh {}: {} vertices, format {}",
+            "Loaded mesh {}: {} vertices, format {} (f32→packed)",
             handle.0,
             vertex_count,
             VertexFormatInfo::for_format(format).name
@@ -295,6 +303,9 @@ impl BufferManager {
     }
 
     /// Load an indexed mesh (retained mode)
+    ///
+    /// Convenience wrapper that accepts unpacked f32 vertex data and packs it internally.
+    /// For procedural meshes or power users with pre-packed data, use load_mesh_indexed_packed() instead.
     ///
     /// The mesh is stored in the appropriate vertex and index buffers based on format.
     /// Returns a MeshHandle for use with draw_mesh().
@@ -306,33 +317,38 @@ impl BufferManager {
         indices: &[u16],
         format: u8,
     ) -> Result<MeshHandle> {
+        use super::packing::pack_vertex_data;
+
         let format_idx = format as usize;
         if format_idx >= VERTEX_FORMAT_COUNT {
             anyhow::bail!("Invalid vertex format: {}", format);
         }
 
-        let stride = vertex_stride(format) as usize;
-        let byte_data = bytemuck::cast_slice(data);
-        let vertex_count = byte_data.len() / stride;
-
-        if byte_data.len() % stride != 0 {
+        // Validate unpacked stride
+        let unpacked_stride_floats = (vertex_stride(format) / 4) as usize;
+        if data.len() % unpacked_stride_floats != 0 {
             anyhow::bail!(
-                "Vertex data size {} is not a multiple of stride {}",
-                byte_data.len(),
-                stride
+                "Vertex data size {} is not a multiple of stride {} floats",
+                data.len(),
+                unpacked_stride_floats
             );
         }
 
+        let vertex_count = data.len() / unpacked_stride_floats;
+
+        // Pack f32 data to GPU format (f16/snorm16/unorm8)
+        let packed_data = pack_vertex_data(data, format);
+
         // Ensure retained vertex buffer has capacity
-        self.retained_vertex_buffers[format_idx].ensure_capacity(device, byte_data.len() as u64);
+        self.retained_vertex_buffers[format_idx].ensure_capacity(device, packed_data.len() as u64);
 
         // Ensure retained index buffer has capacity
         let index_byte_data: &[u8] = bytemuck::cast_slice(indices);
         self.retained_index_buffers[format_idx]
             .ensure_capacity(device, index_byte_data.len() as u64);
 
-        // Write to retained buffers
-        let vertex_offset = self.retained_vertex_buffers[format_idx].write(queue, byte_data);
+        // Write to retained buffers (packed vertex data + indices)
+        let vertex_offset = self.retained_vertex_buffers[format_idx].write(queue, &packed_data);
         let index_offset = self.retained_index_buffers[format_idx].write(queue, index_byte_data);
 
         // Create mesh handle
@@ -351,7 +367,7 @@ impl BufferManager {
         );
 
         tracing::debug!(
-            "Loaded indexed mesh {}: {} vertices, {} indices, format {}",
+            "Loaded indexed mesh {}: {} vertices, {} indices, format {} (f32→packed)",
             handle.0,
             vertex_count,
             indices.len(),

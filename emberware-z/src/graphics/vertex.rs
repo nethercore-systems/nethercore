@@ -436,18 +436,18 @@ mod tests {
 
     #[test]
     fn test_all_16_vertex_formats() {
-        // Verify all 16 formats have valid strides
+        // Verify all 16 formats have valid packed strides
         for i in 0..VERTEX_FORMAT_COUNT {
             let info = VertexFormatInfo::for_format(i as u8);
             assert!(
-                info.stride >= 12,
-                "Format {} has stride {} < 12",
+                info.stride >= 8,  // Minimum: position only (f16x4) = 8 bytes
+                "Format {} has stride {} < 8",
                 i,
                 info.stride
             );
             assert!(
-                info.stride <= 64,
-                "Format {} has stride {} > 64",
+                info.stride <= 44,  // Maximum: full format packed = 44 bytes
+                "Format {} has stride {} > 44",
                 i,
                 info.stride
             );
@@ -504,7 +504,7 @@ mod tests {
         assert!(!format.has_normal());
         assert!(format.has_skinned());
         assert_eq!(format.name, "POS_SKINNED");
-        assert_eq!(format.stride, 32); // 12 + 20
+        assert_eq!(format.stride, 28); // Packed: pos(8) + skinned(20) = 28
     }
 
     #[test]
@@ -515,7 +515,7 @@ mod tests {
         assert!(format.has_normal());
         assert!(format.has_skinned());
         assert_eq!(format.name, "POS_UV_COLOR_NORMAL_SKINNED");
-        assert_eq!(format.stride, 64); // 12 + 8 + 12 + 12 + 20
+        assert_eq!(format.stride, 44); // Packed: pos(8) + uv(4) + color(4) + normal(8) + skinned(20) = 44
     }
 
     #[test]
@@ -572,7 +572,7 @@ mod tests {
     fn test_vertex_buffer_layout_pos_only() {
         let info = VertexFormatInfo::for_format(0);
         let layout = info.vertex_buffer_layout();
-        assert_eq!(layout.array_stride, 12);
+        assert_eq!(layout.array_stride, 8); // f16x4 (8 bytes) - PACKED format
         assert_eq!(layout.attributes.len(), 1);
         assert_eq!(layout.attributes[0].shader_location, 0);
     }
@@ -581,7 +581,7 @@ mod tests {
     fn test_vertex_buffer_layout_full() {
         let info = VertexFormatInfo::for_format(FORMAT_ALL);
         let layout = info.vertex_buffer_layout();
-        assert_eq!(layout.array_stride, 64);
+        assert_eq!(layout.array_stride, 44); // Packed: pos(8) + uv(4) + color(4) + normal(8) + skinned(20) = 44
         assert_eq!(layout.attributes.len(), 6);
     }
 
@@ -589,10 +589,11 @@ mod tests {
     fn test_vertex_attribute_offsets_pos_uv_color_normal() {
         let info = VertexFormatInfo::for_format(FORMAT_UV | FORMAT_COLOR | FORMAT_NORMAL);
         let layout = info.vertex_buffer_layout();
-        assert_eq!(layout.attributes[0].offset, 0);
-        assert_eq!(layout.attributes[1].offset, 12);
-        assert_eq!(layout.attributes[2].offset, 20);
-        assert_eq!(layout.attributes[3].offset, 32);
+        // Packed offsets: pos(0-7), uv(8-11), color(12-15), normal(16-23)
+        assert_eq!(layout.attributes[0].offset, 0);  // Position at 0
+        assert_eq!(layout.attributes[1].offset, 8);  // UV at 8
+        assert_eq!(layout.attributes[2].offset, 12); // Color at 12
+        assert_eq!(layout.attributes[3].offset, 16); // Normal at 16
     }
 
     #[test]
