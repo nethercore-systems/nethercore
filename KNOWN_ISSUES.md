@@ -1,15 +1,15 @@
 ## Blinn Phong example is sitll "blue tinted"
-- Could be wrong endianness packing of colors and uniform colors
 - Could be a problem with procedural meshes and normal generation
-- Could be due to packing of vertex data not correctly referencing normals
+- Could be due to packing of vertex data not correctly referencing normals (ie snorm didn't convert correctly!)
+- Could be wrong endianness packing of colors and uniform colors
 
 ## Can't launch games with command line args
 - cargo run -- lighting, or whatever fails with an Error: No game session
 
 ## Mesh data is not being cleared correctly between games
 - Load one game, it renders fine, close it.
-- Open another game, meshes will be all messed up
-- Buffers aren't being cleared correctly between game launches
+- Open another game, meshes may be messed up.
+- It doesn't happen 100% of the time, but when it does, the mesh just doesn't show. This usually happens during the Procedural Meshes example.
 
 ## Hello World example doesn't work anymore
 - Nothing is rendered to the screen!

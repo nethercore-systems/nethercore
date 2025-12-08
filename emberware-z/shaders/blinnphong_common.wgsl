@@ -100,8 +100,8 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
 
     let view_dir = normalize(in.camera_position - in.world_position);
 
-    // Rim power from byte 3 of uniform_set_1
-    let rim_power_raw = unpack_unorm8_from_u32((shading.uniform_set_1 >> 24u) & 0xFFu);
+    // Rim power from byte 0 of uniform_set_1 (low byte)
+    let rim_power_raw = unpack_unorm8_from_u32(shading.uniform_set_1 & 0xFFu);
     let rim_power = rim_power_raw * 32.0;
 
     let glow = albedo * emissive;

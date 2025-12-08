@@ -254,12 +254,12 @@ fn generate_shader(mode: u8, format: u8) -> Result<String, String> {
             );
             // Mode 3 uses INVERTED spec_damping: 0 = full specular, 255 = no specular
             // This is beginner-friendly: default of 0 gives visible highlights
-            // NOTE: uniform_set_1 is packed little-endian [R, G, B, rim_power], not big-endian like colors
+            // uniform_set_1 format: 0xRRGGBBRP (big-endian, same as color_rgba8)
             let specular = if has_uv {
                 "var specular_color = textureSample(slot2, tex_sampler, in.uv).rgb;\n    specular_color = specular_color * (1.0 - value0);"
             } else {
-                // Unpack little-endian RGB from uniform_set_1: [byte0=R, byte1=G, byte2=B, byte3=rim_power]
-                "let spec_r = f32(shading.uniform_set_1 & 0xFFu) / 255.0;\n    let spec_g = f32((shading.uniform_set_1 >> 8u) & 0xFFu) / 255.0;\n    let spec_b = f32((shading.uniform_set_1 >> 16u) & 0xFFu) / 255.0;\n    var specular_color = vec3<f32>(spec_r, spec_g, spec_b) * (1.0 - value0);"
+                // Unpack big-endian RGB from uniform_set_1: 0xRRGGBBRP format
+                "let spec_r = f32((shading.uniform_set_1 >> 24u) & 0xFFu) / 255.0;\n    let spec_g = f32((shading.uniform_set_1 >> 16u) & 0xFFu) / 255.0;\n    let spec_b = f32((shading.uniform_set_1 >> 8u) & 0xFFu) / 255.0;\n    var specular_color = vec3<f32>(spec_r, spec_g, spec_b) * (1.0 - value0);"
             };
             shader = shader.replace("//FS_MODE2_3_SPECULAR_COLOR", specular);
             if has_uv {
