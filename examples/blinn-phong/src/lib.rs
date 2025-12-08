@@ -316,8 +316,9 @@ pub extern "C" fn render() {
 // Rendering Helpers
 // ============================================================================
 
+/// Pack RGBA into 0xRRGGBBAA format for FFI functions
 const fn rgba(r: u8, g: u8, b: u8, a: u8) -> u32 {
-    (r as u32) | ((g as u32) << 8) | ((b as u32) << 16) | ((a as u32) << 24)
+    ((r as u32) << 24) | ((g as u32) << 16) | ((b as u32) << 8) | (a as u32)
 }
 
 fn draw_sphere_with_material(position: [f32; 3], radius: f32, material: &Material) {

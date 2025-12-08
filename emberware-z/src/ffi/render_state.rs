@@ -28,9 +28,24 @@ pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) ->
 /// * `color` — Color in 0xRRGGBBAA format
 ///
 /// This color is multiplied with vertex colors and textures.
+///
+/// **Examples:**
+/// - `0xFF0000FF` — Red with full alpha
+/// - `0x00FF00FF` — Green with full alpha
+/// - `0x0000FFFF` — Blue with full alpha
+/// - `0xFFFFFFFF` — White with full alpha
 fn set_color(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, color: u32) {
+    // Unpack from 0xRRGGBBAA format
+    let r = ((color >> 24) & 0xFF) as u8;
+    let g = ((color >> 16) & 0xFF) as u8;
+    let b = ((color >> 8) & 0xFF) as u8;
+    let a = (color & 0xFF) as u8;
+
+    // Repack for shader (0xAABBGGRR format - little-endian RGBA)
+    let repacked = (r as u32) | ((g as u32) << 8) | ((b as u32) << 16) | ((a as u32) << 24);
+
     let state = &mut caller.data_mut().console;
-    state.update_color(color);
+    state.update_color(repacked);
 }
 
 /// Enable or disable depth testing
