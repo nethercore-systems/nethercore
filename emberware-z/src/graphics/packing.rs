@@ -122,6 +122,108 @@ pub fn pack_color_rgba_unorm8(r: f32, g: f32, b: f32, a: f32) -> [u8; 4] {
     ]
 }
 
+/// Pack unpacked f32 vertex data to GPU-ready packed format
+///
+/// Converts f32 positions/UVs/normals/colors to f16/snorm16/unorm8 based on format flags.
+/// This is the core packing function used by both immediate draws and retained mesh loading.
+///
+/// # Format Layout (unpacked f32)
+/// - Position: 3 f32 (x, y, z)
+/// - UV (if FORMAT_UV): 2 f32 (u, v)
+/// - Color (if FORMAT_COLOR): 3 f32 (r, g, b) - alpha added as 1.0
+/// - Normal (if FORMAT_NORMAL): 3 f32 (nx, ny, nz)
+/// - Skinning (if FORMAT_SKINNED): Currently placeholder (not yet implemented)
+///
+/// # Packed Layout (GPU format)
+/// - Position: f16x4 (8 bytes, w=1.0 padding)
+/// - UV (if FORMAT_UV): f16x2 (4 bytes)
+/// - Color (if FORMAT_COLOR): unorm8x4 (4 bytes, alpha=255)
+/// - Normal (if FORMAT_NORMAL): snorm16x4 (8 bytes, w=0 padding)
+///
+/// # Arguments
+/// * `data` - Unpacked f32 vertex data (position + optional attributes)
+/// * `format` - Vertex format flags (0-15: UV=1, COLOR=2, NORMAL=4, SKINNED=8)
+///
+/// # Returns
+/// Packed vertex data ready for GPU upload as Vec<u8>
+///
+/// # Memory Savings
+/// - POS_NORMAL: 24 bytes → 16 bytes (33% reduction)
+/// - POS_UV_NORMAL: 32 bytes → 20 bytes (37.5% reduction)
+pub fn pack_vertex_data(data: &[f32], format: u8) -> Vec<u8> {
+    use crate::graphics::{vertex_stride_packed, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV};
+
+    let has_uv = format & FORMAT_UV != 0;
+    let has_color = format & FORMAT_COLOR != 0;
+    let has_normal = format & FORMAT_NORMAL != 0;
+    let has_skinning = format & FORMAT_SKINNED != 0;
+
+    // Calculate unpacked stride (how many f32s per vertex)
+    let mut f32_stride = 3; // Position (x, y, z)
+    if has_uv {
+        f32_stride += 2; // UV (u, v)
+    }
+    if has_color {
+        f32_stride += 3; // Color (r, g, b) - alpha added as 1.0
+    }
+    if has_normal {
+        f32_stride += 3; // Normal (nx, ny, nz)
+    }
+    if has_skinning {
+        f32_stride += 9; // 4 bone indices (as f32) + 4 weights + padding (?)
+                         // NOTE: Skinning layout needs verification
+    }
+
+    let vertex_count = data.len() / f32_stride;
+    let packed_stride = vertex_stride_packed(format) as usize;
+    let mut packed = Vec::with_capacity(vertex_count * packed_stride);
+
+    for i in 0..vertex_count {
+        let base = i * f32_stride;
+        let mut offset = base;
+
+        // Position: f32x3 → f16x4 (8 bytes)
+        let pos = pack_position_f16(data[offset], data[offset + 1], data[offset + 2]);
+        packed.extend_from_slice(cast_slice(&pos));
+        offset += 3;
+
+        // UV: f32x2 → f16x2 (4 bytes)
+        if has_uv {
+            let uv = pack_uv_f16(data[offset], data[offset + 1]);
+            packed.extend_from_slice(cast_slice(&uv));
+            offset += 2;
+        }
+
+        // Color: f32x3 → unorm8x4 (4 bytes, alpha=255)
+        if has_color {
+            let color = pack_color_rgba_unorm8(
+                data[offset],
+                data[offset + 1],
+                data[offset + 2],
+                1.0,
+            );
+            packed.extend_from_slice(cast_slice(&color));
+            offset += 3;
+        }
+
+        // Normal: f32x3 → snorm16x4 (8 bytes)
+        if has_normal {
+            let normal = pack_normal_snorm16(data[offset], data[offset + 1], data[offset + 2]);
+            packed.extend_from_slice(cast_slice(&normal));
+            offset += 3;
+        }
+
+        // Skinning: Keep as-is (not packed)
+        if has_skinning {
+            // TODO: Implement skinning data packing when skinning is used
+            // For now, this is a placeholder
+            tracing::warn!("Skinning data packing not yet implemented");
+        }
+    }
+
+    packed
+}
+
 /// Write a packed POS_UV_NORMAL vertex to a byte buffer (20 bytes)
 ///
 /// Uses bytemuck to cast f16/i16 arrays to bytes efficiently.

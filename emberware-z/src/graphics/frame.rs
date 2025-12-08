@@ -8,6 +8,7 @@
 use glam::Mat4;
 
 use super::command_buffer::{BufferSource, VRPCommand};
+use super::packing::pack_vertex_data;
 use super::pipeline::PipelineKey;
 use super::render_state::{BlendMode, CullMode, RenderState, TextureHandle};
 use super::vertex::VERTEX_FORMAT_COUNT;
@@ -129,12 +130,16 @@ impl ZGraphics {
         for format in 0..VERTEX_FORMAT_COUNT as u8 {
             let vertex_data = self.command_buffer.vertex_data(format);
             if !vertex_data.is_empty() {
+                // Convert f32 bytes → f32 slice → packed bytes for GPU
+                let floats: &[f32] = bytemuck::cast_slice(vertex_data);
+                let packed_data = pack_vertex_data(floats, format);
+
                 self.buffer_manager
                     .vertex_buffer_mut(format)
-                    .ensure_capacity(&self.device, vertex_data.len() as u64);
+                    .ensure_capacity(&self.device, packed_data.len() as u64);
                 self.buffer_manager
                     .vertex_buffer(format)
-                    .write_at(&self.queue, 0, vertex_data);
+                    .write_at(&self.queue, 0, &packed_data);
             }
 
             let index_data = self.command_buffer.index_data(format);
