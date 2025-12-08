@@ -16,24 +16,54 @@ pub const FORMAT_SKINNED: u8 = 8;
 pub const FORMAT_ALL: u8 = FORMAT_UV | FORMAT_COLOR | FORMAT_NORMAL | FORMAT_SKINNED;
 
 /// Number of vertex format permutations (16: 0-15)
+/// GPU always uses packed vertex formats (f16, snorm16, unorm8).
 pub const VERTEX_FORMAT_COUNT: usize = 16;
 
-/// Calculate vertex stride in bytes for a given format
+/// Calculate vertex stride in bytes for unpacked f32 format (convenience API)
+///
+/// Used when game code provides Vec<f32> vertex data that needs packing before GPU upload.
+/// Format values are 0-15 (base format).
 #[inline]
 pub const fn vertex_stride(format: u8) -> u32 {
-    let mut stride = 3 * 4; // Position: 3 floats = 12 bytes
+    // Position: Float32x3 (12 bytes)
+    let mut stride = 12;
 
     if format & FORMAT_UV != 0 {
-        stride += 2 * 4; // UV: 2 floats = 8 bytes
+        stride += 8; // UV: Float32x2
     }
     if format & FORMAT_COLOR != 0 {
-        stride += 3 * 4; // Color: 3 floats = 12 bytes
+        stride += 12; // Color: Float32x3
     }
     if format & FORMAT_NORMAL != 0 {
-        stride += 3 * 4; // Normal: 3 floats = 12 bytes
+        stride += 12; // Normal: Float32x3
     }
     if format & FORMAT_SKINNED != 0 {
-        stride += 4 + 4 * 4; // Bone indices (4 u8 = 4 bytes) + weights (4 floats = 16 bytes) = 20 bytes
+        stride += 20; // Bone indices (4 u8) + weights (4 f32)
+    }
+
+    stride
+}
+
+/// Calculate vertex stride in bytes for packed format (used by power user API)
+///
+/// All formats are packed (f16, snorm16, unorm8) since GPU buffers only use packed data.
+/// Format values are 0-15 (base format, no FORMAT_PACKED flag).
+#[inline]
+pub const fn vertex_stride_packed(format: u8) -> u32 {
+    // Position: Float16x4 (8 bytes)
+    let mut stride = 8;
+
+    if format & FORMAT_UV != 0 {
+        stride += 4; // Float16x2
+    }
+    if format & FORMAT_COLOR != 0 {
+        stride += 4; // Unorm8x4
+    }
+    if format & FORMAT_NORMAL != 0 {
+        stride += 8; // Snorm16x4
+    }
+    if format & FORMAT_SKINNED != 0 {
+        stride += 20; // Bone data (unchanged)
     }
 
     stride
@@ -51,7 +81,9 @@ pub struct VertexFormatInfo {
 }
 
 impl VertexFormatInfo {
-    /// Get vertex format info for a format index
+    /// Get vertex format info for a format index (0-15)
+    ///
+    /// Returns info for GPU vertex buffers, which always use packed formats.
     pub const fn for_format(format: u8) -> Self {
         let name = match format {
             0 => "POS",
@@ -75,7 +107,7 @@ impl VertexFormatInfo {
 
         Self {
             format,
-            stride: vertex_stride(format),
+            stride: vertex_stride_packed(format), // GPU always uses packed
             name,
         }
     }
@@ -123,27 +155,27 @@ impl VertexFormatInfo {
         }
     }
 
-    /// Builds vertex attributes for a format, returning a static slice.
+    /// Builds packed vertex attributes for a format.
+    ///
+    /// GPU always uses packed formats (f16, snorm16, unorm8).
     ///
     /// Shader locations are assigned in order:
-    /// - Location 0: Position (always present, Float32x3)
-    /// - Location 1: UV (if FORMAT_UV, Float32x2)
-    /// - Location 2: Color (if FORMAT_COLOR, Float32x3)
-    /// - Location 3: Normal (if FORMAT_NORMAL, Float32x3)
+    /// - Location 0: Position (Float16x4, padded)
+    /// - Location 1: UV (if FORMAT_UV, Float16x2)
+    /// - Location 2: Color (if FORMAT_COLOR, Unorm8x4)
+    /// - Location 3: Normal (if FORMAT_NORMAL, Snorm16x4)
     /// - Location 4: Bone indices (if FORMAT_SKINNED, Uint8x4)
     /// - Location 5: Bone weights (if FORMAT_SKINNED, Float32x4)
     fn build_attributes(format: u8) -> &'static [wgpu::VertexAttribute] {
-        // Index into pre-computed attribute table by format (0-15)
-        // Invalid formats (>15) fall back to POS only (format 0)
-        VERTEX_ATTRIBUTES[(format & 0x0F) as usize]
+        VERTEX_ATTRIBUTES[format as usize]
     }
 }
 
-/// Attribute sizes in bytes for offset calculation
-const SIZE_POS: u64 = 12; // Float32x3
-const SIZE_UV: u64 = 8; // Float32x2
-const SIZE_COLOR: u64 = 12; // Float32x3
-const SIZE_NORMAL: u64 = 12; // Float32x3
+/// Attribute sizes in bytes for offset calculation (packed formats - GPU only)
+const SIZE_POS: u64 = 8; // Float16x4 (padded for alignment)
+const SIZE_UV: u64 = 4; // Float16x2
+const SIZE_COLOR: u64 = 4; // Unorm8x4
+const SIZE_NORMAL: u64 = 8; // Snorm16x4 (padded for alignment)
 const SIZE_BONE_INDICES: u64 = 4; // Uint8x4
                                   // Note: SIZE_BONE_WEIGHTS (16 bytes) is not needed since bone weights is always last
 
@@ -155,43 +187,43 @@ const LOC_NORMAL: u32 = 3;
 const LOC_BONE_INDICES: u32 = 4;
 const LOC_BONE_WEIGHTS: u32 = 5;
 
-/// Creates a position attribute at offset 0
+/// Creates a position attribute at offset 0 (Float16x4, padded)
 const fn attr_pos() -> wgpu::VertexAttribute {
     wgpu::VertexAttribute {
-        format: wgpu::VertexFormat::Float32x3,
+        format: wgpu::VertexFormat::Float16x4,
         offset: 0,
         shader_location: LOC_POS,
     }
 }
 
-/// Creates a UV attribute at the given offset
+/// Creates a UV attribute at the given offset (Float16x2)
 const fn attr_uv(offset: u64) -> wgpu::VertexAttribute {
     wgpu::VertexAttribute {
-        format: wgpu::VertexFormat::Float32x2,
+        format: wgpu::VertexFormat::Float16x2,
         offset,
         shader_location: LOC_UV,
     }
 }
 
-/// Creates a color attribute at the given offset
+/// Creates a color attribute at the given offset (Unorm8x4)
 const fn attr_color(offset: u64) -> wgpu::VertexAttribute {
     wgpu::VertexAttribute {
-        format: wgpu::VertexFormat::Float32x3,
+        format: wgpu::VertexFormat::Unorm8x4,
         offset,
         shader_location: LOC_COLOR,
     }
 }
 
-/// Creates a normal attribute at the given offset
+/// Creates a normal attribute at the given offset (Snorm16x4)
 const fn attr_normal(offset: u64) -> wgpu::VertexAttribute {
     wgpu::VertexAttribute {
-        format: wgpu::VertexFormat::Float32x3,
+        format: wgpu::VertexFormat::Snorm16x4,
         offset,
         shader_location: LOC_NORMAL,
     }
 }
 
-/// Creates bone indices attribute at the given offset
+/// Creates bone indices attribute at the given offset (Uint8x4)
 const fn attr_bone_indices(offset: u64) -> wgpu::VertexAttribute {
     wgpu::VertexAttribute {
         format: wgpu::VertexFormat::Uint8x4,
@@ -200,7 +232,7 @@ const fn attr_bone_indices(offset: u64) -> wgpu::VertexAttribute {
     }
 }
 
-/// Creates bone weights attribute at the given offset
+/// Creates bone weights attribute at the given offset (Float32x4)
 const fn attr_bone_weights(offset: u64) -> wgpu::VertexAttribute {
     wgpu::VertexAttribute {
         format: wgpu::VertexFormat::Float32x4,
@@ -309,6 +341,7 @@ static VERTEX_ATTRIBUTES: [&[wgpu::VertexAttribute]; 16] = [
         attr_bone_weights(SIZE_POS + SIZE_UV + SIZE_COLOR + SIZE_NORMAL + SIZE_BONE_INDICES),
     ],
 ];
+
 
 #[cfg(test)]
 mod tests {

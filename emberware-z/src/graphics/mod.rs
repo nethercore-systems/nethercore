@@ -67,6 +67,7 @@ mod frame;
 mod init;
 mod matrix_packing;
 mod pipeline;
+mod packing;
 mod quad_instance;
 mod render_state;
 mod texture_manager;
@@ -93,7 +94,14 @@ pub use unified_shading_state::{
     unpack_matcap_blend_modes, update_uniform_set_0_byte, update_uniform_set_1_byte, PackedLight,
     PackedUnifiedShadingState, ShadingStateIndex,
 };
-pub use vertex::{vertex_stride, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV};
+pub use vertex::{
+    vertex_stride, vertex_stride_packed, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV,
+};
+
+// Re-export packing functions for FFI use
+pub use packing::{
+    pack_color_rgba_unorm8, pack_normal_snorm16, pack_position_f16, pack_uv_f16,
+};
 
 // Re-export for crate-internal use
 pub(crate) use init::RenderTarget;
@@ -387,6 +395,29 @@ impl ZGraphics {
     ) -> Result<MeshHandle> {
         self.buffer_manager
             .load_mesh_indexed(&self.device, &self.queue, data, indices, format)
+    }
+
+    /// Load a packed mesh (retained mode)
+    ///
+    /// The mesh data is already packed (f16/snorm16/unorm8 format).
+    /// Returns a MeshHandle for use with draw_mesh().
+    pub fn load_mesh_packed(&mut self, data: &[u8], format: u8) -> Result<MeshHandle> {
+        self.buffer_manager
+            .load_mesh_packed(&self.device, &self.queue, data, format)
+    }
+
+    /// Load a packed indexed mesh (retained mode)
+    ///
+    /// The mesh data is already packed (f16/snorm16/unorm8 format).
+    /// Returns a MeshHandle for use with draw_mesh().
+    pub fn load_mesh_indexed_packed(
+        &mut self,
+        data: &[u8],
+        indices: &[u16],
+        format: u8,
+    ) -> Result<MeshHandle> {
+        self.buffer_manager
+            .load_mesh_indexed_packed(&self.device, &self.queue, data, indices, format)
     }
 
     /// Get mesh info by handle

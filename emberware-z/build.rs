@@ -34,7 +34,8 @@ const VIN_SKINNED: &str =
 
 const VOUT_WORLD_NORMAL: &str = "@location(1) world_normal: vec3<f32>,";
 const VOUT_VIEW_NORMAL: &str = "@location(2) view_normal: vec3<f32>,";
-const VOUT_CAMERA_POS: &str = "@location(4) @interpolate(flat) camera_position: vec3<f32>,";
+const VOUT_VIEW_POS: &str = "@location(4) view_position: vec3<f32>,";
+const VOUT_CAMERA_POS: &str = "@location(5) @interpolate(flat) camera_position: vec3<f32>,";
 const VOUT_UV: &str = "@location(10) uv: vec2<f32>,";
 const VOUT_COLOR: &str = "@location(11) color: vec3<f32>,";
 
@@ -44,6 +45,7 @@ const VS_WORLD_NORMAL: &str =
     "let world_normal_raw = (model_matrix * vec4<f32>(in.normal, 0.0)).xyz;\n    out.world_normal = normalize(world_normal_raw);";
 const VS_VIEW_NORMAL: &str =
     "let view_normal = (view_matrix * vec4<f32>(out.world_normal, 0.0)).xyz;\n    out.view_normal = normalize(view_normal);";
+const VS_VIEW_POS: &str = "let view_pos_4 = view_matrix * model_matrix * world_pos;\n    out.view_position = view_pos_4.xyz;";
 const VS_CAMERA_POS: &str = "out.camera_position = extract_camera_position(view_matrix);";
 
 const VS_SKINNED: &str = r#"// GPU skinning: compute skinned position and normal
@@ -138,6 +140,10 @@ fn generate_shader(mode: u8, format: u8) -> Result<String, String> {
         if has_normal { VOUT_VIEW_NORMAL } else { "" },
     );
     shader = shader.replace(
+        "//VOUT_VIEW_POS",
+        if mode == 1 && has_normal { VOUT_VIEW_POS } else { "" },
+    );
+    shader = shader.replace(
         "//VOUT_CAMERA_POS",
         if mode >= 2 { VOUT_CAMERA_POS } else { "" },
     );
@@ -159,6 +165,13 @@ fn generate_shader(mode: u8, format: u8) -> Result<String, String> {
     } else {
         shader = shader.replace("//VS_WORLD_NORMAL", "");
         shader = shader.replace("//VS_VIEW_NORMAL", "");
+    }
+
+    // View position (mode 1 only, for perspective-correct matcap)
+    if mode == 1 && has_normal {
+        shader = shader.replace("//VS_VIEW_POS", VS_VIEW_POS);
+    } else {
+        shader = shader.replace("//VS_VIEW_POS", "");
     }
 
     // Camera position extraction (modes 2-3 only)

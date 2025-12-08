@@ -3,7 +3,7 @@
 use glam::{Mat4, Vec3};
 use hashbrown::HashMap;
 
-use super::{Font, PendingMesh, PendingTexture, ZInitConfig};
+use super::{Font, PendingMesh, PendingMeshPacked, PendingTexture, ZInitConfig};
 
 /// FFI staging state for Emberware Z
 ///
@@ -34,6 +34,7 @@ pub struct ZFFIState {
     // Pending resource uploads
     pub pending_textures: Vec<PendingTexture>,
     pub pending_meshes: Vec<PendingMesh>,
+    pub pending_meshes_packed: Vec<PendingMeshPacked>,
 
     // Resource handle allocation
     pub next_texture_handle: u32,
@@ -117,6 +118,7 @@ impl Default for ZFFIState {
             mesh_map: hashbrown::HashMap::new(),
             pending_textures: Vec::new(),
             pending_meshes: Vec::new(),
+            pending_meshes_packed: Vec::new(),
             next_texture_handle: 1, // 0 reserved for invalid
             next_mesh_handle: 1,
             next_font_handle: 1,

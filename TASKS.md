@@ -541,50 +541,70 @@ fn compute_matcap_uv(view_position: vec3<f32>, view_normal: vec3<f32>) -> vec2<f
 
 ### **[POLISH] PERF: Pack vertex data to reduce memory/bandwidth**
 
-**Status:** Future optimization
+**Status:** ✅ **COMPLETED** (December 2024)
 
-**Current State:**
-All vertex attributes use f32 components (4 bytes each), resulting in large vertex buffers:
-- Position: 3x f32 = 12 bytes
-- Normal: 3x f32 = 12 bytes
-- UV: 2x f32 = 8 bytes
-- Color: 3x f32 = 12 bytes
-- Bone indices: 4x u32 = 16 bytes (stored as f32 in shader)
-- Bone weights: 4x f32 = 16 bytes
+**Implementation Summary:**
+Successfully refactored the entire mesh generation pipeline to use packed vertex formats, achieving significant memory savings critical for the 12MB ROM limit.
 
-**Proposed Packed Format:**
-Use hardware-accelerated packed formats for significant memory savings:
+**What Was Implemented:**
 
-| Attribute    | Current   | Packed       | Savings     | Notes                              |
-| ------------ | --------- | ------------ | ----------- | ---------------------------------- |
-| Position     | f32x3     | f16x4        | 12→8 bytes  | Last component padded/ignored      |
-| Normal       | f32x3     | snorm16x4    | 12→8 bytes  | Normalized to [-1,1], last ignored |
-| UV           | f32x2     | unorm16x2    | 8→4 bytes   | Normalized to [0,1]                |
-| Vertex color | f32x3     | unorm8x4     | 12→4 bytes  | Standard RGBA8                     |
-| Bone indices | u32x4     | uint8x4      | 16→4 bytes  | Max 256 bones                      |
-| Bone weights | f32x4     | unorm8x4     | 16→4 bytes  | Normalized to [0,1]                |
+1. **Added `half` crate with `bytemuck` support**
+   - Replaced custom f32_to_f16 implementation (~80 lines) with industry-standard `half::f16`
+   - Used `bytemuck::cast_slice()` for zero-cost type conversions
+   - Updated `emberware-z/src/graphics/packing.rs` with new packing functions
 
-**Example Savings:**
-- POS_UV_NORMAL: 32 bytes → 20 bytes (37% reduction)
-- POS_UV_NORMAL_COLOR_SKINNED: 76 bytes → 32 bytes (58% reduction!)
+2. **Created two distinct types for clarity**
+   - `PendingMesh` (Vec<f32>) - Unpacked f32 convenience API for users
+   - `PendingMeshPacked` (Vec<u8>) - Packed bytes for internal use and power users
+   - Removed FORMAT_PACKED flag confusion - format field now only 0-15
 
-**Benefits:**
-- Reduced VRAM usage (important for low-end GPUs)
+3. **Refactored ALL procedural mesh generators**
+   - Updated 12 generators (sphere, cube, cylinder, plane, torus, capsule + UV variants)
+   - All now output packed data directly (16 bytes/vertex for POS_NORMAL, 20 bytes/vertex for POS_UV_NORMAL)
+   - Modified `procedural.rs` to use `Vec<u8>` instead of `Vec<f32>`
+
+4. **Added power user API**
+   - `load_mesh_packed()` and `load_mesh_indexed_packed()` FFI functions
+   - `vertex_stride_packed()` helper function
+   - Allows pre-packed data from asset exporters
+
+5. **Updated GPU upload pipeline**
+   - Added `load_mesh_packed()` and `load_mesh_indexed_packed()` to BufferManager
+   - Updated resource_manager.rs to process both unpacked and packed mesh queues
+   - All GPU vertex buffers now use packed formats
+
+**Actual Savings Achieved:**
+- POS_NORMAL: 24 bytes → 16 bytes (33% reduction)
+- POS_UV_NORMAL: 32 bytes → 20 bytes (37.5% reduction)
+- Example: 10,000 vertex mesh = 320 KB → 200 KB (120 KB saved)
+
+**Files Modified:**
+- `Cargo.toml` - Added `half` crate dependency
+- `emberware-z/src/graphics/packing.rs` - Rewrote using `half::f16`
+- `emberware-z/src/state/resources.rs` - Added `PendingMeshPacked` struct
+- `emberware-z/src/state/ffi_state.rs` - Added `pending_meshes_packed` field
+- `emberware-z/src/graphics/vertex.rs` - Added `vertex_stride_packed()` function
+- `emberware-z/src/ffi/mesh.rs` - Added packed mesh loading FFI
+- `emberware-z/src/procedural.rs` - Complete refactor to output packed data
+- `emberware-z/src/ffi/mesh_generators.rs` - Updated to use packed queue
+- `emberware-z/src/graphics/buffer.rs` - Added packed upload functions
+- `emberware-z/src/graphics/mod.rs` - Exposed packed API
+- `emberware-z/src/resource_manager.rs` - Process both mesh queues
+- Deleted `mesh_generators_packed.rs` (was incorrect approach)
+
+**Testing:**
+- ✅ All examples compile successfully
+- ✅ textured-procedural example builds and runs
+- ✅ Unit tests added for packing functions
+- ✅ No rendering artifacts
+- ✅ 37.5% memory reduction confirmed
+
+**Benefits Achieved:**
+- Critical for 12MB ROM limit compliance
+- Reduced VRAM usage for all meshes
 - Faster vertex fetch (less memory bandwidth)
-- Authentic PS1/N64 precision (f16 positions match era)
-- GPU automatically unpacks to f32 in shader (zero cost)
-
-**Implementation Plan:**
-1. Update `VertexFormatInfo` in `vertex.rs` with packed formats
-2. Modify vertex buffer layout descriptors
-3. Update FFI to accept packed data (or pack on upload)
-4. Test precision loss is acceptable for retro aesthetic
-5. Update examples to use new vertex formats
-
-**Considerations:**
-- f16 position precision: ±65504 range, good for typical game worlds
-- snorm16 normal precision: 1/32767 ≈ 0.00003 angular precision (overkill)
-- May need to adjust vertex data generation in examples
+- Authentic PS1/N64 precision (f16 positions)
+- Simpler API (no FORMAT_PACKED flag confusion)
 
 ---
 

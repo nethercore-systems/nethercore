@@ -198,6 +198,7 @@ struct VertexOut {
     //VOUT_WORLD_NORMAL
     //VOUT_VIEW_NORMAL
     @location(3) @interpolate(flat) shading_state_index: u32,
+    //VOUT_VIEW_POS
     //VOUT_CAMERA_POS
     //VOUT_UV
     //VOUT_COLOR
@@ -243,6 +244,7 @@ fn vs(in: VertexIn, @builtin(instance_index) instance_index: u32) -> VertexOut {
 
     //VS_WORLD_NORMAL
     //VS_VIEW_NORMAL
+    //VS_VIEW_POS
 
     out.clip_position = projection_matrix * view_matrix * model_pos;
     out.shading_state_index = shading_state_idx;

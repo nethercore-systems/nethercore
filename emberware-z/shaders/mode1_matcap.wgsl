@@ -9,9 +9,16 @@
 // Fragment Shader Utilities
 // ============================================================================
 
-// Compute matcap UV from view-space normal
-fn compute_matcap_uv(view_normal: vec3<f32>) -> vec2<f32> {
-    return view_normal.xy * 0.5 + 0.5;
+// Compute matcap UV with perspective correction
+// This prevents distortion at screen edges with wide FOV
+fn compute_matcap_uv(view_position: vec3<f32>, view_normal: vec3<f32>) -> vec2<f32> {
+    let inv_depth = 1.0 / (1.0 + view_position.z);
+    let proj_factor = -view_position.x * view_position.y * inv_depth;
+    let basis1 = vec3<f32>(1.0 - view_position.x * view_position.x * inv_depth, proj_factor, -view_position.x);
+    let basis2 = vec3<f32>(proj_factor, 1.0 - view_position.y * view_position.y * inv_depth, -view_position.y);
+    let matcap_uv = vec2<f32>(dot(basis1, view_normal), dot(basis2, view_normal));
+
+    return matcap_uv * vec2<f32>(0.5, -0.5) + 0.5;
 }
 
 // Convert RGB to HSV
@@ -127,8 +134,8 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     //FS_COLOR
     //FS_UV
 
-    // Compute matcap UV once for all matcaps
-    let matcap_uv = compute_matcap_uv(in.view_normal);
+    // Compute matcap UV once for all matcaps (perspective-correct)
+    let matcap_uv = compute_matcap_uv(in.view_position, in.view_normal);
 
     // Sample and blend matcaps from slots 1-3 using their blend modes
     // Slot 0 is for albedo (used in FS_UV), slots 1-3 are matcaps

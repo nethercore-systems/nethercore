@@ -7,7 +7,7 @@ use hashbrown::HashMap;
 
 use anyhow::Result;
 
-use super::vertex::{vertex_stride, VertexFormatInfo, VERTEX_FORMAT_COUNT};
+use super::vertex::{vertex_stride, vertex_stride_packed, VertexFormatInfo, VERTEX_FORMAT_COUNT};
 
 /// Initial buffer size (64KB)
 const INITIAL_BUFFER_SIZE: u64 = 64 * 1024;
@@ -352,6 +352,132 @@ impl BufferManager {
 
         tracing::debug!(
             "Loaded indexed mesh {}: {} vertices, {} indices, format {}",
+            handle.0,
+            vertex_count,
+            indices.len(),
+            VertexFormatInfo::for_format(format).name
+        );
+
+        Ok(handle)
+    }
+
+    /// Load a packed mesh (retained mode)
+    ///
+    /// The mesh data is already packed (f16/snorm16/unorm8 format).
+    /// The mesh is stored in the appropriate vertex buffer based on format.
+    /// Returns a MeshHandle for use with draw_mesh().
+    pub fn load_mesh_packed(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        data: &[u8],
+        format: u8,
+    ) -> Result<MeshHandle> {
+        let format_idx = format as usize;
+        if format_idx >= VERTEX_FORMAT_COUNT {
+            anyhow::bail!("Invalid vertex format: {}", format);
+        }
+
+        let stride = vertex_stride_packed(format) as usize;
+        let vertex_count = data.len() / stride;
+
+        if data.len() % stride != 0 {
+            anyhow::bail!(
+                "Vertex data size {} is not a multiple of stride {}",
+                data.len(),
+                stride
+            );
+        }
+
+        // Ensure retained buffer has capacity
+        self.retained_vertex_buffers[format_idx].ensure_capacity(device, data.len() as u64);
+
+        // Write to retained buffer
+        let vertex_offset = self.retained_vertex_buffers[format_idx].write(queue, data);
+
+        // Create mesh handle
+        let handle = MeshHandle(self.next_mesh_id);
+        self.next_mesh_id += 1;
+
+        self.retained_meshes.insert(
+            handle.0,
+            RetainedMesh {
+                format,
+                vertex_count: vertex_count as u32,
+                index_count: 0,
+                vertex_offset,
+                index_offset: 0,
+            },
+        );
+
+        tracing::debug!(
+            "Loaded PACKED mesh {}: {} vertices, format {}",
+            handle.0,
+            vertex_count,
+            VertexFormatInfo::for_format(format).name
+        );
+
+        Ok(handle)
+    }
+
+    /// Load a packed indexed mesh (retained mode)
+    ///
+    /// The mesh data is already packed (f16/snorm16/unorm8 format).
+    /// The mesh is stored in the appropriate vertex and index buffers based on format.
+    /// Returns a MeshHandle for use with draw_mesh().
+    pub fn load_mesh_indexed_packed(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        data: &[u8],
+        indices: &[u16],
+        format: u8,
+    ) -> Result<MeshHandle> {
+        let format_idx = format as usize;
+        if format_idx >= VERTEX_FORMAT_COUNT {
+            anyhow::bail!("Invalid vertex format: {}", format);
+        }
+
+        let stride = vertex_stride_packed(format) as usize;
+        let vertex_count = data.len() / stride;
+
+        if data.len() % stride != 0 {
+            anyhow::bail!(
+                "Vertex data size {} is not a multiple of stride {}",
+                data.len(),
+                stride
+            );
+        }
+
+        // Ensure retained vertex buffer has capacity
+        self.retained_vertex_buffers[format_idx].ensure_capacity(device, data.len() as u64);
+
+        // Ensure retained index buffer has capacity
+        let index_byte_data: &[u8] = bytemuck::cast_slice(indices);
+        self.retained_index_buffers[format_idx]
+            .ensure_capacity(device, index_byte_data.len() as u64);
+
+        // Write to retained buffers
+        let vertex_offset = self.retained_vertex_buffers[format_idx].write(queue, data);
+        let index_offset = self.retained_index_buffers[format_idx].write(queue, index_byte_data);
+
+        // Create mesh handle
+        let handle = MeshHandle(self.next_mesh_id);
+        self.next_mesh_id += 1;
+
+        self.retained_meshes.insert(
+            handle.0,
+            RetainedMesh {
+                format,
+                vertex_count: vertex_count as u32,
+                index_count: indices.len() as u32,
+                vertex_offset,
+                index_offset,
+            },
+        );
+
+        tracing::debug!(
+            "Loaded PACKED indexed mesh {}: {} vertices, {} indices, format {}",
             handle.0,
             vertex_count,
             indices.len(),

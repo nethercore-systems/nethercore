@@ -26,11 +26,20 @@ pub struct PendingTexture {
     pub data: Vec<u8>,
 }
 
-/// Pending mesh load request (retained mode)
+/// Pending mesh load request (unpacked f32 data from user)
 #[derive(Debug)]
 pub struct PendingMesh {
     pub handle: u32,
-    pub format: u8,
-    pub vertex_data: Vec<f32>,
+    pub format: u8,  // Vertex format flags (0-15, NO FORMAT_PACKED)
+    pub vertex_data: Vec<f32>,  // Unpacked f32 data
+    pub index_data: Option<Vec<u16>>,
+}
+
+/// Pending packed mesh load request (packed bytes from procedural gen or power users)
+#[derive(Debug)]
+pub struct PendingMeshPacked {
+    pub handle: u32,
+    pub format: u8,  // Vertex format flags (0-15, NO FORMAT_PACKED)
+    pub vertex_data: Vec<u8>,  // Packed bytes (f16, snorm16, unorm8)
     pub index_data: Option<Vec<u16>>,
 }

@@ -25,7 +25,7 @@ hashbrown.workspace = true
 
 [workspace]
 members = ["core", "emberware-z", "shared", "xtask"]
-exclude = ["examples/hello-world", "examples/triangle", "examples/textured-quad", "examples/cube", "examples/lighting", "examples/skinned-mesh", "examples/billboard", "examples/platformer", "examples/blinn-phong", "examples/procedural-shapes", "examples/audio-demo"]
+exclude = ["examples/hello-world", "examples/triangle", "examples/textured-quad", "examples/cube", "examples/lighting", "examples/skinned-mesh", "examples/billboard", "examples/platformer", "examples/blinn-phong", "examples/procedural-shapes", "examples/audio-demo", "examples/textured-procedural"]
 resolver = "2"
 
 [workspace.package]
@@ -60,6 +60,7 @@ egui-winit = "0.30"
 
 # Math
 glam = { version = "0.29", features = ["bytemuck"] }
+half = { version = "2.4", features = ["bytemuck", "serde"] }
 
 # Serialization
 bytemuck = { version = "1", features = ["derive"] }

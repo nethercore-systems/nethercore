@@ -4,21 +4,28 @@
 
 use anyhow::Result;
 use tracing::{info, warn};
-use wasmtime::{Caller, Linker};
+use wasmtime::{Caller, Extern, Linker};
 
 use emberware_core::wasm::GameStateWithConsole;
 
 use crate::console::ZInput;
-use crate::graphics::vertex_stride;
-use crate::state::{PendingMesh, ZFFIState};
+use crate::graphics::{vertex_stride, vertex_stride_packed};
+use crate::state::{PendingMesh, PendingMeshPacked, ZFFIState};
 
 /// Maximum vertex format value (all flags set: UV | COLOR | NORMAL | SKINNED)
 const MAX_VERTEX_FORMAT: u8 = 15;
 
 /// Register mesh FFI functions
 pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
+    // Unpacked mesh loading (user convenience API)
     linker.func_wrap("env", "load_mesh", load_mesh)?;
     linker.func_wrap("env", "load_mesh_indexed", load_mesh_indexed)?;
+
+    // Packed mesh loading (power user API, used by exporter)
+    linker.func_wrap("env", "load_mesh_packed", load_mesh_packed)?;
+    linker.func_wrap("env", "load_mesh_indexed_packed", load_mesh_indexed_packed)?;
+
+    // Mesh drawing
     linker.func_wrap("env", "draw_mesh", draw_mesh)?;
     Ok(())
 }
@@ -291,6 +298,213 @@ fn load_mesh_indexed(
     info!(
         "load_mesh_indexed: created mesh {} with {} vertices, {} indices, format {}",
         handle, vertex_count, index_count, format
+    );
+
+    handle
+}
+
+/// Load packed mesh data (power user API)
+///
+/// # Arguments
+/// * `data_ptr` - Pointer to packed vertex data (f16/snorm16/unorm8)
+/// * `vertex_count` - Number of vertices
+/// * `format` - Vertex format (0-15, base format without FORMAT_PACKED flag)
+///
+/// Returns mesh handle (>0) on success, 0 on failure.
+fn load_mesh_packed(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    data_ptr: u32,
+    vertex_count: u32,
+    format: u32,
+) -> u32 {
+    // Validate format (0-15 only, no FORMAT_PACKED)
+    if format >= 16 {
+        warn!("load_mesh_packed: format must be 0-15 (got {})", format);
+        return 0;
+    }
+    let format = format as u8;
+
+    // Validate vertex count
+    if vertex_count == 0 {
+        warn!("load_mesh_packed: vertex_count cannot be 0");
+        return 0;
+    }
+
+    // Calculate packed stride
+    let stride = vertex_stride_packed(format) as usize;
+    let byte_size = vertex_count as usize * stride;
+
+    // Get memory reference
+    let memory = match caller.get_export("memory") {
+        Some(Extern::Memory(mem)) => mem,
+        _ => {
+            warn!("load_mesh_packed: failed to get WASM memory");
+            return 0;
+        }
+    };
+
+    let ptr = data_ptr as usize;
+
+    // Copy packed bytes from WASM memory
+    let vertex_data: Vec<u8> = {
+        let mem_data = memory.data(&caller);
+
+        if ptr + byte_size > mem_data.len() {
+            warn!(
+                "load_mesh_packed: vertex data ({} bytes at {}) exceeds memory bounds ({})",
+                byte_size,
+                ptr,
+                mem_data.len()
+            );
+            return 0;
+        }
+
+        mem_data[ptr..ptr + byte_size].to_vec()
+    };
+
+    // Now we can mutably borrow state
+    let state = &mut caller.data_mut().console;
+
+    // Allocate a mesh handle
+    let handle = state.next_mesh_handle;
+    state.next_mesh_handle += 1;
+
+    // Store packed mesh data for the graphics backend
+    state.pending_meshes_packed.push(PendingMeshPacked {
+        handle,
+        format,
+        vertex_data,
+        index_data: None,
+    });
+
+    info!(
+        "load_mesh_packed: created mesh {} with {} vertices, format {}, {} bytes",
+        handle, vertex_count, format, byte_size
+    );
+
+    handle
+}
+
+/// Load an indexed packed mesh (power user API)
+///
+/// # Arguments
+/// * `data_ptr` - Pointer to packed vertex data (f16/snorm16/unorm8)
+/// * `vertex_count` - Number of vertices
+/// * `index_ptr` - Pointer to index data (u16 array)
+/// * `index_count` - Number of indices
+/// * `format` - Vertex format (0-15, base format without FORMAT_PACKED flag)
+///
+/// Returns mesh handle (>0) on success, 0 on failure.
+fn load_mesh_indexed_packed(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    data_ptr: u32,
+    vertex_count: u32,
+    index_ptr: u32,
+    index_count: u32,
+    format: u32,
+) -> u32 {
+    // Validate format (0-15 only, no FORMAT_PACKED)
+    if format >= 16 {
+        warn!("load_mesh_indexed_packed: format must be 0-15 (got {})", format);
+        return 0;
+    }
+    let format = format as u8;
+
+    // Validate counts
+    if vertex_count == 0 {
+        warn!("load_mesh_indexed_packed: vertex_count cannot be 0");
+        return 0;
+    }
+    if index_count == 0 {
+        warn!("load_mesh_indexed_packed: index_count cannot be 0");
+        return 0;
+    }
+    if !index_count.is_multiple_of(3) {
+        warn!(
+            "load_mesh_indexed_packed: index_count {} is not a multiple of 3",
+            index_count
+        );
+        return 0;
+    }
+
+    // Calculate sizes
+    let stride = vertex_stride_packed(format) as usize;
+    let vertex_byte_size = vertex_count as usize * stride;
+    let index_byte_size = index_count as usize * 2; // u16 indices
+
+    // Get memory reference
+    let memory = match caller.get_export("memory") {
+        Some(Extern::Memory(mem)) => mem,
+        _ => {
+            warn!("load_mesh_indexed_packed: failed to get WASM memory");
+            return 0;
+        }
+    };
+
+    let vertex_ptr = data_ptr as usize;
+    let idx_ptr = index_ptr as usize;
+
+    // Copy packed data from WASM memory
+    let (vertex_data, index_data): (Vec<u8>, Vec<u16>) = {
+        let mem_data = memory.data(&caller);
+
+        if vertex_ptr + vertex_byte_size > mem_data.len() {
+            warn!(
+                "load_mesh_indexed_packed: vertex data ({} bytes at {}) exceeds memory bounds ({})",
+                vertex_byte_size,
+                vertex_ptr,
+                mem_data.len()
+            );
+            return 0;
+        }
+
+        if idx_ptr + index_byte_size > mem_data.len() {
+            warn!(
+                "load_mesh_indexed_packed: index data ({} bytes at {}) exceeds memory bounds ({})",
+                index_byte_size,
+                idx_ptr,
+                mem_data.len()
+            );
+            return 0;
+        }
+
+        let vertex_bytes = mem_data[vertex_ptr..vertex_ptr + vertex_byte_size].to_vec();
+
+        let index_bytes = &mem_data[idx_ptr..idx_ptr + index_byte_size];
+        let indices: &[u16] = bytemuck::cast_slice(index_bytes);
+
+        // Validate indices are within bounds
+        for &idx in indices {
+            if idx as u32 >= vertex_count {
+                warn!(
+                    "load_mesh_indexed_packed: index {} out of bounds (vertex_count = {})",
+                    idx, vertex_count
+                );
+                return 0;
+            }
+        }
+
+        (vertex_bytes, indices.to_vec())
+    };
+
+    // Now we can mutably borrow state
+    let state = &mut caller.data_mut().console;
+
+    // Allocate a mesh handle
+    let handle = state.next_mesh_handle;
+    state.next_mesh_handle += 1;
+
+    // Store packed mesh data for the graphics backend
+    state.pending_meshes_packed.push(PendingMeshPacked {
+        handle,
+        format,
+        vertex_data,
+        index_data: Some(index_data),
+    });
+
+    info!(
+        "load_mesh_indexed_packed: created mesh {} with {} vertices, {} indices, format {}, {} bytes",
+        handle, vertex_count, index_count, format, vertex_byte_size
     );
 
     handle
