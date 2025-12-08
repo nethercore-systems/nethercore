@@ -5,6 +5,9 @@
 
 ## TODO
 
+### **[PERFORMANCE FEATURE] Implement Pipeline Caching
+- Small speed up when launching the program
+
 ### **[Feature] Add UV-enabled procedural shapes**
 - Add new FFI commands for UV enabled procedural shapes. 
 - Use a smart mapping, like a UV sphere, or a Box cube (not dice faces)
@@ -134,7 +137,7 @@ Grep analysis shows 391 instances of `unwrap()` or `expect()` across 15 files:
    - **Mode 0 (Unlit)**: Vertex colors, textures, no lighting
    - **Mode 1 (Matcap)**: Matcap textures (3 slots), blend modes
    - **Mode 2 (Blinn-Phong)**: Metallic-roughness Blinn-Phong, dynamic lights
-   - **Mode 3 (Hybrid)**: PBR + matcap ambient, best of both
+   - **Mode 3 (Hybrid)**: Specular-Shininess Blinn-Phong, dynamic lights
 
 3. **Vertex Formats:**
    - 8 base formats: POS, POS_UV, POS_COLOR, POS_UV_COLOR, POS_NORMAL, POS_UV_NORMAL, POS_COLOR_NORMAL, POS_UV_COLOR_NORMAL
@@ -184,8 +187,8 @@ Grep analysis shows 391 instances of `unwrap()` or `expect()` across 15 files:
 ### Mode 2: Blinn-Phong (Metallic-Roughness)
 [PBR workflow, lighting model, migration from old Mode 2]
 
-### Mode 3: Hybrid
-[Combining matcap + PBR, best practices]
+### Mode 3: Blinn-Phong (Specular-Shininess)
+[Retro workflow, lighting model]
 
 ## Vertex Formats
 [Table of formats, memory layout, when to use each]
