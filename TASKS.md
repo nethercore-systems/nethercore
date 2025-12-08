@@ -483,6 +483,7 @@ The command-line argument game resolution is not working correctly. Need to inve
 - Is the game_resolver matching correctly?
 - Are there issues with the library lookup?
 - Does it fail silently or show an error?
+- Answer: Error: No game session
 
 **Expected Behavior:**
 1. Exact match: `cargo run -- platformer` launches platformer
@@ -715,17 +716,9 @@ Keyboard players can use analog stick inputs in games, enabling full control wit
 
 **Missing Examples:**
 - ❌ **Mode 0 (Unlit)** example - No example demonstrates unlit rendering
-- ❌ **Mode 1 (Matcap)** example - No matcap rendering demo
-- ❌ **Mode 3 (Hybrid)** example - No hybrid PBR+matcap demo
-- ❌ **Matcap blend modes** - No demo of multiply/add/HSV modulate
-- ❌ **Audio system** - NO AUDIO EXAMPLES AT ALL despite fully working audio!
+- ❌ **Mode 1 (Matcap)** example - No matcap rendering demo, no demo of multiply/add/hsv modulate
+- ❌ **Mode 3 (SS BP)** example - No demo
 - ❌ **Custom fonts** - No font loading demo
-- ❌ **Sprite batching** - No sprite-heavy 2D demo
-- ❌ **Blend modes** - No demo of alpha/additive/multiply blending
-- ❌ **Depth test** - No demo of depth buffer usage
-- ❌ **Cull mode** - No demo of face culling
-- ❌ **Transform stack** - No demo of push/pop transforms
-- ❌ **Multiplayer input** - No demo of 2-4 player local input
 
 **Recommended New Examples:**
 1. **matcap-showcase** - All 3 matcap slots with blend modes (mode 1)
@@ -735,6 +728,7 @@ Keyboard players can use analog stick inputs in games, enabling full control wit
 5. **custom-font** - Load bitmap font, render styled text
 6. **particle-system** - Hundreds of sprites, blend modes
 7. **spatial-audio** - A sound source rotating around a "listener", and audio pans around the object
+8. **rendering mode examples** - Show different scenes in from various rendering modes. Explain the material system (textures and channels)
 
 **Example Location:**
 - Move from `/examples` to `/emberware-z/examples` (they're Z-specific, not core)
@@ -833,109 +827,4 @@ This enables fighting games with unlocked characters, RPGs with player stats, et
 
 ---
 
-## Done
 
-### **[2025-12-07] Asset Pipeline Design**
-Comprehensive research and design for developer tooling to convert industry-standard assets (glTF, PNG, TTF, WAV) to Emberware's native formats.
-
-**Completed:**
-- ✅ Comprehensive design document (1,344 lines)
-- ✅ File format specifications for meshes, textures, fonts, audio
-- ✅ Tool architecture (CLI tool, Blender add-on, web converter)
-- ✅ Integration guide and build pipeline design
-- ✅ Performance analysis (file size vs load time vs runtime)
-- ✅ Implementation roadmap created
-
-**Documentation:** [docs/asset-pipeline.md](docs/asset-pipeline.md)
-
-**Commit:** cb0cab0
-
----
-
-### **[2025-12-07] ROM Format Specification**
-Defined the .ewz (Emberware Z) ROM binary format for packaging and distributing games.
-
-**Completed:**
-- ✅ ROM binary format specification
-- ✅ Manifest schema (JSON metadata)
-- ✅ Distribution workflow documentation
-- ✅ Local storage structure (`~/.emberware/games/`)
-
-**Documentation:**
-- [docs/rom-format.md](docs/rom-format.md) (436 lines)
-- [docs/distributing-games.md](docs/distributing-games.md)
-
-**Commits:** e9d13bf, 8e05edd
-
----
-
-### **[2025-01] Console Abstraction - Unified Launcher Architecture**
-Extracted shared application framework logic into `emberware-core` and created a unified launcher supporting multiple console types.
-
-**Completed (All Phases - Beyond Original Plan!):**
-- ✅ Phase 1-2: Created `core/src/app/` shared framework modules (~916 lines)
-  - `event_loop.rs` - Generic event loop with `ConsoleApp<C>` trait
-  - `config.rs` - Configuration management
-  - `session.rs` - Game session orchestration
-  - `debug.rs` - Debug overlay and FPS tracking
-  - `types.rs` - Shared application types
-- ✅ Phase 3: Refactored Emberware Z as a library implementing `ConsoleApp<C>` trait
-- ✅ Phase 4-5: Created unified launcher with console registry (superior to original plan!)
-  - `src/main.rs` - Unified launcher (115 lines)
-  - `src/registry.rs` - Console type registry with static dispatch
-  - Detects console type from game manifest
-  - Single binary can launch games from any console (Z, Classic, etc.)
-
-**Architecture (Superior to Original Plan):**
-- **Original Plan**: Each console → separate binary (~100 lines each)
-- **Actual Implementation**: Single unified launcher with registry pattern
-- Zero-cost abstraction via enum-based static dispatch
-- No vtables, no heap allocations, direct function calls
-
-**Impact:**
-- Unified launcher: 115 lines (vs ~1,300 lines per console)
-- All consoles share framework improvements automatically
-- Adding new consoles only requires implementing `ConsoleApp<C>` trait
-- Consistent behavior across all Emberware console types
-
-**Location:**
-- Shared framework: `core/src/app/*.rs` (~916 lines)
-- Emberware Z implementation: `emberware-z/src/app/*.rs` (~1,848 lines)
-- Unified launcher: `src/main.rs`, `src/registry.rs` (~250 lines total)
-
-**Documentation:** [docs/console-abstraction-plan.md](docs/console-abstraction-plan.md)
-
-**Commit:** 1c91275 (big refactor)
-
----
-
-### **[2025-01] FFI Module Refactoring**
-Split monolithic `ffi.rs` (4,262 lines) into 16 focused, maintainable modules following the 800-line rule from ARCHITECTURE.md.
-
-**Completed:**
-- ✅ Refactored into organized modules:
-  - `audio.rs` - Audio playback functions
-  - `billboard.rs` - Billboard rendering
-  - `camera.rs` - Camera controls
-  - `config.rs` - Render mode configuration
-  - `draw_2d.rs` - 2D drawing, sprites, text
-  - `draw_3d.rs` - 3D immediate mode drawing
-  - `input.rs` - Input queries
-  - `lighting.rs` - Lights and shadows
-  - `material.rs` - Material properties
-  - `mesh.rs` - Mesh loading and drawing
-  - `render_state.rs` - Blend modes, depth test
-  - `skinning.rs` - Skeletal animation
-  - `sky.rs` - Procedural sky
-  - `texture.rs` - Texture loading
-  - `transform.rs` - Transform stack
-  - `mod.rs` - Module organization
-
-**Impact:**
-- Improved code organization and maintainability
-- Easier to find and modify specific FFI functions
-- Follows architectural best practices
-
-**Location:** `emberware-z/src/ffi/*.rs` (16 files)
-
-**Commit:** 1c91275 (big refactor)
