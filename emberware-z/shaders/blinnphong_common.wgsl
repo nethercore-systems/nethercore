@@ -74,8 +74,8 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
 
     // Unpack uniforms from packed field
     let packed_values = shading.metallic_roughness_emissive_pad;
-    let uniform0 = unpack_unorm8_from_u32(packed_values & 0xFFu);
-    let uniform1 = unpack_unorm8_from_u32((packed_values >> 8u) & 0xFFu);
+    let uniform0 = unpack_unorm8_from_u32(packed_values & 0xFFu); // Metallic or Spec Intensity
+    let uniform1 = unpack_unorm8_from_u32((packed_values >> 8u) & 0xFFu); // Roughness or Shininess
     var emissive = unpack_unorm8_from_u32((packed_values >> 16u) & 0xFFu);
 
     var albedo = material_color.rgb;

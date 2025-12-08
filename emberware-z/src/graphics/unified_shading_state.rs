@@ -149,13 +149,14 @@ pub fn unpack_snorm16(value: i16) -> f32 {
 }
 
 /// Pack RGBA f32 [0.0, 1.0] to u32 RGBA8
+/// Format: 0xRRGGBBAA (R in highest byte, A in lowest)
 #[inline]
 pub fn pack_rgba8(r: f32, g: f32, b: f32, a: f32) -> u32 {
     let r = pack_unorm8(r);
     let g = pack_unorm8(g);
     let b = pack_unorm8(b);
     let a = pack_unorm8(a);
-    (r as u32) | ((g as u32) << 8) | ((b as u32) << 16) | ((a as u32) << 24)
+    ((r as u32) << 24) | ((g as u32) << 16) | ((b as u32) << 8) | (a as u32)
 }
 
 /// Pack Vec3 color [0.0, 1.0] to u32 RGB8 (alpha = 255)
@@ -279,10 +280,11 @@ impl PackedSky {
         let sun_g = pack_unorm8(sun_color.y);
         let sun_b = pack_unorm8(sun_color.z);
         let sun_sharp = pack_unorm8(sun_sharpness);
-        let sun_color_and_sharpness = (sun_r as u32)
-            | ((sun_g as u32) << 8)
-            | ((sun_b as u32) << 16)
-            | ((sun_sharp as u32) << 24);
+        // Format: 0xRRGGBBSS (R in highest byte, sharpness in lowest)
+        let sun_color_and_sharpness = ((sun_r as u32) << 24)
+            | ((sun_g as u32) << 16)
+            | ((sun_b as u32) << 8)
+            | (sun_sharp as u32);
 
         Self {
             horizon_color: horizon_rgba,
@@ -308,8 +310,9 @@ impl PackedLight {
         let b = pack_unorm8(color.z);
         // If disabled, set intensity to 0 (intensity=0 means disabled)
         let intens = if enabled { pack_unorm8(intensity) } else { 0 };
+        // Format: 0xRRGGBBII (R in highest byte, intensity in lowest)
         let color_and_intensity =
-            (r as u32) | ((g as u32) << 8) | ((b as u32) << 16) | ((intens as u32) << 24);
+            ((r as u32) << 24) | ((g as u32) << 16) | ((b as u32) << 8) | (intens as u32);
 
         Self {
             direction_oct: dir_packed,
@@ -330,21 +333,23 @@ impl PackedLight {
     }
 
     /// Extract color as f32 array
+    /// Format: 0xRRGGBBII (R in highest byte, intensity in lowest)
     pub fn get_color(&self) -> [f32; 3] {
-        let r = unpack_unorm8((self.color_and_intensity & 0xFF) as u8);
-        let g = unpack_unorm8(((self.color_and_intensity >> 8) & 0xFF) as u8);
-        let b = unpack_unorm8(((self.color_and_intensity >> 16) & 0xFF) as u8);
+        let r = unpack_unorm8(((self.color_and_intensity >> 24) & 0xFF) as u8);
+        let g = unpack_unorm8(((self.color_and_intensity >> 16) & 0xFF) as u8);
+        let b = unpack_unorm8(((self.color_and_intensity >> 8) & 0xFF) as u8);
         [r, g, b]
     }
 
     /// Extract intensity as f32
+    /// Format: 0xRRGGBBII (intensity in lowest byte)
     pub fn get_intensity(&self) -> f32 {
-        unpack_unorm8(((self.color_and_intensity >> 24) & 0xFF) as u8)
+        unpack_unorm8((self.color_and_intensity & 0xFF) as u8)
     }
 
     /// Check if light is enabled (intensity > 0)
     pub fn is_enabled(&self) -> bool {
-        (self.color_and_intensity >> 24) != 0
+        (self.color_and_intensity & 0xFF) != 0
     }
 }
 
@@ -442,11 +447,12 @@ mod tests {
 
     #[test]
     fn test_pack_rgba8() {
+        // Format: 0xRRGGBBAA (R in highest byte, A in lowest)
         let packed = pack_rgba8(1.0, 0.5, 0.25, 1.0);
-        assert_eq!(packed & 0xFF, 255); // R
-        assert_eq!((packed >> 8) & 0xFF, 128); // G
-        assert_eq!((packed >> 16) & 0xFF, 64); // B
-        assert_eq!((packed >> 24) & 0xFF, 255); // A
+        assert_eq!((packed >> 24) & 0xFF, 255); // R
+        assert_eq!((packed >> 16) & 0xFF, 128); // G
+        assert_eq!((packed >> 8) & 0xFF, 64); // B
+        assert_eq!(packed & 0xFF, 255); // A
     }
 
     #[test]

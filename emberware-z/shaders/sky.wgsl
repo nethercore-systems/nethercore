@@ -53,10 +53,11 @@ fn unpack_unorm8_from_u32(packed: u32) -> f32 {
     return f32(packed & 0xFFu) / 255.0;
 }
 
+// Format: 0xRRGGBBAA (R in highest byte, A in lowest)
 fn unpack_rgb8(packed: u32) -> vec3<f32> {
-    let r = f32(packed & 0xFFu) / 255.0;
-    let g = f32((packed >> 8u) & 0xFFu) / 255.0;
-    let b = f32((packed >> 16u) & 0xFFu) / 255.0;
+    let r = f32((packed >> 24u) & 0xFFu) / 255.0;
+    let g = f32((packed >> 16u) & 0xFFu) / 255.0;
+    let b = f32((packed >> 8u) & 0xFFu) / 255.0;
     return vec3<f32>(r, g, b);
 }
 
@@ -88,6 +89,7 @@ struct SkyData {
     sun_sharpness: f32,
 }
 
+// Format: 0xRRGGBBSS (R in highest byte, sharpness in lowest)
 fn unpack_sky(packed: PackedSky) -> SkyData {
     var sky: SkyData;
     sky.horizon_color = unpack_rgb8(packed.horizon_color);
@@ -95,7 +97,7 @@ fn unpack_sky(packed: PackedSky) -> SkyData {
     sky.sun_direction = unpack_octahedral(packed.sun_direction_oct);
     let sun_packed = packed.sun_color_and_sharpness;
     sky.sun_color = unpack_rgb8(sun_packed);
-    sky.sun_sharpness = unpack_unorm8_from_u32(sun_packed >> 24u);
+    sky.sun_sharpness = unpack_unorm8_from_u32(sun_packed);  // lowest byte
     return sky;
 }
 

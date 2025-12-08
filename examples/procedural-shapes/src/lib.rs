@@ -14,7 +14,6 @@
 //! - Left stick: Rotate shape
 //! - Auto-rotates for visual inspection
 //!
-//! Features checkerboard texture to verify UV mapping and proper lighting for normals.
 
 #![no_std]
 #![no_main]
@@ -83,9 +82,6 @@ static mut CURRENT_SHAPE: u32 = 0;
 /// Mesh handles for all 7 shapes
 static mut MESH_HANDLES: [u32; 7] = [0; 7];
 
-/// Texture handle
-static mut TEXTURE: u32 = 0;
-
 /// Current rotation angles
 static mut ROTATION_X: f32 = 0.0;
 static mut ROTATION_Y: f32 = 0.0;
@@ -104,29 +100,6 @@ static SHAPE_NAMES: [&str; 7] = [
     "Capsule (r=0.8, h=2, 24×8)",
 ];
 
-/// 8x8 checkerboard texture (RGBA8)
-const CHECKERBOARD: [u8; 8 * 8 * 4] = {
-    let mut pixels = [0u8; 256];
-    let white = [0xFF, 0xFF, 0xFF, 0xFF];
-    let gray = [0x80, 0x80, 0x80, 0xFF];
-
-    let mut y = 0;
-    while y < 8 {
-        let mut x = 0;
-        while x < 8 {
-            let idx = (y * 8 + x) * 4;
-            let color = if (x + y) % 2 == 0 { white } else { gray };
-            pixels[idx] = color[0];
-            pixels[idx + 1] = color[1];
-            pixels[idx + 2] = color[2];
-            pixels[idx + 3] = color[3];
-            x += 1;
-        }
-        y += 1;
-    }
-    pixels
-};
-
 #[no_mangle]
 pub extern "C" fn init() {
     unsafe {
@@ -135,24 +108,9 @@ pub extern "C" fn init() {
         render_mode(0); // Unlit with normals (simple Lambert shading)
         depth_test(1); // Enable depth testing
 
-        // Set up procedural sky for lighting
-        sky_set_colors(
-            0xB2CCE6FF, // horizon (light blue)
-            0x4D80E6FF, // zenith (deeper blue)
-        );
-        sky_set_sun(
-            0.3, 0.8, 0.5,  // sun direction (from upper-right)
-            0xFFF2E6FF,     // sun color (warm white)
-            0.98,           // sun sharpness
-        );
-
         // Set up camera
         camera_set(0.0, 5.0, 10.0, 0.0, 0.0, 0.0);
         camera_fov(60.0);
-
-        // Load checkerboard texture to verify UV mapping
-        TEXTURE = load_texture(8, 8, CHECKERBOARD.as_ptr());
-        texture_filter(0); // Nearest neighbor for crisp pixels
 
         // Generate all 7 procedural shapes
         MESH_HANDLES[0] = cube(1.0, 1.0, 1.0); // 2×2×2 cube
@@ -204,7 +162,6 @@ pub extern "C" fn render() {
             push_rotate_x(-45.0); // Additional tilt for plane
         }
 
-        texture_bind(TEXTURE);
         set_color(0xFFFFFFFF); // White (no tint)
         draw_mesh(MESH_HANDLES[CURRENT_SHAPE as usize]);
 

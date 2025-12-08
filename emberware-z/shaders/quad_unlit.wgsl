@@ -100,11 +100,12 @@ const WORLD_SPACE: u32 = 5u;
 // ============================================================================
 
 // Unpack RGBA8 from u32 to vec4<f32>
+// Format: 0xRRGGBBAA (R in highest byte, A in lowest)
 fn unpack_rgba8(packed: u32) -> vec4<f32> {
-    let r = f32(packed & 0xFFu) / 255.0;
-    let g = f32((packed >> 8u) & 0xFFu) / 255.0;
-    let b = f32((packed >> 16u) & 0xFFu) / 255.0;
-    let a = f32((packed >> 24u) & 0xFFu) / 255.0;
+    let r = f32((packed >> 24u) & 0xFFu) / 255.0;
+    let g = f32((packed >> 16u) & 0xFFu) / 255.0;
+    let b = f32((packed >> 8u) & 0xFFu) / 255.0;
+    let a = f32(packed & 0xFFu) / 255.0;
     return vec4<f32>(r, g, b, a);
 }
 

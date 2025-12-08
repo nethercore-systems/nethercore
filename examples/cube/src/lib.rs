@@ -1,7 +1,6 @@
 //! Cube Example
 //!
 //! Demonstrates the procedural cube() function and retained mode 3D drawing.
-//! A textured cube rotates based on analog stick input.
 //!
 //! Features:
 //! - `cube()` to procedurally generate a cube mesh
@@ -62,35 +61,10 @@ extern "C" {
 /// Cube mesh handle
 static mut CUBE_MESH: u32 = 0;
 
-/// Texture handle
-static mut TEXTURE: u32 = 0;
 
 /// Current rotation angles (degrees)
 static mut ROTATION_X: f32 = 0.0;
 static mut ROTATION_Y: f32 = 0.0;
-
-/// 8x8 checkerboard texture (RGBA8)
-const CHECKERBOARD: [u8; 8 * 8 * 4] = {
-    let mut pixels = [0u8; 256];
-    let white = [0xFF, 0xFF, 0xFF, 0xFF];
-    let gray = [0x80, 0x80, 0x80, 0xFF];
-
-    let mut y = 0;
-    while y < 8 {
-        let mut x = 0;
-        while x < 8 {
-            let idx = (y * 8 + x) * 4;
-            let color = if (x + y) % 2 == 0 { white } else { gray };
-            pixels[idx] = color[0];
-            pixels[idx + 1] = color[1];
-            pixels[idx + 2] = color[2];
-            pixels[idx + 3] = color[3];
-            x += 1;
-        }
-        y += 1;
-    }
-    pixels
-};
 
 #[no_mangle]
 pub extern "C" fn init() {
@@ -107,10 +81,6 @@ pub extern "C" fn init() {
 
         // Enable depth testing for proper 3D rendering
         depth_test(1);
-
-        // Load checkerboard texture
-        TEXTURE = load_texture(8, 8, CHECKERBOARD.as_ptr());
-        texture_filter(0); // Nearest neighbor for crisp pixels
 
         // Generate cube mesh procedurally (2×2×2 cube)
         CUBE_MESH = cube(1.0, 1.0, 1.0);
@@ -145,7 +115,6 @@ pub extern "C" fn render() {
         push_rotate_x(ROTATION_X);
 
         // Bind texture and set color
-        texture_bind(TEXTURE);
         set_color(0xFFFFFFFF); // White (no tint)
 
         // Draw the cube

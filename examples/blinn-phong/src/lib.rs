@@ -77,11 +77,13 @@ const BTN_FACE_UP: u32 = 1 << 3;     // Y/Triangle
 // Material Presets
 // ============================================================================
 
+/// Material preset with pre-computed hex colors
+/// Color format: 0xRRGGBBAA (R in highest byte, A in lowest)
 #[derive(Clone, Copy)]
 struct Material {
     name: &'static str,
-    albedo: [f32; 3],
-    material_specular: [f32; 3],
+    albedo: u32,      // Base color (0xRRGGBBAA)
+    specular: u32,    // Specular highlight color (0xRRGGBBAA)
     shininess: f32,
     rim_intensity: f32,
     rim_power: f32,
@@ -92,8 +94,8 @@ const MATERIALS: [Material; 9] = [
     // Gold armor - warm orange specular, high shininess, subtle rim
     Material {
         name: "Gold Armor",
-        albedo: [0.9, 0.6, 0.2],
-        material_specular: [1.0, 0.8, 0.4],
+        albedo: 0xE69933FF,    // [0.9, 0.6, 0.2]
+        specular: 0xFFCC66FF,  // [1.0, 0.8, 0.4]
         shininess: 0.8,        // Maps to ~205 (tight highlights)
         rim_intensity: 0.2,
         rim_power: 0.15,       // Maps to ~4.8 (broad rim)
@@ -102,8 +104,8 @@ const MATERIALS: [Material; 9] = [
     // Silver metal - neutral white specular, very high shininess, minimal rim
     Material {
         name: "Silver Metal",
-        albedo: [0.9, 0.9, 0.9],
-        material_specular: [0.95, 0.95, 0.95],
+        albedo: 0xE6E6E6FF,    // [0.9, 0.9, 0.9]
+        specular: 0xF2F2F2FF,  // [0.95, 0.95, 0.95]
         shininess: 0.85,       // Maps to ~217 (very tight highlights)
         rim_intensity: 0.15,
         rim_power: 0.12,       // Maps to ~3.8
@@ -112,8 +114,8 @@ const MATERIALS: [Material; 9] = [
     // Leather - dark brown, low shininess, subtle rim
     Material {
         name: "Leather",
-        albedo: [0.4, 0.25, 0.15],
-        material_specular: [0.3, 0.25, 0.2],
+        albedo: 0x664026FF,    // [0.4, 0.25, 0.15]
+        specular: 0x4D4033FF,  // [0.3, 0.25, 0.2]
         shininess: 0.3,        // Maps to ~77 (broad highlights)
         rim_intensity: 0.1,
         rim_power: 0.2,        // Maps to ~6.4
@@ -122,8 +124,8 @@ const MATERIALS: [Material; 9] = [
     // Wet skin - bright specular, medium-high shininess, strong rim
     Material {
         name: "Wet Skin",
-        albedo: [0.85, 0.7, 0.65],
-        material_specular: [0.9, 0.8, 0.75],
+        albedo: 0xD9B3A6FF,    // [0.85, 0.7, 0.65]
+        specular: 0xE6CCBFFF,  // [0.9, 0.8, 0.75]
         shininess: 0.7,        // Maps to ~179 (medium-tight highlights)
         rim_intensity: 0.3,
         rim_power: 0.25,       // Maps to ~8.0
@@ -132,8 +134,8 @@ const MATERIALS: [Material; 9] = [
     // Matte plastic - gray, medium shininess, no rim
     Material {
         name: "Matte Plastic",
-        albedo: [0.5, 0.5, 0.55],
-        material_specular: [0.5, 0.5, 0.55],
+        albedo: 0x80808CFF,    // [0.5, 0.5, 0.55]
+        specular: 0x80808CFF,  // [0.5, 0.5, 0.55]
         shininess: 0.5,        // Maps to ~128 (medium highlights)
         rim_intensity: 0.0,
         rim_power: 0.0,
@@ -142,8 +144,8 @@ const MATERIALS: [Material; 9] = [
     // Emissive crystal - bright cyan, high shininess, strong rim, glowing
     Material {
         name: "Glowing Crystal",
-        albedo: [0.3, 0.7, 0.9],
-        material_specular: [0.8, 1.0, 1.0],
+        albedo: 0x4DB3E6FF,    // [0.3, 0.7, 0.9]
+        specular: 0xCCFFFFFF,  // [0.8, 1.0, 1.0]
         shininess: 0.75,       // Maps to ~192
         rim_intensity: 0.4,
         rim_power: 0.18,       // Maps to ~5.7
@@ -152,8 +154,8 @@ const MATERIALS: [Material; 9] = [
     // Brushed copper - warm metallic with directional grain
     Material {
         name: "Brushed Copper",
-        albedo: [0.6, 0.35, 0.2],
-        material_specular: [0.8, 0.5, 0.3],  // Warm copper-tinted highlights
+        albedo: 0x995933FF,    // [0.6, 0.35, 0.2]
+        specular: 0xCC804DFF,  // [0.8, 0.5, 0.3] warm copper-tinted highlights
         shininess: 0.65,       // Maps to ~166 (medium highlights, shows brushing)
         rim_intensity: 0.25,
         rim_power: 0.16,       // Maps to ~5.1
@@ -162,8 +164,8 @@ const MATERIALS: [Material; 9] = [
     // Polished steel - cool metallic, very reflective
     Material {
         name: "Polished Steel",
-        albedo: [0.3, 0.35, 0.4],
-        material_specular: [0.95, 0.95, 1.0],  // Bright blue-white highlights
+        albedo: 0x4D5966FF,    // [0.3, 0.35, 0.4]
+        specular: 0xF2F2FFFF,  // [0.95, 0.95, 1.0] bright blue-white highlights
         shininess: 0.88,       // Maps to ~225 (very tight, mirror-like)
         rim_intensity: 0.2,
         rim_power: 0.1,        // Maps to ~3.2
@@ -172,8 +174,8 @@ const MATERIALS: [Material; 9] = [
     // Neon pink - cyberpunk glow
     Material {
         name: "Neon Pink",
-        albedo: [0.3, 0.1, 0.2],
-        material_specular: [1.0, 0.3, 0.7],  // Hot pink specular
+        albedo: 0x4D1A33FF,    // [0.3, 0.1, 0.2]
+        specular: 0xFF4DB3FF,  // [1.0, 0.3, 0.7] hot pink specular
         shininess: 0.6,        // Maps to ~154
         rim_intensity: 0.5,    // Strong rim for that neon effect
         rim_power: 0.2,        // Maps to ~6.4
@@ -317,28 +319,14 @@ pub extern "C" fn render() {
 // Rendering Helpers
 // ============================================================================
 
-const fn rgba(r: u8, g: u8, b: u8, a: u8) -> u32 {
-    (r as u32) | ((g as u32) << 8) | ((b as u32) << 16) | ((a as u32) << 24)
-}
-
 fn draw_sphere_with_material(position: [f32; 3], radius: f32, material: &Material) {
     unsafe {
-        // Set material properties
-        set_color(rgba(
-            (material.albedo[0] * 255.0) as u8,
-            (material.albedo[1] * 255.0) as u8,
-            (material.albedo[2] * 255.0) as u8,
-            255,
-        ));
+        // Set material properties using pre-computed hex colors
+        set_color(material.albedo);
         material_shininess(material.shininess);
         material_rim(material.rim_intensity, material.rim_power);
         material_emissive(material.emissive);
-        material_specular(rgba(
-            (material.material_specular[0] * 255.0) as u8,
-            (material.material_specular[1] * 255.0) as u8,
-            (material.material_specular[2] * 255.0) as u8,
-            255,
-        ));
+        material_specular(material.specular);
 
         // Set transform and draw mesh
         push_identity();

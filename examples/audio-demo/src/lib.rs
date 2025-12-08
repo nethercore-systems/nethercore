@@ -167,17 +167,17 @@ pub extern "C" fn render() {
         draw_text(line2.as_ptr(), line2.len() as u32, 50.0, 130.0, 1.0, 0xFFFFFFFF);
 
         let line3 = b"  A - Play/Stop sound";
-        draw_text(line3.as_ptr(), line3.len() as u32, 50.0, 150.0, 1.0, 0xFFCCCCCC);
+        draw_text(line3.as_ptr(), line3.len() as u32, 50.0, 150.0, 1.0, 0xCCCCCCFF);
 
         let line4 = b"  B - Toggle Auto/Manual mode";
-        draw_text(line4.as_ptr(), line4.len() as u32, 50.0, 170.0, 1.0, 0xFFCCCCCC);
+        draw_text(line4.as_ptr(), line4.len() as u32, 50.0, 170.0, 1.0, 0xCCCCCCFF);
 
         let line5: &[u8] = if AUTO_MODE {
             b"  (Auto mode active)"
         } else {
             b"  LEFT/RIGHT - Adjust pan"
         };
-        draw_text(line5.as_ptr(), line5.len() as u32, 50.0, 190.0, 1.0, 0xFFCCCCCC);
+        draw_text(line5.as_ptr(), line5.len() as u32, 50.0, 190.0, 1.0, 0xCCCCCCFF);
 
         // Visual pan indicator
         let line6 = b"Pan Position:";
@@ -212,12 +212,13 @@ pub extern "C" fn render() {
         draw_text(pan_str.as_ptr(), pan_str.len() as u32, 280.0, 320.0, 1.0, 0xFFFFFFFF);
 
         // Status
+        // Color format: 0xRRGGBBAA (R in highest byte, A in lowest)
         let status: &[u8] = if IS_PLAYING {
             b"Status: PLAYING (440Hz beep)"
         } else {
             b"Status: STOPPED"
         };
-        let status_color = if IS_PLAYING { 0xFF00FF00 } else { 0xFFFF0000 };
+        let status_color = if IS_PLAYING { 0x00FF00FF } else { 0xFF0000FF };  // Green/Red
         draw_text(status.as_ptr(), status.len() as u32, 50.0, 360.0, 1.0, status_color);
     }
 }

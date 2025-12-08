@@ -180,17 +180,20 @@ fn material_shininess(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>
 
 /// Set specular color (Mode 3 only)
 /// color: RGBA8 packed u32 (RGB used, A ignored)
+/// Format: 0xRRGGBBAA (R in highest byte, A in lowest)
 /// 0xFFFFFFFF = white (neutral specular - highlights match light color)
 /// Tinted values create colored highlights (e.g., warm gold, cool silver)
 fn material_specular(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, color: u32) {
     let state = &mut caller.data_mut().console;
 
     // Extract RGB bytes from input (ignore alpha)
-    let r_u8 = (color & 0xFF) as u8;
-    let g_u8 = ((color >> 8) & 0xFF) as u8;
-    let b_u8 = ((color >> 16) & 0xFF) as u8;
+    // Format: 0xRRGGBBAA (R in highest byte, A in lowest)
+    let r_u8 = ((color >> 24) & 0xFF) as u8;
+    let g_u8 = ((color >> 16) & 0xFF) as u8;
+    let b_u8 = ((color >> 8) & 0xFF) as u8;
 
     // Pack RGB into matcap_blend_modes bytes 0-2 (preserve byte 3 = rim_power)
+    // Internal format: byte 0 = R, byte 1 = G, byte 2 = B, byte 3 = rim_power
     let new_value = (state.current_shading_state.matcap_blend_modes & 0xFF000000)
         | (r_u8 as u32)
         | ((g_u8 as u32) << 8)
