@@ -62,12 +62,13 @@ fn unpack_unorm8_from_u32(packed: u32) -> f32 {
     return f32(packed & 0xFFu) / 255.0;
 }
 
-// Unpack RGBA8 from u32 to vec4<f32>
+// Unpack RGBA8 from u32 (0xRRGGBBAA format) to vec4<f32>
+// This matches intuitive hex literals: 0xFF0000FF = red, 0x00FF00FF = green
 fn unpack_rgba8(packed: u32) -> vec4<f32> {
-    let r = f32(packed & 0xFFu) / 255.0;
-    let g = f32((packed >> 8u) & 0xFFu) / 255.0;
-    let b = f32((packed >> 16u) & 0xFFu) / 255.0;
-    let a = f32((packed >> 24u) & 0xFFu) / 255.0;
+    let r = f32((packed >> 24u) & 0xFFu) / 255.0;
+    let g = f32((packed >> 16u) & 0xFFu) / 255.0;
+    let b = f32((packed >> 8u) & 0xFFu) / 255.0;
+    let a = f32(packed & 0xFFu) / 255.0;
     return vec4<f32>(r, g, b, a);
 }
 
@@ -117,6 +118,7 @@ struct SkyData {
 }
 
 // Unpack PackedSky to usable values
+// sun_color_and_sharpness format: 0xRRGGBBSS (sharpness in byte 0)
 fn unpack_sky(packed: PackedSky) -> SkyData {
     var sky: SkyData;
     sky.horizon_color = unpack_rgb8(packed.horizon_color);
@@ -124,7 +126,7 @@ fn unpack_sky(packed: PackedSky) -> SkyData {
     sky.sun_direction = unpack_octahedral(packed.sun_direction_oct);
     let sun_packed = packed.sun_color_and_sharpness;
     sky.sun_color = unpack_rgb8(sun_packed);
-    sky.sun_sharpness = unpack_unorm8_from_u32(sun_packed >> 24u);
+    sky.sun_sharpness = unpack_unorm8_from_u32(sun_packed);  // byte 0
     return sky;
 }
 
@@ -164,13 +166,15 @@ struct LightData {
 }
 
 // Unpack PackedLight to usable values
+// Format: 0xRRGGBBII where II is intensity (byte 0)
 fn unpack_light(packed: PackedLight) -> LightData {
     var light: LightData;
     light.direction = unpack_octahedral(packed.direction_oct);
-    light.enabled = (packed.color_and_intensity >> 24u) != 0u;  // intensity byte != 0
     let color_intensity = packed.color_and_intensity;
+    // Intensity is in byte 0 (LSB), color in bytes 1-3
+    light.enabled = (color_intensity & 0xFFu) != 0u;  // intensity byte != 0
     light.color = unpack_rgb8(color_intensity);
-    light.intensity = unpack_unorm8_from_u32(color_intensity >> 24u);
+    light.intensity = unpack_unorm8_from_u32(color_intensity);  // byte 0
     return light;
 }
 

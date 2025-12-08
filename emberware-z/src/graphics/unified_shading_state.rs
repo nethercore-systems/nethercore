@@ -150,14 +150,15 @@ pub fn unpack_snorm16(value: i16) -> f32 {
     value as f32 / 32767.0
 }
 
-/// Pack RGBA f32 [0.0, 1.0] to u32 RGBA8
+/// Pack RGBA f32 [0.0, 1.0] to u32 in 0xRRGGBBAA format
+/// This matches intuitive hex literals: 0xFF0000FF = red, 0x00FF00FF = green
 #[inline]
 pub fn pack_rgba8(r: f32, g: f32, b: f32, a: f32) -> u32 {
     let r = pack_unorm8(r);
     let g = pack_unorm8(g);
     let b = pack_unorm8(b);
     let a = pack_unorm8(a);
-    (r as u32) | ((g as u32) << 8) | ((b as u32) << 16) | ((a as u32) << 24)
+    ((r as u32) << 24) | ((g as u32) << 16) | ((b as u32) << 8) | (a as u32)
 }
 
 /// Pack Vec3 color [0.0, 1.0] to u32 RGB8 (alpha = 255)
@@ -281,10 +282,11 @@ impl PackedSky {
         let sun_g = pack_unorm8(sun_color.y);
         let sun_b = pack_unorm8(sun_color.z);
         let sun_sharp = pack_unorm8(sun_sharpness);
-        let sun_color_and_sharpness = (sun_r as u32)
-            | ((sun_g as u32) << 8)
-            | ((sun_b as u32) << 16)
-            | ((sun_sharp as u32) << 24);
+        // Pack as 0xRRGGBBSS to match shader's unpack_rgb8 + sharpness in byte 0
+        let sun_color_and_sharpness = ((sun_r as u32) << 24)
+            | ((sun_g as u32) << 16)
+            | ((sun_b as u32) << 8)
+            | (sun_sharp as u32);
 
         Self {
             horizon_color: horizon_rgba,
@@ -302,6 +304,7 @@ impl PackedSky {
 impl PackedLight {
     /// Create a PackedLight from f32 parameters
     /// If enabled=false, intensity is set to 0 (which indicates disabled light)
+    /// Format: 0xRRGGBBII (RGB in high bytes, intensity in low byte)
     pub fn from_floats(direction: Vec3, color: Vec3, intensity: f32, enabled: bool) -> Self {
         let dir_packed = pack_octahedral_u32(direction.normalize_or_zero());
 
@@ -310,8 +313,9 @@ impl PackedLight {
         let b = pack_unorm8(color.z);
         // If disabled, set intensity to 0 (intensity=0 means disabled)
         let intens = if enabled { pack_unorm8(intensity) } else { 0 };
+        // Pack as 0xRRGGBBII to match shader's unpack_rgb8 (0xRRGGBBAA format)
         let color_and_intensity =
-            (r as u32) | ((g as u32) << 8) | ((b as u32) << 16) | ((intens as u32) << 24);
+            ((r as u32) << 24) | ((g as u32) << 16) | ((b as u32) << 8) | (intens as u32);
 
         Self {
             direction_oct: dir_packed,
@@ -332,21 +336,24 @@ impl PackedLight {
     }
 
     /// Extract color as f32 array
+    /// Format: 0xRRGGBBII (R in byte 3, G in byte 2, B in byte 1, I in byte 0)
     pub fn get_color(&self) -> [f32; 3] {
-        let r = unpack_unorm8((self.color_and_intensity & 0xFF) as u8);
-        let g = unpack_unorm8(((self.color_and_intensity >> 8) & 0xFF) as u8);
-        let b = unpack_unorm8(((self.color_and_intensity >> 16) & 0xFF) as u8);
+        let r = unpack_unorm8(((self.color_and_intensity >> 24) & 0xFF) as u8);
+        let g = unpack_unorm8(((self.color_and_intensity >> 16) & 0xFF) as u8);
+        let b = unpack_unorm8(((self.color_and_intensity >> 8) & 0xFF) as u8);
         [r, g, b]
     }
 
     /// Extract intensity as f32
+    /// Format: 0xRRGGBBII (intensity in byte 0)
     pub fn get_intensity(&self) -> f32 {
-        unpack_unorm8(((self.color_and_intensity >> 24) & 0xFF) as u8)
+        unpack_unorm8((self.color_and_intensity & 0xFF) as u8)
     }
 
     /// Check if light is enabled (intensity > 0)
+    /// Format: 0xRRGGBBII (intensity in byte 0)
     pub fn is_enabled(&self) -> bool {
-        (self.color_and_intensity >> 24) != 0
+        (self.color_and_intensity & 0xFF) != 0
     }
 }
 
