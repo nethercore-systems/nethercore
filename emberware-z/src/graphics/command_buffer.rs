@@ -5,7 +5,7 @@
 //! representation between FFI commands and GPU execution.
 
 use super::render_state::{BlendMode, CullMode, TextureHandle};
-use super::vertex::{vertex_stride, VERTEX_FORMAT_COUNT};
+use super::vertex::{vertex_stride, vertex_stride_packed, VERTEX_FORMAT_COUNT};
 
 /// Specifies which buffer the geometry data comes from
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -207,7 +207,8 @@ impl VirtualRenderPass {
         depth_test: bool,
         cull_mode: CullMode,
     ) {
-        let stride = vertex_stride(mesh_format) as u64;
+        // Use packed stride since retained meshes are stored in packed format
+        let stride = vertex_stride_packed(mesh_format) as u64;
         let base_vertex = (mesh_vertex_offset / stride) as u32;
 
         // Choose variant based on whether mesh is indexed
