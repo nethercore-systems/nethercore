@@ -1,7 +1,7 @@
 use bytemuck::{Pod, Zeroable};
 use glam::{Vec3, Vec4};
 
-use super::render_state::{BlendMode, MatcapBlendMode};
+use super::render_state::MatcapBlendMode;
 
 /// Quantized sky data for GPU upload (16 bytes)
 /// Sun direction uses octahedral encoding for uniform precision
@@ -27,63 +27,47 @@ pub struct PackedLight {
 ///
 /// # Mode-Specific Field Interpretation
 ///
-/// The same struct fields are interpreted differently per render mode (no struct changes needed):
+/// The `uniform_set_0` and `uniform_set_1` fields are interpreted differently per render mode.
+/// Each is a u32 containing 4 packed u8 values: [byte0, byte1, byte2, byte3].
 ///
-/// | Field               | Bytes | Mode 2 (MR-Blinn-Phong)   | Mode 3 (Blinn-Phong)                      |
-/// |---------------------|-------|---------------------------|-------------------------------------------|
-/// | `metallic`          | 0     | Rim intensity (uniform)   | **Specular intensity** (Slot 1.R fallback) |
-/// | `roughness`         | 1     | Roughness → Shininess     | **Shininess** (Slot 1.G fallback)          |
-/// | `emissive`          | 2     | Emissive                  | **Emissive** (same meaning!)               |
-/// | `pad0`              | 3     | Unused                    | Unused                                     |
-/// | `matcap_blend_modes`| 4-7   | Rim power (byte 3 only)   | **Specular RGB + Rim power** (Mode 3)     |
-/// |                     |       |                           | Bytes 0-2: Specular RGB8                   |
-/// |                     |       |                           | Byte 3: Rim power [0-255]→[0-32]           |
+/// Field layout per render mode:
 ///
-/// **Key insights:**
-/// - **Emissive stays in Slot 1.B for both modes** - no migration needed!
-/// - Mode 2: `roughness` mapped to shininess in shader (power curve: 0→256, 1→1)
-/// - Mode 2: rim lighting uses uniform-only (bytes 0 and 3 of matcap_blend_modes)
-/// - Mode 3: `roughness` field reinterpreted directly as shininess (linear: 0→1, 1→256)
-/// - Mode 3: slot1.R now specular_intensity (modulates both specular highlights and rim lighting)
-/// - Specular color (Mode 2): derived from metallic in shader (F0 = mix(0.04, albedo, metallic))
-/// - Specular color (Mode 3): comes from Slot 2 RGB texture OR uniform fallback (bytes 0-2 of `matcap_blend_modes`)
-/// - Rim power (Modes 2 & 3) is uniform-only, stored in `matcap_blend_modes` byte 3, range 0-32
+/// | Mode | uniform_set_0 [b0, b1, b2, b3]                   | uniform_set_1 [b0, b1, b2, b3]           |
+/// |------|--------------------------------------------------|------------------------------------------|
+/// | 0    | [unused, unused, unused, Rim Intensity]          | [unused, unused, unused, Rim Power]      |
+/// | 1    | [BlendMode0, BlendMode1, BlendMode2, BlendMode3] | [unused, unused, unused, unused]         |
+/// | 2    | [Metallic, Roughness, Emissive, Rim Intensity]   | [unused, unused, unused, Rim Power]      |
+/// | 3    | [SpecDamping*, Shininess, Emissive, RimIntens]   | [Spec R, Spec G, Spec B, Rim Power]      |
+///
+/// *SpecDamping is INVERTED: 0=full specular (default), 255=no specular.
+/// This is beginner-friendly since the default of 0 gives visible highlights.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Pod, Zeroable)]
 pub struct PackedUnifiedShadingState {
-    /// Mode 2: Rim intensity [0-255] → [0.0-1.0] (uniform-only, no texture)
-    /// Mode 3: Specular intensity [0-255] → [0.0-1.0] (uniform fallback for Slot 1.R)
-    pub metallic: u8,
-
-    /// Mode 2: Roughness [0-255] → [0.0-1.0], mapped to shininess via pow(256.0, 1.0 - roughness)
-    /// Mode 3: Shininess [0-255] → [0.0-1.0] → [1-256] (uniform fallback for Slot 1.G)
-    pub roughness: u8,
-
-    /// Mode 2: Emissive intensity [0-255+] (allows HDR values > 1.0)
-    /// Mode 3: Emissive intensity [0-255+] (same meaning, uniform fallback for Slot 1.B)
-    pub emissive: u8,
-
-    pub pad0: u8,
+    /// Material color (RGBA8 packed)
     pub color_rgba8: u32,
-    pub blend_mode: u32,
 
-    /// Mode 1: 4x MatcapBlendMode packed as u8s
-    /// Mode 2: Byte 0 = rim_intensity [0-255] → [0.0-1.0] (uniform-only)
-    ///         Byte 3 = rim_power [0-255] → [0.0-1.0] → [0-32] (uniform-only)
-    /// Mode 3: Bytes 0-2 = Specular RGB8 (uniform fallback for Slot 2 RGB, defaults to white)
-    ///         Byte 3 = rim_power [0-255] → [0.0-1.0] → [0-32] (uniform-only)
-    pub matcap_blend_modes: u32,
+    /// Mode-specific uniform data (4 bytes packed as 4 × u8)
+    /// - Mode 0: [unused, unused, unused, rim_intensity]
+    /// - Mode 1: [blend_mode_0, blend_mode_1, blend_mode_2, blend_mode_3]
+    /// - Mode 2: [metallic, roughness, emissive, rim_intensity]
+    /// - Mode 3: [spec_damping*, shininess, emissive, rim_intensity]
+    /// * spec_damping is inverted: 0=full specular, 255=no specular
+    pub uniform_set_0: u32,
+
+    /// Mode-specific extended data (4 bytes packed as 4 × u8)
+    /// - Mode 0: [unused, unused, unused, rim_power]
+    /// - Mode 1: unused
+    /// - Mode 2: [unused, unused, unused, rim_power]
+    /// - Mode 3: [spec_r, spec_g, spec_b, rim_power]
+    pub uniform_set_1: u32,
+
+    /// Reserved for alignment/future use
+    pub _pad0: u32,
 
     pub sky: PackedSky,           // 16 bytes
     pub lights: [PackedLight; 4], // 32 bytes (4 × 8-byte lights)
 }
-
-// TODO: Optimize matcap_blend_modes:
-// We could explore this fields as embedding the mode123
-// unique values
-// Mode1: Blend Modes [4 of them]
-// Mode2: [Metallic, Roughness, Emissive, _]
-// Mode3: [Rim, Shininess, Emissive, _]
 
 impl Default for PackedUnifiedShadingState {
     fn default() -> Self {
@@ -98,14 +82,16 @@ impl Default for PackedUnifiedShadingState {
             0.95, // Sun sharpness: fairly sharp (maps to ~242/255)
         );
 
+        // uniform_set_0: [metallic=0, roughness=128, emissive=0, rim_intensity=0]
+        let uniform_set_0 = pack_uniform_set_0(0, 128, 0, 0);
+        // uniform_set_1: [spec_r=255, spec_g=255, spec_b=255, rim_power=0] (white specular)
+        let uniform_set_1 = pack_uniform_set_1(255, 255, 255, 0);
+
         Self {
-            metallic: 0,    // Non-metallic
-            roughness: 128, // Medium roughness (0.5)
-            emissive: 0,    // No emission
-            pad0: 0,
             color_rgba8: 0xFFFFFFFF, // White
-            blend_mode: BlendMode::Alpha as u32,
-            matcap_blend_modes: 0x00FFFFFF, // Mode 1: All Multiply | Mode 3: White specular RGB + rim_power=0
+            uniform_set_0,
+            uniform_set_1,
+            _pad0: 0,
             sky,
             lights: [PackedLight::default(); 4], // All lights disabled
         }
@@ -249,6 +235,48 @@ pub fn pack_matcap_blend_modes(modes: [MatcapBlendMode; 4]) -> u32 {
         | ((modes[3] as u32) << 24)
 }
 
+// ============================================================================
+// Uniform Set Packing Helpers
+// ============================================================================
+
+/// Pack 4 u8 values into uniform_set_0
+/// Layout: [byte0, byte1, byte2, byte3] where byte0 is in low bits
+/// - Mode 0: [unused, unused, unused, rim_intensity]
+/// - Mode 1: [blend_mode_0, blend_mode_1, blend_mode_2, blend_mode_3]
+/// - Mode 2: [metallic, roughness, emissive, rim_intensity]
+/// - Mode 3: [spec_intensity, shininess, emissive, rim_intensity]
+#[inline]
+pub fn pack_uniform_set_0(byte0: u8, byte1: u8, byte2: u8, byte3: u8) -> u32 {
+    (byte0 as u32) | ((byte1 as u32) << 8) | ((byte2 as u32) << 16) | ((byte3 as u32) << 24)
+}
+
+/// Pack 4 u8 values into uniform_set_1
+/// Layout: [byte0, byte1, byte2, byte3] where byte0 is in low bits
+/// - Mode 0: [unused, unused, unused, rim_power]
+/// - Mode 1: unused
+/// - Mode 2: [unused, unused, unused, rim_power]
+/// - Mode 3: [spec_r, spec_g, spec_b, rim_power]
+#[inline]
+pub fn pack_uniform_set_1(byte0: u8, byte1: u8, byte2: u8, byte3: u8) -> u32 {
+    (byte0 as u32) | ((byte1 as u32) << 8) | ((byte2 as u32) << 16) | ((byte3 as u32) << 24)
+}
+
+/// Update a specific byte in uniform_set_0
+#[inline]
+pub fn update_uniform_set_0_byte(current: u32, byte_index: u8, value: u8) -> u32 {
+    let shift = byte_index as u32 * 8;
+    let mask = !(0xFFu32 << shift);
+    (current & mask) | ((value as u32) << shift)
+}
+
+/// Update a specific byte in uniform_set_1
+#[inline]
+pub fn update_uniform_set_1_byte(current: u32, byte_index: u8, value: u8) -> u32 {
+    let shift = byte_index as u32 * 8;
+    let mask = !(0xFFu32 << shift);
+    (current & mask) | ((value as u32) << shift)
+}
+
 /// Unpack matcap blend modes from u32
 pub fn unpack_matcap_blend_modes(packed: u32) -> [MatcapBlendMode; 4] {
     [
@@ -359,24 +387,32 @@ impl PackedLight {
 
 impl PackedUnifiedShadingState {
     /// Create from all f32 parameters (used during FFI calls)
+    /// For Mode 2: metallic, roughness, emissive packed into uniform_set_0
+    /// rim_intensity defaults to 0, can be set via update methods
     pub fn from_floats(
         metallic: f32,
         roughness: f32,
         emissive: f32,
         color: u32,
-        blend_mode: BlendMode,
         matcap_blend_modes: [MatcapBlendMode; 4],
         sky: PackedSky,
         lights: [PackedLight; 4],
     ) -> Self {
+        // Pack Mode 2 style: [metallic, roughness, emissive, rim_intensity=0]
+        let uniform_set_0 = pack_uniform_set_0(
+            pack_unorm8(metallic),
+            pack_unorm8(roughness),
+            pack_unorm8(emissive),
+            0, // rim_intensity default
+        );
+        // uniform_set_1: for Mode 1 use matcap blend modes, Mode 3 use specular RGB
+        let uniform_set_1 = pack_matcap_blend_modes(matcap_blend_modes);
+
         Self {
-            metallic: pack_unorm8(metallic),
-            roughness: pack_unorm8(roughness),
-            emissive: pack_unorm8(emissive),
-            pad0: 0,
+            uniform_set_0,
             color_rgba8: color,
-            blend_mode: blend_mode as u32,
-            matcap_blend_modes: pack_matcap_blend_modes(matcap_blend_modes),
+            _pad0: 0,
+            uniform_set_1,
             sky,
             lights,
         }

@@ -28,10 +28,10 @@ struct PackedLight {
 
 // Unified per-draw shading state (64 bytes)
 struct PackedUnifiedShadingState {
-    metallic_roughness_emissive_pad: u32,  // 4x u8 packed: [metallic, roughness, emissive, pad]
-    color_rgba8: u32,
-    blend_mode: u32,
-    matcap_blend_modes: u32,
+    color_rgba8: u32,                // Material color (RGBA8 packed)
+    uniform_set_0: u32,              // Mode-specific: [b0, b1, b2, rim_intensity]
+    uniform_set_1: u32,              // Mode-specific: [b0, b1, b2, rim_power]
+    _pad0: u32,                      // Reserved for alignment/future use
     sky: PackedSky,                  // 16 bytes
     lights: array<PackedLight, 4>,   // 32 bytes (4 × 8-byte lights)
 }
@@ -136,7 +136,10 @@ fn sample_sky(direction: vec3<f32>, sky: SkyData) -> vec3<f32> {
     let gradient = mix(sky.horizon_color, sky.zenith_color, up_factor);
     // Negate sun_direction: it's direction rays travel, not direction to sun
     let sun_dot = max(0.0, dot(direction, -sky.sun_direction));
-    let sun = sky.sun_color * pow(sun_dot, sky.sun_sharpness);
+    // Map sharpness [0,1] to power exponent [1, 200]
+    // Higher sharpness = higher exponent = sharper sun disc
+    let sun_power = mix(1.0, 200.0, sky.sun_sharpness);
+    let sun = sky.sun_color * pow(sun_dot, sun_power);
     return gradient + sun;
 }
 

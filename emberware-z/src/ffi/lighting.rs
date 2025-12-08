@@ -25,9 +25,13 @@ pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) ->
 ///
 /// # Arguments
 /// * `index` — Light index (0-3)
-/// * `x` — Direction X component (will be normalized)
-/// * `y` — Direction Y component (will be normalized)
-/// * `z` — Direction Z component (will be normalized)
+/// * `x` — Light ray direction X component (will be normalized)
+/// * `y` — Light ray direction Y component (will be normalized)
+/// * `z` — Light ray direction Z component (will be normalized)
+///
+/// **Direction convention:** The direction is where light rays travel (from light toward surface).
+/// For a light from directly above, use `(0, -1, 0)` (rays going down).
+/// This matches the convention used by `sky_set_sun()`.
 ///
 /// This function sets the light direction and enables the light.
 /// The direction vector will be automatically normalized by the graphics backend.

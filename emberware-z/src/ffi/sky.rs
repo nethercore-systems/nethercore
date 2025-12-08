@@ -57,19 +57,22 @@ fn sky_set_colors(
 /// Set sky sun properties
 ///
 /// # Arguments
-/// * `dir_x` — Sun direction X component (will be normalized)
-/// * `dir_y` — Sun direction Y component (will be normalized)
-/// * `dir_z` — Sun direction Z component (will be normalized)
+/// * `dir_x` — Light ray direction X component (will be normalized)
+/// * `dir_y` — Light ray direction Y component (will be normalized)
+/// * `dir_z` — Light ray direction Z component (will be normalized)
 /// * `color` — Sun color (0xRRGGBBAA)
 /// * `sharpness` — Sun sharpness (0.0-1.0, higher = smaller/sharper sun disc)
 ///
 /// Sets the procedural sky sun. The sun appears as a bright disc in the sky gradient
-/// and provides specular highlights in PBR/Hybrid modes.
+/// and provides diffuse/specular lighting in PBR/Hybrid modes.
+///
+/// **Direction convention:** The direction is where light rays travel (from sun toward surface).
+/// This matches the convention used by `light_set()` for dynamic lights.
 /// Direction will be automatically normalized by the graphics backend.
 ///
 /// **Examples:**
-/// - `sky_set_sun(0.5, 0.707, 0.5, 0xFFFFFFFF, 0.98)` — White sun at 45° elevation
-/// - `sky_set_sun(0.0, 1.0, 0.0, 0xFFE4B5FF, 0.95)` — Warm sunset sun overhead
+/// - `sky_set_sun(0.0, -1.0, 0.0, 0xFFFFFFFF, 0.98)` — Sun directly overhead (rays going down)
+/// - `sky_set_sun(-0.5, -0.707, -0.5, 0xFFE4B5FF, 0.95)` — Sun at 45° elevation from northeast
 fn sky_set_sun(
     mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
     dir_x: f32,
@@ -88,8 +91,8 @@ fn sky_set_sun(
     // Validate direction vector (warn if zero-length)
     let len_sq = dir_x * dir_x + dir_y * dir_y + dir_z * dir_z;
     if len_sq < 1e-10 {
-        warn!("sky_set_sun: zero-length direction vector, using default (0, 1, 0)");
-        state.update_sky_sun([0.0, 1.0, 0.0], [color_r, color_g, color_b], sharpness);
+        warn!("sky_set_sun: zero-length direction vector, using default (0, -1, 0)");
+        state.update_sky_sun([0.0, -1.0, 0.0], [color_r, color_g, color_b], sharpness);
         return;
     }
 
@@ -136,7 +139,7 @@ fn matcap_set(
 /// fn render() {
 ///     // Configure sky colors and sun
 ///     sky_set_colors(0xB2D8F2FF, 0x3366B2FF);  // Light blue → darker blue
-///     sky_set_sun(0.5, 0.707, 0.5, 0xFFF2E6FF, 0.98);  // Warm white sun
+///     sky_set_sun(-0.5, -0.707, -0.5, 0xFFF2E6FF, 0.98);  // Warm white sun (rays going down)
 ///
 ///     // Draw sky first (before geometry)
 ///     draw_sky();

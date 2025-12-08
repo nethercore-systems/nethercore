@@ -72,20 +72,22 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     let material_color = unpack_rgba8(shading.color_rgba8);
     let sky = unpack_sky(shading.sky);
 
-    // Unpack uniforms from packed field
-    let packed_values = shading.metallic_roughness_emissive_pad;
-    let uniform0 = unpack_unorm8_from_u32(packed_values & 0xFFu); // Metallic or Spec Intensity
-    let uniform1 = unpack_unorm8_from_u32((packed_values >> 8u) & 0xFFu); // Roughness or Shininess
-    var emissive = unpack_unorm8_from_u32((packed_values >> 16u) & 0xFFu);
+    // Unpack uniforms from uniform_set_0
+    // Mode 2: [metallic, roughness, emissive, rim_intensity]
+    // Mode 3: [spec_damping*, shininess, emissive, rim_intensity]
+    // *spec_damping is inverted: 0=full specular (default), 255=no specular
+    let uniform0 = unpack_unorm8_from_u32(shading.uniform_set_0 & 0xFFu); // byte 0
+    let uniform1 = unpack_unorm8_from_u32((shading.uniform_set_0 >> 8u) & 0xFFu); // byte 1
+    var emissive = unpack_unorm8_from_u32((shading.uniform_set_0 >> 16u) & 0xFFu); // byte 2
 
     var albedo = material_color.rgb;
     //FS_COLOR
     //FS_UV
 
-    // Rim intensity always comes from uniform (never overridden by texture)
-    let rim_intensity = uniform0;
+    // Rim intensity from byte 3 of uniform_set_0 (separate from metallic/spec_damping)
+    let rim_intensity = unpack_unorm8_from_u32((shading.uniform_set_0 >> 24u) & 0xFFu);
 
-    var value0 = uniform0;  // metallic (mode 2) or specular_intensity (mode 3), may be overridden by texture
+    var value0 = uniform0;  // metallic (mode 2) or spec_damping (mode 3), may be overridden by texture
     var value1 = uniform1;  // roughness (mode 2) or shininess (mode 3)
 
     //FS_MODE2_3_TEXTURES  // Texture overrides for mode-specific slots
@@ -98,8 +100,8 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
 
     let view_dir = normalize(in.camera_position - in.world_position);
 
-    // Unpack rim power from matcap_blend_modes byte 3
-    let rim_power_raw = unpack_unorm8_from_u32(shading.matcap_blend_modes >> 24u);
+    // Rim power from byte 3 of uniform_set_1
+    let rim_power_raw = unpack_unorm8_from_u32((shading.uniform_set_1 >> 24u) & 0xFFu);
     let rim_power = rim_power_raw * 32.0;
 
     let glow = albedo * emissive;

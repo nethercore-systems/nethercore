@@ -114,8 +114,8 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     let shading = shading_states[in.shading_state_index];
     let material_color = unpack_rgba8(shading.color_rgba8);
 
-    // Unpack matcap blend modes
-    let blend_modes_packed = shading.matcap_blend_modes;
+    // Unpack matcap blend modes from uniform_set_1 (Mode 1 uses this for blend modes)
+    let blend_modes_packed = shading.uniform_set_1;
     let blend_mode_0 = (blend_modes_packed) & 0xFFu;
     let blend_mode_1 = (blend_modes_packed >> 8u) & 0xFFu;
     let blend_mode_2 = (blend_modes_packed >> 16u) & 0xFFu;

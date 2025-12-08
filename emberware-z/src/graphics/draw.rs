@@ -186,6 +186,7 @@ impl ZGraphics {
     }
 
     /// Convert game matcap blend mode to graphics matcap blend mode
+    #[allow(dead_code)] // Useful conversion helper
     pub(super) fn convert_matcap_blend_mode(mode: u8) -> MatcapBlendMode {
         match mode {
             0 => MatcapBlendMode::Multiply,
@@ -196,6 +197,7 @@ impl ZGraphics {
     }
 
     /// Map game texture handles to graphics texture handles
+    #[allow(dead_code)] // Useful conversion helper
     pub(super) fn map_texture_handles(
         texture_map: &hashbrown::HashMap<u32, TextureHandle>,
         bound_textures: &[u32; 4],
@@ -212,6 +214,7 @@ impl ZGraphics {
     }
 
     /// Convert game cull mode to graphics cull mode
+    #[allow(dead_code)] // Useful conversion helper
     pub(super) fn convert_cull_mode(mode: u8) -> CullMode {
         match mode {
             0 => CullMode::None,
@@ -222,6 +225,7 @@ impl ZGraphics {
     }
 
     /// Convert game blend mode to graphics blend mode
+    #[allow(dead_code)] // Useful conversion helper
     pub(super) fn convert_blend_mode(mode: u8) -> BlendMode {
         match mode {
             0 => BlendMode::None,

@@ -117,15 +117,15 @@ fn material_emissive(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFISta
     state.update_material_emissive(clamped);
 }
 
-/// Set rim lighting parameters (Mode 3 only)
+/// Set rim lighting parameters (all lit modes)
 ///
 /// # Arguments
-/// * `intensity` — Rim intensity 0.0-1.0 (uniform fallback for Slot 1.R)
-/// * `power` — Rim falloff power 0.0-1.0 (mapped to 0-32 internally, uniform-only, no texture)
+/// * `intensity` — Rim intensity 0.0-1.0 (stored in uniform_set_0 byte 3)
+/// * `power` — Rim falloff power 0.0-32.0 (stored in uniform_set_1 byte 3)
 ///
-/// Used in Mode 3 (Blinn-Phong) for edge lighting effects.
-/// Rim lighting uses the sun color for coherent scene lighting.
-/// Intensity is clamped to 0.0-1.0 range. Power is clamped to 0.0-1.0 and mapped to 0-32.
+/// Rim lighting creates edge highlights. Intensity controls brightness,
+/// power controls falloff sharpness (higher = tighter highlight).
+/// Rim lighting uses the sky color from behind the object for coherent scene lighting.
 fn material_rim(
     mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
     intensity: f32,
@@ -142,8 +142,8 @@ fn material_rim(
         );
     }
 
-    // Clamp and warn for power
-    let power_clamped = power.clamp(0.0, 1.0);
+    // Clamp and warn for power (0-32 range, normalized to 0-1 for storage)
+    let power_clamped = power.clamp(0.0, 32.0);
     if (power - power_clamped).abs() > 0.001 {
         warn!(
             "material_rim: power {} out of range, clamped to {}",
@@ -151,19 +151,11 @@ fn material_rim(
         );
     }
 
-    // Set rim_intensity (reinterprets metallic field in Mode 3)
-    state.update_material_metallic(intensity_clamped);
+    // Set rim_intensity in uniform_set_0 byte 3
+    state.update_material_rim_intensity(intensity_clamped);
 
-    // Pack rim_power into matcap_blend_modes byte 3 (maps 0-1 to 0-255)
-    let power_u8 = (power_clamped * 255.0) as u8;
-    let new_value =
-        (state.current_shading_state.matcap_blend_modes & 0x00FFFFFF) | ((power_u8 as u32) << 24);
-
-    // Only update if changed
-    if state.current_shading_state.matcap_blend_modes != new_value {
-        state.current_shading_state.matcap_blend_modes = new_value;
-        state.shading_state_dirty = true;
-    }
+    // Set rim_power in uniform_set_1 byte 3 (normalized: 0-32 → 0-1 → 0-255)
+    state.update_material_rim_power(power_clamped);
 }
 
 /// Set shininess (Mode 3 only, alias for material_roughness)
@@ -186,22 +178,12 @@ fn material_shininess(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>
 fn material_specular(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, color: u32) {
     let state = &mut caller.data_mut().console;
 
-    // Extract RGB bytes from input (ignore alpha)
+    // Extract RGB bytes from input and convert to normalized floats
     // Format: 0xRRGGBBAA (R in highest byte, A in lowest)
-    let r_u8 = ((color >> 24) & 0xFF) as u8;
-    let g_u8 = ((color >> 16) & 0xFF) as u8;
-    let b_u8 = ((color >> 8) & 0xFF) as u8;
+    let r = ((color >> 24) & 0xFF) as f32 / 255.0;
+    let g = ((color >> 16) & 0xFF) as f32 / 255.0;
+    let b = ((color >> 8) & 0xFF) as f32 / 255.0;
 
-    // Pack RGB into matcap_blend_modes bytes 0-2 (preserve byte 3 = rim_power)
-    // Internal format: byte 0 = R, byte 1 = G, byte 2 = B, byte 3 = rim_power
-    let new_value = (state.current_shading_state.matcap_blend_modes & 0xFF000000)
-        | (r_u8 as u32)
-        | ((g_u8 as u32) << 8)
-        | ((b_u8 as u32) << 16);
-
-    // Only update if changed
-    if state.current_shading_state.matcap_blend_modes != new_value {
-        state.current_shading_state.matcap_blend_modes = new_value;
-        state.shading_state_dirty = true;
-    }
+    // Specular RGB stored in uniform_set_1 bytes 0-2 (byte 3 = rim_power)
+    state.update_specular_color(r, g, b);
 }

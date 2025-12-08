@@ -11,8 +11,8 @@ use emberware_core::wasm::GameStateWithConsole;
 
 use crate::console::ZInput;
 use crate::graphics::FORMAT_NORMAL;
-use crate::state::{PendingMesh, ZFFIState};
 use crate::procedural;
+use crate::state::{PendingMesh, ZFFIState};
 
 /// Register procedural mesh generation FFI functions
 pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
@@ -202,10 +202,7 @@ fn plane(
 ) -> u32 {
     // Validate parameters
     if size_x <= 0.0 || size_z <= 0.0 {
-        warn!(
-            "plane: sizes must be > 0.0 (got {}, {})",
-            size_x, size_z
-        );
+        warn!("plane: sizes must be > 0.0 (got {}, {})", size_x, size_z);
         return 0;
     }
 
@@ -282,7 +279,13 @@ fn torus(
 
     info!(
         "torus: created mesh {} (major={}, minor={}, {}×{} segments, {} verts, {} indices)",
-        handle, major_radius, minor_radius, major_segments, minor_segments, vertex_count, index_count
+        handle,
+        major_radius,
+        minor_radius,
+        major_segments,
+        minor_segments,
+        vertex_count,
+        index_count
     );
     handle
 }

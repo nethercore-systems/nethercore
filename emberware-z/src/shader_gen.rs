@@ -1,15 +1,24 @@
-// ! Shader generation system for Emberware Z
+//! Shader generation system for Emberware Z
 //!
-//! Generates WGSL shaders from templates by replacing placeholders based on:
+//! All 40 shader permutations are pregenerated at build time by build.rs and validated
+//! with naga. This module provides access to the pregenerated shaders.
+//!
 //! - Render mode (0-3): Unlit, Matcap, PBR, Hybrid
 //! - Vertex format flags (UV, COLOR, NORMAL, SKINNED)
 //!
 //! Total shader count: 40
 //! - Mode 0: 16 shaders (all vertex formats)
 //! - Modes 1-3: 8 shaders each (only formats with NORMAL flag)
+//!
+//! Additionally, SKY_SHADER and QUAD_SHADER are generated from templates
+//! (sky_template.wgsl, quad_template.wgsl) combined with common.wgsl utilities.
 
-use crate::graphics::{FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV};
+use crate::graphics::FORMAT_NORMAL;
 use std::fmt;
+
+// Include pregenerated shaders from build.rs
+// This provides: PREGENERATED_SHADERS, get_pregenerated_shader(), SKY_SHADER, QUAD_SHADER
+include!(concat!(env!("OUT_DIR"), "/generated_shaders.rs"));
 
 // ============================================================================
 // Error Types
@@ -44,85 +53,21 @@ impl fmt::Display for ShaderGenError {
 impl std::error::Error for ShaderGenError {}
 
 // ============================================================================
-// Shader Templates (embedded at compile time)
+// Shader Templates (embedded for inspection/debugging via get_template())
 // ============================================================================
 
-// Shared utilities
-const COMMON: &str = include_str!("../shaders/common.wgsl");
 const BLINNPHONG_COMMON: &str = include_str!("../shaders/blinnphong_common.wgsl");
-
-// Mode-specific templates (modes 0-1 only; modes 2-3 generated from blinnphong_common)
 const TEMPLATE_MODE0: &str = include_str!("../shaders/mode0_unlit.wgsl");
 const TEMPLATE_MODE1: &str = include_str!("../shaders/mode1_matcap.wgsl");
-
-// ============================================================================
-// Placeholder Snippets
-// ============================================================================
-
-// Vertex input struct fields
-const VIN_UV: &str = "@location(1) uv: vec2<f32>,";
-const VIN_COLOR: &str = "@location(2) color: vec3<f32>,";
-const VIN_NORMAL: &str = "@location(3) normal: vec3<f32>,";
-const VIN_SKINNED: &str =
-    "@location(4) bone_indices: vec4<u32>,\n    @location(5) bone_weights: vec4<f32>,";
-
-// Vertex output struct fields
-const VOUT_WORLD_NORMAL: &str = "@location(1) world_normal: vec3<f32>,";
-const VOUT_VIEW_NORMAL: &str = "@location(2) view_normal: vec3<f32>,";
-const VOUT_CAMERA_POS: &str = "@location(4) @interpolate(flat) camera_position: vec3<f32>,";
-const VOUT_UV: &str = "@location(10) uv: vec2<f32>,";
-const VOUT_COLOR: &str = "@location(11) color: vec3<f32>,";
-
-// Vertex shader code
-const VS_UV: &str = "out.uv = in.uv;";
-const VS_COLOR: &str = "out.color = in.color;";
-const VS_WORLD_NORMAL: &str =
-    "let world_normal_raw = (model_matrix * vec4<f32>(in.normal, 0.0)).xyz;\n    out.world_normal = normalize(world_normal_raw);";
-const VS_VIEW_NORMAL: &str =
-    "let view_normal = (view_matrix * vec4<f32>(out.world_normal, 0.0)).xyz;\n    out.view_normal = normalize(view_normal);";
-const VS_CAMERA_POS: &str = "out.camera_position = extract_camera_position(view_matrix);";
-
-const VS_SKINNED: &str = r#"// GPU skinning: compute skinned position and normal
-    var skinned_pos = vec3<f32>(0.0, 0.0, 0.0);
-    var skinned_normal = vec3<f32>(0.0, 0.0, 0.0);
-
-    for (var i = 0u; i < 4u; i++) {
-        let bone_idx = in.bone_indices[i];
-        let weight = in.bone_weights[i];
-
-        if (weight > 0.0 && bone_idx < 256u) {
-            let bone_matrix = bones[bone_idx];
-            skinned_pos += (bone_matrix * vec4<f32>(in.position, 1.0)).xyz * weight;
-            //VS_SKINNED_NORMAL
-        }
-    }
-
-    let final_position = skinned_pos;
-    //VS_SKINNED_FINAL_NORMAL"#;
-
-const VS_SKINNED_NORMAL: &str =
-    "skinned_normal += (bone_matrix * vec4<f32>(in.normal, 0.0)).xyz * weight;";
-const VS_SKINNED_FINAL_NORMAL: &str = "let final_normal = normalize(skinned_normal);";
-
-const VS_POSITION_SKINNED: &str = "let world_pos = vec4<f32>(final_position, 1.0);";
-const VS_POSITION_UNSKINNED: &str = "let world_pos = vec4<f32>(in.position, 1.0);";
-
-// Fragment shader code (Mode 0 and Mode 1 - use "color" variable)
-const FS_COLOR: &str = "color *= in.color;";
-const FS_UV: &str = "let tex_sample = textureSample(slot0, tex_sampler, in.uv); color *= tex_sample.rgb; color *= tex_sample.a;";
-const FS_AMBIENT: &str = "let ambient = color * sample_sky(in.world_normal, sky); let sun_color = sample_sky(-sky.sun_direction, sky);";
-const FS_NORMAL: &str =
-    "color = ambient + lambert_diffuse(in.world_normal, sky.sun_direction, color, sun_color);";
-
-// Fragment shader code (Modes 2-3 - use "albedo" variable)
-const FS_ALBEDO_COLOR: &str = "albedo *= in.color;";
-const FS_ALBEDO_UV: &str = "let albedo_sample = textureSample(slot0, tex_sampler, in.uv); albedo *= albedo_sample.rgb; albedo *= albedo_sample.a;";
 
 // ============================================================================
 // Shader Generation
 // ============================================================================
 
-/// Generate a shader from a template for a specific vertex format
+/// Get a pregenerated shader for a specific mode and vertex format
+///
+/// All shaders are pregenerated at build time and validated with naga.
+/// This function returns the pregenerated shader source as a &'static str.
 ///
 /// # Errors
 ///
@@ -134,13 +79,6 @@ pub fn generate_shader(mode: u8, format: u8) -> Result<String, ShaderGenError> {
         return Err(ShaderGenError::InvalidRenderMode(mode));
     }
 
-    // Get the appropriate template (modes 0-1 only; modes 2-3 use BLINNPHONG_COMMON)
-    let template = match mode {
-        0 => TEMPLATE_MODE0,
-        1 => TEMPLATE_MODE1,
-        _ => "", // Modes 2-3 use BLINNPHONG_COMMON, not a template
-    };
-
     // Check if this format is valid for the mode
     // Modes 1-3 require normals
     let has_normal = format & FORMAT_NORMAL != 0;
@@ -148,181 +86,11 @@ pub fn generate_shader(mode: u8, format: u8) -> Result<String, ShaderGenError> {
         return Err(ShaderGenError::MissingNormalFlag { mode, format });
     }
 
-    // Extract format flags
-    let has_uv = format & FORMAT_UV != 0;
-    let has_color = format & FORMAT_COLOR != 0;
-    let has_skinned = format & FORMAT_SKINNED != 0;
+    // Use pregenerated shader (validated at build time)
+    let source = get_pregenerated_shader(mode, format)
+        .expect("Pregenerated shader missing - this indicates a bug in build.rs");
 
-    // Build shader by combining common code + mode-specific template
-    let mut shader = String::new();
-
-    // Always include common bindings and utilities first
-    shader.push_str(COMMON);
-    shader.push('\n');
-
-    // Include Blinn-Phong (modes 2-3) or mode-specific template (modes 0-1)
-    if mode >= 2 {
-        shader.push_str(BLINNPHONG_COMMON);
-    } else {
-        shader.push_str(template);
-    }
-    shader.push('\n');
-
-    // Replace vertex input placeholders
-    shader = shader.replace("//VIN_UV", if has_uv { VIN_UV } else { "" });
-    shader = shader.replace("//VIN_COLOR", if has_color { VIN_COLOR } else { "" });
-    shader = shader.replace("//VIN_NORMAL", if has_normal { VIN_NORMAL } else { "" });
-    shader = shader.replace("//VIN_SKINNED", if has_skinned { VIN_SKINNED } else { "" });
-
-    // Replace vertex output placeholders
-    shader = shader.replace("//VOUT_UV", if has_uv { VOUT_UV } else { "" });
-    shader = shader.replace("//VOUT_COLOR", if has_color { VOUT_COLOR } else { "" });
-    shader = shader.replace(
-        "//VOUT_WORLD_NORMAL",
-        if has_normal { VOUT_WORLD_NORMAL } else { "" },
-    );
-    shader = shader.replace(
-        "//VOUT_VIEW_NORMAL",
-        if has_normal { VOUT_VIEW_NORMAL } else { "" },
-    );
-    shader = shader.replace(
-        "//VOUT_CAMERA_POS",
-        if mode >= 2 { VOUT_CAMERA_POS } else { "" },
-    );
-
-    // Replace vertex shader code placeholders
-    shader = shader.replace("//VS_UV", if has_uv { VS_UV } else { "" });
-    shader = shader.replace("//VS_COLOR", if has_color { VS_COLOR } else { "" });
-
-    // Normal handling depends on skinning
-    if has_normal && !has_skinned {
-        shader = shader.replace("//VS_WORLD_NORMAL", VS_WORLD_NORMAL);
-        shader = shader.replace("//VS_VIEW_NORMAL", VS_VIEW_NORMAL);
-    } else if has_normal && has_skinned {
-        // Skinned normals: use final_normal from skinning code
-        let skinned_world_normal = "out.world_normal = normalize(final_normal);";
-        let skinned_view_normal =
-            "let view_normal = (view_matrix * vec4<f32>(final_normal, 0.0)).xyz;\n    out.view_normal = normalize(view_normal);";
-        shader = shader.replace("//VS_WORLD_NORMAL", skinned_world_normal);
-        shader = shader.replace("//VS_VIEW_NORMAL", skinned_view_normal);
-    } else {
-        shader = shader.replace("//VS_WORLD_NORMAL", "");
-        shader = shader.replace("//VS_VIEW_NORMAL", "");
-    }
-
-    // Camera position extraction (modes 2-3 only)
-    if mode >= 2 {
-        shader = shader.replace("//VS_CAMERA_POS", VS_CAMERA_POS);
-    } else {
-        shader = shader.replace("//VS_CAMERA_POS", "");
-    }
-
-    // Handle skinning with nested replacements
-    if has_skinned {
-        let mut skinned_code = VS_SKINNED.to_string();
-        skinned_code = skinned_code.replace(
-            "//VS_SKINNED_NORMAL",
-            if has_normal { VS_SKINNED_NORMAL } else { "" },
-        );
-        skinned_code = skinned_code.replace(
-            "//VS_SKINNED_FINAL_NORMAL",
-            if has_normal {
-                VS_SKINNED_FINAL_NORMAL
-            } else {
-                ""
-            },
-        );
-        shader = shader.replace("//VS_SKINNED", &skinned_code);
-        shader = shader.replace("//VS_POSITION", VS_POSITION_SKINNED);
-    } else {
-        shader = shader.replace("//VS_SKINNED", "");
-        shader = shader.replace("//VS_POSITION", VS_POSITION_UNSKINNED);
-    }
-
-    // Replace fragment shader placeholders (mode-specific)
-    match mode {
-        0 => {
-            // Mode 0 (Unlit)
-            shader = shader.replace("//FS_COLOR", if has_color { FS_COLOR } else { "" });
-            shader = shader.replace("//FS_UV", if has_uv { FS_UV } else { "" });
-            shader = shader.replace("//FS_AMBIENT", if has_normal { FS_AMBIENT } else { "" });
-            shader = shader.replace("//FS_NORMAL", if has_normal { FS_NORMAL } else { "" });
-        }
-        1 => {
-            // Mode 1 (Matcap)
-            shader = shader.replace("//FS_COLOR", if has_color { FS_COLOR } else { "" });
-            shader = shader.replace("//FS_UV", if has_uv { FS_UV } else { "" });
-            shader = shader.replace("//FS_AMBIENT", ""); // Matcap doesn't use ambient
-        }
-        2 => {
-            // Mode 2: Metallic-Roughness Blinn-Phong
-            shader = shader.replace("//FS_COLOR", if has_color { FS_ALBEDO_COLOR } else { "" });
-            shader = shader.replace("//FS_UV", if has_uv { FS_ALBEDO_UV } else { "" });
-            shader = shader.replace("//FS_AMBIENT", ""); // Modes 2-3 handle lighting internally
-
-            // Diffuse factor: reduce for metallic surfaces (metals don't have diffuse)
-            shader = shader.replace(
-                "//FS_MODE2_3_DIFFUSE_FACTOR",
-                "let diffuse_factor = 1.0 - value0;",
-            );
-
-            // Shininess: Linear mapping from roughness to 1-256 range (consistent with Mode 3)
-            let mode2_shininess = "let shininess = mix(1.0, 256.0, 1.0 - value1);";
-            shader = shader.replace("//FS_MODE2_3_SHININESS", mode2_shininess);
-
-            // Roughness: Direct from value1 (no round-trip conversion)
-            shader = shader.replace("//FS_MODE2_3_ROUGHNESS", "let roughness = value1;");
-
-            // Specular color: Derive from metallic (F0=0.04 dielectric)
-            let mode2_specular = "let specular_color = mix(vec3<f32>(0.04), albedo, value0);";
-            shader = shader.replace("//FS_MODE2_3_SPECULAR_COLOR", mode2_specular);
-
-            // Texture overrides
-            if has_uv {
-                shader = shader.replace("//FS_MODE2_3_TEXTURES", "let mre_sample = textureSample(slot1, tex_sampler, in.uv);\n    value0 = mre_sample.r;\n    value1 = mre_sample.g;\n    emissive = mre_sample.b;");
-            } else {
-                shader = shader.replace("//FS_MODE2_3_TEXTURES", "");
-            }
-        }
-        3 => {
-            // Mode 3: Specular Blinn-Phong
-            shader = shader.replace("//FS_COLOR", if has_color { FS_ALBEDO_COLOR } else { "" });
-            shader = shader.replace("//FS_UV", if has_uv { FS_ALBEDO_UV } else { "" });
-            shader = shader.replace("//FS_AMBIENT", ""); // Modes 2-3 handle lighting internally
-
-            // Diffuse factor: no reduction (Mode 3 has no metallic parameter)
-            shader = shader.replace("//FS_MODE2_3_DIFFUSE_FACTOR", "let diffuse_factor = 1.0;");
-
-            // Shininess: Direct linear mapping (0-1 → 1-256)
-            let mode3_shininess = "let shininess = mix(1.0, 256.0, value1);";
-            shader = shader.replace("//FS_MODE2_3_SHININESS", mode3_shininess);
-
-            // Roughness: Derived from shininess (inverse of the mapping)
-            shader = shader.replace(
-                "//FS_MODE2_3_ROUGHNESS",
-                "let roughness = 1.0 - (shininess - 1.0) / 255.0;",
-            );
-
-            // Specular color: From texture (if UV) or uniform with intensity modulation
-            let mode3_specular = if has_uv {
-                "var specular_color = textureSample(slot2, tex_sampler, in.uv).rgb;\n    specular_color = specular_color * value0;"
-            } else {
-                "var specular_color = unpack_rgb8(shading.matcap_blend_modes);\n    specular_color = specular_color * value0;"
-            };
-            shader = shader.replace("//FS_MODE2_3_SPECULAR_COLOR", mode3_specular);
-
-            // Texture overrides for slot 1 (Specular intensity-Shininess-Emissive)
-            if has_uv {
-                let mode3_textures = "let slot1_sample = textureSample(slot1, tex_sampler, in.uv);\n    value0 = slot1_sample.r;\n    value1 = slot1_sample.g;\n    emissive = slot1_sample.b;";
-                shader = shader.replace("//FS_MODE2_3_TEXTURES", mode3_textures);
-            } else {
-                shader = shader.replace("//FS_MODE2_3_TEXTURES", "");
-            }
-        }
-        _ => {}
-    }
-
-    Ok(shader)
+    Ok(source.to_string())
 }
 
 /// Get the template for a given render mode (for debugging/inspection)
@@ -384,6 +152,7 @@ pub fn valid_formats_for_mode(mode: u8) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::graphics::{FORMAT_COLOR, FORMAT_UV};
 
     #[test]
     fn test_shader_generation_mode0() {

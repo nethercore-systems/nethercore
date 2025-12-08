@@ -151,29 +151,63 @@ impl ZFFIState {
     }
 
     /// Update material property in current shading state (with quantization check)
+    /// Metallic is stored in uniform_set_0 byte 0
     pub fn update_material_metallic(&mut self, value: f32) {
-        use crate::graphics::pack_unorm8;
+        use crate::graphics::{pack_unorm8, update_uniform_set_0_byte};
         let quantized = pack_unorm8(value);
-        if self.current_shading_state.metallic != quantized {
-            self.current_shading_state.metallic = quantized;
+        let current_byte = (self.current_shading_state.uniform_set_0 & 0xFF) as u8;
+        if current_byte != quantized {
+            self.current_shading_state.uniform_set_0 =
+                update_uniform_set_0_byte(self.current_shading_state.uniform_set_0, 0, quantized);
             self.shading_state_dirty = true;
         }
     }
 
+    /// Roughness is stored in uniform_set_0 byte 1
     pub fn update_material_roughness(&mut self, value: f32) {
-        use crate::graphics::pack_unorm8;
+        use crate::graphics::{pack_unorm8, update_uniform_set_0_byte};
         let quantized = pack_unorm8(value);
-        if self.current_shading_state.roughness != quantized {
-            self.current_shading_state.roughness = quantized;
+        let current_byte = ((self.current_shading_state.uniform_set_0 >> 8) & 0xFF) as u8;
+        if current_byte != quantized {
+            self.current_shading_state.uniform_set_0 =
+                update_uniform_set_0_byte(self.current_shading_state.uniform_set_0, 1, quantized);
             self.shading_state_dirty = true;
         }
     }
 
+    /// Emissive is stored in uniform_set_0 byte 2
     pub fn update_material_emissive(&mut self, value: f32) {
-        use crate::graphics::pack_unorm8;
+        use crate::graphics::{pack_unorm8, update_uniform_set_0_byte};
         let quantized = pack_unorm8(value);
-        if self.current_shading_state.emissive != quantized {
-            self.current_shading_state.emissive = quantized;
+        let current_byte = ((self.current_shading_state.uniform_set_0 >> 16) & 0xFF) as u8;
+        if current_byte != quantized {
+            self.current_shading_state.uniform_set_0 =
+                update_uniform_set_0_byte(self.current_shading_state.uniform_set_0, 2, quantized);
+            self.shading_state_dirty = true;
+        }
+    }
+
+    /// Rim intensity is stored in uniform_set_0 byte 3
+    pub fn update_material_rim_intensity(&mut self, value: f32) {
+        use crate::graphics::{pack_unorm8, update_uniform_set_0_byte};
+        let quantized = pack_unorm8(value);
+        let current_byte = ((self.current_shading_state.uniform_set_0 >> 24) & 0xFF) as u8;
+        if current_byte != quantized {
+            self.current_shading_state.uniform_set_0 =
+                update_uniform_set_0_byte(self.current_shading_state.uniform_set_0, 3, quantized);
+            self.shading_state_dirty = true;
+        }
+    }
+
+    /// Rim power is stored in uniform_set_1 byte 3
+    pub fn update_material_rim_power(&mut self, value: f32) {
+        use crate::graphics::{pack_unorm8, update_uniform_set_1_byte};
+        // Rim power is [0-1] → [0-32] in shader, so we pack [0-1] as u8
+        let quantized = pack_unorm8(value / 32.0); // Normalize from [0-32] to [0-1]
+        let current_byte = ((self.current_shading_state.uniform_set_1 >> 24) & 0xFF) as u8;
+        if current_byte != quantized {
+            self.current_shading_state.uniform_set_1 =
+                update_uniform_set_1_byte(self.current_shading_state.uniform_set_1, 3, quantized);
             self.shading_state_dirty = true;
         }
     }
@@ -221,10 +255,15 @@ impl ZFFIState {
     }
 
     /// Update sky sun parameters in current shading state (with quantization)
+    ///
+    /// The `direction` parameter is the direction light rays travel (from sun toward surface).
+    /// This matches the convention used by dynamic lights (`update_light`).
+    /// For a sun directly overhead, use `(0, -1, 0)` (rays going down).
     pub fn update_sky_sun(&mut self, direction: [f32; 3], color: [f32; 3], sharpness: f32) {
         use crate::graphics::{pack_octahedral_u32, pack_unorm8};
         use glam::Vec3;
 
+        // Store direction as-is (rays travel convention, same as dynamic lights)
         let dir_oct_packed = pack_octahedral_u32(Vec3::from_slice(&direction));
 
         let color_r = pack_unorm8(color[0]);
@@ -253,16 +292,8 @@ impl ZFFIState {
         }
     }
 
-    /// Update blend mode in current shading state
-    pub fn update_blend_mode(&mut self, blend_mode: crate::graphics::BlendMode) {
-        let blend_u32 = blend_mode as u32;
-        if self.current_shading_state.blend_mode != blend_u32 {
-            self.current_shading_state.blend_mode = blend_u32;
-            self.shading_state_dirty = true;
-        }
-    }
-
     /// Update a single matcap blend mode slot in current shading state
+    /// Matcap blend modes are stored in uniform_set_1 (Mode 1 only)
     pub fn update_matcap_blend_mode(
         &mut self,
         slot: usize,
@@ -271,12 +302,34 @@ impl ZFFIState {
         use crate::graphics::{pack_matcap_blend_modes, unpack_matcap_blend_modes};
 
         // Unpack current modes, modify one slot, repack
-        let mut modes = unpack_matcap_blend_modes(self.current_shading_state.matcap_blend_modes);
+        let mut modes = unpack_matcap_blend_modes(self.current_shading_state.uniform_set_1);
         modes[slot] = mode;
         let packed = pack_matcap_blend_modes(modes);
 
-        if self.current_shading_state.matcap_blend_modes != packed {
-            self.current_shading_state.matcap_blend_modes = packed;
+        if self.current_shading_state.uniform_set_1 != packed {
+            self.current_shading_state.uniform_set_1 = packed;
+            self.shading_state_dirty = true;
+        }
+    }
+
+    /// Update specular color in current shading state (Mode 3 only)
+    /// Specular RGB is stored in uniform_set_1 bytes 0-2
+    pub fn update_specular_color(&mut self, r: f32, g: f32, b: f32) {
+        use crate::graphics::pack_unorm8;
+
+        let r_u8 = pack_unorm8(r);
+        let g_u8 = pack_unorm8(g);
+        let b_u8 = pack_unorm8(b);
+
+        // Keep rim_power in byte 3, update bytes 0-2
+        let rim_power_byte = ((self.current_shading_state.uniform_set_1 >> 24) & 0xFF) as u8;
+        let new_packed = (r_u8 as u32)
+            | ((g_u8 as u32) << 8)
+            | ((b_u8 as u32) << 16)
+            | ((rim_power_byte as u32) << 24);
+
+        if self.current_shading_state.uniform_set_1 != new_packed {
+            self.current_shading_state.uniform_set_1 = new_packed;
             self.shading_state_dirty = true;
         }
     }

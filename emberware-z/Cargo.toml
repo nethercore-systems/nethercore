@@ -60,6 +60,9 @@ open = { workspace = true }
 # Performance - faster HashMap/HashSet
 hashbrown = { workspace = true }
 
+[build-dependencies]
+naga = { version = "23", features = ["wgsl-in"] }
+
 [dev-dependencies]
 naga = { version = "23", features = ["wgsl-in"] }
 tempfile = "3"

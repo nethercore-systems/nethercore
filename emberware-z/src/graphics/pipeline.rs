@@ -160,13 +160,13 @@ pub(crate) fn create_quad_pipeline(
     surface_format: wgpu::TextureFormat,
     state: &RenderState,
 ) -> PipelineEntry {
-    // Load quad shader
-    const QUAD_SHADER_SOURCE: &str = include_str!("../../shaders/quad_unlit.wgsl");
+    // Load quad shader (generated from quad_template.wgsl by build.rs)
+    use crate::shader_gen::QUAD_SHADER;
 
     // Create shader module
     let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("Quad Shader"),
-        source: wgpu::ShaderSource::Wgsl(QUAD_SHADER_SOURCE.into()),
+        source: wgpu::ShaderSource::Wgsl(QUAD_SHADER.into()),
     });
 
     // Create bind group layouts (same as regular pipelines)
@@ -246,13 +246,13 @@ pub(crate) fn create_sky_pipeline(
     device: &wgpu::Device,
     surface_format: wgpu::TextureFormat,
 ) -> PipelineEntry {
-    // Load sky shader
-    const SKY_SHADER_SOURCE: &str = include_str!("../../shaders/sky.wgsl");
+    // Load sky shader (generated from common.wgsl + sky_template.wgsl by build.rs)
+    use crate::shader_gen::SKY_SHADER;
 
     // Create shader module
     let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("Sky Shader"),
-        source: wgpu::ShaderSource::Wgsl(SKY_SHADER_SOURCE.into()),
+        source: wgpu::ShaderSource::Wgsl(SKY_SHADER.into()),
     });
 
     // Create bind group layouts (same as other pipelines)
@@ -486,8 +486,12 @@ fn create_texture_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLay
 ///
 /// Stores compiled pipelines keyed by their render state configuration.
 /// Pipelines are created on-demand and reused across frames.
+/// Shader modules are precompiled at startup for all 40 permutations.
 pub struct PipelineCache {
     pipelines: HashMap<PipelineKey, PipelineEntry>,
+    /// Precompiled shader modules for all 40 mode/format combinations
+    /// Index = mode * 16 + format for mode 0, or calculated index for modes 1-3
+    shader_modules: Option<Vec<wgpu::ShaderModule>>,
 }
 
 impl PipelineCache {
@@ -495,7 +499,66 @@ impl PipelineCache {
     pub fn new() -> Self {
         Self {
             pipelines: HashMap::new(),
+            shader_modules: None,
         }
+    }
+
+    /// Precompile all 40 shader modules at startup
+    ///
+    /// This should be called during graphics initialization to ensure all shaders
+    /// compile successfully. Panics on any shader compilation failure, indicating
+    /// a bug in shader generation.
+    pub fn precompile_all_shaders(&mut self, device: &wgpu::Device) {
+        use crate::graphics::FORMAT_NORMAL;
+        use crate::shader_gen::generate_shader;
+
+        tracing::info!("Precompiling all 40 shader modules...");
+
+        let mut modules = Vec::with_capacity(40);
+
+        // Mode 0: 16 shaders (all formats)
+        for format in 0u8..16 {
+            let source = generate_shader(0, format)
+                .expect("Mode 0 shader generation should succeed for all formats");
+            let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some(&format!("Mode0_Format{}", format)),
+                source: wgpu::ShaderSource::Wgsl(source.into()),
+            });
+            modules.push(module);
+        }
+
+        // Modes 1-3: 8 shaders each (only formats with NORMAL)
+        for mode in 1u8..=3 {
+            for format in (0u8..16).filter(|f| f & FORMAT_NORMAL != 0) {
+                let source = generate_shader(mode, format).unwrap_or_else(|e| {
+                    panic!(
+                        "Mode {} format {} shader generation failed: {}",
+                        mode, format, e
+                    )
+                });
+                let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                    label: Some(&format!("Mode{}_Format{}", mode, format)),
+                    source: wgpu::ShaderSource::Wgsl(source.into()),
+                });
+                modules.push(module);
+            }
+        }
+
+        assert_eq!(
+            modules.len(),
+            40,
+            "Expected 40 shader modules, got {}",
+            modules.len()
+        );
+        tracing::info!("Successfully precompiled all 40 shader modules");
+
+        self.shader_modules = Some(modules);
+    }
+
+    /// Check if shaders have been precompiled
+    #[allow(dead_code)] // Useful for testing/debugging
+    pub fn shaders_precompiled(&self) -> bool {
+        self.shader_modules.is_some()
     }
 
     /// Get or create a pipeline for the given state

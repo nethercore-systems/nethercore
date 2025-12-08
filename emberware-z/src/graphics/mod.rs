@@ -82,7 +82,7 @@ use emberware_core::console::Graphics;
 
 // Re-export public types from submodules
 pub use buffer::{BufferManager, GrowableBuffer, MeshHandle, RetainedMesh};
-pub use command_buffer::{VirtualRenderPass, VRPCommand};
+pub use command_buffer::{VRPCommand, VirtualRenderPass};
 pub use matrix_packing::MvpShadingIndices;
 pub use quad_instance::{QuadInstance, QuadMode};
 pub use render_state::{
@@ -90,7 +90,8 @@ pub use render_state::{
 };
 pub use unified_shading_state::{
     pack_matcap_blend_modes, pack_octahedral_u32, pack_rgb8, pack_unorm8,
-    unpack_matcap_blend_modes, PackedLight, PackedUnifiedShadingState, ShadingStateIndex,
+    unpack_matcap_blend_modes, update_uniform_set_0_byte, update_uniform_set_1_byte, PackedLight,
+    PackedUnifiedShadingState, ShadingStateIndex,
 };
 pub use vertex::{vertex_stride, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV};
 

@@ -155,37 +155,74 @@ impl ZGraphics {
             .commands_mut()
             .sort_unstable_by_key(|cmd| {
                 // Extract fields from command variant
-                let (format, depth_test, cull_mode, texture_slots, buffer_index, is_quad, is_sky) = match cmd {
-                    VRPCommand::Mesh { format, depth_test, cull_mode, texture_slots, buffer_index, .. } => {
-                        (*format, *depth_test, *cull_mode, *texture_slots, Some(*buffer_index), false, false)
-                    }
-                    VRPCommand::IndexedMesh { format, depth_test, cull_mode, texture_slots, buffer_index, .. } => {
-                        (*format, *depth_test, *cull_mode, *texture_slots, Some(*buffer_index), false, false)
-                    }
-                    VRPCommand::Quad { depth_test, cull_mode, texture_slots, .. } => {
-                        (self.unit_quad_format, *depth_test, *cull_mode, *texture_slots, None, true, false)
-                    }
-                    VRPCommand::Sky { depth_test, .. } => {
-                        // Sky uses unique sort key to render first (before all geometry)
-                        (0, *depth_test, super::render_state::CullMode::None, [TextureHandle::INVALID; 4], None, false, true)
-                    }
-                };
-
-                // Extract blend mode from shading state for sorting
-                let blend_mode = if let Some(buffer_idx) = buffer_index {
-                    // Get shading index from mvp_shading_states buffer (second element of tuple)
-                    let indices = z_state.mvp_shading_states
-                        .get(buffer_idx as usize)
-                        .expect("Invalid buffer_index in VRPCommand - this indicates a bug in state tracking");
-                    let shading_state = z_state.shading_states.get(indices.shading_idx as usize)
-                        .expect("Invalid shading_state_index - this indicates a bug in state tracking");
-                    BlendMode::from_u8((shading_state.blend_mode & 0xFF) as u8)
-                } else {
-                    // Quads have blend_mode in the command itself
+                let (format, depth_test, cull_mode, texture_slots, _buffer_index, is_quad, is_sky) =
                     match cmd {
-                        VRPCommand::Quad { blend_mode, .. } => *blend_mode,
-                        _ => BlendMode::None, // Shouldn't reach here if buffer_index is None for non-Quad
-                    }
+                        VRPCommand::Mesh {
+                            format,
+                            depth_test,
+                            cull_mode,
+                            texture_slots,
+                            buffer_index,
+                            ..
+                        } => (
+                            *format,
+                            *depth_test,
+                            *cull_mode,
+                            *texture_slots,
+                            Some(*buffer_index),
+                            false,
+                            false,
+                        ),
+                        VRPCommand::IndexedMesh {
+                            format,
+                            depth_test,
+                            cull_mode,
+                            texture_slots,
+                            buffer_index,
+                            ..
+                        } => (
+                            *format,
+                            *depth_test,
+                            *cull_mode,
+                            *texture_slots,
+                            Some(*buffer_index),
+                            false,
+                            false,
+                        ),
+                        VRPCommand::Quad {
+                            depth_test,
+                            cull_mode,
+                            texture_slots,
+                            ..
+                        } => (
+                            self.unit_quad_format,
+                            *depth_test,
+                            *cull_mode,
+                            *texture_slots,
+                            None,
+                            true,
+                            false,
+                        ),
+                        VRPCommand::Sky { depth_test, .. } => {
+                            // Sky uses unique sort key to render first (before all geometry)
+                            (
+                                0,
+                                *depth_test,
+                                super::render_state::CullMode::None,
+                                [TextureHandle::INVALID; 4],
+                                None,
+                                false,
+                                true,
+                            )
+                        }
+                    };
+
+                // Extract blend mode from command directly (now stored per-command)
+                let blend_mode = match cmd {
+                    VRPCommand::Mesh { blend_mode, .. } => *blend_mode,
+                    VRPCommand::IndexedMesh { blend_mode, .. } => *blend_mode,
+                    VRPCommand::Quad { blend_mode, .. } => *blend_mode,
+                    VRPCommand::Sky { .. } => BlendMode::None,
                 };
 
                 // Sort key: (render_mode, format, blend_mode, depth_test, cull_mode, texture_slots)
@@ -206,18 +243,30 @@ impl ZGraphics {
                         // Quad pipeline: Use special values to group separately
                         let pipeline_key = PipelineKey::quad(&state);
                         match pipeline_key {
-                            PipelineKey::Quad { blend_mode, depth_test } => {
-                                (255u8, 255u8, blend_mode, depth_test as u8, 0u8)
-                            }
+                            PipelineKey::Quad {
+                                blend_mode,
+                                depth_test,
+                            } => (255u8, 255u8, blend_mode, depth_test as u8, 0u8),
                             _ => unreachable!(),
                         }
                     } else {
                         // Regular pipeline: Use actual values
-                        let pipeline_key = PipelineKey::new(self.current_render_mode, format, &state);
+                        let pipeline_key =
+                            PipelineKey::new(self.current_render_mode, format, &state);
                         match pipeline_key {
-                            PipelineKey::Regular { render_mode, vertex_format, blend_mode, depth_test, cull_mode } => {
-                                (render_mode, vertex_format, blend_mode, depth_test as u8, cull_mode)
-                            }
+                            PipelineKey::Regular {
+                                render_mode,
+                                vertex_format,
+                                blend_mode,
+                                depth_test,
+                                cull_mode,
+                            } => (
+                                render_mode,
+                                vertex_format,
+                                blend_mode,
+                                depth_test as u8,
+                                cull_mode,
+                            ),
                             _ => unreachable!(),
                         }
                     };
@@ -419,6 +468,7 @@ impl ZGraphics {
                         cull_mode,
                         texture_slots,
                         buffer_index,
+                        blend_mode,
                         ..
                     } => (
                         *format,
@@ -428,7 +478,7 @@ impl ZGraphics {
                         BufferSource::Immediate(*buffer_index),
                         false,
                         false,
-                        None,
+                        Some(*blend_mode),
                     ),
                     VRPCommand::IndexedMesh {
                         format,
@@ -436,6 +486,7 @@ impl ZGraphics {
                         cull_mode,
                         texture_slots,
                         buffer_index,
+                        blend_mode,
                         ..
                     } => (
                         *format,
@@ -445,7 +496,7 @@ impl ZGraphics {
                         BufferSource::Retained(*buffer_index),
                         false,
                         false,
-                        None,
+                        Some(*blend_mode),
                     ),
                     VRPCommand::Quad {
                         depth_test,
@@ -468,34 +519,19 @@ impl ZGraphics {
                         *depth_test,
                         super::render_state::CullMode::None,
                         [TextureHandle::INVALID; 4], // Default textures (unused)
-                        BufferSource::Quad, // Sky renders as a fullscreen quad
+                        BufferSource::Quad,          // Sky renders as a fullscreen quad
                         false,
                         true,
                         None,
                     ),
                 };
 
-                // Extract blend mode from shading state for rendering
-                // For Immediate/Retained, get from mvp_shading_states buffer
-                // For Quad, use the blend_mode from the command itself
-                // For Sky, use default blend mode (Alpha)
+                // Blend mode is now stored per-command for all variants
                 let blend_mode = if is_sky {
-                    // Sky doesn't use buffer_index, use default alpha blending
+                    // Sky uses default alpha blending (sky gradient blends with nothing behind)
                     BlendMode::Alpha
                 } else {
-                    match buffer_source {
-                        BufferSource::Immediate(buffer_idx) | BufferSource::Retained(buffer_idx) => {
-                            let indices = z_state.mvp_shading_states
-                                .get(buffer_idx as usize)
-                                .expect("Invalid buffer_index in VRPCommand - this indicates a bug in state tracking");
-                            let shading_state = z_state.shading_states.get(indices.shading_idx as usize)
-                                .expect("Invalid shading_state_index - this indicates a bug in state tracking");
-                            BlendMode::from_u8((shading_state.blend_mode & 0xFF) as u8)
-                        }
-                        BufferSource::Quad => {
-                            cmd_blend_mode.expect("Quad command should have blend_mode")
-                        }
-                    }
+                    cmd_blend_mode.expect("All non-sky commands should have blend_mode")
                 };
 
                 // Create render state from command + blend mode
@@ -509,10 +545,8 @@ impl ZGraphics {
                 // Get/create pipeline - use sky/quad/regular pipeline based on command type
                 if is_sky {
                     // Sky rendering: Ensure sky pipeline exists
-                    self.pipeline_cache.get_or_create_sky(
-                        &self.device,
-                        self.config.format,
-                    );
+                    self.pipeline_cache
+                        .get_or_create_sky(&self.device, self.config.format);
                 } else if is_quad {
                     // Quad rendering: Ensure quad pipeline exists
                     self.pipeline_cache.get_or_create_quad(

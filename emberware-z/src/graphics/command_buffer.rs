@@ -39,6 +39,7 @@ pub enum VRPCommand {
         base_vertex: u32,
         buffer_index: u32,
         texture_slots: [TextureHandle; 4],
+        blend_mode: BlendMode,
         depth_test: bool,
         cull_mode: CullMode,
     },
@@ -50,6 +51,7 @@ pub enum VRPCommand {
         first_index: u32,
         buffer_index: u32,
         texture_slots: [TextureHandle; 4],
+        blend_mode: BlendMode,
         depth_test: bool,
         cull_mode: CullMode,
     },
@@ -67,8 +69,8 @@ pub enum VRPCommand {
     },
     /// Sky draw (fullscreen gradient + sun)
     Sky {
-        shading_state_index: u32,  // Index into shading_states for sky data
-        depth_test: bool,           // Should be false (always behind)
+        shading_state_index: u32, // Index into shading_states for sky data
+        depth_test: bool,         // Should be false (always behind)
     },
 }
 
@@ -126,6 +128,7 @@ impl VirtualRenderPass {
         vertex_data: &[f32],
         buffer_index: u32,
         texture_slots: [TextureHandle; 4],
+        blend_mode: BlendMode,
         depth_test: bool,
         cull_mode: CullMode,
     ) {
@@ -145,6 +148,7 @@ impl VirtualRenderPass {
             base_vertex,
             buffer_index,
             texture_slots,
+            blend_mode,
             depth_test,
             cull_mode,
         });
@@ -158,6 +162,7 @@ impl VirtualRenderPass {
         index_data: &[u16],
         buffer_index: u32,
         texture_slots: [TextureHandle; 4],
+        blend_mode: BlendMode,
         depth_test: bool,
         cull_mode: CullMode,
     ) {
@@ -182,6 +187,7 @@ impl VirtualRenderPass {
             first_index,
             buffer_index,
             texture_slots,
+            blend_mode,
             depth_test,
             cull_mode,
         });
@@ -197,6 +203,7 @@ impl VirtualRenderPass {
         mesh_index_offset: u64,
         buffer_index: u32,
         texture_slots: [TextureHandle; 4],
+        blend_mode: BlendMode,
         depth_test: bool,
         cull_mode: CullMode,
     ) {
@@ -213,6 +220,7 @@ impl VirtualRenderPass {
                 first_index,
                 buffer_index,
                 texture_slots,
+                blend_mode,
                 depth_test,
                 cull_mode,
             });
@@ -223,6 +231,7 @@ impl VirtualRenderPass {
                 base_vertex,
                 buffer_index,
                 texture_slots,
+                blend_mode,
                 depth_test,
                 cull_mode,
             });

@@ -43,8 +43,7 @@ pub fn execute(args: InstallArgs) -> Result<()> {
     let game = match extension {
         "ewz" => {
             println!("Detected Emberware Z ROM (.ewz)");
-            install_z_rom(rom_path, &provider)
-                .context("Failed to install Emberware Z ROM")?
+            install_z_rom(rom_path, &provider).context("Failed to install Emberware Z ROM")?
         }
         _ => {
             anyhow::bail!(

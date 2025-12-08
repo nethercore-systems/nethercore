@@ -104,12 +104,7 @@ pub fn generate_cube(size_x: f32, size_y: f32, size_z: f32) -> MeshData {
     let mut mesh = MeshData::new();
 
     // Helper to add a quad (4 vertices, 2 triangles)
-    let add_quad = |mesh: &mut MeshData,
-                    v0: Vec3,
-                    v1: Vec3,
-                    v2: Vec3,
-                    v3: Vec3,
-                    normal: Vec3| {
+    let add_quad = |mesh: &mut MeshData, v0: Vec3, v1: Vec3, v2: Vec3, v3: Vec3, normal: Vec3| {
         let i0 = mesh.add_vertex(Vertex::new(v0, normal));
         let i1 = mesh.add_vertex(Vertex::new(v1, normal));
         let i2 = mesh.add_vertex(Vertex::new(v2, normal));
@@ -690,8 +685,7 @@ pub fn generate_capsule(radius: f32, height: f32, segments: u32, rings: u32) -> 
     }
 
     // Generate bottom hemisphere indices
-    let bottom_hemisphere_start =
-        (top_hemisphere_start + (rings + 1) * segments) as u32;
+    let bottom_hemisphere_start = (top_hemisphere_start + (rings + 1) * segments) as u32;
 
     for ring in 0..rings {
         for seg in 0..segments {
@@ -803,7 +797,11 @@ mod tests {
     /// Helper: extract vertex position from mesh at given index
     fn get_vertex_pos(mesh: &MeshData, vertex_idx: u16) -> [f32; 3] {
         let base = vertex_idx as usize * 6; // POS_NORMAL format: 6 floats per vertex
-        [mesh.vertices[base], mesh.vertices[base + 1], mesh.vertices[base + 2]]
+        [
+            mesh.vertices[base],
+            mesh.vertices[base + 1],
+            mesh.vertices[base + 2],
+        ]
     }
 
     /// Helper: compute cross product of two 3D vectors
@@ -855,7 +853,11 @@ mod tests {
             return None;
         }
 
-        Some([cross_prod[0] / len, cross_prod[1] / len, cross_prod[2] / len])
+        Some([
+            cross_prod[0] / len,
+            cross_prod[1] / len,
+            cross_prod[2] / len,
+        ])
     }
 
     /// Helper: compute triangle centroid
@@ -936,7 +938,11 @@ mod tests {
         );
         assert!(passed > 0, "Sphere should have valid triangles");
         // 32 segments × 2 poles = 64 degenerate triangles at poles
-        assert!(skipped <= 64, "Sphere should have at most 64 degenerate pole triangles, got {}", skipped);
+        assert!(
+            skipped <= 64,
+            "Sphere should have at most 64 degenerate pole triangles, got {}",
+            skipped
+        );
     }
 
     #[test]
@@ -966,7 +972,8 @@ mod tests {
 
         assert_eq!(skipped, 0, "Plane should have no degenerate triangles");
         assert_eq!(
-            wrong, 0,
+            wrong,
+            0,
             "Plane winding: {}/{} triangles have incorrect winding (normals should point +Y)",
             wrong,
             correct + wrong
@@ -1030,26 +1037,32 @@ mod tests {
         }
 
         assert_eq!(
-            body_wrong, 0,
+            body_wrong,
+            0,
             "Cylinder body winding: {}/{} triangles have incorrect winding",
             body_wrong,
             body_correct + body_wrong
         );
         assert_eq!(
-            cap_wrong, 0,
+            cap_wrong,
+            0,
             "Cylinder cap winding: {}/{} triangles have incorrect winding",
             cap_wrong,
             cap_correct + cap_wrong
         );
         // Cylinder caps have center vertices, so some triangles at center may be degenerate
-        assert!(skipped <= 2, "Cylinder should have at most 2 degenerate triangles, got {}", skipped);
+        assert!(
+            skipped <= 2,
+            "Cylinder should have at most 2 degenerate triangles, got {}",
+            skipped
+        );
     }
 
     #[test]
     fn test_winding_torus() {
         // Use proper torus proportions: major > minor to avoid self-intersection
-        let major_radius = 1.0;  // Distance from torus center to tube center
-        let minor_radius = 0.3;  // Tube radius
+        let major_radius = 1.0; // Distance from torus center to tube center
+        let minor_radius = 0.3; // Tube radius
         let mesh = generate_torus(major_radius, minor_radius, 32, 16);
 
         // Torus: major radius in XZ plane, minor radius forms the tube
@@ -1093,7 +1106,8 @@ mod tests {
 
         assert_eq!(skipped, 0, "Torus should have no degenerate triangles");
         assert_eq!(
-            wrong, 0,
+            wrong,
+            0,
             "Torus winding: {}/{} triangles have incorrect winding",
             wrong,
             correct + wrong
@@ -1128,7 +1142,8 @@ mod tests {
             if radial_xz > 0.01 {
                 // Not on the axis - check radial direction
                 let radial_dir = normalize([centroid[0], 0.0, centroid[2]]);
-                let horizontal_component = face_normal[0] * radial_dir[0] + face_normal[2] * radial_dir[2];
+                let horizontal_component =
+                    face_normal[0] * radial_dir[0] + face_normal[2] * radial_dir[2];
 
                 // Most of the normal's horizontal component should point outward
                 // (Allow for caps where vertical component dominates)
@@ -1167,13 +1182,131 @@ mod tests {
 
         // Capsule has degenerate triangles at hemisphere poles
         // 32 segments × 2 poles = 64 max degenerate triangles
-        assert!(skipped <= 64, "Capsule should have at most 64 degenerate pole triangles, got {}", skipped);
+        assert!(
+            skipped <= 64,
+            "Capsule should have at most 64 degenerate pole triangles, got {}",
+            skipped
+        );
         assert_eq!(
-            wrong, 0,
+            wrong,
+            0,
             "Capsule winding: {}/{} triangles have incorrect winding (skipped {} degenerate)",
             wrong,
-            correct + wrong, skipped
+            correct + wrong,
+            skipped
         );
+    }
+
+    /// Test that stored vertex normals point outward for sphere
+    /// This verifies the actual normal data, not just the winding order
+    #[test]
+    fn test_sphere_vertex_normals_point_outward() {
+        let mesh = generate_sphere(1.0, 16, 8);
+
+        // For a unit sphere centered at origin, the vertex normal should equal
+        // the normalized vertex position (pointing outward from center)
+        for i in (0..mesh.vertices.len()).step_by(6) {
+            let px = mesh.vertices[i];
+            let py = mesh.vertices[i + 1];
+            let pz = mesh.vertices[i + 2];
+            let nx = mesh.vertices[i + 3];
+            let ny = mesh.vertices[i + 4];
+            let nz = mesh.vertices[i + 5];
+
+            // Compute expected normal (normalized position for unit sphere at origin)
+            let pos_len = (px * px + py * py + pz * pz).sqrt();
+            if pos_len < 0.001 {
+                continue; // Skip degenerate vertices at poles
+            }
+
+            let expected_nx = px / pos_len;
+            let expected_ny = py / pos_len;
+            let expected_nz = pz / pos_len;
+
+            // Verify stored normal matches expected (points outward)
+            assert!(
+                (nx - expected_nx).abs() < 0.01,
+                "Sphere vertex normal X mismatch at vertex {}: stored={}, expected={}",
+                i / 6,
+                nx,
+                expected_nx
+            );
+            assert!(
+                (ny - expected_ny).abs() < 0.01,
+                "Sphere vertex normal Y mismatch at vertex {}: stored={}, expected={}",
+                i / 6,
+                ny,
+                expected_ny
+            );
+            assert!(
+                (nz - expected_nz).abs() < 0.01,
+                "Sphere vertex normal Z mismatch at vertex {}: stored={}, expected={}",
+                i / 6,
+                nz,
+                expected_nz
+            );
+
+            // Also verify dot product is positive (normal points same direction as position)
+            let dot_product = px * nx + py * ny + pz * nz;
+            assert!(
+                dot_product > 0.0,
+                "Sphere vertex {} normal points inward! dot(pos, normal) = {}",
+                i / 6,
+                dot_product
+            );
+        }
+    }
+
+    /// Test that cube vertex normals match face directions
+    #[test]
+    fn test_cube_vertex_normals_match_faces() {
+        let mesh = generate_cube(1.0, 1.0, 1.0);
+
+        // Each face has 4 vertices, all with the same normal
+        // Faces in order: +Z, -Z, +Y, -Y, +X, -X
+        let expected_normals: [[f32; 3]; 6] = [
+            [0.0, 0.0, 1.0],  // Front (+Z)
+            [0.0, 0.0, -1.0], // Back (-Z)
+            [0.0, 1.0, 0.0],  // Top (+Y)
+            [0.0, -1.0, 0.0], // Bottom (-Y)
+            [1.0, 0.0, 0.0],  // Right (+X)
+            [-1.0, 0.0, 0.0], // Left (-X)
+        ];
+
+        for face in 0..6 {
+            let expected = expected_normals[face];
+            for vert in 0..4 {
+                let idx = (face * 4 + vert) * 6;
+                let nx = mesh.vertices[idx + 3];
+                let ny = mesh.vertices[idx + 4];
+                let nz = mesh.vertices[idx + 5];
+
+                assert!(
+                    (nx - expected[0]).abs() < 0.001,
+                    "Cube face {} vertex {} normal X mismatch: {} vs expected {}",
+                    face,
+                    vert,
+                    nx,
+                    expected[0]
+                );
+                assert!(
+                    (ny - expected[1]).abs() < 0.001,
+                    "Cube face {} vertex {} normal Y mismatch: {} vs expected {}",
+                    face,
+                    vert,
+                    ny,
+                    expected[1]
+                );
+                assert!(
+                    (nz - expected[2]).abs() < 0.001,
+                    "Cube face {} vertex {} normal Z mismatch: {} vs expected {}",
+                    face,
+                    vert,
+                    nz,
+                    expected[2]
+                );
+            }
+        }
     }
 
     /// Test that verifies ALL procedural shapes at once with a simple outward test

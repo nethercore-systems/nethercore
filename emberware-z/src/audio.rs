@@ -88,8 +88,8 @@ struct PannedSource<S> {
     source: S,
     left_gain: f32,
     right_gain: f32,
-    current_sample: Option<i16>,  // Cache current mono sample for stereo output
-    is_left_channel: bool,  // Track which stereo channel to output next
+    current_sample: Option<i16>, // Cache current mono sample for stereo output
+    is_left_channel: bool,       // Track which stereo channel to output next
 }
 
 impl<S> PannedSource<S>
@@ -110,7 +110,7 @@ where
         // pan = -1: left=1.0, right=0.0 (full left)
         // pan =  0: left=0.707, right=0.707 (center, -3dB each for equal power)
         // pan = +1: left=0.0, right=1.0 (full right)
-        let angle = (pan + 1.0) * 0.25 * std::f32::consts::PI;  // Map -1..1 to 0..PI/2
+        let angle = (pan + 1.0) * 0.25 * std::f32::consts::PI; // Map -1..1 to 0..PI/2
         let left_gain = angle.cos();
         let right_gain = angle.sin();
 
@@ -163,7 +163,7 @@ where
     }
 
     fn channels(&self) -> u16 {
-        2  // Always output stereo
+        2 // Always output stereo
     }
 
     fn sample_rate(&self) -> u32 {
@@ -216,7 +216,7 @@ struct ChannelState {
     sink: Sink,
     current_sound: Option<u32>,
     looping: bool,
-    pan: f32,  // Current pan value (-1.0 to 1.0)
+    pan: f32, // Current pan value (-1.0 to 1.0)
 }
 
 /// Audio server running in background thread
@@ -242,7 +242,7 @@ impl AudioServer {
                 sink,
                 current_sound: None,
                 looping: false,
-                pan: 0.0,  // Center by default
+                pan: 0.0, // Center by default
             });
         }
 

@@ -2,37 +2,8 @@
 
 **Architecture Overview:** See [CLAUDE.md](./CLAUDE.md) for framework design and Console trait details.
 
-## In Progress
-
----
 
 ## TODO
-
----
-
-### **[BUG] Unused Blend Mode field in PackedUnifiedState**
-- We have a really complex uniform state, material properties (metallic, roughness, emissive), blend modes, matcap blend modes, specular color, all being packed and used sporatically.
-- We need to clean up this flow to reduce errors.
-- Propose some other nested structure like...
-```rust
-   uniform_set_0: u32,
-   uniform_set_1: u32 
-```
-- Mode0: unused, unused, unused, Rim Intensity, and set1 unused, unused, unused, Rim Power
-- Mode1 (Matcap): BlendMode, BlendMode, BlendMode, BlendMode, set1 unused
-- Mode2 (MR BP): Metallic, Roughness, Emissive, Rim Intensity, and set1 unused, unused, unused, Rim Power
-- Mode3 (SS BP): Spec Intensity, Shininess Emissive, Rim Intensity, and set1 Spec R, Spec G, Spec B, Rim Power
-- This will also allow us to expand the light rules with more data if necessary.
-- Need to update all shaders with this new logic, and probably bind groups too.
-
-
-### **[Bug] BP shading may be lighting triangles with sky**
-- Need to verify diffuse and sky components from sky is properly clamping the dot products for sky/sun coloring
-- Ambient-only light is fine, but diffuse/specular must be dotting everything correctly.
-
-### **[POLISH] Shader Generation should move to Build/Compile time not Runtime**
-- It's a waste to regenerate these each run. We should probably generate them once at build time and pass finished shaders to the application
-- Also makes debugging shader templating easier!
 
 ### **[Feature] Add UV-enabled procedural shapes**
 - Add new FFI commands for UV enabled procedural shapes. 

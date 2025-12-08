@@ -149,12 +149,13 @@ static mut ROTATION_Y: f32 = 0.0;
 /// Camera orbit angle (degrees) - auto-rotates around the sphere
 static mut CAMERA_ORBIT_ANGLE: f32 = 0.0;
 
-/// Light positions (normalized direction vectors)
+/// Light directions (rays travel convention: direction FROM light source TOWARD surface)
+/// For a light "above", use (0, -1, 0) - rays going down.
 static mut LIGHT_DIRS: [[f32; 3]; 4] = [
-    [0.5, 0.8, 0.3],   // Light 0: upper-right-front (main)
-    [-0.7, 0.3, 0.5],  // Light 1: upper-left
-    [0.3, -0.5, 0.7],  // Light 2: lower-front
-    [-0.3, 0.6, -0.5], // Light 3: upper-back
+    [-0.5, -0.8, -0.3],  // Light 0: from upper-right-front (rays going down-left-back)
+    [0.7, -0.3, -0.5],   // Light 1: from upper-left (rays going right-down-back)
+    [-0.3, 0.5, -0.7],   // Light 2: from lower-front (rays going up-back)
+    [0.3, -0.6, 0.5],    // Light 3: from upper-back (rays going down-forward)
 ];
 
 /// Light enabled states
@@ -371,7 +372,7 @@ pub extern "C" fn render() {
             0x264D99FF    // Zenith: darker blue
         );
         sky_set_sun(
-            0.3, 0.6, 0.4,     // Direction: 45° elevation
+            -0.7, -0.2, -0.7,  // Direction: rays from sun near horizon (low elevation, visible)
             0xFFFAF0FF,        // Color: warm white
             0.95               // Sharpness: fairly sharp disc
         );

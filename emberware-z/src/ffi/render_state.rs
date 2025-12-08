@@ -9,7 +9,6 @@ use wasmtime::{Caller, Linker};
 use emberware_core::wasm::GameStateWithConsole;
 
 use crate::console::ZInput;
-use crate::graphics::BlendMode;
 use crate::state::ZFFIState;
 
 /// Register render state FFI functions
@@ -68,18 +67,17 @@ fn cull_mode(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, mo
 /// * `mode` — 0=none (opaque), 1=alpha, 2=additive, 3=multiply
 ///
 /// Default: none (opaque). Use alpha for transparent textures.
+/// Note: Blend mode is stored per-draw command for pipeline selection, not in GPU shading state.
 fn blend_mode(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, mode: u32) {
     let state = &mut caller.data_mut().console;
 
     if mode > 3 {
         warn!("blend_mode({}) invalid - must be 0-3, using 0 (none)", mode);
         state.blend_mode = 0;
-        state.update_blend_mode(BlendMode::None); // Sync to current_shading_state
         return;
     }
 
     state.blend_mode = mode as u8;
-    state.update_blend_mode(BlendMode::from_u8(mode as u8)); // Sync to current_shading_state
 }
 
 /// Set the texture filtering mode

@@ -91,7 +91,10 @@ impl App {
                         // Create games directory if it doesn't exist
                         if let Err(e) = std::fs::create_dir_all(&games_dir) {
                             tracing::error!("Failed to create games directory: {}", e);
-                            self.last_error = Some(RuntimeError(format!("Failed to create games directory: {}", e)));
+                            self.last_error = Some(RuntimeError(format!(
+                                "Failed to create games directory: {}",
+                                e
+                            )));
                             return;
                         }
 
@@ -102,13 +105,18 @@ impl App {
                             // Copy ROM file to games directory
                             match std::fs::copy(&source_path, &dest_path) {
                                 Ok(_) => {
-                                    tracing::info!("ROM imported successfully to: {}", dest_path.display());
+                                    tracing::info!(
+                                        "ROM imported successfully to: {}",
+                                        dest_path.display()
+                                    );
                                     // Refresh library to show new game
-                                    self.local_games = library::get_local_games(&library::ZDataDirProvider);
+                                    self.local_games =
+                                        library::get_local_games(&library::ZDataDirProvider);
                                 }
                                 Err(e) => {
                                     tracing::error!("Failed to copy ROM file: {}", e);
-                                    self.last_error = Some(RuntimeError(format!("Failed to import ROM: {}", e)));
+                                    self.last_error =
+                                        Some(RuntimeError(format!("Failed to import ROM: {}", e)));
                                 }
                             }
                         } else {
@@ -117,7 +125,9 @@ impl App {
                         }
                     } else {
                         tracing::error!("Could not determine data directory");
-                        self.last_error = Some(RuntimeError("Could not determine data directory".to_string()));
+                        self.last_error = Some(RuntimeError(
+                            "Could not determine data directory".to_string(),
+                        ));
                     }
                 }
             }
