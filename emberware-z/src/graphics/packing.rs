@@ -170,7 +170,7 @@ pub fn pack_vertex_data(data: &[f32], format: u8) -> Vec<u8> {
         f32_stride += 3; // Normal (nx, ny, nz)
     }
     if has_skinning {
-        f32_stride += 9; // 4 bone indices (as f32) + 4 weights + padding (?)
+        f32_stride += 8; // 4 bone indices (as f32) + 4 weights + padding (?)
                          // NOTE: Skinning layout needs verification
     }
 
