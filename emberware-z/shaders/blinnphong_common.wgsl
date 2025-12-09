@@ -117,7 +117,12 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
 
     // Fresnel: F0 = specular_color (works for both MR and SS workflows)
     let fresnel = fresnel_schlick_sg(NdotV, specular_color);
-    let one_minus_F = vec3<f32>(1.0) - fresnel;  // Energy conservation for diffuse
+    let one_minus_F = vec3<f32>(1.0) - fresnel;
+
+    // MODE-SPECIFIC: Diffuse Fresnel multiplier
+    // Mode 2: diffuse_fresnel = one_minus_F (energy conservation)
+    // Mode 3: diffuse_fresnel = vec3(1.0) (no diffuse reduction, artistic freedom)
+    //FS_MODE2_3_DIFFUSE_FRESNEL
 
     // MODE-SPECIFIC: Roughness (injected by shader_gen.rs)
     // Mode 2: direct from value1, Mode 3: derived from shininess
@@ -137,8 +142,8 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     let spec_norm = gotanda_normalization(shininess);
     let ambient_factor = 1.0 / sqrt(1.0 + spec_norm);
 
-    // Diffuse ambient (reduced by fresnel - energy conservation)
-    final_color += diffuse_env * albedo * ambient_factor * diffuse_factor * one_minus_F;
+    // Diffuse ambient
+    final_color += diffuse_env * albedo * ambient_factor * diffuse_factor * diffuse_fresnel;
 
     // Specular environment reflection (attenuated by roughness)
     final_color += specular_env * fresnel * reflection_strength;
@@ -146,8 +151,8 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     // Direct sun - use stored sun color, not sample_sky (which adds gradient on top)
     let sun_color = sky.sun_color;
 
-    // Sun diffuse (direct, energy conserved)
-    final_color += lambert_diffuse(in.world_normal, sky.sun_direction, albedo, sun_color) * diffuse_factor * one_minus_F;
+    // Sun diffuse
+    final_color += lambert_diffuse(in.world_normal, sky.sun_direction, albedo, sun_color) * diffuse_factor * diffuse_fresnel;
 
     // Sun specular
     final_color += normalized_blinn_phong_specular(
@@ -159,7 +164,7 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
         let light = unpack_light(shading.lights[i]);
         if (light.enabled) {
             let light_color = light.color * light.intensity;
-            final_color += lambert_diffuse(in.world_normal, light.direction, albedo, light_color) * diffuse_factor * one_minus_F;
+            final_color += lambert_diffuse(in.world_normal, light.direction, albedo, light_color) * diffuse_factor * diffuse_fresnel;
             final_color += normalized_blinn_phong_specular(
                 in.world_normal, view_dir, light.direction, shininess, specular_color, light_color
             );

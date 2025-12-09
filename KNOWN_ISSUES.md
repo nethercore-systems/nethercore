@@ -1,8 +1,3 @@
-## Blinn Phong example is still "blue tinted"
-- Could be a problem with procedural meshes and normal generation
-- Could be due to packing of vertex data not correctly referencing normals (ie snorm didn't convert correctly!)
-- Could be wrong endianness packing of colors and uniform colors
-
 ## Mesh data is not being cleared correctly between games
 - Load one game, it renders fine, close it.
 - Open another game, meshes may be messed up.

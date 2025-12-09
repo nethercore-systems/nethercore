@@ -248,6 +248,11 @@ fn generate_shader(mode: u8, format: u8) -> Result<String, String> {
             } else {
                 shader = shader.replace("//FS_MODE2_3_TEXTURES", "");
             }
+            // Mode 2: Energy conservation - diffuse reduced by Fresnel
+            shader = shader.replace(
+                "//FS_MODE2_3_DIFFUSE_FRESNEL",
+                "let diffuse_fresnel = one_minus_F;",
+            );
         }
         3 => {
             shader = shader.replace("//FS_COLOR", if has_color { FS_ALBEDO_COLOR } else { "" });
@@ -277,6 +282,11 @@ fn generate_shader(mode: u8, format: u8) -> Result<String, String> {
             } else {
                 shader = shader.replace("//FS_MODE2_3_TEXTURES", "");
             }
+            // Mode 3: No energy conservation - full diffuse always (artistic freedom)
+            shader = shader.replace(
+                "//FS_MODE2_3_DIFFUSE_FRESNEL",
+                "let diffuse_fresnel = vec3<f32>(1.0);",
+            );
         }
         _ => {}
     }

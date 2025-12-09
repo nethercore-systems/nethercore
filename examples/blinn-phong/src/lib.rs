@@ -1,13 +1,16 @@
-//! Blinn-Phong Example (Mode 3)
+//! Blinn-Phong Material Gallery (Mode 3)
 //!
 //! Demonstrates:
 //! - Normalized Blinn-Phong lighting (Gotanda 2010)
-//! - Procedural sphere() for smooth geometry
-//! - Multiple material presets (gold, silver, leather, wet skin, plastic)
-//! - Shininess variation (1-256 range)
-//! - Rim lighting controls
-//! - 4 directional lights + sun
-//! - Interactive material switching
+//! - 66 material presets in 11×6 grid:
+//!   - Row 1: Natural Materials (organic surfaces)
+//!   - Row 2: Realistic Metals (conductors)
+//!   - Row 3: Synthetic & Industrial (man-made)
+//!   - Row 4: Geological (rocks, gems, minerals)
+//!   - Row 5: Fantasy & Magical (enchanted materials)
+//!   - Row 6: Alien & Impossible (sci-fi/surreal)
+//! - Screen-space text labels for each material
+//! - Row category headers
 
 #![no_std]
 #![no_main]
@@ -18,8 +21,6 @@ use libm::{cosf, sinf};
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
-    // Trigger a WASM trap so runtime can catch the error
-    // instead of infinite loop which freezes the game
     core::arch::wasm32::unreachable()
 }
 
@@ -54,8 +55,6 @@ extern "C" {
     fn light_set(index: u32, x: f32, y: f32, z: f32);
     fn light_color(index: u32, color: u32);
     fn light_intensity(index: u32, intensity: f32);
-    fn light_enable(index: u32);
-    fn light_disable(index: u32);
 
     // Procedural mesh generation
     fn sphere(radius: f32, segments: u32, rings: u32) -> u32;
@@ -63,15 +62,9 @@ extern "C" {
     // Mesh drawing
     fn draw_mesh(handle: u32);
 
-    // Input
-    fn button_pressed(player: u32, button: u32) -> u32;
+    // Text rendering
+    fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
 }
-
-// Button constants (from Z input)
-const BTN_FACE_DOWN: u32 = 1 << 0;   // A/Cross
-const BTN_FACE_RIGHT: u32 = 1 << 1;  // B/Circle
-const BTN_FACE_LEFT: u32 = 1 << 2;   // X/Square
-const BTN_FACE_UP: u32 = 1 << 3;     // Y/Triangle
 
 // ============================================================================
 // Material Presets
@@ -82,115 +75,738 @@ const BTN_FACE_UP: u32 = 1 << 3;     // Y/Triangle
 #[derive(Clone, Copy)]
 struct Material {
     name: &'static str,
-    albedo: u32,      // Base color (0xRRGGBBAA)
-    specular: u32,    // Specular highlight color (0xRRGGBBAA)
+    albedo: u32,
+    specular: u32,
     shininess: f32,
     rim_intensity: f32,
     rim_power: f32,
     emissive: f32,
 }
 
-const MATERIALS: [Material; 9] = [
-    // Gold armor - warm orange specular, high shininess, subtle rim
-    Material {
-        name: "Gold Armor",
-        albedo: 0xE69933FF,    // [0.9, 0.6, 0.2]
-        specular: 0xFFCC66FF,  // [1.0, 0.8, 0.4]
-        shininess: 0.8,        // Maps to ~205 (tight highlights)
-        rim_intensity: 0.2,
-        rim_power: 0.15,       // Maps to ~4.8 (broad rim)
-        emissive: 0.0,
-    },
-    // Silver metal - neutral white specular, very high shininess, minimal rim
-    Material {
-        name: "Silver Metal",
-        albedo: 0xE6E6E6FF,    // [0.9, 0.9, 0.9]
-        specular: 0xF2F2F2FF,  // [0.95, 0.95, 0.95]
-        shininess: 0.85,       // Maps to ~217 (very tight highlights)
-        rim_intensity: 0.15,
-        rim_power: 0.12,       // Maps to ~3.8
-        emissive: 0.0,
-    },
-    // Leather - dark brown, low shininess, subtle rim
+const MATERIALS: [Material; 66] = [
+    // =========================================================================
+    // ROW 1: NATURAL MATERIALS (indices 0-10)
+    // Organic surfaces from living things
+    // =========================================================================
+
+    // Leather - tanned hide, warm brown, low sheen
     Material {
         name: "Leather",
-        albedo: 0x664026FF,    // [0.4, 0.25, 0.15]
-        specular: 0x4D4033FF,  // [0.3, 0.25, 0.2]
-        shininess: 0.3,        // Maps to ~77 (broad highlights)
+        albedo: 0x664026FF,
+        specular: 0x4D4033FF,
+        shininess: 0.3,
         rim_intensity: 0.1,
-        rim_power: 0.2,        // Maps to ~6.4
+        rim_power: 0.2,
         emissive: 0.0,
     },
-    // Wet skin - bright specular, medium-high shininess, strong rim
+    // Wet Skin - moist flesh, subsurface scattering look
     Material {
         name: "Wet Skin",
-        albedo: 0xD9B3A6FF,    // [0.85, 0.7, 0.65]
-        specular: 0xE6CCBFFF,  // [0.9, 0.8, 0.75]
-        shininess: 0.7,        // Maps to ~179 (medium-tight highlights)
+        albedo: 0xD9B3A6FF,
+        specular: 0xE6CCBFFF,
+        shininess: 0.7,
         rim_intensity: 0.3,
-        rim_power: 0.25,       // Maps to ~8.0
+        rim_power: 0.25,
         emissive: 0.0,
     },
-    // Matte plastic - gray, medium shininess, no rim
+    // Scales - reptilian, iridescent green-blue
+    Material {
+        name: "Scales",
+        albedo: 0x2D4D3DFF,
+        specular: 0x66AA88FF,
+        shininess: 0.6,
+        rim_intensity: 0.2,
+        rim_power: 0.2,
+        emissive: 0.0,
+    },
+    // Wood - polished grain, warm brown
+    Material {
+        name: "Wood",
+        albedo: 0x8B6914FF,
+        specular: 0x554422FF,
+        shininess: 0.25,
+        rim_intensity: 0.05,
+        rim_power: 0.25,
+        emissive: 0.0,
+    },
+    // Chitin - insect exoskeleton, dark glossy
+    Material {
+        name: "Chitin",
+        albedo: 0x1A1A0DFF,
+        specular: 0x444433FF,
+        shininess: 0.7,
+        rim_intensity: 0.15,
+        rim_power: 0.18,
+        emissive: 0.0,
+    },
+    // Moss - soft green, extremely matte
+    Material {
+        name: "Moss",
+        albedo: 0x4D6633FF,
+        specular: 0x334422FF,
+        shininess: 0.08,
+        rim_intensity: 0.1,
+        rim_power: 0.4,
+        emissive: 0.0,
+    },
+    // Fur - soft fibers, subsurface rim glow
+    Material {
+        name: "Fur",
+        albedo: 0x8B7355FF,
+        specular: 0x554433FF,
+        shininess: 0.15,
+        rim_intensity: 0.25,
+        rim_power: 0.3,
+        emissive: 0.0,
+    },
+    // Feather - iridescent shimmer, dark base
+    Material {
+        name: "Feather",
+        albedo: 0x334455FF,
+        specular: 0x6688AAFF,
+        shininess: 0.5,
+        rim_intensity: 0.2,
+        rim_power: 0.2,
+        emissive: 0.0,
+    },
+    // Bone - ivory white, subtle waxy sheen
+    Material {
+        name: "Bone",
+        albedo: 0xE8DCC8FF,
+        specular: 0xCCBBA0FF,
+        shininess: 0.4,
+        rim_intensity: 0.1,
+        rim_power: 0.25,
+        emissive: 0.0,
+    },
+    // Shell - pearlescent nacre
+    Material {
+        name: "Shell",
+        albedo: 0xF0E8E0FF,
+        specular: 0xFFEEDDFF,
+        shininess: 0.65,
+        rim_intensity: 0.15,
+        rim_power: 0.2,
+        emissive: 0.0,
+    },
+    // Coral - pink organic calcium
+    Material {
+        name: "Coral",
+        albedo: 0xE67373FF,
+        specular: 0xFF9999FF,
+        shininess: 0.35,
+        rim_intensity: 0.15,
+        rim_power: 0.25,
+        emissive: 0.0,
+    },
+
+    // =========================================================================
+    // ROW 2: REALISTIC METALS (indices 11-21)
+    // Conductors with colored reflections
+    // =========================================================================
+
+    // Gold - warm yellow-orange reflections
+    Material {
+        name: "Gold",
+        albedo: 0xE69933FF,
+        specular: 0xFFCC66FF,
+        shininess: 0.8,
+        rim_intensity: 0.2,
+        rim_power: 0.15,
+        emissive: 0.0,
+    },
+    // Silver - neutral bright reflections
+    Material {
+        name: "Silver",
+        albedo: 0xE6E6E6FF,
+        specular: 0xF2F2F2FF,
+        shininess: 0.85,
+        rim_intensity: 0.15,
+        rim_power: 0.12,
+        emissive: 0.0,
+    },
+    // Copper - warm reddish-orange
+    Material {
+        name: "Copper",
+        albedo: 0x995933FF,
+        specular: 0xCC804DFF,
+        shininess: 0.65,
+        rim_intensity: 0.25,
+        rim_power: 0.16,
+        emissive: 0.0,
+    },
+    // Bronze - aged yellowish alloy
+    Material {
+        name: "Bronze",
+        albedo: 0x8C6239FF,
+        specular: 0xCCA366FF,
+        shininess: 0.55,
+        rim_intensity: 0.15,
+        rim_power: 0.18,
+        emissive: 0.0,
+    },
+    // Iron - cool dark gray
+    Material {
+        name: "Iron",
+        albedo: 0x4D5566FF,
+        specular: 0x8899AAFF,
+        shininess: 0.5,
+        rim_intensity: 0.1,
+        rim_power: 0.2,
+        emissive: 0.0,
+    },
+    // Chrome - mirror-like perfection
+    Material {
+        name: "Chrome",
+        albedo: 0xCCCCCCFF,
+        specular: 0xFFFFFFFF,
+        shininess: 0.95,
+        rim_intensity: 0.25,
+        rim_power: 0.08,
+        emissive: 0.0,
+    },
+    // Brass - warm yellow alloy
+    Material {
+        name: "Brass",
+        albedo: 0xB5A642FF,
+        specular: 0xDDCC66FF,
+        shininess: 0.6,
+        rim_intensity: 0.2,
+        rim_power: 0.15,
+        emissive: 0.0,
+    },
+    // Aluminum - matte silvery, distinct from chrome
+    Material {
+        name: "Aluminum",
+        albedo: 0xA0A0A8FF,
+        specular: 0xC0C0C8FF,
+        shininess: 0.5,
+        rim_intensity: 0.1,
+        rim_power: 0.2,
+        emissive: 0.0,
+    },
+    // Titanium - dark gray with blue tint
+    Material {
+        name: "Titanium",
+        albedo: 0x5A6068FF,
+        specular: 0x9099A8FF,
+        shininess: 0.7,
+        rim_intensity: 0.15,
+        rim_power: 0.15,
+        emissive: 0.0,
+    },
+    // Rust - corroded oxidized iron
+    Material {
+        name: "Rust",
+        albedo: 0x8B4513FF,
+        specular: 0x553311FF,
+        shininess: 0.15,
+        rim_intensity: 0.05,
+        rim_power: 0.3,
+        emissive: 0.0,
+    },
+    // Patina - green oxidized copper (verdigris)
+    Material {
+        name: "Patina",
+        albedo: 0x4A7C6FFF,
+        specular: 0x6B9E8AFF,
+        shininess: 0.35,
+        rim_intensity: 0.1,
+        rim_power: 0.25,
+        emissive: 0.0,
+    },
+
+    // =========================================================================
+    // ROW 3: SYNTHETIC & INDUSTRIAL (indices 22-32)
+    // Man-made materials
+    // =========================================================================
+
+    // Matte Plastic - neutral diffuse
     Material {
         name: "Matte Plastic",
-        albedo: 0x80808CFF,    // [0.5, 0.5, 0.55]
-        specular: 0x80808CFF,  // [0.5, 0.5, 0.55]
-        shininess: 0.5,        // Maps to ~128 (medium highlights)
+        albedo: 0x80808CFF,
+        specular: 0x60606AFF,
+        shininess: 0.3,
         rim_intensity: 0.0,
         rim_power: 0.0,
         emissive: 0.0,
     },
-    // Emissive crystal - bright cyan, high shininess, strong rim, glowing
+    // Glossy Plastic - shiny red toy
     Material {
-        name: "Glowing Crystal",
-        albedo: 0x4DB3E6FF,    // [0.3, 0.7, 0.9]
-        specular: 0xCCFFFFFF,  // [0.8, 1.0, 1.0]
-        shininess: 0.75,       // Maps to ~192
+        name: "Glossy Plastic",
+        albedo: 0xCC3333FF,
+        specular: 0xFFAAAAFF,
+        shininess: 0.75,
+        rim_intensity: 0.15,
+        rim_power: 0.15,
+        emissive: 0.0,
+    },
+    // Rubber - very matte black, slight sheen
+    Material {
+        name: "Rubber",
+        albedo: 0x262626FF,
+        specular: 0x404040FF,
+        shininess: 0.15,
+        rim_intensity: 0.05,
+        rim_power: 0.3,
+        emissive: 0.0,
+    },
+    // Glass - transparent feel, strong rim
+    Material {
+        name: "Glass",
+        albedo: 0xE0F0F8FF,
+        specular: 0xFFFFFFFF,
+        shininess: 0.95,
         rim_intensity: 0.4,
-        rim_power: 0.18,       // Maps to ~5.7
-        emissive: 0.3,         // Self-illumination
-    },
-    // Brushed copper - warm metallic with directional grain
-    Material {
-        name: "Brushed Copper",
-        albedo: 0x995933FF,    // [0.6, 0.35, 0.2]
-        specular: 0xCC804DFF,  // [0.8, 0.5, 0.3] warm copper-tinted highlights
-        shininess: 0.65,       // Maps to ~166 (medium highlights, shows brushing)
-        rim_intensity: 0.25,
-        rim_power: 0.16,       // Maps to ~5.1
+        rim_power: 0.1,
         emissive: 0.0,
     },
-    // Polished steel - cool metallic, very reflective
+    // Ceramic - white porcelain
     Material {
-        name: "Polished Steel",
-        albedo: 0x4D5966FF,    // [0.3, 0.35, 0.4]
-        specular: 0xF2F2FFFF,  // [0.95, 0.95, 1.0] bright blue-white highlights
-        shininess: 0.88,       // Maps to ~225 (very tight, mirror-like)
+        name: "Ceramic",
+        albedo: 0xF5F5F0FF,
+        specular: 0xFFFFFFFF,
+        shininess: 0.8,
+        rim_intensity: 0.1,
+        rim_power: 0.15,
+        emissive: 0.0,
+    },
+    // Concrete - rough matte gray
+    Material {
+        name: "Concrete",
+        albedo: 0x808080FF,
+        specular: 0x505050FF,
+        shininess: 0.1,
+        rim_intensity: 0.0,
+        rim_power: 0.0,
+        emissive: 0.0,
+    },
+    // Carbon Fiber - dark woven pattern look
+    Material {
+        name: "Carbon Fiber",
+        albedo: 0x202020FF,
+        specular: 0x606060FF,
+        shininess: 0.6,
+        rim_intensity: 0.15,
+        rim_power: 0.2,
+        emissive: 0.0,
+    },
+    // Vinyl - purple record material
+    Material {
+        name: "Vinyl",
+        albedo: 0x6633AAFF,
+        specular: 0xAA88EEFF,
+        shininess: 0.7,
         rim_intensity: 0.2,
-        rim_power: 0.1,        // Maps to ~3.2
+        rim_power: 0.15,
         emissive: 0.0,
     },
-    // Neon pink - cyberpunk glow
+    // Wax - translucent cream, subsurface
     Material {
-        name: "Neon Pink",
-        albedo: 0x4D1A33FF,    // [0.3, 0.1, 0.2]
-        specular: 0xFF4DB3FF,  // [1.0, 0.3, 0.7] hot pink specular
-        shininess: 0.6,        // Maps to ~154
-        rim_intensity: 0.5,    // Strong rim for that neon effect
-        rim_power: 0.2,        // Maps to ~6.4
-        emissive: 0.4,         // Glowing like the crystal
+        name: "Wax",
+        albedo: 0xF5E6C8FF,
+        specular: 0xFFEED0FF,
+        shininess: 0.45,
+        rim_intensity: 0.35,
+        rim_power: 0.25,
+        emissive: 0.05,
+    },
+    // Cloth - woven fabric, very matte
+    Material {
+        name: "Cloth",
+        albedo: 0x6B5B4BFF,
+        specular: 0x4A4A4AFF,
+        shininess: 0.1,
+        rim_intensity: 0.15,
+        rim_power: 0.35,
+        emissive: 0.0,
+    },
+    // Silk - shiny smooth fabric
+    Material {
+        name: "Silk",
+        albedo: 0xE8D0D0FF,
+        specular: 0xFFE8E8FF,
+        shininess: 0.6,
+        rim_intensity: 0.25,
+        rim_power: 0.2,
+        emissive: 0.0,
+    },
+
+    // =========================================================================
+    // ROW 4: GEOLOGICAL (indices 33-43)
+    // Rocks, minerals, gems
+    // =========================================================================
+
+    // Stone - generic gray rock
+    Material {
+        name: "Stone",
+        albedo: 0x6B6B6BFF,
+        specular: 0x4A4A4AFF,
+        shininess: 0.15,
+        rim_intensity: 0.05,
+        rim_power: 0.3,
+        emissive: 0.0,
+    },
+    // Marble - white with slight sheen
+    Material {
+        name: "Marble",
+        albedo: 0xF0F0F0FF,
+        specular: 0xFFFFFFFF,
+        shininess: 0.6,
+        rim_intensity: 0.1,
+        rim_power: 0.2,
+        emissive: 0.0,
+    },
+    // Granite - speckled gray, polished
+    Material {
+        name: "Granite",
+        albedo: 0x5A5A5AFF,
+        specular: 0x808080FF,
+        shininess: 0.5,
+        rim_intensity: 0.08,
+        rim_power: 0.22,
+        emissive: 0.0,
+    },
+    // Obsidian - volcanic black glass
+    Material {
+        name: "Obsidian",
+        albedo: 0x1A1A1AFF,
+        specular: 0x606068FF,
+        shininess: 0.85,
+        rim_intensity: 0.2,
+        rim_power: 0.12,
+        emissive: 0.0,
+    },
+    // Sandstone - tan rough desert rock
+    Material {
+        name: "Sandstone",
+        albedo: 0xC9A86CFF,
+        specular: 0x8B7355FF,
+        shininess: 0.12,
+        rim_intensity: 0.05,
+        rim_power: 0.35,
+        emissive: 0.0,
+    },
+    // Slate - dark gray layered
+    Material {
+        name: "Slate",
+        albedo: 0x404850FF,
+        specular: 0x606870FF,
+        shininess: 0.35,
+        rim_intensity: 0.08,
+        rim_power: 0.25,
+        emissive: 0.0,
+    },
+    // Jade - green translucent gem
+    Material {
+        name: "Jade",
+        albedo: 0x4D9966FF,
+        specular: 0x99FFBBFF,
+        shininess: 0.72,
+        rim_intensity: 0.35,
+        rim_power: 0.22,
+        emissive: 0.05,
+    },
+    // Crystal - clear quartz, prismatic
+    Material {
+        name: "Crystal",
+        albedo: 0xE8F0F8FF,
+        specular: 0xFFFFFFFF,
+        shininess: 0.9,
+        rim_intensity: 0.4,
+        rim_power: 0.1,
+        emissive: 0.05,
+    },
+    // Amethyst - purple crystal gem
+    Material {
+        name: "Amethyst",
+        albedo: 0x6B3FA0FF,
+        specular: 0xAA77EEFF,
+        shininess: 0.8,
+        rim_intensity: 0.35,
+        rim_power: 0.15,
+        emissive: 0.08,
+    },
+    // Ice - frozen water, blue-white
+    Material {
+        name: "Ice",
+        albedo: 0xC8E8FFFF,
+        specular: 0xE8FFFFFF,
+        shininess: 0.85,
+        rim_intensity: 0.45,
+        rim_power: 0.12,
+        emissive: 0.0,
+    },
+    // Ruby - deep red precious gem
+    Material {
+        name: "Ruby",
+        albedo: 0x991133FF,
+        specular: 0xFF4466FF,
+        shininess: 0.88,
+        rim_intensity: 0.4,
+        rim_power: 0.12,
+        emissive: 0.1,
+    },
+
+    // =========================================================================
+    // ROW 5: FANTASY & MAGICAL (indices 44-54)
+    // Enchanted and supernatural materials
+    // =========================================================================
+
+    // Enchanted - golden magic glow
+    Material {
+        name: "Enchanted",
+        albedo: 0xB8962EFF,
+        specular: 0xFFDD88FF,
+        shininess: 0.75,
+        rim_intensity: 0.5,
+        rim_power: 0.15,
+        emissive: 0.25,
+    },
+    // Cursed - sickly dark purple corruption
+    Material {
+        name: "Cursed",
+        albedo: 0x4D2255FF,
+        specular: 0x8833AAFF,
+        shininess: 0.6,
+        rim_intensity: 0.6,
+        rim_power: 0.12,
+        emissive: 0.15,
+    },
+    // Ethereal - ghostly translucent blue
+    Material {
+        name: "Ethereal",
+        albedo: 0x88AACCFF,
+        specular: 0xCCEEFFFF,
+        shininess: 0.5,
+        rim_intensity: 0.7,
+        rim_power: 0.1,
+        emissive: 0.3,
+    },
+    // Mithril - legendary elvish silver
+    Material {
+        name: "Mithril",
+        albedo: 0xC8D0D8FF,
+        specular: 0xE8F0FFFF,
+        shininess: 0.92,
+        rim_intensity: 0.3,
+        rim_power: 0.1,
+        emissive: 0.1,
+    },
+    // Dragon Scale - iridescent green armor
+    Material {
+        name: "Dragon Scale",
+        albedo: 0x2D5A2DFF,
+        specular: 0x66FF66FF,
+        shininess: 0.8,
+        rim_intensity: 0.35,
+        rim_power: 0.15,
+        emissive: 0.05,
+    },
+    // Fairy Dust - sparkling pink magic
+    Material {
+        name: "Fairy Dust",
+        albedo: 0xFFB6C1FF,
+        specular: 0xFFDDEEFF,
+        shininess: 0.7,
+        rim_intensity: 0.5,
+        rim_power: 0.12,
+        emissive: 0.35,
+    },
+    // Blood Moon - deep crimson lunar
+    Material {
+        name: "Blood Moon",
+        albedo: 0x660022FF,
+        specular: 0xFF3344FF,
+        shininess: 0.65,
+        rim_intensity: 0.55,
+        rim_power: 0.12,
+        emissive: 0.2,
+    },
+    // Starlight - celestial white radiance
+    Material {
+        name: "Starlight",
+        albedo: 0xE8E0F0FF,
+        specular: 0xFFFFFFFF,
+        shininess: 0.85,
+        rim_intensity: 0.6,
+        rim_power: 0.1,
+        emissive: 0.4,
+    },
+    // Arcane - deep magical purple energy
+    Material {
+        name: "Arcane",
+        albedo: 0x2A1A4AFF,
+        specular: 0x7744CCFF,
+        shininess: 0.7,
+        rim_intensity: 0.55,
+        rim_power: 0.1,
+        emissive: 0.25,
+    },
+    // Ice Magic - frozen spell effect
+    Material {
+        name: "Ice Magic",
+        albedo: 0x88CCFFFF,
+        specular: 0xCCFFFFFF,
+        shininess: 0.85,
+        rim_intensity: 0.6,
+        rim_power: 0.08,
+        emissive: 0.3,
+    },
+    // Phoenix - blazing rebirth fire
+    Material {
+        name: "Phoenix",
+        albedo: 0xFF4400FF,
+        specular: 0xFFCC00FF,
+        shininess: 0.65,
+        rim_intensity: 0.85,
+        rim_power: 0.08,
+        emissive: 0.65,
+    },
+
+    // =========================================================================
+    // ROW 6: ALIEN & IMPOSSIBLE (indices 55-65)
+    // Sci-fi and surreal materials
+    // =========================================================================
+
+    // Holographic - vibrant iridescent display
+    Material {
+        name: "Holographic",
+        albedo: 0x99DDFFFF,
+        specular: 0xFFAAFFFF,
+        shininess: 0.85,
+        rim_intensity: 0.6,
+        rim_power: 0.08,
+        emissive: 0.35,
+    },
+    // Plasma - electric blue energy
+    Material {
+        name: "Plasma",
+        albedo: 0x2244AAFF,
+        specular: 0x88DDFFFF,
+        shininess: 0.8,
+        rim_intensity: 0.7,
+        rim_power: 0.1,
+        emissive: 0.5,
+    },
+    // Slime - bright green goo
+    Material {
+        name: "Slime",
+        albedo: 0x33CC4DFF,
+        specular: 0x99FF99FF,
+        shininess: 0.9,
+        rim_intensity: 0.45,
+        rim_power: 0.12,
+        emissive: 0.15,
+    },
+    // Lava - molten rock, intense orange glow
+    Material {
+        name: "Lava",
+        albedo: 0x441100FF,
+        specular: 0xFF4400FF,
+        shininess: 0.5,
+        rim_intensity: 0.9,
+        rim_power: 0.08,
+        emissive: 0.75,
+    },
+    // Alien Flesh - organic pink-purple
+    Material {
+        name: "Alien Flesh",
+        albedo: 0x8B4466FF,
+        specular: 0xCC88AAFF,
+        shininess: 0.55,
+        rim_intensity: 0.4,
+        rim_power: 0.2,
+        emissive: 0.1,
+    },
+    // Bioluminescent - deep sea creature glow
+    Material {
+        name: "Bioluminescent",
+        albedo: 0x116655FF,
+        specular: 0x44FFCCFF,
+        shininess: 0.7,
+        rim_intensity: 0.75,
+        rim_power: 0.08,
+        emissive: 0.55,
+    },
+    // Nebula - cosmic purple gas cloud
+    Material {
+        name: "Nebula",
+        albedo: 0x332255FF,
+        specular: 0xAA66FFFF,
+        shininess: 0.5,
+        rim_intensity: 0.55,
+        rim_power: 0.1,
+        emissive: 0.3,
+    },
+    // Black Hole - event horizon darkness
+    Material {
+        name: "Black Hole",
+        albedo: 0x000000FF,
+        specular: 0x110011FF,
+        shininess: 0.98,
+        rim_intensity: 0.8,
+        rim_power: 0.05,
+        emissive: 0.0,
+    },
+    // Antimatter - inverse reality
+    Material {
+        name: "Antimatter",
+        albedo: 0x1A1A2EFF,
+        specular: 0xFF44FFFF,
+        shininess: 0.85,
+        rim_intensity: 0.7,
+        rim_power: 0.08,
+        emissive: 0.25,
+    },
+    // Living Metal - organic chrome T-1000
+    Material {
+        name: "Living Metal",
+        albedo: 0x607080FF,
+        specular: 0xAABBCCFF,
+        shininess: 0.88,
+        rim_intensity: 0.4,
+        rim_power: 0.12,
+        emissive: 0.1,
+    },
+    // Neon - cyberpunk glowing sign
+    Material {
+        name: "Neon",
+        albedo: 0xFF0066FF,
+        specular: 0xFF88CCFF,
+        shininess: 0.7,
+        rim_intensity: 0.8,
+        rim_power: 0.06,
+        emissive: 0.7,
     },
 ];
+
+// Row category names
+const ROW_NAMES: [&str; 6] = [
+    "NATURAL",
+    "METALS",
+    "SYNTHETIC",
+    "GEOLOGICAL",
+    "FANTASY",
+    "ALIEN",
+];
+
+// ============================================================================
+// Grid Layout Constants
+// ============================================================================
+
+const COLS: usize = 11;
+const ROWS: usize = 6;
+const SPACING_X: f32 = 2.0;
+const SPACING_Y: f32 = 2.2;
+const SPHERE_RADIUS: f32 = 0.8;
 
 // ============================================================================
 // Global State
 // ============================================================================
 
-static mut CURRENT_MATERIAL: usize = 0;
 static mut ROTATION: f32 = 0.0;
 static mut LIGHT_ANGLE: f32 = 0.0;
-static mut SHOW_ALL_MATERIALS: bool = true;
 
 /// Sphere mesh handle
 static mut SPHERE_MESH: u32 = 0;
@@ -204,38 +820,29 @@ pub extern "C" fn init() {
     unsafe {
         // Dark background
         set_clear_color(0x101020FF);
-        // Set Mode 3 (Blinn-Phong)
 
+        // Set Mode 3 (Blinn-Phong)
         render_mode(3);
 
-
-        // Setup 4 dynamic lights in a rotating pattern
-        // Light 0: Red from front-left
+        // Setup rotating lights
         light_set(0, -0.7, -0.2, -0.7);
-        light_color(0, 0xFF4D4DFF);  // Red
+        light_color(0, 0xFF4D4DFF);
         light_intensity(0, 0.6);
-        // light_enable(0);
 
-        // Light 1: Green from front-right
         light_set(1, 0.7, -0.2, -0.7);
-        light_color(1, 0x4DFF4DFF);  // Green
+        light_color(1, 0x4DFF4DFF);
         light_intensity(1, 0.6);
-        // light_enable(1);
 
-        // Light 2: Blue from back-left
         light_set(2, -0.7, -0.2, 0.7);
-        light_color(2, 0x4D4DFFFF);  // Blue
+        light_color(2, 0x4D4DFFFF);
         light_intensity(2, 0.6);
-        // light_enable(2);
 
-        // Light 3: Yellow from back-right
         light_set(3, 0.7, -0.2, 0.7);
-        light_color(3, 0xFFFF4DFF);  // Yellow
+        light_color(3, 0xFFFF4DFF);
         light_intensity(3, 0.6);
-        // light_enable(3);
 
-        // Generate smooth sphere procedurally (64x32 segments for high quality)
-        SPHERE_MESH = sphere(1.0, 64, 32);
+        // Generate lower-poly sphere (16x8 segments)
+        SPHERE_MESH = sphere(1.0, 16, 8);
     }
 }
 
@@ -248,30 +855,11 @@ pub extern "C" fn update() {
         // Rotate spheres
         ROTATION += 0.5;
 
-        // Handle input - cycle materials
-        if button_pressed(0, BTN_FACE_DOWN) != 0 {
-            CURRENT_MATERIAL = (CURRENT_MATERIAL + 1) % MATERIALS.len();
-        }
-
-        if button_pressed(0, BTN_FACE_RIGHT) != 0 {
-            CURRENT_MATERIAL = if CURRENT_MATERIAL == 0 {
-                MATERIALS.len() - 1
-            } else {
-                CURRENT_MATERIAL - 1
-            };
-        }
-
-        // Toggle between single material and all materials display
-        if button_pressed(0, BTN_FACE_UP) != 0 {
-            SHOW_ALL_MATERIALS = !SHOW_ALL_MATERIALS;
-        }
-
         // Update light positions based on rotation
         let angle_rad = LIGHT_ANGLE * PI / 180.0;
         let cos = cosf(angle_rad);
         let sin = sinf(angle_rad);
 
-        // Rotate lights in horizontal plane
         light_set(0, -cos * 0.7, -0.2, -sin * 0.7);
         light_set(1, cos * 0.7, -0.2, -sin * 0.7);
         light_set(2, -cos * 0.7, -0.2, sin * 0.7);
@@ -282,35 +870,62 @@ pub extern "C" fn update() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
-
+        // Camera to fit 11x6 grid - fill the screen
         camera_set(
-            0.0, 0.0, 8.0,  // eye - reasonable distance to see all 6 spheres
+            0.0, 0.0, 10.0,  // eye
             0.0, 0.0, 0.0,   // center
         );
         camera_fov(60.0);
 
-        if SHOW_ALL_MATERIALS {
-            // Display all materials in a grid
-            let spacing = 3.0;
-            let positions = [
-                [-spacing, spacing, 0.0],    // Top-left
-                [0.0, spacing, 0.0],          // Top-center
-                [spacing, spacing, 0.0],      // Top-right
-                [-spacing, 0.0, 0.0], // Center-left
-                [0.0, 0.0, 0.0], // Center
-                [spacing, 0.0, 0.0], // Center-right
-                [-spacing, -spacing, 0.0],    // Bottom-left
-                [0.0, -spacing, 0.0],         // Bottom-center
-                [spacing, -spacing, 0.0],     // Bottom-right
-            ];
+        // Calculate grid offsets (center the grid)
+        let grid_width = (COLS - 1) as f32 * SPACING_X;
+        let grid_height = (ROWS - 1) as f32 * SPACING_Y;
+        let start_x = -grid_width / 2.0;
+        let start_y = grid_height / 2.0;
 
-            for (i, material) in MATERIALS.iter().enumerate() {
-                draw_sphere_with_material(positions[i], 1.2, material);
+        // Draw all 66 materials
+        for row in 0..ROWS {
+            for col in 0..COLS {
+                let idx = row * COLS + col;
+                let material = &MATERIALS[idx];
+
+                let x = start_x + col as f32 * SPACING_X;
+                let y = start_y - row as f32 * SPACING_Y;
+
+                draw_sphere_with_material([x, y, 0.0], SPHERE_RADIUS, material);
             }
-        } else {
-            // Display single material with rotation
-            let material = &MATERIALS[CURRENT_MATERIAL];
-            draw_sphere_with_material([0.0, 0.0, 0.0], 2.0, material);
+        }
+
+        // Draw text labels
+        let text_size = 0.012;
+        let label_color = 0xCCCCCCFF;
+        let header_color = 0xFFCC66FF;
+        let header_size = 0.018;
+
+        // Row headers (left side)
+        for row in 0..ROWS {
+            let y = start_y - row as f32 * SPACING_Y;
+            let screen_x = -0.98;
+            let screen_y = y * 0.052;
+
+            let name = ROW_NAMES[row];
+            draw_text(name.as_ptr(), name.len() as u32, screen_x, screen_y, header_size, header_color);
+        }
+
+        // Material labels (below each sphere)
+        for row in 0..ROWS {
+            for col in 0..COLS {
+                let idx = row * COLS + col;
+                let material = &MATERIALS[idx];
+
+                let x = start_x + col as f32 * SPACING_X;
+                let y = start_y - row as f32 * SPACING_Y;
+
+                let screen_x = x * 0.052 - 0.04;
+                let screen_y = y * 0.052 - 0.05;
+
+                draw_text(material.name.as_ptr(), material.name.len() as u32, screen_x, screen_y, text_size, label_color);
+            }
         }
     }
 }
@@ -321,7 +936,7 @@ pub extern "C" fn render() {
 
 fn draw_sphere_with_material(position: [f32; 3], radius: f32, material: &Material) {
     unsafe {
-        // Set material properties using pre-computed hex colors
+        // Set material properties
         set_color(material.albedo);
         material_shininess(material.shininess);
         material_rim(material.rim_intensity, material.rim_power);
@@ -332,7 +947,6 @@ fn draw_sphere_with_material(position: [f32; 3], radius: f32, material: &Materia
         push_identity();
         push_translate(position[0], position[1], position[2]);
         push_rotate_y(ROTATION);
-
         push_scale_uniform(radius);
 
         draw_mesh(SPHERE_MESH);
