@@ -1143,7 +1143,281 @@ Use this for end-to-end testing:
 
 ---
 
+## Console-Agnostic Integration Architecture
+
+This section is **critical** - it explains how the debug system integrates without requiring console-specific code changes.
+
+### Architecture Overview
+
+```
++------------------------------------------------------------------+
+|                           CORE                                   |
+|                                                                  |
+|  GameStateWithConsole<I, S>     GameSession<C>                  |
+|  +-----------------------+      +---------------------------+    |
+|  | game: GameState       |      | runtime: Runtime<C>       |    |
+|  | console: S            |      | resource_manager: ...     |    |
+|  | debug_registry: ───────────> | debug_panel: DebugPanel   |    |
+|  |   DebugRegistry       |      | frame_controller:         |    |
+|  +-----------------------+      |   FrameController         |    |
+|           ^                     +---------------------------+    |
+|           |                                |                     |
+|   FFI functions write here        Methods for rendering          |
+|   during init()                   and hotkey handling            |
++------------------------------------------------------------------+
+                                            |
+                                            | Consoles call these
+                                            | methods (2 lines of code)
+                                            v
++------------------------------------------------------------------+
+|                      CONSOLE (e.g., Emberware Z)                 |
+|                                                                  |
+|  App::render() {                                                 |
+|      // ... existing egui rendering ...                          |
+|      if let Some(session) = &mut self.game_session {             |
+|          session.render_debug_panel(&self.egui_ctx);  // ADD     |
+|      }                                                           |
+|  }                                                               |
+|                                                                  |
+|  App::handle_key_input() {                                       |
+|      if let Some(session) = &mut self.game_session {             |
+|          session.handle_debug_hotkey(key);  // ADD               |
+|      }                                                           |
+|  }                                                               |
++------------------------------------------------------------------+
+```
+
+### Where Debug State Lives
+
+| Component | Location | Owner | Purpose |
+|-----------|----------|-------|---------|
+| `DebugRegistry` | `core/src/wasm/state.rs` | `GameStateWithConsole` | Stores registered values, accessed by FFI |
+| `DebugPanel` | `core/src/app/session.rs` | `GameSession` | egui UI state and rendering |
+| `FrameController` | `core/src/app/session.rs` | `GameSession` | Pause/step/time scale state |
+
+**Why this split?**
+- `DebugRegistry` must be in `GameStateWithConsole` because FFI functions access it via `Caller<GameStateWithConsole>`
+- `DebugPanel` and `FrameController` are UI/control state, not WASM state, so they belong in `GameSession`
+
+### Core Changes (100% console-agnostic)
+
+#### 1. Add debug state to `GameSession` (`core/src/app/session.rs`)
+
+```rust
+use crate::debug::{DebugPanel, FrameController};
+
+pub struct GameSession<C: Console> {
+    pub runtime: Runtime<C>,
+    pub resource_manager: C::ResourceManager,
+    // ADD these fields:
+    pub debug_panel: DebugPanel,
+    pub frame_controller: FrameController,
+}
+
+impl<C: Console> GameSession<C> {
+    pub fn new(runtime: Runtime<C>, resource_manager: C::ResourceManager) -> Self {
+        Self {
+            runtime,
+            resource_manager,
+            debug_panel: DebugPanel::default(),
+            frame_controller: FrameController::default(),
+        }
+    }
+
+    /// Render the debug inspection panel
+    ///
+    /// Call this during your egui frame rendering.
+    /// Returns `true` if any value was changed.
+    pub fn render_debug_panel(&mut self, ctx: &egui::Context) -> bool {
+        // Skip if no game loaded
+        let game = match self.runtime.game_mut() {
+            Some(g) => g,
+            None => return false,
+        };
+
+        // Get WASM memory
+        let memory = match game.store().data().game.memory {
+            Some(m) => m,
+            None => return false,
+        };
+        let mem_data = memory.data_mut(game.store_mut());
+
+        // Get registry reference
+        let registry = &game.store().data().debug_registry;
+
+        // Render panel
+        self.debug_panel.render(
+            ctx,
+            registry,
+            &mut self.frame_controller,
+            mem_data,
+        )
+    }
+
+    /// Handle debug hotkeys (F3, F5, F6, F7, F8)
+    ///
+    /// Call this from your key input handler.
+    /// Returns `true` if the key was consumed.
+    pub fn handle_debug_hotkey(&mut self, key: &winit::keyboard::Key) -> bool {
+        use winit::keyboard::{Key, NamedKey};
+
+        match key {
+            Key::Named(NamedKey::F3) => {
+                self.debug_panel.toggle_visible();
+                true
+            }
+            Key::Named(NamedKey::F5) => {
+                self.frame_controller.toggle_pause();
+                true
+            }
+            Key::Named(NamedKey::F6) => {
+                self.frame_controller.request_step();
+                true
+            }
+            Key::Named(NamedKey::F7) => {
+                self.frame_controller.decrease_time_scale();
+                true
+            }
+            Key::Named(NamedKey::F8) => {
+                self.frame_controller.increase_time_scale();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Check if we should run game tick (respects pause/step)
+    pub fn should_run_tick(&mut self) -> bool {
+        self.frame_controller.should_run_tick()
+    }
+
+    /// Disable debug features (call when entering netplay)
+    pub fn disable_debug(&mut self) {
+        self.frame_controller.disable();
+    }
+
+    /// Enable debug features (call when exiting netplay)
+    pub fn enable_debug(&mut self) {
+        self.frame_controller.enable();
+    }
+}
+```
+
+#### 2. Integrate with Runtime for frame control (`core/src/runtime.rs`)
+
+The runtime should check `frame_controller.should_run_tick()` before running updates. This is already in core.
+
+### Console Changes (MINIMAL - 2 lines of code)
+
+Consoles need to make **two small additions** to wire up the debug system. Using Emberware Z as an example:
+
+#### 1. In `emberware-z/src/app/mod.rs` - render method (~line 319)
+
+Find the existing debug overlay rendering:
+
+```rust
+// Debug overlay
+if debug_overlay {
+    emberware_core::app::render_debug_overlay(
+        ctx,
+        &debug_stats,
+        // ...
+    );
+}
+```
+
+Add debug panel rendering nearby (inside the egui closure):
+
+```rust
+// Debug overlay
+if debug_overlay {
+    emberware_core::app::render_debug_overlay(/* ... */);
+}
+
+// ADD: Debug inspection panel
+if let Some(session) = &mut self.game_session {
+    session.render_debug_panel(ctx);
+}
+```
+
+#### 2. In `emberware-z/src/app/init.rs` or key handler - handle hotkeys
+
+Find the key input handler and add:
+
+```rust
+fn handle_key_input(&mut self, event: KeyEvent) {
+    // ADD: Let debug system handle hotkeys first
+    if let Some(session) = &mut self.game_session {
+        if session.handle_debug_hotkey(&event.logical_key) {
+            return; // Consumed by debug system
+        }
+    }
+
+    // ... existing key handling ...
+}
+```
+
+#### 3. In `emberware-z/src/app/game_session.rs` - disable during netplay
+
+When starting a networked session:
+
+```rust
+// When entering P2P netplay:
+session.disable_debug();
+
+// When returning to local play:
+session.enable_debug();
+```
+
+### Why This Is Console-Agnostic
+
+1. **All logic is in core:**
+   - `DebugRegistry`, `DebugPanel`, `FrameController` - all in `core/src/debug/`
+   - FFI registration in `core/src/ffi.rs`
+   - `GameSession` methods in `core/src/app/session.rs`
+
+2. **Consoles only wire things up:**
+   - 1 line to render debug panel
+   - 1 line to handle hotkeys
+   - Optional: disable during netplay
+
+3. **Future consoles get it "for free":**
+   - `GameSession<C>` works with any `Console` type
+   - Just add the same 2 lines to new console apps
+
+4. **No console-specific types or traits:**
+   - Uses standard `egui::Context` (already a core dependency)
+   - Uses standard `winit::keyboard::Key`
+
+### What If a Console Wants ZERO Changes?
+
+If you want absolutely zero changes to console code, you could:
+
+1. Add optional trait methods to `ConsoleApp` with default implementations
+2. Have the core event loop call these methods automatically
+
+However, this adds complexity and the "2 lines of code" approach is simpler and more explicit.
+
+### Netplay Detection
+
+The debug system automatically disables during netplay. In `core/src/rollback/session.rs`:
+
+```rust
+impl<I: ConsoleInput, S> RollbackSession<I, S> {
+    /// Check if this is a networked (P2P) session
+    pub fn is_networked(&self) -> bool {
+        matches!(self.session_type, SessionType::P2P)
+    }
+}
+```
+
+The app layer checks this and calls `session.disable_debug()` when appropriate.
+
+---
+
 ## File Checklist
+
+### Core Changes (console-agnostic)
 
 | Phase | Action | File | Description |
 |-------|--------|------|-------------|
@@ -1154,12 +1428,28 @@ Use this for end-to-end testing:
 | 4 | Create | `core/src/debug/frame_control.rs` | FrameController |
 | 5 | Create | `core/src/debug/panel.rs` | DebugPanel egui UI |
 | 6 | Create | `core/src/debug/export.rs` | Export formatting |
-| 7 | Modify | `core/src/wasm/state.rs` | Add `debug_registry` field |
+| 7 | Modify | `core/src/wasm/state.rs` | Add `debug_registry` field to `GameStateWithConsole` |
 | 7 | Modify | `core/src/wasm/mod.rs` | Add `finalize_registration()` in init() |
 | 8 | Modify | `core/src/app/config.rs` | Add `DebugConfig` |
-| 9 | Modify | `core/src/runtime.rs` | Integrate FrameController |
+| 9 | Modify | `core/src/app/session.rs` | Add `debug_panel`, `frame_controller`, helper methods |
+| 9 | Modify | `core/src/runtime.rs` | Check `should_run_tick()` before updates |
 | - | Create | `core/src/debug/mod.rs` | Module root |
 | - | Modify | `core/src/lib.rs` | Add `pub mod debug` |
+
+### Console Changes (minimal wiring only)
+
+| Console | File | Change |
+|---------|------|--------|
+| Z | `emberware-z/src/app/mod.rs` | Add `session.render_debug_panel(ctx)` in egui closure (~1 line) |
+| Z | `emberware-z/src/app/mod.rs` or key handler | Add `session.handle_debug_hotkey(key)` in key handler (~3 lines) |
+| Z | `emberware-z/src/app/game_session.rs` | Add `session.disable_debug()` for netplay (optional) |
+| Classic | (same pattern) | Same 2-3 lines when Classic is implemented |
+
+### Summary
+
+- **Core:** 14 file changes (creates + modifies)
+- **Per console:** 2-3 lines of wiring code
+- **Total console changes:** ~10 lines (not counting optional netplay handling)
 
 ---
 
