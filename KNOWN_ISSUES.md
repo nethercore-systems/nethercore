@@ -12,9 +12,11 @@
 - The main sphere renders
 - Text and light indicators don't render at all
 - Probably due to above issue, ie packed vertex data in the pipeline.
+- Also applies to blinn phong example, in fact text doesnt render at all anymore
 
 ## Textured Procedural Example is rendering the Default Text
 - Likely a texture collision problem
 - Default font texture is at index 0, first loaded texture is maybe also going to this address
 - This causes the meshes to render with texture 0
 - But could also just be a bug with the render pipeline, ie texture ids not being recorded/bound correctly
+- Might be better to explore a separate system for text vs textures, such as a FontId and TextureId to prevent this kind of problem in the future.
