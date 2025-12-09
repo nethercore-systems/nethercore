@@ -338,9 +338,10 @@ fn create_frame_bind_group_layout(
             count: None,
         },
         // Binding 1: View matrices storage buffer (per-frame array)
+        // VERTEX_FRAGMENT: sky shader computes view rays per-pixel in fragment
         wgpu::BindGroupLayoutEntry {
             binding: 1,
-            visibility: wgpu::ShaderStages::VERTEX,
+            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
             ty: wgpu::BindingType::Buffer {
                 ty: wgpu::BufferBindingType::Storage { read_only: true },
                 has_dynamic_offset: false,
@@ -349,9 +350,10 @@ fn create_frame_bind_group_layout(
             count: None,
         },
         // Binding 2: Projection matrices storage buffer (per-frame array)
+        // VERTEX_FRAGMENT: sky shader extracts FOV in fragment
         wgpu::BindGroupLayoutEntry {
             binding: 2,
-            visibility: wgpu::ShaderStages::VERTEX,
+            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
             ty: wgpu::BindingType::Buffer {
                 ty: wgpu::BufferBindingType::Storage { read_only: true },
                 has_dynamic_offset: false,

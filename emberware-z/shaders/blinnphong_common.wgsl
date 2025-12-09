@@ -123,12 +123,12 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     // Mode 2: direct from value1, Mode 3: derived from shininess
     //FS_MODE2_3_ROUGHNESS
 
-    // Diffuse ambient (normal direction)
-    let diffuse_env = sample_sky(N, sky);
+    // Diffuse ambient (normal direction) - use gradient only, sun handled by direct lighting
+    let diffuse_env = sample_sky_ambient(N, sky);
 
-    // Specular reflection (reflection direction - sharp, era-authentic)
+    // Specular reflection (reflection direction) - use gradient only, sun specular via blinn-phong
     let R = reflect(-view_dir, N);
-    let specular_env = sample_sky(R, sky);
+    let specular_env = sample_sky_ambient(R, sky);
 
     // Rough surfaces have dimmer reflections (energy scatters)
     let reflection_strength = (1.0 - roughness) * (1.0 - roughness);  // squared falloff
@@ -143,8 +143,8 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     // Specular environment reflection (attenuated by roughness)
     final_color += specular_env * fresnel * reflection_strength;
 
-    // Direct sun
-    let sun_color = sample_sky(-sky.sun_direction, sky);
+    // Direct sun - use stored sun color, not sample_sky (which adds gradient on top)
+    let sun_color = sky.sun_color;
 
     // Sun diffuse (direct, energy conserved)
     final_color += lambert_diffuse(in.world_normal, sky.sun_direction, albedo, sun_color) * diffuse_factor * one_minus_F;

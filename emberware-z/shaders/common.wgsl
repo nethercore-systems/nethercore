@@ -81,8 +81,10 @@ fn unpack_rgb8(packed: u32) -> vec3<f32> {
 // Uses signed octahedral mapping for uniform precision distribution
 fn unpack_octahedral(packed: u32) -> vec3<f32> {
     // Extract i16 components with sign extension
-    let u_i16 = i32((packed & 0xFFFFu) << 16u) >> 16;  // Sign-extend low 16 bits
-    let v_i16 = i32(packed) >> 16;                      // Arithmetic shift sign-extends
+    // NOTE: We use bitcast<i32>() instead of i32() because i32(u32) for values >= 2^31
+    // is implementation-defined in WGSL, while bitcast always preserves the bit pattern.
+    let u_i16 = bitcast<i32>((packed & 0xFFFFu) << 16u) >> 16;  // Sign-extend low 16 bits
+    let v_i16 = bitcast<i32>(packed) >> 16;                      // Arithmetic shift sign-extends
 
     // Convert snorm16 to float [-1, 1]
     let u = f32(u_i16) / 32767.0;
@@ -130,10 +132,15 @@ fn unpack_sky(packed: PackedSky) -> SkyData {
     return sky;
 }
 
-// Sample procedural sky (gradient + sun)
-fn sample_sky(direction: vec3<f32>, sky: SkyData) -> vec3<f32> {
+// Sample sky gradient only (no sun disc) - use for ambient when direct sun is computed separately
+fn sample_sky_ambient(direction: vec3<f32>, sky: SkyData) -> vec3<f32> {
     let up_factor = direction.y * 0.5 + 0.5;
-    let gradient = mix(sky.horizon_color, sky.zenith_color, up_factor);
+    return mix(sky.horizon_color, sky.zenith_color, up_factor);
+}
+
+// Sample procedural sky (gradient + sun disc) - use for background or when sun is NOT computed separately
+fn sample_sky(direction: vec3<f32>, sky: SkyData) -> vec3<f32> {
+    let gradient = sample_sky_ambient(direction, sky);
     // Negate sun_direction: it's direction rays travel, not direction to sun
     let sun_dot = max(0.0, dot(direction, -sky.sun_direction));
     // Map sharpness [0,1] to power exponent [1, 200]

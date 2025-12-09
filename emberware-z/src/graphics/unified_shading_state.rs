@@ -71,15 +71,15 @@ pub struct PackedUnifiedShadingState {
 
 impl Default for PackedUnifiedShadingState {
     fn default() -> Self {
-        // Reasonable defaults: pleasant outdoor lighting with visible dynamic lights
+        // Natural Earth sky defaults - sun is the key light, sky provides subtle fill
         // Convention: light direction = direction rays travel (physically correct)
         // Users can customize via sky_set_gradient() and sky_set_sun() FFI calls
         let sky = PackedSky::from_floats(
-            Vec3::new(0.3, 0.4, 0.5),                // Horizon: pleasant blue ambient
-            Vec3::new(0.1, 0.2, 0.4),                // Zenith: darker blue sky
-            Vec3::new(-0.3, -0.5, -0.4).normalize(), // Sun direction: rays travel down-left-forward
-            Vec3::new(0.7, 0.65, 0.6),               // Sun color: warm daylight
-            0.95, // Sun sharpness: fairly sharp (maps to ~242/255)
+            Vec3::new(0.25, 0.25, 0.3),              // Horizon: dim warm gray (subtle fill, not key light)
+            Vec3::new(0.15, 0.2, 0.35),              // Zenith: darker blue (sky color, not light source)
+            Vec3::new(-0.4, -0.7, -0.3).normalize(), // Sun direction: high in sky, slightly left
+            Vec3::new(0.7, 0.67, 0.6),               // Sun color: softer daylight (reduced from 1.0)
+            0.92, // Sun sharpness: visible disc
         );
 
         // uniform_set_0: [metallic=0, roughness=128, emissive=0, rim_intensity=0]

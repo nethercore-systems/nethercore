@@ -505,4 +505,85 @@ mod tests {
         assert_eq!(packed[2], 0);
         assert_eq!(packed[3], 191); // 0.75 * 255 ≈ 191
     }
+
+    /// Test octahedral encoding/decoding roundtrip using WGSL-compatible unpacking logic.
+    /// This simulates exactly what the GPU shader does to catch any sign extension issues.
+    #[test]
+    fn test_octahedral_wgsl_roundtrip() {
+        // Simulate WGSL unpack logic exactly
+        // WGSL: let u_i16 = i32((packed & 0xFFFFu) << 16u) >> 16;
+        // WGSL: let v_i16 = i32(packed) >> 16;
+        fn wgsl_unpack(packed: u32) -> (f32, f32) {
+            // For u: extract low 16 bits, shift to high position, bitcast to i32, arithmetic shift back
+            let u_shifted = (packed & 0xFFFF) << 16;
+            let u_i32 = u_shifted as i32; // bitcast u32 to i32
+            let u_i16 = u_i32 >> 16; // arithmetic shift sign-extends
+
+            // For v: bitcast entire u32 to i32, then arithmetic shift right by 16
+            let v_i32 = packed as i32; // bitcast u32 to i32
+            let v_i16 = v_i32 >> 16; // arithmetic shift sign-extends
+
+            (u_i16 as f32 / 32767.0, v_i16 as f32 / 32767.0)
+        }
+
+        // Test cases including negative values in all octants
+        let test_dirs = [
+            glam::Vec3::new(1.0, 0.0, 0.0),   // +X
+            glam::Vec3::new(-1.0, 0.0, 0.0),  // -X
+            glam::Vec3::new(0.0, 1.0, 0.0),   // +Y
+            glam::Vec3::new(0.0, -1.0, 0.0),  // -Y
+            glam::Vec3::new(0.0, 0.0, 1.0),   // +Z (upper hemisphere center)
+            glam::Vec3::new(0.0, 0.0, -1.0),  // -Z (lower hemisphere center)
+            glam::Vec3::new(-0.707, 0.707, 0.0),   // XY plane, negative X
+            glam::Vec3::new(0.707, -0.707, 0.0),   // XY plane, negative Y
+            glam::Vec3::new(0.577, 0.577, 0.577),  // Diagonal +X+Y+Z
+            glam::Vec3::new(-0.577, 0.577, 0.577), // Diagonal -X+Y+Z
+            glam::Vec3::new(0.577, -0.577, 0.577), // Diagonal +X-Y+Z
+            glam::Vec3::new(-0.577, -0.577, 0.577), // Diagonal -X-Y+Z
+            glam::Vec3::new(0.577, 0.577, -0.577),  // Lower hemisphere
+            glam::Vec3::new(-0.577, -0.577, -0.577), // Lower hemisphere opposite
+        ];
+
+        for dir in test_dirs {
+            let normalized = dir.normalize();
+            let packed = pack_octahedral_u32(normalized);
+            let (u, v) = wgsl_unpack(packed);
+            let decoded = decode_octahedral(u, v);
+
+            let error = (decoded - normalized).length();
+            assert!(
+                error < 0.01,
+                "WGSL roundtrip failed for {:?}:\n  packed=0x{:08X}\n  u={}, v={}\n  decoded={:?}\n  error={}",
+                normalized, packed, u, v, decoded, error
+            );
+        }
+    }
+
+    /// Test that negative octahedral coordinates are correctly sign-extended
+    #[test]
+    fn test_octahedral_negative_sign_extension() {
+        // Test a direction that produces negative u value: (-1, 0, 0)
+        let dir = glam::Vec3::new(-1.0, 0.0, 0.0);
+        let packed = pack_octahedral_u32(dir);
+
+        // The low 16 bits should represent a negative snorm16 (sign bit set)
+        let u_raw = packed & 0xFFFF;
+        println!("Testing direction {:?}", dir);
+        println!("  packed = 0x{:08X}", packed);
+        println!("  u_raw (low 16 bits) = 0x{:04X} = {} as u16", u_raw, u_raw);
+
+        // If u_raw has bit 15 set, it's a negative snorm16
+        if u_raw & 0x8000 != 0 {
+            println!("  u is negative (sign bit set)");
+
+            // Verify sign extension works correctly
+            let u_shifted = u_raw << 16;
+            let u_i32 = u_shifted as i32;
+            let u_i16 = u_i32 >> 16;
+            println!("  WGSL-style: shifted=0x{:08X}, as_i32={}, shifted_back={}", u_shifted, u_i32, u_i16);
+
+            // u_i16 should be negative (around -32767 for unit vector component)
+            assert!(u_i16 < 0, "Sign extension failed: u_i16={} should be negative", u_i16);
+        }
+    }
 }
