@@ -99,6 +99,20 @@ impl App {
         // Handle Playing mode: run game frame first
         let mut game_rendered_this_frame = false;
         if matches!(self.mode, AppMode::Playing { .. }) {
+            // Initialize game session if needed (CLI launch case)
+            // When launched via CLI with a game_id, the app starts in Playing mode
+            // but start_game() was never called (unlike Library UI flow)
+            if self.game_session.is_none() {
+                if let AppMode::Playing { ref game_id } = self.mode {
+                    let game_id_owned = game_id.clone();
+                    tracing::info!("Initializing game session for CLI launch: {}", game_id_owned);
+                    if let Err(e) = self.start_game(&game_id_owned) {
+                        self.handle_runtime_error(e);
+                        return;
+                    }
+                }
+            }
+
             // Handle session events (disconnect, desync, network interruption)
             if let Err(e) = self.handle_session_events() {
                 self.handle_runtime_error(e);

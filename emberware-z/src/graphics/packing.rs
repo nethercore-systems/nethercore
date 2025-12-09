@@ -71,6 +71,25 @@ pub fn pack_uv_f16(u: f32, v: f32) -> [f16; 2] {
     [f16::from_f32(u), f16::from_f32(v)]
 }
 
+/// Pack a 2D UV coordinate (f32x2) to Unorm16x2 format
+///
+/// Better precision than f16 for values in the [0.0, 1.0] range.
+/// Unorm16 provides 65536 distinct values uniformly distributed in [0, 1],
+/// while f16 has non-uniform precision that's worse near 0.
+///
+/// # Arguments
+/// * `u`, `v` - UV coordinates (ideally in range [0.0, 1.0])
+///
+/// # Returns
+/// [u16; 2] containing packed unorm16 values [u, v]
+#[inline]
+pub fn pack_uv_unorm16(u: f32, v: f32) -> [u16; 2] {
+    [
+        (u.clamp(0.0, 1.0) * 65535.0) as u16,
+        (v.clamp(0.0, 1.0) * 65535.0) as u16,
+    ]
+}
+
 /// Pack a 3D normal (f32x3) to Snorm16x4 format (with w=0.0 padding)
 ///
 /// # Arguments
@@ -85,6 +104,132 @@ pub fn pack_normal_snorm16(nx: f32, ny: f32, nz: f32) -> [i16; 4] {
         f32_to_snorm16(ny),
         f32_to_snorm16(nz),
         0, // W component padding
+    ]
+}
+
+// ============================================================================
+// Octahedral Normal Encoding
+// ============================================================================
+// Octahedral encoding provides better quality than snorm16x3 with uniform
+// angular precision (~0.02° worst-case error). It maps 3D unit vectors to
+// a 2D square [-1,1]² then packs as 2x snorm16 into a u32.
+
+/// Encode normalized direction to octahedral coordinates in [-1, 1]²
+///
+/// Uses signed octahedral mapping for uniform precision distribution across the sphere.
+/// More accurate than XY+reconstructed-Z approaches, especially near poles.
+#[inline]
+pub fn encode_octahedral(dir: glam::Vec3) -> (f32, f32) {
+    let dir = dir.normalize_or_zero();
+
+    // Project to octahedron via L1 normalization
+    let l1_norm = dir.x.abs() + dir.y.abs() + dir.z.abs();
+    if l1_norm == 0.0 {
+        return (0.0, 0.0);
+    }
+
+    let mut u = dir.x / l1_norm;
+    let mut v = dir.y / l1_norm;
+
+    // Fold lower hemisphere (z < 0) into upper square
+    if dir.z < 0.0 {
+        let u_abs = u.abs();
+        let v_abs = v.abs();
+        u = (1.0 - v_abs) * if u >= 0.0 { 1.0 } else { -1.0 };
+        v = (1.0 - u_abs) * if v >= 0.0 { 1.0 } else { -1.0 };
+    }
+
+    (u, v) // Both in [-1, 1]
+}
+
+/// Decode octahedral coordinates in [-1, 1]² back to normalized direction
+///
+/// Reverses the encoding operation to reconstruct the 3D direction vector.
+#[inline]
+pub fn decode_octahedral(u: f32, v: f32) -> glam::Vec3 {
+    let mut dir = glam::Vec3::new(u, v, 1.0 - u.abs() - v.abs());
+
+    // Unfold lower hemisphere (z < 0 case)
+    if dir.z < 0.0 {
+        let old_x = dir.x;
+        dir.x = (1.0 - dir.y.abs()) * if old_x >= 0.0 { 1.0 } else { -1.0 };
+        dir.y = (1.0 - old_x.abs()) * if dir.y >= 0.0 { 1.0 } else { -1.0 };
+    }
+
+    dir.normalize_or_zero()
+}
+
+/// Pack Vec3 direction to u32 using octahedral encoding (2x snorm16)
+///
+/// Provides uniform angular precision (~0.02° worst-case error with 16-bit components).
+/// More compact (4 bytes) than snorm16x4 (8 bytes) with better quality.
+///
+/// # Arguments
+/// * `dir` - Direction vector (will be normalized)
+///
+/// # Returns
+/// u32 containing packed octahedral coordinates [u: low 16 bits][v: high 16 bits]
+#[inline]
+pub fn pack_octahedral_u32(dir: glam::Vec3) -> u32 {
+    let (u, v) = encode_octahedral(dir);
+    let u_snorm = f32_to_snorm16(u);
+    let v_snorm = f32_to_snorm16(v);
+    // Pack as [u: i16 low 16 bits][v: i16 high 16 bits]
+    (u_snorm as u16 as u32) | ((v_snorm as u16 as u32) << 16)
+}
+
+/// Unpack u32 to Vec3 direction using octahedral decoding (2x snorm16)
+///
+/// Reverses pack_octahedral_u32() to extract the original direction.
+#[inline]
+pub fn unpack_octahedral_u32(packed: u32) -> glam::Vec3 {
+    // Extract i16 components with sign extension
+    let u_i16 = (packed & 0xFFFF) as i16;
+    let v_i16 = (packed >> 16) as i16;
+
+    // Convert snorm16 to float [-1, 1]
+    let u = u_i16 as f32 / 32767.0;
+    let v = v_i16 as f32 / 32767.0;
+
+    decode_octahedral(u, v)
+}
+
+/// Pack a 3D normal to octahedral-encoded u32 (4 bytes)
+///
+/// Convenience wrapper for vertex normal packing. Better quality than
+/// snorm16x3 with uniform angular precision and smaller size (4 vs 8 bytes).
+///
+/// # Arguments
+/// * `nx`, `ny`, `nz` - Normal coordinates (should be normalized)
+///
+/// # Returns
+/// u32 containing octahedral-encoded normal
+#[inline]
+pub fn pack_normal_octahedral(nx: f32, ny: f32, nz: f32) -> u32 {
+    pack_octahedral_u32(glam::Vec3::new(nx, ny, nz))
+}
+
+// ============================================================================
+// Bone Weight Packing
+// ============================================================================
+
+/// Pack bone weights as unorm8x4 (4 bytes)
+///
+/// Reduces from 16 bytes (Float32x4) to 4 bytes. The precision loss is
+/// acceptable for bone weights since they're interpolation factors.
+///
+/// # Arguments
+/// * `weights` - Array of 4 bone weights, each in range [0.0, 1.0]
+///
+/// # Returns
+/// [u8; 4] containing packed unorm8 values
+#[inline]
+pub fn pack_bone_weights_unorm8(weights: [f32; 4]) -> [u8; 4] {
+    [
+        f32_to_unorm8(weights[0]),
+        f32_to_unorm8(weights[1]),
+        f32_to_unorm8(weights[2]),
+        f32_to_unorm8(weights[3]),
     ]
 }
 
@@ -124,7 +269,7 @@ pub fn pack_color_rgba_unorm8(r: f32, g: f32, b: f32, a: f32) -> [u8; 4] {
 
 /// Pack unpacked f32 vertex data to GPU-ready packed format
 ///
-/// Converts f32 positions/UVs/normals/colors to f16/snorm16/unorm8 based on format flags.
+/// Converts f32 positions/UVs/normals/colors to packed formats based on format flags.
 /// This is the core packing function used by both immediate draws and retained mesh loading.
 ///
 /// # Format Layout (unpacked f32)
@@ -132,13 +277,14 @@ pub fn pack_color_rgba_unorm8(r: f32, g: f32, b: f32, a: f32) -> [u8; 4] {
 /// - UV (if FORMAT_UV): 2 f32 (u, v)
 /// - Color (if FORMAT_COLOR): 3 f32 (r, g, b) - alpha added as 1.0
 /// - Normal (if FORMAT_NORMAL): 3 f32 (nx, ny, nz)
-/// - Skinning (if FORMAT_SKINNED): Currently placeholder (not yet implemented)
+/// - Skinning (if FORMAT_SKINNED): 4 bone indices + 4 weights
 ///
 /// # Packed Layout (GPU format)
 /// - Position: f16x4 (8 bytes, w=1.0 padding)
-/// - UV (if FORMAT_UV): f16x2 (4 bytes)
+/// - UV (if FORMAT_UV): unorm16x2 (4 bytes) - better precision than f16 in [0,1]
 /// - Color (if FORMAT_COLOR): unorm8x4 (4 bytes, alpha=255)
-/// - Normal (if FORMAT_NORMAL): snorm16x4 (8 bytes, w=0 padding)
+/// - Normal (if FORMAT_NORMAL): octahedral u32 (4 bytes) - better quality than snorm16x4
+/// - Skinning (if FORMAT_SKINNED): u8x4 indices (4 bytes) + unorm8x4 weights (4 bytes)
 ///
 /// # Arguments
 /// * `data` - Unpacked f32 vertex data (position + optional attributes)
@@ -148,8 +294,8 @@ pub fn pack_color_rgba_unorm8(r: f32, g: f32, b: f32, a: f32) -> [u8; 4] {
 /// Packed vertex data ready for GPU upload as Vec<u8>
 ///
 /// # Memory Savings
-/// - POS_NORMAL: 24 bytes → 16 bytes (33% reduction)
-/// - POS_UV_NORMAL: 32 bytes → 20 bytes (37.5% reduction)
+/// - POS_NORMAL: 24 bytes → 12 bytes (50% reduction)
+/// - POS_UV_NORMAL: 32 bytes → 16 bytes (50% reduction)
 pub fn pack_vertex_data(data: &[f32], format: u8) -> Vec<u8> {
     use crate::graphics::{vertex_stride_packed, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV};
 
@@ -187,9 +333,9 @@ pub fn pack_vertex_data(data: &[f32], format: u8) -> Vec<u8> {
         packed.extend_from_slice(cast_slice(&pos));
         offset += 3;
 
-        // UV: f32x2 → f16x2 (4 bytes)
+        // UV: f32x2 → unorm16x2 (4 bytes)
         if has_uv {
-            let uv = pack_uv_f16(data[offset], data[offset + 1]);
+            let uv = pack_uv_unorm16(data[offset], data[offset + 1]);
             packed.extend_from_slice(cast_slice(&uv));
             offset += 2;
         }
@@ -206,27 +352,44 @@ pub fn pack_vertex_data(data: &[f32], format: u8) -> Vec<u8> {
             offset += 3;
         }
 
-        // Normal: f32x3 → snorm16x4 (8 bytes)
+        // Normal: f32x3 → octahedral u32 (4 bytes)
         if has_normal {
-            let normal = pack_normal_snorm16(data[offset], data[offset + 1], data[offset + 2]);
-            packed.extend_from_slice(cast_slice(&normal));
+            let normal = pack_normal_octahedral(data[offset], data[offset + 1], data[offset + 2]);
+            packed.extend_from_slice(&normal.to_le_bytes());
             offset += 3;
         }
 
-        // Skinning: Keep as-is (not packed)
+        // Skinning: bone indices (u8x4) + bone weights (unorm8x4)
         if has_skinning {
-            // TODO: Implement skinning data packing when skinning is used
-            // For now, this is a placeholder
-            tracing::warn!("Skinning data packing not yet implemented");
+            // Bone indices: 4 f32 → u8x4 (4 bytes)
+            let bone_indices = [
+                data[offset] as u8,
+                data[offset + 1] as u8,
+                data[offset + 2] as u8,
+                data[offset + 3] as u8,
+            ];
+            packed.extend_from_slice(&bone_indices);
+            offset += 4;
+
+            // Bone weights: 4 f32 → unorm8x4 (4 bytes)
+            let bone_weights = pack_bone_weights_unorm8([
+                data[offset],
+                data[offset + 1],
+                data[offset + 2],
+                data[offset + 3],
+            ]);
+            packed.extend_from_slice(&bone_weights);
+            offset += 4;
         }
+        let _ = offset; // Suppress unused warning
     }
 
     packed
 }
 
-/// Write a packed POS_UV_NORMAL vertex to a byte buffer (20 bytes)
+/// Write a packed POS_UV_NORMAL vertex to a byte buffer (16 bytes)
 ///
-/// Uses bytemuck to cast f16/i16 arrays to bytes efficiently.
+/// Uses bytemuck to cast arrays to bytes efficiently.
 ///
 /// # Arguments
 /// * `buf` - Byte buffer to write to
@@ -238,16 +401,16 @@ pub fn write_vertex_uv_normal(buf: &mut Vec<u8>, pos: [f32; 3], uv: [f32; 2], no
     let pos_packed = pack_position_f16(pos[0], pos[1], pos[2]);
     buf.extend_from_slice(cast_slice(&pos_packed)); // bytemuck: [f16; 4] -> &[u8]
 
-    // UV: Float16x2 (4 bytes)
-    let uv_packed = pack_uv_f16(uv[0], uv[1]);
-    buf.extend_from_slice(cast_slice(&uv_packed)); // bytemuck: [f16; 2] -> &[u8]
+    // UV: Unorm16x2 (4 bytes)
+    let uv_packed = pack_uv_unorm16(uv[0], uv[1]);
+    buf.extend_from_slice(cast_slice(&uv_packed)); // bytemuck: [u16; 2] -> &[u8]
 
-    // Normal: Snorm16x4 (8 bytes)
-    let norm_packed = pack_normal_snorm16(normal[0], normal[1], normal[2]);
-    buf.extend_from_slice(cast_slice(&norm_packed)); // bytemuck: [i16; 4] -> &[u8]
+    // Normal: Octahedral u32 (4 bytes)
+    let norm_packed = pack_normal_octahedral(normal[0], normal[1], normal[2]);
+    buf.extend_from_slice(&norm_packed.to_le_bytes());
 }
 
-/// Write a packed POS_NORMAL vertex to a byte buffer (16 bytes)
+/// Write a packed POS_NORMAL vertex to a byte buffer (12 bytes)
 ///
 /// # Arguments
 /// * `buf` - Byte buffer to write to
@@ -258,9 +421,9 @@ pub fn write_vertex_normal(buf: &mut Vec<u8>, pos: [f32; 3], normal: [f32; 3]) {
     let pos_packed = pack_position_f16(pos[0], pos[1], pos[2]);
     buf.extend_from_slice(cast_slice(&pos_packed));
 
-    // Normal: Snorm16x4 (8 bytes)
-    let norm_packed = pack_normal_snorm16(normal[0], normal[1], normal[2]);
-    buf.extend_from_slice(cast_slice(&norm_packed));
+    // Normal: Octahedral u32 (4 bytes)
+    let norm_packed = pack_normal_octahedral(normal[0], normal[1], normal[2]);
+    buf.extend_from_slice(&norm_packed.to_le_bytes());
 }
 
 #[cfg(test)]

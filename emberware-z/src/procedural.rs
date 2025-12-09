@@ -3,15 +3,15 @@
 //! Functions for generating common 3D primitives with proper normals.
 //!
 //! All procedural meshes generate PACKED vertex data for memory efficiency:
-//! - Format 4 (POS_NORMAL): 16 bytes/vertex (f16x4 + snorm16x4)
-//! - Format 5 (POS_UV_NORMAL): 20 bytes/vertex (f16x4 + f16x2 + snorm16x4)
+//! - Format 4 (POS_NORMAL): 12 bytes/vertex (f16x4 + octahedral u32)
+//! - Format 5 (POS_UV_NORMAL): 16 bytes/vertex (f16x4 + unorm16x2 + octahedral u32)
 
 use bytemuck::cast_slice;
 use glam::Vec3;
 use std::f32::consts::PI;
 use tracing::warn;
 
-use crate::graphics::{pack_position_f16, pack_uv_f16, pack_normal_snorm16};
+use crate::graphics::{pack_position_f16, pack_uv_unorm16, pack_normal_octahedral};
 
 /// Vertex with position and normal (no UVs - for solid color rendering)
 #[derive(Clone, Copy, Debug)]
@@ -76,7 +76,7 @@ impl VertexUV {
 
 /// Generated mesh data (PACKED FORMAT - POS_NORMAL)
 pub struct MeshData {
-    /// Packed vertex data: [f16x4, snorm16x4] = 16 bytes per vertex
+    /// Packed vertex data: [f16x4, octahedral u32] = 12 bytes per vertex
     pub vertices: Vec<u8>,
     /// Triangle indices (u16 for GPU compatibility)
     pub indices: Vec<u16>,
@@ -93,15 +93,15 @@ impl MeshData {
 
     /// Add a packed vertex (POS_NORMAL) and return its index
     fn add_vertex(&mut self, vertex: Vertex) -> u16 {
-        let index = (self.vertices.len() / 16) as u16;
+        let index = (self.vertices.len() / 12) as u16;
 
         // Pack position as [f16; 4] and cast to bytes using bytemuck
         let pos_packed = pack_position_f16(vertex.position.x, vertex.position.y, vertex.position.z);
         self.vertices.extend_from_slice(cast_slice(&pos_packed)); // [f16; 4] → &[u8]
 
-        // Pack normal as [i16; 4] and cast to bytes using bytemuck
-        let norm_packed = pack_normal_snorm16(vertex.normal.x, vertex.normal.y, vertex.normal.z);
-        self.vertices.extend_from_slice(cast_slice(&norm_packed)); // [i16; 4] → &[u8]
+        // Pack normal as octahedral u32 (4 bytes)
+        let norm_packed = pack_normal_octahedral(vertex.normal.x, vertex.normal.y, vertex.normal.z);
+        self.vertices.extend_from_slice(&norm_packed.to_le_bytes()); // u32 → &[u8; 4]
 
         index
     }
@@ -116,7 +116,7 @@ impl MeshData {
 
 /// Generated mesh data with UVs (PACKED FORMAT)
 pub struct MeshDataUV {
-    /// Packed vertex data: [f16x4, f16x2, snorm16x4] = 20 bytes per vertex
+    /// Packed vertex data: [f16x4, unorm16x2, octahedral u32] = 16 bytes per vertex
     pub vertices: Vec<u8>,
     /// Triangle indices (u16 for GPU compatibility)
     pub indices: Vec<u16>,
@@ -133,19 +133,19 @@ impl MeshDataUV {
 
     /// Add a packed UV vertex and return its index
     fn add_vertex(&mut self, vertex: VertexUV) -> u16 {
-        let index = (self.vertices.len() / 20) as u16;
+        let index = (self.vertices.len() / 16) as u16;
 
         // Pack position as [f16; 4] and cast to bytes using bytemuck
         let pos_packed = pack_position_f16(vertex.position.x, vertex.position.y, vertex.position.z);
         self.vertices.extend_from_slice(cast_slice(&pos_packed)); // [f16; 4] → &[u8]
 
-        // Pack UV as [f16; 2] and cast to bytes using bytemuck
-        let uv_packed = pack_uv_f16(vertex.uv.0, vertex.uv.1);
-        self.vertices.extend_from_slice(cast_slice(&uv_packed)); // [f16; 2] → &[u8]
+        // Pack UV as [u16; 2] (unorm16) and cast to bytes using bytemuck
+        let uv_packed = pack_uv_unorm16(vertex.uv.0, vertex.uv.1);
+        self.vertices.extend_from_slice(cast_slice(&uv_packed)); // [u16; 2] → &[u8]
 
-        // Pack normal as [i16; 4] and cast to bytes using bytemuck
-        let norm_packed = pack_normal_snorm16(vertex.normal.x, vertex.normal.y, vertex.normal.z);
-        self.vertices.extend_from_slice(cast_slice(&norm_packed)); // [i16; 4] → &[u8]
+        // Pack normal as octahedral u32 (4 bytes)
+        let norm_packed = pack_normal_octahedral(vertex.normal.x, vertex.normal.y, vertex.normal.z);
+        self.vertices.extend_from_slice(&norm_packed.to_le_bytes()); // u32 → &[u8; 4]
 
         index
     }
@@ -443,7 +443,7 @@ pub fn generate_cylinder(
     let half_height = height * 0.5;
 
     // Generate body vertices (two rings: bottom and top)
-    let body_start_index = mesh.vertices.len() / 8;
+    let body_start_index = mesh.vertices.len() / 12;
 
     for i in 0..segments {
         let theta = (i as f32 / segments as f32) * 2.0 * PI;
@@ -683,7 +683,7 @@ pub fn generate_capsule(radius: f32, height: f32, segments: u32, rings: u32) -> 
     }
 
     // Generate cylinder body vertices (two rings)
-    let body_start_index = mesh.vertices.len() / 8;
+    let body_start_index = mesh.vertices.len() / 12;
 
     for i in 0..segments {
         let theta = (i as f32 / segments as f32) * 2.0 * PI;
@@ -1488,35 +1488,33 @@ pub fn generate_capsule_uv(radius: f32, height: f32, segments: u32, rings: u32) 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::graphics::unpack_octahedral_u32;
     use half::f16;
 
     // Helper functions to unpack packed vertex data for testing
-    // Packed format: Position (f16x4, 8 bytes) + Normal (snorm16x4, 8 bytes) = 16 bytes/vertex
+    // Packed format: Position (f16x4, 8 bytes) + Normal (octahedral u32, 4 bytes) = 12 bytes/vertex
 
     /// Unpack position from packed vertex data
     fn unpack_position(data: &[u8], vertex_idx: usize) -> [f32; 3] {
-        let base = vertex_idx * 16; // 16 bytes per vertex (POS_NORMAL packed)
+        let base = vertex_idx * 12; // 12 bytes per vertex (POS_NORMAL packed)
         let pos_bytes = &data[base..base + 8]; // f16x4 position (8 bytes)
         let pos: &[f16; 4] = bytemuck::from_bytes(&pos_bytes[0..8]);
         [pos[0].to_f32(), pos[1].to_f32(), pos[2].to_f32()]
     }
 
-    /// Unpack normal from packed vertex data
+    /// Unpack normal from packed vertex data (octahedral encoded)
     fn unpack_normal(data: &[u8], vertex_idx: usize) -> [f32; 3] {
-        let base = vertex_idx * 16 + 8; // Skip position (8 bytes)
-        let norm_bytes = &data[base..base + 8]; // snorm16x4 normal (8 bytes)
-        let norm: &[i16; 4] = bytemuck::from_bytes(&norm_bytes[0..8]);
-        [
-            norm[0] as f32 / 32767.0,
-            norm[1] as f32 / 32767.0,
-            norm[2] as f32 / 32767.0,
-        ]
+        let base = vertex_idx * 12 + 8; // Skip position (8 bytes)
+        let norm_bytes = &data[base..base + 4]; // octahedral u32 (4 bytes)
+        let packed = u32::from_le_bytes([norm_bytes[0], norm_bytes[1], norm_bytes[2], norm_bytes[3]]);
+        let normal = unpack_octahedral_u32(packed);
+        [normal.x, normal.y, normal.z]
     }
 
     #[test]
     fn test_cube_counts() {
         let mesh = generate_cube(1.0, 1.0, 1.0);
-        assert_eq!(mesh.vertices.len(), 24 * 16); // 24 vertices × 16 bytes (POS_NORMAL packed)
+        assert_eq!(mesh.vertices.len(), 24 * 12); // 24 vertices × 12 bytes (POS_NORMAL packed)
         assert_eq!(mesh.indices.len(), 36); // 6 faces × 2 triangles × 3
     }
 
@@ -1525,7 +1523,7 @@ mod tests {
         let mesh = generate_sphere(1.0, 16, 8);
         let expected_verts = (8 + 1) * 16; // (rings + 1) × segments
         let expected_indices = 8 * 16 * 6; // rings × segments × 6
-        assert_eq!(mesh.vertices.len(), expected_verts * 16); // 16 bytes per vertex (packed)
+        assert_eq!(mesh.vertices.len(), expected_verts * 12); // 12 bytes per vertex (packed)
         assert_eq!(mesh.indices.len(), expected_indices);
     }
 
@@ -1534,14 +1532,14 @@ mod tests {
         let mesh = generate_plane(2.0, 2.0, 4, 4);
         let expected_verts = (4 + 1) * (4 + 1); // (subdivisions_x + 1) × (subdivisions_z + 1)
         let expected_indices = 4 * 4 * 6; // subdivisions_x × subdivisions_z × 6
-        assert_eq!(mesh.vertices.len(), expected_verts * 16); // 16 bytes per vertex (packed)
+        assert_eq!(mesh.vertices.len(), expected_verts * 12); // 12 bytes per vertex (packed)
         assert_eq!(mesh.indices.len(), expected_indices);
     }
 
     #[test]
     fn test_normals_normalized() {
         let mesh = generate_sphere(1.0, 16, 8);
-        let vertex_count = mesh.vertices.len() / 16; // 16 bytes per vertex
+        let vertex_count = mesh.vertices.len() / 12; // 12 bytes per vertex
 
         // Check every normal is unit length
         for i in 0..vertex_count {
@@ -1997,7 +1995,7 @@ mod tests {
     #[test]
     fn test_sphere_vertex_normals_point_outward() {
         let mesh = generate_sphere(1.0, 16, 8);
-        let vertex_count = mesh.vertices.len() / 16; // 16 bytes per vertex (POS_NORMAL packed)
+        let vertex_count = mesh.vertices.len() / 12; // 12 bytes per vertex (POS_NORMAL packed)
 
         // For a unit sphere centered at origin, the vertex normal should equal
         // the normalized vertex position (pointing outward from center)

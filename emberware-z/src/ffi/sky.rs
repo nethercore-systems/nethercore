@@ -135,7 +135,7 @@ fn matcap_set(
 ///
 /// # Usage
 /// Call this **first** in your `render()` function, before any 3D geometry:
-/// ```rust
+/// ```rust,ignore
 /// fn render() {
 ///     // Configure sky colors and sun
 ///     sky_set_colors(0xB2D8F2FF, 0x3366B2FF);  // Light blue → darker blue

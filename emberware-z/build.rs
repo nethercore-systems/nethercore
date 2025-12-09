@@ -28,7 +28,7 @@ const QUAD_TEMPLATE: &str = include_str!("shaders/quad_template.wgsl");
 // Placeholder snippets (must match shader_gen.rs)
 const VIN_UV: &str = "@location(1) uv: vec2<f32>,";
 const VIN_COLOR: &str = "@location(2) color: vec3<f32>,";
-const VIN_NORMAL: &str = "@location(3) normal: vec3<f32>,";
+const VIN_NORMAL: &str = "@location(3) normal_packed: u32,";
 const VIN_SKINNED: &str =
     "@location(4) bone_indices: vec4<u32>,\n    @location(5) bone_weights: vec4<f32>,";
 
@@ -42,15 +42,16 @@ const VOUT_COLOR: &str = "@location(11) color: vec3<f32>,";
 const VS_UV: &str = "out.uv = in.uv;";
 const VS_COLOR: &str = "out.color = in.color;";
 const VS_WORLD_NORMAL: &str =
-    "let world_normal_raw = (model_matrix * vec4<f32>(in.normal, 0.0)).xyz;\n    out.world_normal = normalize(world_normal_raw);";
+    "let normal = unpack_octahedral(in.normal_packed);\n    let world_normal_raw = (model_matrix * vec4<f32>(normal, 0.0)).xyz;\n    out.world_normal = normalize(world_normal_raw);";
 const VS_VIEW_NORMAL: &str =
-    "let view_normal = (view_matrix * vec4<f32>(out.world_normal, 0.0)).xyz;\n    out.view_normal = normalize(view_normal);";
+    "let view_rot = mat3x3<f32>(view_matrix[0].xyz, view_matrix[1].xyz, view_matrix[2].xyz);\n    out.view_normal = normalize(out.world_normal * view_rot);";
 const VS_VIEW_POS: &str = "let view_pos_4 = view_matrix * model_matrix * world_pos;\n    out.view_position = view_pos_4.xyz;";
 const VS_CAMERA_POS: &str = "out.camera_position = extract_camera_position(view_matrix);";
 
 const VS_SKINNED: &str = r#"// GPU skinning: compute skinned position and normal
     var skinned_pos = vec3<f32>(0.0, 0.0, 0.0);
     var skinned_normal = vec3<f32>(0.0, 0.0, 0.0);
+    //VS_SKINNED_UNPACK_NORMAL
 
     for (var i = 0u; i < 4u; i++) {
         let bone_idx = in.bone_indices[i];
@@ -66,8 +67,9 @@ const VS_SKINNED: &str = r#"// GPU skinning: compute skinned position and normal
     let final_position = skinned_pos;
     //VS_SKINNED_FINAL_NORMAL"#;
 
+const VS_SKINNED_UNPACK_NORMAL: &str = "let input_normal = unpack_octahedral(in.normal_packed);";
 const VS_SKINNED_NORMAL: &str =
-    "skinned_normal += (bone_matrix * vec4<f32>(in.normal, 0.0)).xyz * weight;";
+    "skinned_normal += (bone_matrix * vec4<f32>(input_normal, 0.0)).xyz * weight;";
 const VS_SKINNED_FINAL_NORMAL: &str = "let final_normal = normalize(skinned_normal);";
 
 const VS_POSITION_SKINNED: &str = "let world_pos = vec4<f32>(final_position, 1.0);";
@@ -159,7 +161,7 @@ fn generate_shader(mode: u8, format: u8) -> Result<String, String> {
     } else if has_normal && has_skinned {
         let skinned_world_normal = "out.world_normal = normalize(final_normal);";
         let skinned_view_normal =
-            "let view_normal = (view_matrix * vec4<f32>(final_normal, 0.0)).xyz;\n    out.view_normal = normalize(view_normal);";
+            "let view_rot = mat3x3<f32>(view_matrix[0].xyz, view_matrix[1].xyz, view_matrix[2].xyz);\n    out.view_normal = normalize(final_normal * view_rot);";
         shader = shader.replace("//VS_WORLD_NORMAL", skinned_world_normal);
         shader = shader.replace("//VS_VIEW_NORMAL", skinned_view_normal);
     } else {
@@ -184,6 +186,14 @@ fn generate_shader(mode: u8, format: u8) -> Result<String, String> {
     // Handle skinning with nested replacements
     if has_skinned {
         let mut skinned_code = VS_SKINNED.to_string();
+        skinned_code = skinned_code.replace(
+            "//VS_SKINNED_UNPACK_NORMAL",
+            if has_normal {
+                VS_SKINNED_UNPACK_NORMAL
+            } else {
+                ""
+            },
+        );
         skinned_code = skinned_code.replace(
             "//VS_SKINNED_NORMAL",
             if has_normal { VS_SKINNED_NORMAL } else { "" },

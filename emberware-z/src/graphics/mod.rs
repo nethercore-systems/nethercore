@@ -100,7 +100,8 @@ pub use vertex::{
 
 // Re-export packing functions for FFI use
 pub use packing::{
-    pack_color_rgba_unorm8, pack_normal_snorm16, pack_position_f16, pack_uv_f16, pack_vertex_data,
+    pack_bone_weights_unorm8, pack_color_rgba_unorm8, pack_normal_octahedral, pack_normal_snorm16,
+    pack_position_f16, pack_uv_f16, pack_uv_unorm16, pack_vertex_data, unpack_octahedral_u32,
 };
 
 // Re-export for crate-internal use

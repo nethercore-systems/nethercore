@@ -46,7 +46,7 @@ pub const fn vertex_stride(format: u8) -> u32 {
 
 /// Calculate vertex stride in bytes for packed format (used by power user API)
 ///
-/// All formats are packed (f16, snorm16, unorm8) since GPU buffers only use packed data.
+/// All formats are packed since GPU buffers only use packed data.
 /// Format values are 0-15 (base format, no FORMAT_PACKED flag).
 #[inline]
 pub const fn vertex_stride_packed(format: u8) -> u32 {
@@ -54,16 +54,16 @@ pub const fn vertex_stride_packed(format: u8) -> u32 {
     let mut stride = 8;
 
     if format & FORMAT_UV != 0 {
-        stride += 4; // Float16x2
+        stride += 4; // Unorm16x2
     }
     if format & FORMAT_COLOR != 0 {
         stride += 4; // Unorm8x4
     }
     if format & FORMAT_NORMAL != 0 {
-        stride += 8; // Snorm16x4
+        stride += 4; // Octahedral u32
     }
     if format & FORMAT_SKINNED != 0 {
-        stride += 20; // Bone data (unchanged)
+        stride += 8; // Bone indices (u8x4) + weights (unorm8x4)
     }
 
     stride
@@ -157,15 +157,15 @@ impl VertexFormatInfo {
 
     /// Builds packed vertex attributes for a format.
     ///
-    /// GPU always uses packed formats (f16, snorm16, unorm8).
+    /// GPU always uses packed formats.
     ///
     /// Shader locations are assigned in order:
     /// - Location 0: Position (Float16x4, padded)
-    /// - Location 1: UV (if FORMAT_UV, Float16x2)
+    /// - Location 1: UV (if FORMAT_UV, Unorm16x2)
     /// - Location 2: Color (if FORMAT_COLOR, Unorm8x4)
-    /// - Location 3: Normal (if FORMAT_NORMAL, Snorm16x4)
+    /// - Location 3: Normal (if FORMAT_NORMAL, Uint32 octahedral)
     /// - Location 4: Bone indices (if FORMAT_SKINNED, Uint8x4)
-    /// - Location 5: Bone weights (if FORMAT_SKINNED, Float32x4)
+    /// - Location 5: Bone weights (if FORMAT_SKINNED, Unorm8x4)
     fn build_attributes(format: u8) -> &'static [wgpu::VertexAttribute] {
         VERTEX_ATTRIBUTES[format as usize]
     }
@@ -173,11 +173,11 @@ impl VertexFormatInfo {
 
 /// Attribute sizes in bytes for offset calculation (packed formats - GPU only)
 const SIZE_POS: u64 = 8; // Float16x4 (padded for alignment)
-const SIZE_UV: u64 = 4; // Float16x2
+const SIZE_UV: u64 = 4; // Unorm16x2
 const SIZE_COLOR: u64 = 4; // Unorm8x4
-const SIZE_NORMAL: u64 = 8; // Snorm16x4 (padded for alignment)
+const SIZE_NORMAL: u64 = 4; // Octahedral u32
 const SIZE_BONE_INDICES: u64 = 4; // Uint8x4
-                                  // Note: SIZE_BONE_WEIGHTS (16 bytes) is not needed since bone weights is always last
+const SIZE_BONE_WEIGHTS: u64 = 4; // Unorm8x4
 
 /// Shader locations for each attribute type
 const LOC_POS: u32 = 0;
@@ -196,10 +196,10 @@ const fn attr_pos() -> wgpu::VertexAttribute {
     }
 }
 
-/// Creates a UV attribute at the given offset (Float16x2)
+/// Creates a UV attribute at the given offset (Unorm16x2)
 const fn attr_uv(offset: u64) -> wgpu::VertexAttribute {
     wgpu::VertexAttribute {
-        format: wgpu::VertexFormat::Float16x2,
+        format: wgpu::VertexFormat::Unorm16x2,
         offset,
         shader_location: LOC_UV,
     }
@@ -214,10 +214,10 @@ const fn attr_color(offset: u64) -> wgpu::VertexAttribute {
     }
 }
 
-/// Creates a normal attribute at the given offset (Snorm16x4)
+/// Creates a normal attribute at the given offset (Uint32 - octahedral encoded)
 const fn attr_normal(offset: u64) -> wgpu::VertexAttribute {
     wgpu::VertexAttribute {
-        format: wgpu::VertexFormat::Snorm16x4,
+        format: wgpu::VertexFormat::Uint32,
         offset,
         shader_location: LOC_NORMAL,
     }
@@ -232,10 +232,10 @@ const fn attr_bone_indices(offset: u64) -> wgpu::VertexAttribute {
     }
 }
 
-/// Creates bone weights attribute at the given offset (Float32x4)
+/// Creates bone weights attribute at the given offset (Unorm8x4)
 const fn attr_bone_weights(offset: u64) -> wgpu::VertexAttribute {
     wgpu::VertexAttribute {
-        format: wgpu::VertexFormat::Float32x4,
+        format: wgpu::VertexFormat::Unorm8x4,
         offset,
         shader_location: LOC_BONE_WEIGHTS,
     }
@@ -504,7 +504,7 @@ mod tests {
         assert!(!format.has_normal());
         assert!(format.has_skinned());
         assert_eq!(format.name, "POS_SKINNED");
-        assert_eq!(format.stride, 28); // Packed: pos(8) + skinned(20) = 28
+        assert_eq!(format.stride, 16); // Packed: pos(8) + skinned(8) = 16
     }
 
     #[test]
@@ -515,7 +515,7 @@ mod tests {
         assert!(format.has_normal());
         assert!(format.has_skinned());
         assert_eq!(format.name, "POS_UV_COLOR_NORMAL_SKINNED");
-        assert_eq!(format.stride, 44); // Packed: pos(8) + uv(4) + color(4) + normal(8) + skinned(20) = 44
+        assert_eq!(format.stride, 28); // Packed: pos(8) + uv(4) + color(4) + normal(4) + skinned(8) = 28
     }
 
     #[test]
@@ -555,7 +555,7 @@ mod tests {
             assert!(!base_info.has_skinned());
             assert!(skinned_info.has_skinned());
 
-            assert_eq!(skinned_info.stride, base_info.stride + 20);
+            assert_eq!(skinned_info.stride, base_info.stride + 8); // skinned = u8x4 indices + unorm8x4 weights = 8 bytes
         }
     }
 
@@ -581,7 +581,7 @@ mod tests {
     fn test_vertex_buffer_layout_full() {
         let info = VertexFormatInfo::for_format(FORMAT_ALL);
         let layout = info.vertex_buffer_layout();
-        assert_eq!(layout.array_stride, 44); // Packed: pos(8) + uv(4) + color(4) + normal(8) + skinned(20) = 44
+        assert_eq!(layout.array_stride, 28); // Packed: pos(8) + uv(4) + color(4) + normal(4) + skinned(8) = 28
         assert_eq!(layout.attributes.len(), 6);
     }
 
@@ -589,7 +589,7 @@ mod tests {
     fn test_vertex_attribute_offsets_pos_uv_color_normal() {
         let info = VertexFormatInfo::for_format(FORMAT_UV | FORMAT_COLOR | FORMAT_NORMAL);
         let layout = info.vertex_buffer_layout();
-        // Packed offsets: pos(0-7), uv(8-11), color(12-15), normal(16-23)
+        // Packed offsets: pos(0-7), uv(8-11), color(12-15), normal(16-19)
         assert_eq!(layout.attributes[0].offset, 0);  // Position at 0
         assert_eq!(layout.attributes[1].offset, 8);  // UV at 8
         assert_eq!(layout.attributes[2].offset, 12); // Color at 12
