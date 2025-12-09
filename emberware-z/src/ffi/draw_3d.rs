@@ -113,14 +113,9 @@ fn draw_triangles(
 
     let state = &mut caller.data_mut().console;
 
-    // Texture mapping happens in process_draw_commands() using session.texture_map
-    // FFI doesn't have access to the texture map, so we use placeholders here
-    let texture_slots = [
-        crate::graphics::TextureHandle::INVALID,
-        crate::graphics::TextureHandle::INVALID,
-        crate::graphics::TextureHandle::INVALID,
-        crate::graphics::TextureHandle::INVALID,
-    ];
+    // Capture bound_textures at command creation time (not deferred)
+    // They are resolved to TextureHandle at render time via texture_map
+    let textures = state.bound_textures;
 
     let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
     let blend_mode = crate::graphics::BlendMode::from_u8(state.blend_mode);
@@ -133,7 +128,7 @@ fn draw_triangles(
         format,
         &vertex_data,
         buffer_index,
-        texture_slots,
+        textures,
         blend_mode,
         state.depth_test,
         cull_mode,
@@ -274,14 +269,9 @@ fn draw_triangles_indexed(
 
     let state = &mut caller.data_mut().console;
 
-    // Texture mapping happens in process_draw_commands() using session.texture_map
-    // FFI doesn't have access to the texture map, so we use placeholders here
-    let texture_slots = [
-        crate::graphics::TextureHandle::INVALID,
-        crate::graphics::TextureHandle::INVALID,
-        crate::graphics::TextureHandle::INVALID,
-        crate::graphics::TextureHandle::INVALID,
-    ];
+    // Capture bound_textures at command creation time (not deferred)
+    // They are resolved to TextureHandle at render time via texture_map
+    let textures = state.bound_textures;
 
     let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
     let blend_mode = crate::graphics::BlendMode::from_u8(state.blend_mode);
@@ -295,7 +285,7 @@ fn draw_triangles_indexed(
         &vertex_data,
         &index_data,
         buffer_index,
-        texture_slots,
+        textures,
         blend_mode,
         state.depth_test,
         cull_mode,

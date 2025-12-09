@@ -256,7 +256,12 @@ impl App {
                 if let Some(session) = &mut self.game_session {
                     if let Some(game) = session.runtime.game_mut() {
                         let z_state = game.console_state_mut();
-                        graphics.render_frame(&mut encoder, z_state, clear_color);
+                        graphics.render_frame(
+                            &mut encoder,
+                            z_state,
+                            &session.resource_manager.texture_map,
+                            clear_color,
+                        );
                     }
                 }
             }

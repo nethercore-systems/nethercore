@@ -544,14 +544,9 @@ fn draw_mesh(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, ha
     let mesh_vertex_offset = mesh.vertex_offset;
     let mesh_index_offset = mesh.index_offset;
 
-    // Texture mapping happens in process_draw_commands() using session.texture_map
-    // FFI doesn't have access to the texture map, so we use placeholders here
-    let texture_slots = [
-        crate::graphics::TextureHandle::INVALID,
-        crate::graphics::TextureHandle::INVALID,
-        crate::graphics::TextureHandle::INVALID,
-        crate::graphics::TextureHandle::INVALID,
-    ];
+    // Capture bound_textures at command creation time (not deferred)
+    // They are resolved to TextureHandle at render time via texture_map
+    let textures = state.bound_textures;
 
     let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
     let blend_mode = crate::graphics::BlendMode::from_u8(state.blend_mode);
@@ -567,7 +562,7 @@ fn draw_mesh(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, ha
         mesh_vertex_offset,
         mesh_index_offset,
         buffer_index,
-        texture_slots,
+        textures,
         blend_mode,
         state.depth_test,
         cull_mode,

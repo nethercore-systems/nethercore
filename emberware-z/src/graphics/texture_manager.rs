@@ -259,4 +259,32 @@ impl TextureManager {
     pub fn vram_limit(&self) -> usize {
         VRAM_LIMIT
     }
+
+    /// Clear all game textures (preserves font and fallback textures)
+    ///
+    /// This implements the "clear-on-init" pattern - clearing at the start of
+    /// loading a new game rather than when exiting. This handles crashes/failed
+    /// init gracefully since the next game load will clear stale state.
+    pub fn clear_game_textures(&mut self) {
+        // Keep only the built-in textures (checkerboard, white, font)
+        let checkerboard_id = self.fallback_checkerboard.0;
+        let white_id = self.fallback_white.0;
+        let font_id = self.font_texture.0;
+
+        self.textures
+            .retain(|&id, _| id == checkerboard_id || id == white_id || id == font_id);
+
+        // Reset next_texture_id to after the built-in textures
+        // The built-in textures have IDs 1, 2, 3 (0 is INVALID)
+        self.next_texture_id = 4;
+
+        // Recalculate vram_used from remaining textures
+        self.vram_used = self.textures.values().map(|e| e.size_bytes).sum();
+
+        tracing::debug!(
+            "Cleared game textures, {} built-in textures remain, VRAM: {} bytes",
+            self.textures.len(),
+            self.vram_used
+        );
+    }
 }

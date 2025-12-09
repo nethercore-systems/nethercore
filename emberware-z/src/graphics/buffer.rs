@@ -572,6 +572,23 @@ impl BufferManager {
             .buffer()
             .expect("Quad instance buffer should always exist")
     }
+
+    /// Clear all retained meshes (call when switching games)
+    ///
+    /// This implements the "clear-on-init" pattern - clearing at the start of
+    /// loading a new game rather than when exiting. This handles crashes/failed
+    /// init gracefully since the next game load will clear stale state.
+    pub fn clear_game_meshes(&mut self) {
+        self.retained_meshes.clear();
+        self.next_mesh_id = 1;
+        for buf in &mut self.retained_vertex_buffers {
+            buf.reset();
+        }
+        for buf in &mut self.retained_index_buffers {
+            buf.reset();
+        }
+        tracing::debug!("Cleared retained meshes for new game");
+    }
 }
 
 #[cfg(test)]

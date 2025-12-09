@@ -12,7 +12,7 @@ use std::sync::Arc;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
-use super::vertex::{vertex_stride, FORMAT_COLOR, FORMAT_UV};
+use super::vertex::{vertex_stride_packed, FORMAT_COLOR, FORMAT_UV};
 use super::ZGraphics;
 
 /// Offscreen render target for fixed internal resolution
@@ -225,9 +225,10 @@ impl ZGraphics {
             0, 2, 3, // Second triangle
         ];
 
-        // Upload unit quad to retained vertex buffer
-        let vertex_bytes = bytemuck::cast_slice(&unit_quad_vertices);
-        let stride = vertex_stride(unit_quad_format);
+        // Upload unit quad to retained vertex buffer (PACKED format for GPU)
+        use super::packing::pack_vertex_data;
+        let packed_vertices = pack_vertex_data(&unit_quad_vertices, unit_quad_format);
+        let stride = vertex_stride_packed(unit_quad_format);
 
         // Get the current position in the vertex buffer (this will be our base_vertex)
         let unit_quad_base_vertex = {
@@ -235,10 +236,10 @@ impl ZGraphics {
             (retained_vertex_buf.used() / stride as u64) as u32
         };
 
-        // Write vertex data to buffer
+        // Write packed vertex data to buffer
         let retained_vertex_buf_mut = buffer_manager.retained_vertex_buffer_mut(unit_quad_format);
-        retained_vertex_buf_mut.ensure_capacity(&device, vertex_bytes.len() as u64);
-        retained_vertex_buf_mut.write(&queue, vertex_bytes);
+        retained_vertex_buf_mut.ensure_capacity(&device, packed_vertices.len() as u64);
+        retained_vertex_buf_mut.write(&queue, &packed_vertices);
 
         // Upload unit quad to retained index buffer
         let index_bytes = bytemuck::cast_slice(&unit_quad_indices);

@@ -29,44 +29,14 @@ impl ZGraphics {
         // will be cleared when z_state.clear_frame() is called.
         std::mem::swap(&mut self.command_buffer, &mut z_state.render_pass);
 
-        // 1.1. Remap texture handles from FFI handles to graphics handles
-        // FFI functions (draw_triangles, draw_mesh) store INVALID placeholders because they
-        // don't have access to session.texture_map. Now we remap them using bound_textures.
-        for cmd in self.command_buffer.commands_mut() {
-            // Get mutable reference to texture_slots based on variant
-            let texture_slots = match cmd {
-                super::command_buffer::VRPCommand::Mesh { texture_slots, .. } => texture_slots,
-                super::command_buffer::VRPCommand::IndexedMesh { texture_slots, .. } => {
-                    texture_slots
-                }
-                super::command_buffer::VRPCommand::Quad { texture_slots, .. } => texture_slots,
-                super::command_buffer::VRPCommand::Sky { .. } => {
-                    // Sky doesn't use textures, skip remapping
-                    continue;
-                }
-            };
-
-            if texture_slots[0] == TextureHandle::INVALID {
-                *texture_slots = [
-                    texture_map
-                        .get(&z_state.bound_textures[0])
-                        .copied()
-                        .unwrap_or(TextureHandle::INVALID),
-                    texture_map
-                        .get(&z_state.bound_textures[1])
-                        .copied()
-                        .unwrap_or(TextureHandle::INVALID),
-                    texture_map
-                        .get(&z_state.bound_textures[2])
-                        .copied()
-                        .unwrap_or(TextureHandle::INVALID),
-                    texture_map
-                        .get(&z_state.bound_textures[3])
-                        .copied()
-                        .unwrap_or(TextureHandle::INVALID),
-                ];
-            }
-        }
+        // NOTE: Texture handle remapping was removed here.
+        // Mesh/IndexedMesh commands now capture FFI texture handles at command creation time
+        // (stored in `textures: [u32; 4]`), which are resolved to TextureHandle at render
+        // time in frame.rs via texture_map. This fixes the bug where deferred remapping
+        // used stale bound_textures state at frame end.
+        //
+        // Quad commands already work correctly - they capture textures via QuadBatch
+        // and resolve them when creating VRPCommand::Quad in process_draw_commands().
 
         // Ensure default shading state exists for deferred commands.
         // Deferred commands (billboards, sprites, text) use ShadingStateIndex(0) by default.

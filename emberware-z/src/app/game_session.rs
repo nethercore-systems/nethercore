@@ -273,6 +273,12 @@ impl App {
 
     /// Start a game by loading its WASM and initializing the runtime
     pub(super) fn start_game(&mut self, game_id: &str) -> Result<(), RuntimeError> {
+        // Clear resources from previous game (clear-on-init pattern)
+        // This handles crashes/failed init gracefully since the next game load clears stale state
+        if let Some(graphics) = &mut self.graphics {
+            graphics.clear_game_resources();
+        }
+
         // Find the game in local games
         let game = self
             .local_games

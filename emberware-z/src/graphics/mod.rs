@@ -557,6 +557,17 @@ impl ZGraphics {
             state,
         )
     }
+
+    /// Clear game-specific resources (call when starting a new game)
+    ///
+    /// This implements the "clear-on-init" pattern - clearing at the start of
+    /// loading a new game rather than when exiting. This handles crashes/failed
+    /// init gracefully since the next game load will clear stale state.
+    pub fn clear_game_resources(&mut self) {
+        self.buffer_manager.clear_game_meshes();
+        self.texture_manager.clear_game_textures();
+        tracing::info!("Cleared game resources for new game");
+    }
 }
 
 impl Graphics for ZGraphics {

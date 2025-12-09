@@ -90,6 +90,7 @@ impl ZGraphics {
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
         z_state: &crate::state::ZFFIState,
+        texture_map: &hashbrown::HashMap<u32, TextureHandle>,
         clear_color: [f32; 4],
     ) {
         // If no commands, just clear render target
@@ -160,20 +161,21 @@ impl ZGraphics {
             .commands_mut()
             .sort_unstable_by_key(|cmd| {
                 // Extract fields from command variant
-                let (format, depth_test, cull_mode, texture_slots, _buffer_index, is_quad, is_sky) =
+                // For sorting, we use raw u32 texture values (consistent ordering is all we need)
+                let (format, depth_test, cull_mode, texture_ids, _buffer_index, is_quad, is_sky) =
                     match cmd {
                         VRPCommand::Mesh {
                             format,
                             depth_test,
                             cull_mode,
-                            texture_slots,
+                            textures,
                             buffer_index,
                             ..
                         } => (
                             *format,
                             *depth_test,
                             *cull_mode,
-                            *texture_slots,
+                            *textures, // FFI handles as [u32; 4]
                             Some(*buffer_index),
                             false,
                             false,
@@ -182,14 +184,14 @@ impl ZGraphics {
                             format,
                             depth_test,
                             cull_mode,
-                            texture_slots,
+                            textures,
                             buffer_index,
                             ..
                         } => (
                             *format,
                             *depth_test,
                             *cull_mode,
-                            *texture_slots,
+                            *textures, // FFI handles as [u32; 4]
                             Some(*buffer_index),
                             false,
                             false,
@@ -203,7 +205,13 @@ impl ZGraphics {
                             self.unit_quad_format,
                             *depth_test,
                             *cull_mode,
-                            *texture_slots,
+                            // Extract inner u32 from TextureHandle for consistent sort key type
+                            [
+                                texture_slots[0].0,
+                                texture_slots[1].0,
+                                texture_slots[2].0,
+                                texture_slots[3].0,
+                            ],
                             None,
                             true,
                             false,
@@ -214,7 +222,7 @@ impl ZGraphics {
                                 0,
                                 *depth_test,
                                 super::render_state::CullMode::None,
-                                [TextureHandle::INVALID; 4],
+                                [0u32; 4], // Sky doesn't use textures
                                 None,
                                 false,
                                 true,
@@ -282,10 +290,10 @@ impl ZGraphics {
                     blend_mode_u8,
                     depth_test_u8,
                     cull_mode_u8,
-                    texture_slots[0].0,
-                    texture_slots[1].0,
-                    texture_slots[2].0,
-                    texture_slots[3].0,
+                    texture_ids[0],
+                    texture_ids[1],
+                    texture_ids[2],
+                    texture_ids[3],
                 )
             });
 
@@ -455,8 +463,32 @@ impl ZGraphics {
             let mut bound_vertex_format: Option<(u8, BufferSource)> = None;
             let mut frame_bind_group_set = false;
 
+            // Helper closure to resolve FFI texture handles to TextureHandle
+            let resolve_textures = |textures: &[u32; 4]| -> [TextureHandle; 4] {
+                [
+                    texture_map
+                        .get(&textures[0])
+                        .copied()
+                        .unwrap_or(TextureHandle::INVALID),
+                    texture_map
+                        .get(&textures[1])
+                        .copied()
+                        .unwrap_or(TextureHandle::INVALID),
+                    texture_map
+                        .get(&textures[2])
+                        .copied()
+                        .unwrap_or(TextureHandle::INVALID),
+                    texture_map
+                        .get(&textures[3])
+                        .copied()
+                        .unwrap_or(TextureHandle::INVALID),
+                ]
+            };
+
             for cmd in self.command_buffer.commands() {
                 // Destructure command variant to extract common fields
+                // For Mesh/IndexedMesh: resolve FFI texture handles to TextureHandle
+                // For Quad: use texture_slots directly (already TextureHandle)
                 let (
                     format,
                     depth_test,
@@ -471,7 +503,7 @@ impl ZGraphics {
                         format,
                         depth_test,
                         cull_mode,
-                        texture_slots,
+                        textures,
                         buffer_index,
                         blend_mode,
                         ..
@@ -479,7 +511,7 @@ impl ZGraphics {
                         *format,
                         *depth_test,
                         *cull_mode,
-                        *texture_slots,
+                        resolve_textures(textures), // Resolve FFI handles at render time
                         BufferSource::Immediate(*buffer_index),
                         false,
                         false,
@@ -489,7 +521,7 @@ impl ZGraphics {
                         format,
                         depth_test,
                         cull_mode,
-                        texture_slots,
+                        textures,
                         buffer_index,
                         blend_mode,
                         ..
@@ -497,7 +529,7 @@ impl ZGraphics {
                         *format,
                         *depth_test,
                         *cull_mode,
-                        *texture_slots,
+                        resolve_textures(textures), // Resolve FFI handles at render time
                         BufferSource::Retained(*buffer_index),
                         false,
                         false,
@@ -513,7 +545,7 @@ impl ZGraphics {
                         self.unit_quad_format,
                         *depth_test,
                         *cull_mode,
-                        *texture_slots,
+                        *texture_slots, // Already TextureHandle
                         BufferSource::Quad,
                         true,
                         false,

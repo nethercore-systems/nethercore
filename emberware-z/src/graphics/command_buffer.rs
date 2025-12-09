@@ -38,7 +38,9 @@ pub enum VRPCommand {
         vertex_count: u32,
         base_vertex: u32,
         buffer_index: u32,
-        texture_slots: [TextureHandle; 4],
+        /// FFI texture handles captured at command creation time.
+        /// Resolved to TextureHandle at render time via texture_map.
+        textures: [u32; 4],
         blend_mode: BlendMode,
         depth_test: bool,
         cull_mode: CullMode,
@@ -50,7 +52,9 @@ pub enum VRPCommand {
         base_vertex: u32,
         first_index: u32,
         buffer_index: u32,
-        texture_slots: [TextureHandle; 4],
+        /// FFI texture handles captured at command creation time.
+        /// Resolved to TextureHandle at render time via texture_map.
+        textures: [u32; 4],
         blend_mode: BlendMode,
         depth_test: bool,
         cull_mode: CullMode,
@@ -122,12 +126,15 @@ impl VirtualRenderPass {
     }
 
     /// Record a non-indexed triangle draw (called from FFI)
+    ///
+    /// `textures` contains FFI texture handles captured at command creation time.
+    /// They are resolved to TextureHandle at render time via texture_map.
     pub fn record_triangles(
         &mut self,
         format: u8,
         vertex_data: &[f32],
         buffer_index: u32,
-        texture_slots: [TextureHandle; 4],
+        textures: [u32; 4],
         blend_mode: BlendMode,
         depth_test: bool,
         cull_mode: CullMode,
@@ -147,7 +154,7 @@ impl VirtualRenderPass {
             vertex_count: vertex_count as u32,
             base_vertex,
             buffer_index,
-            texture_slots,
+            textures,
             blend_mode,
             depth_test,
             cull_mode,
@@ -155,13 +162,16 @@ impl VirtualRenderPass {
     }
 
     /// Record an indexed triangle draw (called from FFI)
+    ///
+    /// `textures` contains FFI texture handles captured at command creation time.
+    /// They are resolved to TextureHandle at render time via texture_map.
     pub fn record_triangles_indexed(
         &mut self,
         format: u8,
         vertex_data: &[f32],
         index_data: &[u16],
         buffer_index: u32,
-        texture_slots: [TextureHandle; 4],
+        textures: [u32; 4],
         blend_mode: BlendMode,
         depth_test: bool,
         cull_mode: CullMode,
@@ -186,7 +196,7 @@ impl VirtualRenderPass {
             base_vertex,
             first_index,
             buffer_index,
-            texture_slots,
+            textures,
             blend_mode,
             depth_test,
             cull_mode,
@@ -194,6 +204,9 @@ impl VirtualRenderPass {
     }
 
     /// Record a mesh draw (called from FFI)
+    ///
+    /// `textures` contains FFI texture handles captured at command creation time.
+    /// They are resolved to TextureHandle at render time via texture_map.
     pub fn record_mesh(
         &mut self,
         mesh_format: u8,
@@ -202,7 +215,7 @@ impl VirtualRenderPass {
         mesh_vertex_offset: u64,
         mesh_index_offset: u64,
         buffer_index: u32,
-        texture_slots: [TextureHandle; 4],
+        textures: [u32; 4],
         blend_mode: BlendMode,
         depth_test: bool,
         cull_mode: CullMode,
@@ -220,7 +233,7 @@ impl VirtualRenderPass {
                 base_vertex,
                 first_index,
                 buffer_index,
-                texture_slots,
+                textures,
                 blend_mode,
                 depth_test,
                 cull_mode,
@@ -231,7 +244,7 @@ impl VirtualRenderPass {
                 vertex_count: mesh_vertex_count,
                 base_vertex,
                 buffer_index,
-                texture_slots,
+                textures,
                 blend_mode,
                 depth_test,
                 cull_mode,
