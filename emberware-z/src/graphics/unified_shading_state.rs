@@ -75,11 +75,11 @@ impl Default for PackedUnifiedShadingState {
         // Convention: light direction = direction rays travel (physically correct)
         // Users can customize via sky_set_gradient() and sky_set_sun() FFI calls
         let sky = PackedSky::from_floats(
-            Vec3::new(0.25, 0.25, 0.3),              // Horizon: dim warm gray (subtle fill, not key light)
-            Vec3::new(0.15, 0.2, 0.35),              // Zenith: darker blue (sky color, not light source)
+            Vec3::new(0.25, 0.25, 0.3), // Horizon: dim warm gray (subtle fill, not key light)
+            Vec3::new(0.15, 0.2, 0.35), // Zenith: darker blue (sky color, not light source)
             Vec3::new(-0.4, -0.7, -0.3).normalize(), // Sun direction: high in sky, slightly left
-            Vec3::new(0.7, 0.67, 0.6),               // Sun color: softer daylight (reduced from 1.0)
-            0.92, // Sun sharpness: visible disc
+            Vec3::new(0.7, 0.67, 0.6),  // Sun color: softer daylight (reduced from 1.0)
+            0.92,                       // Sun sharpness: visible disc
         );
 
         // uniform_set_0: [metallic=0, roughness=128, emissive=0, rim_intensity=0]

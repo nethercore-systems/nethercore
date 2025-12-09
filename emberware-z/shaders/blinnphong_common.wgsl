@@ -112,7 +112,8 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     //FS_MODE2_3_DIFFUSE_FACTOR
 
     // === Environment Lighting (IBL-lite) ===
-    let N = in.world_normal;
+    // Re-normalize after interpolation - interpolated normals become shorter than unit length
+    let N = normalize(in.world_normal);
     let NdotV = max(dot(N, view_dir), 0.0);
 
     // Fresnel: F0 = specular_color (works for both MR and SS workflows)
@@ -152,11 +153,11 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     let sun_color = sky.sun_color;
 
     // Sun diffuse
-    final_color += lambert_diffuse(in.world_normal, sky.sun_direction, albedo, sun_color) * diffuse_factor * diffuse_fresnel;
+    final_color += lambert_diffuse(N, sky.sun_direction, albedo, sun_color) * diffuse_factor * diffuse_fresnel;
 
     // Sun specular
     final_color += normalized_blinn_phong_specular(
-        in.world_normal, view_dir, sky.sun_direction, shininess, specular_color, sun_color
+        N, view_dir, sky.sun_direction, shininess, specular_color, sun_color
     );
 
     // 4 dynamic lights (direct illumination)
@@ -164,17 +165,19 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
         let light = unpack_light(shading.lights[i]);
         if (light.enabled) {
             let light_color = light.color * light.intensity;
-            final_color += lambert_diffuse(in.world_normal, light.direction, albedo, light_color) * diffuse_factor * diffuse_fresnel;
+            final_color += lambert_diffuse(N, light.direction, albedo, light_color) * diffuse_factor * diffuse_fresnel;
             final_color += normalized_blinn_phong_specular(
-                in.world_normal, view_dir, light.direction, shininess, specular_color, light_color
+                N, view_dir, light.direction, shininess, specular_color, light_color
             );
         }
     }
 
     // Rim lighting (always uses rim_intensity from uniform, never from texture)
-    // Rim color from environment behind the object
-    let rim_env_color = sample_sky(-view_dir, sky);
-    let rim = rim_lighting(in.world_normal, view_dir, rim_env_color, rim_intensity, rim_power);
+    // Specular-tinted rim, modulated by sun color for scene coherence
+    // - Material character from specular_color (gold stays gold, holo stays magenta)
+    // - Scene coherence from sun_color (red lights = red tint on everything)
+    let rim_color = specular_color * sun_color;
+    let rim = rim_lighting(N, view_dir, rim_color, rim_intensity, rim_power);
     final_color += rim;
 
     return vec4<f32>(final_color, material_color.a);

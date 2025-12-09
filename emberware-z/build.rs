@@ -143,7 +143,11 @@ fn generate_shader(mode: u8, format: u8) -> Result<String, String> {
     );
     shader = shader.replace(
         "//VOUT_VIEW_POS",
-        if mode == 1 && has_normal { VOUT_VIEW_POS } else { "" },
+        if mode == 1 && has_normal {
+            VOUT_VIEW_POS
+        } else {
+            ""
+        },
     );
     shader = shader.replace(
         "//VOUT_CAMERA_POS",

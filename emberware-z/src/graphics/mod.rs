@@ -66,8 +66,8 @@ mod draw;
 mod frame;
 mod init;
 mod matrix_packing;
-mod pipeline;
 mod packing;
+mod pipeline;
 mod quad_instance;
 mod render_state;
 mod texture_manager;
@@ -417,8 +417,13 @@ impl ZGraphics {
         indices: &[u16],
         format: u8,
     ) -> Result<MeshHandle> {
-        self.buffer_manager
-            .load_mesh_indexed_packed(&self.device, &self.queue, data, indices, format)
+        self.buffer_manager.load_mesh_indexed_packed(
+            &self.device,
+            &self.queue,
+            data,
+            indices,
+            format,
+        )
     }
 
     /// Get mesh info by handle

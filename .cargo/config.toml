@@ -1,5 +1,6 @@
 [env]
-RUST_LOG = "debug"            # or debug, trace, warn, error
+# or debug, trace, warn, error
+RUST_LOG = "core=debug,emberware_z=debug"           
 RUST_BACKTRACE = "1"
 
 [alias]

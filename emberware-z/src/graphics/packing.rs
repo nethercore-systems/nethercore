@@ -297,7 +297,9 @@ pub fn pack_color_rgba_unorm8(r: f32, g: f32, b: f32, a: f32) -> [u8; 4] {
 /// - POS_NORMAL: 24 bytes → 12 bytes (50% reduction)
 /// - POS_UV_NORMAL: 32 bytes → 16 bytes (50% reduction)
 pub fn pack_vertex_data(data: &[f32], format: u8) -> Vec<u8> {
-    use crate::graphics::{vertex_stride_packed, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV};
+    use crate::graphics::{
+        vertex_stride_packed, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV,
+    };
 
     let has_uv = format & FORMAT_UV != 0;
     let has_color = format & FORMAT_COLOR != 0;
@@ -342,12 +344,8 @@ pub fn pack_vertex_data(data: &[f32], format: u8) -> Vec<u8> {
 
         // Color: f32x3 → unorm8x4 (4 bytes, alpha=255)
         if has_color {
-            let color = pack_color_rgba_unorm8(
-                data[offset],
-                data[offset + 1],
-                data[offset + 2],
-                1.0,
-            );
+            let color =
+                pack_color_rgba_unorm8(data[offset], data[offset + 1], data[offset + 2], 1.0);
             packed.extend_from_slice(cast_slice(&color));
             offset += 3;
         }
@@ -528,19 +526,19 @@ mod tests {
 
         // Test cases including negative values in all octants
         let test_dirs = [
-            glam::Vec3::new(1.0, 0.0, 0.0),   // +X
-            glam::Vec3::new(-1.0, 0.0, 0.0),  // -X
-            glam::Vec3::new(0.0, 1.0, 0.0),   // +Y
-            glam::Vec3::new(0.0, -1.0, 0.0),  // -Y
-            glam::Vec3::new(0.0, 0.0, 1.0),   // +Z (upper hemisphere center)
-            glam::Vec3::new(0.0, 0.0, -1.0),  // -Z (lower hemisphere center)
-            glam::Vec3::new(-0.707, 0.707, 0.0),   // XY plane, negative X
-            glam::Vec3::new(0.707, -0.707, 0.0),   // XY plane, negative Y
-            glam::Vec3::new(0.577, 0.577, 0.577),  // Diagonal +X+Y+Z
-            glam::Vec3::new(-0.577, 0.577, 0.577), // Diagonal -X+Y+Z
-            glam::Vec3::new(0.577, -0.577, 0.577), // Diagonal +X-Y+Z
-            glam::Vec3::new(-0.577, -0.577, 0.577), // Diagonal -X-Y+Z
-            glam::Vec3::new(0.577, 0.577, -0.577),  // Lower hemisphere
+            glam::Vec3::new(1.0, 0.0, 0.0),          // +X
+            glam::Vec3::new(-1.0, 0.0, 0.0),         // -X
+            glam::Vec3::new(0.0, 1.0, 0.0),          // +Y
+            glam::Vec3::new(0.0, -1.0, 0.0),         // -Y
+            glam::Vec3::new(0.0, 0.0, 1.0),          // +Z (upper hemisphere center)
+            glam::Vec3::new(0.0, 0.0, -1.0),         // -Z (lower hemisphere center)
+            glam::Vec3::new(-0.707, 0.707, 0.0),     // XY plane, negative X
+            glam::Vec3::new(0.707, -0.707, 0.0),     // XY plane, negative Y
+            glam::Vec3::new(0.577, 0.577, 0.577),    // Diagonal +X+Y+Z
+            glam::Vec3::new(-0.577, 0.577, 0.577),   // Diagonal -X+Y+Z
+            glam::Vec3::new(0.577, -0.577, 0.577),   // Diagonal +X-Y+Z
+            glam::Vec3::new(-0.577, -0.577, 0.577),  // Diagonal -X-Y+Z
+            glam::Vec3::new(0.577, 0.577, -0.577),   // Lower hemisphere
             glam::Vec3::new(-0.577, -0.577, -0.577), // Lower hemisphere opposite
         ];
 
@@ -580,10 +578,17 @@ mod tests {
             let u_shifted = u_raw << 16;
             let u_i32 = u_shifted as i32;
             let u_i16 = u_i32 >> 16;
-            println!("  WGSL-style: shifted=0x{:08X}, as_i32={}, shifted_back={}", u_shifted, u_i32, u_i16);
+            println!(
+                "  WGSL-style: shifted=0x{:08X}, as_i32={}, shifted_back={}",
+                u_shifted, u_i32, u_i16
+            );
 
             // u_i16 should be negative (around -32767 for unit vector component)
-            assert!(u_i16 < 0, "Sign extension failed: u_i16={} should be negative", u_i16);
+            assert!(
+                u_i16 < 0,
+                "Sign extension failed: u_i16={} should be negative",
+                u_i16
+            );
         }
     }
 }

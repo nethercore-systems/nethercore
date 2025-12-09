@@ -342,7 +342,6 @@ static VERTEX_ATTRIBUTES: [&[wgpu::VertexAttribute]; 16] = [
     ],
 ];
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -440,13 +439,13 @@ mod tests {
         for i in 0..VERTEX_FORMAT_COUNT {
             let info = VertexFormatInfo::for_format(i as u8);
             assert!(
-                info.stride >= 8,  // Minimum: position only (f16x4) = 8 bytes
+                info.stride >= 8, // Minimum: position only (f16x4) = 8 bytes
                 "Format {} has stride {} < 8",
                 i,
                 info.stride
             );
             assert!(
-                info.stride <= 44,  // Maximum: full format packed = 44 bytes
+                info.stride <= 44, // Maximum: full format packed = 44 bytes
                 "Format {} has stride {} > 44",
                 i,
                 info.stride
@@ -590,8 +589,8 @@ mod tests {
         let info = VertexFormatInfo::for_format(FORMAT_UV | FORMAT_COLOR | FORMAT_NORMAL);
         let layout = info.vertex_buffer_layout();
         // Packed offsets: pos(0-7), uv(8-11), color(12-15), normal(16-19)
-        assert_eq!(layout.attributes[0].offset, 0);  // Position at 0
-        assert_eq!(layout.attributes[1].offset, 8);  // UV at 8
+        assert_eq!(layout.attributes[0].offset, 0); // Position at 0
+        assert_eq!(layout.attributes[1].offset, 8); // UV at 8
         assert_eq!(layout.attributes[2].offset, 12); // Color at 12
         assert_eq!(layout.attributes[3].offset, 16); // Normal at 16
     }

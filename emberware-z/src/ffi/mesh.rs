@@ -405,7 +405,10 @@ fn load_mesh_indexed_packed(
 ) -> u32 {
     // Validate format (0-15 only, no FORMAT_PACKED)
     if format >= 16 {
-        warn!("load_mesh_indexed_packed: format must be 0-15 (got {})", format);
+        warn!(
+            "load_mesh_indexed_packed: format must be 0-15 (got {})",
+            format
+        );
         return 0;
     }
     let format = format as u8;

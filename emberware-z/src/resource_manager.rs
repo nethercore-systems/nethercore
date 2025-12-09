@@ -3,9 +3,7 @@
 //! Manages the mapping between game resource handles (u32) and
 //! graphics backend handles (TextureHandle, MeshHandle).
 
-use crate::graphics::{
-    pack_vertex_data, MeshHandle, TextureHandle, ZGraphics,
-};
+use crate::graphics::{pack_vertex_data, MeshHandle, TextureHandle, ZGraphics};
 use crate::state::ZFFIState;
 use bytemuck::cast_slice;
 use emberware_core::console::{Audio, ConsoleResourceManager};
@@ -29,7 +27,6 @@ impl ZResourceManager {
             mesh_map: hashbrown::HashMap::new(),
         }
     }
-
 }
 
 impl ConsoleResourceManager for ZResourceManager {

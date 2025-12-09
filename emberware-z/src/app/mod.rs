@@ -105,7 +105,10 @@ impl App {
             if self.game_session.is_none() {
                 if let AppMode::Playing { ref game_id } = self.mode {
                     let game_id_owned = game_id.clone();
-                    tracing::info!("Initializing game session for CLI launch: {}", game_id_owned);
+                    tracing::info!(
+                        "Initializing game session for CLI launch: {}",
+                        game_id_owned
+                    );
                     if let Err(e) = self.start_game(&game_id_owned) {
                         self.handle_runtime_error(e);
                         return;
