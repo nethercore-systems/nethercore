@@ -287,16 +287,48 @@ Normalized Blinn-Phong with metallic-roughness workflow. Energy-conserving light
 **Lighting Functions:**
 
 ```rust
+// Directional lights (default)
 fn light_set(index: u32, x: f32, y: f32, z: f32)  // index 0-3, direction vector
 fn light_color(index: u32, color: u32)             // 0xRRGGBBAA
-fn light_intensity(index: u32, intensity: f32)
+fn light_intensity(index: u32, intensity: f32)    // 0.0-8.0 range
 fn light_enable(index: u32)
 fn light_disable(index: u32)
+
+// Point lights
+fn light_set_point(index: u32, x: f32, y: f32, z: f32)  // World-space position
+fn light_range(index: u32, range: f32)                   // Falloff distance
 
 // Sun comes from procedural sky (sky_set_sun)
 ```
 
-All lights are directional. The `x`, `y`, `z` parameters specify the light direction (normalized internally).
+**Directional Lights:** The default light type. The `x`, `y`, `z` parameters in `light_set()` specify the direction rays travel (normalized internally). For a light from above, use `(0, -1, 0)`.
+
+**Point Lights:** Emit light from a position in world space with distance-based falloff. Call `light_set_point()` to convert a light slot to a point light at a specific position. Use `light_range()` to control the falloff distance — light intensity reaches zero at this distance.
+
+**Attenuation:** Point lights use smooth quadratic falloff: `(1 - distance/range)²`
+
+**Example: Point Light Setup**
+```rust
+// Set light 0 as a point light above the player
+light_set_point(0, player_x, player_y + 2.0, player_z);
+light_color(0, 0xFFAA44FF);  // Warm orange
+light_intensity(0, 3.0);      // HDR intensity (0-8 range)
+light_range(0, 15.0);         // Light reaches zero at 15 units
+```
+
+**Example: Orbiting Point Light**
+```rust
+fn update() {
+    // Orbit point light around the player
+    let angle = elapsed_time() * 2.0;  // 2 radians per second
+    let orbit_radius = 3.0;
+    let px = player_x + sin(angle) * orbit_radius;
+    let pz = player_z + cos(angle) * orbit_radius;
+    light_set_point(1, px, player_y + 1.5, pz);
+}
+```
+
+**Intensity Range:** Intensity now uses 0.0-8.0 range for HDR support. Values above 1.0 create brighter-than-expected lights useful for point light falloff.
 
 **Material Properties:**
 
@@ -397,12 +429,16 @@ Classic Blinn-Phong lighting with energy-conserving Gotanda normalization. Era-a
 **Lighting Functions (same as Mode 2):**
 
 ```rust
-// 4 dynamic lights (index 0-3)
-fn light_set(index: u32, x: f32, y: f32, z: f32)
-fn light_color(index: u32, color: u32)  // 0xRRGGBBAA
-fn light_intensity(index: u32, intensity: f32)
+// Directional lights (index 0-3)
+fn light_set(index: u32, x: f32, y: f32, z: f32)  // Direction vector
+fn light_color(index: u32, color: u32)             // 0xRRGGBBAA
+fn light_intensity(index: u32, intensity: f32)    // 0.0-8.0 range
 fn light_enable(index: u32)
 fn light_disable(index: u32)
+
+// Point lights
+fn light_set_point(index: u32, x: f32, y: f32, z: f32)  // World position
+fn light_range(index: u32, range: f32)                   // Falloff distance
 
 // Sun lighting comes from procedural sky (sky_set_sun)
 ```

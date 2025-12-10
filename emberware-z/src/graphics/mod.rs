@@ -47,9 +47,10 @@ pub use render_state::{
     BlendMode, CullMode, MatcapBlendMode, RenderState, TextureFilter, TextureHandle,
 };
 pub use unified_shading_state::{
-    pack_matcap_blend_modes, pack_octahedral_u32, pack_rgb8, pack_unorm8,
-    unpack_matcap_blend_modes, update_uniform_set_0_byte, update_uniform_set_1_byte, PackedLight,
-    PackedUnifiedShadingState, ShadingStateIndex,
+    pack_f16, pack_f16x2, pack_matcap_blend_modes, pack_octahedral_u32, pack_rgb8, pack_unorm8,
+    unpack_f16, unpack_f16x2, unpack_matcap_blend_modes, update_uniform_set_0_byte,
+    update_uniform_set_1_byte, LightType, PackedLight, PackedUnifiedShadingState,
+    ShadingStateIndex,
 };
 pub use vertex::{VertexFormatInfo, VERTEX_FORMAT_COUNT, FORMAT_ALL};
 

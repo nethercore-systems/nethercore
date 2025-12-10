@@ -1,6 +1,6 @@
 //! Lighting FFI functions (Mode 2 PBR)
 //!
-//! Functions for configuring directional lights in PBR mode.
+//! Functions for configuring directional and point lights in PBR mode.
 
 use anyhow::Result;
 use tracing::warn;
@@ -9,15 +9,21 @@ use wasmtime::{Caller, Linker};
 use emberware_core::wasm::GameStateWithConsole;
 
 use crate::console::ZInput;
+use crate::graphics::LightType;
 use crate::state::ZFFIState;
 
 /// Register lighting FFI functions
 pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
+    // Directional light functions
     linker.func_wrap("env", "light_set", light_set)?;
     linker.func_wrap("env", "light_color", light_color)?;
     linker.func_wrap("env", "light_intensity", light_intensity)?;
     linker.func_wrap("env", "light_enable", light_enable)?;
     linker.func_wrap("env", "light_disable", light_disable)?;
+
+    // Point light functions
+    linker.func_wrap("env", "light_set_point", light_set_point)?;
+    linker.func_wrap("env", "light_range", light_range)?;
     Ok(())
 }
 
@@ -110,22 +116,36 @@ fn light_color(
 
     // Extract current light state
     let light = &state.current_shading_state.lights[index as usize];
-    let direction = light.get_direction();
+    let light_type = light.get_type();
     let intensity = light.get_intensity();
     let enabled = light.is_enabled();
 
-    // Update with new color
-    state.update_light(index as usize, direction, [r, g, b], intensity, enabled);
+    // Update with new color (preserve type)
+    if light_type == LightType::Point {
+        let position = light.get_position();
+        let range = light.get_range();
+        state.update_point_light(
+            index as usize,
+            position,
+            [r, g, b],
+            intensity,
+            range,
+            enabled,
+        );
+    } else {
+        let direction = light.get_direction();
+        state.update_light(index as usize, direction, [r, g, b], intensity, enabled);
+    }
 }
 
 /// Set light intensity multiplier
 ///
 /// # Arguments
 /// * `index` — Light index (0-3)
-/// * `intensity` — Intensity multiplier (typically 0.0-10.0, but no upper limit)
+/// * `intensity` — Intensity multiplier (typically 0.0-8.0, clamped to 8.0 max)
 ///
 /// Sets the intensity multiplier for a light. The final light contribution is color × intensity.
-/// Negative values are clamped to 0.0.
+/// Negative values are clamped to 0.0, values above 8.0 are clamped to 8.0.
 fn light_intensity(
     mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
     index: u32,
@@ -140,13 +160,19 @@ fn light_intensity(
         return;
     }
 
-    // Validate intensity (allow > 1.0, but clamp negative to 0.0)
+    // Validate intensity (allow 0.0-8.0 range)
     let intensity = if intensity < 0.0 {
         warn!(
             "light_intensity: negative intensity {}, clamping to 0.0",
             intensity
         );
         0.0
+    } else if intensity > 8.0 {
+        warn!(
+            "light_intensity: intensity {} exceeds max 8.0, clamping",
+            intensity
+        );
+        8.0
     } else {
         intensity
     };
@@ -155,14 +181,21 @@ fn light_intensity(
 
     // Extract current light state
     let light = &state.current_shading_state.lights[index as usize];
-    let direction = light.get_direction();
+    let light_type = light.get_type();
     let color = light.get_color();
 
     // Setting non-zero intensity automatically enables the light
     let enabled = intensity > 0.0;
 
-    // Update with new intensity
-    state.update_light(index as usize, direction, color, intensity, enabled);
+    // Update with new intensity (preserve type)
+    if light_type == LightType::Point {
+        let position = light.get_position();
+        let range = light.get_range();
+        state.update_point_light(index as usize, position, color, intensity, range, enabled);
+    } else {
+        let direction = light.get_direction();
+        state.update_light(index as usize, direction, color, intensity, enabled);
+    }
 }
 
 /// Enable a light
@@ -183,7 +216,7 @@ fn light_enable(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
 
     // Extract current light state
     let light = &state.current_shading_state.lights[index as usize];
-    let direction = light.get_direction();
+    let light_type = light.get_type();
     let color = light.get_color();
     let mut intensity = light.get_intensity();
 
@@ -192,8 +225,15 @@ fn light_enable(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
         intensity = 1.0;
     }
 
-    // Enable light
-    state.update_light(index as usize, direction, color, intensity, true);
+    // Enable light (preserve type)
+    if light_type == LightType::Point {
+        let position = light.get_position();
+        let range = light.get_range();
+        state.update_point_light(index as usize, position, color, intensity, range, true);
+    } else {
+        let direction = light.get_direction();
+        state.update_light(index as usize, direction, color, intensity, true);
+    }
 }
 
 /// Disable a light
@@ -215,10 +255,92 @@ fn light_disable(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>
 
     // Extract current light state
     let light = &state.current_shading_state.lights[index as usize];
-    let direction = light.get_direction();
+    let light_type = light.get_type();
     let color = light.get_color();
     let intensity = light.get_intensity();
 
-    // Disable light
-    state.update_light(index as usize, direction, color, intensity, false);
+    // Disable light (preserve type)
+    if light_type == LightType::Point {
+        let position = light.get_position();
+        let range = light.get_range();
+        state.update_point_light(index as usize, position, color, intensity, range, false);
+    } else {
+        let direction = light.get_direction();
+        state.update_light(index as usize, direction, color, intensity, false);
+    }
+}
+
+/// Set light as point light with position
+///
+/// # Arguments
+/// * `index` — Light index (0-3)
+/// * `x` — World-space X position
+/// * `y` — World-space Y position
+/// * `z` — World-space Z position
+///
+/// Converts the light to a point light and sets its position.
+/// Use `light_range()` to set the falloff distance.
+/// Use `light_color()` and `light_intensity()` for color/brightness.
+fn light_set_point(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    index: u32,
+    x: f32,
+    y: f32,
+    z: f32,
+) {
+    if index > 3 {
+        warn!(
+            "light_set_point: invalid light index {} (must be 0-3)",
+            index
+        );
+        return;
+    }
+
+    let state = &mut caller.data_mut().console;
+    let light = &state.current_shading_state.lights[index as usize];
+    let color = light.get_color();
+    let intensity = light.get_intensity();
+    let range = if light.get_type() == LightType::Point {
+        light.get_range()
+    } else {
+        10.0 // Default range for new point lights
+    };
+
+    state.update_point_light(index as usize, [x, y, z], color, intensity, range, true);
+}
+
+/// Set point light range (falloff distance)
+///
+/// # Arguments
+/// * `index` — Light index (0-3)
+/// * `range` — Distance at which light reaches zero intensity
+///
+/// Only affects point lights. Directional lights ignore this.
+fn light_range(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    index: u32,
+    range: f32,
+) {
+    if index > 3 {
+        warn!("light_range: invalid light index {} (must be 0-3)", index);
+        return;
+    }
+
+    let range = range.max(0.0); // Clamp negative to 0
+
+    let state = &mut caller.data_mut().console;
+    let light = &state.current_shading_state.lights[index as usize];
+
+    // Only valid for point lights
+    if light.get_type() != LightType::Point {
+        warn!("light_range: light {} is directional, not point", index);
+        return;
+    }
+
+    let position = light.get_position();
+    let color = light.get_color();
+    let intensity = light.get_intensity();
+    let enabled = light.is_enabled();
+
+    state.update_point_light(index as usize, position, color, intensity, range, enabled);
 }
