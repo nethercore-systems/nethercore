@@ -1,0 +1,13 @@
+# Asset manifest for asset-test example
+
+[output]
+dir = "assets/converted/"
+
+[codegen]
+rust = "src/assets.rs"
+
+[meshes]
+cube = "assets/cube.obj"
+
+[textures]
+checkerboard = "assets/checkerboard.png"

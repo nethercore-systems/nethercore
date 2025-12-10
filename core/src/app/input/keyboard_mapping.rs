@@ -71,6 +71,104 @@ pub struct KeyboardMapping {
         deserialize_with = "deserialize_keycode"
     )]
     pub select: KeyCode,
+
+    // Left stick axis keys
+    #[serde(
+        default = "default_left_stick_up",
+        serialize_with = "serialize_keycode",
+        deserialize_with = "deserialize_keycode"
+    )]
+    pub left_stick_up: KeyCode,
+    #[serde(
+        default = "default_left_stick_down",
+        serialize_with = "serialize_keycode",
+        deserialize_with = "deserialize_keycode"
+    )]
+    pub left_stick_down: KeyCode,
+    #[serde(
+        default = "default_left_stick_left",
+        serialize_with = "serialize_keycode",
+        deserialize_with = "deserialize_keycode"
+    )]
+    pub left_stick_left: KeyCode,
+    #[serde(
+        default = "default_left_stick_right",
+        serialize_with = "serialize_keycode",
+        deserialize_with = "deserialize_keycode"
+    )]
+    pub left_stick_right: KeyCode,
+
+    // Right stick axis keys
+    #[serde(
+        default = "default_right_stick_up",
+        serialize_with = "serialize_keycode",
+        deserialize_with = "deserialize_keycode"
+    )]
+    pub right_stick_up: KeyCode,
+    #[serde(
+        default = "default_right_stick_down",
+        serialize_with = "serialize_keycode",
+        deserialize_with = "deserialize_keycode"
+    )]
+    pub right_stick_down: KeyCode,
+    #[serde(
+        default = "default_right_stick_left",
+        serialize_with = "serialize_keycode",
+        deserialize_with = "deserialize_keycode"
+    )]
+    pub right_stick_left: KeyCode,
+    #[serde(
+        default = "default_right_stick_right",
+        serialize_with = "serialize_keycode",
+        deserialize_with = "deserialize_keycode"
+    )]
+    pub right_stick_right: KeyCode,
+
+    // Trigger keys
+    #[serde(
+        default = "default_left_trigger",
+        serialize_with = "serialize_keycode",
+        deserialize_with = "deserialize_keycode"
+    )]
+    pub left_trigger: KeyCode,
+    #[serde(
+        default = "default_right_trigger",
+        serialize_with = "serialize_keycode",
+        deserialize_with = "deserialize_keycode"
+    )]
+    pub right_trigger: KeyCode,
+}
+
+// Default functions for serde (enables backwards compatibility with old configs)
+fn default_left_stick_up() -> KeyCode {
+    KeyCode::KeyW
+}
+fn default_left_stick_down() -> KeyCode {
+    KeyCode::KeyS
+}
+fn default_left_stick_left() -> KeyCode {
+    KeyCode::KeyA
+}
+fn default_left_stick_right() -> KeyCode {
+    KeyCode::KeyD
+}
+fn default_right_stick_up() -> KeyCode {
+    KeyCode::KeyI
+}
+fn default_right_stick_down() -> KeyCode {
+    KeyCode::KeyK
+}
+fn default_right_stick_left() -> KeyCode {
+    KeyCode::KeyJ
+}
+fn default_right_stick_right() -> KeyCode {
+    KeyCode::KeyL
+}
+fn default_left_trigger() -> KeyCode {
+    KeyCode::KeyU
+}
+fn default_right_trigger() -> KeyCode {
+    KeyCode::KeyO
 }
 
 impl Default for KeyboardMapping {
@@ -95,6 +193,22 @@ impl Default for KeyboardMapping {
             // Enter/Shift for Start/Select
             start: KeyCode::Enter,
             select: KeyCode::ShiftLeft,
+
+            // WASD for left stick
+            left_stick_up: KeyCode::KeyW,
+            left_stick_down: KeyCode::KeyS,
+            left_stick_left: KeyCode::KeyA,
+            left_stick_right: KeyCode::KeyD,
+
+            // IJKL for right stick
+            right_stick_up: KeyCode::KeyI,
+            right_stick_down: KeyCode::KeyK,
+            right_stick_left: KeyCode::KeyJ,
+            right_stick_right: KeyCode::KeyL,
+
+            // U/O for triggers
+            left_trigger: KeyCode::KeyU,
+            right_trigger: KeyCode::KeyO,
         }
     }
 }

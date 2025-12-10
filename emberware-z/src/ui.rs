@@ -83,6 +83,9 @@ impl LibraryUi {
                 if ui.button("📁 Import ROM").clicked() {
                     action = Some(UiAction::ImportRom);
                 }
+                if ui.button("🔧 Open Game").clicked() {
+                    action = Some(UiAction::OpenGame);
+                }
                 if ui.button("🔄 Refresh").clicked() {
                     action = Some(UiAction::RefreshLibrary);
                 }
@@ -120,6 +123,8 @@ pub enum UiAction {
     SetScaleMode(emberware_core::app::config::ScaleMode),
     /// Import a ROM file from disk
     ImportRom,
+    /// Open and run a game file directly (without importing to library)
+    OpenGame,
 }
 
 #[cfg(test)]

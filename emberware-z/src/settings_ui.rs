@@ -10,8 +10,8 @@ use winit::keyboard::KeyCode;
 pub struct SettingsUi {
     /// Currently selected tab
     selected_tab: SettingsTab,
-    /// Which button is currently being remapped (if any)
-    waiting_for_key: Option<InputButton>,
+    /// Which button or axis is currently being remapped (if any)
+    waiting_for_key: Option<WaitingFor>,
     /// Temporary config for editing (not saved until "Apply" is clicked)
     temp_config: Config,
 }
@@ -38,6 +38,26 @@ enum InputButton {
     RightBumper,
     Start,
     Select,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InputAxis {
+    LeftStickUp,
+    LeftStickDown,
+    LeftStickLeft,
+    LeftStickRight,
+    RightStickUp,
+    RightStickDown,
+    RightStickLeft,
+    RightStickRight,
+    LeftTrigger,
+    RightTrigger,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WaitingFor {
+    Button(InputButton),
+    Axis(InputAxis),
 }
 
 impl InputButton {
@@ -93,6 +113,53 @@ impl InputButton {
     }
 }
 
+impl InputAxis {
+    fn name(&self) -> &'static str {
+        match self {
+            InputAxis::LeftStickUp => "Up",
+            InputAxis::LeftStickDown => "Down",
+            InputAxis::LeftStickLeft => "Left",
+            InputAxis::LeftStickRight => "Right",
+            InputAxis::RightStickUp => "Up",
+            InputAxis::RightStickDown => "Down",
+            InputAxis::RightStickLeft => "Left",
+            InputAxis::RightStickRight => "Right",
+            InputAxis::LeftTrigger => "Left Trigger",
+            InputAxis::RightTrigger => "Right Trigger",
+        }
+    }
+
+    fn get_key(&self, mapping: &KeyboardMapping) -> KeyCode {
+        match self {
+            InputAxis::LeftStickUp => mapping.left_stick_up,
+            InputAxis::LeftStickDown => mapping.left_stick_down,
+            InputAxis::LeftStickLeft => mapping.left_stick_left,
+            InputAxis::LeftStickRight => mapping.left_stick_right,
+            InputAxis::RightStickUp => mapping.right_stick_up,
+            InputAxis::RightStickDown => mapping.right_stick_down,
+            InputAxis::RightStickLeft => mapping.right_stick_left,
+            InputAxis::RightStickRight => mapping.right_stick_right,
+            InputAxis::LeftTrigger => mapping.left_trigger,
+            InputAxis::RightTrigger => mapping.right_trigger,
+        }
+    }
+
+    fn set_key(&self, mapping: &mut KeyboardMapping, key: KeyCode) {
+        match self {
+            InputAxis::LeftStickUp => mapping.left_stick_up = key,
+            InputAxis::LeftStickDown => mapping.left_stick_down = key,
+            InputAxis::LeftStickLeft => mapping.left_stick_left = key,
+            InputAxis::LeftStickRight => mapping.left_stick_right = key,
+            InputAxis::RightStickUp => mapping.right_stick_up = key,
+            InputAxis::RightStickDown => mapping.right_stick_down = key,
+            InputAxis::RightStickLeft => mapping.right_stick_left = key,
+            InputAxis::RightStickRight => mapping.right_stick_right = key,
+            InputAxis::LeftTrigger => mapping.left_trigger = key,
+            InputAxis::RightTrigger => mapping.right_trigger = key,
+        }
+    }
+}
+
 impl SettingsUi {
     pub fn new(config: &Config) -> Self {
         Self {
@@ -110,7 +177,7 @@ impl SettingsUi {
     /// Handle key press for remapping
     /// Returns true if the key was consumed (for remapping), false otherwise
     pub fn handle_key_press(&mut self, key: KeyCode) -> bool {
-        if let Some(button) = self.waiting_for_key {
+        if let Some(waiting) = self.waiting_for_key {
             // ESC cancels remapping
             if key == KeyCode::Escape {
                 self.waiting_for_key = None;
@@ -118,7 +185,14 @@ impl SettingsUi {
             }
 
             // Set the new key binding
-            button.set_key(&mut self.temp_config.input.keyboard, key);
+            match waiting {
+                WaitingFor::Button(button) => {
+                    button.set_key(&mut self.temp_config.input.keyboard, key);
+                }
+                WaitingFor::Axis(axis) => {
+                    axis.set_key(&mut self.temp_config.input.keyboard, key);
+                }
+            }
             self.waiting_for_key = None;
             return true; // Consumed the key
         }
@@ -282,10 +356,10 @@ impl SettingsUi {
             ui.heading("D-Pad");
             ui.add_space(5.0);
 
-            self.show_key_binding(ui, InputButton::DPadUp, &mapping);
-            self.show_key_binding(ui, InputButton::DPadDown, &mapping);
-            self.show_key_binding(ui, InputButton::DPadLeft, &mapping);
-            self.show_key_binding(ui, InputButton::DPadRight, &mapping);
+            self.show_button_binding(ui, InputButton::DPadUp, &mapping);
+            self.show_button_binding(ui, InputButton::DPadDown, &mapping);
+            self.show_button_binding(ui, InputButton::DPadLeft, &mapping);
+            self.show_button_binding(ui, InputButton::DPadRight, &mapping);
         });
 
         ui.add_space(10.0);
@@ -295,10 +369,10 @@ impl SettingsUi {
             ui.heading("Face Buttons");
             ui.add_space(5.0);
 
-            self.show_key_binding(ui, InputButton::ButtonA, &mapping);
-            self.show_key_binding(ui, InputButton::ButtonB, &mapping);
-            self.show_key_binding(ui, InputButton::ButtonX, &mapping);
-            self.show_key_binding(ui, InputButton::ButtonY, &mapping);
+            self.show_button_binding(ui, InputButton::ButtonA, &mapping);
+            self.show_button_binding(ui, InputButton::ButtonB, &mapping);
+            self.show_button_binding(ui, InputButton::ButtonX, &mapping);
+            self.show_button_binding(ui, InputButton::ButtonY, &mapping);
         });
 
         ui.add_space(10.0);
@@ -308,8 +382,8 @@ impl SettingsUi {
             ui.heading("Shoulder Buttons");
             ui.add_space(5.0);
 
-            self.show_key_binding(ui, InputButton::LeftBumper, &mapping);
-            self.show_key_binding(ui, InputButton::RightBumper, &mapping);
+            self.show_button_binding(ui, InputButton::LeftBumper, &mapping);
+            self.show_button_binding(ui, InputButton::RightBumper, &mapping);
         });
 
         ui.add_space(10.0);
@@ -319,14 +393,51 @@ impl SettingsUi {
             ui.heading("System Buttons");
             ui.add_space(5.0);
 
-            self.show_key_binding(ui, InputButton::Start, &mapping);
-            self.show_key_binding(ui, InputButton::Select, &mapping);
+            self.show_button_binding(ui, InputButton::Start, &mapping);
+            self.show_button_binding(ui, InputButton::Select, &mapping);
+        });
+
+        ui.add_space(10.0);
+
+        // Left Stick
+        ui.group(|ui| {
+            ui.heading("Left Stick");
+            ui.add_space(5.0);
+
+            self.show_axis_binding(ui, InputAxis::LeftStickUp, &mapping);
+            self.show_axis_binding(ui, InputAxis::LeftStickDown, &mapping);
+            self.show_axis_binding(ui, InputAxis::LeftStickLeft, &mapping);
+            self.show_axis_binding(ui, InputAxis::LeftStickRight, &mapping);
+        });
+
+        ui.add_space(10.0);
+
+        // Right Stick
+        ui.group(|ui| {
+            ui.heading("Right Stick");
+            ui.add_space(5.0);
+
+            self.show_axis_binding(ui, InputAxis::RightStickUp, &mapping);
+            self.show_axis_binding(ui, InputAxis::RightStickDown, &mapping);
+            self.show_axis_binding(ui, InputAxis::RightStickLeft, &mapping);
+            self.show_axis_binding(ui, InputAxis::RightStickRight, &mapping);
+        });
+
+        ui.add_space(10.0);
+
+        // Triggers
+        ui.group(|ui| {
+            ui.heading("Triggers");
+            ui.add_space(5.0);
+
+            self.show_axis_binding(ui, InputAxis::LeftTrigger, &mapping);
+            self.show_axis_binding(ui, InputAxis::RightTrigger, &mapping);
         });
 
         ui.add_space(15.0);
 
         // Deadzone settings
-        ui.heading("Analog Settings");
+        ui.heading("Analog Settings (Gamepad)");
         ui.add_space(5.0);
 
         let input = &mut self.temp_config.input;
@@ -388,7 +499,7 @@ impl SettingsUi {
         ui.label("💡 Game controls are configured in the Controls tab");
     }
 
-    fn show_key_binding(
+    fn show_button_binding(
         &mut self,
         ui: &mut egui::Ui,
         button: InputButton,
@@ -400,11 +511,32 @@ impl SettingsUi {
             let key = button.get_key(mapping);
             let key_name = keycode_to_display_string(key);
 
-            let is_waiting = self.waiting_for_key == Some(button);
+            let is_waiting = self.waiting_for_key == Some(WaitingFor::Button(button));
             let button_text = if is_waiting { "⌨ ..." } else { &key_name };
 
             if ui.button(button_text).clicked() {
-                self.waiting_for_key = Some(button);
+                self.waiting_for_key = Some(WaitingFor::Button(button));
+            }
+        });
+    }
+
+    fn show_axis_binding(
+        &mut self,
+        ui: &mut egui::Ui,
+        axis: InputAxis,
+        mapping: &KeyboardMapping,
+    ) {
+        ui.horizontal(|ui| {
+            ui.label(format!("{:16}", axis.name()));
+
+            let key = axis.get_key(mapping);
+            let key_name = keycode_to_display_string(key);
+
+            let is_waiting = self.waiting_for_key == Some(WaitingFor::Axis(axis));
+            let button_text = if is_waiting { "⌨ ..." } else { &key_name };
+
+            if ui.button(button_text).clicked() {
+                self.waiting_for_key = Some(WaitingFor::Axis(axis));
             }
         });
     }

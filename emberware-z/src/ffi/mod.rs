@@ -5,6 +5,7 @@
 
 #![allow(clippy::too_many_arguments)]
 
+mod assets;
 mod audio;
 mod billboard;
 mod camera;
@@ -79,6 +80,9 @@ pub fn register_z_ffi(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState
 
     // Audio functions
     audio::register(linker)?;
+
+    // EmberZ format loading (load_zmesh, load_ztex, load_zsound)
+    assets::register(linker)?;
 
     Ok(())
 }

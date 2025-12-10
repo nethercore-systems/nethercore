@@ -1,28 +1,29 @@
 # Emberware Asset Pipeline
 
-Convert 3D models, textures, fonts, and audio into optimized Emberware formats.
-
-> **Implementation Status:** The `ember-export` tool and manifest workflow are planned but not yet implemented. See [asset-pipeline-spec.md](asset-pipeline-spec.md) for implementation details. Currently, assets must be loaded manually using the FFI functions documented in the [Manual Integration](#advanced-manual-integration) section.
+Convert 3D models, textures, and audio into optimized Emberware formats.
 
 ---
 
-## Quick Start (Planned)
+## Quick Start
 
-Once implemented, getting assets into an Emberware game will be 3 steps:
+Getting assets into an Emberware game is 3 steps:
 
-**1. Export from your 3D tool** (Blender, Maya, etc.) as glTF, FBX, or OBJ
+**1. Export from your 3D tool** (Blender, Maya, etc.) as glTF, GLB, or OBJ
 
 **2. Create `assets.toml`:**
 ```toml
 [output]
-rust = "src/assets.rs"
+dir = "assets/"
 
 [meshes]
 player = "models/player.gltf"
-enemy = "models/enemy.fbx"
+enemy = "models/enemy.glb"
 
 [textures]
 grass = "textures/grass.png"
+
+[sounds]
+jump = "audio/jump.wav"
 ```
 
 **3. Build and use:**
@@ -31,13 +32,16 @@ ember-export build assets.toml
 ```
 
 ```rust
+static PLAYER_MESH: &[u8] = include_bytes!("assets/player.ewzmesh");
+static GRASS_TEX: &[u8] = include_bytes!("assets/grass.ewztex");
+
 fn init() {
-    let assets = assets::load();
-    // Use assets.player, assets.enemy, assets.grass
+    let player = load_zmesh(PLAYER_MESH.as_ptr() as u32, PLAYER_MESH.len() as u32);
+    let grass = load_ztex(GRASS_TEX.as_ptr() as u32, GRASS_TEX.len() as u32);
 }
 ```
 
-One manifest, one command, one line to load everything.
+One manifest, one command, simple FFI calls.
 
 ---
 
@@ -45,41 +49,35 @@ One manifest, one command, one line to load everything.
 
 ### 3D Models
 
-| Format | Extension | Recommended For |
-|--------|-----------|-----------------|
-| **glTF 2.0** | `.gltf`, `.glb` | Primary format. Blender default, industry standard, best tooling support |
-| **FBX** | `.fbx` | Complex scenes, animations, legacy pipelines |
-| **OBJ** | `.obj` | Simple geometry, ASCII-based, universal support |
+| Format | Extension | Status |
+|--------|-----------|--------|
+| **glTF 2.0** | `.gltf`, `.glb` | Implemented |
+| **OBJ** | `.obj` | Implemented |
 
 **Recommendation:** Use glTF for new projects. It's the "JPEG of 3D" - efficient, well-documented, and supported everywhere.
 
 ### Textures
 
-| Format | Notes |
-|--------|-------|
-| **PNG** | Lossless, supports transparency |
-| **JPG** | Lossy, smaller files, no transparency |
-
-### Fonts
-
-| Format | Notes |
-|--------|-------|
-| **TTF** | TrueType fonts |
-| **OTF** | OpenType fonts |
+| Format | Status |
+|--------|--------|
+| **PNG** | Implemented |
+| **JPG** | Implemented |
 
 ### Audio
 
-| Format | Notes |
-|--------|-------|
-| **WAV** | Uncompressed, best quality |
-| **OGG** | Compressed, good for music |
-| **MP3** | Compressed, widely supported |
+| Format | Status |
+|--------|--------|
+| **WAV** | Implemented |
+
+### Fonts
+
+| Format | Status |
+|--------|--------|
+| **TTF** | Planned |
 
 ---
 
-## Manifest-Based Asset Pipeline (Planned)
-
-> **Status:** Not yet implemented. See [asset-pipeline-spec.md](asset-pipeline-spec.md) for implementation guide.
+## Manifest-Based Asset Pipeline
 
 Define all your game assets in a single `assets.toml` file, then build everything with one command.
 
@@ -88,29 +86,26 @@ Define all your game assets in a single `assets.toml` file, then build everythin
 ```toml
 # Output configuration
 [output]
-rust = "src/assets.rs"          # Generated Rust module
-# c = "include/assets.h"        # Future: C header generation
+dir = "assets/"                  # Output directory for converted files
+# rust = "src/assets.rs"         # Planned: Generated Rust module
 
 # 3D Models
 [meshes]
 player = "models/player.gltf"                           # Simple: just the path
-enemy = "models/enemy.fbx"
+enemy = "models/enemy.glb"
 level = { path = "models/level.obj", format = "POS_UV_NORMAL" }  # With options
 
 # Textures
 [textures]
 player_diffuse = "textures/player.png"
-grass = { path = "textures/grass.png", palette = 256 }  # Palette mode (smaller)
-
-# Fonts
-[fonts]
-ui = { path = "fonts/roboto.ttf", size = 16 }
-title = { path = "fonts/title.otf", size = 32, charset = "ascii" }
 
 # Audio
 [sounds]
 jump = "audio/jump.wav"
-music = "audio/theme.ogg"
+
+# Fonts (planned)
+# [fonts]
+# ui = { path = "fonts/roboto.ttf", size = 16 }
 ```
 
 ### Build Commands
@@ -119,183 +114,75 @@ music = "audio/theme.ogg"
 # Build all assets from manifest
 ember-export build assets.toml
 
-# Watch mode - rebuilds on file changes
-ember-export build assets.toml --watch
-
 # Validate manifest without building
 ember-export check assets.toml
+
+# Convert individual files
+ember-export mesh player.gltf -o player.ewzmesh
+ember-export texture grass.png -o grass.ewztex
+ember-export audio jump.wav -o jump.ewzsnd
 ```
 
-### Generated Code
+### Output Files
 
-Running `ember-export build assets.toml` generates:
-
-1. **Binary asset files** in `assets/` directory:
-   - `player.embermesh`, `enemy.embermesh`, `level.embermesh`
-   - `player_diffuse.embertex`, `grass.embertex`
-   - `ui.emberfont`, `title.emberfont`
-   - `jump.embersnd`, `music.embersnd`
-
-2. **Rust module** at the path specified in `[output].rust`:
-
-```rust
-// AUTO-GENERATED by ember-export - do not edit
-// Source: assets.toml
-
-pub mod assets {
-    // Embedded binary data (compile-time, zero runtime overhead)
-    static PLAYER_MESH: &[u8] = include_bytes!("../assets/player.embermesh");
-    static ENEMY_MESH: &[u8] = include_bytes!("../assets/enemy.embermesh");
-    static LEVEL_MESH: &[u8] = include_bytes!("../assets/level.embermesh");
-    static PLAYER_DIFFUSE_TEX: &[u8] = include_bytes!("../assets/player_diffuse.embertex");
-    static GRASS_TEX: &[u8] = include_bytes!("../assets/grass.embertex");
-    static UI_FONT: &[u8] = include_bytes!("../assets/ui.emberfont");
-    static TITLE_FONT: &[u8] = include_bytes!("../assets/title.emberfont");
-    static JUMP_SFX: &[u8] = include_bytes!("../assets/jump.embersnd");
-    static MUSIC_SFX: &[u8] = include_bytes!("../assets/music.embersnd");
-
-    /// All loaded asset handles
-    pub struct AssetPack {
-        // Meshes
-        pub player: u32,
-        pub enemy: u32,
-        pub level: u32,
-        // Textures
-        pub player_diffuse: u32,
-        pub grass: u32,
-        // Fonts
-        pub ui_font: u32,
-        pub title_font: u32,
-        // Sounds
-        pub jump: u32,
-        pub music: u32,
-    }
-
-    /// Load all assets. Call once in init().
-    pub fn load() -> AssetPack {
-        AssetPack {
-            player: load_mesh_from_embermesh(PLAYER_MESH),
-            enemy: load_mesh_from_embermesh(ENEMY_MESH),
-            level: load_mesh_from_embermesh(LEVEL_MESH),
-            player_diffuse: load_texture_from_embertex(PLAYER_DIFFUSE_TEX),
-            grass: load_texture_from_embertex(GRASS_TEX),
-            ui_font: load_font_from_emberfont(UI_FONT),
-            title_font: load_font_from_emberfont(TITLE_FONT),
-            jump: load_sound_from_embersnd(JUMP_SFX),
-            music: load_sound_from_embersnd(MUSIC_SFX),
-        }
-    }
-}
-```
-
-### Using in Your Game
-
-```rust
-fn init() {
-    let assets = assets::load();
-
-    // Now use the handles:
-    // assets.player      - mesh handle
-    // assets.grass       - texture handle
-    // assets.ui_font     - font handle
-    // assets.jump        - sound handle
-}
-```
-
-**Key benefits:**
-- Zero runtime overhead (all `include_bytes!` at compile time)
-- Type-safe struct with named fields
-- Single entry point - no boilerplate
+Running `ember-export build assets.toml` generates binary asset files:
+- `player.ewzmesh`, `enemy.ewzmesh`, `level.ewzmesh`
+- `player_diffuse.ewztex`
+- `jump.ewzsnd`
 
 ---
 
-## Output File Formats (Planned)
+## Output File Formats
 
-> **Status:** These binary formats are specified but not yet implemented. The `ember-export` tool will generate these files.
+### EmberZMesh (.ewzmesh)
 
-### EmberMesh (.embermesh)
+Binary format for 3D meshes with GPU-optimized packed vertex data. POD format (no magic bytes).
 
-Binary format for 3D meshes with GPU-optimized packed vertex data.
-
-**Header (24 bytes):**
+**Header (12 bytes):**
 ```
-Offset | Type    | Description
--------|---------|----------------------------------
-0x00   | char[4] | Magic: "EMSH"
-0x04   | u32     | Format version (1)
-0x08   | u32     | Vertex count
-0x0C   | u32     | Index count
-0x10   | u8      | Vertex format flags (0-15)
-0x11   | u8      | Packing mode (1 = packed)
-0x12   | u16     | Reserved
-0x14   | u32     | Stride (bytes per vertex)
-0x18   | data    | Vertex data (vertex_count * stride bytes)
-0x??   | u16[]   | Index data (index_count * 2 bytes)
+Offset | Type | Description
+-------|------|----------------------------------
+0x00   | u32  | Vertex count
+0x04   | u32  | Index count
+0x08   | u8   | Vertex format flags (0-15)
+0x09   | u8   | Reserved (padding)
+0x0A   | u16  | Reserved (padding)
+0x0C   | data | Vertex data (vertex_count * stride bytes)
+0x??   | u16[]| Index data (index_count * 2 bytes)
 ```
 
-### EmberTexture (.embertex)
+Stride is calculated from the format flags at runtime.
 
-Binary format for textures.
+### EmberZTexture (.ewztex)
 
-**Header (24 bytes):**
+Binary format for textures. POD format (no magic bytes).
+
+**Header (8 bytes):**
 ```
-Offset | Type    | Description
--------|---------|----------------------------------
-0x00   | char[4] | Magic: "EMTX"
-0x04   | u32     | Format version (1)
-0x08   | u32     | Width in pixels
-0x0C   | u32     | Height in pixels
-0x10   | u32     | Pixel format (0=RGBA8, 1=Palette256)
-0x14   | u32     | Reserved
-0x18   | u8[]    | Pixel data
+Offset | Type | Description
+-------|------|----------------------------------
+0x00   | u32  | Width in pixels
+0x04   | u32  | Height in pixels
+0x08   | u8[] | Pixel data (RGBA8, width * height * 4 bytes)
 ```
 
-**Pixel formats:**
-- **RGBA8**: 4 bytes per pixel (width * height * 4 bytes)
-- **Palette256**: 1024-byte palette + 1 byte per pixel (75% smaller)
+### EmberZSound (.ewzsnd)
 
-### EmberFont (.emberfont)
+Binary format for audio. POD format (no magic bytes).
 
-Binary format for bitmap font atlases.
-
-**Header:**
+**Header (4 bytes):**
 ```
-Offset | Type    | Description
--------|---------|----------------------------------
-0x00   | char[4] | Magic: "EMFT"
-0x04   | u32     | Format version (1)
-0x08   | u32     | Atlas width
-0x0C   | u32     | Atlas height
-0x10   | f32     | Line height
-0x14   | f32     | Baseline offset
-0x18   | u32     | Glyph count
-0x1C   | u32     | Reserved
-0x20   | Glyph[] | Glyph metadata (16 bytes each)
-0x??   | u8[]    | Atlas texture (RGBA8)
-```
-
-### EmberSound (.embersnd)
-
-Binary format for audio.
-
-**Header (24 bytes):**
-```
-Offset | Type    | Description
--------|---------|----------------------------------
-0x00   | char[4] | Magic: "EMSN"
-0x04   | u32     | Format version (1)
-0x08   | u32     | Sample rate (22050)
-0x0C   | u32     | Sample count
-0x10   | u32     | Audio format (0=PCM16)
-0x14   | u32     | Reserved
-0x18   | i16[]   | PCM samples
+Offset | Type  | Description
+-------|-------|----------------------------------
+0x00   | u32   | Sample count
+0x04   | i16[] | PCM samples (22050Hz mono)
 ```
 
 ---
 
-## Vertex Formats (Implemented)
+## Vertex Formats
 
-The Emberware runtime supports 16 vertex format combinations, controlled by format flags. These are used by the existing `load_mesh` FFI functions.
+The Emberware runtime supports 16 vertex format combinations, controlled by format flags.
 
 ```rust
 FORMAT_UV      = 1   // Texture coordinates
@@ -306,24 +193,24 @@ FORMAT_SKINNED = 8   // Bone weights for skeletal animation
 
 ### All 16 Formats
 
-| Format | Name | Packed Stride | Unpacked Stride |
-|--------|------|---------------|-----------------|
-| 0 | POS | 8 bytes | 12 bytes |
-| 1 | POS_UV | 12 bytes | 20 bytes |
-| 2 | POS_COLOR | 12 bytes | 24 bytes |
-| 3 | POS_UV_COLOR | 16 bytes | 32 bytes |
-| 4 | POS_NORMAL | 12 bytes | 24 bytes |
-| 5 | POS_UV_NORMAL | 16 bytes | 32 bytes |
-| 6 | POS_COLOR_NORMAL | 16 bytes | 36 bytes |
-| 7 | POS_UV_COLOR_NORMAL | 20 bytes | 44 bytes |
-| 8 | POS_SKINNED | 16 bytes | 32 bytes |
-| 9 | POS_UV_SKINNED | 20 bytes | 40 bytes |
-| 10 | POS_COLOR_SKINNED | 20 bytes | 44 bytes |
-| 11 | POS_UV_COLOR_SKINNED | 24 bytes | 52 bytes |
-| 12 | POS_NORMAL_SKINNED | 20 bytes | 44 bytes |
-| 13 | POS_UV_NORMAL_SKINNED | 24 bytes | 52 bytes |
-| 14 | POS_COLOR_NORMAL_SKINNED | 24 bytes | 56 bytes |
-| 15 | POS_UV_COLOR_NORMAL_SKINNED | 28 bytes | 64 bytes |
+| Format | Name | Packed Stride |
+|--------|------|---------------|
+| 0 | POS | 8 bytes |
+| 1 | POS_UV | 12 bytes |
+| 2 | POS_COLOR | 12 bytes |
+| 3 | POS_UV_COLOR | 16 bytes |
+| 4 | POS_NORMAL | 12 bytes |
+| 5 | POS_UV_NORMAL | 16 bytes |
+| 6 | POS_COLOR_NORMAL | 16 bytes |
+| 7 | POS_UV_COLOR_NORMAL | 20 bytes |
+| 8 | POS_SKINNED | 16 bytes |
+| 9 | POS_UV_SKINNED | 20 bytes |
+| 10 | POS_COLOR_SKINNED | 20 bytes |
+| 11 | POS_UV_COLOR_SKINNED | 24 bytes |
+| 12 | POS_NORMAL_SKINNED | 20 bytes |
+| 13 | POS_UV_NORMAL_SKINNED | 24 bytes |
+| 14 | POS_COLOR_NORMAL_SKINNED | 24 bytes |
+| 15 | POS_UV_COLOR_NORMAL_SKINNED | 28 bytes |
 
 **Common formats:**
 - **Format 5 (POS_UV_NORMAL)**: Most common for textured, lit meshes
@@ -331,7 +218,7 @@ FORMAT_SKINNED = 8   // Bone weights for skeletal animation
 
 ---
 
-## Packed Vertex Data (Implemented)
+## Packed Vertex Data
 
 The runtime automatically packs vertex data using GPU-optimized formats for smaller memory footprint and faster uploads.
 
@@ -374,7 +261,7 @@ The vertex shader decodes the normal automatically.
 
 ---
 
-## Skeletal Animation (Implemented)
+## Skeletal Animation
 
 ### Vertex Skinning Data
 
@@ -406,9 +293,7 @@ The bottom row `[0, 0, 0, 1]` is implicit (affine transform).
 
 ---
 
-## Tool Reference (Planned)
-
-> **Status:** The `ember-export` CLI tool is not yet implemented. See [asset-pipeline-spec.md](asset-pipeline-spec.md) for implementation guide.
+## Tool Reference
 
 ### ember-export
 
@@ -417,36 +302,53 @@ The asset conversion CLI tool.
 **Build from manifest:**
 ```bash
 ember-export build assets.toml           # Build all assets
-ember-export build assets.toml --watch   # Watch for changes
 ember-export check assets.toml           # Validate only
 ```
 
 **Convert individual files:**
 ```bash
 # Meshes
-ember-export mesh player.gltf -o player.embermesh
-ember-export mesh level.fbx -o level.embermesh --format POS_UV_NORMAL
+ember-export mesh player.gltf -o player.ewzmesh
+ember-export mesh level.obj -o level.ewzmesh --format POS_UV_NORMAL
 
 # Textures
-ember-export texture grass.png -o grass.embertex
-ember-export texture sprites.png -o sprites.embertex --palette 256
-
-# Fonts
-ember-export font roboto.ttf -o ui.emberfont --size 16
-ember-export font title.otf -o title.emberfont --size 32 --charset ascii
+ember-export texture grass.png -o grass.ewztex
 
 # Audio
-ember-export audio jump.wav -o jump.embersnd
-ember-export audio music.ogg -o music.embersnd
+ember-export audio jump.wav -o jump.ewzsnd
 ```
 
 ---
 
-## Manual Integration (Current Method)
+## Loading Assets (FFI)
 
-Until `ember-export` is implemented, load assets manually using these FFI functions. This is also available for fine-grained control once the tooling exists.
+### EmberZ Format Loading (Recommended)
 
-### Load APIs
+The simplest way to load assets is using the EmberZ format functions. These parse the POD headers host-side and upload to GPU.
+
+```rust
+// FFI declarations
+extern "C" {
+    fn load_zmesh(data_ptr: u32, data_len: u32) -> u32;
+    fn load_ztex(data_ptr: u32, data_len: u32) -> u32;
+    fn load_zsound(data_ptr: u32, data_len: u32) -> u32;
+}
+
+// Embed assets at compile time
+static PLAYER_MESH: &[u8] = include_bytes!("assets/player.ewzmesh");
+static GRASS_TEX: &[u8] = include_bytes!("assets/grass.ewztex");
+static JUMP_SFX: &[u8] = include_bytes!("assets/jump.ewzsnd");
+
+fn init() {
+    let player = load_zmesh(PLAYER_MESH.as_ptr() as u32, PLAYER_MESH.len() as u32);
+    let grass = load_ztex(GRASS_TEX.as_ptr() as u32, GRASS_TEX.len() as u32);
+    let jump = load_zsound(JUMP_SFX.as_ptr() as u32, JUMP_SFX.len() as u32);
+}
+```
+
+### Raw Data Loading (Advanced)
+
+For fine-grained control, you can bypass the EmberZ format and provide raw data directly:
 
 **Convenience API** (f32 input, auto-packed):
 ```rust
@@ -458,34 +360,6 @@ load_mesh_indexed(data_ptr, vertex_count, index_ptr, index_count, format) -> u32
 ```rust
 load_mesh_packed(data_ptr, vertex_count, format) -> u32
 load_mesh_indexed_packed(data_ptr, vertex_count, index_ptr, index_count, format) -> u32
-```
-
-### Manual Binary Loading
-
-```rust
-static MESH_DATA: &[u8] = include_bytes!("assets/player.embermesh");
-
-fn init() {
-    // Parse header
-    let vertex_count = u32::from_le_bytes([MESH_DATA[8], MESH_DATA[9], MESH_DATA[10], MESH_DATA[11]]);
-    let index_count = u32::from_le_bytes([MESH_DATA[12], MESH_DATA[13], MESH_DATA[14], MESH_DATA[15]]);
-    let format = MESH_DATA[16];
-    let stride = u32::from_le_bytes([MESH_DATA[20], MESH_DATA[21], MESH_DATA[22], MESH_DATA[23]]);
-
-    // Calculate offsets
-    let vertex_data_start = 24;
-    let vertex_data_size = vertex_count as usize * stride as usize;
-    let index_data_start = vertex_data_start + vertex_data_size;
-
-    // Load mesh
-    let mesh = load_mesh_indexed_packed(
-        &MESH_DATA[vertex_data_start] as *const u8 as u32,
-        vertex_count,
-        &MESH_DATA[index_data_start] as *const u8 as u32,
-        index_count,
-        format as u32,
-    );
-}
 ```
 
 ---
@@ -501,3 +375,13 @@ Emberware enforces these limits:
 | Bones per skeleton | 256 |
 
 All assets are embedded in the WASM binary at compile time. There is no runtime asset loading - this ensures deterministic builds required for rollback netcode.
+
+---
+
+## Planned Features
+
+The following features are planned but not yet implemented:
+
+- **Font conversion** - TTF/OTF to bitmap font atlas (.ewzfont)
+- **Watch mode** - `ember-export build --watch` for auto-rebuild on changes
+- **Rust code generation** - Auto-generated asset loading module
