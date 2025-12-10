@@ -72,6 +72,40 @@ impl App {
                 self.local_games = library::get_local_games(&library::ZDataDirProvider);
                 self.library_ui.selected_game = None;
             }
+            UiAction::OpenGame => {
+                tracing::info!("Opening file picker to run game directly");
+
+                // Open file picker for .ewz and .wasm files
+                let file_handle = rfd::FileDialog::new()
+                    .add_filter("Game Files", &["ewz", "wasm"])
+                    .add_filter("Emberware ROM", &["ewz"])
+                    .add_filter("WebAssembly", &["wasm"])
+                    .set_title("Open Game File")
+                    .pick_file();
+
+                if let Some(path) = file_handle {
+                    tracing::info!("Opening game from: {}", path.display());
+                    self.last_error = None;
+
+                    // Generate a display name from the filename
+                    let game_name = path
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("debug")
+                        .to_string();
+
+                    match self.start_game_from_path(path) {
+                        Ok(()) => {
+                            self.mode = AppMode::Playing {
+                                game_id: format!("[debug] {}", game_name),
+                            };
+                        }
+                        Err(e) => {
+                            self.handle_runtime_error(e);
+                        }
+                    }
+                }
+            }
             UiAction::ImportRom => {
                 tracing::info!("Opening file picker for ROM import");
 

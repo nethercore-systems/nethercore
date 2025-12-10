@@ -133,6 +133,53 @@ impl InputManager {
 
         let mapping = &self.config.keyboard;
 
+        // Compute analog stick values from axis keys
+        // Opposite keys cancel out (both pressed = 0)
+        let left_stick_x = match (
+            is_pressed(mapping.left_stick_left),
+            is_pressed(mapping.left_stick_right),
+        ) {
+            (true, false) => -1.0,
+            (false, true) => 1.0,
+            _ => 0.0,
+        };
+        let left_stick_y = match (
+            is_pressed(mapping.left_stick_down),
+            is_pressed(mapping.left_stick_up),
+        ) {
+            (true, false) => -1.0,
+            (false, true) => 1.0,
+            _ => 0.0,
+        };
+        let right_stick_x = match (
+            is_pressed(mapping.right_stick_left),
+            is_pressed(mapping.right_stick_right),
+        ) {
+            (true, false) => -1.0,
+            (false, true) => 1.0,
+            _ => 0.0,
+        };
+        let right_stick_y = match (
+            is_pressed(mapping.right_stick_down),
+            is_pressed(mapping.right_stick_up),
+        ) {
+            (true, false) => -1.0,
+            (false, true) => 1.0,
+            _ => 0.0,
+        };
+
+        // Triggers are simple on/off (0.0 or 1.0)
+        let left_trigger = if is_pressed(mapping.left_trigger) {
+            1.0
+        } else {
+            0.0
+        };
+        let right_trigger = if is_pressed(mapping.right_trigger) {
+            1.0
+        } else {
+            0.0
+        };
+
         RawInput {
             dpad_up: is_pressed(mapping.dpad_up),
             dpad_down: is_pressed(mapping.dpad_down),
@@ -153,13 +200,12 @@ impl InputManager {
             start: is_pressed(mapping.start),
             select: is_pressed(mapping.select),
 
-            // Keyboard has no analog input
-            left_stick_x: 0.0,
-            left_stick_y: 0.0,
-            right_stick_x: 0.0,
-            right_stick_y: 0.0,
-            left_trigger: 0.0,
-            right_trigger: 0.0,
+            left_stick_x,
+            left_stick_y,
+            right_stick_x,
+            right_stick_y,
+            left_trigger,
+            right_trigger,
         }
     }
 
@@ -632,10 +678,10 @@ mod tests {
     }
 
     #[test]
-    fn test_keyboard_analog_is_zero() {
+    fn test_keyboard_analog_is_zero_when_no_keys_pressed() {
         let manager = InputManager::new(InputConfig::default());
 
-        // Keyboard should always have zero analog values
+        // When no axis keys are pressed, analog values should be zero
         let input = manager.read_keyboard_input();
         assert_eq!(input.left_stick_x, 0.0);
         assert_eq!(input.left_stick_y, 0.0);
@@ -643,6 +689,79 @@ mod tests {
         assert_eq!(input.right_stick_y, 0.0);
         assert_eq!(input.left_trigger, 0.0);
         assert_eq!(input.right_trigger, 0.0);
+    }
+
+    #[test]
+    fn test_keyboard_axis_left_stick() {
+        let mut manager = InputManager::new(InputConfig::default());
+
+        // Press W for up - should give positive Y
+        manager.update_keyboard(KeyCode::KeyW, true);
+        let input = manager.read_keyboard_input();
+        assert_eq!(input.left_stick_y, 1.0);
+        assert_eq!(input.left_stick_x, 0.0);
+
+        // Release W, press S for down - should give negative Y
+        manager.update_keyboard(KeyCode::KeyW, false);
+        manager.update_keyboard(KeyCode::KeyS, true);
+        let input = manager.read_keyboard_input();
+        assert_eq!(input.left_stick_y, -1.0);
+
+        // Press both W and S - should cancel out to 0
+        manager.update_keyboard(KeyCode::KeyW, true);
+        let input = manager.read_keyboard_input();
+        assert_eq!(input.left_stick_y, 0.0);
+
+        // Test X axis with A/D
+        manager.update_keyboard(KeyCode::KeyW, false);
+        manager.update_keyboard(KeyCode::KeyS, false);
+        manager.update_keyboard(KeyCode::KeyA, true);
+        let input = manager.read_keyboard_input();
+        assert_eq!(input.left_stick_x, -1.0);
+
+        manager.update_keyboard(KeyCode::KeyA, false);
+        manager.update_keyboard(KeyCode::KeyD, true);
+        let input = manager.read_keyboard_input();
+        assert_eq!(input.left_stick_x, 1.0);
+    }
+
+    #[test]
+    fn test_keyboard_axis_right_stick() {
+        let mut manager = InputManager::new(InputConfig::default());
+
+        // Press I for up - should give positive Y
+        manager.update_keyboard(KeyCode::KeyI, true);
+        let input = manager.read_keyboard_input();
+        assert_eq!(input.right_stick_y, 1.0);
+
+        // Press J for left - should give negative X
+        manager.update_keyboard(KeyCode::KeyJ, true);
+        let input = manager.read_keyboard_input();
+        assert_eq!(input.right_stick_x, -1.0);
+        assert_eq!(input.right_stick_y, 1.0);
+    }
+
+    #[test]
+    fn test_keyboard_triggers() {
+        let mut manager = InputManager::new(InputConfig::default());
+
+        // Press U for left trigger
+        manager.update_keyboard(KeyCode::KeyU, true);
+        let input = manager.read_keyboard_input();
+        assert_eq!(input.left_trigger, 1.0);
+        assert_eq!(input.right_trigger, 0.0);
+
+        // Press O for right trigger
+        manager.update_keyboard(KeyCode::KeyO, true);
+        let input = manager.read_keyboard_input();
+        assert_eq!(input.left_trigger, 1.0);
+        assert_eq!(input.right_trigger, 1.0);
+
+        // Release left trigger
+        manager.update_keyboard(KeyCode::KeyU, false);
+        let input = manager.read_keyboard_input();
+        assert_eq!(input.left_trigger, 0.0);
+        assert_eq!(input.right_trigger, 1.0);
     }
 
     #[test]
@@ -660,6 +779,17 @@ mod tests {
             right_bumper: KeyCode::KeyO,
             start: KeyCode::Space,
             select: KeyCode::Tab,
+            // Use different keys for axis bindings in this custom mapping
+            left_stick_up: KeyCode::Numpad8,
+            left_stick_down: KeyCode::Numpad2,
+            left_stick_left: KeyCode::Numpad4,
+            left_stick_right: KeyCode::Numpad6,
+            right_stick_up: KeyCode::ArrowUp,
+            right_stick_down: KeyCode::ArrowDown,
+            right_stick_left: KeyCode::ArrowLeft,
+            right_stick_right: KeyCode::ArrowRight,
+            left_trigger: KeyCode::KeyQ,
+            right_trigger: KeyCode::KeyE,
         };
 
         let config = InputConfig {
@@ -669,7 +799,7 @@ mod tests {
 
         let mut manager = InputManager::new(config);
 
-        // Default keys should NOT work
+        // Default D-pad keys (arrow keys) should NOT work for D-pad
         manager.update_keyboard(KeyCode::ArrowUp, true);
         let input = manager.read_keyboard_input();
         assert!(!input.dpad_up);

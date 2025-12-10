@@ -463,55 +463,6 @@ warn!("Invalid texture ID: {}", texture_id);  // Logged but game doesn't know
 
 ---
 
-### **[POLISH] PERF: Store bone matrices as 3x4 instead of 4x4**
-
-**Status:** Future optimization (dependent on GPU skinning)
-
-**Current State:**
-- Bone matrices stored as `mat4x4<f32>` (16 floats = 64 bytes each)
-- 4th row always `[0, 0, 0, 1]` for affine transforms (wasted space)
-- Storage buffer: `array<mat4x4<f32>, 256>` = 16 KB
-
-**Proposed Optimization:**
-Store as 3x4 matrices (row-major):
-```wgsl
-// CPU side: Upload as [f32; 12] per bone (48 bytes)
-// GPU side: Reconstruct 4x4 in shader
-struct BoneMatrix3x4 {
-    row0: vec4<f32>,  // [m00, m01, m02, m03]
-    row1: vec4<f32>,  // [m10, m11, m12, m13]
-    row2: vec4<f32>,  // [m20, m21, m22, m23]
-    // row3 is implicitly [0, 0, 0, 1]
-}
-
-fn expand_bone_matrix(bone: BoneMatrix3x4) -> mat4x4<f32> {
-    return mat4x4<f32>(
-        bone.row0.xyz, 0.0,
-        bone.row1.xyz, 0.0,
-        bone.row2.xyz, 0.0,
-        bone.row0.w, bone.row1.w, bone.row2.w, 1.0
-    );
-}
-```
-
-**Savings:**
-- Per bone: 64 bytes → 48 bytes (25% reduction)
-- 256 bones: 16 KB → 12 KB (4 KB saved)
-- GPU memory bandwidth reduced by 25% during skinning
-
-**Benefits:**
-- Standard practice in production engines (UE, Unity use 3x4)
-- Negligible shader cost (one-time reconstruction per vertex)
-- Allows more bones or higher vertex counts within bandwidth budget
-
-**Implementation:**
-1. Update `set_bones()` FFI to accept 12 floats per bone
-2. Change storage buffer layout in shaders
-3. Add expand_bone_matrix() helper in skinning code
-4. Update skinned-mesh example to provide 3x4 data
-
----
-
 ### **[POLISH] PERF: Store MeshId, TextureId (and other ID)s in as a Vec<T> instead of a HashMap<usize, T>
 - This task may need to be updated if ZGraphics is refactored to something else.
 - Assets can never be unloaded
@@ -524,9 +475,6 @@ fn expand_bone_matrix(bone: BoneMatrix3x4) -> mat4x4<f32> {
 - When loading a game, black bars appear on the sides. The inner window should "snap" to the nearest perfect integer scaling of the window (in integer scaling mode), or just stay at that size for stretch
 - We are not able to resize the window to a size equal to the fantasy console (and game ROMs) initialized resolution. We should be able to scale down to a 1x scaling, but not any smaller to prevent a crash
 - These problems may be due to some kind of egui scaling based on the OS scaling rules.
-
-### **[POLISH] Document ALL FFI Functions **
-- We need to know these at a quick glance so developers can copy paste a "cheat sheet" into their games before working
 
 ### **[POLISH] Add axis-to-keyboard binding support**
 
