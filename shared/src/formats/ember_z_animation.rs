@@ -80,3 +80,47 @@ impl EmberZAnimationHeader {
 
 /// Size of one bone transform matrix in bytes (12 floats × 4 bytes = 48)
 pub const BONE_TRANSFORM_SIZE: usize = 48;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_animation_header_roundtrip() {
+        let header = EmberZAnimationHeader::new(25, 90, 30.0);
+        assert_eq!(header.bone_count, 25);
+        assert_eq!(header.frame_count, 90);
+        assert_eq!(header.frame_rate, 30.0);
+        assert_eq!(header.flags, 0);
+
+        let bytes = header.to_bytes();
+        assert_eq!(bytes.len(), EmberZAnimationHeader::SIZE);
+
+        let parsed = EmberZAnimationHeader::from_bytes(&bytes).unwrap();
+        assert_eq!(parsed.bone_count, header.bone_count);
+        assert_eq!(parsed.frame_count, header.frame_count);
+        assert_eq!(parsed.frame_rate, header.frame_rate);
+        assert_eq!(parsed.flags, header.flags);
+    }
+
+    #[test]
+    fn test_animation_header_size() {
+        assert_eq!(EmberZAnimationHeader::SIZE, 16);
+        assert_eq!(BONE_TRANSFORM_SIZE, 48);
+    }
+
+    #[test]
+    fn test_animation_duration() {
+        let header = EmberZAnimationHeader::new(10, 60, 30.0);
+        assert_eq!(header.duration(), 2.0);
+
+        let header_zero_rate = EmberZAnimationHeader::new(10, 60, 0.0);
+        assert_eq!(header_zero_rate.duration(), 0.0);
+    }
+
+    #[test]
+    fn test_animation_header_from_short_bytes() {
+        let short_bytes = [0u8; 8];
+        assert!(EmberZAnimationHeader::from_bytes(&short_bytes).is_none());
+    }
+}

@@ -2,7 +2,7 @@
 //!
 //! Extracts inverse bind matrices from glTF skins for skeletal animation.
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::Path;
@@ -11,15 +11,19 @@ use crate::formats::write_ember_skeleton;
 
 /// Convert glTF skin data to EmberSkeleton format
 pub fn convert_gltf_skeleton(input: &Path, output: &Path, skin_index: Option<usize>) -> Result<()> {
-    let (document, buffers, _images) = gltf::import(input)
-        .with_context(|| format!("Failed to load glTF: {:?}", input))?;
+    let (document, buffers, _images) =
+        gltf::import(input).with_context(|| format!("Failed to load glTF: {:?}", input))?;
 
     // Get the skin to export
     let skin = if let Some(idx) = skin_index {
-        document.skins().nth(idx)
+        document
+            .skins()
+            .nth(idx)
             .with_context(|| format!("Skin index {} not found in glTF", idx))?
     } else {
-        document.skins().next()
+        document
+            .skins()
+            .next()
             .context("No skins found in glTF file")?
     };
 
@@ -38,8 +42,8 @@ pub fn convert_gltf_skeleton(input: &Path, output: &Path, skin_index: Option<usi
     }
 
     // Write output
-    let file = File::create(output)
-        .with_context(|| format!("Failed to create output: {:?}", output))?;
+    let file =
+        File::create(output).with_context(|| format!("Failed to create output: {:?}", output))?;
     let mut writer = BufWriter::new(file);
 
     write_ember_skeleton(&mut writer, &inverse_bind_matrices)?;
@@ -62,11 +66,13 @@ fn extract_inverse_bind_matrices(
     let joint_count = joints.len();
 
     // Get inverse bind matrices accessor
-    let ibm_accessor = skin.inverse_bind_matrices()
+    let ibm_accessor = skin
+        .inverse_bind_matrices()
         .context("Skin has no inverse bind matrices")?;
 
     // Read inverse bind matrices from buffer
-    let ibm_view = ibm_accessor.view()
+    let ibm_view = ibm_accessor
+        .view()
         .context("Invalid inverse bind matrices accessor")?;
     let buffer = &buffers[ibm_view.buffer().index()];
     let offset = ibm_view.offset() + ibm_accessor.offset();
@@ -102,9 +108,9 @@ fn extract_inverse_bind_matrices(
         // Convert to 3x4 column-major: [col0.xyz, col1.xyz, col2.xyz, col3.xyz]
         // glTF mat4 is already column-major: [col0 (0-3), col1 (4-7), col2 (8-11), col3 (12-15)]
         let mat3x4: [f32; 12] = [
-            mat4[0], mat4[1], mat4[2],   // col0.xyz
-            mat4[4], mat4[5], mat4[6],   // col1.xyz
-            mat4[8], mat4[9], mat4[10],  // col2.xyz
+            mat4[0], mat4[1], mat4[2], // col0.xyz
+            mat4[4], mat4[5], mat4[6], // col1.xyz
+            mat4[8], mat4[9], mat4[10], // col2.xyz
             mat4[12], mat4[13], mat4[14], // col3.xyz (translation)
         ];
 
@@ -116,8 +122,8 @@ fn extract_inverse_bind_matrices(
 
 /// List available skins in a glTF file
 pub fn list_skins(input: &Path) -> Result<()> {
-    let (document, _buffers, _images) = gltf::import(input)
-        .with_context(|| format!("Failed to load glTF: {:?}", input))?;
+    let (document, _buffers, _images) =
+        gltf::import(input).with_context(|| format!("Failed to load glTF: {:?}", input))?;
 
     let skins: Vec<_> = document.skins().collect();
     if skins.is_empty() {

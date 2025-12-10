@@ -3,7 +3,9 @@
 use glam::{Mat4, Vec3};
 use hashbrown::HashMap;
 
-use super::{BoneMatrix3x4, Font, PendingMesh, PendingMeshPacked, PendingTexture, SkeletonData, ZInitConfig};
+use super::{
+    BoneMatrix3x4, Font, PendingMesh, PendingMeshPacked, PendingTexture, SkeletonData, ZInitConfig,
+};
 
 /// FFI staging state for Emberware Z
 ///

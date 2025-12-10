@@ -167,10 +167,7 @@ fn load_skeleton(
 /// * Binding persists until changed (not reset per frame)
 /// * Call multiple times per frame to render different skeletons
 /// * Invalid handles are ignored with a warning
-fn skeleton_bind(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    skeleton: u32,
-) {
+fn skeleton_bind(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, skeleton: u32) {
     let state = &mut caller.data_mut().console;
 
     if skeleton == 0 {

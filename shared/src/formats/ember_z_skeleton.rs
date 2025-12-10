@@ -55,3 +55,34 @@ impl EmberZSkeletonHeader {
 
 /// Size of one inverse bind matrix in bytes (12 floats × 4 bytes = 48)
 pub const INVERSE_BIND_MATRIX_SIZE: usize = 48;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_skeleton_header_roundtrip() {
+        let header = EmberZSkeletonHeader::new(42);
+        assert_eq!(header.bone_count, 42);
+        assert_eq!(header.reserved, 0);
+
+        let bytes = header.to_bytes();
+        assert_eq!(bytes.len(), EmberZSkeletonHeader::SIZE);
+
+        let parsed = EmberZSkeletonHeader::from_bytes(&bytes).unwrap();
+        assert_eq!(parsed.bone_count, header.bone_count);
+        assert_eq!(parsed.reserved, header.reserved);
+    }
+
+    #[test]
+    fn test_skeleton_header_size() {
+        assert_eq!(EmberZSkeletonHeader::SIZE, 8);
+        assert_eq!(INVERSE_BIND_MATRIX_SIZE, 48);
+    }
+
+    #[test]
+    fn test_skeleton_header_from_short_bytes() {
+        let short_bytes = [0u8; 4];
+        assert!(EmberZSkeletonHeader::from_bytes(&short_bytes).is_none());
+    }
+}

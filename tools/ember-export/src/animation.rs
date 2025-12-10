@@ -2,7 +2,7 @@
 //!
 //! Extracts and samples animation clips from glTF files.
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufWriter;
@@ -21,24 +21,32 @@ pub fn convert_gltf_animation(
     skin_index: Option<usize>,
     frame_rate: Option<f32>,
 ) -> Result<()> {
-    let (document, buffers, _images) = gltf::import(input)
-        .with_context(|| format!("Failed to load glTF: {:?}", input))?;
+    let (document, buffers, _images) =
+        gltf::import(input).with_context(|| format!("Failed to load glTF: {:?}", input))?;
 
     // Get the skin (needed for bone order)
     let skin = if let Some(idx) = skin_index {
-        document.skins().nth(idx)
+        document
+            .skins()
+            .nth(idx)
             .with_context(|| format!("Skin index {} not found in glTF", idx))?
     } else {
-        document.skins().next()
+        document
+            .skins()
+            .next()
             .context("No skins found in glTF file")?
     };
 
     // Get the animation
     let animation = if let Some(idx) = animation_index {
-        document.animations().nth(idx)
+        document
+            .animations()
+            .nth(idx)
             .with_context(|| format!("Animation index {} not found in glTF", idx))?
     } else {
-        document.animations().next()
+        document
+            .animations()
+            .next()
             .context("No animations found in glTF file")?
     };
 
@@ -52,8 +60,8 @@ pub fn convert_gltf_animation(
     }
 
     // Write output
-    let file = File::create(output)
-        .with_context(|| format!("Failed to create output: {:?}", output))?;
+    let file =
+        File::create(output).with_context(|| format!("Failed to create output: {:?}", output))?;
     let mut writer = BufWriter::new(file);
 
     write_ember_animation(&mut writer, bone_count, frame_rate, &frames)?;
@@ -109,10 +117,10 @@ fn sample_animation(
 
     // Initialize frames with identity transforms
     let identity: [f32; 12] = [
-        1.0, 0.0, 0.0,  // col0 (x-axis)
-        0.0, 1.0, 0.0,  // col1 (y-axis)
-        0.0, 0.0, 1.0,  // col2 (z-axis)
-        0.0, 0.0, 0.0,  // col3 (translation)
+        1.0, 0.0, 0.0, // col0 (x-axis)
+        0.0, 1.0, 0.0, // col1 (y-axis)
+        0.0, 0.0, 1.0, // col2 (z-axis)
+        0.0, 0.0, 0.0, // col3 (translation)
     ];
     let mut frames: Vec<Vec<[f32; 12]>> = (0..frame_count)
         .map(|_| vec![identity; bone_count])
@@ -219,10 +227,18 @@ fn compose_trs_matrix(t: [f32; 3], q: [f32; 4], s: [f32; 3]) -> [f32; 12] {
 
     // Apply scale and compose
     [
-        r00 * s[0], r01 * s[0], r02 * s[0],  // col0 (scaled x-axis)
-        r10 * s[1], r11 * s[1], r12 * s[1],  // col1 (scaled y-axis)
-        r20 * s[2], r21 * s[2], r22 * s[2],  // col2 (scaled z-axis)
-        t[0], t[1], t[2],                     // col3 (translation)
+        r00 * s[0],
+        r01 * s[0],
+        r02 * s[0], // col0 (scaled x-axis)
+        r10 * s[1],
+        r11 * s[1],
+        r12 * s[1], // col1 (scaled y-axis)
+        r20 * s[2],
+        r21 * s[2],
+        r22 * s[2], // col2 (scaled z-axis)
+        t[0],
+        t[1],
+        t[2], // col3 (translation)
     ]
 }
 
@@ -230,7 +246,10 @@ fn compose_trs_matrix(t: [f32; 3], q: [f32; 4], s: [f32; 3]) -> [f32; 12] {
 // glTF accessor readers
 // ============================================================================
 
-fn read_accessor_f32(accessor: &gltf::Accessor, buffers: &[gltf::buffer::Data]) -> Result<Vec<f32>> {
+fn read_accessor_f32(
+    accessor: &gltf::Accessor,
+    buffers: &[gltf::buffer::Data],
+) -> Result<Vec<f32>> {
     let view = accessor.view().context("Accessor has no buffer view")?;
     let buffer = &buffers[view.buffer().index()];
     let offset = view.offset() + accessor.offset();
@@ -251,7 +270,10 @@ fn read_accessor_f32(accessor: &gltf::Accessor, buffers: &[gltf::buffer::Data]) 
     Ok(values)
 }
 
-fn read_accessor_vec3(accessor: &gltf::Accessor, buffers: &[gltf::buffer::Data]) -> Result<Vec<[f32; 3]>> {
+fn read_accessor_vec3(
+    accessor: &gltf::Accessor,
+    buffers: &[gltf::buffer::Data],
+) -> Result<Vec<[f32; 3]>> {
     let view = accessor.view().context("Accessor has no buffer view")?;
     let buffer = &buffers[view.buffer().index()];
     let offset = view.offset() + accessor.offset();
@@ -272,7 +294,10 @@ fn read_accessor_vec3(accessor: &gltf::Accessor, buffers: &[gltf::buffer::Data])
     Ok(values)
 }
 
-fn read_accessor_quat(accessor: &gltf::Accessor, buffers: &[gltf::buffer::Data]) -> Result<Vec<[f32; 4]>> {
+fn read_accessor_quat(
+    accessor: &gltf::Accessor,
+    buffers: &[gltf::buffer::Data],
+) -> Result<Vec<[f32; 4]>> {
     let view = accessor.view().context("Accessor has no buffer view")?;
     let buffer = &buffers[view.buffer().index()];
     let offset = view.offset() + accessor.offset();
@@ -297,7 +322,12 @@ fn read_accessor_quat(accessor: &gltf::Accessor, buffers: &[gltf::buffer::Data])
 // Interpolation
 // ============================================================================
 
-fn interpolate_vec3(times: &[f32], values: &[[f32; 3]], t: f32, _interp: gltf::animation::Interpolation) -> [f32; 3] {
+fn interpolate_vec3(
+    times: &[f32],
+    values: &[[f32; 3]],
+    t: f32,
+    _interp: gltf::animation::Interpolation,
+) -> [f32; 3] {
     if times.is_empty() || values.is_empty() {
         return [0.0, 0.0, 0.0];
     }
@@ -328,7 +358,12 @@ fn interpolate_vec3(times: &[f32], values: &[[f32; 3]], t: f32, _interp: gltf::a
     ]
 }
 
-fn interpolate_quat(times: &[f32], values: &[[f32; 4]], t: f32, _interp: gltf::animation::Interpolation) -> [f32; 4] {
+fn interpolate_quat(
+    times: &[f32],
+    values: &[[f32; 4]],
+    t: f32,
+    _interp: gltf::animation::Interpolation,
+) -> [f32; 4] {
     if times.is_empty() || values.is_empty() {
         return [0.0, 0.0, 0.0, 1.0]; // Identity quaternion
     }
@@ -400,8 +435,8 @@ fn normalize_quat(q: [f32; 4]) -> [f32; 4] {
 
 /// List available animations in a glTF file
 pub fn list_animations(input: &Path) -> Result<()> {
-    let (document, buffers, _images) = gltf::import(input)
-        .with_context(|| format!("Failed to load glTF: {:?}", input))?;
+    let (document, buffers, _images) =
+        gltf::import(input).with_context(|| format!("Failed to load glTF: {:?}", input))?;
 
     let animations: Vec<_> = document.animations().collect();
     if animations.is_empty() {
@@ -428,7 +463,10 @@ pub fn list_animations(input: &Path) -> Result<()> {
 
         tracing::info!(
             "  [{}] '{}': {} channels, {:.2}s",
-            i, name, channel_count, max_time
+            i,
+            name,
+            channel_count,
+            max_time
         );
     }
 
