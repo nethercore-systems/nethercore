@@ -1,73 +1,16 @@
-//! Vertex format definitions and utilities
+//! Vertex format definitions and wgpu buffer layouts
 //!
-//! Defines vertex format flags, stride calculations, and vertex buffer layouts
-//! for all 16 vertex format permutations (8 base + 8 skinned variants).
+//! This module provides wgpu-specific vertex buffer layout information.
+//! Format constants and stride functions are in z-common.
 
-/// Vertex format flag: Has UV coordinates (2 floats)
-pub const FORMAT_UV: u8 = 1;
-/// Vertex format flag: Has per-vertex color (RGB, 3 floats)
-pub const FORMAT_COLOR: u8 = 2;
-/// Vertex format flag: Has normals (3 floats)
-pub const FORMAT_NORMAL: u8 = 4;
-/// Vertex format flag: Has bone indices/weights for skinning (4 u8 + 4 floats)
-pub const FORMAT_SKINNED: u8 = 8;
+// Re-export format constants from z-common
+pub use z_common::{vertex_stride, vertex_stride_packed, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV};
 
 /// All format flags combined
 pub const FORMAT_ALL: u8 = FORMAT_UV | FORMAT_COLOR | FORMAT_NORMAL | FORMAT_SKINNED;
 
 /// Number of vertex format permutations (16: 0-15)
-/// GPU always uses packed vertex formats (f16, snorm16, unorm8).
 pub const VERTEX_FORMAT_COUNT: usize = 16;
-
-/// Calculate vertex stride in bytes for unpacked f32 format (convenience API)
-///
-/// Used when game code provides Vec<f32> vertex data that needs packing before GPU upload.
-/// Format values are 0-15 (base format).
-#[inline]
-pub const fn vertex_stride(format: u8) -> u32 {
-    // Position: Float32x3 (12 bytes)
-    let mut stride = 12;
-
-    if format & FORMAT_UV != 0 {
-        stride += 8; // UV: Float32x2
-    }
-    if format & FORMAT_COLOR != 0 {
-        stride += 12; // Color: Float32x3
-    }
-    if format & FORMAT_NORMAL != 0 {
-        stride += 12; // Normal: Float32x3
-    }
-    if format & FORMAT_SKINNED != 0 {
-        stride += 20; // Bone indices (4 u8) + weights (4 f32)
-    }
-
-    stride
-}
-
-/// Calculate vertex stride in bytes for packed format (used by power user API)
-///
-/// All formats are packed since GPU buffers only use packed data.
-/// Format values are 0-15 (base format, no FORMAT_PACKED flag).
-#[inline]
-pub const fn vertex_stride_packed(format: u8) -> u32 {
-    // Position: Float16x4 (8 bytes)
-    let mut stride = 8;
-
-    if format & FORMAT_UV != 0 {
-        stride += 4; // Unorm16x2
-    }
-    if format & FORMAT_COLOR != 0 {
-        stride += 4; // Unorm8x4
-    }
-    if format & FORMAT_NORMAL != 0 {
-        stride += 4; // Octahedral u32
-    }
-    if format & FORMAT_SKINNED != 0 {
-        stride += 8; // Bone indices (u8x4) + weights (unorm8x4)
-    }
-
-    stride
-}
 
 /// Vertex format information for creating vertex buffer layouts
 #[derive(Debug, Clone)]

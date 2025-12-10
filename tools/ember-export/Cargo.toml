@@ -10,9 +10,8 @@ name = "ember-export"
 path = "src/main.rs"
 
 [dependencies]
-# Local crates (reuse packing logic from emberware-z)
-# Use default-features = false to avoid pulling in gilrs, wgpu, etc.
-emberware-z = { path = "../../emberware-z", default-features = false }
+# Local crates
+z-common = { path = "../../z-common" }
 emberware-shared = { path = "../../shared" }
 
 # CLI

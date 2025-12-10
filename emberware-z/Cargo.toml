@@ -10,83 +10,57 @@ description = "Emberware Z - Fantasy console runtime"
 name = "emberware_z"
 path = "src/lib.rs"
 
-[features]
-default = ["runtime"]
-# Full runtime with graphics, audio, input, networking
-runtime = [
-    "dep:emberware-core",
-    "dep:wasmtime",
-    "dep:wgpu",
-    "dep:winit",
-    "dep:rodio",
-    "dep:gilrs",
-    "dep:egui",
-    "dep:egui-wgpu",
-    "dep:egui-winit",
-    "dep:ggrs",
-    "dep:reqwest",
-    "dep:tokio",
-    "dep:directories",
-    "dep:rfd",
-    "dep:pollster",
-    "dep:open",
-    "dep:hashbrown",
-]
-
 [dependencies]
+emberware-core = { path = "../core" }
 emberware-shared = { path = "../shared" }
+z-common = { path = "../z-common" }
 
-# Core runtime (optional - for full console)
-emberware-core = { path = "../core", optional = true }
+# WASM runtime
+wasmtime = { workspace = true }
 
-# WASM runtime (optional)
-wasmtime = { workspace = true, optional = true }
+# Graphics
+wgpu = { workspace = true }
+winit = { workspace = true }
 
-# Graphics (optional)
-wgpu = { workspace = true, optional = true }
-winit = { workspace = true, optional = true }
+# Audio
+rodio = { workspace = true }
 
-# Audio (optional)
-rodio = { workspace = true, optional = true }
+# Input
+gilrs = { workspace = true }
 
-# Input (optional)
-gilrs = { workspace = true, optional = true }
+# UI (minimal library)
+egui = { workspace = true }
+egui-wgpu = { workspace = true }
+egui-winit = { workspace = true }
 
-# UI (optional)
-egui = { workspace = true, optional = true }
-egui-wgpu = { workspace = true, optional = true }
-egui-winit = { workspace = true, optional = true }
-
-# Rollback netcode (optional)
-ggrs = { workspace = true, optional = true }
-
-# Always needed for packing
+# Rollback netcode
+ggrs = { workspace = true }
 bytemuck = { workspace = true }
+
+# HTTP (for downloads)
+reqwest = { workspace = true, features = ["json", "stream"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "fs"] }
+
+# Math
 glam = { workspace = true }
 half = { workspace = true }
 
-# HTTP (optional)
-reqwest = { workspace = true, features = ["json", "stream"], optional = true }
-tokio = { workspace = true, features = ["rt-multi-thread", "macros", "fs"], optional = true }
-
-# Utilities - always needed
+# Utilities
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }
+directories = { workspace = true }
+rfd = "0.15"
 chrono = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
+pollster = { workspace = true }
+open = { workspace = true }
 
-# Utilities - optional (runtime only)
-directories = { workspace = true, optional = true }
-rfd = { version = "0.15", optional = true }
-pollster = { workspace = true, optional = true }
-open = { workspace = true, optional = true }
-
-# Performance (optional)
-hashbrown = { workspace = true, optional = true }
+# Performance - faster HashMap/HashSet
+hashbrown = { workspace = true }
 
 [build-dependencies]
 naga = { version = "23", features = ["wgsl-in"] }
