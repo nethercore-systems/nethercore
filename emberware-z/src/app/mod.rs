@@ -21,6 +21,7 @@ use emberware_core::app::{
     session::GameSession, AppMode, DebugStats, RuntimeError, FRAME_TIME_HISTORY_SIZE,
 };
 use emberware_core::console::ConsoleResourceManager;
+use emberware_core::debug::{DebugPanel, FrameController};
 use emberware_core::wasm::WasmEngine;
 
 /// Application state
@@ -75,6 +76,10 @@ pub struct App {
     pub(crate) cached_pixels_per_point: f32,
     pub(crate) last_mode: AppMode,
     pub(crate) last_window_size: (u32, u32),
+    /// Debug inspection panel
+    pub(crate) debug_panel: DebugPanel,
+    /// Frame controller for pause/step/time scale
+    pub(crate) frame_controller: FrameController,
 }
 
 impl App {
@@ -333,6 +338,11 @@ impl App {
             }
         });
 
+        // Render debug inspection panel (separate pass after main UI)
+        if self.debug_panel.visible && matches!(mode, AppMode::Playing { .. }) {
+            self.render_debug_panel();
+        }
+
         egui_state.handle_platform_output(&window, full_output.platform_output);
 
         // Determine if egui needs update
@@ -515,6 +525,111 @@ impl App {
         self.request_redraw_if_needed();
     }
 
+    /// Render the debug inspection panel
+    ///
+    /// This is called separately from the main egui frame to avoid borrow checker issues.
+    /// Uses raw pointer access to WASM memory to work around Rust's borrow checker
+    /// limitations with closure captures.
+    fn render_debug_panel(&mut self) {
+        use emberware_core::debug::{DebugValue, RegisteredValue};
+
+        let session = match &mut self.game_session {
+            Some(s) => s,
+            None => return,
+        };
+
+        let game = match session.runtime.game_mut() {
+            Some(g) => g,
+            None => return,
+        };
+
+        // Get the store to access debug registry and memory
+        let store = game.store_mut();
+
+        // Check if registry has any values
+        if store.data().debug_registry.is_empty() {
+            return;
+        }
+
+        // Get memory handle for read/write
+        let memory = match store.data().game.memory {
+            Some(m) => m,
+            None => return,
+        };
+
+        // Clone the registry for rendering (avoids borrow conflicts)
+        let registry_clone = store.data().debug_registry.clone();
+
+        // Get raw pointer to WASM memory for safe access within this scope
+        // SAFETY: We're not growing the memory during rendering, and all accesses
+        // are bounds-checked. The pointer is valid for the duration of this function.
+        let mem_ptr = memory.data_ptr(store);
+        let mem_len = memory.data_size(store);
+
+        // Create read closure using raw pointer
+        let read_value = |reg_value: &RegisteredValue| -> Option<DebugValue> {
+            let ptr = reg_value.wasm_ptr as usize;
+            let size = reg_value.value_type.byte_size();
+
+            if ptr + size > mem_len {
+                return None;
+            }
+
+            // SAFETY: Bounds checked above, pointer valid for this scope
+            let data = unsafe { std::slice::from_raw_parts(mem_ptr.add(ptr), size) };
+
+            Some(read_debug_value_from_slice(data, reg_value.value_type))
+        };
+
+        // Create write closure using raw pointer
+        let write_value = |reg_value: &RegisteredValue, new_val: &DebugValue| -> bool {
+            let ptr = reg_value.wasm_ptr as usize;
+            let size = reg_value.value_type.byte_size();
+
+            if ptr + size > mem_len {
+                return false;
+            }
+
+            // SAFETY: Bounds checked above, pointer valid for this scope
+            let data = unsafe { std::slice::from_raw_parts_mut(mem_ptr.add(ptr) as *mut u8, size) };
+
+            write_debug_value_to_slice(data, new_val);
+            true
+        };
+
+        // Render the panel
+        let any_changed = self.debug_panel.render(
+            &self.egui_ctx,
+            &registry_clone,
+            &mut self.frame_controller,
+            read_value,
+            write_value,
+        );
+
+        // Store callback info for invocation after we release borrows
+        let callback_to_invoke = if any_changed {
+            registry_clone.change_callback
+        } else {
+            None
+        };
+
+        // Drop the closures and release borrows before calling callback
+        drop(read_value);
+        drop(write_value);
+
+        // Invoke the callback if values changed and one is registered
+        if let Some(callback_ptr) = callback_to_invoke {
+            // Re-acquire game reference to call the callback
+            if let Some(session) = &mut self.game_session {
+                if let Some(game) = session.runtime.game_mut() {
+                    if let Err(e) = game.call_table_func(callback_ptr) {
+                        tracing::warn!("Failed to invoke debug change callback: {}", e);
+                    }
+                }
+            }
+        }
+    }
+
     fn request_redraw_if_needed(&mut self) {
         // In Playing mode or Library/Settings with Poll control flow,
         // we request redraws continuously to ensure UI responsiveness.
@@ -614,6 +729,121 @@ pub fn run(initial_mode: AppMode) -> Result<(), AppError> {
     emberware_core::app::run(app)
         .map_err(|e| AppError::EventLoop(format!("Event loop error: {}", e)))?;
     Ok(())
+}
+
+/// Read a debug value from a byte slice
+fn read_debug_value_from_slice(
+    data: &[u8],
+    value_type: emberware_core::debug::ValueType,
+) -> emberware_core::debug::DebugValue {
+    use emberware_core::debug::{DebugValue, ValueType};
+
+    match value_type {
+        ValueType::I8 => DebugValue::I8(data[0] as i8),
+        ValueType::U8 => DebugValue::U8(data[0]),
+        ValueType::Bool => DebugValue::Bool(data[0] != 0),
+        ValueType::I16 => {
+            let bytes: [u8; 2] = data[..2].try_into().unwrap();
+            DebugValue::I16(i16::from_le_bytes(bytes))
+        }
+        ValueType::U16 => {
+            let bytes: [u8; 2] = data[..2].try_into().unwrap();
+            DebugValue::U16(u16::from_le_bytes(bytes))
+        }
+        ValueType::I32 => {
+            let bytes: [u8; 4] = data[..4].try_into().unwrap();
+            DebugValue::I32(i32::from_le_bytes(bytes))
+        }
+        ValueType::U32 => {
+            let bytes: [u8; 4] = data[..4].try_into().unwrap();
+            DebugValue::U32(u32::from_le_bytes(bytes))
+        }
+        ValueType::F32 => {
+            let bytes: [u8; 4] = data[..4].try_into().unwrap();
+            DebugValue::F32(f32::from_le_bytes(bytes))
+        }
+        ValueType::Vec2 => {
+            let x = f32::from_le_bytes(data[0..4].try_into().unwrap());
+            let y = f32::from_le_bytes(data[4..8].try_into().unwrap());
+            DebugValue::Vec2 { x, y }
+        }
+        ValueType::Vec3 => {
+            let x = f32::from_le_bytes(data[0..4].try_into().unwrap());
+            let y = f32::from_le_bytes(data[4..8].try_into().unwrap());
+            let z = f32::from_le_bytes(data[8..12].try_into().unwrap());
+            DebugValue::Vec3 { x, y, z }
+        }
+        ValueType::Rect => {
+            let x = i16::from_le_bytes(data[0..2].try_into().unwrap());
+            let y = i16::from_le_bytes(data[2..4].try_into().unwrap());
+            let w = i16::from_le_bytes(data[4..6].try_into().unwrap());
+            let h = i16::from_le_bytes(data[6..8].try_into().unwrap());
+            DebugValue::Rect { x, y, w, h }
+        }
+        ValueType::Color => DebugValue::Color {
+            r: data[0],
+            g: data[1],
+            b: data[2],
+            a: data[3],
+        },
+        ValueType::FixedI16Q8 => {
+            let bytes: [u8; 2] = data[..2].try_into().unwrap();
+            DebugValue::FixedI16Q8(i16::from_le_bytes(bytes))
+        }
+        ValueType::FixedI32Q16 => {
+            let bytes: [u8; 4] = data[..4].try_into().unwrap();
+            DebugValue::FixedI32Q16(i32::from_le_bytes(bytes))
+        }
+        ValueType::FixedI32Q8 => {
+            let bytes: [u8; 4] = data[..4].try_into().unwrap();
+            DebugValue::FixedI32Q8(i32::from_le_bytes(bytes))
+        }
+        ValueType::FixedI32Q24 => {
+            let bytes: [u8; 4] = data[..4].try_into().unwrap();
+            DebugValue::FixedI32Q24(i32::from_le_bytes(bytes))
+        }
+    }
+}
+
+/// Write a debug value to a byte slice
+fn write_debug_value_to_slice(data: &mut [u8], value: &emberware_core::debug::DebugValue) {
+    use emberware_core::debug::DebugValue;
+
+    match value {
+        DebugValue::I8(v) => data[0] = *v as u8,
+        DebugValue::U8(v) => data[0] = *v,
+        DebugValue::Bool(v) => data[0] = if *v { 1 } else { 0 },
+        DebugValue::I16(v) => data[..2].copy_from_slice(&v.to_le_bytes()),
+        DebugValue::U16(v) => data[..2].copy_from_slice(&v.to_le_bytes()),
+        DebugValue::I32(v) => data[..4].copy_from_slice(&v.to_le_bytes()),
+        DebugValue::U32(v) => data[..4].copy_from_slice(&v.to_le_bytes()),
+        DebugValue::F32(v) => data[..4].copy_from_slice(&v.to_le_bytes()),
+        DebugValue::Vec2 { x, y } => {
+            data[0..4].copy_from_slice(&x.to_le_bytes());
+            data[4..8].copy_from_slice(&y.to_le_bytes());
+        }
+        DebugValue::Vec3 { x, y, z } => {
+            data[0..4].copy_from_slice(&x.to_le_bytes());
+            data[4..8].copy_from_slice(&y.to_le_bytes());
+            data[8..12].copy_from_slice(&z.to_le_bytes());
+        }
+        DebugValue::Rect { x, y, w, h } => {
+            data[0..2].copy_from_slice(&x.to_le_bytes());
+            data[2..4].copy_from_slice(&y.to_le_bytes());
+            data[4..6].copy_from_slice(&w.to_le_bytes());
+            data[6..8].copy_from_slice(&h.to_le_bytes());
+        }
+        DebugValue::Color { r, g, b, a } => {
+            data[0] = *r;
+            data[1] = *g;
+            data[2] = *b;
+            data[3] = *a;
+        }
+        DebugValue::FixedI16Q8(v) => data[..2].copy_from_slice(&v.to_le_bytes()),
+        DebugValue::FixedI32Q16(v) => data[..4].copy_from_slice(&v.to_le_bytes()),
+        DebugValue::FixedI32Q8(v) => data[..4].copy_from_slice(&v.to_le_bytes()),
+        DebugValue::FixedI32Q24(v) => data[..4].copy_from_slice(&v.to_le_bytes()),
+    }
 }
 
 #[cfg(test)]

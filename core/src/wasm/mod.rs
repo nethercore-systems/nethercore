@@ -137,7 +137,10 @@ impl<I: ConsoleInput, S: Send + Default + 'static> GameInstance<I, S> {
         linker: &Linker<GameStateWithConsole<I, S>>,
         ram_limit: usize,
     ) -> Result<Self> {
-        let mut store = Store::new(engine.engine(), GameStateWithConsole::with_ram_limit(ram_limit));
+        let mut store = Store::new(
+            engine.engine(),
+            GameStateWithConsole::with_ram_limit(ram_limit),
+        );
 
         // Enable resource limiter to enforce memory constraints
         store.limiter(|state| state);
@@ -321,6 +324,47 @@ impl<I: ConsoleInput, S: Send + Default + 'static> GameInstance<I, S> {
         let state = &mut self.store.data_mut().game;
         state.player_count = player_count.min(MAX_PLAYERS as u32);
         state.local_player_mask = local_player_mask;
+    }
+
+    /// Call a WASM function by its table index (for callbacks)
+    ///
+    /// This looks up a function in the indirect function table and calls it.
+    /// Used for debug change callbacks registered by games.
+    ///
+    /// # Arguments
+    /// * `table_index` - Index into the __indirect_function_table
+    ///
+    /// # Returns
+    /// Ok(()) if the function was called successfully, Err if the index is invalid
+    /// or the function has the wrong signature.
+    pub fn call_table_func(&mut self, table_index: u32) -> Result<()> {
+        // Get the indirect function table
+        let table = self
+            .instance
+            .get_table(&mut self.store, "__indirect_function_table")
+            .context("No indirect function table found")?;
+
+        // Get the function at the specified index
+        let func_val = table
+            .get(&mut self.store, table_index)
+            .context("Invalid table index")?;
+
+        // Extract the function from the table value
+        let func = func_val
+            .funcref()
+            .context("Table entry is not a function reference")?
+            .context("Table entry is null")?;
+
+        // Call the function (assuming () -> () signature for callbacks)
+        let typed_func = func
+            .typed::<(), ()>(&self.store)
+            .context("Callback function has wrong signature (expected () -> ())")?;
+
+        typed_func
+            .call(&mut self.store, ())
+            .context("Callback function call failed")?;
+
+        Ok(())
     }
 }
 

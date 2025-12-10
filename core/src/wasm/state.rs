@@ -5,6 +5,8 @@
 use wasmtime::{Memory, ResourceLimiter};
 
 use crate::console::ConsoleInput;
+use crate::debug::ffi::HasDebugRegistry;
+use crate::debug::registry::DebugRegistry;
 
 /// Maximum number of players
 pub const MAX_PLAYERS: usize = 4;
@@ -70,6 +72,8 @@ pub struct GameStateWithConsole<I: ConsoleInput, S> {
     pub console: S,
     /// RAM limit in bytes (for ResourceLimiter enforcement)
     pub ram_limit: usize,
+    /// Debug inspection registry (for runtime value inspection)
+    pub debug_registry: DebugRegistry,
 }
 
 impl<I: ConsoleInput, S: Default> Default for GameStateWithConsole<I, S> {
@@ -78,6 +82,7 @@ impl<I: ConsoleInput, S: Default> Default for GameStateWithConsole<I, S> {
             game: GameState::new(),
             console: S::default(),
             ram_limit: 8 * 1024 * 1024, // Default to 8MB (Emberware Z)
+            debug_registry: DebugRegistry::new(),
         }
     }
 }
@@ -94,7 +99,19 @@ impl<I: ConsoleInput, S: Default> GameStateWithConsole<I, S> {
             game: GameState::new(),
             console: S::default(),
             ram_limit,
+            debug_registry: DebugRegistry::new(),
         }
+    }
+}
+
+/// Implement HasDebugRegistry trait for generic access to debug registry
+impl<I: ConsoleInput, S> HasDebugRegistry for GameStateWithConsole<I, S> {
+    fn debug_registry(&self) -> &DebugRegistry {
+        &self.debug_registry
+    }
+
+    fn debug_registry_mut(&mut self) -> &mut DebugRegistry {
+        &mut self.debug_registry
     }
 }
 
