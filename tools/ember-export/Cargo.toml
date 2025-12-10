@@ -1,0 +1,39 @@
+[package]
+name = "ember-export"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Emberware asset export tool - converts raw assets to GPU-ready binary formats"
+
+[[bin]]
+name = "ember-export"
+path = "src/main.rs"
+
+[dependencies]
+# Local crates (reuse packing logic from emberware-z)
+emberware-z = { path = "../../emberware-z" }
+emberware-shared = { path = "../../shared" }
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Serialization
+toml = "0.8"
+serde = { version = "1", features = ["derive"] }
+
+# Asset loading
+gltf = "1.4"
+image = "0.25"
+hound = "3.5"  # WAV loading
+bytemuck = "1"
+
+# Error handling
+anyhow = "1"
+thiserror = "2"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+tempfile = "3"

@@ -28,6 +28,7 @@ pub mod api;
 pub mod auth;
 pub mod cart;
 pub mod console;
+pub mod formats;
 pub mod local;
 pub mod requests;
 
