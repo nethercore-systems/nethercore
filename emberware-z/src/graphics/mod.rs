@@ -1,9 +1,10 @@
-//! Emberware Z graphics backend (wgpu)
+//! Emberware Z graphics module
 //!
-//! Implements the `Graphics` trait from emberware-core with a wgpu-based
-//! renderer featuring PS1/N64 aesthetic (vertex jitter, affine textures).
+//! This module provides:
+//! - **Always available**: Vertex packing utilities and format constants for asset tools
+//! - **With `runtime` feature**: Full wgpu-based renderer with PS1/N64 aesthetic
 //!
-//! # Architecture
+//! # Architecture (runtime feature)
 //!
 //! **ZFFIState** (staging) → **ZGraphics** (GPU execution)
 //!
@@ -59,60 +60,95 @@
 //! session), this is acceptable. Future versions may add explicit resource invalidation on
 //! game switch if memory pressure becomes a concern.
 
-// Many public APIs are designed for game rendering but not yet fully wired up
-mod buffer;
-mod command_buffer;
-mod draw;
-mod frame;
-mod init;
-mod matrix_packing;
+// ============================================================================
+// Always available: packing utilities and vertex format constants
+// ============================================================================
+
 mod packing;
-mod pipeline;
-mod quad_instance;
-mod render_state;
-mod texture_manager;
-mod unified_shading_state;
 mod vertex;
 
-use hashbrown::HashMap;
-
-use anyhow::{Context, Result};
-
-use emberware_core::console::Graphics;
-
-// Re-export public types from submodules
-pub use buffer::{BufferManager, GrowableBuffer, MeshHandle, RetainedMesh};
-pub use command_buffer::{VRPCommand, VirtualRenderPass};
-pub use matrix_packing::MvpShadingIndices;
-pub use quad_instance::{QuadInstance, QuadMode};
-pub use render_state::{
-    BlendMode, CullMode, MatcapBlendMode, RenderState, TextureFilter, TextureHandle,
-};
-pub use unified_shading_state::{
-    pack_matcap_blend_modes, pack_octahedral_u32, pack_rgb8, pack_unorm8,
-    unpack_matcap_blend_modes, update_uniform_set_0_byte, update_uniform_set_1_byte, PackedLight,
-    PackedUnifiedShadingState, ShadingStateIndex,
-};
-pub use vertex::{
-    vertex_stride, vertex_stride_packed, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV,
-};
-
-// Re-export packing functions for FFI use
+// Re-export packing functions (always available, used by ember-export)
 pub use packing::{
     pack_bone_weights_unorm8, pack_color_rgba_unorm8, pack_normal_octahedral, pack_normal_snorm16,
     pack_position_f16, pack_uv_f16, pack_uv_unorm16, pack_vertex_data, unpack_octahedral_u32,
 };
 
-// Re-export for crate-internal use
+// Re-export vertex format constants and stride functions (always available)
+pub use vertex::{
+    vertex_stride, vertex_stride_packed, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV,
+};
+
+// ============================================================================
+// Runtime feature: full wgpu graphics backend
+// ============================================================================
+
+#[cfg(feature = "runtime")]
+mod buffer;
+#[cfg(feature = "runtime")]
+mod command_buffer;
+#[cfg(feature = "runtime")]
+mod draw;
+#[cfg(feature = "runtime")]
+mod frame;
+#[cfg(feature = "runtime")]
+mod init;
+#[cfg(feature = "runtime")]
+mod matrix_packing;
+#[cfg(feature = "runtime")]
+mod pipeline;
+#[cfg(feature = "runtime")]
+mod quad_instance;
+#[cfg(feature = "runtime")]
+mod render_state;
+#[cfg(feature = "runtime")]
+mod texture_manager;
+#[cfg(feature = "runtime")]
+mod unified_shading_state;
+
+#[cfg(feature = "runtime")]
+use hashbrown::HashMap;
+
+#[cfg(feature = "runtime")]
+use anyhow::{Context, Result};
+
+#[cfg(feature = "runtime")]
+use emberware_core::console::Graphics;
+
+// Re-export public types from submodules (runtime only)
+#[cfg(feature = "runtime")]
+pub use buffer::{BufferManager, GrowableBuffer, MeshHandle, RetainedMesh};
+#[cfg(feature = "runtime")]
+pub use command_buffer::{VRPCommand, VirtualRenderPass};
+#[cfg(feature = "runtime")]
+pub use matrix_packing::MvpShadingIndices;
+#[cfg(feature = "runtime")]
+pub use quad_instance::{QuadInstance, QuadMode};
+#[cfg(feature = "runtime")]
+pub use render_state::{
+    BlendMode, CullMode, MatcapBlendMode, RenderState, TextureFilter, TextureHandle,
+};
+#[cfg(feature = "runtime")]
+pub use unified_shading_state::{
+    pack_matcap_blend_modes, pack_octahedral_u32, pack_rgb8, pack_unorm8,
+    unpack_matcap_blend_modes, update_uniform_set_0_byte, update_uniform_set_1_byte, PackedLight,
+    PackedUnifiedShadingState, ShadingStateIndex,
+};
+
+// Re-export for crate-internal use (runtime only)
+#[cfg(feature = "runtime")]
 pub(crate) use init::RenderTarget;
+#[cfg(feature = "runtime")]
 pub(crate) use pipeline::PipelineEntry;
 
+#[cfg(feature = "runtime")]
 use pipeline::PipelineCache;
+#[cfg(feature = "runtime")]
 use texture_manager::TextureManager;
 
 // MaterialCacheKey removed - obsolete with unified shading state system.
 // Frame bind group is now identical for all draws (contains only buffers, no per-draw material data).
 
+#[cfg(feature = "runtime")]
 /// Emberware Z graphics backend
 ///
 /// Manages wgpu device, textures, render state, and frame presentation.
@@ -196,6 +232,7 @@ pub struct ZGraphics {
     screen_dims_buffer: wgpu::Buffer,
 }
 
+#[cfg(feature = "runtime")]
 impl ZGraphics {
     /// Update render target resolution if changed
     ///
@@ -569,6 +606,7 @@ impl ZGraphics {
     }
 }
 
+#[cfg(feature = "runtime")]
 impl Graphics for ZGraphics {
     fn resize(&mut self, width: u32, height: u32) {
         if width == 0 || height == 0 {
