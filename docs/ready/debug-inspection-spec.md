@@ -1047,4 +1047,151 @@ Resolved during spec creation:
 
 ---
 
+## 15. Implementation Plan
+
+Phased implementation plan with complete code, file paths, and integration points.
+
+### 15.1 Design Decisions
+
+| Topic | Decision |
+|-------|----------|
+| Memory safety | WASM can't access outside its memory; pre-allocate max RAM, disallow buffer growth |
+| Threading | Single-threaded; no synchronization needed |
+| Registration lifetime | `init()` only; no dynamic registration for now |
+| egui location | Core dependency (enables all future consoles automatically) |
+| Group errors | Panic on mismatch; auto-close unclosed groups at registration end |
+| Time scale + GGRS | Debug features disabled during netplay; single-player/local only |
+| Console scope | Console-agnostic in core; no console-specific code needed |
+| Callback re-entrancy | Allowed; if WASM changes values, that's fine |
+| Release linking | Wasmtime ignores unused definitions; always register debug FFI |
+| Float precision | Full round-trip precision for export (use `{:?}` format) |
+| Fixed-point | Support `fixed` crate types (e.g., `FixedI32<U16>` for Q16.16) |
+
+### 15.2 Existing Code Context
+
+| File | Contains | Relevant Patterns |
+|------|----------|-------------------|
+| `core/src/ffi.rs` | Common FFI functions | How to register FFI with `Linker`, how to access `GameStateWithConsole` via `Caller` |
+| `core/src/wasm/state.rs` | `GameState`, `GameStateWithConsole` | Where to add `debug_registry` field |
+| `core/src/wasm/mod.rs` | `GameInstance` | Where to finalize registration after `init()`, how to access WASM memory |
+| `core/src/console.rs` | `Console` trait, `ConsoleInput` | Generic bounds needed for FFI functions |
+| `core/src/app/config.rs` | `Config` struct | Pattern for adding `DebugConfig` |
+| `core/src/rollback/session.rs` | `RollbackSession`, `SessionType` | How to check if networked (for disabling debug) |
+
+### 15.3 Implementation Phases
+
+**Phase 1: Core Types** (`core/src/debug/types.rs`)
+- `ValueType` enum with byte sizes, type names, fractional bits
+- `DebugValue` enum for runtime values
+- `Constraints` struct for min/max
+- Fixed-point support (Q8.8, Q16.16, Q24.8, Q8.24)
+
+**Phase 2: Registry** (`core/src/debug/registry.rs`)
+- `DebugRegistry` struct with values, group stack, callbacks
+- `RegisteredValue` struct with name, full_path, wasm_ptr, value_type, constraints
+- `register()`, `group_begin()`, `group_end()`, `finalize_registration()`
+- `read_value()`, `write_value()` with bounds checking
+
+**Phase 3: FFI Functions** (`core/src/debug/ffi.rs`)
+- All `debug_register_*` functions
+- `debug_group_begin`, `debug_group_end`
+- `debug_is_paused`, `debug_get_time_scale`
+- `debug_set_change_callback`
+
+**Phase 4: Frame Controller** (`core/src/debug/frame_control.rs`)
+- Pause/resume, single-step, time scale
+- `disable()` method for netplay
+
+**Phase 5: Debug Panel** (`core/src/debug/panel.rs`)
+- egui `SidePanel::right` for UI
+- Tree-building from `full_path` strings
+- Value widgets based on `ValueType` and `Constraints`
+
+**Phase 6: Export** (`core/src/debug/export.rs`)
+- `export_rust_flat()` function
+- Use `{:?}` for float formatting (round-trip safe)
+
+**Phase 7: GameState Integration**
+- Add `debug_registry: DebugRegistry` to `GameStateWithConsole`
+- Call `finalize_registration()` after init
+
+**Phase 8: Config** (`core/src/app/config.rs`)
+- Add `DebugConfig` with hotkey strings
+
+**Phase 9: Runtime Integration**
+- Check `session.is_networked()` to disable debug features
+- Integrate `FrameController` with game loop
+
+**Phase 10: Change Callback**
+- Invoke WASM callback via stored function pointer
+
+### 15.4 Console-Agnostic Integration
+
+Debug state lives in:
+- `DebugRegistry` → `GameStateWithConsole` (accessed by FFI via `Caller`)
+- `DebugPanel`, `FrameController` → `GameSession` (UI/control state)
+
+**Console wiring (2-3 lines per console):**
+```rust
+// In egui render:
+if let Some(session) = &mut self.game_session {
+    session.render_debug_panel(ctx);
+}
+
+// In key handler:
+if let Some(session) = &mut self.game_session {
+    if session.handle_debug_hotkey(&event.logical_key) {
+        return;
+    }
+}
+```
+
+### 15.5 File Checklist
+
+| Phase | Action | File |
+|-------|--------|------|
+| 1 | Create | `core/src/debug/types.rs` |
+| 2 | Create | `core/src/debug/registry.rs` |
+| 3 | Create | `core/src/debug/ffi.rs` |
+| 3 | Modify | `core/src/ffi.rs` (add `register_debug_ffi()` call) |
+| 4 | Create | `core/src/debug/frame_control.rs` |
+| 5 | Create | `core/src/debug/panel.rs` |
+| 6 | Create | `core/src/debug/export.rs` |
+| 7 | Modify | `core/src/wasm/state.rs` (add `debug_registry` field) |
+| 7 | Modify | `core/src/wasm/mod.rs` (finalize in init) |
+| 8 | Modify | `core/src/app/config.rs` (add `DebugConfig`) |
+| 9 | Modify | `core/src/app/session.rs` (add panel, frame controller) |
+| - | Create | `core/src/debug/mod.rs` |
+| - | Modify | `core/src/lib.rs` (add `pub mod debug`) |
+
+### 15.6 Integration Test WAT
+
+```wat
+(module
+    (import "env" "debug_register_f32_range" (func $debug_register_f32_range (param i32 i32 f32 f32)))
+    (import "env" "debug_register_i32" (func $debug_register_i32 (param i32 i32)))
+    (import "env" "debug_group_begin" (func $debug_group_begin (param i32)))
+    (import "env" "debug_group_end" (func $debug_group_end))
+
+    (memory (export "memory") 1)
+
+    (data (i32.const 0) "player\00")
+    (data (i32.const 16) "speed\00")
+    (data (i32.const 32) "health\00")
+    (data (i32.const 256) "\00\00\20\41")  ;; speed: 10.0f
+    (data (i32.const 260) "\64\00\00\00")  ;; health: 100
+
+    (func (export "init")
+        (call $debug_group_begin (i32.const 0))
+        (call $debug_register_f32_range (i32.const 16) (i32.const 256) (f32.const 0.0) (f32.const 20.0))
+        (call $debug_register_i32 (i32.const 32) (i32.const 260))
+        (call $debug_group_end)
+    )
+    (func (export "update"))
+    (func (export "render"))
+)
+```
+
+---
+
 **End of Spec**

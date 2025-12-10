@@ -8,11 +8,6 @@
 ### **[PERFORMANCE FEATURE] Implement Pipeline Caching
 - Small speed up when launching the program
 
-### **[Feature] Add UV-enabled procedural shapes**
-- Add new FFI commands for UV enabled procedural shapes. 
-- Use a smart mapping, like a UV sphere, or a Box cube (not dice faces)
-- These must be different functions, in addition to the provided position + normal ones, these should have position + uv + normals
-
 ### **[STABILITY] Reduce unwrap/expect Usage**
 
 **Current State:**

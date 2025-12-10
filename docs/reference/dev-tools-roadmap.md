@@ -19,13 +19,13 @@ Useful but not critical. Implement when time permits.
 
 | Rank | Feature | Tier | Effort | Spec |
 |------|---------|------|--------|------|
-| 1 | **Debug Inspection Panel** | MVP | ~15 days | [debug-inspection-spec.md](./debug-inspection-spec.md) |
-| 2 | **State Snapshots** | MVP | ~8 days | [state-snapshots-spec.md](./state-snapshots-spec.md) |
-| 3 | **WASM Hot Reload** | High | ~8 days | [hot-reload-spec.md](./hot-reload-spec.md) |
-| 4 | **Visual Debug Overlays** | High | ~9 days | [visual-debug-overlays-spec.md](./visual-debug-overlays-spec.md) |
-| 5 | **Replay System** | Important | ~10 days | [replay-system-spec.md](./replay-system-spec.md) |
-| 6 | **Network Condition Simulator** | Important | ~10 days | [network-simulator-spec.md](./network-simulator-spec.md) |
-| 7 | **Memory Viewer** | Important | ~12 days | [memory-viewer-spec.md](./memory-viewer-spec.md) |
+| 1 | **Debug Inspection Panel** | MVP | ~15 days | [debug-inspection-spec.md](../ready/debug-inspection-spec.md) |
+| 2 | **State Snapshots** | MVP | ~8 days | [state-snapshots-spec.md](../pending/state-snapshots-spec.md) |
+| 3 | **WASM Hot Reload** | High | ~8 days | [hot-reload-spec.md](../pending/hot-reload-spec.md) |
+| 4 | **Visual Debug Overlays** | High | ~9 days | [visual-debug-overlays-spec.md](../pending/visual-debug-overlays-spec.md) |
+| 5 | **Replay System** | Important | ~10 days | [replay-system-spec.md](../pending/replay-system-spec.md) |
+| 6 | **Network Condition Simulator** | Important | ~10 days | [network-simulator-spec.md](../pending/network-simulator-spec.md) |
+| 7 | **Memory Viewer** | Important | ~12 days | [memory-viewer-spec.md](../pending/memory-viewer-spec.md) |
 | 8 | Performance Timeline | Nice to Have | ~15 days | Not written |
 | 9 | Log Viewer / Console | Nice to Have | ~6 days | Not written |
 | 10 | Asset Hot Reload | Nice to Have | ~5 days | Not written |
@@ -37,7 +37,7 @@ Useful but not critical. Implement when time permits.
 ### 1. Debug Inspection Panel
 **Priority:** MVP
 **Effort:** ~15 days
-**Spec:** [debug-inspection-spec.md](./debug-inspection-spec.md) + [Implementation Plan](./debug-inspection-implementation-plan.md)
+**Spec:** [debug-inspection-spec.md](../ready/debug-inspection-spec.md)
 
 **Why MVP:**
 - Core debugging capability - inspect any game variable in real-time
@@ -57,7 +57,7 @@ Useful but not critical. Implement when time permits.
 ### 2. State Snapshots (Quick Save/Load)
 **Priority:** MVP
 **Effort:** ~8 days
-**Spec:** [state-snapshots-spec.md](./state-snapshots-spec.md)
+**Spec:** [state-snapshots-spec.md](../pending/state-snapshots-spec.md)
 
 **Why MVP:**
 - Leverages existing `save_state`/`load_state` (minimal new code)
@@ -76,7 +76,7 @@ Useful but not critical. Implement when time permits.
 ### 3. WASM Hot Reload
 **Priority:** High
 **Effort:** ~8 days
-**Spec:** [hot-reload-spec.md](./hot-reload-spec.md)
+**Spec:** [hot-reload-spec.md](../pending/hot-reload-spec.md)
 
 **Why High Priority:**
 - Biggest single iteration speedup (changes visible in <1 second)
@@ -95,7 +95,7 @@ Useful but not critical. Implement when time permits.
 ### 4. Visual Debug Overlays
 **Priority:** High
 **Effort:** ~9 days
-**Spec:** [visual-debug-overlays-spec.md](./visual-debug-overlays-spec.md)
+**Spec:** [visual-debug-overlays-spec.md](../pending/visual-debug-overlays-spec.md)
 
 **Why High Priority:**
 - Essential for spatial debugging (collision, AI, paths)
@@ -116,7 +116,7 @@ Useful but not critical. Implement when time permits.
 ### 5. Replay System
 **Priority:** Important
 **Effort:** ~10 days
-**Spec:** [replay-system-spec.md](./replay-system-spec.md)
+**Spec:** [replay-system-spec.md](../pending/replay-system-spec.md)
 
 **Why Important:**
 - "Free" due to GGRS determinism (just record inputs)
@@ -135,7 +135,7 @@ Useful but not critical. Implement when time permits.
 ### 6. Network Condition Simulator
 **Priority:** Important
 **Effort:** ~10 days
-**Spec:** [network-simulator-spec.md](./network-simulator-spec.md)
+**Spec:** [network-simulator-spec.md](../pending/network-simulator-spec.md)
 
 **Why Important:**
 - Critical for netcode quality assurance
@@ -154,7 +154,7 @@ Useful but not critical. Implement when time permits.
 ### 7. Memory Viewer
 **Priority:** Important
 **Effort:** ~12 days
-**Spec:** [memory-viewer-spec.md](./memory-viewer-spec.md)
+**Spec:** [memory-viewer-spec.md](../pending/memory-viewer-spec.md)
 
 **Why Important:**
 - Low-level debugging capability
