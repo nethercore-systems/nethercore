@@ -21,7 +21,7 @@ pub struct RegisteredValue {
 }
 
 /// Registry of debug values
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct DebugRegistry {
     /// All registered values
     pub values: Vec<RegisteredValue>,

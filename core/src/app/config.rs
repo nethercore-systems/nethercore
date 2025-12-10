@@ -231,6 +231,7 @@ mod tests {
             },
             audio: AudioConfig { master_volume: 0.5 },
             input: InputConfig::default(),
+            debug: DebugConfig::default(),
         };
 
         let toml_str = toml::to_string(&config).unwrap();

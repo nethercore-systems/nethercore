@@ -47,6 +47,7 @@ The examples will appear in the game library.
 - **procedural-shapes** - Procedurally generated shapes
 - **audio-demo** - Audio playback demonstration
 - **textured-procedural** - Textured procedural geometry
+- **debug-demo** - Debug inspection system demo (F3 to open panel, F5/F6 for pause/step)
 
 ## Building Individual Examples
 

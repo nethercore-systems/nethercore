@@ -263,6 +263,32 @@ impl App {
                 match key_code {
                     KeyCode::F3 => {
                         self.debug_overlay = !self.debug_overlay;
+                        // Toggle debug panel visibility along with overlay
+                        self.debug_panel.toggle();
+                    }
+                    KeyCode::F5 => {
+                        // Toggle pause (only in Playing mode)
+                        if matches!(self.mode, AppMode::Playing { .. }) {
+                            self.frame_controller.toggle_pause();
+                        }
+                    }
+                    KeyCode::F6 => {
+                        // Step single frame (only when paused in Playing mode)
+                        if matches!(self.mode, AppMode::Playing { .. }) {
+                            self.frame_controller.request_step();
+                        }
+                    }
+                    KeyCode::F7 => {
+                        // Decrease time scale (only in Playing mode)
+                        if matches!(self.mode, AppMode::Playing { .. }) {
+                            self.frame_controller.decrease_time_scale();
+                        }
+                    }
+                    KeyCode::F8 => {
+                        // Increase time scale (only in Playing mode)
+                        if matches!(self.mode, AppMode::Playing { .. }) {
+                            self.frame_controller.increase_time_scale();
+                        }
                     }
                     KeyCode::F11 => {
                         self.toggle_fullscreen();

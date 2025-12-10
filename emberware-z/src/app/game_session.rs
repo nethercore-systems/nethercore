@@ -190,11 +190,22 @@ impl App {
             .as_mut()
             .ok_or_else(|| RuntimeError("No game session".to_string()))?;
 
+        // Check if frame controller allows running ticks
+        let should_run = self.frame_controller.should_run_tick();
+
         let tick_start = Instant::now();
-        let (ticks, _alpha) = session
-            .runtime
-            .frame()
-            .map_err(|e| RuntimeError(format!("Game frame error: {}", e)))?;
+        let (ticks, _alpha) = if should_run {
+            // Apply time scale by modifying the runtime's accumulated time
+            // For now, we run at normal speed when not paused
+            // Time scale affects visual smoothness, not tick rate
+            session
+                .runtime
+                .frame()
+                .map_err(|e| RuntimeError(format!("Game frame error: {}", e)))?
+        } else {
+            // When paused, don't run any ticks
+            (0, 0.0)
+        };
         let tick_elapsed = tick_start.elapsed();
 
         let did_render = if ticks > 0 {
@@ -343,6 +354,17 @@ impl App {
             .init_game()
             .map_err(|e| RuntimeError(format!("Failed to initialize game: {}", e)))?;
 
+        // Finalize debug registration (prevents further registration after init)
+        if let Some(game) = runtime.game_mut() {
+            game.store_mut()
+                .data_mut()
+                .debug_registry
+                .finalize_registration();
+        }
+
+        // Reset frame controller for new game session
+        self.frame_controller.reset();
+
         // Create resource manager
         let resource_manager = EmberwareZ::new().create_resource_manager();
 
@@ -466,6 +488,17 @@ impl App {
         runtime
             .init_game()
             .map_err(|e| RuntimeError(format!("Failed to initialize game: {}", e)))?;
+
+        // Finalize debug registration (prevents further registration after init)
+        if let Some(game) = runtime.game_mut() {
+            game.store_mut()
+                .data_mut()
+                .debug_registry
+                .finalize_registration();
+        }
+
+        // Reset frame controller for new game session
+        self.frame_controller.reset();
 
         // Create resource manager
         let resource_manager = EmberwareZ::new().create_resource_manager();
