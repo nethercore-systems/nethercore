@@ -1,6 +1,7 @@
 use bytemuck::{Pod, Zeroable};
 use glam::{Vec3, Vec4};
 use half::f16;
+use z_common::{encode_octahedral, pack_octahedral_u32, unpack_octahedral_u32};
 
 use super::render_state::MatcapBlendMode;
 
@@ -230,75 +231,6 @@ pub fn pack_rgb8(color: Vec3) -> u32 {
 #[inline]
 pub fn pack_rgba8_vec4(color: Vec4) -> u32 {
     pack_rgba8(color.x, color.y, color.z, color.w)
-}
-
-/// Encode normalized direction to octahedral coordinates in [-1, 1]²
-/// Uses signed octahedral mapping for uniform precision distribution across the sphere.
-/// More accurate than XY+reconstructed-Z approaches, especially near poles.
-#[inline]
-pub fn encode_octahedral(dir: Vec3) -> (f32, f32) {
-    let dir = dir.normalize_or_zero();
-
-    // Project to octahedron via L1 normalization
-    let l1_norm = dir.x.abs() + dir.y.abs() + dir.z.abs();
-    if l1_norm == 0.0 {
-        return (0.0, 0.0);
-    }
-
-    let mut u = dir.x / l1_norm;
-    let mut v = dir.y / l1_norm;
-
-    // Fold lower hemisphere (z < 0) into upper square
-    if dir.z < 0.0 {
-        let u_abs = u.abs();
-        let v_abs = v.abs();
-        u = (1.0 - v_abs) * if u >= 0.0 { 1.0 } else { -1.0 };
-        v = (1.0 - u_abs) * if v >= 0.0 { 1.0 } else { -1.0 };
-    }
-
-    (u, v) // Both in [-1, 1]
-}
-
-/// Pack Vec3 direction to u32 using octahedral encoding (2x snorm16)
-/// Provides uniform angular precision (~0.02° worst-case error with 16-bit components)
-#[inline]
-pub fn pack_octahedral_u32(dir: Vec3) -> u32 {
-    let (u, v) = encode_octahedral(dir);
-    let u_snorm = pack_snorm16(u);
-    let v_snorm = pack_snorm16(v);
-    // Pack as [u: i16 low 16 bits][v: i16 high 16 bits]
-    (u_snorm as u16 as u32) | ((v_snorm as u16 as u32) << 16)
-}
-
-/// Decode octahedral coordinates in [-1, 1]² back to normalized direction
-/// Reverses the encoding operation to reconstruct the 3D direction vector.
-#[inline]
-pub fn decode_octahedral(u: f32, v: f32) -> Vec3 {
-    let mut dir = Vec3::new(u, v, 1.0 - u.abs() - v.abs());
-
-    // Unfold lower hemisphere (z < 0 case)
-    if dir.z < 0.0 {
-        let old_x = dir.x;
-        dir.x = (1.0 - dir.y.abs()) * if old_x >= 0.0 { 1.0 } else { -1.0 };
-        dir.y = (1.0 - old_x.abs()) * if dir.y >= 0.0 { 1.0 } else { -1.0 };
-    }
-
-    dir.normalize_or_zero()
-}
-
-/// Unpack u32 to Vec3 direction using octahedral decoding (2x snorm16)
-/// Reverses pack_octahedral_u32() to extract the original direction.
-#[inline]
-pub fn unpack_octahedral_u32(packed: u32) -> Vec3 {
-    // Extract i16 components with sign extension
-    let u_i16 = ((packed & 0xFFFF) as i16) as i32;
-    let v_i16 = ((packed >> 16) as i16) as i32;
-
-    // Convert snorm16 to float [-1, 1]
-    let u = unpack_snorm16(u_i16 as i16);
-    let v = unpack_snorm16(v_i16 as i16);
-
-    decode_octahedral(u, v)
 }
 
 /// Pack 4x MatcapBlendMode into u32 (4 bytes)
