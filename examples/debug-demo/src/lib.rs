@@ -6,6 +6,7 @@
 //! - Register values for debug inspection via FFI
 //! - Organize values into groups (player, world, effects)
 //! - Various value types: f32, i32, bool, Vec2, Color
+//! - Change callback for derived value updates
 //! - Visual feedback showing effect of value changes
 //!
 //! Usage:
@@ -66,6 +67,7 @@ extern "C" {
     fn debug_register_i32(name: *const u8, ptr: *const i32);
     fn debug_register_bool(name: *const u8, ptr: *const u8);
     fn debug_register_color(name: *const u8, ptr: *const u8);
+    fn debug_set_change_callback(callback: extern "C" fn());
 }
 
 // ============================================================================
@@ -88,6 +90,10 @@ static mut ENABLE_ROTATION: u8 = 1; // bool stored as u8
 static mut PLAYER_COLOR: [u8; 4] = [255, 100, 100, 255]; // RGBA
 static mut ORBIT_COLOR: [u8; 4] = [100, 100, 255, 255];
 
+// Derived/computed values (updated by change callback)
+static mut CHANGE_COUNT: i32 = 0; // Tracks how many times debug values changed
+static mut TOTAL_SPHERES: i32 = 3; // Derived from OBJECT_COUNT (clamped)
+
 // Mesh handles
 static mut CUBE_MESH: u32 = 0;
 static mut SPHERE_MESH: u32 = 0;
@@ -95,6 +101,19 @@ static mut SPHERE_MESH: u32 = 0;
 // ============================================================================
 // Game Implementation
 // ============================================================================
+
+/// Callback invoked when any debug value changes
+/// Updates derived values that depend on debug-tweakable values
+extern "C" fn on_debug_change() {
+    unsafe {
+        // Track how many times values have been changed
+        CHANGE_COUNT += 1;
+
+        // Recalculate derived values
+        // TOTAL_SPHERES is OBJECT_COUNT clamped to valid range
+        TOTAL_SPHERES = OBJECT_COUNT.max(0).min(8);
+    }
+}
 
 #[no_mangle]
 pub extern "C" fn init() {
@@ -113,8 +132,9 @@ pub extern "C" fn init() {
         CUBE_MESH = cube(1.0, 1.0, 1.0);
         SPHERE_MESH = sphere(0.5, 2);
 
-        // Register debug values
+        // Register debug values and change callback
         register_debug_values();
+        debug_set_change_callback(on_debug_change);
     }
 }
 
@@ -140,6 +160,12 @@ unsafe fn register_debug_values() {
     debug_group_begin(b"effects\0".as_ptr());
     debug_register_bool(b"enable_rotation\0".as_ptr(), &ENABLE_ROTATION);
     debug_register_color(b"orbit_color\0".as_ptr(), ORBIT_COLOR.as_ptr());
+    debug_group_end();
+
+    // Stats group (derived values, updated by change callback)
+    debug_group_begin(b"stats\0".as_ptr());
+    debug_register_i32(b"change_count\0".as_ptr(), &CHANGE_COUNT);
+    debug_register_i32(b"total_spheres\0".as_ptr(), &TOTAL_SPHERES);
     debug_group_end();
 }
 
