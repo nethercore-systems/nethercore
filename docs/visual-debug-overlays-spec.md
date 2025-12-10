@@ -650,6 +650,443 @@ The overlay buffer lives in `GameStateWithConsole`, populated via FFI. Each cons
 - `ZGraphics` implements `render_overlays(&self, buffer: &OverlayBuffer)`
 - Future consoles can use 2D-only overlays or different rendering styles
 
+## Way Forward: Implementation Guide
+
+This section provides concrete implementation steps based on the current Emberware codebase architecture.
+
+### Step 1: Add Overlay Types to Core
+
+**File: `core/src/debug/overlay.rs` (new file)**
+
+```rust
+//! Visual debug overlay system
+
+use std::collections::{HashMap, HashSet};
+
+/// Overlay category (matches FFI constants)
+#[repr(u32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum OverlayCategory {
+    Collision = 0,
+    AI = 1,
+    Physics = 2,
+    Camera = 3,
+    Navigation = 4,
+    Performance = 5,
+    Custom(u32),
+}
+
+impl From<u32> for OverlayCategory {
+    fn from(v: u32) -> Self {
+        match v {
+            0 => Self::Collision,
+            1 => Self::AI,
+            2 => Self::Physics,
+            3 => Self::Camera,
+            4 => Self::Navigation,
+            5 => Self::Performance,
+            n => Self::Custom(n),
+        }
+    }
+}
+
+/// Current overlay style state
+#[derive(Clone, Copy, Default)]
+pub struct OverlayStyle {
+    pub color: [u8; 4],
+    pub line_width: f32,
+    pub fill_opacity: f32,
+    pub depth_test: bool,
+}
+
+/// Single overlay draw command
+#[derive(Clone)]
+pub enum OverlayCommand {
+    Box3D { min: [f32; 3], max: [f32; 3], style: OverlayStyle },
+    Sphere { center: [f32; 3], radius: f32, style: OverlayStyle },
+    Line { start: [f32; 3], end: [f32; 3], style: OverlayStyle },
+    Arrow { start: [f32; 3], end: [f32; 3], head_size: f32, style: OverlayStyle },
+    Cone { apex: [f32; 3], dir: [f32; 3], height: f32, angle: f32, style: OverlayStyle },
+    Text3D { pos: [f32; 3], text: String, style: OverlayStyle },
+    // ... other commands
+}
+
+/// Buffer holding all overlay commands for a frame
+#[derive(Default)]
+pub struct OverlayBuffer {
+    pub commands: HashMap<OverlayCategory, Vec<OverlayCommand>>,
+    pub enabled_categories: HashSet<OverlayCategory>,
+    style_stack: Vec<OverlayStyle>,
+    current_style: OverlayStyle,
+    path_points: Vec<[f32; 3]>,
+    path_category: Option<OverlayCategory>,
+}
+
+impl OverlayBuffer {
+    pub fn new() -> Self {
+        let mut enabled = HashSet::new();
+        enabled.insert(OverlayCategory::Collision);
+        Self {
+            enabled_categories: enabled,
+            current_style: OverlayStyle {
+                color: [255, 255, 255, 255],
+                line_width: 1.0,
+                fill_opacity: 0.3,
+                depth_test: true,
+            },
+            ..Default::default()
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.commands.clear();
+        self.path_points.clear();
+        self.path_category = None;
+    }
+
+    pub fn push_command(&mut self, category: OverlayCategory, cmd: OverlayCommand) {
+        if self.enabled_categories.contains(&category) {
+            self.commands.entry(category).or_default().push(cmd);
+        }
+    }
+
+    pub fn set_color(&mut self, r: u8, g: u8, b: u8, a: u8) {
+        self.current_style.color = [r, g, b, a];
+    }
+
+    pub fn push_style(&mut self) {
+        self.style_stack.push(self.current_style);
+    }
+
+    pub fn pop_style(&mut self) {
+        if let Some(s) = self.style_stack.pop() {
+            self.current_style = s;
+        }
+    }
+
+    pub fn style(&self) -> OverlayStyle {
+        self.current_style
+    }
+}
+```
+
+### Step 2: Add Overlay Buffer to Console State
+
+**File: `core/src/wasm/state.rs`**
+
+Add overlay buffer to `GameStateWithConsole`:
+
+```rust
+use crate::debug::overlay::OverlayBuffer;
+
+pub struct GameStateWithConsole<I: ConsoleInput, S: Send + Default> {
+    pub game: GameState<I>,
+    pub console_state: S,
+    pub debug_registry: DebugRegistry,  // From debug inspection
+    pub overlay_buffer: OverlayBuffer,  // NEW
+}
+
+impl<I: ConsoleInput, S: Send + Default + 'static> GameStateWithConsole<I, S> {
+    pub fn new() -> Self {
+        Self {
+            game: GameState::new(),
+            console_state: S::default(),
+            debug_registry: DebugRegistry::new(),
+            overlay_buffer: OverlayBuffer::new(),
+        }
+    }
+}
+```
+
+### Step 3: Register FFI Functions
+
+**File: `core/src/ffi.rs`**
+
+Add overlay FFI functions:
+
+```rust
+pub fn register_common_ffi<I: ConsoleInput, S: Send + Default + 'static>(
+    linker: &mut Linker<GameStateWithConsole<I, S>>,
+) -> Result<()> {
+    // ... existing registrations ...
+
+    // Overlay functions
+    linker.func_wrap("env", "debug_overlay_enable", debug_overlay_enable)?;
+    linker.func_wrap("env", "debug_overlay_disable", debug_overlay_disable)?;
+    linker.func_wrap("env", "debug_overlay_set_color", debug_overlay_set_color)?;
+    linker.func_wrap("env", "debug_overlay_set_line_width", debug_overlay_set_line_width)?;
+    linker.func_wrap("env", "debug_overlay_set_depth_test", debug_overlay_set_depth_test)?;
+    linker.func_wrap("env", "debug_overlay_push_style", debug_overlay_push_style)?;
+    linker.func_wrap("env", "debug_overlay_pop_style", debug_overlay_pop_style)?;
+    linker.func_wrap("env", "debug_draw_box", debug_draw_box)?;
+    linker.func_wrap("env", "debug_draw_sphere", debug_draw_sphere)?;
+    linker.func_wrap("env", "debug_draw_line", debug_draw_line)?;
+    linker.func_wrap("env", "debug_draw_arrow", debug_draw_arrow)?;
+    // ... more primitive functions
+
+    Ok(())
+}
+
+fn debug_overlay_set_color<I: ConsoleInput, S: Send + Default>(
+    mut caller: Caller<'_, GameStateWithConsole<I, S>>,
+    r: u32, g: u32, b: u32, a: u32,
+) {
+    caller.data_mut().overlay_buffer.set_color(r as u8, g as u8, b as u8, a as u8);
+}
+
+fn debug_draw_box<I: ConsoleInput, S: Send + Default>(
+    mut caller: Caller<'_, GameStateWithConsole<I, S>>,
+    category: u32,
+    min_x: f32, min_y: f32, min_z: f32,
+    max_x: f32, max_y: f32, max_z: f32,
+) {
+    let style = caller.data().overlay_buffer.style();
+    let cmd = OverlayCommand::Box3D {
+        min: [min_x, min_y, min_z],
+        max: [max_x, max_y, max_z],
+        style,
+    };
+    caller.data_mut().overlay_buffer.push_command(category.into(), cmd);
+}
+
+fn debug_draw_sphere<I: ConsoleInput, S: Send + Default>(
+    mut caller: Caller<'_, GameStateWithConsole<I, S>>,
+    category: u32,
+    cx: f32, cy: f32, cz: f32, radius: f32,
+) {
+    let style = caller.data().overlay_buffer.style();
+    let cmd = OverlayCommand::Sphere {
+        center: [cx, cy, cz],
+        radius,
+        style,
+    };
+    caller.data_mut().overlay_buffer.push_command(category.into(), cmd);
+}
+
+// ... similar for other primitives
+```
+
+### Step 4: Implement Console Renderer
+
+**File: `emberware-z/src/graphics/overlay_renderer.rs` (new file)**
+
+```rust
+use crate::graphics::ZGraphics;
+use emberware_core::debug::overlay::{OverlayBuffer, OverlayCommand, OverlayStyle};
+use wgpu::RenderPass;
+
+/// Renders debug overlays for Emberware Z
+pub struct OverlayRenderer {
+    line_pipeline: wgpu::RenderPipeline,
+    line_vertex_buffer: wgpu::Buffer,
+    line_vertices: Vec<LineVertex>,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+struct LineVertex {
+    position: [f32; 3],
+    color: [f32; 4],
+}
+
+impl OverlayRenderer {
+    pub fn new(device: &wgpu::Device, format: wgpu::TextureFormat) -> Self {
+        // Create line rendering pipeline
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Overlay Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("overlay.wgsl").into()),
+        });
+
+        // ... pipeline setup ...
+
+        Self {
+            line_pipeline: todo!(),
+            line_vertex_buffer: todo!(),
+            line_vertices: Vec::new(),
+        }
+    }
+
+    pub fn render(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        depth_view: &wgpu::TextureView,
+        buffer: &OverlayBuffer,
+        view_proj: &[[f32; 4]; 4],
+    ) {
+        self.line_vertices.clear();
+
+        // Convert overlay commands to line vertices
+        for (category, commands) in &buffer.commands {
+            for cmd in commands {
+                self.process_command(cmd);
+            }
+        }
+
+        if self.line_vertices.is_empty() {
+            return;
+        }
+
+        // Upload vertices and render
+        // ...
+    }
+
+    fn process_command(&mut self, cmd: &OverlayCommand) {
+        match cmd {
+            OverlayCommand::Box3D { min, max, style } => {
+                self.add_box_lines(*min, *max, style);
+            }
+            OverlayCommand::Sphere { center, radius, style } => {
+                self.add_sphere_lines(*center, *radius, style);
+            }
+            OverlayCommand::Line { start, end, style } => {
+                self.add_line(*start, *end, style);
+            }
+            // ... handle other commands
+            _ => {}
+        }
+    }
+
+    fn add_line(&mut self, start: [f32; 3], end: [f32; 3], style: &OverlayStyle) {
+        let color = [
+            style.color[0] as f32 / 255.0,
+            style.color[1] as f32 / 255.0,
+            style.color[2] as f32 / 255.0,
+            style.color[3] as f32 / 255.0,
+        ];
+        self.line_vertices.push(LineVertex { position: start, color });
+        self.line_vertices.push(LineVertex { position: end, color });
+    }
+
+    fn add_box_lines(&mut self, min: [f32; 3], max: [f32; 3], style: &OverlayStyle) {
+        // 12 edges of a box
+        let corners = [
+            [min[0], min[1], min[2]], [max[0], min[1], min[2]],
+            [max[0], max[1], min[2]], [min[0], max[1], min[2]],
+            [min[0], min[1], max[2]], [max[0], min[1], max[2]],
+            [max[0], max[1], max[2]], [min[0], max[1], max[2]],
+        ];
+        let edges = [
+            (0,1), (1,2), (2,3), (3,0),  // bottom
+            (4,5), (5,6), (6,7), (7,4),  // top
+            (0,4), (1,5), (2,6), (3,7),  // verticals
+        ];
+        for (a, b) in edges {
+            self.add_line(corners[a], corners[b], style);
+        }
+    }
+
+    fn add_sphere_lines(&mut self, center: [f32; 3], radius: f32, style: &OverlayStyle) {
+        // Draw 3 circles (XY, XZ, YZ planes)
+        const SEGMENTS: usize = 16;
+        for i in 0..SEGMENTS {
+            let a0 = (i as f32 / SEGMENTS as f32) * std::f32::consts::TAU;
+            let a1 = ((i + 1) as f32 / SEGMENTS as f32) * std::f32::consts::TAU;
+            let (s0, c0) = (a0.sin() * radius, a0.cos() * radius);
+            let (s1, c1) = (a1.sin() * radius, a1.cos() * radius);
+
+            // XY circle
+            self.add_line(
+                [center[0] + c0, center[1] + s0, center[2]],
+                [center[0] + c1, center[1] + s1, center[2]],
+                style,
+            );
+            // XZ circle
+            self.add_line(
+                [center[0] + c0, center[1], center[2] + s0],
+                [center[0] + c1, center[1], center[2] + s1],
+                style,
+            );
+            // YZ circle
+            self.add_line(
+                [center[0], center[1] + c0, center[2] + s0],
+                [center[0], center[1] + c1, center[2] + s1],
+                style,
+            );
+        }
+    }
+}
+```
+
+### Step 5: Integrate into Graphics Pipeline
+
+**File: `emberware-z/src/graphics/mod.rs`**
+
+Add overlay rendering after main scene:
+
+```rust
+impl ZGraphics {
+    pub fn render_frame(
+        &mut self,
+        encoder: &mut wgpu::CommandEncoder,
+        z_state: &mut ZFFIState,
+        clear_color: [f32; 4],
+    ) {
+        // ... existing render code ...
+
+        // Render debug overlays (after main scene, before egui)
+        if let Some(overlay_buffer) = &z_state.overlay_buffer {
+            self.overlay_renderer.render(
+                encoder,
+                &self.render_target_view,
+                &self.depth_view,
+                overlay_buffer,
+                &self.view_proj_matrix,
+            );
+        }
+    }
+}
+```
+
+### Step 6: Clear Overlay Buffer Each Frame
+
+**File: `emberware-z/src/app/game_session.rs`**
+
+Clear overlays before game's render():
+
+```rust
+impl App {
+    fn run_game_frame(&mut self) -> Result<(bool, bool), RuntimeError> {
+        // ...
+
+        // Clear overlay buffer before render
+        if let Some(session) = &mut self.game_session {
+            if let Some(game) = session.runtime.game_mut() {
+                game.store_mut().data_mut().overlay_buffer.clear();
+            }
+        }
+
+        // Call game's render() - this populates overlay_buffer via FFI
+        session.runtime.render()?;
+
+        // ...
+    }
+}
+```
+
+### File Checklist
+
+| File | Changes |
+|------|---------|
+| `core/src/debug/overlay.rs` | New file: OverlayBuffer, OverlayCommand, OverlayStyle types |
+| `core/src/debug/mod.rs` | Export overlay module |
+| `core/src/wasm/state.rs` | Add overlay_buffer to GameStateWithConsole |
+| `core/src/ffi.rs` | Add ~20 overlay FFI functions |
+| `emberware-z/src/graphics/overlay_renderer.rs` | New file: wgpu overlay renderer |
+| `emberware-z/src/graphics/overlay.wgsl` | New file: overlay shader |
+| `emberware-z/src/graphics/mod.rs` | Integrate overlay_renderer into render_frame |
+| `emberware-z/src/app/game_session.rs` | Clear overlay buffer each frame |
+
+### Test Cases
+
+1. **Box rendering**: Call debug_draw_box, verify wireframe box appears
+2. **Sphere rendering**: Call debug_draw_sphere, verify sphere circles appear
+3. **Category toggle**: Disable category, verify its overlays hidden
+4. **Style push/pop**: Verify style state correctly saved/restored
+5. **Depth test**: Draw overlay behind object, verify depth test works
+6. **Many overlays**: Draw 1000 boxes, verify performance acceptable
+7. **Text labels**: Draw 3D text, verify billboard rendering
+
 ## Future Enhancements
 
 1. **Gizmos**: Interactive handles for editing values in-world

@@ -267,6 +267,315 @@ How strict should state compatibility checking be?
 ### Console Changes
 Minimal - just forward hotkey and show notifications via existing egui integration.
 
+## Way Forward: Implementation Guide
+
+This section provides concrete implementation steps based on the current Emberware codebase architecture.
+
+### Step 1: Add Hot Reload State to Core Types
+
+**File: `core/src/wasm/state.rs`**
+
+Add hot reload tracking to `GameState`:
+
+```rust
+// Add to GameState<I>
+pub struct GameState<I: ConsoleInput> {
+    // ... existing fields ...
+
+    /// Hot reload enabled for this session
+    pub hot_reload_enabled: bool,
+    /// Number of hot reloads this session
+    pub hot_reload_count: u32,
+}
+```
+
+### Step 2: Add File Watcher to Runtime
+
+**File: `core/src/runtime.rs`**
+
+Add file watching capability using the `notify` crate:
+
+```rust
+use notify::{RecommendedWatcher, RecursiveMode, Watcher, Event};
+use std::sync::mpsc::{channel, Receiver};
+use std::path::PathBuf;
+
+pub struct Runtime<C: Console> {
+    // ... existing fields ...
+
+    /// File watcher for hot reload
+    file_watcher: Option<RecommendedWatcher>,
+    /// Channel to receive file change events
+    file_change_rx: Option<Receiver<Result<Event, notify::Error>>>,
+    /// Path being watched
+    watched_path: Option<PathBuf>,
+    /// Pending reload (debounced)
+    pending_reload: Option<std::time::Instant>,
+}
+
+impl<C: Console> Runtime<C> {
+    /// Start watching a ROM file for changes
+    pub fn watch_rom(&mut self, path: PathBuf) -> anyhow::Result<()> {
+        let (tx, rx) = channel();
+        let mut watcher = notify::recommended_watcher(move |res| {
+            let _ = tx.send(res);
+        })?;
+        watcher.watch(&path, RecursiveMode::NonRecursive)?;
+
+        self.file_watcher = Some(watcher);
+        self.file_change_rx = Some(rx);
+        self.watched_path = Some(path);
+        Ok(())
+    }
+
+    /// Check for pending hot reload and execute if ready
+    pub fn check_hot_reload(&mut self) -> Option<HotReloadResult> {
+        // Check for file change events
+        if let Some(rx) = &self.file_change_rx {
+            while let Ok(event) = rx.try_recv() {
+                if event.is_ok() {
+                    // Debounce: schedule reload 100ms from now
+                    self.pending_reload = Some(
+                        std::time::Instant::now() + std::time::Duration::from_millis(100)
+                    );
+                }
+            }
+        }
+
+        // Check if debounce period has passed
+        if let Some(reload_at) = self.pending_reload {
+            if std::time::Instant::now() >= reload_at {
+                self.pending_reload = None;
+                return Some(self.execute_hot_reload());
+            }
+        }
+        None
+    }
+}
+```
+
+### Step 3: Implement Hot Reload Logic in GameInstance
+
+**File: `core/src/wasm/mod.rs`**
+
+Add the core hot reload method to `GameInstance`:
+
+```rust
+impl<I: ConsoleInput, S: Send + Default + 'static> GameInstance<I, S> {
+    /// Perform hot reload with a new WASM module
+    pub fn hot_reload(
+        &mut self,
+        engine: &WasmEngine,
+        new_module: &wasmtime::Module,
+        linker: &wasmtime::Linker<GameStateWithConsole<I, S>>,
+    ) -> anyhow::Result<HotReloadResult> {
+        // 1. Save current state
+        let state_data = self.save_state()?;
+        let prev_version = self.call_hot_reload_prepare().unwrap_or(0);
+
+        // 2. Create new instance
+        let mut new_instance = GameInstance::new(engine, new_module, linker)?;
+
+        // 3. Preserve timing/session state from old instance
+        new_instance.store.data_mut().game.tick_count = self.store.data().game.tick_count;
+        new_instance.store.data_mut().game.elapsed_time = self.store.data().game.elapsed_time;
+        new_instance.store.data_mut().game.hot_reload_count =
+            self.store.data().game.hot_reload_count + 1;
+
+        // 4. Call init() on new module (re-registers resources)
+        new_instance.call_init()?;
+
+        // 5. Try to restore state
+        let state_restored = match new_instance.load_state(&state_data) {
+            Ok(()) => true,
+            Err(e) => {
+                tracing::warn!("Hot reload: state incompatible, starting fresh: {}", e);
+                false
+            }
+        };
+
+        // 6. Notify game of reload completion
+        let _ = new_instance.call_hot_reload_complete(prev_version);
+
+        // 7. Replace self with new instance
+        *self = new_instance;
+
+        Ok(HotReloadResult {
+            success: true,
+            state_restored,
+            reload_count: self.store.data().game.hot_reload_count,
+        })
+    }
+}
+```
+
+### Step 4: Register FFI Functions
+
+**File: `core/src/ffi.rs`**
+
+Add hot reload FFI functions to `register_common_ffi`:
+
+```rust
+pub fn register_common_ffi<I: ConsoleInput, S: Send + Default + 'static>(
+    linker: &mut Linker<GameStateWithConsole<I, S>>,
+) -> Result<()> {
+    // ... existing registrations ...
+
+    // Hot reload functions
+    linker.func_wrap("env", "hot_reload_enabled", hot_reload_enabled)?;
+    linker.func_wrap("env", "hot_reload_count", hot_reload_count)?;
+
+    Ok(())
+}
+
+fn hot_reload_enabled<I: ConsoleInput, S>(
+    caller: Caller<'_, GameStateWithConsole<I, S>>
+) -> i32 {
+    if caller.data().game.hot_reload_enabled { 1 } else { 0 }
+}
+
+fn hot_reload_count<I: ConsoleInput, S>(
+    caller: Caller<'_, GameStateWithConsole<I, S>>
+) -> u32 {
+    caller.data().game.hot_reload_count
+}
+```
+
+### Step 5: Integrate into GameSession
+
+**File: `core/src/app/session.rs`**
+
+Add hot reload handling to `GameSession`:
+
+```rust
+pub struct GameSession<C: Console> {
+    pub runtime: Runtime<C>,
+    pub resource_manager: C::ResourceManager,
+
+    /// Hot reload UI state
+    hot_reload_status: HotReloadStatus,
+    /// Toast message to display
+    toast_message: Option<(String, std::time::Instant)>,
+}
+
+impl<C: Console> GameSession<C> {
+    /// Call this each frame to check for hot reload
+    pub fn update_hot_reload(&mut self, wasm_engine: &WasmEngine) {
+        if let Some(result) = self.runtime.check_hot_reload() {
+            match result {
+                Ok(hr) => {
+                    // Clear resource manager for re-registration
+                    self.resource_manager.clear();
+
+                    let msg = if hr.state_restored {
+                        format!("Hot reload #{} complete", hr.reload_count)
+                    } else {
+                        format!("Hot reload #{} (state reset)", hr.reload_count)
+                    };
+                    self.show_toast(msg);
+                }
+                Err(e) => {
+                    self.show_toast(format!("Hot reload failed: {}", e));
+                }
+            }
+        }
+    }
+
+    /// Handle Ctrl+R hotkey
+    pub fn handle_hot_reload_hotkey(&mut self, force_reset: bool) -> bool {
+        // Trigger immediate reload
+        if let Some(path) = self.runtime.watched_path.clone() {
+            // Touch the file or force reload
+            self.runtime.pending_reload = Some(std::time::Instant::now());
+            true
+        } else {
+            false
+        }
+    }
+}
+```
+
+### Step 6: Wire into Console App (Emberware Z)
+
+**File: `emberware-z/src/app/mod.rs`**
+
+Add hot reload integration to the app event loop:
+
+```rust
+impl App {
+    fn run_game_frame(&mut self) -> Result<(bool, bool), RuntimeError> {
+        // Check for hot reload before processing frame
+        if let Some(session) = &mut self.game_session {
+            if let Some(engine) = &self.wasm_engine {
+                session.update_hot_reload(engine);
+            }
+        }
+
+        // ... existing frame code ...
+    }
+
+    fn handle_key_input(&mut self, event: KeyEvent) {
+        // ... existing key handling ...
+
+        // Hot reload hotkeys
+        if event.state.is_pressed() {
+            match event.logical_key {
+                Key::Character(c) if c == "r" => {
+                    let ctrl = event.modifiers.contains(Modifiers::CONTROL);
+                    let shift = event.modifiers.contains(Modifiers::SHIFT);
+                    if ctrl {
+                        if let Some(session) = &mut self.game_session {
+                            session.handle_hot_reload_hotkey(shift);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+}
+```
+
+### Step 7: Handle Resource Manager Reset
+
+**File: `emberware-z/src/resource_manager.rs`**
+
+Add clear method for hot reload:
+
+```rust
+impl ZResourceManager {
+    /// Clear all resources for hot reload
+    pub fn clear(&mut self) {
+        self.texture_map.clear();
+        self.mesh_map.clear();
+        // Keep built-in resources (font, white texture) - they're re-added in start_game
+    }
+}
+```
+
+### File Checklist
+
+| File | Changes |
+|------|---------|
+| `core/src/wasm/state.rs` | Add `hot_reload_enabled`, `hot_reload_count` to `GameState` |
+| `core/src/wasm/mod.rs` | Add `hot_reload()` method to `GameInstance` |
+| `core/src/runtime.rs` | Add file watcher, `check_hot_reload()` |
+| `core/src/ffi.rs` | Add `hot_reload_enabled`, `hot_reload_count` FFI functions |
+| `core/src/app/session.rs` | Add `update_hot_reload()`, toast notifications |
+| `emberware-z/src/app/mod.rs` | Wire hot reload into game loop and hotkeys |
+| `emberware-z/src/resource_manager.rs` | Add `clear()` method |
+| `core/Cargo.toml` | Add `notify = "6.0"` dependency |
+
+### Test Cases
+
+1. **Basic hot reload**: Modify WASM, verify game continues with state
+2. **State incompatibility**: Change struct layout, verify graceful fallback
+3. **Compilation error**: Introduce syntax error, verify game continues
+4. **Rapid changes**: Multiple quick saves, verify debounce works
+5. **Resource re-registration**: Add new texture in init(), verify it loads
+6. **Netplay disabled**: Start P2P session, verify hot reload is disabled
+7. **Hotkey**: Press Ctrl+R, verify manual reload triggers
+
 ## Future Enhancements
 
 1. **Incremental Compilation**: Watch source files, trigger cargo build

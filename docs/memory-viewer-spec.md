@@ -478,6 +478,385 @@ Should bookmarks persist across sessions?
 
 Memory viewing is inherently console-agnostic - all consoles use WASM linear memory. The viewer lives in core and uses egui for UI.
 
+## Way Forward: Implementation Guide
+
+This section provides concrete implementation steps based on the current Emberware codebase architecture.
+
+### Step 1: Add Memory Viewer Types
+
+**File: `core/src/debug/memory.rs` (new file)**
+
+```rust
+//! Memory viewer and search system
+
+use std::collections::HashMap;
+
+/// Memory region metadata
+#[derive(Clone)]
+pub struct MemoryRegion {
+    pub name: String,
+    pub start: u32,
+    pub end: u32,
+    pub description: String,
+}
+
+/// Bookmarked memory address
+#[derive(Clone)]
+pub struct Bookmark {
+    pub name: String,
+    pub address: u32,
+    pub data_type: DataType,
+    pub notes: String,
+}
+
+/// Data type for interpretation
+#[derive(Clone, Copy, PartialEq)]
+pub enum DataType {
+    U8, I8, U16Le, I16Le, U32Le, I32Le, U64Le, I64Le,
+    F32Le, F64Le, Pointer, Hex,
+}
+
+impl DataType {
+    pub fn size(&self) -> usize {
+        match self {
+            DataType::U8 | DataType::I8 => 1,
+            DataType::U16Le | DataType::I16Le => 2,
+            DataType::U32Le | DataType::I32Le | DataType::F32Le | DataType::Pointer => 4,
+            DataType::U64Le | DataType::I64Le | DataType::F64Le => 8,
+            DataType::Hex => 1,
+        }
+    }
+
+    pub fn format_value(&self, bytes: &[u8]) -> String {
+        match self {
+            DataType::U8 => format!("{}", bytes[0]),
+            DataType::I8 => format!("{}", bytes[0] as i8),
+            DataType::U16Le => format!("{}", u16::from_le_bytes([bytes[0], bytes[1]])),
+            DataType::I16Le => format!("{}", i16::from_le_bytes([bytes[0], bytes[1]])),
+            DataType::U32Le => format!("{}", u32::from_le_bytes(bytes[..4].try_into().unwrap())),
+            DataType::I32Le => format!("{}", i32::from_le_bytes(bytes[..4].try_into().unwrap())),
+            DataType::F32Le => format!("{:.6}", f32::from_le_bytes(bytes[..4].try_into().unwrap())),
+            DataType::Pointer => format!("-> 0x{:08X}", u32::from_le_bytes(bytes[..4].try_into().unwrap())),
+            DataType::Hex => format!("{:02X}", bytes[0]),
+            _ => "...".to_string(),
+        }
+    }
+}
+
+/// Memory search state
+pub struct MemorySearch {
+    pub pattern: SearchPattern,
+    pub results: Vec<SearchResult>,
+    pub previous_values: HashMap<u32, Vec<u8>>,
+}
+
+pub enum SearchPattern {
+    ExactValue { data_type: DataType, value: Vec<u8> },
+    Changed,
+    Unchanged,
+    Increased,
+    Decreased,
+}
+
+pub struct SearchResult {
+    pub address: u32,
+    pub current_value: Vec<u8>,
+    pub previous_value: Option<Vec<u8>>,
+}
+
+/// Memory viewer state
+pub struct MemoryViewer {
+    pub view_address: u32,
+    pub bytes_per_row: usize,
+    pub regions: Vec<MemoryRegion>,
+    pub bookmarks: Vec<Bookmark>,
+    pub search: Option<MemorySearch>,
+    pub previous_memory: Option<Vec<u8>>,
+    pub selected_address: Option<u32>,
+}
+
+impl MemoryViewer {
+    pub fn new() -> Self {
+        Self {
+            view_address: 0,
+            bytes_per_row: 16,
+            regions: Vec::new(),
+            bookmarks: Vec::new(),
+            search: None,
+            previous_memory: None,
+            selected_address: None,
+        }
+    }
+}
+```
+
+### Step 2: Add Memory Viewer UI
+
+**File: `core/src/app/memory_ui.rs` (new file)**
+
+```rust
+use crate::debug::memory::{MemoryViewer, DataType, Bookmark};
+use egui::{Ui, Color32, RichText};
+
+impl MemoryViewer {
+    /// Render the memory viewer panel
+    pub fn show(&mut self, ui: &mut Ui, memory: &[u8], prev_memory: Option<&[u8]>) {
+        // Address input
+        ui.horizontal(|ui| {
+            ui.label("Address:");
+            let mut addr_str = format!("{:08X}", self.view_address);
+            if ui.text_edit_singleline(&mut addr_str).changed() {
+                if let Ok(addr) = u32::from_str_radix(&addr_str, 16) {
+                    self.view_address = addr;
+                }
+            }
+            if ui.button("Go").clicked() {
+                // Already updated
+            }
+        });
+
+        ui.separator();
+
+        // Hex view
+        let start = self.view_address as usize;
+        let rows = 16;
+
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            ui.style_mut().override_font_id = Some(egui::FontId::monospace(12.0));
+
+            for row in 0..rows {
+                let row_addr = start + row * self.bytes_per_row;
+                if row_addr >= memory.len() {
+                    break;
+                }
+
+                ui.horizontal(|ui| {
+                    // Address column
+                    ui.label(format!("{:08X}", row_addr));
+
+                    // Hex bytes
+                    for col in 0..self.bytes_per_row {
+                        let addr = row_addr + col;
+                        if addr >= memory.len() {
+                            ui.label("  ");
+                            continue;
+                        }
+
+                        let byte = memory[addr];
+                        let changed = prev_memory
+                            .map(|p| addr < p.len() && p[addr] != byte)
+                            .unwrap_or(false);
+
+                        let text = format!("{:02X}", byte);
+                        let text = if changed {
+                            RichText::new(text).color(Color32::YELLOW)
+                        } else {
+                            RichText::new(text)
+                        };
+
+                        if ui.selectable_label(
+                            self.selected_address == Some(addr as u32),
+                            text
+                        ).clicked() {
+                            self.selected_address = Some(addr as u32);
+                        }
+
+                        if col == 7 {
+                            ui.label(" ");
+                        }
+                    }
+
+                    ui.label(" ");
+
+                    // ASCII column
+                    let mut ascii = String::new();
+                    for col in 0..self.bytes_per_row {
+                        let addr = row_addr + col;
+                        if addr >= memory.len() {
+                            break;
+                        }
+                        let byte = memory[addr];
+                        ascii.push(if byte.is_ascii_graphic() || byte == b' ' {
+                            byte as char
+                        } else {
+                            '.'
+                        });
+                    }
+                    ui.label(ascii);
+                });
+            }
+        });
+
+        // Selection info
+        if let Some(addr) = self.selected_address {
+            ui.separator();
+            if (addr as usize) + 8 <= memory.len() {
+                let bytes = &memory[addr as usize..addr as usize + 8];
+                ui.horizontal(|ui| {
+                    ui.label(format!("0x{:08X}:", addr));
+                    ui.label(format!("u32: {}", u32::from_le_bytes(bytes[..4].try_into().unwrap())));
+                    ui.label(format!("f32: {:.4}", f32::from_le_bytes(bytes[..4].try_into().unwrap())));
+                    ui.label(format!("i32: {}", i32::from_le_bytes(bytes[..4].try_into().unwrap())));
+                });
+            }
+        }
+    }
+}
+```
+
+### Step 3: Integrate into GameSession
+
+**File: `core/src/app/session.rs`**
+
+```rust
+use crate::debug::memory::MemoryViewer;
+
+pub struct GameSession<C: Console> {
+    pub runtime: Runtime<C>,
+    pub resource_manager: C::ResourceManager,
+    pub debug_panel: DebugPanel,
+    pub memory_viewer: MemoryViewer,  // NEW
+    memory_viewer_visible: bool,
+}
+
+impl<C: Console> GameSession<C> {
+    pub fn render_memory_viewer(&mut self, ctx: &egui::Context) -> bool {
+        if !self.memory_viewer_visible {
+            return false;
+        }
+
+        let game = match self.runtime.game_mut() {
+            Some(g) => g,
+            None => return false,
+        };
+
+        let memory = match game.store().data().game.memory {
+            Some(m) => m,
+            None => return false,
+        };
+
+        let mem_data = memory.data(game.store());
+
+        egui::Window::new("Memory Viewer")
+            .default_size([600.0, 400.0])
+            .show(ctx, |ui| {
+                self.memory_viewer.show(ui, mem_data, None);
+            });
+
+        true
+    }
+
+    pub fn toggle_memory_viewer(&mut self) {
+        self.memory_viewer_visible = !self.memory_viewer_visible;
+    }
+}
+```
+
+### Step 4: Add Memory Region FFI
+
+**File: `core/src/ffi.rs`**
+
+```rust
+// Add to register_common_ffi
+linker.func_wrap("env", "debug_memory_register_region", debug_memory_register_region)?;
+linker.func_wrap("env", "debug_memory_size", debug_memory_size)?;
+
+fn debug_memory_register_region<I: ConsoleInput, S: Send + Default>(
+    mut caller: Caller<'_, GameStateWithConsole<I, S>>,
+    name_ptr: u32,
+    name_len: u32,
+    start: u32,
+    end: u32,
+) {
+    let memory = match caller.data().game.memory {
+        Some(m) => m,
+        None => return,
+    };
+
+    let name = {
+        let data = memory.data(&caller);
+        let ptr = name_ptr as usize;
+        let len = name_len as usize;
+        if ptr + len <= data.len() {
+            String::from_utf8_lossy(&data[ptr..ptr + len]).to_string()
+        } else {
+            return;
+        }
+    };
+
+    caller.data_mut().debug_registry.memory_regions.push(MemoryRegion {
+        name,
+        start,
+        end,
+        description: String::new(),
+    });
+}
+
+fn debug_memory_size<I: ConsoleInput, S: Send + Default>(
+    caller: Caller<'_, GameStateWithConsole<I, S>>
+) -> u32 {
+    caller.data().game.memory
+        .map(|m| m.data_size(&caller) as u32)
+        .unwrap_or(0)
+}
+```
+
+### Step 5: Wire into Console App
+
+**File: `emberware-z/src/app/mod.rs`**
+
+```rust
+impl App {
+    fn handle_key_input(&mut self, event: KeyEvent) {
+        // ... existing key handling ...
+
+        if event.state.is_pressed() {
+            match event.logical_key {
+                Key::Named(NamedKey::F6) => {
+                    if let Some(session) = &mut self.game_session {
+                        session.toggle_memory_viewer();
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn render(&mut self) {
+        // ... in the egui context ...
+
+        // Render memory viewer if in Playing mode
+        if matches!(mode, AppMode::Playing { .. }) {
+            if let Some(session) = &mut self.game_session {
+                session.render_memory_viewer(&self.egui_ctx);
+            }
+        }
+    }
+}
+```
+
+### File Checklist
+
+| File | Changes |
+|------|---------|
+| `core/src/debug/memory.rs` | New file: MemoryViewer, Bookmark, DataType, Search types |
+| `core/src/debug/mod.rs` | Export memory module |
+| `core/src/app/memory_ui.rs` | New file: egui hex view renderer |
+| `core/src/app/session.rs` | Add MemoryViewer field and rendering |
+| `core/src/ffi.rs` | Add memory region FFI functions |
+| `emberware-z/src/app/mod.rs` | Wire F6 hotkey and render call |
+
+### Test Cases
+
+1. **Hex view rendering**: Open viewer, verify memory displayed correctly
+2. **Address navigation**: Enter address, verify view scrolls
+3. **Change highlighting**: Modify memory, verify yellow highlight
+4. **Selection**: Click byte, verify interpretation shown
+5. **Search exact**: Search for known value, verify found
+6. **Search changed**: Modify value, search changed, verify narrowed
+7. **Bookmarks**: Add bookmark, verify persists across frames
+8. **Region registration**: Register heap region, verify appears in dropdown
+
 ## Future Enhancements
 
 1. **Structure templates**: Define struct layouts for automatic parsing

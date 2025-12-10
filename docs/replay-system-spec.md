@@ -452,6 +452,481 @@ Should replays from untrusted sources be playable?
 
 **Total:** ~10 days
 
+## Way Forward: Implementation Guide
+
+This section provides concrete implementation steps based on the current Emberware codebase architecture.
+
+### Step 1: Add Replay Types to Core
+
+**File: `core/src/replay/mod.rs` (new file)**
+
+```rust
+//! Replay recording and playback system
+
+use crate::console::ConsoleInput;
+use bytemuck::Pod;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+pub mod recording;
+pub mod playback;
+
+/// Complete replay file
+#[derive(Serialize, Deserialize)]
+pub struct Replay {
+    pub header: ReplayHeader,
+    pub initial_state: Vec<u8>,
+    pub inputs: Vec<FrameInputs>,
+    pub checkpoints: Vec<Checkpoint>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ReplayHeader {
+    pub magic: [u8; 4],
+    pub version: u32,
+    pub game_id: String,
+    pub rom_hash: [u8; 32],
+    pub console: String,
+    pub timestamp: u64,
+    pub frame_count: u64,
+    pub player_count: u8,
+    pub random_seed: u64,
+    pub input_size: usize,  // Size of serialized input type
+    pub metadata: HashMap<String, String>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct FrameInputs {
+    pub frame: u64,
+    pub player_inputs: Vec<Vec<u8>>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Checkpoint {
+    pub frame: u64,
+    pub state: Vec<u8>,
+}
+
+impl Replay {
+    pub const MAGIC: [u8; 4] = *b"EMBR";
+    pub const VERSION: u32 = 1;
+
+    /// Find nearest checkpoint at or before target frame
+    pub fn find_checkpoint(&self, target_frame: u64) -> Option<&Checkpoint> {
+        self.checkpoints
+            .iter()
+            .filter(|c| c.frame <= target_frame)
+            .max_by_key(|c| c.frame)
+    }
+}
+```
+
+### Step 2: Implement Recording System
+
+**File: `core/src/replay/recording.rs`**
+
+```rust
+use super::*;
+use crate::console::ConsoleInput;
+use crate::wasm::GameInstance;
+use bytemuck::Pod;
+
+/// Active recording session
+pub struct ReplayRecorder<I: ConsoleInput + Pod> {
+    header: ReplayHeader,
+    initial_state: Vec<u8>,
+    inputs: Vec<FrameInputs>,
+    checkpoints: Vec<Checkpoint>,
+    checkpoint_interval: u64,
+    last_checkpoint_frame: u64,
+    _phantom: std::marker::PhantomData<I>,
+}
+
+impl<I: ConsoleInput + Pod> ReplayRecorder<I> {
+    pub fn new(
+        game_id: &str,
+        rom_hash: [u8; 32],
+        console: &str,
+        player_count: u8,
+        random_seed: u64,
+        initial_state: Vec<u8>,
+    ) -> Self {
+        Self {
+            header: ReplayHeader {
+                magic: Replay::MAGIC,
+                version: Replay::VERSION,
+                game_id: game_id.to_string(),
+                rom_hash,
+                console: console.to_string(),
+                timestamp: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs(),
+                frame_count: 0,
+                player_count,
+                random_seed,
+                input_size: std::mem::size_of::<I>(),
+                metadata: HashMap::new(),
+            },
+            initial_state,
+            inputs: Vec::new(),
+            checkpoints: Vec::new(),
+            checkpoint_interval: 300, // Every 5 seconds at 60fps
+            last_checkpoint_frame: 0,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+
+    /// Record inputs for a frame
+    pub fn record_frame(&mut self, frame: u64, player_inputs: &[I]) {
+        let serialized: Vec<Vec<u8>> = player_inputs
+            .iter()
+            .map(|i| bytemuck::bytes_of(i).to_vec())
+            .collect();
+
+        self.inputs.push(FrameInputs {
+            frame,
+            player_inputs: serialized,
+        });
+        self.header.frame_count = frame;
+    }
+
+    /// Add checkpoint (call periodically from game loop)
+    pub fn maybe_add_checkpoint(&mut self, frame: u64, state: &[u8]) {
+        if frame - self.last_checkpoint_frame >= self.checkpoint_interval {
+            self.checkpoints.push(Checkpoint {
+                frame,
+                state: state.to_vec(),
+            });
+            self.last_checkpoint_frame = frame;
+        }
+    }
+
+    /// Finalize recording into a Replay
+    pub fn finish(self) -> Replay {
+        Replay {
+            header: self.header,
+            initial_state: self.initial_state,
+            inputs: self.inputs,
+            checkpoints: self.checkpoints,
+        }
+    }
+}
+```
+
+### Step 3: Implement Playback System
+
+**File: `core/src/replay/playback.rs`**
+
+```rust
+use super::*;
+use crate::console::ConsoleInput;
+use bytemuck::Pod;
+
+/// Replay playback state
+pub struct ReplayPlayer<I: ConsoleInput + Pod> {
+    replay: Replay,
+    current_frame: u64,
+    playback_speed: f32,
+    paused: bool,
+    _phantom: std::marker::PhantomData<I>,
+}
+
+impl<I: ConsoleInput + Pod> ReplayPlayer<I> {
+    pub fn new(replay: Replay) -> Self {
+        Self {
+            replay,
+            current_frame: 0,
+            playback_speed: 1.0,
+            paused: false,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+
+    /// Get inputs for current frame (returns None if past end)
+    pub fn get_frame_inputs(&self) -> Option<Vec<I>> {
+        self.replay.inputs
+            .iter()
+            .find(|fi| fi.frame == self.current_frame)
+            .map(|fi| {
+                fi.player_inputs
+                    .iter()
+                    .map(|bytes| *bytemuck::from_bytes(bytes))
+                    .collect()
+            })
+    }
+
+    /// Advance to next frame
+    pub fn advance(&mut self) {
+        if !self.paused && self.current_frame < self.replay.header.frame_count {
+            self.current_frame += 1;
+        }
+    }
+
+    /// Seek to a specific frame
+    pub fn seek(&mut self, target_frame: u64) -> Option<&Checkpoint> {
+        self.current_frame = target_frame.min(self.replay.header.frame_count);
+        self.replay.find_checkpoint(target_frame)
+    }
+
+    pub fn toggle_pause(&mut self) { self.paused = !self.paused; }
+    pub fn is_paused(&self) -> bool { self.paused }
+    pub fn current_frame(&self) -> u64 { self.current_frame }
+    pub fn total_frames(&self) -> u64 { self.replay.header.frame_count }
+    pub fn progress(&self) -> f32 {
+        self.current_frame as f32 / self.replay.header.frame_count.max(1) as f32
+    }
+}
+```
+
+### Step 4: Integrate into Runtime
+
+**File: `core/src/runtime.rs`**
+
+Add replay state to Runtime:
+
+```rust
+use crate::replay::{Replay, ReplayRecorder, ReplayPlayer};
+
+pub struct Runtime<C: Console> {
+    // ... existing fields ...
+
+    /// Active replay recording (if any)
+    replay_recorder: Option<ReplayRecorder<C::Input>>,
+    /// Active replay playback (if any)
+    replay_player: Option<ReplayPlayer<C::Input>>,
+}
+
+impl<C: Console> Runtime<C> {
+    /// Start recording a replay
+    pub fn start_recording(&mut self, game_id: &str, rom_hash: [u8; 32]) -> anyhow::Result<()> {
+        let game = self.game.as_ref().ok_or_else(|| anyhow::anyhow!("No game loaded"))?;
+        let initial_state = game.save_state()?;
+        let seed = game.state().rng_state;
+
+        self.replay_recorder = Some(ReplayRecorder::new(
+            game_id,
+            rom_hash,
+            self.console.specs().name,
+            game.state().player_count as u8,
+            seed,
+            initial_state,
+        ));
+        Ok(())
+    }
+
+    /// Stop recording and return the replay
+    pub fn stop_recording(&mut self) -> Option<Replay> {
+        self.replay_recorder.take().map(|r| r.finish())
+    }
+
+    /// Start playing a replay
+    pub fn start_playback(&mut self, replay: Replay) -> anyhow::Result<()> {
+        let game = self.game.as_mut().ok_or_else(|| anyhow::anyhow!("No game loaded"))?;
+
+        // Restore initial state
+        game.load_state(&replay.initial_state)?;
+
+        // Reseed RNG
+        game.state_mut().seed_rng(replay.header.random_seed);
+
+        self.replay_player = Some(ReplayPlayer::new(replay));
+        Ok(())
+    }
+
+    /// During frame(), feed inputs from replay instead of live input
+    pub fn frame(&mut self) -> anyhow::Result<(u32, f32)> {
+        // If playing replay, override inputs
+        if let Some(player) = &mut self.replay_player {
+            if let Some(inputs) = player.get_frame_inputs() {
+                // Feed replay inputs to game
+                if let Some(game) = &mut self.game {
+                    for (i, input) in inputs.iter().enumerate() {
+                        game.set_input(i, *input);
+                    }
+                }
+            }
+            player.advance();
+        }
+
+        // If recording, capture inputs
+        if let Some(recorder) = &mut self.replay_recorder {
+            if let Some(game) = &self.game {
+                let frame = game.state().tick_count;
+                let inputs = game.get_all_inputs();
+                recorder.record_frame(frame, &inputs);
+
+                // Maybe add checkpoint
+                if let Ok(state) = game.save_state() {
+                    recorder.maybe_add_checkpoint(frame, &state);
+                }
+            }
+        }
+
+        // ... existing frame logic ...
+    }
+}
+```
+
+### Step 5: Add Replay FFI Functions
+
+**File: `core/src/ffi.rs`**
+
+```rust
+// Add to register_common_ffi
+linker.func_wrap("env", "replay_is_recording", replay_is_recording)?;
+linker.func_wrap("env", "replay_is_playing", replay_is_playing)?;
+linker.func_wrap("env", "replay_current_frame", replay_current_frame)?;
+linker.func_wrap("env", "replay_total_frames", replay_total_frames)?;
+
+fn replay_is_recording<I: ConsoleInput, S>(caller: Caller<'_, GameStateWithConsole<I, S>>) -> i32 {
+    if caller.data().game.replay_recording { 1 } else { 0 }
+}
+
+fn replay_is_playing<I: ConsoleInput, S>(caller: Caller<'_, GameStateWithConsole<I, S>>) -> i32 {
+    if caller.data().game.replay_playing { 1 } else { 0 }
+}
+
+fn replay_current_frame<I: ConsoleInput, S>(caller: Caller<'_, GameStateWithConsole<I, S>>) -> u64 {
+    caller.data().game.replay_frame
+}
+
+fn replay_total_frames<I: ConsoleInput, S>(caller: Caller<'_, GameStateWithConsole<I, S>>) -> u64 {
+    caller.data().game.replay_total_frames
+}
+```
+
+### Step 6: Add Timeline UI
+
+**File: `core/src/app/replay_ui.rs` (new file)**
+
+```rust
+use egui::{Ui, Response};
+
+pub struct ReplayTimelineUI {
+    seeking: bool,
+    seek_frame: u64,
+}
+
+impl ReplayTimelineUI {
+    pub fn new() -> Self {
+        Self { seeking: false, seek_frame: 0 }
+    }
+
+    pub fn show(&mut self, ui: &mut Ui, current: u64, total: u64, paused: bool) -> ReplayAction {
+        let mut action = ReplayAction::None;
+
+        ui.horizontal(|ui| {
+            // Play/pause button
+            if ui.button(if paused { "▶" } else { "⏸" }).clicked() {
+                action = ReplayAction::TogglePause;
+            }
+
+            // Step buttons
+            if ui.button("⏮").clicked() { action = ReplayAction::Seek(0); }
+            if ui.button("◀").clicked() { action = ReplayAction::StepBack; }
+            if ui.button("▶").clicked() { action = ReplayAction::StepForward; }
+            if ui.button("⏭").clicked() { action = ReplayAction::Seek(total); }
+
+            // Timeline slider
+            let mut progress = current as f32 / total.max(1) as f32;
+            if ui.add(egui::Slider::new(&mut progress, 0.0..=1.0).show_value(false)).changed() {
+                action = ReplayAction::Seek((progress * total as f32) as u64);
+            }
+
+            // Frame counter
+            ui.label(format!("{} / {}", current, total));
+        });
+
+        action
+    }
+}
+
+pub enum ReplayAction {
+    None,
+    TogglePause,
+    StepForward,
+    StepBack,
+    Seek(u64),
+}
+```
+
+### Step 7: Wire into GameSession
+
+**File: `core/src/app/session.rs`**
+
+```rust
+use crate::replay::{Replay, ReplayPlayer};
+use super::replay_ui::{ReplayTimelineUI, ReplayAction};
+
+impl<C: Console> GameSession<C> {
+    /// Handle replay hotkeys
+    pub fn handle_replay_hotkey(&mut self, key: &winit::keyboard::Key) -> bool {
+        use winit::keyboard::{Key, NamedKey};
+        match key {
+            Key::Named(NamedKey::F9) => {
+                self.toggle_recording();
+                true
+            }
+            Key::Named(NamedKey::Space) if self.runtime.is_replaying() => {
+                self.runtime.toggle_replay_pause();
+                true
+            }
+            Key::Named(NamedKey::ArrowLeft) if self.runtime.is_replaying() => {
+                self.runtime.step_replay_back();
+                true
+            }
+            Key::Named(NamedKey::ArrowRight) if self.runtime.is_replaying() => {
+                self.runtime.step_replay_forward();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Render replay timeline UI (call from egui context)
+    pub fn render_replay_ui(&mut self, ctx: &egui::Context) {
+        if let Some(player) = self.runtime.replay_player() {
+            egui::TopBottomPanel::bottom("replay_timeline").show(ctx, |ui| {
+                let action = self.replay_ui.show(
+                    ui,
+                    player.current_frame(),
+                    player.total_frames(),
+                    player.is_paused(),
+                );
+                // Handle action...
+            });
+        }
+    }
+}
+```
+
+### File Checklist
+
+| File | Changes |
+|------|---------|
+| `core/src/replay/mod.rs` | New file: Replay, ReplayHeader, FrameInputs, Checkpoint types |
+| `core/src/replay/recording.rs` | New file: ReplayRecorder implementation |
+| `core/src/replay/playback.rs` | New file: ReplayPlayer implementation |
+| `core/src/runtime.rs` | Add replay_recorder, replay_player fields and methods |
+| `core/src/wasm/state.rs` | Add replay_recording, replay_playing, replay_frame flags |
+| `core/src/ffi.rs` | Add replay FFI functions |
+| `core/src/app/replay_ui.rs` | New file: Timeline UI widget |
+| `core/src/app/session.rs` | Add replay hotkey handling and UI rendering |
+| `core/src/lib.rs` | Export replay module |
+| `emberware-z/src/app/mod.rs` | Wire replay UI into egui rendering |
+| `core/Cargo.toml` | Add `lz4_flex` for compression (optional) |
+
+### Test Cases
+
+1. **Basic recording**: Start game, press F9, play, press F9, verify replay saved
+2. **Playback**: Load replay, verify identical game state at each frame
+3. **Seeking**: Jump to frame 1000, verify state matches checkpoint
+4. **Determinism**: Play same replay twice, verify byte-identical states
+5. **Checkpoint seeking**: Seek to frame 1500, verify correct checkpoint loaded
+6. **Take over**: During playback, press key to take control, verify game continues
+7. **File format**: Save/load replay file, verify roundtrip
+
 ## Future Enhancements
 
 1. **Video export**: Render replay to video file

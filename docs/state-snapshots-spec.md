@@ -452,6 +452,394 @@ State snapshots are fully console-agnostic:
 - UI is egui (shared across consoles)
 - Thumbnail capture uses existing render target
 
+## Way Forward: Implementation Guide
+
+This section provides concrete implementation steps based on the current Emberware codebase architecture.
+
+### Step 1: Add Snapshot Types
+
+**File: `core/src/snapshot/mod.rs` (new file)**
+
+```rust
+//! State snapshot system (quick save/load)
+
+use serde::{Deserialize, Serialize};
+
+/// A complete state snapshot
+#[derive(Serialize, Deserialize)]
+pub struct StateSnapshot {
+    pub name: String,
+    pub timestamp: u64,
+    pub frame: u64,
+    pub state: Vec<u8>,
+    pub thumbnail: Option<Vec<u8>>,
+    pub game_id: String,
+    pub rom_hash: [u8; 32],
+}
+
+impl StateSnapshot {
+    pub const MAGIC: [u8; 4] = *b"EMBS";
+    pub const VERSION: u32 = 1;
+}
+
+/// Manages quick slots and named snapshots
+pub struct SnapshotManager {
+    /// Quick slots (F5/F9 style, session-only)
+    pub quick_slots: [Option<StateSnapshot>; 9],
+    /// Undo slot (auto-saved before load)
+    pub undo_slot: Option<StateSnapshot>,
+    /// Auto-save interval tracking
+    pub last_auto_save: std::time::Instant,
+    pub auto_save_interval_secs: u32,
+}
+
+impl SnapshotManager {
+    pub fn new() -> Self {
+        Self {
+            quick_slots: Default::default(),
+            undo_slot: None,
+            last_auto_save: std::time::Instant::now(),
+            auto_save_interval_secs: 120,
+        }
+    }
+
+    pub fn quick_save(&mut self, slot: usize, snapshot: StateSnapshot) {
+        if slot < 9 {
+            self.quick_slots[slot] = Some(snapshot);
+        }
+    }
+
+    pub fn quick_load(&mut self, slot: usize) -> Option<&StateSnapshot> {
+        if slot < 9 {
+            self.quick_slots[slot].as_ref()
+        } else {
+            None
+        }
+    }
+
+    pub fn save_undo(&mut self, current_state: StateSnapshot) {
+        self.undo_slot = Some(current_state);
+    }
+
+    pub fn should_auto_save(&self) -> bool {
+        self.last_auto_save.elapsed().as_secs() >= self.auto_save_interval_secs as u64
+    }
+
+    pub fn mark_auto_saved(&mut self) {
+        self.last_auto_save = std::time::Instant::now();
+    }
+}
+```
+
+### Step 2: Integrate into GameSession
+
+**File: `core/src/app/session.rs`**
+
+```rust
+use crate::snapshot::{SnapshotManager, StateSnapshot};
+
+pub struct GameSession<C: Console> {
+    pub runtime: Runtime<C>,
+    pub resource_manager: C::ResourceManager,
+    pub snapshot_manager: SnapshotManager,  // NEW
+    pub game_id: String,
+    pub rom_hash: [u8; 32],
+}
+
+impl<C: Console> GameSession<C> {
+    /// Create a snapshot from current game state
+    pub fn create_snapshot(&self, name: &str) -> anyhow::Result<StateSnapshot> {
+        let game = self.runtime.game()
+            .ok_or_else(|| anyhow::anyhow!("No game loaded"))?;
+
+        let state = game.save_state()?;
+        let frame = game.store().data().game.tick_count;
+
+        Ok(StateSnapshot {
+            name: name.to_string(),
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+            frame,
+            state,
+            thumbnail: None,  // Captured separately
+            game_id: self.game_id.clone(),
+            rom_hash: self.rom_hash,
+        })
+    }
+
+    /// Load a snapshot into the game
+    pub fn load_snapshot(&mut self, snapshot: &StateSnapshot) -> anyhow::Result<()> {
+        // Save undo state before loading
+        if let Ok(undo) = self.create_snapshot("undo") {
+            self.snapshot_manager.save_undo(undo);
+        }
+
+        // Load the snapshot
+        let game = self.runtime.game_mut()
+            .ok_or_else(|| anyhow::anyhow!("No game loaded"))?;
+
+        game.load_state(&snapshot.state)?;
+
+        Ok(())
+    }
+
+    /// Quick save to slot (0-8)
+    pub fn quick_save(&mut self, slot: usize) -> anyhow::Result<()> {
+        let snapshot = self.create_snapshot(&format!("Quick Slot {}", slot + 1))?;
+        self.snapshot_manager.quick_save(slot, snapshot);
+        Ok(())
+    }
+
+    /// Quick load from slot (0-8)
+    pub fn quick_load(&mut self, slot: usize) -> anyhow::Result<()> {
+        let snapshot = self.snapshot_manager.quick_load(slot)
+            .ok_or_else(|| anyhow::anyhow!("Slot {} is empty", slot + 1))?
+            .clone();
+        self.load_snapshot(&snapshot)
+    }
+
+    /// Handle snapshot hotkeys
+    pub fn handle_snapshot_hotkey(&mut self, key: &winit::keyboard::Key, shift: bool) -> bool {
+        use winit::keyboard::{Key, NamedKey};
+        match key {
+            Key::Named(NamedKey::F5) if !shift => {
+                // Quick save to slot 1
+                let _ = self.quick_save(0);
+                true
+            }
+            Key::Named(NamedKey::F9) if !shift => {
+                // Quick load from slot 1
+                let _ = self.quick_load(0);
+                true
+            }
+            Key::Character(c) if shift && c.len() == 1 => {
+                // Shift+1-9 for specific slots (save)
+                if let Some(digit) = c.chars().next().and_then(|c| c.to_digit(10)) {
+                    if digit >= 1 && digit <= 9 {
+                        let _ = self.quick_save((digit - 1) as usize);
+                        return true;
+                    }
+                }
+                false
+            }
+            _ => false,
+        }
+    }
+
+    /// Check and perform auto-save if needed
+    pub fn update_auto_save(&mut self) {
+        if self.snapshot_manager.should_auto_save() {
+            if let Ok(snapshot) = self.create_snapshot("auto_save") {
+                // Save to disk
+                let _ = self.save_snapshot_to_disk(&snapshot, "auto_save");
+                self.snapshot_manager.mark_auto_saved();
+            }
+        }
+    }
+
+    /// Save snapshot to disk
+    pub fn save_snapshot_to_disk(&self, snapshot: &StateSnapshot, filename: &str) -> anyhow::Result<()> {
+        let path = dirs::home_dir()
+            .ok_or_else(|| anyhow::anyhow!("No home directory"))?
+            .join(".emberware")
+            .join("games")
+            .join(&self.game_id)
+            .join("snapshots")
+            .join(format!("{}.snapshot", filename));
+
+        std::fs::create_dir_all(path.parent().unwrap())?;
+
+        let data = bincode::serialize(snapshot)?;
+        std::fs::write(path, data)?;
+
+        Ok(())
+    }
+
+    /// Load snapshot from disk
+    pub fn load_snapshot_from_disk(&self, filename: &str) -> anyhow::Result<StateSnapshot> {
+        let path = dirs::home_dir()
+            .ok_or_else(|| anyhow::anyhow!("No home directory"))?
+            .join(".emberware")
+            .join("games")
+            .join(&self.game_id)
+            .join("snapshots")
+            .join(format!("{}.snapshot", filename));
+
+        let data = std::fs::read(path)?;
+        let snapshot: StateSnapshot = bincode::deserialize(&data)?;
+
+        Ok(snapshot)
+    }
+}
+```
+
+### Step 3: Add Snapshot Browser UI
+
+**File: `core/src/app/snapshot_ui.rs` (new file)**
+
+```rust
+use crate::snapshot::{SnapshotManager, StateSnapshot};
+use egui::{Ui, Vec2};
+
+pub struct SnapshotBrowserUI {
+    visible: bool,
+    new_name: String,
+}
+
+impl SnapshotBrowserUI {
+    pub fn new() -> Self {
+        Self {
+            visible: false,
+            new_name: String::new(),
+        }
+    }
+
+    pub fn toggle(&mut self) {
+        self.visible = !self.visible;
+    }
+
+    pub fn show(
+        &mut self,
+        ctx: &egui::Context,
+        manager: &SnapshotManager,
+    ) -> SnapshotAction {
+        if !self.visible {
+            return SnapshotAction::None;
+        }
+
+        let mut action = SnapshotAction::None;
+
+        egui::Window::new("Snapshots")
+            .default_size([400.0, 300.0])
+            .show(ctx, |ui| {
+                // Quick slots
+                ui.heading("Quick Slots");
+                ui.horizontal(|ui| {
+                    for i in 0..9 {
+                        let label = if manager.quick_slots[i].is_some() {
+                            format!("[{}]", i + 1)
+                        } else {
+                            format!(" {} ", i + 1)
+                        };
+
+                        if ui.button(label).clicked() {
+                            action = SnapshotAction::LoadQuickSlot(i);
+                        }
+                    }
+                });
+
+                ui.separator();
+
+                // Named snapshots would be loaded from disk here
+                ui.heading("Named Snapshots");
+                ui.label("(Load from disk)");
+
+                ui.separator();
+
+                // Save new snapshot
+                ui.horizontal(|ui| {
+                    ui.label("Name:");
+                    ui.text_edit_singleline(&mut self.new_name);
+                    if ui.button("Save").clicked() && !self.new_name.is_empty() {
+                        action = SnapshotAction::SaveNamed(std::mem::take(&mut self.new_name));
+                    }
+                });
+            });
+
+        action
+    }
+}
+
+pub enum SnapshotAction {
+    None,
+    LoadQuickSlot(usize),
+    SaveQuickSlot(usize),
+    SaveNamed(String),
+    LoadNamed(String),
+}
+```
+
+### Step 4: Wire into Console App
+
+**File: `emberware-z/src/app/mod.rs`**
+
+```rust
+impl App {
+    fn handle_key_input(&mut self, event: KeyEvent) {
+        // ... existing key handling ...
+
+        let shift = event.modifiers.contains(Modifiers::SHIFT);
+
+        if event.state.is_pressed() {
+            // Snapshot hotkeys
+            if let Some(session) = &mut self.game_session {
+                if session.handle_snapshot_hotkey(&event.logical_key, shift) {
+                    return;
+                }
+            }
+
+            // Snapshot browser toggle
+            match event.logical_key {
+                Key::Named(NamedKey::F4) => {
+                    self.snapshot_browser.toggle();
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn update(&mut self) {
+        // ... existing update code ...
+
+        // Auto-save check (once per second is fine)
+        if let Some(session) = &mut self.game_session {
+            session.update_auto_save();
+        }
+    }
+
+    fn render(&mut self) {
+        // ... in egui context ...
+
+        // Snapshot browser
+        if let Some(session) = &mut self.game_session {
+            let action = self.snapshot_browser.show(&self.egui_ctx, &session.snapshot_manager);
+            match action {
+                SnapshotAction::LoadQuickSlot(i) => { let _ = session.quick_load(i); }
+                SnapshotAction::SaveNamed(name) => {
+                    if let Ok(snap) = session.create_snapshot(&name) {
+                        let _ = session.save_snapshot_to_disk(&snap, &name);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+}
+```
+
+### File Checklist
+
+| File | Changes |
+|------|---------|
+| `core/src/snapshot/mod.rs` | New file: StateSnapshot, SnapshotManager |
+| `core/src/app/session.rs` | Add SnapshotManager, quick_save/load methods |
+| `core/src/app/snapshot_ui.rs` | New file: SnapshotBrowserUI |
+| `core/src/lib.rs` | Export snapshot module |
+| `emberware-z/src/app/mod.rs` | Wire hotkeys and browser UI |
+| `core/Cargo.toml` | Add `bincode` for serialization, `dirs` for paths |
+
+### Test Cases
+
+1. **Quick save/load**: Press F5, modify game, press F9, verify state restored
+2. **Multiple slots**: Save to slots 1-3, load each, verify correct state
+3. **Undo**: Load snapshot, verify undo slot populated
+4. **Named save**: Save with name, restart emulator, load, verify works
+5. **Auto-save**: Wait 2 minutes, verify auto-save created
+6. **Empty slot**: Try to load empty slot, verify error message
+7. **ROM mismatch**: Load snapshot from different ROM, verify warning
+
 ## Future Enhancements
 
 1. **Snapshot timeline**: Visual timeline of all snapshots
