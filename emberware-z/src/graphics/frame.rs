@@ -347,6 +347,20 @@ impl ZGraphics {
                 .write_buffer(&self.bone_buffer, 0, bytemuck::cast_slice(&bone_data));
         }
 
+        // 7. Upload inverse bind matrices when a skeleton is bound
+        if let Some(skeleton) = z_state.get_bound_skeleton() {
+            let bone_count = skeleton.bone_count as usize;
+            let mut inverse_bind_data: Vec<f32> = Vec::with_capacity(bone_count * 12);
+            for matrix in &skeleton.inverse_bind[..bone_count] {
+                inverse_bind_data.extend_from_slice(&matrix.to_array());
+            }
+            self.queue.write_buffer(
+                &self.inverse_bind_buffer,
+                0,
+                bytemuck::cast_slice(&inverse_bind_data),
+            );
+        }
+
         // Take texture cache out temporarily to avoid nested mutable borrows during render pass.
         // Cache is persistent across frames - entries are reused when keys match.
         let mut texture_bind_groups = std::mem::take(&mut self.texture_bind_groups);
@@ -423,13 +437,17 @@ impl ZGraphics {
                     },
                     wgpu::BindGroupEntry {
                         binding: 6,
+                        resource: self.inverse_bind_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 7,
                         resource: self
                             .buffer_manager
                             .quad_instance_buffer()
                             .as_entire_binding(),
                     },
                     wgpu::BindGroupEntry {
-                        binding: 7,
+                        binding: 8,
                         resource: self.screen_dims_buffer.as_entire_binding(),
                     },
                 ],

@@ -760,6 +760,102 @@ fn render() {
 - CPU-side animation (keyframes, blend trees, IK) is left to the developer
 - Industry standard: Unity, Unreal, and most engines use 3×4 matrices for skeletal animation
 
+### Skeletal Animation (Inverse Bind Mode)
+
+For production skeletal animation workflows, Emberware Z supports **inverse bind mode**. Instead of pre-multiplying inverse bind matrices on the CPU, you can upload them once and let the GPU apply them automatically.
+
+**Two skinning modes:**
+
+| Mode | `skeleton_bind()` | `set_bones()` receives | GPU applies |
+|------|-------------------|------------------------|-------------|
+| **Raw** (default) | `0` or not called | Final skinning matrices | Nothing extra |
+| **Inverse Bind** | Valid skeleton handle | Model-space bone transforms | `bone × inverse_bind` |
+
+**Raw mode** (backward compatible): Developer pre-computes `bone_transform × inverse_bind` on CPU, uploads as final matrix.
+
+**Inverse Bind mode** (new): Developer uploads model-space transforms from animation data, GPU multiplies by inverse bind matrices.
+
+```rust
+fn load_skeleton(inverse_bind_ptr: *const f32, bone_count: u32) -> u32
+fn skeleton_bind(skeleton: u32)
+```
+
+**load_skeleton:**
+
+Loads inverse bind matrices for a skeleton. Call once during `init()`.
+
+- `inverse_bind_ptr`: Pointer to array of 3×4 matrices (12 floats each, column-major)
+- `bone_count`: Number of bones (maximum 256)
+- Returns: Skeleton handle (non-zero on success, 0 on error)
+
+**skeleton_bind:**
+
+Binds a skeleton for subsequent skinned mesh rendering.
+
+- `skeleton = 0`: Disable inverse bind mode (raw mode)
+- `skeleton > 0`: Enable inverse bind mode using specified skeleton
+
+**Example workflow:**
+
+```rust
+static mut SKELETON: u32 = 0;
+static mut CHARACTER_MESH: u32 = 0;
+static INVERSE_BIND_DATA: &[u8] = include_bytes!("assets/character.ewzskel");
+
+fn init() {
+    unsafe {
+        // Load skeleton (inverse bind matrices)
+        let header_size = 8;  // 2 × u32 header
+        let bone_count = u32::from_le_bytes([
+            INVERSE_BIND_DATA[0], INVERSE_BIND_DATA[1],
+            INVERSE_BIND_DATA[2], INVERSE_BIND_DATA[3]
+        ]);
+        let matrices_ptr = INVERSE_BIND_DATA[header_size..].as_ptr() as *const f32;
+        SKELETON = load_skeleton(matrices_ptr, bone_count);
+
+        // Load skinned mesh
+        CHARACTER_MESH = load_mesh(...);
+    }
+}
+
+fn render() {
+    unsafe {
+        // Bind skeleton (enables inverse bind mode)
+        skeleton_bind(SKELETON);
+
+        // Upload model-space bone transforms (animation data)
+        // GPU will automatically apply: final = bone × inverse_bind
+        set_bones(animation_bones.as_ptr(), bone_count);
+
+        draw_mesh(CHARACTER_MESH);
+
+        // Unbind skeleton for other meshes (optional, or use different skeleton)
+        skeleton_bind(0);
+    }
+}
+```
+
+**When to use each mode:**
+
+- **Raw mode**: Simple cases, single character, manual control over matrix composition
+- **Inverse Bind mode**: Multiple skeletons, glTF pipeline, cleaner separation of animation and bind pose
+
+**Asset export:**
+
+Use `ember-export` to convert glTF skeletons:
+
+```bash
+# Export skeleton (inverse bind matrices)
+ember-export skeleton character.glb -o character.ewzskel
+
+# Export animation clip (sampled transforms)
+ember-export animation character.glb -o walk.ewzanim --frame-rate 30
+
+# List available skeletons/animations
+ember-export skeleton character.glb --list
+ember-export animation character.glb --list
+```
+
 ### Textures
 
 Games embed assets via `include_bytes!()` and pass raw pixels — no file-based loading. All resources are created in `init()` and automatically cleaned up on game shutdown.

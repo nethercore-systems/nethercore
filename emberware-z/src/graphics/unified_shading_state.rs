@@ -62,8 +62,10 @@ pub struct PackedUnifiedShadingState {
     /// - Mode 3: [spec_r, spec_g, spec_b, rim_power]
     pub uniform_set_1: u32,
 
-    /// Reserved for alignment/future use
-    pub _pad0: u32,
+    /// Flags and reserved bits
+    /// - Bit 0: skinning_mode (0 = raw, 1 = inverse bind mode)
+    /// - Bits 1-31: reserved for future use
+    pub flags: u32,
 
     pub sky: PackedSky,           // 16 bytes
     pub lights: [PackedLight; 4], // 32 bytes (4 × 8-byte lights)
@@ -91,7 +93,7 @@ impl Default for PackedUnifiedShadingState {
             color_rgba8: 0xFFFFFFFF, // White
             uniform_set_0,
             uniform_set_1,
-            _pad0: 0,
+            flags: 0, // skinning_mode = 0 (raw mode)
             sky,
             lights: [PackedLight::default(); 4], // All lights disabled
         }
@@ -385,6 +387,10 @@ impl PackedLight {
 // PackedUnifiedShadingState Helpers
 // ============================================================================
 
+/// Flag bit for skinning mode in PackedUnifiedShadingState.flags
+/// 0 = raw mode (matrices used as-is), 1 = inverse bind mode
+pub const FLAG_SKINNING_MODE: u32 = 1 << 0;
+
 impl PackedUnifiedShadingState {
     /// Create from all f32 parameters (used during FFI calls)
     /// For Mode 2: metallic, roughness, emissive packed into uniform_set_0
@@ -411,11 +417,29 @@ impl PackedUnifiedShadingState {
         Self {
             uniform_set_0,
             color_rgba8: color,
-            _pad0: 0,
+            flags: 0, // skinning_mode = 0 (raw mode)
             uniform_set_1,
             sky,
             lights,
         }
+    }
+
+    /// Set skinning mode flag
+    /// - false: raw mode (matrices used as-is)
+    /// - true: inverse bind mode (GPU applies inverse bind matrices)
+    #[inline]
+    pub fn set_skinning_mode(&mut self, inverse_bind: bool) {
+        if inverse_bind {
+            self.flags |= FLAG_SKINNING_MODE;
+        } else {
+            self.flags &= !FLAG_SKINNING_MODE;
+        }
+    }
+
+    /// Get skinning mode flag
+    #[inline]
+    pub fn skinning_mode(&self) -> bool {
+        (self.flags & FLAG_SKINNING_MODE) != 0
     }
 }
 

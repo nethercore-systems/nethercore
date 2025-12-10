@@ -394,7 +394,7 @@ fn create_frame_bind_group_layout(
             },
             count: None,
         },
-        // Binding 6: Quad instances storage buffer (for GPU-instanced quad rendering)
+        // Binding 6: Inverse bind storage buffer for skeletal animation
         wgpu::BindGroupLayoutEntry {
             binding: 6,
             visibility: wgpu::ShaderStages::VERTEX,
@@ -405,9 +405,20 @@ fn create_frame_bind_group_layout(
             },
             count: None,
         },
-        // Binding 7: Screen dimensions uniform (for screen-space quad NDC conversion)
+        // Binding 7: Quad instances storage buffer (for GPU-instanced quad rendering)
         wgpu::BindGroupLayoutEntry {
             binding: 7,
+            visibility: wgpu::ShaderStages::VERTEX,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        },
+        // Binding 8: Screen dimensions uniform (for screen-space quad NDC conversion)
+        wgpu::BindGroupLayoutEntry {
+            binding: 8,
             visibility: wgpu::ShaderStages::VERTEX,
             ty: wgpu::BindingType::Buffer {
                 ty: wgpu::BufferBindingType::Uniform,

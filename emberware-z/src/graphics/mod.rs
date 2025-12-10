@@ -48,8 +48,8 @@ pub use render_state::{
 };
 pub use unified_shading_state::{
     pack_matcap_blend_modes, pack_octahedral_u32, pack_rgb8, pack_unorm8,
-    unpack_matcap_blend_modes, update_uniform_set_0_byte, update_uniform_set_1_byte, PackedLight,
-    PackedUnifiedShadingState, ShadingStateIndex,
+    unpack_matcap_blend_modes, update_uniform_set_0_byte, update_uniform_set_1_byte,
+    PackedLight, PackedUnifiedShadingState, ShadingStateIndex, FLAG_SKINNING_MODE,
 };
 pub use vertex::{VertexFormatInfo, VERTEX_FORMAT_COUNT, FORMAT_ALL};
 
@@ -96,6 +96,7 @@ pub struct ZGraphics {
 
     // Bone system (GPU skinning)
     bone_buffer: wgpu::Buffer,
+    inverse_bind_buffer: wgpu::Buffer,
 
     // Matrix storage buffers (per-frame arrays)
     model_matrix_buffer: wgpu::Buffer,

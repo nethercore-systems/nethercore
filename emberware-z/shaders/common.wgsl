@@ -31,7 +31,7 @@ struct PackedUnifiedShadingState {
     color_rgba8: u32,                // Material color (RGBA8 packed)
     uniform_set_0: u32,              // Mode-specific: [b0, b1, b2, rim_intensity]
     uniform_set_1: u32,              // Mode-specific: [b0, b1, b2, rim_power]
-    _pad0: u32,                      // Reserved for alignment/future use
+    flags: u32,                      // Bit 0: skinning_mode (0=raw, 1=inverse bind)
     sky: PackedSky,                  // 16 bytes
     lights: array<PackedLight, 4>,   // 32 bytes (4 × 8-byte lights)
 }
@@ -54,6 +54,10 @@ struct BoneMatrix3x4 {
 // Bone transforms for GPU skinning (up to 256 bones, 3x4 format)
 @group(0) @binding(5) var<storage, read> bones: array<BoneMatrix3x4, 256>;
 
+// Inverse bind matrices for skeletal animation (up to 256 bones, 3x4 format)
+// Contains the inverse bind pose for each bone, used in inverse bind mode
+@group(0) @binding(6) var<storage, read> inverse_bind: array<BoneMatrix3x4, 256>;
+
 // Helper to expand 3x4 bone matrix → 4x4 for skinning calculations
 // Input is row-major, output is column-major (WGSL mat4x4 convention)
 fn bone_to_mat4(bone: BoneMatrix3x4) -> mat4x4<f32> {
@@ -64,6 +68,9 @@ fn bone_to_mat4(bone: BoneMatrix3x4) -> mat4x4<f32> {
         vec4<f32>(bone.row0.w, bone.row1.w, bone.row2.w, 1.0)  // column 3 (translation)
     );
 }
+
+// Skinning mode flag constant (bit 0 of flags field)
+const FLAG_SKINNING_MODE: u32 = 1u;
 
 // Texture bindings (group 1)
 @group(1) @binding(0) var slot0: texture_2d<f32>;
