@@ -227,7 +227,7 @@ impl ZFFIState {
         }
     }
 
-    /// Update light in current shading state (with quantization)
+    /// Update a directional light in current shading state (with quantization)
     pub fn update_light(
         &mut self,
         index: usize,
@@ -239,10 +239,37 @@ impl ZFFIState {
         use crate::graphics::PackedLight;
         use glam::Vec3;
 
-        let new_light = PackedLight::from_floats(
+        let new_light = PackedLight::directional(
             Vec3::from_slice(&direction),
             Vec3::from_slice(&color),
             intensity,
+            enabled,
+        );
+
+        if self.current_shading_state.lights[index] != new_light {
+            self.current_shading_state.lights[index] = new_light;
+            self.shading_state_dirty = true;
+        }
+    }
+
+    /// Update a point light in current shading state (with quantization)
+    pub fn update_point_light(
+        &mut self,
+        index: usize,
+        position: [f32; 3],
+        color: [f32; 3],
+        intensity: f32,
+        range: f32,
+        enabled: bool,
+    ) {
+        use crate::graphics::PackedLight;
+        use glam::Vec3;
+
+        let new_light = PackedLight::point(
+            Vec3::from_slice(&position),
+            Vec3::from_slice(&color),
+            intensity,
+            range,
             enabled,
         );
 

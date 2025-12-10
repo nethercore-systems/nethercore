@@ -33,9 +33,10 @@ use emberware_core::console::Graphics;
 
 // Re-export packing utilities from z-common (for FFI and backwards compat)
 pub use z_common::{
-    pack_bone_weights_unorm8, pack_color_rgba_unorm8, pack_normal_octahedral, pack_normal_snorm16,
+    FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV, pack_bone_weights_unorm8,
+    pack_color_rgba_unorm8, pack_normal_octahedral, pack_normal_snorm16, pack_octahedral_u32,
     pack_position_f16, pack_uv_f16, pack_uv_unorm16, pack_vertex_data, unpack_octahedral_u32,
-    vertex_stride, vertex_stride_packed, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV,
+    vertex_stride, vertex_stride_packed,
 };
 
 // Re-export public types from submodules
@@ -47,11 +48,11 @@ pub use render_state::{
     BlendMode, CullMode, MatcapBlendMode, RenderState, TextureFilter, TextureHandle,
 };
 pub use unified_shading_state::{
-    pack_matcap_blend_modes, pack_octahedral_u32, pack_rgb8, pack_unorm8,
+    LightType, PackedLight, PackedUnifiedShadingState, ShadingStateIndex, FLAG_SKINNING_MODE,
+    pack_f16, pack_f16x2, pack_matcap_blend_modes, pack_rgb8, pack_unorm8, unpack_f16, unpack_f16x2,
     unpack_matcap_blend_modes, update_uniform_set_0_byte, update_uniform_set_1_byte,
-    PackedLight, PackedUnifiedShadingState, ShadingStateIndex, FLAG_SKINNING_MODE,
 };
-pub use vertex::{VertexFormatInfo, VERTEX_FORMAT_COUNT, FORMAT_ALL};
+pub use vertex::{FORMAT_ALL, VERTEX_FORMAT_COUNT, VertexFormatInfo};
 
 // Re-export for crate-internal use
 pub(crate) use init::RenderTarget;

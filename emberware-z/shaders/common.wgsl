@@ -20,20 +20,21 @@ struct PackedSky {
     sun_color_and_sharpness: u32,    // RGB8 + sharpness u8
 }
 
-// Packed light data (8 bytes)
+// Packed light data (12 bytes) - supports directional and point lights
 struct PackedLight {
-    direction_oct: u32,              // Octahedral encoding (2x snorm16)
-    color_and_intensity: u32,        // RGB8 + intensity u8 (intensity=0 means disabled)
+    data0: u32,  // Directional: octahedral direction (snorm16x2), Point: position XY (f16x2)
+    data1: u32,  // RGB8 (bits 31-8) + type (bit 7) + intensity (bits 6-0)
+    data2: u32,  // Directional: unused (0), Point: position Z + range (f16x2)
 }
 
-// Unified per-draw shading state (64 bytes)
+// Unified per-draw shading state (80 bytes)
 struct PackedUnifiedShadingState {
     color_rgba8: u32,                // Material color (RGBA8 packed)
     uniform_set_0: u32,              // Mode-specific: [b0, b1, b2, rim_intensity]
     uniform_set_1: u32,              // Mode-specific: [b0, b1, b2, rim_power]
     flags: u32,                      // Bit 0: skinning_mode (0=raw, 1=inverse bind)
     sky: PackedSky,                  // 16 bytes
-    lights: array<PackedLight, 4>,   // 32 bytes (4 × 8-byte lights)
+    lights: array<PackedLight, 4>,   // 48 bytes (4 × 12-byte lights)
 }
 
 // Per-frame storage buffer - array of shading states
@@ -193,23 +194,51 @@ fn lambert_diffuse(
 // Light Utilities
 // ============================================================================
 
-// Unpacked light data
+// Unpacked light data (extended for point lights)
 struct LightData {
-    direction: vec3<f32>,
+    direction: vec3<f32>,    // For directional lights
+    position: vec3<f32>,     // For point lights
     color: vec3<f32>,
     intensity: f32,
+    range: f32,              // For point lights
+    light_type: u32,         // 0 = directional, 1 = point
     enabled: bool,
 }
 
 // Unpack PackedLight to usable values
-// Format: 0xRRGGBBII (R in highest byte, intensity in lowest)
+// Supports both directional and point lights
 fn unpack_light(packed: PackedLight) -> LightData {
     var light: LightData;
-    light.direction = unpack_octahedral(packed.direction_oct);
-    light.enabled = (packed.color_and_intensity & 0xFFu) != 0u;  // intensity byte != 0
-    let color_intensity = packed.color_and_intensity;
-    light.color = unpack_rgb8(color_intensity);
-    light.intensity = unpack_unorm8_from_u32(color_intensity);  // lowest byte
+
+    // Extract type from bit 7 of data1
+    light.light_type = (packed.data1 >> 7u) & 1u;
+
+    // Extract intensity from bits 0-6, map 0-127 -> 0.0-8.0
+    let intensity_7bit = f32(packed.data1 & 0x7Fu);
+    light.intensity = intensity_7bit / 127.0 * 8.0;
+    light.enabled = intensity_7bit > 0.0;
+
+    // Extract color (bits 31-8)
+    light.color = vec3<f32>(
+        f32((packed.data1 >> 24u) & 0xFFu) / 255.0,
+        f32((packed.data1 >> 16u) & 0xFFu) / 255.0,
+        f32((packed.data1 >> 8u) & 0xFFu) / 255.0
+    );
+
+    if (light.light_type == 0u) {
+        // Directional light: unpack octahedral direction
+        light.direction = unpack_octahedral(packed.data0);
+        light.position = vec3<f32>(0.0);
+        light.range = 0.0;
+    } else {
+        // Point light: unpack position (f16x2 + f16) and range (f16)
+        let xy = unpack2x16float(packed.data0);
+        let z_range = unpack2x16float(packed.data2);
+        light.position = vec3<f32>(xy.x, xy.y, z_range.x);
+        light.range = z_range.y;
+        light.direction = vec3<f32>(0.0, -1.0, 0.0);  // Default, unused
+    }
+
     return light;
 }
 

@@ -1,5 +1,7 @@
 use bytemuck::{Pod, Zeroable};
 use glam::{Vec3, Vec4};
+use half::f16;
+use z_common::{encode_octahedral, pack_octahedral_u32, unpack_octahedral_u32};
 
 use super::render_state::MatcapBlendMode;
 
@@ -14,16 +16,62 @@ pub struct PackedSky {
     pub sun_color_and_sharpness: u32, // RGB8 + sharpness u8 (4 bytes)
 }
 
-/// One packed light (8 bytes)
+/// Light type stored in bit 7 of data1
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum LightType {
+    #[default]
+    Directional = 0,
+    Point = 1,
+}
+
+impl LightType {
+    pub fn from_bit(bit: bool) -> Self {
+        if bit {
+            LightType::Point
+        } else {
+            LightType::Directional
+        }
+    }
+
+    pub fn to_bit(self) -> bool {
+        matches!(self, LightType::Point)
+    }
+}
+
+/// One packed light (12 bytes) - supports directional and point lights
+///
+/// # Format
+///
+/// **data0:**
+/// - Directional: octahedral direction (snorm16x2)
+/// - Point: position XY (f16x2)
+///
+/// **data1:** RGB8 (bits 31-8) + type (bit 7) + intensity (bits 6-0)
+/// - Format: 0xRRGGBB_TI where T=type(1bit), I=intensity(7bits)
+/// - Intensity maps 0-127 -> 0.0-8.0 for HDR support
+///
+/// **data2:**
+/// - Directional: unused (0)
+/// - Point: position Z (f16, bits 15-0) + range (f16, bits 31-16)
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Pod, Zeroable)]
 pub struct PackedLight {
-    pub direction_oct: u32,       // Octahedral encoding (2x snorm16) - 4 bytes
-    pub color_and_intensity: u32, // RGB8 + intensity u8 (intensity=0 means disabled) - 4 bytes
+    /// Directional: octahedral direction (snorm16x2)
+    /// Point: position XY (f16x2)
+    pub data0: u32,
+
+    /// RGB8 (bits 31-8) + type (bit 7) + intensity (bits 6-0)
+    /// Format: 0xRRGGBB_TI where T=type(1bit), I=intensity(7bits)
+    pub data1: u32,
+
+    /// Directional: unused (0)
+    /// Point: position Z (f16, bits 15-0) + range (f16, bits 31-16)
+    pub data2: u32,
 }
 
-/// Unified per-draw shading state (64 bytes, POD, hashable)
-/// Size breakdown: 16 bytes (header) + 16 bytes (sky) + 32 bytes (4 × 8-byte lights)
+/// Unified per-draw shading state (80 bytes, POD, hashable)
+/// Size breakdown: 16 bytes (header) + 16 bytes (sky) + 48 bytes (4 × 12-byte lights)
 ///
 /// # Mode-Specific Field Interpretation
 ///
@@ -68,7 +116,7 @@ pub struct PackedUnifiedShadingState {
     pub flags: u32,
 
     pub sky: PackedSky,           // 16 bytes
-    pub lights: [PackedLight; 4], // 32 bytes (4 × 8-byte lights)
+    pub lights: [PackedLight; 4], // 48 bytes (4 × 12-byte lights)
 }
 
 impl Default for PackedUnifiedShadingState {
@@ -136,6 +184,34 @@ pub fn unpack_snorm16(value: i16) -> f32 {
     value as f32 / 32767.0
 }
 
+/// Pack f32 to IEEE 754 half-precision float (f16) stored as u16
+#[inline]
+pub fn pack_f16(value: f32) -> u16 {
+    f16::from_f32(value).to_bits()
+}
+
+/// Unpack IEEE 754 half-precision float (f16) from u16 to f32
+#[inline]
+pub fn unpack_f16(bits: u16) -> f32 {
+    f16::from_bits(bits).to_f32()
+}
+
+/// Pack two f32 values into a u32 as f16x2
+#[inline]
+pub fn pack_f16x2(x: f32, y: f32) -> u32 {
+    let x_bits = pack_f16(x) as u32;
+    let y_bits = pack_f16(y) as u32;
+    x_bits | (y_bits << 16)
+}
+
+/// Unpack u32 to two f32 values from f16x2
+#[inline]
+pub fn unpack_f16x2(packed: u32) -> (f32, f32) {
+    let x = unpack_f16((packed & 0xFFFF) as u16);
+    let y = unpack_f16((packed >> 16) as u16);
+    (x, y)
+}
+
 /// Pack RGBA f32 [0.0, 1.0] to u32 RGBA8
 /// Format: 0xRRGGBBAA (R in highest byte, A in lowest)
 #[inline]
@@ -157,75 +233,6 @@ pub fn pack_rgb8(color: Vec3) -> u32 {
 #[inline]
 pub fn pack_rgba8_vec4(color: Vec4) -> u32 {
     pack_rgba8(color.x, color.y, color.z, color.w)
-}
-
-/// Encode normalized direction to octahedral coordinates in [-1, 1]²
-/// Uses signed octahedral mapping for uniform precision distribution across the sphere.
-/// More accurate than XY+reconstructed-Z approaches, especially near poles.
-#[inline]
-pub fn encode_octahedral(dir: Vec3) -> (f32, f32) {
-    let dir = dir.normalize_or_zero();
-
-    // Project to octahedron via L1 normalization
-    let l1_norm = dir.x.abs() + dir.y.abs() + dir.z.abs();
-    if l1_norm == 0.0 {
-        return (0.0, 0.0);
-    }
-
-    let mut u = dir.x / l1_norm;
-    let mut v = dir.y / l1_norm;
-
-    // Fold lower hemisphere (z < 0) into upper square
-    if dir.z < 0.0 {
-        let u_abs = u.abs();
-        let v_abs = v.abs();
-        u = (1.0 - v_abs) * if u >= 0.0 { 1.0 } else { -1.0 };
-        v = (1.0 - u_abs) * if v >= 0.0 { 1.0 } else { -1.0 };
-    }
-
-    (u, v) // Both in [-1, 1]
-}
-
-/// Pack Vec3 direction to u32 using octahedral encoding (2x snorm16)
-/// Provides uniform angular precision (~0.02° worst-case error with 16-bit components)
-#[inline]
-pub fn pack_octahedral_u32(dir: Vec3) -> u32 {
-    let (u, v) = encode_octahedral(dir);
-    let u_snorm = pack_snorm16(u);
-    let v_snorm = pack_snorm16(v);
-    // Pack as [u: i16 low 16 bits][v: i16 high 16 bits]
-    (u_snorm as u16 as u32) | ((v_snorm as u16 as u32) << 16)
-}
-
-/// Decode octahedral coordinates in [-1, 1]² back to normalized direction
-/// Reverses the encoding operation to reconstruct the 3D direction vector.
-#[inline]
-pub fn decode_octahedral(u: f32, v: f32) -> Vec3 {
-    let mut dir = Vec3::new(u, v, 1.0 - u.abs() - v.abs());
-
-    // Unfold lower hemisphere (z < 0 case)
-    if dir.z < 0.0 {
-        let old_x = dir.x;
-        dir.x = (1.0 - dir.y.abs()) * if old_x >= 0.0 { 1.0 } else { -1.0 };
-        dir.y = (1.0 - old_x.abs()) * if dir.y >= 0.0 { 1.0 } else { -1.0 };
-    }
-
-    dir.normalize_or_zero()
-}
-
-/// Unpack u32 to Vec3 direction using octahedral decoding (2x snorm16)
-/// Reverses pack_octahedral_u32() to extract the original direction.
-#[inline]
-pub fn unpack_octahedral_u32(packed: u32) -> Vec3 {
-    // Extract i16 components with sign extension
-    let u_i16 = ((packed & 0xFFFF) as i16) as i32;
-    let v_i16 = ((packed >> 16) as i16) as i32;
-
-    // Convert snorm16 to float [-1, 1]
-    let u = unpack_snorm16(u_i16 as i16);
-    let v = unpack_snorm16(v_i16 as i16);
-
-    decode_octahedral(u, v)
 }
 
 /// Pack 4x MatcapBlendMode into u32 (4 bytes)
@@ -330,24 +337,61 @@ impl PackedSky {
 // ============================================================================
 
 impl PackedLight {
-    /// Create a PackedLight from f32 parameters
-    /// If enabled=false, intensity is set to 0 (which indicates disabled light)
-    pub fn from_floats(direction: Vec3, color: Vec3, intensity: f32, enabled: bool) -> Self {
-        let dir_packed = pack_octahedral_u32(direction.normalize_or_zero());
+    /// Create a directional light
+    pub fn directional(direction: Vec3, color: Vec3, intensity: f32, enabled: bool) -> Self {
+        let data0 = pack_octahedral_u32(direction.normalize_or_zero());
+        let data1 =
+            Self::pack_color_type_intensity(color, LightType::Directional, intensity, enabled);
+        Self {
+            data0,
+            data1,
+            data2: 0,
+        }
+    }
 
+    /// Create a point light
+    pub fn point(position: Vec3, color: Vec3, intensity: f32, range: f32, enabled: bool) -> Self {
+        let data0 = pack_f16x2(position.x, position.y);
+        let data1 = Self::pack_color_type_intensity(color, LightType::Point, intensity, enabled);
+        let data2 = pack_f16x2(position.z, range);
+        Self {
+            data0,
+            data1,
+            data2,
+        }
+    }
+
+    /// Pack color, type, and intensity into data1
+    /// Format: 0xRRGGBB_TI where T=type(1bit), I=intensity(7bits)
+    fn pack_color_type_intensity(
+        color: Vec3,
+        light_type: LightType,
+        intensity: f32,
+        enabled: bool,
+    ) -> u32 {
         let r = pack_unorm8(color.x);
         let g = pack_unorm8(color.y);
         let b = pack_unorm8(color.z);
-        // If disabled, set intensity to 0 (intensity=0 means disabled)
-        let intens = if enabled { pack_unorm8(intensity) } else { 0 };
-        // Format: 0xRRGGBBII (R in highest byte, intensity in lowest)
-        let color_and_intensity =
-            ((r as u32) << 24) | ((g as u32) << 16) | ((b as u32) << 8) | (intens as u32);
 
-        Self {
-            direction_oct: dir_packed,
-            color_and_intensity,
-        }
+        // Intensity: 0.0-8.0 -> 0-127 (7 bits)
+        // If disabled, set to 0
+        let intensity_7bit = if enabled {
+            ((intensity / 8.0).clamp(0.0, 1.0) * 127.0).round() as u8
+        } else {
+            0
+        };
+
+        // Type in bit 7, intensity in bits 0-6
+        let type_intensity = ((light_type as u8) << 7) | (intensity_7bit & 0x7F);
+
+        ((r as u32) << 24) | ((g as u32) << 16) | ((b as u32) << 8) | (type_intensity as u32)
+    }
+
+    /// Create a PackedLight from f32 parameters (directional light)
+    /// Backward compatibility: delegates to directional()
+    /// If enabled=false, intensity is set to 0 (which indicates disabled light)
+    pub fn from_floats(direction: Vec3, color: Vec3, intensity: f32, enabled: bool) -> Self {
+        Self::directional(direction, color, intensity, enabled)
     }
 
     /// Create a disabled light (all zeros)
@@ -355,31 +399,50 @@ impl PackedLight {
         Self::default()
     }
 
-    /// Extract direction as f32 array
-    /// Decodes the octahedral-encoded direction stored in the packed light.
+    /// Get light type (directional or point)
+    pub fn get_type(&self) -> LightType {
+        LightType::from_bit((self.data1 & 0x80) != 0)
+    }
+
+    /// Extract direction as f32 array (only valid for directional lights)
+    /// Decodes the octahedral-encoded direction stored in data0.
     pub fn get_direction(&self) -> [f32; 3] {
-        let dir = unpack_octahedral_u32(self.direction_oct);
+        let dir = unpack_octahedral_u32(self.data0);
         [dir.x, dir.y, dir.z]
     }
 
+    /// Get position (only valid for point lights)
+    pub fn get_position(&self) -> [f32; 3] {
+        let (x, y) = unpack_f16x2(self.data0);
+        let (z, _) = unpack_f16x2(self.data2);
+        [x, y, z]
+    }
+
+    /// Get range (only valid for point lights)
+    pub fn get_range(&self) -> f32 {
+        let (_, range) = unpack_f16x2(self.data2);
+        range
+    }
+
     /// Extract color as f32 array
-    /// Format: 0xRRGGBBII (R in highest byte, intensity in lowest)
+    /// Format: 0xRRGGBB_TI (R in highest byte, type+intensity in lowest byte)
     pub fn get_color(&self) -> [f32; 3] {
-        let r = unpack_unorm8(((self.color_and_intensity >> 24) & 0xFF) as u8);
-        let g = unpack_unorm8(((self.color_and_intensity >> 16) & 0xFF) as u8);
-        let b = unpack_unorm8(((self.color_and_intensity >> 8) & 0xFF) as u8);
+        let r = unpack_unorm8(((self.data1 >> 24) & 0xFF) as u8);
+        let g = unpack_unorm8(((self.data1 >> 16) & 0xFF) as u8);
+        let b = unpack_unorm8(((self.data1 >> 8) & 0xFF) as u8);
         [r, g, b]
     }
 
-    /// Extract intensity as f32
-    /// Format: 0xRRGGBBII (intensity in lowest byte)
+    /// Extract intensity as f32 (0.0-8.0 range)
+    /// Intensity is stored in bits 0-6 of data1
     pub fn get_intensity(&self) -> f32 {
-        unpack_unorm8((self.color_and_intensity & 0xFF) as u8)
+        let intensity_7bit = (self.data1 & 0x7F) as f32;
+        intensity_7bit / 127.0 * 8.0
     }
 
     /// Check if light is enabled (intensity > 0)
     pub fn is_enabled(&self) -> bool {
-        (self.color_and_intensity & 0xFF) != 0
+        (self.data1 & 0x7F) != 0
     }
 }
 
@@ -450,8 +513,8 @@ mod tests {
     #[test]
     fn test_packed_sizes() {
         assert_eq!(std::mem::size_of::<PackedSky>(), 16);
-        assert_eq!(std::mem::size_of::<PackedLight>(), 8); // Was 16, now 8 (50% reduction!)
-        assert_eq!(std::mem::size_of::<PackedUnifiedShadingState>(), 64); // Was 100, now 64 (16 + 16 + 32)
+        assert_eq!(std::mem::size_of::<PackedLight>(), 12); // 12 bytes for point light support
+        assert_eq!(std::mem::size_of::<PackedUnifiedShadingState>(), 80); // 16 + 16 + 48
     }
 
     #[test]
@@ -527,8 +590,110 @@ mod tests {
     #[test]
     fn test_disabled_light() {
         let light = PackedLight::disabled();
-        assert_eq!(light.direction_oct, 0);
-        assert_eq!(light.color_and_intensity, 0);
+        assert_eq!(light.data0, 0);
+        assert_eq!(light.data1, 0);
+        assert_eq!(light.data2, 0);
         assert!(!light.is_enabled());
+    }
+
+    #[test]
+    fn test_directional_light_roundtrip() {
+        let dir = Vec3::new(0.5, -0.7, 0.3).normalize();
+        let color = Vec3::new(1.0, 0.5, 0.25);
+        let intensity = 2.5;
+
+        let light = PackedLight::directional(dir, color, intensity, true);
+
+        assert_eq!(light.get_type(), LightType::Directional);
+        assert!(light.is_enabled());
+
+        let unpacked_dir = light.get_direction();
+        assert!((unpacked_dir[0] - dir.x).abs() < 0.01);
+        assert!((unpacked_dir[1] - dir.y).abs() < 0.01);
+        assert!((unpacked_dir[2] - dir.z).abs() < 0.01);
+
+        let unpacked_color = light.get_color();
+        assert!((unpacked_color[0] - color.x).abs() < 0.01);
+        assert!((unpacked_color[1] - color.y).abs() < 0.01);
+        assert!((unpacked_color[2] - color.z).abs() < 0.01);
+
+        // Intensity with 7-bit precision in 0-8 range
+        let unpacked_intensity = light.get_intensity();
+        assert!((unpacked_intensity - intensity).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_point_light_roundtrip() {
+        let pos = Vec3::new(10.5, -5.25, 100.0);
+        let color = Vec3::new(0.8, 0.6, 0.4);
+        let intensity = 4.0;
+        let range = 25.0;
+
+        let light = PackedLight::point(pos, color, intensity, range, true);
+
+        assert_eq!(light.get_type(), LightType::Point);
+        assert!(light.is_enabled());
+
+        let unpacked_pos = light.get_position();
+        // f16 precision is about 3 decimal digits
+        assert!((unpacked_pos[0] - pos.x).abs() < 0.1);
+        assert!((unpacked_pos[1] - pos.y).abs() < 0.1);
+        assert!((unpacked_pos[2] - pos.z).abs() < 1.0);
+
+        let unpacked_range = light.get_range();
+        assert!((unpacked_range - range).abs() < 0.5);
+    }
+
+    #[test]
+    fn test_f16_packing() {
+        let values = [0.0, 1.0, -1.0, 100.0, 0.001, 65504.0];
+        for v in values {
+            let packed = pack_f16(v);
+            let unpacked = unpack_f16(packed);
+            let error = (unpacked - v).abs() / v.abs().max(1.0);
+            assert!(
+                error < 0.01,
+                "f16 roundtrip failed for {}: got {}",
+                v,
+                unpacked
+            );
+        }
+    }
+
+    #[test]
+    fn test_f16x2_packing() {
+        let (x, y) = (42.5, -17.25);
+        let packed = pack_f16x2(x, y);
+        let (ux, uy) = unpack_f16x2(packed);
+        assert!((ux - x).abs() < 0.1);
+        assert!((uy - y).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_intensity_range() {
+        // Test intensity at various points in 0-8 range
+        for intensity in [0.0, 1.0, 2.0, 4.0, 7.9] {
+            let light =
+                PackedLight::directional(Vec3::new(0.0, -1.0, 0.0), Vec3::ONE, intensity, true);
+            let unpacked = light.get_intensity();
+            assert!(
+                (unpacked - intensity).abs() < 0.1,
+                "intensity {} unpacked to {}",
+                intensity,
+                unpacked
+            );
+        }
+    }
+
+    #[test]
+    fn test_disabled_directional_light() {
+        let light = PackedLight::directional(
+            Vec3::new(0.0, -1.0, 0.0),
+            Vec3::ONE,
+            1.0,
+            false, // disabled
+        );
+        assert!(!light.is_enabled());
+        assert_eq!(light.get_intensity(), 0.0);
     }
 }
