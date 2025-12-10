@@ -7,6 +7,7 @@ use anyhow::Result;
 use wasmtime::{Caller, Linker};
 
 use crate::console::ConsoleInput;
+use crate::debug::ffi::register_debug_ffi;
 use crate::wasm::{GameStateWithConsole, MAX_SAVE_SIZE, MAX_SAVE_SLOTS};
 
 /// Register common FFI functions with the linker
@@ -31,6 +32,10 @@ pub fn register_common_ffi<I: ConsoleInput, S: Send + Default + 'static>(
     // Session functions
     linker.func_wrap("env", "player_count", player_count)?;
     linker.func_wrap("env", "local_player_mask", local_player_mask)?;
+
+    // Debug inspection functions
+    // These are always registered; release builds won't import them
+    register_debug_ffi(linker)?;
 
     Ok(())
 }
