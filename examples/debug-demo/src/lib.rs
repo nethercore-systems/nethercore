@@ -180,8 +180,8 @@ pub extern "C" fn render() {
             };
 
             let rad = angle * core::f32::consts::PI / 180.0;
-            let x = ORBIT_RADIUS * rad.cos();
-            let z = ORBIT_RADIUS * rad.sin();
+            let x = ORBIT_RADIUS * cos_approx(rad);
+            let z = ORBIT_RADIUS * sin_approx(rad);
 
             push_identity();
             push_translate(x, 0.0, z);
@@ -198,4 +198,26 @@ fn color_to_u32(rgba: &[u8; 4]) -> u32 {
         | ((rgba[1] as u32) << 16)
         | ((rgba[2] as u32) << 8)
         | (rgba[3] as u32)
+}
+
+/// Simple sine approximation (Taylor series, good enough for visuals)
+fn sin_approx(x: f32) -> f32 {
+    // Normalize to [-PI, PI]
+    let pi = core::f32::consts::PI;
+    let mut x = x % (2.0 * pi);
+    if x > pi {
+        x -= 2.0 * pi;
+    } else if x < -pi {
+        x += 2.0 * pi;
+    }
+    // Taylor series: sin(x) ≈ x - x³/6 + x⁵/120
+    let x2 = x * x;
+    let x3 = x2 * x;
+    let x5 = x3 * x2;
+    x - x3 / 6.0 + x5 / 120.0
+}
+
+/// Simple cosine approximation
+fn cos_approx(x: f32) -> f32 {
+    sin_approx(x + core::f32::consts::FRAC_PI_2)
 }
