@@ -309,17 +309,10 @@ fn draw_text_str(s: &str, x: f32, y: f32, size: f32, color: u32) {
     }
 }
 
-// Simple sine approximation (no libm needed)
+// Using libm for accurate no_std math
+#[inline]
 fn sin_approx(x: f32) -> f32 {
-    let mut t = x;
-    while t > 3.14159 {
-        t -= 6.28318;
-    }
-    while t < -3.14159 {
-        t += 6.28318;
-    }
-    let t2 = t * t;
-    t * (1.0 - t2 / 6.0 * (1.0 - t2 / 20.0))
+    libm::sinf(x)
 }
 
 fn clamp(v: f32, min: f32, max: f32) -> f32 {

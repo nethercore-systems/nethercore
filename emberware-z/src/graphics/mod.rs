@@ -77,7 +77,6 @@ mod vertex;
 use hashbrown::HashMap;
 
 use anyhow::{Context, Result};
-use glam::Mat4;
 
 use emberware_core::console::Graphics;
 
@@ -627,27 +626,9 @@ impl Graphics for ZGraphics {
         self.current_view = None;
     }
 
-    fn set_bones(&mut self, bones: &[Mat4]) {
-        if bones.is_empty() {
-            return;
-        }
-
-        // Clamp to maximum 256 bones
-        let bone_count = bones.len().min(256);
-
-        // Convert Mat4 matrices to flat f32 array for GPU upload
-        // Each Mat4 is 16 floats (64 bytes)
-        let mut bone_data: Vec<f32> = Vec::with_capacity(bone_count * 16);
-        for matrix in &bones[..bone_count] {
-            bone_data.extend_from_slice(&matrix.to_cols_array());
-        }
-
-        // Upload to GPU bone storage buffer
-        self.queue
-            .write_buffer(&self.bone_buffer, 0, bytemuck::cast_slice(&bone_data));
-
-        tracing::trace!("Uploaded {} bone matrices to GPU", bone_count);
-    }
+    // Note: Bone matrix upload is now done directly in render_frame() in frame.rs
+    // The set_bones FFI function stores BoneMatrix3x4 in z_state.bone_matrices,
+    // which is then uploaded to the GPU during frame rendering.
 }
 
 // Tests removed - generate_text_quads was replaced by GPU-instanced quad rendering system

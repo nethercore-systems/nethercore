@@ -172,7 +172,7 @@ The simulator sits between GGRS and the actual network transport:
 │                          │                                  │
 │                          ▼                                  │
 ├─────────────────────────────────────────────────────────────┤
-│                 matchbox_socket (WebRTC)                   │
+│                   Network Transport Layer                   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -523,7 +523,7 @@ Should network conditions be recorded in replays?
 **Key components:**
 1. NetworkConditions data structures - 0.5 days
 2. Packet delay queue - 1 day
-3. Integration with matchbox_socket - 2 days
+3. Integration with transport layer - 2 days
 4. Packet loss/duplication/reorder - 1 day
 5. Bandwidth limiting - 1 day
 6. Spike simulation - 0.5 days

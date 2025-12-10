@@ -318,8 +318,7 @@ pub fn pack_vertex_data(data: &[f32], format: u8) -> Vec<u8> {
         f32_stride += 3; // Normal (nx, ny, nz)
     }
     if has_skinning {
-        f32_stride += 8; // 4 bone indices (as f32) + 4 weights + padding (?)
-                         // NOTE: Skinning layout needs verification
+        f32_stride += 5; // 1 packed bone indices f32 (bit pattern of u8x4) + 4 weights
     }
 
     let vertex_count = data.len() / f32_stride;
@@ -359,15 +358,12 @@ pub fn pack_vertex_data(data: &[f32], format: u8) -> Vec<u8> {
 
         // Skinning: bone indices (u8x4) + bone weights (unorm8x4)
         if has_skinning {
-            // Bone indices: 4 f32 → u8x4 (4 bytes)
-            let bone_indices = [
-                data[offset] as u8,
-                data[offset + 1] as u8,
-                data[offset + 2] as u8,
-                data[offset + 3] as u8,
-            ];
+            // Bone indices: 1 packed f32 (bit pattern of u32 with u8x4) → u8x4 (4 bytes)
+            // The f32 contains the bit pattern of a u32: [idx0, idx1, idx2, idx3]
+            let packed_indices_u32 = data[offset].to_bits();
+            let bone_indices = packed_indices_u32.to_le_bytes();
             packed.extend_from_slice(&bone_indices);
-            offset += 4;
+            offset += 1;
 
             // Bone weights: 4 f32 → unorm8x4 (4 bytes)
             let bone_weights = pack_bone_weights_unorm8([

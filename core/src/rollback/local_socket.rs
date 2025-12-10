@@ -28,7 +28,7 @@
 //! # Limitations
 //!
 //! - No NAT traversal (localhost only)
-//! - No ICE/STUN/TURN (use matchbox for production networking)
+//! - No ICE/STUN/TURN
 //! - Simple point-to-point (no mesh networking for >2 players without manual port assignment)
 
 use std::io;
@@ -72,7 +72,7 @@ impl std::error::Error for LocalSocketError {}
 /// Simple UDP socket for local P2P testing
 ///
 /// Implements `NonBlockingSocket<String>` for GGRS, allowing P2P sessions
-/// to be created without a matchbox signaling server.
+/// to be created without a signaling server.
 ///
 /// The address type is `String` to match GGRS's expected type, with the
 /// format `"ip:port"` (e.g., `"127.0.0.1:7777"`).

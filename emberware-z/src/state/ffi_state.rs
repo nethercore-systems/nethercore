@@ -3,7 +3,7 @@
 use glam::{Mat4, Vec3};
 use hashbrown::HashMap;
 
-use super::{Font, PendingMesh, PendingMeshPacked, PendingTexture, ZInitConfig};
+use super::{BoneMatrix3x4, Font, PendingMesh, PendingMeshPacked, PendingTexture, ZInitConfig};
 
 /// FFI staging state for Emberware Z
 ///
@@ -21,8 +21,8 @@ pub struct ZFFIState {
     pub texture_filter: u8,
     pub bound_textures: [u32; 4],
 
-    // GPU skinning
-    pub bone_matrices: Vec<Mat4>,
+    // GPU skinning (3x4 matrices for 25% memory savings)
+    pub bone_matrices: Vec<BoneMatrix3x4>,
     pub bone_count: u32,
 
     // Virtual Render Pass (direct recording)

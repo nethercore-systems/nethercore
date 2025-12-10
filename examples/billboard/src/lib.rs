@@ -363,23 +363,15 @@ fn update_camera() {
     }
 }
 
-// Simple sine approximation (no libm needed)
+// Using libm for accurate no_std math
+#[inline]
 fn sin_approx(x: f32) -> f32 {
-    // Normalize to -PI..PI
-    let mut t = x;
-    while t > 3.14159 {
-        t -= 6.28318;
-    }
-    while t < -3.14159 {
-        t += 6.28318;
-    }
-    // Bhaskara I's approximation
-    let t2 = t * t;
-    t * (1.0 - t2 / 6.0 * (1.0 - t2 / 20.0))
+    libm::sinf(x)
 }
 
+#[inline]
 fn cos_approx(x: f32) -> f32 {
-    sin_approx(x + 1.5708) // PI/2
+    libm::cosf(x)
 }
 
 #[no_mangle]

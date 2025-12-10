@@ -336,6 +336,17 @@ impl ZGraphics {
             self.queue.write_buffer(&self.mvp_indices_buffer, 0, data);
         }
 
+        // 6. Upload bone matrices (3x4 format, 12 floats per bone)
+        if !z_state.bone_matrices.is_empty() {
+            let bone_count = z_state.bone_matrices.len().min(256);
+            let mut bone_data: Vec<f32> = Vec::with_capacity(bone_count * 12);
+            for matrix in &z_state.bone_matrices[..bone_count] {
+                bone_data.extend_from_slice(&matrix.to_array());
+            }
+            self.queue
+                .write_buffer(&self.bone_buffer, 0, bytemuck::cast_slice(&bone_data));
+        }
+
         // Take texture cache out temporarily to avoid nested mutable borrows during render pass.
         // Cache is persistent across frames - entries are reused when keys match.
         let mut texture_bind_groups = std::mem::take(&mut self.texture_bind_groups);

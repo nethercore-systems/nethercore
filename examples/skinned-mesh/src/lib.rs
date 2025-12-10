@@ -1,19 +1,26 @@
-//! Skinned Mesh Example
+//! Skinned Mesh Example - GPU Skinning Validator
 //!
-//! Demonstrates GPU skinning with Emberware Z's skeletal animation system.
+//! Validates Emberware Z's skeletal animation system:
+//! - 3x4 bone matrix format (12 floats per bone, column-major)
+//! - GPU skinning with smooth weight blending
+//! - Multiple bone hierarchy animation
 //!
-//! Features demonstrated:
-//! - `load_mesh_indexed()` with FORMAT_NORMAL | FORMAT_SKINNED
-//! - `set_bones()` to upload bone matrices each frame
-//! - CPU-side bone animation (sine wave demo)
-//! - Simple bone hierarchy (3-bone arm)
+//! Matrix Format (column-major, consistent with transform_set):
+//! Each bone matrix is stored as 4 columns × 3 elements:
+//! ```text
+//! [col0.x, col0.y, col0.z]  // X axis
+//! [col1.x, col1.y, col1.z]  // Y axis
+//! [col2.x, col2.y, col2.z]  // Z axis
+//! [tx,     ty,     tz    ]  // translation
+//! // implicit 4th row [0, 0, 0, 1] (affine transform)
+//! ```
 //!
 //! Workflow: CPU animation -> GPU skinning
 //! 1. In init(): Load skinned mesh with bone indices/weights baked into vertices
 //! 2. Each update(): Animate skeleton on CPU (update bone transforms)
 //! 3. Each render(): Call set_bones() then draw_mesh()
 //!
-//! Note: Rollback state is automatic (entire WASM memory is snapshotted). No save_state/load_state needed.
+//! Note: Rollback state is automatic (entire WASM memory is snapshotted).
 //!
 //! Controls:
 //! - Left stick: Rotate view
@@ -27,8 +34,6 @@ use core::panic::PanicInfo;
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
-    // Trigger a WASM trap so runtime can catch the error
-    // instead of infinite loop which freezes the game
     core::arch::wasm32::unreachable()
 }
 
@@ -57,11 +62,11 @@ extern "C" {
     ) -> u32;
     fn draw_mesh(handle: u32);
 
-    // GPU Skinning
+    // GPU Skinning - 3x4 matrices (12 floats per bone, row-major)
     fn set_bones(matrices_ptr: *const f32, count: u32);
 
     // Transform
-    fn transform_identity();
+    fn push_identity();
 
     // Render state
     fn set_color(color: u32);
@@ -82,11 +87,13 @@ const FORMAT_SKINNED: u32 = 8;
 
 /// POS_NORMAL_SKINNED format (12)
 /// Layout: pos(3f) + normal(3f) + bone_indices(4u8) + bone_weights(4f)
-/// Stride: 12 + 12 + 4 + 16 = 44 bytes = 11 floats
 const FORMAT_POS_NORMAL_SKINNED: u32 = FORMAT_NORMAL | FORMAT_SKINNED;
 
 /// Number of bones in our simple skeleton
 const NUM_BONES: usize = 3;
+
+/// Floats per 3x4 bone matrix (row-major)
+const BONE_MATRIX_FLOATS: usize = 12;
 
 /// Arm segment length
 const SEGMENT_LENGTH: f32 = 1.5;
@@ -107,174 +114,156 @@ static mut ANIM_SPEED: f32 = 1.0;
 /// Animation paused
 static mut PAUSED: bool = false;
 
-/// Bone matrices (3 bones x 16 floats each = 48 floats)
-/// Each 4x4 matrix is stored in column-major order
-static mut BONE_MATRICES: [f32; NUM_BONES * 16] = [0.0; NUM_BONES * 16];
+/// Bone matrices (3 bones × 12 floats each = 36 floats)
+/// Each 3x4 matrix is stored in row-major order
+static mut BONE_MATRICES: [f32; NUM_BONES * BONE_MATRIX_FLOATS] = [0.0; NUM_BONES * BONE_MATRIX_FLOATS];
 
-/// Simple sine approximation using Taylor series (good for small angles)
-/// sin(x) ≈ x - x^3/6 + x^5/120 for |x| < π
-fn sin_approx(mut x: f32) -> f32 {
-    // Normalize to [-π, π]
-    const TWO_PI: f32 = 6.283185307;
-    const PI: f32 = 3.141592654;
-    while x > PI { x -= TWO_PI; }
-    while x < -PI { x += TWO_PI; }
+// ============================================================================
+// Math Utilities (using libm for accurate no_std math)
+// ============================================================================
 
-    let x2 = x * x;
-    let x3 = x2 * x;
-    let x5 = x3 * x2;
-    x - x3 / 6.0 + x5 / 120.0
+#[inline]
+fn sin_approx(x: f32) -> f32 {
+    libm::sinf(x)
 }
 
-/// cos(x) = sin(x + π/2)
+#[inline]
 fn cos_approx(x: f32) -> f32 {
-    const HALF_PI: f32 = 1.570796327;
-    sin_approx(x + HALF_PI)
+    libm::cosf(x)
 }
 
-/// Create a 4x4 identity matrix (column-major)
-fn mat4_identity(out: &mut [f32; 16]) {
+// ============================================================================
+// 3x4 Matrix Operations (Column-Major - consistent with transform_set)
+// ============================================================================
+//
+// Memory layout (12 floats):
+//   [col0.x, col0.y, col0.z,  // X axis
+//    col1.x, col1.y, col1.z,  // Y axis
+//    col2.x, col2.y, col2.z,  // Z axis
+//    tx,     ty,     tz    ]  // translation
+//
+// This is the same convention as transform_set, view_matrix_set, etc.
+
+/// Create a 3x4 identity matrix (column-major)
+fn mat3x4_identity(out: &mut [f32; 12]) {
     *out = [
-        1.0, 0.0, 0.0, 0.0, // column 0
-        0.0, 1.0, 0.0, 0.0, // column 1
-        0.0, 0.0, 1.0, 0.0, // column 2
-        0.0, 0.0, 0.0, 1.0, // column 3
+        1.0, 0.0, 0.0, // col 0: X axis
+        0.0, 1.0, 0.0, // col 1: Y axis
+        0.0, 0.0, 1.0, // col 2: Z axis
+        0.0, 0.0, 0.0, // col 3: translation
     ];
 }
 
-/// Create a rotation matrix around Z axis (column-major)
-fn mat4_rotation_z(out: &mut [f32; 16], angle: f32) {
+/// Create a 3x4 rotation matrix around Z axis (column-major)
+fn mat3x4_rotation_z(out: &mut [f32; 12], angle: f32) {
     let c = cos_approx(angle);
     let s = sin_approx(angle);
     *out = [
-        c,   s,   0.0, 0.0, // column 0
-        -s,  c,   0.0, 0.0, // column 1
-        0.0, 0.0, 1.0, 0.0, // column 2
-        0.0, 0.0, 0.0, 1.0, // column 3
+        c,   s,   0.0, // col 0: X axis rotated
+        -s,  c,   0.0, // col 1: Y axis rotated
+        0.0, 0.0, 1.0, // col 2: Z axis unchanged
+        0.0, 0.0, 0.0, // col 3: no translation
     ];
 }
 
-/// Create a translation matrix (column-major)
-fn mat4_translation(out: &mut [f32; 16], x: f32, y: f32, z: f32) {
+/// Create a 3x4 translation matrix (column-major)
+fn mat3x4_translation(out: &mut [f32; 12], x: f32, y: f32, z: f32) {
     *out = [
-        1.0, 0.0, 0.0, 0.0, // column 0
-        0.0, 1.0, 0.0, 0.0, // column 1
-        0.0, 0.0, 1.0, 0.0, // column 2
-        x,   y,   z,   1.0, // column 3
+        1.0, 0.0, 0.0, // col 0: X axis
+        0.0, 1.0, 0.0, // col 1: Y axis
+        0.0, 0.0, 1.0, // col 2: Z axis
+        x,   y,   z,   // col 3: translation
     ];
 }
 
-/// Multiply two 4x4 matrices (column-major): out = a * b
-fn mat4_multiply(out: &mut [f32; 16], a: &[f32; 16], b: &[f32; 16]) {
-    let mut result = [0.0f32; 16];
-    for col in 0..4 {
-        for row in 0..4 {
-            let mut sum = 0.0;
-            for k in 0..4 {
-                sum += a[k * 4 + row] * b[col * 4 + k];
-            }
-            result[col * 4 + row] = sum;
-        }
-    }
-    *out = result;
+/// Multiply two 3x4 matrices: out = a * b (both column-major)
+/// For column vectors: (A * B) * v = A * (B * v), so B is applied first.
+/// Treats implicit 4th row as [0, 0, 0, 1]
+fn mat3x4_multiply(out: &mut [f32; 12], a: &[f32; 12], b: &[f32; 12]) {
+    // Column-major indexing: col_i starts at index i*3
+    // a's 3x3 rotation is cols 0-2, translation is col 3
+    // Same for b
+
+    // Result col 0 = A.rot * B.col0
+    out[0] = a[0]*b[0] + a[3]*b[1] + a[6]*b[2];
+    out[1] = a[1]*b[0] + a[4]*b[1] + a[7]*b[2];
+    out[2] = a[2]*b[0] + a[5]*b[1] + a[8]*b[2];
+
+    // Result col 1 = A.rot * B.col1
+    out[3] = a[0]*b[3] + a[3]*b[4] + a[6]*b[5];
+    out[4] = a[1]*b[3] + a[4]*b[4] + a[7]*b[5];
+    out[5] = a[2]*b[3] + a[5]*b[4] + a[8]*b[5];
+
+    // Result col 2 = A.rot * B.col2
+    out[6] = a[0]*b[6] + a[3]*b[7] + a[6]*b[8];
+    out[7] = a[1]*b[6] + a[4]*b[7] + a[7]*b[8];
+    out[8] = a[2]*b[6] + a[5]*b[7] + a[8]*b[8];
+
+    // Result col 3 = A.rot * B.col3 + A.col3
+    out[9]  = a[0]*b[9] + a[3]*b[10] + a[6]*b[11] + a[9];
+    out[10] = a[1]*b[9] + a[4]*b[10] + a[7]*b[11] + a[10];
+    out[11] = a[2]*b[9] + a[5]*b[10] + a[8]*b[11] + a[11];
 }
+
+// ============================================================================
+// Mesh Generation
+// ============================================================================
 
 /// Generate a cylindrical arm segment mesh with skinning data
-/// Returns (vertices, indices) where vertices include bone indices and weights
-///
-/// The arm is made of 3 segments, each influenced by a bone:
-/// - Segment 0: primarily bone 0, blended with bone 1 at the joint
-/// - Segment 1: primarily bone 1, blended with bones 0 and 2 at joints
-/// - Segment 2: primarily bone 2, blended with bone 1 at the joint
 fn generate_arm_mesh() -> ([f32; 60 * 11], [u16; 324]) {
-    // Cylinder parameters
-    const SEGMENTS: usize = 6;   // Around circumference
-    const RINGS: usize = 10;     // Along length (including end caps)
+    const SEGMENTS: usize = 6;
+    const RINGS: usize = 10;
     const RADIUS: f32 = 0.2;
     const TOTAL_LENGTH: f32 = SEGMENT_LENGTH * 3.0;
 
-    // Vertex layout: pos(3) + normal(3) + bone_indices(4u8 as 1f32) + bone_weights(4)
-    // Total: 11 floats per vertex
-    let mut vertices = [0.0f32; 60 * 11];  // 6 segments * 10 rings = 60 verts, 11 floats each
-    let mut indices = [0u16; 324];         // (SEGMENTS * (RINGS-1) * 2 * 3) triangles
+    let mut vertices = [0.0f32; 60 * 11];
+    let mut indices = [0u16; 324];
 
     let mut v_idx = 0;
     let mut i_idx = 0;
 
-    // Generate vertices for each ring
     for ring in 0..RINGS {
         let y = (ring as f32 / (RINGS - 1) as f32) * TOTAL_LENGTH - TOTAL_LENGTH * 0.5;
-
-        // Determine bone weights based on position along arm
-        // Position 0.0 = bone 0, 0.33 = bone 1, 0.66 = bone 2
-        let normalized_pos = (y + TOTAL_LENGTH * 0.5) / TOTAL_LENGTH; // 0.0 to 1.0
+        let normalized_pos = (y + TOTAL_LENGTH * 0.5) / TOTAL_LENGTH;
 
         // Calculate bone weights with smooth blending
-        let bone0_weight: f32;
-        let bone1_weight: f32;
-        let bone2_weight: f32;
-
-        if normalized_pos < 0.33 {
-            // First segment: bone 0 dominant, blend to bone 1
+        let (bone0_weight, bone1_weight, bone2_weight) = if normalized_pos < 0.33 {
             let blend = normalized_pos / 0.33;
-            bone0_weight = 1.0 - blend * 0.5;
-            bone1_weight = blend * 0.5;
-            bone2_weight = 0.0;
+            (1.0 - blend * 0.5, blend * 0.5, 0.0)
         } else if normalized_pos < 0.66 {
-            // Middle segment: bone 1 dominant, blend from 0 and to 2
             let blend = (normalized_pos - 0.33) / 0.33;
-            bone0_weight = (1.0 - blend) * 0.3;
-            bone1_weight = 0.4 + (1.0 - (2.0 * blend - 1.0).abs()) * 0.3;
-            bone2_weight = blend * 0.3;
+            ((1.0 - blend) * 0.3, 0.4 + (1.0 - (2.0 * blend - 1.0).abs()) * 0.3, blend * 0.3)
         } else {
-            // Last segment: bone 2 dominant, blend from bone 1
             let blend = (normalized_pos - 0.66) / 0.34;
-            bone0_weight = 0.0;
-            bone1_weight = (1.0 - blend) * 0.5;
-            bone2_weight = 0.5 + blend * 0.5;
-        }
+            (0.0, (1.0 - blend) * 0.5, 0.5 + blend * 0.5)
+        };
 
-        // Normalize weights (should already sum to ~1.0 but ensure it)
         let weight_sum = bone0_weight + bone1_weight + bone2_weight;
-        let w0 = bone0_weight / weight_sum;
-        let w1 = bone1_weight / weight_sum;
-        let w2 = bone2_weight / weight_sum;
+        let (w0, w1, w2) = (bone0_weight / weight_sum, bone1_weight / weight_sum, bone2_weight / weight_sum);
 
-        // Pack bone indices as 4 bytes into a u32, then reinterpret as f32
-        // Indices: [0, 1, 2, 0] (4th unused, set to 0)
+        // Pack bone indices as 4 bytes into a u32
         let bone_indices_packed: u32 = 0 | (1 << 8) | (2 << 16) | (0 << 24);
         let bone_indices_f32 = f32::from_bits(bone_indices_packed);
 
         for seg in 0..SEGMENTS {
             let angle = (seg as f32 / SEGMENTS as f32) * 6.283185307;
-            let nx = cos_approx(angle);
-            let nz = sin_approx(angle);
-            let x = nx * RADIUS;
-            let z = nz * RADIUS;
+            let (nx, nz) = (cos_approx(angle), sin_approx(angle));
+            let (x, z) = (nx * RADIUS, nz * RADIUS);
 
-            // Position
             vertices[v_idx] = x;
             vertices[v_idx + 1] = y;
             vertices[v_idx + 2] = z;
-
-            // Normal (pointing outward from cylinder axis)
             vertices[v_idx + 3] = nx;
             vertices[v_idx + 4] = 0.0;
             vertices[v_idx + 5] = nz;
-
-            // Bone indices (packed as 4 u8 into a single float's bits)
             vertices[v_idx + 6] = bone_indices_f32;
-
-            // Bone weights
             vertices[v_idx + 7] = w0;
             vertices[v_idx + 8] = w1;
             vertices[v_idx + 9] = w2;
-            vertices[v_idx + 10] = 0.0; // 4th weight unused
-
+            vertices[v_idx + 10] = 0.0;
             v_idx += 11;
         }
 
-        // Generate triangles connecting this ring to the next
         if ring < RINGS - 1 {
             let ring_start = (ring * SEGMENTS) as u16;
             let next_ring_start = ((ring + 1) * SEGMENTS) as u16;
@@ -285,15 +274,12 @@ fn generate_arm_mesh() -> ([f32; 60 * 11], [u16; 324]) {
                 let curr_up = next_ring_start + seg as u16;
                 let next_up = next_ring_start + ((seg + 1) % SEGMENTS) as u16;
 
-                // Two triangles per quad
                 indices[i_idx] = curr;
                 indices[i_idx + 1] = next;
                 indices[i_idx + 2] = curr_up;
-
                 indices[i_idx + 3] = next;
                 indices[i_idx + 4] = next_up;
                 indices[i_idx + 5] = curr_up;
-
                 i_idx += 6;
             }
         }
@@ -302,93 +288,105 @@ fn generate_arm_mesh() -> ([f32; 60 * 11], [u16; 324]) {
     (vertices, indices)
 }
 
+// ============================================================================
+// Animation
+// ============================================================================
+
 /// Update bone matrices based on animation time
 /// Creates a wave-like bending motion through the arm
+///
+/// For proper skeletal animation with column vectors (M * v), rotation around
+/// a pivot point P requires: T(P) * R * T(-P)
+/// - T(-P): move pivot to origin
+/// - R: rotate around origin
+/// - T(P): move back to pivot position
 fn update_bones(time: f32) {
-    unsafe {
-        // Each bone applies a rotation then translation
-        // Bone 0: base of arm (at origin, rotates around Z)
-        // Bone 1: middle joint (offset by segment_length, rotates around Z)
-        // Bone 2: end joint (offset by another segment_length, rotates around Z)
+    // Use addr_of_mut! to avoid Rust 2024 static mut reference warnings
+    let bones = unsafe { &mut *core::ptr::addr_of_mut!(BONE_MATRICES) };
 
-        // Calculate rotation angles for each bone (wave motion)
-        let angle0 = sin_approx(time) * 0.3;
-        let angle1 = sin_approx(time + 1.0) * 0.5;
-        let angle2 = sin_approx(time + 2.0) * 0.4;
+    let angle0 = sin_approx(time) * 0.3;
+    let angle1 = sin_approx(time + 1.0) * 0.5;
+    let angle2 = sin_approx(time + 2.0) * 0.4;
 
-        // Bone 0: Just rotation at the base
-        let mut rot0 = [0.0f32; 16];
-        let mut trans0 = [0.0f32; 16];
-        mat4_rotation_z(&mut rot0, angle0);
-        mat4_translation(&mut trans0, 0.0, -SEGMENT_LENGTH * 1.5, 0.0); // Move to base
-        mat4_multiply(&mut *(BONE_MATRICES.as_mut_ptr() as *mut [f32; 16]), &rot0, &trans0);
+    let mut rot = [0.0f32; 12];
+    let mut trans_to = [0.0f32; 12];
+    let mut trans_from = [0.0f32; 12];
+    let mut temp1 = [0.0f32; 12];
+    let mut temp2 = [0.0f32; 12];
 
-        // Bone 1: Translation + rotation, relative to bone 0
-        // First apply bone 0's transform, then translate up, then rotate
-        let mut rot1 = [0.0f32; 16];
-        let mut trans1 = [0.0f32; 16];
-        let mut bone0_final = [0.0f32; 16];
-        let mut temp = [0.0f32; 16];
+    // Joint positions in bind pose (mesh spans y = -2.25 to +2.25)
+    // Joint 0 at base: y = -SEGMENT_LENGTH * 1.5 = -2.25
+    // Joint 1 in middle: y = -SEGMENT_LENGTH * 0.5 = -0.75
+    // Joint 2 near top: y = SEGMENT_LENGTH * 0.5 = 0.75
+    let joint0_y = -SEGMENT_LENGTH * 1.5;
+    let joint1_y = -SEGMENT_LENGTH * 0.5;
+    let joint2_y = SEGMENT_LENGTH * 0.5;
 
-        // Copy bone 0's final transform
-        for i in 0..16 {
-            bone0_final[i] = BONE_MATRICES[i];
-        }
+    // Bone 0: rotate around base joint (y = -2.25)
+    // bone0 = T(joint0) * R * T(-joint0)
+    mat3x4_translation(&mut trans_from, 0.0, -joint0_y, 0.0); // T(-P): move joint to origin
+    mat3x4_rotation_z(&mut rot, angle0);
+    mat3x4_translation(&mut trans_to, 0.0, joint0_y, 0.0); // T(P): move back
+    mat3x4_multiply(&mut temp1, &rot, &trans_from); // R * T(-P)
+    {
+        let bone0: &mut [f32; 12] = (&mut bones[0..12]).try_into().unwrap();
+        mat3x4_multiply(bone0, &trans_to, &temp1); // T(P) * R * T(-P)
+    }
 
-        mat4_translation(&mut trans1, 0.0, SEGMENT_LENGTH, 0.0);
-        mat4_rotation_z(&mut rot1, angle1);
-        mat4_multiply(&mut temp, &rot1, &trans1);
-        mat4_multiply(&mut *(BONE_MATRICES.as_mut_ptr().add(16) as *mut [f32; 16]), &bone0_final, &temp);
+    // Bone 1: inherit bone 0's transform, then rotate around joint 1
+    // bone1 = bone0 * T(joint1) * R * T(-joint1)
+    let bone0_copy: [f32; 12] = bones[0..12].try_into().unwrap();
+    mat3x4_translation(&mut trans_from, 0.0, -joint1_y, 0.0); // T(-P)
+    mat3x4_rotation_z(&mut rot, angle1);
+    mat3x4_translation(&mut trans_to, 0.0, joint1_y, 0.0); // T(P)
+    mat3x4_multiply(&mut temp1, &rot, &trans_from); // R * T(-P)
+    mat3x4_multiply(&mut temp2, &trans_to, &temp1); // T(P) * R * T(-P)
+    {
+        let bone1: &mut [f32; 12] = (&mut bones[12..24]).try_into().unwrap();
+        mat3x4_multiply(bone1, &bone0_copy, &temp2); // bone0 * local_transform
+    }
 
-        // Bone 2: Translation + rotation, relative to bone 1
-        let mut bone1_final = [0.0f32; 16];
-        let mut rot2 = [0.0f32; 16];
-        let mut trans2 = [0.0f32; 16];
-
-        for i in 0..16 {
-            bone1_final[i] = BONE_MATRICES[16 + i];
-        }
-
-        mat4_translation(&mut trans2, 0.0, SEGMENT_LENGTH, 0.0);
-        mat4_rotation_z(&mut rot2, angle2);
-        mat4_multiply(&mut temp, &rot2, &trans2);
-        mat4_multiply(&mut *(BONE_MATRICES.as_mut_ptr().add(32) as *mut [f32; 16]), &bone1_final, &temp);
+    // Bone 2: inherit bone 1's transform, then rotate around joint 2
+    // bone2 = bone1 * T(joint2) * R * T(-joint2)
+    let bone1_copy: [f32; 12] = bones[12..24].try_into().unwrap();
+    mat3x4_translation(&mut trans_from, 0.0, -joint2_y, 0.0); // T(-P)
+    mat3x4_rotation_z(&mut rot, angle2);
+    mat3x4_translation(&mut trans_to, 0.0, joint2_y, 0.0); // T(P)
+    mat3x4_multiply(&mut temp1, &rot, &trans_from); // R * T(-P)
+    mat3x4_multiply(&mut temp2, &trans_to, &temp1); // T(P) * R * T(-P)
+    {
+        let bone2: &mut [f32; 12] = (&mut bones[24..36]).try_into().unwrap();
+        mat3x4_multiply(bone2, &bone1_copy, &temp2); // bone1 * local_transform
     }
 }
+
+// ============================================================================
+// Game Lifecycle
+// ============================================================================
 
 #[no_mangle]
 pub extern "C" fn init() {
     unsafe {
-        // Dark background
         set_clear_color(0x1a1a2eFF);
-
-        // Note: Sky uses reasonable defaults (blue gradient with sun) from the renderer
-        // No need to set sky explicitly unless you want custom sky settings
-
-        // Set up camera
         camera_set(0.0, 1.0, 8.0, 0.0, 0.0, 0.0);
         camera_fov(60.0);
-
-        // Enable depth testing
         depth_test(1);
 
-        // Generate and load the arm mesh
         let (vertices, indices) = generate_arm_mesh();
         ARM_MESH = load_mesh_indexed(
             vertices.as_ptr(),
-            60, // 6 segments * 10 rings = 60 vertices
+            60,
             indices.as_ptr(),
-            324, // index count
+            324,
             FORMAT_POS_NORMAL_SKINNED,
         );
 
-        // Initialize bone matrices to identity
+        // Initialize bone matrices to identity (3x4 format)
+        let bones = &mut *core::ptr::addr_of_mut!(BONE_MATRICES);
         for i in 0..NUM_BONES {
-            let mut identity = [0.0f32; 16];
-            mat4_identity(&mut identity);
-            for j in 0..16 {
-                BONE_MATRICES[i * 16 + j] = identity[j];
-            }
+            let mut identity = [0.0f32; 12];
+            mat3x4_identity(&mut identity);
+            bones[i * 12..(i + 1) * 12].copy_from_slice(&identity);
         }
     }
 }
@@ -396,22 +394,18 @@ pub extern "C" fn init() {
 #[no_mangle]
 pub extern "C" fn update() {
     unsafe {
-        // View rotation with left stick
         let stick_x = left_stick_x(0);
         let stick_y = left_stick_y(0);
         VIEW_ROTATION_Y += stick_x * 2.0;
         VIEW_ROTATION_X += stick_y * 2.0;
 
-        // Clamp vertical rotation
         if VIEW_ROTATION_X > 89.0 { VIEW_ROTATION_X = 89.0; }
         if VIEW_ROTATION_X < -89.0 { VIEW_ROTATION_X = -89.0; }
 
-        // Toggle pause with A button
         if button_pressed(0, BUTTON_A) != 0 {
             PAUSED = !PAUSED;
         }
 
-        // Adjust animation speed with D-pad
         if button_held(0, BUTTON_UP) != 0 {
             ANIM_SPEED += 0.02;
             if ANIM_SPEED > 3.0 { ANIM_SPEED = 3.0; }
@@ -421,22 +415,18 @@ pub extern "C" fn update() {
             if ANIM_SPEED < 0.1 { ANIM_SPEED = 0.1; }
         }
 
-        // Update animation time
         if !PAUSED {
             ANIM_TIME += 0.05 * ANIM_SPEED;
-            // Keep time bounded to avoid precision issues
             const TWO_PI: f32 = 6.283185307;
             if ANIM_TIME > TWO_PI * 100.0 {
                 ANIM_TIME -= TWO_PI * 100.0;
             }
         }
 
-        // Update bone matrices based on animation
         update_bones(ANIM_TIME);
     }
 }
 
-/// Format a float value to string buffer, returns length written
 fn format_float(val: f32, buf: &mut [u8]) -> usize {
     let whole = val as i32;
     let frac = ((val - whole as f32).abs() * 100.0) as i32;
@@ -454,57 +444,47 @@ fn format_float(val: f32, buf: &mut [u8]) -> usize {
     }
     buf[i] = b'0' + (whole_abs % 10) as u8;
     i += 1;
-
     buf[i] = b'.';
     i += 1;
-
     buf[i] = b'0' + (frac / 10) as u8;
     i += 1;
     buf[i] = b'0' + (frac % 10) as u8;
     i += 1;
-
     i
 }
 
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
-        // Upload bone matrices to GPU before drawing
-        set_bones(BONE_MATRICES.as_ptr(), NUM_BONES as u32);
+        // Upload 3x4 bone matrices to GPU (12 floats × 3 bones)
+        let bones = &*core::ptr::addr_of!(BONE_MATRICES);
+        set_bones(bones.as_ptr(), NUM_BONES as u32);
 
-        // Apply view rotation (no rotation for now - add your own matrix math!)
-        transform_identity();
-        // TODO: Build rotation matrices for VIEW_ROTATION_X and VIEW_ROTATION_Y and call transform_set()
-
-        // Draw the arm mesh
-        set_color(0xE0C090FF); // Warm skin-like color
+        push_identity();
+        set_color(0xE0C090FF);
         draw_mesh(ARM_MESH);
 
-        // Draw UI
-        let y = 20.0;
-        let line_h = 50.0;
+        // Draw UI (scaled for 960x540 resolution)
+        let y = 10.0;
+        let line_h = 18.0;
 
-        let title = b"GPU Skinning Demo";
-        draw_text(title.as_ptr(), title.len() as u32, 20.0, y, 48.0, 0xFFFFFFFF);
+        let title = b"GPU Skinning (3x4 Matrices)";
+        draw_text(title.as_ptr(), title.len() as u32, 10.0, y, 16.0, 0xFFFFFFFF);
 
         let mut buf = [0u8; 32];
 
-        // Animation speed
         let prefix = b"Speed (D-pad): ";
         let len = format_float(ANIM_SPEED, &mut buf[prefix.len()..]);
         buf[..prefix.len()].copy_from_slice(prefix);
-        draw_text(buf.as_ptr(), (prefix.len() + len) as u32, 20.0, y + line_h, 40.0, 0xCCCCCCFF);
+        draw_text(buf.as_ptr(), (prefix.len() + len) as u32, 10.0, y + line_h, 12.0, 0xCCCCCCFF);
 
-        // Pause status
         let status = if PAUSED { b"Status: PAUSED (A)" as &[u8] } else { b"Status: Playing (A)" as &[u8] };
-        draw_text(status.as_ptr(), status.len() as u32, 20.0, y + line_h * 2.0, 40.0, 0xCCCCCCFF);
+        draw_text(status.as_ptr(), status.len() as u32, 10.0, y + line_h * 2.0, 12.0, 0xCCCCCCFF);
 
-        // Bone info
-        let bones_label = b"3 bones, smooth weight blending";
-        draw_text(bones_label.as_ptr(), bones_label.len() as u32, 20.0, y + line_h * 3.5, 36.0, 0x888888FF);
+        let bones_label = b"3 bones, 12 floats/bone (25% savings)";
+        draw_text(bones_label.as_ptr(), bones_label.len() as u32, 10.0, y + line_h * 3.5, 10.0, 0x888888FF);
 
-        // Controls hint
         let hint = b"L-Stick: Rotate view";
-        draw_text(hint.as_ptr(), hint.len() as u32, 20.0, y + line_h * 4.5, 32.0, 0x666666FF);
+        draw_text(hint.as_ptr(), hint.len() as u32, 10.0, y + line_h * 4.5, 10.0, 0x666666FF);
     }
 }

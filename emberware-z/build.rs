@@ -58,7 +58,7 @@ const VS_SKINNED: &str = r#"// GPU skinning: compute skinned position and normal
         let weight = in.bone_weights[i];
 
         if (weight > 0.0 && bone_idx < 256u) {
-            let bone_matrix = bones[bone_idx];
+            let bone_matrix = bone_to_mat4(bones[bone_idx]);
             skinned_pos += (bone_matrix * vec4<f32>(in.position, 1.0)).xyz * weight;
             //VS_SKINNED_NORMAL
         }

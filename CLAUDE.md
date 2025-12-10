@@ -100,7 +100,6 @@ The core handles GGRS serialization of whatever input type the console uses.
 ### Core
 - wasmtime (WASM execution)
 - GGRS (rollback netcode)
-- matchbox_socket (WebRTC P2P networking)
 - winit (windowing)
 
 ### Emberware Z

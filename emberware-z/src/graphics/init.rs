@@ -138,10 +138,11 @@ impl ZGraphics {
         // Create buffer manager (vertex/index buffers and mesh storage)
         let mut buffer_manager = super::BufferManager::new(&device);
 
-        // Create bone storage buffer for GPU skinning (256 bones × 64 bytes = 16KB)
+        // Create bone storage buffer for GPU skinning (256 bones × 48 bytes = 12KB)
+        // Uses 3x4 matrices instead of 4x4 for 25% memory savings
         let bone_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Bone Storage Buffer"),
-            size: 256 * 64, // 256 matrices × 64 bytes per matrix
+            size: 256 * 48, // 256 matrices × 48 bytes per 3x4 matrix
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });

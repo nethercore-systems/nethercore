@@ -659,10 +659,21 @@ position → uv (if present) → color (if present) → normal (if present) → 
 **Bone transform upload:**
 
 ```rust
-fn set_bones(matrices: *const f32, count: u32)  // 16 floats per bone (4×4 matrix, column-major)
+fn set_bones(matrices: *const f32, count: u32)  // 12 floats per bone (3×4 matrix, row-major)
 ```
 
 Call `set_bones()` before `draw_mesh()` or `draw_triangles()` to upload the current bone transforms. Maximum 256 bones per skeleton.
+
+**Matrix layout (row-major, 12 floats per bone):**
+
+```text
+[m00, m01, m02, tx]  // row 0: X axis + translation X
+[m10, m11, m12, ty]  // row 1: Y axis + translation Y
+[m20, m21, m22, tz]  // row 2: Z axis + translation Z
+// row 3 [0, 0, 0, 1] is implicit (affine transform)
+```
+
+This format saves 25% memory compared to 4×4 matrices (48 bytes vs 64 bytes per bone) while preserving full precision for affine transformations.
 
 **Workflow:**
 
@@ -674,7 +685,7 @@ Call `set_bones()` before `draw_mesh()` or `draw_triangles()` to upload the curr
 
 ```rust
 static mut CHARACTER_MESH: u32 = 0;
-static mut BONE_MATRICES: [f32; 256 * 16] = [0.0; 256 * 16];  // Up to 256 bones
+static mut BONE_MATRICES: [f32; 256 * 12] = [0.0; 256 * 12];  // Up to 256 bones (3x4 format)
 static mut BONE_COUNT: u32 = 0;
 
 fn init() {
@@ -687,13 +698,12 @@ fn init() {
         );
         BONE_COUNT = 24;  // This character has 24 bones
 
-        // Initialize bone matrices to identity
+        // Initialize bone matrices to identity (3x4 row-major)
         for i in 0..BONE_COUNT as usize {
-            // Column-major identity matrix
-            BONE_MATRICES[i * 16 + 0] = 1.0;  // col0.x
-            BONE_MATRICES[i * 16 + 5] = 1.0;  // col1.y
-            BONE_MATRICES[i * 16 + 10] = 1.0; // col2.z
-            BONE_MATRICES[i * 16 + 15] = 1.0; // col3.w
+            BONE_MATRICES[i * 12 + 0] = 1.0;  // row0.x (X axis)
+            BONE_MATRICES[i * 12 + 5] = 1.0;  // row1.y (Y axis)
+            BONE_MATRICES[i * 12 + 10] = 1.0; // row2.z (Z axis)
+            // Translation (row0.w, row1.w, row2.w) default to 0.0
         }
     }
 }
@@ -709,7 +719,7 @@ fn update() {
 fn render() {
     unsafe {
         texture_bind(CHARACTER_TEXTURE);
-        set_bones(BONE_MATRICES.as_ptr(), BONE_COUNT);  // Upload bone transforms
+        set_bones(BONE_MATRICES.as_ptr(), BONE_COUNT);  // Upload 3x4 bone transforms
         transform_translate(0.0, 0.0, -5.0);
         draw_mesh(CHARACTER_MESH);
     }
@@ -719,9 +729,10 @@ fn render() {
 **Notes:**
 - Bone matrices are world-space (or object-space if you prefer — just be consistent)
 - The vertex shader computes: `skinned_pos = Σ(bone_weight[i] * bone_matrix[bone_index[i]] * vertex_pos)`
-- Normals are also transformed using the inverse transpose of the bone matrix
+- Normals are also transformed using the bone rotation (upper 3×3 submatrix)
 - For best performance, limit to 4 bones per vertex with normalized weights
 - CPU-side animation (keyframes, blend trees, IK) is left to the developer
+- Industry standard: Unity, Unreal, and most engines use 3×4 matrices for skeletal animation
 
 ### Textures
 

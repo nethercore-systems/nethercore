@@ -43,8 +43,27 @@ struct PackedUnifiedShadingState {
 // Each entry is 4 × u32: [model_idx, view_idx, proj_idx, shading_idx]
 @group(0) @binding(4) var<storage, read> mvp_shading_indices: array<vec4<u32>>;
 
-// Bone transforms for GPU skinning (up to 256 bones)
-@group(0) @binding(5) var<storage, read> bones: array<mat4x4<f32>, 256>;
+// 3x4 bone matrix struct (row-major storage, 48 bytes per bone)
+// Implicit 4th row is [0, 0, 0, 1] (affine transform)
+struct BoneMatrix3x4 {
+    row0: vec4<f32>,  // [m00, m01, m02, tx]
+    row1: vec4<f32>,  // [m10, m11, m12, ty]
+    row2: vec4<f32>,  // [m20, m21, m22, tz]
+}
+
+// Bone transforms for GPU skinning (up to 256 bones, 3x4 format)
+@group(0) @binding(5) var<storage, read> bones: array<BoneMatrix3x4, 256>;
+
+// Helper to expand 3x4 bone matrix → 4x4 for skinning calculations
+// Input is row-major, output is column-major (WGSL mat4x4 convention)
+fn bone_to_mat4(bone: BoneMatrix3x4) -> mat4x4<f32> {
+    return mat4x4<f32>(
+        vec4<f32>(bone.row0.x, bone.row1.x, bone.row2.x, 0.0), // column 0
+        vec4<f32>(bone.row0.y, bone.row1.y, bone.row2.y, 0.0), // column 1
+        vec4<f32>(bone.row0.z, bone.row1.z, bone.row2.z, 0.0), // column 2
+        vec4<f32>(bone.row0.w, bone.row1.w, bone.row2.w, 1.0)  // column 3 (translation)
+    );
+}
 
 // Texture bindings (group 1)
 @group(1) @binding(0) var slot0: texture_2d<f32>;
