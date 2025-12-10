@@ -24,7 +24,7 @@ directories.workspace = true
 hashbrown.workspace = true
 
 [workspace]
-members = ["core", "emberware-z", "shared", "xtask", "tools/ember-export"]
+members = ["core", "emberware-z", "shared", "z-common", "xtask", "tools/ember-export"]
 exclude = ["examples/hello-world", "examples/triangle", "examples/textured-quad", "examples/cube", "examples/lighting", "examples/skinned-mesh", "examples/billboard", "examples/platformer", "examples/blinn-phong", "examples/procedural-shapes", "examples/audio-demo", "examples/textured-procedural"]
 resolver = "2"
 

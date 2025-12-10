@@ -8,7 +8,7 @@ mod audio;
 pub mod console;
 mod ffi;
 mod font;
-pub mod graphics;  // Public for ember-export to access packing
+pub mod graphics;
 mod input;
 mod library;
 mod procedural;

@@ -15,8 +15,8 @@ mod texture;
 mod audio;
 // mod font;  // Deferred
 
-// Re-export packing functions and vertex format constants from emberware-z
-pub use emberware_z::graphics::{
+// Re-export packing functions and vertex format constants from z-common
+pub use z_common::{
     pack_bone_weights_unorm8, pack_color_rgba_unorm8, pack_normal_octahedral, pack_normal_snorm16,
     pack_position_f16, pack_uv_f16, pack_uv_unorm16, pack_vertex_data, unpack_octahedral_u32,
     vertex_stride, vertex_stride_packed, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV,

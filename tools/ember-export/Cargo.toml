@@ -10,8 +10,8 @@ name = "ember-export"
 path = "src/main.rs"
 
 [dependencies]
-# Local crates (reuse packing logic from emberware-z)
-emberware-z = { path = "../../emberware-z" }
+# Local crates
+z-common = { path = "../../z-common" }
 emberware-shared = { path = "../../shared" }
 
 # CLI
