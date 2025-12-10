@@ -43,6 +43,10 @@ The examples will appear in the game library.
 - **skinned-mesh** - Skeletal animation
 - **billboard** - Billboard sprites
 - **platformer** - Simple platformer game
+- **blinn-phong** - Blinn-Phong lighting demo
+- **procedural-shapes** - Procedurally generated shapes
+- **audio-demo** - Audio playback demonstration
+- **textured-procedural** - Textured procedural geometry
 
 ## Building Individual Examples
 

@@ -19,7 +19,7 @@
       "Bash(cargo clippy:*)",
       "Bash(tree:*)",
       "Bash(git log:*)",
-      "Bash(ls -la \"c:\\Development\\emberware\\.github\"\" 2>/dev/null || echo \"No .github directory \")"
+      "Bash(ls:*)"
     ],
     "deny": [],
     "ask": []

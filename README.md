@@ -86,7 +86,7 @@ The examples will appear in the Emberware Z game library. Use the refresh button
 - **Case-insensitive**: `CUBE`, `Cube`, and `cube` all work
 - **Error messages**: Invalid games show suggestions and available games list
 
-**Available examples:** hello-world, triangle, textured-quad, cube, lighting, skinned-mesh, billboard, platformer
+**Available examples:** hello-world, triangle, textured-quad, cube, lighting, skinned-mesh, billboard, platformer, blinn-phong, procedural-shapes, audio-demo, textured-procedural
 
 For more details, see [examples/README.md](./examples/README.md).
 
@@ -101,9 +101,9 @@ Visit [emberware.io](https://emberware.io) to create an account and upload your 
 | Generation | 5th (PS1/N64) | 4th (Genesis/SNES) |
 | Target audience | Experienced devs | Beginners, students |
 | Resolution | 360p-1080p | 8 options (16:9 + 4:3, pixel-perfect) |
-| RAM | 16MB | 4MB |
-| VRAM | 8MB | 2MB |
-| ROM size | 32MB | 16MB |
+| RAM | 4MB | 4MB |
+| VRAM | 4MB | 2MB |
+| ROM size | 12MB | 16MB |
 | 3D support | Yes | No |
 | Analog input | Sticks + triggers | D-pad only |
 | Face buttons | 4 (A/B/X/Y) | 6 (A/B/C/X/Y/Z) |

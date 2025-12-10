@@ -157,8 +157,8 @@ The console uses GGRS for deterministic rollback netcode. This means:
 ### Rendering Architecture (Emberware Z)
 
 **Summary:**
-- **4 render modes**: Unlit, Matcap, PBR-lite, Hybrid (set once in `init()`)
-- **8 vertex formats**: Position + optional UV/Color/Normal (runtime permutations)
+- **4 render modes**: Unlit, Matcap, Metallic-Roughness (MR), Specular-Shininess (SS) — all use Blinn-Phong (set once in `init()`)
+- **16 vertex formats**: Position + optional UV/Color/Normal + optional Skinned (runtime permutations)
 - **40 shader permutations**: Generated from templates at compile-time
 - **One vertex buffer per stride**: Avoids padding waste
 - **Procedural sky**: Gradient + sun, provides ambient/reflection in all modes
