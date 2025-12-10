@@ -16,7 +16,7 @@
 pub mod state;
 
 use anyhow::{Context, Result};
-use wasmtime::{Engine, Instance, Linker, Module, Store, TypedFunc};
+use wasmtime::{Engine, ExternType, Instance, Linker, Module, Store, TypedFunc};
 
 use crate::console::ConsoleInput;
 
@@ -44,6 +44,51 @@ impl WasmEngine {
     pub fn load_module(&self, bytes: &[u8]) -> Result<Module> {
         Module::new(&self.engine, bytes).context("Failed to compile WASM module")
     }
+
+    /// Validate that a WASM module's memory requirements fit console constraints
+    ///
+    /// Call this before instantiating a module to ensure it doesn't declare
+    /// more memory than the console allows. This provides a clear error message
+    /// rather than failing during instantiation.
+    ///
+    /// # Arguments
+    /// * `module` - The compiled WASM module to validate
+    /// * `ram_limit` - Maximum allowed memory in bytes (from ConsoleSpecs::ram_limit)
+    ///
+    /// # Returns
+    /// * `Ok(())` if the module's memory requirements fit within the limit
+    /// * `Err(...)` if the module requires too much memory
+    pub fn validate_module_memory(module: &Module, ram_limit: usize) -> Result<()> {
+        for export in module.exports() {
+            if let ExternType::Memory(mem_type) = export.ty() {
+                let min_pages = mem_type.minimum();
+                let min_bytes = min_pages as usize * 65536; // WASM pages are 64KB
+
+                if min_bytes > ram_limit {
+                    anyhow::bail!(
+                        "Module '{}' requires {} bytes ({} pages) minimum memory, \
+                         but console only allows {} bytes. \
+                         Reduce your game's memory usage or embedded assets.",
+                        export.name(),
+                        min_bytes,
+                        min_pages,
+                        ram_limit
+                    );
+                }
+
+                // Warn if module declares no maximum (will be limited by host)
+                if mem_type.maximum().is_none() {
+                    log::debug!(
+                        "Module memory '{}' has no maximum declared; \
+                         host will limit to {} bytes",
+                        export.name(),
+                        ram_limit
+                    );
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 // NOTE: WasmEngine intentionally does not implement Default.
@@ -66,13 +111,37 @@ pub struct GameInstance<I: ConsoleInput, S: Send + Default + 'static> {
 }
 
 impl<I: ConsoleInput, S: Send + Default + 'static> GameInstance<I, S> {
-    /// Create a new game instance from a module
+    /// Create a new game instance from a module with default RAM limit (8MB)
     pub fn new(
         engine: &WasmEngine,
         module: &Module,
         linker: &Linker<GameStateWithConsole<I, S>>,
     ) -> Result<Self> {
-        let mut store = Store::new(engine.engine(), GameStateWithConsole::new());
+        // Default to 8MB (Emberware Z limit)
+        Self::with_ram_limit(engine, module, linker, 8 * 1024 * 1024)
+    }
+
+    /// Create a new game instance from a module with specified RAM limit
+    ///
+    /// The RAM limit enforces how much WASM linear memory the game can use.
+    /// This should match the console's `ConsoleSpecs::ram_limit`.
+    ///
+    /// # Arguments
+    /// * `engine` - The WASM engine
+    /// * `module` - The compiled WASM module
+    /// * `linker` - The linker with FFI functions registered
+    /// * `ram_limit` - Maximum linear memory in bytes (e.g., 8MB for Emberware Z)
+    pub fn with_ram_limit(
+        engine: &WasmEngine,
+        module: &Module,
+        linker: &Linker<GameStateWithConsole<I, S>>,
+        ram_limit: usize,
+    ) -> Result<Self> {
+        let mut store = Store::new(engine.engine(), GameStateWithConsole::with_ram_limit(ram_limit));
+
+        // Enable resource limiter to enforce memory constraints
+        store.limiter(|state| state);
+
         let instance = linker
             .instantiate(&mut store, module)
             .map_err(|e| {

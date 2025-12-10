@@ -97,6 +97,39 @@ Emberware uses GGRS for deterministic rollback netcode. Key rules:
 
 **No manual serialization needed!** All game state in WASM linear memory is automatically saved and restored by the host. Your `update()` function just needs to be deterministic — resources (textures, meshes, sounds) stay in GPU/host memory and are never rolled back, only the game state handles in WASM memory.
 
+### Memory Limits
+
+WASM linear memory is **strictly enforced** by the host:
+
+| Console | Memory Limit | VRAM |
+|---------|--------------|------|
+| **Emberware Z** | 8 MB | 4 MB |
+| **Emberware Classic** | 2 MB | 1 MB |
+
+This unified memory includes:
+- Your compiled game code
+- All `include_bytes!()` embedded assets
+- Stack space (function calls, local variables)
+- Heap allocations (game state, dynamic data)
+
+**Enforcement:**
+- Games that declare more memory than allowed will **fail to load**
+- Games that try to grow memory past the limit will **fail at runtime**
+- The host uses wasmtime's `ResourceLimiter` — this cannot be bypassed
+
+**Rollback Performance:**
+The entire linear memory is snapshotted for rollback netcode. With xxHash3 checksums, this takes approximately:
+- 8MB: ~0.5ms per save (Emberware Z)
+- 2MB: ~0.1ms per save (Emberware Classic)
+
+During an 8-frame rollback at 60fps, the total overhead is ~4ms — well within the 16.67ms frame budget.
+
+**Tips:**
+- Use `include_bytes!()` to embed assets at compile time
+- Upload textures to VRAM in `init()` — they don't count against linear memory after upload
+- Keep game state small for faster rollback
+- Use tracker music (MOD/XM format) instead of raw audio to save space
+
 ---
 
 ## System Functions

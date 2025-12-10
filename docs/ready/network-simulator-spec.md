@@ -460,44 +460,36 @@ Test when one player has worse connection:
 - Is advantage fair?
 - Does the good-connection player suffer?
 
-## Pending Questions
+## Design Decisions
 
-### Q1: Where does simulation run?
-- A) On both instances (each simulates its own)
-- B) On network layer (affects both directions together)
-- C) Configurable per-instance
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Where simulation runs | **Per-instance** | Each instance controls its own simulation. Independent configuration. |
+| Persist settings | **Remember last** | Settings persist across restarts. Convenient for iterative testing. |
+| Affect local play | **Netplay only** | Only activates when connected to another instance (including localhost). |
+| Bandwidth accuracy | **Simple byte throttle** | Good enough for testing. Full congestion simulation is overkill. |
+| Replay integration | **Metadata only** | Record conditions for reference, but replays are still deterministic inputs. |
 
-**Recommendation**: Option A - each instance controls its own simulation.
+### Local Play vs Localhost Netplay
 
-### Q2: Persist simulation settings?
-- A) Reset on restart
-- B) Remember last settings
-- C) Per-game settings
+**Important clarification on Q3:**
 
-**Recommendation**: Option B.
+- **Local play** = Single-player, no network connection at all
+- **Localhost netplay** = Two instances on same machine connected via localhost
 
-### Q3: Affect local testing?
-Should simulation work in local play (no network)?
-- A) No - only for netplay
-- B) Yes - simulate even for local splitscreen
+The simulator is designed for **localhost netplay testing** - running 2+ instances on the same machine, connected via network, with artificial lag injected between them.
 
-**Recommendation**: Option A - local play should be responsive.
+```
+┌──────────────────┐    simulated network    ┌──────────────────┐
+│   Instance 1     │ ◄─────────────────────► │   Instance 2     │
+│   (Player 1)     │    latency + jitter     │   (Player 2)     │
+│   localhost:5000 │    packet loss          │   localhost:5001 │
+└──────────────────┘                         └──────────────────┘
 
-### Q4: Bandwidth simulation accuracy?
-How accurate should bandwidth limiting be?
-- A) Simple byte count throttle
-- B) Full TCP/UDP congestion simulation
-- C) Just show warning, don't actually limit
+This IS the primary use case for the Network Simulator.
+```
 
-**Recommendation**: Option A - good enough for testing.
-
-### Q5: Integration with replays?
-Should network conditions be recorded in replays?
-- A) No - replays are deterministic inputs
-- B) Yes - record actual latencies experienced
-- C) Metadata only (for reference)
-
-**Recommendation**: Option C.
+**True single-player** (no network at all) has no packets to simulate, so the simulator does nothing. This is correct behavior.
 
 ## Pros
 

@@ -70,20 +70,12 @@ impl GameStateSnapshot {
         self.data.len()
     }
 
-    /// Compute FNV-1a checksum for desync detection
+    /// Compute xxHash3 checksum for desync detection
     ///
-    /// FNV-1a is fast and has good distribution for checksumming.
-    /// We use this to detect desyncs between clients.
+    /// xxHash3 is SIMD-optimized (~50 GB/s throughput) for fast checksumming
+    /// of large state buffers. We use this to detect desyncs between clients.
     fn compute_checksum(data: &[u8]) -> u64 {
-        const FNV_OFFSET_BASIS: u64 = 0xcbf29ce484222325;
-        const FNV_PRIME: u64 = 0x100000001b3;
-
-        let mut hash = FNV_OFFSET_BASIS;
-        for byte in data {
-            hash ^= *byte as u64;
-            hash = hash.wrapping_mul(FNV_PRIME);
-        }
-        hash
+        xxhash_rust::xxh3::xxh3_64(data)
     }
 }
 

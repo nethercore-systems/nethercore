@@ -28,6 +28,8 @@ let data_mut = memory.data_mut(&mut store);  // &mut [u8]
 
 ### Memory Regions
 
+The Memory Viewer automatically detects standard WASM memory regions and allows games to register additional custom regions:
+
 ```rust
 /// A named memory region for easier navigation
 pub struct MemoryRegion {
@@ -43,15 +45,23 @@ pub struct MemoryRegion {
     /// Description
     pub description: String,
 
-    /// Access pattern (read-only, read-write, etc.)
-    pub access: MemoryAccess,
+    /// Source: auto-detected or game-registered
+    pub source: RegionSource,
 }
 
-pub enum MemoryAccess {
-    ReadOnly,
-    ReadWrite,
-    Executable,  // For WASM function table area
+pub enum RegionSource {
+    /// Auto-detected from WASM memory layout
+    AutoDetected,
+    /// Registered by game via FFI
+    GameRegistered,
 }
+
+/// Auto-detected regions (estimated from WASM conventions)
+/// - Static: 0 to __data_end (if exported)
+/// - Heap: __heap_base to current memory.size()
+/// - Stack: Between static and heap (grows down)
+///
+/// These are best-effort estimates. Games can register more precise regions.
 
 /// Bookmarked address for quick navigation
 pub struct Bookmark {
@@ -390,54 +400,56 @@ Track memory changes efficiently:
 
 **Recommendation**: Track only viewed region + bookmarks.
 
-## Pending Questions
+## Design Decisions
 
-### Q1: Memory write permissions?
-Should the viewer allow editing memory?
-- A) Read-only for safety
-- B) Edit with warning
-- C) Edit freely
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Memory write permissions | **Full read/write with warning** | Power tool for debugging. Show warning on first edit. |
+| Search performance | **Background search with progress** | Large memory can take seconds to scan. Don't block UI. |
+| Auto-detect structures | **Raw bytes** (MVP) | Start simple. Add basic pattern detection (strings, pointers) later. |
+| Memory access scope | **Full WASM linear memory** | Access entire RAM - not just registered regions. This is the power-user tool. |
+| Source debugging | **Future enhancement** | DWARF integration is complex. Not in MVP. |
+| Bookmark persistence | **Exportable files** | Most flexible - share bookmarks, import from others |
 
-**Recommendation**: Option B - powerful for debugging but warn about risks.
+### Full Memory Access
 
-### Q2: Search performance?
-For large memory (100MB+), full scans are slow.
-- A) Limit search range
-- B) Background search with progress
-- C) Index common patterns
+Unlike the Debug Inspection panel (which shows registered variables), the Memory Viewer provides **raw access to all WASM linear memory**:
 
-**Recommendation**: Option B.
+- **Static data** - `include_bytes!` content, const arrays, string literals
+- **Stack** - Local variables, function call frames
+- **Heap** - Dynamically allocated memory (`Vec`, `Box`, etc.)
 
-### Q3: Automatic structure detection?
-Should we try to auto-detect data structures?
-- A) No - just raw bytes
-- B) Basic patterns (strings, pointers)
-- C) Full structure inference
+**What you CAN do:**
+- View any address in WASM memory (0 to memory.size())
+- Modify any byte (with corruption warning)
+- Poke sprite data, level layouts, hardcoded values
+- Search for values anywhere in memory
 
-**Recommendation**: Start with A, add B later.
+**What you CANNOT do:**
+- Modify WASM bytecode (instructions are in separate module structure)
+- Change function signatures or imports
+- Bypass WASM's security model
 
-### Q4: Memory-mapped regions?
-WASM has linear memory, but games may have logical regions:
-- A) Just show linear addresses
-- B) Allow region annotations
-- C) Parse WASM debug info for symbols
+**WASM Memory Architecture Note:**
+WASM linear memory is DATA only (heap, stack, static). The actual executable code lives in a separate, immutable module structure. This is a fundamental WASM security property - you can corrupt game state, but you cannot inject code.
 
-**Recommendation**: Option B - game registers regions.
+### Corruption Warning
 
-### Q5: Integration with source debugging?
-Could we show source code references for addresses?
-- Requires DWARF debug info
-- Complex but very powerful
+On first memory edit in a session, show warning:
 
-**Recommendation**: Future enhancement, not MVP.
+```
+⚠️ Direct Memory Edit
 
-### Q6: Persistence of bookmarks?
-Should bookmarks persist across sessions?
-- A) Session only
-- B) Per-game persistence
-- C) Exportable bookmark files
+You are about to modify WASM memory directly. This can:
+• Corrupt game state
+• Cause crashes or undefined behavior
+• Modify static data (sprites, levels, constants)
 
-**Recommendation**: Option C - most flexible.
+Changes persist until game restart.
+Use Debug Inspection panel for safe value editing.
+
+[ Cancel ]  [ Edit Anyway ]  ☐ Don't show again
+```
 
 ## Pros
 

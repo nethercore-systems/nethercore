@@ -2,7 +2,7 @@
 //!
 //! Minimal core game state - console-agnostic.
 
-use wasmtime::Memory;
+use wasmtime::{Memory, ResourceLimiter};
 
 use crate::console::ConsoleInput;
 
@@ -68,6 +68,8 @@ pub struct GameStateWithConsole<I: ConsoleInput, S> {
     pub game: GameState<I>,
     /// Console-specific state (rendering, transforms, etc.)
     pub console: S,
+    /// RAM limit in bytes (for ResourceLimiter enforcement)
+    pub ram_limit: usize,
 }
 
 impl<I: ConsoleInput, S: Default> Default for GameStateWithConsole<I, S> {
@@ -75,13 +77,51 @@ impl<I: ConsoleInput, S: Default> Default for GameStateWithConsole<I, S> {
         Self {
             game: GameState::new(),
             console: S::default(),
+            ram_limit: 8 * 1024 * 1024, // Default to 8MB (Emberware Z)
         }
     }
 }
 
 impl<I: ConsoleInput, S: Default> GameStateWithConsole<I, S> {
+    /// Create new state with default RAM limit (8MB)
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Create new state with specified RAM limit
+    pub fn with_ram_limit(ram_limit: usize) -> Self {
+        Self {
+            game: GameState::new(),
+            console: S::default(),
+            ram_limit,
+        }
+    }
+}
+
+/// Implement ResourceLimiter to enforce console memory constraints
+///
+/// This prevents malicious or buggy games from allocating more memory
+/// than the console allows. The host enforces this limit at the wasmtime
+/// level, so games cannot bypass it.
+impl<I: ConsoleInput, S> ResourceLimiter for GameStateWithConsole<I, S> {
+    fn memory_growing(
+        &mut self,
+        _current: usize,
+        desired: usize,
+        _maximum: Option<usize>,
+    ) -> Result<bool, anyhow::Error> {
+        // Allow growth only if it stays within the RAM limit
+        Ok(desired <= self.ram_limit)
+    }
+
+    fn table_growing(
+        &mut self,
+        _current: usize,
+        desired: usize,
+        _maximum: Option<usize>,
+    ) -> Result<bool, anyhow::Error> {
+        // Allow reasonable table sizes (for indirect function calls)
+        Ok(desired <= 10000)
     }
 }
 

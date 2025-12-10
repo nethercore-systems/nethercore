@@ -10,12 +10,38 @@ Emberware Z is a 5th-generation fantasy console targeting PS1/N64/Saturn aesthet
 | **Resolution** | 360p, 540p (default), 720p, 1080p |
 | **Color depth** | RGBA8 |
 | **Tick rate** | 24, 30, 60 (default), 120 fps |
-| **RAM** | 4MB |
-| **VRAM** | 4MB |
+| **Memory** | 8MB unified (code + assets + game state) |
+| **VRAM** | 4MB (GPU textures and mesh buffers) |
 | **CPU budget** | 4ms per tick (at 60fps) |
-| **ROM size** | 12MB max (uncompressed) |
 | **Netcode** | Deterministic rollback via GGRS |
 | **Max players** | 4 (any mix of local + remote) |
+
+### Memory Model
+
+Emberware Z uses a **unified 8MB memory model**. Everything lives in WASM linear memory:
+- Compiled game code
+- Static data and embedded assets (`include_bytes!`)
+- Stack (function calls, local variables)
+- Heap (dynamic allocations, game state)
+
+This entire memory is automatically snapshotted for rollback netcode using xxHash3 checksums (~0.5ms per save). Games cannot exceed the 8MB limit — the host enforces this via wasmtime's ResourceLimiter.
+
+**Memory Budget Guidelines:**
+
+| Component | Typical Size | Notes |
+|-----------|--------------|-------|
+| Code | 50-200 KB | Even complex games |
+| Textures (before VRAM upload) | 1-4 MB | Uploaded to GPU in `init()` |
+| Audio | 500 KB - 2 MB | Use tracker music for BGM |
+| Animations | ~100 KB/character | With keyframe compression |
+| Game state | 10-100 KB | Entities, physics, etc. |
+
+**Example: Full fighting game budget (~4.4MB)**
+- 8 characters with meshes, textures, animations: ~1.5MB
+- 3 stages: ~1MB
+- Sound effects: ~650KB
+- Music (tracker): ~120KB
+- Effects, UI, code: ~1.1MB
 
 ### Configuration (init-only)
 

@@ -43,30 +43,57 @@ pub const EMBERWARE_Z_TICK_RATES: &[u32] = &[24, 30, 60, 120];
 /// Emberware Z VRAM limit (4 MB)
 pub const EMBERWARE_Z_VRAM_LIMIT: usize = 4 * 1024 * 1024;
 
+/// Emberware Z unified memory limit (8 MB)
+pub const EMBERWARE_Z_MEMORY_LIMIT: usize = 8 * 1024 * 1024;
+
 /// Get Emberware Z console specifications.
 ///
 /// PS1/N64-era aesthetic with modern 3D rendering capabilities.
 /// Supports PBR lighting, GPU skinning, and 4-player local/online multiplayer.
+///
+/// # Memory Model
+///
+/// Emberware Z uses a **unified 8MB memory model**. Everything lives in WASM
+/// linear memory: code, assets (via `include_bytes!`), stack, and heap.
+/// This entire memory is snapshotted for rollback netcode.
+///
+/// - **Memory:** 8 MB unified (code + assets + game state)
+/// - **VRAM:** 4 MB (GPU textures and mesh buffers)
 pub const fn emberware_z_specs() -> &'static ConsoleSpecs {
     &ConsoleSpecs {
         name: "Emberware Z",
         resolutions: EMBERWARE_Z_RESOLUTIONS,
         default_resolution: 1, // 540p
         tick_rates: EMBERWARE_Z_TICK_RATES,
-        default_tick_rate: 2,       // 60 fps
-        ram_limit: 4 * 1024 * 1024, // 4MB
-        vram_limit: EMBERWARE_Z_VRAM_LIMIT,
-        rom_limit: 12 * 1024 * 1024, // 12MB (uncompressed)
-        cpu_budget_us: 4000,         // 4ms per tick at 60fps
+        default_tick_rate: 2,                  // 60 fps
+        ram_limit: EMBERWARE_Z_MEMORY_LIMIT,   // 8MB unified
+        vram_limit: EMBERWARE_Z_VRAM_LIMIT,    // 4MB GPU
+        rom_limit: EMBERWARE_Z_MEMORY_LIMIT,   // Same as ram_limit (unified)
+        cpu_budget_us: 4000,                   // 4ms per tick at 60fps
     }
 }
 
 // === Emberware Classic Specifications ===
 
+/// Emberware Classic unified memory limit (2 MB)
+pub const EMBERWARE_CLASSIC_MEMORY_LIMIT: usize = 2 * 1024 * 1024;
+
+/// Emberware Classic VRAM limit (1 MB)
+pub const EMBERWARE_CLASSIC_VRAM_LIMIT: usize = 1 * 1024 * 1024;
+
 /// Get Emberware Classic console specifications.
 ///
 /// SNES/Genesis-era aesthetic with 2D-only rendering, tilemaps,
 /// sprite layers, and palette swapping.
+///
+/// # Memory Model
+///
+/// Emberware Classic uses a **unified 2MB memory model**. Everything lives in
+/// WASM linear memory: code, assets (via `include_bytes!`), stack, and heap.
+/// This entire memory is snapshotted for rollback netcode.
+///
+/// - **Memory:** 2 MB unified (code + assets + game state)
+/// - **VRAM:** 1 MB (GPU textures and sprite buffers)
 pub const fn emberware_classic_specs() -> &'static ConsoleSpecs {
     &ConsoleSpecs {
         name: "Emberware Classic",
@@ -80,12 +107,12 @@ pub const fn emberware_classic_specs() -> &'static ConsoleSpecs {
             (360, 270), // 6: 4:3, 4× scale to 1080p
             (480, 360), // 7: 4:3, 3× scale to 1080p
         ],
-        default_resolution: 5, // 288×216 (4:3)
+        default_resolution: 5,                    // 288×216 (4:3)
         tick_rates: &[30, 60],
-        default_tick_rate: 1,       // 60 fps
-        ram_limit: 1024 * 1024,     // 1MB
-        vram_limit: 1024 * 1024,    // 1MB
-        rom_limit: 4 * 1024 * 1024, // 4MB (uncompressed)
-        cpu_budget_us: 4000,        // 4ms per tick at 60fps
+        default_tick_rate: 1,                     // 60 fps
+        ram_limit: EMBERWARE_CLASSIC_MEMORY_LIMIT,   // 2MB unified
+        vram_limit: EMBERWARE_CLASSIC_VRAM_LIMIT,    // 1MB GPU
+        rom_limit: EMBERWARE_CLASSIC_MEMORY_LIMIT,   // Same as ram_limit (unified)
+        cpu_budget_us: 4000,                         // 4ms per tick at 60fps
     }
 }

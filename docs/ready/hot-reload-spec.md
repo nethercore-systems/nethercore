@@ -186,44 +186,42 @@ Debounce handles this - only the final stable file is loaded.
 ### Corrupt WASM
 Validation catches this before any state modification.
 
-## Pending Questions
+## Design Decisions
 
-### Q1: Should `init()` be called on reload?
-**Options:**
-- A) Always call `init()` after reload, then `load_state` (current proposal)
-- B) Skip `init()` if state loads successfully
-- C) Add `__hot_reload_init()` separate from `init()`
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Call `init()` on reload | **Yes, always** | `init()` registers resources (textures, meshes). Must re-register with new module. |
+| Resource handle strategy | **Clear all, re-init** | Call `resource_manager.clear()` before `init()`. Clean slate approach is simpler and more reliable. |
+| Watch file or directory | **Watch specific `rom.wasm`** | Simple and predictable. Build tool integration out of scope. |
+| Compilation threading | **Background thread** | Compilation can take 100ms+, would cause frame stutter on main thread. |
+| State compatibility | **Lenient with warnings** | Try to load state, fail gracefully if incompatible. Show clear warning to user. |
 
-**Consideration**: `init()` typically registers resources (textures, etc). These need re-registration with new module. Recommend Option A.
+### Resource Handle Implementation
 
-### Q2: How to handle resource handles?
-When the new module calls `init()`, it will re-register textures, meshes, etc. The resource manager needs to handle this gracefully:
-- Clear old registrations
-- Allow re-registration with same handles
-- Or: persist resource manager state across reload
+The hot reload sequence handles resources as follows:
 
-### Q3: Watch file or directory?
-**Options:**
-- A) Watch specific `rom.wasm` file
-- B) Watch entire game directory for any `.wasm` file
-- C) Watch source directory and trigger builds
+```rust
+// In hot_reload() method:
+// 1. Save current state
+let state_data = self.save_state()?;
 
-**Recommendation**: Option A for simplicity. Build tool integration (Option C) is out of scope.
+// 2. Clear ALL resources before instantiating new module
+self.resource_manager.clear();
 
-### Q4: Compilation threading?
-Should WASM compilation happen:
-- A) On main thread (simple, but causes frame stutter)
-- B) On background thread (smooth, but more complex)
+// 3. Create new instance
+let mut new_instance = GameInstance::new(engine, new_module, linker)?;
 
-**Recommendation**: Option B - compilation can take 100ms+, which would cause noticeable stutter.
+// 4. Call init() - game re-registers all resources fresh
+new_instance.call_init()?;
 
-### Q5: State format versioning?
-How strict should state compatibility checking be?
-- A) Strict: any change = incompatible
-- B) Lenient: try to load, fail gracefully
-- C) Smart: semantic versioning with migration support
+// 5. Restore state (resources now have fresh handles)
+new_instance.load_state(&state_data)?;
+```
 
-**Recommendation**: Option B with clear warnings.
+This "clear all, re-init" approach ensures:
+- No stale resource handles from old module
+- No handle collision between old and new registrations
+- Clean separation between module lifetimes
 
 ## Pros
 
@@ -540,15 +538,25 @@ impl App {
 
 **File: `emberware-z/src/resource_manager.rs`**
 
-Add clear method for hot reload:
+Add clear method for hot reload. This clears ALL game-registered resources so `init()` can re-register them fresh:
 
 ```rust
 impl ZResourceManager {
     /// Clear all resources for hot reload
+    ///
+    /// Called before instantiating new WASM module. The new module's init()
+    /// will re-register all resources. Built-in resources (font, default textures)
+    /// are re-created automatically during game start.
     pub fn clear(&mut self) {
+        // Clear all game-registered resources
         self.texture_map.clear();
         self.mesh_map.clear();
-        // Keep built-in resources (font, white texture) - they're re-added in start_game
+        self.palette_map.clear();
+
+        // GPU resources will be dropped when maps clear
+        // Built-in resources (font, white texture) are re-added in start_game()
+
+        tracing::debug!("Resource manager cleared for hot reload");
     }
 }
 ```

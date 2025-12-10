@@ -562,52 +562,39 @@ For scenes with many entities:
 - Reduce sphere/circle segment count at distance
 - Aggregate overlays for clustered entities
 
-## Pending Questions
+## Design Decisions
 
-### Q1: Should overlays be recorded in replays?
-**Options:**
-- A) No - overlays are transient debug output
-- B) Yes - useful for reviewing debug visualization
-- C) Separate "overlay replay" track
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Record overlays in replays | **No** | Overlays are transient debug output - regenerate from game state during playback |
+| Custom category naming | **Yes** | Games can register custom categories with names and default colors for better discoverability |
+| Per-entity filtering | **Categories only** (MVP) | Start simple. Add spatial filtering (near cursor) in future if needed. |
+| Overlay persistence | **Cleared each frame** | Immediate-mode pattern - game redraws overlays each frame. Simpler, no stale data. |
+| 2D vs 3D coordinate spaces | **Keep separate** | Clearer intent. `debug_draw_box()` vs `debug_draw_rect_2d()` are distinct use cases. |
 
-**Recommendation:** Option A - overlays regenerate from game state.
+### Custom Category Registration
 
-### Q2: Custom category naming?
-Should games be able to name custom categories for the UI?
+Games can register custom categories beyond the built-in ones:
 
 ```rust
+// Register a custom category
 extern "C" fn debug_overlay_register_category(
-    id: u32,
-    name_ptr: u32, name_len: u32,
-    default_color: u32,
+    id: u32,              // Category ID (use values >= 100 for custom)
+    name_ptr: u32,        // Null-terminated name string
+    name_len: u32,
+    default_color: u32,   // RGBA packed (0xRRGGBBAA)
+);
+
+// Example usage in game init():
+debug_overlay_register_category(
+    100,                  // Custom category ID
+    "spawners\0".as_ptr(),
+    8,
+    0x00FF00FF,          // Green
 );
 ```
 
-**Recommendation:** Yes - improves discoverability.
-
-### Q3: Per-entity overlay toggles?
-Should there be a way to show/hide overlays for specific entities?
-- A) Categories only (current proposal)
-- B) Entity ID filtering
-- C) Spatial filtering (only show overlays near cursor)
-
-**Recommendation:** Start with A, add C later if needed.
-
-### Q4: Overlay persistence?
-Should overlays persist across frames, or be cleared each frame?
-- A) Cleared each frame (current proposal) - game must redraw
-- B) Persistent until explicitly cleared
-- C) Time-based fade-out
-
-**Recommendation:** Option A - simpler, matches immediate-mode pattern.
-
-### Q5: 2D vs 3D coordinate spaces?
-Current proposal has both 2D and 3D functions. Should we unify?
-- A) Keep separate (current)
-- B) All 3D, use z=0 for 2D
-- C) All 2D with optional z
-
-**Recommendation:** Option A - clearer intent.
+Custom categories appear in the debug panel UI alongside built-in categories.
 
 ## Pros
 

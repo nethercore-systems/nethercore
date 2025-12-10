@@ -370,47 +370,15 @@ Allowed - captures paused state exactly.
 ### Rapid Save/Load
 Debounce saves (100ms minimum between saves).
 
-## Pending Questions
+## Design Decisions
 
-### Q1: Cross-session quick slots?
-Should quick slots persist across emulator restarts?
-- A) No - session only (current)
-- B) Yes - persist to disk
-- C) Configurable
-
-**Recommendation**: Option C.
-
-### Q2: Undo load?
-Should loading a snapshot save current state to "undo" slot?
-- A) No
-- B) Yes - automatic undo slot
-- C) Prompt "Save current state first?"
-
-**Recommendation**: Option B - non-intrusive safety net.
-
-### Q3: Snapshot sharing?
-Should snapshots be shareable (like replays)?
-- A) No - local only
-- B) Yes - exportable files
-- C) Yes with ROM hash verification
-
-**Recommendation**: Option C.
-
-### Q4: Thumbnail timing?
-When to capture thumbnail?
-- A) Last rendered frame before save
-- B) Capture new frame at save time
-- C) No thumbnails (simpler)
-
-**Recommendation**: Option A - no extra rendering.
-
-### Q5: State compression?
-Should snapshot state be compressed?
-- A) No - fast save/load
-- B) Yes - smaller files (LZ4)
-- C) Configurable
-
-**Recommendation**: Option B - LZ4 is fast enough.
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Cross-session quick slots | **Configurable** (default: session-only) | Flexibility for different workflows |
+| Undo slot on load | **Yes, automatic** | Non-intrusive safety net - always save current state before loading |
+| Snapshot sharing | **Yes with ROM hash verification** | Allow sharing, but verify compatibility |
+| Thumbnail timing | **Last rendered frame** | No extra rendering overhead |
+| State compression | **LZ4** | Fast enough for real-time, significant size reduction |
 
 ## Pros
 

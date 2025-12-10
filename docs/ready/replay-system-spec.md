@@ -365,58 +365,62 @@ pub enum AnnotationCategory {
 
 Timeline UI shows annotation markers that can be clicked to seek.
 
-## Pending Questions
+## Design Decisions
 
-### Q1: Multi-player replay format?
-For netplay recordings:
-- A) Record all player inputs in single file (current proposal)
-- B) Record each player's perspective separately
-- C) Record from one player's perspective with predicted inputs
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Multi-player format | **Single file with all inputs** | One authoritative replay, simpler to share and analyze |
+| Replay sharing | **Allow cross-machine** | Replays are deterministic inputs - work like netcode. Warn on emulator version mismatch. |
+| "Take over" from replay | **Yes, both modes** | Watch passively OR press key to take control - powerful for bug reproduction |
+| Recording during netplay | **Host records** | Host records authoritative replay. Other players can request copy. |
+| Automatic recording | **Instant replay buffer (3 minutes)** | Rolling buffer always available. Configurable duration. |
+| External replay loading | **Warning dialog, allow playback** | Warn about untrusted source, but allow - inputs can't escape WASM sandbox |
 
-**Recommendation:** Option A - single authoritative replay with all inputs.
+### Instant Replay Buffer
 
-### Q2: Replay sharing format?
-Should replays be shareable across different machines?
-- ROM hash ensures same game version
-- But what about different emulator versions?
+The emulator maintains a rolling buffer of the last 3 minutes (configurable) of gameplay:
 
-**Options:**
-- A) Strict: Require exact emulator version match
-- B) Lenient: Try to play, warn on mismatch
-- C) Versioned: Include emulator version, migration support
+```rust
+pub struct InstantReplayBuffer {
+    /// Maximum duration to keep (default: 3 minutes)
+    pub max_duration_secs: u32,
 
-**Recommendation:** Option B with clear warnings.
+    /// Rolling input buffer
+    pub inputs: VecDeque<FrameInputs>,
 
-### Q3: "Take over" from replay?
-Should users be able to:
-- A) Only watch replays passively
-- B) Press a key to "take over" and play from current point
-- C) Both modes available
+    /// Periodic checkpoints for seeking (every 5 seconds)
+    pub checkpoints: VecDeque<Checkpoint>,
 
-**Recommendation:** Option C - "take over" is powerful for bug reproduction.
+    /// Current buffer start frame
+    pub start_frame: u64,
+}
+```
 
-### Q4: Recording in netplay?
-Should recording be available during P2P netplay?
-- A) No - too complex with rollback
-- B) One designated player records
-- C) All players record their own perspective
+**Memory usage estimate** (3 minutes at 60fps):
+- Inputs: ~10,800 frames × 16 bytes = ~170KB
+- Checkpoints: ~36 checkpoints × 500KB avg = ~18MB
+- Total: ~20MB (acceptable for development tool)
 
-**Recommendation:** Option B - host records authoritative replay.
+**Configuration:**
 
-### Q5: Automatic recording?
-Should the emulator automatically record all sessions?
-- A) No - explicit recording only
-- B) Yes - configurable, auto-delete old replays
-- C) "Instant replay" buffer - last N minutes always available
+```toml
+# ~/.emberware/config.toml
+[replay]
+instant_buffer_duration_secs = 180  # 3 minutes
+instant_buffer_checkpoint_interval = 300  # frames (5 seconds)
+share_replays_cross_machine = true  # Allow loading replays from other machines
+warn_on_version_mismatch = true  # Show warning for different emulator versions
+```
 
-**Recommendation:** Option C - instant replay buffer is most useful.
+### Cross-Machine Replay Sharing
 
-### Q6: External replay loading?
-Should replays from untrusted sources be playable?
-- Security concern: Crafted inputs might trigger bugs
-- Options: Sandboxed playback, warning dialog, signature verification
+Replays are deterministic input sequences - they work cross-machine by design (same principle as netcode). Compatibility is verified by:
 
-**Recommendation:** Warning dialog + sandboxed playback.
+1. **ROM hash** - Must match exactly (same game binary)
+2. **Emulator version** - Warning if different, but allow playback
+3. **Console type** - Must match (e.g., emberware-z)
+
+If ROM hash matches, replay WILL produce identical results on any machine.
 
 ## Pros
 

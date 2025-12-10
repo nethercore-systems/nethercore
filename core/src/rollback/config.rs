@@ -22,20 +22,22 @@ pub const DEFAULT_INPUT_DELAY: usize = 0;
 /// Default input delay for online play (balance between responsiveness and rollbacks)
 pub const DEFAULT_ONLINE_INPUT_DELAY: usize = 2;
 
-/// Default maximum state buffer size (16MB - full WASM linear memory snapshot)
+/// Default maximum state buffer size (8MB - matches Emberware Z unified memory)
 ///
-/// **IMPORTANT**: This is a default fallback value. Consoles should use their
-/// specific RAM limit from `ConsoleSpecs::ram_limit` when creating rollback sessions.
-/// For example:
-/// - Emberware Z: 4MB (ConsoleSpecs::ram_limit)
-/// - Emberware Classic: 1MB (ConsoleSpecs::ram_limit)
+/// This is the default fallback value matching Emberware Z's unified memory model.
+/// Consoles should use their specific RAM limit from `ConsoleSpecs::ram_limit`
+/// when creating rollback sessions.
+///
+/// Memory limits:
+/// - Emberware Z: 8MB unified (code + assets + state)
+/// - Emberware Classic: 2MB unified (code + assets + state)
 ///
 /// To use console-specific limits, create the RollbackStateManager with:
 /// ```ignore
 /// let max_state_size = console.specs().ram_limit;
 /// let state_manager = RollbackStateManager::new(max_state_size);
 /// ```
-pub const MAX_STATE_SIZE: usize = 16 * 1024 * 1024;
+pub const MAX_STATE_SIZE: usize = 8 * 1024 * 1024;
 
 /// GGRS configuration for Emberware
 ///

@@ -39,6 +39,9 @@ log = { workspace = true }
 rand = { workspace = true }
 rand_pcg = { workspace = true }
 
+# Fast checksums for rollback state (SIMD-optimized)
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+
 # Serialization for network messages
 bincode = { workspace = true }
 
