@@ -12,66 +12,52 @@ pub use config::ZInitConfig;
 pub use ffi_state::ZFFIState;
 pub use resources::{Font, PendingMesh, PendingMeshPacked, PendingTexture};
 
-// Re-export BoneMatrix3x4 (defined below)
-
 /// Maximum number of bones for GPU skinning
 pub const MAX_BONES: usize = 256;
 
-use glam::Vec4;
+// Re-export BoneMatrix3x4 from shared (the canonical POD type)
+pub use emberware_shared::math::BoneMatrix3x4;
 
-/// 3x4 affine bone matrix (row-major storage)
+/// Extension trait for BoneMatrix3x4 with glam conversion methods
 ///
-/// Stores 3 rows of a 4x4 affine matrix. The implicit 4th row is [0, 0, 0, 1].
-/// Each row is a Vec4: [Xx, Xy, Xz, Tx] etc.
-///
-/// Memory layout (48 bytes):
-/// - row0: rotation row 0 + translation X
-/// - row1: rotation row 1 + translation Y
-/// - row2: rotation row 2 + translation Z
-#[derive(Clone, Copy, Debug, Default)]
-#[repr(C)]
-pub struct BoneMatrix3x4 {
-    pub row0: Vec4,
-    pub row1: Vec4,
-    pub row2: Vec4,
+/// This adds glam-specific methods to the POD BoneMatrix3x4 type
+/// without requiring glam as a dependency in the shared crate.
+pub trait BoneMatrix3x4Ext {
+    /// Convert from Mat4 (column-major) to BoneMatrix3x4 (row-major)
+    fn from_mat4(m: glam::Mat4) -> BoneMatrix3x4;
+
+    /// Get row 0 as a glam Vec4
+    fn row0_vec4(&self) -> glam::Vec4;
+
+    /// Get row 1 as a glam Vec4
+    fn row1_vec4(&self) -> glam::Vec4;
+
+    /// Get row 2 as a glam Vec4
+    fn row2_vec4(&self) -> glam::Vec4;
 }
 
-impl BoneMatrix3x4 {
-    /// Identity bone matrix (no transformation)
-    pub const IDENTITY: Self = Self {
-        row0: Vec4::new(1.0, 0.0, 0.0, 0.0),
-        row1: Vec4::new(0.0, 1.0, 0.0, 0.0),
-        row2: Vec4::new(0.0, 0.0, 1.0, 0.0),
-    };
-
-    /// Convert from Mat4 (column-major) to BoneMatrix3x4 (row-major)
-    pub fn from_mat4(m: glam::Mat4) -> Self {
+impl BoneMatrix3x4Ext for BoneMatrix3x4 {
+    fn from_mat4(m: glam::Mat4) -> BoneMatrix3x4 {
         // Mat4 is column-major: m.col(0) = [m00, m10, m20, m30]
         // We want row-major: row0 = [m00, m01, m02, m03]
         let cols = m.to_cols_array_2d();
-        Self {
-            row0: Vec4::new(cols[0][0], cols[1][0], cols[2][0], cols[3][0]),
-            row1: Vec4::new(cols[0][1], cols[1][1], cols[2][1], cols[3][1]),
-            row2: Vec4::new(cols[0][2], cols[1][2], cols[2][2], cols[3][2]),
+        BoneMatrix3x4 {
+            row0: [cols[0][0], cols[1][0], cols[2][0], cols[3][0]],
+            row1: [cols[0][1], cols[1][1], cols[2][1], cols[3][1]],
+            row2: [cols[0][2], cols[1][2], cols[2][2], cols[3][2]],
         }
     }
 
-    /// Convert to flat f32 array for GPU upload (row-major)
-    pub fn to_array(&self) -> [f32; 12] {
-        [
-            self.row0.x,
-            self.row0.y,
-            self.row0.z,
-            self.row0.w,
-            self.row1.x,
-            self.row1.y,
-            self.row1.z,
-            self.row1.w,
-            self.row2.x,
-            self.row2.y,
-            self.row2.z,
-            self.row2.w,
-        ]
+    fn row0_vec4(&self) -> glam::Vec4 {
+        glam::Vec4::from_array(self.row0)
+    }
+
+    fn row1_vec4(&self) -> glam::Vec4 {
+        glam::Vec4::from_array(self.row1)
+    }
+
+    fn row2_vec4(&self) -> glam::Vec4 {
+        glam::Vec4::from_array(self.row2)
     }
 }
 

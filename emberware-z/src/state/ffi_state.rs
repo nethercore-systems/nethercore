@@ -1,7 +1,11 @@
 //! FFI staging state for Emberware Z
 
+use std::sync::Arc;
+
 use glam::{Mat4, Vec3};
 use hashbrown::HashMap;
+
+use emberware_shared::cart::ZDataPack;
 
 use super::{BoneMatrix3x4, Font, PendingMesh, PendingMeshPacked, PendingTexture, ZInitConfig};
 
@@ -14,6 +18,10 @@ use super::{BoneMatrix3x4, Font, PendingMesh, PendingMeshPacked, PendingTexture,
 /// This is NOT serialized for rollback - only core GameState is rolled back.
 #[derive(Debug)]
 pub struct ZFFIState {
+    // Data pack from ROM (set during game loading, immutable after)
+    // Assets in the data pack are loaded via `rom_*` FFI and go directly to VRAM
+    pub data_pack: Option<Arc<ZDataPack>>,
+
     // Render state
     pub depth_test: bool,
     pub cull_mode: u8,
@@ -107,6 +115,7 @@ impl Default for ZFFIState {
         ));
 
         Self {
+            data_pack: None, // Set during game loading
             depth_test: true,
             cull_mode: 1, // Back-face culling
             blend_mode: 0,

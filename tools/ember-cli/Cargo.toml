@@ -1,0 +1,40 @@
+[package]
+name = "ember-cli"
+version = "0.1.0"
+edition = "2021"
+description = "CLI tool for building Emberware Z games"
+
+[[bin]]
+name = "ember"
+path = "src/main.rs"
+
+[dependencies]
+# Local crates
+emberware-shared = { path = "../../shared" }
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Error handling
+anyhow = "1"
+
+# Serialization
+toml = "0.8"
+serde = { version = "1", features = ["derive"] }
+bitcode = "0.6"
+
+# Image processing (for texture conversion)
+image = "0.24"
+
+# Filesystem
+directories = "5"
+walkdir = "2"
+
+# Time
+chrono = "0.4"
+
+# Executable finding
+which = "6"
+
+[dev-dependencies]
+tempfile = "3"

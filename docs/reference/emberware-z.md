@@ -10,7 +10,8 @@ Emberware Z is a 5th-generation fantasy console targeting PS1/N64/Saturn aesthet
 | **Resolution** | 360p, 540p (default), 720p, 1080p |
 | **Color depth** | RGBA8 |
 | **Tick rate** | 24, 30, 60 (default), 120 fps |
-| **Memory** | 8MB unified (code + assets + game state) |
+| **ROM (Cartridge)** | 12MB (WASM code + data pack assets) |
+| **RAM** | 4MB (WASM linear memory for game state) |
 | **VRAM** | 4MB (GPU textures and mesh buffers) |
 | **CPU budget** | 4ms per tick (at 60fps) |
 | **Netcode** | Deterministic rollback via GGRS |
@@ -18,30 +19,43 @@ Emberware Z is a 5th-generation fantasy console targeting PS1/N64/Saturn aesthet
 
 ### Memory Model
 
-Emberware Z uses a **unified 8MB memory model**. Everything lives in WASM linear memory:
-- Compiled game code
-- Static data and embedded assets (`include_bytes!`)
+Emberware Z uses a **12MB ROM + 4MB RAM** memory model with datapack-based asset loading. This separates immutable data from game state, enabling efficient rollback.
+
+**ROM (Cartridge) — 12MB total:**
+- WASM bytecode (typically 50-200 KB)
+- Data pack: textures, meshes, sounds, fonts, raw data
+- Assets loaded via `rom_*` FFI go directly to VRAM/audio memory
+
+**RAM (Linear Memory) — 4MB:**
 - Stack (function calls, local variables)
 - Heap (dynamic allocations, game state)
+- Only resource handles (u32 IDs) stored here
 
-This entire memory is automatically snapshotted for rollback netcode using xxHash3 checksums (~0.5ms per save). Games cannot exceed the 8MB limit — the host enforces this via wasmtime's ResourceLimiter.
+**VRAM — 4MB:**
+- GPU textures uploaded via `load_texture()` or `rom_texture()`
+- Mesh buffers uploaded via `mesh_create()` or `rom_mesh()`
+
+**Rollback Performance:**
+Only the 4MB RAM is snapshotted. With xxHash3: ~0.25ms per save.
+During an 8-frame rollback at 60fps: ~2ms total — well within frame budget.
 
 **Memory Budget Guidelines:**
 
-| Component | Typical Size | Notes |
-|-----------|--------------|-------|
-| Code | 50-200 KB | Even complex games |
-| Textures (before VRAM upload) | 1-4 MB | Uploaded to GPU in `init()` |
-| Audio | 500 KB - 2 MB | Use tracker music for BGM |
-| Animations | ~100 KB/character | With keyframe compression |
-| Game state | 10-100 KB | Entities, physics, etc. |
+| Component | Location | Typical Size |
+|-----------|----------|--------------|
+| WASM code | ROM | 50-200 KB |
+| Textures | ROM → VRAM | 2-8 MB |
+| Meshes | ROM → VRAM | 500 KB - 2 MB |
+| Sounds | ROM → Audio | 500 KB - 2 MB |
+| Animations | ROM (data) | ~100 KB/character |
+| Game state | RAM | 10-100 KB |
 
-**Example: Full fighting game budget (~4.4MB)**
-- 8 characters with meshes, textures, animations: ~1.5MB
-- 3 stages: ~1MB
-- Sound effects: ~650KB
-- Music (tracker): ~120KB
-- Effects, UI, code: ~1.1MB
+**Example: Full fighting game (~10MB ROM)**
+- 8 characters with meshes, textures, animations: ~4MB
+- 3 stages: ~3MB
+- Sound effects + music: ~2MB
+- Effects, UI, code: ~1MB
+- Game state in RAM: ~50KB (tiny for fast rollback!)
 
 ### Configuration (init-only)
 
