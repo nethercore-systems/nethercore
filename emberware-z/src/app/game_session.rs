@@ -5,9 +5,9 @@ use crate::library;
 use emberware_core::app::{session::GameSession, RuntimeError, FRAME_TIME_HISTORY_SIZE};
 use emberware_core::console::Console;
 use emberware_core::rollback::{SessionEvent, SessionType};
-use z_common::{ZDataPack, ZRom};
 use std::path::Path;
 use std::time::Instant;
+use z_common::{ZDataPack, ZRom};
 
 use super::App;
 

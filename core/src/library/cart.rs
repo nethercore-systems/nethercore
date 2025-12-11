@@ -101,9 +101,9 @@ pub fn install_z_rom(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use z_common::{ZMetadata, ZRom, EWZ_VERSION};
     use std::path::PathBuf;
     use tempfile::TempDir;
+    use z_common::{ZMetadata, ZRom, EWZ_VERSION};
 
     /// Test data directory provider
     struct TestDataDirProvider {
