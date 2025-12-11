@@ -48,13 +48,20 @@ fn build_examples() -> Result<()> {
     println!("Games directory: {}", games_dir.display());
     println!();
 
+    // Library crates that shouldn't be built as standalone examples
+    let skip_dirs = ["inspector-common"];
+
     // Get all example directories that have a Cargo.toml (are buildable)
     let examples: Vec<_> = fs::read_dir(&examples_dir)
         .context("Failed to read examples directory")?
         .filter_map(|entry| entry.ok())
         .filter(|entry| {
             let path = entry.path();
-            path.is_dir() && path.join("Cargo.toml").exists()
+            let name = entry.file_name();
+            let name_str = name.to_string_lossy();
+            path.is_dir()
+                && path.join("Cargo.toml").exists()
+                && !skip_dirs.contains(&name_str.as_ref())
         })
         .collect();
 

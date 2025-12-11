@@ -11,8 +11,10 @@
 
 // Compute matcap UV with perspective correction
 // This prevents distortion at screen edges with wide FOV
+// Note: In view space, Z is negative for objects in front of camera (looking down -Z)
 fn compute_matcap_uv(view_position: vec3<f32>, view_normal: vec3<f32>) -> vec2<f32> {
-    let inv_depth = 1.0 / (1.0 + view_position.z);
+    let depth = -view_position.z;  // Convert to positive depth
+    let inv_depth = 1.0 / (1.0 + depth);
     let proj_factor = -view_position.x * view_position.y * inv_depth;
     let basis1 = vec3<f32>(1.0 - view_position.x * view_position.x * inv_depth, proj_factor, -view_position.x);
     let basis2 = vec3<f32>(proj_factor, 1.0 - view_position.y * view_position.y * inv_depth, -view_position.y);

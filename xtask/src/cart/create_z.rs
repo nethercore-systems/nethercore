@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use clap::Args;
-use emberware_shared::cart::z::{ZMetadata, ZRom, EWZ_VERSION};
+use z_common::{ZMetadata, ZRom, EWZ_VERSION};
 
 /// Arguments for creating an Emberware Z ROM
 #[derive(Debug, Args)]

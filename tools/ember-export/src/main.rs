@@ -25,7 +25,7 @@ pub use z_common::{
 };
 
 // Re-export file extension constants
-pub use emberware_shared::formats::{
+pub use z_common::{
     EWZ_ANIMATION_EXT, EWZ_MESH_EXT, EWZ_SKELETON_EXT, EWZ_SOUND_EXT, EWZ_TEXTURE_EXT,
 };
 

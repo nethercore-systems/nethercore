@@ -15,7 +15,7 @@
 
 use bitcode::{Decode, Encode};
 
-use crate::local::LocalGameManifest;
+use emberware_shared::local::LocalGameManifest;
 
 use super::z_data_pack::ZDataPack;
 

@@ -5,12 +5,10 @@ use clap::Args;
 use serde::Deserialize;
 use std::path::PathBuf;
 
-use emberware_shared::cart::z::{ZMetadata, ZRom, EWZ_VERSION};
-use emberware_shared::cart::z_data_pack::{
-    PackedData, PackedMesh, PackedSound, PackedTexture, ZDataPack,
+use z_common::{
+    vertex_stride_packed, EmberZMeshHeader, PackedData, PackedMesh, PackedSound, PackedTexture,
+    ZDataPack, ZMetadata, ZRom, EWZ_VERSION,
 };
-use emberware_shared::formats::EmberZMeshHeader;
-use z_common::vertex_stride_packed;
 
 /// Arguments for the pack command
 #[derive(Args)]

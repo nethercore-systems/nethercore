@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use clap::Args;
-use emberware_shared::cart::z::ZRom;
+use z_common::ZRom;
 
 /// Arguments for inspecting ROM metadata
 #[derive(Debug, Args)]

@@ -23,6 +23,10 @@ impl ZGraphics {
         // Apply init config to graphics (render mode, etc.)
         self.set_render_mode(z_state.init_config.render_mode);
 
+        // Sync texture filter from FFI state
+        use super::render_state::TextureFilter;
+        self.render_state.texture_filter = TextureFilter::from_u32(z_state.texture_filter as u32);
+
         // 1. Swap the FFI-populated render pass into our command buffer
         // This efficiently transfers all immediate geometry (triangles, meshes)
         // without copying vectors. The old command buffer (now in z_state.render_pass)

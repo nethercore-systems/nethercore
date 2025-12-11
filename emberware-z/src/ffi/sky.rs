@@ -38,12 +38,8 @@ fn sky_set_colors(
     horizon_color: u32,
     zenith_color: u32,
 ) {
-    // Unpack colors from 0xRRGGBBAA to 0.0-1.0 range (ignore alpha)
-    let horizon = super::unpack_rgb(horizon_color);
-    let zenith = super::unpack_rgb(zenith_color);
-
     let state = &mut caller.data_mut().console;
-    state.update_sky_colors(horizon, zenith);
+    state.update_sky_colors(horizon_color, zenith_color);
 }
 
 /// Set sky sun properties
@@ -73,20 +69,17 @@ fn sky_set_sun(
     color: u32,
     sharpness: f32,
 ) {
-    // Unpack color from 0xRRGGBBAA to 0.0-1.0 range (ignore alpha)
-    let sun_color = super::unpack_rgb(color);
-
     let state = &mut caller.data_mut().console;
 
     // Validate direction vector (warn if zero-length)
     let len_sq = dir_x * dir_x + dir_y * dir_y + dir_z * dir_z;
     if len_sq < 1e-10 {
         warn!("sky_set_sun: zero-length direction vector, using default (0, -1, 0)");
-        state.update_sky_sun([0.0, -1.0, 0.0], sun_color, sharpness);
+        state.update_sky_sun([0.0, -1.0, 0.0], color, sharpness);
         return;
     }
 
-    state.update_sky_sun([dir_x, dir_y, dir_z], sun_color, sharpness);
+    state.update_sky_sun([dir_x, dir_y, dir_z], color, sharpness);
 }
 
 /// Bind a matcap texture to a slot (Mode 1 only)

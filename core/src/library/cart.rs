@@ -7,7 +7,7 @@
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use emberware_shared::cart::z::ZRom;
+use z_common::ZRom;
 
 use super::{DataDirProvider, LocalGame};
 
@@ -101,7 +101,7 @@ pub fn install_z_rom(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use emberware_shared::cart::z::{ZMetadata, EWZ_VERSION};
+    use z_common::{ZMetadata, ZRom, EWZ_VERSION};
     use std::path::PathBuf;
     use tempfile::TempDir;
 

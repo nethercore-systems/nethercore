@@ -92,7 +92,7 @@ fn ember_export_convert_texture(input: &Path, output: &Path) {
 
 // Verify EmberZMesh header structure
 fn verify_ember_z_mesh(data: &[u8]) {
-    use emberware_shared::formats::EmberZMeshHeader;
+    use z_common::EmberZMeshHeader;
 
     assert!(
         data.len() >= EmberZMeshHeader::SIZE,
@@ -128,7 +128,7 @@ fn verify_ember_z_mesh(data: &[u8]) {
 
 // Verify EmberZTexture header structure
 fn verify_ember_z_texture(data: &[u8], expected_width: u32, expected_height: u32) {
-    use emberware_shared::formats::EmberZTextureHeader;
+    use z_common::EmberZTextureHeader;
 
     assert!(
         data.len() >= EmberZTextureHeader::SIZE,
@@ -157,27 +157,7 @@ fn verify_ember_z_texture(data: &[u8], expected_width: u32, expected_height: u32
     );
 }
 
-// Calculate vertex stride based on format flags
+// Use z-common's stride calculation (no duplication)
 fn calculate_stride(format: u8) -> usize {
-    const FORMAT_UV: u8 = 1;
-    const FORMAT_COLOR: u8 = 2;
-    const FORMAT_NORMAL: u8 = 4;
-    const FORMAT_SKINNED: u8 = 8;
-
-    let mut stride = 8; // Position (f16x4)
-
-    if format & FORMAT_UV != 0 {
-        stride += 4; // UV (unorm16x2)
-    }
-    if format & FORMAT_COLOR != 0 {
-        stride += 4; // Color (unorm8x4)
-    }
-    if format & FORMAT_NORMAL != 0 {
-        stride += 4; // Normal (octahedral u32)
-    }
-    if format & FORMAT_SKINNED != 0 {
-        stride += 8; // Bone indices (u8x4) + weights (unorm8x4)
-    }
-
-    stride
+    z_common::vertex_stride_packed(format) as usize
 }

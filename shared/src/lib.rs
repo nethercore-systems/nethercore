@@ -1,8 +1,10 @@
 //! Shared types for Emberware fantasy console platform.
 //!
-//! This crate provides types shared between the Emberware platform backend API
-//! and console clients (Emberware Z, etc.). All types are serializable with serde
-//! for JSON API communication.
+//! This crate provides general types shared between the Emberware platform backend API
+//! and all console clients. All types are serializable with serde for JSON API communication.
+//!
+//! Console-specific types (like Z ROM formats, asset formats) belong in their respective
+//! console crates (e.g., `z-common` for Emberware Z).
 //!
 //! # Type Categories
 //!
@@ -11,6 +13,7 @@
 //! - **Auth Types**: [`User`], [`AuthResponse`], [`ApiError`]
 //! - **Local Types**: [`LocalGameManifest`] for cached game metadata
 //! - **Request Types**: [`RegisterRequest`], [`LoginRequest`], [`CreateGameRequest`], etc.
+//! - **Math Types**: [`BoneMatrix3x4`] for skeletal animation
 //!
 //! # Example
 //!
@@ -26,9 +29,7 @@
 // Module declarations
 pub mod api;
 pub mod auth;
-pub mod cart;
 pub mod console;
-pub mod formats;
 pub mod local;
 pub mod math;
 pub mod requests;
@@ -36,7 +37,6 @@ pub mod requests;
 // Re-export all public items for convenience
 pub use api::*;
 pub use auth::*;
-pub use cart::*;
 pub use console::*;
 pub use local::*;
 pub use math::*;

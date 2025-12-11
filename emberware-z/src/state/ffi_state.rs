@@ -5,7 +5,7 @@ use std::sync::Arc;
 use glam::{Mat4, Vec3};
 use hashbrown::HashMap;
 
-use emberware_shared::cart::ZDataPack;
+use z_common::ZDataPack;
 
 use super::{
     BoneMatrix3x4, Font, PendingMesh, PendingMeshPacked, PendingSkeleton, PendingTexture,
@@ -291,43 +291,40 @@ impl ZFFIState {
         }
     }
 
-    /// Update sky colors in current shading state (with quantization)
-    pub fn update_sky_colors(&mut self, horizon: [f32; 3], zenith: [f32; 3]) {
-        use crate::graphics::pack_rgb8;
-        use glam::Vec3;
+    /// Update sky colors in current shading state
+    ///
+    /// Both colors are 0xRRGGBBAA format (alpha ignored).
+    pub fn update_sky_colors(&mut self, horizon_rgba: u32, zenith_rgba: u32) {
+        // Mask off alpha, keeping RGB in upper 24 bits
+        let horizon = horizon_rgba & 0xFFFFFF00;
+        let zenith = zenith_rgba & 0xFFFFFF00;
 
-        let horizon_packed = pack_rgb8(Vec3::from_slice(&horizon));
-        let zenith_packed = pack_rgb8(Vec3::from_slice(&zenith));
-
-        if self.current_shading_state.sky.horizon_color != horizon_packed
-            || self.current_shading_state.sky.zenith_color != zenith_packed
+        if self.current_shading_state.sky.horizon_color != horizon
+            || self.current_shading_state.sky.zenith_color != zenith
         {
-            self.current_shading_state.sky.horizon_color = horizon_packed;
-            self.current_shading_state.sky.zenith_color = zenith_packed;
+            self.current_shading_state.sky.horizon_color = horizon;
+            self.current_shading_state.sky.zenith_color = zenith;
             self.shading_state_dirty = true;
         }
     }
 
-    /// Update sky sun parameters in current shading state (with quantization)
+    /// Update sky sun parameters in current shading state
     ///
     /// The `direction` parameter is the direction light rays travel (from sun toward surface).
     /// This matches the convention used by dynamic lights (`update_light`).
     /// For a sun directly overhead, use `(0, -1, 0)` (rays going down).
-    pub fn update_sky_sun(&mut self, direction: [f32; 3], color: [f32; 3], sharpness: f32) {
+    ///
+    /// `color_rgba` is 0xRRGGBBAA format (alpha ignored).
+    pub fn update_sky_sun(&mut self, direction: [f32; 3], color_rgba: u32, sharpness: f32) {
         use crate::graphics::{pack_octahedral_u32, pack_unorm8};
         use glam::Vec3;
 
         // Store direction as-is (rays travel convention, same as dynamic lights)
         let dir_oct_packed = pack_octahedral_u32(Vec3::from_slice(&direction));
 
-        let color_r = pack_unorm8(color[0]);
-        let color_g = pack_unorm8(color[1]);
-        let color_b = pack_unorm8(color[2]);
-        let sharp = pack_unorm8(sharpness);
-        let color_and_sharpness = (color_r as u32)
-            | ((color_g as u32) << 8)
-            | ((color_b as u32) << 16)
-            | ((sharp as u32) << 24);
+        // Input: 0xRRGGBBAA, Output: 0xRRGGBBSS (replace alpha with sharpness)
+        let sharp = pack_unorm8(sharpness) as u32;
+        let color_and_sharpness = (color_rgba & 0xFFFFFF00) | sharp;
 
         if self.current_shading_state.sky.sun_direction_oct != dir_oct_packed
             || self.current_shading_state.sky.sun_color_and_sharpness != color_and_sharpness

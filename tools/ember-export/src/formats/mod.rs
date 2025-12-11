@@ -1,8 +1,8 @@
 //! Binary format definitions for Emberware Z asset files
 //!
-//! Re-exports from emberware-shared for writing asset files.
+//! Re-exports from z-common for writing asset files.
 
-pub use emberware_shared::formats::*;
+pub use z_common::formats::*;
 
 use anyhow::Result;
 use std::io::Write;

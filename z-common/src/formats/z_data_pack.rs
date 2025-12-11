@@ -13,7 +13,7 @@
 use bitcode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
-use crate::math::BoneMatrix3x4;
+use emberware_shared::math::BoneMatrix3x4;
 
 /// Emberware Z data pack
 ///

@@ -7,7 +7,7 @@
 //! - `.ewz` ROM files in the games directory (production, preferred)
 //! - Subdirectories with `manifest.json` and `rom.wasm` (development, backward compatibility)
 
-use emberware_shared::cart::z::ZRom;
+use z_common::ZRom;
 use emberware_shared::LocalGameManifest;
 use std::path::{Path, PathBuf};
 

@@ -5,7 +5,7 @@ use crate::library;
 use emberware_core::app::{session::GameSession, RuntimeError, FRAME_TIME_HISTORY_SIZE};
 use emberware_core::console::Console;
 use emberware_core::rollback::{SessionEvent, SessionType};
-use emberware_shared::cart::ZDataPack;
+use z_common::{ZDataPack, ZRom};
 use std::path::Path;
 use std::time::Instant;
 
@@ -34,7 +34,7 @@ fn load_rom(path: &Path) -> Result<(Vec<u8>, Option<ZDataPack>), RuntimeError> {
         let ewz_bytes = std::fs::read(path)
             .map_err(|e| RuntimeError(format!("Failed to read .ewz ROM file: {}", e)))?;
 
-        let rom = emberware_shared::cart::z::ZRom::from_bytes(&ewz_bytes)
+        let rom = ZRom::from_bytes(&ewz_bytes)
             .map_err(|e| RuntimeError(format!("Failed to parse .ewz ROM: {}", e)))?;
 
         // Extract WASM code and data pack from ROM

@@ -1,4 +1,4 @@
-//! Asset loading FFI for EmberZ binary formats (.ewzmesh, .ewztex, .ewzsnd)
+//! Asset loading FFI for EmberZ binary formats (.ewzmesh, .ewztex, .ewzsnd, .ewzskel)
 //!
 //! These functions load assets from POD EmberZ binary formats.
 //! No magic bytes - format is determined by which function is called.
@@ -19,12 +19,17 @@ use wasmtime::{Caller, Linker};
 use super::get_wasm_memory;
 
 use emberware_core::wasm::GameStateWithConsole;
-use emberware_shared::formats::{EmberZMeshHeader, EmberZSoundHeader, EmberZTextureHeader};
+use z_common::formats::{
+    EmberZMeshHeader, EmberZSkeletonHeader, EmberZSoundHeader, EmberZTextureHeader,
+};
 
 use crate::audio::Sound;
 use crate::console::ZInput;
 use crate::graphics::vertex_stride_packed;
-use crate::state::{PendingMeshPacked, PendingTexture, ZFFIState};
+use crate::state::{
+    BoneMatrix3x4, PendingMeshPacked, PendingSkeleton, PendingTexture, ZFFIState, MAX_BONES,
+    MAX_SKELETONS,
+};
 
 /// Register asset loading FFI functions
 pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
@@ -32,6 +37,7 @@ pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) ->
     linker.func_wrap("env", "load_zmesh", load_zmesh)?;
     linker.func_wrap("env", "load_ztex", load_ztex)?;
     linker.func_wrap("env", "load_zsound", load_zsound)?;
+    linker.func_wrap("env", "load_zskeleton", load_zskeleton)?;
     Ok(())
 }
 
@@ -379,6 +385,161 @@ fn load_zsound(
     info!(
         "load_zsound: created sound {} ({} samples)",
         handle, sample_count
+    );
+
+    handle
+}
+
+/// Load a skeleton from EmberZ skeleton (.ewzskel) binary format
+///
+/// # Arguments
+/// * `data_ptr` — Pointer to .ewzskel binary data
+/// * `data_len` — Length of the data in bytes
+///
+/// Returns skeleton handle (>0) on success, 0 on failure.
+///
+/// # Binary Format
+/// ```text
+/// 0x00: bone_count u32
+/// 0x04: reserved u32
+/// 0x08: inverse_bind_matrices (bone_count × 48 bytes, 3×4 column-major)
+/// ```
+fn load_zskeleton(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    data_ptr: u32,
+    data_len: u32,
+) -> u32 {
+    let data_len = data_len as usize;
+
+    // Validate minimum size
+    if data_len < EmberZSkeletonHeader::SIZE {
+        warn!(
+            "load_zskeleton: data too small ({} bytes, need at least {})",
+            data_len,
+            EmberZSkeletonHeader::SIZE
+        );
+        return 0;
+    }
+
+    // Get memory reference
+    let Some(memory) = get_wasm_memory(&mut caller) else {
+        warn!("load_zskeleton: failed to get WASM memory");
+        return 0;
+    };
+
+    let ptr = data_ptr as usize;
+
+    // Read and parse header, then copy inverse bind matrices
+    let (bone_count, inverse_bind) = {
+        let mem_data = memory.data(&caller);
+
+        if ptr + data_len > mem_data.len() {
+            warn!(
+                "load_zskeleton: data ({} bytes at {}) exceeds memory bounds ({})",
+                data_len,
+                ptr,
+                mem_data.len()
+            );
+            return 0;
+        }
+
+        let data = &mem_data[ptr..ptr + data_len];
+
+        // Parse header
+        let Some(header) = EmberZSkeletonHeader::from_bytes(data) else {
+            warn!("load_zskeleton: failed to parse header");
+            return 0;
+        };
+
+        // Validate bone count
+        if header.bone_count == 0 {
+            warn!("load_zskeleton: bone_count is 0");
+            return 0;
+        }
+        if header.bone_count > MAX_BONES as u32 {
+            warn!(
+                "load_zskeleton: bone_count {} exceeds maximum {}",
+                header.bone_count, MAX_BONES
+            );
+            return 0;
+        }
+
+        // Calculate expected data size (48 bytes per bone matrix)
+        let matrix_size = 48usize;
+        let matrices_size = header.bone_count as usize * matrix_size;
+        let expected_size = EmberZSkeletonHeader::SIZE + matrices_size;
+
+        if data_len < expected_size {
+            warn!(
+                "load_zskeleton: data too small ({} bytes, need {} for {} bones)",
+                data_len, expected_size, header.bone_count
+            );
+            return 0;
+        }
+
+        // Parse inverse bind matrices (column-major input, row-major output for GPU)
+        let mut inverse_bind = Vec::with_capacity(header.bone_count as usize);
+        for i in 0..header.bone_count as usize {
+            let offset = EmberZSkeletonHeader::SIZE + i * matrix_size;
+            let matrix_bytes = &data[offset..offset + matrix_size];
+
+            // Convert bytes to f32 array (12 floats in column-major order)
+            let mut floats = [0.0f32; 12];
+            for (j, float) in floats.iter_mut().enumerate() {
+                let byte_offset = j * 4;
+                let bytes = [
+                    matrix_bytes[byte_offset],
+                    matrix_bytes[byte_offset + 1],
+                    matrix_bytes[byte_offset + 2],
+                    matrix_bytes[byte_offset + 3],
+                ];
+                *float = f32::from_le_bytes(bytes);
+            }
+
+            // Transpose column-major input to row-major storage (for GPU alignment)
+            // Input:  [col0.x, col0.y, col0.z, col1.x, col1.y, col1.z, col2.x, col2.y, col2.z, tx, ty, tz]
+            // Output: row0 = [col0.x, col1.x, col2.x, tx]
+            //         row1 = [col0.y, col1.y, col2.y, ty]
+            //         row2 = [col0.z, col1.z, col2.z, tz]
+            let matrix = BoneMatrix3x4 {
+                row0: [floats[0], floats[3], floats[6], floats[9]],
+                row1: [floats[1], floats[4], floats[7], floats[10]],
+                row2: [floats[2], floats[5], floats[8], floats[11]],
+            };
+            inverse_bind.push(matrix);
+        }
+
+        (header.bone_count, inverse_bind)
+    };
+
+    // Check skeleton limit before allocating
+    let state = &caller.data().console;
+    let total_skeletons = state.skeletons.len() + state.pending_skeletons.len();
+    if total_skeletons >= MAX_SKELETONS {
+        warn!(
+            "load_zskeleton: maximum skeleton count {} exceeded",
+            MAX_SKELETONS
+        );
+        return 0;
+    }
+
+    // Now we can mutably borrow state
+    let state = &mut caller.data_mut().console;
+
+    // Allocate a skeleton handle
+    let handle = state.next_skeleton_handle;
+    state.next_skeleton_handle += 1;
+
+    // Store pending skeleton for GPU upload
+    state.pending_skeletons.push(PendingSkeleton {
+        handle,
+        inverse_bind,
+        bone_count,
+    });
+
+    info!(
+        "load_zskeleton: created skeleton {} with {} bones",
+        handle, bone_count
     );
 
     handle
