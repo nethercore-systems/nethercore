@@ -135,6 +135,7 @@ mod tests {
                 target_fps: Some(60),
             },
             code: b"\0asm\x01\x00\x00\x00test code".to_vec(),
+            data_pack: None,
             thumbnail: Some(b"fake png data".to_vec()),
             screenshots: vec![],
         }

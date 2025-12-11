@@ -18,6 +18,7 @@ mod material;
 mod mesh;
 mod mesh_generators;
 mod render_state;
+mod rom;
 mod skinning;
 mod sky;
 mod texture;
@@ -83,6 +84,9 @@ pub fn register_z_ffi(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState
 
     // EmberZ format loading (load_zmesh, load_ztex, load_zsound)
     assets::register(linker)?;
+
+    // ROM data pack loading (rom_texture, rom_mesh, rom_sound, etc.)
+    rom::register(linker)?;
 
     Ok(())
 }

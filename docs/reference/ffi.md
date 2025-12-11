@@ -99,18 +99,22 @@ Emberware uses GGRS for deterministic rollback netcode. Key rules:
 
 ### Memory Limits
 
-WASM linear memory is **strictly enforced** by the host:
+Emberware uses a **split ROM + RAM memory model** for efficient rollback:
 
-| Console | Memory Limit | VRAM |
-|---------|--------------|------|
-| **Emberware Z** | 8 MB | 4 MB |
-| **Emberware Classic** | 2 MB | 1 MB |
+| Console | ROM (Cartridge) | RAM (Linear Memory) | VRAM |
+|---------|-----------------|---------------------|------|
+| **Emberware Z** | 12 MB | 4 MB | 4 MB |
+| **Emberware Classic** | 4 MB | 2 MB | 1 MB |
 
-This unified memory includes:
-- Your compiled game code
-- All `include_bytes!()` embedded assets
+**ROM (Cartridge):** Contains WASM code + bundled assets (via data pack). Not snapshotted.
+- WASM bytecode (typically 50-200 KB)
+- Data pack assets: textures, meshes, sounds, fonts, raw data
+- Assets loaded via `rom_*` FFI go directly to VRAM/audio memory
+
+**RAM (Linear Memory):** Your game's working memory. Fully snapshotted for rollback.
 - Stack space (function calls, local variables)
 - Heap allocations (game state, dynamic data)
+- Only resource handles (u32 IDs) stored here — actual data in VRAM
 
 **Enforcement:**
 - Games that declare more memory than allowed will **fail to load**
@@ -118,17 +122,17 @@ This unified memory includes:
 - The host uses wasmtime's `ResourceLimiter` — this cannot be bypassed
 
 **Rollback Performance:**
-The entire linear memory is snapshotted for rollback netcode. With xxHash3 checksums, this takes approximately:
-- 8MB: ~0.5ms per save (Emberware Z)
-- 2MB: ~0.1ms per save (Emberware Classic)
+Only RAM is snapshotted for rollback netcode. With xxHash3 checksums:
+- 4MB: ~0.25ms per save (Emberware Z)
+- 2MB: ~0.10ms per save (Emberware Classic)
 
-During an 8-frame rollback at 60fps, the total overhead is ~4ms — well within the 16.67ms frame budget.
+During an 8-frame rollback at 60fps, the total overhead is ~2ms — well within the 16.67ms frame budget.
 
 **Tips:**
-- Use `include_bytes!()` to embed assets at compile time
-- Upload textures to VRAM in `init()` — they don't count against linear memory after upload
+- Use `rom_*` functions to load assets from the data pack (doesn't use RAM)
+- Legacy `include_bytes!()` still works for small assets
 - Keep game state small for faster rollback
-- Use tracker music (MOD/XM format) instead of raw audio to save space
+- Only handles live in WASM memory — textures, meshes, sounds stay in host memory
 
 ---
 
@@ -342,14 +346,33 @@ opt-level = "s"
 lto = true
 ```
 
-### Embedding Assets
+### Loading Assets
 
-Assets are embedded directly in the WASM binary:
+**Recommended: Data Pack Loading (rom_* functions)**
+
+Assets bundled in the ROM's data pack bypass WASM memory entirely:
 
 ```rust
-// Embed at compile time
+fn init() {
+    // Load from data pack — goes directly to VRAM
+    let tex = rom_texture(b"player_sprite".as_ptr(), 13);
+    let mesh = rom_mesh(b"enemy_model".as_ptr(), 11);
+    let sfx = rom_sound(b"jump".as_ptr(), 4);
+
+    // For raw level data, copies into WASM memory
+    let len = rom_data_len(b"level1".as_ptr(), 6);
+    let mut buffer = vec![0u8; len as usize];
+    rom_data(b"level1".as_ptr(), 6, buffer.as_mut_ptr(), len);
+}
+```
+
+**Legacy: Embedded Assets**
+
+You can still embed small assets directly in the WASM binary:
+
+```rust
+// Embed at compile time (uses RAM!)
 static SPRITE_PNG: &[u8] = include_bytes!("assets/sprite.png");
-static LEVEL_DATA: &[u8] = include_bytes!("assets/level1.bin");
 
 fn init() {
     // Decode and upload to GPU at runtime
@@ -357,6 +380,10 @@ fn init() {
     let tex = load_texture(w, h, pixels.as_ptr());
 }
 ```
+
+**Which to use?**
+- **Data pack** for large assets (textures, meshes, sounds) — doesn't use RAM
+- **include_bytes!** for tiny files or generated content (<10KB)
 
 ---
 

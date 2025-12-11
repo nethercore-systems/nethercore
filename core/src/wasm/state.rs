@@ -77,13 +77,13 @@ impl<I: ConsoleInput, S: Default> Default for GameStateWithConsole<I, S> {
         Self {
             game: GameState::new(),
             console: S::default(),
-            ram_limit: 8 * 1024 * 1024, // Default to 8MB (Emberware Z)
+            ram_limit: 4 * 1024 * 1024, // Default to 4MB (Emberware Z RAM)
         }
     }
 }
 
 impl<I: ConsoleInput, S: Default> GameStateWithConsole<I, S> {
-    /// Create new state with default RAM limit (8MB)
+    /// Create new state with default RAM limit (4MB)
     pub fn new() -> Self {
         Self::default()
     }

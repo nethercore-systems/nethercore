@@ -3,7 +3,6 @@
 //! Functions for setting bone transformation matrices for skeletal animation.
 
 use anyhow::Result;
-use glam::Vec4;
 use tracing::warn;
 use wasmtime::{Caller, Linker};
 
@@ -118,9 +117,9 @@ fn set_bones(
         //         row1 = [col0.y, col1.y, col2.y, ty]
         //         row2 = [col0.z, col1.z, col2.z, tz]
         let matrix = BoneMatrix3x4 {
-            row0: Vec4::new(floats[0], floats[3], floats[6], floats[9]),
-            row1: Vec4::new(floats[1], floats[4], floats[7], floats[10]),
-            row2: Vec4::new(floats[2], floats[5], floats[8], floats[11]),
+            row0: [floats[0], floats[3], floats[6], floats[9]],
+            row1: [floats[1], floats[4], floats[7], floats[10]],
+            row2: [floats[2], floats[5], floats[8], floats[11]],
         };
         matrices.push(matrix);
     }

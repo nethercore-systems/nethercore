@@ -111,14 +111,14 @@ pub struct GameInstance<I: ConsoleInput, S: Send + Default + 'static> {
 }
 
 impl<I: ConsoleInput, S: Send + Default + 'static> GameInstance<I, S> {
-    /// Create a new game instance from a module with default RAM limit (8MB)
+    /// Create a new game instance from a module with default RAM limit (4MB)
     pub fn new(
         engine: &WasmEngine,
         module: &Module,
         linker: &Linker<GameStateWithConsole<I, S>>,
     ) -> Result<Self> {
-        // Default to 8MB (Emberware Z limit)
-        Self::with_ram_limit(engine, module, linker, 8 * 1024 * 1024)
+        // Default to 4MB (Emberware Z RAM limit)
+        Self::with_ram_limit(engine, module, linker, 4 * 1024 * 1024)
     }
 
     /// Create a new game instance from a module with specified RAM limit
