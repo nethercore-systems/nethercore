@@ -10,6 +10,7 @@ use emberware_shared::cart::z_data_pack::{
     PackedData, PackedMesh, PackedSound, PackedTexture, ZDataPack,
 };
 use emberware_shared::formats::EmberZMeshHeader;
+use z_common::vertex_stride_packed;
 
 /// Arguments for the pack command
 #[derive(Args)]
@@ -243,8 +244,8 @@ fn load_mesh(id: &str, path: &std::path::Path) -> Result<PackedMesh> {
         anyhow::bail!("Invalid mesh format {}: {}", header.format, path.display());
     }
 
-    // Calculate stride based on format flags
-    let stride = calculate_vertex_stride(header.format);
+    // Calculate stride based on format flags (using z-common)
+    let stride = vertex_stride_packed(header.format) as usize;
     let vertex_data_size = header.vertex_count as usize * stride;
     let index_data_size = header.index_count as usize * 2; // u16 indices
 
@@ -282,31 +283,6 @@ fn load_mesh(id: &str, path: &std::path::Path) -> Result<PackedMesh> {
         vertex_data,
         index_data,
     })
-}
-
-/// Calculate vertex stride based on format flags
-fn calculate_vertex_stride(format: u8) -> usize {
-    const FORMAT_UV: u8 = 1;
-    const FORMAT_COLOR: u8 = 2;
-    const FORMAT_NORMAL: u8 = 4;
-    const FORMAT_SKINNED: u8 = 8;
-
-    let mut stride = 8; // Position (f16x4)
-
-    if format & FORMAT_UV != 0 {
-        stride += 4; // UV (unorm16x2)
-    }
-    if format & FORMAT_COLOR != 0 {
-        stride += 4; // Color (unorm8x4)
-    }
-    if format & FORMAT_NORMAL != 0 {
-        stride += 4; // Normal (octahedral u32)
-    }
-    if format & FORMAT_SKINNED != 0 {
-        stride += 8; // Bone indices (u8x4) + weights (unorm8x4)
-    }
-
-    stride
 }
 
 /// Load a sound from a WAV file
@@ -589,12 +565,12 @@ version = "1.0.0"
 
     #[test]
     fn test_load_mesh_with_uv_and_color() {
+        use z_common::{FORMAT_UV, FORMAT_COLOR};
+
         let dir = tempdir().unwrap();
         let mesh_path = dir.path().join("test_uv_color.ewzmesh");
 
         // Format 3 = position (8) + UV (4) + color (4) = 16 bytes per vertex
-        const FORMAT_UV: u8 = 1;
-        const FORMAT_COLOR: u8 = 2;
         let format = FORMAT_UV | FORMAT_COLOR;
 
         let header = EmberZMeshHeader::new(4, 6, format);
@@ -648,29 +624,30 @@ version = "1.0.0"
     }
 
     #[test]
-    fn test_calculate_vertex_stride() {
+    fn test_vertex_stride_packed() {
+        // Verify z_common::vertex_stride_packed works as expected
         // Position only
-        assert_eq!(calculate_vertex_stride(0), 8);
+        assert_eq!(vertex_stride_packed(0), 8);
 
         // Position + UV
-        assert_eq!(calculate_vertex_stride(1), 12);
+        assert_eq!(vertex_stride_packed(1), 12);
 
         // Position + Color
-        assert_eq!(calculate_vertex_stride(2), 12);
+        assert_eq!(vertex_stride_packed(2), 12);
 
         // Position + UV + Color
-        assert_eq!(calculate_vertex_stride(3), 16);
+        assert_eq!(vertex_stride_packed(3), 16);
 
         // Position + Normal
-        assert_eq!(calculate_vertex_stride(4), 12);
+        assert_eq!(vertex_stride_packed(4), 12);
 
         // Position + UV + Color + Normal
-        assert_eq!(calculate_vertex_stride(7), 20);
+        assert_eq!(vertex_stride_packed(7), 20);
 
         // Position + Skinned
-        assert_eq!(calculate_vertex_stride(8), 16);
+        assert_eq!(vertex_stride_packed(8), 16);
 
         // All features
-        assert_eq!(calculate_vertex_stride(15), 28);
+        assert_eq!(vertex_stride_packed(15), 28);
     }
 }

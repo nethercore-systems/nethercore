@@ -12,54 +12,8 @@
 //! 0x0C: vertex_data (vertex_count * stride)
 //! var:  index_data (index_count * 2 bytes), if indexed
 //! ```
-
-// =============================================================================
-// Vertex Format Flags
-// =============================================================================
-
-/// Vertex format flag: Has UV coordinates
-pub const FORMAT_UV: u8 = 1;
-/// Vertex format flag: Has per-vertex color
-pub const FORMAT_COLOR: u8 = 2;
-/// Vertex format flag: Has normals
-pub const FORMAT_NORMAL: u8 = 4;
-/// Vertex format flag: Has bone indices/weights for skinning
-pub const FORMAT_SKINNED: u8 = 8;
-
-/// All format flags combined
-pub const FORMAT_ALL: u8 = FORMAT_UV | FORMAT_COLOR | FORMAT_NORMAL | FORMAT_SKINNED;
-
-/// Number of vertex format permutations (16: 0-15)
-pub const VERTEX_FORMAT_COUNT: usize = 16;
-
-/// Calculate vertex stride in bytes for packed format (GPU-ready)
-///
-/// This is the stride used in `.ewzmesh` files and GPU vertex buffers.
-/// Format values are 0-15 (combination of FORMAT_* flags).
-#[inline]
-pub const fn vertex_stride_packed(format: u8) -> usize {
-    // Position: Float16x4 (8 bytes)
-    let mut stride = 8;
-
-    if format & FORMAT_UV != 0 {
-        stride += 4; // Unorm16x2
-    }
-    if format & FORMAT_COLOR != 0 {
-        stride += 4; // Unorm8x4
-    }
-    if format & FORMAT_NORMAL != 0 {
-        stride += 4; // Octahedral u32
-    }
-    if format & FORMAT_SKINNED != 0 {
-        stride += 8; // Bone indices (u8x4) + weights (unorm8x4)
-    }
-
-    stride
-}
-
-// =============================================================================
-// Mesh Header
-// =============================================================================
+//!
+//! For vertex format constants and stride calculation, see `z_common::packing`.
 
 /// EmberZMesh header (12 bytes)
 #[derive(Debug, Clone, Copy)]

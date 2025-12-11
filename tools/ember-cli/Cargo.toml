@@ -11,6 +11,7 @@ path = "src/main.rs"
 [dependencies]
 # Local crates
 emberware-shared = { path = "../../shared" }
+z-common = { path = "../../z-common" }
 
 # CLI
 clap = { version = "4", features = ["derive"] }
