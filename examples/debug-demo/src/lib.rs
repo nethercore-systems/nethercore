@@ -61,12 +61,12 @@ extern "C" {
     fn elapsed_time() -> f32;
 
     // Debug inspection FFI (compile out in release builds)
-    fn debug_group_begin(name: *const u8);
+    fn debug_group_begin(name: *const u8, name_len: u32);
     fn debug_group_end();
-    fn debug_register_f32(name: *const u8, ptr: *const f32);
-    fn debug_register_i32(name: *const u8, ptr: *const i32);
-    fn debug_register_bool(name: *const u8, ptr: *const u8);
-    fn debug_register_color(name: *const u8, ptr: *const u8);
+    fn debug_register_f32(name: *const u8, name_len: u32, ptr: *const f32);
+    fn debug_register_i32(name: *const u8, name_len: u32, ptr: *const i32);
+    fn debug_register_bool(name: *const u8, name_len: u32, ptr: *const u8);
+    fn debug_register_color(name: *const u8, name_len: u32, ptr: *const u8);
 }
 
 // ============================================================================
@@ -143,31 +143,31 @@ pub extern "C" fn init() {
 /// Register all tweakable values with the debug inspection system
 unsafe fn register_debug_values() {
     // Player group
-    debug_group_begin(b"player\0".as_ptr());
-    debug_register_f32(b"x\0".as_ptr(), &PLAYER_X);
-    debug_register_f32(b"y\0".as_ptr(), &PLAYER_Y);
-    debug_register_f32(b"speed\0".as_ptr(), &PLAYER_SPEED);
-    debug_register_f32(b"scale\0".as_ptr(), &PLAYER_SCALE);
-    debug_register_color(b"color\0".as_ptr(), PLAYER_COLOR.as_ptr());
+    debug_group_begin(b"player".as_ptr(), 6);
+    debug_register_f32(b"x".as_ptr(), 1, &PLAYER_X);
+    debug_register_f32(b"y".as_ptr(), 1, &PLAYER_Y);
+    debug_register_f32(b"speed".as_ptr(), 5, &PLAYER_SPEED);
+    debug_register_f32(b"scale".as_ptr(), 5, &PLAYER_SCALE);
+    debug_register_color(b"color".as_ptr(), 5, PLAYER_COLOR.as_ptr());
     debug_group_end();
 
     // World group
-    debug_group_begin(b"world\0".as_ptr());
-    debug_register_f32(b"rotation_speed\0".as_ptr(), &ROTATION_SPEED);
-    debug_register_i32(b"object_count\0".as_ptr(), &OBJECT_COUNT);
-    debug_register_f32(b"orbit_radius\0".as_ptr(), &ORBIT_RADIUS);
+    debug_group_begin(b"world".as_ptr(), 5);
+    debug_register_f32(b"rotation_speed".as_ptr(), 14, &ROTATION_SPEED);
+    debug_register_i32(b"object_count".as_ptr(), 12, &OBJECT_COUNT);
+    debug_register_f32(b"orbit_radius".as_ptr(), 12, &ORBIT_RADIUS);
     debug_group_end();
 
     // Effects group
-    debug_group_begin(b"effects\0".as_ptr());
-    debug_register_bool(b"enable_rotation\0".as_ptr(), &ENABLE_ROTATION);
-    debug_register_color(b"orbit_color\0".as_ptr(), ORBIT_COLOR.as_ptr());
+    debug_group_begin(b"effects".as_ptr(), 7);
+    debug_register_bool(b"enable_rotation".as_ptr(), 15, &ENABLE_ROTATION);
+    debug_register_color(b"orbit_color".as_ptr(), 11, ORBIT_COLOR.as_ptr());
     debug_group_end();
 
     // Stats group (derived values, updated by change callback)
-    debug_group_begin(b"stats\0".as_ptr());
-    debug_register_i32(b"change_count\0".as_ptr(), &CHANGE_COUNT);
-    debug_register_i32(b"total_spheres\0".as_ptr(), &TOTAL_SPHERES);
+    debug_group_begin(b"stats".as_ptr(), 5);
+    debug_register_i32(b"change_count".as_ptr(), 12, &CHANGE_COUNT);
+    debug_register_i32(b"total_spheres".as_ptr(), 13, &TOTAL_SPHERES);
     debug_group_end();
 }
 

@@ -22,7 +22,7 @@ use crate::console::ConsoleInput;
 
 // Re-export public types from state module
 pub use state::{
-    read_c_string_from_memory, GameState, GameStateWithConsole, MAX_PLAYERS, MAX_SAVE_SIZE,
+    read_string_from_memory, GameState, GameStateWithConsole, MAX_PLAYERS, MAX_SAVE_SIZE,
     MAX_SAVE_SLOTS,
 };
 

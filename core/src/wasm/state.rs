@@ -6,19 +6,21 @@ use wasmtime::{AsContext, Memory, ResourceLimiter};
 
 use crate::console::ConsoleInput;
 
-/// Read a null-terminated C string from WASM memory
+/// Read a length-prefixed string from WASM memory
 ///
 /// Returns None if:
-/// - No null terminator found within memory bounds
+/// - ptr + len exceeds memory bounds
 /// - String is not valid UTF-8
-pub fn read_c_string_from_memory<T>(memory: Memory, ctx: impl AsContext<Data = T>, ptr: u32) -> Option<String> {
+pub fn read_string_from_memory<T>(memory: Memory, ctx: impl AsContext<Data = T>, ptr: u32, len: u32) -> Option<String> {
     let data = memory.data(&ctx);
     let start = ptr as usize;
+    let end = start + len as usize;
 
-    // Find null terminator
-    let end = data[start..].iter().position(|&b| b == 0)?;
+    if end > data.len() {
+        return None;
+    }
 
-    std::str::from_utf8(&data[start..start + end])
+    std::str::from_utf8(&data[start..end])
         .ok()
         .map(String::from)
 }
