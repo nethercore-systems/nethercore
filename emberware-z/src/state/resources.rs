@@ -1,10 +1,24 @@
 //! Resource types pending GPU upload
 
+use super::BoneMatrix3x4;
+
+/// Pending skeleton load request (created during init)
+#[derive(Debug)]
+pub struct PendingSkeleton {
+    pub handle: u32,
+    pub inverse_bind: Vec<BoneMatrix3x4>,
+    pub bone_count: u32,
+}
+
 /// Custom bitmap font definition
 #[derive(Debug, Clone)]
 pub struct Font {
     /// Texture handle for the font atlas
     pub texture: u32,
+    /// Width of the texture atlas in pixels
+    pub atlas_width: u32,
+    /// Height of the texture atlas in pixels
+    pub atlas_height: u32,
     /// Width of each glyph in pixels (for fixed-width fonts)
     pub char_width: u8,
     /// Height of each glyph in pixels

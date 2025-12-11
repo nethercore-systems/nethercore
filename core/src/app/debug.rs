@@ -100,9 +100,9 @@ pub fn render_debug_overlay(
 
                             // Calculate heights (scaled to budget, capped at 150%)
                             let update_height =
-                                ((update_time / TARGET_FRAME_TIME_MS).min(1.5) * graph_height);
+                                (update_time / TARGET_FRAME_TIME_MS).min(1.5) * graph_height;
                             let render_height =
-                                ((render_time / TARGET_FRAME_TIME_MS).min(1.5) * graph_height);
+                                (render_time / TARGET_FRAME_TIME_MS).min(1.5) * graph_height;
                             let total_height = (update_height + render_height).min(graph_height);
 
                             let bottom_y = rect.bottom();

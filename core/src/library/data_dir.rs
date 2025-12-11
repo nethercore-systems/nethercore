@@ -34,18 +34,5 @@ pub trait DataDirProvider: Send + Sync {
     fn data_dir(&self) -> Option<PathBuf>;
 }
 
-/// Default implementation using the `directories` crate.
-///
-/// This is the standard implementation that most consoles should use.
-/// It follows platform conventions:
-/// - Windows: `%APPDATA%\emberware\emberware\data`
-/// - macOS: `~/Library/Application Support/io.emberware.emberware`
-/// - Linux: `~/.local/share/emberware`
-pub struct DefaultDataDirProvider;
-
-impl DataDirProvider for DefaultDataDirProvider {
-    fn data_dir(&self) -> Option<PathBuf> {
-        directories::ProjectDirs::from("io", "emberware", "emberware")
-            .map(|dirs| dirs.data_dir().to_path_buf())
-    }
-}
+// Note: Use `emberware_core::app::config::data_dir()` for the default path.
+// Consoles provide their own DataDirProvider implementation (e.g., ZDataDirProvider).

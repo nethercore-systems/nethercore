@@ -6,6 +6,7 @@ use anyhow::Result;
 use tracing::{info, warn};
 use wasmtime::{Caller, Linker};
 
+use super::get_wasm_memory;
 use emberware_core::wasm::GameStateWithConsole;
 
 use crate::audio::{AudioCommand, Sound};
@@ -55,12 +56,9 @@ fn load_sound(
     let sample_count = (byte_len / 2) as usize;
 
     // Get WASM memory
-    let memory = match caller.get_export("memory") {
-        Some(wasmtime::Extern::Memory(mem)) => mem,
-        _ => {
-            warn!("load_sound: failed to get WASM memory");
-            return 0;
-        }
+    let Some(memory) = get_wasm_memory(&mut caller) else {
+        warn!("load_sound: failed to get WASM memory");
+        return 0;
     };
 
     // Read PCM data from WASM memory

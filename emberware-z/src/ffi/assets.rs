@@ -4,7 +4,7 @@
 //! No magic bytes - format is determined by which function is called.
 //!
 //! Usage from game code:
-//! ```rust
+//! ```text
 //! static MESH_DATA: &[u8] = include_bytes!("player.ewzmesh");
 //! let handle = load_zmesh(MESH_DATA.as_ptr() as u32, MESH_DATA.len() as u32);
 //! ```
@@ -14,7 +14,9 @@
 
 use anyhow::Result;
 use tracing::{info, warn};
-use wasmtime::{Caller, Extern, Linker};
+use wasmtime::{Caller, Linker};
+
+use super::get_wasm_memory;
 
 use emberware_core::wasm::GameStateWithConsole;
 use emberware_shared::formats::{EmberZMeshHeader, EmberZSoundHeader, EmberZTextureHeader};
@@ -58,12 +60,9 @@ fn load_zmesh(
     }
 
     // Get memory reference
-    let memory = match caller.get_export("memory") {
-        Some(Extern::Memory(mem)) => mem,
-        _ => {
-            warn!("load_zmesh: failed to get WASM memory");
-            return 0;
-        }
+    let Some(memory) = get_wasm_memory(&mut caller) else {
+        warn!("load_zmesh: failed to get WASM memory");
+        return 0;
     };
 
     let ptr = data_ptr as usize;
@@ -193,12 +192,9 @@ fn load_ztex(
     }
 
     // Get memory reference
-    let memory = match caller.get_export("memory") {
-        Some(Extern::Memory(mem)) => mem,
-        _ => {
-            warn!("load_ztex: failed to get WASM memory");
-            return 0;
-        }
+    let Some(memory) = get_wasm_memory(&mut caller) else {
+        warn!("load_ztex: failed to get WASM memory");
+        return 0;
     };
 
     let ptr = data_ptr as usize;
@@ -282,7 +278,10 @@ fn load_ztex(
         data: pixel_data,
     });
 
-    info!("load_ztex: created texture {} ({}x{})", handle, width, height);
+    info!(
+        "load_ztex: created texture {} ({}x{})",
+        handle, width, height
+    );
 
     handle
 }
@@ -312,12 +311,9 @@ fn load_zsound(
     }
 
     // Get memory reference
-    let memory = match caller.get_export("memory") {
-        Some(Extern::Memory(mem)) => mem,
-        _ => {
-            warn!("load_zsound: failed to get WASM memory");
-            return 0;
-        }
+    let Some(memory) = get_wasm_memory(&mut caller) else {
+        warn!("load_zsound: failed to get WASM memory");
+        return 0;
     };
 
     let ptr = data_ptr as usize;
@@ -357,8 +353,7 @@ fn load_zsound(
         }
 
         // Copy sample data
-        let sample_bytes =
-            &data[EmberZSoundHeader::SIZE..EmberZSoundHeader::SIZE + sample_size];
+        let sample_bytes = &data[EmberZSoundHeader::SIZE..EmberZSoundHeader::SIZE + sample_size];
         let samples: &[i16] = bytemuck::cast_slice(sample_bytes);
 
         (header.sample_count, samples.to_vec())
@@ -381,7 +376,10 @@ fn load_zsound(
     }
     state.sounds[handle as usize] = Some(sound);
 
-    info!("load_zsound: created sound {} ({} samples)", handle, sample_count);
+    info!(
+        "load_zsound: created sound {} ({} samples)",
+        handle, sample_count
+    );
 
     handle
 }

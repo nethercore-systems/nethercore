@@ -1,6 +1,7 @@
 //! Application state and main loop
 
 mod debug;
+mod debug_values;
 mod game_session;
 mod init;
 mod ui;
@@ -12,6 +13,7 @@ use std::time::Instant;
 use winit::{event::WindowEvent, event_loop::ActiveEventLoop, window::Window};
 
 use crate::console::EmberwareZ;
+use crate::ffi::unpack_rgba;
 use crate::graphics::ZGraphics;
 use crate::input::InputManager;
 use crate::library::LocalGame;
@@ -21,7 +23,15 @@ use emberware_core::app::{
     session::GameSession, AppMode, DebugStats, RuntimeError, FRAME_TIME_HISTORY_SIZE,
 };
 use emberware_core::console::ConsoleResourceManager;
+use emberware_core::debug::{DebugPanel, FrameController};
 use emberware_core::wasm::WasmEngine;
+
+/// Data needed to render the debug panel (extracted before egui frame)
+struct DebugPanelData {
+    registry: emberware_core::debug::DebugRegistry,
+    mem_ptr: *mut u8,
+    mem_len: usize,
+}
 
 /// Application state
 pub struct App {
@@ -75,6 +85,10 @@ pub struct App {
     pub(crate) cached_pixels_per_point: f32,
     pub(crate) last_mode: AppMode,
     pub(crate) last_window_size: (u32, u32),
+    /// Debug inspection panel
+    pub(crate) debug_panel: DebugPanel,
+    /// Frame controller for pause/step/time scale
+    pub(crate) frame_controller: FrameController,
 }
 
 impl App {
@@ -185,6 +199,14 @@ impl App {
         let game_tick_fps = self.calculate_game_tick_fps();
         let last_error = self.last_error.clone();
 
+        // Prepare debug panel data BEFORE borrowing graphics (to avoid borrow conflicts)
+        let debug_panel_data =
+            if self.debug_panel.visible && matches!(mode, AppMode::Playing { .. }) {
+                self.prepare_debug_panel_data()
+            } else {
+                None
+            };
+
         let window = match self.window.clone() {
             Some(w) => w,
             None => return,
@@ -238,12 +260,7 @@ impl App {
                         if let Some(game) = session.runtime.game() {
                             let z_state = game.console_state();
 
-                            let clear = z_state.init_config.clear_color;
-                            let clear_r = ((clear >> 24) & 0xFF) as f32 / 255.0;
-                            let clear_g = ((clear >> 16) & 0xFF) as f32 / 255.0;
-                            let clear_b = ((clear >> 8) & 0xFF) as f32 / 255.0;
-                            let clear_a = (clear & 0xFF) as f32 / 255.0;
-                            [clear_r, clear_g, clear_b, clear_a]
+                            unpack_rgba(z_state.init_config.clear_color)
                         } else {
                             [0.1, 0.1, 0.1, 1.0]
                         }
@@ -276,17 +293,24 @@ impl App {
         // Collect UI action separately to avoid borrow conflicts
         let mut ui_action = None;
 
-        // Collect debug stats for overlay
-        let debug_stats = DebugStats {
-            frame_times: self.debug_stats.frame_times.clone(),
-            game_tick_times: self.debug_stats.game_tick_times.clone(),
-            game_render_times: self.debug_stats.game_render_times.clone(),
-            vram_used: self.debug_stats.vram_used,
-            vram_limit: self.debug_stats.vram_limit,
-            ping_ms: self.debug_stats.ping_ms,
-            rollback_frames: self.debug_stats.rollback_frames,
-            frame_advantage: self.debug_stats.frame_advantage,
-            network_interrupted: self.debug_stats.network_interrupted,
+        // Track if debug values were changed (set inside closure)
+        let mut debug_values_changed = false;
+
+        // Collect debug stats for overlay only when needed (avoid VecDeque clones every frame)
+        let debug_stats = if debug_overlay {
+            Some(DebugStats {
+                frame_times: self.debug_stats.frame_times.clone(),
+                game_tick_times: self.debug_stats.game_tick_times.clone(),
+                game_render_times: self.debug_stats.game_render_times.clone(),
+                vram_used: self.debug_stats.vram_used,
+                vram_limit: self.debug_stats.vram_limit,
+                ping_ms: self.debug_stats.ping_ms,
+                rollback_frames: self.debug_stats.rollback_frames,
+                frame_advantage: self.debug_stats.frame_advantage,
+                network_interrupted: self.debug_stats.network_interrupted,
+            })
+        } else {
+            None
         };
 
         let full_output = self.egui_ctx.run(raw_input, |ctx| {
@@ -320,15 +344,57 @@ impl App {
                 }
             }
 
-            // Debug overlay
-            if debug_overlay {
+            // Debug overlay (only when enabled - stats are only cloned when needed)
+            if let Some(ref stats) = debug_stats {
                 emberware_core::app::render_debug_overlay(
                     ctx,
-                    &debug_stats,
+                    stats,
                     matches!(mode, AppMode::Playing { .. }),
                     frame_time_ms,
                     render_fps,
                     game_tick_fps,
+                );
+            }
+
+            // Debug inspection panel - MUST be inside ctx.run() to receive input
+            if let Some(ref data) = debug_panel_data {
+                use emberware_core::debug::{DebugValue, RegisteredValue};
+
+                let mem_ptr = data.mem_ptr;
+                let mem_len = data.mem_len;
+
+                // Create read closure using raw pointer
+                let read_value = |reg_value: &RegisteredValue| -> Option<DebugValue> {
+                    let ptr = reg_value.wasm_ptr as usize;
+                    let size = reg_value.value_type.byte_size();
+                    if ptr + size > mem_len {
+                        return None;
+                    }
+                    // SAFETY: Bounds checked above, pointer valid for this frame
+                    let slice = unsafe { std::slice::from_raw_parts(mem_ptr.add(ptr), size) };
+                    debug_values::read_from_slice(slice, reg_value.value_type)
+                };
+
+                // Create write closure using raw pointer
+                let write_value = |reg_value: &RegisteredValue, new_val: &DebugValue| -> bool {
+                    let ptr = reg_value.wasm_ptr as usize;
+                    let size = reg_value.value_type.byte_size();
+                    if ptr + size > mem_len {
+                        return false;
+                    }
+                    // SAFETY: Bounds checked above, pointer valid for this frame
+                    let slice = unsafe { std::slice::from_raw_parts_mut(mem_ptr.add(ptr), size) };
+                    debug_values::write_to_slice(slice, new_val);
+                    true
+                };
+
+                // Render the panel (use ctx from closure, not self.egui_ctx)
+                debug_values_changed = self.debug_panel.render(
+                    ctx,
+                    &data.registry,
+                    &mut self.frame_controller,
+                    read_value,
+                    write_value,
                 );
             }
         });
@@ -502,6 +568,15 @@ impl App {
         // Present frame
         surface_texture.present();
 
+        // Call on_debug_change() if debug values were modified
+        if debug_values_changed {
+            if let Some(session) = &mut self.game_session {
+                if let Some(game) = session.runtime.game_mut() {
+                    game.call_on_debug_change();
+                }
+            }
+        }
+
         // Handle UI action after rendering is complete
         if let Some(action) = ui_action {
             if matches!(action, UiAction::OpenSettings) && matches!(self.mode, AppMode::Settings) {
@@ -513,6 +588,37 @@ impl App {
 
         // Request next frame
         self.request_redraw_if_needed();
+    }
+
+    /// Prepare debug panel data before the egui frame
+    ///
+    /// Returns None if no debug panel should be shown (no game, no registry, etc.)
+    fn prepare_debug_panel_data(&mut self) -> Option<DebugPanelData> {
+        let session = self.game_session.as_mut()?;
+        let game = session.runtime.game_mut()?;
+        let store = game.store_mut();
+
+        // Check if registry has any values
+        if store.data().debug_registry.is_empty() {
+            return None;
+        }
+
+        // Get memory handle
+        let memory = store.data().game.memory?;
+
+        // Clone the registry
+        let registry = store.data().debug_registry.clone();
+
+        // Get raw pointer to WASM memory
+        // SAFETY: Pointer is valid for the duration of this frame
+        let mem_ptr = memory.data_ptr(&mut *store);
+        let mem_len = memory.data_size(&mut *store);
+
+        Some(DebugPanelData {
+            registry,
+            mem_ptr,
+            mem_len,
+        })
     }
 
     fn request_redraw_if_needed(&mut self) {
@@ -559,25 +665,51 @@ impl emberware_core::app::ConsoleApp<EmberwareZ> for App {
                 self.mark_needs_redraw();
                 return true; // Event consumed
             }
-        }
 
-        match event {
-            WindowEvent::Resized(new_size) => {
-                tracing::debug!("Window resized to {:?}", new_size);
-                self.handle_resize(*new_size);
-                false
+            // Check if egui wants keyboard input (text fields, sliders, etc.)
+            let egui_wants_keyboard = self.egui_ctx.wants_keyboard_input();
+
+            match event {
+                WindowEvent::Resized(new_size) => {
+                    tracing::debug!("Window resized to {:?}", new_size);
+                    self.handle_resize(*new_size);
+                    false
+                }
+                WindowEvent::ScaleFactorChanged { .. } => {
+                    tracing::debug!("DPI scale factor changed");
+                    false
+                }
+                WindowEvent::KeyboardInput {
+                    event: key_event, ..
+                } => {
+                    // Only pass keyboard input to game if egui doesn't want it
+                    if !egui_wants_keyboard {
+                        self.handle_key_input(key_event.clone());
+                    }
+                    false
+                }
+                _ => false,
             }
-            WindowEvent::ScaleFactorChanged { .. } => {
-                tracing::debug!("DPI scale factor changed");
-                false
+        } else {
+            // No egui state - handle events normally
+            match event {
+                WindowEvent::Resized(new_size) => {
+                    tracing::debug!("Window resized to {:?}", new_size);
+                    self.handle_resize(*new_size);
+                    false
+                }
+                WindowEvent::ScaleFactorChanged { .. } => {
+                    tracing::debug!("DPI scale factor changed");
+                    false
+                }
+                WindowEvent::KeyboardInput {
+                    event: key_event, ..
+                } => {
+                    self.handle_key_input(key_event.clone());
+                    false
+                }
+                _ => false,
             }
-            WindowEvent::KeyboardInput {
-                event: key_event, ..
-            } => {
-                self.handle_key_input(key_event.clone());
-                false
-            }
-            _ => false,
         }
     }
 

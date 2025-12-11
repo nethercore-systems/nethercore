@@ -14,6 +14,7 @@ use crate::library;
 use crate::ui::LibraryUi;
 use emberware_core::app::config;
 use emberware_core::app::{AppMode, DebugStats, FRAME_TIME_HISTORY_SIZE};
+use emberware_core::debug::{DebugPanel, FrameController};
 use emberware_core::wasm::WasmEngine;
 
 use super::App;
@@ -81,6 +82,8 @@ impl App {
             cached_pixels_per_point: 1.0,
             last_mode: initial_mode.clone(),
             last_window_size: (960, 540),
+            debug_panel: DebugPanel::new(),
+            frame_controller: FrameController::new(),
         }
     }
 

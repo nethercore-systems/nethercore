@@ -89,6 +89,7 @@ impl QuadInstance {
     }
 
     /// Create a billboard instance at a world-space position
+    #[allow(clippy::too_many_arguments)]
     pub fn billboard(
         position: [f32; 3],
         width: f32,
@@ -111,6 +112,7 @@ impl QuadInstance {
     }
 
     /// Create a screen-space sprite instance
+    #[allow(clippy::too_many_arguments)]
     pub fn sprite(
         screen_x: f32,
         screen_y: f32,

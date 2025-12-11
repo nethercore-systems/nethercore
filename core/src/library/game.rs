@@ -76,18 +76,27 @@ fn get_games_from_dir(games_dir: &Path) -> Vec<LocalGame> {
                 });
             }
 
-            // Backward compatibility: Check if this is a legacy game directory
+            // Check if this is a game directory
             if path.is_dir() {
                 let manifest_path = path.join("manifest.json");
                 let manifest_content = std::fs::read_to_string(manifest_path).ok()?;
                 let manifest: LocalGameManifest = serde_json::from_str(&manifest_content).ok()?;
+
+                // Check for ROM file - prefer .ewz (data pack), fall back to .wasm
+                let ewz_path = path.join("rom.ewz");
+                let wasm_path = path.join("rom.wasm");
+                let rom_path = if ewz_path.exists() {
+                    ewz_path
+                } else {
+                    wasm_path
+                };
 
                 return Some(LocalGame {
                     id: manifest.id,
                     title: manifest.title,
                     author: manifest.author,
                     version: manifest.version,
-                    rom_path: path.join("rom.wasm"), // Points to extracted WASM
+                    rom_path,
                     console_type: manifest.console_type,
                 });
             }

@@ -4,7 +4,9 @@
 //! Format constants and stride functions are in z-common.
 
 // Re-export format constants from z-common
-pub use z_common::{vertex_stride, vertex_stride_packed, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV};
+pub use z_common::{
+    vertex_stride, vertex_stride_packed, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV,
+};
 
 /// All format flags combined
 pub const FORMAT_ALL: u8 = FORMAT_UV | FORMAT_COLOR | FORMAT_NORMAL | FORMAT_SKINNED;
@@ -87,7 +89,6 @@ impl VertexFormatInfo {
     /// - `attributes` built from the format flags
     ///
     /// The returned layout can be used when creating render pipelines.
-    #[cfg(feature = "runtime")]
     pub fn vertex_buffer_layout(&self) -> wgpu::VertexBufferLayout<'static> {
         // Build attribute list based on format
         let attributes = Self::build_attributes(self.format);
@@ -110,7 +111,6 @@ impl VertexFormatInfo {
     /// - Location 3: Normal (if FORMAT_NORMAL, Uint32 octahedral)
     /// - Location 4: Bone indices (if FORMAT_SKINNED, Uint8x4)
     /// - Location 5: Bone weights (if FORMAT_SKINNED, Unorm8x4)
-    #[cfg(feature = "runtime")]
     fn build_attributes(format: u8) -> &'static [wgpu::VertexAttribute] {
         VERTEX_ATTRIBUTES[format as usize]
     }
@@ -120,7 +120,6 @@ impl VertexFormatInfo {
 // wgpu-specific vertex attribute definitions (requires runtime feature)
 // ============================================================================
 
-#[cfg(feature = "runtime")]
 mod wgpu_attrs {
     /// Attribute sizes in bytes for offset calculation (packed formats - GPU only)
     const SIZE_POS: u64 = 8; // Float16x4 (padded for alignment)
@@ -128,7 +127,8 @@ mod wgpu_attrs {
     const SIZE_COLOR: u64 = 4; // Unorm8x4
     const SIZE_NORMAL: u64 = 4; // Octahedral u32
     const SIZE_BONE_INDICES: u64 = 4; // Uint8x4
-    const SIZE_BONE_WEIGHTS: u64 = 4; // Unorm8x4
+                                      // Note: SIZE_BONE_WEIGHTS not needed - bone weights is always the last attribute
+                                      // so its size never appears in offset calculations
 
     /// Shader locations for each attribute type
     const LOC_POS: u32 = 0;
@@ -294,7 +294,6 @@ mod wgpu_attrs {
     ];
 }
 
-#[cfg(feature = "runtime")]
 use wgpu_attrs::VERTEX_ATTRIBUTES;
 
 #[cfg(test)]

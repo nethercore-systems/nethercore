@@ -10,7 +10,8 @@ Emberware Z is a 5th-generation fantasy console targeting PS1/N64/Saturn aesthet
 | **Resolution** | 360p, 540p (default), 720p, 1080p |
 | **Color depth** | RGBA8 |
 | **Tick rate** | 24, 30, 60 (default), 120 fps |
-| **Memory** | 8MB unified (code + assets + game state) |
+| **ROM (Cartridge)** | 12MB (WASM code + data pack assets) |
+| **RAM** | 4MB (WASM linear memory for game state) |
 | **VRAM** | 4MB (GPU textures and mesh buffers) |
 | **CPU budget** | 4ms per tick (at 60fps) |
 | **Netcode** | Deterministic rollback via GGRS |
@@ -18,30 +19,43 @@ Emberware Z is a 5th-generation fantasy console targeting PS1/N64/Saturn aesthet
 
 ### Memory Model
 
-Emberware Z uses a **unified 8MB memory model**. Everything lives in WASM linear memory:
-- Compiled game code
-- Static data and embedded assets (`include_bytes!`)
+Emberware Z uses a **12MB ROM + 4MB RAM** memory model with datapack-based asset loading. This separates immutable data from game state, enabling efficient rollback.
+
+**ROM (Cartridge) — 12MB total:**
+- WASM bytecode (typically 50-200 KB)
+- Data pack: textures, meshes, sounds, fonts, raw data
+- Assets loaded via `rom_*` FFI go directly to VRAM/audio memory
+
+**RAM (Linear Memory) — 4MB:**
 - Stack (function calls, local variables)
 - Heap (dynamic allocations, game state)
+- Only resource handles (u32 IDs) stored here
 
-This entire memory is automatically snapshotted for rollback netcode using xxHash3 checksums (~0.5ms per save). Games cannot exceed the 8MB limit — the host enforces this via wasmtime's ResourceLimiter.
+**VRAM — 4MB:**
+- GPU textures uploaded via `load_texture()` or `rom_texture()`
+- Mesh buffers uploaded via `mesh_create()` or `rom_mesh()`
+
+**Rollback Performance:**
+Only the 4MB RAM is snapshotted. With xxHash3: ~0.25ms per save.
+During an 8-frame rollback at 60fps: ~2ms total — well within frame budget.
 
 **Memory Budget Guidelines:**
 
-| Component | Typical Size | Notes |
-|-----------|--------------|-------|
-| Code | 50-200 KB | Even complex games |
-| Textures (before VRAM upload) | 1-4 MB | Uploaded to GPU in `init()` |
-| Audio | 500 KB - 2 MB | Use tracker music for BGM |
-| Animations | ~100 KB/character | With keyframe compression |
-| Game state | 10-100 KB | Entities, physics, etc. |
+| Component | Location | Typical Size |
+|-----------|----------|--------------|
+| WASM code | ROM | 50-200 KB |
+| Textures | ROM → VRAM | 2-8 MB |
+| Meshes | ROM → VRAM | 500 KB - 2 MB |
+| Sounds | ROM → Audio | 500 KB - 2 MB |
+| Animations | ROM (data) | ~100 KB/character |
+| Game state | RAM | 10-100 KB |
 
-**Example: Full fighting game budget (~4.4MB)**
-- 8 characters with meshes, textures, animations: ~1.5MB
-- 3 stages: ~1MB
-- Sound effects: ~650KB
-- Music (tracker): ~120KB
-- Effects, UI, code: ~1.1MB
+**Example: Full fighting game (~10MB ROM)**
+- 8 characters with meshes, textures, animations: ~4MB
+- 3 stages: ~3MB
+- Sound effects + music: ~2MB
+- Effects, UI, code: ~1MB
+- Game state in RAM: ~50KB (tiny for fast rollback!)
 
 ### Configuration (init-only)
 
@@ -287,16 +301,48 @@ Normalized Blinn-Phong with metallic-roughness workflow. Energy-conserving light
 **Lighting Functions:**
 
 ```rust
+// Directional lights (default)
 fn light_set(index: u32, x: f32, y: f32, z: f32)  // index 0-3, direction vector
 fn light_color(index: u32, color: u32)             // 0xRRGGBBAA
-fn light_intensity(index: u32, intensity: f32)
+fn light_intensity(index: u32, intensity: f32)    // 0.0-8.0 range
 fn light_enable(index: u32)
 fn light_disable(index: u32)
+
+// Point lights
+fn light_set_point(index: u32, x: f32, y: f32, z: f32)  // World-space position
+fn light_range(index: u32, range: f32)                   // Falloff distance
 
 // Sun comes from procedural sky (sky_set_sun)
 ```
 
-All lights are directional. The `x`, `y`, `z` parameters specify the light direction (normalized internally).
+**Directional Lights:** The default light type. The `x`, `y`, `z` parameters in `light_set()` specify the direction rays travel (normalized internally). For a light from above, use `(0, -1, 0)`.
+
+**Point Lights:** Emit light from a position in world space with distance-based falloff. Call `light_set_point()` to convert a light slot to a point light at a specific position. Use `light_range()` to control the falloff distance — light intensity reaches zero at this distance.
+
+**Attenuation:** Point lights use smooth quadratic falloff: `(1 - distance/range)²`
+
+**Example: Point Light Setup**
+```rust
+// Set light 0 as a point light above the player
+light_set_point(0, player_x, player_y + 2.0, player_z);
+light_color(0, 0xFFAA44FF);  // Warm orange
+light_intensity(0, 3.0);      // HDR intensity (0-8 range)
+light_range(0, 15.0);         // Light reaches zero at 15 units
+```
+
+**Example: Orbiting Point Light**
+```rust
+fn update() {
+    // Orbit point light around the player
+    let angle = elapsed_time() * 2.0;  // 2 radians per second
+    let orbit_radius = 3.0;
+    let px = player_x + sin(angle) * orbit_radius;
+    let pz = player_z + cos(angle) * orbit_radius;
+    light_set_point(1, px, player_y + 1.5, pz);
+}
+```
+
+**Intensity Range:** Intensity now uses 0.0-8.0 range for HDR support. Values above 1.0 create brighter-than-expected lights useful for point light falloff.
 
 **Material Properties:**
 
@@ -397,12 +443,16 @@ Classic Blinn-Phong lighting with energy-conserving Gotanda normalization. Era-a
 **Lighting Functions (same as Mode 2):**
 
 ```rust
-// 4 dynamic lights (index 0-3)
-fn light_set(index: u32, x: f32, y: f32, z: f32)
-fn light_color(index: u32, color: u32)  // 0xRRGGBBAA
-fn light_intensity(index: u32, intensity: f32)
+// Directional lights (index 0-3)
+fn light_set(index: u32, x: f32, y: f32, z: f32)  // Direction vector
+fn light_color(index: u32, color: u32)             // 0xRRGGBBAA
+fn light_intensity(index: u32, intensity: f32)    // 0.0-8.0 range
 fn light_enable(index: u32)
 fn light_disable(index: u32)
+
+// Point lights
+fn light_set_point(index: u32, x: f32, y: f32, z: f32)  // World position
+fn light_range(index: u32, range: f32)                   // Falloff distance
 
 // Sun lighting comes from procedural sky (sky_set_sun)
 ```
@@ -685,19 +735,22 @@ position → uv (if present) → color (if present) → normal (if present) → 
 **Bone transform upload:**
 
 ```rust
-fn set_bones(matrices: *const f32, count: u32)  // 12 floats per bone (3×4 matrix, row-major)
+fn set_bones(matrices: *const f32, count: u32)  // 12 floats per bone (3×4 matrix, column-major)
 ```
 
 Call `set_bones()` before `draw_mesh()` or `draw_triangles()` to upload the current bone transforms. Maximum 256 bones per skeleton.
 
-**Matrix layout (row-major, 12 floats per bone):**
+**Matrix layout (column-major, 12 floats per bone):**
 
 ```text
-[m00, m01, m02, tx]  // row 0: X axis + translation X
-[m10, m11, m12, ty]  // row 1: Y axis + translation Y
-[m20, m21, m22, tz]  // row 2: Z axis + translation Z
-// row 3 [0, 0, 0, 1] is implicit (affine transform)
+[m00, m10, m20]  // col 0: X axis
+[m01, m11, m21]  // col 1: Y axis
+[m02, m12, m22]  // col 2: Z axis
+[tx,  ty,  tz ]  // col 3: translation
+// implicit 4th row [0, 0, 0, 1] (affine transform)
 ```
+
+This is the same convention as `transform_set()` and glam/WGSL. Memory layout: `[col0.x, col0.y, col0.z, col1.x, col1.y, col1.z, col2.x, col2.y, col2.z, tx, ty, tz]`
 
 This format saves 25% memory compared to 4×4 matrices (48 bytes vs 64 bytes per bone) while preserving full precision for affine transformations.
 
@@ -724,12 +777,12 @@ fn init() {
         );
         BONE_COUNT = 24;  // This character has 24 bones
 
-        // Initialize bone matrices to identity (3x4 row-major)
+        // Initialize bone matrices to identity (3x4 column-major)
         for i in 0..BONE_COUNT as usize {
-            BONE_MATRICES[i * 12 + 0] = 1.0;  // row0.x (X axis)
-            BONE_MATRICES[i * 12 + 5] = 1.0;  // row1.y (Y axis)
-            BONE_MATRICES[i * 12 + 10] = 1.0; // row2.z (Z axis)
-            // Translation (row0.w, row1.w, row2.w) default to 0.0
+            BONE_MATRICES[i * 12 + 0] = 1.0;  // col0.x (X axis x component)
+            BONE_MATRICES[i * 12 + 4] = 1.0;  // col1.y (Y axis y component)
+            BONE_MATRICES[i * 12 + 8] = 1.0;  // col2.z (Z axis z component)
+            // Translation (indices 9, 10, 11) defaults to 0.0
         }
     }
 }
@@ -759,6 +812,102 @@ fn render() {
 - For best performance, limit to 4 bones per vertex with normalized weights
 - CPU-side animation (keyframes, blend trees, IK) is left to the developer
 - Industry standard: Unity, Unreal, and most engines use 3×4 matrices for skeletal animation
+
+### Skeletal Animation (Inverse Bind Mode)
+
+For production skeletal animation workflows, Emberware Z supports **inverse bind mode**. Instead of pre-multiplying inverse bind matrices on the CPU, you can upload them once and let the GPU apply them automatically.
+
+**Two skinning modes:**
+
+| Mode | `skeleton_bind()` | `set_bones()` receives | GPU applies |
+|------|-------------------|------------------------|-------------|
+| **Raw** (default) | `0` or not called | Final skinning matrices | Nothing extra |
+| **Inverse Bind** | Valid skeleton handle | Model-space bone transforms | `bone × inverse_bind` |
+
+**Raw mode** (backward compatible): Developer pre-computes `bone_transform × inverse_bind` on CPU, uploads as final matrix.
+
+**Inverse Bind mode** (new): Developer uploads model-space transforms from animation data, GPU multiplies by inverse bind matrices.
+
+```rust
+fn load_skeleton(inverse_bind_ptr: *const f32, bone_count: u32) -> u32
+fn skeleton_bind(skeleton: u32)
+```
+
+**load_skeleton:**
+
+Loads inverse bind matrices for a skeleton. Call once during `init()`.
+
+- `inverse_bind_ptr`: Pointer to array of 3×4 matrices (12 floats each, column-major)
+- `bone_count`: Number of bones (maximum 256)
+- Returns: Skeleton handle (non-zero on success, 0 on error)
+
+**skeleton_bind:**
+
+Binds a skeleton for subsequent skinned mesh rendering.
+
+- `skeleton = 0`: Disable inverse bind mode (raw mode)
+- `skeleton > 0`: Enable inverse bind mode using specified skeleton
+
+**Example workflow:**
+
+```rust
+static mut SKELETON: u32 = 0;
+static mut CHARACTER_MESH: u32 = 0;
+static INVERSE_BIND_DATA: &[u8] = include_bytes!("assets/character.ewzskel");
+
+fn init() {
+    unsafe {
+        // Load skeleton (inverse bind matrices)
+        let header_size = 8;  // 2 × u32 header
+        let bone_count = u32::from_le_bytes([
+            INVERSE_BIND_DATA[0], INVERSE_BIND_DATA[1],
+            INVERSE_BIND_DATA[2], INVERSE_BIND_DATA[3]
+        ]);
+        let matrices_ptr = INVERSE_BIND_DATA[header_size..].as_ptr() as *const f32;
+        SKELETON = load_skeleton(matrices_ptr, bone_count);
+
+        // Load skinned mesh
+        CHARACTER_MESH = load_mesh(...);
+    }
+}
+
+fn render() {
+    unsafe {
+        // Bind skeleton (enables inverse bind mode)
+        skeleton_bind(SKELETON);
+
+        // Upload model-space bone transforms (animation data)
+        // GPU will automatically apply: final = bone × inverse_bind
+        set_bones(animation_bones.as_ptr(), bone_count);
+
+        draw_mesh(CHARACTER_MESH);
+
+        // Unbind skeleton for other meshes (optional, or use different skeleton)
+        skeleton_bind(0);
+    }
+}
+```
+
+**When to use each mode:**
+
+- **Raw mode**: Simple cases, single character, manual control over matrix composition
+- **Inverse Bind mode**: Multiple skeletons, glTF pipeline, cleaner separation of animation and bind pose
+
+**Asset export:**
+
+Use `ember-export` to convert glTF skeletons:
+
+```bash
+# Export skeleton (inverse bind matrices)
+ember-export skeleton character.glb -o character.ewzskel
+
+# Export animation clip (sampled transforms)
+ember-export animation character.glb -o walk.ewzanim --frame-rate 30
+
+# List available skeletons/animations
+ember-export skeleton character.glb --list
+ember-export animation character.glb --list
+```
 
 ### Textures
 

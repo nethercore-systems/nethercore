@@ -129,6 +129,7 @@ impl VirtualRenderPass {
     ///
     /// `textures` contains FFI texture handles captured at command creation time.
     /// They are resolved to TextureHandle at render time via texture_map.
+    #[allow(clippy::too_many_arguments)]
     pub fn record_triangles(
         &mut self,
         format: u8,
@@ -165,6 +166,7 @@ impl VirtualRenderPass {
     ///
     /// `textures` contains FFI texture handles captured at command creation time.
     /// They are resolved to TextureHandle at render time via texture_map.
+    #[allow(clippy::too_many_arguments)]
     pub fn record_triangles_indexed(
         &mut self,
         format: u8,
@@ -207,6 +209,7 @@ impl VirtualRenderPass {
     ///
     /// `textures` contains FFI texture handles captured at command creation time.
     /// They are resolved to TextureHandle at render time via texture_map.
+    #[allow(clippy::too_many_arguments)]
     pub fn record_mesh(
         &mut self,
         mesh_format: u8,

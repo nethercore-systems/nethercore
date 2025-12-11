@@ -1,11 +1,23 @@
 //! Emberware Z ROM format (`.ewz`)
 //!
 //! Binary ROM format for Emberware Z games using bitcode serialization.
-//! Each ROM contains game code, metadata, and optional assets (thumbnail, screenshots).
+//! Each ROM contains game code, metadata, optional data pack, and preview assets.
+//!
+//! # Memory Model
+//!
+//! Emberware Z uses a **12MB ROM + 4MB RAM** memory model:
+//! - ROM (Cartridge): 12 MB total (WASM code + assets via data pack)
+//! - RAM: 4 MB WASM linear memory (code + heap + stack)
+//! - VRAM: 4 MB GPU textures and mesh buffers
+//!
+//! Assets loaded via `rom_*` FFI go directly to VRAM/audio memory on the host,
+//! bypassing WASM linear memory. Only handles (u32 IDs) live in game state.
 
 use bitcode::{Decode, Encode};
 
 use crate::local::LocalGameManifest;
+
+use super::z_data_pack::ZDataPack;
 
 /// Emberware Z ROM format version
 pub const EWZ_VERSION: u32 = 1;
@@ -16,7 +28,26 @@ pub const EWZ_MAGIC: &[u8; 4] = b"EWZ\0";
 /// Complete Emberware Z ROM
 ///
 /// This struct represents a complete game ROM for Emberware Z, including
-/// all metadata, compiled WASM code, and optional assets.
+/// all metadata, compiled WASM code, optional data pack, and preview assets.
+///
+/// # Memory Layout
+///
+/// ```text
+/// ┌─────────────────────────────────────────────────────────────┐
+/// │                    .ewz ROM File (≤12MB)                    │
+/// ├─────────────────────────────────────────────────────────────┤
+/// │  EWZ Header (4 bytes)                                       │
+/// │  ├── Magic: "EWZ\0"                                         │
+/// ├─────────────────────────────────────────────────────────────┤
+/// │  ZRom (bitcode serialized)                                  │
+/// │  ├── version: u32                                           │
+/// │  ├── metadata: ZMetadata                                    │
+/// │  ├── code: Vec<u8>         ← WASM bytecode (≤4MB)          │
+/// │  ├── data_pack: Option<ZDataPack>  ← Bundled assets        │
+/// │  ├── thumbnail: Option<Vec<u8>>                            │
+/// │  └── screenshots: Vec<Vec<u8>>                             │
+/// └─────────────────────────────────────────────────────────────┘
+/// ```
 #[derive(Debug, Clone, Encode, Decode)]
 pub struct ZRom {
     /// ROM format version (currently 1)
@@ -25,8 +56,15 @@ pub struct ZRom {
     /// Game metadata
     pub metadata: ZMetadata,
 
-    /// Compiled WASM code
+    /// Compiled WASM code (must fit in 4MB RAM)
     pub code: Vec<u8>,
+
+    /// Optional data pack containing bundled assets
+    ///
+    /// Assets in the data pack are loaded via `rom_*` FFI functions and go
+    /// directly to VRAM/audio memory, bypassing WASM linear memory.
+    /// This enables efficient rollback (only 4MB RAM snapshotted).
+    pub data_pack: Option<ZDataPack>,
 
     /// Optional thumbnail (256x256 PNG, extracted locally during installation)
     pub thumbnail: Option<Vec<u8>>,
@@ -198,6 +236,7 @@ mod tests {
                 target_fps: Some(60),
             },
             code: b"\0asm\x01\x00\x00\x00".to_vec(), // Valid WASM header
+            data_pack: None,                         // No bundled assets for simple test
             thumbnail: None,
             screenshots: vec![],
         }

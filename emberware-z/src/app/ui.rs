@@ -262,7 +262,38 @@ impl App {
             if pressed {
                 match key_code {
                     KeyCode::F3 => {
+                        // Toggle stats overlay only
                         self.debug_overlay = !self.debug_overlay;
+                    }
+                    KeyCode::F4 => {
+                        // Toggle debug inspector panel (only when playing)
+                        if matches!(self.mode, AppMode::Playing { .. }) {
+                            self.debug_panel.toggle();
+                        }
+                    }
+                    KeyCode::F5 => {
+                        // Toggle pause (only in Playing mode)
+                        if matches!(self.mode, AppMode::Playing { .. }) {
+                            self.frame_controller.toggle_pause();
+                        }
+                    }
+                    KeyCode::F6 => {
+                        // Step single frame (only when paused in Playing mode)
+                        if matches!(self.mode, AppMode::Playing { .. }) {
+                            self.frame_controller.request_step();
+                        }
+                    }
+                    KeyCode::F7 => {
+                        // Decrease time scale (only in Playing mode)
+                        if matches!(self.mode, AppMode::Playing { .. }) {
+                            self.frame_controller.decrease_time_scale();
+                        }
+                    }
+                    KeyCode::F8 => {
+                        // Increase time scale (only in Playing mode)
+                        if matches!(self.mode, AppMode::Playing { .. }) {
+                            self.frame_controller.increase_time_scale();
+                        }
                     }
                     KeyCode::F11 => {
                         self.toggle_fullscreen();

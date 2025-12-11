@@ -1,18 +1,20 @@
 //! ember-export - Emberware asset export tool
 //!
 //! Converts raw assets (glTF, PNG, WAV, TTF) to GPU-ready binary formats
-//! (.ewzmesh, .ewztex, .ewzsnd)
+//! (.ewzmesh, .ewztex, .ewzsnd, .ewzskel, .ewzanim)
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
+mod animation;
+mod audio;
 mod codegen;
 mod formats;
 mod manifest;
 mod mesh;
+mod skeleton;
 mod texture;
-mod audio;
 // mod font;  // Deferred
 
 // Re-export packing functions and vertex format constants from z-common
@@ -23,7 +25,9 @@ pub use z_common::{
 };
 
 // Re-export file extension constants
-pub use emberware_shared::formats::{EWZ_MESH_EXT, EWZ_SOUND_EXT, EWZ_TEXTURE_EXT};
+pub use emberware_shared::formats::{
+    EWZ_ANIMATION_EXT, EWZ_MESH_EXT, EWZ_SKELETON_EXT, EWZ_SOUND_EXT, EWZ_TEXTURE_EXT,
+};
 
 #[derive(Parser)]
 #[command(name = "ember-export")]
@@ -91,6 +95,50 @@ enum Commands {
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
+
+    /// Export skeleton (inverse bind matrices) from glTF
+    Skeleton {
+        /// Input glTF/GLB file
+        input: PathBuf,
+
+        /// Output .ewzskel file
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+
+        /// Skin index (default: first skin)
+        #[arg(short, long)]
+        skin: Option<usize>,
+
+        /// List available skins instead of exporting
+        #[arg(long)]
+        list: bool,
+    },
+
+    /// Export animation clip from glTF
+    Animation {
+        /// Input glTF/GLB file
+        input: PathBuf,
+
+        /// Output .ewzanim file
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+
+        /// Animation index (default: first animation)
+        #[arg(short, long)]
+        animation: Option<usize>,
+
+        /// Skin index (default: first skin)
+        #[arg(short, long)]
+        skin: Option<usize>,
+
+        /// Frame rate for sampling (default: 30)
+        #[arg(short, long)]
+        frame_rate: Option<f32>,
+
+        /// List available animations instead of exporting
+        #[arg(long)]
+        list: bool,
+    },
 }
 
 fn main() -> Result<()> {
@@ -105,7 +153,11 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Build { manifest, output, verbose } => {
+        Commands::Build {
+            manifest,
+            output,
+            verbose,
+        } => {
             if verbose {
                 tracing::info!("Building assets from {:?}", manifest);
             }
@@ -121,12 +173,17 @@ fn main() -> Result<()> {
             tracing::info!("Manifest is valid!");
         }
 
-        Commands::Mesh { input, output, format } => {
+        Commands::Mesh {
+            input,
+            output,
+            format,
+        } => {
             let output = output.unwrap_or_else(|| input.with_extension(EWZ_MESH_EXT));
             tracing::info!("Converting {:?} -> {:?}", input, output);
 
             // Detect format by extension
-            let ext = input.extension()
+            let ext = input
+                .extension()
                 .and_then(|e| e.to_str())
                 .map(|s| s.to_lowercase())
                 .unwrap_or_default();
@@ -134,7 +191,10 @@ fn main() -> Result<()> {
             match ext.as_str() {
                 "obj" => mesh::convert_obj(&input, &output, format.as_deref())?,
                 "gltf" | "glb" => mesh::convert_gltf(&input, &output, format.as_deref())?,
-                _ => anyhow::bail!("Unsupported mesh format: {:?} (use .obj, .gltf, or .glb)", input),
+                _ => anyhow::bail!(
+                    "Unsupported mesh format: {:?} (use .obj, .gltf, or .glb)",
+                    input
+                ),
             }
             tracing::info!("Done!");
         }
@@ -151,6 +211,40 @@ fn main() -> Result<()> {
             tracing::info!("Converting {:?} -> {:?}", input, output);
             audio::convert_wav(&input, &output)?;
             tracing::info!("Done!");
+        }
+
+        Commands::Skeleton {
+            input,
+            output,
+            skin,
+            list,
+        } => {
+            if list {
+                skeleton::list_skins(&input)?;
+            } else {
+                let output = output.unwrap_or_else(|| input.with_extension(EWZ_SKELETON_EXT));
+                tracing::info!("Exporting skeleton {:?} -> {:?}", input, output);
+                skeleton::convert_gltf_skeleton(&input, &output, skin)?;
+                tracing::info!("Done!");
+            }
+        }
+
+        Commands::Animation {
+            input,
+            output,
+            animation,
+            skin,
+            frame_rate,
+            list,
+        } => {
+            if list {
+                animation::list_animations(&input)?;
+            } else {
+                let output = output.unwrap_or_else(|| input.with_extension(EWZ_ANIMATION_EXT));
+                tracing::info!("Exporting animation {:?} -> {:?}", input, output);
+                animation::convert_gltf_animation(&input, &output, animation, skin, frame_rate)?;
+                tracing::info!("Done!");
+            }
         }
     }
 

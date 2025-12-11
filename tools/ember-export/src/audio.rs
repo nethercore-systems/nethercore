@@ -17,28 +17,28 @@ pub fn convert_wav(input: &Path, output: &Path) -> Result<()> {
 
     // Read samples
     let samples: Vec<i16> = match spec.sample_format {
-        hound::SampleFormat::Int => {
-            match spec.bits_per_sample {
-                16 => reader.samples::<i16>().map(|s| s.unwrap()).collect(),
-                8 => reader.samples::<i8>().map(|s| (s.unwrap() as i16) << 8).collect(),
-                24 | 32 => {
-                    reader.samples::<i32>()
-                        .map(|s| (s.unwrap() >> (spec.bits_per_sample - 16)) as i16)
-                        .collect()
-                }
-                _ => bail!("Unsupported bit depth: {}", spec.bits_per_sample),
-            }
-        }
-        hound::SampleFormat::Float => {
-            reader.samples::<f32>()
-                .map(|s| (s.unwrap() * 32767.0) as i16)
-                .collect()
-        }
+        hound::SampleFormat::Int => match spec.bits_per_sample {
+            16 => reader.samples::<i16>().map(|s| s.unwrap()).collect(),
+            8 => reader
+                .samples::<i8>()
+                .map(|s| (s.unwrap() as i16) << 8)
+                .collect(),
+            24 | 32 => reader
+                .samples::<i32>()
+                .map(|s| (s.unwrap() >> (spec.bits_per_sample - 16)) as i16)
+                .collect(),
+            _ => bail!("Unsupported bit depth: {}", spec.bits_per_sample),
+        },
+        hound::SampleFormat::Float => reader
+            .samples::<f32>()
+            .map(|s| (s.unwrap() * 32767.0) as i16)
+            .collect(),
     };
 
     // Convert to mono if stereo
     let mono_samples: Vec<i16> = if spec.channels == 2 {
-        samples.chunks(2)
+        samples
+            .chunks(2)
             .map(|chunk| ((chunk[0] as i32 + chunk[1] as i32) / 2) as i16)
             .collect()
     } else if spec.channels == 1 {
@@ -55,8 +55,8 @@ pub fn convert_wav(input: &Path, output: &Path) -> Result<()> {
     };
 
     // Write output
-    let file = File::create(output)
-        .with_context(|| format!("Failed to create output: {:?}", output))?;
+    let file =
+        File::create(output).with_context(|| format!("Failed to create output: {:?}", output))?;
     let mut writer = BufWriter::new(file);
 
     write_ember_sound(&mut writer, &resampled)?;

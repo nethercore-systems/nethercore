@@ -39,19 +39,11 @@ fn sky_set_colors(
     zenith_color: u32,
 ) {
     // Unpack colors from 0xRRGGBBAA to 0.0-1.0 range (ignore alpha)
-    let horizon_r = ((horizon_color >> 24) & 0xFF) as f32 / 255.0;
-    let horizon_g = ((horizon_color >> 16) & 0xFF) as f32 / 255.0;
-    let horizon_b = ((horizon_color >> 8) & 0xFF) as f32 / 255.0;
-
-    let zenith_r = ((zenith_color >> 24) & 0xFF) as f32 / 255.0;
-    let zenith_g = ((zenith_color >> 16) & 0xFF) as f32 / 255.0;
-    let zenith_b = ((zenith_color >> 8) & 0xFF) as f32 / 255.0;
+    let horizon = super::unpack_rgb(horizon_color);
+    let zenith = super::unpack_rgb(zenith_color);
 
     let state = &mut caller.data_mut().console;
-    state.update_sky_colors(
-        [horizon_r, horizon_g, horizon_b],
-        [zenith_r, zenith_g, zenith_b],
-    );
+    state.update_sky_colors(horizon, zenith);
 }
 
 /// Set sky sun properties
@@ -82,9 +74,7 @@ fn sky_set_sun(
     sharpness: f32,
 ) {
     // Unpack color from 0xRRGGBBAA to 0.0-1.0 range (ignore alpha)
-    let color_r = ((color >> 24) & 0xFF) as f32 / 255.0;
-    let color_g = ((color >> 16) & 0xFF) as f32 / 255.0;
-    let color_b = ((color >> 8) & 0xFF) as f32 / 255.0;
+    let sun_color = super::unpack_rgb(color);
 
     let state = &mut caller.data_mut().console;
 
@@ -92,15 +82,11 @@ fn sky_set_sun(
     let len_sq = dir_x * dir_x + dir_y * dir_y + dir_z * dir_z;
     if len_sq < 1e-10 {
         warn!("sky_set_sun: zero-length direction vector, using default (0, -1, 0)");
-        state.update_sky_sun([0.0, -1.0, 0.0], [color_r, color_g, color_b], sharpness);
+        state.update_sky_sun([0.0, -1.0, 0.0], sun_color, sharpness);
         return;
     }
 
-    state.update_sky_sun(
-        [dir_x, dir_y, dir_z],
-        [color_r, color_g, color_b],
-        sharpness,
-    );
+    state.update_sky_sun([dir_x, dir_y, dir_z], sun_color, sharpness);
 }
 
 /// Bind a matcap texture to a slot (Mode 1 only)

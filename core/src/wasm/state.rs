@@ -2,9 +2,36 @@
 //!
 //! Minimal core game state - console-agnostic.
 
-use wasmtime::{Memory, ResourceLimiter};
+use wasmtime::{AsContext, Memory, ResourceLimiter};
 
 use crate::console::ConsoleInput;
+
+/// Read a length-prefixed string from WASM memory
+///
+/// Returns None if:
+/// - ptr + len exceeds memory bounds
+/// - String is not valid UTF-8
+pub fn read_string_from_memory<T>(
+    memory: Memory,
+    ctx: impl AsContext<Data = T>,
+    ptr: u32,
+    len: u32,
+) -> Option<String> {
+    let data = memory.data(&ctx);
+    let start = ptr as usize;
+    let end = start + len as usize;
+
+    if end > data.len() {
+        return None;
+    }
+
+    std::str::from_utf8(&data[start..end])
+        .ok()
+        .map(String::from)
+}
+
+use crate::debug::ffi::HasDebugRegistry;
+use crate::debug::registry::DebugRegistry;
 
 /// Maximum number of players
 pub const MAX_PLAYERS: usize = 4;
@@ -70,6 +97,8 @@ pub struct GameStateWithConsole<I: ConsoleInput, S> {
     pub console: S,
     /// RAM limit in bytes (for ResourceLimiter enforcement)
     pub ram_limit: usize,
+    /// Debug inspection registry (for runtime value inspection)
+    pub debug_registry: DebugRegistry,
 }
 
 impl<I: ConsoleInput, S: Default> Default for GameStateWithConsole<I, S> {
@@ -78,12 +107,13 @@ impl<I: ConsoleInput, S: Default> Default for GameStateWithConsole<I, S> {
             game: GameState::new(),
             console: S::default(),
             ram_limit: 8 * 1024 * 1024, // Default to 8MB (Emberware Z)
+            debug_registry: DebugRegistry::new(),
         }
     }
 }
 
 impl<I: ConsoleInput, S: Default> GameStateWithConsole<I, S> {
-    /// Create new state with default RAM limit (8MB)
+    /// Create new state with default RAM limit (4MB)
     pub fn new() -> Self {
         Self::default()
     }
@@ -94,7 +124,19 @@ impl<I: ConsoleInput, S: Default> GameStateWithConsole<I, S> {
             game: GameState::new(),
             console: S::default(),
             ram_limit,
+            debug_registry: DebugRegistry::new(),
         }
+    }
+}
+
+/// Implement HasDebugRegistry trait for generic access to debug registry
+impl<I: ConsoleInput, S> HasDebugRegistry for GameStateWithConsole<I, S> {
+    fn debug_registry(&self) -> &DebugRegistry {
+        &self.debug_registry
+    }
+
+    fn debug_registry_mut(&mut self) -> &mut DebugRegistry {
+        &mut self.debug_registry
     }
 }
 

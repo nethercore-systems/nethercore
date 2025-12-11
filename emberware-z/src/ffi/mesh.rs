@@ -4,8 +4,9 @@
 
 use anyhow::Result;
 use tracing::{info, warn};
-use wasmtime::{Caller, Extern, Linker};
+use wasmtime::{Caller, Linker};
 
+use super::get_wasm_memory;
 use emberware_core::wasm::GameStateWithConsole;
 
 use crate::console::ZInput;
@@ -335,12 +336,9 @@ fn load_mesh_packed(
     let byte_size = vertex_count as usize * stride;
 
     // Get memory reference
-    let memory = match caller.get_export("memory") {
-        Some(Extern::Memory(mem)) => mem,
-        _ => {
-            warn!("load_mesh_packed: failed to get WASM memory");
-            return 0;
-        }
+    let Some(memory) = get_wasm_memory(&mut caller) else {
+        warn!("load_mesh_packed: failed to get WASM memory");
+        return 0;
     };
 
     let ptr = data_ptr as usize;
@@ -436,12 +434,9 @@ fn load_mesh_indexed_packed(
     let index_byte_size = index_count as usize * 2; // u16 indices
 
     // Get memory reference
-    let memory = match caller.get_export("memory") {
-        Some(Extern::Memory(mem)) => mem,
-        _ => {
-            warn!("load_mesh_indexed_packed: failed to get WASM memory");
-            return 0;
-        }
+    let Some(memory) = get_wasm_memory(&mut caller) else {
+        warn!("load_mesh_indexed_packed: failed to get WASM memory");
+        return 0;
     };
 
     let vertex_ptr = data_ptr as usize;

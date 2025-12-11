@@ -9,7 +9,7 @@ use wasmtime::{Caller, Linker};
 
 use emberware_core::wasm::GameStateWithConsole;
 
-use crate::console::ZInput;
+use crate::console::{ZInput, RESOLUTIONS};
 use crate::state::ZFFIState;
 
 /// Register camera FFI functions
@@ -70,8 +70,15 @@ fn camera_fov(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, f
         fov_degrees
     };
 
+    // Get actual viewport dimensions from init config
+    let resolution_index = state.init_config.resolution_index as usize;
+    let (width, height) = RESOLUTIONS
+        .get(resolution_index)
+        .copied()
+        .unwrap_or((960, 540));
+    let aspect = width as f32 / height as f32;
+
     // Rebuild projection matrix with new FOV
-    let aspect = 16.0 / 9.0; // TODO: Get from actual viewport
     let proj = Mat4::perspective_rh(clamped_fov.to_radians(), aspect, 0.1, 1000.0);
 
     // Set current projection matrix (will be pushed to pool on next draw)

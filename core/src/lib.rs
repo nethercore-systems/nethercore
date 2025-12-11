@@ -12,6 +12,7 @@
 
 pub mod app;
 pub mod console;
+pub mod debug;
 pub mod ffi;
 #[cfg(test)]
 mod integration;

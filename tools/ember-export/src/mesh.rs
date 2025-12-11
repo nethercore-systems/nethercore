@@ -1,39 +1,44 @@
 //! Mesh converter (glTF/OBJ -> .embermesh)
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter};
 use std::path::Path;
 
 use crate::formats::write_ember_mesh;
-use crate::{FORMAT_NORMAL, FORMAT_UV, vertex_stride_packed};
+use crate::{vertex_stride_packed, FORMAT_NORMAL, FORMAT_UV};
 
 /// Convert a glTF/GLB file to EmberMesh format
 pub fn convert_gltf(input: &Path, output: &Path, format_override: Option<&str>) -> Result<()> {
-    let (document, buffers, _images) = gltf::import(input)
-        .with_context(|| format!("Failed to load glTF: {:?}", input))?;
+    let (document, buffers, _images) =
+        gltf::import(input).with_context(|| format!("Failed to load glTF: {:?}", input))?;
 
     // Get the first mesh
-    let mesh = document.meshes().next()
+    let mesh = document
+        .meshes()
+        .next()
         .context("No meshes found in glTF")?;
-    let primitive = mesh.primitives().next()
+    let primitive = mesh
+        .primitives()
+        .next()
         .context("No primitives found in mesh")?;
 
     // Extract vertex data
     let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
 
     // Positions (required)
-    let positions: Vec<[f32; 3]> = reader.read_positions()
+    let positions: Vec<[f32; 3]> = reader
+        .read_positions()
         .context("No positions in mesh")?
         .collect();
 
     // UVs (optional)
-    let uvs: Option<Vec<[f32; 2]>> = reader.read_tex_coords(0)
+    let uvs: Option<Vec<[f32; 2]>> = reader
+        .read_tex_coords(0)
         .map(|iter| iter.into_f32().collect());
 
     // Normals (optional)
-    let normals: Option<Vec<[f32; 3]>> = reader.read_normals()
-        .map(|iter| iter.collect());
+    let normals: Option<Vec<[f32; 3]>> = reader.read_normals().map(|iter| iter.collect());
 
     // Determine format
     let format = if let Some(fmt_str) = format_override {
@@ -51,15 +56,16 @@ pub fn convert_gltf(input: &Path, output: &Path, format_override: Option<&str>) 
     };
 
     // Indices (optional)
-    let indices: Option<Vec<u16>> = reader.read_indices()
+    let indices: Option<Vec<u16>> = reader
+        .read_indices()
         .map(|iter| iter.into_u32().map(|i| i as u16).collect());
 
     // Pack vertex data
     let vertex_data = pack_vertices(&positions, uvs.as_deref(), normals.as_deref(), format);
 
     // Write output
-    let file = File::create(output)
-        .with_context(|| format!("Failed to create output: {:?}", output))?;
+    let file =
+        File::create(output).with_context(|| format!("Failed to create output: {:?}", output))?;
     let mut writer = BufWriter::new(file);
 
     write_ember_mesh(&mut writer, format, &vertex_data, indices.as_deref())?;
@@ -100,7 +106,7 @@ fn pack_vertices(
     normals: Option<&[[f32; 3]]>,
     format: u8,
 ) -> Vec<u8> {
-    use crate::{pack_position_f16, pack_uv_unorm16, pack_normal_octahedral};
+    use crate::{pack_normal_octahedral, pack_position_f16, pack_uv_unorm16};
     use bytemuck::cast_slice;
 
     let has_uv = format & FORMAT_UV != 0;
@@ -135,8 +141,7 @@ fn pack_vertices(
 
 /// Convert an OBJ file to EmberMesh format
 pub fn convert_obj(input: &Path, output: &Path, format_override: Option<&str>) -> Result<()> {
-    let file = File::open(input)
-        .with_context(|| format!("Failed to open OBJ: {:?}", input))?;
+    let file = File::open(input).with_context(|| format!("Failed to open OBJ: {:?}", input))?;
     let reader = BufReader::new(file);
 
     let mut positions: Vec<[f32; 3]> = Vec::new();
@@ -205,7 +210,8 @@ pub fn convert_obj(input: &Path, output: &Path, format_override: Option<&str>) -
                         }
 
                         if let Some(ni) = vni {
-                            final_normals.push(normals_raw.get(ni).copied().unwrap_or([0.0, 1.0, 0.0]));
+                            final_normals
+                                .push(normals_raw.get(ni).copied().unwrap_or([0.0, 1.0, 0.0]));
                         }
                     }
                 }
@@ -236,13 +242,21 @@ pub fn convert_obj(input: &Path, output: &Path, format_override: Option<&str>) -
     };
 
     // Pack vertex data
-    let uvs = if has_uvs { Some(final_uvs.as_slice()) } else { None };
-    let normals = if has_normals { Some(final_normals.as_slice()) } else { None };
+    let uvs = if has_uvs {
+        Some(final_uvs.as_slice())
+    } else {
+        None
+    };
+    let normals = if has_normals {
+        Some(final_normals.as_slice())
+    } else {
+        None
+    };
     let vertex_data = pack_vertices(&final_positions, uvs, normals, format);
 
     // Write output
-    let file = File::create(output)
-        .with_context(|| format!("Failed to create output: {:?}", output))?;
+    let file =
+        File::create(output).with_context(|| format!("Failed to create output: {:?}", output))?;
     let mut writer = BufWriter::new(file);
 
     write_ember_mesh(&mut writer, format, &vertex_data, Some(&indices))?;
@@ -265,12 +279,14 @@ fn parse_obj_vertex(s: &str) -> Option<(usize, Option<usize>, Option<usize>)> {
 
     let vi = parts.first()?.parse::<usize>().ok()?.checked_sub(1)?; // OBJ indices are 1-based
 
-    let vti = parts.get(1)
+    let vti = parts
+        .get(1)
         .filter(|s| !s.is_empty())
         .and_then(|s| s.parse::<usize>().ok())
         .and_then(|i| i.checked_sub(1));
 
-    let vni = parts.get(2)
+    let vni = parts
+        .get(2)
         .filter(|s| !s.is_empty())
         .and_then(|s| s.parse::<usize>().ok())
         .and_then(|i| i.checked_sub(1));

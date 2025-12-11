@@ -158,6 +158,7 @@ pub fn execute(args: CreateZArgs) -> Result<()> {
         version: EWZ_VERSION,
         metadata,
         code,
+        data_pack: None, // TODO: Support data pack via ember CLI
         thumbnail,
         screenshots,
     };

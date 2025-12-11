@@ -140,6 +140,19 @@ impl<C: Console> Runtime<C> {
     /// Returns the number of ticks that were executed and the interpolation factor
     /// for rendering between the last two states.
     pub fn frame(&mut self) -> Result<(u32, f32)> {
+        self.frame_with_time_scale(1.0)
+    }
+
+    /// Run a frame with a time scale modifier.
+    ///
+    /// Time scale affects how fast game time passes:
+    /// - 1.0 = normal speed
+    /// - 0.5 = half speed (slow motion)
+    /// - 2.0 = double speed (fast forward)
+    ///
+    /// Returns the number of ticks that were executed and the interpolation factor
+    /// for rendering between the last two states.
+    pub fn frame_with_time_scale(&mut self, time_scale: f32) -> Result<(u32, f32)> {
         let now = Instant::now();
 
         // Calculate delta time
@@ -155,7 +168,9 @@ impl<C: Console> Runtime<C> {
         };
         self.last_update = Some(now);
 
-        self.accumulator += delta;
+        // Apply time scale to delta before accumulating
+        let scaled_delta = delta.mul_f32(time_scale.max(0.0));
+        self.accumulator += scaled_delta;
 
         // Run fixed timestep updates
         let mut ticks = 0u32;

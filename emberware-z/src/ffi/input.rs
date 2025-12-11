@@ -8,9 +8,44 @@
 use tracing::warn;
 use wasmtime::Caller;
 
-use crate::console::ZInput;
+use crate::console::{ZInput, MAX_BUTTON_INDEX, STICK_SCALE, TRIGGER_SCALE};
 use crate::state::ZFFIState;
 use emberware_core::wasm::{GameStateWithConsole, MAX_PLAYERS};
+
+// ============================================================================
+// Validation Helpers (reduce DRY violations)
+// ============================================================================
+
+/// Validate player index, returning Some(player_idx) if valid
+#[inline]
+fn validate_player(player: u32, func_name: &str) -> Option<usize> {
+    let player_idx = player as usize;
+    if player_idx >= MAX_PLAYERS {
+        warn!(
+            "{}: invalid player {} (max {})",
+            func_name,
+            player,
+            MAX_PLAYERS - 1
+        );
+        None
+    } else {
+        Some(player_idx)
+    }
+}
+
+/// Validate button index, returning true if valid
+#[inline]
+fn validate_button(button: u32, func_name: &str) -> bool {
+    if button > MAX_BUTTON_INDEX {
+        warn!(
+            "{}: invalid button {} (max {})",
+            func_name, button, MAX_BUTTON_INDEX
+        );
+        false
+    } else {
+        true
+    }
+}
 
 // ============================================================================
 // Button Functions
@@ -29,29 +64,16 @@ pub fn button_held(
     player: u32,
     button: u32,
 ) -> u32 {
+    let Some(player_idx) = validate_player(player, "button_held") else {
+        return 0;
+    };
+    if !validate_button(button, "button_held") {
+        return 0;
+    }
+
     let state = &caller.data().game;
-    let player = player as usize;
-
-    if player >= MAX_PLAYERS {
-        warn!(
-            "button_held: invalid player {} (max {})",
-            player,
-            MAX_PLAYERS - 1
-        );
-        return 0;
-    }
-
-    if button > 13 {
-        warn!("button_held: invalid button {} (max 13)", button);
-        return 0;
-    }
-
     let mask = 1u16 << button;
-    if (state.input_curr[player].buttons & mask) != 0 {
-        1
-    } else {
-        0
-    }
+    u32::from((state.input_curr[player_idx].buttons & mask) != 0)
 }
 
 /// Check if a button was just pressed this tick
@@ -67,32 +89,19 @@ pub fn button_pressed(
     player: u32,
     button: u32,
 ) -> u32 {
+    let Some(player_idx) = validate_player(player, "button_pressed") else {
+        return 0;
+    };
+    if !validate_button(button, "button_pressed") {
+        return 0;
+    }
+
     let state = &caller.data().game;
-    let player = player as usize;
-
-    if player >= MAX_PLAYERS {
-        warn!(
-            "button_pressed: invalid player {} (max {})",
-            player,
-            MAX_PLAYERS - 1
-        );
-        return 0;
-    }
-
-    if button > 13 {
-        warn!("button_pressed: invalid button {} (max 13)", button);
-        return 0;
-    }
-
     let mask = 1u16 << button;
-    let was_held = (state.input_prev[player].buttons & mask) != 0;
-    let is_held = (state.input_curr[player].buttons & mask) != 0;
+    let was_held = (state.input_prev[player_idx].buttons & mask) != 0;
+    let is_held = (state.input_curr[player_idx].buttons & mask) != 0;
 
-    if is_held && !was_held {
-        1
-    } else {
-        0
-    }
+    u32::from(is_held && !was_held)
 }
 
 /// Check if a button was just released this tick
@@ -108,32 +117,19 @@ pub fn button_released(
     player: u32,
     button: u32,
 ) -> u32 {
+    let Some(player_idx) = validate_player(player, "button_released") else {
+        return 0;
+    };
+    if !validate_button(button, "button_released") {
+        return 0;
+    }
+
     let state = &caller.data().game;
-    let player = player as usize;
-
-    if player >= MAX_PLAYERS {
-        warn!(
-            "button_released: invalid player {} (max {})",
-            player,
-            MAX_PLAYERS - 1
-        );
-        return 0;
-    }
-
-    if button > 13 {
-        warn!("button_released: invalid button {} (max 13)", button);
-        return 0;
-    }
-
     let mask = 1u16 << button;
-    let was_held = (state.input_prev[player].buttons & mask) != 0;
-    let is_held = (state.input_curr[player].buttons & mask) != 0;
+    let was_held = (state.input_prev[player_idx].buttons & mask) != 0;
+    let is_held = (state.input_curr[player_idx].buttons & mask) != 0;
 
-    if was_held && !is_held {
-        1
-    } else {
-        0
-    }
+    u32::from(was_held && !is_held)
 }
 
 /// Get bitmask of all held buttons for a player
@@ -147,19 +143,10 @@ pub fn buttons_held(
     caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
     player: u32,
 ) -> u32 {
-    let state = &caller.data().game;
-    let player = player as usize;
-
-    if player >= MAX_PLAYERS {
-        warn!(
-            "buttons_held: invalid player {} (max {})",
-            player,
-            MAX_PLAYERS - 1
-        );
+    let Some(player_idx) = validate_player(player, "buttons_held") else {
         return 0;
-    }
-
-    state.input_curr[player].buttons as u32
+    };
+    caller.data().game.input_curr[player_idx].buttons as u32
 }
 
 /// Get bitmask of all buttons just pressed this tick
@@ -173,20 +160,12 @@ pub fn buttons_pressed(
     caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
     player: u32,
 ) -> u32 {
-    let state = &caller.data().game;
-    let player = player as usize;
-
-    if player >= MAX_PLAYERS {
-        warn!(
-            "buttons_pressed: invalid player {} (max {})",
-            player,
-            MAX_PLAYERS - 1
-        );
+    let Some(player_idx) = validate_player(player, "buttons_pressed") else {
         return 0;
-    }
-
-    let prev = state.input_prev[player].buttons;
-    let curr = state.input_curr[player].buttons;
+    };
+    let state = &caller.data().game;
+    let prev = state.input_prev[player_idx].buttons;
+    let curr = state.input_curr[player_idx].buttons;
 
     // Pressed = held now AND not held before
     (curr & !prev) as u32
@@ -203,20 +182,12 @@ pub fn buttons_released(
     caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
     player: u32,
 ) -> u32 {
-    let state = &caller.data().game;
-    let player = player as usize;
-
-    if player >= MAX_PLAYERS {
-        warn!(
-            "buttons_released: invalid player {} (max {})",
-            player,
-            MAX_PLAYERS - 1
-        );
+    let Some(player_idx) = validate_player(player, "buttons_released") else {
         return 0;
-    }
-
-    let prev = state.input_prev[player].buttons;
-    let curr = state.input_curr[player].buttons;
+    };
+    let state = &caller.data().game;
+    let prev = state.input_prev[player_idx].buttons;
+    let curr = state.input_curr[player_idx].buttons;
 
     // Released = held before AND not held now
     (prev & !curr) as u32
@@ -237,19 +208,10 @@ pub fn left_stick_x(
     caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
     player: u32,
 ) -> f32 {
-    let state = &caller.data().game;
-    let player = player as usize;
-
-    if player >= MAX_PLAYERS {
-        warn!(
-            "left_stick_x: invalid player {} (max {})",
-            player,
-            MAX_PLAYERS - 1
-        );
+    let Some(player_idx) = validate_player(player, "left_stick_x") else {
         return 0.0;
-    }
-
-    state.input_curr[player].left_stick_x as f32 / 127.0
+    };
+    caller.data().game.input_curr[player_idx].left_stick_x as f32 / STICK_SCALE
 }
 
 /// Get left stick Y axis value
@@ -263,19 +225,10 @@ pub fn left_stick_y(
     caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
     player: u32,
 ) -> f32 {
-    let state = &caller.data().game;
-    let player = player as usize;
-
-    if player >= MAX_PLAYERS {
-        warn!(
-            "left_stick_y: invalid player {} (max {})",
-            player,
-            MAX_PLAYERS - 1
-        );
+    let Some(player_idx) = validate_player(player, "left_stick_y") else {
         return 0.0;
-    }
-
-    state.input_curr[player].left_stick_y as f32 / 127.0
+    };
+    caller.data().game.input_curr[player_idx].left_stick_y as f32 / STICK_SCALE
 }
 
 /// Get right stick X axis value
@@ -289,19 +242,10 @@ pub fn right_stick_x(
     caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
     player: u32,
 ) -> f32 {
-    let state = &caller.data().game;
-    let player = player as usize;
-
-    if player >= MAX_PLAYERS {
-        warn!(
-            "right_stick_x: invalid player {} (max {})",
-            player,
-            MAX_PLAYERS - 1
-        );
+    let Some(player_idx) = validate_player(player, "right_stick_x") else {
         return 0.0;
-    }
-
-    state.input_curr[player].right_stick_x as f32 / 127.0
+    };
+    caller.data().game.input_curr[player_idx].right_stick_x as f32 / STICK_SCALE
 }
 
 /// Get right stick Y axis value
@@ -315,19 +259,10 @@ pub fn right_stick_y(
     caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
     player: u32,
 ) -> f32 {
-    let state = &caller.data().game;
-    let player = player as usize;
-
-    if player >= MAX_PLAYERS {
-        warn!(
-            "right_stick_y: invalid player {} (max {})",
-            player,
-            MAX_PLAYERS - 1
-        );
+    let Some(player_idx) = validate_player(player, "right_stick_y") else {
         return 0.0;
-    }
-
-    state.input_curr[player].right_stick_y as f32 / 127.0
+    };
+    caller.data().game.input_curr[player_idx].right_stick_y as f32 / STICK_SCALE
 }
 
 /// Get both left stick axes at once
@@ -345,24 +280,15 @@ pub fn left_stick(
     out_x: u32,
     out_y: u32,
 ) {
-    let (x, y) = {
-        let state = &caller.data().game;
-        let player = player as usize;
-
-        if player >= MAX_PLAYERS {
-            warn!(
-                "left_stick: invalid player {} (max {})",
-                player,
-                MAX_PLAYERS - 1
-            );
-            (0.0f32, 0.0f32)
-        } else {
-            let input = &state.input_curr[player];
+    let (x, y) = match validate_player(player, "left_stick") {
+        Some(player_idx) => {
+            let input = &caller.data().game.input_curr[player_idx];
             (
-                input.left_stick_x as f32 / 127.0,
-                input.left_stick_y as f32 / 127.0,
+                input.left_stick_x as f32 / STICK_SCALE,
+                input.left_stick_y as f32 / STICK_SCALE,
             )
         }
+        None => (0.0f32, 0.0f32),
     };
 
     // Write results to WASM memory
@@ -402,24 +328,15 @@ pub fn right_stick(
     out_x: u32,
     out_y: u32,
 ) {
-    let (x, y) = {
-        let state = &caller.data().game;
-        let player = player as usize;
-
-        if player >= MAX_PLAYERS {
-            warn!(
-                "right_stick: invalid player {} (max {})",
-                player,
-                MAX_PLAYERS - 1
-            );
-            (0.0f32, 0.0f32)
-        } else {
-            let input = &state.input_curr[player];
+    let (x, y) = match validate_player(player, "right_stick") {
+        Some(player_idx) => {
+            let input = &caller.data().game.input_curr[player_idx];
             (
-                input.right_stick_x as f32 / 127.0,
-                input.right_stick_y as f32 / 127.0,
+                input.right_stick_x as f32 / STICK_SCALE,
+                input.right_stick_y as f32 / STICK_SCALE,
             )
         }
+        None => (0.0f32, 0.0f32),
     };
 
     // Write results to WASM memory
@@ -459,19 +376,10 @@ pub fn trigger_left(
     caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
     player: u32,
 ) -> f32 {
-    let state = &caller.data().game;
-    let player = player as usize;
-
-    if player >= MAX_PLAYERS {
-        warn!(
-            "trigger_left: invalid player {} (max {})",
-            player,
-            MAX_PLAYERS - 1
-        );
+    let Some(player_idx) = validate_player(player, "trigger_left") else {
         return 0.0;
-    }
-
-    state.input_curr[player].left_trigger as f32 / 255.0
+    };
+    caller.data().game.input_curr[player_idx].left_trigger as f32 / TRIGGER_SCALE
 }
 
 /// Get right trigger value
@@ -485,19 +393,10 @@ pub fn trigger_right(
     caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
     player: u32,
 ) -> f32 {
-    let state = &caller.data().game;
-    let player = player as usize;
-
-    if player >= MAX_PLAYERS {
-        warn!(
-            "trigger_right: invalid player {} (max {})",
-            player,
-            MAX_PLAYERS - 1
-        );
+    let Some(player_idx) = validate_player(player, "trigger_right") else {
         return 0.0;
-    }
-
-    state.input_curr[player].right_trigger as f32 / 255.0
+    };
+    caller.data().game.input_curr[player_idx].right_trigger as f32 / TRIGGER_SCALE
 }
 
 // ============================================================================
