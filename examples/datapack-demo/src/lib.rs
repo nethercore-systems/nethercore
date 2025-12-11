@@ -159,12 +159,12 @@ pub extern "C" fn render() {
 
         // Draw instructions
         let title = b"Data Pack Demo";
-        draw_text(title.as_ptr(), title.len() as u32, 10.0, 10.0, 2.0, 0xFFFFFFFF);
+        draw_text(title.as_ptr(), title.len() as u32, 20.0, 20.0, 32.0, 0xFFFFFFFF);
 
         let hint = b"[A] Play sound  [Stick] Rotate";
-        draw_text(hint.as_ptr(), hint.len() as u32, 10.0, 40.0, 1.0, 0xAAAAAAFF);
+        draw_text(hint.as_ptr(), hint.len() as u32, 20.0, 70.0, 20.0, 0xAAAAAAFF);
 
         let info = b"Assets loaded from ROM data pack";
-        draw_text(info.as_ptr(), info.len() as u32, 10.0, 60.0, 1.0, 0x88FF88FF);
+        draw_text(info.as_ptr(), info.len() as u32, 20.0, 100.0, 18.0, 0x88FF88FF);
     }
 }

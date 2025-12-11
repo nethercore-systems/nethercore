@@ -5,6 +5,8 @@ use crate::library;
 use emberware_core::app::{session::GameSession, RuntimeError, FRAME_TIME_HISTORY_SIZE};
 use emberware_core::console::Console;
 use emberware_core::rollback::{SessionEvent, SessionType};
+use emberware_shared::cart::ZDataPack;
+use std::path::Path;
 use std::time::Instant;
 
 use super::App;
@@ -21,6 +23,28 @@ impl emberware_core::console::Audio for DummyAudio {
     }
     fn stop(&mut self, _handle: emberware_core::console::SoundHandle) {}
     fn set_rollback_mode(&mut self, _rolling_back: bool) {}
+}
+
+/// Load WASM bytes and optional data pack from a ROM file path
+///
+/// Supports both .ewz ROM files and raw WASM files.
+fn load_rom(path: &Path) -> Result<(Vec<u8>, Option<ZDataPack>), RuntimeError> {
+    if path.extension().and_then(|e| e.to_str()) == Some("ewz") {
+        // Load from .ewz ROM file
+        let ewz_bytes = std::fs::read(path)
+            .map_err(|e| RuntimeError(format!("Failed to read .ewz ROM file: {}", e)))?;
+
+        let rom = emberware_shared::cart::z::ZRom::from_bytes(&ewz_bytes)
+            .map_err(|e| RuntimeError(format!("Failed to parse .ewz ROM: {}", e)))?;
+
+        // Extract WASM code and data pack from ROM
+        Ok((rom.code, rom.data_pack))
+    } else {
+        // Load raw WASM file (backward compatibility for development)
+        let wasm = std::fs::read(path)
+            .map_err(|e| RuntimeError(format!("Failed to read ROM file: {}", e)))?;
+        Ok((wasm, None))
+    }
 }
 
 impl App {
@@ -271,44 +295,17 @@ impl App {
         Ok((true, did_render))
     }
 
-    /// Start a game by loading its WASM and initializing the runtime
-    pub(super) fn start_game(&mut self, game_id: &str) -> Result<(), RuntimeError> {
-        // Clear resources from previous game (clear-on-init pattern)
-        // This handles crashes/failed init gracefully since the next game load clears stale state
-        if let Some(graphics) = &mut self.graphics {
-            graphics.clear_game_resources();
-        }
-
-        // Find the game in local games
-        let game = self
-            .local_games
-            .iter()
-            .find(|g| g.id == game_id)
-            .ok_or_else(|| RuntimeError(format!("Game not found: {}", game_id)))?;
-
+    /// Internal helper to initialize and start a game from WASM bytes and optional data pack
+    fn initialize_game(
+        &mut self,
+        rom_bytes: Vec<u8>,
+        data_pack: Option<ZDataPack>,
+    ) -> Result<(), RuntimeError> {
         // Ensure WASM engine is available
         let wasm_engine = self
             .wasm_engine
             .as_ref()
             .ok_or_else(|| RuntimeError("WASM engine not initialized".to_string()))?;
-
-        // Load the ROM file
-        // Supports both .ewz ROM files and raw WASM files (for backward compatibility)
-        let rom_bytes = if game.rom_path.extension().and_then(|e| e.to_str()) == Some("ewz") {
-            // Load from .ewz ROM file
-            let ewz_bytes = std::fs::read(&game.rom_path)
-                .map_err(|e| RuntimeError(format!("Failed to read .ewz ROM file: {}", e)))?;
-
-            let rom = emberware_shared::cart::z::ZRom::from_bytes(&ewz_bytes)
-                .map_err(|e| RuntimeError(format!("Failed to parse .ewz ROM: {}", e)))?;
-
-            // Extract WASM code from ROM
-            rom.code
-        } else {
-            // Load raw WASM file (backward compatibility for development)
-            std::fs::read(&game.rom_path)
-                .map_err(|e| RuntimeError(format!("Failed to read ROM file: {}", e)))?
-        };
 
         // Load the WASM module
         let module = wasm_engine
@@ -337,6 +334,14 @@ impl App {
         // Create the runtime
         let mut runtime = emberware_core::runtime::Runtime::new(console);
         runtime.load_game(game_instance);
+
+        // Set data pack on console state (before init, so rom_* functions work)
+        if let Some(data_pack) = data_pack {
+            if let Some(game) = runtime.game_mut() {
+                game.console_state_mut().data_pack = Some(std::sync::Arc::new(data_pack));
+                tracing::info!("Data pack loaded with assets");
+            }
+        }
 
         // Initialize the game (calls game's init() function)
         runtime
@@ -392,6 +397,30 @@ impl App {
                 }
             }
         }
+
+        Ok(())
+    }
+
+    /// Start a game by loading its WASM and initializing the runtime
+    pub(super) fn start_game(&mut self, game_id: &str) -> Result<(), RuntimeError> {
+        // Clear resources from previous game (clear-on-init pattern)
+        // This handles crashes/failed init gracefully since the next game load clears stale state
+        if let Some(graphics) = &mut self.graphics {
+            graphics.clear_game_resources();
+        }
+
+        // Find the game in local games
+        let game = self
+            .local_games
+            .iter()
+            .find(|g| g.id == game_id)
+            .ok_or_else(|| RuntimeError(format!("Game not found: {}", game_id)))?;
+
+        // Load ROM file (WASM bytes and optional data pack)
+        let (rom_bytes, data_pack) = load_rom(&game.rom_path)?;
+
+        // Initialize and start the game
+        self.initialize_game(rom_bytes, data_pack)?;
 
         tracing::info!("Game started: {}", game_id);
         Ok(())
@@ -410,112 +439,11 @@ impl App {
             graphics.clear_game_resources();
         }
 
-        // Ensure WASM engine is available
-        let wasm_engine = self
-            .wasm_engine
-            .as_ref()
-            .ok_or_else(|| RuntimeError("WASM engine not initialized".to_string()))?;
+        // Load ROM file (WASM bytes and optional data pack)
+        let (rom_bytes, data_pack) = load_rom(&path)?;
 
-        // Load the ROM file
-        // Supports both .ewz ROM files and raw WASM files
-        let rom_bytes = if path.extension().and_then(|e| e.to_str()) == Some("ewz") {
-            // Load from .ewz ROM file
-            let ewz_bytes = std::fs::read(&path)
-                .map_err(|e| RuntimeError(format!("Failed to read .ewz ROM file: {}", e)))?;
-
-            let rom = emberware_shared::cart::z::ZRom::from_bytes(&ewz_bytes)
-                .map_err(|e| RuntimeError(format!("Failed to parse .ewz ROM: {}", e)))?;
-
-            // Extract WASM code from ROM
-            rom.code
-        } else {
-            // Load raw WASM file (for development/debugging)
-            std::fs::read(&path)
-                .map_err(|e| RuntimeError(format!("Failed to read WASM file: {}", e)))?
-        };
-
-        // Load the WASM module
-        let module = wasm_engine
-            .load_module(&rom_bytes)
-            .map_err(|e| RuntimeError(format!("Failed to load WASM module: {}", e)))?;
-
-        // Create a linker and register FFI functions
-        let mut linker = wasmtime::Linker::new(wasm_engine.engine());
-
-        // Register common FFI functions
-        emberware_core::ffi::register_common_ffi(&mut linker)
-            .map_err(|e| RuntimeError(format!("Failed to register common FFI: {}", e)))?;
-
-        // Create the console instance
-        let console = EmberwareZ::new();
-
-        // Register console-specific FFI functions
-        console
-            .register_ffi(&mut linker)
-            .map_err(|e| RuntimeError(format!("Failed to register Z FFI: {}", e)))?;
-
-        // Create the game instance
-        let game_instance = emberware_core::wasm::GameInstance::new(wasm_engine, &module, &linker)
-            .map_err(|e| RuntimeError(format!("Failed to instantiate game: {}", e)))?;
-
-        // Create the runtime
-        let mut runtime = emberware_core::runtime::Runtime::new(console);
-        runtime.load_game(game_instance);
-
-        // Initialize the game (calls game's init() function)
-        runtime
-            .init_game()
-            .map_err(|e| RuntimeError(format!("Failed to initialize game: {}", e)))?;
-
-        // Create resource manager
-        let resource_manager = EmberwareZ::new().create_resource_manager();
-
-        // Create the game session
-        self.game_session = Some(GameSession::new(runtime, resource_manager));
-
-        // Add built-in font texture to texture map (handle 0)
-        // Add white fallback texture to texture map (handle 0xFFFFFFFF)
-        if let (Some(session), Some(graphics)) = (&mut self.game_session, &self.graphics) {
-            let font_texture_handle = graphics.font_texture();
-            session
-                .resource_manager
-                .texture_map
-                .insert(0, font_texture_handle);
-            tracing::info!(
-                "Initialized font texture in texture_map: handle 0 -> {:?}",
-                font_texture_handle
-            );
-
-            let white_texture_handle = graphics.white_texture();
-            session
-                .resource_manager
-                .texture_map
-                .insert(u32::MAX, white_texture_handle);
-            tracing::info!(
-                "Initialized white texture in texture_map: handle 0xFFFFFFFF -> {:?}",
-                white_texture_handle
-            );
-        }
-
-        // Update render target resolution and window minimum size based on game's init config
-        if let Some(session) = &self.game_session {
-            if let Some(game) = session.runtime.game() {
-                let z_state = game.console_state();
-                let resolution_index = z_state.init_config.resolution_index as u8;
-
-                // Update graphics render target to match game resolution
-                if let Some(graphics) = &mut self.graphics {
-                    graphics.update_resolution(resolution_index);
-
-                    // Update window minimum size to match game resolution
-                    if let Some(window) = &self.window {
-                        let min_size =
-                            winit::dpi::PhysicalSize::new(graphics.width(), graphics.height());
-                        window.set_min_inner_size(Some(min_size));
-                    }
-                }
-            }
-        }
+        // Initialize and start the game
+        self.initialize_game(rom_bytes, data_pack)?;
 
         tracing::info!("Game started from path: {}", path.display());
         Ok(())

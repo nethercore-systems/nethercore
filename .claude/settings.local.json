@@ -19,7 +19,8 @@
       "Bash(cargo clippy:*)",
       "Bash(tree:*)",
       "Bash(git log:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(xxd:*)"
     ],
     "deny": [],
     "ask": []

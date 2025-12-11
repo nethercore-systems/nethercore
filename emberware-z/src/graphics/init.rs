@@ -227,7 +227,7 @@ impl ZGraphics {
         ];
 
         // Upload unit quad to retained vertex buffer (PACKED format for GPU)
-        use super::packing::pack_vertex_data;
+        use z_common::pack_vertex_data;
         let packed_vertices = pack_vertex_data(&unit_quad_vertices, unit_quad_format);
         let stride = vertex_stride_packed(unit_quad_format);
 

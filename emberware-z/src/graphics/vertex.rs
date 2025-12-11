@@ -87,7 +87,6 @@ impl VertexFormatInfo {
     /// - `attributes` built from the format flags
     ///
     /// The returned layout can be used when creating render pipelines.
-    #[cfg(feature = "runtime")]
     pub fn vertex_buffer_layout(&self) -> wgpu::VertexBufferLayout<'static> {
         // Build attribute list based on format
         let attributes = Self::build_attributes(self.format);
@@ -110,7 +109,6 @@ impl VertexFormatInfo {
     /// - Location 3: Normal (if FORMAT_NORMAL, Uint32 octahedral)
     /// - Location 4: Bone indices (if FORMAT_SKINNED, Uint8x4)
     /// - Location 5: Bone weights (if FORMAT_SKINNED, Unorm8x4)
-    #[cfg(feature = "runtime")]
     fn build_attributes(format: u8) -> &'static [wgpu::VertexAttribute] {
         VERTEX_ATTRIBUTES[format as usize]
     }
@@ -120,7 +118,6 @@ impl VertexFormatInfo {
 // wgpu-specific vertex attribute definitions (requires runtime feature)
 // ============================================================================
 
-#[cfg(feature = "runtime")]
 mod wgpu_attrs {
     /// Attribute sizes in bytes for offset calculation (packed formats - GPU only)
     const SIZE_POS: u64 = 8; // Float16x4 (padded for alignment)
@@ -294,7 +291,6 @@ mod wgpu_attrs {
     ];
 }
 
-#[cfg(feature = "runtime")]
 use wgpu_attrs::VERTEX_ATTRIBUTES;
 
 #[cfg(test)]

@@ -42,7 +42,7 @@ extern "C" {
 
     // Sprite drawing (for custom font rendering)
     fn texture_bind(handle: u32);
-    fn draw_sprite_region(x: f32, y: f32, w: f32, h: f32, u0: f32, v0: f32, u1: f32, v1: f32);
+    fn draw_sprite_region(x: f32, y: f32, w: f32, h: f32, u0: f32, v0: f32, u1: f32, v1: f32, color: u32);
 
     // Render state
     fn set_color(color: u32);
@@ -103,14 +103,14 @@ pub extern "C" fn render() {
     unsafe {
         // Title using built-in font
         let title = b"Font Atlas Demo";
-        draw_text(title.as_ptr(), title.len() as u32, 10.0, 10.0, 2.0, 0xFFFF00FF);
+        draw_text(title.as_ptr(), title.len() as u32, 20.0, 20.0, 32.0, 0xFFFF00FF);
 
         // Instructions
-        let hint = b"[Stick] Scroll";
-        draw_text(hint.as_ptr(), hint.len() as u32, 10.0, 40.0, 1.0, 0xAAAAAAFF);
+        let hint = b"[Stick] Scroll the atlas";
+        draw_text(hint.as_ptr(), hint.len() as u32, 20.0, 70.0, 20.0, 0xAAAAAAFF);
 
-        let info = b"Texture atlas loaded from ROM data pack";
-        draw_text(info.as_ptr(), info.len() as u32, 10.0, 60.0, 1.0, 0x88FF88FF);
+        let info = b"Texture atlas loaded from ROM";
+        draw_text(info.as_ptr(), info.len() as u32, 20.0, 100.0, 18.0, 0x88FF88FF);
 
         // Bind the font atlas texture
         texture_bind(FONT_ATLAS);
@@ -118,40 +118,47 @@ pub extern "C" fn render() {
 
         // Draw the atlas as a sprite grid to demonstrate how
         // individual glyphs would be drawn with UV coordinates
-        let base_y = 100.0 + SCROLL_Y;
-        let scale = 1.0 + sinf(TIME) * 0.1;
+        let base_y = 180.0 + SCROLL_Y;
+        let anim_scale = 1.0 + sinf(TIME) * 0.1;
 
-        // Draw full atlas preview
+        // Draw full atlas preview (larger)
         draw_sprite_region(
-            50.0,
+            30.0,
             base_y,
-            128.0 * scale,
-            128.0 * scale,
+            200.0 * anim_scale,
+            200.0 * anim_scale,
             0.0, 0.0,  // UV top-left
             1.0, 1.0,  // UV bottom-right
+            0xFFFFFFFF, // White color
         );
 
-        // Draw individual "glyphs" (quarters of the texture)
+        // Label for full atlas
+        let label1 = b"Full Atlas";
+        draw_text(label1.as_ptr(), label1.len() as u32, 50.0, base_y - 30.0, 18.0, 0xFFFFFFFF);
+
+        // Draw individual "glyphs" (quarters of the texture) - larger and spaced better
         // This demonstrates how you'd render individual characters
         // from a font atlas using UV coordinates
 
+        let glyph_x = 300.0;
+        let glyph_size = 90.0;
+        let glyph_gap = 100.0;
+
+        // Label for glyph regions
+        let label2 = b"UV Regions";
+        draw_text(label2.as_ptr(), label2.len() as u32, glyph_x + 40.0, base_y - 30.0, 18.0, 0xFFFFFFFF);
+
         // Top-left quarter
-        draw_sprite_region(220.0, base_y, 48.0, 48.0, 0.0, 0.0, 0.5, 0.5);
+        draw_sprite_region(glyph_x, base_y, glyph_size, glyph_size, 0.0, 0.0, 0.5, 0.5, 0xFFFFFFFF);
         // Top-right quarter
-        draw_sprite_region(280.0, base_y, 48.0, 48.0, 0.5, 0.0, 1.0, 0.5);
+        draw_sprite_region(glyph_x + glyph_gap, base_y, glyph_size, glyph_size, 0.5, 0.0, 1.0, 0.5, 0xFFFFFFFF);
         // Bottom-left quarter
-        draw_sprite_region(220.0, base_y + 60.0, 48.0, 48.0, 0.0, 0.5, 0.5, 1.0);
+        draw_sprite_region(glyph_x, base_y + glyph_gap, glyph_size, glyph_size, 0.0, 0.5, 0.5, 1.0, 0xFFFFFFFF);
         // Bottom-right quarter
-        draw_sprite_region(280.0, base_y + 60.0, 48.0, 48.0, 0.5, 0.5, 1.0, 1.0);
+        draw_sprite_region(glyph_x + glyph_gap, base_y + glyph_gap, glyph_size, glyph_size, 0.5, 0.5, 1.0, 1.0, 0xFFFFFFFF);
 
-        // Explanation text
-        let note1 = b"Left: Full atlas";
-        draw_text(note1.as_ptr(), note1.len() as u32, 10.0, 300.0, 1.0, 0xCCCCCCFF);
-
-        let note2 = b"Right: Individual glyph UV regions";
-        draw_text(note2.as_ptr(), note2.len() as u32, 10.0, 320.0, 1.0, 0xCCCCCCFF);
-
-        let note3 = b"In practice, use glyph metrics for proper text layout";
-        draw_text(note3.as_ptr(), note3.len() as u32, 10.0, 360.0, 1.0, 0x888888FF);
+        // Explanation text at bottom
+        let note = b"Shows how sprite regions extract glyphs";
+        draw_text(note.as_ptr(), note.len() as u32, 20.0, 480.0, 16.0, 0x888888FF);
     }
 }

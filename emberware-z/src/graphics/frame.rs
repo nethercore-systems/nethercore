@@ -8,7 +8,7 @@
 use glam::Mat4;
 
 use super::command_buffer::{BufferSource, VRPCommand};
-use super::packing::pack_vertex_data;
+use z_common::pack_vertex_data;
 use super::pipeline::PipelineKey;
 use super::render_state::{BlendMode, CullMode, RenderState, TextureHandle};
 use super::vertex::VERTEX_FORMAT_COUNT;

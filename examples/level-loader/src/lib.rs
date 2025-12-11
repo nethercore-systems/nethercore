@@ -46,7 +46,7 @@ extern "C" {
 
     // Drawing
     fn texture_bind(handle: u32);
-    fn draw_sprite_region(x: f32, y: f32, w: f32, h: f32, u0: f32, v0: f32, u1: f32, v1: f32);
+    fn draw_sprite_region(x: f32, y: f32, w: f32, h: f32, u0: f32, v0: f32, u1: f32, v1: f32, color: u32);
     fn draw_rect(x: f32, y: f32, width: f32, height: f32, color: u32);
     fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, scale: f32, color: u32);
 
@@ -64,7 +64,7 @@ const BUTTON_RIGHT: u32 = 3;
 
 const HEADER_SIZE: usize = 10; // Magic(4) + Version(1) + LevelNum(1) + Width(2) + Height(2)
 const MAX_LEVEL_SIZE: usize = 4096; // Max level data including header
-const TILE_SIZE: f32 = 24.0;
+const TILE_SIZE: f32 = 32.0; // Larger tiles for better visibility
 
 // Level data buffer (stored in WASM memory)
 static mut LEVEL_DATA: [u8; MAX_LEVEL_SIZE] = [0u8; MAX_LEVEL_SIZE];
@@ -220,58 +220,80 @@ pub extern "C" fn update() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
+        // UI Header area (top 120 pixels)
+        let map_offset_y = 130.0;
+
         // Render tilemap using colored rectangles
         // (In a real game, you'd use textured sprites from the tileset)
 
-        // Calculate visible tile range
+        // Calculate visible tile range (offset for header)
         let start_x = (CAMERA_X / TILE_SIZE) as i32;
         let start_y = (CAMERA_Y / TILE_SIZE) as i32;
-        let end_x = start_x + 20; // Screen width / tile size + margin
-        let end_y = start_y + 16; // Screen height / tile size + margin
+        let end_x = start_x + 15; // Fewer tiles horizontally for larger size
+        let end_y = start_y + 12; // Fewer tiles vertically
 
         for y in start_y.max(0)..end_y.min(LEVEL_HEIGHT as i32) {
             for x in start_x.max(0)..end_x.min(LEVEL_WIDTH as i32) {
                 let tile = get_tile(x as u32, y as u32);
 
-                // Calculate screen position
+                // Calculate screen position (offset below header)
                 let screen_x = (x as f32 * TILE_SIZE) - CAMERA_X;
-                let screen_y = (y as f32 * TILE_SIZE) - CAMERA_Y;
+                let screen_y = (y as f32 * TILE_SIZE) - CAMERA_Y + map_offset_y;
 
                 // Get color for this tile type
                 let color = TILE_COLORS[(tile as usize) % TILE_COLORS.len()];
 
                 // Draw tile as colored rectangle
-                draw_rect(screen_x, screen_y, TILE_SIZE - 1.0, TILE_SIZE - 1.0, color);
+                draw_rect(screen_x, screen_y, TILE_SIZE - 2.0, TILE_SIZE - 2.0, color);
             }
         }
 
-        // Draw tileset preview in corner (shows the loaded texture)
-        texture_bind(TILESET);
-        set_color(0xFFFFFFFF);
-        draw_sprite_region(350.0, 10.0, 32.0, 32.0, 0.0, 0.0, 1.0, 1.0);
-
-        // UI overlay
+        // UI overlay (proper text sizes for 540p)
         let title = b"Level Loader Demo";
-        draw_text(title.as_ptr(), title.len() as u32, 10.0, 10.0, 2.0, 0xFFFFFFFF);
+        draw_text(title.as_ptr(), title.len() as u32, 20.0, 20.0, 28.0, 0xFFFFFFFF);
 
-        // Level info
+        // Level indicator with visual arrows
+        let left_arrow = if CURRENT_LEVEL > 0 { b"<< " } else { b"   " };
+        let right_arrow = if CURRENT_LEVEL < 2 { b" >>" } else { b"   " };
+
+        draw_text(left_arrow.as_ptr(), 3, 20.0, 60.0, 24.0, 0x88FF88FF);
+
         let level_text = match CURRENT_LEVEL {
             0 => b"Level 1 of 3" as &[u8],
             1 => b"Level 2 of 3" as &[u8],
             _ => b"Level 3 of 3" as &[u8],
         };
-        draw_text(level_text.as_ptr(), level_text.len() as u32, 10.0, 40.0, 1.0, 0xFFFF00FF);
+        draw_text(level_text.as_ptr(), level_text.len() as u32, 80.0, 60.0, 24.0, 0xFFFF00FF);
+        draw_text(right_arrow.as_ptr(), 3, 300.0, 60.0, 24.0, 0x88FF88FF);
 
         // Controls hint
-        let hint = b"[D-Pad L/R] Switch level  [Stick] Pan";
-        draw_text(hint.as_ptr(), hint.len() as u32, 10.0, 60.0, 1.0, 0xAAAAAAFF);
+        let hint = b"[D-Pad] Switch  [Stick] Pan";
+        draw_text(hint.as_ptr(), hint.len() as u32, 20.0, 100.0, 18.0, 0xAAAAAAFF);
 
-        // Info about data loading
-        let info = b"Level data loaded via rom_data()";
-        draw_text(info.as_ptr(), info.len() as u32, 10.0, 80.0, 1.0, 0x88FF88FF);
+        // Tile legend on the right side
+        let legend_x = 700.0;
+        let legend = b"Legend:";
+        draw_text(legend.as_ptr(), legend.len() as u32, legend_x, 150.0, 20.0, 0xFFFFFFFF);
 
-        // Show level dimensions
-        let dims = b"16x12 tiles, ELVL format";
-        draw_text(dims.as_ptr(), dims.len() as u32, 10.0, 100.0, 1.0, 0x888888FF);
+        // Draw color swatches with labels (larger)
+        draw_rect(legend_x, 185.0, 24.0, 24.0, TILE_COLORS[0]);
+        let floor = b"Floor";
+        draw_text(floor.as_ptr(), floor.len() as u32, legend_x + 35.0, 185.0, 18.0, 0xCCCCCCFF);
+
+        draw_rect(legend_x, 220.0, 24.0, 24.0, TILE_COLORS[1]);
+        let wall = b"Wall";
+        draw_text(wall.as_ptr(), wall.len() as u32, legend_x + 35.0, 220.0, 18.0, 0xCCCCCCFF);
+
+        draw_rect(legend_x, 255.0, 24.0, 24.0, TILE_COLORS[2]);
+        let deco = b"Decor";
+        draw_text(deco.as_ptr(), deco.len() as u32, legend_x + 35.0, 255.0, 18.0, 0xCCCCCCFF);
+
+        draw_rect(legend_x, 290.0, 24.0, 24.0, TILE_COLORS[3]);
+        let other = b"Other";
+        draw_text(other.as_ptr(), other.len() as u32, legend_x + 35.0, 290.0, 18.0, 0xCCCCCCFF);
+
+        // Info at bottom
+        let info = b"Data loaded via rom_data()";
+        draw_text(info.as_ptr(), info.len() as u32, 20.0, 500.0, 16.0, 0x888888FF);
     }
 }
