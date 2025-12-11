@@ -721,19 +721,22 @@ position → uv (if present) → color (if present) → normal (if present) → 
 **Bone transform upload:**
 
 ```rust
-fn set_bones(matrices: *const f32, count: u32)  // 12 floats per bone (3×4 matrix, row-major)
+fn set_bones(matrices: *const f32, count: u32)  // 12 floats per bone (3×4 matrix, column-major)
 ```
 
 Call `set_bones()` before `draw_mesh()` or `draw_triangles()` to upload the current bone transforms. Maximum 256 bones per skeleton.
 
-**Matrix layout (row-major, 12 floats per bone):**
+**Matrix layout (column-major, 12 floats per bone):**
 
 ```text
-[m00, m01, m02, tx]  // row 0: X axis + translation X
-[m10, m11, m12, ty]  // row 1: Y axis + translation Y
-[m20, m21, m22, tz]  // row 2: Z axis + translation Z
-// row 3 [0, 0, 0, 1] is implicit (affine transform)
+[m00, m10, m20]  // col 0: X axis
+[m01, m11, m21]  // col 1: Y axis
+[m02, m12, m22]  // col 2: Z axis
+[tx,  ty,  tz ]  // col 3: translation
+// implicit 4th row [0, 0, 0, 1] (affine transform)
 ```
+
+This is the same convention as `transform_set()` and glam/WGSL. Memory layout: `[col0.x, col0.y, col0.z, col1.x, col1.y, col1.z, col2.x, col2.y, col2.z, tx, ty, tz]`
 
 This format saves 25% memory compared to 4×4 matrices (48 bytes vs 64 bytes per bone) while preserving full precision for affine transformations.
 
@@ -760,12 +763,12 @@ fn init() {
         );
         BONE_COUNT = 24;  // This character has 24 bones
 
-        // Initialize bone matrices to identity (3x4 row-major)
+        // Initialize bone matrices to identity (3x4 column-major)
         for i in 0..BONE_COUNT as usize {
-            BONE_MATRICES[i * 12 + 0] = 1.0;  // row0.x (X axis)
-            BONE_MATRICES[i * 12 + 5] = 1.0;  // row1.y (Y axis)
-            BONE_MATRICES[i * 12 + 10] = 1.0; // row2.z (Z axis)
-            // Translation (row0.w, row1.w, row2.w) default to 0.0
+            BONE_MATRICES[i * 12 + 0] = 1.0;  // col0.x (X axis x component)
+            BONE_MATRICES[i * 12 + 4] = 1.0;  // col1.y (Y axis y component)
+            BONE_MATRICES[i * 12 + 8] = 1.0;  // col2.z (Z axis z component)
+            // Translation (indices 9, 10, 11) defaults to 0.0
         }
     }
 }
