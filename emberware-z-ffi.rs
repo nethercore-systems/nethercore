@@ -707,15 +707,69 @@ extern "C" {
     /// Disable a light (preserves settings for re-enabling).
     pub fn light_disable(index: u32);
 
+    /// Convert a light to a point light at world position.
+    ///
+    /// # Arguments
+    /// * `index` — Light index (0-3)
+    /// * `x`, `y`, `z` — World-space position
+    ///
+    /// Enables the light automatically. Default range is 10.0 units.
+    pub fn light_set_point(index: u32, x: f32, y: f32, z: f32);
+
+    /// Set point light falloff distance.
+    ///
+    /// # Arguments
+    /// * `index` — Light index (0-3)
+    /// * `range` — Distance at which light reaches zero intensity
+    ///
+    /// Only affects point lights (ignored for directional).
+    pub fn light_range(index: u32, range: f32);
+
     // =========================================================================
     // GPU Skinning
     // =========================================================================
 
+    /// Load a skeleton's inverse bind matrices to GPU.
+    ///
+    /// Call once during `init()` after loading skinned meshes.
+    /// The inverse bind matrices transform vertices from model space
+    /// to bone-local space at bind time.
+    ///
+    /// # Arguments
+    /// * `inverse_bind_ptr` — Pointer to array of 3×4 matrices (12 floats per bone, column-major)
+    /// * `bone_count` — Number of bones (max 256)
+    ///
+    /// # Returns
+    /// Skeleton handle (>0) on success, 0 on error.
+    pub fn load_skeleton(inverse_bind_ptr: *const f32, bone_count: u32) -> u32;
+
+    /// Bind a skeleton for subsequent skinned mesh rendering.
+    ///
+    /// When bound, `set_bones()` expects model-space transforms and the GPU
+    /// automatically applies the inverse bind matrices.
+    ///
+    /// # Arguments
+    /// * `skeleton` — Skeleton handle from `load_skeleton()`, or 0 to unbind (raw mode)
+    ///
+    /// # Behavior
+    /// - skeleton > 0: Enable inverse bind mode. `set_bones()` receives model transforms.
+    /// - skeleton = 0: Disable inverse bind mode (raw). `set_bones()` receives final matrices.
+    pub fn skeleton_bind(skeleton: u32);
+
     /// Set bone transform matrices for skeletal animation.
     ///
     /// # Arguments
-    /// * `matrices_ptr` — Pointer to array of 4x4 matrices (16 floats each, column-major)
+    /// * `matrices_ptr` — Pointer to array of 3×4 matrices (12 floats per bone, column-major)
     /// * `count` — Number of bones (max 256)
+    ///
+    /// Each bone matrix is 12 floats in column-major order:
+    /// ```text
+    /// [col0.x, col0.y, col0.z]  // X axis
+    /// [col1.x, col1.y, col1.z]  // Y axis
+    /// [col2.x, col2.y, col2.z]  // Z axis
+    /// [tx,     ty,     tz    ]  // translation
+    /// // implicit 4th row [0, 0, 0, 1]
+    /// ```
     pub fn set_bones(matrices_ptr: *const f32, count: u32);
 
     // =========================================================================
@@ -762,6 +816,206 @@ extern "C" {
 
     /// Set music volume.
     pub fn music_set_volume(volume: f32);
+
+    // =========================================================================
+    // ROM Data Pack API (init-only)
+    // =========================================================================
+    //
+    // Load assets from the bundled ROM data pack by string ID.
+    // Assets go directly to VRAM/audio memory, bypassing WASM linear memory.
+    // All `rom_*` functions can only be called during `init()`.
+
+    /// Load a texture from ROM data pack by ID.
+    ///
+    /// # Arguments
+    /// * `id_ptr` — Pointer to asset ID string in WASM memory
+    /// * `id_len` — Length of asset ID string
+    ///
+    /// # Returns
+    /// Texture handle (>0) on success. Traps on failure.
+    pub fn rom_texture(id_ptr: u32, id_len: u32) -> u32;
+
+    /// Load a mesh from ROM data pack by ID.
+    ///
+    /// # Returns
+    /// Mesh handle (>0) on success. Traps on failure.
+    pub fn rom_mesh(id_ptr: u32, id_len: u32) -> u32;
+
+    /// Load skeleton inverse bind matrices from ROM data pack by ID.
+    ///
+    /// # Returns
+    /// Skeleton handle (>0) on success. Traps on failure.
+    pub fn rom_skeleton(id_ptr: u32, id_len: u32) -> u32;
+
+    /// Load a font atlas from ROM data pack by ID.
+    ///
+    /// # Returns
+    /// Texture handle for font atlas (>0) on success. Traps on failure.
+    pub fn rom_font(id_ptr: u32, id_len: u32) -> u32;
+
+    /// Load a sound from ROM data pack by ID.
+    ///
+    /// # Returns
+    /// Sound handle (>0) on success. Traps on failure.
+    pub fn rom_sound(id_ptr: u32, id_len: u32) -> u32;
+
+    /// Get the byte size of raw data in the ROM data pack.
+    ///
+    /// Use this to allocate a buffer before calling `rom_data()`.
+    ///
+    /// # Returns
+    /// Byte count on success. Traps if not found.
+    pub fn rom_data_len(id_ptr: u32, id_len: u32) -> u32;
+
+    /// Copy raw data from ROM data pack into WASM linear memory.
+    ///
+    /// # Arguments
+    /// * `id_ptr`, `id_len` — Asset ID string
+    /// * `dst_ptr` — Pointer to destination buffer in WASM memory
+    /// * `max_len` — Maximum bytes to copy (size of destination buffer)
+    ///
+    /// # Returns
+    /// Bytes written on success. Traps on failure.
+    pub fn rom_data(id_ptr: u32, id_len: u32, dst_ptr: u32, max_len: u32) -> u32;
+
+    // =========================================================================
+    // Embedded Asset API
+    // =========================================================================
+    //
+    // Load assets from EmberZ binary formats embedded via include_bytes!().
+    // Use with: static DATA: &[u8] = include_bytes!("asset.ewzmesh");
+
+    /// Load a mesh from .ewzmesh binary format.
+    ///
+    /// # Arguments
+    /// * `data_ptr` — Pointer to .ewzmesh binary data
+    /// * `data_len` — Length of the data in bytes
+    ///
+    /// # Returns
+    /// Mesh handle (>0) on success, 0 on failure.
+    pub fn load_zmesh(data_ptr: u32, data_len: u32) -> u32;
+
+    /// Load a texture from .ewztex binary format.
+    ///
+    /// # Returns
+    /// Texture handle (>0) on success, 0 on failure.
+    pub fn load_ztex(data_ptr: u32, data_len: u32) -> u32;
+
+    /// Load a sound from .ewzsnd binary format.
+    ///
+    /// # Returns
+    /// Sound handle (>0) on success, 0 on failure.
+    pub fn load_zsound(data_ptr: u32, data_len: u32) -> u32;
+
+    // =========================================================================
+    // Debug Inspection System
+    // =========================================================================
+    //
+    // Runtime value inspection and editing for development.
+    // Press F3 to open panel. Zero overhead in release builds (compiles out).
+    // All debug functions use length-prefixed strings: (name_ptr, name_len).
+
+    // --- Primitive Type Registration (Editable) ---
+
+    /// Register an i8 value for debug inspection.
+    pub fn debug_register_i8(name_ptr: u32, name_len: u32, ptr: u32);
+    /// Register an i16 value for debug inspection.
+    pub fn debug_register_i16(name_ptr: u32, name_len: u32, ptr: u32);
+    /// Register an i32 value for debug inspection.
+    pub fn debug_register_i32(name_ptr: u32, name_len: u32, ptr: u32);
+    /// Register a u8 value for debug inspection.
+    pub fn debug_register_u8(name_ptr: u32, name_len: u32, ptr: u32);
+    /// Register a u16 value for debug inspection.
+    pub fn debug_register_u16(name_ptr: u32, name_len: u32, ptr: u32);
+    /// Register a u32 value for debug inspection.
+    pub fn debug_register_u32(name_ptr: u32, name_len: u32, ptr: u32);
+    /// Register an f32 value for debug inspection.
+    pub fn debug_register_f32(name_ptr: u32, name_len: u32, ptr: u32);
+    /// Register a bool value for debug inspection.
+    pub fn debug_register_bool(name_ptr: u32, name_len: u32, ptr: u32);
+
+    // --- Range-Constrained Registration (Slider UI) ---
+
+    /// Register an i32 with min/max range constraints.
+    pub fn debug_register_i32_range(name_ptr: u32, name_len: u32, ptr: u32, min: i32, max: i32);
+    /// Register an f32 with min/max range constraints.
+    pub fn debug_register_f32_range(name_ptr: u32, name_len: u32, ptr: u32, min: f32, max: f32);
+    /// Register a u8 with min/max range constraints.
+    pub fn debug_register_u8_range(name_ptr: u32, name_len: u32, ptr: u32, min: u32, max: u32);
+    /// Register a u16 with min/max range constraints.
+    pub fn debug_register_u16_range(name_ptr: u32, name_len: u32, ptr: u32, min: u32, max: u32);
+    /// Register an i16 with min/max range constraints.
+    pub fn debug_register_i16_range(name_ptr: u32, name_len: u32, ptr: u32, min: i32, max: i32);
+
+    // --- Compound Type Registration (Editable) ---
+
+    /// Register a Vec2 (2 floats: x, y) for debug inspection.
+    pub fn debug_register_vec2(name_ptr: u32, name_len: u32, ptr: u32);
+    /// Register a Vec3 (3 floats: x, y, z) for debug inspection.
+    pub fn debug_register_vec3(name_ptr: u32, name_len: u32, ptr: u32);
+    /// Register a Rect (4 i16: x, y, w, h) for debug inspection.
+    pub fn debug_register_rect(name_ptr: u32, name_len: u32, ptr: u32);
+    /// Register a Color (4 u8: RGBA) for debug inspection with color picker.
+    pub fn debug_register_color(name_ptr: u32, name_len: u32, ptr: u32);
+
+    // --- Fixed-Point Type Registration (Editable) ---
+
+    /// Register Q8.8 fixed-point (i16) for debug inspection.
+    pub fn debug_register_fixed_i16_q8(name_ptr: u32, name_len: u32, ptr: u32);
+    /// Register Q16.16 fixed-point (i32) for debug inspection.
+    pub fn debug_register_fixed_i32_q16(name_ptr: u32, name_len: u32, ptr: u32);
+    /// Register Q24.8 fixed-point (i32) for debug inspection.
+    pub fn debug_register_fixed_i32_q8(name_ptr: u32, name_len: u32, ptr: u32);
+    /// Register Q8.24 fixed-point (i32) for debug inspection.
+    pub fn debug_register_fixed_i32_q24(name_ptr: u32, name_len: u32, ptr: u32);
+
+    // --- Watch Functions (Read-Only Display) ---
+
+    /// Watch an i8 value (read-only).
+    pub fn debug_watch_i8(name_ptr: u32, name_len: u32, ptr: u32);
+    /// Watch an i16 value (read-only).
+    pub fn debug_watch_i16(name_ptr: u32, name_len: u32, ptr: u32);
+    /// Watch an i32 value (read-only).
+    pub fn debug_watch_i32(name_ptr: u32, name_len: u32, ptr: u32);
+    /// Watch a u8 value (read-only).
+    pub fn debug_watch_u8(name_ptr: u32, name_len: u32, ptr: u32);
+    /// Watch a u16 value (read-only).
+    pub fn debug_watch_u16(name_ptr: u32, name_len: u32, ptr: u32);
+    /// Watch a u32 value (read-only).
+    pub fn debug_watch_u32(name_ptr: u32, name_len: u32, ptr: u32);
+    /// Watch an f32 value (read-only).
+    pub fn debug_watch_f32(name_ptr: u32, name_len: u32, ptr: u32);
+    /// Watch a bool value (read-only).
+    pub fn debug_watch_bool(name_ptr: u32, name_len: u32, ptr: u32);
+    /// Watch a Vec2 value (read-only).
+    pub fn debug_watch_vec2(name_ptr: u32, name_len: u32, ptr: u32);
+    /// Watch a Vec3 value (read-only).
+    pub fn debug_watch_vec3(name_ptr: u32, name_len: u32, ptr: u32);
+    /// Watch a Rect value (read-only).
+    pub fn debug_watch_rect(name_ptr: u32, name_len: u32, ptr: u32);
+    /// Watch a Color value (read-only).
+    pub fn debug_watch_color(name_ptr: u32, name_len: u32, ptr: u32);
+
+    // --- Grouping Functions ---
+
+    /// Begin a collapsible group in the debug UI.
+    pub fn debug_group_begin(name_ptr: u32, name_len: u32);
+    /// End the current debug group.
+    pub fn debug_group_end();
+
+    // --- State Query Functions ---
+
+    /// Query if the game is currently paused (debug mode).
+    ///
+    /// # Returns
+    /// 1 if paused, 0 if running normally.
+    pub fn debug_is_paused() -> i32;
+
+    /// Get the current time scale multiplier.
+    ///
+    /// # Returns
+    /// 1.0 = normal, 0.5 = half-speed, 2.0 = double-speed, etc.
+    pub fn debug_get_time_scale() -> f32;
 }
 
 // =============================================================================
@@ -912,4 +1166,89 @@ pub mod color {
     pub const MAGENTA: u32 = 0xFF00FFFF;
     pub const ORANGE: u32 = 0xFF8000FF;
     pub const TRANSPARENT: u32 = 0x00000000;
+}
+
+// =============================================================================
+// ROM HELPERS
+// =============================================================================
+
+/// Helper to load a ROM texture by string literal.
+///
+/// # Example
+/// ```rust,ignore
+/// let tex = rom_texture_str("player");
+/// ```
+#[inline]
+pub fn rom_texture_str(id: &str) -> u32 {
+    unsafe { rom_texture(id.as_ptr() as u32, id.len() as u32) }
+}
+
+/// Helper to load a ROM mesh by string literal.
+#[inline]
+pub fn rom_mesh_str(id: &str) -> u32 {
+    unsafe { rom_mesh(id.as_ptr() as u32, id.len() as u32) }
+}
+
+/// Helper to load a ROM sound by string literal.
+#[inline]
+pub fn rom_sound_str(id: &str) -> u32 {
+    unsafe { rom_sound(id.as_ptr() as u32, id.len() as u32) }
+}
+
+/// Helper to load a ROM font by string literal.
+#[inline]
+pub fn rom_font_str(id: &str) -> u32 {
+    unsafe { rom_font(id.as_ptr() as u32, id.len() as u32) }
+}
+
+/// Helper to load a ROM skeleton by string literal.
+#[inline]
+pub fn rom_skeleton_str(id: &str) -> u32 {
+    unsafe { rom_skeleton(id.as_ptr() as u32, id.len() as u32) }
+}
+
+/// Helper to get ROM data length by string literal.
+#[inline]
+pub fn rom_data_len_str(id: &str) -> u32 {
+    unsafe { rom_data_len(id.as_ptr() as u32, id.len() as u32) }
+}
+
+// =============================================================================
+// DEBUG HELPERS
+// =============================================================================
+
+/// Helper to register an f32 debug value by string literal.
+///
+/// # Example
+/// ```rust,ignore
+/// static mut SPEED: f32 = 5.0;
+/// debug_f32("speed", &SPEED);
+/// ```
+#[inline]
+pub unsafe fn debug_f32(name: &str, ptr: &f32) {
+    debug_register_f32(name.as_ptr() as u32, name.len() as u32, ptr as *const f32 as u32);
+}
+
+/// Helper to register an i32 debug value by string literal.
+#[inline]
+pub unsafe fn debug_i32(name: &str, ptr: &i32) {
+    debug_register_i32(name.as_ptr() as u32, name.len() as u32, ptr as *const i32 as u32);
+}
+
+/// Helper to register a bool debug value by string literal.
+#[inline]
+pub unsafe fn debug_bool(name: &str, ptr: &bool) {
+    debug_register_bool(name.as_ptr() as u32, name.len() as u32, ptr as *const bool as u32);
+}
+
+/// Helper to begin a debug group by string literal.
+#[inline]
+pub fn debug_group(name: &str) {
+    unsafe { debug_group_begin(name.as_ptr() as u32, name.len() as u32); }
+}
+
+/// Helper to end the current debug group.
+#[inline]
+pub fn debug_group_close() {
+    unsafe { debug_group_end(); }
 }

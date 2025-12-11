@@ -6,22 +6,23 @@ A fantasy console platform with built-in rollback netcode.
 
 | Console | Generation | Aesthetic | Doc |
 |---------|------------|-----------|-----|
-| **Emberware Z** | 5th gen | PS1/N64/Saturn | [docs/emberware-z.md](./docs/emberware-z.md) |
-| **Emberware Classic** | 4th gen | Genesis/SNES/Neo Geo | [docs/emberware-classic.md](./docs/emberware-classic.md) |
+| **Emberware Z** | 5th gen | PS1/N64/Saturn | [docs/reference/emberware-z.md](./docs/reference/emberware-z.md) |
+| **Emberware Classic** | 4th gen | Genesis/SNES/Neo Geo | [docs/reference/emberware-classic.md](./docs/reference/emberware-classic.md) |
 
 ## What's Here
 
 | Directory | Description |
 |-----------|-------------|
-| `/core` | Shared console framework (WASM runtime, GGRS rollback) |
+| `/core` | Shared console framework (WASM runtime, GGRS rollback, debug inspection) |
 | `/emberware-z` | Emberware Z runtime implementation |
-| `/shared` | API types shared with platform backend |
+| `/shared` | API types shared with platform backend, cart/ROM formats |
+| `/tools` | Developer tools: `ember-cli` (build/pack/run), `ember-export` (asset conversion) |
 | `/docs` | FFI documentation for game developers |
 | `/examples` | Example games |
 
 ## For Game Developers
 
-See [docs/ffi.md](./docs/ffi.md) for the shared FFI API, then check your target console's specific docs.
+See [docs/reference/ffi.md](./docs/reference/ffi.md) for the shared FFI API, then check your target console's specific docs.
 
 ### Quick Start
 
@@ -86,7 +87,7 @@ The examples will appear in the Emberware Z game library. Use the refresh button
 - **Case-insensitive**: `CUBE`, `Cube`, and `cube` all work
 - **Error messages**: Invalid games show suggestions and available games list
 
-**Available examples:** hello-world, triangle, textured-quad, cube, lighting, skinned-mesh, billboard, platformer, blinn-phong, procedural-shapes, audio-demo, textured-procedural
+**Available examples:** hello-world, triangle, textured-quad, cube, lighting, skinned-mesh, billboard, platformer, blinn-phong, procedural-shapes, audio-demo, textured-procedural, debug-demo, datapack-demo, font-demo, level-loader, asset-test
 
 For more details, see [examples/README.md](./examples/README.md).
 
@@ -116,4 +117,4 @@ Visit [emberware.io](https://emberware.io) to create an account and upload your 
 
 ## License
 
-MIT License
+Dual-licensed under MIT OR Apache-2.0 (your choice).

@@ -5,16 +5,17 @@
 Emberware is a fantasy console platform with built-in rollback netcode, designed to support multiple fantasy consoles (Emberware Z, Classic, etc.) with a shared framework.
 
 **Repository Structure:**
-- `/core` — Console trait, WASM runtime, GGRS rollback
+- `/core` — Console trait, WASM runtime, GGRS rollback, debug inspection
 - `/emberware-z` — PS1/N64 aesthetic console implementation
-- `/shared` — API types for platform backend
+- `/shared` — API types for platform backend, cart/ROM formats
+- `/tools` — Developer tools (ember-cli, ember-export)
 - `/docs` — Game developer documentation
 - `/examples` — Example games
 
 **Key Documentation:**
 - [TASKS.md](./TASKS.md) — Development status and implementation plan
-- [docs/ffi.md](./docs/ffi.md) — Shared FFI API reference
-- [docs/emberware-z.md](./docs/emberware-z.md) — Z-specific API
+- [docs/reference/ffi.md](./docs/reference/ffi.md) — Shared FFI API reference
+- [docs/reference/emberware-z.md](./docs/reference/emberware-z.md) — Z-specific API
 
 ## Architecture
 
@@ -114,11 +115,13 @@ The core handles GGRS serialization of whatever input type the console uses.
 
 ## Project Structure
 
-- `/core` — `emberware-core` crate with Console trait, WASM runtime, GGRS integration
+- `/core` — `emberware-core` crate with Console trait, WASM runtime, GGRS integration, debug inspection
 - `/emberware-z` — `emberware-z` binary implementing Console for PS1/N64 aesthetic
-- `/shared` — `emberware-shared` crate with API types
-- `/docs/ffi.md` — FFI reference for game developers
-- `/examples/hello-world` — Minimal example game
+- `/shared` — `emberware-shared` crate with API types, cart formats, asset formats
+- `/tools/ember-cli` — Build, pack, and run games (`ember build`, `ember pack`, `ember run`)
+- `/tools/ember-export` — Convert assets to Emberware formats (meshes, textures, audio, skeletons, animations)
+- `/docs/reference/` — FFI reference and API documentation for game developers
+- `/examples/` — Example games demonstrating various features
 
 ## Conventions
 
@@ -160,6 +163,50 @@ The console uses GGRS for deterministic rollback netcode. This means:
 - No `*_free` functions — resources auto-cleaned on game shutdown
 - Vertex buffers: one buffer per stride, grows dynamically during init
 - Immediate-mode draws buffered on CPU, flushed once per frame
+
+### Asset Loading
+Two approaches for loading assets:
+
+**ROM Data Pack (recommended):** Assets bundled in `.ewz` ROM file, loaded by string ID:
+```rust
+// In init() - assets go directly to VRAM, bypass WASM memory
+let texture = rom_texture(b"player".as_ptr(), 6);
+let mesh = rom_mesh(b"level".as_ptr(), 5);
+let sound = rom_sound(b"jump".as_ptr(), 4);
+```
+
+**Embedded Assets:** Use `include_bytes!()` with binary formats:
+```rust
+static MESH: &[u8] = include_bytes!("player.ewzmesh");
+let handle = load_zmesh(MESH.as_ptr() as u32, MESH.len() as u32);
+```
+
+### Game Manifest (ember.toml)
+Games are packaged using `ember.toml`:
+```toml
+[game]
+id = "my-game"
+title = "My Game"
+author = "Developer"
+version = "1.0.0"
+render_mode = 2  # 0=Unlit, 1=Matcap, 2=PBR, 3=Hybrid
+
+[[assets.textures]]
+id = "player"
+path = "assets/player.png"
+
+[[assets.meshes]]
+id = "level"
+path = "assets/level.ewzmesh"
+```
+
+### Debug Inspection System
+Runtime value editing for development (F3 to open panel):
+- Register values with `debug_register_*()` functions
+- Organize with `debug_group_begin/end()`
+- Read-only values with `debug_watch_*()` functions
+- Frame control: F5=pause, F6=step, F7/F8=time scale
+- Zero overhead in release builds (compiles out)
 
 ### Rendering Architecture (Emberware Z)
 
@@ -213,6 +260,10 @@ cargo run
 **Implementation:**
 - `emberware-z/src/game_resolver.rs` - Game ID resolution logic
 - `emberware-z/src/main.rs` - CLI argument parsing
+
+## License
+
+Dual-licensed under MIT OR Apache-2.0 (your choice).
 
 ## Related
 - `emberware-platform` (private) — Backend API, web frontend
