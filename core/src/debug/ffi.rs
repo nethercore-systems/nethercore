@@ -103,12 +103,8 @@ where
     linker.func_wrap("env", "debug_is_paused", debug_is_paused::<I, S>)?;
     linker.func_wrap("env", "debug_get_time_scale", debug_get_time_scale::<I, S>)?;
 
-    // Callback registration
-    linker.func_wrap(
-        "env",
-        "debug_set_change_callback",
-        debug_set_change_callback::<I, S>,
-    )?;
+    // Note: Change callbacks are handled via exported on_debug_change() function
+    // No FFI registration needed - console looks for the export directly
 
     Ok(())
 }
@@ -586,20 +582,6 @@ where
     1.0
 }
 
-// ============================================================================
-// Callback registration
-// ============================================================================
-
-fn debug_set_change_callback<I, S>(
-    mut caller: Caller<'_, GameStateWithConsole<I, S>>,
-    callback_ptr: u32,
-) where
-    I: ConsoleInput,
-    S: Send + Default + 'static,
-    GameStateWithConsole<I, S>: HasDebugRegistry,
-{
-    caller
-        .data_mut()
-        .debug_registry_mut()
-        .set_change_callback(callback_ptr);
-}
+// Note: Change callbacks are handled via exported on_debug_change() function.
+// Games export `on_debug_change` and the console calls it when values change,
+// similar to how init/update/render work.

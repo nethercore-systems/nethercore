@@ -606,25 +606,15 @@ impl App {
             write_value,
         );
 
-        // Store callback info for invocation after we release borrows
-        let callback_to_invoke = if any_changed {
-            registry_clone.change_callback
-        } else {
-            None
-        };
-
-        // Drop the closures and release borrows before calling callback
+        // Drop the closures to release borrows before calling callback
         drop(read_value);
         drop(write_value);
 
-        // Invoke the callback if values changed and one is registered
-        if let Some(callback_ptr) = callback_to_invoke {
-            // Re-acquire game reference to call the callback
+        // Call on_debug_change() if values changed and game exports it
+        if any_changed {
             if let Some(session) = &mut self.game_session {
                 if let Some(game) = session.runtime.game_mut() {
-                    if let Err(e) = game.call_table_func(callback_ptr) {
-                        tracing::warn!("Failed to invoke debug change callback: {}", e);
-                    }
+                    game.call_on_debug_change();
                 }
             }
         }

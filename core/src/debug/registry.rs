@@ -27,8 +27,6 @@ pub struct DebugRegistry {
     pub values: Vec<RegisteredValue>,
     /// Current group path stack during registration
     group_stack: Vec<String>,
-    /// Callback function pointer to invoke when values change
-    pub change_callback: Option<u32>,
     /// Whether registration has been finalized (after init completes)
     pub finalized: bool,
 }
@@ -106,16 +104,10 @@ impl DebugRegistry {
         }
     }
 
-    /// Set the change callback function pointer
-    pub fn set_change_callback(&mut self, callback_ptr: u32) {
-        self.change_callback = Some(callback_ptr);
-    }
-
     /// Clear the registry (for game reload)
     pub fn clear(&mut self) {
         self.values.clear();
         self.group_stack.clear();
-        self.change_callback = None;
         self.finalized = false;
     }
 
