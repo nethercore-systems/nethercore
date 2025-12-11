@@ -10,7 +10,7 @@ mod resources;
 
 pub use config::ZInitConfig;
 pub use ffi_state::ZFFIState;
-pub use resources::{Font, PendingMesh, PendingMeshPacked, PendingTexture};
+pub use resources::{Font, PendingMesh, PendingMeshPacked, PendingSkeleton, PendingTexture};
 
 // Re-export BoneMatrix3x4 and SkeletonData (defined below)
 
