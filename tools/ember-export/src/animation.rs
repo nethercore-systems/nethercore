@@ -155,6 +155,7 @@ fn sample_animation(
         let times = read_accessor_f32(&input_accessor, buffers)?;
         let interpolation = sampler.interpolation();
 
+        #[allow(clippy::needless_range_loop)]
         match target.property() {
             gltf::animation::Property::Translation => {
                 let values = read_accessor_vec3(&output_accessor, buffers)?;

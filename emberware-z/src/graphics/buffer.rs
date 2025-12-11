@@ -258,7 +258,7 @@ impl BufferManager {
 
         // Validate unpacked stride
         let unpacked_stride_floats = (vertex_stride(format) / 4) as usize;
-        if data.len() % unpacked_stride_floats != 0 {
+        if !data.len().is_multiple_of(unpacked_stride_floats) {
             anyhow::bail!(
                 "Vertex data size {} is not a multiple of stride {} floats",
                 data.len(),
@@ -326,7 +326,7 @@ impl BufferManager {
 
         // Validate unpacked stride
         let unpacked_stride_floats = (vertex_stride(format) / 4) as usize;
-        if data.len() % unpacked_stride_floats != 0 {
+        if !data.len().is_multiple_of(unpacked_stride_floats) {
             anyhow::bail!(
                 "Vertex data size {} is not a multiple of stride {} floats",
                 data.len(),
@@ -397,7 +397,7 @@ impl BufferManager {
         let stride = vertex_stride_packed(format) as usize;
         let vertex_count = data.len() / stride;
 
-        if data.len() % stride != 0 {
+        if !data.len().is_multiple_of(stride) {
             anyhow::bail!(
                 "Vertex data size {} is not a multiple of stride {}",
                 data.len(),
@@ -457,7 +457,7 @@ impl BufferManager {
         let stride = vertex_stride_packed(format) as usize;
         let vertex_count = data.len() / stride;
 
-        if data.len() % stride != 0 {
+        if !data.len().is_multiple_of(stride) {
             anyhow::bail!(
                 "Vertex data size {} is not a multiple of stride {}",
                 data.len(),

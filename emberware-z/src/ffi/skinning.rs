@@ -30,7 +30,7 @@ pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) ->
 ///
 /// # Arguments
 /// * `inverse_bind_ptr` — Pointer to array of 3×4 matrices in WASM memory
-///                        (12 floats per matrix, column-major order)
+///   (12 floats per matrix, column-major order)
 /// * `bone_count` — Number of bones (maximum 256)
 ///
 /// # Returns

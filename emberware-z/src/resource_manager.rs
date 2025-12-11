@@ -18,13 +18,19 @@ pub struct ZResourceManager {
     pub mesh_map: hashbrown::HashMap<u32, MeshHandle>,
 }
 
-impl ZResourceManager {
-    /// Create a new resource manager
-    pub fn new() -> Self {
+impl Default for ZResourceManager {
+    fn default() -> Self {
         Self {
             texture_map: hashbrown::HashMap::new(),
             mesh_map: hashbrown::HashMap::new(),
         }
+    }
+}
+
+impl ZResourceManager {
+    /// Create a new resource manager
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 

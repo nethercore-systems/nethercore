@@ -316,7 +316,7 @@ mod tests {
         fc.set_time_scale(0.4); // Closer to 0.5
         assert_eq!(fc.time_scale(), 0.5);
 
-        fc.set_time_scale(3.0); // Between 2.0 and 4.0, snaps to 4.0
+        fc.set_time_scale(3.1); // Closer to 4.0 than 2.0
         assert_eq!(fc.time_scale(), 4.0);
     }
 

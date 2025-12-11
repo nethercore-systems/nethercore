@@ -4,7 +4,7 @@
 //! No magic bytes - format is determined by which function is called.
 //!
 //! Usage from game code:
-//! ```rust
+//! ```text
 //! static MESH_DATA: &[u8] = include_bytes!("player.ewzmesh");
 //! let handle = load_zmesh(MESH_DATA.as_ptr() as u32, MESH_DATA.len() as u32);
 //! ```

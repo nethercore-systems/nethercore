@@ -12,6 +12,7 @@ use clap::Subcommand;
 
 /// Cart management subcommands
 #[derive(Debug, Subcommand)]
+#[allow(clippy::large_enum_variant)]
 pub enum CartCommand {
     /// Create an Emberware Z ROM (.ewz) from a WASM file
     #[command(name = "create-z")]

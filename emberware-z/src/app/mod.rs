@@ -1,6 +1,7 @@
 //! Application state and main loop
 
 mod debug;
+mod debug_values;
 mod game_session;
 mod init;
 mod ui;
@@ -281,17 +282,21 @@ impl App {
         // Collect UI action separately to avoid borrow conflicts
         let mut ui_action = None;
 
-        // Collect debug stats for overlay
-        let debug_stats = DebugStats {
-            frame_times: self.debug_stats.frame_times.clone(),
-            game_tick_times: self.debug_stats.game_tick_times.clone(),
-            game_render_times: self.debug_stats.game_render_times.clone(),
-            vram_used: self.debug_stats.vram_used,
-            vram_limit: self.debug_stats.vram_limit,
-            ping_ms: self.debug_stats.ping_ms,
-            rollback_frames: self.debug_stats.rollback_frames,
-            frame_advantage: self.debug_stats.frame_advantage,
-            network_interrupted: self.debug_stats.network_interrupted,
+        // Collect debug stats for overlay only when needed (avoid VecDeque clones every frame)
+        let debug_stats = if debug_overlay {
+            Some(DebugStats {
+                frame_times: self.debug_stats.frame_times.clone(),
+                game_tick_times: self.debug_stats.game_tick_times.clone(),
+                game_render_times: self.debug_stats.game_render_times.clone(),
+                vram_used: self.debug_stats.vram_used,
+                vram_limit: self.debug_stats.vram_limit,
+                ping_ms: self.debug_stats.ping_ms,
+                rollback_frames: self.debug_stats.rollback_frames,
+                frame_advantage: self.debug_stats.frame_advantage,
+                network_interrupted: self.debug_stats.network_interrupted,
+            })
+        } else {
+            None
         };
 
         let full_output = self.egui_ctx.run(raw_input, |ctx| {
@@ -325,11 +330,11 @@ impl App {
                 }
             }
 
-            // Debug overlay
-            if debug_overlay {
+            // Debug overlay (only when enabled - stats are only cloned when needed)
+            if let Some(ref stats) = debug_stats {
                 emberware_core::app::render_debug_overlay(
                     ctx,
-                    &debug_stats,
+                    stats,
                     matches!(mode, AppMode::Playing { .. }),
                     frame_time_ms,
                     render_fps,
@@ -583,7 +588,7 @@ impl App {
             // SAFETY: Bounds checked above, pointer valid for this scope
             let data = unsafe { std::slice::from_raw_parts(mem_ptr.add(ptr), size) };
 
-            Some(read_debug_value_from_slice(data, reg_value.value_type))
+            Some(debug_values::read_from_slice(data, reg_value.value_type))
         };
 
         // Create write closure using raw pointer
@@ -596,9 +601,9 @@ impl App {
             }
 
             // SAFETY: Bounds checked above, pointer valid for this scope
-            let data = unsafe { std::slice::from_raw_parts_mut(mem_ptr.add(ptr) as *mut u8, size) };
+            let data = unsafe { std::slice::from_raw_parts_mut(mem_ptr.add(ptr), size) };
 
-            write_debug_value_to_slice(data, new_val);
+            debug_values::write_to_slice(data, new_val);
             true
         };
 
@@ -611,9 +616,8 @@ impl App {
             write_value,
         );
 
-        // Drop the closures to release borrows before calling callback
-        drop(read_value);
-        drop(write_value);
+        // Closures are dropped automatically when they go out of scope
+        let _ = (read_value, write_value);
 
         // Call on_debug_change() if values changed and game exports it
         if any_changed {
@@ -724,121 +728,6 @@ pub fn run(initial_mode: AppMode) -> Result<(), AppError> {
     emberware_core::app::run(app)
         .map_err(|e| AppError::EventLoop(format!("Event loop error: {}", e)))?;
     Ok(())
-}
-
-/// Read a debug value from a byte slice
-fn read_debug_value_from_slice(
-    data: &[u8],
-    value_type: emberware_core::debug::ValueType,
-) -> emberware_core::debug::DebugValue {
-    use emberware_core::debug::{DebugValue, ValueType};
-
-    match value_type {
-        ValueType::I8 => DebugValue::I8(data[0] as i8),
-        ValueType::U8 => DebugValue::U8(data[0]),
-        ValueType::Bool => DebugValue::Bool(data[0] != 0),
-        ValueType::I16 => {
-            let bytes: [u8; 2] = data[..2].try_into().unwrap();
-            DebugValue::I16(i16::from_le_bytes(bytes))
-        }
-        ValueType::U16 => {
-            let bytes: [u8; 2] = data[..2].try_into().unwrap();
-            DebugValue::U16(u16::from_le_bytes(bytes))
-        }
-        ValueType::I32 => {
-            let bytes: [u8; 4] = data[..4].try_into().unwrap();
-            DebugValue::I32(i32::from_le_bytes(bytes))
-        }
-        ValueType::U32 => {
-            let bytes: [u8; 4] = data[..4].try_into().unwrap();
-            DebugValue::U32(u32::from_le_bytes(bytes))
-        }
-        ValueType::F32 => {
-            let bytes: [u8; 4] = data[..4].try_into().unwrap();
-            DebugValue::F32(f32::from_le_bytes(bytes))
-        }
-        ValueType::Vec2 => {
-            let x = f32::from_le_bytes(data[0..4].try_into().unwrap());
-            let y = f32::from_le_bytes(data[4..8].try_into().unwrap());
-            DebugValue::Vec2 { x, y }
-        }
-        ValueType::Vec3 => {
-            let x = f32::from_le_bytes(data[0..4].try_into().unwrap());
-            let y = f32::from_le_bytes(data[4..8].try_into().unwrap());
-            let z = f32::from_le_bytes(data[8..12].try_into().unwrap());
-            DebugValue::Vec3 { x, y, z }
-        }
-        ValueType::Rect => {
-            let x = i16::from_le_bytes(data[0..2].try_into().unwrap());
-            let y = i16::from_le_bytes(data[2..4].try_into().unwrap());
-            let w = i16::from_le_bytes(data[4..6].try_into().unwrap());
-            let h = i16::from_le_bytes(data[6..8].try_into().unwrap());
-            DebugValue::Rect { x, y, w, h }
-        }
-        ValueType::Color => DebugValue::Color {
-            r: data[0],
-            g: data[1],
-            b: data[2],
-            a: data[3],
-        },
-        ValueType::FixedI16Q8 => {
-            let bytes: [u8; 2] = data[..2].try_into().unwrap();
-            DebugValue::FixedI16Q8(i16::from_le_bytes(bytes))
-        }
-        ValueType::FixedI32Q16 => {
-            let bytes: [u8; 4] = data[..4].try_into().unwrap();
-            DebugValue::FixedI32Q16(i32::from_le_bytes(bytes))
-        }
-        ValueType::FixedI32Q8 => {
-            let bytes: [u8; 4] = data[..4].try_into().unwrap();
-            DebugValue::FixedI32Q8(i32::from_le_bytes(bytes))
-        }
-        ValueType::FixedI32Q24 => {
-            let bytes: [u8; 4] = data[..4].try_into().unwrap();
-            DebugValue::FixedI32Q24(i32::from_le_bytes(bytes))
-        }
-    }
-}
-
-/// Write a debug value to a byte slice
-fn write_debug_value_to_slice(data: &mut [u8], value: &emberware_core::debug::DebugValue) {
-    use emberware_core::debug::DebugValue;
-
-    match value {
-        DebugValue::I8(v) => data[0] = *v as u8,
-        DebugValue::U8(v) => data[0] = *v,
-        DebugValue::Bool(v) => data[0] = if *v { 1 } else { 0 },
-        DebugValue::I16(v) => data[..2].copy_from_slice(&v.to_le_bytes()),
-        DebugValue::U16(v) => data[..2].copy_from_slice(&v.to_le_bytes()),
-        DebugValue::I32(v) => data[..4].copy_from_slice(&v.to_le_bytes()),
-        DebugValue::U32(v) => data[..4].copy_from_slice(&v.to_le_bytes()),
-        DebugValue::F32(v) => data[..4].copy_from_slice(&v.to_le_bytes()),
-        DebugValue::Vec2 { x, y } => {
-            data[0..4].copy_from_slice(&x.to_le_bytes());
-            data[4..8].copy_from_slice(&y.to_le_bytes());
-        }
-        DebugValue::Vec3 { x, y, z } => {
-            data[0..4].copy_from_slice(&x.to_le_bytes());
-            data[4..8].copy_from_slice(&y.to_le_bytes());
-            data[8..12].copy_from_slice(&z.to_le_bytes());
-        }
-        DebugValue::Rect { x, y, w, h } => {
-            data[0..2].copy_from_slice(&x.to_le_bytes());
-            data[2..4].copy_from_slice(&y.to_le_bytes());
-            data[4..6].copy_from_slice(&w.to_le_bytes());
-            data[6..8].copy_from_slice(&h.to_le_bytes());
-        }
-        DebugValue::Color { r, g, b, a } => {
-            data[0] = *r;
-            data[1] = *g;
-            data[2] = *b;
-            data[3] = *a;
-        }
-        DebugValue::FixedI16Q8(v) => data[..2].copy_from_slice(&v.to_le_bytes()),
-        DebugValue::FixedI32Q16(v) => data[..4].copy_from_slice(&v.to_le_bytes()),
-        DebugValue::FixedI32Q8(v) => data[..4].copy_from_slice(&v.to_le_bytes()),
-        DebugValue::FixedI32Q24(v) => data[..4].copy_from_slice(&v.to_le_bytes()),
-    }
 }
 
 #[cfg(test)]

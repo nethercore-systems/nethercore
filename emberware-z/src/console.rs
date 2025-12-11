@@ -30,10 +30,13 @@ pub use emberware_shared::{
 };
 
 /// Maximum value for analog stick conversion (i8 range: -128 to 127)
-const STICK_SCALE: f32 = 127.0;
+pub const STICK_SCALE: f32 = 127.0;
 
 /// Maximum value for trigger conversion (u8 range: 0 to 255)
-const TRIGGER_SCALE: f32 = 255.0;
+pub const TRIGGER_SCALE: f32 = 255.0;
+
+/// Maximum valid button index (0-13, corresponding to Button enum)
+pub const MAX_BUTTON_INDEX: u32 = 13;
 
 /// Button indices for ZInput
 ///

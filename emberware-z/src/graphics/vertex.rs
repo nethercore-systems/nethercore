@@ -127,7 +127,8 @@ mod wgpu_attrs {
     const SIZE_COLOR: u64 = 4; // Unorm8x4
     const SIZE_NORMAL: u64 = 4; // Octahedral u32
     const SIZE_BONE_INDICES: u64 = 4; // Uint8x4
-    const SIZE_BONE_WEIGHTS: u64 = 4; // Unorm8x4
+    // Note: SIZE_BONE_WEIGHTS not needed - bone weights is always the last attribute
+    // so its size never appears in offset calculations
 
     /// Shader locations for each attribute type
     const LOC_POS: u32 = 0;

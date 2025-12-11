@@ -1,7 +1,7 @@
 use bytemuck::{Pod, Zeroable};
 use glam::{Vec3, Vec4};
 use half::f16;
-use z_common::{encode_octahedral, pack_octahedral_u32, unpack_octahedral_u32};
+use z_common::{pack_octahedral_u32, unpack_octahedral_u32};
 
 use super::render_state::MatcapBlendMode;
 
@@ -174,12 +174,14 @@ pub fn unpack_unorm8(value: u8) -> f32 {
 
 /// Pack an f32 normalized value [-1.0, 1.0] to i16 snorm16 [-32767, 32767]
 #[inline]
+#[allow(dead_code)]
 pub fn pack_snorm16(value: f32) -> i16 {
     (value.clamp(-1.0, 1.0) * 32767.0).round() as i16
 }
 
 /// Unpack snorm16 [-32767, 32767] to f32 [-1.0, 1.0]
 #[inline]
+#[allow(dead_code)]
 pub fn unpack_snorm16(value: i16) -> f32 {
     value as f32 / 32767.0
 }
@@ -231,6 +233,7 @@ pub fn pack_rgb8(color: Vec3) -> u32 {
 
 /// Pack Vec4 color [0.0, 1.0] to u32 RGBA8
 #[inline]
+#[allow(dead_code)]
 pub fn pack_rgba8_vec4(color: Vec4) -> u32 {
     pack_rgba8(color.x, color.y, color.z, color.w)
 }
@@ -509,6 +512,7 @@ impl PackedUnifiedShadingState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use z_common::encode_octahedral;
 
     #[test]
     fn test_packed_sizes() {

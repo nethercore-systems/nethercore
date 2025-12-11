@@ -99,8 +99,11 @@ fn find_similar_games(query: &str, available_games: &[LocalGame]) -> Vec<String>
 
 /// Calculate Levenshtein distance between two strings
 fn levenshtein_distance(s1: &str, s2: &str) -> usize {
-    let len1 = s1.len();
-    let len2 = s2.len();
+    // Pre-collect chars to avoid O(n) .chars().nth() calls
+    let chars1: Vec<char> = s1.chars().collect();
+    let chars2: Vec<char> = s2.chars().collect();
+    let len1 = chars1.len();
+    let len2 = chars2.len();
 
     if len1 == 0 {
         return len2;
@@ -111,20 +114,16 @@ fn levenshtein_distance(s1: &str, s2: &str) -> usize {
 
     let mut matrix = vec![vec![0; len2 + 1]; len1 + 1];
 
-    for i in 0..=len1 {
-        matrix[i][0] = i;
+    for (i, row) in matrix.iter_mut().enumerate().take(len1 + 1) {
+        row[0] = i;
     }
-    for j in 0..=len2 {
-        matrix[0][j] = j;
+    for (j, val) in matrix[0].iter_mut().enumerate().take(len2 + 1) {
+        *val = j;
     }
 
     for i in 1..=len1 {
         for j in 1..=len2 {
-            let cost = if s1.chars().nth(i - 1) == s2.chars().nth(j - 1) {
-                0
-            } else {
-                1
-            };
+            let cost = if chars1[i - 1] == chars2[j - 1] { 0 } else { 1 };
             matrix[i][j] = std::cmp::min(
                 std::cmp::min(matrix[i - 1][j] + 1, matrix[i][j - 1] + 1),
                 matrix[i - 1][j - 1] + cost,

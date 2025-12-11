@@ -320,7 +320,7 @@ fn load_sound(id: &str, path: &std::path::Path) -> Result<PackedSound> {
         }
 
         offset += 8 + chunk_size;
-        if chunk_size % 2 != 0 {
+        if !chunk_size.is_multiple_of(2) {
             offset += 1; // Padding byte
         }
     }

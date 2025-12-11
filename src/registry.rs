@@ -70,6 +70,7 @@ impl ConsoleType {
     ///
     /// - `"ewz"` for Emberware Z
     /// - Future: `"ewc"` for Emberware Classic, etc.
+    #[allow(dead_code)]
     pub fn rom_extension(&self) -> &'static str {
         match self {
             ConsoleType::Z => "ewz",
@@ -85,6 +86,7 @@ impl ConsoleType {
     ///
     /// - `Some(ConsoleType::Z)` for `.ewz` files
     /// - `None` for unknown extensions
+    #[allow(dead_code)]
     pub fn from_extension(ext: &str) -> Option<Self> {
         match ext {
             "ewz" => Some(ConsoleType::Z),
@@ -160,11 +162,13 @@ impl ConsoleRegistry {
     }
 
     /// Get all available console type strings.
+    #[allow(dead_code)]
     pub fn available_consoles(&self) -> Vec<&'static str> {
         ConsoleType::all().iter().map(|ct| ct.as_str()).collect()
     }
 
     /// Check if a console type is supported.
+    #[allow(dead_code)]
     pub fn supports(&self, console_type: &str) -> bool {
         ConsoleType::from_str(console_type).is_some()
     }

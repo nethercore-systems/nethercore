@@ -402,7 +402,8 @@ impl ZGraphics {
         self.current_render_mode
     }
 
-    pub fn get_pipeline(&mut self, format: u8, state: &RenderState) -> &PipelineEntry {
+    #[allow(dead_code)]
+    pub(crate) fn get_pipeline(&mut self, format: u8, state: &RenderState) -> &PipelineEntry {
         self.pipeline_cache.get_or_create(
             &self.device,
             self.config.format,

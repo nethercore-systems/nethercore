@@ -34,49 +34,6 @@ pub struct SkeletonData {
     pub bone_count: u32,
 }
 
-/// Extension trait for BoneMatrix3x4 with glam conversion methods
-///
-/// This adds glam-specific methods to the POD BoneMatrix3x4 type
-/// without requiring glam as a dependency in the shared crate.
-pub trait BoneMatrix3x4Ext {
-    /// Convert from Mat4 (column-major) to BoneMatrix3x4 (row-major)
-    fn from_mat4(m: glam::Mat4) -> BoneMatrix3x4;
-
-    /// Get row 0 as a glam Vec4
-    fn row0_vec4(&self) -> glam::Vec4;
-
-    /// Get row 1 as a glam Vec4
-    fn row1_vec4(&self) -> glam::Vec4;
-
-    /// Get row 2 as a glam Vec4
-    fn row2_vec4(&self) -> glam::Vec4;
-}
-
-impl BoneMatrix3x4Ext for BoneMatrix3x4 {
-    fn from_mat4(m: glam::Mat4) -> BoneMatrix3x4 {
-        // Mat4 is column-major: m.col(0) = [m00, m10, m20, m30]
-        // We want row-major: row0 = [m00, m01, m02, m03]
-        let cols = m.to_cols_array_2d();
-        BoneMatrix3x4 {
-            row0: [cols[0][0], cols[1][0], cols[2][0], cols[3][0]],
-            row1: [cols[0][1], cols[1][1], cols[2][1], cols[3][1]],
-            row2: [cols[0][2], cols[1][2], cols[2][2], cols[3][2]],
-        }
-    }
-
-    fn row0_vec4(&self) -> glam::Vec4 {
-        glam::Vec4::from_array(self.row0)
-    }
-
-    fn row1_vec4(&self) -> glam::Vec4 {
-        glam::Vec4::from_array(self.row1)
-    }
-
-    fn row2_vec4(&self) -> glam::Vec4 {
-        glam::Vec4::from_array(self.row2)
-    }
-}
-
 /// A batch of quad instances that share the same texture bindings
 #[derive(Debug, Clone)]
 pub struct QuadBatch {

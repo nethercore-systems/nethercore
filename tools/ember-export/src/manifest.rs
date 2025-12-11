@@ -111,6 +111,7 @@ pub enum FontEntry {
     Detailed {
         path: PathBuf,
         #[serde(default = "default_font_size")]
+        #[allow(dead_code)]
         size: u32,
     },
 }
@@ -127,6 +128,7 @@ impl FontEntry {
         }
     }
 
+    #[allow(dead_code)]
     pub fn size(&self) -> u32 {
         match self {
             FontEntry::Simple(_) => default_font_size(),

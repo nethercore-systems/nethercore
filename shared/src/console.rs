@@ -88,7 +88,7 @@ pub const fn emberware_z_specs() -> &'static ConsoleSpecs {
 pub const EMBERWARE_CLASSIC_MEMORY_LIMIT: usize = 2 * 1024 * 1024;
 
 /// Emberware Classic VRAM limit (1 MB)
-pub const EMBERWARE_CLASSIC_VRAM_LIMIT: usize = 1 * 1024 * 1024;
+pub const EMBERWARE_CLASSIC_VRAM_LIMIT: usize = 1024 * 1024;
 
 /// Get Emberware Classic console specifications.
 ///

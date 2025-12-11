@@ -52,9 +52,9 @@ pub fn generate_rust_module(manifest: &Manifest, output_path: &Path) -> Result<(
     code.push_str("//!\n");
     code.push_str("//! This module provides access to all assets defined in assets.toml.\n");
     code.push_str("//! Call `load()` during your game's `init()` to load all assets.\n");
-    code.push_str("\n");
+    code.push('\n');
     code.push_str("#![allow(dead_code)]\n");
-    code.push_str("\n");
+    code.push('\n');
 
     // Collect all assets
     let mut mesh_assets: Vec<(&String, String)> = Vec::new();
@@ -64,19 +64,19 @@ pub fn generate_rust_module(manifest: &Manifest, output_path: &Path) -> Result<(
     let output_dir = &manifest.output.dir;
 
     // Meshes
-    for (name, _entry) in &manifest.meshes {
+    for name in manifest.meshes.keys() {
         let output_file = format!("{}/{}.{}", output_dir.display(), name, EWZ_MESH_EXT);
         mesh_assets.push((name, output_file));
     }
 
     // Textures
-    for (name, _entry) in &manifest.textures {
+    for name in manifest.textures.keys() {
         let output_file = format!("{}/{}.{}", output_dir.display(), name, EWZ_TEXTURE_EXT);
         texture_assets.push((name, output_file));
     }
 
     // Sounds
-    for (name, _entry) in &manifest.sounds {
+    for name in manifest.sounds.keys() {
         let output_file = format!("{}/{}.{}", output_dir.display(), name, EWZ_SOUND_EXT);
         sound_assets.push((name, output_file));
     }
@@ -105,7 +105,7 @@ pub fn generate_rust_module(manifest: &Manifest, output_path: &Path) -> Result<(
         code.push_str(&format!("static {}: &[u8] = include_bytes!(\"{}\");\n", const_name, rel_path));
     }
 
-    code.push_str("\n");
+    code.push('\n');
 
     // FFI declarations
     code.push_str("// FFI functions for loading assets\n");
@@ -206,7 +206,7 @@ fn to_field_name(name: &str) -> String {
 }
 
 /// Create a relative path from `from` to `to`
-fn make_relative_path(from: &Path, to: &Path) -> String {
+fn make_relative_path(_from: &Path, to: &Path) -> String {
     // Simple implementation: just use the path as-is for now
     // A more sophisticated version would compute actual relative paths
     to.to_string_lossy()
