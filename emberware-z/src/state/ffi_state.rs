@@ -4,7 +4,8 @@ use glam::{Mat4, Vec3};
 use hashbrown::HashMap;
 
 use super::{
-    BoneMatrix3x4, Font, PendingMesh, PendingMeshPacked, PendingTexture, SkeletonData, ZInitConfig,
+    BoneMatrix3x4, Font, PendingMesh, PendingMeshPacked, PendingSkeleton, PendingTexture,
+    SkeletonData, ZInitConfig,
 };
 
 /// FFI staging state for Emberware Z
@@ -41,10 +42,11 @@ pub struct ZFFIState {
     // Mesh metadata mapping (for FFI access to mesh info)
     pub mesh_map: hashbrown::HashMap<u32, crate::graphics::RetainedMesh>,
 
-    // Pending resource uploads
+    // Pending resource uploads (processed after init())
     pub pending_textures: Vec<PendingTexture>,
     pub pending_meshes: Vec<PendingMesh>,
     pub pending_meshes_packed: Vec<PendingMeshPacked>,
+    pub pending_skeletons: Vec<PendingSkeleton>,
 
     // Resource handle allocation
     pub next_texture_handle: u32,
@@ -132,6 +134,7 @@ impl Default for ZFFIState {
             pending_textures: Vec::new(),
             pending_meshes: Vec::new(),
             pending_meshes_packed: Vec::new(),
+            pending_skeletons: Vec::new(),
             next_texture_handle: 1, // 0 reserved for invalid
             next_mesh_handle: 1,
             next_font_handle: 1,

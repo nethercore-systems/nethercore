@@ -13,7 +13,7 @@ use wasmtime::{Caller, Linker};
 use emberware_core::wasm::GameStateWithConsole;
 
 use crate::console::ZInput;
-use crate::state::{BoneMatrix3x4, SkeletonData, ZFFIState, MAX_BONES, MAX_SKELETONS};
+use crate::state::{BoneMatrix3x4, PendingSkeleton, ZFFIState, MAX_BONES, MAX_SKELETONS};
 
 /// Register GPU skinning FFI functions
 pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
@@ -60,9 +60,10 @@ fn load_skeleton(
         return 0;
     }
 
-    // Check skeleton limit
+    // Check skeleton limit (pending + already loaded)
     let state = &caller.data().console;
-    if state.skeletons.len() >= MAX_SKELETONS {
+    let total_skeletons = state.skeletons.len() + state.pending_skeletons.len();
+    if total_skeletons >= MAX_SKELETONS {
         warn!(
             "load_skeleton: maximum skeleton count {} exceeded",
             MAX_SKELETONS
@@ -132,18 +133,19 @@ fn load_skeleton(
         inverse_bind.push(matrix);
     }
 
-    // Store skeleton and allocate handle
+    // Store pending skeleton and allocate handle
     let state = &mut caller.data_mut().console;
     let handle = state.next_skeleton_handle;
     state.next_skeleton_handle += 1;
 
-    state.skeletons.push(SkeletonData {
+    state.pending_skeletons.push(PendingSkeleton {
+        handle,
         inverse_bind,
         bone_count,
     });
 
     tracing::info!(
-        "load_skeleton: created skeleton {} with {} bones",
+        "load_skeleton: queued skeleton {} with {} bones",
         handle,
         bone_count
     );
