@@ -10,14 +10,30 @@ mod resources;
 
 pub use config::ZInitConfig;
 pub use ffi_state::ZFFIState;
-pub use resources::{Font, PendingMesh, PendingMeshPacked, PendingTexture};
+pub use resources::{Font, PendingMesh, PendingMeshPacked, PendingSkeleton, PendingTexture};
 
-// Re-export BoneMatrix3x4 (defined below)
+// Re-export BoneMatrix3x4 and SkeletonData (defined below)
 
 /// Maximum number of bones for GPU skinning
 pub const MAX_BONES: usize = 256;
 
+/// Maximum number of skeletons that can be loaded
+pub const MAX_SKELETONS: usize = 64;
+
 use glam::Vec4;
+
+/// Skeleton data containing inverse bind matrices
+///
+/// Stored on the CPU side for upload to GPU when bound.
+/// The inverse bind matrices transform vertices from model space
+/// to bone-local space at bind time.
+#[derive(Clone, Debug)]
+pub struct SkeletonData {
+    /// Inverse bind matrices (one per bone, 3x4 row-major format)
+    pub inverse_bind: Vec<BoneMatrix3x4>,
+    /// Number of bones in this skeleton
+    pub bone_count: u32,
+}
 
 /// 3x4 affine bone matrix (row-major storage)
 ///

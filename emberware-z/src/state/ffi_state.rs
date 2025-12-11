@@ -3,7 +3,10 @@
 use glam::{Mat4, Vec3};
 use hashbrown::HashMap;
 
-use super::{BoneMatrix3x4, Font, PendingMesh, PendingMeshPacked, PendingTexture, ZInitConfig};
+use super::{
+    BoneMatrix3x4, Font, PendingMesh, PendingMeshPacked, PendingSkeleton, PendingTexture,
+    SkeletonData, ZInitConfig,
+};
 
 /// FFI staging state for Emberware Z
 ///
@@ -25,16 +28,25 @@ pub struct ZFFIState {
     pub bone_matrices: Vec<BoneMatrix3x4>,
     pub bone_count: u32,
 
+    // Skeleton system (inverse bind matrices for GPU skinning)
+    /// Loaded skeletons (index 0 is reserved, handles are 1-indexed)
+    pub skeletons: Vec<SkeletonData>,
+    /// Currently bound skeleton handle (0 = no skeleton bound, raw mode)
+    pub bound_skeleton: u32,
+    /// Next skeleton handle to allocate
+    pub next_skeleton_handle: u32,
+
     // Virtual Render Pass (direct recording)
     pub render_pass: crate::graphics::VirtualRenderPass,
 
     // Mesh metadata mapping (for FFI access to mesh info)
     pub mesh_map: hashbrown::HashMap<u32, crate::graphics::RetainedMesh>,
 
-    // Pending resource uploads
+    // Pending resource uploads (processed after init())
     pub pending_textures: Vec<PendingTexture>,
     pub pending_meshes: Vec<PendingMesh>,
     pub pending_meshes_packed: Vec<PendingMeshPacked>,
+    pub pending_skeletons: Vec<PendingSkeleton>,
 
     // Resource handle allocation
     pub next_texture_handle: u32,
@@ -114,11 +126,15 @@ impl Default for ZFFIState {
             bound_textures: [0; 4],
             bone_matrices: Vec::new(),
             bone_count: 0,
+            skeletons: Vec::new(),
+            bound_skeleton: 0,
+            next_skeleton_handle: 1, // 0 reserved for "no skeleton"
             render_pass: crate::graphics::VirtualRenderPass::new(),
             mesh_map: hashbrown::HashMap::new(),
             pending_textures: Vec::new(),
             pending_meshes: Vec::new(),
             pending_meshes_packed: Vec::new(),
+            pending_skeletons: Vec::new(),
             next_texture_handle: 1, // 0 reserved for invalid
             next_mesh_handle: 1,
             next_font_handle: 1,
@@ -214,7 +230,7 @@ impl ZFFIState {
         }
     }
 
-    /// Update light in current shading state (with quantization)
+    /// Update a directional light in current shading state (with quantization)
     pub fn update_light(
         &mut self,
         index: usize,
@@ -226,10 +242,37 @@ impl ZFFIState {
         use crate::graphics::PackedLight;
         use glam::Vec3;
 
-        let new_light = PackedLight::from_floats(
+        let new_light = PackedLight::directional(
             Vec3::from_slice(&direction),
             Vec3::from_slice(&color),
             intensity,
+            enabled,
+        );
+
+        if self.current_shading_state.lights[index] != new_light {
+            self.current_shading_state.lights[index] = new_light;
+            self.shading_state_dirty = true;
+        }
+    }
+
+    /// Update a point light in current shading state (with quantization)
+    pub fn update_point_light(
+        &mut self,
+        index: usize,
+        position: [f32; 3],
+        color: [f32; 3],
+        intensity: f32,
+        range: f32,
+        enabled: bool,
+    ) {
+        use crate::graphics::PackedLight;
+        use glam::Vec3;
+
+        let new_light = PackedLight::point(
+            Vec3::from_slice(&position),
+            Vec3::from_slice(&color),
+            intensity,
+            range,
             enabled,
         );
 
@@ -334,6 +377,38 @@ impl ZFFIState {
             self.current_shading_state.uniform_set_1 = new_packed;
             self.shading_state_dirty = true;
         }
+    }
+
+    /// Update skinning mode in current shading state
+    /// - false: raw mode (bone matrices used as-is)
+    /// - true: inverse bind mode (GPU applies inverse bind matrices)
+    pub fn update_skinning_mode(&mut self, inverse_bind: bool) {
+        use crate::graphics::FLAG_SKINNING_MODE;
+
+        let new_flags = if inverse_bind {
+            self.current_shading_state.flags | FLAG_SKINNING_MODE
+        } else {
+            self.current_shading_state.flags & !FLAG_SKINNING_MODE
+        };
+
+        if self.current_shading_state.flags != new_flags {
+            self.current_shading_state.flags = new_flags;
+            self.shading_state_dirty = true;
+        }
+    }
+
+    /// Check if a skeleton is currently bound (inverse bind mode enabled)
+    pub fn is_skeleton_bound(&self) -> bool {
+        self.bound_skeleton != 0
+    }
+
+    /// Get the currently bound skeleton data, if any
+    pub fn get_bound_skeleton(&self) -> Option<&SkeletonData> {
+        if self.bound_skeleton == 0 {
+            return None;
+        }
+        let index = self.bound_skeleton as usize - 1;
+        self.skeletons.get(index)
     }
 
     /// Add current shading state to the pool if dirty, returning its index

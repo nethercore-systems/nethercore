@@ -23,6 +23,9 @@ pub struct Config {
     /// Input/controller settings
     #[serde(default)]
     pub input: InputConfig,
+    /// Debug inspection settings
+    #[serde(default)]
+    pub debug: DebugConfig,
 }
 
 /// Scaling mode for render target to window
@@ -65,6 +68,44 @@ pub struct AudioConfig {
     pub master_volume: f32,
 }
 
+/// Debug inspection configuration.
+///
+/// Configures hotkeys and behavior for the debug inspection panel.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DebugConfig {
+    /// Toggle debug inspection panel (default: F3)
+    #[serde(default = "default_panel_toggle")]
+    pub panel_toggle: String,
+    /// Toggle pause/resume (default: F5)
+    #[serde(default = "default_pause_toggle")]
+    pub pause_toggle: String,
+    /// Step single frame when paused (default: F6)
+    #[serde(default = "default_step_frame")]
+    pub step_frame: String,
+    /// Decrease time scale (default: F7)
+    #[serde(default = "default_speed_decrease")]
+    pub speed_decrease: String,
+    /// Increase time scale (default: F8)
+    #[serde(default = "default_speed_increase")]
+    pub speed_increase: String,
+}
+
+fn default_panel_toggle() -> String {
+    "F3".to_string()
+}
+fn default_pause_toggle() -> String {
+    "F5".to_string()
+}
+fn default_step_frame() -> String {
+    "F6".to_string()
+}
+fn default_speed_decrease() -> String {
+    "F7".to_string()
+}
+fn default_speed_increase() -> String {
+    "F8".to_string()
+}
+
 fn default_true() -> bool {
     true
 }
@@ -89,6 +130,18 @@ impl Default for VideoConfig {
 impl Default for AudioConfig {
     fn default() -> Self {
         Self { master_volume: 0.8 }
+    }
+}
+
+impl Default for DebugConfig {
+    fn default() -> Self {
+        Self {
+            panel_toggle: default_panel_toggle(),
+            pause_toggle: default_pause_toggle(),
+            step_frame: default_step_frame(),
+            speed_decrease: default_speed_decrease(),
+            speed_increase: default_speed_increase(),
+        }
     }
 }
 
@@ -178,6 +231,7 @@ mod tests {
             },
             audio: AudioConfig { master_volume: 0.5 },
             input: InputConfig::default(),
+            debug: DebugConfig::default(),
         };
 
         let toml_str = toml::to_string(&config).unwrap();

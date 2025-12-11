@@ -21,7 +21,10 @@ use wasmtime::{Engine, ExternType, Instance, Linker, Module, Store, TypedFunc};
 use crate::console::ConsoleInput;
 
 // Re-export public types from state module
-pub use state::{GameState, GameStateWithConsole, MAX_PLAYERS, MAX_SAVE_SIZE, MAX_SAVE_SLOTS};
+pub use state::{
+    read_string_from_memory, GameState, GameStateWithConsole, MAX_PLAYERS, MAX_SAVE_SIZE,
+    MAX_SAVE_SLOTS,
+};
 
 /// Shared WASM engine (one per application)
 pub struct WasmEngine {
@@ -97,7 +100,6 @@ impl WasmEngine {
 // returns Result<Self> which properly propagates initialization errors.
 
 /// A loaded and instantiated game
-/// A loaded and instantiated game
 pub struct GameInstance<I: ConsoleInput, S: Send + Default + 'static> {
     store: Store<GameStateWithConsole<I, S>>,
     /// The WASM instance.
@@ -108,6 +110,7 @@ pub struct GameInstance<I: ConsoleInput, S: Send + Default + 'static> {
     init_fn: Option<TypedFunc<(), ()>>,
     update_fn: Option<TypedFunc<(), ()>>,
     render_fn: Option<TypedFunc<(), ()>>,
+    on_debug_change_fn: Option<TypedFunc<(), ()>>,
 }
 
 impl<I: ConsoleInput, S: Send + Default + 'static> GameInstance<I, S> {
@@ -137,7 +140,10 @@ impl<I: ConsoleInput, S: Send + Default + 'static> GameInstance<I, S> {
         linker: &Linker<GameStateWithConsole<I, S>>,
         ram_limit: usize,
     ) -> Result<Self> {
-        let mut store = Store::new(engine.engine(), GameStateWithConsole::with_ram_limit(ram_limit));
+        let mut store = Store::new(
+            engine.engine(),
+            GameStateWithConsole::with_ram_limit(ram_limit),
+        );
 
         // Enable resource limiter to enforce memory constraints
         store.limiter(|state| state);
@@ -159,6 +165,9 @@ impl<I: ConsoleInput, S: Send + Default + 'static> GameInstance<I, S> {
         let init_fn = instance.get_typed_func::<(), ()>(&mut store, "init").ok();
         let update_fn = instance.get_typed_func::<(), ()>(&mut store, "update").ok();
         let render_fn = instance.get_typed_func::<(), ()>(&mut store, "render").ok();
+        let on_debug_change_fn = instance
+            .get_typed_func::<(), ()>(&mut store, "on_debug_change")
+            .ok();
 
         Ok(Self {
             store,
@@ -166,6 +175,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static> GameInstance<I, S> {
             init_fn,
             update_fn,
             render_fn,
+            on_debug_change_fn,
         })
     }
 
@@ -321,6 +331,23 @@ impl<I: ConsoleInput, S: Send + Default + 'static> GameInstance<I, S> {
         let state = &mut self.store.data_mut().game;
         state.player_count = player_count.min(MAX_PLAYERS as u32);
         state.local_player_mask = local_player_mask;
+    }
+
+    /// Call the game's on_debug_change function if it exists
+    ///
+    /// This is called when debug values are modified through the debug panel.
+    /// Games can optionally export this function to react to debug value changes.
+    pub fn call_on_debug_change(&mut self) {
+        if let Some(func) = &self.on_debug_change_fn {
+            if let Err(e) = func.call(&mut self.store, ()) {
+                tracing::warn!("on_debug_change() failed: {}", e);
+            }
+        }
+    }
+
+    /// Returns true if the game exports an on_debug_change function
+    pub fn has_debug_change_callback(&self) -> bool {
+        self.on_debug_change_fn.is_some()
     }
 }
 

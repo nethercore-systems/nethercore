@@ -3,8 +3,8 @@
 //! This module handles processing draw commands from ZFFIState and converting
 //! them into GPU rendering operations.
 
-use super::render_state::{BlendMode, CullMode, MatcapBlendMode, TextureHandle};
 use super::ZGraphics;
+use super::render_state::{BlendMode, CullMode, MatcapBlendMode, TextureHandle};
 
 impl ZGraphics {
     /// Process all draw commands from ZFFIState and execute them

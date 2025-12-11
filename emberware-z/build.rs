@@ -49,6 +49,12 @@ const VS_VIEW_POS: &str = "let view_pos_4 = view_matrix * model_matrix * world_p
 const VS_CAMERA_POS: &str = "out.camera_position = extract_camera_position(view_matrix);";
 
 const VS_SKINNED: &str = r#"// GPU skinning: compute skinned position and normal
+    // Skinning mode is stored in shading state flags (bit 0)
+    // 0 = raw mode (bone matrices used as-is)
+    // 1 = inverse bind mode (apply inverse bind matrices)
+    let shading_state_for_skinning = shading_states[shading_state_idx];
+    let use_inverse_bind = (shading_state_for_skinning.flags & FLAG_SKINNING_MODE) != 0u;
+
     var skinned_pos = vec3<f32>(0.0, 0.0, 0.0);
     var skinned_normal = vec3<f32>(0.0, 0.0, 0.0);
     //VS_SKINNED_UNPACK_NORMAL
@@ -58,7 +64,14 @@ const VS_SKINNED: &str = r#"// GPU skinning: compute skinned position and normal
         let weight = in.bone_weights[i];
 
         if (weight > 0.0 && bone_idx < 256u) {
-            let bone_matrix = bone_to_mat4(bones[bone_idx]);
+            var bone_matrix = bone_to_mat4(bones[bone_idx]);
+
+            // Apply inverse bind in inverse bind mode
+            if (use_inverse_bind) {
+                let inv_bind = bone_to_mat4(inverse_bind[bone_idx]);
+                bone_matrix = bone_matrix * inv_bind;
+            }
+
             skinned_pos += (bone_matrix * vec4<f32>(in.position, 1.0)).xyz * weight;
             //VS_SKINNED_NORMAL
         }

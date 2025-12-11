@@ -4,8 +4,7 @@
 //! graphics backend handles (TextureHandle, MeshHandle).
 
 use crate::graphics::{pack_vertex_data, MeshHandle, TextureHandle, ZGraphics};
-use crate::state::ZFFIState;
-use bytemuck::cast_slice;
+use crate::state::{SkeletonData, ZFFIState};
 use emberware_core::console::{Audio, ConsoleResourceManager};
 
 /// Resource manager for Emberware Z
@@ -116,6 +115,31 @@ impl ConsoleResourceManager for ZResourceManager {
                     tracing::warn!("Failed to load packed mesh {}: {}", pending.handle, e);
                 }
             }
+        }
+
+        // Process pending skeletons (move to finalized storage)
+        // Skeletons are stored by handle order (handle N is at index N-1)
+        for pending in state.pending_skeletons.drain(..) {
+            // Ensure skeletons vec is large enough for this handle
+            let index = pending.handle as usize - 1;
+            while state.skeletons.len() <= index {
+                // Fill gaps with empty skeletons (shouldn't happen in practice)
+                state.skeletons.push(SkeletonData {
+                    inverse_bind: Vec::new(),
+                    bone_count: 0,
+                });
+            }
+
+            state.skeletons[index] = SkeletonData {
+                inverse_bind: pending.inverse_bind,
+                bone_count: pending.bone_count,
+            };
+
+            tracing::debug!(
+                "Loaded skeleton: handle={} with {} bones",
+                pending.handle,
+                pending.bone_count
+            );
         }
     }
 

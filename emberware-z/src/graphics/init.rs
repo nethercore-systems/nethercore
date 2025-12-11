@@ -12,8 +12,8 @@ use std::sync::Arc;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
-use super::vertex::{vertex_stride_packed, FORMAT_COLOR, FORMAT_UV};
 use super::ZGraphics;
+use super::vertex::{FORMAT_COLOR, FORMAT_UV, vertex_stride_packed};
 
 /// Offscreen render target for fixed internal resolution
 ///
@@ -147,6 +147,15 @@ impl ZGraphics {
             mapped_at_creation: false,
         });
 
+        // Create inverse bind storage buffer for skeletal animation (256 bones × 48 bytes = 12KB)
+        // Contains inverse bind pose matrices for each skeleton, uploaded when skeleton is bound
+        let inverse_bind_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Inverse Bind Storage Buffer"),
+            size: 256 * 48, // 256 matrices × 48 bytes per 3x4 matrix
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
         // Create matrix storage buffers (per-frame arrays)
         let model_matrix_capacity = 1024;
         let model_matrix_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -272,6 +281,7 @@ impl ZGraphics {
             sampler_linear,
             render_state: super::RenderState::default(),
             bone_buffer,
+            inverse_bind_buffer,
             model_matrix_buffer,
             view_matrix_buffer,
             proj_matrix_buffer,
