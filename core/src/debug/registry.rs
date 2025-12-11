@@ -124,7 +124,7 @@ impl DebugRegistry {
     /// Read a value from WASM memory
     pub fn read_value<T>(
         &self,
-        caller: &Caller<'_, T>,
+        caller: &mut Caller<'_, T>,
         value: &RegisteredValue,
     ) -> Option<DebugValue> {
         let memory = caller.get_export("memory").and_then(|e| e.into_memory())?;
@@ -364,7 +364,7 @@ impl DebugRegistry {
 }
 
 /// Tree node for hierarchical display
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum TreeNode {
     /// A group containing child nodes
     Group {

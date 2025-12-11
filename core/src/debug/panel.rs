@@ -93,9 +93,10 @@ impl DebugPanel {
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
-                        if let Some(tree) = &self.tree_cache {
+                        // Clone tree to avoid borrow conflict with render_tree(&mut self)
+                        if let Some(tree) = self.tree_cache.clone() {
                             any_changed |=
-                                self.render_tree(ui, tree, registry, "", &read_value, &write_value);
+                                self.render_tree(ui, &tree, registry, "", &read_value, &write_value);
                         }
                     });
 

@@ -338,10 +338,10 @@ impl App {
             }
         });
 
-        // Render debug inspection panel (separate pass after main UI)
-        if self.debug_panel.visible && matches!(mode, AppMode::Playing { .. }) {
-            self.render_debug_panel();
-        }
+        // Note: Debug panel rendering is deferred until after graphics operations
+        // to avoid borrow checker issues with self.graphics
+        let should_render_debug_panel =
+            self.debug_panel.visible && matches!(mode, AppMode::Playing { .. });
 
         egui_state.handle_platform_output(&window, full_output.platform_output);
 
@@ -512,6 +512,11 @@ impl App {
         // Present frame
         surface_texture.present();
 
+        // Render debug inspection panel (deferred to avoid borrow conflicts)
+        if should_render_debug_panel {
+            self.render_debug_panel();
+        }
+
         // Handle UI action after rendering is complete
         if let Some(action) = ui_action {
             if matches!(action, UiAction::OpenSettings) && matches!(self.mode, AppMode::Settings) {
@@ -563,8 +568,8 @@ impl App {
         // Get raw pointer to WASM memory for safe access within this scope
         // SAFETY: We're not growing the memory during rendering, and all accesses
         // are bounds-checked. The pointer is valid for the duration of this function.
-        let mem_ptr = memory.data_ptr(store);
-        let mem_len = memory.data_size(store);
+        let mem_ptr = memory.data_ptr(&mut *store);
+        let mem_len = memory.data_size(&mut *store);
 
         // Create read closure using raw pointer
         let read_value = |reg_value: &RegisteredValue| -> Option<DebugValue> {

@@ -288,13 +288,14 @@ fn extract_camera_position(view_matrix: mat4x4<f32>) -> vec3<f32> {
 fn vs(in: VertexIn, @builtin(instance_index) instance_index: u32) -> VertexOut {
     var out: VertexOut;
 
-    //VS_SKINNED
-
+    // Extract indices first (needed by skinning code)
     let indices = mvp_shading_indices[instance_index];
     let model_idx = indices.x;
     let view_idx = indices.y;
     let proj_idx = indices.z;
     let shading_state_idx = indices.w;
+
+    //VS_SKINNED
 
     let model_matrix = model_matrices[model_idx];
     let view_matrix = view_matrices[view_idx];
