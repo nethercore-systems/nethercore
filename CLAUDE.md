@@ -146,7 +146,14 @@ The console uses GGRS for deterministic rollback netcode. This means:
 - **Column vectors**: `v' = M * v`
 - **Y-up**, right-handed coordinate system
 - FFI angles in **degrees** (convert to radians internally)
-- `transform_set()` takes 16 floats in column-major order: `[col0, col1, col2, col3]`
+
+**Matrix FFI formats (all column-major):**
+- **4×4 matrices** (16 floats): `[col0.xyzw, col1.xyzw, col2.xyzw, col3.xyzw]`
+  - Used by: `transform_set()`, `view_matrix_set()`, `proj_matrix_set()`
+- **3×4 matrices** (12 floats): `[col0.xyz, col1.xyz, col2.xyz, col3.xyz]`
+  - Used by: `set_bones()`, `load_skeleton()` (bone/inverse-bind matrices)
+  - Implicit 4th row `[0, 0, 0, 1]` (affine transforms only)
+  - Saves 25% memory vs 4×4 (48 bytes vs 64 bytes per matrix)
 
 ### Resource Management
 - All graphics resources (textures, palettes, tilemaps) created in `init()`
