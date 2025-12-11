@@ -216,15 +216,14 @@ impl App {
 
         // Check if frame controller allows running ticks
         let should_run = self.frame_controller.should_run_tick();
+        let time_scale = self.frame_controller.time_scale();
 
         let tick_start = Instant::now();
         let (ticks, _alpha) = if should_run {
-            // Apply time scale by modifying the runtime's accumulated time
-            // For now, we run at normal speed when not paused
-            // Time scale affects visual smoothness, not tick rate
+            // Apply time scale to the runtime's frame update
             session
                 .runtime
-                .frame()
+                .frame_with_time_scale(time_scale)
                 .map_err(|e| RuntimeError(format!("Game frame error: {}", e)))?
         } else {
             // When paused, don't run any ticks

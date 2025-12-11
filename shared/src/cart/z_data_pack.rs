@@ -384,7 +384,8 @@ mod tests {
     #[test]
     fn test_data_pack_with_assets() {
         let mut pack = ZDataPack::new();
-        pack.textures.push(PackedTexture::new("test", 2, 2, vec![0; 16]));
+        pack.textures
+            .push(PackedTexture::new("test", 2, 2, vec![0; 16]));
         pack.meshes.push(PackedMesh {
             id: "mesh".to_string(),
             format: 0,
@@ -401,8 +402,10 @@ mod tests {
     #[test]
     fn test_find_texture() {
         let mut pack = ZDataPack::new();
-        pack.textures.push(PackedTexture::new("player", 32, 32, vec![0; 32 * 32 * 4]));
-        pack.textures.push(PackedTexture::new("enemy", 16, 16, vec![0; 16 * 16 * 4]));
+        pack.textures
+            .push(PackedTexture::new("player", 32, 32, vec![0; 32 * 32 * 4]));
+        pack.textures
+            .push(PackedTexture::new("enemy", 16, 16, vec![0; 16 * 16 * 4]));
 
         assert!(pack.find_texture("player").is_some());
         assert!(pack.find_texture("enemy").is_some());
@@ -550,8 +553,26 @@ mod tests {
             atlas_height: 256,
             atlas_data: vec![0; 256 * 256 * 4],
             glyphs: vec![
-                PackedGlyph { codepoint: 'A' as u32, x: 0, y: 0, w: 8, h: 8, x_offset: 0.0, y_offset: 0.0, advance: 8.0 },
-                PackedGlyph { codepoint: 'B' as u32, x: 8, y: 0, w: 8, h: 8, x_offset: 0.0, y_offset: 0.0, advance: 8.0 },
+                PackedGlyph {
+                    codepoint: 'A' as u32,
+                    x: 0,
+                    y: 0,
+                    w: 8,
+                    h: 8,
+                    x_offset: 0.0,
+                    y_offset: 0.0,
+                    advance: 8.0,
+                },
+                PackedGlyph {
+                    codepoint: 'B' as u32,
+                    x: 8,
+                    y: 0,
+                    w: 8,
+                    h: 8,
+                    x_offset: 0.0,
+                    y_offset: 0.0,
+                    advance: 8.0,
+                },
             ],
             line_height: 10.0,
             baseline: 8.0,
@@ -569,7 +590,8 @@ mod tests {
     fn test_find_sound() {
         let mut pack = ZDataPack::new();
         pack.sounds.push(PackedSound::new("jump", vec![0i16; 2205])); // 0.1 sec
-        pack.sounds.push(PackedSound::new("explosion", vec![0i16; 22050])); // 1 sec
+        pack.sounds
+            .push(PackedSound::new("explosion", vec![0i16; 22050])); // 1 sec
 
         let jump = pack.find_sound("jump");
         assert!(jump.is_some());
@@ -585,7 +607,8 @@ mod tests {
     #[test]
     fn test_find_data() {
         let mut pack = ZDataPack::new();
-        pack.data.push(PackedData::new("level1", vec![1, 2, 3, 4, 5]));
+        pack.data
+            .push(PackedData::new("level1", vec![1, 2, 3, 4, 5]));
         pack.data.push(PackedData::new("config", vec![0xFF; 100]));
 
         let level = pack.find_data("level1");
@@ -604,7 +627,8 @@ mod tests {
         let mut pack = ZDataPack::new();
 
         // Add one of each asset type
-        pack.textures.push(PackedTexture::new("tex", 4, 4, vec![0xAB; 64]));
+        pack.textures
+            .push(PackedTexture::new("tex", 4, 4, vec![0xAB; 64]));
         pack.meshes.push(PackedMesh {
             id: "mesh".to_string(),
             format: 0b0101,
@@ -613,7 +637,8 @@ mod tests {
             vertex_data: vec![1, 2, 3],
             index_data: vec![0, 1, 2],
         });
-        pack.skeletons.push(PackedSkeleton::new("skel", vec![BoneMatrix3x4::IDENTITY]));
+        pack.skeletons
+            .push(PackedSkeleton::new("skel", vec![BoneMatrix3x4::IDENTITY]));
         pack.fonts.push(PackedFont {
             id: "font".to_string(),
             atlas_width: 64,
@@ -621,8 +646,13 @@ mod tests {
             atlas_data: vec![0; 64 * 64 * 4],
             glyphs: vec![PackedGlyph {
                 codepoint: 'X' as u32,
-                x: 0, y: 0, w: 8, h: 8,
-                x_offset: 0.0, y_offset: 0.0, advance: 8.0,
+                x: 0,
+                y: 0,
+                w: 8,
+                h: 8,
+                x_offset: 0.0,
+                y_offset: 0.0,
+                advance: 8.0,
             }],
             line_height: 12.0,
             baseline: 10.0,

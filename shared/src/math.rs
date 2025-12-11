@@ -94,7 +94,9 @@ mod tests {
 
     #[test]
     fn test_from_array() {
-        let arr = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0];
+        let arr = [
+            1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
+        ];
         let m = BoneMatrix3x4::from_array(arr);
         assert_eq!(m.row0, [1.0, 2.0, 3.0, 4.0]);
         assert_eq!(m.row1, [5.0, 6.0, 7.0, 8.0]);
@@ -103,7 +105,9 @@ mod tests {
 
     #[test]
     fn test_roundtrip() {
-        let arr = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0];
+        let arr = [
+            1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0,
+        ];
         let m = BoneMatrix3x4::from_array(arr);
         let arr2 = m.to_array();
         assert_eq!(arr, arr2);

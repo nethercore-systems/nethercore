@@ -62,7 +62,10 @@ fn read_string_id(
 }
 
 /// Check if we're in init phase (init-only function guard)
-fn check_init_only(caller: &Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, fn_name: &str) -> Result<()> {
+fn check_init_only(
+    caller: &Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    fn_name: &str,
+) -> Result<()> {
     if !caller.data().game.in_init {
         bail!("{}: can only be called during init()", fn_name);
     }
@@ -100,9 +103,9 @@ fn rom_texture(
             .data_pack
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("rom_texture: no data pack loaded"))?;
-        let texture = data_pack
-            .find_texture(&id)
-            .ok_or_else(|| anyhow::anyhow!("rom_texture: texture '{}' not found in data pack", id))?;
+        let texture = data_pack.find_texture(&id).ok_or_else(|| {
+            anyhow::anyhow!("rom_texture: texture '{}' not found in data pack", id)
+        })?;
         (texture.width, texture.height, texture.data.clone())
     };
 
@@ -151,7 +154,11 @@ fn rom_mesh(
         let mesh = data_pack
             .find_mesh(&id)
             .ok_or_else(|| anyhow::anyhow!("rom_mesh: mesh '{}' not found in data pack", id))?;
-        (mesh.format, mesh.vertex_data.clone(), mesh.index_data.clone())
+        (
+            mesh.format,
+            mesh.vertex_data.clone(),
+            mesh.index_data.clone(),
+        )
     };
 
     // Now mutate state to allocate handle and queue upload
@@ -199,9 +206,9 @@ fn rom_skeleton(
             .data_pack
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("rom_skeleton: no data pack loaded"))?;
-        let skeleton = data_pack
-            .find_skeleton(&id)
-            .ok_or_else(|| anyhow::anyhow!("rom_skeleton: skeleton '{}' not found in data pack", id))?;
+        let skeleton = data_pack.find_skeleton(&id).ok_or_else(|| {
+            anyhow::anyhow!("rom_skeleton: skeleton '{}' not found in data pack", id)
+        })?;
         skeleton.bone_count
     };
 
@@ -246,7 +253,11 @@ fn rom_font(
         let packed_font = data_pack
             .find_font(&id)
             .ok_or_else(|| anyhow::anyhow!("rom_font: font '{}' not found in data pack", id))?;
-        (packed_font.atlas_width, packed_font.atlas_height, packed_font.atlas_data.clone())
+        (
+            packed_font.atlas_width,
+            packed_font.atlas_height,
+            packed_font.atlas_data.clone(),
+        )
     };
 
     // Now mutate state to allocate handle and queue upload

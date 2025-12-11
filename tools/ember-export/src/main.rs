@@ -8,13 +8,13 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 mod animation;
+mod audio;
 mod codegen;
 mod formats;
 mod manifest;
 mod mesh;
 mod skeleton;
 mod texture;
-mod audio;
 // mod font;  // Deferred
 
 // Re-export packing functions and vertex format constants from z-common
@@ -153,7 +153,11 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Build { manifest, output, verbose } => {
+        Commands::Build {
+            manifest,
+            output,
+            verbose,
+        } => {
             if verbose {
                 tracing::info!("Building assets from {:?}", manifest);
             }
@@ -169,12 +173,17 @@ fn main() -> Result<()> {
             tracing::info!("Manifest is valid!");
         }
 
-        Commands::Mesh { input, output, format } => {
+        Commands::Mesh {
+            input,
+            output,
+            format,
+        } => {
             let output = output.unwrap_or_else(|| input.with_extension(EWZ_MESH_EXT));
             tracing::info!("Converting {:?} -> {:?}", input, output);
 
             // Detect format by extension
-            let ext = input.extension()
+            let ext = input
+                .extension()
                 .and_then(|e| e.to_str())
                 .map(|s| s.to_lowercase())
                 .unwrap_or_default();
@@ -182,7 +191,10 @@ fn main() -> Result<()> {
             match ext.as_str() {
                 "obj" => mesh::convert_obj(&input, &output, format.as_deref())?,
                 "gltf" | "glb" => mesh::convert_gltf(&input, &output, format.as_deref())?,
-                _ => anyhow::bail!("Unsupported mesh format: {:?} (use .obj, .gltf, or .glb)", input),
+                _ => anyhow::bail!(
+                    "Unsupported mesh format: {:?} (use .obj, .gltf, or .glb)",
+                    input
+                ),
             }
             tracing::info!("Done!");
         }
@@ -201,7 +213,12 @@ fn main() -> Result<()> {
             tracing::info!("Done!");
         }
 
-        Commands::Skeleton { input, output, skin, list } => {
+        Commands::Skeleton {
+            input,
+            output,
+            skin,
+            list,
+        } => {
             if list {
                 skeleton::list_skins(&input)?;
             } else {
@@ -212,7 +229,14 @@ fn main() -> Result<()> {
             }
         }
 
-        Commands::Animation { input, output, animation, skin, frame_rate, list } => {
+        Commands::Animation {
+            input,
+            output,
+            animation,
+            skin,
+            frame_rate,
+            list,
+        } => {
             if list {
                 animation::list_animations(&input)?;
             } else {

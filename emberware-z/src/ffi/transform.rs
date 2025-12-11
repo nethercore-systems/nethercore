@@ -239,4 +239,3 @@ fn push_scale_uniform(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFISt
     let new_matrix = current * Mat4::from_scale(Vec3::splat(s));
     state.current_model_matrix = Some(new_matrix);
 }
-

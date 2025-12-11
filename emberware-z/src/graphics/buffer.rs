@@ -7,7 +7,7 @@ use hashbrown::HashMap;
 
 use anyhow::Result;
 
-use super::vertex::{VERTEX_FORMAT_COUNT, VertexFormatInfo, vertex_stride, vertex_stride_packed};
+use super::vertex::{vertex_stride, vertex_stride_packed, VertexFormatInfo, VERTEX_FORMAT_COUNT};
 
 /// Initial buffer size (64KB)
 const INITIAL_BUFFER_SIZE: u64 = 64 * 1024;

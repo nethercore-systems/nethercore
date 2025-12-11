@@ -54,7 +54,8 @@ fn test_triangle_obj() {
     let obj_path = dir.path().join("triangle.obj");
     let mesh_path = dir.path().join("triangle.embermesh");
 
-    generate_test_assets::generate_triangle_obj(&obj_path).expect("Failed to generate triangle OBJ");
+    generate_test_assets::generate_triangle_obj(&obj_path)
+        .expect("Failed to generate triangle OBJ");
     ember_export_convert_obj(&obj_path, &mesh_path);
 
     let data = std::fs::read(&mesh_path).expect("Failed to read mesh file");
@@ -64,7 +65,12 @@ fn test_triangle_obj() {
 // Helper to run ember-export mesh command
 fn ember_export_convert_obj(input: &Path, output: &Path) {
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_ember-export"))
-        .args(["mesh", input.to_str().unwrap(), "-o", output.to_str().unwrap()])
+        .args([
+            "mesh",
+            input.to_str().unwrap(),
+            "-o",
+            output.to_str().unwrap(),
+        ])
         .status()
         .expect("Failed to run ember-export");
     assert!(status.success(), "ember-export mesh command failed");
@@ -73,7 +79,12 @@ fn ember_export_convert_obj(input: &Path, output: &Path) {
 // Helper to run ember-export texture command
 fn ember_export_convert_texture(input: &Path, output: &Path) {
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_ember-export"))
-        .args(["texture", input.to_str().unwrap(), "-o", output.to_str().unwrap()])
+        .args([
+            "texture",
+            input.to_str().unwrap(),
+            "-o",
+            output.to_str().unwrap(),
+        ])
         .status()
         .expect("Failed to run ember-export");
     assert!(status.success(), "ember-export texture command failed");
@@ -83,7 +94,10 @@ fn ember_export_convert_texture(input: &Path, output: &Path) {
 fn verify_ember_z_mesh(data: &[u8]) {
     use emberware_shared::formats::EmberZMeshHeader;
 
-    assert!(data.len() >= EmberZMeshHeader::SIZE, "Mesh data too small for header");
+    assert!(
+        data.len() >= EmberZMeshHeader::SIZE,
+        "Mesh data too small for header"
+    );
 
     let header = EmberZMeshHeader::from_bytes(data).expect("Failed to parse mesh header");
 
@@ -116,7 +130,10 @@ fn verify_ember_z_mesh(data: &[u8]) {
 fn verify_ember_z_texture(data: &[u8], expected_width: u32, expected_height: u32) {
     use emberware_shared::formats::EmberZTextureHeader;
 
-    assert!(data.len() >= EmberZTextureHeader::SIZE, "Texture data too small for header");
+    assert!(
+        data.len() >= EmberZTextureHeader::SIZE,
+        "Texture data too small for header"
+    );
 
     let header = EmberZTextureHeader::from_bytes(data).expect("Failed to parse texture header");
 

@@ -236,7 +236,7 @@ mod tests {
                 target_fps: Some(60),
             },
             code: b"\0asm\x01\x00\x00\x00".to_vec(), // Valid WASM header
-            data_pack: None, // No bundled assets for simple test
+            data_pack: None,                         // No bundled assets for simple test
             thumbnail: None,
             screenshots: vec![],
         }

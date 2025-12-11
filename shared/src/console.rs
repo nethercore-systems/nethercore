@@ -74,11 +74,11 @@ pub const fn emberware_z_specs() -> &'static ConsoleSpecs {
         resolutions: EMBERWARE_Z_RESOLUTIONS,
         default_resolution: 1, // 540p
         tick_rates: EMBERWARE_Z_TICK_RATES,
-        default_tick_rate: 2,                  // 60 fps
-        ram_limit: EMBERWARE_Z_RAM_LIMIT,      // 4MB linear memory
-        vram_limit: EMBERWARE_Z_VRAM_LIMIT,    // 4MB GPU
-        rom_limit: EMBERWARE_Z_ROM_LIMIT,      // 12MB cartridge
-        cpu_budget_us: 4000,                   // 4ms per tick at 60fps
+        default_tick_rate: 2,               // 60 fps
+        ram_limit: EMBERWARE_Z_RAM_LIMIT,   // 4MB linear memory
+        vram_limit: EMBERWARE_Z_VRAM_LIMIT, // 4MB GPU
+        rom_limit: EMBERWARE_Z_ROM_LIMIT,   // 12MB cartridge
+        cpu_budget_us: 4000,                // 4ms per tick at 60fps
     }
 }
 
@@ -116,12 +116,12 @@ pub const fn emberware_classic_specs() -> &'static ConsoleSpecs {
             (360, 270), // 6: 4:3, 4× scale to 1080p
             (480, 360), // 7: 4:3, 3× scale to 1080p
         ],
-        default_resolution: 5,                    // 288×216 (4:3)
+        default_resolution: 5, // 288×216 (4:3)
         tick_rates: &[30, 60],
-        default_tick_rate: 1,                     // 60 fps
-        ram_limit: EMBERWARE_CLASSIC_MEMORY_LIMIT,   // 2MB unified
-        vram_limit: EMBERWARE_CLASSIC_VRAM_LIMIT,    // 1MB GPU
-        rom_limit: EMBERWARE_CLASSIC_MEMORY_LIMIT,   // Same as ram_limit (unified)
-        cpu_budget_us: 4000,                         // 4ms per tick at 60fps
+        default_tick_rate: 1,                      // 60 fps
+        ram_limit: EMBERWARE_CLASSIC_MEMORY_LIMIT, // 2MB unified
+        vram_limit: EMBERWARE_CLASSIC_VRAM_LIMIT,  // 1MB GPU
+        rom_limit: EMBERWARE_CLASSIC_MEMORY_LIMIT, // Same as ram_limit (unified)
+        cpu_budget_us: 4000,                       // 4ms per tick at 60fps
     }
 }

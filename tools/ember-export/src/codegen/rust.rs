@@ -90,19 +90,28 @@ pub fn generate_rust_module(manifest: &Manifest, output_path: &Path) -> Result<(
     for (name, path) in &mesh_assets {
         let rel_path = make_relative_path(output_parent, Path::new(path));
         let const_name = to_const_name(name, "MESH");
-        code.push_str(&format!("static {}: &[u8] = include_bytes!(\"{}\");\n", const_name, rel_path));
+        code.push_str(&format!(
+            "static {}: &[u8] = include_bytes!(\"{}\");\n",
+            const_name, rel_path
+        ));
     }
 
     for (name, path) in &texture_assets {
         let rel_path = make_relative_path(output_parent, Path::new(path));
         let const_name = to_const_name(name, "TEX");
-        code.push_str(&format!("static {}: &[u8] = include_bytes!(\"{}\");\n", const_name, rel_path));
+        code.push_str(&format!(
+            "static {}: &[u8] = include_bytes!(\"{}\");\n",
+            const_name, rel_path
+        ));
     }
 
     for (name, path) in &sound_assets {
         let rel_path = make_relative_path(output_parent, Path::new(path));
         let const_name = to_const_name(name, "SND");
-        code.push_str(&format!("static {}: &[u8] = include_bytes!(\"{}\");\n", const_name, rel_path));
+        code.push_str(&format!(
+            "static {}: &[u8] = include_bytes!(\"{}\");\n",
+            const_name, rel_path
+        ));
     }
 
     code.push('\n');
@@ -209,6 +218,5 @@ fn to_field_name(name: &str) -> String {
 fn make_relative_path(_from: &Path, to: &Path) -> String {
     // Simple implementation: just use the path as-is for now
     // A more sophisticated version would compute actual relative paths
-    to.to_string_lossy()
-        .replace('\\', "/")  // Use forward slashes for cross-platform compatibility
+    to.to_string_lossy().replace('\\', "/") // Use forward slashes for cross-platform compatibility
 }

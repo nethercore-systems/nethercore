@@ -59,10 +59,10 @@ pub fn execute(args: RunArgs) -> Result<()> {
     println!("=== Running ===");
 
     // Read manifest to get game ID
-    let manifest_content = std::fs::read_to_string(&manifest_path)
-        .context("Failed to read ember.toml")?;
-    let manifest: toml::Value = toml::from_str(&manifest_content)
-        .context("Failed to parse ember.toml")?;
+    let manifest_content =
+        std::fs::read_to_string(&manifest_path).context("Failed to read ember.toml")?;
+    let manifest: toml::Value =
+        toml::from_str(&manifest_content).context("Failed to parse ember.toml")?;
 
     let game_id = manifest
         .get("game")
@@ -79,7 +79,11 @@ pub fn execute(args: RunArgs) -> Result<()> {
     // 3. Relative to ember-cli
     let emberware_exe = find_emberware_exe()?;
 
-    println!("Launching: {} {}", emberware_exe.display(), rom_path.display());
+    println!(
+        "Launching: {} {}",
+        emberware_exe.display(),
+        rom_path.display()
+    );
 
     let status = Command::new(&emberware_exe)
         .arg(&rom_path)
@@ -105,11 +109,7 @@ fn find_emberware_exe() -> Result<PathBuf> {
     let cargo_exe = PathBuf::from("cargo");
 
     // Check if we can run cargo
-    if Command::new(&cargo_exe)
-        .arg("--version")
-        .output()
-        .is_ok()
-    {
+    if Command::new(&cargo_exe).arg("--version").output().is_ok() {
         // Return a special marker that means "use cargo run"
         return Ok(PathBuf::from("cargo:run"));
     }

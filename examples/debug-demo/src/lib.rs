@@ -66,6 +66,8 @@ extern "C" {
     fn debug_register_i32(name: *const u8, name_len: u32, ptr: *const i32);
     fn debug_register_bool(name: *const u8, name_len: u32, ptr: *const u8);
     fn debug_register_color(name: *const u8, name_len: u32, ptr: *const u8);
+    // Watch (read-only) variants - display only, can't be edited
+    fn debug_watch_i32(name: *const u8, name_len: u32, ptr: *const i32);
 }
 
 // ============================================================================
@@ -164,9 +166,10 @@ unsafe fn register_debug_values() {
     debug_group_end();
 
     // Stats group (derived values, updated by change callback)
+    // These use debug_watch_* (read-only) since they're computed, not editable
     debug_group_begin(b"stats".as_ptr(), 5);
-    debug_register_i32(b"change_count".as_ptr(), 12, &CHANGE_COUNT);
-    debug_register_i32(b"total_spheres".as_ptr(), 13, &TOTAL_SPHERES);
+    debug_watch_i32(b"change_count".as_ptr(), 12, &CHANGE_COUNT);
+    debug_watch_i32(b"total_spheres".as_ptr(), 13, &TOTAL_SPHERES);
     debug_group_end();
 }
 

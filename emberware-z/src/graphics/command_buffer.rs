@@ -5,7 +5,7 @@
 //! representation between FFI commands and GPU execution.
 
 use super::render_state::{BlendMode, CullMode, TextureHandle};
-use super::vertex::{VERTEX_FORMAT_COUNT, vertex_stride, vertex_stride_packed};
+use super::vertex::{vertex_stride, vertex_stride_packed, VERTEX_FORMAT_COUNT};
 
 /// Specifies which buffer the geometry data comes from
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

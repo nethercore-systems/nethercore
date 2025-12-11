@@ -520,12 +520,7 @@ impl SettingsUi {
         });
     }
 
-    fn show_axis_binding(
-        &mut self,
-        ui: &mut egui::Ui,
-        axis: InputAxis,
-        mapping: &KeyboardMapping,
-    ) {
+    fn show_axis_binding(&mut self, ui: &mut egui::Ui, axis: InputAxis, mapping: &KeyboardMapping) {
         ui.horizontal(|ui| {
             ui.label(format!("{:16}", axis.name()));
 

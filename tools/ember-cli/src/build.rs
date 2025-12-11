@@ -45,10 +45,7 @@ pub fn execute(args: BuildArgs) -> Result<()> {
 
     // Find the built WASM file
     let profile = if args.debug { "debug" } else { "release" };
-    let target_dir = project_dir.join(format!(
-        "target/wasm32-unknown-unknown/{}/",
-        profile
-    ));
+    let target_dir = project_dir.join(format!("target/wasm32-unknown-unknown/{}/", profile));
 
     // Find .wasm file
     let wasm_file = std::fs::read_dir(&target_dir)

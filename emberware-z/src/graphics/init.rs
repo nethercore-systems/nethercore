@@ -12,8 +12,8 @@ use std::sync::Arc;
 use wgpu::util::DeviceExt;
 use winit::window::Window;
 
+use super::vertex::{vertex_stride_packed, FORMAT_COLOR, FORMAT_UV};
 use super::ZGraphics;
-use super::vertex::{FORMAT_COLOR, FORMAT_UV, vertex_stride_packed};
 
 /// Offscreen render target for fixed internal resolution
 ///

@@ -77,7 +77,10 @@ pub fn execute(args: PackArgs) -> Result<()> {
     let manifest: EmberManifest =
         toml::from_str(&manifest_content).context("Failed to parse ember.toml")?;
 
-    println!("Packing game: {} ({})", manifest.game.title, manifest.game.id);
+    println!(
+        "Packing game: {} ({})",
+        manifest.game.title, manifest.game.id
+    );
 
     // Get project directory (parent of manifest)
     let project_dir = manifest_path
@@ -157,7 +160,11 @@ pub fn execute(args: PackArgs) -> Result<()> {
         .with_context(|| format!("Failed to write ROM: {}", output_path.display()))?;
 
     println!();
-    println!("Created: {} ({} bytes)", output_path.display(), rom_bytes.len());
+    println!(
+        "Created: {} ({} bytes)",
+        output_path.display(),
+        rom_bytes.len()
+    );
     println!("  Game ID: {}", manifest.game.id);
     println!("  Title: {}", manifest.game.title);
     println!("  Version: {}", manifest.game.version);
@@ -174,7 +181,12 @@ fn load_assets(project_dir: &std::path::Path, assets: &AssetsSection) -> Result<
         let path = project_dir.join(&entry.path);
         let texture = load_texture(&entry.id, &path)?;
         pack.textures.push(texture);
-        println!("  Texture: {} ({}x{})", entry.id, pack.textures.last().unwrap().width, pack.textures.last().unwrap().height);
+        println!(
+            "  Texture: {} ({}x{})",
+            entry.id,
+            pack.textures.last().unwrap().width,
+            pack.textures.last().unwrap().height
+        );
     }
 
     // Load meshes (not implemented yet - requires mesh format support)
@@ -182,7 +194,11 @@ fn load_assets(project_dir: &std::path::Path, assets: &AssetsSection) -> Result<
         let path = project_dir.join(&entry.path);
         let mesh = load_mesh(&entry.id, &path)?;
         pack.meshes.push(mesh);
-        println!("  Mesh: {} ({} vertices)", entry.id, pack.meshes.last().unwrap().vertex_count);
+        println!(
+            "  Mesh: {} ({} vertices)",
+            entry.id,
+            pack.meshes.last().unwrap().vertex_count
+        );
     }
 
     // Load sounds
@@ -210,8 +226,8 @@ fn load_assets(project_dir: &std::path::Path, assets: &AssetsSection) -> Result<
 
 /// Load a texture from an image file (PNG, JPG, etc.)
 fn load_texture(id: &str, path: &std::path::Path) -> Result<PackedTexture> {
-    let img = image::open(path)
-        .with_context(|| format!("Failed to load texture: {}", path.display()))?;
+    let img =
+        image::open(path).with_context(|| format!("Failed to load texture: {}", path.display()))?;
 
     let rgba = img.to_rgba8();
     let (width, height) = rgba.dimensions();
@@ -229,8 +245,8 @@ fn load_texture(id: &str, path: &std::path::Path) -> Result<PackedTexture> {
 /// Supports: .ewzmesh / .embermesh (Emberware Z mesh format)
 /// Future: .gltf, .glb, .obj (via ember-export)
 fn load_mesh(id: &str, path: &std::path::Path) -> Result<PackedMesh> {
-    let data = std::fs::read(path)
-        .with_context(|| format!("Failed to load mesh: {}", path.display()))?;
+    let data =
+        std::fs::read(path).with_context(|| format!("Failed to load mesh: {}", path.display()))?;
 
     // Parse EmberZMesh header
     let header = EmberZMeshHeader::from_bytes(&data)
@@ -288,8 +304,8 @@ fn load_mesh(id: &str, path: &std::path::Path) -> Result<PackedMesh> {
 /// Load a sound from a WAV file
 fn load_sound(id: &str, path: &std::path::Path) -> Result<PackedSound> {
     // Read WAV file and convert to 22050Hz mono i16
-    let data = std::fs::read(path)
-        .with_context(|| format!("Failed to load sound: {}", path.display()))?;
+    let data =
+        std::fs::read(path).with_context(|| format!("Failed to load sound: {}", path.display()))?;
 
     // Parse WAV header (simplified - assumes 16-bit PCM)
     if data.len() < 44 || &data[0..4] != b"RIFF" || &data[8..12] != b"WAVE" {
@@ -337,8 +353,8 @@ fn load_sound(id: &str, path: &std::path::Path) -> Result<PackedSound> {
 
 /// Load raw data from file
 fn load_data(id: &str, path: &std::path::Path) -> Result<PackedData> {
-    let data = std::fs::read(path)
-        .with_context(|| format!("Failed to load data: {}", path.display()))?;
+    let data =
+        std::fs::read(path).with_context(|| format!("Failed to load data: {}", path.display()))?;
 
     Ok(PackedData {
         id: id.to_string(),
@@ -565,7 +581,7 @@ version = "1.0.0"
 
     #[test]
     fn test_load_mesh_with_uv_and_color() {
-        use z_common::{FORMAT_UV, FORMAT_COLOR};
+        use z_common::{FORMAT_COLOR, FORMAT_UV};
 
         let dir = tempdir().unwrap();
         let mesh_path = dir.path().join("test_uv_color.ewzmesh");

@@ -200,11 +200,12 @@ impl App {
         let last_error = self.last_error.clone();
 
         // Prepare debug panel data BEFORE borrowing graphics (to avoid borrow conflicts)
-        let debug_panel_data = if self.debug_panel.visible && matches!(mode, AppMode::Playing { .. }) {
-            self.prepare_debug_panel_data()
-        } else {
-            None
-        };
+        let debug_panel_data =
+            if self.debug_panel.visible && matches!(mode, AppMode::Playing { .. }) {
+                self.prepare_debug_panel_data()
+            } else {
+                None
+            };
 
         let window = match self.window.clone() {
             Some(w) => w,
@@ -291,6 +292,9 @@ impl App {
 
         // Collect UI action separately to avoid borrow conflicts
         let mut ui_action = None;
+
+        // Track if debug values were changed (set inside closure)
+        let mut debug_values_changed = false;
 
         // Collect debug stats for overlay only when needed (avoid VecDeque clones every frame)
         let debug_stats = if debug_overlay {
@@ -385,7 +389,7 @@ impl App {
                 };
 
                 // Render the panel (use ctx from closure, not self.egui_ctx)
-                self.debug_panel.render(
+                debug_values_changed = self.debug_panel.render(
                     ctx,
                     &data.registry,
                     &mut self.frame_controller,
@@ -394,9 +398,6 @@ impl App {
                 );
             }
         });
-
-        // Track if debug values changed (now handled inside the closure via panel state)
-        let debug_values_changed = false; // TODO: propagate from inside closure if needed
 
         egui_state.handle_platform_output(&window, full_output.platform_output);
 

@@ -95,8 +95,14 @@ impl DebugPanel {
                     .show(ui, |ui| {
                         // Clone tree to avoid borrow conflict with render_tree(&mut self)
                         if let Some(tree) = self.tree_cache.clone() {
-                            any_changed |=
-                                self.render_tree(ui, &tree, registry, "", &read_value, &write_value);
+                            any_changed |= self.render_tree(
+                                ui,
+                                &tree,
+                                registry,
+                                "",
+                                &read_value,
+                                &write_value,
+                            );
                         }
                     });
 
@@ -236,6 +242,12 @@ impl DebugPanel {
         reg_value: &RegisteredValue,
         current: DebugValue,
     ) -> Option<DebugValue> {
+        // Read-only values just display as labels
+        if reg_value.read_only {
+            self.render_watch_value(ui, reg_value, &current);
+            return None;
+        }
+
         match (&reg_value.value_type, &reg_value.constraints) {
             // Float with range -> slider
             (ValueType::F32, Some(c)) => {
@@ -585,6 +597,38 @@ impl DebugPanel {
                 }
             }
         }
+    }
+
+    /// Render a read-only watch value as a label
+    fn render_watch_value(
+        &self,
+        ui: &mut egui::Ui,
+        reg_value: &RegisteredValue,
+        current: &DebugValue,
+    ) {
+        let value_str = match current {
+            DebugValue::I8(v) => format!("{}", v),
+            DebugValue::U8(v) => format!("{}", v),
+            DebugValue::I16(v) => format!("{}", v),
+            DebugValue::U16(v) => format!("{}", v),
+            DebugValue::I32(v) => format!("{}", v),
+            DebugValue::U32(v) => format!("{}", v),
+            DebugValue::F32(v) => format!("{:.3}", v),
+            DebugValue::Bool(v) => format!("{}", v),
+            DebugValue::Vec2 { x, y } => format!("({:.2}, {:.2})", x, y),
+            DebugValue::Vec3 { x, y, z } => format!("({:.2}, {:.2}, {:.2})", x, y, z),
+            DebugValue::Rect { x, y, w, h } => format!("({}, {}, {}x{})", x, y, w, h),
+            DebugValue::Color { r, g, b, a } => format!("#{:02X}{:02X}{:02X}{:02X}", r, g, b, a),
+            DebugValue::FixedI16Q8(v) => format!("{:.3}", *v as f32 / 256.0),
+            DebugValue::FixedI32Q16(v) => format!("{:.3}", *v as f32 / 65536.0),
+            DebugValue::FixedI32Q8(v) => format!("{:.3}", *v as f32 / 256.0),
+            DebugValue::FixedI32Q24(v) => format!("{:.6}", *v as f32 / 16777216.0),
+        };
+
+        ui.horizontal(|ui| {
+            // Dimmed color for read-only indicator
+            ui.weak(format!("{}: {}", reg_value.name, value_str));
+        });
     }
 
     /// Render export buttons

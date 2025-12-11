@@ -102,7 +102,12 @@ fn build_examples() -> Result<()> {
                 if let Some(wasm_file) = wasm_file {
                     if has_ember_toml {
                         // Data pack example - use ember pack
-                        match build_with_ember_pack(&example_path, &wasm_file.path(), &games_dir, &example_name_str) {
+                        match build_with_ember_pack(
+                            &example_path,
+                            &wasm_file.path(),
+                            &games_dir,
+                            &example_name_str,
+                        ) {
                             Ok(_) => {
                                 println!("  ✓ Installed (with data pack)");
                                 success_count += 1;
@@ -110,8 +115,12 @@ fn build_examples() -> Result<()> {
                             Err(e) => {
                                 // Check if it's just missing assets
                                 let err_str = e.to_string();
-                                if err_str.contains("Failed to load") || err_str.contains("No such file") {
-                                    println!("  ⊘ Skipped (missing assets - this is a template example)");
+                                if err_str.contains("Failed to load")
+                                    || err_str.contains("No such file")
+                                {
+                                    println!(
+                                        "  ⊘ Skipped (missing assets - this is a template example)"
+                                    );
                                     skipped_count += 1;
                                 } else {
                                     println!("  ✗ Pack failed: {}", e);

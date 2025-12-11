@@ -18,6 +18,8 @@ pub struct RegisteredValue {
     pub value_type: ValueType,
     /// Optional range constraints (for sliders)
     pub constraints: Option<Constraints>,
+    /// Whether this value is read-only (watch mode)
+    pub read_only: bool,
 }
 
 /// Registry of debug values
@@ -65,8 +67,25 @@ impl DebugRegistry {
         value_type: ValueType,
         constraints: Option<Constraints>,
     ) {
+        self.register_internal(name, wasm_ptr, value_type, constraints, false);
+    }
+
+    /// Register a read-only watch value for debug inspection
+    pub fn watch(&mut self, name: &str, wasm_ptr: u32, value_type: ValueType) {
+        self.register_internal(name, wasm_ptr, value_type, None, true);
+    }
+
+    /// Internal registration with read_only flag
+    fn register_internal(
+        &mut self,
+        name: &str,
+        wasm_ptr: u32,
+        value_type: ValueType,
+        constraints: Option<Constraints>,
+        read_only: bool,
+    ) {
         if self.finalized {
-            log::warn!("debug_register called after init - ignored");
+            log::warn!("debug registration called after init - ignored");
             return;
         }
 
@@ -83,6 +102,7 @@ impl DebugRegistry {
             wasm_ptr,
             value_type,
             constraints,
+            read_only,
         });
     }
 

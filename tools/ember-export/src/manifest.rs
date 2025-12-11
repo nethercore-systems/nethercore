@@ -72,9 +72,7 @@ impl MeshEntry {
 #[serde(untagged)]
 pub enum TextureEntry {
     Simple(PathBuf),
-    Detailed {
-        path: PathBuf,
-    },
+    Detailed { path: PathBuf },
 }
 
 impl TextureEntry {
@@ -90,9 +88,7 @@ impl TextureEntry {
 #[serde(untagged)]
 pub enum SoundEntry {
     Simple(PathBuf),
-    Detailed {
-        path: PathBuf,
-    },
+    Detailed { path: PathBuf },
 }
 
 impl SoundEntry {
@@ -183,7 +179,9 @@ pub fn build_all(manifest: &Manifest, output_override: Option<&Path>) -> Result<
         tracing::info!("Converting mesh: {} -> {:?}", name, output);
 
         // Detect format by extension
-        let ext = entry.path().extension()
+        let ext = entry
+            .path()
+            .extension()
             .and_then(|e| e.to_str())
             .map(|s| s.to_lowercase())
             .unwrap_or_default();
@@ -211,7 +209,10 @@ pub fn build_all(manifest: &Manifest, output_override: Option<&Path>) -> Result<
 
     // Fonts are deferred
     if !manifest.fonts.is_empty() {
-        tracing::warn!("Font conversion not yet implemented, skipping {} fonts", manifest.fonts.len());
+        tracing::warn!(
+            "Font conversion not yet implemented, skipping {} fonts",
+            manifest.fonts.len()
+        );
     }
 
     // Generate Rust code if configured

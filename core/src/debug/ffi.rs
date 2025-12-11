@@ -95,6 +95,20 @@ where
         debug_register_fixed_i32_q24::<I, S>,
     )?;
 
+    // Watch (read-only) registration functions
+    linker.func_wrap("env", "debug_watch_i8", debug_watch_i8::<I, S>)?;
+    linker.func_wrap("env", "debug_watch_i16", debug_watch_i16::<I, S>)?;
+    linker.func_wrap("env", "debug_watch_i32", debug_watch_i32::<I, S>)?;
+    linker.func_wrap("env", "debug_watch_u8", debug_watch_u8::<I, S>)?;
+    linker.func_wrap("env", "debug_watch_u16", debug_watch_u16::<I, S>)?;
+    linker.func_wrap("env", "debug_watch_u32", debug_watch_u32::<I, S>)?;
+    linker.func_wrap("env", "debug_watch_f32", debug_watch_f32::<I, S>)?;
+    linker.func_wrap("env", "debug_watch_bool", debug_watch_bool::<I, S>)?;
+    linker.func_wrap("env", "debug_watch_vec2", debug_watch_vec2::<I, S>)?;
+    linker.func_wrap("env", "debug_watch_vec3", debug_watch_vec3::<I, S>)?;
+    linker.func_wrap("env", "debug_watch_rect", debug_watch_rect::<I, S>)?;
+    linker.func_wrap("env", "debug_watch_color", debug_watch_color::<I, S>)?;
+
     // Grouping functions
     linker.func_wrap("env", "debug_group_begin", debug_group_begin::<I, S>)?;
     linker.func_wrap("env", "debug_group_end", debug_group_end::<I, S>)?;
@@ -114,7 +128,11 @@ where
 // ============================================================================
 
 /// Read a length-prefixed string from WASM memory
-fn read_string<I, S>(caller: &Caller<'_, GameStateWithConsole<I, S>>, ptr: u32, len: u32) -> Option<String>
+fn read_string<I, S>(
+    caller: &Caller<'_, GameStateWithConsole<I, S>>,
+    ptr: u32,
+    len: u32,
+) -> Option<String>
 where
     I: ConsoleInput,
 {
@@ -532,11 +550,234 @@ fn debug_register_fixed_i32_q24<I, S>(
 }
 
 // ============================================================================
+// Watch (read-only) registration functions
+// ============================================================================
+
+fn debug_watch_i8<I, S>(
+    mut caller: Caller<'_, GameStateWithConsole<I, S>>,
+    name_ptr: u32,
+    name_len: u32,
+    ptr: u32,
+) where
+    I: ConsoleInput,
+    S: Send + Default + 'static,
+    GameStateWithConsole<I, S>: HasDebugRegistry,
+{
+    if let Some(name) = read_string(&caller, name_ptr, name_len) {
+        caller
+            .data_mut()
+            .debug_registry_mut()
+            .watch(&name, ptr, ValueType::I8);
+    }
+}
+
+fn debug_watch_i16<I, S>(
+    mut caller: Caller<'_, GameStateWithConsole<I, S>>,
+    name_ptr: u32,
+    name_len: u32,
+    ptr: u32,
+) where
+    I: ConsoleInput,
+    S: Send + Default + 'static,
+    GameStateWithConsole<I, S>: HasDebugRegistry,
+{
+    if let Some(name) = read_string(&caller, name_ptr, name_len) {
+        caller
+            .data_mut()
+            .debug_registry_mut()
+            .watch(&name, ptr, ValueType::I16);
+    }
+}
+
+fn debug_watch_i32<I, S>(
+    mut caller: Caller<'_, GameStateWithConsole<I, S>>,
+    name_ptr: u32,
+    name_len: u32,
+    ptr: u32,
+) where
+    I: ConsoleInput,
+    S: Send + Default + 'static,
+    GameStateWithConsole<I, S>: HasDebugRegistry,
+{
+    if let Some(name) = read_string(&caller, name_ptr, name_len) {
+        caller
+            .data_mut()
+            .debug_registry_mut()
+            .watch(&name, ptr, ValueType::I32);
+    }
+}
+
+fn debug_watch_u8<I, S>(
+    mut caller: Caller<'_, GameStateWithConsole<I, S>>,
+    name_ptr: u32,
+    name_len: u32,
+    ptr: u32,
+) where
+    I: ConsoleInput,
+    S: Send + Default + 'static,
+    GameStateWithConsole<I, S>: HasDebugRegistry,
+{
+    if let Some(name) = read_string(&caller, name_ptr, name_len) {
+        caller
+            .data_mut()
+            .debug_registry_mut()
+            .watch(&name, ptr, ValueType::U8);
+    }
+}
+
+fn debug_watch_u16<I, S>(
+    mut caller: Caller<'_, GameStateWithConsole<I, S>>,
+    name_ptr: u32,
+    name_len: u32,
+    ptr: u32,
+) where
+    I: ConsoleInput,
+    S: Send + Default + 'static,
+    GameStateWithConsole<I, S>: HasDebugRegistry,
+{
+    if let Some(name) = read_string(&caller, name_ptr, name_len) {
+        caller
+            .data_mut()
+            .debug_registry_mut()
+            .watch(&name, ptr, ValueType::U16);
+    }
+}
+
+fn debug_watch_u32<I, S>(
+    mut caller: Caller<'_, GameStateWithConsole<I, S>>,
+    name_ptr: u32,
+    name_len: u32,
+    ptr: u32,
+) where
+    I: ConsoleInput,
+    S: Send + Default + 'static,
+    GameStateWithConsole<I, S>: HasDebugRegistry,
+{
+    if let Some(name) = read_string(&caller, name_ptr, name_len) {
+        caller
+            .data_mut()
+            .debug_registry_mut()
+            .watch(&name, ptr, ValueType::U32);
+    }
+}
+
+fn debug_watch_f32<I, S>(
+    mut caller: Caller<'_, GameStateWithConsole<I, S>>,
+    name_ptr: u32,
+    name_len: u32,
+    ptr: u32,
+) where
+    I: ConsoleInput,
+    S: Send + Default + 'static,
+    GameStateWithConsole<I, S>: HasDebugRegistry,
+{
+    if let Some(name) = read_string(&caller, name_ptr, name_len) {
+        caller
+            .data_mut()
+            .debug_registry_mut()
+            .watch(&name, ptr, ValueType::F32);
+    }
+}
+
+fn debug_watch_bool<I, S>(
+    mut caller: Caller<'_, GameStateWithConsole<I, S>>,
+    name_ptr: u32,
+    name_len: u32,
+    ptr: u32,
+) where
+    I: ConsoleInput,
+    S: Send + Default + 'static,
+    GameStateWithConsole<I, S>: HasDebugRegistry,
+{
+    if let Some(name) = read_string(&caller, name_ptr, name_len) {
+        caller
+            .data_mut()
+            .debug_registry_mut()
+            .watch(&name, ptr, ValueType::Bool);
+    }
+}
+
+fn debug_watch_vec2<I, S>(
+    mut caller: Caller<'_, GameStateWithConsole<I, S>>,
+    name_ptr: u32,
+    name_len: u32,
+    ptr: u32,
+) where
+    I: ConsoleInput,
+    S: Send + Default + 'static,
+    GameStateWithConsole<I, S>: HasDebugRegistry,
+{
+    if let Some(name) = read_string(&caller, name_ptr, name_len) {
+        caller
+            .data_mut()
+            .debug_registry_mut()
+            .watch(&name, ptr, ValueType::Vec2);
+    }
+}
+
+fn debug_watch_vec3<I, S>(
+    mut caller: Caller<'_, GameStateWithConsole<I, S>>,
+    name_ptr: u32,
+    name_len: u32,
+    ptr: u32,
+) where
+    I: ConsoleInput,
+    S: Send + Default + 'static,
+    GameStateWithConsole<I, S>: HasDebugRegistry,
+{
+    if let Some(name) = read_string(&caller, name_ptr, name_len) {
+        caller
+            .data_mut()
+            .debug_registry_mut()
+            .watch(&name, ptr, ValueType::Vec3);
+    }
+}
+
+fn debug_watch_rect<I, S>(
+    mut caller: Caller<'_, GameStateWithConsole<I, S>>,
+    name_ptr: u32,
+    name_len: u32,
+    ptr: u32,
+) where
+    I: ConsoleInput,
+    S: Send + Default + 'static,
+    GameStateWithConsole<I, S>: HasDebugRegistry,
+{
+    if let Some(name) = read_string(&caller, name_ptr, name_len) {
+        caller
+            .data_mut()
+            .debug_registry_mut()
+            .watch(&name, ptr, ValueType::Rect);
+    }
+}
+
+fn debug_watch_color<I, S>(
+    mut caller: Caller<'_, GameStateWithConsole<I, S>>,
+    name_ptr: u32,
+    name_len: u32,
+    ptr: u32,
+) where
+    I: ConsoleInput,
+    S: Send + Default + 'static,
+    GameStateWithConsole<I, S>: HasDebugRegistry,
+{
+    if let Some(name) = read_string(&caller, name_ptr, name_len) {
+        caller
+            .data_mut()
+            .debug_registry_mut()
+            .watch(&name, ptr, ValueType::Color);
+    }
+}
+
+// ============================================================================
 // Grouping functions
 // ============================================================================
 
-fn debug_group_begin<I, S>(mut caller: Caller<'_, GameStateWithConsole<I, S>>, name_ptr: u32, name_len: u32)
-where
+fn debug_group_begin<I, S>(
+    mut caller: Caller<'_, GameStateWithConsole<I, S>>,
+    name_ptr: u32,
+    name_len: u32,
+) where
     I: ConsoleInput,
     S: Send + Default + 'static,
     GameStateWithConsole<I, S>: HasDebugRegistry,

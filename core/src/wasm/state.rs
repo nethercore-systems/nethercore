@@ -11,7 +11,12 @@ use crate::console::ConsoleInput;
 /// Returns None if:
 /// - ptr + len exceeds memory bounds
 /// - String is not valid UTF-8
-pub fn read_string_from_memory<T>(memory: Memory, ctx: impl AsContext<Data = T>, ptr: u32, len: u32) -> Option<String> {
+pub fn read_string_from_memory<T>(
+    memory: Memory,
+    ctx: impl AsContext<Data = T>,
+    ptr: u32,
+    len: u32,
+) -> Option<String> {
     let data = memory.data(&ctx);
     let start = ptr as usize;
     let end = start + len as usize;

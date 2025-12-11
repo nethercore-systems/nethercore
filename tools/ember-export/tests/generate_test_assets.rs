@@ -14,10 +14,10 @@ pub fn generate_test_png(path: &Path) -> std::io::Result<()> {
 
     // 2x2 image: red, green, blue, white
     let pixels: Vec<u8> = vec![
-        255, 0, 0, 255,       // Red
-        0, 255, 0, 255,       // Green
-        0, 0, 255, 255,       // Blue
-        255, 255, 255, 255,   // White
+        255, 0, 0, 255, // Red
+        0, 255, 0, 255, // Green
+        0, 0, 255, 255, // Blue
+        255, 255, 255, 255, // White
     ];
 
     image::save_buffer(path, &pixels, width, height, image::ColorType::Rgba8)
@@ -35,13 +35,13 @@ pub fn generate_checkerboard_png(path: &Path) -> std::io::Result<()> {
             let idx = ((y * width + x) * 4) as usize;
             let is_white = (x + y) % 2 == 0;
             if is_white {
-                pixels[idx] = 255;     // R
+                pixels[idx] = 255; // R
                 pixels[idx + 1] = 255; // G
                 pixels[idx + 2] = 255; // B
                 pixels[idx + 3] = 255; // A
             } else {
-                pixels[idx] = 128;     // R
-                pixels[idx + 1] = 64;  // G
+                pixels[idx] = 128; // R
+                pixels[idx + 1] = 64; // G
                 pixels[idx + 2] = 192; // B
                 pixels[idx + 3] = 255; // A
             }
@@ -72,12 +72,12 @@ pub fn generate_cube_obj(path: &Path) -> std::io::Result<()> {
     writeln!(file)?;
 
     // Normals (6 face normals)
-    writeln!(file, "vn  0  0  1")?;  // front
-    writeln!(file, "vn  0  0 -1")?;  // back
-    writeln!(file, "vn  1  0  0")?;  // right
-    writeln!(file, "vn -1  0  0")?;  // left
-    writeln!(file, "vn  0  1  0")?;  // top
-    writeln!(file, "vn  0 -1  0")?;  // bottom
+    writeln!(file, "vn  0  0  1")?; // front
+    writeln!(file, "vn  0  0 -1")?; // back
+    writeln!(file, "vn  1  0  0")?; // right
+    writeln!(file, "vn -1  0  0")?; // left
+    writeln!(file, "vn  0  1  0")?; // top
+    writeln!(file, "vn  0 -1  0")?; // bottom
     writeln!(file)?;
 
     // UVs (simple 0-1 mapping per face)

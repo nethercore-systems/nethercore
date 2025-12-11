@@ -278,7 +278,10 @@ fn load_ztex(
         data: pixel_data,
     });
 
-    info!("load_ztex: created texture {} ({}x{})", handle, width, height);
+    info!(
+        "load_ztex: created texture {} ({}x{})",
+        handle, width, height
+    );
 
     handle
 }
@@ -350,8 +353,7 @@ fn load_zsound(
         }
 
         // Copy sample data
-        let sample_bytes =
-            &data[EmberZSoundHeader::SIZE..EmberZSoundHeader::SIZE + sample_size];
+        let sample_bytes = &data[EmberZSoundHeader::SIZE..EmberZSoundHeader::SIZE + sample_size];
         let samples: &[i16] = bytemuck::cast_slice(sample_bytes);
 
         (header.sample_count, samples.to_vec())
@@ -374,7 +376,10 @@ fn load_zsound(
     }
     state.sounds[handle as usize] = Some(sound);
 
-    info!("load_zsound: created sound {} ({} samples)", handle, sample_count);
+    info!(
+        "load_zsound: created sound {} ({} samples)",
+        handle, sample_count
+    );
 
     handle
 }
