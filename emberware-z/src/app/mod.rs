@@ -26,6 +26,13 @@ use emberware_core::console::ConsoleResourceManager;
 use emberware_core::debug::{DebugPanel, FrameController};
 use emberware_core::wasm::WasmEngine;
 
+/// Data needed to render the debug panel (extracted before egui frame)
+struct DebugPanelData {
+    registry: emberware_core::debug::DebugRegistry,
+    mem_ptr: *mut u8,
+    mem_len: usize,
+}
+
 /// Application state
 pub struct App {
     /// Current application mode
@@ -192,6 +199,13 @@ impl App {
         let game_tick_fps = self.calculate_game_tick_fps();
         let last_error = self.last_error.clone();
 
+        // Prepare debug panel data BEFORE borrowing graphics (to avoid borrow conflicts)
+        let debug_panel_data = if self.debug_panel.visible && matches!(mode, AppMode::Playing { .. }) {
+            self.prepare_debug_panel_data()
+        } else {
+            None
+        };
+
         let window = match self.window.clone() {
             Some(w) => w,
             None => return,
@@ -337,12 +351,52 @@ impl App {
                     game_tick_fps,
                 );
             }
+
+            // Debug inspection panel - MUST be inside ctx.run() to receive input
+            if let Some(ref data) = debug_panel_data {
+                use emberware_core::debug::{DebugValue, RegisteredValue};
+
+                let mem_ptr = data.mem_ptr;
+                let mem_len = data.mem_len;
+
+                // Create read closure using raw pointer
+                let read_value = |reg_value: &RegisteredValue| -> Option<DebugValue> {
+                    let ptr = reg_value.wasm_ptr as usize;
+                    let size = reg_value.value_type.byte_size();
+                    if ptr + size > mem_len {
+                        return None;
+                    }
+                    // SAFETY: Bounds checked above, pointer valid for this frame
+                    let slice = unsafe { std::slice::from_raw_parts(mem_ptr.add(ptr), size) };
+                    debug_values::read_from_slice(slice, reg_value.value_type)
+                };
+
+                // Create write closure using raw pointer
+                let write_value = |reg_value: &RegisteredValue, new_val: &DebugValue| -> bool {
+                    let ptr = reg_value.wasm_ptr as usize;
+                    let size = reg_value.value_type.byte_size();
+                    if ptr + size > mem_len {
+                        return false;
+                    }
+                    // SAFETY: Bounds checked above, pointer valid for this frame
+                    let slice = unsafe { std::slice::from_raw_parts_mut(mem_ptr.add(ptr), size) };
+                    debug_values::write_to_slice(slice, new_val);
+                    true
+                };
+
+                // Render the panel (use ctx from closure, not self.egui_ctx)
+                self.debug_panel.render(
+                    ctx,
+                    &data.registry,
+                    &mut self.frame_controller,
+                    read_value,
+                    write_value,
+                );
+            }
         });
 
-        // Note: Debug panel rendering is deferred until after graphics operations
-        // to avoid borrow checker issues with self.graphics
-        let should_render_debug_panel =
-            self.debug_panel.visible && matches!(mode, AppMode::Playing { .. });
+        // Track if debug values changed (now handled inside the closure via panel state)
+        let debug_values_changed = false; // TODO: propagate from inside closure if needed
 
         egui_state.handle_platform_output(&window, full_output.platform_output);
 
@@ -513,9 +567,13 @@ impl App {
         // Present frame
         surface_texture.present();
 
-        // Render debug inspection panel (deferred to avoid borrow conflicts)
-        if should_render_debug_panel {
-            self.render_debug_panel();
+        // Call on_debug_change() if debug values were modified
+        if debug_values_changed {
+            if let Some(session) = &mut self.game_session {
+                if let Some(game) = session.runtime.game_mut() {
+                    game.call_on_debug_change();
+                }
+            }
         }
 
         // Handle UI action after rendering is complete
@@ -531,98 +589,35 @@ impl App {
         self.request_redraw_if_needed();
     }
 
-    /// Render the debug inspection panel
+    /// Prepare debug panel data before the egui frame
     ///
-    /// This is called separately from the main egui frame to avoid borrow checker issues.
-    /// Uses raw pointer access to WASM memory to work around Rust's borrow checker
-    /// limitations with closure captures.
-    fn render_debug_panel(&mut self) {
-        use emberware_core::debug::{DebugValue, RegisteredValue};
-
-        let session = match &mut self.game_session {
-            Some(s) => s,
-            None => return,
-        };
-
-        let game = match session.runtime.game_mut() {
-            Some(g) => g,
-            None => return,
-        };
-
-        // Get the store to access debug registry and memory
+    /// Returns None if no debug panel should be shown (no game, no registry, etc.)
+    fn prepare_debug_panel_data(&mut self) -> Option<DebugPanelData> {
+        let session = self.game_session.as_mut()?;
+        let game = session.runtime.game_mut()?;
         let store = game.store_mut();
 
         // Check if registry has any values
         if store.data().debug_registry.is_empty() {
-            return;
+            return None;
         }
 
-        // Get memory handle for read/write
-        let memory = match store.data().game.memory {
-            Some(m) => m,
-            None => return,
-        };
+        // Get memory handle
+        let memory = store.data().game.memory?;
 
-        // Clone the registry for rendering (avoids borrow conflicts)
-        let registry_clone = store.data().debug_registry.clone();
+        // Clone the registry
+        let registry = store.data().debug_registry.clone();
 
-        // Get raw pointer to WASM memory for safe access within this scope
-        // SAFETY: We're not growing the memory during rendering, and all accesses
-        // are bounds-checked. The pointer is valid for the duration of this function.
+        // Get raw pointer to WASM memory
+        // SAFETY: Pointer is valid for the duration of this frame
         let mem_ptr = memory.data_ptr(&mut *store);
         let mem_len = memory.data_size(&mut *store);
 
-        // Create read closure using raw pointer
-        let read_value = |reg_value: &RegisteredValue| -> Option<DebugValue> {
-            let ptr = reg_value.wasm_ptr as usize;
-            let size = reg_value.value_type.byte_size();
-
-            if ptr + size > mem_len {
-                return None;
-            }
-
-            // SAFETY: Bounds checked above, pointer valid for this scope
-            let data = unsafe { std::slice::from_raw_parts(mem_ptr.add(ptr), size) };
-
-            debug_values::read_from_slice(data, reg_value.value_type)
-        };
-
-        // Create write closure using raw pointer
-        let write_value = |reg_value: &RegisteredValue, new_val: &DebugValue| -> bool {
-            let ptr = reg_value.wasm_ptr as usize;
-            let size = reg_value.value_type.byte_size();
-
-            if ptr + size > mem_len {
-                return false;
-            }
-
-            // SAFETY: Bounds checked above, pointer valid for this scope
-            let data = unsafe { std::slice::from_raw_parts_mut(mem_ptr.add(ptr), size) };
-
-            debug_values::write_to_slice(data, new_val);
-            true
-        };
-
-        // Render the panel
-        let any_changed = self.debug_panel.render(
-            &self.egui_ctx,
-            &registry_clone,
-            &mut self.frame_controller,
-            read_value,
-            write_value,
-        );
-
-        // Closures are dropped automatically when they go out of scope
-        let _ = (read_value, write_value);
-
-        // Call on_debug_change() if values changed and game exports it
-        if any_changed {
-            if let Some(session) = &mut self.game_session {
-                if let Some(game) = session.runtime.game_mut() {
-                    game.call_on_debug_change();
-                }
-            }
-        }
+        Some(DebugPanelData {
+            registry,
+            mem_ptr,
+            mem_len,
+        })
     }
 
     fn request_redraw_if_needed(&mut self) {
@@ -669,25 +664,51 @@ impl emberware_core::app::ConsoleApp<EmberwareZ> for App {
                 self.mark_needs_redraw();
                 return true; // Event consumed
             }
-        }
 
-        match event {
-            WindowEvent::Resized(new_size) => {
-                tracing::debug!("Window resized to {:?}", new_size);
-                self.handle_resize(*new_size);
-                false
+            // Check if egui wants keyboard input (text fields, sliders, etc.)
+            let egui_wants_keyboard = self.egui_ctx.wants_keyboard_input();
+
+            match event {
+                WindowEvent::Resized(new_size) => {
+                    tracing::debug!("Window resized to {:?}", new_size);
+                    self.handle_resize(*new_size);
+                    false
+                }
+                WindowEvent::ScaleFactorChanged { .. } => {
+                    tracing::debug!("DPI scale factor changed");
+                    false
+                }
+                WindowEvent::KeyboardInput {
+                    event: key_event, ..
+                } => {
+                    // Only pass keyboard input to game if egui doesn't want it
+                    if !egui_wants_keyboard {
+                        self.handle_key_input(key_event.clone());
+                    }
+                    false
+                }
+                _ => false,
             }
-            WindowEvent::ScaleFactorChanged { .. } => {
-                tracing::debug!("DPI scale factor changed");
-                false
+        } else {
+            // No egui state - handle events normally
+            match event {
+                WindowEvent::Resized(new_size) => {
+                    tracing::debug!("Window resized to {:?}", new_size);
+                    self.handle_resize(*new_size);
+                    false
+                }
+                WindowEvent::ScaleFactorChanged { .. } => {
+                    tracing::debug!("DPI scale factor changed");
+                    false
+                }
+                WindowEvent::KeyboardInput {
+                    event: key_event, ..
+                } => {
+                    self.handle_key_input(key_event.clone());
+                    false
+                }
+                _ => false,
             }
-            WindowEvent::KeyboardInput {
-                event: key_event, ..
-            } => {
-                self.handle_key_input(key_event.clone());
-                false
-            }
-            _ => false,
         }
     }
 

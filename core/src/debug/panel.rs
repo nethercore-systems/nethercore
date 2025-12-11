@@ -76,13 +76,13 @@ impl DebugPanel {
 
         let mut any_changed = false;
 
-        egui::SidePanel::right("debug_inspection_panel")
-            .default_width(320.0)
+        egui::Window::new("Debug Inspector")
+            .id(egui::Id::new("debug_inspection_window"))
+            .default_pos([10.0, 10.0])
+            .default_size([320.0, 400.0])
             .resizable(true)
+            .collapsible(true)
             .show(ctx, |ui| {
-                ui.heading("Debug Values");
-                ui.separator();
-
                 // Frame controls
                 if !frame_controller.is_disabled() {
                     any_changed |= self.render_frame_controls(ui, frame_controller);

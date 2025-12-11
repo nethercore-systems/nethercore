@@ -41,17 +41,16 @@ extern "C" {
 
     // Procedural mesh generation
     fn cube(size_x: f32, size_y: f32, size_z: f32) -> u32;
-    fn sphere(radius: f32, subdivisions: u32) -> u32;
+    fn sphere(radius: f32, segments: u32, rings: u32) -> u32;
 
     // Mesh drawing
     fn draw_mesh(handle: u32);
 
-    // Transform
+    // Transform (push_identity resets, push_* compose onto current)
     fn push_identity();
     fn push_translate(x: f32, y: f32, z: f32);
     fn push_rotate_y(angle_deg: f32);
     fn push_scale(x: f32, y: f32, z: f32);
-    fn pop_transform();
 
     // Render state
     fn set_color(color: u32);
@@ -133,7 +132,7 @@ pub extern "C" fn init() {
 
         // Generate meshes
         CUBE_MESH = cube(1.0, 1.0, 1.0);
-        SPHERE_MESH = sphere(0.5, 2);
+        SPHERE_MESH = sphere(0.5, 8, 8);
 
         // Register debug values
         register_debug_values();
@@ -182,6 +181,7 @@ pub extern "C" fn render() {
         let time = elapsed_time();
 
         // Draw player cube at center
+        // push_identity() resets transform, then push_* compose onto it
         push_identity();
         push_translate(PLAYER_X, PLAYER_Y, 0.0);
         push_scale(PLAYER_SCALE, PLAYER_SCALE, PLAYER_SCALE);
@@ -190,9 +190,6 @@ pub extern "C" fn render() {
         let player_color = color_to_u32(&PLAYER_COLOR);
         set_color(player_color);
         draw_mesh(CUBE_MESH);
-        pop_transform();
-        pop_transform();
-        pop_transform();
 
         // Draw orbiting spheres
         let orbit_color = color_to_u32(&ORBIT_COLOR);
@@ -208,14 +205,13 @@ pub extern "C" fn render() {
             };
 
             let rad = angle * core::f32::consts::PI / 180.0;
-            let x = ORBIT_RADIUS * cos_approx(rad);
-            let z = ORBIT_RADIUS * sin_approx(rad);
+            let x = ORBIT_RADIUS * libm::cosf(rad);
+            let z = ORBIT_RADIUS * libm::sinf(rad);
 
+            // Each push_identity() resets for a new object
             push_identity();
             push_translate(x, 0.0, z);
             draw_mesh(SPHERE_MESH);
-            pop_transform();
-            pop_transform();
         }
     }
 }
@@ -226,26 +222,4 @@ fn color_to_u32(rgba: &[u8; 4]) -> u32 {
         | ((rgba[1] as u32) << 16)
         | ((rgba[2] as u32) << 8)
         | (rgba[3] as u32)
-}
-
-/// Simple sine approximation (Taylor series, good enough for visuals)
-fn sin_approx(x: f32) -> f32 {
-    // Normalize to [-PI, PI]
-    let pi = core::f32::consts::PI;
-    let mut x = x % (2.0 * pi);
-    if x > pi {
-        x -= 2.0 * pi;
-    } else if x < -pi {
-        x += 2.0 * pi;
-    }
-    // Taylor series: sin(x) ≈ x - x³/6 + x⁵/120
-    let x2 = x * x;
-    let x3 = x2 * x;
-    let x5 = x3 * x2;
-    x - x3 / 6.0 + x5 / 120.0
-}
-
-/// Simple cosine approximation
-fn cos_approx(x: f32) -> f32 {
-    sin_approx(x + core::f32::consts::FRAC_PI_2)
 }

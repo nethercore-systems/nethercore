@@ -262,9 +262,14 @@ impl App {
             if pressed {
                 match key_code {
                     KeyCode::F3 => {
+                        // Toggle stats overlay only
                         self.debug_overlay = !self.debug_overlay;
-                        // Toggle debug panel visibility along with overlay
-                        self.debug_panel.toggle();
+                    }
+                    KeyCode::F4 => {
+                        // Toggle debug inspector panel (only when playing)
+                        if matches!(self.mode, AppMode::Playing { .. }) {
+                            self.debug_panel.toggle();
+                        }
                     }
                     KeyCode::F5 => {
                         // Toggle pause (only in Playing mode)
