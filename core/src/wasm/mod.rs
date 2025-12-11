@@ -97,7 +97,6 @@ impl WasmEngine {
 // returns Result<Self> which properly propagates initialization errors.
 
 /// A loaded and instantiated game
-/// A loaded and instantiated game
 pub struct GameInstance<I: ConsoleInput, S: Send + Default + 'static> {
     store: Store<GameStateWithConsole<I, S>>,
     /// The WASM instance.
@@ -108,6 +107,7 @@ pub struct GameInstance<I: ConsoleInput, S: Send + Default + 'static> {
     init_fn: Option<TypedFunc<(), ()>>,
     update_fn: Option<TypedFunc<(), ()>>,
     render_fn: Option<TypedFunc<(), ()>>,
+    on_debug_change_fn: Option<TypedFunc<(), ()>>,
 }
 
 impl<I: ConsoleInput, S: Send + Default + 'static> GameInstance<I, S> {
@@ -162,6 +162,9 @@ impl<I: ConsoleInput, S: Send + Default + 'static> GameInstance<I, S> {
         let init_fn = instance.get_typed_func::<(), ()>(&mut store, "init").ok();
         let update_fn = instance.get_typed_func::<(), ()>(&mut store, "update").ok();
         let render_fn = instance.get_typed_func::<(), ()>(&mut store, "render").ok();
+        let on_debug_change_fn = instance
+            .get_typed_func::<(), ()>(&mut store, "on_debug_change")
+            .ok();
 
         Ok(Self {
             store,
@@ -169,6 +172,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static> GameInstance<I, S> {
             init_fn,
             update_fn,
             render_fn,
+            on_debug_change_fn,
         })
     }
 
@@ -326,45 +330,21 @@ impl<I: ConsoleInput, S: Send + Default + 'static> GameInstance<I, S> {
         state.local_player_mask = local_player_mask;
     }
 
-    /// Call a WASM function by its table index (for callbacks)
+    /// Call the game's on_debug_change function if it exists
     ///
-    /// This looks up a function in the indirect function table and calls it.
-    /// Used for debug change callbacks registered by games.
-    ///
-    /// # Arguments
-    /// * `table_index` - Index into the __indirect_function_table
-    ///
-    /// # Returns
-    /// Ok(()) if the function was called successfully, Err if the index is invalid
-    /// or the function has the wrong signature.
-    pub fn call_table_func(&mut self, table_index: u32) -> Result<()> {
-        // Get the indirect function table
-        let table = self
-            .instance
-            .get_table(&mut self.store, "__indirect_function_table")
-            .context("No indirect function table found")?;
+    /// This is called when debug values are modified through the debug panel.
+    /// Games can optionally export this function to react to debug value changes.
+    pub fn call_on_debug_change(&mut self) {
+        if let Some(func) = &self.on_debug_change_fn {
+            if let Err(e) = func.call(&mut self.store, ()) {
+                tracing::warn!("on_debug_change() failed: {}", e);
+            }
+        }
+    }
 
-        // Get the function at the specified index
-        let func_val = table
-            .get(&mut self.store, table_index)
-            .context("Invalid table index")?;
-
-        // Extract the function from the table value
-        let func = func_val
-            .funcref()
-            .context("Table entry is not a function reference")?
-            .context("Table entry is null")?;
-
-        // Call the function (assuming () -> () signature for callbacks)
-        let typed_func = func
-            .typed::<(), ()>(&self.store)
-            .context("Callback function has wrong signature (expected () -> ())")?;
-
-        typed_func
-            .call(&mut self.store, ())
-            .context("Callback function call failed")?;
-
-        Ok(())
+    /// Returns true if the game exports an on_debug_change function
+    pub fn has_debug_change_callback(&self) -> bool {
+        self.on_debug_change_fn.is_some()
     }
 }
 

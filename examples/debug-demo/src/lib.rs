@@ -67,7 +67,6 @@ extern "C" {
     fn debug_register_i32(name: *const u8, ptr: *const i32);
     fn debug_register_bool(name: *const u8, ptr: *const u8);
     fn debug_register_color(name: *const u8, ptr: *const u8);
-    fn debug_set_change_callback(callback: extern "C" fn());
 }
 
 // ============================================================================
@@ -102,9 +101,13 @@ static mut SPHERE_MESH: u32 = 0;
 // Game Implementation
 // ============================================================================
 
-/// Callback invoked when any debug value changes
+/// Optional callback invoked when any debug value changes
 /// Updates derived values that depend on debug-tweakable values
-extern "C" fn on_debug_change() {
+///
+/// This is automatically called by the console when debug values are modified.
+/// Export this function to react to changes (similar to init/update/render).
+#[no_mangle]
+pub extern "C" fn on_debug_change() {
     unsafe {
         // Track how many times values have been changed
         CHANGE_COUNT += 1;
@@ -132,9 +135,8 @@ pub extern "C" fn init() {
         CUBE_MESH = cube(1.0, 1.0, 1.0);
         SPHERE_MESH = sphere(0.5, 2);
 
-        // Register debug values and change callback
+        // Register debug values
         register_debug_values();
-        debug_set_change_callback(on_debug_change);
     }
 }
 
