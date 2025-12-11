@@ -2,9 +2,27 @@
 //!
 //! Minimal core game state - console-agnostic.
 
-use wasmtime::{Memory, ResourceLimiter};
+use wasmtime::{AsContext, Memory, ResourceLimiter};
 
 use crate::console::ConsoleInput;
+
+/// Read a null-terminated C string from WASM memory
+///
+/// Returns None if:
+/// - No null terminator found within memory bounds
+/// - String is not valid UTF-8
+pub fn read_c_string_from_memory<T>(memory: Memory, ctx: impl AsContext<Data = T>, ptr: u32) -> Option<String> {
+    let data = memory.data(&ctx);
+    let start = ptr as usize;
+
+    // Find null terminator
+    let end = data[start..].iter().position(|&b| b == 0)?;
+
+    std::str::from_utf8(&data[start..start + end])
+        .ok()
+        .map(String::from)
+}
+
 use crate::debug::ffi::HasDebugRegistry;
 use crate::debug::registry::DebugRegistry;
 

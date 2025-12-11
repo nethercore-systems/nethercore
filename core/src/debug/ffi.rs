@@ -7,7 +7,7 @@ use anyhow::Result;
 use wasmtime::{Caller, Linker};
 
 use crate::console::ConsoleInput;
-use crate::wasm::GameStateWithConsole;
+use crate::wasm::{read_c_string_from_memory, GameStateWithConsole};
 
 use super::registry::DebugRegistry;
 use super::types::{Constraints, ValueType};
@@ -119,22 +119,7 @@ where
     I: ConsoleInput,
 {
     let memory = caller.data().game.memory?;
-    let data = memory.data(caller);
-    let start = ptr as usize;
-
-    // Find null terminator
-    let mut end = start;
-    while end < data.len() && data[end] != 0 {
-        end += 1;
-    }
-
-    if end >= data.len() {
-        return None; // No null terminator found
-    }
-
-    std::str::from_utf8(&data[start..end])
-        .ok()
-        .map(String::from)
+    read_c_string_from_memory(memory, caller, ptr)
 }
 
 // ============================================================================

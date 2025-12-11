@@ -21,7 +21,10 @@ use wasmtime::{Engine, ExternType, Instance, Linker, Module, Store, TypedFunc};
 use crate::console::ConsoleInput;
 
 // Re-export public types from state module
-pub use state::{GameState, GameStateWithConsole, MAX_PLAYERS, MAX_SAVE_SIZE, MAX_SAVE_SLOTS};
+pub use state::{
+    read_c_string_from_memory, GameState, GameStateWithConsole, MAX_PLAYERS, MAX_SAVE_SIZE,
+    MAX_SAVE_SLOTS,
+};
 
 /// Shared WASM engine (one per application)
 pub struct WasmEngine {
