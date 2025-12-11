@@ -15,6 +15,10 @@ pub struct PendingSkeleton {
 pub struct Font {
     /// Texture handle for the font atlas
     pub texture: u32,
+    /// Width of the texture atlas in pixels
+    pub atlas_width: u32,
+    /// Height of the texture atlas in pixels
+    pub atlas_height: u32,
     /// Width of each glyph in pixels (for fixed-width fonts)
     pub char_width: u8,
     /// Height of each glyph in pixels

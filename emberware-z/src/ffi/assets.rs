@@ -14,7 +14,9 @@
 
 use anyhow::Result;
 use tracing::{info, warn};
-use wasmtime::{Caller, Extern, Linker};
+use wasmtime::{Caller, Linker};
+
+use super::get_wasm_memory;
 
 use emberware_core::wasm::GameStateWithConsole;
 use emberware_shared::formats::{EmberZMeshHeader, EmberZSoundHeader, EmberZTextureHeader};
@@ -58,12 +60,9 @@ fn load_zmesh(
     }
 
     // Get memory reference
-    let memory = match caller.get_export("memory") {
-        Some(Extern::Memory(mem)) => mem,
-        _ => {
-            warn!("load_zmesh: failed to get WASM memory");
-            return 0;
-        }
+    let Some(memory) = get_wasm_memory(&mut caller) else {
+        warn!("load_zmesh: failed to get WASM memory");
+        return 0;
     };
 
     let ptr = data_ptr as usize;
@@ -193,12 +192,9 @@ fn load_ztex(
     }
 
     // Get memory reference
-    let memory = match caller.get_export("memory") {
-        Some(Extern::Memory(mem)) => mem,
-        _ => {
-            warn!("load_ztex: failed to get WASM memory");
-            return 0;
-        }
+    let Some(memory) = get_wasm_memory(&mut caller) else {
+        warn!("load_ztex: failed to get WASM memory");
+        return 0;
     };
 
     let ptr = data_ptr as usize;
@@ -312,12 +308,9 @@ fn load_zsound(
     }
 
     // Get memory reference
-    let memory = match caller.get_export("memory") {
-        Some(Extern::Memory(mem)) => mem,
-        _ => {
-            warn!("load_zsound: failed to get WASM memory");
-            return 0;
-        }
+    let Some(memory) = get_wasm_memory(&mut caller) else {
+        warn!("load_zsound: failed to get WASM memory");
+        return 0;
     };
 
     let ptr = data_ptr as usize;

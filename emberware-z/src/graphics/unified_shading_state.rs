@@ -273,20 +273,28 @@ pub fn pack_uniform_set_1(byte0: u8, byte1: u8, byte2: u8, byte3: u8) -> u32 {
     (byte0 as u32) | ((byte1 as u32) << 8) | ((byte2 as u32) << 16) | ((byte3 as u32) << 24)
 }
 
-/// Update a specific byte in uniform_set_0
+/// Update a specific byte in a packed u32 value
+///
+/// # Arguments
+/// * `current` - The current packed u32 value
+/// * `byte_index` - Which byte to update (0-3, where 0 is lowest byte)
+/// * `value` - The new byte value
 #[inline]
-pub fn update_uniform_set_0_byte(current: u32, byte_index: u8, value: u8) -> u32 {
+pub fn update_u32_byte(current: u32, byte_index: u8, value: u8) -> u32 {
     let shift = byte_index as u32 * 8;
     let mask = !(0xFFu32 << shift);
     (current & mask) | ((value as u32) << shift)
 }
 
-/// Update a specific byte in uniform_set_1
+// Backwards compatibility aliases
+#[inline]
+pub fn update_uniform_set_0_byte(current: u32, byte_index: u8, value: u8) -> u32 {
+    update_u32_byte(current, byte_index, value)
+}
+
 #[inline]
 pub fn update_uniform_set_1_byte(current: u32, byte_index: u8, value: u8) -> u32 {
-    let shift = byte_index as u32 * 8;
-    let mask = !(0xFFu32 << shift);
-    (current & mask) | ((value as u32) << shift)
+    update_u32_byte(current, byte_index, value)
 }
 
 /// Unpack matcap blend modes from u32

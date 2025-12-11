@@ -108,9 +108,7 @@ fn light_color(
     }
 
     // Unpack color from 0xRRGGBBAA to 0.0-1.0 range
-    let r = ((color >> 24) & 0xFF) as f32 / 255.0;
-    let g = ((color >> 16) & 0xFF) as f32 / 255.0;
-    let b = ((color >> 8) & 0xFF) as f32 / 255.0;
+    let [r, g, b] = super::unpack_rgb(color);
 
     let state = &mut caller.data_mut().console;
 

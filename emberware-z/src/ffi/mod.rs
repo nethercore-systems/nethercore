@@ -6,6 +6,48 @@
 #![allow(clippy::too_many_arguments)]
 
 mod assets;
+
+// ============================================================================
+// Color Utilities
+// ============================================================================
+
+/// Unpack a 0xRRGGBBAA color to normalized [r, g, b, a] floats (0.0-1.0)
+#[inline]
+pub fn unpack_rgba(color: u32) -> [f32; 4] {
+    [
+        ((color >> 24) & 0xFF) as f32 / 255.0,
+        ((color >> 16) & 0xFF) as f32 / 255.0,
+        ((color >> 8) & 0xFF) as f32 / 255.0,
+        (color & 0xFF) as f32 / 255.0,
+    ]
+}
+
+/// Unpack a 0xRRGGBBAA color to normalized [r, g, b] floats (0.0-1.0), ignoring alpha
+#[inline]
+pub(crate) fn unpack_rgb(color: u32) -> [f32; 3] {
+    [
+        ((color >> 24) & 0xFF) as f32 / 255.0,
+        ((color >> 16) & 0xFF) as f32 / 255.0,
+        ((color >> 8) & 0xFF) as f32 / 255.0,
+    ]
+}
+
+// ============================================================================
+// WASM Memory Utilities
+// ============================================================================
+
+/// Get WASM memory from a Caller
+///
+/// Returns `None` if the WASM module doesn't export memory (should never happen
+/// for valid WASM modules).
+#[inline]
+pub(crate) fn get_wasm_memory<T>(caller: &mut Caller<'_, T>) -> Option<Memory> {
+    match caller.get_export("memory") {
+        Some(Extern::Memory(mem)) => Some(mem),
+        _ => None,
+    }
+}
+
 mod audio;
 mod billboard;
 mod camera;
@@ -25,7 +67,7 @@ mod texture;
 mod transform;
 
 use anyhow::Result;
-use wasmtime::Linker;
+use wasmtime::{Caller, Extern, Linker, Memory};
 
 use emberware_core::wasm::GameStateWithConsole;
 

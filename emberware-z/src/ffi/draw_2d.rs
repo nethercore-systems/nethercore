@@ -329,12 +329,12 @@ fn draw_text(
         let scale = size / font.char_height as f32;
         let glyph_height = size;
 
-        // Calculate atlas dimensions
-        let texture_width = 1024; // TODO: Get actual texture dimensions
-        let texture_height = 1024;
+        // Use stored atlas dimensions
+        let texture_width = font.atlas_width;
+        let texture_height = font.atlas_height;
 
         let max_glyph_width = font.char_width as u32;
-        let glyphs_per_row = texture_width / max_glyph_width;
+        let glyphs_per_row = texture_width / max_glyph_width.max(1);
 
         for ch in text_str.chars() {
             let char_code = ch as u32;
@@ -467,6 +467,20 @@ fn load_font(
 
     let state = &mut caller.data_mut().console;
 
+    // Look up texture dimensions from pending_textures
+    let (atlas_width, atlas_height) = state
+        .pending_textures
+        .iter()
+        .find(|t| t.handle == texture)
+        .map(|t| (t.width, t.height))
+        .unwrap_or_else(|| {
+            warn!(
+                "load_font: texture {} not found in pending_textures, using 1024x1024",
+                texture
+            );
+            (1024, 1024)
+        });
+
     // Allocate font handle
     let handle = state.next_font_handle;
     state.next_font_handle += 1;
@@ -474,6 +488,8 @@ fn load_font(
     // Create font descriptor
     let font = Font {
         texture,
+        atlas_width,
+        atlas_height,
         char_width: char_width as u8,
         char_height: char_height as u8,
         first_codepoint,
@@ -561,14 +577,33 @@ fn load_font_ex(
 
     let state = &mut caller.data_mut().console;
 
+    // Look up texture dimensions from pending_textures
+    let (atlas_width, atlas_height) = state
+        .pending_textures
+        .iter()
+        .find(|t| t.handle == texture)
+        .map(|t| (t.width, t.height))
+        .unwrap_or_else(|| {
+            warn!(
+                "load_font_ex: texture {} not found in pending_textures, using 1024x1024",
+                texture
+            );
+            (1024, 1024)
+        });
+
     // Allocate font handle
     let handle = state.next_font_handle;
     state.next_font_handle += 1;
 
+    // Get max width from widths array for grid calculations
+    let max_char_width = widths.iter().copied().max().unwrap_or(8);
+
     // Create font descriptor
     let font = Font {
         texture,
-        char_width: 0, // Not used for variable-width
+        atlas_width,
+        atlas_height,
+        char_width: max_char_width, // Max width for grid calculations
         char_height: char_height as u8,
         first_codepoint,
         char_count,

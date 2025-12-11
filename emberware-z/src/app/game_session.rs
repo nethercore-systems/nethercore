@@ -285,12 +285,18 @@ impl App {
         };
 
         // Process audio commands after rendering
-        // Clone the audio commands and sounds to avoid double mutable borrow
-        if let Some(game) = session.runtime.game_mut() {
-            let console_state = game.console_state();
-            let audio_commands = console_state.audio_commands.clone();
-            let sounds = console_state.sounds.clone();
+        // Use mem::take to avoid cloning - takes ownership and leaves empty vecs
+        let (audio_commands, sounds) = if let Some(game) = session.runtime.game_mut() {
+            let console_state = game.console_state_mut();
+            (
+                std::mem::take(&mut console_state.audio_commands),
+                console_state.sounds.clone(), // sounds must be cloned (contains Arcs, shared with audio system)
+            )
+        } else {
+            (Vec::new(), Vec::new())
+        };
 
+        if !audio_commands.is_empty() {
             if let Some(audio) = session.runtime.audio_mut() {
                 audio.process_commands(&audio_commands, &sounds);
             }

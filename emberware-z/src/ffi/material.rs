@@ -179,10 +179,7 @@ fn material_specular(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFISta
     let state = &mut caller.data_mut().console;
 
     // Extract RGB bytes from input and convert to normalized floats
-    // Format: 0xRRGGBBAA (R in highest byte, A in lowest)
-    let r = ((color >> 24) & 0xFF) as f32 / 255.0;
-    let g = ((color >> 16) & 0xFF) as f32 / 255.0;
-    let b = ((color >> 8) & 0xFF) as f32 / 255.0;
+    let [r, g, b] = super::unpack_rgb(color);
 
     // Specular RGB stored in uniform_set_1 bytes 0-2 (byte 3 = rim_power)
     state.update_specular_color(r, g, b);

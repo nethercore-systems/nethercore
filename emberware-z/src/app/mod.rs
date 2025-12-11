@@ -13,6 +13,7 @@ use std::time::Instant;
 use winit::{event::WindowEvent, event_loop::ActiveEventLoop, window::Window};
 
 use crate::console::EmberwareZ;
+use crate::ffi::unpack_rgba;
 use crate::graphics::ZGraphics;
 use crate::input::InputManager;
 use crate::library::LocalGame;
@@ -244,12 +245,7 @@ impl App {
                         if let Some(game) = session.runtime.game() {
                             let z_state = game.console_state();
 
-                            let clear = z_state.init_config.clear_color;
-                            let clear_r = ((clear >> 24) & 0xFF) as f32 / 255.0;
-                            let clear_g = ((clear >> 16) & 0xFF) as f32 / 255.0;
-                            let clear_b = ((clear >> 8) & 0xFF) as f32 / 255.0;
-                            let clear_a = (clear & 0xFF) as f32 / 255.0;
-                            [clear_r, clear_g, clear_b, clear_a]
+                            unpack_rgba(z_state.init_config.clear_color)
                         } else {
                             [0.1, 0.1, 0.1, 1.0]
                         }
@@ -588,7 +584,7 @@ impl App {
             // SAFETY: Bounds checked above, pointer valid for this scope
             let data = unsafe { std::slice::from_raw_parts(mem_ptr.add(ptr), size) };
 
-            Some(debug_values::read_from_slice(data, reg_value.value_type))
+            debug_values::read_from_slice(data, reg_value.value_type)
         };
 
         // Create write closure using raw pointer
