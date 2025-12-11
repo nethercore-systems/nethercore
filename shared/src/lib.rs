@@ -30,6 +30,7 @@ pub mod cart;
 pub mod console;
 pub mod formats;
 pub mod local;
+pub mod math;
 pub mod requests;
 
 // Re-export all public items for convenience
@@ -38,4 +39,5 @@ pub use auth::*;
 pub use cart::*;
 pub use console::*;
 pub use local::*;
+pub use math::*;
 pub use requests::*;

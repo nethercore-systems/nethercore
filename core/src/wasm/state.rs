@@ -108,7 +108,7 @@ impl<I: ConsoleInput, S: Default> Default for GameStateWithConsole<I, S> {
 }
 
 impl<I: ConsoleInput, S: Default> GameStateWithConsole<I, S> {
-    /// Create new state with default RAM limit (8MB)
+    /// Create new state with default RAM limit (4MB)
     pub fn new() -> Self {
         Self::default()
     }

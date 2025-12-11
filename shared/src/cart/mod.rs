@@ -7,6 +7,7 @@
 //! # Structure
 //!
 //! - `z.rs` - Emberware Z ROM format (`.ewz`)
+//! - `z_data_pack.rs` - Emberware Z data pack (bundled assets)
 //! - Future: `classic.rs` - Emberware Classic ROM format (`.ewc`)
 //!
 //! # Design
@@ -15,5 +16,10 @@
 //! - Each ROM has a magic bytes header for validation
 //! - Metadata includes optional platform foreign keys for syncing
 //! - Screenshots stored in ROM but not extracted locally (save disk space)
+//! - Data packs contain GPU-ready assets loaded via `rom_*` FFI
 
 pub mod z;
+pub mod z_data_pack;
+
+// Re-export data pack types for convenience
+pub use z_data_pack::*;

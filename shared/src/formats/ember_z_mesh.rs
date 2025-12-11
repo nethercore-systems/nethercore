@@ -12,6 +12,8 @@
 //! 0x0C: vertex_data (vertex_count * stride)
 //! var:  index_data (index_count * 2 bytes), if indexed
 //! ```
+//!
+//! For vertex format constants and stride calculation, see `z_common::packing`.
 
 /// EmberZMesh header (12 bytes)
 #[derive(Debug, Clone, Copy)]
