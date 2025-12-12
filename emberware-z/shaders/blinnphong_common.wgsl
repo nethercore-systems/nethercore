@@ -8,6 +8,20 @@
 // NOTE: Common bindings, structures, and utilities are injected by shader_gen.rs from common.wgsl
 
 // ============================================================================
+// Material Unpacking Helpers
+// ============================================================================
+
+// Unpack specular RGB from uniform_set_1
+// Format: 0xRRGGBBRP (R in high byte, rim_power in low byte)
+// Returns normalized RGB in [0.0, 1.0] range
+fn unpack_specular_rgb(uniform_set_1: u32) -> vec3<f32> {
+    let r = f32((uniform_set_1 >> 24u) & 0xFFu) / 255.0;
+    let g = f32((uniform_set_1 >> 16u) & 0xFFu) / 255.0;
+    let b = f32((uniform_set_1 >> 8u) & 0xFFu) / 255.0;
+    return vec3<f32>(r, g, b);
+}
+
+// ============================================================================
 // Lighting Functions
 // ============================================================================
 
@@ -210,6 +224,11 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     let rim_color = specular_color * sun_color;
     let rim = rim_lighting(N, view_dir, rim_color, rim_intensity, rim_power);
     final_color += rim;
+
+    // Dither transparency (always active)
+    if should_discard_dither(in.clip_position.xy, shading.flags) {
+        discard;
+    }
 
     return vec4<f32>(final_color, material_color.a);
 }

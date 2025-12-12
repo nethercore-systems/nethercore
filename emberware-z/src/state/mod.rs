@@ -10,13 +10,18 @@ mod resources;
 
 pub use config::ZInitConfig;
 pub use ffi_state::ZFFIState;
-pub use resources::{Font, PendingMesh, PendingMeshPacked, PendingSkeleton, PendingTexture};
+pub use resources::{
+    Font, PendingKeyframes, PendingMesh, PendingMeshPacked, PendingSkeleton, PendingTexture,
+};
 
 /// Maximum number of bones for GPU skinning
 pub const MAX_BONES: usize = 256;
 
 /// Maximum number of skeletons that can be loaded
 pub const MAX_SKELETONS: usize = 64;
+
+/// Maximum number of keyframe collections that can be loaded
+pub const MAX_KEYFRAME_COLLECTIONS: usize = 256;
 
 // Re-export BoneMatrix3x4 from shared (the canonical POD type)
 pub use emberware_shared::math::BoneMatrix3x4;
@@ -32,6 +37,20 @@ pub struct SkeletonData {
     pub inverse_bind: Vec<BoneMatrix3x4>,
     /// Number of bones in this skeleton
     pub bone_count: u32,
+}
+
+/// Loaded keyframe collection (stored on host/ROM)
+///
+/// Contains keyframe data ready for decoding and use.
+/// Data stays on host and is accessed via keyframe_read/keyframe_bind.
+#[derive(Clone, Debug)]
+pub struct LoadedKeyframeCollection {
+    /// Number of bones per frame
+    pub bone_count: u8,
+    /// Number of frames in the collection
+    pub frame_count: u16,
+    /// Raw platform format data (frame_count × bone_count × 16 bytes)
+    pub data: Vec<u8>,
 }
 
 /// A batch of quad instances that share the same texture bindings and blend mode

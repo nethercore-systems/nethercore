@@ -13,6 +13,63 @@
 use bitcode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
+/// Texture compression format
+///
+/// Determined by render mode:
+/// - Mode 0 (Unlit): RGBA8 — pixel-perfect, full alpha
+/// - Mode 1-3 (Matcap/MRBP/SSBP): BC7 — 4× compression, stipple transparency
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Encode, Decode)]
+pub enum TextureFormat {
+    /// Uncompressed RGBA8 (4 bytes per pixel)
+    /// Used for Mode 0 (Unlit) and procedural textures
+    #[default]
+    Rgba8,
+
+    /// BC7 compressed (8 bits per pixel, sRGB color space)
+    /// Used for albedo, matcap, specular color, environment textures
+    Bc7,
+
+    /// BC7 compressed (8 bits per pixel, linear color space)
+    /// Used for material maps (metallic/roughness/emissive in slot 1)
+    Bc7Linear,
+}
+
+impl TextureFormat {
+    /// Check if this format is BC7 (compressed)
+    pub fn is_bc7(&self) -> bool {
+        matches!(self, TextureFormat::Bc7 | TextureFormat::Bc7Linear)
+    }
+
+    /// Check if this format uses sRGB color space
+    pub fn is_srgb(&self) -> bool {
+        matches!(self, TextureFormat::Rgba8 | TextureFormat::Bc7)
+    }
+
+    /// Calculate data size for given dimensions
+    pub fn data_size(&self, width: u16, height: u16) -> usize {
+        let w = width as usize;
+        let h = height as usize;
+
+        match self {
+            TextureFormat::Rgba8 => w * h * 4,
+            TextureFormat::Bc7 | TextureFormat::Bc7Linear => {
+                let blocks_x = (w + 3) / 4;
+                let blocks_y = (h + 3) / 4;
+                blocks_x * blocks_y * 16
+            }
+        }
+    }
+
+    /// Get wgpu-compatible format name (for debugging/logging)
+    pub fn wgpu_format_name(&self) -> &'static str {
+        match self {
+            TextureFormat::Rgba8 => "Rgba8UnormSrgb",
+            TextureFormat::Bc7 => "Bc7RgbaUnormSrgb",
+            TextureFormat::Bc7Linear => "Bc7RgbaUnorm",
+        }
+    }
+}
+
 use emberware_shared::math::BoneMatrix3x4;
 
 /// Emberware Z data pack
@@ -29,6 +86,9 @@ pub struct ZDataPack {
 
     /// Skeletons (inverse bind matrices only — GPU-ready)
     pub skeletons: Vec<PackedSkeleton>,
+
+    /// Keyframe collections (animation clips)
+    pub keyframes: Vec<PackedKeyframes>,
 
     /// Fonts (bitmap atlas + glyph metrics)
     pub fonts: Vec<PackedFont>,
@@ -51,6 +111,7 @@ impl ZDataPack {
         self.textures.is_empty()
             && self.meshes.is_empty()
             && self.skeletons.is_empty()
+            && self.keyframes.is_empty()
             && self.fonts.is_empty()
             && self.sounds.is_empty()
             && self.data.is_empty()
@@ -61,6 +122,7 @@ impl ZDataPack {
         self.textures.len()
             + self.meshes.len()
             + self.skeletons.len()
+            + self.keyframes.len()
             + self.fonts.len()
             + self.sounds.len()
             + self.data.len()
@@ -81,6 +143,11 @@ impl ZDataPack {
         self.skeletons.iter().find(|s| s.id == id)
     }
 
+    /// Find a keyframe collection by ID
+    pub fn find_keyframes(&self, id: &str) -> Option<&PackedKeyframes> {
+        self.keyframes.iter().find(|k| k.id == id)
+    }
+
     /// Find a font by ID
     pub fn find_font(&self, id: &str) -> Option<&PackedFont> {
         self.fonts.iter().find(|f| f.id == id)
@@ -97,43 +164,76 @@ impl ZDataPack {
     }
 }
 
-/// Packed texture (RGBA8 pixel data)
+/// Packed texture (RGBA8 or BC7 compressed)
 ///
 /// Ready for direct GPU upload via `wgpu::Queue::write_texture()`.
+/// Format is determined by render mode at build time.
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct PackedTexture {
     /// Asset ID (e.g., "player_idle", "stage1_tileset")
     pub id: String,
 
-    /// Texture width in pixels
-    pub width: u32,
+    /// Texture width in pixels (max 65535)
+    pub width: u16,
 
-    /// Texture height in pixels
-    pub height: u32,
+    /// Texture height in pixels (max 65535)
+    pub height: u16,
 
-    /// RGBA8 pixel data (width * height * 4 bytes)
+    /// Texture format (RGBA8 or BC7)
+    #[serde(default)]
+    pub format: TextureFormat,
+
+    /// Pixel data (RGBA8) or compressed blocks (BC7)
     pub data: Vec<u8>,
 }
 
 impl PackedTexture {
-    /// Create a new packed texture
+    /// Create a new RGBA8 packed texture
     pub fn new(id: impl Into<String>, width: u32, height: u32, data: Vec<u8>) -> Self {
         Self {
             id: id.into(),
-            width,
-            height,
+            width: width as u16,
+            height: height as u16,
+            format: TextureFormat::Rgba8,
             data,
         }
     }
 
-    /// Get expected data size (width * height * 4)
-    pub fn expected_size(&self) -> usize {
-        (self.width * self.height * 4) as usize
+    /// Create a new packed texture with explicit format
+    pub fn with_format(
+        id: impl Into<String>,
+        width: u16,
+        height: u16,
+        format: TextureFormat,
+        data: Vec<u8>,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            width,
+            height,
+            format,
+            data,
+        }
     }
 
-    /// Validate that data size matches dimensions
+    /// Get expected data size based on format
+    pub fn expected_size(&self) -> usize {
+        self.format.data_size(self.width, self.height)
+    }
+
+    /// Validate that data size matches dimensions and format
     pub fn validate(&self) -> bool {
         self.data.len() == self.expected_size()
+    }
+
+    /// Check if texture is BC7 compressed
+    pub fn is_bc7(&self) -> bool {
+        self.format.is_bc7()
+    }
+
+    /// Get dimensions as u32 tuple (for wgpu compatibility)
+    pub fn dimensions_u32(&self) -> (u32, u32) {
+        (self.width as u32, self.height as u32)
     }
 }
 
@@ -239,6 +339,54 @@ impl PackedSkeleton {
     /// Validate that bone count matches matrices
     pub fn validate(&self) -> bool {
         self.inverse_bind_matrices.len() == self.bone_count as usize
+    }
+}
+
+/// Packed keyframe collection (animation clip)
+///
+/// Contains keyframe data in platform format (16 bytes per bone per frame).
+/// Data is stored in ROM and accessed via `rom_keyframes()` or `keyframes_load()`.
+#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+pub struct PackedKeyframes {
+    /// Asset ID (e.g., "walk", "run", "idle")
+    pub id: String,
+
+    /// Number of bones per frame
+    pub bone_count: u8,
+
+    /// Number of frames
+    pub frame_count: u16,
+
+    /// Raw platform format data (frame_count × bone_count × 16 bytes)
+    pub data: Vec<u8>,
+}
+
+impl PackedKeyframes {
+    /// Create a new packed keyframes collection
+    pub fn new(id: impl Into<String>, bone_count: u8, frame_count: u16, data: Vec<u8>) -> Self {
+        Self {
+            id: id.into(),
+            bone_count,
+            frame_count,
+            data,
+        }
+    }
+
+    /// Validate that data size matches header
+    pub fn validate(&self) -> bool {
+        let expected = self.bone_count as usize * self.frame_count as usize * 16;
+        self.bone_count > 0 && self.frame_count > 0 && self.data.len() == expected
+    }
+
+    /// Get frame data as a slice
+    pub fn frame_data(&self, frame_index: u16) -> Option<&[u8]> {
+        if frame_index >= self.frame_count {
+            return None;
+        }
+        let frame_size = self.bone_count as usize * 16;
+        let start = frame_index as usize * frame_size;
+        let end = start + frame_size;
+        Some(&self.data[start..end])
     }
 }
 
@@ -623,6 +771,59 @@ mod tests {
     }
 
     #[test]
+    fn test_find_keyframes() {
+        let mut pack = ZDataPack::new();
+
+        // Create 2 bones, 3 frames animation (2 * 3 * 16 = 96 bytes)
+        let walk_data = vec![0u8; 2 * 3 * 16];
+        pack.keyframes
+            .push(PackedKeyframes::new("walk", 2, 3, walk_data));
+
+        // Create 4 bones, 10 frames animation (4 * 10 * 16 = 640 bytes)
+        let run_data = vec![0u8; 4 * 10 * 16];
+        pack.keyframes
+            .push(PackedKeyframes::new("run", 4, 10, run_data));
+
+        let walk = pack.find_keyframes("walk");
+        assert!(walk.is_some());
+        assert_eq!(walk.unwrap().bone_count, 2);
+        assert_eq!(walk.unwrap().frame_count, 3);
+        assert!(walk.unwrap().validate());
+
+        let run = pack.find_keyframes("run");
+        assert!(run.is_some());
+        assert_eq!(run.unwrap().bone_count, 4);
+        assert_eq!(run.unwrap().frame_count, 10);
+        assert!(run.unwrap().validate());
+
+        assert!(pack.find_keyframes("missing").is_none());
+    }
+
+    #[test]
+    fn test_packed_keyframes_frame_data() {
+        // 2 bones, 2 frames (2 * 2 * 16 = 64 bytes)
+        let mut data = vec![0u8; 64];
+        // Mark first frame's first bone
+        data[0] = 0xFF;
+        // Mark second frame's first bone
+        data[32] = 0xAA;
+
+        let kf = PackedKeyframes::new("test", 2, 2, data);
+        assert!(kf.validate());
+
+        let frame0 = kf.frame_data(0).unwrap();
+        assert_eq!(frame0.len(), 32); // 2 bones * 16 bytes
+        assert_eq!(frame0[0], 0xFF);
+
+        let frame1 = kf.frame_data(1).unwrap();
+        assert_eq!(frame1.len(), 32);
+        assert_eq!(frame1[0], 0xAA);
+
+        // Out of bounds
+        assert!(kf.frame_data(2).is_none());
+    }
+
+    #[test]
     fn test_serialization_roundtrip() {
         let mut pack = ZDataPack::new();
 
@@ -639,6 +840,8 @@ mod tests {
         });
         pack.skeletons
             .push(PackedSkeleton::new("skel", vec![BoneMatrix3x4::IDENTITY]));
+        pack.keyframes
+            .push(PackedKeyframes::new("anim", 2, 5, vec![0; 2 * 5 * 16]));
         pack.fonts.push(PackedFont {
             id: "font".to_string(),
             atlas_width: 64,
@@ -667,10 +870,11 @@ mod tests {
         let decoded: ZDataPack = bitcode::decode(&encoded).expect("decode failed");
 
         // Verify all assets survived
-        assert_eq!(decoded.asset_count(), 6);
+        assert_eq!(decoded.asset_count(), 7);
         assert_eq!(decoded.textures.len(), 1);
         assert_eq!(decoded.meshes.len(), 1);
         assert_eq!(decoded.skeletons.len(), 1);
+        assert_eq!(decoded.keyframes.len(), 1);
         assert_eq!(decoded.fonts.len(), 1);
         assert_eq!(decoded.sounds.len(), 1);
         assert_eq!(decoded.data.len(), 1);
@@ -679,9 +883,110 @@ mod tests {
         assert_eq!(decoded.find_texture("tex").unwrap().width, 4);
         assert_eq!(decoded.find_mesh("mesh").unwrap().format, 0b0101);
         assert_eq!(decoded.find_skeleton("skel").unwrap().bone_count, 1);
+        assert_eq!(decoded.find_keyframes("anim").unwrap().bone_count, 2);
+        assert_eq!(decoded.find_keyframes("anim").unwrap().frame_count, 5);
         assert!((decoded.find_font("font").unwrap().line_height - 12.0).abs() < 0.001);
         assert_eq!(decoded.find_sound("sfx").unwrap().data.len(), 100);
         assert_eq!(decoded.find_data("raw").unwrap().data, vec![9, 8, 7]);
+    }
+
+    // ========================================================================
+    // TextureFormat tests
+    // ========================================================================
+
+    #[test]
+    fn test_texture_format_default() {
+        let tex = PackedTexture::new("test", 64, 64, vec![0; 64 * 64 * 4]);
+        assert_eq!(tex.format, TextureFormat::Rgba8);
+    }
+
+    #[test]
+    fn test_texture_format_equality() {
+        assert_eq!(TextureFormat::Rgba8, TextureFormat::Rgba8);
+        assert_eq!(TextureFormat::Bc7, TextureFormat::Bc7);
+        assert_eq!(TextureFormat::Bc7Linear, TextureFormat::Bc7Linear);
+
+        assert_ne!(TextureFormat::Rgba8, TextureFormat::Bc7);
+        assert_ne!(TextureFormat::Bc7, TextureFormat::Bc7Linear);
+    }
+
+    #[test]
+    fn test_texture_format_is_bc7() {
+        assert!(!TextureFormat::Rgba8.is_bc7());
+        assert!(TextureFormat::Bc7.is_bc7());
+        assert!(TextureFormat::Bc7Linear.is_bc7());
+    }
+
+    #[test]
+    fn test_texture_format_is_srgb() {
+        assert!(TextureFormat::Rgba8.is_srgb());
+        assert!(TextureFormat::Bc7.is_srgb());
+        assert!(!TextureFormat::Bc7Linear.is_srgb());
+    }
+
+    #[test]
+    fn test_texture_format_data_size_rgba8() {
+        assert_eq!(TextureFormat::Rgba8.data_size(64, 64), 64 * 64 * 4);
+        assert_eq!(TextureFormat::Rgba8.data_size(32, 32), 32 * 32 * 4);
+        assert_eq!(TextureFormat::Rgba8.data_size(128, 64), 128 * 64 * 4);
+    }
+
+    #[test]
+    fn test_texture_format_data_size_bc7() {
+        // 64×64 = 16×16 blocks × 16 bytes = 4096 bytes
+        assert_eq!(TextureFormat::Bc7.data_size(64, 64), 4096);
+
+        // 32×32 = 8×8 blocks × 16 bytes = 1024 bytes
+        assert_eq!(TextureFormat::Bc7.data_size(32, 32), 1024);
+
+        // 128×128 = 32×32 blocks × 16 bytes = 16384 bytes
+        assert_eq!(TextureFormat::Bc7.data_size(128, 128), 16384);
+    }
+
+    #[test]
+    fn test_texture_format_data_size_bc7_non_aligned() {
+        // 30×30 → 8×8 blocks (rounds up) × 16 bytes = 1024 bytes
+        assert_eq!(TextureFormat::Bc7.data_size(30, 30), 8 * 8 * 16);
+
+        // 1×1 → 1×1 blocks × 16 bytes = 16 bytes
+        assert_eq!(TextureFormat::Bc7.data_size(1, 1), 16);
+
+        // 5×7 → 2×2 blocks × 16 bytes = 64 bytes
+        assert_eq!(TextureFormat::Bc7.data_size(5, 7), 2 * 2 * 16);
+    }
+
+    #[test]
+    fn test_bc7_compression_ratio() {
+        let w: u16 = 64;
+        let h: u16 = 64;
+        let rgba8 = TextureFormat::Rgba8.data_size(w, h);
+        let bc7 = TextureFormat::Bc7.data_size(w, h);
+        assert_eq!(rgba8 / bc7, 4); // 4× compression ratio
+    }
+
+    #[test]
+    fn test_packed_texture_with_format() {
+        let tex = PackedTexture::with_format(
+            "material",
+            64,
+            64,
+            TextureFormat::Bc7Linear,
+            vec![0; 4096], // BC7 size for 64×64
+        );
+
+        assert_eq!(tex.width, 64);
+        assert_eq!(tex.height, 64);
+        assert_eq!(tex.format, TextureFormat::Bc7Linear);
+        assert!(tex.is_bc7());
+        assert!(tex.validate());
+    }
+
+    #[test]
+    fn test_packed_texture_dimensions_u32() {
+        let tex = PackedTexture::new("test", 256, 128, vec![0; 256 * 128 * 4]);
+        let (w, h) = tex.dimensions_u32();
+        assert_eq!(w, 256);
+        assert_eq!(h, 128);
     }
 
     #[test]

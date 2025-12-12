@@ -18,6 +18,8 @@ pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) ->
     linker.func_wrap("env", "cull_mode", cull_mode)?;
     linker.func_wrap("env", "blend_mode", blend_mode)?;
     linker.func_wrap("env", "texture_filter", texture_filter)?;
+    linker.func_wrap("env", "uniform_alpha", uniform_alpha)?;
+    linker.func_wrap("env", "dither_offset", dither_offset)?;
     Ok(())
 }
 
@@ -102,4 +104,51 @@ fn texture_filter(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>
 
     state.texture_filter = filter as u8;
     state.update_texture_filter(filter == 1);
+}
+
+/// Set uniform alpha level for dither transparency
+///
+/// # Arguments
+/// * `level` — 0-15 (0=fully transparent, 15=fully opaque, default=15)
+///
+/// This controls the dither pattern threshold for screen-door transparency.
+/// The dither pattern is always active, but with level=15 (default) all fragments pass.
+fn uniform_alpha(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, level: u32) {
+    let state = &mut caller.data_mut().console;
+
+    if level > 15 {
+        warn!(
+            "uniform_alpha({}) invalid - must be 0-15, clamping to 15",
+            level
+        );
+    }
+
+    state.update_uniform_alpha(level.min(15) as u8);
+}
+
+/// Set dither offset for dither transparency
+///
+/// # Arguments
+/// * `x` — 0-3 pixel shift in X axis
+/// * `y` — 0-3 pixel shift in Y axis
+///
+/// Use different offsets for stacked dithered meshes to prevent pattern cancellation.
+/// When two transparent objects overlap with the same alpha level and offset, their
+/// dither patterns align and pixels cancel out. Different offsets shift the pattern
+/// so both objects remain visible.
+fn dither_offset(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    x: u32,
+    y: u32,
+) {
+    let state = &mut caller.data_mut().console;
+
+    if x > 3 || y > 3 {
+        warn!(
+            "dither_offset({}, {}) invalid - values must be 0-3, clamping",
+            x, y
+        );
+    }
+
+    state.update_dither_offset(x.min(3) as u8, y.min(3) as u8);
 }

@@ -1,6 +1,7 @@
 //! Resource types pending GPU upload
 
 use super::BoneMatrix3x4;
+use z_common::TextureFormat;
 
 /// Pending skeleton load request (created during init)
 #[derive(Debug)]
@@ -32,11 +33,16 @@ pub struct Font {
 }
 
 /// Pending texture load request
+///
+/// Supports both RGBA8 (uncompressed) and BC7 (compressed) texture formats.
 #[derive(Debug)]
 pub struct PendingTexture {
     pub handle: u32,
     pub width: u32,
     pub height: u32,
+    /// Texture format (RGBA8, BC7, or BC7Linear)
+    pub format: TextureFormat,
+    /// Pixel data (RGBA8) or compressed blocks (BC7)
     pub data: Vec<u8>,
 }
 
@@ -56,4 +62,13 @@ pub struct PendingMeshPacked {
     pub format: u8,           // Vertex format flags (0-15, NO FORMAT_PACKED)
     pub vertex_data: Vec<u8>, // Packed bytes (f16, snorm16, unorm8)
     pub index_data: Option<Vec<u16>>,
+}
+
+/// Pending keyframe collection load request (created during init)
+#[derive(Debug)]
+pub struct PendingKeyframes {
+    pub handle: u32,
+    pub bone_count: u8,
+    pub frame_count: u16,
+    pub data: Vec<u8>, // Platform format (16 bytes per bone per frame)
 }

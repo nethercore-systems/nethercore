@@ -51,7 +51,9 @@ pub use unified_shading_state::{
     pack_f16, pack_f16x2, pack_matcap_blend_modes, pack_rgb8, pack_unorm8, unpack_f16,
     unpack_f16x2, unpack_matcap_blend_modes, update_uniform_set_0_byte, update_uniform_set_1_byte,
     LightType, PackedLight, PackedUnifiedShadingState, ShadingStateIndex, FLAG_SKINNING_MODE,
-    FLAG_TEXTURE_FILTER_LINEAR,
+    FLAG_TEXTURE_FILTER_LINEAR, FLAG_USE_UNIFORM_COLOR, FLAG_USE_UNIFORM_METALLIC, FLAG_USE_UNIFORM_ROUGHNESS, FLAG_USE_UNIFORM_EMISSIVE, FLAG_USE_UNIFORM_SPECULAR, FLAG_USE_MATCAP_REFLECTION, FLAG_UNIFORM_ALPHA_MASK, FLAG_UNIFORM_ALPHA_SHIFT,
+    FLAG_DITHER_OFFSET_X_MASK, FLAG_DITHER_OFFSET_X_SHIFT, FLAG_DITHER_OFFSET_Y_MASK,
+    FLAG_DITHER_OFFSET_Y_SHIFT, DEFAULT_FLAGS,
 };
 pub use vertex::{VertexFormatInfo, FORMAT_ALL, VERTEX_FORMAT_COUNT};
 
@@ -209,6 +211,24 @@ impl ZGraphics {
     ) -> Result<TextureHandle> {
         self.texture_manager
             .load_texture(&self.device, &self.queue, width, height, pixels)
+    }
+
+    /// Load a texture with explicit format (RGBA8 or BC7)
+    pub fn load_texture_with_format(
+        &mut self,
+        width: u32,
+        height: u32,
+        data: &[u8],
+        format: z_common::TextureFormat,
+    ) -> Result<TextureHandle> {
+        self.texture_manager.load_texture_with_format(
+            &self.device,
+            &self.queue,
+            width,
+            height,
+            data,
+            format,
+        )
     }
 
     pub fn get_texture_view(&self, handle: TextureHandle) -> Option<&wgpu::TextureView> {

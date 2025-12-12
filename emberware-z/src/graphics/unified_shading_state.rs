@@ -141,7 +141,7 @@ impl Default for PackedUnifiedShadingState {
             color_rgba8: 0xFFFFFFFF, // White
             uniform_set_0,
             uniform_set_1,
-            flags: 0, // skinning_mode = 0 (raw mode)
+            flags: DEFAULT_FLAGS, // uniform_alpha = 15 (opaque), other flags = 0
             sky,
             lights: [PackedLight::default(); 4], // All lights disabled
         }
@@ -469,6 +469,48 @@ pub const FLAG_SKINNING_MODE: u32 = 1 << 0;
 /// 0 = nearest (pixelated), 1 = linear (smooth)
 pub const FLAG_TEXTURE_FILTER_LINEAR: u32 = 1 << 1;
 
+// ============================================================================
+// Material Override Flags (bits 2-7)
+// ============================================================================
+
+/// Flag bit for uniform color override (bit 2)
+pub const FLAG_USE_UNIFORM_COLOR: u32 = 1 << 2;
+/// Flag bit for uniform metallic override (bit 3)
+pub const FLAG_USE_UNIFORM_METALLIC: u32 = 1 << 3;
+/// Flag bit for uniform roughness override (bit 4)
+pub const FLAG_USE_UNIFORM_ROUGHNESS: u32 = 1 << 4;
+/// Flag bit for uniform emissive override (bit 5)
+pub const FLAG_USE_UNIFORM_EMISSIVE: u32 = 1 << 5;
+/// Flag bit for uniform specular override (bit 6, Mode 3 only)
+pub const FLAG_USE_UNIFORM_SPECULAR: u32 = 1 << 6;
+/// Flag bit for matcap vs sky reflection (bit 7, Mode 1 only)
+pub const FLAG_USE_MATCAP_REFLECTION: u32 = 1 << 7;
+
+// ============================================================================
+// Dither Transparency Flags (Bits 8-15)
+// ============================================================================
+
+/// Mask for uniform alpha level in flags (bits 8-11)
+/// Values 0-15: 0 = fully transparent, 15 = fully opaque (default)
+pub const FLAG_UNIFORM_ALPHA_MASK: u32 = 0xF << 8;
+/// Bit shift for uniform alpha level
+pub const FLAG_UNIFORM_ALPHA_SHIFT: u32 = 8;
+
+/// Mask for dither offset X in flags (bits 12-13)
+/// Values 0-3: pixel shift in X axis
+pub const FLAG_DITHER_OFFSET_X_MASK: u32 = 0x3 << 12;
+/// Bit shift for dither offset X
+pub const FLAG_DITHER_OFFSET_X_SHIFT: u32 = 12;
+
+/// Mask for dither offset Y in flags (bits 14-15)
+/// Values 0-3: pixel shift in Y axis
+pub const FLAG_DITHER_OFFSET_Y_MASK: u32 = 0x3 << 14;
+/// Bit shift for dither offset Y
+pub const FLAG_DITHER_OFFSET_Y_SHIFT: u32 = 14;
+
+/// Default flags value with uniform_alpha = 15 (opaque)
+pub const DEFAULT_FLAGS: u32 = 0xF << 8;
+
 impl PackedUnifiedShadingState {
     /// Create from all f32 parameters (used during FFI calls)
     /// For Mode 2: metallic, roughness, emissive packed into uniform_set_0
@@ -495,7 +537,7 @@ impl PackedUnifiedShadingState {
         Self {
             uniform_set_0,
             color_rgba8: color,
-            flags: 0, // skinning_mode = 0 (raw mode)
+            flags: DEFAULT_FLAGS, // uniform_alpha = 15 (opaque), other flags = 0
             uniform_set_1,
             sky,
             lights,
@@ -757,5 +799,111 @@ mod tests {
 
         // Verify it's different from skinning_mode (bit 0)
         assert_ne!(FLAG_TEXTURE_FILTER_LINEAR, FLAG_SKINNING_MODE);
+    }
+
+    // ========================================================================
+    // Dither Transparency Tests
+    // ========================================================================
+
+    #[test]
+    fn test_uniform_alpha_packing() {
+        // Test all 16 values pack/unpack correctly
+        for alpha in 0..=15u32 {
+            let flags = alpha << FLAG_UNIFORM_ALPHA_SHIFT;
+            let unpacked = (flags & FLAG_UNIFORM_ALPHA_MASK) >> FLAG_UNIFORM_ALPHA_SHIFT;
+            assert_eq!(unpacked, alpha);
+        }
+    }
+
+    #[test]
+    fn test_dither_offset_packing() {
+        // Test all 16 offset combinations
+        for x in 0..=3u32 {
+            for y in 0..=3u32 {
+                let flags =
+                    (x << FLAG_DITHER_OFFSET_X_SHIFT) | (y << FLAG_DITHER_OFFSET_Y_SHIFT);
+                let unpacked_x =
+                    (flags & FLAG_DITHER_OFFSET_X_MASK) >> FLAG_DITHER_OFFSET_X_SHIFT;
+                let unpacked_y =
+                    (flags & FLAG_DITHER_OFFSET_Y_MASK) >> FLAG_DITHER_OFFSET_Y_SHIFT;
+                assert_eq!(unpacked_x, x);
+                assert_eq!(unpacked_y, y);
+            }
+        }
+    }
+
+    #[test]
+    fn test_default_flags_are_opaque() {
+        let state = PackedUnifiedShadingState::default();
+        let alpha = (state.flags & FLAG_UNIFORM_ALPHA_MASK) >> FLAG_UNIFORM_ALPHA_SHIFT;
+        assert_eq!(alpha, 15, "Default uniform_alpha must be 15 (opaque)");
+    }
+
+    #[test]
+    fn test_bayer_threshold_values() {
+        // Verify Bayer matrix produces values in expected range
+        const BAYER_4X4: [f32; 16] = [
+            0.0 / 16.0,
+            8.0 / 16.0,
+            2.0 / 16.0,
+            10.0 / 16.0,
+            12.0 / 16.0,
+            4.0 / 16.0,
+            14.0 / 16.0,
+            6.0 / 16.0,
+            3.0 / 16.0,
+            11.0 / 16.0,
+            1.0 / 16.0,
+            9.0 / 16.0,
+            15.0 / 16.0,
+            7.0 / 16.0,
+            13.0 / 16.0,
+            5.0 / 16.0,
+        ];
+
+        for (i, &threshold) in BAYER_4X4.iter().enumerate() {
+            assert!(threshold >= 0.0, "Threshold {} is negative", i);
+            assert!(threshold < 1.0, "Threshold {} >= 1.0", i);
+        }
+
+        // Verify we have 16 unique values
+        let mut sorted = BAYER_4X4.to_vec();
+        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        for i in 0..15 {
+            assert_ne!(sorted[i], sorted[i + 1], "Duplicate threshold values");
+        }
+    }
+
+    #[test]
+    fn test_dither_flags_independence() {
+        // Verify dither flags don't interfere with other flags
+        let mut state = PackedUnifiedShadingState::default();
+
+        // Set skinning_mode and texture_filter
+        state.flags |= FLAG_SKINNING_MODE | FLAG_TEXTURE_FILTER_LINEAR;
+
+        // Set uniform_alpha to 8 (50% transparency)
+        state.flags = (state.flags & !FLAG_UNIFORM_ALPHA_MASK) | (8u32 << FLAG_UNIFORM_ALPHA_SHIFT);
+
+        // Set dither offset to (2, 3)
+        state.flags = (state.flags & !FLAG_DITHER_OFFSET_X_MASK & !FLAG_DITHER_OFFSET_Y_MASK)
+            | (2u32 << FLAG_DITHER_OFFSET_X_SHIFT)
+            | (3u32 << FLAG_DITHER_OFFSET_Y_SHIFT);
+
+        // Verify all flags are independent
+        assert!(state.skinning_mode());
+        assert_ne!(state.flags & FLAG_TEXTURE_FILTER_LINEAR, 0);
+        assert_eq!(
+            (state.flags & FLAG_UNIFORM_ALPHA_MASK) >> FLAG_UNIFORM_ALPHA_SHIFT,
+            8
+        );
+        assert_eq!(
+            (state.flags & FLAG_DITHER_OFFSET_X_MASK) >> FLAG_DITHER_OFFSET_X_SHIFT,
+            2
+        );
+        assert_eq!(
+            (state.flags & FLAG_DITHER_OFFSET_Y_MASK) >> FLAG_DITHER_OFFSET_Y_SHIFT,
+            3
+        );
     }
 }

@@ -7,6 +7,10 @@ pub use z_common::formats::*;
 use anyhow::Result;
 use std::io::Write;
 
+use z_common::formats::{encode_bone_transform, EmberZAnimationHeader};
+
+use crate::animation::BoneTRS;
+
 /// Write a complete EmberMesh file
 pub fn write_ember_mesh<W: Write>(
     w: &mut W,
@@ -31,17 +35,37 @@ pub fn write_ember_mesh<W: Write>(
     Ok(())
 }
 
-/// Write a complete EmberTexture file
+/// Write a complete EmberTexture file (RGBA8 or BC7)
+///
+/// # Arguments
+/// * `w` - Writer to output to
+/// * `width` - Texture width (u16, max 65535)
+/// * `height` - Texture height (u16, max 65535)
+/// * `format` - Texture format (Rgba8, Bc7, or Bc7Linear)
+/// * `data` - Pixel data (RGBA8) or compressed blocks (BC7)
 pub fn write_ember_texture<W: Write>(
+    w: &mut W,
+    width: u16,
+    height: u16,
+    _format: TextureFormat,
+    data: &[u8],
+) -> Result<()> {
+    let header = EmberZTextureHeader::new(width, height);
+    w.write_all(&header.to_bytes())?;
+    w.write_all(data)?;
+    Ok(())
+}
+
+/// Write an RGBA8 EmberTexture file (legacy compatibility)
+///
+/// This is a convenience wrapper that assumes RGBA8 format.
+pub fn write_ember_texture_rgba8<W: Write>(
     w: &mut W,
     width: u32,
     height: u32,
     pixels: &[u8],
 ) -> Result<()> {
-    let header = EmberZTextureHeader::new(width, height);
-    w.write_all(&header.to_bytes())?;
-    w.write_all(pixels)?;
-    Ok(())
+    write_ember_texture(w, width as u16, height as u16, TextureFormat::Rgba8, pixels)
 }
 
 /// Write a complete EmberSound file
@@ -73,23 +97,50 @@ pub fn write_ember_skeleton<W: Write>(
     Ok(())
 }
 
-/// Write a complete EmberAnimation file
+/// Write a complete EmberAnimation file (new platform format)
 ///
-/// Frame data is stored as bone_count × frame_count matrices (12 floats each).
+/// Uses the compressed platform format (16 bytes per bone per frame):
+/// - rotation: u32 (smallest-three packed quaternion)
+/// - position: [u16; 3] (f16 × 3)
+/// - scale: [u16; 3] (f16 × 3)
+///
+/// # Arguments
+/// * `w` — Writer to output to
+/// * `bone_count` — Number of bones per frame (max 255)
+/// * `frames` — Vector of frames, each containing `bone_count` BoneTRS transforms
 pub fn write_ember_animation<W: Write>(
     w: &mut W,
-    bone_count: u32,
-    frame_rate: f32,
-    frames: &[Vec<[f32; 12]>],
+    bone_count: u8,
+    frames: &[Vec<BoneTRS>],
 ) -> Result<()> {
-    let header = EmberZAnimationHeader::new(bone_count, frames.len() as u32, frame_rate);
+    // Validate
+    if frames.is_empty() {
+        anyhow::bail!("Animation has no frames");
+    }
+    if bone_count == 0 {
+        anyhow::bail!("Animation has no bones");
+    }
+
+    let frame_count = frames.len() as u16;
+
+    // Write header (4 bytes)
+    let header = EmberZAnimationHeader::new(bone_count, frame_count);
     w.write_all(&header.to_bytes())?;
 
+    // Write frame data (frame_count × bone_count × 16 bytes)
     for frame in frames {
-        for matrix in frame {
-            for f in matrix {
-                w.write_all(&f.to_le_bytes())?;
-            }
+        if frame.len() != bone_count as usize {
+            anyhow::bail!(
+                "Frame has {} bones, expected {}",
+                frame.len(),
+                bone_count
+            );
+        }
+
+        for bone in frame {
+            // Encode TRS to platform format (16 bytes)
+            let encoded = encode_bone_transform(bone.rotation, bone.position, bone.scale);
+            w.write_all(&encoded.to_bytes())?;
         }
     }
 

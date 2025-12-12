@@ -8,8 +8,8 @@ use hashbrown::HashMap;
 use z_common::ZDataPack;
 
 use super::{
-    BoneMatrix3x4, Font, PendingMesh, PendingMeshPacked, PendingSkeleton, PendingTexture,
-    SkeletonData, ZInitConfig,
+    BoneMatrix3x4, Font, LoadedKeyframeCollection, PendingKeyframes, PendingMesh,
+    PendingMeshPacked, PendingSkeleton, PendingTexture, SkeletonData, ZInitConfig,
 };
 
 /// FFI staging state for Emberware Z
@@ -43,6 +43,14 @@ pub struct ZFFIState {
     pub bound_skeleton: u32,
     /// Next skeleton handle to allocate
     pub next_skeleton_handle: u32,
+
+    // Keyframe system (animation clips stored on host)
+    /// Loaded keyframe collections (handles are 1-indexed)
+    pub keyframes: Vec<LoadedKeyframeCollection>,
+    /// Pending keyframe loads (processed after init())
+    pub pending_keyframes: Vec<PendingKeyframes>,
+    /// Next keyframe handle to allocate
+    pub next_keyframe_handle: u32,
 
     // Virtual Render Pass (direct recording)
     pub render_pass: crate::graphics::VirtualRenderPass,
@@ -138,6 +146,9 @@ impl Default for ZFFIState {
             skeletons: Vec::new(),
             bound_skeleton: 0,
             next_skeleton_handle: 1, // 0 reserved for "no skeleton"
+            keyframes: Vec::new(),
+            pending_keyframes: Vec::new(),
+            next_keyframe_handle: 1, // 0 reserved for "invalid"
             render_pass: crate::graphics::VirtualRenderPass::new(),
             mesh_map: hashbrown::HashMap::new(),
             pending_textures: Vec::new(),
@@ -419,6 +430,99 @@ impl ZFFIState {
             self.current_shading_state.flags = new_flags;
             self.shading_state_dirty = true;
         }
+    }
+
+    /// Update uniform alpha level in current shading state (dither transparency)
+    /// - 0: fully transparent (all pixels discarded)
+    /// - 15: fully opaque (no pixels discarded, default)
+    pub fn update_uniform_alpha(&mut self, alpha: u8) {
+        use crate::graphics::{FLAG_UNIFORM_ALPHA_MASK, FLAG_UNIFORM_ALPHA_SHIFT};
+
+        let alpha = alpha.min(15) as u32; // Clamp to 4 bits
+        let new_flags = (self.current_shading_state.flags & !FLAG_UNIFORM_ALPHA_MASK)
+            | (alpha << FLAG_UNIFORM_ALPHA_SHIFT);
+
+        if self.current_shading_state.flags != new_flags {
+            self.current_shading_state.flags = new_flags;
+            self.shading_state_dirty = true;
+        }
+    }
+
+    /// Update dither offset in current shading state
+    /// - x: 0-3 pixel shift in X axis
+    /// - y: 0-3 pixel shift in Y axis
+    /// Use different offsets for stacked transparent objects to prevent pattern cancellation
+    pub fn update_dither_offset(&mut self, x: u8, y: u8) {
+        use crate::graphics::{
+            FLAG_DITHER_OFFSET_X_MASK, FLAG_DITHER_OFFSET_X_SHIFT, FLAG_DITHER_OFFSET_Y_MASK,
+            FLAG_DITHER_OFFSET_Y_SHIFT,
+        };
+
+        let x = (x.min(3) as u32) << FLAG_DITHER_OFFSET_X_SHIFT;
+        let y = (y.min(3) as u32) << FLAG_DITHER_OFFSET_Y_SHIFT;
+        let new_flags = (self.current_shading_state.flags
+            & !FLAG_DITHER_OFFSET_X_MASK
+            & !FLAG_DITHER_OFFSET_Y_MASK)
+            | x
+            | y;
+
+        if self.current_shading_state.flags != new_flags {
+            self.current_shading_state.flags = new_flags;
+            self.shading_state_dirty = true;
+        }
+    }
+
+    // =========================================================================
+    // Material Override Flag Methods
+    // =========================================================================
+
+    /// Internal helper to update an override flag
+    fn update_override_flag(&mut self, flag: u32, enabled: bool) {
+        let new_flags = if enabled {
+            self.current_shading_state.flags | flag
+        } else {
+            self.current_shading_state.flags & !flag
+        };
+        if self.current_shading_state.flags != new_flags {
+            self.current_shading_state.flags = new_flags;
+            self.shading_state_dirty = true;
+        }
+    }
+
+    /// Update use_uniform_color flag
+    pub fn set_use_uniform_color(&mut self, enabled: bool) {
+        use crate::graphics::FLAG_USE_UNIFORM_COLOR;
+        self.update_override_flag(FLAG_USE_UNIFORM_COLOR, enabled);
+    }
+
+    /// Update use_uniform_metallic flag
+    pub fn set_use_uniform_metallic(&mut self, enabled: bool) {
+        use crate::graphics::FLAG_USE_UNIFORM_METALLIC;
+        self.update_override_flag(FLAG_USE_UNIFORM_METALLIC, enabled);
+    }
+
+    /// Update use_uniform_roughness flag
+    pub fn set_use_uniform_roughness(&mut self, enabled: bool) {
+        use crate::graphics::FLAG_USE_UNIFORM_ROUGHNESS;
+        self.update_override_flag(FLAG_USE_UNIFORM_ROUGHNESS, enabled);
+    }
+
+    /// Update use_uniform_emissive flag
+    pub fn set_use_uniform_emissive(&mut self, enabled: bool) {
+        use crate::graphics::FLAG_USE_UNIFORM_EMISSIVE;
+        self.update_override_flag(FLAG_USE_UNIFORM_EMISSIVE, enabled);
+    }
+
+    /// Update use_uniform_specular flag (Mode 3 only)
+    pub fn set_use_uniform_specular(&mut self, enabled: bool) {
+        use crate::graphics::FLAG_USE_UNIFORM_SPECULAR;
+        self.update_override_flag(FLAG_USE_UNIFORM_SPECULAR, enabled);
+    }
+
+    /// Update use_matcap_reflection flag (Mode 1 only)
+    pub fn set_use_matcap_reflection(&mut self, enabled: bool) {
+        use crate::graphics::FLAG_USE_MATCAP_REFLECTION;
+        self.update_override_flag(FLAG_USE_MATCAP_REFLECTION, enabled);
     }
 
     /// Check if a skeleton is currently bound (inverse bind mode enabled)
@@ -797,5 +901,159 @@ mod tests {
 
         // Should reuse the same buffer index
         assert_eq!(idx1, idx2);
+    }
+
+    // ========================================================================
+    // Dither Transparency Tests
+    // ========================================================================
+
+    #[test]
+    fn test_uniform_alpha_update() {
+        use crate::graphics::{FLAG_UNIFORM_ALPHA_MASK, FLAG_UNIFORM_ALPHA_SHIFT};
+
+        let mut ffi_state = ZFFIState::default();
+
+        // Default should be opaque (alpha = 15)
+        let alpha = (ffi_state.current_shading_state.flags & FLAG_UNIFORM_ALPHA_MASK)
+            >> FLAG_UNIFORM_ALPHA_SHIFT;
+        assert_eq!(alpha, 15);
+
+        // Update to 50% transparency
+        ffi_state.update_uniform_alpha(8);
+        let alpha = (ffi_state.current_shading_state.flags & FLAG_UNIFORM_ALPHA_MASK)
+            >> FLAG_UNIFORM_ALPHA_SHIFT;
+        assert_eq!(alpha, 8);
+        assert!(ffi_state.shading_state_dirty);
+
+        // Reset dirty flag and update to same value - should not mark dirty
+        ffi_state.shading_state_dirty = false;
+        ffi_state.update_uniform_alpha(8);
+        assert!(!ffi_state.shading_state_dirty);
+
+        // Update to different value - should mark dirty
+        ffi_state.update_uniform_alpha(0);
+        assert!(ffi_state.shading_state_dirty);
+        let alpha = (ffi_state.current_shading_state.flags & FLAG_UNIFORM_ALPHA_MASK)
+            >> FLAG_UNIFORM_ALPHA_SHIFT;
+        assert_eq!(alpha, 0);
+    }
+
+    #[test]
+    fn test_dither_offset_update() {
+        use crate::graphics::{
+            FLAG_DITHER_OFFSET_X_MASK, FLAG_DITHER_OFFSET_X_SHIFT, FLAG_DITHER_OFFSET_Y_MASK,
+            FLAG_DITHER_OFFSET_Y_SHIFT,
+        };
+
+        let mut ffi_state = ZFFIState::default();
+
+        // Default should be (0, 0)
+        let x = (ffi_state.current_shading_state.flags & FLAG_DITHER_OFFSET_X_MASK)
+            >> FLAG_DITHER_OFFSET_X_SHIFT;
+        let y = (ffi_state.current_shading_state.flags & FLAG_DITHER_OFFSET_Y_MASK)
+            >> FLAG_DITHER_OFFSET_Y_SHIFT;
+        assert_eq!(x, 0);
+        assert_eq!(y, 0);
+
+        // Update to (2, 3)
+        ffi_state.update_dither_offset(2, 3);
+
+        let x = (ffi_state.current_shading_state.flags & FLAG_DITHER_OFFSET_X_MASK)
+            >> FLAG_DITHER_OFFSET_X_SHIFT;
+        let y = (ffi_state.current_shading_state.flags & FLAG_DITHER_OFFSET_Y_MASK)
+            >> FLAG_DITHER_OFFSET_Y_SHIFT;
+
+        assert_eq!(x, 2);
+        assert_eq!(y, 3);
+        assert!(ffi_state.shading_state_dirty);
+    }
+
+    #[test]
+    fn test_dither_updates_preserve_other_flags() {
+        use crate::graphics::{
+            FLAG_SKINNING_MODE, FLAG_TEXTURE_FILTER_LINEAR, FLAG_UNIFORM_ALPHA_MASK,
+            FLAG_UNIFORM_ALPHA_SHIFT,
+        };
+
+        let mut ffi_state = ZFFIState::default();
+
+        // Set some other flags first
+        ffi_state.update_skinning_mode(true);
+        ffi_state.update_texture_filter(true);
+
+        // Verify they're set
+        assert_ne!(ffi_state.current_shading_state.flags & FLAG_SKINNING_MODE, 0);
+        assert_ne!(
+            ffi_state.current_shading_state.flags & FLAG_TEXTURE_FILTER_LINEAR,
+            0
+        );
+
+        // Update uniform_alpha
+        ffi_state.update_uniform_alpha(8);
+
+        // Verify other flags are preserved
+        assert_ne!(ffi_state.current_shading_state.flags & FLAG_SKINNING_MODE, 0);
+        assert_ne!(
+            ffi_state.current_shading_state.flags & FLAG_TEXTURE_FILTER_LINEAR,
+            0
+        );
+        assert_eq!(
+            (ffi_state.current_shading_state.flags & FLAG_UNIFORM_ALPHA_MASK)
+                >> FLAG_UNIFORM_ALPHA_SHIFT,
+            8
+        );
+
+        // Update dither_offset
+        ffi_state.update_dither_offset(1, 2);
+
+        // Verify all flags are still preserved
+        assert_ne!(ffi_state.current_shading_state.flags & FLAG_SKINNING_MODE, 0);
+        assert_ne!(
+            ffi_state.current_shading_state.flags & FLAG_TEXTURE_FILTER_LINEAR,
+            0
+        );
+        assert_eq!(
+            (ffi_state.current_shading_state.flags & FLAG_UNIFORM_ALPHA_MASK)
+                >> FLAG_UNIFORM_ALPHA_SHIFT,
+            8
+        );
+    }
+
+    #[test]
+    fn test_uniform_alpha_clamping() {
+        use crate::graphics::{FLAG_UNIFORM_ALPHA_MASK, FLAG_UNIFORM_ALPHA_SHIFT};
+
+        let mut ffi_state = ZFFIState::default();
+
+        // Values > 15 should be clamped to 15
+        ffi_state.update_uniform_alpha(100);
+        let alpha = (ffi_state.current_shading_state.flags & FLAG_UNIFORM_ALPHA_MASK)
+            >> FLAG_UNIFORM_ALPHA_SHIFT;
+        assert_eq!(alpha, 15);
+
+        // Values at boundary should work
+        ffi_state.update_uniform_alpha(15);
+        let alpha = (ffi_state.current_shading_state.flags & FLAG_UNIFORM_ALPHA_MASK)
+            >> FLAG_UNIFORM_ALPHA_SHIFT;
+        assert_eq!(alpha, 15);
+    }
+
+    #[test]
+    fn test_dither_offset_clamping() {
+        use crate::graphics::{
+            FLAG_DITHER_OFFSET_X_MASK, FLAG_DITHER_OFFSET_X_SHIFT, FLAG_DITHER_OFFSET_Y_MASK,
+            FLAG_DITHER_OFFSET_Y_SHIFT,
+        };
+
+        let mut ffi_state = ZFFIState::default();
+
+        // Values > 3 should be clamped
+        ffi_state.update_dither_offset(100, 200);
+        let x = (ffi_state.current_shading_state.flags & FLAG_DITHER_OFFSET_X_MASK)
+            >> FLAG_DITHER_OFFSET_X_SHIFT;
+        let y = (ffi_state.current_shading_state.flags & FLAG_DITHER_OFFSET_Y_MASK)
+            >> FLAG_DITHER_OFFSET_Y_SHIFT;
+        assert_eq!(x, 3);
+        assert_eq!(y, 3);
     }
 }

@@ -86,6 +86,7 @@ struct QuadVertexOut {
     @location(1) uv: vec2<f32>,
     @location(2) color: vec4<f32>,
     @location(3) @interpolate(flat) shading_state_index: u32,
+    @location(4) @interpolate(flat) mode: u32,
 }
 
 @vertex
@@ -118,6 +119,7 @@ fn vs(in: QuadVertexIn, @builtin(instance_index) instance_idx: u32) -> QuadVerte
     out.uv = mix(instance.uv.xy, instance.uv.zw, in.uv);
     out.color = unpack_rgba8(instance.color);
     out.shading_state_index = instance.shading_state_index;
+    out.mode = instance.mode;
     return out;
 }
 
@@ -128,5 +130,14 @@ fn fs(in: QuadVertexOut) -> @location(0) vec4<f32> {
     let tex_color = sample_filtered(slot0, shading.flags, in.uv);
     let color = tex_color.rgb * in.color.rgb * material_color.rgb;
     let alpha = tex_color.a * in.color.a * material_color.a;
+
+    // Dither transparency for 3D quads (billboards, world-space)
+    // Skip for screen-space UI/text which uses alpha blending instead
+    if in.mode != SCREEN_SPACE {
+        if should_discard_dither(in.clip_position.xy, shading.flags) {
+            discard;
+        }
+    }
+
     return vec4<f32>(color, alpha);
 }
