@@ -19,7 +19,7 @@
 #![no_main]
 
 use core::panic::PanicInfo;
-use examples_common::{checkerboard_8x8, color_to_u32};
+use examples_common::checkerboard_8x8;
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
@@ -105,7 +105,7 @@ static mut USE_UNIFORM_EMISSIVE_FLAG: u8 = 0;
 
 // Uniform material values used when overrides are enabled
 // These match what the non-UV sphere uses
-static mut UNIFORM_COLOR: [u8; 4] = [255, 180, 80, 255]; // Warm orange
+static mut UNIFORM_COLOR: u32 = 0xFFB450FF; // Warm orange
 static mut UNIFORM_METALLIC: f32 = 0.9;
 static mut UNIFORM_ROUGHNESS: f32 = 0.2;
 static mut UNIFORM_EMISSIVE: f32 = 0.0;
@@ -189,7 +189,7 @@ unsafe fn register_debug_values() {
 
     // Uniform values group - these are used when overrides are enabled
     debug_group_begin(b"Uniform Values".as_ptr(), 14);
-    debug_register_color(b"color".as_ptr(), 5, UNIFORM_COLOR.as_ptr());
+    debug_register_color(b"color".as_ptr(), 5, &UNIFORM_COLOR as *const u32 as *const u8);
     debug_register_f32(b"metallic".as_ptr(), 8, &UNIFORM_METALLIC);
     debug_register_f32(b"roughness".as_ptr(), 9, &UNIFORM_ROUGHNESS);
     debug_register_f32(b"emissive".as_ptr(), 8, &UNIFORM_EMISSIVE);
@@ -325,7 +325,7 @@ fn draw_uv_sphere(x: f32, y: f32, z: f32, radius: f32) {
         use_uniform_emissive(USE_UNIFORM_EMISSIVE_FLAG as u32);
 
         // Set uniform values (used when corresponding override flag is enabled)
-        set_color(color_to_u32(&UNIFORM_COLOR));
+        set_color(UNIFORM_COLOR);
         material_metallic(UNIFORM_METALLIC);
         material_roughness(UNIFORM_ROUGHNESS);
         material_emissive(UNIFORM_EMISSIVE);
@@ -357,7 +357,7 @@ fn draw_non_uv_sphere(x: f32, y: f32, z: f32, radius: f32) {
         use_uniform_emissive(1);
 
         // Set material values - these match the uniform values in the debug panel
-        set_color(color_to_u32(&UNIFORM_COLOR));
+        set_color(UNIFORM_COLOR);
         material_metallic(UNIFORM_METALLIC);
         material_roughness(UNIFORM_ROUGHNESS);
         material_emissive(UNIFORM_EMISSIVE);

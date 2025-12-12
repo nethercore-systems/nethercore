@@ -19,7 +19,6 @@
 #![no_main]
 
 use core::panic::PanicInfo;
-use examples_common::color_to_u32;
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
@@ -91,17 +90,17 @@ const BUTTON_A: u32 = 4;
 // Shape settings
 static mut SHAPE_INDEX: i32 = 0; // 0=Sphere, 1=Cube, 2=Torus
 static mut ROTATION_SPEED: f32 = 30.0; // degrees per second
-static mut OBJECT_COLOR: [u8; 4] = [255, 255, 255, 255]; // RGBA
+static mut OBJECT_COLOR: u32 = 0xFFFFFFFF; // White
 
 // Sky settings
-static mut HORIZON_COLOR: [u8; 4] = [178, 216, 242, 255]; // Light blue
-static mut ZENITH_COLOR: [u8; 4] = [51, 102, 178, 255]; // Darker blue
+static mut HORIZON_COLOR: u32 = 0xB2D8F2FF; // Light blue
+static mut ZENITH_COLOR: u32 = 0x3366B2FF; // Darker blue
 
 // Sun settings
 static mut SUN_DIR_X: f32 = 0.5;
 static mut SUN_DIR_Y: f32 = -0.7;
 static mut SUN_DIR_Z: f32 = 0.5;
-static mut SUN_COLOR: [u8; 4] = [255, 242, 230, 255]; // Warm white
+static mut SUN_COLOR: u32 = 0xFFF2E6FF; // Warm white
 static mut SUN_SHARPNESS: f32 = 0.98;
 
 // ============================================================================
@@ -168,13 +167,13 @@ unsafe fn register_debug_values() {
     debug_group_begin(b"shape".as_ptr(), 5);
     debug_register_i32(b"index (0-2)".as_ptr(), 11, &SHAPE_INDEX);
     debug_register_f32(b"rotation_speed".as_ptr(), 14, &ROTATION_SPEED);
-    debug_register_color(b"color".as_ptr(), 5, OBJECT_COLOR.as_ptr());
+    debug_register_color(b"color".as_ptr(), 5, &OBJECT_COLOR as *const u32 as *const u8);
     debug_group_end();
 
     // Sky group
     debug_group_begin(b"sky".as_ptr(), 3);
-    debug_register_color(b"horizon".as_ptr(), 7, HORIZON_COLOR.as_ptr());
-    debug_register_color(b"zenith".as_ptr(), 6, ZENITH_COLOR.as_ptr());
+    debug_register_color(b"horizon".as_ptr(), 7, &HORIZON_COLOR as *const u32 as *const u8);
+    debug_register_color(b"zenith".as_ptr(), 6, &ZENITH_COLOR as *const u32 as *const u8);
     debug_group_end();
 
     // Sun group
@@ -182,7 +181,7 @@ unsafe fn register_debug_values() {
     debug_register_f32(b"dir_x".as_ptr(), 5, &SUN_DIR_X);
     debug_register_f32(b"dir_y".as_ptr(), 5, &SUN_DIR_Y);
     debug_register_f32(b"dir_z".as_ptr(), 5, &SUN_DIR_Z);
-    debug_register_color(b"color".as_ptr(), 5, SUN_COLOR.as_ptr());
+    debug_register_color(b"color".as_ptr(), 5, &SUN_COLOR as *const u32 as *const u8);
     debug_register_f32(b"sharpness".as_ptr(), 9, &SUN_SHARPNESS);
     debug_group_end();
 }
@@ -213,21 +212,15 @@ pub extern "C" fn update() {
 pub extern "C" fn render() {
     unsafe {
         // Configure and draw sky
-        let horizon = color_to_u32(&HORIZON_COLOR);
-        let zenith = color_to_u32(&ZENITH_COLOR);
-        sky_set_colors(horizon, zenith);
-
-        let sun_color = color_to_u32(&SUN_COLOR);
-        sky_set_sun(SUN_DIR_X, SUN_DIR_Y, SUN_DIR_Z, sun_color, SUN_SHARPNESS);
+        sky_set_colors(HORIZON_COLOR, ZENITH_COLOR);
+        sky_set_sun(SUN_DIR_X, SUN_DIR_Y, SUN_DIR_Z, SUN_COLOR, SUN_SHARPNESS);
         draw_sky();
 
         // Draw current shape
         push_identity();
         push_rotate_y(ROTATION_Y);
         push_rotate_x(ROTATION_X);
-
-        let obj_color = color_to_u32(&OBJECT_COLOR);
-        set_color(obj_color);
+        set_color(OBJECT_COLOR);
 
         let mesh = match SHAPE_INDEX {
             0 => SPHERE_MESH,
