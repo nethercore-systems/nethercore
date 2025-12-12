@@ -6,8 +6,8 @@ use serde::Deserialize;
 use std::path::PathBuf;
 
 use z_common::{
-    vertex_stride_packed, EmberZMeshHeader, PackedData, PackedMesh, PackedSound, PackedTexture,
-    ZDataPack, ZMetadata, ZRom, EWZ_VERSION,
+    vertex_stride_packed, EmberZAnimationHeader, EmberZMeshHeader, PackedData, PackedKeyframes,
+    PackedMesh, PackedSound, PackedTexture, ZDataPack, ZMetadata, ZRom, EWZ_VERSION,
 };
 
 /// Arguments for the pack command
@@ -54,6 +54,8 @@ struct AssetsSection {
     textures: Vec<AssetEntry>,
     #[serde(default)]
     meshes: Vec<AssetEntry>,
+    #[serde(default)]
+    keyframes: Vec<AssetEntry>,
     #[serde(default)]
     sounds: Vec<AssetEntry>,
     #[serde(default)]
@@ -187,7 +189,7 @@ fn load_assets(project_dir: &std::path::Path, assets: &AssetsSection) -> Result<
         );
     }
 
-    // Load meshes (not implemented yet - requires mesh format support)
+    // Load meshes
     for entry in &assets.meshes {
         let path = project_dir.join(&entry.path);
         let mesh = load_mesh(&entry.id, &path)?;
@@ -197,6 +199,17 @@ fn load_assets(project_dir: &std::path::Path, assets: &AssetsSection) -> Result<
             entry.id,
             pack.meshes.last().unwrap().vertex_count
         );
+    }
+
+    // Load keyframes (animation clips)
+    for entry in &assets.keyframes {
+        let path = project_dir.join(&entry.path);
+        let keyframes = load_keyframes(&entry.id, &path)?;
+        println!(
+            "  Keyframes: {} ({} bones, {} frames)",
+            entry.id, keyframes.bone_count, keyframes.frame_count
+        );
+        pack.keyframes.push(keyframes);
     }
 
     // Load sounds
@@ -296,6 +309,58 @@ fn load_mesh(id: &str, path: &std::path::Path) -> Result<PackedMesh> {
         index_count: header.index_count,
         vertex_data,
         index_data,
+    })
+}
+
+/// Load keyframes from .ewzanim file
+///
+/// The new platform format (16 bytes per bone per frame):
+/// - Header: 4 bytes (bone_count u8, flags u8, frame_count u16 LE)
+/// - Data: frame_count × bone_count × 16 bytes
+fn load_keyframes(id: &str, path: &std::path::Path) -> Result<PackedKeyframes> {
+    let data = std::fs::read(path)
+        .with_context(|| format!("Failed to load keyframes: {}", path.display()))?;
+
+    // Parse header
+    let header = EmberZAnimationHeader::from_bytes(&data)
+        .context("Failed to parse keyframes header - file may be corrupted or wrong format")?;
+
+    // Copy values from packed struct to avoid alignment issues
+    let bone_count = header.bone_count;
+    let frame_count = header.frame_count;
+    let flags = header.flags;
+
+    // Validate header
+    if !header.validate() {
+        anyhow::bail!(
+            "Invalid keyframes header (bone_count={}, frame_count={}, flags={}): {}",
+            bone_count,
+            frame_count,
+            flags,
+            path.display()
+        );
+    }
+
+    // Validate data size
+    let expected_size = header.file_size();
+    if data.len() < expected_size {
+        anyhow::bail!(
+            "Keyframes data too small: {} bytes, expected {} (bones: {}, frames: {})",
+            data.len(),
+            expected_size,
+            bone_count,
+            frame_count
+        );
+    }
+
+    // Extract frame data (skip header)
+    let frame_data = data[EmberZAnimationHeader::SIZE..expected_size].to_vec();
+
+    Ok(PackedKeyframes {
+        id: id.to_string(),
+        bone_count,
+        frame_count,
+        data: frame_data,
     })
 }
 
@@ -663,5 +728,86 @@ version = "1.0.0"
 
         // All features
         assert_eq!(vertex_stride_packed(15), 28);
+    }
+
+    #[test]
+    fn test_load_keyframes_ewzanim() {
+        let dir = tempdir().unwrap();
+        let anim_path = dir.path().join("test.ewzanim");
+
+        // Create a minimal .ewzanim file
+        // 2 bones, 3 frames (2 * 3 * 16 = 96 bytes of data)
+        let header = EmberZAnimationHeader::new(2, 3);
+        let mut anim_data = header.to_bytes().to_vec();
+
+        // Add frame data (96 bytes)
+        anim_data.extend_from_slice(&[0u8; 96]);
+
+        std::fs::write(&anim_path, &anim_data).unwrap();
+
+        // Load it
+        let packed = load_keyframes("test_anim", &anim_path).unwrap();
+        assert_eq!(packed.id, "test_anim");
+        assert_eq!(packed.bone_count, 2);
+        assert_eq!(packed.frame_count, 3);
+        assert_eq!(packed.data.len(), 96);
+        assert!(packed.validate());
+    }
+
+    #[test]
+    fn test_load_keyframes_invalid_header() {
+        let dir = tempdir().unwrap();
+        let bad_path = dir.path().join("bad.ewzanim");
+
+        // Invalid header (bone_count = 0)
+        let mut data = vec![0u8; 4];
+        data[0] = 0; // bone_count = 0 (invalid)
+        data[1] = 0; // flags
+        data[2] = 10; // frame_count LSB
+        data[3] = 0; // frame_count MSB
+
+        std::fs::write(&bad_path, &data).unwrap();
+
+        let result = load_keyframes("bad", &bad_path);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_load_keyframes_truncated() {
+        let dir = tempdir().unwrap();
+        let trunc_path = dir.path().join("truncated.ewzanim");
+
+        // Valid header but truncated data
+        let header = EmberZAnimationHeader::new(5, 10); // 5 bones, 10 frames = 800 bytes
+        let mut data = header.to_bytes().to_vec();
+        data.extend_from_slice(&[0u8; 100]); // Only 100 bytes instead of 800
+
+        std::fs::write(&trunc_path, &data).unwrap();
+
+        let result = load_keyframes("truncated", &trunc_path);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_manifest_with_keyframes() {
+        let manifest_toml = r#"
+[game]
+id = "anim-game"
+title = "Animation Game"
+author = "Author"
+version = "0.1.0"
+
+[[assets.keyframes]]
+id = "walk"
+path = "assets/walk.ewzanim"
+
+[[assets.keyframes]]
+id = "run"
+path = "assets/run.ewzanim"
+"#;
+        let manifest: EmberManifest = toml::from_str(manifest_toml).unwrap();
+        assert_eq!(manifest.assets.keyframes.len(), 2);
+        assert_eq!(manifest.assets.keyframes[0].id, "walk");
+        assert_eq!(manifest.assets.keyframes[1].id, "run");
     }
 }

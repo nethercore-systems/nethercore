@@ -23,9 +23,18 @@ pub use packing::{
 
 // Re-export commonly used format items
 pub use formats::{
-    EmberZAnimationHeader, EmberZMeshHeader, EmberZSkeletonHeader, EmberZSoundHeader,
-    EmberZTextureHeader, PackedData, PackedFont, PackedGlyph, PackedMesh, PackedSkeleton,
-    PackedSound, PackedTexture, ZDataPack, ZMetadata, ZRom, BONE_TRANSFORM_SIZE, EWZ_ANIMATION_EXT,
-    EWZ_MAGIC, EWZ_MESH_EXT, EWZ_SKELETON_EXT, EWZ_SOUND_EXT, EWZ_TEXTURE_EXT, EWZ_VERSION,
-    INVERSE_BIND_MATRIX_SIZE, SAMPLE_RATE,
+    // Animation types
+    decode_bone_transform, decode_quat_smallest_three, encode_bone_transform,
+    encode_quat_smallest_three, f16_to_f32, f32_to_f16, BoneTransform, EmberZAnimationHeader,
+    PlatformBoneKeyframe, BONE_TRANSFORM_SIZE, PLATFORM_BONE_KEYFRAME_SIZE,
+    // Mesh/texture/skeleton types
+    EmberZMeshHeader, EmberZSkeletonHeader, EmberZSoundHeader, EmberZTextureHeader,
+    // Data pack types
+    PackedData, PackedFont, PackedGlyph, PackedKeyframes, PackedMesh, PackedSkeleton, PackedSound,
+    PackedTexture, ZDataPack,
+    // ROM types
+    ZMetadata, ZRom,
+    // Constants
+    EWZ_ANIMATION_EXT, EWZ_MAGIC, EWZ_MESH_EXT, EWZ_SKELETON_EXT, EWZ_SOUND_EXT, EWZ_TEXTURE_EXT,
+    EWZ_VERSION, INVERSE_BIND_MATRIX_SIZE, SAMPLE_RATE,
 };

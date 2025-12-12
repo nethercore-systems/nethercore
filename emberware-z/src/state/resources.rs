@@ -57,3 +57,12 @@ pub struct PendingMeshPacked {
     pub vertex_data: Vec<u8>, // Packed bytes (f16, snorm16, unorm8)
     pub index_data: Option<Vec<u16>>,
 }
+
+/// Pending keyframe collection load request (created during init)
+#[derive(Debug)]
+pub struct PendingKeyframes {
+    pub handle: u32,
+    pub bone_count: u8,
+    pub frame_count: u16,
+    pub data: Vec<u8>, // Platform format (16 bytes per bone per frame)
+}
