@@ -1,7 +1,7 @@
 //! Material Override Demo (Mode 2 PBR)
 //!
 //! Demonstrates the material override flags feature for switching between
-//! texture sampling and uniform values at runtime.
+//! texture sampling and uniform values at runtime when using UV-mapped meshes.
 //!
 //! Features:
 //! - Side-by-side comparison of textured vs uniform materials
@@ -10,7 +10,7 @@
 //!
 //! Usage:
 //! 1. Run the game
-//! 2. Press F3 to open the debug panel
+//! 2. Press F4 to open the debug panel
 //! 3. Toggle the override flags to see the difference
 //! 4. The left sphere uses textures, right sphere uses uniform overrides
 
@@ -63,8 +63,12 @@ extern "C" {
     fn light_color(index: u32, color: u32);
     fn light_intensity(index: u32, intensity: f32);
 
-    // Procedural mesh generation
-    fn sphere(radius: f32, segments: u32, rings: u32) -> u32;
+    // Procedural mesh generation (UV version for texture support)
+    fn sphere_uv(radius: f32, segments: u32, rings: u32) -> u32;
+
+    // Texture loading and binding
+    fn load_texture(width: u32, height: u32, data_ptr: *const u8) -> u32;
+    fn texture_bind(handle: u32);
 
     // Mesh drawing
     fn draw_mesh(handle: u32);
@@ -102,6 +106,12 @@ static mut UNIFORM_EMISSIVE: f32 = 0.0;
 // Mesh handles
 static mut SPHERE_MESH: u32 = 0;
 
+// Texture handles
+static mut CHECKER_TEXTURE: u32 = 0;
+
+// Checkerboard texture buffer (8x8 RGBA = 256 bytes)
+static mut CHECKER_DATA: [u8; 256] = [0; 256];
+
 // Animation
 static mut ROTATION: f32 = 0.0;
 
@@ -127,8 +137,12 @@ pub extern "C" fn init() {
         light_color(1, 0x8080FFFF);
         light_intensity(1, 0.3);
 
-        // Generate sphere mesh
-        SPHERE_MESH = sphere(1.0, 24, 12);
+        // Generate sphere mesh with UVs (required for texture override demo)
+        SPHERE_MESH = sphere_uv(1.0, 24, 12);
+
+        // Create checkerboard texture (8x8, cyan/magenta pattern)
+        create_checkerboard_texture();
+        CHECKER_TEXTURE = load_texture(8, 8, CHECKER_DATA.as_ptr());
 
         // Register debug values
         register_debug_values();
@@ -193,7 +207,7 @@ pub extern "C" fn render() {
             title_color,
         );
         draw_text(
-            b"Press F3 for debug panel".as_ptr(),
+            b"Press F4 for debug panel".as_ptr(),
             24,
             -0.2,
             0.35,
@@ -227,7 +241,7 @@ pub extern "C" fn render() {
             label_color,
         );
         draw_text(
-            b"(toggle in F3)".as_ptr(),
+            b"(toggle in F4)".as_ptr(),
             14,
             0.16,
             -0.33,
@@ -241,17 +255,20 @@ pub extern "C" fn render() {
 // Rendering Helpers
 // ============================================================================
 
-/// Draw a sphere with default material (no overrides)
+/// Draw a sphere with default material (no overrides) - shows texture
 fn draw_sphere_default(x: f32, y: f32, z: f32, radius: f32) {
     unsafe {
-        // Disable all overrides - use default/texture values
+        // Bind checkerboard texture to slot 0 (albedo)
+        texture_bind(CHECKER_TEXTURE);
+
+        // Disable all overrides - use texture values
         use_uniform_color(0);
         use_uniform_metallic(0);
         use_uniform_roughness(0);
         use_uniform_emissive(0);
 
-        // Set default material values (these are used when no texture is bound)
-        set_color(0xCCCCCCFF); // Gray
+        // Set default material values (multiplied with texture)
+        set_color(0xFFFFFFFF); // White (don't tint texture)
         material_metallic(0.0);
         material_roughness(0.5);
         material_emissive(0.0);
@@ -268,6 +285,9 @@ fn draw_sphere_default(x: f32, y: f32, z: f32, radius: f32) {
 /// Draw a sphere with uniform overrides based on debug panel settings
 fn draw_sphere_with_overrides(x: f32, y: f32, z: f32, radius: f32) {
     unsafe {
+        // Bind same checkerboard texture (will be overridden when flag is set)
+        texture_bind(CHECKER_TEXTURE);
+
         // Apply override flags from debug panel
         use_uniform_color(USE_UNIFORM_COLOR as u32);
         use_uniform_metallic(USE_UNIFORM_METALLIC as u32);
@@ -298,4 +318,23 @@ fn draw_sphere_with_overrides(x: f32, y: f32, z: f32, radius: f32) {
 /// Convert RGBA bytes to u32 color (0xRRGGBBAA format)
 fn color_to_u32(rgba: &[u8; 4]) -> u32 {
     ((rgba[0] as u32) << 24) | ((rgba[1] as u32) << 16) | ((rgba[2] as u32) << 8) | (rgba[3] as u32)
+}
+
+/// Create a checkerboard texture pattern in CHECKER_DATA buffer
+unsafe fn create_checkerboard_texture() {
+    // 8x8 checkerboard with cyan and magenta squares
+    let cyan: [u8; 4] = [0, 200, 200, 255];
+    let magenta: [u8; 4] = [200, 0, 200, 255];
+
+    for y in 0..8 {
+        for x in 0..8 {
+            let idx = (y * 8 + x) * 4;
+            let is_light = ((x + y) % 2) == 0;
+            let color = if is_light { &cyan } else { &magenta };
+            CHECKER_DATA[idx] = color[0];
+            CHECKER_DATA[idx + 1] = color[1];
+            CHECKER_DATA[idx + 2] = color[2];
+            CHECKER_DATA[idx + 3] = color[3];
+        }
+    }
 }
