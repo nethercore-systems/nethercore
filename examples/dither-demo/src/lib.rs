@@ -1,12 +1,13 @@
 //! Dither Transparency Demo
 //!
 //! Demonstrates the always-on dither transparency system with:
+//! - Side-by-side comparison: same offsets vs unique offsets
 //! - Multiple meshes at different alpha levels (0-15)
-//! - Overlapping meshes with different dither offsets
 //! - Debug controls for real-time tweaking
 //!
 //! Controls:
 //! - Left stick: Rotate scene
+//! - A button: Toggle between comparison mode and single group
 //! - F3: Open debug panel to tweak alpha levels and offsets
 //! - F5: Pause, F6: Step frame
 //!
@@ -39,6 +40,7 @@ extern "C" {
     fn camera_fov(fov_degrees: f32);
 
     // Input
+    fn button_pressed(player: u32, button: u32) -> u32;
     fn left_stick_x(player: u32) -> f32;
     fn left_stick_y(player: u32) -> f32;
 
@@ -56,7 +58,6 @@ extern "C" {
     fn push_translate(x: f32, y: f32, z: f32);
     fn push_rotate_x(angle_deg: f32);
     fn push_rotate_y(angle_deg: f32);
-    fn push_scale(x: f32, y: f32, z: f32);
 
     // Render state
     fn set_color(color: u32);
@@ -84,6 +85,9 @@ extern "C" {
     fn debug_register_bool(name: *const u8, name_len: u32, ptr: *const u8);
 }
 
+// Button constants
+const BUTTON_A: u32 = 1;
+
 // ============================================================================
 // State
 // ============================================================================
@@ -91,29 +95,32 @@ extern "C" {
 // Mesh handles
 static mut SPHERE_MESH: u32 = 0;
 static mut CUBE_MESH: u32 = 0;
-static mut TORUS_MESH: u32 = 0;
 static mut GROUND_MESH: u32 = 0;
 
 // Scene rotation
 static mut ROTATION_Y: f32 = 0.0;
-static mut ROTATION_X: f32 = 15.0;
+static mut ROTATION_X: f32 = 20.0;
+
+// Display mode: 0 = comparison (side-by-side), 1 = single group with tweakable offsets
+static mut DISPLAY_MODE: i32 = 0;
 
 // Debug-tweakable values
-static mut ALPHA_SPHERE_1: i32 = 15; // Front sphere - opaque
-static mut ALPHA_SPHERE_2: i32 = 10; // Middle sphere - 63% opaque
-static mut ALPHA_SPHERE_3: i32 = 5;  // Back sphere - 31% opaque
-static mut ALPHA_CUBE: i32 = 8;      // Cube - 50% opaque
-static mut ALPHA_TORUS: i32 = 12;    // Torus - 75% opaque
-static mut ALPHA_GROUND: i32 = 15;   // Ground - opaque
+static mut ALPHA_FRONT: i32 = 8;  // Front sphere - 50% opaque
+static mut ALPHA_MID: i32 = 8;    // Middle sphere - 50% opaque
+static mut ALPHA_BACK: i32 = 8;   // Back sphere - 50% opaque
+static mut ALPHA_GROUND: i32 = 15; // Ground - opaque
 
-// Dither offsets for overlapping objects
-static mut OFFSET_SPHERE_1: i32 = 0;
-static mut OFFSET_SPHERE_2: i32 = 1;
-static mut OFFSET_SPHERE_3: i32 = 2;
+// Dither offsets for single-group mode
+static mut OFFSET_FRONT: i32 = 0;
+static mut OFFSET_MID: i32 = 1;
+static mut OFFSET_BACK: i32 = 2;
+
+// Toggle for single-group mode: use unique offsets or all same
+static mut USE_UNIQUE_OFFSETS: u8 = 1;
 
 // Animation
 static mut AUTO_ROTATE: u8 = 1;
-static mut ROTATION_SPEED: f32 = 20.0;
+static mut ROTATION_SPEED: f32 = 15.0;
 
 // ============================================================================
 // Implementation
@@ -131,8 +138,8 @@ pub extern "C" fn init() {
         // Enable depth testing
         depth_test(1);
 
-        // Set up camera
-        camera_set(0.0, 4.0, 10.0, 0.0, 0.0, 0.0);
+        // Set up camera - pulled back to see both groups
+        camera_set(0.0, 5.0, 12.0, 0.0, 0.0, 0.0);
         camera_fov(50.0);
 
         // Set up sky for ambient lighting
@@ -140,10 +147,9 @@ pub extern "C" fn init() {
         sky_set_sun(-0.5, -1.0, -0.5, 0xFFEEDDFF, 0.8);
 
         // Generate meshes
-        SPHERE_MESH = sphere(1.0, 24, 12);
-        CUBE_MESH = cube(1.5, 1.5, 1.5);
-        TORUS_MESH = torus(1.2, 0.4, 24, 12);
-        GROUND_MESH = plane(8.0, 8.0, 1, 1);
+        SPHERE_MESH = sphere(0.8, 24, 12);
+        CUBE_MESH = cube(1.2, 1.2, 1.2);
+        GROUND_MESH = plane(12.0, 8.0, 1, 1);
 
         // Register debug values
         register_debug_values();
@@ -151,21 +157,25 @@ pub extern "C" fn init() {
 }
 
 unsafe fn register_debug_values() {
+    // Display mode
+    debug_group_begin(b"display".as_ptr(), 7);
+    debug_register_i32(b"mode (0=compare, 1=single)".as_ptr(), 25, &DISPLAY_MODE);
+    debug_group_end();
+
     // Alpha levels group
     debug_group_begin(b"alpha levels".as_ptr(), 12);
-    debug_register_i32(b"sphere_front (0-15)".as_ptr(), 18, &ALPHA_SPHERE_1);
-    debug_register_i32(b"sphere_mid (0-15)".as_ptr(), 16, &ALPHA_SPHERE_2);
-    debug_register_i32(b"sphere_back (0-15)".as_ptr(), 17, &ALPHA_SPHERE_3);
-    debug_register_i32(b"cube (0-15)".as_ptr(), 10, &ALPHA_CUBE);
-    debug_register_i32(b"torus (0-15)".as_ptr(), 11, &ALPHA_TORUS);
+    debug_register_i32(b"front (0-15)".as_ptr(), 11, &ALPHA_FRONT);
+    debug_register_i32(b"mid (0-15)".as_ptr(), 9, &ALPHA_MID);
+    debug_register_i32(b"back (0-15)".as_ptr(), 10, &ALPHA_BACK);
     debug_register_i32(b"ground (0-15)".as_ptr(), 12, &ALPHA_GROUND);
     debug_group_end();
 
-    // Dither offsets group (for overlapping spheres)
-    debug_group_begin(b"dither offsets".as_ptr(), 14);
-    debug_register_i32(b"sphere_front (0-3)".as_ptr(), 17, &OFFSET_SPHERE_1);
-    debug_register_i32(b"sphere_mid (0-3)".as_ptr(), 15, &OFFSET_SPHERE_2);
-    debug_register_i32(b"sphere_back (0-3)".as_ptr(), 16, &OFFSET_SPHERE_3);
+    // Dither offsets group (for single-group mode)
+    debug_group_begin(b"offsets (single mode)".as_ptr(), 20);
+    debug_register_bool(b"use_unique_offsets".as_ptr(), 18, &USE_UNIQUE_OFFSETS);
+    debug_register_i32(b"front (0-3)".as_ptr(), 10, &OFFSET_FRONT);
+    debug_register_i32(b"mid (0-3)".as_ptr(), 8, &OFFSET_MID);
+    debug_register_i32(b"back (0-3)".as_ptr(), 9, &OFFSET_BACK);
     debug_group_end();
 
     // Animation group
@@ -178,6 +188,11 @@ unsafe fn register_debug_values() {
 #[no_mangle]
 pub extern "C" fn update() {
     unsafe {
+        // Toggle display mode with A button
+        if button_pressed(0, BUTTON_A) != 0 {
+            DISPLAY_MODE = if DISPLAY_MODE == 0 { 1 } else { 0 };
+        }
+
         // Manual rotation with left stick
         let stick_x = left_stick_x(0);
         let stick_y = left_stick_y(0);
@@ -211,116 +226,184 @@ pub extern "C" fn update() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
-        let time = elapsed_time();
-
-        // ====================================================================
-        // Draw ground plane (opaque by default, can be tweaked)
-        // ====================================================================
+        // Draw ground plane
         push_identity();
         push_translate(0.0, -2.0, 0.0);
-        set_color(0x505070FF);
+        set_color(0x404055FF);
         uniform_alpha(clamp_alpha(ALPHA_GROUND));
         dither_offset(0, 0);
         draw_mesh(GROUND_MESH);
 
-        // ====================================================================
-        // Draw torus (rotating, partially transparent)
-        // ====================================================================
-        push_identity();
-        push_rotate_y(ROTATION_Y);
-        push_rotate_x(ROTATION_X);
-        push_translate(0.0, 0.0, 0.0);
-        push_rotate_y(time * 30.0); // Additional spin
+        if DISPLAY_MODE == 0 {
+            render_comparison_mode();
+        } else {
+            render_single_mode();
+        }
 
-        set_color(0xFFAA66FF); // Orange
-        uniform_alpha(clamp_alpha(ALPHA_TORUS));
-        dither_offset(0, 0);
-        draw_mesh(TORUS_MESH);
-
-        // ====================================================================
-        // Draw three overlapping spheres to demonstrate dither offset
-        // Without different offsets, overlapping dithered objects cancel out
-        // ====================================================================
-
-        // Back sphere (most transparent)
-        push_identity();
-        push_rotate_y(ROTATION_Y);
-        push_rotate_x(ROTATION_X);
-        push_translate(0.0, 0.5, -1.5);
-
-        set_color(0x6666FFFF); // Blue
-        uniform_alpha(clamp_alpha(ALPHA_SPHERE_3));
-        dither_offset(
-            clamp_offset(OFFSET_SPHERE_3) as u32,
-            clamp_offset(OFFSET_SPHERE_3) as u32,
-        );
-        draw_mesh(SPHERE_MESH);
-
-        // Middle sphere
-        push_identity();
-        push_rotate_y(ROTATION_Y);
-        push_rotate_x(ROTATION_X);
-        push_translate(0.0, 0.5, 0.0);
-
-        set_color(0x66FF66FF); // Green
-        uniform_alpha(clamp_alpha(ALPHA_SPHERE_2));
-        dither_offset(
-            clamp_offset(OFFSET_SPHERE_2) as u32,
-            clamp_offset(OFFSET_SPHERE_2) as u32,
-        );
-        draw_mesh(SPHERE_MESH);
-
-        // Front sphere
-        push_identity();
-        push_rotate_y(ROTATION_Y);
-        push_rotate_x(ROTATION_X);
-        push_translate(0.0, 0.5, 1.5);
-
-        set_color(0xFF6666FF); // Red
-        uniform_alpha(clamp_alpha(ALPHA_SPHERE_1));
-        dither_offset(
-            clamp_offset(OFFSET_SPHERE_1) as u32,
-            clamp_offset(OFFSET_SPHERE_1) as u32,
-        );
-        draw_mesh(SPHERE_MESH);
-
-        // ====================================================================
-        // Draw cube (off to the side)
-        // ====================================================================
-        push_identity();
-        push_rotate_y(ROTATION_Y);
-        push_rotate_x(ROTATION_X);
-        push_translate(3.0, 0.0, 0.0);
-        push_rotate_y(time * 45.0);
-
-        set_color(0xFFFF66FF); // Yellow
-        uniform_alpha(clamp_alpha(ALPHA_CUBE));
-        dither_offset(0, 0);
-        draw_mesh(CUBE_MESH);
-
-        // ====================================================================
         // Reset to opaque for UI
-        // ====================================================================
         uniform_alpha(15);
         dither_offset(0, 0);
 
-        // Draw UI instructions
-        let title = "Dither Transparency Demo";
-        draw_text(title.as_ptr(), title.len() as u32, 10.0, 10.0, 24.0, 0xFFFFFFFF);
-
-        let instructions = "F3: Debug Panel | Left Stick: Rotate | Try changing alpha levels!";
-        draw_text(
-            instructions.as_ptr(),
-            instructions.len() as u32,
-            10.0,
-            40.0,
-            14.0,
-            0xAAAAAAFF,
-        );
-
-        let tip = "Tip: Set sphere offsets to same value to see pattern cancellation";
-        draw_text(tip.as_ptr(), tip.len() as u32, 10.0, 60.0, 12.0, 0x888888FF);
+        // Draw UI
+        render_ui();
     }
+}
+
+/// Render side-by-side comparison: same offsets vs unique offsets
+unsafe fn render_comparison_mode() {
+    // ========================================================================
+    // LEFT GROUP: Same offset (0,0) - shows pattern cancellation
+    // ========================================================================
+    let left_x = -3.0;
+
+    // Back sphere (blue)
+    push_identity();
+    push_rotate_y(ROTATION_Y);
+    push_rotate_x(ROTATION_X);
+    push_translate(left_x, 0.5, -1.2);
+    set_color(0x6688FFFF);
+    uniform_alpha(clamp_alpha(ALPHA_BACK));
+    dither_offset(0, 0); // Same offset!
+    draw_mesh(SPHERE_MESH);
+
+    // Middle sphere (green)
+    push_identity();
+    push_rotate_y(ROTATION_Y);
+    push_rotate_x(ROTATION_X);
+    push_translate(left_x, 0.5, 0.0);
+    set_color(0x66FF88FF);
+    uniform_alpha(clamp_alpha(ALPHA_MID));
+    dither_offset(0, 0); // Same offset!
+    draw_mesh(SPHERE_MESH);
+
+    // Front sphere (red)
+    push_identity();
+    push_rotate_y(ROTATION_Y);
+    push_rotate_x(ROTATION_X);
+    push_translate(left_x, 0.5, 1.2);
+    set_color(0xFF6688FF);
+    uniform_alpha(clamp_alpha(ALPHA_FRONT));
+    dither_offset(0, 0); // Same offset!
+    draw_mesh(SPHERE_MESH);
+
+    // ========================================================================
+    // RIGHT GROUP: Unique offsets - correct layering
+    // ========================================================================
+    let right_x = 3.0;
+
+    // Back sphere (blue)
+    push_identity();
+    push_rotate_y(ROTATION_Y);
+    push_rotate_x(ROTATION_X);
+    push_translate(right_x, 0.5, -1.2);
+    set_color(0x6688FFFF);
+    uniform_alpha(clamp_alpha(ALPHA_BACK));
+    dither_offset(2, 2); // Unique offset
+    draw_mesh(SPHERE_MESH);
+
+    // Middle sphere (green)
+    push_identity();
+    push_rotate_y(ROTATION_Y);
+    push_rotate_x(ROTATION_X);
+    push_translate(right_x, 0.5, 0.0);
+    set_color(0x66FF88FF);
+    uniform_alpha(clamp_alpha(ALPHA_MID));
+    dither_offset(1, 1); // Unique offset
+    draw_mesh(SPHERE_MESH);
+
+    // Front sphere (red)
+    push_identity();
+    push_rotate_y(ROTATION_Y);
+    push_rotate_x(ROTATION_X);
+    push_translate(right_x, 0.5, 1.2);
+    set_color(0xFF6688FF);
+    uniform_alpha(clamp_alpha(ALPHA_FRONT));
+    dither_offset(0, 0); // Unique offset
+    draw_mesh(SPHERE_MESH);
+}
+
+/// Render single group with tweakable offsets
+unsafe fn render_single_mode() {
+    let center_x = 0.0;
+
+    // Determine offsets based on toggle
+    let (off_front, off_mid, off_back) = if USE_UNIQUE_OFFSETS != 0 {
+        (
+            clamp_offset(OFFSET_FRONT) as u32,
+            clamp_offset(OFFSET_MID) as u32,
+            clamp_offset(OFFSET_BACK) as u32,
+        )
+    } else {
+        (0, 0, 0) // All same
+    };
+
+    // Back sphere (blue)
+    push_identity();
+    push_rotate_y(ROTATION_Y);
+    push_rotate_x(ROTATION_X);
+    push_translate(center_x, 0.5, -1.2);
+    set_color(0x6688FFFF);
+    uniform_alpha(clamp_alpha(ALPHA_BACK));
+    dither_offset(off_back, off_back);
+    draw_mesh(SPHERE_MESH);
+
+    // Middle sphere (green)
+    push_identity();
+    push_rotate_y(ROTATION_Y);
+    push_rotate_x(ROTATION_X);
+    push_translate(center_x, 0.5, 0.0);
+    set_color(0x66FF88FF);
+    uniform_alpha(clamp_alpha(ALPHA_MID));
+    dither_offset(off_mid, off_mid);
+    draw_mesh(SPHERE_MESH);
+
+    // Front sphere (red)
+    push_identity();
+    push_rotate_y(ROTATION_Y);
+    push_rotate_x(ROTATION_X);
+    push_translate(center_x, 0.5, 1.2);
+    set_color(0xFF6688FF);
+    uniform_alpha(clamp_alpha(ALPHA_FRONT));
+    dither_offset(off_front, off_front);
+    draw_mesh(SPHERE_MESH);
+}
+
+/// Render UI text
+unsafe fn render_ui() {
+    let title = "Dither Transparency Demo";
+    draw_text(title.as_ptr(), title.len() as u32, 10.0, 10.0, 24.0, 0xFFFFFFFF);
+
+    if DISPLAY_MODE == 0 {
+        // Comparison mode labels
+        let left_label = "SAME OFFSETS";
+        draw_text(left_label.as_ptr(), left_label.len() as u32, 80.0, 420.0, 18.0, 0xFF8888FF);
+
+        let right_label = "UNIQUE OFFSETS";
+        draw_text(right_label.as_ptr(), right_label.len() as u32, 440.0, 420.0, 18.0, 0x88FF88FF);
+
+        let left_desc = "(pattern cancellation)";
+        draw_text(left_desc.as_ptr(), left_desc.len() as u32, 60.0, 445.0, 12.0, 0xAAAAFFFF);
+
+        let right_desc = "(correct layering)";
+        draw_text(right_desc.as_ptr(), right_desc.len() as u32, 450.0, 445.0, 12.0, 0xAAFFAAFF);
+
+        let instruction = "Press A to switch to single-group mode";
+        draw_text(instruction.as_ptr(), instruction.len() as u32, 10.0, 40.0, 14.0, 0xAAAAAAFF);
+    } else {
+        // Single mode
+        let mode_text = if USE_UNIQUE_OFFSETS != 0 {
+            "Mode: UNIQUE OFFSETS (use F3 to toggle)"
+        } else {
+            "Mode: SAME OFFSETS (use F3 to toggle)"
+        };
+        draw_text(mode_text.as_ptr(), mode_text.len() as u32, 10.0, 40.0, 14.0, 0xAAAAAAFF);
+
+        let instruction = "Press A to switch to comparison mode";
+        draw_text(instruction.as_ptr(), instruction.len() as u32, 10.0, 60.0, 14.0, 0x888888FF);
+    }
+
+    let controls = "Left Stick: Rotate | F3: Debug Panel";
+    draw_text(controls.as_ptr(), controls.len() as u32, 10.0, 80.0, 12.0, 0x666666FF);
 }
 
 /// Clamp alpha to valid range 0-15
