@@ -54,7 +54,7 @@ extern "C" {
     fn rom_keyframes(id_ptr: *const u8, id_len: u32) -> u32;
     fn keyframes_bone_count(handle: u32) -> u8;
     fn keyframes_frame_count(handle: u32) -> u16;
-    fn keyframe_read(handle: u32, index: u32, out_ptr: *mut u8) -> u32;
+    fn keyframe_read(handle: u32, index: u32, out_ptr: *mut u8);
     fn keyframe_bind(handle: u32, index: u32);
 
     // Skinning
