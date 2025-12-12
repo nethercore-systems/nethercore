@@ -107,6 +107,20 @@ const FS_ALBEDO_UV: &str = r#"if !has_flag(shading.flags, FLAG_USE_UNIFORM_COLOR
         albedo *= albedo_sample.a;
     }"#;
 
+// Mode 2/3: MRE/material texture sampling with override flag support
+// Shared between Mode 2 (MRE = metallic/roughness/emissive) and Mode 3 (SDE = spec_damping/shininess/emissive)
+// The variable name "mat_sample" is generic to work for both modes
+const FS_MODE2_3_TEXTURES_UV: &str = r#"let mat_sample = sample_filtered(slot1, shading.flags, in.uv);
+    if !has_flag(shading.flags, FLAG_USE_UNIFORM_METALLIC) {
+        value0 = mat_sample.r;
+    }
+    if !has_flag(shading.flags, FLAG_USE_UNIFORM_ROUGHNESS) {
+        value1 = mat_sample.g;
+    }
+    if !has_flag(shading.flags, FLAG_USE_UNIFORM_EMISSIVE) {
+        emissive = mat_sample.b;
+    }"#;
+
 /// Generate a shader for a specific mode and vertex format
 fn generate_shader(mode: u8, format: u8) -> Result<String, String> {
     // Validate mode
@@ -271,17 +285,8 @@ fn generate_shader(mode: u8, format: u8) -> Result<String, String> {
                 "let specular_color = mix(vec3<f32>(0.04), albedo, value0);",
             );
             if has_uv {
-                // Mode 2: MRE texture sampling with override flag support
-                shader = shader.replace("//FS_MODE2_3_TEXTURES", r#"let mre_sample = sample_filtered(slot1, shading.flags, in.uv);
-    if !has_flag(shading.flags, FLAG_USE_UNIFORM_METALLIC) {
-        value0 = mre_sample.r;
-    }
-    if !has_flag(shading.flags, FLAG_USE_UNIFORM_ROUGHNESS) {
-        value1 = mre_sample.g;
-    }
-    if !has_flag(shading.flags, FLAG_USE_UNIFORM_EMISSIVE) {
-        emissive = mre_sample.b;
-    }"#);
+                // Mode 2: MRE texture sampling with override flag support (uses shared constant)
+                shader = shader.replace("//FS_MODE2_3_TEXTURES", FS_MODE2_3_TEXTURES_UV);
             } else {
                 shader = shader.replace("//FS_MODE2_3_TEXTURES", "");
             }
@@ -308,36 +313,23 @@ fn generate_shader(mode: u8, format: u8) -> Result<String, String> {
             // This is beginner-friendly: default of 0 gives visible highlights
             // uniform_set_1 format: 0xRRGGBBRP (big-endian, same as color_rgba8)
             // Mode 3 specular color: supports both texture and uniform sources
+            // Uses unpack_specular_rgb() helper to avoid code duplication
             let specular = if has_uv {
                 // With UV: check flag to decide between texture and uniform
                 r#"var specular_color: vec3<f32>;
     if has_flag(shading.flags, FLAG_USE_UNIFORM_SPECULAR) {
-        // Use uniform specular color from uniform_set_1
-        let spec_r = f32((shading.uniform_set_1 >> 24u) & 0xFFu) / 255.0;
-        let spec_g = f32((shading.uniform_set_1 >> 16u) & 0xFFu) / 255.0;
-        let spec_b = f32((shading.uniform_set_1 >> 8u) & 0xFFu) / 255.0;
-        specular_color = vec3<f32>(spec_r, spec_g, spec_b) * (1.0 - value0);
+        specular_color = unpack_specular_rgb(shading.uniform_set_1) * (1.0 - value0);
     } else {
-        // Sample from specular texture (slot 2)
         specular_color = sample_filtered(slot2, shading.flags, in.uv).rgb * (1.0 - value0);
     }"#
             } else {
                 // Without UV: always use uniform specular color
-                "let spec_r = f32((shading.uniform_set_1 >> 24u) & 0xFFu) / 255.0;\n    let spec_g = f32((shading.uniform_set_1 >> 16u) & 0xFFu) / 255.0;\n    let spec_b = f32((shading.uniform_set_1 >> 8u) & 0xFFu) / 255.0;\n    var specular_color = vec3<f32>(spec_r, spec_g, spec_b) * (1.0 - value0);"
+                "var specular_color = unpack_specular_rgb(shading.uniform_set_1) * (1.0 - value0);"
             };
             shader = shader.replace("//FS_MODE2_3_SPECULAR_COLOR", specular);
             if has_uv {
-                // Mode 3: slot1 texture sampling with override flag support
-                shader = shader.replace("//FS_MODE2_3_TEXTURES", r#"let slot1_sample = sample_filtered(slot1, shading.flags, in.uv);
-    if !has_flag(shading.flags, FLAG_USE_UNIFORM_METALLIC) {
-        value0 = slot1_sample.r;
-    }
-    if !has_flag(shading.flags, FLAG_USE_UNIFORM_ROUGHNESS) {
-        value1 = slot1_sample.g;
-    }
-    if !has_flag(shading.flags, FLAG_USE_UNIFORM_EMISSIVE) {
-        emissive = slot1_sample.b;
-    }"#);
+                // Mode 3: slot1 texture sampling with override flag support (uses shared constant)
+                shader = shader.replace("//FS_MODE2_3_TEXTURES", FS_MODE2_3_TEXTURES_UV);
             } else {
                 shader = shader.replace("//FS_MODE2_3_TEXTURES", "");
             }

@@ -31,6 +31,7 @@ pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) ->
         "material_specular_damping",
         material_specular_damping,
     )?;
+    linker.func_wrap("env", "material_spec_damping", material_specular_damping)?; // Short alias
     linker.func_wrap("env", "material_specular_color", material_specular_color)?;
 
     // Material override flags (see material-overrides-spec.md)
