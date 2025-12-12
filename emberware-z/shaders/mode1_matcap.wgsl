@@ -146,17 +146,30 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     // Compute matcap UV once for all matcaps (perspective-correct)
     let matcap_uv = compute_matcap_uv(in.view_position, in.view_normal);
 
-    // Sample and blend matcaps from slots 1-3 using their blend modes
-    // Slot 0 is for albedo (used in FS_UV), slots 1-3 are matcaps
-    // Slots default to 1×1 white texture if not bound
-    let matcap1 = sample_filtered(slot1, shading.flags, matcap_uv).rgb;
-    color = blend_colors(color, matcap1, blend_mode_1);
+    // Check use_matcap_reflection flag:
+    // 0 = use procedural sky for reflection (default)
+    // 1 = use matcap textures for stylized reflection
+    if has_flag(shading.flags, FLAG_USE_MATCAP_REFLECTION) {
+        // Sample and blend matcaps from slots 1-3 using their blend modes
+        // Slot 0 is for albedo (used in FS_UV), slots 1-3 are matcaps
+        // Slots default to 1×1 white texture if not bound
+        let matcap1 = sample_filtered(slot1, shading.flags, matcap_uv).rgb;
+        color = blend_colors(color, matcap1, blend_mode_1);
 
-    let matcap2 = sample_filtered(slot2, shading.flags, matcap_uv).rgb;
-    color = blend_colors(color, matcap2, blend_mode_2);
+        let matcap2 = sample_filtered(slot2, shading.flags, matcap_uv).rgb;
+        color = blend_colors(color, matcap2, blend_mode_2);
 
-    let matcap3 = sample_filtered(slot3, shading.flags, matcap_uv).rgb;
-    color = blend_colors(color, matcap3, blend_mode_3);
+        let matcap3 = sample_filtered(slot3, shading.flags, matcap_uv).rgb;
+        color = blend_colors(color, matcap3, blend_mode_3);
+    } else {
+        // Use procedural sky for environment reflection instead of matcaps
+        // Sample sky in world normal direction for ambient-like reflection
+        let sky = unpack_sky(shading.sky);
+        let N = normalize(in.world_normal);
+        let sky_color = sample_sky(N, sky);
+        // Apply using first blend mode for consistency
+        color = blend_colors(color, sky_color, blend_mode_1);
+    }
 
     // Dither transparency (always active)
     if should_discard_dither(in.clip_position.xy, shading.flags) {

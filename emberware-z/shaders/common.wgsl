@@ -78,7 +78,35 @@ const FLAG_SKINNING_MODE: u32 = 1u;
 const FLAG_TEXTURE_FILTER_LINEAR: u32 = 2u;
 
 // ============================================================================
-// Dither Transparency Constants and Helpers
+// Material Override Flags (bits 2-7)
+// See material-overrides-spec.md for details
+// ============================================================================
+
+// Uniform color override (bit 2): 0 = texture/vertex, 1 = uniform color_rgba8
+const FLAG_USE_UNIFORM_COLOR: u32 = 4u;
+
+// Uniform metallic override (bit 3): Mode 2 = metallic, Mode 3 = spec_damping
+const FLAG_USE_UNIFORM_METALLIC: u32 = 8u;
+
+// Uniform roughness override (bit 4): Mode 2 = roughness, Mode 3 = shininess
+const FLAG_USE_UNIFORM_ROUGHNESS: u32 = 16u;
+
+// Uniform emissive override (bit 5): 0 = texture, 1 = uniform intensity
+const FLAG_USE_UNIFORM_EMISSIVE: u32 = 32u;
+
+// Uniform specular override (bit 6, Mode 3 only): 0 = texture, 1 = uniform RGB
+const FLAG_USE_UNIFORM_SPECULAR: u32 = 64u;
+
+// Matcap reflection override (bit 7, Mode 1 only): 0 = sky, 1 = matcap texture
+const FLAG_USE_MATCAP_REFLECTION: u32 = 128u;
+
+// Helper function to check if a flag is set
+fn has_flag(flags: u32, flag: u32) -> bool {
+    return (flags & flag) != 0u;
+}
+
+// ============================================================================
+// Dither Transparency Constants and Helpers (bits 8-15)
 // ============================================================================
 
 // Dither field masks in PackedUnifiedShadingState.flags
