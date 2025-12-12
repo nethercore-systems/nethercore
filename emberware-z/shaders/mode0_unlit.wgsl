@@ -29,5 +29,10 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     // Normal-based diffuse lighting (if normals present)
     //FS_NORMAL
 
+    // Dither transparency (always active)
+    if should_discard_dither(in.clip_position.xy, shading.flags) {
+        discard;
+    }
+
     return vec4<f32>(color, material_color.a);
 }

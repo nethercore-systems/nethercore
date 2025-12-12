@@ -77,6 +77,53 @@ const FLAG_SKINNING_MODE: u32 = 1u;
 // 0 = nearest (pixelated), 1 = linear (smooth)
 const FLAG_TEXTURE_FILTER_LINEAR: u32 = 2u;
 
+// ============================================================================
+// Dither Transparency Constants and Helpers
+// ============================================================================
+
+// Dither field masks in PackedUnifiedShadingState.flags
+const FLAG_UNIFORM_ALPHA_MASK: u32 = 0xF00u;      // Bits 8-11
+const FLAG_UNIFORM_ALPHA_SHIFT: u32 = 8u;
+const FLAG_DITHER_OFFSET_X_MASK: u32 = 0x3000u;   // Bits 12-13
+const FLAG_DITHER_OFFSET_X_SHIFT: u32 = 12u;
+const FLAG_DITHER_OFFSET_Y_MASK: u32 = 0xC000u;   // Bits 14-15
+const FLAG_DITHER_OFFSET_Y_SHIFT: u32 = 14u;
+
+// 4x4 Bayer matrix - classic Saturn/PS1 dither (16 alpha levels)
+const BAYER_4X4: array<f32, 16> = array(
+     0.0/16.0,  8.0/16.0,  2.0/16.0, 10.0/16.0,
+    12.0/16.0,  4.0/16.0, 14.0/16.0,  6.0/16.0,
+     3.0/16.0, 11.0/16.0,  1.0/16.0,  9.0/16.0,
+    15.0/16.0,  7.0/16.0, 13.0/16.0,  5.0/16.0,
+);
+
+// Extract uniform alpha (0-15 → 0.0-1.0)
+fn get_uniform_alpha(flags: u32) -> f32 {
+    let level = (flags & FLAG_UNIFORM_ALPHA_MASK) >> FLAG_UNIFORM_ALPHA_SHIFT;
+    return f32(level) / 15.0;
+}
+
+// Extract dither offset
+fn get_dither_offset(flags: u32) -> vec2<u32> {
+    let x = (flags & FLAG_DITHER_OFFSET_X_MASK) >> FLAG_DITHER_OFFSET_X_SHIFT;
+    let y = (flags & FLAG_DITHER_OFFSET_Y_MASK) >> FLAG_DITHER_OFFSET_Y_SHIFT;
+    return vec2<u32>(x, y);
+}
+
+// Always-on dither transparency check
+// Returns true if the fragment should be discarded
+fn should_discard_dither(frag_coord: vec2<f32>, flags: u32) -> bool {
+    let uniform_alpha = get_uniform_alpha(flags);
+    let offset = get_dither_offset(flags);
+
+    // Apply offset to break pattern alignment for stacked meshes
+    let x = (u32(frag_coord.x) + offset.x) % 4u;
+    let y = (u32(frag_coord.y) + offset.y) % 4u;
+
+    let threshold = BAYER_4X4[y * 4u + x];
+    return uniform_alpha < threshold;
+}
+
 // Texture bindings (group 1)
 @group(1) @binding(0) var slot0: texture_2d<f32>;
 @group(1) @binding(1) var slot1: texture_2d<f32>;
