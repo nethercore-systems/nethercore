@@ -279,7 +279,6 @@ impl ZGraphics {
             texture_manager,
             sampler_nearest,
             sampler_linear,
-            render_state: super::RenderState::default(),
             bone_buffer,
             inverse_bind_buffer,
             model_matrix_buffer,

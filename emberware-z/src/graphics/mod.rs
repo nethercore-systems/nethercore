@@ -51,6 +51,7 @@ pub use unified_shading_state::{
     pack_f16, pack_f16x2, pack_matcap_blend_modes, pack_rgb8, pack_unorm8, unpack_f16,
     unpack_f16x2, unpack_matcap_blend_modes, update_uniform_set_0_byte, update_uniform_set_1_byte,
     LightType, PackedLight, PackedUnifiedShadingState, ShadingStateIndex, FLAG_SKINNING_MODE,
+    FLAG_TEXTURE_FILTER_LINEAR,
 };
 pub use vertex::{VertexFormatInfo, FORMAT_ALL, VERTEX_FORMAT_COUNT};
 
@@ -91,9 +92,6 @@ pub struct ZGraphics {
     // Samplers
     sampler_nearest: wgpu::Sampler,
     sampler_linear: wgpu::Sampler,
-
-    // Current render state
-    render_state: RenderState,
 
     // Bone system (GPU skinning)
     bone_buffer: wgpu::Buffer,
@@ -254,33 +252,11 @@ impl ZGraphics {
         self.texture_manager.vram_limit()
     }
 
-    // Render State
-    pub fn set_depth_test(&mut self, enabled: bool) {
-        self.render_state.depth_test = enabled;
-    }
-
-    pub fn set_cull_mode(&mut self, mode: CullMode) {
-        self.render_state.cull_mode = mode;
-    }
-
-    pub fn set_blend_mode(&mut self, mode: BlendMode) {
-        self.render_state.blend_mode = mode;
-    }
-
-    pub fn set_texture_filter(&mut self, filter: TextureFilter) {
-        self.render_state.texture_filter = filter;
-    }
-
-    pub fn render_state(&self) -> &RenderState {
-        &self.render_state
-    }
-
-    pub fn current_sampler(&self) -> &wgpu::Sampler {
-        match self.render_state.texture_filter {
-            TextureFilter::Nearest => &self.sampler_nearest,
-            TextureFilter::Linear => &self.sampler_linear,
-        }
-    }
+    // Note: Render state methods (set_depth_test, set_cull_mode, set_blend_mode,
+    // set_texture_filter, render_state(), current_sampler()) have been removed.
+    // Render state is now captured per-command from ZFFIState in draw.rs.
+    // Texture filter is stored in PackedUnifiedShadingState.flags (bit 1) for
+    // per-draw shader selection via sample_filtered() helper.
 
     // Mesh Loading
     pub fn load_mesh(&mut self, data: &[f32], format: u8) -> Result<MeshHandle> {

@@ -73,12 +73,26 @@ fn bone_to_mat4(bone: BoneMatrix3x4) -> mat4x4<f32> {
 // Skinning mode flag constant (bit 0 of flags field)
 const FLAG_SKINNING_MODE: u32 = 1u;
 
+// Texture filter mode flag constant (bit 1 of flags field)
+// 0 = nearest (pixelated), 1 = linear (smooth)
+const FLAG_TEXTURE_FILTER_LINEAR: u32 = 2u;
+
 // Texture bindings (group 1)
 @group(1) @binding(0) var slot0: texture_2d<f32>;
 @group(1) @binding(1) var slot1: texture_2d<f32>;
 @group(1) @binding(2) var slot2: texture_2d<f32>;
 @group(1) @binding(3) var slot3: texture_2d<f32>;
-@group(1) @binding(4) var tex_sampler: sampler;
+@group(1) @binding(4) var sampler_nearest: sampler;
+@group(1) @binding(5) var sampler_linear: sampler;
+
+// Sample texture with per-draw filter selection via shading state flags
+// This reduces code bloat - all texture sampling goes through this helper
+fn sample_filtered(tex: texture_2d<f32>, flags: u32, uv: vec2<f32>) -> vec4<f32> {
+    if ((flags & FLAG_TEXTURE_FILTER_LINEAR) != 0u) {
+        return textureSample(tex, sampler_linear, uv);
+    }
+    return textureSample(tex, sampler_nearest, uv);
+}
 
 // ============================================================================
 // Data Unpacking Utilities
@@ -185,8 +199,10 @@ fn lambert_diffuse(
     albedo: vec3<f32>,
     light_color: vec3<f32>,
 ) -> vec3<f32> {
+    // Re-normalize after interpolation (interpolated normals have length < 1.0)
+    let N = normalize(normal);
     let L = -light_dir;
-    let n_dot_l = max(dot(normal, L), 0.0);
+    let n_dot_l = max(dot(N, L), 0.0);
     return albedo * light_color * n_dot_l;
 }
 

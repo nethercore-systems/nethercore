@@ -403,6 +403,24 @@ impl ZFFIState {
         }
     }
 
+    /// Update texture filter mode in current shading state
+    /// - false/0: nearest (pixelated)
+    /// - true/1: linear (smooth)
+    pub fn update_texture_filter(&mut self, linear: bool) {
+        use crate::graphics::FLAG_TEXTURE_FILTER_LINEAR;
+
+        let new_flags = if linear {
+            self.current_shading_state.flags | FLAG_TEXTURE_FILTER_LINEAR
+        } else {
+            self.current_shading_state.flags & !FLAG_TEXTURE_FILTER_LINEAR
+        };
+
+        if self.current_shading_state.flags != new_flags {
+            self.current_shading_state.flags = new_flags;
+            self.shading_state_dirty = true;
+        }
+    }
+
     /// Check if a skeleton is currently bound (inverse bind mode enabled)
     pub fn is_skeleton_bound(&self) -> bool {
         self.bound_skeleton != 0
@@ -505,23 +523,26 @@ impl ZFFIState {
         buffer_idx
     }
 
-    /// Add a quad instance to the appropriate batch (auto-batches by texture)
+    /// Add a quad instance to the appropriate batch (auto-batches by texture and blend mode)
     ///
-    /// This automatically groups quads by texture to minimize draw calls.
-    /// When bound_textures changes, a new batch is created.
+    /// This automatically groups quads by texture and blend mode to minimize draw calls.
+    /// When bound_textures or blend_mode changes, a new batch is created.
     pub fn add_quad_instance(&mut self, instance: crate::graphics::QuadInstance) {
         // Check if we can add to the current batch or need a new one
         if let Some(last_batch) = self.quad_batches.last_mut() {
-            if last_batch.textures == self.bound_textures {
-                // Same textures - add to current batch
+            if last_batch.textures == self.bound_textures
+                && last_batch.blend_mode == self.blend_mode
+            {
+                // Same textures and blend mode - add to current batch
                 last_batch.instances.push(instance);
                 return;
             }
         }
 
-        // Need a new batch (either first batch or textures changed)
+        // Need a new batch (either first batch, textures changed, or blend mode changed)
         self.quad_batches.push(super::QuadBatch {
             textures: self.bound_textures,
+            blend_mode: self.blend_mode,
             instances: vec![instance],
         });
     }

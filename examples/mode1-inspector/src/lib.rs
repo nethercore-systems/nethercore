@@ -50,8 +50,6 @@ static mut FILTER_MODE: i32 = 1;  // 0=nearest, 1=linear
 static mut SPHERE_MESH: u32 = 0;
 static mut CUBE_MESH: u32 = 0;
 static mut TORUS_MESH: u32 = 0;
-static mut PREVIEW_PLANE: u32 = 0;
-static mut PREVIEW_SPHERE: u32 = 0;
 
 // Matcap texture handles (10 types)
 static mut MATCAP_TEXTURES: [u32; 10] = [0; 10];
@@ -90,8 +88,10 @@ fn generate_matcap(kind: i32) -> [u8; MATCAP_SIZE * MATCAP_SIZE * 4] {
     for y in 0..MATCAP_SIZE {
         for x in 0..MATCAP_SIZE {
             // Normalize to -1..1
+            // X: left (-1) to right (+1)
+            // Y: top (+1) to bottom (-1) - standard matcap convention (highlights at top)
             let nx = (x as f32 / (MATCAP_SIZE as f32 / 2.0)) - 1.0;
-            let ny = (y as f32 / (MATCAP_SIZE as f32 / 2.0)) - 1.0;
+            let ny = 1.0 - (y as f32 / (MATCAP_SIZE as f32 / 2.0));
             let dist_sq = nx * nx + ny * ny;
             let dist = sqrtf(dist_sq);
 
@@ -428,31 +428,35 @@ fn hsv_to_rgb(h: f32, s: f32, v: f32) -> (u8, u8, u8) {
 unsafe fn register_debug_values() {
     // Shape group
     debug_group_begin(b"shape".as_ptr(), 5);
-    debug_register_i32(b"index (0-2)".as_ptr(), 11, &SHAPE_INDEX);
-    debug_register_f32(b"rotation_speed".as_ptr(), 14, &ROTATION_SPEED);
+    debug_register_i32(b"shape".as_ptr(), 5, &SHAPE_INDEX);
+    debug_register_f32(b"rotation".as_ptr(), 8, &ROTATION_SPEED);
     debug_register_color(b"color".as_ptr(), 5, &OBJECT_COLOR as *const u32 as *const u8);
-    debug_register_i32(b"filter (0=near,1=lin)".as_ptr(), 21, &FILTER_MODE);
+    debug_group_end();
+
+    // Rendering group
+    debug_group_begin(b"rendering".as_ptr(), 9);
+    debug_register_i32(b"filter".as_ptr(), 6, &FILTER_MODE);
     debug_group_end();
 
     // Matcap slot 1
-    debug_group_begin(b"matcap_slot_1".as_ptr(), 13);
+    debug_group_begin(b"slot_1".as_ptr(), 6);
     debug_register_bool(b"enabled".as_ptr(), 7, &MATCAP1_ENABLED);
-    debug_register_i32(b"type (0-5)".as_ptr(), 10, &MATCAP1_INDEX);
-    debug_register_i32(b"blend (0-2)".as_ptr(), 11, &MATCAP1_BLEND);
+    debug_register_i32(b"matcap".as_ptr(), 6, &MATCAP1_INDEX);
+    debug_register_i32(b"blend".as_ptr(), 5, &MATCAP1_BLEND);
     debug_group_end();
 
     // Matcap slot 2
-    debug_group_begin(b"matcap_slot_2".as_ptr(), 13);
+    debug_group_begin(b"slot_2".as_ptr(), 6);
     debug_register_bool(b"enabled".as_ptr(), 7, &MATCAP2_ENABLED);
-    debug_register_i32(b"type (0-5)".as_ptr(), 10, &MATCAP2_INDEX);
-    debug_register_i32(b"blend (0-2)".as_ptr(), 11, &MATCAP2_BLEND);
+    debug_register_i32(b"matcap".as_ptr(), 6, &MATCAP2_INDEX);
+    debug_register_i32(b"blend".as_ptr(), 5, &MATCAP2_BLEND);
     debug_group_end();
 
     // Matcap slot 3
-    debug_group_begin(b"matcap_slot_3".as_ptr(), 13);
+    debug_group_begin(b"slot_3".as_ptr(), 6);
     debug_register_bool(b"enabled".as_ptr(), 7, &MATCAP3_ENABLED);
-    debug_register_i32(b"type (0-5)".as_ptr(), 10, &MATCAP3_INDEX);
-    debug_register_i32(b"blend (0-2)".as_ptr(), 11, &MATCAP3_BLEND);
+    debug_register_i32(b"matcap".as_ptr(), 6, &MATCAP3_INDEX);
+    debug_register_i32(b"blend".as_ptr(), 5, &MATCAP3_BLEND);
     debug_group_end();
 }
 
@@ -480,9 +484,6 @@ pub extern "C" fn init() {
         SPHERE_MESH = sphere(1.0, 32, 24);
         CUBE_MESH = cube(1.6, 1.6, 1.6);
         TORUS_MESH = torus(0.8, 0.35, 32, 24);
-
-        // Small sphere for preview
-        PREVIEW_SPHERE = sphere(0.5, 16, 12);
 
         // Generate all 10 matcap textures
         for i in 0..10 {
@@ -574,9 +575,6 @@ pub extern "C" fn render() {
         };
         draw_mesh(mesh);
 
-        // Draw 3D sphere previews (shows matcap on geometry)
-        draw_preview_spheres();
-
         // Draw 2D texture previews (shows raw matcap texture)
         draw_preview_quads();
 
@@ -585,77 +583,15 @@ pub extern "C" fn render() {
     }
 }
 
-unsafe fn draw_preview_spheres() {
-    // Draw 3D sphere previews showing matcap applied to geometry
-    let base_x = -2.5;
-    let base_y = -1.5;
-    let spacing = 0.8;
-
-    // Preview for slot 1
-    if MATCAP1_ENABLED != 0 {
-        matcap_set(1, MATCAP_TEXTURES[MATCAP1_INDEX as usize]);
-        matcap_blend_mode(1, MATCAP1_BLEND as u32);
-        matcap_set(2, 0);
-        matcap_set(3, 0);
-
-        set_color(0xFFFFFFFF);
-        push_identity();
-        push_translate(base_x, base_y, 0.0);
-        push_scale_uniform(0.4);
-        draw_mesh(PREVIEW_SPHERE);
-    }
-
-    // Preview for slot 2
-    if MATCAP2_ENABLED != 0 {
-        matcap_set(1, 0);
-        matcap_set(2, MATCAP_TEXTURES[MATCAP2_INDEX as usize]);
-        matcap_blend_mode(2, MATCAP2_BLEND as u32);
-        matcap_set(3, 0);
-
-        set_color(0xFFFFFFFF);
-        push_identity();
-        push_translate(base_x + spacing, base_y, 0.0);
-        push_scale_uniform(0.4);
-        draw_mesh(PREVIEW_SPHERE);
-    }
-
-    // Preview for slot 3
-    if MATCAP3_ENABLED != 0 {
-        matcap_set(1, 0);
-        matcap_set(2, 0);
-        matcap_set(3, MATCAP_TEXTURES[MATCAP3_INDEX as usize]);
-        matcap_blend_mode(3, MATCAP3_BLEND as u32);
-
-        set_color(0xFFFFFFFF);
-        push_identity();
-        push_translate(base_x + spacing * 2.0, base_y, 0.0);
-        push_scale_uniform(0.4);
-        draw_mesh(PREVIEW_SPHERE);
-    }
-
-    // Restore all slots for next frame's main object
-    if MATCAP1_ENABLED != 0 {
-        matcap_set(1, MATCAP_TEXTURES[MATCAP1_INDEX as usize]);
-        matcap_blend_mode(1, MATCAP1_BLEND as u32);
-    }
-    if MATCAP2_ENABLED != 0 {
-        matcap_set(2, MATCAP_TEXTURES[MATCAP2_INDEX as usize]);
-        matcap_blend_mode(2, MATCAP2_BLEND as u32);
-    }
-    if MATCAP3_ENABLED != 0 {
-        matcap_set(3, MATCAP_TEXTURES[MATCAP3_INDEX as usize]);
-        matcap_blend_mode(3, MATCAP3_BLEND as u32);
-    }
-}
-
 unsafe fn draw_preview_quads() {
-    // Draw matcap texture previews as screen-space quads
+    // Draw matcap texture previews as screen-space quads on right side
     // This shows the actual texture content, not affected by 3D camera
+    // Screen resolution is 960x540
 
     let preview_size = 48.0;
     let padding = 8.0;
-    let base_x = 10.0;
-    let base_y = 90.0;  // Below slot info text
+    let base_x = 960.0 - padding - preview_size;  // Right-aligned
+    let base_y = 10.0;  // Top of screen
 
     // Preview for slot 1
     if MATCAP1_ENABLED != 0 {
@@ -666,13 +602,13 @@ unsafe fn draw_preview_quads() {
     // Preview for slot 2
     if MATCAP2_ENABLED != 0 {
         texture_bind(MATCAP_TEXTURES[MATCAP2_INDEX as usize]);
-        draw_sprite(base_x + preview_size + padding, base_y, preview_size, preview_size, 0xFFFFFFFF);
+        draw_sprite(base_x, base_y + preview_size + padding, preview_size, preview_size, 0xFFFFFFFF);
     }
 
     // Preview for slot 3
     if MATCAP3_ENABLED != 0 {
         texture_bind(MATCAP_TEXTURES[MATCAP3_INDEX as usize]);
-        draw_sprite(base_x + (preview_size + padding) * 2.0, base_y, preview_size, preview_size, 0xFFFFFFFF);
+        draw_sprite(base_x, base_y + (preview_size + padding) * 2.0, preview_size, preview_size, 0xFFFFFFFF);
     }
 
     // Unbind texture

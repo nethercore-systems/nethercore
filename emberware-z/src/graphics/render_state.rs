@@ -191,6 +191,9 @@ impl MatcapBlendMode {
 }
 
 /// Current render state (tracks what needs pipeline changes)
+///
+/// Note: texture_filter is not part of this struct - it's stored in
+/// PackedUnifiedShadingState.flags (bit 1) for per-draw selection
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RenderState {
     /// Depth test enabled
@@ -199,8 +202,6 @@ pub struct RenderState {
     pub cull_mode: CullMode,
     /// Blending mode
     pub blend_mode: BlendMode,
-    /// Texture filter mode
-    pub texture_filter: TextureFilter,
 }
 
 impl Default for RenderState {
@@ -209,7 +210,6 @@ impl Default for RenderState {
             depth_test: true,
             cull_mode: CullMode::Back,
             blend_mode: BlendMode::None,
-            texture_filter: TextureFilter::Nearest,
         }
     }
 }
@@ -224,7 +224,8 @@ mod tests {
         assert!(state.depth_test);
         assert_eq!(state.cull_mode, CullMode::Back);
         assert_eq!(state.blend_mode, BlendMode::None);
-        assert_eq!(state.texture_filter, TextureFilter::Nearest);
+        // Note: texture_filter is no longer part of RenderState
+        // It's now in PackedUnifiedShadingState.flags (bit 1)
     }
 
     #[test]
@@ -299,17 +300,8 @@ mod tests {
         assert_eq!(state.blend_mode, BlendMode::None);
     }
 
-    #[test]
-    fn test_render_state_texture_filter_switching() {
-        let mut state = RenderState::default();
-        assert_eq!(state.texture_filter, TextureFilter::Nearest);
-        state.texture_filter = TextureFilter::Linear;
-        assert_eq!(state.texture_filter, TextureFilter::Linear);
-        assert_eq!(state.texture_filter.to_wgpu(), wgpu::FilterMode::Linear);
-        state.texture_filter = TextureFilter::Nearest;
-        assert_eq!(state.texture_filter, TextureFilter::Nearest);
-        assert_eq!(state.texture_filter.to_wgpu(), wgpu::FilterMode::Nearest);
-    }
+    // Note: test_render_state_texture_filter_switching removed - texture_filter
+    // is now in PackedUnifiedShadingState.flags (bit 1), not RenderState
 
     #[test]
     fn test_render_state_equality() {

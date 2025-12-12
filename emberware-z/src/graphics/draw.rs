@@ -23,9 +23,8 @@ impl ZGraphics {
         // Apply init config to graphics (render mode, etc.)
         self.set_render_mode(z_state.init_config.render_mode);
 
-        // Sync texture filter from FFI state
-        use super::render_state::TextureFilter;
-        self.render_state.texture_filter = TextureFilter::from_u32(z_state.texture_filter as u32);
+        // Note: texture_filter sync removed - filter is now per-draw via
+        // PackedUnifiedShadingState.flags (bit 1) and sample_filtered() shader helper
 
         // 1. Swap the FFI-populated render pass into our command buffer
         // This efficiently transfers all immediate geometry (triangles, meshes)
@@ -78,7 +77,7 @@ impl ZGraphics {
 
             // Accumulate all instances into one buffer and track batch offsets
             let mut all_instances = Vec::with_capacity(total_instances);
-            let mut batch_info = Vec::new(); // (base_instance, instance_count, textures)
+            let mut batch_info = Vec::new(); // (base_instance, instance_count, textures, blend_mode)
 
             for batch in &z_state.quad_batches {
                 if batch.instances.is_empty() {
@@ -87,13 +86,19 @@ impl ZGraphics {
 
                 let base_instance = all_instances.len() as u32;
                 all_instances.extend_from_slice(&batch.instances);
-                batch_info.push((base_instance, batch.instances.len() as u32, batch.textures));
+                batch_info.push((
+                    base_instance,
+                    batch.instances.len() as u32,
+                    batch.textures,
+                    batch.blend_mode,
+                ));
 
                 tracing::info!(
-                    "  Batch: base_instance={}, count={}, textures={:?}",
+                    "  Batch: base_instance={}, count={}, textures={:?}, blend_mode={}",
                     base_instance,
                     batch.instances.len(),
-                    batch.textures
+                    batch.textures,
+                    batch.blend_mode
                 );
             }
 
@@ -109,7 +114,7 @@ impl ZGraphics {
             }
 
             // Create draw commands for each batch with correct base_instance
-            for (base_instance, instance_count, textures) in batch_info {
+            for (base_instance, instance_count, textures, batch_blend_mode) in batch_info {
                 // Map FFI texture handles to graphics texture handles for this batch
                 let texture_slots = [
                     texture_map
@@ -131,15 +136,17 @@ impl ZGraphics {
                 ];
 
                 tracing::info!(
-                    "Quad draw command: base_instance={}, count={}, textures={:?} -> {:?}",
+                    "Quad draw command: base_instance={}, count={}, textures={:?} -> {:?}, blend_mode={}",
                     base_instance,
                     instance_count,
                     textures,
-                    texture_slots
+                    texture_slots,
+                    batch_blend_mode
                 );
 
                 // Note: Quad instances contain their own shading_state_index in the instance data.
                 // BufferSource::Quad has no buffer_index - quads read transforms and shading from instance data.
+                // blend_mode comes from the batch (captured when quads were created), not current z_state
                 self.command_buffer
                     .add_command(super::command_buffer::VRPCommand::Quad {
                         base_vertex: self.unit_quad_base_vertex,
@@ -147,9 +154,9 @@ impl ZGraphics {
                         base_instance,
                         instance_count,
                         texture_slots,
-                        blend_mode: BlendMode::Alpha, // Enable alpha blending for text/sprites
-                        depth_test: true, // Billboards typically use depth test (TODO: per-instance?)
-                        cull_mode: CullMode::None, // Quads are double-sided
+                        blend_mode: BlendMode::from_u8(batch_blend_mode),
+                        depth_test: z_state.depth_test,
+                        cull_mode: CullMode::from_u8(z_state.cull_mode),
                     });
             }
         }

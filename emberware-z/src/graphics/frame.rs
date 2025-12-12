@@ -240,11 +240,12 @@ impl ZGraphics {
 
                 // Sort key: (render_mode, format, blend_mode, depth_test, cull_mode, texture_slots)
                 // This groups commands by pipeline first, then by textures
+                // Note: texture_filter is no longer part of pipeline state - it's in
+                // PackedUnifiedShadingState.flags for per-draw shader selection
                 let state = RenderState {
                     depth_test,
                     cull_mode,
                     blend_mode,
-                    texture_filter: self.render_state.texture_filter,
                 };
 
                 // Create sort key based on pipeline type (Regular vs Quad vs Sky)
@@ -397,7 +398,6 @@ impl ZGraphics {
                 depth_test,
                 cull_mode,
                 blend_mode: BlendMode::None, // Doesn't matter for layout
-                texture_filter: self.render_state.texture_filter,
             };
             let pipeline_entry = self.pipeline_cache.get_or_create(
                 &self.device,
@@ -605,7 +605,6 @@ impl ZGraphics {
                     depth_test,
                     cull_mode,
                     blend_mode,
-                    texture_filter: self.render_state.texture_filter,
                 };
 
                 // Get/create pipeline - use sky/quad/regular pipeline based on command type
@@ -699,11 +698,14 @@ impl ZGraphics {
                                     binding: 3,
                                     resource: wgpu::BindingResource::TextureView(tex_view_3),
                                 },
+                                // Both samplers bound - shader selects via shading state flag
                                 wgpu::BindGroupEntry {
                                     binding: 4,
-                                    resource: wgpu::BindingResource::Sampler(
-                                        self.current_sampler(),
-                                    ),
+                                    resource: wgpu::BindingResource::Sampler(&self.sampler_nearest),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 5,
+                                    resource: wgpu::BindingResource::Sampler(&self.sampler_linear),
                                 },
                             ],
                         })

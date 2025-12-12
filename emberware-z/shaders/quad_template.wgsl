@@ -125,7 +125,7 @@ fn vs(in: QuadVertexIn, @builtin(instance_index) instance_idx: u32) -> QuadVerte
 fn fs(in: QuadVertexOut) -> @location(0) vec4<f32> {
     let shading = shading_states[in.shading_state_index];
     let material_color = unpack_rgba8(shading.color_rgba8);
-    let tex_color = textureSample(slot0, tex_sampler, in.uv);
+    let tex_color = sample_filtered(slot0, shading.flags, in.uv);
     let color = tex_color.rgb * in.color.rgb * material_color.rgb;
     let alpha = tex_color.a * in.color.a * material_color.a;
     return vec4<f32>(color, alpha);

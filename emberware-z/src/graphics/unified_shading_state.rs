@@ -465,6 +465,10 @@ impl PackedLight {
 /// 0 = raw mode (matrices used as-is), 1 = inverse bind mode
 pub const FLAG_SKINNING_MODE: u32 = 1 << 0;
 
+/// Flag bit for texture filter mode in PackedUnifiedShadingState.flags
+/// 0 = nearest (pixelated), 1 = linear (smooth)
+pub const FLAG_TEXTURE_FILTER_LINEAR: u32 = 1 << 1;
+
 impl PackedUnifiedShadingState {
     /// Create from all f32 parameters (used during FFI calls)
     /// For Mode 2: metallic, roughness, emissive packed into uniform_set_0
@@ -707,5 +711,51 @@ mod tests {
         );
         assert!(!light.is_enabled());
         assert_eq!(light.get_intensity(), 0.0);
+    }
+
+    #[test]
+    fn test_texture_filter_flag() {
+        let mut state = PackedUnifiedShadingState::default();
+        // Default: nearest (flag not set)
+        assert_eq!(state.flags & FLAG_TEXTURE_FILTER_LINEAR, 0);
+
+        // Set to linear
+        state.flags |= FLAG_TEXTURE_FILTER_LINEAR;
+        assert_ne!(state.flags & FLAG_TEXTURE_FILTER_LINEAR, 0);
+
+        // Set back to nearest
+        state.flags &= !FLAG_TEXTURE_FILTER_LINEAR;
+        assert_eq!(state.flags & FLAG_TEXTURE_FILTER_LINEAR, 0);
+    }
+
+    #[test]
+    fn test_flags_independence() {
+        // Verify texture_filter and skinning_mode flags don't interfere with each other
+        let mut state = PackedUnifiedShadingState::default();
+
+        // Set both flags
+        state.flags = FLAG_SKINNING_MODE | FLAG_TEXTURE_FILTER_LINEAR;
+        assert!(state.skinning_mode());
+        assert_ne!(state.flags & FLAG_TEXTURE_FILTER_LINEAR, 0);
+
+        // Clear skinning_mode, texture_filter should remain
+        state.flags &= !FLAG_SKINNING_MODE;
+        assert!(!state.skinning_mode());
+        assert_ne!(state.flags & FLAG_TEXTURE_FILTER_LINEAR, 0);
+
+        // Clear texture_filter, both should be clear
+        state.flags &= !FLAG_TEXTURE_FILTER_LINEAR;
+        assert!(!state.skinning_mode());
+        assert_eq!(state.flags & FLAG_TEXTURE_FILTER_LINEAR, 0);
+    }
+
+    #[test]
+    fn test_texture_filter_flag_bit_position() {
+        // Verify the flag is at bit 1 (value 2)
+        assert_eq!(FLAG_TEXTURE_FILTER_LINEAR, 2);
+        assert_eq!(FLAG_TEXTURE_FILTER_LINEAR, 1 << 1);
+
+        // Verify it's different from skinning_mode (bit 0)
+        assert_ne!(FLAG_TEXTURE_FILTER_LINEAR, FLAG_SKINNING_MODE);
     }
 }

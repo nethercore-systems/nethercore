@@ -287,6 +287,13 @@ fn draw_text(
 
     let state = &mut caller.data_mut().console;
 
+    // Text always uses alpha blending for smooth anti-aliased edges
+    state.blend_mode = 1; // BlendMode::Alpha
+
+    // Text always uses nearest filtering (crisp pixels, no blurry interpolation)
+    state.texture_filter = 0;
+    state.update_texture_filter(false);
+
     // Ensure material color is white so it doesn't interfere with text instance color
     // (Text color is passed via the color parameter and stored in instance.color)
     state.update_color(0xFFFFFFFF);

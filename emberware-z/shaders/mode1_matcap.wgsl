@@ -13,14 +13,16 @@
 // This prevents distortion at screen edges with wide FOV
 // Note: In view space, Z is negative for objects in front of camera (looking down -Z)
 fn compute_matcap_uv(view_position: vec3<f32>, view_normal: vec3<f32>) -> vec2<f32> {
+    // Re-normalize after interpolation (interpolated normals have length < 1.0)
+    let n = normalize(view_normal);
     let depth = -view_position.z;  // Convert to positive depth
     let inv_depth = 1.0 / (1.0 + depth);
     let proj_factor = -view_position.x * view_position.y * inv_depth;
     let basis1 = vec3<f32>(1.0 - view_position.x * view_position.x * inv_depth, proj_factor, -view_position.x);
     let basis2 = vec3<f32>(proj_factor, 1.0 - view_position.y * view_position.y * inv_depth, -view_position.y);
-    let matcap_uv = vec2<f32>(dot(basis1, view_normal), dot(basis2, view_normal));
+    let matcap_uv = vec2<f32>(dot(basis1, n), dot(basis2, n));
 
-    return matcap_uv * vec2<f32>(0.5, -0.5) + 0.5;
+    return matcap_uv * 0.5 + 0.5;
 }
 
 // Convert RGB to HSV
@@ -142,13 +144,13 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     // Sample and blend matcaps from slots 1-3 using their blend modes
     // Slot 0 is for albedo (used in FS_UV), slots 1-3 are matcaps
     // Slots default to 1×1 white texture if not bound
-    let matcap1 = textureSample(slot1, tex_sampler, matcap_uv).rgb;
+    let matcap1 = sample_filtered(slot1, shading.flags, matcap_uv).rgb;
     color = blend_colors(color, matcap1, blend_mode_1);
 
-    let matcap2 = textureSample(slot2, tex_sampler, matcap_uv).rgb;
+    let matcap2 = sample_filtered(slot2, shading.flags, matcap_uv).rgb;
     color = blend_colors(color, matcap2, blend_mode_2);
 
-    let matcap3 = textureSample(slot3, tex_sampler, matcap_uv).rgb;
+    let matcap3 = sample_filtered(slot3, shading.flags, matcap_uv).rgb;
     color = blend_colors(color, matcap3, blend_mode_3);
 
     return vec4<f32>(color, material_color.a);

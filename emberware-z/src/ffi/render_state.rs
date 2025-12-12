@@ -86,6 +86,7 @@ fn blend_mode(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, m
 /// * `filter` — 0=nearest (pixelated, retro), 1=linear (smooth)
 ///
 /// Default: nearest for retro aesthetic.
+/// Note: Filter mode is stored in PackedUnifiedShadingState.flags for per-draw shader selection.
 fn texture_filter(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, filter: u32) {
     let state = &mut caller.data_mut().console;
 
@@ -95,8 +96,10 @@ fn texture_filter(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>
             filter
         );
         state.texture_filter = 0;
+        state.update_texture_filter(false);
         return;
     }
 
     state.texture_filter = filter as u8;
+    state.update_texture_filter(filter == 1);
 }

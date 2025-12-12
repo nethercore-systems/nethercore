@@ -484,9 +484,16 @@ fn create_texture_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLay
                 },
                 count: None,
             },
-            // Sampler
+            // Sampler (nearest)
             wgpu::BindGroupLayoutEntry {
                 binding: 4,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+            // Sampler (linear) - for per-draw filter selection via shading state flag
+            wgpu::BindGroupLayoutEntry {
+                binding: 5,
                 visibility: wgpu::ShaderStages::FRAGMENT,
                 ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                 count: None,
