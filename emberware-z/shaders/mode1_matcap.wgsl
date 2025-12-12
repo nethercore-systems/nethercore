@@ -158,5 +158,10 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     let matcap3 = sample_filtered(slot3, shading.flags, matcap_uv).rgb;
     color = blend_colors(color, matcap3, blend_mode_3);
 
+    // Dither transparency (always active)
+    if should_discard_dither(in.clip_position.xy, shading.flags) {
+        discard;
+    }
+
     return vec4<f32>(color, material_color.a);
 }
