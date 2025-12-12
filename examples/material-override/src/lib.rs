@@ -19,7 +19,7 @@
 #![no_main]
 
 use core::panic::PanicInfo;
-use examples_common::generate_checkerboard_8x8;
+use examples_common::checkerboard_8x8;
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
@@ -118,9 +118,13 @@ static mut SPHERE_MESH: u32 = 0;
 static mut ALBEDO_TEXTURE: u32 = 0;
 static mut MRE_TEXTURE: u32 = 0;
 
-// Texture data buffers (8x8 RGBA = 256 bytes each)
-static mut ALBEDO_DATA: [u8; 256] = [0; 256];
-static mut MRE_DATA: [u8; 256] = [0; 256];
+// Texture data (compile-time generated checkerboards, 0xRRGGBBAA format)
+// Albedo: cyan/magenta checkerboard
+const ALBEDO_DATA: [u32; 64] = checkerboard_8x8(0x00C8C8FF, 0xC800C8FF);
+// MRE: metallic/roughness/emissive in R/G/B channels
+// Pattern A: high metallic (255), low roughness (51 = 0.2), no emissive (M=1.0, R=0.2, E=0.0)
+// Pattern B: low metallic (0), high roughness (204 = 0.8), no emissive (M=0.0, R=0.8, E=0.0)
+const MRE_DATA: [u32; 64] = checkerboard_8x8(0xFF3300FF, 0x00CC00FF);
 
 // Animation
 static mut ROTATION: f32 = 0.0;
@@ -153,20 +157,9 @@ pub extern "C" fn init() {
         // Non-UV sphere: uses vertex colors, material values come from uniforms
         SPHERE_MESH = sphere(1.0, 24, 12);
 
-        // Create albedo texture (checkerboard: cyan/magenta)
-        let cyan = [0u8, 200, 200, 255];
-        let magenta = [200u8, 0, 200, 255];
-        generate_checkerboard_8x8(cyan, magenta, &mut ALBEDO_DATA);
-        ALBEDO_TEXTURE = load_texture(8, 8, ALBEDO_DATA.as_ptr());
-
-        // Create MRE texture (checkerboard for metallic/roughness/emissive)
-        // R channel = metallic, G channel = roughness, B channel = emissive
-        // Pattern A: high metallic (255), low roughness (51 = 0.2), no emissive
-        // Pattern B: low metallic (0), high roughness (204 = 0.8), no emissive
-        let metal_shiny = [255u8, 51, 0, 255]; // M=1.0, R=0.2, E=0.0
-        let plastic_matte = [0u8, 204, 0, 255]; // M=0.0, R=0.8, E=0.0
-        generate_checkerboard_8x8(metal_shiny, plastic_matte, &mut MRE_DATA);
-        MRE_TEXTURE = load_texture(8, 8, MRE_DATA.as_ptr());
+        // Load textures (data is compile-time generated)
+        ALBEDO_TEXTURE = load_texture(8, 8, ALBEDO_DATA.as_ptr() as *const u8);
+        MRE_TEXTURE = load_texture(8, 8, MRE_DATA.as_ptr() as *const u8);
 
         // Register debug values
         register_debug_values();

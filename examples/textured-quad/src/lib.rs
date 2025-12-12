@@ -14,6 +14,7 @@
 #![no_main]
 
 use core::panic::PanicInfo;
+use examples_common::checkerboard_8x8;
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
@@ -35,30 +36,8 @@ extern "C" {
 /// Texture handle for our checkerboard
 static mut TEXTURE: u32 = 0;
 
-/// 8x8 checkerboard pattern (RGBA8)
-/// Each pixel is 4 bytes: R, G, B, A
-/// Creates a cyan/magenta checkerboard
-const CHECKERBOARD: [u8; 8 * 8 * 4] = {
-    let mut pixels = [0u8; 256];
-    let cyan = [0x00, 0xFF, 0xFF, 0xFF];
-    let magenta = [0xFF, 0x00, 0xFF, 0xFF];
-
-    let mut y = 0;
-    while y < 8 {
-        let mut x = 0;
-        while x < 8 {
-            let idx = (y * 8 + x) * 4;
-            let color = if (x + y) % 2 == 0 { cyan } else { magenta };
-            pixels[idx] = color[0];
-            pixels[idx + 1] = color[1];
-            pixels[idx + 2] = color[2];
-            pixels[idx + 3] = color[3];
-            x += 1;
-        }
-        y += 1;
-    }
-    pixels
-};
+/// 8x8 checkerboard pattern (0xRRGGBBAA format) - cyan/magenta
+const CHECKERBOARD: [u32; 64] = checkerboard_8x8(0x00FFFFFF, 0xFF00FFFF);
 
 #[no_mangle]
 pub extern "C" fn init() {
@@ -67,7 +46,7 @@ pub extern "C" fn init() {
         set_clear_color(0x1a1a2eFF);
 
         // Load the checkerboard texture
-        TEXTURE = load_texture(8, 8, CHECKERBOARD.as_ptr());
+        TEXTURE = load_texture(8, 8, CHECKERBOARD.as_ptr() as *const u8);
 
         // Use nearest-neighbor filtering for crisp pixel art look
         texture_filter(0);

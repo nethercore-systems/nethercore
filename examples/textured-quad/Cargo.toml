@@ -6,6 +6,9 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib"]
 
+[dependencies]
+examples-common = { path = "../examples-common" }
+
 [profile.release]
 opt-level = "s"
 lto = true
