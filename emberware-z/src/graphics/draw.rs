@@ -92,22 +92,10 @@ impl ZGraphics {
                     batch.textures,
                     batch.blend_mode,
                 ));
-
-                tracing::info!(
-                    "  Batch: base_instance={}, count={}, textures={:?}, blend_mode={}",
-                    base_instance,
-                    batch.instances.len(),
-                    batch.textures,
-                    batch.blend_mode
-                );
             }
 
             // Upload all instances once to GPU
             if !all_instances.is_empty() {
-                tracing::info!(
-                    "Uploading {} total quad instances to GPU",
-                    all_instances.len()
-                );
                 self.buffer_manager
                     .upload_quad_instances(&self.device, &self.queue, &all_instances)
                     .expect("Failed to upload quad instances to GPU");
@@ -134,15 +122,6 @@ impl ZGraphics {
                         .copied()
                         .unwrap_or(TextureHandle::INVALID),
                 ];
-
-                tracing::info!(
-                    "Quad draw command: base_instance={}, count={}, textures={:?} -> {:?}, blend_mode={}",
-                    base_instance,
-                    instance_count,
-                    textures,
-                    texture_slots,
-                    batch_blend_mode
-                );
 
                 // Note: Quad instances contain their own shading_state_index in the instance data.
                 // BufferSource::Quad has no buffer_index - quads read transforms and shading from instance data.

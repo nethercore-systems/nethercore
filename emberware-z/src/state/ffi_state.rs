@@ -344,7 +344,7 @@ impl ZFFIState {
     }
 
     /// Update a single matcap blend mode slot in current shading state
-    /// Matcap blend modes are stored in uniform_set_1 (Mode 1 only)
+    /// Matcap blend modes are stored in uniform_set_0 (Mode 1 only)
     pub fn update_matcap_blend_mode(
         &mut self,
         slot: usize,
@@ -353,12 +353,12 @@ impl ZFFIState {
         use crate::graphics::{pack_matcap_blend_modes, unpack_matcap_blend_modes};
 
         // Unpack current modes, modify one slot, repack
-        let mut modes = unpack_matcap_blend_modes(self.current_shading_state.uniform_set_1);
+        let mut modes = unpack_matcap_blend_modes(self.current_shading_state.uniform_set_0);
         modes[slot] = mode;
         let packed = pack_matcap_blend_modes(modes);
 
-        if self.current_shading_state.uniform_set_1 != packed {
-            self.current_shading_state.uniform_set_1 = packed;
+        if self.current_shading_state.uniform_set_0 != packed {
+            self.current_shading_state.uniform_set_0 = packed;
             self.shading_state_dirty = true;
         }
     }

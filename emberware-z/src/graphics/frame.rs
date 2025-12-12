@@ -725,15 +725,8 @@ impl ZGraphics {
 
                 // Set texture bind group (only if changed)
                 if bound_texture_slots != Some(texture_slots) {
-                    tracing::info!(
-                        "Setting texture bind group: {:?} (was: {:?})",
-                        texture_slots,
-                        bound_texture_slots
-                    );
                     render_pass.set_bind_group(1, &*texture_bind_group, &[]);
                     bound_texture_slots = Some(texture_slots);
-                } else {
-                    tracing::trace!("Skipping bind group set (unchanged): {:?}", texture_slots);
                 }
 
                 // Set vertex buffer (only if format or buffer source changed)

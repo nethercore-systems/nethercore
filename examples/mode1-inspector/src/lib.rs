@@ -51,8 +51,8 @@ static mut SPHERE_MESH: u32 = 0;
 static mut CUBE_MESH: u32 = 0;
 static mut TORUS_MESH: u32 = 0;
 
-// Matcap texture handles (10 types)
-static mut MATCAP_TEXTURES: [u32; 10] = [0; 10];
+// Matcap texture handles (20 types: 10 base + 10 blending)
+static mut MATCAP_TEXTURES: [u32; 20] = [0; 20];
 
 // Camera
 static mut CAMERA: DebugCamera = DebugCamera {
@@ -81,316 +81,282 @@ const MATCAP_SIZE: usize = 64;
 // ============================================================================
 
 /// Generate a matcap texture of the given type
-/// Types: 0=Basic, 1=Rim, 2=Metal, 3=Toon, 4=Iridescent, 5=Glow
+/// Types 0-9: Base color matcaps (standalone materials)
+/// Types 10-19: Blending matcaps (designed for layering)
 fn generate_matcap(kind: i32) -> [u8; MATCAP_SIZE * MATCAP_SIZE * 4] {
     let mut pixels = [0u8; MATCAP_SIZE * MATCAP_SIZE * 4];
 
     for y in 0..MATCAP_SIZE {
         for x in 0..MATCAP_SIZE {
-            // Normalize to -1..1
-            // X: left (-1) to right (+1)
-            // Y: top (+1) to bottom (-1) - standard matcap convention (highlights at top)
-            let nx = (x as f32 / (MATCAP_SIZE as f32 / 2.0)) - 1.0;
-            let ny = 1.0 - (y as f32 / (MATCAP_SIZE as f32 / 2.0));
+            // Normalize to -1..1 with proper edge handling
+            let nx = (x as f32 / (MATCAP_SIZE - 1) as f32) * 2.0 - 1.0;
+            let ny = 1.0 - (y as f32 / (MATCAP_SIZE - 1) as f32) * 2.0;
             let dist_sq = nx * nx + ny * ny;
-            let dist = sqrtf(dist_sq);
-
-            // Compute normal Z (assuming hemisphere)
-            let nz = if dist <= 1.0 {
-                sqrtf(1.0 - dist_sq)
-            } else {
-                0.0
-            };
+            let raw_dist = sqrtf(dist_sq);
+            let dist = raw_dist.min(1.0);
+            let nz = sqrtf(1.0 - dist * dist);
 
             let (r, g, b) = match kind {
-                0 => matcap_studio_warm(nx, ny, nz, dist),
-                1 => matcap_cyan_rim(dist),
-                2 => matcap_gold(nx, ny, nz, dist),
-                3 => matcap_jade(dist, nz),
-                4 => matcap_iridescent(nx, ny),
-                5 => matcap_red_wax(dist),
-                6 => matcap_chrome(nx, ny, nz, dist),
-                7 => matcap_copper(nx, ny, nz, dist),
-                8 => matcap_pearl(nx, ny, nz, dist),
-                9 => matcap_gray_basic(nx, ny, nz, dist),
-                _ => (255, 255, 255),
+                // === BASE COLOR MATCAPS (0-9) ===
+                0 => matcap_studio_warm(nx, ny, nz),
+                1 => matcap_studio_cool(nx, ny, nz),
+                2 => matcap_clay_gray(nx, ny, nz),
+                3 => matcap_red_wax(nz, dist),
+                4 => matcap_jade(nz),
+                5 => matcap_gold(nx, ny, nz),
+                6 => matcap_chrome(nx, ny, nz),
+                7 => matcap_copper(nx, ny, nz),
+                8 => matcap_pearl(nx, ny, nz),
+                9 => matcap_skin(nx, ny, nz, dist),
+                // === BLENDING MATCAPS (10-19) ===
+                10 => matcap_rim_light(dist),
+                11 => matcap_cyan_glow(dist),
+                12 => matcap_top_light(ny, nz),
+                13 => matcap_specular_dot(nx, ny, nz),
+                14 => matcap_rainbow(nx, ny),
+                15 => matcap_hue_shift_warm(nx, ny),
+                16 => matcap_hue_shift_cool(nx, ny),
+                17 => matcap_ambient_occlusion(dist),
+                18 => matcap_inner_glow(dist),
+                19 => matcap_gradient_bands(nz),
+                _ => (128, 128, 128),
             };
 
             let i = (y * MATCAP_SIZE + x) * 4;
             pixels[i] = r;
             pixels[i + 1] = g;
             pixels[i + 2] = b;
-            pixels[i + 3] = if dist <= 1.0 { 255 } else { 0 };
+            pixels[i + 3] = if raw_dist <= 1.0 { 255 } else { 0 };
         }
     }
 
     pixels
 }
 
-/// Studio warm matcap - orange highlights, blue shadows (classic studio lighting)
-fn matcap_studio_warm(nx: f32, ny: f32, nz: f32, dist: f32) -> (u8, u8, u8) {
-    if dist > 1.0 {
-        return (60, 50, 80);
-    }
+// ============================================================================
+// BASE COLOR MATCAPS (0-9) - Standalone materials
+// ============================================================================
 
-    // Light coming from top-right
-    let light_x = 0.5;
-    let light_y = 0.7;
-    let light_z = 0.5;
-    let light_len = sqrtf(light_x * light_x + light_y * light_y + light_z * light_z);
-    let lx = light_x / light_len;
-    let ly = light_y / light_len;
-    let lz = light_z / light_len;
-
+/// 0: Studio Warm - orange highlights, blue shadows (classic 3-point lighting)
+fn matcap_studio_warm(nx: f32, ny: f32, nz: f32) -> (u8, u8, u8) {
+    let (lx, ly, lz) = normalize_light(0.5, 0.7, 0.5);
     let ndotl = (nx * lx + ny * ly + nz * lz).max(0.0);
 
-    // Warm (orange) for lit areas, cool (blue) for shadows
-    let warm = (255.0, 200.0, 150.0);  // Orange-ish highlight
-    let cool = (60.0, 70.0, 120.0);    // Blue-ish shadow
+    let warm = (255.0, 200.0, 150.0);
+    let cool = (60.0, 70.0, 120.0);
 
-    let r = (cool.0 + (warm.0 - cool.0) * ndotl) as u8;
-    let g = (cool.1 + (warm.1 - cool.1) * ndotl) as u8;
-    let b = (cool.2 + (warm.2 - cool.2) * ndotl) as u8;
-
-    (r, g, b)
+    lerp_color(cool, warm, ndotl)
 }
 
-/// Cyan rim matcap - dark purple center, cyan edges (sci-fi look)
-fn matcap_cyan_rim(dist: f32) -> (u8, u8, u8) {
-    if dist > 1.0 {
-        return (0, 0, 0);
-    }
-
-    // Fresnel-like effect: edges are bright cyan
-    let rim = powf(dist, 2.0);
-    let center = (30.0, 20.0, 60.0);   // Dark purple center
-    let edge = (100.0, 255.0, 255.0);  // Cyan edge
-
-    let r = (center.0 + (edge.0 - center.0) * rim) as u8;
-    let g = (center.1 + (edge.1 - center.1) * rim) as u8;
-    let b = (center.2 + (edge.2 - center.2) * rim) as u8;
-
-    (r, g, b)
-}
-
-/// Gold metal matcap - warm golden reflections
-fn matcap_gold(nx: f32, ny: f32, nz: f32, dist: f32) -> (u8, u8, u8) {
-    if dist > 1.0 {
-        return (40, 30, 10);
-    }
-
-    // Specular highlight
-    let light_x = 0.3;
-    let light_y = 0.8;
-    let light_z = 0.5;
-    let light_len = sqrtf(light_x * light_x + light_y * light_y + light_z * light_z);
-    let lx = light_x / light_len;
-    let ly = light_y / light_len;
-    let lz = light_z / light_len;
-
-    // View direction (0, 0, 1)
-    let vz = 1.0;
-
-    // Half vector
-    let hx = lx;
-    let hy = ly;
-    let hz = lz + vz;
-    let h_len = sqrtf(hx * hx + hy * hy + hz * hz);
-    let hx = hx / h_len;
-    let hy = hy / h_len;
-    let hz = hz / h_len;
-
-    let ndoth = (nx * hx + ny * hy + nz * hz).max(0.0);
-    let spec = powf(ndoth, 64.0);
-
-    // Base metallic gradient
+/// 1: Studio Cool - blue highlights, warm shadows (inverse of warm)
+fn matcap_studio_cool(nx: f32, ny: f32, nz: f32) -> (u8, u8, u8) {
+    let (lx, ly, lz) = normalize_light(0.5, 0.7, 0.5);
     let ndotl = (nx * lx + ny * ly + nz * lz).max(0.0);
-    let base = 0.15 + 0.5 * ndotl;
 
-    let v = base + spec * 0.8;
-    let v = v.min(1.0);
+    let cool = (150.0, 200.0, 255.0);
+    let warm = (120.0, 80.0, 60.0);
 
-    // Gold tint: high red, medium green, low blue
-    let r = (v * 255.0) as u8;
-    let g = (v * 200.0) as u8;
-    let b = (v * 80.0) as u8;
-
-    (r, g, b)
+    lerp_color(warm, cool, ndotl)
 }
 
-/// Jade matcap - teal/green with stepped bands (stylized jade stone)
-fn matcap_jade(dist: f32, nz: f32) -> (u8, u8, u8) {
-    if dist > 1.0 {
-        return (20, 50, 40);
-    }
-
-    // Use normal Z to create bands
-    let bands = 4.0;
-    let v = floorf(nz * bands) / bands;
-
-    // Jade green tones
-    let dark = (30.0, 80.0, 70.0);
-    let light = (150.0, 230.0, 200.0);
-
-    let r = (dark.0 + (light.0 - dark.0) * v) as u8;
-    let g = (dark.1 + (light.1 - dark.1) * v) as u8;
-    let b = (dark.2 + (light.2 - dark.2) * v) as u8;
-
-    (r, g, b)
-}
-
-/// Iridescent matcap - rainbow gradient
-fn matcap_iridescent(nx: f32, ny: f32) -> (u8, u8, u8) {
-    // Map position to hue
-    let angle = libm::atan2f(ny, nx);
-    let hue = (angle + PI) / (2.0 * PI);
-
-    hsv_to_rgb(hue, 0.7, 0.9)
-}
-
-/// Red wax matcap - warm sculpting look (like ZBrush default)
-fn matcap_red_wax(dist: f32) -> (u8, u8, u8) {
-    if dist > 1.0 {
-        return (40, 10, 10);
-    }
-
-    // Inverse distance - bright in center with subsurface-like falloff
-    let v = 1.0 - dist;
-    let v = powf(v, 1.2);  // Soften the falloff
-
-    // Red wax tones - warm red/orange
-    let dark = (80.0, 30.0, 25.0);
-    let light = (255.0, 180.0, 150.0);
-
-    let r = (dark.0 + (light.0 - dark.0) * v) as u8;
-    let g = (dark.1 + (light.1 - dark.1) * v) as u8;
-    let b = (dark.2 + (light.2 - dark.2) * v) as u8;
-
-    (r, g, b)
-}
-
-/// Chrome matcap - bright silver/white metal with sharp highlights
-fn matcap_chrome(nx: f32, ny: f32, nz: f32, dist: f32) -> (u8, u8, u8) {
-    if dist > 1.0 {
-        return (30, 30, 35);
-    }
-
-    // Light from top-right
-    let light_x = 0.4;
-    let light_y = 0.8;
-    let light_z = 0.4;
-    let light_len = sqrtf(light_x * light_x + light_y * light_y + light_z * light_z);
-    let lx = light_x / light_len;
-    let ly = light_y / light_len;
-    let lz = light_z / light_len;
-
-    // Half vector for specular
-    let hz = 1.0 + lz;
-    let h_len = sqrtf(lx * lx + ly * ly + hz * hz);
-    let hx = lx / h_len;
-    let hy = ly / h_len;
-    let hz = hz / h_len;
-
-    let ndoth = (nx * hx + ny * hy + nz * hz).max(0.0);
-    let spec = powf(ndoth, 128.0);  // Very sharp highlight
-
+/// 2: Clay Gray - neutral sculpting preview (ZBrush-style)
+fn matcap_clay_gray(nx: f32, ny: f32, nz: f32) -> (u8, u8, u8) {
+    let (lx, ly, lz) = normalize_light(0.4, 0.8, 0.4);
     let ndotl = (nx * lx + ny * ly + nz * lz).max(0.0);
-    let base = 0.15 + 0.35 * ndotl;
 
-    let v = base + spec * 0.9;
+    // Add subtle specular
+    let (hx, hy, hz) = half_vector(lx, ly, lz);
+    let spec = powf((nx * hx + ny * hy + nz * hz).max(0.0), 32.0);
+
+    let v = 0.25 + 0.5 * ndotl + 0.25 * spec;
     let v = (v.min(1.0) * 255.0) as u8;
-
-    // Slight cool tint
-    let r = v;
-    let g = v;
-    let b = ((v as f32) * 1.05).min(255.0) as u8;
-
-    (r, g, b)
-}
-
-/// Copper matcap - warm reddish-orange metal
-fn matcap_copper(nx: f32, ny: f32, nz: f32, dist: f32) -> (u8, u8, u8) {
-    if dist > 1.0 {
-        return (30, 15, 10);
-    }
-
-    let light_x = 0.3;
-    let light_y = 0.8;
-    let light_z = 0.5;
-    let light_len = sqrtf(light_x * light_x + light_y * light_y + light_z * light_z);
-    let lx = light_x / light_len;
-    let ly = light_y / light_len;
-    let lz = light_z / light_len;
-
-    let hz = 1.0 + lz;
-    let h_len = sqrtf(lx * lx + ly * ly + hz * hz);
-    let hx = lx / h_len;
-    let hy = ly / h_len;
-    let hz = hz / h_len;
-
-    let ndoth = (nx * hx + ny * hy + nz * hz).max(0.0);
-    let spec = powf(ndoth, 48.0);
-
-    let ndotl = (nx * lx + ny * ly + nz * lz).max(0.0);
-    let base = 0.2 + 0.5 * ndotl;
-
-    let v = base + spec * 0.7;
-    let v = v.min(1.0);
-
-    // Copper tint: high red, medium green, low blue
-    let r = (v * 255.0) as u8;
-    let g = (v * 160.0) as u8;
-    let b = (v * 100.0) as u8;
-
-    (r, g, b)
-}
-
-/// Pearl matcap - soft iridescent with pastel tones
-fn matcap_pearl(nx: f32, ny: f32, nz: f32, dist: f32) -> (u8, u8, u8) {
-    if dist > 1.0 {
-        return (200, 200, 210);
-    }
-
-    // Base brightness from normal
-    let base = 0.7 + 0.3 * nz;
-
-    // Subtle hue shift based on viewing angle
-    let angle = libm::atan2f(ny, nx);
-    let hue = (angle + PI) / (2.0 * PI);
-
-    // Very desaturated pastel colors
-    let (hr, hg, hb) = hsv_to_rgb(hue, 0.15, 1.0);
-
-    let r = ((hr as f32) * base) as u8;
-    let g = ((hg as f32) * base) as u8;
-    let b = ((hb as f32) * base) as u8;
-
-    (r, g, b)
-}
-
-/// Gray basic matcap - classic grayscale for blending
-fn matcap_gray_basic(nx: f32, ny: f32, nz: f32, dist: f32) -> (u8, u8, u8) {
-    if dist > 1.0 {
-        return (128, 128, 128);
-    }
-
-    // Light coming from top-right
-    let light_x = 0.5;
-    let light_y = 0.7;
-    let light_z = 0.5;
-    let light_len = sqrtf(light_x * light_x + light_y * light_y + light_z * light_z);
-    let lx = light_x / light_len;
-    let ly = light_y / light_len;
-    let lz = light_z / light_len;
-
-    let ndotl = (nx * lx + ny * ly + nz * lz).max(0.0);
-
-    let ambient = 0.2;
-    let diffuse = 0.8;
-    let v = ambient + diffuse * ndotl;
-    let v = (v * 255.0) as u8;
-
     (v, v, v)
+}
+
+/// 3: Red Wax - warm sculpting material with subsurface feel
+fn matcap_red_wax(nz: f32, dist: f32) -> (u8, u8, u8) {
+    let front = powf(nz, 0.8);
+    let rim = powf(dist, 1.5) * 0.3;
+    let v = (front + rim).min(1.0);
+
+    let dark = (80.0, 30.0, 25.0);
+    let light = (255.0, 160.0, 130.0);
+
+    lerp_color(dark, light, v)
+}
+
+/// 4: Jade - stylized green stone with banded look
+fn matcap_jade(nz: f32) -> (u8, u8, u8) {
+    let bands = floorf(nz * 5.0) / 5.0;
+    let smooth = nz * 0.3 + bands * 0.7;
+
+    let dark = (40.0, 90.0, 80.0);
+    let light = (140.0, 220.0, 190.0);
+
+    lerp_color(dark, light, smooth)
+}
+
+/// 5: Gold - metallic gold with specular highlight
+fn matcap_gold(nx: f32, ny: f32, nz: f32) -> (u8, u8, u8) {
+    let (lx, ly, lz) = normalize_light(0.3, 0.8, 0.5);
+    let (hx, hy, hz) = half_vector(lx, ly, lz);
+
+    let ndotl = (nx * lx + ny * ly + nz * lz).max(0.0);
+    let spec = powf((nx * hx + ny * hy + nz * hz).max(0.0), 64.0);
+
+    let v = (0.15 + 0.5 * ndotl + 0.8 * spec).min(1.0);
+    ((v * 255.0) as u8, (v * 200.0) as u8, (v * 80.0) as u8)
+}
+
+/// 6: Chrome - bright silver metal with sharp highlight
+fn matcap_chrome(nx: f32, ny: f32, nz: f32) -> (u8, u8, u8) {
+    let (lx, ly, lz) = normalize_light(0.4, 0.8, 0.4);
+    let (hx, hy, hz) = half_vector(lx, ly, lz);
+
+    let ndotl = (nx * lx + ny * ly + nz * lz).max(0.0);
+    let spec = powf((nx * hx + ny * hy + nz * hz).max(0.0), 128.0);
+
+    let v = (0.15 + 0.35 * ndotl + 0.9 * spec).min(1.0);
+    let v = (v * 255.0) as u8;
+    (v, v, ((v as f32) * 1.02).min(255.0) as u8)
+}
+
+/// 7: Copper - warm reddish-orange metal
+fn matcap_copper(nx: f32, ny: f32, nz: f32) -> (u8, u8, u8) {
+    let (lx, ly, lz) = normalize_light(0.3, 0.8, 0.5);
+    let (hx, hy, hz) = half_vector(lx, ly, lz);
+
+    let ndotl = (nx * lx + ny * ly + nz * lz).max(0.0);
+    let spec = powf((nx * hx + ny * hy + nz * hz).max(0.0), 48.0);
+
+    let v = (0.2 + 0.5 * ndotl + 0.7 * spec).min(1.0);
+    ((v * 255.0) as u8, (v * 160.0) as u8, (v * 100.0) as u8)
+}
+
+/// 8: Pearl - soft iridescent white with pastel tints
+fn matcap_pearl(nx: f32, ny: f32, nz: f32) -> (u8, u8, u8) {
+    let base = 0.7 + 0.3 * nz;
+    let hue = (libm::atan2f(ny, nx) + PI) / (2.0 * PI);
+    let (hr, hg, hb) = hsv_to_rgb(hue, 0.12, 1.0);
+
+    (((hr as f32) * base) as u8, ((hg as f32) * base) as u8, ((hb as f32) * base) as u8)
+}
+
+/// 9: Skin - warm skin tone with subsurface scattering feel
+fn matcap_skin(nx: f32, ny: f32, nz: f32, dist: f32) -> (u8, u8, u8) {
+    let (lx, ly, lz) = normalize_light(0.4, 0.7, 0.6);
+    let ndotl = (nx * lx + ny * ly + nz * lz).max(0.0);
+
+    // Subsurface approximation - red shows through at edges
+    let sss = powf(dist, 2.0) * 0.3;
+
+    let shadow = (180.0, 120.0, 100.0);
+    let lit = (255.0, 220.0, 200.0);
+    let (r, g, b) = lerp_color(shadow, lit, ndotl);
+
+    // Add red at edges for SSS
+    ((r as f32 + sss * 40.0).min(255.0) as u8, g, b)
+}
+
+// ============================================================================
+// BLENDING MATCAPS (10-19) - Designed for layering
+// ============================================================================
+
+/// 10: Rim Light - bright white edges, dark center (use with Add)
+fn matcap_rim_light(dist: f32) -> (u8, u8, u8) {
+    let rim = powf(dist, 2.5);
+    let v = (rim * 255.0) as u8;
+    (v, v, v)
+}
+
+/// 11: Cyan Glow - sci-fi edge glow (use with Add)
+fn matcap_cyan_glow(dist: f32) -> (u8, u8, u8) {
+    let rim = powf(dist, 2.0);
+    ((rim * 50.0) as u8, (rim * 200.0) as u8, (rim * 255.0) as u8)
+}
+
+/// 12: Top Light - directional gradient from above (use with Multiply)
+fn matcap_top_light(ny: f32, nz: f32) -> (u8, u8, u8) {
+    // Brighter where normal points up
+    let v = (ny * 0.3 + nz * 0.3 + 0.5).clamp(0.0, 1.0);
+    let v = (v * 255.0) as u8;
+    (v, v, v)
+}
+
+/// 13: Specular Dot - sharp highlight point (use with Add)
+fn matcap_specular_dot(nx: f32, ny: f32, nz: f32) -> (u8, u8, u8) {
+    let (lx, ly, lz) = normalize_light(0.3, 0.7, 0.6);
+    let (hx, hy, hz) = half_vector(lx, ly, lz);
+    let spec = powf((nx * hx + ny * hy + nz * hz).max(0.0), 256.0);
+    let v = (spec * 255.0) as u8;
+    (v, v, v)
+}
+
+/// 14: Rainbow - full hue rotation (use with HSV for iridescence)
+fn matcap_rainbow(nx: f32, ny: f32) -> (u8, u8, u8) {
+    let hue = (libm::atan2f(ny, nx) + PI) / (2.0 * PI);
+    hsv_to_rgb(hue, 0.8, 0.9)
+}
+
+/// 15: Hue Shift Warm - shifts colors toward orange/red (use with HSV)
+fn matcap_hue_shift_warm(nx: f32, ny: f32) -> (u8, u8, u8) {
+    let angle = libm::atan2f(ny, nx);
+    let hue = 0.08 + (angle + PI) / (2.0 * PI) * 0.15; // Orange range
+    hsv_to_rgb(hue, 0.6, 0.9)
+}
+
+/// 16: Hue Shift Cool - shifts colors toward blue/cyan (use with HSV)
+fn matcap_hue_shift_cool(nx: f32, ny: f32) -> (u8, u8, u8) {
+    let angle = libm::atan2f(ny, nx);
+    let hue = 0.5 + (angle + PI) / (2.0 * PI) * 0.15; // Blue range
+    hsv_to_rgb(hue, 0.6, 0.9)
+}
+
+/// 17: Ambient Occlusion - darkens edges (use with Multiply)
+fn matcap_ambient_occlusion(dist: f32) -> (u8, u8, u8) {
+    let ao = 1.0 - powf(dist, 1.5) * 0.5;
+    let v = (ao * 255.0) as u8;
+    (v, v, v)
+}
+
+/// 18: Inner Glow - bright center, fades to edges (use with Add)
+fn matcap_inner_glow(dist: f32) -> (u8, u8, u8) {
+    let glow = 1.0 - powf(dist, 1.2);
+    let v = (glow * 200.0) as u8;
+    (v, v, v)
+}
+
+/// 19: Gradient Bands - toon-style stepped shading (use with Multiply)
+fn matcap_gradient_bands(nz: f32) -> (u8, u8, u8) {
+    let bands = floorf(nz * 4.0) / 4.0;
+    let v = (0.4 + bands * 0.6).min(1.0);
+    let v = (v * 255.0) as u8;
+    (v, v, v)
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/// Normalize a light direction vector
+fn normalize_light(x: f32, y: f32, z: f32) -> (f32, f32, f32) {
+    let len = sqrtf(x * x + y * y + z * z);
+    (x / len, y / len, z / len)
+}
+
+/// Compute half vector for Blinn-Phong specular (view is always 0,0,1)
+fn half_vector(lx: f32, ly: f32, lz: f32) -> (f32, f32, f32) {
+    let hz = lz + 1.0;
+    let len = sqrtf(lx * lx + ly * ly + hz * hz);
+    (lx / len, ly / len, hz / len)
+}
+
+/// Linear interpolate between two RGB colors
+fn lerp_color(a: (f32, f32, f32), b: (f32, f32, f32), t: f32) -> (u8, u8, u8) {
+    let r = (a.0 + (b.0 - a.0) * t) as u8;
+    let g = (a.1 + (b.1 - a.1) * t) as u8;
+    let blu = (a.2 + (b.2 - a.2) * t) as u8;
+    (r, g, blu)
 }
 
 /// Convert HSV to RGB (h, s, v all in 0..1)
@@ -485,8 +451,8 @@ pub extern "C" fn init() {
         CUBE_MESH = cube(1.6, 1.6, 1.6);
         TORUS_MESH = torus(0.8, 0.35, 32, 24);
 
-        // Generate all 10 matcap textures
-        for i in 0..10 {
+        // Generate all 20 matcap textures (0-9 base, 10-19 blending)
+        for i in 0..20 {
             let pixels = generate_matcap(i as i32);
             MATCAP_TEXTURES[i] = load_texture(MATCAP_SIZE as u32, MATCAP_SIZE as u32, pixels.as_ptr());
         }
@@ -509,9 +475,9 @@ pub extern "C" fn update() {
 
         // Clamp values
         SHAPE_INDEX = SHAPE_INDEX.clamp(0, 2);
-        MATCAP1_INDEX = MATCAP1_INDEX.clamp(0, 9);
-        MATCAP2_INDEX = MATCAP2_INDEX.clamp(0, 9);
-        MATCAP3_INDEX = MATCAP3_INDEX.clamp(0, 9);
+        MATCAP1_INDEX = MATCAP1_INDEX.clamp(0, 19);
+        MATCAP2_INDEX = MATCAP2_INDEX.clamp(0, 19);
+        MATCAP3_INDEX = MATCAP3_INDEX.clamp(0, 19);
         MATCAP1_BLEND = MATCAP1_BLEND.clamp(0, 2);
         MATCAP2_BLEND = MATCAP2_BLEND.clamp(0, 2);
         MATCAP3_BLEND = MATCAP3_BLEND.clamp(0, 2);
@@ -541,7 +507,8 @@ pub extern "C" fn render() {
             matcap_set(1, MATCAP_TEXTURES[MATCAP1_INDEX as usize]);
             matcap_blend_mode(1, MATCAP1_BLEND as u32);
         } else {
-            matcap_set(1, 0);  // Disable slot
+            matcap_set(1, 0);
+            matcap_blend_mode(1, 0);  // Reset to Multiply so white has no effect
         }
 
         // Slot 2
@@ -550,6 +517,7 @@ pub extern "C" fn render() {
             matcap_blend_mode(2, MATCAP2_BLEND as u32);
         } else {
             matcap_set(2, 0);
+            matcap_blend_mode(2, 0);  // Reset to Multiply so white has no effect
         }
 
         // Slot 3
@@ -558,6 +526,7 @@ pub extern "C" fn render() {
             matcap_blend_mode(3, MATCAP3_BLEND as u32);
         } else {
             matcap_set(3, 0);
+            matcap_blend_mode(3, 0);  // Reset to Multiply so white has no effect
         }
 
         // Set object color
@@ -615,12 +584,60 @@ unsafe fn draw_preview_quads() {
     texture_bind(0);
 }
 
+/// Get matcap info: (name, role, best_blend)
+/// role: "Base" or "Blend"
+/// best_blend: recommended blend mode for blending matcaps, empty for base
+fn matcap_info(index: i32) -> (&'static str, &'static str, &'static str) {
+    match index {
+        // Base matcaps (0-9)
+        0 => ("StudioWarm", "Base", ""),
+        1 => ("StudioCool", "Base", ""),
+        2 => ("ClayGray", "Base", ""),
+        3 => ("RedWax", "Base", ""),
+        4 => ("Jade", "Base", ""),
+        5 => ("Gold", "Base", ""),
+        6 => ("Chrome", "Base", ""),
+        7 => ("Copper", "Base", ""),
+        8 => ("Pearl", "Base", ""),
+        9 => ("Skin", "Base", ""),
+        // Blending matcaps (10-19)
+        10 => ("RimLight", "Blend", "Add"),
+        11 => ("CyanGlow", "Blend", "Add"),
+        12 => ("TopLight", "Blend", "Mul"),
+        13 => ("SpecDot", "Blend", "Add"),
+        14 => ("Rainbow", "Blend", "HSV"),
+        15 => ("HueWarm", "Blend", "HSV"),
+        16 => ("HueCool", "Blend", "HSV"),
+        17 => ("AO", "Blend", "Mul"),
+        18 => ("InnerGlow", "Blend", "Add"),
+        19 => ("Bands", "Blend", "Mul"),
+        _ => ("???", "???", ""),
+    }
+}
+
+/// Get blend mode name
+fn blend_name(mode: i32) -> &'static str {
+    match mode {
+        0 => "Mul",
+        1 => "Add",
+        2 => "HSV",
+        _ => "???",
+    }
+}
+
 unsafe fn draw_ui() {
-    // Draw header
+    // Right side positioning (to the left of preview quads)
+    // Preview quads are at x=904, need room for ~420px of text
+    let text_x = 470.0;
+    let preview_size = 48.0;
+    let padding = 8.0;
+    let slot_spacing = preview_size + padding;  // Match preview quad spacing
+
+    // Draw header on right side
     draw_text(
         b"MODE 1: MATCAP".as_ptr(),
         14,
-        10.0, 10.0, 16.0,
+        text_x, 10.0, 14.0,
         0xFFFFFFFF,
     );
 
@@ -635,42 +652,67 @@ unsafe fn draw_ui() {
         1 => 11,
         _ => 12,
     };
-    draw_text(shape_name, shape_len, 10.0, 30.0, 12.0, 0xFFCCCCCC);
+    draw_text(shape_name, shape_len, text_x, 28.0, 11.0, 0xFFCCCCCC);
 
-    // Matcap type names for reference (matches generate_matcap indices)
-    // 0=Studio Warm, 1=Cyan Rim, 2=Gold, 3=Jade, 4=Iridescent, 5=Red Wax
-    let _type_names = [
-        "Studio", "CyanRim", "Gold", "Jade", "Rainbow", "RedWax"
-    ];
-    let _blend_names = ["Multiply", "Add", "HSV"];
+    // Slot info - positioned to align with preview quads
+    // Slot 1 info (aligned with first preview at y=10)
+    let slot1_y = 48.0;
+    draw_slot_info(1, MATCAP1_ENABLED != 0, MATCAP1_INDEX, MATCAP1_BLEND, text_x, slot1_y, 0xFFAAAAFF);
 
-    // Slot info
-    let slot1_info = if MATCAP1_ENABLED != 0 { "Slot1: ON" } else { "Slot1: OFF" };
-    draw_text(slot1_info.as_ptr(), slot1_info.len() as u32, 10.0, 50.0, 10.0, 0xFFAAAAFF);
+    // Slot 2 info (aligned with second preview)
+    let slot2_y = slot1_y + slot_spacing;
+    draw_slot_info(2, MATCAP2_ENABLED != 0, MATCAP2_INDEX, MATCAP2_BLEND, text_x, slot2_y, 0xFFAAFFAA);
 
-    let slot2_info = if MATCAP2_ENABLED != 0 { "Slot2: ON" } else { "Slot2: OFF" };
-    draw_text(slot2_info.as_ptr(), slot2_info.len() as u32, 10.0, 62.0, 10.0, 0xFFAAFFAA);
+    // Slot 3 info (aligned with third preview)
+    let slot3_y = slot2_y + slot_spacing;
+    draw_slot_info(3, MATCAP3_ENABLED != 0, MATCAP3_INDEX, MATCAP3_BLEND, text_x, slot3_y, 0xFFFFAAAA);
 
-    let slot3_info = if MATCAP3_ENABLED != 0 { "Slot3: ON" } else { "Slot3: OFF" };
-    draw_text(slot3_info.as_ptr(), slot3_info.len() as u32, 10.0, 74.0, 10.0, 0xFFFFAAAA);
-
-    // Controls hint
+    // Controls hint at bottom right
     draw_text(
         b"A/B: Cycle shape".as_ptr(),
         16,
-        10.0, 450.0, 10.0,
+        text_x, 500.0, 10.0,
         0xFF888888,
     );
     draw_text(
-        b"Left stick: Rotate".as_ptr(),
-        18,
-        10.0, 462.0, 10.0,
+        b"LStick: Rotate  RStick: Camera".as_ptr(),
+        31,
+        text_x, 514.0, 10.0,
         0xFF888888,
     );
-    draw_text(
-        b"Right stick: Camera".as_ptr(),
-        19,
-        10.0, 474.0, 10.0,
-        0xFF888888,
-    );
+}
+
+unsafe fn draw_slot_info(slot: i32, enabled: bool, matcap_idx: i32, blend_mode: i32, x: f32, y: f32, color: u32) {
+    // Slot label with colon (6 chars * ~15px = ~90px)
+    let slot_label = match slot {
+        1 => b"Slot1:".as_ptr(),
+        2 => b"Slot2:".as_ptr(),
+        _ => b"Slot3:".as_ptr(),
+    };
+    draw_text(slot_label, 6, x, y, 11.0, color);
+
+    if !enabled {
+        draw_text(b"OFF".as_ptr(), 3, x + 100.0, y, 11.0, 0xFF666666);
+        return;
+    }
+
+    let (name, role, best) = matcap_info(matcap_idx);
+    let blend = blend_name(blend_mode);
+
+    // Line 1: Name [Role]
+    // Name starts after "Slot1:" (~100px), longest name is "StudioWarm" (10 chars * 15 = 150px)
+    draw_text(name.as_ptr(), name.len() as u32, x + 100.0, y, 11.0, 0xFFFFFFFF);
+    draw_text(b"[".as_ptr(), 1, x + 260.0, y, 11.0, 0xFF666666);
+    draw_text(role.as_ptr(), role.len() as u32, x + 275.0, y, 11.0, 0xFF888888);
+    draw_text(b"]".as_ptr(), 1, x + 355.0, y, 11.0, 0xFF666666);
+
+    // Line 2: Blend mode and best recommendation
+    draw_text(b"Blend:".as_ptr(), 6, x + 100.0, y + 14.0, 10.0, 0xFF888888);
+    draw_text(blend.as_ptr(), blend.len() as u32, x + 195.0, y + 14.0, 10.0, color);
+
+    if !best.is_empty() {
+        draw_text(b"(best:".as_ptr(), 6, x + 250.0, y + 14.0, 10.0, 0xFF555555);
+        draw_text(best.as_ptr(), best.len() as u32, x + 345.0, y + 14.0, 10.0, 0xFF777777);
+        draw_text(b")".as_ptr(), 1, x + 400.0, y + 14.0, 10.0, 0xFF555555);
+    }
 }

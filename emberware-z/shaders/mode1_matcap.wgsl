@@ -9,20 +9,25 @@
 // Fragment Shader Utilities
 // ============================================================================
 
-// Compute matcap UV with perspective correction
+// Compute matcap UV with perspective correction using orthonormal basis construction
 // This prevents distortion at screen edges with wide FOV
-// Note: In view space, Z is negative for objects in front of camera (looking down -Z)
 fn compute_matcap_uv(view_position: vec3<f32>, view_normal: vec3<f32>) -> vec2<f32> {
-    // Re-normalize after interpolation (interpolated normals have length < 1.0)
     let n = normalize(view_normal);
-    let depth = -view_position.z;  // Convert to positive depth
-    let inv_depth = 1.0 / (1.0 + depth);
-    let proj_factor = -view_position.x * view_position.y * inv_depth;
-    let basis1 = vec3<f32>(1.0 - view_position.x * view_position.x * inv_depth, proj_factor, -view_position.x);
-    let basis2 = vec3<f32>(proj_factor, 1.0 - view_position.y * view_position.y * inv_depth, -view_position.y);
-    let matcap_uv = vec2<f32>(dot(basis1, n), dot(basis2, n));
+    // Direction from surface TO camera (negate because view_position.z is negative in front)
+    // The formula requires positive Z for objects in front of camera
+    let I = normalize(-view_position);
 
-    return matcap_uv * 0.5 + 0.5;
+    // Orthonormal basis construction
+    let a = 1.0 / (1.0 + I.z);
+    let b = -I.x * I.y * a;
+    let b1 = vec3<f32>(1.0 - I.x * I.x * a, b, -I.x);
+    let b2 = vec3<f32>(b, 1.0 - I.y * I.y * a, -I.y);
+
+    let matcap_uv = vec2<f32>(dot(b1, n), dot(b2, n));
+
+    // Negate Y for wgpu texture coords (Y=0 at top), clamp to avoid edge artifacts
+    let uv = vec2<f32>(matcap_uv.x * 0.5 + 0.5, -matcap_uv.y * 0.5 + 0.5);
+    return clamp(uv, vec2<f32>(0.0), vec2<f32>(1.0));
 }
 
 // Convert RGB to HSV
@@ -125,8 +130,8 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     let shading = shading_states[in.shading_state_index];
     let material_color = unpack_rgba8(shading.color_rgba8);
 
-    // Unpack matcap blend modes from uniform_set_1 (Mode 1 uses this for blend modes)
-    let blend_modes_packed = shading.uniform_set_1;
+    // Unpack matcap blend modes from uniform_set_0 (Mode 1 uses this for blend modes)
+    let blend_modes_packed = shading.uniform_set_0;
     let blend_mode_0 = (blend_modes_packed) & 0xFFu;
     let blend_mode_1 = (blend_modes_packed >> 8u) & 0xFFu;
     let blend_mode_2 = (blend_modes_packed >> 16u) & 0xFFu;
