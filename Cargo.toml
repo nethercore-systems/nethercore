@@ -25,7 +25,7 @@ hashbrown.workspace = true
 
 [workspace]
 members = ["core", "emberware-z", "shared", "z-common", "xtask", "tools/ember-export", "tools/ember-cli"]
-exclude = ["examples/hello-world", "examples/triangle", "examples/textured-quad", "examples/cube", "examples/lighting", "examples/skinned-mesh", "examples/billboard", "examples/platformer", "examples/blinn-phong", "examples/procedural-shapes", "examples/audio-demo", "examples/textured-procedural", "examples/debug-demo", "examples/datapack-demo", "examples/font-demo", "examples/level-loader", "examples/asset-test", "examples/inspector-common", "examples/mode0-inspector", "examples/mode1-inspector", "examples/mode2-inspector", "examples/mode3-inspector"]
+exclude = ["examples/hello-world", "examples/triangle", "examples/textured-quad", "examples/cube", "examples/lighting", "examples/skinned-mesh", "examples/billboard", "examples/platformer", "examples/blinn-phong", "examples/procedural-shapes", "examples/audio-demo", "examples/textured-procedural", "examples/debug-demo", "examples/datapack-demo", "examples/font-demo", "examples/level-loader", "examples/asset-test", "examples/inspector-common", "examples/mode0-inspector", "examples/mode1-inspector", "examples/mode2-inspector", "examples/mode3-inspector", "examples/dither-demo"]
 resolver = "2"
 
 [workspace.package]
