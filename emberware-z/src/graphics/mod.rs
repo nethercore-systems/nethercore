@@ -51,7 +51,9 @@ pub use unified_shading_state::{
     pack_f16, pack_f16x2, pack_matcap_blend_modes, pack_rgb8, pack_unorm8, unpack_f16,
     unpack_f16x2, unpack_matcap_blend_modes, update_uniform_set_0_byte, update_uniform_set_1_byte,
     LightType, PackedLight, PackedUnifiedShadingState, ShadingStateIndex, FLAG_SKINNING_MODE,
-    FLAG_TEXTURE_FILTER_LINEAR,
+    FLAG_TEXTURE_FILTER_LINEAR, FLAG_UNIFORM_ALPHA_MASK, FLAG_UNIFORM_ALPHA_SHIFT,
+    FLAG_DITHER_OFFSET_X_MASK, FLAG_DITHER_OFFSET_X_SHIFT, FLAG_DITHER_OFFSET_Y_MASK,
+    FLAG_DITHER_OFFSET_Y_SHIFT, DEFAULT_FLAGS,
 };
 pub use vertex::{VertexFormatInfo, FORMAT_ALL, VERTEX_FORMAT_COUNT};
 
