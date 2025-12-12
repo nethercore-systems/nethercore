@@ -19,7 +19,7 @@
 #![no_main]
 
 use core::panic::PanicInfo;
-use examples_common::checkerboard_8x8;
+use examples_common::{checkerboard_8x8, color_to_u32};
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
@@ -375,9 +375,4 @@ fn draw_non_uv_sphere(x: f32, y: f32, z: f32, radius: f32) {
         use_uniform_roughness(0);
         use_uniform_emissive(0);
     }
-}
-
-/// Convert RGBA bytes to u32 color (0xRRGGBBAA format)
-fn color_to_u32(rgba: &[u8; 4]) -> u32 {
-    ((rgba[0] as u32) << 24) | ((rgba[1] as u32) << 16) | ((rgba[2] as u32) << 8) | (rgba[3] as u32)
 }

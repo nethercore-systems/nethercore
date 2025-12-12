@@ -20,6 +20,7 @@
 #![no_main]
 
 use core::panic::PanicInfo;
+use examples_common::color_to_u32;
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
@@ -217,12 +218,4 @@ pub extern "C" fn render() {
             draw_mesh(SPHERE_MESH);
         }
     }
-}
-
-/// Convert RGBA bytes to u32 color
-fn color_to_u32(rgba: &[u8; 4]) -> u32 {
-    ((rgba[0] as u32) << 24)
-        | ((rgba[1] as u32) << 16)
-        | ((rgba[2] as u32) << 8)
-        | (rgba[3] as u32)
 }

@@ -19,6 +19,7 @@
 #![no_main]
 
 use core::panic::PanicInfo;
+use examples_common::color_to_u32;
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
@@ -271,12 +272,4 @@ unsafe fn draw_ui() {
 
     let hint3 = b"F3 to open debug panel";
     draw_text(hint3.as_ptr(), hint3.len() as u32, 10.0, 110.0, 14.0, 0x888888FF);
-}
-
-/// Convert RGBA bytes to u32 color (0xRRGGBBAA)
-fn color_to_u32(rgba: &[u8; 4]) -> u32 {
-    ((rgba[0] as u32) << 24)
-        | ((rgba[1] as u32) << 16)
-        | ((rgba[2] as u32) << 8)
-        | (rgba[3] as u32)
 }

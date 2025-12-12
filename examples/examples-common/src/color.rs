@@ -1,6 +1,14 @@
-//! Color constants
+//! Color utilities
 //!
-//! Common color values as packed u32 (0xRRGGBBAA format).
+//! Common color values and conversion functions.
+//! All colors use packed u32 format (0xRRGGBBAA).
+
+/// Convert RGBA bytes to packed u32 color (0xRRGGBBAA format)
+///
+/// Can be used in const context.
+pub const fn color_to_u32(rgba: &[u8; 4]) -> u32 {
+    ((rgba[0] as u32) << 24) | ((rgba[1] as u32) << 16) | ((rgba[2] as u32) << 8) | (rgba[3] as u32)
+}
 
 pub const WHITE: u32 = 0xFFFFFFFF;
 pub const BLACK: u32 = 0x000000FF;
