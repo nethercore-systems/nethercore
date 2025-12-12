@@ -455,6 +455,67 @@ impl ZFFIState {
             | x
             | y;
 
+    // ========================================================================
+    // Material Override Flag Methods
+    // See material-overrides-spec.md for details
+    // ========================================================================
+
+    /// Update use_uniform_color flag
+    /// - false: use texture/vertex color
+    /// - true: use uniform color_rgba8
+    pub fn set_use_uniform_color(&mut self, enabled: bool) {
+        use crate::graphics::FLAG_USE_UNIFORM_COLOR;
+        self.update_override_flag(FLAG_USE_UNIFORM_COLOR, enabled);
+    }
+
+    /// Update use_uniform_metallic flag
+    /// - false: sample metallic from texture (Mode 2) / spec_damping from texture (Mode 3)
+    /// - true: use uniform metallic / spec_damping
+    pub fn set_use_uniform_metallic(&mut self, enabled: bool) {
+        use crate::graphics::FLAG_USE_UNIFORM_METALLIC;
+        self.update_override_flag(FLAG_USE_UNIFORM_METALLIC, enabled);
+    }
+
+    /// Update use_uniform_roughness flag
+    /// - false: sample roughness from texture (Mode 2) / shininess from texture (Mode 3)
+    /// - true: use uniform roughness / shininess
+    pub fn set_use_uniform_roughness(&mut self, enabled: bool) {
+        use crate::graphics::FLAG_USE_UNIFORM_ROUGHNESS;
+        self.update_override_flag(FLAG_USE_UNIFORM_ROUGHNESS, enabled);
+    }
+
+    /// Update use_uniform_emissive flag
+    /// - false: sample emissive from texture
+    /// - true: use uniform emissive intensity
+    pub fn set_use_uniform_emissive(&mut self, enabled: bool) {
+        use crate::graphics::FLAG_USE_UNIFORM_EMISSIVE;
+        self.update_override_flag(FLAG_USE_UNIFORM_EMISSIVE, enabled);
+    }
+
+    /// Update use_uniform_specular flag (Mode 3 only)
+    /// - false: sample specular color from texture
+    /// - true: use uniform specular RGB
+    pub fn set_use_uniform_specular(&mut self, enabled: bool) {
+        use crate::graphics::FLAG_USE_UNIFORM_SPECULAR;
+        self.update_override_flag(FLAG_USE_UNIFORM_SPECULAR, enabled);
+    }
+
+    /// Update use_matcap_reflection flag (Mode 1 only)
+    /// - false: use procedural sky for reflection
+    /// - true: use matcap texture for stylized reflection
+    pub fn set_use_matcap_reflection(&mut self, enabled: bool) {
+        use crate::graphics::FLAG_USE_MATCAP_REFLECTION;
+        self.update_override_flag(FLAG_USE_MATCAP_REFLECTION, enabled);
+    }
+
+    /// Internal helper to update an override flag
+    fn update_override_flag(&mut self, flag: u32, enabled: bool) {
+        let new_flags = if enabled {
+            self.current_shading_state.flags | flag
+        } else {
+            self.current_shading_state.flags & !flag
+        };
+
         if self.current_shading_state.flags != new_flags {
             self.current_shading_state.flags = new_flags;
             self.shading_state_dirty = true;

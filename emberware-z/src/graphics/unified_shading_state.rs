@@ -493,6 +493,35 @@ pub const FLAG_DITHER_OFFSET_Y_SHIFT: u32 = 14;
 
 /// Default flags value with uniform_alpha = 15 (opaque)
 pub const DEFAULT_FLAGS: u32 = 0xF << 8;
+// Material Override Flags (bits 2-7)
+// See material-overrides-spec.md for details
+// ============================================================================
+
+/// Flag bit for uniform color override (bit 2)
+/// 0 = use texture/vertex color, 1 = use uniform color_rgba8
+pub const FLAG_USE_UNIFORM_COLOR: u32 = 1 << 2;
+
+/// Flag bit for uniform metallic override (bit 3)
+/// Mode 2: 0 = sample metallic from texture R, 1 = use uniform metallic
+/// Mode 3: 0 = sample spec_damping from texture, 1 = use uniform spec_damping
+pub const FLAG_USE_UNIFORM_METALLIC: u32 = 1 << 3;
+
+/// Flag bit for uniform roughness override (bit 4)
+/// Mode 2: 0 = sample roughness from texture G, 1 = use uniform roughness
+/// Mode 3: 0 = sample shininess from texture, 1 = use uniform shininess
+pub const FLAG_USE_UNIFORM_ROUGHNESS: u32 = 1 << 4;
+
+/// Flag bit for uniform emissive override (bit 5)
+/// 0 = sample emissive from texture B, 1 = use uniform emissive intensity
+pub const FLAG_USE_UNIFORM_EMISSIVE: u32 = 1 << 5;
+
+/// Flag bit for uniform specular override (bit 6, Mode 3 only)
+/// 0 = sample specular color from texture, 1 = use uniform specular RGB
+pub const FLAG_USE_UNIFORM_SPECULAR: u32 = 1 << 6;
+
+/// Flag bit for matcap vs sky reflection (bit 7, Mode 1 only)
+/// 0 = use procedural sky for reflection, 1 = use matcap texture
+pub const FLAG_USE_MATCAP_REFLECTION: u32 = 1 << 7;
 
 impl PackedUnifiedShadingState {
     /// Create from all f32 parameters (used during FFI calls)
@@ -543,6 +572,26 @@ impl PackedUnifiedShadingState {
     #[inline]
     pub fn skinning_mode(&self) -> bool {
         (self.flags & FLAG_SKINNING_MODE) != 0
+    }
+
+    /// Set a material override flag
+    ///
+    /// # Arguments
+    /// * `flag` - The flag constant (e.g., FLAG_USE_UNIFORM_COLOR)
+    /// * `enabled` - Whether to enable or disable the flag
+    #[inline]
+    pub fn set_override_flag(&mut self, flag: u32, enabled: bool) {
+        if enabled {
+            self.flags |= flag;
+        } else {
+            self.flags &= !flag;
+        }
+    }
+
+    /// Check if a material override flag is set
+    #[inline]
+    pub fn has_override_flag(&self, flag: u32) -> bool {
+        (self.flags & flag) != 0
     }
 }
 
@@ -888,5 +937,216 @@ mod tests {
             (state.flags & FLAG_DITHER_OFFSET_Y_MASK) >> FLAG_DITHER_OFFSET_Y_SHIFT,
             3
         );
+    // Material Override Flag Tests
+    // ========================================================================
+
+    #[test]
+    fn test_material_override_flag_bit_positions() {
+        // Verify all override flags have correct bit positions
+        assert_eq!(FLAG_USE_UNIFORM_COLOR, 1 << 2);
+        assert_eq!(FLAG_USE_UNIFORM_METALLIC, 1 << 3);
+        assert_eq!(FLAG_USE_UNIFORM_ROUGHNESS, 1 << 4);
+        assert_eq!(FLAG_USE_UNIFORM_EMISSIVE, 1 << 5);
+        assert_eq!(FLAG_USE_UNIFORM_SPECULAR, 1 << 6);
+        assert_eq!(FLAG_USE_MATCAP_REFLECTION, 1 << 7);
+
+        // Verify no overlap with existing flags
+        assert_ne!(FLAG_USE_UNIFORM_COLOR, FLAG_SKINNING_MODE);
+        assert_ne!(FLAG_USE_UNIFORM_COLOR, FLAG_TEXTURE_FILTER_LINEAR);
+    }
+
+    #[test]
+    fn test_material_override_flags_independence() {
+        // Verify all override flags can be set independently
+        let mut state = PackedUnifiedShadingState::default();
+
+        // Set all material override flags
+        state.set_override_flag(FLAG_USE_UNIFORM_COLOR, true);
+        state.set_override_flag(FLAG_USE_UNIFORM_METALLIC, true);
+        state.set_override_flag(FLAG_USE_UNIFORM_ROUGHNESS, true);
+        state.set_override_flag(FLAG_USE_UNIFORM_EMISSIVE, true);
+        state.set_override_flag(FLAG_USE_UNIFORM_SPECULAR, true);
+        state.set_override_flag(FLAG_USE_MATCAP_REFLECTION, true);
+
+        // Verify all are set
+        assert!(state.has_override_flag(FLAG_USE_UNIFORM_COLOR));
+        assert!(state.has_override_flag(FLAG_USE_UNIFORM_METALLIC));
+        assert!(state.has_override_flag(FLAG_USE_UNIFORM_ROUGHNESS));
+        assert!(state.has_override_flag(FLAG_USE_UNIFORM_EMISSIVE));
+        assert!(state.has_override_flag(FLAG_USE_UNIFORM_SPECULAR));
+        assert!(state.has_override_flag(FLAG_USE_MATCAP_REFLECTION));
+
+        // Clear one and verify others remain
+        state.set_override_flag(FLAG_USE_UNIFORM_COLOR, false);
+        assert!(!state.has_override_flag(FLAG_USE_UNIFORM_COLOR));
+        assert!(state.has_override_flag(FLAG_USE_UNIFORM_METALLIC));
+        assert!(state.has_override_flag(FLAG_USE_MATCAP_REFLECTION));
+    }
+
+    #[test]
+    fn test_material_override_flags_default_to_zero() {
+        // All override flags should default to 0 (use texture/default behavior)
+        let state = PackedUnifiedShadingState::default();
+
+        assert!(!state.has_override_flag(FLAG_USE_UNIFORM_COLOR));
+        assert!(!state.has_override_flag(FLAG_USE_UNIFORM_METALLIC));
+        assert!(!state.has_override_flag(FLAG_USE_UNIFORM_ROUGHNESS));
+        assert!(!state.has_override_flag(FLAG_USE_UNIFORM_EMISSIVE));
+        assert!(!state.has_override_flag(FLAG_USE_UNIFORM_SPECULAR));
+        assert!(!state.has_override_flag(FLAG_USE_MATCAP_REFLECTION));
+    }
+
+    #[test]
+    fn test_override_flags_dont_affect_existing_flags() {
+        // Verify material override flags don't interfere with skinning/filter flags
+        let mut state = PackedUnifiedShadingState::default();
+
+        // Set skinning and filter flags
+        state.flags |= FLAG_SKINNING_MODE | FLAG_TEXTURE_FILTER_LINEAR;
+        assert!(state.skinning_mode());
+
+        // Set all material override flags
+        state.set_override_flag(FLAG_USE_UNIFORM_COLOR, true);
+        state.set_override_flag(FLAG_USE_UNIFORM_METALLIC, true);
+
+        // Verify skinning and filter flags are still set
+        assert!(state.skinning_mode());
+        assert_ne!(state.flags & FLAG_TEXTURE_FILTER_LINEAR, 0);
+
+        // Verify material flags are set
+        assert!(state.has_override_flag(FLAG_USE_UNIFORM_COLOR));
+        assert!(state.has_override_flag(FLAG_USE_UNIFORM_METALLIC));
+
+        // Clear material flags, verify others remain
+        state.set_override_flag(FLAG_USE_UNIFORM_COLOR, false);
+        state.set_override_flag(FLAG_USE_UNIFORM_METALLIC, false);
+        assert!(state.skinning_mode());
+        assert_ne!(state.flags & FLAG_TEXTURE_FILTER_LINEAR, 0);
+    }
+
+    #[test]
+    fn test_flag_packing_roundtrip() {
+        // Test that flags pack/unpack correctly through all 6 override flags
+        for flag in [
+            FLAG_USE_UNIFORM_COLOR,
+            FLAG_USE_UNIFORM_METALLIC,
+            FLAG_USE_UNIFORM_ROUGHNESS,
+            FLAG_USE_UNIFORM_EMISSIVE,
+            FLAG_USE_UNIFORM_SPECULAR,
+            FLAG_USE_MATCAP_REFLECTION,
+        ] {
+            let mut state = PackedUnifiedShadingState::default();
+
+            // Verify flag starts unset
+            assert!(
+                !state.has_override_flag(flag),
+                "Flag {:08b} should start unset",
+                flag
+            );
+
+            // Set flag
+            state.set_override_flag(flag, true);
+            assert!(
+                state.has_override_flag(flag),
+                "Flag {:08b} should be set",
+                flag
+            );
+
+            // Unset flag
+            state.set_override_flag(flag, false);
+            assert!(
+                !state.has_override_flag(flag),
+                "Flag {:08b} should be unset",
+                flag
+            );
+        }
+    }
+
+    #[test]
+    fn test_override_flag_toggle() {
+        // Explicit test for enable/disable cycle as specified in spec
+        let mut state = PackedUnifiedShadingState::default();
+
+        // Enable
+        state.set_override_flag(FLAG_USE_UNIFORM_EMISSIVE, true);
+        assert!(state.has_override_flag(FLAG_USE_UNIFORM_EMISSIVE));
+
+        // Disable
+        state.set_override_flag(FLAG_USE_UNIFORM_EMISSIVE, false);
+        assert!(!state.has_override_flag(FLAG_USE_UNIFORM_EMISSIVE));
+
+        // Enable again
+        state.set_override_flag(FLAG_USE_UNIFORM_EMISSIVE, true);
+        assert!(state.has_override_flag(FLAG_USE_UNIFORM_EMISSIVE));
+    }
+
+    #[test]
+    fn test_override_with_future_dither_flags_coexist() {
+        // Material overrides (bits 2-7) and future dither flags (bits 8-15) shouldn't conflict
+        // This tests forward compatibility with the transparency spec
+        let mut state = PackedUnifiedShadingState::default();
+
+        // Set material overrides (bits 2-7)
+        state.set_override_flag(FLAG_USE_UNIFORM_COLOR, true);
+        state.set_override_flag(FLAG_USE_UNIFORM_METALLIC, true);
+        state.set_override_flag(FLAG_USE_UNIFORM_ROUGHNESS, true);
+
+        // Simulate setting dither values in bits 8-15 directly
+        // uniform_alpha (bits 8-11) = 8 (50% alpha)
+        // dither_offset_x (bits 12-13) = 2
+        // dither_offset_y (bits 14-15) = 1
+        let dither_bits: u32 = (8 << 8) | (2 << 12) | (1 << 14);
+        state.flags |= dither_bits;
+
+        // Verify material override flags are preserved
+        assert!(state.has_override_flag(FLAG_USE_UNIFORM_COLOR));
+        assert!(state.has_override_flag(FLAG_USE_UNIFORM_METALLIC));
+        assert!(state.has_override_flag(FLAG_USE_UNIFORM_ROUGHNESS));
+        assert!(!state.has_override_flag(FLAG_USE_UNIFORM_EMISSIVE));
+        assert!(!state.has_override_flag(FLAG_USE_UNIFORM_SPECULAR));
+        assert!(!state.has_override_flag(FLAG_USE_MATCAP_REFLECTION));
+
+        // Verify dither bits are preserved
+        assert_eq!((state.flags >> 8) & 0xF, 8); // uniform_alpha
+        assert_eq!((state.flags >> 12) & 0x3, 2); // dither_offset_x
+        assert_eq!((state.flags >> 14) & 0x3, 1); // dither_offset_y
+
+        // Verify skinning/filter flags (bits 0-1) are still 0
+        assert!(!state.skinning_mode());
+        assert_eq!(state.flags & FLAG_TEXTURE_FILTER_LINEAR, 0);
+
+        // Now clear some material flags and verify dither is preserved
+        state.set_override_flag(FLAG_USE_UNIFORM_COLOR, false);
+        assert!(!state.has_override_flag(FLAG_USE_UNIFORM_COLOR));
+        assert_eq!((state.flags >> 8) & 0xF, 8); // dither still intact
+    }
+
+    #[test]
+    fn test_all_flag_bits_addressable() {
+        // Verify we can set and read bits 0-7 independently
+        let mut state = PackedUnifiedShadingState::default();
+
+        // Set all 8 bits that are currently defined
+        state.flags = FLAG_SKINNING_MODE
+            | FLAG_TEXTURE_FILTER_LINEAR
+            | FLAG_USE_UNIFORM_COLOR
+            | FLAG_USE_UNIFORM_METALLIC
+            | FLAG_USE_UNIFORM_ROUGHNESS
+            | FLAG_USE_UNIFORM_EMISSIVE
+            | FLAG_USE_UNIFORM_SPECULAR
+            | FLAG_USE_MATCAP_REFLECTION;
+
+        // Verify all 8 bits are set (bits 0-7 = 0xFF)
+        assert_eq!(state.flags & 0xFF, 0xFF);
+
+        // Verify each flag individually
+        assert!(state.skinning_mode());
+        assert_ne!(state.flags & FLAG_TEXTURE_FILTER_LINEAR, 0);
+        assert!(state.has_override_flag(FLAG_USE_UNIFORM_COLOR));
+        assert!(state.has_override_flag(FLAG_USE_UNIFORM_METALLIC));
+        assert!(state.has_override_flag(FLAG_USE_UNIFORM_ROUGHNESS));
+        assert!(state.has_override_flag(FLAG_USE_UNIFORM_EMISSIVE));
+        assert!(state.has_override_flag(FLAG_USE_UNIFORM_SPECULAR));
+        assert!(state.has_override_flag(FLAG_USE_MATCAP_REFLECTION));
     }
 }

@@ -13,14 +13,38 @@ use crate::state::ZFFIState;
 
 /// Register material FFI functions
 pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
+    // Texture binding functions
     linker.func_wrap("env", "material_mre", material_mre)?;
     linker.func_wrap("env", "material_albedo", material_albedo)?;
+
+    // Material value setters
     linker.func_wrap("env", "material_metallic", material_metallic)?;
     linker.func_wrap("env", "material_roughness", material_roughness)?;
     linker.func_wrap("env", "material_emissive", material_emissive)?;
     linker.func_wrap("env", "material_rim", material_rim)?;
     linker.func_wrap("env", "material_shininess", material_shininess)?;
     linker.func_wrap("env", "material_specular", material_specular)?;
+
+    // Mode 3 aliases (for semantic clarity)
+    linker.func_wrap(
+        "env",
+        "material_specular_damping",
+        material_specular_damping,
+    )?;
+    linker.func_wrap("env", "material_specular_color", material_specular_color)?;
+
+    // Material override flags (see material-overrides-spec.md)
+    linker.func_wrap("env", "use_uniform_color", use_uniform_color)?;
+    linker.func_wrap("env", "use_uniform_metallic", use_uniform_metallic)?;
+    linker.func_wrap("env", "use_uniform_roughness", use_uniform_roughness)?;
+    linker.func_wrap("env", "use_uniform_emissive", use_uniform_emissive)?;
+    linker.func_wrap("env", "use_uniform_specular", use_uniform_specular)?;
+    linker.func_wrap("env", "use_matcap_reflection", use_matcap_reflection)?;
+
+    // Aliases for override flags (for semantic clarity in different modes)
+    linker.func_wrap("env", "use_uniform_specular_damping", use_uniform_metallic)?;
+    linker.func_wrap("env", "use_uniform_shininess", use_uniform_roughness)?;
+
     Ok(())
 }
 
@@ -183,4 +207,125 @@ fn material_specular(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFISta
 
     // Specular RGB stored in uniform_set_1 bytes 0-2 (byte 3 = rim_power)
     state.update_specular_color(r, g, b);
+}
+
+// ============================================================================
+// Mode 3 Aliases (for semantic clarity)
+// ============================================================================
+
+/// Set specular damping (Mode 3 only, alias for material_metallic)
+///
+/// # Arguments
+/// * `value` — Damping value (0.0 = full specular, 1.0 = no specular)
+///
+/// This is an alias for material_metallic() for clarity when using Mode 3.
+/// Note: This is INVERTED from metallic - 0 gives full specular (beginner-friendly).
+fn material_specular_damping(
+    caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    value: f32,
+) {
+    // Simply calls material_metallic - field reinterpretation happens in the shader
+    material_metallic(caller, value);
+}
+
+/// Set specular color as RGB floats (Mode 3 only)
+///
+/// # Arguments
+/// * `r`, `g`, `b` — Color components (0.0-1.0)
+///
+/// Alternative to material_specular(u32) when you have separate float components.
+fn material_specular_color(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    r: f32,
+    g: f32,
+    b: f32,
+) {
+    let state = &mut caller.data_mut().console;
+    state.update_specular_color(r.clamp(0.0, 1.0), g.clamp(0.0, 1.0), b.clamp(0.0, 1.0));
+}
+
+// ============================================================================
+// Material Override Flag Functions
+// See material-overrides-spec.md for details
+// ============================================================================
+
+/// Set whether to use uniform color instead of texture/vertex color
+///
+/// # Arguments
+/// * `enabled` — 0 = use texture/vertex color (default), 1 = use uniform color_rgba8
+///
+/// When enabled, the uniform color (set via set_color) is used instead of sampling
+/// from the albedo texture. Useful for solid-colored objects or temporary overrides.
+fn use_uniform_color(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    enabled: u32,
+) {
+    let state = &mut caller.data_mut().console;
+    state.set_use_uniform_color(enabled != 0);
+}
+
+/// Set whether to use uniform metallic instead of texture (Mode 2)
+/// or uniform specular damping instead of texture (Mode 3)
+///
+/// # Arguments
+/// * `enabled` — 0 = sample from texture (default), 1 = use uniform value
+fn use_uniform_metallic(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    enabled: u32,
+) {
+    let state = &mut caller.data_mut().console;
+    state.set_use_uniform_metallic(enabled != 0);
+}
+
+/// Set whether to use uniform roughness instead of texture (Mode 2)
+/// or uniform shininess instead of texture (Mode 3)
+///
+/// # Arguments
+/// * `enabled` — 0 = sample from texture (default), 1 = use uniform value
+fn use_uniform_roughness(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    enabled: u32,
+) {
+    let state = &mut caller.data_mut().console;
+    state.set_use_uniform_roughness(enabled != 0);
+}
+
+/// Set whether to use uniform emissive intensity instead of texture
+///
+/// # Arguments
+/// * `enabled` — 0 = sample from texture (default), 1 = use uniform value
+///
+/// Applies to Mode 2 (PBR) and Mode 3 (Specular-Shininess).
+fn use_uniform_emissive(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    enabled: u32,
+) {
+    let state = &mut caller.data_mut().console;
+    state.set_use_uniform_emissive(enabled != 0);
+}
+
+/// Set whether to use uniform specular color instead of texture (Mode 3 only)
+///
+/// # Arguments
+/// * `enabled` — 0 = sample from specular texture (default), 1 = use uniform specular RGB
+fn use_uniform_specular(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    enabled: u32,
+) {
+    let state = &mut caller.data_mut().console;
+    state.set_use_uniform_specular(enabled != 0);
+}
+
+/// Set whether to use matcap texture for reflection instead of sky (Mode 1 only)
+///
+/// # Arguments
+/// * `enabled` — 0 = use procedural sky reflection (default), 1 = use matcap texture
+///
+/// When enabled, matcap slots provide stylized reflection instead of the procedural sky.
+fn use_matcap_reflection(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    enabled: u32,
+) {
+    let state = &mut caller.data_mut().console;
+    state.set_use_matcap_reflection(enabled != 0);
 }
