@@ -211,6 +211,24 @@ impl ZGraphics {
             .load_texture(&self.device, &self.queue, width, height, pixels)
     }
 
+    /// Load a texture with explicit format (RGBA8 or BC7)
+    pub fn load_texture_with_format(
+        &mut self,
+        width: u32,
+        height: u32,
+        data: &[u8],
+        format: z_common::TextureFormat,
+    ) -> Result<TextureHandle> {
+        self.texture_manager.load_texture_with_format(
+            &self.device,
+            &self.queue,
+            width,
+            height,
+            data,
+            format,
+        )
+    }
+
     pub fn get_texture_view(&self, handle: TextureHandle) -> Option<&wgpu::TextureView> {
         self.texture_manager.get_texture_view(handle)
     }

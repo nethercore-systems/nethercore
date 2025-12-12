@@ -17,6 +17,7 @@ use emberware_core::wasm::GameStateWithConsole;
 use crate::audio::Sound;
 use crate::console::ZInput;
 use crate::state::{PendingMeshPacked, PendingSkeleton, PendingTexture, ZFFIState, MAX_SKELETONS};
+use z_common::TextureFormat;
 
 /// Register ROM data pack FFI functions
 pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
@@ -97,7 +98,7 @@ fn rom_texture(
         .ok_or_else(|| anyhow::anyhow!("rom_texture: failed to read asset ID"))?;
 
     // Extract texture data from data pack (read-only access)
-    let (width, height, data) = {
+    let (width, height, format, data) = {
         let state = &caller.data().console;
         let data_pack = state
             .data_pack
@@ -106,7 +107,12 @@ fn rom_texture(
         let texture = data_pack.find_texture(&id).ok_or_else(|| {
             anyhow::anyhow!("rom_texture: texture '{}' not found in data pack", id)
         })?;
-        (texture.width, texture.height, texture.data.clone())
+        (
+            texture.width as u32,
+            texture.height as u32,
+            texture.format,
+            texture.data.clone(),
+        )
     };
 
     // Now mutate state to allocate handle and queue upload
@@ -118,6 +124,7 @@ fn rom_texture(
         handle,
         width,
         height,
+        format,
         data,
     });
 
@@ -282,10 +289,12 @@ fn rom_font(
     let atlas_handle = state.next_texture_handle;
     state.next_texture_handle += 1;
 
+    // Font atlases are always RGBA8 (uncompressed for crisp text)
     state.pending_textures.push(PendingTexture {
         handle: atlas_handle,
         width: atlas_width,
         height: atlas_height,
+        format: TextureFormat::Rgba8,
         data: atlas_data,
     });
 

@@ -13,6 +13,63 @@
 use bitcode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
+/// Texture compression format
+///
+/// Determined by render mode:
+/// - Mode 0 (Unlit): RGBA8 — pixel-perfect, full alpha
+/// - Mode 1-3 (Matcap/MRBP/SSBP): BC7 — 4× compression, stipple transparency
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Encode, Decode)]
+pub enum TextureFormat {
+    /// Uncompressed RGBA8 (4 bytes per pixel)
+    /// Used for Mode 0 (Unlit) and procedural textures
+    #[default]
+    Rgba8,
+
+    /// BC7 compressed (8 bits per pixel, sRGB color space)
+    /// Used for albedo, matcap, specular color, environment textures
+    Bc7,
+
+    /// BC7 compressed (8 bits per pixel, linear color space)
+    /// Used for material maps (metallic/roughness/emissive in slot 1)
+    Bc7Linear,
+}
+
+impl TextureFormat {
+    /// Check if this format is BC7 (compressed)
+    pub fn is_bc7(&self) -> bool {
+        matches!(self, TextureFormat::Bc7 | TextureFormat::Bc7Linear)
+    }
+
+    /// Check if this format uses sRGB color space
+    pub fn is_srgb(&self) -> bool {
+        matches!(self, TextureFormat::Rgba8 | TextureFormat::Bc7)
+    }
+
+    /// Calculate data size for given dimensions
+    pub fn data_size(&self, width: u16, height: u16) -> usize {
+        let w = width as usize;
+        let h = height as usize;
+
+        match self {
+            TextureFormat::Rgba8 => w * h * 4,
+            TextureFormat::Bc7 | TextureFormat::Bc7Linear => {
+                let blocks_x = (w + 3) / 4;
+                let blocks_y = (h + 3) / 4;
+                blocks_x * blocks_y * 16
+            }
+        }
+    }
+
+    /// Get wgpu-compatible format name (for debugging/logging)
+    pub fn wgpu_format_name(&self) -> &'static str {
+        match self {
+            TextureFormat::Rgba8 => "Rgba8UnormSrgb",
+            TextureFormat::Bc7 => "Bc7RgbaUnormSrgb",
+            TextureFormat::Bc7Linear => "Bc7RgbaUnorm",
+        }
+    }
+}
+
 use emberware_shared::math::BoneMatrix3x4;
 
 /// Emberware Z data pack
@@ -97,43 +154,76 @@ impl ZDataPack {
     }
 }
 
-/// Packed texture (RGBA8 pixel data)
+/// Packed texture (RGBA8 or BC7 compressed)
 ///
 /// Ready for direct GPU upload via `wgpu::Queue::write_texture()`.
+/// Format is determined by render mode at build time.
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct PackedTexture {
     /// Asset ID (e.g., "player_idle", "stage1_tileset")
     pub id: String,
 
-    /// Texture width in pixels
-    pub width: u32,
+    /// Texture width in pixels (max 65535)
+    pub width: u16,
 
-    /// Texture height in pixels
-    pub height: u32,
+    /// Texture height in pixels (max 65535)
+    pub height: u16,
 
-    /// RGBA8 pixel data (width * height * 4 bytes)
+    /// Texture format (RGBA8 or BC7)
+    #[serde(default)]
+    pub format: TextureFormat,
+
+    /// Pixel data (RGBA8) or compressed blocks (BC7)
     pub data: Vec<u8>,
 }
 
 impl PackedTexture {
-    /// Create a new packed texture
+    /// Create a new RGBA8 packed texture
     pub fn new(id: impl Into<String>, width: u32, height: u32, data: Vec<u8>) -> Self {
         Self {
             id: id.into(),
-            width,
-            height,
+            width: width as u16,
+            height: height as u16,
+            format: TextureFormat::Rgba8,
             data,
         }
     }
 
-    /// Get expected data size (width * height * 4)
-    pub fn expected_size(&self) -> usize {
-        (self.width * self.height * 4) as usize
+    /// Create a new packed texture with explicit format
+    pub fn with_format(
+        id: impl Into<String>,
+        width: u16,
+        height: u16,
+        format: TextureFormat,
+        data: Vec<u8>,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            width,
+            height,
+            format,
+            data,
+        }
     }
 
-    /// Validate that data size matches dimensions
+    /// Get expected data size based on format
+    pub fn expected_size(&self) -> usize {
+        self.format.data_size(self.width, self.height)
+    }
+
+    /// Validate that data size matches dimensions and format
     pub fn validate(&self) -> bool {
         self.data.len() == self.expected_size()
+    }
+
+    /// Check if texture is BC7 compressed
+    pub fn is_bc7(&self) -> bool {
+        self.format.is_bc7()
+    }
+
+    /// Get dimensions as u32 tuple (for wgpu compatibility)
+    pub fn dimensions_u32(&self) -> (u32, u32) {
+        (self.width as u32, self.height as u32)
     }
 }
 
@@ -682,6 +772,105 @@ mod tests {
         assert!((decoded.find_font("font").unwrap().line_height - 12.0).abs() < 0.001);
         assert_eq!(decoded.find_sound("sfx").unwrap().data.len(), 100);
         assert_eq!(decoded.find_data("raw").unwrap().data, vec![9, 8, 7]);
+    }
+
+    // ========================================================================
+    // TextureFormat tests
+    // ========================================================================
+
+    #[test]
+    fn test_texture_format_default() {
+        let tex = PackedTexture::new("test", 64, 64, vec![0; 64 * 64 * 4]);
+        assert_eq!(tex.format, TextureFormat::Rgba8);
+    }
+
+    #[test]
+    fn test_texture_format_equality() {
+        assert_eq!(TextureFormat::Rgba8, TextureFormat::Rgba8);
+        assert_eq!(TextureFormat::Bc7, TextureFormat::Bc7);
+        assert_eq!(TextureFormat::Bc7Linear, TextureFormat::Bc7Linear);
+
+        assert_ne!(TextureFormat::Rgba8, TextureFormat::Bc7);
+        assert_ne!(TextureFormat::Bc7, TextureFormat::Bc7Linear);
+    }
+
+    #[test]
+    fn test_texture_format_is_bc7() {
+        assert!(!TextureFormat::Rgba8.is_bc7());
+        assert!(TextureFormat::Bc7.is_bc7());
+        assert!(TextureFormat::Bc7Linear.is_bc7());
+    }
+
+    #[test]
+    fn test_texture_format_is_srgb() {
+        assert!(TextureFormat::Rgba8.is_srgb());
+        assert!(TextureFormat::Bc7.is_srgb());
+        assert!(!TextureFormat::Bc7Linear.is_srgb());
+    }
+
+    #[test]
+    fn test_texture_format_data_size_rgba8() {
+        assert_eq!(TextureFormat::Rgba8.data_size(64, 64), 64 * 64 * 4);
+        assert_eq!(TextureFormat::Rgba8.data_size(32, 32), 32 * 32 * 4);
+        assert_eq!(TextureFormat::Rgba8.data_size(128, 64), 128 * 64 * 4);
+    }
+
+    #[test]
+    fn test_texture_format_data_size_bc7() {
+        // 64×64 = 16×16 blocks × 16 bytes = 4096 bytes
+        assert_eq!(TextureFormat::Bc7.data_size(64, 64), 4096);
+
+        // 32×32 = 8×8 blocks × 16 bytes = 1024 bytes
+        assert_eq!(TextureFormat::Bc7.data_size(32, 32), 1024);
+
+        // 128×128 = 32×32 blocks × 16 bytes = 16384 bytes
+        assert_eq!(TextureFormat::Bc7.data_size(128, 128), 16384);
+    }
+
+    #[test]
+    fn test_texture_format_data_size_bc7_non_aligned() {
+        // 30×30 → 8×8 blocks (rounds up) × 16 bytes = 1024 bytes
+        assert_eq!(TextureFormat::Bc7.data_size(30, 30), 8 * 8 * 16);
+
+        // 1×1 → 1×1 blocks × 16 bytes = 16 bytes
+        assert_eq!(TextureFormat::Bc7.data_size(1, 1), 16);
+
+        // 5×7 → 2×2 blocks × 16 bytes = 64 bytes
+        assert_eq!(TextureFormat::Bc7.data_size(5, 7), 2 * 2 * 16);
+    }
+
+    #[test]
+    fn test_bc7_compression_ratio() {
+        let w: u16 = 64;
+        let h: u16 = 64;
+        let rgba8 = TextureFormat::Rgba8.data_size(w, h);
+        let bc7 = TextureFormat::Bc7.data_size(w, h);
+        assert_eq!(rgba8 / bc7, 4); // 4× compression ratio
+    }
+
+    #[test]
+    fn test_packed_texture_with_format() {
+        let tex = PackedTexture::with_format(
+            "material",
+            64,
+            64,
+            TextureFormat::Bc7Linear,
+            vec![0; 4096], // BC7 size for 64×64
+        );
+
+        assert_eq!(tex.width, 64);
+        assert_eq!(tex.height, 64);
+        assert_eq!(tex.format, TextureFormat::Bc7Linear);
+        assert!(tex.is_bc7());
+        assert!(tex.validate());
+    }
+
+    #[test]
+    fn test_packed_texture_dimensions_u32() {
+        let tex = PackedTexture::new("test", 256, 128, vec![0; 256 * 128 * 4]);
+        let (w, h) = tex.dimensions_u32();
+        assert_eq!(w, 256);
+        assert_eq!(h, 128);
     }
 
     #[test]

@@ -27,6 +27,9 @@ bitcode = "0.6"
 # Image processing (for texture conversion)
 image = "0.24"
 
+# Texture compression
+intel_tex_2 = "0.5"  # BC7 compression (ISPC-based, high quality)
+
 # Filesystem
 directories = "5"
 walkdir = "2"

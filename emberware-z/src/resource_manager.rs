@@ -44,15 +44,22 @@ impl ConsoleResourceManager for ZResourceManager {
         _audio: &mut dyn Audio,
         state: &mut Self::State,
     ) {
-        // Process pending textures
+        // Process pending textures (RGBA8 or BC7)
         for pending in state.pending_textures.drain(..) {
-            match graphics.load_texture(pending.width, pending.height, &pending.data) {
+            let result = graphics.load_texture_with_format(
+                pending.width,
+                pending.height,
+                &pending.data,
+                pending.format,
+            );
+            match result {
                 Ok(handle) => {
                     self.texture_map.insert(pending.handle, handle);
                     tracing::debug!(
-                        "Loaded texture: game_handle={} -> graphics_handle={:?}",
+                        "Loaded texture: game_handle={} -> graphics_handle={:?} ({:?})",
                         pending.handle,
-                        handle
+                        handle,
+                        pending.format,
                     );
                 }
                 Err(e) => {

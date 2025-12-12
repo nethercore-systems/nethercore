@@ -127,7 +127,7 @@ fn verify_ember_z_mesh(data: &[u8]) {
 }
 
 // Verify EmberZTexture header structure
-fn verify_ember_z_texture(data: &[u8], expected_width: u32, expected_height: u32) {
+fn verify_ember_z_texture(data: &[u8], expected_width: u16, expected_height: u16) {
     use z_common::EmberZTextureHeader;
 
     assert!(
@@ -140,7 +140,7 @@ fn verify_ember_z_texture(data: &[u8], expected_width: u32, expected_height: u32
     assert_eq!(header.width, expected_width, "Width mismatch");
     assert_eq!(header.height, expected_height, "Height mismatch");
 
-    let pixel_size = header.pixel_size();
+    let pixel_size = header.rgba8_size();
     let expected_total = EmberZTextureHeader::SIZE + pixel_size;
 
     assert_eq!(

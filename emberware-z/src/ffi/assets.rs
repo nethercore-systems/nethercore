@@ -22,6 +22,7 @@ use emberware_core::wasm::GameStateWithConsole;
 use z_common::formats::{
     EmberZMeshHeader, EmberZSkeletonHeader, EmberZSoundHeader, EmberZTextureHeader,
 };
+use z_common::TextureFormat;
 
 use crate::audio::Sound;
 use crate::console::ZInput;
@@ -237,7 +238,9 @@ fn load_ztex(
         }
 
         // Calculate pixel data size (RGBA8 = 4 bytes per pixel)
-        let Some(pixels) = header.width.checked_mul(header.height) else {
+        let width = header.width as u32;
+        let height = header.height as u32;
+        let Some(pixels) = width.checked_mul(height) else {
             warn!(
                 "load_ztex: dimensions overflow ({}x{})",
                 header.width, header.height
@@ -266,7 +269,7 @@ fn load_ztex(
         let pixel_data =
             data[EmberZTextureHeader::SIZE..EmberZTextureHeader::SIZE + pixel_size].to_vec();
 
-        (header.width, header.height, pixel_data)
+        (width, height, pixel_data)
     };
 
     // Now we can mutably borrow state
@@ -277,10 +280,12 @@ fn load_ztex(
     state.next_texture_handle += 1;
 
     // Store texture data for the graphics backend
+    // load_ztex() always uses RGBA8 format (embedded binary format)
     state.pending_textures.push(PendingTexture {
         handle,
         width,
         height,
+        format: TextureFormat::Rgba8,
         data: pixel_data,
     });
 

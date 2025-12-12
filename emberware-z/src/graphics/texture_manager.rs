@@ -1,6 +1,7 @@
 //! Texture management for Emberware Z graphics.
 //!
 //! Handles texture loading, VRAM tracking, and fallback textures.
+//! Supports both RGBA8 (uncompressed) and BC7 (compressed) texture formats.
 
 use hashbrown::HashMap;
 
@@ -8,6 +9,7 @@ use anyhow::Result;
 use wgpu::util::DeviceExt;
 
 use crate::console::VRAM_LIMIT;
+use z_common::TextureFormat;
 
 pub use super::render_state::TextureHandle;
 
@@ -133,6 +135,144 @@ impl TextureManager {
         pixels: &[u8],
     ) -> Result<TextureHandle> {
         self.load_texture_internal(device, queue, width, height, pixels, true)
+    }
+
+    /// Load a texture with explicit format (RGBA8 or BC7).
+    ///
+    /// This is the main entry point for loading textures from ROM data packs.
+    /// BC7 textures provide 4× compression compared to RGBA8.
+    pub fn load_texture_with_format(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        width: u32,
+        height: u32,
+        data: &[u8],
+        format: TextureFormat,
+    ) -> Result<TextureHandle> {
+        match format {
+            TextureFormat::Rgba8 => self.load_texture_internal(device, queue, width, height, data, true),
+            TextureFormat::Bc7 => self.load_texture_bc7_internal(
+                device,
+                queue,
+                width,
+                height,
+                data,
+                wgpu::TextureFormat::Bc7RgbaUnormSrgb,
+                true,
+            ),
+            TextureFormat::Bc7Linear => self.load_texture_bc7_internal(
+                device,
+                queue,
+                width,
+                height,
+                data,
+                wgpu::TextureFormat::Bc7RgbaUnorm,
+                true,
+            ),
+        }
+    }
+
+    /// Internal BC7 texture loading
+    fn load_texture_bc7_internal(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        width: u32,
+        height: u32,
+        data: &[u8],
+        wgpu_format: wgpu::TextureFormat,
+        track_vram: bool,
+    ) -> Result<TextureHandle> {
+        // BC7: 4×4 blocks, 16 bytes per block
+        let blocks_x = (width + 3) / 4;
+        let blocks_y = (height + 3) / 4;
+        let expected_size = (blocks_x * blocks_y * 16) as usize;
+
+        if data.len() != expected_size {
+            anyhow::bail!(
+                "BC7 data size mismatch: expected {} bytes for {}x{} ({}x{} blocks), got {}",
+                expected_size,
+                width,
+                height,
+                blocks_x,
+                blocks_y,
+                data.len()
+            );
+        }
+
+        // VRAM size is the compressed size
+        let size_bytes = expected_size;
+
+        // Check VRAM budget
+        if track_vram && self.vram_used + size_bytes > VRAM_LIMIT {
+            anyhow::bail!(
+                "VRAM budget exceeded: {} + {} > {} bytes",
+                self.vram_used,
+                size_bytes,
+                VRAM_LIMIT
+            );
+        }
+
+        // Create texture with BC7 format
+        let texture = device.create_texture_with_data(
+            queue,
+            &wgpu::TextureDescriptor {
+                label: Some("BC7 Texture"),
+                size: wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu_format,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            },
+            wgpu::util::TextureDataOrder::LayerMajor,
+            data,
+        );
+
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let handle = TextureHandle(self.next_texture_id);
+        self.next_texture_id += 1;
+
+        self.textures.insert(
+            handle.0,
+            TextureEntry {
+                texture,
+                view,
+                width,
+                height,
+                size_bytes,
+            },
+        );
+
+        if track_vram {
+            self.vram_used += size_bytes;
+        }
+
+        let format_name = match wgpu_format {
+            wgpu::TextureFormat::Bc7RgbaUnormSrgb => "BC7 sRGB",
+            wgpu::TextureFormat::Bc7RgbaUnorm => "BC7 Linear",
+            _ => "BC7",
+        };
+
+        tracing::debug!(
+            "Loaded {} texture {}: {}x{}, {} bytes (VRAM: {}/{})",
+            format_name,
+            handle.0,
+            width,
+            height,
+            size_bytes,
+            self.vram_used,
+            VRAM_LIMIT
+        );
+
+        Ok(handle)
     }
 
     /// Internal texture loading (optionally tracks VRAM)

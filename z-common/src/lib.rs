@@ -25,7 +25,7 @@ pub use packing::{
 pub use formats::{
     EmberZAnimationHeader, EmberZMeshHeader, EmberZSkeletonHeader, EmberZSoundHeader,
     EmberZTextureHeader, PackedData, PackedFont, PackedGlyph, PackedMesh, PackedSkeleton,
-    PackedSound, PackedTexture, ZDataPack, ZMetadata, ZRom, BONE_TRANSFORM_SIZE, EWZ_ANIMATION_EXT,
-    EWZ_MAGIC, EWZ_MESH_EXT, EWZ_SKELETON_EXT, EWZ_SOUND_EXT, EWZ_TEXTURE_EXT, EWZ_VERSION,
-    INVERSE_BIND_MATRIX_SIZE, SAMPLE_RATE,
+    PackedSound, PackedTexture, TextureFormat, ZDataPack, ZMetadata, ZRom, BONE_TRANSFORM_SIZE,
+    EWZ_ANIMATION_EXT, EWZ_MAGIC, EWZ_MESH_EXT, EWZ_SKELETON_EXT, EWZ_SOUND_EXT, EWZ_TEXTURE_EXT,
+    EWZ_VERSION, INVERSE_BIND_MATRIX_SIZE, SAMPLE_RATE,
 };
