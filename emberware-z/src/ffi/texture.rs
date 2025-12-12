@@ -11,6 +11,7 @@ use emberware_core::wasm::GameStateWithConsole;
 use crate::console::ZInput;
 use crate::graphics::MatcapBlendMode;
 use crate::state::{PendingTexture, ZFFIState};
+use z_common::TextureFormat;
 
 /// Register texture FFI functions
 pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
@@ -88,10 +89,12 @@ fn load_texture(
     state.next_texture_handle += 1;
 
     // Store the texture data for the graphics backend
+    // load_texture() always creates RGBA8 textures (from WASM memory)
     state.pending_textures.push(PendingTexture {
         handle,
         width,
         height,
+        format: TextureFormat::Rgba8,
         data: pixel_data,
     });
 

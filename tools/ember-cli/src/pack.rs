@@ -1,4 +1,8 @@
 //! Pack command - create .ewz ROM from WASM + assets
+//!
+//! Automatically compresses textures based on render mode:
+//! - Mode 0 (Unlit): RGBA8 (uncompressed)
+//! - Mode 1-3 (Matcap/PBR/Hybrid): BC7 (4× compression)
 
 use anyhow::{Context, Result};
 use clap::Args;
@@ -7,7 +11,7 @@ use std::path::PathBuf;
 
 use z_common::{
     vertex_stride_packed, EmberZMeshHeader, PackedData, PackedMesh, PackedSound, PackedTexture,
-    ZDataPack, ZMetadata, ZRom, EWZ_VERSION,
+    TextureFormat, ZDataPack, ZMetadata, ZRom, EWZ_VERSION,
 };
 
 /// Arguments for the pack command
@@ -110,8 +114,26 @@ pub fn execute(args: PackArgs) -> Result<()> {
         .with_context(|| format!("Failed to read WASM file: {}", wasm_path.display()))?;
     println!("  WASM: {} ({} bytes)", wasm_path.display(), code.len());
 
+    // Determine texture format based on render mode
+    let render_mode = manifest.game.render_mode.unwrap_or(0) as u8;
+    let texture_format = if render_mode == 0 {
+        TextureFormat::Rgba8
+    } else {
+        TextureFormat::Bc7
+    };
+
+    let format_name = match texture_format {
+        TextureFormat::Rgba8 => "RGBA8 (uncompressed)",
+        TextureFormat::Bc7 => "BC7 (4× compressed)",
+        TextureFormat::Bc7Linear => "BC7 Linear (4× compressed)",
+    };
+    println!(
+        "  Render mode: {} -> textures: {}",
+        render_mode, format_name
+    );
+
     // Load assets into data pack
-    let data_pack = load_assets(project_dir, &manifest.assets)?;
+    let data_pack = load_assets(project_dir, &manifest.assets, texture_format)?;
 
     // Create metadata
     let metadata = ZMetadata {
@@ -171,20 +193,25 @@ pub fn execute(args: PackArgs) -> Result<()> {
 }
 
 /// Load assets from disk into a data pack
-fn load_assets(project_dir: &std::path::Path, assets: &AssetsSection) -> Result<ZDataPack> {
+fn load_assets(
+    project_dir: &std::path::Path,
+    assets: &AssetsSection,
+    texture_format: TextureFormat,
+) -> Result<ZDataPack> {
     let mut pack = ZDataPack::new();
 
     // Load textures
     for entry in &assets.textures {
         let path = project_dir.join(&entry.path);
-        let texture = load_texture(&entry.id, &path)?;
-        pack.textures.push(texture);
+        let texture = load_texture(&entry.id, &path, texture_format)?;
+
+        let format_str = if texture.format.is_bc7() { " [BC7]" } else { "" };
         println!(
-            "  Texture: {} ({}x{})",
-            entry.id,
-            pack.textures.last().unwrap().width,
-            pack.textures.last().unwrap().height
+            "  Texture: {} ({}x{}){}",
+            entry.id, texture.width, texture.height, format_str
         );
+
+        pack.textures.push(texture);
     }
 
     // Load meshes (not implemented yet - requires mesh format support)
@@ -223,19 +250,88 @@ fn load_assets(project_dir: &std::path::Path, assets: &AssetsSection) -> Result<
 }
 
 /// Load a texture from an image file (PNG, JPG, etc.)
-fn load_texture(id: &str, path: &std::path::Path) -> Result<PackedTexture> {
+///
+/// Compresses to BC7 if the format requires it.
+fn load_texture(
+    id: &str,
+    path: &std::path::Path,
+    format: TextureFormat,
+) -> Result<PackedTexture> {
     let img =
         image::open(path).with_context(|| format!("Failed to load texture: {}", path.display()))?;
 
     let rgba = img.to_rgba8();
     let (width, height) = rgba.dimensions();
+    let pixels = rgba.as_raw();
 
-    Ok(PackedTexture {
-        id: id.to_string(),
-        width,
-        height,
-        data: rgba.into_raw(),
-    })
+    // Compress or pass through based on format
+    let data = match format {
+        TextureFormat::Rgba8 => pixels.to_vec(),
+        TextureFormat::Bc7 | TextureFormat::Bc7Linear => compress_bc7(pixels, width, height)?,
+    };
+
+    Ok(PackedTexture::with_format(
+        id,
+        width as u16,
+        height as u16,
+        format,
+        data,
+    ))
+}
+
+/// Compress RGBA8 pixels to BC7 format
+///
+/// Uses intel_tex_2 (ISPC-based) for high-quality BC7 compression.
+fn compress_bc7(pixels: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
+    use intel_tex_2::bc7;
+
+    let w = width as usize;
+    let h = height as usize;
+
+    // Calculate block dimensions (round up to 4×4 blocks)
+    let blocks_x = (w + 3) / 4;
+    let blocks_y = (h + 3) / 4;
+    let output_size = blocks_x * blocks_y * 16;
+
+    let mut output = vec![0u8; output_size];
+
+    // Create padded buffer if dimensions aren't multiples of 4
+    let padded_width = blocks_x * 4;
+    let padded_height = blocks_y * 4;
+
+    let input_data: Vec<u8> = if w == padded_width && h == padded_height {
+        pixels.to_vec()
+    } else {
+        // Create padded buffer with edge extension
+        let mut padded = vec![0u8; padded_width * padded_height * 4];
+
+        for y in 0..padded_height {
+            for x in 0..padded_width {
+                let src_x = x.min(w - 1);
+                let src_y = y.min(h - 1);
+
+                let src_idx = (src_y * w + src_x) * 4;
+                let dst_idx = (y * padded_width + x) * 4;
+
+                padded[dst_idx..dst_idx + 4].copy_from_slice(&pixels[src_idx..src_idx + 4]);
+            }
+        }
+
+        padded
+    };
+
+    // Create surface for intel_tex_2
+    let surface = intel_tex_2::RgbaSurface {
+        width: padded_width as u32,
+        height: padded_height as u32,
+        stride: (padded_width * 4) as u32,
+        data: &input_data,
+    };
+
+    // Compress using intel_tex_2 BC7 (fast settings for good speed/quality balance)
+    bc7::compress_blocks_into(&bc7::opaque_fast_settings(), &surface, &mut output);
+
+    Ok(output)
 }
 
 /// Load a mesh from file
@@ -457,7 +553,7 @@ version = "1.0.0"
     }
 
     #[test]
-    fn test_load_texture_png() {
+    fn test_load_texture_png_rgba8() {
         let dir = tempdir().unwrap();
         let img_path = dir.path().join("test.png");
 
@@ -471,12 +567,38 @@ version = "1.0.0"
         });
         img.save(&img_path).unwrap();
 
-        // Load it
-        let packed = load_texture("test_tex", &img_path).unwrap();
+        // Load it as RGBA8
+        let packed = load_texture("test_tex", &img_path, TextureFormat::Rgba8).unwrap();
         assert_eq!(packed.id, "test_tex");
         assert_eq!(packed.width, 2);
         assert_eq!(packed.height, 2);
+        assert_eq!(packed.format, TextureFormat::Rgba8);
         assert_eq!(packed.data.len(), 2 * 2 * 4); // RGBA8
+    }
+
+    #[test]
+    fn test_load_texture_png_bc7() {
+        let dir = tempdir().unwrap();
+        let img_path = dir.path().join("test.png");
+
+        // Create a 16x16 PNG (must be at least 4×4 for BC7)
+        let img = image::RgbaImage::from_fn(16, 16, |x, y| {
+            if (x + y) % 2 == 0 {
+                image::Rgba([255, 0, 0, 255]) // Red
+            } else {
+                image::Rgba([0, 255, 0, 255]) // Green
+            }
+        });
+        img.save(&img_path).unwrap();
+
+        // Load it as BC7
+        let packed = load_texture("test_tex", &img_path, TextureFormat::Bc7).unwrap();
+        assert_eq!(packed.id, "test_tex");
+        assert_eq!(packed.width, 16);
+        assert_eq!(packed.height, 16);
+        assert_eq!(packed.format, TextureFormat::Bc7);
+        // BC7: 4×4 blocks = 16 blocks × 16 bytes = 256 bytes
+        assert_eq!(packed.data.len(), 4 * 4 * 16);
     }
 
     #[test]
@@ -539,7 +661,7 @@ version = "1.0.0"
         let dir = tempdir().unwrap();
         let assets = AssetsSection::default();
 
-        let pack = load_assets(dir.path(), &assets).unwrap();
+        let pack = load_assets(dir.path(), &assets, TextureFormat::Rgba8).unwrap();
         assert!(pack.is_empty());
         assert_eq!(pack.asset_count(), 0);
     }

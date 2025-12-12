@@ -1,6 +1,7 @@
 //! Resource types pending GPU upload
 
 use super::BoneMatrix3x4;
+use z_common::TextureFormat;
 
 /// Pending skeleton load request (created during init)
 #[derive(Debug)]
@@ -32,11 +33,16 @@ pub struct Font {
 }
 
 /// Pending texture load request
+///
+/// Supports both RGBA8 (uncompressed) and BC7 (compressed) texture formats.
 #[derive(Debug)]
 pub struct PendingTexture {
     pub handle: u32,
     pub width: u32,
     pub height: u32,
+    /// Texture format (RGBA8, BC7, or BC7Linear)
+    pub format: TextureFormat,
+    /// Pixel data (RGBA8) or compressed blocks (BC7)
     pub data: Vec<u8>,
 }
 

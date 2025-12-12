@@ -31,17 +31,37 @@ pub fn write_ember_mesh<W: Write>(
     Ok(())
 }
 
-/// Write a complete EmberTexture file
+/// Write a complete EmberTexture file (RGBA8 or BC7)
+///
+/// # Arguments
+/// * `w` - Writer to output to
+/// * `width` - Texture width (u16, max 65535)
+/// * `height` - Texture height (u16, max 65535)
+/// * `format` - Texture format (Rgba8, Bc7, or Bc7Linear)
+/// * `data` - Pixel data (RGBA8) or compressed blocks (BC7)
 pub fn write_ember_texture<W: Write>(
+    w: &mut W,
+    width: u16,
+    height: u16,
+    _format: TextureFormat,
+    data: &[u8],
+) -> Result<()> {
+    let header = EmberZTextureHeader::new(width, height);
+    w.write_all(&header.to_bytes())?;
+    w.write_all(data)?;
+    Ok(())
+}
+
+/// Write an RGBA8 EmberTexture file (legacy compatibility)
+///
+/// This is a convenience wrapper that assumes RGBA8 format.
+pub fn write_ember_texture_rgba8<W: Write>(
     w: &mut W,
     width: u32,
     height: u32,
     pixels: &[u8],
 ) -> Result<()> {
-    let header = EmberZTextureHeader::new(width, height);
-    w.write_all(&header.to_bytes())?;
-    w.write_all(pixels)?;
-    Ok(())
+    write_ember_texture(w, width as u16, height as u16, TextureFormat::Rgba8, pixels)
 }
 
 /// Write a complete EmberSound file
