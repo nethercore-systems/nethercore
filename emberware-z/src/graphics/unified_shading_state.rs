@@ -470,6 +470,23 @@ pub const FLAG_SKINNING_MODE: u32 = 1 << 0;
 pub const FLAG_TEXTURE_FILTER_LINEAR: u32 = 1 << 1;
 
 // ============================================================================
+// Material Override Flags (bits 2-7)
+// ============================================================================
+
+/// Flag bit for uniform color override (bit 2)
+pub const FLAG_USE_UNIFORM_COLOR: u32 = 1 << 2;
+/// Flag bit for uniform metallic override (bit 3)
+pub const FLAG_USE_UNIFORM_METALLIC: u32 = 1 << 3;
+/// Flag bit for uniform roughness override (bit 4)
+pub const FLAG_USE_UNIFORM_ROUGHNESS: u32 = 1 << 4;
+/// Flag bit for uniform emissive override (bit 5)
+pub const FLAG_USE_UNIFORM_EMISSIVE: u32 = 1 << 5;
+/// Flag bit for uniform specular override (bit 6, Mode 3 only)
+pub const FLAG_USE_UNIFORM_SPECULAR: u32 = 1 << 6;
+/// Flag bit for matcap vs sky reflection (bit 7, Mode 1 only)
+pub const FLAG_USE_MATCAP_REFLECTION: u32 = 1 << 7;
+
+// ============================================================================
 // Dither Transparency Flags (Bits 8-15)
 // ============================================================================
 
