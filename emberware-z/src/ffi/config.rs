@@ -1,9 +1,12 @@
-//! Configuration FFI functions (init-only)
+//! Configuration FFI functions (init-only, single-call)
 //!
 //! These functions configure the console during game initialization.
-//! All calls outside of init() are ignored with a warning.
+//!
+//! **Init-only:** Calls outside of init() are ignored with a warning.
+//! **Single-call:** Each function can only be called once during init().
+//!                  Calling the same function twice traps with an error.
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use tracing::{info, warn};
 use wasmtime::{Caller, Linker};
 
@@ -25,24 +28,33 @@ pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) ->
 ///
 /// Valid indices: 0=360p, 1=540p (default), 2=720p, 3=1080p
 ///
-/// Must be called during `init()`. Calls outside init are ignored with a warning.
-fn set_resolution(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, res: u32) {
+/// **Init-only:** Must be called during `init()`. Calls outside init are ignored.
+/// **Single-call:** Can only be called once. Second call traps with an error.
+fn set_resolution(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    res: u32,
+) -> Result<()> {
     // Check if we're in init phase
     if !caller.data().game.in_init {
         warn!("set_resolution() called outside init() - ignored");
-        return;
+        return Ok(());
     }
 
     let state = &mut caller.data_mut().console;
 
+    // Check for duplicate call
+    if state.init_config.resolution_set {
+        bail!("set_resolution() called twice - each config function can only be called once during init()");
+    }
+    state.init_config.resolution_set = true;
+
     // Validate resolution index
     if res as usize >= RESOLUTIONS.len() {
-        warn!(
-            "set_resolution({}) invalid - must be 0-{}, using default",
+        bail!(
+            "set_resolution({}) invalid - must be 0-{}",
             res,
             RESOLUTIONS.len() - 1
         );
-        return;
     }
 
     state.init_config.resolution_index = res;
@@ -50,30 +62,40 @@ fn set_resolution(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>
 
     let (w, h) = RESOLUTIONS[res as usize];
     info!("Resolution set to {}x{} (index {})", w, h, res);
+    Ok(())
 }
 
 /// Set the tick rate (frames per second for update loop)
 ///
 /// Valid indices: 0=24fps, 1=30fps, 2=60fps (default), 3=120fps
 ///
-/// Must be called during `init()`. Calls outside init are ignored with a warning.
-fn set_tick_rate(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, rate: u32) {
+/// **Init-only:** Must be called during `init()`. Calls outside init are ignored.
+/// **Single-call:** Can only be called once. Second call traps with an error.
+fn set_tick_rate(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    rate: u32,
+) -> Result<()> {
     // Check if we're in init phase
     if !caller.data().game.in_init {
         warn!("set_tick_rate() called outside init() - ignored");
-        return;
+        return Ok(());
     }
 
     let state = &mut caller.data_mut().console;
 
+    // Check for duplicate call
+    if state.init_config.tick_rate_set {
+        bail!("set_tick_rate() called twice - each config function can only be called once during init()");
+    }
+    state.init_config.tick_rate_set = true;
+
     // Validate tick rate index
     if rate as usize >= TICK_RATES.len() {
-        warn!(
-            "set_tick_rate({}) invalid - must be 0-{}, using default",
+        bail!(
+            "set_tick_rate({}) invalid - must be 0-{}",
             rate,
             TICK_RATES.len() - 1
         );
-        return;
     }
 
     state.init_config.tick_rate_index = rate;
@@ -81,6 +103,7 @@ fn set_tick_rate(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>
 
     let fps = TICK_RATES[rate as usize];
     info!("Tick rate set to {} fps (index {})", fps, rate);
+    Ok(())
 }
 
 /// Set the clear/background color
@@ -88,15 +111,25 @@ fn set_tick_rate(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>
 /// Color format: 0xRRGGBBAA (red, green, blue, alpha)
 /// Default: 0x000000FF (black, fully opaque)
 ///
-/// Must be called during `init()`. Calls outside init are ignored with a warning.
-fn set_clear_color(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, color: u32) {
+/// **Init-only:** Must be called during `init()`. Calls outside init are ignored.
+/// **Single-call:** Can only be called once. Second call traps with an error.
+fn set_clear_color(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    color: u32,
+) -> Result<()> {
     // Check if we're in init phase
     if !caller.data().game.in_init {
         warn!("set_clear_color() called outside init() - ignored");
-        return;
+        return Ok(());
     }
 
     let state = &mut caller.data_mut().console;
+
+    // Check for duplicate call
+    if state.init_config.clear_color_set {
+        bail!("set_clear_color() called twice - each config function can only be called once during init()");
+    }
+    state.init_config.clear_color_set = true;
 
     state.init_config.clear_color = color;
     state.init_config.modified = true;
@@ -112,6 +145,7 @@ fn set_clear_color(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState
         b,
         a as f32 / 255.0
     );
+    Ok(())
 }
 
 /// Set the render mode
@@ -122,23 +156,29 @@ fn set_clear_color(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState
 /// - 2 = PBR (physically-based rendering with up to 4 lights)
 /// - 3 = Hybrid (PBR direct + matcap ambient)
 ///
-/// Must be called during `init()`. Calls outside init are ignored with a warning.
-fn render_mode(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, mode: u32) {
+/// **Init-only:** Must be called during `init()`. Calls outside init are ignored.
+/// **Single-call:** Can only be called once. Second call traps with an error.
+fn render_mode(
+    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mode: u32,
+) -> Result<()> {
     // Check if we're in init phase
     if !caller.data().game.in_init {
         warn!("render_mode() called outside init() - ignored");
-        return;
+        return Ok(());
     }
 
     let state = &mut caller.data_mut().console;
 
+    // Check for duplicate call
+    if state.init_config.render_mode_set {
+        bail!("render_mode() called twice - each config function can only be called once during init()");
+    }
+    state.init_config.render_mode_set = true;
+
     // Validate mode
     if mode > 3 {
-        warn!(
-            "render_mode({}) invalid - must be 0-3, using default (0=Unlit)",
-            mode
-        );
-        return;
+        bail!("render_mode({}) invalid - must be 0-3", mode);
     }
 
     state.init_config.render_mode = mode as u8;
@@ -152,4 +192,5 @@ fn render_mode(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, 
         _ => "Unknown",
     };
     info!("Render mode set to {} (mode {})", mode_name, mode);
+    Ok(())
 }

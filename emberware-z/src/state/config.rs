@@ -1,6 +1,9 @@
 //! Init-time configuration for Emberware Z
 
 /// Init-time configuration for Emberware Z
+///
+/// All config functions are **init-only** and **single-call** — calling the same
+/// function twice during init() is an error and will trap.
 #[derive(Debug, Clone)]
 pub struct ZInitConfig {
     /// Resolution index (0-3 for Z: 360p, 540p, 720p, 1080p)
@@ -13,6 +16,16 @@ pub struct ZInitConfig {
     pub render_mode: u8,
     /// Whether any config was changed during init
     pub modified: bool,
+
+    // Duplicate call tracking — each config function can only be called once
+    /// Whether set_resolution() has been called
+    pub resolution_set: bool,
+    /// Whether set_tick_rate() has been called
+    pub tick_rate_set: bool,
+    /// Whether set_clear_color() has been called
+    pub clear_color_set: bool,
+    /// Whether render_mode() has been called
+    pub render_mode_set: bool,
 }
 
 impl Default for ZInitConfig {
@@ -23,6 +36,11 @@ impl Default for ZInitConfig {
             clear_color: 0x000000FF, // Black, fully opaque
             render_mode: 0,          // Unlit
             modified: false,
+            // No config functions called yet
+            resolution_set: false,
+            tick_rate_set: false,
+            clear_color_set: false,
+            render_mode_set: false,
         }
     }
 }
