@@ -1,0 +1,12 @@
+[package]
+name = "gen-test-anim"
+version = "0.1.0"
+edition = "2021"
+description = "Generate test animation files for animation-demo example"
+
+[[bin]]
+name = "gen-test-anim"
+path = "src/main.rs"
+
+[dependencies]
+z-common = { path = "../../z-common" }

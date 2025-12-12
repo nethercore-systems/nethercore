@@ -87,6 +87,9 @@ pub struct ZDataPack {
     /// Skeletons (inverse bind matrices only — GPU-ready)
     pub skeletons: Vec<PackedSkeleton>,
 
+    /// Keyframe collections (animation clips)
+    pub keyframes: Vec<PackedKeyframes>,
+
     /// Fonts (bitmap atlas + glyph metrics)
     pub fonts: Vec<PackedFont>,
 
@@ -108,6 +111,7 @@ impl ZDataPack {
         self.textures.is_empty()
             && self.meshes.is_empty()
             && self.skeletons.is_empty()
+            && self.keyframes.is_empty()
             && self.fonts.is_empty()
             && self.sounds.is_empty()
             && self.data.is_empty()
@@ -118,6 +122,7 @@ impl ZDataPack {
         self.textures.len()
             + self.meshes.len()
             + self.skeletons.len()
+            + self.keyframes.len()
             + self.fonts.len()
             + self.sounds.len()
             + self.data.len()
@@ -136,6 +141,11 @@ impl ZDataPack {
     /// Find a skeleton by ID
     pub fn find_skeleton(&self, id: &str) -> Option<&PackedSkeleton> {
         self.skeletons.iter().find(|s| s.id == id)
+    }
+
+    /// Find a keyframe collection by ID
+    pub fn find_keyframes(&self, id: &str) -> Option<&PackedKeyframes> {
+        self.keyframes.iter().find(|k| k.id == id)
     }
 
     /// Find a font by ID
@@ -329,6 +339,54 @@ impl PackedSkeleton {
     /// Validate that bone count matches matrices
     pub fn validate(&self) -> bool {
         self.inverse_bind_matrices.len() == self.bone_count as usize
+    }
+}
+
+/// Packed keyframe collection (animation clip)
+///
+/// Contains keyframe data in platform format (16 bytes per bone per frame).
+/// Data is stored in ROM and accessed via `rom_keyframes()` or `keyframes_load()`.
+#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+pub struct PackedKeyframes {
+    /// Asset ID (e.g., "walk", "run", "idle")
+    pub id: String,
+
+    /// Number of bones per frame
+    pub bone_count: u8,
+
+    /// Number of frames
+    pub frame_count: u16,
+
+    /// Raw platform format data (frame_count × bone_count × 16 bytes)
+    pub data: Vec<u8>,
+}
+
+impl PackedKeyframes {
+    /// Create a new packed keyframes collection
+    pub fn new(id: impl Into<String>, bone_count: u8, frame_count: u16, data: Vec<u8>) -> Self {
+        Self {
+            id: id.into(),
+            bone_count,
+            frame_count,
+            data,
+        }
+    }
+
+    /// Validate that data size matches header
+    pub fn validate(&self) -> bool {
+        let expected = self.bone_count as usize * self.frame_count as usize * 16;
+        self.bone_count > 0 && self.frame_count > 0 && self.data.len() == expected
+    }
+
+    /// Get frame data as a slice
+    pub fn frame_data(&self, frame_index: u16) -> Option<&[u8]> {
+        if frame_index >= self.frame_count {
+            return None;
+        }
+        let frame_size = self.bone_count as usize * 16;
+        let start = frame_index as usize * frame_size;
+        let end = start + frame_size;
+        Some(&self.data[start..end])
     }
 }
 
@@ -713,6 +771,59 @@ mod tests {
     }
 
     #[test]
+    fn test_find_keyframes() {
+        let mut pack = ZDataPack::new();
+
+        // Create 2 bones, 3 frames animation (2 * 3 * 16 = 96 bytes)
+        let walk_data = vec![0u8; 2 * 3 * 16];
+        pack.keyframes
+            .push(PackedKeyframes::new("walk", 2, 3, walk_data));
+
+        // Create 4 bones, 10 frames animation (4 * 10 * 16 = 640 bytes)
+        let run_data = vec![0u8; 4 * 10 * 16];
+        pack.keyframes
+            .push(PackedKeyframes::new("run", 4, 10, run_data));
+
+        let walk = pack.find_keyframes("walk");
+        assert!(walk.is_some());
+        assert_eq!(walk.unwrap().bone_count, 2);
+        assert_eq!(walk.unwrap().frame_count, 3);
+        assert!(walk.unwrap().validate());
+
+        let run = pack.find_keyframes("run");
+        assert!(run.is_some());
+        assert_eq!(run.unwrap().bone_count, 4);
+        assert_eq!(run.unwrap().frame_count, 10);
+        assert!(run.unwrap().validate());
+
+        assert!(pack.find_keyframes("missing").is_none());
+    }
+
+    #[test]
+    fn test_packed_keyframes_frame_data() {
+        // 2 bones, 2 frames (2 * 2 * 16 = 64 bytes)
+        let mut data = vec![0u8; 64];
+        // Mark first frame's first bone
+        data[0] = 0xFF;
+        // Mark second frame's first bone
+        data[32] = 0xAA;
+
+        let kf = PackedKeyframes::new("test", 2, 2, data);
+        assert!(kf.validate());
+
+        let frame0 = kf.frame_data(0).unwrap();
+        assert_eq!(frame0.len(), 32); // 2 bones * 16 bytes
+        assert_eq!(frame0[0], 0xFF);
+
+        let frame1 = kf.frame_data(1).unwrap();
+        assert_eq!(frame1.len(), 32);
+        assert_eq!(frame1[0], 0xAA);
+
+        // Out of bounds
+        assert!(kf.frame_data(2).is_none());
+    }
+
+    #[test]
     fn test_serialization_roundtrip() {
         let mut pack = ZDataPack::new();
 
@@ -729,6 +840,8 @@ mod tests {
         });
         pack.skeletons
             .push(PackedSkeleton::new("skel", vec![BoneMatrix3x4::IDENTITY]));
+        pack.keyframes
+            .push(PackedKeyframes::new("anim", 2, 5, vec![0; 2 * 5 * 16]));
         pack.fonts.push(PackedFont {
             id: "font".to_string(),
             atlas_width: 64,
@@ -757,10 +870,11 @@ mod tests {
         let decoded: ZDataPack = bitcode::decode(&encoded).expect("decode failed");
 
         // Verify all assets survived
-        assert_eq!(decoded.asset_count(), 6);
+        assert_eq!(decoded.asset_count(), 7);
         assert_eq!(decoded.textures.len(), 1);
         assert_eq!(decoded.meshes.len(), 1);
         assert_eq!(decoded.skeletons.len(), 1);
+        assert_eq!(decoded.keyframes.len(), 1);
         assert_eq!(decoded.fonts.len(), 1);
         assert_eq!(decoded.sounds.len(), 1);
         assert_eq!(decoded.data.len(), 1);
@@ -769,6 +883,8 @@ mod tests {
         assert_eq!(decoded.find_texture("tex").unwrap().width, 4);
         assert_eq!(decoded.find_mesh("mesh").unwrap().format, 0b0101);
         assert_eq!(decoded.find_skeleton("skel").unwrap().bone_count, 1);
+        assert_eq!(decoded.find_keyframes("anim").unwrap().bone_count, 2);
+        assert_eq!(decoded.find_keyframes("anim").unwrap().frame_count, 5);
         assert!((decoded.find_font("font").unwrap().line_height - 12.0).abs() < 0.001);
         assert_eq!(decoded.find_sound("sfx").unwrap().data.len(), 100);
         assert_eq!(decoded.find_data("raw").unwrap().data, vec![9, 8, 7]);
