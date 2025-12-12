@@ -1,6 +1,7 @@
 //! Animation converter (glTF -> .ewzanim)
 //!
 //! Extracts and samples animation clips from glTF files.
+//! Outputs the new compressed platform format (16 bytes per bone).
 
 use anyhow::{bail, Context, Result};
 use std::collections::HashMap;
@@ -12,6 +13,27 @@ use crate::formats::write_ember_animation;
 
 /// Default sample rate for animations (frames per second)
 const DEFAULT_FRAME_RATE: f32 = 30.0;
+
+/// Bone transform (TRS) for a single bone in a single frame
+#[derive(Clone, Copy, Debug)]
+pub struct BoneTRS {
+    /// Quaternion rotation [x, y, z, w]
+    pub rotation: [f32; 4],
+    /// Position/translation
+    pub position: [f32; 3],
+    /// Scale
+    pub scale: [f32; 3],
+}
+
+impl Default for BoneTRS {
+    fn default() -> Self {
+        Self {
+            rotation: [0.0, 0.0, 0.0, 1.0], // Identity quaternion
+            position: [0.0, 0.0, 0.0],
+            scale: [1.0, 1.0, 1.0],
+        }
+    }
+}
 
 /// Convert glTF animation to EmberAnimation format
 pub fn convert_gltf_animation(
@@ -52,11 +74,27 @@ pub fn convert_gltf_animation(
 
     let frame_rate = frame_rate.unwrap_or(DEFAULT_FRAME_RATE);
 
-    // Sample the animation
+    // Sample the animation (returns TRS per bone per frame)
     let (frames, bone_count) = sample_animation(&animation, &skin, &buffers, frame_rate)?;
 
     if frames.is_empty() {
         bail!("Animation produced no frames");
+    }
+
+    // Validate bone count
+    if bone_count > 255 {
+        bail!(
+            "Animation has {} bones, maximum is 255 for new format",
+            bone_count
+        );
+    }
+
+    // Validate frame count
+    if frames.len() > 65535 {
+        bail!(
+            "Animation has {} frames, maximum is 65535 for new format",
+            frames.len()
+        );
     }
 
     // Write output
@@ -64,7 +102,7 @@ pub fn convert_gltf_animation(
         File::create(output).with_context(|| format!("Failed to create output: {:?}", output))?;
     let mut writer = BufWriter::new(file);
 
-    write_ember_animation(&mut writer, bone_count, frame_rate, &frames)?;
+    write_ember_animation(&mut writer, bone_count as u8, &frames)?;
 
     tracing::info!(
         "Exported animation '{}': {} bones, {} frames at {} fps ({:.2}s)",
@@ -79,12 +117,14 @@ pub fn convert_gltf_animation(
 }
 
 /// Sample animation channels at regular intervals
+///
+/// Returns (frames, bone_count) where each frame is Vec<BoneTRS> of bone transforms.
 fn sample_animation(
     animation: &gltf::Animation,
     skin: &gltf::Skin,
     buffers: &[gltf::buffer::Data],
     frame_rate: f32,
-) -> Result<(Vec<Vec<[f32; 12]>>, u32)> {
+) -> Result<(Vec<Vec<BoneTRS>>, u32)> {
     // Build joint index map (node index -> bone index)
     let joints: Vec<_> = skin.joints().collect();
     let bone_count = joints.len();
@@ -116,26 +156,8 @@ fn sample_animation(
     }
 
     // Initialize frames with identity transforms
-    let identity: [f32; 12] = [
-        1.0, 0.0, 0.0, // col0 (x-axis)
-        0.0, 1.0, 0.0, // col1 (y-axis)
-        0.0, 0.0, 1.0, // col2 (z-axis)
-        0.0, 0.0, 0.0, // col3 (translation)
-    ];
-    let mut frames: Vec<Vec<[f32; 12]>> = (0..frame_count)
-        .map(|_| vec![identity; bone_count])
-        .collect();
-
-    // Per-bone transform components (accumulated per frame)
-    // We store separate T, R, S and compose them at the end
-    let mut translations: Vec<Vec<[f32; 3]>> = (0..frame_count)
-        .map(|_| vec![[0.0, 0.0, 0.0]; bone_count])
-        .collect();
-    let mut rotations: Vec<Vec<[f32; 4]>> = (0..frame_count)
-        .map(|_| vec![[0.0, 0.0, 0.0, 1.0]; bone_count]) // Identity quaternion
-        .collect();
-    let mut scales: Vec<Vec<[f32; 3]>> = (0..frame_count)
-        .map(|_| vec![[1.0, 1.0, 1.0]; bone_count])
+    let mut frames: Vec<Vec<BoneTRS>> = (0..frame_count)
+        .map(|_| vec![BoneTRS::default(); bone_count])
         .collect();
 
     // Sample each channel
@@ -162,7 +184,7 @@ fn sample_animation(
                 for frame_idx in 0..frame_count {
                     let t = frame_idx as f32 / frame_rate;
                     let value = interpolate_vec3(&times, &values, t, interpolation);
-                    translations[frame_idx][bone_index] = value;
+                    frames[frame_idx][bone_index].position = value;
                 }
             }
             gltf::animation::Property::Rotation => {
@@ -170,7 +192,7 @@ fn sample_animation(
                 for frame_idx in 0..frame_count {
                     let t = frame_idx as f32 / frame_rate;
                     let value = interpolate_quat(&times, &values, t, interpolation);
-                    rotations[frame_idx][bone_index] = value;
+                    frames[frame_idx][bone_index].rotation = value;
                 }
             }
             gltf::animation::Property::Scale => {
@@ -178,69 +200,14 @@ fn sample_animation(
                 for frame_idx in 0..frame_count {
                     let t = frame_idx as f32 / frame_rate;
                     let value = interpolate_vec3(&times, &values, t, interpolation);
-                    scales[frame_idx][bone_index] = value;
+                    frames[frame_idx][bone_index].scale = value;
                 }
             }
             _ => {} // Ignore weights/morph targets
         }
     }
 
-    // Compose TRS into 3x4 matrices
-    for frame_idx in 0..frame_count {
-        for bone_idx in 0..bone_count {
-            let t = translations[frame_idx][bone_idx];
-            let r = rotations[frame_idx][bone_idx];
-            let s = scales[frame_idx][bone_idx];
-            frames[frame_idx][bone_idx] = compose_trs_matrix(t, r, s);
-        }
-    }
-
     Ok((frames, bone_count as u32))
-}
-
-/// Compose translation, rotation, scale into a 3x4 matrix (column-major)
-fn compose_trs_matrix(t: [f32; 3], q: [f32; 4], s: [f32; 3]) -> [f32; 12] {
-    // Convert quaternion to rotation matrix
-    let [qx, qy, qz, qw] = q;
-
-    let xx = qx * qx;
-    let yy = qy * qy;
-    let zz = qz * qz;
-    let xy = qx * qy;
-    let xz = qx * qz;
-    let yz = qy * qz;
-    let wx = qw * qx;
-    let wy = qw * qy;
-    let wz = qw * qz;
-
-    // Rotation matrix elements (column-major)
-    let r00 = 1.0 - 2.0 * (yy + zz);
-    let r01 = 2.0 * (xy + wz);
-    let r02 = 2.0 * (xz - wy);
-
-    let r10 = 2.0 * (xy - wz);
-    let r11 = 1.0 - 2.0 * (xx + zz);
-    let r12 = 2.0 * (yz + wx);
-
-    let r20 = 2.0 * (xz + wy);
-    let r21 = 2.0 * (yz - wx);
-    let r22 = 1.0 - 2.0 * (xx + yy);
-
-    // Apply scale and compose
-    [
-        r00 * s[0],
-        r01 * s[0],
-        r02 * s[0], // col0 (scaled x-axis)
-        r10 * s[1],
-        r11 * s[1],
-        r12 * s[1], // col1 (scaled y-axis)
-        r20 * s[2],
-        r21 * s[2],
-        r22 * s[2], // col2 (scaled z-axis)
-        t[0],
-        t[1],
-        t[2], // col3 (translation)
-    ]
 }
 
 // ============================================================================

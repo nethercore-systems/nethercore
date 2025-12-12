@@ -55,6 +55,7 @@ mod config;
 mod draw_2d;
 mod draw_3d;
 pub mod input;
+mod keyframes;
 mod lighting;
 mod material;
 mod mesh;
@@ -120,6 +121,9 @@ pub fn register_z_ffi(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState
 
     // GPU skinning
     skinning::register(linker)?;
+
+    // Keyframe animations
+    keyframes::register(linker)?;
 
     // Audio functions
     audio::register(linker)?;

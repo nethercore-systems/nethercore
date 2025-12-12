@@ -8,8 +8,8 @@ use hashbrown::HashMap;
 use z_common::ZDataPack;
 
 use super::{
-    BoneMatrix3x4, Font, PendingMesh, PendingMeshPacked, PendingSkeleton, PendingTexture,
-    SkeletonData, ZInitConfig,
+    BoneMatrix3x4, Font, LoadedKeyframeCollection, PendingKeyframes, PendingMesh,
+    PendingMeshPacked, PendingSkeleton, PendingTexture, SkeletonData, ZInitConfig,
 };
 
 /// FFI staging state for Emberware Z
@@ -43,6 +43,14 @@ pub struct ZFFIState {
     pub bound_skeleton: u32,
     /// Next skeleton handle to allocate
     pub next_skeleton_handle: u32,
+
+    // Keyframe system (animation clips stored on host)
+    /// Loaded keyframe collections (handles are 1-indexed)
+    pub keyframes: Vec<LoadedKeyframeCollection>,
+    /// Pending keyframe loads (processed after init())
+    pub pending_keyframes: Vec<PendingKeyframes>,
+    /// Next keyframe handle to allocate
+    pub next_keyframe_handle: u32,
 
     // Virtual Render Pass (direct recording)
     pub render_pass: crate::graphics::VirtualRenderPass,
@@ -138,6 +146,9 @@ impl Default for ZFFIState {
             skeletons: Vec::new(),
             bound_skeleton: 0,
             next_skeleton_handle: 1, // 0 reserved for "no skeleton"
+            keyframes: Vec::new(),
+            pending_keyframes: Vec::new(),
+            next_keyframe_handle: 1, // 0 reserved for "invalid"
             render_pass: crate::graphics::VirtualRenderPass::new(),
             mesh_map: hashbrown::HashMap::new(),
             pending_textures: Vec::new(),
