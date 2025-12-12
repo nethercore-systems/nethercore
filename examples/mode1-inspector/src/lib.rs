@@ -16,7 +16,7 @@ fn panic(_info: &PanicInfo) -> ! {
     core::arch::wasm32::unreachable()
 }
 
-use inspector_common::*;
+use examples_common::*;
 use libm::{sqrtf, powf, fabsf, floorf};
 
 // ============================================================================
