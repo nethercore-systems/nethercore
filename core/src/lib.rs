@@ -43,3 +43,6 @@ pub use rollback::{
 
 // Re-export GGRS types for convenience
 pub use ggrs::{GgrsError, GgrsEvent, GgrsRequest, InputStatus, PlayerType, SessionState};
+
+// Re-export analysis types for build-time WASM analysis
+pub use analysis::{analyze_wasm, AnalysisError, AnalysisResult, TextureFormatHint};
