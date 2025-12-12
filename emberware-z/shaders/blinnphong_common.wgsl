@@ -211,5 +211,10 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     let rim = rim_lighting(N, view_dir, rim_color, rim_intensity, rim_power);
     final_color += rim;
 
+    // Dither transparency (always active)
+    if should_discard_dither(in.clip_position.xy, shading.flags) {
+        discard;
+    }
+
     return vec4<f32>(final_color, material_color.a);
 }
