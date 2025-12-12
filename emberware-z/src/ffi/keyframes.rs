@@ -331,51 +331,50 @@ fn keyframes_frame_count(
 ///
 /// # Arguments
 /// * `handle` — Keyframe collection handle
-/// * `frame_index` — Frame to read (0-based)
+/// * `index` — Frame index (0-based)
 /// * `out_ptr` — Pointer to output buffer in WASM memory (must be bone_count × 40 bytes)
 ///
-/// # Behavior
-/// Writes `bone_count` BoneTransform structs to the output buffer.
-/// Returns 1 on success, 0 on failure.
+/// # Traps
+/// - Invalid handle (0 or not loaded)
+/// - Frame index out of bounds
+/// - Output buffer out of bounds
 fn keyframe_read(
     mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
     handle: u32,
-    frame_index: u16,
+    index: u32,
     out_ptr: u32,
-) -> u32 {
+) -> Result<()> {
     if handle == 0 {
-        warn!("keyframe_read: invalid handle 0");
-        return 0;
+        bail!("keyframe_read: invalid keyframe handle 0");
     }
 
     // Get keyframe collection
-    let (bone_count, frame_count, frame_data) = {
+    let (bone_count, frame_data) = {
         let state = &caller.data().console;
-        let index = handle as usize - 1;
+        let handle_index = handle as usize - 1;
 
-        match state.keyframes.get(index) {
+        match state.keyframes.get(handle_index) {
             Some(kf) => {
-                if frame_index >= kf.frame_count {
-                    warn!(
-                        "keyframe_read: frame {} out of bounds (collection has {} frames)",
-                        frame_index, kf.frame_count
+                if index >= kf.frame_count as u32 {
+                    bail!(
+                        "keyframe_read: frame index {} >= frame_count {}",
+                        index,
+                        kf.frame_count
                     );
-                    return 0;
                 }
 
                 // Get frame data
                 let frame_size = kf.bone_count as usize * PLATFORM_BONE_KEYFRAME_SIZE;
-                let start = frame_index as usize * frame_size;
+                let start = index as usize * frame_size;
                 let end = start + frame_size;
-                (kf.bone_count, kf.frame_count, kf.data[start..end].to_vec())
+                (kf.bone_count, kf.data[start..end].to_vec())
             }
             None => {
-                warn!(
-                    "keyframe_read: handle {} not found (only {} loaded)",
+                bail!(
+                    "keyframe_read: invalid keyframe handle {} (only {} loaded)",
                     handle,
                     state.keyframes.len()
                 );
-                return 0;
             }
         }
     };
@@ -384,26 +383,23 @@ fn keyframe_read(
     let output_size = bone_count as usize * BoneTransform::SIZE;
 
     // Get WASM memory and validate bounds
-    let memory = match caller.data().game.memory {
-        Some(mem) => mem,
-        None => {
-            warn!("keyframe_read: WASM memory not initialized");
-            return 0;
-        }
-    };
+    let memory = caller
+        .data()
+        .game
+        .memory
+        .ok_or_else(|| anyhow::anyhow!("keyframe_read: WASM memory not initialized"))?;
 
     let data = memory.data_mut(&mut caller);
     let out_start = out_ptr as usize;
     let out_end = out_start + output_size;
 
     if out_end > data.len() {
-        warn!(
+        bail!(
             "keyframe_read: output buffer out of bounds ({}-{}, memory size {})",
             out_start,
             out_end,
             data.len()
         );
-        return 0;
     }
 
     // Decode each bone and write to output
@@ -424,12 +420,12 @@ fn keyframe_read(
 
     tracing::trace!(
         "keyframe_read: decoded frame {} from handle {} ({} bones)",
-        frame_index,
+        index,
         handle,
         bone_count
     );
 
-    1 // Success
+    Ok(())
 }
 
 /// Bind a keyframe directly to GPU bone matrices
@@ -437,41 +433,42 @@ fn keyframe_read(
 /// Decodes the platform format and uploads directly to the GPU bone buffer,
 /// bypassing WASM memory. Use this for the "stamp" path when no blending is needed.
 ///
+/// Equivalent to: keyframe_read() -> build matrices -> set_bones()
+///
 /// # Arguments
 /// * `handle` — Keyframe collection handle
-/// * `frame_index` — Frame to bind (0-based)
+/// * `index` — Frame index (0-based)
 ///
-/// # Behavior
-/// Sets up bone matrices for subsequent skinned mesh draws.
-/// This is equivalent to calling keyframe_read() + converting to matrices + set_bones().
+/// # Traps
+/// - Invalid handle (0 or not loaded)
+/// - Frame index out of bounds
 fn keyframe_bind(
     mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
     handle: u32,
-    frame_index: u16,
-) {
+    index: u32,
+) -> Result<()> {
     if handle == 0 {
-        warn!("keyframe_bind: invalid handle 0");
-        return;
+        bail!("keyframe_bind: invalid keyframe handle 0");
     }
 
     // Get keyframe collection and decode
     let bone_matrices: Vec<BoneMatrix3x4> = {
         let state = &caller.data().console;
-        let index = handle as usize - 1;
+        let handle_index = handle as usize - 1;
 
-        match state.keyframes.get(index) {
+        match state.keyframes.get(handle_index) {
             Some(kf) => {
-                if frame_index >= kf.frame_count {
-                    warn!(
-                        "keyframe_bind: frame {} out of bounds (collection has {} frames)",
-                        frame_index, kf.frame_count
+                if index >= kf.frame_count as u32 {
+                    bail!(
+                        "keyframe_bind: frame index {} >= frame_count {}",
+                        index,
+                        kf.frame_count
                     );
-                    return;
                 }
 
                 // Get frame data
                 let frame_size = kf.bone_count as usize * PLATFORM_BONE_KEYFRAME_SIZE;
-                let start = frame_index as usize * frame_size;
+                let start = index as usize * frame_size;
 
                 // Decode each bone
                 let mut matrices = Vec::with_capacity(kf.bone_count as usize);
@@ -491,12 +488,11 @@ fn keyframe_bind(
                 matrices
             }
             None => {
-                warn!(
-                    "keyframe_bind: handle {} not found (only {} loaded)",
+                bail!(
+                    "keyframe_bind: invalid keyframe handle {} (only {} loaded)",
                     handle,
                     state.keyframes.len()
                 );
-                return;
             }
         }
     };
@@ -509,10 +505,12 @@ fn keyframe_bind(
 
     tracing::trace!(
         "keyframe_bind: bound frame {} from handle {} ({} bones)",
-        frame_index,
+        index,
         handle,
         bone_count
     );
+
+    Ok(())
 }
 
 /// Convert a BoneTransform to a 3x4 bone matrix
