@@ -266,7 +266,7 @@ fn rom_keyframes(
 fn keyframes_bone_count(
     caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
     handle: u32,
-) -> u8 {
+) -> u32 {
     if handle == 0 {
         warn!("keyframes_bone_count: invalid handle 0");
         return 0;
@@ -276,7 +276,7 @@ fn keyframes_bone_count(
     let index = handle as usize - 1;
 
     if let Some(kf) = state.keyframes.get(index) {
-        kf.bone_count
+        kf.bone_count as u32
     } else {
         warn!(
             "keyframes_bone_count: handle {} not found (only {} loaded)",
@@ -297,7 +297,7 @@ fn keyframes_bone_count(
 fn keyframes_frame_count(
     caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
     handle: u32,
-) -> u16 {
+) -> u32 {
     if handle == 0 {
         warn!("keyframes_frame_count: invalid handle 0");
         return 0;
@@ -307,7 +307,7 @@ fn keyframes_frame_count(
     let index = handle as usize - 1;
 
     if let Some(kf) = state.keyframes.get(index) {
-        kf.frame_count
+        kf.frame_count as u32
     } else {
         warn!(
             "keyframes_frame_count: handle {} not found (only {} loaded)",
