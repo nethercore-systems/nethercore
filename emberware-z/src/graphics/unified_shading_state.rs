@@ -935,4 +935,92 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn test_override_flag_toggle() {
+        // Explicit test for enable/disable cycle as specified in spec
+        let mut state = PackedUnifiedShadingState::default();
+
+        // Enable
+        state.set_override_flag(FLAG_USE_UNIFORM_EMISSIVE, true);
+        assert!(state.has_override_flag(FLAG_USE_UNIFORM_EMISSIVE));
+
+        // Disable
+        state.set_override_flag(FLAG_USE_UNIFORM_EMISSIVE, false);
+        assert!(!state.has_override_flag(FLAG_USE_UNIFORM_EMISSIVE));
+
+        // Enable again
+        state.set_override_flag(FLAG_USE_UNIFORM_EMISSIVE, true);
+        assert!(state.has_override_flag(FLAG_USE_UNIFORM_EMISSIVE));
+    }
+
+    #[test]
+    fn test_override_with_future_dither_flags_coexist() {
+        // Material overrides (bits 2-7) and future dither flags (bits 8-15) shouldn't conflict
+        // This tests forward compatibility with the transparency spec
+        let mut state = PackedUnifiedShadingState::default();
+
+        // Set material overrides (bits 2-7)
+        state.set_override_flag(FLAG_USE_UNIFORM_COLOR, true);
+        state.set_override_flag(FLAG_USE_UNIFORM_METALLIC, true);
+        state.set_override_flag(FLAG_USE_UNIFORM_ROUGHNESS, true);
+
+        // Simulate setting dither values in bits 8-15 directly
+        // uniform_alpha (bits 8-11) = 8 (50% alpha)
+        // dither_offset_x (bits 12-13) = 2
+        // dither_offset_y (bits 14-15) = 1
+        let dither_bits: u32 = (8 << 8) | (2 << 12) | (1 << 14);
+        state.flags |= dither_bits;
+
+        // Verify material override flags are preserved
+        assert!(state.has_override_flag(FLAG_USE_UNIFORM_COLOR));
+        assert!(state.has_override_flag(FLAG_USE_UNIFORM_METALLIC));
+        assert!(state.has_override_flag(FLAG_USE_UNIFORM_ROUGHNESS));
+        assert!(!state.has_override_flag(FLAG_USE_UNIFORM_EMISSIVE));
+        assert!(!state.has_override_flag(FLAG_USE_UNIFORM_SPECULAR));
+        assert!(!state.has_override_flag(FLAG_USE_MATCAP_REFLECTION));
+
+        // Verify dither bits are preserved
+        assert_eq!((state.flags >> 8) & 0xF, 8); // uniform_alpha
+        assert_eq!((state.flags >> 12) & 0x3, 2); // dither_offset_x
+        assert_eq!((state.flags >> 14) & 0x3, 1); // dither_offset_y
+
+        // Verify skinning/filter flags (bits 0-1) are still 0
+        assert!(!state.skinning_mode());
+        assert_eq!(state.flags & FLAG_TEXTURE_FILTER_LINEAR, 0);
+
+        // Now clear some material flags and verify dither is preserved
+        state.set_override_flag(FLAG_USE_UNIFORM_COLOR, false);
+        assert!(!state.has_override_flag(FLAG_USE_UNIFORM_COLOR));
+        assert_eq!((state.flags >> 8) & 0xF, 8); // dither still intact
+    }
+
+    #[test]
+    fn test_all_flag_bits_addressable() {
+        // Verify we can set and read bits 0-7 independently
+        let mut state = PackedUnifiedShadingState::default();
+
+        // Set all 8 bits that are currently defined
+        state.flags = FLAG_SKINNING_MODE
+            | FLAG_TEXTURE_FILTER_LINEAR
+            | FLAG_USE_UNIFORM_COLOR
+            | FLAG_USE_UNIFORM_METALLIC
+            | FLAG_USE_UNIFORM_ROUGHNESS
+            | FLAG_USE_UNIFORM_EMISSIVE
+            | FLAG_USE_UNIFORM_SPECULAR
+            | FLAG_USE_MATCAP_REFLECTION;
+
+        // Verify all 8 bits are set (bits 0-7 = 0xFF)
+        assert_eq!(state.flags & 0xFF, 0xFF);
+
+        // Verify each flag individually
+        assert!(state.skinning_mode());
+        assert_ne!(state.flags & FLAG_TEXTURE_FILTER_LINEAR, 0);
+        assert!(state.has_override_flag(FLAG_USE_UNIFORM_COLOR));
+        assert!(state.has_override_flag(FLAG_USE_UNIFORM_METALLIC));
+        assert!(state.has_override_flag(FLAG_USE_UNIFORM_ROUGHNESS));
+        assert!(state.has_override_flag(FLAG_USE_UNIFORM_EMISSIVE));
+        assert!(state.has_override_flag(FLAG_USE_UNIFORM_SPECULAR));
+        assert!(state.has_override_flag(FLAG_USE_MATCAP_REFLECTION));
+    }
 }
