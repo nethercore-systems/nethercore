@@ -1,29 +1,60 @@
-# Emberware Z Audio System Specification
+# ADPCM Audio Compression Specification
 
-**Status:** Proposal / Draft  
-**Author:** Zerve  
+**Status:** Integration Spec / Ready for Implementation
+**Author:** Zerve
 **Last Updated:** December 2025
 
 ---
 
 ## Executive Summary
 
-This document specifies the audio system for Emberware Z, using ADPCM compression for samples and a tracker-based system for music. The goal is era-authentic audio that fits within ROM constraints while providing good quality.
+This document specifies ADPCM compression integration for Emberware Z's existing audio system. The goal is to enable era-authentic audio that fits within the 16 MB ROM budget while maintaining the current channel-based playback architecture.
 
 **Key decisions:**
-- ADPCM compression (4:1 ratio vs PCM)
-- 22,050 Hz default sample rate
+- IMA-ADPCM compression (4:1 ratio vs PCM) for ROM efficiency
+- 22,050 Hz output rate (11,025 Hz option in file format)
+- Decompression at load time (init only) — zero runtime cost
 - Mono required for SFX, optional stereo for music
-- Tracker system for music (small ROM footprint, era-authentic)
+- Three loading paths: procedural PCM, ROM assets (ADPCM), power-user ADPCM
+- Existing playback API unchanged (16 SFX channels + 1 music channel)
+
+---
+
+## Scope & Integration
+
+This specification focuses on **ADPCM compression integration** for ROM efficiency. It is not a redesign of the audio system, but an upgrade to support compressed audio assets.
+
+**What this spec covers:**
+- IMA-ADPCM codec implementation (encode/decode)
+- `.ewzsnd` file format for compressed audio assets
+- Integration with existing 16-channel audio system
+- Three loading paths (procedural PCM, ROM ADPCM, power-user ADPCM)
+- Decompression strategy (load time vs runtime)
+
+**What remains unchanged:**
+- Channel-based playback architecture (16 SFX + 1 music)
+- Existing FFI playback functions (`play_sound`, `channel_*`, `music_*`)
+- Audio command buffering system
+- Rollback integration (`set_rollback_mode()`)
+- 22,050 Hz playback rate
+
+**Out of scope (future work):**
+- 3D spatial audio positioning
+- Tracker/sequencer music system
+- Runtime audio effects (reverb, chorus, etc.)
+
+**Integration approach:**
+All ADPCM decompression happens **at load time (init only)**. Once loaded, sounds are stored as PCM samples and played through the existing system. This means zero CPU cost during gameplay and full compatibility with the current architecture.
 
 ---
 
 ## Design Goals
 
-1. **ROM efficiency** — Audio should not dominate the ROM budget
+1. **ROM efficiency** — Audio should not dominate the ROM budget (ADPCM provides 4:1 compression)
 2. **Era-authentic sound** — PS1/Saturn/N64 quality, not modern HD audio
-3. **Simple for developers** — Load sample, play sample
-4. **Rollback-friendly** — Audio state must be deterministic or fire-and-forget
+3. **Transparent integration** — Developers use the same playback API, compression is automatic
+4. **Backwards compatible** — Procedural/synthesized PCM sounds still supported
+5. **Rollback-friendly** — Audio state must be deterministic or fire-and-forget
 
 ---
 
@@ -56,26 +87,27 @@ Compression ratio:            8:1
 
 > **Note:** The 8:1 ratio comes from 16-bit → 4-bit (4:1) being the primary compression. ADPCM also provides inter-sample prediction which maintains quality despite the bit reduction.
 
-### Music: Tracker Modules
+### Music: ADPCM Samples
 
-Music uses a tracker/sequencer format with ADPCM-compressed samples.
+Music currently uses the same ADPCM-compressed sample format as SFX. Future tracker/sequencer support is planned.
 
-| Property | Specification |
-|----------|---------------|
-| Format | Platform-specific module (see Module Format section) |
-| Sample format | ADPCM (same as SFX) |
-| Channels | 8-16 simultaneous voices |
-| Pattern resolution | 64 rows per pattern typical |
+**Current approach:**
+- Music tracks are ADPCM-compressed audio files loaded via `rom_sound()`
+- Played on dedicated music channel (channel 0)
+- Same compression benefits as SFX (4:1 ratio)
 
-**Storage cost:**
+**Future work:**
+- Tracker/sequencer system with patterns and multi-channel arrangement
+- See XM format research for potential direction
+- Would use ADPCM samples within module format
+
+**Storage comparison (for reference):**
 ```
-Typical module with samples: 50-200 KB per song
-vs PCM stereo (3 min song):  15+ MB
+ADPCM music file (3 min):   ~1-2 MB compressed
+vs PCM stereo (3 min):      ~15 MB uncompressed
 
-Ratio: 75-300× smaller
+Ratio: ~8-15× smaller
 ```
-
-This is how SNES, Genesis, PS1, and N64 games achieved full soundtracks in limited ROM.
 
 ---
 
@@ -91,7 +123,7 @@ This is how SNES, Genesis, PS1, and N64 games achieved full soundtracks in limit
 | Music samples | 22,050 Hz | Instrument clarity |
 | Lo-fi aesthetic | 11,025 Hz | Intentional crunch |
 
-Developers may mix sample rates. The host resamples to output rate at playback.
+Developers may mix sample rates. The host resamples from stored sample rate (11,025 or 22,050 Hz) to output rate (22,050 Hz) during decompression at load time.
 
 ---
 
@@ -101,9 +133,9 @@ Developers may mix sample rates. The host resamples to output rate at playback.
 
 All SFX must be mono. Rationale:
 
-1. **Spatial audio** — SFX are positioned in 3D space; the engine calculates stereo panning from world position
-2. **ROM savings** — Stereo doubles size with no benefit for positioned sounds
-3. **Era authenticity** — PS1/N64 SFX were mono with hardware spatialization
+1. **Stereo panning** — SFX use simple stereo panning (-1.0 left to 1.0 right) applied at playback
+2. **ROM savings** — Stereo doubles size with no benefit when panning is applied in code
+3. **Era authenticity** — PS1/N64 SFX were mono with runtime panning
 
 ### Music: Mono Default, Stereo Optional
 
@@ -316,6 +348,8 @@ pub fn encode_adpcm(pcm_data: &[i16], adpcm_output: &mut [u8]) {
 
 ## Sound File Format (.ewzsnd)
 
+> **Note:** .ewzsnd is an **ADPCM-only format** used for bundled ROM assets. It is not a dual-format container. Raw PCM sounds use the `load_sound()` function directly without a file format.
+
 ### Header (16 bytes)
 
 ```rust
@@ -370,145 +404,179 @@ Total: 11,041 bytes for 1 second of audio
 
 ---
 
-## Proposed FFI Functions
+## Integration Architecture
 
-> **Open Question:** Function naming convention
-> - `sound_*` prefix: `sound_load`, `sound_play`
-> - `audio_*` prefix: `audio_load`, `audio_play`
-> - `sfx_*` / `music_*` split: `sfx_play`, `music_play`
+### Decompression Strategy
 
-### Sound Loading
+**All decompression happens at load time (init only):**
+1. Assets authored as WAV/FLAC → `ember-export` → .ewzsnd (ADPCM)
+2. Bundled in ROM data pack via `ember.toml`
+3. `rom_sound()` loads .ewzsnd → decodes ADPCM → stores as PCM i16
+4. Playback system unchanged (works with PCM samples)
 
-```rust
-/// Load a sound effect from ROM
-///
-/// # Arguments
-/// * `data_ptr` — Pointer to .ewzsnd data (embedded via include_bytes!)
-/// * `byte_size` — Size of data
-///
-/// # Returns
-/// Sound handle (0 = error)
-fn load_sound(data_ptr: *const u8, byte_size: u32) -> u32;
+**Benefits:**
+- Zero CPU cost during gameplay (no runtime decoding)
+- Simple architecture (decoder only runs during init)
+- ROM compression (4:1 ratio) without RAM cost
+- Compatible with existing audio system
 
-/// Unload a sound and free resources
-fn unload_sound(handle: u32);
+**Trade-off:**
+- RAM usage: Decompressed PCM (but negligible on modern systems)
+- ROM savings: 4:1 compression makes 16 MB budget feasible
+
+### Asset Workflow
+
+```
+Developer workflow:
+1. Author: sound.wav (PCM audio file)
+2. Add to ember.toml:
+   [[assets.sounds]]
+   id = "jump"
+   path = "assets/jump.wav"
+3. Build: ember-export converts to jump.ewzsnd (ADPCM)
+4. Pack: ember pack bundles into ROM data pack
+5. Load: rom_sound(b"jump".as_ptr(), 4) in init()
+6. Play: play_sound(handle, 1.0, 0.0) in update()/render()
 ```
 
-### Sound Playback
+### Current System Compatibility
 
-```rust
-/// Play a sound effect
-///
-/// # Arguments  
-/// * `handle` — Sound handle from load_sound()
-/// * `volume` — Volume 0.0 to 1.0
-/// * `pan` — Stereo pan -1.0 (left) to 1.0 (right), 0.0 = center
-///
-/// # Returns
-/// Voice ID for this playback instance (0 = failed, no free voices)
-fn play_sound(handle: u32, volume: f32, pan: f32) -> u32;
+**No changes to:**
+- Audio::play/stop/set_rollback_mode trait
+- 16 channel architecture
+- Command buffering system
+- Rodio playback backend
+- 22,050 Hz output rate
+- Equal-power stereo panning
 
-/// Play a sound with 3D positioning
-///
-/// # Arguments
-/// * `handle` — Sound handle
-/// * `volume` — Base volume 0.0 to 1.0
-/// * `x`, `y`, `z` — World position
-///
-/// Pan and attenuation calculated from listener position.
-fn play_sound_3d(handle: u32, volume: f32, x: f32, y: f32, z: f32) -> u32;
-
-/// Stop a playing voice
-fn stop_voice(voice_id: u32);
-
-/// Stop all instances of a sound
-fn stop_sound(handle: u32);
-
-/// Set master volume
-fn set_master_volume(volume: f32);
-```
-
-### Listener (for 3D audio)
-
-```rust
-/// Set listener position and orientation for 3D audio
-///
-/// # Arguments
-/// * `x`, `y`, `z` — Listener position
-/// * `forward_x/y/z` — Forward direction (normalized)
-/// * `up_x/y/z` — Up direction (normalized)
-fn set_listener(
-    x: f32, y: f32, z: f32,
-    forward_x: f32, forward_y: f32, forward_z: f32,
-    up_x: f32, up_y: f32, up_z: f32
-);
-```
-
-### Music (Tracker)
-
-```rust
-/// Load a music module
-///
-/// # Arguments
-/// * `data_ptr` — Pointer to module data
-/// * `byte_size` — Size of data
-///
-/// # Returns
-/// Module handle (0 = error)
-fn load_music(data_ptr: *const u8, byte_size: u32) -> u32;
-
-/// Play music module
-///
-/// # Arguments
-/// * `handle` — Module handle
-/// * `loop` — Whether to loop (1) or play once (0)
-fn play_music(handle: u32, loop_flag: u32);
-
-/// Stop current music
-fn stop_music();
-
-/// Pause/unpause music
-fn pause_music(paused: u32);
-
-/// Set music volume
-fn set_music_volume(volume: f32);
-
-/// Unload music module
-fn unload_music(handle: u32);
-```
+**New additions:**
+- ADPCM decoder (used only during asset loading)
+- .ewzsnd file format parser
+- `load_sound_adpcm()` FFI function
+- ember-export ADPCM encoding support
 
 ---
 
-## Voice Management
+## FFI Functions
 
-The host manages a fixed pool of voices (simultaneous sounds).
+Emberware Z provides three loading paths to support different use cases:
 
-| Property | Value |
-|----------|-------|
-| Max voices (SFX) | 16-32 |
-| Max voices (music) | 8-16 (within module) |
-| Voice stealing | Oldest voice with same sound, then oldest overall |
+### 1. Procedural PCM Loading (Unchanged)
 
-When all voices are in use:
-1. If the same sound is already playing, steal its oldest instance
-2. Otherwise, steal the globally oldest voice
-3. Return voice ID (never fail silently)
+For runtime-generated or synthesized sounds:
+
+```rust
+/// Load PCM sound from WASM memory (init only)
+///
+/// Use for procedural/synthesized audio generated at runtime.
+/// Data is raw 16-bit signed PCM samples.
+///
+/// # Arguments
+/// * `data_ptr` — Pointer to i16 PCM samples in WASM memory
+/// * `byte_len` — Size in bytes (must be even)
+///
+/// # Returns
+/// Sound handle (0 = error)
+fn load_sound(data_ptr: *const i16, byte_len: u32) -> u32;
+```
+
+### 2. ROM Asset Loading (Primary Path - ADPCM)
+
+For bundled game assets (recommended):
+
+```rust
+/// Load sound from ROM data pack (init only)
+///
+/// Primary method for loading bundled audio assets.
+/// Automatically decompresses ADPCM to PCM at load time.
+/// Assets are .ewzsnd format (ADPCM compressed).
+///
+/// # Arguments
+/// * `id_ptr` — Pointer to asset ID string (e.g., "jump", "music_stage1")
+/// * `id_len` — Length of ID string
+///
+/// # Returns
+/// Sound handle (0 = error)
+fn rom_sound(id_ptr: *const u8, id_len: u32) -> u32;
+```
+
+### 3. Power User ADPCM Loading (Advanced)
+
+For custom asset pipelines:
+
+```rust
+/// Load ADPCM sound from WASM memory (init only)
+///
+/// For advanced users handling their own compression.
+/// Accepts raw .ewzsnd format data.
+/// Decompresses ADPCM to PCM at load time.
+///
+/// # Arguments
+/// * `data_ptr` — Pointer to .ewzsnd file data in WASM memory
+/// * `byte_len` — Size in bytes
+///
+/// # Returns
+/// Sound handle (0 = error)
+fn load_sound_adpcm(data_ptr: *const u8, byte_len: u32) -> u32;
+```
+
+### Playback Functions (Unchanged)
+
+All playback functions work identically regardless of loading method:
+
+```rust
+/// Play a sound effect (fire-and-forget)
+fn play_sound(sound: u32, volume: f32, pan: f32);
+
+/// Play on managed channel with looping control
+fn channel_play(channel: u32, sound: u32, volume: f32, pan: f32, looping: u32);
+
+/// Update channel parameters
+fn channel_set(channel: u32, volume: f32, pan: f32);
+
+/// Stop a channel
+fn channel_stop(channel: u32);
+
+/// Play music (uses dedicated channel 0)
+fn music_play(sound: u32, volume: f32);
+
+/// Stop music
+fn music_stop();
+
+/// Set music volume
+fn music_set_volume(volume: f32);
+```
+
+**Key points:**
+- 16 SFX channels (fire-and-forget or managed)
+- 1 dedicated music channel (always looping)
+- Pan range: -1.0 (left) to 1.0 (right), 0.0 (center)
+- Volume range: 0.0 to 1.0
+- All sounds loaded during `init()`, playback in `update()`/`render()`
 
 ---
 
 ## Rollback Considerations
 
-Audio is **fire-and-forget** for rollback purposes:
+Audio is **fire-and-forget** for rollback purposes. The current implementation handles this via the `set_rollback_mode()` flag on the Audio trait.
 
-1. **Sound effects triggered during rolled-back frames** — May play briefly, then cut off. This is acceptable; players don't notice brief audio glitches during rollback.
+**Technical implementation:**
+- During rollback replay, `set_rollback_mode(true)` is called
+- Audio commands are discarded (not sent to audio thread) during rollback
+- This prevents audio desync without requiring state serialization
+- When rollback completes, `set_rollback_mode(false)` resumes normal playback
+
+**Behavior:**
+1. **Sound effects triggered during rolled-back frames** — May play briefly, then cut off when rollback occurs. This is acceptable; players don't notice brief audio glitches during rollback.
 
 2. **Music** — Continues playing, not affected by rollback. Music is non-gameplay state.
 
 3. **No audio state in WASM memory** — All audio state lives host-side. WASM just issues play commands.
 
-**Important:** Don't trigger sounds in `update()` that depend on game state that might be rolled back. Either:
-- Trigger sounds in `render()` (not rolled back)
-- Accept brief audio artifacts during rollback
+**Best practices:**
+- Trigger sounds in `render()` for guaranteed playback (render is not rolled back)
+- Or trigger in `update()` and accept brief artifacts during rollback
+- Don't rely on audio state for game logic (audio is non-deterministic)
 
 ---
 
@@ -555,60 +623,25 @@ ADPCM makes the audio budget tractable.
 
 ---
 
-## Tracker Module Format
+## Future Work: Tracker/Sequencer Music
 
-> **Open Question:** Use existing format or define custom?
->
-> Options:
-> - **MOD** — Classic Amiga format, simple, well-documented
-> - **XM** — Extended MOD, more features, FastTracker II
-> - **IT** — Impulse Tracker, most features
-> - **Custom** — Tailored to Emberware needs
->
-> Recommendation: Support MOD or XM for familiarity, or define a simple custom format optimized for ADPCM samples.
+A tracker-based music system is planned for future implementation. This would provide:
+- Pattern-based sequencing (like MOD/XM formats)
+- Multi-channel arrangement (8-16 voices)
+- ADPCM-compressed samples within modules
+- Small ROM footprint compared to streaming audio
 
-### Custom Module Format (Proposed)
+**Potential direction:**
+- Support XM (Extended Module) format for tooling compatibility
+- Or use libopenmpt library to support MOD/XM/IT formats
+- Custom format tailored to Emberware's needs remains an option
 
-If using a custom format:
+**Next steps:**
+- Complete ADPCM compression implementation first
+- **After ADPCM is done:** Create `docs/pending/tracker-music-spec.md` with detailed tracker system design
+- This creates a continuous spec → implement → new spec workflow
 
-```rust
-#[repr(C, packed)]
-struct ModuleHeader {
-    magic: [u8; 4],          // "EWZM"
-    version: u8,
-    flags: u8,
-    num_channels: u8,        // 4-16
-    num_patterns: u8,
-    num_samples: u8,
-    song_length: u8,         // Number of pattern entries in order list
-    restart_position: u8,    // For looping
-    initial_tempo: u8,       // Ticks per row
-    initial_bpm: u8,         // Rows per minute / 4
-    reserved: [u8; 2],
-}
-
-// Followed by:
-// - Order list: song_length × u8 (pattern indices)
-// - Sample headers: num_samples × SampleHeader
-// - Pattern data: num_patterns × pattern_size
-// - Sample data: concatenated ADPCM data
-```
-
----
-
-## Open Questions
-
-1. **Tracker format** — MOD/XM/IT compatibility or custom format?
-
-2. **Sample rate options** — Only 22050/11025, or allow 44100 for music?
-
-3. **Voice count** — 16 sufficient, or need 32 for complex scenes?
-
-4. **Streaming** — Any support for streaming long audio from ROM? (Probably not needed with tracker music)
-
-5. **Effects** — Should host provide reverb/chorus, or leave to tracker?
-
-6. **Function naming** — `sound_*`, `audio_*`, or split `sfx_*`/`music_*`?
+This is deferred to allow ADPCM compression integration to be implemented first.
 
 ---
 

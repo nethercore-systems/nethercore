@@ -14,6 +14,8 @@ path = "src/main.rs"
 z-common = { path = "../../z-common" }
 emberware-shared = { path = "../../shared" }
 
+hashbrown = { workspace = true }
+
 # CLI
 clap = { version = "4", features = ["derive"] }
 

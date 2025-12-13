@@ -4,7 +4,7 @@
 
 use anyhow::{Context, Result};
 use serde::Deserialize;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::path::{Path, PathBuf};
 
 use crate::{EWZ_MESH_EXT, EWZ_SOUND_EXT, EWZ_TEXTURE_EXT};

@@ -501,7 +501,7 @@ This section provides concrete implementation steps based on the current Emberwa
 ```rust
 //! Memory viewer and search system
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 /// Memory region metadata
 #[derive(Clone)]

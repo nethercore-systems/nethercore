@@ -78,10 +78,14 @@ fn format_rust_const(name: &str, value_type: &ValueType, value: &DebugValue) -> 
                 const_name, x, y, w, h
             )
         }
-        (ValueType::Color, DebugValue::Color { r, g, b, a }) => {
+        (ValueType::Color, DebugValue::Color(packed)) => {
+            let r = (packed >> 24) & 0xFF;
+            let g = (packed >> 16) & 0xFF;
+            let b = (packed >> 8) & 0xFF;
+            let a = packed & 0xFF;
             format!(
-                "const {}: Color = Color {{ r: {}, g: {}, b: {}, a: {} }};",
-                const_name, r, g, b, a
+                "const {}: u32 = 0x{:08X}; // R={}, G={}, B={}, A={}",
+                const_name, packed, r, g, b, a
             )
         }
         // Fixed-point: export both raw value and float equivalent as comment
@@ -174,16 +178,11 @@ mod tests {
         let result = format_rust_const(
             "tint",
             &ValueType::Color,
-            &DebugValue::Color {
-                r: 255,
-                g: 128,
-                b: 64,
-                a: 255,
-            },
+            &DebugValue::Color(0xFF8040FF),
         );
         assert_eq!(
             result,
-            "const TINT: Color = Color { r: 255, g: 128, b: 64, a: 255 };"
+            "const TINT: u32 = 0xFF8040FF; // R=255, G=128, B=64, A=255"
         );
     }
 

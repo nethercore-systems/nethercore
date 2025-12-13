@@ -23,7 +23,7 @@
 //! }
 //! ```
 
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use wasmparser::{Operator, Parser, Payload};
 
 /// Result of build-time WASM analysis

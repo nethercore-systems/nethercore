@@ -34,28 +34,36 @@ Pre-decode and upload ALL animation data (keyframe bone matrices + inverse bind 
 
 ### New GPU Memory Layout
 
-**Separate from 4MB procedural VRAM budget** (static after init):
+**Mixed static/dynamic buffers in @group(0)** — bind group cached, buffer contents updated per-frame:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ @group(2) @binding(0): all_inverse_bind_mats               │
-│ array<BoneMatrix3x4, N>  (grows during init)               │
+│ @group(0) @binding(6): all_inverse_bind_mats               │
+│ array<BoneMatrix3x4, N>  (ONE-TIME write after init)       │
 │                                                             │
 │ Layout:                                                     │
 │ [skeleton_0_bones...][skeleton_1_bones...][skeleton_N...]  │
 │ └─offset=0          └─offset=bone_count_0                  │
+│                                                             │
+│ Static buffer - written once via queue.write_buffer()      │
+│ after init, never modified again                           │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│ @group(2) @binding(1): all_keyframes                       │
-│ array<BoneMatrix3x4, M>  (grows during init)               │
+│ @group(0) @binding(7): all_keyframes                       │
+│ array<BoneMatrix3x4, M>  (ONE-TIME write after init)       │
 │                                                             │
 │ Layout per animation:                                       │
 │ [frame_0_bones...][frame_1_bones...][frame_N_bones...]     │
 │                                                             │
 │ Each animation at different offset in global buffer         │
+│                                                             │
+│ Static buffer - written once via queue.write_buffer()      │
+│ after init, never modified again                           │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+**Key insight:** With proper bind group caching (fixing current bug where frame bind group is recreated every frame), we can mix static and dynamic buffers in the same bind group. The bind group is created once and cached; only buffer **contents** are updated via `queue.write_buffer()`.
 
 ### Index Tracking Structures
 
@@ -106,7 +114,7 @@ pub struct PackedUnifiedShadingState {
 > - Bits 12-15: Dither offsets
 >
 > The new `animation_flags` field handles buffer selection:
-> - Bit 0: `use_dynamic` (0 = read from @group(2) `all_keyframes`, 1 = read from @group(0) `immediate_bones`)
+> - Bit 0: `use_dynamic` (0 = read from @group(0) `all_keyframes`, 1 = read from @group(0) `immediate_bones`)
 > - Bits 1-7: reserved
 > - Bits 8-15: reserved for v2.1 blend factor (0-255 → 0.0-1.0)
 
@@ -168,8 +176,8 @@ fn set_bones(matrices_ptr: u32, count: u32) -> u32 {
 #[derive(Clone, Copy, Default)]
 pub enum KeyframeSource {
     #[default]
-    Static { offset: u32 },    // Read from all_keyframes[@group(2)] at offset
-    Immediate { offset: u32 }, // Read from immediate_bones[@group(0)] at offset
+    Static { offset: u32 },    // Read from all_keyframes[@group(0) @binding(7)] at offset
+    Immediate { offset: u32 }, // Read from immediate_bones[@group(0) @binding(5)] at offset
 }
 ```
 
@@ -186,30 +194,31 @@ This allows multiple bone states per frame without re-uploading.
 ### New Bind Group Structure
 
 ```
-@group(0) - Per-frame data
-  @binding(0): model_matrices      array<mat4x4<f32>>
-  @binding(1): view_matrices       array<mat4x4<f32>>
-  @binding(2): proj_matrices       array<mat4x4<f32>>
-  @binding(3): shading_states      array<PackedUnifiedShadingState>
-  @binding(4): mvp_shading_indices array<vec4<u32>>
-  @binding(5): immediate_bones     array<BoneMatrix3x4>  (indexed per-draw, data changes each frame)
-  @binding(6): (REMOVED - inverse_bind moved to @group(2))
-  @binding(7): quad_instances      array<QuadInstance>
-  @binding(8): screen_dims         vec2<f32>
+@group(0) - Frame data (BIND GROUP CACHED - recreate only when pipeline changes)
+  @binding(0): model_matrices         array<mat4x4<f32>>        (per-frame write)
+  @binding(1): view_matrices          array<mat4x4<f32>>        (per-frame write)
+  @binding(2): proj_matrices          array<mat4x4<f32>>        (per-frame write)
+  @binding(3): shading_states         array<PackedUnifiedShadingState>  (per-frame write)
+  @binding(4): mvp_shading_indices    array<vec4<u32>>          (per-frame write)
+  @binding(5): immediate_bones        array<BoneMatrix3x4>      (per-frame write, indexed)
+  @binding(6): all_inverse_bind_mats  array<BoneMatrix3x4>      (ONE-TIME write after init)
+  @binding(7): all_keyframes          array<BoneMatrix3x4>      (ONE-TIME write after init)
+  @binding(8): quad_instances         array<QuadInstance>       (per-frame write)
+  @binding(9): screen_dims            vec2<f32>                 (rarely changes)
 
-@group(1) - Textures (unchanged)
+@group(1) - Textures (bind group cached per texture combo)
   @binding(0-3): texture slots
   @binding(4): sampler_nearest
   @binding(5): sampler_linear
-
-@group(2) - Static animation data (NEW - uploaded once after init)
-  @binding(0): all_inverse_bind_mats  array<BoneMatrix3x4>
-  @binding(1): all_keyframes          array<BoneMatrix3x4>
 ```
 
+**Bind group lifecycle:**
+- `@group(0)` bind group: Created once, cached, reused. Only recreated when pipeline changes.
+- `@group(1)` bind group: Cached per texture slot combination (existing pattern).
+
 **Buffer lifecycle:**
-- `@group(0)` buffers: Fixed-size, data written each frame via `queue.write_buffer()`
-- `@group(2)` buffers: Sized during init, data uploaded once, never modified
+- Per-frame buffers: `queue.write_buffer()` every frame (bindings 0-5, 8, 9)
+- Static buffers: `queue.write_buffer()` ONCE after init (bindings 6, 7), never modified again
 
 ## Implementation Plan
 
@@ -241,38 +250,92 @@ for pending in state.pending_keyframes.drain(..) {
 }
 ```
 
+### Phase 0.5: Fix Bind Group Caching Bug (Prerequisite)
+
+**Problem**: The current `frame.rs` recreates the frame bind group (@group(0)) **every frame** ([frame.rs:369-458](d:\Development\emberware\emberware-z\src\graphics\frame.rs#L369-L458)), even though the buffers themselves are persistent. Only the buffer **contents** change via `queue.write_buffer()`.
+
+**Impact**: Wasteful GPU descriptor set creation every frame. This bug prevents us from efficiently mixing static and dynamic buffers in @group(0).
+
+**Files to modify:**
+- `emberware-z/src/graphics/mod.rs` (or wherever `ZGraphics` struct is defined)
+- `emberware-z/src/graphics/frame.rs`
+
+**Fix**: Add bind group caching to ZGraphics:
+
+```rust
+pub struct ZGraphics {
+    // ... existing fields ...
+
+    /// Cached frame bind group - only recreated when pipeline changes
+    cached_frame_bind_group: Option<wgpu::BindGroup>,
+
+    /// Track which pipeline the cached bind group was created for
+    cached_pipeline_id: Option<PipelineId>,
+}
+```
+
+**Implementation in frame.rs:**
+
+```rust
+// Check if we can reuse cached bind group
+let frame_bind_group = if let Some(cached) = &self.cached_frame_bind_group {
+    if self.cached_pipeline_id == Some(current_pipeline_id) {
+        // Pipeline unchanged - reuse cached bind group!
+        cached
+    } else {
+        // Pipeline changed - recreate bind group
+        let new_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor { ... });
+        self.cached_frame_bind_group = Some(new_bg.clone());
+        self.cached_pipeline_id = Some(current_pipeline_id);
+        self.cached_frame_bind_group.as_ref().unwrap()
+    }
+} else {
+    // First frame - create bind group
+    let new_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor { ... });
+    self.cached_frame_bind_group = Some(new_bg.clone());
+    self.cached_pipeline_id = Some(current_pipeline_id);
+    self.cached_frame_bind_group.as_ref().unwrap()
+};
+```
+
+**Benefit**: This fix allows Phase 1 to add static animation buffers (@binding(6), @binding(7)) to @group(0) without performance concerns. The bind group is created once; buffer contents are updated cheaply.
+
 ### Phase 1: GPU Infrastructure
 
 **Files to modify:**
-- `emberware-z/src/graphics/init.rs` - Create static animation buffers and bind group layout
-- `emberware-z/src/graphics/frame.rs` - Bind @group(2) once per frame
+- `emberware-z/src/graphics/init.rs` - Add static animation buffers (@binding(6), @binding(7))
+- `emberware-z/src/graphics/pipeline.rs` - Update frame bind group layout with new bindings
+- `emberware-z/src/graphics/frame.rs` - Upload static buffers once after init
 
 **Tasks:**
 1. Add `all_inverse_bind_buffer: wgpu::Buffer` and `all_keyframes_buffer: wgpu::Buffer` to ZGraphics
-2. Create bind group layout for @group(2) with two storage buffer bindings
-3. Create **placeholder** bind group initially (before init resources are known)
-4. **Recreate** the bind group in Phase 3 after calculating exact buffer sizes
-5. Bind @group(2) once at start of render pass (immutable after init)
+2. Update frame bind group layout (@group(0)) to include:
+   - @binding(6): all_inverse_bind_mats (storage buffer)
+   - @binding(7): all_keyframes (storage buffer)
+   - Renumber existing @binding(6) → @binding(8) (quad_instances)
+   - Renumber existing @binding(7) → @binding(9) (screen_dims)
+3. Create placeholder buffers during graphics init (before game loads)
+4. Phase 3 will resize buffers and upload data after init
 
-**Bind Group Lifecycle:**
+**Buffer Lifecycle:**
 
 ```
 graphics init (Phase 1)
-    └─→ Create placeholder buffers (48 bytes each)
-    └─→ Create placeholder bind group (valid but minimal)
+    └─→ Create placeholder buffers (48 bytes each) for @binding(6), @binding(7)
+    └─→ Update bind group layout to include new bindings
+    └─→ Cached bind group will be created on first frame (Phase 0.5)
 
 init() runs (game loads animations)
     └─→ pending_keyframes accumulates
 
 process_pending_resources (Phase 3)
     └─→ Calculate exact buffer sizes
-    └─→ Create correctly-sized buffers
-    └─→ Upload all animation data
-    └─→ RECREATE bind group with final buffers  ← Important!
-    └─→ Drop placeholder buffers
+    └─→ Recreate buffers with correct size
+    └─→ Upload all animation data via queue.write_buffer()
+    └─→ Invalidate cached bind group (force recreation with new buffers)
 
 render loop
-    └─→ Bind final @group(2) once per frame
+    └─→ Cached bind group references final buffers (from Phase 0.5)
 ```
 
 **Empty Animation Handling:**
@@ -285,21 +348,21 @@ const BONE_MATRIX_SIZE: u64 = 48;  // 3×4 f32 = 12 floats × 4 bytes
 
 // Minimum size: 1 BoneMatrix3x4 (48 bytes) - placeholder for empty games
 let all_inverse_bind_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-    label: Some("All Inverse Bind Matrices"),
-    size: BONE_MATRIX_SIZE,  // Replaced in Phase 3 if skeletons loaded
+    label: Some("All Inverse Bind Matrices (Static)"),
+    size: BONE_MATRIX_SIZE,  // Will be resized in Phase 3 if skeletons loaded
     usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
     mapped_at_creation: false,
 });
 
 let all_keyframes_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-    label: Some("All Keyframes"),
-    size: BONE_MATRIX_SIZE,  // Replaced in Phase 3 if animations loaded
+    label: Some("All Keyframes (Static)"),
+    size: BONE_MATRIX_SIZE,  // Will be resized in Phase 3 if animations loaded
     usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
     mapped_at_creation: false,
 });
 ```
 
-The bind group must be valid even with no animation data. Shaders check `inverse_bind_base > 0u` before accessing, so the placeholder is never read.
+The buffers must be valid even with no animation data. Shaders check `inverse_bind_base > 0u` before accessing, so the placeholder is never read.
 
 ### Phase 2: Index Tracking
 
@@ -324,16 +387,22 @@ The bind group must be valid even with no animation data. Shaders check `inverse
 **Tasks:**
 1. After all `pending_skeletons` are processed:
    - Concatenate all inverse bind matrices into single buffer
-   - Record offset for each skeleton
-   - Upload to `all_inverse_bind_buffer`
+   - Record offset for each skeleton in `SkeletonGpuInfo`
+   - Calculate total buffer size needed
+   - Recreate `all_inverse_bind_buffer` with exact size (if > placeholder size)
+   - Upload via `queue.write_buffer()` ONCE
 
 2. After all `pending_keyframes` are processed:
    - For each keyframe collection, decode ALL frames to BoneMatrix3x4
    - Concatenate into single buffer
-   - Record base offset for each collection
-   - Upload to `all_keyframes_buffer`
+   - Record base offset for each collection in `KeyframeGpuInfo`
+   - Calculate total buffer size needed
+   - Recreate `all_keyframes_buffer` with exact size (if > placeholder size)
+   - Upload via `queue.write_buffer()` ONCE
 
-3. Create @group(2) bind group with populated buffers
+3. Invalidate cached frame bind group (set `cached_frame_bind_group = None`)
+   - Forces recreation on next frame with correct buffer sizes
+   - Bind group caching (Phase 0.5) handles this automatically
 
 ### Phase 4: Shading State Extension
 
@@ -367,7 +436,7 @@ fn skeleton_bind(handle: u32) {
         let gpu_info = &state.skeleton_gpu_info[handle - 1];
         state.current_inverse_bind_base = gpu_info.inverse_bind_offset; // full u32
     }
-    state.animation_state_dirty = true;
+    state.shading_state_dirty = true;  // Animation state is part of shading state
 }
 ```
 
@@ -378,7 +447,7 @@ fn keyframe_bind(handle: u32, frame: u32) {
         // Unbind keyframes - reset to default static offset 0
         // (non-skinned meshes ignore this entirely via shader permutations)
         state.current_keyframe_source = KeyframeSource::Static { offset: 0 };
-        state.animation_state_dirty = true;
+        state.shading_state_dirty = true;  // Animation state is part of shading state
         return;
     }
 
@@ -394,7 +463,7 @@ fn keyframe_bind(handle: u32, frame: u32) {
     let offset = gpu_info.keyframe_base_offset + frame_offset;
 
     state.current_keyframe_source = KeyframeSource::Static { offset };
-    state.animation_state_dirty = true;
+    state.shading_state_dirty = true;  // Animation state is part of shading state
 }
 ```
 
@@ -414,7 +483,7 @@ fn set_bones(matrices_ptr: u32, count: u32) {
 
     // Set current draw state to use immediate bones at this offset
     state.current_keyframe_source = KeyframeSource::Immediate { offset };
-    state.animation_state_dirty = true;
+    state.shading_state_dirty = true;  // Animation state is part of shading state
 }
 ```
 
@@ -423,72 +492,38 @@ fn set_bones(matrices_ptr: u32, count: u32) {
 ### Phase 6: Shader Updates
 
 **Files to modify:**
-- `emberware-z/shaders/common.wgsl` - Add @group(2) bindings
-- `emberware-z/src/graphics/pipeline.rs` - Update shader template generation
+- `emberware-z/shaders/common.wgsl` - Update @group(0) bindings (3D rendering)
+- `emberware-z/shaders/quad_template.wgsl` - Update @group(0) bindings (2D rendering)
+- `emberware-z/src/graphics/pipeline.rs` - Update shader template generation, bind group layout
+- `emberware-z/build.rs` - Update `//VS_SKINNED` template code
 
 **Shader Template System:**
 
-The current skinning code is injected via the `//VS_SKINNED` placeholder in the template system (see `pipeline.rs:create_shader_module()`). The pipeline generates 40 shader permutations at compile-time:
+The current skinning code is injected via the `//VS_SKINNED` placeholder in the template system (see `build.rs`). The pipeline generates 40 shader permutations at compile-time:
 - **Mode 0 (Unlit):** 16 permutations (all 16 vertex formats)
 - **Modes 1-3 (Matcap, MR, SS):** 8 permutations each (only formats with NORMAL flag)
 
-The template system uses string replacement to inject mode-specific and format-specific code:
-```rust
-// In pipeline.rs
-let shader_source = COMMON_WGSL
-    .replace("//MODE_SPECIFIC", &mode_specific_code)
-    .replace("//VS_SKINNED", &skinning_code)
-    .replace("//VERTEX_FORMAT", &format_specific_code);
-```
-
 **Update tasks:**
 
-1. **Add @group(2) binding declarations to `common.wgsl`** (shared by all permutations):
-   ```wgsl
-   // Static animation data - bound once after init, never changes
-   @group(2) @binding(0) var<storage, read> all_inverse_bind_mats: array<BoneMatrix3x4>;
-   @group(2) @binding(1) var<storage, read> all_keyframes: array<BoneMatrix3x4>;
-   ```
+1. **Update @group(0) binding declarations in `common.wgsl` (3D rendering):**
+   - Rename @binding(5) from `bones` → `immediate_bones`
+   - Rename @binding(6) from `inverse_bind` → `all_inverse_bind_mats`
+   - Add @binding(7): `all_keyframes` (NEW - static animation buffers)
 
-2. **Update `//VS_SKINNED` template expansion in `pipeline.rs`:**
+2. **Update @group(0) binding declarations in `quad_template.wgsl` (2D rendering):**
+   - **CRITICAL:** Renumber @binding(7) → @binding(8) (quad_instances)
+   - **CRITICAL:** Renumber @binding(8) → @binding(9) (screen_dims)
+   - This shader doesn't use animation bindings 5-7, but must match bind group layout
+
+3. **Update `//VS_SKINNED` template expansion in `build.rs`:**
    - Extract animation fields from expanded `PackedUnifiedShadingState` (indices 20-23 after unpacking)
-   - Branch on `use_dynamic` flag to select buffer source
-   - Keep existing `skin_vertex()` signature for skinned permutations
+   - Branch on `use_dynamic` flag to select buffer source (immediate_bones vs all_keyframes)
+   - Keep existing `skin_vertex()` pattern for skinned permutations
 
-3. **Update `create_frame_bind_group_layout()` in `pipeline.rs`:**
-   - Remove @binding(6) (inverse_bind moved to @group(2))
-   - Keep @binding(5) as `immediate_bones` (renamed from `bones`)
-
-4. **Add `create_static_bind_group_layout()` in `pipeline.rs`:**
-   ```rust
-   fn create_static_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
-       device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-           label: Some("Static Animation Bind Group Layout"),
-           entries: &[
-               wgpu::BindGroupLayoutEntry {
-                   binding: 0,
-                   visibility: wgpu::ShaderStages::VERTEX,
-                   ty: wgpu::BindingType::Buffer {
-                       ty: wgpu::BufferBindingType::Storage { read_only: true },
-                       has_dynamic_offset: false,
-                       min_binding_size: None,
-                   },
-                   count: None,
-               },
-               wgpu::BindGroupLayoutEntry {
-                   binding: 1,
-                   visibility: wgpu::ShaderStages::VERTEX,
-                   ty: wgpu::BindingType::Buffer {
-                       ty: wgpu::BufferBindingType::Storage { read_only: true },
-                       has_dynamic_offset: false,
-                       min_binding_size: None,
-                   },
-                   count: None,
-               },
-           ],
-       })
-   }
-   ```
+4. **Update `create_frame_bind_group_layout()` in `pipeline.rs`:**
+   - Add @binding(6): all_inverse_bind_mats (storage buffer, read-only)
+   - Add @binding(7): all_keyframes (storage buffer, read-only)
+   - Renumber existing bindings 6-7 → 8-9 to match shader updates
 
 **New shader code:**
 
@@ -506,9 +541,11 @@ let shader_source = COMMON_WGSL
 // @group(0) @binding(5) - Per-frame dynamic bones (indexed, grows during frame)
 @group(0) @binding(5) var<storage, read> immediate_bones: array<BoneMatrix3x4>;
 
-// @group(2) - Static animation data (bound once after init)
-@group(2) @binding(0) var<storage, read> all_inverse_bind_mats: array<BoneMatrix3x4>;
-@group(2) @binding(1) var<storage, read> all_keyframes: array<BoneMatrix3x4>;
+// @group(0) @binding(6) - Static inverse bind matrices (one-time upload after init)
+@group(0) @binding(6) var<storage, read> all_inverse_bind_mats: array<BoneMatrix3x4>;
+
+// @group(0) @binding(7) - Static keyframe matrices (one-time upload after init)
+@group(0) @binding(7) var<storage, read> all_keyframes: array<BoneMatrix3x4>;
 
 // PackedUnifiedShadingState now has 4 new u32 fields at the end:
 // - keyframe_base: u32     (index into all_keyframes OR immediate_bones)
@@ -539,14 +576,14 @@ fn skin_vertex(
         // Both paths use keyframe_base + bone_idx (unified indexing!)
         var bone_mat: BoneMatrix3x4;
         if use_dynamic {
-            // Dynamic from per-frame immediate_bones buffer
+            // Dynamic from per-frame immediate_bones buffer (@binding(5))
             bone_mat = immediate_bones[keyframe_base + bone_idx];
         } else {
-            // Static from init-time all_keyframes buffer
+            // Static from init-time all_keyframes buffer (@binding(7))
             bone_mat = all_keyframes[keyframe_base + bone_idx];
         }
 
-        // Apply inverse bind if skeleton is bound
+        // Apply inverse bind if skeleton is bound (@binding(6))
         if inverse_bind_base > 0u {
             let inv_bind = all_inverse_bind_mats[inverse_bind_base + bone_idx];
             bone_mat = multiply_3x4(bone_mat, inv_bind);
@@ -579,10 +616,38 @@ pub const SHADING_STATE_SIZE: usize = 96;  // Updated from 80
 - Keyframe decoding CPU cost per bind
 
 ### After
-- **Procedural VRAM (4MB)**: Only dynamic data (`set_bones` fallback, per-frame matrices)
-- **Static Animation VRAM (separate)**: Pre-uploaded, immutable
+- **Procedural VRAM (4MB)**: Per-frame dynamic data uploaded via `queue.write_buffer()` each frame
+- **Static Animation VRAM (counted separately from 4MB limit)**: Pre-uploaded once after init, immutable
   - Inverse bind: `bone_count × BONE_MATRIX_SIZE` per skeleton (one-time)
   - Keyframes: `bone_count × BONE_MATRIX_SIZE × frame_count` per animation (one-time)
+
+### Per-Frame Procedural VRAM Budget (4MB)
+
+The 4MB limit applies to data generated/uploaded **each frame** via `queue.write_buffer()`:
+
+**Counted against 4MB:**
+- `immediate_bones` - up to 196KB (4096 matrices × 48 bytes, defined by `MAX_IMMEDIATE_BONE_MATRICES`)
+- `model_matrices` - varies (one mat4x4 per draw call)
+- `view_matrices` - typically small (one per camera)
+- `proj_matrices` - typically small (one per camera)
+- `shading_states` - varies (deduplicated via HashMap)
+- `mvp_shading_indices` - varies (one vec4 per draw call)
+- Procedural vertex data (immediate-mode draws)
+- `quad_instances` - varies (UI/sprite quads)
+
+**NOT counted against 4MB (static after init):**
+- `all_inverse_bind_mats` - loaded from ROM once (@binding(6))
+- `all_keyframes` - loaded from ROM once (@binding(7))
+- Retained mesh vertex/index buffers
+- Texture data
+
+**immediate_bones calculation:**
+```rust
+pub const MAX_IMMEDIATE_BONE_MATRICES: usize = 4096;  // Add to state/mod.rs
+// 4096 × 48 bytes = 196KB per frame (conservative limit)
+// Cleared each frame (no accumulation)
+// Each set_bones() appends (doesn't overwrite)
+```
 
 **Typical skeleton sizes** (most games use 20-60 bones, not 256):
 - Small character (20 bones): 20 × 48 = 960 bytes
@@ -639,7 +704,9 @@ let keyframes_size = (total_keyframe_matrices.max(1) * BONE_MATRIX_SIZE) as u64;
 // 4. Create final bind group with correctly-sized buffers
 ```
 
-**Limitation:** Animations cannot be loaded after `init()` completes. The @group(2) buffers are immutable after creation. This matches existing patterns (textures/meshes also loaded during init).
+**Limitation:** Animations cannot be loaded after `init()` completes. The static animation buffers are immutable after creation. This matches the init-only resource loading model (textures/meshes also loaded during init).
+
+See [Resource Loading Model](#resource-loading-model) section below for rationale and migration plan.
 
 ### Peak Memory During Init
 
@@ -667,6 +734,124 @@ During rollback (8+ times/second):
 - **After**: Update 1 u32 index per draw call
 
 This is a massive win for determinism and performance.
+
+## Bind Group Caching Architecture
+
+### Current Bug
+
+The frame bind group (@group(0)) is recreated every frame in [frame.rs:369](d:\Development\emberware\emberware-z\src\graphics\frame.rs#L369), even though the buffers themselves don't change - only their contents.
+
+**Current wasteful pattern:**
+```rust
+// Every frame in frame.rs
+let frame_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+    label: Some("Frame Bind Group (Unified)"),
+    layout: &pipeline_entry.bind_group_layout_frame,
+    entries: &[/* ... 9 entries pointing to same buffers ... */],
+})
+```
+
+This creates a new GPU descriptor set every frame, even though the buffers are persistent and only their contents change via `queue.write_buffer()`.
+
+### Correct Pattern
+
+- **Bind groups**: Created once, cached, reused until pipeline changes
+- **Buffer contents**: Updated via `queue.write_buffer()` each frame (cheap operation)
+- **Recreation triggers**: Pipeline change, buffer resize, first frame
+
+### Benefits
+
+1. **Eliminates wasteful GPU work**: No descriptor set creation every frame
+2. **Enables mixed static/dynamic buffers**: Can have both per-frame (@binding(0-5, 8-9)) and static (@binding(6-7)) buffers in same bind group
+3. **Simpler architecture**: No need for separate @group(2) - everything fits in @group(0)
+4. **Matches wgpu best practices**: Bind groups are designed to be cached and reused
+
+### Implementation
+
+**Add to ZGraphics:**
+```rust
+pub struct ZGraphics {
+    // ... existing fields ...
+
+    /// Cached frame bind group - only recreated when pipeline changes
+    cached_frame_bind_group: Option<wgpu::BindGroup>,
+
+    /// Track which pipeline the cached bind group was created for
+    cached_pipeline_id: Option<PipelineId>,
+}
+```
+
+**Update frame.rs:**
+```rust
+// Check if we can reuse cached bind group
+let frame_bind_group = if let Some(cached) = &self.cached_frame_bind_group {
+    if self.cached_pipeline_id == Some(current_pipeline_id) {
+        // Pipeline unchanged - reuse cached bind group!
+        cached
+    } else {
+        // Pipeline changed - recreate bind group
+        let new_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor { ... });
+        self.cached_frame_bind_group = Some(new_bg.clone());
+        self.cached_pipeline_id = Some(current_pipeline_id);
+        self.cached_frame_bind_group.as_ref().unwrap()
+    }
+} else {
+    // First frame - create bind group
+    let new_bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor { ... });
+    self.cached_frame_bind_group = Some(new_bg.clone());
+    self.cached_pipeline_id = Some(current_pipeline_id);
+    self.cached_frame_bind_group.as_ref().unwrap()
+};
+```
+
+**When to invalidate cache:**
+- Pipeline change (different shader permutation)
+- Buffer resize (after init when animation buffers are finalized)
+- Explicit invalidation (set `cached_frame_bind_group = None`)
+
+## Resource Loading Model
+
+### Current Implementation (Lazy)
+
+- `process_pending_resources()` called **every frame** in game loop ([app/mod.rs:155](d:\Development\emberware\emberware-z\src\app\mod.rs#L155))
+- Allows runtime resource loading (performance hazard)
+- Buffers could grow during gameplay (GPU stalls, bind group recreation)
+
+### Correct Model (Init-Only)
+
+**Resources ONLY loaded during `init()` callback:**
+1. Game calls `init()` once at startup
+2. All `*_load()` / `rom_*()` functions called during init
+3. Pending resources accumulate
+4. After `init()` completes, `process_pending_resources()` called ONCE
+5. Buffers sized, bind groups created
+6. Gameplay begins - no more resource loading
+
+**Runtime loading attempts error clearly** (future enforcement).
+
+### Rationale
+
+1. **ROM constraint**: 16MB limit, all assets known at compile time (in manifest)
+2. **Predictable memory**: No mid-game allocations or GPU stalls
+3. **Performance**: No buffer resizing during gameplay
+4. **Developer UX**: Clear mental model - "load in init, use in update/render"
+5. **Bind group stability**: With cached bind groups, we need stable buffer sizes
+
+### Migration Path
+
+**Phase 0 (this PR):**
+- Document init-only pattern in spec
+- Implement animation v2 assuming init-only loading
+- Add warning comments in FFI that loading after init is unsupported
+
+**Future PR (after animation v2):**
+- Move `process_pending_resources()` call from per-frame loop to post-init hook
+- Add runtime validation: error if `*_load()` functions called outside init phase
+- Track init phase via state flag (`in_init: bool`)
+
+### Impact on Games
+
+**No breaking changes** - existing games already load all resources in `init()`. This codifies the existing best practice.
 
 ## Animation State Precedence
 
@@ -808,16 +993,36 @@ keyframe_blend(anim_handle, frame_a, frame_b, t);
 
 ## Design Decisions
 
-1. **Buffer indices**: Full 32-bit indices (due to 16-byte alignment requirement → 96 bytes)
+1. **Architecture: @group(0) instead of @group(2)**
+   - Original spec proposed separate @group(2) for static animation buffers
+   - With bind group caching fix (Phase 0.5), we can mix static/dynamic buffers in @group(0)
+   - Simpler implementation, one less bind group to manage
+   - No performance difference (bind group cached, only buffer contents updated)
+
+2. **Bind group caching**: Fix existing bug first (Phase 0.5)
+   - Current code recreates frame bind group every frame (wasteful)
+   - Fix enables efficient static buffer integration
+   - Matches wgpu best practices
+
+3. **Init-only resource loading**: Codify existing best practice
+   - ROM is 16MB, all assets in manifest
+   - Predictable memory, no mid-game GPU stalls
+   - Enables stable bind group caching
+   - Future PR will enforce this with validation
+
+4. **Buffer indices**: Full 32-bit indices (due to 16-byte alignment requirement → 96 bytes)
    - Max 4 billion bone matrices per buffer - effectively unlimited
-   - ROM size is the practical limit
+   - ROM size (16MB) is the practical limit
 
-2. **Animation budget**: No separate limit - ROM size already enforces budget
+5. **Animation budget**: No separate limit - ROM size already enforces budget
+   - `MAX_IMMEDIATE_BONE_MATRICES = 4096` for per-frame dynamic bones (196KB)
+   - Static animation data limited by ROM (16MB) and GPU limits
 
-3. **Shading state**: 80 → 96 bytes (16-byte aligned)
+6. **Shading state**: 80 → 96 bytes (16-byte aligned)
    - 20% increase in shading state buffer traffic
    - Acceptable trade-off for massive rollback/runtime gains
    - Includes reserved field for v2.1 GPU interpolation
+   - Uses existing `shading_state_dirty` flag (no new dirty flag needed)
 
 ## Error Handling
 
@@ -943,17 +1148,21 @@ The graphics state remains valid after any error. Failed operations leave the pr
 
 | File | Purpose |
 |------|---------|
-| `emberware-z/src/graphics/init.rs` | Create @group(2) static buffers, remove @binding(6) |
-| `emberware-z/src/graphics/frame.rs` | Bind @group(2), upload immediate_bones per-frame |
-| `emberware-z/src/graphics/pipeline.rs` | Update `//VS_SKINNED` template for indexed bones |
+| `emberware-z/src/graphics/mod.rs` | Add cached_frame_bind_group, cached_pipeline_id fields |
+| `emberware-z/src/graphics/init.rs` | Create static animation buffers (@binding(6), @binding(7)) |
+| `emberware-z/src/graphics/frame.rs` | Implement bind group caching, upload buffers per-frame |
+| `emberware-z/src/graphics/pipeline.rs` | Update frame bind group layout (add bindings 6-7, renumber 6-7→8-9) |
+| `emberware-z/build.rs` | Update `//VS_SKINNED` template for indexed bones |
 | `emberware-z/src/graphics/unified_shading_state.rs` | Add 4 animation fields (16 bytes, 80→96) |
+| `emberware-z/src/state/mod.rs` | Add MAX_IMMEDIATE_BONE_MATRICES constant |
 | `emberware-z/src/state/resources.rs` | Add KeyframeSource enum, SkeletonGpuInfo, KeyframeGpuInfo |
 | `emberware-z/src/state/ffi_state.rs` | Add immediate_bones vec, track GPU offsets |
-| `emberware-z/src/resource_manager.rs` | Fix pending_keyframes bug, process to @group(2) |
-| `emberware-z/src/ffi/skinning.rs` | Update set_bones() to append to immediate_bones |
-| `emberware-z/src/ffi/keyframes.rs` | Update keyframe_bind for static buffer indexing |
-| `emberware-z/shaders/common.wgsl` | Add @group(2) bindings, immediate_bones |
-| `docs/reference/ffi.md` | Document immediate_bones behavior, state precedence |
+| `emberware-z/src/resource_manager.rs` | Fix pending_keyframes bug, upload to @group(0) static buffers |
+| `emberware-z/src/ffi/skinning.rs` | Update set_bones() to append to immediate_bones, use shading_state_dirty |
+| `emberware-z/src/ffi/keyframes.rs` | Update keyframe_bind for static buffer indexing, use shading_state_dirty |
+| `emberware-z/shaders/common.wgsl` | Update @group(0) bindings (rename 5-6, add 7) for 3D rendering |
+| `emberware-z/shaders/quad_template.wgsl` | Update @group(0) bindings (renumber 7→8, 8→9) for 2D rendering |
+| `docs/reference/ffi.md` | Document immediate_bones behavior, state precedence, init-only loading |
 
 ---
 
@@ -1077,3 +1286,24 @@ Measure before and after v2 implementation:
 - [ ] Memory usage matches expected budget calculations
 - [ ] CPU usage during animation playback reduced (no decoding)
 - [ ] GPU skinning performance unchanged (same vertex shader work)
+
+### Bind Group Caching Tests
+
+Verify Phase 0.5 fix works correctly:
+
+- [ ] Frame bind group created once on first frame
+- [ ] Bind group reused when pipeline unchanged
+- [ ] Bind group recreated when switching shader permutations
+- [ ] Bind group recreated after buffer resize (init finalization)
+- [ ] No performance regression from caching logic
+- [ ] Invalidation works correctly (set cached_frame_bind_group = None)
+
+### Init-Only Loading Tests
+
+Verify resource loading model:
+
+- [ ] All animations loaded during init() work correctly
+- [ ] Buffers sized correctly after init
+- [ ] Bind group references correct buffers after init
+- [ ] (Future) Runtime loading attempts error clearly with helpful message
+- [ ] Games with no animations work (placeholder buffers)

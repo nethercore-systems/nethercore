@@ -95,7 +95,7 @@ pub enum DebugValue {
     Vec2 { x: f32, y: f32 },
     Vec3 { x: f32, y: f32, z: f32 },
     Rect { x: i16, y: i16, w: i16, h: i16 },
-    Color { r: u8, g: u8, b: u8, a: u8 },
+    Color(u32), // 0xRRGGBBAA format
     // Fixed-point stored as raw bits, converted to float for display
     FixedI16Q8(i16),
     FixedI32Q16(i32),
@@ -161,13 +161,6 @@ impl DebugValue {
         }
     }
 
-    /// Get Color components (r, g, b, a)
-    pub fn as_color(&self) -> (u8, u8, u8, u8) {
-        match self {
-            DebugValue::Color { r, g, b, a } => (*r, *g, *b, *a),
-            _ => (0, 0, 0, 255),
-        }
-    }
 
     /// Get the value type for this debug value
     pub fn value_type(&self) -> ValueType {
@@ -183,7 +176,7 @@ impl DebugValue {
             DebugValue::Vec2 { .. } => ValueType::Vec2,
             DebugValue::Vec3 { .. } => ValueType::Vec3,
             DebugValue::Rect { .. } => ValueType::Rect,
-            DebugValue::Color { .. } => ValueType::Color,
+            DebugValue::Color(_) => ValueType::Color,
             DebugValue::FixedI16Q8(_) => ValueType::FixedI16Q8,
             DebugValue::FixedI32Q16(_) => ValueType::FixedI32Q16,
             DebugValue::FixedI32Q8(_) => ValueType::FixedI32Q8,
@@ -261,15 +254,6 @@ mod tests {
             DebugValue::Vec2 { x: 0.0, y: 0.0 }.value_type(),
             ValueType::Vec2
         );
-        assert_eq!(
-            DebugValue::Color {
-                r: 0,
-                g: 0,
-                b: 0,
-                a: 0
-            }
-            .value_type(),
-            ValueType::Color
-        );
+        assert_eq!(DebugValue::Color(0xFF0000FF).value_type(), ValueType::Color);
     }
 }

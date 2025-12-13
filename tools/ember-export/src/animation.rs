@@ -4,7 +4,7 @@
 //! Outputs the new compressed platform format (16 bytes per bone).
 
 use anyhow::{bail, Context, Result};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::Path;

@@ -2,7 +2,7 @@
 //!
 //! Provides an egui panel for viewing and editing registered debug values.
 
-use std::collections::HashSet;
+use hashbrown::HashSet;
 
 use super::export::export_as_rust_flat;
 use super::frame_control::{FrameController, TIME_SCALE_OPTIONS};
@@ -515,20 +515,31 @@ impl DebugPanel {
             }
             // Color -> color picker using Color32 directly (avoids f32 conversion issues)
             (ValueType::Color, _) => {
-                let (r, g, b, a) = current.as_color();
+                let packed = if let DebugValue::Color(p) = current {
+                    p
+                } else {
+                    0
+                };
+                // Unpack: 0xRRGGBBAA
+                let r = ((packed >> 24) & 0xFF) as u8;
+                let g = ((packed >> 16) & 0xFF) as u8;
+                let b = ((packed >> 8) & 0xFF) as u8;
+                let a = (packed & 0xFF) as u8;
+
                 let mut color = egui::Color32::from_rgba_unmultiplied(r, g, b, a);
                 let mut changed = false;
                 ui.horizontal(|ui| {
                     ui.label(&reg_value.name);
                     changed = ui.color_edit_button_srgba(&mut color).changed();
                 });
+
                 if changed {
-                    Some(DebugValue::Color {
-                        r: color.r(),
-                        g: color.g(),
-                        b: color.b(),
-                        a: color.a(),
-                    })
+                    // Repack: 0xRRGGBBAA
+                    let packed = ((color.r() as u32) << 24)
+                        | ((color.g() as u32) << 16)
+                        | ((color.b() as u32) << 8)
+                        | (color.a() as u32);
+                    Some(DebugValue::Color(packed))
                 } else {
                     None
                 }
@@ -613,7 +624,13 @@ impl DebugPanel {
             DebugValue::Vec2 { x, y } => format!("({:.2}, {:.2})", x, y),
             DebugValue::Vec3 { x, y, z } => format!("({:.2}, {:.2}, {:.2})", x, y, z),
             DebugValue::Rect { x, y, w, h } => format!("({}, {}, {}x{})", x, y, w, h),
-            DebugValue::Color { r, g, b, a } => format!("#{:02X}{:02X}{:02X}{:02X}", r, g, b, a),
+            DebugValue::Color(packed) => {
+                let r = (packed >> 24) & 0xFF;
+                let g = (packed >> 16) & 0xFF;
+                let b = (packed >> 8) & 0xFF;
+                let a = packed & 0xFF;
+                format!("#{:02X}{:02X}{:02X}{:02X}", r, g, b, a)
+            }
             DebugValue::FixedI16Q8(v) => format!("{:.3}", *v as f32 / 256.0),
             DebugValue::FixedI32Q16(v) => format!("{:.3}", *v as f32 / 65536.0),
             DebugValue::FixedI32Q8(v) => format!("{:.3}", *v as f32 / 256.0),

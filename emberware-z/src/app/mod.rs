@@ -1,7 +1,6 @@
 //! Application state and main loop
 
 mod debug;
-mod debug_values;
 mod game_session;
 mod init;
 mod ui;
@@ -372,7 +371,7 @@ impl App {
                     }
                     // SAFETY: Bounds checked above, pointer valid for this frame
                     let slice = unsafe { std::slice::from_raw_parts(mem_ptr.add(ptr), size) };
-                    debug_values::read_from_slice(slice, reg_value.value_type)
+                    Some(data.registry.read_value_from_slice(slice, reg_value.value_type))
                 };
 
                 // Create write closure using raw pointer
@@ -384,8 +383,7 @@ impl App {
                     }
                     // SAFETY: Bounds checked above, pointer valid for this frame
                     let slice = unsafe { std::slice::from_raw_parts_mut(mem_ptr.add(ptr), size) };
-                    debug_values::write_to_slice(slice, new_val);
-                    true
+                    data.registry.write_value_to_slice(slice, new_val)
                 };
 
                 // Render the panel (use ctx from closure, not self.egui_ctx)

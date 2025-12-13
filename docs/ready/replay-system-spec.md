@@ -470,7 +470,7 @@ This section provides concrete implementation steps based on the current Emberwa
 use crate::console::ConsoleInput;
 use bytemuck::Pod;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 pub mod recording;
 pub mod playback;
