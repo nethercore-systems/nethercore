@@ -4,8 +4,62 @@
 //! graphics backend handles (TextureHandle, MeshHandle).
 
 use crate::graphics::{MeshHandle, TextureHandle, ZGraphics, pack_vertex_data};
-use crate::state::{SkeletonData, ZFFIState};
+use crate::state::{
+    BoneMatrix3x4, KeyframeGpuInfo, LoadedKeyframeCollection, SkeletonData, SkeletonGpuInfo,
+    ZFFIState,
+};
 use emberware_core::console::{Audio, ConsoleResourceManager};
+use z_common::formats::{
+    decode_bone_transform, BoneTransform, PlatformBoneKeyframe, PLATFORM_BONE_KEYFRAME_SIZE,
+};
+
+/// Convert a BoneTransform to a 3x4 bone matrix
+///
+/// The BoneTransform contains:
+/// - rotation: quaternion [x, y, z, w]
+/// - position: [x, y, z]
+/// - scale: [x, y, z]
+///
+/// The output is a 3x4 matrix in row-major format for GPU:
+/// - row0: [m00, m01, m02, tx]
+/// - row1: [m10, m11, m12, ty]
+/// - row2: [m20, m21, m22, tz]
+fn bone_transform_to_matrix(t: &BoneTransform) -> BoneMatrix3x4 {
+    let [qx, qy, qz, qw] = t.rotation;
+    let [px, py, pz] = t.position;
+    let [sx, sy, sz] = t.scale;
+
+    // Quaternion to rotation matrix
+    let xx = qx * qx;
+    let yy = qy * qy;
+    let zz = qz * qz;
+    let xy = qx * qy;
+    let xz = qx * qz;
+    let yz = qy * qz;
+    let wx = qw * qx;
+    let wy = qw * qy;
+    let wz = qw * qz;
+
+    // Rotation matrix elements (row-major)
+    let r00 = 1.0 - 2.0 * (yy + zz);
+    let r01 = 2.0 * (xy - wz);
+    let r02 = 2.0 * (xz + wy);
+
+    let r10 = 2.0 * (xy + wz);
+    let r11 = 1.0 - 2.0 * (xx + zz);
+    let r12 = 2.0 * (yz - wx);
+
+    let r20 = 2.0 * (xz - wy);
+    let r21 = 2.0 * (yz + wx);
+    let r22 = 1.0 - 2.0 * (xx + yy);
+
+    // Apply scale and build 3x4 matrix (row-major for GPU)
+    BoneMatrix3x4 {
+        row0: [r00 * sx, r01 * sy, r02 * sz, px],
+        row1: [r10 * sx, r11 * sy, r12 * sz, py],
+        row2: [r20 * sx, r21 * sy, r22 * sz, pz],
+    }
+}
 
 /// Resource manager for Emberware Z
 ///
@@ -132,6 +186,7 @@ impl ConsoleResourceManager for ZResourceManager {
 
         // Process pending skeletons (move to finalized storage)
         // Skeletons are stored by handle order (handle N is at index N-1)
+        let had_skeletons = !state.pending_skeletons.is_empty();
         for pending in state.pending_skeletons.drain(..) {
             // Ensure skeletons vec is large enough for this handle
             let index = pending.handle as usize - 1;
@@ -153,6 +208,126 @@ impl ConsoleResourceManager for ZResourceManager {
                 pending.handle,
                 pending.bone_count
             );
+        }
+
+        // Process pending keyframes (move to finalized storage)
+        // Keyframes are stored by handle order (handle N is at index N-1)
+        let had_keyframes = !state.pending_keyframes.is_empty();
+        for pending in state.pending_keyframes.drain(..) {
+            let index = pending.handle as usize - 1;
+            while state.keyframes.len() <= index {
+                // Fill gaps with empty keyframe collections (shouldn't happen in practice)
+                state.keyframes.push(LoadedKeyframeCollection {
+                    bone_count: 0,
+                    frame_count: 0,
+                    data: Vec::new(),
+                });
+            }
+
+            state.keyframes[index] = LoadedKeyframeCollection {
+                bone_count: pending.bone_count,
+                frame_count: pending.frame_count,
+                data: pending.data,
+            };
+
+            tracing::debug!(
+                "Loaded keyframes: handle={} with {} bones, {} frames",
+                pending.handle,
+                pending.bone_count,
+                pending.frame_count
+            );
+        }
+
+        // =====================================================================
+        // Animation System v2: Upload static animation data to GPU
+        // =====================================================================
+
+        // Upload all skeleton inverse bind matrices to GPU
+        if had_skeletons {
+            let mut all_inverse_bind: Vec<BoneMatrix3x4> = Vec::new();
+
+            // Ensure gpu_info vec is large enough
+            while state.skeleton_gpu_info.len() < state.skeletons.len() {
+                state.skeleton_gpu_info.push(SkeletonGpuInfo::default());
+            }
+
+            for (i, skeleton) in state.skeletons.iter().enumerate() {
+                if skeleton.bone_count == 0 {
+                    continue; // Skip empty placeholders
+                }
+
+                let offset = all_inverse_bind.len() as u32;
+                state.skeleton_gpu_info[i] = SkeletonGpuInfo {
+                    inverse_bind_offset: offset,
+                    bone_count: skeleton.bone_count as u8,
+                };
+
+                all_inverse_bind.extend_from_slice(&skeleton.inverse_bind);
+            }
+
+            if !all_inverse_bind.is_empty() {
+                graphics.upload_static_inverse_bind(&all_inverse_bind);
+                tracing::info!(
+                    "Uploaded {} skeletons ({} total inverse bind matrices)",
+                    state.skeletons.iter().filter(|s| s.bone_count > 0).count(),
+                    all_inverse_bind.len()
+                );
+            }
+        }
+
+        // Decode and upload all keyframe bone matrices to GPU
+        if had_keyframes {
+            let mut all_keyframes: Vec<BoneMatrix3x4> = Vec::new();
+
+            // Ensure gpu_info vec is large enough
+            while state.keyframe_gpu_info.len() < state.keyframes.len() {
+                state.keyframe_gpu_info.push(KeyframeGpuInfo::default());
+            }
+
+            for (i, kf) in state.keyframes.iter().enumerate() {
+                if kf.frame_count == 0 {
+                    continue; // Skip empty placeholders
+                }
+
+                let base_offset = all_keyframes.len() as u32;
+                state.keyframe_gpu_info[i] = KeyframeGpuInfo {
+                    keyframe_base_offset: base_offset,
+                    bone_count: kf.bone_count,
+                    frame_count: kf.frame_count,
+                };
+
+                // Decode all frames for this animation
+                for frame_idx in 0..kf.frame_count as usize {
+                    let frame_start = frame_idx * kf.bone_count as usize * PLATFORM_BONE_KEYFRAME_SIZE;
+
+                    for bone_idx in 0..kf.bone_count as usize {
+                        let kf_offset = frame_start + bone_idx * PLATFORM_BONE_KEYFRAME_SIZE;
+                        let kf_bytes = &kf.data[kf_offset..kf_offset + PLATFORM_BONE_KEYFRAME_SIZE];
+
+                        // Decode platform keyframe to BoneTransform
+                        let platform_kf = PlatformBoneKeyframe::from_bytes(kf_bytes);
+                        let transform = decode_bone_transform(&platform_kf);
+
+                        // Convert to BoneMatrix3x4
+                        let matrix = bone_transform_to_matrix(&transform);
+                        all_keyframes.push(matrix);
+                    }
+                }
+            }
+
+            if !all_keyframes.is_empty() {
+                graphics.upload_static_keyframes(&all_keyframes);
+                tracing::info!(
+                    "Uploaded {} keyframe collections ({} total bone matrices)",
+                    state.keyframes.iter().filter(|k| k.frame_count > 0).count(),
+                    all_keyframes.len()
+                );
+            }
+        }
+
+        // Invalidate frame bind group cache if buffers may have changed
+        if had_skeletons || had_keyframes {
+            graphics.invalidate_frame_bind_group();
         }
     }
 

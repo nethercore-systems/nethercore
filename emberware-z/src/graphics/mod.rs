@@ -48,14 +48,15 @@ pub use render_state::{
     BlendMode, CullMode, MatcapBlendMode, RenderState, TextureFilter, TextureHandle,
 };
 pub use unified_shading_state::{
-    DEFAULT_FLAGS, FLAG_DITHER_OFFSET_X_MASK, FLAG_DITHER_OFFSET_X_SHIFT,
-    FLAG_DITHER_OFFSET_Y_MASK, FLAG_DITHER_OFFSET_Y_SHIFT, FLAG_SKINNING_MODE,
-    FLAG_TEXTURE_FILTER_LINEAR, FLAG_UNIFORM_ALPHA_MASK, FLAG_UNIFORM_ALPHA_SHIFT,
-    FLAG_USE_MATCAP_REFLECTION, FLAG_USE_UNIFORM_COLOR, FLAG_USE_UNIFORM_EMISSIVE,
-    FLAG_USE_UNIFORM_METALLIC, FLAG_USE_UNIFORM_ROUGHNESS, FLAG_USE_UNIFORM_SPECULAR, LightType,
-    PackedLight, PackedUnifiedShadingState, ShadingStateIndex, pack_f16, pack_f16x2,
-    pack_matcap_blend_modes, pack_rgb8, pack_unorm8, unpack_f16, unpack_f16x2,
-    unpack_matcap_blend_modes, update_uniform_set_0_byte, update_uniform_set_1_byte,
+    ANIMATION_FLAG_USE_IMMEDIATE, DEFAULT_FLAGS, FLAG_DITHER_OFFSET_X_MASK,
+    FLAG_DITHER_OFFSET_X_SHIFT, FLAG_DITHER_OFFSET_Y_MASK, FLAG_DITHER_OFFSET_Y_SHIFT,
+    FLAG_SKINNING_MODE, FLAG_TEXTURE_FILTER_LINEAR, FLAG_UNIFORM_ALPHA_MASK,
+    FLAG_UNIFORM_ALPHA_SHIFT, FLAG_USE_MATCAP_REFLECTION, FLAG_USE_UNIFORM_COLOR,
+    FLAG_USE_UNIFORM_EMISSIVE, FLAG_USE_UNIFORM_METALLIC, FLAG_USE_UNIFORM_ROUGHNESS,
+    FLAG_USE_UNIFORM_SPECULAR, LightType, PackedLight, PackedUnifiedShadingState,
+    ShadingStateIndex, pack_f16, pack_f16x2, pack_matcap_blend_modes, pack_rgb8, pack_unorm8,
+    unpack_f16, unpack_f16x2, unpack_matcap_blend_modes, update_uniform_set_0_byte,
+    update_uniform_set_1_byte,
 };
 pub use vertex::{FORMAT_ALL, VERTEX_FORMAT_COUNT, VertexFormatInfo};
 
@@ -101,6 +102,12 @@ pub struct ZGraphics {
     bone_buffer: wgpu::Buffer,
     inverse_bind_buffer: wgpu::Buffer,
 
+    // Static animation buffers (written once after init, indexed by shading state)
+    // @binding(7): all_keyframes - pre-decoded bone matrices for all animations
+    all_keyframes_buffer: wgpu::Buffer,
+    inverse_bind_capacity: usize,     // in matrices (48 bytes each)
+    all_keyframes_capacity: usize,    // in matrices (48 bytes each)
+
     // Matrix storage buffers (per-frame arrays)
     model_matrix_buffer: wgpu::Buffer,
     view_matrix_buffer: wgpu::Buffer,
@@ -115,8 +122,15 @@ pub struct ZGraphics {
     shading_state_buffer: wgpu::Buffer,
     shading_state_capacity: usize,
 
-    // Bind group caches (cleared and repopulated each frame)
+    // Bind group caches
     texture_bind_groups: HashMap<[TextureHandle; 4], wgpu::BindGroup>,
+
+    /// Cached frame bind group (@group(0)) - only recreated when buffers change
+    /// This avoids wasteful GPU descriptor set creation every frame.
+    cached_frame_bind_group: Option<wgpu::BindGroup>,
+
+    /// Hash of buffer sizes/addresses to detect when bind group needs recreation
+    cached_frame_bind_group_hash: u64,
 
     // Frame state
     current_frame: Option<wgpu::SurfaceTexture>,
@@ -158,6 +172,13 @@ impl ZGraphics {
     /// Update scaling mode for render target to window
     pub fn set_scale_mode(&mut self, scale_mode: emberware_core::app::config::ScaleMode) {
         self.scale_mode = scale_mode;
+    }
+
+    /// Invalidate cached frame bind group, forcing recreation on next frame.
+    /// Call this when buffers are recreated (e.g., after init animation data upload).
+    pub fn invalidate_frame_bind_group(&mut self) {
+        self.cached_frame_bind_group = None;
+        self.cached_frame_bind_group_hash = 0;
     }
 
     fn recreate_render_target(&mut self, resolution_index: u8) {
@@ -418,6 +439,108 @@ impl ZGraphics {
         self.texture_bind_groups.clear(); // Clear cached bind groups!
         tracing::info!("Cleared game resources for new game");
     }
+
+    // Animation System v2: Static buffer upload methods
+
+    /// Upload all inverse bind matrices to the static GPU buffer
+    ///
+    /// Called once after init() when all skeletons have been loaded.
+    /// Recreates buffer if current capacity is insufficient.
+    pub fn upload_static_inverse_bind(
+        &mut self,
+        all_matrices: &[crate::state::BoneMatrix3x4],
+    ) {
+        let matrix_count = all_matrices.len();
+        if matrix_count == 0 {
+            return; // Keep placeholder buffer
+        }
+
+        const BONE_MATRIX_SIZE: usize = 48; // 3×4 f32 = 12 floats × 4 bytes
+        let required_capacity = matrix_count;
+
+        // Recreate buffer if needed
+        if required_capacity > self.inverse_bind_capacity {
+            self.inverse_bind_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("All Inverse Bind Matrices (@binding(6))"),
+                size: (required_capacity * BONE_MATRIX_SIZE) as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            self.inverse_bind_capacity = required_capacity;
+            tracing::info!(
+                "Resized inverse bind buffer: {} matrices ({} bytes)",
+                required_capacity,
+                required_capacity * BONE_MATRIX_SIZE
+            );
+        }
+
+        // Convert BoneMatrix3x4 to bytes (safe: repr(C) struct of [f32; 4] arrays)
+        let bytes = bone_matrices_to_bytes(all_matrices);
+        self.queue.write_buffer(&self.inverse_bind_buffer, 0, &bytes);
+
+        tracing::debug!(
+            "Uploaded {} inverse bind matrices ({} bytes)",
+            matrix_count,
+            matrix_count * BONE_MATRIX_SIZE
+        );
+    }
+
+    /// Upload all pre-decoded keyframe matrices to the static GPU buffer
+    ///
+    /// Called once after init() when all keyframes have been loaded and decoded.
+    /// Recreates buffer if current capacity is insufficient.
+    pub fn upload_static_keyframes(
+        &mut self,
+        all_matrices: &[crate::state::BoneMatrix3x4],
+    ) {
+        let matrix_count = all_matrices.len();
+        if matrix_count == 0 {
+            return; // Keep placeholder buffer
+        }
+
+        const BONE_MATRIX_SIZE: usize = 48; // 3×4 f32 = 12 floats × 4 bytes
+        let required_capacity = matrix_count;
+
+        // Recreate buffer if needed
+        if required_capacity > self.all_keyframes_capacity {
+            self.all_keyframes_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("All Keyframes (@binding(7))"),
+                size: (required_capacity * BONE_MATRIX_SIZE) as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            self.all_keyframes_capacity = required_capacity;
+            tracing::info!(
+                "Resized keyframes buffer: {} matrices ({} bytes)",
+                required_capacity,
+                required_capacity * BONE_MATRIX_SIZE
+            );
+        }
+
+        // Convert BoneMatrix3x4 to bytes (safe: repr(C) struct of [f32; 4] arrays)
+        let bytes = bone_matrices_to_bytes(all_matrices);
+        self.queue.write_buffer(&self.all_keyframes_buffer, 0, &bytes);
+
+        tracing::debug!(
+            "Uploaded {} keyframe matrices ({} bytes)",
+            matrix_count,
+            matrix_count * BONE_MATRIX_SIZE
+        );
+    }
+}
+
+/// Convert a slice of BoneMatrix3x4 to bytes for GPU upload
+///
+/// BoneMatrix3x4 is #[repr(C)] with three [f32; 4] arrays (48 bytes total).
+/// This is safe because the struct is fully POD-compatible.
+fn bone_matrices_to_bytes(matrices: &[crate::state::BoneMatrix3x4]) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(matrices.len() * 48);
+    for m in matrices {
+        bytes.extend_from_slice(bytemuck::cast_slice(&m.row0));
+        bytes.extend_from_slice(bytemuck::cast_slice(&m.row1));
+        bytes.extend_from_slice(bytemuck::cast_slice(&m.row2));
+    }
+    bytes
 }
 
 impl Graphics for ZGraphics {

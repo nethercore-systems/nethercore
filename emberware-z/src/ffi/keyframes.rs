@@ -21,7 +21,7 @@ use z_common::formats::{
 use super::guards::check_init_only;
 use crate::console::ZInput;
 use crate::state::{
-    BoneMatrix3x4, MAX_BONES, MAX_KEYFRAME_COLLECTIONS, PendingKeyframes, ZFFIState,
+    BoneMatrix3x4, KeyframeSource, MAX_BONES, MAX_KEYFRAME_COLLECTIONS, PendingKeyframes, ZFFIState,
 };
 
 /// Register keyframe animation FFI functions
@@ -252,6 +252,9 @@ fn rom_keyframes(
 ///
 /// # Returns
 /// Bone count (0 on invalid handle)
+///
+/// # Note
+/// Works during init() by also checking pending_keyframes.
 fn keyframes_bone_count(
     caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
     handle: u32,
@@ -264,16 +267,26 @@ fn keyframes_bone_count(
     let state = &caller.data().console;
     let index = handle as usize - 1;
 
+    // First check finalized keyframes
     if let Some(kf) = state.keyframes.get(index) {
-        kf.bone_count as u32
-    } else {
-        warn!(
-            "keyframes_bone_count: handle {} not found (only {} loaded)",
-            handle,
-            state.keyframes.len()
-        );
-        0
+        return kf.bone_count as u32;
     }
+
+    // During init(), keyframes may still be in pending_keyframes
+    // Search by handle since indices don't match during pending state
+    for pending in &state.pending_keyframes {
+        if pending.handle == handle {
+            return pending.bone_count as u32;
+        }
+    }
+
+    warn!(
+        "keyframes_bone_count: handle {} not found (only {} loaded, {} pending)",
+        handle,
+        state.keyframes.len(),
+        state.pending_keyframes.len()
+    );
+    0
 }
 
 /// Get the frame count for a keyframe collection
@@ -283,6 +296,9 @@ fn keyframes_bone_count(
 ///
 /// # Returns
 /// Frame count (0 on invalid handle)
+///
+/// # Note
+/// Works during init() by also checking pending_keyframes.
 fn keyframes_frame_count(
     caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
     handle: u32,
@@ -295,16 +311,26 @@ fn keyframes_frame_count(
     let state = &caller.data().console;
     let index = handle as usize - 1;
 
+    // First check finalized keyframes
     if let Some(kf) = state.keyframes.get(index) {
-        kf.frame_count as u32
-    } else {
-        warn!(
-            "keyframes_frame_count: handle {} not found (only {} loaded)",
-            handle,
-            state.keyframes.len()
-        );
-        0
+        return kf.frame_count as u32;
     }
+
+    // During init(), keyframes may still be in pending_keyframes
+    // Search by handle since indices don't match during pending state
+    for pending in &state.pending_keyframes {
+        if pending.handle == handle {
+            return pending.frame_count as u32;
+        }
+    }
+
+    warn!(
+        "keyframes_frame_count: handle {} not found (only {} loaded, {} pending)",
+        handle,
+        state.keyframes.len(),
+        state.pending_keyframes.len()
+    );
+    0
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -417,85 +443,92 @@ fn keyframe_read(
     Ok(())
 }
 
-/// Bind a keyframe directly to GPU bone matrices
+/// Bind a keyframe directly from the static GPU buffer (Animation System v2)
 ///
-/// Decodes the platform format and uploads directly to the GPU bone buffer,
-/// bypassing WASM memory. Use this for the "stamp" path when no blending is needed.
-///
-/// Equivalent to: keyframe_read() -> build matrices -> set_bones()
+/// Points subsequent skinned draws to use pre-decoded matrices from @binding(7) all_keyframes.
+/// No CPU decoding or data transfer needed at draw time.
 ///
 /// # Arguments
-/// * `handle` — Keyframe collection handle
+/// * `handle` — Keyframe collection handle (0 to unbind)
 /// * `index` — Frame index (0-based)
 ///
 /// # Traps
-/// - Invalid handle (0 or not loaded)
+/// - Invalid handle (not loaded)
 /// - Frame index out of bounds
+///
+/// # Animation System v2
+/// Unlike the legacy `keyframe_read() -> set_bones()` path, this uses pre-uploaded
+/// static keyframe data. The GPU shader reads directly from the all_keyframes buffer
+/// at the computed offset.
 fn keyframe_bind(
     mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
     handle: u32,
     index: u32,
 ) -> Result<()> {
     if handle == 0 {
-        bail!("keyframe_bind: invalid keyframe handle 0");
+        // Unbind keyframes - reset to default static offset 0
+        let state = &mut caller.data_mut().console;
+        state.current_keyframe_source = KeyframeSource::Static { offset: 0 };
+        state.bone_count = 0;
+        state.shading_state_dirty = true;
+        tracing::trace!("keyframe_bind: unbound (offset 0)");
+        return Ok(());
     }
 
-    // Get keyframe collection and decode
-    let bone_matrices: Vec<BoneMatrix3x4> = {
+    // Extract values from immutable borrow first
+    let (offset, bone_count) = {
         let state = &caller.data().console;
         let handle_index = handle as usize - 1;
 
-        match state.keyframes.get(handle_index) {
-            Some(kf) => {
-                if index >= kf.frame_count as u32 {
-                    bail!(
-                        "keyframe_bind: frame index {} >= frame_count {}",
-                        index,
-                        kf.frame_count
-                    );
-                }
-
-                // Get frame data
-                let frame_size = kf.bone_count as usize * PLATFORM_BONE_KEYFRAME_SIZE;
-                let start = index as usize * frame_size;
-
-                // Decode each bone
-                let mut matrices = Vec::with_capacity(kf.bone_count as usize);
-                for i in 0..kf.bone_count as usize {
-                    let kf_offset = start + i * PLATFORM_BONE_KEYFRAME_SIZE;
-                    let kf_bytes = &kf.data[kf_offset..kf_offset + PLATFORM_BONE_KEYFRAME_SIZE];
-
-                    // Parse and decode platform keyframe
-                    let platform_kf = PlatformBoneKeyframe::from_bytes(kf_bytes);
-                    let transform = decode_bone_transform(&platform_kf);
-
-                    // Convert BoneTransform to 3x4 matrix
-                    let matrix = bone_transform_to_matrix(&transform);
-                    matrices.push(matrix);
-                }
-
-                matrices
-            }
-            None => {
-                bail!(
-                    "keyframe_bind: invalid keyframe handle {} (only {} loaded)",
-                    handle,
-                    state.keyframes.len()
-                );
-            }
+        // Validate handle against loaded keyframes
+        if handle_index >= state.keyframes.len() {
+            bail!(
+                "keyframe_bind: invalid keyframe handle {} (only {} loaded)",
+                handle,
+                state.keyframes.len()
+            );
         }
+
+        // Get GPU info for this keyframe collection
+        if handle_index >= state.keyframe_gpu_info.len() {
+            bail!(
+                "keyframe_bind: keyframe {} has no GPU info (only {} uploaded)",
+                handle,
+                state.keyframe_gpu_info.len()
+            );
+        }
+
+        let gpu_info = &state.keyframe_gpu_info[handle_index];
+
+        // Validate frame index
+        if index >= gpu_info.frame_count as u32 {
+            bail!(
+                "keyframe_bind: frame index {} >= frame_count {}",
+                index,
+                gpu_info.frame_count
+            );
+        }
+
+        // Compute the global buffer offset for this specific frame
+        // Layout in all_keyframes: [kf0_frame0_bones..., kf0_frame1_bones..., kf1_frame0_bones..., ...]
+        let frame_offset = index * gpu_info.bone_count as u32;
+        let offset = gpu_info.keyframe_base_offset + frame_offset;
+        let bone_count = gpu_info.bone_count as u32;
+
+        (offset, bone_count)
     };
 
-    // Set bone matrices
-    let bone_count = bone_matrices.len() as u32;
+    // Update state for this draw
     let state = &mut caller.data_mut().console;
-    state.bone_matrices = bone_matrices;
+    state.current_keyframe_source = KeyframeSource::Static { offset };
     state.bone_count = bone_count;
+    state.shading_state_dirty = true;
 
     tracing::trace!(
-        "keyframe_bind: bound frame {} from handle {} ({} bones)",
-        index,
+        "keyframe_bind: bound handle {} frame {} -> offset {} ({} bones)",
         handle,
+        index,
+        offset,
         bone_count
     );
 
@@ -513,6 +546,10 @@ fn keyframe_bind(
 /// - row0: [m00, m01, m02, tx]
 /// - row1: [m10, m11, m12, ty]
 /// - row2: [m20, m21, m22, tz]
+///
+/// Note: This function is used by tests but not runtime code since Animation System v2
+/// uses pre-decoded static keyframes. Keeping it for test coverage.
+#[allow(dead_code)]
 fn bone_transform_to_matrix(t: &BoneTransform) -> BoneMatrix3x4 {
     let [qx, qy, qz, qw] = t.rotation;
     let [px, py, pz] = t.position;

@@ -909,6 +909,92 @@ ember-export skeleton character.glb --list
 ember-export animation character.glb --list
 ```
 
+### Keyframe Animation System (Animation System v2)
+
+Emberware Z provides a high-performance keyframe animation system optimized for rollback netcode. All animation data is uploaded to GPU storage buffers once during `init()`, eliminating per-frame decode/upload overhead.
+
+**Two animation paths:**
+
+| Path | Function | Use Case | Performance |
+|------|----------|----------|-------------|
+| **Static keyframes** | `keyframe_bind()` | Pre-baked animations from ROM | Zero per-frame CPU work |
+| **Immediate bones** | `set_bones()` | Procedural, IK, blended | Minimal per-frame overhead |
+
+**Static keyframes (`keyframe_bind`):**
+
+For animations loaded from ROM data packs. Keyframe data is decoded and uploaded to GPU once during init. Binding just sets an offset into the static buffer.
+
+```rust
+fn rom_keyframes(id_ptr: *const u8, id_len: u32) -> u32  // Load from ROM data pack
+fn keyframes_bone_count(handle: u32) -> u8               // Query bone count
+fn keyframes_frame_count(handle: u32) -> u16             // Query frame count
+fn keyframe_bind(handle: u32, index: u32)                // Bind frame (GPU-side, no CPU decode)
+fn keyframe_read(handle: u32, index: u32, out_ptr: *mut u8)  // Read to WASM for blending
+```
+
+**Immediate bones (`set_bones`):**
+
+For procedural animation, IK, physics-driven bones, or CPU-side blending. Bone matrices are appended to a per-frame buffer.
+
+```rust
+fn set_bones(matrices_ptr: *const f32, count: u32)      // 12 floats per bone (3×4 matrix)
+fn set_bones_4x4(matrices_ptr: *const f32, count: u32)  // 16 floats per bone (4×4 matrix)
+```
+
+**Example - Static keyframe animation:**
+
+```rust
+static mut WALK_ANIM: u32 = 0;
+static mut ANIM_FRAME: u32 = 0;
+
+fn init() {
+    unsafe {
+        // Load keyframes from ROM (data uploaded to GPU once)
+        let id = b"walk";
+        WALK_ANIM = rom_keyframes(id.as_ptr(), id.len() as u32);
+    }
+}
+
+fn render() {
+    unsafe {
+        // Bind frame - just sets GPU buffer offset, no CPU decode!
+        let frame_count = keyframes_frame_count(WALK_ANIM) as u32;
+        keyframe_bind(WALK_ANIM, ANIM_FRAME % frame_count);
+        draw_mesh(CHARACTER_MESH);
+    }
+}
+```
+
+**Example - Blended animation (CPU interpolation):**
+
+```rust
+fn render() {
+    unsafe {
+        let frame_a = (ANIM_TIME as u32) % frame_count;
+        let frame_b = (frame_a + 1) % frame_count;
+        let blend = ANIM_TIME - ANIM_TIME.floor();
+
+        // Read keyframes to WASM memory for blending
+        keyframe_read(WALK_ANIM, frame_a, buf_a.as_mut_ptr());
+        keyframe_read(WALK_ANIM, frame_b, buf_b.as_mut_ptr());
+
+        // Interpolate and build matrices on CPU
+        let blended_matrices = interpolate_bones(&buf_a, &buf_b, blend);
+
+        // Upload blended result (uses immediate bones buffer)
+        set_bones_4x4(blended_matrices.as_ptr(), bone_count);
+        draw_mesh(CHARACTER_MESH);
+    }
+}
+```
+
+**Performance characteristics:**
+
+- **Static path**: Zero per-frame CPU work. GPU reads directly from static buffer.
+- **Immediate path**: Bones appended to per-frame buffer, uploaded once before rendering.
+- **Rollback-friendly**: Static data never changes, immediate data is rebuilt each frame.
+- **Multiple animations**: Each `keyframe_bind()` or `set_bones()` sets state for subsequent draws.
+
 ### Textures
 
 Games embed assets via `include_bytes!()` and pass raw pixels — no file-based loading. All resources are created in `init()` and automatically cleaned up on game shutdown.

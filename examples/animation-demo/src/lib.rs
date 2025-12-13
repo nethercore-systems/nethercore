@@ -1,9 +1,15 @@
-//! Animation Demo - ROM-Backed Keyframe Animation System
+//! Animation Demo - ROM-Backed Keyframe Animation System (Animation System v2)
 //!
 //! Demonstrates Emberware Z's keyframe animation system:
 //! - Loading keyframes from ROM data pack (no WASM memory used)
-//! - Step-based "stamp" animation with keyframe_bind()
-//! - Blended animation with keyframe_read() + set_bones_4x4()
+//! - Step-based "stamp" animation with keyframe_bind() - uses static GPU buffers
+//! - Blended animation with keyframe_read() + set_bones_4x4() - uses immediate bones buffer
+//!
+//! Animation System v2 Features:
+//! - All keyframe data uploaded to GPU once during init (no per-frame decode/upload)
+//! - keyframe_bind() sets an offset into static all_keyframes buffer
+//! - set_bones_4x4() appends to per-frame immediate_bones buffer
+//! - Both paths are GPU-optimized with minimal CPU overhead
 //!
 //! Controls:
 //! - A button: Toggle between stamp and blended mode

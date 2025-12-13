@@ -13,7 +13,7 @@ use emberware_core::wasm::GameStateWithConsole;
 
 use super::guards::check_init_only;
 use crate::console::ZInput;
-use crate::state::{BoneMatrix3x4, MAX_BONES, MAX_SKELETONS, PendingSkeleton, ZFFIState};
+use crate::state::{BoneMatrix3x4, KeyframeSource, MAX_BONES, MAX_SKELETONS, PendingSkeleton, ZFFIState};
 
 /// Register GPU skinning FFI functions
 pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
@@ -180,9 +180,11 @@ fn skeleton_bind(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>
     let state = &mut caller.data_mut().console;
 
     if skeleton == 0 {
-        // Unbind skeleton (raw mode)
+        // Unbind skeleton (raw mode) - clear inverse bind base
         state.bound_skeleton = 0;
+        state.current_inverse_bind_base = 0;
         state.update_skinning_mode(false);
+        state.shading_state_dirty = true;
         tracing::trace!("skeleton_bind: unbound (raw mode)");
         return;
     }
@@ -198,9 +200,28 @@ fn skeleton_bind(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>
         return;
     }
 
+    // Look up GPU info and set inverse bind base offset
+    if index < state.skeleton_gpu_info.len() {
+        let gpu_info = &state.skeleton_gpu_info[index];
+        state.current_inverse_bind_base = gpu_info.inverse_bind_offset;
+    } else {
+        // Skeleton loaded but GPU info not yet populated (shouldn't happen after init)
+        warn!(
+            "skeleton_bind: skeleton {} has no GPU info (only {} uploaded)",
+            skeleton,
+            state.skeleton_gpu_info.len()
+        );
+        state.current_inverse_bind_base = 0;
+    }
+
     state.bound_skeleton = skeleton;
     state.update_skinning_mode(true);
-    tracing::trace!("skeleton_bind: bound skeleton {}", skeleton);
+    state.shading_state_dirty = true;
+    tracing::trace!(
+        "skeleton_bind: bound skeleton {} (inverse_bind_base={})",
+        skeleton,
+        state.current_inverse_bind_base
+    );
 }
 
 /// Set bone transform matrices for GPU skinning
@@ -226,6 +247,11 @@ fn skeleton_bind(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>
 ///
 /// Call this before drawing skinned meshes (meshes with FORMAT_SKINNED flag).
 /// The bone transforms are typically computed on CPU each frame for skeletal animation.
+///
+/// # Animation System v2
+/// Bone matrices are appended to the per-frame immediate bones buffer.
+/// The offset at which matrices were added is tracked, allowing multiple
+/// set_bones() calls per frame for different skinned mesh draws.
 fn set_bones(
     mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
     matrices_ptr: u32,
@@ -234,17 +260,18 @@ fn set_bones(
     // Validate bone count
     if count > MAX_BONES as u32 {
         warn!(
-            "set_bones: bone count {} exceeds maximum {} - clamping",
+            "set_bones: bone count {} exceeds maximum {} - rejecting",
             count, MAX_BONES
         );
         return;
     }
 
     if count == 0 {
-        // Clear bone data
+        // Setting 0 bones - use static keyframes mode instead
         let state = &mut caller.data_mut().console;
-        state.bone_matrices.clear();
+        state.current_keyframe_source = KeyframeSource::Static { offset: 0 };
         state.bone_count = 0;
+        state.shading_state_dirty = true;
         return;
     }
 
@@ -276,13 +303,19 @@ fn set_bones(
         return;
     }
 
+    // Record offset before appending (Animation System v2: accumulating buffer)
+    let offset = {
+        let state = &caller.data().console;
+        state.bone_matrices.len() as u32
+    };
+
     // Parse 3x4 matrices from memory (column-major order, like transform_set)
     // Input layout: [col0.xyz, col1.xyz, col2.xyz, col3.xyz]
     // Output layout: vec4 rows (transposed for GPU alignment)
     let mut matrices = Vec::with_capacity(count as usize);
     for i in 0..count as usize {
-        let offset = start + i * matrix_size;
-        let matrix_bytes = &data[offset..offset + matrix_size];
+        let mem_offset = start + i * matrix_size;
+        let matrix_bytes = &data[mem_offset..mem_offset + matrix_size];
 
         // Convert bytes to f32 array (12 floats in column-major order)
         let mut floats = [0.0f32; 12];
@@ -310,10 +343,14 @@ fn set_bones(
         matrices.push(matrix);
     }
 
-    // Store bone matrices in render state
+    // Append bone matrices to render state (Animation System v2: accumulating)
     let state = &mut caller.data_mut().console;
-    state.bone_matrices = matrices;
+    state.bone_matrices.extend(matrices);
     state.bone_count = count;
+
+    // Set current draw state to use immediate bones at this offset
+    state.current_keyframe_source = KeyframeSource::Immediate { offset };
+    state.shading_state_dirty = true;
 }
 
 /// Set bone transform matrices for GPU skinning (4x4 format)
@@ -335,6 +372,10 @@ fn set_bones(
 ///
 /// Use this when you have 4x4 matrices from a math library like glam.
 /// For 3x4 matrices, use `set_bones()` instead for better performance.
+///
+/// # Animation System v2
+/// Bone matrices are appended to the per-frame immediate bones buffer.
+/// See set_bones() for details.
 fn set_bones_4x4(
     mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
     matrices_ptr: u32,
@@ -343,17 +384,18 @@ fn set_bones_4x4(
     // Validate bone count
     if count > MAX_BONES as u32 {
         warn!(
-            "set_bones_4x4: bone count {} exceeds maximum {} - clamping",
+            "set_bones_4x4: bone count {} exceeds maximum {} - rejecting",
             count, MAX_BONES
         );
         return;
     }
 
     if count == 0 {
-        // Clear bone data
+        // Setting 0 bones - use static keyframes mode instead
         let state = &mut caller.data_mut().console;
-        state.bone_matrices.clear();
+        state.current_keyframe_source = KeyframeSource::Static { offset: 0 };
         state.bone_count = 0;
+        state.shading_state_dirty = true;
         return;
     }
 
@@ -385,13 +427,19 @@ fn set_bones_4x4(
         return;
     }
 
+    // Record offset before appending (Animation System v2: accumulating buffer)
+    let offset = {
+        let state = &caller.data().console;
+        state.bone_matrices.len() as u32
+    };
+
     // Parse 4x4 matrices from memory (column-major order)
     // Input layout: [col0.xyzw, col1.xyzw, col2.xyzw, col3.xyzw]
     // Output layout: 3x4 row-major for GPU (drop 4th row)
     let mut matrices = Vec::with_capacity(count as usize);
     for i in 0..count as usize {
-        let offset = start + i * matrix_size;
-        let matrix_bytes = &data[offset..offset + matrix_size];
+        let mem_offset = start + i * matrix_size;
+        let matrix_bytes = &data[mem_offset..mem_offset + matrix_size];
 
         // Convert bytes to f32 array (16 floats in column-major order)
         let mut floats = [0.0f32; 16];
@@ -424,8 +472,12 @@ fn set_bones_4x4(
         matrices.push(matrix);
     }
 
-    // Store bone matrices in render state
+    // Append bone matrices to render state (Animation System v2: accumulating)
     let state = &mut caller.data_mut().console;
-    state.bone_matrices = matrices;
+    state.bone_matrices.extend(matrices);
     state.bone_count = count;
+
+    // Set current draw state to use immediate bones at this offset
+    state.current_keyframe_source = KeyframeSource::Immediate { offset };
+    state.shading_state_dirty = true;
 }

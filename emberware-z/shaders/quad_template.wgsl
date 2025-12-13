@@ -2,7 +2,7 @@
 // Prepended with common.wgsl bindings/utilities by build.rs
 
 // ============================================================================
-// Quad-Specific Bindings (in addition to common bindings 0-6)
+// Quad-Specific Bindings (in addition to common bindings 0-7)
 // ============================================================================
 
 struct QuadInstance {
@@ -17,10 +17,10 @@ struct QuadInstance {
     _padding: u32,
 }
 
-@group(0) @binding(7) var<storage, read> quad_instances: array<QuadInstance>;
+@group(0) @binding(8) var<storage, read> quad_instances: array<QuadInstance>;
 
 struct ScreenDimensions { width: f32, height: f32, }
-@group(0) @binding(8) var<uniform> screen_dims: ScreenDimensions;
+@group(0) @binding(9) var<uniform> screen_dims: ScreenDimensions;
 
 // Quad modes
 const BILLBOARD_SPHERICAL: u32 = 0u;

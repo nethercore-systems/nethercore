@@ -137,6 +137,11 @@ impl GrowableBuffer {
     pub fn used(&self) -> u64 {
         self.used
     }
+
+    /// Get current capacity in bytes
+    pub fn capacity(&self) -> u64 {
+        self.capacity
+    }
 }
 
 /// Handle to a retained mesh
@@ -571,6 +576,11 @@ impl BufferManager {
         self.quad_instance_buffer
             .buffer()
             .expect("Quad instance buffer should always exist")
+    }
+
+    /// Get the quad instance buffer capacity (for bind group cache hash)
+    pub fn quad_instance_capacity(&self) -> u64 {
+        self.quad_instance_buffer.capacity()
     }
 
     /// Clear all retained meshes (call when switching games)

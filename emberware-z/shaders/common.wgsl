@@ -27,7 +27,7 @@ struct PackedLight {
     data2: u32,  // Directional: unused (0), Point: position Z + range (f16x2)
 }
 
-// Unified per-draw shading state (80 bytes)
+// Unified per-draw shading state (96 bytes)
 struct PackedUnifiedShadingState {
     color_rgba8: u32,                // Material color (RGBA8 packed)
     uniform_set_0: u32,              // Mode-specific: [b0, b1, b2, rim_intensity]
@@ -35,6 +35,11 @@ struct PackedUnifiedShadingState {
     flags: u32,                      // Bit 0: skinning_mode (0=raw, 1=inverse bind)
     sky: PackedSky,                  // 16 bytes
     lights: array<PackedLight, 4>,   // 48 bytes (4 × 12-byte lights)
+    // Animation System v2 fields (16 bytes)
+    keyframe_base: u32,              // Base offset into all_keyframes buffer
+    inverse_bind_base: u32,          // Base offset into inverse_bind buffer
+    animation_flags: u32,            // Bit 0: use_static_keyframes
+    _animation_reserved: u32,        // Reserved for v2.1
 }
 
 // Per-frame storage buffer - array of shading states
@@ -55,9 +60,13 @@ struct BoneMatrix3x4 {
 // Bone transforms for GPU skinning (up to 256 bones, 3x4 format)
 @group(0) @binding(5) var<storage, read> bones: array<BoneMatrix3x4, 256>;
 
-// Inverse bind matrices for skeletal animation (up to 256 bones, 3x4 format)
+// Inverse bind matrices for all skeletons (static after init, indexed by shading state)
 // Contains the inverse bind pose for each bone, used in inverse bind mode
-@group(0) @binding(6) var<storage, read> inverse_bind: array<BoneMatrix3x4, 256>;
+@group(0) @binding(6) var<storage, read> inverse_bind: array<BoneMatrix3x4>;
+
+// All keyframes storage buffer - pre-decoded bone matrices for all animations (static after init)
+// Indexed by shading state's keyframe_base + bone_index
+@group(0) @binding(7) var<storage, read> all_keyframes: array<BoneMatrix3x4>;
 
 // Helper to expand 3x4 bone matrix → 4x4 for skinning calculations
 // Input is row-major, output is column-major (WGSL mat4x4 convention)
@@ -76,6 +85,11 @@ const FLAG_SKINNING_MODE: u32 = 1u;
 // Texture filter mode flag constant (bit 1 of flags field)
 // 0 = nearest (pixelated), 1 = linear (smooth)
 const FLAG_TEXTURE_FILTER_LINEAR: u32 = 2u;
+
+// Animation System v2 flags (in animation_flags field of PackedUnifiedShadingState)
+// Bit 0: Use immediate bones buffer instead of static keyframes
+// 0 = read from all_keyframes (static), 1 = read from bones (immediate/dynamic)
+const ANIMATION_FLAG_USE_IMMEDIATE: u32 = 1u;
 
 // ============================================================================
 // Material Override Flags (bits 2-7)

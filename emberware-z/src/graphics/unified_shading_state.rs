@@ -70,8 +70,8 @@ pub struct PackedLight {
     pub data2: u32,
 }
 
-/// Unified per-draw shading state (80 bytes, POD, hashable)
-/// Size breakdown: 16 bytes (header) + 16 bytes (sky) + 48 bytes (4 × 12-byte lights)
+/// Unified per-draw shading state (96 bytes, POD, hashable)
+/// Size breakdown: 16 bytes (header) + 16 bytes (sky) + 48 bytes (lights) + 16 bytes (animation)
 ///
 /// # Mode-Specific Field Interpretation
 ///
@@ -117,6 +117,25 @@ pub struct PackedUnifiedShadingState {
 
     pub sky: PackedSky,           // 16 bytes
     pub lights: [PackedLight; 4], // 48 bytes (4 × 12-byte lights)
+
+    // Animation System v2 fields (16 bytes total)
+    /// Base offset into @binding(7) all_keyframes buffer
+    /// Shader reads: all_keyframes[keyframe_base + bone_index]
+    /// 0 = no keyframes bound (use bones buffer directly)
+    pub keyframe_base: u32,
+
+    /// Base offset into @binding(6) all_inverse_bind buffer
+    /// Shader reads: inverse_bind[inverse_bind_base + bone_index]
+    /// 0 = no skeleton bound (raw bone mode)
+    pub inverse_bind_base: u32,
+
+    /// Animation-specific flags (separate from main flags field)
+    /// - Bit 0: use_static_keyframes (0 = immediate bones, 1 = static keyframes)
+    /// - Bits 1-31: reserved for v2.1
+    pub animation_flags: u32,
+
+    /// Reserved for future animation features (zeroed)
+    pub _animation_reserved: u32,
 }
 
 impl Default for PackedUnifiedShadingState {
@@ -144,6 +163,11 @@ impl Default for PackedUnifiedShadingState {
             flags: DEFAULT_FLAGS, // uniform_alpha = 15 (opaque), other flags = 0
             sky,
             lights: [PackedLight::default(); 4], // All lights disabled
+            // Animation System v2 fields (default to no animation)
+            keyframe_base: 0,        // No keyframes bound
+            inverse_bind_base: 0,    // No skeleton bound (raw bone mode)
+            animation_flags: 0,      // Use immediate bones by default
+            _animation_reserved: 0,  // Zeroed
         }
     }
 }
@@ -470,6 +494,14 @@ pub const FLAG_SKINNING_MODE: u32 = 1 << 0;
 pub const FLAG_TEXTURE_FILTER_LINEAR: u32 = 1 << 1;
 
 // ============================================================================
+// Animation System v2 Flags (in animation_flags field)
+// ============================================================================
+
+/// Flag bit for immediate bone mode in PackedUnifiedShadingState.animation_flags
+/// 0 = use static keyframes (@binding(7)), 1 = use immediate bones (@binding(5))
+pub const ANIMATION_FLAG_USE_IMMEDIATE: u32 = 1 << 0;
+
+// ============================================================================
 // Material Override Flags (bits 2-7)
 // ============================================================================
 
@@ -541,6 +573,11 @@ impl PackedUnifiedShadingState {
             uniform_set_1,
             sky,
             lights,
+            // Animation System v2 fields - defaults
+            keyframe_base: 0,
+            inverse_bind_base: 0,
+            animation_flags: 0,
+            _animation_reserved: 0,
         }
     }
 
@@ -572,7 +609,7 @@ mod tests {
     fn test_packed_sizes() {
         assert_eq!(std::mem::size_of::<PackedSky>(), 16);
         assert_eq!(std::mem::size_of::<PackedLight>(), 12); // 12 bytes for point light support
-        assert_eq!(std::mem::size_of::<PackedUnifiedShadingState>(), 80); // 16 + 16 + 48
+        assert_eq!(std::mem::size_of::<PackedUnifiedShadingState>(), 96); // 16 + 16 + 48 + 16 (animation)
     }
 
     #[test]

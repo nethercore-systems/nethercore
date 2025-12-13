@@ -11,7 +11,8 @@ mod resources;
 pub use config::ZInitConfig;
 pub use ffi_state::ZFFIState;
 pub use resources::{
-    Font, PendingKeyframes, PendingMesh, PendingMeshPacked, PendingSkeleton, PendingTexture,
+    Font, KeyframeGpuInfo, KeyframeSource, PendingKeyframes, PendingMesh, PendingMeshPacked,
+    PendingSkeleton, PendingTexture, SkeletonGpuInfo,
 };
 
 /// Maximum number of bones for GPU skinning

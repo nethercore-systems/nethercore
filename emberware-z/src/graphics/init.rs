@@ -74,12 +74,21 @@ impl ZGraphics {
 
         tracing::info!("Using GPU adapter: {:?}", adapter.get_info().name);
 
-        // Request device and queue
+        // Request device and queue with increased storage buffer limits
+        // Animation System v2 requires 9 storage buffers in vertex stage:
+        // - 0-4: matrices and indices
+        // - 5: immediate bones
+        // - 6: inverse bind matrices (static)
+        // - 7: all keyframes (static)
+        // - 8: quad instances
+        let mut limits = wgpu::Limits::default();
+        limits.max_storage_buffers_per_shader_stage = 10; // Default is 8, we need 9
+
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("Emberware Z Device"),
                 required_features: wgpu::Features::default(),
-                required_limits: wgpu::Limits::default(),
+                required_limits: limits,
                 memory_hints: wgpu::MemoryHints::Performance,
                 experimental_features: Default::default(),
                 trace: wgpu::Trace::Off,
@@ -147,10 +156,23 @@ impl ZGraphics {
         });
 
         // Create inverse bind storage buffer for skeletal animation (256 bones × 48 bytes = 12KB)
-        // Contains inverse bind pose matrices for each skeleton, uploaded when skeleton is bound
+        // @binding(6): Contains all inverse bind pose matrices for all skeletons
+        // Initially sized for 256 bones, will grow if more skeletons are loaded
+        let inverse_bind_capacity = 256; // matrices
         let inverse_bind_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Inverse Bind Storage Buffer"),
-            size: 256 * 48, // 256 matrices × 48 bytes per 3x4 matrix
+            label: Some("All Inverse Bind Matrices (@binding(6))"),
+            size: (inverse_bind_capacity * 48) as u64, // 48 bytes per 3x4 matrix
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        // Create static keyframes storage buffer for skeletal animation
+        // @binding(7): Contains all pre-decoded bone matrices for all animation keyframes
+        // Placeholder size (1 matrix = 48 bytes), will grow when animations are loaded
+        let all_keyframes_capacity = 1; // matrices (placeholder)
+        let all_keyframes_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("All Keyframes (@binding(7))"),
+            size: (all_keyframes_capacity * 48) as u64, // 48 bytes per 3x4 matrix
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -280,6 +302,9 @@ impl ZGraphics {
             sampler_linear,
             bone_buffer,
             inverse_bind_buffer,
+            all_keyframes_buffer,
+            inverse_bind_capacity,
+            all_keyframes_capacity,
             model_matrix_buffer,
             view_matrix_buffer,
             proj_matrix_buffer,
@@ -291,6 +316,8 @@ impl ZGraphics {
             shading_state_buffer,
             shading_state_capacity,
             texture_bind_groups: hashbrown::HashMap::new(),
+            cached_frame_bind_group: None,
+            cached_frame_bind_group_hash: 0,
             current_frame: None,
             current_view: None,
             buffer_manager,

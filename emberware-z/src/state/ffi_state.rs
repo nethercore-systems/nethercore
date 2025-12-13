@@ -8,8 +8,9 @@ use hashbrown::HashMap;
 use z_common::ZDataPack;
 
 use super::{
-    BoneMatrix3x4, Font, LoadedKeyframeCollection, PendingKeyframes, PendingMesh,
-    PendingMeshPacked, PendingSkeleton, PendingTexture, SkeletonData, ZInitConfig,
+    BoneMatrix3x4, Font, KeyframeGpuInfo, KeyframeSource, LoadedKeyframeCollection,
+    PendingKeyframes, PendingMesh, PendingMeshPacked, PendingSkeleton, PendingTexture,
+    SkeletonData, SkeletonGpuInfo, ZInitConfig,
 };
 
 /// FFI staging state for Emberware Z
@@ -51,6 +52,18 @@ pub struct ZFFIState {
     pub pending_keyframes: Vec<PendingKeyframes>,
     /// Next keyframe handle to allocate
     pub next_keyframe_handle: u32,
+
+    // GPU Animation Index Tracking (Animation System v2)
+    /// Tracks where each skeleton's inverse bind matrices are in @binding(6)
+    /// Index = skeleton_handle - 1 (handles are 1-indexed)
+    pub skeleton_gpu_info: Vec<SkeletonGpuInfo>,
+    /// Tracks where each keyframe collection's data is in @binding(7)
+    /// Index = keyframe_handle - 1 (handles are 1-indexed)
+    pub keyframe_gpu_info: Vec<KeyframeGpuInfo>,
+    /// Current keyframe source for skinned draws (Static or Immediate)
+    pub current_keyframe_source: KeyframeSource,
+    /// Current inverse bind base offset into @binding(6) for the bound skeleton
+    pub current_inverse_bind_base: u32,
 
     // Virtual Render Pass (direct recording)
     pub render_pass: crate::graphics::VirtualRenderPass,
@@ -149,6 +162,10 @@ impl Default for ZFFIState {
             keyframes: Vec::new(),
             pending_keyframes: Vec::new(),
             next_keyframe_handle: 1, // 0 reserved for "invalid"
+            skeleton_gpu_info: Vec::new(),
+            keyframe_gpu_info: Vec::new(),
+            current_keyframe_source: KeyframeSource::default(),
+            current_inverse_bind_base: 0,
             render_pass: crate::graphics::VirtualRenderPass::new(),
             mesh_map: hashbrown::HashMap::new(),
             pending_textures: Vec::new(),
@@ -414,6 +431,42 @@ impl ZFFIState {
         }
     }
 
+    /// Sync animation state (Animation System v2) to current_shading_state
+    ///
+    /// Copies current_keyframe_source and current_inverse_bind_base to
+    /// the packed shading state fields. Called before add_shading_state().
+    pub fn sync_animation_state(&mut self) {
+        use crate::graphics::ANIMATION_FLAG_USE_IMMEDIATE;
+
+        // Determine keyframe_base and animation_flags from current_keyframe_source
+        let (keyframe_base, use_immediate) = match self.current_keyframe_source {
+            KeyframeSource::Static { offset } => (offset, false),
+            KeyframeSource::Immediate { offset } => (offset, true),
+        };
+
+        let animation_flags = if use_immediate {
+            ANIMATION_FLAG_USE_IMMEDIATE
+        } else {
+            0
+        };
+
+        // Update shading state if changed
+        if self.current_shading_state.keyframe_base != keyframe_base {
+            self.current_shading_state.keyframe_base = keyframe_base;
+            self.shading_state_dirty = true;
+        }
+
+        if self.current_shading_state.inverse_bind_base != self.current_inverse_bind_base {
+            self.current_shading_state.inverse_bind_base = self.current_inverse_bind_base;
+            self.shading_state_dirty = true;
+        }
+
+        if self.current_shading_state.animation_flags != animation_flags {
+            self.current_shading_state.animation_flags = animation_flags;
+            self.shading_state_dirty = true;
+        }
+    }
+
     /// Update texture filter mode in current shading state
     /// - false/0: nearest (pixelated)
     /// - true/1: linear (smooth)
@@ -544,6 +597,9 @@ impl ZFFIState {
     /// Uses deduplication via HashMap - if this exact state already exists, returns existing index.
     /// Otherwise adds a new entry.
     pub fn add_shading_state(&mut self) -> crate::graphics::ShadingStateIndex {
+        // Sync animation state before checking (Animation System v2)
+        self.sync_animation_state();
+
         // If not dirty, return the last added state (should be at index states.len() - 1)
         if !self.shading_state_dirty && !self.shading_states.is_empty() {
             return crate::graphics::ShadingStateIndex(self.shading_states.len() as u32 - 1);
@@ -704,6 +760,10 @@ impl ZFFIState {
 
         // Clear GPU-instanced quad batches for next frame
         self.quad_batches.clear();
+
+        // Clear immediate bone matrices for next frame (Animation System v2)
+        // The bone_matrices buffer accumulates during the frame and must be reset
+        self.bone_matrices.clear();
 
         // Note: Render state (color, blend_mode, etc.) persists between frames
     }

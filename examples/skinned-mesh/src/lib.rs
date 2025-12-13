@@ -1,9 +1,10 @@
-//! Skinned Mesh Example - GPU Skinning Validator
+//! Skinned Mesh Example - GPU Skinning Validator (Animation System v2)
 //!
 //! Validates Emberware Z's skeletal animation system:
 //! - 3x4 bone matrix format (12 floats per bone, column-major)
 //! - GPU skinning with smooth weight blending
 //! - Multiple bone hierarchy animation
+//! - Procedural/dynamic bone animation using immediate bones buffer
 //!
 //! Matrix Format (column-major, consistent with transform_set):
 //! Each bone matrix is stored as 4 columns × 3 elements:
@@ -14,6 +15,11 @@
 //! [tx,     ty,     tz    ]  // translation
 //! // implicit 4th row [0, 0, 0, 1] (affine transform)
 //! ```
+//!
+//! Animation System v2 Features:
+//! - set_bones() appends to per-frame immediate_bones buffer (indexed access)
+//! - Multiple bone states can coexist in a single frame
+//! - GPU reads bones via indexed offset (no re-uploads between draws)
 //!
 //! Workflow: CPU animation -> GPU skinning
 //! 1. In init(): Load skinned mesh with bone indices/weights baked into vertices

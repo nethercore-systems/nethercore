@@ -1,9 +1,14 @@
-# Animation Demo - Keyframe Animation System Test
+# Animation Demo - Keyframe Animation System Test (Animation System v2)
 #
 # Demonstrates the ROM-backed keyframe animation system:
 # - Loading keyframes from data pack via rom_keyframes()
-# - Step-based animation with keyframe_bind() (stamp mode)
-# - Blended animation with keyframe_read() + set_bones_4x4()
+# - Step-based animation with keyframe_bind() - uses static GPU buffers
+# - Blended animation with keyframe_read() + set_bones_4x4() - uses immediate bones
+#
+# Animation System v2 optimizations:
+# - All keyframe data uploaded to GPU once during init
+# - Zero per-frame CPU decoding in stamp mode
+# - Immediate bones buffer supports multiple bone states per frame
 #
 # Build workflow:
 #   1. cargo xtask build-examples  # Builds all examples including this one
