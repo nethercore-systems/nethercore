@@ -6,13 +6,13 @@
 //! **Single-call:** Each function can only be called once during init().
 //!                  Calling the same function twice traps with an error.
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use tracing::{info, warn};
 use wasmtime::{Caller, Linker};
 
 use emberware_core::wasm::GameStateWithConsole;
 
-use crate::console::{ZInput, RESOLUTIONS, TICK_RATES};
+use crate::console::{RESOLUTIONS, TICK_RATES, ZInput};
 use crate::state::ZFFIState;
 
 /// Register configuration FFI functions
@@ -44,7 +44,9 @@ fn set_resolution(
 
     // Check for duplicate call
     if state.init_config.resolution_set {
-        bail!("set_resolution() called twice - each config function can only be called once during init()");
+        bail!(
+            "set_resolution() called twice - each config function can only be called once during init()"
+        );
     }
     state.init_config.resolution_set = true;
 
@@ -85,7 +87,9 @@ fn set_tick_rate(
 
     // Check for duplicate call
     if state.init_config.tick_rate_set {
-        bail!("set_tick_rate() called twice - each config function can only be called once during init()");
+        bail!(
+            "set_tick_rate() called twice - each config function can only be called once during init()"
+        );
     }
     state.init_config.tick_rate_set = true;
 
@@ -127,7 +131,9 @@ fn set_clear_color(
 
     // Check for duplicate call
     if state.init_config.clear_color_set {
-        bail!("set_clear_color() called twice - each config function can only be called once during init()");
+        bail!(
+            "set_clear_color() called twice - each config function can only be called once during init()"
+        );
     }
     state.init_config.clear_color_set = true;
 
@@ -172,7 +178,9 @@ fn render_mode(
 
     // Check for duplicate call
     if state.init_config.render_mode_set {
-        bail!("render_mode() called twice - each config function can only be called once during init()");
+        bail!(
+            "render_mode() called twice - each config function can only be called once during init()"
+        );
     }
     state.init_config.render_mode_set = true;
 

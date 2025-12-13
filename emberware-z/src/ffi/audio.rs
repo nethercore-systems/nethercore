@@ -6,7 +6,7 @@ use anyhow::Result;
 use tracing::{info, warn};
 use wasmtime::{Caller, Linker};
 
-use super::get_wasm_memory;
+use super::{get_wasm_memory, guards::check_init_only};
 use emberware_core::wasm::GameStateWithConsole;
 
 use crate::audio::{AudioCommand, Sound};
@@ -41,9 +41,9 @@ fn load_sound(
     data_ptr: u32,
     byte_len: u32,
 ) -> u32 {
-    // Enforce init-only
-    if !caller.data().game.in_init {
-        warn!("load_sound() called outside init() - ignored");
+    // Guard: init-only
+    if let Err(e) = check_init_only(&caller, "load_sound") {
+        warn!("{}", e);
         return 0;
     }
 

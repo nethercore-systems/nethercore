@@ -175,11 +175,7 @@ mod tests {
 
     #[test]
     fn test_format_rust_const_color() {
-        let result = format_rust_const(
-            "tint",
-            &ValueType::Color,
-            &DebugValue::Color(0xFF8040FF),
-        );
+        let result = format_rust_const("tint", &ValueType::Color, &DebugValue::Color(0xFF8040FF));
         assert_eq!(
             result,
             "const TINT: u32 = 0xFF8040FF; // R=255, G=128, B=64, A=255"

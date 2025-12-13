@@ -53,7 +53,9 @@ impl Audio for TestAudio {
 
 /// Test input type
 #[repr(C)]
-#[derive(Clone, Copy, Default, PartialEq, Debug, Pod, Zeroable, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone, Copy, Default, PartialEq, Debug, Pod, Zeroable, serde::Serialize, serde::Deserialize,
+)]
 pub struct TestInput {
     pub buttons: u16,
     pub x: i8,

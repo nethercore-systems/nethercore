@@ -168,7 +168,8 @@ pub fn analyze_wasm(wasm_bytes: &[u8]) -> Result<AnalysisResult, AnalysisError> 
 
         if let Payload::CodeSectionEntry(body) = payload {
             let mut last_const: Option<u32> = None;
-            let ops = body.get_operators_reader()
+            let ops = body
+                .get_operators_reader()
                 .map_err(|e| AnalysisError::ParseError(e.to_string()))?;
 
             for op in ops {
@@ -299,56 +300,131 @@ mod tests {
 
     #[test]
     fn test_uses_bc7() {
-        assert!(!AnalysisResult { render_mode: 0, ..Default::default() }.uses_bc7());
-        assert!(AnalysisResult { render_mode: 1, ..Default::default() }.uses_bc7());
-        assert!(AnalysisResult { render_mode: 2, ..Default::default() }.uses_bc7());
-        assert!(AnalysisResult { render_mode: 3, ..Default::default() }.uses_bc7());
+        assert!(
+            !AnalysisResult {
+                render_mode: 0,
+                ..Default::default()
+            }
+            .uses_bc7()
+        );
+        assert!(
+            AnalysisResult {
+                render_mode: 1,
+                ..Default::default()
+            }
+            .uses_bc7()
+        );
+        assert!(
+            AnalysisResult {
+                render_mode: 2,
+                ..Default::default()
+            }
+            .uses_bc7()
+        );
+        assert!(
+            AnalysisResult {
+                render_mode: 3,
+                ..Default::default()
+            }
+            .uses_bc7()
+        );
     }
 
     #[test]
     fn test_texture_format_for_slot_mode0() {
-        let result = AnalysisResult { render_mode: 0, ..Default::default() };
+        let result = AnalysisResult {
+            render_mode: 0,
+            ..Default::default()
+        };
         assert_eq!(result.texture_format_for_slot(0), TextureFormatHint::Rgba8);
         assert_eq!(result.texture_format_for_slot(1), TextureFormatHint::Rgba8);
     }
 
     #[test]
     fn test_texture_format_for_slot_mode1() {
-        let result = AnalysisResult { render_mode: 1, ..Default::default() };
-        assert_eq!(result.texture_format_for_slot(0), TextureFormatHint::Bc7Srgb);
-        assert_eq!(result.texture_format_for_slot(1), TextureFormatHint::Bc7Srgb);
-        assert_eq!(result.texture_format_for_slot(2), TextureFormatHint::Bc7Srgb);
-        assert_eq!(result.texture_format_for_slot(3), TextureFormatHint::Bc7Srgb);
+        let result = AnalysisResult {
+            render_mode: 1,
+            ..Default::default()
+        };
+        assert_eq!(
+            result.texture_format_for_slot(0),
+            TextureFormatHint::Bc7Srgb
+        );
+        assert_eq!(
+            result.texture_format_for_slot(1),
+            TextureFormatHint::Bc7Srgb
+        );
+        assert_eq!(
+            result.texture_format_for_slot(2),
+            TextureFormatHint::Bc7Srgb
+        );
+        assert_eq!(
+            result.texture_format_for_slot(3),
+            TextureFormatHint::Bc7Srgb
+        );
     }
 
     #[test]
     fn test_texture_format_for_slot_mode2() {
-        let result = AnalysisResult { render_mode: 2, ..Default::default() };
-        assert_eq!(result.texture_format_for_slot(0), TextureFormatHint::Bc7Srgb);  // Albedo
-        assert_eq!(result.texture_format_for_slot(1), TextureFormatHint::Bc7Linear); // Material
-        assert_eq!(result.texture_format_for_slot(3), TextureFormatHint::Bc7Srgb);  // Env
+        let result = AnalysisResult {
+            render_mode: 2,
+            ..Default::default()
+        };
+        assert_eq!(
+            result.texture_format_for_slot(0),
+            TextureFormatHint::Bc7Srgb
+        ); // Albedo
+        assert_eq!(
+            result.texture_format_for_slot(1),
+            TextureFormatHint::Bc7Linear
+        ); // Material
+        assert_eq!(
+            result.texture_format_for_slot(3),
+            TextureFormatHint::Bc7Srgb
+        ); // Env
     }
 
     #[test]
     fn test_texture_format_for_slot_mode3() {
-        let result = AnalysisResult { render_mode: 3, ..Default::default() };
-        assert_eq!(result.texture_format_for_slot(0), TextureFormatHint::Bc7Srgb);  // Albedo
-        assert_eq!(result.texture_format_for_slot(1), TextureFormatHint::Bc7Linear); // Material
-        assert_eq!(result.texture_format_for_slot(2), TextureFormatHint::Bc7Srgb);  // Specular
-        assert_eq!(result.texture_format_for_slot(3), TextureFormatHint::Bc7Srgb);  // Env
+        let result = AnalysisResult {
+            render_mode: 3,
+            ..Default::default()
+        };
+        assert_eq!(
+            result.texture_format_for_slot(0),
+            TextureFormatHint::Bc7Srgb
+        ); // Albedo
+        assert_eq!(
+            result.texture_format_for_slot(1),
+            TextureFormatHint::Bc7Linear
+        ); // Material
+        assert_eq!(
+            result.texture_format_for_slot(2),
+            TextureFormatHint::Bc7Srgb
+        ); // Specular
+        assert_eq!(
+            result.texture_format_for_slot(3),
+            TextureFormatHint::Bc7Srgb
+        ); // Env
     }
 
     #[test]
     fn test_validation_valid_modes() {
         for mode in 0..=3 {
-            let result = AnalysisResult { render_mode: mode, ..Default::default() };
+            let result = AnalysisResult {
+                render_mode: mode,
+                ..Default::default()
+            };
             assert!(validate_result(&result).is_ok());
         }
     }
 
     #[test]
     fn test_validation_invalid_mode() {
-        let result = AnalysisResult { render_mode: 4, ..Default::default() };
+        let result = AnalysisResult {
+            render_mode: 4,
+            ..Default::default()
+        };
         assert!(matches!(
             validate_result(&result),
             Err(AnalysisError::InvalidRenderMode(4))
@@ -369,13 +445,16 @@ mod tests {
     #[test]
     fn test_analyze_wasm_no_config_calls() {
         // Minimal WASM with no config calls
-        let wasm = wat::parse_str(r#"
+        let wasm = wat::parse_str(
+            r#"
             (module
                 (func (export "init"))
                 (func (export "update"))
                 (func (export "render"))
             )
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
 
         let result = analyze_wasm(&wasm).unwrap();
         assert_eq!(result.render_mode, 0); // Default
@@ -385,7 +464,8 @@ mod tests {
     #[test]
     fn test_analyze_wasm_render_mode_call() {
         // WASM that calls render_mode(2)
-        let wasm = wat::parse_str(r#"
+        let wasm = wat::parse_str(
+            r#"
             (module
                 (import "env" "render_mode" (func $render_mode (param i32)))
                 (func (export "init")
@@ -395,7 +475,9 @@ mod tests {
                 (func (export "update"))
                 (func (export "render"))
             )
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
 
         let result = analyze_wasm(&wasm).unwrap();
         assert_eq!(result.render_mode, 2);
@@ -404,7 +486,8 @@ mod tests {
     #[test]
     fn test_analyze_wasm_set_resolution_call() {
         // WASM that calls set_resolution(3)
-        let wasm = wat::parse_str(r#"
+        let wasm = wat::parse_str(
+            r#"
             (module
                 (import "env" "set_resolution" (func $set_resolution (param i32)))
                 (func (export "init")
@@ -412,7 +495,9 @@ mod tests {
                     call $set_resolution
                 )
             )
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
 
         let result = analyze_wasm(&wasm).unwrap();
         assert_eq!(result.resolution, Some(3));
@@ -421,7 +506,8 @@ mod tests {
     #[test]
     fn test_analyze_wasm_duplicate_render_mode() {
         // WASM that calls render_mode twice - should fail
-        let wasm = wat::parse_str(r#"
+        let wasm = wat::parse_str(
+            r#"
             (module
                 (import "env" "render_mode" (func $render_mode (param i32)))
                 (func (export "init")
@@ -431,7 +517,9 @@ mod tests {
                     call $render_mode
                 )
             )
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
 
         let result = analyze_wasm(&wasm);
         assert!(matches!(
@@ -443,7 +531,8 @@ mod tests {
     #[test]
     fn test_analyze_wasm_invalid_render_mode() {
         // WASM that calls render_mode(5) - invalid
-        let wasm = wat::parse_str(r#"
+        let wasm = wat::parse_str(
+            r#"
             (module
                 (import "env" "render_mode" (func $render_mode (param i32)))
                 (func (export "init")
@@ -451,7 +540,9 @@ mod tests {
                     call $render_mode
                 )
             )
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
 
         let result = analyze_wasm(&wasm);
         assert!(matches!(result, Err(AnalysisError::InvalidRenderMode(5))));
@@ -460,7 +551,8 @@ mod tests {
     #[test]
     fn test_analyze_wasm_multiple_config_calls() {
         // WASM with multiple different config calls (allowed)
-        let wasm = wat::parse_str(r#"
+        let wasm = wat::parse_str(
+            r#"
             (module
                 (import "env" "render_mode" (func $render_mode (param i32)))
                 (import "env" "set_resolution" (func $set_resolution (param i32)))
@@ -474,7 +566,9 @@ mod tests {
                     call $set_tick_rate
                 )
             )
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
 
         let result = analyze_wasm(&wasm).unwrap();
         assert_eq!(result.render_mode, 2);
@@ -485,7 +579,8 @@ mod tests {
     #[test]
     fn test_analyze_wasm_duplicate_set_resolution() {
         // WASM that calls set_resolution twice - should fail
-        let wasm = wat::parse_str(r#"
+        let wasm = wat::parse_str(
+            r#"
             (module
                 (import "env" "set_resolution" (func $set_resolution (param i32)))
                 (func (export "init")
@@ -495,7 +590,9 @@ mod tests {
                     call $set_resolution
                 )
             )
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
 
         let result = analyze_wasm(&wasm);
         assert!(matches!(
@@ -507,7 +604,8 @@ mod tests {
     #[test]
     fn test_analyze_wasm_invalid_resolution() {
         // WASM that calls set_resolution(5) - invalid
-        let wasm = wat::parse_str(r#"
+        let wasm = wat::parse_str(
+            r#"
             (module
                 (import "env" "set_resolution" (func $set_resolution (param i32)))
                 (func (export "init")
@@ -515,7 +613,9 @@ mod tests {
                     call $set_resolution
                 )
             )
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
 
         let result = analyze_wasm(&wasm);
         assert!(matches!(result, Err(AnalysisError::InvalidResolution(5))));
@@ -523,7 +623,10 @@ mod tests {
 
     #[test]
     fn test_validation_invalid_resolution() {
-        let result = AnalysisResult { resolution: Some(4), ..Default::default() };
+        let result = AnalysisResult {
+            resolution: Some(4),
+            ..Default::default()
+        };
         assert!(matches!(
             validate_result(&result),
             Err(AnalysisError::InvalidResolution(4))
@@ -533,7 +636,10 @@ mod tests {
     #[test]
     fn test_validation_valid_resolutions() {
         for res in 0..=3 {
-            let result = AnalysisResult { resolution: Some(res), ..Default::default() };
+            let result = AnalysisResult {
+                resolution: Some(res),
+                ..Default::default()
+            };
             assert!(validate_result(&result).is_ok());
         }
     }

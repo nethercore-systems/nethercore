@@ -11,8 +11,9 @@ use wasmtime::{Caller, Linker};
 
 use emberware_core::wasm::GameStateWithConsole;
 
+use super::guards::check_init_only;
 use crate::console::ZInput;
-use crate::state::{BoneMatrix3x4, PendingSkeleton, ZFFIState, MAX_BONES, MAX_SKELETONS};
+use crate::state::{BoneMatrix3x4, MAX_BONES, MAX_SKELETONS, PendingSkeleton, ZFFIState};
 
 /// Register GPU skinning FFI functions
 pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
@@ -47,6 +48,12 @@ fn load_skeleton(
     inverse_bind_ptr: u32,
     bone_count: u32,
 ) -> u32 {
+    // Guard: init-only
+    if let Err(e) = check_init_only(&caller, "load_skeleton") {
+        warn!("{}", e);
+        return 0;
+    }
+
     // Validate bone count
     if bone_count == 0 {
         warn!("load_skeleton: bone_count is 0");

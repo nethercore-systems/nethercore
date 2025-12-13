@@ -9,5 +9,5 @@ mod resolver;
 
 pub use cart::install_z_rom;
 pub use data_dir::DataDirProvider;
-pub use game::{delete_game, get_local_games, is_cached, LocalGame};
-pub use resolver::{resolve_game_id, GameResolutionError};
+pub use game::{LocalGame, delete_game, get_local_games, is_cached};
+pub use resolver::{GameResolutionError, resolve_game_id};

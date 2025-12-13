@@ -8,7 +8,7 @@
 use tracing::warn;
 use wasmtime::Caller;
 
-use crate::console::{ZInput, MAX_BUTTON_INDEX, STICK_SCALE, TRIGGER_SCALE};
+use crate::console::{MAX_BUTTON_INDEX, STICK_SCALE, TRIGGER_SCALE, ZInput};
 use crate::state::ZFFIState;
 use emberware_core::wasm::{GameStateWithConsole, MAX_PLAYERS};
 

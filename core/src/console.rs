@@ -80,9 +80,9 @@ pub trait ConsoleResourceManager: Send + 'static {
 
     /// Process pending texture/mesh/audio resources from game state
     ///
-    /// Called after game.init() and after each game.render() to upload
-    /// resources requested during those phases.
-    /// TODO: This should only ever be called after init, not every frame
+    /// Called once after game.init() to upload all resources requested
+    /// during the initialization phase. Should not be called during the
+    /// game loop (resources are init-only).
     fn process_pending_resources(
         &mut self,
         graphics: &mut Self::Graphics,

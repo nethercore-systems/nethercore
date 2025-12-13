@@ -54,6 +54,7 @@ mod camera;
 mod config;
 mod draw_2d;
 mod draw_3d;
+pub(crate) mod guards;
 pub mod input;
 mod keyframes;
 mod lighting;

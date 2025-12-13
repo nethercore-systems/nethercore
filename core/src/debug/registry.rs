@@ -569,7 +569,11 @@ mod tests {
         // A game with `static COLOR: u32 = 0xFF8040FF` (R=255, G=128, B=64, A=255)
         // On little-endian, this is stored as bytes [0xFF, 0x40, 0x80, 0xFF]
         let game_bytes: [u8; 4] = 0xFF8040FFu32.to_le_bytes();
-        assert_eq!(game_bytes, [0xFF, 0x40, 0x80, 0xFF], "Sanity check: u32 LE byte order");
+        assert_eq!(
+            game_bytes,
+            [0xFF, 0x40, 0x80, 0xFF],
+            "Sanity check: u32 LE byte order"
+        );
 
         // Reading from game memory should give correct RGBA
         let read = registry.read_value_from_slice(&game_bytes, ValueType::Color);

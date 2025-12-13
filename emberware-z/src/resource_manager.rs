@@ -3,7 +3,7 @@
 //! Manages the mapping between game resource handles (u32) and
 //! graphics backend handles (TextureHandle, MeshHandle).
 
-use crate::graphics::{pack_vertex_data, MeshHandle, TextureHandle, ZGraphics};
+use crate::graphics::{MeshHandle, TextureHandle, ZGraphics, pack_vertex_data};
 use crate::state::{SkeletonData, ZFFIState};
 use emberware_core::console::{Audio, ConsoleResourceManager};
 

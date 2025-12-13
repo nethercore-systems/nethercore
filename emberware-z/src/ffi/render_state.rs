@@ -136,11 +136,7 @@ fn uniform_alpha(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>
 /// When two transparent objects overlap with the same alpha level and offset, their
 /// dither patterns align and pixels cancel out. Different offsets shift the pattern
 /// so both objects remain visible.
-fn dither_offset(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    x: u32,
-    y: u32,
-) {
+fn dither_offset(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, x: u32, y: u32) {
     let state = &mut caller.data_mut().console;
 
     if x > 3 || y > 3 {

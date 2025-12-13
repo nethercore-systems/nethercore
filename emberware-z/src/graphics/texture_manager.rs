@@ -151,7 +151,9 @@ impl TextureManager {
         format: TextureFormat,
     ) -> Result<TextureHandle> {
         match format {
-            TextureFormat::Rgba8 => self.load_texture_internal(device, queue, width, height, data, true),
+            TextureFormat::Rgba8 => {
+                self.load_texture_internal(device, queue, width, height, data, true)
+            }
             TextureFormat::Bc7 => self.load_texture_bc7_internal(
                 device,
                 queue,
@@ -383,6 +385,11 @@ impl TextureManager {
     /// Get white fallback texture handle
     pub fn white_texture(&self) -> TextureHandle {
         self.fallback_white
+    }
+
+    /// Get the number of loaded textures (for debugging)
+    pub fn texture_count(&self) -> usize {
+        self.textures.len()
     }
 
     /// Get font texture view

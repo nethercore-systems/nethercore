@@ -69,11 +69,7 @@ impl FrameController {
 
     /// Get the current time scale
     pub fn time_scale(&self) -> f32 {
-        if self.disabled {
-            1.0
-        } else {
-            self.time_scale
-        }
+        if self.disabled { 1.0 } else { self.time_scale }
     }
 
     /// Toggle pause state

@@ -7,7 +7,7 @@ use anyhow::Result;
 use wasmtime::{Caller, Linker};
 
 use crate::console::ConsoleInput;
-use crate::wasm::{read_string_from_memory, GameStateWithConsole};
+use crate::wasm::{GameStateWithConsole, read_string_from_memory};
 
 use super::registry::DebugRegistry;
 use super::types::{Constraints, ValueType};

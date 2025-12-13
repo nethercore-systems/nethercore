@@ -56,7 +56,7 @@ pub mod registry;
 pub mod types;
 
 // Re-export commonly used types
-pub use ffi::{register_debug_ffi, HasDebugRegistry};
+pub use ffi::{HasDebugRegistry, register_debug_ffi};
 pub use frame_control::{FrameController, TIME_SCALE_OPTIONS};
 pub use panel::DebugPanel;
 pub use registry::{DebugRegistry, RegisteredValue, TreeNode};

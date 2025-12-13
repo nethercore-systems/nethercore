@@ -982,7 +982,10 @@ mod tests {
         ffi_state.update_texture_filter(true);
 
         // Verify they're set
-        assert_ne!(ffi_state.current_shading_state.flags & FLAG_SKINNING_MODE, 0);
+        assert_ne!(
+            ffi_state.current_shading_state.flags & FLAG_SKINNING_MODE,
+            0
+        );
         assert_ne!(
             ffi_state.current_shading_state.flags & FLAG_TEXTURE_FILTER_LINEAR,
             0
@@ -992,7 +995,10 @@ mod tests {
         ffi_state.update_uniform_alpha(8);
 
         // Verify other flags are preserved
-        assert_ne!(ffi_state.current_shading_state.flags & FLAG_SKINNING_MODE, 0);
+        assert_ne!(
+            ffi_state.current_shading_state.flags & FLAG_SKINNING_MODE,
+            0
+        );
         assert_ne!(
             ffi_state.current_shading_state.flags & FLAG_TEXTURE_FILTER_LINEAR,
             0
@@ -1007,7 +1013,10 @@ mod tests {
         ffi_state.update_dither_offset(1, 2);
 
         // Verify all flags are still preserved
-        assert_ne!(ffi_state.current_shading_state.flags & FLAG_SKINNING_MODE, 0);
+        assert_ne!(
+            ffi_state.current_shading_state.flags & FLAG_SKINNING_MODE,
+            0
+        );
         assert_ne!(
             ffi_state.current_shading_state.flags & FLAG_TEXTURE_FILTER_LINEAR,
             0

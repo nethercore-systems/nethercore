@@ -51,17 +51,17 @@ mod state;
 
 // Re-export public types from config
 pub use config::{
-    EmberwareConfig, SessionConfig, DEFAULT_INPUT_DELAY, DEFAULT_ONLINE_INPUT_DELAY,
-    MAX_INPUT_DELAY, MAX_ROLLBACK_FRAMES, MAX_STATE_SIZE,
+    DEFAULT_INPUT_DELAY, DEFAULT_ONLINE_INPUT_DELAY, EmberwareConfig, MAX_INPUT_DELAY,
+    MAX_ROLLBACK_FRAMES, MAX_STATE_SIZE, SessionConfig,
 };
 
 // Re-export public types from player
-pub use player::{PlayerSessionConfig, MAX_PLAYERS};
+pub use player::{MAX_PLAYERS, PlayerSessionConfig};
 
 // Re-export public types from state
 pub use state::{
-    GameStateSnapshot, LoadStateError, RollbackStateManager, SaveStateError, StatePool,
-    STATE_POOL_SIZE,
+    GameStateSnapshot, LoadStateError, RollbackStateManager, STATE_POOL_SIZE, SaveStateError,
+    StatePool,
 };
 
 // Re-export public types from session
@@ -71,4 +71,4 @@ pub use session::{
 };
 
 // Re-export public types from local_socket
-pub use local_socket::{LocalSocket, LocalSocketError, DEFAULT_LOCAL_PORT};
+pub use local_socket::{DEFAULT_LOCAL_PORT, LocalSocket, LocalSocketError};

@@ -41,10 +41,8 @@ const VOUT_COLOR: &str = "@location(11) color: vec3<f32>,";
 
 const VS_UV: &str = "out.uv = in.uv;";
 const VS_COLOR: &str = "out.color = in.color;";
-const VS_WORLD_NORMAL: &str =
-    "let normal = unpack_octahedral(in.normal_packed);\n    let world_normal_raw = (model_matrix * vec4<f32>(normal, 0.0)).xyz;\n    out.world_normal = normalize(world_normal_raw);";
-const VS_VIEW_NORMAL: &str =
-    "let view_rot = mat3x3<f32>(view_matrix[0].xyz, view_matrix[1].xyz, view_matrix[2].xyz);\n    out.view_normal = normalize(view_rot * out.world_normal);";
+const VS_WORLD_NORMAL: &str = "let normal = unpack_octahedral(in.normal_packed);\n    let world_normal_raw = (model_matrix * vec4<f32>(normal, 0.0)).xyz;\n    out.world_normal = normalize(world_normal_raw);";
+const VS_VIEW_NORMAL: &str = "let view_rot = mat3x3<f32>(view_matrix[0].xyz, view_matrix[1].xyz, view_matrix[2].xyz);\n    out.view_normal = normalize(view_rot * out.world_normal);";
 const VS_VIEW_POS: &str = "out.view_position = (view_matrix * model_pos).xyz;";
 const VS_CAMERA_POS: &str = "out.camera_position = extract_camera_position(view_matrix);";
 
@@ -203,8 +201,7 @@ fn generate_shader(mode: u8, format: u8) -> Result<String, String> {
         shader = shader.replace("//VS_VIEW_NORMAL", VS_VIEW_NORMAL);
     } else if has_normal && has_skinned {
         let skinned_world_normal = "out.world_normal = normalize(final_normal);";
-        let skinned_view_normal =
-            "let view_rot = mat3x3<f32>(view_matrix[0].xyz, view_matrix[1].xyz, view_matrix[2].xyz);\n    out.view_normal = normalize(view_rot * final_normal);";
+        let skinned_view_normal = "let view_rot = mat3x3<f32>(view_matrix[0].xyz, view_matrix[1].xyz, view_matrix[2].xyz);\n    out.view_normal = normalize(view_rot * final_normal);";
         shader = shader.replace("//VS_WORLD_NORMAL", skinned_world_normal);
         shader = shader.replace("//VS_VIEW_NORMAL", skinned_view_normal);
     } else {

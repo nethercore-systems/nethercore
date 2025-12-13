@@ -28,21 +28,21 @@ pub mod wasm;
 pub use console::{Audio, Console, ConsoleInput, ConsoleSpecs, Graphics};
 pub use runtime::{Runtime, RuntimeConfig};
 pub use wasm::{
-    GameInstance, GameState, GameStateWithConsole, WasmEngine, MAX_PLAYERS, MAX_SAVE_SIZE,
-    MAX_SAVE_SLOTS,
+    GameInstance, GameState, GameStateWithConsole, MAX_PLAYERS, MAX_SAVE_SIZE, MAX_SAVE_SLOTS,
+    WasmEngine,
 };
 
 // Re-export rollback types
 pub use rollback::{
-    ConnectionQuality, EmberwareConfig, GameStateSnapshot, LoadStateError, LocalSocket,
-    LocalSocketError, NetworkInput, PlayerNetworkStats, PlayerSessionConfig, RollbackSession,
-    RollbackStateManager, SaveStateError, SessionConfig, SessionError, SessionEvent, SessionType,
-    StatePool, DEFAULT_INPUT_DELAY, DEFAULT_LOCAL_PORT, DEFAULT_ONLINE_INPUT_DELAY,
-    MAX_INPUT_DELAY, MAX_ROLLBACK_FRAMES, MAX_STATE_SIZE, STATE_POOL_SIZE,
+    ConnectionQuality, DEFAULT_INPUT_DELAY, DEFAULT_LOCAL_PORT, DEFAULT_ONLINE_INPUT_DELAY,
+    EmberwareConfig, GameStateSnapshot, LoadStateError, LocalSocket, LocalSocketError,
+    MAX_INPUT_DELAY, MAX_ROLLBACK_FRAMES, MAX_STATE_SIZE, NetworkInput, PlayerNetworkStats,
+    PlayerSessionConfig, RollbackSession, RollbackStateManager, STATE_POOL_SIZE, SaveStateError,
+    SessionConfig, SessionError, SessionEvent, SessionType, StatePool,
 };
 
 // Re-export GGRS types for convenience
 pub use ggrs::{GgrsError, GgrsEvent, GgrsRequest, InputStatus, PlayerType, SessionState};
 
 // Re-export analysis types for build-time WASM analysis
-pub use analysis::{analyze_wasm, AnalysisError, AnalysisResult, TextureFormatHint};
+pub use analysis::{AnalysisError, AnalysisResult, TextureFormatHint, analyze_wasm};

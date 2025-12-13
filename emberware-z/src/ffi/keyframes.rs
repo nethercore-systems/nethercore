@@ -8,19 +8,20 @@
 //! - `keyframe_read`: Decode and read a keyframe to WASM memory
 //! - `keyframe_bind`: Bind a keyframe directly to GPU (bypass WASM)
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use tracing::warn;
 use wasmtime::{Caller, Linker};
 
 use emberware_core::wasm::GameStateWithConsole;
 use z_common::formats::{
-    decode_bone_transform, BoneTransform, EmberZAnimationHeader, PlatformBoneKeyframe,
-    PLATFORM_BONE_KEYFRAME_SIZE,
+    BoneTransform, EmberZAnimationHeader, PLATFORM_BONE_KEYFRAME_SIZE, PlatformBoneKeyframe,
+    decode_bone_transform,
 };
 
+use super::guards::check_init_only;
 use crate::console::ZInput;
 use crate::state::{
-    BoneMatrix3x4, PendingKeyframes, ZFFIState, MAX_BONES, MAX_KEYFRAME_COLLECTIONS,
+    BoneMatrix3x4, MAX_BONES, MAX_KEYFRAME_COLLECTIONS, PendingKeyframes, ZFFIState,
 };
 
 /// Register keyframe animation FFI functions
@@ -37,17 +38,6 @@ pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) ->
     linker.func_wrap("env", "keyframe_read", keyframe_read)?;
     linker.func_wrap("env", "keyframe_bind", keyframe_bind)?;
 
-    Ok(())
-}
-
-/// Check if we're in init phase (init-only function guard)
-fn check_init_only(
-    caller: &Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    fn_name: &str,
-) -> Result<()> {
-    if !caller.data().game.in_init {
-        bail!("{}: can only be called during init()", fn_name);
-    }
     Ok(())
 }
 

@@ -1,8 +1,8 @@
 //! UI action handling and input processing
 
 use crate::app::RuntimeError;
-use emberware_core::app::config;
 use emberware_core::app::AppMode;
+use emberware_core::app::config;
 use emberware_core::console::Graphics;
 use winit::{
     event::{ElementState, KeyEvent},

@@ -6,7 +6,7 @@
 mod registry;
 
 use anyhow::Result;
-use emberware_core::library::{get_local_games, resolve_game_id, DataDirProvider};
+use emberware_core::library::{DataDirProvider, get_local_games, resolve_game_id};
 use registry::ConsoleRegistry;
 use std::env;
 use std::path::PathBuf;

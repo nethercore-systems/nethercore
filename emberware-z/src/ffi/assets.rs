@@ -16,20 +16,20 @@ use anyhow::Result;
 use tracing::{info, warn};
 use wasmtime::{Caller, Linker};
 
-use super::get_wasm_memory;
+use super::{get_wasm_memory, guards::check_init_only};
 
 use emberware_core::wasm::GameStateWithConsole;
+use z_common::TextureFormat;
 use z_common::formats::{
     EmberZMeshHeader, EmberZSkeletonHeader, EmberZSoundHeader, EmberZTextureHeader,
 };
-use z_common::TextureFormat;
 
 use crate::audio::Sound;
 use crate::console::ZInput;
 use crate::graphics::vertex_stride_packed;
 use crate::state::{
-    BoneMatrix3x4, PendingMeshPacked, PendingSkeleton, PendingTexture, ZFFIState, MAX_BONES,
-    MAX_SKELETONS,
+    BoneMatrix3x4, MAX_BONES, MAX_SKELETONS, PendingMeshPacked, PendingSkeleton, PendingTexture,
+    ZFFIState,
 };
 
 /// Register asset loading FFI functions
@@ -54,6 +54,12 @@ fn load_zmesh(
     data_ptr: u32,
     data_len: u32,
 ) -> u32 {
+    // Guard: init-only
+    if let Err(e) = check_init_only(&caller, "load_zmesh") {
+        warn!("{}", e);
+        return 0;
+    }
+
     let data_len = data_len as usize;
 
     // Validate minimum size
@@ -186,6 +192,12 @@ fn load_ztex(
     data_ptr: u32,
     data_len: u32,
 ) -> u32 {
+    // Guard: init-only
+    if let Err(e) = check_init_only(&caller, "load_ztex") {
+        warn!("{}", e);
+        return 0;
+    }
+
     let data_len = data_len as usize;
 
     // Validate minimum size
@@ -309,6 +321,12 @@ fn load_zsound(
     data_ptr: u32,
     data_len: u32,
 ) -> u32 {
+    // Guard: init-only
+    if let Err(e) = check_init_only(&caller, "load_zsound") {
+        warn!("{}", e);
+        return 0;
+    }
+
     let data_len = data_len as usize;
 
     // Validate minimum size
@@ -414,6 +432,12 @@ fn load_zskeleton(
     data_ptr: u32,
     data_len: u32,
 ) -> u32 {
+    // Guard: init-only
+    if let Err(e) = check_init_only(&caller, "load_zskeleton") {
+        warn!("{}", e);
+        return 0;
+    }
+
     let data_len = data_len as usize;
 
     // Validate minimum size

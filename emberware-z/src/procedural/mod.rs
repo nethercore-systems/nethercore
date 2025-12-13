@@ -268,9 +268,12 @@ mod tests {
         // Sphere has degenerate triangles at poles where all vertices share the same position
         // (top pole: ring 0, bottom pole: ring N)
         assert_eq!(
-            failed, 0,
+            failed,
+            0,
             "Sphere winding: {}/{} non-degenerate triangles have incorrect winding (skipped {} degenerate)",
-            failed, passed + failed, skipped
+            failed,
+            passed + failed,
+            skipped
         );
         assert!(passed > 0, "Sphere should have valid triangles");
         // 32 segments × 2 poles = 64 degenerate triangles at poles

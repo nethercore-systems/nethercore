@@ -97,7 +97,10 @@ fn build_examples() -> Result<()> {
                     // Check if it's just missing assets (template example)
                     let err_str = e.to_string();
                     if err_str.contains("Failed to load") || err_str.contains("No such file") {
-                        println!("  ⊘ {} skipped (missing assets - template example)", example_name_str);
+                        println!(
+                            "  ⊘ {} skipped (missing assets - template example)",
+                            example_name_str
+                        );
                         skipped_count.fetch_add(1, Ordering::Relaxed);
                     } else {
                         println!("  ✗ {} failed: {}", example_name_str, e);
@@ -109,7 +112,10 @@ fn build_examples() -> Result<()> {
             // No ember.toml - use legacy WASM-only installation
             match build_wasm_only(&example_path, &games_dir, &example_name_str) {
                 Ok(_) => {
-                    println!("  ✓ {} installed (WASM-only, no ember.toml)", example_name_str);
+                    println!(
+                        "  ✓ {} installed (WASM-only, no ember.toml)",
+                        example_name_str
+                    );
                     success_count.fetch_add(1, Ordering::Relaxed);
                 }
                 Err(e) => {

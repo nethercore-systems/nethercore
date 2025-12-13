@@ -13,7 +13,7 @@
 //! - Rollback-aware: commands discarded during replay
 
 use rodio::{OutputStream, Sink, Source};
-use std::sync::{mpsc, Arc};
+use std::sync::{Arc, mpsc};
 use std::thread;
 use tracing::{error, trace, warn};
 

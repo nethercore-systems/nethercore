@@ -399,11 +399,19 @@ mod tests {
         let decoded = decode_quat_smallest_three(encoded);
 
         // Verify idx is 3 (w is largest)
-        assert_eq!(encoded & 0x3, 3, "Identity quaternion should drop w (idx=3)");
+        assert_eq!(
+            encoded & 0x3,
+            3,
+            "Identity quaternion should drop w (idx=3)"
+        );
 
         // Verify roundtrip (dot product should be close to 1)
         let dot = q[0] * decoded[0] + q[1] * decoded[1] + q[2] * decoded[2] + q[3] * decoded[3];
-        assert!(dot.abs() > 0.999, "Identity roundtrip failed: dot = {}", dot);
+        assert!(
+            dot.abs() > 0.999,
+            "Identity roundtrip failed: dot = {}",
+            dot
+        );
     }
 
     #[test]
@@ -460,7 +468,11 @@ mod tests {
 
         // Verify roundtrip
         let dot = q[0] * decoded[0] + q[1] * decoded[1] + q[2] * decoded[2] + q[3] * decoded[3];
-        assert!(dot.abs() > 0.999, "120° [1,1,1] roundtrip failed: dot = {}", dot);
+        assert!(
+            dot.abs() > 0.999,
+            "120° [1,1,1] roundtrip failed: dot = {}",
+            dot
+        );
     }
 
     #[test]
@@ -472,7 +484,11 @@ mod tests {
 
         // Verify roundtrip
         let dot = q[0] * decoded[0] + q[1] * decoded[1] + q[2] * decoded[2] + q[3] * decoded[3];
-        assert!(dot.abs() > 0.999, "Half-angle 90° X roundtrip failed: dot = {}", dot);
+        assert!(
+            dot.abs() > 0.999,
+            "Half-angle 90° X roundtrip failed: dot = {}",
+            dot
+        );
     }
 
     #[test]
@@ -485,7 +501,11 @@ mod tests {
 
         // For q and -q representing same rotation, dot can be positive or negative
         let dot = q[0] * decoded[0] + q[1] * decoded[1] + q[2] * decoded[2] + q[3] * decoded[3];
-        assert!(dot.abs() > 0.999, "Sign flip roundtrip failed: dot = {}", dot);
+        assert!(
+            dot.abs() > 0.999,
+            "Sign flip roundtrip failed: dot = {}",
+            dot
+        );
     }
 
     #[test]
@@ -497,7 +517,11 @@ mod tests {
 
         // Compute dot product (should be > 0.9999 for < 0.1° error)
         let dot = q[0] * decoded[0] + q[1] * decoded[1] + q[2] * decoded[2] + q[3] * decoded[3];
-        assert!(dot.abs() > 0.9999, "Quaternion roundtrip precision failed: dot = {}", dot);
+        assert!(
+            dot.abs() > 0.9999,
+            "Quaternion roundtrip precision failed: dot = {}",
+            dot
+        );
     }
 
     // ========================================================================
@@ -567,15 +591,33 @@ mod tests {
         let encoded = encode_bone_transform(input.rotation, input.position, input.scale);
 
         // Verify idx=3 (w is dropped as largest component)
-        assert_eq!(encoded.rotation & 0x3, 3, "Identity rotation should drop w (idx=3)");
-        assert_eq!(encoded.position, [0x0000, 0x0000, 0x0000], "Zero position encoding");
-        assert_eq!(encoded.scale, [0x3C00, 0x3C00, 0x3C00], "Unit scale encoding");
+        assert_eq!(
+            encoded.rotation & 0x3,
+            3,
+            "Identity rotation should drop w (idx=3)"
+        );
+        assert_eq!(
+            encoded.position,
+            [0x0000, 0x0000, 0x0000],
+            "Zero position encoding"
+        );
+        assert_eq!(
+            encoded.scale,
+            [0x3C00, 0x3C00, 0x3C00],
+            "Unit scale encoding"
+        );
 
         let decoded = decode_bone_transform(&encoded);
 
         assert!((decoded.rotation[3] - 1.0).abs() < 0.002, "w ≈ 1");
-        assert!(decoded.position.iter().all(|&v| v.abs() < 0.001), "position ≈ 0");
-        assert!(decoded.scale.iter().all(|&v| (v - 1.0).abs() < 0.001), "scale ≈ 1");
+        assert!(
+            decoded.position.iter().all(|&v| v.abs() < 0.001),
+            "position ≈ 0"
+        );
+        assert!(
+            decoded.scale.iter().all(|&v| (v - 1.0).abs() < 0.001),
+            "scale ≈ 1"
+        );
     }
 
     #[test]
@@ -594,7 +636,11 @@ mod tests {
             + input.rotation[1] * decoded.rotation[1]
             + input.rotation[2] * decoded.rotation[2]
             + input.rotation[3] * decoded.rotation[3];
-        assert!(dot.abs() > 0.9999, "Nearly identical rotation: dot = {}", dot);
+        assert!(
+            dot.abs() > 0.9999,
+            "Nearly identical rotation: dot = {}",
+            dot
+        );
 
         // Verify position (f16 precision)
         assert!((decoded.position[0] - 1.5).abs() < 0.01);
@@ -652,7 +698,11 @@ mod tests {
             + input.rotation[1] * decoded.rotation[1]
             + input.rotation[2] * decoded.rotation[2]
             + input.rotation[3] * decoded.rotation[3];
-        assert!(dot.abs() > 0.999, "Rotation roundtrip failed: dot = {}", dot);
+        assert!(
+            dot.abs() > 0.999,
+            "Rotation roundtrip failed: dot = {}",
+            dot
+        );
     }
 
     // ========================================================================
@@ -691,8 +741,14 @@ mod tests {
         let parsed_kf = PlatformBoneKeyframe::from_bytes(&data[4..]);
         let decoded = decode_bone_transform(&parsed_kf);
         assert!((decoded.rotation[3] - 1.0).abs() < 0.002, "w ≈ 1");
-        assert!(decoded.position.iter().all(|&v| v.abs() < 0.001), "position ≈ 0");
-        assert!(decoded.scale.iter().all(|&v| (v - 1.0).abs() < 0.001), "scale ≈ 1");
+        assert!(
+            decoded.position.iter().all(|&v| v.abs() < 0.001),
+            "position ≈ 0"
+        );
+        assert!(
+            decoded.scale.iter().all(|&v| (v - 1.0).abs() < 0.001),
+            "scale ≈ 1"
+        );
     }
 
     #[test]
@@ -717,9 +773,9 @@ mod tests {
     fn test_platform_keyframe_roundtrip() {
         // Create a keyframe via encode to ensure valid values
         let kf = encode_bone_transform(
-            [0.0, 0.0, 0.0, 1.0],  // Identity rotation
-            [1.0, 2.0, -2.0],      // Position
-            [1.0, 1.0, 1.0],       // Unit scale
+            [0.0, 0.0, 0.0, 1.0], // Identity rotation
+            [1.0, 2.0, -2.0],     // Position
+            [1.0, 1.0, 1.0],      // Unit scale
         );
 
         let bytes = kf.to_bytes();

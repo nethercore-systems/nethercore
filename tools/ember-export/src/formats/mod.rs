@@ -118,11 +118,7 @@ pub fn write_ember_animation<W: Write>(
     // Write frame data (frame_count × bone_count × 16 bytes)
     for frame in frames {
         if frame.len() != bone_count as usize {
-            anyhow::bail!(
-                "Frame has {} bones, expected {}",
-                frame.len(),
-                bone_count
-            );
+            anyhow::bail!("Frame has {} bones, expected {}", frame.len(), bone_count);
         }
 
         for bone in frame {

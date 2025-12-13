@@ -3,8 +3,8 @@
 //! Parses assets.toml and coordinates asset conversion.
 
 use anyhow::{Context, Result};
-use serde::Deserialize;
 use hashbrown::HashMap;
+use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
 use crate::{EWZ_MESH_EXT, EWZ_SOUND_EXT, EWZ_TEXTURE_EXT};

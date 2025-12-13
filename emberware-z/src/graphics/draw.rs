@@ -3,8 +3,8 @@
 //! This module handles processing draw commands from ZFFIState and converting
 //! them into GPU rendering operations.
 
-use super::render_state::{BlendMode, CullMode, MatcapBlendMode, TextureHandle};
 use super::ZGraphics;
+use super::render_state::{BlendMode, CullMode, MatcapBlendMode, TextureHandle};
 
 impl ZGraphics {
     /// Process all draw commands from ZFFIState and execute them
@@ -20,8 +20,8 @@ impl ZGraphics {
         z_state: &mut crate::state::ZFFIState,
         texture_map: &hashbrown::HashMap<u32, TextureHandle>,
     ) {
-        // Apply init config to graphics (render mode, etc.)
-        self.set_render_mode(z_state.init_config.render_mode);
+        // Note: render mode is set once after init() in App::flush_post_init_resources()
+        // No need to set it every frame
 
         // Note: texture_filter sync removed - filter is now per-draw via
         // PackedUnifiedShadingState.flags (bit 1) and sample_filtered() shader helper

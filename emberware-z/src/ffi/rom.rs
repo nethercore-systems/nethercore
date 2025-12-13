@@ -8,15 +8,16 @@
 
 use std::sync::Arc;
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use tracing::warn;
 use wasmtime::{Caller, Linker};
 
 use emberware_core::wasm::GameStateWithConsole;
 
+use super::guards::check_init_only;
 use crate::audio::Sound;
 use crate::console::ZInput;
-use crate::state::{PendingMeshPacked, PendingSkeleton, PendingTexture, ZFFIState, MAX_SKELETONS};
+use crate::state::{MAX_SKELETONS, PendingMeshPacked, PendingSkeleton, PendingTexture, ZFFIState};
 use z_common::TextureFormat;
 
 /// Register ROM data pack FFI functions
@@ -60,17 +61,6 @@ fn read_string_id(
 
     let bytes = &data[start..end];
     String::from_utf8(bytes.to_vec()).ok()
-}
-
-/// Check if we're in init phase (init-only function guard)
-fn check_init_only(
-    caller: &Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    fn_name: &str,
-) -> Result<()> {
-    if !caller.data().game.in_init {
-        bail!("{}: can only be called during init()", fn_name);
-    }
-    Ok(())
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

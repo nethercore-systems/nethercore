@@ -161,7 +161,6 @@ impl DebugValue {
         }
     }
 
-
     /// Get the value type for this debug value
     pub fn value_type(&self) -> ValueType {
         match self {

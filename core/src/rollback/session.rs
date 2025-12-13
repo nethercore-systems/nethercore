@@ -14,7 +14,7 @@ use crate::console::ConsoleInput;
 use crate::wasm::GameInstance;
 
 use super::config::{EmberwareConfig, SessionConfig};
-use super::player::{PlayerSessionConfig, MAX_PLAYERS};
+use super::player::{MAX_PLAYERS, PlayerSessionConfig};
 use super::state::{GameStateSnapshot, LoadStateError, RollbackStateManager, SaveStateError};
 
 // ============================================================================
@@ -830,7 +830,9 @@ mod tests {
 
     // Test input type for unit tests
     #[repr(C)]
-    #[derive(Clone, Copy, Default, PartialEq, Debug, Pod, Zeroable, serde::Serialize, serde::Deserialize)]
+    #[derive(
+        Clone, Copy, Default, PartialEq, Debug, Pod, Zeroable, serde::Serialize, serde::Deserialize,
+    )]
     struct TestInput {
         buttons: u16,
         x: i8,

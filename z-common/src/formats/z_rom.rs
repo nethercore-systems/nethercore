@@ -269,10 +269,12 @@ mod tests {
         let result = ZRom::from_bytes(&bad_bytes);
 
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Invalid EWZ magic bytes"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Invalid EWZ magic bytes")
+        );
     }
 
     #[test]
@@ -282,10 +284,12 @@ mod tests {
 
         let result = rom.validate();
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Game ID cannot be empty"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Game ID cannot be empty")
+        );
     }
 
     #[test]
@@ -295,10 +299,12 @@ mod tests {
 
         let result = rom.validate();
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Invalid WASM code"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Invalid WASM code")
+        );
     }
 
     #[test]

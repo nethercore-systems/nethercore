@@ -6,7 +6,7 @@ use anyhow::Result;
 use tracing::{info, warn};
 use wasmtime::{Caller, Linker};
 
-use super::get_wasm_memory;
+use super::{get_wasm_memory, guards::check_init_only};
 use emberware_core::wasm::GameStateWithConsole;
 
 use crate::console::ZInput;
@@ -51,6 +51,12 @@ fn load_mesh(
     vertex_count: u32,
     format: u32,
 ) -> u32 {
+    // Guard: init-only
+    if let Err(e) = check_init_only(&caller, "load_mesh") {
+        warn!("{}", e);
+        return 0;
+    }
+
     // Validate format
     if format > MAX_VERTEX_FORMAT as u32 {
         warn!(
@@ -160,6 +166,12 @@ fn load_mesh_indexed(
     index_count: u32,
     format: u32,
 ) -> u32 {
+    // Guard: init-only
+    if let Err(e) = check_init_only(&caller, "load_mesh_indexed") {
+        warn!("{}", e);
+        return 0;
+    }
+
     // Validate format
     if format > MAX_VERTEX_FORMAT as u32 {
         warn!(
@@ -318,6 +330,12 @@ fn load_mesh_packed(
     vertex_count: u32,
     format: u32,
 ) -> u32 {
+    // Guard: init-only
+    if let Err(e) = check_init_only(&caller, "load_mesh_packed") {
+        warn!("{}", e);
+        return 0;
+    }
+
     // Validate format (0-15 only, no FORMAT_PACKED)
     if format >= 16 {
         warn!("load_mesh_packed: format must be 0-15 (got {})", format);
@@ -401,6 +419,12 @@ fn load_mesh_indexed_packed(
     index_count: u32,
     format: u32,
 ) -> u32 {
+    // Guard: init-only
+    if let Err(e) = check_init_only(&caller, "load_mesh_indexed_packed") {
+        warn!("{}", e);
+        return 0;
+    }
+
     // Validate format (0-15 only, no FORMAT_PACKED)
     if format >= 16 {
         warn!(

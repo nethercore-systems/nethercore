@@ -9,7 +9,7 @@ use wasmtime::{Caller, Linker};
 
 use emberware_core::wasm::GameStateWithConsole;
 
-use crate::console::{ZInput, RESOLUTIONS};
+use crate::console::{RESOLUTIONS, ZInput};
 use crate::state::ZFFIState;
 
 /// Register camera FFI functions

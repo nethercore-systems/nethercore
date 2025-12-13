@@ -103,7 +103,7 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
     use tempfile::TempDir;
-    use z_common::{ZMetadata, ZRom, EWZ_VERSION};
+    use z_common::{EWZ_VERSION, ZMetadata, ZRom};
 
     /// Test data directory provider
     struct TestDataDirProvider {

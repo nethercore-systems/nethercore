@@ -66,7 +66,10 @@ pub fn execute(args: CompileArgs) -> Result<PathBuf> {
         // Compiler errors were already printed to stderr
         anyhow::bail!(
             "Compilation failed (exit code: {})\nCheck the error messages above.",
-            status.code().map(|c| c.to_string()).unwrap_or_else(|| "unknown".to_string())
+            status
+                .code()
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| "unknown".to_string())
         );
     }
 
@@ -104,9 +107,8 @@ fn validate_wasm(bytes: &[u8]) -> Result<()> {
     }
 
     // Run static analysis to validate config function usage
-    emberware_core::analysis::analyze_wasm(bytes).map_err(|e| {
-        anyhow::anyhow!("WASM validation failed: {}", e)
-    })?;
+    emberware_core::analysis::analyze_wasm(bytes)
+        .map_err(|e| anyhow::anyhow!("WASM validation failed: {}", e))?;
 
     Ok(())
 }

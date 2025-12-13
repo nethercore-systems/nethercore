@@ -48,7 +48,13 @@ pub fn convert_image_with_format(input: &Path, output: &Path, format: TextureFor
         File::create(output).with_context(|| format!("Failed to create output: {:?}", output))?;
     let mut writer = BufWriter::new(file);
 
-    write_ember_texture(&mut writer, width as u16, height as u16, output_format, &output_data)?;
+    write_ember_texture(
+        &mut writer,
+        width as u16,
+        height as u16,
+        output_format,
+        &output_data,
+    )?;
 
     let compression_info = if output_format.is_bc7() {
         let original_size = (width * height * 4) as usize;
@@ -217,7 +223,8 @@ mod tests {
     #[test]
     fn test_process_texture_rgba8() {
         let pixels = vec![255u8; 16 * 16 * 4];
-        let (w, h, fmt, data) = process_texture_for_pack(&pixels, 16, 16, TextureFormat::Rgba8).unwrap();
+        let (w, h, fmt, data) =
+            process_texture_for_pack(&pixels, 16, 16, TextureFormat::Rgba8).unwrap();
 
         assert_eq!(w, 16);
         assert_eq!(h, 16);
@@ -228,7 +235,8 @@ mod tests {
     #[test]
     fn test_process_texture_bc7() {
         let pixels = vec![255u8; 16 * 16 * 4];
-        let (w, h, fmt, data) = process_texture_for_pack(&pixels, 16, 16, TextureFormat::Bc7).unwrap();
+        let (w, h, fmt, data) =
+            process_texture_for_pack(&pixels, 16, 16, TextureFormat::Bc7).unwrap();
 
         assert_eq!(w, 16);
         assert_eq!(h, 16);

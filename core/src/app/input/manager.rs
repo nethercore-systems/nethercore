@@ -8,9 +8,9 @@ use winit::keyboard::KeyCode;
 use super::InputConfig;
 
 #[cfg(test)]
-use super::keycode_serde::{keycode_to_string, string_to_keycode};
-#[cfg(test)]
 use super::KeyboardMapping;
+#[cfg(test)]
+use super::keycode_serde::{keycode_to_string, string_to_keycode};
 
 pub struct InputManager {
     /// Gilrs context for gamepad handling (None if initialization failed)

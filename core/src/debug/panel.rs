@@ -526,19 +526,30 @@ impl DebugPanel {
                 let b = ((packed >> 8) & 0xFF) as u8;
                 let a = (packed & 0xFF) as u8;
 
-                let mut color = egui::Color32::from_rgba_unmultiplied(r, g, b, a);
+                let mut color = egui::Rgba::from_rgba_unmultiplied(
+                    r as f32 / 255.0,
+                    g as f32 / 255.0,
+                    b as f32 / 255.0,
+                    a as f32 / 255.0,
+                );
                 let mut changed = false;
                 ui.horizontal(|ui| {
                     ui.label(&reg_value.name);
-                    changed = ui.color_edit_button_srgba(&mut color).changed();
+                    changed = egui::color_picker::color_edit_button_rgba(
+                        ui,
+                        &mut color,
+                        egui::color_picker::Alpha::OnlyBlend,
+                    )
+                    .changed();
                 });
 
                 if changed {
                     // Repack: 0xRRGGBBAA
-                    let packed = ((color.r() as u32) << 24)
-                        | ((color.g() as u32) << 16)
-                        | ((color.b() as u32) << 8)
-                        | (color.a() as u32);
+                    let r = (color.r() * 255.0).round() as u32;
+                    let g = (color.g() * 255.0).round() as u32;
+                    let b = (color.b() * 255.0).round() as u32;
+                    let a = (color.a() * 255.0).round() as u32;
+                    let packed = (r << 24) | (g << 16) | (b << 8) | a;
                     Some(DebugValue::Color(packed))
                 } else {
                     None

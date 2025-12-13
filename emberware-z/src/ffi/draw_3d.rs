@@ -209,45 +209,48 @@ fn draw_triangles_indexed(
     let index_byte_size = index_data_size as usize;
 
     // Copy data
-    let (vertex_data, index_data): (Vec<f32>, Vec<u16>) =
-        {
-            let mem_data = memory.data(&caller);
+    let (vertex_data, index_data): (Vec<f32>, Vec<u16>) = {
+        let mem_data = memory.data(&caller);
 
-            if vertex_ptr + vertex_byte_size > mem_data.len() {
-                warn!(
+        if vertex_ptr + vertex_byte_size > mem_data.len() {
+            warn!(
                 "draw_triangles_indexed: vertex data ({} bytes at {}) exceeds memory bounds ({})",
-                vertex_byte_size, vertex_ptr, mem_data.len()
+                vertex_byte_size,
+                vertex_ptr,
+                mem_data.len()
             );
-                return;
-            }
+            return;
+        }
 
-            if idx_ptr + index_byte_size > mem_data.len() {
-                warn!(
+        if idx_ptr + index_byte_size > mem_data.len() {
+            warn!(
                 "draw_triangles_indexed: index data ({} bytes at {}) exceeds memory bounds ({})",
-                index_byte_size, idx_ptr, mem_data.len()
+                index_byte_size,
+                idx_ptr,
+                mem_data.len()
             );
+            return;
+        }
+
+        let vertex_bytes = &mem_data[vertex_ptr..vertex_ptr + vertex_byte_size];
+        let floats: &[f32] = bytemuck::cast_slice(vertex_bytes);
+
+        let index_bytes = &mem_data[idx_ptr..idx_ptr + index_byte_size];
+        let indices: &[u16] = bytemuck::cast_slice(index_bytes);
+
+        // Validate indices are within bounds
+        for &idx in indices {
+            if idx as u32 >= vertex_count {
+                warn!(
+                    "draw_triangles_indexed: index {} out of bounds (vertex_count = {})",
+                    idx, vertex_count
+                );
                 return;
             }
+        }
 
-            let vertex_bytes = &mem_data[vertex_ptr..vertex_ptr + vertex_byte_size];
-            let floats: &[f32] = bytemuck::cast_slice(vertex_bytes);
-
-            let index_bytes = &mem_data[idx_ptr..idx_ptr + index_byte_size];
-            let indices: &[u16] = bytemuck::cast_slice(index_bytes);
-
-            // Validate indices are within bounds
-            for &idx in indices {
-                if idx as u32 >= vertex_count {
-                    warn!(
-                        "draw_triangles_indexed: index {} out of bounds (vertex_count = {})",
-                        idx, vertex_count
-                    );
-                    return;
-                }
-            }
-
-            (floats.to_vec(), indices.to_vec())
-        };
+        (floats.to_vec(), indices.to_vec())
+    };
 
     // Verify data lengths
     if vertex_data.len() != float_count as usize {

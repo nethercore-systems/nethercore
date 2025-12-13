@@ -8,6 +8,7 @@ use wasmtime::{Caller, Linker};
 
 use emberware_core::wasm::GameStateWithConsole;
 
+use super::guards::check_init_only;
 use crate::console::ZInput;
 use crate::graphics::MatcapBlendMode;
 use crate::state::{PendingTexture, ZFFIState};
@@ -37,6 +38,12 @@ fn load_texture(
     height: u32,
     pixels_ptr: u32,
 ) -> u32 {
+    // Guard: init-only
+    if let Err(e) = check_init_only(&caller, "load_texture") {
+        warn!("{}", e);
+        return 0;
+    }
+
     // Validate dimensions
     if width == 0 || height == 0 {
         warn!("load_texture: invalid dimensions {}x{}", width, height);

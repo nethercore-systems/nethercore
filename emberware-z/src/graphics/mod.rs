@@ -33,10 +33,10 @@ use emberware_core::console::Graphics;
 
 // Re-export packing utilities from z-common (for FFI and backwards compat)
 pub use z_common::{
-    pack_bone_weights_unorm8, pack_color_rgba_unorm8, pack_normal_octahedral, pack_normal_snorm16,
-    pack_octahedral_u32, pack_position_f16, pack_uv_f16, pack_uv_unorm16, pack_vertex_data,
-    unpack_octahedral_u32, vertex_stride, vertex_stride_packed, FORMAT_COLOR, FORMAT_NORMAL,
-    FORMAT_SKINNED, FORMAT_UV,
+    FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV, pack_bone_weights_unorm8,
+    pack_color_rgba_unorm8, pack_normal_octahedral, pack_normal_snorm16, pack_octahedral_u32,
+    pack_position_f16, pack_uv_f16, pack_uv_unorm16, pack_vertex_data, unpack_octahedral_u32,
+    vertex_stride, vertex_stride_packed,
 };
 
 // Re-export public types from submodules
@@ -48,14 +48,16 @@ pub use render_state::{
     BlendMode, CullMode, MatcapBlendMode, RenderState, TextureFilter, TextureHandle,
 };
 pub use unified_shading_state::{
-    pack_f16, pack_f16x2, pack_matcap_blend_modes, pack_rgb8, pack_unorm8, unpack_f16,
-    unpack_f16x2, unpack_matcap_blend_modes, update_uniform_set_0_byte, update_uniform_set_1_byte,
-    LightType, PackedLight, PackedUnifiedShadingState, ShadingStateIndex, FLAG_SKINNING_MODE,
-    FLAG_TEXTURE_FILTER_LINEAR, FLAG_USE_UNIFORM_COLOR, FLAG_USE_UNIFORM_METALLIC, FLAG_USE_UNIFORM_ROUGHNESS, FLAG_USE_UNIFORM_EMISSIVE, FLAG_USE_UNIFORM_SPECULAR, FLAG_USE_MATCAP_REFLECTION, FLAG_UNIFORM_ALPHA_MASK, FLAG_UNIFORM_ALPHA_SHIFT,
-    FLAG_DITHER_OFFSET_X_MASK, FLAG_DITHER_OFFSET_X_SHIFT, FLAG_DITHER_OFFSET_Y_MASK,
-    FLAG_DITHER_OFFSET_Y_SHIFT, DEFAULT_FLAGS,
+    DEFAULT_FLAGS, FLAG_DITHER_OFFSET_X_MASK, FLAG_DITHER_OFFSET_X_SHIFT,
+    FLAG_DITHER_OFFSET_Y_MASK, FLAG_DITHER_OFFSET_Y_SHIFT, FLAG_SKINNING_MODE,
+    FLAG_TEXTURE_FILTER_LINEAR, FLAG_UNIFORM_ALPHA_MASK, FLAG_UNIFORM_ALPHA_SHIFT,
+    FLAG_USE_MATCAP_REFLECTION, FLAG_USE_UNIFORM_COLOR, FLAG_USE_UNIFORM_EMISSIVE,
+    FLAG_USE_UNIFORM_METALLIC, FLAG_USE_UNIFORM_ROUGHNESS, FLAG_USE_UNIFORM_SPECULAR, LightType,
+    PackedLight, PackedUnifiedShadingState, ShadingStateIndex, pack_f16, pack_f16x2,
+    pack_matcap_blend_modes, pack_rgb8, pack_unorm8, unpack_f16, unpack_f16x2,
+    unpack_matcap_blend_modes, update_uniform_set_0_byte, update_uniform_set_1_byte,
 };
-pub use vertex::{VertexFormatInfo, FORMAT_ALL, VERTEX_FORMAT_COUNT};
+pub use vertex::{FORMAT_ALL, VERTEX_FORMAT_COUNT, VertexFormatInfo};
 
 // Re-export for crate-internal use
 pub(crate) use init::RenderTarget;
@@ -412,6 +414,8 @@ impl ZGraphics {
     pub fn clear_game_resources(&mut self) {
         self.buffer_manager.clear_game_meshes();
         self.texture_manager.clear_game_textures();
+        self.command_buffer.reset();
+        self.texture_bind_groups.clear(); // Clear cached bind groups!
         tracing::info!("Cleared game resources for new game");
     }
 }

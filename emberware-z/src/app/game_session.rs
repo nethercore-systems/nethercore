@@ -2,8 +2,8 @@
 
 use crate::console::EmberwareZ;
 use crate::library;
-use emberware_core::app::{session::GameSession, RuntimeError, FRAME_TIME_HISTORY_SIZE};
-use emberware_core::console::Console;
+use emberware_core::app::{FRAME_TIME_HISTORY_SIZE, RuntimeError, session::GameSession};
+use emberware_core::console::{Console, ConsoleResourceManager};
 use emberware_core::rollback::{SessionEvent, SessionType};
 use std::path::Path;
 use std::time::Instant;
@@ -372,17 +372,11 @@ impl App {
                 .finalize_registration();
         }
 
-        // Reset frame controller for new game session
-        self.frame_controller.reset();
-
-        // Create resource manager
+        // Create resource manager and game session
         let resource_manager = EmberwareZ::new().create_resource_manager();
-
-        // Create the game session
         self.game_session = Some(GameSession::new(runtime, resource_manager));
 
-        // Add built-in font texture to texture map (handle 0)
-        // Add white fallback texture to texture map (handle 0xFFFFFFFF)
+        // Add built-in textures BEFORE flushing user resources
         if let (Some(session), Some(graphics)) = (&mut self.game_session, &self.graphics) {
             let font_texture_handle = graphics.font_texture();
             session
@@ -405,6 +399,12 @@ impl App {
             );
         }
 
+        // Flush all resources accumulated during init()
+        self.flush_post_init_resources()?;
+
+        // Reset frame controller for new game session
+        self.frame_controller.reset();
+
         // Update render target resolution and window minimum size based on game's init config
         if let Some(session) = &self.game_session {
             if let Some(game) = session.runtime.game() {
@@ -423,6 +423,45 @@ impl App {
                     }
                 }
             }
+        }
+
+        Ok(())
+    }
+
+    /// Flush pending resources accumulated during init()
+    ///
+    /// Called exactly once after runtime.init_game() to process all textures,
+    /// meshes, and skeletons requested during the game's init() function.
+    fn flush_post_init_resources(&mut self) -> Result<(), RuntimeError> {
+        let session = self
+            .game_session
+            .as_mut()
+            .ok_or_else(|| RuntimeError("No game session".to_string()))?;
+
+        let graphics = self
+            .graphics
+            .as_mut()
+            .ok_or_else(|| RuntimeError("Graphics not initialized".to_string()))?;
+
+        // Process all pending resources from init()
+        let mut dummy_audio = DummyAudio;
+        if let Some(game) = session.runtime.game_mut() {
+            let state = game.console_state_mut();
+
+            tracing::info!(
+                "Flushing post-init resources: {} textures, {} meshes (f32), {} meshes (packed), {} skeletons",
+                state.pending_textures.len(),
+                state.pending_meshes.len(),
+                state.pending_meshes_packed.len(),
+                state.pending_skeletons.len()
+            );
+
+            session
+                .resource_manager
+                .process_pending_resources(graphics, &mut dummy_audio, state);
+
+            // Set render mode once from init config
+            graphics.set_render_mode(state.init_config.render_mode);
         }
 
         Ok(())

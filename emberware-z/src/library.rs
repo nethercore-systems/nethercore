@@ -7,7 +7,7 @@ use emberware_core::library::DataDirProvider;
 use std::path::PathBuf;
 
 // Re-export all library types and functions from core
-pub use emberware_core::library::{delete_game, get_local_games, LocalGame};
+pub use emberware_core::library::{LocalGame, delete_game, get_local_games};
 
 /// Z's implementation of DataDirProvider.
 ///

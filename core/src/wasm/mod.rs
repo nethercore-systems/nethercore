@@ -22,8 +22,8 @@ use crate::console::ConsoleInput;
 
 // Re-export public types from state module
 pub use state::{
-    read_string_from_memory, GameState, GameStateWithConsole, MAX_PLAYERS, MAX_SAVE_SIZE,
-    MAX_SAVE_SLOTS,
+    GameState, GameStateWithConsole, MAX_PLAYERS, MAX_SAVE_SIZE, MAX_SAVE_SLOTS,
+    read_string_from_memory,
 };
 
 /// Shared WASM engine (one per application)
@@ -360,7 +360,18 @@ mod tests {
     use bytemuck::{Pod, Zeroable};
 
     #[repr(C)]
-    #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Pod, Zeroable, serde::Serialize, serde::Deserialize)]
+    #[derive(
+        Debug,
+        Clone,
+        Copy,
+        Default,
+        PartialEq,
+        Eq,
+        Pod,
+        Zeroable,
+        serde::Serialize,
+        serde::Deserialize,
+    )]
     struct TestInput {
         buttons: u16,
     }

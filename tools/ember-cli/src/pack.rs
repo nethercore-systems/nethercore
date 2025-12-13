@@ -61,8 +61,8 @@ pub fn execute(args: PackArgs) -> Result<()> {
     println!("  WASM: {} ({} bytes)", wasm_path.display(), code.len());
 
     // Analyze WASM to get render mode
-    let analysis = emberware_core::analysis::analyze_wasm(&code)
-        .context("Failed to analyze WASM file")?;
+    let analysis =
+        emberware_core::analysis::analyze_wasm(&code).context("Failed to analyze WASM file")?;
     let render_mode = analysis.render_mode;
 
     // Determine texture format based on render mode
@@ -210,7 +210,11 @@ fn load_assets(
 
     // Print results (after parallel loading completes)
     for texture in &textures {
-        let format_str = if texture.format.is_bc7() { " [BC7]" } else { "" };
+        let format_str = if texture.format.is_bc7() {
+            " [BC7]"
+        } else {
+            ""
+        };
         println!(
             "  Texture: {} ({}x{}){}",
             texture.id, texture.width, texture.height, format_str
@@ -251,11 +255,7 @@ fn load_assets(
 /// Load a texture from an image file (PNG, JPG, etc.)
 ///
 /// Compresses to BC7 if the format requires it.
-fn load_texture(
-    id: &str,
-    path: &std::path::Path,
-    format: TextureFormat,
-) -> Result<PackedTexture> {
+fn load_texture(id: &str, path: &std::path::Path, format: TextureFormat) -> Result<PackedTexture> {
     let img =
         image::open(path).with_context(|| format!("Failed to load texture: {}", path.display()))?;
 

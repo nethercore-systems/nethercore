@@ -12,10 +12,10 @@ pub mod types;
 
 pub use config::Config;
 pub use debug::{calculate_fps, render_debug_overlay, update_frame_times};
-pub use event_loop::{run, AppEventHandler, ConsoleApp};
+pub use event_loop::{AppEventHandler, ConsoleApp, run};
 pub use input::InputManager;
 pub use session::GameSession;
 pub use types::{
-    AppMode, DebugStats, RuntimeError, FRAME_TIME_HISTORY_SIZE, GRAPH_MAX_FRAME_TIME_MS,
+    AppMode, DebugStats, FRAME_TIME_HISTORY_SIZE, GRAPH_MAX_FRAME_TIME_MS, RuntimeError,
     TARGET_FRAME_TIME_MS,
 };

@@ -19,7 +19,7 @@ use crate::library::LocalGame;
 use crate::ui::{LibraryUi, UiAction};
 use emberware_core::app::config::Config;
 use emberware_core::app::{
-    session::GameSession, AppMode, DebugStats, RuntimeError, FRAME_TIME_HISTORY_SIZE,
+    AppMode, DebugStats, FRAME_TIME_HISTORY_SIZE, RuntimeError, session::GameSession,
 };
 use emberware_core::console::ConsoleResourceManager;
 use emberware_core::debug::{DebugPanel, FrameController};
@@ -141,32 +141,16 @@ impl App {
             // Run game frame (update + render)
             let (game_running, did_render) = match self.run_game_frame() {
                 Ok((running, rendered)) => {
-                    // Only process resources and execute draw commands if we rendered
+                    // Only execute draw commands if we rendered
                     if rendered {
                         if let Some(session) = &mut self.game_session {
                             if let Some(graphics) = &mut self.graphics {
-                                // Process pending resources by accessing resource manager directly
-                                // Use dummy audio since Z resource manager doesn't use it
-                                let mut dummy_audio = game_session::DummyAudio;
-                                {
-                                    if let Some(game) = session.runtime.game_mut() {
-                                        let state = game.console_state_mut();
-                                        session.resource_manager.process_pending_resources(
-                                            graphics,
-                                            &mut dummy_audio,
-                                            state,
-                                        );
-                                    }
-                                }
-
-                                // Execute draw commands
-                                {
-                                    if let Some(game) = session.runtime.game_mut() {
-                                        let state = game.console_state_mut();
-                                        session
-                                            .resource_manager
-                                            .execute_draw_commands(graphics, state);
-                                    }
+                                // Execute draw commands (resources already flushed post-init)
+                                if let Some(game) = session.runtime.game_mut() {
+                                    let state = game.console_state_mut();
+                                    session
+                                        .resource_manager
+                                        .execute_draw_commands(graphics, state);
                                 }
                             }
                         }
@@ -371,7 +355,10 @@ impl App {
                     }
                     // SAFETY: Bounds checked above, pointer valid for this frame
                     let slice = unsafe { std::slice::from_raw_parts(mem_ptr.add(ptr), size) };
-                    Some(data.registry.read_value_from_slice(slice, reg_value.value_type))
+                    Some(
+                        data.registry
+                            .read_value_from_slice(slice, reg_value.value_type),
+                    )
                 };
 
                 // Create write closure using raw pointer

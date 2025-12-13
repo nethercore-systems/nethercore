@@ -820,12 +820,9 @@ mod tests {
         // Test all 16 offset combinations
         for x in 0..=3u32 {
             for y in 0..=3u32 {
-                let flags =
-                    (x << FLAG_DITHER_OFFSET_X_SHIFT) | (y << FLAG_DITHER_OFFSET_Y_SHIFT);
-                let unpacked_x =
-                    (flags & FLAG_DITHER_OFFSET_X_MASK) >> FLAG_DITHER_OFFSET_X_SHIFT;
-                let unpacked_y =
-                    (flags & FLAG_DITHER_OFFSET_Y_MASK) >> FLAG_DITHER_OFFSET_Y_SHIFT;
+                let flags = (x << FLAG_DITHER_OFFSET_X_SHIFT) | (y << FLAG_DITHER_OFFSET_Y_SHIFT);
+                let unpacked_x = (flags & FLAG_DITHER_OFFSET_X_MASK) >> FLAG_DITHER_OFFSET_X_SHIFT;
+                let unpacked_y = (flags & FLAG_DITHER_OFFSET_Y_MASK) >> FLAG_DITHER_OFFSET_Y_SHIFT;
                 assert_eq!(unpacked_x, x);
                 assert_eq!(unpacked_y, y);
             }

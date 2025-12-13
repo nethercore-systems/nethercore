@@ -49,11 +49,7 @@ fn main() {
             let py = bone as f32 * 1.5 - 1.5; // -1.5, 0.0, 1.5
 
             // Encode to platform format
-            let keyframe = encode_bone_transform(
-                [qx, qy, qz, qw],
-                [0.0, py, 0.0],
-                [1.0, 1.0, 1.0],
-            );
+            let keyframe = encode_bone_transform([qx, qy, qz, qw], [0.0, py, 0.0], [1.0, 1.0, 1.0]);
 
             // Write 16-byte keyframe
             file.write_all(&keyframe.to_bytes())
