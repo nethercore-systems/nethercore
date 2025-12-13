@@ -20,8 +20,7 @@ use z_common::formats::{
 
 use crate::console::ZInput;
 use crate::state::{
-    BoneMatrix3x4, LoadedKeyframeCollection, PendingKeyframes, ZFFIState, MAX_BONES,
-    MAX_KEYFRAME_COLLECTIONS,
+    BoneMatrix3x4, PendingKeyframes, ZFFIState, MAX_BONES, MAX_KEYFRAME_COLLECTIONS,
 };
 
 /// Register keyframe animation FFI functions

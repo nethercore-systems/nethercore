@@ -336,7 +336,7 @@ impl App {
                         ui_action = Some(action);
                     }
                 }
-                AppMode::Playing { ref game_id } => {
+                AppMode::Playing { game_id } => {
                     // Game is rendered before egui, so we don't need a central panel
                     // Just show debug info if overlay is enabled
                     let _ = game_id; // Used in debug overlay

@@ -11,7 +11,7 @@ use crate::console::ConsoleInput;
 /// Returns None if:
 /// - ptr + len exceeds memory bounds
 /// - String is not valid UTF-8
-pub fn read_string_from_memory<T>(
+pub fn read_string_from_memory<T: 'static>(
     memory: Memory,
     ctx: impl AsContext<Data = T>,
     ptr: u32,
@@ -145,7 +145,7 @@ impl<I: ConsoleInput, S> HasDebugRegistry for GameStateWithConsole<I, S> {
 /// This prevents malicious or buggy games from allocating more memory
 /// than the console allows. The host enforces this limit at the wasmtime
 /// level, so games cannot bypass it.
-impl<I: ConsoleInput, S> ResourceLimiter for GameStateWithConsole<I, S> {
+impl<I: ConsoleInput, S: Send> ResourceLimiter for GameStateWithConsole<I, S> {
     fn memory_growing(
         &mut self,
         _current: usize,
