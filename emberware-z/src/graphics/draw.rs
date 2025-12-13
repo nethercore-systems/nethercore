@@ -58,22 +58,6 @@ impl ZGraphics {
         if !z_state.quad_batches.is_empty() {
             let total_instances: usize =
                 z_state.quad_batches.iter().map(|b| b.instances.len()).sum();
-            tracing::info!(
-                "Processing {} quad batches with {} total instances",
-                z_state.quad_batches.len(),
-                total_instances
-            );
-
-            // DEBUG: Log view/projection matrices
-            if !z_state.view_matrices.is_empty() && !z_state.proj_matrices.is_empty() {
-                tracing::info!(
-                    "  View matrix count: {}, Proj matrix count: {}",
-                    z_state.view_matrices.len(),
-                    z_state.proj_matrices.len()
-                );
-                tracing::info!("  View[0]: {:?}", z_state.view_matrices[0]);
-                tracing::info!("  Proj[0]: {:?}", z_state.proj_matrices[0]);
-            }
 
             // Accumulate all instances into one buffer and track batch offsets
             let mut all_instances = Vec::with_capacity(total_instances);

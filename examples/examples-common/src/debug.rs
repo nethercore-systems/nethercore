@@ -78,15 +78,15 @@ pub unsafe fn register_point_light_debug(
 
 /// Register Mode 2 (MR) material debug values
 pub unsafe fn register_mr_material_debug(
-    metallic: *const f32,
-    roughness: *const f32,
+    metallic: *const u8,
+    roughness: *const u8,
     emissive: *const f32,
     rim_intensity: *const f32,
     rim_power: *const f32,
 ) {
     debug_group_begin(b"material".as_ptr(), 8);
-    debug_register_f32(b"metallic".as_ptr(), 8, metallic);
-    debug_register_f32(b"roughness".as_ptr(), 9, roughness);
+    debug_register_u8(b"metallic".as_ptr(), 8, metallic);
+    debug_register_u8(b"roughness".as_ptr(), 9, roughness);
     debug_register_f32(b"emissive".as_ptr(), 8, emissive);
     debug_register_f32(b"rim_intensity".as_ptr(), 13, rim_intensity);
     debug_register_f32(b"rim_power".as_ptr(), 9, rim_power);

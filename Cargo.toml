@@ -96,4 +96,4 @@ pollster = "0.4"
 open = "5"
 
 # Performance - faster HashMap/HashSet
-hashbrown = "0.15"
+hashbrown = { version = "0.15", features = ["serde"] }

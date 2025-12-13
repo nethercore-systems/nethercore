@@ -2,9 +2,11 @@ mod cart;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
+use rayon::prelude::*;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Emberware build tasks
 #[derive(Parser)]
@@ -46,7 +48,6 @@ fn build_examples() -> Result<()> {
     fs::create_dir_all(&games_dir).context("Failed to create games directory")?;
 
     println!("Games directory: {}", games_dir.display());
-    println!();
 
     // Build ember CLI first if needed
     let ember_exe = ensure_ember_cli(&project_root)?;
@@ -69,13 +70,12 @@ fn build_examples() -> Result<()> {
         .collect();
 
     println!("Building {} examples...", examples.len());
-    println!();
 
-    let mut success_count = 0;
-    let mut fail_count = 0;
-    let mut skipped_count = 0;
+    let success_count = AtomicUsize::new(0);
+    let fail_count = AtomicUsize::new(0);
+    let skipped_count = AtomicUsize::new(0);
 
-    for example in examples {
+    examples.par_iter().for_each(|example| {
         let example_path = example.path();
         let example_name = example.file_name();
         let example_name_str = example_name.to_string_lossy();
@@ -90,18 +90,18 @@ fn build_examples() -> Result<()> {
             // Use ember build (compile + pack)
             match build_with_ember(&ember_exe, &example_path, &games_dir, &example_name_str) {
                 Ok(_) => {
-                    println!("  ✓ Installed");
-                    success_count += 1;
+                    println!("  ✓ {} installed", example_name_str);
+                    success_count.fetch_add(1, Ordering::Relaxed);
                 }
                 Err(e) => {
                     // Check if it's just missing assets (template example)
                     let err_str = e.to_string();
                     if err_str.contains("Failed to load") || err_str.contains("No such file") {
-                        println!("  ⊘ Skipped (missing assets - template example)");
-                        skipped_count += 1;
+                        println!("  ⊘ {} skipped (missing assets - template example)", example_name_str);
+                        skipped_count.fetch_add(1, Ordering::Relaxed);
                     } else {
-                        println!("  ✗ Build failed: {}", e);
-                        fail_count += 1;
+                        println!("  ✗ {} failed: {}", example_name_str, e);
+                        fail_count.fetch_add(1, Ordering::Relaxed);
                     }
                 }
             }
@@ -109,27 +109,28 @@ fn build_examples() -> Result<()> {
             // No ember.toml - use legacy WASM-only installation
             match build_wasm_only(&example_path, &games_dir, &example_name_str) {
                 Ok(_) => {
-                    println!("  ✓ Installed (WASM-only, no ember.toml)");
-                    success_count += 1;
+                    println!("  ✓ {} installed (WASM-only, no ember.toml)", example_name_str);
+                    success_count.fetch_add(1, Ordering::Relaxed);
                 }
                 Err(e) => {
-                    println!("  ✗ Build failed: {}", e);
-                    fail_count += 1;
+                    println!("  ✗ {} failed: {}", example_name_str, e);
+                    fail_count.fetch_add(1, Ordering::Relaxed);
                 }
             }
         }
-    }
+    });
 
     println!();
     println!(
         "Done! {} succeeded, {} skipped, {} failed",
-        success_count, skipped_count, fail_count
+        success_count.load(Ordering::Relaxed),
+        skipped_count.load(Ordering::Relaxed),
+        fail_count.load(Ordering::Relaxed)
     );
     println!("Examples installed to: {}", games_dir.display());
     println!("You can now run 'cargo run' to play them in Emberware Z.");
 
-    if skipped_count > 0 {
-        println!();
+    if skipped_count.load(Ordering::Relaxed) > 0 {
         println!("Note: Skipped examples are templates that demonstrate data pack usage.");
         println!("      Add assets to their assets/ folder and rebuild to use them.");
     }

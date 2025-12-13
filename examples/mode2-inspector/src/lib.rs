@@ -37,8 +37,8 @@ static mut ROTATION_SPEED: f32 = 30.0;
 static mut OBJECT_COLOR: u32 = 0xFFFFFFFF;
 
 // Material settings (Mode 2)
-static mut METALLIC: f32 = 0.0;
-static mut ROUGHNESS: f32 = 0.5;
+static mut METALLIC: u8 = 0;
+static mut ROUGHNESS: u8 = 128;
 static mut EMISSIVE: f32 = 0.0;
 static mut RIM_INTENSITY: f32 = 0.0;
 static mut RIM_POWER: f32 = 0.5;
@@ -117,9 +117,7 @@ pub extern "C" fn on_debug_change() {
         if SHAPE_INDEX < 0 { SHAPE_INDEX = 0; }
         if SHAPE_INDEX > 2 { SHAPE_INDEX = 2; }
 
-        // Clamp material values
-        METALLIC = METALLIC.clamp(0.0, 1.0);
-        ROUGHNESS = ROUGHNESS.clamp(0.0, 1.0);
+        // Clamp material values (metallic/roughness are u8, naturally clamped 0-255)
         EMISSIVE = EMISSIVE.clamp(0.0, 2.0);
         RIM_INTENSITY = RIM_INTENSITY.clamp(0.0, 1.0);
         RIM_POWER = RIM_POWER.clamp(0.0, 1.0);
@@ -161,8 +159,8 @@ unsafe fn register_debug_values() {
 
     // Material group
     debug_group_begin(b"material".as_ptr(), 8);
-    debug_register_f32(b"metallic".as_ptr(), 8, &METALLIC);
-    debug_register_f32(b"roughness".as_ptr(), 9, &ROUGHNESS);
+    debug_register_u8(b"metallic".as_ptr(), 8, &METALLIC);
+    debug_register_u8(b"roughness".as_ptr(), 9, &ROUGHNESS);
     debug_register_f32(b"emissive".as_ptr(), 8, &EMISSIVE);
     debug_register_f32(b"rim_intensity".as_ptr(), 13, &RIM_INTENSITY);
     debug_register_f32(b"rim_power".as_ptr(), 9, &RIM_POWER);
@@ -275,9 +273,9 @@ pub extern "C" fn render() {
         // Apply lights
         apply_lights();
 
-        // Apply material
-        material_metallic(METALLIC);
-        material_roughness(ROUGHNESS);
+        // Apply material (convert u8 to f32 for metallic/roughness)
+        material_metallic(METALLIC as f32 / 255.0);
+        material_roughness(ROUGHNESS as f32 / 255.0);
         material_emissive(EMISSIVE);
         material_rim(RIM_INTENSITY, RIM_POWER);
 

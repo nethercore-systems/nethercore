@@ -89,6 +89,7 @@ extern "C" {
     fn debug_group_begin(name: *const u8, name_len: u32);
     fn debug_group_end();
     fn debug_register_bool(name: *const u8, name_len: u32, ptr: *const u8);
+    fn debug_register_u8(name: *const u8, name_len: u32, ptr: *const u8);
     fn debug_register_f32(name: *const u8, name_len: u32, ptr: *const f32);
     fn debug_register_color(name: *const u8, name_len: u32, ptr: *const u8);
 }
@@ -106,8 +107,8 @@ static mut USE_UNIFORM_EMISSIVE_FLAG: u8 = 0;
 // Uniform material values used when overrides are enabled
 // These match what the non-UV sphere uses
 static mut UNIFORM_COLOR: u32 = 0xFFB450FF; // Warm orange
-static mut UNIFORM_METALLIC: f32 = 0.9;
-static mut UNIFORM_ROUGHNESS: f32 = 0.2;
+static mut UNIFORM_METALLIC: u8 = 230; // ~0.9 * 255
+static mut UNIFORM_ROUGHNESS: u8 = 51;  // ~0.2 * 255
 static mut UNIFORM_EMISSIVE: f32 = 0.0;
 
 // Mesh handles
@@ -190,8 +191,8 @@ unsafe fn register_debug_values() {
     // Uniform values group - these are used when overrides are enabled
     debug_group_begin(b"Uniform Values".as_ptr(), 14);
     debug_register_color(b"color".as_ptr(), 5, &UNIFORM_COLOR as *const u32 as *const u8);
-    debug_register_f32(b"metallic".as_ptr(), 8, &UNIFORM_METALLIC);
-    debug_register_f32(b"roughness".as_ptr(), 9, &UNIFORM_ROUGHNESS);
+    debug_register_u8(b"metallic".as_ptr(), 8, &UNIFORM_METALLIC);
+    debug_register_u8(b"roughness".as_ptr(), 9, &UNIFORM_ROUGHNESS);
     debug_register_f32(b"emissive".as_ptr(), 8, &UNIFORM_EMISSIVE);
     debug_group_end();
 }
@@ -326,8 +327,8 @@ fn draw_uv_sphere(x: f32, y: f32, z: f32, radius: f32) {
 
         // Set uniform values (used when corresponding override flag is enabled)
         set_color(UNIFORM_COLOR);
-        material_metallic(UNIFORM_METALLIC);
-        material_roughness(UNIFORM_ROUGHNESS);
+        material_metallic(UNIFORM_METALLIC as f32 / 255.0);
+        material_roughness(UNIFORM_ROUGHNESS as f32 / 255.0);
         material_emissive(UNIFORM_EMISSIVE);
 
         // Transform and draw
@@ -358,8 +359,8 @@ fn draw_non_uv_sphere(x: f32, y: f32, z: f32, radius: f32) {
 
         // Set material values - these match the uniform values in the debug panel
         set_color(UNIFORM_COLOR);
-        material_metallic(UNIFORM_METALLIC);
-        material_roughness(UNIFORM_ROUGHNESS);
+        material_metallic(UNIFORM_METALLIC as f32 / 255.0);
+        material_roughness(UNIFORM_ROUGHNESS as f32 / 255.0);
         material_emissive(UNIFORM_EMISSIVE);
 
         // Transform and draw

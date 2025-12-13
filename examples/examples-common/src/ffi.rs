@@ -125,6 +125,7 @@ extern "C" {
     pub fn debug_group_end();
     pub fn debug_register_f32(name: *const u8, name_len: u32, ptr: *const f32);
     pub fn debug_register_i32(name: *const u8, name_len: u32, ptr: *const i32);
+    pub fn debug_register_u8(name: *const u8, name_len: u32, ptr: *const u8);
     pub fn debug_register_bool(name: *const u8, name_len: u32, ptr: *const u8);
     pub fn debug_register_color(name: *const u8, name_len: u32, ptr: *const u8);
     pub fn debug_watch_f32(name: *const u8, name_len: u32, ptr: *const f32);

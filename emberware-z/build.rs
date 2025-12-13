@@ -292,10 +292,11 @@ fn generate_shader(mode: u8, format: u8) -> Result<String, String> {
             } else {
                 shader = shader.replace("//FS_MODE2_3_TEXTURES", "");
             }
-            // Mode 2: Energy conservation - diffuse reduced by Fresnel
+            // Mode 2: Energy conservation - diffuse reduced by Fresnel (roughness-dependent)
+            // value1 contains roughness at this point (before conversion to shininess)
             shader = shader.replace(
                 "//FS_MODE2_3_DIFFUSE_FRESNEL",
-                "let diffuse_fresnel = one_minus_F;",
+                "let diffuse_fresnel = mix(one_minus_F, vec3<f32>(1.0), value1);",
             );
         }
         3 => {

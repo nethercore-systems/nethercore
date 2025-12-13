@@ -764,16 +764,6 @@ impl ZGraphics {
 
                         const UNIT_QUAD_INDEX_COUNT: u32 = 6;
 
-                        tracing::info!(
-                            "Drawing {} quad instances at base_instance {} (indices {}..{}, base_vertex {}, textures: {:?})",
-                            instance_count,
-                            base_instance,
-                            first_index,
-                            first_index + UNIT_QUAD_INDEX_COUNT,
-                            base_vertex,
-                            texture_slots
-                        );
-
                         // Indexed draw with GPU instancing (quads always use indices)
                         let index_buffer = self
                             .buffer_manager
@@ -832,10 +822,6 @@ impl ZGraphics {
                         ..
                     } => {
                         // Sky rendering: Fullscreen triangle with procedural gradient
-                        tracing::info!(
-                            "Drawing sky with shading_state_index {} (vertices 0..3)",
-                            shading_state_index
-                        );
 
                         // Draw fullscreen triangle (3 vertices, no vertex buffer)
                         // Uses shading_state_index as instance range to pass index to shader
