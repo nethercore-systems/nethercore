@@ -122,9 +122,12 @@ impl App {
         let egui_renderer = egui_wgpu::Renderer::new(
             graphics.device(),
             graphics.surface_format(),
-            None,
-            1,
-            false, // dithering
+            egui_wgpu::RendererOptions {
+                depth_stencil_format: None,
+                msaa_samples: 1,
+                dithering: false,
+                predictable_texture_filtering: false,
+            },
         );
 
         tracing::info!("Graphics and egui initialized successfully");

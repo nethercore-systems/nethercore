@@ -76,7 +76,7 @@ impl Button {
 /// This struct is POD (Plain Old Data) for efficient serialization over the network
 /// and for GGRS rollback state management.
 #[repr(C)]
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Pod, Zeroable)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Pod, Zeroable, serde::Serialize, serde::Deserialize)]
 pub struct ZInput {
     /// Button bitmask: D-pad + A/B/X/Y + L/R bumpers + L3/R3 + Start/Select
     /// Bit layout: UP(0), DOWN(1), LEFT(2), RIGHT(3), A(4), B(5), X(6), Y(7),

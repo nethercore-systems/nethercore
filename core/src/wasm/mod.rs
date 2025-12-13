@@ -360,7 +360,7 @@ mod tests {
     use bytemuck::{Pod, Zeroable};
 
     #[repr(C)]
-    #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Pod, Zeroable)]
+    #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Pod, Zeroable, serde::Serialize, serde::Deserialize)]
     struct TestInput {
         buttons: u16,
     }

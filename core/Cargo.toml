@@ -15,7 +15,7 @@ z-common = { path = "../z-common" }
 wasmtime = { workspace = true }
 
 # WASM static analysis (for build-time config detection)
-wasmparser = "0.219"
+wasmparser = { workspace = true }
 
 # Rollback netcode
 ggrs = { workspace = true }
@@ -44,22 +44,22 @@ rand = { workspace = true }
 rand_pcg = { workspace = true }
 
 # Fast checksums for rollback state (SIMD-optimized)
-xxhash-rust = { version = "0.8", features = ["xxh3"] }
+xxhash-rust = { workspace = true }
 
 # Serialization for network messages
 bincode = { workspace = true }
 
 # Application framework dependencies (Step 1)
-gilrs = "0.10"                       # Gamepad input
+gilrs = { workspace = true }         # Gamepad input (NOTE: upgraded from 0.10 to 0.11)
 serde = { workspace = true }
-toml = "0.8"                         # Config file format
-directories = "5"                    # Platform-specific paths
+toml = { workspace = true }          # Config file format
+directories = { workspace = true }   # Platform-specific paths
 hashbrown = { workspace = true }     # Fast HashMap
 tracing = { workspace = true }       # Logging
-egui = "0.30"                        # Debug overlay UI
-serde_json = "1.0"                   # JSON for game manifests
+egui = { workspace = true }          # Debug overlay UI
+serde_json = { workspace = true }    # JSON for game manifests
 
 [dev-dependencies]
 # WAT text format parser for test WASM modules
-wat = "1"
-tempfile = "3"                       # Temporary directories for tests
+wat = { workspace = true }
+tempfile = { workspace = true }      # Temporary directories for tests

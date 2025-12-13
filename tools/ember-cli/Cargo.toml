@@ -15,34 +15,34 @@ emberware-shared = { path = "../../shared" }
 z-common = { path = "../../z-common" }
 
 # CLI
-clap = { version = "4", features = ["derive"] }
+clap = { workspace = true }
 
 # Error handling
-anyhow = "1"
+anyhow = { workspace = true }
 
 # Serialization
-toml = "0.8"
-serde = { version = "1", features = ["derive"] }
-bitcode = "0.6"
+toml = { workspace = true }
+serde = { workspace = true }
+bitcode = { workspace = true }
 
 # Image processing (for texture conversion)
-image = "0.24"
+image = { workspace = true }  # NOTE: Upgraded from 0.24 to 0.25
 
 # Texture compression
-intel_tex_2 = "0.5"  # BC7 compression (ISPC-based, high quality)
+intel_tex_2 = { workspace = true }  # BC7 compression (ISPC-based, high quality)
 
 # Parallel processing
-rayon = "1.10"
+rayon = { workspace = true }
 
 # Filesystem
-directories = "5"
-walkdir = "2"
+directories = { workspace = true }
+walkdir = { workspace = true }
 
 # Time
-chrono = "0.4"
+chrono = { workspace = true }
 
 # Executable finding
-which = "6"
+which = { workspace = true }
 
 [dev-dependencies]
-tempfile = "3"
+tempfile = { workspace = true }

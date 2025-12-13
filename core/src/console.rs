@@ -102,7 +102,17 @@ pub trait ConsoleResourceManager: Send + 'static {
 /// Must be POD (Plain Old Data) for efficient serialization over the network
 /// and for GGRS rollback state management.
 pub trait ConsoleInput:
-    Clone + Copy + Default + PartialEq + Pod + Zeroable + Send + Sync + 'static
+    Clone
+    + Copy
+    + Default
+    + PartialEq
+    + Pod
+    + Zeroable
+    + serde::Serialize
+    + serde::de::DeserializeOwned
+    + Send
+    + Sync
+    + 'static
 {
 }
 

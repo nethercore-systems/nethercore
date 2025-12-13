@@ -53,17 +53,12 @@ impl Audio for TestAudio {
 
 /// Test input type
 #[repr(C)]
-#[derive(Clone, Copy, Default, PartialEq, Debug)]
+#[derive(Clone, Copy, Default, PartialEq, Debug, Pod, Zeroable, serde::Serialize, serde::Deserialize)]
 pub struct TestInput {
     pub buttons: u16,
     pub x: i8,
     pub y: i8,
 }
-
-// SAFETY: TestInput is #[repr(C)] with only primitive types (u16, i8, i8).
-// All bit patterns are valid for these types, satisfying Pod and Zeroable requirements.
-unsafe impl Pod for TestInput {}
-unsafe impl Zeroable for TestInput {}
 impl ConsoleInput for TestInput {}
 
 /// Test resource manager (no-op)

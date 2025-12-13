@@ -17,28 +17,28 @@ emberware-shared = { path = "../../shared" }
 hashbrown = { workspace = true }
 
 # CLI
-clap = { version = "4", features = ["derive"] }
+clap = { workspace = true }
 
 # Serialization
-toml = "0.8"
-serde = { version = "1", features = ["derive"] }
+toml = { workspace = true }
+serde = { workspace = true }
 
 # Asset loading
-gltf = "1.4"
-image = "0.25"
-hound = "3.5"  # WAV loading
-bytemuck = "1"
+gltf = { workspace = true }
+image = { workspace = true }
+hound = { workspace = true }  # WAV loading
+bytemuck = { workspace = true }
 
 # Texture compression
-intel_tex_2 = "0.5"  # BC7 compression (ISPC-based, high quality)
+intel_tex_2 = { workspace = true }  # BC7 compression (ISPC-based, high quality)
 
 # Error handling
-anyhow = "1"
-thiserror = "2"
+anyhow = { workspace = true }
+thiserror = { workspace = true }
 
 # Logging
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
-tempfile = "3"
+tempfile = { workspace = true }

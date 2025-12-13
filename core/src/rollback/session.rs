@@ -182,7 +182,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static> RollbackSession<I, S> {
     ) -> Result<Self, GgrsError> {
         let session = SessionBuilder::<EmberwareConfig<I>>::new()
             .with_num_players(config.num_players)
-            .with_max_prediction_window(config.max_prediction_frames)?
+            .with_max_prediction_window(config.max_prediction_frames)
             .with_input_delay(config.input_delay)
             .with_check_distance(2)
             .start_synctest_session()?;
@@ -257,7 +257,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static> RollbackSession<I, S> {
     {
         let mut builder = SessionBuilder::<EmberwareConfig<I>>::new()
             .with_num_players(config.num_players)
-            .with_max_prediction_window(config.max_prediction_frames)?
+            .with_max_prediction_window(config.max_prediction_frames)
             .with_input_delay(config.input_delay)
             .with_fps(config.fps)?
             .with_disconnect_timeout(Duration::from_millis(config.disconnect_timeout))
@@ -830,17 +830,12 @@ mod tests {
 
     // Test input type for unit tests
     #[repr(C)]
-    #[derive(Clone, Copy, Default, PartialEq, Debug)]
+    #[derive(Clone, Copy, Default, PartialEq, Debug, Pod, Zeroable, serde::Serialize, serde::Deserialize)]
     struct TestInput {
         buttons: u16,
         x: i8,
         y: i8,
     }
-
-    // SAFETY: TestInput is #[repr(C)] with only primitive types (u16, i8, i8).
-    // All bit patterns are valid for these types, satisfying Pod and Zeroable requirements.
-    unsafe impl Pod for TestInput {}
-    unsafe impl Zeroable for TestInput {}
     impl ConsoleInput for TestInput {}
 
     #[test]

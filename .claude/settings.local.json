@@ -21,7 +21,9 @@
       "Bash(git log:*)",
       "Bash(ls:*)",
       "Bash(xxd:*)",
-      "Bash(findstr:*)"    
+      "Bash(findstr:*)",
+      "Bash(cargo doc:*)",
+      "Bash(cargo tree:*)"
     ],
     "deny": [],
     "ask": []

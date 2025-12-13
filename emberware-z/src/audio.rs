@@ -47,7 +47,7 @@ struct SoundSource {
 }
 
 impl Iterator for SoundSource {
-    type Item = i16;
+    type Item = f32;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.position >= self.data.len() {
@@ -55,13 +55,14 @@ impl Iterator for SoundSource {
         } else {
             let sample = self.data[self.position];
             self.position += 1;
-            Some(sample)
+            // Convert i16 to f32 normalized (-1.0 to 1.0)
+            Some(sample as f32 / 32768.0)
         }
     }
 }
 
 impl Source for SoundSource {
-    fn current_frame_len(&self) -> Option<usize> {
+    fn current_span_len(&self) -> Option<usize> {
         Some(self.data.len() - self.position)
     }
 
@@ -88,13 +89,13 @@ struct PannedSource<S> {
     source: S,
     left_gain: f32,
     right_gain: f32,
-    current_sample: Option<i16>, // Cache current mono sample for stereo output
+    current_sample: Option<f32>, // Cache current mono sample for stereo output
     is_left_channel: bool,       // Track which stereo channel to output next
 }
 
 impl<S> PannedSource<S>
 where
-    S: Source<Item = i16>,
+    S: Source<Item = f32>,
 {
     /// Create a new panned source with the given pan value
     ///
@@ -126,9 +127,9 @@ where
 
 impl<S> Iterator for PannedSource<S>
 where
-    S: Source<Item = i16>,
+    S: Source<Item = f32>,
 {
-    type Item = i16;
+    type Item = f32;
 
     fn next(&mut self) -> Option<Self::Item> {
         // For stereo output, we need to output left and right samples alternately.
@@ -141,25 +142,25 @@ where
             self.is_left_channel = false;
 
             // Output left channel (scaled by left gain)
-            Some((sample as f32 * self.left_gain) as i16)
+            Some(sample * self.left_gain)
         } else {
             // Use cached sample for right channel
             let sample = self.current_sample?;
             self.is_left_channel = true;
 
             // Output right channel (scaled by right gain)
-            Some((sample as f32 * self.right_gain) as i16)
+            Some(sample * self.right_gain)
         }
     }
 }
 
 impl<S> Source for PannedSource<S>
 where
-    S: Source<Item = i16>,
+    S: Source<Item = f32>,
 {
-    fn current_frame_len(&self) -> Option<usize> {
+    fn current_span_len(&self) -> Option<usize> {
         // Each mono frame becomes 2 stereo samples
-        self.source.current_frame_len().map(|len| len * 2)
+        self.source.current_span_len().map(|len| len * 2)
     }
 
     fn channels(&self) -> u16 {
@@ -230,14 +231,13 @@ struct AudioServer {
 impl AudioServer {
     /// Create new audio server (runs in background thread)
     fn new() -> Result<Self, String> {
-        let (stream, stream_handle) = OutputStream::try_default()
+        let stream = rodio::OutputStreamBuilder::open_default_stream()
             .map_err(|e| format!("Failed to create audio output stream: {}", e))?;
 
         // Create 16 channel sinks
         let mut channels = Vec::with_capacity(MAX_CHANNELS);
         for _ in 0..MAX_CHANNELS {
-            let sink = Sink::try_new(&stream_handle)
-                .map_err(|e| format!("Failed to create audio sink: {}", e))?;
+            let sink = Sink::connect_new(stream.mixer());
             channels.push(ChannelState {
                 sink,
                 current_sound: None,
@@ -247,8 +247,7 @@ impl AudioServer {
         }
 
         // Create dedicated music sink
-        let music_sink = Sink::try_new(&stream_handle)
-            .map_err(|e| format!("Failed to create music sink: {}", e))?;
+        let music_sink = Sink::connect_new(stream.mixer());
 
         Ok(Self {
             _stream: stream,

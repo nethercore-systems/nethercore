@@ -56,18 +56,6 @@ pub fn write_ember_texture<W: Write>(
     Ok(())
 }
 
-/// Write an RGBA8 EmberTexture file (legacy compatibility)
-///
-/// This is a convenience wrapper that assumes RGBA8 format.
-pub fn write_ember_texture_rgba8<W: Write>(
-    w: &mut W,
-    width: u32,
-    height: u32,
-    pixels: &[u8],
-) -> Result<()> {
-    write_ember_texture(w, width as u16, height as u16, TextureFormat::Rgba8, pixels)
-}
-
 /// Write a complete EmberSound file
 pub fn write_ember_sound<W: Write>(w: &mut W, samples: &[i16]) -> Result<()> {
     let header = EmberZSoundHeader::new(samples.len() as u32);

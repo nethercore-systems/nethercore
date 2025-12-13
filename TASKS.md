@@ -5,12 +5,6 @@
 
 ## TODO
 
-### Blend Mode in Render State vs ZState (cant change between texture calls)
-
-### Figure out Animation System
-
-### Mode1 Debug stuff is all messed up
-
 ### **[PERFORMANCE FEATURE] Implement Pipeline Caching
 - Small speed up when launching the program
 
