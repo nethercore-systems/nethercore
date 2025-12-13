@@ -5,9 +5,6 @@
 
 ## TODO
 
-### **[PERFORMANCE FEATURE] Implement Pipeline Caching
-- Small speed up when launching the program
-
 ### **[STABILITY] Reduce unwrap/expect Usage**
 
 **Current State:**
@@ -476,93 +473,6 @@ warn!("Invalid texture ID: {}", texture_id);  // Logged but game doesn't know
 - We are not able to resize the window to a size equal to the fantasy console (and game ROMs) initialized resolution. We should be able to scale down to a 1x scaling, but not any smaller to prevent a crash
 - These problems may be due to some kind of egui scaling based on the OS scaling rules.
 
-### **[POLISH] Add axis-to-keyboard binding support**
-
-**Status:** Not yet implemented
-
-**Current State:**
-- Keyboard bindings only support button presses (digital input)
-- Analog sticks and triggers cannot be controlled via keyboard
-- Settings UI has deadzone sliders for analog inputs
-
-**What's Needed:**
-Allow users to bind keyboard keys to simulate analog stick axes and triggers.
-
-**Implementation Plan:**
-
-1. **Extend KeyboardMapping struct** in `input.rs`:
-   - Add fields for axis bindings (e.g., `left_stick_up_key`, `left_stick_down_key`, etc.)
-   - Each axis direction gets its own key binding
-   - When pressed, outputs 0 or 1 (binary analog values)
-
-2. **Update InputManager**:
-   - Check axis key bindings in addition to button bindings
-   - Combine axis keys to generate stick/trigger values
-   - Examples:
-     - Left stick: W/S for Y axis (-1/+1), A/D for X axis (-1/+1)
-     - Triggers: Q/E for left/right trigger (0 or 255)
-
-3. **Settings UI additions** in `settings_ui.rs`:
-   - Add "Analog Sticks" section to Controls tab
-   - Add "Triggers" section to Controls tab
-   - Each axis gets 4 key bindings (left stick: up/down/left/right)
-   - Triggers get 2 key bindings (left trigger, right trigger)
-   - Use same click-to-rebind UX as existing button bindings
-
-4. **Config serialization**:
-   - Update serde derives to include new axis binding fields
-   - Provide sensible defaults (e.g., WASD for left stick, arrows for right stick)
-
-**Files to Modify:**
-- `emberware-z/src/input.rs` - Add axis binding fields to KeyboardMapping
-- `emberware-z/src/settings_ui.rs` - Add axis remapping UI sections
-- `emberware-z/src/config.rs` - Ensure new fields serialize correctly
-
-**User Benefit:**
-Keyboard players can use analog stick inputs in games, enabling full control without a gamepad.
-
----
-
-### **[EXAMPLES] Create comprehensive example suite**
-
-**Status:** Examples exist but coverage gaps
-
-**Current Examples (8):**
-1. ✅ hello-world - 2D text + rectangles, basic input
-2. ✅ triangle - Immediate mode 3D (POS_COLOR)
-3. ✅ textured-quad - Textured geometry
-4. ✅ cube - 3D cube mesh
-5. ✅ lighting - PBR mode (mode 2), dynamic lights
-6. ✅ billboard - All 4 billboard modes
-7. ✅ skinned-mesh - GPU skinning demo
-8. ✅ platformer - 2D platformer game
-
-**Missing Examples:**
-- ❌ **Mode 0 (Unlit)** example - No example demonstrates unlit rendering
-- ❌ **Mode 1 (Matcap)** example - No matcap rendering demo, no demo of multiply/add/hsv modulate
-- ❌ **Mode 3 (SS BP)** example - No demo
-- ❌ **Custom fonts** - No font loading demo
-
-**Recommended New Examples:**
-1. **matcap-showcase** - All 3 matcap slots with blend modes (mode 1)
-2. **unlit-lowpoly** - PS1-style low-poly with vertex colors (mode 0)
-3. **hybrid-character** - Character with matcap ambient + PBR lighting (mode 3)
-4. **audio-test** - Sound effects, music, channels (CRITICAL - audio undocumented!)
-5. **custom-font** - Load bitmap font, render styled text
-6. **particle-system** - Hundreds of sprites, blend modes
-7. **spatial-audio** - A sound source rotating around a "listener", and audio pans around the object
-8. **rendering mode examples** - Show different scenes in from various rendering modes. Explain the material system (textures and channels)
-
-**Example Location:**
-- Move from `/examples` to `/emberware-z/examples` (they're Z-specific, not core)
-- Update Cargo workspace to reflect new location
-- Update README to point to new location
-
-**Files to Modify:**
-- Create 7 new example projects
-- Move existing examples to emberware-z/examples/
-- Update root Cargo.toml workspace members
-
 ---
 
 ### **[NEEDS CLARIFICATION] Define and enforce console runtime limits**
@@ -649,5 +559,3 @@ This enables fighting games with unlocked characters, RPGs with player stats, et
 - Spectators: receive all save data but don't contribute a slot
 
 ---
-
-
