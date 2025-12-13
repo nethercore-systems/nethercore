@@ -8,7 +8,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 libm = "0.2"
-inspector-common = { path = "../inspector-common" }
 
 [profile.release]
 opt-level = "s"

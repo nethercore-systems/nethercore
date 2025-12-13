@@ -1,6 +1,6 @@
 //! Color constants
 //!
-//! Common color values as packed u32 (0xRRGGBBAA format).
+//! All colors use packed u32 format (0xRRGGBBAA).
 
 pub const WHITE: u32 = 0xFFFFFFFF;
 pub const BLACK: u32 = 0x000000FF;

@@ -19,7 +19,7 @@
 #![no_main]
 
 use core::panic::PanicInfo;
-use inspector_common::*;
+use examples_common::*;
 use libm::{cosf, sinf};
 
 #[panic_handler]

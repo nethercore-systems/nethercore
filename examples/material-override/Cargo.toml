@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 libm = "0.2"
+examples-common = { path = "../examples-common" }
 
 [lib]
 crate-type = ["cdylib"]

@@ -87,8 +87,8 @@ static mut ORBIT_RADIUS: f32 = 3.0;
 
 // Visual effects
 static mut ENABLE_ROTATION: u8 = 1; // bool stored as u8
-static mut PLAYER_COLOR: [u8; 4] = [255, 100, 100, 255]; // RGBA
-static mut ORBIT_COLOR: [u8; 4] = [100, 100, 255, 255];
+static mut PLAYER_COLOR: u32 = 0xFF6464FF; // Red
+static mut ORBIT_COLOR: u32 = 0x6464FFFF; // Blue
 
 // Derived/computed values (updated by change callback)
 static mut CHANGE_COUNT: i32 = 0; // Tracks how many times debug values changed
@@ -149,7 +149,7 @@ unsafe fn register_debug_values() {
     debug_register_f32(b"y".as_ptr(), 1, &PLAYER_Y);
     debug_register_f32(b"speed".as_ptr(), 5, &PLAYER_SPEED);
     debug_register_f32(b"scale".as_ptr(), 5, &PLAYER_SCALE);
-    debug_register_color(b"color".as_ptr(), 5, PLAYER_COLOR.as_ptr());
+    debug_register_color(b"color".as_ptr(), 5, &PLAYER_COLOR as *const u32 as *const u8);
     debug_group_end();
 
     // World group
@@ -162,7 +162,7 @@ unsafe fn register_debug_values() {
     // Effects group
     debug_group_begin(b"effects".as_ptr(), 7);
     debug_register_bool(b"enable_rotation".as_ptr(), 15, &ENABLE_ROTATION);
-    debug_register_color(b"orbit_color".as_ptr(), 11, ORBIT_COLOR.as_ptr());
+    debug_register_color(b"orbit_color".as_ptr(), 11, &ORBIT_COLOR as *const u32 as *const u8);
     debug_group_end();
 
     // Stats group (derived values, updated by change callback)
@@ -189,14 +189,11 @@ pub extern "C" fn render() {
         push_translate(PLAYER_X, PLAYER_Y, 0.0);
         push_scale(PLAYER_SCALE, PLAYER_SCALE, PLAYER_SCALE);
 
-        // Convert RGBA to u32 color
-        let player_color = color_to_u32(&PLAYER_COLOR);
-        set_color(player_color);
+        set_color(PLAYER_COLOR);
         draw_mesh(CUBE_MESH);
 
         // Draw orbiting spheres
-        let orbit_color = color_to_u32(&ORBIT_COLOR);
-        set_color(orbit_color);
+        set_color(ORBIT_COLOR);
 
         let count = OBJECT_COUNT.max(0).min(8); // Clamp to reasonable range
         for i in 0..count {
@@ -217,12 +214,4 @@ pub extern "C" fn render() {
             draw_mesh(SPHERE_MESH);
         }
     }
-}
-
-/// Convert RGBA bytes to u32 color
-fn color_to_u32(rgba: &[u8; 4]) -> u32 {
-    ((rgba[0] as u32) << 24)
-        | ((rgba[1] as u32) << 16)
-        | ((rgba[2] as u32) << 8)
-        | (rgba[3] as u32)
 }
