@@ -37,7 +37,7 @@ extern "C" {
 static mut TEXTURE: u32 = 0;
 
 /// 8x8 checkerboard pattern (0xRRGGBBAA format) - cyan/magenta
-const CHECKERBOARD: [u32; 64] = checkerboard_8x8(0x00FFFFFF, 0xFF00FFFF);
+const CHECKERBOARD: [u8; 256] = checkerboard_8x8(0x00FFFFFF, 0xFF00FFFF);
 
 #[no_mangle]
 pub extern "C" fn init() {
@@ -46,7 +46,7 @@ pub extern "C" fn init() {
         set_clear_color(0x1a1a2eFF);
 
         // Load the checkerboard texture
-        TEXTURE = load_texture(8, 8, CHECKERBOARD.as_ptr() as *const u8);
+        TEXTURE = load_texture(8, 8, CHECKERBOARD.as_ptr());
 
         // Use nearest-neighbor filtering for crisp pixel art look
         texture_filter(0);

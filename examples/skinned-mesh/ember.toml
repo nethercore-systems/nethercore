@@ -1,0 +1,5 @@
+[game]
+id = "skinned-mesh"
+title = "Skinned Mesh"
+author = "Emberware Examples"
+version = "0.1.0"

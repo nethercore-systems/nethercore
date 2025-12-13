@@ -1,0 +1,5 @@
+[game]
+id = "hello-world"
+title = "Hello World"
+author = "Emberware Examples"
+version = "0.1.0"

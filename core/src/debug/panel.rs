@@ -513,26 +513,21 @@ impl DebugPanel {
                     None
                 }
             }
-            // Color -> color picker
+            // Color -> color picker using Color32 directly (avoids f32 conversion issues)
             (ValueType::Color, _) => {
                 let (r, g, b, a) = current.as_color();
-                let mut color = [
-                    r as f32 / 255.0,
-                    g as f32 / 255.0,
-                    b as f32 / 255.0,
-                    a as f32 / 255.0,
-                ];
+                let mut color = egui::Color32::from_rgba_unmultiplied(r, g, b, a);
                 let mut changed = false;
                 ui.horizontal(|ui| {
                     ui.label(&reg_value.name);
-                    changed = ui.color_edit_button_rgba_unmultiplied(&mut color).changed();
+                    changed = ui.color_edit_button_srgba(&mut color).changed();
                 });
                 if changed {
                     Some(DebugValue::Color {
-                        r: (color[0] * 255.0).round() as u8,
-                        g: (color[1] * 255.0).round() as u8,
-                        b: (color[2] * 255.0).round() as u8,
-                        a: (color[3] * 255.0).round() as u8,
+                        r: color.r(),
+                        g: color.g(),
+                        b: color.b(),
+                        a: color.a(),
                     })
                 } else {
                     None

@@ -1,4 +1,6 @@
-//! Run command - build + pack + launch in emulator
+//! Run command - build + launch in emulator
+//!
+//! Orchestrates: compile → pack → launch
 
 use anyhow::{Context, Result};
 use clap::Args;
@@ -6,7 +8,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 use crate::build::{self, BuildArgs};
-use crate::pack::{self, PackArgs};
+use crate::manifest::EmberManifest;
 
 /// Arguments for the run command
 #[derive(Args)]
@@ -15,7 +17,7 @@ pub struct RunArgs {
     #[arg(short, long)]
     pub project: Option<PathBuf>,
 
-    /// Path to ember.toml manifest file
+    /// Path to ember.toml manifest file (relative to project directory)
     #[arg(short, long, default_value = "ember.toml")]
     pub manifest: PathBuf,
 
@@ -23,7 +25,7 @@ pub struct RunArgs {
     #[arg(long)]
     pub debug: bool,
 
-    /// Don't rebuild, just repack and run
+    /// Don't rebuild, just launch existing ROM
     #[arg(long)]
     pub no_build: bool,
 }
@@ -35,60 +37,56 @@ pub fn execute(args: RunArgs) -> Result<()> {
         .clone()
         .unwrap_or_else(|| std::env::current_dir().unwrap());
 
+    let manifest_path = project_dir.join(&args.manifest);
+
     // Step 1: Build (unless --no-build)
     if !args.no_build {
-        println!("=== Building ===");
         build::execute(BuildArgs {
             project: Some(project_dir.clone()),
+            manifest: args.manifest.clone(),
+            output: None,
             debug: args.debug,
+            no_compile: false,
         })?;
         println!();
     }
 
-    // Step 2: Pack
-    println!("=== Packing ===");
-    let manifest_path = project_dir.join(&args.manifest);
-    pack::execute(PackArgs {
-        manifest: manifest_path.clone(),
-        output: None,
-        wasm: None,
-    })?;
-    println!();
-
-    // Step 3: Run
-    println!("=== Running ===");
+    // Step 2: Launch
+    println!("=== Launching ===");
 
     // Read manifest to get game ID
-    let manifest_content =
-        std::fs::read_to_string(&manifest_path).context("Failed to read ember.toml")?;
-    let manifest: toml::Value =
-        toml::from_str(&manifest_content).context("Failed to parse ember.toml")?;
+    let manifest = EmberManifest::load(&manifest_path)?;
+    let rom_path = project_dir.join(format!("{}.ewz", manifest.game.id));
 
-    let game_id = manifest
-        .get("game")
-        .and_then(|g| g.get("id"))
-        .and_then(|id| id.as_str())
-        .context("Missing game.id in ember.toml")?;
-
-    let rom_path = project_dir.join(format!("{}.ewz", game_id));
+    if !rom_path.exists() {
+        anyhow::bail!(
+            "ROM file not found: {}\nRun 'ember build' first.",
+            rom_path.display()
+        );
+    }
 
     // Find emberware executable
-    // Try several locations:
-    // 1. In PATH
-    // 2. In workspace target directory
-    // 3. Relative to ember-cli
     let emberware_exe = find_emberware_exe()?;
 
     println!(
-        "Launching: {} {}",
+        "  Launching: {} {}",
         emberware_exe.display(),
         rom_path.display()
     );
 
-    let status = Command::new(&emberware_exe)
-        .arg(&rom_path)
-        .status()
-        .context("Failed to run emberware")?;
+    // Handle special "cargo:run" marker
+    let status = if emberware_exe.to_string_lossy() == "cargo:run" {
+        Command::new("cargo")
+            .args(["run", "-p", "emberware-z", "--"])
+            .arg(&rom_path)
+            .status()
+            .context("Failed to run 'cargo run'")?
+    } else {
+        Command::new(&emberware_exe)
+            .arg(&rom_path)
+            .status()
+            .context("Failed to run emberware")?
+    };
 
     if !status.success() {
         anyhow::bail!("Emberware exited with error");

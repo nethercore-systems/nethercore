@@ -20,7 +20,8 @@
       "Bash(tree:*)",
       "Bash(git log:*)",
       "Bash(ls:*)",
-      "Bash(xxd:*)"
+      "Bash(xxd:*)",
+      "Bash(findstr:*)"    
     ],
     "deny": [],
     "ask": []

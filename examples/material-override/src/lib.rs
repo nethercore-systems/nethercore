@@ -120,11 +120,11 @@ static mut MRE_TEXTURE: u32 = 0;
 
 // Texture data (compile-time generated checkerboards, 0xRRGGBBAA format)
 // Albedo: cyan/magenta checkerboard
-const ALBEDO_DATA: [u32; 64] = checkerboard_8x8(0x00C8C8FF, 0xC800C8FF);
+const ALBEDO_DATA: [u8; 256] = checkerboard_8x8(0x00C8C8FF, 0xC800C8FF);
 // MRE: metallic/roughness/emissive in R/G/B channels
 // Pattern A: high metallic (255), low roughness (51 = 0.2), no emissive (M=1.0, R=0.2, E=0.0)
 // Pattern B: low metallic (0), high roughness (204 = 0.8), no emissive (M=0.0, R=0.8, E=0.0)
-const MRE_DATA: [u32; 64] = checkerboard_8x8(0xFF3300FF, 0x00CC00FF);
+const MRE_DATA: [u8; 256] = checkerboard_8x8(0xFF3300FF, 0x00CC00FF);
 
 // Animation
 static mut ROTATION: f32 = 0.0;
@@ -158,8 +158,8 @@ pub extern "C" fn init() {
         SPHERE_MESH = sphere(1.0, 24, 12);
 
         // Load textures (data is compile-time generated)
-        ALBEDO_TEXTURE = load_texture(8, 8, ALBEDO_DATA.as_ptr() as *const u8);
-        MRE_TEXTURE = load_texture(8, 8, MRE_DATA.as_ptr() as *const u8);
+        ALBEDO_TEXTURE = load_texture(8, 8, ALBEDO_DATA.as_ptr());
+        MRE_TEXTURE = load_texture(8, 8, MRE_DATA.as_ptr());
 
         // Register debug values
         register_debug_values();

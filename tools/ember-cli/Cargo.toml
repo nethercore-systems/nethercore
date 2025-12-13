@@ -10,6 +10,7 @@ path = "src/main.rs"
 
 [dependencies]
 # Local crates
+emberware-core = { path = "../../core" }
 emberware-shared = { path = "../../shared" }
 z-common = { path = "../../z-common" }
 
@@ -29,6 +30,9 @@ image = "0.24"
 
 # Texture compression
 intel_tex_2 = "0.5"  # BC7 compression (ISPC-based, high quality)
+
+# Parallel processing
+rayon = "1.10"
 
 # Filesystem
 directories = "5"

@@ -229,10 +229,12 @@ impl DebugRegistry {
                 DebugValue::Rect { x, y, w, h }
             }
             ValueType::Color => {
-                let r = data[0];
-                let g = data[1];
-                let b = data[2];
-                let a = data[3];
+                // Colors are stored as u32 in 0xRRGGBBAA format
+                let packed = u32::from_le_bytes(data[0..4].try_into().unwrap());
+                let r = ((packed >> 24) & 0xFF) as u8;
+                let g = ((packed >> 16) & 0xFF) as u8;
+                let b = ((packed >> 8) & 0xFF) as u8;
+                let a = (packed & 0xFF) as u8;
                 DebugValue::Color { r, g, b, a }
             }
             ValueType::FixedI16Q8 => {
@@ -349,10 +351,12 @@ impl DebugRegistry {
                 data[6..8].copy_from_slice(&h.to_le_bytes());
             }
             DebugValue::Color { r, g, b, a } => {
-                data[0] = *r;
-                data[1] = *g;
-                data[2] = *b;
-                data[3] = *a;
+                // Colors are stored as u32 in 0xRRGGBBAA format
+                let packed = ((*r as u32) << 24)
+                    | ((*g as u32) << 16)
+                    | ((*b as u32) << 8)
+                    | (*a as u32);
+                data[..4].copy_from_slice(&packed.to_le_bytes());
             }
             DebugValue::FixedI16Q8(v) => {
                 data[..2].copy_from_slice(&v.to_le_bytes());
@@ -571,7 +575,26 @@ mod tests {
             }
         );
 
-        // Test Color
+        // Test Color - verify byte layout matches u32 0xRRGGBBAA format
+        // A game with `static COLOR: u32 = 0xFF8040FF` (R=255, G=128, B=64, A=255)
+        // On little-endian, this is stored as bytes [0xFF, 0x40, 0x80, 0xFF]
+        let game_bytes: [u8; 4] = 0xFF8040FFu32.to_le_bytes();
+        assert_eq!(game_bytes, [0xFF, 0x40, 0x80, 0xFF], "Sanity check: u32 LE byte order");
+
+        // Reading from game memory should give correct RGBA
+        let read = registry.read_value_from_slice(&game_bytes, ValueType::Color);
+        assert_eq!(
+            read,
+            DebugValue::Color {
+                r: 255,
+                g: 128,
+                b: 64,
+                a: 255
+            },
+            "Reading u32 0xFF8040FF should give R=255, G=128, B=64, A=255"
+        );
+
+        // Writing should produce bytes that match the u32 format
         let mut data = [0u8; 4];
         registry.write_value_to_slice(
             &mut data,
@@ -582,14 +605,38 @@ mod tests {
                 a: 255,
             },
         );
+        assert_eq!(
+            data, game_bytes,
+            "Written bytes should match u32 0xFF8040FF layout"
+        );
+
+        // Test with different alpha to catch byte-swap bugs
+        // R=255, G=0, B=0, A=1 should produce u32 = 0xFF000001
+        let red_low_alpha: [u8; 4] = 0xFF000001u32.to_le_bytes();
+        let mut data = [0u8; 4];
+        registry.write_value_to_slice(
+            &mut data,
+            &DebugValue::Color {
+                r: 255,
+                g: 0,
+                b: 0,
+                a: 1,
+            },
+        );
+        assert_eq!(
+            data, red_low_alpha,
+            "R=255,G=0,B=0,A=1 should produce bytes for u32 0xFF000001"
+        );
+
+        // Verify round-trip
         let read = registry.read_value_from_slice(&data, ValueType::Color);
         assert_eq!(
             read,
             DebugValue::Color {
                 r: 255,
-                g: 128,
-                b: 64,
-                a: 255
+                g: 0,
+                b: 0,
+                a: 1
             }
         );
 

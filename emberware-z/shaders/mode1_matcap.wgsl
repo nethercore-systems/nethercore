@@ -137,8 +137,9 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     let blend_mode_2 = (blend_modes_packed >> 16u) & 0xFFu;
     let blend_mode_3 = (blend_modes_packed >> 24u) & 0xFFu;
 
-    // Start with material color
+    // Start with material color, base_alpha defaults to material alpha
     var color = material_color.rgb;
+    var base_alpha = material_color.a;
 
     //FS_COLOR
     //FS_UV
@@ -171,10 +172,10 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
         color = blend_colors(color, sky_color, blend_mode_1);
     }
 
-    // Dither transparency (always active)
-    if should_discard_dither(in.clip_position.xy, shading.flags) {
+    // Dither transparency (two-layer: base_alpha × effect_alpha)
+    if should_discard_dither(in.clip_position.xy, shading.flags, base_alpha) {
         discard;
     }
 
-    return vec4<f32>(color, material_color.a);
+    return vec4<f32>(color, base_alpha);
 }

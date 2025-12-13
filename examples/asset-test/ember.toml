@@ -1,0 +1,5 @@
+[game]
+id = "asset-test"
+title = "Asset Test"
+author = "Emberware Examples"
+version = "0.1.0"

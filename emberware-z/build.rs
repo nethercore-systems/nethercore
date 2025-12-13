@@ -90,10 +90,11 @@ const VS_POSITION_UNSKINNED: &str = "let world_pos = vec4<f32>(in.position, 1.0)
 
 const FS_COLOR: &str = "color *= in.color;";
 // Mode 0/1: Color/albedo from texture, with uniform color override support
+// When FLAG_USE_UNIFORM_COLOR is NOT set, use texture alpha for dithering
 const FS_UV: &str = r#"if !has_flag(shading.flags, FLAG_USE_UNIFORM_COLOR) {
         let tex_sample = sample_filtered(slot0, shading.flags, in.uv);
         color *= tex_sample.rgb;
-        color *= tex_sample.a;
+        base_alpha = tex_sample.a;
     }"#;
 const FS_AMBIENT: &str = "let ambient = color * sample_sky(in.world_normal, sky); let sun_color = sample_sky(-sky.sun_direction, sky);";
 const FS_NORMAL: &str =
@@ -101,10 +102,11 @@ const FS_NORMAL: &str =
 
 const FS_ALBEDO_COLOR: &str = "albedo *= in.color;";
 // Mode 2/3: Albedo from texture, with uniform color override support
+// When FLAG_USE_UNIFORM_COLOR is NOT set, use texture alpha for dithering
 const FS_ALBEDO_UV: &str = r#"if !has_flag(shading.flags, FLAG_USE_UNIFORM_COLOR) {
         let albedo_sample = sample_filtered(slot0, shading.flags, in.uv);
         albedo *= albedo_sample.rgb;
-        albedo *= albedo_sample.a;
+        base_alpha = albedo_sample.a;
     }"#;
 
 // Mode 2/3: MRE/material texture sampling with override flag support

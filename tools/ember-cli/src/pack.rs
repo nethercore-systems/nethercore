@@ -6,13 +6,14 @@
 
 use anyhow::{Context, Result};
 use clap::Args;
-use serde::Deserialize;
 use std::path::PathBuf;
 
 use z_common::{
     vertex_stride_packed, EmberZAnimationHeader, EmberZMeshHeader, PackedData, PackedKeyframes,
     PackedMesh, PackedSound, PackedTexture, TextureFormat, ZDataPack, ZMetadata, ZRom, EWZ_VERSION,
 };
+
+use crate::manifest::{AssetsSection, EmberManifest};
 
 /// Arguments for the pack command
 #[derive(Args)]
@@ -25,61 +26,16 @@ pub struct PackArgs {
     #[arg(short, long)]
     pub output: Option<PathBuf>,
 
-    /// Path to WASM file (overrides manifest)
+    /// Path to WASM file (overrides auto-detection)
     #[arg(long)]
     pub wasm: Option<PathBuf>,
-}
-
-/// Ember.toml manifest structure
-#[derive(Debug, Deserialize)]
-struct EmberManifest {
-    game: GameSection,
-    #[serde(default)]
-    assets: AssetsSection,
-}
-
-#[derive(Debug, Deserialize)]
-struct GameSection {
-    id: String,
-    title: String,
-    author: String,
-    version: String,
-    #[serde(default)]
-    description: String,
-    #[serde(default)]
-    tags: Vec<String>,
-    #[serde(default)]
-    render_mode: Option<u32>,
-}
-
-#[derive(Debug, Default, Deserialize)]
-struct AssetsSection {
-    #[serde(default)]
-    textures: Vec<AssetEntry>,
-    #[serde(default)]
-    meshes: Vec<AssetEntry>,
-    #[serde(default)]
-    keyframes: Vec<AssetEntry>,
-    #[serde(default)]
-    sounds: Vec<AssetEntry>,
-    #[serde(default)]
-    data: Vec<AssetEntry>,
-}
-
-#[derive(Debug, Deserialize)]
-struct AssetEntry {
-    id: String,
-    path: String,
 }
 
 /// Execute the pack command
 pub fn execute(args: PackArgs) -> Result<()> {
     // Read manifest
     let manifest_path = &args.manifest;
-    let manifest_content =
-        std::fs::read_to_string(manifest_path).context("Failed to read ember.toml")?;
-    let manifest: EmberManifest =
-        toml::from_str(&manifest_content).context("Failed to parse ember.toml")?;
+    let manifest = EmberManifest::load(manifest_path)?;
 
     println!(
         "Packing game: {} ({})",
@@ -95,20 +51,8 @@ pub fn execute(args: PackArgs) -> Result<()> {
     let wasm_path = if let Some(wasm) = args.wasm {
         wasm
     } else {
-        // Default: look in target directory
-        let target_dir = project_dir.join("target/wasm32-unknown-unknown/release");
-        std::fs::read_dir(&target_dir)
-            .context("Failed to read target directory")?
-            .filter_map(|e| e.ok())
-            .find(|e| {
-                e.path()
-                    .extension()
-                    .and_then(|ext| ext.to_str())
-                    .map(|ext| ext == "wasm")
-                    .unwrap_or(false)
-            })
-            .map(|e| e.path())
-            .context("No WASM file found. Run 'ember build' first.")?
+        // Use manifest to find WASM (checks build.wasm first, then auto-detects)
+        manifest.find_wasm(project_dir, false)?
     };
 
     // Read WASM code
@@ -116,8 +60,12 @@ pub fn execute(args: PackArgs) -> Result<()> {
         .with_context(|| format!("Failed to read WASM file: {}", wasm_path.display()))?;
     println!("  WASM: {} ({} bytes)", wasm_path.display(), code.len());
 
+    // Analyze WASM to get render mode
+    let analysis = emberware_core::analysis::analyze_wasm(&code)
+        .context("Failed to analyze WASM file")?;
+    let render_mode = analysis.render_mode;
+
     // Determine texture format based on render mode
-    let render_mode = manifest.game.render_mode.unwrap_or(0) as u8;
     let texture_format = if render_mode == 0 {
         TextureFormat::Rgba8
     } else {
@@ -149,7 +97,7 @@ pub fn execute(args: PackArgs) -> Result<()> {
         platform_author_id: None,
         created_at: chrono::Utc::now().to_rfc3339(),
         tool_version: env!("CARGO_PKG_VERSION").to_string(),
-        render_mode: manifest.game.render_mode,
+        render_mode: Some(render_mode as u32),
         default_resolution: None,
         target_fps: None,
     };
@@ -194,72 +142,110 @@ pub fn execute(args: PackArgs) -> Result<()> {
     Ok(())
 }
 
-/// Load assets from disk into a data pack
+/// Load assets from disk into a data pack (parallel)
 fn load_assets(
     project_dir: &std::path::Path,
     assets: &AssetsSection,
     texture_format: TextureFormat,
 ) -> Result<ZDataPack> {
-    let mut pack = ZDataPack::new();
+    use rayon::prelude::*;
 
-    // Load textures
-    for entry in &assets.textures {
-        let path = project_dir.join(&entry.path);
-        let texture = load_texture(&entry.id, &path, texture_format)?;
+    // Load all asset types in parallel
+    // Textures are the most expensive (BC7 compression), so they benefit most from parallelism
 
+    // Load textures in parallel
+    let textures: Result<Vec<_>> = assets
+        .textures
+        .par_iter()
+        .map(|entry| {
+            let path = project_dir.join(&entry.path);
+            load_texture(&entry.id, &path, texture_format)
+        })
+        .collect();
+    let textures = textures?;
+
+    // Load meshes in parallel
+    let meshes: Result<Vec<_>> = assets
+        .meshes
+        .par_iter()
+        .map(|entry| {
+            let path = project_dir.join(&entry.path);
+            load_mesh(&entry.id, &path)
+        })
+        .collect();
+    let meshes = meshes?;
+
+    // Load keyframes in parallel
+    let keyframes: Result<Vec<_>> = assets
+        .keyframes
+        .par_iter()
+        .map(|entry| {
+            let path = project_dir.join(&entry.path);
+            load_keyframes(&entry.id, &path)
+        })
+        .collect();
+    let keyframes = keyframes?;
+
+    // Load sounds in parallel
+    let sounds: Result<Vec<_>> = assets
+        .sounds
+        .par_iter()
+        .map(|entry| {
+            let path = project_dir.join(&entry.path);
+            load_sound(&entry.id, &path)
+        })
+        .collect();
+    let sounds = sounds?;
+
+    // Load raw data in parallel
+    let data: Result<Vec<_>> = assets
+        .data
+        .par_iter()
+        .map(|entry| {
+            let path = project_dir.join(&entry.path);
+            load_data(&entry.id, &path)
+        })
+        .collect();
+    let data = data?;
+
+    // Print results (after parallel loading completes)
+    for texture in &textures {
         let format_str = if texture.format.is_bc7() { " [BC7]" } else { "" };
         println!(
             "  Texture: {} ({}x{}){}",
-            entry.id, texture.width, texture.height, format_str
-        );
-
-        pack.textures.push(texture);
-    }
-
-    // Load meshes
-    for entry in &assets.meshes {
-        let path = project_dir.join(&entry.path);
-        let mesh = load_mesh(&entry.id, &path)?;
-        pack.meshes.push(mesh);
-        println!(
-            "  Mesh: {} ({} vertices)",
-            entry.id,
-            pack.meshes.last().unwrap().vertex_count
+            texture.id, texture.width, texture.height, format_str
         );
     }
-
-    // Load keyframes (animation clips)
-    for entry in &assets.keyframes {
-        let path = project_dir.join(&entry.path);
-        let keyframes = load_keyframes(&entry.id, &path)?;
+    for mesh in &meshes {
+        println!("  Mesh: {} ({} vertices)", mesh.id, mesh.vertex_count);
+    }
+    for kf in &keyframes {
         println!(
             "  Keyframes: {} ({} bones, {} frames)",
-            entry.id, keyframes.bone_count, keyframes.frame_count
+            kf.id, kf.bone_count, kf.frame_count
         );
-        pack.keyframes.push(keyframes);
+    }
+    for sound in &sounds {
+        println!("  Sound: {} ({:.2}s)", sound.id, sound.duration_seconds());
+    }
+    for d in &data {
+        println!("  Data: {} ({} bytes)", d.id, d.data.len());
     }
 
-    // Load sounds
-    for entry in &assets.sounds {
-        let path = project_dir.join(&entry.path);
-        let sound = load_sound(&entry.id, &path)?;
-        println!("  Sound: {} ({:.2}s)", entry.id, sound.duration_seconds());
-        pack.sounds.push(sound);
+    let total = textures.len() + meshes.len() + keyframes.len() + sounds.len() + data.len();
+    if total > 0 {
+        println!("  Total: {} assets", total);
     }
 
-    // Load raw data
-    for entry in &assets.data {
-        let path = project_dir.join(&entry.path);
-        let data = load_data(&entry.id, &path)?;
-        println!("  Data: {} ({} bytes)", entry.id, data.data.len());
-        pack.data.push(data);
-    }
-
-    if pack.asset_count() > 0 {
-        println!("  Total: {} assets", pack.asset_count());
-    }
-
-    Ok(pack)
+    Ok(ZDataPack {
+        textures,
+        meshes,
+        skeletons: vec![], // TODO: add skeleton loading when needed
+        keyframes,
+        fonts: vec![], // TODO: add font loading when needed
+        sounds,
+        data,
+    })
 }
 
 /// Load a texture from an image file (PNG, JPG, etc.)
@@ -536,18 +522,16 @@ author = "Test Author"
 version = "1.0.0"
 description = "A test game"
 tags = ["action", "puzzle"]
-render_mode = 2
 
 [assets]
 "#;
-        let manifest: EmberManifest = toml::from_str(manifest_toml).unwrap();
+        let manifest = EmberManifest::parse(manifest_toml).unwrap();
         assert_eq!(manifest.game.id, "test-game");
         assert_eq!(manifest.game.title, "Test Game");
         assert_eq!(manifest.game.author, "Test Author");
         assert_eq!(manifest.game.version, "1.0.0");
         assert_eq!(manifest.game.description, "A test game");
         assert_eq!(manifest.game.tags, vec!["action", "puzzle"]);
-        assert_eq!(manifest.game.render_mode, Some(2));
     }
 
     #[test]
@@ -575,7 +559,7 @@ path = "assets/jump.wav"
 id = "level1"
 path = "assets/level1.bin"
 "#;
-        let manifest: EmberManifest = toml::from_str(manifest_toml).unwrap();
+        let manifest = EmberManifest::parse(manifest_toml).unwrap();
         assert_eq!(manifest.assets.textures.len(), 2);
         assert_eq!(manifest.assets.textures[0].id, "player");
         assert_eq!(manifest.assets.textures[1].id, "enemy");
@@ -594,11 +578,10 @@ title = "Minimal Game"
 author = "Author"
 version = "1.0.0"
 "#;
-        let manifest: EmberManifest = toml::from_str(manifest_toml).unwrap();
+        let manifest = EmberManifest::parse(manifest_toml).unwrap();
         assert_eq!(manifest.game.id, "minimal");
         assert!(manifest.game.description.is_empty());
         assert!(manifest.game.tags.is_empty());
-        assert!(manifest.game.render_mode.is_none());
         assert!(manifest.assets.textures.is_empty());
     }
 
@@ -927,7 +910,7 @@ path = "assets/walk.ewzanim"
 id = "run"
 path = "assets/run.ewzanim"
 "#;
-        let manifest: EmberManifest = toml::from_str(manifest_toml).unwrap();
+        let manifest = EmberManifest::parse(manifest_toml).unwrap();
         assert_eq!(manifest.assets.keyframes.len(), 2);
         assert_eq!(manifest.assets.keyframes[0].id, "walk");
         assert_eq!(manifest.assets.keyframes[1].id, "run");

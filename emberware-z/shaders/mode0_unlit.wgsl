@@ -17,8 +17,9 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     let material_color = unpack_rgba8(shading.color_rgba8);
     let sky = unpack_sky(shading.sky);
 
-    // Start with material color
+    // Start with material color, base_alpha defaults to material alpha
     var color = material_color.rgb;
+    var base_alpha = material_color.a;
 
     //FS_COLOR
     //FS_UV
@@ -29,10 +30,10 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     // Normal-based diffuse lighting (if normals present)
     //FS_NORMAL
 
-    // Dither transparency (always active)
-    if should_discard_dither(in.clip_position.xy, shading.flags) {
+    // Dither transparency (two-layer: base_alpha × effect_alpha)
+    if should_discard_dither(in.clip_position.xy, shading.flags, base_alpha) {
         discard;
     }
 
-    return vec4<f32>(color, material_color.a);
+    return vec4<f32>(color, base_alpha);
 }

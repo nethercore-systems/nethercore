@@ -95,6 +95,10 @@ pub enum AnalysisError {
     #[error("invalid render mode {0} (must be 0-3)")]
     InvalidRenderMode(u8),
 
+    /// Invalid resolution (must be 0-3)
+    #[error("invalid resolution {0} (must be 0-3)")]
+    InvalidResolution(u32),
+
     /// Config function called multiple times
     #[error("{0}() called {1} times - each config function can only be called once")]
     DuplicateCall(String, usize),
@@ -220,6 +224,11 @@ pub fn analyze_wasm(wasm_bytes: &[u8]) -> Result<AnalysisResult, AnalysisError> 
                 }
             }
             "set_resolution" => {
+                if let Some(res) = call.arg {
+                    if res > 3 {
+                        return Err(AnalysisError::InvalidResolution(res));
+                    }
+                }
                 result.resolution = call.arg;
             }
             "set_tick_rate" => {
@@ -247,6 +256,11 @@ fn is_config_function(name: &str) -> bool {
 pub fn validate_result(result: &AnalysisResult) -> Result<(), AnalysisError> {
     if result.render_mode > 3 {
         return Err(AnalysisError::InvalidRenderMode(result.render_mode));
+    }
+    if let Some(res) = result.resolution {
+        if res > 3 {
+            return Err(AnalysisError::InvalidResolution(res));
+        }
     }
     Ok(())
 }
@@ -488,5 +502,39 @@ mod tests {
             result,
             Err(AnalysisError::DuplicateCall(name, 2)) if name == "set_resolution"
         ));
+    }
+
+    #[test]
+    fn test_analyze_wasm_invalid_resolution() {
+        // WASM that calls set_resolution(5) - invalid
+        let wasm = wat::parse_str(r#"
+            (module
+                (import "env" "set_resolution" (func $set_resolution (param i32)))
+                (func (export "init")
+                    i32.const 5
+                    call $set_resolution
+                )
+            )
+        "#).unwrap();
+
+        let result = analyze_wasm(&wasm);
+        assert!(matches!(result, Err(AnalysisError::InvalidResolution(5))));
+    }
+
+    #[test]
+    fn test_validation_invalid_resolution() {
+        let result = AnalysisResult { resolution: Some(4), ..Default::default() };
+        assert!(matches!(
+            validate_result(&result),
+            Err(AnalysisError::InvalidResolution(4))
+        ));
+    }
+
+    #[test]
+    fn test_validation_valid_resolutions() {
+        for res in 0..=3 {
+            let result = AnalysisResult { resolution: Some(res), ..Default::default() };
+            assert!(validate_result(&result).is_ok());
+        }
     }
 }

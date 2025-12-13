@@ -129,15 +129,15 @@ fn fs(in: QuadVertexOut) -> @location(0) vec4<f32> {
     let material_color = unpack_rgba8(shading.color_rgba8);
     let tex_color = sample_filtered(slot0, shading.flags, in.uv);
     let color = tex_color.rgb * in.color.rgb * material_color.rgb;
-    let alpha = tex_color.a * in.color.a * material_color.a;
+    let base_alpha = tex_color.a * in.color.a * material_color.a;
 
     // Dither transparency for 3D quads (billboards, world-space)
     // Skip for screen-space UI/text which uses alpha blending instead
     if in.mode != SCREEN_SPACE {
-        if should_discard_dither(in.clip_position.xy, shading.flags) {
+        if should_discard_dither(in.clip_position.xy, shading.flags, base_alpha) {
             discard;
         }
     }
 
-    return vec4<f32>(color, alpha);
+    return vec4<f32>(color, base_alpha);
 }

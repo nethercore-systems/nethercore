@@ -1,0 +1,5 @@
+[game]
+id = "platformer"
+title = "Platformer"
+author = "Emberware Examples"
+version = "0.1.0"
