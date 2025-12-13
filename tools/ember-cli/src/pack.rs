@@ -8,9 +8,11 @@ use anyhow::{Context, Result};
 use clap::Args;
 use std::path::PathBuf;
 
+use emberware_shared::math::BoneMatrix3x4;
 use z_common::{
-    vertex_stride_packed, EmberZAnimationHeader, EmberZMeshHeader, PackedData, PackedKeyframes,
-    PackedMesh, PackedSound, PackedTexture, TextureFormat, ZDataPack, ZMetadata, ZRom, EWZ_VERSION,
+    vertex_stride_packed, EmberZAnimationHeader, EmberZMeshHeader, EmberZSkeletonHeader,
+    PackedData, PackedKeyframes, PackedMesh, PackedSkeleton, PackedSound, PackedTexture,
+    TextureFormat, ZDataPack, ZMetadata, ZRom, EWZ_VERSION, INVERSE_BIND_MATRIX_SIZE,
 };
 
 use crate::manifest::{AssetsSection, EmberManifest};
@@ -175,9 +177,26 @@ fn load_assets(
         .collect();
     let meshes = meshes?;
 
-    // Load keyframes in parallel
-    let keyframes: Result<Vec<_>> = assets
+    // Load skeletons in parallel
+    let skeletons: Result<Vec<_>> = assets
+        .skeletons
+        .par_iter()
+        .map(|entry| {
+            let path = project_dir.join(&entry.path);
+            load_skeleton(&entry.id, &path)
+        })
+        .collect();
+    let skeletons = skeletons?;
+
+    // Load keyframes in parallel (support both 'keyframes' and 'animations' keys)
+    // Combine both 'keyframes' and 'animations' entries
+    let all_keyframe_entries: Vec<_> = assets
         .keyframes
+        .iter()
+        .chain(assets.animations.iter())
+        .collect();
+
+    let keyframes: Result<Vec<_>> = all_keyframe_entries
         .par_iter()
         .map(|entry| {
             let path = project_dir.join(&entry.path);
@@ -235,8 +254,11 @@ fn load_assets(
     for d in &data {
         println!("  Data: {} ({} bytes)", d.id, d.data.len());
     }
+    for skeleton in &skeletons {
+        println!("  Skeleton: {} ({} bones)", skeleton.id, skeleton.bone_count);
+    }
 
-    let total = textures.len() + meshes.len() + keyframes.len() + sounds.len() + data.len();
+    let total = textures.len() + meshes.len() + skeletons.len() + keyframes.len() + sounds.len() + data.len();
     if total > 0 {
         println!("  Total: {} assets", total);
     }
@@ -244,7 +266,7 @@ fn load_assets(
     Ok(ZDataPack {
         textures,
         meshes,
-        skeletons: vec![], // TODO: add skeleton loading when needed
+        skeletons,
         keyframes,
         fonts: vec![], // TODO: add font loading when needed
         sounds,
@@ -504,6 +526,82 @@ fn load_data(id: &str, path: &std::path::Path) -> Result<PackedData> {
     Ok(PackedData {
         id: id.to_string(),
         data,
+    })
+}
+
+/// Load a skeleton from .ewzskel file
+///
+/// File format:
+/// - Header: 8 bytes (bone_count u32, reserved u32)
+/// - Data: bone_count × 48 bytes (inverse bind matrices, 12 floats each)
+fn load_skeleton(id: &str, path: &std::path::Path) -> Result<PackedSkeleton> {
+    let data = std::fs::read(path)
+        .with_context(|| format!("Failed to load skeleton: {}", path.display()))?;
+
+    // Parse header
+    let header = EmberZSkeletonHeader::from_bytes(&data)
+        .context("Failed to parse skeleton header - file may be corrupted or wrong format")?;
+
+    let bone_count = header.bone_count;
+
+    // Validate header
+    if bone_count == 0 {
+        anyhow::bail!("Skeleton has no bones: {}", path.display());
+    }
+    if bone_count > 256 {
+        anyhow::bail!(
+            "Skeleton has too many bones ({}, max 256): {}",
+            bone_count,
+            path.display()
+        );
+    }
+
+    // Validate data size
+    let expected_size = EmberZSkeletonHeader::SIZE + (bone_count as usize * INVERSE_BIND_MATRIX_SIZE);
+    if data.len() < expected_size {
+        anyhow::bail!(
+            "Skeleton data too small: {} bytes, expected {} (bones: {})",
+            data.len(),
+            expected_size,
+            bone_count
+        );
+    }
+
+    // Extract inverse bind matrices
+    let matrix_data = &data[EmberZSkeletonHeader::SIZE..expected_size];
+    let mut inverse_bind_matrices = Vec::with_capacity(bone_count as usize);
+
+    for i in 0..bone_count as usize {
+        let offset = i * INVERSE_BIND_MATRIX_SIZE;
+        let matrix_bytes = &matrix_data[offset..offset + INVERSE_BIND_MATRIX_SIZE];
+
+        // Parse 12 floats from file (column-major: col0, col1, col2, col3)
+        let mut cols = [[0.0f32; 3]; 4];
+        for col in 0..4 {
+            for row in 0..3 {
+                let float_offset = (col * 3 + row) * 4;
+                cols[col][row] = f32::from_le_bytes([
+                    matrix_bytes[float_offset],
+                    matrix_bytes[float_offset + 1],
+                    matrix_bytes[float_offset + 2],
+                    matrix_bytes[float_offset + 3],
+                ]);
+            }
+        }
+
+        // Convert to row-major for BoneMatrix3x4
+        let matrix = BoneMatrix3x4::from_rows(
+            [cols[0][0], cols[1][0], cols[2][0], cols[3][0]], // row 0
+            [cols[0][1], cols[1][1], cols[2][1], cols[3][1]], // row 1
+            [cols[0][2], cols[1][2], cols[2][2], cols[3][2]], // row 2
+        );
+        inverse_bind_matrices.push(matrix);
+    }
+
+    Ok(PackedSkeleton {
+        id: id.to_string(),
+        bone_count,
+        inverse_bind_matrices,
     })
 }
 

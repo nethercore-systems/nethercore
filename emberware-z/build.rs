@@ -67,8 +67,8 @@ const VS_SKINNED: &str = r#"// GPU skinning: compute skinned position and normal
             // Get bone matrix from unified_animation (CPU pre-computed keyframe_base)
             var bone_matrix = bone_to_mat4(unified_animation[keyframe_base + bone_idx]);
 
-            // Apply inverse bind if in inverse bind mode and skeleton is bound
-            if (use_inverse_bind && inverse_bind_base > 0u) {
+            // Apply inverse bind if in inverse bind mode (skeleton is bound via skeleton_bind)
+            if (use_inverse_bind) {
                 let inv_bind = bone_to_mat4(unified_animation[inverse_bind_base + bone_idx]);
                 bone_matrix = bone_matrix * inv_bind;
             }

@@ -49,6 +49,9 @@ fn build_examples() -> Result<()> {
 
     println!("Games directory: {}", games_dir.display());
 
+    // Run asset generators first
+    run_asset_generators(&project_root)?;
+
     // Build ember CLI first if needed
     let ember_exe = ensure_ember_cli(&project_root)?;
 
@@ -141,6 +144,55 @@ fn build_examples() -> Result<()> {
         println!("      Add assets to their assets/ folder and rebuild to use them.");
     }
 
+    Ok(())
+}
+
+/// Run all asset generator tools (tools/gen-*)
+fn run_asset_generators(project_root: &Path) -> Result<()> {
+    let tools_dir = project_root.join("tools");
+
+    if !tools_dir.exists() {
+        return Ok(());
+    }
+
+    // Find all gen-* directories in tools/
+    let generators: Vec<_> = fs::read_dir(&tools_dir)
+        .context("Failed to read tools directory")?
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| {
+            let name = entry.file_name();
+            let name_str = name.to_string_lossy();
+            entry.path().is_dir()
+                && name_str.starts_with("gen-")
+                && entry.path().join("Cargo.toml").exists()
+        })
+        .collect();
+
+    if generators.is_empty() {
+        return Ok(());
+    }
+
+    println!("Running {} asset generator(s)...", generators.len());
+
+    for generator in &generators {
+        let name = generator.file_name();
+        let name_str = name.to_string_lossy();
+
+        let output = Command::new("cargo")
+            .args(["run", "-p", &name_str, "--release"])
+            .current_dir(project_root)
+            .output()
+            .with_context(|| format!("Failed to run {}", name_str))?;
+
+        if output.status.success() {
+            println!("  ✓ {} completed", name_str);
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            println!("  ✗ {} failed: {}", name_str, stderr.lines().last().unwrap_or("unknown error"));
+        }
+    }
+
+    println!();
     Ok(())
 }
 

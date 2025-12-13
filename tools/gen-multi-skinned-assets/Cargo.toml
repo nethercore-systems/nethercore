@@ -1,0 +1,8 @@
+[package]
+name = "gen-multi-skinned-assets"
+version = "0.1.0"
+edition = "2021"
+description = "Generate assets for multi-skinned-rom example"
+
+[dependencies]
+z-common = { path = "../../z-common" }

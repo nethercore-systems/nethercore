@@ -12,7 +12,7 @@ use emberware_core::wasm::GameStateWithConsole;
 /// Returns an error if called after init() has completed.
 ///
 /// # Usage
-/// ```rust
+/// ```rust,ignore
 /// // For functions returning Result<u32>:
 /// fn load_mesh(...) -> Result<u32> {
 ///     check_init_only(&caller, "load_mesh")?;

@@ -46,7 +46,11 @@ pub struct AssetsSection {
     #[serde(default)]
     pub meshes: Vec<AssetEntry>,
     #[serde(default)]
+    pub skeletons: Vec<AssetEntry>,
+    #[serde(default)]
     pub keyframes: Vec<AssetEntry>,
+    #[serde(default)]
+    pub animations: Vec<AssetEntry>,  // Alias for keyframes
     #[serde(default)]
     pub sounds: Vec<AssetEntry>,
     #[serde(default)]
