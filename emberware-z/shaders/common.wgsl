@@ -4,13 +4,28 @@
 // ============================================================================
 
 // ============================================================================
-// Bindings and Data Structures
+// UNIFIED BUFFER ARCHITECTURE (5 bindings, grouped by purpose)
 // ============================================================================
+// Reduced from 9 storage buffers to 5 storage for WebGPU compatibility.
+// All mat4x4 matrices merged into unified_transforms.
+// All mat3x4 animation matrices merged into unified_animation.
+// CPU pre-computes absolute indices into unified_transforms (no frame_offsets needed).
+// Screen dimensions eliminated - resolution_index packed into QuadInstance.mode.
+//
+// Layout (grouped by purpose):
+// - Binding 0-1: Transforms (unified_transforms, mvp_shading_indices)
+// - Binding 2: Shading (shading_states)
+// - Binding 3: Animation (unified_animation)
+// - Binding 4: Quad rendering (quad_instances)
 
-// Per-frame storage buffers - all matrices for the frame
-@group(0) @binding(0) var<storage, read> model_matrices: array<mat4x4<f32>>;
-@group(0) @binding(1) var<storage, read> view_matrices: array<mat4x4<f32>>;
-@group(0) @binding(2) var<storage, read> proj_matrices: array<mat4x4<f32>>;
+// Binding 0: unified_transforms - all mat4x4 matrices [models | views | projs]
+// Indices are pre-computed on CPU to be absolute offsets into this array
+@group(0) @binding(0) var<storage, read> unified_transforms: array<mat4x4<f32>>;
+
+// Binding 1: mvp_shading_indices - absolute indices into unified_transforms + shading_states
+// Each entry is 4 × u32: [model_idx, view_idx, proj_idx, shading_idx]
+// view_idx and proj_idx are PRE-OFFSET by CPU (already absolute indices)
+@group(0) @binding(1) var<storage, read> mvp_shading_indices: array<vec4<u32>>;
 
 // Packed sky data (16 bytes)
 struct PackedSky {
@@ -42,12 +57,8 @@ struct PackedUnifiedShadingState {
     _animation_reserved: u32,        // Reserved for v2.1
 }
 
-// Per-frame storage buffer - array of shading states
-@group(0) @binding(3) var<storage, read> shading_states: array<PackedUnifiedShadingState>;
-
-// Per-frame storage buffer - unpacked MVP + shading indices (no bit-packing!)
-// Each entry is 4 × u32: [model_idx, view_idx, proj_idx, shading_idx]
-@group(0) @binding(4) var<storage, read> mvp_shading_indices: array<vec4<u32>>;
+// Binding 2: shading_states - per-draw shading state array
+@group(0) @binding(2) var<storage, read> shading_states: array<PackedUnifiedShadingState>;
 
 // 3x4 bone matrix struct (row-major storage, 48 bytes per bone)
 // Implicit 4th row is [0, 0, 0, 1] (affine transform)
@@ -57,16 +68,12 @@ struct BoneMatrix3x4 {
     row2: vec4<f32>,  // [m20, m21, m22, tz]
 }
 
-// Bone transforms for GPU skinning (up to 256 bones, 3x4 format)
-@group(0) @binding(5) var<storage, read> bones: array<BoneMatrix3x4, 256>;
+// Binding 3: unified_animation - all mat3x4 animation data [inverse_bind | keyframes | immediate]
+// CPU pre-computes keyframe_base to point to the correct section
+@group(0) @binding(3) var<storage, read> unified_animation: array<BoneMatrix3x4>;
 
-// Inverse bind matrices for all skeletons (static after init, indexed by shading state)
-// Contains the inverse bind pose for each bone, used in inverse bind mode
-@group(0) @binding(6) var<storage, read> inverse_bind: array<BoneMatrix3x4>;
-
-// All keyframes storage buffer - pre-decoded bone matrices for all animations (static after init)
-// Indexed by shading state's keyframe_base + bone_index
-@group(0) @binding(7) var<storage, read> all_keyframes: array<BoneMatrix3x4>;
+// Binding 4: quad_instances - for GPU-instanced quad rendering (declared in quad_template.wgsl)
+// (not declared here - only used by quad shader)
 
 // Helper to expand 3x4 bone matrix → 4x4 for skinning calculations
 // Input is row-major, output is column-major (WGSL mat4x4 convention)
@@ -87,9 +94,8 @@ const FLAG_SKINNING_MODE: u32 = 1u;
 const FLAG_TEXTURE_FILTER_LINEAR: u32 = 2u;
 
 // Animation System v2 flags (in animation_flags field of PackedUnifiedShadingState)
-// Bit 0: Use immediate bones buffer instead of static keyframes
-// 0 = read from all_keyframes (static), 1 = read from bones (immediate/dynamic)
-const ANIMATION_FLAG_USE_IMMEDIATE: u32 = 1u;
+// NOTE: ANIMATION_FLAG_USE_IMMEDIATE removed - unified_animation buffer uses
+// pre-computed offsets (keyframe_base already points to correct section)
 
 // ============================================================================
 // Material Override Flags (bits 2-7)
@@ -406,9 +412,10 @@ fn vs(in: VertexIn, @builtin(instance_index) instance_index: u32) -> VertexOut {
 
     //VS_SKINNED
 
-    let model_matrix = model_matrices[model_idx];
-    let view_matrix = view_matrices[view_idx];
-    let projection_matrix = proj_matrices[proj_idx];
+    // Access unified_transforms directly - indices are pre-offset by CPU
+    let model_matrix = unified_transforms[model_idx];
+    let view_matrix = unified_transforms[view_idx];
+    let projection_matrix = unified_transforms[proj_idx];
 
     //VS_POSITION
     let model_pos = model_matrix * world_pos;

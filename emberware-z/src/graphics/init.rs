@@ -9,7 +9,6 @@
 use anyhow::{Context, Result};
 use glam::Mat4;
 use std::sync::Arc;
-use wgpu::util::DeviceExt;
 use winit::window::Window;
 
 use super::ZGraphics;
@@ -74,21 +73,13 @@ impl ZGraphics {
 
         tracing::info!("Using GPU adapter: {:?}", adapter.get_info().name);
 
-        // Request device and queue with increased storage buffer limits
-        // Animation System v2 requires 9 storage buffers in vertex stage:
-        // - 0-4: matrices and indices
-        // - 5: immediate bones
-        // - 6: inverse bind matrices (static)
-        // - 7: all keyframes (static)
-        // - 8: quad instances
-        let mut limits = wgpu::Limits::default();
-        limits.max_storage_buffers_per_shader_stage = 10; // Default is 8, we need 9
-
+        // Request device and queue with default limits
+        // Unified buffer architecture uses only 4 storage buffers (well under default limit of 8)
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("Emberware Z Device"),
                 required_features: wgpu::Features::default(),
-                required_limits: limits,
+                required_limits: wgpu::Limits::default(),
                 memory_hints: wgpu::MemoryHints::Performance,
                 experimental_features: Default::default(),
                 trace: wgpu::Trace::Off,
@@ -146,63 +137,38 @@ impl ZGraphics {
         // Create buffer manager (vertex/index buffers and mesh storage)
         let mut buffer_manager = super::BufferManager::new(&device);
 
-        // Create bone storage buffer for GPU skinning (256 bones × 48 bytes = 12KB)
-        // Uses 3x4 matrices instead of 4x4 for 25% memory savings
-        let bone_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Bone Storage Buffer"),
-            size: 256 * 48, // 256 matrices × 48 bytes per 3x4 matrix
+        // =================================================================
+        // UNIFIED BUFFER ARCHITECTURE
+        // =================================================================
+        // Merges similar matrix buffers to reduce storage buffer count:
+        // - unified_transforms: model + view + proj matrices (per-frame)
+        // - unified_animation: inverse_bind + keyframes + immediate bones (mixed)
+        // This keeps us at 4 storage buffers, well under WebGPU's default limit of 8.
+
+        // Unified transforms buffer: [models | views | projs]
+        // Holds all mat4x4 matrices uploaded each frame
+        let unified_transforms_capacity = 1024 + 64 + 64; // models + views + projs
+        let unified_transforms_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Unified Transforms (@binding(0))"),
+            size: (unified_transforms_capacity * std::mem::size_of::<Mat4>()) as u64,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
-        // Create inverse bind storage buffer for skeletal animation (256 bones × 48 bytes = 12KB)
-        // @binding(6): Contains all inverse bind pose matrices for all skeletons
-        // Initially sized for 256 bones, will grow if more skeletons are loaded
-        let inverse_bind_capacity = 256; // matrices
-        let inverse_bind_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("All Inverse Bind Matrices (@binding(6))"),
-            size: (inverse_bind_capacity * 48) as u64, // 48 bytes per 3x4 matrix
+        // Unified animation buffer: [inverse_bind | keyframes | immediate_bones]
+        // Sections:
+        // - Inverse bind: static, uploaded once after init (256 default)
+        // - Keyframes: static, uploaded once after init (8192 default)
+        // - Immediate: per-frame, uploaded each frame (256 max)
+        let unified_animation_capacity = 256 + 8192 + 256; // inverse + keyframes + immediate
+        let unified_animation_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Unified Animation (@binding(3))"),
+            size: (unified_animation_capacity * 48) as u64, // 48 bytes per mat3x4
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
-        // Create static keyframes storage buffer for skeletal animation
-        // @binding(7): Contains all pre-decoded bone matrices for all animation keyframes
-        // Placeholder size (1 matrix = 48 bytes), will grow when animations are loaded
-        let all_keyframes_capacity = 1; // matrices (placeholder)
-        let all_keyframes_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("All Keyframes (@binding(7))"),
-            size: (all_keyframes_capacity * 48) as u64, // 48 bytes per 3x4 matrix
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        // Create matrix storage buffers (per-frame arrays)
-        let model_matrix_capacity = 1024;
-        let model_matrix_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Model Matrices"),
-            size: (model_matrix_capacity * std::mem::size_of::<Mat4>()) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let view_matrix_capacity = 16;
-        let view_matrix_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("View Matrices"),
-            size: (view_matrix_capacity * std::mem::size_of::<Mat4>()) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let proj_matrix_capacity = 16;
-        let proj_matrix_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Projection Matrices"),
-            size: (proj_matrix_capacity * std::mem::size_of::<Mat4>()) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        // Create MVP indices buffer (2 × u32 per entry: packed MVP + shading_state_index)
+        // Create MVP indices buffer (4 × u32 per entry: absolute model/view/proj/shading indices)
         let mvp_indices_capacity = 1024;
         let mvp_indices_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("MVP Indices"),
@@ -226,14 +192,6 @@ impl ZGraphics {
 
         // Create offscreen render target at default resolution (960×540)
         let render_target = Self::create_render_target(&device, 960, 540, surface_format);
-
-        // Create screen dimensions uniform buffer (for screen-space quad rendering)
-        let screen_dims_data: [f32; 2] = [render_target.width as f32, render_target.height as f32];
-        let screen_dims_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Screen Dimensions Uniform"),
-            contents: bytemuck::cast_slice(&screen_dims_data),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
 
         // Create blit pipeline for scaling render target to window
         let (blit_pipeline, blit_bind_group, blit_sampler) =
@@ -300,18 +258,14 @@ impl ZGraphics {
             texture_manager,
             sampler_nearest,
             sampler_linear,
-            bone_buffer,
-            inverse_bind_buffer,
-            all_keyframes_buffer,
-            inverse_bind_capacity,
-            all_keyframes_capacity,
-            model_matrix_buffer,
-            view_matrix_buffer,
-            proj_matrix_buffer,
+            // Unified buffer architecture
+            unified_transforms_buffer,
+            unified_transforms_capacity,
+            unified_animation_buffer,
+            unified_animation_capacity,
+            inverse_bind_end: 0,       // Set when inverse bind matrices are uploaded
+            animation_static_end: 0,   // Set when keyframes are uploaded
             mvp_indices_buffer,
-            model_matrix_capacity,
-            view_matrix_capacity,
-            proj_matrix_capacity,
             mvp_indices_capacity,
             shading_state_buffer,
             shading_state_capacity,
@@ -329,7 +283,6 @@ impl ZGraphics {
             unit_quad_format,
             unit_quad_base_vertex,
             unit_quad_first_index,
-            screen_dims_buffer,
         };
 
         // Precompile all 40 shader modules at startup

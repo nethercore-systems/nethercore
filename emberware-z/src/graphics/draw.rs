@@ -59,7 +59,17 @@ impl ZGraphics {
             let total_instances: usize =
                 z_state.quad_batches.iter().map(|b| b.instances.len()).sum();
 
+            // Compute absolute offsets for view/proj matrices in unified_transforms
+            // Layout: [models | views | projs]
+            let view_offset = z_state.model_matrices.len() as u32;
+            let proj_offset = (z_state.model_matrices.len() + z_state.view_matrices.len()) as u32;
+
+            // Get resolution index to pack into mode field (bits 8-9)
+            let resolution_index = z_state.init_config.resolution_index;
+
             // Accumulate all instances into one buffer and track batch offsets
+            // Transform logical view_index to absolute view_index and proj_index
+            // Pack resolution_index into upper bits of mode
             let mut all_instances = Vec::with_capacity(total_instances);
             let mut batch_info = Vec::new(); // (base_instance, instance_count, textures, blend_mode)
 
@@ -69,7 +79,20 @@ impl ZGraphics {
                 }
 
                 let base_instance = all_instances.len() as u32;
-                all_instances.extend_from_slice(&batch.instances);
+
+                // Transform each instance:
+                // - Convert logical view_index to absolute indices
+                // - Pack resolution_index into mode (bits 8-9)
+                for instance in &batch.instances {
+                    let mut transformed = *instance;
+                    let logical_view_index = transformed.view_index;
+                    transformed.view_index = view_offset + logical_view_index;
+                    transformed.proj_index = proj_offset + logical_view_index;
+                    // Pack resolution_index into bits 8-9 of mode
+                    transformed.mode |= (resolution_index & 0x3) << 8;
+                    all_instances.push(transformed);
+                }
+
                 batch_info.push((
                     base_instance,
                     batch.instances.len() as u32,

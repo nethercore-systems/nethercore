@@ -53,17 +53,21 @@ pub struct ZFFIState {
     /// Next keyframe handle to allocate
     pub next_keyframe_handle: u32,
 
-    // GPU Animation Index Tracking (Animation System v2)
-    /// Tracks where each skeleton's inverse bind matrices are in @binding(6)
+    // GPU Animation Index Tracking (Animation System v2 - Unified Buffer)
+    /// Tracks where each skeleton's inverse bind matrices are in unified_animation
     /// Index = skeleton_handle - 1 (handles are 1-indexed)
     pub skeleton_gpu_info: Vec<SkeletonGpuInfo>,
-    /// Tracks where each keyframe collection's data is in @binding(7)
+    /// Tracks where each keyframe collection's data is in unified_animation
     /// Index = keyframe_handle - 1 (handles are 1-indexed)
     pub keyframe_gpu_info: Vec<KeyframeGpuInfo>,
     /// Current keyframe source for skinned draws (Static or Immediate)
     pub current_keyframe_source: KeyframeSource,
-    /// Current inverse bind base offset into @binding(6) for the bound skeleton
+    /// Current inverse bind base offset (already absolute - inverse_bind at offset 0)
     pub current_inverse_bind_base: u32,
+    /// Offset where inverse_bind section ends = keyframes section starts (set after static upload)
+    pub inverse_bind_end: u32,
+    /// Offset where static data ends = immediate section starts (set after static upload)
+    pub animation_static_end: u32,
 
     // Virtual Render Pass (direct recording)
     pub render_pass: crate::graphics::VirtualRenderPass,
@@ -166,6 +170,8 @@ impl Default for ZFFIState {
             keyframe_gpu_info: Vec::new(),
             current_keyframe_source: KeyframeSource::default(),
             current_inverse_bind_base: 0,
+            inverse_bind_end: 0,
+            animation_static_end: 0,
             render_pass: crate::graphics::VirtualRenderPass::new(),
             mesh_map: hashbrown::HashMap::new(),
             pending_textures: Vec::new(),
@@ -431,23 +437,21 @@ impl ZFFIState {
         }
     }
 
-    /// Sync animation state (Animation System v2) to current_shading_state
+    /// Sync animation state (Animation System v2 - Unified Buffer) to current_shading_state
     ///
-    /// Copies current_keyframe_source and current_inverse_bind_base to
-    /// the packed shading state fields. Called before add_shading_state().
+    /// Computes absolute keyframe_base into unified_animation buffer:
+    /// - Static keyframes: inverse_bind_end + section_offset
+    /// - Immediate bones: animation_static_end + offset
+    ///
+    /// Also copies current_inverse_bind_base (already absolute since inverse_bind is at offset 0).
+    /// Called before add_shading_state().
     pub fn sync_animation_state(&mut self) {
-        use crate::graphics::ANIMATION_FLAG_USE_IMMEDIATE;
-
-        // Determine keyframe_base and animation_flags from current_keyframe_source
-        let (keyframe_base, use_immediate) = match self.current_keyframe_source {
-            KeyframeSource::Static { offset } => (offset, false),
-            KeyframeSource::Immediate { offset } => (offset, true),
-        };
-
-        let animation_flags = if use_immediate {
-            ANIMATION_FLAG_USE_IMMEDIATE
-        } else {
-            0
+        // Compute absolute keyframe_base into unified_animation buffer
+        let keyframe_base = match self.current_keyframe_source {
+            // Static keyframes are at [inverse_bind_end..animation_static_end)
+            KeyframeSource::Static { offset } => self.inverse_bind_end + offset,
+            // Immediate bones are at [animation_static_end..)
+            KeyframeSource::Immediate { offset } => self.animation_static_end + offset,
         };
 
         // Update shading state if changed
@@ -461,10 +465,7 @@ impl ZFFIState {
             self.shading_state_dirty = true;
         }
 
-        if self.current_shading_state.animation_flags != animation_flags {
-            self.current_shading_state.animation_flags = animation_flags;
-            self.shading_state_dirty = true;
-        }
+        // Note: animation_flags no longer used - shader uses unified_animation with pre-computed offsets
     }
 
     /// Update texture filter mode in current shading state

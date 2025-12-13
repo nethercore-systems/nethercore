@@ -2,33 +2,50 @@
 // Prepended with common.wgsl bindings/utilities by build.rs
 
 // ============================================================================
-// Quad-Specific Bindings (in addition to common bindings 0-7)
+// Quad-Specific Bindings
+// Uses bindings from common.wgsl: 0-3 (binding 4 is quad_instances below)
 // ============================================================================
 
 struct QuadInstance {
     position: vec4<f32>,       // world/screen position (xyz used)
     size: vec2<f32>,           // width, height
     rotation: f32,             // radians (screen-space only)
-    mode: u32,                 // QuadMode enum
+    mode_packed: u32,          // bits 0-7: QuadMode, bits 8-9: resolution_index
     uv: vec4<f32>,             // texture atlas rect (u0, v0, u1, v1)
     color: u32,                // packed RGBA8
     shading_state_index: u32,
-    view_index: u32,
-    _padding: u32,
+    view_index: u32,           // Absolute index into unified_transforms
+    proj_index: u32,           // Absolute index into unified_transforms
 }
 
-@group(0) @binding(8) var<storage, read> quad_instances: array<QuadInstance>;
+// Binding 4: quad_instances (only used by quad shader)
+@group(0) @binding(4) var<storage, read> quad_instances: array<QuadInstance>;
 
-struct ScreenDimensions { width: f32, height: f32, }
-@group(0) @binding(9) var<uniform> screen_dims: ScreenDimensions;
-
-// Quad modes
+// Quad modes (bits 0-7 of mode_packed)
 const BILLBOARD_SPHERICAL: u32 = 0u;
 const BILLBOARD_CYLINDRICAL_Y: u32 = 1u;
 const BILLBOARD_CYLINDRICAL_X: u32 = 2u;
 const BILLBOARD_CYLINDRICAL_Z: u32 = 3u;
 const SCREEN_SPACE: u32 = 4u;
 const WORLD_SPACE: u32 = 5u;
+
+// Hardcoded resolutions (indexed by bits 8-9 of mode_packed)
+// 0=360p, 1=540p, 2=720p, 3=1080p
+const RESOLUTIONS: array<vec2<f32>, 4> = array<vec2<f32>, 4>(
+    vec2<f32>(640.0, 360.0),
+    vec2<f32>(960.0, 540.0),
+    vec2<f32>(1280.0, 720.0),
+    vec2<f32>(1920.0, 1080.0)
+);
+
+// Extract mode and resolution from packed u32
+fn unpack_mode(packed: u32) -> u32 {
+    return packed & 0xFFu;
+}
+
+fn unpack_resolution_index(packed: u32) -> u32 {
+    return (packed >> 8u) & 0x3u;
+}
 
 // ============================================================================
 // Billboard Math
@@ -93,24 +110,30 @@ struct QuadVertexOut {
 fn vs(in: QuadVertexIn, @builtin(instance_index) instance_idx: u32) -> QuadVertexOut {
     var out: QuadVertexOut;
     let instance = quad_instances[instance_idx];
-    let view_matrix = view_matrices[instance.view_index];
-    let projection_matrix = proj_matrices[instance.view_index];
+    // Access view/proj directly - indices are pre-computed by CPU
+    let view_matrix = unified_transforms[instance.view_index];
+    let projection_matrix = unified_transforms[instance.proj_index];
+
+    // Unpack mode and resolution from packed field
+    let mode = unpack_mode(instance.mode_packed);
+    let resolution_idx = unpack_resolution_index(instance.mode_packed);
+    let screen_dims = RESOLUTIONS[resolution_idx];
 
     var world_pos: vec3<f32>;
 
-    if (instance.mode == SCREEN_SPACE) {
+    if (mode == SCREEN_SPACE) {
         let screen_offset = apply_screen_space(in.position.xy, instance.size, instance.rotation);
-        let ndc_x = (instance.position.x + screen_offset.x) / screen_dims.width * 2.0 - 1.0;
-        let ndc_y = 1.0 - (instance.position.y + screen_offset.y) / screen_dims.height * 2.0;
+        let ndc_x = (instance.position.x + screen_offset.x) / screen_dims.x * 2.0 - 1.0;
+        let ndc_y = 1.0 - (instance.position.y + screen_offset.y) / screen_dims.y * 2.0;
         out.clip_position = vec4<f32>(ndc_x, ndc_y, instance.position.z, 1.0);
         out.world_position = instance.position.xyz;
-    } else if (instance.mode == WORLD_SPACE) {
+    } else if (mode == WORLD_SPACE) {
         let scaled_pos = vec3<f32>(in.position.x * instance.size.x, in.position.y * instance.size.y, 0.0);
         world_pos = instance.position.xyz + scaled_pos;
         out.world_position = world_pos;
         out.clip_position = projection_matrix * view_matrix * vec4<f32>(world_pos, 1.0);
     } else {
-        let billboard_offset = apply_billboard(in.position.xy, instance.size, instance.mode, view_matrix);
+        let billboard_offset = apply_billboard(in.position.xy, instance.size, mode, view_matrix);
         world_pos = instance.position.xyz + billboard_offset;
         out.world_position = world_pos;
         out.clip_position = projection_matrix * view_matrix * vec4<f32>(world_pos, 1.0);
@@ -119,7 +142,7 @@ fn vs(in: QuadVertexIn, @builtin(instance_index) instance_idx: u32) -> QuadVerte
     out.uv = mix(instance.uv.xy, instance.uv.zw, in.uv);
     out.color = unpack_rgba8(instance.color);
     out.shading_state_index = instance.shading_state_index;
-    out.mode = instance.mode;
+    out.mode = mode;
     return out;
 }
 

@@ -49,8 +49,9 @@ fn fs(in: SkyVertexOut) -> @location(0) vec4<f32> {
     let sky_data = unpack_sky(shading.sky);
 
     // Compute view ray per-pixel (not interpolated from vertices)
-    let view_matrix = view_matrices[in.view_idx];
-    let proj_matrix = proj_matrices[in.proj_idx];
+    // view_idx and proj_idx are pre-computed absolute indices by CPU
+    let view_matrix = unified_transforms[in.view_idx];
+    let proj_matrix = unified_transforms[in.proj_idx];
 
     // Extract camera basis vectors (rows of view matrix rotation part)
     let cam_right = vec3<f32>(view_matrix[0].x, view_matrix[1].x, view_matrix[2].x);

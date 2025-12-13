@@ -319,28 +319,28 @@ pub(crate) fn create_sky_pipeline(
 }
 
 /// Create bind group layout for per-frame uniforms (group 0)
-/// Unified layout for all render modes (0-3)
+///
+/// UNIFIED BUFFER ARCHITECTURE (5 bindings, all storage, grouped by purpose):
+/// - Binding 0-1: Transforms (unified_transforms, mvp_indices)
+/// - Binding 2: Shading (shading_states)
+/// - Binding 3: Animation (unified_animation)
+/// - Binding 4: Quad rendering (quad_instances)
+///
+/// CPU pre-computes absolute indices into unified_transforms (no frame_offsets needed).
+/// Screen dimensions eliminated - resolution_index packed into QuadInstance.mode.
 fn create_frame_bind_group_layout(
     device: &wgpu::Device,
     _render_mode: u8,
 ) -> wgpu::BindGroupLayout {
-    // Unified binding layout (0-5) - same for all modes
     let bindings = vec![
-        // Binding 0: Model matrices storage buffer (per-frame array)
+        // =====================================================================
+        // TRANSFORMS (bindings 0-1)
+        // =====================================================================
+
+        // Binding 0: unified_transforms - all mat4x4 matrices [models | views | projs]
+        // VERTEX_FRAGMENT: sky shader needs view/proj matrices in fragment
         wgpu::BindGroupLayoutEntry {
             binding: 0,
-            visibility: wgpu::ShaderStages::VERTEX,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Storage { read_only: true },
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        },
-        // Binding 1: View matrices storage buffer (per-frame array)
-        // VERTEX_FRAGMENT: sky shader computes view rays per-pixel in fragment
-        wgpu::BindGroupLayoutEntry {
-            binding: 1,
             visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
             ty: wgpu::BindingType::Buffer {
                 ty: wgpu::BufferBindingType::Storage { read_only: true },
@@ -349,8 +349,24 @@ fn create_frame_bind_group_layout(
             },
             count: None,
         },
-        // Binding 2: Projection matrices storage buffer (per-frame array)
-        // VERTEX_FRAGMENT: sky shader extracts FOV in fragment
+        // Binding 1: mvp_indices - absolute indices [model_idx, view_idx, proj_idx, shading_idx]
+        // view_idx and proj_idx are pre-offset by CPU to point directly into unified_transforms
+        wgpu::BindGroupLayoutEntry {
+            binding: 1,
+            visibility: wgpu::ShaderStages::VERTEX,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        },
+
+        // =====================================================================
+        // SHADING (binding 2)
+        // =====================================================================
+
+        // Binding 2: shading_states - per-draw shading state array
         wgpu::BindGroupLayoutEntry {
             binding: 2,
             visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
@@ -361,10 +377,15 @@ fn create_frame_bind_group_layout(
             },
             count: None,
         },
-        // Binding 3: Shading states storage buffer (per-draw shading state array)
+
+        // =====================================================================
+        // ANIMATION (binding 3)
+        // =====================================================================
+
+        // Binding 3: unified_animation - all mat3x4 [inverse_bind | keyframes | immediate]
         wgpu::BindGroupLayoutEntry {
             binding: 3,
-            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+            visibility: wgpu::ShaderStages::VERTEX,
             ty: wgpu::BindingType::Buffer {
                 ty: wgpu::BufferBindingType::Storage { read_only: true },
                 has_dynamic_offset: false,
@@ -372,7 +393,13 @@ fn create_frame_bind_group_layout(
             },
             count: None,
         },
-        // Binding 4: MVP + shading indices storage buffer (vec2<u32>: packed MVP + shading state index)
+
+        // =====================================================================
+        // QUAD RENDERING (binding 4)
+        // =====================================================================
+
+        // Binding 4: quad_instances - for GPU-instanced quad rendering
+        // Screen dimensions eliminated - resolution_index packed into mode field
         wgpu::BindGroupLayoutEntry {
             binding: 4,
             visibility: wgpu::ShaderStages::VERTEX,
@@ -380,61 +407,6 @@ fn create_frame_bind_group_layout(
                 ty: wgpu::BufferBindingType::Storage { read_only: true },
                 has_dynamic_offset: false,
                 min_binding_size: None,
-            },
-            count: None,
-        },
-        // Binding 5: Bone storage buffer for GPU skinning
-        wgpu::BindGroupLayoutEntry {
-            binding: 5,
-            visibility: wgpu::ShaderStages::VERTEX,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Storage { read_only: true },
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        },
-        // Binding 6: Inverse bind storage buffer for all skeletons (static after init)
-        wgpu::BindGroupLayoutEntry {
-            binding: 6,
-            visibility: wgpu::ShaderStages::VERTEX,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Storage { read_only: true },
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        },
-        // Binding 7: All keyframes storage buffer - pre-decoded bone matrices (static after init)
-        wgpu::BindGroupLayoutEntry {
-            binding: 7,
-            visibility: wgpu::ShaderStages::VERTEX,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Storage { read_only: true },
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        },
-        // Binding 8: Quad instances storage buffer (for GPU-instanced quad rendering)
-        wgpu::BindGroupLayoutEntry {
-            binding: 8,
-            visibility: wgpu::ShaderStages::VERTEX,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Storage { read_only: true },
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        },
-        // Binding 9: Screen dimensions uniform (for screen-space quad NDC conversion)
-        wgpu::BindGroupLayoutEntry {
-            binding: 9,
-            visibility: wgpu::ShaderStages::VERTEX,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: wgpu::BufferSize::new(8), // 2 × f32 = 8 bytes
             },
             count: None,
         },

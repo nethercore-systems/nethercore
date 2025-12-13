@@ -662,19 +662,26 @@ mod tests {
 
         let m = bone_transform_to_matrix(&t);
 
-        // X axis should be unchanged
+        // For 90° rotation around X, the rotation matrix is:
+        // [1   0    0]
+        // [0   0   -1]  (row 1)
+        // [0   1    0]  (row 2)
+        //
+        // This transforms: Y axis → Z, Z axis → -Y
+
+        // Row 0: X axis unchanged
         assert!((m.row0[0] - 1.0).abs() < 0.001);
         assert!((m.row0[1]).abs() < 0.001);
         assert!((m.row0[2]).abs() < 0.001);
 
-        // Y axis rotates to Z: (0, 1, 0) -> (0, 0, 1)
+        // Row 1: [0, 0, -1]
         assert!((m.row1[0]).abs() < 0.001);
         assert!((m.row1[1]).abs() < 0.001);
-        assert!((m.row1[2] - 1.0).abs() < 0.001);
+        assert!((m.row1[2] + 1.0).abs() < 0.001); // -1
 
-        // Z axis rotates to -Y: (0, 0, 1) -> (0, -1, 0)
+        // Row 2: [0, 1, 0]
         assert!((m.row2[0]).abs() < 0.001);
-        assert!((m.row2[1] + 1.0).abs() < 0.001);
+        assert!((m.row2[1] - 1.0).abs() < 0.001); // +1
         assert!((m.row2[2]).abs() < 0.001);
     }
 }

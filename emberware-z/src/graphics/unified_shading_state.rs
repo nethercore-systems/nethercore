@@ -494,12 +494,12 @@ pub const FLAG_SKINNING_MODE: u32 = 1 << 0;
 pub const FLAG_TEXTURE_FILTER_LINEAR: u32 = 1 << 1;
 
 // ============================================================================
-// Animation System v2 Flags (in animation_flags field)
+// Animation System v2 (Unified Buffer)
 // ============================================================================
-
-/// Flag bit for immediate bone mode in PackedUnifiedShadingState.animation_flags
-/// 0 = use static keyframes (@binding(7)), 1 = use immediate bones (@binding(5))
-pub const ANIMATION_FLAG_USE_IMMEDIATE: u32 = 1 << 0;
+// NOTE: ANIMATION_FLAG_USE_IMMEDIATE removed - unified_animation buffer uses
+// pre-computed offsets. The shader just reads from unified_animation[keyframe_base + bone_idx].
+// The animation_flags field in PackedUnifiedShadingState is now unused but kept for
+// struct layout compatibility.
 
 // ============================================================================
 // Material Override Flags (bits 2-7)

@@ -300,69 +300,80 @@ impl ZGraphics {
                 )
             });
 
-        // Upload matrices from z_state to GPU storage buffers
-        // 1. Upload model matrices
-        if !z_state.model_matrices.is_empty() {
-            self.ensure_model_buffer_capacity(z_state.model_matrices.len());
-            let data = bytemuck::cast_slice(&z_state.model_matrices);
-            self.queue.write_buffer(&self.model_matrix_buffer, 0, data);
+        // =================================================================
+        // UNIFIED BUFFER UPLOADS
+        // =================================================================
+
+        // 1. Upload unified transforms: [models | views | projs]
+        let model_count = z_state.model_matrices.len();
+        let view_count = z_state.view_matrices.len();
+        let proj_count = z_state.proj_matrices.len();
+        let total_transforms = model_count + view_count + proj_count;
+
+        if total_transforms > 0 {
+            self.ensure_unified_transforms_capacity(total_transforms);
+
+            // Build contiguous data: models, then views, then projs
+            let mut transform_data =
+                Vec::with_capacity(total_transforms * std::mem::size_of::<Mat4>());
+            transform_data.extend_from_slice(bytemuck::cast_slice(&z_state.model_matrices));
+            transform_data.extend_from_slice(bytemuck::cast_slice(&z_state.view_matrices));
+            transform_data.extend_from_slice(bytemuck::cast_slice(&z_state.proj_matrices));
+
+            self.queue
+                .write_buffer(&self.unified_transforms_buffer, 0, &transform_data);
         }
 
-        // 2. Upload view matrices
-        if !z_state.view_matrices.is_empty() {
-            self.ensure_view_buffer_capacity(z_state.view_matrices.len());
-            let data = bytemuck::cast_slice(&z_state.view_matrices);
-            self.queue.write_buffer(&self.view_matrix_buffer, 0, data);
-        }
-
-        // 3. Upload projection matrices
-        if !z_state.proj_matrices.is_empty() {
-            self.ensure_proj_buffer_capacity(z_state.proj_matrices.len());
-            let data = bytemuck::cast_slice(&z_state.proj_matrices);
-            self.queue.write_buffer(&self.proj_matrix_buffer, 0, data);
-        }
-
-        // 4. Upload shading states (NEW - Phase 5)
+        // 2. Upload shading states
         if !z_state.shading_states.is_empty() {
             self.ensure_shading_state_buffer_capacity(z_state.shading_states.len());
             let data = bytemuck::cast_slice(&z_state.shading_states);
             self.queue.write_buffer(&self.shading_state_buffer, 0, data);
         }
 
-        // 5. Upload MVP + shading state indices (already deduplicated by add_mvp_shading_state)
-        // WGSL: array<vec4<u32>> - unpacked indices use all 4 fields naturally (no bit-packing!)
-        // Each entry is 4 × u32: [model_idx, view_idx, proj_idx, shading_idx]
+        // 3. Upload MVP + shading indices with ABSOLUTE offsets into unified_transforms
+        // CPU pre-computes absolute indices so shader does direct lookup without offset arithmetic
+        // view_idx → view_idx + model_count
+        // proj_idx → proj_idx + model_count + view_count
         let state_count = z_state.mvp_shading_states.len();
         if state_count > 0 {
             self.ensure_mvp_indices_buffer_capacity(state_count);
-            let data = bytemuck::cast_slice(&z_state.mvp_shading_states);
+
+            // Transform relative indices to absolute indices
+            let view_offset = model_count as u32;
+            let proj_offset = (model_count + view_count) as u32;
+
+            let absolute_indices: Vec<super::MvpShadingIndices> = z_state
+                .mvp_shading_states
+                .iter()
+                .map(|idx| super::MvpShadingIndices {
+                    model_idx: idx.model_idx,
+                    view_idx: idx.view_idx + view_offset,
+                    proj_idx: idx.proj_idx + proj_offset,
+                    shading_idx: idx.shading_idx,
+                })
+                .collect();
+
+            let data = bytemuck::cast_slice(&absolute_indices);
             self.queue.write_buffer(&self.mvp_indices_buffer, 0, data);
         }
 
-        // 6. Upload bone matrices (3x4 format, 12 floats per bone)
+        // 6. Upload immediate bone matrices to unified_animation (dynamic section)
+        // Bones are appended after static data (inverse_bind + keyframes)
         if !z_state.bone_matrices.is_empty() {
             let bone_count = z_state.bone_matrices.len().min(256);
             let mut bone_data: Vec<f32> = Vec::with_capacity(bone_count * 12);
             for matrix in &z_state.bone_matrices[..bone_count] {
                 bone_data.extend_from_slice(&matrix.to_array());
             }
+            // Write after static sections (inverse_bind + keyframes)
+            let byte_offset = (self.animation_static_end * 48) as u64;
             self.queue
-                .write_buffer(&self.bone_buffer, 0, bytemuck::cast_slice(&bone_data));
+                .write_buffer(&self.unified_animation_buffer, byte_offset, bytemuck::cast_slice(&bone_data));
         }
 
-        // 7. Upload inverse bind matrices when a skeleton is bound
-        if let Some(skeleton) = z_state.get_bound_skeleton() {
-            let bone_count = skeleton.bone_count as usize;
-            let mut inverse_bind_data: Vec<f32> = Vec::with_capacity(bone_count * 12);
-            for matrix in &skeleton.inverse_bind[..bone_count] {
-                inverse_bind_data.extend_from_slice(&matrix.to_array());
-            }
-            self.queue.write_buffer(
-                &self.inverse_bind_buffer,
-                0,
-                bytemuck::cast_slice(&inverse_bind_data),
-            );
-        }
+        // NOTE: Inverse bind matrices are now uploaded once during init via upload_static_inverse_bind()
+        // They live in unified_animation[0..inverse_bind_end]
 
         // Take texture cache out temporarily to avoid nested mutable borrows during render pass.
         // Cache is persistent across frames - entries are reused when keys match.
@@ -406,15 +417,12 @@ impl ZGraphics {
             let bind_group_hash = {
                 use std::hash::{Hash, Hasher};
                 let mut hasher = std::collections::hash_map::DefaultHasher::new();
-                self.model_matrix_capacity.hash(&mut hasher);
-                self.view_matrix_capacity.hash(&mut hasher);
-                self.proj_matrix_capacity.hash(&mut hasher);
+                // Unified buffer capacities
+                self.unified_transforms_capacity.hash(&mut hasher);
+                self.unified_animation_capacity.hash(&mut hasher);
                 self.shading_state_capacity.hash(&mut hasher);
                 self.mvp_indices_capacity.hash(&mut hasher);
                 self.current_render_mode.hash(&mut hasher);
-                // Include static animation buffer capacities
-                self.inverse_bind_capacity.hash(&mut hasher);
-                self.all_keyframes_capacity.hash(&mut hasher);
                 // Include quad instance buffer capacity
                 self.buffer_manager.quad_instance_capacity().hash(&mut hasher);
                 hasher.finish()
@@ -440,53 +448,20 @@ impl ZGraphics {
                         &first_state,
                     );
 
+                    // Bind group layout (grouped by purpose):
+                    // 0-1: Transforms (unified_transforms, mvp_indices)
+                    // 2: Shading (shading_states)
+                    // 3: Animation (unified_animation)
+                    // 4: Quad rendering (quad_instances)
                     let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                         label: Some("Frame Bind Group (Unified)"),
                         layout: &pipeline_entry.bind_group_layout_frame,
                         entries: &[
-                            wgpu::BindGroupEntry {
-                                binding: 0,
-                                resource: self.model_matrix_buffer.as_entire_binding(),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 1,
-                                resource: self.view_matrix_buffer.as_entire_binding(),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 2,
-                                resource: self.proj_matrix_buffer.as_entire_binding(),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 3,
-                                resource: self.shading_state_buffer.as_entire_binding(),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 4,
-                                resource: self.mvp_indices_buffer.as_entire_binding(),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 5,
-                                resource: self.bone_buffer.as_entire_binding(),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 6,
-                                resource: self.inverse_bind_buffer.as_entire_binding(),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 7,
-                                resource: self.all_keyframes_buffer.as_entire_binding(),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 8,
-                                resource: self
-                                    .buffer_manager
-                                    .quad_instance_buffer()
-                                    .as_entire_binding(),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 9,
-                                resource: self.screen_dims_buffer.as_entire_binding(),
-                            },
+                            wgpu::BindGroupEntry { binding: 0, resource: self.unified_transforms_buffer.as_entire_binding() },
+                            wgpu::BindGroupEntry { binding: 1, resource: self.mvp_indices_buffer.as_entire_binding() },
+                            wgpu::BindGroupEntry { binding: 2, resource: self.shading_state_buffer.as_entire_binding() },
+                            wgpu::BindGroupEntry { binding: 3, resource: self.unified_animation_buffer.as_entire_binding() },
+                            wgpu::BindGroupEntry { binding: 4, resource: self.buffer_manager.quad_instance_buffer().as_entire_binding() },
                         ],
                     });
                     self.cached_frame_bind_group = Some(bind_group.clone());
@@ -508,53 +483,20 @@ impl ZGraphics {
                     &first_state,
                 );
 
+                // Bind group layout (grouped by purpose):
+                // 0-1: Transforms (unified_transforms, mvp_indices)
+                // 2: Shading (shading_states)
+                // 3: Animation (unified_animation)
+                // 4: Quad rendering (quad_instances)
                 let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some("Frame Bind Group (Unified)"),
                     layout: &pipeline_entry.bind_group_layout_frame,
                     entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: self.model_matrix_buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: self.view_matrix_buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 2,
-                            resource: self.proj_matrix_buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 3,
-                            resource: self.shading_state_buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 4,
-                            resource: self.mvp_indices_buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 5,
-                            resource: self.bone_buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 6,
-                            resource: self.inverse_bind_buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 7,
-                            resource: self.all_keyframes_buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 8,
-                            resource: self
-                                .buffer_manager
-                                .quad_instance_buffer()
-                                .as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 9,
-                            resource: self.screen_dims_buffer.as_entire_binding(),
-                        },
+                        wgpu::BindGroupEntry { binding: 0, resource: self.unified_transforms_buffer.as_entire_binding() },
+                        wgpu::BindGroupEntry { binding: 1, resource: self.mvp_indices_buffer.as_entire_binding() },
+                        wgpu::BindGroupEntry { binding: 2, resource: self.shading_state_buffer.as_entire_binding() },
+                        wgpu::BindGroupEntry { binding: 3, resource: self.unified_animation_buffer.as_entire_binding() },
+                        wgpu::BindGroupEntry { binding: 4, resource: self.buffer_manager.quad_instance_buffer().as_entire_binding() },
                     ],
                 });
                 self.cached_frame_bind_group = Some(bind_group.clone());
@@ -949,70 +891,31 @@ impl ZGraphics {
         // without re-rendering the game content
     }
 
-    /// Ensure model matrix buffer has sufficient capacity
-    pub(super) fn ensure_model_buffer_capacity(&mut self, count: usize) {
-        if count <= self.model_matrix_capacity {
+    // =================================================================
+    // BUFFER CAPACITY MANAGEMENT
+    // =================================================================
+
+    /// Ensure unified transforms buffer has sufficient capacity
+    pub(super) fn ensure_unified_transforms_capacity(&mut self, count: usize) {
+        if count <= self.unified_transforms_capacity {
             return;
         }
 
         let new_capacity = (count * 2).next_power_of_two();
         tracing::debug!(
-            "Growing model matrix buffer: {} → {}",
-            self.model_matrix_capacity,
+            "Growing unified transforms buffer: {} → {}",
+            self.unified_transforms_capacity,
             new_capacity
         );
 
-        self.model_matrix_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Model Matrices"),
+        self.unified_transforms_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Unified Transforms (@binding(0))"),
             size: (new_capacity * std::mem::size_of::<Mat4>()) as u64,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        self.model_matrix_capacity = new_capacity;
-    }
-
-    /// Ensure view matrix buffer has sufficient capacity
-    pub(super) fn ensure_view_buffer_capacity(&mut self, count: usize) {
-        if count <= self.view_matrix_capacity {
-            return;
-        }
-
-        let new_capacity = (count * 2).next_power_of_two();
-        tracing::debug!(
-            "Growing view matrix buffer: {} → {}",
-            self.view_matrix_capacity,
-            new_capacity
-        );
-
-        self.view_matrix_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("View Matrices"),
-            size: (new_capacity * std::mem::size_of::<Mat4>()) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        self.view_matrix_capacity = new_capacity;
-    }
-
-    /// Ensure projection matrix buffer has sufficient capacity
-    pub(super) fn ensure_proj_buffer_capacity(&mut self, count: usize) {
-        if count <= self.proj_matrix_capacity {
-            return;
-        }
-
-        let new_capacity = (count * 2).next_power_of_two();
-        tracing::debug!(
-            "Growing projection matrix buffer: {} → {}",
-            self.proj_matrix_capacity,
-            new_capacity
-        );
-
-        self.proj_matrix_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Projection Matrices"),
-            size: (new_capacity * std::mem::size_of::<Mat4>()) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        self.proj_matrix_capacity = new_capacity;
+        self.unified_transforms_capacity = new_capacity;
+        self.invalidate_frame_bind_group();
     }
 
     /// Ensure MVP indices buffer has sufficient capacity

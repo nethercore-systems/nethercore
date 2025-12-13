@@ -47,12 +47,11 @@ const VS_VIEW_POS: &str = "out.view_position = (view_matrix * model_pos).xyz;";
 const VS_CAMERA_POS: &str = "out.camera_position = extract_camera_position(view_matrix);";
 
 const VS_SKINNED: &str = r#"// GPU skinning: compute skinned position and normal
-    // Animation System v2: use keyframe_base and inverse_bind_base offsets
+    // Animation System v2 (Unified Buffer): keyframe_base and inverse_bind_base
+    // point directly into unified_animation buffer (offsets pre-computed on CPU)
     // - Skinning mode (FLAG_SKINNING_MODE): 0 = raw, 1 = apply inverse bind
-    // - Animation flags (ANIMATION_FLAG_USE_IMMEDIATE): 0 = all_keyframes, 1 = bones
     let shading_state_for_skinning = shading_states[shading_state_idx];
     let use_inverse_bind = (shading_state_for_skinning.flags & FLAG_SKINNING_MODE) != 0u;
-    let use_immediate = (shading_state_for_skinning.animation_flags & ANIMATION_FLAG_USE_IMMEDIATE) != 0u;
     let keyframe_base = shading_state_for_skinning.keyframe_base;
     let inverse_bind_base = shading_state_for_skinning.inverse_bind_base;
 
@@ -65,17 +64,12 @@ const VS_SKINNED: &str = r#"// GPU skinning: compute skinned position and normal
         let weight = in.bone_weights[i];
 
         if (weight > 0.0 && bone_idx < 256u) {
-            // Select bone matrix from immediate (bones) or static (all_keyframes) buffer
-            var bone_matrix: mat4x4<f32>;
-            if (use_immediate) {
-                bone_matrix = bone_to_mat4(bones[keyframe_base + bone_idx]);
-            } else {
-                bone_matrix = bone_to_mat4(all_keyframes[keyframe_base + bone_idx]);
-            }
+            // Get bone matrix from unified_animation (CPU pre-computed keyframe_base)
+            var bone_matrix = bone_to_mat4(unified_animation[keyframe_base + bone_idx]);
 
             // Apply inverse bind if in inverse bind mode and skeleton is bound
             if (use_inverse_bind && inverse_bind_base > 0u) {
-                let inv_bind = bone_to_mat4(inverse_bind[inverse_bind_base + bone_idx]);
+                let inv_bind = bone_to_mat4(unified_animation[inverse_bind_base + bone_idx]);
                 bone_matrix = bone_matrix * inv_bind;
             }
 

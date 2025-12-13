@@ -53,11 +53,13 @@ pub struct QuadInstance {
     /// Index into shading_states buffer for material properties
     pub shading_state_index: u32, // 4 bytes
 
-    /// Index into view_matrices buffer for billboard math
+    /// Absolute index into unified_transforms for view matrix
+    /// (Set by GPU upload transform, not by game code)
     pub view_index: u32, // 4 bytes
 
-    /// Final padding to align struct to 16 bytes (WGSL array elements must be 16-byte aligned)
-    pub _padding2: [u32; 1], // 4 bytes padding (60 -> 64 bytes)
+    /// Absolute index into unified_transforms for projection matrix
+    /// (Set by GPU upload transform, computed from logical view index)
+    pub proj_index: u32, // 4 bytes
 }
 
 // Safety: QuadInstance is repr(C) with only primitive types and explicit padding
@@ -84,7 +86,7 @@ impl QuadInstance {
             color,
             shading_state_index,
             view_index,
-            _padding2: [0],
+            proj_index: 0, // Set by GPU upload transform
         }
     }
 
@@ -133,7 +135,7 @@ impl QuadInstance {
             color,
             shading_state_index,
             view_index,
-            _padding2: [0],
+            proj_index: 0, // Set by GPU upload transform
         }
     }
 }
@@ -159,7 +161,7 @@ mod tests {
         // offset 48: color u32 (4 bytes) = 4 bytes
         // offset 52: shading_state_index u32 (4 bytes) = 4 bytes
         // offset 56: view_index u32 (4 bytes) = 4 bytes
-        // offset 60: _padding2 u32 (4 bytes) = 4 bytes
+        // offset 60: proj_index u32 (4 bytes) = 4 bytes
         // Total: 64 bytes (16-byte aligned)
 
         assert_eq!(
