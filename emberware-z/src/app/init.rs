@@ -137,14 +137,15 @@ impl App {
         self.window = Some(window);
 
         // If a game session exists, add the font and white textures to its texture map
+        // Note: Handle 0 is reserved as invalid (triggers fallback when load_* fails)
         if let (Some(session), Some(graphics)) = (&mut self.game_session, &self.graphics) {
             let font_texture_handle = graphics.font_texture();
             session
                 .resource_manager
                 .texture_map
-                .insert(0, font_texture_handle);
+                .insert(u32::MAX - 1, font_texture_handle); // Reserved for built-in font
             tracing::info!(
-                "Added font texture to existing game session: handle 0 -> {:?}",
+                "Added font texture to existing game session: handle 0xFFFFFFFE -> {:?}",
                 font_texture_handle
             );
 
@@ -152,7 +153,7 @@ impl App {
             session
                 .resource_manager
                 .texture_map
-                .insert(u32::MAX, white_texture_handle);
+                .insert(u32::MAX, white_texture_handle); // Reserved for white fallback
             tracing::info!(
                 "Added white texture to existing game session: handle 0xFFFFFFFF -> {:?}",
                 white_texture_handle

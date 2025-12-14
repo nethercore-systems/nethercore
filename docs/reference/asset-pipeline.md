@@ -157,14 +157,23 @@ Stride is calculated from the format flags at runtime.
 
 Binary format for textures. POD format (no magic bytes).
 
-**Header (8 bytes):**
+**Current Header (4 bytes):**
 ```
 Offset | Type | Description
 -------|------|----------------------------------
-0x00   | u32  | Width in pixels
-0x04   | u32  | Height in pixels
-0x08   | u8[] | Pixel data (RGBA8, width * height * 4 bytes)
+0x00   | u16  | Width in pixels (max 65535)
+0x02   | u16  | Height in pixels (max 65535)
+0x04   | u8[] | Pixel data (RGBA8, width * height * 4 bytes)
 ```
+
+**⚠️ Format Change (Dec 12, 2024):**
+- **Old format** (before commit 3ed67ef): 8-byte header with `u32 width + u32 height`
+- **Current format**: 4-byte header with `u16 width + u16 height`
+- If you have old `.ewztex` files, regenerate them with:
+  ```bash
+  ember-export texture <source.png> -o <output.ewztex>
+  ```
+- **Symptom of old format**: "invalid dimensions" error during load
 
 ### EmberZSound (.ewzsnd)
 

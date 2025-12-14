@@ -49,12 +49,20 @@ impl LibraryUi {
                 ui.heading(format!("Your Games ({})", games.len()));
                 ui.add_space(10.0);
 
-                for game in games {
-                    let selected = self.selected_game.as_ref() == Some(&game.id);
-                    if ui.selectable_label(selected, &game.title).clicked() {
-                        self.selected_game = Some(game.id.clone());
-                    }
-                }
+                // Calculate available height for the scroll area
+                // Reserve space for selection details and bottom buttons
+                let available_height = ui.available_height() - 150.0;
+
+                egui::ScrollArea::vertical()
+                    .max_height(available_height)
+                    .show(ui, |ui| {
+                        for game in games {
+                            let selected = self.selected_game.as_ref() == Some(&game.id);
+                            if ui.selectable_label(selected, &game.title).clicked() {
+                                self.selected_game = Some(game.id.clone());
+                            }
+                        }
+                    });
 
                 ui.separator();
 

@@ -323,9 +323,9 @@ fn draw_text(
     if let Some(ref font) = custom_font {
         state.bound_textures[0] = font.texture;
     } else {
-        // For built-in font, use handle 0 (special case handled in rendering)
-        // The rendering code will map handle 0 to the actual built-in font texture
-        state.bound_textures[0] = 0;
+        // For built-in font, use reserved handle (u32::MAX - 1)
+        // This handle is mapped to the actual built-in font texture at startup
+        state.bound_textures[0] = u32::MAX - 1;
     }
 
     // Generate quad instances for each character
@@ -627,7 +627,7 @@ fn load_font_ex(
 /// * `font_handle` — Font handle from load_font() or load_font_ex(), or 0 for built-in font
 ///
 /// # Notes
-/// - Font 0 is the built-in 8×8 monospace font (default)
+/// - Font handle 0 uses the built-in 8×8 monospace font (default)
 /// - Custom fonts persist for all subsequent draw_text() calls until changed
 #[inline]
 fn font_bind(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, font_handle: u32) {

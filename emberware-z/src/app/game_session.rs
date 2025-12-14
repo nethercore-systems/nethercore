@@ -377,14 +377,15 @@ impl App {
         self.game_session = Some(GameSession::new(runtime, resource_manager));
 
         // Add built-in textures BEFORE flushing user resources
+        // Note: Handle 0 is reserved as invalid (triggers fallback when load_* fails)
         if let (Some(session), Some(graphics)) = (&mut self.game_session, &self.graphics) {
             let font_texture_handle = graphics.font_texture();
             session
                 .resource_manager
                 .texture_map
-                .insert(0, font_texture_handle);
+                .insert(u32::MAX - 1, font_texture_handle); // Reserved for built-in font
             tracing::info!(
-                "Initialized font texture in texture_map: handle 0 -> {:?}",
+                "Initialized font texture in texture_map: handle 0xFFFFFFFE -> {:?}",
                 font_texture_handle
             );
 
@@ -392,7 +393,7 @@ impl App {
             session
                 .resource_manager
                 .texture_map
-                .insert(u32::MAX, white_texture_handle);
+                .insert(u32::MAX, white_texture_handle); // Reserved for white fallback
             tracing::info!(
                 "Initialized white texture in texture_map: handle 0xFFFFFFFF -> {:?}",
                 white_texture_handle

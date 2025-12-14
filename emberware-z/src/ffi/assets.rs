@@ -236,14 +236,21 @@ fn load_ztex(
 
         // Parse header
         let Some(header) = EmberZTextureHeader::from_bytes(data) else {
-            warn!("load_ztex: failed to parse header");
+            warn!(
+                "load_ztex: failed to parse header. \
+                File may be in old 8-byte format (u32+u32). \
+                Regenerate with: ember-export texture <source.png> -o <output.ewztex>"
+            );
             return 0;
         };
 
         // Validate dimensions
         if header.width == 0 || header.height == 0 {
             warn!(
-                "load_ztex: invalid dimensions {}x{}",
+                "load_ztex: invalid dimensions {}x{}. \
+                This often indicates old 8-byte header format. \
+                Expected: u16 width + u16 height (4 bytes total). \
+                Regenerate with ember-export.",
                 header.width, header.height
             );
             return 0;
