@@ -117,3 +117,11 @@ pub struct PendingKeyframes {
     pub frame_count: u16,
     pub data: Vec<u8>, // Platform format (16 bytes per bone per frame)
 }
+
+/// Pending sound load request (created during init)
+#[derive(Debug)]
+pub struct PendingSound {
+    pub handle: u32,
+    /// Mono 16-bit PCM samples at 22050Hz
+    pub data: Vec<i16>,
+}

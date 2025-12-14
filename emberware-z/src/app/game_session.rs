@@ -14,7 +14,13 @@ use super::App;
 /// Dummy audio backend for resource processing (Z resource manager doesn't use audio)
 pub(super) struct DummyAudio;
 impl emberware_core::console::Audio for DummyAudio {
-    fn set_rollback_mode(&mut self, _rolling_back: bool) {}
+    fn push_frame(&mut self, _samples: &[f32]) {}
+    fn sample_rate(&self) -> u32 {
+        22050
+    }
+    fn buffer_health(&self) -> f32 {
+        0.5
+    }
 }
 
 /// Load WASM bytes and optional data pack from a ROM file path
@@ -277,25 +283,33 @@ impl App {
 
         // Generate audio for this frame (per-frame audio architecture)
         // Audio state is in rollback.audio and is saved/restored during GGRS rollback
-        //
-        // Note: We clone the sounds Vec<Option<Sound>> because:
-        // 1. Sound contains Arc<Vec<i16>> so cloning is cheap (just Arc::clone)
-        // 2. We can't hold both game_mut() and audio_mut() at the same time
-        let (sounds, mut audio_state) = if let Some(game) = session.runtime.game_mut() {
-            let ctx = game.store_mut().data_mut();
-            (ctx.ffi.sounds.clone(), ctx.rollback.audio)
-        } else {
-            (Vec::new(), crate::audio::AudioPlaybackState::new())
-        };
+        // Skip audio generation during rollback to avoid wasted computation
+        let is_rolling_back = session
+            .runtime
+            .session()
+            .map_or(false, |s| s.is_rolling_back());
 
-        // Generate and submit audio samples
-        if let Some(audio) = session.runtime.audio_mut() {
-            audio.generate_and_submit(&mut audio_state, &sounds);
-        }
+        if !is_rolling_back {
+            // Get sounds from resource manager and audio state from rollback
+            let sounds = session.resource_manager.sounds();
+            let mut audio_state = if let Some(game) = session.runtime.game_mut() {
+                game.store_mut().data_mut().rollback.audio
+            } else {
+                crate::audio::AudioPlaybackState::new()
+            };
 
-        // Write back the updated audio state
-        if let Some(game) = session.runtime.game_mut() {
-            game.store_mut().data_mut().rollback.audio = audio_state;
+            // Generate audio samples and push to output
+            if let Some(audio) = session.runtime.audio_mut() {
+                // generate_frame returns a reference to internal buffer, so we need
+                // to copy it before calling push_frame
+                let samples = audio.generate_frame(&mut audio_state, sounds).to_vec();
+                audio.push_frame(&samples);
+            }
+
+            // Write back the updated audio state
+            if let Some(game) = session.runtime.game_mut() {
+                game.store_mut().data_mut().rollback.audio = audio_state;
+            }
         }
 
         // Check if game requested quit

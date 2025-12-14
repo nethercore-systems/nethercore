@@ -29,13 +29,19 @@ impl Graphics for TestGraphics {
 }
 
 /// Test audio backend (no-op)
-pub struct TestAudio {
-    pub rollback_mode: bool,
-}
+pub struct TestAudio;
 
 impl Audio for TestAudio {
-    fn set_rollback_mode(&mut self, rolling_back: bool) {
-        self.rollback_mode = rolling_back;
+    fn push_frame(&mut self, _samples: &[f32]) {
+        // No-op for tests
+    }
+
+    fn sample_rate(&self) -> u32 {
+        22050
+    }
+
+    fn buffer_health(&self) -> f32 {
+        0.5
     }
 }
 
@@ -106,9 +112,7 @@ impl Console for TestConsole {
     }
 
     fn create_audio(&self) -> anyhow::Result<Self::Audio> {
-        Ok(TestAudio {
-            rollback_mode: false,
-        })
+        Ok(TestAudio)
     }
 
     fn map_input(&self, raw: &RawInput) -> Self::Input {

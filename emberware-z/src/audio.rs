@@ -395,6 +395,12 @@ impl AudioOutput {
     pub fn available(&self) -> usize {
         self.producer.vacant_len()
     }
+
+    /// Get buffer health (0.0 = empty, 1.0 = full)
+    pub fn buffer_health(&self) -> f32 {
+        let occupied = RING_BUFFER_SIZE - self.producer.vacant_len();
+        occupied as f32 / RING_BUFFER_SIZE as f32
+    }
 }
 
 // ============================================================================
@@ -575,15 +581,13 @@ pub enum AudioCommand {
 ///
 /// This implements the per-frame audio generation approach:
 /// - Audio playback state is part of rollback state
-/// - `generate_and_submit()` is called once per frame after update
+/// - `generate_frame()` + `push_frame()` called once per frame after update
 /// - Audio output uses cpal + lock-free ring buffer
 pub struct ZAudio {
     /// The audio output (cpal stream)
     output: Option<AudioOutput>,
     /// Frame sample buffer (reused each frame)
     frame_buffer: Vec<f32>,
-    /// Whether we're in rollback mode (mutes new sounds)
-    rollback_mode: bool,
 }
 
 impl ZAudio {
@@ -600,70 +604,45 @@ impl ZAudio {
         Ok(Self {
             output,
             frame_buffer: vec![0.0; SAMPLES_PER_FRAME * 2],
-            rollback_mode: false,
         })
     }
 
-    /// Generate audio for the current frame and submit to output
+    /// Generate audio samples for the current frame
     ///
     /// This should be called once per frame after update() completes.
-    /// Skips audio generation during rollback replay.
-    pub fn generate_and_submit(
+    /// The caller should skip this during rollback.
+    pub fn generate_frame(
         &mut self,
         state: &mut AudioPlaybackState,
         sounds: &[Option<Sound>],
-    ) {
-        // Skip audio generation during rollback - state will be restored
-        // and we'll generate audio once we're at the confirmed frame
-        if self.rollback_mode {
-            return;
-        }
-
+    ) -> &[f32] {
         // Generate samples for this frame
         generate_audio_frame(state, sounds, &mut self.frame_buffer);
-
-        // Submit to audio output
-        if let Some(output) = &mut self.output {
-            output.write_samples(&self.frame_buffer);
-        }
+        &self.frame_buffer
     }
 
     /// Check if audio is available
     pub fn is_available(&self) -> bool {
         self.output.is_some()
     }
+}
 
-    /// Get the sample rate
-    pub fn sample_rate(&self) -> u32 {
+// Implement Audio trait
+impl emberware_core::console::Audio for ZAudio {
+    fn push_frame(&mut self, samples: &[f32]) {
+        if let Some(output) = &mut self.output {
+            output.write_samples(samples);
+        }
+    }
+
+    fn sample_rate(&self) -> u32 {
         self.output
             .as_ref()
             .map_or(SAMPLE_RATE, |o| o.sample_rate())
     }
 
-    /// Set rollback mode
-    pub fn set_rollback_mode(&mut self, rolling_back: bool) {
-        self.rollback_mode = rolling_back;
-    }
-
-    /// Check if in rollback mode
-    pub fn is_rolling_back(&self) -> bool {
-        self.rollback_mode
-    }
-
-    /// Process buffered audio commands (legacy - for backwards compatibility)
-    ///
-    /// In the new architecture, audio is generated per-frame via `generate_and_submit()`.
-    /// This method exists for compatibility during migration.
-    pub fn process_commands(&mut self, _commands: &[AudioCommand], _sounds: &[Option<Sound>]) {
-        // Legacy - no-op in new architecture
-        // Audio is now generated per-frame via AudioPlaybackState
-    }
-}
-
-// Implement Audio trait
-impl emberware_core::console::Audio for ZAudio {
-    fn set_rollback_mode(&mut self, rolling_back: bool) {
-        self.rollback_mode = rolling_back;
+    fn buffer_health(&self) -> f32 {
+        self.output.as_ref().map_or(0.5, |o| o.buffer_health())
     }
 }
 

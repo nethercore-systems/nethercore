@@ -11,7 +11,8 @@ use tracing::{info, warn};
 use wasmtime::{Caller, Linker};
 
 use super::{get_wasm_memory, guards::check_init_only, ZContext};
-use crate::audio::{Sound, MAX_SFX_CHANNELS};
+use crate::audio::MAX_SFX_CHANNELS;
+use crate::state::PendingSound;
 
 /// Register audio FFI functions
 pub fn register(linker: &mut Linker<ZContext>) -> Result<()> {
@@ -73,17 +74,14 @@ fn load_sound(mut caller: Caller<'_, ZContext>, data_ptr: u32, byte_len: u32) ->
 
     let state = &mut caller.data_mut().ffi;
 
-    // Create Sound and add to sounds vec
-    let sound = Sound::new(pcm_data);
-
+    // Add to pending sounds (will be moved to resource manager during process_pending_resources)
     let handle = state.next_sound_handle;
     state.next_sound_handle += 1;
 
-    // Resize sounds vec if needed
-    if handle as usize >= state.sounds.len() {
-        state.sounds.resize(handle as usize + 1, None);
-    }
-    state.sounds[handle as usize] = Some(sound);
+    state.pending_sounds.push(PendingSound {
+        handle,
+        data: pcm_data,
+    });
 
     info!("Loaded sound {} ({} samples)", handle, sample_count);
     handle

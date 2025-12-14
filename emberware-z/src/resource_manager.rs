@@ -3,14 +3,14 @@
 //! Manages the mapping between game resource handles (u32) and
 //! graphics backend handles (TextureHandle, MeshHandle).
 
-use crate::graphics::{MeshHandle, TextureHandle, ZGraphics, pack_vertex_data};
+use crate::graphics::{pack_vertex_data, MeshHandle, TextureHandle, ZGraphics};
 use crate::state::{
     BoneMatrix3x4, KeyframeGpuInfo, LoadedKeyframeCollection, SkeletonData, SkeletonGpuInfo,
     ZFFIState,
 };
 use emberware_core::console::{Audio, ConsoleResourceManager};
 use z_common::formats::{
-    BoneTransform, PLATFORM_BONE_KEYFRAME_SIZE, PlatformBoneKeyframe, decode_bone_transform,
+    decode_bone_transform, BoneTransform, PlatformBoneKeyframe, PLATFORM_BONE_KEYFRAME_SIZE,
 };
 
 /// Convert a BoneTransform to a 3x4 bone matrix
@@ -65,11 +65,14 @@ fn bone_transform_to_matrix(t: &BoneTransform) -> BoneMatrix3x4 {
 ///
 /// Manages the mapping between game resource handles (u32) and
 /// graphics backend handles (TextureHandle, MeshHandle).
+/// Also stores loaded sounds for audio generation.
 pub struct ZResourceManager {
     /// Mapping from game texture handles to graphics texture handles
     pub texture_map: hashbrown::HashMap<u32, TextureHandle>,
     /// Mapping from game mesh handles to graphics mesh handles
     pub mesh_map: hashbrown::HashMap<u32, MeshHandle>,
+    /// Loaded sounds (indexed by handle - 1, handle 0 is invalid)
+    sounds: Vec<Option<crate::audio::Sound>>,
 }
 
 impl Default for ZResourceManager {
@@ -77,6 +80,7 @@ impl Default for ZResourceManager {
         Self {
             texture_map: hashbrown::HashMap::new(),
             mesh_map: hashbrown::HashMap::new(),
+            sounds: Vec::new(),
         }
     }
 }
@@ -85,6 +89,11 @@ impl ZResourceManager {
     /// Create a new resource manager
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Get sounds slice for audio generation
+    pub fn sounds(&self) -> &[Option<crate::audio::Sound>] {
+        &self.sounds
     }
 }
 
@@ -182,6 +191,21 @@ impl ConsoleResourceManager for ZResourceManager {
                     tracing::warn!("Failed to load packed mesh {}: {}", pending.handle, e);
                 }
             }
+        }
+
+        // Process pending sounds (move to finalized storage in resource manager)
+        // Sounds are stored by handle order (handle N is at index N-1)
+        for pending in state.pending_sounds.drain(..) {
+            let index = pending.handle as usize - 1;
+            while self.sounds.len() <= index {
+                self.sounds.push(None);
+            }
+            self.sounds[index] = Some(crate::audio::Sound::new(pending.data));
+            tracing::debug!(
+                "Loaded sound: handle={} ({} samples)",
+                pending.handle,
+                self.sounds[index].as_ref().map_or(0, |s| s.len())
+            );
         }
 
         // Process pending skeletons (move to finalized storage)

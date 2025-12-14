@@ -191,10 +191,8 @@ impl<C: Console> Runtime<C> {
                         .handle_requests(game, requests)
                         .map_err(|e| anyhow::anyhow!("GGRS handle_requests failed: {}", e))?;
 
-                    // Update audio rollback mode
-                    if let Some(audio) = &mut self.audio {
-                        audio.set_rollback_mode(session.is_rolling_back());
-                    }
+                    // Note: Audio is generated at the game loop level after update,
+                    // and skipped during rollback by checking session.is_rolling_back()
 
                     // Execute each AdvanceFrame with its inputs
                     for inputs in advance_inputs {

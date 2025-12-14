@@ -9,8 +9,8 @@ use z_common::ZDataPack;
 
 use super::{
     BoneMatrix3x4, Font, KeyframeGpuInfo, KeyframeSource, LoadedKeyframeCollection,
-    PendingKeyframes, PendingMesh, PendingMeshPacked, PendingSkeleton, PendingTexture,
-    SkeletonData, SkeletonGpuInfo, ZInitConfig,
+    PendingKeyframes, PendingMesh, PendingMeshPacked, PendingSkeleton, PendingSound,
+    PendingTexture, SkeletonData, SkeletonGpuInfo, ZInitConfig,
 };
 
 /// FFI staging state for Emberware Z
@@ -90,8 +90,8 @@ pub struct ZFFIState {
     pub fonts: Vec<Font>,
     pub current_font: u32,
 
-    // Audio system (sounds stored here, playback state in ZRollbackState)
-    pub sounds: Vec<Option<crate::audio::Sound>>,
+    // Audio system (pending sounds processed during init, then moved to resource manager)
+    pub pending_sounds: Vec<PendingSound>,
     pub next_sound_handle: u32,
 
     // Init configuration
@@ -180,7 +180,7 @@ impl Default for ZFFIState {
             next_font_handle: 1,
             fonts: Vec::new(),
             current_font: 0, // 0 = built-in font
-            sounds: Vec::new(),
+            pending_sounds: Vec::new(),
             next_sound_handle: 1, // 0 reserved for invalid
             init_config: ZInitConfig::default(),
             model_matrices: model_matrices.clone(),
