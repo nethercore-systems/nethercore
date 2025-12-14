@@ -172,23 +172,37 @@ fn run_asset_generators(project_root: &Path) -> Result<()> {
         return Ok(());
     }
 
-    println!("Running {} asset generator(s)...", generators.len());
+    println!("Running {} asset generator(s) in parallel...", generators.len());
 
-    for generator in &generators {
-        let name = generator.file_name();
-        let name_str = name.to_string_lossy();
+    // Run generators in parallel and collect results
+    let results: Vec<_> = generators
+        .par_iter()
+        .map(|generator| {
+            let name = generator.file_name();
+            let name_str = name.to_string_lossy().to_string();
 
-        let output = Command::new("cargo")
-            .args(["run", "-p", &name_str, "--release"])
-            .current_dir(project_root)
-            .output()
-            .with_context(|| format!("Failed to run {}", name_str))?;
+            let output = Command::new("cargo")
+                .args(["run", "-p", &name_str, "--release"])
+                .current_dir(project_root)
+                .output();
 
-        if output.status.success() {
-            println!("  ✓ {} completed", name_str);
-        } else {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            println!("  ✗ {} failed: {}", name_str, stderr.lines().last().unwrap_or("unknown error"));
+            match output {
+                Ok(output) if output.status.success() => (name_str, Ok(())),
+                Ok(output) => {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    let error = stderr.lines().last().unwrap_or("unknown error").to_string();
+                    (name_str, Err(error))
+                }
+                Err(e) => (name_str, Err(format!("Failed to run: {}", e))),
+            }
+        })
+        .collect();
+
+    // Print results after all generators complete
+    for (name, result) in results {
+        match result {
+            Ok(()) => println!("  ✓ {} completed", name),
+            Err(e) => println!("  ✗ {} failed: {}", name, e),
         }
     }
 

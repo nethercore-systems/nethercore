@@ -11,12 +11,14 @@
 //! Controls:
 //! - D-pad Up/Down: Adjust animation speed
 //! - A button: Toggle animation pause
+//! - Left stick: Rotate view
 
 #![no_std]
 #![no_main]
 
 use core::panic::PanicInfo;
 use libm::{cosf, sinf};
+use examples_common::{DebugCamera, StickControl};
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
@@ -33,6 +35,8 @@ extern "C" {
     fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
     fn camera_fov(fov_degrees: f32);
 
+    fn left_stick_x(player: u32) -> f32;
+    fn left_stick_y(player: u32) -> f32;
     fn button_pressed(player: u32, button: u32) -> u32;
     fn button_held(player: u32, button: u32) -> u32;
 
@@ -138,6 +142,20 @@ const TOTAL_INDICES: usize = NUM_BOXES * INDICES_PER_BOX;    // 252
 
 static mut ROBOT_MESH: u32 = 0;
 static mut ROBOT_SKELETON: u32 = 0;
+
+/// Camera for orbit control
+static mut CAMERA: DebugCamera = DebugCamera {
+    target_x: 0.0,
+    target_y: 1.0,
+    target_z: 0.0,
+    distance: 18.0,
+    elevation: 20.0,
+    azimuth: 0.0,
+    auto_orbit_speed: 0.0,
+    stick_control: StickControl::LeftStick,
+    fov: 60.0,
+};
+
 static mut ANIM_TIME: f32 = 0.0;
 static mut ANIM_SPEED: f32 = 1.0;
 static mut PAUSED: bool = false;
@@ -297,14 +315,14 @@ fn compute_walk_cycle(phase: f32, bones: &mut [[f32; 12]; BONE_COUNT]) {
 
     // Left leg chain
     let l_hip_pos = [-LEG_OFFSET_X, HIP_Y, 0.0];
-    bones[1] = mat3x4_rotate_x_at(l_hip_pos, l_hip_angle);
+    bones[1] = mat3x4_rotate_x_world(l_hip_angle, l_hip_pos);
 
     let l_knee_local_y = KNEE_Y - HIP_Y;
     let l_knee_world = rotate_point_x(
         [l_hip_pos[0], l_hip_pos[1] + l_knee_local_y, l_hip_pos[2]],
         l_hip_pos, l_hip_angle
     );
-    bones[2] = mat3x4_rotate_x_at(l_knee_world, l_hip_angle + l_knee_bend);
+    bones[2] = mat3x4_rotate_x_world(l_hip_angle + l_knee_bend, l_knee_world);
 
     let l_foot_local_y = FOOT_Y - KNEE_Y;
     let l_foot_world = rotate_point_x(
@@ -316,14 +334,14 @@ fn compute_walk_cycle(phase: f32, bones: &mut [[f32; 12]; BONE_COUNT]) {
 
     // Right leg chain (mirrored)
     let r_hip_pos = [LEG_OFFSET_X, HIP_Y, 0.0];
-    bones[4] = mat3x4_rotate_x_at(r_hip_pos, r_hip_angle);
+    bones[4] = mat3x4_rotate_x_world(r_hip_angle, r_hip_pos);
 
     let r_knee_local_y = KNEE_Y - HIP_Y;
     let r_knee_world = rotate_point_x(
         [r_hip_pos[0], r_hip_pos[1] + r_knee_local_y, r_hip_pos[2]],
         r_hip_pos, r_hip_angle
     );
-    bones[5] = mat3x4_rotate_x_at(r_knee_world, r_hip_angle + r_knee_bend);
+    bones[5] = mat3x4_rotate_x_world(r_hip_angle + r_knee_bend, r_knee_world);
 
     let r_foot_local_y = FOOT_Y - KNEE_Y;
     let r_foot_world = rotate_point_x(
@@ -357,22 +375,6 @@ fn mat3x4_rotate_x_world(angle: f32, pos: [f32; 3]) -> [f32; 12] {
         0.0, c, s,      // col 1
         0.0, -s, c,     // col 2
         pos[0], pos[1], pos[2],  // translation to world pos
-    ]
-}
-
-/// Create a rotation matrix around X axis at a given pivot point
-fn mat3x4_rotate_x_at(pivot: [f32; 3], angle: f32) -> [f32; 12] {
-    let c = cosf(angle);
-    let s = sinf(angle);
-
-    let ty = pivot[1] * (1.0 - c) + pivot[2] * s;
-    let tz = pivot[2] * (1.0 - c) - pivot[1] * s;
-
-    [
-        1.0, 0.0, 0.0,
-        0.0, c, s,
-        0.0, -s, c,
-        pivot[0], ty + pivot[1], tz + pivot[2],
     ]
 }
 
@@ -429,6 +431,9 @@ pub extern "C" fn init() {
 #[no_mangle]
 pub extern "C" fn update() {
     unsafe {
+        // Update camera
+        CAMERA.update();
+
         // Toggle pause
         if button_pressed(0, BUTTON_A) != 0 {
             PAUSED = !PAUSED;
@@ -461,9 +466,8 @@ pub extern "C" fn update() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
-        // Set camera every frame (immediate mode)
-        camera_set(0.0, 8.0, 18.0, 0.0, 1.0, 0.0);
-        camera_fov(55.0);
+        // Apply camera
+        CAMERA.apply();
 
         let grid_offset = (GRID_SIZE as f32 - 1.0) * SPACING * 0.5;
 

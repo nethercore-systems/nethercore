@@ -63,6 +63,7 @@ static mut CAMERA: DebugCamera = DebugCamera {
     elevation: 20.0,
     azimuth: 0.0,
     auto_orbit_speed: 0.0, // No auto-orbit for matcap - user controls
+    stick_control: StickControl::RightStick,
     fov: 60.0,
 };
 

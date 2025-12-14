@@ -100,9 +100,18 @@ static mut LIGHT_INDICATOR_MESH: u32 = 0;
 static mut ROTATION_X: f32 = 0.0;
 static mut ROTATION_Y: f32 = 0.0;
 
-static mut CAMERA_AZIMUTH: f32 = 0.0;
-static mut CAMERA_ELEVATION: f32 = 20.0;
-static mut CAMERA_DISTANCE: f32 = 6.0;
+/// Camera for orbit control
+static mut CAMERA: DebugCamera = DebugCamera {
+    target_x: 0.0,
+    target_y: 0.0,
+    target_z: 0.0,
+    distance: 6.0,
+    elevation: 20.0,
+    azimuth: 0.0,
+    auto_orbit_speed: 15.0,
+    stick_control: StickControl::RightStick,
+    fov: 60.0,
+};
 
 const SHAPE_NAMES: [&str; 3] = ["Sphere", "Cube", "Torus"];
 
@@ -244,19 +253,8 @@ pub extern "C" fn update() {
             ROTATION_Y += ROTATION_SPEED * (1.0 / 60.0);
         }
 
-        // Camera orbit with right stick
-        let rstick_x = right_stick_x(0);
-        let rstick_y = right_stick_y(0);
-
-        if rstick_x.abs() > 0.1 || rstick_y.abs() > 0.1 {
-            CAMERA_AZIMUTH += rstick_x * 2.0;
-            CAMERA_ELEVATION -= rstick_y * 2.0;
-            CAMERA_ELEVATION = CAMERA_ELEVATION.clamp(-80.0, 80.0);
-        } else {
-            CAMERA_AZIMUTH += 15.0 * (1.0 / 60.0);
-        }
-
-        if CAMERA_AZIMUTH >= 360.0 { CAMERA_AZIMUTH -= 360.0; }
+        // Update camera
+        CAMERA.update();
     }
 }
 
@@ -264,7 +262,7 @@ pub extern "C" fn update() {
 pub extern "C" fn render() {
     unsafe {
         // Apply camera
-        apply_camera();
+        CAMERA.apply();
 
         // Configure and draw sky
         sky_set_colors(HORIZON_COLOR, ZENITH_COLOR);
@@ -300,19 +298,6 @@ pub extern "C" fn render() {
         // Draw UI
         draw_ui();
     }
-}
-
-unsafe fn apply_camera() {
-    let azimuth_rad = CAMERA_AZIMUTH * core::f32::consts::PI / 180.0;
-    let elevation_rad = CAMERA_ELEVATION * core::f32::consts::PI / 180.0;
-
-    let horizontal_dist = CAMERA_DISTANCE * cosf(elevation_rad);
-    let cam_x = horizontal_dist * sinf(azimuth_rad);
-    let cam_y = CAMERA_DISTANCE * sinf(elevation_rad);
-    let cam_z = horizontal_dist * cosf(azimuth_rad);
-
-    camera_set(cam_x, cam_y, cam_z, 0.0, 0.0, 0.0);
-    camera_fov(60.0);
 }
 
 unsafe fn apply_lights() {

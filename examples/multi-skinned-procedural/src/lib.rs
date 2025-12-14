@@ -19,6 +19,7 @@
 
 use core::panic::PanicInfo;
 use core::ptr::addr_of_mut;
+use examples_common::{DebugCamera, StickControl};
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
@@ -39,8 +40,6 @@ extern "C" {
     fn camera_fov(fov_degrees: f32);
 
     // Input
-    fn left_stick_x(player: u32) -> f32;
-    fn left_stick_y(player: u32) -> f32;
     fn button_pressed(player: u32, button: u32) -> u32;
     fn button_held(player: u32, button: u32) -> u32;
 
@@ -149,7 +148,19 @@ static mut ARM2_MESH: u32 = 0;
 static mut ARM2_SKELETON: u32 = 0;
 static mut ARM2_BONES_DATA: [f32; ARM2_BONES * BONE_MATRIX_FLOATS] = [0.0; ARM2_BONES * BONE_MATRIX_FLOATS];
 
-static mut VIEW_ROTATION_Y: f32 = 0.0;
+/// Camera for orbit control
+static mut CAMERA: DebugCamera = DebugCamera {
+    target_x: 0.0,
+    target_y: 3.0,
+    target_z: 0.0,
+    distance: 15.0,
+    elevation: 20.0,
+    azimuth: 0.0,
+    auto_orbit_speed: 0.0,
+    stick_control: StickControl::LeftStick,
+    fov: 60.0,
+};
+
 static mut ANIM_TIME: f32 = 0.0;
 static mut ANIM_SPEED: f32 = 1.0;
 static mut PAUSED: bool = false;
@@ -567,9 +578,8 @@ pub extern "C" fn init() {
 #[no_mangle]
 pub extern "C" fn update() {
     unsafe {
-        // View rotation
-        let stick_x = left_stick_x(0);
-        VIEW_ROTATION_Y += stick_x * 2.0;
+        // Update camera
+        CAMERA.update();
 
         // Toggle pause
         if button_pressed(0, BUTTON_A) != 0 {
@@ -604,9 +614,8 @@ pub extern "C" fn update() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
-        // Set camera every frame (immediate mode)
-        camera_set(0.0, 4.0, 15.0, 0.0, 3.0, 0.0);
-        camera_fov(50.0);
+        // Apply camera
+        CAMERA.apply();
 
         // Draw Arm 1 (vertical, positioned left)
         skeleton_bind(ARM1_SKELETON);

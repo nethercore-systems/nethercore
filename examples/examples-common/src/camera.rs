@@ -8,6 +8,13 @@
 use crate::ffi::*;
 use libm::{cosf, sinf};
 
+/// Which stick controls camera orbit
+#[derive(Copy, Clone)]
+pub enum StickControl {
+    LeftStick,   // For animation examples
+    RightStick,  // Default for inspector examples
+}
+
 /// Camera state for debug orbiting
 pub struct DebugCamera {
     /// Target point the camera looks at
@@ -23,6 +30,9 @@ pub struct DebugCamera {
     /// Auto-orbit speed (degrees per second, 0 to disable)
     pub auto_orbit_speed: f32,
 
+    /// Which stick controls camera orbit (default: RightStick)
+    pub stick_control: StickControl,
+
     /// Field of view
     pub fov: f32,
 }
@@ -37,6 +47,7 @@ impl Default for DebugCamera {
             elevation: 20.0,
             azimuth: 0.0,
             auto_orbit_speed: 15.0,
+            stick_control: StickControl::RightStick,
             fov: 60.0,
         }
     }
@@ -52,12 +63,24 @@ impl DebugCamera {
         }
     }
 
+    /// Create camera with left stick control (for animation examples)
+    pub fn new_left_stick(distance: f32, elevation: f32) -> Self {
+        Self {
+            distance,
+            elevation,
+            stick_control: StickControl::LeftStick,
+            ..Default::default()
+        }
+    }
+
     /// Update camera based on input (call in update())
     pub fn update(&mut self) {
         unsafe {
-            // Right stick for manual orbit
-            let stick_x = right_stick_x(0);
-            let stick_y = right_stick_y(0);
+            // Read stick based on configuration
+            let (stick_x, stick_y) = match self.stick_control {
+                StickControl::LeftStick => (left_stick_x(0), left_stick_y(0)),
+                StickControl::RightStick => (right_stick_x(0), right_stick_y(0)),
+            };
 
             if stick_x.abs() > 0.1 || stick_y.abs() > 0.1 {
                 self.azimuth += stick_x * 2.0;
