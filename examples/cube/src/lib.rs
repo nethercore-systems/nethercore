@@ -75,10 +75,6 @@ pub extern "C" fn init() {
         // Note: Sky uses reasonable defaults (blue gradient with sun) from the renderer
         // No need to set sky explicitly unless you want custom sky settings
 
-        // Set up camera
-        camera_set(0.0, 0.0, 5.0, 0.0, 0.0, 0.0);
-        camera_fov(60.0);
-
         // Enable depth testing for proper 3D rendering
         depth_test(1);
 
@@ -109,6 +105,10 @@ pub extern "C" fn update() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
+        // Set camera every frame (immediate mode)
+        camera_set(0.0, 0.0, 5.0, 0.0, 0.0, 0.0);
+        camera_fov(60.0);
+
         // Apply rotation accumulated in update()
         push_identity();
         push_rotate_y(ROTATION_Y);

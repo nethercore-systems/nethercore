@@ -108,10 +108,6 @@ pub extern "C" fn init() {
         render_mode(0); // Unlit with normals (simple Lambert shading)
         depth_test(1); // Enable depth testing
 
-        // Set up camera
-        camera_set(0.0, 5.0, 10.0, 0.0, 0.0, 0.0);
-        camera_fov(60.0);
-
         // Generate all 7 procedural shapes
         MESH_HANDLES[0] = cube(1.0, 1.0, 1.0); // 2×2×2 cube
         MESH_HANDLES[1] = sphere(1.5, 32, 16); // High-quality sphere
@@ -152,6 +148,10 @@ pub extern "C" fn update() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
+        // Set camera every frame (immediate mode)
+        camera_set(0.0, 5.0, 10.0, 0.0, 0.0, 0.0);
+        camera_fov(60.0);
+
         // Draw current shape
         push_identity();
         push_rotate_y(ROTATION_Y);

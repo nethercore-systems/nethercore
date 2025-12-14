@@ -69,10 +69,6 @@ pub extern "C" fn init() {
         // Dark background
         set_clear_color(0x0a0a1aFF);
 
-        // Set up 2D camera
-        camera_set(0.0, 0.0, 1.0, 0.0, 0.0, 0.0);
-        camera_fov(60.0);
-
         // Load font atlas texture from ROM data pack
         FONT_ATLAS = rom_texture(b"font_atlas".as_ptr(), 10);
 
@@ -101,6 +97,10 @@ pub extern "C" fn update() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
+        // Set camera every frame (immediate mode)
+        camera_set(0.0, 0.0, 1.0, 0.0, 0.0, 0.0);
+        camera_fov(60.0);
+
         // Title using built-in font
         let title = b"Font Atlas Demo";
         draw_text(title.as_ptr(), title.len() as u32, 20.0, 20.0, 32.0, 0xFFFF00FF);

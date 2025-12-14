@@ -288,15 +288,23 @@ fn generate_horizontal_arm_mesh(path: &PathBuf, bone_count: u32, segment_length:
     println!("Generated {} ({} vertices, {} indices)", path.display(), vertex_count, index_count);
 }
 
-/// Generate vertical arm animation (Z-axis rotations)
+/// Generate vertical arm animation (Z-axis rotations) with proper hierarchical chaining
 fn generate_animation(path: &PathBuf, bone_count: u8, frame_count: u16, params: &[(f32, f32)]) {
     let header = EmberZAnimationHeader::new(bone_count, frame_count);
 
     let mut file = File::create(path).expect("Failed to create animation file");
     file.write_all(&header.to_bytes()).expect("Failed to write header");
 
+    let segment_length = 1.5f32;
+
     for frame in 0..frame_count {
         let t = (frame as f32 / frame_count as f32) * TAU;
+
+        // Compute hierarchical world transforms for each bone
+        // We need to chain: bone[i] world = bone[i-1] world * bone[i] local
+        let mut world_positions: Vec<[f32; 3]> = Vec::new();
+        let mut world_rotations: Vec<[f32; 4]> = Vec::new();
+        let mut accumulated_angle = 0.0f32;
 
         for bone in 0..bone_count {
             let (phase, amplitude) = if (bone as usize) < params.len() {
@@ -305,19 +313,37 @@ fn generate_animation(path: &PathBuf, bone_count: u8, frame_count: u16, params: 
                 (0.0, 0.3)
             };
 
-            let angle = (t + phase).sin() * amplitude;
+            // This bone's LOCAL rotation (relative to parent)
+            let local_angle = (t + phase).sin() * amplitude;
+            accumulated_angle += local_angle;
 
-            // Quaternion for Z rotation
-            let half_angle = angle * 0.5;
-            let qx = 0.0f32;
-            let qy = 0.0f32;
-            let qz = half_angle.sin();
-            let qw = half_angle.cos();
+            // Compute world position by rotating through the chain
+            let world_pos = if bone == 0 {
+                [0.0, 0.0, 0.0]  // Root bone at origin
+            } else {
+                // Position is parent's position + segment rotated by parent's accumulated rotation
+                let parent_pos = world_positions[bone as usize - 1];
+                let parent_angle = accumulated_angle - local_angle; // Parent's total rotation
 
-            // Position: bone offset along Y axis
-            let py = bone as f32 * 1.5;
+                // Rotate the segment vector by parent's rotation around Z
+                let c = parent_angle.cos();
+                let s = parent_angle.sin();
+                // Segment goes from parent along Y axis (0, segment_length, 0)
+                // Rotated around Z: (x', y') = (x*c - y*s, x*s + y*c)
+                let dx = -segment_length * s;
+                let dy = segment_length * c;
 
-            let keyframe = encode_bone_transform([qx, qy, qz, qw], [0.0, py, 0.0], [1.0, 1.0, 1.0]);
+                [parent_pos[0] + dx, parent_pos[1] + dy, parent_pos[2]]
+            };
+
+            // World rotation quaternion (Z-axis rotation)
+            let half_angle = accumulated_angle * 0.5;
+            let world_quat = [0.0f32, 0.0, half_angle.sin(), half_angle.cos()];
+
+            world_positions.push(world_pos);
+            world_rotations.push(world_quat);
+
+            let keyframe = encode_bone_transform(world_quat, world_pos, [1.0, 1.0, 1.0]);
             file.write_all(&keyframe.to_bytes()).expect("Failed to write keyframe");
         }
     }
@@ -325,32 +351,56 @@ fn generate_animation(path: &PathBuf, bone_count: u8, frame_count: u16, params: 
     println!("Generated {} ({} bones, {} frames)", path.display(), bone_count, frame_count);
 }
 
-/// Generate horizontal arm animation (Y-axis rotations)
+/// Generate horizontal arm animation (Y-axis rotations) with proper hierarchical chaining
 fn generate_horizontal_animation(path: &PathBuf, bone_count: u8, frame_count: u16) {
     let header = EmberZAnimationHeader::new(bone_count, frame_count);
 
     let mut file = File::create(path).expect("Failed to create animation file");
     file.write_all(&header.to_bytes()).expect("Failed to write header");
 
+    let segment_length = 1.0f32;
+
     for frame in 0..frame_count {
         let t = (frame as f32 / frame_count as f32) * TAU;
+
+        // Compute hierarchical world transforms for each bone
+        let mut world_positions: Vec<[f32; 3]> = Vec::new();
+        let mut accumulated_angle = 0.0f32;
 
         for bone in 0..bone_count {
             let phase = bone as f32 * 0.3;
             let amplitude = 0.3 + (bone as f32 * 0.1);
-            let angle = (t + phase).sin() * amplitude;
 
-            // Quaternion for Y rotation
-            let half_angle = angle * 0.5;
-            let qx = 0.0f32;
-            let qy = half_angle.sin();
-            let qz = 0.0f32;
-            let qw = half_angle.cos();
+            // This bone's LOCAL rotation (relative to parent)
+            let local_angle = (t + phase).sin() * amplitude;
+            accumulated_angle += local_angle;
 
-            // Position: bone offset along X axis
-            let px = bone as f32 * 1.0;
+            // Compute world position by rotating through the chain
+            let world_pos = if bone == 0 {
+                [0.0, 0.0, 0.0]  // Root bone at origin
+            } else {
+                // Position is parent's position + segment rotated by parent's accumulated rotation
+                let parent_pos = world_positions[bone as usize - 1];
+                let parent_angle = accumulated_angle - local_angle; // Parent's total rotation
 
-            let keyframe = encode_bone_transform([qx, qy, qz, qw], [px, 0.0, 0.0], [1.0, 1.0, 1.0]);
+                // Rotate the segment vector by parent's rotation around Y
+                let c = parent_angle.cos();
+                let s = parent_angle.sin();
+                // Segment goes from parent along X axis (segment_length, 0, 0)
+                // Rotated around Y: (x', z') = (x*c + z*s, -x*s + z*c)
+                let dx = segment_length * c;
+                let dz = -segment_length * s;
+
+                [parent_pos[0] + dx, parent_pos[1], parent_pos[2] + dz]
+            };
+
+            // World rotation quaternion (Y-axis rotation)
+            let half_angle = accumulated_angle * 0.5;
+            let world_quat = [0.0f32, half_angle.sin(), 0.0, half_angle.cos()];
+
+            world_positions.push(world_pos);
+
+            let keyframe = encode_bone_transform(world_quat, world_pos, [1.0, 1.0, 1.0]);
             file.write_all(&keyframe.to_bytes()).expect("Failed to write keyframe");
         }
     }

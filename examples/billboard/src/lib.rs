@@ -329,10 +329,6 @@ pub extern "C" fn init() {
         // Note: Sky uses reasonable defaults (blue gradient with sun) from the renderer
         // No need to set sky explicitly unless you want custom sky settings
 
-        // Set up camera
-        update_camera();
-        camera_fov(60.0);
-
         // Enable depth testing and alpha blending
         depth_test(1);
         blend_mode(BLEND_ALPHA);
@@ -360,6 +356,7 @@ fn update_camera() {
         let cam_x = sin_approx(rad) * CAMERA_DISTANCE;
         let cam_z = cos_approx(rad) * CAMERA_DISTANCE;
         camera_set(cam_x, CAMERA_HEIGHT, cam_z, 0.0, 0.0, 0.0);
+        camera_fov(60.0);
     }
 }
 

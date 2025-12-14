@@ -518,9 +518,6 @@ fn update_arm2_bones(time: f32) {
 pub extern "C" fn init() {
     unsafe {
         set_clear_color(0x1a2a1aFF);
-        // Camera positioned to see both arms: eye at (0, 4, 15) looking at (0, 3, 0)
-        camera_set(0.0, 4.0, 15.0, 0.0, 3.0, 0.0);
-        camera_fov(50.0);
         depth_test(1);
 
         // Generate and load Arm 1 mesh
@@ -607,6 +604,10 @@ pub extern "C" fn update() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
+        // Set camera every frame (immediate mode)
+        camera_set(0.0, 4.0, 15.0, 0.0, 3.0, 0.0);
+        camera_fov(50.0);
+
         // Draw Arm 1 (vertical, positioned left)
         skeleton_bind(ARM1_SKELETON);
         set_bones(ARM1_BONES_DATA.as_ptr(), ARM1_BONES as u32);

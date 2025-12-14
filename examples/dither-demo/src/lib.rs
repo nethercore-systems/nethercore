@@ -138,10 +138,6 @@ pub extern "C" fn init() {
         // Enable depth testing
         depth_test(1);
 
-        // Set up camera - pulled back to see both groups
-        camera_set(0.0, 5.0, 12.0, 0.0, 0.0, 0.0);
-        camera_fov(50.0);
-
         // Set up sky for ambient lighting
         sky_set_colors(0x404060FF, 0x202040FF);
         sky_set_sun(-0.5, -1.0, -0.5, 0xFFEEDDFF, 0.8);
@@ -226,6 +222,10 @@ pub extern "C" fn update() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
+        // Set camera every frame (immediate mode)
+        camera_set(0.0, 5.0, 12.0, 0.0, 0.0, 0.0);
+        camera_fov(50.0);
+
         // Draw ground plane
         push_identity();
         push_translate(0.0, -2.0, 0.0);

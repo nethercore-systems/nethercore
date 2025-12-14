@@ -125,10 +125,6 @@ pub extern "C" fn init() {
         // Dark background
         set_clear_color(0x1a1a2eFF);
 
-        // Set up camera
-        camera_set(0.0, 4.0, 8.0, 0.0, 0.0, 0.0);
-        camera_fov(60.0);
-
         // Enable depth testing
         depth_test(1);
 
@@ -181,6 +177,10 @@ pub extern "C" fn update() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
+        // Set camera every frame (immediate mode)
+        camera_set(0.0, 4.0, 8.0, 0.0, 0.0, 0.0);
+        camera_fov(60.0);
+
         let time = elapsed_time();
 
         // Draw player cube at center

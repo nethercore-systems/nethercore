@@ -83,10 +83,6 @@ pub extern "C" fn init() {
         // Dark blue background
         set_clear_color(0x1a1a2eFF);
 
-        // Set up camera
-        camera_set(0.0, 0.0, 4.0, 0.0, 0.0, 0.0);
-        camera_fov(60.0);
-
         // Enable depth testing for proper 3D rendering
         depth_test(1);
 
@@ -126,6 +122,10 @@ pub extern "C" fn update() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
+        // Set camera every frame (immediate mode)
+        camera_set(0.0, 0.0, 4.0, 0.0, 0.0, 0.0);
+        camera_fov(60.0);
+
         // Apply rotation
         push_identity();
         push_rotate_y(ROTATION_Y);

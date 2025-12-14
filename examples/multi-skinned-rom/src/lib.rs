@@ -98,9 +98,6 @@ static mut PAUSED: bool = false;
 pub extern "C" fn init() {
     unsafe {
         set_clear_color(0x1e2a1eFF);
-        // Camera to see both ROM-loaded animated arms
-        camera_set(0.0, 4.0, 15.0, 0.0, 3.0, 0.0);
-        camera_fov(50.0);
         depth_test(1);
 
         // Load character 1 assets from ROM
@@ -153,6 +150,10 @@ pub extern "C" fn update() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
+        // Set camera every frame (immediate mode)
+        camera_set(0.0, 4.0, 15.0, 0.0, 3.0, 0.0);
+        camera_fov(50.0);
+
         // Character 1: vertical arm (left side)
         {
             let frame = (ANIM_TIME as u32) % (ARM1_FRAME_COUNT as u32);

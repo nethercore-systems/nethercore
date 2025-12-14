@@ -397,10 +397,6 @@ pub extern "C" fn init() {
         // Note: Sky uses reasonable defaults (blue gradient with sun) from the renderer
         // No need to set sky explicitly unless you want custom sky settings
 
-        // Set up camera (side view for platformer)
-        camera_set(0.0, 2.0, 15.0, 0.0, 2.0, 0.0);
-        camera_fov(45.0);
-
         // Render settings
         depth_test(1);
         blend_mode(BLEND_ALPHA);
@@ -711,6 +707,10 @@ fn render_ui() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
+        // Set camera every frame (immediate mode)
+        camera_set(0.0, 2.0, 15.0, 0.0, 2.0, 0.0);
+        camera_fov(45.0);
+
         set_color(0xFFFFFFFF);
 
         // Render game objects (back to front)

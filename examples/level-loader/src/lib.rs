@@ -178,10 +178,6 @@ pub extern "C" fn init() {
         // Dark blue background
         set_clear_color(0x1a2a3aFF);
 
-        // Set up 2D camera
-        camera_set(0.0, 0.0, 1.0, 0.0, 0.0, 0.0);
-        camera_fov(60.0);
-
         // Load tileset texture from data pack
         TILESET = rom_texture(b"tileset".as_ptr(), 7);
 
@@ -220,6 +216,10 @@ pub extern "C" fn update() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
+        // Set camera every frame (immediate mode)
+        camera_set(0.0, 0.0, 1.0, 0.0, 0.0, 0.0);
+        camera_fov(60.0);
+
         // UI Header area (top 120 pixels)
         let map_offset_y = 130.0;
 

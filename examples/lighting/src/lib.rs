@@ -188,10 +188,6 @@ pub extern "C" fn init() {
         // Note: Sky uses reasonable defaults (blue gradient with sun) from the renderer
         // No need to set sky explicitly unless you want custom sky settings
 
-        // Set up camera
-        camera_set(0.0, 0.0, 4.0, 0.0, 0.0, 0.0);
-        camera_fov(60.0);
-
         // Enable depth testing
         depth_test(1);
 

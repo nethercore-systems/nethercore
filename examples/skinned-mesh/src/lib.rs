@@ -374,8 +374,6 @@ fn update_bones(time: f32) {
 pub extern "C" fn init() {
     unsafe {
         set_clear_color(0x1a1a2eFF);
-        camera_set(0.0, 1.0, 8.0, 0.0, 0.0, 0.0);
-        camera_fov(60.0);
         depth_test(1);
 
         let (vertices, indices) = generate_arm_mesh();
@@ -462,6 +460,10 @@ fn format_float(val: f32, buf: &mut [u8]) -> usize {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
+        // Set camera every frame (immediate mode)
+        camera_set(0.0, 1.0, 8.0, 0.0, 0.0, 0.0);
+        camera_fov(60.0);
+
         // Upload 3x4 bone matrices to GPU (12 floats × 3 bones)
         let bones = &*core::ptr::addr_of!(BONE_MATRICES);
         set_bones(bones.as_ptr(), NUM_BONES as u32);

@@ -279,8 +279,11 @@ impl ConsoleResourceManager for ZResourceManager {
         }
 
         // If we had skeletons but no keyframes, animation_static_end = inverse_bind_end
+        // IMPORTANT: Must sync to graphics.animation_static_end so frame.rs uploads
+        // immediate bones to the correct offset that matches what the shader expects
         if had_skeletons && !had_keyframes {
             state.animation_static_end = state.inverse_bind_end;
+            graphics.animation_static_end = graphics.inverse_bind_end;
         }
 
         // Decode and upload all keyframe bone matrices to GPU
@@ -335,7 +338,10 @@ impl ConsoleResourceManager for ZResourceManager {
                 );
             } else {
                 // No keyframes loaded - animation_static_end = inverse_bind_end
+                // IMPORTANT: Must sync to graphics.animation_static_end so frame.rs uploads
+                // immediate bones to the correct offset that matches what the shader expects
                 state.animation_static_end = state.inverse_bind_end;
+                graphics.animation_static_end = graphics.inverse_bind_end;
             }
         }
 

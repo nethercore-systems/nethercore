@@ -311,7 +311,8 @@ fn compute_walk_cycle(phase: f32, bones: &mut [[f32; 12]; BONE_COUNT]) {
         [l_knee_world[0], l_knee_world[1] + l_foot_local_y, l_knee_world[2]],
         l_knee_world, l_hip_angle + l_knee_bend
     );
-    bones[3] = mat3x4_translate(l_foot_world[0], l_foot_world[1], l_foot_world[2]);
+    // Foot world transform: rotation (inherited from leg chain) + position
+    bones[3] = mat3x4_rotate_x_world(l_hip_angle + l_knee_bend, l_foot_world);
 
     // Right leg chain (mirrored)
     let r_hip_pos = [LEG_OFFSET_X, HIP_Y, 0.0];
@@ -329,7 +330,8 @@ fn compute_walk_cycle(phase: f32, bones: &mut [[f32; 12]; BONE_COUNT]) {
         [r_knee_world[0], r_knee_world[1] + r_foot_local_y, r_knee_world[2]],
         r_knee_world, r_hip_angle + r_knee_bend
     );
-    bones[6] = mat3x4_translate(r_foot_world[0], r_foot_world[1], r_foot_world[2]);
+    // Foot world transform: rotation (inherited from leg chain) + position
+    bones[6] = mat3x4_rotate_x_world(r_hip_angle + r_knee_bend, r_foot_world);
 }
 
 // ============================================================================
@@ -342,6 +344,19 @@ fn mat3x4_translate(x: f32, y: f32, z: f32) -> [f32; 12] {
         0.0, 1.0, 0.0,  // col 1
         0.0, 0.0, 1.0,  // col 2
         x, y, z,        // col 3
+    ]
+}
+
+/// Create a bone world transform: rotation around X + translation to world position
+/// This is what child bones need to "follow" their parent's rotation
+fn mat3x4_rotate_x_world(angle: f32, pos: [f32; 3]) -> [f32; 12] {
+    let c = cosf(angle);
+    let s = sinf(angle);
+    [
+        1.0, 0.0, 0.0,  // col 0
+        0.0, c, s,      // col 1
+        0.0, -s, c,     // col 2
+        pos[0], pos[1], pos[2],  // translation to world pos
     ]
 }
 
@@ -384,9 +399,6 @@ fn rotate_point_x(point: [f32; 3], pivot: [f32; 3], angle: f32) -> [f32; 3] {
 pub extern "C" fn init() {
     unsafe {
         set_clear_color(0x202830FF);
-        // Camera to see 6x6 grid of robots (grid spans ~12.5 units, robots ~2 units tall)
-        camera_set(0.0, 8.0, 18.0, 0.0, 1.0, 0.0);
-        camera_fov(55.0);
         depth_test(1);
 
         // Generate robot mesh
@@ -449,6 +461,10 @@ pub extern "C" fn update() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
+        // Set camera every frame (immediate mode)
+        camera_set(0.0, 8.0, 18.0, 0.0, 1.0, 0.0);
+        camera_fov(55.0);
+
         let grid_offset = (GRID_SIZE as f32 - 1.0) * SPACING * 0.5;
 
         for row in 0..GRID_SIZE {

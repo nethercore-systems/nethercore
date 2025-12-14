@@ -50,8 +50,6 @@ pub extern "C" fn init() {
     unsafe {
         // Dark blue-gray background
         set_clear_color(0x1a1a2eFF);
-        // Position camera to view the triangle
-        camera_set(0.0, 0.0, 3.0, 0.0, 0.0, 0.0);
     }
 }
 
@@ -63,6 +61,9 @@ pub extern "C" fn update() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
+        // Set camera every frame (immediate mode)
+        camera_set(0.0, 0.0, 3.0, 0.0, 0.0, 0.0);
+
         // Rotate triangle around Y axis based on elapsed time
         push_identity();
         let time = elapsed_time();

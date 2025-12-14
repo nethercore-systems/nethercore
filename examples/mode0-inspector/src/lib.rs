@@ -145,10 +145,6 @@ pub extern "C" fn init() {
         // Set render mode 0 (Unlit with Lambert if normals present)
         render_mode(0);
 
-        // Set up camera
-        camera_set(0.0, 2.0, 6.0, 0.0, 0.0, 0.0);
-        camera_fov(60.0);
-
         // Enable depth testing
         depth_test(1);
 
@@ -211,6 +207,10 @@ pub extern "C" fn update() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
+        // Set camera every frame (immediate mode)
+        camera_set(0.0, 2.0, 6.0, 0.0, 0.0, 0.0);
+        camera_fov(60.0);
+
         // Configure and draw sky
         sky_set_colors(HORIZON_COLOR, ZENITH_COLOR);
         sky_set_sun(SUN_DIR_X, SUN_DIR_Y, SUN_DIR_Z, SUN_COLOR, SUN_SHARPNESS);

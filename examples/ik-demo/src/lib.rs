@@ -47,6 +47,9 @@ extern "C" {
     ) -> u32;
     fn draw_mesh(handle: u32);
 
+    // Procedural shapes
+    fn sphere(radius: f32, segments: u32, rings: u32) -> u32;
+
     fn load_skeleton(inverse_bind_ptr: *const f32, bone_count: u32) -> u32;
     fn skeleton_bind(skeleton: u32);
     fn set_bones(matrices_ptr: *const f32, count: u32);
@@ -106,6 +109,7 @@ static mut ARM_MESH: u32 = 0;
 static mut ARM_SKELETON: u32 = 0;
 static mut BONE_MATRICES: [f32; NUM_BONES * BONE_MATRIX_FLOATS] = [0.0; NUM_BONES * BONE_MATRIX_FLOATS];
 
+static mut TARGET_SPHERE: u32 = 0;
 static mut TARGET: [f32; 3] = [2.0, 3.0, 0.0];
 static mut AUTO_MODE: bool = true;
 static mut TIME: f32 = 0.0;
@@ -365,9 +369,6 @@ fn generate_arm_mesh() -> ([f32; 48 * FLOATS_PER_VERTEX], [u16; 72]) {
 pub extern "C" fn init() {
     unsafe {
         set_clear_color(0x1a1a2eFF);
-        // Camera to see 2-bone IK arm (total length 4 units, extending up from origin)
-        camera_set(0.0, 2.5, 8.0, 0.0, 2.0, 0.0);
-        camera_fov(55.0);
         depth_test(1);
 
         // Generate and load arm mesh
@@ -391,6 +392,9 @@ pub extern "C" fn init() {
             let ident = mat3x4_identity();
             BONE_MATRICES[i * 12..(i + 1) * 12].copy_from_slice(&ident);
         }
+
+        // Create target sphere
+        TARGET_SPHERE = sphere(0.2, 12, 8);
     }
 }
 
@@ -441,6 +445,10 @@ pub extern "C" fn update() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
+        // Set camera every frame (immediate mode)
+        camera_set(0.0, 2.5, 8.0, 0.0, 2.0, 0.0);
+        camera_fov(55.0);
+
         // Draw arm with IK-computed bone transforms
         skeleton_bind(ARM_SKELETON);
         set_bones(BONE_MATRICES.as_ptr(), NUM_BONES as u32);
@@ -448,8 +456,12 @@ pub extern "C" fn render() {
         set_color(0x80C080FF);  // Light green
         draw_mesh(ARM_MESH);
 
-        // Note: Target and shoulder markers would use draw_sphere if available
-        // The IK arm reaching toward the target demonstrates the solver
+        // Draw target sphere (unbind skeleton first for non-skinned mesh)
+        skeleton_bind(0);
+        push_identity();
+        push_translate(TARGET[0], TARGET[1], TARGET[2]);
+        set_color(0xFF4040FF);  // Red
+        draw_mesh(TARGET_SPHERE);
 
         // Draw UI
         draw_ui();

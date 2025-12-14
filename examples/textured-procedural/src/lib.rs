@@ -134,10 +134,6 @@ pub extern "C" fn init() {
         render_mode(0); // Unlit (textured)
         depth_test(1); // Enable depth testing
 
-        // Set up camera
-        camera_set(0.0, 3.0, 8.0, 0.0, 0.0, 0.0);
-        camera_fov(60.0);
-
         // Generate and load UV debug texture
         let texture_pixels = generate_uv_debug_texture();
         TEXTURE_HANDLE = load_texture(64, 64, texture_pixels.as_ptr());
@@ -181,6 +177,10 @@ pub extern "C" fn update() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
+        // Set camera every frame (immediate mode)
+        camera_set(0.0, 3.0, 8.0, 0.0, 0.0, 0.0);
+        camera_fov(60.0);
+
         // Bind UV debug texture
         texture_bind(TEXTURE_HANDLE);
 

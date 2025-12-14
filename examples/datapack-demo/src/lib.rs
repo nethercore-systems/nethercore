@@ -94,10 +94,6 @@ pub extern "C" fn init() {
         // Dark blue background
         set_clear_color(0x1a2a3aFF);
 
-        // Set up camera
-        camera_set(0.0, 0.0, 4.0, 0.0, 0.0, 0.0);
-        camera_fov(60.0);
-
         // Enable depth testing
         depth_test(1);
 
@@ -143,6 +139,10 @@ pub extern "C" fn update() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
+        // Set camera every frame (immediate mode)
+        camera_set(0.0, 0.0, 4.0, 0.0, 0.0, 0.0);
+        camera_fov(60.0);
+
         // Calculate bounce offset
         let bounce_y = sinf(BOUNCE) * 0.2;
 

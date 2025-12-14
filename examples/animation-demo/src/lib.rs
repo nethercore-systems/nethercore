@@ -379,8 +379,6 @@ fn generate_arm_mesh() -> ([f32; 60 * 11], [u16; 324]) {
 pub extern "C" fn init() {
     unsafe {
         set_clear_color(0x1a1a2eFF);
-        camera_set(0.0, 1.0, 8.0, 0.0, 0.0, 0.0);
-        camera_fov(60.0);
         depth_test(1);
 
         // Load the arm mesh
@@ -439,6 +437,10 @@ pub extern "C" fn update() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
+        // Set camera every frame (immediate mode)
+        camera_set(0.0, 1.0, 8.0, 0.0, 0.0, 0.0);
+        camera_fov(60.0);
+
         let frame_count = FRAME_COUNT as u32;
 
         if BLENDED_MODE {

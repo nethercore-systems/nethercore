@@ -74,10 +74,6 @@ pub extern "C" fn init() {
         // Set clear color
         set_clear_color(0x19172AFF); // Dark blue-purple
 
-        // Set up camera
-        camera_set(0.0, 0.0, 3.0, 0.0, 0.0, 0.0);
-        camera_fov(60.0);
-
         // Generate and load beep sound
         let beep_samples = generate_beep();
         BEEP_SOUND = load_sound(
@@ -150,6 +146,9 @@ pub extern "C" fn update() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
+        // Set camera every frame (immediate mode)
+        camera_set(0.0, 0.0, 3.0, 0.0, 0.0, 0.0);
+        camera_fov(60.0);
 
         // Title
         let title = b"Audio Panning Demo";
