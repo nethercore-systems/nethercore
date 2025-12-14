@@ -60,7 +60,9 @@ impl LibraryUi {
                         let item_width = 200.0;
                         let spacing = 10.0;
                         let available_width = ui.available_width();
-                        let columns = ((available_width + spacing) / (item_width + spacing)).floor().max(1.0) as usize;
+                        let columns = ((available_width + spacing) / (item_width + spacing))
+                            .floor()
+                            .max(1.0) as usize;
 
                         egui::Grid::new("games_grid")
                             .num_columns(columns)

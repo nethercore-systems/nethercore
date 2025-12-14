@@ -164,10 +164,10 @@ impl Default for PackedUnifiedShadingState {
             sky,
             lights: [PackedLight::default(); 4], // All lights disabled
             // Animation System v2 fields (default to no animation)
-            keyframe_base: 0,        // No keyframes bound
-            inverse_bind_base: 0,    // No skeleton bound (raw bone mode)
-            animation_flags: 0,      // Use immediate bones by default
-            _animation_reserved: 0,  // Zeroed
+            keyframe_base: 0,       // No keyframes bound
+            inverse_bind_base: 0,   // No skeleton bound (raw bone mode)
+            animation_flags: 0,     // Use immediate bones by default
+            _animation_reserved: 0, // Zeroed
         }
     }
 }

@@ -52,9 +52,9 @@ pub use unified_shading_state::{
     FLAG_DITHER_OFFSET_Y_MASK, FLAG_DITHER_OFFSET_Y_SHIFT, FLAG_SKINNING_MODE,
     FLAG_TEXTURE_FILTER_LINEAR, FLAG_UNIFORM_ALPHA_MASK, FLAG_UNIFORM_ALPHA_SHIFT,
     FLAG_USE_MATCAP_REFLECTION, FLAG_USE_UNIFORM_COLOR, FLAG_USE_UNIFORM_EMISSIVE,
-    FLAG_USE_UNIFORM_METALLIC, FLAG_USE_UNIFORM_ROUGHNESS, FLAG_USE_UNIFORM_SPECULAR,
-    LightType, PackedLight, PackedUnifiedShadingState, ShadingStateIndex, pack_f16,
-    pack_f16x2, pack_matcap_blend_modes, pack_rgb8, pack_unorm8, unpack_f16, unpack_f16x2,
+    FLAG_USE_UNIFORM_METALLIC, FLAG_USE_UNIFORM_ROUGHNESS, FLAG_USE_UNIFORM_SPECULAR, LightType,
+    PackedLight, PackedUnifiedShadingState, ShadingStateIndex, pack_f16, pack_f16x2,
+    pack_matcap_blend_modes, pack_rgb8, pack_unorm8, unpack_f16, unpack_f16x2,
     unpack_matcap_blend_modes, update_uniform_set_0_byte, update_uniform_set_1_byte,
 };
 pub use vertex::{FORMAT_ALL, VERTEX_FORMAT_COUNT, VertexFormatInfo};
@@ -112,7 +112,7 @@ pub struct ZGraphics {
     // - Keyframes: static, uploaded once after init
     // - Immediate: per-frame, uploaded each frame
     unified_animation_buffer: wgpu::Buffer,
-    unified_animation_capacity: usize,  // in mat3x4 count
+    unified_animation_capacity: usize, // in mat3x4 count
     /// Where inverse bind section ends in unified_animation (pub for state sync)
     pub inverse_bind_end: usize,
     /// Where static data ends in unified_animation (pub for state sync)
@@ -452,10 +452,7 @@ impl ZGraphics {
     /// Called once after init() when all skeletons have been loaded.
     /// Writes to section [0..I) of unified_animation buffer.
     /// Sets inverse_bind_end to track where inverse bind section ends.
-    pub fn upload_static_inverse_bind(
-        &mut self,
-        all_matrices: &[crate::state::BoneMatrix3x4],
-    ) {
+    pub fn upload_static_inverse_bind(&mut self, all_matrices: &[crate::state::BoneMatrix3x4]) {
         let matrix_count = all_matrices.len();
         if matrix_count == 0 {
             self.inverse_bind_end = 0;
@@ -486,7 +483,8 @@ impl ZGraphics {
 
         // Write inverse bind matrices at offset 0 (first section)
         let bytes = bone_matrices_to_bytes(all_matrices);
-        self.queue.write_buffer(&self.unified_animation_buffer, 0, &bytes);
+        self.queue
+            .write_buffer(&self.unified_animation_buffer, 0, &bytes);
 
         // Track where inverse bind section ends (= keyframes section starts)
         self.inverse_bind_end = matrix_count;
@@ -503,10 +501,7 @@ impl ZGraphics {
     /// Called once after init() when all keyframes have been loaded and decoded.
     /// Writes to section [I..I+K) of unified_animation buffer.
     /// Sets animation_static_end to track where static data ends.
-    pub fn upload_static_keyframes(
-        &mut self,
-        all_matrices: &[crate::state::BoneMatrix3x4],
-    ) {
+    pub fn upload_static_keyframes(&mut self, all_matrices: &[crate::state::BoneMatrix3x4]) {
         let matrix_count = all_matrices.len();
         if matrix_count == 0 {
             // Static end is just after inverse bind
@@ -542,7 +537,8 @@ impl ZGraphics {
 
         // Write keyframe matrices after inverse bind section
         let bytes = bone_matrices_to_bytes(all_matrices);
-        self.queue.write_buffer(&self.unified_animation_buffer, byte_offset as u64, &bytes);
+        self.queue
+            .write_buffer(&self.unified_animation_buffer, byte_offset as u64, &bytes);
 
         // Track where static data ends (= immediate section starts)
         self.animation_static_end = self.inverse_bind_end + matrix_count;

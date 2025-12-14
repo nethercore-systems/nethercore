@@ -21,27 +21,40 @@ fn main() {
     fs::create_dir_all(&output_dir).expect("Failed to create output directory");
 
     // Generate assets for character 1 (3-bone vertical arm)
-    generate_skeleton(&output_dir.join("arm1.ewzskel"), 3, &[
-        [0.0, 0.0, 0.0],    // Bone 0: origin
-        [0.0, -1.5, 0.0],   // Bone 1: inverse of T(0, 1.5, 0)
-        [0.0, -3.0, 0.0],   // Bone 2: inverse of T(0, 3.0, 0)
-    ]);
+    generate_skeleton(
+        &output_dir.join("arm1.ewzskel"),
+        3,
+        &[
+            [0.0, 0.0, 0.0],  // Bone 0: origin
+            [0.0, -1.5, 0.0], // Bone 1: inverse of T(0, 1.5, 0)
+            [0.0, -3.0, 0.0], // Bone 2: inverse of T(0, 3.0, 0)
+        ],
+    );
 
     generate_arm_mesh(&output_dir.join("arm1.ewzmesh"), 3, 1.5, true);
 
-    generate_animation(&output_dir.join("wave1.ewzanim"), 3, 30, &[
-        (0.0, 0.5),   // Bone 0: phase 0, amplitude 0.5
-        (0.5, 0.7),   // Bone 1: phase 0.5, amplitude 0.7
-        (1.0, 0.4),   // Bone 2: phase 1.0, amplitude 0.4
-    ]);
+    generate_animation(
+        &output_dir.join("wave1.ewzanim"),
+        3,
+        30,
+        &[
+            (0.0, 0.5), // Bone 0: phase 0, amplitude 0.5
+            (0.5, 0.7), // Bone 1: phase 0.5, amplitude 0.7
+            (1.0, 0.4), // Bone 2: phase 1.0, amplitude 0.4
+        ],
+    );
 
     // Generate assets for character 2 (4-bone horizontal arm)
-    generate_skeleton(&output_dir.join("arm2.ewzskel"), 4, &[
-        [0.0, 0.0, 0.0],    // Bone 0: origin
-        [-1.0, 0.0, 0.0],   // Bone 1: inverse of T(1, 0, 0)
-        [-2.0, 0.0, 0.0],   // Bone 2: inverse of T(2, 0, 0)
-        [-3.0, 0.0, 0.0],   // Bone 3: inverse of T(3, 0, 0)
-    ]);
+    generate_skeleton(
+        &output_dir.join("arm2.ewzskel"),
+        4,
+        &[
+            [0.0, 0.0, 0.0],  // Bone 0: origin
+            [-1.0, 0.0, 0.0], // Bone 1: inverse of T(1, 0, 0)
+            [-2.0, 0.0, 0.0], // Bone 2: inverse of T(2, 0, 0)
+            [-3.0, 0.0, 0.0], // Bone 3: inverse of T(3, 0, 0)
+        ],
+    );
 
     generate_horizontal_arm_mesh(&output_dir.join("arm2.ewzmesh"), 4, 1.0);
 
@@ -55,19 +68,29 @@ fn generate_skeleton(path: &PathBuf, bone_count: u32, translations: &[[f32; 3]])
     let header = EmberZSkeletonHeader::new(bone_count);
 
     let mut file = File::create(path).expect("Failed to create skeleton file");
-    file.write_all(&header.to_bytes()).expect("Failed to write header");
+    file.write_all(&header.to_bytes())
+        .expect("Failed to write header");
 
     // Write inverse bind matrices (3x4 column-major)
     for translation in translations.iter().take(bone_count as usize) {
         // Identity rotation, translation for inverse bind
         let matrix: [f32; 12] = [
-            1.0, 0.0, 0.0,  // col 0
-            0.0, 1.0, 0.0,  // col 1
-            0.0, 0.0, 1.0,  // col 2
-            translation[0], translation[1], translation[2],  // col 3
+            1.0,
+            0.0,
+            0.0, // col 0
+            0.0,
+            1.0,
+            0.0, // col 1
+            0.0,
+            0.0,
+            1.0, // col 2
+            translation[0],
+            translation[1],
+            translation[2], // col 3
         ];
         for f in matrix {
-            file.write_all(&f.to_le_bytes()).expect("Failed to write matrix");
+            file.write_all(&f.to_le_bytes())
+                .expect("Failed to write matrix");
         }
     }
 
@@ -93,47 +116,65 @@ fn generate_arm_mesh(path: &PathBuf, bone_count: u32, segment_height: f32, _vert
         // 6 faces, 4 vertices each
         let faces: Vec<([f32; 3], [[f32; 3]; 4])> = vec![
             // Front (+Z)
-            ([0.0, 0.0, 1.0], [
-                [-half_w, y_base, half_w],
-                [half_w, y_base, half_w],
-                [half_w, y_base + segment_height, half_w],
-                [-half_w, y_base + segment_height, half_w],
-            ]),
+            (
+                [0.0, 0.0, 1.0],
+                [
+                    [-half_w, y_base, half_w],
+                    [half_w, y_base, half_w],
+                    [half_w, y_base + segment_height, half_w],
+                    [-half_w, y_base + segment_height, half_w],
+                ],
+            ),
             // Back (-Z)
-            ([0.0, 0.0, -1.0], [
-                [half_w, y_base, -half_w],
-                [-half_w, y_base, -half_w],
-                [-half_w, y_base + segment_height, -half_w],
-                [half_w, y_base + segment_height, -half_w],
-            ]),
+            (
+                [0.0, 0.0, -1.0],
+                [
+                    [half_w, y_base, -half_w],
+                    [-half_w, y_base, -half_w],
+                    [-half_w, y_base + segment_height, -half_w],
+                    [half_w, y_base + segment_height, -half_w],
+                ],
+            ),
             // Right (+X)
-            ([1.0, 0.0, 0.0], [
-                [half_w, y_base, half_w],
-                [half_w, y_base, -half_w],
-                [half_w, y_base + segment_height, -half_w],
-                [half_w, y_base + segment_height, half_w],
-            ]),
+            (
+                [1.0, 0.0, 0.0],
+                [
+                    [half_w, y_base, half_w],
+                    [half_w, y_base, -half_w],
+                    [half_w, y_base + segment_height, -half_w],
+                    [half_w, y_base + segment_height, half_w],
+                ],
+            ),
             // Left (-X)
-            ([-1.0, 0.0, 0.0], [
-                [-half_w, y_base, -half_w],
-                [-half_w, y_base, half_w],
-                [-half_w, y_base + segment_height, half_w],
-                [-half_w, y_base + segment_height, -half_w],
-            ]),
+            (
+                [-1.0, 0.0, 0.0],
+                [
+                    [-half_w, y_base, -half_w],
+                    [-half_w, y_base, half_w],
+                    [-half_w, y_base + segment_height, half_w],
+                    [-half_w, y_base + segment_height, -half_w],
+                ],
+            ),
             // Top (+Y)
-            ([0.0, 1.0, 0.0], [
-                [-half_w, y_base + segment_height, half_w],
-                [half_w, y_base + segment_height, half_w],
-                [half_w, y_base + segment_height, -half_w],
-                [-half_w, y_base + segment_height, -half_w],
-            ]),
+            (
+                [0.0, 1.0, 0.0],
+                [
+                    [-half_w, y_base + segment_height, half_w],
+                    [half_w, y_base + segment_height, half_w],
+                    [half_w, y_base + segment_height, -half_w],
+                    [-half_w, y_base + segment_height, -half_w],
+                ],
+            ),
             // Bottom (-Y)
-            ([0.0, -1.0, 0.0], [
-                [-half_w, y_base, -half_w],
-                [half_w, y_base, -half_w],
-                [half_w, y_base, half_w],
-                [-half_w, y_base, half_w],
-            ]),
+            (
+                [0.0, -1.0, 0.0],
+                [
+                    [-half_w, y_base, -half_w],
+                    [half_w, y_base, -half_w],
+                    [half_w, y_base, half_w],
+                    [-half_w, y_base, half_w],
+                ],
+            ),
         ];
 
         for (face_idx, (normal, corners)) in faces.iter().enumerate() {
@@ -177,13 +218,21 @@ fn generate_arm_mesh(path: &PathBuf, bone_count: u32, segment_height: f32, _vert
     let header = EmberZMeshHeader::new(vertex_count, index_count, FORMAT_POS_NORMAL_SKINNED);
 
     let mut file = File::create(path).expect("Failed to create mesh file");
-    file.write_all(&header.to_bytes()).expect("Failed to write header");
-    file.write_all(&packed_vertices).expect("Failed to write vertices");
+    file.write_all(&header.to_bytes())
+        .expect("Failed to write header");
+    file.write_all(&packed_vertices)
+        .expect("Failed to write vertices");
     for idx in &indices {
-        file.write_all(&idx.to_le_bytes()).expect("Failed to write index");
+        file.write_all(&idx.to_le_bytes())
+            .expect("Failed to write index");
     }
 
-    println!("Generated {} ({} vertices, {} indices)", path.display(), vertex_count, index_count);
+    println!(
+        "Generated {} ({} vertices, {} indices)",
+        path.display(),
+        vertex_count,
+        index_count
+    );
 }
 
 /// Generate a horizontal arm mesh (box segments along X axis)
@@ -202,47 +251,65 @@ fn generate_horizontal_arm_mesh(path: &PathBuf, bone_count: u32, segment_length:
 
         let faces: Vec<([f32; 3], [[f32; 3]; 4])> = vec![
             // Front (+Z)
-            ([0.0, 0.0, 1.0], [
-                [x_base, -half_h, half_h],
-                [x_base + segment_length, -half_h, half_h],
-                [x_base + segment_length, half_h, half_h],
-                [x_base, half_h, half_h],
-            ]),
+            (
+                [0.0, 0.0, 1.0],
+                [
+                    [x_base, -half_h, half_h],
+                    [x_base + segment_length, -half_h, half_h],
+                    [x_base + segment_length, half_h, half_h],
+                    [x_base, half_h, half_h],
+                ],
+            ),
             // Back (-Z)
-            ([0.0, 0.0, -1.0], [
-                [x_base + segment_length, -half_h, -half_h],
-                [x_base, -half_h, -half_h],
-                [x_base, half_h, -half_h],
-                [x_base + segment_length, half_h, -half_h],
-            ]),
+            (
+                [0.0, 0.0, -1.0],
+                [
+                    [x_base + segment_length, -half_h, -half_h],
+                    [x_base, -half_h, -half_h],
+                    [x_base, half_h, -half_h],
+                    [x_base + segment_length, half_h, -half_h],
+                ],
+            ),
             // Top (+Y)
-            ([0.0, 1.0, 0.0], [
-                [x_base, half_h, half_h],
-                [x_base + segment_length, half_h, half_h],
-                [x_base + segment_length, half_h, -half_h],
-                [x_base, half_h, -half_h],
-            ]),
+            (
+                [0.0, 1.0, 0.0],
+                [
+                    [x_base, half_h, half_h],
+                    [x_base + segment_length, half_h, half_h],
+                    [x_base + segment_length, half_h, -half_h],
+                    [x_base, half_h, -half_h],
+                ],
+            ),
             // Bottom (-Y)
-            ([0.0, -1.0, 0.0], [
-                [x_base, -half_h, -half_h],
-                [x_base + segment_length, -half_h, -half_h],
-                [x_base + segment_length, -half_h, half_h],
-                [x_base, -half_h, half_h],
-            ]),
+            (
+                [0.0, -1.0, 0.0],
+                [
+                    [x_base, -half_h, -half_h],
+                    [x_base + segment_length, -half_h, -half_h],
+                    [x_base + segment_length, -half_h, half_h],
+                    [x_base, -half_h, half_h],
+                ],
+            ),
             // Right (+X)
-            ([1.0, 0.0, 0.0], [
-                [x_base + segment_length, -half_h, half_h],
-                [x_base + segment_length, -half_h, -half_h],
-                [x_base + segment_length, half_h, -half_h],
-                [x_base + segment_length, half_h, half_h],
-            ]),
+            (
+                [1.0, 0.0, 0.0],
+                [
+                    [x_base + segment_length, -half_h, half_h],
+                    [x_base + segment_length, -half_h, -half_h],
+                    [x_base + segment_length, half_h, -half_h],
+                    [x_base + segment_length, half_h, half_h],
+                ],
+            ),
             // Left (-X)
-            ([-1.0, 0.0, 0.0], [
-                [x_base, -half_h, -half_h],
-                [x_base, -half_h, half_h],
-                [x_base, half_h, half_h],
-                [x_base, half_h, -half_h],
-            ]),
+            (
+                [-1.0, 0.0, 0.0],
+                [
+                    [x_base, -half_h, -half_h],
+                    [x_base, -half_h, half_h],
+                    [x_base, half_h, half_h],
+                    [x_base, half_h, -half_h],
+                ],
+            ),
         ];
 
         for (face_idx, (normal, corners)) in faces.iter().enumerate() {
@@ -279,13 +346,21 @@ fn generate_horizontal_arm_mesh(path: &PathBuf, bone_count: u32, segment_length:
     let header = EmberZMeshHeader::new(vertex_count, index_count, FORMAT_POS_NORMAL_SKINNED);
 
     let mut file = File::create(path).expect("Failed to create mesh file");
-    file.write_all(&header.to_bytes()).expect("Failed to write header");
-    file.write_all(&packed_vertices).expect("Failed to write vertices");
+    file.write_all(&header.to_bytes())
+        .expect("Failed to write header");
+    file.write_all(&packed_vertices)
+        .expect("Failed to write vertices");
     for idx in &indices {
-        file.write_all(&idx.to_le_bytes()).expect("Failed to write index");
+        file.write_all(&idx.to_le_bytes())
+            .expect("Failed to write index");
     }
 
-    println!("Generated {} ({} vertices, {} indices)", path.display(), vertex_count, index_count);
+    println!(
+        "Generated {} ({} vertices, {} indices)",
+        path.display(),
+        vertex_count,
+        index_count
+    );
 }
 
 /// Generate vertical arm animation (Z-axis rotations) with proper hierarchical chaining
@@ -293,7 +368,8 @@ fn generate_animation(path: &PathBuf, bone_count: u8, frame_count: u16, params: 
     let header = EmberZAnimationHeader::new(bone_count, frame_count);
 
     let mut file = File::create(path).expect("Failed to create animation file");
-    file.write_all(&header.to_bytes()).expect("Failed to write header");
+    file.write_all(&header.to_bytes())
+        .expect("Failed to write header");
 
     let segment_length = 1.5f32;
 
@@ -319,7 +395,7 @@ fn generate_animation(path: &PathBuf, bone_count: u8, frame_count: u16, params: 
 
             // Compute world position by rotating through the chain
             let world_pos = if bone == 0 {
-                [0.0, 0.0, 0.0]  // Root bone at origin
+                [0.0, 0.0, 0.0] // Root bone at origin
             } else {
                 // Position is parent's position + segment rotated by parent's accumulated rotation
                 let parent_pos = world_positions[bone as usize - 1];
@@ -344,11 +420,17 @@ fn generate_animation(path: &PathBuf, bone_count: u8, frame_count: u16, params: 
             world_rotations.push(world_quat);
 
             let keyframe = encode_bone_transform(world_quat, world_pos, [1.0, 1.0, 1.0]);
-            file.write_all(&keyframe.to_bytes()).expect("Failed to write keyframe");
+            file.write_all(&keyframe.to_bytes())
+                .expect("Failed to write keyframe");
         }
     }
 
-    println!("Generated {} ({} bones, {} frames)", path.display(), bone_count, frame_count);
+    println!(
+        "Generated {} ({} bones, {} frames)",
+        path.display(),
+        bone_count,
+        frame_count
+    );
 }
 
 /// Generate horizontal arm animation (Y-axis rotations) with proper hierarchical chaining
@@ -356,7 +438,8 @@ fn generate_horizontal_animation(path: &PathBuf, bone_count: u8, frame_count: u1
     let header = EmberZAnimationHeader::new(bone_count, frame_count);
 
     let mut file = File::create(path).expect("Failed to create animation file");
-    file.write_all(&header.to_bytes()).expect("Failed to write header");
+    file.write_all(&header.to_bytes())
+        .expect("Failed to write header");
 
     let segment_length = 1.0f32;
 
@@ -377,7 +460,7 @@ fn generate_horizontal_animation(path: &PathBuf, bone_count: u8, frame_count: u1
 
             // Compute world position by rotating through the chain
             let world_pos = if bone == 0 {
-                [0.0, 0.0, 0.0]  // Root bone at origin
+                [0.0, 0.0, 0.0] // Root bone at origin
             } else {
                 // Position is parent's position + segment rotated by parent's accumulated rotation
                 let parent_pos = world_positions[bone as usize - 1];
@@ -401,9 +484,15 @@ fn generate_horizontal_animation(path: &PathBuf, bone_count: u8, frame_count: u1
             world_positions.push(world_pos);
 
             let keyframe = encode_bone_transform(world_quat, world_pos, [1.0, 1.0, 1.0]);
-            file.write_all(&keyframe.to_bytes()).expect("Failed to write keyframe");
+            file.write_all(&keyframe.to_bytes())
+                .expect("Failed to write keyframe");
         }
     }
 
-    println!("Generated {} ({} bones, {} frames)", path.display(), bone_count, frame_count);
+    println!(
+        "Generated {} ({} bones, {} frames)",
+        path.display(),
+        bone_count,
+        frame_count
+    );
 }

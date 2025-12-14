@@ -368,8 +368,11 @@ impl ZGraphics {
             }
             // Write after static sections (inverse_bind + keyframes)
             let byte_offset = (self.animation_static_end * 48) as u64;
-            self.queue
-                .write_buffer(&self.unified_animation_buffer, byte_offset, bytemuck::cast_slice(&bone_data));
+            self.queue.write_buffer(
+                &self.unified_animation_buffer,
+                byte_offset,
+                bytemuck::cast_slice(&bone_data),
+            );
         }
 
         // NOTE: Inverse bind matrices are now uploaded once during init via upload_static_inverse_bind()
@@ -424,7 +427,9 @@ impl ZGraphics {
                 self.mvp_indices_capacity.hash(&mut hasher);
                 self.current_render_mode.hash(&mut hasher);
                 // Include quad instance buffer capacity
-                self.buffer_manager.quad_instance_capacity().hash(&mut hasher);
+                self.buffer_manager
+                    .quad_instance_capacity()
+                    .hash(&mut hasher);
                 hasher.finish()
             };
 
@@ -457,11 +462,29 @@ impl ZGraphics {
                         label: Some("Frame Bind Group (Unified)"),
                         layout: &pipeline_entry.bind_group_layout_frame,
                         entries: &[
-                            wgpu::BindGroupEntry { binding: 0, resource: self.unified_transforms_buffer.as_entire_binding() },
-                            wgpu::BindGroupEntry { binding: 1, resource: self.mvp_indices_buffer.as_entire_binding() },
-                            wgpu::BindGroupEntry { binding: 2, resource: self.shading_state_buffer.as_entire_binding() },
-                            wgpu::BindGroupEntry { binding: 3, resource: self.unified_animation_buffer.as_entire_binding() },
-                            wgpu::BindGroupEntry { binding: 4, resource: self.buffer_manager.quad_instance_buffer().as_entire_binding() },
+                            wgpu::BindGroupEntry {
+                                binding: 0,
+                                resource: self.unified_transforms_buffer.as_entire_binding(),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 1,
+                                resource: self.mvp_indices_buffer.as_entire_binding(),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 2,
+                                resource: self.shading_state_buffer.as_entire_binding(),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 3,
+                                resource: self.unified_animation_buffer.as_entire_binding(),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 4,
+                                resource: self
+                                    .buffer_manager
+                                    .quad_instance_buffer()
+                                    .as_entire_binding(),
+                            },
                         ],
                     });
                     self.cached_frame_bind_group = Some(bind_group.clone());
@@ -492,11 +515,29 @@ impl ZGraphics {
                     label: Some("Frame Bind Group (Unified)"),
                     layout: &pipeline_entry.bind_group_layout_frame,
                     entries: &[
-                        wgpu::BindGroupEntry { binding: 0, resource: self.unified_transforms_buffer.as_entire_binding() },
-                        wgpu::BindGroupEntry { binding: 1, resource: self.mvp_indices_buffer.as_entire_binding() },
-                        wgpu::BindGroupEntry { binding: 2, resource: self.shading_state_buffer.as_entire_binding() },
-                        wgpu::BindGroupEntry { binding: 3, resource: self.unified_animation_buffer.as_entire_binding() },
-                        wgpu::BindGroupEntry { binding: 4, resource: self.buffer_manager.quad_instance_buffer().as_entire_binding() },
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: self.unified_transforms_buffer.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: self.mvp_indices_buffer.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: self.shading_state_buffer.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 3,
+                            resource: self.unified_animation_buffer.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 4,
+                            resource: self
+                                .buffer_manager
+                                .quad_instance_buffer()
+                                .as_entire_binding(),
+                        },
                     ],
                 });
                 self.cached_frame_bind_group = Some(bind_group.clone());

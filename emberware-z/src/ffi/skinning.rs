@@ -13,7 +13,9 @@ use emberware_core::wasm::GameStateWithConsole;
 
 use super::guards::check_init_only;
 use crate::console::ZInput;
-use crate::state::{BoneMatrix3x4, KeyframeSource, MAX_BONES, MAX_SKELETONS, PendingSkeleton, ZFFIState};
+use crate::state::{
+    BoneMatrix3x4, KeyframeSource, MAX_BONES, MAX_SKELETONS, PendingSkeleton, ZFFIState,
+};
 
 /// Register GPU skinning FFI functions
 pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {

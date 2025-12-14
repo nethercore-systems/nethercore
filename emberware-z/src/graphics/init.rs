@@ -263,8 +263,8 @@ impl ZGraphics {
             unified_transforms_capacity,
             unified_animation_buffer,
             unified_animation_capacity,
-            inverse_bind_end: 0,       // Set when inverse bind matrices are uploaded
-            animation_static_end: 0,   // Set when keyframes are uploaded
+            inverse_bind_end: 0, // Set when inverse bind matrices are uploaded
+            animation_static_end: 0, // Set when keyframes are uploaded
             mvp_indices_buffer,
             mvp_indices_capacity,
             shading_state_buffer,

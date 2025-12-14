@@ -10,7 +10,7 @@ use crate::state::{
 };
 use emberware_core::console::{Audio, ConsoleResourceManager};
 use z_common::formats::{
-    decode_bone_transform, BoneTransform, PlatformBoneKeyframe, PLATFORM_BONE_KEYFRAME_SIZE,
+    BoneTransform, PLATFORM_BONE_KEYFRAME_SIZE, PlatformBoneKeyframe, decode_bone_transform,
 };
 
 /// Convert a BoneTransform to a 3x4 bone matrix
@@ -309,7 +309,8 @@ impl ConsoleResourceManager for ZResourceManager {
 
                 // Decode all frames for this animation
                 for frame_idx in 0..kf.frame_count as usize {
-                    let frame_start = frame_idx * kf.bone_count as usize * PLATFORM_BONE_KEYFRAME_SIZE;
+                    let frame_start =
+                        frame_idx * kf.bone_count as usize * PLATFORM_BONE_KEYFRAME_SIZE;
 
                     for bone_idx in 0..kf.bone_count as usize {
                         let kf_offset = frame_start + bone_idx * PLATFORM_BONE_KEYFRAME_SIZE;

@@ -50,7 +50,7 @@ pub struct AssetsSection {
     #[serde(default)]
     pub keyframes: Vec<AssetEntry>,
     #[serde(default)]
-    pub animations: Vec<AssetEntry>,  // Alias for keyframes
+    pub animations: Vec<AssetEntry>, // Alias for keyframes
     #[serde(default)]
     pub sounds: Vec<AssetEntry>,
     #[serde(default)]

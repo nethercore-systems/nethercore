@@ -172,7 +172,10 @@ fn run_asset_generators(project_root: &Path) -> Result<()> {
         return Ok(());
     }
 
-    println!("Running {} asset generator(s) in parallel...", generators.len());
+    println!(
+        "Running {} asset generator(s) in parallel...",
+        generators.len()
+    );
 
     // Run generators in parallel and collect results
     let results: Vec<_> = generators

@@ -255,10 +255,18 @@ fn load_assets(
         println!("  Data: {} ({} bytes)", d.id, d.data.len());
     }
     for skeleton in &skeletons {
-        println!("  Skeleton: {} ({} bones)", skeleton.id, skeleton.bone_count);
+        println!(
+            "  Skeleton: {} ({} bones)",
+            skeleton.id, skeleton.bone_count
+        );
     }
 
-    let total = textures.len() + meshes.len() + skeletons.len() + keyframes.len() + sounds.len() + data.len();
+    let total = textures.len()
+        + meshes.len()
+        + skeletons.len()
+        + keyframes.len()
+        + sounds.len()
+        + data.len();
     if total > 0 {
         println!("  Total: {} assets", total);
     }
@@ -557,7 +565,8 @@ fn load_skeleton(id: &str, path: &std::path::Path) -> Result<PackedSkeleton> {
     }
 
     // Validate data size
-    let expected_size = EmberZSkeletonHeader::SIZE + (bone_count as usize * INVERSE_BIND_MATRIX_SIZE);
+    let expected_size =
+        EmberZSkeletonHeader::SIZE + (bone_count as usize * INVERSE_BIND_MATRIX_SIZE);
     if data.len() < expected_size {
         anyhow::bail!(
             "Skeleton data too small: {} bytes, expected {} (bones: {})",
