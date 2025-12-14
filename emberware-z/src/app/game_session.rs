@@ -351,6 +351,12 @@ impl App {
         let mut runtime = emberware_core::runtime::Runtime::new(console);
         runtime.load_game(game_instance);
 
+        // Create and set audio backend
+        let audio = EmberwareZ::new()
+            .create_audio()
+            .map_err(|e| RuntimeError(format!("Failed to create audio: {}", e)))?;
+        runtime.set_audio(audio);
+
         // Set data pack on console state (before init, so rom_* functions work)
         if let Some(data_pack) = data_pack {
             if let Some(game) = runtime.game_mut() {

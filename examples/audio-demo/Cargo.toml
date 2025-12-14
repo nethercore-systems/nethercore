@@ -13,3 +13,4 @@ codegen-units = 1
 panic = "abort"
 
 [dependencies]
+libm = "0.2"

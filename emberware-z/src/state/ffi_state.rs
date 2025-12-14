@@ -752,7 +752,8 @@ impl ZFFIState {
         self.mvp_shading_states.clear();
         self.mvp_shading_map.clear();
 
-        self.audio_commands.clear();
+        // Note: audio_commands is NOT cleared here - it's consumed via std::mem::take()
+        // in game_session.rs after update() runs, preserving commands from both update() and render()
 
         // Reset shading state pool for next frame
         self.shading_states.clear();

@@ -38,31 +38,31 @@ static mut IS_PLAYING: bool = false;
 static mut AUTO_MODE: bool = true;
 static mut AUTO_TIMER: f32 = 0.0;
 
-/// Generate a simple beep sound (440Hz square wave approximation, 0.1 seconds)
-fn generate_beep() -> [i16; 2205] {  // 22050 Hz × 0.1s = 2205 samples
-    let mut samples = [0i16; 2205];
+/// Generate a smooth sine wave tone (440Hz, 1 second, seamless loop)
+fn generate_tone() -> [i16; 22050] {  // 22050 Hz × 1s = 22050 samples
+    let mut samples = [0i16; 22050];
     let frequency = 440.0;  // A4 note
     let sample_rate = 22050.0;
-    let period_samples = (sample_rate / frequency) as usize;
 
-    for (i, sample) in samples.iter_mut().enumerate() {
-        // Square wave: alternate between high and low
-        let value = if (i % period_samples) < (period_samples / 2) {
-            1.0
-        } else {
-            -1.0
-        };
+    // Calculate samples per complete wave cycle for seamless looping
+    let samples_per_cycle = sample_rate / frequency;
+    // Find number of complete cycles that fit in our buffer
+    let complete_cycles = libm::floorf(22050.0 / samples_per_cycle);
+    let actual_samples = (complete_cycles * samples_per_cycle) as usize;
 
-        // Apply envelope (fade in/out to avoid clicks)
-        let envelope = if i < 100 {
-            i as f32 / 100.0  // Fade in
-        } else if i > 2105 {
-            (2205 - i) as f32 / 100.0  // Fade out
-        } else {
-            1.0
-        };
+    for i in 0..actual_samples {
+        // Sine wave for smooth sound
+        let t = i as f32 / sample_rate;
+        let value = libm::sinf(2.0 * core::f32::consts::PI * frequency * t);
 
-        *sample = (value * envelope * 32767.0 * 0.3) as i16;  // 30% volume
+        samples[i] = (value * 32767.0 * 0.25) as i16;  // 25% volume
+    }
+
+    // Fill remaining samples to complete the buffer (maintains loop point)
+    for i in actual_samples..22050 {
+        let t = i as f32 / sample_rate;
+        let value = libm::sinf(2.0 * core::f32::consts::PI * frequency * t);
+        samples[i] = (value * 32767.0 * 0.25) as i16;
     }
 
     samples
@@ -74,15 +74,15 @@ pub extern "C" fn init() {
         // Set clear color
         set_clear_color(0x19172AFF); // Dark blue-purple
 
-        // Generate and load beep sound
-        let beep_samples = generate_beep();
+        // Generate and load smooth tone
+        let tone_samples = generate_tone();
         BEEP_SOUND = load_sound(
-            beep_samples.as_ptr(),
-            (beep_samples.len() * 2) as u32  // byte length
+            tone_samples.as_ptr(),
+            (tone_samples.len() * 2) as u32  // byte length
         );
 
         // Start in auto mode with a sound playing
-        channel_play(0, BEEP_SOUND, 0.8, 0.0, 1);  // Looping beep
+        channel_play(0, BEEP_SOUND, 0.5, 0.0, 1);  // Looping tone at 50% volume
         IS_PLAYING = true;
     }
 }
@@ -131,14 +131,14 @@ pub extern "C" fn update() {
                 channel_stop(0);
                 IS_PLAYING = false;
             } else {
-                channel_play(0, BEEP_SOUND, 0.8, PAN_POSITION, 1);
+                channel_play(0, BEEP_SOUND, 0.5, PAN_POSITION, 1);
                 IS_PLAYING = true;
             }
         }
 
         // Update pan in real-time
         if IS_PLAYING {
-            channel_set(0, 0.8, PAN_POSITION);
+            channel_set(0, 0.5, PAN_POSITION);
         }
     }
 }
@@ -152,7 +152,7 @@ pub extern "C" fn render() {
 
         // Title
         let title = b"Audio Panning Demo";
-        draw_text(title.as_ptr(), title.len() as u32, 180.0, 30.0, 2.0, 0xFFFFFFFF);
+        draw_text(title.as_ptr(), title.len() as u32, 20.0, 20.0, 32.0, 0xFFFFFFFF);
 
         // Instructions
         let line1: &[u8] = if AUTO_MODE {
@@ -160,65 +160,64 @@ pub extern "C" fn render() {
         } else {
             b"Mode: MANUAL (use D-pad to pan)"
         };
-        draw_text(line1.as_ptr(), line1.len() as u32, 50.0, 100.0, 1.0, 0xFFAAAAFF);
+        draw_text(line1.as_ptr(), line1.len() as u32, 20.0, 70.0, 18.0, 0xFFAAAAFF);
 
         let line2 = b"Controls:";
-        draw_text(line2.as_ptr(), line2.len() as u32, 50.0, 130.0, 1.0, 0xFFFFFFFF);
+        draw_text(line2.as_ptr(), line2.len() as u32, 20.0, 110.0, 20.0, 0xFFFFFFFF);
 
-        let line3 = b"  A - Play/Stop sound";
-        draw_text(line3.as_ptr(), line3.len() as u32, 50.0, 150.0, 1.0, 0xCCCCCCFF);
+        let line3 = b"  [A] Play/Stop";
+        draw_text(line3.as_ptr(), line3.len() as u32, 20.0, 145.0, 18.0, 0xCCCCCCFF);
 
-        let line4 = b"  B - Toggle Auto/Manual mode";
-        draw_text(line4.as_ptr(), line4.len() as u32, 50.0, 170.0, 1.0, 0xCCCCCCFF);
+        let line4 = b"  [B] Toggle Auto/Manual";
+        draw_text(line4.as_ptr(), line4.len() as u32, 20.0, 175.0, 18.0, 0xCCCCCCFF);
 
         let line5: &[u8] = if AUTO_MODE {
             b"  (Auto mode active)"
         } else {
-            b"  LEFT/RIGHT - Adjust pan"
+            b"  [D-pad] Adjust pan"
         };
-        draw_text(line5.as_ptr(), line5.len() as u32, 50.0, 190.0, 1.0, 0xCCCCCCFF);
+        draw_text(line5.as_ptr(), line5.len() as u32, 20.0, 205.0, 18.0, 0xCCCCCCFF);
 
         // Visual pan indicator
         let line6 = b"Pan Position:";
-        draw_text(line6.as_ptr(), line6.len() as u32, 50.0, 240.0, 1.0, 0xFFFFFFFF);
+        draw_text(line6.as_ptr(), line6.len() as u32, 20.0, 260.0, 20.0, 0xFFFFFFFF);
 
         // Draw pan slider background
-        draw_rect(100.0, 270.0, 440.0, 20.0, 0x333333FF);
+        draw_rect(80.0, 300.0, 480.0, 30.0, 0x333333FF);
 
         // Draw center line
-        draw_rect(318.0, 265.0, 4.0, 30.0, 0x666666FF);
+        draw_rect(318.0, 290.0, 4.0, 50.0, 0x666666FF);
 
         // Draw pan indicator
-        let indicator_x = 320.0 + (PAN_POSITION * 220.0);
+        let indicator_x = 320.0 + (PAN_POSITION * 240.0);
         let indicator_color = if IS_PLAYING {
             0x00FF00FF  // Green when playing
         } else {
             0x666666FF  // Gray when stopped
         };
-        draw_rect(indicator_x - 8.0, 265.0, 16.0, 30.0, indicator_color);
+        draw_rect(indicator_x - 10.0, 290.0, 20.0, 50.0, indicator_color);
 
         // Draw speaker labels
         let left_label = b"L";
-        draw_text(left_label.as_ptr(), left_label.len() as u32, 80.0, 275.0, 1.5, 0xFFFFFFFF);
+        draw_text(left_label.as_ptr(), left_label.len() as u32, 50.0, 300.0, 24.0, 0xFFFFFFFF);
 
         let right_label = b"R";
-        draw_text(right_label.as_ptr(), right_label.len() as u32, 550.0, 275.0, 1.5, 0xFFFFFFFF);
+        draw_text(right_label.as_ptr(), right_label.len() as u32, 575.0, 300.0, 24.0, 0xFFFFFFFF);
 
         // Show pan value
         let mut pan_text = [0u8; 32];
         let pan_percent = (PAN_POSITION * 100.0) as i32;
         let pan_str = format_pan(pan_percent, &mut pan_text);
-        draw_text(pan_str.as_ptr(), pan_str.len() as u32, 280.0, 320.0, 1.0, 0xFFFFFFFF);
+        draw_text(pan_str.as_ptr(), pan_str.len() as u32, 260.0, 370.0, 20.0, 0xFFFFFFFF);
 
         // Status
-        // Color format: 0xRRGGBBAA (R in highest byte, A in lowest)
         let status: &[u8] = if IS_PLAYING {
-            b"Status: PLAYING (440Hz beep)"
+            b"Status: PLAYING (440Hz tone)"
         } else {
             b"Status: STOPPED"
         };
         let status_color = if IS_PLAYING { 0x00FF00FF } else { 0xFF0000FF };  // Green/Red
-        draw_text(status.as_ptr(), status.len() as u32, 50.0, 360.0, 1.0, status_color);
+        draw_text(status.as_ptr(), status.len() as u32, 20.0, 420.0, 20.0, status_color);
     }
 }
 
