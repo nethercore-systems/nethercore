@@ -1,6 +1,6 @@
 # ADPCM Audio Compression Specification
 
-**Status:** Integration Spec / Ready for Implementation
+**Status:** Rejected in favor of QOA
 **Author:** Zerve
 **Last Updated:** December 2025
 
