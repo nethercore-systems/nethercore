@@ -2,7 +2,7 @@
 
 use crate::console::EmberwareZ;
 use crate::library;
-use emberware_core::app::{FRAME_TIME_HISTORY_SIZE, RuntimeError, session::GameSession};
+use emberware_core::app::{session::GameSession, RuntimeError, FRAME_TIME_HISTORY_SIZE};
 use emberware_core::console::{Console, ConsoleResourceManager};
 use emberware_core::rollback::{SessionEvent, SessionType};
 use std::path::Path;
@@ -14,14 +14,6 @@ use super::App;
 /// Dummy audio backend for resource processing (Z resource manager doesn't use audio)
 pub(super) struct DummyAudio;
 impl emberware_core::console::Audio for DummyAudio {
-    fn play(
-        &mut self,
-        _handle: emberware_core::console::SoundHandle,
-        _volume: f32,
-        _looping: bool,
-    ) {
-    }
-    fn stop(&mut self, _handle: emberware_core::console::SoundHandle) {}
     fn set_rollback_mode(&mut self, _rolling_back: bool) {}
 }
 
@@ -283,22 +275,27 @@ impl App {
             false // No render
         };
 
-        // Process audio commands after rendering
-        // Use mem::take to avoid cloning - takes ownership and leaves empty vecs
-        let (audio_commands, sounds) = if let Some(game) = session.runtime.game_mut() {
-            let console_state = game.console_state_mut();
-            (
-                std::mem::take(&mut console_state.audio_commands),
-                console_state.sounds.clone(), // sounds must be cloned (contains Arcs, shared with audio system)
-            )
+        // Generate audio for this frame (per-frame audio architecture)
+        // Audio state is in rollback.audio and is saved/restored during GGRS rollback
+        //
+        // Note: We clone the sounds Vec<Option<Sound>> because:
+        // 1. Sound contains Arc<Vec<i16>> so cloning is cheap (just Arc::clone)
+        // 2. We can't hold both game_mut() and audio_mut() at the same time
+        let (sounds, mut audio_state) = if let Some(game) = session.runtime.game_mut() {
+            let ctx = game.store_mut().data_mut();
+            (ctx.ffi.sounds.clone(), ctx.rollback.audio)
         } else {
-            (Vec::new(), Vec::new())
+            (Vec::new(), crate::audio::AudioPlaybackState::new())
         };
 
-        if !audio_commands.is_empty() {
-            if let Some(audio) = session.runtime.audio_mut() {
-                audio.process_commands(&audio_commands, &sounds);
-            }
+        // Generate and submit audio samples
+        if let Some(audio) = session.runtime.audio_mut() {
+            audio.generate_and_submit(&mut audio_state, &sounds);
+        }
+
+        // Write back the updated audio state
+        if let Some(game) = session.runtime.game_mut() {
+            game.store_mut().data_mut().rollback.audio = audio_state;
         }
 
         // Check if game requested quit

@@ -1,20 +1,20 @@
 //! Audio FFI functions
 //!
 //! Functions for loading sounds and controlling playback via channels and music.
+//!
+//! In the per-frame audio architecture, these functions directly modify the
+//! `AudioPlaybackState` in `ctx.rollback.audio`, which is saved/restored during
+//! GGRS rollback for deterministic audio.
 
 use anyhow::Result;
 use tracing::{info, warn};
 use wasmtime::{Caller, Linker};
 
-use super::{get_wasm_memory, guards::check_init_only};
-use emberware_core::wasm::GameStateWithConsole;
-
-use crate::audio::{AudioCommand, Sound};
-use crate::console::ZInput;
-use crate::state::ZFFIState;
+use super::{get_wasm_memory, guards::check_init_only, ZContext};
+use crate::audio::{Sound, MAX_SFX_CHANNELS};
 
 /// Register audio FFI functions
-pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
+pub fn register(linker: &mut Linker<ZContext>) -> Result<()> {
     linker.func_wrap("env", "load_sound", load_sound)?;
     linker.func_wrap("env", "play_sound", play_sound)?;
     linker.func_wrap("env", "channel_play", channel_play)?;
@@ -36,11 +36,7 @@ pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) ->
 ///
 /// # Returns
 /// Sound handle for use with play_sound, channel_play, music_play
-fn load_sound(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    data_ptr: u32,
-    byte_len: u32,
-) -> u32 {
+fn load_sound(mut caller: Caller<'_, ZContext>, data_ptr: u32, byte_len: u32) -> u32 {
     // Guard: init-only
     if let Err(e) = check_init_only(&caller, "load_sound") {
         warn!("{}", e);
@@ -75,12 +71,10 @@ fn load_sound(
     };
     pcm_data.copy_from_slice(data_slice);
 
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
 
     // Create Sound and add to sounds vec
-    let sound = Sound {
-        data: std::sync::Arc::new(pcm_data),
-    };
+    let sound = Sound::new(pcm_data);
 
     let handle = state.next_sound_handle;
     state.next_sound_handle += 1;
@@ -103,16 +97,17 @@ fn load_sound(
 /// - `sound`: Sound handle from load_sound()
 /// - `volume`: 0.0 to 1.0
 /// - `pan`: -1.0 (left) to 1.0 (right), 0.0 = center
-fn play_sound(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    sound: u32,
-    volume: f32,
-    pan: f32,
-) {
-    let state = &mut caller.data_mut().console;
-    state
-        .audio_commands
-        .push(AudioCommand::PlaySound { sound, volume, pan });
+fn play_sound(mut caller: Caller<'_, ZContext>, sound: u32, volume: f32, pan: f32) {
+    let ctx = caller.data_mut();
+    let audio_state = &mut ctx.rollback.audio;
+
+    // Find first free channel
+    if let Some(channel_idx) = audio_state.find_free_channel() {
+        audio_state.channels[channel_idx].play(sound, volume, pan, false);
+    } else {
+        // All channels busy, sound dropped (this is fine for fire-and-forget)
+        tracing::trace!("play_sound: all channels busy, sound {} dropped", sound);
+    }
 }
 
 /// Play sound on specific channel
@@ -126,21 +121,21 @@ fn play_sound(
 /// - `pan`: -1.0 (left) to 1.0 (right), 0.0 = center
 /// - `looping`: 1 = loop, 0 = play once
 fn channel_play(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZContext>,
     channel: u32,
     sound: u32,
     volume: f32,
     pan: f32,
     looping: u32,
 ) {
-    let state = &mut caller.data_mut().console;
-    state.audio_commands.push(AudioCommand::ChannelPlay {
-        channel,
-        sound,
-        volume,
-        pan,
-        looping: looping != 0,
-    });
+    let channel_idx = channel as usize;
+    if channel_idx >= MAX_SFX_CHANNELS {
+        warn!("channel_play: invalid channel {}", channel);
+        return;
+    }
+
+    let audio_state = &mut caller.data_mut().rollback.audio;
+    audio_state.channels[channel_idx].play(sound, volume, pan, looping != 0);
 }
 
 /// Update channel parameters (call every frame for positional audio)
@@ -149,29 +144,36 @@ fn channel_play(
 /// - `channel`: 0-15
 /// - `volume`: 0.0 to 1.0
 /// - `pan`: -1.0 (left) to 1.0 (right), 0.0 = center
-fn channel_set(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    channel: u32,
-    volume: f32,
-    pan: f32,
-) {
-    let state = &mut caller.data_mut().console;
-    state.audio_commands.push(AudioCommand::ChannelSet {
-        channel,
-        volume,
-        pan,
-    });
+fn channel_set(mut caller: Caller<'_, ZContext>, channel: u32, volume: f32, pan: f32) {
+    let channel_idx = channel as usize;
+    if channel_idx >= MAX_SFX_CHANNELS {
+        warn!("channel_set: invalid channel {}", channel);
+        return;
+    }
+
+    let audio_state = &mut caller.data_mut().rollback.audio;
+    let ch = &mut audio_state.channels[channel_idx];
+
+    // Only update if playing (ignore if stopped)
+    if ch.is_playing() {
+        ch.set_volume(volume);
+        ch.set_pan(pan);
+    }
 }
 
 /// Stop channel
 ///
 /// # Parameters
 /// - `channel`: 0-15
-fn channel_stop(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, channel: u32) {
-    let state = &mut caller.data_mut().console;
-    state
-        .audio_commands
-        .push(AudioCommand::ChannelStop { channel });
+fn channel_stop(mut caller: Caller<'_, ZContext>, channel: u32) {
+    let channel_idx = channel as usize;
+    if channel_idx >= MAX_SFX_CHANNELS {
+        warn!("channel_stop: invalid channel {}", channel);
+        return;
+    }
+
+    let audio_state = &mut caller.data_mut().rollback.audio;
+    audio_state.channels[channel_idx].stop();
 }
 
 /// Play music (looping, dedicated channel)
@@ -179,30 +181,22 @@ fn channel_stop(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
 /// # Parameters
 /// - `sound`: Sound handle from load_sound()
 /// - `volume`: 0.0 to 1.0
-fn music_play(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    sound: u32,
-    volume: f32,
-) {
-    let state = &mut caller.data_mut().console;
-    state
-        .audio_commands
-        .push(AudioCommand::MusicPlay { sound, volume });
+fn music_play(mut caller: Caller<'_, ZContext>, sound: u32, volume: f32) {
+    let audio_state = &mut caller.data_mut().rollback.audio;
+    audio_state.music.play(sound, volume);
 }
 
 /// Stop music
-fn music_stop(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>) {
-    let state = &mut caller.data_mut().console;
-    state.audio_commands.push(AudioCommand::MusicStop);
+fn music_stop(mut caller: Caller<'_, ZContext>) {
+    let audio_state = &mut caller.data_mut().rollback.audio;
+    audio_state.music.stop();
 }
 
 /// Set music volume
 ///
 /// # Parameters
 /// - `volume`: 0.0 to 1.0
-fn music_set_volume(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, volume: f32) {
-    let state = &mut caller.data_mut().console;
-    state
-        .audio_commands
-        .push(AudioCommand::MusicSetVolume { volume });
+fn music_set_volume(mut caller: Caller<'_, ZContext>, volume: f32) {
+    let audio_state = &mut caller.data_mut().rollback.audio;
+    audio_state.music.set_volume(volume);
 }

@@ -22,8 +22,9 @@ wasmtime = { workspace = true }
 wgpu = { workspace = true }
 winit = { workspace = true }
 
-# Audio
-rodio = { workspace = true }
+# Audio (per-frame generation via cpal + lock-free ring buffer)
+cpal = "0.15"
+ringbuf = "0.4"
 
 # Input
 gilrs = { workspace = true }

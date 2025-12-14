@@ -8,9 +8,9 @@
 use tracing::warn;
 use wasmtime::Caller;
 
+use super::ZContext;
 use crate::console::{MAX_BUTTON_INDEX, STICK_SCALE, TRIGGER_SCALE, ZInput};
-use crate::state::ZFFIState;
-use emberware_core::wasm::{GameStateWithConsole, MAX_PLAYERS};
+use emberware_core::wasm::MAX_PLAYERS;
 
 // ============================================================================
 // Validation Helpers (reduce DRY violations)
@@ -60,7 +60,7 @@ fn validate_button(button: u32, func_name: &str) -> bool {
 /// Returns 1 if held, 0 otherwise.
 #[inline]
 pub fn button_held(
-    caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    caller: Caller<'_, ZContext>,
     player: u32,
     button: u32,
 ) -> u32 {
@@ -85,7 +85,7 @@ pub fn button_held(
 /// Returns 1 if just pressed (not held last tick, held this tick), 0 otherwise.
 #[inline]
 pub fn button_pressed(
-    caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    caller: Caller<'_, ZContext>,
     player: u32,
     button: u32,
 ) -> u32 {
@@ -113,7 +113,7 @@ pub fn button_pressed(
 /// Returns 1 if just released (held last tick, not held this tick), 0 otherwise.
 #[inline]
 pub fn button_released(
-    caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    caller: Caller<'_, ZContext>,
     player: u32,
     button: u32,
 ) -> u32 {
@@ -140,7 +140,7 @@ pub fn button_released(
 /// Returns a bitmask where each bit represents a button state.
 #[inline]
 pub fn buttons_held(
-    caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    caller: Caller<'_, ZContext>,
     player: u32,
 ) -> u32 {
     let Some(player_idx) = validate_player(player, "buttons_held") else {
@@ -157,7 +157,7 @@ pub fn buttons_held(
 /// Returns a bitmask of buttons that are held now but were not held last tick.
 #[inline]
 pub fn buttons_pressed(
-    caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    caller: Caller<'_, ZContext>,
     player: u32,
 ) -> u32 {
     let Some(player_idx) = validate_player(player, "buttons_pressed") else {
@@ -179,7 +179,7 @@ pub fn buttons_pressed(
 /// Returns a bitmask of buttons that were held last tick but are not held now.
 #[inline]
 pub fn buttons_released(
-    caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    caller: Caller<'_, ZContext>,
     player: u32,
 ) -> u32 {
     let Some(player_idx) = validate_player(player, "buttons_released") else {
@@ -205,7 +205,7 @@ pub fn buttons_released(
 /// Returns value from -1.0 to 1.0 (0.0 if invalid player).
 #[inline]
 pub fn left_stick_x(
-    caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    caller: Caller<'_, ZContext>,
     player: u32,
 ) -> f32 {
     let Some(player_idx) = validate_player(player, "left_stick_x") else {
@@ -222,7 +222,7 @@ pub fn left_stick_x(
 /// Returns value from -1.0 to 1.0 (0.0 if invalid player).
 #[inline]
 pub fn left_stick_y(
-    caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    caller: Caller<'_, ZContext>,
     player: u32,
 ) -> f32 {
     let Some(player_idx) = validate_player(player, "left_stick_y") else {
@@ -239,7 +239,7 @@ pub fn left_stick_y(
 /// Returns value from -1.0 to 1.0 (0.0 if invalid player).
 #[inline]
 pub fn right_stick_x(
-    caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    caller: Caller<'_, ZContext>,
     player: u32,
 ) -> f32 {
     let Some(player_idx) = validate_player(player, "right_stick_x") else {
@@ -256,7 +256,7 @@ pub fn right_stick_x(
 /// Returns value from -1.0 to 1.0 (0.0 if invalid player).
 #[inline]
 pub fn right_stick_y(
-    caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    caller: Caller<'_, ZContext>,
     player: u32,
 ) -> f32 {
     let Some(player_idx) = validate_player(player, "right_stick_y") else {
@@ -275,7 +275,7 @@ pub fn right_stick_y(
 /// More efficient than two separate calls for the same player.
 #[inline]
 pub fn left_stick(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZContext>,
     player: u32,
     out_x: u32,
     out_y: u32,
@@ -323,7 +323,7 @@ pub fn left_stick(
 /// More efficient than two separate calls for the same player.
 #[inline]
 pub fn right_stick(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZContext>,
     player: u32,
     out_x: u32,
     out_y: u32,
@@ -373,7 +373,7 @@ pub fn right_stick(
 /// Returns value from 0.0 to 1.0 (0.0 if invalid player).
 #[inline]
 pub fn trigger_left(
-    caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    caller: Caller<'_, ZContext>,
     player: u32,
 ) -> f32 {
     let Some(player_idx) = validate_player(player, "trigger_left") else {
@@ -390,7 +390,7 @@ pub fn trigger_left(
 /// Returns value from 0.0 to 1.0 (0.0 if invalid player).
 #[inline]
 pub fn trigger_right(
-    caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    caller: Caller<'_, ZContext>,
     player: u32,
 ) -> f32 {
     let Some(player_idx) = validate_player(player, "trigger_right") else {

@@ -6,17 +6,15 @@ use anyhow::Result;
 use tracing::warn;
 use wasmtime::{Caller, Linker};
 
-use emberware_core::wasm::GameStateWithConsole;
+use super::ZContext;
 
-use crate::console::ZInput;
 use crate::graphics::vertex_stride;
-use crate::state::ZFFIState;
 
 /// Maximum vertex format value (all flags set: UV | COLOR | NORMAL | SKINNED)
 const MAX_VERTEX_FORMAT: u8 = 15;
 
 /// Register immediate mode 3D drawing FFI functions
-pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
+pub fn register(linker: &mut Linker<ZContext>) -> Result<()> {
     linker.func_wrap("env", "draw_triangles", draw_triangles)?;
     linker.func_wrap("env", "draw_triangles_indexed", draw_triangles_indexed)?;
     Ok(())
@@ -32,7 +30,7 @@ pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) ->
 /// Vertices are buffered on the CPU and flushed at frame end.
 /// Uses current transform and render state.
 fn draw_triangles(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZContext>,
     data_ptr: u32,
     vertex_count: u32,
     format: u32,
@@ -111,7 +109,7 @@ fn draw_triangles(
         return;
     }
 
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
 
     // Capture bound_textures at command creation time (not deferred)
     // They are resolved to TextureHandle at render time via texture_map
@@ -147,7 +145,7 @@ fn draw_triangles(
 /// Vertices and indices are buffered on the CPU and flushed at frame end.
 /// Uses current transform and render state.
 fn draw_triangles_indexed(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZContext>,
     data_ptr: u32,
     vertex_count: u32,
     index_ptr: u32,
@@ -270,7 +268,7 @@ fn draw_triangles_indexed(
         return;
     }
 
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
 
     // Capture bound_textures at command creation time (not deferred)
     // They are resolved to TextureHandle at render time via texture_map

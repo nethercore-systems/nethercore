@@ -47,9 +47,6 @@ winit = "0.30"
 # Graphics
 wgpu = "27"
 
-# Audio
-rodio = "0.21"
-
 # Input
 gilrs = "0.11"
 

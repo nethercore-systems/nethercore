@@ -25,11 +25,11 @@ pub mod test_utils;
 pub mod wasm;
 
 // Re-export core traits and types
-pub use console::{Audio, Console, ConsoleInput, ConsoleSpecs, Graphics};
+pub use console::{Audio, Console, ConsoleInput, ConsoleRollbackState, ConsoleSpecs, Graphics};
 pub use runtime::{Runtime, RuntimeConfig};
 pub use wasm::{
-    GameInstance, GameState, GameStateWithConsole, MAX_PLAYERS, MAX_SAVE_SIZE, MAX_SAVE_SLOTS,
-    WasmEngine,
+    GameInstance, GameState, GameStateWithConsole, WasmGameContext, MAX_PLAYERS, MAX_SAVE_SIZE,
+    MAX_SAVE_SLOTS, WasmEngine,
 };
 
 // Re-export rollback types

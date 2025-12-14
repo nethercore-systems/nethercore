@@ -16,14 +16,16 @@ pub const STATE_POOL_SIZE: usize = super::config::MAX_ROLLBACK_FRAMES + 2;
 
 /// Snapshot of game state for rollback
 ///
-/// Contains the serialized WASM game state and a checksum for desync detection.
-/// The data comes from calling `GameInstance::save_state()` which invokes the
-/// game's exported `save_state(ptr, max_len) -> len` function.
+/// Contains the serialized WASM game state, console rollback state, and a checksum for desync detection.
+/// The data comes from calling `GameInstance::save_state()` which snapshots the entire WASM linear memory.
+/// The console_data comes from the console's `ConsoleRollbackState` (e.g., audio playback positions).
 #[derive(Clone)]
 pub struct GameStateSnapshot {
-    /// Serialized WASM game state
+    /// Serialized WASM game state (entire linear memory)
     pub data: Vec<u8>,
-    /// FNV-1a checksum for desync detection
+    /// Serialized console rollback state (host-side, POD bytes via bytemuck)
+    pub console_data: Vec<u8>,
+    /// Combined xxHash3 checksum for desync detection
     pub checksum: u64,
     /// Frame number this snapshot was taken at
     pub frame: i32,
@@ -34,16 +36,29 @@ impl GameStateSnapshot {
     pub fn new() -> Self {
         Self {
             data: Vec::new(),
+            console_data: Vec::new(),
             checksum: 0,
             frame: -1,
         }
     }
 
-    /// Create a snapshot from serialized data
+    /// Create a snapshot from serialized WASM data only (no console state)
     pub fn from_data(data: Vec<u8>, frame: i32) -> Self {
-        let checksum = Self::compute_checksum(&data);
+        let checksum = Self::compute_checksum(&data, &[]);
         Self {
             data,
+            console_data: Vec::new(),
+            checksum,
+            frame,
+        }
+    }
+
+    /// Create a snapshot with both WASM and console rollback state
+    pub fn from_data_with_console(data: Vec<u8>, console_data: Vec<u8>, frame: i32) -> Self {
+        let checksum = Self::compute_checksum(&data, &console_data);
+        Self {
+            data,
+            console_data,
             checksum,
             frame,
         }
@@ -52,9 +67,10 @@ impl GameStateSnapshot {
     /// Create a snapshot from a pre-allocated buffer (avoids allocation)
     pub fn from_buffer(buffer: &mut Vec<u8>, len: usize, frame: i32) -> Self {
         buffer.truncate(len);
-        let checksum = Self::compute_checksum(buffer);
+        let checksum = Self::compute_checksum(buffer, &[]);
         Self {
             data: std::mem::take(buffer),
+            console_data: Vec::new(),
             checksum,
             frame,
         }
@@ -65,17 +81,40 @@ impl GameStateSnapshot {
         self.data.is_empty()
     }
 
-    /// Get the size of the serialized state in bytes
+    /// Get the size of the serialized WASM state in bytes
     pub fn len(&self) -> usize {
         self.data.len()
+    }
+
+    /// Get the total size including console state
+    pub fn total_len(&self) -> usize {
+        self.data.len() + self.console_data.len()
     }
 
     /// Compute xxHash3 checksum for desync detection
     ///
     /// xxHash3 is SIMD-optimized (~50 GB/s throughput) for fast checksumming
     /// of large state buffers. We use this to detect desyncs between clients.
-    fn compute_checksum(data: &[u8]) -> u64 {
-        xxhash_rust::xxh3::xxh3_64(data)
+    /// Combines both WASM and console state for a single checksum.
+    fn compute_checksum(wasm_data: &[u8], console_data: &[u8]) -> u64 {
+        use xxhash_rust::xxh3::Xxh3;
+        let mut hasher = Xxh3::new();
+        hasher.update(wasm_data);
+        hasher.update(console_data);
+        hasher.digest()
+    }
+
+    /// Save console rollback state (zero-copy via bytemuck)
+    pub fn save_console<R: bytemuck::Pod>(state: &R) -> Vec<u8> {
+        bytemuck::bytes_of(state).to_vec()
+    }
+
+    /// Load console rollback state (zero-copy via bytemuck)
+    ///
+    /// # Panics
+    /// Panics if the data size doesn't match the expected type size.
+    pub fn load_console<R: bytemuck::Pod + Copy>(data: &[u8]) -> R {
+        *bytemuck::from_bytes(data)
     }
 }
 

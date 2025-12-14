@@ -1,311 +1,547 @@
-//! Emberware Z audio backend
+//! Per-frame audio generation for Emberware Z
 //!
-//! PS1/N64-style audio system with:
-//! - 22,050 Hz sample rate (authentic retro)
-//! - 16-bit signed PCM mono format
-//! - 16 managed channels for sound effects
-//! - Dedicated music channel
-//! - Rollback-aware audio command buffering
+//! This module implements deterministic audio generation that integrates with
+//! GGRS rollback netcode. Audio state (playhead positions, volumes) is part of
+//! the rollback state, ensuring perfect audio synchronization during rollback.
 //!
-//! Thread-safe architecture:
-//! - Audio server runs in background thread, owns rodio OutputStream/Sinks
-//! - Main thread sends commands via mpsc channel
-//! - Rollback-aware: commands discarded during replay
+//! # Architecture
+//!
+//! - `AudioOutput`: cpal stream + lock-free ring buffer (runs in audio thread)
+//! - `AudioPlaybackState`: POD struct saved/restored during rollback
+//! - `generate_audio_frame()`: Called once per frame to generate samples
+//!
+//! # Sample Format
+//!
+//! - Sample rate: 22,050 Hz (PS1/N64 authentic)
+//! - Format: 16-bit signed mono PCM (stored in Sound)
+//! - Output: Stereo interleaved (L, R, L, R, ...)
+//! - Equal-power panning for constant loudness
 
-use rodio::{OutputStream, Sink, Source};
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Arc, mpsc};
-use std::thread;
-use tracing::{error, trace, warn};
+use std::sync::Arc;
 
-/// Maximum number of sound effect channels
-pub const MAX_CHANNELS: usize = 16;
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::{Device, SampleFormat, Stream, StreamConfig};
+use ringbuf::traits::{Consumer, Producer, Split};
+use ringbuf::HeapRb;
 
-/// Audio sample rate (22.05 kHz - PS1/N64 authentic)
-pub const SAMPLE_RATE: u32 = 22_050;
+use bytemuck::{Pod, Zeroable};
 
-/// Sound data (raw PCM)
-#[derive(Clone, Debug)]
+// ============================================================================
+// Constants
+// ============================================================================
+
+/// Target sample rate (22.05 kHz - PS1/N64 authentic)
+pub const SAMPLE_RATE: u32 = 22050;
+
+/// Samples per frame at 60 FPS (22050 / 60 = 367.5, round up to 368)
+pub const SAMPLES_PER_FRAME: usize = 368;
+
+/// Ring buffer size (frames of audio to buffer for smooth playback)
+/// 4 frames = ~67ms latency at 60 FPS
+const RING_BUFFER_FRAMES: usize = 4;
+
+/// Ring buffer capacity in stereo samples
+const RING_BUFFER_SIZE: usize = SAMPLES_PER_FRAME * 2 * RING_BUFFER_FRAMES;
+
+/// Maximum number of SFX channels
+pub const MAX_SFX_CHANNELS: usize = 16;
+
+/// Maximum number of sounds that can be loaded
+pub const MAX_SOUNDS: usize = 256;
+
+// ============================================================================
+// Sound Data
+// ============================================================================
+
+/// Loaded sound data (22.05 kHz 16-bit mono PCM)
+#[derive(Debug, Clone)]
 pub struct Sound {
-    /// Raw PCM data (16-bit signed, mono, 22.05kHz)
+    /// Raw PCM samples
     pub data: Arc<Vec<i16>>,
 }
 
 impl Sound {
-    /// Create a rodio source from this sound
-    fn to_source(&self) -> SoundSource {
-        SoundSource {
-            data: self.data.clone(),
-            position: 0,
-        }
-    }
-}
-
-/// Rodio source for playback
-#[derive(Clone)]
-struct SoundSource {
-    data: Arc<Vec<i16>>,
-    position: usize,
-}
-
-impl Iterator for SoundSource {
-    type Item = f32;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.position >= self.data.len() {
-            None
-        } else {
-            let sample = self.data[self.position];
-            self.position += 1;
-            // Convert i16 to f32 normalized (-1.0 to 1.0)
-            Some(sample as f32 / 32768.0)
-        }
-    }
-}
-
-impl Source for SoundSource {
-    fn current_span_len(&self) -> Option<usize> {
-        Some(self.data.len() - self.position)
-    }
-
-    fn channels(&self) -> u16 {
-        1 // Mono
-    }
-
-    fn sample_rate(&self) -> u32 {
-        SAMPLE_RATE
-    }
-
-    fn total_duration(&self) -> Option<std::time::Duration> {
-        let samples = self.data.len() as u32;
-        let seconds = samples as f64 / SAMPLE_RATE as f64;
-        Some(std::time::Duration::from_secs_f64(seconds))
-    }
-}
-
-/// Shared pan state for dynamic panning updates
-///
-/// Stores pan value as atomic u32 (f32 bits) for thread-safe updates.
-#[derive(Clone)]
-pub struct SharedPan(Arc<AtomicU32>);
-
-impl SharedPan {
-    /// Create new shared pan state with initial value
-    fn new(pan: f32) -> Self {
-        Self(Arc::new(AtomicU32::new(pan.to_bits())))
-    }
-
-    /// Get current pan value
-    fn get(&self) -> f32 {
-        f32::from_bits(self.0.load(Ordering::SeqCst))
-    }
-
-    /// Set pan value (thread-safe, can be called while sound is playing)
-    fn set(&self, pan: f32) {
-        self.0.store(pan.clamp(-1.0, 1.0).to_bits(), Ordering::SeqCst);
-    }
-
-    /// Get the Arc pointer for debugging (to verify clones share the same atomic)
-    #[allow(dead_code)]
-    fn arc_ptr(&self) -> usize {
-        Arc::as_ptr(&self.0) as usize
-    }
-}
-
-/// Repeating panned audio source for looped playback
-///
-/// Converts mono input to stereo with positional panning, and automatically
-/// loops when reaching the end. Unlike using repeat_infinite(), this doesn't
-/// require cloning, ensuring pan updates work correctly in real-time.
-struct RepeatingPannedSource {
-    sound: Sound,
-    position: usize,
-    pan: SharedPan,
-    current_sample: Option<f32>,
-    is_left_channel: bool,
-}
-
-impl RepeatingPannedSource {
-    fn new(sound: Sound, pan: SharedPan) -> Self {
+    /// Create a new sound from raw PCM data
+    pub fn new(data: Vec<i16>) -> Self {
         Self {
-            sound,
-            position: 0,
-            pan,
-            current_sample: None,
-            is_left_channel: true,
+            data: Arc::new(data),
         }
     }
 
+    /// Get the number of samples
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+
+    /// Check if the sound is empty
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
+}
+
+// ============================================================================
+// Audio Playback State (POD - saved/restored during rollback)
+// ============================================================================
+
+/// State for a single SFX channel (20 bytes)
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default, Pod, Zeroable)]
+pub struct ChannelState {
+    /// Sound handle (0 = no sound playing)
+    pub sound_handle: u32,
+    /// Playhead position in samples
+    pub playhead: u32,
+    /// Volume (0.0 - 1.0, stored as fixed-point)
+    pub volume_fixed: u16,
+    /// Pan (-1.0 to 1.0, stored as signed fixed-point)
+    pub pan_fixed: i16,
+    /// Flags: bit 0 = looping, bit 1 = playing
+    pub flags: u8,
+    /// Padding for alignment
+    pub _pad: [u8; 3],
+}
+
+impl ChannelState {
+    /// Flag: channel is looping
+    const FLAG_LOOPING: u8 = 1 << 0;
+    /// Flag: channel is playing
+    const FLAG_PLAYING: u8 = 1 << 1;
+
+    /// Check if the channel is playing
     #[inline]
-    fn calculate_gains(&self) -> (f32, f32) {
-        let pan = self.pan.get().clamp(-1.0, 1.0);
-        let angle = (pan + 1.0) * 0.25 * std::f32::consts::PI;
-        let left = angle.cos();
-        let right = angle.sin();
-        (left, right)
+    pub fn is_playing(&self) -> bool {
+        self.flags & Self::FLAG_PLAYING != 0
     }
 
-    fn next_sample(&mut self) -> f32 {
-        if self.position >= self.sound.data.len() {
-            self.position = 0; // Loop back to start
-        }
-        let sample = self.sound.data[self.position];
-        self.position += 1;
-        sample as f32 / 32768.0
+    /// Check if the channel is looping
+    #[inline]
+    pub fn is_looping(&self) -> bool {
+        self.flags & Self::FLAG_LOOPING != 0
     }
-}
 
-impl Iterator for RepeatingPannedSource {
-    type Item = f32;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.is_left_channel {
-            let sample = self.next_sample();
-            self.current_sample = Some(sample);
-            self.is_left_channel = false;
-            let (left_gain, _) = self.calculate_gains();
-            Some(sample * left_gain)
+    /// Set the playing flag
+    #[inline]
+    pub fn set_playing(&mut self, playing: bool) {
+        if playing {
+            self.flags |= Self::FLAG_PLAYING;
         } else {
-            let sample = self.current_sample?;
-            self.is_left_channel = true;
-            let (_, right_gain) = self.calculate_gains();
-            Some(sample * right_gain)
+            self.flags &= !Self::FLAG_PLAYING;
         }
     }
+
+    /// Set the looping flag
+    #[inline]
+    pub fn set_looping(&mut self, looping: bool) {
+        if looping {
+            self.flags |= Self::FLAG_LOOPING;
+        } else {
+            self.flags &= !Self::FLAG_LOOPING;
+        }
+    }
+
+    /// Get volume as f32 (0.0 - 1.0)
+    #[inline]
+    pub fn volume(&self) -> f32 {
+        self.volume_fixed as f32 / 65535.0
+    }
+
+    /// Set volume from f32 (clamped to 0.0 - 1.0)
+    #[inline]
+    pub fn set_volume(&mut self, volume: f32) {
+        self.volume_fixed = (volume.clamp(0.0, 1.0) * 65535.0) as u16;
+    }
+
+    /// Get pan as f32 (-1.0 to 1.0)
+    #[inline]
+    pub fn pan(&self) -> f32 {
+        self.pan_fixed as f32 / 32767.0
+    }
+
+    /// Set pan from f32 (clamped to -1.0 to 1.0)
+    #[inline]
+    pub fn set_pan(&mut self, pan: f32) {
+        self.pan_fixed = (pan.clamp(-1.0, 1.0) * 32767.0) as i16;
+    }
+
+    /// Start playing a sound
+    pub fn play(&mut self, sound_handle: u32, volume: f32, pan: f32, looping: bool) {
+        self.sound_handle = sound_handle;
+        self.playhead = 0;
+        self.set_volume(volume);
+        self.set_pan(pan);
+        self.set_playing(true);
+        self.set_looping(looping);
+    }
+
+    /// Stop playing
+    pub fn stop(&mut self) {
+        self.set_playing(false);
+        self.sound_handle = 0;
+        self.playhead = 0;
+    }
 }
 
-impl Source for RepeatingPannedSource {
-    fn current_span_len(&self) -> Option<usize> {
-        None // Infinite length due to looping
+/// Music channel state (separate from SFX, 20 bytes)
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default, Pod, Zeroable)]
+pub struct MusicState {
+    /// Sound handle for music (0 = no music)
+    pub sound_handle: u32,
+    /// Playhead position in samples
+    pub playhead: u32,
+    /// Volume (0.0 - 1.0, stored as fixed-point)
+    pub volume_fixed: u16,
+    /// Flags: bit 0 = playing (music always loops)
+    pub flags: u8,
+    /// Padding for alignment
+    pub _pad: [u8; 5],
+}
+
+impl MusicState {
+    /// Flag: music is playing
+    const FLAG_PLAYING: u8 = 1 << 0;
+
+    /// Check if music is playing
+    #[inline]
+    pub fn is_playing(&self) -> bool {
+        self.flags & Self::FLAG_PLAYING != 0
     }
 
-    fn channels(&self) -> u16 {
-        2 // Stereo
+    /// Set the playing flag
+    #[inline]
+    pub fn set_playing(&mut self, playing: bool) {
+        if playing {
+            self.flags |= Self::FLAG_PLAYING;
+        } else {
+            self.flags &= !Self::FLAG_PLAYING;
+        }
     }
 
-    fn sample_rate(&self) -> u32 {
-        SAMPLE_RATE
+    /// Get volume as f32 (0.0 - 1.0)
+    #[inline]
+    pub fn volume(&self) -> f32 {
+        self.volume_fixed as f32 / 65535.0
     }
 
-    fn total_duration(&self) -> Option<std::time::Duration> {
-        None // Infinite duration
+    /// Set volume from f32 (clamped to 0.0 - 1.0)
+    #[inline]
+    pub fn set_volume(&mut self, volume: f32) {
+        self.volume_fixed = (volume.clamp(0.0, 1.0) * 65535.0) as u16;
+    }
+
+    /// Start playing music
+    pub fn play(&mut self, sound_handle: u32, volume: f32) {
+        self.sound_handle = sound_handle;
+        self.playhead = 0;
+        self.set_volume(volume);
+        self.set_playing(true);
+    }
+
+    /// Stop music
+    pub fn stop(&mut self) {
+        self.set_playing(false);
+        self.sound_handle = 0;
+        self.playhead = 0;
     }
 }
 
-/// Panned audio source wrapper
+/// Complete audio playback state (340 bytes total)
 ///
-/// Converts mono input to stereo with positional panning using equal-power panning.
-/// This ensures constant perceived loudness across the stereo field.
-/// Pan can be dynamically updated via the SharedPan handle.
-///
-/// Clone is implemented to support repeat_infinite(), and the cloned instances
-/// share the same SharedPan (via Arc), so pan updates affect all clones.
-#[derive(Clone)]
-struct PannedSource<S> {
-    source: S,
-    pan: SharedPan,
-    current_sample: Option<f32>, // Cache current mono sample for stereo output
-    is_left_channel: bool,       // Track which stereo channel to output next
+/// This is the POD struct that gets saved/restored during GGRS rollback.
+/// All fields are fixed-size and use bytemuck for zero-copy serialization.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+pub struct AudioPlaybackState {
+    /// SFX channel states (16 channels × 20 bytes = 320 bytes)
+    pub channels: [ChannelState; MAX_SFX_CHANNELS],
+    /// Music channel state (20 bytes)
+    pub music: MusicState,
 }
 
-impl<S> PannedSource<S>
-where
-    S: Source<Item = f32>,
-{
-    /// Create a new panned source with shared pan state
-    ///
-    /// # Arguments
-    /// * `source` - Mono audio source to pan
-    /// * `pan` - Shared pan state for dynamic updates
-    fn new(source: S, pan: SharedPan) -> Self {
+impl Default for AudioPlaybackState {
+    fn default() -> Self {
         Self {
-            source,
-            pan,
-            current_sample: None,
-            is_left_channel: true,
+            channels: [ChannelState::default(); MAX_SFX_CHANNELS],
+            music: MusicState::default(),
         }
     }
+}
 
-    /// Calculate stereo gains from pan value using equal-power panning
+impl AudioPlaybackState {
+    /// Create a new audio playback state
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Find an available channel for fire-and-forget sounds
     ///
-    /// Equal-power panning formula (constant power law)
-    /// Ensures constant perceived loudness across the stereo field
-    /// pan = -1: left=1.0, right=0.0 (full left)
-    /// pan =  0: left=0.707, right=0.707 (center, -3dB each for equal power)
-    /// pan = +1: left=0.0, right=1.0 (full right)
-    #[inline]
-    fn calculate_gains(&self) -> (f32, f32) {
-        let pan = self.pan.get().clamp(-1.0, 1.0);
-        let angle = (pan + 1.0) * 0.25 * std::f32::consts::PI; // Map -1..1 to 0..PI/2
-        let left = angle.cos();
-        let right = angle.sin();
-        (left, right)
+    /// Returns the index of an available channel, or None if all are in use.
+    pub fn find_free_channel(&self) -> Option<usize> {
+        self.channels.iter().position(|c| !c.is_playing())
     }
 }
 
-impl<S> Iterator for PannedSource<S>
-where
-    S: Source<Item = f32>,
-{
-    type Item = f32;
+// ============================================================================
+// Audio Output (cpal stream + ring buffer)
+// ============================================================================
 
-    fn next(&mut self) -> Option<Self::Item> {
-        // For stereo output, we need to output left and right samples alternately.
-        // Each mono input sample is duplicated and scaled by the pan gains.
+/// Audio output using cpal with lock-free ring buffer
+///
+/// The audio callback runs in a separate thread and consumes samples from
+/// the ring buffer. The game thread produces samples via `write_samples()`.
+pub struct AudioOutput {
+    /// The cpal output stream (must be kept alive)
+    _stream: Stream,
+    /// Producer side of the ring buffer (boxed to avoid self-referential struct)
+    producer: Box<ringbuf::HeapProd<'static, f32>>,
+    /// Detected sample rate (may differ from target)
+    sample_rate: u32,
+}
 
-        if self.is_left_channel {
-            // Fetch next mono sample from source and cache it
-            let sample = self.source.next()?;
-            self.current_sample = Some(sample);
-            self.is_left_channel = false;
+impl AudioOutput {
+    /// Create a new audio output
+    ///
+    /// Attempts to find a suitable output device and configure it for
+    /// stereo output at our target sample rate. Falls back to the device's
+    /// default sample rate if 22050 Hz is not supported.
+    pub fn new() -> anyhow::Result<Self> {
+        let host = cpal::default_host();
+        let device = host
+            .default_output_device()
+            .ok_or_else(|| anyhow::anyhow!("No audio output device found"))?;
 
-            // Calculate gains dynamically (allows real-time pan updates)
-            let (left_gain, _) = self.calculate_gains();
+        // Try to get a config at our target sample rate, fall back to device default
+        let sample_rate = Self::find_sample_rate(&device)?;
 
-            // Output left channel (scaled by left gain)
-            Some(sample * left_gain)
+        let config = StreamConfig {
+            channels: 2,
+            sample_rate: cpal::SampleRate(sample_rate),
+            buffer_size: cpal::BufferSize::Default,
+        };
+
+        // Create the ring buffer
+        let ring = HeapRb::<f32>::new(RING_BUFFER_SIZE);
+        let (producer, mut consumer) = ring.split();
+
+        // Create the output stream
+        let stream = device.build_output_stream(
+            &config,
+            move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                // Fill the output buffer from the ring buffer
+                let samples_read = consumer.pop_slice(data);
+                // Fill any remaining samples with silence
+                for sample in &mut data[samples_read..] {
+                    *sample = 0.0;
+                }
+            },
+            |err| {
+                tracing::error!("Audio stream error: {}", err);
+            },
+            None,
+        )?;
+
+        stream.play()?;
+
+        tracing::info!(
+            "Audio output initialized: {} Hz, {} sample ring buffer",
+            sample_rate,
+            RING_BUFFER_SIZE
+        );
+
+        // Box the producer to avoid self-referential issues
+        let producer = Box::new(producer);
+
+        Ok(Self {
+            _stream: stream,
+            producer,
+            sample_rate,
+        })
+    }
+
+    /// Find a suitable sample rate for the device
+    fn find_sample_rate(device: &Device) -> anyhow::Result<u32> {
+        let supported_configs = device.supported_output_configs()?;
+
+        // First, try to find a config that supports exactly our target sample rate
+        for config in supported_configs.clone() {
+            if config.channels() == 2
+                && config.min_sample_rate().0 <= SAMPLE_RATE
+                && config.max_sample_rate().0 >= SAMPLE_RATE
+                && config.sample_format() == SampleFormat::F32
+            {
+                return Ok(SAMPLE_RATE);
+            }
+        }
+
+        // Fall back to the device's default config
+        let default_config = device.default_output_config()?;
+        Ok(default_config.sample_rate().0)
+    }
+
+    /// Get the actual sample rate being used
+    pub fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+
+    /// Write stereo samples to the ring buffer
+    ///
+    /// Returns the number of samples written. If the ring buffer is full,
+    /// samples may be dropped (this shouldn't happen under normal operation).
+    pub fn write_samples(&mut self, samples: &[f32]) -> usize {
+        self.producer.push_slice(samples)
+    }
+
+    /// Get the number of samples available in the ring buffer
+    pub fn available(&self) -> usize {
+        self.producer.vacant_len()
+    }
+}
+
+// ============================================================================
+// Audio Generation
+// ============================================================================
+
+/// Generate audio samples for one frame
+///
+/// This function is called once per game frame and generates `SAMPLES_PER_FRAME`
+/// stereo samples based on the current audio playback state.
+///
+/// # Arguments
+/// * `state` - The current audio playback state (updated in place)
+/// * `sounds` - Slice of loaded sounds (indexed by sound_handle - 1)
+/// * `output` - Output buffer for stereo samples (must be at least SAMPLES_PER_FRAME * 2)
+///
+/// # Panning
+/// Uses equal-power panning (constant loudness across the stereo field):
+/// - `left_gain = cos((pan + 1) * π/4)`
+/// - `right_gain = sin((pan + 1) * π/4)`
+pub fn generate_audio_frame(
+    state: &mut AudioPlaybackState,
+    sounds: &[Option<Sound>],
+    output: &mut [f32],
+) {
+    debug_assert!(output.len() >= SAMPLES_PER_FRAME * 2);
+
+    // Clear the output buffer
+    for sample in output.iter_mut().take(SAMPLES_PER_FRAME * 2) {
+        *sample = 0.0;
+    }
+
+    // Mix all playing channels
+    for channel in state.channels.iter_mut() {
+        if !channel.is_playing() {
+            continue;
+        }
+
+        let sound_idx = channel.sound_handle.saturating_sub(1) as usize;
+        let Some(Some(sound)) = sounds.get(sound_idx) else {
+            channel.stop();
+            continue;
+        };
+
+        mix_channel_samples(channel, &sound.data, output, SAMPLES_PER_FRAME);
+    }
+
+    // Mix music
+    if state.music.is_playing() {
+        let sound_idx = state.music.sound_handle.saturating_sub(1) as usize;
+        if let Some(Some(sound)) = sounds.get(sound_idx) {
+            mix_music_samples(&mut state.music, &sound.data, output, SAMPLES_PER_FRAME);
         } else {
-            // Use cached sample for right channel
-            let sample = self.current_sample?;
-            self.is_left_channel = true;
-
-            // Calculate gains dynamically
-            let (_, right_gain) = self.calculate_gains();
-
-            // Output right channel (scaled by right gain)
-            Some(sample * right_gain)
+            state.music.stop();
         }
     }
-}
 
-impl<S> Source for PannedSource<S>
-where
-    S: Source<Item = f32>,
-{
-    fn current_span_len(&self) -> Option<usize> {
-        // Each mono frame becomes 2 stereo samples
-        self.source.current_span_len().map(|len| len * 2)
-    }
-
-    fn channels(&self) -> u16 {
-        2 // Always output stereo
-    }
-
-    fn sample_rate(&self) -> u32 {
-        self.source.sample_rate()
-    }
-
-    fn total_duration(&self) -> Option<std::time::Duration> {
-        self.source.total_duration()
+    // Clamp output to [-1.0, 1.0]
+    for sample in output.iter_mut().take(SAMPLES_PER_FRAME * 2) {
+        *sample = sample.clamp(-1.0, 1.0);
     }
 }
 
-/// Audio commands buffered per frame
+/// Mix samples from a single channel into the output buffer
+fn mix_channel_samples(
+    channel: &mut ChannelState,
+    sound_data: &[i16],
+    output: &mut [f32],
+    num_samples: usize,
+) {
+    let volume = channel.volume();
+    let pan = channel.pan();
+
+    // Equal-power panning
+    let pan_angle = (pan + 1.0) * std::f32::consts::FRAC_PI_4;
+    let left_gain = pan_angle.cos() * volume;
+    let right_gain = pan_angle.sin() * volume;
+
+    let sound_len = sound_data.len() as u32;
+
+    for i in 0..num_samples {
+        // Check for end of sound
+        if channel.playhead >= sound_len {
+            if channel.is_looping() {
+                channel.playhead = 0;
+            } else {
+                channel.stop();
+                break;
+            }
+        }
+
+        let sample_idx = channel.playhead as usize;
+        if sample_idx >= sound_data.len() {
+            break;
+        }
+
+        // Convert i16 to f32 (-1.0 to 1.0)
+        let sample = sound_data[sample_idx] as f32 / 32768.0;
+
+        // Mix into stereo output
+        let out_idx = i * 2;
+        output[out_idx] += sample * left_gain;
+        output[out_idx + 1] += sample * right_gain;
+
+        channel.playhead += 1;
+    }
+}
+
+/// Mix music samples into the output buffer (always loops, center-panned)
+fn mix_music_samples(
+    music: &mut MusicState,
+    sound_data: &[i16],
+    output: &mut [f32],
+    num_samples: usize,
+) {
+    let volume = music.volume();
+    let sound_len = sound_data.len() as u32;
+
+    for i in 0..num_samples {
+        if music.playhead >= sound_len {
+            music.playhead = 0; // Music always loops
+        }
+
+        let sample_idx = music.playhead as usize;
+        let sample = sound_data[sample_idx] as f32 / 32768.0 * volume;
+
+        // Center-panned (equal to both channels)
+        let out_idx = i * 2;
+        output[out_idx] += sample;
+        output[out_idx + 1] += sample;
+
+        music.playhead += 1;
+    }
+}
+
+// ============================================================================
+// Legacy Audio Commands (for backwards compatibility during migration)
+// ============================================================================
+
+/// Audio command (legacy - kept for migration)
 #[derive(Debug, Clone)]
 pub enum AudioCommand {
-    /// Play sound on next available channel
-    PlaySound { sound: u32, volume: f32, pan: f32 },
-    /// Play sound on specific channel
+    PlaySound {
+        sound: u32,
+        volume: f32,
+        pan: f32,
+    },
     ChannelPlay {
         channel: u32,
         sound: u32,
@@ -313,320 +549,95 @@ pub enum AudioCommand {
         pan: f32,
         looping: bool,
     },
-    /// Update channel parameters
-    ChannelSet { channel: u32, volume: f32, pan: f32 },
-    /// Stop channel
-    ChannelStop { channel: u32 },
-    /// Play music (looping)
-    MusicPlay { sound: u32, volume: f32 },
-    /// Stop music
-    MusicStop,
-    /// Set music volume
-    MusicSetVolume { volume: f32 },
-}
-
-/// Internal command sent to audio server thread
-enum ServerCommand {
-    /// Process audio commands with sound library
-    ProcessCommands {
-        commands: Vec<AudioCommand>,
-        sounds: Vec<Option<Sound>>,
-    },
-    /// Shutdown audio server
-    Shutdown,
-}
-
-/// Channel state tracking
-struct ChannelState {
-    sink: Sink,
-    current_sound: Option<u32>,
-    looping: bool,
-    pan: SharedPan, // Shared pan state for dynamic updates
-}
-
-/// Audio server running in background thread
-struct AudioServer {
-    _stream: OutputStream,
-    channels: Vec<ChannelState>,
-    music_sink: Sink,
-    current_music: Option<u32>,
-}
-
-impl AudioServer {
-    /// Create new audio server (runs in background thread)
-    fn new() -> Result<Self, String> {
-        let stream = rodio::OutputStreamBuilder::open_default_stream()
-            .map_err(|e| format!("Failed to create audio output stream: {}", e))?;
-
-        // Create 16 channel sinks
-        let mut channels = Vec::with_capacity(MAX_CHANNELS);
-        for _ in 0..MAX_CHANNELS {
-            let sink = Sink::connect_new(stream.mixer());
-            channels.push(ChannelState {
-                sink,
-                current_sound: None,
-                looping: false,
-                pan: SharedPan::new(0.0), // Center by default
-            });
-        }
-
-        // Create dedicated music sink
-        let music_sink = Sink::connect_new(stream.mixer());
-
-        Ok(Self {
-            _stream: stream,
-            channels,
-            music_sink,
-            current_music: None,
-        })
-    }
-
-    /// Main server loop
-    fn run(mut self, rx: mpsc::Receiver<ServerCommand>) {
-        while let Ok(cmd) = rx.recv() {
-            match cmd {
-                ServerCommand::ProcessCommands { commands, sounds } => {
-                    self.process_commands(&commands, &sounds);
-                }
-                ServerCommand::Shutdown => {
-                    trace!("Audio server shutting down");
-                    break;
-                }
-            }
-        }
-    }
-
-    /// Process buffered audio commands
-    fn process_commands(&mut self, commands: &[AudioCommand], sounds: &[Option<Sound>]) {
-        for cmd in commands {
-            match cmd {
-                AudioCommand::PlaySound { sound, volume, pan } => {
-                    self.play_sound(*sound, *volume, *pan, sounds);
-                }
-                AudioCommand::ChannelPlay {
-                    channel,
-                    sound,
-                    volume,
-                    pan,
-                    looping,
-                } => {
-                    self.channel_play(*channel, *sound, *volume, *pan, *looping, sounds);
-                }
-                AudioCommand::ChannelSet {
-                    channel,
-                    volume,
-                    pan,
-                } => {
-                    self.channel_set(*channel, *volume, *pan);
-                }
-                AudioCommand::ChannelStop { channel } => {
-                    self.channel_stop(*channel);
-                }
-                AudioCommand::MusicPlay { sound, volume } => {
-                    self.music_play(*sound, *volume, sounds);
-                }
-                AudioCommand::MusicStop => {
-                    self.music_stop();
-                }
-                AudioCommand::MusicSetVolume { volume } => {
-                    self.music_set_volume(*volume);
-                }
-            }
-        }
-    }
-
-    /// Play sound on next available channel
-    fn play_sound(&mut self, sound: u32, volume: f32, pan: f32, sounds: &[Option<Sound>]) {
-        let sound_idx = sound as usize;
-        if sound_idx >= sounds.len() {
-            warn!("play_sound: invalid sound handle {}", sound);
-            return;
-        }
-
-        let Some(sound_data) = &sounds[sound_idx] else {
-            warn!("play_sound: sound {} not loaded", sound);
-            return;
-        };
-
-        // Find first free channel
-        for channel in &mut self.channels {
-            if channel.sink.empty() {
-                channel.sink.set_volume(volume.clamp(0.0, 1.0));
-
-                // Set pan and apply panning using PannedSource with shared pan state
-                channel.pan.set(pan);
-                let source = PannedSource::new(sound_data.to_source(), channel.pan.clone());
-                channel.sink.append(source);
-
-                channel.current_sound = Some(sound);
-                channel.looping = false;
-                return;
-            }
-        }
-
-        warn!("play_sound: all channels busy");
-    }
-
-    /// Play sound on specific channel
-    fn channel_play(
-        &mut self,
+    ChannelSet {
         channel: u32,
-        sound: u32,
         volume: f32,
         pan: f32,
-        looping: bool,
-        sounds: &[Option<Sound>],
-    ) {
-        let channel_idx = channel as usize;
-        if channel_idx >= MAX_CHANNELS {
-            warn!("channel_play: invalid channel {}", channel);
-            return;
-        }
-
-        let sound_idx = sound as usize;
-        if sound_idx >= sounds.len() {
-            warn!("channel_play: invalid sound handle {}", sound);
-            return;
-        }
-
-        let Some(sound_data) = &sounds[sound_idx] else {
-            warn!("channel_play: sound {} not loaded", sound);
-            return;
-        };
-
-        let ch = &mut self.channels[channel_idx];
-
-        // If same sound already playing and looping, just update volume and pan (dynamic pan update)
-        if ch.current_sound == Some(sound) && !ch.sink.empty() && ch.looping == looping {
-            ch.sink.set_volume(volume.clamp(0.0, 1.0));
-            ch.pan.set(pan); // Dynamic pan update via SharedPan
-            return;
-        }
-
-        // Stop current sound and play new one
-        ch.sink.stop();
-        ch.sink.set_volume(volume.clamp(0.0, 1.0));
-
-        // Set pan and apply panning using PannedSource with shared pan state
-        ch.pan.set(pan);
-        let pan_clone = ch.pan.clone();
-
-        if looping {
-            // For looping, use RepeatingPannedSource instead of repeat_infinite()
-            // This avoids cloning and ensures pan updates work correctly
-            let repeating_source = RepeatingPannedSource::new(sound_data.clone(), pan_clone);
-            ch.sink.append(repeating_source);
-        } else {
-            let panned_source = PannedSource::new(sound_data.to_source(), pan_clone);
-            ch.sink.append(panned_source);
-        }
-
-        ch.current_sound = Some(sound);
-        ch.looping = looping;
-    }
-
-    /// Update channel parameters (volume and pan)
-    ///
-    /// Pan is updated dynamically via SharedPan - changes take effect immediately
-    /// on currently playing sounds.
-    fn channel_set(&mut self, channel: u32, volume: f32, pan: f32) {
-        let channel_idx = channel as usize;
-        if channel_idx >= MAX_CHANNELS {
-            warn!("channel_set: invalid channel {}", channel);
-            return;
-        }
-
-        let ch = &mut self.channels[channel_idx];
-        ch.sink.set_volume(volume.clamp(0.0, 1.0));
-
-        // Dynamic pan update - takes effect immediately on playing sound
-        ch.pan.set(pan);
-    }
-
-    /// Stop channel
-    fn channel_stop(&mut self, channel: u32) {
-        let channel_idx = channel as usize;
-        if channel_idx >= MAX_CHANNELS {
-            warn!("channel_stop: invalid channel {}", channel);
-            return;
-        }
-
-        let ch = &mut self.channels[channel_idx];
-        ch.sink.stop();
-        ch.current_sound = None;
-        ch.looping = false;
-    }
-
-    /// Play music (looping)
-    fn music_play(&mut self, sound: u32, volume: f32, sounds: &[Option<Sound>]) {
-        let sound_idx = sound as usize;
-        if sound_idx >= sounds.len() {
-            warn!("music_play: invalid sound handle {}", sound);
-            return;
-        }
-
-        let Some(sound_data) = &sounds[sound_idx] else {
-            warn!("music_play: sound {} not loaded", sound);
-            return;
-        };
-
-        // If same music already playing, just update volume
-        if self.current_music == Some(sound) && !self.music_sink.empty() {
-            self.music_sink.set_volume(volume.clamp(0.0, 1.0));
-            return;
-        }
-
-        // Stop current music and play new one
-        self.music_sink.stop();
-        self.music_sink.set_volume(volume.clamp(0.0, 1.0));
-        self.music_sink
-            .append(sound_data.to_source().repeat_infinite());
-        self.current_music = Some(sound);
-    }
-
-    /// Stop music
-    fn music_stop(&mut self) {
-        self.music_sink.stop();
-        self.current_music = None;
-    }
-
-    /// Set music volume
-    fn music_set_volume(&mut self, volume: f32) {
-        self.music_sink.set_volume(volume.clamp(0.0, 1.0));
-    }
+    },
+    ChannelStop {
+        channel: u32,
+    },
+    MusicPlay {
+        sound: u32,
+        volume: f32,
+    },
+    MusicStop,
+    MusicSetVolume {
+        volume: f32,
+    },
 }
 
-/// Emberware Z audio backend
+// ============================================================================
+// ZAudio - Main Audio Backend
+// ============================================================================
+
+/// Audio backend for Emberware Z
+///
+/// This implements the per-frame audio generation approach:
+/// - Audio playback state is part of rollback state
+/// - `generate_and_submit()` is called once per frame after update
+/// - Audio output uses cpal + lock-free ring buffer
 pub struct ZAudio {
-    /// Whether audio is in rollback mode (commands discarded)
+    /// The audio output (cpal stream)
+    output: Option<AudioOutput>,
+    /// Frame sample buffer (reused each frame)
+    frame_buffer: Vec<f32>,
+    /// Whether we're in rollback mode (mutes new sounds)
     rollback_mode: bool,
-    /// Channel to send commands to audio server thread
-    tx: mpsc::Sender<ServerCommand>,
-    /// Audio server thread handle
-    _thread: thread::JoinHandle<()>,
 }
 
 impl ZAudio {
-    /// Create new audio backend
-    pub fn new() -> Result<Self, String> {
-        let (tx, rx) = mpsc::channel();
-
-        // Spawn audio server thread
-        let thread = thread::spawn(move || match AudioServer::new() {
-            Ok(server) => {
-                trace!("Audio server started");
-                server.run(rx);
-            }
+    /// Create a new audio backend
+    pub fn new() -> anyhow::Result<Self> {
+        let output = match AudioOutput::new() {
+            Ok(output) => Some(output),
             Err(e) => {
-                error!("Failed to initialize audio server: {}", e);
+                tracing::warn!("Failed to initialize audio output: {}. Audio disabled.", e);
+                None
             }
-        });
+        };
 
         Ok(Self {
+            output,
+            frame_buffer: vec![0.0; SAMPLES_PER_FRAME * 2],
             rollback_mode: false,
-            tx,
-            _thread: thread,
         })
+    }
+
+    /// Generate audio for the current frame and submit to output
+    ///
+    /// This should be called once per frame after update() completes.
+    /// Skips audio generation during rollback replay.
+    pub fn generate_and_submit(
+        &mut self,
+        state: &mut AudioPlaybackState,
+        sounds: &[Option<Sound>],
+    ) {
+        // Skip audio generation during rollback - state will be restored
+        // and we'll generate audio once we're at the confirmed frame
+        if self.rollback_mode {
+            return;
+        }
+
+        // Generate samples for this frame
+        generate_audio_frame(state, sounds, &mut self.frame_buffer);
+
+        // Submit to audio output
+        if let Some(output) = &mut self.output {
+            output.write_samples(&self.frame_buffer);
+        }
+    }
+
+    /// Check if audio is available
+    pub fn is_available(&self) -> bool {
+        self.output.is_some()
+    }
+
+    /// Get the sample rate
+    pub fn sample_rate(&self) -> u32 {
+        self.output
+            .as_ref()
+            .map_or(SAMPLE_RATE, |o| o.sample_rate())
     }
 
     /// Set rollback mode
@@ -634,32 +645,151 @@ impl ZAudio {
         self.rollback_mode = rolling_back;
     }
 
-    /// Process buffered audio commands
-    pub fn process_commands(&mut self, commands: &[AudioCommand], sounds: &[Option<Sound>]) {
-        if self.rollback_mode {
-            // Discard playback commands during rollback
-            return;
-        }
+    /// Check if in rollback mode
+    pub fn is_rolling_back(&self) -> bool {
+        self.rollback_mode
+    }
 
-        if commands.is_empty() {
-            return;
-        }
-
-        // Send commands to audio server thread
-        let server_cmd = ServerCommand::ProcessCommands {
-            commands: commands.to_vec(),
-            sounds: sounds.to_vec(),
-        };
-
-        if let Err(e) = self.tx.send(server_cmd) {
-            error!("Failed to send commands to audio server: {}", e);
-        }
+    /// Process buffered audio commands (legacy - for backwards compatibility)
+    ///
+    /// In the new architecture, audio is generated per-frame via `generate_and_submit()`.
+    /// This method exists for compatibility during migration.
+    pub fn process_commands(&mut self, _commands: &[AudioCommand], _sounds: &[Option<Sound>]) {
+        // Legacy - no-op in new architecture
+        // Audio is now generated per-frame via AudioPlaybackState
     }
 }
 
-impl Drop for ZAudio {
-    fn drop(&mut self) {
-        // Send shutdown command to audio server
-        let _ = self.tx.send(ServerCommand::Shutdown);
+// Implement Audio trait
+impl emberware_core::console::Audio for ZAudio {
+    fn set_rollback_mode(&mut self, rolling_back: bool) {
+        self.rollback_mode = rolling_back;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_channel_state_volume() {
+        let mut channel = ChannelState::default();
+        channel.set_volume(0.5);
+        assert!((channel.volume() - 0.5).abs() < 0.001);
+
+        channel.set_volume(0.0);
+        assert!((channel.volume()).abs() < 0.001);
+
+        channel.set_volume(1.0);
+        assert!((channel.volume() - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_channel_state_pan() {
+        let mut channel = ChannelState::default();
+        channel.set_pan(0.0);
+        assert!((channel.pan()).abs() < 0.001);
+
+        channel.set_pan(-1.0);
+        assert!((channel.pan() + 1.0).abs() < 0.001);
+
+        channel.set_pan(1.0);
+        assert!((channel.pan() - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_channel_state_flags() {
+        let mut channel = ChannelState::default();
+        assert!(!channel.is_playing());
+        assert!(!channel.is_looping());
+
+        channel.set_playing(true);
+        assert!(channel.is_playing());
+        assert!(!channel.is_looping());
+
+        channel.set_looping(true);
+        assert!(channel.is_playing());
+        assert!(channel.is_looping());
+
+        channel.stop();
+        assert!(!channel.is_playing());
+    }
+
+    #[test]
+    fn test_audio_playback_state_find_free_channel() {
+        let mut state = AudioPlaybackState::new();
+
+        // All channels should be free initially
+        assert_eq!(state.find_free_channel(), Some(0));
+
+        // Mark first channel as playing
+        state.channels[0].set_playing(true);
+        assert_eq!(state.find_free_channel(), Some(1));
+
+        // Mark all channels as playing
+        for channel in &mut state.channels {
+            channel.set_playing(true);
+        }
+        assert_eq!(state.find_free_channel(), None);
+    }
+
+    #[test]
+    fn test_audio_playback_state_is_pod() {
+        // Verify the state is exactly the expected size
+        assert_eq!(
+            std::mem::size_of::<AudioPlaybackState>(),
+            std::mem::size_of::<ChannelState>() * MAX_SFX_CHANNELS
+                + std::mem::size_of::<MusicState>()
+        );
+
+        // Verify we can serialize/deserialize via bytemuck
+        let state = AudioPlaybackState::new();
+        let bytes: &[u8] = bytemuck::bytes_of(&state);
+        let _restored: AudioPlaybackState = *bytemuck::from_bytes(bytes);
+    }
+
+    #[test]
+    fn test_generate_audio_frame_silence() {
+        let mut state = AudioPlaybackState::new();
+        let sounds: Vec<Option<Sound>> = Vec::new();
+        let mut output = vec![0.0f32; SAMPLES_PER_FRAME * 2];
+
+        generate_audio_frame(&mut state, &sounds, &mut output);
+
+        // Should all be silence
+        for sample in &output {
+            assert_eq!(*sample, 0.0);
+        }
+    }
+
+    #[test]
+    fn test_generate_audio_frame_with_sound() {
+        let mut state = AudioPlaybackState::new();
+
+        // Create a simple test sound (sine wave)
+        let sound_data: Vec<i16> = (0..1000)
+            .map(|i| ((i as f32 * 0.1).sin() * 16000.0) as i16)
+            .collect();
+        let sounds = vec![Some(Sound::new(sound_data))];
+
+        // Play on channel 0
+        state.channels[0].play(1, 1.0, 0.0, false);
+
+        let mut output = vec![0.0f32; SAMPLES_PER_FRAME * 2];
+        generate_audio_frame(&mut state, &sounds, &mut output);
+
+        // Should have non-zero output
+        let has_audio = output.iter().any(|s| *s != 0.0);
+        assert!(has_audio);
+    }
+
+    #[test]
+    fn test_channel_state_size() {
+        assert_eq!(std::mem::size_of::<ChannelState>(), 16);
+    }
+
+    #[test]
+    fn test_music_state_size() {
+        assert_eq!(std::mem::size_of::<MusicState>(), 16);
     }
 }

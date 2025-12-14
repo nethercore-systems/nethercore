@@ -6,16 +6,13 @@ use anyhow::Result;
 use tracing::warn;
 use wasmtime::{Caller, Linker};
 
-use emberware_core::wasm::GameStateWithConsole;
-
-use super::guards::check_init_only;
-use crate::console::ZInput;
+use super::{guards::check_init_only, ZContext};
 use crate::graphics::MatcapBlendMode;
-use crate::state::{PendingTexture, ZFFIState};
+use crate::state::PendingTexture;
 use z_common::TextureFormat;
 
 /// Register texture FFI functions
-pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
+pub fn register(linker: &mut Linker<ZContext>) -> Result<()> {
     linker.func_wrap("env", "load_texture", load_texture)?;
     linker.func_wrap("env", "texture_bind", texture_bind)?;
     linker.func_wrap("env", "texture_bind_slot", texture_bind_slot)?;
@@ -33,7 +30,7 @@ pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) ->
 /// Returns texture handle (>0) on success, 0 on failure.
 /// Validates VRAM budget before allocation.
 fn load_texture(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZContext>,
     width: u32,
     height: u32,
     pixels_ptr: u32,
@@ -89,7 +86,7 @@ fn load_texture(
     };
 
     // Now we can mutably borrow state
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
 
     // Allocate a texture handle
     let handle = state.next_texture_handle;
@@ -114,8 +111,8 @@ fn load_texture(
 /// * `handle` — Texture handle from load_texture
 ///
 /// Equivalent to texture_bind_slot(handle, 0).
-fn texture_bind(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, handle: u32) {
-    let state = &mut caller.data_mut().console;
+fn texture_bind(mut caller: Caller<'_, ZContext>, handle: u32) {
+    let state = &mut caller.data_mut().ffi;
     state.bound_textures[0] = handle;
 }
 
@@ -127,7 +124,7 @@ fn texture_bind(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
 ///
 /// Slots: 0=albedo, 1=MRE/matcap, 2=env matcap, 3=matcap
 fn texture_bind_slot(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZContext>,
     handle: u32,
     slot: u32,
 ) {
@@ -136,7 +133,7 @@ fn texture_bind_slot(
         return;
     }
 
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     state.bound_textures[slot as usize] = handle;
 }
 
@@ -150,7 +147,7 @@ fn texture_bind_slot(
 /// Mode 1 (Add): Additive blending for glow/emission effects
 /// Mode 2 (HSV Modulate): Hue shifting and iridescence effects
 fn matcap_blend_mode(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZContext>,
     slot: u32,
     mode: u32,
 ) {
@@ -167,6 +164,6 @@ fn matcap_blend_mode(
         }
     };
 
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     state.update_matcap_blend_mode(slot as usize, blend_mode); // Update single slot in unified state
 }

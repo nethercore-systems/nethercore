@@ -16,6 +16,22 @@ use crate::wasm::GameStateWithConsole;
 // Re-export ConsoleSpecs from shared crate for convenience
 pub use emberware_shared::ConsoleSpecs;
 
+/// Console-specific rollback state that needs explicit serialization
+///
+/// This is for HOST-SIDE state that affects deterministic behavior but
+/// lives outside WASM linear memory. Must be POD for zero-copy save/load.
+///
+/// Examples:
+/// - Audio playback state (playhead positions, channel volumes)
+/// - Any other console-specific deterministic state
+///
+/// The state is serialized/deserialized via `bytemuck::bytes_of()` and
+/// `bytemuck::from_bytes()` for zero-copy efficiency during rollback.
+pub trait ConsoleRollbackState: Pod + Zeroable + Default + Send + 'static {}
+
+/// Dummy implementation for consoles with no extra rollback state
+impl ConsoleRollbackState for () {}
+
 /// Trait for fantasy console implementations
 ///
 /// Each console defines its own graphics backend, audio backend, input layout,
@@ -35,6 +51,14 @@ pub trait Console: Send + 'static {
     /// It is rebuilt each frame and is NOT part of rollback state (only GameState is rolled back).
     /// For example, Emberware Z uses ZFFIState which holds draw commands, camera, transforms, etc.
     type State: Default + Send + 'static;
+    /// Console-specific rollback state (must be POD for zero-copy serialization)
+    ///
+    /// This state lives on the HOST side (not in WASM memory) but affects deterministic behavior.
+    /// It is saved/restored alongside WASM memory snapshots during GGRS rollback.
+    /// Examples: audio playhead positions, channel states.
+    ///
+    /// Use `()` for consoles with no extra rollback state.
+    type RollbackState: ConsoleRollbackState;
     /// Console-specific resource manager type
     type ResourceManager: ConsoleResourceManager<Graphics = Self::Graphics, State = Self::State>;
 
@@ -179,17 +203,16 @@ pub trait Graphics: Send {
 }
 
 /// Trait for audio backends
+///
+/// In the per-frame audio model, audio playback state is part of the rollback state
+/// and audio is generated once per frame after update() completes. The only method
+/// on this trait is `set_rollback_mode` which tells the backend to skip audio output
+/// during rollback replay.
 pub trait Audio: Send {
-    /// Play a sound
-    fn play(&mut self, handle: SoundHandle, volume: f32, looping: bool);
-
-    /// Stop a sound
-    fn stop(&mut self, handle: SoundHandle);
-
-    /// Set rollback mode (mutes audio during rollback replay)
+    /// Set rollback mode
+    ///
+    /// When `rolling_back` is true, the audio backend should skip generating
+    /// audio output. During rollback, audio state is saved/restored with the
+    /// game state, but we don't want to play audio during frame replay.
     fn set_rollback_mode(&mut self, rolling_back: bool);
 }
-
-/// Handle to a loaded sound
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct SoundHandle(pub u32);

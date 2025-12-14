@@ -6,8 +6,8 @@ use wasmtime::Linker;
 use winit::window::Window;
 
 use crate::console::{
-    Audio, Console, ConsoleInput, ConsoleResourceManager, ConsoleSpecs, Graphics, RawInput,
-    SoundHandle,
+    Audio, Console, ConsoleInput, ConsoleResourceManager, ConsoleRollbackState, ConsoleSpecs,
+    Graphics, RawInput,
 };
 use crate::wasm::GameStateWithConsole;
 
@@ -31,21 +31,9 @@ impl Graphics for TestGraphics {
 /// Test audio backend (no-op)
 pub struct TestAudio {
     pub rollback_mode: bool,
-    pub play_count: u32,
-    pub stop_count: u32,
 }
 
 impl Audio for TestAudio {
-    fn play(&mut self, _handle: SoundHandle, _volume: f32, _looping: bool) {
-        if !self.rollback_mode {
-            self.play_count += 1;
-        }
-    }
-    fn stop(&mut self, _handle: SoundHandle) {
-        if !self.rollback_mode {
-            self.stop_count += 1;
-        }
-    }
     fn set_rollback_mode(&mut self, rolling_back: bool) {
         self.rollback_mode = rolling_back;
     }
@@ -89,6 +77,7 @@ impl Console for TestConsole {
     type Audio = TestAudio;
     type Input = TestInput;
     type State = ();
+    type RollbackState = ();
     type ResourceManager = TestResourceManager;
 
     fn specs(&self) -> &'static ConsoleSpecs {
@@ -119,8 +108,6 @@ impl Console for TestConsole {
     fn create_audio(&self) -> anyhow::Result<Self::Audio> {
         Ok(TestAudio {
             rollback_mode: false,
-            play_count: 0,
-            stop_count: 0,
         })
     }
 

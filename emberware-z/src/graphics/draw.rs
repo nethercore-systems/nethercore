@@ -147,7 +147,7 @@ impl ZGraphics {
             }
         }
 
-        // Note: All per-frame cleanup (model_matrices, audio_commands, render_pass)
+        // Note: All per-frame cleanup (model_matrices, render_pass)
         // happens AFTER render_frame completes in app.rs via z_state.clear_frame()
         // This keeps cleanup centralized and ensures matrices survive until GPU upload
     }

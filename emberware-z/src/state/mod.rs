@@ -1,15 +1,17 @@
-//! Emberware Z FFI state and types
+//! Emberware Z state types
 //!
-//! FFI staging state for Emberware Z console.
-//! This state is rebuilt each frame from FFI calls and consumed by ZGraphics.
-//! It is NOT part of rollback state - only GameState is rolled back.
+//! Contains both FFI staging state and rollback state:
+//! - `ZFFIState`: Per-frame FFI staging (NOT rolled back, rebuilt each frame)
+//! - `ZRollbackState`: Deterministic state (IS rolled back, saved/restored with WASM memory)
 
 mod config;
 mod ffi_state;
 mod resources;
+mod rollback_state;
 
 pub use config::ZInitConfig;
 pub use ffi_state::ZFFIState;
+pub use rollback_state::ZRollbackState;
 pub use resources::{
     Font, KeyframeGpuInfo, KeyframeSource, PendingKeyframes, PendingMesh, PendingMeshPacked,
     PendingSkeleton, PendingTexture, SkeletonGpuInfo,

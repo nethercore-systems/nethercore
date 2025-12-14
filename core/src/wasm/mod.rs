@@ -22,7 +22,7 @@ use crate::console::ConsoleInput;
 
 // Re-export public types from state module
 pub use state::{
-    GameState, GameStateWithConsole, MAX_PLAYERS, MAX_SAVE_SIZE, MAX_SAVE_SLOTS,
+    GameState, GameStateWithConsole, WasmGameContext, MAX_PLAYERS, MAX_SAVE_SIZE, MAX_SAVE_SLOTS,
     read_string_from_memory,
 };
 
@@ -292,14 +292,14 @@ impl<I: ConsoleInput, S: Send + Default + 'static> GameInstance<I, S> {
         &self.store.data().game
     }
 
-    /// Get mutable reference to console-specific state
+    /// Get mutable reference to console-specific FFI state
     pub fn console_state_mut(&mut self) -> &mut S {
-        &mut self.store.data_mut().console
+        &mut self.store.data_mut().ffi
     }
 
-    /// Get reference to console-specific state
+    /// Get reference to console-specific FFI state
     pub fn console_state(&self) -> &S {
-        &self.store.data().console
+        &self.store.data().ffi
     }
 
     /// Set input for a player

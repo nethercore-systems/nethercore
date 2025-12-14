@@ -9,16 +9,13 @@ use anyhow::Result;
 use tracing::warn;
 use wasmtime::{Caller, Linker};
 
-use emberware_core::wasm::GameStateWithConsole;
-
-use super::guards::check_init_only;
-use crate::console::ZInput;
+use super::{guards::check_init_only, ZContext};
 use crate::state::{
-    BoneMatrix3x4, KeyframeSource, MAX_BONES, MAX_SKELETONS, PendingSkeleton, ZFFIState,
+    BoneMatrix3x4, KeyframeSource, MAX_BONES, MAX_SKELETONS, PendingSkeleton,
 };
 
 /// Register GPU skinning FFI functions
-pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
+pub fn register(linker: &mut Linker<ZContext>) -> Result<()> {
     linker.func_wrap("env", "load_skeleton", load_skeleton)?;
     linker.func_wrap("env", "skeleton_bind", skeleton_bind)?;
     linker.func_wrap("env", "set_bones", set_bones)?;
@@ -46,7 +43,7 @@ pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) ->
 /// * inverse_bind_ptr is null or out of bounds
 /// * Maximum skeleton count exceeded
 fn load_skeleton(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZContext>,
     inverse_bind_ptr: u32,
     bone_count: u32,
 ) -> u32 {
@@ -70,7 +67,7 @@ fn load_skeleton(
     }
 
     // Check skeleton limit (pending + already loaded)
-    let state = &caller.data().console;
+    let state = &caller.data().ffi;
     let total_skeletons = state.skeletons.len() + state.pending_skeletons.len();
     if total_skeletons >= MAX_SKELETONS {
         warn!(
@@ -143,7 +140,7 @@ fn load_skeleton(
     }
 
     // Store pending skeleton and allocate handle
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     let handle = state.next_skeleton_handle;
     state.next_skeleton_handle += 1;
 
@@ -178,8 +175,8 @@ fn load_skeleton(
 /// * Binding persists until changed (not reset per frame)
 /// * Call multiple times per frame to render different skeletons
 /// * Invalid handles are ignored with a warning
-fn skeleton_bind(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, skeleton: u32) {
-    let state = &mut caller.data_mut().console;
+fn skeleton_bind(mut caller: Caller<'_, ZContext>, skeleton: u32) {
+    let state = &mut caller.data_mut().ffi;
 
     if skeleton == 0 {
         // Unbind skeleton (raw mode) - clear inverse bind base
@@ -255,7 +252,7 @@ fn skeleton_bind(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>
 /// The offset at which matrices were added is tracked, allowing multiple
 /// set_bones() calls per frame for different skinned mesh draws.
 fn set_bones(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZContext>,
     matrices_ptr: u32,
     count: u32,
 ) {
@@ -270,7 +267,7 @@ fn set_bones(
 
     if count == 0 {
         // Setting 0 bones - use static keyframes mode instead
-        let state = &mut caller.data_mut().console;
+        let state = &mut caller.data_mut().ffi;
         state.current_keyframe_source = KeyframeSource::Static { offset: 0 };
         state.bone_count = 0;
         state.shading_state_dirty = true;
@@ -307,7 +304,7 @@ fn set_bones(
 
     // Record offset before appending (Animation System v2: accumulating buffer)
     let offset = {
-        let state = &caller.data().console;
+        let state = &caller.data().ffi;
         state.bone_matrices.len() as u32
     };
 
@@ -346,7 +343,7 @@ fn set_bones(
     }
 
     // Append bone matrices to render state (Animation System v2: accumulating)
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     state.bone_matrices.extend(matrices);
     state.bone_count = count;
 
@@ -379,7 +376,7 @@ fn set_bones(
 /// Bone matrices are appended to the per-frame immediate bones buffer.
 /// See set_bones() for details.
 fn set_bones_4x4(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZContext>,
     matrices_ptr: u32,
     count: u32,
 ) {
@@ -394,7 +391,7 @@ fn set_bones_4x4(
 
     if count == 0 {
         // Setting 0 bones - use static keyframes mode instead
-        let state = &mut caller.data_mut().console;
+        let state = &mut caller.data_mut().ffi;
         state.current_keyframe_source = KeyframeSource::Static { offset: 0 };
         state.bone_count = 0;
         state.shading_state_dirty = true;
@@ -431,7 +428,7 @@ fn set_bones_4x4(
 
     // Record offset before appending (Animation System v2: accumulating buffer)
     let offset = {
-        let state = &caller.data().console;
+        let state = &caller.data().ffi;
         state.bone_matrices.len() as u32
     };
 
@@ -475,7 +472,7 @@ fn set_bones_4x4(
     }
 
     // Append bone matrices to render state (Animation System v2: accumulating)
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     state.bone_matrices.extend(matrices);
     state.bone_count = count;
 

@@ -1,11 +1,9 @@
 //! FFI guard functions for enforcing lifecycle constraints
 
-use anyhow::{Result, bail};
+use anyhow::{bail, Result};
 use wasmtime::Caller;
 
-use crate::console::ZInput;
-use crate::state::ZFFIState;
-use emberware_core::wasm::GameStateWithConsole;
+use super::ZContext;
 
 /// Check if we're in init phase (init-only function guard)
 ///
@@ -28,10 +26,7 @@ use emberware_core::wasm::GameStateWithConsole;
 ///     // ... rest of function
 /// }
 /// ```
-pub(crate) fn check_init_only(
-    caller: &Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    fn_name: &str,
-) -> Result<()> {
+pub(crate) fn check_init_only(caller: &Caller<'_, ZContext>, fn_name: &str) -> Result<()> {
     if !caller.data().game.in_init {
         bail!("{}: can only be called during init()", fn_name);
     }

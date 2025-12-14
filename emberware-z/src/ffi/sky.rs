@@ -6,13 +6,10 @@ use anyhow::Result;
 use tracing::warn;
 use wasmtime::{Caller, Linker};
 
-use emberware_core::wasm::GameStateWithConsole;
-
-use crate::console::ZInput;
-use crate::state::ZFFIState;
+use super::ZContext;
 
 /// Register sky system FFI functions
-pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
+pub fn register(linker: &mut Linker<ZContext>) -> Result<()> {
     linker.func_wrap("env", "sky_set_colors", sky_set_colors)?;
     linker.func_wrap("env", "sky_set_sun", sky_set_sun)?;
     linker.func_wrap("env", "matcap_set", matcap_set)?;
@@ -34,11 +31,11 @@ pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) ->
 /// - `sky_set_colors(0x87CEEBFF, 0x191970FF)` — Light blue horizon, midnight blue zenith
 /// - `sky_set_colors(0xFF6B6BFF, 0x4A00E0FF)` — Sunset gradient (red to purple)
 fn sky_set_colors(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZContext>,
     horizon_color: u32,
     zenith_color: u32,
 ) {
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     state.update_sky_colors(horizon_color, zenith_color);
 }
 
@@ -62,14 +59,14 @@ fn sky_set_colors(
 /// - `sky_set_sun(0.0, -1.0, 0.0, 0xFFFFFFFF, 0.98)` — Sun directly overhead (rays going down)
 /// - `sky_set_sun(-0.5, -0.707, -0.5, 0xFFE4B5FF, 0.95)` — Sun at 45° elevation from northeast
 fn sky_set_sun(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZContext>,
     dir_x: f32,
     dir_y: f32,
     dir_z: f32,
     color: u32,
     sharpness: f32,
 ) {
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
 
     // Validate direction vector (warn if zero-length)
     let len_sq = dir_x * dir_x + dir_y * dir_y + dir_z * dir_z;
@@ -92,7 +89,7 @@ fn sky_set_sun(
 /// Slot 0 is reserved for albedo texture.
 /// Using this function in other modes is allowed but has no effect.
 fn matcap_set(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZContext>,
     slot: u32,
     texture: u32,
 ) {
@@ -102,7 +99,7 @@ fn matcap_set(
         return;
     }
 
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     state.bound_textures[slot as usize] = texture;
 }
 
@@ -133,8 +130,8 @@ fn matcap_set(
 /// - Works in all render modes (0-3)
 /// - Sky always renders behind all geometry
 /// - Depth test is disabled for sky rendering
-fn draw_sky(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>) {
-    let state = &mut caller.data_mut().console;
+fn draw_sky(mut caller: Caller<'_, ZContext>) {
+    let state = &mut caller.data_mut().ffi;
 
     // Get or create shading state index for current sky configuration
     // This ensures the sky data is uploaded to GPU

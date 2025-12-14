@@ -10,11 +10,11 @@ use wasmtime::Linker;
 use winit::window::Window;
 
 use emberware_core::{
-    console::{Audio, Console, ConsoleInput, ConsoleSpecs, RawInput, SoundHandle},
-    wasm::GameStateWithConsole,
+    console::{Console, ConsoleInput, ConsoleSpecs, RawInput},
+    wasm::WasmGameContext,
 };
 
-use crate::state::ZFFIState;
+use crate::state::{ZFFIState, ZRollbackState};
 
 use crate::graphics::ZGraphics;
 
@@ -152,21 +152,6 @@ impl ConsoleInput for ZInput {}
 /// Re-export ZAudio from audio module
 pub use crate::audio::ZAudio;
 
-impl Audio for ZAudio {
-    fn play(&mut self, _handle: SoundHandle, _volume: f32, _looping: bool) {
-        // Legacy Audio trait - not used in Z console
-        // Audio is handled via AudioCommand buffering system
-    }
-
-    fn stop(&mut self, _handle: SoundHandle) {
-        // Legacy Audio trait - not used in Z console
-    }
-
-    fn set_rollback_mode(&mut self, rolling_back: bool) {
-        ZAudio::set_rollback_mode(self, rolling_back);
-    }
-}
-
 /// Emberware Z fantasy console
 ///
 /// Implements the PS1/N64 aesthetic with:
@@ -195,6 +180,7 @@ impl Console for EmberwareZ {
     type Audio = ZAudio;
     type Input = ZInput;
     type State = ZFFIState;
+    type RollbackState = ZRollbackState;
     type ResourceManager = crate::resource_manager::ZResourceManager;
 
     fn specs(&self) -> &'static ConsoleSpecs {
@@ -203,7 +189,7 @@ impl Console for EmberwareZ {
 
     fn register_ffi(
         &self,
-        linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>,
+        linker: &mut Linker<WasmGameContext<ZInput, ZFFIState, ZRollbackState>>,
     ) -> Result<()> {
         // Register all Z-specific FFI functions (graphics, input, transforms, camera, etc.)
         crate::ffi::register_z_ffi(linker)?;
