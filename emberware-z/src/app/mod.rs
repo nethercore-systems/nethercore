@@ -78,6 +78,8 @@ pub struct App {
     pub(crate) game_session: Option<GameSession<EmberwareZ>>,
     /// Whether a redraw is needed (UI state changed)
     pub(crate) needs_redraw: bool,
+    /// Next scheduled egui repaint time (for animations)
+    pub(crate) next_egui_repaint: Option<Instant>,
     // Egui optimization cache
     pub(crate) cached_egui_shapes: Vec<egui::epaint::ClippedShape>,
     pub(crate) cached_egui_tris: Vec<egui::ClippedPrimitive>,
@@ -94,6 +96,9 @@ impl App {
     /// Render the current frame
     fn render(&mut self) {
         let now = Instant::now();
+
+        // Clear scheduled egui repaint for this frame's collection
+        self.next_egui_repaint = None;
 
         // Update frame timing
         self.frame_times.push(now);
@@ -437,12 +442,17 @@ impl App {
         }
 
         // Check 7: Viewport repaint requested
-        if !egui_dirty {
-            for viewport_output in full_output.viewport_output.values() {
-                if viewport_output.repaint_delay.is_zero() {
-                    egui_dirty = true;
-                    break;
-                }
+        for viewport_output in full_output.viewport_output.values() {
+            if viewport_output.repaint_delay.is_zero() {
+                egui_dirty = true;
+            } else if !viewport_output.repaint_delay.is_max() {
+                // Schedule future repaint for animations
+                let repaint_at = Instant::now() + viewport_output.repaint_delay;
+                self.next_egui_repaint = Some(
+                    self.next_egui_repaint
+                        .map(|t| t.min(repaint_at))
+                        .unwrap_or(repaint_at),
+                );
             }
         }
 
@@ -609,17 +619,9 @@ impl App {
     }
 
     fn request_redraw_if_needed(&mut self) {
-        // In Playing mode or Library/Settings with Poll control flow,
-        // we request redraws continuously to ensure UI responsiveness.
-        // The egui dirty-checking and mesh caching prevents unnecessary GPU work.
-        let needs_redraw = true;
-
-        if needs_redraw {
-            if let Some(window) = &self.window {
-                window.request_redraw();
-            }
-            self.needs_redraw = false;
-        }
+        // Reset needs_redraw flag after each frame
+        // The actual redraw scheduling is handled by next_frame_time()
+        self.needs_redraw = false;
     }
 
     fn mark_needs_redraw(&mut self) {
@@ -641,7 +643,8 @@ impl emberware_core::app::ConsoleApp<EmberwareZ> for App {
 
     fn render_frame(&mut self) -> anyhow::Result<bool> {
         self.render();
-        Ok(true) // Always request redraw
+        // Return whether we need immediate redraw (for debug stepping, transitions, etc.)
+        Ok(self.needs_redraw)
     }
 
     fn on_window_event(&mut self, event: &WindowEvent) -> bool {
@@ -723,6 +726,29 @@ impl emberware_core::app::ConsoleApp<EmberwareZ> for App {
     fn request_redraw(&self) {
         if let Some(window) = &self.window {
             window.request_redraw();
+        }
+    }
+
+    fn next_frame_time(&self) -> Option<Instant> {
+        match &self.mode {
+            AppMode::Playing { .. } => {
+                // Game running: schedule next tick based on tick_duration
+                if let Some(session) = &self.game_session {
+                    let tick_duration = session.runtime.tick_duration();
+                    let next_tick = self.last_frame + tick_duration;
+                    // Also consider egui repaints (for debug overlays)
+                    match self.next_egui_repaint {
+                        Some(egui_time) => Some(next_tick.min(egui_time)),
+                        None => Some(next_tick),
+                    }
+                } else {
+                    Some(Instant::now()) // Fallback: immediate
+                }
+            }
+            AppMode::Library | AppMode::Settings => {
+                // UI only: wake on events or scheduled egui repaints
+                self.next_egui_repaint
+            }
         }
     }
 }

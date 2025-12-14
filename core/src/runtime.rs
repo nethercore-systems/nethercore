@@ -273,6 +273,11 @@ impl<C: Console> Runtime<C> {
         self.config.tick_rate
     }
 
+    /// Get the tick duration
+    pub fn tick_duration(&self) -> Duration {
+        self.tick_duration
+    }
+
     /// Get the console
     pub fn console(&self) -> &C {
         &self.console

@@ -89,6 +89,9 @@ pub trait ConsoleApp<C: Console>: Sized {
 
     /// Request a redraw from the event loop.
     fn request_redraw(&self);
+
+    /// When is the next frame needed? Returns None to wait for events, Some(instant) for scheduled render.
+    fn next_frame_time(&self) -> Option<std::time::Instant>;
 }
 
 /// Generic event loop handler for any Console implementation.
@@ -113,8 +116,6 @@ impl<C: Console, A: ConsoleApp<C>> AppEventHandler<C, A> {
 impl<C: Console, A: ConsoleApp<C>> ApplicationHandler for AppEventHandler<C, A> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if let Some(app) = &mut self.app {
-            event_loop.set_control_flow(ControlFlow::Poll);
-
             // Create window
             let window_attributes = Window::default_attributes()
                 .with_title("Emberware")
@@ -180,9 +181,18 @@ impl<C: Console, A: ConsoleApp<C>> ApplicationHandler for AppEventHandler<C, A> 
         }
     }
 
-    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         if let Some(app) = &self.app {
-            app.request_redraw();
+            match app.next_frame_time() {
+                Some(next_time) => {
+                    event_loop.set_control_flow(ControlFlow::WaitUntil(next_time));
+                    // Still request redraw so we wake up at the right time
+                    app.request_redraw();
+                }
+                None => {
+                    event_loop.set_control_flow(ControlFlow::Wait);
+                }
+            }
         }
     }
 }
@@ -202,7 +212,6 @@ impl<C: Console, A: ConsoleApp<C>> ApplicationHandler for AppEventHandler<C, A> 
 /// ```
 pub fn run<C: Console, A: ConsoleApp<C>>(app: A) -> anyhow::Result<()> {
     let event_loop = EventLoop::new()?;
-    event_loop.set_control_flow(ControlFlow::Poll);
 
     let mut handler = AppEventHandler::new(app);
     event_loop.run_app(&mut handler)?;

@@ -102,7 +102,8 @@ impl SharedPan {
 
     /// Set pan value (thread-safe, can be called while sound is playing)
     fn set(&self, pan: f32) {
-        self.0.store(pan.clamp(-1.0, 1.0).to_bits(), Ordering::SeqCst);
+        self.0
+            .store(pan.clamp(-1.0, 1.0).to_bits(), Ordering::SeqCst);
     }
 
     /// Get the Arc pointer for debugging (to verify clones share the same atomic)
