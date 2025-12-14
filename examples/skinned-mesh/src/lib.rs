@@ -37,6 +37,7 @@
 #![no_main]
 
 use core::panic::PanicInfo;
+use examples_common::{DebugCamera, StickControl};
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
@@ -53,8 +54,6 @@ extern "C" {
     fn camera_fov(fov_degrees: f32);
 
     // Input
-    fn left_stick_x(player: u32) -> f32;
-    fn left_stick_y(player: u32) -> f32;
     fn button_pressed(player: u32, button: u32) -> u32;
     fn button_held(player: u32, button: u32) -> u32;
 
@@ -107,9 +106,18 @@ const SEGMENT_LENGTH: f32 = 1.5;
 /// Mesh handle
 static mut ARM_MESH: u32 = 0;
 
-/// View rotation
-static mut VIEW_ROTATION_X: f32 = 15.0;
-static mut VIEW_ROTATION_Y: f32 = 0.0;
+/// Camera for orbit control
+static mut CAMERA: DebugCamera = DebugCamera {
+    target_x: 0.0,
+    target_y: 0.0,
+    target_z: 0.0,
+    distance: 8.0,
+    elevation: 15.0,
+    azimuth: 0.0,
+    auto_orbit_speed: 0.0,
+    stick_control: StickControl::LeftStick,
+    fov: 60.0,
+};
 
 /// Animation time (in radians, wraps around)
 static mut ANIM_TIME: f32 = 0.0;
@@ -280,12 +288,13 @@ fn generate_arm_mesh() -> ([f32; 60 * 11], [u16; 324]) {
                 let curr_up = next_ring_start + seg as u16;
                 let next_up = next_ring_start + ((seg + 1) % SEGMENTS) as u16;
 
+                // Counter-clockwise winding when viewed from outside
                 indices[i_idx] = curr;
-                indices[i_idx + 1] = next;
-                indices[i_idx + 2] = curr_up;
+                indices[i_idx + 1] = curr_up;
+                indices[i_idx + 2] = next;
                 indices[i_idx + 3] = next;
-                indices[i_idx + 4] = next_up;
-                indices[i_idx + 5] = curr_up;
+                indices[i_idx + 4] = curr_up;
+                indices[i_idx + 5] = next_up;
                 i_idx += 6;
             }
         }
@@ -398,13 +407,8 @@ pub extern "C" fn init() {
 #[no_mangle]
 pub extern "C" fn update() {
     unsafe {
-        let stick_x = left_stick_x(0);
-        let stick_y = left_stick_y(0);
-        VIEW_ROTATION_Y += stick_x * 2.0;
-        VIEW_ROTATION_X += stick_y * 2.0;
-
-        if VIEW_ROTATION_X > 89.0 { VIEW_ROTATION_X = 89.0; }
-        if VIEW_ROTATION_X < -89.0 { VIEW_ROTATION_X = -89.0; }
+        // Update camera
+        CAMERA.update();
 
         if button_pressed(0, BUTTON_A) != 0 {
             PAUSED = !PAUSED;
@@ -460,9 +464,8 @@ fn format_float(val: f32, buf: &mut [u8]) -> usize {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
-        // Set camera every frame (immediate mode)
-        camera_set(0.0, 1.0, 8.0, 0.0, 0.0, 0.0);
-        camera_fov(60.0);
+        // Apply camera
+        CAMERA.apply();
 
         // Upload 3x4 bone matrices to GPU (12 floats × 3 bones)
         let bones = &*core::ptr::addr_of!(BONE_MATRICES);

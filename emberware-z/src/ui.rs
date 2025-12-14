@@ -56,12 +56,28 @@ impl LibraryUi {
                 egui::ScrollArea::vertical()
                     .max_height(available_height)
                     .show(ui, |ui| {
-                        for game in games {
-                            let selected = self.selected_game.as_ref() == Some(&game.id);
-                            if ui.selectable_label(selected, &game.title).clicked() {
-                                self.selected_game = Some(game.id.clone());
-                            }
-                        }
+                        // Use grid layout to make use of horizontal space
+                        let item_width = 200.0;
+                        let spacing = 10.0;
+                        let available_width = ui.available_width();
+                        let columns = ((available_width + spacing) / (item_width + spacing)).floor().max(1.0) as usize;
+
+                        egui::Grid::new("games_grid")
+                            .num_columns(columns)
+                            .spacing([spacing, spacing])
+                            .show(ui, |ui| {
+                                for (i, game) in games.iter().enumerate() {
+                                    let selected = self.selected_game.as_ref() == Some(&game.id);
+                                    if ui.selectable_label(selected, &game.title).clicked() {
+                                        self.selected_game = Some(game.id.clone());
+                                    }
+
+                                    // End row after reaching column count
+                                    if (i + 1) % columns == 0 {
+                                        ui.end_row();
+                                    }
+                                }
+                            });
                     });
 
                 ui.separator();

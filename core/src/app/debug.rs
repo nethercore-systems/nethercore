@@ -122,7 +122,7 @@ pub fn render_debug_overlay(
                                 bg_color,
                             );
 
-                            // Draw update time (bottom, blue)
+                            // Draw update time (bottom, red - critical for rollback)
                             if update_height > 0.0 {
                                 painter.rect_filled(
                                     egui::Rect::from_min_max(
@@ -130,11 +130,11 @@ pub fn render_debug_overlay(
                                         egui::pos2(x + bar_width - 1.0, bottom_y),
                                     ),
                                     0.0,
-                                    egui::Color32::from_rgb(80, 120, 200), // Blue - update time
+                                    egui::Color32::from_rgb(220, 60, 60), // Red - update time (critical for rollback)
                                 );
                             }
 
-                            // Draw render time (stacked on top of update, orange)
+                            // Draw render time (stacked on top of update, blue)
                             if render_height > 0.0 {
                                 painter.rect_filled(
                                     egui::Rect::from_min_max(
@@ -142,7 +142,7 @@ pub fn render_debug_overlay(
                                         egui::pos2(x + bar_width - 1.0, bottom_y - update_height),
                                     ),
                                     0.0,
-                                    egui::Color32::from_rgb(220, 140, 60), // Orange - render time
+                                    egui::Color32::from_rgb(80, 120, 200), // Blue - render time
                                 );
                             }
                         } else {
@@ -173,6 +173,86 @@ pub fn render_debug_overlay(
                     egui::Color32::from_gray(150),
                 );
             }
+
+            // Legend below the graph
+            ui.add_space(6.0);
+
+            ui.horizontal_wrapped(|ui| {
+                let swatch_size = egui::vec2(8.0, 8.0);
+                let text_color = egui::Color32::from_gray(180);
+                let font = egui::FontId::proportional(9.0);
+
+                if is_playing {
+                    // Green square + "Budget (16.67ms)"
+                    let cursor = ui.cursor().min;
+                    ui.painter().rect_filled(
+                        egui::Rect::from_min_size(cursor, swatch_size),
+                        1.0,
+                        egui::Color32::from_rgb(100, 200, 100),
+                    );
+                    ui.add_space(10.0);
+                    ui.label(
+                        egui::RichText::new("Budget (16.67ms)")
+                            .font(font.clone())
+                            .color(text_color),
+                    );
+                    ui.add_space(12.0);
+
+                    // Red square + "Update (critical)"
+                    let cursor = ui.cursor().min;
+                    ui.painter().rect_filled(
+                        egui::Rect::from_min_size(cursor, swatch_size),
+                        1.0,
+                        egui::Color32::from_rgb(220, 60, 60),
+                    );
+                    ui.add_space(10.0);
+                    ui.label(
+                        egui::RichText::new("Update (critical)")
+                            .font(font.clone())
+                            .color(text_color),
+                    );
+                    ui.add_space(12.0);
+
+                    // Blue square + "Render"
+                    let cursor = ui.cursor().min;
+                    ui.painter().rect_filled(
+                        egui::Rect::from_min_size(cursor, swatch_size),
+                        1.0,
+                        egui::Color32::from_rgb(80, 120, 200),
+                    );
+                    ui.add_space(10.0);
+                    ui.label(egui::RichText::new("Render").font(font).color(text_color));
+                } else {
+                    // Green square + "On-time (≤16.67ms)"
+                    let cursor = ui.cursor().min;
+                    ui.painter().rect_filled(
+                        egui::Rect::from_min_size(cursor, swatch_size),
+                        1.0,
+                        egui::Color32::from_rgb(100, 200, 100),
+                    );
+                    ui.add_space(10.0);
+                    ui.label(
+                        egui::RichText::new("On-time (≤16.67ms)")
+                            .font(font.clone())
+                            .color(text_color),
+                    );
+                    ui.add_space(12.0);
+
+                    // Yellow square + "Late (>16.67ms)"
+                    let cursor = ui.cursor().min;
+                    ui.painter().rect_filled(
+                        egui::Rect::from_min_size(cursor, swatch_size),
+                        1.0,
+                        egui::Color32::from_rgb(200, 200, 100),
+                    );
+                    ui.add_space(10.0);
+                    ui.label(
+                        egui::RichText::new("Late (>16.67ms)")
+                            .font(font)
+                            .color(text_color),
+                    );
+                }
+            });
 
             ui.separator();
 

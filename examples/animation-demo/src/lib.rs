@@ -366,12 +366,13 @@ fn generate_arm_mesh() -> ([f32; 60 * 11], [u16; 324]) {
                 let curr_up = next_ring_start + seg as u16;
                 let next_up = next_ring_start + ((seg + 1) % SEGMENTS) as u16;
 
+                // Counter-clockwise winding when viewed from outside
                 indices[i_idx] = curr;
-                indices[i_idx + 1] = next;
-                indices[i_idx + 2] = curr_up;
+                indices[i_idx + 1] = curr_up;
+                indices[i_idx + 2] = next;
                 indices[i_idx + 3] = next;
-                indices[i_idx + 4] = next_up;
-                indices[i_idx + 5] = curr_up;
+                indices[i_idx + 4] = curr_up;
+                indices[i_idx + 5] = next_up;
                 i_idx += 6;
             }
         }
