@@ -205,14 +205,22 @@ pub trait Graphics: Send {
 /// Trait for audio backends
 ///
 /// In the per-frame audio model, audio playback state is part of the rollback state
-/// and audio is generated once per frame after update() completes. The only method
-/// on this trait is `set_rollback_mode` which tells the backend to skip audio output
-/// during rollback replay.
+/// and audio is generated once per frame after update() completes. The runtime
+/// generates samples and pushes them to this backend.
 pub trait Audio: Send {
-    /// Set rollback mode
+    /// Push one frame's worth of generated audio samples
     ///
-    /// When `rolling_back` is true, the audio backend should skip generating
-    /// audio output. During rollback, audio state is saved/restored with the
-    /// game state, but we don't want to play audio during frame replay.
-    fn set_rollback_mode(&mut self, rolling_back: bool);
+    /// Samples are interleaved stereo (L, R, L, R, ...).
+    /// Called once per frame after all updates complete.
+    fn push_frame(&mut self, samples: &[f32]);
+
+    /// Get current sample rate
+    ///
+    /// May differ from preferred rate if device doesn't support it.
+    fn sample_rate(&self) -> u32;
+
+    /// Check buffer health (0.0 = empty, 1.0 = full)
+    ///
+    /// Can be used to detect if audio is falling behind or ahead.
+    fn buffer_health(&self) -> f32;
 }
