@@ -65,83 +65,19 @@ library/
 
 ## Implementation Plan
 
-### Phase 1: Create Standalone Player for Emberware Z
+### Phase 1: Create Standalone Player for Emberware Z ✅ COMPLETE
 
 **Goal:** `emberware-z.exe path/to/game.ewz` launches and plays the game.
 
-#### 1.1 Add binary target to emberware-z
+**Completed:**
+- [x] Added `[[bin]]` target to `emberware-z/Cargo.toml`
+- [x] Created `emberware-z/src/bin/main.rs` with clap CLI
+- [x] Created `emberware-z/src/player.rs` with full game loop
+- [x] Tested: `cargo run -p emberware-z -- examples/cube/cube.ewz` works
 
-**File:** `emberware-z/Cargo.toml`
-
-```toml
-[[bin]]
-name = "emberware-z"
-path = "src/bin/main.rs"
-
-[features]
-default = ["player"]
-player = ["dep:winit", "dep:egui", "dep:egui-winit", "dep:egui-wgpu", "dep:clap"]
-```
-
-#### 1.2 Create player binary
-
-**File:** `emberware-z/src/bin/main.rs`
-
-```rust
-use std::path::PathBuf;
-use clap::Parser;
-use anyhow::Result;
-
-#[derive(Parser)]
-#[command(name = "emberware-z")]
-#[command(about = "Emberware Z - PS1/N64 aesthetic fantasy console")]
-struct Args {
-    /// ROM file to play (.ewz)
-    rom: PathBuf,
-
-    /// Enable debug overlay
-    #[arg(short, long)]
-    debug: bool,
-}
-
-fn main() -> Result<()> {
-    let args = Args::parse();
-    emberware_z::player::run(args.rom, args.debug)
-}
-```
-
-#### 1.3 Create player module
-
-**File:** `emberware-z/src/player.rs`
-
-Move/adapt the game-running logic from `library/src/app/`:
-- Window creation
-- ConsoleRunner initialization
-- Game loop (input → update → render)
-- Debug overlay
-- Frame controller
-
-This is essentially what `library/src/app/game_session.rs` does, but standalone.
-
-#### 1.4 Reuse from ember-cli
-
-`tools/ember-cli/src/run.rs` already implements running a game. Extract shared logic:
-
-**File:** `core/src/player.rs` (new)
-
-```rust
-/// Shared player logic used by standalone players and ember-cli
-pub fn run_game<C: Console>(
-    console: C,
-    rom_path: &Path,
-    debug: bool,
-) -> Result<()> {
-    // Window creation
-    // ConsoleRunner setup
-    // Game loop
-    // Debug overlay
-}
-```
+**Files created:**
+- `emberware-z/src/bin/main.rs` - CLI entry point
+- `emberware-z/src/player.rs` - PlayerApp implementing ConsoleApp trait
 
 ### Phase 2: Simplify Library
 

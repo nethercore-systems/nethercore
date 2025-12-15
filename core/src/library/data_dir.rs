@@ -34,5 +34,14 @@ pub trait DataDirProvider: Send + Sync {
     fn data_dir(&self) -> Option<PathBuf>;
 }
 
-// Note: Use `emberware_core::app::config::data_dir()` for the default path.
-// Consoles provide their own DataDirProvider implementation (e.g., ZDataDirProvider).
+/// Default implementation of DataDirProvider using the standard Emberware data directory.
+///
+/// Uses `~/.emberware/` (or platform equivalent) for all consoles.
+/// This is suitable for most use cases where consoles share the same data directory.
+pub struct DefaultDataDirProvider;
+
+impl DataDirProvider for DefaultDataDirProvider {
+    fn data_dir(&self) -> Option<PathBuf> {
+        crate::app::config::data_dir()
+    }
+}

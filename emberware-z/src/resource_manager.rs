@@ -124,8 +124,7 @@ impl ConsoleResourceManager for ZResourceManager {
 
         // Register built-in texture handles (font, white)
         // These are reserved handles used by draw_text and draw_rect
-        self.texture_map
-            .insert(u32::MAX, graphics.white_texture());
+        self.texture_map.insert(u32::MAX, graphics.white_texture());
         self.texture_map
             .insert(u32::MAX - 1, graphics.font_texture());
 

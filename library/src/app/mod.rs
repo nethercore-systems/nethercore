@@ -1,141 +1,273 @@
-//! Application state and main loop
+//! Library application state and main loop
+//!
+//! The library is a simple launcher UI that:
+//! - Shows installed games
+//! - Launches games as separate player processes
+//! - Does NOT run games in-process
 
-mod debug;
-mod game_session;
 mod init;
-mod ui;
 
 pub use init::AppError;
 
 use std::sync::Arc;
 use std::time::Instant;
-use winit::{event::WindowEvent, event_loop::ActiveEventLoop, window::Window};
+use winit::{
+    application::ApplicationHandler,
+    event::WindowEvent,
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    window::{Window, WindowAttributes, WindowId},
+};
 
-use crate::registry::ActiveGame;
+use crate::graphics::LibraryGraphics;
 use crate::ui::{LibraryUi, UiAction};
 use emberware_core::app::config::Config;
-use emberware_core::app::{AppMode, DebugStats, FRAME_TIME_HISTORY_SIZE, RuntimeError};
-use emberware_core::debug::{DebugPanel, FrameController};
-use emberware_z::console::EmberwareZ;
-use emberware_z::input::InputManager;
-use emberware_z::library::LocalGame;
+use emberware_core::library::{LocalGame, RomLoaderRegistry};
 
-/// Data needed to render the debug panel (extracted before egui frame)
-struct DebugPanelData {
-    registry: emberware_core::debug::DebugRegistry,
-    mem_ptr: *mut u8,
-    mem_len: usize,
-}
-
-/// Application state
+/// Library application state
 pub struct App {
-    /// Current application mode
-    pub(crate) mode: AppMode,
     /// User configuration
-    pub(crate) config: Config,
-    /// Window handle (created during resumed event)
-    pub(crate) window: Option<Arc<Window>>,
-    /// Active game instance (console-agnostic, owns graphics + game session)
-    pub(crate) active_game: Option<ActiveGame>,
-    /// Input manager (keyboard + gamepad)
-    pub(crate) input_manager: Option<InputManager>,
+    config: Config,
+    /// Window handle
+    window: Option<Arc<Window>>,
+    /// Graphics context for egui rendering
+    graphics: Option<LibraryGraphics>,
     /// Whether the application should exit
-    pub(crate) should_exit: bool,
+    should_exit: bool,
     /// egui context
-    pub(crate) egui_ctx: egui::Context,
+    egui_ctx: egui::Context,
     /// egui-winit state
-    pub(crate) egui_state: Option<egui_winit::State>,
+    egui_state: Option<egui_winit::State>,
     /// egui-wgpu renderer
-    pub(crate) egui_renderer: Option<egui_wgpu::Renderer>,
+    egui_renderer: Option<egui_wgpu::Renderer>,
     /// Library UI state
-    pub(crate) library_ui: LibraryUi,
+    library_ui: LibraryUi,
     /// Settings UI state
-    pub(crate) settings_ui: crate::ui::SettingsUi,
+    settings_ui: crate::ui::SettingsUi,
     /// Cached local games list
-    pub(crate) local_games: Vec<LocalGame>,
-    /// Debug overlay enabled (F3)
-    pub(crate) debug_overlay: bool,
-    /// Frame times for FPS calculation (render rate)
-    pub(crate) frame_times: Vec<Instant>,
-    /// Last frame time
-    pub(crate) last_frame: Instant,
-    /// Game tick times for game FPS calculation (update rate)
-    pub(crate) game_tick_times: Vec<Instant>,
-    /// Last game tick time
-    pub(crate) last_game_tick: Instant,
-    /// Debug statistics
-    pub(crate) debug_stats: DebugStats,
-    /// Last runtime error (for displaying error in library)
-    pub(crate) last_error: Option<RuntimeError>,
-    /// Whether a redraw is needed (UI state changed)
-    pub(crate) needs_redraw: bool,
-    // Egui optimization cache
-    pub(crate) cached_egui_shapes: Vec<egui::epaint::ClippedShape>,
-    pub(crate) cached_egui_tris: Vec<egui::ClippedPrimitive>,
-    pub(crate) cached_pixels_per_point: f32,
-    pub(crate) last_mode: AppMode,
-    pub(crate) last_window_size: (u32, u32),
-    /// Debug inspection panel
-    pub(crate) debug_panel: DebugPanel,
-    /// Frame controller for pause/step/time scale
-    pub(crate) frame_controller: FrameController,
-    /// Next scheduled simulation tick (used for WaitUntil in game mode)
-    pub(crate) next_tick: Instant,
-    /// Whether the last advance_simulation() call rendered new game content
-    /// Used by render() to know whether to render new game content or blit the last frame
-    pub(crate) last_sim_rendered: bool,
+    local_games: Vec<LocalGame>,
+    /// ROM loader registry
+    rom_loader_registry: RomLoaderRegistry,
+    /// Last error message (for displaying in UI)
+    last_error: Option<String>,
+    /// Whether a redraw is needed
+    needs_redraw: bool,
+    /// Egui cache
+    cached_egui_shapes: Vec<egui::epaint::ClippedShape>,
+    cached_egui_tris: Vec<egui::ClippedPrimitive>,
+    cached_pixels_per_point: f32,
+    last_window_size: (u32, u32),
+    /// Last frame time for throttling
+    last_frame: Instant,
 }
 
 impl App {
-    /// Render the current frame
+    /// Create a new library application
+    pub fn new() -> Self {
+        let config = emberware_core::app::config::load();
+        let rom_loader_registry = crate::registry::create_rom_loader_registry();
+        let local_games = emberware_core::library::get_local_games_with_loaders(
+            &emberware_core::library::DefaultDataDirProvider,
+            &rom_loader_registry,
+        );
+
+        Self {
+            settings_ui: crate::ui::SettingsUi::new(&config),
+            config,
+            window: None,
+            graphics: None,
+            should_exit: false,
+            egui_ctx: egui::Context::default(),
+            egui_state: None,
+            egui_renderer: None,
+            library_ui: LibraryUi::new(),
+            local_games,
+            rom_loader_registry,
+            last_error: None,
+            needs_redraw: true,
+            cached_egui_shapes: Vec::new(),
+            cached_egui_tris: Vec::new(),
+            cached_pixels_per_point: 1.0,
+            last_window_size: (960, 540),
+            last_frame: Instant::now(),
+        }
+    }
+
+    /// Refresh the local games list
+    fn refresh_games(&mut self) {
+        self.local_games = emberware_core::library::get_local_games_with_loaders(
+            &emberware_core::library::DefaultDataDirProvider,
+            &self.rom_loader_registry,
+        );
+    }
+
+    /// Handle UI actions
+    fn handle_ui_action(&mut self, action: UiAction) {
+        match action {
+            UiAction::PlayGame(game_id) => {
+                tracing::info!("Launching game: {}", game_id);
+
+                // Find the game and launch it
+                if let Some(game) = self.local_games.iter().find(|g| g.id == game_id) {
+                    match crate::registry::launch_game_by_id(game) {
+                        Ok(()) => {
+                            tracing::info!("Player process spawned for: {}", game_id);
+                            self.last_error = None;
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to launch game: {}", e);
+                            self.last_error = Some(format!("Failed to launch: {}", e));
+                        }
+                    }
+                } else {
+                    self.last_error = Some(format!("Game not found: {}", game_id));
+                }
+            }
+            UiAction::DeleteGame(game_id) => {
+                tracing::info!("Deleting game: {}", game_id);
+                if let Err(e) = emberware_core::library::delete_game(
+                    &emberware_core::library::DefaultDataDirProvider,
+                    &game_id,
+                ) {
+                    tracing::error!("Failed to delete game: {}", e);
+                }
+                self.refresh_games();
+                self.library_ui.selected_game = None;
+            }
+            UiAction::OpenBrowser => {
+                const PLATFORM_URL: &str = "https://emberware.io";
+                tracing::info!("Opening browser to {}", PLATFORM_URL);
+                if let Err(e) = open::that(PLATFORM_URL) {
+                    tracing::error!("Failed to open browser: {}", e);
+                }
+            }
+            UiAction::OpenSettings => {
+                // Toggle settings panel in library UI
+                self.library_ui.show_settings = !self.library_ui.show_settings;
+                if self.library_ui.show_settings {
+                    self.settings_ui.update_temp_config(&self.config);
+                }
+            }
+            UiAction::DismissError => {
+                self.last_error = None;
+            }
+            UiAction::RefreshLibrary => {
+                tracing::info!("Refreshing game library");
+                self.refresh_games();
+                self.library_ui.selected_game = None;
+            }
+            UiAction::OpenGame => {
+                tracing::info!("Opening file picker to run game directly");
+
+                let file_handle = rfd::FileDialog::new()
+                    .add_filter("Game Files", &["ewz", "wasm"])
+                    .add_filter("Emberware ROM", &["ewz"])
+                    .add_filter("WebAssembly", &["wasm"])
+                    .set_title("Open Game File")
+                    .pick_file();
+
+                if let Some(path) = file_handle {
+                    tracing::info!("Launching game from: {}", path.display());
+                    match crate::registry::launch_game_from_path(&path) {
+                        Ok(()) => {
+                            tracing::info!("Player process spawned for: {}", path.display());
+                            self.last_error = None;
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to launch game: {}", e);
+                            self.last_error = Some(format!("Failed to launch: {}", e));
+                        }
+                    }
+                }
+            }
+            UiAction::ImportRom => {
+                tracing::info!("Opening file picker for ROM import");
+
+                let file_handle = rfd::FileDialog::new()
+                    .add_filter("Emberware ROM", &["ewz"])
+                    .set_title("Import ROM File")
+                    .pick_file();
+
+                if let Some(source_path) = file_handle {
+                    tracing::info!("Selected ROM file: {}", source_path.display());
+
+                    if let Some(data_dir) = emberware_core::app::config::data_dir() {
+                        let games_dir = data_dir.join("games");
+
+                        if let Err(e) = std::fs::create_dir_all(&games_dir) {
+                            tracing::error!("Failed to create games directory: {}", e);
+                            self.last_error =
+                                Some(format!("Failed to create games directory: {}", e));
+                            return;
+                        }
+
+                        if let Some(filename) = source_path.file_name() {
+                            let dest_path = games_dir.join(filename);
+
+                            match std::fs::copy(&source_path, &dest_path) {
+                                Ok(_) => {
+                                    tracing::info!(
+                                        "ROM imported successfully to: {}",
+                                        dest_path.display()
+                                    );
+                                    self.refresh_games();
+                                }
+                                Err(e) => {
+                                    tracing::error!("Failed to copy ROM file: {}", e);
+                                    self.last_error = Some(format!("Failed to import ROM: {}", e));
+                                }
+                            }
+                        } else {
+                            self.last_error = Some("Invalid file path".to_string());
+                        }
+                    } else {
+                        self.last_error = Some("Could not determine data directory".to_string());
+                    }
+                }
+            }
+            UiAction::SaveSettings(new_config) => {
+                tracing::info!("Saving settings...");
+                self.config = new_config.clone();
+
+                if let Err(e) = emberware_core::app::config::save(&self.config) {
+                    tracing::error!("Failed to save config: {}", e);
+                } else {
+                    tracing::info!("Settings saved successfully");
+                }
+
+                // Apply fullscreen setting
+                if let Some(window) = &self.window {
+                    let is_fullscreen = window.fullscreen().is_some();
+                    if is_fullscreen != self.config.video.fullscreen {
+                        let new_fullscreen = if self.config.video.fullscreen {
+                            Some(winit::window::Fullscreen::Borderless(None))
+                        } else {
+                            None
+                        };
+                        window.set_fullscreen(new_fullscreen);
+                    }
+                }
+
+                self.settings_ui.update_temp_config(&self.config);
+                self.library_ui.show_settings = false;
+            }
+            UiAction::SetScaleMode(_scale_mode) => {
+                // Scale mode only affects game rendering, which happens in player process
+                // This is a no-op in the library
+            }
+        }
+    }
+
+    /// Render the library UI
     fn render(&mut self) {
-        let now = Instant::now();
-
-        // Update frame timing
-        self.frame_times.push(now);
-        if self.frame_times.len() > FRAME_TIME_HISTORY_SIZE {
-            self.frame_times.remove(0);
-        }
-        let frame_time_ms = now.duration_since(self.last_frame).as_secs_f32() * 1000.0;
-        self.last_frame = now;
-
-        // Update debug stats
-        self.debug_stats.frame_times.push_back(frame_time_ms);
-        while self.debug_stats.frame_times.len() > FRAME_TIME_HISTORY_SIZE {
-            self.debug_stats.frame_times.pop_front();
-        }
-
-        // Simulation is now done in advance_simulation(), called from about_to_wait.
-        // We just use the result (last_sim_rendered) to know if we have new content to render.
-        let game_rendered_this_frame = self.last_sim_rendered;
-
-        // Pre-collect values to avoid borrow conflicts
-        let mode = self.mode.clone();
-        let debug_overlay = self.debug_overlay;
-        let render_fps = self.calculate_fps();
-        let game_tick_fps = self.calculate_game_tick_fps();
-        let last_error = self.last_error.clone();
-
-        // Prepare debug panel data BEFORE borrowing active_game (to avoid borrow conflicts)
-        let debug_panel_data =
-            if self.debug_panel.visible && matches!(mode, AppMode::Playing { .. } | AppMode::PlayingFromPath { .. }) {
-                self.prepare_debug_panel_data()
-            } else {
-                None
-            };
-
-        let window = match self.window.clone() {
-            Some(w) => w,
+        let window = match &self.window {
+            Some(w) => w.clone(),
             None => return,
         };
 
-        let active_game = match &mut self.active_game {
+        let graphics = match &self.graphics {
             Some(g) => g,
             None => return,
         };
-
-        // Update VRAM usage from active_game
-        self.debug_stats.vram_used = active_game.vram_used();
 
         let egui_state = match &mut self.egui_state {
             Some(s) => s,
@@ -148,7 +280,7 @@ impl App {
         };
 
         // Get surface texture
-        let surface_texture = match active_game.get_current_texture() {
+        let surface_texture = match graphics.get_current_texture() {
             Ok(tex) => tex,
             Err(e) => {
                 tracing::warn!("Failed to get surface texture: {}", e);
@@ -160,170 +292,52 @@ impl App {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        // Create SINGLE encoder for entire frame
+        // Create encoder
         let mut encoder =
-            active_game
+            graphics
                 .device()
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("Frame Encoder"),
+                    label: Some("Library Frame Encoder"),
                 });
 
-        // If in Playing mode, render game (only if we generated new content this frame)
-        if matches!(mode, AppMode::Playing { .. } | AppMode::PlayingFromPath { .. }) {
-            if game_rendered_this_frame {
-                // Get clear color from game state
-                let clear_color = active_game.clear_color();
-
-                // Render new game content to render target
-                active_game.render_game_frame(&mut encoder, clear_color);
-            }
-
-            // Always blit the render target to the window (shows last rendered frame)
-            active_game.blit_to_window(&mut encoder, &view);
-        }
-
-        // Start egui frame
+        // Run egui
         let raw_input = egui_state.take_egui_input(&window);
-
-        // Collect UI action separately to avoid borrow conflicts
         let mut ui_action = None;
 
-        // Track if debug values were changed (set inside closure)
-        let mut debug_values_changed = false;
-
-        // Collect debug stats for overlay only in game mode (meaningless in library mode)
-        let debug_stats = if debug_overlay && matches!(mode, AppMode::Playing { .. } | AppMode::PlayingFromPath { .. }) {
-            Some(DebugStats {
-                frame_times: self.debug_stats.frame_times.clone(),
-                game_tick_times: self.debug_stats.game_tick_times.clone(),
-                game_render_times: self.debug_stats.game_render_times.clone(),
-                vram_used: self.debug_stats.vram_used,
-                vram_limit: self.debug_stats.vram_limit,
-                ping_ms: self.debug_stats.ping_ms,
-                rollback_frames: self.debug_stats.rollback_frames,
-                frame_advantage: self.debug_stats.frame_advantage,
-                network_interrupted: self.debug_stats.network_interrupted,
-            })
-        } else {
-            None
-        };
-
         let full_output = self.egui_ctx.run(raw_input, |ctx| {
-            // Render UI based on current mode
-            match &mode {
-                AppMode::Library => {
-                    // Show error message if there was a recent error
-                    if let Some(ref error) = last_error {
-                        egui::TopBottomPanel::top("error_panel").show(ctx, |ui| {
-                            ui.horizontal(|ui| {
-                                ui.colored_label(egui::Color32::RED, format!("Error: {}", error));
-                                if ui.button("Dismiss").clicked() {
-                                    ui_action = Some(UiAction::DismissError);
-                                }
-                            });
-                        });
-                    }
-                    if let Some(action) = self.library_ui.show(ctx, &self.local_games) {
-                        ui_action = Some(action);
-                    }
-                }
-                AppMode::Settings => {
-                    if let Some(action) = self.settings_ui.show(ctx) {
-                        ui_action = Some(action);
-                    }
-                }
-                AppMode::Playing { game_id } => {
-                    // Game is rendered before egui, so we don't need a central panel
-                    // Just show debug info if overlay is enabled
-                    let _ = game_id; // Used in debug overlay
-                }
-                AppMode::PlayingFromPath { path } => {
-                    // Same as Playing - game is rendered before egui
-                    let _ = path;
-                }
+            // Show error panel if there's an error
+            if let Some(ref error) = self.last_error {
+                egui::TopBottomPanel::top("error_panel").show(ctx, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.colored_label(egui::Color32::RED, format!("Error: {}", error));
+                        if ui.button("Dismiss").clicked() {
+                            ui_action = Some(UiAction::DismissError);
+                        }
+                    });
+                });
             }
 
-            // Debug overlay (only when enabled - stats are only cloned when needed)
-            if let Some(ref stats) = debug_stats {
-                emberware_core::app::render_debug_overlay(
-                    ctx,
-                    stats,
-                    matches!(mode, AppMode::Playing { .. } | AppMode::PlayingFromPath { .. }),
-                    frame_time_ms,
-                    render_fps,
-                    game_tick_fps,
-                );
-            }
-
-            // Debug inspection panel - MUST be inside ctx.run() to receive input
-            if let Some(ref data) = debug_panel_data {
-                use emberware_core::debug::{DebugValue, RegisteredValue};
-
-                let mem_ptr = data.mem_ptr;
-                let mem_len = data.mem_len;
-
-                // Create read closure using raw pointer
-                let read_value = |reg_value: &RegisteredValue| -> Option<DebugValue> {
-                    let ptr = reg_value.wasm_ptr as usize;
-                    let size = reg_value.value_type.byte_size();
-                    if ptr + size > mem_len {
-                        return None;
-                    }
-                    // SAFETY: Bounds checked above, pointer valid for this frame
-                    let slice = unsafe { std::slice::from_raw_parts(mem_ptr.add(ptr), size) };
-                    Some(
-                        data.registry
-                            .read_value_from_slice(slice, reg_value.value_type),
-                    )
-                };
-
-                // Create write closure using raw pointer
-                let write_value = |reg_value: &RegisteredValue, new_val: &DebugValue| -> bool {
-                    let ptr = reg_value.wasm_ptr as usize;
-                    let size = reg_value.value_type.byte_size();
-                    if ptr + size > mem_len {
-                        return false;
-                    }
-                    // SAFETY: Bounds checked above, pointer valid for this frame
-                    let slice = unsafe { std::slice::from_raw_parts_mut(mem_ptr.add(ptr), size) };
-                    data.registry.write_value_to_slice(slice, new_val)
-                };
-
-                // Render the panel (use ctx from closure, not self.egui_ctx)
-                debug_values_changed = self.debug_panel.render(
-                    ctx,
-                    &data.registry,
-                    &mut self.frame_controller,
-                    read_value,
-                    write_value,
-                );
+            // Show settings or library
+            if self.library_ui.show_settings {
+                if let Some(action) = self.settings_ui.show(ctx) {
+                    ui_action = Some(action);
+                }
+            } else if let Some(action) = self.library_ui.show(ctx, &self.local_games) {
+                ui_action = Some(action);
             }
         });
 
         egui_state.handle_platform_output(&window, full_output.platform_output);
 
         // Determine if egui needs update
-        let mut egui_dirty = false;
+        let mut egui_dirty = self.cached_egui_shapes.is_empty();
 
-        // Check 1: First frame
-        if self.cached_egui_shapes.is_empty() {
-            egui_dirty = true;
-        }
-
-        // Check 2: Mode changed
-        if !egui_dirty && self.last_mode != mode {
-            egui_dirty = true;
-            self.last_mode = mode.clone();
-        }
-
-        // Check 3: Window resized
-        let current_size = (active_game.width(), active_game.height());
+        let current_size = (graphics.width(), graphics.height());
         if !egui_dirty && self.last_window_size != current_size {
             egui_dirty = true;
             self.last_window_size = current_size;
         }
 
-        // Check 4: DPI changed
         if !egui_dirty
             && (self.cached_pixels_per_point - full_output.pixels_per_point).abs() > 0.001
         {
@@ -331,12 +345,10 @@ impl App {
             self.cached_pixels_per_point = full_output.pixels_per_point;
         }
 
-        // Check 5: Texture changes
         if !egui_dirty && !full_output.textures_delta.set.is_empty() {
             egui_dirty = true;
         }
 
-        // Check 6: Shapes changed (fast vector comparison)
         if !egui_dirty {
             if full_output.shapes.len() != self.cached_egui_shapes.len() {
                 egui_dirty = true;
@@ -352,7 +364,6 @@ impl App {
             }
         }
 
-        // Check 7: Viewport repaint requested
         if !egui_dirty {
             for viewport_output in full_output.viewport_output.values() {
                 if viewport_output.repaint_delay.is_zero() {
@@ -363,25 +374,22 @@ impl App {
         }
 
         let screen_descriptor = egui_wgpu::ScreenDescriptor {
-            size_in_pixels: [active_game.width(), active_game.height()],
+            size_in_pixels: [graphics.width(), graphics.height()],
             pixels_per_point: window.scale_factor() as f32,
         };
 
-        // Conditional tessellation and buffer update
+        // Tessellate and render
         let tris = if egui_dirty {
-            // Tessellate and cache
             let new_tris = self
                 .egui_ctx
                 .tessellate(full_output.shapes.clone(), full_output.pixels_per_point);
 
-            // Update cache
             self.cached_egui_shapes = full_output.shapes;
             self.cached_egui_tris = new_tris.clone();
 
-            // Update GPU buffers (ONLY when dirty)
             egui_renderer.update_buffers(
-                active_game.device(),
-                active_game.queue(),
+                graphics.device(),
+                graphics.queue(),
                 &mut encoder,
                 &new_tris,
                 &screen_descriptor,
@@ -389,43 +397,28 @@ impl App {
 
             new_tris
         } else {
-            // Reuse cached triangles
             self.cached_egui_tris.clone()
         };
 
-        // Texture updates still happen (already delta-tracked)
+        // Update textures
         for (id, image_delta) in &full_output.textures_delta.set {
-            egui_renderer.update_texture(
-                active_game.device(),
-                active_game.queue(),
-                *id,
-                image_delta,
-            );
+            egui_renderer.update_texture(graphics.device(), graphics.queue(), *id, image_delta);
         }
 
-        // Create render pass and render egui (only if there are triangles to render)
-        // When in Playing mode, use Load to preserve game rendering.
-        // Otherwise, clear with a dark background color.
-        let is_playing = matches!(mode, AppMode::Playing { .. } | AppMode::PlayingFromPath { .. });
+        // Render egui
         if !tris.is_empty() {
-            let load_op = if is_playing {
-                wgpu::LoadOp::Load
-            } else {
-                wgpu::LoadOp::Clear(wgpu::Color {
-                    r: 0.1,
-                    g: 0.1,
-                    b: 0.1,
-                    a: 1.0,
-                })
-            };
-
             let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Egui Render Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: load_op,
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.1,
+                            g: 0.1,
+                            b: 0.1,
+                            a: 1.0,
+                        }),
                         store: wgpu::StoreOp::Store,
                     },
                     depth_slice: None,
@@ -435,14 +428,10 @@ impl App {
                 occlusion_query_set: None,
             });
 
-            // egui-wgpu 0.30 requires RenderPass<'static>. wgpu's forget_lifetime()
-            // safely removes the lifetime constraint, converting compile-time errors
-            // to runtime errors if the encoder is misused while the pass is active.
             let mut render_pass_static = render_pass.forget_lifetime();
-
             egui_renderer.render(&mut render_pass_static, &tris, &screen_descriptor);
-        } else if !is_playing {
-            // If no egui content but not in playing mode, we still need to clear the screen
+        } else {
+            // Clear screen even with no egui content
             let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Clear Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -465,289 +454,177 @@ impl App {
             });
         }
 
-        // Submit commands
-        active_game
-            .queue()
-            .submit(std::iter::once(encoder.finish()));
+        // Submit
+        graphics.queue().submit(std::iter::once(encoder.finish()));
 
-        // Free egui textures
+        // Free textures
         for id in &full_output.textures_delta.free {
             egui_renderer.free_texture(id);
         }
 
-        // Present frame
+        // Present
         surface_texture.present();
 
-        // Call on_debug_change() if debug values were modified
-        if debug_values_changed {
-            if let Some(game) = &mut self.active_game {
-                game.call_on_debug_change();
-            }
-        }
-
-        // Handle UI action after rendering is complete
+        // Handle UI action
         if let Some(action) = ui_action {
-            if matches!(action, UiAction::OpenSettings) && matches!(self.mode, AppMode::Settings) {
-                self.mode = AppMode::Library;
-            } else {
-                self.handle_ui_action(action);
-            }
+            self.handle_ui_action(action);
         }
-        // Note: We no longer request redraws here - the event loop handles that
     }
+}
 
-    /// Prepare debug panel data before the egui frame
-    ///
-    /// Returns None if no debug panel should be shown (no game, no registry, etc.)
-    fn prepare_debug_panel_data(&mut self) -> Option<DebugPanelData> {
-        let active_game = self.active_game.as_mut()?;
-        let (registry, mem_ptr, mem_len) = active_game.debug_panel_data()?;
-
-        Some(DebugPanelData {
-            registry,
-            mem_ptr,
-            mem_len,
-        })
-    }
-
-    fn mark_needs_redraw(&mut self) {
-        self.needs_redraw = true;
-    }
-
-    /// Advance simulation by one tick
-    ///
-    /// Called from the event loop's about_to_wait when a tick is due.
-    /// This runs the game's update logic, NOT rendering.
-    fn advance_simulation_internal(&mut self) {
-        // Reset last_sim_rendered - will be set by run_game_frame if it rendered
-        self.last_sim_rendered = false;
-
-        // Only run simulation if in a playing mode
-        if !matches!(
-            self.mode,
-            AppMode::Playing { .. } | AppMode::PlayingFromPath { .. }
-        ) {
+impl ApplicationHandler for App {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        if self.window.is_some() {
             return;
         }
 
-        // Check if game is loaded (initialize if needed for CLI launch case)
-        let game_loaded = self.active_game.as_ref().map_or(false, |g| g.has_game());
-        if !game_loaded {
-            match &self.mode {
-                AppMode::Playing { game_id } => {
-                    let game_id_owned = game_id.clone();
-                    tracing::info!(
-                        "Initializing game session for CLI launch: {}",
-                        game_id_owned
-                    );
-                    if let Err(e) = self.start_game(&game_id_owned) {
-                        self.handle_runtime_error(e);
-                        return;
-                    }
-                }
-                AppMode::PlayingFromPath { path } => {
-                    let path_owned = path.clone();
-                    tracing::info!(
-                        "Initializing game session from path: {}",
-                        path_owned.display()
-                    );
-                    if let Err(e) = self.start_game_from_path(path_owned) {
-                        self.handle_runtime_error(e);
-                        return;
-                    }
-                }
-                _ => {}
-            }
-        }
+        // Create window
+        let window_attrs = WindowAttributes::default()
+            .with_title("Emberware Library")
+            .with_inner_size(winit::dpi::LogicalSize::new(960, 540));
 
-        // Handle session events (disconnect, desync, network interruption)
-        if let Err(e) = self.handle_session_events() {
-            self.handle_runtime_error(e);
-            return;
-        }
-
-        // Update debug stats from session
-        self.update_session_stats();
-
-        // Run game frame (update + render commands)
-        let (game_running, did_render) = match self.run_game_frame() {
-            Ok((running, rendered)) => {
-                // Only execute draw commands if we rendered
-                if rendered {
-                    if let Some(active_game) = &mut self.active_game {
-                        active_game.execute_draw_commands();
-                    }
-                }
-                (running, rendered)
-            }
+        let window = match event_loop.create_window(window_attrs) {
+            Ok(w) => Arc::new(w),
             Err(e) => {
-                self.handle_runtime_error(e);
+                tracing::error!("Failed to create window: {}", e);
+                event_loop.exit();
                 return;
             }
         };
 
-        self.last_sim_rendered = did_render;
-
-        // If game requested quit, return to library
-        if !game_running {
-            if let Some(active_game) = &mut self.active_game {
-                active_game.unload_game();
-            }
-            self.mode = AppMode::Library;
-            self.local_games =
-                emberware_z::library::get_local_games(&emberware_z::library::ZDataDirProvider);
+        // Apply fullscreen from config
+        if self.config.video.fullscreen {
+            window.set_fullscreen(Some(winit::window::Fullscreen::Borderless(None)));
         }
+
+        // Initialize graphics
+        let graphics = match LibraryGraphics::new(window.clone()) {
+            Ok(g) => g,
+            Err(e) => {
+                tracing::error!("Failed to initialize graphics: {}", e);
+                event_loop.exit();
+                return;
+            }
+        };
+
+        // Initialize egui
+        let egui_state = egui_winit::State::new(
+            self.egui_ctx.clone(),
+            egui::ViewportId::ROOT,
+            &window,
+            Some(window.scale_factor() as f32),
+            None,
+            None,
+        );
+
+        let egui_renderer = egui_wgpu::Renderer::new(
+            graphics.device(),
+            graphics.surface_format(),
+            egui_wgpu::RendererOptions {
+                depth_stencil_format: None,
+                msaa_samples: 1,
+                dithering: false,
+                predictable_texture_filtering: false,
+            },
+        );
+
+        tracing::info!("Library window and graphics initialized");
+
+        self.window = Some(window);
+        self.graphics = Some(graphics);
+        self.egui_state = Some(egui_state);
+        self.egui_renderer = Some(egui_renderer);
     }
-}
 
-impl emberware_core::app::ConsoleApp<EmberwareZ> for App {
-    // === Window lifecycle ===
-
-    fn on_window_created(
+    fn window_event(
         &mut self,
-        window: Arc<Window>,
         event_loop: &ActiveEventLoop,
-    ) -> anyhow::Result<()> {
-        self.on_window_created(window, event_loop)
-    }
-
-    fn on_window_event(&mut self, event: &WindowEvent) -> bool {
-        // Let egui handle the event first
+        _window_id: WindowId,
+        event: WindowEvent,
+    ) {
+        // Let egui handle events
         if let (Some(egui_state), Some(window)) = (&mut self.egui_state, &self.window) {
-            let response = egui_state.on_window_event(window, event);
-
-            // Mark redraw if egui wants one (hover effects, animations, etc.)
-            // Don't call request_redraw() immediately - let about_to_wait batch events
+            let response = egui_state.on_window_event(window, &event);
             if response.repaint {
-                self.mark_needs_redraw();
+                self.needs_redraw = true;
             }
-
             if response.consumed {
-                return true; // Event consumed
+                return;
             }
+        }
 
-            // Check if egui wants keyboard input (text fields, sliders, etc.)
-            let egui_wants_keyboard = self.egui_ctx.wants_keyboard_input();
-
-            match event {
-                WindowEvent::Resized(new_size) => {
-                    tracing::debug!("Window resized to {:?}", new_size);
-                    self.handle_resize(*new_size);
-                    self.mark_needs_redraw();
-                    false
-                }
-                WindowEvent::ScaleFactorChanged { .. } => {
-                    tracing::debug!("DPI scale factor changed");
-                    self.mark_needs_redraw();
-                    false
-                }
-                WindowEvent::KeyboardInput {
-                    event: key_event, ..
-                } => {
-                    // Only pass keyboard input to game if egui doesn't want it
-                    if !egui_wants_keyboard {
-                        self.handle_key_input(key_event.clone());
+        match event {
+            WindowEvent::CloseRequested => {
+                self.should_exit = true;
+                event_loop.exit();
+            }
+            WindowEvent::Resized(new_size) => {
+                if new_size.width > 0 && new_size.height > 0 {
+                    if let Some(graphics) = &mut self.graphics {
+                        graphics.resize(new_size.width, new_size.height);
                     }
-                    false
+                    self.needs_redraw = true;
                 }
-                _ => false,
             }
-        } else {
-            // No egui state - handle events normally
-            match event {
-                WindowEvent::Resized(new_size) => {
-                    tracing::debug!("Window resized to {:?}", new_size);
-                    self.handle_resize(*new_size);
-                    self.mark_needs_redraw();
-                    false
+            WindowEvent::RedrawRequested => {
+                self.render();
+                self.needs_redraw = false;
+                self.last_frame = Instant::now();
+            }
+            WindowEvent::KeyboardInput { event, .. } => {
+                // Handle F11 for fullscreen toggle
+                if event.state == winit::event::ElementState::Pressed {
+                    if let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::F11) =
+                        event.physical_key
+                    {
+                        if let Some(window) = &self.window {
+                            let is_fullscreen = window.fullscreen().is_some();
+                            let new_fullscreen = if is_fullscreen {
+                                None
+                            } else {
+                                Some(winit::window::Fullscreen::Borderless(None))
+                            };
+                            window.set_fullscreen(new_fullscreen);
+                            self.config.video.fullscreen = !is_fullscreen;
+                            let _ = emberware_core::app::config::save(&self.config);
+                        }
+                    }
                 }
-                WindowEvent::ScaleFactorChanged { .. } => {
-                    tracing::debug!("DPI scale factor changed");
-                    self.mark_needs_redraw();
-                    false
-                }
-                WindowEvent::KeyboardInput {
-                    event: key_event, ..
-                } => {
-                    self.handle_key_input(key_event.clone());
-                    false
-                }
-                _ => false,
+            }
+            _ => {}
+        }
+    }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        if self.should_exit {
+            event_loop.exit();
+            return;
+        }
+
+        // Request redraw if needed
+        if self.needs_redraw {
+            if let Some(window) = &self.window {
+                window.request_redraw();
             }
         }
-    }
 
-    // === Simulation control ===
-
-    fn has_active_game(&self) -> bool {
-        // Return true if we're in a playing mode (to trigger game loading)
-        // OR if there's actually a game session running
-        matches!(self.mode, AppMode::Playing { .. } | AppMode::PlayingFromPath { .. })
-            || self.active_game.as_ref().map_or(false, |g| g.has_game())
-    }
-
-    fn next_tick(&self) -> Instant {
-        self.next_tick
-    }
-
-    fn advance_simulation(&mut self) {
-        // Update input before advancing simulation
-        self.update_input();
-        // Run the actual simulation logic
-        self.advance_simulation_internal();
-    }
-
-    fn update_next_tick(&mut self) {
-        if let Some(active_game) = &self.active_game {
-            self.next_tick += active_game.tick_duration();
-        }
-    }
-
-    // === Rendering ===
-
-    fn render(&mut self) {
-        self.render();
-    }
-
-    // === Redraw flag ===
-
-    fn needs_redraw(&self) -> bool {
-        self.needs_redraw
-    }
-
-    fn mark_needs_redraw(&mut self) {
-        self.needs_redraw = true;
-    }
-
-    fn clear_needs_redraw(&mut self) {
-        self.needs_redraw = false;
-    }
-
-    // === Application lifecycle ===
-
-    fn on_runtime_error(&mut self, error: RuntimeError) {
-        self.handle_runtime_error(error);
-    }
-
-    fn should_exit(&self) -> bool {
-        self.should_exit
-    }
-
-    fn request_exit(&mut self) {
-        self.should_exit = true;
-    }
-
-    fn request_redraw(&self) {
-        if let Some(window) = &self.window {
-            window.request_redraw();
-        }
+        // Use reactive mode - only redraw when something changes
+        event_loop.set_control_flow(ControlFlow::Wait);
     }
 }
 
-pub fn run(initial_mode: AppMode) -> Result<(), AppError> {
-    tracing::info!("Starting with mode: {:?}", initial_mode);
-    let app = App::new(initial_mode);
-    emberware_core::app::run(app)
+/// Run the library application
+pub fn run() -> Result<(), AppError> {
+    tracing::info!("Starting Emberware Library");
+
+    let event_loop = EventLoop::new()
+        .map_err(|e| AppError::EventLoop(format!("Failed to create event loop: {}", e)))?;
+
+    let mut app = App::new();
+
+    event_loop
+        .run_app(&mut app)
         .map_err(|e| AppError::EventLoop(format!("Event loop error: {}", e)))?;
+
     Ok(())
 }

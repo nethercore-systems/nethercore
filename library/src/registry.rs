@@ -5,50 +5,47 @@
 //!
 //! # Architecture
 //!
-//! The registry uses an enum-based approach for zero-cost abstraction:
+//! The library spawns separate player processes for each console type:
 //!
 //! 1. `ConsoleType` enum represents all compile-time known console types
-//! 2. `ActiveGame` enum holds running game instances with static dispatch
-//! 3. `RomLoaderRegistry` manages ROM loaders for all console types
-//! 4. Match expressions provide static dispatch (no vtables)
-//! 5. Compiler enforces exhaustiveness when adding new consoles
+//! 2. `RomLoaderRegistry` manages ROM loaders for all console types
+//! 3. `launch_player()` spawns the appropriate player binary
+//! 4. Each console has its own player binary (e.g., `emberware-z`)
 //!
 //! # Adding a New Console
 //!
-//! 1. Add variant to `ConsoleType` enum (e.g., `Classic`)
-//! 2. Add variant to `ActiveGame` enum with ConsoleRunner<Console>
+//! 1. Create player binary for the console (e.g., `emberware-classic`)
+//! 2. Add variant to `ConsoleType` enum (e.g., `Classic`)
 //! 3. Update `as_str()` to return the manifest identifier (e.g., `"classic"`)
 //! 4. Update `from_str()` to parse the identifier
 //! 5. Update `all()` to include the new variant
-//! 6. Add match arms in `launch_game()`, `launch_library()`, and `ActiveGame` methods
-//! 7. Register the console's RomLoader in `RomLoaderRegistry::new()`
-//! 8. Compiler will error on any missed match arms
+//! 6. Update `player_binary_name()` to return the binary name
+//! 7. Register the console's RomLoader in `create_rom_loader_registry()`
 //!
-//! # Performance
+//! # Benefits
 //!
-//! This design eliminates dynamic dispatch overhead:
-//! - No vtable lookups
-//! - No heap allocations for providers
-//! - Direct function calls via match expressions
-//! - Better compiler optimization opportunities
+//! - Library has zero console-specific code
+//! - Each console is fully isolated (crash isolation)
+//! - Adding a new console requires no library changes
+//! - Library can be replaced with any UI (web, native, CLI)
 
-use std::sync::Arc;
-use std::time::Duration;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
-use anyhow::Result;
-use winit::window::Window;
+use anyhow::{Context, Result};
 
-use emberware_core::ConsoleRunner;
-use emberware_core::app::session::GameSession;
-use emberware_core::app::types::AppMode;
-use emberware_core::console::{ConsoleResourceManager, RawInput};
-use emberware_core::debug::DebugRegistry;
 use emberware_core::library::{LocalGame, RomLoaderRegistry};
-use emberware_core::rollback::SessionEvent;
 
-use emberware_z::console::EmberwareZ;
-use emberware_z::state::ZFFIState;
-use z_common::{ZDataPack, ZRomLoader};
+use z_common::ZRomLoader;
+
+/// Options to pass to the player process
+#[derive(Debug, Clone, Default)]
+pub struct PlayerOptions {
+    /// Start in fullscreen mode
+    pub fullscreen: bool,
+    /// Enable debug overlay
+    pub debug: bool,
+}
 
 /// Enum representing all available console types.
 ///
@@ -104,7 +101,6 @@ impl ConsoleType {
     ///
     /// - `Some(ConsoleType::Z)` for `.ewz` files
     /// - `None` for unknown extensions
-    #[allow(dead_code)]
     pub fn from_extension(ext: &str) -> Option<Self> {
         match ext {
             "ewz" => Some(ConsoleType::Z),
@@ -118,414 +114,228 @@ impl ConsoleType {
         &[ConsoleType::Z]
     }
 
-    /// Launch a game with this console type.
-    pub fn launch_game(&self, game_id: &str) -> Result<()> {
-        match self {
-            ConsoleType::Z => {
-                let mode = AppMode::Playing {
-                    game_id: game_id.to_string(),
-                };
-                crate::app::run(mode).map_err(|e| anyhow::anyhow!("Z console error: {}", e))
-            }
-        }
-    }
-
-    /// Launch the library UI for this console type.
-    pub fn launch_library(&self) -> Result<()> {
-        match self {
-            ConsoleType::Z => crate::app::run(AppMode::Library)
-                .map_err(|e| anyhow::anyhow!("Z console error: {}", e)),
-        }
-    }
-
-    /// Launch a game directly from a file path (for development).
-    pub fn launch_from_path(&self, path: std::path::PathBuf) -> Result<()> {
-        match self {
-            ConsoleType::Z => {
-                let mode = AppMode::PlayingFromPath { path };
-                crate::app::run(mode).map_err(|e| anyhow::anyhow!("Z console error: {}", e))
-            }
-        }
-    }
-}
-
-/// Active game instance for runtime execution.
-///
-/// This enum provides static dispatch for running games across different
-/// console types. Each variant holds a `ConsoleRunner<C>` for its respective
-/// console implementation.
-///
-/// # Usage
-///
-/// ```ignore
-/// let mut game = ActiveGame::create_z(window, wasm_bytes, num_players)?;
-/// loop {
-///     game.add_input(0, &raw_input);
-///     game.update()?;
-///     game.render()?;
-/// }
-/// ```
-pub enum ActiveGame {
-    /// Emberware Z game instance
-    Z(ConsoleRunner<EmberwareZ>),
-    // Future: Classic(ConsoleRunner<EmberwareClassic>),
-}
-
-impl ActiveGame {
-    /// Create a new Emberware Z runner without loading a game.
+    /// Get the player binary name for this console type.
     ///
-    /// This creates the graphics and audio backends but doesn't load any game.
-    /// Use `load_game` to load a game later.
-    pub fn new_z(window: Arc<Window>) -> Result<Self> {
-        let console = EmberwareZ::new();
-        let runner = ConsoleRunner::new(console, window)?;
-        Ok(ActiveGame::Z(runner))
-    }
-
-    /// Create a runner for a console type without loading a game.
-    pub fn new(console_type: ConsoleType, window: Arc<Window>) -> Result<Self> {
-        match console_type {
-            ConsoleType::Z => Self::new_z(window),
-        }
-    }
-
-    /// Create a new Emberware Z game instance with a loaded game.
-    pub fn create_z(window: Arc<Window>, wasm_bytes: &[u8], num_players: usize) -> Result<Self> {
-        let console = EmberwareZ::new();
-        let mut runner = ConsoleRunner::new(console, window)?;
-        runner.load_game(EmberwareZ::new(), wasm_bytes, num_players)?;
-        Ok(ActiveGame::Z(runner))
-    }
-
-    /// Create a game instance based on console type with a loaded game.
-    pub fn create(
-        console_type: ConsoleType,
-        window: Arc<Window>,
-        wasm_bytes: &[u8],
-        num_players: usize,
-    ) -> Result<Self> {
-        match console_type {
-            ConsoleType::Z => Self::create_z(window, wasm_bytes, num_players),
-        }
-    }
-
-    /// Load a game into an existing runner.
-    pub fn load_game(
-        &mut self,
-        wasm_bytes: &[u8],
-        data_pack: Option<Arc<ZDataPack>>,
-        num_players: usize,
-    ) -> Result<()> {
+    /// This is the name of the executable that plays games for this console.
+    pub fn player_binary_name(&self) -> &'static str {
         match self {
-            ActiveGame::Z(runner) => {
-                runner.load_game(EmberwareZ::with_datapack(data_pack), wasm_bytes, num_players)
-            }
-        }
-    }
-
-    /// Add input for a player.
-    pub fn add_input(&mut self, player: usize, raw_input: &RawInput) {
-        match self {
-            ActiveGame::Z(runner) => runner.add_input(player, raw_input),
-        }
-    }
-
-    /// Run a frame update.
-    pub fn update(&mut self) -> Result<(u32, f32)> {
-        match self {
-            ActiveGame::Z(runner) => runner.update(),
-        }
-    }
-
-    /// Render the current frame.
-    pub fn render(&mut self) -> Result<()> {
-        match self {
-            ActiveGame::Z(runner) => runner.render(),
-        }
-    }
-
-    /// Begin a new graphics frame.
-    pub fn begin_frame(&mut self) {
-        match self {
-            ActiveGame::Z(runner) => runner.begin_frame(),
-        }
-    }
-
-    /// End the current graphics frame and present.
-    pub fn end_frame(&mut self) {
-        match self {
-            ActiveGame::Z(runner) => runner.end_frame(),
-        }
-    }
-
-    /// Handle window resize.
-    pub fn resize(&mut self, width: u32, height: u32) {
-        match self {
-            ActiveGame::Z(runner) => runner.resize(width, height),
-        }
-    }
-
-    /// Poll remote clients (for networked sessions).
-    pub fn poll_remote_clients(&mut self) {
-        match self {
-            ActiveGame::Z(runner) => runner.poll_remote_clients(),
-        }
-    }
-
-    /// Handle and return session events.
-    pub fn handle_session_events(&mut self) -> Vec<SessionEvent> {
-        match self {
-            ActiveGame::Z(runner) => runner.handle_session_events(),
-        }
-    }
-
-    /// Check if a game is loaded.
-    pub fn has_game(&self) -> bool {
-        match self {
-            ActiveGame::Z(runner) => runner.has_game(),
-        }
-    }
-
-    /// Get the console type.
-    pub fn console_type(&self) -> ConsoleType {
-        match self {
-            ActiveGame::Z(_) => ConsoleType::Z,
-        }
-    }
-
-    // === GPU Resource Access (for egui rendering) ===
-
-    /// Get the wgpu device.
-    pub fn device(&self) -> &wgpu::Device {
-        match self {
-            ActiveGame::Z(runner) => runner.graphics().device(),
-        }
-    }
-
-    /// Get the wgpu queue.
-    pub fn queue(&self) -> &wgpu::Queue {
-        match self {
-            ActiveGame::Z(runner) => runner.graphics().queue(),
-        }
-    }
-
-    /// Get the surface texture format.
-    pub fn surface_format(&self) -> wgpu::TextureFormat {
-        match self {
-            ActiveGame::Z(runner) => runner.graphics().surface_format(),
-        }
-    }
-
-    /// Get the current width.
-    pub fn width(&self) -> u32 {
-        match self {
-            ActiveGame::Z(runner) => runner.graphics().width(),
-        }
-    }
-
-    /// Get the current height.
-    pub fn height(&self) -> u32 {
-        match self {
-            ActiveGame::Z(runner) => runner.graphics().height(),
-        }
-    }
-
-    /// Get the current surface texture for rendering.
-    pub fn get_current_texture(&mut self) -> Result<wgpu::SurfaceTexture> {
-        match self {
-            ActiveGame::Z(runner) => runner.graphics_mut().get_current_texture(),
-        }
-    }
-
-    /// Get VRAM usage in bytes.
-    pub fn vram_used(&self) -> usize {
-        match self {
-            ActiveGame::Z(runner) => runner.graphics().vram_used(),
-        }
-    }
-
-    /// Get VRAM limit in bytes.
-    pub fn vram_limit(&self) -> usize {
-        match self {
-            ActiveGame::Z(runner) => runner.graphics().vram_limit(),
-        }
-    }
-
-    /// Render game frame to render target.
-    ///
-    /// This is a complex operation that requires careful borrowing:
-    /// we need both graphics (from runner) and game state (from session).
-    pub fn render_game_frame(&mut self, encoder: &mut wgpu::CommandEncoder, clear_color: [f32; 4]) {
-        match self {
-            ActiveGame::Z(runner) => {
-                // Use split borrow to get graphics and session simultaneously
-                let (graphics, session_opt) = runner.graphics_and_session_mut();
-                let session = match session_opt {
-                    Some(s) => s,
-                    None => return,
-                };
-                let game = match session.runtime.game_mut() {
-                    Some(g) => g,
-                    None => return,
-                };
-                let z_state = game.console_state_mut();
-                let texture_map = &session.resource_manager.texture_map;
-
-                graphics.render_frame(encoder, z_state, texture_map, clear_color);
-            }
-        }
-    }
-
-    /// Blit render target to window.
-    pub fn blit_to_window(&self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
-        match self {
-            ActiveGame::Z(runner) => runner.graphics().blit_to_window(encoder, view),
-        }
-    }
-
-    /// Execute draw commands from game state.
-    pub fn execute_draw_commands(&mut self) {
-        match self {
-            ActiveGame::Z(runner) => {
-                // Use split borrow to get graphics and session simultaneously
-                let (graphics, session_opt) = runner.graphics_and_session_mut();
-                if let Some(session) = session_opt {
-                    if let Some(game) = session.runtime.game_mut() {
-                        let state = game.console_state_mut();
-                        session
-                            .resource_manager
-                            .execute_draw_commands(graphics, state);
-                    }
-                }
-            }
-        }
-    }
-
-    // === Game State Access ===
-
-    /// Get clear color from game config.
-    pub fn clear_color(&self) -> [f32; 4] {
-        match self {
-            ActiveGame::Z(runner) => {
-                if let Some(session) = runner.session() {
-                    if let Some(game) = session.runtime.game() {
-                        let z_state = game.console_state();
-                        return emberware_z::ffi::unpack_rgba(z_state.init_config.clear_color);
-                    }
-                }
-                [0.1, 0.1, 0.1, 1.0]
-            }
-        }
-    }
-
-    /// Get the game's tick duration.
-    pub fn tick_duration(&self) -> Duration {
-        match self {
-            ActiveGame::Z(runner) => {
-                if let Some(session) = runner.session() {
-                    session.runtime.tick_duration()
-                } else {
-                    Duration::from_secs_f64(1.0 / 60.0)
-                }
-            }
-        }
-    }
-
-    /// Check if the game requested quit.
-    pub fn quit_requested(&self) -> bool {
-        match self {
-            ActiveGame::Z(runner) => runner.quit_requested(),
-        }
-    }
-
-    /// Run the game's render function.
-    pub fn call_render(&mut self) -> Result<()> {
-        match self {
-            ActiveGame::Z(runner) => {
-                if let Some(session) = runner.session_mut() {
-                    session.runtime.render()?;
-                }
-                Ok(())
-            }
-        }
-    }
-
-    /// Call on_debug_change when debug values are modified.
-    pub fn call_on_debug_change(&mut self) {
-        match self {
-            ActiveGame::Z(runner) => {
-                if let Some(session) = runner.session_mut() {
-                    if let Some(game) = session.runtime.game_mut() {
-                        game.call_on_debug_change();
-                    }
-                }
-            }
-        }
-    }
-
-    /// Get debug registry and memory info for debug panel.
-    pub fn debug_panel_data(&mut self) -> Option<(DebugRegistry, *mut u8, usize)> {
-        match self {
-            ActiveGame::Z(runner) => {
-                let session = runner.session_mut()?;
-                let game = session.runtime.game_mut()?;
-                let store = game.store_mut();
-
-                if store.data().debug_registry.is_empty() {
-                    return None;
-                }
-
-                let memory = store.data().game.memory?;
-                let registry = store.data().debug_registry.clone();
-                let mem_ptr = memory.data_ptr(&mut *store);
-                let mem_len = memory.data_size(&mut *store);
-
-                Some((registry, mem_ptr, mem_len))
-            }
-        }
-    }
-
-    /// Get the console-specific FFI state (for accessing sounds, etc.)
-    pub fn console_state(&self) -> Option<&ZFFIState> {
-        match self {
-            ActiveGame::Z(runner) => runner.session()?.runtime.game()?.console_state().into(),
-        }
-    }
-
-    /// Get mutable console-specific FFI state.
-    pub fn console_state_mut(&mut self) -> Option<&mut ZFFIState> {
-        match self {
-            ActiveGame::Z(runner) => Some(
-                runner
-                    .session_mut()?
-                    .runtime
-                    .game_mut()?
-                    .console_state_mut(),
-            ),
-        }
-    }
-
-    /// Get mutable reference to game session.
-    pub fn session_mut(&mut self) -> Option<&mut GameSession<EmberwareZ>> {
-        match self {
-            ActiveGame::Z(runner) => runner.session_mut(),
-        }
-    }
-
-    /// Unload the current game.
-    pub fn unload_game(&mut self) {
-        match self {
-            ActiveGame::Z(runner) => runner.unload_game(),
-        }
-    }
-
-    /// Set the scale mode for graphics.
-    pub fn set_scale_mode(&mut self, scale_mode: emberware_core::app::config::ScaleMode) {
-        match self {
-            ActiveGame::Z(runner) => runner.graphics_mut().set_scale_mode(scale_mode),
+            ConsoleType::Z => "emberware-z",
+            // Future: ConsoleType::Classic => "emberware-classic",
         }
     }
 }
+
+// =============================================================================
+// Player Launching
+// =============================================================================
+
+/// Find the player binary for a console type.
+///
+/// Searches in order:
+/// 1. Same directory as the library executable
+/// 2. System PATH
+///
+/// Returns the full path to the player binary, or just the binary name
+/// if it should be found in PATH.
+pub fn find_player_binary(console_type: ConsoleType) -> PathBuf {
+    let binary_name = console_type.player_binary_name();
+    let exe_name = if cfg!(windows) {
+        format!("{}.exe", binary_name)
+    } else {
+        binary_name.to_string()
+    };
+
+    // Try same directory as library executable
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            let player_path = dir.join(&exe_name);
+            if player_path.exists() {
+                return player_path;
+            }
+        }
+    }
+
+    // Fall back to PATH
+    PathBuf::from(exe_name)
+}
+
+/// Launch a game using the appropriate player process.
+///
+/// This spawns a new process for the player and returns immediately.
+/// The library continues running while the game plays.
+/// Use `run_player` if you want to wait for the player to finish.
+pub fn launch_player(rom_path: &Path, console_type: ConsoleType) -> Result<()> {
+    let player = find_player_binary(console_type);
+
+    tracing::info!(
+        "Launching player: {} {}",
+        player.display(),
+        rom_path.display()
+    );
+
+    Command::new(&player)
+        .arg(rom_path)
+        .spawn()
+        .with_context(|| {
+            format!(
+                "Failed to launch player '{}'. Make sure it exists in the same directory as the library or in your PATH.",
+                player.display()
+            )
+        })?;
+
+    Ok(())
+}
+
+/// Run a game using the appropriate player process and wait for it to finish.
+///
+/// This is used when launching from CLI - the launcher process waits for the
+/// player to exit before returning. No library UI is shown.
+pub fn run_player(rom_path: &Path, console_type: ConsoleType) -> Result<()> {
+    run_player_with_options(rom_path, console_type, &PlayerOptions::default())
+}
+
+/// Run a game with player options and wait for it to finish.
+///
+/// This is used when launching from CLI with flags like --fullscreen.
+pub fn run_player_with_options(
+    rom_path: &Path,
+    console_type: ConsoleType,
+    options: &PlayerOptions,
+) -> Result<()> {
+    let player = find_player_binary(console_type);
+
+    tracing::info!(
+        "Running player: {} {}{}{}",
+        player.display(),
+        rom_path.display(),
+        if options.fullscreen {
+            " --fullscreen"
+        } else {
+            ""
+        },
+        if options.debug { " --debug" } else { "" },
+    );
+
+    let mut cmd = Command::new(&player);
+    cmd.arg(rom_path);
+
+    if options.fullscreen {
+        cmd.arg("--fullscreen");
+    }
+    if options.debug {
+        cmd.arg("--debug");
+    }
+
+    let status = cmd.status().with_context(|| {
+        format!(
+            "Failed to run player '{}'. Make sure it exists in the same directory as the library or in your PATH.",
+            player.display()
+        )
+    })?;
+
+    if !status.success() {
+        if let Some(code) = status.code() {
+            // Exit code 0 is success, anything else is an error
+            // But some exit codes are normal (e.g., user pressed ESC)
+            if code != 0 {
+                tracing::debug!("Player exited with code: {}", code);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Launch a game by ID (spawns and returns immediately).
+///
+/// Looks up the game in the local games list and launches the appropriate player.
+/// Used by the library UI when the user clicks Play.
+pub fn launch_game_by_id(game: &LocalGame) -> Result<()> {
+    let console_type = ConsoleType::from_str(&game.console_type).ok_or_else(|| {
+        anyhow::anyhow!(
+            "Unknown console type: '{}'. Supported consoles: {}",
+            game.console_type,
+            ConsoleType::all()
+                .iter()
+                .map(|c| c.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    })?;
+
+    launch_player(&game.rom_path, console_type)
+}
+
+/// Run a game by ID and wait for it to finish.
+///
+/// Used when launching from CLI with a game ID argument.
+pub fn run_game_by_id(game: &LocalGame) -> Result<()> {
+    run_game_by_id_with_options(game, &PlayerOptions::default())
+}
+
+/// Run a game by ID with options and wait for it to finish.
+pub fn run_game_by_id_with_options(game: &LocalGame, options: &PlayerOptions) -> Result<()> {
+    let console_type = ConsoleType::from_str(&game.console_type).ok_or_else(|| {
+        anyhow::anyhow!(
+            "Unknown console type: '{}'. Supported consoles: {}",
+            game.console_type,
+            ConsoleType::all()
+                .iter()
+                .map(|c| c.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    })?;
+
+    run_player_with_options(&game.rom_path, console_type, options)
+}
+
+/// Launch a game from a file path (spawns and returns immediately).
+///
+/// Detects the console type from the file extension.
+/// Used by the library UI.
+pub fn launch_game_from_path(path: &Path) -> Result<()> {
+    let console_type = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .and_then(ConsoleType::from_extension)
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "Unknown ROM file type: {}. Supported extensions: .ewz",
+                path.display()
+            )
+        })?;
+
+    launch_player(path, console_type)
+}
+
+/// Run a game from a file path and wait for it to finish.
+///
+/// Detects the console type from the file extension.
+/// Used when launching from CLI with a file path argument.
+pub fn run_game_from_path(path: &Path) -> Result<()> {
+    run_game_from_path_with_options(path, &PlayerOptions::default())
+}
+
+/// Run a game from a file path with options and wait for it to finish.
+pub fn run_game_from_path_with_options(path: &Path, options: &PlayerOptions) -> Result<()> {
+    let console_type = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .and_then(ConsoleType::from_extension)
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "Unknown ROM file type: {}. Supported extensions: .ewz",
+                path.display()
+            )
+        })?;
+
+    run_player_with_options(path, console_type, options)
+}
+
+// =============================================================================
+// ROM Loader Registry
+// =============================================================================
 
 /// Create a ROM loader registry with all supported console ROM loaders.
 ///
@@ -541,55 +351,65 @@ pub fn create_rom_loader_registry() -> RomLoaderRegistry {
 /// Registry of all available console types.
 ///
 /// Provides lookup and validation for console types based on game manifests.
-/// Uses static dispatch via the ConsoleType enum for zero-cost abstraction.
+/// Uses player process spawning for game execution.
 pub struct ConsoleRegistry {
     // No fields needed - all console types are compile-time known
 }
 
 impl ConsoleRegistry {
     /// Create a new registry.
-    ///
-    /// Since all console types are compile-time known, this is just
-    /// a constructor for the registry namespace.
     pub fn new() -> Self {
         Self {}
     }
 
-    /// Launch a game using the appropriate console.
+    /// Launch a game using the appropriate player process.
     ///
-    /// Returns an error if the game's console type is not supported.
+    /// Spawns a new process and returns immediately.
+    /// The library stays open while the game plays.
     pub fn launch_game(&self, game: &LocalGame) -> Result<()> {
-        let console_type = ConsoleType::from_str(&game.console_type).ok_or_else(|| {
-            anyhow::anyhow!(
-                "Unknown console type: '{}'. Supported consoles: {}",
-                game.console_type,
-                Self::available_consoles_display()
-            )
-        })?;
-
-        console_type.launch_game(&game.id)
+        launch_game_by_id(game)
     }
 
-    /// Launch the library UI for a specific console type.
+    /// Run a game and wait for it to finish.
     ///
-    /// Defaults to Emberware Z if no console type is specified.
-    pub fn launch_library(&self, console_type: Option<ConsoleType>) -> Result<()> {
-        let console = console_type.unwrap_or(ConsoleType::Z);
-        console.launch_library()
+    /// Used when launching from CLI - no library UI is shown.
+    pub fn run_game(&self, game: &LocalGame) -> Result<()> {
+        run_game_by_id(game)
     }
 
-    /// Launch a game directly from a file path (for development).
+    /// Run a game with options and wait for it to finish.
     ///
-    /// Detects the console type from the file extension.
-    pub fn launch_from_path(&self, path: std::path::PathBuf) -> Result<()> {
-        // Detect console type from extension
-        let console_type = path
-            .extension()
-            .and_then(|e| e.to_str())
-            .and_then(ConsoleType::from_extension)
-            .unwrap_or(ConsoleType::Z);
+    /// Used when launching from CLI with flags like --fullscreen.
+    pub fn run_game_with_options(&self, game: &LocalGame, options: &PlayerOptions) -> Result<()> {
+        run_game_by_id_with_options(game, options)
+    }
 
-        console_type.launch_from_path(path)
+    /// Launch a game directly from a file path.
+    ///
+    /// Detects the console type from the file extension and spawns the player.
+    pub fn launch_from_path(&self, path: PathBuf) -> Result<()> {
+        launch_game_from_path(&path)
+    }
+
+    /// Run a game from a file path and wait for it to finish.
+    ///
+    /// Used when launching from CLI - no library UI is shown.
+    pub fn run_from_path(&self, path: PathBuf) -> Result<()> {
+        run_game_from_path(&path)
+    }
+
+    /// Run a game from a file path with options and wait for it to finish.
+    pub fn run_from_path_with_options(&self, path: PathBuf, options: &PlayerOptions) -> Result<()> {
+        run_game_from_path_with_options(&path, options)
+    }
+
+    /// Launch the library UI.
+    ///
+    /// This runs the library UI in the current process.
+    /// Games are launched as separate player processes.
+    pub fn launch_library(&self) -> Result<()> {
+        // Library is now console-agnostic - it shows all games and spawns appropriate players
+        crate::app::run().map_err(|e| anyhow::anyhow!("Library error: {}", e))
     }
 
     /// Get all available console type strings.
@@ -602,15 +422,6 @@ impl ConsoleRegistry {
     #[allow(dead_code)]
     pub fn supports(&self, console_type: &str) -> bool {
         ConsoleType::from_str(console_type).is_some()
-    }
-
-    /// Get a display string of all available consoles (for error messages).
-    fn available_consoles_display() -> String {
-        ConsoleType::all()
-            .iter()
-            .map(|ct| format!("'{}'", ct.as_str()))
-            .collect::<Vec<_>>()
-            .join(", ")
     }
 }
 
@@ -679,15 +490,14 @@ mod tests {
     }
 
     #[test]
-    fn test_available_consoles_display() {
-        let display = ConsoleRegistry::available_consoles_display();
-        assert_eq!(display, "'z'");
-    }
-
-    #[test]
     fn test_registry_default() {
         let registry = ConsoleRegistry::default();
         assert!(registry.supports("z"));
+    }
+
+    #[test]
+    fn test_console_type_player_binary_name() {
+        assert_eq!(ConsoleType::Z.player_binary_name(), "emberware-z");
     }
 
     #[test]

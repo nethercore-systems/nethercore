@@ -18,11 +18,8 @@ path = "src/main.rs"
 # Local crates
 emberware-core = { path = "../core" }
 emberware-shared = { path = "../shared" }
-emberware-z = { path = "../emberware-z" }
+# Note: z-common provides ZRomLoader for reading .ewz ROM metadata
 z-common = { path = "../z-common" }
-
-# WASM runtime
-wasmtime.workspace = true
 
 # Workspace dependencies
 anyhow.workspace = true

@@ -32,9 +32,11 @@ pub struct Config {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum ScaleMode {
     /// Stretch to fill window (may distort aspect ratio)
-    #[default]
     Stretch,
-    /// Integer scaling for pixel-perfect rendering (adds black bars)
+    /// Maintain aspect ratio, scale to fill as much as possible (adds letterbox bars)
+    #[default]
+    Fit,
+    /// Integer scaling for pixel-perfect rendering (adds black bars, may not fill screen)
     PixelPerfect,
 }
 
@@ -237,6 +239,11 @@ mod tests {
         assert_eq!(parsed.video.resolution_scale, 3);
         assert_eq!(parsed.video.scale_mode, ScaleMode::PixelPerfect);
         assert!((parsed.audio.master_volume - 0.5).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_scale_mode_default_is_fit() {
+        assert_eq!(ScaleMode::default(), ScaleMode::Fit);
     }
 
     #[test]

@@ -3,7 +3,7 @@
 use super::UiAction;
 use egui::{ComboBox, Context, Slider};
 use emberware_core::app::config::{Config, ScaleMode};
-use emberware_z::input::KeyboardMapping;
+use emberware_core::app::input::KeyboardMapping;
 use winit::keyboard::KeyCode;
 
 /// Settings UI state
@@ -286,9 +286,15 @@ impl SettingsUi {
         ComboBox::from_label("Scale Mode")
             .selected_text(match video.scale_mode {
                 ScaleMode::Stretch => "Stretch (Fill Window)",
+                ScaleMode::Fit => "Fit (Maintain Aspect Ratio)",
                 ScaleMode::PixelPerfect => "Pixel Perfect (Integer Scaling)",
             })
             .show_ui(ui, |ui| {
+                ui.selectable_value(
+                    &mut video.scale_mode,
+                    ScaleMode::Fit,
+                    "Fit (Maintain Aspect Ratio)",
+                );
                 ui.selectable_value(
                     &mut video.scale_mode,
                     ScaleMode::Stretch,
@@ -303,6 +309,9 @@ impl SettingsUi {
 
         // Show description
         match video.scale_mode {
+            ScaleMode::Fit => {
+                ui.label("   Scales to fill window while maintaining aspect ratio (letterbox)");
+            }
             ScaleMode::Stretch => {
                 ui.label("   Stretches to fill window (may distort aspect ratio)");
             }

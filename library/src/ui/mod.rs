@@ -8,7 +8,7 @@ mod settings;
 
 pub use settings::SettingsUi;
 
-use emberware_z::library::LocalGame;
+use emberware_core::library::LocalGame;
 
 /// The game library UI state and rendering.
 ///
@@ -17,6 +17,8 @@ use emberware_z::library::LocalGame;
 pub struct LibraryUi {
     /// Currently selected game ID, if any
     pub selected_game: Option<String>,
+    /// Whether to show the settings panel
+    pub show_settings: bool,
 }
 
 impl LibraryUi {
@@ -24,6 +26,7 @@ impl LibraryUi {
     pub fn new() -> Self {
         Self {
             selected_game: None,
+            show_settings: false,
         }
     }
 

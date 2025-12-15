@@ -27,16 +27,20 @@ use emberware_z::player::{PlayerConfig, run};
 
 #[derive(Parser)]
 #[command(name = "emberware-z")]
-#[command(author, version, about = "Emberware Z - PS1/N64 aesthetic fantasy console")]
+#[command(
+    author,
+    version,
+    about = "Emberware Z - PS1/N64 aesthetic fantasy console"
+)]
 struct Args {
     /// ROM file to play (.ewz or .wasm)
     rom: PathBuf,
 
-    /// Start in fullscreen mode
+    /// Start in fullscreen mode (borderless window, scales to fit)
     #[arg(long, short = 'f')]
     fullscreen: bool,
 
-    /// Integer scaling factor (default: 2)
+    /// Integer scaling factor (default: 2, only affects windowed mode)
     #[arg(long, short = 's', default_value = "2")]
     scale: u32,
 

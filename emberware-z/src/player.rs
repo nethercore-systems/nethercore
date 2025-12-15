@@ -17,11 +17,11 @@ use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Fullscreen, Window};
 
+use emberware_core::ConsoleRunner;
 use emberware_core::app::event_loop::ConsoleApp;
-use emberware_core::app::{DebugStats, RuntimeError, FRAME_TIME_HISTORY_SIZE};
+use emberware_core::app::{DebugStats, FRAME_TIME_HISTORY_SIZE, RuntimeError};
 use emberware_core::console::{Console, ConsoleResourceManager};
 use emberware_core::debug::FrameController;
-use emberware_core::ConsoleRunner;
 use z_common::{ZDataPack, ZRom};
 
 use crate::audio;

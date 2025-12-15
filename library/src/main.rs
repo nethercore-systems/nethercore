@@ -5,7 +5,7 @@
 
 use anyhow::Result;
 use emberware_core::library::{DataDirProvider, get_local_games, resolve_game_id};
-use emberware_library::registry::ConsoleRegistry;
+use emberware_library::registry::{ConsoleRegistry, PlayerOptions};
 use std::env;
 use std::path::PathBuf;
 
@@ -53,6 +53,21 @@ fn is_rom_path(arg: &str) -> Option<PathBuf> {
     None
 }
 
+/// Parse player options from command line args
+fn parse_player_options(args: &[String]) -> PlayerOptions {
+    let mut options = PlayerOptions::default();
+
+    for arg in args.iter().skip(1) {
+        match arg.as_str() {
+            "-f" | "--fullscreen" => options.fullscreen = true,
+            "-d" | "--debug" => options.debug = true,
+            _ => {}
+        }
+    }
+
+    options
+}
+
 fn main() -> Result<()> {
     // Initialize logging
     tracing_subscriber::fmt()
@@ -68,13 +83,17 @@ fn main() -> Result<()> {
     // Check for CLI game argument or deep link
     let args: Vec<String> = env::args().collect();
 
+    // Parse player options from CLI flags
+    let options = parse_player_options(&args);
+
     // Try deep link first (emberware://play/game_id)
     if let Some(game_id) = parse_deep_link(&args) {
         tracing::info!("Deep link detected: {}", game_id);
 
         let games = get_local_games(&provider);
         if let Some(game) = games.iter().find(|g| g.id == game_id) {
-            registry.launch_game(game)?;
+            // Run and wait (no library UI)
+            registry.run_game_with_options(game, &options)?;
         } else {
             eprintln!("Game '{}' not found", game_id);
             std::process::exit(1);
@@ -85,15 +104,17 @@ fn main() -> Result<()> {
     // Check for file path argument (for development)
     if args.len() > 1 {
         if let Some(path) = is_rom_path(&args[1]) {
-            tracing::info!("Launching from file path: {}", path.display());
-            registry.launch_from_path(path)?;
+            tracing::info!("Running from file path: {}", path.display());
+            // Run and wait (no library UI)
+            registry.run_from_path_with_options(path, &options)?;
             return Ok(());
         }
     }
 
-    // Check for game ID argument
-    if args.len() > 1 {
-        let query = &args[1];
+    // Check for game ID argument - find first non-flag argument
+    let game_query = args.iter().skip(1).find(|arg| !arg.starts_with('-'));
+
+    if let Some(query) = game_query {
         let games = get_local_games(&provider);
 
         if games.is_empty() {
@@ -107,14 +128,10 @@ fn main() -> Result<()> {
             Ok(game_id) => {
                 // Find the game to get its console type
                 if let Some(game) = games.iter().find(|g| g.id == game_id) {
-                    tracing::info!(
-                        "Launching '{}' (console: {})",
-                        game.title,
-                        game.console_type
-                    );
+                    tracing::info!("Running '{}' (console: {})", game.title, game.console_type);
 
-                    // Launch via registry
-                    registry.launch_game(game)?;
+                    // Run and wait (no library UI)
+                    registry.run_game_with_options(game, &options)?;
                 } else {
                     eprintln!("Game '{}' not found", game_id);
                     std::process::exit(1);
@@ -137,11 +154,9 @@ fn main() -> Result<()> {
         }
     } else {
         // No argument - show unified library UI
-        // For now, default to Z's library UI
-        // TODO: Create unified library UI that shows all console types
-        tracing::info!("Launching unified library (defaulting to Z for now)");
+        tracing::info!("Launching Emberware Library");
 
-        registry.launch_library(None)?;
+        registry.launch_library()?;
     }
 
     Ok(())

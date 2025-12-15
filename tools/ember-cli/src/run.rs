@@ -59,9 +59,7 @@ pub fn execute(args: RunArgs) -> Result<()> {
     let rom_path = project_dir.join(format!("{}.ewz", manifest.game.id));
 
     // Use absolute path for subprocess (working directory may differ)
-    let rom_path = rom_path
-        .canonicalize()
-        .unwrap_or_else(|_| rom_path.clone());
+    let rom_path = rom_path.canonicalize().unwrap_or_else(|_| rom_path.clone());
 
     if !rom_path.exists() {
         anyhow::bail!(
@@ -100,10 +98,10 @@ pub fn execute(args: RunArgs) -> Result<()> {
     Ok(())
 }
 
-/// Find the emberware executable
+/// Find the emberware-z player executable
 fn find_emberware_exe() -> Result<PathBuf> {
-    // Try PATH first
-    if let Ok(path) = which::which("emberware") {
+    // Try PATH first - look for the standalone player
+    if let Ok(path) = which::which("emberware-z") {
         return Ok(path);
     }
 
@@ -118,7 +116,7 @@ fn find_emberware_exe() -> Result<PathBuf> {
     }
 
     anyhow::bail!(
-        "Could not find emberware executable. \
+        "Could not find emberware-z executable. \
         Make sure it's in your PATH or run from the workspace directory."
     )
 }
