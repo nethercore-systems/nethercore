@@ -251,6 +251,30 @@ impl App {
             let render_elapsed = render_start.elapsed();
             let render_time_ms = render_elapsed.as_secs_f32() * 1000.0;
 
+            // Generate audio for this frame (per-frame audio architecture)
+            // Audio generation happens during render because render() is only called
+            // when presenting to the user (not during GGRS rollback replay).
+            // Audio state updates happen in FFI calls during update(), but we only
+            // generate the actual samples when rendering.
+            {
+                let sounds = session.resource_manager.sounds();
+                let mut audio_state = if let Some(game) = session.runtime.game_mut() {
+                    game.store_mut().data_mut().rollback.audio
+                } else {
+                    crate::audio::AudioPlaybackState::new()
+                };
+
+                if let Some(audio) = session.runtime.audio_mut() {
+                    let samples = audio.generate_frame(&mut audio_state, sounds).to_vec();
+                    audio.push_frame(&samples);
+                }
+
+                // Write back the updated audio state
+                if let Some(game) = session.runtime.game_mut() {
+                    game.store_mut().data_mut().rollback.audio = audio_state;
+                }
+            }
+
             // Track game render time
             self.debug_stats.game_render_times.push_back(render_time_ms);
             while self.debug_stats.game_render_times.len() > FRAME_TIME_HISTORY_SIZE {
@@ -280,37 +304,6 @@ impl App {
         } else {
             false // No render
         };
-
-        // Generate audio for this frame (per-frame audio architecture)
-        // Audio state is in rollback.audio and is saved/restored during GGRS rollback
-        // Skip audio generation during rollback to avoid wasted computation
-        let is_rolling_back = session
-            .runtime
-            .session()
-            .map_or(false, |s| s.is_rolling_back());
-
-        if !is_rolling_back {
-            // Get sounds from resource manager and audio state from rollback
-            let sounds = session.resource_manager.sounds();
-            let mut audio_state = if let Some(game) = session.runtime.game_mut() {
-                game.store_mut().data_mut().rollback.audio
-            } else {
-                crate::audio::AudioPlaybackState::new()
-            };
-
-            // Generate audio samples and push to output
-            if let Some(audio) = session.runtime.audio_mut() {
-                // generate_frame returns a reference to internal buffer, so we need
-                // to copy it before calling push_frame
-                let samples = audio.generate_frame(&mut audio_state, sounds).to_vec();
-                audio.push_frame(&samples);
-            }
-
-            // Write back the updated audio state
-            if let Some(game) = session.runtime.game_mut() {
-                game.store_mut().data_mut().rollback.audio = audio_state;
-            }
-        }
 
         // Check if game requested quit
         if let Some(game) = session.runtime.game_mut() {
