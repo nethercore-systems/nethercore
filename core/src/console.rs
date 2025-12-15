@@ -11,6 +11,7 @@ use glam::Mat4;
 use wasmtime::Linker;
 use winit::window::Window;
 
+use crate::debug::DebugStat;
 use crate::wasm::WasmGameContext;
 
 // Re-export ConsoleSpecs from shared crate for convenience
@@ -84,6 +85,17 @@ pub trait Console: Send + 'static {
 
     /// Get the window title for this console
     fn window_title(&self) -> &'static str;
+
+    /// Get console-specific debug statistics
+    ///
+    /// These are read-only values displayed in the debug overlay showing
+    /// the current state of console subsystems (e.g., draw call count,
+    /// vertex count, texture memory usage).
+    ///
+    /// Default implementation returns an empty list.
+    fn debug_stats(&self, _state: &Self::State) -> Vec<DebugStat> {
+        Vec::new()
+    }
 }
 
 /// Trait for console-specific resource management

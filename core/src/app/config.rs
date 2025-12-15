@@ -142,26 +142,26 @@ impl Default for DebugConfig {
 
 /// Returns the platform-specific configuration directory.
 ///
-/// On Windows: `%APPDATA%\emberware\emberware\config`
-/// On macOS: `~/Library/Application Support/io.emberware.emberware`
-/// On Linux: `~/.config/emberware`
+/// On Windows: `%APPDATA%\Emberware\config`
+/// On macOS: `~/Library/Application Support/io.emberware.Emberware`
+/// On Linux: `~/.config/Emberware`
 ///
 /// Returns `None` if the home directory cannot be determined.
 pub fn config_dir() -> Option<PathBuf> {
-    directories::ProjectDirs::from("io", "emberware", "emberware")
+    directories::ProjectDirs::from("io.emberware", "", "Emberware")
         .map(|dirs| dirs.config_dir().to_path_buf())
 }
 
 /// Returns the platform-specific data directory for game storage.
 ///
-/// On Windows: `%APPDATA%\emberware\emberware\data`
-/// On macOS: `~/Library/Application Support/io.emberware.emberware`
-/// On Linux: `~/.local/share/emberware`
+/// On Windows: `%APPDATA%\Emberware\data`
+/// On macOS: `~/Library/Application Support/io.emberware.Emberware`
+/// On Linux: `~/.local/share/Emberware`
 ///
 /// This is where downloaded games and save data are stored.
 /// Returns `None` if the home directory cannot be determined.
 pub fn data_dir() -> Option<PathBuf> {
-    directories::ProjectDirs::from("io", "emberware", "emberware")
+    directories::ProjectDirs::from("io.emberware", "", "Emberware")
         .map(|dirs| dirs.data_dir().to_path_buf())
 }
 

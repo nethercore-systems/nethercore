@@ -8,17 +8,21 @@
 //! The registry uses an enum-based approach for zero-cost abstraction:
 //!
 //! 1. `ConsoleType` enum represents all compile-time known console types
-//! 2. Match expressions provide static dispatch (no vtables)
-//! 3. Compiler enforces exhaustiveness when adding new consoles
+//! 2. `ActiveGame` enum holds running game instances with static dispatch
+//! 3. `RomLoaderRegistry` manages ROM loaders for all console types
+//! 4. Match expressions provide static dispatch (no vtables)
+//! 5. Compiler enforces exhaustiveness when adding new consoles
 //!
 //! # Adding a New Console
 //!
 //! 1. Add variant to `ConsoleType` enum (e.g., `Classic`)
-//! 2. Update `as_str()` to return the manifest identifier (e.g., `"classic"`)
-//! 3. Update `from_str()` to parse the identifier
-//! 4. Update `all()` to include the new variant
-//! 5. Add match arms in `launch_game()` and `launch_library()`
-//! 6. Compiler will error on any missed match arms
+//! 2. Add variant to `ActiveGame` enum with ConsoleRunner<Console>
+//! 3. Update `as_str()` to return the manifest identifier (e.g., `"classic"`)
+//! 4. Update `from_str()` to parse the identifier
+//! 5. Update `all()` to include the new variant
+//! 6. Add match arms in `launch_game()`, `launch_library()`, and `ActiveGame` methods
+//! 7. Register the console's RomLoader in `RomLoaderRegistry::new()`
+//! 8. Compiler will error on any missed match arms
 //!
 //! # Performance
 //!
@@ -28,9 +32,19 @@
 //! - Direct function calls via match expressions
 //! - Better compiler optimization opportunities
 
+use std::sync::Arc;
+
 use anyhow::Result;
+use winit::window::Window;
+
 use emberware_core::app::types::AppMode;
-use emberware_core::library::LocalGame;
+use emberware_core::console::RawInput;
+use emberware_core::library::{LocalGame, RomLoader, RomLoaderRegistry};
+use emberware_core::rollback::SessionEvent;
+use emberware_core::ConsoleRunner;
+
+use emberware_z::console::EmberwareZ;
+use z_common::ZRomLoader;
 
 /// Enum representing all available console types.
 ///
@@ -119,6 +133,131 @@ impl ConsoleType {
                 .map_err(|e| anyhow::anyhow!("Z console error: {}", e)),
         }
     }
+}
+
+/// Active game instance for runtime execution.
+///
+/// This enum provides static dispatch for running games across different
+/// console types. Each variant holds a `ConsoleRunner<C>` for its respective
+/// console implementation.
+///
+/// # Usage
+///
+/// ```ignore
+/// let mut game = ActiveGame::create_z(window, wasm_bytes, num_players)?;
+/// loop {
+///     game.add_input(0, &raw_input);
+///     game.update()?;
+///     game.render()?;
+/// }
+/// ```
+pub enum ActiveGame {
+    /// Emberware Z game instance
+    Z(ConsoleRunner<EmberwareZ>),
+    // Future: Classic(ConsoleRunner<EmberwareClassic>),
+}
+
+impl ActiveGame {
+    /// Create a new Emberware Z game instance.
+    pub fn create_z(window: Arc<Window>, wasm_bytes: &[u8], num_players: usize) -> Result<Self> {
+        let console = EmberwareZ::new();
+        let mut runner = ConsoleRunner::new(console, window)?;
+        runner.load_game(EmberwareZ::new(), wasm_bytes, num_players)?;
+        Ok(ActiveGame::Z(runner))
+    }
+
+    /// Create a game instance based on console type.
+    pub fn create(
+        console_type: ConsoleType,
+        window: Arc<Window>,
+        wasm_bytes: &[u8],
+        num_players: usize,
+    ) -> Result<Self> {
+        match console_type {
+            ConsoleType::Z => Self::create_z(window, wasm_bytes, num_players),
+        }
+    }
+
+    /// Add input for a player.
+    pub fn add_input(&mut self, player: usize, raw_input: &RawInput) {
+        match self {
+            ActiveGame::Z(runner) => runner.add_input(player, raw_input),
+        }
+    }
+
+    /// Run a frame update.
+    pub fn update(&mut self) -> Result<(u32, f32)> {
+        match self {
+            ActiveGame::Z(runner) => runner.update(),
+        }
+    }
+
+    /// Render the current frame.
+    pub fn render(&mut self) -> Result<()> {
+        match self {
+            ActiveGame::Z(runner) => runner.render(),
+        }
+    }
+
+    /// Begin a new graphics frame.
+    pub fn begin_frame(&mut self) {
+        match self {
+            ActiveGame::Z(runner) => runner.begin_frame(),
+        }
+    }
+
+    /// End the current graphics frame and present.
+    pub fn end_frame(&mut self) {
+        match self {
+            ActiveGame::Z(runner) => runner.end_frame(),
+        }
+    }
+
+    /// Handle window resize.
+    pub fn resize(&mut self, width: u32, height: u32) {
+        match self {
+            ActiveGame::Z(runner) => runner.resize(width, height),
+        }
+    }
+
+    /// Poll remote clients (for networked sessions).
+    pub fn poll_remote_clients(&mut self) {
+        match self {
+            ActiveGame::Z(runner) => runner.poll_remote_clients(),
+        }
+    }
+
+    /// Handle and return session events.
+    pub fn handle_session_events(&mut self) -> Vec<SessionEvent> {
+        match self {
+            ActiveGame::Z(runner) => runner.handle_session_events(),
+        }
+    }
+
+    /// Check if a game is loaded.
+    pub fn has_game(&self) -> bool {
+        match self {
+            ActiveGame::Z(runner) => runner.has_game(),
+        }
+    }
+
+    /// Get the console type.
+    pub fn console_type(&self) -> ConsoleType {
+        match self {
+            ActiveGame::Z(_) => ConsoleType::Z,
+        }
+    }
+}
+
+/// Create a ROM loader registry with all supported console ROM loaders.
+///
+/// This registers loaders for all supported ROM formats:
+/// - `.ewz` files for Emberware Z
+pub fn create_rom_loader_registry() -> RomLoaderRegistry {
+    let mut registry = RomLoaderRegistry::new();
+    registry.register(Box::new(ZRomLoader));
+    // Future: registry.register(Box::new(ClassicRomLoader));
+    registry
 }
 
 /// Registry of all available console types.

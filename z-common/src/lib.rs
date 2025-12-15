@@ -9,9 +9,14 @@
 //!
 //! - [`packing`] - Vertex data packing utilities (f32 → f16/snorm16/unorm8)
 //! - [`formats`] - Z-specific binary asset and ROM formats
+//! - [`loader`] - ROM loader for .ewz files
 
 pub mod formats;
+pub mod loader;
 pub mod packing;
+
+// Re-export the ROM loader
+pub use loader::ZRomLoader;
 
 // Re-export commonly used packing items
 pub use packing::{

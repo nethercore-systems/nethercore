@@ -15,6 +15,7 @@ path = "src/main.rs"
 emberware-core = { path = "core" }
 emberware-shared = { path = "shared" }
 emberware-z = { path = "emberware-z" }
+z-common = { path = "z-common" }
 
 # Workspace dependencies
 anyhow.workspace = true
@@ -22,6 +23,7 @@ tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 directories.workspace = true
 hashbrown.workspace = true
+winit.workspace = true
 
 [workspace]
 members = ["core", "emberware-z", "shared", "z-common", "xtask", "tools/ember-export", "tools/ember-cli", "tools/gen-test-anim", "tools/gen-multi-skinned-assets"]

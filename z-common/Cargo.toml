@@ -9,6 +9,7 @@ description = "Shared types and utilities for Emberware Z console"
 [dependencies]
 # Local crates
 emberware-shared = { path = "../shared" }
+emberware-core = { path = "../core" }
 
 # Vertex packing
 glam = { workspace = true }
@@ -17,6 +18,7 @@ bytemuck = { workspace = true }
 
 # Serialization (for ROM and data pack formats)
 serde = { workspace = true }
+serde_json = { workspace = true }
 bitcode = { workspace = true }
 
 # Time (for ROM manifest generation)
@@ -24,3 +26,6 @@ chrono = { workspace = true }
 
 # Error handling
 anyhow = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

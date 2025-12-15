@@ -11,6 +11,7 @@ use winit::window::Window;
 
 use emberware_core::{
     console::{Audio, Console, ConsoleInput, ConsoleSpecs, RawInput, SoundHandle},
+    debug::DebugStat,
     wasm::WasmGameContext,
 };
 
@@ -297,6 +298,19 @@ impl Console for EmberwareZ {
 
     fn window_title(&self) -> &'static str {
         "Emberware Z"
+    }
+
+    fn debug_stats(&self, state: &ZFFIState) -> Vec<DebugStat> {
+        vec![
+            DebugStat::number("Draw Calls", state.render_pass.commands().len()),
+            DebugStat::number("Textures", state.next_texture_handle.saturating_sub(1)),
+            DebugStat::number("Meshes", state.next_mesh_handle.saturating_sub(1)),
+            DebugStat::number("Skeletons", state.next_skeleton_handle.saturating_sub(1)),
+            DebugStat::number("Keyframes", state.next_keyframe_handle.saturating_sub(1)),
+            DebugStat::number("Fonts", state.next_font_handle.saturating_sub(1)),
+            DebugStat::number("MVP States", state.mvp_shading_states.len()),
+            DebugStat::number("Shading States", state.shading_states.len()),
+        ]
     }
 }
 

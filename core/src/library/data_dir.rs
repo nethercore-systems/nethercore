@@ -18,7 +18,7 @@ use std::path::PathBuf;
 ///
 /// impl DataDirProvider for ZDataDirProvider {
 ///     fn data_dir(&self) -> Option<PathBuf> {
-///         directories::ProjectDirs::from("io", "emberware", "emberware")
+///         directories::ProjectDirs::from("io.emberware", "", "Emberware")
 ///             .map(|dirs| dirs.data_dir().to_path_buf())
 ///     }
 /// }
