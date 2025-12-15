@@ -443,8 +443,8 @@ impl App {
         for viewport_output in full_output.viewport_output.values() {
             if viewport_output.repaint_delay.is_zero() {
                 egui_dirty = true;
-            } else if !viewport_output.repaint_delay.is_max() {
-                // Schedule future repaint for animations
+            } else if viewport_output.repaint_delay < std::time::Duration::MAX {
+                // Schedule future repaint for animations (not MAX means egui wants a future repaint)
                 let repaint_at = Instant::now() + viewport_output.repaint_delay;
                 self.next_egui_repaint = Some(
                     self.next_egui_repaint
