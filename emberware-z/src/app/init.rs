@@ -77,7 +77,6 @@ impl App {
             wasm_engine,
             game_session: None,
             next_egui_repaint: None,
-            pending_repaint: false,
             cached_egui_shapes: Vec::new(),
             cached_egui_tris: Vec::new(),
             cached_pixels_per_point: 1.0,

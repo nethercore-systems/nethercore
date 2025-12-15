@@ -176,20 +176,23 @@ impl<C: Console, A: ConsoleApp<C>> ApplicationHandler for AppEventHandler<C, A> 
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         if let Some(app) = &self.app {
-            match app.next_frame_time() {
-                Some(next_time) => {
-                    let now = std::time::Instant::now();
-                    if next_time <= now {
-                        // Time to render now - request redraw and wait for it
-                        app.request_redraw();
-                        event_loop.set_control_flow(ControlFlow::Wait);
+            match app.current_mode() {
+                AppMode::Playing { .. } => {
+                    // Game mode: render at fixed timestep
+                    if let Some(next_time) = app.next_frame_time() {
+                        let now = std::time::Instant::now();
+                        if next_time <= now {
+                            // Time for next frame
+                            app.request_redraw();
+                        }
+                        // Schedule next wake-up (handles both immediate and future cases)
+                        event_loop.set_control_flow(ControlFlow::WaitUntil(next_time.max(now)));
                     } else {
-                        // Schedule wake-up for future render (e.g., next game tick or egui animation)
-                        event_loop.set_control_flow(ControlFlow::WaitUntil(next_time));
+                        event_loop.set_control_flow(ControlFlow::Wait);
                     }
                 }
-                None => {
-                    // No scheduled render, wait for events
+                AppMode::Library | AppMode::Settings => {
+                    // UI mode: only render on events, handled by on_window_event
                     event_loop.set_control_flow(ControlFlow::Wait);
                 }
             }
