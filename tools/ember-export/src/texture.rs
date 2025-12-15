@@ -150,6 +150,7 @@ pub fn compress_bc7(pixels: &[u8], width: u32, height: u32, _srgb: bool) -> Resu
 ///
 /// This is the main entry point for the pack command to compress textures.
 /// Returns (width, height, format, data).
+#[allow(dead_code)]
 pub fn process_texture_for_pack(
     pixels: &[u8],
     width: u32,

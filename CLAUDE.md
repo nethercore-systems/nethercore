@@ -5,8 +5,10 @@
 Emberware is a fantasy console platform with built-in rollback netcode, designed to support multiple fantasy consoles (Emberware Z, Classic, etc.) with a shared framework.
 
 **Repository Structure:**
-- `/core` — Console trait, WASM runtime, GGRS rollback, debug inspection
-- `/emberware-z` — PS1/N64 aesthetic console implementation
+- `/core` — Console trait, WASM runtime, GGRS rollback, ConsoleRunner, debug inspection
+- `/library` — Main binary with library UI, console registry, game launcher
+- `/emberware-z` — PS1/N64 aesthetic console implementation (library, no binary)
+- `/z-common` — Z-specific formats, ROM loader
 - `/shared` — API types for platform backend, cart/ROM formats
 - `/tools` — Developer tools (ember-cli, ember-export)
 - `/docs` — Game developer documentation
@@ -20,27 +22,35 @@ Emberware is a fantasy console platform with built-in rollback netcode, designed
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    emberware-z                          │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐ │
-│  │ ZGraphics   │  │ ZAudio      │  │ Z-specific FFI  │ │
-│  │ (wgpu)      │  │ (rodio)     │  │ (draw_*, etc)   │ │
-│  └──────┬──────┘  └──────┬──────┘  └────────┬────────┘ │
-│         │                │                   │          │
-│         └────────────────┼───────────────────┘          │
-│                          │ implements Console trait     │
-├──────────────────────────┼──────────────────────────────┤
-│                    emberware-core                       │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐ │
-│  │ Console     │  │ Runtime<C>  │  │ Common FFI      │ │
-│  │ trait       │  │ game loop   │  │ (input, save,   │ │
-│  │             │  │ GGRS        │  │  random, etc)   │ │
-│  └─────────────┘  └─────────────┘  └─────────────────┘ │
-│  ┌─────────────┐  ┌─────────────┐                      │
-│  │ WasmEngine  │  │ Rollback    │                      │
-│  │ (wasmtime)  │  │ state mgmt  │                      │
-│  └─────────────┘  └─────────────┘                      │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                      library (binary)                       │
+│  ┌───────────────┐  ┌──────────────┐  ┌──────────────────┐ │
+│  │ ConsoleRegistry│ │ ActiveGame   │  │ Library UI       │ │
+│  │ (static dispatch│ │ enum dispatch│  │ (egui)           │ │
+│  └───────┬───────┘  └──────┬───────┘  └──────────────────┘ │
+│          │                 │                                │
+├──────────┼─────────────────┼────────────────────────────────┤
+│          │           emberware-z (lib)                      │
+│  ┌───────▼───────┐  ┌─────────────┐  ┌─────────────────┐   │
+│  │ EmberwareZ    │  │ ZGraphics   │  │ Z-specific FFI  │   │
+│  │ Console impl  │  │ (wgpu)      │  │ (draw_*, etc)   │   │
+│  └───────┬───────┘  └─────────────┘  └─────────────────┘   │
+│          │          ┌─────────────┐  ┌─────────────────┐   │
+│          │          │ ZAudio      │  │ ZRollbackState  │   │
+│          │          │ (cpal)      │  │ (audio state)   │   │
+│          │          └─────────────┘  └─────────────────┘   │
+├──────────┼──────────────────────────────────────────────────┤
+│          │              emberware-core                      │
+│  ┌───────▼───────┐  ┌─────────────┐  ┌─────────────────┐   │
+│  │ Console trait │  │ConsoleRunner│  │ Common FFI      │   │
+│  │ + RollbackState│ │ <C: Console>│  │ (input, save,   │   │
+│  │               │  │ game loop   │  │  random, etc)   │   │
+│  └───────────────┘  └─────────────┘  └─────────────────┘   │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────┐     │
+│  │ WasmEngine  │  │ Rollback    │  │ RomLoader trait │     │
+│  │ (wasmtime)  │  │ state mgmt  │  │ (console-agnostic)│   │
+│  └─────────────┘  └─────────────┘  └─────────────────┘     │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ### Console Trait
@@ -51,18 +61,25 @@ Each fantasy console implements the `Console` trait:
 pub trait Console: Send + 'static {
     type Graphics: Graphics;
     type Audio: Audio;
-    type Input: ConsoleInput;  // Console-specific input layout
+    type Input: ConsoleInput;           // Console-specific input layout
+    type State: Default + Send;          // Per-frame FFI state (not rolled back)
+    type RollbackState: ConsoleRollbackState;  // Rolled back state (e.g., audio)
+    type ResourceManager: ConsoleResourceManager;
 
     fn name(&self) -> &'static str;
     fn specs(&self) -> &ConsoleSpecs;
-    fn register_ffi(&self, linker: &mut Linker<GameState>) -> Result<()>;
+    fn register_ffi(&self, linker: &mut Linker<WasmGameContext<...>>) -> Result<()>;
     fn create_graphics(&self, window: Arc<Window>) -> Result<Self::Graphics>;
     fn create_audio(&self) -> Result<Self::Audio>;
     fn map_input(&self, raw: &RawInput) -> Self::Input;
+    fn debug_stats(&self, state: &Self::State) -> Vec<DebugStat>;
 }
 
 // Must be POD for GGRS serialization
 pub trait ConsoleInput: Clone + Copy + Default + bytemuck::Pod + bytemuck::Zeroable {}
+
+// Console-specific rollback state (e.g., audio playhead positions)
+pub trait ConsoleRollbackState: Pod + Zeroable + Default + Send + 'static {}
 ```
 
 This allows:
@@ -106,7 +123,9 @@ The core handles GGRS serialization of whatever input type the console uses.
 ### Emberware Z
 - wgpu (graphics with PS1/N64 aesthetic)
 - glam (math: vectors, matrices, quaternions)
-- rodio (audio)
+- cpal + ringbuf (per-frame audio generation with rollback support)
+
+### Library
 - egui (library UI)
 - reqwest (ROM downloads)
 
@@ -115,8 +134,10 @@ The core handles GGRS serialization of whatever input type the console uses.
 
 ## Project Structure
 
-- `/core` — `emberware-core` crate with Console trait, WASM runtime, GGRS integration, debug inspection
-- `/emberware-z` — `emberware-z` binary implementing Console for PS1/N64 aesthetic
+- `/core` — `emberware-core` crate with Console trait, ConsoleRunner, WASM runtime, GGRS integration, debug inspection
+- `/library` — `emberware-library` binary (default workspace member) with library UI, console registry
+- `/emberware-z` — `emberware-z` library implementing Console for PS1/N64 aesthetic
+- `/z-common` — Z-specific formats, ZRomLoader implementing RomLoader trait
 - `/shared` — `emberware-shared` crate with API types, cart formats, asset formats
 - `/tools/ember-cli` — Build, pack, and run games (`ember build`, `ember pack`, `ember run`)
 - `/tools/ember-export` — Convert assets to Emberware formats (meshes, textures, audio, skeletons, animations)
@@ -258,8 +279,8 @@ cargo run
 - Helpful error messages listing available games
 
 **Implementation:**
-- `emberware-z/src/game_resolver.rs` - Game ID resolution logic
-- `emberware-z/src/main.rs` - CLI argument parsing
+- `library/src/registry.rs` - Game ID resolution and console registry
+- `library/src/main.rs` - CLI argument parsing and entry point
 
 ## License
 

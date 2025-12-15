@@ -3,19 +3,25 @@
 **Architecture Overview:** See [CLAUDE.md](./CLAUDE.md) for framework design and Console trait details.
 
 
-## TODO
+## Completed
 
-### **[CRITICAL] Architure Flaw: Library app is actually Z Specific**
-- There is no "console agnostic library", its only the Z app.
-- This means we would have different apps for different consoles, which is wrong
-- A console should be something which "runs a game" within the library, something without a runtime which is managed by the host app.
-- The console shouldnt need to manage its own runtime, and should in a sense be a "black box" that the app can run, through basic functions like Update and Render (which in turn call the wasm functions and handle state and such). The Rollback should be completely console agnostic etc.
-- This better architecture will reduce code reuse significantly and allow expansion of future consoles.
-- Z App needs to be removed with a new Library or other local app to use.
-- This means we may need to implement console specific things like a DebugPanel (receives a &mut DebugPanel as an api) but the console just defines the stats/layout of it.
-- When opening the app, it should launch the library (unless parameters are passed)
-- The library must display all available games, for all avialable consoles.
-- When a game is launched, we must initialize the console, load the rom, handle all of that stuff.
+### **[COMPLETE] Console-Agnostic Architecture + Per-Frame Audio Refactor**
+*Completed in commits d21f8a6 through e7d21b5*
+
+- **Phase 1:** Added ConsoleRollbackState trait, renamed GameStateWithConsole → WasmGameContext, updated snapshot system to serialize console rollback state
+- **Phase 2:** Replaced rodio streaming with cpal per-frame audio generation, ZRollbackState for automatic audio rollback
+- **Phase 3:** Created library/ crate with ConsoleRunner, ActiveGame enum dispatch, RomLoader trait, moved app code from emberware-z
+- **Phase 4:** Removed old emberware-z binary, updated workspace default-members to library
+
+**Key Achievements:**
+- Core is fully console-agnostic (no z-common imports)
+- Per-frame audio generation with automatic rollback support
+- Static dispatch via ActiveGame enum (no vtables)
+- Adding future consoles = add enum variant + match arms only
+
+---
+
+## TODO
 
 ### **[STABILITY] Reduce unwrap/expect Usage**
 

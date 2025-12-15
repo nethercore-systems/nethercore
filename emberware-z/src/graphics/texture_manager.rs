@@ -388,6 +388,7 @@ impl TextureManager {
     }
 
     /// Get the number of loaded textures (for debugging)
+    #[allow(dead_code)]
     pub fn texture_count(&self) -> usize {
         self.textures.len()
     }
