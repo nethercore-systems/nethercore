@@ -7,12 +7,14 @@
 mod tests {
     use wasmtime::Linker;
 
-    use crate::console::{Console, RawInput};
-    use crate::ffi::register_common_ffi;
-    use crate::rollback::{GameStateSnapshot, RollbackSession, RollbackStateManager};
-    use crate::runtime::Runtime;
-    use crate::test_utils::{TestConsole, TestInput};
-    use crate::wasm::{GameInstance, GameState, MAX_PLAYERS, WasmEngine, WasmGameContext};
+    use crate::{
+        console::{Console, RawInput},
+        ffi::register_common_ffi,
+        rollback::{GameStateSnapshot, RollbackSession, RollbackStateManager},
+        runtime::Runtime,
+        test_utils::{TestConsole, TestInput},
+        wasm::{GameInstance, GameState, MAX_PLAYERS, WasmEngine, WasmGameContext},
+    };
 
     /// Create a test engine with common FFI registered
     fn create_test_engine() -> (WasmEngine, Linker<WasmGameContext<TestInput, (), ()>>) {
