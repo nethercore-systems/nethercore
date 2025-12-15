@@ -87,6 +87,14 @@ impl<C: Console> ConsoleRunner<C> {
         &mut self.audio
     }
 
+    /// Get mutable references to both graphics and session simultaneously.
+    ///
+    /// This enables operations that need both, which would otherwise fail
+    /// the borrow checker due to the session borrowing from the runner.
+    pub fn graphics_and_session_mut(&mut self) -> (&mut C::Graphics, Option<&mut GameSession<C>>) {
+        (&mut self.graphics, self.session.as_mut())
+    }
+
     /// Get a reference to the WASM engine.
     pub fn wasm_engine(&self) -> &WasmEngine {
         &self.wasm_engine
@@ -252,5 +260,15 @@ impl<C: Console> ConsoleRunner<C> {
         } else {
             Vec::new()
         }
+    }
+
+    /// Check if the game requested to quit.
+    pub fn quit_requested(&self) -> bool {
+        if let Some(session) = &self.session {
+            if let Some(game) = session.runtime.game() {
+                return game.state().quit_requested;
+            }
+        }
+        false
     }
 }

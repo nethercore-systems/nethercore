@@ -7,15 +7,14 @@ use thiserror::Error;
 use winit::event_loop::ActiveEventLoop;
 use winit::window::{Fullscreen, Window};
 
-use emberware_z::console::VRAM_LIMIT;
-use emberware_z::graphics::ZGraphics;
-use emberware_z::input::InputManager;
-use emberware_z::library;
+use crate::registry::ActiveGame;
 use crate::ui::LibraryUi;
 use emberware_core::app::config;
 use emberware_core::app::{AppMode, DebugStats, FRAME_TIME_HISTORY_SIZE};
 use emberware_core::debug::{DebugPanel, FrameController};
-use emberware_core::wasm::WasmEngine;
+use emberware_z::console::VRAM_LIMIT;
+use emberware_z::input::InputManager;
+use emberware_z::library;
 
 use super::App;
 
@@ -38,24 +37,12 @@ impl App {
 
         let now = Instant::now();
 
-        // Initialize WASM engine (may fail on unsupported platforms)
-        let wasm_engine = match WasmEngine::new() {
-            Ok(engine) => {
-                tracing::info!("WASM engine initialized");
-                Some(engine)
-            }
-            Err(e) => {
-                tracing::error!("Failed to initialize WASM engine: {}", e);
-                None
-            }
-        };
-
         Self {
             mode: initial_mode.clone(),
             settings_ui: crate::ui::SettingsUi::new(&config),
             config,
             window: None,
-            graphics: None,
+            active_game: None,
             input_manager,
             should_exit: false,
             egui_ctx: egui::Context::default(),
@@ -74,8 +61,6 @@ impl App {
                 ..Default::default()
             },
             last_error: None,
-            wasm_engine,
-            game_session: None,
             needs_redraw: true,
             cached_egui_shapes: Vec::new(),
             cached_egui_tris: Vec::new(),
@@ -104,11 +89,8 @@ impl App {
             window.set_fullscreen(Some(Fullscreen::Borderless(None)));
         }
 
-        // Initialize graphics backend
-        let mut graphics = pollster::block_on(ZGraphics::new(window.clone()))?;
-
-        // Apply scale mode from config
-        graphics.set_scale_mode(self.config.video.scale_mode);
+        // Initialize ActiveGame (creates graphics backend without loading a game)
+        let active_game = ActiveGame::new_z(window.clone())?;
 
         // Initialize egui-winit state
         let egui_state = egui_winit::State::new(
@@ -122,8 +104,8 @@ impl App {
 
         // Initialize egui-wgpu renderer
         let egui_renderer = egui_wgpu::Renderer::new(
-            graphics.device(),
-            graphics.surface_format(),
+            active_game.device(),
+            active_game.surface_format(),
             egui_wgpu::RendererOptions {
                 depth_stencil_format: None,
                 msaa_samples: 1,
@@ -135,32 +117,8 @@ impl App {
         tracing::info!("Graphics and egui initialized successfully");
         self.egui_state = Some(egui_state);
         self.egui_renderer = Some(egui_renderer);
-        self.graphics = Some(graphics);
+        self.active_game = Some(active_game);
         self.window = Some(window);
-
-        // If a game session exists, add the font and white textures to its texture map
-        // Note: Handle 0 is reserved as invalid (triggers fallback when load_* fails)
-        if let (Some(session), Some(graphics)) = (&mut self.game_session, &self.graphics) {
-            let font_texture_handle = graphics.font_texture();
-            session
-                .resource_manager
-                .texture_map
-                .insert(u32::MAX - 1, font_texture_handle); // Reserved for built-in font
-            tracing::info!(
-                "Added font texture to existing game session: handle 0xFFFFFFFE -> {:?}",
-                font_texture_handle
-            );
-
-            let white_texture_handle = graphics.white_texture();
-            session
-                .resource_manager
-                .texture_map
-                .insert(u32::MAX, white_texture_handle); // Reserved for white fallback
-            tracing::info!(
-                "Added white texture to existing game session: handle 0xFFFFFFFF -> {:?}",
-                white_texture_handle
-            );
-        }
 
         Ok(())
     }

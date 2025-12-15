@@ -31,8 +31,8 @@ pub use runner::ConsoleRunner;
 pub use runtime::{Runtime, RuntimeConfig};
 #[allow(deprecated)]
 pub use wasm::{
-    GameInstance, GameState, GameStateWithConsole, WasmGameContext, MAX_PLAYERS, MAX_SAVE_SIZE,
-    MAX_SAVE_SLOTS, WasmEngine,
+    GameInstance, GameState, GameStateWithConsole, MAX_PLAYERS, MAX_SAVE_SIZE, MAX_SAVE_SLOTS,
+    WasmEngine, WasmGameContext,
 };
 
 // Re-export rollback types

@@ -148,11 +148,7 @@ fn material_emissive(mut caller: Caller<'_, ZGameContext>, value: f32) {
 /// Rim lighting creates edge highlights. Intensity controls brightness,
 /// power controls falloff sharpness (higher = tighter highlight).
 /// Rim lighting uses the sky color from behind the object for coherent scene lighting.
-fn material_rim(
-    mut caller: Caller<'_, ZGameContext>,
-    intensity: f32,
-    power: f32,
-) {
+fn material_rim(mut caller: Caller<'_, ZGameContext>, intensity: f32, power: f32) {
     let state = &mut caller.data_mut().ffi;
 
     // Clamp and warn for intensity
@@ -218,10 +214,7 @@ fn material_specular(mut caller: Caller<'_, ZGameContext>, color: u32) {
 ///
 /// This is an alias for material_metallic() for clarity when using Mode 3.
 /// Note: This is INVERTED from metallic - 0 gives full specular (beginner-friendly).
-fn material_specular_damping(
-    caller: Caller<'_, ZGameContext>,
-    value: f32,
-) {
+fn material_specular_damping(caller: Caller<'_, ZGameContext>, value: f32) {
     // Simply calls material_metallic - field reinterpretation happens in the shader
     material_metallic(caller, value);
 }
@@ -232,12 +225,7 @@ fn material_specular_damping(
 /// * `r`, `g`, `b` — Color components (0.0-1.0)
 ///
 /// Alternative to material_specular(u32) when you have separate float components.
-fn material_specular_color(
-    mut caller: Caller<'_, ZGameContext>,
-    r: f32,
-    g: f32,
-    b: f32,
-) {
+fn material_specular_color(mut caller: Caller<'_, ZGameContext>, r: f32, g: f32, b: f32) {
     let state = &mut caller.data_mut().ffi;
     state.update_specular_color(r.clamp(0.0, 1.0), g.clamp(0.0, 1.0), b.clamp(0.0, 1.0));
 }
@@ -254,10 +242,7 @@ fn material_specular_color(
 ///
 /// When enabled, the uniform color (set via set_color) is used instead of sampling
 /// from the albedo texture. Useful for solid-colored objects or temporary overrides.
-fn use_uniform_color(
-    mut caller: Caller<'_, ZGameContext>,
-    enabled: u32,
-) {
+fn use_uniform_color(mut caller: Caller<'_, ZGameContext>, enabled: u32) {
     let state = &mut caller.data_mut().ffi;
     state.set_use_uniform_color(enabled != 0);
 }
@@ -267,10 +252,7 @@ fn use_uniform_color(
 ///
 /// # Arguments
 /// * `enabled` — 0 = sample from texture (default), 1 = use uniform value
-fn use_uniform_metallic(
-    mut caller: Caller<'_, ZGameContext>,
-    enabled: u32,
-) {
+fn use_uniform_metallic(mut caller: Caller<'_, ZGameContext>, enabled: u32) {
     let state = &mut caller.data_mut().ffi;
     state.set_use_uniform_metallic(enabled != 0);
 }
@@ -280,10 +262,7 @@ fn use_uniform_metallic(
 ///
 /// # Arguments
 /// * `enabled` — 0 = sample from texture (default), 1 = use uniform value
-fn use_uniform_roughness(
-    mut caller: Caller<'_, ZGameContext>,
-    enabled: u32,
-) {
+fn use_uniform_roughness(mut caller: Caller<'_, ZGameContext>, enabled: u32) {
     let state = &mut caller.data_mut().ffi;
     state.set_use_uniform_roughness(enabled != 0);
 }
@@ -294,10 +273,7 @@ fn use_uniform_roughness(
 /// * `enabled` — 0 = sample from texture (default), 1 = use uniform value
 ///
 /// Applies to Mode 2 (PBR) and Mode 3 (Specular-Shininess).
-fn use_uniform_emissive(
-    mut caller: Caller<'_, ZGameContext>,
-    enabled: u32,
-) {
+fn use_uniform_emissive(mut caller: Caller<'_, ZGameContext>, enabled: u32) {
     let state = &mut caller.data_mut().ffi;
     state.set_use_uniform_emissive(enabled != 0);
 }
@@ -306,10 +282,7 @@ fn use_uniform_emissive(
 ///
 /// # Arguments
 /// * `enabled` — 0 = sample from specular texture (default), 1 = use uniform specular RGB
-fn use_uniform_specular(
-    mut caller: Caller<'_, ZGameContext>,
-    enabled: u32,
-) {
+fn use_uniform_specular(mut caller: Caller<'_, ZGameContext>, enabled: u32) {
     let state = &mut caller.data_mut().ffi;
     state.set_use_uniform_specular(enabled != 0);
 }
@@ -320,10 +293,7 @@ fn use_uniform_specular(
 /// * `enabled` — 0 = use procedural sky reflection (default), 1 = use matcap texture
 ///
 /// When enabled, matcap slots provide stylized reflection instead of the procedural sky.
-fn use_matcap_reflection(
-    mut caller: Caller<'_, ZGameContext>,
-    enabled: u32,
-) {
+fn use_matcap_reflection(mut caller: Caller<'_, ZGameContext>, enabled: u32) {
     let state = &mut caller.data_mut().ffi;
     state.set_use_matcap_reflection(enabled != 0);
 }

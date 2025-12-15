@@ -33,17 +33,21 @@
 //! - Better compiler optimization opportunities
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Result;
 use winit::window::Window;
 
+use emberware_core::ConsoleRunner;
+use emberware_core::app::session::GameSession;
 use emberware_core::app::types::AppMode;
-use emberware_core::console::RawInput;
+use emberware_core::console::{ConsoleResourceManager, RawInput};
+use emberware_core::debug::DebugRegistry;
 use emberware_core::library::{LocalGame, RomLoaderRegistry};
 use emberware_core::rollback::SessionEvent;
-use emberware_core::ConsoleRunner;
 
 use emberware_z::console::EmberwareZ;
+use emberware_z::state::ZFFIState;
 use z_common::ZRomLoader;
 
 /// Enum representing all available console types.
@@ -158,7 +162,24 @@ pub enum ActiveGame {
 }
 
 impl ActiveGame {
-    /// Create a new Emberware Z game instance.
+    /// Create a new Emberware Z runner without loading a game.
+    ///
+    /// This creates the graphics and audio backends but doesn't load any game.
+    /// Use `load_game` to load a game later.
+    pub fn new_z(window: Arc<Window>) -> Result<Self> {
+        let console = EmberwareZ::new();
+        let runner = ConsoleRunner::new(console, window)?;
+        Ok(ActiveGame::Z(runner))
+    }
+
+    /// Create a runner for a console type without loading a game.
+    pub fn new(console_type: ConsoleType, window: Arc<Window>) -> Result<Self> {
+        match console_type {
+            ConsoleType::Z => Self::new_z(window),
+        }
+    }
+
+    /// Create a new Emberware Z game instance with a loaded game.
     pub fn create_z(window: Arc<Window>, wasm_bytes: &[u8], num_players: usize) -> Result<Self> {
         let console = EmberwareZ::new();
         let mut runner = ConsoleRunner::new(console, window)?;
@@ -166,7 +187,7 @@ impl ActiveGame {
         Ok(ActiveGame::Z(runner))
     }
 
-    /// Create a game instance based on console type.
+    /// Create a game instance based on console type with a loaded game.
     pub fn create(
         console_type: ConsoleType,
         window: Arc<Window>,
@@ -175,6 +196,13 @@ impl ActiveGame {
     ) -> Result<Self> {
         match console_type {
             ConsoleType::Z => Self::create_z(window, wasm_bytes, num_players),
+        }
+    }
+
+    /// Load a game into an existing runner.
+    pub fn load_game(&mut self, wasm_bytes: &[u8], num_players: usize) -> Result<()> {
+        match self {
+            ActiveGame::Z(runner) => runner.load_game(EmberwareZ::new(), wasm_bytes, num_players),
         }
     }
 
@@ -245,6 +273,239 @@ impl ActiveGame {
     pub fn console_type(&self) -> ConsoleType {
         match self {
             ActiveGame::Z(_) => ConsoleType::Z,
+        }
+    }
+
+    // === GPU Resource Access (for egui rendering) ===
+
+    /// Get the wgpu device.
+    pub fn device(&self) -> &wgpu::Device {
+        match self {
+            ActiveGame::Z(runner) => runner.graphics().device(),
+        }
+    }
+
+    /// Get the wgpu queue.
+    pub fn queue(&self) -> &wgpu::Queue {
+        match self {
+            ActiveGame::Z(runner) => runner.graphics().queue(),
+        }
+    }
+
+    /// Get the surface texture format.
+    pub fn surface_format(&self) -> wgpu::TextureFormat {
+        match self {
+            ActiveGame::Z(runner) => runner.graphics().surface_format(),
+        }
+    }
+
+    /// Get the current width.
+    pub fn width(&self) -> u32 {
+        match self {
+            ActiveGame::Z(runner) => runner.graphics().width(),
+        }
+    }
+
+    /// Get the current height.
+    pub fn height(&self) -> u32 {
+        match self {
+            ActiveGame::Z(runner) => runner.graphics().height(),
+        }
+    }
+
+    /// Get the current surface texture for rendering.
+    pub fn get_current_texture(&mut self) -> Result<wgpu::SurfaceTexture> {
+        match self {
+            ActiveGame::Z(runner) => runner.graphics_mut().get_current_texture(),
+        }
+    }
+
+    /// Get VRAM usage in bytes.
+    pub fn vram_used(&self) -> usize {
+        match self {
+            ActiveGame::Z(runner) => runner.graphics().vram_used(),
+        }
+    }
+
+    /// Get VRAM limit in bytes.
+    pub fn vram_limit(&self) -> usize {
+        match self {
+            ActiveGame::Z(runner) => runner.graphics().vram_limit(),
+        }
+    }
+
+    /// Render game frame to render target.
+    ///
+    /// This is a complex operation that requires careful borrowing:
+    /// we need both graphics (from runner) and game state (from session).
+    pub fn render_game_frame(&mut self, encoder: &mut wgpu::CommandEncoder, clear_color: [f32; 4]) {
+        match self {
+            ActiveGame::Z(runner) => {
+                // Use split borrow to get graphics and session simultaneously
+                let (graphics, session_opt) = runner.graphics_and_session_mut();
+                let session = match session_opt {
+                    Some(s) => s,
+                    None => return,
+                };
+                let game = match session.runtime.game_mut() {
+                    Some(g) => g,
+                    None => return,
+                };
+                let z_state = game.console_state_mut();
+                let texture_map = &session.resource_manager.texture_map;
+
+                graphics.render_frame(encoder, z_state, texture_map, clear_color);
+            }
+        }
+    }
+
+    /// Blit render target to window.
+    pub fn blit_to_window(&self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
+        match self {
+            ActiveGame::Z(runner) => runner.graphics().blit_to_window(encoder, view),
+        }
+    }
+
+    /// Execute draw commands from game state.
+    pub fn execute_draw_commands(&mut self) {
+        match self {
+            ActiveGame::Z(runner) => {
+                // Use split borrow to get graphics and session simultaneously
+                let (graphics, session_opt) = runner.graphics_and_session_mut();
+                if let Some(session) = session_opt {
+                    if let Some(game) = session.runtime.game_mut() {
+                        let state = game.console_state_mut();
+                        session
+                            .resource_manager
+                            .execute_draw_commands(graphics, state);
+                    }
+                }
+            }
+        }
+    }
+
+    // === Game State Access ===
+
+    /// Get clear color from game config.
+    pub fn clear_color(&self) -> [f32; 4] {
+        match self {
+            ActiveGame::Z(runner) => {
+                if let Some(session) = runner.session() {
+                    if let Some(game) = session.runtime.game() {
+                        let z_state = game.console_state();
+                        return emberware_z::ffi::unpack_rgba(z_state.init_config.clear_color);
+                    }
+                }
+                [0.1, 0.1, 0.1, 1.0]
+            }
+        }
+    }
+
+    /// Get the game's tick duration.
+    pub fn tick_duration(&self) -> Duration {
+        match self {
+            ActiveGame::Z(runner) => {
+                if let Some(session) = runner.session() {
+                    session.runtime.tick_duration()
+                } else {
+                    Duration::from_secs_f64(1.0 / 60.0)
+                }
+            }
+        }
+    }
+
+    /// Check if the game requested quit.
+    pub fn quit_requested(&self) -> bool {
+        match self {
+            ActiveGame::Z(runner) => runner.quit_requested(),
+        }
+    }
+
+    /// Run the game's render function.
+    pub fn call_render(&mut self) -> Result<()> {
+        match self {
+            ActiveGame::Z(runner) => {
+                if let Some(session) = runner.session_mut() {
+                    session.runtime.render()?;
+                }
+                Ok(())
+            }
+        }
+    }
+
+    /// Call on_debug_change when debug values are modified.
+    pub fn call_on_debug_change(&mut self) {
+        match self {
+            ActiveGame::Z(runner) => {
+                if let Some(session) = runner.session_mut() {
+                    if let Some(game) = session.runtime.game_mut() {
+                        game.call_on_debug_change();
+                    }
+                }
+            }
+        }
+    }
+
+    /// Get debug registry and memory info for debug panel.
+    pub fn debug_panel_data(&mut self) -> Option<(DebugRegistry, *mut u8, usize)> {
+        match self {
+            ActiveGame::Z(runner) => {
+                let session = runner.session_mut()?;
+                let game = session.runtime.game_mut()?;
+                let store = game.store_mut();
+
+                if store.data().debug_registry.is_empty() {
+                    return None;
+                }
+
+                let memory = store.data().game.memory?;
+                let registry = store.data().debug_registry.clone();
+                let mem_ptr = memory.data_ptr(&mut *store);
+                let mem_len = memory.data_size(&mut *store);
+
+                Some((registry, mem_ptr, mem_len))
+            }
+        }
+    }
+
+    /// Get the console-specific FFI state (for accessing sounds, etc.)
+    pub fn console_state(&self) -> Option<&ZFFIState> {
+        match self {
+            ActiveGame::Z(runner) => runner.session()?.runtime.game()?.console_state().into(),
+        }
+    }
+
+    /// Get mutable console-specific FFI state.
+    pub fn console_state_mut(&mut self) -> Option<&mut ZFFIState> {
+        match self {
+            ActiveGame::Z(runner) => Some(
+                runner
+                    .session_mut()?
+                    .runtime
+                    .game_mut()?
+                    .console_state_mut(),
+            ),
+        }
+    }
+
+    /// Get mutable reference to game session.
+    pub fn session_mut(&mut self) -> Option<&mut GameSession<EmberwareZ>> {
+        match self {
+            ActiveGame::Z(runner) => runner.session_mut(),
+        }
+    }
+
+    /// Unload the current game.
+    pub fn unload_game(&mut self) {
+        match self {
+            ActiveGame::Z(runner) => runner.unload_game(),
+        }
+    }
+
+    /// Set the scale mode for graphics.
+    pub fn set_scale_mode(&mut self, scale_mode: emberware_core::app::config::ScaleMode) {
+        match self {
+            ActiveGame::Z(runner) => runner.graphics_mut().set_scale_mode(scale_mode),
         }
     }
 }

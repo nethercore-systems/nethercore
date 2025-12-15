@@ -287,7 +287,9 @@ impl<C: Console> Runtime<C> {
     }
 
     /// Get a mutable reference to the rollback session
-    pub fn session_mut(&mut self) -> Option<&mut RollbackSession<C::Input, C::State, C::RollbackState>> {
+    pub fn session_mut(
+        &mut self,
+    ) -> Option<&mut RollbackSession<C::Input, C::State, C::RollbackState>> {
         self.session.as_mut()
     }
 

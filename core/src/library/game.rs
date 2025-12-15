@@ -10,8 +10,8 @@
 use emberware_shared::LocalGameManifest;
 use std::path::{Path, PathBuf};
 
-use super::rom::RomLoaderRegistry;
 use super::DataDirProvider;
+use super::rom::RomLoaderRegistry;
 
 /// A locally cached game with its metadata and ROM path.
 #[derive(Debug, Clone)]

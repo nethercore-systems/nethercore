@@ -29,10 +29,7 @@ pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
 ///
 /// **Init-only:** Must be called during `init()`. Calls outside init are ignored.
 /// **Single-call:** Can only be called once. Second call traps with an error.
-fn set_resolution(
-    mut caller: Caller<'_, ZGameContext>,
-    res: u32,
-) -> Result<()> {
+fn set_resolution(mut caller: Caller<'_, ZGameContext>, res: u32) -> Result<()> {
     // Check if we're in init phase
     if !caller.data().game.in_init {
         warn!("set_resolution() called outside init() - ignored");
@@ -72,10 +69,7 @@ fn set_resolution(
 ///
 /// **Init-only:** Must be called during `init()`. Calls outside init are ignored.
 /// **Single-call:** Can only be called once. Second call traps with an error.
-fn set_tick_rate(
-    mut caller: Caller<'_, ZGameContext>,
-    rate: u32,
-) -> Result<()> {
+fn set_tick_rate(mut caller: Caller<'_, ZGameContext>, rate: u32) -> Result<()> {
     // Check if we're in init phase
     if !caller.data().game.in_init {
         warn!("set_tick_rate() called outside init() - ignored");
@@ -116,10 +110,7 @@ fn set_tick_rate(
 ///
 /// **Init-only:** Must be called during `init()`. Calls outside init are ignored.
 /// **Single-call:** Can only be called once. Second call traps with an error.
-fn set_clear_color(
-    mut caller: Caller<'_, ZGameContext>,
-    color: u32,
-) -> Result<()> {
+fn set_clear_color(mut caller: Caller<'_, ZGameContext>, color: u32) -> Result<()> {
     // Check if we're in init phase
     if !caller.data().game.in_init {
         warn!("set_clear_color() called outside init() - ignored");
@@ -163,10 +154,7 @@ fn set_clear_color(
 ///
 /// **Init-only:** Must be called during `init()`. Calls outside init are ignored.
 /// **Single-call:** Can only be called once. Second call traps with an error.
-fn render_mode(
-    mut caller: Caller<'_, ZGameContext>,
-    mode: u32,
-) -> Result<()> {
+fn render_mode(mut caller: Caller<'_, ZGameContext>, mode: u32) -> Result<()> {
     // Check if we're in init phase
     if !caller.data().game.in_init {
         warn!("render_mode() called outside init() - ignored");

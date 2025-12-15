@@ -13,7 +13,17 @@ use wasmtime::{Caller, Linker};
 use crate::audio::Sound;
 use crate::state::MAX_CHANNELS;
 
-use super::{get_wasm_memory, guards::check_init_only, ZGameContext};
+use super::{ZGameContext, get_wasm_memory, guards::check_init_only};
+
+/// Clamp a float value, treating NaN as the minimum value
+#[inline]
+fn clamp_safe(value: f32, min: f32, max: f32) -> f32 {
+    if value.is_nan() {
+        min
+    } else {
+        value.clamp(min, max)
+    }
+}
 
 /// Register audio FFI functions
 pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
@@ -59,6 +69,26 @@ fn load_sound(mut caller: Caller<'_, ZGameContext>, data_ptr: u32, byte_len: u32
         return 0;
     };
 
+    // Validate memory bounds: check for overflow and bounds
+    let mem_size = memory.data_size(&caller);
+    let end_offset = match (data_ptr as usize).checked_add(byte_len as usize) {
+        Some(end) => end,
+        None => {
+            warn!(
+                "load_sound: pointer arithmetic overflow (ptr={}, len={})",
+                data_ptr, byte_len
+            );
+            return 0;
+        }
+    };
+    if end_offset > mem_size {
+        warn!(
+            "load_sound: out of bounds (ptr={}, len={}, mem_size={})",
+            data_ptr, byte_len, mem_size
+        );
+        return 0;
+    }
+
     // Read PCM data from WASM memory
     let mut pcm_data = vec![0i16; sample_count];
     // SAFETY: This unsafe block is sound because:
@@ -67,6 +97,7 @@ fn load_sound(mut caller: Caller<'_, ZGameContext>, data_ptr: u32, byte_len: u32
     // 3. sample_count = byte_len / 2, so we're reading exactly the right number of i16 samples
     // 4. Data is immediately copied to owned Vec, no aliasing or lifetime issues
     // 5. WASM linear memory is guaranteed to be valid for the duration of this call
+    // 6. Bounds are validated above: data_ptr + byte_len <= mem_size
     let data_slice = unsafe {
         let ptr = memory.data_ptr(&caller).add(data_ptr as usize);
         std::slice::from_raw_parts(ptr as *const i16, sample_count)
@@ -110,8 +141,8 @@ fn play_sound(mut caller: Caller<'_, ZGameContext>, sound: u32, volume: f32, pan
             channel.sound = sound;
             channel.position = 0;
             channel.looping = 0;
-            channel.volume = volume.clamp(0.0, 1.0);
-            channel.pan = pan.clamp(-1.0, 1.0);
+            channel.volume = clamp_safe(volume, 0.0, 1.0);
+            channel.pan = clamp_safe(pan, -1.0, 1.0);
             return;
         }
     }
@@ -149,8 +180,8 @@ fn channel_play(
 
     // If same sound is already playing and looping matches, just update volume/pan
     if ch.sound == sound && ch.looping == looping && ch.sound != 0 {
-        ch.volume = volume.clamp(0.0, 1.0);
-        ch.pan = pan.clamp(-1.0, 1.0);
+        ch.volume = clamp_safe(volume, 0.0, 1.0);
+        ch.pan = clamp_safe(pan, -1.0, 1.0);
         return;
     }
 
@@ -158,8 +189,8 @@ fn channel_play(
     ch.sound = sound;
     ch.position = 0;
     ch.looping = looping;
-    ch.volume = volume.clamp(0.0, 1.0);
-    ch.pan = pan.clamp(-1.0, 1.0);
+    ch.volume = clamp_safe(volume, 0.0, 1.0);
+    ch.pan = clamp_safe(pan, -1.0, 1.0);
 }
 
 /// Update channel parameters (call every frame for positional audio)
@@ -177,8 +208,8 @@ fn channel_set(mut caller: Caller<'_, ZGameContext>, channel: u32, volume: f32, 
 
     let ctx = caller.data_mut();
     let ch = &mut ctx.rollback.audio.channels[channel_idx];
-    ch.volume = volume.clamp(0.0, 1.0);
-    ch.pan = pan.clamp(-1.0, 1.0);
+    ch.volume = clamp_safe(volume, 0.0, 1.0);
+    ch.pan = clamp_safe(pan, -1.0, 1.0);
 }
 
 /// Stop channel
@@ -210,7 +241,7 @@ fn music_play(mut caller: Caller<'_, ZGameContext>, sound: u32, volume: f32) {
 
     // If same music is already playing, just update volume
     if music.sound == sound && music.sound != 0 {
-        music.volume = volume.clamp(0.0, 1.0);
+        music.volume = clamp_safe(volume, 0.0, 1.0);
         return;
     }
 
@@ -218,7 +249,7 @@ fn music_play(mut caller: Caller<'_, ZGameContext>, sound: u32, volume: f32) {
     music.sound = sound;
     music.position = 0;
     music.looping = 1; // Music always loops
-    music.volume = volume.clamp(0.0, 1.0);
+    music.volume = clamp_safe(volume, 0.0, 1.0);
     music.pan = 0.0; // Music is always centered
 }
 
@@ -237,5 +268,5 @@ fn music_stop(mut caller: Caller<'_, ZGameContext>) {
 /// - `volume`: 0.0 to 1.0
 fn music_set_volume(mut caller: Caller<'_, ZGameContext>, volume: f32) {
     let ctx = caller.data_mut();
-    ctx.rollback.audio.music.volume = volume.clamp(0.0, 1.0);
+    ctx.rollback.audio.music.volume = clamp_safe(volume, 0.0, 1.0);
 }

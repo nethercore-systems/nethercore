@@ -78,7 +78,11 @@ pub trait RomLoader: Send + Sync {
     /// # Returns
     ///
     /// The installed `LocalGame` that can be launched immediately.
-    fn install(&self, rom_path: &Path, data_dir_provider: &dyn DataDirProvider) -> Result<LocalGame>;
+    fn install(
+        &self,
+        rom_path: &Path,
+        data_dir_provider: &dyn DataDirProvider,
+    ) -> Result<LocalGame>;
 }
 
 /// Registry of ROM loaders for all supported console types.
@@ -92,7 +96,9 @@ pub struct RomLoaderRegistry {
 impl RomLoaderRegistry {
     /// Create an empty registry.
     pub fn new() -> Self {
-        Self { loaders: Vec::new() }
+        Self {
+            loaders: Vec::new(),
+        }
     }
 
     /// Register a ROM loader.
@@ -102,12 +108,18 @@ impl RomLoaderRegistry {
 
     /// Find a loader that can handle the given bytes.
     pub fn find_loader(&self, bytes: &[u8]) -> Option<&dyn RomLoader> {
-        self.loaders.iter().find(|l| l.can_load(bytes)).map(|l| l.as_ref())
+        self.loaders
+            .iter()
+            .find(|l| l.can_load(bytes))
+            .map(|l| l.as_ref())
     }
 
     /// Find a loader by file extension.
     pub fn find_by_extension(&self, ext: &str) -> Option<&dyn RomLoader> {
-        self.loaders.iter().find(|l| l.extension() == ext).map(|l| l.as_ref())
+        self.loaders
+            .iter()
+            .find(|l| l.extension() == ext)
+            .map(|l| l.as_ref())
     }
 
     /// Find a loader by console type.

@@ -88,12 +88,7 @@ fn transform_set(mut caller: Caller<'_, ZGameContext>, matrix_ptr: u32) {
 /// * `x`, `y`, `z` — Translation amounts
 ///
 /// Reads the current transform, applies translation, and pushes the result.
-fn push_translate(
-    mut caller: Caller<'_, ZGameContext>,
-    x: f32,
-    y: f32,
-    z: f32,
-) {
+fn push_translate(mut caller: Caller<'_, ZGameContext>, x: f32, y: f32, z: f32) {
     let state = &mut caller.data_mut().ffi;
     let current = state.current_model_matrix.unwrap_or_else(|| {
         state
@@ -200,12 +195,7 @@ fn push_rotate(
 /// * `x`, `y`, `z` — Scale factors for each axis
 ///
 /// Reads the current transform, applies scale, and pushes the result.
-fn push_scale(
-    mut caller: Caller<'_, ZGameContext>,
-    x: f32,
-    y: f32,
-    z: f32,
-) {
+fn push_scale(mut caller: Caller<'_, ZGameContext>, x: f32, y: f32, z: f32) {
     let state = &mut caller.data_mut().ffi;
     let current = state.current_model_matrix.unwrap_or_else(|| {
         state

@@ -30,13 +30,7 @@ pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
 /// - 2 (cylindrical Y): Rotates around Y axis only (stays upright)
 /// - 3 (cylindrical X): Rotates around X axis only
 /// - 4 (cylindrical Z): Rotates around Z axis only
-fn draw_billboard(
-    mut caller: Caller<'_, ZGameContext>,
-    w: f32,
-    h: f32,
-    mode: u32,
-    color: u32,
-) {
+fn draw_billboard(mut caller: Caller<'_, ZGameContext>, w: f32, h: f32, mode: u32, color: u32) {
     // Validate mode
     if !(1..=4).contains(&mode) {
         warn!("draw_billboard: invalid mode {} (must be 1-4)", mode);

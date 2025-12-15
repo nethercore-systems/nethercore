@@ -8,8 +8,8 @@
 use tracing::warn;
 use wasmtime::Caller;
 
-use crate::console::{MAX_BUTTON_INDEX, STICK_SCALE, TRIGGER_SCALE};
 use super::ZGameContext;
+use crate::console::{MAX_BUTTON_INDEX, STICK_SCALE, TRIGGER_SCALE};
 use emberware_core::wasm::MAX_PLAYERS;
 
 // ============================================================================
@@ -59,11 +59,7 @@ fn validate_button(button: u32, func_name: &str) -> bool {
 ///
 /// Returns 1 if held, 0 otherwise.
 #[inline]
-pub fn button_held(
-    caller: Caller<'_, ZGameContext>,
-    player: u32,
-    button: u32,
-) -> u32 {
+pub fn button_held(caller: Caller<'_, ZGameContext>, player: u32, button: u32) -> u32 {
     let Some(player_idx) = validate_player(player, "button_held") else {
         return 0;
     };
@@ -84,11 +80,7 @@ pub fn button_held(
 ///
 /// Returns 1 if just pressed (not held last tick, held this tick), 0 otherwise.
 #[inline]
-pub fn button_pressed(
-    caller: Caller<'_, ZGameContext>,
-    player: u32,
-    button: u32,
-) -> u32 {
+pub fn button_pressed(caller: Caller<'_, ZGameContext>, player: u32, button: u32) -> u32 {
     let Some(player_idx) = validate_player(player, "button_pressed") else {
         return 0;
     };
@@ -112,11 +104,7 @@ pub fn button_pressed(
 ///
 /// Returns 1 if just released (held last tick, not held this tick), 0 otherwise.
 #[inline]
-pub fn button_released(
-    caller: Caller<'_, ZGameContext>,
-    player: u32,
-    button: u32,
-) -> u32 {
+pub fn button_released(caller: Caller<'_, ZGameContext>, player: u32, button: u32) -> u32 {
     let Some(player_idx) = validate_player(player, "button_released") else {
         return 0;
     };
@@ -139,10 +127,7 @@ pub fn button_released(
 ///
 /// Returns a bitmask where each bit represents a button state.
 #[inline]
-pub fn buttons_held(
-    caller: Caller<'_, ZGameContext>,
-    player: u32,
-) -> u32 {
+pub fn buttons_held(caller: Caller<'_, ZGameContext>, player: u32) -> u32 {
     let Some(player_idx) = validate_player(player, "buttons_held") else {
         return 0;
     };
@@ -156,10 +141,7 @@ pub fn buttons_held(
 ///
 /// Returns a bitmask of buttons that are held now but were not held last tick.
 #[inline]
-pub fn buttons_pressed(
-    caller: Caller<'_, ZGameContext>,
-    player: u32,
-) -> u32 {
+pub fn buttons_pressed(caller: Caller<'_, ZGameContext>, player: u32) -> u32 {
     let Some(player_idx) = validate_player(player, "buttons_pressed") else {
         return 0;
     };
@@ -178,10 +160,7 @@ pub fn buttons_pressed(
 ///
 /// Returns a bitmask of buttons that were held last tick but are not held now.
 #[inline]
-pub fn buttons_released(
-    caller: Caller<'_, ZGameContext>,
-    player: u32,
-) -> u32 {
+pub fn buttons_released(caller: Caller<'_, ZGameContext>, player: u32) -> u32 {
     let Some(player_idx) = validate_player(player, "buttons_released") else {
         return 0;
     };
@@ -204,10 +183,7 @@ pub fn buttons_released(
 ///
 /// Returns value from -1.0 to 1.0 (0.0 if invalid player).
 #[inline]
-pub fn left_stick_x(
-    caller: Caller<'_, ZGameContext>,
-    player: u32,
-) -> f32 {
+pub fn left_stick_x(caller: Caller<'_, ZGameContext>, player: u32) -> f32 {
     let Some(player_idx) = validate_player(player, "left_stick_x") else {
         return 0.0;
     };
@@ -221,10 +197,7 @@ pub fn left_stick_x(
 ///
 /// Returns value from -1.0 to 1.0 (0.0 if invalid player).
 #[inline]
-pub fn left_stick_y(
-    caller: Caller<'_, ZGameContext>,
-    player: u32,
-) -> f32 {
+pub fn left_stick_y(caller: Caller<'_, ZGameContext>, player: u32) -> f32 {
     let Some(player_idx) = validate_player(player, "left_stick_y") else {
         return 0.0;
     };
@@ -238,10 +211,7 @@ pub fn left_stick_y(
 ///
 /// Returns value from -1.0 to 1.0 (0.0 if invalid player).
 #[inline]
-pub fn right_stick_x(
-    caller: Caller<'_, ZGameContext>,
-    player: u32,
-) -> f32 {
+pub fn right_stick_x(caller: Caller<'_, ZGameContext>, player: u32) -> f32 {
     let Some(player_idx) = validate_player(player, "right_stick_x") else {
         return 0.0;
     };
@@ -255,10 +225,7 @@ pub fn right_stick_x(
 ///
 /// Returns value from -1.0 to 1.0 (0.0 if invalid player).
 #[inline]
-pub fn right_stick_y(
-    caller: Caller<'_, ZGameContext>,
-    player: u32,
-) -> f32 {
+pub fn right_stick_y(caller: Caller<'_, ZGameContext>, player: u32) -> f32 {
     let Some(player_idx) = validate_player(player, "right_stick_y") else {
         return 0.0;
     };
@@ -274,12 +241,7 @@ pub fn right_stick_y(
 ///
 /// More efficient than two separate calls for the same player.
 #[inline]
-pub fn left_stick(
-    mut caller: Caller<'_, ZGameContext>,
-    player: u32,
-    out_x: u32,
-    out_y: u32,
-) {
+pub fn left_stick(mut caller: Caller<'_, ZGameContext>, player: u32, out_x: u32, out_y: u32) {
     let (x, y) = match validate_player(player, "left_stick") {
         Some(player_idx) => {
             let input = &caller.data().game.input_curr[player_idx];
@@ -322,12 +284,7 @@ pub fn left_stick(
 ///
 /// More efficient than two separate calls for the same player.
 #[inline]
-pub fn right_stick(
-    mut caller: Caller<'_, ZGameContext>,
-    player: u32,
-    out_x: u32,
-    out_y: u32,
-) {
+pub fn right_stick(mut caller: Caller<'_, ZGameContext>, player: u32, out_x: u32, out_y: u32) {
     let (x, y) = match validate_player(player, "right_stick") {
         Some(player_idx) => {
             let input = &caller.data().game.input_curr[player_idx];
@@ -372,10 +329,7 @@ pub fn right_stick(
 ///
 /// Returns value from 0.0 to 1.0 (0.0 if invalid player).
 #[inline]
-pub fn trigger_left(
-    caller: Caller<'_, ZGameContext>,
-    player: u32,
-) -> f32 {
+pub fn trigger_left(caller: Caller<'_, ZGameContext>, player: u32) -> f32 {
     let Some(player_idx) = validate_player(player, "trigger_left") else {
         return 0.0;
     };
@@ -389,10 +343,7 @@ pub fn trigger_left(
 ///
 /// Returns value from 0.0 to 1.0 (0.0 if invalid player).
 #[inline]
-pub fn trigger_right(
-    caller: Caller<'_, ZGameContext>,
-    player: u32,
-) -> f32 {
+pub fn trigger_right(caller: Caller<'_, ZGameContext>, player: u32) -> f32 {
     let Some(player_idx) = validate_player(player, "trigger_right") else {
         return 0.0;
     };

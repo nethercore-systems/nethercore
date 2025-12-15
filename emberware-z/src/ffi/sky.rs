@@ -30,11 +30,7 @@ pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
 /// **Examples:**
 /// - `sky_set_colors(0x87CEEBFF, 0x191970FF)` — Light blue horizon, midnight blue zenith
 /// - `sky_set_colors(0xFF6B6BFF, 0x4A00E0FF)` — Sunset gradient (red to purple)
-fn sky_set_colors(
-    mut caller: Caller<'_, ZGameContext>,
-    horizon_color: u32,
-    zenith_color: u32,
-) {
+fn sky_set_colors(mut caller: Caller<'_, ZGameContext>, horizon_color: u32, zenith_color: u32) {
     let state = &mut caller.data_mut().ffi;
     state.update_sky_colors(horizon_color, zenith_color);
 }
@@ -88,11 +84,7 @@ fn sky_set_sun(
 /// In Mode 1 (Matcap), slots 1-3 are used for matcap textures that multiply together.
 /// Slot 0 is reserved for albedo texture.
 /// Using this function in other modes is allowed but has no effect.
-fn matcap_set(
-    mut caller: Caller<'_, ZGameContext>,
-    slot: u32,
-    texture: u32,
-) {
+fn matcap_set(mut caller: Caller<'_, ZGameContext>, slot: u32, texture: u32) {
     // Validate slot range (1-3 for matcaps)
     if !(1..=3).contains(&slot) {
         warn!("matcap_set: invalid slot {} (must be 1-3)", slot);

@@ -159,7 +159,9 @@ impl<I: ConsoleInput, S, R: ConsoleRollbackState> HasDebugRegistry for WasmGameC
 /// This prevents malicious or buggy games from allocating more memory
 /// than the console allows. The host enforces this limit at the wasmtime
 /// level, so games cannot bypass it.
-impl<I: ConsoleInput, S: Send, R: ConsoleRollbackState> ResourceLimiter for WasmGameContext<I, S, R> {
+impl<I: ConsoleInput, S: Send, R: ConsoleRollbackState> ResourceLimiter
+    for WasmGameContext<I, S, R>
+{
     fn memory_growing(
         &mut self,
         _current: usize,

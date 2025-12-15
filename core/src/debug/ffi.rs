@@ -72,7 +72,11 @@ where
     linker.func_wrap("env", "debug_register_vec2", debug_register_vec2::<I, S, R>)?;
     linker.func_wrap("env", "debug_register_vec3", debug_register_vec3::<I, S, R>)?;
     linker.func_wrap("env", "debug_register_rect", debug_register_rect::<I, S, R>)?;
-    linker.func_wrap("env", "debug_register_color", debug_register_color::<I, S, R>)?;
+    linker.func_wrap(
+        "env",
+        "debug_register_color",
+        debug_register_color::<I, S, R>,
+    )?;
 
     // Fixed-point type registration
     linker.func_wrap(
@@ -116,7 +120,11 @@ where
 
     // State query functions
     linker.func_wrap("env", "debug_is_paused", debug_is_paused::<I, S, R>)?;
-    linker.func_wrap("env", "debug_get_time_scale", debug_get_time_scale::<I, S, R>)?;
+    linker.func_wrap(
+        "env",
+        "debug_get_time_scale",
+        debug_get_time_scale::<I, S, R>,
+    )?;
 
     // Note: Change callbacks are handled via exported on_debug_change() function
     // No FFI registration needed - console looks for the export directly

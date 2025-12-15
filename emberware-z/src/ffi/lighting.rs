@@ -40,13 +40,7 @@ pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
 /// The direction vector will be automatically normalized by the graphics backend.
 /// For Mode 2 (PBR), all lights are directional.
 /// Use `light_color()` and `light_intensity()` to set color and brightness.
-fn light_set(
-    mut caller: Caller<'_, ZGameContext>,
-    index: u32,
-    x: f32,
-    y: f32,
-    z: f32,
-) {
+fn light_set(mut caller: Caller<'_, ZGameContext>, index: u32, x: f32, y: f32, z: f32) {
     // Validate index
     if index > 3 {
         warn!("light_set: invalid light index {} (must be 0-3)", index);
@@ -93,11 +87,7 @@ fn light_set(
 /// - `0xFF0000FF` — Red light
 /// - `0xFFFFFFFF` — White light
 /// - `0xFFA500FF` — Orange light
-fn light_color(
-    mut caller: Caller<'_, ZGameContext>,
-    index: u32,
-    color: u32,
-) {
+fn light_color(mut caller: Caller<'_, ZGameContext>, index: u32, color: u32) {
     // Validate index
     if index > 3 {
         warn!("light_color: invalid light index {} (must be 0-3)", index);
@@ -141,11 +131,7 @@ fn light_color(
 ///
 /// Sets the intensity multiplier for a light. The final light contribution is color × intensity.
 /// Negative values are clamped to 0.0, values above 8.0 are clamped to 8.0.
-fn light_intensity(
-    mut caller: Caller<'_, ZGameContext>,
-    index: u32,
-    intensity: f32,
-) {
+fn light_intensity(mut caller: Caller<'_, ZGameContext>, index: u32, intensity: f32) {
     // Validate index
     if index > 3 {
         warn!(
@@ -276,13 +262,7 @@ fn light_disable(mut caller: Caller<'_, ZGameContext>, index: u32) {
 /// Converts the light to a point light and sets its position.
 /// Use `light_range()` to set the falloff distance.
 /// Use `light_color()` and `light_intensity()` for color/brightness.
-fn light_set_point(
-    mut caller: Caller<'_, ZGameContext>,
-    index: u32,
-    x: f32,
-    y: f32,
-    z: f32,
-) {
+fn light_set_point(mut caller: Caller<'_, ZGameContext>, index: u32, x: f32, y: f32, z: f32) {
     if index > 3 {
         warn!(
             "light_set_point: invalid light index {} (must be 0-3)",
@@ -311,11 +291,7 @@ fn light_set_point(
 /// * `range` — Distance at which light reaches zero intensity
 ///
 /// Only affects point lights. Directional lights ignore this.
-fn light_range(
-    mut caller: Caller<'_, ZGameContext>,
-    index: u32,
-    range: f32,
-) {
+fn light_range(mut caller: Caller<'_, ZGameContext>, index: u32, range: f32) {
     if index > 3 {
         warn!("light_range: invalid light index {} (must be 0-3)", index);
         return;

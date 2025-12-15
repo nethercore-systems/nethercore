@@ -8,8 +8,8 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use emberware_core::library::{DataDirProvider, LocalGame, RomLoader, RomMetadata};
 
-use crate::formats::z_rom::EWZ_MAGIC;
 use crate::ZRom;
+use crate::formats::z_rom::EWZ_MAGIC;
 
 /// ROM loader for Emberware Z (.ewz) files.
 ///
@@ -43,7 +43,11 @@ impl RomLoader for ZRomLoader {
         bytes.len() >= 4 && &bytes[0..4] == EWZ_MAGIC
     }
 
-    fn install(&self, rom_path: &Path, data_dir_provider: &dyn DataDirProvider) -> Result<LocalGame> {
+    fn install(
+        &self,
+        rom_path: &Path,
+        data_dir_provider: &dyn DataDirProvider,
+    ) -> Result<LocalGame> {
         // 1. Load and validate ROM
         let bytes = std::fs::read(rom_path)
             .with_context(|| format!("Failed to read ROM file: {}", rom_path.display()))?;

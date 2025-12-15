@@ -8,10 +8,14 @@ use wasmtime::{Caller, Linker};
 
 use crate::console::{ConsoleInput, ConsoleRollbackState};
 use crate::debug::ffi::register_debug_ffi;
-use crate::wasm::{WasmGameContext, MAX_SAVE_SIZE, MAX_SAVE_SLOTS};
+use crate::wasm::{MAX_SAVE_SIZE, MAX_SAVE_SLOTS, WasmGameContext};
 
 /// Register common FFI functions with the linker
-pub fn register_common_ffi<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>(
+pub fn register_common_ffi<
+    I: ConsoleInput,
+    S: Send + Default + 'static,
+    R: ConsoleRollbackState,
+>(
     linker: &mut Linker<WasmGameContext<I, S, R>>,
 ) -> Result<()> {
     // System functions
@@ -41,17 +45,23 @@ pub fn register_common_ffi<I: ConsoleInput, S: Send + Default + 'static, R: Cons
 }
 
 /// Get delta time since last tick (seconds)
-fn delta_time<I: ConsoleInput, S, R: ConsoleRollbackState>(caller: Caller<'_, WasmGameContext<I, S, R>>) -> f32 {
+fn delta_time<I: ConsoleInput, S, R: ConsoleRollbackState>(
+    caller: Caller<'_, WasmGameContext<I, S, R>>,
+) -> f32 {
     caller.data().game.delta_time
 }
 
 /// Get elapsed time since game start (seconds)
-fn elapsed_time<I: ConsoleInput, S, R: ConsoleRollbackState>(caller: Caller<'_, WasmGameContext<I, S, R>>) -> f32 {
+fn elapsed_time<I: ConsoleInput, S, R: ConsoleRollbackState>(
+    caller: Caller<'_, WasmGameContext<I, S, R>>,
+) -> f32 {
     caller.data().game.elapsed_time
 }
 
 /// Get current tick number
-fn tick_count<I: ConsoleInput, S, R: ConsoleRollbackState>(caller: Caller<'_, WasmGameContext<I, S, R>>) -> u64 {
+fn tick_count<I: ConsoleInput, S, R: ConsoleRollbackState>(
+    caller: Caller<'_, WasmGameContext<I, S, R>>,
+) -> u64 {
     caller.data().game.tick_count
 }
 
@@ -74,7 +84,9 @@ fn log_message<I: ConsoleInput, S, R: ConsoleRollbackState>(
 }
 
 /// Request to quit to the library
-fn quit<I: ConsoleInput, S, R: ConsoleRollbackState>(mut caller: Caller<'_, WasmGameContext<I, S, R>>) {
+fn quit<I: ConsoleInput, S, R: ConsoleRollbackState>(
+    mut caller: Caller<'_, WasmGameContext<I, S, R>>,
+) {
     caller.data_mut().game.quit_requested = true;
 }
 
@@ -183,17 +195,23 @@ fn delete<I: ConsoleInput, S, R: ConsoleRollbackState>(
 }
 
 /// Generate deterministic random u32
-fn random<I: ConsoleInput, S, R: ConsoleRollbackState>(mut caller: Caller<'_, WasmGameContext<I, S, R>>) -> u32 {
+fn random<I: ConsoleInput, S, R: ConsoleRollbackState>(
+    mut caller: Caller<'_, WasmGameContext<I, S, R>>,
+) -> u32 {
     caller.data_mut().game.random()
 }
 
 /// Get number of players in session
-fn player_count<I: ConsoleInput, S, R: ConsoleRollbackState>(caller: Caller<'_, WasmGameContext<I, S, R>>) -> u32 {
+fn player_count<I: ConsoleInput, S, R: ConsoleRollbackState>(
+    caller: Caller<'_, WasmGameContext<I, S, R>>,
+) -> u32 {
     caller.data().game.player_count
 }
 
 /// Get bitmask of local players
-fn local_player_mask<I: ConsoleInput, S, R: ConsoleRollbackState>(caller: Caller<'_, WasmGameContext<I, S, R>>) -> u32 {
+fn local_player_mask<I: ConsoleInput, S, R: ConsoleRollbackState>(
+    caller: Caller<'_, WasmGameContext<I, S, R>>,
+) -> u32 {
     caller.data().game.local_player_mask
 }
 

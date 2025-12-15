@@ -17,8 +17,8 @@ use std::sync::Arc;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use ringbuf::{
-    traits::{Consumer, Producer, Split},
     HeapRb,
+    traits::{Consumer, Producer, Split},
 };
 use tracing::{debug, error, info, warn};
 
@@ -31,8 +31,9 @@ pub const OUTPUT_SAMPLE_RATE: u32 = 44_100;
 pub const SOURCE_SAMPLE_RATE: u32 = 22_050;
 
 /// Ring buffer size in samples (stereo frames * 2 channels)
-/// ~100ms buffer at 44.1kHz = 4410 frames * 2 channels = 8820 samples
-const RING_BUFFER_SIZE: usize = 8820;
+/// ~150ms buffer at 44.1kHz = 6615 frames * 2 channels = 13230 samples
+/// Larger buffer provides more headroom for frame timing jitter
+const RING_BUFFER_SIZE: usize = 13230;
 
 /// Sound data (raw PCM)
 #[derive(Clone, Debug)]
@@ -126,7 +127,12 @@ impl AudioOutput {
                     )
                     .map_err(|e| format!("Failed to build audio stream: {}", e))?
             }
-            _ => return Err(format!("Unsupported sample format: {:?}", config.sample_format())),
+            _ => {
+                return Err(format!(
+                    "Unsupported sample format: {:?}",
+                    config.sample_format()
+                ));
+            }
         };
 
         stream

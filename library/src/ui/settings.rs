@@ -1,9 +1,9 @@
 //! Settings UI for configuring video, audio, and input
 
-use emberware_z::input::KeyboardMapping;
 use super::UiAction;
 use egui::{ComboBox, Context, Slider};
 use emberware_core::app::config::{Config, ScaleMode};
+use emberware_z::input::KeyboardMapping;
 use winit::keyboard::KeyCode;
 
 /// Settings UI state

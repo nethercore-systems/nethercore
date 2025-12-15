@@ -1,33 +1,19 @@
 //! Game session lifecycle management
 
-use emberware_z::console::EmberwareZ;
-use emberware_z::library;
-use emberware_core::app::{FRAME_TIME_HISTORY_SIZE, RuntimeError, session::GameSession};
-use emberware_core::console::{Console, ConsoleResourceManager};
+use emberware_core::app::{FRAME_TIME_HISTORY_SIZE, RuntimeError};
+use emberware_core::console::Console;
 use emberware_core::rollback::{SessionEvent, SessionType};
+use emberware_z::library;
 use std::path::Path;
 use std::time::Instant;
-use z_common::{ZDataPack, ZRom};
+use z_common::ZRom;
 
 use super::App;
 
-/// Dummy audio backend for resource processing (Z resource manager doesn't use audio)
-pub(super) struct DummyAudio;
-impl emberware_core::console::Audio for DummyAudio {
-    fn play(
-        &mut self,
-        _handle: emberware_core::console::SoundHandle,
-        _volume: f32,
-        _looping: bool,
-    ) {
-    }
-    fn stop(&mut self, _handle: emberware_core::console::SoundHandle) {}
-}
-
-/// Load WASM bytes and optional data pack from a ROM file path
+/// Load ROM and return WASM bytes
 ///
 /// Supports both .ewz ROM files and raw WASM files.
-fn load_rom(path: &Path) -> Result<(Vec<u8>, Option<ZDataPack>), RuntimeError> {
+fn load_rom_wasm(path: &Path) -> Result<Vec<u8>, RuntimeError> {
     if path.extension().and_then(|e| e.to_str()) == Some("ewz") {
         // Load from .ewz ROM file
         let ewz_bytes = std::fs::read(path)
@@ -36,13 +22,13 @@ fn load_rom(path: &Path) -> Result<(Vec<u8>, Option<ZDataPack>), RuntimeError> {
         let rom = ZRom::from_bytes(&ewz_bytes)
             .map_err(|e| RuntimeError(format!("Failed to parse .ewz ROM: {}", e)))?;
 
-        // Extract WASM code and data pack from ROM
-        Ok((rom.code, rom.data_pack))
+        // Extract WASM code from ROM
+        Ok(rom.code)
     } else {
         // Load raw WASM file (backward compatibility for development)
         let wasm = std::fs::read(path)
             .map_err(|e| RuntimeError(format!("Failed to read ROM file: {}", e)))?;
-        Ok((wasm, None))
+        Ok(wasm)
     }
 }
 
@@ -54,7 +40,10 @@ impl App {
     /// the error message to the user.
     pub(super) fn handle_runtime_error(&mut self, error: RuntimeError) {
         tracing::error!("Runtime error: {}", error);
-        self.game_session = None; // Clean up game session
+        // Clean up game session via ActiveGame
+        if let Some(active_game) = &mut self.active_game {
+            active_game.unload_game();
+        }
         self.last_error = Some(error);
         self.mode = emberware_core::app::AppMode::Library;
         self.local_games = library::get_local_games(&library::ZDataDirProvider);
@@ -65,16 +54,16 @@ impl App {
     /// Processes network events like disconnect, desync, and network interruption.
     /// Returns an error if a critical event occurs that should terminate the session.
     pub(super) fn handle_session_events(&mut self) -> Result<(), RuntimeError> {
-        let session = match &mut self.game_session {
-            Some(s) => s,
-            None => return Ok(()),
+        let active_game = match &mut self.active_game {
+            Some(g) if g.has_game() => g,
+            _ => return Ok(()),
         };
 
         // Poll remote clients for network messages (P2P sessions only)
-        session.runtime.poll_remote_clients();
+        active_game.poll_remote_clients();
 
         // Get session events
-        let events = session.runtime.handle_session_events();
+        let events = active_game.handle_session_events();
 
         // Clear network interrupted flag - will be set again if still interrupted
         self.debug_stats.network_interrupted = None;
@@ -141,10 +130,20 @@ impl App {
     ///
     /// Populates network statistics in DebugStats from the rollback session.
     pub(super) fn update_session_stats(&mut self) {
-        let session = match &self.game_session {
+        let active_game = match &mut self.active_game {
+            Some(g) if g.has_game() => g,
+            _ => {
+                // Clear network stats when no session
+                self.debug_stats.ping_ms = None;
+                self.debug_stats.rollback_frames = 0;
+                self.debug_stats.frame_advantage = 0;
+                return;
+            }
+        };
+
+        let session = match active_game.session_mut() {
             Some(s) => s,
             None => {
-                // Clear network stats when no session
                 self.debug_stats.ping_ms = None;
                 self.debug_stats.rollback_frames = 0;
                 self.debug_stats.frame_advantage = 0;
@@ -192,9 +191,17 @@ impl App {
     /// Returns true if the game is still running, false if it should exit.
     /// Returns (game_still_running, did_render_this_frame)
     pub(super) fn run_game_frame(&mut self) -> Result<(bool, bool), RuntimeError> {
+        let active_game = self
+            .active_game
+            .as_mut()
+            .ok_or_else(|| RuntimeError("No active game".to_string()))?;
+
+        let session = active_game
+            .session_mut()
+            .ok_or_else(|| RuntimeError("No game session".to_string()))?;
+
         // First, update input from InputManager
-        if let (Some(session), Some(input_manager)) = (&mut self.game_session, &self.input_manager)
-        {
+        if let Some(input_manager) = &self.input_manager {
             let console = session.runtime.console();
 
             // Get input for each local player and set it on the game
@@ -206,12 +213,6 @@ impl App {
                 game.set_input(0, z_input);
             }
         }
-
-        // Run the game frame (fixed timestep updates)
-        let session = self
-            .game_session
-            .as_mut()
-            .ok_or_else(|| RuntimeError("No game session".to_string()))?;
 
         // Check if frame controller allows running ticks
         let should_run = self.frame_controller.should_run_tick();
@@ -322,185 +323,22 @@ impl App {
         }
 
         // Check if game requested quit
-        if let Some(game) = session.runtime.game_mut() {
-            if game.state().quit_requested {
-                return Ok((false, did_render));
-            }
-        }
+        let quit_requested = session
+            .runtime
+            .game()
+            .map(|g| g.state().quit_requested)
+            .unwrap_or(false);
 
-        Ok((true, did_render))
-    }
-
-    /// Internal helper to initialize and start a game from WASM bytes and optional data pack
-    fn initialize_game(
-        &mut self,
-        rom_bytes: Vec<u8>,
-        data_pack: Option<ZDataPack>,
-    ) -> Result<(), RuntimeError> {
-        // Ensure WASM engine is available
-        let wasm_engine = self
-            .wasm_engine
-            .as_ref()
-            .ok_or_else(|| RuntimeError("WASM engine not initialized".to_string()))?;
-
-        // Load the WASM module
-        let module = wasm_engine
-            .load_module(&rom_bytes)
-            .map_err(|e| RuntimeError(format!("Failed to load WASM module: {}", e)))?;
-
-        // Create a linker and register FFI functions
-        let mut linker = wasmtime::Linker::new(wasm_engine.engine());
-
-        // Register common FFI functions
-        emberware_core::ffi::register_common_ffi(&mut linker)
-            .map_err(|e| RuntimeError(format!("Failed to register common FFI: {}", e)))?;
-
-        // Create the console instance
-        let console = EmberwareZ::new();
-
-        // Register console-specific FFI functions
-        console
-            .register_ffi(&mut linker)
-            .map_err(|e| RuntimeError(format!("Failed to register Z FFI: {}", e)))?;
-
-        // Create the game instance
-        let game_instance = emberware_core::wasm::GameInstance::new(wasm_engine, &module, &linker)
-            .map_err(|e| RuntimeError(format!("Failed to instantiate game: {}", e)))?;
-
-        // Create the runtime
-        let mut runtime = emberware_core::runtime::Runtime::new(console);
-        runtime.load_game(game_instance);
-
-        // Create and set audio backend
-        let audio = EmberwareZ::new()
-            .create_audio()
-            .map_err(|e| RuntimeError(format!("Failed to create audio: {}", e)))?;
-        runtime.set_audio(audio);
-
-        // Set data pack on console state (before init, so rom_* functions work)
-        if let Some(data_pack) = data_pack {
-            if let Some(game) = runtime.game_mut() {
-                game.console_state_mut().data_pack = Some(std::sync::Arc::new(data_pack));
-                tracing::info!("Data pack loaded with assets");
-            }
-        }
-
-        // Initialize the game (calls game's init() function)
-        runtime
-            .init_game()
-            .map_err(|e| RuntimeError(format!("Failed to initialize game: {}", e)))?;
-
-        // Finalize debug registration (prevents further registration after init)
-        if let Some(game) = runtime.game_mut() {
-            game.store_mut()
-                .data_mut()
-                .debug_registry
-                .finalize_registration();
-        }
-
-        // Create resource manager and game session
-        let resource_manager = EmberwareZ::new().create_resource_manager();
-        self.game_session = Some(GameSession::new(runtime, resource_manager));
-
-        // Add built-in textures BEFORE flushing user resources
-        // Note: Handle 0 is reserved as invalid (triggers fallback when load_* fails)
-        if let (Some(session), Some(graphics)) = (&mut self.game_session, &self.graphics) {
-            let font_texture_handle = graphics.font_texture();
-            session
-                .resource_manager
-                .texture_map
-                .insert(u32::MAX - 1, font_texture_handle); // Reserved for built-in font
-            tracing::info!(
-                "Initialized font texture in texture_map: handle 0xFFFFFFFE -> {:?}",
-                font_texture_handle
-            );
-
-            let white_texture_handle = graphics.white_texture();
-            session
-                .resource_manager
-                .texture_map
-                .insert(u32::MAX, white_texture_handle); // Reserved for white fallback
-            tracing::info!(
-                "Initialized white texture in texture_map: handle 0xFFFFFFFF -> {:?}",
-                white_texture_handle
-            );
-        }
-
-        // Flush all resources accumulated during init()
-        self.flush_post_init_resources()?;
-
-        // Reset frame controller for new game session
-        self.frame_controller.reset();
-
-        // Update render target resolution and window minimum size based on game's init config
-        if let Some(session) = &self.game_session {
-            if let Some(game) = session.runtime.game() {
-                let z_state = game.console_state();
-                let resolution_index = z_state.init_config.resolution_index as u8;
-
-                // Update graphics render target to match game resolution
-                if let Some(graphics) = &mut self.graphics {
-                    graphics.update_resolution(resolution_index);
-
-                    // Update window minimum size to match game resolution
-                    if let Some(window) = &self.window {
-                        let min_size =
-                            winit::dpi::PhysicalSize::new(graphics.width(), graphics.height());
-                        window.set_min_inner_size(Some(min_size));
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Flush pending resources accumulated during init()
-    ///
-    /// Called exactly once after runtime.init_game() to process all textures,
-    /// meshes, and skeletons requested during the game's init() function.
-    fn flush_post_init_resources(&mut self) -> Result<(), RuntimeError> {
-        let session = self
-            .game_session
-            .as_mut()
-            .ok_or_else(|| RuntimeError("No game session".to_string()))?;
-
-        let graphics = self
-            .graphics
-            .as_mut()
-            .ok_or_else(|| RuntimeError("Graphics not initialized".to_string()))?;
-
-        // Process all pending resources from init()
-        let mut dummy_audio = DummyAudio;
-        if let Some(game) = session.runtime.game_mut() {
-            let state = game.console_state_mut();
-
-            tracing::info!(
-                "Flushing post-init resources: {} textures, {} meshes (f32), {} meshes (packed), {} skeletons",
-                state.pending_textures.len(),
-                state.pending_meshes.len(),
-                state.pending_meshes_packed.len(),
-                state.pending_skeletons.len()
-            );
-
-            session
-                .resource_manager
-                .process_pending_resources(graphics, &mut dummy_audio, state);
-
-            // Set render mode once from init config
-            graphics.set_render_mode(state.init_config.render_mode);
-        }
-
-        Ok(())
+        Ok((!quit_requested, did_render))
     }
 
     /// Start a game by loading its WASM and initializing the runtime
     pub(super) fn start_game(&mut self, game_id: &str) -> Result<(), RuntimeError> {
-        // Clear resources from previous game (clear-on-init pattern)
-        // This handles crashes/failed init gracefully since the next game load clears stale state
-        if let Some(graphics) = &mut self.graphics {
-            graphics.clear_game_resources();
-        }
+        // Ensure active_game exists
+        let active_game = self
+            .active_game
+            .as_mut()
+            .ok_or_else(|| RuntimeError("Graphics not initialized".to_string()))?;
 
         // Find the game in local games
         let game = self
@@ -509,11 +347,16 @@ impl App {
             .find(|g| g.id == game_id)
             .ok_or_else(|| RuntimeError(format!("Game not found: {}", game_id)))?;
 
-        // Load ROM file (WASM bytes and optional data pack)
-        let (rom_bytes, data_pack) = load_rom(&game.rom_path)?;
+        // Load ROM file (WASM bytes)
+        let rom_bytes = load_rom_wasm(&game.rom_path)?;
 
-        // Initialize and start the game
-        self.initialize_game(rom_bytes, data_pack)?;
+        // Load the game via ActiveGame (handles all initialization)
+        active_game
+            .load_game(&rom_bytes, 1)
+            .map_err(|e| RuntimeError(format!("Failed to load game: {}", e)))?;
+
+        // Reset frame controller for new game session
+        self.frame_controller.reset();
 
         tracing::info!("Game started: {}", game_id);
         Ok(())
@@ -527,16 +370,22 @@ impl App {
         &mut self,
         path: std::path::PathBuf,
     ) -> Result<(), RuntimeError> {
-        // Clear resources from previous game
-        if let Some(graphics) = &mut self.graphics {
-            graphics.clear_game_resources();
-        }
+        // Ensure active_game exists
+        let active_game = self
+            .active_game
+            .as_mut()
+            .ok_or_else(|| RuntimeError("Graphics not initialized".to_string()))?;
 
-        // Load ROM file (WASM bytes and optional data pack)
-        let (rom_bytes, data_pack) = load_rom(&path)?;
+        // Load ROM file (WASM bytes)
+        let rom_bytes = load_rom_wasm(&path)?;
 
-        // Initialize and start the game
-        self.initialize_game(rom_bytes, data_pack)?;
+        // Load the game via ActiveGame (handles all initialization)
+        active_game
+            .load_game(&rom_bytes, 1)
+            .map_err(|e| RuntimeError(format!("Failed to load game: {}", e)))?;
+
+        // Reset frame controller for new game session
+        self.frame_controller.reset();
 
         tracing::info!("Game started from path: {}", path.display());
         Ok(())

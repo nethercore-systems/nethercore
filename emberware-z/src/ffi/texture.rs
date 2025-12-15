@@ -6,7 +6,7 @@ use anyhow::Result;
 use tracing::warn;
 use wasmtime::{Caller, Linker};
 
-use super::{guards::check_init_only, ZGameContext};
+use super::{ZGameContext, guards::check_init_only};
 use crate::graphics::MatcapBlendMode;
 use crate::state::PendingTexture;
 use z_common::TextureFormat;
@@ -123,11 +123,7 @@ fn texture_bind(mut caller: Caller<'_, ZGameContext>, handle: u32) {
 /// * `slot` — Slot index (0-3)
 ///
 /// Slots: 0=albedo, 1=MRE/matcap, 2=env matcap, 3=matcap
-fn texture_bind_slot(
-    mut caller: Caller<'_, ZGameContext>,
-    handle: u32,
-    slot: u32,
-) {
+fn texture_bind_slot(mut caller: Caller<'_, ZGameContext>, handle: u32, slot: u32) {
     if slot > 3 {
         warn!("texture_bind_slot: invalid slot {} (max 3)", slot);
         return;
@@ -146,11 +142,7 @@ fn texture_bind_slot(
 /// Mode 0 (Multiply): Standard matcap blending (default)
 /// Mode 1 (Add): Additive blending for glow/emission effects
 /// Mode 2 (HSV Modulate): Hue shifting and iridescence effects
-fn matcap_blend_mode(
-    mut caller: Caller<'_, ZGameContext>,
-    slot: u32,
-    mode: u32,
-) {
+fn matcap_blend_mode(mut caller: Caller<'_, ZGameContext>, slot: u32, mode: u32) {
     if !(1..=3).contains(&slot) {
         warn!("matcap_blend_mode: invalid slot {} (must be 1-3)", slot);
         return;

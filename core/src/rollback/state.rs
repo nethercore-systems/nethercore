@@ -244,7 +244,11 @@ impl RollbackStateManager {
         }
 
         // Create snapshot with checksum covering both WASM and console data
-        Ok(GameStateSnapshot::from_data_with_console(snapshot_data, console_data, frame))
+        Ok(GameStateSnapshot::from_data_with_console(
+            snapshot_data,
+            console_data,
+            frame,
+        ))
     }
 
     /// Load a game state from a snapshot

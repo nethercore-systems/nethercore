@@ -90,7 +90,11 @@ const FRAME_ADVANTAGE_WARNING_THRESHOLD: i32 = 4;
 /// Wraps GGRS session types and provides a unified interface for
 /// local, sync-test, and P2P sessions. Handles state management
 /// and input processing.
-pub struct RollbackSession<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState = ()> {
+pub struct RollbackSession<
+    I: ConsoleInput,
+    S: Send + Default + 'static,
+    R: ConsoleRollbackState = (),
+> {
     inner: SessionInner<I>,
     session_type: SessionType,
     config: SessionConfig,
@@ -112,7 +116,9 @@ pub struct RollbackSession<I: ConsoleInput, S: Send + Default + 'static, R: Cons
     _phantom: std::marker::PhantomData<(S, R)>,
 }
 
-impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState> RollbackSession<I, S, R> {
+impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>
+    RollbackSession<I, S, R>
+{
     /// Create a new local session (no rollback)
     ///
     /// Local sessions run without GGRS - updates execute immediately

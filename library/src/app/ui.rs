@@ -1,18 +1,17 @@
 //! UI action handling and input processing
 
-use emberware_core::app::RuntimeError;
 use emberware_core::app::AppMode;
+use emberware_core::app::RuntimeError;
 use emberware_core::app::config;
-use emberware_core::console::Graphics;
 use winit::{
     event::{ElementState, KeyEvent},
     keyboard::{KeyCode, PhysicalKey},
     window::Fullscreen,
 };
 
+use crate::ui::UiAction;
 use emberware_z::input::InputManager;
 use emberware_z::library;
-use crate::ui::UiAction;
 
 use super::App;
 
@@ -179,8 +178,8 @@ impl App {
                 // Apply changes to input manager (recreate with new config)
                 self.input_manager = Some(InputManager::new(self.config.input.clone()));
 
-                if let Some(graphics) = &mut self.graphics {
-                    graphics.set_scale_mode(self.config.video.scale_mode);
+                if let Some(active_game) = &mut self.active_game {
+                    active_game.set_scale_mode(self.config.video.scale_mode);
                 }
 
                 // Apply fullscreen setting if changed
@@ -204,8 +203,8 @@ impl App {
             }
             UiAction::SetScaleMode(scale_mode) => {
                 // Preview scale mode change
-                if let Some(graphics) = &mut self.graphics {
-                    graphics.set_scale_mode(scale_mode);
+                if let Some(active_game) = &mut self.active_game {
+                    active_game.set_scale_mode(scale_mode);
                 }
             }
         }
@@ -214,8 +213,8 @@ impl App {
     /// Handle window resize
     pub(super) fn handle_resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
-            if let Some(graphics) = &mut self.graphics {
-                graphics.resize(new_size.width, new_size.height);
+            if let Some(active_game) = &mut self.active_game {
+                active_game.resize(new_size.width, new_size.height);
             }
         }
     }
@@ -308,7 +307,10 @@ impl App {
                         match self.mode {
                             AppMode::Playing { .. } => {
                                 tracing::info!("Exiting game via ESC");
-                                self.game_session = None; // Clean up game session
+                                // Clean up game session via ActiveGame
+                                if let Some(active_game) = &mut self.active_game {
+                                    active_game.unload_game();
+                                }
                                 self.mode = AppMode::Library;
                                 self.local_games =
                                     library::get_local_games(&library::ZDataDirProvider);

@@ -47,12 +47,7 @@ pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
 /// Returns mesh handle (>0) on success, 0 on failure.
 ///
 /// The cube has 24 vertices (4 per face) with flat normals and box-unwrapped UVs.
-fn cube(
-    mut caller: Caller<'_, ZGameContext>,
-    size_x: f32,
-    size_y: f32,
-    size_z: f32,
-) -> u32 {
+fn cube(mut caller: Caller<'_, ZGameContext>, size_x: f32, size_y: f32, size_z: f32) -> u32 {
     // Validate parameters
     if size_x <= 0.0 || size_y <= 0.0 || size_z <= 0.0 {
         warn!(
@@ -102,12 +97,7 @@ fn cube(
 /// Returns mesh handle (>0) on success, 0 on failure.
 ///
 /// The sphere uses equirectangular UV mapping and smooth normals.
-fn sphere(
-    mut caller: Caller<'_, ZGameContext>,
-    radius: f32,
-    segments: u32,
-    rings: u32,
-) -> u32 {
+fn sphere(mut caller: Caller<'_, ZGameContext>, radius: f32, segments: u32, rings: u32) -> u32 {
     // Validate parameters
     if radius <= 0.0 {
         warn!("sphere: radius must be > 0.0 (got {})", radius);
@@ -378,12 +368,7 @@ fn capsule(
 /// - V maps 0→1 from north pole to south pole (latitude)
 ///
 /// Perfect for skybox/environment mapping and earth-like textures.
-fn sphere_uv(
-    mut caller: Caller<'_, ZGameContext>,
-    radius: f32,
-    segments: u32,
-    rings: u32,
-) -> u32 {
+fn sphere_uv(mut caller: Caller<'_, ZGameContext>, radius: f32, segments: u32, rings: u32) -> u32 {
     // Validate parameters
     if radius <= 0.0 {
         warn!("sphere_uv: radius must be > 0.0 (got {})", radius);
@@ -483,12 +468,7 @@ fn plane_uv(
 /// - +X/-X: V=[0.0-0.5], +Y/-Y: V=[0.5-1.0], +Z/-Z: mixed
 ///
 /// Perfect for cubemaps and multi-texture cubes.
-fn cube_uv(
-    mut caller: Caller<'_, ZGameContext>,
-    size_x: f32,
-    size_y: f32,
-    size_z: f32,
-) -> u32 {
+fn cube_uv(mut caller: Caller<'_, ZGameContext>, size_x: f32, size_y: f32, size_z: f32) -> u32 {
     // Validate parameters
     if size_x <= 0.0 || size_y <= 0.0 || size_z <= 0.0 {
         warn!(

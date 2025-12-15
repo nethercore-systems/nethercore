@@ -33,14 +33,7 @@ pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
 ///
 /// Draws the full texture (UV 0,0 to 1,1) as a quad in screen space.
 /// Uses current blend mode and bound texture (slot 0).
-fn draw_sprite(
-    mut caller: Caller<'_, ZGameContext>,
-    x: f32,
-    y: f32,
-    w: f32,
-    h: f32,
-    color: u32,
-) {
+fn draw_sprite(mut caller: Caller<'_, ZGameContext>, x: f32, y: f32, w: f32, h: f32, color: u32) {
     let state = &mut caller.data_mut().ffi;
 
     // Get shading state index
@@ -191,14 +184,7 @@ fn draw_sprite_ex(
 /// * `color` — Fill color (0xRRGGBBAA)
 ///
 /// Draws an untextured quad. Useful for UI backgrounds, health bars, etc.
-fn draw_rect(
-    mut caller: Caller<'_, ZGameContext>,
-    x: f32,
-    y: f32,
-    w: f32,
-    h: f32,
-    color: u32,
-) {
+fn draw_rect(mut caller: Caller<'_, ZGameContext>, x: f32, y: f32, w: f32, h: f32, color: u32) {
     let state = &mut caller.data_mut().ffi;
 
     // Bind white texture (handle 0xFFFFFFFF) to slot 0

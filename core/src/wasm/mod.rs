@@ -23,7 +23,7 @@ use crate::console::{ConsoleInput, ConsoleRollbackState};
 // Re-export public types from state module
 #[allow(deprecated)]
 pub use state::{
-    GameState, GameStateWithConsole, WasmGameContext, MAX_PLAYERS, MAX_SAVE_SIZE, MAX_SAVE_SLOTS,
+    GameState, GameStateWithConsole, MAX_PLAYERS, MAX_SAVE_SIZE, MAX_SAVE_SLOTS, WasmGameContext,
     read_string_from_memory,
 };
 
@@ -101,7 +101,8 @@ impl WasmEngine {
 // returns Result<Self> which properly propagates initialization errors.
 
 /// A loaded and instantiated game
-pub struct GameInstance<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState = ()> {
+pub struct GameInstance<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState = ()>
+{
     store: Store<WasmGameContext<I, S, R>>,
     /// The WASM instance.
     /// Not directly used after initialization, but must be kept alive to maintain
@@ -141,10 +142,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState> Game
         linker: &Linker<WasmGameContext<I, S, R>>,
         ram_limit: usize,
     ) -> Result<Self> {
-        let mut store = Store::new(
-            engine.engine(),
-            WasmGameContext::with_ram_limit(ram_limit),
-        );
+        let mut store = Store::new(engine.engine(), WasmGameContext::with_ram_limit(ram_limit));
 
         // Enable resource limiter to enforce memory constraints
         store.limiter(|state| state);

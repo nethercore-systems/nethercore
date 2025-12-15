@@ -9,10 +9,8 @@ use anyhow::Result;
 use tracing::warn;
 use wasmtime::{Caller, Linker};
 
-use super::{guards::check_init_only, ZGameContext};
-use crate::state::{
-    BoneMatrix3x4, KeyframeSource, MAX_BONES, MAX_SKELETONS, PendingSkeleton,
-};
+use super::{ZGameContext, guards::check_init_only};
+use crate::state::{BoneMatrix3x4, KeyframeSource, MAX_BONES, MAX_SKELETONS, PendingSkeleton};
 
 /// Register GPU skinning FFI functions
 pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
@@ -251,11 +249,7 @@ fn skeleton_bind(mut caller: Caller<'_, ZGameContext>, skeleton: u32) {
 /// Bone matrices are appended to the per-frame immediate bones buffer.
 /// The offset at which matrices were added is tracked, allowing multiple
 /// set_bones() calls per frame for different skinned mesh draws.
-fn set_bones(
-    mut caller: Caller<'_, ZGameContext>,
-    matrices_ptr: u32,
-    count: u32,
-) {
+fn set_bones(mut caller: Caller<'_, ZGameContext>, matrices_ptr: u32, count: u32) {
     // Validate bone count
     if count > MAX_BONES as u32 {
         warn!(
@@ -375,11 +369,7 @@ fn set_bones(
 /// # Animation System v2
 /// Bone matrices are appended to the per-frame immediate bones buffer.
 /// See set_bones() for details.
-fn set_bones_4x4(
-    mut caller: Caller<'_, ZGameContext>,
-    matrices_ptr: u32,
-    count: u32,
-) {
+fn set_bones_4x4(mut caller: Caller<'_, ZGameContext>, matrices_ptr: u32, count: u32) {
     // Validate bone count
     if count > MAX_BONES as u32 {
         warn!(

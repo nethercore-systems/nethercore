@@ -17,7 +17,7 @@ use z_common::formats::{
     decode_bone_transform,
 };
 
-use super::{guards::check_init_only, ZGameContext};
+use super::{ZGameContext, guards::check_init_only};
 use crate::state::{
     BoneMatrix3x4, KeyframeSource, MAX_BONES, MAX_KEYFRAME_COLLECTIONS, PendingKeyframes,
 };
@@ -160,11 +160,7 @@ fn keyframes_load(
 /// Keyframe collection handle (>0) on success. Traps on failure.
 ///
 /// **Init-only:** Can only be called during `init()`.
-fn rom_keyframes(
-    mut caller: Caller<'_, ZGameContext>,
-    id_ptr: u32,
-    id_len: u32,
-) -> Result<u32> {
+fn rom_keyframes(mut caller: Caller<'_, ZGameContext>, id_ptr: u32, id_len: u32) -> Result<u32> {
     check_init_only(&caller, "rom_keyframes")?;
 
     // Read asset ID from WASM memory
@@ -253,10 +249,7 @@ fn rom_keyframes(
 ///
 /// # Note
 /// Works during init() by also checking pending_keyframes.
-fn keyframes_bone_count(
-    caller: Caller<'_, ZGameContext>,
-    handle: u32,
-) -> u32 {
+fn keyframes_bone_count(caller: Caller<'_, ZGameContext>, handle: u32) -> u32 {
     if handle == 0 {
         warn!("keyframes_bone_count: invalid handle 0");
         return 0;
@@ -297,10 +290,7 @@ fn keyframes_bone_count(
 ///
 /// # Note
 /// Works during init() by also checking pending_keyframes.
-fn keyframes_frame_count(
-    caller: Caller<'_, ZGameContext>,
-    handle: u32,
-) -> u32 {
+fn keyframes_frame_count(caller: Caller<'_, ZGameContext>, handle: u32) -> u32 {
     if handle == 0 {
         warn!("keyframes_frame_count: invalid handle 0");
         return 0;
@@ -458,11 +448,7 @@ fn keyframe_read(
 /// Unlike the legacy `keyframe_read() -> set_bones()` path, this uses pre-uploaded
 /// static keyframe data. The GPU shader reads directly from the all_keyframes buffer
 /// at the computed offset.
-fn keyframe_bind(
-    mut caller: Caller<'_, ZGameContext>,
-    handle: u32,
-    index: u32,
-) -> Result<()> {
+fn keyframe_bind(mut caller: Caller<'_, ZGameContext>, handle: u32, index: u32) -> Result<()> {
     if handle == 0 {
         // Unbind keyframes - reset to default static offset 0
         let state = &mut caller.data_mut().ffi;

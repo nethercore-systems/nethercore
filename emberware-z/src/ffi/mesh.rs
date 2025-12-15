@@ -6,7 +6,7 @@ use anyhow::Result;
 use tracing::{info, warn};
 use wasmtime::{Caller, Linker};
 
-use super::{get_wasm_memory, guards::check_init_only, ZGameContext};
+use super::{ZGameContext, get_wasm_memory, guards::check_init_only};
 use crate::graphics::{vertex_stride, vertex_stride_packed};
 use crate::state::{PendingMesh, PendingMeshPacked};
 

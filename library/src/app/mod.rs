@@ -11,19 +11,14 @@ use std::sync::Arc;
 use std::time::Instant;
 use winit::{event::WindowEvent, event_loop::ActiveEventLoop, window::Window};
 
-use emberware_z::console::EmberwareZ;
-use emberware_z::ffi::unpack_rgba;
-use emberware_z::graphics::ZGraphics;
-use emberware_z::input::InputManager;
-use emberware_z::library::LocalGame;
+use crate::registry::ActiveGame;
 use crate::ui::{LibraryUi, UiAction};
 use emberware_core::app::config::Config;
-use emberware_core::app::{
-    AppMode, DebugStats, FRAME_TIME_HISTORY_SIZE, RuntimeError, session::GameSession,
-};
-use emberware_core::console::ConsoleResourceManager;
+use emberware_core::app::{AppMode, DebugStats, FRAME_TIME_HISTORY_SIZE, RuntimeError};
 use emberware_core::debug::{DebugPanel, FrameController};
-use emberware_core::wasm::WasmEngine;
+use emberware_z::console::EmberwareZ;
+use emberware_z::input::InputManager;
+use emberware_z::library::LocalGame;
 
 /// Data needed to render the debug panel (extracted before egui frame)
 struct DebugPanelData {
@@ -40,8 +35,8 @@ pub struct App {
     pub(crate) config: Config,
     /// Window handle (created during resumed event)
     pub(crate) window: Option<Arc<Window>>,
-    /// Graphics backend (initialized after window creation)
-    pub(crate) graphics: Option<ZGraphics>,
+    /// Active game instance (console-agnostic, owns graphics + game session)
+    pub(crate) active_game: Option<ActiveGame>,
     /// Input manager (keyboard + gamepad)
     pub(crate) input_manager: Option<InputManager>,
     /// Whether the application should exit
@@ -72,10 +67,6 @@ pub struct App {
     pub(crate) debug_stats: DebugStats,
     /// Last runtime error (for displaying error in library)
     pub(crate) last_error: Option<RuntimeError>,
-    /// WASM engine (shared across all games)
-    pub(crate) wasm_engine: Option<WasmEngine>,
-    /// Active game session (only present in Playing mode)
-    pub(crate) game_session: Option<GameSession<EmberwareZ>>,
     /// Whether a redraw is needed (UI state changed)
     pub(crate) needs_redraw: bool,
     // Egui optimization cache
@@ -125,7 +116,7 @@ impl App {
         let game_tick_fps = self.calculate_game_tick_fps();
         let last_error = self.last_error.clone();
 
-        // Prepare debug panel data BEFORE borrowing graphics (to avoid borrow conflicts)
+        // Prepare debug panel data BEFORE borrowing active_game (to avoid borrow conflicts)
         let debug_panel_data =
             if self.debug_panel.visible && matches!(mode, AppMode::Playing { .. }) {
                 self.prepare_debug_panel_data()
@@ -138,13 +129,13 @@ impl App {
             None => return,
         };
 
-        let graphics = match &mut self.graphics {
+        let active_game = match &mut self.active_game {
             Some(g) => g,
             None => return,
         };
 
-        // Update VRAM usage from graphics
-        self.debug_stats.vram_used = graphics.vram_used();
+        // Update VRAM usage from active_game
+        self.debug_stats.vram_used = active_game.vram_used();
 
         let egui_state = match &mut self.egui_state {
             Some(s) => s,
@@ -157,7 +148,7 @@ impl App {
         };
 
         // Get surface texture
-        let surface_texture = match graphics.get_current_texture() {
+        let surface_texture = match active_game.get_current_texture() {
             Ok(tex) => tex,
             Err(e) => {
                 tracing::warn!("Failed to get surface texture: {}", e);
@@ -171,7 +162,7 @@ impl App {
 
         // Create SINGLE encoder for entire frame
         let mut encoder =
-            graphics
+            active_game
                 .device()
                 .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                     label: Some("Frame Encoder"),
@@ -181,36 +172,14 @@ impl App {
         if matches!(mode, AppMode::Playing { .. }) {
             if game_rendered_this_frame {
                 // Get clear color from game state
-                let clear_color = {
-                    if let Some(session) = &self.game_session {
-                        if let Some(game) = session.runtime.game() {
-                            let z_state = game.console_state();
-
-                            unpack_rgba(z_state.init_config.clear_color)
-                        } else {
-                            [0.1, 0.1, 0.1, 1.0]
-                        }
-                    } else {
-                        [0.1, 0.1, 0.1, 1.0]
-                    }
-                };
+                let clear_color = active_game.clear_color();
 
                 // Render new game content to render target
-                if let Some(session) = &mut self.game_session {
-                    if let Some(game) = session.runtime.game_mut() {
-                        let z_state = game.console_state_mut();
-                        graphics.render_frame(
-                            &mut encoder,
-                            z_state,
-                            &session.resource_manager.texture_map,
-                            clear_color,
-                        );
-                    }
-                }
+                active_game.render_game_frame(&mut encoder, clear_color);
             }
 
             // Always blit the render target to the window (shows last rendered frame)
-            graphics.blit_to_window(&mut encoder, &view);
+            active_game.blit_to_window(&mut encoder, &view);
         }
 
         // Start egui frame
@@ -344,7 +313,7 @@ impl App {
         }
 
         // Check 3: Window resized
-        let current_size = (graphics.width(), graphics.height());
+        let current_size = (active_game.width(), active_game.height());
         if !egui_dirty && self.last_window_size != current_size {
             egui_dirty = true;
             self.last_window_size = current_size;
@@ -390,7 +359,7 @@ impl App {
         }
 
         let screen_descriptor = egui_wgpu::ScreenDescriptor {
-            size_in_pixels: [graphics.width(), graphics.height()],
+            size_in_pixels: [active_game.width(), active_game.height()],
             pixels_per_point: window.scale_factor() as f32,
         };
 
@@ -407,8 +376,8 @@ impl App {
 
             // Update GPU buffers (ONLY when dirty)
             egui_renderer.update_buffers(
-                graphics.device(),
-                graphics.queue(),
+                active_game.device(),
+                active_game.queue(),
                 &mut encoder,
                 &new_tris,
                 &screen_descriptor,
@@ -422,7 +391,12 @@ impl App {
 
         // Texture updates still happen (already delta-tracked)
         for (id, image_delta) in &full_output.textures_delta.set {
-            egui_renderer.update_texture(graphics.device(), graphics.queue(), *id, image_delta);
+            egui_renderer.update_texture(
+                active_game.device(),
+                active_game.queue(),
+                *id,
+                image_delta,
+            );
         }
 
         // Create render pass and render egui (only if there are triangles to render)
@@ -488,7 +462,9 @@ impl App {
         }
 
         // Submit commands
-        graphics.queue().submit(std::iter::once(encoder.finish()));
+        active_game
+            .queue()
+            .submit(std::iter::once(encoder.finish()));
 
         // Free egui textures
         for id in &full_output.textures_delta.free {
@@ -500,10 +476,8 @@ impl App {
 
         // Call on_debug_change() if debug values were modified
         if debug_values_changed {
-            if let Some(session) = &mut self.game_session {
-                if let Some(game) = session.runtime.game_mut() {
-                    game.call_on_debug_change();
-                }
+            if let Some(game) = &mut self.active_game {
+                game.call_on_debug_change();
             }
         }
 
@@ -522,25 +496,8 @@ impl App {
     ///
     /// Returns None if no debug panel should be shown (no game, no registry, etc.)
     fn prepare_debug_panel_data(&mut self) -> Option<DebugPanelData> {
-        let session = self.game_session.as_mut()?;
-        let game = session.runtime.game_mut()?;
-        let store = game.store_mut();
-
-        // Check if registry has any values
-        if store.data().debug_registry.is_empty() {
-            return None;
-        }
-
-        // Get memory handle
-        let memory = store.data().game.memory?;
-
-        // Clone the registry
-        let registry = store.data().debug_registry.clone();
-
-        // Get raw pointer to WASM memory
-        // SAFETY: Pointer is valid for the duration of this frame
-        let mem_ptr = memory.data_ptr(&mut *store);
-        let mem_len = memory.data_size(&mut *store);
+        let active_game = self.active_game.as_mut()?;
+        let (registry, mem_ptr, mem_len) = active_game.debug_panel_data()?;
 
         Some(DebugPanelData {
             registry,
@@ -566,10 +523,9 @@ impl App {
             return;
         }
 
-        // Initialize game session if needed (CLI launch case)
-        // When launched via CLI with a game_id, the app starts in Playing mode
-        // but start_game() was never called (unlike Library UI flow)
-        if self.game_session.is_none() {
+        // Check if game is loaded (initialize if needed for CLI launch case)
+        let game_loaded = self.active_game.as_ref().map_or(false, |g| g.has_game());
+        if !game_loaded {
             if let AppMode::Playing { ref game_id } = self.mode {
                 let game_id_owned = game_id.clone();
                 tracing::info!(
@@ -597,16 +553,8 @@ impl App {
             Ok((running, rendered)) => {
                 // Only execute draw commands if we rendered
                 if rendered {
-                    if let Some(session) = &mut self.game_session {
-                        if let Some(graphics) = &mut self.graphics {
-                            // Execute draw commands (resources already flushed post-init)
-                            if let Some(game) = session.runtime.game_mut() {
-                                let state = game.console_state_mut();
-                                session
-                                    .resource_manager
-                                    .execute_draw_commands(graphics, state);
-                            }
-                        }
+                    if let Some(active_game) = &mut self.active_game {
+                        active_game.execute_draw_commands();
                     }
                 }
                 (running, rendered)
@@ -621,9 +569,12 @@ impl App {
 
         // If game requested quit, return to library
         if !game_running {
-            self.game_session = None;
+            if let Some(active_game) = &mut self.active_game {
+                active_game.unload_game();
+            }
             self.mode = AppMode::Library;
-            self.local_games = emberware_z::library::get_local_games(&emberware_z::library::ZDataDirProvider);
+            self.local_games =
+                emberware_z::library::get_local_games(&emberware_z::library::ZDataDirProvider);
         }
     }
 }
@@ -708,7 +659,7 @@ impl emberware_core::app::ConsoleApp<EmberwareZ> for App {
     // === Simulation control ===
 
     fn has_active_game(&self) -> bool {
-        self.game_session.is_some()
+        self.active_game.as_ref().map_or(false, |g| g.has_game())
     }
 
     fn next_tick(&self) -> Instant {
@@ -723,8 +674,8 @@ impl emberware_core::app::ConsoleApp<EmberwareZ> for App {
     }
 
     fn update_next_tick(&mut self) {
-        if let Some(session) = &self.game_session {
-            self.next_tick += session.runtime.tick_duration();
+        if let Some(active_game) = &self.active_game {
+            self.next_tick += active_game.tick_duration();
         }
     }
 
