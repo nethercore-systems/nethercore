@@ -1,6 +1,6 @@
 # Console-Agnostic Library Architecture Specification
 
-**Status:** Pending
+**Status:** REJECTED - in favor of combined-refactor-plan.md
 **Author:** Claude (with Zerve)
 **Version:** 1.0
 **Last Updated:** December 2024

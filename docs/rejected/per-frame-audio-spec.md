@@ -1,6 +1,6 @@
 # Per-Frame Audio Generation Specification
 
-**Status:** Ready for Implementation
+**Status:** REJECTED - in favor of combined-refactor-plan.md
 **Author:** Claude
 **Last Updated:** December 2025
 
