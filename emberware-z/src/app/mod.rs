@@ -638,9 +638,14 @@ impl emberware_core::app::ConsoleApp<EmberwareZ> for App {
         // Let egui handle the event first
         if let (Some(egui_state), Some(window)) = (&mut self.egui_state, &self.window) {
             let response = egui_state.on_window_event(window, event);
-            if response.consumed {
+
+            // Request redraw if egui needs it (hover effects, animations, etc.)
+            if response.repaint {
                 self.trigger_redraw();
-                return true; // Event consumed
+            }
+
+            if response.consumed {
+                return true; // Event consumed by egui
             }
 
             // Check if egui wants keyboard input (text fields, sliders, etc.)
