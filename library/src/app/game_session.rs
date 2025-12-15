@@ -1,19 +1,27 @@
 //! Game session lifecycle management
 
+use std::path::Path;
+use std::sync::Arc;
+use std::time::Instant;
+
 use emberware_core::app::{FRAME_TIME_HISTORY_SIZE, RuntimeError};
 use emberware_core::console::Console;
 use emberware_core::rollback::{SessionEvent, SessionType};
 use emberware_z::library;
-use std::path::Path;
-use std::time::Instant;
-use z_common::ZRom;
+use z_common::{ZDataPack, ZRom};
 
 use super::App;
 
-/// Load ROM and return WASM bytes
+/// Loaded ROM data (WASM code + optional datapack)
+struct LoadedRom {
+    code: Vec<u8>,
+    data_pack: Option<Arc<ZDataPack>>,
+}
+
+/// Load ROM and return WASM bytes + datapack
 ///
 /// Supports both .ewz ROM files and raw WASM files.
-fn load_rom_wasm(path: &Path) -> Result<Vec<u8>, RuntimeError> {
+fn load_rom(path: &Path) -> Result<LoadedRom, RuntimeError> {
     if path.extension().and_then(|e| e.to_str()) == Some("ewz") {
         // Load from .ewz ROM file
         let ewz_bytes = std::fs::read(path)
@@ -22,13 +30,19 @@ fn load_rom_wasm(path: &Path) -> Result<Vec<u8>, RuntimeError> {
         let rom = ZRom::from_bytes(&ewz_bytes)
             .map_err(|e| RuntimeError(format!("Failed to parse .ewz ROM: {}", e)))?;
 
-        // Extract WASM code from ROM
-        Ok(rom.code)
+        // Extract WASM code and datapack from ROM
+        Ok(LoadedRom {
+            code: rom.code,
+            data_pack: rom.data_pack.map(Arc::new),
+        })
     } else {
         // Load raw WASM file (backward compatibility for development)
         let wasm = std::fs::read(path)
             .map_err(|e| RuntimeError(format!("Failed to read ROM file: {}", e)))?;
-        Ok(wasm)
+        Ok(LoadedRom {
+            code: wasm,
+            data_pack: None,
+        })
     }
 }
 
@@ -212,6 +226,9 @@ impl App {
             if let Some(game) = session.runtime.game_mut() {
                 game.set_input(0, z_input);
             }
+
+            // Also add to rollback session (required for P2P, no-op for local)
+            let _ = session.runtime.add_local_input(0, z_input);
         }
 
         // Check if frame controller allows running ticks
@@ -347,12 +364,12 @@ impl App {
             .find(|g| g.id == game_id)
             .ok_or_else(|| RuntimeError(format!("Game not found: {}", game_id)))?;
 
-        // Load ROM file (WASM bytes)
-        let rom_bytes = load_rom_wasm(&game.rom_path)?;
+        // Load ROM file (WASM bytes + datapack)
+        let rom = load_rom(&game.rom_path)?;
 
         // Load the game via ActiveGame (handles all initialization)
         active_game
-            .load_game(&rom_bytes, 1)
+            .load_game(&rom.code, rom.data_pack, 1)
             .map_err(|e| RuntimeError(format!("Failed to load game: {}", e)))?;
 
         // Reset frame controller for new game session
@@ -376,12 +393,12 @@ impl App {
             .as_mut()
             .ok_or_else(|| RuntimeError("Graphics not initialized".to_string()))?;
 
-        // Load ROM file (WASM bytes)
-        let rom_bytes = load_rom_wasm(&path)?;
+        // Load ROM file (WASM bytes + datapack)
+        let rom = load_rom(&path)?;
 
         // Load the game via ActiveGame (handles all initialization)
         active_game
-            .load_game(&rom_bytes, 1)
+            .load_game(&rom.code, rom.data_pack, 1)
             .map_err(|e| RuntimeError(format!("Failed to load game: {}", e)))?;
 
         // Reset frame controller for new game session

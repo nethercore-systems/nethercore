@@ -157,9 +157,18 @@ impl<C: Console> ConsoleRunner<C> {
         runtime.load_game(game);
         runtime.set_tick_rate(self.specs.tick_rates[self.specs.default_tick_rate]);
 
+        // Create and set audio backend for the runtime
+        // (separate from ConsoleRunner's audio which is used for resource loading)
+        let audio = runtime.console().create_audio()?;
+        runtime.set_audio(audio);
+
         // Create local rollback session
         let rollback_session = RollbackSession::new_local(num_players, self.specs.ram_limit);
         runtime.set_session(rollback_session);
+
+        // Initialize console-specific FFI state before calling game init()
+        // (e.g., set datapack for rom_* functions)
+        runtime.initialize_console_state();
 
         // Initialize the game (calls init() export)
         runtime.init_game()?;

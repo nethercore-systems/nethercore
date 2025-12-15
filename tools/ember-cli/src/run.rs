@@ -58,6 +58,11 @@ pub fn execute(args: RunArgs) -> Result<()> {
     let manifest = EmberManifest::load(&manifest_path)?;
     let rom_path = project_dir.join(format!("{}.ewz", manifest.game.id));
 
+    // Use absolute path for subprocess (working directory may differ)
+    let rom_path = rom_path
+        .canonicalize()
+        .unwrap_or_else(|_| rom_path.clone());
+
     if !rom_path.exists() {
         anyhow::bail!(
             "ROM file not found: {}\nRun 'ember build' first.",

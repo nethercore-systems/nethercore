@@ -118,7 +118,7 @@ impl App {
 
         // Prepare debug panel data BEFORE borrowing active_game (to avoid borrow conflicts)
         let debug_panel_data =
-            if self.debug_panel.visible && matches!(mode, AppMode::Playing { .. }) {
+            if self.debug_panel.visible && matches!(mode, AppMode::Playing { .. } | AppMode::PlayingFromPath { .. }) {
                 self.prepare_debug_panel_data()
             } else {
                 None
@@ -169,7 +169,7 @@ impl App {
                 });
 
         // If in Playing mode, render game (only if we generated new content this frame)
-        if matches!(mode, AppMode::Playing { .. }) {
+        if matches!(mode, AppMode::Playing { .. } | AppMode::PlayingFromPath { .. }) {
             if game_rendered_this_frame {
                 // Get clear color from game state
                 let clear_color = active_game.clear_color();
@@ -192,7 +192,7 @@ impl App {
         let mut debug_values_changed = false;
 
         // Collect debug stats for overlay only in game mode (meaningless in library mode)
-        let debug_stats = if debug_overlay && matches!(mode, AppMode::Playing { .. }) {
+        let debug_stats = if debug_overlay && matches!(mode, AppMode::Playing { .. } | AppMode::PlayingFromPath { .. }) {
             Some(DebugStats {
                 frame_times: self.debug_stats.frame_times.clone(),
                 game_tick_times: self.debug_stats.game_tick_times.clone(),
@@ -237,6 +237,10 @@ impl App {
                     // Just show debug info if overlay is enabled
                     let _ = game_id; // Used in debug overlay
                 }
+                AppMode::PlayingFromPath { path } => {
+                    // Same as Playing - game is rendered before egui
+                    let _ = path;
+                }
             }
 
             // Debug overlay (only when enabled - stats are only cloned when needed)
@@ -244,7 +248,7 @@ impl App {
                 emberware_core::app::render_debug_overlay(
                     ctx,
                     stats,
-                    matches!(mode, AppMode::Playing { .. }),
+                    matches!(mode, AppMode::Playing { .. } | AppMode::PlayingFromPath { .. }),
                     frame_time_ms,
                     render_fps,
                     game_tick_fps,
@@ -402,7 +406,7 @@ impl App {
         // Create render pass and render egui (only if there are triangles to render)
         // When in Playing mode, use Load to preserve game rendering.
         // Otherwise, clear with a dark background color.
-        let is_playing = matches!(mode, AppMode::Playing { .. });
+        let is_playing = matches!(mode, AppMode::Playing { .. } | AppMode::PlayingFromPath { .. });
         if !tris.is_empty() {
             let load_op = if is_playing {
                 wgpu::LoadOp::Load
@@ -518,24 +522,41 @@ impl App {
         // Reset last_sim_rendered - will be set by run_game_frame if it rendered
         self.last_sim_rendered = false;
 
-        // Only run simulation if in Playing mode
-        if !matches!(self.mode, AppMode::Playing { .. }) {
+        // Only run simulation if in a playing mode
+        if !matches!(
+            self.mode,
+            AppMode::Playing { .. } | AppMode::PlayingFromPath { .. }
+        ) {
             return;
         }
 
         // Check if game is loaded (initialize if needed for CLI launch case)
         let game_loaded = self.active_game.as_ref().map_or(false, |g| g.has_game());
         if !game_loaded {
-            if let AppMode::Playing { ref game_id } = self.mode {
-                let game_id_owned = game_id.clone();
-                tracing::info!(
-                    "Initializing game session for CLI launch: {}",
-                    game_id_owned
-                );
-                if let Err(e) = self.start_game(&game_id_owned) {
-                    self.handle_runtime_error(e);
-                    return;
+            match &self.mode {
+                AppMode::Playing { game_id } => {
+                    let game_id_owned = game_id.clone();
+                    tracing::info!(
+                        "Initializing game session for CLI launch: {}",
+                        game_id_owned
+                    );
+                    if let Err(e) = self.start_game(&game_id_owned) {
+                        self.handle_runtime_error(e);
+                        return;
+                    }
                 }
+                AppMode::PlayingFromPath { path } => {
+                    let path_owned = path.clone();
+                    tracing::info!(
+                        "Initializing game session from path: {}",
+                        path_owned.display()
+                    );
+                    if let Err(e) = self.start_game_from_path(path_owned) {
+                        self.handle_runtime_error(e);
+                        return;
+                    }
+                }
+                _ => {}
             }
         }
 
@@ -659,7 +680,10 @@ impl emberware_core::app::ConsoleApp<EmberwareZ> for App {
     // === Simulation control ===
 
     fn has_active_game(&self) -> bool {
-        self.active_game.as_ref().map_or(false, |g| g.has_game())
+        // Return true if we're in a playing mode (to trigger game loading)
+        // OR if there's actually a game session running
+        matches!(self.mode, AppMode::Playing { .. } | AppMode::PlayingFromPath { .. })
+            || self.active_game.as_ref().map_or(false, |g| g.has_game())
     }
 
     fn next_tick(&self) -> Instant {

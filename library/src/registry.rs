@@ -48,7 +48,7 @@ use emberware_core::rollback::SessionEvent;
 
 use emberware_z::console::EmberwareZ;
 use emberware_z::state::ZFFIState;
-use z_common::ZRomLoader;
+use z_common::{ZDataPack, ZRomLoader};
 
 /// Enum representing all available console types.
 ///
@@ -137,6 +137,16 @@ impl ConsoleType {
                 .map_err(|e| anyhow::anyhow!("Z console error: {}", e)),
         }
     }
+
+    /// Launch a game directly from a file path (for development).
+    pub fn launch_from_path(&self, path: std::path::PathBuf) -> Result<()> {
+        match self {
+            ConsoleType::Z => {
+                let mode = AppMode::PlayingFromPath { path };
+                crate::app::run(mode).map_err(|e| anyhow::anyhow!("Z console error: {}", e))
+            }
+        }
+    }
 }
 
 /// Active game instance for runtime execution.
@@ -200,9 +210,16 @@ impl ActiveGame {
     }
 
     /// Load a game into an existing runner.
-    pub fn load_game(&mut self, wasm_bytes: &[u8], num_players: usize) -> Result<()> {
+    pub fn load_game(
+        &mut self,
+        wasm_bytes: &[u8],
+        data_pack: Option<Arc<ZDataPack>>,
+        num_players: usize,
+    ) -> Result<()> {
         match self {
-            ActiveGame::Z(runner) => runner.load_game(EmberwareZ::new(), wasm_bytes, num_players),
+            ActiveGame::Z(runner) => {
+                runner.load_game(EmberwareZ::with_datapack(data_pack), wasm_bytes, num_players)
+            }
         }
     }
 
@@ -559,6 +576,20 @@ impl ConsoleRegistry {
     pub fn launch_library(&self, console_type: Option<ConsoleType>) -> Result<()> {
         let console = console_type.unwrap_or(ConsoleType::Z);
         console.launch_library()
+    }
+
+    /// Launch a game directly from a file path (for development).
+    ///
+    /// Detects the console type from the file extension.
+    pub fn launch_from_path(&self, path: std::path::PathBuf) -> Result<()> {
+        // Detect console type from extension
+        let console_type = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .and_then(ConsoleType::from_extension)
+            .unwrap_or(ConsoleType::Z);
+
+        console_type.launch_from_path(path)
     }
 
     /// Get all available console type strings.

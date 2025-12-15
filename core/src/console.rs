@@ -96,6 +96,15 @@ pub trait Console: Send + 'static {
     fn debug_stats(&self, _state: &Self::State) -> Vec<DebugStat> {
         Vec::new()
     }
+
+    /// Initialize console-specific FFI state before game init() is called
+    ///
+    /// This is called after the game instance is created but before the
+    /// game's init() function runs. Use this to set up console-specific
+    /// state that the game needs during initialization (e.g., datapack).
+    ///
+    /// Default implementation does nothing.
+    fn initialize_ffi_state(&self, _state: &mut Self::State) {}
 }
 
 /// Trait for console-specific resource management

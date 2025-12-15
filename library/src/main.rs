@@ -32,6 +32,27 @@ fn parse_deep_link(args: &[String]) -> Option<String> {
     None
 }
 
+/// Check if a string looks like a file path to a ROM file
+fn is_rom_path(arg: &str) -> Option<PathBuf> {
+    let path = PathBuf::from(arg);
+
+    // Check if it has a ROM extension
+    let ext = path.extension().and_then(|e| e.to_str());
+    let is_rom_ext = matches!(ext, Some("ewz") | Some("wasm"));
+
+    // If it has a ROM extension and the file exists, treat it as a path
+    if is_rom_ext && path.exists() {
+        return Some(path);
+    }
+
+    // If it contains path separators and exists, treat it as a path
+    if (arg.contains('/') || arg.contains('\\')) && path.exists() {
+        return Some(path);
+    }
+
+    None
+}
+
 fn main() -> Result<()> {
     // Initialize logging
     tracing_subscriber::fmt()
@@ -48,27 +69,41 @@ fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
 
     // Try deep link first (emberware://play/game_id)
-    let query = if let Some(game_id) = parse_deep_link(&args) {
+    if let Some(game_id) = parse_deep_link(&args) {
         tracing::info!("Deep link detected: {}", game_id);
-        Some(game_id)
-    } else if args.len() > 1 {
-        // Regular CLI argument
-        Some(args[1].clone())
-    } else {
-        None
-    };
 
-    if let Some(query) = query {
-        // Get all available games
+        let games = get_local_games(&provider);
+        if let Some(game) = games.iter().find(|g| g.id == game_id) {
+            registry.launch_game(game)?;
+        } else {
+            eprintln!("Game '{}' not found", game_id);
+            std::process::exit(1);
+        }
+        return Ok(());
+    }
+
+    // Check for file path argument (for development)
+    if args.len() > 1 {
+        if let Some(path) = is_rom_path(&args[1]) {
+            tracing::info!("Launching from file path: {}", path.display());
+            registry.launch_from_path(path)?;
+            return Ok(());
+        }
+    }
+
+    // Check for game ID argument
+    if args.len() > 1 {
+        let query = &args[1];
         let games = get_local_games(&provider);
 
         if games.is_empty() {
             eprintln!("No games installed. Download games from the library UI.");
+            eprintln!("Tip: You can also pass a .ewz file path directly.");
             std::process::exit(1);
         }
 
         // Resolve game ID
-        match resolve_game_id(&query, &games) {
+        match resolve_game_id(query, &games) {
             Ok(game_id) => {
                 // Find the game to get its console type
                 if let Some(game) = games.iter().find(|g| g.id == game_id) {

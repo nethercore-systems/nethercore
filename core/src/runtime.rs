@@ -98,6 +98,16 @@ impl<C: Console> Runtime<C> {
         self.audio = Some(audio);
     }
 
+    /// Initialize console-specific FFI state before calling game init()
+    ///
+    /// This allows the console to set up state that the game needs during
+    /// initialization (e.g., datapack for rom_* functions).
+    pub fn initialize_console_state(&mut self) {
+        if let Some(game) = &mut self.game {
+            self.console.initialize_ffi_state(game.console_state_mut());
+        }
+    }
+
     /// Initialize the loaded game
     pub fn init_game(&mut self) -> Result<()> {
         if let Some(game) = &mut self.game {

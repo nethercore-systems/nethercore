@@ -266,31 +266,31 @@ impl App {
                     }
                     KeyCode::F4 => {
                         // Toggle debug inspector panel (only when playing)
-                        if matches!(self.mode, AppMode::Playing { .. }) {
+                        if matches!(self.mode, AppMode::Playing { .. } | AppMode::PlayingFromPath { .. }) {
                             self.debug_panel.toggle();
                         }
                     }
                     KeyCode::F5 => {
                         // Toggle pause (only in Playing mode)
-                        if matches!(self.mode, AppMode::Playing { .. }) {
+                        if matches!(self.mode, AppMode::Playing { .. } | AppMode::PlayingFromPath { .. }) {
                             self.frame_controller.toggle_pause();
                         }
                     }
                     KeyCode::F6 => {
                         // Step single frame (only when paused in Playing mode)
-                        if matches!(self.mode, AppMode::Playing { .. }) {
+                        if matches!(self.mode, AppMode::Playing { .. } | AppMode::PlayingFromPath { .. }) {
                             self.frame_controller.request_step();
                         }
                     }
                     KeyCode::F7 => {
                         // Decrease time scale (only in Playing mode)
-                        if matches!(self.mode, AppMode::Playing { .. }) {
+                        if matches!(self.mode, AppMode::Playing { .. } | AppMode::PlayingFromPath { .. }) {
                             self.frame_controller.decrease_time_scale();
                         }
                     }
                     KeyCode::F8 => {
                         // Increase time scale (only in Playing mode)
-                        if matches!(self.mode, AppMode::Playing { .. }) {
+                        if matches!(self.mode, AppMode::Playing { .. } | AppMode::PlayingFromPath { .. }) {
                             self.frame_controller.increase_time_scale();
                         }
                     }
@@ -305,7 +305,7 @@ impl App {
                     KeyCode::Escape => {
                         // Return to library when in game or settings
                         match self.mode {
-                            AppMode::Playing { .. } => {
+                            AppMode::Playing { .. } | AppMode::PlayingFromPath { .. } => {
                                 tracing::info!("Exiting game via ESC");
                                 // Clean up game session via ActiveGame
                                 if let Some(active_game) = &mut self.active_game {

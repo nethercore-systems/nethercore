@@ -14,6 +14,7 @@ use emberware_core::{
     debug::DebugStat,
     wasm::WasmGameContext,
 };
+use z_common::ZDataPack;
 
 use crate::state::{ZFFIState, ZRollbackState};
 
@@ -171,13 +172,19 @@ impl Audio for ZAudio {
 /// - Dual analog sticks and analog triggers
 /// - Deterministic rollback netcode via GGRS
 pub struct EmberwareZ {
-    // Configuration could go here
+    /// Optional datapack for ROM assets (textures, meshes, sounds)
+    data_pack: Option<Arc<ZDataPack>>,
 }
 
 impl EmberwareZ {
     /// Create a new Emberware Z console instance
     pub fn new() -> Self {
-        Self {}
+        Self { data_pack: None }
+    }
+
+    /// Create a new Emberware Z console instance with a datapack
+    pub fn with_datapack(data_pack: Option<Arc<ZDataPack>>) -> Self {
+        Self { data_pack }
     }
 }
 
@@ -311,6 +318,11 @@ impl Console for EmberwareZ {
             DebugStat::number("MVP States", state.mvp_shading_states.len()),
             DebugStat::number("Shading States", state.shading_states.len()),
         ]
+    }
+
+    fn initialize_ffi_state(&self, state: &mut ZFFIState) {
+        // Set datapack for rom_* FFI functions
+        state.data_pack = self.data_pack.clone();
     }
 }
 

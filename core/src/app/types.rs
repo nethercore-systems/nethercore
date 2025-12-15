@@ -3,6 +3,7 @@
 //! Console-agnostic types used across the application framework.
 
 use std::collections::VecDeque;
+use std::path::PathBuf;
 
 /// Application mode state machine
 ///
@@ -12,8 +13,10 @@ use std::collections::VecDeque;
 pub enum AppMode {
     /// Library/launcher UI mode
     Library,
-    /// Playing a game
+    /// Playing a game by ID (from installed games)
     Playing { game_id: String },
+    /// Playing a game directly from a file path (for development)
+    PlayingFromPath { path: PathBuf },
     /// Settings/configuration UI mode
     Settings,
 }

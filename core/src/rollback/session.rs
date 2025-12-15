@@ -70,8 +70,9 @@ unsafe impl<I: ConsoleInput> Zeroable for NetworkInput<I> {}
 enum SessionInner<I: ConsoleInput> {
     /// Local session - no GGRS, just direct execution
     Local {
-        num_players: usize,
         current_frame: i32,
+        /// Stored inputs for each player (set via add_local_input)
+        stored_inputs: Vec<I>,
     },
     /// Sync test session for determinism testing (boxed to reduce enum size)
     SyncTest {
@@ -149,8 +150,8 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>
 
         Self {
             inner: SessionInner::Local {
-                num_players,
                 current_frame: 0,
+                stored_inputs: vec![I::default(); num_players],
             },
             session_type: SessionType::Local,
             config: SessionConfig::local(num_players),
@@ -359,9 +360,11 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>
     /// For GGRS sessions, input is passed to GGRS for synchronization.
     pub fn add_local_input(&mut self, player_handle: usize, input: I) -> Result<(), GgrsError> {
         match &mut self.inner {
-            SessionInner::Local { .. } => {
-                // Local sessions don't need GGRS input handling
-                // Input is set directly on GameInstance
+            SessionInner::Local { stored_inputs, .. } => {
+                // Store input for use in advance_frame
+                if player_handle < stored_inputs.len() {
+                    stored_inputs[player_handle] = input;
+                }
                 Ok(())
             }
             SessionInner::SyncTest { session, .. } => session.add_local_input(player_handle, input),
@@ -386,17 +389,19 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>
     /// - AdvanceFrame: Execute one tick with the given inputs
     ///
     /// For Local sessions, this returns a simple AdvanceFrame request
-    /// with default inputs for all players.
+    /// with the stored inputs (set via `add_local_input`).
     pub fn advance_frame(&mut self) -> Result<Vec<GgrsRequest<EmberwareConfig<I>>>, GgrsError> {
         match &mut self.inner {
             SessionInner::Local {
-                num_players,
                 current_frame,
+                stored_inputs,
+                ..
             } => {
-                // Local sessions just advance immediately with default inputs
+                // Local sessions advance immediately with stored inputs
                 *current_frame += 1;
-                let inputs: Vec<(I, InputStatus)> = (0..*num_players)
-                    .map(|_| (I::default(), InputStatus::Confirmed))
+                let inputs: Vec<(I, InputStatus)> = stored_inputs
+                    .iter()
+                    .map(|input| (*input, InputStatus::Confirmed))
                     .collect();
                 Ok(vec![GgrsRequest::AdvanceFrame { inputs }])
             }
