@@ -78,6 +78,8 @@ pub struct App {
     pub(crate) game_session: Option<GameSession<EmberwareZ>>,
     /// Next scheduled egui repaint time (for animations)
     pub(crate) next_egui_repaint: Option<Instant>,
+    /// Input event triggered a repaint request (coalesced in about_to_wait)
+    pub(crate) pending_repaint: bool,
     // Egui optimization cache
     pub(crate) cached_egui_shapes: Vec<egui::epaint::ClippedShape>,
     pub(crate) cached_egui_tris: Vec<egui::ClippedPrimitive>,
@@ -95,8 +97,9 @@ impl App {
     fn render(&mut self) {
         let now = Instant::now();
 
-        // Clear scheduled egui repaint for this frame's collection
+        // Clear repaint flags for this frame's collection
         self.next_egui_repaint = None;
+        self.pending_repaint = false;
 
         // Update frame timing
         self.frame_times.push(now);
@@ -612,12 +615,6 @@ impl App {
             mem_len,
         })
     }
-
-    fn trigger_redraw(&mut self) {
-        if let Some(window) = &self.window {
-            window.request_redraw();
-        }
-    }
 }
 
 impl emberware_core::app::ConsoleApp<EmberwareZ> for App {
@@ -639,9 +636,9 @@ impl emberware_core::app::ConsoleApp<EmberwareZ> for App {
         if let (Some(egui_state), Some(window)) = (&mut self.egui_state, &self.window) {
             let response = egui_state.on_window_event(window, event);
 
-            // Request redraw if egui needs it (hover effects, animations, etc.)
+            // Mark pending repaint if egui needs it (coalesced in about_to_wait via next_frame_time)
             if response.repaint {
-                self.trigger_redraw();
+                self.pending_repaint = true;
             }
 
             if response.consumed {
@@ -722,6 +719,11 @@ impl emberware_core::app::ConsoleApp<EmberwareZ> for App {
     }
 
     fn next_frame_time(&self) -> Option<Instant> {
+        // If input triggered a repaint, render immediately
+        if self.pending_repaint {
+            return Some(Instant::now());
+        }
+
         match &self.mode {
             AppMode::Playing { .. } => {
                 // Game running: schedule next tick based on tick_duration
