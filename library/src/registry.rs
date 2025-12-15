@@ -39,7 +39,7 @@ use winit::window::Window;
 
 use emberware_core::app::types::AppMode;
 use emberware_core::console::RawInput;
-use emberware_core::library::{LocalGame, RomLoader, RomLoaderRegistry};
+use emberware_core::library::{LocalGame, RomLoaderRegistry};
 use emberware_core::rollback::SessionEvent;
 use emberware_core::ConsoleRunner;
 
@@ -121,7 +121,7 @@ impl ConsoleType {
                 let mode = AppMode::Playing {
                     game_id: game_id.to_string(),
                 };
-                emberware_z::app::run(mode).map_err(|e| anyhow::anyhow!("Z console error: {}", e))
+                crate::app::run(mode).map_err(|e| anyhow::anyhow!("Z console error: {}", e))
             }
         }
     }
@@ -129,7 +129,7 @@ impl ConsoleType {
     /// Launch the library UI for this console type.
     pub fn launch_library(&self) -> Result<()> {
         match self {
-            ConsoleType::Z => emberware_z::app::run(AppMode::Library)
+            ConsoleType::Z => crate::app::run(AppMode::Library)
                 .map_err(|e| anyhow::anyhow!("Z console error: {}", e)),
         }
     }

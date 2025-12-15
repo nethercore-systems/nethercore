@@ -1,6 +1,6 @@
 //! UI action handling and input processing
 
-use crate::app::RuntimeError;
+use emberware_core::app::RuntimeError;
 use emberware_core::app::AppMode;
 use emberware_core::app::config;
 use emberware_core::console::Graphics;
@@ -10,8 +10,8 @@ use winit::{
     window::Fullscreen,
 };
 
-use crate::input::InputManager;
-use crate::library;
+use emberware_z::input::InputManager;
+use emberware_z::library;
 use crate::ui::UiAction;
 
 use super::App;

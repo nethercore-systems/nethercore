@@ -1,7 +1,7 @@
 //! Game session lifecycle management
 
-use crate::console::EmberwareZ;
-use crate::library;
+use emberware_z::console::EmberwareZ;
+use emberware_z::library;
 use emberware_core::app::{FRAME_TIME_HISTORY_SIZE, RuntimeError, session::GameSession};
 use emberware_core::console::{Console, ConsoleResourceManager};
 use emberware_core::rollback::{SessionEvent, SessionType};
@@ -291,17 +291,17 @@ impl App {
                 .runtime
                 .audio()
                 .map(|a| a.sample_rate())
-                .unwrap_or(crate::audio::OUTPUT_SAMPLE_RATE);
+                .unwrap_or(emberware_z::audio::OUTPUT_SAMPLE_RATE);
 
             // Generate audio samples from rollback state
             let audio_buffer = if let Some(game) = session.runtime.game_mut() {
                 // Clone sounds slice (contains Arcs, cheap to clone)
-                let sounds: Vec<Option<crate::audio::Sound>> =
+                let sounds: Vec<Option<emberware_z::audio::Sound>> =
                     game.console_state().sounds.clone();
                 let rollback_state = game.rollback_state_mut();
 
                 let mut buffer = Vec::new();
-                crate::audio::generate_audio_frame(
+                emberware_z::audio::generate_audio_frame(
                     &mut rollback_state.audio,
                     &sounds,
                     tick_rate,

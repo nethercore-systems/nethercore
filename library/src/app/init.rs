@@ -7,10 +7,10 @@ use thiserror::Error;
 use winit::event_loop::ActiveEventLoop;
 use winit::window::{Fullscreen, Window};
 
-use crate::console::VRAM_LIMIT;
-use crate::graphics::ZGraphics;
-use crate::input::InputManager;
-use crate::library;
+use emberware_z::console::VRAM_LIMIT;
+use emberware_z::graphics::ZGraphics;
+use emberware_z::input::InputManager;
+use emberware_z::library;
 use crate::ui::LibraryUi;
 use emberware_core::app::config;
 use emberware_core::app::{AppMode, DebugStats, FRAME_TIME_HISTORY_SIZE};
@@ -52,7 +52,7 @@ impl App {
 
         Self {
             mode: initial_mode.clone(),
-            settings_ui: crate::settings_ui::SettingsUi::new(&config),
+            settings_ui: crate::ui::SettingsUi::new(&config),
             config,
             window: None,
             graphics: None,

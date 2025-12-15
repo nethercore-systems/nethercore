@@ -3,11 +3,9 @@
 //! This binary can launch games from any supported console type (Z, Classic, etc.)
 //! by detecting the console type from the game manifest.
 
-mod registry;
-
 use anyhow::Result;
 use emberware_core::library::{DataDirProvider, get_local_games, resolve_game_id};
-use registry::ConsoleRegistry;
+use emberware_library::registry::ConsoleRegistry;
 use std::env;
 use std::path::PathBuf;
 
