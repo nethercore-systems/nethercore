@@ -7,13 +7,10 @@ use glam::Mat4;
 use tracing::warn;
 use wasmtime::{Caller, Linker};
 
-use emberware_core::wasm::GameStateWithConsole;
-
-use crate::console::ZInput;
-use crate::state::ZFFIState;
+use super::ZGameContext;
 
 /// Register billboard drawing FFI functions
-pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
+pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
     linker.func_wrap("env", "draw_billboard", draw_billboard)?;
     linker.func_wrap("env", "draw_billboard_region", draw_billboard_region)?;
     Ok(())
@@ -33,20 +30,14 @@ pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) ->
 /// - 2 (cylindrical Y): Rotates around Y axis only (stays upright)
 /// - 3 (cylindrical X): Rotates around X axis only
 /// - 4 (cylindrical Z): Rotates around Z axis only
-fn draw_billboard(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    w: f32,
-    h: f32,
-    mode: u32,
-    color: u32,
-) {
+fn draw_billboard(mut caller: Caller<'_, ZGameContext>, w: f32, h: f32, mode: u32, color: u32) {
     // Validate mode
     if !(1..=4).contains(&mode) {
         warn!("draw_billboard: invalid mode {} (must be 1-4)", mode);
         return;
     }
 
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
 
     // Get shading state index IMMEDIATELY (while current_shading_state is valid)
     let shading_state_index = state.add_shading_state();
@@ -112,7 +103,7 @@ fn draw_billboard(
 ///
 /// This allows drawing a region of a sprite sheet as a billboard.
 fn draw_billboard_region(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     w: f32,
     h: f32,
     src_x: f32,
@@ -128,7 +119,7 @@ fn draw_billboard_region(
         return;
     }
 
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
 
     // Get shading state index IMMEDIATELY (while current_shading_state is valid)
     let shading_state_index = state.add_shading_state();

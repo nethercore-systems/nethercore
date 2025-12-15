@@ -1,0 +1,46 @@
+[package]
+name = "emberware-library"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Unified Emberware fantasy console launcher"
+
+[lib]
+name = "emberware_library"
+path = "src/lib.rs"
+
+[[bin]]
+name = "emberware"
+path = "src/main.rs"
+
+[dependencies]
+# Local crates
+emberware-core = { path = "../core" }
+emberware-shared = { path = "../shared" }
+# Note: z-common provides ZRomLoader for reading .ewz ROM metadata
+z-common = { path = "../z-common" }
+
+# Workspace dependencies
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+directories.workspace = true
+hashbrown.workspace = true
+
+# Windowing
+winit.workspace = true
+
+# Graphics
+wgpu.workspace = true
+
+# UI
+egui.workspace = true
+egui-wgpu.workspace = true
+egui-winit.workspace = true
+
+# Utilities
+pollster.workspace = true
+open.workspace = true
+rfd.workspace = true

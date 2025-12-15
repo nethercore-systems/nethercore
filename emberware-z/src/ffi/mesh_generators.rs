@@ -11,15 +11,13 @@ use anyhow::Result;
 use tracing::{info, warn};
 use wasmtime::{Caller, Linker};
 
-use emberware_core::wasm::GameStateWithConsole;
-
-use crate::console::ZInput;
+use super::ZGameContext;
 use crate::graphics::{FORMAT_NORMAL, FORMAT_UV};
 use crate::procedural;
-use crate::state::{PendingMeshPacked, ZFFIState};
+use crate::state::PendingMeshPacked;
 
 /// Register procedural mesh generation FFI functions
-pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
+pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
     // Base procedural shapes (FORMAT_NORMAL - solid colors)
     linker.func_wrap("env", "cube", cube)?;
     linker.func_wrap("env", "sphere", sphere)?;
@@ -49,12 +47,7 @@ pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) ->
 /// Returns mesh handle (>0) on success, 0 on failure.
 ///
 /// The cube has 24 vertices (4 per face) with flat normals and box-unwrapped UVs.
-fn cube(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    size_x: f32,
-    size_y: f32,
-    size_z: f32,
-) -> u32 {
+fn cube(mut caller: Caller<'_, ZGameContext>, size_x: f32, size_y: f32, size_z: f32) -> u32 {
     // Validate parameters
     if size_x <= 0.0 || size_y <= 0.0 || size_z <= 0.0 {
         warn!(
@@ -71,7 +64,7 @@ fn cube(
     let index_count = mesh_data.indices.len();
 
     // Allocate handle and queue mesh
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     let handle = state.next_mesh_handle;
     state.next_mesh_handle += 1;
 
@@ -104,12 +97,7 @@ fn cube(
 /// Returns mesh handle (>0) on success, 0 on failure.
 ///
 /// The sphere uses equirectangular UV mapping and smooth normals.
-fn sphere(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    radius: f32,
-    segments: u32,
-    rings: u32,
-) -> u32 {
+fn sphere(mut caller: Caller<'_, ZGameContext>, radius: f32, segments: u32, rings: u32) -> u32 {
     // Validate parameters
     if radius <= 0.0 {
         warn!("sphere: radius must be > 0.0 (got {})", radius);
@@ -123,7 +111,7 @@ fn sphere(
     let index_count = mesh_data.indices.len();
 
     // Allocate handle and queue mesh
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     let handle = state.next_mesh_handle;
     state.next_mesh_handle += 1;
 
@@ -154,7 +142,7 @@ fn sphere(
 /// If radius_bottom != radius_top, creates a tapered cylinder or cone.
 /// Includes top and bottom caps (omitted if radius is 0).
 fn cylinder(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     radius_bottom: f32,
     radius_top: f32,
     height: f32,
@@ -181,7 +169,7 @@ fn cylinder(
     let index_count = mesh_data.indices.len();
 
     // Allocate handle and queue mesh
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     let handle = state.next_mesh_handle;
     state.next_mesh_handle += 1;
 
@@ -211,7 +199,7 @@ fn cylinder(
 ///
 /// The plane is centered at the origin with Y=0, facing up (+Y).
 fn plane(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     size_x: f32,
     size_z: f32,
     subdivisions_x: u32,
@@ -230,7 +218,7 @@ fn plane(
     let index_count = mesh_data.indices.len();
 
     // Allocate handle and queue mesh
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     let handle = state.next_mesh_handle;
     state.next_mesh_handle += 1;
 
@@ -260,7 +248,7 @@ fn plane(
 ///
 /// The torus lies in the XZ plane with smooth normals and wrapped UVs.
 fn torus(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     major_radius: f32,
     minor_radius: f32,
     major_segments: u32,
@@ -283,7 +271,7 @@ fn torus(
     let index_count = mesh_data.indices.len();
 
     // Allocate handle and queue mesh
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     let handle = state.next_mesh_handle;
     state.next_mesh_handle += 1;
 
@@ -320,7 +308,7 @@ fn torus(
 /// Total capsule height = height + 2 * radius.
 /// If height is 0, generates a sphere instead.
 fn capsule(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     radius: f32,
     height: f32,
     segments: u32,
@@ -344,7 +332,7 @@ fn capsule(
     let index_count = mesh_data.indices.len();
 
     // Allocate handle and queue mesh
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     let handle = state.next_mesh_handle;
     state.next_mesh_handle += 1;
 
@@ -380,12 +368,7 @@ fn capsule(
 /// - V maps 0→1 from north pole to south pole (latitude)
 ///
 /// Perfect for skybox/environment mapping and earth-like textures.
-fn sphere_uv(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    radius: f32,
-    segments: u32,
-    rings: u32,
-) -> u32 {
+fn sphere_uv(mut caller: Caller<'_, ZGameContext>, radius: f32, segments: u32, rings: u32) -> u32 {
     // Validate parameters
     if radius <= 0.0 {
         warn!("sphere_uv: radius must be > 0.0 (got {})", radius);
@@ -399,7 +382,7 @@ fn sphere_uv(
     let index_count = mesh_data.indices.len();
 
     // Allocate handle and queue mesh
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     let handle = state.next_mesh_handle;
     state.next_mesh_handle += 1;
 
@@ -433,7 +416,7 @@ fn sphere_uv(
 ///
 /// Perfect for ground planes, floors, and tiled textures.
 fn plane_uv(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     size_x: f32,
     size_z: f32,
     subdivisions_x: u32,
@@ -452,7 +435,7 @@ fn plane_uv(
     let index_count = mesh_data.indices.len();
 
     // Allocate handle and queue mesh
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     let handle = state.next_mesh_handle;
     state.next_mesh_handle += 1;
 
@@ -485,12 +468,7 @@ fn plane_uv(
 /// - +X/-X: V=[0.0-0.5], +Y/-Y: V=[0.5-1.0], +Z/-Z: mixed
 ///
 /// Perfect for cubemaps and multi-texture cubes.
-fn cube_uv(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    size_x: f32,
-    size_y: f32,
-    size_z: f32,
-) -> u32 {
+fn cube_uv(mut caller: Caller<'_, ZGameContext>, size_x: f32, size_y: f32, size_z: f32) -> u32 {
     // Validate parameters
     if size_x <= 0.0 || size_y <= 0.0 || size_z <= 0.0 {
         warn!(
@@ -507,7 +485,7 @@ fn cube_uv(
     let index_count = mesh_data.indices.len();
 
     // Allocate handle and queue mesh
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     let handle = state.next_mesh_handle;
     state.next_mesh_handle += 1;
 
@@ -547,7 +525,7 @@ fn cube_uv(
 ///
 /// Perfect for barrel, can, pillar textures.
 fn cylinder_uv(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     radius_bottom: f32,
     radius_top: f32,
     height: f32,
@@ -574,7 +552,7 @@ fn cylinder_uv(
     let index_count = mesh_data.indices.len();
 
     // Allocate handle and queue mesh
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     let handle = state.next_mesh_handle;
     state.next_mesh_handle += 1;
 
@@ -608,7 +586,7 @@ fn cylinder_uv(
 ///
 /// Perfect for donut, ring, tire textures with repeating patterns.
 fn torus_uv(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     major_radius: f32,
     minor_radius: f32,
     major_segments: u32,
@@ -631,7 +609,7 @@ fn torus_uv(
     let index_count = mesh_data.indices.len();
 
     // Allocate handle and queue mesh
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     let handle = state.next_mesh_handle;
     state.next_mesh_handle += 1;
 
@@ -673,7 +651,7 @@ fn torus_uv(
 ///
 /// Perfect for pill, barrel, character body textures.
 fn capsule_uv(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     radius: f32,
     height: f32,
     segments: u32,
@@ -697,7 +675,7 @@ fn capsule_uv(
     let index_count = mesh_data.indices.len();
 
     // Allocate handle and queue mesh
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     let handle = state.next_mesh_handle;
     state.next_mesh_handle += 1;
 

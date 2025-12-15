@@ -6,13 +6,11 @@ use anyhow::Result;
 use tracing::warn;
 use wasmtime::{Caller, Linker};
 
-use emberware_core::wasm::GameStateWithConsole;
-
-use crate::console::ZInput;
-use crate::state::{Font, ZFFIState};
+use super::ZGameContext;
+use crate::state::Font;
 
 /// Register 2D drawing FFI functions
-pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
+pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
     linker.func_wrap("env", "draw_sprite", draw_sprite)?;
     linker.func_wrap("env", "draw_sprite_region", draw_sprite_region)?;
     linker.func_wrap("env", "draw_sprite_ex", draw_sprite_ex)?;
@@ -35,15 +33,8 @@ pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) ->
 ///
 /// Draws the full texture (UV 0,0 to 1,1) as a quad in screen space.
 /// Uses current blend mode and bound texture (slot 0).
-fn draw_sprite(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    x: f32,
-    y: f32,
-    w: f32,
-    h: f32,
-    color: u32,
-) {
-    let state = &mut caller.data_mut().console;
+fn draw_sprite(mut caller: Caller<'_, ZGameContext>, x: f32, y: f32, w: f32, h: f32, color: u32) {
+    let state = &mut caller.data_mut().ffi;
 
     // Get shading state index
     let shading_state_index = state.add_shading_state();
@@ -82,7 +73,7 @@ fn draw_sprite(
 ///
 /// Useful for sprite sheets and texture atlases.
 fn draw_sprite_region(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     x: f32,
     y: f32,
     w: f32,
@@ -93,7 +84,7 @@ fn draw_sprite_region(
     src_h: f32,
     color: u32,
 ) {
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
 
     // Get shading state index
     let shading_state_index = state.add_shading_state();
@@ -138,7 +129,7 @@ fn draw_sprite_region(
 ///
 /// The sprite rotates around the origin point. For center rotation, use (w/2, h/2).
 fn draw_sprite_ex(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     x: f32,
     y: f32,
     w: f32,
@@ -152,7 +143,7 @@ fn draw_sprite_ex(
     angle_deg: f32,
     color: u32,
 ) {
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
 
     // Get shading state index
     let shading_state_index = state.add_shading_state();
@@ -193,15 +184,8 @@ fn draw_sprite_ex(
 /// * `color` — Fill color (0xRRGGBBAA)
 ///
 /// Draws an untextured quad. Useful for UI backgrounds, health bars, etc.
-fn draw_rect(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    x: f32,
-    y: f32,
-    w: f32,
-    h: f32,
-    color: u32,
-) {
-    let state = &mut caller.data_mut().console;
+fn draw_rect(mut caller: Caller<'_, ZGameContext>, x: f32, y: f32, w: f32, h: f32, color: u32) {
+    let state = &mut caller.data_mut().ffi;
 
     // Bind white texture (handle 0xFFFFFFFF) to slot 0
     state.bound_textures[0] = u32::MAX;
@@ -237,7 +221,7 @@ fn draw_rect(
 ///
 /// Supports full UTF-8 encoding. Text is left-aligned with no wrapping.
 fn draw_text(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     ptr: u32,
     len: u32,
     x: f32,
@@ -285,7 +269,7 @@ fn draw_text(
         return;
     }
 
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
 
     // Text always uses alpha blending for smooth anti-aliased edges
     state.blend_mode = 1; // BlendMode::Alpha
@@ -441,7 +425,7 @@ fn draw_text(
 /// - The texture must have enough space for char_count glyphs
 #[inline]
 fn load_font(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     texture: u32,
     char_width: u32,
     char_height: u32,
@@ -472,7 +456,7 @@ fn load_font(
         return 0;
     }
 
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
 
     // Look up texture dimensions from pending_textures
     let (atlas_width, atlas_height) = state
@@ -528,7 +512,7 @@ fn load_font(
 /// - Glyphs are still arranged in a grid, but can have custom widths
 #[inline]
 fn load_font_ex(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     texture: u32,
     widths_ptr: u32,
     char_height: u32,
@@ -582,7 +566,7 @@ fn load_font_ex(
         mem_data[ptr..ptr + len].to_vec()
     };
 
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
 
     // Look up texture dimensions from pending_textures
     let (atlas_width, atlas_height) = state
@@ -630,8 +614,8 @@ fn load_font_ex(
 /// - Font handle 0 uses the built-in 8×8 monospace font (default)
 /// - Custom fonts persist for all subsequent draw_text() calls until changed
 #[inline]
-fn font_bind(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, font_handle: u32) {
-    let state = &mut caller.data_mut().console;
+fn font_bind(mut caller: Caller<'_, ZGameContext>, font_handle: u32) {
+    let state = &mut caller.data_mut().ffi;
 
     // Validate font handle (0 is always valid = built-in)
     if font_handle != 0 {

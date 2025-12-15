@@ -2,8 +2,9 @@
 
 use anyhow::{Context, Result};
 use clap::Args;
-use emberware_core::library::cart::install_z_rom;
+use emberware_core::library::RomLoader;
 use std::path::PathBuf;
+use z_common::ZRomLoader;
 
 #[derive(Debug, Args)]
 pub struct InstallArgs {
@@ -43,7 +44,10 @@ pub fn execute(args: InstallArgs) -> Result<()> {
     let game = match extension {
         "ewz" => {
             println!("Detected Emberware Z ROM (.ewz)");
-            install_z_rom(rom_path, &provider).context("Failed to install Emberware Z ROM")?
+            let loader = ZRomLoader;
+            loader
+                .install(rom_path, &provider)
+                .context("Failed to install Emberware Z ROM")?
         }
         _ => {
             anyhow::bail!(
@@ -77,7 +81,7 @@ impl emberware_core::library::DataDirProvider for DataDirProviderImpl {
         if let Some(ref dir) = self.override_dir {
             Some(dir.clone())
         } else {
-            directories::ProjectDirs::from("io", "emberware", "emberware")
+            directories::ProjectDirs::from("io.emberware", "", "Emberware")
                 .map(|dirs| dirs.data_dir().to_path_buf())
         }
     }

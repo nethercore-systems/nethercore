@@ -7,6 +7,7 @@
 mod config;
 mod ffi_state;
 mod resources;
+mod rollback_state;
 
 pub use config::ZInitConfig;
 pub use ffi_state::ZFFIState;
@@ -14,6 +15,7 @@ pub use resources::{
     Font, KeyframeGpuInfo, KeyframeSource, PendingKeyframes, PendingMesh, PendingMeshPacked,
     PendingSkeleton, PendingTexture, SkeletonGpuInfo,
 };
+pub use rollback_state::{AudioPlaybackState, ChannelState, MAX_CHANNELS, ZRollbackState};
 
 /// Maximum number of bones for GPU skinning
 pub const MAX_BONES: usize = 256;

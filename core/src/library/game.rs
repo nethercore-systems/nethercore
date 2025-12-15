@@ -4,14 +4,14 @@
 //! Games are stored in the platform's data directory under a `games` subdirectory.
 //!
 //! Supported formats:
-//! - `.ewz` ROM files in the games directory (production, preferred)
+//! - ROM files in the games directory (detected via RomLoaderRegistry)
 //! - Subdirectories with `manifest.json` and `rom.wasm` (development, backward compatibility)
 
 use emberware_shared::LocalGameManifest;
 use std::path::{Path, PathBuf};
-use z_common::ZRom;
 
 use super::DataDirProvider;
+use super::rom::RomLoaderRegistry;
 
 /// A locally cached game with its metadata and ROM path.
 #[derive(Debug, Clone)]
@@ -35,22 +35,44 @@ pub struct LocalGame {
 ///
 /// Scans the games directory for valid game folders (containing `manifest.json`).
 /// Games with invalid or missing manifests are silently skipped.
+///
+/// Note: This version only scans directories with manifest.json files.
+/// Use `get_local_games_with_loaders` to also detect ROM files directly.
 pub fn get_local_games(provider: &dyn DataDirProvider) -> Vec<LocalGame> {
     let games_dir = match provider.data_dir() {
         Some(dir) => dir.join("games"),
         None => return vec![],
     };
 
-    get_games_from_dir(&games_dir)
+    get_games_from_dir(&games_dir, None)
+}
+
+/// Returns all locally cached games, including ROM files detected by loaders.
+///
+/// Scans the games directory for:
+/// 1. ROM files matching registered loader extensions (if registry provided)
+/// 2. Directories with `manifest.json` (backward compatibility, development)
+///
+/// Games with invalid or missing data are silently skipped.
+pub fn get_local_games_with_loaders(
+    provider: &dyn DataDirProvider,
+    registry: &RomLoaderRegistry,
+) -> Vec<LocalGame> {
+    let games_dir = match provider.data_dir() {
+        Some(dir) => dir.join("games"),
+        None => return vec![],
+    };
+
+    get_games_from_dir(&games_dir, Some(registry))
 }
 
 /// Internal: Scan a directory for games.
 /// Extracted for testability.
 ///
-/// Scans for both:
-/// 1. `.ewz` ROM files (preferred, production)
+/// Scans for:
+/// 1. ROM files matching registered loader extensions (if registry provided)
 /// 2. Directories with `manifest.json` (backward compatibility, development)
-fn get_games_from_dir(games_dir: &Path) -> Vec<LocalGame> {
+fn get_games_from_dir(games_dir: &Path, registry: Option<&RomLoaderRegistry>) -> Vec<LocalGame> {
     let Ok(entries) = std::fs::read_dir(games_dir) else {
         return vec![];
     };
@@ -60,20 +82,26 @@ fn get_games_from_dir(games_dir: &Path) -> Vec<LocalGame> {
             let entry = entry.ok()?;
             let path = entry.path();
 
-            // Check if this is a .ewz ROM file
-            if path.is_file() && path.extension().and_then(|e| e.to_str()) == Some("ewz") {
-                // Load ROM metadata
-                let rom_bytes = std::fs::read(&path).ok()?;
-                let rom = ZRom::from_bytes(&rom_bytes).ok()?;
+            // Check if this is a ROM file (if registry provided)
+            if let Some(registry) = registry {
+                if path.is_file() {
+                    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                        if let Some(loader) = registry.find_by_extension(ext) {
+                            // Load ROM metadata using the appropriate loader
+                            let rom_bytes = std::fs::read(&path).ok()?;
+                            let metadata = loader.load_metadata(&rom_bytes).ok()?;
 
-                return Some(LocalGame {
-                    id: rom.metadata.id.clone(),
-                    title: rom.metadata.title.clone(),
-                    author: rom.metadata.author.clone(),
-                    version: rom.metadata.version.clone(),
-                    rom_path: path, // Points directly to the .ewz file
-                    console_type: "z".to_string(),
-                });
+                            return Some(LocalGame {
+                                id: metadata.id,
+                                title: metadata.title,
+                                author: metadata.author,
+                                version: metadata.version,
+                                rom_path: path,
+                                console_type: loader.console_type().to_string(),
+                            });
+                        }
+                    }
+                }
             }
 
             // Check if this is a game directory
@@ -82,13 +110,28 @@ fn get_games_from_dir(games_dir: &Path) -> Vec<LocalGame> {
                 let manifest_content = std::fs::read_to_string(manifest_path).ok()?;
                 let manifest: LocalGameManifest = serde_json::from_str(&manifest_content).ok()?;
 
-                // Check for ROM file - prefer .ewz (data pack), fall back to .wasm
-                let ewz_path = path.join("rom.ewz");
-                let wasm_path = path.join("rom.wasm");
-                let rom_path = if ewz_path.exists() {
-                    ewz_path
+                // Check for ROM file - try registered extensions first, fall back to .wasm
+                let rom_path = if let Some(registry) = registry {
+                    // Try each registered extension, then fall back to .wasm
+                    let wasm_fallback = path.join("rom.wasm");
+                    registry
+                        .supported_extensions()
+                        .iter()
+                        .map(|ext| path.join(format!("rom.{}", ext)))
+                        .find(|p| p.exists())
+                        .or_else(|| wasm_fallback.exists().then_some(wasm_fallback))?
                 } else {
-                    wasm_path
+                    // Without registry, check for known ROM extensions
+                    // Try .ewz first (standard Emberware ROM format), then fall back to .wasm
+                    let ewz_path = path.join("rom.ewz");
+                    let wasm_path = path.join("rom.wasm");
+                    if ewz_path.exists() {
+                        ewz_path
+                    } else if wasm_path.exists() {
+                        wasm_path
+                    } else {
+                        return None; // Skip games with missing ROM files
+                    }
                 };
 
                 return Some(LocalGame {
@@ -190,13 +233,13 @@ mod tests {
     #[test]
     fn test_get_games_from_empty_dir() {
         let temp_dir = TempDir::new().unwrap();
-        let games = get_games_from_dir(temp_dir.path());
+        let games = get_games_from_dir(temp_dir.path(), None);
         assert!(games.is_empty());
     }
 
     #[test]
     fn test_get_games_from_nonexistent_dir() {
-        let games = get_games_from_dir(Path::new("/nonexistent/path/that/does/not/exist"));
+        let games = get_games_from_dir(Path::new("/nonexistent/path/that/does/not/exist"), None);
         assert!(games.is_empty());
     }
 
@@ -205,7 +248,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         create_test_game(temp_dir.path(), "my-game", "My Game", "Dev Name", "1.0.0");
 
-        let games = get_games_from_dir(temp_dir.path());
+        let games = get_games_from_dir(temp_dir.path(), None);
         assert_eq!(games.len(), 1);
         assert_eq!(games[0].id, "my-game");
         assert_eq!(games[0].title, "My Game");
@@ -221,7 +264,7 @@ mod tests {
         create_test_game(temp_dir.path(), "game-2", "Game Two", "Author B", "2.0.0");
         create_test_game(temp_dir.path(), "game-3", "Game Three", "Author C", "3.0.0");
 
-        let games = get_games_from_dir(temp_dir.path());
+        let games = get_games_from_dir(temp_dir.path(), None);
         assert_eq!(games.len(), 3);
 
         // Verify all games are present (order may vary)
@@ -245,7 +288,7 @@ mod tests {
         // Create a file (not a directory) in the games dir
         fs::write(temp_dir.path().join("not-a-dir.txt"), "some content").unwrap();
 
-        let games = get_games_from_dir(temp_dir.path());
+        let games = get_games_from_dir(temp_dir.path(), None);
         assert_eq!(games.len(), 1);
         assert_eq!(games[0].id, "valid-game");
     }
@@ -266,7 +309,7 @@ mod tests {
         fs::create_dir_all(&invalid_dir).unwrap();
         fs::write(invalid_dir.join("rom.wasm"), b"dummy").unwrap();
 
-        let games = get_games_from_dir(temp_dir.path());
+        let games = get_games_from_dir(temp_dir.path(), None);
         assert_eq!(games.len(), 1);
         assert_eq!(games[0].id, "valid-game");
     }
@@ -287,7 +330,7 @@ mod tests {
         fs::create_dir_all(&invalid_dir).unwrap();
         fs::write(invalid_dir.join("manifest.json"), "not valid json {{{").unwrap();
 
-        let games = get_games_from_dir(temp_dir.path());
+        let games = get_games_from_dir(temp_dir.path(), None);
         assert_eq!(games.len(), 1);
         assert_eq!(games[0].id, "valid-game");
     }
@@ -312,7 +355,7 @@ mod tests {
         )
         .unwrap();
 
-        let games = get_games_from_dir(temp_dir.path());
+        let games = get_games_from_dir(temp_dir.path(), None);
         assert_eq!(games.len(), 1);
         assert_eq!(games[0].id, "valid-game");
     }
@@ -322,7 +365,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         create_test_game(temp_dir.path(), "path-test", "Path Test", "Author", "1.0.0");
 
-        let games = get_games_from_dir(temp_dir.path());
+        let games = get_games_from_dir(temp_dir.path(), None);
         assert_eq!(games.len(), 1);
 
         let expected_rom_path = temp_dir.path().join("path-test").join("rom.wasm");
@@ -451,14 +494,14 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
 
         // Initially empty
-        let games = get_games_from_dir(temp_dir.path());
+        let games = get_games_from_dir(temp_dir.path(), None);
         assert!(games.is_empty());
 
         // Add a game
         create_test_game(temp_dir.path(), "workflow-game", "Workflow", "Dev", "1.0.0");
 
         // Should now appear in list
-        let games = get_games_from_dir(temp_dir.path());
+        let games = get_games_from_dir(temp_dir.path(), None);
         assert_eq!(games.len(), 1);
         assert!(is_cached_in_dir(temp_dir.path(), "workflow-game"));
 
@@ -466,7 +509,7 @@ mod tests {
         delete_game_in_dir(temp_dir.path(), "workflow-game").unwrap();
 
         // Should be gone from list
-        let games = get_games_from_dir(temp_dir.path());
+        let games = get_games_from_dir(temp_dir.path(), None);
         assert!(games.is_empty());
         assert!(!is_cached_in_dir(temp_dir.path(), "workflow-game"));
     }
@@ -492,7 +535,7 @@ mod tests {
         );
         create_test_game(temp_dir.path(), "game.with.dots", "Dots", "Author", "1.0.0");
 
-        let games = get_games_from_dir(temp_dir.path());
+        let games = get_games_from_dir(temp_dir.path(), None);
         assert_eq!(games.len(), 3);
 
         // All should be cached
@@ -524,7 +567,7 @@ mod tests {
         .unwrap();
         fs::write(game_dir.join("rom.wasm"), b"dummy").unwrap();
 
-        let games = get_games_from_dir(temp_dir.path());
+        let games = get_games_from_dir(temp_dir.path(), None);
         assert_eq!(games.len(), 1);
         assert_eq!(games[0].title, "日本語ゲーム");
         assert_eq!(games[0].author, "开发者");
@@ -552,7 +595,7 @@ mod tests {
         .unwrap();
         fs::write(game_dir.join("rom.wasm"), b"dummy").unwrap();
 
-        let games = get_games_from_dir(temp_dir.path());
+        let games = get_games_from_dir(temp_dir.path(), None);
         assert_eq!(games.len(), 1);
         assert_eq!(games[0].id, "");
         assert_eq!(games[0].title, "");
@@ -565,7 +608,7 @@ mod tests {
 
         create_test_game(temp_dir.path(), &long_id, "Long ID Game", "Author", "1.0.0");
 
-        let games = get_games_from_dir(temp_dir.path());
+        let games = get_games_from_dir(temp_dir.path(), None);
         assert_eq!(games.len(), 1);
         assert_eq!(games[0].id, long_id);
         assert!(is_cached_in_dir(temp_dir.path(), &long_id));

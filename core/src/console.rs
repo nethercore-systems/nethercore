@@ -11,10 +11,25 @@ use glam::Mat4;
 use wasmtime::Linker;
 use winit::window::Window;
 
-use crate::wasm::GameStateWithConsole;
+use crate::debug::DebugStat;
+use crate::wasm::WasmGameContext;
 
 // Re-export ConsoleSpecs from shared crate for convenience
 pub use emberware_shared::ConsoleSpecs;
+
+/// Console-specific rollback state (host-side, POD for zero-copy serialization)
+///
+/// This trait represents state that lives on the host side (not in WASM memory)
+/// but still needs to be rolled back during netcode rollback. Examples include:
+/// - Audio playhead positions
+/// - Channel volumes and pan values
+///
+/// The state must be POD (Plain Old Data) so it can be serialized/deserialized
+/// with zero-copy using bytemuck.
+pub trait ConsoleRollbackState: Pod + Zeroable + Default + Send + 'static {}
+
+// Unit type implementation for consoles with no rollback state
+impl ConsoleRollbackState for () {}
 
 /// Trait for fantasy console implementations
 ///
@@ -35,6 +50,12 @@ pub trait Console: Send + 'static {
     /// It is rebuilt each frame and is NOT part of rollback state (only GameState is rolled back).
     /// For example, Emberware Z uses ZFFIState which holds draw commands, camera, transforms, etc.
     type State: Default + Send + 'static;
+    /// Console-specific rollback state (host-side, rolled back with WASM memory)
+    ///
+    /// This state lives on the host side but is included in rollback snapshots.
+    /// Examples: audio playhead positions, channel volumes.
+    /// Use `()` for consoles with no host-side rollback state.
+    type RollbackState: ConsoleRollbackState;
     /// Console-specific resource manager type
     type ResourceManager: ConsoleResourceManager<Graphics = Self::Graphics, State = Self::State>;
 
@@ -44,7 +65,7 @@ pub trait Console: Send + 'static {
     /// Register console-specific FFI functions with the WASM linker
     fn register_ffi(
         &self,
-        linker: &mut Linker<GameStateWithConsole<Self::Input, Self::State>>,
+        linker: &mut Linker<WasmGameContext<Self::Input, Self::State, Self::RollbackState>>,
     ) -> Result<()>;
 
     /// Create the graphics backend for this console
@@ -64,6 +85,26 @@ pub trait Console: Send + 'static {
 
     /// Get the window title for this console
     fn window_title(&self) -> &'static str;
+
+    /// Get console-specific debug statistics
+    ///
+    /// These are read-only values displayed in the debug overlay showing
+    /// the current state of console subsystems (e.g., draw call count,
+    /// vertex count, texture memory usage).
+    ///
+    /// Default implementation returns an empty list.
+    fn debug_stats(&self, _state: &Self::State) -> Vec<DebugStat> {
+        Vec::new()
+    }
+
+    /// Initialize console-specific FFI state before game init() is called
+    ///
+    /// This is called after the game instance is created but before the
+    /// game's init() function runs. Use this to set up console-specific
+    /// state that the game needs during initialization (e.g., datapack).
+    ///
+    /// Default implementation does nothing.
+    fn initialize_ffi_state(&self, _state: &mut Self::State) {}
 }
 
 /// Trait for console-specific resource management
@@ -185,9 +226,6 @@ pub trait Audio: Send {
 
     /// Stop a sound
     fn stop(&mut self, handle: SoundHandle);
-
-    /// Set rollback mode (mutes audio during rollback replay)
-    fn set_rollback_mode(&mut self, rolling_back: bool);
 }
 
 /// Handle to a loaded sound

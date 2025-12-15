@@ -122,6 +122,12 @@ impl ConsoleResourceManager for ZResourceManager {
             }
         }
 
+        // Register built-in texture handles (font, white)
+        // These are reserved handles used by draw_text and draw_rect
+        self.texture_map.insert(u32::MAX, graphics.white_texture());
+        self.texture_map
+            .insert(u32::MAX - 1, graphics.font_texture());
+
         // Process pending unpacked meshes (f32 convenience API)
         // Convert to packed format before GPU upload for 37.5% memory savings
         for pending in state.pending_meshes.drain(..) {

@@ -29,6 +29,28 @@ impl ZGraphics {
                     self.config.height as f32,
                 )
             }
+            emberware_core::app::config::ScaleMode::Fit => {
+                // Maintain aspect ratio, scale to fill as much as possible
+                let render_width = self.render_target.width as f32;
+                let render_height = self.render_target.height as f32;
+                let window_width = self.config.width as f32;
+                let window_height = self.config.height as f32;
+
+                // Calculate scale factor that fits within window while maintaining aspect ratio
+                let scale_x = window_width / render_width;
+                let scale_y = window_height / render_height;
+                let scale = scale_x.min(scale_y);
+
+                // Calculate scaled dimensions
+                let scaled_width = render_width * scale;
+                let scaled_height = render_height * scale;
+
+                // Center the viewport (letterbox/pillarbox)
+                let x = (window_width - scaled_width) / 2.0;
+                let y = (window_height - scaled_height) / 2.0;
+
+                (x, y, scaled_width, scaled_height)
+            }
             emberware_core::app::config::ScaleMode::PixelPerfect => {
                 // Integer scaling with letterboxing (pixel-perfect)
                 let render_width = self.render_target.width as f32;

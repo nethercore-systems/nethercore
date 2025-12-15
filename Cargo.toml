@@ -1,30 +1,6 @@
-[package]
-name = "emberware"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-repository.workspace = true
-description = "Unified Emberware fantasy console launcher"
-
-[[bin]]
-name = "emberware"
-path = "src/main.rs"
-
-[dependencies]
-# Local crates
-emberware-core = { path = "core" }
-emberware-shared = { path = "shared" }
-emberware-z = { path = "emberware-z" }
-
-# Workspace dependencies
-anyhow.workspace = true
-tracing.workspace = true
-tracing-subscriber = { workspace = true, features = ["env-filter"] }
-directories.workspace = true
-hashbrown.workspace = true
-
 [workspace]
-members = ["core", "emberware-z", "shared", "z-common", "xtask", "tools/ember-export", "tools/ember-cli", "tools/gen-test-anim", "tools/gen-multi-skinned-assets"]
+members = ["core", "emberware-z", "shared", "z-common", "library", "xtask", "tools/ember-export", "tools/ember-cli", "tools/gen-test-anim", "tools/gen-multi-skinned-assets"]
+default-members = ["library"]
 exclude = ["examples/hello-world", "examples/triangle", "examples/textured-quad", "examples/cube", "examples/lighting", "examples/skinned-mesh", "examples/billboard", "examples/platformer", "examples/blinn-phong", "examples/procedural-shapes", "examples/audio-demo", "examples/textured-procedural", "examples/debug-demo", "examples/datapack-demo", "examples/font-demo", "examples/level-loader", "examples/asset-test", "examples/examples-common", "examples/mode0-inspector", "examples/mode1-inspector", "examples/mode2-inspector", "examples/mode3-inspector", "examples/animation-demo", "examples/dither-demo", "examples/material-override", "examples/multi-skinned-procedural", "examples/ik-demo", "examples/multi-skinned-rom", "examples/skeleton-stress-test"]
 resolver = "2"
 
@@ -48,7 +24,8 @@ winit = "0.30"
 wgpu = "27"
 
 # Audio
-rodio = "0.21"
+cpal = "0.16"
+ringbuf = "0.4"
 
 # Input
 gilrs = "0.11"

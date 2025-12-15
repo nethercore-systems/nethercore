@@ -19,17 +19,20 @@ pub mod ffi;
 mod integration;
 pub mod library;
 pub mod rollback;
+pub mod runner;
 pub mod runtime;
 #[cfg(test)]
 pub mod test_utils;
 pub mod wasm;
 
 // Re-export core traits and types
-pub use console::{Audio, Console, ConsoleInput, ConsoleSpecs, Graphics};
+pub use console::{Audio, Console, ConsoleInput, ConsoleRollbackState, ConsoleSpecs, Graphics};
+pub use runner::ConsoleRunner;
 pub use runtime::{Runtime, RuntimeConfig};
+#[allow(deprecated)]
 pub use wasm::{
     GameInstance, GameState, GameStateWithConsole, MAX_PLAYERS, MAX_SAVE_SIZE, MAX_SAVE_SLOTS,
-    WasmEngine,
+    WasmEngine, WasmGameContext,
 };
 
 // Re-export rollback types
@@ -46,3 +49,6 @@ pub use ggrs::{GgrsError, GgrsEvent, GgrsRequest, InputStatus, PlayerType, Sessi
 
 // Re-export analysis types for build-time WASM analysis
 pub use analysis::{AnalysisError, AnalysisResult, TextureFormatHint, analyze_wasm};
+
+// Re-export debug types
+pub use debug::DebugStat;

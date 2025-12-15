@@ -32,9 +32,11 @@ pub struct Config {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum ScaleMode {
     /// Stretch to fill window (may distort aspect ratio)
-    #[default]
     Stretch,
-    /// Integer scaling for pixel-perfect rendering (adds black bars)
+    /// Maintain aspect ratio, scale to fill as much as possible (adds letterbox bars)
+    #[default]
+    Fit,
+    /// Integer scaling for pixel-perfect rendering (adds black bars, may not fill screen)
     PixelPerfect,
 }
 
@@ -142,26 +144,26 @@ impl Default for DebugConfig {
 
 /// Returns the platform-specific configuration directory.
 ///
-/// On Windows: `%APPDATA%\emberware\emberware\config`
-/// On macOS: `~/Library/Application Support/io.emberware.emberware`
-/// On Linux: `~/.config/emberware`
+/// On Windows: `%APPDATA%\Emberware\config`
+/// On macOS: `~/Library/Application Support/io.emberware.Emberware`
+/// On Linux: `~/.config/Emberware`
 ///
 /// Returns `None` if the home directory cannot be determined.
 pub fn config_dir() -> Option<PathBuf> {
-    directories::ProjectDirs::from("io", "emberware", "emberware")
+    directories::ProjectDirs::from("io.emberware", "", "Emberware")
         .map(|dirs| dirs.config_dir().to_path_buf())
 }
 
 /// Returns the platform-specific data directory for game storage.
 ///
-/// On Windows: `%APPDATA%\emberware\emberware\data`
-/// On macOS: `~/Library/Application Support/io.emberware.emberware`
-/// On Linux: `~/.local/share/emberware`
+/// On Windows: `%APPDATA%\Emberware\data`
+/// On macOS: `~/Library/Application Support/io.emberware.Emberware`
+/// On Linux: `~/.local/share/Emberware`
 ///
 /// This is where downloaded games and save data are stored.
 /// Returns `None` if the home directory cannot be determined.
 pub fn data_dir() -> Option<PathBuf> {
-    directories::ProjectDirs::from("io", "emberware", "emberware")
+    directories::ProjectDirs::from("io.emberware", "", "Emberware")
         .map(|dirs| dirs.data_dir().to_path_buf())
 }
 
@@ -237,6 +239,11 @@ mod tests {
         assert_eq!(parsed.video.resolution_scale, 3);
         assert_eq!(parsed.video.scale_mode, ScaleMode::PixelPerfect);
         assert!((parsed.audio.master_volume - 0.5).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_scale_mode_default_is_fit() {
+        assert_eq!(ScaleMode::default(), ScaleMode::Fit);
     }
 
     #[test]

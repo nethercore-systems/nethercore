@@ -6,13 +6,10 @@ use anyhow::Result;
 use tracing::warn;
 use wasmtime::{Caller, Linker};
 
-use emberware_core::wasm::GameStateWithConsole;
-
-use crate::console::ZInput;
-use crate::state::ZFFIState;
+use super::ZGameContext;
 
 /// Register render state FFI functions
-pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
+pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
     linker.func_wrap("env", "set_color", set_color)?;
     linker.func_wrap("env", "depth_test", depth_test)?;
     linker.func_wrap("env", "cull_mode", cull_mode)?;
@@ -29,8 +26,8 @@ pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) ->
 /// * `color` — Color in 0xRRGGBBAA format
 ///
 /// This color is multiplied with vertex colors and textures.
-fn set_color(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, color: u32) {
-    let state = &mut caller.data_mut().console;
+fn set_color(mut caller: Caller<'_, ZGameContext>, color: u32) {
+    let state = &mut caller.data_mut().ffi;
     state.update_color(color);
 }
 
@@ -40,8 +37,8 @@ fn set_color(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, co
 /// * `enabled` — 0 to disable, non-zero to enable
 ///
 /// Default: enabled. Disable for 2D overlays or special effects.
-fn depth_test(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, enabled: u32) {
-    let state = &mut caller.data_mut().console;
+fn depth_test(mut caller: Caller<'_, ZGameContext>, enabled: u32) {
+    let state = &mut caller.data_mut().ffi;
     state.depth_test = enabled != 0;
 }
 
@@ -51,8 +48,8 @@ fn depth_test(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, e
 /// * `mode` — 0=none (draw both sides), 1=back (default), 2=front
 ///
 /// Back-face culling is the default for solid 3D objects.
-fn cull_mode(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, mode: u32) {
-    let state = &mut caller.data_mut().console;
+fn cull_mode(mut caller: Caller<'_, ZGameContext>, mode: u32) {
+    let state = &mut caller.data_mut().ffi;
 
     if mode > 2 {
         warn!("cull_mode({}) invalid - must be 0-2, using 0 (none)", mode);
@@ -70,8 +67,8 @@ fn cull_mode(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, mo
 ///
 /// Default: none (opaque). Use alpha for transparent textures.
 /// Note: Blend mode is stored per-draw command for pipeline selection, not in GPU shading state.
-fn blend_mode(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, mode: u32) {
-    let state = &mut caller.data_mut().console;
+fn blend_mode(mut caller: Caller<'_, ZGameContext>, mode: u32) {
+    let state = &mut caller.data_mut().ffi;
 
     if mode > 3 {
         warn!("blend_mode({}) invalid - must be 0-3, using 0 (none)", mode);
@@ -89,8 +86,8 @@ fn blend_mode(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, m
 ///
 /// Default: nearest for retro aesthetic.
 /// Note: Filter mode is stored in PackedUnifiedShadingState.flags for per-draw shader selection.
-fn texture_filter(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, filter: u32) {
-    let state = &mut caller.data_mut().console;
+fn texture_filter(mut caller: Caller<'_, ZGameContext>, filter: u32) {
+    let state = &mut caller.data_mut().ffi;
 
     if filter > 1 {
         warn!(
@@ -113,8 +110,8 @@ fn texture_filter(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>
 ///
 /// This controls the dither pattern threshold for screen-door transparency.
 /// The dither pattern is always active, but with level=15 (default) all fragments pass.
-fn uniform_alpha(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, level: u32) {
-    let state = &mut caller.data_mut().console;
+fn uniform_alpha(mut caller: Caller<'_, ZGameContext>, level: u32) {
+    let state = &mut caller.data_mut().ffi;
 
     if level > 15 {
         warn!(
@@ -136,8 +133,8 @@ fn uniform_alpha(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>
 /// When two transparent objects overlap with the same alpha level and offset, their
 /// dither patterns align and pixels cancel out. Different offsets shift the pattern
 /// so both objects remain visible.
-fn dither_offset(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, x: u32, y: u32) {
-    let state = &mut caller.data_mut().console;
+fn dither_offset(mut caller: Caller<'_, ZGameContext>, x: u32, y: u32) {
+    let state = &mut caller.data_mut().ffi;
 
     if x > 3 || y > 3 {
         warn!(

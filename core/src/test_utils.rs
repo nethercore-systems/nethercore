@@ -9,7 +9,7 @@ use crate::console::{
     Audio, Console, ConsoleInput, ConsoleResourceManager, ConsoleSpecs, Graphics, RawInput,
     SoundHandle,
 };
-use crate::wasm::GameStateWithConsole;
+use crate::wasm::WasmGameContext;
 
 // ============================================================================
 // Test Console Implementation
@@ -30,24 +30,16 @@ impl Graphics for TestGraphics {
 
 /// Test audio backend (no-op)
 pub struct TestAudio {
-    pub rollback_mode: bool,
     pub play_count: u32,
     pub stop_count: u32,
 }
 
 impl Audio for TestAudio {
     fn play(&mut self, _handle: SoundHandle, _volume: f32, _looping: bool) {
-        if !self.rollback_mode {
-            self.play_count += 1;
-        }
+        self.play_count += 1;
     }
     fn stop(&mut self, _handle: SoundHandle) {
-        if !self.rollback_mode {
-            self.stop_count += 1;
-        }
-    }
-    fn set_rollback_mode(&mut self, rolling_back: bool) {
-        self.rollback_mode = rolling_back;
+        self.stop_count += 1;
     }
 }
 
@@ -89,6 +81,7 @@ impl Console for TestConsole {
     type Audio = TestAudio;
     type Input = TestInput;
     type State = ();
+    type RollbackState = ();
     type ResourceManager = TestResourceManager;
 
     fn specs(&self) -> &'static ConsoleSpecs {
@@ -107,7 +100,7 @@ impl Console for TestConsole {
 
     fn register_ffi(
         &self,
-        _linker: &mut Linker<GameStateWithConsole<TestInput, ()>>,
+        _linker: &mut Linker<WasmGameContext<TestInput, (), ()>>,
     ) -> anyhow::Result<()> {
         Ok(())
     }
@@ -118,7 +111,6 @@ impl Console for TestConsole {
 
     fn create_audio(&self) -> anyhow::Result<Self::Audio> {
         Ok(TestAudio {
-            rollback_mode: false,
             play_count: 0,
             stop_count: 0,
         })

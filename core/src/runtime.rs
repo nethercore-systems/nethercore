@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 use ggrs::GgrsError;
 
-use crate::console::{Audio, Console};
+use crate::console::Console;
 use crate::rollback::{RollbackSession, SessionEvent};
 use crate::wasm::GameInstance;
 
@@ -44,8 +44,8 @@ pub struct Runtime<C: Console> {
     #[allow(dead_code)]
     console: C,
     config: RuntimeConfig,
-    game: Option<GameInstance<C::Input, C::State>>,
-    session: Option<RollbackSession<C::Input, C::State>>,
+    game: Option<GameInstance<C::Input, C::State, C::RollbackState>>,
+    session: Option<RollbackSession<C::Input, C::State, C::RollbackState>>,
     audio: Option<C::Audio>,
     accumulator: Duration,
     last_update: Option<Instant>,
@@ -82,20 +82,30 @@ impl<C: Console> Runtime<C> {
     }
 
     /// Load a game instance
-    pub fn load_game(&mut self, game: GameInstance<C::Input, C::State>) {
+    pub fn load_game(&mut self, game: GameInstance<C::Input, C::State, C::RollbackState>) {
         self.game = Some(game);
         self.accumulator = Duration::ZERO;
         self.last_update = None;
     }
 
     /// Set the rollback session
-    pub fn set_session(&mut self, session: RollbackSession<C::Input, C::State>) {
+    pub fn set_session(&mut self, session: RollbackSession<C::Input, C::State, C::RollbackState>) {
         self.session = Some(session);
     }
 
     /// Set the audio backend
     pub fn set_audio(&mut self, audio: C::Audio) {
         self.audio = Some(audio);
+    }
+
+    /// Initialize console-specific FFI state before calling game init()
+    ///
+    /// This allows the console to set up state that the game needs during
+    /// initialization (e.g., datapack for rom_* functions).
+    pub fn initialize_console_state(&mut self) {
+        if let Some(game) = &mut self.game {
+            self.console.initialize_ffi_state(game.console_state_mut());
+        }
     }
 
     /// Initialize the loaded game
@@ -196,10 +206,8 @@ impl<C: Console> Runtime<C> {
                         .handle_requests(game, requests)
                         .map_err(|e| anyhow::anyhow!("GGRS handle_requests failed: {}", e))?;
 
-                    // Update audio rollback mode
-                    if let Some(audio) = &mut self.audio {
-                        audio.set_rollback_mode(session.is_rolling_back());
-                    }
+                    // Note: Audio rollback is automatic via ConsoleRollbackState
+                    // Audio state is part of snapshot, no explicit mode tracking needed
 
                     // Execute each AdvanceFrame with its inputs
                     for inputs in advance_inputs {
@@ -264,12 +272,12 @@ impl<C: Console> Runtime<C> {
     }
 
     /// Get a reference to the loaded game
-    pub fn game(&self) -> Option<&GameInstance<C::Input, C::State>> {
+    pub fn game(&self) -> Option<&GameInstance<C::Input, C::State, C::RollbackState>> {
         self.game.as_ref()
     }
 
     /// Get a mutable reference to the loaded game
-    pub fn game_mut(&mut self) -> Option<&mut GameInstance<C::Input, C::State>> {
+    pub fn game_mut(&mut self) -> Option<&mut GameInstance<C::Input, C::State, C::RollbackState>> {
         self.game.as_mut()
     }
 
@@ -284,12 +292,14 @@ impl<C: Console> Runtime<C> {
     }
 
     /// Get a reference to the rollback session
-    pub fn session(&self) -> Option<&RollbackSession<C::Input, C::State>> {
+    pub fn session(&self) -> Option<&RollbackSession<C::Input, C::State, C::RollbackState>> {
         self.session.as_ref()
     }
 
     /// Get a mutable reference to the rollback session
-    pub fn session_mut(&mut self) -> Option<&mut RollbackSession<C::Input, C::State>> {
+    pub fn session_mut(
+        &mut self,
+    ) -> Option<&mut RollbackSession<C::Input, C::State, C::RollbackState>> {
         self.session.as_mut()
     }
 
@@ -460,7 +470,6 @@ mod tests {
         let mut runtime = Runtime::new(console);
 
         let audio = TestAudio {
-            rollback_mode: false,
             play_count: 0,
             stop_count: 0,
         };
@@ -475,7 +484,6 @@ mod tests {
         let mut runtime = Runtime::new(console);
 
         let audio = TestAudio {
-            rollback_mode: false,
             play_count: 0,
             stop_count: 0,
         };

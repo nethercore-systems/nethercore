@@ -2,7 +2,7 @@
 //!
 //! Provides state snapshot and buffer pool functionality for GGRS rollback.
 
-use crate::console::ConsoleInput;
+use crate::console::{ConsoleInput, ConsoleRollbackState};
 use crate::wasm::GameInstance;
 
 use super::config::MAX_STATE_SIZE;
@@ -16,14 +16,17 @@ pub const STATE_POOL_SIZE: usize = super::config::MAX_ROLLBACK_FRAMES + 2;
 
 /// Snapshot of game state for rollback
 ///
-/// Contains the serialized WASM game state and a checksum for desync detection.
-/// The data comes from calling `GameInstance::save_state()` which invokes the
-/// game's exported `save_state(ptr, max_len) -> len` function.
+/// Contains the serialized WASM game state, console-specific rollback data,
+/// and a checksum for desync detection.
+/// The data comes from calling `GameInstance::save_state()` which snapshots
+/// the entire WASM linear memory.
 #[derive(Clone)]
 pub struct GameStateSnapshot {
-    /// Serialized WASM game state
+    /// Serialized WASM game state (entire linear memory)
     pub data: Vec<u8>,
-    /// FNV-1a checksum for desync detection
+    /// Console-specific rollback state (POD, serialized via bytemuck)
+    pub console_data: Vec<u8>,
+    /// xxHash3 checksum for desync detection (covers both data and console_data)
     pub checksum: u64,
     /// Frame number this snapshot was taken at
     pub frame: i32,
@@ -34,16 +37,29 @@ impl GameStateSnapshot {
     pub fn new() -> Self {
         Self {
             data: Vec::new(),
+            console_data: Vec::new(),
             checksum: 0,
             frame: -1,
         }
     }
 
-    /// Create a snapshot from serialized data
+    /// Create a snapshot from serialized data (no console data)
     pub fn from_data(data: Vec<u8>, frame: i32) -> Self {
-        let checksum = Self::compute_checksum(&data);
+        let checksum = Self::compute_checksum(&data, &[]);
         Self {
             data,
+            console_data: Vec::new(),
+            checksum,
+            frame,
+        }
+    }
+
+    /// Create a snapshot from WASM data and console rollback data
+    pub fn from_data_with_console(data: Vec<u8>, console_data: Vec<u8>, frame: i32) -> Self {
+        let checksum = Self::compute_checksum(&data, &console_data);
+        Self {
+            data,
+            console_data,
             checksum,
             frame,
         }
@@ -52,9 +68,10 @@ impl GameStateSnapshot {
     /// Create a snapshot from a pre-allocated buffer (avoids allocation)
     pub fn from_buffer(buffer: &mut Vec<u8>, len: usize, frame: i32) -> Self {
         buffer.truncate(len);
-        let checksum = Self::compute_checksum(buffer);
+        let checksum = Self::compute_checksum(buffer, &[]);
         Self {
             data: std::mem::take(buffer),
+            console_data: Vec::new(),
             checksum,
             frame,
         }
@@ -65,17 +82,27 @@ impl GameStateSnapshot {
         self.data.is_empty()
     }
 
-    /// Get the size of the serialized state in bytes
+    /// Get the size of the serialized WASM state in bytes
     pub fn len(&self) -> usize {
         self.data.len()
+    }
+
+    /// Get total snapshot size including console data
+    pub fn total_len(&self) -> usize {
+        self.data.len() + self.console_data.len()
     }
 
     /// Compute xxHash3 checksum for desync detection
     ///
     /// xxHash3 is SIMD-optimized (~50 GB/s throughput) for fast checksumming
     /// of large state buffers. We use this to detect desyncs between clients.
-    fn compute_checksum(data: &[u8]) -> u64 {
-        xxhash_rust::xxh3::xxh3_64(data)
+    /// Checksum covers both WASM memory and console rollback state.
+    fn compute_checksum(data: &[u8], console_data: &[u8]) -> u64 {
+        use xxhash_rust::xxh3::Xxh3;
+        let mut hasher = Xxh3::new();
+        hasher.update(data);
+        hasher.update(console_data);
+        hasher.digest()
     }
 }
 
@@ -192,11 +219,12 @@ impl RollbackStateManager {
 
     /// Save the current game state
     ///
-    /// Calls `game.save_state()` to snapshot the entire WASM linear memory.
+    /// Calls `game.save_state()` to snapshot the entire WASM linear memory,
+    /// and serializes the console rollback state via bytemuck.
     /// Returns a `GameStateSnapshot` with checksum.
-    pub fn save_state<I: ConsoleInput, S: Send + Default + 'static>(
+    pub fn save_state<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>(
         &mut self,
-        game: &mut GameInstance<I, S>,
+        game: &mut GameInstance<I, S, R>,
         frame: i32,
     ) -> Result<GameStateSnapshot, SaveStateError> {
         // Snapshot entire WASM linear memory
@@ -204,23 +232,32 @@ impl RollbackStateManager {
             .save_state()
             .map_err(|e| SaveStateError::WasmError(e.to_string()))?;
 
-        if snapshot_data.len() > self.max_state_size {
+        // Serialize console rollback state via bytemuck (zero-copy for POD types)
+        let console_data = bytemuck::bytes_of(game.rollback_state()).to_vec();
+
+        let total_size = snapshot_data.len() + console_data.len();
+        if total_size > self.max_state_size {
             return Err(SaveStateError::StateTooLarge {
-                size: snapshot_data.len(),
+                size: total_size,
                 max: self.max_state_size,
             });
         }
 
-        // Create snapshot with checksum
-        Ok(GameStateSnapshot::from_data(snapshot_data, frame))
+        // Create snapshot with checksum covering both WASM and console data
+        Ok(GameStateSnapshot::from_data_with_console(
+            snapshot_data,
+            console_data,
+            frame,
+        ))
     }
 
     /// Load a game state from a snapshot
     ///
-    /// Calls `game.load_state()` to restore the game to the saved state.
-    pub fn load_state<I: ConsoleInput, S: Send + Default + 'static>(
+    /// Calls `game.load_state()` to restore the WASM linear memory,
+    /// and deserializes the console rollback state via bytemuck.
+    pub fn load_state<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>(
         &mut self,
-        game: &mut GameInstance<I, S>,
+        game: &mut GameInstance<I, S, R>,
         snapshot: &GameStateSnapshot,
     ) -> Result<(), LoadStateError> {
         if snapshot.is_empty() {
@@ -228,8 +265,22 @@ impl RollbackStateManager {
             return Ok(());
         }
 
+        // Restore WASM linear memory
         game.load_state(&snapshot.data)
-            .map_err(|e| LoadStateError::WasmError(e.to_string()))
+            .map_err(|e| LoadStateError::WasmError(e.to_string()))?;
+
+        // Restore console rollback state if present
+        if !snapshot.console_data.is_empty() {
+            if let Ok(console_state) = bytemuck::try_from_bytes::<R>(&snapshot.console_data) {
+                *game.rollback_state_mut() = *console_state;
+            } else {
+                return Err(LoadStateError::WasmError(
+                    "Console rollback state size mismatch".to_string(),
+                ));
+            }
+        }
+
+        Ok(())
     }
 
     /// Return a snapshot's buffer to the pool

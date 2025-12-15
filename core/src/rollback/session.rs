@@ -10,7 +10,7 @@ use ggrs::{
     SessionBuilder, SessionState, SyncTestSession,
 };
 
-use crate::console::ConsoleInput;
+use crate::console::{ConsoleInput, ConsoleRollbackState};
 use crate::wasm::GameInstance;
 
 use super::config::{EmberwareConfig, SessionConfig};
@@ -70,8 +70,9 @@ unsafe impl<I: ConsoleInput> Zeroable for NetworkInput<I> {}
 enum SessionInner<I: ConsoleInput> {
     /// Local session - no GGRS, just direct execution
     Local {
-        num_players: usize,
         current_frame: i32,
+        /// Stored inputs for each player (set via add_local_input)
+        stored_inputs: Vec<I>,
     },
     /// Sync test session for determinism testing (boxed to reduce enum size)
     SyncTest {
@@ -90,7 +91,11 @@ const FRAME_ADVANTAGE_WARNING_THRESHOLD: i32 = 4;
 /// Wraps GGRS session types and provides a unified interface for
 /// local, sync-test, and P2P sessions. Handles state management
 /// and input processing.
-pub struct RollbackSession<I: ConsoleInput, S: Send + Default + 'static> {
+pub struct RollbackSession<
+    I: ConsoleInput,
+    S: Send + Default + 'static,
+    R: ConsoleRollbackState = (),
+> {
     inner: SessionInner<I>,
     session_type: SessionType,
     config: SessionConfig,
@@ -109,10 +114,12 @@ pub struct RollbackSession<I: ConsoleInput, S: Send + Default + 'static> {
     last_frame_advantage: i32,
     /// Whether a desync has been detected
     desync_detected: bool,
-    _phantom: std::marker::PhantomData<S>,
+    _phantom: std::marker::PhantomData<(S, R)>,
 }
 
-impl<I: ConsoleInput, S: Send + Default + 'static> RollbackSession<I, S> {
+impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>
+    RollbackSession<I, S, R>
+{
     /// Create a new local session (no rollback)
     ///
     /// Local sessions run without GGRS - updates execute immediately
@@ -143,8 +150,8 @@ impl<I: ConsoleInput, S: Send + Default + 'static> RollbackSession<I, S> {
 
         Self {
             inner: SessionInner::Local {
-                num_players,
                 current_frame: 0,
+                stored_inputs: vec![I::default(); num_players],
             },
             session_type: SessionType::Local,
             config: SessionConfig::local(num_players),
@@ -353,9 +360,11 @@ impl<I: ConsoleInput, S: Send + Default + 'static> RollbackSession<I, S> {
     /// For GGRS sessions, input is passed to GGRS for synchronization.
     pub fn add_local_input(&mut self, player_handle: usize, input: I) -> Result<(), GgrsError> {
         match &mut self.inner {
-            SessionInner::Local { .. } => {
-                // Local sessions don't need GGRS input handling
-                // Input is set directly on GameInstance
+            SessionInner::Local { stored_inputs, .. } => {
+                // Store input for use in advance_frame
+                if player_handle < stored_inputs.len() {
+                    stored_inputs[player_handle] = input;
+                }
                 Ok(())
             }
             SessionInner::SyncTest { session, .. } => session.add_local_input(player_handle, input),
@@ -380,17 +389,19 @@ impl<I: ConsoleInput, S: Send + Default + 'static> RollbackSession<I, S> {
     /// - AdvanceFrame: Execute one tick with the given inputs
     ///
     /// For Local sessions, this returns a simple AdvanceFrame request
-    /// with default inputs for all players.
+    /// with the stored inputs (set via `add_local_input`).
     pub fn advance_frame(&mut self) -> Result<Vec<GgrsRequest<EmberwareConfig<I>>>, GgrsError> {
         match &mut self.inner {
             SessionInner::Local {
-                num_players,
                 current_frame,
+                stored_inputs,
+                ..
             } => {
-                // Local sessions just advance immediately with default inputs
+                // Local sessions advance immediately with stored inputs
                 *current_frame += 1;
-                let inputs: Vec<(I, InputStatus)> = (0..*num_players)
-                    .map(|_| (I::default(), InputStatus::Confirmed))
+                let inputs: Vec<(I, InputStatus)> = stored_inputs
+                    .iter()
+                    .map(|input| (*input, InputStatus::Confirmed))
                     .collect();
                 Ok(vec![GgrsRequest::AdvanceFrame { inputs }])
             }
@@ -598,7 +609,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static> RollbackSession<I, S> {
     /// be muted. Check `is_rolling_back()` before playing sounds.
     pub fn handle_requests(
         &mut self,
-        game: &mut GameInstance<I, S>,
+        game: &mut GameInstance<I, S, R>,
         requests: Vec<GgrsRequest<EmberwareConfig<I>>>,
     ) -> Result<Vec<Vec<(I, InputStatus)>>, SessionError> {
         let mut advance_inputs = Vec::new();
@@ -651,7 +662,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static> RollbackSession<I, S> {
     /// Save game state (convenience wrapper)
     pub fn save_game_state(
         &mut self,
-        game: &mut GameInstance<I, S>,
+        game: &mut GameInstance<I, S, R>,
         frame: i32,
     ) -> Result<GameStateSnapshot, SaveStateError> {
         self.state_manager.save_state(game, frame)
@@ -660,7 +671,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static> RollbackSession<I, S> {
     /// Load game state (convenience wrapper)
     pub fn load_game_state(
         &mut self,
-        game: &mut GameInstance<I, S>,
+        game: &mut GameInstance<I, S, R>,
         snapshot: &GameStateSnapshot,
     ) -> Result<(), LoadStateError> {
         self.state_manager.load_state(game, snapshot)

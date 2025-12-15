@@ -12,20 +12,18 @@ use anyhow::{Result, bail};
 use tracing::warn;
 use wasmtime::{Caller, Linker};
 
-use emberware_core::wasm::GameStateWithConsole;
 use z_common::formats::{
     BoneTransform, EmberZAnimationHeader, PLATFORM_BONE_KEYFRAME_SIZE, PlatformBoneKeyframe,
     decode_bone_transform,
 };
 
-use super::guards::check_init_only;
-use crate::console::ZInput;
+use super::{ZGameContext, guards::check_init_only};
 use crate::state::{
-    BoneMatrix3x4, KeyframeSource, MAX_BONES, MAX_KEYFRAME_COLLECTIONS, PendingKeyframes, ZFFIState,
+    BoneMatrix3x4, KeyframeSource, MAX_BONES, MAX_KEYFRAME_COLLECTIONS, PendingKeyframes,
 };
 
 /// Register keyframe animation FFI functions
-pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
+pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
     // Init-only loading
     linker.func_wrap("env", "keyframes_load", keyframes_load)?;
     linker.func_wrap("env", "rom_keyframes", rom_keyframes)?;
@@ -56,14 +54,14 @@ pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) ->
 ///
 /// **Init-only:** Can only be called during `init()`.
 fn keyframes_load(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     data_ptr: u32,
     byte_size: u32,
 ) -> Result<u32> {
     check_init_only(&caller, "keyframes_load")?;
 
     // Check keyframe collection limit
-    let state = &caller.data().console;
+    let state = &caller.data().ffi;
     let total_keyframes = state.keyframes.len() + state.pending_keyframes.len();
     if total_keyframes >= MAX_KEYFRAME_COLLECTIONS {
         bail!(
@@ -131,7 +129,7 @@ fn keyframes_load(
     let keyframe_data = data[data_start..data_start + data_len].to_vec();
 
     // Allocate handle and queue pending load
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     let handle = state.next_keyframe_handle;
     state.next_keyframe_handle += 1;
 
@@ -162,11 +160,7 @@ fn keyframes_load(
 /// Keyframe collection handle (>0) on success. Traps on failure.
 ///
 /// **Init-only:** Can only be called during `init()`.
-fn rom_keyframes(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    id_ptr: u32,
-    id_len: u32,
-) -> Result<u32> {
+fn rom_keyframes(mut caller: Caller<'_, ZGameContext>, id_ptr: u32, id_len: u32) -> Result<u32> {
     check_init_only(&caller, "rom_keyframes")?;
 
     // Read asset ID from WASM memory
@@ -189,7 +183,7 @@ fn rom_keyframes(
     };
 
     // Check keyframe collection limit
-    let state = &caller.data().console;
+    let state = &caller.data().ffi;
     let total_keyframes = state.keyframes.len() + state.pending_keyframes.len();
     if total_keyframes >= MAX_KEYFRAME_COLLECTIONS {
         bail!(
@@ -200,7 +194,7 @@ fn rom_keyframes(
 
     // Get keyframe data from data pack
     let (bone_count, frame_count, keyframe_data) = {
-        let state = &caller.data().console;
+        let state = &caller.data().ffi;
         let data_pack = state
             .data_pack
             .as_ref()
@@ -219,7 +213,7 @@ fn rom_keyframes(
     };
 
     // Allocate handle and queue pending load
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     let handle = state.next_keyframe_handle;
     state.next_keyframe_handle += 1;
 
@@ -255,16 +249,13 @@ fn rom_keyframes(
 ///
 /// # Note
 /// Works during init() by also checking pending_keyframes.
-fn keyframes_bone_count(
-    caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    handle: u32,
-) -> u32 {
+fn keyframes_bone_count(caller: Caller<'_, ZGameContext>, handle: u32) -> u32 {
     if handle == 0 {
         warn!("keyframes_bone_count: invalid handle 0");
         return 0;
     }
 
-    let state = &caller.data().console;
+    let state = &caller.data().ffi;
     let index = handle as usize - 1;
 
     // First check finalized keyframes
@@ -299,16 +290,13 @@ fn keyframes_bone_count(
 ///
 /// # Note
 /// Works during init() by also checking pending_keyframes.
-fn keyframes_frame_count(
-    caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    handle: u32,
-) -> u32 {
+fn keyframes_frame_count(caller: Caller<'_, ZGameContext>, handle: u32) -> u32 {
     if handle == 0 {
         warn!("keyframes_frame_count: invalid handle 0");
         return 0;
     }
 
-    let state = &caller.data().console;
+    let state = &caller.data().ffi;
     let index = handle as usize - 1;
 
     // First check finalized keyframes
@@ -354,7 +342,7 @@ fn keyframes_frame_count(
 /// - Frame index out of bounds
 /// - Output buffer out of bounds
 fn keyframe_read(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     handle: u32,
     index: u32,
     out_ptr: u32,
@@ -365,7 +353,7 @@ fn keyframe_read(
 
     // Get keyframe collection
     let (bone_count, frame_data) = {
-        let state = &caller.data().console;
+        let state = &caller.data().ffi;
         let handle_index = handle as usize - 1;
 
         match state.keyframes.get(handle_index) {
@@ -460,14 +448,10 @@ fn keyframe_read(
 /// Unlike the legacy `keyframe_read() -> set_bones()` path, this uses pre-uploaded
 /// static keyframe data. The GPU shader reads directly from the all_keyframes buffer
 /// at the computed offset.
-fn keyframe_bind(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
-    handle: u32,
-    index: u32,
-) -> Result<()> {
+fn keyframe_bind(mut caller: Caller<'_, ZGameContext>, handle: u32, index: u32) -> Result<()> {
     if handle == 0 {
         // Unbind keyframes - reset to default static offset 0
-        let state = &mut caller.data_mut().console;
+        let state = &mut caller.data_mut().ffi;
         state.current_keyframe_source = KeyframeSource::Static { offset: 0 };
         state.bone_count = 0;
         state.shading_state_dirty = true;
@@ -477,7 +461,7 @@ fn keyframe_bind(
 
     // Extract values from immutable borrow first
     let (offset, bone_count) = {
-        let state = &caller.data().console;
+        let state = &caller.data().ffi;
         let handle_index = handle as usize - 1;
 
         // Validate handle against loaded keyframes
@@ -519,7 +503,7 @@ fn keyframe_bind(
     };
 
     // Update state for this draw
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     state.current_keyframe_source = KeyframeSource::Static { offset };
     state.bone_count = bone_count;
     state.shading_state_dirty = true;

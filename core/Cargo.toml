@@ -9,7 +9,6 @@ description = "Core framework for Emberware fantasy console platform"
 [dependencies]
 # Shared types
 emberware-shared = { path = "../shared" }
-z-common = { path = "../z-common" }
 
 # WASM execution
 wasmtime = { workspace = true }

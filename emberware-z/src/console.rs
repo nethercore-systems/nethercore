@@ -11,10 +11,12 @@ use winit::window::Window;
 
 use emberware_core::{
     console::{Audio, Console, ConsoleInput, ConsoleSpecs, RawInput, SoundHandle},
-    wasm::GameStateWithConsole,
+    debug::DebugStat,
+    wasm::WasmGameContext,
 };
+use z_common::ZDataPack;
 
-use crate::state::ZFFIState;
+use crate::state::{ZFFIState, ZRollbackState};
 
 use crate::graphics::ZGraphics;
 
@@ -155,15 +157,11 @@ pub use crate::audio::ZAudio;
 impl Audio for ZAudio {
     fn play(&mut self, _handle: SoundHandle, _volume: f32, _looping: bool) {
         // Legacy Audio trait - not used in Z console
-        // Audio is handled via AudioCommand buffering system
+        // Audio is handled via per-frame generation from ZRollbackState
     }
 
     fn stop(&mut self, _handle: SoundHandle) {
         // Legacy Audio trait - not used in Z console
-    }
-
-    fn set_rollback_mode(&mut self, rolling_back: bool) {
-        ZAudio::set_rollback_mode(self, rolling_back);
     }
 }
 
@@ -174,13 +172,19 @@ impl Audio for ZAudio {
 /// - Dual analog sticks and analog triggers
 /// - Deterministic rollback netcode via GGRS
 pub struct EmberwareZ {
-    // Configuration could go here
+    /// Optional datapack for ROM assets (textures, meshes, sounds)
+    data_pack: Option<Arc<ZDataPack>>,
 }
 
 impl EmberwareZ {
     /// Create a new Emberware Z console instance
     pub fn new() -> Self {
-        Self {}
+        Self { data_pack: None }
+    }
+
+    /// Create a new Emberware Z console instance with a datapack
+    pub fn with_datapack(data_pack: Option<Arc<ZDataPack>>) -> Self {
+        Self { data_pack }
     }
 }
 
@@ -195,6 +199,7 @@ impl Console for EmberwareZ {
     type Audio = ZAudio;
     type Input = ZInput;
     type State = ZFFIState;
+    type RollbackState = ZRollbackState;
     type ResourceManager = crate::resource_manager::ZResourceManager;
 
     fn specs(&self) -> &'static ConsoleSpecs {
@@ -203,7 +208,7 @@ impl Console for EmberwareZ {
 
     fn register_ffi(
         &self,
-        linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>,
+        linker: &mut Linker<WasmGameContext<ZInput, ZFFIState, ZRollbackState>>,
     ) -> Result<()> {
         // Register all Z-specific FFI functions (graphics, input, transforms, camera, etc.)
         crate::ffi::register_z_ffi(linker)?;
@@ -300,6 +305,24 @@ impl Console for EmberwareZ {
 
     fn window_title(&self) -> &'static str {
         "Emberware Z"
+    }
+
+    fn debug_stats(&self, state: &ZFFIState) -> Vec<DebugStat> {
+        vec![
+            DebugStat::number("Draw Calls", state.render_pass.commands().len()),
+            DebugStat::number("Textures", state.next_texture_handle.saturating_sub(1)),
+            DebugStat::number("Meshes", state.next_mesh_handle.saturating_sub(1)),
+            DebugStat::number("Skeletons", state.next_skeleton_handle.saturating_sub(1)),
+            DebugStat::number("Keyframes", state.next_keyframe_handle.saturating_sub(1)),
+            DebugStat::number("Fonts", state.next_font_handle.saturating_sub(1)),
+            DebugStat::number("MVP States", state.mvp_shading_states.len()),
+            DebugStat::number("Shading States", state.shading_states.len()),
+        ]
+    }
+
+    fn initialize_ffi_state(&self, state: &mut ZFFIState) {
+        // Set datapack for rom_* FFI functions
+        state.data_pack = self.data_pack.clone();
     }
 }
 

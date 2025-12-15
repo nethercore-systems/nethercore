@@ -11,18 +11,19 @@
 //! - [`WasmEngine`] - Shared WASM engine (one per application)
 //! - [`GameInstance`] - Loaded and instantiated game
 //! - [`GameState`] - Minimal core state (input, timing, RNG, saves)
-//! - [`GameStateWithConsole`] - Wrapper combining core + console state
+//! - [`WasmGameContext`] - Context combining core + console FFI + rollback state
 
 pub mod state;
 
 use anyhow::{Context, Result};
 use wasmtime::{Engine, ExternType, Instance, Linker, Module, Store, TypedFunc};
 
-use crate::console::ConsoleInput;
+use crate::console::{ConsoleInput, ConsoleRollbackState};
 
 // Re-export public types from state module
+#[allow(deprecated)]
 pub use state::{
-    GameState, GameStateWithConsole, MAX_PLAYERS, MAX_SAVE_SIZE, MAX_SAVE_SLOTS,
+    GameState, GameStateWithConsole, MAX_PLAYERS, MAX_SAVE_SIZE, MAX_SAVE_SLOTS, WasmGameContext,
     read_string_from_memory,
 };
 
@@ -100,8 +101,9 @@ impl WasmEngine {
 // returns Result<Self> which properly propagates initialization errors.
 
 /// A loaded and instantiated game
-pub struct GameInstance<I: ConsoleInput, S: Send + Default + 'static> {
-    store: Store<GameStateWithConsole<I, S>>,
+pub struct GameInstance<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState = ()>
+{
+    store: Store<WasmGameContext<I, S, R>>,
     /// The WASM instance.
     /// Not directly used after initialization, but must be kept alive to maintain
     /// the lifetime of exported functions and memory references.
@@ -113,12 +115,12 @@ pub struct GameInstance<I: ConsoleInput, S: Send + Default + 'static> {
     on_debug_change_fn: Option<TypedFunc<(), ()>>,
 }
 
-impl<I: ConsoleInput, S: Send + Default + 'static> GameInstance<I, S> {
+impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState> GameInstance<I, S, R> {
     /// Create a new game instance from a module with default RAM limit (4MB)
     pub fn new(
         engine: &WasmEngine,
         module: &Module,
-        linker: &Linker<GameStateWithConsole<I, S>>,
+        linker: &Linker<WasmGameContext<I, S, R>>,
     ) -> Result<Self> {
         // Default to 4MB (Emberware Z RAM limit)
         Self::with_ram_limit(engine, module, linker, 4 * 1024 * 1024)
@@ -137,13 +139,10 @@ impl<I: ConsoleInput, S: Send + Default + 'static> GameInstance<I, S> {
     pub fn with_ram_limit(
         engine: &WasmEngine,
         module: &Module,
-        linker: &Linker<GameStateWithConsole<I, S>>,
+        linker: &Linker<WasmGameContext<I, S, R>>,
         ram_limit: usize,
     ) -> Result<Self> {
-        let mut store = Store::new(
-            engine.engine(),
-            GameStateWithConsole::with_ram_limit(ram_limit),
-        );
+        let mut store = Store::new(engine.engine(), WasmGameContext::with_ram_limit(ram_limit));
 
         // Enable resource limiter to enforce memory constraints
         store.limiter(|state| state);
@@ -273,12 +272,12 @@ impl<I: ConsoleInput, S: Send + Default + 'static> GameInstance<I, S> {
     }
 
     /// Get mutable reference to the store
-    pub fn store_mut(&mut self) -> &mut Store<GameStateWithConsole<I, S>> {
+    pub fn store_mut(&mut self) -> &mut Store<WasmGameContext<I, S, R>> {
         &mut self.store
     }
 
     /// Get reference to the store
-    pub fn store(&self) -> &Store<GameStateWithConsole<I, S>> {
+    pub fn store(&self) -> &Store<WasmGameContext<I, S, R>> {
         &self.store
     }
 
@@ -292,14 +291,24 @@ impl<I: ConsoleInput, S: Send + Default + 'static> GameInstance<I, S> {
         &self.store.data().game
     }
 
-    /// Get mutable reference to console-specific state
+    /// Get mutable reference to console-specific FFI state
     pub fn console_state_mut(&mut self) -> &mut S {
-        &mut self.store.data_mut().console
+        &mut self.store.data_mut().ffi
     }
 
-    /// Get reference to console-specific state
+    /// Get reference to console-specific FFI state
     pub fn console_state(&self) -> &S {
-        &self.store.data().console
+        &self.store.data().ffi
+    }
+
+    /// Get mutable reference to console-specific rollback state
+    pub fn rollback_state_mut(&mut self) -> &mut R {
+        &mut self.store.data_mut().rollback
+    }
+
+    /// Get reference to console-specific rollback state
+    pub fn rollback_state(&self) -> &R {
+        &self.store.data().rollback
     }
 
     /// Set input for a player

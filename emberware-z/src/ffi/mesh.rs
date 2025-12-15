@@ -6,18 +6,15 @@ use anyhow::Result;
 use tracing::{info, warn};
 use wasmtime::{Caller, Linker};
 
-use super::{get_wasm_memory, guards::check_init_only};
-use emberware_core::wasm::GameStateWithConsole;
-
-use crate::console::ZInput;
+use super::{ZGameContext, get_wasm_memory, guards::check_init_only};
 use crate::graphics::{vertex_stride, vertex_stride_packed};
-use crate::state::{PendingMesh, PendingMeshPacked, ZFFIState};
+use crate::state::{PendingMesh, PendingMeshPacked};
 
 /// Maximum vertex format value (all flags set: UV | COLOR | NORMAL | SKINNED)
 const MAX_VERTEX_FORMAT: u8 = 15;
 
 /// Register mesh FFI functions
-pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
+pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
     // Unpacked mesh loading (user convenience API)
     linker.func_wrap("env", "load_mesh", load_mesh)?;
     linker.func_wrap("env", "load_mesh_indexed", load_mesh_indexed)?;
@@ -46,7 +43,7 @@ pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) ->
 ///
 /// Returns mesh handle (>0) on success, 0 on failure.
 fn load_mesh(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     data_ptr: u32,
     vertex_count: u32,
     format: u32,
@@ -126,7 +123,7 @@ fn load_mesh(
     }
 
     // Now we can mutably borrow state
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
 
     // Allocate a mesh handle
     let handle = state.next_mesh_handle;
@@ -159,7 +156,7 @@ fn load_mesh(
 ///
 /// Returns mesh handle (>0) on success, 0 on failure.
 fn load_mesh_indexed(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     data_ptr: u32,
     vertex_count: u32,
     index_ptr: u32,
@@ -294,7 +291,7 @@ fn load_mesh_indexed(
     }
 
     // Now we can mutably borrow state
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
 
     // Allocate a mesh handle
     let handle = state.next_mesh_handle;
@@ -325,7 +322,7 @@ fn load_mesh_indexed(
 ///
 /// Returns mesh handle (>0) on success, 0 on failure.
 fn load_mesh_packed(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     data_ptr: u32,
     vertex_count: u32,
     format: u32,
@@ -379,7 +376,7 @@ fn load_mesh_packed(
     };
 
     // Now we can mutably borrow state
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
 
     // Allocate a mesh handle
     let handle = state.next_mesh_handle;
@@ -412,7 +409,7 @@ fn load_mesh_packed(
 ///
 /// Returns mesh handle (>0) on success, 0 on failure.
 fn load_mesh_indexed_packed(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     data_ptr: u32,
     vertex_count: u32,
     index_ptr: u32,
@@ -510,7 +507,7 @@ fn load_mesh_indexed_packed(
     };
 
     // Now we can mutably borrow state
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
 
     // Allocate a mesh handle
     let handle = state.next_mesh_handle;
@@ -539,13 +536,13 @@ fn load_mesh_indexed_packed(
 ///
 /// The mesh is drawn using the current transform (from transform_* functions)
 /// and render state (color, textures, depth test, cull mode, blend mode).
-fn draw_mesh(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, handle: u32) {
+fn draw_mesh(mut caller: Caller<'_, ZGameContext>, handle: u32) {
     if handle == 0 {
         warn!("draw_mesh: invalid handle 0");
         return;
     }
 
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
 
     // Look up mesh
     let mesh = match state.mesh_map.get(&handle) {

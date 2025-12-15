@@ -1,9 +1,9 @@
 //! Settings UI for configuring video, audio, and input
 
-use crate::input::KeyboardMapping;
-use crate::ui::UiAction;
+use super::UiAction;
 use egui::{ComboBox, Context, Slider};
 use emberware_core::app::config::{Config, ScaleMode};
+use emberware_core::app::input::KeyboardMapping;
 use winit::keyboard::KeyCode;
 
 /// Settings UI state
@@ -204,15 +204,15 @@ impl SettingsUi {
         let mut action = None;
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("⚙ Settings");
+            ui.heading("Settings");
             ui.separator();
 
             // Tab bar
             ui.horizontal(|ui| {
-                ui.selectable_value(&mut self.selected_tab, SettingsTab::Video, "📺 Video");
-                ui.selectable_value(&mut self.selected_tab, SettingsTab::Audio, "🔊 Audio");
-                ui.selectable_value(&mut self.selected_tab, SettingsTab::Controls, "🎮 Controls");
-                ui.selectable_value(&mut self.selected_tab, SettingsTab::Hotkeys, "⌨ Hotkeys");
+                ui.selectable_value(&mut self.selected_tab, SettingsTab::Video, "Video");
+                ui.selectable_value(&mut self.selected_tab, SettingsTab::Audio, "Audio");
+                ui.selectable_value(&mut self.selected_tab, SettingsTab::Controls, "Controls");
+                ui.selectable_value(&mut self.selected_tab, SettingsTab::Hotkeys, "Hotkeys");
             });
 
             ui.separator();
@@ -239,16 +239,16 @@ impl SettingsUi {
 
             // Bottom buttons
             ui.horizontal(|ui| {
-                if ui.button("◀ Back to Library").clicked() {
+                if ui.button("Back to Library").clicked() {
                     action = Some(UiAction::OpenSettings); // Toggle back to library
                 }
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("💾 Apply & Save").clicked() {
+                    if ui.button("Apply & Save").clicked() {
                         action = Some(UiAction::SaveSettings(self.temp_config.clone()));
                     }
 
-                    if ui.button("↺ Reset to Defaults").clicked() {
+                    if ui.button("Reset to Defaults").clicked() {
                         self.temp_config = Config::default();
                     }
                 });
@@ -286,9 +286,15 @@ impl SettingsUi {
         ComboBox::from_label("Scale Mode")
             .selected_text(match video.scale_mode {
                 ScaleMode::Stretch => "Stretch (Fill Window)",
+                ScaleMode::Fit => "Fit (Maintain Aspect Ratio)",
                 ScaleMode::PixelPerfect => "Pixel Perfect (Integer Scaling)",
             })
             .show_ui(ui, |ui| {
+                ui.selectable_value(
+                    &mut video.scale_mode,
+                    ScaleMode::Fit,
+                    "Fit (Maintain Aspect Ratio)",
+                );
                 ui.selectable_value(
                     &mut video.scale_mode,
                     ScaleMode::Stretch,
@@ -303,11 +309,14 @@ impl SettingsUi {
 
         // Show description
         match video.scale_mode {
+            ScaleMode::Fit => {
+                ui.label("   Scales to fill window while maintaining aspect ratio (letterbox)");
+            }
             ScaleMode::Stretch => {
-                ui.label("   📏 Stretches to fill window (may distort aspect ratio)");
+                ui.label("   Stretches to fill window (may distort aspect ratio)");
             }
             ScaleMode::PixelPerfect => {
-                ui.label("   🎨 Integer scaling with black bars (pixel-perfect display)");
+                ui.label("   Integer scaling with black bars (pixel-perfect display)");
             }
         }
 
@@ -333,7 +342,7 @@ impl SettingsUi {
         );
 
         ui.add_space(5.0);
-        ui.label("   🔊 Controls the overall volume level");
+        ui.label("   Controls the overall volume level");
     }
 
     fn show_controls_tab(&mut self, ui: &mut egui::Ui) {
@@ -341,7 +350,7 @@ impl SettingsUi {
         ui.add_space(5.0);
 
         if self.waiting_for_key.is_some() {
-            ui.colored_label(egui::Color32::YELLOW, "⌨ Press any key to rebind...");
+            ui.colored_label(egui::Color32::YELLOW, "Press any key to rebind...");
             ui.label("Press ESC to cancel");
             ui.add_space(10.0);
         } else {
@@ -470,7 +479,7 @@ impl SettingsUi {
         let show_hotkey = |ui: &mut egui::Ui, key: &str, description: &str| {
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new(key).monospace().strong());
-                ui.label("—");
+                ui.label("-");
                 ui.label(description);
             });
         };
@@ -494,9 +503,9 @@ impl SettingsUi {
 
         ui.heading("Tips");
         ui.add_space(5.0);
-        ui.label("💡 Use Settings → Video to configure scaling mode");
-        ui.label("💡 Borderless fullscreen (F11) gives the best pixel-perfect scaling");
-        ui.label("💡 Game controls are configured in the Controls tab");
+        ui.label("Use Settings > Video to configure scaling mode");
+        ui.label("Borderless fullscreen (F11) gives the best pixel-perfect scaling");
+        ui.label("Game controls are configured in the Controls tab");
     }
 
     fn show_button_binding(
@@ -512,7 +521,7 @@ impl SettingsUi {
             let key_name = keycode_to_display_string(key);
 
             let is_waiting = self.waiting_for_key == Some(WaitingFor::Button(button));
-            let button_text = if is_waiting { "⌨ ..." } else { &key_name };
+            let button_text = if is_waiting { "..." } else { &key_name };
 
             if ui.button(button_text).clicked() {
                 self.waiting_for_key = Some(WaitingFor::Button(button));
@@ -528,7 +537,7 @@ impl SettingsUi {
             let key_name = keycode_to_display_string(key);
 
             let is_waiting = self.waiting_for_key == Some(WaitingFor::Axis(axis));
-            let button_text = if is_waiting { "⌨ ..." } else { &key_name };
+            let button_text = if is_waiting { "..." } else { &key_name };
 
             if ui.button(button_text).clicked() {
                 self.waiting_for_key = Some(WaitingFor::Axis(axis));
@@ -595,10 +604,10 @@ fn keycode_to_display_string(key: KeyCode) -> String {
         KeyCode::F12 => "F12",
 
         // Arrow keys
-        KeyCode::ArrowUp => "↑ Up",
-        KeyCode::ArrowDown => "↓ Down",
-        KeyCode::ArrowLeft => "← Left",
-        KeyCode::ArrowRight => "→ Right",
+        KeyCode::ArrowUp => "Up",
+        KeyCode::ArrowDown => "Down",
+        KeyCode::ArrowLeft => "Left",
+        KeyCode::ArrowRight => "Right",
 
         // Special keys
         KeyCode::Space => "Space",

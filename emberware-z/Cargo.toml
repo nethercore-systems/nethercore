@@ -10,7 +10,14 @@ description = "Emberware Z - Fantasy console runtime"
 name = "emberware_z"
 path = "src/lib.rs"
 
+[[bin]]
+name = "emberware-z"
+path = "src/bin/main.rs"
+
 [dependencies]
+# CLI (for player binary)
+clap = { version = "4", features = ["derive"] }
+
 emberware-core = { path = "../core" }
 emberware-shared = { path = "../shared" }
 z-common = { path = "../z-common" }
@@ -23,7 +30,8 @@ wgpu = { workspace = true }
 winit = { workspace = true }
 
 # Audio
-rodio = { workspace = true }
+cpal = { workspace = true }
+ringbuf = { workspace = true }
 
 # Input
 gilrs = { workspace = true }

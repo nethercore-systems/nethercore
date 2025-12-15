@@ -384,7 +384,7 @@ fn project_root() -> PathBuf {
 }
 
 fn get_games_dir() -> Result<PathBuf> {
-    directories::ProjectDirs::from("io", "emberware", "emberware")
+    directories::ProjectDirs::from("io.emberware", "", "Emberware")
         .map(|dirs| dirs.data_dir().join("games"))
         .context("Failed to determine data directory")
 }

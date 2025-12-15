@@ -6,13 +6,17 @@
 use anyhow::Result;
 use wasmtime::{Caller, Linker};
 
-use crate::console::ConsoleInput;
+use crate::console::{ConsoleInput, ConsoleRollbackState};
 use crate::debug::ffi::register_debug_ffi;
-use crate::wasm::{GameStateWithConsole, MAX_SAVE_SIZE, MAX_SAVE_SLOTS};
+use crate::wasm::{MAX_SAVE_SIZE, MAX_SAVE_SLOTS, WasmGameContext};
 
 /// Register common FFI functions with the linker
-pub fn register_common_ffi<I: ConsoleInput, S: Send + Default + 'static>(
-    linker: &mut Linker<GameStateWithConsole<I, S>>,
+pub fn register_common_ffi<
+    I: ConsoleInput,
+    S: Send + Default + 'static,
+    R: ConsoleRollbackState,
+>(
+    linker: &mut Linker<WasmGameContext<I, S, R>>,
 ) -> Result<()> {
     // System functions
     linker.func_wrap("env", "delta_time", delta_time)?;
@@ -41,23 +45,29 @@ pub fn register_common_ffi<I: ConsoleInput, S: Send + Default + 'static>(
 }
 
 /// Get delta time since last tick (seconds)
-fn delta_time<I: ConsoleInput, S>(caller: Caller<'_, GameStateWithConsole<I, S>>) -> f32 {
+fn delta_time<I: ConsoleInput, S, R: ConsoleRollbackState>(
+    caller: Caller<'_, WasmGameContext<I, S, R>>,
+) -> f32 {
     caller.data().game.delta_time
 }
 
 /// Get elapsed time since game start (seconds)
-fn elapsed_time<I: ConsoleInput, S>(caller: Caller<'_, GameStateWithConsole<I, S>>) -> f32 {
+fn elapsed_time<I: ConsoleInput, S, R: ConsoleRollbackState>(
+    caller: Caller<'_, WasmGameContext<I, S, R>>,
+) -> f32 {
     caller.data().game.elapsed_time
 }
 
 /// Get current tick number
-fn tick_count<I: ConsoleInput, S>(caller: Caller<'_, GameStateWithConsole<I, S>>) -> u64 {
+fn tick_count<I: ConsoleInput, S, R: ConsoleRollbackState>(
+    caller: Caller<'_, WasmGameContext<I, S, R>>,
+) -> u64 {
     caller.data().game.tick_count
 }
 
 /// Log a message from WASM
-fn log_message<I: ConsoleInput, S>(
-    caller: Caller<'_, GameStateWithConsole<I, S>>,
+fn log_message<I: ConsoleInput, S, R: ConsoleRollbackState>(
+    caller: Caller<'_, WasmGameContext<I, S, R>>,
     ptr: u32,
     len: u32,
 ) {
@@ -74,15 +84,17 @@ fn log_message<I: ConsoleInput, S>(
 }
 
 /// Request to quit to the library
-fn quit<I: ConsoleInput, S>(mut caller: Caller<'_, GameStateWithConsole<I, S>>) {
+fn quit<I: ConsoleInput, S, R: ConsoleRollbackState>(
+    mut caller: Caller<'_, WasmGameContext<I, S, R>>,
+) {
     caller.data_mut().game.quit_requested = true;
 }
 
 /// Save data to a slot (0-7)
 ///
 /// Returns: 0 = success, 1 = invalid slot, 2 = data too large
-fn save<I: ConsoleInput, S>(
-    mut caller: Caller<'_, GameStateWithConsole<I, S>>,
+fn save<I: ConsoleInput, S, R: ConsoleRollbackState>(
+    mut caller: Caller<'_, WasmGameContext<I, S, R>>,
     slot: u32,
     data_ptr: u32,
     data_len: u32,
@@ -121,8 +133,8 @@ fn save<I: ConsoleInput, S>(
 /// Load data from a slot (0-7)
 ///
 /// Returns: bytes read, or 0 if slot is empty/invalid
-fn load<I: ConsoleInput, S>(
-    mut caller: Caller<'_, GameStateWithConsole<I, S>>,
+fn load<I: ConsoleInput, S, R: ConsoleRollbackState>(
+    mut caller: Caller<'_, WasmGameContext<I, S, R>>,
     slot: u32,
     data_ptr: u32,
     max_len: u32,
@@ -167,8 +179,8 @@ fn load<I: ConsoleInput, S>(
 /// Delete data in a slot (0-7)
 ///
 /// Returns: 0 = success, 1 = invalid slot
-fn delete<I: ConsoleInput, S>(
-    mut caller: Caller<'_, GameStateWithConsole<I, S>>,
+fn delete<I: ConsoleInput, S, R: ConsoleRollbackState>(
+    mut caller: Caller<'_, WasmGameContext<I, S, R>>,
     slot: u32,
 ) -> u32 {
     let slot = slot as usize;
@@ -183,17 +195,23 @@ fn delete<I: ConsoleInput, S>(
 }
 
 /// Generate deterministic random u32
-fn random<I: ConsoleInput, S>(mut caller: Caller<'_, GameStateWithConsole<I, S>>) -> u32 {
+fn random<I: ConsoleInput, S, R: ConsoleRollbackState>(
+    mut caller: Caller<'_, WasmGameContext<I, S, R>>,
+) -> u32 {
     caller.data_mut().game.random()
 }
 
 /// Get number of players in session
-fn player_count<I: ConsoleInput, S>(caller: Caller<'_, GameStateWithConsole<I, S>>) -> u32 {
+fn player_count<I: ConsoleInput, S, R: ConsoleRollbackState>(
+    caller: Caller<'_, WasmGameContext<I, S, R>>,
+) -> u32 {
     caller.data().game.player_count
 }
 
 /// Get bitmask of local players
-fn local_player_mask<I: ConsoleInput, S>(caller: Caller<'_, GameStateWithConsole<I, S>>) -> u32 {
+fn local_player_mask<I: ConsoleInput, S, R: ConsoleRollbackState>(
+    caller: Caller<'_, WasmGameContext<I, S, R>>,
+) -> u32 {
     caller.data().game.local_player_mask
 }
 
@@ -202,7 +220,7 @@ mod tests {
     use super::*;
     use crate::test_utils::TestInput;
     use crate::wasm::GameState;
-    use crate::wasm::GameStateWithConsole;
+    use crate::wasm::WasmGameContext;
     use wasmtime::{Engine, Linker, Store};
 
     // ============================================================================
@@ -212,7 +230,7 @@ mod tests {
     #[test]
     fn test_register_common_ffi() {
         let engine = Engine::default();
-        let mut linker: Linker<GameStateWithConsole<TestInput, ()>> = Linker::new(&engine);
+        let mut linker: Linker<WasmGameContext<TestInput, ()>> = Linker::new(&engine);
         let result = register_common_ffi(&mut linker);
         assert!(result.is_ok());
     }
@@ -220,7 +238,7 @@ mod tests {
     #[test]
     fn test_ffi_functions_registered() {
         let engine = Engine::default();
-        let mut linker: Linker<GameStateWithConsole<TestInput, ()>> = Linker::new(&engine);
+        let mut linker: Linker<WasmGameContext<TestInput, ()>> = Linker::new(&engine);
         register_common_ffi(&mut linker).unwrap();
 
         // Verify key functions are registered by checking module "env"
@@ -233,7 +251,7 @@ mod tests {
     fn test_ffi_with_wasm_module() {
         // Create a minimal WASM module that imports common FFI functions
         let engine = Engine::default();
-        let mut linker: Linker<GameStateWithConsole<TestInput, ()>> = Linker::new(&engine);
+        let mut linker: Linker<WasmGameContext<TestInput, ()>> = Linker::new(&engine);
         register_common_ffi(&mut linker).unwrap();
 
         // WAT module that imports and calls delta_time
@@ -250,7 +268,7 @@ mod tests {
         let wasm = wat::parse_str(wat).unwrap();
         let module = wasmtime::Module::new(&engine, wasm).unwrap();
 
-        let mut store = Store::new(&engine, GameStateWithConsole::<TestInput, ()>::new());
+        let mut store = Store::new(&engine, WasmGameContext::<TestInput, ()>::new());
         let result = linker.instantiate(&mut store, &module);
         assert!(result.is_ok());
     }
@@ -258,7 +276,7 @@ mod tests {
     #[test]
     fn test_ffi_random_from_wasm() {
         let engine = Engine::default();
-        let mut linker: Linker<GameStateWithConsole<TestInput, ()>> = Linker::new(&engine);
+        let mut linker: Linker<WasmGameContext<TestInput, ()>> = Linker::new(&engine);
         register_common_ffi(&mut linker).unwrap();
 
         // WAT module that imports random
@@ -274,7 +292,7 @@ mod tests {
         let wasm = wat::parse_str(wat).unwrap();
         let module = wasmtime::Module::new(&engine, wasm).unwrap();
 
-        let mut store = Store::new(&engine, GameStateWithConsole::<TestInput, ()>::new());
+        let mut store = Store::new(&engine, WasmGameContext::<TestInput, ()>::new());
         store.data_mut().game.seed_rng(42);
 
         let instance = linker.instantiate(&mut store, &module).unwrap();
@@ -293,7 +311,7 @@ mod tests {
     #[test]
     fn test_ffi_quit_from_wasm() {
         let engine = Engine::default();
-        let mut linker: Linker<GameStateWithConsole<TestInput, ()>> = Linker::new(&engine);
+        let mut linker: Linker<WasmGameContext<TestInput, ()>> = Linker::new(&engine);
         register_common_ffi(&mut linker).unwrap();
 
         // WAT module that imports quit
@@ -309,7 +327,7 @@ mod tests {
         let wasm = wat::parse_str(wat).unwrap();
         let module = wasmtime::Module::new(&engine, wasm).unwrap();
 
-        let mut store = Store::new(&engine, GameStateWithConsole::<TestInput, ()>::new());
+        let mut store = Store::new(&engine, WasmGameContext::<TestInput, ()>::new());
         assert!(!store.data().game.quit_requested);
 
         let instance = linker.instantiate(&mut store, &module).unwrap();
@@ -501,7 +519,7 @@ mod tests {
     #[test]
     fn test_log_message_out_of_bounds() {
         let engine = Engine::default();
-        let mut linker: Linker<GameStateWithConsole<TestInput, ()>> = Linker::new(&engine);
+        let mut linker: Linker<WasmGameContext<TestInput, ()>> = Linker::new(&engine);
         register_common_ffi(&mut linker).unwrap();
 
         // WAT module that calls log with out-of-bounds pointer
@@ -519,7 +537,7 @@ mod tests {
         let wasm = wat::parse_str(wat).unwrap();
         let module = wasmtime::Module::new(&engine, wasm).unwrap();
 
-        let mut store = Store::new(&engine, GameStateWithConsole::<TestInput, ()>::new());
+        let mut store = Store::new(&engine, WasmGameContext::<TestInput, ()>::new());
         // Set up memory reference
         let instance = linker.instantiate(&mut store, &module).unwrap();
         if let Some(memory) = instance.get_memory(&mut store, "memory") {
@@ -538,7 +556,7 @@ mod tests {
     #[test]
     fn test_log_message_wrapping_overflow() {
         let engine = Engine::default();
-        let mut linker: Linker<GameStateWithConsole<TestInput, ()>> = Linker::new(&engine);
+        let mut linker: Linker<WasmGameContext<TestInput, ()>> = Linker::new(&engine);
         register_common_ffi(&mut linker).unwrap();
 
         // WAT module that tries to cause ptr + len overflow
@@ -555,7 +573,7 @@ mod tests {
         let wasm = wat::parse_str(wat).unwrap();
         let module = wasmtime::Module::new(&engine, wasm).unwrap();
 
-        let mut store = Store::new(&engine, GameStateWithConsole::<TestInput, ()>::new());
+        let mut store = Store::new(&engine, WasmGameContext::<TestInput, ()>::new());
         let instance = linker.instantiate(&mut store, &module).unwrap();
         if let Some(memory) = instance.get_memory(&mut store, "memory") {
             store.data_mut().game.memory = Some(memory);
@@ -573,7 +591,7 @@ mod tests {
     #[test]
     fn test_save_invalid_slot() {
         let engine = Engine::default();
-        let mut linker: Linker<GameStateWithConsole<TestInput, ()>> = Linker::new(&engine);
+        let mut linker: Linker<WasmGameContext<TestInput, ()>> = Linker::new(&engine);
         register_common_ffi(&mut linker).unwrap();
 
         // WAT module that calls save with invalid slot
@@ -590,7 +608,7 @@ mod tests {
         let wasm = wat::parse_str(wat).unwrap();
         let module = wasmtime::Module::new(&engine, wasm).unwrap();
 
-        let mut store = Store::new(&engine, GameStateWithConsole::<TestInput, ()>::new());
+        let mut store = Store::new(&engine, WasmGameContext::<TestInput, ()>::new());
         let instance = linker.instantiate(&mut store, &module).unwrap();
         if let Some(memory) = instance.get_memory(&mut store, "memory") {
             store.data_mut().game.memory = Some(memory);
@@ -607,7 +625,7 @@ mod tests {
     #[test]
     fn test_save_data_too_large() {
         let engine = Engine::default();
-        let mut linker: Linker<GameStateWithConsole<TestInput, ()>> = Linker::new(&engine);
+        let mut linker: Linker<WasmGameContext<TestInput, ()>> = Linker::new(&engine);
         register_common_ffi(&mut linker).unwrap();
 
         // WAT module that tries to save data larger than MAX_SAVE_SIZE
@@ -624,7 +642,7 @@ mod tests {
         let wasm = wat::parse_str(wat).unwrap();
         let module = wasmtime::Module::new(&engine, wasm).unwrap();
 
-        let mut store = Store::new(&engine, GameStateWithConsole::<TestInput, ()>::new());
+        let mut store = Store::new(&engine, WasmGameContext::<TestInput, ()>::new());
         let instance = linker.instantiate(&mut store, &module).unwrap();
         if let Some(memory) = instance.get_memory(&mut store, "memory") {
             store.data_mut().game.memory = Some(memory);
@@ -641,7 +659,7 @@ mod tests {
     #[test]
     fn test_save_out_of_bounds_pointer() {
         let engine = Engine::default();
-        let mut linker: Linker<GameStateWithConsole<TestInput, ()>> = Linker::new(&engine);
+        let mut linker: Linker<WasmGameContext<TestInput, ()>> = Linker::new(&engine);
         register_common_ffi(&mut linker).unwrap();
 
         // WAT module that tries to save from out-of-bounds memory
@@ -659,7 +677,7 @@ mod tests {
         let wasm = wat::parse_str(wat).unwrap();
         let module = wasmtime::Module::new(&engine, wasm).unwrap();
 
-        let mut store = Store::new(&engine, GameStateWithConsole::<TestInput, ()>::new());
+        let mut store = Store::new(&engine, WasmGameContext::<TestInput, ()>::new());
         let instance = linker.instantiate(&mut store, &module).unwrap();
         if let Some(memory) = instance.get_memory(&mut store, "memory") {
             store.data_mut().game.memory = Some(memory);
@@ -676,7 +694,7 @@ mod tests {
     #[test]
     fn test_load_invalid_slot() {
         let engine = Engine::default();
-        let mut linker: Linker<GameStateWithConsole<TestInput, ()>> = Linker::new(&engine);
+        let mut linker: Linker<WasmGameContext<TestInput, ()>> = Linker::new(&engine);
         register_common_ffi(&mut linker).unwrap();
 
         // WAT module that calls load with invalid slot
@@ -693,7 +711,7 @@ mod tests {
         let wasm = wat::parse_str(wat).unwrap();
         let module = wasmtime::Module::new(&engine, wasm).unwrap();
 
-        let mut store = Store::new(&engine, GameStateWithConsole::<TestInput, ()>::new());
+        let mut store = Store::new(&engine, WasmGameContext::<TestInput, ()>::new());
         let instance = linker.instantiate(&mut store, &module).unwrap();
         if let Some(memory) = instance.get_memory(&mut store, "memory") {
             store.data_mut().game.memory = Some(memory);
@@ -710,7 +728,7 @@ mod tests {
     #[test]
     fn test_load_empty_slot() {
         let engine = Engine::default();
-        let mut linker: Linker<GameStateWithConsole<TestInput, ()>> = Linker::new(&engine);
+        let mut linker: Linker<WasmGameContext<TestInput, ()>> = Linker::new(&engine);
         register_common_ffi(&mut linker).unwrap();
 
         // WAT module that calls load on an empty slot
@@ -727,7 +745,7 @@ mod tests {
         let wasm = wat::parse_str(wat).unwrap();
         let module = wasmtime::Module::new(&engine, wasm).unwrap();
 
-        let mut store = Store::new(&engine, GameStateWithConsole::<TestInput, ()>::new());
+        let mut store = Store::new(&engine, WasmGameContext::<TestInput, ()>::new());
         let instance = linker.instantiate(&mut store, &module).unwrap();
         if let Some(memory) = instance.get_memory(&mut store, "memory") {
             store.data_mut().game.memory = Some(memory);
@@ -762,7 +780,7 @@ mod tests {
         let wasm = wat::parse_str(wat).unwrap();
         let module = wasmtime::Module::new(&engine, wasm).unwrap();
 
-        let mut store = Store::new(&engine, GameStateWithConsole::<TestInput, ()>::new());
+        let mut store = Store::new(&engine, WasmGameContext::<TestInput, ()>::new());
         let instance = linker.instantiate(&mut store, &module).unwrap();
         if let Some(memory) = instance.get_memory(&mut store, "memory") {
             store.data_mut().game.memory = Some(memory);
@@ -781,7 +799,7 @@ mod tests {
     #[test]
     fn test_delete_invalid_slot() {
         let engine = Engine::default();
-        let mut linker: Linker<GameStateWithConsole<TestInput, ()>> = Linker::new(&engine);
+        let mut linker: Linker<WasmGameContext<TestInput, ()>> = Linker::new(&engine);
         register_common_ffi(&mut linker).unwrap();
 
         // WAT module that calls delete with invalid slot
@@ -798,7 +816,7 @@ mod tests {
         let wasm = wat::parse_str(wat).unwrap();
         let module = wasmtime::Module::new(&engine, wasm).unwrap();
 
-        let mut store = Store::new(&engine, GameStateWithConsole::<TestInput, ()>::new());
+        let mut store = Store::new(&engine, WasmGameContext::<TestInput, ()>::new());
         let instance = linker.instantiate(&mut store, &module).unwrap();
 
         let test_fn = instance
@@ -812,7 +830,7 @@ mod tests {
     #[test]
     fn test_save_load_roundtrip() {
         let engine = Engine::default();
-        let mut linker: Linker<GameStateWithConsole<TestInput, ()>> = Linker::new(&engine);
+        let mut linker: Linker<WasmGameContext<TestInput, ()>> = Linker::new(&engine);
         register_common_ffi(&mut linker).unwrap();
 
         // WAT module that saves and loads data, verifying it roundtrips correctly
@@ -846,7 +864,7 @@ mod tests {
         let wasm = wat::parse_str(wat).unwrap();
         let module = wasmtime::Module::new(&engine, wasm).unwrap();
 
-        let mut store = Store::new(&engine, GameStateWithConsole::<TestInput, ()>::new());
+        let mut store = Store::new(&engine, WasmGameContext::<TestInput, ()>::new());
         let instance = linker.instantiate(&mut store, &module).unwrap();
         if let Some(memory) = instance.get_memory(&mut store, "memory") {
             store.data_mut().game.memory = Some(memory);
@@ -871,7 +889,7 @@ mod tests {
     #[test]
     fn test_save_boundary_slot_values() {
         let engine = Engine::default();
-        let mut linker: Linker<GameStateWithConsole<TestInput, ()>> = Linker::new(&engine);
+        let mut linker: Linker<WasmGameContext<TestInput, ()>> = Linker::new(&engine);
         register_common_ffi(&mut linker).unwrap();
 
         // Test slot boundary values (0-7 valid, 8+ invalid)
@@ -887,7 +905,7 @@ mod tests {
         let wasm = wat::parse_str(wat).unwrap();
         let module = wasmtime::Module::new(&engine, wasm).unwrap();
 
-        let mut store = Store::new(&engine, GameStateWithConsole::<TestInput, ()>::new());
+        let mut store = Store::new(&engine, WasmGameContext::<TestInput, ()>::new());
         let instance = linker.instantiate(&mut store, &module).unwrap();
         if let Some(memory) = instance.get_memory(&mut store, "memory") {
             store.data_mut().game.memory = Some(memory);
@@ -911,7 +929,7 @@ mod tests {
     #[test]
     fn test_log_no_memory() {
         let engine = Engine::default();
-        let mut linker: Linker<GameStateWithConsole<TestInput, ()>> = Linker::new(&engine);
+        let mut linker: Linker<WasmGameContext<TestInput, ()>> = Linker::new(&engine);
         register_common_ffi(&mut linker).unwrap();
 
         // WAT module without exported memory
@@ -926,7 +944,7 @@ mod tests {
         let wasm = wat::parse_str(wat).unwrap();
         let module = wasmtime::Module::new(&engine, wasm).unwrap();
 
-        let mut store = Store::new(&engine, GameStateWithConsole::<TestInput, ()>::new());
+        let mut store = Store::new(&engine, WasmGameContext::<TestInput, ()>::new());
         // Intentionally NOT setting memory
         let instance = linker.instantiate(&mut store, &module).unwrap();
 
@@ -942,7 +960,7 @@ mod tests {
     #[test]
     fn test_save_no_memory() {
         let engine = Engine::default();
-        let mut linker: Linker<GameStateWithConsole<TestInput, ()>> = Linker::new(&engine);
+        let mut linker: Linker<WasmGameContext<TestInput, ()>> = Linker::new(&engine);
         register_common_ffi(&mut linker).unwrap();
 
         // WAT module without exported memory
@@ -957,7 +975,7 @@ mod tests {
         let wasm = wat::parse_str(wat).unwrap();
         let module = wasmtime::Module::new(&engine, wasm).unwrap();
 
-        let mut store = Store::new(&engine, GameStateWithConsole::<TestInput, ()>::new());
+        let mut store = Store::new(&engine, WasmGameContext::<TestInput, ()>::new());
         // Intentionally NOT setting memory
         let instance = linker.instantiate(&mut store, &module).unwrap();
 
@@ -972,7 +990,7 @@ mod tests {
     #[test]
     fn test_load_no_memory() {
         let engine = Engine::default();
-        let mut linker: Linker<GameStateWithConsole<TestInput, ()>> = Linker::new(&engine);
+        let mut linker: Linker<WasmGameContext<TestInput, ()>> = Linker::new(&engine);
         register_common_ffi(&mut linker).unwrap();
 
         // WAT module without exported memory
@@ -987,7 +1005,7 @@ mod tests {
         let wasm = wat::parse_str(wat).unwrap();
         let module = wasmtime::Module::new(&engine, wasm).unwrap();
 
-        let mut store = Store::new(&engine, GameStateWithConsole::<TestInput, ()>::new());
+        let mut store = Store::new(&engine, WasmGameContext::<TestInput, ()>::new());
         // Intentionally NOT setting memory - but we need to put some data in the slot first
         store.data_mut().game.save_data[0] = Some(vec![1, 2, 3, 4]);
         let instance = linker.instantiate(&mut store, &module).unwrap();
