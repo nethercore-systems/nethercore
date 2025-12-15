@@ -9,9 +9,13 @@ description = "Emberware asset export tool - converts raw assets to GPU-ready bi
 name = "ember-export"
 path = "src/main.rs"
 
+[features]
+default = ["gamepad"]
+gamepad = ["z-common/gamepad"]
+
 [dependencies]
 # Local crates
-z-common = { path = "../../z-common" }
+z-common = { path = "../../z-common", default-features = false }
 emberware-shared = { path = "../../shared" }
 
 hashbrown = { workspace = true }

@@ -8,11 +8,15 @@ description = "CLI tool for building Emberware Z games"
 name = "ember"
 path = "src/main.rs"
 
+[features]
+default = ["gamepad"]
+gamepad = ["emberware-core/gamepad", "z-common/gamepad"]
+
 [dependencies]
 # Local crates
-emberware-core = { path = "../../core" }
+emberware-core = { path = "../../core", default-features = false }
 emberware-shared = { path = "../../shared" }
-z-common = { path = "../../z-common" }
+z-common = { path = "../../z-common", default-features = false }
 
 # CLI
 clap = { workspace = true }

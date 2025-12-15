@@ -14,13 +14,17 @@ path = "src/lib.rs"
 name = "emberware-z"
 path = "src/bin/main.rs"
 
+[features]
+default = ["gamepad"]
+gamepad = ["emberware-core/gamepad", "z-common/gamepad"]
+
 [dependencies]
 # CLI (for player binary)
 clap = { version = "4", features = ["derive"] }
 
-emberware-core = { path = "../core" }
+emberware-core = { path = "../core", default-features = false }
 emberware-shared = { path = "../shared" }
-z-common = { path = "../z-common" }
+z-common = { path = "../z-common", default-features = false }
 
 # WASM runtime
 wasmtime = { workspace = true }
@@ -32,9 +36,6 @@ winit = { workspace = true }
 # Audio
 cpal = { workspace = true }
 ringbuf = { workspace = true }
-
-# Input
-gilrs = { workspace = true }
 
 # UI (minimal library)
 egui = { workspace = true }

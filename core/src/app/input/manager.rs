@@ -1,6 +1,7 @@
 //! Input manager handling keyboard and gamepad
 
 use crate::console::RawInput;
+#[cfg(feature = "gamepad")]
 use gilrs::{Axis, Button, Gilrs};
 use hashbrown::HashMap;
 use winit::keyboard::KeyCode;
@@ -13,7 +14,8 @@ use super::KeyboardMapping;
 use super::keycode_serde::{keycode_to_string, string_to_keycode};
 
 pub struct InputManager {
-    /// Gilrs context for gamepad handling (None if initialization failed)
+    /// Gilrs context for gamepad handling (None if initialization failed or gamepad feature disabled)
+    #[cfg(feature = "gamepad")]
     gilrs: Option<Gilrs>,
 
     /// Current keyboard state (key -> pressed)
@@ -28,12 +30,14 @@ pub struct InputManager {
     player_inputs: [RawInput; 4],
 
     /// Gamepad ID to player slot mapping
+    #[cfg(feature = "gamepad")]
     gamepad_to_player: HashMap<gilrs::GamepadId, usize>,
 }
 
 impl InputManager {
     /// Create a new input manager
     pub fn new(config: InputConfig) -> Self {
+        #[cfg(feature = "gamepad")]
         let gilrs = match Gilrs::new() {
             Ok(g) => Some(g),
             Err(e) => {
@@ -46,10 +50,12 @@ impl InputManager {
         };
 
         Self {
+            #[cfg(feature = "gamepad")]
             gilrs,
             keyboard_state: HashMap::new(),
             config,
             player_inputs: [RawInput::default(); 4],
+            #[cfg(feature = "gamepad")]
             gamepad_to_player: HashMap::new(),
         }
     }
@@ -60,6 +66,7 @@ impl InputManager {
     }
 
     /// Poll gamepad events and update input state
+    #[cfg(feature = "gamepad")]
     pub fn update(&mut self) {
         // Collect gilrs events first (if gamepad support is available)
         let events: Vec<_> = if let Some(ref mut gilrs) = self.gilrs {
@@ -106,6 +113,13 @@ impl InputManager {
         }
     }
 
+    /// Poll events and update input state (keyboard only when gamepad feature is disabled)
+    #[cfg(not(feature = "gamepad"))]
+    pub fn update(&mut self) {
+        // Keyboard input only when gamepad feature is disabled
+        self.player_inputs[0] = self.read_keyboard_input();
+    }
+
     /// Get input state for a specific player
     pub fn get_player_input(&self, player: usize) -> RawInput {
         if player < 4 {
@@ -122,6 +136,7 @@ impl InputManager {
     }
 
     /// Find the next free player slot (0-3)
+    #[cfg(feature = "gamepad")]
     fn find_free_player_slot(&self) -> Option<usize> {
         (0..4).find(|&slot| !self.gamepad_to_player.values().any(|&s| s == slot))
     }
@@ -210,6 +225,7 @@ impl InputManager {
     }
 
     /// Read gamepad input and map to RawInput
+    #[cfg(feature = "gamepad")]
     fn read_gamepad_input(&self, gamepad: &gilrs::Gamepad) -> RawInput {
         // Read buttons
         let btn = |button: Button| -> bool { gamepad.is_pressed(button) };
@@ -266,6 +282,7 @@ impl InputManager {
     }
 
     /// Apply deadzone to analog stick input
+    #[cfg_attr(not(feature = "gamepad"), allow(dead_code))]
     fn apply_stick_deadzone(&self, value: f32) -> f32 {
         let deadzone = self.config.stick_deadzone;
         if value.abs() < deadzone {
@@ -448,6 +465,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "gamepad")]
     fn test_find_free_player_slot_all_empty() {
         let manager = InputManager::new(InputConfig::default());
         // All slots should be free initially, first free is 0
