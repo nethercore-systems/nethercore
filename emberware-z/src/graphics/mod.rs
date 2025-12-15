@@ -61,7 +61,6 @@ pub use vertex::{FORMAT_ALL, VERTEX_FORMAT_COUNT, VertexFormatInfo};
 
 // Re-export for crate-internal use
 pub(crate) use init::RenderTarget;
-pub(crate) use pipeline::PipelineEntry;
 
 use pipeline::PipelineCache;
 use texture_manager::TextureManager;
@@ -413,17 +412,6 @@ impl ZGraphics {
 
     pub fn render_mode(&self) -> u8 {
         self.current_render_mode
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn get_pipeline(&mut self, format: u8, state: &RenderState) -> &PipelineEntry {
-        self.pipeline_cache.get_or_create(
-            &self.device,
-            self.config.format,
-            self.current_render_mode,
-            format,
-            state,
-        )
     }
 
     pub fn clear_game_resources(&mut self) {

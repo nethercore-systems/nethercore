@@ -4,7 +4,7 @@
 //! them into GPU rendering operations.
 
 use super::ZGraphics;
-use super::render_state::{BlendMode, CullMode, MatcapBlendMode, TextureHandle};
+use super::render_state::{BlendMode, CullMode, TextureHandle};
 
 impl ZGraphics {
     /// Process all draw commands from ZFFIState and execute them
@@ -150,56 +150,5 @@ impl ZGraphics {
         // Note: All per-frame cleanup (model_matrices, audio_commands, render_pass)
         // happens AFTER render_frame completes in app.rs via z_state.clear_frame()
         // This keeps cleanup centralized and ensures matrices survive until GPU upload
-    }
-
-    /// Convert game matcap blend mode to graphics matcap blend mode
-    #[allow(dead_code)] // Useful conversion helper
-    pub(super) fn convert_matcap_blend_mode(mode: u8) -> MatcapBlendMode {
-        match mode {
-            0 => MatcapBlendMode::Multiply,
-            1 => MatcapBlendMode::Add,
-            2 => MatcapBlendMode::HsvModulate,
-            _ => MatcapBlendMode::Multiply,
-        }
-    }
-
-    /// Map game texture handles to graphics texture handles
-    #[allow(dead_code)] // Useful conversion helper
-    pub(super) fn map_texture_handles(
-        texture_map: &hashbrown::HashMap<u32, TextureHandle>,
-        bound_textures: &[u32; 4],
-    ) -> [TextureHandle; 4] {
-        let mut texture_slots = [TextureHandle::INVALID; 4];
-        for (slot, &game_handle) in bound_textures.iter().enumerate() {
-            if game_handle != 0 {
-                if let Some(&graphics_handle) = texture_map.get(&game_handle) {
-                    texture_slots[slot] = graphics_handle;
-                }
-            }
-        }
-        texture_slots
-    }
-
-    /// Convert game cull mode to graphics cull mode
-    #[allow(dead_code)] // Useful conversion helper
-    pub(super) fn convert_cull_mode(mode: u8) -> CullMode {
-        match mode {
-            0 => CullMode::None,
-            1 => CullMode::Back,
-            2 => CullMode::Front,
-            _ => CullMode::None,
-        }
-    }
-
-    /// Convert game blend mode to graphics blend mode
-    #[allow(dead_code)] // Useful conversion helper
-    pub(super) fn convert_blend_mode(mode: u8) -> BlendMode {
-        match mode {
-            0 => BlendMode::None,
-            1 => BlendMode::Alpha,
-            2 => BlendMode::Additive,
-            3 => BlendMode::Multiply,
-            _ => BlendMode::None,
-        }
     }
 }

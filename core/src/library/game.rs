@@ -83,25 +83,23 @@ fn get_games_from_dir(games_dir: &Path, registry: Option<&RomLoaderRegistry>) ->
             let path = entry.path();
 
             // Check if this is a ROM file (if registry provided)
-            if let Some(registry) = registry {
-                if path.is_file() {
-                    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                        if let Some(loader) = registry.find_by_extension(ext) {
-                            // Load ROM metadata using the appropriate loader
-                            let rom_bytes = std::fs::read(&path).ok()?;
-                            let metadata = loader.load_metadata(&rom_bytes).ok()?;
+            if let Some(registry) = registry
+                && path.is_file()
+                && let Some(ext) = path.extension().and_then(|e| e.to_str())
+                && let Some(loader) = registry.find_by_extension(ext)
+            {
+                // Load ROM metadata using the appropriate loader
+                let rom_bytes = std::fs::read(&path).ok()?;
+                let metadata = loader.load_metadata(&rom_bytes).ok()?;
 
-                            return Some(LocalGame {
-                                id: metadata.id,
-                                title: metadata.title,
-                                author: metadata.author,
-                                version: metadata.version,
-                                rom_path: path,
-                                console_type: loader.console_type().to_string(),
-                            });
-                        }
-                    }
-                }
+                return Some(LocalGame {
+                    id: metadata.id,
+                    title: metadata.title,
+                    author: metadata.author,
+                    version: metadata.version,
+                    rom_path: path,
+                    console_type: loader.console_type().to_string(),
+                });
             }
 
             // Check if this is a game directory

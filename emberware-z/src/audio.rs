@@ -219,13 +219,13 @@ pub fn generate_audio_frame(
         }
 
         // Mix music channel
-        if playback_state.music.sound != 0 {
-            if let Some(sample) = mix_channel(&mut playback_state.music, sounds, resample_ratio) {
-                // Music is centered (no pan)
-                let vol = playback_state.music.volume;
-                left += sample * vol;
-                right += sample * vol;
-            }
+        if playback_state.music.sound != 0
+            && let Some(sample) = mix_channel(&mut playback_state.music, sounds, resample_ratio)
+        {
+            // Music is centered (no pan)
+            let vol = playback_state.music.volume;
+            left += sample * vol;
+            right += sample * vol;
         }
 
         // Soft clamp to prevent harsh clipping

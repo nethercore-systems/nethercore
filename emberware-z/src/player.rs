@@ -99,10 +99,10 @@ impl PlayerApp {
 
     /// Get tick duration from the loaded game
     fn tick_duration(&self) -> Duration {
-        if let Some(runner) = &self.runner {
-            if let Some(session) = runner.session() {
-                return session.runtime.tick_duration();
-            }
+        if let Some(runner) = &self.runner
+            && let Some(session) = runner.session()
+        {
+            return session.runtime.tick_duration();
         }
         Duration::from_secs_f64(1.0 / 60.0)
     }
@@ -248,10 +248,10 @@ impl PlayerApp {
                 None
             };
 
-            if let Some(buffer) = audio_buffer {
-                if let Some(audio) = session.runtime.audio_mut() {
-                    audio.push_samples(&buffer);
-                }
+            if let Some(buffer) = audio_buffer
+                && let Some(audio) = session.runtime.audio_mut()
+            {
+                audio.push_samples(&buffer);
             }
         }
 
@@ -269,13 +269,13 @@ impl PlayerApp {
     fn execute_draw_commands(&mut self) {
         if let Some(runner) = &mut self.runner {
             let (graphics, session_opt) = runner.graphics_and_session_mut();
-            if let Some(session) = session_opt {
-                if let Some(game) = session.runtime.game_mut() {
-                    let state = game.console_state_mut();
-                    session
-                        .resource_manager
-                        .execute_draw_commands(graphics, state);
-                }
+            if let Some(session) = session_opt
+                && let Some(game) = session.runtime.game_mut()
+            {
+                let state = game.console_state_mut();
+                session
+                    .resource_manager
+                    .execute_draw_commands(graphics, state);
             }
         }
     }
@@ -342,7 +342,7 @@ impl ConsoleApp<EmberwareZ> for PlayerApp {
     }
 
     fn has_active_game(&self) -> bool {
-        self.runner.as_ref().map_or(false, |r| r.has_game())
+        self.runner.as_ref().is_some_and(|r| r.has_game())
     }
 
     fn next_tick(&self) -> Instant {
@@ -412,12 +412,12 @@ impl ConsoleApp<EmberwareZ> for PlayerApp {
             let clear_color = get_clear_color(runner);
             let (graphics, session_opt) = runner.graphics_and_session_mut();
 
-            if let Some(session) = session_opt {
-                if let Some(game) = session.runtime.game_mut() {
-                    let z_state = game.console_state_mut();
-                    let texture_map = &session.resource_manager.texture_map;
-                    graphics.render_frame(&mut encoder, z_state, texture_map, clear_color);
-                }
+            if let Some(session) = session_opt
+                && let Some(game) = session.runtime.game_mut()
+            {
+                let z_state = game.console_state_mut();
+                let texture_map = &session.resource_manager.texture_map;
+                graphics.render_frame(&mut encoder, z_state, texture_map, clear_color);
             }
         }
 
@@ -494,11 +494,11 @@ fn load_rom(path: &Path) -> Result<LoadedRom> {
 
 /// Get clear color from runner
 fn get_clear_color(runner: &ConsoleRunner<EmberwareZ>) -> [f32; 4] {
-    if let Some(session) = runner.session() {
-        if let Some(game) = session.runtime.game() {
-            let z_state = game.console_state();
-            return crate::ffi::unpack_rgba(z_state.init_config.clear_color);
-        }
+    if let Some(session) = runner.session()
+        && let Some(game) = session.runtime.game()
+    {
+        let z_state = game.console_state();
+        return crate::ffi::unpack_rgba(z_state.init_config.clear_color);
     }
     [0.1, 0.1, 0.1, 1.0]
 }

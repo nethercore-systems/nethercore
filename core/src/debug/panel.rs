@@ -216,15 +216,12 @@ impl DebugPanel {
                     }
                 }
                 TreeNode::Value(idx) => {
-                    if let Some(reg_value) = registry.values.get(*idx) {
-                        if let Some(current) = read_value(reg_value) {
-                            if let Some(new_val) = self.render_value_widget(ui, reg_value, current)
-                            {
-                                if write_value(reg_value, &new_val) {
-                                    any_changed = true;
-                                }
-                            }
-                        }
+                    if let Some(reg_value) = registry.values.get(*idx)
+                        && let Some(current) = read_value(reg_value)
+                        && let Some(new_val) = self.render_value_widget(ui, reg_value, current)
+                        && write_value(reg_value, &new_val)
+                    {
+                        any_changed = true;
                     }
                 }
             }

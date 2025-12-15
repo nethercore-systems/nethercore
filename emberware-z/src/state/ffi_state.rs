@@ -686,14 +686,13 @@ impl ZFFIState {
     /// When bound_textures or blend_mode changes, a new batch is created.
     pub fn add_quad_instance(&mut self, instance: crate::graphics::QuadInstance) {
         // Check if we can add to the current batch or need a new one
-        if let Some(last_batch) = self.quad_batches.last_mut() {
-            if last_batch.textures == self.bound_textures
-                && last_batch.blend_mode == self.blend_mode
-            {
-                // Same textures and blend mode - add to current batch
-                last_batch.instances.push(instance);
-                return;
-            }
+        if let Some(last_batch) = self.quad_batches.last_mut()
+            && last_batch.textures == self.bound_textures
+            && last_batch.blend_mode == self.blend_mode
+        {
+            // Same textures and blend mode - add to current batch
+            last_batch.instances.push(instance);
+            return;
         }
 
         // Need a new batch (either first batch, textures changed, or blend mode changed)

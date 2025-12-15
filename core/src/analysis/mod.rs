@@ -225,10 +225,10 @@ pub fn analyze_wasm(wasm_bytes: &[u8]) -> Result<AnalysisResult, AnalysisError> 
                 }
             }
             "set_resolution" => {
-                if let Some(res) = call.arg {
-                    if res > 3 {
-                        return Err(AnalysisError::InvalidResolution(res));
-                    }
+                if let Some(res) = call.arg
+                    && res > 3
+                {
+                    return Err(AnalysisError::InvalidResolution(res));
                 }
                 result.resolution = call.arg;
             }
@@ -258,10 +258,10 @@ pub fn validate_result(result: &AnalysisResult) -> Result<(), AnalysisError> {
     if result.render_mode > 3 {
         return Err(AnalysisError::InvalidRenderMode(result.render_mode));
     }
-    if let Some(res) = result.resolution {
-        if res > 3 {
-            return Err(AnalysisError::InvalidResolution(res));
-        }
+    if let Some(res) = result.resolution
+        && res > 3
+    {
+        return Err(AnalysisError::InvalidResolution(res));
     }
     Ok(())
 }

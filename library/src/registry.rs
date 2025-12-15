@@ -146,12 +146,12 @@ pub fn find_player_binary(console_type: ConsoleType) -> PathBuf {
     };
 
     // Try same directory as library executable
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            let player_path = dir.join(&exe_name);
-            if player_path.exists() {
-                return player_path;
-            }
+    if let Ok(exe) = std::env::current_exe()
+        && let Some(dir) = exe.parent()
+    {
+        let player_path = dir.join(&exe_name);
+        if player_path.exists() {
+            return player_path;
         }
     }
 
@@ -233,14 +233,13 @@ pub fn run_player_with_options(
         )
     })?;
 
-    if !status.success() {
-        if let Some(code) = status.code() {
-            // Exit code 0 is success, anything else is an error
-            // But some exit codes are normal (e.g., user pressed ESC)
-            if code != 0 {
-                tracing::debug!("Player exited with code: {}", code);
-            }
-        }
+    if !status.success()
+        && let Some(code) = status.code()
+        && code != 0
+    {
+        // Exit code 0 is success, anything else is an error
+        // But some exit codes are normal (e.g., user pressed ESC)
+        tracing::debug!("Player exited with code: {}", code);
     }
 
     Ok(())

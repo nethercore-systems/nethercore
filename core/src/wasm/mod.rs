@@ -347,10 +347,10 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState> Game
     /// This is called when debug values are modified through the debug panel.
     /// Games can optionally export this function to react to debug value changes.
     pub fn call_on_debug_change(&mut self) {
-        if let Some(func) = &self.on_debug_change_fn {
-            if let Err(e) = func.call(&mut self.store, ()) {
-                tracing::warn!("on_debug_change() failed: {}", e);
-            }
+        if let Some(func) = &self.on_debug_change_fn
+            && let Err(e) = func.call(&mut self.store, ())
+        {
+            tracing::warn!("on_debug_change() failed: {}", e);
         }
     }
 

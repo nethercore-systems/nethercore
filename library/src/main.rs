@@ -102,13 +102,13 @@ fn main() -> Result<()> {
     }
 
     // Check for file path argument (for development)
-    if args.len() > 1 {
-        if let Some(path) = is_rom_path(&args[1]) {
-            tracing::info!("Running from file path: {}", path.display());
-            // Run and wait (no library UI)
-            registry.run_from_path_with_options(path, &options)?;
-            return Ok(());
-        }
+    if args.len() > 1
+        && let Some(path) = is_rom_path(&args[1])
+    {
+        tracing::info!("Running from file path: {}", path.display());
+        // Run and wait (no library UI)
+        registry.run_from_path_with_options(path, &options)?;
+        return Ok(());
     }
 
     // Check for game ID argument - find first non-flag argument

@@ -573,22 +573,20 @@ impl ApplicationHandler for App {
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 // Handle F11 for fullscreen toggle
-                if event.state == winit::event::ElementState::Pressed {
-                    if let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::F11) =
+                if event.state == winit::event::ElementState::Pressed
+                    && let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::F11) =
                         event.physical_key
-                    {
-                        if let Some(window) = &self.window {
-                            let is_fullscreen = window.fullscreen().is_some();
-                            let new_fullscreen = if is_fullscreen {
-                                None
-                            } else {
-                                Some(winit::window::Fullscreen::Borderless(None))
-                            };
-                            window.set_fullscreen(new_fullscreen);
-                            self.config.video.fullscreen = !is_fullscreen;
-                            let _ = emberware_core::app::config::save(&self.config);
-                        }
-                    }
+                    && let Some(window) = &self.window
+                {
+                    let is_fullscreen = window.fullscreen().is_some();
+                    let new_fullscreen = if is_fullscreen {
+                        None
+                    } else {
+                        Some(winit::window::Fullscreen::Borderless(None))
+                    };
+                    window.set_fullscreen(new_fullscreen);
+                    self.config.video.fullscreen = !is_fullscreen;
+                    let _ = emberware_core::app::config::save(&self.config);
                 }
             }
             _ => {}
@@ -602,10 +600,10 @@ impl ApplicationHandler for App {
         }
 
         // Request redraw if needed
-        if self.needs_redraw {
-            if let Some(window) = &self.window {
-                window.request_redraw();
-            }
+        if self.needs_redraw
+            && let Some(window) = &self.window
+        {
+            window.request_redraw();
         }
 
         // Use reactive mode - only redraw when something changes

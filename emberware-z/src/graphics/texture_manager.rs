@@ -387,12 +387,6 @@ impl TextureManager {
         self.fallback_white
     }
 
-    /// Get the number of loaded textures (for debugging)
-    #[allow(dead_code)]
-    pub fn texture_count(&self) -> usize {
-        self.textures.len()
-    }
-
     /// Get font texture view
     pub fn get_font_texture_view(&self) -> &wgpu::TextureView {
         &self.textures[&self.font_texture.0].view

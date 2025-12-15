@@ -91,17 +91,17 @@ impl LibraryUi {
 
                 ui.separator();
 
-                if let Some(ref game_id) = self.selected_game {
-                    if let Some(game) = games.iter().find(|g| &g.id == game_id) {
-                        ui.label(format!("By: {}", game.author));
-                        ui.add_space(5.0);
+                if let Some(ref game_id) = self.selected_game
+                    && let Some(game) = games.iter().find(|g| &g.id == game_id)
+                {
+                    ui.label(format!("By: {}", game.author));
+                    ui.add_space(5.0);
 
-                        if ui.button("Play").clicked() {
-                            action = Some(UiAction::PlayGame(game_id.clone()));
-                        }
-                        if ui.button("Delete").clicked() {
-                            action = Some(UiAction::DeleteGame(game_id.clone()));
-                        }
+                    if ui.button("Play").clicked() {
+                        action = Some(UiAction::PlayGame(game_id.clone()));
+                    }
+                    if ui.button("Delete").clicked() {
+                        action = Some(UiAction::DeleteGame(game_id.clone()));
                     }
                 }
 

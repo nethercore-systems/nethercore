@@ -75,10 +75,10 @@ fn log_message<I: ConsoleInput, S, R: ConsoleRollbackState>(
         let data = memory.data(&caller);
         let ptr = ptr as usize;
         let len = len as usize;
-        if ptr + len <= data.len() {
-            if let Ok(msg) = std::str::from_utf8(&data[ptr..ptr + len]) {
-                log::info!("[GAME] {}", msg);
-            }
+        if ptr + len <= data.len()
+            && let Ok(msg) = std::str::from_utf8(&data[ptr..ptr + len])
+        {
+            log::info!("[GAME] {}", msg);
         }
     }
 }

@@ -273,10 +273,10 @@ impl<C: Console> ConsoleRunner<C> {
 
     /// Check if the game requested to quit.
     pub fn quit_requested(&self) -> bool {
-        if let Some(session) = &self.session {
-            if let Some(game) = session.runtime.game() {
-                return game.state().quit_requested;
-            }
+        if let Some(session) = &self.session
+            && let Some(game) = session.runtime.game()
+        {
+            return game.state().quit_requested;
         }
         false
     }

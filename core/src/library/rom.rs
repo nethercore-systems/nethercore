@@ -166,10 +166,10 @@ pub fn install_rom(
     data_dir_provider: &dyn DataDirProvider,
 ) -> Result<LocalGame> {
     // Try to detect by extension first
-    if let Some(ext) = rom_path.extension().and_then(|e| e.to_str()) {
-        if let Some(loader) = registry.find_by_extension(ext) {
-            return loader.install(rom_path, data_dir_provider);
-        }
+    if let Some(ext) = rom_path.extension().and_then(|e| e.to_str())
+        && let Some(loader) = registry.find_by_extension(ext)
+    {
+        return loader.install(rom_path, data_dir_provider);
     }
 
     // Fall back to reading bytes and checking magic

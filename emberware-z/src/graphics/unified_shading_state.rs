@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use glam::{Vec3, Vec4};
+use glam::Vec3;
 use half::f16;
 use z_common::{pack_octahedral_u32, unpack_octahedral_u32};
 
@@ -253,13 +253,6 @@ pub fn pack_rgba8(r: f32, g: f32, b: f32, a: f32) -> u32 {
 #[inline]
 pub fn pack_rgb8(color: Vec3) -> u32 {
     pack_rgba8(color.x, color.y, color.z, 1.0)
-}
-
-/// Pack Vec4 color [0.0, 1.0] to u32 RGBA8
-#[inline]
-#[allow(dead_code)]
-pub fn pack_rgba8_vec4(color: Vec4) -> u32 {
-    pack_rgba8(color.x, color.y, color.z, color.w)
 }
 
 /// Pack 4x MatcapBlendMode into u32 (4 bytes)
