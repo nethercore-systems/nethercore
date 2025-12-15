@@ -7,13 +7,12 @@ use glam::{Mat4, Vec3};
 use tracing::warn;
 use wasmtime::{Caller, Linker};
 
-use emberware_core::wasm::GameStateWithConsole;
+use super::ZGameContext;
 
-use crate::console::{RESOLUTIONS, ZInput};
-use crate::state::ZFFIState;
+use crate::console::RESOLUTIONS;
 
 /// Register camera FFI functions
-pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
+pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
     linker.func_wrap("env", "camera_set", camera_set)?;
     linker.func_wrap("env", "camera_fov", camera_fov)?;
     linker.func_wrap("env", "push_view_matrix", push_view_matrix)?;
@@ -29,7 +28,7 @@ pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) ->
 ///
 /// Uses a Y-up, right-handed coordinate system.
 fn camera_set(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     x: f32,
     y: f32,
     z: f32,
@@ -37,7 +36,7 @@ fn camera_set(
     target_y: f32,
     target_z: f32,
 ) {
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
 
     // Build view matrix from position and target
     let position = Vec3::new(x, y, z);
@@ -55,8 +54,8 @@ fn camera_set(
 ///
 /// Values outside 1-179 degrees are clamped with a warning.
 /// Rebuilds the projection matrix at index 0 with default parameters (16:9 aspect, 0.1 near, 1000 far).
-fn camera_fov(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, fov_degrees: f32) {
-    let state = &mut caller.data_mut().console;
+fn camera_fov(mut caller: Caller<'_, ZGameContext>, fov_degrees: f32) {
+    let state = &mut caller.data_mut().ffi;
 
     // Validate FOV range
     let clamped_fov = if !(1.0..=179.0).contains(&fov_degrees) {
@@ -96,7 +95,7 @@ fn camera_fov(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, f
 /// # Returns
 /// The index of the newly added view matrix (0-255)
 fn push_view_matrix(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     m0: f32,
     m1: f32,
     m2: f32,
@@ -114,7 +113,7 @@ fn push_view_matrix(
     m14: f32,
     m15: f32,
 ) {
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
 
     let matrix = Mat4::from_cols_array(&[
         m0, m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15,
@@ -133,7 +132,7 @@ fn push_view_matrix(
 ///
 /// Sets the current projection matrix (no return value - uses lazy allocation)
 fn push_projection_matrix(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     m0: f32,
     m1: f32,
     m2: f32,
@@ -151,7 +150,7 @@ fn push_projection_matrix(
     m14: f32,
     m15: f32,
 ) {
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
 
     let matrix = Mat4::from_cols_array(&[
         m0, m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15,

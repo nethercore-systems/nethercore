@@ -4,7 +4,7 @@
 
 use wasmtime::{AsContext, Memory, ResourceLimiter};
 
-use crate::console::ConsoleInput;
+use crate::console::{ConsoleInput, ConsoleRollbackState};
 
 /// Read a length-prefixed string from WASM memory
 ///
@@ -89,30 +89,43 @@ pub struct GameState<I: ConsoleInput> {
     pub quit_requested: bool,
 }
 
-/// Wrapper combining core GameState and console-specific state
-pub struct GameStateWithConsole<I: ConsoleInput, S> {
-    /// Core game state (input, timing, RNG, saves)
+/// Context for WASM game execution
+///
+/// Combines core GameState, console-specific FFI state, and rollback state.
+/// The generic parameters are:
+/// - `I`: Console-specific input type (e.g., ZInput)
+/// - `S`: Console-specific FFI state (e.g., ZFFIState) - NOT rolled back
+/// - `R`: Console-specific rollback state (e.g., ZRollbackState) - IS rolled back
+pub struct WasmGameContext<I: ConsoleInput, S, R: ConsoleRollbackState = ()> {
+    /// Core WASM game state (memory snapshots from this)
     pub game: GameState<I>,
-    /// Console-specific state (rendering, transforms, etc.)
-    pub console: S,
+    /// Console-specific per-frame FFI state (NOT rolled back)
+    pub ffi: S,
+    /// Console-specific rollback state (IS rolled back via bytemuck)
+    pub rollback: R,
     /// RAM limit in bytes (for ResourceLimiter enforcement)
     pub ram_limit: usize,
     /// Debug inspection registry (for runtime value inspection)
     pub debug_registry: DebugRegistry,
 }
 
-impl<I: ConsoleInput, S: Default> Default for GameStateWithConsole<I, S> {
+/// Type alias for backward compatibility
+#[deprecated(note = "Use WasmGameContext instead")]
+pub type GameStateWithConsole<I, S> = WasmGameContext<I, S, ()>;
+
+impl<I: ConsoleInput, S: Default, R: ConsoleRollbackState> Default for WasmGameContext<I, S, R> {
     fn default() -> Self {
         Self {
             game: GameState::new(),
-            console: S::default(),
+            ffi: S::default(),
+            rollback: R::default(),
             ram_limit: 8 * 1024 * 1024, // Default to 8MB (Emberware Z)
             debug_registry: DebugRegistry::new(),
         }
     }
 }
 
-impl<I: ConsoleInput, S: Default> GameStateWithConsole<I, S> {
+impl<I: ConsoleInput, S: Default, R: ConsoleRollbackState> WasmGameContext<I, S, R> {
     /// Create new state with default RAM limit (4MB)
     pub fn new() -> Self {
         Self::default()
@@ -122,7 +135,8 @@ impl<I: ConsoleInput, S: Default> GameStateWithConsole<I, S> {
     pub fn with_ram_limit(ram_limit: usize) -> Self {
         Self {
             game: GameState::new(),
-            console: S::default(),
+            ffi: S::default(),
+            rollback: R::default(),
             ram_limit,
             debug_registry: DebugRegistry::new(),
         }
@@ -130,7 +144,7 @@ impl<I: ConsoleInput, S: Default> GameStateWithConsole<I, S> {
 }
 
 /// Implement HasDebugRegistry trait for generic access to debug registry
-impl<I: ConsoleInput, S> HasDebugRegistry for GameStateWithConsole<I, S> {
+impl<I: ConsoleInput, S, R: ConsoleRollbackState> HasDebugRegistry for WasmGameContext<I, S, R> {
     fn debug_registry(&self) -> &DebugRegistry {
         &self.debug_registry
     }
@@ -145,7 +159,7 @@ impl<I: ConsoleInput, S> HasDebugRegistry for GameStateWithConsole<I, S> {
 /// This prevents malicious or buggy games from allocating more memory
 /// than the console allows. The host enforces this limit at the wasmtime
 /// level, so games cannot bypass it.
-impl<I: ConsoleInput, S: Send> ResourceLimiter for GameStateWithConsole<I, S> {
+impl<I: ConsoleInput, S: Send, R: ConsoleRollbackState> ResourceLimiter for WasmGameContext<I, S, R> {
     fn memory_growing(
         &mut self,
         _current: usize,

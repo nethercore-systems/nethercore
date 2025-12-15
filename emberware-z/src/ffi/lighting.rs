@@ -6,14 +6,11 @@ use anyhow::Result;
 use tracing::warn;
 use wasmtime::{Caller, Linker};
 
-use emberware_core::wasm::GameStateWithConsole;
-
-use crate::console::ZInput;
+use super::ZGameContext;
 use crate::graphics::LightType;
-use crate::state::ZFFIState;
 
 /// Register lighting FFI functions
-pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
+pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
     // Directional light functions
     linker.func_wrap("env", "light_set", light_set)?;
     linker.func_wrap("env", "light_color", light_color)?;
@@ -44,7 +41,7 @@ pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) ->
 /// For Mode 2 (PBR), all lights are directional.
 /// Use `light_color()` and `light_intensity()` to set color and brightness.
 fn light_set(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     index: u32,
     x: f32,
     y: f32,
@@ -58,7 +55,7 @@ fn light_set(
 
     // Validate direction vector (warn if zero-length)
     let len_sq = x * x + y * y + z * z;
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
 
     if len_sq < 1e-10 {
         warn!("light_set: zero-length direction vector, using default (0, -1, 0)");
@@ -97,7 +94,7 @@ fn light_set(
 /// - `0xFFFFFFFF` — White light
 /// - `0xFFA500FF` — Orange light
 fn light_color(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     index: u32,
     color: u32,
 ) {
@@ -110,7 +107,7 @@ fn light_color(
     // Unpack color from 0xRRGGBBAA to 0.0-1.0 range
     let [r, g, b] = super::unpack_rgb(color);
 
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
 
     // Extract current light state
     let light = &state.current_shading_state.lights[index as usize];
@@ -145,7 +142,7 @@ fn light_color(
 /// Sets the intensity multiplier for a light. The final light contribution is color × intensity.
 /// Negative values are clamped to 0.0, values above 8.0 are clamped to 8.0.
 fn light_intensity(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     index: u32,
     intensity: f32,
 ) {
@@ -175,7 +172,7 @@ fn light_intensity(
         intensity
     };
 
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
 
     // Extract current light state
     let light = &state.current_shading_state.lights[index as usize];
@@ -203,14 +200,14 @@ fn light_intensity(
 ///
 /// Enables a previously disabled light so it contributes to the scene.
 /// The light will use its current direction, color, and intensity settings.
-fn light_enable(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, index: u32) {
+fn light_enable(mut caller: Caller<'_, ZGameContext>, index: u32) {
     // Validate index
     if index > 3 {
         warn!("light_enable: invalid light index {} (must be 0-3)", index);
         return;
     }
 
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
 
     // Extract current light state
     let light = &state.current_shading_state.lights[index as usize];
@@ -242,14 +239,14 @@ fn light_enable(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
 /// Disables a light so it no longer contributes to the scene.
 /// Useful for toggling lights on/off dynamically.
 /// The light's direction, color, and intensity are preserved and can be re-enabled later.
-fn light_disable(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, index: u32) {
+fn light_disable(mut caller: Caller<'_, ZGameContext>, index: u32) {
     // Validate index
     if index > 3 {
         warn!("light_disable: invalid light index {} (must be 0-3)", index);
         return;
     }
 
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
 
     // Extract current light state
     let light = &state.current_shading_state.lights[index as usize];
@@ -280,7 +277,7 @@ fn light_disable(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>
 /// Use `light_range()` to set the falloff distance.
 /// Use `light_color()` and `light_intensity()` for color/brightness.
 fn light_set_point(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     index: u32,
     x: f32,
     y: f32,
@@ -294,7 +291,7 @@ fn light_set_point(
         return;
     }
 
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     let light = &state.current_shading_state.lights[index as usize];
     let color = light.get_color();
     let intensity = light.get_intensity();
@@ -315,7 +312,7 @@ fn light_set_point(
 ///
 /// Only affects point lights. Directional lights ignore this.
 fn light_range(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     index: u32,
     range: f32,
 ) {
@@ -326,7 +323,7 @@ fn light_range(
 
     let range = range.max(0.0); // Clamp negative to 0
 
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     let light = &state.current_shading_state.lights[index as usize];
 
     // Only valid for point lights

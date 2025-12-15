@@ -44,8 +44,8 @@ pub struct Runtime<C: Console> {
     #[allow(dead_code)]
     console: C,
     config: RuntimeConfig,
-    game: Option<GameInstance<C::Input, C::State>>,
-    session: Option<RollbackSession<C::Input, C::State>>,
+    game: Option<GameInstance<C::Input, C::State, C::RollbackState>>,
+    session: Option<RollbackSession<C::Input, C::State, C::RollbackState>>,
     audio: Option<C::Audio>,
     accumulator: Duration,
     last_update: Option<Instant>,
@@ -82,14 +82,14 @@ impl<C: Console> Runtime<C> {
     }
 
     /// Load a game instance
-    pub fn load_game(&mut self, game: GameInstance<C::Input, C::State>) {
+    pub fn load_game(&mut self, game: GameInstance<C::Input, C::State, C::RollbackState>) {
         self.game = Some(game);
         self.accumulator = Duration::ZERO;
         self.last_update = None;
     }
 
     /// Set the rollback session
-    pub fn set_session(&mut self, session: RollbackSession<C::Input, C::State>) {
+    pub fn set_session(&mut self, session: RollbackSession<C::Input, C::State, C::RollbackState>) {
         self.session = Some(session);
     }
 
@@ -264,12 +264,12 @@ impl<C: Console> Runtime<C> {
     }
 
     /// Get a reference to the loaded game
-    pub fn game(&self) -> Option<&GameInstance<C::Input, C::State>> {
+    pub fn game(&self) -> Option<&GameInstance<C::Input, C::State, C::RollbackState>> {
         self.game.as_ref()
     }
 
     /// Get a mutable reference to the loaded game
-    pub fn game_mut(&mut self) -> Option<&mut GameInstance<C::Input, C::State>> {
+    pub fn game_mut(&mut self) -> Option<&mut GameInstance<C::Input, C::State, C::RollbackState>> {
         self.game.as_mut()
     }
 
@@ -284,12 +284,12 @@ impl<C: Console> Runtime<C> {
     }
 
     /// Get a reference to the rollback session
-    pub fn session(&self) -> Option<&RollbackSession<C::Input, C::State>> {
+    pub fn session(&self) -> Option<&RollbackSession<C::Input, C::State, C::RollbackState>> {
         self.session.as_ref()
     }
 
     /// Get a mutable reference to the rollback session
-    pub fn session_mut(&mut self) -> Option<&mut RollbackSession<C::Input, C::State>> {
+    pub fn session_mut(&mut self) -> Option<&mut RollbackSession<C::Input, C::State, C::RollbackState>> {
         self.session.as_mut()
     }
 

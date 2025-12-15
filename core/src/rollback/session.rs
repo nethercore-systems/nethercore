@@ -10,7 +10,7 @@ use ggrs::{
     SessionBuilder, SessionState, SyncTestSession,
 };
 
-use crate::console::ConsoleInput;
+use crate::console::{ConsoleInput, ConsoleRollbackState};
 use crate::wasm::GameInstance;
 
 use super::config::{EmberwareConfig, SessionConfig};
@@ -90,7 +90,7 @@ const FRAME_ADVANTAGE_WARNING_THRESHOLD: i32 = 4;
 /// Wraps GGRS session types and provides a unified interface for
 /// local, sync-test, and P2P sessions. Handles state management
 /// and input processing.
-pub struct RollbackSession<I: ConsoleInput, S: Send + Default + 'static> {
+pub struct RollbackSession<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState = ()> {
     inner: SessionInner<I>,
     session_type: SessionType,
     config: SessionConfig,
@@ -109,10 +109,10 @@ pub struct RollbackSession<I: ConsoleInput, S: Send + Default + 'static> {
     last_frame_advantage: i32,
     /// Whether a desync has been detected
     desync_detected: bool,
-    _phantom: std::marker::PhantomData<S>,
+    _phantom: std::marker::PhantomData<(S, R)>,
 }
 
-impl<I: ConsoleInput, S: Send + Default + 'static> RollbackSession<I, S> {
+impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState> RollbackSession<I, S, R> {
     /// Create a new local session (no rollback)
     ///
     /// Local sessions run without GGRS - updates execute immediately
@@ -598,7 +598,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static> RollbackSession<I, S> {
     /// be muted. Check `is_rolling_back()` before playing sounds.
     pub fn handle_requests(
         &mut self,
-        game: &mut GameInstance<I, S>,
+        game: &mut GameInstance<I, S, R>,
         requests: Vec<GgrsRequest<EmberwareConfig<I>>>,
     ) -> Result<Vec<Vec<(I, InputStatus)>>, SessionError> {
         let mut advance_inputs = Vec::new();
@@ -651,7 +651,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static> RollbackSession<I, S> {
     /// Save game state (convenience wrapper)
     pub fn save_game_state(
         &mut self,
-        game: &mut GameInstance<I, S>,
+        game: &mut GameInstance<I, S, R>,
         frame: i32,
     ) -> Result<GameStateSnapshot, SaveStateError> {
         self.state_manager.save_state(game, frame)
@@ -660,7 +660,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static> RollbackSession<I, S> {
     /// Load game state (convenience wrapper)
     pub fn load_game_state(
         &mut self,
-        game: &mut GameInstance<I, S>,
+        game: &mut GameInstance<I, S, R>,
         snapshot: &GameStateSnapshot,
     ) -> Result<(), LoadStateError> {
         self.state_manager.load_state(game, snapshot)

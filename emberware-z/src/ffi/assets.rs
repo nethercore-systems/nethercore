@@ -16,24 +16,21 @@ use anyhow::Result;
 use tracing::{info, warn};
 use wasmtime::{Caller, Linker};
 
-use super::{get_wasm_memory, guards::check_init_only};
+use super::{get_wasm_memory, guards::check_init_only, ZGameContext};
 
-use emberware_core::wasm::GameStateWithConsole;
 use z_common::TextureFormat;
 use z_common::formats::{
     EmberZMeshHeader, EmberZSkeletonHeader, EmberZSoundHeader, EmberZTextureHeader,
 };
 
 use crate::audio::Sound;
-use crate::console::ZInput;
 use crate::graphics::vertex_stride_packed;
 use crate::state::{
     BoneMatrix3x4, MAX_BONES, MAX_SKELETONS, PendingMeshPacked, PendingSkeleton, PendingTexture,
-    ZFFIState,
 };
 
 /// Register asset loading FFI functions
-pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
+pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
     // Load from EmberZ binary formats (Phase A - include_bytes! workflow)
     linker.func_wrap("env", "load_zmesh", load_zmesh)?;
     linker.func_wrap("env", "load_ztex", load_ztex)?;
@@ -50,7 +47,7 @@ pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) ->
 ///
 /// Returns mesh handle (>0) on success, 0 on failure.
 fn load_zmesh(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     data_ptr: u32,
     data_len: u32,
 ) -> u32 {
@@ -158,7 +155,7 @@ fn load_zmesh(
     };
 
     // Now we can mutably borrow state
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
 
     // Allocate a mesh handle
     let handle = state.next_mesh_handle;
@@ -188,7 +185,7 @@ fn load_zmesh(
 ///
 /// Returns texture handle (>0) on success, 0 on failure.
 fn load_ztex(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     data_ptr: u32,
     data_len: u32,
 ) -> u32 {
@@ -292,7 +289,7 @@ fn load_ztex(
     };
 
     // Now we can mutably borrow state
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
 
     // Allocate a texture handle
     let handle = state.next_texture_handle;
@@ -324,7 +321,7 @@ fn load_ztex(
 ///
 /// Returns sound handle (>0) on success, 0 on failure.
 fn load_zsound(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     data_ptr: u32,
     data_len: u32,
 ) -> u32 {
@@ -396,7 +393,7 @@ fn load_zsound(
     };
 
     // Now we can mutably borrow state
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
 
     // Create Sound and add to sounds vec (matches load_sound pattern)
     let sound = Sound {
@@ -435,7 +432,7 @@ fn load_zsound(
 /// 0x08: inverse_bind_matrices (bone_count × 48 bytes, 3×4 column-major)
 /// ```
 fn load_zskeleton(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     data_ptr: u32,
     data_len: u32,
 ) -> u32 {
@@ -549,7 +546,7 @@ fn load_zskeleton(
     };
 
     // Check skeleton limit before allocating
-    let state = &caller.data().console;
+    let state = &caller.data().ffi;
     let total_skeletons = state.skeletons.len() + state.pending_skeletons.len();
     if total_skeletons >= MAX_SKELETONS {
         warn!(
@@ -560,7 +557,7 @@ fn load_zskeleton(
     }
 
     // Now we can mutably borrow state
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
 
     // Allocate a skeleton handle
     let handle = state.next_skeleton_handle;

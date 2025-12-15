@@ -3,9 +3,7 @@
 use anyhow::{Result, bail};
 use wasmtime::Caller;
 
-use crate::console::ZInput;
-use crate::state::ZFFIState;
-use emberware_core::wasm::GameStateWithConsole;
+use super::ZGameContext;
 
 /// Check if we're in init phase (init-only function guard)
 ///
@@ -29,7 +27,7 @@ use emberware_core::wasm::GameStateWithConsole;
 /// }
 /// ```
 pub(crate) fn check_init_only(
-    caller: &Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    caller: &Caller<'_, ZGameContext>,
     fn_name: &str,
 ) -> Result<()> {
     if !caller.data().game.in_init {

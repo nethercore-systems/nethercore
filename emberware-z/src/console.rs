@@ -11,7 +11,7 @@ use winit::window::Window;
 
 use emberware_core::{
     console::{Audio, Console, ConsoleInput, ConsoleSpecs, RawInput, SoundHandle},
-    wasm::GameStateWithConsole,
+    wasm::WasmGameContext,
 };
 
 use crate::state::ZFFIState;
@@ -195,6 +195,7 @@ impl Console for EmberwareZ {
     type Audio = ZAudio;
     type Input = ZInput;
     type State = ZFFIState;
+    type RollbackState = (); // No host-side rollback state yet
     type ResourceManager = crate::resource_manager::ZResourceManager;
 
     fn specs(&self) -> &'static ConsoleSpecs {
@@ -203,7 +204,7 @@ impl Console for EmberwareZ {
 
     fn register_ffi(
         &self,
-        linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>,
+        linker: &mut Linker<WasmGameContext<ZInput, ZFFIState, ()>>,
     ) -> Result<()> {
         // Register all Z-specific FFI functions (graphics, input, transforms, camera, etc.)
         crate::ffi::register_z_ffi(linker)?;

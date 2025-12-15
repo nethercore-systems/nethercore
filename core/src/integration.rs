@@ -12,10 +12,10 @@ mod tests {
     use crate::rollback::{GameStateSnapshot, RollbackSession, RollbackStateManager};
     use crate::runtime::Runtime;
     use crate::test_utils::{TestConsole, TestInput};
-    use crate::wasm::{GameInstance, GameState, GameStateWithConsole, MAX_PLAYERS, WasmEngine};
+    use crate::wasm::{GameInstance, GameState, WasmGameContext, MAX_PLAYERS, WasmEngine};
 
     /// Create a test engine with common FFI registered
-    fn create_test_engine() -> (WasmEngine, Linker<GameStateWithConsole<TestInput, ()>>) {
+    fn create_test_engine() -> (WasmEngine, Linker<WasmGameContext<TestInput, (), ()>>) {
         let engine = WasmEngine::new().unwrap();
         let mut linker = Linker::new(engine.engine());
         register_common_ffi(&mut linker).unwrap();

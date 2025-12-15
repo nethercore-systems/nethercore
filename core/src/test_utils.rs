@@ -9,7 +9,7 @@ use crate::console::{
     Audio, Console, ConsoleInput, ConsoleResourceManager, ConsoleSpecs, Graphics, RawInput,
     SoundHandle,
 };
-use crate::wasm::GameStateWithConsole;
+use crate::wasm::WasmGameContext;
 
 // ============================================================================
 // Test Console Implementation
@@ -89,6 +89,7 @@ impl Console for TestConsole {
     type Audio = TestAudio;
     type Input = TestInput;
     type State = ();
+    type RollbackState = ();
     type ResourceManager = TestResourceManager;
 
     fn specs(&self) -> &'static ConsoleSpecs {
@@ -107,7 +108,7 @@ impl Console for TestConsole {
 
     fn register_ffi(
         &self,
-        _linker: &mut Linker<GameStateWithConsole<TestInput, ()>>,
+        _linker: &mut Linker<WasmGameContext<TestInput, (), ()>>,
     ) -> anyhow::Result<()> {
         Ok(())
     }

@@ -71,13 +71,16 @@ mod transform;
 use anyhow::Result;
 use wasmtime::{Caller, Extern, Linker, Memory};
 
-use emberware_core::wasm::GameStateWithConsole;
+use emberware_core::wasm::WasmGameContext;
 
 use crate::console::ZInput;
 use crate::state::ZFFIState;
 
+/// Type alias for Emberware Z WASM game context
+pub type ZGameContext = WasmGameContext<ZInput, ZFFIState, ()>;
+
 /// Register all Emberware Z FFI functions with the linker
-pub fn register_z_ffi(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
+pub fn register_z_ffi(linker: &mut Linker<ZGameContext>) -> Result<()> {
     // Configuration functions (init-only)
     config::register(linker)?;
 

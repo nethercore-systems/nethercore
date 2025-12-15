@@ -7,13 +7,10 @@ use glam::{Mat4, Vec3};
 use tracing::warn;
 use wasmtime::{Caller, Linker};
 
-use emberware_core::wasm::GameStateWithConsole;
-
-use crate::console::ZInput;
-use crate::state::ZFFIState;
+use super::ZGameContext;
 
 /// Register transform FFI functions
-pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
+pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
     linker.func_wrap("env", "push_identity", push_identity)?;
     linker.func_wrap("env", "transform_set", transform_set)?;
     linker.func_wrap("env", "push_translate", push_translate)?;
@@ -31,8 +28,8 @@ pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) ->
 /// After calling this, subsequent draws will use identity transformation
 /// (objects will be drawn at their original position/rotation/scale).
 /// This is typically called at the start of rendering to reset the transform stack.
-fn push_identity(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>) {
-    let state = &mut caller.data_mut().console;
+fn push_identity(mut caller: Caller<'_, ZGameContext>) {
+    let state = &mut caller.data_mut().ffi;
     state.current_model_matrix = Some(Mat4::IDENTITY);
 }
 
@@ -43,7 +40,7 @@ fn push_identity(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>
 ///
 /// Column-major order means: [col0, col1, col2, col3] where each column is [x, y, z, w].
 /// This is the same format used by glam and WGSL.
-fn transform_set(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, matrix_ptr: u32) {
+fn transform_set(mut caller: Caller<'_, ZGameContext>, matrix_ptr: u32) {
     // Read the 16 floats from WASM memory
     let memory = match caller.data().game.memory {
         Some(m) => m,
@@ -80,7 +77,7 @@ fn transform_set(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>
         );
         return;
     };
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     let new_matrix = Mat4::from_cols_array(&matrix);
     state.current_model_matrix = Some(new_matrix); // Pending matrix
 }
@@ -92,12 +89,12 @@ fn transform_set(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>
 ///
 /// Reads the current transform, applies translation, and pushes the result.
 fn push_translate(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     x: f32,
     y: f32,
     z: f32,
 ) {
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     let current = state.current_model_matrix.unwrap_or_else(|| {
         state
             .model_matrices
@@ -115,8 +112,8 @@ fn push_translate(
 /// * `angle_deg` — Rotation angle in degrees
 ///
 /// Reads the current transform, applies rotation, and pushes the result.
-fn push_rotate_x(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, angle_deg: f32) {
-    let state = &mut caller.data_mut().console;
+fn push_rotate_x(mut caller: Caller<'_, ZGameContext>, angle_deg: f32) {
+    let state = &mut caller.data_mut().ffi;
     let current = state.current_model_matrix.unwrap_or_else(|| {
         state
             .model_matrices
@@ -135,8 +132,8 @@ fn push_rotate_x(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>
 /// * `angle_deg` — Rotation angle in degrees
 ///
 /// Reads the current transform, applies rotation, and pushes the result.
-fn push_rotate_y(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, angle_deg: f32) {
-    let state = &mut caller.data_mut().console;
+fn push_rotate_y(mut caller: Caller<'_, ZGameContext>, angle_deg: f32) {
+    let state = &mut caller.data_mut().ffi;
     let current = state.current_model_matrix.unwrap_or_else(|| {
         state
             .model_matrices
@@ -155,8 +152,8 @@ fn push_rotate_y(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>
 /// * `angle_deg` — Rotation angle in degrees
 ///
 /// Reads the current transform, applies rotation, and pushes the result.
-fn push_rotate_z(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, angle_deg: f32) {
-    let state = &mut caller.data_mut().console;
+fn push_rotate_z(mut caller: Caller<'_, ZGameContext>, angle_deg: f32) {
+    let state = &mut caller.data_mut().ffi;
     let current = state.current_model_matrix.unwrap_or_else(|| {
         state
             .model_matrices
@@ -177,13 +174,13 @@ fn push_rotate_z(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>
 ///
 /// Reads the current transform, applies rotation, and pushes the result.
 fn push_rotate(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     angle_deg: f32,
     axis_x: f32,
     axis_y: f32,
     axis_z: f32,
 ) {
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     let current = state.current_model_matrix.unwrap_or_else(|| {
         state
             .model_matrices
@@ -204,12 +201,12 @@ fn push_rotate(
 ///
 /// Reads the current transform, applies scale, and pushes the result.
 fn push_scale(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     x: f32,
     y: f32,
     z: f32,
 ) {
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     let current = state.current_model_matrix.unwrap_or_else(|| {
         state
             .model_matrices
@@ -227,8 +224,8 @@ fn push_scale(
 /// * `s` — Uniform scale factor
 ///
 /// Reads the current transform, applies scale, and pushes the result.
-fn push_scale_uniform(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, s: f32) {
-    let state = &mut caller.data_mut().console;
+fn push_scale_uniform(mut caller: Caller<'_, ZGameContext>, s: f32) {
+    let state = &mut caller.data_mut().ffi;
     let current = state.current_model_matrix.unwrap_or_else(|| {
         state
             .model_matrices

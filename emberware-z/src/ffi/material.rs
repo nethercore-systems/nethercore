@@ -6,13 +6,10 @@ use anyhow::Result;
 use tracing::warn;
 use wasmtime::{Caller, Linker};
 
-use emberware_core::wasm::GameStateWithConsole;
-
-use crate::console::ZInput;
-use crate::state::ZFFIState;
+use super::ZGameContext;
 
 /// Register material FFI functions
-pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) -> Result<()> {
+pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
     // Texture binding functions
     linker.func_wrap("env", "material_mre", material_mre)?;
     linker.func_wrap("env", "material_albedo", material_albedo)?;
@@ -56,8 +53,8 @@ pub fn register(linker: &mut Linker<GameStateWithConsole<ZInput, ZFFIState>>) ->
 ///
 /// Binds to slot 1. Used in Mode 2 (PBR) and Mode 3 (Hybrid).
 /// In Mode 2/3, slot 1 is interpreted as an MRE texture instead of a matcap.
-fn material_mre(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, texture: u32) {
-    let state = &mut caller.data_mut().console;
+fn material_mre(mut caller: Caller<'_, ZGameContext>, texture: u32) {
+    let state = &mut caller.data_mut().ffi;
     state.bound_textures[1] = texture;
 }
 
@@ -68,8 +65,8 @@ fn material_mre(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
 ///
 /// Binds to slot 0. This is equivalent to texture_bind(texture) but more semantically clear.
 /// The albedo texture is multiplied with the uniform color and vertex colors.
-fn material_albedo(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, texture: u32) {
-    let state = &mut caller.data_mut().console;
+fn material_albedo(mut caller: Caller<'_, ZGameContext>, texture: u32) {
+    let state = &mut caller.data_mut().ffi;
     state.bound_textures[0] = texture;
 }
 
@@ -80,8 +77,8 @@ fn material_albedo(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState
 ///
 /// Used in Mode 2 (PBR) and Mode 3 (Hybrid).
 /// Clamped to 0.0-1.0 range. Default is 0.0 (non-metallic).
-fn material_metallic(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, value: f32) {
-    let state = &mut caller.data_mut().console;
+fn material_metallic(mut caller: Caller<'_, ZGameContext>, value: f32) {
+    let state = &mut caller.data_mut().ffi;
     let clamped = value.clamp(0.0, 1.0);
 
     if (value - clamped).abs() > 0.001 {
@@ -102,8 +99,8 @@ fn material_metallic(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFISta
 ///
 /// Used in Mode 2 (PBR) and Mode 3 (Hybrid).
 /// Clamped to 0.0-1.0 range. Default is 0.5.
-fn material_roughness(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, value: f32) {
-    let state = &mut caller.data_mut().console;
+fn material_roughness(mut caller: Caller<'_, ZGameContext>, value: f32) {
+    let state = &mut caller.data_mut().ffi;
     let clamped = value.clamp(0.0, 1.0);
 
     if (value - clamped).abs() > 0.001 {
@@ -124,8 +121,8 @@ fn material_roughness(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFISt
 ///
 /// Used in Mode 2 (PBR) and Mode 3 (Hybrid).
 /// Values can be greater than 1.0 for HDR-like effects. Default is 0.0.
-fn material_emissive(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, value: f32) {
-    let state = &mut caller.data_mut().console;
+fn material_emissive(mut caller: Caller<'_, ZGameContext>, value: f32) {
+    let state = &mut caller.data_mut().ffi;
 
     // No clamping for emissive - allow HDR values
     let clamped = if value < 0.0 {
@@ -152,11 +149,11 @@ fn material_emissive(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFISta
 /// power controls falloff sharpness (higher = tighter highlight).
 /// Rim lighting uses the sky color from behind the object for coherent scene lighting.
 fn material_rim(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     intensity: f32,
     power: f32,
 ) {
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
 
     // Clamp and warn for intensity
     let intensity_clamped = intensity.clamp(0.0, 1.0);
@@ -190,7 +187,7 @@ fn material_rim(
 ///
 /// This is an alias for material_roughness() for clarity when using Mode 3.
 /// Clamped to 0.0-1.0 range. Default is 0.5 (maps to shininess ~128).
-fn material_shininess(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, value: f32) {
+fn material_shininess(caller: Caller<'_, ZGameContext>, value: f32) {
     // Simply calls material_roughness - field reinterpretation happens in the shader
     material_roughness(caller, value);
 }
@@ -200,8 +197,8 @@ fn material_shininess(caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>
 /// Format: 0xRRGGBBAA (R in highest byte, A in lowest)
 /// 0xFFFFFFFF = white (neutral specular - highlights match light color)
 /// Tinted values create colored highlights (e.g., warm gold, cool silver)
-fn material_specular(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>, color: u32) {
-    let state = &mut caller.data_mut().console;
+fn material_specular(mut caller: Caller<'_, ZGameContext>, color: u32) {
+    let state = &mut caller.data_mut().ffi;
 
     // Extract RGB bytes from input and convert to normalized floats
     let [r, g, b] = super::unpack_rgb(color);
@@ -222,7 +219,7 @@ fn material_specular(mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFISta
 /// This is an alias for material_metallic() for clarity when using Mode 3.
 /// Note: This is INVERTED from metallic - 0 gives full specular (beginner-friendly).
 fn material_specular_damping(
-    caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    caller: Caller<'_, ZGameContext>,
     value: f32,
 ) {
     // Simply calls material_metallic - field reinterpretation happens in the shader
@@ -236,12 +233,12 @@ fn material_specular_damping(
 ///
 /// Alternative to material_specular(u32) when you have separate float components.
 fn material_specular_color(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     r: f32,
     g: f32,
     b: f32,
 ) {
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     state.update_specular_color(r.clamp(0.0, 1.0), g.clamp(0.0, 1.0), b.clamp(0.0, 1.0));
 }
 
@@ -258,10 +255,10 @@ fn material_specular_color(
 /// When enabled, the uniform color (set via set_color) is used instead of sampling
 /// from the albedo texture. Useful for solid-colored objects or temporary overrides.
 fn use_uniform_color(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     enabled: u32,
 ) {
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     state.set_use_uniform_color(enabled != 0);
 }
 
@@ -271,10 +268,10 @@ fn use_uniform_color(
 /// # Arguments
 /// * `enabled` — 0 = sample from texture (default), 1 = use uniform value
 fn use_uniform_metallic(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     enabled: u32,
 ) {
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     state.set_use_uniform_metallic(enabled != 0);
 }
 
@@ -284,10 +281,10 @@ fn use_uniform_metallic(
 /// # Arguments
 /// * `enabled` — 0 = sample from texture (default), 1 = use uniform value
 fn use_uniform_roughness(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     enabled: u32,
 ) {
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     state.set_use_uniform_roughness(enabled != 0);
 }
 
@@ -298,10 +295,10 @@ fn use_uniform_roughness(
 ///
 /// Applies to Mode 2 (PBR) and Mode 3 (Specular-Shininess).
 fn use_uniform_emissive(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     enabled: u32,
 ) {
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     state.set_use_uniform_emissive(enabled != 0);
 }
 
@@ -310,10 +307,10 @@ fn use_uniform_emissive(
 /// # Arguments
 /// * `enabled` — 0 = sample from specular texture (default), 1 = use uniform specular RGB
 fn use_uniform_specular(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     enabled: u32,
 ) {
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     state.set_use_uniform_specular(enabled != 0);
 }
 
@@ -324,9 +321,9 @@ fn use_uniform_specular(
 ///
 /// When enabled, matcap slots provide stylized reflection instead of the procedural sky.
 fn use_matcap_reflection(
-    mut caller: Caller<'_, GameStateWithConsole<ZInput, ZFFIState>>,
+    mut caller: Caller<'_, ZGameContext>,
     enabled: u32,
 ) {
-    let state = &mut caller.data_mut().console;
+    let state = &mut caller.data_mut().ffi;
     state.set_use_matcap_reflection(enabled != 0);
 }
