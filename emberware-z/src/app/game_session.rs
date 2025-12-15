@@ -22,7 +22,6 @@ impl emberware_core::console::Audio for DummyAudio {
     ) {
     }
     fn stop(&mut self, _handle: emberware_core::console::SoundHandle) {}
-    fn set_rollback_mode(&mut self, _rolling_back: bool) {}
 }
 
 /// Load WASM bytes and optional data pack from a ROM file path
@@ -283,21 +282,42 @@ impl App {
             false // No render
         };
 
-        // Process audio commands after rendering
-        // Use mem::take to avoid cloning - takes ownership and leaves empty vecs
-        let (audio_commands, sounds) = if let Some(game) = session.runtime.game_mut() {
-            let console_state = game.console_state_mut();
-            (
-                std::mem::take(&mut console_state.audio_commands),
-                console_state.sounds.clone(), // sounds must be cloned (contains Arcs, shared with audio system)
-            )
-        } else {
-            (Vec::new(), Vec::new())
-        };
+        // Generate audio samples after rendering (only on confirmed frames)
+        // Audio state is in rollback state, which was already advanced during update
+        if did_render {
+            // Get tick rate and sample rate before borrowing game mutably
+            let tick_rate = session.runtime.tick_rate();
+            let sample_rate = session
+                .runtime
+                .audio()
+                .map(|a| a.sample_rate())
+                .unwrap_or(crate::audio::OUTPUT_SAMPLE_RATE);
 
-        if !audio_commands.is_empty() {
-            if let Some(audio) = session.runtime.audio_mut() {
-                audio.process_commands(&audio_commands, &sounds);
+            // Generate audio samples from rollback state
+            let audio_buffer = if let Some(game) = session.runtime.game_mut() {
+                // Clone sounds slice (contains Arcs, cheap to clone)
+                let sounds: Vec<Option<crate::audio::Sound>> =
+                    game.console_state().sounds.clone();
+                let rollback_state = game.rollback_state_mut();
+
+                let mut buffer = Vec::new();
+                crate::audio::generate_audio_frame(
+                    &mut rollback_state.audio,
+                    &sounds,
+                    tick_rate,
+                    sample_rate,
+                    &mut buffer,
+                );
+                Some(buffer)
+            } else {
+                None
+            };
+
+            // Push samples to audio output (separate borrow)
+            if let Some(buffer) = audio_buffer {
+                if let Some(audio) = session.runtime.audio_mut() {
+                    audio.push_samples(&buffer);
+                }
             }
         }
 

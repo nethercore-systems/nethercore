@@ -74,10 +74,10 @@ use wasmtime::{Caller, Extern, Linker, Memory};
 use emberware_core::wasm::WasmGameContext;
 
 use crate::console::ZInput;
-use crate::state::ZFFIState;
+use crate::state::{ZFFIState, ZRollbackState};
 
 /// Type alias for Emberware Z WASM game context
-pub type ZGameContext = WasmGameContext<ZInput, ZFFIState, ()>;
+pub type ZGameContext = WasmGameContext<ZInput, ZFFIState, ZRollbackState>;
 
 /// Register all Emberware Z FFI functions with the linker
 pub fn register_z_ffi(linker: &mut Linker<ZGameContext>) -> Result<()> {

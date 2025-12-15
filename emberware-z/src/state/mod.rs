@@ -7,9 +7,11 @@
 mod config;
 mod ffi_state;
 mod resources;
+mod rollback_state;
 
 pub use config::ZInitConfig;
 pub use ffi_state::ZFFIState;
+pub use rollback_state::{AudioPlaybackState, ChannelState, ZRollbackState, MAX_CHANNELS};
 pub use resources::{
     Font, KeyframeGpuInfo, KeyframeSource, PendingKeyframes, PendingMesh, PendingMeshPacked,
     PendingSkeleton, PendingTexture, SkeletonGpuInfo,

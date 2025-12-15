@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 use ggrs::GgrsError;
 
-use crate::console::{Audio, Console};
+use crate::console::Console;
 use crate::rollback::{RollbackSession, SessionEvent};
 use crate::wasm::GameInstance;
 
@@ -196,10 +196,8 @@ impl<C: Console> Runtime<C> {
                         .handle_requests(game, requests)
                         .map_err(|e| anyhow::anyhow!("GGRS handle_requests failed: {}", e))?;
 
-                    // Update audio rollback mode
-                    if let Some(audio) = &mut self.audio {
-                        audio.set_rollback_mode(session.is_rolling_back());
-                    }
+                    // Note: Audio rollback is automatic via ConsoleRollbackState
+                    // Audio state is part of snapshot, no explicit mode tracking needed
 
                     // Execute each AdvanceFrame with its inputs
                     for inputs in advance_inputs {
@@ -460,7 +458,6 @@ mod tests {
         let mut runtime = Runtime::new(console);
 
         let audio = TestAudio {
-            rollback_mode: false,
             play_count: 0,
             stop_count: 0,
         };
@@ -475,7 +472,6 @@ mod tests {
         let mut runtime = Runtime::new(console);
 
         let audio = TestAudio {
-            rollback_mode: false,
             play_count: 0,
             stop_count: 0,
         };

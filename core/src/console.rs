@@ -205,9 +205,6 @@ pub trait Audio: Send {
 
     /// Stop a sound
     fn stop(&mut self, handle: SoundHandle);
-
-    /// Set rollback mode (mutes audio during rollback replay)
-    fn set_rollback_mode(&mut self, rolling_back: bool);
 }
 
 /// Handle to a loaded sound

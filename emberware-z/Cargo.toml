@@ -23,7 +23,8 @@ wgpu = { workspace = true }
 winit = { workspace = true }
 
 # Audio
-rodio = { workspace = true }
+cpal = { workspace = true }
+ringbuf = { workspace = true }
 
 # Input
 gilrs = { workspace = true }

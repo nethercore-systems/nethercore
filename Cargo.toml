@@ -48,7 +48,8 @@ winit = "0.30"
 wgpu = "27"
 
 # Audio
-rodio = "0.21"
+cpal = "0.16"
+ringbuf = "0.4"
 
 # Input
 gilrs = "0.11"

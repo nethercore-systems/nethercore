@@ -90,11 +90,8 @@ pub struct ZFFIState {
     pub fonts: Vec<Font>,
     pub current_font: u32,
 
-    // Audio system
-    #[allow(dead_code)] // Used in full audio implementation
+    // Audio system (sounds stored here for FFI access, playback state in ZRollbackState)
     pub sounds: Vec<Option<crate::audio::Sound>>,
-    pub audio_commands: Vec<crate::audio::AudioCommand>,
-    #[allow(dead_code)] // Used in full audio implementation
     pub next_sound_handle: u32,
 
     // Init configuration
@@ -184,7 +181,6 @@ impl Default for ZFFIState {
             fonts: Vec::new(),
             current_font: 0, // 0 = built-in font
             sounds: Vec::new(),
-            audio_commands: Vec::new(),
             next_sound_handle: 1, // 0 reserved for invalid
             init_config: ZInitConfig::default(),
             model_matrices: model_matrices.clone(),
@@ -717,7 +713,8 @@ impl ZFFIState {
     /// - render_pass (immediate draw commands)
     /// - model_matrices (per-draw transforms)
     /// - deferred_commands (billboards, sprites, text, sky)
-    /// - audio_commands (sound effects, music)
+    ///
+    /// Note: Audio playback state is in ZRollbackState, not here.
     ///
     /// One-time init resources (pending_textures, pending_meshes) are NOT cleared here.
     /// They are drained once after init() in app.rs and never accumulate again.
@@ -751,9 +748,6 @@ impl ZFFIState {
         // Clear combined MVP+shading state pool
         self.mvp_shading_states.clear();
         self.mvp_shading_map.clear();
-
-        // Note: audio_commands is NOT cleared here - it's consumed via std::mem::take()
-        // in game_session.rs after update() runs, preserving commands from both update() and render()
 
         // Reset shading state pool for next frame
         self.shading_states.clear();
