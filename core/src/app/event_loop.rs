@@ -59,9 +59,9 @@ pub trait ConsoleApp<C: Console>: Sized {
 
     /// Render one frame (game + UI composite).
     ///
-    /// Called once per display frame. Return `true` to request another
-    /// frame immediately, or `false` if the app is idle.
-    fn render_frame(&mut self) -> anyhow::Result<bool>;
+    /// Called once per display frame. Frame scheduling is handled by
+    /// `next_frame_time()` in `about_to_wait()`.
+    fn render_frame(&mut self) -> anyhow::Result<()>;
 
     /// Handle a window event.
     ///
@@ -160,15 +160,8 @@ impl<C: Console, A: ConsoleApp<C>> ApplicationHandler for AppEventHandler<C, A> 
                     app.update_input();
 
                     // Render frame
-                    match app.render_frame() {
-                        Ok(should_redraw) => {
-                            if should_redraw || !matches!(app.current_mode(), AppMode::Library) {
-                                app.request_redraw();
-                            }
-                        }
-                        Err(e) => {
-                            tracing::error!("Render error: {}", e);
-                        }
+                    if let Err(e) = app.render_frame() {
+                        tracing::error!("Render error: {}", e);
                     }
 
                     // Check if app wants to exit

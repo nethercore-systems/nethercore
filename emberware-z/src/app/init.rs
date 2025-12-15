@@ -76,7 +76,6 @@ impl App {
             last_error: None,
             wasm_engine,
             game_session: None,
-            needs_redraw: true,
             next_egui_repaint: None,
             cached_egui_shapes: Vec::new(),
             cached_egui_tris: Vec::new(),

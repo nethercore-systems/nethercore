@@ -76,8 +76,6 @@ pub struct App {
     pub(crate) wasm_engine: Option<WasmEngine>,
     /// Active game session (only present in Playing mode)
     pub(crate) game_session: Option<GameSession<EmberwareZ>>,
-    /// Whether a redraw is needed (UI state changed)
-    pub(crate) needs_redraw: bool,
     /// Next scheduled egui repaint time (for animations)
     pub(crate) next_egui_repaint: Option<Instant>,
     // Egui optimization cache
@@ -582,9 +580,6 @@ impl App {
                 self.handle_ui_action(action);
             }
         }
-
-        // Request next frame
-        self.request_redraw_if_needed();
     }
 
     /// Prepare debug panel data before the egui frame
@@ -618,14 +613,7 @@ impl App {
         })
     }
 
-    fn request_redraw_if_needed(&mut self) {
-        // Reset needs_redraw flag after each frame
-        // The actual redraw scheduling is handled by next_frame_time()
-        self.needs_redraw = false;
-    }
-
-    fn mark_needs_redraw(&mut self) {
-        self.needs_redraw = true;
+    fn trigger_redraw(&mut self) {
         if let Some(window) = &self.window {
             window.request_redraw();
         }
@@ -641,10 +629,9 @@ impl emberware_core::app::ConsoleApp<EmberwareZ> for App {
         self.on_window_created(window, event_loop)
     }
 
-    fn render_frame(&mut self) -> anyhow::Result<bool> {
+    fn render_frame(&mut self) -> anyhow::Result<()> {
         self.render();
-        // Return whether we need immediate redraw (for debug stepping, transitions, etc.)
-        Ok(self.needs_redraw)
+        Ok(())
     }
 
     fn on_window_event(&mut self, event: &WindowEvent) -> bool {
@@ -652,7 +639,7 @@ impl emberware_core::app::ConsoleApp<EmberwareZ> for App {
         if let (Some(egui_state), Some(window)) = (&mut self.egui_state, &self.window) {
             let response = egui_state.on_window_event(window, event);
             if response.consumed {
-                self.mark_needs_redraw();
+                self.trigger_redraw();
                 return true; // Event consumed
             }
 
