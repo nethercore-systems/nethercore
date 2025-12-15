@@ -178,11 +178,18 @@ impl<C: Console, A: ConsoleApp<C>> ApplicationHandler for AppEventHandler<C, A> 
         if let Some(app) = &self.app {
             match app.next_frame_time() {
                 Some(next_time) => {
-                    event_loop.set_control_flow(ControlFlow::WaitUntil(next_time));
-                    // Still request redraw so we wake up at the right time
-                    app.request_redraw();
+                    let now = std::time::Instant::now();
+                    if next_time <= now {
+                        // Time to render now - request redraw and wait for it
+                        app.request_redraw();
+                        event_loop.set_control_flow(ControlFlow::Wait);
+                    } else {
+                        // Schedule wake-up for future render (e.g., next game tick or egui animation)
+                        event_loop.set_control_flow(ControlFlow::WaitUntil(next_time));
+                    }
                 }
                 None => {
+                    // No scheduled render, wait for events
                     event_loop.set_control_flow(ControlFlow::Wait);
                 }
             }
