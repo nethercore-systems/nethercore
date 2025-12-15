@@ -9,9 +9,13 @@
 - There is no "console agnostic library", its only the Z app.
 - This means we would have different apps for different consoles, which is wrong
 - A console should be something which "runs a game" within the library, something without a runtime which is managed by the host app.
+- The console shouldnt need to manage its own runtime, and should in a sense be a "black box" that the app can run, through basic functions like Update and Render (which in turn call the wasm functions and handle state and such). The Rollback should be completely console agnostic etc.
 - This better architecture will reduce code reuse significantly and allow expansion of future consoles.
 - Z App needs to be removed with a new Library or other local app to use.
 - This means we may need to implement console specific things like a DebugPanel (receives a &mut DebugPanel as an api) but the console just defines the stats/layout of it.
+- When opening the app, it should launch the library (unless parameters are passed)
+- The library must display all available games, for all avialable consoles.
+- When a game is launched, we must initialize the console, load the rom, handle all of that stuff.
 
 ### **[STABILITY] Reduce unwrap/expect Usage**
 
