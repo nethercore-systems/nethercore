@@ -5,6 +5,14 @@
 
 ## TODO
 
+### **[CRITICAL] Architure Flaw: Library app is actually Z Specific**
+- There is no "console agnostic library", its only the Z app.
+- This means we would have different apps for different consoles, which is wrong
+- A console should be something which "runs a game" within the library, something without a runtime which is managed by the host app.
+- This better architecture will reduce code reuse significantly and allow expansion of future consoles.
+- Z App needs to be removed with a new Library or other local app to use.
+- This means we may need to implement console specific things like a DebugPanel (receives a &mut DebugPanel as an api) but the console just defines the stats/layout of it.
+
 ### **[STABILITY] Reduce unwrap/expect Usage**
 
 **Current State:**

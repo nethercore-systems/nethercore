@@ -84,6 +84,8 @@ impl App {
             last_window_size: (960, 540),
             debug_panel: DebugPanel::new(),
             frame_controller: FrameController::new(),
+            next_tick: now,
+            last_sim_rendered: false,
         }
     }
 

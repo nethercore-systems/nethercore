@@ -76,6 +76,11 @@ impl<C: Console> Runtime<C> {
         self.tick_duration = Duration::from_secs_f64(1.0 / tick_rate as f64);
     }
 
+    /// Get the tick duration (time per tick, inverse of tick rate)
+    pub fn tick_duration(&self) -> Duration {
+        self.tick_duration
+    }
+
     /// Load a game instance
     pub fn load_game(&mut self, game: GameInstance<C::Input, C::State>) {
         self.game = Some(game);

@@ -2,8 +2,23 @@
 //!
 //! This module provides console-agnostic event loop infrastructure that works
 //! with any fantasy console implementing the Console trait.
+//!
+//! ## Event Loop Model
+//!
+//! The event loop follows a clear separation of concerns:
+//!
+//! - **WindowEvent**: Handle input, mark `needs_redraw = true`
+//! - **about_to_wait**: If game mode, advance simulation when tick is due; set ControlFlow;
+//!   request redraw only if `needs_redraw` is true
+//! - **RedrawRequested**: Render game + UI, clear `needs_redraw`
+//!
+//! This ensures:
+//! - Library mode is pure event-driven (`ControlFlow::Wait`)
+//! - Game mode uses `WaitUntil(next_tick)` without busy-spinning
+//! - Redraws only happen when state actually changed
 
 use std::sync::Arc;
+use std::time::Instant;
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
@@ -13,7 +28,7 @@ use winit::{
 
 use crate::console::Console;
 
-use super::types::{AppMode, RuntimeError};
+use super::types::RuntimeError;
 
 /// Trait for console-specific application behavior.
 ///
@@ -21,33 +36,18 @@ use super::types::{AppMode, RuntimeError};
 /// rendering, input, and UI. The generic event loop in core will call
 /// these methods at appropriate times.
 ///
-/// # Example
+/// ## Key Design
 ///
-/// ```rust,ignore
-/// use emberware_core::app::event_loop::ConsoleApp;
-/// use emberware_core::console::Console;
+/// Simulation and rendering are separated:
+/// - `advance_simulation()` is called from `about_to_wait` when a tick is due
+/// - `render()` is called from `RedrawRequested` and does NOT advance simulation
 ///
-/// struct ZApp {
-///     graphics: ZGraphics,
-///     audio: ZAudio,
-///     // ... other fields
-/// }
-///
-/// impl ConsoleApp<EmberwareZ> for ZApp {
-///     fn on_window_created(&mut self, window: Arc<Window>) -> Result<()> {
-///         // Initialize graphics with window
-///         Ok(())
-///     }
-///
-///     fn render_frame(&mut self) -> Result<bool> {
-///         // Render game + UI
-///         Ok(true) // Request redraw
-///     }
-///
-///     // ... implement other methods
-/// }
-/// ```
+/// The `needs_redraw` flag controls when redraws are requested:
+/// - Set true on input events, simulation advances, mode changes
+/// - Cleared after rendering
 pub trait ConsoleApp<C: Console>: Sized {
+    // === Window lifecycle ===
+
     /// Called when the window is created or resumed.
     ///
     /// Initialize graphics and any window-dependent resources here.
@@ -57,29 +57,61 @@ pub trait ConsoleApp<C: Console>: Sized {
         event_loop: &ActiveEventLoop,
     ) -> anyhow::Result<()>;
 
-    /// Render one frame (game + UI composite).
-    ///
-    /// Called once per display frame. Return `true` to request another
-    /// frame immediately, or `false` if the app is idle.
-    fn render_frame(&mut self) -> anyhow::Result<bool>;
-
     /// Handle a window event.
     ///
-    /// Return `true` if the event was consumed (prevents default handling).
+    /// Return `true` if the event was consumed (e.g., by egui).
+    /// When true, the event loop will mark `needs_redraw`.
     fn on_window_event(&mut self, event: &WindowEvent) -> bool;
 
-    /// Update input state before game frame execution.
+    // === Simulation control ===
+
+    /// Check if a game is actively running.
     ///
-    /// Called once per frame before `render_frame()`.
-    fn update_input(&mut self);
+    /// Returns true when there's an active game session.
+    /// Used to determine whether to use `WaitUntil` (game) or `Wait` (library).
+    fn has_active_game(&self) -> bool;
+
+    /// Get the scheduled time for next simulation tick.
+    ///
+    /// Only meaningful when `has_active_game()` returns true.
+    fn next_tick(&self) -> Instant;
+
+    /// Advance simulation by one tick.
+    ///
+    /// Called from `about_to_wait` when `now >= next_tick()`.
+    /// Should run the game's update logic, execute draw commands, process audio.
+    fn advance_simulation(&mut self);
+
+    /// Update next_tick after simulation.
+    ///
+    /// Called after `advance_simulation()`. Should set `next_tick += tick_duration`.
+    fn update_next_tick(&mut self);
+
+    // === Rendering ===
+
+    /// Render the current frame (game + UI).
+    ///
+    /// Does NOT advance simulation - that's done in `advance_simulation()`.
+    /// Called from `RedrawRequested`.
+    fn render(&mut self);
+
+    // === Redraw flag ===
+
+    /// Check if a redraw is needed.
+    fn needs_redraw(&self) -> bool;
+
+    /// Mark that a redraw is needed.
+    fn mark_needs_redraw(&mut self);
+
+    /// Clear the redraw flag after rendering.
+    fn clear_needs_redraw(&mut self);
+
+    // === Application lifecycle ===
 
     /// Handle a critical runtime error.
     ///
     /// Examples: game crash, network disconnect, WASM panic
     fn on_runtime_error(&mut self, error: RuntimeError);
-
-    /// Get the current application mode.
-    fn current_mode(&self) -> &AppMode;
 
     /// Check if application should exit.
     fn should_exit(&self) -> bool;
@@ -87,7 +119,9 @@ pub trait ConsoleApp<C: Console>: Sized {
     /// Mark that application should exit.
     fn request_exit(&mut self);
 
-    /// Request a redraw from the event loop.
+    /// Request a redraw from the window.
+    ///
+    /// Calls `window.request_redraw()`.
     fn request_redraw(&self);
 }
 
@@ -113,9 +147,7 @@ impl<C: Console, A: ConsoleApp<C>> AppEventHandler<C, A> {
 impl<C: Console, A: ConsoleApp<C>> ApplicationHandler for AppEventHandler<C, A> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if let Some(app) = &mut self.app {
-            event_loop.set_control_flow(ControlFlow::Poll);
-
-            // Create window
+            // Create window (don't set control flow here - about_to_wait will do it)
             let window_attributes = Window::default_attributes()
                 .with_title("Emberware")
                 .with_inner_size(winit::dpi::LogicalSize::new(1280, 720));
@@ -143,9 +175,11 @@ impl<C: Console, A: ConsoleApp<C>> ApplicationHandler for AppEventHandler<C, A> 
         event: WindowEvent,
     ) {
         if let Some(app) = &mut self.app {
-            // Let app handle the event first
+            // Let app handle the event first (egui, input, etc.)
             if app.on_window_event(&event) {
-                return; // Event was consumed
+                app.mark_needs_redraw();
+                app.request_redraw(); // Request immediately for responsive input
+                return;
             }
 
             // Handle common events
@@ -155,20 +189,9 @@ impl<C: Console, A: ConsoleApp<C>> ApplicationHandler for AppEventHandler<C, A> 
                     event_loop.exit();
                 }
                 WindowEvent::RedrawRequested => {
-                    // Update input
-                    app.update_input();
-
-                    // Render frame
-                    match app.render_frame() {
-                        Ok(should_redraw) => {
-                            if should_redraw || !matches!(app.current_mode(), AppMode::Library) {
-                                app.request_redraw();
-                            }
-                        }
-                        Err(e) => {
-                            tracing::error!("Render error: {}", e);
-                        }
-                    }
+                    // ONLY render here - simulation already happened in about_to_wait
+                    app.render();
+                    app.clear_needs_redraw();
 
                     // Check if app wants to exit
                     if app.should_exit() {
@@ -180,9 +203,27 @@ impl<C: Console, A: ConsoleApp<C>> ApplicationHandler for AppEventHandler<C, A> 
         }
     }
 
-    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        if let Some(app) = &self.app {
-            app.request_redraw();
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        if let Some(app) = &mut self.app {
+            if app.has_active_game() {
+                // GAME MODE: Check if tick is due
+                let now = Instant::now();
+                if now >= app.next_tick() {
+                    // Advance simulation HERE (not in RedrawRequested!)
+                    app.advance_simulation();
+                    app.update_next_tick(); // next_tick += tick_duration
+                    app.mark_needs_redraw();
+                }
+                event_loop.set_control_flow(ControlFlow::WaitUntil(app.next_tick()));
+            } else {
+                // LIBRARY MODE: pure event-driven
+                event_loop.set_control_flow(ControlFlow::Wait);
+            }
+
+            // Request redraw only if state changed
+            if app.needs_redraw() {
+                app.request_redraw();
+            }
         }
     }
 }
@@ -202,7 +243,7 @@ impl<C: Console, A: ConsoleApp<C>> ApplicationHandler for AppEventHandler<C, A> 
 /// ```
 pub fn run<C: Console, A: ConsoleApp<C>>(app: A) -> anyhow::Result<()> {
     let event_loop = EventLoop::new()?;
-    event_loop.set_control_flow(ControlFlow::Poll);
+    // Don't set control flow here - about_to_wait will set it dynamically
 
     let mut handler = AppEventHandler::new(app);
     event_loop.run_app(&mut handler)?;

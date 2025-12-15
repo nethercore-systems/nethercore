@@ -88,6 +88,11 @@ pub struct App {
     pub(crate) debug_panel: DebugPanel,
     /// Frame controller for pause/step/time scale
     pub(crate) frame_controller: FrameController,
+    /// Next scheduled simulation tick (used for WaitUntil in game mode)
+    pub(crate) next_tick: Instant,
+    /// Whether the last advance_simulation() call rendered new game content
+    /// Used by render() to know whether to render new game content or blit the last frame
+    pub(crate) last_sim_rendered: bool,
 }
 
 impl App {
@@ -109,71 +114,9 @@ impl App {
             self.debug_stats.frame_times.pop_front();
         }
 
-        // Handle Playing mode: run game frame first
-        let mut game_rendered_this_frame = false;
-        if matches!(self.mode, AppMode::Playing { .. }) {
-            // Initialize game session if needed (CLI launch case)
-            // When launched via CLI with a game_id, the app starts in Playing mode
-            // but start_game() was never called (unlike Library UI flow)
-            if self.game_session.is_none() {
-                if let AppMode::Playing { ref game_id } = self.mode {
-                    let game_id_owned = game_id.clone();
-                    tracing::info!(
-                        "Initializing game session for CLI launch: {}",
-                        game_id_owned
-                    );
-                    if let Err(e) = self.start_game(&game_id_owned) {
-                        self.handle_runtime_error(e);
-                        return;
-                    }
-                }
-            }
-
-            // Handle session events (disconnect, desync, network interruption)
-            if let Err(e) = self.handle_session_events() {
-                self.handle_runtime_error(e);
-                return;
-            }
-
-            // Update debug stats from session
-            self.update_session_stats();
-
-            // Run game frame (update + render)
-            let (game_running, did_render) = match self.run_game_frame() {
-                Ok((running, rendered)) => {
-                    // Only execute draw commands if we rendered
-                    if rendered {
-                        if let Some(session) = &mut self.game_session {
-                            if let Some(graphics) = &mut self.graphics {
-                                // Execute draw commands (resources already flushed post-init)
-                                if let Some(game) = session.runtime.game_mut() {
-                                    let state = game.console_state_mut();
-                                    session
-                                        .resource_manager
-                                        .execute_draw_commands(graphics, state);
-                                }
-                            }
-                        }
-                    }
-                    (running, rendered)
-                }
-                Err(e) => {
-                    self.handle_runtime_error(e);
-                    return;
-                }
-            };
-
-            game_rendered_this_frame = did_render;
-
-            // If game requested quit, return to library
-            if !game_running {
-                self.game_session = None;
-                self.mode = AppMode::Library;
-                self.local_games =
-                    crate::library::get_local_games(&crate::library::ZDataDirProvider);
-                return;
-            }
-        }
+        // Simulation is now done in advance_simulation(), called from about_to_wait.
+        // We just use the result (last_sim_rendered) to know if we have new content to render.
+        let game_rendered_this_frame = self.last_sim_rendered;
 
         // Pre-collect values to avoid borrow conflicts
         let mode = self.mode.clone();
@@ -279,8 +222,8 @@ impl App {
         // Track if debug values were changed (set inside closure)
         let mut debug_values_changed = false;
 
-        // Collect debug stats for overlay only when needed (avoid VecDeque clones every frame)
-        let debug_stats = if debug_overlay {
+        // Collect debug stats for overlay only in game mode (meaningless in library mode)
+        let debug_stats = if debug_overlay && matches!(mode, AppMode::Playing { .. }) {
             Some(DebugStats {
                 frame_times: self.debug_stats.frame_times.clone(),
                 game_tick_times: self.debug_stats.game_tick_times.clone(),
@@ -572,9 +515,7 @@ impl App {
                 self.handle_ui_action(action);
             }
         }
-
-        // Request next frame
-        self.request_redraw_if_needed();
+        // Note: We no longer request redraws here - the event loop handles that
     }
 
     /// Prepare debug panel data before the egui frame
@@ -608,29 +549,88 @@ impl App {
         })
     }
 
-    fn request_redraw_if_needed(&mut self) {
-        // In Playing mode or Library/Settings with Poll control flow,
-        // we request redraws continuously to ensure UI responsiveness.
-        // The egui dirty-checking and mesh caching prevents unnecessary GPU work.
-        let needs_redraw = true;
-
-        if needs_redraw {
-            if let Some(window) = &self.window {
-                window.request_redraw();
-            }
-            self.needs_redraw = false;
-        }
-    }
-
     fn mark_needs_redraw(&mut self) {
         self.needs_redraw = true;
-        if let Some(window) = &self.window {
-            window.request_redraw();
+    }
+
+    /// Advance simulation by one tick
+    ///
+    /// Called from the event loop's about_to_wait when a tick is due.
+    /// This runs the game's update logic, NOT rendering.
+    fn advance_simulation_internal(&mut self) {
+        // Reset last_sim_rendered - will be set by run_game_frame if it rendered
+        self.last_sim_rendered = false;
+
+        // Only run simulation if in Playing mode
+        if !matches!(self.mode, AppMode::Playing { .. }) {
+            return;
+        }
+
+        // Initialize game session if needed (CLI launch case)
+        // When launched via CLI with a game_id, the app starts in Playing mode
+        // but start_game() was never called (unlike Library UI flow)
+        if self.game_session.is_none() {
+            if let AppMode::Playing { ref game_id } = self.mode {
+                let game_id_owned = game_id.clone();
+                tracing::info!(
+                    "Initializing game session for CLI launch: {}",
+                    game_id_owned
+                );
+                if let Err(e) = self.start_game(&game_id_owned) {
+                    self.handle_runtime_error(e);
+                    return;
+                }
+            }
+        }
+
+        // Handle session events (disconnect, desync, network interruption)
+        if let Err(e) = self.handle_session_events() {
+            self.handle_runtime_error(e);
+            return;
+        }
+
+        // Update debug stats from session
+        self.update_session_stats();
+
+        // Run game frame (update + render commands)
+        let (game_running, did_render) = match self.run_game_frame() {
+            Ok((running, rendered)) => {
+                // Only execute draw commands if we rendered
+                if rendered {
+                    if let Some(session) = &mut self.game_session {
+                        if let Some(graphics) = &mut self.graphics {
+                            // Execute draw commands (resources already flushed post-init)
+                            if let Some(game) = session.runtime.game_mut() {
+                                let state = game.console_state_mut();
+                                session
+                                    .resource_manager
+                                    .execute_draw_commands(graphics, state);
+                            }
+                        }
+                    }
+                }
+                (running, rendered)
+            }
+            Err(e) => {
+                self.handle_runtime_error(e);
+                return;
+            }
+        };
+
+        self.last_sim_rendered = did_render;
+
+        // If game requested quit, return to library
+        if !game_running {
+            self.game_session = None;
+            self.mode = AppMode::Library;
+            self.local_games = crate::library::get_local_games(&crate::library::ZDataDirProvider);
         }
     }
 }
 
 impl emberware_core::app::ConsoleApp<EmberwareZ> for App {
+    // === Window lifecycle ===
+
     fn on_window_created(
         &mut self,
         window: Arc<Window>,
@@ -639,17 +639,18 @@ impl emberware_core::app::ConsoleApp<EmberwareZ> for App {
         self.on_window_created(window, event_loop)
     }
 
-    fn render_frame(&mut self) -> anyhow::Result<bool> {
-        self.render();
-        Ok(true) // Always request redraw
-    }
-
     fn on_window_event(&mut self, event: &WindowEvent) -> bool {
         // Let egui handle the event first
         if let (Some(egui_state), Some(window)) = (&mut self.egui_state, &self.window) {
             let response = egui_state.on_window_event(window, event);
-            if response.consumed {
+
+            // Mark redraw if egui wants one (hover effects, animations, etc.)
+            // Don't call request_redraw() immediately - let about_to_wait batch events
+            if response.repaint {
                 self.mark_needs_redraw();
+            }
+
+            if response.consumed {
                 return true; // Event consumed
             }
 
@@ -660,10 +661,12 @@ impl emberware_core::app::ConsoleApp<EmberwareZ> for App {
                 WindowEvent::Resized(new_size) => {
                     tracing::debug!("Window resized to {:?}", new_size);
                     self.handle_resize(*new_size);
+                    self.mark_needs_redraw();
                     false
                 }
                 WindowEvent::ScaleFactorChanged { .. } => {
                     tracing::debug!("DPI scale factor changed");
+                    self.mark_needs_redraw();
                     false
                 }
                 WindowEvent::KeyboardInput {
@@ -683,10 +686,12 @@ impl emberware_core::app::ConsoleApp<EmberwareZ> for App {
                 WindowEvent::Resized(new_size) => {
                     tracing::debug!("Window resized to {:?}", new_size);
                     self.handle_resize(*new_size);
+                    self.mark_needs_redraw();
                     false
                 }
                 WindowEvent::ScaleFactorChanged { .. } => {
                     tracing::debug!("DPI scale factor changed");
+                    self.mark_needs_redraw();
                     false
                 }
                 WindowEvent::KeyboardInput {
@@ -700,16 +705,53 @@ impl emberware_core::app::ConsoleApp<EmberwareZ> for App {
         }
     }
 
-    fn update_input(&mut self) {
-        self.update_input();
+    // === Simulation control ===
+
+    fn has_active_game(&self) -> bool {
+        self.game_session.is_some()
     }
+
+    fn next_tick(&self) -> Instant {
+        self.next_tick
+    }
+
+    fn advance_simulation(&mut self) {
+        // Update input before advancing simulation
+        self.update_input();
+        // Run the actual simulation logic
+        self.advance_simulation_internal();
+    }
+
+    fn update_next_tick(&mut self) {
+        if let Some(session) = &self.game_session {
+            self.next_tick += session.runtime.tick_duration();
+        }
+    }
+
+    // === Rendering ===
+
+    fn render(&mut self) {
+        self.render();
+    }
+
+    // === Redraw flag ===
+
+    fn needs_redraw(&self) -> bool {
+        self.needs_redraw
+    }
+
+    fn mark_needs_redraw(&mut self) {
+        self.needs_redraw = true;
+    }
+
+    fn clear_needs_redraw(&mut self) {
+        self.needs_redraw = false;
+    }
+
+    // === Application lifecycle ===
 
     fn on_runtime_error(&mut self, error: RuntimeError) {
         self.handle_runtime_error(error);
-    }
-
-    fn current_mode(&self) -> &AppMode {
-        &self.mode
     }
 
     fn should_exit(&self) -> bool {
