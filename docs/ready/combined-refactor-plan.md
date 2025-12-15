@@ -133,15 +133,29 @@ impl RollbackStateManager {
 
 ### 2.1 Add Dependencies
 
+**File:** `Cargo.toml` (workspace root)
+
+```toml
+[workspace.dependencies]
+# ... existing ...
+
+# Audio (add these)
+cpal = "0.16"
+ringbuf = "0.4"
+
+# Remove rodio from workspace deps after Phase 2 is complete
+# rodio = "0.21"
+```
+
 **File:** `emberware-z/Cargo.toml`
 
 ```toml
 # Remove
-# rodio = "0.21"
+# rodio.workspace = true
 
 # Add
-cpal = "0.15"
-ringbuf = "0.4"
+cpal.workspace = true
+ringbuf.workspace = true
 ```
 
 ### 2.2 Create ZRollbackState
@@ -288,7 +302,8 @@ impl Console for EmberwareZ {
 
 | File | Changes |
 |------|---------|
-| `emberware-z/Cargo.toml` | Remove rodio, add cpal + ringbuf |
+| `Cargo.toml` (workspace) | Add cpal 0.16 + ringbuf 0.4 as workspace deps |
+| `emberware-z/Cargo.toml` | Remove rodio, add cpal.workspace + ringbuf.workspace |
 | `emberware-z/src/audio.rs` | Complete rewrite (~400 lines) |
 | `emberware-z/src/state/rollback_state.rs` | NEW file (~60 lines) |
 | `emberware-z/src/state/mod.rs` | Export rollback_state |
@@ -644,7 +659,7 @@ Phase 4: Cleanup (~10 files deleted, ~100 lines changed)
 | `GameStateSnapshot { data, checksum, frame }` | `GameStateSnapshot { data, console_data, checksum, frame }` |
 | `Console::State` | `Console::State` (FFI) + `Console::RollbackState` (rollback) |
 | `AudioCommand` buffering | Direct `ZRollbackState.audio` modification |
-| `rodio` streaming | `cpal` + `ringbuf` per-frame |
+| `rodio` streaming | `cpal` 0.16 + `ringbuf` per-frame |
 | `set_rollback_mode()` | (removed - automatic via state rollback) |
 
 ---
