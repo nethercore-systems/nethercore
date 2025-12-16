@@ -139,9 +139,10 @@ impl<C: Console, A: ConsoleApp<C>> ApplicationHandler for AppEventHandler<C, A> 
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if let Some(app) = &mut self.app {
             // Create window (don't set control flow here - about_to_wait will do it)
+            // Note: minimum size is set by the app in on_window_created() based on game resolution
             let window_attributes = Window::default_attributes()
                 .with_title("Emberware")
-                .with_inner_size(winit::dpi::LogicalSize::new(1280, 720));
+                .with_inner_size(winit::dpi::LogicalSize::new(960, 540));
 
             match event_loop.create_window(window_attributes) {
                 Ok(window) => {

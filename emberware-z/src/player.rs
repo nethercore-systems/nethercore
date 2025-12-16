@@ -31,6 +31,112 @@ use crate::audio;
 use crate::console::EmberwareZ;
 use crate::input::InputManager;
 
+/// Simple settings panel for the player app
+struct PlayerSettingsPanel {
+    /// Whether the panel is visible
+    visible: bool,
+    /// Temporary scale mode (applied on change)
+    scale_mode: emberware_core::app::config::ScaleMode,
+    /// Whether fullscreen is enabled
+    fullscreen: bool,
+}
+
+impl PlayerSettingsPanel {
+    fn new(config: &emberware_core::app::config::Config, fullscreen: bool) -> Self {
+        Self {
+            visible: false,
+            scale_mode: config.video.scale_mode,
+            fullscreen,
+        }
+    }
+
+    fn toggle(&mut self) {
+        self.visible = !self.visible;
+    }
+
+    /// Render the settings panel and return true if settings changed
+    fn render(&mut self, ctx: &egui::Context) -> SettingsAction {
+        let mut action = SettingsAction::None;
+
+        if !self.visible {
+            return action;
+        }
+
+        egui::Window::new("Settings")
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ctx, |ui| {
+                ui.heading("Video");
+                ui.add_space(5.0);
+
+                // Fullscreen toggle
+                if ui.checkbox(&mut self.fullscreen, "Fullscreen (F11)").changed() {
+                    action = SettingsAction::ToggleFullscreen(self.fullscreen);
+                }
+                ui.add_space(5.0);
+
+                // Scale mode
+                ui.label("Scale Mode:");
+                let old_scale_mode = self.scale_mode;
+                egui::ComboBox::from_id_salt("scale_mode")
+                    .selected_text(match self.scale_mode {
+                        emberware_core::app::config::ScaleMode::Stretch => "Stretch",
+                        emberware_core::app::config::ScaleMode::Fit => "Fit",
+                        emberware_core::app::config::ScaleMode::PixelPerfect => "Pixel Perfect",
+                    })
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(
+                            &mut self.scale_mode,
+                            emberware_core::app::config::ScaleMode::Fit,
+                            "Fit (Maintain Aspect Ratio)",
+                        );
+                        ui.selectable_value(
+                            &mut self.scale_mode,
+                            emberware_core::app::config::ScaleMode::Stretch,
+                            "Stretch (Fill Window)",
+                        );
+                        ui.selectable_value(
+                            &mut self.scale_mode,
+                            emberware_core::app::config::ScaleMode::PixelPerfect,
+                            "Pixel Perfect (Integer Scaling)",
+                        );
+                    });
+                if self.scale_mode != old_scale_mode {
+                    action = SettingsAction::SetScaleMode(self.scale_mode);
+                }
+
+                ui.add_space(15.0);
+                ui.separator();
+                ui.add_space(5.0);
+
+                ui.horizontal(|ui| {
+                    if ui.button("Close (F2)").clicked() {
+                        self.visible = false;
+                    }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.button("Save to Config").clicked() {
+                            action = SettingsAction::SaveConfig;
+                        }
+                    });
+                });
+
+                ui.add_space(5.0);
+                ui.label(egui::RichText::new("Press F2 to toggle this panel").weak().small());
+            });
+
+        action
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum SettingsAction {
+    None,
+    ToggleFullscreen(bool),
+    SetScaleMode(emberware_core::app::config::ScaleMode),
+    SaveConfig,
+}
+
 /// Player configuration passed from CLI
 pub struct PlayerConfig {
     /// ROM file path
@@ -53,6 +159,10 @@ pub struct PlayerApp {
     runner: Option<ConsoleRunner<EmberwareZ>>,
     /// Input manager
     input_manager: InputManager,
+    /// Scale mode for render target to window (loaded from config)
+    scale_mode: emberware_core::app::config::ScaleMode,
+    /// Settings panel (F2)
+    settings_panel: PlayerSettingsPanel,
     /// Debug overlay enabled (F3)
     debug_overlay: bool,
     /// Debug inspector panel (F4)
@@ -85,7 +195,10 @@ impl PlayerApp {
     /// Create a new player app with the given configuration
     pub fn new(config: PlayerConfig) -> Self {
         let now = Instant::now();
-        let input_config = emberware_core::app::config::load().input;
+        let app_config = emberware_core::app::config::load();
+        let input_config = app_config.input.clone();
+        let scale_mode = app_config.video.scale_mode;
+        let settings_panel = PlayerSettingsPanel::new(&app_config, config.fullscreen);
 
         Self {
             debug_overlay: config.debug,
@@ -94,6 +207,8 @@ impl PlayerApp {
             window: None,
             runner: None,
             input_manager: InputManager::new(input_config),
+            scale_mode,
+            settings_panel,
             frame_controller: FrameController::new(),
             next_tick: now,
             last_sim_rendered: false,
@@ -130,6 +245,10 @@ impl PlayerApp {
                 PhysicalKey::Code(KeyCode::Escape) => {
                     self.should_exit = true;
                 }
+                PhysicalKey::Code(KeyCode::F2) => {
+                    self.settings_panel.toggle();
+                    self.needs_redraw = true;
+                }
                 PhysicalKey::Code(KeyCode::F3) => {
                     self.debug_overlay = !self.debug_overlay;
                     self.needs_redraw = true;
@@ -148,10 +267,13 @@ impl PlayerApp {
                 }
                 PhysicalKey::Code(KeyCode::F11) => {
                     if let Some(window) = &self.window {
-                        if window.fullscreen().is_some() {
+                        let is_fullscreen = window.fullscreen().is_some();
+                        if is_fullscreen {
                             window.set_fullscreen(None);
+                            self.settings_panel.fullscreen = false;
                         } else {
                             window.set_fullscreen(Some(Fullscreen::Borderless(None)));
+                            self.settings_panel.fullscreen = true;
                         }
                     }
                 }
@@ -322,7 +444,19 @@ impl ConsoleApp<EmberwareZ> for PlayerApp {
 
         // Create console runner
         let console = EmberwareZ::new();
+        let specs = console.specs();
+
+        // Set minimum window size based on console's render resolution
+        let (render_width, render_height) = specs.resolutions[specs.default_resolution];
+        window.set_min_inner_size(Some(winit::dpi::LogicalSize::new(
+            render_width,
+            render_height,
+        )));
+
         let mut runner = ConsoleRunner::new(console, window.clone())?;
+
+        // Apply scale mode from user config
+        runner.graphics_mut().set_scale_mode(self.scale_mode);
 
         // Load ROM
         let rom = load_rom(&self.config.rom_path)?;
@@ -468,8 +602,8 @@ impl ConsoleApp<EmberwareZ> for PlayerApp {
         // Blit to window
         runner.graphics().blit_to_window(&mut encoder, &view);
 
-        // Render debug overlays via egui (on top of game)
-        if self.debug_overlay || self.debug_panel.visible {
+        // Render overlays via egui (on top of game)
+        if self.debug_overlay || self.debug_panel.visible || self.settings_panel.visible {
             // Extract registry and memory base address (no copy - WASM is idle during rendering)
             let (registry_opt, mem_base, mem_len, has_debug_callback) = {
                 if let Some(session) = runner.session() {
@@ -502,6 +636,9 @@ impl ConsoleApp<EmberwareZ> for PlayerApp {
             let pending_writes: RefCell<Vec<(RegisteredValue, DebugValue)>> =
                 RefCell::new(Vec::new());
 
+            // Settings action to apply after egui closure
+            let settings_action: RefCell<SettingsAction> = RefCell::new(SettingsAction::None);
+
             if let (Some(egui_state), Some(egui_renderer), Some(window)) =
                 (&mut self.egui_state, &mut self.egui_renderer, &self.window)
             {
@@ -513,8 +650,14 @@ impl ConsoleApp<EmberwareZ> for PlayerApp {
                 let game_tick_times = &self.game_tick_times;
                 let debug_panel = &mut self.debug_panel;
                 let frame_controller = &mut self.frame_controller;
+                let settings_panel = &mut self.settings_panel;
 
                 let full_output = self.egui_ctx.run(raw_input, |ctx| {
+                    // Render settings panel first (so it's on top)
+                    let action = settings_panel.render(ctx);
+                    if !matches!(action, SettingsAction::None) {
+                        *settings_action.borrow_mut() = action;
+                    }
                     if debug_overlay {
                         let frame_time_ms =
                             debug_stats.frame_times.back().copied().unwrap_or(16.67);
@@ -648,6 +791,35 @@ impl ConsoleApp<EmberwareZ> for PlayerApp {
                         if has_debug_callback {
                             game.call_on_debug_change();
                         }
+                    }
+                }
+            }
+
+            // Apply settings actions
+            match settings_action.into_inner() {
+                SettingsAction::None => {}
+                SettingsAction::ToggleFullscreen(fullscreen) => {
+                    if let Some(window) = &self.window {
+                        if fullscreen {
+                            window.set_fullscreen(Some(Fullscreen::Borderless(None)));
+                        } else {
+                            window.set_fullscreen(None);
+                        }
+                    }
+                }
+                SettingsAction::SetScaleMode(scale_mode) => {
+                    self.scale_mode = scale_mode;
+                    runner.graphics_mut().set_scale_mode(scale_mode);
+                }
+                SettingsAction::SaveConfig => {
+                    // Save current settings to config file
+                    let mut config = emberware_core::app::config::load();
+                    config.video.scale_mode = self.settings_panel.scale_mode;
+                    config.video.fullscreen = self.settings_panel.fullscreen;
+                    if let Err(e) = emberware_core::app::config::save(&config) {
+                        tracing::error!("Failed to save config: {}", e);
+                    } else {
+                        tracing::info!("Settings saved to config");
                     }
                 }
             }

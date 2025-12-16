@@ -279,7 +279,7 @@ impl ZGraphics {
             pipeline_cache: super::pipeline::PipelineCache::new(),
             current_render_mode: 0,      // Default to Mode 0 (Unlit)
             current_resolution_index: 1, // 960×540 (default)
-            scale_mode: emberware_core::app::config::ScaleMode::default(), // Stretch by default
+            scale_mode: emberware_core::app::config::ScaleMode::default(), // PixelPerfect by default
             unit_quad_format,
             unit_quad_base_vertex,
             unit_quad_first_index,

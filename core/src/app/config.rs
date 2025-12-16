@@ -34,9 +34,9 @@ pub enum ScaleMode {
     /// Stretch to fill window (may distort aspect ratio)
     Stretch,
     /// Maintain aspect ratio, scale to fill as much as possible (adds letterbox bars)
-    #[default]
     Fit,
     /// Integer scaling for pixel-perfect rendering (adds black bars, may not fill screen)
+    #[default]
     PixelPerfect,
 }
 
@@ -242,8 +242,8 @@ mod tests {
     }
 
     #[test]
-    fn test_scale_mode_default_is_fit() {
-        assert_eq!(ScaleMode::default(), ScaleMode::Fit);
+    fn test_scale_mode_default_is_integer() {
+        assert_eq!(ScaleMode::default(), ScaleMode::PixelPerfect);
     }
 
     #[test]
