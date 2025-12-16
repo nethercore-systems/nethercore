@@ -61,12 +61,18 @@ pub fn convert_wav(input: &Path, output: &Path) -> Result<()> {
 
     write_ember_sound(&mut writer, &resampled)?;
 
+    // QOA achieves ~5:1 compression (3.2 bits/sample vs 16 bits/sample)
+    let pcm_size = resampled.len() * 2;
+    let qoa_frame_size = ember_qoa::encode_qoa(&resampled).len();
+    let total_size = z_common::formats::EmberZSoundHeader::SIZE + qoa_frame_size;
+
     tracing::info!(
-        "Converted audio: {} samples ({}Hz -> {}Hz), {} bytes",
+        "Converted audio: {} samples ({}Hz -> {}Hz), {} bytes ({:.1}:1 vs PCM)",
         resampled.len(),
         spec.sample_rate,
         SAMPLE_RATE,
-        resampled.len() * 2
+        total_size,
+        pcm_size as f64 / total_size as f64
     );
 
     Ok(())

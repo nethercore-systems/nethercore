@@ -4,10 +4,10 @@
 
 use anyhow::Result;
 use glam::{Mat4, Vec3};
-use tracing::warn;
 use wasmtime::{Caller, Linker};
 
 use super::ZGameContext;
+use super::helpers::read_wasm_matrix4x4;
 
 /// Register transform FFI functions
 pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
@@ -41,45 +41,14 @@ fn push_identity(mut caller: Caller<'_, ZGameContext>) {
 /// Column-major order means: [col0, col1, col2, col3] where each column is [x, y, z, w].
 /// This is the same format used by glam and WGSL.
 fn transform_set(mut caller: Caller<'_, ZGameContext>, matrix_ptr: u32) {
-    // Read the 16 floats from WASM memory
-    let memory = match caller.data().game.memory {
-        Some(m) => m,
-        None => {
-            warn!("transform_set failed: no WASM memory available");
-            return;
-        }
-    };
-
-    let mem_data = memory.data(&caller);
-    let ptr = matrix_ptr as usize;
-    let size = 16 * std::mem::size_of::<f32>();
-
-    // Bounds check
-    if ptr + size > mem_data.len() {
-        warn!(
-            "transform_set failed: pointer {} + {} bytes exceeds memory bounds {}",
-            ptr,
-            size,
-            mem_data.len()
-        );
-        return;
-    }
-
-    // Read floats from memory
-    let bytes = &mem_data[ptr..ptr + size];
-    let floats: &[f32] = bytemuck::cast_slice(bytes);
-
-    // Create matrix from column-major array
-    let Ok(matrix): Result<[f32; 16], _> = floats.try_into() else {
-        warn!(
-            "transform_set failed: expected 16 floats, got {}",
-            floats.len()
-        );
+    // Read the 16 floats from WASM memory using helper
+    let Some(matrix) = read_wasm_matrix4x4(&caller, matrix_ptr, "transform_set") else {
         return;
     };
+
     let state = &mut caller.data_mut().ffi;
     let new_matrix = Mat4::from_cols_array(&matrix);
-    state.current_model_matrix = Some(new_matrix); // Pending matrix
+    state.current_model_matrix = Some(new_matrix);
 }
 
 /// Push a translated transform onto the stack

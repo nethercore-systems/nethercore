@@ -42,7 +42,6 @@ pub use formats::{
     // Mesh/texture/skeleton types
     EmberZMeshHeader,
     EmberZSkeletonHeader,
-    EmberZSoundHeader,
     EmberZTextureHeader,
     INVERSE_BIND_MATRIX_SIZE,
     PLATFORM_BONE_KEYFRAME_SIZE,

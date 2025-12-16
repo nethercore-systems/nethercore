@@ -56,13 +56,16 @@ pub fn write_ember_texture<W: Write>(
     Ok(())
 }
 
-/// Write a complete EmberSound file
+/// Write a complete EmberSound file (QOA compressed format)
+///
+/// Uses QOA compression (~5:1 ratio) instead of raw PCM.
+/// Format: EmberZSoundHeader (4 bytes) + QOA frame data.
 pub fn write_ember_sound<W: Write>(w: &mut W, samples: &[i16]) -> Result<()> {
     let header = EmberZSoundHeader::new(samples.len() as u32);
     w.write_all(&header.to_bytes())?;
-    for sample in samples {
-        w.write_all(&sample.to_le_bytes())?;
-    }
+
+    let qoa_data = ember_qoa::encode_qoa(samples);
+    w.write_all(&qoa_data)?;
     Ok(())
 }
 

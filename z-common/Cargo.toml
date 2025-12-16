@@ -14,6 +14,7 @@ gamepad = ["emberware-core/gamepad"]
 # Local crates
 emberware-shared = { path = "../shared" }
 emberware-core = { path = "../core", default-features = false }
+ember-qoa = { path = "../ember-qoa" }
 
 # Vertex packing
 glam = { workspace = true }

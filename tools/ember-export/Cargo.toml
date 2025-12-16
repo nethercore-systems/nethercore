@@ -17,6 +17,7 @@ gamepad = ["z-common/gamepad"]
 # Local crates
 z-common = { path = "../../z-common", default-features = false }
 emberware-shared = { path = "../../shared" }
+ember-qoa = { path = "../../ember-qoa" }
 
 hashbrown = { workspace = true }
 

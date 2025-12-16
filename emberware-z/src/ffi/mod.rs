@@ -6,6 +6,7 @@
 #![allow(clippy::too_many_arguments)]
 
 mod assets;
+pub(crate) mod helpers;
 
 // ============================================================================
 // Color Utilities

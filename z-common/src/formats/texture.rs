@@ -41,8 +41,8 @@ impl EmberZTextureHeader {
 
     /// Calculate BC7 compressed data size (16 bytes per 4×4 block)
     pub fn bc7_size(&self) -> usize {
-        let blocks_x = (self.width as usize + 3) / 4;
-        let blocks_y = (self.height as usize + 3) / 4;
+        let blocks_x = (self.width as usize).div_ceil(4);
+        let blocks_y = (self.height as usize).div_ceil(4);
         blocks_x * blocks_y * 16
     }
 

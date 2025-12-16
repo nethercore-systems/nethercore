@@ -53,8 +53,8 @@ impl TextureFormat {
         match self {
             TextureFormat::Rgba8 => w * h * 4,
             TextureFormat::Bc7 | TextureFormat::Bc7Linear => {
-                let blocks_x = (w + 3) / 4;
-                let blocks_y = (h + 3) / 4;
+                let blocks_x = w.div_ceil(4);
+                let blocks_y = h.div_ceil(4);
                 blocks_x * blocks_y * 16
             }
         }

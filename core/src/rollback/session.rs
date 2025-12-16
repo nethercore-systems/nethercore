@@ -12,9 +12,10 @@ use ggrs::{
 
 use crate::console::{ConsoleInput, ConsoleRollbackState};
 use crate::wasm::GameInstance;
+use crate::ConnectionQuality;
 
 use super::config::{EmberwareConfig, SessionConfig};
-use super::events::{ConnectionQuality, PlayerNetworkStats, SessionError, SessionEvent};
+use super::events::{PlayerNetworkStats, SessionError, SessionEvent};
 use super::player::{MAX_PLAYERS, PlayerSessionConfig};
 use super::state::{GameStateSnapshot, LoadStateError, RollbackStateManager, SaveStateError};
 

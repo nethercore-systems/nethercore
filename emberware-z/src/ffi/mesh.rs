@@ -6,12 +6,13 @@ use anyhow::Result;
 use tracing::{info, warn};
 use wasmtime::{Caller, Linker};
 
-use super::{ZGameContext, get_wasm_memory, guards::check_init_only};
+use super::helpers::{
+    checked_mul, read_wasm_bytes, read_wasm_floats, read_wasm_u16s, validate_count_nonzero,
+    validate_vertex_format, MAX_VERTEX_FORMAT,
+};
+use super::{ZGameContext, guards::check_init_only};
 use crate::graphics::{vertex_stride, vertex_stride_packed};
 use crate::state::{PendingMesh, PendingMeshPacked};
-
-/// Maximum vertex format value (all flags set: UV | COLOR | NORMAL | SKINNED)
-const MAX_VERTEX_FORMAT: u8 = 15;
 
 /// Register mesh FFI functions
 pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
@@ -48,79 +49,33 @@ fn load_mesh(
     vertex_count: u32,
     format: u32,
 ) -> u32 {
+    const FN_NAME: &str = "load_mesh";
+
     // Guard: init-only
-    if let Err(e) = check_init_only(&caller, "load_mesh") {
+    if let Err(e) = check_init_only(&caller, FN_NAME) {
         warn!("{}", e);
         return 0;
     }
 
-    // Validate format
-    if format > MAX_VERTEX_FORMAT as u32 {
-        warn!(
-            "load_mesh: invalid format {} (max {})",
-            format, MAX_VERTEX_FORMAT
-        );
+    // Validate format and vertex count
+    let Some(format) = validate_vertex_format(format, FN_NAME) else {
         return 0;
-    }
-    let format = format as u8;
-
-    // Validate vertex count
-    if vertex_count == 0 {
-        warn!("load_mesh: vertex_count cannot be 0");
+    };
+    if !validate_count_nonzero(vertex_count, FN_NAME, "vertex_count") {
         return 0;
     }
 
     // Calculate data size with overflow checking
     let stride = vertex_stride(format);
-    let Some(data_size) = vertex_count.checked_mul(stride) else {
-        warn!(
-            "load_mesh: data size overflow (vertex_count={}, stride={})",
-            vertex_count, stride
-        );
+    let Some(data_size) = checked_mul(vertex_count, stride, FN_NAME, "data size") else {
         return 0;
     };
-    let float_count = data_size / 4;
+    let float_count = (data_size / 4) as usize;
 
     // Read vertex data from WASM memory
-    let memory = match caller.data().game.memory {
-        Some(m) => m,
-        None => {
-            warn!("load_mesh: no WASM memory available");
-            return 0;
-        }
-    };
-
-    let ptr = data_ptr as usize;
-    let byte_size = data_size as usize;
-
-    // Copy vertex data while we have the immutable borrow
-    let vertex_data: Vec<f32> = {
-        let mem_data = memory.data(&caller);
-
-        if ptr + byte_size > mem_data.len() {
-            warn!(
-                "load_mesh: vertex data ({} bytes at {}) exceeds memory bounds ({})",
-                byte_size,
-                ptr,
-                mem_data.len()
-            );
-            return 0;
-        }
-
-        let bytes = &mem_data[ptr..ptr + byte_size];
-        let floats: &[f32] = bytemuck::cast_slice(bytes);
-        floats.to_vec()
-    };
-
-    // Verify data length
-    if vertex_data.len() != float_count as usize {
-        warn!(
-            "load_mesh: expected {} floats, got {}",
-            float_count,
-            vertex_data.len()
-        );
+    let Some(vertex_data) = read_wasm_floats(&caller, data_ptr, float_count, FN_NAME) else {
         return 0;
-    }
+    };
 
     // Now we can mutably borrow state
     let state = &mut caller.data_mut().ffi;
@@ -163,131 +118,61 @@ fn load_mesh_indexed(
     index_count: u32,
     format: u32,
 ) -> u32 {
+    const FN_NAME: &str = "load_mesh_indexed";
+
     // Guard: init-only
-    if let Err(e) = check_init_only(&caller, "load_mesh_indexed") {
+    if let Err(e) = check_init_only(&caller, FN_NAME) {
         warn!("{}", e);
         return 0;
     }
 
     // Validate format
-    if format > MAX_VERTEX_FORMAT as u32 {
-        warn!(
-            "load_mesh_indexed: invalid format {} (max {})",
-            format, MAX_VERTEX_FORMAT
-        );
+    let Some(format) = validate_vertex_format(format, FN_NAME) else {
         return 0;
-    }
-    let format = format as u8;
+    };
 
     // Validate counts
-    if vertex_count == 0 {
-        warn!("load_mesh_indexed: vertex_count cannot be 0");
+    if !validate_count_nonzero(vertex_count, FN_NAME, "vertex_count") {
         return 0;
     }
-    if index_count == 0 {
-        warn!("load_mesh_indexed: index_count cannot be 0");
+    if !validate_count_nonzero(index_count, FN_NAME, "index_count") {
         return 0;
     }
     if !index_count.is_multiple_of(3) {
         warn!(
-            "load_mesh_indexed: index_count {} is not a multiple of 3",
-            index_count
+            "{}: index_count {} is not a multiple of 3",
+            FN_NAME, index_count
         );
         return 0;
     }
 
     // Calculate data sizes with overflow checking
     let stride = vertex_stride(format);
-    let Some(vertex_data_size) = vertex_count.checked_mul(stride) else {
-        warn!(
-            "load_mesh_indexed: vertex data size overflow (vertex_count={}, stride={})",
-            vertex_count, stride
-        );
+    let Some(vertex_data_size) = checked_mul(vertex_count, stride, FN_NAME, "vertex data size")
+    else {
         return 0;
     };
-    let Some(index_data_size) = index_count.checked_mul(2) else {
-        warn!(
-            "load_mesh_indexed: index data size overflow (index_count={})",
-            index_count
-        );
+    let float_count = (vertex_data_size / 4) as usize;
+
+    // Read vertex data from WASM memory
+    let Some(vertex_data) = read_wasm_floats(&caller, data_ptr, float_count, FN_NAME) else {
         return 0;
     };
-    let float_count = vertex_data_size / 4;
 
-    // Read data from WASM memory
-    let memory = match caller.data().game.memory {
-        Some(m) => m,
-        None => {
-            warn!("load_mesh_indexed: no WASM memory available");
-            return 0;
-        }
+    // Read index data from WASM memory
+    let Some(index_data) = read_wasm_u16s(&caller, index_ptr, index_count as usize, FN_NAME) else {
+        return 0;
     };
 
-    let vertex_ptr = data_ptr as usize;
-    let vertex_byte_size = vertex_data_size as usize;
-    let idx_ptr = index_ptr as usize;
-    let index_byte_size = index_data_size as usize;
-
-    // Copy data while we have the immutable borrow
-    let (vertex_data, index_data): (Vec<f32>, Vec<u16>) = {
-        let mem_data = memory.data(&caller);
-
-        if vertex_ptr + vertex_byte_size > mem_data.len() {
+    // Validate indices are within bounds
+    for &idx in &index_data {
+        if idx as u32 >= vertex_count {
             warn!(
-                "load_mesh_indexed: vertex data ({} bytes at {}) exceeds memory bounds ({})",
-                vertex_byte_size,
-                vertex_ptr,
-                mem_data.len()
+                "{}: index {} out of bounds (vertex_count = {})",
+                FN_NAME, idx, vertex_count
             );
             return 0;
         }
-
-        if idx_ptr + index_byte_size > mem_data.len() {
-            warn!(
-                "load_mesh_indexed: index data ({} bytes at {}) exceeds memory bounds ({})",
-                index_byte_size,
-                idx_ptr,
-                mem_data.len()
-            );
-            return 0;
-        }
-
-        let vertex_bytes = &mem_data[vertex_ptr..vertex_ptr + vertex_byte_size];
-        let floats: &[f32] = bytemuck::cast_slice(vertex_bytes);
-
-        let index_bytes = &mem_data[idx_ptr..idx_ptr + index_byte_size];
-        let indices: &[u16] = bytemuck::cast_slice(index_bytes);
-
-        // Validate indices are within bounds
-        for &idx in indices {
-            if idx as u32 >= vertex_count {
-                warn!(
-                    "load_mesh_indexed: index {} out of bounds (vertex_count = {})",
-                    idx, vertex_count
-                );
-                return 0;
-            }
-        }
-
-        (floats.to_vec(), indices.to_vec())
-    };
-
-    // Verify data lengths
-    if vertex_data.len() != float_count as usize {
-        warn!(
-            "load_mesh_indexed: expected {} vertex floats, got {}",
-            float_count,
-            vertex_data.len()
-        );
-        return 0;
-    }
-    if index_data.len() != index_count as usize {
-        warn!(
-            "load_mesh_indexed: expected {} indices, got {}",
-            index_count,
-            index_data.len()
-        );
-        return 0;
     }
 
     // Now we can mutably borrow state
@@ -306,8 +191,8 @@ fn load_mesh_indexed(
     });
 
     info!(
-        "load_mesh_indexed: created mesh {} with {} vertices, {} indices, format {}",
-        handle, vertex_count, index_count, format
+        "{}: created mesh {} with {} vertices, {} indices, format {}",
+        FN_NAME, handle, vertex_count, index_count, format
     );
 
     handle
@@ -327,22 +212,21 @@ fn load_mesh_packed(
     vertex_count: u32,
     format: u32,
 ) -> u32 {
+    const FN_NAME: &str = "load_mesh_packed";
+
     // Guard: init-only
-    if let Err(e) = check_init_only(&caller, "load_mesh_packed") {
+    if let Err(e) = check_init_only(&caller, FN_NAME) {
         warn!("{}", e);
         return 0;
     }
 
     // Validate format (0-15 only, no FORMAT_PACKED)
-    if format >= 16 {
-        warn!("load_mesh_packed: format must be 0-15 (got {})", format);
+    let Some(format) = validate_vertex_format(format, FN_NAME) else {
         return 0;
-    }
-    let format = format as u8;
+    };
 
     // Validate vertex count
-    if vertex_count == 0 {
-        warn!("load_mesh_packed: vertex_count cannot be 0");
+    if !validate_count_nonzero(vertex_count, FN_NAME, "vertex_count") {
         return 0;
     }
 
@@ -350,29 +234,9 @@ fn load_mesh_packed(
     let stride = vertex_stride_packed(format) as usize;
     let byte_size = vertex_count as usize * stride;
 
-    // Get memory reference
-    let Some(memory) = get_wasm_memory(&mut caller) else {
-        warn!("load_mesh_packed: failed to get WASM memory");
+    // Read packed bytes from WASM memory
+    let Some(vertex_data) = read_wasm_bytes(&caller, data_ptr, byte_size, FN_NAME) else {
         return 0;
-    };
-
-    let ptr = data_ptr as usize;
-
-    // Copy packed bytes from WASM memory
-    let vertex_data: Vec<u8> = {
-        let mem_data = memory.data(&caller);
-
-        if ptr + byte_size > mem_data.len() {
-            warn!(
-                "load_mesh_packed: vertex data ({} bytes at {}) exceeds memory bounds ({})",
-                byte_size,
-                ptr,
-                mem_data.len()
-            );
-            return 0;
-        }
-
-        mem_data[ptr..ptr + byte_size].to_vec()
     };
 
     // Now we can mutably borrow state
@@ -391,8 +255,8 @@ fn load_mesh_packed(
     });
 
     info!(
-        "load_mesh_packed: created mesh {} with {} vertices, format {}, {} bytes",
-        handle, vertex_count, format, byte_size
+        "{}: created mesh {} with {} vertices, format {}, {} bytes",
+        FN_NAME, handle, vertex_count, format, byte_size
     );
 
     handle
@@ -416,35 +280,30 @@ fn load_mesh_indexed_packed(
     index_count: u32,
     format: u32,
 ) -> u32 {
+    const FN_NAME: &str = "load_mesh_indexed_packed";
+
     // Guard: init-only
-    if let Err(e) = check_init_only(&caller, "load_mesh_indexed_packed") {
+    if let Err(e) = check_init_only(&caller, FN_NAME) {
         warn!("{}", e);
         return 0;
     }
 
     // Validate format (0-15 only, no FORMAT_PACKED)
-    if format >= 16 {
-        warn!(
-            "load_mesh_indexed_packed: format must be 0-15 (got {})",
-            format
-        );
+    let Some(format) = validate_vertex_format(format, FN_NAME) else {
         return 0;
-    }
-    let format = format as u8;
+    };
 
     // Validate counts
-    if vertex_count == 0 {
-        warn!("load_mesh_indexed_packed: vertex_count cannot be 0");
+    if !validate_count_nonzero(vertex_count, FN_NAME, "vertex_count") {
         return 0;
     }
-    if index_count == 0 {
-        warn!("load_mesh_indexed_packed: index_count cannot be 0");
+    if !validate_count_nonzero(index_count, FN_NAME, "index_count") {
         return 0;
     }
     if !index_count.is_multiple_of(3) {
         warn!(
-            "load_mesh_indexed_packed: index_count {} is not a multiple of 3",
-            index_count
+            "{}: index_count {} is not a multiple of 3",
+            FN_NAME, index_count
         );
         return 0;
     }
@@ -452,59 +311,27 @@ fn load_mesh_indexed_packed(
     // Calculate sizes
     let stride = vertex_stride_packed(format) as usize;
     let vertex_byte_size = vertex_count as usize * stride;
-    let index_byte_size = index_count as usize * 2; // u16 indices
 
-    // Get memory reference
-    let Some(memory) = get_wasm_memory(&mut caller) else {
-        warn!("load_mesh_indexed_packed: failed to get WASM memory");
+    // Read packed vertex data from WASM memory
+    let Some(vertex_data) = read_wasm_bytes(&caller, data_ptr, vertex_byte_size, FN_NAME) else {
         return 0;
     };
 
-    let vertex_ptr = data_ptr as usize;
-    let idx_ptr = index_ptr as usize;
-
-    // Copy packed data from WASM memory
-    let (vertex_data, index_data): (Vec<u8>, Vec<u16>) = {
-        let mem_data = memory.data(&caller);
-
-        if vertex_ptr + vertex_byte_size > mem_data.len() {
-            warn!(
-                "load_mesh_indexed_packed: vertex data ({} bytes at {}) exceeds memory bounds ({})",
-                vertex_byte_size,
-                vertex_ptr,
-                mem_data.len()
-            );
-            return 0;
-        }
-
-        if idx_ptr + index_byte_size > mem_data.len() {
-            warn!(
-                "load_mesh_indexed_packed: index data ({} bytes at {}) exceeds memory bounds ({})",
-                index_byte_size,
-                idx_ptr,
-                mem_data.len()
-            );
-            return 0;
-        }
-
-        let vertex_bytes = mem_data[vertex_ptr..vertex_ptr + vertex_byte_size].to_vec();
-
-        let index_bytes = &mem_data[idx_ptr..idx_ptr + index_byte_size];
-        let indices: &[u16] = bytemuck::cast_slice(index_bytes);
-
-        // Validate indices are within bounds
-        for &idx in indices {
-            if idx as u32 >= vertex_count {
-                warn!(
-                    "load_mesh_indexed_packed: index {} out of bounds (vertex_count = {})",
-                    idx, vertex_count
-                );
-                return 0;
-            }
-        }
-
-        (vertex_bytes, indices.to_vec())
+    // Read index data from WASM memory
+    let Some(index_data) = read_wasm_u16s(&caller, index_ptr, index_count as usize, FN_NAME) else {
+        return 0;
     };
+
+    // Validate indices are within bounds
+    for &idx in &index_data {
+        if idx as u32 >= vertex_count {
+            warn!(
+                "{}: index {} out of bounds (vertex_count = {})",
+                FN_NAME, idx, vertex_count
+            );
+            return 0;
+        }
+    }
 
     // Now we can mutably borrow state
     let state = &mut caller.data_mut().ffi;
@@ -522,8 +349,8 @@ fn load_mesh_indexed_packed(
     });
 
     info!(
-        "load_mesh_indexed_packed: created mesh {} with {} vertices, {} indices, format {}, {} bytes",
-        handle, vertex_count, index_count, format, vertex_byte_size
+        "{}: created mesh {} with {} vertices, {} indices, format {}, {} bytes",
+        FN_NAME, handle, vertex_count, index_count, format, vertex_byte_size
     );
 
     handle

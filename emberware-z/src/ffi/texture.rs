@@ -6,6 +6,7 @@ use anyhow::Result;
 use tracing::warn;
 use wasmtime::{Caller, Linker};
 
+use super::helpers::{checked_mul, read_wasm_bytes, validate_dimensions_nonzero};
 use super::{ZGameContext, guards::check_init_only};
 use crate::graphics::MatcapBlendMode;
 use crate::state::PendingTexture;
@@ -35,54 +36,30 @@ fn load_texture(
     height: u32,
     pixels_ptr: u32,
 ) -> u32 {
+    const FN_NAME: &str = "load_texture";
+
     // Guard: init-only
-    if let Err(e) = check_init_only(&caller, "load_texture") {
+    if let Err(e) = check_init_only(&caller, FN_NAME) {
         warn!("{}", e);
         return 0;
     }
 
     // Validate dimensions
-    if width == 0 || height == 0 {
-        warn!("load_texture: invalid dimensions {}x{}", width, height);
+    if !validate_dimensions_nonzero(width, height, FN_NAME) {
         return 0;
     }
 
+    // Calculate size with overflow checking
+    let Some(pixels) = checked_mul(width, height, FN_NAME, "dimensions") else {
+        return 0;
+    };
+    let Some(size) = checked_mul(pixels, 4, FN_NAME, "size") else {
+        return 0;
+    };
+
     // Read pixel data from WASM memory
-    let memory = match caller.data().game.memory {
-        Some(m) => m,
-        None => {
-            warn!("load_texture: no WASM memory available");
-            return 0;
-        }
-    };
-
-    let ptr = pixels_ptr as usize;
-    // Use checked arithmetic to prevent overflow
-    let Some(pixels) = width.checked_mul(height) else {
-        warn!("load_texture: dimensions overflow ({}x{})", width, height);
+    let Some(pixel_data) = read_wasm_bytes(&caller, pixels_ptr, size as usize, FN_NAME) else {
         return 0;
-    };
-    let Some(size) = pixels.checked_mul(4) else {
-        warn!("load_texture: size overflow ({}x{})", width, height);
-        return 0;
-    };
-    let size = size as usize;
-
-    // Copy pixel data while we have the immutable borrow
-    let pixel_data = {
-        let mem_data = memory.data(&caller);
-
-        if ptr + size > mem_data.len() {
-            warn!(
-                "load_texture: pixel data ({} bytes at {}) exceeds memory bounds ({})",
-                size,
-                ptr,
-                mem_data.len()
-            );
-            return 0;
-        }
-
-        mem_data[ptr..ptr + size].to_vec()
     };
 
     // Now we can mutably borrow state

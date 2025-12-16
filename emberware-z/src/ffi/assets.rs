@@ -20,7 +20,7 @@ use super::{ZGameContext, get_wasm_memory, guards::check_init_only};
 
 use z_common::TextureFormat;
 use z_common::formats::{
-    EmberZMeshHeader, EmberZSkeletonHeader, EmberZSoundHeader, EmberZTextureHeader,
+    EmberZMeshHeader, EmberZSkeletonHeader, EmberZTextureHeader, decode_sound,
 };
 
 use crate::audio::Sound;
@@ -307,6 +307,9 @@ fn load_ztex(mut caller: Caller<'_, ZGameContext>, data_ptr: u32, data_len: u32)
 
 /// Load audio from EmberZ sound (.ewzsnd) binary format
 ///
+/// Supports both legacy PCM format and QOA compressed format.
+/// Format is auto-detected by `decode_sound()`.
+///
 /// # Arguments
 /// * `data_ptr` — Pointer to .ewzsnd binary data
 /// * `data_len` — Length of the data in bytes
@@ -321,12 +324,11 @@ fn load_zsound(mut caller: Caller<'_, ZGameContext>, data_ptr: u32, data_len: u3
 
     let data_len = data_len as usize;
 
-    // Validate minimum size
-    if data_len < EmberZSoundHeader::SIZE {
+    // Validate minimum size (need at least 4 bytes for header)
+    if data_len < 4 {
         warn!(
-            "load_zsound: data too small ({} bytes, need at least {})",
-            data_len,
-            EmberZSoundHeader::SIZE
+            "load_zsound: data too small ({} bytes, need at least 4)",
+            data_len
         );
         return 0;
     }
@@ -339,8 +341,8 @@ fn load_zsound(mut caller: Caller<'_, ZGameContext>, data_ptr: u32, data_len: u3
 
     let ptr = data_ptr as usize;
 
-    // Read and parse header, then copy sample data
-    let (sample_count, samples) = {
+    // Read and decode sound data (auto-detects PCM vs QOA)
+    let samples = {
         let mem_data = memory.data(&caller);
 
         if ptr + data_len > mem_data.len() {
@@ -355,30 +357,16 @@ fn load_zsound(mut caller: Caller<'_, ZGameContext>, data_ptr: u32, data_len: u3
 
         let data = &mem_data[ptr..ptr + data_len];
 
-        // Parse header
-        let Some(header) = EmberZSoundHeader::from_bytes(data) else {
-            warn!("load_zsound: failed to parse header");
+        // Decode sound (auto-detects format: PCM or QOA)
+        let Some(decoded) = decode_sound(data) else {
+            warn!("load_zsound: failed to decode sound data");
             return 0;
         };
 
-        // Calculate sample data size (PCM16 = 2 bytes per sample)
-        let sample_size = header.sample_count as usize * 2;
-
-        let expected_size = EmberZSoundHeader::SIZE + sample_size;
-        if data_len < expected_size {
-            warn!(
-                "load_zsound: data too small ({} bytes, need {} for {} samples)",
-                data_len, expected_size, header.sample_count
-            );
-            return 0;
-        }
-
-        // Copy sample data
-        let sample_bytes = &data[EmberZSoundHeader::SIZE..EmberZSoundHeader::SIZE + sample_size];
-        let samples: &[i16] = bytemuck::cast_slice(sample_bytes);
-
-        (header.sample_count, samples.to_vec())
+        decoded
     };
+
+    let sample_count = samples.len();
 
     // Now we can mutably borrow state
     let state = &mut caller.data_mut().ffi;

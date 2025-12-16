@@ -60,6 +60,12 @@ pub struct App {
     last_frame: Instant,
 }
 
+impl Default for App {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl App {
     /// Create a new library application
     pub fn new() -> Self {
