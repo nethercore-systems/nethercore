@@ -1,20 +1,19 @@
-//! Generic application event loop for any console implementation
+//! Generic application event loop for console game players
 //!
-//! This module provides console-agnostic event loop infrastructure that works
-//! with any fantasy console implementing the Console trait.
+//! This module provides event loop infrastructure for running games.
+//! The library UI uses its own separate event loop.
 //!
 //! ## Event Loop Model
 //!
 //! The event loop follows a clear separation of concerns:
 //!
 //! - **WindowEvent**: Handle input, mark `needs_redraw = true`
-//! - **about_to_wait**: If game mode, advance simulation when tick is due; set ControlFlow;
+//! - **about_to_wait**: Advance simulation when tick is due; set `WaitUntil(next_tick)`;
 //!   request redraw only if `needs_redraw` is true
 //! - **RedrawRequested**: Render game + UI, clear `needs_redraw`
 //!
 //! This ensures:
-//! - Library mode is pure event-driven (`ControlFlow::Wait`)
-//! - Game mode uses `WaitUntil(next_tick)` without busy-spinning
+//! - Uses `WaitUntil(next_tick)` without busy-spinning
 //! - Redraws only happen when state actually changed
 
 use std::sync::Arc;
@@ -65,15 +64,7 @@ pub trait ConsoleApp<C: Console>: Sized {
 
     // === Simulation control ===
 
-    /// Check if a game is actively running.
-    ///
-    /// Returns true when there's an active game session.
-    /// Used to determine whether to use `WaitUntil` (game) or `Wait` (library).
-    fn has_active_game(&self) -> bool;
-
     /// Get the scheduled time for next simulation tick.
-    ///
-    /// Only meaningful when `has_active_game()` returns true.
     fn next_tick(&self) -> Instant;
 
     /// Advance simulation by one tick.
@@ -205,22 +196,15 @@ impl<C: Console, A: ConsoleApp<C>> ApplicationHandler for AppEventHandler<C, A> 
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         if let Some(app) = &mut self.app {
-            if app.has_active_game() {
-                // GAME MODE: Check if tick is due
-                let now = Instant::now();
-                if now >= app.next_tick() {
-                    // Advance simulation HERE (not in RedrawRequested!)
-                    app.advance_simulation();
-                    app.update_next_tick(); // next_tick += tick_duration
-                    app.mark_needs_redraw();
-                }
-                event_loop.set_control_flow(ControlFlow::WaitUntil(app.next_tick()));
-            } else {
-                // LIBRARY MODE: pure event-driven
-                event_loop.set_control_flow(ControlFlow::Wait);
+            // Check if tick is due
+            let now = Instant::now();
+            if now >= app.next_tick() {
+                app.advance_simulation();
+                app.update_next_tick();
+                app.mark_needs_redraw();
             }
+            event_loop.set_control_flow(ControlFlow::WaitUntil(app.next_tick()));
 
-            // Request redraw only if state changed
             if app.needs_redraw() {
                 app.request_redraw();
             }

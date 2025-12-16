@@ -356,6 +356,11 @@ impl ConsoleResourceManager for ZResourceManager {
         if had_skeletons || had_keyframes {
             graphics.invalidate_frame_bind_group();
         }
+
+        // Apply init config to graphics (render mode and resolution from game's init() phase)
+        // Always apply - defaults are sensible (mode 0 = Unlit, resolution 1 = 540p)
+        graphics.set_render_mode(state.init_config.render_mode);
+        graphics.update_resolution(state.init_config.resolution_index as u8);
     }
 
     fn execute_draw_commands(&mut self, graphics: &mut Self::Graphics, state: &mut Self::State) {

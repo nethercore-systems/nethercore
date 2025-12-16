@@ -4,6 +4,10 @@
 
 Emberware is a fantasy console platform with built-in rollback netcode, designed to support multiple fantasy consoles (Emberware Z, Classic, etc.) with a shared framework.
 
+**Console Status:**
+- **Emberware Z** — Fully implemented (PS1/N64 aesthetic)
+- **Emberware Classic** — Coming Soon (documented but not yet implemented)
+
 **Repository Structure:**
 - `/core` — Console trait, WASM runtime, GGRS rollback, ConsoleRunner, debug inspection
 - `/library` — Main binary with library UI, console registry, game launcher
@@ -18,6 +22,7 @@ Emberware is a fantasy console platform with built-in rollback netcode, designed
 - [TASKS.md](./TASKS.md) — Development status and implementation plan
 - [docs/reference/ffi.md](./docs/reference/ffi.md) — Shared FFI API reference
 - [docs/reference/emberware-z.md](./docs/reference/emberware-z.md) — Z-specific API
+- [docs/reference/rendering-architecture.md](./docs/reference/rendering-architecture.md) — Graphics deep dive
 
 ## Architecture
 

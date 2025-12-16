@@ -1,105 +1,173 @@
-# Emberware Examples
+# Emberware Z Examples
 
-Example games demonstrating Emberware Z features.
+Example games demonstrating Emberware Z features. Each example is a standalone WASM game showcasing specific APIs and techniques.
 
-## Building and Installing Examples
+## Building and Running
 
-To build all examples and install them to your local Emberware library:
-
-```bash
-cargo xtask build-examples
-```
-
-This will:
-1. Compile each example to WASM (targeting `wasm32-unknown-unknown`)
-2. Install them to `~/.emberware/games/` (or platform-specific equivalent)
-3. Generate a manifest for each game
-
-### Prerequisites
-
-Make sure you have the WASM target installed:
-
+**Prerequisites:**
 ```bash
 rustup target add wasm32-unknown-unknown
 ```
 
-## Running Examples
-
-After building, simply run Emberware Z:
-
+**Build all examples:**
 ```bash
-cargo run
+cargo xtask build-examples
 ```
 
-The examples will appear in the game library.
+This will compile each example to WASM and install them to `~/.emberware/games/`.
+
+**Run examples:**
+```bash
+# Launch library UI
+cargo run
+
+# Or launch directly by name
+cargo run -- hello-world
+cargo run -- platformer
+cargo run -- lighting
+```
+
+---
 
 ## Available Examples
 
-### Basic Examples
+### Getting Started
 
-- **hello-world** - Minimal example showing basic setup
-- **triangle** - Single colored triangle
-- **textured-quad** - Textured rectangle
-- **cube** - Rotating 3D cube
+| Example | Description |
+|---------|-------------|
+| **hello-world** | Basic 2D drawing with `draw_text`, `draw_rect`, input handling |
+| **triangle** | Minimal 3D — single colored triangle |
+| **textured-quad** | Textured sprite rendering with `load_texture`, `texture_bind` |
+| **cube** | Rotating textured cube with transforms |
 
-### Graphics Examples
+### Graphics & Rendering
 
-- **lighting** - PBR lighting demo
-- **skinned-mesh** - Skeletal animation
-- **billboard** - Billboard sprites
-- **blinn-phong** - Blinn-Phong lighting demo
-- **procedural-shapes** - Procedurally generated shapes
-- **textured-procedural** - Textured procedural geometry
-- **debug-demo** - Debug inspection system demo (F3 to open panel, F5/F6 for pause/step)
+| Example | Description |
+|---------|-------------|
+| **lighting** | PBR lighting (mode 2) with 4 dynamic lights, sky, materials |
+| **blinn-phong** | Classic Blinn-Phong (mode 3) with specular and rim lighting |
+| **billboard** | GPU-instanced billboards and sprites |
+| **procedural-shapes** | Built-in generators: `cube()`, `sphere()`, `cylinder()`, etc. |
+| **textured-procedural** | Procedural shapes with texture mapping |
+| **dither-demo** | PS1-style ordered dithering effects |
+| **material-override** | Per-draw material property overrides |
 
-### Audio Example
+### Render Mode Inspectors
 
-- **audio-demo** - Audio playback demonstration
+| Example | Description |
+|---------|-------------|
+| **mode0-inspector** | Interactive inspector for Unlit mode |
+| **mode1-inspector** | Interactive inspector for Matcap mode (blend modes) |
+| **mode2-inspector** | Interactive inspector for MR-Blinn-Phong mode |
+| **mode3-inspector** | Interactive inspector for Blinn-Phong mode |
 
-### Game Examples
+### Animation & Skinning
 
-- **platformer** - Simple platformer game
+| Example | Description |
+|---------|-------------|
+| **skinned-mesh** | GPU skeletal animation basics with `set_bones` |
+| **animation-demo** | Keyframe animation playback from ROM data |
+| **ik-demo** | Inverse kinematics (procedural animation) |
+| **multi-skinned-procedural** | Multiple animated characters (procedural bones) |
+| **multi-skinned-rom** | Multiple animated characters (ROM data) |
+| **skeleton-stress-test** | Performance testing with many skeletons |
 
-### Data Pack Examples
+### Audio
 
-These examples demonstrate the ROM data pack system using `rom_*` FFI functions:
+| Example | Description |
+|---------|-------------|
+| **audio-demo** | Sound effects, panning, channels, looping |
 
-- **datapack-demo** - Full workflow: textures, meshes, and sounds from data pack
-- **font-demo** - Loading and using bitmap fonts from data pack
-- **level-loader** - Loading custom binary level data with `rom_data()`
-- **asset-test** - Loading pre-converted `.ewzmesh` and `.ewztex` assets
+### Asset Loading (Data Packs)
 
-## Building Individual Examples
+| Example | Description |
+|---------|-------------|
+| **datapack-demo** | Full `rom_*` workflow: textures, meshes, sounds |
+| **font-demo** | Custom font loading with `rom_font` |
+| **level-loader** | Loading level data with `rom_data` |
+| **asset-test** | Pre-converted `.ewzmesh` and `.ewztex` assets |
 
-To build a single example:
+### Complete Games
 
-```bash
-cd examples/hello-world
-cargo build --target wasm32-unknown-unknown --release
-```
+| Example | Description |
+|---------|-------------|
+| **platformer** | Full mini-game: physics, collision, multiple players |
 
-The WASM file will be in `target/wasm32-unknown-unknown/release/`.
+### Development Tools
+
+| Example | Description |
+|---------|-------------|
+| **debug-demo** | Debug inspection system (F3 panel, frame control) |
+
+### Shared Library
+
+| Directory | Description |
+|-----------|-------------|
+| **examples-common** | Shared utilities: `DebugCamera`, `StickControl`, math |
+
+---
+
+## Example Details
+
+### hello-world
+Basic 2D drawing with text and rectangles. Controls: D-pad moves square, A resets.
+
+### lighting
+Full PBR demo with interactive material and light controls:
+- Left stick: Rotate sphere
+- Right stick: Move light
+- Triggers: Metallic (LT) / Roughness (RT)
+- D-pad: Light intensity
+- A/B/X/Y: Toggle lights
+
+### skinned-mesh
+GPU skeletal animation with 3x4 bone matrices and smooth weight blending.
+- Left stick: Rotate view
+- A: Toggle animation
+- D-pad: Animation speed
+
+### audio-demo
+Audio system demo with panning and channel control:
+- Left/Right: Adjust pan
+- A: Play sound
+- B: Stop sound
+
+### platformer
+Complete mini-game demonstrating:
+- 2D gameplay using 3D renderer
+- Billboarded sprites
+- Simple physics (gravity, friction)
+- AABB collision detection
+- Multiple players
+- 2D UI overlay
+
+### debug-demo
+Debug inspection system demo:
+- F3: Toggle debug panel
+- F5: Pause/resume
+- F6: Step frame
+- F7/F8: Time scale
+
+---
 
 ## Data Pack Workflow
 
-Examples using data packs require the `ember` CLI tool:
+Examples using data packs require the `ember` CLI:
 
 ```bash
-# 1. Build the WASM
+# 1. Build WASM
 ember build
 
-# 2. Bundle assets into data pack (reads ember.toml)
+# 2. Bundle assets (reads ember.toml)
 ember pack
 
-# 3. Launch in emulator
+# 3. Launch game
 ember run
 ```
 
-See `ember.toml` in each data pack example for the manifest format.
-
 ### rom_* FFI Functions
 
-Data pack assets bypass WASM memory and go directly to VRAM/audio:
+Data pack assets bypass WASM memory, going directly to VRAM/audio:
 
 ```rust
 fn init() {
@@ -115,3 +183,24 @@ fn init() {
     rom_data(b"level1".as_ptr(), 6, buf.as_mut_ptr(), len);
 }
 ```
+
+See `ember.toml` in each data pack example for the manifest format.
+
+---
+
+## Building Individual Examples
+
+```bash
+cd examples/hello-world
+cargo build --target wasm32-unknown-unknown --release
+```
+
+Output: `target/wasm32-unknown-unknown/release/hello_world.wasm`
+
+---
+
+## Further Reading
+
+- [FFI Reference](../docs/reference/ffi.md) — Shared API documentation
+- [Emberware Z Reference](../docs/reference/emberware-z.md) — Console-specific API
+- [Rendering Architecture](../docs/reference/rendering-architecture.md) — Graphics deep dive

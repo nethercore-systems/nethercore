@@ -50,8 +50,10 @@ pub struct PlayerApp {
     runner: Option<ConsoleRunner<EmberwareZ>>,
     /// Input manager
     input_manager: InputManager,
-    /// Debug overlay enabled
+    /// Debug overlay enabled (F3)
     debug_overlay: bool,
+    /// Debug inspector enabled (F4)
+    debug_inspector: bool,
     /// Frame controller (pause/step)
     frame_controller: FrameController,
     /// Next scheduled simulation tick
@@ -68,6 +70,12 @@ pub struct PlayerApp {
     game_tick_times: Vec<Instant>,
     /// Last game tick
     last_game_tick: Instant,
+    /// egui context
+    egui_ctx: egui::Context,
+    /// egui-winit state
+    egui_state: Option<egui_winit::State>,
+    /// egui-wgpu renderer
+    egui_renderer: Option<egui_wgpu::Renderer>,
 }
 
 impl PlayerApp {
@@ -78,6 +86,7 @@ impl PlayerApp {
 
         Self {
             debug_overlay: config.debug,
+            debug_inspector: false,
             config,
             window: None,
             runner: None,
@@ -94,6 +103,9 @@ impl PlayerApp {
             },
             game_tick_times: Vec::with_capacity(120),
             last_game_tick: now,
+            egui_ctx: egui::Context::default(),
+            egui_state: None,
+            egui_renderer: None,
         }
     }
 
@@ -117,6 +129,10 @@ impl PlayerApp {
                 }
                 PhysicalKey::Code(KeyCode::F3) => {
                     self.debug_overlay = !self.debug_overlay;
+                    self.needs_redraw = true;
+                }
+                PhysicalKey::Code(KeyCode::F4) => {
+                    self.debug_inspector = !self.debug_inspector;
                     self.needs_redraw = true;
                 }
                 PhysicalKey::Code(KeyCode::F5) => {
@@ -314,6 +330,23 @@ impl ConsoleApp<EmberwareZ> for PlayerApp {
             .load_game(console_with_datapack, &rom.code, 1)
             .context("Failed to load game")?;
 
+        // Initialize egui for debug overlays
+        let egui_state = egui_winit::State::new(
+            self.egui_ctx.clone(),
+            egui::ViewportId::ROOT,
+            &window,
+            Some(window.scale_factor() as f32),
+            None,
+            None,
+        );
+        let egui_renderer = egui_wgpu::Renderer::new(
+            runner.graphics().device(),
+            runner.graphics().surface_format(),
+            egui_wgpu::RendererOptions::default(),
+        );
+        self.egui_state = Some(egui_state);
+        self.egui_renderer = Some(egui_renderer);
+
         self.window = Some(window);
         self.runner = Some(runner);
         self.next_tick = Instant::now();
@@ -339,10 +372,6 @@ impl ConsoleApp<EmberwareZ> for PlayerApp {
             }
             _ => false,
         }
-    }
-
-    fn has_active_game(&self) -> bool {
-        self.runner.as_ref().is_some_and(|r| r.has_game())
     }
 
     fn next_tick(&self) -> Instant {
@@ -423,6 +452,106 @@ impl ConsoleApp<EmberwareZ> for PlayerApp {
 
         // Blit to window
         runner.graphics().blit_to_window(&mut encoder, &view);
+
+        // Render debug overlays via egui (on top of game)
+        if self.debug_overlay || self.debug_inspector {
+            if let (Some(egui_state), Some(egui_renderer), Some(window)) = (
+                &mut self.egui_state,
+                &mut self.egui_renderer,
+                &self.window,
+            ) {
+                let raw_input = egui_state.take_egui_input(window);
+
+                let full_output = self.egui_ctx.run(raw_input, |ctx| {
+                    if self.debug_overlay {
+                        let frame_time_ms = self
+                            .debug_stats
+                            .frame_times
+                            .back()
+                            .copied()
+                            .unwrap_or(16.67);
+                        let render_fps =
+                            emberware_core::app::debug::calculate_fps(&self.game_tick_times);
+                        emberware_core::app::debug::render_debug_overlay(
+                            ctx,
+                            &self.debug_stats,
+                            true,
+                            frame_time_ms,
+                            render_fps,
+                            render_fps,
+                        );
+                    }
+                    if self.debug_inspector {
+                        egui::Window::new("Inspector (F4)")
+                            .default_pos([10.0, 200.0])
+                            .show(ctx, |ui| {
+                                ui.label("Debug value inspection");
+                                ui.separator();
+                                ui.label("No debug values registered.");
+                                ui.label("Games can register values with debug_register_*() FFI.");
+                            });
+                    }
+                });
+
+                egui_state.handle_platform_output(window, full_output.platform_output);
+
+                // Tessellate and render egui
+                let screen_descriptor = egui_wgpu::ScreenDescriptor {
+                    size_in_pixels: [
+                        runner.graphics().width(),
+                        runner.graphics().height(),
+                    ],
+                    pixels_per_point: window.scale_factor() as f32,
+                };
+
+                let tris = self
+                    .egui_ctx
+                    .tessellate(full_output.shapes, full_output.pixels_per_point);
+
+                for (id, delta) in &full_output.textures_delta.set {
+                    egui_renderer.update_texture(
+                        runner.graphics().device(),
+                        runner.graphics().queue(),
+                        *id,
+                        delta,
+                    );
+                }
+
+                egui_renderer.update_buffers(
+                    runner.graphics().device(),
+                    runner.graphics().queue(),
+                    &mut encoder,
+                    &tris,
+                    &screen_descriptor,
+                );
+
+                // Render egui on top of game
+                {
+                    let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("Egui Render Pass"),
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: &view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Load, // Don't clear - overlay on top
+                                store: wgpu::StoreOp::Store,
+                            },
+                            depth_slice: None,
+                        })],
+                        depth_stencil_attachment: None,
+                        timestamp_writes: None,
+                        occlusion_query_set: None,
+                    });
+                    let mut render_pass_static = render_pass.forget_lifetime();
+                    egui_renderer.render(&mut render_pass_static, &tris, &screen_descriptor);
+                }
+
+                // Free textures
+                for id in &full_output.textures_delta.free {
+                    egui_renderer.free_texture(id);
+                }
+            }
+        }
 
         // Submit
         runner

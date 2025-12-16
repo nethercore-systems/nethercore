@@ -4,10 +4,10 @@ A fantasy console platform with built-in rollback netcode.
 
 ## Consoles
 
-| Console | Generation | Aesthetic | Doc |
-|---------|------------|-----------|-----|
-| **Emberware Z** | 5th gen | PS1/N64/Saturn | [docs/reference/emberware-z.md](./docs/reference/emberware-z.md) |
-| **Emberware Classic** | 4th gen | Genesis/SNES/Neo Geo | [docs/reference/emberware-classic.md](./docs/reference/emberware-classic.md) |
+| Console | Generation | Aesthetic | Status | Doc |
+|---------|------------|-----------|--------|-----|
+| **Emberware Z** | 5th gen | PS1/N64/Saturn | Available | [docs/reference/emberware-z.md](./docs/reference/emberware-z.md) |
+| **Emberware Classic** | 4th gen | Genesis/SNES/Neo Geo | Coming Soon | [docs/reference/emberware-classic.md](./docs/reference/emberware-classic.md) |
 
 ## What's Here
 
@@ -87,15 +87,17 @@ The examples will appear in the Emberware Z game library. Use the refresh button
 - **Case-insensitive**: `CUBE`, `Cube`, and `cube` all work
 - **Error messages**: Invalid games show suggestions and available games list
 
-**Available examples:** hello-world, triangle, textured-quad, cube, lighting, skinned-mesh, billboard, platformer, blinn-phong, procedural-shapes, audio-demo, textured-procedural, debug-demo, datapack-demo, font-demo, level-loader, asset-test
+The `/examples` directory contains 28 example games covering graphics, animation, audio, and more.
 
-For more details, see [examples/README.md](./examples/README.md).
+See [examples/README.md](./examples/README.md) for the complete list with descriptions.
 
 ### Upload
 
 Visit [emberware.io](https://emberware.io) to create an account and upload your game.
 
 ## Console Specs Comparison
+
+*Note: Emberware Classic is documented but not yet implemented.*
 
 | Spec | Emberware Z | Emberware Classic |
 |------|-------------|-------------------|

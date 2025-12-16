@@ -3,7 +3,7 @@
 This document covers the **shared FFI** common to all Emberware consoles. For console-specific APIs, see:
 
 - [Emberware Z](./emberware-z.md) — 5th gen (PS1/N64/Saturn)
-- [Emberware Classic](./emberware-classic.md) — 4th gen (Genesis/SNES/Neo Geo)
+- [Emberware Classic](./emberware-classic.md) — 4th gen (Genesis/SNES/Neo Geo) *(Coming Soon)*
 
 ---
 
@@ -319,6 +319,126 @@ Deletes a save slot. Returns 0 on success, 1 if invalid slot.
 
 ---
 
+## ROM Data Pack Functions
+
+These functions load assets from the ROM's data pack. Assets go directly to VRAM/audio memory, bypassing WASM linear memory for efficient rollback.
+
+**All `rom_*` functions are init-only** — they must be called in `init()`, not `update()` or `render()`.
+
+### rom_texture
+
+```rust
+fn rom_texture(id_ptr: *const u8, id_len: u32) -> u32
+```
+
+Loads a texture from the data pack by string ID. Returns a texture handle (0 if not found).
+
+```rust
+let tex = rom_texture(b"player".as_ptr(), 6);
+```
+
+---
+
+### rom_mesh
+
+```rust
+fn rom_mesh(id_ptr: *const u8, id_len: u32) -> u32
+```
+
+Loads a mesh from the data pack by string ID. Returns a mesh handle (0 if not found).
+
+```rust
+let mesh = rom_mesh(b"enemy".as_ptr(), 5);
+```
+
+---
+
+### rom_sound
+
+```rust
+fn rom_sound(id_ptr: *const u8, id_len: u32) -> u32
+```
+
+Loads a sound from the data pack by string ID. Returns a sound handle (0 if not found).
+
+```rust
+let sfx = rom_sound(b"jump".as_ptr(), 4);
+```
+
+---
+
+### rom_skeleton
+
+```rust
+fn rom_skeleton(id_ptr: *const u8, id_len: u32) -> u32
+```
+
+Loads a skeleton from the data pack by string ID. Returns a skeleton handle (0 if not found).
+
+```rust
+let skel = rom_skeleton(b"player_rig".as_ptr(), 10);
+```
+
+---
+
+### rom_animation
+
+```rust
+fn rom_animation(id_ptr: *const u8, id_len: u32) -> u32
+```
+
+Loads an animation from the data pack by string ID. Returns an animation handle (0 if not found).
+
+```rust
+let anim = rom_animation(b"walk".as_ptr(), 4);
+```
+
+---
+
+### rom_font
+
+```rust
+fn rom_font(id_ptr: *const u8, id_len: u32) -> u32
+```
+
+Loads a bitmap font from the data pack by string ID. Returns a font handle (0 if not found).
+
+```rust
+let font = rom_font(b"ui_font".as_ptr(), 7);
+```
+
+---
+
+### rom_data_len
+
+```rust
+fn rom_data_len(id_ptr: *const u8, id_len: u32) -> u32
+```
+
+Returns the size in bytes of raw data in the data pack. Returns 0 if not found.
+
+```rust
+let len = rom_data_len(b"level1".as_ptr(), 6);
+```
+
+---
+
+### rom_data
+
+```rust
+fn rom_data(id_ptr: *const u8, id_len: u32, out_ptr: *mut u8, max_len: u32) -> u32
+```
+
+Copies raw data from the data pack into WASM memory. Returns bytes copied (0 if not found or buffer too small).
+
+```rust
+let len = rom_data_len(b"level1".as_ptr(), 6);
+let mut buffer = vec![0u8; len as usize];
+rom_data(b"level1".as_ptr(), 6, buffer.as_mut_ptr(), len);
+```
+
+---
+
 ## Building Your Game
 
 ```bash
@@ -391,10 +511,10 @@ fn init() {
 
 Each console has its own graphics, input, and audio APIs:
 
-| Console | Input | Graphics | Doc |
-|---------|-------|----------|-----|
-| **Emberware Z** | Dual analog sticks, analog triggers, 4 face buttons | 2D + 3D, transforms | [emberware-z.md](./emberware-z.md) |
-| **Emberware Classic** | D-pad only, 6 face buttons, no analog | 2D sprites, tilemaps | [emberware-classic.md](./emberware-classic.md) |
+| Console | Input | Graphics | Status | Doc |
+|---------|-------|----------|--------|-----|
+| **Emberware Z** | Dual analog sticks, analog triggers, 4 face buttons | 2D + 3D, transforms | Available | [emberware-z.md](./emberware-z.md) |
+| **Emberware Classic** | D-pad only, 6 face buttons, no analog | 2D sprites, tilemaps | Coming Soon | [emberware-classic.md](./emberware-classic.md) |
 
 ---
 
