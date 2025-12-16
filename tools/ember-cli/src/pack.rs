@@ -77,7 +77,6 @@ pub fn execute(args: PackArgs) -> Result<()> {
     let format_name = match texture_format {
         TextureFormat::Rgba8 => "RGBA8 (uncompressed)",
         TextureFormat::Bc7 => "BC7 (4× compressed)",
-        TextureFormat::Bc7Linear => "BC7 Linear (4× compressed)",
     };
     println!(
         "  Render mode: {} -> textures: {}",
@@ -296,7 +295,7 @@ fn load_texture(id: &str, path: &std::path::Path, format: TextureFormat) -> Resu
     // Compress or pass through based on format
     let data = match format {
         TextureFormat::Rgba8 => pixels.to_vec(),
-        TextureFormat::Bc7 | TextureFormat::Bc7Linear => compress_bc7(pixels, width, height)?,
+        TextureFormat::Bc7 => compress_bc7(pixels, width, height)?,
     };
 
     Ok(PackedTexture::with_format(

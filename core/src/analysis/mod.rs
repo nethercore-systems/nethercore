@@ -56,22 +56,13 @@ impl AnalysisResult {
 
     /// Get the texture format for a given slot
     ///
-    /// Returns the appropriate format based on render mode and slot:
+    /// Returns the appropriate format based on render mode:
     /// - Mode 0: Always RGBA8
-    /// - Mode 1: BC7 for all slots (matcap)
-    /// - Mode 2: BC7 sRGB for slots 0,3; BC7 Linear for slot 1 (material)
-    /// - Mode 3: BC7 sRGB for slots 0,2,3; BC7 Linear for slot 1 (material)
-    pub fn texture_format_for_slot(&self, slot: u8) -> TextureFormatHint {
+    /// - Mode 1-3: BC7 compressed
+    pub fn texture_format_for_slot(&self, _slot: u8) -> TextureFormatHint {
         match self.render_mode {
             0 => TextureFormatHint::Rgba8,
-            1 => TextureFormatHint::Bc7Srgb, // Matcap - all sRGB
-            2 | 3 => {
-                if slot == 1 {
-                    TextureFormatHint::Bc7Linear // Material map
-                } else {
-                    TextureFormatHint::Bc7Srgb // Albedo, specular, env
-                }
-            }
+            1 | 2 | 3 => TextureFormatHint::Bc7,
             _ => TextureFormatHint::Rgba8, // Invalid mode defaults to RGBA8
         }
     }
@@ -82,10 +73,8 @@ impl AnalysisResult {
 pub enum TextureFormatHint {
     /// Uncompressed RGBA8
     Rgba8,
-    /// BC7 compressed, sRGB color space
-    Bc7Srgb,
-    /// BC7 compressed, linear color space (for material maps)
-    Bc7Linear,
+    /// BC7 compressed
+    Bc7,
 }
 
 /// Validation error for analysis results
@@ -346,22 +335,10 @@ mod tests {
             render_mode: 1,
             ..Default::default()
         };
-        assert_eq!(
-            result.texture_format_for_slot(0),
-            TextureFormatHint::Bc7Srgb
-        );
-        assert_eq!(
-            result.texture_format_for_slot(1),
-            TextureFormatHint::Bc7Srgb
-        );
-        assert_eq!(
-            result.texture_format_for_slot(2),
-            TextureFormatHint::Bc7Srgb
-        );
-        assert_eq!(
-            result.texture_format_for_slot(3),
-            TextureFormatHint::Bc7Srgb
-        );
+        assert_eq!(result.texture_format_for_slot(0), TextureFormatHint::Bc7);
+        assert_eq!(result.texture_format_for_slot(1), TextureFormatHint::Bc7);
+        assert_eq!(result.texture_format_for_slot(2), TextureFormatHint::Bc7);
+        assert_eq!(result.texture_format_for_slot(3), TextureFormatHint::Bc7);
     }
 
     #[test]
@@ -370,18 +347,9 @@ mod tests {
             render_mode: 2,
             ..Default::default()
         };
-        assert_eq!(
-            result.texture_format_for_slot(0),
-            TextureFormatHint::Bc7Srgb
-        ); // Albedo
-        assert_eq!(
-            result.texture_format_for_slot(1),
-            TextureFormatHint::Bc7Linear
-        ); // Material
-        assert_eq!(
-            result.texture_format_for_slot(3),
-            TextureFormatHint::Bc7Srgb
-        ); // Env
+        assert_eq!(result.texture_format_for_slot(0), TextureFormatHint::Bc7);
+        assert_eq!(result.texture_format_for_slot(1), TextureFormatHint::Bc7);
+        assert_eq!(result.texture_format_for_slot(3), TextureFormatHint::Bc7);
     }
 
     #[test]
@@ -390,22 +358,10 @@ mod tests {
             render_mode: 3,
             ..Default::default()
         };
-        assert_eq!(
-            result.texture_format_for_slot(0),
-            TextureFormatHint::Bc7Srgb
-        ); // Albedo
-        assert_eq!(
-            result.texture_format_for_slot(1),
-            TextureFormatHint::Bc7Linear
-        ); // Material
-        assert_eq!(
-            result.texture_format_for_slot(2),
-            TextureFormatHint::Bc7Srgb
-        ); // Specular
-        assert_eq!(
-            result.texture_format_for_slot(3),
-            TextureFormatHint::Bc7Srgb
-        ); // Env
+        assert_eq!(result.texture_format_for_slot(0), TextureFormatHint::Bc7);
+        assert_eq!(result.texture_format_for_slot(1), TextureFormatHint::Bc7);
+        assert_eq!(result.texture_format_for_slot(2), TextureFormatHint::Bc7);
+        assert_eq!(result.texture_format_for_slot(3), TextureFormatHint::Bc7);
     }
 
     #[test]

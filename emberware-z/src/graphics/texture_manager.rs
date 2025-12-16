@@ -160,15 +160,6 @@ impl TextureManager {
                 width,
                 height,
                 data,
-                wgpu::TextureFormat::Bc7RgbaUnormSrgb,
-                true,
-            ),
-            TextureFormat::Bc7Linear => self.load_texture_bc7_internal(
-                device,
-                queue,
-                width,
-                height,
-                data,
                 wgpu::TextureFormat::Bc7RgbaUnorm,
                 true,
             ),
@@ -258,8 +249,7 @@ impl TextureManager {
         }
 
         let format_name = match wgpu_format {
-            wgpu::TextureFormat::Bc7RgbaUnormSrgb => "BC7 sRGB",
-            wgpu::TextureFormat::Bc7RgbaUnorm => "BC7 Linear",
+            wgpu::TextureFormat::Bc7RgbaUnorm => "BC7",
             _ => "BC7",
         };
 
@@ -321,7 +311,7 @@ impl TextureManager {
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                format: wgpu::TextureFormat::Rgba8Unorm,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                 view_formats: &[],
             },

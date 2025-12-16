@@ -25,24 +25,15 @@ pub enum TextureFormat {
     #[default]
     Rgba8,
 
-    /// BC7 compressed (8 bits per pixel, sRGB color space)
-    /// Used for albedo, matcap, specular color, environment textures
-    Bc7,
-
     /// BC7 compressed (8 bits per pixel, linear color space)
-    /// Used for material maps (metallic/roughness/emissive in slot 1)
-    Bc7Linear,
+    /// Used for all textures in modes 1-3
+    Bc7,
 }
 
 impl TextureFormat {
     /// Check if this format is BC7 (compressed)
     pub fn is_bc7(&self) -> bool {
-        matches!(self, TextureFormat::Bc7 | TextureFormat::Bc7Linear)
-    }
-
-    /// Check if this format uses sRGB color space
-    pub fn is_srgb(&self) -> bool {
-        matches!(self, TextureFormat::Rgba8 | TextureFormat::Bc7)
+        matches!(self, TextureFormat::Bc7)
     }
 
     /// Calculate data size for given dimensions
@@ -52,7 +43,7 @@ impl TextureFormat {
 
         match self {
             TextureFormat::Rgba8 => w * h * 4,
-            TextureFormat::Bc7 | TextureFormat::Bc7Linear => {
+            TextureFormat::Bc7 => {
                 let blocks_x = w.div_ceil(4);
                 let blocks_y = h.div_ceil(4);
                 blocks_x * blocks_y * 16
@@ -63,9 +54,8 @@ impl TextureFormat {
     /// Get wgpu-compatible format name (for debugging/logging)
     pub fn wgpu_format_name(&self) -> &'static str {
         match self {
-            TextureFormat::Rgba8 => "Rgba8UnormSrgb",
-            TextureFormat::Bc7 => "Bc7RgbaUnormSrgb",
-            TextureFormat::Bc7Linear => "Bc7RgbaUnorm",
+            TextureFormat::Rgba8 => "Rgba8Unorm",
+            TextureFormat::Bc7 => "Bc7RgbaUnorm",
         }
     }
 }
@@ -904,24 +894,14 @@ mod tests {
     fn test_texture_format_equality() {
         assert_eq!(TextureFormat::Rgba8, TextureFormat::Rgba8);
         assert_eq!(TextureFormat::Bc7, TextureFormat::Bc7);
-        assert_eq!(TextureFormat::Bc7Linear, TextureFormat::Bc7Linear);
 
         assert_ne!(TextureFormat::Rgba8, TextureFormat::Bc7);
-        assert_ne!(TextureFormat::Bc7, TextureFormat::Bc7Linear);
     }
 
     #[test]
     fn test_texture_format_is_bc7() {
         assert!(!TextureFormat::Rgba8.is_bc7());
         assert!(TextureFormat::Bc7.is_bc7());
-        assert!(TextureFormat::Bc7Linear.is_bc7());
-    }
-
-    #[test]
-    fn test_texture_format_is_srgb() {
-        assert!(TextureFormat::Rgba8.is_srgb());
-        assert!(TextureFormat::Bc7.is_srgb());
-        assert!(!TextureFormat::Bc7Linear.is_srgb());
     }
 
     #[test]
@@ -970,13 +950,13 @@ mod tests {
             "material",
             64,
             64,
-            TextureFormat::Bc7Linear,
+            TextureFormat::Bc7,
             vec![0; 4096], // BC7 size for 64×64
         );
 
         assert_eq!(tex.width, 64);
         assert_eq!(tex.height, 64);
-        assert_eq!(tex.format, TextureFormat::Bc7Linear);
+        assert_eq!(tex.format, TextureFormat::Bc7);
         assert!(tex.is_bc7());
         assert!(tex.validate());
     }

@@ -34,12 +34,8 @@ pub fn convert_image_with_format(input: &Path, output: &Path, format: TextureFor
     let (output_data, output_format) = match format {
         TextureFormat::Rgba8 => (pixels.to_vec(), TextureFormat::Rgba8),
         TextureFormat::Bc7 => {
-            let compressed = compress_bc7(pixels, width, height, true)?;
+            let compressed = compress_bc7(pixels, width, height)?;
             (compressed, TextureFormat::Bc7)
-        }
-        TextureFormat::Bc7Linear => {
-            let compressed = compress_bc7(pixels, width, height, false)?;
-            (compressed, TextureFormat::Bc7Linear)
         }
     };
 
@@ -88,11 +84,10 @@ pub fn convert_image_with_format(input: &Path, output: &Path, format: TextureFor
 /// * `pixels` - RGBA8 pixel data (width × height × 4 bytes)
 /// * `width` - Image width in pixels
 /// * `height` - Image height in pixels
-/// * `_srgb` - Whether to treat input as sRGB (affects compression quality heuristics)
 ///
 /// # Returns
 /// BC7 compressed block data
-pub fn compress_bc7(pixels: &[u8], width: u32, height: u32, _srgb: bool) -> Result<Vec<u8>> {
+pub fn compress_bc7(pixels: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
     use intel_tex_2::bc7;
 
     let w = width as usize;
@@ -159,8 +154,7 @@ pub fn process_texture_for_pack(
 ) -> Result<(u16, u16, TextureFormat, Vec<u8>)> {
     let data = match format {
         TextureFormat::Rgba8 => pixels.to_vec(),
-        TextureFormat::Bc7 => compress_bc7(pixels, width, height, true)?,
-        TextureFormat::Bc7Linear => compress_bc7(pixels, width, height, false)?,
+        TextureFormat::Bc7 => compress_bc7(pixels, width, height)?,
     };
 
     Ok((width as u16, height as u16, format, data))
@@ -177,7 +171,7 @@ mod tests {
         let height = 4u32;
         let pixels: Vec<u8> = vec![255, 0, 0, 255].repeat(16); // Red
 
-        let compressed = compress_bc7(&pixels, width, height, true).unwrap();
+        let compressed = compress_bc7(&pixels, width, height).unwrap();
 
         // BC7 output should be exactly 16 bytes for a 4×4 block
         assert_eq!(compressed.len(), 16);
@@ -190,7 +184,7 @@ mod tests {
         let height = 64u32;
         let pixels: Vec<u8> = vec![0, 128, 255, 255].repeat((width * height) as usize);
 
-        let compressed = compress_bc7(&pixels, width, height, true).unwrap();
+        let compressed = compress_bc7(&pixels, width, height).unwrap();
 
         assert_eq!(compressed.len(), 4096);
     }
@@ -202,7 +196,7 @@ mod tests {
         let height = 30u32;
         let pixels: Vec<u8> = vec![128, 128, 128, 255].repeat((width * height) as usize);
 
-        let compressed = compress_bc7(&pixels, width, height, true).unwrap();
+        let compressed = compress_bc7(&pixels, width, height).unwrap();
 
         // 8×8 blocks × 16 bytes = 1024 bytes
         assert_eq!(compressed.len(), 8 * 8 * 16);
@@ -214,7 +208,7 @@ mod tests {
         let height = 64u32;
         let pixels: Vec<u8> = vec![0; (width * height * 4) as usize];
 
-        let compressed = compress_bc7(&pixels, width, height, true).unwrap();
+        let compressed = compress_bc7(&pixels, width, height).unwrap();
 
         let original_size = (width * height * 4) as usize;
         let ratio = original_size / compressed.len();
