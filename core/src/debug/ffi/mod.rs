@@ -11,6 +11,7 @@
 //! ❌ DO NOT add FFI function implementations here
 //! ✅ DO add them to domain-specific submodules (register.rs, watch.rs, control.rs)
 
+mod actions;
 mod control;
 mod register;
 mod watch;
@@ -38,6 +39,7 @@ where
     register::register(linker)?;
     watch::register(linker)?;
     control::register(linker)?;
+    actions::register(linker)?;
     Ok(())
 }
 

@@ -20,14 +20,18 @@ use winit::window::{Fullscreen, Window};
 
 use emberware_core::ConsoleRunner;
 use emberware_core::app::event_loop::ConsoleApp;
-use emberware_core::app::{DebugStats, FRAME_TIME_HISTORY_SIZE, RuntimeError};
+use emberware_core::app::{
+    DebugStats, FRAME_TIME_HISTORY_SIZE, GameError, GameErrorPhase, RuntimeError,
+    parse_wasm_error,
+};
 use emberware_core::console::{Console, ConsoleResourceManager};
-use emberware_core::debug::FrameController;
+use emberware_core::debug::{ActionRequest, FrameController};
 use emberware_core::debug::registry::RegisteredValue;
 use emberware_core::debug::types::DebugValue;
 use z_common::{ZDataPack, ZRom};
 
 use crate::audio;
+use crate::capture::{self, ScreenCapture};
 use crate::console::EmberwareZ;
 use crate::input::InputManager;
 
@@ -39,6 +43,8 @@ struct PlayerSettingsPanel {
     scale_mode: emberware_core::app::config::ScaleMode,
     /// Whether fullscreen is enabled
     fullscreen: bool,
+    /// Master volume (0.0 - 1.0)
+    master_volume: f32,
 }
 
 impl PlayerSettingsPanel {
@@ -47,6 +53,7 @@ impl PlayerSettingsPanel {
             visible: false,
             scale_mode: config.video.scale_mode,
             fullscreen,
+            master_volume: config.audio.master_volume,
         }
     }
 
@@ -65,8 +72,10 @@ impl PlayerSettingsPanel {
         egui::Window::new("Settings")
             .collapsible(false)
             .resizable(false)
+            .default_width(280.0)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
+                ui.set_min_width(250.0);
                 ui.heading("Video");
                 ui.add_space(5.0);
 
@@ -107,6 +116,21 @@ impl PlayerSettingsPanel {
                 }
 
                 ui.add_space(15.0);
+                ui.heading("Audio");
+                ui.add_space(5.0);
+
+                // Volume slider
+                let old_volume = self.master_volume;
+                ui.add(
+                    egui::Slider::new(&mut self.master_volume, 0.0..=1.0)
+                        .text("Master Volume")
+                        .custom_formatter(|n, _| format!("{:.0}%", n * 100.0)),
+                );
+                if (self.master_volume - old_volume).abs() > f32::EPSILON {
+                    action = SettingsAction::SetVolume(self.master_volume);
+                }
+
+                ui.add_space(15.0);
                 ui.separator();
                 ui.add_space(5.0);
 
@@ -134,7 +158,127 @@ enum SettingsAction {
     None,
     ToggleFullscreen(bool),
     SetScaleMode(emberware_core::app::config::ScaleMode),
+    SetVolume(f32),
     SaveConfig,
+}
+
+/// Action from error screen UI
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ErrorAction {
+    /// No action
+    None,
+    /// Restart the game
+    Restart,
+    /// Quit the application
+    Quit,
+}
+
+/// Render the error screen overlay
+fn render_error_screen(ctx: &egui::Context, error: &GameError) -> ErrorAction {
+    let mut action = ErrorAction::None;
+
+    // Semi-transparent background overlay
+    egui::Area::new(egui::Id::new("error_overlay_bg"))
+        .fixed_pos(egui::pos2(0.0, 0.0))
+        .order(egui::Order::Background)
+        .show(ctx, |ui| {
+            let screen = ui.ctx().input(|i| i.screen_rect());
+            ui.painter().rect_filled(
+                screen,
+                0.0,
+                egui::Color32::from_rgba_unmultiplied(0, 0, 0, 200),
+            );
+        });
+
+    egui::Window::new("Game Error")
+        .collapsible(false)
+        .resizable(false)
+        .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+        .default_width(450.0)
+        .show(ctx, |ui| {
+            // Error icon and title
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("⚠").size(24.0).color(egui::Color32::YELLOW));
+                ui.heading(&error.summary);
+            });
+
+            ui.add_space(10.0);
+
+            // Phase and tick info
+            ui.horizontal(|ui| {
+                ui.label(format!("Phase: {}", error.phase));
+                if let Some(tick) = error.tick {
+                    ui.separator();
+                    ui.label(format!("Tick: {}", tick));
+                }
+            });
+
+            ui.add_space(10.0);
+            ui.separator();
+            ui.add_space(10.0);
+
+            // Suggestions
+            if !error.suggestions.is_empty() {
+                ui.label(egui::RichText::new("Possible causes:").strong());
+                for suggestion in &error.suggestions {
+                    ui.horizontal(|ui| {
+                        ui.label("  •");
+                        ui.label(suggestion);
+                    });
+                }
+                ui.add_space(10.0);
+            }
+
+            // Collapsible error details
+            egui::CollapsingHeader::new("Error Details")
+                .default_open(false)
+                .show(ui, |ui| {
+                    egui::ScrollArea::vertical()
+                        .max_height(200.0)
+                        .show(ui, |ui| {
+                            ui.add(
+                                egui::TextEdit::multiline(&mut error.details.as_str())
+                                    .font(egui::TextStyle::Monospace)
+                                    .desired_width(f32::INFINITY),
+                            );
+                        });
+                });
+
+            // Stack trace if available
+            if let Some(ref trace) = error.stack_trace {
+                egui::CollapsingHeader::new("Stack Trace")
+                    .default_open(false)
+                    .show(ui, |ui| {
+                        egui::ScrollArea::vertical()
+                            .max_height(150.0)
+                            .show(ui, |ui| {
+                                for frame in trace {
+                                    ui.monospace(frame);
+                                }
+                            });
+                    });
+            }
+
+            ui.add_space(15.0);
+            ui.separator();
+            ui.add_space(10.0);
+
+            // Action buttons
+            ui.horizontal(|ui| {
+                if ui.button("Restart Game").clicked() {
+                    action = ErrorAction::Restart;
+                }
+                ui.add_space(20.0);
+                if ui.button("Quit").clicked() {
+                    action = ErrorAction::Quit;
+                }
+            });
+
+            ui.add_space(5.0);
+            ui.label(egui::RichText::new("Press Escape to quit").weak().small());
+        });
+
+    action
 }
 
 /// Player configuration passed from CLI
@@ -189,6 +333,16 @@ pub struct PlayerApp {
     egui_state: Option<egui_winit::State>,
     /// egui-wgpu renderer
     egui_renderer: Option<egui_wgpu::Renderer>,
+    /// Cached ROM data for restart capability
+    loaded_rom: Option<LoadedRom>,
+    /// Current error state (None = playing normally)
+    error_state: Option<GameError>,
+    /// Screen capture manager (screenshots/GIFs)
+    capture: ScreenCapture,
+    /// Screenshot key (parsed from config)
+    screenshot_key: KeyCode,
+    /// GIF toggle key (parsed from config)
+    gif_toggle_key: KeyCode,
 }
 
 impl PlayerApp {
@@ -199,6 +353,42 @@ impl PlayerApp {
         let input_config = app_config.input.clone();
         let scale_mode = app_config.video.scale_mode;
         let settings_panel = PlayerSettingsPanel::new(&app_config, config.fullscreen);
+
+        // Validate keybindings and log any conflicts
+        let warnings = emberware_core::app::config::validate_keybindings(&app_config);
+        for warning in warnings {
+            tracing::warn!("Keybinding conflict: {}", warning);
+        }
+
+        // Parse capture keybindings
+        let screenshot_key = parse_key_code(&app_config.capture.screenshot).unwrap_or_else(|| {
+            tracing::warn!(
+                "Invalid screenshot key '{}', using F9",
+                app_config.capture.screenshot
+            );
+            KeyCode::F9
+        });
+        let gif_toggle_key = parse_key_code(&app_config.capture.gif_toggle).unwrap_or_else(|| {
+            tracing::warn!(
+                "Invalid GIF toggle key '{}', using F10",
+                app_config.capture.gif_toggle
+            );
+            KeyCode::F10
+        });
+
+        // Initialize capture manager with initial game name from path
+        // (will be updated with actual title when ROM is loaded)
+        let initial_game_name = config
+            .rom_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("game")
+            .to_string();
+        let capture = ScreenCapture::new(
+            app_config.capture.gif_fps,
+            app_config.capture.gif_max_seconds,
+            initial_game_name,
+        );
 
         Self {
             debug_overlay: config.debug,
@@ -224,6 +414,11 @@ impl PlayerApp {
             egui_ctx: egui::Context::default(),
             egui_state: None,
             egui_renderer: None,
+            loaded_rom: None,
+            error_state: None,
+            capture,
+            screenshot_key,
+            gif_toggle_key,
         }
     }
 
@@ -235,6 +430,67 @@ impl PlayerApp {
             return session.runtime.tick_duration();
         }
         Duration::from_secs_f64(1.0 / 60.0)
+    }
+
+    /// Restart the game after an error
+    ///
+    /// Clears the error state, unloads the current game, and reloads it
+    /// from the cached ROM data.
+    fn restart_game(&mut self) {
+        // Clear error state
+        self.error_state = None;
+
+        // Get cached ROM or reload from disk
+        let rom = if let Some(ref rom) = self.loaded_rom {
+            rom.clone()
+        } else if let Ok(rom) = load_rom(&self.config.rom_path) {
+            self.loaded_rom = Some(rom.clone());
+            rom
+        } else {
+            tracing::error!("Failed to reload ROM for restart");
+            self.should_exit = true;
+            return;
+        };
+
+        // Unload current game
+        if let Some(runner) = &mut self.runner {
+            runner.unload_game();
+        }
+
+        // Create new console with datapack and reload game
+        let console = EmberwareZ::with_datapack(rom.data_pack.clone());
+
+        if let Some(runner) = &mut self.runner {
+            if let Err(e) = runner.load_game(console, &rom.code, 1) {
+                tracing::error!("Failed to restart game: {}", e);
+                // Show error for restart failure
+                self.error_state = Some(GameError {
+                    summary: "Restart Failed".to_string(),
+                    details: format!("{:#}", e),
+                    stack_trace: None,
+                    tick: None,
+                    phase: GameErrorPhase::Init,
+                    suggestions: vec![
+                        "The ROM file may be corrupted".to_string(),
+                        "Try closing and reopening the player".to_string(),
+                    ],
+                });
+                return;
+            }
+
+            // Restore audio volume from settings
+            if let Some(session) = runner.session_mut() {
+                if let Some(audio) = session.runtime.audio_mut() {
+                    audio.set_master_volume(self.settings_panel.master_volume);
+                }
+            }
+        }
+
+        // Reset timing
+        self.next_tick = Instant::now();
+        self.needs_redraw = true;
+
+        tracing::info!("Game restarted successfully");
     }
 
     /// Handle keyboard input
@@ -275,6 +531,25 @@ impl PlayerApp {
                             window.set_fullscreen(Some(Fullscreen::Borderless(None)));
                             self.settings_panel.fullscreen = true;
                         }
+                    }
+                }
+                // Screenshot (configurable key, default F9)
+                PhysicalKey::Code(key) if key == self.screenshot_key => {
+                    self.capture.request_screenshot();
+                    tracing::info!("Screenshot requested");
+                    self.needs_redraw = true;
+                }
+                // GIF toggle (configurable key, default F10)
+                PhysicalKey::Code(key) if key == self.gif_toggle_key => {
+                    if let Some(runner) = &self.runner {
+                        let (w, h) = runner.graphics().render_target_dimensions();
+                        self.capture.toggle_recording(w, h);
+                        if self.capture.is_recording() {
+                            tracing::info!("GIF recording started");
+                        } else {
+                            tracing::info!("GIF recording stopped, saving...");
+                        }
+                        self.needs_redraw = true;
                     }
                 }
                 _ => {}
@@ -433,22 +708,23 @@ impl ConsoleApp<EmberwareZ> for PlayerApp {
             window.set_fullscreen(Some(Fullscreen::Borderless(None)));
         }
 
-        // Set window title
-        let rom_name = self
-            .config
-            .rom_path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("Emberware Z");
-        window.set_title(&format!("Emberware Z - {}", rom_name));
+        // Load ROM and cache for restart capability (do this first to get game name)
+        let rom = load_rom(&self.config.rom_path)?;
+        self.loaded_rom = Some(rom.clone());
+
+        // Set window title using game name from ROM metadata
+        window.set_title(&format!("Emberware Z - {}", rom.game_name));
+
+        // Update capture manager with the actual game name
+        self.capture.set_game_name(rom.game_name.clone());
 
         // Create console runner
         let console = EmberwareZ::new();
         let specs = console.specs();
 
-        // Set minimum window size based on console's render resolution
+        // Set minimum window size based on console's render resolution (in physical pixels)
         let (render_width, render_height) = specs.resolutions[specs.default_resolution];
-        window.set_min_inner_size(Some(winit::dpi::LogicalSize::new(
+        window.set_min_inner_size(Some(winit::dpi::PhysicalSize::new(
             render_width,
             render_height,
         )));
@@ -458,14 +734,18 @@ impl ConsoleApp<EmberwareZ> for PlayerApp {
         // Apply scale mode from user config
         runner.graphics_mut().set_scale_mode(self.scale_mode);
 
-        // Load ROM
-        let rom = load_rom(&self.config.rom_path)?;
-
-        // Create console with datapack and load game
-        let console_with_datapack = EmberwareZ::with_datapack(rom.data_pack);
+        // Create console with datapack and load game (rom already loaded above)
+        let console_with_datapack = EmberwareZ::with_datapack(rom.data_pack.clone());
         runner
             .load_game(console_with_datapack, &rom.code, 1)
             .context("Failed to load game")?;
+
+        // Apply audio volume from config
+        if let Some(session) = runner.session_mut() {
+            if let Some(audio) = session.runtime.audio_mut() {
+                audio.set_master_volume(self.settings_panel.master_volume);
+            }
+        }
 
         // Initialize egui for debug overlays
         let egui_state = egui_winit::State::new(
@@ -530,8 +810,21 @@ impl ConsoleApp<EmberwareZ> for PlayerApp {
     fn advance_simulation(&mut self) {
         self.last_sim_rendered = false;
 
+        // If in error state, don't advance - just wait for user action
+        if self.error_state.is_some() {
+            return;
+        }
+
         // Poll gamepad input
         self.input_manager.update();
+
+        // Get current tick count before running (for error reporting)
+        let tick_before = self
+            .runner
+            .as_ref()
+            .and_then(|r| r.session())
+            .and_then(|s| s.runtime.game())
+            .map(|g| g.state().tick_count);
 
         match self.run_game_frame() {
             Ok((game_running, did_render)) => {
@@ -547,8 +840,23 @@ impl ConsoleApp<EmberwareZ> for PlayerApp {
                 }
             }
             Err(e) => {
-                tracing::error!("Runtime error: {}", e);
-                self.should_exit = true;
+                // Parse error and transition to error state instead of exiting
+                let error_msg = e.0.clone();
+
+                // Determine phase from error message
+                let phase = if error_msg.contains("Render error") {
+                    GameErrorPhase::Render
+                } else {
+                    GameErrorPhase::Update
+                };
+
+                // Parse into structured GameError
+                let game_error = parse_wasm_error(&anyhow::anyhow!("{}", error_msg), tick_before, phase);
+
+                tracing::error!("Game error: {}", game_error);
+                self.error_state = Some(game_error);
+                self.needs_redraw = true;
+                // DO NOT set should_exit = true - show error screen instead
             }
         }
     }
@@ -558,12 +866,17 @@ impl ConsoleApp<EmberwareZ> for PlayerApp {
     }
 
     fn render(&mut self) {
-        let runner = match &mut self.runner {
-            Some(r) => r,
-            None => return,
-        };
+        // Track if restart was requested (handled after runner borrow ends)
+        let mut restart_requested = false;
 
-        // Get surface texture
+        // Begin block to scope runner borrow (restart_game needs &mut self after)
+        {
+            let runner = match &mut self.runner {
+                Some(r) => r,
+                None => return,
+            };
+
+            // Get surface texture
         let surface_texture = match runner.graphics_mut().get_current_texture() {
             Ok(tex) => tex,
             Err(e) => {
@@ -603,7 +916,7 @@ impl ConsoleApp<EmberwareZ> for PlayerApp {
         runner.graphics().blit_to_window(&mut encoder, &view);
 
         // Render overlays via egui (on top of game)
-        if self.debug_overlay || self.debug_panel.visible || self.settings_panel.visible {
+        if self.debug_overlay || self.debug_panel.visible || self.settings_panel.visible || self.error_state.is_some() {
             // Extract registry and memory base address (no copy - WASM is idle during rendering)
             let (registry_opt, mem_base, mem_len, has_debug_callback) = {
                 if let Some(session) = runner.session() {
@@ -636,8 +949,14 @@ impl ConsoleApp<EmberwareZ> for PlayerApp {
             let pending_writes: RefCell<Vec<(RegisteredValue, DebugValue)>> =
                 RefCell::new(Vec::new());
 
+            // Pending action to apply after egui closure
+            let pending_action: RefCell<Option<ActionRequest>> = RefCell::new(None);
+
             // Settings action to apply after egui closure
             let settings_action: RefCell<SettingsAction> = RefCell::new(SettingsAction::None);
+
+            // Error action to apply after egui closure
+            let error_action: RefCell<ErrorAction> = RefCell::new(ErrorAction::None);
 
             if let (Some(egui_state), Some(egui_renderer), Some(window)) =
                 (&mut self.egui_state, &mut self.egui_renderer, &self.window)
@@ -651,6 +970,7 @@ impl ConsoleApp<EmberwareZ> for PlayerApp {
                 let debug_panel = &mut self.debug_panel;
                 let frame_controller = &mut self.frame_controller;
                 let settings_panel = &mut self.settings_panel;
+                let error_state_ref = &self.error_state;
 
                 let full_output = self.egui_ctx.run(raw_input, |ctx| {
                     // Render settings panel first (so it's on top)
@@ -703,13 +1023,24 @@ impl ConsoleApp<EmberwareZ> for PlayerApp {
                                     true
                                 };
 
-                            debug_panel.render(
+                            let (_changed, action) = debug_panel.render(
                                 ctx,
                                 registry,
                                 frame_controller,
                                 read_value,
                                 write_value,
                             );
+                            if let Some(action) = action {
+                                *pending_action.borrow_mut() = Some(action);
+                            }
+                        }
+                    }
+
+                    // Render error screen if in error state (highest priority, on top of everything)
+                    if let Some(error) = error_state_ref {
+                        let action = render_error_screen(ctx, error);
+                        if action != ErrorAction::None {
+                            *error_action.borrow_mut() = action;
                         }
                     }
                 });
@@ -795,6 +1126,17 @@ impl ConsoleApp<EmberwareZ> for PlayerApp {
                 }
             }
 
+            // Apply pending debug action
+            if let Some(action_req) = pending_action.into_inner() {
+                if let Some(session) = runner.session_mut() {
+                    if let Some(game) = session.runtime.game_mut() {
+                        if let Err(e) = game.call_action(&action_req.func_name, &action_req.args) {
+                            tracing::warn!("Debug action '{}' failed: {}", action_req.func_name, e);
+                        }
+                    }
+                }
+            }
+
             // Apply settings actions
             match settings_action.into_inner() {
                 SettingsAction::None => {}
@@ -811,16 +1153,35 @@ impl ConsoleApp<EmberwareZ> for PlayerApp {
                     self.scale_mode = scale_mode;
                     runner.graphics_mut().set_scale_mode(scale_mode);
                 }
+                SettingsAction::SetVolume(volume) => {
+                    if let Some(session) = runner.session_mut() {
+                        if let Some(audio) = session.runtime.audio_mut() {
+                            audio.set_master_volume(volume);
+                        }
+                    }
+                }
                 SettingsAction::SaveConfig => {
                     // Save current settings to config file
                     let mut config = emberware_core::app::config::load();
                     config.video.scale_mode = self.settings_panel.scale_mode;
                     config.video.fullscreen = self.settings_panel.fullscreen;
+                    config.audio.master_volume = self.settings_panel.master_volume;
                     if let Err(e) = emberware_core::app::config::save(&config) {
                         tracing::error!("Failed to save config: {}", e);
                     } else {
                         tracing::info!("Settings saved to config");
                     }
+                }
+            }
+
+            // Apply error actions (restart is deferred)
+            match error_action.into_inner() {
+                ErrorAction::None => {}
+                ErrorAction::Restart => {
+                    restart_requested = true;
+                }
+                ErrorAction::Quit => {
+                    self.should_exit = true;
                 }
             }
         }
@@ -832,6 +1193,43 @@ impl ConsoleApp<EmberwareZ> for PlayerApp {
             .submit(std::iter::once(encoder.finish()));
 
         surface_texture.present();
+
+        // Process screen capture (screenshot/GIF) if needed
+        if self.capture.needs_capture() {
+            let (width, height) = runner.graphics().render_target_dimensions();
+            let pixels = capture::read_render_target_pixels(
+                runner.graphics().device(),
+                runner.graphics().queue(),
+                runner.graphics().render_target_texture(),
+                width,
+                height,
+            );
+            self.capture.process_frame(pixels, width, height);
+        }
+
+        // Check for capture save results
+        if let Some(result) = self.capture.poll_save_result() {
+            match result {
+                capture::SaveResult::Screenshot(Ok(path)) => {
+                    tracing::info!("Screenshot saved: {}", path.display());
+                }
+                capture::SaveResult::Screenshot(Err(e)) => {
+                    tracing::error!("Failed to save screenshot: {}", e);
+                }
+                capture::SaveResult::Gif(Ok(path)) => {
+                    tracing::info!("GIF saved: {}", path.display());
+                }
+                capture::SaveResult::Gif(Err(e)) => {
+                    tracing::error!("Failed to save GIF: {}", e);
+                }
+            }
+        }
+        } // End runner borrow block
+
+        // Handle deferred restart (after runner borrow ends)
+        if restart_requested {
+            self.restart_game();
+        }
     }
 
     fn needs_redraw(&self) -> bool {
@@ -847,8 +1245,25 @@ impl ConsoleApp<EmberwareZ> for PlayerApp {
     }
 
     fn on_runtime_error(&mut self, error: RuntimeError) {
-        tracing::error!("Runtime error: {}", error);
-        self.should_exit = true;
+        // Get current tick count for error reporting
+        let tick = self
+            .runner
+            .as_ref()
+            .and_then(|r| r.session())
+            .and_then(|s| s.runtime.game())
+            .map(|g| g.state().tick_count);
+
+        // Parse into structured GameError
+        let game_error = parse_wasm_error(
+            &anyhow::anyhow!("{}", error.0),
+            tick,
+            GameErrorPhase::Update, // Default to Update phase
+        );
+
+        tracing::error!("Runtime error: {}", game_error);
+        self.error_state = Some(game_error);
+        self.needs_redraw = true;
+        // DO NOT set should_exit = true - show error screen instead
     }
 
     fn should_exit(&self) -> bool {
@@ -867,28 +1282,47 @@ impl ConsoleApp<EmberwareZ> for PlayerApp {
 }
 
 /// Loaded ROM data
+#[derive(Clone)]
 struct LoadedRom {
     code: Vec<u8>,
     data_pack: Option<Arc<ZDataPack>>,
+    /// Game title (from ROM metadata or file stem fallback)
+    game_name: String,
 }
 
 /// Load ROM from path
 fn load_rom(path: &Path) -> Result<LoadedRom> {
+    // Fallback name from file stem
+    let fallback_name = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("Emberware Z")
+        .to_string();
+
     if path.extension().and_then(|e| e.to_str()) == Some("ewz") {
         let ewz_bytes = std::fs::read(path).context("Failed to read .ewz ROM file")?;
 
         let rom = ZRom::from_bytes(&ewz_bytes).context("Failed to parse .ewz ROM")?;
 
+        // Use metadata title, fall back to file stem if empty
+        let game_name = if rom.metadata.title.is_empty() {
+            fallback_name
+        } else {
+            rom.metadata.title.clone()
+        };
+
         Ok(LoadedRom {
             code: rom.code,
             data_pack: rom.data_pack.map(Arc::new),
+            game_name,
         })
     } else {
-        // Raw WASM file
+        // Raw WASM file - use file stem as name
         let wasm = std::fs::read(path).context("Failed to read WASM file")?;
         Ok(LoadedRom {
             code: wasm,
             data_pack: None,
+            game_name: fallback_name,
         })
     }
 }
@@ -902,6 +1336,27 @@ fn get_clear_color(runner: &ConsoleRunner<EmberwareZ>) -> [f32; 4] {
         return crate::ffi::unpack_rgba(z_state.init_config.clear_color);
     }
     [0.1, 0.1, 0.1, 1.0]
+}
+
+/// Parse a key string to a winit KeyCode.
+///
+/// Supports F1-F12 keys. Returns None for unrecognized keys.
+fn parse_key_code(s: &str) -> Option<KeyCode> {
+    match s.to_uppercase().as_str() {
+        "F1" => Some(KeyCode::F1),
+        "F2" => Some(KeyCode::F2),
+        "F3" => Some(KeyCode::F3),
+        "F4" => Some(KeyCode::F4),
+        "F5" => Some(KeyCode::F5),
+        "F6" => Some(KeyCode::F6),
+        "F7" => Some(KeyCode::F7),
+        "F8" => Some(KeyCode::F8),
+        "F9" => Some(KeyCode::F9),
+        "F10" => Some(KeyCode::F10),
+        "F11" => Some(KeyCode::F11),
+        "F12" => Some(KeyCode::F12),
+        _ => None,
+    }
 }
 
 /// Run the standalone player

@@ -5,3 +5,4 @@ RUST_BACKTRACE = "1"
 
 [alias]
 xtask = "run --package xtask --"
+ba = "build --workspace"

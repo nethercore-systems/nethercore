@@ -344,6 +344,8 @@ fn soft_clip(x: f32) -> f32 {
 pub struct ZAudio {
     /// Audio output (cpal stream + ring buffer)
     output: Option<AudioOutput>,
+    /// Master volume (0.0 - 1.0)
+    master_volume: f32,
 }
 
 impl ZAudio {
@@ -352,12 +354,26 @@ impl ZAudio {
         match AudioOutput::new() {
             Ok(output) => Ok(Self {
                 output: Some(output),
+                master_volume: 1.0,
             }),
             Err(e) => {
                 warn!("Failed to create audio output: {}. Audio disabled.", e);
-                Ok(Self { output: None })
+                Ok(Self {
+                    output: None,
+                    master_volume: 1.0,
+                })
             }
         }
+    }
+
+    /// Set the master volume (0.0 - 1.0)
+    pub fn set_master_volume(&mut self, volume: f32) {
+        self.master_volume = volume.clamp(0.0, 1.0);
+    }
+
+    /// Get the current master volume
+    pub fn master_volume(&self) -> f32 {
+        self.master_volume
     }
 
     /// Get the sample rate (or default if audio is disabled)
@@ -369,9 +385,18 @@ impl ZAudio {
     }
 
     /// Push generated audio samples to the output
+    ///
+    /// Samples are scaled by the master volume before being pushed to the output.
     pub fn push_samples(&mut self, samples: &[f32]) {
         if let Some(output) = &mut self.output {
-            output.push_samples(samples);
+            // Skip scaling if volume is at 100%
+            if (self.master_volume - 1.0).abs() < f32::EPSILON {
+                output.push_samples(samples);
+            } else {
+                // Scale samples by master volume
+                let scaled: Vec<f32> = samples.iter().map(|s| s * self.master_volume).collect();
+                output.push_samples(&scaled);
+            }
         }
     }
 
@@ -388,7 +413,10 @@ impl ZAudio {
 
 impl Default for ZAudio {
     fn default() -> Self {
-        Self::new().unwrap_or(Self { output: None })
+        Self::new().unwrap_or(Self {
+            output: None,
+            master_volume: 1.0,
+        })
     }
 }
 

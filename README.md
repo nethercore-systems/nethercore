@@ -91,6 +91,48 @@ The `/examples` directory contains 28 example games covering graphics, animation
 
 See [examples/README.md](./examples/README.md) for the complete list with descriptions.
 
+## Screen Capture
+
+Emberware includes built-in screenshot and GIF recording:
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| Screenshot | **F9** | Save PNG to `~/.emberware/Emberware/screenshots/` |
+| GIF Toggle | **F10** | Start/stop GIF recording, saves to `~/.emberware/Emberware/gifs/` |
+
+Filenames include the game name and timestamp: `platformer_screenshot_2025-01-15_14-30-45.png`
+
+### Configuration
+
+All capture keys are configurable in `~/.emberware/config.toml`:
+
+```toml
+[capture]
+screenshot = "F9"
+gif_toggle = "F10"
+gif_fps = 30          # Recording framerate (default: 30)
+gif_max_seconds = 60  # Max duration before auto-stop
+```
+
+## Documentation
+
+Searchable API documentation is available as an mdBook:
+
+```bash
+# Install mdBook
+cargo install mdbook
+
+# Build and serve locally
+cd docs/book
+mdbook serve
+# Opens at http://localhost:3000
+```
+
+**Quick References:**
+- [Cheat Sheet](./docs/book/src/cheat-sheet.md) — All ~116 functions at a glance
+- [Getting Started](./docs/book/src/getting-started.md) — Your first game
+- [API Reference](./docs/book/src/) — Full documentation
+
 ### Upload
 
 Visit [emberware.io](https://emberware.io) to create an account and upload your game.

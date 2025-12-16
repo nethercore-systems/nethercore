@@ -142,7 +142,7 @@ impl<C: Console, A: ConsoleApp<C>> ApplicationHandler for AppEventHandler<C, A> 
             // Note: minimum size is set by the app in on_window_created() based on game resolution
             let window_attributes = Window::default_attributes()
                 .with_title("Emberware")
-                .with_inner_size(winit::dpi::LogicalSize::new(960, 540));
+                .with_inner_size(winit::dpi::PhysicalSize::new(960u32, 540u32));
 
             match event_loop.create_window(window_attributes) {
                 Ok(window) => {

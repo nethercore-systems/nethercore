@@ -26,6 +26,9 @@ pub struct Config {
     /// Debug inspection settings
     #[serde(default)]
     pub debug: DebugConfig,
+    /// Capture (screenshot/GIF) settings
+    #[serde(default)]
+    pub capture: CaptureConfig,
 }
 
 /// Scaling mode for render target to window
@@ -87,6 +90,25 @@ pub struct DebugConfig {
     pub speed_increase: String,
 }
 
+/// Screenshot and GIF recording configuration.
+///
+/// Configures hotkeys and settings for capturing gameplay.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CaptureConfig {
+    /// Screenshot keybinding (default: F9)
+    #[serde(default = "default_screenshot_key")]
+    pub screenshot: String,
+    /// GIF recording toggle keybinding (default: F10)
+    #[serde(default = "default_gif_toggle_key")]
+    pub gif_toggle: String,
+    /// GIF recording framerate (default: 30)
+    #[serde(default = "default_gif_fps")]
+    pub gif_fps: u32,
+    /// GIF max duration in seconds (default: 60)
+    #[serde(default = "default_gif_max_seconds")]
+    pub gif_max_seconds: u32,
+}
+
 fn default_panel_toggle() -> String {
     "F3".to_string()
 }
@@ -101,6 +123,19 @@ fn default_speed_decrease() -> String {
 }
 fn default_speed_increase() -> String {
     "F8".to_string()
+}
+
+fn default_screenshot_key() -> String {
+    "F9".to_string()
+}
+fn default_gif_toggle_key() -> String {
+    "F10".to_string()
+}
+fn default_gif_fps() -> u32 {
+    30
+}
+fn default_gif_max_seconds() -> u32 {
+    60
 }
 
 fn default_true() -> bool {
@@ -138,6 +173,17 @@ impl Default for DebugConfig {
             step_frame: default_step_frame(),
             speed_decrease: default_speed_decrease(),
             speed_increase: default_speed_increase(),
+        }
+    }
+}
+
+impl Default for CaptureConfig {
+    fn default() -> Self {
+        Self {
+            screenshot: default_screenshot_key(),
+            gif_toggle: default_gif_toggle_key(),
+            gif_fps: default_gif_fps(),
+            gif_max_seconds: default_gif_max_seconds(),
         }
     }
 }
@@ -196,6 +242,74 @@ pub fn save(config: &Config) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Parse a key string to a key name for comparison.
+///
+/// Returns the uppercase key name if valid, or None if not recognized.
+/// Currently supports F1-F12 keys.
+pub fn parse_key_name(s: &str) -> Option<&'static str> {
+    match s.to_uppercase().as_str() {
+        "F1" => Some("F1"),
+        "F2" => Some("F2"),
+        "F3" => Some("F3"),
+        "F4" => Some("F4"),
+        "F5" => Some("F5"),
+        "F6" => Some("F6"),
+        "F7" => Some("F7"),
+        "F8" => Some("F8"),
+        "F9" => Some("F9"),
+        "F10" => Some("F10"),
+        "F11" => Some("F11"),
+        "F12" => Some("F12"),
+        "ESCAPE" | "ESC" => Some("ESCAPE"),
+        _ => None,
+    }
+}
+
+/// Validate that no keybindings conflict with each other.
+///
+/// Checks all configurable keys against reserved system keys and each other.
+/// Returns a list of warning messages for any conflicts found.
+pub fn validate_keybindings(config: &Config) -> Vec<String> {
+    use std::collections::HashSet;
+    let mut warnings = Vec::new();
+    let mut used_keys: HashSet<String> = HashSet::new();
+
+    // Reserved system keys (hardcoded, not configurable)
+    used_keys.insert("ESCAPE".to_string());
+    used_keys.insert("F2".to_string()); // Settings panel
+    used_keys.insert("F4".to_string()); // Debug inspector panel
+    used_keys.insert("F11".to_string()); // Fullscreen
+
+    // Debug keys
+    let debug_keys = [
+        (&config.debug.panel_toggle, "debug.panel_toggle"),
+        (&config.debug.pause_toggle, "debug.pause_toggle"),
+        (&config.debug.step_frame, "debug.step_frame"),
+        (&config.debug.speed_decrease, "debug.speed_decrease"),
+        (&config.debug.speed_increase, "debug.speed_increase"),
+    ];
+    for (key, name) in debug_keys {
+        let key_upper = key.to_uppercase();
+        if !used_keys.insert(key_upper.clone()) {
+            warnings.push(format!("{} key '{}' conflicts with another binding", name, key));
+        }
+    }
+
+    // Capture keys
+    let capture_keys = [
+        (&config.capture.screenshot, "capture.screenshot"),
+        (&config.capture.gif_toggle, "capture.gif_toggle"),
+    ];
+    for (key, name) in capture_keys {
+        let key_upper = key.to_uppercase();
+        if !used_keys.insert(key_upper.clone()) {
+            warnings.push(format!("{} key '{}' conflicts with another binding", name, key));
+        }
+    }
+
+    warnings
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -229,6 +343,7 @@ mod tests {
             audio: AudioConfig { master_volume: 0.5 },
             input: InputConfig::default(),
             debug: DebugConfig::default(),
+            capture: CaptureConfig::default(),
         };
 
         let toml_str = toml::to_string(&config).unwrap();

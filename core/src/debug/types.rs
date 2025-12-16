@@ -203,6 +203,45 @@ impl Constraints {
     }
 }
 
+// =============================================================================
+// Action Types (for debug action buttons)
+// =============================================================================
+
+/// Parameter type for debug actions
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ActionParamType {
+    I32,
+    F32,
+}
+
+/// Runtime value for action parameters
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ActionParamValue {
+    I32(i32),
+    F32(f32),
+}
+
+impl ActionParamValue {
+    /// Get the parameter type
+    pub fn param_type(&self) -> ActionParamType {
+        match self {
+            ActionParamValue::I32(_) => ActionParamType::I32,
+            ActionParamValue::F32(_) => ActionParamType::F32,
+        }
+    }
+}
+
+/// A parameter definition for a debug action
+#[derive(Debug, Clone)]
+pub struct ActionParam {
+    /// Display name of the parameter
+    pub name: String,
+    /// Type of the parameter
+    pub param_type: ActionParamType,
+    /// Default value for the parameter
+    pub default_value: ActionParamValue,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

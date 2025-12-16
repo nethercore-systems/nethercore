@@ -369,6 +369,17 @@ impl ZGraphics {
         &self.queue
     }
 
+    // Capture Support (screenshot/GIF)
+    /// Returns the dimensions of the render target (game resolution)
+    pub fn render_target_dimensions(&self) -> (u32, u32) {
+        (self.render_target.width, self.render_target.height)
+    }
+
+    /// Returns a reference to the render target color texture for capture
+    pub fn render_target_texture(&self) -> &wgpu::Texture {
+        &self.render_target.color_texture
+    }
+
     pub fn surface_format(&self) -> wgpu::TextureFormat {
         self.config.format
     }

@@ -1,13 +1,22 @@
 //! Debug inspection panel UI
 //!
-//! Provides an egui panel for viewing and editing registered debug values.
+//! Provides an egui panel for viewing and editing registered debug values and actions.
 
-use hashbrown::HashSet;
+use hashbrown::{HashMap, HashSet};
 
 use super::export::export_as_rust_flat;
 use super::frame_control::{FrameController, TIME_SCALE_OPTIONS};
-use super::registry::{DebugRegistry, RegisteredValue, TreeNode};
-use super::types::{DebugValue, ValueType};
+use super::registry::{DebugRegistry, RegisteredAction, RegisteredValue, TreeNode};
+use super::types::{ActionParamValue, DebugValue, ValueType};
+
+/// Request to invoke a debug action
+#[derive(Debug, Clone)]
+pub struct ActionRequest {
+    /// Name of the WASM function to call
+    pub func_name: String,
+    /// Arguments to pass to the function
+    pub args: Vec<ActionParamValue>,
+}
 
 /// Debug inspection panel state
 pub struct DebugPanel {
@@ -19,6 +28,8 @@ pub struct DebugPanel {
     tree_cache: Option<Vec<TreeNode>>,
     /// Whether tree needs to be rebuilt
     tree_dirty: bool,
+    /// Current parameter values for each action (action_idx -> param values)
+    action_params: HashMap<usize, Vec<ActionParamValue>>,
 }
 
 impl Default for DebugPanel {
@@ -35,6 +46,7 @@ impl DebugPanel {
             collapsed_groups: HashSet::new(),
             tree_cache: None,
             tree_dirty: true,
+            action_params: HashMap::new(),
         }
     }
 
@@ -55,7 +67,9 @@ impl DebugPanel {
 
     /// Render the debug panel
     ///
-    /// Returns true if any value was changed (caller should invoke callback).
+    /// Returns (value_changed, action_request):
+    /// - value_changed: true if any value was changed (caller should invoke on_debug_change)
+    /// - action_request: Some if an action button was clicked (caller should invoke the action)
     pub fn render(
         &mut self,
         ctx: &egui::Context,
@@ -63,9 +77,9 @@ impl DebugPanel {
         frame_controller: &mut FrameController,
         read_value: impl Fn(&RegisteredValue) -> Option<DebugValue>,
         write_value: impl Fn(&RegisteredValue, &DebugValue) -> bool,
-    ) -> bool {
+    ) -> (bool, Option<ActionRequest>) {
         if !self.visible || registry.is_empty() {
-            return false;
+            return (false, None);
         }
 
         // Rebuild tree if needed
@@ -75,6 +89,7 @@ impl DebugPanel {
         }
 
         let mut any_changed = false;
+        let mut action_request: Option<ActionRequest> = None;
 
         egui::Window::new("Debug Inspector")
             .id(egui::Id::new("debug_inspection_window"))
@@ -89,13 +104,13 @@ impl DebugPanel {
                     ui.separator();
                 }
 
-                // Scrollable area for values
+                // Scrollable area for values and actions
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
                         // Clone tree to avoid borrow conflict with render_tree(&mut self)
                         if let Some(tree) = self.tree_cache.clone() {
-                            any_changed |= self.render_tree(
+                            let (changed, action) = self.render_tree(
                                 ui,
                                 &tree,
                                 registry,
@@ -103,6 +118,10 @@ impl DebugPanel {
                                 &read_value,
                                 &write_value,
                             );
+                            any_changed |= changed;
+                            if action.is_some() {
+                                action_request = action;
+                            }
                         }
                     });
 
@@ -112,7 +131,7 @@ impl DebugPanel {
                 self.render_export_buttons(ui, registry, &read_value);
             });
 
-        any_changed
+        (any_changed, action_request)
     }
 
     /// Render frame control buttons
@@ -172,6 +191,8 @@ impl DebugPanel {
     }
 
     /// Render the value tree recursively
+    ///
+    /// Returns (any_changed, action_request)
     fn render_tree(
         &mut self,
         ui: &mut egui::Ui,
@@ -180,8 +201,9 @@ impl DebugPanel {
         parent_path: &str,
         read_value: &impl Fn(&RegisteredValue) -> Option<DebugValue>,
         write_value: &impl Fn(&RegisteredValue, &DebugValue) -> bool,
-    ) -> bool {
+    ) -> (bool, Option<ActionRequest>) {
         let mut any_changed = false;
+        let mut action_request: Option<ActionRequest> = None;
 
         for node in nodes {
             match node {
@@ -196,7 +218,7 @@ impl DebugPanel {
                     let header = egui::CollapsingHeader::new(name)
                         .default_open(!is_collapsed)
                         .show(ui, |ui| {
-                            any_changed |= self.render_tree(
+                            let (changed, action) = self.render_tree(
                                 ui,
                                 children,
                                 registry,
@@ -204,6 +226,10 @@ impl DebugPanel {
                                 read_value,
                                 write_value,
                             );
+                            any_changed |= changed;
+                            if action.is_some() {
+                                action_request = action;
+                            }
                         });
 
                     // Track collapse state
@@ -224,10 +250,17 @@ impl DebugPanel {
                         any_changed = true;
                     }
                 }
+                TreeNode::Action(idx) => {
+                    if let Some(reg_action) = registry.actions.get(*idx) {
+                        if let Some(request) = self.render_action(ui, *idx, reg_action) {
+                            action_request = Some(request);
+                        }
+                    }
+                }
             }
         }
 
-        any_changed
+        (any_changed, action_request)
     }
 
     /// Render a widget for a single value
@@ -649,6 +682,75 @@ impl DebugPanel {
             // Dimmed color for read-only indicator
             ui.weak(format!("{}: {}", reg_value.name, value_str));
         });
+    }
+
+    /// Render an action button with optional parameter inputs
+    ///
+    /// Returns Some(ActionRequest) if the button was clicked
+    fn render_action(
+        &mut self,
+        ui: &mut egui::Ui,
+        action_idx: usize,
+        action: &RegisteredAction,
+    ) -> Option<ActionRequest> {
+        // Initialize parameter values from defaults if not already set
+        if !self.action_params.contains_key(&action_idx) {
+            let defaults: Vec<ActionParamValue> = action
+                .params
+                .iter()
+                .map(|p| p.default_value)
+                .collect();
+            self.action_params.insert(action_idx, defaults);
+        }
+
+        let mut clicked = false;
+
+        ui.horizontal(|ui| {
+            // Action name as label first
+            ui.label(&action.name);
+
+            // Render parameter inputs (compact, with name prefix)
+            if let Some(params) = self.action_params.get_mut(&action_idx) {
+                for (i, param) in action.params.iter().enumerate() {
+                    if let Some(value) = params.get_mut(i) {
+                        match value {
+                            ActionParamValue::I32(v) => {
+                                ui.add(
+                                    egui::DragValue::new(v)
+                                        .prefix(format!("{}: ", param.name)),
+                                );
+                            }
+                            ActionParamValue::F32(v) => {
+                                ui.add(
+                                    egui::DragValue::new(v)
+                                        .speed(0.1)
+                                        .prefix(format!("{}: ", param.name)),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Execution button
+            if ui.button("▶").clicked() {
+                clicked = true;
+            }
+        });
+
+        if clicked {
+            let args = self
+                .action_params
+                .get(&action_idx)
+                .cloned()
+                .unwrap_or_default();
+            Some(ActionRequest {
+                func_name: action.func_name.clone(),
+                args,
+            })
+        } else {
+            None
+        }
     }
 
     /// Render export buttons

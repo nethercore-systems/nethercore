@@ -3,6 +3,7 @@
 //! Console-agnostic types used across the application framework.
 
 use std::collections::VecDeque;
+use std::fmt;
 use std::path::PathBuf;
 
 /// Application mode state machine
@@ -31,6 +32,57 @@ pub struct RuntimeError(pub String);
 impl std::fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+/// Phase of game execution where an error occurred
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GameErrorPhase {
+    /// Error during game initialization (init function)
+    Init,
+    /// Error during game update tick (update function)
+    Update,
+    /// Error during game rendering (render function)
+    Render,
+}
+
+impl fmt::Display for GameErrorPhase {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            GameErrorPhase::Init => write!(f, "init"),
+            GameErrorPhase::Update => write!(f, "update"),
+            GameErrorPhase::Render => write!(f, "render"),
+        }
+    }
+}
+
+/// Structured error information for display in the error screen
+///
+/// Provides user-friendly error information with helpful suggestions
+/// and detailed technical information for debugging.
+#[derive(Debug, Clone)]
+pub struct GameError {
+    /// User-friendly summary of the error (e.g., "Memory Access Error")
+    pub summary: String,
+    /// Detailed error message from wasmtime
+    pub details: String,
+    /// Optional stack trace information (function names/offsets)
+    pub stack_trace: Option<Vec<String>>,
+    /// Tick number when error occurred (if during update)
+    pub tick: Option<u64>,
+    /// Which phase of game execution failed
+    pub phase: GameErrorPhase,
+    /// Helpful suggestions for debugging
+    pub suggestions: Vec<String>,
+}
+
+impl fmt::Display for GameError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} (during {})", self.summary, self.phase)?;
+        if let Some(tick) = self.tick {
+            write!(f, " at tick {}", tick)?;
+        }
+        Ok(())
     }
 }
 

@@ -16,9 +16,10 @@
 pub mod state;
 
 use anyhow::{Context, Result};
-use wasmtime::{Engine, ExternType, Instance, Linker, Module, Store, TypedFunc};
+use wasmtime::{Engine, ExternType, Instance, Linker, Module, Store, TypedFunc, Val};
 
 use crate::console::{ConsoleInput, ConsoleRollbackState};
+use crate::debug::types::ActionParamValue;
 
 // Re-export public types from state module
 #[allow(deprecated)]
@@ -366,6 +367,32 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState> Game
     /// Returns true if the game exports an on_debug_change function
     pub fn has_debug_change_callback(&self) -> bool {
         self.on_debug_change_fn.is_some()
+    }
+
+    /// Call a debug action by function name with arguments
+    ///
+    /// This is used to invoke WASM functions from the debug panel's action buttons.
+    /// The function must be exported by the game.
+    pub fn call_action(&mut self, func_name: &str, args: &[ActionParamValue]) -> Result<()> {
+        let func = self
+            .instance
+            .get_func(&mut self.store, func_name)
+            .ok_or_else(|| anyhow::anyhow!("Action function '{}' not exported", func_name))?;
+
+        // Convert ActionParamValue to wasmtime::Val
+        let vals: Vec<Val> = args
+            .iter()
+            .map(|arg| match arg {
+                ActionParamValue::I32(v) => Val::I32(*v),
+                ActionParamValue::F32(v) => Val::F32(v.to_bits()),
+            })
+            .collect();
+
+        // Call with no expected results (fire and forget)
+        func.call(&mut self.store, &vals, &mut [])
+            .with_context(|| format!("Failed to call action '{}'", func_name))?;
+
+        Ok(())
     }
 }
 

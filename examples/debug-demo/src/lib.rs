@@ -6,15 +6,17 @@
 //! - Register values for debug inspection via FFI
 //! - Organize values into groups (player, world, effects)
 //! - Various value types: f32, i32, bool, Vec2, Color
+//! - Action buttons that call WASM functions when clicked
 //! - Change callback for derived value updates
 //! - Visual feedback showing effect of value changes
 //!
 //! Usage:
 //! 1. Run the game
-//! 2. Press F3 to open the debug panel
+//! 2. Press F4 to open the debug panel
 //! 3. Tweak values and see immediate visual changes
-//! 4. Press F5 to pause, F6 to step frame
-//! 5. Press F7/F8 to change time scale
+//! 4. Click action buttons to trigger functions
+//! 5. Press F5 to pause, F6 to step frame
+//! 6. Press F7/F8 to change time scale
 
 #![no_std]
 #![no_main]
@@ -68,6 +70,21 @@ extern "C" {
     fn debug_register_color(name: *const u8, name_len: u32, ptr: *const u8);
     // Watch (read-only) variants - display only, can't be edited
     fn debug_watch_i32(name: *const u8, name_len: u32, ptr: *const i32);
+    // Action buttons - call WASM functions when clicked
+    fn debug_register_action(
+        name: *const u8,
+        name_len: u32,
+        func_name: *const u8,
+        func_name_len: u32,
+    );
+    fn debug_action_begin(
+        name: *const u8,
+        name_len: u32,
+        func_name: *const u8,
+        func_name_len: u32,
+    );
+    fn debug_action_param_i32(name: *const u8, name_len: u32, default_value: i32);
+    fn debug_action_end();
 }
 
 // ============================================================================
@@ -94,6 +111,9 @@ static mut ORBIT_COLOR: u32 = 0x6464FFFF; // Blue
 static mut CHANGE_COUNT: i32 = 0; // Tracks how many times debug values changed
 static mut TOTAL_SPHERES: i32 = 3; // Derived from OBJECT_COUNT (clamped)
 
+// Action button counter
+static mut ACTION_CLICK_COUNT: i32 = 0; // Tracks clicks on the simple action button
+
 // Mesh handles
 static mut CUBE_MESH: u32 = 0;
 static mut SPHERE_MESH: u32 = 0;
@@ -116,6 +136,29 @@ pub extern "C" fn on_debug_change() {
         // Recalculate derived values
         // TOTAL_SPHERES is OBJECT_COUNT clamped to valid range
         TOTAL_SPHERES = OBJECT_COUNT.max(0).min(8);
+    }
+}
+
+// ============================================================================
+// Debug Action Functions - Called when action buttons are clicked
+// ============================================================================
+
+/// Simple action with no parameters
+/// Increments a click counter each time it's called
+#[no_mangle]
+pub extern "C" fn debug_function() {
+    unsafe {
+        ACTION_CLICK_COUNT += 1;
+    }
+}
+
+/// Action with parameters demonstrating the param system
+/// Sets the player position to the given x and y coordinates
+#[no_mangle]
+pub extern "C" fn set_position(x: i32, y: i32) {
+    unsafe {
+        PLAYER_X = x as f32;
+        PLAYER_Y = y as f32;
     }
 }
 
@@ -166,6 +209,29 @@ unsafe fn register_debug_values() {
     debug_group_begin(b"stats".as_ptr(), 5);
     debug_watch_i32(b"change_count".as_ptr(), 12, &CHANGE_COUNT);
     debug_watch_i32(b"total_spheres".as_ptr(), 13, &TOTAL_SPHERES);
+    debug_group_end();
+
+    // Actions group - demonstrates debug action buttons
+    debug_group_begin(b"actions".as_ptr(), 7);
+
+    // Simple action with no parameters - just click and it calls the function
+    debug_register_action(
+        b"Debug Function".as_ptr(),
+        14,
+        b"debug_function".as_ptr(),
+        14,
+    );
+
+    // Action with parameters - shows input fields before the button
+    // Clicking this will move the player cube to the specified position
+    debug_action_begin(b"Set Position".as_ptr(), 12, b"set_position".as_ptr(), 12);
+    debug_action_param_i32(b"x".as_ptr(), 1, 0);
+    debug_action_param_i32(b"y".as_ptr(), 1, 2);
+    debug_action_end();
+
+    // Watch value to show action results
+    debug_watch_i32(b"click_count".as_ptr(), 11, &ACTION_CLICK_COUNT);
+
     debug_group_end();
 }
 

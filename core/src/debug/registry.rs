@@ -2,7 +2,7 @@
 //!
 //! Stores registered debug values and provides read/write access to WASM memory.
 
-use super::types::{Constraints, DebugValue, ValueType};
+use super::types::{ActionParam, ActionParamValue, Constraints, DebugValue, ValueType};
 use wasmtime::{Caller, Memory};
 
 /// A registered debug value
@@ -22,15 +22,52 @@ pub struct RegisteredValue {
     pub read_only: bool,
 }
 
-/// Registry of debug values
-#[derive(Default, Clone)]
+/// A registered debug action (button that calls a WASM function)
+#[derive(Debug, Clone)]
+pub struct RegisteredAction {
+    /// Display name of the action (button label)
+    pub name: String,
+    /// Full hierarchical path (e.g., "spawning/spawn_enemy")
+    pub full_path: String,
+    /// Name of the WASM function to call
+    pub func_name: String,
+    /// Parameters to pass to the function
+    pub params: Vec<ActionParam>,
+}
+
+/// Builder state for action registration
+struct PendingAction {
+    name: String,
+    full_path: String,
+    func_name: String,
+    params: Vec<ActionParam>,
+}
+
+/// Registry of debug values and actions
+#[derive(Default)]
 pub struct DebugRegistry {
     /// All registered values
     pub values: Vec<RegisteredValue>,
+    /// All registered actions
+    pub actions: Vec<RegisteredAction>,
     /// Current group path stack during registration
     group_stack: Vec<String>,
     /// Whether registration has been finalized (after init completes)
     pub finalized: bool,
+    /// Pending action being built (between action_begin and action_end)
+    pending_action: Option<PendingAction>,
+}
+
+impl Clone for DebugRegistry {
+    fn clone(&self) -> Self {
+        Self {
+            values: self.values.clone(),
+            actions: self.actions.clone(),
+            group_stack: self.group_stack.clone(),
+            finalized: self.finalized,
+            pending_action: None, // Don't clone pending state
+        }
+    }
 }
 
 impl DebugRegistry {
@@ -75,6 +112,118 @@ impl DebugRegistry {
         self.register_internal(name, wasm_ptr, value_type, None, true);
     }
 
+    // =========================================================================
+    // Action Registration (builder pattern)
+    // =========================================================================
+
+    /// Begin building an action with optional parameters
+    ///
+    /// Call `action_param_*` methods to add parameters, then `action_end` to finish.
+    pub fn action_begin(&mut self, name: &str, func_name: &str) {
+        if self.finalized {
+            log::warn!("debug_action_begin called after init - ignored");
+            return;
+        }
+
+        if self.pending_action.is_some() {
+            log::warn!("debug_action_begin called while another action is pending - ignored");
+            return;
+        }
+
+        // Build full path from group stack
+        let full_path = if self.group_stack.is_empty() {
+            name.to_string()
+        } else {
+            format!("{}/{}", self.group_stack.join("/"), name)
+        };
+
+        self.pending_action = Some(PendingAction {
+            name: name.to_string(),
+            full_path,
+            func_name: func_name.to_string(),
+            params: Vec::new(),
+        });
+    }
+
+    /// Add an i32 parameter to the pending action
+    pub fn action_param_i32(&mut self, name: &str, default_value: i32) {
+        if self.finalized {
+            log::warn!("debug_action_param_i32 called after init - ignored");
+            return;
+        }
+
+        if let Some(pending) = &mut self.pending_action {
+            pending.params.push(ActionParam {
+                name: name.to_string(),
+                param_type: super::types::ActionParamType::I32,
+                default_value: ActionParamValue::I32(default_value),
+            });
+        } else {
+            log::warn!("debug_action_param_i32 called without action_begin - ignored");
+        }
+    }
+
+    /// Add an f32 parameter to the pending action
+    pub fn action_param_f32(&mut self, name: &str, default_value: f32) {
+        if self.finalized {
+            log::warn!("debug_action_param_f32 called after init - ignored");
+            return;
+        }
+
+        if let Some(pending) = &mut self.pending_action {
+            pending.params.push(ActionParam {
+                name: name.to_string(),
+                param_type: super::types::ActionParamType::F32,
+                default_value: ActionParamValue::F32(default_value),
+            });
+        } else {
+            log::warn!("debug_action_param_f32 called without action_begin - ignored");
+        }
+    }
+
+    /// Finish building the pending action and register it
+    pub fn action_end(&mut self) {
+        if self.finalized {
+            log::warn!("debug_action_end called after init - ignored");
+            return;
+        }
+
+        if let Some(pending) = self.pending_action.take() {
+            self.actions.push(RegisteredAction {
+                name: pending.name,
+                full_path: pending.full_path,
+                func_name: pending.func_name,
+                params: pending.params,
+            });
+        } else {
+            log::warn!("debug_action_end called without action_begin - ignored");
+        }
+    }
+
+    /// Register a simple action with no parameters
+    ///
+    /// Convenience method equivalent to `action_begin` + `action_end`.
+    pub fn register_action(&mut self, name: &str, func_name: &str) {
+        if self.finalized {
+            log::warn!("debug_register_action called after init - ignored");
+            return;
+        }
+
+        // Build full path from group stack
+        let full_path = if self.group_stack.is_empty() {
+            name.to_string()
+        } else {
+            format!("{}/{}", self.group_stack.join("/"), name)
+        };
+
+        self.actions.push(RegisteredAction {
+            name: name.to_string(),
+            full_path,
+            func_name: func_name.to_string(),
+            params: Vec::new(),
+        });
+    }
+
     /// Internal registration with read_only flag
     fn register_internal(
         &mut self,
@@ -108,7 +257,7 @@ impl DebugRegistry {
 
     /// Finalize registration (called after init completes)
     ///
-    /// This auto-closes any unclosed groups and prevents further registration.
+    /// This auto-closes any unclosed groups/actions and prevents further registration.
     pub fn finalize_registration(&mut self) {
         if !self.group_stack.is_empty() {
             log::warn!(
@@ -117,17 +266,30 @@ impl DebugRegistry {
             );
             self.group_stack.clear();
         }
+
+        if self.pending_action.is_some() {
+            log::warn!("debug: unclosed action at end of init, discarding");
+            self.pending_action = None;
+        }
+
         self.finalized = true;
 
-        if !self.values.is_empty() {
-            log::info!("Debug inspection: registered {} values", self.values.len());
+        let total = self.values.len() + self.actions.len();
+        if total > 0 {
+            log::info!(
+                "Debug inspection: registered {} values, {} actions",
+                self.values.len(),
+                self.actions.len()
+            );
         }
     }
 
     /// Clear the registry (for game reload)
     pub fn clear(&mut self) {
         self.values.clear();
+        self.actions.clear();
         self.group_stack.clear();
+        self.pending_action = None;
         self.finalized = false;
     }
 
@@ -136,9 +298,9 @@ impl DebugRegistry {
         self.values.len()
     }
 
-    /// Check if registry is empty
+    /// Check if registry is empty (no values or actions)
     pub fn is_empty(&self) -> bool {
-        self.values.is_empty()
+        self.values.is_empty() && self.actions.is_empty()
     }
 
     /// Read a value from WASM memory
@@ -368,9 +530,16 @@ impl DebugRegistry {
     pub fn build_tree(&self) -> Vec<TreeNode> {
         let mut root_nodes: Vec<TreeNode> = Vec::new();
 
+        // Insert values
         for (idx, value) in self.values.iter().enumerate() {
             let path_parts: Vec<&str> = value.full_path.split('/').collect();
-            insert_into_tree(&mut root_nodes, &path_parts, idx);
+            insert_value_into_tree(&mut root_nodes, &path_parts, idx);
+        }
+
+        // Insert actions
+        for (idx, action) in self.actions.iter().enumerate() {
+            let path_parts: Vec<&str> = action.full_path.split('/').collect();
+            insert_action_into_tree(&mut root_nodes, &path_parts, idx);
         }
 
         root_nodes
@@ -387,10 +556,12 @@ pub enum TreeNode {
     },
     /// A leaf value (index into registry.values)
     Value(usize),
+    /// A leaf action (index into registry.actions)
+    Action(usize),
 }
 
 /// Helper function to insert a value into the tree
-fn insert_into_tree(nodes: &mut Vec<TreeNode>, path_parts: &[&str], value_idx: usize) {
+fn insert_value_into_tree(nodes: &mut Vec<TreeNode>, path_parts: &[&str], value_idx: usize) {
     if path_parts.is_empty() {
         return;
     }
@@ -411,13 +582,50 @@ fn insert_into_tree(nodes: &mut Vec<TreeNode>, path_parts: &[&str], value_idx: u
         Some(idx) => {
             // Group exists, recurse into it
             if let TreeNode::Group { children, .. } = &mut nodes[idx] {
-                insert_into_tree(children, &path_parts[1..], value_idx);
+                insert_value_into_tree(children, &path_parts[1..], value_idx);
             }
         }
         None => {
             // Create new group
             let mut children = Vec::new();
-            insert_into_tree(&mut children, &path_parts[1..], value_idx);
+            insert_value_into_tree(&mut children, &path_parts[1..], value_idx);
+            nodes.push(TreeNode::Group {
+                name: group_name.to_string(),
+                children,
+            });
+        }
+    }
+}
+
+/// Helper function to insert an action into the tree
+fn insert_action_into_tree(nodes: &mut Vec<TreeNode>, path_parts: &[&str], action_idx: usize) {
+    if path_parts.is_empty() {
+        return;
+    }
+
+    if path_parts.len() == 1 {
+        // Leaf node - add the action
+        nodes.push(TreeNode::Action(action_idx));
+        return;
+    }
+
+    // Find or create the group for this path segment
+    let group_name = path_parts[0];
+    let group_idx = nodes
+        .iter()
+        .position(|n| matches!(n, TreeNode::Group { name, .. } if name == group_name));
+
+    match group_idx {
+        Some(idx) => {
+            // Group exists, recurse into it
+            if let TreeNode::Group { children, .. } = &mut nodes[idx] {
+                insert_action_into_tree(children, &path_parts[1..], action_idx);
+            }
+        }
+        None => {
+            // Create new group
+            let mut children = Vec::new();
+            insert_action_into_tree(&mut children, &path_parts[1..], action_idx);
             nodes.push(TreeNode::Group {
                 name: group_name.to_string(),
                 children,

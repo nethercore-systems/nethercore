@@ -59,7 +59,7 @@ pub mod types;
 // Re-export commonly used types
 pub use ffi::{HasDebugRegistry, register_debug_ffi};
 pub use frame_control::{FrameController, TIME_SCALE_OPTIONS};
-pub use panel::DebugPanel;
-pub use registry::{DebugRegistry, RegisteredValue, TreeNode};
+pub use panel::{ActionRequest, DebugPanel};
+pub use registry::{DebugRegistry, RegisteredAction, RegisteredValue, TreeNode};
 pub use stats::DebugStat;
-pub use types::{Constraints, DebugValue, ValueType};
+pub use types::{ActionParamValue, Constraints, DebugValue, ValueType};

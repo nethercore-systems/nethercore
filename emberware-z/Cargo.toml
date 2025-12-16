@@ -71,6 +71,10 @@ open = { workspace = true }
 # Performance - faster HashMap/HashSet
 hashbrown = { workspace = true }
 
+# Screenshot/GIF capture
+image = { workspace = true }
+gif = "0.13"
+
 [build-dependencies]
 naga = { version = "23", features = ["wgsl-in"] }
 
