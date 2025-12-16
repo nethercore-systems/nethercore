@@ -44,6 +44,7 @@
 //! - `local_socket`: UDP socket for local network testing
 
 mod config;
+mod events;
 pub mod local_socket;
 mod player;
 mod session;
@@ -65,10 +66,10 @@ pub use state::{
 };
 
 // Re-export public types from session
-pub use session::{
-    ConnectionQuality, NetworkInput, PlayerNetworkStats, RollbackSession, SessionError,
-    SessionEvent, SessionType,
-};
+pub use session::{NetworkInput, RollbackSession, SessionType};
+
+// Re-export public types from events
+pub use events::{ConnectionQuality, PlayerNetworkStats, SessionError, SessionEvent};
 
 // Re-export public types from local_socket
 pub use local_socket::{DEFAULT_LOCAL_PORT, LocalSocket, LocalSocketError};

@@ -10,12 +10,14 @@ use anyhow::Result;
 use wasmtime::Linker;
 use winit::window::Window;
 
-use crate::app::session::GameSession;
-use crate::console::{Console, Graphics, RawInput};
-use crate::ffi::register_common_ffi;
-use crate::rollback::{RollbackSession, SessionEvent};
-use crate::runtime::Runtime;
-use crate::wasm::{GameInstance, WasmEngine, WasmGameContext};
+use crate::{
+    app::session::GameSession,
+    console::{Console, Graphics, RawInput},
+    ffi::register_common_ffi,
+    rollback::{RollbackSession, SessionEvent},
+    runtime::Runtime,
+    wasm::{GameInstance, WasmEngine, WasmGameContext},
+};
 
 /// High-level game runner for any console type.
 ///

@@ -6,6 +6,10 @@ license.workspace = true
 repository.workspace = true
 description = "Core framework for Emberware fantasy console platform"
 
+[features]
+default = ["gamepad"]
+gamepad = ["dep:gilrs"]
+
 [dependencies]
 # Shared types
 emberware-shared = { path = "../shared" }
@@ -49,7 +53,7 @@ xxhash-rust = { workspace = true }
 bincode = { workspace = true }
 
 # Application framework dependencies (Step 1)
-gilrs = { workspace = true }         # Gamepad input (NOTE: upgraded from 0.10 to 0.11)
+gilrs = { workspace = true, optional = true }  # Gamepad input (optional, requires libudev on Linux)
 serde = { workspace = true }
 toml = { workspace = true }          # Config file format
 directories = { workspace = true }   # Platform-specific paths
