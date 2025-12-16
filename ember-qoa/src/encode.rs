@@ -5,8 +5,8 @@
 //! (z-common) handles the EmberZSoundHeader with total_samples.
 
 use crate::{
-    clamp_i16, QoaLms, QOA_DEQUANT_TAB, QOA_FRAME_HEADER_SIZE, QOA_FRAME_SAMPLES,
-    QOA_LMS_STATE_SIZE, QOA_QUANT_TAB, QOA_SCALEFACTOR_TAB, QOA_SLICE_LEN,
+    QOA_DEQUANT_TAB, QOA_FRAME_HEADER_SIZE, QOA_FRAME_SAMPLES, QOA_LMS_STATE_SIZE, QOA_QUANT_TAB,
+    QOA_SCALEFACTOR_TAB, QOA_SLICE_LEN, QoaLms, clamp_i16,
 };
 
 /// Encode a slice of up to 20 samples

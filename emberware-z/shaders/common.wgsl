@@ -173,7 +173,7 @@ fn should_discard_dither(frag_coord: vec2<f32>, flags: u32, base_alpha: f32) -> 
     let y = (u32(frag_coord.y) + offset.y) % 4u;
 
     let threshold = BAYER_4X4[y * 4u + x];
-    return final_alpha < threshold;
+    return final_alpha <= threshold;
 }
 
 // Texture bindings (group 1)

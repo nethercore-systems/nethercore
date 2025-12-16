@@ -139,7 +139,13 @@ fn vs(in: QuadVertexIn, @builtin(instance_index) instance_idx: u32) -> QuadVerte
         out.clip_position = projection_matrix * view_matrix * vec4<f32>(world_pos, 1.0);
     }
 
-    out.uv = mix(instance.uv.xy, instance.uv.zw, in.uv);
+    // Flip UV.v for 3D quads (billboards, world-space) to match image file convention
+    // Screen-space already has Y flipped in NDC calculation
+    var vertex_uv = in.uv;
+    if (mode != SCREEN_SPACE) {
+        vertex_uv.y = 1.0 - vertex_uv.y;
+    }
+    out.uv = mix(instance.uv.xy, instance.uv.zw, vertex_uv);
     out.color = unpack_rgba8(instance.color);
     out.shading_state_index = instance.shading_state_index;
     out.mode = mode;
@@ -154,12 +160,9 @@ fn fs(in: QuadVertexOut) -> @location(0) vec4<f32> {
     let color = tex_color.rgb * in.color.rgb * material_color.rgb;
     let base_alpha = tex_color.a * in.color.a * material_color.a;
 
-    // Dither transparency for 3D quads (billboards, world-space)
-    // Skip for screen-space UI/text which uses alpha blending instead
-    if in.mode != SCREEN_SPACE {
-        if should_discard_dither(in.clip_position.xy, shading.flags, base_alpha) {
-            discard;
-        }
+    // Dither transparency for all quads (including screen-space text/sprites)
+    if should_discard_dither(in.clip_position.xy, shading.flags, base_alpha) {
+        discard;
     }
 
     return vec4<f32>(color, base_alpha);

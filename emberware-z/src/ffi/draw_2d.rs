@@ -271,8 +271,8 @@ fn draw_text(
 
     let state = &mut caller.data_mut().ffi;
 
-    // Text always uses alpha blending for smooth anti-aliased edges
-    state.blend_mode = 1; // BlendMode::Alpha
+    // Text uses dithering for transparency (same as all other quads)
+    state.blend_mode = 0; // BlendMode::None (opaque with dithering)
 
     // Text always uses nearest filtering (crisp pixels, no blurry interpolation)
     state.texture_filter = 0;

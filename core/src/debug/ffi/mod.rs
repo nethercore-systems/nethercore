@@ -19,7 +19,7 @@ use anyhow::Result;
 use wasmtime::{Caller, Linker};
 
 use crate::console::{ConsoleInput, ConsoleRollbackState};
-use crate::wasm::{read_string_from_memory, WasmGameContext};
+use crate::wasm::{WasmGameContext, read_string_from_memory};
 
 // Re-export the trait
 pub use self::register::HasDebugRegistry;

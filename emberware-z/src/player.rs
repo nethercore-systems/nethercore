@@ -6,6 +6,7 @@
 //! - `ember run` command (development)
 //! - Library process spawning
 
+use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::path::Path;
 use std::sync::Arc;
@@ -22,6 +23,8 @@ use emberware_core::app::event_loop::ConsoleApp;
 use emberware_core::app::{DebugStats, FRAME_TIME_HISTORY_SIZE, RuntimeError};
 use emberware_core::console::{Console, ConsoleResourceManager};
 use emberware_core::debug::FrameController;
+use emberware_core::debug::registry::RegisteredValue;
+use emberware_core::debug::types::DebugValue;
 use z_common::{ZDataPack, ZRom};
 
 use crate::audio;
@@ -52,8 +55,8 @@ pub struct PlayerApp {
     input_manager: InputManager,
     /// Debug overlay enabled (F3)
     debug_overlay: bool,
-    /// Debug inspector enabled (F4)
-    debug_inspector: bool,
+    /// Debug inspector panel (F4)
+    debug_panel: emberware_core::debug::DebugPanel,
     /// Frame controller (pause/step)
     frame_controller: FrameController,
     /// Next scheduled simulation tick
@@ -86,7 +89,7 @@ impl PlayerApp {
 
         Self {
             debug_overlay: config.debug,
-            debug_inspector: false,
+            debug_panel: emberware_core::debug::DebugPanel::new(),
             config,
             window: None,
             runner: None,
@@ -132,7 +135,7 @@ impl PlayerApp {
                     self.needs_redraw = true;
                 }
                 PhysicalKey::Code(KeyCode::F4) => {
-                    self.debug_inspector = !self.debug_inspector;
+                    self.debug_panel.toggle();
                     self.needs_redraw = true;
                 }
                 PhysicalKey::Code(KeyCode::F5) => {
@@ -356,6 +359,18 @@ impl ConsoleApp<EmberwareZ> for PlayerApp {
     }
 
     fn on_window_event(&mut self, event: &WindowEvent) -> bool {
+        // Forward events to egui for debug panel interaction
+        if let (Some(egui_state), Some(window)) = (&mut self.egui_state, &self.window) {
+            let response = egui_state.on_window_event(window, event);
+            if response.consumed {
+                self.needs_redraw = true;
+                return true;
+            }
+            if response.repaint {
+                self.needs_redraw = true;
+            }
+        }
+
         match event {
             WindowEvent::Resized(size) => {
                 if let Some(runner) = &mut self.runner {
@@ -454,42 +469,105 @@ impl ConsoleApp<EmberwareZ> for PlayerApp {
         runner.graphics().blit_to_window(&mut encoder, &view);
 
         // Render debug overlays via egui (on top of game)
-        if self.debug_overlay || self.debug_inspector {
-            if let (Some(egui_state), Some(egui_renderer), Some(window)) = (
-                &mut self.egui_state,
-                &mut self.egui_renderer,
-                &self.window,
-            ) {
+        if self.debug_overlay || self.debug_panel.visible {
+            // Extract registry and memory base address (no copy - WASM is idle during rendering)
+            let (registry_opt, mem_base, mem_len, has_debug_callback) = {
+                if let Some(session) = runner.session() {
+                    if let Some(game) = session.runtime.game() {
+                        let registry = game.store().data().debug_registry.clone();
+                        let memory = game.store().data().game.memory;
+                        let has_callback = game.has_debug_change_callback();
+                        if let Some(mem) = memory {
+                            // SAFETY: WASM is single-threaded and idle during egui rendering.
+                            // Store base address as usize - memory won't move or change.
+                            let mem_data = mem.data(game.store());
+                            (
+                                Some(registry),
+                                mem_data.as_ptr() as usize,
+                                mem_data.len(),
+                                has_callback,
+                            )
+                        } else {
+                            (Some(registry), 0usize, 0usize, has_callback)
+                        }
+                    } else {
+                        (None, 0usize, 0usize, false)
+                    }
+                } else {
+                    (None, 0usize, 0usize, false)
+                }
+            };
+
+            // Pending writes to apply after egui closure
+            let pending_writes: RefCell<Vec<(RegisteredValue, DebugValue)>> =
+                RefCell::new(Vec::new());
+
+            if let (Some(egui_state), Some(egui_renderer), Some(window)) =
+                (&mut self.egui_state, &mut self.egui_renderer, &self.window)
+            {
                 let raw_input = egui_state.take_egui_input(window);
 
+                // Extract fields for closure to avoid capturing all of self
+                let debug_overlay = self.debug_overlay;
+                let debug_stats = &self.debug_stats;
+                let game_tick_times = &self.game_tick_times;
+                let debug_panel = &mut self.debug_panel;
+                let frame_controller = &mut self.frame_controller;
+
                 let full_output = self.egui_ctx.run(raw_input, |ctx| {
-                    if self.debug_overlay {
-                        let frame_time_ms = self
-                            .debug_stats
-                            .frame_times
-                            .back()
-                            .copied()
-                            .unwrap_or(16.67);
-                        let render_fps =
-                            emberware_core::app::debug::calculate_fps(&self.game_tick_times);
+                    if debug_overlay {
+                        let frame_time_ms =
+                            debug_stats.frame_times.back().copied().unwrap_or(16.67);
+                        let render_fps = emberware_core::app::debug::calculate_fps(game_tick_times);
                         emberware_core::app::debug::render_debug_overlay(
                             ctx,
-                            &self.debug_stats,
+                            debug_stats,
                             true,
                             frame_time_ms,
                             render_fps,
                             render_fps,
                         );
                     }
-                    if self.debug_inspector {
-                        egui::Window::new("Inspector (F4)")
-                            .default_pos([10.0, 200.0])
-                            .show(ctx, |ui| {
-                                ui.label("Debug value inspection");
-                                ui.separator();
-                                ui.label("No debug values registered.");
-                                ui.label("Games can register values with debug_register_*() FFI.");
-                            });
+                    if debug_panel.visible {
+                        if let Some(ref registry) = registry_opt {
+                            let registry_for_read = registry.clone();
+
+                            let read_value = |reg_val: &RegisteredValue| -> Option<DebugValue> {
+                                if mem_base == 0 || mem_len == 0 {
+                                    return None;
+                                }
+                                let ptr = reg_val.wasm_ptr as usize;
+                                let size = reg_val.value_type.byte_size();
+                                if ptr + size > mem_len {
+                                    return None;
+                                }
+                                // SAFETY: WASM is single-threaded and idle during egui rendering.
+                                // The memory won't change until we return control to the game.
+                                let bytes = unsafe {
+                                    std::slice::from_raw_parts((mem_base + ptr) as *const u8, size)
+                                };
+                                Some(
+                                    registry_for_read
+                                        .read_value_from_slice(bytes, reg_val.value_type),
+                                )
+                            };
+
+                            let write_value =
+                                |reg_val: &RegisteredValue, new_val: &DebugValue| -> bool {
+                                    pending_writes
+                                        .borrow_mut()
+                                        .push((reg_val.clone(), new_val.clone()));
+                                    true
+                                };
+
+                            debug_panel.render(
+                                ctx,
+                                registry,
+                                frame_controller,
+                                read_value,
+                                write_value,
+                            );
+                        }
                     }
                 });
 
@@ -497,10 +575,7 @@ impl ConsoleApp<EmberwareZ> for PlayerApp {
 
                 // Tessellate and render egui
                 let screen_descriptor = egui_wgpu::ScreenDescriptor {
-                    size_in_pixels: [
-                        runner.graphics().width(),
-                        runner.graphics().height(),
-                    ],
+                    size_in_pixels: [runner.graphics().width(), runner.graphics().height()],
                     pixels_per_point: window.scale_factor() as f32,
                 };
 
@@ -549,6 +624,31 @@ impl ConsoleApp<EmberwareZ> for PlayerApp {
                 // Free textures
                 for id in &full_output.textures_delta.free {
                     egui_renderer.free_texture(id);
+                }
+            }
+
+            // Apply pending writes to WASM memory
+            let writes = pending_writes.into_inner();
+            if !writes.is_empty() {
+                if let Some(session) = runner.session_mut() {
+                    if let Some(game) = session.runtime.game_mut() {
+                        let memory = game.store().data().game.memory;
+                        if let Some(mem) = memory {
+                            let registry = game.store().data().debug_registry.clone();
+                            let data = mem.data_mut(game.store_mut());
+                            for (reg_val, new_val) in &writes {
+                                let ptr = reg_val.wasm_ptr as usize;
+                                let size = reg_val.value_type.byte_size();
+                                if ptr + size <= data.len() {
+                                    registry
+                                        .write_value_to_slice(&mut data[ptr..ptr + size], new_val);
+                                }
+                            }
+                        }
+                        if has_debug_callback {
+                            game.call_on_debug_change();
+                        }
+                    }
                 }
             }
         }

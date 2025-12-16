@@ -6,10 +6,8 @@ use anyhow::Result;
 use tracing::warn;
 use wasmtime::{Caller, Linker};
 
-use super::helpers::{
-    checked_mul, read_wasm_floats, read_wasm_u16s, validate_vertex_format,
-};
 use super::ZGameContext;
+use super::helpers::{checked_mul, read_wasm_floats, read_wasm_u16s, validate_vertex_format};
 use crate::graphics::vertex_stride;
 
 /// Register immediate mode 3D drawing FFI functions

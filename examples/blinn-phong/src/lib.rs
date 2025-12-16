@@ -628,34 +628,32 @@ pub extern "C" fn render() {
             }
         }
 
-        // Draw text labels
-        let text_size = 0.015;
+        // Draw text labels (pixel coordinates for 960×540)
+        let text_size = 12.0;
         let label_color = 0xCCCCCCFF;
         let header_color = 0xFFCC66FF;
-        let header_size = 0.022;
+        let header_size = 14.0;
 
-        // Row headers (left side)
+        // Row headers (left side) - evenly spaced vertically
+        let row_spacing = 90.0;
+        let first_row_y = 70.0;
+
         for row in 0..ROWS {
-            let y = start_y - row as f32 * SPACING_Y;
-            let screen_x = -0.98;
-            let screen_y = y * 0.042;
-
+            let screen_y = first_row_y + row as f32 * row_spacing;
             let name = ROW_NAMES[row];
-            draw_text(name.as_ptr(), name.len() as u32, screen_x, screen_y, header_size, header_color);
+            draw_text(name.as_ptr(), name.len() as u32, 10.0, screen_y, header_size, header_color);
         }
 
         // Material labels (below each sphere)
+        let first_col_x = 95.0;
+        let col_spacing = 108.0;
+
         for row in 0..ROWS {
             for col in 0..COLS {
                 let idx = row * COLS + col;
                 let material = &MATERIALS[idx];
-
-                let x = start_x + col as f32 * SPACING_X;
-                let y = start_y - row as f32 * SPACING_Y;
-
-                let screen_x = x * 0.042 - 0.03;
-                let screen_y = y * 0.042 - 0.06;
-
+                let screen_x = first_col_x + col as f32 * col_spacing;
+                let screen_y = first_row_y + row as f32 * row_spacing + 45.0;
                 draw_text(material.name.as_ptr(), material.name.len() as u32, screen_x, screen_y, text_size, label_color);
             }
         }

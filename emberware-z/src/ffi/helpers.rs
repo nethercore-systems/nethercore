@@ -108,6 +108,22 @@ pub(crate) fn read_wasm_u16s(
     Some(values.to_vec())
 }
 
+/// Read i16 samples from WASM memory with bounds checking.
+///
+/// Returns `Some(Vec<i16>)` if successful, `None` with warning on error.
+/// Used for audio PCM data.
+pub(crate) fn read_wasm_i16s(
+    caller: &Caller<'_, ZGameContext>,
+    ptr: u32,
+    count: usize,
+    fn_name: &str,
+) -> Option<Vec<i16>> {
+    let byte_size = count * std::mem::size_of::<i16>();
+    let bytes = read_wasm_bytes(caller, ptr, byte_size, fn_name)?;
+    let values: &[i16] = bytemuck::cast_slice(&bytes);
+    Some(values.to_vec())
+}
+
 // ============================================================================
 // Validation Helpers
 // ============================================================================
@@ -176,11 +192,7 @@ pub(crate) fn validate_count_max(count: u32, max: u32, fn_name: &str, count_name
 ///
 /// Returns `true` if valid (both > 0), `false` with warning if either is zero.
 #[inline]
-pub(crate) fn validate_dimensions_nonzero(
-    width: u32,
-    height: u32,
-    fn_name: &str,
-) -> bool {
+pub(crate) fn validate_dimensions_nonzero(width: u32, height: u32, fn_name: &str) -> bool {
     if width == 0 || height == 0 {
         warn!("{}: invalid dimensions {}x{}", fn_name, width, height);
         return false;

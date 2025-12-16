@@ -4,7 +4,7 @@
 //! Note: This is a pure codec - no file headers are parsed. The caller
 //! (z-common) provides total_samples from EmberZSoundHeader.
 
-use crate::{clamp_i16, QoaError, QoaLms, QOA_DEQUANT_TAB, QOA_FRAME_HEADER_SIZE, QOA_SLICE_LEN};
+use crate::{QOA_DEQUANT_TAB, QOA_FRAME_HEADER_SIZE, QOA_SLICE_LEN, QoaError, QoaLms, clamp_i16};
 
 /// Decode a single slice (8 bytes = 20 samples)
 ///

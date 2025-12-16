@@ -10,9 +10,9 @@ use ggrs::{
     SessionBuilder, SessionState, SyncTestSession,
 };
 
+use crate::ConnectionQuality;
 use crate::console::{ConsoleInput, ConsoleRollbackState};
 use crate::wasm::GameInstance;
-use crate::ConnectionQuality;
 
 use super::config::{EmberwareConfig, SessionConfig};
 use super::events::{PlayerNetworkStats, SessionError, SessionEvent};
