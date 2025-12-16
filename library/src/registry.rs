@@ -70,7 +70,7 @@ impl ConsoleType {
     /// Parse a console type from a string.
     ///
     /// Returns `None` if the string doesn't match any known console type.
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s {
             "z" => Some(ConsoleType::Z),
             _ => None,
@@ -250,7 +250,7 @@ pub fn run_player_with_options(
 /// Looks up the game in the local games list and launches the appropriate player.
 /// Used by the library UI when the user clicks Play.
 pub fn launch_game_by_id(game: &LocalGame) -> Result<()> {
-    let console_type = ConsoleType::from_str(&game.console_type).ok_or_else(|| {
+    let console_type = ConsoleType::parse(&game.console_type).ok_or_else(|| {
         anyhow::anyhow!(
             "Unknown console type: '{}'. Supported consoles: {}",
             game.console_type,
@@ -274,7 +274,7 @@ pub fn run_game_by_id(game: &LocalGame) -> Result<()> {
 
 /// Run a game by ID with options and wait for it to finish.
 pub fn run_game_by_id_with_options(game: &LocalGame, options: &PlayerOptions) -> Result<()> {
-    let console_type = ConsoleType::from_str(&game.console_type).ok_or_else(|| {
+    let console_type = ConsoleType::parse(&game.console_type).ok_or_else(|| {
         anyhow::anyhow!(
             "Unknown console type: '{}'. Supported consoles: {}",
             game.console_type,
@@ -420,7 +420,7 @@ impl ConsoleRegistry {
     /// Check if a console type is supported.
     #[allow(dead_code)]
     pub fn supports(&self, console_type: &str) -> bool {
-        ConsoleType::from_str(console_type).is_some()
+        ConsoleType::parse(console_type).is_some()
     }
 }
 
@@ -440,16 +440,16 @@ mod tests {
     }
 
     #[test]
-    fn test_console_type_from_str_valid() {
-        assert_eq!(ConsoleType::from_str("z"), Some(ConsoleType::Z));
+    fn test_console_type_parse_valid() {
+        assert_eq!(ConsoleType::parse("z"), Some(ConsoleType::Z));
     }
 
     #[test]
-    fn test_console_type_from_str_invalid() {
-        assert_eq!(ConsoleType::from_str("invalid"), None);
-        assert_eq!(ConsoleType::from_str(""), None);
-        assert_eq!(ConsoleType::from_str("Z"), None); // Case-sensitive
-        assert_eq!(ConsoleType::from_str("classic"), None); // Not yet implemented
+    fn test_console_type_parse_invalid() {
+        assert_eq!(ConsoleType::parse("invalid"), None);
+        assert_eq!(ConsoleType::parse(""), None);
+        assert_eq!(ConsoleType::parse("Z"), None); // Case-sensitive
+        assert_eq!(ConsoleType::parse("classic"), None); // Not yet implemented
     }
 
     #[test]

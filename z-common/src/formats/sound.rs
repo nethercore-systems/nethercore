@@ -88,10 +88,7 @@ pub fn decode_sound(data: &[u8]) -> Option<Vec<i16>> {
     let header = EmberZSoundHeader::from_bytes(data)?;
     let qoa_data = &data[EmberZSoundHeader::SIZE..];
 
-    match ember_qoa::decode_qoa(qoa_data, header.total_samples as usize) {
-        Ok(samples) => Some(samples),
-        Err(_) => None,
-    }
+    ember_qoa::decode_qoa(qoa_data, header.total_samples as usize).ok()
 }
 
 #[cfg(test)]

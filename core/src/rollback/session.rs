@@ -10,7 +10,6 @@ use ggrs::{
     SessionBuilder, SessionState, SyncTestSession,
 };
 
-use crate::ConnectionQuality;
 use crate::console::{ConsoleInput, ConsoleRollbackState};
 use crate::wasm::GameInstance;
 

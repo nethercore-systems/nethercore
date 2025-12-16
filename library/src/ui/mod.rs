@@ -21,6 +21,12 @@ pub struct LibraryUi {
     pub show_settings: bool,
 }
 
+impl Default for LibraryUi {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LibraryUi {
     /// Creates a new library UI with no game selected.
     pub fn new() -> Self {

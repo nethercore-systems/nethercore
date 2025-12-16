@@ -62,7 +62,7 @@ impl AnalysisResult {
     pub fn texture_format_for_slot(&self, _slot: u8) -> TextureFormatHint {
         match self.render_mode {
             0 => TextureFormatHint::Rgba8,
-            1 | 2 | 3 => TextureFormatHint::Bc7,
+            1..=3 => TextureFormatHint::Bc7,
             _ => TextureFormatHint::Rgba8, // Invalid mode defaults to RGBA8
         }
     }
