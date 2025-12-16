@@ -251,13 +251,13 @@ impl PlayerApp {
                 .unwrap_or(audio::OUTPUT_SAMPLE_RATE);
 
             let audio_buffer = if let Some(game) = session.runtime.game_mut() {
-                let sounds: Vec<Option<audio::Sound>> = game.console_state().sounds.clone();
-                let rollback_state = game.rollback_state_mut();
+                // Use split borrows to avoid cloning the sounds vector
+                let (ffi_state, rollback_state) = game.ffi_and_rollback_mut();
 
                 let mut buffer = Vec::new();
                 audio::generate_audio_frame(
                     &mut rollback_state.audio,
-                    &sounds,
+                    &ffi_state.sounds,
                     tick_rate,
                     sample_rate,
                     &mut buffer,

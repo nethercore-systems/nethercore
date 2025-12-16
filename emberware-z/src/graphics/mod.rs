@@ -159,6 +159,10 @@ pub struct ZGraphics {
     unit_quad_format: u8,
     unit_quad_base_vertex: u32,
     unit_quad_first_index: u32,
+
+    // Persistent buffers for quad instance processing (avoids per-frame allocation)
+    quad_instance_scratch: Vec<QuadInstance>,
+    quad_batch_scratch: Vec<(u32, u32, [u32; 4], u8)>,
 }
 
 impl ZGraphics {

@@ -270,15 +270,15 @@ fn load_assets(
         println!("  Total: {} assets", total);
     }
 
-    Ok(ZDataPack {
+    Ok(ZDataPack::with_assets(
         textures,
         meshes,
         skeletons,
         keyframes,
-        fonts: vec![], // TODO: add font loading when needed
+        vec![], // fonts: TODO: add font loading when needed
         sounds,
         data,
-    })
+    ))
 }
 
 /// Load a texture from an image file (PNG, JPG, etc.)

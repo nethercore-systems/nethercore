@@ -311,6 +311,15 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState> Game
         &self.store.data().rollback
     }
 
+    /// Get split borrows: immutable FFI state and mutable rollback state
+    ///
+    /// This avoids the need to clone data when you need to read from FFI state
+    /// while mutating rollback state (e.g., audio generation).
+    pub fn ffi_and_rollback_mut(&mut self) -> (&S, &mut R) {
+        let ctx = self.store.data_mut();
+        (&ctx.ffi, &mut ctx.rollback)
+    }
+
     /// Set input for a player
     pub fn set_input(&mut self, player: usize, input: I) {
         if player < MAX_PLAYERS {

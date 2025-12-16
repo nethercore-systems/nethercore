@@ -11,7 +11,9 @@
 //! - **Console-specific** — Prevents mixing data between consoles
 
 use bitcode::{Decode, Encode};
+use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
+use std::sync::OnceLock;
 
 /// Texture compression format
 ///
@@ -88,12 +90,72 @@ pub struct ZDataPack {
 
     /// Raw data (levels, dialogue, custom formats)
     pub data: Vec<PackedData>,
+
+    // ========================================================================
+    // Index caches for O(1) lookup (built lazily on first access)
+    // ========================================================================
+    #[serde(skip)]
+    #[bitcode(skip)]
+    texture_index: OnceLock<HashMap<String, usize>>,
+
+    #[serde(skip)]
+    #[bitcode(skip)]
+    mesh_index: OnceLock<HashMap<String, usize>>,
+
+    #[serde(skip)]
+    #[bitcode(skip)]
+    skeleton_index: OnceLock<HashMap<String, usize>>,
+
+    #[serde(skip)]
+    #[bitcode(skip)]
+    keyframes_index: OnceLock<HashMap<String, usize>>,
+
+    #[serde(skip)]
+    #[bitcode(skip)]
+    font_index: OnceLock<HashMap<String, usize>>,
+
+    #[serde(skip)]
+    #[bitcode(skip)]
+    sound_index: OnceLock<HashMap<String, usize>>,
+
+    #[serde(skip)]
+    #[bitcode(skip)]
+    data_index: OnceLock<HashMap<String, usize>>,
 }
 
 impl ZDataPack {
     /// Create an empty data pack
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Create a data pack with the given assets
+    pub fn with_assets(
+        textures: Vec<PackedTexture>,
+        meshes: Vec<PackedMesh>,
+        skeletons: Vec<PackedSkeleton>,
+        keyframes: Vec<PackedKeyframes>,
+        fonts: Vec<PackedFont>,
+        sounds: Vec<PackedSound>,
+        data: Vec<PackedData>,
+    ) -> Self {
+        Self {
+            textures,
+            meshes,
+            skeletons,
+            keyframes,
+            fonts,
+            sounds,
+            data,
+            // Index caches will be lazily initialized on first lookup
+            texture_index: OnceLock::new(),
+            mesh_index: OnceLock::new(),
+            skeleton_index: OnceLock::new(),
+            keyframes_index: OnceLock::new(),
+            font_index: OnceLock::new(),
+            sound_index: OnceLock::new(),
+            data_index: OnceLock::new(),
+        }
     }
 
     /// Check if the data pack is empty
@@ -118,40 +180,73 @@ impl ZDataPack {
             + self.data.len()
     }
 
-    /// Find a texture by ID
+    /// Find a texture by ID (O(1) lookup via lazy-initialized hash index)
     pub fn find_texture(&self, id: &str) -> Option<&PackedTexture> {
-        self.textures.iter().find(|t| t.id == id)
+        let index = self
+            .texture_index
+            .get_or_init(|| build_index(&self.textures, |t| &t.id));
+        index.get(id).map(|&i| &self.textures[i])
     }
 
-    /// Find a mesh by ID
+    /// Find a mesh by ID (O(1) lookup via lazy-initialized hash index)
     pub fn find_mesh(&self, id: &str) -> Option<&PackedMesh> {
-        self.meshes.iter().find(|m| m.id == id)
+        let index = self
+            .mesh_index
+            .get_or_init(|| build_index(&self.meshes, |m| &m.id));
+        index.get(id).map(|&i| &self.meshes[i])
     }
 
-    /// Find a skeleton by ID
+    /// Find a skeleton by ID (O(1) lookup via lazy-initialized hash index)
     pub fn find_skeleton(&self, id: &str) -> Option<&PackedSkeleton> {
-        self.skeletons.iter().find(|s| s.id == id)
+        let index = self
+            .skeleton_index
+            .get_or_init(|| build_index(&self.skeletons, |s| &s.id));
+        index.get(id).map(|&i| &self.skeletons[i])
     }
 
-    /// Find a keyframe collection by ID
+    /// Find a keyframe collection by ID (O(1) lookup via lazy-initialized hash index)
     pub fn find_keyframes(&self, id: &str) -> Option<&PackedKeyframes> {
-        self.keyframes.iter().find(|k| k.id == id)
+        let index = self
+            .keyframes_index
+            .get_or_init(|| build_index(&self.keyframes, |k| &k.id));
+        index.get(id).map(|&i| &self.keyframes[i])
     }
 
-    /// Find a font by ID
+    /// Find a font by ID (O(1) lookup via lazy-initialized hash index)
     pub fn find_font(&self, id: &str) -> Option<&PackedFont> {
-        self.fonts.iter().find(|f| f.id == id)
+        let index = self
+            .font_index
+            .get_or_init(|| build_index(&self.fonts, |f| &f.id));
+        index.get(id).map(|&i| &self.fonts[i])
     }
 
-    /// Find a sound by ID
+    /// Find a sound by ID (O(1) lookup via lazy-initialized hash index)
     pub fn find_sound(&self, id: &str) -> Option<&PackedSound> {
-        self.sounds.iter().find(|s| s.id == id)
+        let index = self
+            .sound_index
+            .get_or_init(|| build_index(&self.sounds, |s| &s.id));
+        index.get(id).map(|&i| &self.sounds[i])
     }
 
-    /// Find raw data by ID
+    /// Find raw data by ID (O(1) lookup via lazy-initialized hash index)
     pub fn find_data(&self, id: &str) -> Option<&PackedData> {
-        self.data.iter().find(|d| d.id == id)
+        let index = self
+            .data_index
+            .get_or_init(|| build_index(&self.data, |d| &d.id));
+        index.get(id).map(|&i| &self.data[i])
     }
+}
+
+/// Build a hash map index from a vector of items with string IDs
+fn build_index<T, F>(items: &[T], get_id: F) -> HashMap<String, usize>
+where
+    F: Fn(&T) -> &String,
+{
+    items
+        .iter()
+        .enumerate()
+        .map(|(i, item)| (get_id(item).clone(), i))
+        .collect()
 }
 
 /// Packed texture (RGBA8 or BC7 compressed)

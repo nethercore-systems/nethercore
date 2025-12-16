@@ -39,9 +39,8 @@ impl Default for RuntimeConfig {
 /// while sharing the core game loop and rollback infrastructure.
 pub struct Runtime<C: Console> {
     /// The console implementation.
-    /// Kept for future use (e.g., accessing console-specific features) and to maintain
-    /// ownership of the console instance for the runtime's lifetime.
-    #[allow(dead_code)]
+    /// Used for console-specific FFI state initialization and ownership of the console
+    /// instance for the runtime's lifetime.
     console: C,
     config: RuntimeConfig,
     game: Option<GameInstance<C::Input, C::State, C::RollbackState>>,

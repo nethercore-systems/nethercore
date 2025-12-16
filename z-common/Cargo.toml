@@ -32,5 +32,8 @@ chrono = { workspace = true }
 # Error handling
 anyhow = { workspace = true }
 
+# Fast HashMap for asset lookups
+hashbrown = { workspace = true }
+
 [dev-dependencies]
 tempfile = { workspace = true }

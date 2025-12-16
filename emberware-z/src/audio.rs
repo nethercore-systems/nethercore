@@ -238,17 +238,16 @@ pub fn generate_audio_frame(
 }
 
 /// Mix a single channel, returning the sample value and advancing the playhead
+///
+/// # Precondition
+/// `channel.sound` must be non-zero (callers must check before calling)
 fn mix_channel(
     channel: &mut ChannelState,
     sounds: &[Option<Sound>],
     resample_ratio: f32,
 ) -> Option<f32> {
     let sound_idx = channel.sound as usize;
-
-    // Channel is silent (no sound assigned)
-    if sound_idx == 0 {
-        return None;
-    }
+    debug_assert!(sound_idx != 0, "mix_channel called with silent channel");
 
     // Validate sound handle (handles start at 1, stored at their index)
     if sound_idx >= sounds.len() {
@@ -315,12 +314,12 @@ fn mix_channel(
 /// - pan = 0: left = 0.707, right = 0.707 (center, -3dB each)
 /// - pan = +1: left = 0.0, right = 1.0 (full right)
 fn apply_pan(sample: f32, pan: f32, volume: f32) -> (f32, f32) {
-    let pan = pan.clamp(-1.0, 1.0);
+    // pan and volume are already clamped when stored in ChannelState (via clamp_safe)
     let angle = (pan + 1.0) * 0.25 * std::f32::consts::PI; // Map -1..1 to 0..PI/2
     let left_gain = angle.cos();
     let right_gain = angle.sin();
 
-    let scaled = sample * volume.clamp(0.0, 1.0);
+    let scaled = sample * volume;
     (scaled * left_gain, scaled * right_gain)
 }
 

@@ -68,34 +68,33 @@ impl InputManager {
     /// Poll gamepad events and update input state
     #[cfg(feature = "gamepad")]
     pub fn update(&mut self) {
-        // Collect gilrs events first (if gamepad support is available)
-        let events: Vec<_> = if let Some(ref mut gilrs) = self.gilrs {
-            std::iter::from_fn(|| gilrs.next_event())
-                .map(|e| (e.id, e.event))
-                .collect()
-        } else {
-            Vec::new()
-        };
-
-        // Process collected events
-        for (id, event) in events {
-            match event {
-                gilrs::EventType::Connected => {
-                    // Assign to next available player slot
-                    if let Some(slot) = self.find_free_player_slot() {
-                        self.gamepad_to_player.insert(id, slot);
-                        tracing::info!("Gamepad {} connected as player {}", id, slot);
-                    } else {
-                        tracing::warn!("Gamepad {} connected but no free player slots", id);
+        // Process gilrs events directly without collecting into a Vec
+        // This avoids per-frame heap allocation
+        if let Some(ref mut gilrs) = self.gilrs {
+            while let Some(event) = gilrs.next_event() {
+                match event.event {
+                    gilrs::EventType::Connected => {
+                        // Find next free player slot (inlined to avoid borrow conflict)
+                        let free_slot = (0..4)
+                            .find(|&slot| !self.gamepad_to_player.values().any(|&s| s == slot));
+                        if let Some(slot) = free_slot {
+                            self.gamepad_to_player.insert(event.id, slot);
+                            tracing::info!("Gamepad {} connected as player {}", event.id, slot);
+                        } else {
+                            tracing::warn!(
+                                "Gamepad {} connected but no free player slots",
+                                event.id
+                            );
+                        }
                     }
-                }
-                gilrs::EventType::Disconnected => {
-                    if let Some(slot) = self.gamepad_to_player.remove(&id) {
-                        tracing::info!("Gamepad {} (player {}) disconnected", id, slot);
-                        self.player_inputs[slot] = RawInput::default();
+                    gilrs::EventType::Disconnected => {
+                        if let Some(slot) = self.gamepad_to_player.remove(&event.id) {
+                            tracing::info!("Gamepad {} (player {}) disconnected", event.id, slot);
+                            self.player_inputs[slot] = RawInput::default();
+                        }
                     }
+                    _ => {}
                 }
-                _ => {}
             }
         }
 
@@ -133,12 +132,6 @@ impl InputManager {
     #[allow(dead_code)] // Public API for rollback netcode, not yet wired up
     pub fn get_all_inputs(&self) -> [RawInput; 4] {
         self.player_inputs
-    }
-
-    /// Find the next free player slot (0-3)
-    #[cfg(feature = "gamepad")]
-    fn find_free_player_slot(&self) -> Option<usize> {
-        (0..4).find(|&slot| !self.gamepad_to_player.values().any(|&s| s == slot))
     }
 
     /// Read keyboard input and map to RawInput

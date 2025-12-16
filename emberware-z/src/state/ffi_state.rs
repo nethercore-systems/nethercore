@@ -183,9 +183,9 @@ impl Default for ZFFIState {
             sounds: Vec::new(),
             next_sound_handle: 1, // 0 reserved for invalid
             init_config: ZInitConfig::default(),
-            model_matrices: model_matrices.clone(),
-            view_matrices: view_matrices.clone(),
-            proj_matrices: proj_matrices.clone(),
+            model_matrices,
+            view_matrices,
+            proj_matrices,
             current_model_matrix: None, // Start with None = use pool index 0
             current_view_matrix: None,
             current_proj_matrix: None,

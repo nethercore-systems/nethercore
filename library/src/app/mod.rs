@@ -385,26 +385,26 @@ impl App {
         };
 
         // Tessellate and render
-        let tris = if egui_dirty {
-            let new_tris = self
+        // Note: tessellate() takes ownership of shapes, so we must clone for caching.
+        // However, we avoid cloning the tessellation result by using references.
+        if egui_dirty {
+            // Cache shapes for comparison on next frame, tessellate with clone
+            // (tessellate consumes the Vec, so clone is unavoidable here)
+            self.cached_egui_tris = self
                 .egui_ctx
                 .tessellate(full_output.shapes.clone(), full_output.pixels_per_point);
-
             self.cached_egui_shapes = full_output.shapes;
-            self.cached_egui_tris = new_tris.clone();
 
             egui_renderer.update_buffers(
                 graphics.device(),
                 graphics.queue(),
                 &mut encoder,
-                &new_tris,
+                &self.cached_egui_tris,
                 &screen_descriptor,
             );
-
-            new_tris
-        } else {
-            self.cached_egui_tris.clone()
-        };
+        }
+        // Use reference to cached tris (avoids clone when not dirty)
+        let tris = &self.cached_egui_tris;
 
         // Update textures
         for (id, image_delta) in &full_output.textures_delta.set {
@@ -435,7 +435,7 @@ impl App {
             });
 
             let mut render_pass_static = render_pass.forget_lifetime();
-            egui_renderer.render(&mut render_pass_static, &tris, &screen_descriptor);
+            egui_renderer.render(&mut render_pass_static, tris, &screen_descriptor);
         } else {
             // Clear screen even with no egui content
             let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

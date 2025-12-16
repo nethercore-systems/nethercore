@@ -58,6 +58,7 @@ serde = { workspace = true }
 toml = { workspace = true }          # Config file format
 directories = { workspace = true }   # Platform-specific paths
 hashbrown = { workspace = true }     # Fast HashMap
+smallvec = { workspace = true }      # Inline small vectors
 tracing = { workspace = true }       # Logging
 egui = { workspace = true }          # Debug overlay UI
 serde_json = { workspace = true }    # JSON for game manifests

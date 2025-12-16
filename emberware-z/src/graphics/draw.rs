@@ -67,33 +67,42 @@ impl ZGraphics {
             // Get resolution index to pack into mode field (bits 8-9)
             let resolution_index = z_state.init_config.resolution_index;
 
-            // Accumulate all instances into one buffer and track batch offsets
-            // Transform logical view_index to absolute view_index and proj_index
-            // Pack resolution_index into upper bits of mode
-            let mut all_instances = Vec::with_capacity(total_instances);
-            let mut batch_info = Vec::new(); // (base_instance, instance_count, textures, blend_mode)
+            // Clear and reuse scratch buffers (avoids per-frame allocation)
+            self.quad_instance_scratch.clear();
+            self.quad_batch_scratch.clear();
+
+            // Reserve capacity only if needed (buffers grow but never shrink)
+            if self.quad_instance_scratch.capacity() < total_instances {
+                self.quad_instance_scratch
+                    .reserve(total_instances - self.quad_instance_scratch.capacity());
+            }
+            if self.quad_batch_scratch.capacity() < z_state.quad_batches.len() {
+                self.quad_batch_scratch
+                    .reserve(z_state.quad_batches.len() - self.quad_batch_scratch.capacity());
+            }
 
             for batch in &z_state.quad_batches {
                 if batch.instances.is_empty() {
                     continue;
                 }
 
-                let base_instance = all_instances.len() as u32;
+                let base_instance = self.quad_instance_scratch.len() as u32;
 
                 // Transform each instance:
                 // - Convert logical view_index to absolute indices
                 // - Pack resolution_index into mode (bits 8-9)
-                for instance in &batch.instances {
-                    let mut transformed = *instance;
-                    let logical_view_index = transformed.view_index;
-                    transformed.view_index = view_offset + logical_view_index;
-                    transformed.proj_index = proj_offset + logical_view_index;
-                    // Pack resolution_index into bits 8-9 of mode
-                    transformed.mode |= (resolution_index & 0x3) << 8;
-                    all_instances.push(transformed);
-                }
+                self.quad_instance_scratch
+                    .extend(batch.instances.iter().map(|instance| {
+                        let mut transformed = *instance;
+                        let logical_view_index = transformed.view_index;
+                        transformed.view_index = view_offset + logical_view_index;
+                        transformed.proj_index = proj_offset + logical_view_index;
+                        // Pack resolution_index into bits 8-9 of mode
+                        transformed.mode |= (resolution_index & 0x3) << 8;
+                        transformed
+                    }));
 
-                batch_info.push((
+                self.quad_batch_scratch.push((
                     base_instance,
                     batch.instances.len() as u32,
                     batch.textures,
@@ -102,14 +111,16 @@ impl ZGraphics {
             }
 
             // Upload all instances once to GPU
-            if !all_instances.is_empty() {
+            if !self.quad_instance_scratch.is_empty() {
                 self.buffer_manager
-                    .upload_quad_instances(&self.device, &self.queue, &all_instances)
+                    .upload_quad_instances(&self.device, &self.queue, &self.quad_instance_scratch)
                     .expect("Failed to upload quad instances to GPU");
             }
 
             // Create draw commands for each batch with correct base_instance
-            for (base_instance, instance_count, textures, batch_blend_mode) in batch_info {
+            for &(base_instance, instance_count, textures, batch_blend_mode) in
+                &self.quad_batch_scratch
+            {
                 // Map FFI texture handles to graphics texture handles for this batch
                 let texture_slots = [
                     texture_map

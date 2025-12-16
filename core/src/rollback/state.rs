@@ -4,8 +4,13 @@
 
 use crate::console::{ConsoleInput, ConsoleRollbackState};
 use crate::wasm::GameInstance;
+use smallvec::SmallVec;
 
 use super::config::MAX_STATE_SIZE;
+
+/// Inline storage size for console rollback state (avoids heap allocation)
+/// 512 bytes covers Emberware Z's 340-byte AudioPlaybackState with room to spare
+pub type ConsoleDataVec = SmallVec<[u8; 512]>;
 
 /// Number of pre-allocated state buffers in the pool
 pub const STATE_POOL_SIZE: usize = super::config::MAX_ROLLBACK_FRAMES + 2;
@@ -25,7 +30,8 @@ pub struct GameStateSnapshot {
     /// Serialized WASM game state (entire linear memory)
     pub data: Vec<u8>,
     /// Console-specific rollback state (POD, serialized via bytemuck)
-    pub console_data: Vec<u8>,
+    /// Uses SmallVec to store inline (no heap allocation for typical console states)
+    pub console_data: ConsoleDataVec,
     /// xxHash3 checksum for desync detection (covers both data and console_data)
     pub checksum: u64,
     /// Frame number this snapshot was taken at
@@ -37,7 +43,7 @@ impl GameStateSnapshot {
     pub fn new() -> Self {
         Self {
             data: Vec::new(),
-            console_data: Vec::new(),
+            console_data: SmallVec::new(),
             checksum: 0,
             frame: -1,
         }
@@ -48,14 +54,14 @@ impl GameStateSnapshot {
         let checksum = Self::compute_checksum(&data, &[]);
         Self {
             data,
-            console_data: Vec::new(),
+            console_data: SmallVec::new(),
             checksum,
             frame,
         }
     }
 
     /// Create a snapshot from WASM data and console rollback data
-    pub fn from_data_with_console(data: Vec<u8>, console_data: Vec<u8>, frame: i32) -> Self {
+    pub fn from_data_with_console(data: Vec<u8>, console_data: ConsoleDataVec, frame: i32) -> Self {
         let checksum = Self::compute_checksum(&data, &console_data);
         Self {
             data,
@@ -71,7 +77,7 @@ impl GameStateSnapshot {
         let checksum = Self::compute_checksum(buffer, &[]);
         Self {
             data: std::mem::take(buffer),
-            console_data: Vec::new(),
+            console_data: SmallVec::new(),
             checksum,
             frame,
         }
@@ -233,7 +239,8 @@ impl RollbackStateManager {
             .map_err(|e| SaveStateError::WasmError(e.to_string()))?;
 
         // Serialize console rollback state via bytemuck (zero-copy for POD types)
-        let console_data = bytemuck::bytes_of(game.rollback_state()).to_vec();
+        // SmallVec stores inline (no heap allocation) for typical console states (<512 bytes)
+        let console_data = SmallVec::from_slice(bytemuck::bytes_of(game.rollback_state()));
 
         let total_size = snapshot_data.len() + console_data.len();
         if total_size > self.max_state_size {

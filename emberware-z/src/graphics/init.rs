@@ -283,6 +283,8 @@ impl ZGraphics {
             unit_quad_format,
             unit_quad_base_vertex,
             unit_quad_first_index,
+            quad_instance_scratch: Vec::new(),
+            quad_batch_scratch: Vec::new(),
         };
 
         // Precompile all 40 shader modules at startup

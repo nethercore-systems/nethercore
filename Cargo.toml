@@ -75,6 +75,9 @@ open = "5"
 # Performance - faster HashMap/HashSet
 hashbrown = { version = "0.16", features = ["serde"] }
 
+# Performance - inline small vectors
+smallvec = "1"
+
 # WASM analysis
 wasmparser = "0.243"
 

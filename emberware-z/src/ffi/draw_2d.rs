@@ -294,18 +294,30 @@ fn draw_text(
     // Determine which font to use
     let font_handle = state.current_font;
 
-    // Look up custom font if font_handle != 0
-    // Clone the font to avoid holding a borrow across add_quad_instance calls
-    let custom_font = if font_handle == 0 {
-        None
-    } else {
-        let font_index = (font_handle - 1) as usize;
-        state.fonts.get(font_index).cloned()
-    };
+    // Extract font data into local variables to avoid cloning the entire Font struct.
+    // Only the char_widths Vec is cloned (if present), all other fields are Copy types.
+    let custom_font_data: Option<(u32, u32, u32, u8, u8, u32, u32, Option<Vec<u8>>)> =
+        if font_handle == 0 {
+            None
+        } else {
+            let font_index = (font_handle - 1) as usize;
+            state.fonts.get(font_index).map(|font| {
+                (
+                    font.texture,
+                    font.atlas_width,
+                    font.atlas_height,
+                    font.char_width,
+                    font.char_height,
+                    font.first_codepoint,
+                    font.char_count,
+                    font.char_widths.clone(), // Only clone the widths Vec, not the whole Font
+                )
+            })
+        };
 
     // Bind the appropriate font texture to slot 0
-    if let Some(ref font) = custom_font {
-        state.bound_textures[0] = font.texture;
+    if let Some((texture, ..)) = custom_font_data {
+        state.bound_textures[0] = texture;
     } else {
         // For built-in font, use reserved handle (u32::MAX - 1)
         // This handle is mapped to the actual built-in font texture at startup
@@ -315,36 +327,43 @@ fn draw_text(
     // Generate quad instances for each character
     let mut cursor_x = x;
 
-    if let Some(ref font) = custom_font {
+    if let Some((
+        _texture,
+        atlas_width,
+        atlas_height,
+        char_width,
+        char_height,
+        first_codepoint,
+        char_count,
+        ref char_widths,
+    )) = custom_font_data
+    {
         // Custom font rendering
-        let scale = size / font.char_height as f32;
+        let scale = size / char_height as f32;
         let glyph_height = size;
 
         // Use stored atlas dimensions
-        let texture_width = font.atlas_width;
-        let texture_height = font.atlas_height;
+        let texture_width = atlas_width;
+        let texture_height = atlas_height;
 
-        let max_glyph_width = font.char_width as u32;
+        let max_glyph_width = char_width as u32;
         let glyphs_per_row = texture_width / max_glyph_width.max(1);
 
         for ch in text_str.chars() {
             let char_code = ch as u32;
 
             // Calculate glyph index
-            if char_code < font.first_codepoint
-                || char_code >= font.first_codepoint + font.char_count
-            {
+            if char_code < first_codepoint || char_code >= first_codepoint + char_count {
                 // Character not in font, skip or use replacement
                 continue;
             }
-            let glyph_index = (char_code - font.first_codepoint) as usize;
+            let glyph_index = (char_code - first_codepoint) as usize;
 
             // Get glyph width (variable or fixed)
-            let glyph_width_px = font
-                .char_widths
+            let glyph_width_px = char_widths
                 .as_ref()
                 .and_then(|widths| widths.get(glyph_index).copied())
-                .unwrap_or(font.char_width);
+                .unwrap_or(char_width);
             let glyph_width = glyph_width_px as f32 * scale;
 
             // Calculate UV coordinates
@@ -352,10 +371,10 @@ fn draw_text(
             let row = glyph_index / glyphs_per_row as usize;
 
             let u0 = (col * max_glyph_width as usize) as f32 / texture_width as f32;
-            let v0 = (row * font.char_height as usize) as f32 / texture_height as f32;
+            let v0 = (row * char_height as usize) as f32 / texture_height as f32;
             let u1 = ((col * max_glyph_width as usize) + glyph_width_px as usize) as f32
                 / texture_width as f32;
-            let v1 = ((row + 1) * font.char_height as usize) as f32 / texture_height as f32;
+            let v1 = ((row + 1) * char_height as usize) as f32 / texture_height as f32;
 
             // Create quad instance for this glyph
             let instance = crate::graphics::QuadInstance::sprite(
