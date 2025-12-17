@@ -305,6 +305,18 @@ fn lambert_diffuse(
     return albedo * light_color * n_dot_l;
 }
 
+// Smooth distance attenuation for point lights
+// Returns 1.0 at distance=0, 0.0 at distance>=range
+fn point_light_attenuation(distance: f32, range: f32) -> f32 {
+    if (range <= 0.0) {
+        return 0.0;
+    }
+    let t = clamp(distance / range, 0.0, 1.0);
+    // Smooth falloff: quadratic ease-out (feels more natural than linear)
+    let inv_t = 1.0 - t;
+    return inv_t * inv_t;
+}
+
 // ============================================================================
 // Light Utilities
 // ============================================================================

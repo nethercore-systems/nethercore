@@ -97,9 +97,40 @@ const FS_UV: &str = r#"if !has_flag(shading.flags, FLAG_USE_UNIFORM_COLOR) {
         color *= tex_sample.rgb;
         base_alpha = tex_sample.a;
     }"#;
-const FS_AMBIENT: &str = "let ambient = color * sample_sky(in.world_normal, sky); let sun_color = sample_sky(-sky.sun_direction, sky);";
-const FS_NORMAL: &str =
-    "color = ambient + lambert_diffuse(in.world_normal, sky.sun_direction, color, sun_color);";
+// Mode 0 Lambert: ambient from sky gradient + save albedo for lighting
+const FS_AMBIENT: &str = r#"let ambient = color * sample_sky_ambient(in.world_normal, sky);
+    let albedo = color;"#;
+
+// Mode 0 Lambert: sun diffuse + 4 dynamic lights
+const FS_NORMAL: &str = r#"var final_color = ambient;
+
+    // Sun Lambert diffuse
+    final_color += lambert_diffuse(in.world_normal, sky.sun_direction, albedo, sky.sun_color);
+
+    // 4 dynamic lights (Lambert diffuse only)
+    for (var i = 0u; i < 4u; i++) {
+        let light = unpack_light(shading.lights[i]);
+        if (light.enabled) {
+            var light_dir: vec3<f32>;
+            var attenuation: f32 = 1.0;
+
+            if (light.light_type == 0u) {
+                // Directional light: use stored direction
+                light_dir = light.direction;
+            } else {
+                // Point light: compute direction and attenuation
+                let to_light = light.position - in.world_position;
+                let distance = length(to_light);
+                light_dir = -normalize(to_light);  // Negate: convention is "ray direction"
+                attenuation = point_light_attenuation(distance, light.range);
+            }
+
+            let light_color = light.color * light.intensity * attenuation;
+            final_color += lambert_diffuse(in.world_normal, light_dir, albedo, light_color);
+        }
+    }
+
+    color = final_color;"#;
 
 const FS_ALBEDO_COLOR: &str = "albedo *= in.color;";
 // Mode 2/3: Albedo from texture, with uniform color override support
