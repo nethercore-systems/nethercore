@@ -21,7 +21,7 @@ Emberware is a fantasy console platform with built-in rollback netcode, designed
 **Key Documentation:**
 - [TASKS.md](./TASKS.md) — Development status and implementation plan
 - [docs/reference/ffi.md](./docs/reference/ffi.md) — Shared FFI API reference
-- [docs/reference/emberware-z.md](./docs/reference/emberware-z.md) — Z-specific API
+- [../emberware-design/consoles/zx-spec.md](../emberware-design/consoles/zx-spec.md) — ZX console specification (source of truth)
 - [docs/reference/rendering-architecture.md](./docs/reference/rendering-architecture.md) — Graphics deep dive
 
 ## Architecture
