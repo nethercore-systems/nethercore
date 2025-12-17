@@ -1,7 +1,7 @@
 //! Console type registry for multi-console support
 //!
 //! This module provides the infrastructure for the unified launcher to
-//! support multiple console types (Z, Classic, etc.) from a single binary.
+//! support multiple console types (ZX, Chroma, etc.) from a single binary.
 //!
 //! # Architecture
 //!
@@ -14,9 +14,9 @@
 //!
 //! # Adding a New Console
 //!
-//! 1. Create player binary for the console (e.g., `emberware-classic`)
-//! 2. Add variant to `ConsoleType` enum (e.g., `Classic`)
-//! 3. Update `as_str()` to return the manifest identifier (e.g., `"classic"`)
+//! 1. Create player binary for the console (e.g., `emberware-chroma`)
+//! 2. Add variant to `ConsoleType` enum (e.g., `Chroma`)
+//! 3. Update `as_str()` to return the manifest identifier (e.g., `"chroma"`)
 //! 4. Update `from_str()` to parse the identifier
 //! 5. Update `all()` to include the new variant
 //! 6. Update `player_binary_name()` to return the binary name
@@ -36,7 +36,7 @@ use anyhow::{Context, Result};
 
 use emberware_core::library::{LocalGame, RomLoaderRegistry};
 
-use z_common::ZRomLoader;
+use zx_common::ZRomLoader;
 
 /// Options to pass to the player process
 #[derive(Debug, Clone, Default)]
@@ -52,9 +52,9 @@ pub struct PlayerOptions {
 /// Uses static dispatch for zero-cost abstraction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ConsoleType {
-    /// Emberware Z (PS1/N64 aesthetic)
+    /// Emberware ZX (PS1/N64 aesthetic)
     Z,
-    // Future: Classic, Y, X, etc.
+    // Future: Chroma, Y, X, etc.
 }
 
 impl ConsoleType {
@@ -83,8 +83,8 @@ impl ConsoleType {
     ///
     /// # Returns
     ///
-    /// - `"ewz"` for Emberware Z
-    /// - Future: `"ewc"` for Emberware Classic, etc.
+    /// - `"ewzx"` for Emberware ZX
+    /// - Future: `"ewc"` for Emberware Chroma, etc.
     #[allow(dead_code)]
     pub fn rom_extension(&self) -> &'static str {
         match self {
@@ -104,7 +104,7 @@ impl ConsoleType {
     pub fn from_extension(ext: &str) -> Option<Self> {
         match ext {
             "ewz" => Some(ConsoleType::Z),
-            // Future: "ewc" => Some(ConsoleType::Classic),
+            // Future: "ewc" => Some(ConsoleType::Chroma),
             _ => None,
         }
     }
@@ -120,7 +120,7 @@ impl ConsoleType {
     pub fn player_binary_name(&self) -> &'static str {
         match self {
             ConsoleType::Z => "emberware-z",
-            // Future: ConsoleType::Classic => "emberware-classic",
+            // Future: ConsoleType::Chroma => "emberware-chroma",
         }
     }
 }
@@ -343,7 +343,7 @@ pub fn run_game_from_path_with_options(path: &Path, options: &PlayerOptions) -> 
 pub fn create_rom_loader_registry() -> RomLoaderRegistry {
     let mut registry = RomLoaderRegistry::new();
     registry.register(Box::new(ZRomLoader));
-    // Future: registry.register(Box::new(ClassicRomLoader));
+    // Future: registry.register(Box::new(ChromaRomLoader));
     registry
 }
 
@@ -449,7 +449,7 @@ mod tests {
         assert_eq!(ConsoleType::parse("invalid"), None);
         assert_eq!(ConsoleType::parse(""), None);
         assert_eq!(ConsoleType::parse("Z"), None); // Case-sensitive
-        assert_eq!(ConsoleType::parse("classic"), None); // Not yet implemented
+        assert_eq!(ConsoleType::parse("chroma"), None); // Not yet implemented
     }
 
     #[test]
@@ -476,7 +476,7 @@ mod tests {
     fn test_registry_supports_invalid() {
         let registry = ConsoleRegistry::new();
         assert!(!registry.supports("invalid"));
-        assert!(!registry.supports("classic")); // Not yet implemented
+        assert!(!registry.supports("chroma")); // Not yet implemented
         assert!(!registry.supports(""));
         assert!(!registry.supports("Z")); // Case-sensitive
     }
@@ -514,6 +514,6 @@ mod tests {
         assert_eq!(ConsoleType::from_extension("invalid"), None);
         assert_eq!(ConsoleType::from_extension(""), None);
         assert_eq!(ConsoleType::from_extension("EWZ"), None); // Case-sensitive
-        assert_eq!(ConsoleType::from_extension("ewc"), None); // Not yet implemented
+        assert_eq!(ConsoleType::from_extension("ewc"), None); // Chroma not yet implemented
     }
 }

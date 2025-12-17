@@ -9,11 +9,11 @@ use anyhow::Result;
 use tracing::warn;
 use wasmtime::{Caller, Linker};
 
-use super::{ZGameContext, guards::check_init_only};
+use super::{ZXGameContext, guards::check_init_only};
 use crate::state::{BoneMatrix3x4, KeyframeSource, MAX_BONES, MAX_SKELETONS, PendingSkeleton};
 
 /// Register GPU skinning FFI functions
-pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
+pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     linker.func_wrap("env", "load_skeleton", load_skeleton)?;
     linker.func_wrap("env", "skeleton_bind", skeleton_bind)?;
     linker.func_wrap("env", "set_bones", set_bones)?;
@@ -41,7 +41,7 @@ pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
 /// * inverse_bind_ptr is null or out of bounds
 /// * Maximum skeleton count exceeded
 fn load_skeleton(
-    mut caller: Caller<'_, ZGameContext>,
+    mut caller: Caller<'_, ZXGameContext>,
     inverse_bind_ptr: u32,
     bone_count: u32,
 ) -> u32 {
@@ -173,7 +173,7 @@ fn load_skeleton(
 /// * Binding persists until changed (not reset per frame)
 /// * Call multiple times per frame to render different skeletons
 /// * Invalid handles are ignored with a warning
-fn skeleton_bind(mut caller: Caller<'_, ZGameContext>, skeleton: u32) {
+fn skeleton_bind(mut caller: Caller<'_, ZXGameContext>, skeleton: u32) {
     let state = &mut caller.data_mut().ffi;
 
     if skeleton == 0 {
@@ -249,7 +249,7 @@ fn skeleton_bind(mut caller: Caller<'_, ZGameContext>, skeleton: u32) {
 /// Bone matrices are appended to the per-frame immediate bones buffer.
 /// The offset at which matrices were added is tracked, allowing multiple
 /// set_bones() calls per frame for different skinned mesh draws.
-fn set_bones(mut caller: Caller<'_, ZGameContext>, matrices_ptr: u32, count: u32) {
+fn set_bones(mut caller: Caller<'_, ZXGameContext>, matrices_ptr: u32, count: u32) {
     // Validate bone count
     if count > MAX_BONES as u32 {
         warn!(
@@ -369,7 +369,7 @@ fn set_bones(mut caller: Caller<'_, ZGameContext>, matrices_ptr: u32, count: u32
 /// # Animation System v2
 /// Bone matrices are appended to the per-frame immediate bones buffer.
 /// See set_bones() for details.
-fn set_bones_4x4(mut caller: Caller<'_, ZGameContext>, matrices_ptr: u32, count: u32) {
+fn set_bones_4x4(mut caller: Caller<'_, ZXGameContext>, matrices_ptr: u32, count: u32) {
     // Validate bone count
     if count > MAX_BONES as u32 {
         warn!(

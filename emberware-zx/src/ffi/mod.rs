@@ -1,4 +1,4 @@
-//! Emberware Z FFI host functions
+//! Emberware ZX FFI host functions
 //!
 //! Console-specific FFI functions for the PS1/N64 aesthetic fantasy console.
 //! These functions are registered with the WASM linker and called by games.
@@ -77,11 +77,11 @@ use emberware_core::wasm::WasmGameContext;
 use crate::console::ZInput;
 use crate::state::{ZFFIState, ZRollbackState};
 
-/// Type alias for Emberware Z WASM game context
-pub type ZGameContext = WasmGameContext<ZInput, ZFFIState, ZRollbackState>;
+/// Type alias for Emberware ZX WASM game context
+pub type ZXGameContext = WasmGameContext<ZInput, ZFFIState, ZRollbackState>;
 
-/// Register all Emberware Z FFI functions with the linker
-pub fn register_z_ffi(linker: &mut Linker<ZGameContext>) -> Result<()> {
+/// Register all Emberware ZX FFI functions with the linker
+pub fn register_zx_ffi(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     // Configuration functions (init-only)
     config::register(linker)?;
 

@@ -9,4 +9,4 @@ name = "gen-test-anim"
 path = "src/main.rs"
 
 [dependencies]
-z-common = { path = "../../z-common" }
+zx-common = { path = "../../zx-common" }

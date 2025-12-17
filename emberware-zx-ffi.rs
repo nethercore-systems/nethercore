@@ -1,7 +1,7 @@
-//! Emberware Z FFI Bindings
+//! Emberware ZX FFI Bindings
 //!
-//! This file provides all FFI function declarations for Emberware Z games.
-//! Import this module to access the complete Emberware Z API.
+//! This file provides all FFI function declarations for Emberware ZX games.
+//! Import this module to access the complete Emberware ZX API.
 //!
 //! # Usage
 //!

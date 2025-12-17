@@ -1,14 +1,14 @@
-//! Shared types and utilities for Emberware Z console
+//! Shared types and utilities for Emberware ZX console
 //!
-//! This crate provides Z-specific utilities shared between:
-//! - `emberware-z` (runtime)
+//! This crate provides ZX-specific utilities shared between:
+//! - `emberware-zx` (runtime)
 //! - `ember-export` (asset pipeline)
 //! - `ember-cli` (build tools)
 //!
 //! # Modules
 //!
 //! - [`packing`] - Vertex data packing utilities (f32 → f16/snorm16/unorm8)
-//! - [`formats`] - Z-specific binary asset and ROM formats
+//! - [`formats`] - ZX-specific binary asset and ROM formats
 //! - [`loader`] - ROM loader for .ewz files
 
 pub mod formats;

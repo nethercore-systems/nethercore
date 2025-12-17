@@ -13,7 +13,7 @@ use wasmtime::{Caller, Linker};
 use crate::audio::Sound;
 use crate::state::MAX_CHANNELS;
 
-use super::{ZGameContext, guards::check_init_only, helpers::read_wasm_i16s};
+use super::{ZXGameContext, guards::check_init_only, helpers::read_wasm_i16s};
 
 /// Clamp a float value, treating NaN as the minimum value
 #[inline]
@@ -26,7 +26,7 @@ fn clamp_safe(value: f32, min: f32, max: f32) -> f32 {
 }
 
 /// Register audio FFI functions
-pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
+pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     linker.func_wrap("env", "load_sound", load_sound)?;
     linker.func_wrap("env", "play_sound", play_sound)?;
     linker.func_wrap("env", "channel_play", channel_play)?;
@@ -48,7 +48,7 @@ pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
 ///
 /// # Returns
 /// Sound handle for use with play_sound, channel_play, music_play
-fn load_sound(mut caller: Caller<'_, ZGameContext>, data_ptr: u32, byte_len: u32) -> u32 {
+fn load_sound(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, byte_len: u32) -> u32 {
     // Guard: init-only
     if let Err(e) = check_init_only(&caller, "load_sound") {
         warn!("{}", e);
@@ -96,7 +96,7 @@ fn load_sound(mut caller: Caller<'_, ZGameContext>, data_ptr: u32, byte_len: u32
 /// - `sound`: Sound handle from load_sound()
 /// - `volume`: 0.0 to 1.0
 /// - `pan`: -1.0 (left) to 1.0 (right), 0.0 = center
-fn play_sound(mut caller: Caller<'_, ZGameContext>, sound: u32, volume: f32, pan: f32) {
+fn play_sound(mut caller: Caller<'_, ZXGameContext>, sound: u32, volume: f32, pan: f32) {
     let ctx = caller.data_mut();
 
     // Find first free channel (sound == 0 means channel is available)
@@ -126,7 +126,7 @@ fn play_sound(mut caller: Caller<'_, ZGameContext>, sound: u32, volume: f32, pan
 /// - `pan`: -1.0 (left) to 1.0 (right), 0.0 = center
 /// - `looping`: 1 = loop, 0 = play once
 fn channel_play(
-    mut caller: Caller<'_, ZGameContext>,
+    mut caller: Caller<'_, ZXGameContext>,
     channel: u32,
     sound: u32,
     volume: f32,
@@ -163,7 +163,7 @@ fn channel_play(
 /// - `channel`: 0-15
 /// - `volume`: 0.0 to 1.0
 /// - `pan`: -1.0 (left) to 1.0 (right), 0.0 = center
-fn channel_set(mut caller: Caller<'_, ZGameContext>, channel: u32, volume: f32, pan: f32) {
+fn channel_set(mut caller: Caller<'_, ZXGameContext>, channel: u32, volume: f32, pan: f32) {
     let channel_idx = channel as usize;
     if channel_idx >= MAX_CHANNELS {
         warn!("channel_set: invalid channel {}", channel);
@@ -180,7 +180,7 @@ fn channel_set(mut caller: Caller<'_, ZGameContext>, channel: u32, volume: f32, 
 ///
 /// # Parameters
 /// - `channel`: 0-15
-fn channel_stop(mut caller: Caller<'_, ZGameContext>, channel: u32) {
+fn channel_stop(mut caller: Caller<'_, ZXGameContext>, channel: u32) {
     let channel_idx = channel as usize;
     if channel_idx >= MAX_CHANNELS {
         warn!("channel_stop: invalid channel {}", channel);
@@ -199,7 +199,7 @@ fn channel_stop(mut caller: Caller<'_, ZGameContext>, channel: u32) {
 /// # Parameters
 /// - `sound`: Sound handle from load_sound()
 /// - `volume`: 0.0 to 1.0
-fn music_play(mut caller: Caller<'_, ZGameContext>, sound: u32, volume: f32) {
+fn music_play(mut caller: Caller<'_, ZXGameContext>, sound: u32, volume: f32) {
     let ctx = caller.data_mut();
     let music = &mut ctx.rollback.audio.music;
 
@@ -218,7 +218,7 @@ fn music_play(mut caller: Caller<'_, ZGameContext>, sound: u32, volume: f32) {
 }
 
 /// Stop music
-fn music_stop(mut caller: Caller<'_, ZGameContext>) {
+fn music_stop(mut caller: Caller<'_, ZXGameContext>) {
     let ctx = caller.data_mut();
     let music = &mut ctx.rollback.audio.music;
     music.sound = 0;
@@ -230,7 +230,7 @@ fn music_stop(mut caller: Caller<'_, ZGameContext>) {
 ///
 /// # Parameters
 /// - `volume`: 0.0 to 1.0
-fn music_set_volume(mut caller: Caller<'_, ZGameContext>, volume: f32) {
+fn music_set_volume(mut caller: Caller<'_, ZXGameContext>, volume: f32) {
     let ctx = caller.data_mut();
     ctx.rollback.audio.music.volume = clamp_safe(volume, 0.0, 1.0);
 }

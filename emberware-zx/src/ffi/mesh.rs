@@ -10,12 +10,12 @@ use super::helpers::{
     MAX_VERTEX_FORMAT, checked_mul, read_wasm_bytes, read_wasm_floats, read_wasm_u16s,
     validate_count_nonzero, validate_vertex_format,
 };
-use super::{ZGameContext, guards::check_init_only};
+use super::{ZXGameContext, guards::check_init_only};
 use crate::graphics::{vertex_stride, vertex_stride_packed};
 use crate::state::{PendingMesh, PendingMeshPacked};
 
 /// Register mesh FFI functions
-pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
+pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     // Unpacked mesh loading (user convenience API)
     linker.func_wrap("env", "load_mesh", load_mesh)?;
     linker.func_wrap("env", "load_mesh_indexed", load_mesh_indexed)?;
@@ -44,7 +44,7 @@ pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
 ///
 /// Returns mesh handle (>0) on success, 0 on failure.
 fn load_mesh(
-    mut caller: Caller<'_, ZGameContext>,
+    mut caller: Caller<'_, ZXGameContext>,
     data_ptr: u32,
     vertex_count: u32,
     format: u32,
@@ -111,7 +111,7 @@ fn load_mesh(
 ///
 /// Returns mesh handle (>0) on success, 0 on failure.
 fn load_mesh_indexed(
-    mut caller: Caller<'_, ZGameContext>,
+    mut caller: Caller<'_, ZXGameContext>,
     data_ptr: u32,
     vertex_count: u32,
     index_ptr: u32,
@@ -207,7 +207,7 @@ fn load_mesh_indexed(
 ///
 /// Returns mesh handle (>0) on success, 0 on failure.
 fn load_mesh_packed(
-    mut caller: Caller<'_, ZGameContext>,
+    mut caller: Caller<'_, ZXGameContext>,
     data_ptr: u32,
     vertex_count: u32,
     format: u32,
@@ -273,7 +273,7 @@ fn load_mesh_packed(
 ///
 /// Returns mesh handle (>0) on success, 0 on failure.
 fn load_mesh_indexed_packed(
-    mut caller: Caller<'_, ZGameContext>,
+    mut caller: Caller<'_, ZXGameContext>,
     data_ptr: u32,
     vertex_count: u32,
     index_ptr: u32,
@@ -363,7 +363,7 @@ fn load_mesh_indexed_packed(
 ///
 /// The mesh is drawn using the current transform (from transform_* functions)
 /// and render state (color, textures, depth test, cull mode, blend mode).
-fn draw_mesh(mut caller: Caller<'_, ZGameContext>, handle: u32) {
+fn draw_mesh(mut caller: Caller<'_, ZXGameContext>, handle: u32) {
     if handle == 0 {
         warn!("draw_mesh: invalid handle 0");
         return;

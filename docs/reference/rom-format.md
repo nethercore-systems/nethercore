@@ -5,8 +5,8 @@
 Emberware uses console-specific binary ROM formats for game distribution. Each fantasy console has its own ROM format with a unique file extension and structure, ensuring type-safety and preventing incompatible games from being loaded on the wrong console.
 
 **Current ROM Formats:**
-- `.ewz` - Emberware Z (PS1/N64 aesthetic)
-- `.ewc` - Emberware Classic (future - 2D retro aesthetic)
+- `.ewz` - Emberware ZX (PS1/N64 aesthetic)
+- `.ewc` - Emberware Chroma (future - 2D retro aesthetic)
 
 **Why Console-Specific?**
 - ✅ Type-safe - impossible to load wrong ROM in wrong console
@@ -283,22 +283,22 @@ This displays:
 
 ## Future Console Formats
 
-When new consoles are added (e.g., Emberware Classic), they will follow the same pattern:
+When new consoles are added (e.g., Emberware Chroma), they will follow the same pattern:
 
 ```rust
-// Emberware Classic ROM (.ewc)
+// Emberware Chroma ROM (.ewc)
 pub const EWC_VERSION: u32 = 1;
 pub const EWC_MAGIC: &[u8; 4] = b"EWC\0";
 
-pub struct ClassicRom {
+pub struct ChromaRom {
     pub version: u32,
-    pub metadata: ClassicMetadata,
+    pub metadata: ChromaMetadata,
     pub code: Vec<u8>,
     pub thumbnail: Option<Vec<u8>>,
     pub screenshots: Vec<Vec<u8>>,
 }
 
-pub struct ClassicMetadata {
+pub struct ChromaMetadata {
     // Core fields (same as Z for consistency)
     pub id: String,
     pub title: String,
@@ -311,7 +311,7 @@ pub struct ClassicMetadata {
     pub created_at: String,
     pub tool_version: String,
 
-    // Classic-specific settings
+    // Chroma-specific settings
     pub palette: Option<String>,     // "nes", "snes", "genesis"
     pub sprite_limit: Option<u32>,
     pub audio_channels: Option<u32>,

@@ -91,8 +91,8 @@ pub struct ConsoleSpecs {
     pub save_data_limit: usize,
 }
 
-// Emberware Z
-pub const fn emberware_z_specs() -> &'static ConsoleSpecs {
+// Emberware ZX
+pub const fn emberware_zx_specs() -> &'static ConsoleSpecs {
     &ConsoleSpecs {
         // ... existing ...
         max_players: 4,
@@ -101,8 +101,8 @@ pub const fn emberware_z_specs() -> &'static ConsoleSpecs {
     }
 }
 
-// Emberware Classic (example: 2-player retro console)
-pub const fn emberware_classic_specs() -> &'static ConsoleSpecs {
+// Emberware Chroma (example: 2-player retro console)
+pub const fn emberware_chroma_specs() -> &'static ConsoleSpecs {
     &ConsoleSpecs {
         // ... existing ...
         max_players: 2,
@@ -161,8 +161,8 @@ pub struct ConsoleSpecs {
 ```
 
 **Console values:**
-- Emberware Z: `64 * 1024` (64KB per player)
-- Emberware Classic: `16 * 1024` (16KB per player, smaller for retro feel)
+- Emberware ZX: `64 * 1024` (64KB per player)
+- Emberware Chroma: `16 * 1024` (16KB per player, smaller for retro feel)
 
 ### 2. SessionSaveData Structure
 
@@ -461,7 +461,7 @@ for i in 0..player_count() {
         └── profile_N.sav          # (N = max_profiles - 1)
 ```
 
-**Note:** Profile count varies by console. Emberware Z: 4 profiles. Classic: 2 profiles.
+**Note:** Profile count varies by console. Emberware ZX: 4 profiles. Chroma: 2 profiles.
 
 **Migration:** Old `player.sav` format is deprecated. Rename to `profile_0.sav`.
 
@@ -525,7 +525,7 @@ Simple format with header for versioning:
 
 ## Profile System
 
-The platform manages save profiles per game, bound to controller slots. The number of profiles matches `specs.max_profiles` for the console (e.g., 4 for Emberware Z, 2 for Classic).
+The platform manages save profiles per game, bound to controller slots. The number of profiles matches `specs.max_profiles` for the console (e.g., 4 for Emberware ZX, 2 for Chroma).
 
 ### Controller-to-Profile Binding
 
@@ -536,15 +536,15 @@ Stored globally in `~/.emberware/profiles.toml`:
 # Number of entries matches specs.max_players for the console
 # Profile index determines which profile_N.sav file is used
 
-# Emberware Z (4-player console)
-[bindings.emberware-z]
+# Emberware ZX (4-player console)
+[bindings.emberware-zx]
 controller_0 = 0    # Controller 0 uses profile_0.sav
 controller_1 = 1    # Controller 1 uses profile_1.sav
 controller_2 = 2    # Controller 2 uses profile_2.sav
 controller_3 = 3    # Controller 3 uses profile_3.sav
 
-# Emberware Classic (2-player console)
-[bindings.emberware-classic]
+# Emberware Chroma (2-player console)
+[bindings.emberware-chroma]
 controller_0 = 0
 controller_1 = 1
 ```

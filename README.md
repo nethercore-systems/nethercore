@@ -7,7 +7,7 @@ A fantasy console platform with built-in rollback netcode.
 | Console | Generation | Aesthetic | Status | Doc |
 |---------|------------|-----------|--------|-----|
 | **Emberware Z** | 5th gen | PS1/N64/Saturn | Available | [docs/reference/emberware-z.md](./docs/reference/emberware-z.md) |
-| **Emberware Classic** | 4th gen | Genesis/SNES/Neo Geo | Coming Soon | [docs/reference/emberware-classic.md](./docs/reference/emberware-classic.md) |
+| **Emberware Chroma** | 4th gen | Genesis/SNES/Neo Geo | Coming Soon | [docs/reference/emberware-chroma.md](./docs/reference/emberware-chroma.md) |
 
 ## What's Here
 

@@ -16,7 +16,7 @@ use anyhow::Result;
 use tracing::{info, warn};
 use wasmtime::{Caller, Linker};
 
-use super::{ZGameContext, get_wasm_memory, guards::check_init_only};
+use super::{ZXGameContext, get_wasm_memory, guards::check_init_only};
 
 use z_common::TextureFormat;
 use z_common::formats::{
@@ -30,7 +30,7 @@ use crate::state::{
 };
 
 /// Register asset loading FFI functions
-pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
+pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     // Load from EmberZ binary formats (Phase A - include_bytes! workflow)
     linker.func_wrap("env", "load_zmesh", load_zmesh)?;
     linker.func_wrap("env", "load_ztex", load_ztex)?;
@@ -46,7 +46,7 @@ pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
 /// * `data_len` — Length of the data in bytes
 ///
 /// Returns mesh handle (>0) on success, 0 on failure.
-fn load_zmesh(mut caller: Caller<'_, ZGameContext>, data_ptr: u32, data_len: u32) -> u32 {
+fn load_zmesh(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len: u32) -> u32 {
     // Guard: init-only
     if let Err(e) = check_init_only(&caller, "load_zmesh") {
         warn!("{}", e);
@@ -180,7 +180,7 @@ fn load_zmesh(mut caller: Caller<'_, ZGameContext>, data_ptr: u32, data_len: u32
 /// * `data_len` — Length of the data in bytes
 ///
 /// Returns texture handle (>0) on success, 0 on failure.
-fn load_ztex(mut caller: Caller<'_, ZGameContext>, data_ptr: u32, data_len: u32) -> u32 {
+fn load_ztex(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len: u32) -> u32 {
     // Guard: init-only
     if let Err(e) = check_init_only(&caller, "load_ztex") {
         warn!("{}", e);
@@ -315,7 +315,7 @@ fn load_ztex(mut caller: Caller<'_, ZGameContext>, data_ptr: u32, data_len: u32)
 /// * `data_len` — Length of the data in bytes
 ///
 /// Returns sound handle (>0) on success, 0 on failure.
-fn load_zsound(mut caller: Caller<'_, ZGameContext>, data_ptr: u32, data_len: u32) -> u32 {
+fn load_zsound(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len: u32) -> u32 {
     // Guard: init-only
     if let Err(e) = check_init_only(&caller, "load_zsound") {
         warn!("{}", e);
@@ -407,7 +407,7 @@ fn load_zsound(mut caller: Caller<'_, ZGameContext>, data_ptr: u32, data_len: u3
 /// 0x04: reserved u32
 /// 0x08: inverse_bind_matrices (bone_count × 48 bytes, 3×4 column-major)
 /// ```
-fn load_zskeleton(mut caller: Caller<'_, ZGameContext>, data_ptr: u32, data_len: u32) -> u32 {
+fn load_zskeleton(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len: u32) -> u32 {
     // Guard: init-only
     if let Err(e) = check_init_only(&caller, "load_zskeleton") {
         warn!("{}", e);

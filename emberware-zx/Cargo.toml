@@ -1,22 +1,22 @@
 [package]
-name = "emberware-z"
+name = "emberware-zx"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Emberware Z - Fantasy console runtime"
+description = "Emberware ZX - Fantasy console runtime"
 
 [lib]
-name = "emberware_z"
+name = "emberware_zx"
 path = "src/lib.rs"
 
 [[bin]]
-name = "emberware-z"
+name = "emberware-zx"
 path = "src/bin/main.rs"
 
 [features]
 default = ["gamepad"]
-gamepad = ["emberware-core/gamepad", "z-common/gamepad"]
+gamepad = ["emberware-core/gamepad", "zx-common/gamepad"]
 
 [dependencies]
 # CLI (for player binary)
@@ -24,7 +24,7 @@ clap = { version = "4", features = ["derive"] }
 
 emberware-core = { path = "../core", default-features = false }
 emberware-shared = { path = "../shared" }
-z-common = { path = "../z-common", default-features = false }
+zx-common = { path = "../zx-common", default-features = false }
 
 # WASM runtime
 wasmtime = { workspace = true }

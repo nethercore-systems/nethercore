@@ -7,7 +7,7 @@ edition = "2021"
 # Local crates
 emberware-shared = { path = "../shared" }
 emberware-core = { path = "../core" }
-z-common = { path = "../z-common" }
+zx-common = { path = "../zx-common" }
 
 # Workspace dependencies
 anyhow = { workspace = true }

@@ -1,10 +1,10 @@
 [package]
-name = "z-common"
+name = "zx-common"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Shared types and utilities for Emberware Z console"
+description = "Shared types and utilities for Emberware ZX console"
 
 [features]
 default = ["gamepad"]

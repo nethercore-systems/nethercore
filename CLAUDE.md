@@ -2,11 +2,11 @@
 
 ## Project Overview
 
-Emberware is a fantasy console platform with built-in rollback netcode, designed to support multiple fantasy consoles (Emberware Z, Classic, etc.) with a shared framework.
+Emberware is a fantasy console platform with built-in rollback netcode, designed to support multiple fantasy consoles (Emberware ZX, Chroma, etc.) with a shared framework.
 
 **Console Status:**
-- **Emberware Z** — Fully implemented (PS1/N64 aesthetic)
-- **Emberware Classic** — Coming Soon (documented but not yet implemented)
+- **Emberware ZX** — Fully implemented (PS1/N64 aesthetic)
+- **Emberware Chroma** — Coming Soon (documented but not yet implemented)
 
 **Repository Structure:**
 - `/core` — Console trait, WASM runtime, GGRS rollback, ConsoleRunner, debug inspection
@@ -109,9 +109,9 @@ pub struct ZInput {
     pub right_trigger: u8,
 }
 
-// Emberware Classic (6-button retro)
+// Emberware Chroma (6-button retro)
 #[repr(C)]
-pub struct ClassicInput {
+pub struct ChromaInput {
     pub buttons: u16,  // D-pad + A/B/C/X/Y/Z + L/R + start/select
 }
 ```

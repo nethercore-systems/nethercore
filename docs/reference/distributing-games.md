@@ -19,8 +19,8 @@ This guide covers how to package and distribute your Emberware games as ROM file
 
 Emberware uses console-specific ROM formats for game distribution:
 
-- **Emberware Z**: `.ewz` files (PS1/N64 aesthetic)
-- **Emberware Classic**: `.ewc` files (future - 2D retro aesthetic)
+- **Emberware ZX**: `.ewz` files (PS1/N64 aesthetic)
+- **Emberware Chroma**: `.ewc` files (future - 2D retro aesthetic)
 
 ROM files package your game's WASM code, metadata, and assets into a single binary file that players can easily install and play.
 
@@ -620,7 +620,7 @@ cargo xtask cart info super-platformer-v1.0.0.ewz
 
 - [rom-format.md](./rom-format.md) - Technical ROM format specification
 - [ffi.md](./ffi.md) - Emberware FFI API reference
-- [emberware-z.md](./emberware-z.md) - Emberware Z console documentation
+- [emberware-zx.md](./emberware-zx.md) - Emberware ZX console documentation
 
 ## Getting Help
 

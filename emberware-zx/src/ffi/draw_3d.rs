@@ -6,12 +6,12 @@ use anyhow::Result;
 use tracing::warn;
 use wasmtime::{Caller, Linker};
 
-use super::ZGameContext;
+use super::ZXGameContext;
 use super::helpers::{checked_mul, read_wasm_floats, read_wasm_u16s, validate_vertex_format};
 use crate::graphics::vertex_stride;
 
 /// Register immediate mode 3D drawing FFI functions
-pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
+pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     linker.func_wrap("env", "draw_triangles", draw_triangles)?;
     linker.func_wrap("env", "draw_triangles_indexed", draw_triangles_indexed)?;
     Ok(())
@@ -27,7 +27,7 @@ pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
 /// Vertices are buffered on the CPU and flushed at frame end.
 /// Uses current transform and render state.
 fn draw_triangles(
-    mut caller: Caller<'_, ZGameContext>,
+    mut caller: Caller<'_, ZXGameContext>,
     data_ptr: u32,
     vertex_count: u32,
     format: u32,
@@ -99,7 +99,7 @@ fn draw_triangles(
 /// Vertices and indices are buffered on the CPU and flushed at frame end.
 /// Uses current transform and render state.
 fn draw_triangles_indexed(
-    mut caller: Caller<'_, ZGameContext>,
+    mut caller: Caller<'_, ZXGameContext>,
     data_ptr: u32,
     vertex_count: u32,
     index_ptr: u32,

@@ -1,4 +1,4 @@
-//! Emberware Z console implementation
+//! Emberware ZX console implementation
 //!
 //! Implements the `Console` trait for the PS1/N64 aesthetic fantasy console.
 
@@ -14,21 +14,21 @@ use emberware_core::{
     debug::DebugStat,
     wasm::WasmGameContext,
 };
-use z_common::ZDataPack;
+use zx_common::ZDataPack;
 
 use crate::state::{ZFFIState, ZRollbackState};
 
 use crate::graphics::ZGraphics;
 
-/// Get Emberware Z console specifications
-pub const fn z_specs() -> &'static ConsoleSpecs {
-    emberware_shared::emberware_z_specs()
+/// Get Emberware ZX console specifications
+pub const fn zx_specs() -> &'static ConsoleSpecs {
+    emberware_shared::emberware_zx_specs()
 }
 
 // Re-export constants for FFI validation
 pub use emberware_shared::{
-    EMBERWARE_Z_RESOLUTIONS as RESOLUTIONS, EMBERWARE_Z_TICK_RATES as TICK_RATES,
-    EMBERWARE_Z_VRAM_LIMIT as VRAM_LIMIT,
+    EMBERWARE_ZX_RESOLUTIONS as RESOLUTIONS, EMBERWARE_ZX_TICK_RATES as TICK_RATES,
+    EMBERWARE_ZX_VRAM_LIMIT as VRAM_LIMIT,
 };
 
 /// Maximum value for analog stick conversion (i8 range: -128 to 127)
@@ -73,7 +73,7 @@ impl Button {
     }
 }
 
-/// Emberware Z input state (PS2/Xbox style with dual analog sticks and triggers)
+/// Emberware ZX input state (PS2/Xbox style with dual analog sticks and triggers)
 ///
 /// This struct is POD (Plain Old Data) for efficient serialization over the network
 /// and for GGRS rollback state management.
@@ -165,36 +165,36 @@ impl Audio for ZAudio {
     }
 }
 
-/// Emberware Z fantasy console
+/// Emberware ZX fantasy console
 ///
 /// Implements the PS1/N64 aesthetic with:
 /// - wgpu-based 3D graphics with vertex jitter, affine texture mapping
 /// - Dual analog sticks and analog triggers
 /// - Deterministic rollback netcode via GGRS
-pub struct EmberwareZ {
+pub struct EmberwareZX {
     /// Optional datapack for ROM assets (textures, meshes, sounds)
     data_pack: Option<Arc<ZDataPack>>,
 }
 
-impl EmberwareZ {
-    /// Create a new Emberware Z console instance
+impl EmberwareZX {
+    /// Create a new Emberware ZX console instance
     pub fn new() -> Self {
         Self { data_pack: None }
     }
 
-    /// Create a new Emberware Z console instance with a datapack
+    /// Create a new Emberware ZX console instance with a datapack
     pub fn with_datapack(data_pack: Option<Arc<ZDataPack>>) -> Self {
         Self { data_pack }
     }
 }
 
-impl Default for EmberwareZ {
+impl Default for EmberwareZX {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Console for EmberwareZ {
+impl Console for EmberwareZX {
     type Graphics = ZGraphics;
     type Audio = ZAudio;
     type Input = ZInput;
@@ -203,15 +203,15 @@ impl Console for EmberwareZ {
     type ResourceManager = crate::resource_manager::ZResourceManager;
 
     fn specs(&self) -> &'static ConsoleSpecs {
-        z_specs()
+        zx_specs()
     }
 
     fn register_ffi(
         &self,
         linker: &mut Linker<WasmGameContext<ZInput, ZFFIState, ZRollbackState>>,
     ) -> Result<()> {
-        // Register all Z-specific FFI functions (graphics, input, transforms, camera, etc.)
-        crate::ffi::register_z_ffi(linker)?;
+        // Register all ZX-specific FFI functions (graphics, input, transforms, camera, etc.)
+        crate::ffi::register_zx_ffi(linker)?;
         Ok(())
     }
 
@@ -304,7 +304,7 @@ impl Console for EmberwareZ {
     }
 
     fn window_title(&self) -> &'static str {
-        "Emberware Z"
+        "Emberware ZX"
     }
 
     fn debug_stats(&self, state: &ZFFIState) -> Vec<DebugStat> {
@@ -374,7 +374,7 @@ mod tests {
 
     #[test]
     fn test_map_input() {
-        let console = EmberwareZ::new();
+        let console = EmberwareZX::new();
         let raw = RawInput {
             dpad_up: true,
             button_a: true,
@@ -393,10 +393,10 @@ mod tests {
 
     #[test]
     fn test_specs() {
-        let console = EmberwareZ::new();
+        let console = EmberwareZX::new();
         let specs = console.specs();
 
-        assert_eq!(specs.name, "Emberware Z");
+        assert_eq!(specs.name, "Emberware ZX");
         assert_eq!(specs.resolutions.len(), 4);
         assert_eq!(specs.resolutions[specs.default_resolution], (960, 540));
         assert_eq!(specs.tick_rates[specs.default_tick_rate], 60);

@@ -1,6 +1,6 @@
-# Emberware Classic — Console Specification
+# Emberware Chroma — Console Specification
 
-Emberware Classic is a beginner-friendly 2D fantasy console inspired by SNES/Genesis era hardware. Designed for students, junior developers, and anyone learning 2D game development.
+Emberware Chroma is a beginner-friendly 2D fantasy console inspired by SNES/Genesis era hardware. Designed for students, junior developers, and anyone learning 2D game development.
 
 ## Console Specs
 

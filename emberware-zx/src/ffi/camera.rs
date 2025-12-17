@@ -7,12 +7,12 @@ use glam::{Mat4, Vec3};
 use tracing::warn;
 use wasmtime::{Caller, Linker};
 
-use super::ZGameContext;
+use super::ZXGameContext;
 
 use crate::console::RESOLUTIONS;
 
 /// Register camera FFI functions
-pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
+pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     linker.func_wrap("env", "camera_set", camera_set)?;
     linker.func_wrap("env", "camera_fov", camera_fov)?;
     linker.func_wrap("env", "push_view_matrix", push_view_matrix)?;
@@ -28,7 +28,7 @@ pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
 ///
 /// Uses a Y-up, right-handed coordinate system.
 fn camera_set(
-    mut caller: Caller<'_, ZGameContext>,
+    mut caller: Caller<'_, ZXGameContext>,
     x: f32,
     y: f32,
     z: f32,
@@ -54,7 +54,7 @@ fn camera_set(
 ///
 /// Values outside 1-179 degrees are clamped with a warning.
 /// Rebuilds the projection matrix at index 0 with default parameters (16:9 aspect, 0.1 near, 1000 far).
-fn camera_fov(mut caller: Caller<'_, ZGameContext>, fov_degrees: f32) {
+fn camera_fov(mut caller: Caller<'_, ZXGameContext>, fov_degrees: f32) {
     let state = &mut caller.data_mut().ffi;
 
     // Validate FOV range
@@ -95,7 +95,7 @@ fn camera_fov(mut caller: Caller<'_, ZGameContext>, fov_degrees: f32) {
 /// # Returns
 /// The index of the newly added view matrix (0-255)
 fn push_view_matrix(
-    mut caller: Caller<'_, ZGameContext>,
+    mut caller: Caller<'_, ZXGameContext>,
     m0: f32,
     m1: f32,
     m2: f32,
@@ -132,7 +132,7 @@ fn push_view_matrix(
 ///
 /// Sets the current projection matrix (no return value - uses lazy allocation)
 fn push_projection_matrix(
-    mut caller: Caller<'_, ZGameContext>,
+    mut caller: Caller<'_, ZXGameContext>,
     m0: f32,
     m1: f32,
     m2: f32,

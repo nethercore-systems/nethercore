@@ -3,7 +3,7 @@
 use anyhow::{Result, bail};
 use wasmtime::Caller;
 
-use super::ZGameContext;
+use super::ZXGameContext;
 
 /// Check if we're in init phase (init-only function guard)
 ///
@@ -26,7 +26,7 @@ use super::ZGameContext;
 ///     // ... rest of function
 /// }
 /// ```
-pub(crate) fn check_init_only(caller: &Caller<'_, ZGameContext>, fn_name: &str) -> Result<()> {
+pub(crate) fn check_init_only(caller: &Caller<'_, ZXGameContext>, fn_name: &str) -> Result<()> {
     if !caller.data().game.in_init {
         bail!("{}: can only be called during init()", fn_name);
     }

@@ -4,7 +4,7 @@
 //! and all console clients. All types are serializable with serde for JSON API communication.
 //!
 //! Console-specific types (like Z ROM formats, asset formats) belong in their respective
-//! console crates (e.g., `z-common` for Emberware Z).
+//! console crates (e.g., `zx-common` for Emberware ZX).
 //!
 //! # Type Categories
 //!

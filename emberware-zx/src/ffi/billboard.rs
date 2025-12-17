@@ -7,10 +7,10 @@ use glam::Mat4;
 use tracing::warn;
 use wasmtime::{Caller, Linker};
 
-use super::ZGameContext;
+use super::ZXGameContext;
 
 /// Register billboard drawing FFI functions
-pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
+pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     linker.func_wrap("env", "draw_billboard", draw_billboard)?;
     linker.func_wrap("env", "draw_billboard_region", draw_billboard_region)?;
     Ok(())
@@ -30,7 +30,7 @@ pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
 /// - 2 (cylindrical Y): Rotates around Y axis only (stays upright)
 /// - 3 (cylindrical X): Rotates around X axis only
 /// - 4 (cylindrical Z): Rotates around Z axis only
-fn draw_billboard(mut caller: Caller<'_, ZGameContext>, w: f32, h: f32, mode: u32, color: u32) {
+fn draw_billboard(mut caller: Caller<'_, ZXGameContext>, w: f32, h: f32, mode: u32, color: u32) {
     // Validate mode
     if !(1..=4).contains(&mode) {
         warn!("draw_billboard: invalid mode {} (must be 1-4)", mode);
@@ -103,7 +103,7 @@ fn draw_billboard(mut caller: Caller<'_, ZGameContext>, w: f32, h: f32, mode: u3
 ///
 /// This allows drawing a region of a sprite sheet as a billboard.
 fn draw_billboard_region(
-    mut caller: Caller<'_, ZGameContext>,
+    mut caller: Caller<'_, ZXGameContext>,
     w: f32,
     h: f32,
     src_x: f32,

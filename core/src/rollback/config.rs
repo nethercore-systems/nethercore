@@ -22,15 +22,15 @@ pub const DEFAULT_INPUT_DELAY: usize = 0;
 /// Default input delay for online play (balance between responsiveness and rollbacks)
 pub const DEFAULT_ONLINE_INPUT_DELAY: usize = 2;
 
-/// Default maximum state buffer size (4MB - matches Emberware Z RAM limit)
+/// Default maximum state buffer size (4MB - matches Emberware ZX RAM limit)
 ///
-/// This is the default fallback value matching Emberware Z's RAM limit.
+/// This is the default fallback value matching Emberware ZX's RAM limit.
 /// Consoles should use their specific RAM limit from `ConsoleSpecs::ram_limit`
 /// when creating rollback sessions.
 ///
 /// Memory limits:
-/// - Emberware Z: 4MB RAM (only linear memory is snapshotted)
-/// - Emberware Classic: 2MB RAM
+/// - Emberware ZX: 4MB RAM (only linear memory is snapshotted)
+/// - Emberware Chroma: 2MB RAM
 ///
 /// Note: Assets loaded via `rom_*` FFI go directly to VRAM/audio memory and
 /// are NOT included in rollback snapshots. Only WASM linear memory is saved.
@@ -44,7 +44,7 @@ pub const MAX_STATE_SIZE: usize = 4 * 1024 * 1024;
 
 /// GGRS configuration for Emberware
 ///
-/// Parameterized by the console's input type (e.g., `ZInput` for Emberware Z).
+/// Parameterized by the console's input type (e.g., `ZInput` for Emberware ZX).
 /// This allows different consoles to use different input layouts while sharing
 /// the rollback infrastructure.
 pub struct EmberwareConfig<I: ConsoleInput> {

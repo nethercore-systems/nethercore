@@ -1,6 +1,6 @@
-//! Emberware Z - Library interface
+//! Emberware ZX - Library interface
 //!
-//! This module exports the public API for emberware-z, allowing it to be
+//! This module exports the public API for emberware-zx, allowing it to be
 //! used as a library by the unified launcher or as a standalone player.
 
 pub mod audio;

@@ -6,7 +6,7 @@
 use tracing::warn;
 use wasmtime::{Caller, Memory};
 
-use super::ZGameContext;
+use super::ZXGameContext;
 
 // ============================================================================
 // Memory Helpers
@@ -17,7 +17,7 @@ use super::ZGameContext;
 /// Use this when you need the raw Memory handle for complex access patterns.
 /// For simple byte/float reading, prefer `read_wasm_bytes` or `read_wasm_floats`.
 #[inline]
-pub(crate) fn get_memory(caller: &Caller<'_, ZGameContext>, fn_name: &str) -> Option<Memory> {
+pub(crate) fn get_memory(caller: &Caller<'_, ZXGameContext>, fn_name: &str) -> Option<Memory> {
     match caller.data().game.memory {
         Some(m) => Some(m),
         None => {
@@ -37,7 +37,7 @@ pub(crate) fn get_memory(caller: &Caller<'_, ZGameContext>, fn_name: &str) -> Op
 /// * `size` - Number of bytes to read
 /// * `fn_name` - Function name for error messages
 pub(crate) fn read_wasm_bytes(
-    caller: &Caller<'_, ZGameContext>,
+    caller: &Caller<'_, ZXGameContext>,
     ptr: u32,
     size: usize,
     fn_name: &str,
@@ -70,7 +70,7 @@ pub(crate) fn read_wasm_bytes(
 /// * `float_count` - Number of f32 values to read
 /// * `fn_name` - Function name for error messages
 pub(crate) fn read_wasm_floats(
-    caller: &Caller<'_, ZGameContext>,
+    caller: &Caller<'_, ZXGameContext>,
     ptr: u32,
     float_count: usize,
     fn_name: &str,
@@ -85,7 +85,7 @@ pub(crate) fn read_wasm_floats(
 ///
 /// Returns `Some([f32; 16])` in column-major order if successful.
 pub(crate) fn read_wasm_matrix4x4(
-    caller: &Caller<'_, ZGameContext>,
+    caller: &Caller<'_, ZXGameContext>,
     ptr: u32,
     fn_name: &str,
 ) -> Option<[f32; 16]> {
@@ -97,7 +97,7 @@ pub(crate) fn read_wasm_matrix4x4(
 ///
 /// Returns `Some(Vec<u16>)` if successful, `None` with warning on error.
 pub(crate) fn read_wasm_u16s(
-    caller: &Caller<'_, ZGameContext>,
+    caller: &Caller<'_, ZXGameContext>,
     ptr: u32,
     count: usize,
     fn_name: &str,
@@ -113,7 +113,7 @@ pub(crate) fn read_wasm_u16s(
 /// Returns `Some(Vec<i16>)` if successful, `None` with warning on error.
 /// Used for audio PCM data.
 pub(crate) fn read_wasm_i16s(
-    caller: &Caller<'_, ZGameContext>,
+    caller: &Caller<'_, ZXGameContext>,
     ptr: u32,
     count: usize,
     fn_name: &str,

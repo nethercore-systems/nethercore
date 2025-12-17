@@ -6,11 +6,11 @@ use anyhow::Result;
 use tracing::warn;
 use wasmtime::{Caller, Linker};
 
-use super::ZGameContext;
+use super::ZXGameContext;
 use crate::state::Font;
 
 /// Register 2D drawing FFI functions
-pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
+pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     linker.func_wrap("env", "draw_sprite", draw_sprite)?;
     linker.func_wrap("env", "draw_sprite_region", draw_sprite_region)?;
     linker.func_wrap("env", "draw_sprite_ex", draw_sprite_ex)?;
@@ -33,7 +33,7 @@ pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
 ///
 /// Draws the full texture (UV 0,0 to 1,1) as a quad in screen space.
 /// Uses current blend mode and bound texture (slot 0).
-fn draw_sprite(mut caller: Caller<'_, ZGameContext>, x: f32, y: f32, w: f32, h: f32, color: u32) {
+fn draw_sprite(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, w: f32, h: f32, color: u32) {
     let state = &mut caller.data_mut().ffi;
 
     // Get shading state index
@@ -73,7 +73,7 @@ fn draw_sprite(mut caller: Caller<'_, ZGameContext>, x: f32, y: f32, w: f32, h: 
 ///
 /// Useful for sprite sheets and texture atlases.
 fn draw_sprite_region(
-    mut caller: Caller<'_, ZGameContext>,
+    mut caller: Caller<'_, ZXGameContext>,
     x: f32,
     y: f32,
     w: f32,
@@ -129,7 +129,7 @@ fn draw_sprite_region(
 ///
 /// The sprite rotates around the origin point. For center rotation, use (w/2, h/2).
 fn draw_sprite_ex(
-    mut caller: Caller<'_, ZGameContext>,
+    mut caller: Caller<'_, ZXGameContext>,
     x: f32,
     y: f32,
     w: f32,
@@ -184,7 +184,7 @@ fn draw_sprite_ex(
 /// * `color` — Fill color (0xRRGGBBAA)
 ///
 /// Draws an untextured quad. Useful for UI backgrounds, health bars, etc.
-fn draw_rect(mut caller: Caller<'_, ZGameContext>, x: f32, y: f32, w: f32, h: f32, color: u32) {
+fn draw_rect(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, w: f32, h: f32, color: u32) {
     let state = &mut caller.data_mut().ffi;
 
     // Bind white texture (handle 0xFFFFFFFF) to slot 0
@@ -221,7 +221,7 @@ fn draw_rect(mut caller: Caller<'_, ZGameContext>, x: f32, y: f32, w: f32, h: f3
 ///
 /// Supports full UTF-8 encoding. Text is left-aligned with no wrapping.
 fn draw_text(
-    mut caller: Caller<'_, ZGameContext>,
+    mut caller: Caller<'_, ZXGameContext>,
     ptr: u32,
     len: u32,
     x: f32,
@@ -444,7 +444,7 @@ fn draw_text(
 /// - The texture must have enough space for char_count glyphs
 #[inline]
 fn load_font(
-    mut caller: Caller<'_, ZGameContext>,
+    mut caller: Caller<'_, ZXGameContext>,
     texture: u32,
     char_width: u32,
     char_height: u32,
@@ -531,7 +531,7 @@ fn load_font(
 /// - Glyphs are still arranged in a grid, but can have custom widths
 #[inline]
 fn load_font_ex(
-    mut caller: Caller<'_, ZGameContext>,
+    mut caller: Caller<'_, ZXGameContext>,
     texture: u32,
     widths_ptr: u32,
     char_height: u32,
@@ -633,7 +633,7 @@ fn load_font_ex(
 /// - Font handle 0 uses the built-in 8×8 monospace font (default)
 /// - Custom fonts persist for all subsequent draw_text() calls until changed
 #[inline]
-fn font_bind(mut caller: Caller<'_, ZGameContext>, font_handle: u32) {
+fn font_bind(mut caller: Caller<'_, ZXGameContext>, font_handle: u32) {
     let state = &mut caller.data_mut().ffi;
 
     // Validate font handle (0 is always valid = built-in)

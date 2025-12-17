@@ -7,13 +7,13 @@ use tracing::warn;
 use wasmtime::{Caller, Linker};
 
 use super::helpers::{checked_mul, read_wasm_bytes, validate_dimensions_nonzero};
-use super::{ZGameContext, guards::check_init_only};
+use super::{ZXGameContext, guards::check_init_only};
 use crate::graphics::MatcapBlendMode;
 use crate::state::PendingTexture;
 use z_common::TextureFormat;
 
 /// Register texture FFI functions
-pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
+pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     linker.func_wrap("env", "load_texture", load_texture)?;
     linker.func_wrap("env", "texture_bind", texture_bind)?;
     linker.func_wrap("env", "texture_bind_slot", texture_bind_slot)?;
@@ -31,7 +31,7 @@ pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
 /// Returns texture handle (>0) on success, 0 on failure.
 /// Validates VRAM budget before allocation.
 fn load_texture(
-    mut caller: Caller<'_, ZGameContext>,
+    mut caller: Caller<'_, ZXGameContext>,
     width: u32,
     height: u32,
     pixels_ptr: u32,
@@ -88,7 +88,7 @@ fn load_texture(
 /// * `handle` — Texture handle from load_texture
 ///
 /// Equivalent to texture_bind_slot(handle, 0).
-fn texture_bind(mut caller: Caller<'_, ZGameContext>, handle: u32) {
+fn texture_bind(mut caller: Caller<'_, ZXGameContext>, handle: u32) {
     let state = &mut caller.data_mut().ffi;
     state.bound_textures[0] = handle;
 }
@@ -100,7 +100,7 @@ fn texture_bind(mut caller: Caller<'_, ZGameContext>, handle: u32) {
 /// * `slot` — Slot index (0-3)
 ///
 /// Slots: 0=albedo, 1=MRE/matcap, 2=env matcap, 3=matcap
-fn texture_bind_slot(mut caller: Caller<'_, ZGameContext>, handle: u32, slot: u32) {
+fn texture_bind_slot(mut caller: Caller<'_, ZXGameContext>, handle: u32, slot: u32) {
     if slot > 3 {
         warn!("texture_bind_slot: invalid slot {} (max 3)", slot);
         return;
@@ -119,7 +119,7 @@ fn texture_bind_slot(mut caller: Caller<'_, ZGameContext>, handle: u32, slot: u3
 /// Mode 0 (Multiply): Standard matcap blending (default)
 /// Mode 1 (Add): Additive blending for glow/emission effects
 /// Mode 2 (HSV Modulate): Hue shifting and iridescence effects
-fn matcap_blend_mode(mut caller: Caller<'_, ZGameContext>, slot: u32, mode: u32) {
+fn matcap_blend_mode(mut caller: Caller<'_, ZXGameContext>, slot: u32, mode: u32) {
     if !(1..=3).contains(&slot) {
         warn!("matcap_blend_mode: invalid slot {} (must be 1-3)", slot);
         return;

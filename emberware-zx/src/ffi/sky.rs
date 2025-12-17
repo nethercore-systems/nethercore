@@ -6,10 +6,10 @@ use anyhow::Result;
 use tracing::warn;
 use wasmtime::{Caller, Linker};
 
-use super::ZGameContext;
+use super::ZXGameContext;
 
 /// Register sky system FFI functions
-pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
+pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     linker.func_wrap("env", "sky_set_colors", sky_set_colors)?;
     linker.func_wrap("env", "sky_set_sun", sky_set_sun)?;
     linker.func_wrap("env", "matcap_set", matcap_set)?;
@@ -30,7 +30,7 @@ pub fn register(linker: &mut Linker<ZGameContext>) -> Result<()> {
 /// **Examples:**
 /// - `sky_set_colors(0x87CEEBFF, 0x191970FF)` — Light blue horizon, midnight blue zenith
 /// - `sky_set_colors(0xFF6B6BFF, 0x4A00E0FF)` — Sunset gradient (red to purple)
-fn sky_set_colors(mut caller: Caller<'_, ZGameContext>, horizon_color: u32, zenith_color: u32) {
+fn sky_set_colors(mut caller: Caller<'_, ZXGameContext>, horizon_color: u32, zenith_color: u32) {
     let state = &mut caller.data_mut().ffi;
     state.update_sky_colors(horizon_color, zenith_color);
 }
@@ -55,7 +55,7 @@ fn sky_set_colors(mut caller: Caller<'_, ZGameContext>, horizon_color: u32, zeni
 /// - `sky_set_sun(0.0, -1.0, 0.0, 0xFFFFFFFF, 0.98)` — Sun directly overhead (rays going down)
 /// - `sky_set_sun(-0.5, -0.707, -0.5, 0xFFE4B5FF, 0.95)` — Sun at 45° elevation from northeast
 fn sky_set_sun(
-    mut caller: Caller<'_, ZGameContext>,
+    mut caller: Caller<'_, ZXGameContext>,
     dir_x: f32,
     dir_y: f32,
     dir_z: f32,
@@ -84,7 +84,7 @@ fn sky_set_sun(
 /// In Mode 1 (Matcap), slots 1-3 are used for matcap textures that multiply together.
 /// Slot 0 is reserved for albedo texture.
 /// Using this function in other modes is allowed but has no effect.
-fn matcap_set(mut caller: Caller<'_, ZGameContext>, slot: u32, texture: u32) {
+fn matcap_set(mut caller: Caller<'_, ZXGameContext>, slot: u32, texture: u32) {
     // Validate slot range (1-3 for matcaps)
     if !(1..=3).contains(&slot) {
         warn!("matcap_set: invalid slot {} (must be 1-3)", slot);
@@ -122,7 +122,7 @@ fn matcap_set(mut caller: Caller<'_, ZGameContext>, slot: u32, texture: u32) {
 /// - Works in all render modes (0-3)
 /// - Sky always renders behind all geometry
 /// - Depth test is disabled for sky rendering
-fn draw_sky(mut caller: Caller<'_, ZGameContext>) {
+fn draw_sky(mut caller: Caller<'_, ZXGameContext>) {
     let state = &mut caller.data_mut().ffi;
 
     // Get or create shading state index for current sky configuration

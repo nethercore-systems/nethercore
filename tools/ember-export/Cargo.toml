@@ -11,11 +11,11 @@ path = "src/main.rs"
 
 [features]
 default = ["gamepad"]
-gamepad = ["z-common/gamepad"]
+gamepad = ["zx-common/gamepad"]
 
 [dependencies]
 # Local crates
-z-common = { path = "../../z-common", default-features = false }
+zx-common = { path = "../../zx-common", default-features = false }
 emberware-shared = { path = "../../shared" }
 ember-qoa = { path = "../../ember-qoa" }
 

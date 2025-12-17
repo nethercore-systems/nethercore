@@ -2,8 +2,8 @@
 
 This document covers the **shared FFI** common to all Emberware consoles. For console-specific APIs, see:
 
-- [Emberware Z](./emberware-z.md) — 5th gen (PS1/N64/Saturn)
-- [Emberware Classic](./emberware-classic.md) — 4th gen (Genesis/SNES/Neo Geo) *(Coming Soon)*
+- [Emberware ZX](./emberware-zx.md) — 5th gen (PS1/N64/Saturn)
+- [Emberware Chroma](./emberware-chroma.md) — 4th gen (Genesis/SNES/Neo Geo) *(Coming Soon)*
 
 ---
 
@@ -45,10 +45,10 @@ fn render_mode(mode: u32)                   // Emberware Z only: 0-3
 ```
 
 Resolution values are console-specific:
-- **Emberware Z**: 0=360p, 1=540p (default), 2=720p, 3=1080p
-- **Emberware Classic**: 0-7 (see console docs for specific resolutions)
+- **Emberware ZX**: 0=360p, 1=540p (default), 2=720p, 3=1080p
+- **Emberware Chroma**: 0-7 (see console docs for specific resolutions)
 
-If not set, the console uses its defaults (540p @ 60fps for Z, 384×216 @ 60fps for Classic).
+If not set, the console uses its defaults (540p @ 60fps for ZX, 384×216 @ 60fps for Chroma).
 
 **Why init-only?**
 - Resolution affects framebuffer allocation
@@ -103,8 +103,8 @@ Emberware uses a **split ROM + RAM memory model** for efficient rollback:
 
 | Console | ROM (Cartridge) | RAM (Linear Memory) | VRAM |
 |---------|-----------------|---------------------|------|
-| **Emberware Z** | 12 MB | 4 MB | 4 MB |
-| **Emberware Classic** | 4 MB | 2 MB | 1 MB |
+| **Emberware ZX** | 12 MB | 4 MB | 4 MB |
+| **Emberware Chroma** | 4 MB | 2 MB | 1 MB |
 
 **ROM (Cartridge):** Contains WASM code + bundled assets (via data pack). Not snapshotted.
 - WASM bytecode (typically 50-200 KB)
@@ -123,8 +123,8 @@ Emberware uses a **split ROM + RAM memory model** for efficient rollback:
 
 **Rollback Performance:**
 Only RAM is snapshotted for rollback netcode. With xxHash3 checksums:
-- 4MB: ~0.25ms per save (Emberware Z)
-- 2MB: ~0.10ms per save (Emberware Classic)
+- 4MB: ~0.25ms per save (Emberware ZX)
+- 2MB: ~0.10ms per save (Emberware Chroma)
 
 During an 8-frame rollback at 60fps, the total overhead is ~2ms — well within the 16.67ms frame budget.
 
@@ -513,8 +513,8 @@ Each console has its own graphics, input, and audio APIs:
 
 | Console | Input | Graphics | Status | Doc |
 |---------|-------|----------|--------|-----|
-| **Emberware Z** | Dual analog sticks, analog triggers, 4 face buttons | 2D + 3D, transforms | Available | [emberware-z.md](./emberware-z.md) |
-| **Emberware Classic** | D-pad only, 6 face buttons, no analog | 2D sprites, tilemaps | Coming Soon | [emberware-classic.md](./emberware-classic.md) |
+| **Emberware ZX** | Dual analog sticks, analog triggers, 4 face buttons | 2D + 3D, transforms | Available | [emberware-zx.md](./emberware-zx.md) |
+| **Emberware Chroma** | D-pad only, 6 face buttons, no analog | 2D sprites, tilemaps | Coming Soon | [emberware-chroma.md](./emberware-chroma.md) |
 
 ---
 

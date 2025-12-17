@@ -5,4 +5,4 @@ edition = "2021"
 description = "Generate assets for multi-skinned-rom example"
 
 [dependencies]
-z-common = { path = "../../z-common" }
+zx-common = { path = "../../zx-common" }
