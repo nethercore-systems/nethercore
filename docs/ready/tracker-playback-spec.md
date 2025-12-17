@@ -1,17 +1,25 @@
 # Tracker Playback System Specification
 
-**Status:** Draft
+**Status:** Ready for Implementation
 **Author:** Claude
-**Version:** 1.0
+**Version:** 2.0
 **Last Updated:** December 2024
+
+> **Key Change in v2.0:** Samples are loaded from ROM data pack (not embedded in XM). This enables sample reuse between trackers and SFX, significantly reducing ROM size.
 
 ---
 
 ## Summary
 
-Implement a tracker module playback system for Emberware Z that allows games to play .XM (Extended Module) files through the dedicated music channel. Tracker modules are compact, procedural music files that were standard on PS1/N64-era platforms—perfectly matching Emberware Z's aesthetic.
+Implement a tracker module playback system for Emberware Z that allows games to play .XM (Extended Module) pattern data through the dedicated music channel. Tracker modules are compact, procedural music files that were standard on PS1/N64-era platforms—perfectly matching Emberware Z's aesthetic.
 
-**Key concept:** Tracker files are embedded in the ROM data pack, loaded via `rom_tracker()`, and played through the existing music channel infrastructure with new tracker-specific FFI functions.
+**Key concept:** Tracker files contain **pattern data only**—samples are loaded separately from the ROM data pack via naming convention. This allows sample reuse between trackers and SFX, keeping ROM sizes minimal.
+
+**How it works:**
+1. Samples declared in `[[assets.sounds]]` as usual
+2. Tracker XM files reference samples by instrument name
+3. At pack time, samples are stripped from XM; instrument names mapped to ROM sample IDs
+4. At runtime, `rom_tracker()` resolves instruments to loaded samples
 
 ---
 
@@ -132,9 +140,12 @@ pub struct ZDataPack {
 
 pub struct PackedTracker {
     pub id: String,
-    pub data: Vec<u8>,  // Raw XM file bytes
+    pub pattern_data: Vec<u8>,   // XM file with samples stripped
+    pub sample_ids: Vec<String>, // Instrument index → ROM sample ID
 }
 ```
+
+**Note:** Samples are NOT embedded in the tracker. The `sample_ids` vec maps XM instrument indices to ROM sample IDs that must be loaded via `[[assets.sounds]]`.
 
 ### 2. TrackerState (Rollback-Safe)
 
@@ -167,9 +178,10 @@ pub struct TrackerState {
     pub bpm: u16,
 
     /// Volume multiplier (0-256, 256 = 1.0)
+    /// Note: Final volume = (this volume / 256) × XM global volume (Gxx effect)
     pub volume: u16,
 
-    /// Flags: bit 0 = playing, bit 1 = looping
+    /// Flags: bit 0 = playing, bit 1 = looping, bit 2 = paused
     pub flags: u32,
 
     /// Sample-accurate position within tick
@@ -257,6 +269,77 @@ This is deterministic because:
 
 ---
 
+## Sample Resolution
+
+### Naming Convention
+
+XM instruments are mapped to ROM samples by **instrument name**:
+- XM instrument named `"kick"` → resolves to `rom_sound("kick")`
+- XM instrument named `"snare_01"` → resolves to `rom_sound("snare_01")`
+
+**Single sample per instrument (MVP):** Each instrument maps to exactly one ROM sample. Pitch shifting handles all notes. Multi-sample instruments (where different notes trigger different samples) are not supported in MVP.
+
+**Drum kit workaround:** Instead of one "drums" instrument with multiple samples, create separate instruments: "kick", "snare", "hihat", etc.
+
+### Load-Time Validation
+
+When `rom_tracker()` is called:
+1. Parse XM pattern data from `PackedTracker`
+2. Read `sample_ids` mapping
+3. Resolve each sample ID to a loaded ROM sound handle
+4. **Fail (return 0)** if any sample ID has no matching ROM sound
+
+```rust
+// Pseudocode
+fn rom_tracker(id: &str) -> u32 {
+    let tracker = data_pack.get_tracker(id)?;
+
+    for (instr_idx, sample_id) in tracker.sample_ids.iter().enumerate() {
+        let sound_handle = resolve_sound(sample_id);
+        if sound_handle == 0 {
+            log::warn!("Tracker '{}': instrument {} references unknown sample '{}'",
+                       id, instr_idx, sample_id);
+            return 0;  // Fail load
+        }
+        engine.bind_sample(instr_idx, sound_handle);
+    }
+
+    // Success
+    engine.load_patterns(&tracker.pattern_data)
+}
+```
+
+### Workflow for Composers
+
+1. **Create samples** as individual `.wav` files (22.05kHz, 16-bit, mono)
+2. **Add samples to ROM** via `[[assets.sounds]]` in `ember.toml`
+3. **Create XM** in tracker software (MilkyTracker, OpenMPT, etc.)
+4. **Name instruments** to exactly match ROM sample IDs
+5. **Export XM** — samples will be stripped at pack time, only patterns kept
+
+**Example:**
+```toml
+# ember.toml
+[[assets.sounds]]
+id = "kick"
+path = "samples/kick.wav"
+
+[[assets.sounds]]
+id = "snare"
+path = "samples/snare.wav"
+
+[[assets.sounds]]
+id = "bass"
+path = "samples/bass.wav"
+
+[[assets.trackers]]
+id = "main_theme"
+path = "music/main_theme.xm"
+# XM instruments must be named: "kick", "snare", "bass"
+```
+
+---
+
 ## FFI API
 
 ### Loading (Init-only)
@@ -278,6 +361,7 @@ fn load_tracker(data_ptr: u32, data_len: u32) -> u32;
 /// handle: Tracker handle from rom_tracker/load_tracker
 /// volume: 0.0 to 1.0
 /// looping: 0 = play once, 1 = loop
+/// Note: Automatically stops PCM music (music_stop)
 fn tracker_play(handle: u32, volume: f32, looping: u32);
 
 /// Stop tracker playback
@@ -287,13 +371,22 @@ fn tracker_stop();
 /// paused: 0 = resume, 1 = pause
 fn tracker_pause(paused: u32);
 
-/// Set tracker volume
+/// Set tracker volume (multiplied with XM global volume)
 fn tracker_set_volume(volume: f32);
 
 /// Check if tracker is currently playing
 /// Returns: 1 if playing, 0 if stopped/paused
 fn tracker_is_playing() -> u32;
 ```
+
+### Music Channel Interaction
+
+**Tracker and PCM music are mutually exclusive:**
+- `tracker_play()` automatically calls `music_stop()` internally
+- `music_play()` automatically calls `tracker_stop()` internally
+- Only one music source can be active at a time
+
+This simplifies the mental model: there's one "music channel" that can either play PCM or tracker, but not both. Games don't need to manually manage stopping one before starting the other.
 
 ### Position Control (for dynamic music)
 
@@ -342,6 +435,20 @@ fn tracker_name(handle: u32, out_ptr: u32, max_len: u32) -> u32;
 id = "my-game"
 title = "My Game"
 
+# Samples declared here are available to all trackers
+[[assets.sounds]]
+id = "kick"
+path = "samples/kick.wav"
+
+[[assets.sounds]]
+id = "snare"
+path = "samples/snare.wav"
+
+[[assets.sounds]]
+id = "bass_synth"
+path = "samples/bass.wav"
+
+# Tracker references samples by instrument name
 [[assets.trackers]]
 id = "main_theme"
 path = "music/main_theme.xm"
@@ -349,40 +456,56 @@ path = "music/main_theme.xm"
 [[assets.trackers]]
 id = "boss_battle"
 path = "music/boss.xm"
-
-[[assets.trackers]]
-id = "game_over"
-path = "music/gameover.xm"
 ```
 
 ### ember-export Support
 
 ```bash
-# Validate and optionally optimize XM file
+# Validate XM file and check instrument names
 ember-export tracker input.xm -o output.xm
 
-# Convert from other formats (if implementing converters)
-ember-export tracker input.it -o output.xm --format xm
+# List instrument names (for debugging sample mapping)
+ember-export tracker input.xm --list-instruments
 ```
 
 **Validation checks:**
 - Valid XM header and structure
-- Sample rates within supported range
 - Channel count ≤ 32
-- File size reasonable (warn if >1MB)
+- Instrument names are valid identifiers (no spaces, etc.)
+- Warn if file contains large embedded samples (they'll be stripped)
 
 ### ember-cli pack
 
 ```rust
 // tools/ember-cli/src/pack.rs
 
-// Add tracker loading alongside other assets
 for entry in &manifest.assets.trackers {
-    let data = fs::read(&entry.path)?;
-    validate_xm(&data)?;
+    let xm_data = fs::read(&entry.path)?;
+
+    // 1. Parse XM to extract instrument names
+    let xm = parse_xm(&xm_data)?;
+
+    // 2. Build sample_ids mapping from instrument names
+    let mut sample_ids = Vec::new();
+    for instr in &xm.instruments {
+        let sample_id = instr.name.trim().to_string();
+        // Validate sample exists in manifest
+        if !manifest.assets.sounds.iter().any(|s| s.id == sample_id) {
+            return Err(format!(
+                "Tracker '{}' instrument '{}' references unknown sample '{}'",
+                entry.id, instr.name, sample_id
+            ));
+        }
+        sample_ids.push(sample_id);
+    }
+
+    // 3. Strip samples from XM, keep only pattern data
+    let pattern_data = strip_xm_samples(&xm_data)?;
+
     trackers.push(PackedTracker {
         id: entry.id.clone(),
-        data,
+        pattern_data,
+        sample_ids,
     });
 }
 ```
@@ -516,22 +639,32 @@ impl TrackerEngine {
 
 ### Optimization: Row State Caching
 
+To minimize rollback seek time, channel states are cached at regular intervals:
+
+**Caching Strategy:**
+- Cache channel state **every 4 rows**
+- Always cache at **pattern boundaries** (row 0 of each pattern)
+- LRU eviction when cache exceeds **256KB**
+- On rollback: seek to nearest cached state, then replay remaining rows/ticks
+
+**Worst case seek:** 4 rows × 6 ticks × 32 channels = ~768 tick operations (fast)
+
 ```rust
-/// Cache channel states at pattern boundaries for fast rollback
+/// Cache channel states for fast rollback
 pub struct RowStateCache {
     /// Cached states: key = (order, row), value = channel states
     cache: HashMap<(u16, u16), [TrackerChannel; 32]>,
-    max_entries: usize,
+    max_size_bytes: usize,  // 256KB
 }
 
 impl RowStateCache {
     /// Store state at row boundary
     fn cache_row(&mut self, order: u16, row: u16, channels: &[TrackerChannel; 32]) {
-        // Only cache at pattern start (row 0) or every 16 rows
-        if row % 16 != 0 { return; }
+        // Cache every 4 rows OR at pattern start
+        if row % 4 != 0 { return; }
 
         // LRU eviction if cache full
-        if self.cache.len() >= self.max_entries {
+        while self.current_size() >= self.max_size_bytes {
             self.evict_oldest();
         }
 
@@ -540,7 +673,11 @@ impl RowStateCache {
 
     /// Find nearest cached state before target
     fn find_nearest(&self, order: u16, row: u16) -> Option<((u16, u16), &[TrackerChannel; 32])> {
-        // ... find closest cached position
+        // Find closest (order, row) <= target
+        self.cache.iter()
+            .filter(|&((o, r), _)| *o < order || (*o == order && *r <= row))
+            .max_by_key(|&((o, r), _)| (*o, *r))
+            .map(|(k, v)| (*k, v))
     }
 }
 ```
@@ -610,32 +747,54 @@ impl TrackerEngine {
 
 ### Key XM Effects to Support
 
-| Effect | Hex | Name | Priority |
-|--------|-----|------|----------|
-| 0 | 0xy | Arpeggio | High |
-| 1 | 1xx | Portamento up | High |
-| 2 | 2xx | Portamento down | High |
-| 3 | 3xx | Tone portamento | High |
-| 4 | 4xy | Vibrato | High |
-| 5 | 5xy | Tone porta + vol slide | Medium |
-| 6 | 6xy | Vibrato + vol slide | Medium |
-| 7 | 7xy | Tremolo | Medium |
-| 8 | 8xx | Set panning | High |
-| 9 | 9xx | Sample offset | High |
-| A | Axy | Volume slide | High |
-| B | Bxx | Position jump | High |
-| C | Cxx | Set volume | High |
-| D | Dxx | Pattern break | High |
-| E | Exy | Extended effects | Mixed |
-| F | Fxx | Set speed/tempo | High |
-| G | Gxx | Set global volume | Medium |
-| H | Hxy | Global volume slide | Low |
-| K | Kxx | Key off | High |
-| L | Lxx | Set envelope pos | Low |
-| P | Pxy | Panning slide | Low |
-| R | Rxy | Retrigger | Medium |
-| T | Txy | Tremor | Low |
-| X | Xxy | Extra fine effects | Low |
+| Effect | Hex | Name | Priority | MVP |
+|--------|-----|------|----------|-----|
+| 0 | 0xy | Arpeggio | High | ✅ |
+| 1 | 1xx | Portamento up | High | ✅ |
+| 2 | 2xx | Portamento down | High | ✅ |
+| 3 | 3xx | Tone portamento | High | ✅ |
+| 4 | 4xy | Vibrato | High | ✅ |
+| 5 | 5xy | Tone porta + vol slide | Medium | ✅ |
+| 6 | 6xy | Vibrato + vol slide | Medium | ✅ |
+| 7 | 7xy | Tremolo | Medium | ✅ |
+| 8 | 8xx | Set panning | High | ✅ |
+| 9 | 9xx | Sample offset | High | ✅ |
+| A | Axy | Volume slide | High | ✅ |
+| B | Bxx | Position jump | High | ✅ |
+| C | Cxx | Set volume | High | ✅ |
+| D | Dxx | Pattern break | High | ✅ |
+| E | Exy | Extended effects | Mixed | ✅ | 14/15 (all except EF) |
+| F | Fxx | Set speed/tempo | High | ✅ |
+| G | Gxx | Set global volume | Medium | ✅ |
+| H | Hxy | Global volume slide | Low | ✅ | Same as Axy for global vol |
+| K | Kxx | Key off | High | ✅ |
+| L | Lxx | Set envelope pos | Low | ✅ | Just set position value |
+| P | Pxy | Panning slide | Low | ✅ | Same as Axy for pan |
+| R | Rxy | Retrigger | Medium | ✅ |
+| T | Txy | Tremor | Low | ❌ | Needs per-channel counter |
+| X | Xxy | Extra fine effects | Low | ❌ | Many sub-effects |
+
+### Extended Effects (Exy) - MVP Scope
+
+| Effect | Hex | Name | MVP | Notes |
+|--------|-----|------|-----|-------|
+| E1 | E1x | Fine porta up | ✅ | Same as 1xx, 4x finer |
+| E2 | E2x | Fine porta down | ✅ | Same as 2xx, 4x finer |
+| E3 | E3x | Glissando control | ✅ | Quantize porta to semitones |
+| E4 | E4x | Vibrato waveform | ✅ | Lookup table selector |
+| E5 | E5x | Set finetune | ✅ | Per-channel frequency offset |
+| E6 | E6x | Pattern loop | ✅ | Loop section of pattern |
+| E7 | E7x | Tremolo waveform | ✅ | Lookup table selector |
+| E8 | E8x | Set panning (coarse) | ✅ | Direct pan assignment |
+| E9 | E9x | Retrigger note | ✅ | Re-trigger every N ticks |
+| EA | EAx | Fine volume slide up | ✅ | Same as Axy, 4x finer |
+| EB | EBx | Fine volume slide down | ✅ | Same as Axy, 4x finer |
+| EC | ECx | Note cut | ✅ | Cut volume at tick N |
+| ED | EDx | Note delay | ✅ | Delay note trigger N ticks |
+| EE | EEx | Pattern delay | ✅ | Repeat row N times |
+| EF | EFx | Invert loop | ❌ | Obsolete Amiga quirk, skip |
+
+**MVP covers:** Full Exy support (14/15 effects). Only EF (invert loop) is omitted as it's an obsolete Amiga hardware quirk with no practical use.
 
 ---
 
@@ -647,9 +806,11 @@ impl TrackerEngine {
 |-----------|------|-------|
 | TrackerState (rollback) | 64 bytes | Per-frame snapshot |
 | TrackerEngine | ~4 KB | Channels + buffers |
-| XmModule (loaded) | 50KB-500KB | Depends on samples |
-| Row state cache | ~64 KB | Optional optimization |
-| **Total per tracker** | **~100KB-600KB** | |
+| XmModule (patterns only) | 5KB-50KB | Samples loaded separately from ROM |
+| Row state cache | ~256 KB | LRU cache, every 4 rows |
+| **Total per tracker** | **~270KB-310KB** | Much smaller than embedded-sample approach |
+
+**Note:** Sample memory is shared with SFX via ROM data pack. A 3-song soundtrack reusing samples might only need 500KB total instead of 1.5MB with embedded samples.
 
 ### Performance
 
@@ -660,14 +821,27 @@ impl TrackerEngine {
 
 ### ROM Space
 
-Typical tracker sizes:
-- Simple chiptune: 10-50 KB
-- Full song with samples: 100-300 KB
-- Complex orchestral: 300-800 KB
+With the hybrid approach (patterns + ROM samples):
+
+**Pattern data only:**
+- Simple chiptune: 2-10 KB
+- Full song: 10-30 KB
+- Complex arrangement: 30-50 KB
+
+**Samples (shared across trackers):**
+- Typical sample set: 200-500 KB
+- Reused for SFX, no duplication
+
+**Example ROM budget:**
+```
+3 songs × 20KB patterns = 60KB
+Shared sample set       = 300KB
+Total music             = 360KB
+```
 
 **Comparison to PCM:**
-- 3-minute song @ 22kHz mono: ~7.9 MB (PCM) vs ~200 KB (XM)
-- **~40x smaller!**
+- 3-minute song @ 22kHz mono: ~7.9 MB (PCM) vs ~320 KB (tracker + samples)
+- **~25x smaller!** (with sample reuse, even better)
 
 ---
 
@@ -733,6 +907,56 @@ fn validate_xm(data: &[u8]) -> Result<(), XmError> {
 
     // ... more validation
     Ok(())
+}
+```
+
+---
+
+## Debug Panel Integration
+
+When a tracker is playing, the F3 debug panel displays tracker state:
+
+**Position Info:**
+```
+Tracker: main_theme
+Position: Order 5/32 | Row 48/64 | Tick 3/6
+Tempo: Speed 6 | BPM 125
+```
+
+**Channel Activity:**
+Visual bars showing which channels are active and their current volume levels. Useful for debugging music sync and identifying silent channels.
+
+```
+Channels:
+ 0 ████████░░  1 ██████░░░░  2 ░░░░░░░░░░  3 ████░░░░░░
+ 4 ██░░░░░░░░  5 ░░░░░░░░░░  6 ██████████  7 ████████░░
+...
+```
+
+**Implementation:**
+```rust
+// emberware-z/src/debug.rs
+impl TrackerEngine {
+    pub fn debug_stats(&self, state: &TrackerState) -> Vec<DebugStat> {
+        if state.handle == 0 {
+            return vec![];
+        }
+
+        vec![
+            DebugStat::new("Tracker", &self.current_tracker_name()),
+            DebugStat::new("Position", &format!(
+                "Order {}/{} | Row {}/64 | Tick {}/{}",
+                state.order_position, self.song_length(),
+                state.row, state.tick, state.speed
+            )),
+            DebugStat::new("Tempo", &format!(
+                "Speed {} | BPM {}",
+                state.speed, state.bpm
+            )),
+            // Channel activity as visual bars
+            DebugStat::new("Channels", &self.channel_activity_string()),
+        ]
+    }
 }
 ```
 
@@ -854,13 +1078,18 @@ fn tracker_position() -> u32;
 
 ## Future Enhancements
 
-1. **S3M/IT support:** Additional format parsers
-2. **Subsong support:** Multiple songs in one module
-3. **Channel muting:** Mute specific channels for layered music
-4. **Real-time tempo sync:** Sync to game events
-5. **Waveform visualization:** FFT for audio visualizers
-6. **MOD import:** Auto-convert MOD to XM on load
-7. **Sample streaming:** For very large samples (>1MB)
+**Post-MVP (prioritized):**
+1. **Multi-sample instruments:** Note→sample mapping for realistic instruments and drum kits
+2. **Remaining effects:** Tremor (Txy), extra fine effects (Xxy)
+3. **Sample interpolation options:** None (authentic crunch) / cubic (smoother)
+
+**Longer-term:**
+4. **S3M/IT support:** Additional format parsers
+5. **Subsong support:** Multiple songs in one module
+6. **Channel muting:** Mute specific channels for layered music
+7. **Real-time tempo sync:** Sync to game events
+8. **Waveform visualization:** FFT for audio visualizers
+9. **Sample streaming:** For very large samples (>1MB)
 
 ---
 
