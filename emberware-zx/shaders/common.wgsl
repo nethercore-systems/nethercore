@@ -369,6 +369,33 @@ fn unpack_light(packed: PackedLight) -> LightData {
     return light;
 }
 
+// Computed light data after resolving direction and attenuation
+struct ComputedLight {
+    direction: vec3<f32>,  // Light direction (ray direction convention)
+    color: vec3<f32>,      // Light color × intensity × attenuation
+}
+
+// Compute light direction and effective color for both directional and point lights
+// Resolves the directional vs point light branching in one place
+fn compute_light(light: LightData, world_position: vec3<f32>) -> ComputedLight {
+    var result: ComputedLight;
+
+    if (light.light_type == 0u) {
+        // Directional light: use stored direction
+        result.direction = light.direction;
+        result.color = light.color * light.intensity;
+    } else {
+        // Point light: compute direction and attenuation
+        let to_light = light.position - world_position;
+        let distance = length(to_light);
+        result.direction = -normalize(to_light);  // Negate: convention is "ray direction"
+        let attenuation = point_light_attenuation(distance, light.range);
+        result.color = light.color * light.intensity * attenuation;
+    }
+
+    return result;
+}
+
 // ============================================================================
 // Unified Vertex Input/Output (all modes)
 // ============================================================================

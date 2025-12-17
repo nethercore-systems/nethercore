@@ -178,31 +178,17 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
 
     // 4 dynamic lights (direct illumination)
     for (var i = 0u; i < 4u; i++) {
-        let light = unpack_light(shading.lights[i]);
-        if (light.enabled) {
-            var light_dir: vec3<f32>;
-            var attenuation: f32 = 1.0;
-
-            if (light.light_type == 0u) {
-                // Directional light: use stored direction
-                light_dir = light.direction;
-            } else {
-                // Point light: compute direction and attenuation
-                let to_light = light.position - in.world_position;
-                let distance = length(to_light);
-                light_dir = -normalize(to_light);  // Negate: convention is "ray direction"
-                attenuation = point_light_attenuation(distance, light.range);
-            }
-
-            let light_color = light.color * light.intensity * attenuation;
+        let light_data = unpack_light(shading.lights[i]);
+        if (light_data.enabled) {
+            let light = compute_light(light_data, in.world_position);
 
             // Diffuse
-            final_color += lambert_diffuse(N, light_dir, albedo, light_color)
+            final_color += lambert_diffuse(N, light.direction, albedo, light.color)
                            * diffuse_factor * diffuse_fresnel;
 
             // Specular
             final_color += normalized_blinn_phong_specular(
-                N, view_dir, light_dir, shininess, specular_color, light_color
+                N, view_dir, light.direction, shininess, specular_color, light.color
             );
         }
     }
