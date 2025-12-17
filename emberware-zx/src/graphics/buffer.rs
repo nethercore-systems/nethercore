@@ -254,7 +254,7 @@ impl BufferManager {
         data: &[f32],
         format: u8,
     ) -> Result<MeshHandle> {
-        use z_common::pack_vertex_data;
+        use zx_common::pack_vertex_data;
 
         let format_idx = format as usize;
         if format_idx >= VERTEX_FORMAT_COUNT {
@@ -322,7 +322,7 @@ impl BufferManager {
         indices: &[u16],
         format: u8,
     ) -> Result<MeshHandle> {
-        use z_common::pack_vertex_data;
+        use zx_common::pack_vertex_data;
 
         let format_idx = format as usize;
         if format_idx >= VERTEX_FORMAT_COUNT {

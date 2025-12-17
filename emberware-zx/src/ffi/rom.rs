@@ -15,7 +15,7 @@ use wasmtime::{Caller, Linker};
 use super::{ZXGameContext, guards::check_init_only};
 use crate::audio::Sound;
 use crate::state::{MAX_SKELETONS, PendingMeshPacked, PendingSkeleton, PendingTexture};
-use z_common::TextureFormat;
+use zx_common::TextureFormat;
 
 /// Register ROM data pack FFI functions
 pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {

@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use clap::Args;
-use z_common::ZRom;
+use zx_common::ZRom;
 
 /// Arguments for inspecting ROM metadata
 #[derive(Debug, Args)]

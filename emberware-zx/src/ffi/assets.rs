@@ -18,8 +18,8 @@ use wasmtime::{Caller, Linker};
 
 use super::{ZXGameContext, get_wasm_memory, guards::check_init_only};
 
-use z_common::TextureFormat;
-use z_common::formats::{
+use zx_common::TextureFormat;
+use zx_common::formats::{
     EmberZMeshHeader, EmberZSkeletonHeader, EmberZTextureHeader, decode_sound,
 };
 

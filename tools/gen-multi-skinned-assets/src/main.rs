@@ -7,10 +7,10 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::path::PathBuf;
 
-use z_common::formats::animation::{encode_bone_transform, EmberZAnimationHeader};
-use z_common::formats::mesh::EmberZMeshHeader;
-use z_common::formats::skeleton::EmberZSkeletonHeader;
-use z_common::packing::{pack_vertex_data, FORMAT_NORMAL, FORMAT_SKINNED};
+use zx_common::formats::animation::{encode_bone_transform, EmberZAnimationHeader};
+use zx_common::formats::mesh::EmberZMeshHeader;
+use zx_common::formats::skeleton::EmberZSkeletonHeader;
+use zx_common::packing::{pack_vertex_data, FORMAT_NORMAL, FORMAT_SKINNED};
 
 const FORMAT_POS_NORMAL_SKINNED: u8 = FORMAT_NORMAL | FORMAT_SKINNED;
 

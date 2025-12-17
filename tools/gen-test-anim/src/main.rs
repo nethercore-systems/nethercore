@@ -6,7 +6,7 @@ use std::f32::consts::TAU;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
-use z_common::formats::animation::{encode_bone_transform, EmberZAnimationHeader};
+use zx_common::formats::animation::{encode_bone_transform, EmberZAnimationHeader};
 
 fn main() {
     let output_path = PathBuf::from("examples/animation-demo/assets/wave.ewzanim");

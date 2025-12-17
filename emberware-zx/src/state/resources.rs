@@ -1,7 +1,7 @@
 //! Resource types pending GPU upload
 
 use super::BoneMatrix3x4;
-use z_common::TextureFormat;
+use zx_common::TextureFormat;
 
 // ============================================================================
 // GPU Animation Index Tracking (Animation System v2)

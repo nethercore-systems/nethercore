@@ -9,7 +9,7 @@ use clap::Args;
 use std::path::PathBuf;
 
 use emberware_shared::math::BoneMatrix3x4;
-use z_common::{
+use zx_common::{
     vertex_stride_packed, EmberZAnimationHeader, EmberZMeshHeader, EmberZSkeletonHeader,
     PackedData, PackedKeyframes, PackedMesh, PackedSkeleton, PackedSound, PackedTexture,
     TextureFormat, ZDataPack, ZMetadata, ZRom, EWZ_VERSION, INVERSE_BIND_MATRIX_SIZE,
@@ -855,7 +855,7 @@ version = "1.0.0"
 
     #[test]
     fn test_load_mesh_with_uv_and_color() {
-        use z_common::{FORMAT_COLOR, FORMAT_UV};
+        use zx_common::{FORMAT_COLOR, FORMAT_UV};
 
         let dir = tempdir().unwrap();
         let mesh_path = dir.path().join("test_uv_color.ewzmesh");

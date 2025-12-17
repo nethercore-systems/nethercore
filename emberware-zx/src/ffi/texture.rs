@@ -10,7 +10,7 @@ use super::helpers::{checked_mul, read_wasm_bytes, validate_dimensions_nonzero};
 use super::{ZXGameContext, guards::check_init_only};
 use crate::graphics::MatcapBlendMode;
 use crate::state::PendingTexture;
-use z_common::TextureFormat;
+use zx_common::TextureFormat;
 
 /// Register texture FFI functions
 pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {

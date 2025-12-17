@@ -31,8 +31,8 @@ use anyhow::{Context, Result};
 
 use emberware_core::console::Graphics;
 
-// Re-export packing utilities from z-common (for FFI and backwards compat)
-pub use z_common::{
+// Re-export packing utilities from zx-common (for FFI and backwards compat)
+pub use zx_common::{
     FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV, pack_bone_weights_unorm8,
     pack_color_rgba_unorm8, pack_normal_octahedral, pack_normal_snorm16, pack_octahedral_u32,
     pack_position_f16, pack_uv_f16, pack_uv_unorm16, pack_vertex_data, unpack_octahedral_u32,
@@ -239,7 +239,7 @@ impl ZGraphics {
         width: u32,
         height: u32,
         data: &[u8],
-        format: z_common::TextureFormat,
+        format: zx_common::TextureFormat,
     ) -> Result<TextureHandle> {
         self.texture_manager.load_texture_with_format(
             &self.device,

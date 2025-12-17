@@ -10,7 +10,7 @@ use std::fs::File;
 use std::io::BufWriter;
 use std::path::Path;
 
-use z_common::TextureFormat;
+use zx_common::TextureFormat;
 
 use crate::formats::write_ember_texture;
 

@@ -3,8 +3,8 @@
 //! This module provides wgpu-specific vertex buffer layout information.
 //! Format constants and stride functions are in z-common.
 
-// Re-export format constants from z-common
-pub use z_common::{
+// Re-export format constants from zx-common
+pub use zx_common::{
     FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV, vertex_stride, vertex_stride_packed,
 };
 

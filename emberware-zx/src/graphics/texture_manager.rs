@@ -9,7 +9,7 @@ use anyhow::Result;
 use wgpu::util::DeviceExt;
 
 use crate::console::VRAM_LIMIT;
-use z_common::TextureFormat;
+use zx_common::TextureFormat;
 
 pub use super::render_state::TextureHandle;
 

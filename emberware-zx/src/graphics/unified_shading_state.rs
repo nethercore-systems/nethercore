@@ -1,7 +1,7 @@
 use bytemuck::{Pod, Zeroable};
 use glam::Vec3;
 use half::f16;
-use z_common::{pack_octahedral_u32, unpack_octahedral_u32};
+use zx_common::{pack_octahedral_u32, unpack_octahedral_u32};
 
 use super::render_state::MatcapBlendMode;
 

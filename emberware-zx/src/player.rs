@@ -28,11 +28,11 @@ use emberware_core::console::{Console, ConsoleResourceManager};
 use emberware_core::debug::{ActionRequest, FrameController};
 use emberware_core::debug::registry::RegisteredValue;
 use emberware_core::debug::types::DebugValue;
-use z_common::{ZDataPack, ZRom};
+use zx_common::{ZDataPack, ZRom};
 
 use crate::audio;
 use crate::capture::{self, ScreenCapture};
-use crate::console::EmberwareZ;
+use crate::console::EmberwareZX;
 use crate::input::InputManager;
 
 /// Simple settings panel for the player app
@@ -300,7 +300,7 @@ pub struct PlayerApp {
     /// Window handle
     window: Option<Arc<Window>>,
     /// Console runner (owns graphics, audio, game session)
-    runner: Option<ConsoleRunner<EmberwareZ>>,
+    runner: Option<ConsoleRunner<EmberwareZX>>,
     /// Input manager
     input_manager: InputManager,
     /// Scale mode for render target to window (loaded from config)
@@ -458,7 +458,7 @@ impl PlayerApp {
         }
 
         // Create new console with datapack and reload game
-        let console = EmberwareZ::with_datapack(rom.data_pack.clone());
+        let console = EmberwareZX::with_datapack(rom.data_pack.clone());
 
         if let Some(runner) = &mut self.runner {
             if let Err(e) = runner.load_game(console, &rom.code, 1) {
@@ -697,7 +697,7 @@ impl PlayerApp {
     }
 }
 
-impl ConsoleApp<EmberwareZ> for PlayerApp {
+impl ConsoleApp<EmberwareZX> for PlayerApp {
     fn on_window_created(
         &mut self,
         window: Arc<Window>,
@@ -719,7 +719,7 @@ impl ConsoleApp<EmberwareZ> for PlayerApp {
         self.capture.set_game_name(rom.game_name.clone());
 
         // Create console runner
-        let console = EmberwareZ::new();
+        let console = EmberwareZX::new();
         let specs = console.specs();
 
         // Set minimum window size based on console's render resolution (in physical pixels)
@@ -735,7 +735,7 @@ impl ConsoleApp<EmberwareZ> for PlayerApp {
         runner.graphics_mut().set_scale_mode(self.scale_mode);
 
         // Create console with datapack and load game (rom already loaded above)
-        let console_with_datapack = EmberwareZ::with_datapack(rom.data_pack.clone());
+        let console_with_datapack = EmberwareZX::with_datapack(rom.data_pack.clone());
         runner
             .load_game(console_with_datapack, &rom.code, 1)
             .context("Failed to load game")?;
@@ -1328,7 +1328,7 @@ fn load_rom(path: &Path) -> Result<LoadedRom> {
 }
 
 /// Get clear color from runner
-fn get_clear_color(runner: &ConsoleRunner<EmberwareZ>) -> [f32; 4] {
+fn get_clear_color(runner: &ConsoleRunner<EmberwareZX>) -> [f32; 4] {
     if let Some(session) = runner.session()
         && let Some(game) = session.runtime.game()
     {

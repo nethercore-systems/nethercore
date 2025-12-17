@@ -12,7 +12,7 @@ use anyhow::{Result, bail};
 use tracing::warn;
 use wasmtime::{Caller, Linker};
 
-use z_common::formats::{
+use zx_common::formats::{
     BoneTransform, EmberZAnimationHeader, PLATFORM_BONE_KEYFRAME_SIZE, PlatformBoneKeyframe,
     decode_bone_transform,
 };

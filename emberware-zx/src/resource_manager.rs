@@ -9,7 +9,7 @@ use crate::state::{
     ZFFIState,
 };
 use emberware_core::console::{Audio, ConsoleResourceManager};
-use z_common::formats::{
+use zx_common::formats::{
     BoneTransform, PLATFORM_BONE_KEYFRAME_SIZE, PlatformBoneKeyframe, decode_bone_transform,
 };
 

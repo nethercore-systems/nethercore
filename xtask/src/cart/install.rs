@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use clap::Args;
 use emberware_core::library::RomLoader;
 use std::path::PathBuf;
-use z_common::ZRomLoader;
+use zx_common::ZRomLoader;
 
 #[derive(Debug, Args)]
 pub struct InstallArgs {

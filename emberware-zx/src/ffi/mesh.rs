@@ -7,8 +7,8 @@ use tracing::{info, warn};
 use wasmtime::{Caller, Linker};
 
 use super::helpers::{
-    MAX_VERTEX_FORMAT, checked_mul, read_wasm_bytes, read_wasm_floats, read_wasm_u16s,
-    validate_count_nonzero, validate_vertex_format,
+    checked_mul, read_wasm_bytes, read_wasm_floats, read_wasm_u16s, validate_count_nonzero,
+    validate_vertex_format,
 };
 use super::{ZXGameContext, guards::check_init_only};
 use crate::graphics::{vertex_stride, vertex_stride_packed};

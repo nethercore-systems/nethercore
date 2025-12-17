@@ -23,7 +23,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::Parser;
 
-use emberware_z::player::{PlayerConfig, run};
+use emberware_zx::player::{PlayerConfig, run};
 
 #[derive(Parser)]
 #[command(name = "emberware-z")]

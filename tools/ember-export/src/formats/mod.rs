@@ -2,12 +2,12 @@
 //!
 //! Re-exports from z-common for writing asset files.
 
-pub use z_common::formats::*;
+pub use zx_common::formats::*;
 
 use anyhow::Result;
 use std::io::Write;
 
-use z_common::formats::{encode_bone_transform, EmberZAnimationHeader};
+use zx_common::formats::{encode_bone_transform, EmberZAnimationHeader};
 
 use crate::animation::BoneTRS;
 
