@@ -683,6 +683,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>
 mod tests {
     use super::*;
 
+    use crate::rollback::ConnectionQuality;
     // Test input type for unit tests
     #[repr(C)]
     #[derive(

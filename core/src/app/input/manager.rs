@@ -458,14 +458,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "gamepad")]
-    fn test_find_free_player_slot_all_empty() {
-        let manager = InputManager::new(InputConfig::default());
-        // All slots should be free initially, first free is 0
-        assert_eq!(manager.find_free_player_slot(), Some(0));
-    }
-
-    #[test]
     fn test_find_free_slot_logic_sequential() {
         // Test the slot-finding logic directly
         assert_eq!(find_free_slot_from_occupied(&[]), Some(0));
