@@ -11,7 +11,7 @@ Emberware is a fantasy console platform with built-in rollback netcode, designed
 **Repository Structure:**
 - `/core` — Console trait, WASM runtime, GGRS rollback, ConsoleRunner, debug inspection
 - `/library` — Main binary with library UI, console registry, game launcher
-- `/emberware-z` — PS1/N64 aesthetic console implementation (library, no binary)
+- `/emberware-zx` — PS1/N64 aesthetic console implementation (library, no binary)
 - `/z-common` — Z-specific formats, ROM loader
 - `/shared` — API types for platform backend, cart/ROM formats
 - `/tools` — Developer tools (ember-cli, ember-export)
@@ -24,6 +24,58 @@ Emberware is a fantasy console platform with built-in rollback netcode, designed
 - [../emberware-design/consoles/zx-spec.md](../emberware-design/consoles/zx-spec.md) — ZX console specification (source of truth)
 - [docs/architecture/zx/rendering.md](./docs/architecture/zx/rendering.md) — ZX graphics deep dive
 
+## Canonical References
+
+| Reference | File | Purpose |
+|-----------|------|---------|
+| FFI Source of Truth | [emberware-zx-ffi.rs](./emberware-zx-ffi.rs) | All ZX FFI function signatures |
+| Shared FFI | [core/src/ffi.rs](./core/src/ffi.rs) | System, input, save, ROM functions |
+| ZX FFI Implementation | [emberware-zx/src/ffi/mod.rs](./emberware-zx/src/ffi/mod.rs) | ZX-specific FFI registration |
+| Console Trait | [core/src/console.rs](./core/src/console.rs) | Console abstraction |
+
+## Key Source Files
+
+### Core Crate
+- [core/src/lib.rs](./core/src/lib.rs) — Public API exports
+- [core/src/console.rs](./core/src/console.rs) — Console trait definition
+- [core/src/wasm/mod.rs](./core/src/wasm/mod.rs) — WASM runtime
+- [core/src/rollback/mod.rs](./core/src/rollback/mod.rs) — GGRS integration
+
+### Emberware ZX
+- [emberware-zx/src/lib.rs](./emberware-zx/src/lib.rs) — ZX public API
+- [emberware-zx/src/console.rs](./emberware-zx/src/console.rs) — Console impl
+- [emberware-zx/src/graphics/mod.rs](./emberware-zx/src/graphics/mod.rs) — wgpu rendering
+
+### Library
+- [library/src/main.rs](./library/src/main.rs) — Entry point
+- [library/src/registry.rs](./library/src/registry.rs) — Console registry
+
+## Testing
+
+```bash
+# Run all tests
+cargo test
+
+# Build all examples
+cargo xtask build-examples
+
+# Run specific example
+cargo run -- platformer
+cargo run -- hello-world
+```
+
+## Example Games
+
+Located in `examples/` — 28 examples organized by category:
+
+| Category | Examples |
+|----------|----------|
+| Getting Started | `hello-world`, `triangle`, `textured-quad`, `cube` |
+| Graphics | `lighting`, `blinn-phong`, `billboard`, `procedural-shapes` |
+| Animation | `skinned-mesh`, `animation-demo`, `ik-demo` |
+| Audio | `audio-demo` |
+| Complete Game | `platformer` |
+
 ## Architecture
 
 ```
@@ -35,7 +87,7 @@ Emberware is a fantasy console platform with built-in rollback netcode, designed
 │  └───────┬───────┘  └──────┬───────┘  └──────────────────┘ │
 │          │                 │                                │
 ├──────────┼─────────────────┼────────────────────────────────┤
-│          │           emberware-z (lib)                      │
+│          │           emberware-zx (lib)                     │
 │  ┌───────▼───────┐  ┌─────────────┐  ┌─────────────────┐   │
 │  │ EmberwareZ    │  │ ZGraphics   │  │ Z-specific FFI  │   │
 │  │ Console impl  │  │ (wgpu)      │  │ (draw_*, etc)   │   │
@@ -141,7 +193,7 @@ The core handles GGRS serialization of whatever input type the console uses.
 
 - `/core` — `emberware-core` crate with Console trait, ConsoleRunner, WASM runtime, GGRS integration, debug inspection
 - `/library` — `emberware-library` binary (default workspace member) with library UI, console registry
-- `/emberware-z` — `emberware-z` library implementing Console for PS1/N64 aesthetic
+- `/emberware-zx` — `emberware-zx` library implementing Console for PS1/N64 aesthetic
 - `/z-common` — Z-specific formats, ZRomLoader implementing RomLoader trait
 - `/shared` — `emberware-shared` crate with API types, cart formats, asset formats
 - `/tools/ember-cli` — Build, pack, and run games (`ember build`, `ember pack`, `ember run`)
