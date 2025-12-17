@@ -30,3 +30,8 @@
 
 - [Render Modes](./guides/render-modes.md)
 - [Rollback Safety](./guides/rollback-safety.md)
+- [Asset Pipeline](./guides/asset-pipeline.md)
+
+# Reference
+
+- [Dither Patterns](./reference/dither-patterns.md)

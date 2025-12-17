@@ -115,7 +115,7 @@ fn generate_manifest(game_id: &str, game_title: &str, is_rust_project: bool) -> 
     // Header
     content.push_str("# Ember Game Manifest\n");
     content
-        .push_str("# See: https://github.com/emberware-io/emberware/docs/reference/manifest.md\n");
+        .push_str("# See: https://github.com/emberware-io/emberware/docs/book/\n");
     content.push_str("\n");
 
     // Game section

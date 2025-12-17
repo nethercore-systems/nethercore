@@ -596,7 +596,7 @@ impl PackedUnifiedShadingState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use z_common::encode_octahedral;
+    use zx_common::encode_octahedral;
 
     #[test]
     fn test_packed_sizes() {

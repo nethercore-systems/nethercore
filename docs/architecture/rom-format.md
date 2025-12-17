@@ -5,8 +5,8 @@
 Emberware uses console-specific binary ROM formats for game distribution. Each fantasy console has its own ROM format with a unique file extension and structure, ensuring type-safety and preventing incompatible games from being loaded on the wrong console.
 
 **Current ROM Formats:**
-- `.ewz` - Emberware ZX (PS1/N64 aesthetic)
-- `.ewc` - Emberware Chroma (future - 2D retro aesthetic)
+- `.ewz` - Emberware ZX (3d Home console)
+- `.ewc` - Emberware Chroma (2d Handheld console)
 
 **Why Console-Specific?**
 - ✅ Type-safe - impossible to load wrong ROM in wrong console

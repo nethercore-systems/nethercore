@@ -92,7 +92,7 @@ fn ember_export_convert_texture(input: &Path, output: &Path) {
 
 // Verify EmberZMesh header structure
 fn verify_ember_z_mesh(data: &[u8]) {
-    use z_common::EmberZMeshHeader;
+    use zx_common::EmberZMeshHeader;
 
     assert!(
         data.len() >= EmberZMeshHeader::SIZE,
@@ -128,7 +128,7 @@ fn verify_ember_z_mesh(data: &[u8]) {
 
 // Verify EmberZTexture header structure
 fn verify_ember_z_texture(data: &[u8], expected_width: u16, expected_height: u16) {
-    use z_common::EmberZTextureHeader;
+    use zx_common::EmberZTextureHeader;
 
     assert!(
         data.len() >= EmberZTextureHeader::SIZE,
@@ -157,7 +157,7 @@ fn verify_ember_z_texture(data: &[u8], expected_width: u16, expected_height: u16
     );
 }
 
-// Use z-common's stride calculation (no duplication)
+// Use zx-common's stride calculation (no duplication)
 fn calculate_stride(format: u8) -> usize {
-    z_common::vertex_stride_packed(format) as usize
+    zx_common::vertex_stride_packed(format) as usize
 }

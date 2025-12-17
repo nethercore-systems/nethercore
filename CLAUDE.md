@@ -20,9 +20,9 @@ Emberware is a fantasy console platform with built-in rollback netcode, designed
 
 **Key Documentation:**
 - [TASKS.md](./TASKS.md) — Development status and implementation plan
-- [docs/reference/ffi.md](./docs/reference/ffi.md) — Shared FFI API reference
+- [docs/architecture/ffi.md](./docs/architecture/ffi.md) — Shared FFI API reference
 - [../emberware-design/consoles/zx-spec.md](../emberware-design/consoles/zx-spec.md) — ZX console specification (source of truth)
-- [docs/reference/rendering-architecture.md](./docs/reference/rendering-architecture.md) — Graphics deep dive
+- [docs/architecture/zx/rendering.md](./docs/architecture/zx/rendering.md) — ZX graphics deep dive
 
 ## Architecture
 
@@ -146,7 +146,9 @@ The core handles GGRS serialization of whatever input type the console uses.
 - `/shared` — `emberware-shared` crate with API types, cart formats, asset formats
 - `/tools/ember-cli` — Build, pack, and run games (`ember build`, `ember pack`, `ember run`)
 - `/tools/ember-export` — Convert assets to Emberware formats (meshes, textures, audio, skeletons, animations)
-- `/docs/reference/` — FFI reference and API documentation for game developers
+- `/docs/architecture/` — FFI reference and internal architecture
+- `/docs/contributing/` — Contributor guides
+- `/docs/book/` — Game developer documentation (mdBook)
 - `/examples/` — Example games demonstrating various features
 
 ## Conventions

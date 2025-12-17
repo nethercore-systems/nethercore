@@ -6,8 +6,8 @@ A fantasy console platform with built-in rollback netcode.
 
 | Console | Generation | Aesthetic | Status | Doc |
 |---------|------------|-----------|--------|-----|
-| **Emberware Z** | 5th gen | PS1/N64/Saturn | Available | [docs/reference/emberware-z.md](./docs/reference/emberware-z.md) |
-| **Emberware Chroma** | 4th gen | Genesis/SNES/Neo Geo | Coming Soon | [docs/reference/emberware-chroma.md](./docs/reference/emberware-chroma.md) |
+| **Emberware Z** | 5th gen | PS1/N64/Saturn | Available | [docs/book/](./docs/book/) |
+| **Emberware Chroma** | 4th gen | Genesis/SNES/Neo Geo | Coming Soon | — |
 
 ## What's Here
 
@@ -17,12 +17,14 @@ A fantasy console platform with built-in rollback netcode.
 | `/emberware-z` | Emberware Z runtime implementation |
 | `/shared` | API types shared with platform backend, cart/ROM formats |
 | `/tools` | Developer tools: `ember-cli` (build/pack/run), `ember-export` (asset conversion) |
-| `/docs` | FFI documentation for game developers |
+| `/docs/book` | Game developer documentation (mdBook) |
+| `/docs/architecture` | Internal architecture (FFI, rendering, ROM format) |
+| `/docs/contributing` | Contributor guides |
 | `/examples` | Example games |
 
 ## For Game Developers
 
-See [docs/reference/ffi.md](./docs/reference/ffi.md) for the shared FFI API, then check your target console's specific docs.
+See [docs/architecture/ffi.md](./docs/architecture/ffi.md) for the shared FFI API, or browse the [mdBook documentation](./docs/book/).
 
 ### Quick Start
 

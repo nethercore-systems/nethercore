@@ -201,6 +201,6 @@ Output: `target/wasm32-unknown-unknown/release/hello_world.wasm`
 
 ## Further Reading
 
-- [FFI Reference](../docs/reference/ffi.md) — Shared API documentation
-- [Emberware Z Reference](../docs/reference/emberware-z.md) — Console-specific API
-- [Rendering Architecture](../docs/reference/rendering-architecture.md) — Graphics deep dive
+- [FFI Reference](../docs/architecture/ffi.md) — Shared API documentation
+- [Game Developer Book](../docs/book/) — Full API documentation (mdBook)
+- [Rendering Architecture](../docs/architecture/zx/rendering.md) — ZX graphics deep dive
