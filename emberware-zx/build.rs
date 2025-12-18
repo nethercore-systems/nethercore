@@ -97,8 +97,8 @@ const FS_UV: &str = r#"if !has_flag(shading.flags, FLAG_USE_UNIFORM_COLOR) {
         color *= tex_sample.rgb;
         base_alpha = tex_sample.a;
     }"#;
-// Mode 0 Lambert: ambient from sky gradient + save albedo for lighting
-const FS_AMBIENT: &str = r#"let ambient = color * sample_sky_ambient(in.world_normal, sky);
+// Mode 0 Lambert: ambient from environment gradient + save albedo for lighting
+const FS_AMBIENT: &str = r#"let ambient = color * sample_environment_ambient(shading.environment_index, in.world_normal);
     let albedo = color;"#;
 
 // Mode 0 Lambert: 4 dynamic lights only (no sun direct lighting)

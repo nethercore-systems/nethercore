@@ -5,15 +5,142 @@ use zx_common::{pack_octahedral_u32, unpack_octahedral_u32};
 
 use super::render_state::MatcapBlendMode;
 
-/// Quantized sky data for GPU upload (16 bytes)
-/// Sun direction uses octahedral encoding for uniform precision
+// ============================================================================
+// Environment System (Multi-Environment v3)
+// ============================================================================
+
+/// Environment configuration (48 bytes, POD, hashable)
+/// Supports 8 procedural modes with layering and blend modes.
+///
+/// # Header Layout (bits)
+/// - 0-2:   base_mode (0-7)
+/// - 3-5:   overlay_mode (0-7)
+/// - 6-7:   blend_mode (0-3: Alpha, Add, Multiply, Screen)
+/// - 8-31:  reserved
+///
+/// # Data Layout
+/// - data[0..5]:  Base mode parameters (20 bytes)
+/// - data[5..10]: Overlay mode parameters (20 bytes)
+/// - data[10]:    Shared/overflow (4 bytes)
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Pod, Zeroable)]
-pub struct PackedSky {
-    pub horizon_color: u32,           // RGBA8 packed (4 bytes)
-    pub zenith_color: u32,            // RGBA8 packed (4 bytes)
-    pub sun_direction_oct: u32,       // Octahedral encoding (2x snorm16) - 4 bytes
-    pub sun_color_and_sharpness: u32, // RGB8 + sharpness u8 (4 bytes)
+pub struct PackedEnvironmentState {
+    /// Header: base_mode(3) + overlay_mode(3) + blend_mode(2) + reserved(24)
+    pub header: u32,
+    /// Mode parameters: base[0..5], overlay[5..10], shared[10]
+    pub data: [u32; 11],
+}
+
+// Compile-time size verification
+const _: () = assert!(core::mem::size_of::<PackedEnvironmentState>() == 48);
+const _: () = assert!(core::mem::align_of::<PackedEnvironmentState>() >= 4);
+
+/// Environment mode constants
+pub mod env_mode {
+    pub const GRADIENT: u32 = 0;
+    pub const SCATTER: u32 = 1;
+    pub const LINES: u32 = 2;
+    pub const SILHOUETTE: u32 = 3;
+    pub const RECTANGLES: u32 = 4;
+    pub const ROOM: u32 = 5;
+    pub const CURTAINS: u32 = 6;
+    pub const RINGS: u32 = 7;
+}
+
+/// Blend mode constants for environment layering
+pub mod blend_mode {
+    pub const ALPHA: u32 = 0;    // lerp(base, overlay, overlay.a)
+    pub const ADD: u32 = 1;      // base + overlay
+    pub const MULTIPLY: u32 = 2; // base * overlay
+    pub const SCREEN: u32 = 3;   // 1 - (1-base) * (1-overlay)
+}
+
+impl PackedEnvironmentState {
+    /// Create header from mode and blend settings
+    #[inline]
+    pub fn make_header(base_mode: u32, overlay_mode: u32, blend_mode: u32) -> u32 {
+        (base_mode & 0x7) | ((overlay_mode & 0x7) << 3) | ((blend_mode & 0x3) << 6)
+    }
+
+    /// Get base mode from header
+    #[inline]
+    pub fn base_mode(&self) -> u32 {
+        self.header & 0x7
+    }
+
+    /// Get overlay mode from header
+    #[inline]
+    pub fn overlay_mode(&self) -> u32 {
+        (self.header >> 3) & 0x7
+    }
+
+    /// Get blend mode from header
+    #[inline]
+    pub fn blend_mode(&self) -> u32 {
+        (self.header >> 6) & 0x3
+    }
+
+    /// Set base mode
+    #[inline]
+    pub fn set_base_mode(&mut self, mode: u32) {
+        self.header = (self.header & !0x7) | (mode & 0x7);
+    }
+
+    /// Set overlay mode
+    #[inline]
+    pub fn set_overlay_mode(&mut self, mode: u32) {
+        self.header = (self.header & !(0x7 << 3)) | ((mode & 0x7) << 3);
+    }
+
+    /// Set blend mode
+    #[inline]
+    pub fn set_blend_mode(&mut self, mode: u32) {
+        self.header = (self.header & !(0x3 << 6)) | ((mode & 0x3) << 6);
+    }
+
+    /// Pack gradient parameters into data[offset..offset+5]
+    /// Mode 0: Gradient - 4-color sky/ground gradient
+    pub fn pack_gradient(
+        &mut self,
+        offset: usize,
+        zenith: u32,
+        sky_horizon: u32,
+        ground_horizon: u32,
+        nadir: u32,
+        rotation: f32,
+        shift: f32,
+    ) {
+        self.data[offset] = zenith;
+        self.data[offset + 1] = sky_horizon;
+        self.data[offset + 2] = ground_horizon;
+        self.data[offset + 3] = nadir;
+        self.data[offset + 4] = pack_f16x2(rotation, shift);
+    }
+
+    /// Create a default gradient environment (blue sky)
+    pub fn default_gradient() -> Self {
+        let mut env = Self::default();
+        env.header = Self::make_header(env_mode::GRADIENT, env_mode::GRADIENT, blend_mode::ALPHA);
+        // Blue sky defaults
+        env.pack_gradient(
+            0,
+            0x3366B2FF, // zenith: darker blue
+            0xB2D8F2FF, // sky_horizon: light blue
+            0x8B7355FF, // ground_horizon: tan/brown
+            0x4A3728FF, // nadir: dark brown
+            0.0,        // rotation
+            0.0,        // shift
+        );
+        env
+    }
+}
+
+/// Handle to interned environment state (newtype for type safety)
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct EnvironmentIndex(pub u32);
+
+impl EnvironmentIndex {
+    pub const INVALID: Self = Self(u32::MAX);
 }
 
 /// Light type stored in bit 7 of data1
@@ -70,8 +197,8 @@ pub struct PackedLight {
     pub data2: u32,
 }
 
-/// Unified per-draw shading state (96 bytes, POD, hashable)
-/// Size breakdown: 16 bytes (header) + 16 bytes (sky) + 48 bytes (lights) + 16 bytes (animation)
+/// Unified per-draw shading state (80 bytes, POD, hashable)
+/// Size breakdown: 16 bytes (header) + 48 bytes (lights) + 16 bytes (animation/environment)
 ///
 /// # Mode-Specific Field Interpretation
 ///
@@ -115,10 +242,9 @@ pub struct PackedUnifiedShadingState {
     /// - Bits 1-31: reserved for future use
     pub flags: u32,
 
-    pub sky: PackedSky,           // 16 bytes
     pub lights: [PackedLight; 4], // 48 bytes (4 × 12-byte lights)
 
-    // Animation System v2 fields (16 bytes total)
+    // Animation System v2 fields (12 bytes)
     /// Base offset into @binding(7) all_keyframes buffer
     /// Shader reads: all_keyframes[keyframe_base + bone_index]
     /// 0 = no keyframes bound (use bones buffer directly)
@@ -129,28 +255,16 @@ pub struct PackedUnifiedShadingState {
     /// 0 = no skeleton bound (raw bone mode)
     pub inverse_bind_base: u32,
 
-    /// Animation-specific flags (separate from main flags field)
-    /// - Bit 0: use_static_keyframes (0 = immediate bones, 1 = static keyframes)
-    /// - Bits 1-31: reserved for v2.1
-    pub animation_flags: u32,
+    /// Padding for struct alignment (previously animation_flags, now unused)
+    pub _pad: u32,
 
-    /// Reserved for future animation features (zeroed)
-    pub _animation_reserved: u32,
+    /// Index into environment_states buffer for sky/environment rendering
+    /// References a PackedEnvironmentState in the GPU buffer
+    pub environment_index: u32,
 }
 
 impl Default for PackedUnifiedShadingState {
     fn default() -> Self {
-        // Natural Earth sky defaults - sun is the key light, sky provides subtle fill
-        // Convention: light direction = direction rays travel (physically correct)
-        // Users can customize via sky_set_gradient() and sky_set_sun() FFI calls
-        let sky = PackedSky::from_floats(
-            Vec3::new(0.25, 0.25, 0.3), // Horizon: dim warm gray (subtle fill, not key light)
-            Vec3::new(0.15, 0.2, 0.35), // Zenith: darker blue (sky color, not light source)
-            Vec3::new(-0.4, -0.7, -0.3).normalize(), // Sun direction: high in sky, slightly left
-            Vec3::new(0.7, 0.67, 0.6),  // Sun color: softer daylight (reduced from 1.0)
-            0.92,                       // Sun sharpness: visible disc
-        );
-
         // uniform_set_0: [metallic=0, roughness=128, emissive=0, rim_intensity=0]
         let uniform_set_0 = pack_uniform_set_0(0, 128, 0, 0);
         // uniform_set_1: [spec_r=255, spec_g=255, spec_b=255, rim_power=0] (white specular)
@@ -161,13 +275,12 @@ impl Default for PackedUnifiedShadingState {
             uniform_set_0,
             uniform_set_1,
             flags: DEFAULT_FLAGS, // uniform_alpha = 15 (opaque), other flags = 0
-            sky,
             lights: [PackedLight::default(); 4], // All lights disabled
             // Animation System v2 fields (default to no animation)
             keyframe_base: 0,       // No keyframes bound
             inverse_bind_base: 0,   // No skeleton bound (raw bone mode)
-            animation_flags: 0,     // Use immediate bones by default
-            _animation_reserved: 0, // Zeroed
+            _pad: 0,
+            environment_index: 0,   // Index 0 = default environment
         }
     }
 }
@@ -325,42 +438,6 @@ pub fn unpack_matcap_blend_modes(packed: u32) -> [MatcapBlendMode; 4] {
 }
 
 // ============================================================================
-// PackedSky Helpers
-// ============================================================================
-
-impl PackedSky {
-    /// Create a PackedSky from f32 parameters
-    pub fn from_floats(
-        horizon_color: Vec3,
-        zenith_color: Vec3,
-        sun_direction: Vec3,
-        sun_color: Vec3,
-        sun_sharpness: f32,
-    ) -> Self {
-        let horizon_rgba = pack_rgb8(horizon_color);
-        let zenith_rgba = pack_rgb8(zenith_color);
-        let sun_dir_oct = pack_octahedral_u32(sun_direction);
-
-        let sun_r = pack_unorm8(sun_color.x);
-        let sun_g = pack_unorm8(sun_color.y);
-        let sun_b = pack_unorm8(sun_color.z);
-        let sun_sharp = pack_unorm8(sun_sharpness);
-        // Format: 0xRRGGBBSS (R in highest byte, sharpness in lowest)
-        let sun_color_and_sharpness = ((sun_r as u32) << 24)
-            | ((sun_g as u32) << 16)
-            | ((sun_b as u32) << 8)
-            | (sun_sharp as u32);
-
-        Self {
-            horizon_color: horizon_rgba,
-            zenith_color: zenith_rgba,
-            sun_direction_oct: sun_dir_oct,
-            sun_color_and_sharpness,
-        }
-    }
-}
-
-// ============================================================================
 // PackedLight Helpers
 // ============================================================================
 
@@ -491,8 +568,6 @@ pub const FLAG_TEXTURE_FILTER_LINEAR: u32 = 1 << 1;
 // ============================================================================
 // NOTE: ANIMATION_FLAG_USE_IMMEDIATE removed - unified_animation buffer uses
 // pre-computed offsets. The shader just reads from unified_animation[keyframe_base + bone_idx].
-// The animation_flags field in PackedUnifiedShadingState is now unused but kept for
-// struct layout compatibility.
 
 // ============================================================================
 // Material Override Flags (bits 2-7)
@@ -546,8 +621,8 @@ impl PackedUnifiedShadingState {
         emissive: f32,
         color: u32,
         matcap_blend_modes: [MatcapBlendMode; 4],
-        sky: PackedSky,
         lights: [PackedLight; 4],
+        environment_index: u32,
     ) -> Self {
         // Pack Mode 2 style: [metallic, roughness, emissive, rim_intensity=0]
         let uniform_set_0 = pack_uniform_set_0(
@@ -564,13 +639,12 @@ impl PackedUnifiedShadingState {
             color_rgba8: color,
             flags: DEFAULT_FLAGS, // uniform_alpha = 15 (opaque), other flags = 0
             uniform_set_1,
-            sky,
             lights,
             // Animation System v2 fields - defaults
             keyframe_base: 0,
             inverse_bind_base: 0,
-            animation_flags: 0,
-            _animation_reserved: 0,
+            _pad: 0,
+            environment_index,
         }
     }
 
@@ -600,9 +674,9 @@ mod tests {
 
     #[test]
     fn test_packed_sizes() {
-        assert_eq!(std::mem::size_of::<PackedSky>(), 16);
         assert_eq!(std::mem::size_of::<PackedLight>(), 12); // 12 bytes for point light support
-        assert_eq!(std::mem::size_of::<PackedUnifiedShadingState>(), 96); // 16 + 16 + 48 + 16 (animation)
+        assert_eq!(std::mem::size_of::<PackedEnvironmentState>(), 48); // 4 (header) + 44 (data)
+        assert_eq!(std::mem::size_of::<PackedUnifiedShadingState>(), 80); // 16 (header) + 48 (lights) + 16 (animation/env)
     }
 
     #[test]
@@ -664,15 +738,6 @@ mod tests {
         assert_eq!((packed >> 16) & 0xFF, 128); // G
         assert_eq!((packed >> 8) & 0xFF, 64); // B
         assert_eq!(packed & 0xFF, 255); // A
-    }
-
-    #[test]
-    fn test_default_sky_is_black() {
-        let sky = PackedSky::default();
-        assert_eq!(sky.horizon_color, 0);
-        assert_eq!(sky.zenith_color, 0);
-        assert_eq!(sky.sun_direction_oct, 0);
-        assert_eq!(sky.sun_color_and_sharpness, 0);
     }
 
     #[test]
@@ -932,5 +997,86 @@ mod tests {
             (state.flags & FLAG_DITHER_OFFSET_Y_MASK) >> FLAG_DITHER_OFFSET_Y_SHIFT,
             3
         );
+    }
+
+    // ========================================================================
+    // Environment System Tests
+    // ========================================================================
+
+    #[test]
+    fn test_environment_header_packing() {
+        // Test all combinations of modes and blend modes
+        for base in 0..8u32 {
+            for overlay in 0..8u32 {
+                for blend in 0..4u32 {
+                    let header = PackedEnvironmentState::make_header(base, overlay, blend);
+                    let mut env = PackedEnvironmentState::default();
+                    env.header = header;
+                    assert_eq!(env.base_mode(), base);
+                    assert_eq!(env.overlay_mode(), overlay);
+                    assert_eq!(env.blend_mode(), blend);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_environment_mode_setters() {
+        let mut env = PackedEnvironmentState::default();
+
+        env.set_base_mode(env_mode::GRADIENT);
+        env.set_overlay_mode(env_mode::SCATTER);
+        env.set_blend_mode(blend_mode::ADD);
+
+        assert_eq!(env.base_mode(), env_mode::GRADIENT);
+        assert_eq!(env.overlay_mode(), env_mode::SCATTER);
+        assert_eq!(env.blend_mode(), blend_mode::ADD);
+
+        // Change individual values without affecting others
+        env.set_base_mode(env_mode::RINGS);
+        assert_eq!(env.base_mode(), env_mode::RINGS);
+        assert_eq!(env.overlay_mode(), env_mode::SCATTER); // unchanged
+        assert_eq!(env.blend_mode(), blend_mode::ADD); // unchanged
+    }
+
+    #[test]
+    fn test_environment_gradient_packing() {
+        let mut env = PackedEnvironmentState::default();
+        env.pack_gradient(
+            0,
+            0x3366B2FF, // zenith
+            0xB2D8F2FF, // sky_horizon
+            0x8B7355FF, // ground_horizon
+            0x4A3728FF, // nadir
+            45.0,       // rotation
+            0.25,       // shift
+        );
+
+        assert_eq!(env.data[0], 0x3366B2FF);
+        assert_eq!(env.data[1], 0xB2D8F2FF);
+        assert_eq!(env.data[2], 0x8B7355FF);
+        assert_eq!(env.data[3], 0x4A3728FF);
+
+        // Verify f16x2 packing of rotation and shift
+        let (rotation, shift) = unpack_f16x2(env.data[4]);
+        assert!((rotation - 45.0).abs() < 0.1);
+        assert!((shift - 0.25).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_environment_default_gradient() {
+        let env = PackedEnvironmentState::default_gradient();
+        assert_eq!(env.base_mode(), env_mode::GRADIENT);
+        assert_eq!(env.overlay_mode(), env_mode::GRADIENT);
+        assert_eq!(env.blend_mode(), blend_mode::ALPHA);
+        // Verify colors are set
+        assert_ne!(env.data[0], 0); // zenith
+        assert_ne!(env.data[1], 0); // sky_horizon
+    }
+
+    #[test]
+    fn test_environment_index() {
+        assert_eq!(EnvironmentIndex::default(), EnvironmentIndex(0));
+        assert_eq!(EnvironmentIndex::INVALID, EnvironmentIndex(u32::MAX));
     }
 }

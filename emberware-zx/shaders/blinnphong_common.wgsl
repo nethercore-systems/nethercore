@@ -84,7 +84,6 @@ fn rim_lighting(
 fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     let shading = shading_states[in.shading_state_index];
     let material_color = unpack_rgba8(shading.color_rgba8);
-    let sky = unpack_sky(shading.sky);
 
     // Unpack uniforms from uniform_set_0
     // Mode 2: [metallic, roughness, emissive, rim_intensity]
@@ -145,12 +144,12 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     // Mode 2: direct from value1, Mode 3: derived from shininess
     //FS_MODE2_3_ROUGHNESS
 
-    // Diffuse ambient (normal direction) - use gradient only, sun handled by direct lighting
-    let diffuse_env = sample_sky_ambient(N, sky);
+    // Diffuse ambient (normal direction) - use 4-color environment gradient
+    let diffuse_env = sample_environment_ambient(shading.environment_index, N);
 
-    // Specular reflection (reflection direction) - use gradient only, sun specular via blinn-phong
+    // Specular reflection (reflection direction) - use 4-color environment gradient
     let R = reflect(-view_dir, N);
-    let specular_env = sample_sky_ambient(R, sky);
+    let specular_env = sample_environment_ambient(shading.environment_index, R);
 
     // Rough surfaces have dimmer reflections (energy scatters)
     let reflection_strength = (1.0 - roughness) * (1.0 - roughness);  // squared falloff
@@ -165,22 +164,22 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     // Specular environment reflection (attenuated by roughness)
     final_color += specular_env * fresnel * reflection_strength;
 
-    // Direct sun - use stored sun color, not sample_sky (which adds gradient on top)
-    let sun_color = sky.sun_color;
-
-    // Sun diffuse
-    final_color += lambert_diffuse(N, sky.sun_direction, albedo, sun_color) * diffuse_factor * diffuse_fresnel;
-
-    // Sun specular
-    final_color += normalized_blinn_phong_specular(
-        N, view_dir, sky.sun_direction, shininess, specular_color, sun_color
-    );
+    // Track dominant light color for rim lighting coherence
+    var dominant_light_color = vec3<f32>(0.0);
+    var max_light_intensity = 0.0;
 
     // 4 dynamic lights (direct illumination)
     for (var i = 0u; i < 4u; i++) {
         let light_data = unpack_light(shading.lights[i]);
         if (light_data.enabled) {
             let light = compute_light(light_data, in.world_position);
+
+            // Track dominant light for rim coherence (brightest light wins)
+            let light_lum = dot(light.color, vec3<f32>(0.299, 0.587, 0.114));
+            if (light_lum > max_light_intensity) {
+                max_light_intensity = light_lum;
+                dominant_light_color = light.color;
+            }
 
             // Diffuse
             final_color += lambert_diffuse(N, light.direction, albedo, light.color)
@@ -194,10 +193,11 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
     }
 
     // Rim lighting (always uses rim_intensity from uniform, never from texture)
-    // Specular-tinted rim, modulated by sun color for scene coherence
     // - Material character from specular_color (gold stays gold, holo stays magenta)
-    // - Scene coherence from sun_color (red lights = red tint on everything)
-    let rim_color = specular_color * sun_color;
+    // - Scene coherence from dominant light (brightest light tints the rim)
+    // If no lights enabled, use white for rim to maintain visibility
+    let scene_tint = select(vec3<f32>(1.0), dominant_light_color, max_light_intensity > 0.0);
+    let rim_color = specular_color * scene_tint;
     let rim = rim_lighting(N, view_dir, rim_color, rim_intensity, rim_power);
     final_color += rim;
 

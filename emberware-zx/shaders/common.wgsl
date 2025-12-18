@@ -4,9 +4,9 @@
 // ============================================================================
 
 // ============================================================================
-// UNIFIED BUFFER ARCHITECTURE (5 bindings, grouped by purpose)
+// UNIFIED BUFFER ARCHITECTURE (6 bindings, grouped by purpose)
 // ============================================================================
-// Reduced from 9 storage buffers to 5 storage for WebGPU compatibility.
+// Reduced from 9 storage buffers to 6 storage for WebGPU compatibility.
 // All mat4x4 matrices merged into unified_transforms.
 // All mat3x4 animation matrices merged into unified_animation.
 // CPU pre-computes absolute indices into unified_transforms (no frame_offsets needed).
@@ -16,7 +16,8 @@
 // - Binding 0-1: Transforms (unified_transforms, mvp_shading_indices)
 // - Binding 2: Shading (shading_states)
 // - Binding 3: Animation (unified_animation)
-// - Binding 4: Quad rendering (quad_instances)
+// - Binding 4: Environment (environment_states) - Multi-Environment v3
+// - Binding 5: Quad rendering (quad_instances)
 
 // Binding 0: unified_transforms - all mat4x4 matrices [models | views | projs]
 // Indices are pre-computed on CPU to be absolute offsets into this array
@@ -27,14 +28,6 @@
 // view_idx and proj_idx are PRE-OFFSET by CPU (already absolute indices)
 @group(0) @binding(1) var<storage, read> mvp_shading_indices: array<vec4<u32>>;
 
-// Packed sky data (16 bytes)
-struct PackedSky {
-    horizon_color: u32,              // RGBA8 packed
-    zenith_color: u32,               // RGBA8 packed
-    sun_direction_oct: u32,          // Octahedral encoding (2x snorm16)
-    sun_color_and_sharpness: u32,    // RGB8 + sharpness u8
-}
-
 // Packed light data (12 bytes) - supports directional and point lights
 struct PackedLight {
     data0: u32,  // Directional: octahedral direction (snorm16x2), Point: position XY (f16x2)
@@ -42,19 +35,18 @@ struct PackedLight {
     data2: u32,  // Directional: unused (0), Point: position Z + range (f16x2)
 }
 
-// Unified per-draw shading state (96 bytes)
+// Unified per-draw shading state (80 bytes)
 struct PackedUnifiedShadingState {
     color_rgba8: u32,                // Material color (RGBA8 packed)
     uniform_set_0: u32,              // Mode-specific: [b0, b1, b2, rim_intensity]
     uniform_set_1: u32,              // Mode-specific: [b0, b1, b2, rim_power]
     flags: u32,                      // Bit 0: skinning_mode (0=raw, 1=inverse bind)
-    sky: PackedSky,                  // 16 bytes
     lights: array<PackedLight, 4>,   // 48 bytes (4 × 12-byte lights)
-    // Animation System v2 fields (16 bytes)
+    // Animation System v2 fields (8 bytes) + padding (4 bytes) + environment index (4 bytes)
     keyframe_base: u32,              // Base offset into all_keyframes buffer
     inverse_bind_base: u32,          // Base offset into inverse_bind buffer
-    animation_flags: u32,            // Bit 0: use_static_keyframes
-    _animation_reserved: u32,        // Reserved for v2.1
+    _pad: u32,                       // Unused padding for struct alignment
+    environment_index: u32,          // Index into environment_states buffer
 }
 
 // Binding 2: shading_states - per-draw shading state array
@@ -72,7 +64,40 @@ struct BoneMatrix3x4 {
 // CPU pre-computes keyframe_base to point to the correct section
 @group(0) @binding(3) var<storage, read> unified_animation: array<BoneMatrix3x4>;
 
-// Binding 4: quad_instances - for GPU-instanced quad rendering (declared in quad_template.wgsl)
+// ============================================================================
+// ENVIRONMENT SYSTEM (Multi-Environment v3)
+// ============================================================================
+// Procedural environment rendering with layering and blend modes.
+// 8 modes: Gradient, Scatter, Lines, Silhouette, Rectangles, Room, Curtains, Rings
+
+// Packed environment state (48 bytes)
+// Header: base_mode(3) + overlay_mode(3) + blend_mode(2) + reserved(24)
+// Data: base[0..5], overlay[5..10], shared[10]
+struct PackedEnvironmentState {
+    header: u32,
+    data: array<u32, 11>,
+}
+
+// Environment mode constants
+const ENV_MODE_GRADIENT: u32 = 0u;
+const ENV_MODE_SCATTER: u32 = 1u;
+const ENV_MODE_LINES: u32 = 2u;
+const ENV_MODE_SILHOUETTE: u32 = 3u;
+const ENV_MODE_RECTANGLES: u32 = 4u;
+const ENV_MODE_ROOM: u32 = 5u;
+const ENV_MODE_CURTAINS: u32 = 6u;
+const ENV_MODE_RINGS: u32 = 7u;
+
+// Blend mode constants
+const ENV_BLEND_ALPHA: u32 = 0u;     // lerp(base, overlay, overlay.a)
+const ENV_BLEND_ADD: u32 = 1u;       // base + overlay
+const ENV_BLEND_MULTIPLY: u32 = 2u;  // base * overlay
+const ENV_BLEND_SCREEN: u32 = 3u;    // 1 - (1-base) * (1-overlay)
+
+// Binding 4: environment_states - per-frame array of PackedEnvironmentState
+@group(0) @binding(4) var<storage, read> environment_states: array<PackedEnvironmentState>;
+
+// Binding 5: quad_instances - for GPU-instanced quad rendering (declared in quad_template.wgsl)
 // (not declared here - only used by quad shader)
 
 // Helper to expand 3x4 bone matrix → 4x4 for skinning calculations
@@ -93,9 +118,8 @@ const FLAG_SKINNING_MODE: u32 = 1u;
 // 0 = nearest (pixelated), 1 = linear (smooth)
 const FLAG_TEXTURE_FILTER_LINEAR: u32 = 2u;
 
-// Animation System v2 flags (in animation_flags field of PackedUnifiedShadingState)
-// NOTE: ANIMATION_FLAG_USE_IMMEDIATE removed - unified_animation buffer uses
-// pre-computed offsets (keyframe_base already points to correct section)
+// Animation System v2: CPU pre-computes absolute keyframe_base offsets
+// (no flags needed - shader just reads from unified_animation[keyframe_base + bone_idx])
 
 // ============================================================================
 // Material Override Flags (bits 2-7)
@@ -247,47 +271,106 @@ fn unpack_octahedral(packed: u32) -> vec3<f32> {
 }
 
 // ============================================================================
-// Sky Utilities
+// Environment Sampling (Multi-Environment v3)
 // ============================================================================
 
-// Unpacked sky data
-struct SkyData {
-    horizon_color: vec3<f32>,
-    zenith_color: vec3<f32>,
-    sun_direction: vec3<f32>,
-    sun_color: vec3<f32>,
-    sun_sharpness: f32,
+// Sample gradient environment (Mode 0)
+// data[0]: zenith color (RGBA8)
+// data[1]: sky_horizon color (RGBA8)
+// data[2]: ground_horizon color (RGBA8)
+// data[3]: nadir color (RGBA8)
+// data[4]: rotation (f16) + shift (f16) packed
+fn sample_gradient(data: array<u32, 11>, offset: u32, direction: vec3<f32>) -> vec4<f32> {
+    let zenith = unpack_rgba8(data[offset]);
+    let sky_horizon = unpack_rgba8(data[offset + 1u]);
+    let ground_horizon = unpack_rgba8(data[offset + 2u]);
+    let nadir = unpack_rgba8(data[offset + 3u]);
+    let rotation_shift = unpack2x16float(data[offset + 4u]);
+    let rotation = rotation_shift.x;
+    let shift = rotation_shift.y;
+
+    // Apply Y-axis rotation to direction
+    let cos_r = cos(rotation);
+    let sin_r = sin(rotation);
+    let rotated_dir = vec3<f32>(
+        direction.x * cos_r + direction.z * sin_r,
+        direction.y,
+        -direction.x * sin_r + direction.z * cos_r
+    );
+
+    // Calculate blend factor with shift applied
+    let y = clamp(rotated_dir.y + shift, -1.0, 1.0);
+
+    // Smooth 4-color gradient: nadir (-1) -> ground_horizon (-0.1) -> sky_horizon (0.1) -> zenith (1)
+    // Small horizon band for smooth ground/sky transition
+    var result: vec4<f32>;
+
+    if (y < -0.1) {
+        // Below horizon: nadir to ground_horizon
+        // Map [-1, -0.1] → [0, 1]
+        let t = (y + 1.0) / 0.9;
+        result = mix(nadir, ground_horizon, t);
+    } else if (y < 0.1) {
+        // Horizon band: ground_horizon to sky_horizon
+        // Map [-0.1, 0.1] → [0, 1]
+        let t = (y + 0.1) / 0.2;
+        result = mix(ground_horizon, sky_horizon, t);
+    } else {
+        // Above horizon: sky_horizon to zenith
+        // Map [0.1, 1] → [0, 1]
+        let t = (y - 0.1) / 0.9;
+        result = mix(sky_horizon, zenith, t);
+    }
+
+    return result;
 }
 
-// Unpack PackedSky to usable values
-// Format: 0xRRGGBBSS (R in highest byte, sharpness in lowest)
-fn unpack_sky(packed: PackedSky) -> SkyData {
-    var sky: SkyData;
-    sky.horizon_color = unpack_rgb8(packed.horizon_color);
-    sky.zenith_color = unpack_rgb8(packed.zenith_color);
-    sky.sun_direction = unpack_octahedral(packed.sun_direction_oct);
-    let sun_packed = packed.sun_color_and_sharpness;
-    sky.sun_color = unpack_rgb8(sun_packed);
-    sky.sun_sharpness = unpack_unorm8_from_u32(sun_packed);  // lowest byte
-    return sky;
+// Sample a single environment mode
+fn sample_mode(mode: u32, data: array<u32, 11>, offset: u32, direction: vec3<f32>) -> vec4<f32> {
+    switch (mode) {
+        case 0u: { return sample_gradient(data, offset, direction); }
+        // Future modes will be added here
+        default: { return sample_gradient(data, offset, direction); }
+    }
 }
 
-// Sample sky gradient only (no sun disc) - use for ambient when direct sun is computed separately
-fn sample_sky_ambient(direction: vec3<f32>, sky: SkyData) -> vec3<f32> {
-    let up_factor = direction.y * 0.5 + 0.5;
-    return mix(sky.horizon_color, sky.zenith_color, up_factor);
+// Blend two layers together
+fn blend_layers(base: vec4<f32>, overlay: vec4<f32>, mode: u32) -> vec4<f32> {
+    switch (mode) {
+        case 0u: { return mix(base, overlay, overlay.a); }  // Alpha blend
+        case 1u: { return base + overlay; }                  // Add
+        case 2u: { return base * overlay; }                  // Multiply
+        case 3u: {
+            // Screen: 1 - (1-base) * (1-overlay)
+            return vec4<f32>(1.0) - (vec4<f32>(1.0) - base) * (vec4<f32>(1.0) - overlay);
+        }
+        default: { return base; }
+    }
 }
 
-// Sample procedural sky (gradient + sun disc) - use for background or when sun is NOT computed separately
-fn sample_sky(direction: vec3<f32>, sky: SkyData) -> vec3<f32> {
-    let gradient = sample_sky_ambient(direction, sky);
-    // Negate sun_direction: it's direction rays travel, not direction to sun
-    let sun_dot = max(0.0, dot(direction, -sky.sun_direction));
-    // Map sharpness [0,1] to power exponent [1, 200]
-    // Higher sharpness = higher exponent = sharper sun disc
-    let sun_power = mix(1.0, 200.0, sky.sun_sharpness);
-    let sun = sky.sun_color * pow(sun_dot, sun_power);
-    return gradient + sun;
+// Sample complete environment (base + overlay with blend)
+fn sample_environment(env_index: u32, direction: vec3<f32>) -> vec4<f32> {
+    let env = environment_states[env_index];
+    let base_mode = env.header & 0x7u;
+    let overlay_mode = (env.header >> 3u) & 0x7u;
+    let blend_mode = (env.header >> 6u) & 0x3u;
+
+    let base_color = sample_mode(base_mode, env.data, 0u, direction);
+
+    // If same mode for both layers, skip overlay
+    if (overlay_mode == base_mode) {
+        return base_color;
+    }
+
+    let overlay_color = sample_mode(overlay_mode, env.data, 5u, direction);
+    return blend_layers(base_color, overlay_color, blend_mode);
+}
+
+// Sample environment ambient (average of zenith and horizon)
+// Used for material lighting when sky data is needed
+fn sample_environment_ambient(env_index: u32, direction: vec3<f32>) -> vec3<f32> {
+    let env_color = sample_environment(env_index, direction);
+    return env_color.rgb;
 }
 
 // Lambert diffuse lighting (unified for all modes)

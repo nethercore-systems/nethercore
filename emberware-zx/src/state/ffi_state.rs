@@ -120,6 +120,15 @@ pub struct ZFFIState {
     pub current_shading_state: crate::graphics::PackedUnifiedShadingState,
     pub shading_state_dirty: bool,
 
+    // Environment state system (Multi-Environment v3)
+    // Pool of unique environment states (deduplicated)
+    pub environment_states: Vec<crate::graphics::PackedEnvironmentState>,
+    pub environment_state_map:
+        HashMap<crate::graphics::PackedEnvironmentState, crate::graphics::EnvironmentIndex>,
+    // Current staging state (modified by env_* FFI calls)
+    pub current_environment_state: crate::graphics::PackedEnvironmentState,
+    pub environment_dirty: bool,
+
     // GPU-instanced quad rendering (batched by texture)
     pub quad_batches: Vec<super::QuadBatch>,
 }
@@ -195,6 +204,11 @@ impl Default for ZFFIState {
             shading_state_map: HashMap::new(),
             current_shading_state: crate::graphics::PackedUnifiedShadingState::default(),
             shading_state_dirty: true, // Start dirty so first draw creates state 0
+            // Environment state system (Multi-Environment v3)
+            environment_states: Vec::new(),
+            environment_state_map: HashMap::new(),
+            current_environment_state: crate::graphics::PackedEnvironmentState::default_gradient(),
+            environment_dirty: true, // Start dirty so first draw creates environment 0
             quad_batches: Vec::new(),
         }
     }
@@ -321,48 +335,45 @@ impl ZFFIState {
         }
     }
 
-    /// Update sky colors in current shading state
+    /// Update sky colors in current environment state (backwards compatibility)
     ///
-    /// Both colors are 0xRRGGBBAA format (alpha ignored).
+    /// Both colors are 0xRRGGBBAA format.
+    /// Maps to env_gradient_set() internally for Multi-Environment v3 compatibility.
+    /// Ground colors are derived as darker versions of sky colors.
     pub fn update_sky_colors(&mut self, horizon_rgba: u32, zenith_rgba: u32) {
-        // Mask off alpha, keeping RGB in upper 24 bits
-        let horizon = horizon_rgba & 0xFFFFFF00;
-        let zenith = zenith_rgba & 0xFFFFFF00;
+        use crate::graphics::{env_mode, blend_mode};
 
-        if self.current_shading_state.sky.horizon_color != horizon
-            || self.current_shading_state.sky.zenith_color != zenith
-        {
-            self.current_shading_state.sky.horizon_color = horizon;
-            self.current_shading_state.sky.zenith_color = zenith;
-            self.shading_state_dirty = true;
-        }
-    }
+        // Create ground colors by darkening the sky colors
+        let darken = |color: u32| -> u32 {
+            let r = ((color >> 24) & 0xFF) * 6 / 10;
+            let g = ((color >> 16) & 0xFF) * 6 / 10;
+            let b = ((color >> 8) & 0xFF) * 6 / 10;
+            let a = color & 0xFF;
+            (r << 24) | (g << 16) | (b << 8) | a
+        };
 
-    /// Update sky sun parameters in current shading state
-    ///
-    /// The `direction` parameter is the direction light rays travel (from sun toward surface).
-    /// This matches the convention used by dynamic lights (`update_light`).
-    /// For a sun directly overhead, use `(0, -1, 0)` (rays going down).
-    ///
-    /// `color_rgba` is 0xRRGGBBAA format (alpha ignored).
-    pub fn update_sky_sun(&mut self, direction: [f32; 3], color_rgba: u32, sharpness: f32) {
-        use crate::graphics::{pack_octahedral_u32, pack_unorm8};
-        use glam::Vec3;
+        let ground_horizon = darken(horizon_rgba);
+        let nadir = darken(zenith_rgba);
 
-        // Store direction as-is (rays travel convention, same as dynamic lights)
-        let dir_oct_packed = pack_octahedral_u32(Vec3::from_slice(&direction));
+        // Set up gradient mode
+        self.current_environment_state
+            .set_base_mode(env_mode::GRADIENT);
+        self.current_environment_state
+            .set_overlay_mode(env_mode::GRADIENT);
+        self.current_environment_state.set_blend_mode(blend_mode::ALPHA);
 
-        // Input: 0xRRGGBBAA, Output: 0xRRGGBBSS (replace alpha with sharpness)
-        let sharp = pack_unorm8(sharpness) as u32;
-        let color_and_sharpness = (color_rgba & 0xFFFFFF00) | sharp;
+        // Pack gradient colors
+        self.current_environment_state.pack_gradient(
+            0,              // base mode offset
+            zenith_rgba,    // zenith
+            horizon_rgba,   // sky_horizon
+            ground_horizon, // ground_horizon
+            nadir,          // nadir
+            0.0,            // rotation
+            0.0,            // shift
+        );
 
-        if self.current_shading_state.sky.sun_direction_oct != dir_oct_packed
-            || self.current_shading_state.sky.sun_color_and_sharpness != color_and_sharpness
-        {
-            self.current_shading_state.sky.sun_direction_oct = dir_oct_packed;
-            self.current_shading_state.sky.sun_color_and_sharpness = color_and_sharpness;
-            self.shading_state_dirty = true;
-        }
+        self.environment_dirty = true;
     }
 
     /// Update color in current shading state (no quantization - already u32 RGBA8)
@@ -461,7 +472,7 @@ impl ZFFIState {
             self.shading_state_dirty = true;
         }
 
-        // Note: animation_flags no longer used - shader uses unified_animation with pre-computed offsets
+        // Note: _pad field is unused - shader uses unified_animation with pre-computed offsets
     }
 
     /// Update texture filter mode in current shading state
@@ -589,13 +600,53 @@ impl ZFFIState {
         self.skeletons.get(index)
     }
 
+    /// Add current environment state to the pool if dirty, returning its index
+    ///
+    /// Uses deduplication via HashMap - if this exact state already exists, returns existing index.
+    /// Otherwise adds a new entry.
+    pub fn add_environment_state(&mut self) -> crate::graphics::EnvironmentIndex {
+        // If not dirty, return the last added state (should be at index states.len() - 1)
+        if !self.environment_dirty && !self.environment_states.is_empty() {
+            return crate::graphics::EnvironmentIndex(self.environment_states.len() as u32 - 1);
+        }
+
+        // Check if this state already exists (deduplication)
+        if let Some(&existing_idx) = self.environment_state_map.get(&self.current_environment_state)
+        {
+            self.environment_dirty = false;
+            return existing_idx;
+        }
+
+        // Add new state
+        let idx = self.environment_states.len() as u32;
+        if idx >= 65536 {
+            panic!("Environment state pool overflow! Maximum 65,536 unique states per frame.");
+        }
+
+        let env_idx = crate::graphics::EnvironmentIndex(idx);
+        self.environment_states.push(self.current_environment_state);
+        self.environment_state_map
+            .insert(self.current_environment_state, env_idx);
+        self.environment_dirty = false;
+
+        env_idx
+    }
+
     /// Add current shading state to the pool if dirty, returning its index
     ///
     /// Uses deduplication via HashMap - if this exact state already exists, returns existing index.
     /// Otherwise adds a new entry.
+    /// Also syncs the current environment state index into the shading state.
     pub fn add_shading_state(&mut self) -> crate::graphics::ShadingStateIndex {
         // Sync animation state before checking (Animation System v2)
         self.sync_animation_state();
+
+        // Sync environment state (Multi-Environment v3)
+        let env_idx = self.add_environment_state();
+        if self.current_shading_state.environment_index != env_idx.0 {
+            self.current_shading_state.environment_index = env_idx.0;
+            self.shading_state_dirty = true;
+        }
 
         // If not dirty, return the last added state (should be at index states.len() - 1)
         if !self.shading_state_dirty && !self.shading_states.is_empty() {
@@ -752,6 +803,11 @@ impl ZFFIState {
         self.shading_states.clear();
         self.shading_state_map.clear();
         self.shading_state_dirty = true; // Mark dirty so first draw creates state 0
+
+        // Reset environment state pool for next frame (Multi-Environment v3)
+        self.environment_states.clear();
+        self.environment_state_map.clear();
+        self.environment_dirty = true; // Mark dirty so first draw creates environment 0
 
         // Clear GPU-instanced quad batches for next frame
         self.quad_batches.clear();

@@ -56,6 +56,8 @@ pub use unified_shading_state::{
     PackedLight, PackedUnifiedShadingState, ShadingStateIndex, pack_f16, pack_f16x2,
     pack_matcap_blend_modes, pack_rgb8, pack_unorm8, unpack_f16, unpack_f16x2,
     unpack_matcap_blend_modes, update_uniform_set_0_byte, update_uniform_set_1_byte,
+    // Multi-Environment v3
+    PackedEnvironmentState, EnvironmentIndex, blend_mode, env_mode,
 };
 pub use vertex::{FORMAT_ALL, VERTEX_FORMAT_COUNT, VertexFormatInfo};
 
@@ -124,6 +126,11 @@ pub struct ZGraphics {
     // Shading state storage buffer (per-frame array)
     shading_state_buffer: wgpu::Buffer,
     shading_state_capacity: usize,
+
+    // Environment state storage buffer (Multi-Environment v3)
+    // @binding(4) - per-frame array of PackedEnvironmentState
+    environment_states_buffer: wgpu::Buffer,
+    environment_states_capacity: usize,
 
     // Bind group caches
     texture_bind_groups: HashMap<[TextureHandle; 4], wgpu::BindGroup>,

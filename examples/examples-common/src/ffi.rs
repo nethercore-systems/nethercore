@@ -74,11 +74,25 @@ extern "C" {
     pub fn blend_mode(mode: u32);
 
     // ========================================================================
-    // Sky
+    // Sky (backwards compatibility)
     // ========================================================================
     pub fn sky_set_colors(horizon_color: u32, zenith_color: u32);
     pub fn sky_set_sun(dir_x: f32, dir_y: f32, dir_z: f32, color: u32, sharpness: f32);
     pub fn draw_sky();
+
+    // ========================================================================
+    // Environment (Multi-Environment v3)
+    // ========================================================================
+    pub fn env_gradient_set(
+        zenith: u32,
+        sky_horizon: u32,
+        ground_horizon: u32,
+        nadir: u32,
+        rotation: f32,
+        shift: f32,
+    );
+    pub fn env_select_pair(base_mode: u32, overlay_mode: u32);
+    pub fn env_blend_mode(mode: u32);
 
     // ========================================================================
     // Lighting (Mode 2 & 3)

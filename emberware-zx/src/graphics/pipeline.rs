@@ -320,11 +320,12 @@ pub(crate) fn create_sky_pipeline(
 
 /// Create bind group layout for per-frame uniforms (group 0)
 ///
-/// UNIFIED BUFFER ARCHITECTURE (5 bindings, all storage, grouped by purpose):
+/// UNIFIED BUFFER ARCHITECTURE (6 bindings, all storage, grouped by purpose):
 /// - Binding 0-1: Transforms (unified_transforms, mvp_indices)
 /// - Binding 2: Shading (shading_states)
 /// - Binding 3: Animation (unified_animation)
-/// - Binding 4: Quad rendering (quad_instances)
+/// - Binding 4: Environment (environment_states) - Multi-Environment v3
+/// - Binding 5: Quad rendering (quad_instances)
 ///
 /// CPU pre-computes absolute indices into unified_transforms (no frame_offsets needed).
 /// Screen dimensions eliminated - resolution_index packed into QuadInstance.mode.
@@ -392,13 +393,29 @@ fn create_frame_bind_group_layout(
             count: None,
         },
         // =====================================================================
-        // QUAD RENDERING (binding 4)
+        // ENVIRONMENT (binding 4) - Multi-Environment v3
         // =====================================================================
 
-        // Binding 4: quad_instances - for GPU-instanced quad rendering
-        // Screen dimensions eliminated - resolution_index packed into mode field
+        // Binding 4: environment_states - per-frame array of PackedEnvironmentState
+        // Used by sky shader for procedural environment rendering
         wgpu::BindGroupLayoutEntry {
             binding: 4,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        },
+        // =====================================================================
+        // QUAD RENDERING (binding 5)
+        // =====================================================================
+
+        // Binding 5: quad_instances - for GPU-instanced quad rendering
+        // Screen dimensions eliminated - resolution_index packed into mode field
+        wgpu::BindGroupLayoutEntry {
+            binding: 5,
             visibility: wgpu::ShaderStages::VERTEX,
             ty: wgpu::BindingType::Buffer {
                 ty: wgpu::BufferBindingType::Storage { read_only: true },

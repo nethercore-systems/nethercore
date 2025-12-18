@@ -1,6 +1,7 @@
 //! Sky system FFI functions
 //!
-//! Functions for setting procedural sky gradient and sun properties.
+//! Functions for setting procedural sky gradient. Sun-based lighting was removed
+//! in Multi-Environment v3 - use light_set() for directional lighting instead.
 
 use anyhow::Result;
 use tracing::warn;
@@ -11,7 +12,6 @@ use super::ZXGameContext;
 /// Register sky system FFI functions
 pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     linker.func_wrap("env", "sky_set_colors", sky_set_colors)?;
-    linker.func_wrap("env", "sky_set_sun", sky_set_sun)?;
     linker.func_wrap("env", "matcap_set", matcap_set)?;
     linker.func_wrap("env", "draw_sky", draw_sky)?;
     Ok(())
@@ -33,46 +33,6 @@ pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
 fn sky_set_colors(mut caller: Caller<'_, ZXGameContext>, horizon_color: u32, zenith_color: u32) {
     let state = &mut caller.data_mut().ffi;
     state.update_sky_colors(horizon_color, zenith_color);
-}
-
-/// Set sky sun properties
-///
-/// # Arguments
-/// * `dir_x` — Light ray direction X component (will be normalized)
-/// * `dir_y` — Light ray direction Y component (will be normalized)
-/// * `dir_z` — Light ray direction Z component (will be normalized)
-/// * `color` — Sun color (0xRRGGBBAA)
-/// * `sharpness` — Sun sharpness (0.0-1.0, higher = smaller/sharper sun disc)
-///
-/// Sets the procedural sky sun. The sun appears as a bright disc in the sky gradient
-/// and provides diffuse/specular lighting in PBR/Hybrid modes.
-///
-/// **Direction convention:** The direction is where light rays travel (from sun toward surface).
-/// This matches the convention used by `light_set()` for dynamic lights.
-/// Direction will be automatically normalized by the graphics backend.
-///
-/// **Examples:**
-/// - `sky_set_sun(0.0, -1.0, 0.0, 0xFFFFFFFF, 0.98)` — Sun directly overhead (rays going down)
-/// - `sky_set_sun(-0.5, -0.707, -0.5, 0xFFE4B5FF, 0.95)` — Sun at 45° elevation from northeast
-fn sky_set_sun(
-    mut caller: Caller<'_, ZXGameContext>,
-    dir_x: f32,
-    dir_y: f32,
-    dir_z: f32,
-    color: u32,
-    sharpness: f32,
-) {
-    let state = &mut caller.data_mut().ffi;
-
-    // Validate direction vector (warn if zero-length)
-    let len_sq = dir_x * dir_x + dir_y * dir_y + dir_z * dir_z;
-    if len_sq < 1e-10 {
-        warn!("sky_set_sun: zero-length direction vector, using default (0, -1, 0)");
-        state.update_sky_sun([0.0, -1.0, 0.0], color, sharpness);
-        return;
-    }
-
-    state.update_sky_sun([dir_x, dir_y, dir_z], color, sharpness);
 }
 
 /// Bind a matcap texture to a slot (Mode 1 only)

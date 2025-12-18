@@ -1,6 +1,6 @@
 // Sky rendering shader template
 // Prepended with common.wgsl by build.rs
-// Renders a fullscreen gradient with sun disc using procedural sky data
+// Renders a fullscreen procedural environment using Multi-Environment v3
 
 // ============================================================================
 // Vertex and Fragment Shaders
@@ -44,9 +44,9 @@ fn vs(@builtin(vertex_index) vertex_index: u32, @builtin(instance_index) instanc
 
 @fragment
 fn fs(in: SkyVertexOut) -> @location(0) vec4<f32> {
-    // Get sky data from shading state
+    // Get environment index from shading state (Multi-Environment v3)
     let shading = shading_states[in.shading_state_index];
-    let sky_data = unpack_sky(shading.sky);
+    let env_index = shading.environment_index;
 
     // Compute view ray per-pixel (not interpolated from vertices)
     // view_idx and proj_idx are pre-computed absolute indices by CPU
@@ -70,8 +70,8 @@ fn fs(in: SkyVertexOut) -> @location(0) vec4<f32> {
     // Transform to world space
     let view_ray = cam_right * view_ray_cam.x + cam_up * view_ray_cam.y + cam_back * view_ray_cam.z;
 
-    // Sample sky
-    let sky_color = sample_sky(normalize(view_ray), sky_data);
+    // Sample environment (Multi-Environment v3)
+    let env_color = sample_environment(env_index, normalize(view_ray));
 
-    return vec4<f32>(sky_color, 1.0);
+    return env_color;
 }

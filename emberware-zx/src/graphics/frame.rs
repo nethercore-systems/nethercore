@@ -353,6 +353,14 @@ impl ZGraphics {
             self.queue.write_buffer(&self.shading_state_buffer, 0, data);
         }
 
+        // 2b. Upload environment states (Multi-Environment v3)
+        if !z_state.environment_states.is_empty() {
+            self.ensure_environment_states_buffer_capacity(z_state.environment_states.len());
+            let data = bytemuck::cast_slice(&z_state.environment_states);
+            self.queue
+                .write_buffer(&self.environment_states_buffer, 0, data);
+        }
+
         // 3. Upload MVP + shading indices with ABSOLUTE offsets into unified_transforms
         // CPU pre-computes absolute indices so shader does direct lookup without offset arithmetic
         // view_idx → view_idx + model_count
@@ -479,7 +487,8 @@ impl ZGraphics {
                     // 0-1: Transforms (unified_transforms, mvp_indices)
                     // 2: Shading (shading_states)
                     // 3: Animation (unified_animation)
-                    // 4: Quad rendering (quad_instances)
+                    // 4: Environment (environment_states) - Multi-Environment v3
+                    // 5: Quad rendering (quad_instances)
                     let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                         label: Some("Frame Bind Group (Unified)"),
                         layout: &pipeline_entry.bind_group_layout_frame,
@@ -502,6 +511,10 @@ impl ZGraphics {
                             },
                             wgpu::BindGroupEntry {
                                 binding: 4,
+                                resource: self.environment_states_buffer.as_entire_binding(),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 5,
                                 resource: self
                                     .buffer_manager
                                     .quad_instance_buffer()
@@ -532,7 +545,8 @@ impl ZGraphics {
                 // 0-1: Transforms (unified_transforms, mvp_indices)
                 // 2: Shading (shading_states)
                 // 3: Animation (unified_animation)
-                // 4: Quad rendering (quad_instances)
+                // 4: Environment (environment_states) - Multi-Environment v3
+                // 5: Quad rendering (quad_instances)
                 let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some("Frame Bind Group (Unified)"),
                     layout: &pipeline_entry.bind_group_layout_frame,
@@ -555,6 +569,10 @@ impl ZGraphics {
                         },
                         wgpu::BindGroupEntry {
                             binding: 4,
+                            resource: self.environment_states_buffer.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 5,
                             resource: self
                                 .buffer_manager
                                 .quad_instance_buffer()
@@ -1023,5 +1041,27 @@ impl ZGraphics {
             mapped_at_creation: false,
         });
         self.shading_state_capacity = new_capacity;
+    }
+
+    /// Ensure environment state buffer has sufficient capacity (Multi-Environment v3)
+    pub(super) fn ensure_environment_states_buffer_capacity(&mut self, count: usize) {
+        if count <= self.environment_states_capacity {
+            return;
+        }
+
+        let new_capacity = (count * 2).next_power_of_two();
+        tracing::debug!(
+            "Growing environment state buffer: {} → {}",
+            self.environment_states_capacity,
+            new_capacity
+        );
+
+        self.environment_states_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Environment States"),
+            size: (new_capacity * std::mem::size_of::<super::PackedEnvironmentState>()) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        self.environment_states_capacity = new_capacity;
     }
 }

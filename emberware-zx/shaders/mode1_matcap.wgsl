@@ -163,13 +163,12 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
         let matcap3 = sample_filtered(slot3, shading.flags, matcap_uv).rgb;
         color = blend_colors(color, matcap3, blend_mode_3);
     } else {
-        // Use procedural sky for environment reflection instead of matcaps
-        // Sample sky in world normal direction for ambient-like reflection
-        let sky = unpack_sky(shading.sky);
+        // Use procedural environment for reflection instead of matcaps
+        // Sample 4-color environment gradient in world normal direction
         let N = normalize(in.world_normal);
-        let sky_color = sample_sky(N, sky);
+        let env_color = sample_environment_ambient(shading.environment_index, N);
         // Apply using first blend mode for consistency
-        color = blend_colors(color, sky_color, blend_mode_1);
+        color = blend_colors(color, env_color, blend_mode_1);
     }
 
     // Dither transparency (two-layer: base_alpha × effect_alpha)

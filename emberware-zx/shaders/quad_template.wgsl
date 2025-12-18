@@ -3,7 +3,7 @@
 
 // ============================================================================
 // Quad-Specific Bindings
-// Uses bindings from common.wgsl: 0-3 (binding 4 is quad_instances below)
+// Uses bindings from common.wgsl: 0-4 (binding 5 is quad_instances below)
 // ============================================================================
 
 struct QuadInstance {
@@ -18,8 +18,8 @@ struct QuadInstance {
     proj_index: u32,           // Absolute index into unified_transforms
 }
 
-// Binding 4: quad_instances (only used by quad shader)
-@group(0) @binding(4) var<storage, read> quad_instances: array<QuadInstance>;
+// Binding 5: quad_instances (only used by quad shader)
+@group(0) @binding(5) var<storage, read> quad_instances: array<QuadInstance>;
 
 // Quad modes (bits 0-7 of mode_packed)
 const BILLBOARD_SPHERICAL: u32 = 0u;
