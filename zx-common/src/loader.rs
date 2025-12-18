@@ -26,7 +26,7 @@ impl RomLoader for ZRomLoader {
     }
 
     fn console_type(&self) -> &'static str {
-        "z"
+        ZX_ROM_FORMAT.console_type
     }
 
     fn load_metadata(&self, bytes: &[u8]) -> Result<RomMetadata> {
@@ -105,7 +105,7 @@ impl RomLoader for ZRomLoader {
             author: rom.metadata.author.clone(),
             version: rom.metadata.version.clone(),
             rom_path: game_dir.join("rom.wasm"),
-            console_type: "z".to_string(),
+            console_type: ZX_ROM_FORMAT.console_type.to_string(),
         })
     }
 }
@@ -162,7 +162,7 @@ mod tests {
     #[test]
     fn test_console_type() {
         let loader = ZRomLoader;
-        assert_eq!(loader.console_type(), "z");
+        assert_eq!(loader.console_type(), ZX_ROM_FORMAT.console_type);
     }
 
     #[test]
@@ -217,7 +217,7 @@ mod tests {
         let local_game = result.unwrap();
         assert_eq!(local_game.id, "test-game");
         assert_eq!(local_game.title, "Test Game");
-        assert_eq!(local_game.console_type, "z");
+        assert_eq!(local_game.console_type, ZX_ROM_FORMAT.console_type);
 
         // Check files were created
         let game_dir = temp_dir.path().join("games").join("test-game");

@@ -64,7 +64,7 @@ impl ConsoleType {
     /// This matches the `console_type` field in game manifests.
     pub fn as_str(&self) -> &'static str {
         match self {
-            ConsoleType::ZX => "zx",
+            ConsoleType::ZX => ZX_ROM_FORMAT.console_type,
         }
     }
 
@@ -72,10 +72,11 @@ impl ConsoleType {
     ///
     /// Returns `None` if the string doesn't match any known console type.
     pub fn parse(s: &str) -> Option<Self> {
-        match s {
-            "zx" => Some(ConsoleType::ZX),
-            _ => None,
+        if s == ZX_ROM_FORMAT.console_type {
+            return Some(ConsoleType::ZX);
         }
+        // Future: if s == CHROMA_ROM_FORMAT.console_type { return Some(ConsoleType::Chroma); }
+        None
     }
 
     /// Get the ROM file extension for this console type.

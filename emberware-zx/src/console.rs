@@ -163,6 +163,18 @@ impl Audio for ZAudio {
     fn stop(&mut self, _handle: SoundHandle) {
         // Legacy Audio trait - not used in ZX console
     }
+
+    fn set_master_volume(&mut self, volume: f32) {
+        ZAudio::set_master_volume(self, volume);
+    }
+
+    fn sample_rate(&self) -> u32 {
+        ZAudio::sample_rate(self)
+    }
+
+    fn push_samples(&mut self, samples: &[f32]) {
+        ZAudio::push_samples(self, samples);
+    }
 }
 
 /// Emberware ZX fantasy console
@@ -171,6 +183,7 @@ impl Audio for ZAudio {
 /// - wgpu-based 3D graphics with vertex jitter, affine texture mapping
 /// - Dual analog sticks and analog triggers
 /// - Deterministic rollback netcode via GGRS
+#[derive(Clone)]
 pub struct EmberwareZX {
     /// Optional datapack for ROM assets (textures, meshes, sounds)
     data_pack: Option<Arc<ZDataPack>>,
@@ -201,6 +214,7 @@ impl Console for EmberwareZX {
     type State = ZFFIState;
     type RollbackState = ZRollbackState;
     type ResourceManager = crate::resource_manager::ZResourceManager;
+    type AudioGenerator = crate::audio::ZXAudioGenerator;
 
     fn specs() -> &'static ConsoleSpecs {
         zx_specs()
@@ -319,6 +333,14 @@ impl Console for EmberwareZX {
     fn initialize_ffi_state(&self, state: &mut ZFFIState) {
         // Set datapack for rom_* FFI functions
         state.data_pack = self.data_pack.clone();
+    }
+
+    fn clear_color_from_state(state: &Self::State) -> [f32; 4] {
+        crate::ffi::unpack_rgba(state.init_config.clear_color)
+    }
+
+    fn clear_frame_state(state: &mut Self::State) {
+        state.clear_frame();
     }
 }
 

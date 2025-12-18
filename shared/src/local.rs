@@ -2,9 +2,11 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::ZX_ROM_FORMAT;
+
 /// Default console type for backward compatibility with old manifests.
 fn default_console_type() -> String {
-    "z".to_string()
+    ZX_ROM_FORMAT.console_type.to_string()
 }
 
 /// Cached game metadata stored locally.
@@ -22,10 +24,10 @@ pub struct LocalGameManifest {
     pub version: String,
     /// ISO 8601 timestamp when the ROM was downloaded.
     pub downloaded_at: String,
-    /// Console type identifier ("z", "classic", etc.)
+    /// Console type identifier ("zx", "chroma", etc.)
     ///
     /// Used by the unified launcher to determine which console to use.
-    /// Defaults to "z" for backward compatibility with old manifests.
+    /// Defaults to "zx" for backward compatibility with old manifests.
     #[serde(default = "default_console_type")]
     pub console_type: String,
 }

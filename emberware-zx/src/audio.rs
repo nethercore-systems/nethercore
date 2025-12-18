@@ -420,6 +420,37 @@ impl Default for ZAudio {
     }
 }
 
+/// Audio generator for Emberware ZX
+///
+/// Implements the AudioGenerator trait to enable console-agnostic audio generation
+/// in the generic StandaloneApp.
+pub struct ZXAudioGenerator;
+
+impl emberware_core::AudioGenerator for ZXAudioGenerator {
+    type RollbackState = crate::state::ZRollbackState;
+    type State = crate::state::ZFFIState;
+
+    fn default_sample_rate() -> u32 {
+        OUTPUT_SAMPLE_RATE
+    }
+
+    fn generate_frame(
+        rollback_state: &mut Self::RollbackState,
+        state: &Self::State,
+        tick_rate: u32,
+        sample_rate: u32,
+        output: &mut Vec<f32>,
+    ) {
+        generate_audio_frame(
+            &mut rollback_state.audio,
+            &state.sounds,
+            tick_rate,
+            sample_rate,
+            output,
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

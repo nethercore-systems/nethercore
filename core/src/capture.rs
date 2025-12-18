@@ -1,6 +1,6 @@
 //! Screenshot and GIF recording functionality.
 //!
-//! Provides screen capture capabilities for gameplay recording.
+//! Provides console-agnostic screen capture capabilities for gameplay recording.
 //! - Screenshots saved as PNG to `~/.emberware/screenshots/`
 //! - GIFs saved to `~/.emberware/gifs/`
 
@@ -8,6 +8,23 @@ use anyhow::{Context, Result};
 use std::path::PathBuf;
 use std::sync::mpsc;
 use std::thread;
+
+/// Trait for graphics backends that support screen capture.
+///
+/// Implement this trait to enable screenshot and GIF recording functionality.
+pub trait CaptureSupport {
+    /// Get the wgpu device for staging buffer creation.
+    fn device(&self) -> &wgpu::Device;
+
+    /// Get the wgpu queue for command submission.
+    fn queue(&self) -> &wgpu::Queue;
+
+    /// Get the render target texture (game resolution, not window).
+    fn render_target_texture(&self) -> &wgpu::Texture;
+
+    /// Get the render target dimensions (width, height).
+    fn render_target_dimensions(&self) -> (u32, u32);
+}
 
 /// Screen capture state manager.
 ///
@@ -292,6 +309,18 @@ pub fn read_render_target_pixels(
     staging_buffer.unmap();
 
     pixels
+}
+
+/// Convenience function to read pixels from a graphics backend that implements CaptureSupport.
+pub fn read_capture_pixels<G: CaptureSupport>(graphics: &G) -> Vec<u8> {
+    let (width, height) = graphics.render_target_dimensions();
+    read_render_target_pixels(
+        graphics.device(),
+        graphics.queue(),
+        graphics.render_target_texture(),
+        width,
+        height,
+    )
 }
 
 /// Get the screenshots directory, creating it if needed.

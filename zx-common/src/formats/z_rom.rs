@@ -213,7 +213,7 @@ impl ZRom {
             author: self.metadata.author.clone(),
             version: self.metadata.version.clone(),
             downloaded_at: chrono::Utc::now().to_rfc3339(),
-            console_type: "z".to_string(),
+            console_type: ZX_ROM_FORMAT.console_type.to_string(),
         }
     }
 }
@@ -321,6 +321,6 @@ mod tests {
         assert_eq!(manifest.title, "Test Game");
         assert_eq!(manifest.author, "Test Author");
         assert_eq!(manifest.version, "1.0.0");
-        assert_eq!(manifest.console_type, "z");
+        assert_eq!(manifest.console_type, ZX_ROM_FORMAT.console_type);
     }
 }

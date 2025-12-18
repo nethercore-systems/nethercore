@@ -12,6 +12,7 @@
 
 pub mod analysis;
 pub mod app;
+pub mod capture;
 pub mod console;
 pub mod debug;
 pub mod ffi;
@@ -26,7 +27,9 @@ pub mod test_utils;
 pub mod wasm;
 
 // Re-export core traits and types
-pub use console::{Audio, Console, ConsoleInput, ConsoleRollbackState, ConsoleSpecs, Graphics};
+pub use console::{
+    Audio, AudioGenerator, Console, ConsoleInput, ConsoleRollbackState, ConsoleSpecs, Graphics,
+};
 pub use runner::ConsoleRunner;
 pub use runtime::{Runtime, RuntimeConfig};
 #[allow(deprecated)]
@@ -52,3 +55,6 @@ pub use analysis::{AnalysisError, AnalysisResult, TextureFormatHint, analyze_was
 
 // Re-export debug types
 pub use debug::DebugStat;
+
+// Re-export capture types
+pub use capture::{CaptureSupport, SaveResult, ScreenCapture, read_capture_pixels, read_render_target_pixels};

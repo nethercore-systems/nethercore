@@ -61,7 +61,15 @@ hashbrown = { workspace = true }     # Fast HashMap
 smallvec = { workspace = true }      # Inline small vectors
 tracing = { workspace = true }       # Logging
 egui = { workspace = true }          # Debug overlay UI
+egui-wgpu = { workspace = true }     # egui wgpu renderer
+egui-winit = { workspace = true }    # egui winit integration
 serde_json = { workspace = true }    # JSON for game manifests
+
+# Screen capture dependencies
+wgpu = { workspace = true }          # GPU texture readback
+image = { workspace = true }         # PNG encoding
+gif = { workspace = true }           # GIF encoding
+chrono = { workspace = true }        # Timestamps for filenames
 
 [dev-dependencies]
 # WAT text format parser for test WASM modules

@@ -24,6 +24,11 @@
 /// Each console has its own static `RomFormat` instance.
 #[derive(Debug, Clone, Copy)]
 pub struct RomFormat {
+    /// Console type identifier (e.g., "zx")
+    ///
+    /// Used in manifests and registry to identify the console type.
+    pub console_type: &'static str,
+
     /// ROM file extension without dot (e.g., "ewzx")
     pub extension: &'static str,
 
@@ -53,6 +58,7 @@ impl RomFormat {
     /// Create a new ROM format specification.
     #[allow(clippy::too_many_arguments)]
     pub const fn new(
+        console_type: &'static str,
         extension: &'static str,
         magic: &'static [u8; 4],
         version: u32,
@@ -63,6 +69,7 @@ impl RomFormat {
         animation_ext: &'static str,
     ) -> Self {
         Self {
+            console_type,
             extension,
             magic,
             version,
@@ -78,10 +85,12 @@ impl RomFormat {
 /// Emberware ZX ROM format specification.
 ///
 /// This is the single source of truth for all ZX ROM format constants:
+/// - Console type: `zx`
 /// - ROM extension: `.ewzx`
 /// - Magic bytes: `EWZX`
 /// - Asset extensions: `.ewzxmesh`, `.ewzxtex`, `.ewzxsnd`, `.ewzxskel`, `.ewzxanim`
 pub const ZX_ROM_FORMAT: RomFormat = RomFormat::new(
+    "zx",
     "ewzx",
     b"EWZX",
     1,
@@ -95,6 +104,11 @@ pub const ZX_ROM_FORMAT: RomFormat = RomFormat::new(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_zx_rom_format_console_type() {
+        assert_eq!(ZX_ROM_FORMAT.console_type, "zx");
+    }
 
     #[test]
     fn test_zx_rom_format_extension() {

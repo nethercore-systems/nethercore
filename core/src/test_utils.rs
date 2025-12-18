@@ -74,6 +74,16 @@ impl ConsoleResourceManager for TestResourceManager {
     fn execute_draw_commands(&mut self, _graphics: &mut Self::Graphics, _state: &mut Self::State) {
         // No-op for tests
     }
+
+    fn render_game_to_target(
+        &self,
+        _graphics: &mut Self::Graphics,
+        _encoder: &mut wgpu::CommandEncoder,
+        _state: &Self::State,
+        _clear_color: [f32; 4],
+    ) {
+        // No-op for tests
+    }
 }
 
 impl Console for TestConsole {
@@ -83,6 +93,7 @@ impl Console for TestConsole {
     type State = ();
     type RollbackState = ();
     type ResourceManager = TestResourceManager;
+    type AudioGenerator = ();
 
     fn specs() -> &'static ConsoleSpecs {
         &ConsoleSpecs {

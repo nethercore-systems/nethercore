@@ -32,19 +32,19 @@ pub struct RomMetadata {
 /// # Example
 ///
 /// ```ignore
-/// // In z-common crate:
+/// // In zx-common crate:
 /// pub struct ZRomLoader;
 ///
 /// impl RomLoader for ZRomLoader {
-///     fn extension(&self) -> &'static str { "ewz" }
-///     fn console_type(&self) -> &'static str { "z" }
+///     fn extension(&self) -> &'static str { "ewzx" }
+///     fn console_type(&self) -> &'static str { "zx" }
 ///     // ...
 /// }
 /// ```
 pub trait RomLoader: Send + Sync {
     /// Get the file extension for this ROM format (without the dot).
     ///
-    /// Example: `"ewz"` for Emberware ZX ROMs.
+    /// Example: `"ewzx"` for Emberware ZX ROMs.
     fn extension(&self) -> &'static str;
 
     /// Get the console type identifier.

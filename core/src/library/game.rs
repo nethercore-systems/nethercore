@@ -210,7 +210,7 @@ mod tests {
             "author": author,
             "version": version,
             "downloaded_at": "2024-01-01T00:00:00Z",
-            "console_type": "z"
+            "console_type": "zx"
         });
 
         fs::write(

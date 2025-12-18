@@ -31,6 +31,60 @@ pub trait ConsoleRollbackState: Pod + Zeroable + Default + Send + 'static {}
 // Unit type implementation for consoles with no rollback state
 impl ConsoleRollbackState for () {}
 
+/// Trait for console-specific audio generation
+///
+/// Consoles that support audio implement this trait to generate audio
+/// samples from their rollback state. The audio generation happens once
+/// per confirmed game frame (not during rollback).
+///
+/// Use `()` for consoles with no audio generation.
+pub trait AudioGenerator: Send + 'static {
+    /// Console rollback state type
+    type RollbackState: ConsoleRollbackState;
+    /// Console FFI staging state type
+    type State: Default + Send + 'static;
+
+    /// Get the default sample rate for this console's audio output
+    fn default_sample_rate() -> u32 {
+        44_100 // Default to CD quality
+    }
+
+    /// Generate one frame of audio samples
+    ///
+    /// Called once per confirmed game frame (not during rollback).
+    /// Output should be interleaved stereo samples (left, right, left, right...).
+    ///
+    /// # Arguments
+    /// * `rollback_state` - Mutable reference to console rollback state (e.g., audio playhead positions)
+    /// * `state` - Reference to console FFI state (e.g., loaded sounds)
+    /// * `tick_rate` - Game tick rate (e.g., 60 for 60fps)
+    /// * `sample_rate` - Output sample rate (e.g., 44100)
+    /// * `output` - Buffer to append stereo samples to
+    fn generate_frame(
+        rollback_state: &mut Self::RollbackState,
+        state: &Self::State,
+        tick_rate: u32,
+        sample_rate: u32,
+        output: &mut Vec<f32>,
+    );
+}
+
+/// No-op audio generator for consoles without audio
+impl AudioGenerator for () {
+    type RollbackState = ();
+    type State = ();
+
+    fn generate_frame(
+        _rollback_state: &mut Self::RollbackState,
+        _state: &Self::State,
+        _tick_rate: u32,
+        _sample_rate: u32,
+        _output: &mut Vec<f32>,
+    ) {
+        // No-op: output remains empty
+    }
+}
+
 /// Trait for fantasy console implementations
 ///
 /// Each console defines its own graphics backend, audio backend, input layout,
@@ -58,6 +112,10 @@ pub trait Console: Send + 'static {
     type RollbackState: ConsoleRollbackState;
     /// Console-specific resource manager type
     type ResourceManager: ConsoleResourceManager<Graphics = Self::Graphics, State = Self::State>;
+    /// Audio generator type for per-frame audio sample generation
+    ///
+    /// Use `()` for consoles without audio generation.
+    type AudioGenerator: AudioGenerator<RollbackState = Self::RollbackState, State = Self::State>;
 
     /// Get console specifications
     fn specs() -> &'static ConsoleSpecs;
@@ -102,6 +160,30 @@ pub trait Console: Send + 'static {
     ///
     /// Default implementation does nothing.
     fn initialize_ffi_state(&self, _state: &mut Self::State) {}
+
+    /// Unpack a console-specific clear color to normalized RGBA
+    ///
+    /// Consoles may store clear colors in different formats (e.g., packed u32).
+    /// This method converts to normalized [0.0, 1.0] RGBA for wgpu.
+    ///
+    /// Default implementation returns dark gray.
+    fn unpack_clear_color(_color: u32) -> [f32; 4] {
+        [0.1, 0.1, 0.1, 1.0]
+    }
+
+    /// Get the clear color from console state.
+    ///
+    /// Extracts and unpacks the clear color stored in the console's FFI state.
+    /// Default implementation returns dark gray.
+    fn clear_color_from_state(_state: &Self::State) -> [f32; 4] {
+        [0.1, 0.1, 0.1, 1.0]
+    }
+
+    /// Clear per-frame state before rendering.
+    ///
+    /// Called at the start of each rendered frame to reset per-frame state
+    /// like draw commands. Default implementation does nothing.
+    fn clear_frame_state(_state: &mut Self::State) {}
 }
 
 /// Trait for console-specific resource management
@@ -133,6 +215,19 @@ pub trait ConsoleResourceManager: Send + 'static {
     /// Called after game.render() to execute all draw commands that
     /// were recorded during that frame.
     fn execute_draw_commands(&mut self, graphics: &mut Self::Graphics, state: &mut Self::State);
+
+    /// Render game content to the render target.
+    ///
+    /// Called once per rendered frame to draw the game's graphics.
+    /// The implementation handles console-specific rendering (draw commands,
+    /// camera, lighting, etc.)
+    fn render_game_to_target(
+        &self,
+        graphics: &mut Self::Graphics,
+        encoder: &mut wgpu::CommandEncoder,
+        state: &Self::State,
+        clear_color: [f32; 4],
+    );
 }
 
 /// Trait for console input types
@@ -223,6 +318,19 @@ pub trait Audio: Send {
 
     /// Stop a sound
     fn stop(&mut self, handle: SoundHandle);
+
+    /// Set the master volume (0.0 - 1.0)
+    fn set_master_volume(&mut self, _volume: f32) {}
+
+    /// Get the output sample rate
+    fn sample_rate(&self) -> u32 {
+        44_100 // Default to CD quality
+    }
+
+    /// Push audio samples to the output buffer.
+    ///
+    /// Samples should be interleaved stereo (left, right, left, right, ...).
+    fn push_samples(&mut self, _samples: &[f32]) {}
 }
 
 /// Handle to a loaded sound

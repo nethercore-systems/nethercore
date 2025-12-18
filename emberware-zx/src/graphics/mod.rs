@@ -626,3 +626,48 @@ impl Graphics for ZGraphics {
         self.current_view = None;
     }
 }
+
+impl emberware_core::capture::CaptureSupport for ZGraphics {
+    fn device(&self) -> &wgpu::Device {
+        &self.device
+    }
+
+    fn queue(&self) -> &wgpu::Queue {
+        &self.queue
+    }
+
+    fn render_target_texture(&self) -> &wgpu::Texture {
+        &self.render_target.color_texture
+    }
+
+    fn render_target_dimensions(&self) -> (u32, u32) {
+        (self.render_target.width, self.render_target.height)
+    }
+}
+
+impl emberware_core::app::StandaloneGraphicsSupport for ZGraphics {
+    fn surface_format(&self) -> wgpu::TextureFormat {
+        self.config.format
+    }
+
+    fn width(&self) -> u32 {
+        self.config.width
+    }
+
+    fn height(&self) -> u32 {
+        self.config.height
+    }
+
+    fn get_current_texture(&mut self) -> Result<wgpu::SurfaceTexture, wgpu::SurfaceError> {
+        self.surface.get_current_texture()
+    }
+
+    fn blit_to_window(&self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
+        // Delegate to existing method in frame.rs
+        ZGraphics::blit_to_window(self, encoder, view)
+    }
+
+    fn set_scale_mode(&mut self, mode: emberware_core::app::config::ScaleMode) {
+        self.scale_mode = mode;
+    }
+}

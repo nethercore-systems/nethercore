@@ -367,4 +367,14 @@ impl ConsoleResourceManager for ZResourceManager {
         // Process draw commands - ZGraphics consumes draw commands directly
         graphics.process_draw_commands(state, &self.texture_map);
     }
+
+    fn render_game_to_target(
+        &self,
+        graphics: &mut Self::Graphics,
+        encoder: &mut wgpu::CommandEncoder,
+        state: &Self::State,
+        clear_color: [f32; 4],
+    ) {
+        graphics.render_frame(encoder, state, &self.texture_map, clear_color);
+    }
 }
