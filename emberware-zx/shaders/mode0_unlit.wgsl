@@ -1,7 +1,7 @@
-// Mode 0: Unlit / Simple Lambert
+// Mode 0: Lambert Shading
 // Supports all 16 vertex formats (0-15)
-// Without normals: flat color
-// With normals: simple Lambert shading using sky sun
+// Without normals: flat color (unlit)
+// With normals: Lambert shading using sky sun + 4 dynamic lights
 
 // NOTE: Vertex shader (VertexIn/VertexOut structs and @vertex fn) is injected by shader_gen.rs from common.wgsl
 // NOTE: Common bindings, structures, and utilities are injected by shader_gen.rs from common.wgsl

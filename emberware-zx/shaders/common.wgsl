@@ -305,6 +305,18 @@ fn lambert_diffuse(
     return albedo * light_color * n_dot_l;
 }
 
+// Smooth distance attenuation for point lights
+// Returns 1.0 at distance=0, 0.0 at distance>=range
+fn point_light_attenuation(distance: f32, range: f32) -> f32 {
+    if (range <= 0.0) {
+        return 0.0;
+    }
+    let t = clamp(distance / range, 0.0, 1.0);
+    // Smooth falloff: quadratic ease-out (feels more natural than linear)
+    let inv_t = 1.0 - t;
+    return inv_t * inv_t;
+}
+
 // ============================================================================
 // Light Utilities
 // ============================================================================
@@ -355,6 +367,33 @@ fn unpack_light(packed: PackedLight) -> LightData {
     }
 
     return light;
+}
+
+// Computed light data after resolving direction and attenuation
+struct ComputedLight {
+    direction: vec3<f32>,  // Light direction (ray direction convention)
+    color: vec3<f32>,      // Light color × intensity × attenuation
+}
+
+// Compute light direction and effective color for both directional and point lights
+// Resolves the directional vs point light branching in one place
+fn compute_light(light: LightData, world_position: vec3<f32>) -> ComputedLight {
+    var result: ComputedLight;
+
+    if (light.light_type == 0u) {
+        // Directional light: use stored direction
+        result.direction = light.direction;
+        result.color = light.color * light.intensity;
+    } else {
+        // Point light: compute direction and attenuation
+        let to_light = light.position - world_position;
+        let distance = length(to_light);
+        result.direction = -normalize(to_light);  // Negate: convention is "ray direction"
+        let attenuation = point_light_attenuation(distance, light.range);
+        result.color = light.color * light.intensity * attenuation;
+    }
+
+    return result;
 }
 
 // ============================================================================

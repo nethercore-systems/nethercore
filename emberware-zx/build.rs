@@ -97,9 +97,26 @@ const FS_UV: &str = r#"if !has_flag(shading.flags, FLAG_USE_UNIFORM_COLOR) {
         color *= tex_sample.rgb;
         base_alpha = tex_sample.a;
     }"#;
-const FS_AMBIENT: &str = "let ambient = color * sample_sky(in.world_normal, sky); let sun_color = sample_sky(-sky.sun_direction, sky);";
-const FS_NORMAL: &str =
-    "color = ambient + lambert_diffuse(in.world_normal, sky.sun_direction, color, sun_color);";
+// Mode 0 Lambert: ambient from sky gradient + save albedo for lighting
+const FS_AMBIENT: &str = r#"let ambient = color * sample_sky_ambient(in.world_normal, sky);
+    let albedo = color;"#;
+
+// Mode 0 Lambert: sun diffuse + 4 dynamic lights
+const FS_NORMAL: &str = r#"var final_color = ambient;
+
+    // Sun Lambert diffuse
+    final_color += lambert_diffuse(in.world_normal, sky.sun_direction, albedo, sky.sun_color);
+
+    // 4 dynamic lights (Lambert diffuse only)
+    for (var i = 0u; i < 4u; i++) {
+        let light_data = unpack_light(shading.lights[i]);
+        if (light_data.enabled) {
+            let light = compute_light(light_data, in.world_position);
+            final_color += lambert_diffuse(in.world_normal, light.direction, albedo, light.color);
+        }
+    }
+
+    color = final_color;"#;
 
 const FS_ALBEDO_COLOR: &str = "albedo *= in.color;";
 // Mode 2/3: Albedo from texture, with uniform color override support

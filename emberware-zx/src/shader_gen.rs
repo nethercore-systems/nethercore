@@ -3,7 +3,7 @@
 //! All 40 shader permutations are pregenerated at build time by build.rs and validated
 //! with naga. This module provides access to the pregenerated shaders.
 //!
-//! - Render mode (0-3): Unlit, Matcap, PBR, Hybrid
+//! - Render mode (0-3): Lambert, Matcap, MR-Blinn-Phong, Blinn-Phong
 //! - Vertex format flags (UV, COLOR, NORMAL, SKINNED)
 //!
 //! Total shader count: 40
@@ -114,7 +114,7 @@ pub fn get_template(mode: u8) -> Result<&'static str, ShaderGenError> {
 /// Get human-readable name for a render mode
 pub fn mode_name(mode: u8) -> &'static str {
     match mode {
-        0 => "Unlit",
+        0 => "Lambert",
         1 => "Matcap",
         2 => "MR-Blinn-Phong",
         3 => "Blinn-Phong",
