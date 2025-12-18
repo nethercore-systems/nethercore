@@ -22,8 +22,9 @@ pub use loader::ZRomLoader;
 pub use packing::{
     FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV, encode_octahedral,
     pack_bone_weights_unorm8, pack_color_rgba_unorm8, pack_normal_octahedral, pack_normal_snorm16,
-    pack_octahedral_u32, pack_position_f16, pack_uv_f16, pack_uv_unorm16, pack_vertex_data,
-    unpack_octahedral_u32, vertex_stride, vertex_stride_packed,
+    pack_octahedral_u16, pack_octahedral_u32, pack_position_f16, pack_uv_f16, pack_uv_unorm16,
+    pack_vertex_data, unpack_octahedral_u16, unpack_octahedral_u32, vertex_stride,
+    vertex_stride_packed,
 };
 
 // Re-export commonly used format items

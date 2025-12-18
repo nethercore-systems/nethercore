@@ -1,7 +1,7 @@
 use bytemuck::{Pod, Zeroable};
 use glam::Vec3;
 use half::f16;
-use zx_common::{pack_octahedral_u32, unpack_octahedral_u32};
+use zx_common::{pack_octahedral_u16, pack_octahedral_u32, unpack_octahedral_u32};
 
 use super::render_state::MatcapBlendMode;
 
@@ -132,6 +132,333 @@ impl PackedEnvironmentState {
             0.0,        // shift
         );
         env
+    }
+
+    /// Pack scatter parameters into data[offset..offset+5]
+    /// Mode 1: Scatter - Cellular noise particle field with parallax layers
+    ///
+    /// # Data Layout
+    /// - data[0]: variant(2) + density(8) + size(8) + glow(8) + streak_len(6) = 32 bits
+    /// - data[1]: color_primary(RGB8, 24) + parallax_rate(8) = 32 bits
+    /// - data[2]: color_secondary(RGB8, 24) + parallax_size(8) = 32 bits
+    /// - data[3]: phase(u16, 16) + layer_count(2) + reserved(14) = 32 bits
+    /// - data[4]: reserved
+    pub fn pack_scatter(
+        &mut self,
+        offset: usize,
+        variant: u32,        // 0-3: Stars, Vertical, Horizontal, Warp
+        density: u32,        // 0-255
+        size: u32,           // 0-255
+        glow: u32,           // 0-255
+        streak_length: u32,  // 0-63
+        color_primary: u32,  // RGB8 (0xRRGGBB00)
+        color_secondary: u32, // RGB8 (0xRRGGBB00)
+        parallax_rate: u32,  // 0-255
+        parallax_size: u32,  // 0-255
+        phase: u32,          // 0-65535
+        layer_count: u32,    // 1-3
+    ) {
+        // data[0]: variant(2) + density(8) + size(8) + glow(8) + streak_len(6)
+        self.data[offset] = (variant & 0x3)
+            | ((density & 0xFF) << 2)
+            | ((size & 0xFF) << 10)
+            | ((glow & 0xFF) << 18)
+            | ((streak_length & 0x3F) << 26);
+
+        // data[1]: color_primary RGB (bits 31-8) + parallax_rate (bits 7-0)
+        self.data[offset + 1] = (color_primary & 0xFFFFFF00) | (parallax_rate & 0xFF);
+
+        // data[2]: color_secondary RGB (bits 31-8) + parallax_size (bits 7-0)
+        self.data[offset + 2] = (color_secondary & 0xFFFFFF00) | (parallax_size & 0xFF);
+
+        // data[3]: phase(16) + layer_count(2) + reserved(14)
+        self.data[offset + 3] = (phase & 0xFFFF) | (((layer_count.clamp(1, 3) - 1) & 0x3) << 16);
+
+        // data[4]: reserved
+        self.data[offset + 4] = 0;
+    }
+
+    /// Pack lines parameters into data[offset..offset+5]
+    /// Mode 2: Lines - Infinite grid lines projected onto a plane
+    ///
+    /// # Data Layout
+    /// - data[0]: variant(2) + line_type(2) + thickness(8) + accent_every(8) + reserved(12)
+    /// - data[1]: spacing(f16) + fade_distance(f16)
+    /// - data[2]: color_primary (RGBA8)
+    /// - data[3]: color_accent (RGBA8)
+    /// - data[4]: phase(u16) + reserved(16)
+    pub fn pack_lines(
+        &mut self,
+        offset: usize,
+        variant: u32,       // 0-2: Floor, Ceiling, Sphere
+        line_type: u32,     // 0-2: Horizontal, Vertical, Grid
+        thickness: u32,     // 0-255
+        spacing: f32,       // World units
+        fade_distance: f32, // World units
+        color_primary: u32, // RGBA8
+        color_accent: u32,  // RGBA8
+        accent_every: u32,  // Accent every Nth line
+        phase: u32,         // 0-65535
+    ) {
+        // data[0]: variant(2) + line_type(2) + thickness(8) + accent_every(8) + reserved(12)
+        self.data[offset] = (variant & 0x3)
+            | ((line_type & 0x3) << 2)
+            | ((thickness & 0xFF) << 4)
+            | ((accent_every & 0xFF) << 12);
+
+        // data[1]: spacing(f16) + fade_distance(f16)
+        self.data[offset + 1] = pack_f16x2(spacing, fade_distance);
+
+        // data[2]: color_primary (RGBA8)
+        self.data[offset + 2] = color_primary;
+
+        // data[3]: color_accent (RGBA8)
+        self.data[offset + 3] = color_accent;
+
+        // data[4]: phase(u16) + reserved(16)
+        self.data[offset + 4] = phase & 0xFFFF;
+    }
+
+    /// Pack silhouette parameters into data[offset..offset+5]
+    /// Mode 3: Silhouette - Layered terrain silhouettes with parallax
+    ///
+    /// # Data Layout
+    /// - data[0]: jaggedness(8) + layer_count(2) + parallax_rate(8) + reserved(14)
+    /// - data[1]: color_near (RGBA8)
+    /// - data[2]: color_far (RGBA8)
+    /// - data[3]: sky_zenith (RGBA8)
+    /// - data[4]: sky_horizon (RGBA8) - seed stored in shared data[10]
+    pub fn pack_silhouette(
+        &mut self,
+        offset: usize,
+        jaggedness: u32,     // 0-255: 0=smooth hills, 255=sharp peaks
+        layer_count: u32,    // 1-3 depth layers
+        color_near: u32,     // RGBA8 nearest silhouette
+        color_far: u32,      // RGBA8 farthest silhouette
+        sky_zenith: u32,     // RGBA8 sky behind silhouettes
+        sky_horizon: u32,    // RGBA8 horizon behind silhouettes
+        parallax_rate: u32,  // 0-255 layer separation
+        seed: u32,           // Noise seed for terrain shape
+    ) {
+        // data[0]: jaggedness(8) + layer_count(2) + parallax_rate(8) + reserved(14)
+        self.data[offset] = (jaggedness & 0xFF)
+            | (((layer_count.clamp(1, 3) - 1) & 0x3) << 8)
+            | ((parallax_rate & 0xFF) << 10);
+
+        // data[1]: color_near (RGBA8)
+        self.data[offset + 1] = color_near;
+
+        // data[2]: color_far (RGBA8)
+        self.data[offset + 2] = color_far;
+
+        // data[3]: sky_zenith (RGBA8)
+        self.data[offset + 3] = sky_zenith;
+
+        // data[4]: sky_horizon (RGBA8)
+        self.data[offset + 4] = sky_horizon;
+
+        // Store seed in shared data[10]
+        if offset == 0 {
+            self.data[10] = (self.data[10] & 0x0000FFFF) | ((seed & 0xFFFF) << 16);
+        } else {
+            self.data[10] = (self.data[10] & 0xFFFF0000) | (seed & 0xFFFF);
+        }
+    }
+
+    /// Pack rectangles parameters into data[offset..offset+5]
+    /// Mode 4: Rectangles - Rectangular light sources (windows, screens, panels)
+    ///
+    /// # Data Layout
+    /// - data[0]: variant(2) + density(8) + lit_ratio(8) + size_min(6) + size_max(6) + aspect(2)
+    /// - data[1]: color_primary (RGBA8)
+    /// - data[2]: color_variation (RGBA8)
+    /// - data[3]: parallax_rate(8) + reserved(8) + phase(16)
+    /// - data[4]: reserved
+    pub fn pack_rectangles(
+        &mut self,
+        offset: usize,
+        variant: u32,         // 0-3: Scatter, Buildings, Bands, Panels
+        density: u32,         // 0-255 how many rectangles
+        lit_ratio: u32,       // 0-255 percentage lit
+        size_min: u32,        // 0-63 minimum size
+        size_max: u32,        // 0-63 maximum size
+        aspect: u32,          // 0-3 aspect ratio bias
+        color_primary: u32,   // RGBA8 main window color
+        color_variation: u32, // RGBA8 color variation
+        parallax_rate: u32,   // 0-255 layer separation
+        phase: u32,           // 0-65535 flicker phase
+    ) {
+        // data[0]: variant(2) + density(8) + lit_ratio(8) + size_min(6) + size_max(6) + aspect(2)
+        self.data[offset] = (variant & 0x3)
+            | ((density & 0xFF) << 2)
+            | ((lit_ratio & 0xFF) << 10)
+            | ((size_min & 0x3F) << 18)
+            | ((size_max & 0x3F) << 24)
+            | ((aspect & 0x3) << 30);
+
+        // data[1]: color_primary (RGBA8)
+        self.data[offset + 1] = color_primary;
+
+        // data[2]: color_variation (RGBA8)
+        self.data[offset + 2] = color_variation;
+
+        // data[3]: parallax_rate(8) + reserved(8) + phase(16)
+        self.data[offset + 3] = (parallax_rate & 0xFF) | ((phase & 0xFFFF) << 16);
+
+        // data[4]: reserved
+        self.data[offset + 4] = 0;
+    }
+
+    /// Pack room parameters into data[offset..offset+5]
+    /// Mode 5: Room - Interior of a 3D box with directional lighting
+    ///
+    /// # Data Layout (viewer packed into color alpha bytes - rooms are opaque)
+    /// - data[0]: color_ceiling_RGB(24) + viewer_x_snorm8(8)
+    /// - data[1]: color_floor_RGB(24) + viewer_y_snorm8(8)
+    /// - data[2]: color_walls_RGB(24) + viewer_z_snorm8(8)
+    /// - data[3]: panel_size(f16) + panel_gap(8) + corner_darken(8)
+    /// - data[4]: light_dir_oct(16) + light_intensity(8) + room_scale(8)
+    /// Note: Does NOT use shared data[10] - can safely layer with other modes
+    pub fn pack_room(
+        &mut self,
+        offset: usize,
+        color_ceiling: u32,   // RGB8 (alpha byte ignored, used for viewer_x)
+        color_floor: u32,     // RGB8 (alpha byte ignored, used for viewer_y)
+        color_walls: u32,     // RGB8 (alpha byte ignored, used for viewer_z)
+        panel_size: f32,      // World units
+        panel_gap: u32,       // 0-255
+        light_direction: Vec3, // Normalized light direction
+        light_intensity: u32, // 0-255
+        corner_darken: u32,   // 0-255
+        room_scale: f32,      // Room size multiplier
+        viewer_x: i32,        // snorm8: -128 to 127 = -1.0 to 1.0 (8-bit precision)
+        viewer_y: i32,        // snorm8
+        viewer_z: i32,        // snorm8
+    ) {
+        // Convert viewer positions from i32 to snorm8 (clamp to -128..127, store as u8)
+        let vx = ((viewer_x.clamp(-128, 127) as i8) as u8) as u32;
+        let vy = ((viewer_y.clamp(-128, 127) as i8) as u8) as u32;
+        let vz = ((viewer_z.clamp(-128, 127) as i8) as u8) as u32;
+
+        // data[0]: color_ceiling RGB (bits 31-8) + viewer_x snorm8 (bits 7-0)
+        self.data[offset] = (color_ceiling & 0xFFFFFF00) | vx;
+
+        // data[1]: color_floor RGB (bits 31-8) + viewer_y snorm8 (bits 7-0)
+        self.data[offset + 1] = (color_floor & 0xFFFFFF00) | vy;
+
+        // data[2]: color_walls RGB (bits 31-8) + viewer_z snorm8 (bits 7-0)
+        self.data[offset + 2] = (color_walls & 0xFFFFFF00) | vz;
+
+        // data[3]: panel_size(f16, bits 0-15) + panel_gap(8, bits 16-23) + corner_darken(8, bits 24-31)
+        let panel_size_bits = pack_f16(panel_size) as u32;
+        self.data[offset + 3] =
+            panel_size_bits | ((panel_gap & 0xFF) << 16) | ((corner_darken & 0xFF) << 24);
+
+        // data[4]: light_dir_oct(16, bits 0-15) + light_intensity(8, bits 16-23) + room_scale(8, bits 24-31)
+        let light_oct = pack_octahedral_u32(light_direction.normalize_or_zero());
+        let room_scale_packed = ((room_scale.clamp(0.1, 25.5) * 10.0) as u32) & 0xFF;
+        self.data[offset + 4] =
+            (light_oct & 0xFFFF) | ((light_intensity & 0xFF) << 16) | (room_scale_packed << 24);
+    }
+
+    /// Pack curtains parameters into data[offset..offset+5]
+    /// Mode 6: Curtains - Vertical structures (pillars, trees) around viewer
+    ///
+    /// # Data Layout
+    /// - data[0]: layer_count(2) + density(8) + height_min(6) + height_max(6) + width(5) + spacing(5)
+    /// - data[1]: waviness(8) + glow(8) + parallax_rate(8) + reserved(8)
+    /// - data[2]: color_near (RGBA8)
+    /// - data[3]: color_far (RGBA8)
+    /// - data[4]: phase(u16) + reserved(16)
+    pub fn pack_curtains(
+        &mut self,
+        offset: usize,
+        layer_count: u32,   // 1-3 depth layers
+        density: u32,       // 0-255 structures per cell
+        height_min: u32,    // 0-63 minimum height
+        height_max: u32,    // 0-63 maximum height
+        width: u32,         // 0-31 structure width
+        spacing: u32,       // 0-31 gap between structures
+        waviness: u32,      // 0-255 organic wobble
+        color_near: u32,    // RGBA8 nearest structure
+        color_far: u32,     // RGBA8 farthest structure
+        glow: u32,          // 0-255 neon/magical glow
+        parallax_rate: u32, // 0-255 layer separation
+        phase: u32,         // 0-65535 scroll phase
+    ) {
+        // data[0]: layer_count(2) + density(8) + height_min(6) + height_max(6) + width(5) + spacing(5)
+        self.data[offset] = ((layer_count.clamp(1, 3) - 1) & 0x3)
+            | ((density & 0xFF) << 2)
+            | ((height_min & 0x3F) << 10)
+            | ((height_max & 0x3F) << 16)
+            | ((width & 0x1F) << 22)
+            | ((spacing & 0x1F) << 27);
+
+        // data[1]: waviness(8) + glow(8) + parallax_rate(8) + reserved(8)
+        self.data[offset + 1] =
+            (waviness & 0xFF) | ((glow & 0xFF) << 8) | ((parallax_rate & 0xFF) << 16);
+
+        // data[2]: color_near (RGBA8)
+        self.data[offset + 2] = color_near;
+
+        // data[3]: color_far (RGBA8)
+        self.data[offset + 3] = color_far;
+
+        // data[4]: phase(u16) + reserved(16)
+        self.data[offset + 4] = phase & 0xFFFF;
+    }
+
+    /// Pack rings parameters into data[offset..offset+5]
+    /// Mode 7: Rings - Concentric rings around focal direction (tunnel/portal/vortex)
+    ///
+    /// # Data Layout
+    /// - data[0]: ring_count(8) + thickness(8) + center_falloff(8) + reserved(8)
+    /// - data[1]: color_a (RGBA8)
+    /// - data[2]: color_b (RGBA8)
+    /// - data[3]: center_color (RGBA8)
+    /// - data[4]: spiral_twist(f16) + axis_oct(16)
+    /// Note: phase is stored in shared data[10] upper 16 bits
+    pub fn pack_rings(
+        &mut self,
+        offset: usize,
+        ring_count: u32,     // 1-255
+        thickness: u32,      // 0-255
+        color_a: u32,        // RGBA8
+        color_b: u32,        // RGBA8
+        center_color: u32,   // RGBA8
+        center_falloff: u32, // 0-255
+        spiral_twist: f32,   // Degrees
+        axis: Vec3,          // Ring axis direction
+        phase: u32,          // 0-65535
+    ) {
+        // data[0]: ring_count(8) + thickness(8) + center_falloff(8) + reserved(8)
+        self.data[offset] =
+            (ring_count & 0xFF) | ((thickness & 0xFF) << 8) | ((center_falloff & 0xFF) << 16);
+
+        // data[1]: color_a (RGBA8)
+        self.data[offset + 1] = color_a;
+
+        // data[2]: color_b (RGBA8)
+        self.data[offset + 2] = color_b;
+
+        // data[3]: center_color (RGBA8)
+        self.data[offset + 3] = center_color;
+
+        // data[4]: spiral_twist(f16, bits 0-15) + axis_oct16(16, bits 16-31)
+        // Using 16-bit octahedral (2x snorm8) for axis - ~1.4° precision, fits in 16 bits
+        let axis_oct = pack_octahedral_u16(axis.normalize_or_zero()) as u32;
+        let twist_bits = pack_f16(spiral_twist) as u32;
+        self.data[offset + 4] = twist_bits | (axis_oct << 16);
+
+        // Store phase in shared data[10] - upper 16 bits for rings
+        // Note: Only works when rings is base mode (offset=0) or we use a different storage
+        // For now, store in data[10] which is shared
+        if offset == 0 {
+            self.data[10] = (self.data[10] & 0x0000FFFF) | ((phase & 0xFFFF) << 16);
+        } else {
+            // For overlay at offset 5, store phase in data[10] lower 16 bits
+            self.data[10] = (self.data[10] & 0xFFFF0000) | (phase & 0xFFFF);
+        }
     }
 }
 

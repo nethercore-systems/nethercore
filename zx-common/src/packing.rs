@@ -184,6 +184,28 @@ pub fn pack_octahedral_u32(dir: glam::Vec3) -> u32 {
     (u_snorm as u16 as u32) | ((v_snorm as u16 as u32) << 16)
 }
 
+/// Pack Vec3 direction to u16 using octahedral encoding (2x snorm8)
+///
+/// Lower precision than u32 version (~1.4° accuracy) but fits in 16 bits.
+/// Useful for space-constrained storage like environment mode parameters.
+#[inline]
+pub fn pack_octahedral_u16(dir: glam::Vec3) -> u16 {
+    let (u, v) = encode_octahedral(dir);
+    let u_snorm = ((u.clamp(-1.0, 1.0) * 127.0) as i8) as u8;
+    let v_snorm = ((v.clamp(-1.0, 1.0) * 127.0) as i8) as u8;
+    (u_snorm as u16) | ((v_snorm as u16) << 8)
+}
+
+/// Unpack u16 to Vec3 direction using octahedral decoding (2x snorm8)
+#[inline]
+pub fn unpack_octahedral_u16(packed: u16) -> glam::Vec3 {
+    let u_i8 = packed as u8 as i8;
+    let v_i8 = (packed >> 8) as u8 as i8;
+    let u = u_i8 as f32 / 127.0;
+    let v = v_i8 as f32 / 127.0;
+    decode_octahedral(u, v)
+}
+
 /// Unpack u32 to Vec3 direction using octahedral decoding
 #[inline]
 pub fn unpack_octahedral_u32(packed: u32) -> glam::Vec3 {

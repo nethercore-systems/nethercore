@@ -91,6 +91,94 @@ extern "C" {
         rotation: f32,
         shift: f32,
     );
+    pub fn env_scatter_set(
+        variant: u32,
+        density: u32,
+        size: u32,
+        glow: u32,
+        streak_length: u32,
+        color_primary: u32,
+        color_secondary: u32,
+        parallax_rate: u32,
+        parallax_size: u32,
+        phase: u32,
+    );
+    pub fn env_lines_set(
+        variant: u32,
+        line_type: u32,
+        thickness: u32,
+        spacing: f32,
+        fade_distance: f32,
+        color_primary: u32,
+        color_accent: u32,
+        accent_every: u32,
+        phase: u32,
+    );
+    pub fn env_silhouette_set(
+        jaggedness: u32,
+        layer_count: u32,
+        color_near: u32,
+        color_far: u32,
+        sky_zenith: u32,
+        sky_horizon: u32,
+        parallax_rate: u32,
+        seed: u32,
+    );
+    pub fn env_rectangles_set(
+        variant: u32,
+        density: u32,
+        lit_ratio: u32,
+        size_min: u32,
+        size_max: u32,
+        aspect: u32,
+        color_primary: u32,
+        color_variation: u32,
+        parallax_rate: u32,
+        phase: u32,
+    );
+    pub fn env_room_set(
+        color_ceiling: u32,
+        color_floor: u32,
+        color_walls: u32,
+        panel_size: f32,
+        panel_gap: u32,
+        light_dir_x: f32,
+        light_dir_y: f32,
+        light_dir_z: f32,
+        light_intensity: u32,
+        corner_darken: u32,
+        room_scale: f32,
+        viewer_x: i32,
+        viewer_y: i32,
+        viewer_z: i32,
+    );
+    pub fn env_curtains_set(
+        layer_count: u32,
+        density: u32,
+        height_min: u32,
+        height_max: u32,
+        width: u32,
+        spacing: u32,
+        waviness: u32,
+        color_near: u32,
+        color_far: u32,
+        glow: u32,
+        parallax_rate: u32,
+        phase: u32,
+    );
+    pub fn env_rings_set(
+        ring_count: u32,
+        thickness: u32,
+        color_a: u32,
+        color_b: u32,
+        center_color: u32,
+        center_falloff: u32,
+        spiral_twist: f32,
+        axis_x: f32,
+        axis_y: f32,
+        axis_z: f32,
+        phase: u32,
+    );
     pub fn env_select_pair(base_mode: u32, overlay_mode: u32);
     pub fn env_blend_mode(mode: u32);
 

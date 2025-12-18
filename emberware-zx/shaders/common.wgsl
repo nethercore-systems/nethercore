@@ -325,11 +325,762 @@ fn sample_gradient(data: array<u32, 11>, offset: u32, direction: vec3<f32>) -> v
     return result;
 }
 
+// ============================================================================
+// Hash Functions (for procedural randomness)
+// ============================================================================
+
+// Fast integer hash → float in [0,1] (for discrete randomness)
+fn hash21(p: vec2<u32>) -> f32 {
+    var n = p.x * 1597u + p.y * 2549u;
+    n = n ^ (n >> 13u);
+    n = n * 1013904223u;
+    return f32(n) * (1.0 / 4294967295.0);
+}
+
+fn hash11(p: u32) -> f32 {
+    var n = p * 1597u;
+    n = n ^ (n >> 13u);
+    n = n * 1013904223u;
+    return f32(n) * (1.0 / 4294967295.0);
+}
+
+// Hash vec3 to float
+fn hash31(p: vec3<f32>) -> f32 {
+    var p3 = fract(p * 0.1031);
+    p3 = p3 + dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+}
+
+// ============================================================================
+// Mode 1: Scatter - Cellular noise particle field
+// ============================================================================
+// data[0]: variant(2) + density(8) + size(8) + glow(8) + streak_len(6)
+// data[1]: color_primary RGB (bits 31-8) + parallax_rate (bits 7-0)
+// data[2]: color_secondary RGB (bits 31-8) + parallax_size (bits 7-0)
+// data[3]: phase(16) + layer_count(2) + reserved(14)
+fn sample_scatter(data: array<u32, 11>, offset: u32, direction: vec3<f32>) -> vec4<f32> {
+    // Unpack parameters
+    let d0 = data[offset];
+    let variant = d0 & 0x3u;
+    let density = f32((d0 >> 2u) & 0xFFu) / 255.0;
+    let size = f32((d0 >> 10u) & 0xFFu) / 255.0 * 0.1 + 0.001;
+    let glow = f32((d0 >> 18u) & 0xFFu) / 255.0;
+    let streak_len = f32((d0 >> 26u) & 0x3Fu) / 63.0;
+
+    let d1 = data[offset + 1u];
+    let color_primary = vec3<f32>(
+        f32((d1 >> 24u) & 0xFFu) / 255.0,
+        f32((d1 >> 16u) & 0xFFu) / 255.0,
+        f32((d1 >> 8u) & 0xFFu) / 255.0
+    );
+
+    let d2 = data[offset + 2u];
+    let color_secondary = vec3<f32>(
+        f32((d2 >> 24u) & 0xFFu) / 255.0,
+        f32((d2 >> 16u) & 0xFFu) / 255.0,
+        f32((d2 >> 8u) & 0xFFu) / 255.0
+    );
+
+    let d3 = data[offset + 3u];
+    let phase = f32(d3 & 0xFFFFu) / 65535.0;
+    let layer_count = ((d3 >> 16u) & 0x3u) + 1u;
+
+    // Normalize direction
+    let dir = normalize(direction);
+
+    // Project direction to spherical coordinates for cell lookup
+    let theta = atan2(dir.z, dir.x);
+    let phi = asin(clamp(dir.y, -1.0, 1.0));
+
+    // Grid cell size based on density
+    let cell_size = mix(0.5, 0.05, density);
+
+    // UV coordinates on sphere
+    var uv = vec2<f32>(theta / 6.28318 + 0.5, phi / 3.14159 + 0.5);
+
+    // Apply animation based on variant
+    switch (variant) {
+        case 1u: { // Vertical (rain)
+            uv.y = uv.y + phase;
+        }
+        case 2u: { // Horizontal (speed lines)
+            uv.x = uv.x + phase;
+        }
+        case 3u: { // Warp (radial)
+            // Move outward from center
+            let center = vec2<f32>(0.5, 0.5);
+            let to_center = uv - center;
+            uv = center + to_center * (1.0 + phase * 0.5);
+        }
+        default: { // Stars (0) - twinkle
+            // Twinkle handled below
+        }
+    }
+
+    // Cell coordinates
+    let cell = floor(uv / cell_size);
+    let cell_uv = fract(uv / cell_size);
+
+    // Check current and neighboring cells for particles
+    var brightness = 0.0;
+    var final_color = vec3<f32>(0.0);
+
+    for (var dy: i32 = -1; dy <= 1; dy = dy + 1) {
+        for (var dx: i32 = -1; dx <= 1; dx = dx + 1) {
+            let neighbor = cell + vec2<f32>(f32(dx), f32(dy));
+            let cell_hash = hash21(vec2<u32>(u32(neighbor.x + 1000.0) & 0xFFFFu, u32(neighbor.y + 1000.0) & 0xFFFFu));
+
+            // Only spawn particle if hash is below density threshold
+            if (cell_hash > density) {
+                continue;
+            }
+
+            // Random position within cell
+            let px = hash21(vec2<u32>(u32(neighbor.x + 2000.0) & 0xFFFFu, u32(neighbor.y + 2000.0) & 0xFFFFu));
+            let py = hash21(vec2<u32>(u32(neighbor.x + 3000.0) & 0xFFFFu, u32(neighbor.y + 3000.0) & 0xFFFFu));
+            let particle_pos = neighbor * cell_size + vec2<f32>(px, py) * cell_size;
+
+            // Distance to particle
+            var dist: f32;
+            if (variant == 1u && streak_len > 0.0) {
+                // Vertical streak
+                let streak_dist = abs(uv.x - particle_pos.x);
+                let y_dist = abs(fract(uv.y - particle_pos.y + 0.5) - 0.5);
+                dist = max(streak_dist, y_dist / (1.0 + streak_len * 10.0));
+            } else if (variant == 2u && streak_len > 0.0) {
+                // Horizontal streak
+                let streak_dist = abs(uv.y - particle_pos.y);
+                let x_dist = abs(fract(uv.x - particle_pos.x + 0.5) - 0.5);
+                dist = max(streak_dist, x_dist / (1.0 + streak_len * 10.0));
+            } else {
+                dist = length(uv - particle_pos);
+            }
+
+            // Particle brightness with size and glow
+            let particle_size = size * (0.5 + 0.5 * hash11(u32(neighbor.x + neighbor.y * 1000.0) & 0xFFFFu));
+            let particle_brightness = smoothstep(particle_size * (1.0 + glow), 0.0, dist);
+
+            // Twinkle for stars variant
+            var twinkle = 1.0;
+            if (variant == 0u) {
+                let twinkle_hash = hash11(u32(neighbor.x * 7.0 + neighbor.y * 13.0) & 0xFFFFu);
+                twinkle = 0.5 + 0.5 * sin(phase * 6.28318 * 4.0 + twinkle_hash * 6.28318);
+            }
+
+            // Color variation
+            let color_mix = hash11(u32(neighbor.x * 11.0 + neighbor.y * 17.0) & 0xFFFFu);
+            let particle_color = mix(color_primary, color_secondary, color_mix);
+
+            brightness = max(brightness, particle_brightness * twinkle);
+            final_color = max(final_color, particle_color * particle_brightness * twinkle);
+        }
+    }
+
+    return vec4<f32>(final_color, brightness);
+}
+
+// ============================================================================
+// Mode 2: Lines - Infinite grid lines projected onto a plane
+// ============================================================================
+// data[0]: variant(2) + line_type(2) + thickness(8) + accent_every(8) + reserved(12)
+// data[1]: spacing(f16) + fade_distance(f16)
+// data[2]: color_primary (RGBA8)
+// data[3]: color_accent (RGBA8)
+// data[4]: phase(u16) + reserved(16)
+fn sample_lines(data: array<u32, 11>, offset: u32, direction: vec3<f32>) -> vec4<f32> {
+    // Unpack parameters
+    let d0 = data[offset];
+    let variant = d0 & 0x3u;           // 0=Floor, 1=Ceiling, 2=Sphere
+    let line_type = (d0 >> 2u) & 0x3u; // 0=Horizontal, 1=Vertical, 2=Grid
+    let thickness = f32((d0 >> 4u) & 0xFFu) / 255.0 * 0.1 + 0.005;
+    let accent_every = max(1u, (d0 >> 12u) & 0xFFu);
+
+    let spacing_fade = unpack2x16float(data[offset + 1u]);
+    let spacing = max(0.1, spacing_fade.x);
+    let fade_distance = max(1.0, spacing_fade.y);
+
+    let color_primary = unpack_rgba8(data[offset + 2u]);
+    let color_accent = unpack_rgba8(data[offset + 3u]);
+
+    let phase = f32(data[offset + 4u] & 0xFFFFu) / 65535.0;
+
+    let dir = normalize(direction);
+
+    // Calculate UV based on variant
+    var uv: vec2<f32>;
+    var fade: f32 = 1.0;
+
+    switch (variant) {
+        case 0u: { // Floor - project onto Y=0 plane
+            if (dir.y >= -0.001) {
+                return vec4<f32>(0.0); // Looking up, no floor visible
+            }
+            let t = -1.0 / dir.y; // Intersection distance
+            uv = vec2<f32>(dir.x * t, dir.z * t);
+            fade = 1.0 - smoothstep(0.0, fade_distance, length(uv));
+        }
+        case 1u: { // Ceiling - project onto Y=1 plane
+            if (dir.y <= 0.001) {
+                return vec4<f32>(0.0); // Looking down, no ceiling visible
+            }
+            let t = 1.0 / dir.y;
+            uv = vec2<f32>(dir.x * t, dir.z * t);
+            fade = 1.0 - smoothstep(0.0, fade_distance, length(uv));
+        }
+        default: { // Sphere - use spherical coordinates
+            let theta = atan2(dir.z, dir.x);
+            let phi = asin(clamp(dir.y, -1.0, 1.0));
+            uv = vec2<f32>(theta / 3.14159, phi / 1.5708) * spacing * 5.0;
+            fade = 1.0;
+        }
+    }
+
+    // Apply phase offset (scroll animation)
+    uv.y = uv.y + phase * spacing;
+
+    // Calculate grid lines
+    var line_intensity = 0.0;
+    var is_accent = false;
+
+    // Scale UV by spacing
+    let scaled_uv = uv / spacing;
+
+    if (line_type == 0u || line_type == 2u) {
+        // Horizontal lines
+        let line_y = fract(scaled_uv.y);
+        let dist_y = min(line_y, 1.0 - line_y);
+        let h_line = smoothstep(thickness, 0.0, dist_y);
+        if (h_line > line_intensity) {
+            line_intensity = h_line;
+            let line_index = u32(floor(scaled_uv.y));
+            is_accent = (line_index % accent_every) == 0u;
+        }
+    }
+
+    if (line_type == 1u || line_type == 2u) {
+        // Vertical lines
+        let line_x = fract(scaled_uv.x);
+        let dist_x = min(line_x, 1.0 - line_x);
+        let v_line = smoothstep(thickness, 0.0, dist_x);
+        if (v_line > line_intensity) {
+            line_intensity = v_line;
+            let line_index = u32(floor(scaled_uv.x));
+            is_accent = (line_index % accent_every) == 0u;
+        }
+    }
+
+    // Choose color based on accent
+    let line_color = select(color_primary, color_accent, is_accent);
+
+    // Apply fade and return
+    let final_intensity = line_intensity * fade;
+    return vec4<f32>(line_color.rgb * final_intensity, line_color.a * final_intensity);
+}
+
+// ============================================================================
+// Mode 3: Silhouette - Layered terrain silhouettes with parallax
+// ============================================================================
+// data[0]: jaggedness(8) + layer_count(2) + parallax_rate(8) + reserved(14)
+// data[1]: color_near (RGBA8)
+// data[2]: color_far (RGBA8)
+// data[3]: sky_zenith (RGBA8)
+// data[4]: sky_horizon (RGBA8)
+// data[10]: seed stored in upper 16 bits (base) or lower 16 bits (overlay)
+
+// Looping value noise for smooth terrain generation
+fn looping_value_noise(t: f32, period: u32, seed: u32) -> f32 {
+    let scaled = t * f32(period);
+    let i = u32(floor(scaled)) % period;
+    let i_next = (i + 1u) % period;
+    let f = fract(scaled);
+
+    let seed_offset = seed * 7919u;
+    let a = hash11(i + seed_offset);
+    let b = hash11(i_next + seed_offset);
+    let smooth_t = f * f * (3.0 - 2.0 * f);  // smoothstep interpolation
+    return mix(a, b, smooth_t);
+}
+
+fn sample_silhouette(data: array<u32, 11>, offset: u32, direction: vec3<f32>) -> vec4<f32> {
+    // Unpack parameters
+    let d0 = data[offset];
+    let jaggedness = f32(d0 & 0xFFu) / 255.0;
+    let layer_count = ((d0 >> 8u) & 0x3u) + 1u;
+    let parallax_rate = f32((d0 >> 10u) & 0xFFu) / 255.0;
+
+    let color_near = unpack_rgba8(data[offset + 1u]);
+    let color_far = unpack_rgba8(data[offset + 2u]);
+    let sky_zenith = unpack_rgba8(data[offset + 3u]);
+    let sky_horizon = unpack_rgba8(data[offset + 4u]);
+
+    // Extract seed from shared data[10]
+    var seed: u32;
+    if (offset == 0u) {
+        seed = (data[10] >> 16u) & 0xFFFFu;
+    } else {
+        seed = data[10] & 0xFFFFu;
+    }
+
+    let dir = normalize(direction);
+
+    // Only render silhouettes below horizon
+    if (dir.y > 0.3) {
+        // Sky gradient above silhouettes
+        let sky_t = clamp((dir.y - 0.3) / 0.7, 0.0, 1.0);
+        return mix(sky_horizon, sky_zenith, sky_t);
+    }
+
+    // Calculate horizontal angle (0-1 wrapping)
+    let theta = atan2(dir.z, dir.x);
+    let angle = (theta / 6.28318) + 0.5;  // 0 to 1
+
+    // Noise period based on jaggedness (more peaks = more jagged)
+    let base_period = u32(mix(4.0, 32.0, jaggedness));
+
+    // Check each layer from back to front
+    var result_color = mix(sky_horizon, sky_zenith, clamp(dir.y + 0.3, 0.0, 1.0));
+
+    for (var layer: u32 = 0u; layer < layer_count; layer = layer + 1u) {
+        let layer_f = f32(layer) / f32(max(1u, layer_count - 1u));
+
+        // Layer depth affects base height and parallax offset
+        let layer_depth = 1.0 - layer_f;  // 1.0 = far, 0.0 = near
+        let base_height = -0.1 - layer_depth * 0.3 * parallax_rate;
+
+        // Generate terrain height using looping noise
+        let layer_seed = seed + layer * 12345u;
+        let noise_period = base_period + layer * 4u;
+
+        // Multi-octave noise for more interesting terrain
+        var terrain_height = 0.0;
+        terrain_height += looping_value_noise(angle, noise_period, layer_seed) * 0.5;
+        terrain_height += looping_value_noise(angle * 2.0, noise_period * 2u, layer_seed + 1000u) * 0.25;
+        terrain_height += looping_value_noise(angle * 4.0, noise_period * 4u, layer_seed + 2000u) * 0.125;
+
+        // Scale height based on jaggedness
+        let height_scale = mix(0.1, 0.4, jaggedness);
+        let silhouette_height = base_height + terrain_height * height_scale;
+
+        // Check if direction is below silhouette line
+        if (dir.y < silhouette_height) {
+            // Interpolate color based on layer depth
+            let layer_color = mix(color_near, color_far, layer_depth);
+            result_color = layer_color;
+        }
+    }
+
+    return result_color;
+}
+
+// ============================================================================
+// Mode 4: Rectangles - Rectangular light sources (windows, screens, panels)
+// ============================================================================
+// data[0]: variant(2) + density(8) + lit_ratio(8) + size_min(6) + size_max(6) + aspect(2)
+// data[1]: color_primary (RGBA8)
+// data[2]: color_variation (RGBA8)
+// data[3]: parallax_rate(8) + reserved(8) + phase(16)
+fn sample_rectangles(data: array<u32, 11>, offset: u32, direction: vec3<f32>) -> vec4<f32> {
+    // Unpack parameters
+    let d0 = data[offset];
+    let variant = d0 & 0x3u;
+    let density = f32((d0 >> 2u) & 0xFFu) / 255.0;
+    let lit_ratio = f32((d0 >> 10u) & 0xFFu) / 255.0;
+    let size_min = f32((d0 >> 18u) & 0x3Fu) / 63.0 * 0.1 + 0.01;
+    let size_max = f32((d0 >> 24u) & 0x3Fu) / 63.0 * 0.2 + 0.02;
+    let aspect = f32((d0 >> 30u) & 0x3u);
+
+    let color_primary = unpack_rgba8(data[offset + 1u]);
+    let color_variation = unpack_rgba8(data[offset + 2u]);
+
+    let d3 = data[offset + 3u];
+    let phase = f32((d3 >> 16u) & 0xFFFFu) / 65535.0;
+
+    let dir = normalize(direction);
+
+    // Project to spherical coordinates
+    let theta = atan2(dir.z, dir.x);
+    let phi = asin(clamp(dir.y, -1.0, 1.0));
+    var uv = vec2<f32>((theta / 6.28318) + 0.5, (phi / 3.14159) + 0.5);
+
+    // Grid cell size based on density
+    let cell_size = mix(0.2, 0.03, density);
+    let cell = floor(uv / cell_size);
+    let cell_uv = fract(uv / cell_size);
+
+    // Hash for this cell
+    let cell_hash = hash21(vec2<u32>(u32(cell.x + 500.0) & 0xFFFFu, u32(cell.y + 500.0) & 0xFFFFu));
+
+    // Only create rectangle if hash below density
+    if (cell_hash > density) {
+        return vec4<f32>(0.0);
+    }
+
+    // Check if lit (using phase for flicker)
+    let lit_hash = hash21(vec2<u32>(u32(cell.x * 7.0 + 100.0) & 0xFFFFu, u32(cell.y * 11.0 + 100.0) & 0xFFFFu));
+    let flicker = sin(phase * 6.28318 * 8.0 + lit_hash * 6.28318) * 0.5 + 0.5;
+    let is_lit = lit_hash < lit_ratio * (0.5 + 0.5 * flicker);
+
+    if (!is_lit) {
+        return vec4<f32>(0.0);
+    }
+
+    // Rectangle size and position within cell
+    let size_hash = hash21(vec2<u32>(u32(cell.x * 13.0 + 200.0) & 0xFFFFu, u32(cell.y * 17.0 + 200.0) & 0xFFFFu));
+    let rect_size = mix(size_min, size_max, size_hash) / cell_size;
+
+    // Aspect ratio
+    let aspect_mult = 1.0 + aspect * 0.5;
+    let rect_w = rect_size;
+    let rect_h = rect_size * aspect_mult;
+
+    // Center position
+    let pos_hash_x = hash21(vec2<u32>(u32(cell.x * 19.0 + 300.0) & 0xFFFFu, u32(cell.y * 23.0 + 300.0) & 0xFFFFu));
+    let pos_hash_y = hash21(vec2<u32>(u32(cell.x * 29.0 + 400.0) & 0xFFFFu, u32(cell.y * 31.0 + 400.0) & 0xFFFFu));
+    let rect_center = vec2<f32>(
+        0.5 + (pos_hash_x - 0.5) * (1.0 - rect_w),
+        0.5 + (pos_hash_y - 0.5) * (1.0 - rect_h)
+    );
+
+    // Check if inside rectangle
+    let dist_x = abs(cell_uv.x - rect_center.x);
+    let dist_y = abs(cell_uv.y - rect_center.y);
+
+    if (dist_x < rect_w * 0.5 && dist_y < rect_h * 0.5) {
+        // Color variation
+        let color_hash = hash21(vec2<u32>(u32(cell.x * 37.0) & 0xFFFFu, u32(cell.y * 41.0) & 0xFFFFu));
+        let rect_color = mix(color_primary, color_variation, color_hash);
+
+        // Slight edge glow
+        let edge_x = smoothstep(0.0, rect_w * 0.1, rect_w * 0.5 - dist_x);
+        let edge_y = smoothstep(0.0, rect_h * 0.1, rect_h * 0.5 - dist_y);
+        let brightness = edge_x * edge_y;
+
+        return vec4<f32>(rect_color.rgb * brightness, rect_color.a * brightness);
+    }
+
+    return vec4<f32>(0.0);
+}
+
+// ============================================================================
+// Mode 5: Room - Interior of a 3D box with directional lighting
+// ============================================================================
+// data[0]: color_ceiling_RGB(24) + viewer_x_snorm8(8)
+// data[1]: color_floor_RGB(24) + viewer_y_snorm8(8)
+// data[2]: color_walls_RGB(24) + viewer_z_snorm8(8)
+// data[3]: panel_size(f16) + panel_gap(8) + corner_darken(8)
+// data[4]: light_dir_oct(16) + light_intensity(8) + room_scale(8)
+// Note: Does NOT use data[10] - can safely layer with other modes
+fn sample_room(data: array<u32, 11>, offset: u32, direction: vec3<f32>) -> vec4<f32> {
+    // Unpack colors (RGB only, alpha byte contains viewer position)
+    let color_ceiling = vec4<f32>(unpack_rgb8(data[offset]), 1.0);
+    let color_floor = vec4<f32>(unpack_rgb8(data[offset + 1u]), 1.0);
+    let color_walls = vec4<f32>(unpack_rgb8(data[offset + 2u]), 1.0);
+
+    // Unpack viewer position from color alpha bytes (snorm8: -128..127 -> -1.0..1.0)
+    let viewer_x = f32(bitcast<i32>((data[offset] & 0xFFu) << 24u) >> 24) / 127.0;
+    let viewer_y = f32(bitcast<i32>((data[offset + 1u] & 0xFFu) << 24u) >> 24) / 127.0;
+    let viewer_z = f32(bitcast<i32>((data[offset + 2u] & 0xFFu) << 24u) >> 24) / 127.0;
+    let viewer = vec3<f32>(viewer_x, viewer_y, viewer_z);
+
+    let d3 = data[offset + 3u];
+    let panel_size = unpack2x16float(d3).x;
+    let panel_gap = f32((d3 >> 16u) & 0xFFu) / 255.0;
+    let corner_darken = f32((d3 >> 24u) & 0xFFu) / 255.0;
+
+    let d4 = data[offset + 4u];
+    let light_intensity = f32((d4 >> 16u) & 0xFFu) / 255.0;
+    let room_scale = f32((d4 >> 24u) & 0xFFu) / 10.0 + 0.1;
+
+    let dir = normalize(direction);
+
+    // Ray-box intersection to find which surface we hit
+    // Box is centered at origin, half-extents = room_scale
+    let inv_dir = 1.0 / dir;
+    let t_min = (-room_scale - viewer) * inv_dir;
+    let t_max = (room_scale - viewer) * inv_dir;
+
+    let t1 = min(t_min, t_max);
+    let t2 = max(t_min, t_max);
+
+    let t_near = max(max(t1.x, t1.y), t1.z);
+    let t_far = min(min(t2.x, t2.y), t2.z);
+
+    if (t_far < 0.0) {
+        return vec4<f32>(0.0);
+    }
+
+    let t = select(t_far, t_near, t_near > 0.0);
+    let hit_point = viewer + dir * t;
+
+    // Determine which face we hit
+    let abs_hit = abs(hit_point);
+    var surface_color: vec4<f32>;
+    var normal: vec3<f32>;
+    var uv: vec2<f32>;
+
+    if (abs_hit.y > abs_hit.x && abs_hit.y > abs_hit.z) {
+        // Floor or ceiling
+        if (hit_point.y < 0.0) {
+            surface_color = color_floor;
+            normal = vec3<f32>(0.0, 1.0, 0.0);
+        } else {
+            surface_color = color_ceiling;
+            normal = vec3<f32>(0.0, -1.0, 0.0);
+        }
+        uv = hit_point.xz / room_scale;
+    } else if (abs_hit.x > abs_hit.z) {
+        // Left or right wall
+        surface_color = color_walls;
+        normal = vec3<f32>(select(1.0, -1.0, hit_point.x > 0.0), 0.0, 0.0);
+        uv = hit_point.yz / room_scale;
+    } else {
+        // Front or back wall
+        surface_color = color_walls;
+        normal = vec3<f32>(0.0, 0.0, select(1.0, -1.0, hit_point.z > 0.0));
+        uv = hit_point.xy / room_scale;
+    }
+
+    // Panel pattern
+    if (panel_size > 0.01) {
+        let panel_uv = fract(uv / panel_size);
+        let panel_edge = step(panel_gap, panel_uv.x) * step(panel_gap, panel_uv.y) *
+                         step(panel_uv.x, 1.0 - panel_gap) * step(panel_uv.y, 1.0 - panel_gap);
+        surface_color = surface_color * (0.8 + 0.2 * panel_edge);
+    }
+
+    // Corner darkening (distance from center of each face)
+    let corner_dist = length(uv) / 1.414;  // Normalize by diagonal
+    let corner_factor = 1.0 - corner_darken * corner_dist * corner_dist;
+
+    // Simple directional lighting
+    let light_dir = vec3<f32>(0.3, -0.8, 0.5);  // Default light direction
+    let n_dot_l = max(dot(normal, -normalize(light_dir)), 0.0);
+    let lighting = 0.3 + 0.7 * n_dot_l * light_intensity;
+
+    return vec4<f32>(surface_color.rgb * lighting * corner_factor, surface_color.a);
+}
+
+// ============================================================================
+// Mode 6: Curtains - Vertical structures (pillars, trees) around viewer
+// ============================================================================
+// data[0]: layer_count(2) + density(8) + height_min(6) + height_max(6) + width(5) + spacing(5)
+// data[1]: waviness(8) + glow(8) + parallax_rate(8) + reserved(8)
+// data[2]: color_near (RGBA8)
+// data[3]: color_far (RGBA8)
+// data[4]: phase(u16) + reserved(16)
+fn sample_curtains(data: array<u32, 11>, offset: u32, direction: vec3<f32>) -> vec4<f32> {
+    // Unpack parameters
+    let d0 = data[offset];
+    let layer_count = (d0 & 0x3u) + 1u;
+    let density = f32((d0 >> 2u) & 0xFFu) / 255.0;
+    let height_min = f32((d0 >> 10u) & 0x3Fu) / 63.0;
+    let height_max = f32((d0 >> 16u) & 0x3Fu) / 63.0;
+    let width = f32((d0 >> 22u) & 0x1Fu) / 31.0 * 0.1 + 0.01;
+    let spacing = f32((d0 >> 27u) & 0x1Fu) / 31.0 * 0.2 + 0.05;
+
+    let d1 = data[offset + 1u];
+    let waviness = f32(d1 & 0xFFu) / 255.0;
+    let glow = f32((d1 >> 8u) & 0xFFu) / 255.0;
+    let parallax_rate = f32((d1 >> 16u) & 0xFFu) / 255.0;
+
+    let color_near = unpack_rgba8(data[offset + 2u]);
+    let color_far = unpack_rgba8(data[offset + 3u]);
+
+    let phase = f32(data[offset + 4u] & 0xFFFFu) / 65535.0;
+
+    let dir = normalize(direction);
+
+    // Horizontal angle for curtain placement
+    let theta = atan2(dir.z, dir.x);
+    let angle = (theta / 6.28318) + 0.5 + phase;  // 0 to 1, with scroll
+
+    var result = vec4<f32>(0.0);
+
+    // Check each layer from back to front
+    for (var layer: u32 = 0u; layer < layer_count; layer = layer + 1u) {
+        let layer_f = f32(layer) / f32(max(1u, layer_count - 1u));
+        let layer_depth = 1.0 - layer_f;  // 1.0 = far, 0.0 = near
+
+        // Adjust cell size based on layer (farther = smaller apparent spacing)
+        let layer_spacing = spacing * (1.0 + layer_depth * parallax_rate);
+        let cell = floor(angle / layer_spacing);
+        let cell_fract = fract(angle / layer_spacing);
+
+        // Hash for this curtain
+        let cell_hash = hash21(vec2<u32>(u32(cell + 1000.0 + f32(layer) * 100.0) & 0xFFFFu, layer));
+
+        // Only spawn curtain if hash below density
+        if (cell_hash > density) {
+            continue;
+        }
+
+        // Curtain position within cell
+        let pos_hash = hash21(vec2<u32>(u32(cell * 7.0 + 200.0) & 0xFFFFu, layer + 1u));
+        let curtain_pos = pos_hash * (1.0 - width / layer_spacing);
+
+        // Distance to curtain center
+        let dist_to_curtain = abs(cell_fract - curtain_pos);
+        let curtain_width = width / layer_spacing;
+
+        if (dist_to_curtain < curtain_width * 0.5) {
+            // Height of this curtain
+            let height_hash = hash21(vec2<u32>(u32(cell * 11.0 + 300.0) & 0xFFFFu, layer + 2u));
+            let curtain_height = mix(height_min, height_max, height_hash);
+
+            // Vertical position check
+            let curtain_base = -0.3 - layer_depth * 0.2;
+            let curtain_top = curtain_base + curtain_height;
+
+            // Apply waviness
+            var wave_offset = 0.0;
+            if (waviness > 0.0) {
+                let wave_hash = hash21(vec2<u32>(u32(cell * 13.0) & 0xFFFFu, layer + 3u));
+                wave_offset = sin((dir.y + wave_hash) * 10.0 + phase * 6.28318) * waviness * 0.05;
+            }
+
+            if (dir.y >= curtain_base && dir.y <= curtain_top) {
+                // Color interpolation by depth
+                let curtain_color = mix(color_near, color_far, layer_depth);
+
+                // Edge softness
+                let edge_dist = dist_to_curtain / (curtain_width * 0.5);
+                let alpha = (1.0 - edge_dist) * curtain_color.a;
+
+                // Glow effect
+                let glow_factor = 1.0 + glow * (1.0 - edge_dist);
+
+                // Take frontmost visible curtain
+                if (alpha > result.a) {
+                    result = vec4<f32>(curtain_color.rgb * glow_factor, alpha);
+                }
+            }
+        }
+    }
+
+    return result;
+}
+
+// ============================================================================
+// Mode 7: Rings - Concentric rings around focal direction
+// ============================================================================
+// data[0]: ring_count(8) + thickness(8) + center_falloff(8) + reserved(8)
+// data[1]: color_a (RGBA8)
+// data[2]: color_b (RGBA8)
+// data[3]: center_color (RGBA8)
+// data[4]: spiral_twist(f16, bits 0-15) + axis_oct16(16, bits 16-31)
+// data[10]: phase stored in upper 16 bits (base) or lower 16 bits (overlay)
+
+// Unpack 16-bit octahedral (2x snorm8) to direction vector
+fn unpack_octahedral_u16(packed: u32) -> vec3<f32> {
+    // Extract snorm8 components with sign extension
+    let u_i8 = bitcast<i32>((packed & 0xFFu) << 24u) >> 24;
+    let v_i8 = bitcast<i32>(((packed >> 8u) & 0xFFu) << 24u) >> 24;
+
+    let u = f32(u_i8) / 127.0;
+    let v = f32(v_i8) / 127.0;
+
+    // Reconstruct 3D direction (same as unpack_octahedral but lower precision input)
+    var dir: vec3<f32>;
+    dir.x = u;
+    dir.y = v;
+    dir.z = 1.0 - abs(u) - abs(v);
+
+    if (dir.z < 0.0) {
+        let old_x = dir.x;
+        dir.x = (1.0 - abs(dir.y)) * select(-1.0, 1.0, old_x >= 0.0);
+        dir.y = (1.0 - abs(old_x)) * select(-1.0, 1.0, dir.y >= 0.0);
+    }
+
+    return normalize(dir);
+}
+
+fn sample_rings(data: array<u32, 11>, offset: u32, direction: vec3<f32>) -> vec4<f32> {
+    // Unpack parameters
+    let d0 = data[offset];
+    let ring_count = max(1u, d0 & 0xFFu);
+    let thickness = f32((d0 >> 8u) & 0xFFu) / 255.0;
+    let center_falloff = f32((d0 >> 16u) & 0xFFu) / 255.0;
+
+    let color_a = unpack_rgba8(data[offset + 1u]);
+    let color_b = unpack_rgba8(data[offset + 2u]);
+    let center_color = unpack_rgba8(data[offset + 3u]);
+
+    let d4 = data[offset + 4u];
+    let spiral_twist = unpack2x16float(d4).x; // degrees
+
+    // Extract phase from shared data[10]
+    var phase: f32;
+    if (offset == 0u) {
+        phase = f32((data[10] >> 16u) & 0xFFFFu) / 65535.0;
+    } else {
+        phase = f32(data[10] & 0xFFFFu) / 65535.0;
+    }
+
+    // Unpack axis from 16-bit octahedral (2x snorm8) in upper 16 bits of d4
+    let axis_oct16 = (d4 >> 16u) & 0xFFFFu;
+    let axis = unpack_octahedral_u16(axis_oct16);
+
+    let dir = normalize(direction);
+
+    // Calculate angle from axis
+    let dot_axis = dot(dir, axis);
+    let angle_from_axis = acos(clamp(dot_axis, -1.0, 1.0));
+
+    // Normalized distance from center (0 at axis, 1 at perpendicular)
+    let dist = angle_from_axis / 3.14159;
+
+    // Apply spiral twist
+    var ring_pos = dist * f32(ring_count);
+    if (spiral_twist != 0.0) {
+        // Calculate angular position around axis
+        let perp = dir - axis * dot_axis;
+        let perp_len = length(perp);
+        if (perp_len > 0.001) {
+            let perp_norm = perp / perp_len;
+            let angle = atan2(
+                dot(perp_norm, vec3<f32>(1.0, 0.0, 0.0)),
+                dot(perp_norm, vec3<f32>(0.0, 1.0, 0.0))
+            );
+            ring_pos = ring_pos + angle * spiral_twist / 360.0;
+        }
+    }
+
+    // Apply phase animation (rotation)
+    ring_pos = ring_pos + phase * f32(ring_count);
+
+    // Calculate ring pattern
+    let ring_fract = fract(ring_pos);
+    let ring_index = u32(floor(ring_pos));
+
+    // Alternating colors
+    let is_color_a = (ring_index % 2u) == 0u;
+    let ring_color = select(color_b, color_a, is_color_a);
+
+    // Ring edge softness based on thickness
+    let edge_soft = (1.0 - thickness) * 0.5;
+    let ring_intensity = smoothstep(0.0, edge_soft, ring_fract) * smoothstep(1.0, 1.0 - edge_soft, ring_fract);
+
+    // Center glow
+    let center_intensity = pow(1.0 - dist, 1.0 / max(0.01, center_falloff));
+
+    // Blend ring color with center color
+    let final_color = mix(ring_color.rgb, center_color.rgb, center_intensity * center_color.a);
+    let final_alpha = max(ring_color.a * ring_intensity, center_color.a * center_intensity);
+
+    return vec4<f32>(final_color, final_alpha);
+}
+
 // Sample a single environment mode
 fn sample_mode(mode: u32, data: array<u32, 11>, offset: u32, direction: vec3<f32>) -> vec4<f32> {
     switch (mode) {
         case 0u: { return sample_gradient(data, offset, direction); }
-        // Future modes will be added here
+        case 1u: { return sample_scatter(data, offset, direction); }
+        case 2u: { return sample_lines(data, offset, direction); }
+        case 3u: { return sample_silhouette(data, offset, direction); }
+        case 4u: { return sample_rectangles(data, offset, direction); }
+        case 5u: { return sample_room(data, offset, direction); }
+        case 6u: { return sample_curtains(data, offset, direction); }
+        case 7u: { return sample_rings(data, offset, direction); }
         default: { return sample_gradient(data, offset, direction); }
     }
 }
