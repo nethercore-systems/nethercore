@@ -1,6 +1,6 @@
 # Getting Started
 
-Create your first Emberware Z game in minutes.
+Create your first Emberware ZX game in minutes.
 
 ## Prerequisites
 

@@ -12,8 +12,7 @@ pub struct User {
     /// User's email address (for account recovery).
     pub email: String,
     /// ISO 8601 timestamp when the account was created.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub created_at: Option<String>,
+    pub created_at: String,
 }
 
 /// Successful authentication response.
@@ -63,4 +62,10 @@ pub mod error_codes {
     pub const VALIDATION_ERROR: &str = "VALIDATION_ERROR";
     /// Resource already exists (e.g., duplicate username).
     pub const CONFLICT: &str = "CONFLICT";
+    /// Storage/upload operation failed.
+    pub const UPLOAD_FAILED: &str = "UPLOAD_FAILED";
+    /// Database query or connection error.
+    pub const DATABASE_ERROR: &str = "DATABASE_ERROR";
+    /// Unexpected internal server error.
+    pub const INTERNAL_ERROR: &str = "INTERNAL_ERROR";
 }

@@ -68,12 +68,12 @@ pub(crate) fn create_pipeline(
         Ok(source) => source,
         Err(e) => {
             tracing::warn!(
-                "Shader generation failed for mode {} format {}: {}. Falling back to Mode 0 (unlit).",
+                "Shader generation failed for mode {} format {}: {}. Falling back to Mode 0 (Lambert).",
                 render_mode,
                 format,
                 e
             );
-            // Fallback to Mode 0 (unlit) which supports all formats
+            // Fallback to Mode 0 (Lambert) which supports all formats
             generate_shader(0, format).expect("Mode 0 should support all vertex formats")
         }
     };

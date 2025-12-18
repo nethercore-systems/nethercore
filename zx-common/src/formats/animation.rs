@@ -1,6 +1,6 @@
 //! EmberZAnimation binary format (.ewzanim)
 //!
-//! Z console animation clip format containing sampled bone transforms.
+//! ZX console animation clip format containing sampled bone transforms.
 //! POD format with minimal header - no magic bytes.
 //!
 //! # Layout

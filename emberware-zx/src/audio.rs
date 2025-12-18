@@ -1,4 +1,4 @@
-//! Emberware Z audio backend
+//! Emberware ZX audio backend
 //!
 //! Per-frame audio generation with rollback support.
 //!
@@ -338,7 +338,7 @@ fn soft_clip(x: f32) -> f32 {
     }
 }
 
-/// Emberware Z audio backend
+/// Emberware ZX audio backend
 ///
 /// Wraps AudioOutput and provides the Console::Audio interface.
 pub struct ZAudio {

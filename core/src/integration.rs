@@ -5,6 +5,7 @@
 
 #[cfg(test)]
 mod tests {
+    use emberware_shared::EMBERWARE_ZX_RAM_LIMIT;
     use wasmtime::Linker;
 
     use crate::{
@@ -481,7 +482,7 @@ mod tests {
         let module = engine.load_module(&wasm).unwrap();
         let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
-        let mut session = RollbackSession::<TestInput, ()>::new_local(2, 4 * 1024 * 1024);
+        let mut session = RollbackSession::<TestInput, ()>::new_local(2, EMBERWARE_ZX_RAM_LIMIT);
 
         game.init().unwrap();
 
@@ -637,7 +638,7 @@ mod tests {
     /// Test RollbackSession input handling
     #[test]
     fn test_rollback_session_input() {
-        let mut session = RollbackSession::<TestInput, ()>::new_local(2, 4 * 1024 * 1024);
+        let mut session = RollbackSession::<TestInput, ()>::new_local(2, EMBERWARE_ZX_RAM_LIMIT);
 
         // Add input for local players
         let input0 = TestInput {
@@ -686,7 +687,7 @@ mod tests {
     #[test]
     fn test_console_specs_limits() {
         let console = TestConsole;
-        let specs = console.specs();
+        let specs = TestConsole::specs();
 
         assert_eq!(specs.ram_limit, 16 * 1024 * 1024);
         assert_eq!(specs.vram_limit, 8 * 1024 * 1024);
@@ -861,7 +862,7 @@ mod tests {
         runtime.init_game().unwrap();
 
         // Set up 4-player local session
-        let session = RollbackSession::<TestInput, ()>::new_local(4, 4 * 1024 * 1024);
+        let session = RollbackSession::<TestInput, ()>::new_local(4, EMBERWARE_ZX_RAM_LIMIT);
         runtime.set_session(session);
 
         // Verify session is set

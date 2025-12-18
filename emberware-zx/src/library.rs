@@ -1,7 +1,7 @@
 //! Game library management - re-exports from core
 //!
-//! Emberware Z uses the console-agnostic game library from `emberware_core`.
-//! This module provides convenient re-exports and Z-specific implementations.
+//! Emberware ZX uses the console-agnostic game library from `emberware_core`.
+//! This module provides convenient re-exports and ZX-specific implementations.
 
 use emberware_core::library::DataDirProvider;
 use std::path::PathBuf;

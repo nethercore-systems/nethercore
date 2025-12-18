@@ -156,12 +156,12 @@ pub use crate::audio::ZAudio;
 
 impl Audio for ZAudio {
     fn play(&mut self, _handle: SoundHandle, _volume: f32, _looping: bool) {
-        // Legacy Audio trait - not used in Z console
+        // Legacy Audio trait - not used in ZX console
         // Audio is handled via per-frame generation from ZRollbackState
     }
 
     fn stop(&mut self, _handle: SoundHandle) {
-        // Legacy Audio trait - not used in Z console
+        // Legacy Audio trait - not used in ZX console
     }
 }
 
@@ -202,7 +202,7 @@ impl Console for EmberwareZX {
     type RollbackState = ZRollbackState;
     type ResourceManager = crate::resource_manager::ZResourceManager;
 
-    fn specs(&self) -> &'static ConsoleSpecs {
+    fn specs() -> &'static ConsoleSpecs {
         zx_specs()
     }
 
@@ -303,10 +303,6 @@ impl Console for EmberwareZX {
         crate::resource_manager::ZResourceManager::new()
     }
 
-    fn window_title(&self) -> &'static str {
-        "Emberware ZX"
-    }
-
     fn debug_stats(&self, state: &ZFFIState) -> Vec<DebugStat> {
         vec![
             DebugStat::number("Draw Calls", state.render_pass.commands().len()),
@@ -393,8 +389,8 @@ mod tests {
 
     #[test]
     fn test_specs() {
-        let console = EmberwareZX::new();
-        let specs = console.specs();
+        let _console = EmberwareZX::new();
+        let specs = EmberwareZX::specs();
 
         assert_eq!(specs.name, "Emberware ZX");
         assert_eq!(specs.resolutions.len(), 4);

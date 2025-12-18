@@ -1,4 +1,4 @@
-//! Built-in bitmap font for Emberware Z
+//! Built-in bitmap font for Emberware ZX
 //!
 //! Simple 8x8 monospace font covering ASCII 32-126 (printable characters).
 //! This is a minimal font suitable for debug text and simple UI.

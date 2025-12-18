@@ -56,7 +56,11 @@ pub fn execute(args: RunArgs) -> Result<()> {
 
     // Read manifest to get game ID
     let manifest = EmberManifest::load(&manifest_path)?;
-    let rom_path = project_dir.join(format!("{}.ewz", manifest.game.id));
+    let rom_path = project_dir.join(format!(
+        "{}.{}",
+        manifest.game.id,
+        emberware_shared::ZX_ROM_FORMAT.extension
+    ));
 
     // Use absolute path for subprocess (working directory may differ)
     let rom_path = rom_path.canonicalize().unwrap_or_else(|_| rom_path.clone());
@@ -80,7 +84,7 @@ pub fn execute(args: RunArgs) -> Result<()> {
     // Handle special "cargo:run" marker
     let status = if emberware_exe.to_string_lossy() == "cargo:run" {
         Command::new("cargo")
-            .args(["run", "-p", "emberware-z", "--"])
+            .args(["run", "-p", "emberware-zx", "--"])
             .arg(&rom_path)
             .status()
             .context("Failed to run 'cargo run'")?
@@ -98,10 +102,10 @@ pub fn execute(args: RunArgs) -> Result<()> {
     Ok(())
 }
 
-/// Find the emberware-z player executable
+/// Find the emberware-zx player executable
 fn find_emberware_exe() -> Result<PathBuf> {
     // Try PATH first - look for the standalone player
-    if let Ok(path) = which::which("emberware-z") {
+    if let Ok(path) = which::which("emberware-zx") {
         return Ok(path);
     }
 
@@ -116,7 +120,7 @@ fn find_emberware_exe() -> Result<PathBuf> {
     }
 
     anyhow::bail!(
-        "Could not find emberware-z executable. \
+        "Could not find emberware-zx executable. \
         Make sure it's in your PATH or run from the workspace directory."
     )
 }

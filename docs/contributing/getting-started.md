@@ -444,7 +444,7 @@ const TRANSPARENT: u32 = 0x00000000;
 
 ## Next Steps
 
-1. **Read the API reference**: [ffi.md](./ffi.md) and [emberware-z.md](./emberware-z.md)
+1. **Read the API reference**: [ffi.md](./ffi.md) and [emberware-zx.md](./emberware-zx.md)
 2. **Study the examples**: Each demonstrates specific features
 3. **Build something small**: A simple game teaches more than reading docs
 4. **Join the community**: Share your creations at [emberware.io](https://emberware.io)

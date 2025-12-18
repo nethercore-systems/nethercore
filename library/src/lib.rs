@@ -4,7 +4,7 @@
 //! It contains the console-agnostic UI and application logic.
 //!
 //! The library is 100% console-agnostic. Games are launched as separate player
-//! processes (e.g., `emberware-z` for Z games). This provides:
+//! processes (e.g., `emberware-zx` for ZX games). This provides:
 //! - Crash isolation (game crash doesn't crash the library)
 //! - Clean separation of concerns
 //! - Easy addition of new console types

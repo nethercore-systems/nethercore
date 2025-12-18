@@ -160,7 +160,7 @@ extern "C" {
     /// Set the render mode. Must be called during `init()`.
     ///
     /// # Arguments
-    /// * `mode` — 0=Unlit, 1=Matcap, 2=PBR, 3=Hybrid
+    /// * `mode` — 0=Lambert, 1=Matcap, 2=PBR, 3=Hybrid
     pub fn render_mode(mode: u32);
 
     // =========================================================================
@@ -883,25 +883,25 @@ extern "C" {
     // =========================================================================
     //
     // Load assets from EmberZ binary formats embedded via include_bytes!().
-    // Use with: static DATA: &[u8] = include_bytes!("asset.ewzmesh");
+    // Use with: static DATA: &[u8] = include_bytes!("asset.ewzxmesh");
 
-    /// Load a mesh from .ewzmesh binary format.
+    /// Load a mesh from .ewzxmesh binary format.
     ///
     /// # Arguments
-    /// * `data_ptr` — Pointer to .ewzmesh binary data
+    /// * `data_ptr` — Pointer to .ewzxmesh binary data
     /// * `data_len` — Length of the data in bytes
     ///
     /// # Returns
     /// Mesh handle (>0) on success, 0 on failure.
     pub fn load_zmesh(data_ptr: u32, data_len: u32) -> u32;
 
-    /// Load a texture from .ewztex binary format.
+    /// Load a texture from .ewzxtex binary format.
     ///
     /// # Returns
     /// Texture handle (>0) on success, 0 on failure.
     pub fn load_ztex(data_ptr: u32, data_len: u32) -> u32;
 
-    /// Load a sound from .ewzsnd binary format.
+    /// Load a sound from .ewzxsnd binary format.
     ///
     /// # Returns
     /// Sound handle (>0) on success, 0 on failure.
@@ -1042,7 +1042,7 @@ pub mod button {
 
 /// Render modes for `render_mode()`
 pub mod render {
-    pub const UNLIT: u32 = 0;
+    pub const LAMBERT: u32 = 0;
     pub const MATCAP: u32 = 1;
     pub const PBR: u32 = 2;
     pub const HYBRID: u32 = 3;

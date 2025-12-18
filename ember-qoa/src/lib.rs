@@ -207,7 +207,7 @@ mod tests {
     #[test]
     fn test_roundtrip_preserves_length() {
         // Test various lengths including frame boundaries
-        for len in [1, 20, 100, 5119, 5120, 5121, 10240, 22050] {
+        for len in [1, 20, 100, QOA_FRAME_SAMPLES - 1, QOA_FRAME_SAMPLES, QOA_FRAME_SAMPLES + 1, QOA_FRAME_SAMPLES * 2, 22050] {
             let original: Vec<i16> = (0..len).map(|i| (i as i16).wrapping_mul(7)).collect();
             let encoded = encode_qoa(&original);
             let decoded = decode_qoa(&encoded, original.len()).unwrap();

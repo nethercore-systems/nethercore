@@ -6,7 +6,7 @@ A fantasy console platform with built-in rollback netcode.
 
 | Console | Generation | Aesthetic | Status | Doc |
 |---------|------------|-----------|--------|-----|
-| **Emberware Z** | 5th gen | PS1/N64/Saturn | Available | [docs/book/](./docs/book/) |
+| **Emberware ZX** | 5th gen | PS1/N64/Saturn | Available | [docs/book/](./docs/book/) |
 | **Emberware Chroma** | 4th gen | Genesis/SNES/Neo Geo | Coming Soon | — |
 
 ## What's Here
@@ -14,7 +14,7 @@ A fantasy console platform with built-in rollback netcode.
 | Directory | Description |
 |-----------|-------------|
 | `/core` | Shared console framework (WASM runtime, GGRS rollback, debug inspection) |
-| `/emberware-z` | Emberware Z runtime implementation |
+| `/emberware-zx` | Emberware ZX runtime implementation |
 | `/shared` | API types shared with platform backend, cart/ROM formats |
 | `/tools` | Developer tools: `ember-cli` (build/pack/run), `ember-export` (asset conversion) |
 | `/docs/book` | Game developer documentation (mdBook) |
@@ -53,7 +53,7 @@ cargo build --target wasm32-unknown-unknown --release
 
 ### Testing with Examples
 
-The `/examples` directory contains several example games demonstrating Emberware Z features. To build and test them:
+The `/examples` directory contains several example games demonstrating Emberware ZX features. To build and test them:
 
 **Prerequisites:**
 ```bash
@@ -81,7 +81,7 @@ cargo run -- plat            # Launch by prefix match
 cargo run -- CUBE            # Case-insensitive
 ```
 
-The examples will appear in the Emberware Z game library. Use the refresh button if you add new games while the app is running.
+The examples will appear in the Emberware ZX game library. Use the refresh button if you add new games while the app is running.
 
 **CLI Launch Features:**
 - **Exact matching**: `cargo run -- cube` launches cube
@@ -143,7 +143,7 @@ Visit [emberware.io](https://emberware.io) to create an account and upload your 
 
 *Note: Emberware Classic is documented but not yet implemented.*
 
-| Spec | Emberware Z | Emberware Classic |
+| Spec | Emberware ZX | Emberware Classic |
 |------|-------------|-------------------|
 | Generation | 5th (PS1/N64) | 4th (Genesis/SNES) |
 | Target audience | Experienced devs | Beginners, students |

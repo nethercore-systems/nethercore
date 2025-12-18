@@ -7,7 +7,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::manifest::Manifest;
-use crate::{EWZ_MESH_EXT, EWZ_SOUND_EXT, EWZ_TEXTURE_EXT};
+use emberware_shared::ZX_ROM_FORMAT;
 
 /// Generate a Rust module that loads assets
 ///
@@ -22,8 +22,8 @@ use crate::{EWZ_MESH_EXT, EWZ_SOUND_EXT, EWZ_TEXTURE_EXT};
 ///
 /// mod assets {
 ///     // Embedded data
-///     static PLAYER_MESH: &[u8] = include_bytes!("../assets/player.ewzmesh");
-///     static PLAYER_TEX: &[u8] = include_bytes!("../assets/player.ewztex");
+///     static PLAYER_MESH: &[u8] = include_bytes!("../assets/player.ewzxmesh");
+///     static PLAYER_TEX: &[u8] = include_bytes!("../assets/player.ewzxtex");
 ///
 ///     extern "C" {
 ///         fn rom_mesh(data_ptr: u32, data_len: u32) -> u32;
@@ -65,19 +65,29 @@ pub fn generate_rust_module(manifest: &Manifest, output_path: &Path) -> Result<(
 
     // Meshes
     for name in manifest.meshes.keys() {
-        let output_file = format!("{}/{}.{}", output_dir.display(), name, EWZ_MESH_EXT);
+        let output_file = format!("{}/{}.{}", output_dir.display(), name, ZX_ROM_FORMAT.mesh_ext);
         mesh_assets.push((name, output_file));
     }
 
     // Textures
     for name in manifest.textures.keys() {
-        let output_file = format!("{}/{}.{}", output_dir.display(), name, EWZ_TEXTURE_EXT);
+        let output_file = format!(
+            "{}/{}.{}",
+            output_dir.display(),
+            name,
+            ZX_ROM_FORMAT.texture_ext
+        );
         texture_assets.push((name, output_file));
     }
 
     // Sounds
     for name in manifest.sounds.keys() {
-        let output_file = format!("{}/{}.{}", output_dir.display(), name, EWZ_SOUND_EXT);
+        let output_file = format!(
+            "{}/{}.{}",
+            output_dir.display(),
+            name,
+            ZX_ROM_FORMAT.sound_ext
+        );
         sound_assets.push((name, output_file));
     }
 

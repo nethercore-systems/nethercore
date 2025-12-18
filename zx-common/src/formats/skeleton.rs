@@ -1,6 +1,6 @@
 //! EmberZSkeleton binary format (.ewzskel)
 //!
-//! Z console skeleton format containing inverse bind matrices for skeletal animation.
+//! ZX console skeleton format containing inverse bind matrices for skeletal animation.
 //! POD format - no magic bytes.
 //!
 //! # Layout

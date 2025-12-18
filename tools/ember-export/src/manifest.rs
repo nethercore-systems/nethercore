@@ -7,7 +7,7 @@ use hashbrown::HashMap;
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
-use crate::{EWZ_MESH_EXT, EWZ_SOUND_EXT, EWZ_TEXTURE_EXT};
+use emberware_shared::ZX_ROM_FORMAT;
 
 /// Root manifest structure
 #[derive(Debug, Deserialize)]
@@ -175,7 +175,7 @@ pub fn build_all(manifest: &Manifest, output_override: Option<&Path>) -> Result<
 
     // Convert meshes
     for (name, entry) in &manifest.meshes {
-        let output = output_dir.join(format!("{}.{}", name, EWZ_MESH_EXT));
+        let output = output_dir.join(format!("{}.{}", name, ZX_ROM_FORMAT.mesh_ext));
         tracing::info!("Converting mesh: {} -> {:?}", name, output);
 
         // Detect format by extension
@@ -195,14 +195,14 @@ pub fn build_all(manifest: &Manifest, output_override: Option<&Path>) -> Result<
 
     // Convert textures
     for (name, entry) in &manifest.textures {
-        let output = output_dir.join(format!("{}.{}", name, EWZ_TEXTURE_EXT));
+        let output = output_dir.join(format!("{}.{}", name, ZX_ROM_FORMAT.texture_ext));
         tracing::info!("Converting texture: {} -> {:?}", name, output);
         crate::texture::convert_image(entry.path(), &output)?;
     }
 
     // Convert sounds
     for (name, entry) in &manifest.sounds {
-        let output = output_dir.join(format!("{}.{}", name, EWZ_SOUND_EXT));
+        let output = output_dir.join(format!("{}.{}", name, ZX_ROM_FORMAT.sound_ext));
         tracing::info!("Converting sound: {} -> {:?}", name, output);
         crate::audio::convert_wav(entry.path(), &output)?;
     }

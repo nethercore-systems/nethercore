@@ -132,7 +132,7 @@ pub extern "C" fn init() {
         // Dark blue background
         set_clear_color(0x1a1a3eFF);
 
-        // Use unlit mode with normals for clear visibility
+        // Use Lambert mode with normals for clear visibility
         render_mode(0);
 
         // Enable depth testing

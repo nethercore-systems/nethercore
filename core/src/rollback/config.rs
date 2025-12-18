@@ -4,6 +4,7 @@
 
 use std::marker::PhantomData;
 
+use emberware_shared::EMBERWARE_ZX_RAM_LIMIT;
 use ggrs::Config;
 
 use crate::console::ConsoleInput;
@@ -40,7 +41,7 @@ pub const DEFAULT_ONLINE_INPUT_DELAY: usize = 2;
 /// let max_state_size = console.specs().ram_limit;
 /// let state_manager = RollbackStateManager::new(max_state_size);
 /// ```
-pub const MAX_STATE_SIZE: usize = 4 * 1024 * 1024;
+pub const MAX_STATE_SIZE: usize = EMBERWARE_ZX_RAM_LIMIT;
 
 /// GGRS configuration for Emberware
 ///

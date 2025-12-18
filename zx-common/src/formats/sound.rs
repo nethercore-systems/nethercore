@@ -1,6 +1,6 @@
 //! EmberZSound binary format (.ewzsnd)
 //!
-//! Z console audio format. QOA compressed.
+//! ZX console audio format. QOA compressed.
 //! POD format - no magic bytes.
 //!
 //! # Layout
@@ -16,7 +16,7 @@
 //!
 //! Sample rate is fixed at 22050Hz (controlled by ember-export).
 
-/// Z console sample rate (fixed)
+/// ZX console sample rate (fixed)
 pub const SAMPLE_RATE: u32 = 22050;
 
 /// Sound flags

@@ -4,7 +4,7 @@ Controller input handling for buttons, analog sticks, and triggers.
 
 ## Controller Layout
 
-Emberware Z uses a modern PS2/Xbox-style controller:
+Emberware ZX uses a modern PS2/Xbox-style controller:
 
 ```
          [LB]                    [RB]

@@ -210,7 +210,7 @@ path = "assets/player.png"
 
 [[assets.meshes]]
 id = "level"
-path = "assets/level.ewzmesh"
+path = "assets/level.ewzxmesh"
 "#,
         )
         .unwrap();

@@ -1,6 +1,6 @@
 //! EmberZTexture binary format (.embertex)
 //!
-//! Z console texture format. Supports RGBA8 (Mode 0) or BC7 (Modes 1-3).
+//! ZX console texture format. Supports RGBA8 (Mode 0) or BC7 (Modes 1-3).
 //! POD format - no magic bytes.
 //!
 //! # Layout

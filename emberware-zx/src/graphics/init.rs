@@ -77,7 +77,7 @@ impl ZGraphics {
         // Unified buffer architecture uses only 4 storage buffers (well under default limit of 8)
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
-                label: Some("Emberware Z Device"),
+                label: Some("Emberware ZX Device"),
                 required_features: wgpu::Features::default(),
                 required_limits: wgpu::Limits::default(),
                 memory_hints: wgpu::MemoryHints::Performance,

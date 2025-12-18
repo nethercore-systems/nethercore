@@ -88,7 +88,7 @@ impl DebugCamera {
                 self.elevation = self.elevation.clamp(-80.0, 80.0);
             } else if self.auto_orbit_speed > 0.0 {
                 // Auto-orbit when stick is centered
-                self.azimuth += self.auto_orbit_speed * (1.0 / 60.0);
+                self.azimuth += self.auto_orbit_speed * delta_time();
             }
 
             // Wrap azimuth

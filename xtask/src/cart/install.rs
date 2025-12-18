@@ -8,7 +8,7 @@ use zx_common::ZRomLoader;
 
 #[derive(Debug, Args)]
 pub struct InstallArgs {
-    /// Path to the ROM file (.ewz)
+    /// Path to the ROM file (.ewzx)
     #[arg(value_name = "ROM_FILE")]
     pub rom_path: PathBuf,
 
@@ -42,16 +42,16 @@ pub fn execute(args: InstallArgs) -> Result<()> {
 
     // Install based on extension
     let game = match extension {
-        "ewz" => {
-            println!("Detected Emberware Z ROM (.ewz)");
+        "ewzx" => {
+            println!("Detected Emberware ZX ROM (.ewzx)");
             let loader = ZRomLoader;
             loader
                 .install(rom_path, &provider)
-                .context("Failed to install Emberware Z ROM")?
+                .context("Failed to install Emberware ZX ROM")?
         }
         _ => {
             anyhow::bail!(
-                "Unsupported ROM extension: .{}\nSupported formats: .ewz",
+                "Unsupported ROM extension: .{}\nSupported formats: .ewzx",
                 extension
             );
         }

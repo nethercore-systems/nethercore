@@ -1,10 +1,11 @@
 //! ember-export - Emberware asset export tool
 //!
 //! Converts raw assets (glTF, PNG, WAV, TTF) to GPU-ready binary formats
-//! (.ewzmesh, .ewztex, .ewzsnd, .ewzskel, .ewzanim)
+//! (.ewzxmesh, .ewzxtex, .ewzxsnd, .ewzxskel, .ewzxanim)
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use emberware_shared::ZX_ROM_FORMAT;
 use std::path::PathBuf;
 
 mod animation;
@@ -24,10 +25,8 @@ pub use zx_common::{
     vertex_stride, vertex_stride_packed, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV,
 };
 
-// Re-export file extension constants
-pub use zx_common::{
-    EWZ_ANIMATION_EXT, EWZ_MESH_EXT, EWZ_SKELETON_EXT, EWZ_SOUND_EXT, EWZ_TEXTURE_EXT,
-};
+// Re-export ROM format from shared (includes all extension constants)
+pub use emberware_shared::RomFormat;
 
 #[derive(Parser)]
 #[command(name = "ember-export")]
@@ -67,7 +66,7 @@ enum Commands {
         /// Input mesh file (glTF/GLB/OBJ)
         input: PathBuf,
 
-        /// Output .ewzmesh file
+        /// Output .ewzxmesh file
         #[arg(short, long)]
         output: Option<PathBuf>,
 
@@ -81,7 +80,7 @@ enum Commands {
         /// Input PNG/JPG file
         input: PathBuf,
 
-        /// Output .ewztex file
+        /// Output .ewzxtex file
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
@@ -91,7 +90,7 @@ enum Commands {
         /// Input WAV file
         input: PathBuf,
 
-        /// Output .ewzsnd file
+        /// Output .ewzxsnd file
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
@@ -101,7 +100,7 @@ enum Commands {
         /// Input glTF/GLB file
         input: PathBuf,
 
-        /// Output .ewzskel file
+        /// Output .ewzxskel file
         #[arg(short, long)]
         output: Option<PathBuf>,
 
@@ -119,7 +118,7 @@ enum Commands {
         /// Input glTF/GLB file
         input: PathBuf,
 
-        /// Output .ewzanim file
+        /// Output .ewzxanim file
         #[arg(short, long)]
         output: Option<PathBuf>,
 
@@ -178,7 +177,7 @@ fn main() -> Result<()> {
             output,
             format,
         } => {
-            let output = output.unwrap_or_else(|| input.with_extension(EWZ_MESH_EXT));
+            let output = output.unwrap_or_else(|| input.with_extension(ZX_ROM_FORMAT.mesh_ext));
             tracing::info!("Converting {:?} -> {:?}", input, output);
 
             // Detect format by extension
@@ -200,14 +199,14 @@ fn main() -> Result<()> {
         }
 
         Commands::Texture { input, output } => {
-            let output = output.unwrap_or_else(|| input.with_extension(EWZ_TEXTURE_EXT));
+            let output = output.unwrap_or_else(|| input.with_extension(ZX_ROM_FORMAT.texture_ext));
             tracing::info!("Converting {:?} -> {:?}", input, output);
             texture::convert_image(&input, &output)?;
             tracing::info!("Done!");
         }
 
         Commands::Audio { input, output } => {
-            let output = output.unwrap_or_else(|| input.with_extension(EWZ_SOUND_EXT));
+            let output = output.unwrap_or_else(|| input.with_extension(ZX_ROM_FORMAT.sound_ext));
             tracing::info!("Converting {:?} -> {:?}", input, output);
             audio::convert_wav(&input, &output)?;
             tracing::info!("Done!");
@@ -222,7 +221,8 @@ fn main() -> Result<()> {
             if list {
                 skeleton::list_skins(&input)?;
             } else {
-                let output = output.unwrap_or_else(|| input.with_extension(EWZ_SKELETON_EXT));
+                let output =
+                    output.unwrap_or_else(|| input.with_extension(ZX_ROM_FORMAT.skeleton_ext));
                 tracing::info!("Exporting skeleton {:?} -> {:?}", input, output);
                 skeleton::convert_gltf_skeleton(&input, &output, skin)?;
                 tracing::info!("Done!");
@@ -240,7 +240,8 @@ fn main() -> Result<()> {
             if list {
                 animation::list_animations(&input)?;
             } else {
-                let output = output.unwrap_or_else(|| input.with_extension(EWZ_ANIMATION_EXT));
+                let output =
+                    output.unwrap_or_else(|| input.with_extension(ZX_ROM_FORMAT.animation_ext));
                 tracing::info!("Exporting animation {:?} -> {:?}", input, output);
                 animation::convert_gltf_animation(&input, &output, animation, skin, frame_rate)?;
                 tracing::info!("Done!");

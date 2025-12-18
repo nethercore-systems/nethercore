@@ -1,4 +1,4 @@
-//! Pack command - create .ewz ROM from WASM + assets
+//! Pack command - create .ewzx ROM from WASM + assets
 //!
 //! Automatically compresses textures based on render mode:
 //! - Mode 0 (Unlit): RGBA8 (uncompressed)
@@ -9,10 +9,11 @@ use clap::Args;
 use std::path::PathBuf;
 
 use emberware_shared::math::BoneMatrix3x4;
+use emberware_shared::ZX_ROM_FORMAT;
 use zx_common::{
     vertex_stride_packed, EmberZAnimationHeader, EmberZMeshHeader, EmberZSkeletonHeader,
     PackedData, PackedKeyframes, PackedMesh, PackedSkeleton, PackedSound, PackedTexture,
-    TextureFormat, ZDataPack, ZMetadata, ZRom, EWZ_VERSION, INVERSE_BIND_MATRIX_SIZE,
+    TextureFormat, ZDataPack, ZMetadata, ZRom, INVERSE_BIND_MATRIX_SIZE,
 };
 
 use crate::manifest::{AssetsSection, EmberManifest};
@@ -24,7 +25,7 @@ pub struct PackArgs {
     #[arg(short, long, default_value = "ember.toml")]
     pub manifest: PathBuf,
 
-    /// Output .ewz file path
+    /// Output .ewzx file path
     #[arg(short, long)]
     pub output: Option<PathBuf>,
 
@@ -105,7 +106,7 @@ pub fn execute(args: PackArgs) -> Result<()> {
 
     // Create ROM
     let rom = ZRom {
-        version: EWZ_VERSION,
+        version: ZX_ROM_FORMAT.version,
         metadata,
         code,
         data_pack: if data_pack.is_empty() {
@@ -121,9 +122,9 @@ pub fn execute(args: PackArgs) -> Result<()> {
     rom.validate().context("ROM validation failed")?;
 
     // Determine output path
-    let output_path = args
-        .output
-        .unwrap_or_else(|| project_dir.join(format!("{}.ewz", manifest.game.id)));
+    let output_path = args.output.unwrap_or_else(|| {
+        project_dir.join(format!("{}.{}", manifest.game.id, ZX_ROM_FORMAT.extension))
+    });
 
     // Write ROM
     let rom_bytes = rom.to_bytes().context("Failed to serialize ROM")?;
@@ -364,7 +365,7 @@ fn compress_bc7(pixels: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
 
 /// Load a mesh from file
 ///
-/// Supports: .ewzmesh / .embermesh (Emberware Z mesh format)
+/// Supports: .ewzxmesh / .embermesh (Emberware ZX mesh format)
 /// Future: .gltf, .glb, .obj (via ember-export)
 fn load_mesh(id: &str, path: &std::path::Path) -> Result<PackedMesh> {
     let data =
@@ -423,7 +424,7 @@ fn load_mesh(id: &str, path: &std::path::Path) -> Result<PackedMesh> {
     })
 }
 
-/// Load keyframes from .ewzanim file
+/// Load keyframes from .ewzxanim file
 ///
 /// The new platform format (16 bytes per bone per frame):
 /// - Header: 4 bytes (bone_count u8, flags u8, frame_count u16 LE)
@@ -536,7 +537,7 @@ fn load_data(id: &str, path: &std::path::Path) -> Result<PackedData> {
     })
 }
 
-/// Load a skeleton from .ewzskel file
+/// Load a skeleton from .ewzxskel file
 ///
 /// File format:
 /// - Header: 8 bytes (bone_count u32, reserved u32)
@@ -821,9 +822,9 @@ version = "1.0.0"
     }
 
     #[test]
-    fn test_load_mesh_ewzmesh() {
+    fn test_load_mesh_ewzxmesh() {
         let dir = tempdir().unwrap();
-        let mesh_path = dir.path().join("test.ewzmesh");
+        let mesh_path = dir.path().join("test.ewzxmesh");
 
         // Create a minimal EmberZMesh file
         // Format 0 = position only (8 bytes per vertex)
@@ -858,7 +859,7 @@ version = "1.0.0"
         use zx_common::{FORMAT_COLOR, FORMAT_UV};
 
         let dir = tempdir().unwrap();
-        let mesh_path = dir.path().join("test_uv_color.ewzmesh");
+        let mesh_path = dir.path().join("test_uv_color.ewzxmesh");
 
         // Format 3 = position (8) + UV (4) + color (4) = 16 bytes per vertex
         let format = FORMAT_UV | FORMAT_COLOR;
@@ -888,7 +889,7 @@ version = "1.0.0"
     #[test]
     fn test_load_mesh_invalid_too_small() {
         let dir = tempdir().unwrap();
-        let mesh_path = dir.path().join("bad.ewzmesh");
+        let mesh_path = dir.path().join("bad.ewzxmesh");
 
         // File too small to contain header
         std::fs::write(&mesh_path, &[0u8; 5]).unwrap();
@@ -900,7 +901,7 @@ version = "1.0.0"
     #[test]
     fn test_load_mesh_invalid_truncated_data() {
         let dir = tempdir().unwrap();
-        let mesh_path = dir.path().join("truncated.ewzmesh");
+        let mesh_path = dir.path().join("truncated.ewzxmesh");
 
         // Valid header but truncated vertex data
         let header = EmberZMeshHeader::new(10, 0, 0); // Claims 10 vertices (80 bytes needed)
@@ -942,11 +943,11 @@ version = "1.0.0"
     }
 
     #[test]
-    fn test_load_keyframes_ewzanim() {
+    fn test_load_keyframes_ewzxanim() {
         let dir = tempdir().unwrap();
-        let anim_path = dir.path().join("test.ewzanim");
+        let anim_path = dir.path().join("test.ewzxanim");
 
-        // Create a minimal .ewzanim file
+        // Create a minimal .ewzxanim file
         // 2 bones, 3 frames (2 * 3 * 16 = 96 bytes of data)
         let header = EmberZAnimationHeader::new(2, 3);
         let mut anim_data = header.to_bytes().to_vec();
@@ -968,7 +969,7 @@ version = "1.0.0"
     #[test]
     fn test_load_keyframes_invalid_header() {
         let dir = tempdir().unwrap();
-        let bad_path = dir.path().join("bad.ewzanim");
+        let bad_path = dir.path().join("bad.ewzxanim");
 
         // Invalid header (bone_count = 0)
         let mut data = vec![0u8; 4];
@@ -986,7 +987,7 @@ version = "1.0.0"
     #[test]
     fn test_load_keyframes_truncated() {
         let dir = tempdir().unwrap();
-        let trunc_path = dir.path().join("truncated.ewzanim");
+        let trunc_path = dir.path().join("truncated.ewzxanim");
 
         // Valid header but truncated data
         let header = EmberZAnimationHeader::new(5, 10); // 5 bones, 10 frames = 800 bytes
@@ -1010,11 +1011,11 @@ version = "0.1.0"
 
 [[assets.keyframes]]
 id = "walk"
-path = "assets/walk.ewzanim"
+path = "assets/walk.ewzxanim"
 
 [[assets.keyframes]]
 id = "run"
-path = "assets/run.ewzanim"
+path = "assets/run.ewzxanim"
 "#;
         let manifest = EmberManifest::parse(manifest_toml).unwrap();
         assert_eq!(manifest.assets.keyframes.len(), 2);

@@ -10,7 +10,7 @@
 //! 1. `ConsoleType` enum represents all compile-time known console types
 //! 2. `RomLoaderRegistry` manages ROM loaders for all console types
 //! 3. `launch_player()` spawns the appropriate player binary
-//! 4. Each console has its own player binary (e.g., `emberware-z`)
+//! 4. Each console has its own player binary (e.g., `emberware-zx`)
 //!
 //! # Adding a New Console
 //!
@@ -35,6 +35,7 @@ use std::process::Command;
 use anyhow::{Context, Result};
 
 use emberware_core::library::{LocalGame, RomLoaderRegistry};
+use emberware_shared::ZX_ROM_FORMAT;
 
 use zx_common::ZRomLoader;
 
@@ -53,7 +54,7 @@ pub struct PlayerOptions {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ConsoleType {
     /// Emberware ZX (PS1/N64 aesthetic)
-    Z,
+    ZX,
     // Future: Chroma, Y, X, etc.
 }
 
@@ -63,7 +64,7 @@ impl ConsoleType {
     /// This matches the `console_type` field in game manifests.
     pub fn as_str(&self) -> &'static str {
         match self {
-            ConsoleType::Z => "z",
+            ConsoleType::ZX => "zx",
         }
     }
 
@@ -72,7 +73,7 @@ impl ConsoleType {
     /// Returns `None` if the string doesn't match any known console type.
     pub fn parse(s: &str) -> Option<Self> {
         match s {
-            "z" => Some(ConsoleType::Z),
+            "zx" => Some(ConsoleType::ZX),
             _ => None,
         }
     }
@@ -88,7 +89,7 @@ impl ConsoleType {
     #[allow(dead_code)]
     pub fn rom_extension(&self) -> &'static str {
         match self {
-            ConsoleType::Z => "ewz",
+            ConsoleType::ZX => ZX_ROM_FORMAT.extension,
         }
     }
 
@@ -99,19 +100,19 @@ impl ConsoleType {
     ///
     /// # Returns
     ///
-    /// - `Some(ConsoleType::Z)` for `.ewz` files
+    /// - `Some(ConsoleType::ZX)` for `.ewzx` files
     /// - `None` for unknown extensions
     pub fn from_extension(ext: &str) -> Option<Self> {
-        match ext {
-            "ewz" => Some(ConsoleType::Z),
-            // Future: "ewc" => Some(ConsoleType::Chroma),
-            _ => None,
+        if ext == ZX_ROM_FORMAT.extension {
+            return Some(ConsoleType::ZX);
         }
+        // Future: if ext == CHROMA_ROM_FORMAT.extension { return Some(ConsoleType::Chroma); }
+        None
     }
 
     /// Get all available console types.
     pub fn all() -> &'static [ConsoleType] {
-        &[ConsoleType::Z]
+        &[ConsoleType::ZX]
     }
 
     /// Get the player binary name for this console type.
@@ -119,7 +120,7 @@ impl ConsoleType {
     /// This is the name of the executable that plays games for this console.
     pub fn player_binary_name(&self) -> &'static str {
         match self {
-            ConsoleType::Z => "emberware-z",
+            ConsoleType::ZX => "emberware-zx",
             // Future: ConsoleType::Chroma => "emberware-chroma",
         }
     }
@@ -300,8 +301,9 @@ pub fn launch_game_from_path(path: &Path) -> Result<()> {
         .and_then(ConsoleType::from_extension)
         .ok_or_else(|| {
             anyhow::anyhow!(
-                "Unknown ROM file type: {}. Supported extensions: .ewz",
-                path.display()
+                "Unknown ROM file type: {}. Supported extensions: .{}",
+                path.display(),
+                ZX_ROM_FORMAT.extension
             )
         })?;
 
@@ -324,8 +326,9 @@ pub fn run_game_from_path_with_options(path: &Path, options: &PlayerOptions) -> 
         .and_then(ConsoleType::from_extension)
         .ok_or_else(|| {
             anyhow::anyhow!(
-                "Unknown ROM file type: {}. Supported extensions: .ewz",
-                path.display()
+                "Unknown ROM file type: {}. Supported extensions: .{}",
+                path.display(),
+                ZX_ROM_FORMAT.extension
             )
         })?;
 
@@ -339,7 +342,7 @@ pub fn run_game_from_path_with_options(path: &Path, options: &PlayerOptions) -> 
 /// Create a ROM loader registry with all supported console ROM loaders.
 ///
 /// This registers loaders for all supported ROM formats:
-/// - `.ewz` files for Emberware Z
+/// - `.ewzx` files for Emberware ZX
 pub fn create_rom_loader_registry() -> RomLoaderRegistry {
     let mut registry = RomLoaderRegistry::new();
     registry.register(Box::new(ZRomLoader));
@@ -436,19 +439,19 @@ mod tests {
 
     #[test]
     fn test_console_type_as_str() {
-        assert_eq!(ConsoleType::Z.as_str(), "z");
+        assert_eq!(ConsoleType::ZX.as_str(), "zx");
     }
 
     #[test]
     fn test_console_type_parse_valid() {
-        assert_eq!(ConsoleType::parse("z"), Some(ConsoleType::Z));
+        assert_eq!(ConsoleType::parse("zx"), Some(ConsoleType::ZX));
     }
 
     #[test]
     fn test_console_type_parse_invalid() {
         assert_eq!(ConsoleType::parse("invalid"), None);
         assert_eq!(ConsoleType::parse(""), None);
-        assert_eq!(ConsoleType::parse("Z"), None); // Case-sensitive
+        assert_eq!(ConsoleType::parse("ZX"), None); // Case-sensitive
         assert_eq!(ConsoleType::parse("chroma"), None); // Not yet implemented
     }
 
@@ -456,7 +459,7 @@ mod tests {
     fn test_console_type_all() {
         let all = ConsoleType::all();
         assert_eq!(all.len(), 1);
-        assert!(all.contains(&ConsoleType::Z));
+        assert!(all.contains(&ConsoleType::ZX));
     }
 
     #[test]
@@ -469,7 +472,7 @@ mod tests {
     #[test]
     fn test_registry_supports_valid() {
         let registry = ConsoleRegistry::new();
-        assert!(registry.supports("z"));
+        assert!(registry.supports("zx"));
     }
 
     #[test]
@@ -478,42 +481,45 @@ mod tests {
         assert!(!registry.supports("invalid"));
         assert!(!registry.supports("chroma")); // Not yet implemented
         assert!(!registry.supports(""));
-        assert!(!registry.supports("Z")); // Case-sensitive
+        assert!(!registry.supports("ZX")); // Case-sensitive
     }
 
     #[test]
     fn test_registry_available_consoles() {
         let registry = ConsoleRegistry::new();
         let consoles = registry.available_consoles();
-        assert_eq!(consoles, vec!["z"]);
+        assert_eq!(consoles, vec!["zx"]);
     }
 
     #[test]
     fn test_registry_default() {
         let registry = ConsoleRegistry::default();
-        assert!(registry.supports("z"));
+        assert!(registry.supports("zx"));
     }
 
     #[test]
     fn test_console_type_player_binary_name() {
-        assert_eq!(ConsoleType::Z.player_binary_name(), "emberware-z");
+        assert_eq!(ConsoleType::ZX.player_binary_name(), "emberware-zx");
     }
 
     #[test]
     fn test_console_type_rom_extension() {
-        assert_eq!(ConsoleType::Z.rom_extension(), "ewz");
+        assert_eq!(ConsoleType::ZX.rom_extension(), ZX_ROM_FORMAT.extension);
     }
 
     #[test]
     fn test_console_type_from_extension_valid() {
-        assert_eq!(ConsoleType::from_extension("ewz"), Some(ConsoleType::Z));
+        assert_eq!(
+            ConsoleType::from_extension(ZX_ROM_FORMAT.extension),
+            Some(ConsoleType::ZX)
+        );
     }
 
     #[test]
     fn test_console_type_from_extension_invalid() {
         assert_eq!(ConsoleType::from_extension("invalid"), None);
         assert_eq!(ConsoleType::from_extension(""), None);
-        assert_eq!(ConsoleType::from_extension("EWZ"), None); // Case-sensitive
+        assert_eq!(ConsoleType::from_extension("EWZX"), None); // Case-sensitive
         assert_eq!(ConsoleType::from_extension("ewc"), None); // Chroma not yet implemented
     }
 }

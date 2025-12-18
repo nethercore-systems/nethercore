@@ -1,4 +1,4 @@
-//! Binary format definitions for Emberware Z asset files
+//! Binary format definitions for Emberware ZX asset files
 //!
 //! Re-exports from z-common for writing asset files.
 

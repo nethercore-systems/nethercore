@@ -1,4 +1,4 @@
-//! FFI declarations for Emberware Z
+//! FFI declarations for Emberware ZX
 //!
 //! Common FFI functions used by all inspector examples.
 

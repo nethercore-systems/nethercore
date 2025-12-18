@@ -22,7 +22,7 @@ Emberware uses console-specific binary ROM formats for game distribution. Each f
 - ✅ Games can `#[derive(Encode)]` for ROM metadata
 - ✅ No external dependencies for inspection (just Rust tooling)
 
-## Emberware Z ROM Format (.ewz)
+## Emberware ZX ROM Format (.ewz)
 
 ### File Structure
 
@@ -39,7 +39,7 @@ game.ewz (binary file)
 
 ### Magic Bytes
 
-All Emberware Z ROM files start with the magic bytes: `EWZ\0` (hex: `45 57 5A 00`)
+All Emberware ZX ROM files start with the magic bytes: `EWZ\0` (hex: `45 57 5A 00`)
 
 This allows tools to quickly identify the ROM type and reject invalid files.
 
@@ -174,7 +174,7 @@ The ROM keeps a simple `author` string for offline display when the platform is 
   - Example: "0.1.0"
   - Useful for debugging ROM issues
 
-#### Console-Specific Settings (Emberware Z)
+#### Console-Specific Settings (Emberware ZX)
 
 - **render_mode**: Rendering mode for the game
   - `0` = Unlit (flat shading, no lighting)
@@ -371,7 +371,7 @@ Large game with assets:
 Common validation errors and their meanings:
 
 **"Invalid EWZ magic bytes"**
-- File is not an Emberware Z ROM
+- File is not an Emberware ZX ROM
 - File may be corrupted
 - Wrong ROM type (trying to load .ewc as .ewz)
 
@@ -433,4 +433,4 @@ The ROM format is an **addition** for distribution, not a replacement for develo
 
 - [distributing-games.md](./distributing-games.md) - Complete guide for game developers
 - [ffi.md](./ffi.md) - Emberware FFI API reference
-- [emberware-z.md](./emberware-z.md) - Z-specific API documentation
+- [emberware-zx.md](./emberware-zx.md) - ZX-specific API documentation

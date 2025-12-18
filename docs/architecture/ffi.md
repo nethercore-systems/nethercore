@@ -41,7 +41,7 @@ Certain settings define the "mood" of your game and **must be set in `init()`**.
 fn set_resolution(res: u32)                 // Console-specific resolution enum (see console docs)
 fn set_tick_rate(fps: u32)                  // 24, 30, 60, or 120
 fn set_clear_color(color: u32)              // Auto-clear color (0xRRGGBBAA), default: black
-fn render_mode(mode: u32)                   // Emberware Z only: 0-3
+fn render_mode(mode: u32)                   // Emberware ZX only: 0-3
 ```
 
 Resolution values are console-specific:
@@ -58,7 +58,7 @@ If not set, the console uses its defaults (540p @ 60fps for ZX, 384×216 @ 60fps
 
 ### Mode 2 Migration (2025)
 
-**Emberware Z Mode 2 was migrated from PBR-lite to Metallic-Roughness Blinn-Phong:**
+**Emberware ZX Mode 2 was migrated from PBR-lite to Metallic-Roughness Blinn-Phong:**
 
 **What changed in the rendering:**
 - Specular model: GGX → Normalized Blinn-Phong (Gotanda 2010)

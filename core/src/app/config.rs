@@ -152,8 +152,8 @@ impl Default for VideoConfig {
     fn default() -> Self {
         Self {
             fullscreen: false,
-            vsync: true,
-            resolution_scale: 2,
+            vsync: default_true(),
+            resolution_scale: default_scale(),
             scale_mode: ScaleMode::default(),
         }
     }
@@ -161,7 +161,9 @@ impl Default for VideoConfig {
 
 impl Default for AudioConfig {
     fn default() -> Self {
-        Self { master_volume: 0.8 }
+        Self {
+            master_volume: default_volume(),
+        }
     }
 }
 

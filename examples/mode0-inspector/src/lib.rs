@@ -1,7 +1,7 @@
-//! Mode 0 Inspector - Unlit / Simple Lambert
+//! Mode 0 Inspector - Lambert Shading
 //!
 //! Demonstrates the debug inspection system for Mode 0 rendering.
-//! Mode 0 with normals provides simple Lambert shading using the sky's sun.
+//! Mode 0 provides Lambert diffuse shading with up to 4 dynamic lights.
 //!
 //! Features:
 //! - Shape cycling (Sphere, Cube, Torus)
@@ -69,6 +69,13 @@ extern "C" {
     fn sky_set_sun(dir_x: f32, dir_y: f32, dir_z: f32, color: u32, sharpness: f32);
     fn draw_sky();
 
+    // Lights (4 dynamic lights)
+    fn light_set(index: u32, x: f32, y: f32, z: f32);
+    fn light_color(index: u32, color: u32);
+    fn light_intensity(index: u32, intensity: f32);
+    fn light_enable(index: u32);
+    fn light_disable(index: u32);
+
     // 2D UI
     fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
 
@@ -77,6 +84,7 @@ extern "C" {
     fn debug_group_end();
     fn debug_register_f32(name: *const u8, name_len: u32, ptr: *const f32);
     fn debug_register_i32(name: *const u8, name_len: u32, ptr: *const i32);
+    fn debug_register_u8(name: *const u8, name_len: u32, ptr: *const u8);
     fn debug_register_color(name: *const u8, name_len: u32, ptr: *const u8);
 }
 
@@ -102,6 +110,22 @@ static mut SUN_DIR_Y: f32 = -0.7;
 static mut SUN_DIR_Z: f32 = 0.5;
 static mut SUN_COLOR: u32 = 0xFFF2E6FF; // Warm white
 static mut SUN_SHARPNESS: f32 = 0.98;
+
+// Light settings (4 dynamic lights)
+static mut LIGHT_DIRS: [[f32; 3]; 4] = [
+    [-0.5, -0.8, -0.3],  // Light 0: key light (from upper-right-front)
+    [0.7, -0.3, -0.5],   // Light 1: fill light (from upper-left)
+    [-0.3, 0.5, -0.7],   // Light 2: back light (from lower-front)
+    [0.3, -0.6, 0.5],    // Light 3: rim light (from upper-back)
+];
+static mut LIGHT_COLORS: [u32; 4] = [
+    0xFFF2E6FF,  // Light 0: warm white
+    0x99B3FFFF,  // Light 1: cool blue
+    0xFFB380FF,  // Light 2: orange
+    0xB3FFB3FF,  // Light 3: green
+];
+static mut LIGHT_ENABLED: [u8; 4] = [1, 1, 0, 0];  // First two enabled by default
+static mut LIGHT_INTENSITY: [f32; 4] = [1.5, 1.0, 0.8, 0.6];
 
 // ============================================================================
 // Internal State
@@ -142,7 +166,7 @@ pub extern "C" fn init() {
         // Dark background
         set_clear_color(0x1a1a2eFF);
 
-        // Set render mode 0 (Unlit with Lambert if normals present)
+        // Set render mode 0 (Lambert diffuse shading)
         render_mode(0);
 
         // Enable depth testing
@@ -152,6 +176,19 @@ pub extern "C" fn init() {
         SPHERE_MESH = sphere(1.5, 32, 16);
         CUBE_MESH = cube(1.2, 1.2, 1.2);
         TORUS_MESH = torus(1.2, 0.5, 32, 16);
+
+        // Initialize 4 lights
+        for i in 0..4u32 {
+            let dir = LIGHT_DIRS[i as usize];
+            light_set(i, dir[0], dir[1], dir[2]);
+            light_color(i, LIGHT_COLORS[i as usize]);
+            light_intensity(i, LIGHT_INTENSITY[i as usize]);
+            if LIGHT_ENABLED[i as usize] != 0 {
+                light_enable(i);
+            } else {
+                light_disable(i);
+            }
+        }
 
         // Register debug values
         register_debug_values();
@@ -179,6 +216,23 @@ unsafe fn register_debug_values() {
     debug_register_f32(b"dir_z".as_ptr(), 5, &SUN_DIR_Z);
     debug_register_color(b"color".as_ptr(), 5, &SUN_COLOR as *const u32 as *const u8);
     debug_register_f32(b"sharpness".as_ptr(), 9, &SUN_SHARPNESS);
+    debug_group_end();
+
+    // Light groups (4 lights)
+    register_light_debug(0, b"light0");
+    register_light_debug(1, b"light1");
+    register_light_debug(2, b"light2");
+    register_light_debug(3, b"light3");
+}
+
+unsafe fn register_light_debug(index: usize, name: &[u8]) {
+    debug_group_begin(name.as_ptr(), name.len() as u32);
+    debug_register_u8(b"enabled".as_ptr(), 7, &LIGHT_ENABLED[index]);
+    debug_register_f32(b"dir_x".as_ptr(), 5, &LIGHT_DIRS[index][0]);
+    debug_register_f32(b"dir_y".as_ptr(), 5, &LIGHT_DIRS[index][1]);
+    debug_register_f32(b"dir_z".as_ptr(), 5, &LIGHT_DIRS[index][2]);
+    debug_register_color(b"color".as_ptr(), 5, &LIGHT_COLORS[index] as *const u32 as *const u8);
+    debug_register_f32(b"intensity".as_ptr(), 9, &LIGHT_INTENSITY[index]);
     debug_group_end();
 }
 
@@ -216,6 +270,19 @@ pub extern "C" fn render() {
         sky_set_sun(SUN_DIR_X, SUN_DIR_Y, SUN_DIR_Z, SUN_COLOR, SUN_SHARPNESS);
         draw_sky();
 
+        // Update lights from debug values
+        for i in 0..4u32 {
+            let dir = LIGHT_DIRS[i as usize];
+            light_set(i, dir[0], dir[1], dir[2]);
+            light_color(i, LIGHT_COLORS[i as usize]);
+            light_intensity(i, LIGHT_INTENSITY[i as usize]);
+            if LIGHT_ENABLED[i as usize] != 0 {
+                light_enable(i);
+            } else {
+                light_disable(i);
+            }
+        }
+
         // Draw current shape
         push_identity();
         push_rotate_y(ROTATION_Y);
@@ -237,7 +304,7 @@ pub extern "C" fn render() {
 
 unsafe fn draw_ui() {
     // Title
-    let title = b"Mode 0: Unlit / Lambert";
+    let title = b"Mode 0: Lambert";
     draw_text(title.as_ptr(), title.len() as u32, 10.0, 10.0, 20.0, 0xFFFFFFFF);
 
     // Current shape

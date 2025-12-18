@@ -59,7 +59,7 @@ impl<C: Console> ConsoleRunner<C> {
         let graphics = console.create_graphics(window)?;
         let audio = console.create_audio()?;
         let wasm_engine = WasmEngine::new()?;
-        let specs = console.specs();
+        let specs = C::specs();
 
         // Note: We don't store the console here because the Runtime takes ownership
         // when a game is loaded. The console is primarily needed for its specs

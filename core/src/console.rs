@@ -1,6 +1,6 @@
 //! Console trait and associated types
 //!
-//! Each fantasy console (Emberware Z, Classic, etc.) implements the `Console` trait
+//! Each fantasy console (Emberware ZX, Chroma, etc.) implements the `Console` trait
 //! to define its specific graphics, audio, input, and FFI functions.
 
 use std::sync::Arc;
@@ -48,7 +48,7 @@ pub trait Console: Send + 'static {
     ///
     /// This state is written to by FFI functions and consumed by Graphics/Audio backends.
     /// It is rebuilt each frame and is NOT part of rollback state (only GameState is rolled back).
-    /// For example, Emberware Z uses ZFFIState which holds draw commands, camera, transforms, etc.
+    /// For example, Emberware ZX uses ZFFIState which holds draw commands, camera, transforms, etc.
     type State: Default + Send + 'static;
     /// Console-specific rollback state (host-side, rolled back with WASM memory)
     ///
@@ -60,7 +60,7 @@ pub trait Console: Send + 'static {
     type ResourceManager: ConsoleResourceManager<Graphics = Self::Graphics, State = Self::State>;
 
     /// Get console specifications
-    fn specs(&self) -> &'static ConsoleSpecs;
+    fn specs() -> &'static ConsoleSpecs;
 
     /// Register console-specific FFI functions with the WASM linker
     fn register_ffi(
@@ -82,9 +82,6 @@ pub trait Console: Send + 'static {
     /// Resource managers handle the mapping between game resource handles (u32)
     /// and graphics backend handles (console-specific types).
     fn create_resource_manager(&self) -> Self::ResourceManager;
-
-    /// Get the window title for this console
-    fn window_title(&self) -> &'static str;
 
     /// Get console-specific debug statistics
     ///

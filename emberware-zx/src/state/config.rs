@@ -1,6 +1,6 @@
-//! Init-time configuration for Emberware Z
+//! Init-time configuration for Emberware ZX
 
-/// Init-time configuration for Emberware Z
+/// Init-time configuration for Emberware ZX
 ///
 /// All config functions are **init-only** and **single-call** — calling the same
 /// function twice during init() is an error and will trap.

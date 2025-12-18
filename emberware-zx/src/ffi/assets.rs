@@ -1,11 +1,11 @@
-//! Asset loading FFI for EmberZ binary formats (.ewzmesh, .ewztex, .ewzsnd, .ewzskel)
+//! Asset loading FFI for EmberZ binary formats (.ewzxmesh, .ewzxtex, .ewzxsnd, .ewzxskel)
 //!
 //! These functions load assets from POD EmberZ binary formats.
 //! No magic bytes - format is determined by which function is called.
 //!
 //! Usage from game code:
 //! ```text
-//! static MESH_DATA: &[u8] = include_bytes!("player.ewzmesh");
+//! static MESH_DATA: &[u8] = include_bytes!("player.ewzxmesh");
 //! let handle = load_zmesh(MESH_DATA.as_ptr() as u32, MESH_DATA.len() as u32);
 //! ```
 //!
@@ -39,10 +39,10 @@ pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     Ok(())
 }
 
-/// Load a mesh from EmberZ mesh (.ewzmesh) binary format
+/// Load a mesh from EmberZ mesh (.ewzxmesh) binary format
 ///
 /// # Arguments
-/// * `data_ptr` — Pointer to .ewzmesh binary data
+/// * `data_ptr` — Pointer to .ewzxmesh binary data
 /// * `data_len` — Length of the data in bytes
 ///
 /// Returns mesh handle (>0) on success, 0 on failure.
@@ -173,10 +173,10 @@ fn load_zmesh(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len: u3
     handle
 }
 
-/// Load a texture from EmberZ texture (.ewztex) binary format
+/// Load a texture from EmberZ texture (.ewzxtex) binary format
 ///
 /// # Arguments
-/// * `data_ptr` — Pointer to .ewztex binary data
+/// * `data_ptr` — Pointer to .ewzxtex binary data
 /// * `data_len` — Length of the data in bytes
 ///
 /// Returns texture handle (>0) on success, 0 on failure.
@@ -228,7 +228,7 @@ fn load_ztex(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len: u32
             warn!(
                 "load_ztex: failed to parse header. \
                 File may be in old 8-byte format (u32+u32). \
-                Regenerate with: ember-export texture <source.png> -o <output.ewztex>"
+                Regenerate with: ember-export texture <source.png> -o <output.ewzxtex>"
             );
             return 0;
         };
@@ -305,13 +305,13 @@ fn load_ztex(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len: u32
     handle
 }
 
-/// Load audio from EmberZ sound (.ewzsnd) binary format
+/// Load audio from EmberZ sound (.ewzxsnd) binary format
 ///
 /// Supports both legacy PCM format and QOA compressed format.
 /// Format is auto-detected by `decode_sound()`.
 ///
 /// # Arguments
-/// * `data_ptr` — Pointer to .ewzsnd binary data
+/// * `data_ptr` — Pointer to .ewzxsnd binary data
 /// * `data_len` — Length of the data in bytes
 ///
 /// Returns sound handle (>0) on success, 0 on failure.
@@ -393,10 +393,10 @@ fn load_zsound(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len: u
     handle
 }
 
-/// Load a skeleton from EmberZ skeleton (.ewzskel) binary format
+/// Load a skeleton from EmberZ skeleton (.ewzxskel) binary format
 ///
 /// # Arguments
-/// * `data_ptr` — Pointer to .ewzskel binary data
+/// * `data_ptr` — Pointer to .ewzxskel binary data
 /// * `data_len` — Length of the data in bytes
 ///
 /// Returns skeleton handle (>0) on success, 0 on failure.

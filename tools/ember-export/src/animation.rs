@@ -1,4 +1,4 @@
-//! Animation converter (glTF -> .ewzanim)
+//! Animation converter (glTF -> .ewzxanim)
 //!
 //! Extracts and samples animation clips from glTF files.
 //! Outputs the new compressed platform format (16 bytes per bone).

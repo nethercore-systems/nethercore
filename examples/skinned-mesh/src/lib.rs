@@ -1,6 +1,6 @@
 //! Skinned Mesh Example - GPU Skinning Validator (Animation System v2)
 //!
-//! Validates Emberware Z's skeletal animation system:
+//! Validates Emberware ZX's skeletal animation system:
 //! - 3x4 bone matrix format (12 floats per bone, column-major)
 //! - GPU skinning with smooth weight blending
 //! - Multiple bone hierarchy animation

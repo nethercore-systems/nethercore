@@ -1,13 +1,13 @@
-//! Emberware Z - Standalone Player
+//! Emberware ZX - Standalone Player
 //!
-//! A minimal player for running .ewz ROM files without the library UI.
+//! A minimal player for running Emberware ZX ROM files without the library UI.
 //!
 //! # Usage
 //!
 //! ```bash
-//! emberware-z path/to/game.ewz
-//! emberware-z game.ewz --fullscreen
-//! emberware-z game.ewz --debug
+//! emberware-zx path/to/game.ewzx
+//! emberware-zx game.ewzx --fullscreen
+//! emberware-zx game.ewzx --debug
 //! ```
 //!
 //! # Keyboard Shortcuts
@@ -26,14 +26,14 @@ use clap::Parser;
 use emberware_zx::player::{PlayerConfig, run};
 
 #[derive(Parser)]
-#[command(name = "emberware-z")]
+#[command(name = "emberware-zx")]
 #[command(
     author,
     version,
-    about = "Emberware Z - PS1/N64 aesthetic fantasy console"
+    about = "Emberware ZX - PS1/N64 aesthetic fantasy console"
 )]
 struct Args {
-    /// ROM file to play (.ewz or .wasm)
+    /// ROM file to play (.ewzx or .wasm)
     rom: PathBuf,
 
     /// Start in fullscreen mode (borderless window, scales to fit)

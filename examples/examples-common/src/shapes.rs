@@ -100,7 +100,7 @@ impl ShapeRotation {
                 self.x += stick_y * 3.0;
             } else {
                 // Auto-rotate
-                self.y += self.speed * (1.0 / 60.0);
+                self.y += self.speed * delta_time();
             }
 
             // Wrap angles

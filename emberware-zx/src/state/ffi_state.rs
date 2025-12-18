@@ -1,4 +1,4 @@
-//! FFI staging state for Emberware Z
+//! FFI staging state for Emberware ZX
 
 use std::sync::Arc;
 
@@ -13,7 +13,7 @@ use super::{
     SkeletonData, SkeletonGpuInfo, ZInitConfig,
 };
 
-/// FFI staging state for Emberware Z
+/// FFI staging state for Emberware ZX
 ///
 /// This state is written to by FFI functions during update()/render() calls,
 /// then consumed by ZGraphics at the end of each frame. It is cleared after

@@ -36,8 +36,8 @@ impl Default for InputConfig {
     fn default() -> Self {
         Self {
             keyboard: KeyboardMapping::default(),
-            stick_deadzone: 0.15,
-            trigger_deadzone: 0.1,
+            stick_deadzone: default_deadzone(),
+            trigger_deadzone: default_trigger_deadzone(),
         }
     }
 }

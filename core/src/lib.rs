@@ -5,7 +5,7 @@
 //!
 //! # Architecture
 //!
-//! - [`Console`] - Trait implemented by each fantasy console (e.g., Emberware Z)
+//! - [`Console`] - Trait implemented by each fantasy console (e.g., Emberware ZX)
 //! - [`Runtime`] - Game loop orchestration with fixed timestep updates
 //! - [`GameInstance`] - WASM game loaded and instantiated
 //! - [`RollbackSession`] - GGRS integration for rollback netcode

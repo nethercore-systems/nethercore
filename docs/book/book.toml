@@ -1,7 +1,7 @@
 [book]
-title = "Emberware Z API Reference"
+title = "Emberware ZX API Reference"
 authors = ["Emberware Team"]
-description = "Complete API documentation for the Emberware Z fantasy console"
+description = "Complete API documentation for the Emberware ZX fantasy console"
 language = "en"
 src = "src"
 

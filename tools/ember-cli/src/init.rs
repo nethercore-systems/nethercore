@@ -171,7 +171,7 @@ fn generate_manifest(game_id: &str, game_title: &str, is_rust_project: bool) -> 
 
     // Assets section
     content.push_str("# Assets\n");
-    content.push_str("# Declare assets to bundle into the .ewz cartridge.\n");
+    content.push_str("# Declare assets to bundle into the .ewzx cartridge.\n");
     content.push_str("# Load in game code with rom_texture(), rom_mesh(), etc.\n");
     content.push_str("#\n");
     content.push_str("# [[assets.textures]]\n");
@@ -180,7 +180,7 @@ fn generate_manifest(game_id: &str, game_title: &str, is_rust_project: bool) -> 
     content.push_str("#\n");
     content.push_str("# [[assets.meshes]]\n");
     content.push_str("# id = \"level\"\n");
-    content.push_str("# path = \"assets/level.ewzmesh\"\n");
+    content.push_str("# path = \"assets/level.ewzxmesh\"\n");
     content.push_str("#\n");
     content.push_str("# [[assets.sounds]]\n");
     content.push_str("# id = \"jump\"\n");
@@ -188,7 +188,7 @@ fn generate_manifest(game_id: &str, game_title: &str, is_rust_project: bool) -> 
     content.push_str("#\n");
     content.push_str("# [[assets.keyframes]]\n");
     content.push_str("# id = \"walk\"\n");
-    content.push_str("# path = \"assets/walk.ewzanim\"\n");
+    content.push_str("# path = \"assets/walk.ewzxanim\"\n");
     content.push_str("#\n");
     content.push_str("# [[assets.data]]\n");
     content.push_str("# id = \"levels\"\n");

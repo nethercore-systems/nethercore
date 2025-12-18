@@ -201,9 +201,9 @@ For thumbnails, you can:
 
 ## Console-Specific Settings
 
-### Emberware Z Settings
+### Emberware ZX Settings
 
-When creating an Emberware Z ROM, you can specify console-specific settings:
+When creating an Emberware ZX ROM, you can specify console-specific settings:
 
 #### Render Mode
 

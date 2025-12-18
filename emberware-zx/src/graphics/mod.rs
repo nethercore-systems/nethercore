@@ -1,4 +1,4 @@
-//! Emberware Z graphics backend (wgpu)
+//! Emberware ZX graphics backend (wgpu)
 //!
 //! Implements the `Graphics` trait from emberware-core with a wgpu-based
 //! renderer featuring PS1/N64 aesthetic (vertex jitter, affine textures).
@@ -65,7 +65,7 @@ pub(crate) use init::RenderTarget;
 use pipeline::PipelineCache;
 use texture_manager::TextureManager;
 
-/// Emberware Z graphics backend
+/// Emberware ZX graphics backend
 ///
 /// Manages wgpu device, textures, render state, and frame presentation.
 /// Implements the vertex buffer architecture with one buffer per stride

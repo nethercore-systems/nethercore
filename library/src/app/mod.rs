@@ -165,8 +165,8 @@ impl App {
                 tracing::info!("Opening file picker to run game directly");
 
                 let file_handle = rfd::FileDialog::new()
-                    .add_filter("Game Files", &["ewz", "wasm"])
-                    .add_filter("Emberware ROM", &["ewz"])
+                    .add_filter("Game Files", &["ewzx", "wasm"])
+                    .add_filter("Emberware ROM", &["ewzx"])
                     .add_filter("WebAssembly", &["wasm"])
                     .set_title("Open Game File")
                     .pick_file();
@@ -189,7 +189,7 @@ impl App {
                 tracing::info!("Opening file picker for ROM import");
 
                 let file_handle = rfd::FileDialog::new()
-                    .add_filter("Emberware ROM", &["ewz"])
+                    .add_filter("Emberware ROM", &["ewzx"])
                     .set_title("Import ROM File")
                     .pick_file();
 

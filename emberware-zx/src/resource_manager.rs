@@ -1,4 +1,4 @@
-//! Resource manager for Emberware Z
+//! Resource manager for Emberware ZX
 //!
 //! Manages the mapping between game resource handles (u32) and
 //! graphics backend handles (TextureHandle, MeshHandle).
@@ -61,7 +61,7 @@ fn bone_transform_to_matrix(t: &BoneTransform) -> BoneMatrix3x4 {
     }
 }
 
-/// Resource manager for Emberware Z
+/// Resource manager for Emberware ZX
 ///
 /// Manages the mapping between game resource handles (u32) and
 /// graphics backend handles (TextureHandle, MeshHandle).

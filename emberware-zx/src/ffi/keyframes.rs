@@ -46,7 +46,7 @@ pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
 /// Load keyframes from WASM memory
 ///
 /// # Arguments
-/// * `data_ptr` — Pointer to .ewzanim data in WASM memory
+/// * `data_ptr` — Pointer to .ewzxanim data in WASM memory
 /// * `byte_size` — Total size of the data in bytes
 ///
 /// # Returns

@@ -1,6 +1,6 @@
 # Cheat Sheet
 
-All Emberware Z FFI functions on one page.
+All Emberware ZX FFI functions on one page.
 
 ---
 

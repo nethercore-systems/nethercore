@@ -1,14 +1,15 @@
-//! Create Emberware Z ROM (.ewz) files
+//! Create Emberware ZX ROM (.ewzx) files
 
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use clap::Args;
-use zx_common::{ZMetadata, ZRom, EWZ_VERSION};
+use emberware_shared::ZX_ROM_FORMAT;
+use zx_common::{ZMetadata, ZRom};
 
-/// Arguments for creating an Emberware Z ROM
+/// Arguments for creating an Emberware ZX ROM
 #[derive(Debug, Args)]
-pub struct CreateZArgs {
+pub struct CreateZxArgs {
     /// Path to the compiled WASM file
     pub wasm_file: PathBuf,
 
@@ -64,14 +65,14 @@ pub struct CreateZArgs {
     #[arg(long)]
     pub target_fps: Option<u32>,
 
-    /// Output ROM file path (.ewz)
+    /// Output ROM file path (.ewzx)
     #[arg(long, short = 'o')]
     pub output: PathBuf,
 }
 
-/// Execute the create-z command
-pub fn execute(args: CreateZArgs) -> Result<()> {
-    println!("Creating Emberware Z ROM: {}", args.output.display());
+/// Execute the create-zx command
+pub fn execute(args: CreateZxArgs) -> Result<()> {
+    println!("Creating Emberware ZX ROM: {}", args.output.display());
 
     // 1. Read and validate WASM file
     let code = std::fs::read(&args.wasm_file)
@@ -155,7 +156,7 @@ pub fn execute(args: CreateZArgs) -> Result<()> {
 
     // 6. Create ROM
     let rom = ZRom {
-        version: EWZ_VERSION,
+        version: ZX_ROM_FORMAT.version,
         metadata,
         code,
         data_pack: None, // TODO: Support data pack via ember CLI

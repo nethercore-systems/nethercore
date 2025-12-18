@@ -1,4 +1,4 @@
-//! Shader generation system for Emberware Z
+//! Shader generation system for Emberware ZX
 //!
 //! All 40 shader permutations are pregenerated at build time by build.rs and validated
 //! with naga. This module provides access to the pregenerated shaders.
@@ -57,7 +57,7 @@ impl std::error::Error for ShaderGenError {}
 // ============================================================================
 
 const BLINNPHONG_COMMON: &str = include_str!("../shaders/blinnphong_common.wgsl");
-const TEMPLATE_MODE0: &str = include_str!("../shaders/mode0_unlit.wgsl");
+const TEMPLATE_MODE0: &str = include_str!("../shaders/mode0_lambert.wgsl");
 const TEMPLATE_MODE1: &str = include_str!("../shaders/mode1_matcap.wgsl");
 
 // ============================================================================

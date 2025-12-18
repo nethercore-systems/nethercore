@@ -1,6 +1,6 @@
-# Emberware Z Examples
+# Emberware ZX Examples
 
-Example games demonstrating Emberware Z features. Each example is a standalone WASM game showcasing specific APIs and techniques.
+Example games demonstrating Emberware ZX features. Each example is a standalone WASM game showcasing specific APIs and techniques.
 
 ## Building and Running
 

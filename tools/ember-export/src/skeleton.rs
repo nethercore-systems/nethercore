@@ -1,4 +1,4 @@
-//! Skeleton converter (glTF -> .ewzskel)
+//! Skeleton converter (glTF -> .ewzxskel)
 //!
 //! Extracts inverse bind matrices from glTF skins for skeletal animation.
 

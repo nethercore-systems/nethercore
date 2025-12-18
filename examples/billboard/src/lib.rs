@@ -71,6 +71,7 @@ extern "C" {
 
     // Timing
     fn elapsed_time() -> f32;
+    fn delta_time() -> f32;
 
     // Random (deterministic)
     fn random() -> u32;
@@ -394,7 +395,7 @@ pub extern "C" fn update() {
             FRAME_TIME = elapsed_time();
 
             // Update particles
-            let dt = 1.0 / 60.0; // Fixed timestep
+            let dt = delta_time();
             for i in 0..MAX_PARTICLES {
                 PARTICLES[i].update(dt);
 

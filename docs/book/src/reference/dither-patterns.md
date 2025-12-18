@@ -1,6 +1,6 @@
 # Dither Patterns Reference
 
-Quick reference for Bayer dithering matrices. Currently Emberware Z uses 4x4 only (compile-time), but these are available for future work.
+Quick reference for Bayer dithering matrices. Currently Emberware ZX uses 4x4 only (compile-time), but these are available for future work.
 
 ## 2x2 Bayer Matrix (4 levels)
 

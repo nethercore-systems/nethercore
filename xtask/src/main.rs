@@ -137,7 +137,7 @@ fn build_examples() -> Result<()> {
         fail_count.load(Ordering::Relaxed)
     );
     println!("Examples installed to: {}", games_dir.display());
-    println!("You can now run 'cargo run' to play them in Emberware Z.");
+    println!("You can now run 'cargo run' to play them in Emberware ZX.");
 
     if skipped_count.load(Ordering::Relaxed) > 0 {
         println!("Note: Skipped examples are templates that demonstrate data pack usage.");
@@ -259,7 +259,7 @@ fn build_with_ember(
     fs::create_dir_all(&game_dir)?;
 
     // Output path for the ROM
-    let rom_output = game_dir.join("rom.ewz");
+    let rom_output = game_dir.join("rom.ewzx");
 
     // Run ember build (compile + pack)
     let output = Command::new(ember_exe)

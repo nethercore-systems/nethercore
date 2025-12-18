@@ -1,12 +1,12 @@
-# Emberware Z Rendering Architecture
+# Emberware ZX Rendering Architecture
 
-This document describes the rendering architecture of Emberware Z, covering the GPU pipeline, render modes, vertex formats, shader generation, and material system.
+This document describes the rendering architecture of Emberware ZX, covering the GPU pipeline, render modes, vertex formats, shader generation, and material system.
 
 ---
 
 ## Overview
 
-Emberware Z uses a **wgpu-based** forward renderer with a command buffer pattern. The architecture separates staging (FFI state) from GPU execution:
+Emberware ZX uses a **wgpu-based** forward renderer with a command buffer pattern. The architecture separates staging (FFI state) from GPU execution:
 
 ```
 ┌──────────────────┐    ┌────────────────┐    ┌─────────────┐
@@ -83,7 +83,7 @@ The renderer uses a unified buffer layout to minimize binding changes:
 
 ## Render Modes
 
-Emberware Z supports 4 forward rendering modes, set once in `init()`:
+Emberware ZX supports 4 forward rendering modes, set once in `init()`:
 
 ```rust
 fn render_mode(mode: u32)  // 0-3, init-only
@@ -91,12 +91,12 @@ fn render_mode(mode: u32)  // 0-3, init-only
 
 | Mode | Name | Shaders | Description |
 |------|------|---------|-------------|
-| 0 | **Unlit** | 16 | Texture × vertex color. Simple Lambert if normals present. |
+| 0 | **Lambert** | 16 | Texture × vertex color. Simple Lambert if normals present. |
 | 1 | **Matcap** | 8 | View-space normal matcap sampling. Stylized, cheap. |
 | 2 | **MR-Blinn-Phong** | 8 | Metallic-roughness Blinn-Phong. Energy-conserving. |
 | 3 | **Blinn-Phong** | 8 | Classic specular-shininess with rim lighting. |
 
-### Mode 0: Unlit
+### Mode 0: Lambert
 
 The simplest mode — no lighting calculations for formats without normals.
 
@@ -275,7 +275,7 @@ Total: 40 shaders
 Shaders are generated from WGSL templates with placeholder replacement:
 
 **Template files:**
-- `shaders/mode0_unlit.wgsl` — Mode 0 template
+- `shaders/mode0_lambert.wgsl` — Mode 0 template
 - `shaders/mode1_matcap.wgsl` — Mode 1 template
 - `shaders/blinnphong_common.wgsl` — Modes 2-3 common code
 - `shaders/common.wgsl` — Shared utilities
@@ -519,16 +519,16 @@ Invalidate on:
 
 | File | Description |
 |------|-------------|
-| `emberware-z/src/graphics/mod.rs` | ZGraphics main implementation |
-| `emberware-z/src/graphics/frame.rs` | Frame rendering and command execution |
-| `emberware-z/src/graphics/pipeline.rs` | Pipeline cache and creation |
-| `emberware-z/src/graphics/vertex.rs` | Vertex format definitions |
-| `emberware-z/src/graphics/unified_shading_state.rs` | Shading state packing |
-| `emberware-z/src/graphics/buffer.rs` | Buffer management |
-| `emberware-z/src/graphics/command_buffer.rs` | Virtual render pass |
-| `emberware-z/src/graphics/texture_manager.rs` | Texture loading and VRAM tracking |
-| `emberware-z/src/shader_gen.rs` | Shader permutation system |
-| `emberware-z/shaders/*.wgsl` | Shader templates |
+| `emberware-zx/src/graphics/mod.rs` | ZGraphics main implementation |
+| `emberware-zx/src/graphics/frame.rs` | Frame rendering and command execution |
+| `emberware-zx/src/graphics/pipeline.rs` | Pipeline cache and creation |
+| `emberware-zx/src/graphics/vertex.rs` | Vertex format definitions |
+| `emberware-zx/src/graphics/unified_shading_state.rs` | Shading state packing |
+| `emberware-zx/src/graphics/buffer.rs` | Buffer management |
+| `emberware-zx/src/graphics/command_buffer.rs` | Virtual render pass |
+| `emberware-zx/src/graphics/texture_manager.rs` | Texture loading and VRAM tracking |
+| `emberware-zx/src/shader_gen.rs` | Shader permutation system |
+| `emberware-zx/shaders/*.wgsl` | Shader templates |
 
 ---
 

@@ -1,7 +1,10 @@
-//! Emberware Z binary asset and ROM formats
+//! Emberware ZX binary asset and ROM formats
 //!
 //! These are POD (Plain Old Data) formats for GPU-ready assets and ROM packaging.
 //! No magic bytes - the format is determined by context (which FFI function is called).
+//!
+//! ROM format constants (extensions, magic bytes) are defined in `emberware_shared::RomFormat`.
+//! Use `ZX_ROM_FORMAT` for all ZX-specific format constants.
 
 pub mod animation;
 pub mod mesh;
@@ -19,17 +22,5 @@ pub use texture::*;
 pub use z_data_pack::*;
 pub use z_rom::*;
 
-/// File extension for EmberZ mesh files
-pub const EWZ_MESH_EXT: &str = "ewzmesh";
-
-/// File extension for EmberZ texture files
-pub const EWZ_TEXTURE_EXT: &str = "ewztex";
-
-/// File extension for EmberZ sound files
-pub const EWZ_SOUND_EXT: &str = "ewzsnd";
-
-/// File extension for EmberZ skeleton files
-pub const EWZ_SKELETON_EXT: &str = "ewzskel";
-
-/// File extension for EmberZ animation files
-pub const EWZ_ANIMATION_EXT: &str = "ewzanim";
+// Re-export ROM format from shared for convenience
+pub use emberware_shared::{RomFormat, ZX_ROM_FORMAT};

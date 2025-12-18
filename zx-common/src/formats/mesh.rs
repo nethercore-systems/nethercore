@@ -1,6 +1,6 @@
 //! EmberZMesh binary format (.embermesh)
 //!
-//! Z console GPU-ready mesh format with packed vertices.
+//! ZX console GPU-ready mesh format with packed vertices.
 //! POD format - no magic bytes.
 //!
 //! # Layout

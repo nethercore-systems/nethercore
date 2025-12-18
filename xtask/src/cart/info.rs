@@ -9,7 +9,7 @@ use zx_common::ZRom;
 /// Arguments for inspecting ROM metadata
 #[derive(Debug, Args)]
 pub struct InfoArgs {
-    /// Path to the ROM file (.ewz)
+    /// Path to the ROM file (.ewzx)
     pub rom_file: PathBuf,
 }
 
@@ -23,12 +23,12 @@ pub fn execute(args: InfoArgs) -> Result<()> {
         .ok_or_else(|| anyhow::anyhow!("ROM file has no extension"))?;
 
     match extension {
-        "ewz" => inspect_z_rom(&args.rom_file),
+        "ewzx" => inspect_z_rom(&args.rom_file),
         _ => anyhow::bail!("Unsupported ROM extension: .{}", extension),
     }
 }
 
-/// Inspect an Emberware Z ROM
+/// Inspect an Emberware ZX ROM
 fn inspect_z_rom(rom_path: &PathBuf) -> Result<()> {
     // Read ROM file
     let rom_bytes = std::fs::read(rom_path)
@@ -42,7 +42,7 @@ fn inspect_z_rom(rom_path: &PathBuf) -> Result<()> {
 
     // Display metadata
     println!("═══════════════════════════════════════════════════════════");
-    println!("Emberware Z ROM: {}", rom_path.display());
+    println!("Emberware ZX ROM: {}", rom_path.display());
     println!("═══════════════════════════════════════════════════════════");
     println!();
 
@@ -84,7 +84,7 @@ fn inspect_z_rom(rom_path: &PathBuf) -> Result<()> {
         || rom.metadata.target_fps.is_some()
     {
         println!();
-        println!("CONSOLE SETTINGS (Emberware Z)");
+        println!("CONSOLE SETTINGS (Emberware ZX)");
         println!("───────────────────────────────────────────────────────────");
 
         if let Some(mode) = rom.metadata.render_mode {

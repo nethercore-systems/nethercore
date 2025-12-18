@@ -316,6 +316,8 @@ impl<C: Console> Runtime<C> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use emberware_shared::EMBERWARE_ZX_RAM_LIMIT;
     use wasmtime::Linker;
 
     use crate::console::{Console, RawInput};
@@ -354,7 +356,7 @@ mod tests {
         let console = TestConsole;
         let runtime = Runtime::new(console);
 
-        assert_eq!(runtime.console().specs().name, "Test Console");
+        assert_eq!(TestConsole::specs().name, "Test Console");
     }
 
     #[test]
@@ -439,7 +441,7 @@ mod tests {
         let mut runtime = Runtime::<TestConsole>::new(console);
 
         let session =
-            crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, 4 * 1024 * 1024);
+            crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, EMBERWARE_ZX_RAM_LIMIT);
         runtime.set_session(session);
 
         assert!(runtime.session().is_some());
@@ -452,7 +454,7 @@ mod tests {
         let mut runtime = Runtime::<TestConsole>::new(console);
 
         let session =
-            crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, 4 * 1024 * 1024);
+            crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, EMBERWARE_ZX_RAM_LIMIT);
         runtime.set_session(session);
 
         // Verify mutable access
@@ -557,7 +559,7 @@ mod tests {
         let mut runtime = Runtime::<TestConsole>::new(console);
 
         let session =
-            crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, 4 * 1024 * 1024);
+            crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, EMBERWARE_ZX_RAM_LIMIT);
         runtime.set_session(session);
 
         // Local sessions don't use GGRS input, so this should succeed
@@ -591,7 +593,7 @@ mod tests {
         let mut runtime = Runtime::<TestConsole>::new(console);
 
         let session =
-            crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, 4 * 1024 * 1024);
+            crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, EMBERWARE_ZX_RAM_LIMIT);
         runtime.set_session(session);
 
         // Local sessions don't produce events
@@ -618,7 +620,7 @@ mod tests {
         let mut runtime = Runtime::<TestConsole>::new(console);
 
         let session =
-            crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, 4 * 1024 * 1024);
+            crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, EMBERWARE_ZX_RAM_LIMIT);
         runtime.set_session(session);
 
         // Should not panic (no-op for local sessions)
@@ -631,8 +633,8 @@ mod tests {
 
     #[test]
     fn test_console_specs() {
-        let console = TestConsole;
-        let specs = console.specs();
+        let _console = TestConsole;
+        let specs = TestConsole::specs();
 
         assert_eq!(specs.name, "Test Console");
         assert_eq!(specs.resolutions.len(), 2);

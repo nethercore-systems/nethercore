@@ -1,8 +1,8 @@
-//! Standalone player for Emberware Z
+//! Standalone player for Emberware ZX
 //!
-//! This module provides a minimal player application that can run .ewz ROM files
+//! This module provides a minimal player application that can run Emberware ZX ROM files
 //! without the full library UI. Used by:
-//! - `emberware-z` binary (standalone player)
+//! - `emberware-zx` binary (standalone player)
 //! - `ember run` command (development)
 //! - Library process spawning
 
@@ -28,6 +28,7 @@ use emberware_core::console::{Console, ConsoleResourceManager};
 use emberware_core::debug::{ActionRequest, FrameController};
 use emberware_core::debug::registry::RegisteredValue;
 use emberware_core::debug::types::DebugValue;
+use emberware_shared::ZX_ROM_FORMAT;
 use zx_common::{ZDataPack, ZRom};
 
 use crate::audio;
@@ -713,14 +714,14 @@ impl ConsoleApp<EmberwareZX> for PlayerApp {
         self.loaded_rom = Some(rom.clone());
 
         // Set window title using game name from ROM metadata
-        window.set_title(&format!("Emberware Z - {}", rom.game_name));
+        window.set_title(&format!("Emberware ZX - {}", rom.game_name));
 
         // Update capture manager with the actual game name
         self.capture.set_game_name(rom.game_name.clone());
 
         // Create console runner
         let console = EmberwareZX::new();
-        let specs = console.specs();
+        let specs = EmberwareZX::specs();
 
         // Set minimum window size based on console's render resolution (in physical pixels)
         let (render_width, render_height) = specs.resolutions[specs.default_resolution];
@@ -1296,13 +1297,13 @@ fn load_rom(path: &Path) -> Result<LoadedRom> {
     let fallback_name = path
         .file_stem()
         .and_then(|s| s.to_str())
-        .unwrap_or("Emberware Z")
+        .unwrap_or(EmberwareZX::specs().name)
         .to_string();
 
-    if path.extension().and_then(|e| e.to_str()) == Some("ewz") {
-        let ewz_bytes = std::fs::read(path).context("Failed to read .ewz ROM file")?;
+    if path.extension().and_then(|e| e.to_str()) == Some(ZX_ROM_FORMAT.extension) {
+        let rom_bytes = std::fs::read(path).context("Failed to read Emberware ZX ROM file")?;
 
-        let rom = ZRom::from_bytes(&ewz_bytes).context("Failed to parse .ewz ROM")?;
+        let rom = ZRom::from_bytes(&rom_bytes).context("Failed to parse Emberware ZX ROM")?;
 
         // Use metadata title, fall back to file stem if empty
         let game_name = if rom.metadata.title.is_empty() {
@@ -1369,7 +1370,7 @@ pub fn run(config: PlayerConfig) -> Result<()> {
         )
         .init();
 
-    tracing::info!("Starting Emberware Z player");
+    tracing::info!("Starting Emberware ZX player");
     tracing::info!("ROM: {}", config.rom_path.display());
 
     let app = PlayerApp::new(config);

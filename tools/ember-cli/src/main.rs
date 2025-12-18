@@ -1,10 +1,10 @@
-//! Ember CLI - Build tool for Emberware Z games
+//! Ember CLI - Build tool for Emberware ZX games
 //!
 //! # Commands
 //!
 //! - `ember init` - Create a new ember.toml manifest
 //! - `ember compile` - Compile WASM from game project (runs build script)
-//! - `ember pack` - Bundle WASM + assets into .ewz ROM (no compilation)
+//! - `ember pack` - Bundle WASM + assets into .ewzx ROM (no compilation)
 //! - `ember build` - Build game: compile + pack (main command)
 //! - `ember run` - Build and launch in emulator
 //!
@@ -55,10 +55,10 @@ mod run;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
-/// Ember CLI - Build tool for Emberware Z games
+/// Ember CLI - Build tool for Emberware ZX games
 #[derive(Parser)]
 #[command(name = "ember")]
-#[command(about = "Build tool for Emberware Z games")]
+#[command(about = "Build tool for Emberware ZX games")]
 #[command(version)]
 struct Cli {
     #[command(subcommand)]
@@ -73,7 +73,7 @@ enum Commands {
     /// Compile WASM from game project (runs build script from manifest)
     Compile(compile::CompileArgs),
 
-    /// Bundle WASM + assets into .ewz ROM (no compilation)
+    /// Bundle WASM + assets into .ewzx ROM (no compilation)
     Pack(pack::PackArgs),
 
     /// Build game: compile + pack (main command)

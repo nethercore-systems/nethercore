@@ -26,6 +26,50 @@ This document describes Emberware's codebase organization principles, module str
 - Test modules with extensive test cases (keep related tests together)
 - Files with clear boundaries that would be awkward to split
 
+### Single Source of Truth
+
+**Every piece of data should have exactly one canonical source. Derived values should reference that source, not duplicate it.**
+
+**Rationale:**
+- Duplicate definitions drift apart over time
+- Changes require updating multiple locations (easy to miss one)
+- Readers can't tell which source is authoritative
+- Tests may pass with inconsistent values
+
+**Common violations:**
+- Hardcoded strings that duplicate values in config/specs structs
+- Methods that return the same value as an existing field
+- Constants defined in multiple modules
+- Display names duplicating internal identifiers
+
+**How to fix:**
+```rust
+// ❌ BAD: Duplicate source of truth
+impl Console for MyConsole {
+    fn specs() -> &'static ConsoleSpecs {
+        &SPECS  // name: "My Console"
+    }
+
+    fn window_title() -> &'static str {
+        "My Console"  // Duplicates specs.name!
+    }
+}
+
+// ✅ GOOD: Single source of truth
+impl Console for MyConsole {
+    fn specs() -> &'static ConsoleSpecs {
+        &SPECS  // name: "My Console"
+    }
+    // No window_title() - callers use Self::specs().name
+}
+```
+
+**Guidelines:**
+- Identify the canonical source for each piece of data
+- Remove methods/fields that merely duplicate existing data
+- Use derived accessors that reference the canonical source
+- Document which struct/const is the source of truth for a domain
+
 ### Module Organization
 
 Emberware follows a **2-level module depth maximum** for most code:
@@ -175,12 +219,12 @@ struct PrivateType { /* ... */ }
 
 **Before:**
 ```
-emberware-z/src/ffi.rs         4,262 lines   ❌
+emberware-zx/src/ffi.rs         4,262 lines   ❌
 ```
 
 **After:**
 ```
-emberware-z/src/ffi/
+emberware-zx/src/ffi/
 ├── mod.rs              80 lines     ✅  (Registration only)
 ├── audio.rs           200 lines     ✅
 ├── camera.rs          200 lines     ✅
@@ -207,12 +251,12 @@ emberware-z/src/ffi/
 
 **Before:**
 ```
-emberware-z/src/app.rs         1,760 lines   ❌
+emberware-zx/src/app.rs         1,760 lines   ❌
 ```
 
 **After:**
 ```
-emberware-z/src/app/
+emberware-zx/src/app/
 ├── mod.rs              700 lines     ✅  (App struct + render loop)
 ├── init.rs             160 lines     ✅  (Initialization)
 ├── game_session.rs     350 lines     ✅  (Game lifecycle)
@@ -230,12 +274,12 @@ emberware-z/src/app/
 
 **Before:**
 ```
-emberware-z/src/state.rs       740 lines     ⚠️
+emberware-zx/src/state.rs       740 lines     ⚠️
 ```
 
 **After:**
 ```
-emberware-z/src/state/
+emberware-zx/src/state/
 ├── mod.rs              100 lines     ✅  (Re-exports + QuadBatch)
 ├── config.rs            40 lines     ✅  (Init configuration)
 ├── resources.rs         60 lines     ✅  (Pending resources)
@@ -410,7 +454,7 @@ When reviewing code:
 
 - [FFI Reference](./ffi.md) - Public WebAssembly host function API
 - [Rendering Architecture](./rendering-architecture.md) - Graphics system deep dive
-- [Emberware Z API](./emberware-z.md) - Z console-specific features
+- [Emberware ZX API](./emberware-zx.md) - ZX console-specific features
 
 ## Questions?
 

@@ -50,7 +50,7 @@ impl LibraryUi {
         let mut action = None;
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("EMBERWARE Z");
+            ui.heading("EMBERWARE ZX");
             ui.separator();
 
             if games.is_empty() {

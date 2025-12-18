@@ -38,7 +38,7 @@ fn is_rom_path(arg: &str) -> Option<PathBuf> {
 
     // Check if it has a ROM extension
     let ext = path.extension().and_then(|e| e.to_str());
-    let is_rom_ext = matches!(ext, Some("ewz") | Some("wasm"));
+    let is_rom_ext = matches!(ext, Some("ewzx") | Some("wasm"));
 
     // If it has a ROM extension and the file exists, treat it as a path
     if is_rom_ext && path.exists() {
@@ -119,7 +119,7 @@ fn main() -> Result<()> {
 
         if games.is_empty() {
             eprintln!("No games installed. Download games from the library UI.");
-            eprintln!("Tip: You can also pass a .ewz file path directly.");
+            eprintln!("Tip: You can also pass a .ewzx file path directly.");
             std::process::exit(1);
         }
 

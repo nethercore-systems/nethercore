@@ -9,7 +9,7 @@
 //!
 //! - [`packing`] - Vertex data packing utilities (f32 → f16/snorm16/unorm8)
 //! - [`formats`] - ZX-specific binary asset and ROM formats
-//! - [`loader`] - ROM loader for .ewz files
+//! - [`loader`] - ROM loader for Emberware ZX ROM files
 
 pub mod formats;
 pub mod loader;
@@ -30,14 +30,9 @@ pub use packing::{
 pub use formats::{
     BONE_TRANSFORM_SIZE,
     BoneTransform,
-    // Constants
-    EWZ_ANIMATION_EXT,
-    EWZ_MAGIC,
-    EWZ_MESH_EXT,
-    EWZ_SKELETON_EXT,
-    EWZ_SOUND_EXT,
-    EWZ_TEXTURE_EXT,
-    EWZ_VERSION,
+    // ROM format constants (from emberware_shared)
+    RomFormat,
+    ZX_ROM_FORMAT,
     EmberZAnimationHeader,
     // Mesh/texture/skeleton types
     EmberZMeshHeader,

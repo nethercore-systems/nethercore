@@ -1,6 +1,6 @@
-# Emberware Z API Reference
+# Emberware ZX API Reference
 
-Emberware Z is a 5th-generation fantasy console targeting PS1/N64/Saturn aesthetics with modern conveniences like deterministic rollback netcode.
+Emberware ZX is a 5th-generation fantasy console targeting PS1/N64/Saturn aesthetics with modern conveniences like deterministic rollback netcode.
 
 ## Console Specs
 
@@ -43,7 +43,7 @@ pub extern "C" fn render() {
 
 ## Memory Model
 
-Emberware Z uses a **12MB ROM + 4MB RAM** memory model:
+Emberware ZX uses a **12MB ROM + 4MB RAM** memory model:
 
 - **ROM (12MB)**: WASM bytecode + data pack (textures, meshes, sounds)
 - **RAM (4MB)**: WASM linear memory for game state

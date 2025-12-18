@@ -1,4 +1,4 @@
-//! Build script for emberware-z
+//! Build script for emberware-zx
 //!
 //! Generates all 40 shader permutations at compile time and validates them with naga.
 //! Also generates sky.wgsl from common utilities + sky_template.
@@ -20,7 +20,7 @@ const FORMAT_SKINNED: u8 = 8;
 // Shader template files (read at build time)
 const COMMON: &str = include_str!("shaders/common.wgsl");
 const BLINNPHONG_COMMON: &str = include_str!("shaders/blinnphong_common.wgsl");
-const TEMPLATE_MODE0: &str = include_str!("shaders/mode0_unlit.wgsl");
+const TEMPLATE_MODE0: &str = include_str!("shaders/mode0_lambert.wgsl");
 const TEMPLATE_MODE1: &str = include_str!("shaders/mode1_matcap.wgsl");
 const SKY_TEMPLATE: &str = include_str!("shaders/sky_template.wgsl");
 const QUAD_TEMPLATE: &str = include_str!("shaders/quad_template.wgsl");
@@ -474,7 +474,7 @@ fn main() {
     // Tell Cargo to rerun this if the shader templates change
     println!("cargo:rerun-if-changed=shaders/common.wgsl");
     println!("cargo:rerun-if-changed=shaders/blinnphong_common.wgsl");
-    println!("cargo:rerun-if-changed=shaders/mode0_unlit.wgsl");
+    println!("cargo:rerun-if-changed=shaders/mode0_lambert.wgsl");
     println!("cargo:rerun-if-changed=shaders/mode1_matcap.wgsl");
     println!("cargo:rerun-if-changed=shaders/sky_template.wgsl");
     println!("cargo:rerun-if-changed=shaders/quad_template.wgsl");

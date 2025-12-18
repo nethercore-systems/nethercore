@@ -1,6 +1,6 @@
-//! Emberware Z FFI state and types
+//! Emberware ZX FFI state and types
 //!
-//! FFI staging state for Emberware Z console.
+//! FFI staging state for Emberware ZX console.
 //! This state is rebuilt each frame from FFI calls and consumed by ZGraphics.
 //! It is NOT part of rollback state - only GameState is rolled back.
 

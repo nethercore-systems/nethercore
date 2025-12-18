@@ -1,4 +1,4 @@
-//! Emberware Z data pack format
+//! Emberware ZX data pack format
 //!
 //! Contains GPU-ready asset data bundled with the ROM. Assets loaded via `rom_*` FFI
 //! go directly to VRAM/audio memory on the host, bypassing WASM linear memory.
@@ -64,9 +64,9 @@ impl TextureFormat {
 
 use emberware_shared::math::BoneMatrix3x4;
 
-/// Emberware Z data pack
+/// Emberware ZX data pack
 ///
-/// Contains all bundled assets for an Emberware Z ROM. Assets are stored
+/// Contains all bundled assets for an Emberware ZX ROM. Assets are stored
 /// in GPU-ready formats and loaded directly to VRAM/audio memory.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Encode, Decode)]
 pub struct ZDataPack {

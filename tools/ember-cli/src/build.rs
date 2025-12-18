@@ -2,7 +2,7 @@
 //!
 //! This is the main command for game developers. It orchestrates:
 //! 1. Compile: Run build script → WASM
-//! 2. Pack: Bundle WASM + assets → .ewz cartridge
+//! 2. Pack: Bundle WASM + assets → .ewzx cartridge
 //!
 //! # Future optimization: Concurrent compile + asset loading
 //!
@@ -35,7 +35,7 @@
 //!     .map(|(id, img)| compress_texture(id, img, analysis.render_mode))
 //!     .collect()?;
 //!
-//! // 7. Bundle and write .ewz
+//! // 7. Bundle and write .ewzx
 //! ```
 //!
 //! This would overlap I/O-bound compilation with CPU-bound asset loading,
@@ -60,7 +60,7 @@ pub struct BuildArgs {
     #[arg(short, long, default_value = "ember.toml")]
     pub manifest: PathBuf,
 
-    /// Output .ewz file path
+    /// Output .ewzx file path
     #[arg(short, long)]
     pub output: Option<PathBuf>,
 

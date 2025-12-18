@@ -1,19 +1,19 @@
-//! ROM loader implementation for Emberware Z
+//! ROM loader implementation for Emberware ZX
 //!
 //! This module provides the `ZRomLoader` which implements the `RomLoader` trait
-//! from emberware-core, allowing the library system to work with .ewz ROM files.
+//! from emberware-core, allowing the library system to work with .ewzx ROM files.
 
 use std::path::Path;
 
 use anyhow::{Context, Result};
 use emberware_core::library::{DataDirProvider, LocalGame, RomLoader, RomMetadata};
+use emberware_shared::ZX_ROM_FORMAT;
 
 use crate::ZRom;
-use crate::formats::z_rom::EWZ_MAGIC;
 
-/// ROM loader for Emberware Z (.ewz) files.
+/// ROM loader for Emberware ZX (.ewzx) files.
 ///
-/// This loader handles the Z console's ROM format, which contains:
+/// This loader handles the ZX console's ROM format, which contains:
 /// - WASM code (compiled game)
 /// - Optional data pack (bundled assets)
 /// - Metadata (title, author, version)
@@ -22,7 +22,7 @@ pub struct ZRomLoader;
 
 impl RomLoader for ZRomLoader {
     fn extension(&self) -> &'static str {
-        "ewz"
+        ZX_ROM_FORMAT.extension
     }
 
     fn console_type(&self) -> &'static str {
@@ -40,7 +40,7 @@ impl RomLoader for ZRomLoader {
     }
 
     fn can_load(&self, bytes: &[u8]) -> bool {
-        bytes.len() >= 4 && &bytes[0..4] == EWZ_MAGIC
+        bytes.len() >= 4 && &bytes[0..4] == ZX_ROM_FORMAT.magic
     }
 
     fn install(
@@ -53,7 +53,7 @@ impl RomLoader for ZRomLoader {
             .with_context(|| format!("Failed to read ROM file: {}", rom_path.display()))?;
 
         let rom = ZRom::from_bytes(&bytes)
-            .with_context(|| format!("Failed to load EWZ ROM: {}", rom_path.display()))?;
+            .with_context(|| format!("Failed to load EWZX ROM: {}", rom_path.display()))?;
 
         // 2. Get game directory
         let games_dir = data_dir_provider
@@ -113,7 +113,7 @@ impl RomLoader for ZRomLoader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{EWZ_VERSION, ZMetadata};
+    use crate::ZMetadata;
     use std::path::PathBuf;
     use tempfile::TempDir;
 
@@ -130,7 +130,7 @@ mod tests {
 
     fn create_test_rom() -> ZRom {
         ZRom {
-            version: EWZ_VERSION,
+            version: ZX_ROM_FORMAT.version,
             metadata: ZMetadata {
                 id: "test-game".to_string(),
                 title: "Test Game".to_string(),
@@ -156,7 +156,7 @@ mod tests {
     #[test]
     fn test_extension() {
         let loader = ZRomLoader;
-        assert_eq!(loader.extension(), "ewz");
+        assert_eq!(loader.extension(), ZX_ROM_FORMAT.extension);
     }
 
     #[test]
@@ -207,7 +207,7 @@ mod tests {
         // Create ROM file
         let rom = create_test_rom();
         let rom_bytes = rom.to_bytes().unwrap();
-        let rom_path = temp_dir.path().join("test-game.ewz");
+        let rom_path = temp_dir.path().join("test-game.ewzx");
         std::fs::write(&rom_path, rom_bytes).unwrap();
 
         // Install ROM

@@ -84,7 +84,7 @@ impl Console for TestConsole {
     type RollbackState = ();
     type ResourceManager = TestResourceManager;
 
-    fn specs(&self) -> &'static ConsoleSpecs {
+    fn specs() -> &'static ConsoleSpecs {
         &ConsoleSpecs {
             name: "Test Console",
             resolutions: &[(320, 240), (640, 480)],
@@ -133,9 +133,5 @@ impl Console for TestConsole {
 
     fn create_resource_manager(&self) -> Self::ResourceManager {
         TestResourceManager
-    }
-
-    fn window_title(&self) -> &'static str {
-        "Test Console"
     }
 }

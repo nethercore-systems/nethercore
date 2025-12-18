@@ -1,6 +1,6 @@
 //! Multi-Skinned ROM Example - ROM-Backed Skeletal Animation
 //!
-//! Demonstrates Emberware Z's ROM asset loading with skeletal animation:
+//! Demonstrates Emberware ZX's ROM asset loading with skeletal animation:
 //! - `rom_skeleton()` - loading inverse bind matrices from data pack
 //! - `rom_mesh()` - loading skinned mesh from data pack
 //! - `rom_keyframes()` - loading animations from data pack

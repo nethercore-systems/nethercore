@@ -2,6 +2,7 @@
 //!
 //! Minimal core game state - console-agnostic.
 
+use emberware_shared::EMBERWARE_ZX_RAM_LIMIT;
 use wasmtime::{AsContext, Memory, ResourceLimiter};
 
 use crate::console::{ConsoleInput, ConsoleRollbackState};
@@ -119,7 +120,7 @@ impl<I: ConsoleInput, S: Default, R: ConsoleRollbackState> Default for WasmGameC
             game: GameState::new(),
             ffi: S::default(),
             rollback: R::default(),
-            ram_limit: 8 * 1024 * 1024, // Default to 8MB (Emberware Z)
+            ram_limit: EMBERWARE_ZX_RAM_LIMIT, // Default to 4MB (Emberware ZX)
             debug_registry: DebugRegistry::new(),
         }
     }

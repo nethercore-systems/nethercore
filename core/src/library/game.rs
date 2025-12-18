@@ -7,7 +7,7 @@
 //! - ROM files in the games directory (detected via RomLoaderRegistry)
 //! - Subdirectories with `manifest.json` and `rom.wasm` (development, backward compatibility)
 
-use emberware_shared::LocalGameManifest;
+use emberware_shared::{LocalGameManifest, ZX_ROM_FORMAT};
 use std::path::{Path, PathBuf};
 
 use super::DataDirProvider;
@@ -120,11 +120,11 @@ fn get_games_from_dir(games_dir: &Path, registry: Option<&RomLoaderRegistry>) ->
                         .or_else(|| wasm_fallback.exists().then_some(wasm_fallback))?
                 } else {
                     // Without registry, check for known ROM extensions
-                    // Try .ewz first (standard Emberware ROM format), then fall back to .wasm
-                    let ewz_path = path.join("rom.ewz");
+                    // Try ZX ROM format first, then fall back to .wasm
+                    let zx_rom_path = path.join(format!("rom.{}", ZX_ROM_FORMAT.extension));
                     let wasm_path = path.join("rom.wasm");
-                    if ewz_path.exists() {
-                        ewz_path
+                    if zx_rom_path.exists() {
+                        zx_rom_path
                     } else if wasm_path.exists() {
                         wasm_path
                     } else {

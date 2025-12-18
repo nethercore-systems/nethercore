@@ -1,4 +1,4 @@
-//! Emberware Z rollback state
+//! Emberware ZX rollback state
 //!
 //! This module contains console-specific state that needs to be rolled back
 //! during netcode rollback. Unlike FFI state (which is rebuilt each frame),
@@ -42,7 +42,7 @@ pub struct AudioPlaybackState {
     pub music: ChannelState,
 }
 
-/// Emberware Z rollback state
+/// Emberware ZX rollback state
 ///
 /// This is the console-specific state that gets rolled back along with
 /// WASM memory during netcode rollback. It contains audio playback state

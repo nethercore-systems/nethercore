@@ -1,43 +1,45 @@
-//! Emberware Z ROM format (`.ewz`)
+//! Emberware ZX ROM format (`.ewzx`)
 //!
-//! Binary ROM format for Emberware Z games using bitcode serialization.
+//! Binary ROM format for Emberware ZX games using bitcode serialization.
 //! Each ROM contains game code, metadata, optional data pack, and preview assets.
 //!
 //! # Memory Model
 //!
-//! Emberware Z uses a **12MB ROM + 4MB RAM** memory model:
+//! Emberware ZX uses a **12MB ROM + 4MB RAM** memory model:
 //! - ROM (Cartridge): 12 MB total (WASM code + assets via data pack)
 //! - RAM: 4 MB WASM linear memory (code + heap + stack)
 //! - VRAM: 4 MB GPU textures and mesh buffers
 //!
 //! Assets loaded via `rom_*` FFI go directly to VRAM/audio memory on the host,
 //! bypassing WASM linear memory. Only handles (u32 IDs) live in game state.
+//!
+//! # Format Constants
+//!
+//! All ROM format constants are defined in [`emberware_shared::ZX_ROM_FORMAT`]:
+//! - Extension: `"ewzx"`
+//! - Magic bytes: `b"EWZX"`
+//! - Version: `1`
 
 use bitcode::{Decode, Encode};
 
 use emberware_shared::local::LocalGameManifest;
+use emberware_shared::ZX_ROM_FORMAT;
 
 use super::z_data_pack::ZDataPack;
 
-/// Emberware Z ROM format version
-pub const EWZ_VERSION: u32 = 1;
-
-/// Magic bytes for EWZ ROM files: "EWZ\0"
-pub const EWZ_MAGIC: &[u8; 4] = b"EWZ\0";
-
-/// Complete Emberware Z ROM
+/// Complete Emberware ZX ROM
 ///
-/// This struct represents a complete game ROM for Emberware Z, including
+/// This struct represents a complete game ROM for Emberware ZX, including
 /// all metadata, compiled WASM code, optional data pack, and preview assets.
 ///
 /// # Memory Layout
 ///
 /// ```text
 /// ┌─────────────────────────────────────────────────────────────┐
-/// │                    .ewz ROM File (≤12MB)                    │
+/// │                   .ewzx ROM File (≤12MB)                    │
 /// ├─────────────────────────────────────────────────────────────┤
-/// │  EWZ Header (4 bytes)                                       │
-/// │  ├── Magic: "EWZ\0"                                         │
+/// │  EWZX Header (4 bytes)                                      │
+/// │  ├── Magic: "EWZX"                                          │
 /// ├─────────────────────────────────────────────────────────────┤
 /// │  ZRom (bitcode serialized)                                  │
 /// │  ├── version: u32                                           │
@@ -77,7 +79,7 @@ pub struct ZRom {
     pub screenshots: Vec<Vec<u8>>,
 }
 
-/// Emberware Z specific metadata
+/// Emberware ZX specific metadata
 #[derive(Debug, Clone, Encode, Decode)]
 pub struct ZMetadata {
     // Core game info
@@ -128,10 +130,10 @@ impl ZRom {
     /// Serialize ROM to bytes with magic header
     ///
     /// The output format is:
-    /// - 4 bytes: Magic bytes "EWZ\0"
+    /// - 4 bytes: Magic bytes "EWZX"
     /// - Remaining bytes: Bitcode-encoded ZRom struct
     pub fn to_bytes(&self) -> anyhow::Result<Vec<u8>> {
-        let mut bytes = EWZ_MAGIC.to_vec();
+        let mut bytes = ZX_ROM_FORMAT.magic.to_vec();
         let encoded = bitcode::encode(self);
         bytes.extend(encoded);
         Ok(bytes)
@@ -142,13 +144,16 @@ impl ZRom {
     /// This checks magic bytes, deserializes the ROM, and runs validation.
     pub fn from_bytes(bytes: &[u8]) -> anyhow::Result<Self> {
         // Check magic bytes
-        if bytes.len() < 4 || &bytes[0..4] != EWZ_MAGIC {
-            anyhow::bail!("Invalid EWZ magic bytes (expected: EWZ\\0)");
+        if bytes.len() < 4 || &bytes[0..4] != ZX_ROM_FORMAT.magic {
+            anyhow::bail!(
+                "Invalid EWZX magic bytes (expected: {:?})",
+                std::str::from_utf8(ZX_ROM_FORMAT.magic).unwrap_or("EWZX")
+            );
         }
 
         // Decode remaining bytes
         let rom: ZRom = bitcode::decode(&bytes[4..])
-            .map_err(|e| anyhow::anyhow!("Failed to decode EWZ ROM: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to decode EWZX ROM: {}", e))?;
 
         // Validate
         rom.validate()?;
@@ -164,11 +169,11 @@ impl ZRom {
     /// - WASM code has valid magic bytes
     pub fn validate(&self) -> anyhow::Result<()> {
         // Check version
-        if self.version > EWZ_VERSION {
+        if self.version > ZX_ROM_FORMAT.version {
             anyhow::bail!(
-                "Unsupported EWZ version: {} (max supported: {})",
+                "Unsupported EWZX version: {} (max supported: {})",
                 self.version,
-                EWZ_VERSION
+                ZX_ROM_FORMAT.version
             );
         }
 
@@ -219,7 +224,7 @@ mod tests {
 
     fn create_test_rom() -> ZRom {
         ZRom {
-            version: EWZ_VERSION,
+            version: ZX_ROM_FORMAT.version,
             metadata: ZMetadata {
                 id: "test-game".to_string(),
                 title: "Test Game".to_string(),
@@ -260,7 +265,7 @@ mod tests {
         let bytes = rom.to_bytes().unwrap();
 
         // Check magic bytes
-        assert_eq!(&bytes[0..4], b"EWZ\0");
+        assert_eq!(&bytes[0..4], ZX_ROM_FORMAT.magic);
     }
 
     #[test]
@@ -273,7 +278,7 @@ mod tests {
             result
                 .unwrap_err()
                 .to_string()
-                .contains("Invalid EWZ magic bytes")
+                .contains("Invalid EWZX magic bytes")
         );
     }
 

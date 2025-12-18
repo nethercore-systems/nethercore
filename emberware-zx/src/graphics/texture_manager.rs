@@ -1,4 +1,4 @@
-//! Texture management for Emberware Z graphics.
+//! Texture management for Emberware ZX graphics.
 //!
 //! Handles texture loading, VRAM tracking, and fallback textures.
 //! Supports both RGBA8 (uncompressed) and BC7 (compressed) texture formats.

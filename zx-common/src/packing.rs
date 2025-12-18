@@ -5,7 +5,7 @@
 //! - f32 → snorm16 (signed normalized, -1.0 to 1.0)
 //! - f32 → unorm8 (unsigned normalized, 0.0 to 1.0)
 //!
-//! Used by both `ember-export` (asset pipeline) and `emberware-z` (runtime).
+//! Used by both `ember-export` (asset pipeline) and `emberware-zx` (runtime).
 
 use bytemuck::cast_slice;
 use half::f16;

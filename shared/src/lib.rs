@@ -30,14 +30,18 @@
 pub mod api;
 pub mod auth;
 pub mod console;
+pub mod constants;
 pub mod local;
 pub mod math;
 pub mod requests;
+pub mod rom_format;
 
 // Re-export all public items for convenience
 pub use api::*;
 pub use auth::*;
 pub use console::*;
+pub use constants::*;
 pub use local::*;
 pub use math::*;
 pub use requests::*;
+pub use rom_format::*;

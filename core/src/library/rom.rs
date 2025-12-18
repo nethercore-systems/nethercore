@@ -44,13 +44,13 @@ pub struct RomMetadata {
 pub trait RomLoader: Send + Sync {
     /// Get the file extension for this ROM format (without the dot).
     ///
-    /// Example: `"ewz"` for Emberware Z ROMs.
+    /// Example: `"ewz"` for Emberware ZX ROMs.
     fn extension(&self) -> &'static str;
 
     /// Get the console type identifier.
     ///
     /// This matches the `console_type` field in game manifests.
-    /// Example: `"z"` for Emberware Z.
+    /// Example: `"z"` for Emberware ZX.
     fn console_type(&self) -> &'static str;
 
     /// Load metadata from ROM bytes without fully parsing the ROM.

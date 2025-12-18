@@ -9,6 +9,9 @@ use wasmtime::{Caller, Linker};
 use super::ZXGameContext;
 use crate::state::Font;
 
+/// Default font texture size used when texture dimensions cannot be determined.
+const DEFAULT_FONT_TEXTURE_SIZE: (u32, u32) = (1024, 1024);
+
 /// Register 2D drawing FFI functions
 pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     linker.func_wrap("env", "draw_sprite", draw_sprite)?;
@@ -485,10 +488,10 @@ fn load_font(
         .map(|t| (t.width, t.height))
         .unwrap_or_else(|| {
             warn!(
-                "load_font: texture {} not found in pending_textures, using 1024x1024",
-                texture
+                "load_font: texture {} not found in pending_textures, using {}x{}",
+                texture, DEFAULT_FONT_TEXTURE_SIZE.0, DEFAULT_FONT_TEXTURE_SIZE.1
             );
-            (1024, 1024)
+            DEFAULT_FONT_TEXTURE_SIZE
         });
 
     // Allocate font handle
@@ -595,10 +598,10 @@ fn load_font_ex(
         .map(|t| (t.width, t.height))
         .unwrap_or_else(|| {
             warn!(
-                "load_font_ex: texture {} not found in pending_textures, using 1024x1024",
-                texture
+                "load_font_ex: texture {} not found in pending_textures, using {}x{}",
+                texture, DEFAULT_FONT_TEXTURE_SIZE.0, DEFAULT_FONT_TEXTURE_SIZE.1
             );
-            (1024, 1024)
+            DEFAULT_FONT_TEXTURE_SIZE
         });
 
     // Allocate font handle

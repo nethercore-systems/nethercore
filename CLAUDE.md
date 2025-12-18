@@ -149,7 +149,7 @@ This allows:
 Each console defines its own input struct:
 
 ```rust
-// Emberware Z (PS2/Xbox style)
+// Emberware ZX (PS2/Xbox style)
 #[repr(C)]
 pub struct ZInput {
     pub buttons: u16,        // D-pad + face + shoulders + start/select
@@ -177,7 +177,7 @@ The core handles GGRS serialization of whatever input type the console uses.
 - GGRS (rollback netcode)
 - winit (windowing)
 
-### Emberware Z
+### Emberware ZX
 - wgpu (graphics with PS1/N64 aesthetic)
 - glam (math: vectors, matrices, quaternions)
 - cpal + ringbuf (per-frame audio generation with rollback support)
@@ -288,7 +288,7 @@ Runtime value editing for development (F3 to open panel):
 - Frame control: F5=pause, F6=step, F7/F8=time scale
 - Zero overhead in release builds (compiles out)
 
-### Rendering Architecture (Emberware Z)
+### Rendering Architecture (Emberware ZX)
 
 **Summary:**
 - **4 render modes**: Unlit, Matcap, Metallic-Roughness (MR), Specular-Shininess (SS) — all use Blinn-Phong (set once in `init()`)

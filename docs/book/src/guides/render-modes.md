@@ -1,6 +1,6 @@
 # Render Modes Guide
 
-Emberware Z supports 4 rendering modes, each with different lighting and material features.
+Emberware ZX supports 4 rendering modes, each with different lighting and material features.
 
 ## Overview
 
