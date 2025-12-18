@@ -101,11 +101,8 @@ const FS_UV: &str = r#"if !has_flag(shading.flags, FLAG_USE_UNIFORM_COLOR) {
 const FS_AMBIENT: &str = r#"let ambient = color * sample_sky_ambient(in.world_normal, sky);
     let albedo = color;"#;
 
-// Mode 0 Lambert: sun diffuse + 4 dynamic lights
+// Mode 0 Lambert: 4 dynamic lights only (no sun direct lighting)
 const FS_NORMAL: &str = r#"var final_color = ambient;
-
-    // Sun Lambert diffuse
-    final_color += lambert_diffuse(in.world_normal, sky.sun_direction, albedo, sky.sun_color);
 
     // 4 dynamic lights (Lambert diffuse only)
     for (var i = 0u; i < 4u; i++) {
