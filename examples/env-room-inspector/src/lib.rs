@@ -27,8 +27,13 @@ static mut VIEWER_Y: i32 = 0;
 static mut VIEWER_Z: i32 = 0;
 
 static mut SPHERE_MESH: u32 = 0;
+static mut CUBE_MESH: u32 = 0;
+static mut TORUS_MESH: u32 = 0;
+static mut SHAPE_INDEX: i32 = 0;
 static mut CAM_ANGLE: f32 = 0.0;
 static mut CAM_ELEVATION: f32 = 10.0;
+
+const SHAPE_COUNT: usize = 3;
 
 #[no_mangle]
 pub extern "C" fn on_debug_change() {
@@ -48,6 +53,8 @@ pub extern "C" fn init() {
         render_mode(2);
         depth_test(1);
         SPHERE_MESH = sphere(0.8, 24, 16);
+        CUBE_MESH = cube(1.0, 1.0, 1.0);
+        TORUS_MESH = torus(0.7, 0.25, 32, 16);
 
         debug_group_begin(b"room".as_ptr(), 4);
         debug_register_color(b"ceiling".as_ptr(), 7, &COLOR_CEILING as *const u32 as *const u8);
@@ -71,6 +78,10 @@ pub extern "C" fn init() {
 #[no_mangle]
 pub extern "C" fn update() {
     unsafe {
+        if button_pressed(0, BUTTON_B) != 0 {
+            SHAPE_INDEX = (SHAPE_INDEX + 1) % SHAPE_COUNT as i32;
+        }
+
         // Move viewer with left stick
         let stick_x = left_stick_x(0);
         let stick_y = left_stick_y(0);
@@ -139,12 +150,17 @@ pub extern "C" fn render() {
         set_color(0xFFCC00FF);
         material_metallic(0.6);
         material_roughness(0.3);
-        draw_mesh(SPHERE_MESH);
+        let mesh = match SHAPE_INDEX {
+            0 => SPHERE_MESH,
+            1 => CUBE_MESH,
+            _ => TORUS_MESH,
+        };
+        draw_mesh(mesh);
 
         let title = b"Env Mode 5: Room";
         draw_text(title.as_ptr(), title.len() as u32, 10.0, 10.0, 20.0, 0xFFFFFFFF);
 
-        let hint = b"Left stick: move XZ | Triggers: move Y | Right stick: camera";
+        let hint = b"L-stick: XZ | Triggers: Y | R-stick: cam | B: shape | F4: debug";
         draw_text(hint.as_ptr(), hint.len() as u32, 10.0, 40.0, 14.0, 0x888888FF);
     }
 }

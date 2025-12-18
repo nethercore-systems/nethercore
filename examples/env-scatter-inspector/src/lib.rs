@@ -14,10 +14,11 @@ fn panic(_info: &PanicInfo) -> ! {
 }
 
 // Debug values
-static mut VARIANT: u8 = 0;       // 0=points, 1=stars, 2=streaks, 3=flakes
+// Variant: 0=Stars(twinkle), 1=Vertical(rain/snow), 2=Horizontal(speed), 3=Warp(radial)
+static mut VARIANT: u8 = 0;
 static mut DENSITY: u8 = 180;
-static mut SIZE: u8 = 30;
-static mut GLOW: u8 = 128;
+static mut SIZE: u8 = 15;
+static mut GLOW: u8 = 64;
 static mut STREAK_LENGTH: u8 = 0;
 static mut COLOR_PRIMARY: u32 = 0xFFFFFFFF;
 static mut COLOR_SECONDARY: u32 = 0x8888FFFF;
@@ -28,53 +29,57 @@ static mut ANIMATE: u8 = 1;
 static mut PRESET_INDEX: i32 = 0;
 
 static mut SPHERE_MESH: u32 = 0;
+static mut CUBE_MESH: u32 = 0;
+static mut TORUS_MESH: u32 = 0;
+static mut SHAPE_INDEX: i32 = 0;
 static mut CAM_ANGLE: f32 = 0.0;
 static mut CAM_ELEVATION: f32 = 0.0;
 
+const SHAPE_COUNT: usize = 3;
 const PRESET_COUNT: usize = 4;
 const PRESET_NAMES: [&str; PRESET_COUNT] = ["Stars", "Snow", "Rain", "Particles"];
 
 fn load_preset(index: usize) {
     unsafe {
         match index {
-            0 => { // Stars
-                VARIANT = 1;  // stars
+            0 => { // Stars - twinkle, no movement
+                VARIANT = 0;  // twinkle
                 DENSITY = 200;
-                SIZE = 25;
-                GLOW = 200;
-                STREAK_LENGTH = 0;
-                COLOR_PRIMARY = 0xFFFFFFFF;
-                COLOR_SECONDARY = 0xAAAAFFFF;
-                PARALLAX_RATE = 50;
-                PARALLAX_SIZE = 80;
-            }
-            1 => { // Snow
-                VARIANT = 3;  // flakes
-                DENSITY = 150;
-                SIZE = 40;
+                SIZE = 8;
                 GLOW = 100;
                 STREAK_LENGTH = 0;
                 COLOR_PRIMARY = 0xFFFFFFFF;
-                COLOR_SECONDARY = 0xDDDDFFFF;
-                PARALLAX_RATE = 180;
-                PARALLAX_SIZE = 100;
+                COLOR_SECONDARY = 0xAAAAFFFF;
+                PARALLAX_RATE = 20;
+                PARALLAX_SIZE = 50;
             }
-            2 => { // Rain
-                VARIANT = 2;  // streaks
+            1 => { // Snow - vertical fall, soft dots
+                VARIANT = 1;  // vertical movement
+                DENSITY = 150;
+                SIZE = 12;
+                GLOW = 60;
+                STREAK_LENGTH = 0;
+                COLOR_PRIMARY = 0xFFFFFFFF;
+                COLOR_SECONDARY = 0xDDDDFFFF;
+                PARALLAX_RATE = 80;
+                PARALLAX_SIZE = 60;
+            }
+            2 => { // Rain - vertical fall with streaks
+                VARIANT = 1;  // vertical movement
                 DENSITY = 200;
-                SIZE = 15;
-                GLOW = 50;
-                STREAK_LENGTH = 200;
+                SIZE = 6;
+                GLOW = 30;
+                STREAK_LENGTH = 40;
                 COLOR_PRIMARY = 0x8899CCFF;
                 COLOR_SECONDARY = 0x6677AAFF;
-                PARALLAX_RATE = 250;
+                PARALLAX_RATE = 200;
                 PARALLAX_SIZE = 30;
             }
-            _ => { // Particles
-                VARIANT = 0;  // points
-                DENSITY = 255;
-                SIZE = 20;
-                GLOW = 255;
+            _ => { // Particles - warp/radial movement
+                VARIANT = 3;  // warp outward
+                DENSITY = 180;
+                SIZE = 10;
+                GLOW = 150;
                 STREAK_LENGTH = 0;
                 COLOR_PRIMARY = 0xFF8800FF;
                 COLOR_SECONDARY = 0xFFFF00FF;
@@ -100,6 +105,8 @@ pub extern "C" fn init() {
         render_mode(2);
         depth_test(1);
         SPHERE_MESH = sphere(1.0, 32, 24);
+        CUBE_MESH = cube(1.4, 1.4, 1.4);
+        TORUS_MESH = torus(1.0, 0.4, 32, 16);
         load_preset(0);
 
         debug_group_begin(b"scatter".as_ptr(), 7);
@@ -133,6 +140,9 @@ pub extern "C" fn update() {
         if button_pressed(0, BUTTON_A) != 0 {
             PRESET_INDEX = (PRESET_INDEX + 1) % PRESET_COUNT as i32;
             load_preset(PRESET_INDEX as usize);
+        }
+        if button_pressed(0, BUTTON_B) != 0 {
+            SHAPE_INDEX = (SHAPE_INDEX + 1) % SHAPE_COUNT as i32;
         }
 
         if ANIMATE != 0 {
@@ -180,7 +190,12 @@ pub extern "C" fn render() {
         set_color(0x333344FF);
         material_metallic(0.7);
         material_roughness(0.3);
-        draw_mesh(SPHERE_MESH);
+        let mesh = match SHAPE_INDEX {
+            0 => SPHERE_MESH,
+            1 => CUBE_MESH,
+            _ => TORUS_MESH,
+        };
+        draw_mesh(mesh);
 
         let title = b"Env Mode 1: Scatter";
         draw_text(title.as_ptr(), title.len() as u32, 10.0, 10.0, 20.0, 0xFFFFFFFF);
@@ -193,7 +208,7 @@ pub extern "C" fn render() {
         label[prefix.len()..prefix.len() + name.len()].copy_from_slice(name);
         draw_text(label.as_ptr(), (prefix.len() + name.len()) as u32, 10.0, 40.0, 16.0, 0xCCCCCCFF);
 
-        let hint = b"A: cycle presets | Left stick: camera | F3: debug";
+        let hint = b"A: preset | B: shape | Stick: camera | F4: debug";
         draw_text(hint.as_ptr(), hint.len() as u32, 10.0, 70.0, 14.0, 0x888888FF);
     }
 }

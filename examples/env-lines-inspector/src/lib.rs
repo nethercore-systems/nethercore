@@ -14,11 +14,13 @@ fn panic(_info: &PanicInfo) -> ! {
 }
 
 // Debug values
-static mut VARIANT: u8 = 0;       // 0=horizontal, 1=vertical, 2=grid, 3=radial
-static mut LINE_TYPE: u8 = 0;     // 0=solid, 1=dashed, 2=dotted, 3=glow
+// Variant: 0=Floor, 1=Ceiling, 2=Sphere (WHERE lines appear)
+// Line Type: 0=Horizontal, 1=Vertical, 2=Grid (PATTERN of lines)
+static mut VARIANT: u8 = 0;
+static mut LINE_TYPE: u8 = 2;
 static mut THICKNESS: u8 = 20;
-static mut SPACING: f32 = 0.1;
-static mut FADE_DISTANCE: f32 = 1.0;
+static mut SPACING: f32 = 0.5;
+static mut FADE_DISTANCE: f32 = 5.0;
 static mut COLOR_PRIMARY: u32 = 0x00FF88FF;
 static mut COLOR_ACCENT: u32 = 0xFF00AAFF;
 static mut ACCENT_EVERY: u8 = 5;
@@ -27,51 +29,55 @@ static mut ANIMATE: u8 = 1;
 static mut PRESET_INDEX: i32 = 0;
 
 static mut SPHERE_MESH: u32 = 0;
+static mut CUBE_MESH: u32 = 0;
+static mut TORUS_MESH: u32 = 0;
+static mut SHAPE_INDEX: i32 = 0;
 static mut CAM_ANGLE: f32 = 0.0;
 static mut CAM_ELEVATION: f32 = 10.0;
 
+const SHAPE_COUNT: usize = 3;
 const PRESET_COUNT: usize = 4;
-const PRESET_NAMES: [&str; PRESET_COUNT] = ["Grid", "Scanlines", "Horizon", "Laser"];
+const PRESET_NAMES: [&str; PRESET_COUNT] = ["Grid", "Scanlines", "Horizon", "Ceiling"];
 
 fn load_preset(index: usize) {
     unsafe {
         match index {
-            0 => { // Grid
-                VARIANT = 2;      // grid
-                LINE_TYPE = 0;    // solid
+            0 => { // Grid - floor grid (synthwave style)
+                VARIANT = 0;      // Floor
+                LINE_TYPE = 2;    // Grid pattern
                 THICKNESS = 15;
-                SPACING = 0.08;
-                FADE_DISTANCE = 0.8;
+                SPACING = 0.5;
+                FADE_DISTANCE = 8.0;
                 COLOR_PRIMARY = 0x00FF88FF;
                 COLOR_ACCENT = 0xFFFFFFFF;
                 ACCENT_EVERY = 5;
             }
-            1 => { // Scanlines
-                VARIANT = 0;      // horizontal
-                LINE_TYPE = 0;    // solid
+            1 => { // Scanlines - sphere horizontal lines
+                VARIANT = 2;      // Sphere
+                LINE_TYPE = 0;    // Horizontal
                 THICKNESS = 8;
-                SPACING = 0.02;
-                FADE_DISTANCE = 0.0;
+                SPACING = 0.15;
+                FADE_DISTANCE = 10.0;
                 COLOR_PRIMARY = 0x33FF33FF;
                 COLOR_ACCENT = 0x88FF88FF;
                 ACCENT_EVERY = 10;
             }
-            2 => { // Horizon
-                VARIANT = 0;      // horizontal
-                LINE_TYPE = 3;    // glow
-                THICKNESS = 40;
-                SPACING = 0.15;
-                FADE_DISTANCE = 1.2;
+            2 => { // Horizon - floor horizontal lines
+                VARIANT = 0;      // Floor
+                LINE_TYPE = 0;    // Horizontal
+                THICKNESS = 25;
+                SPACING = 0.4;
+                FADE_DISTANCE = 12.0;
                 COLOR_PRIMARY = 0xFF6600FF;
                 COLOR_ACCENT = 0xFFFF00FF;
                 ACCENT_EVERY = 4;
             }
-            _ => { // Laser
-                VARIANT = 3;      // radial
-                LINE_TYPE = 3;    // glow
-                THICKNESS = 25;
-                SPACING = 0.2;
-                FADE_DISTANCE = 0.5;
+            _ => { // Ceiling - ceiling grid
+                VARIANT = 1;      // Ceiling
+                LINE_TYPE = 2;    // Grid pattern
+                THICKNESS = 20;
+                SPACING = 0.3;
+                FADE_DISTANCE = 6.0;
                 COLOR_PRIMARY = 0xFF0066FF;
                 COLOR_ACCENT = 0x00FFFFFF;
                 ACCENT_EVERY = 3;
@@ -84,10 +90,10 @@ fn load_preset(index: usize) {
 pub extern "C" fn on_debug_change() {
     unsafe {
         PRESET_INDEX = PRESET_INDEX.clamp(0, PRESET_COUNT as i32 - 1);
-        VARIANT = VARIANT.clamp(0, 3);
-        LINE_TYPE = LINE_TYPE.clamp(0, 3);
-        SPACING = SPACING.clamp(0.01, 1.0);
-        FADE_DISTANCE = FADE_DISTANCE.clamp(0.0, 2.0);
+        VARIANT = VARIANT.clamp(0, 2);     // 0=Floor, 1=Ceiling, 2=Sphere
+        LINE_TYPE = LINE_TYPE.clamp(0, 2); // 0=Horizontal, 1=Vertical, 2=Grid
+        SPACING = SPACING.clamp(0.05, 2.0);
+        FADE_DISTANCE = FADE_DISTANCE.clamp(1.0, 20.0);
     }
 }
 
@@ -98,6 +104,8 @@ pub extern "C" fn init() {
         render_mode(2);
         depth_test(1);
         SPHERE_MESH = sphere(1.0, 32, 24);
+        CUBE_MESH = cube(1.4, 1.4, 1.4);
+        TORUS_MESH = torus(1.0, 0.4, 32, 16);
         load_preset(0);
 
         debug_group_begin(b"lines".as_ptr(), 5);
@@ -127,6 +135,9 @@ pub extern "C" fn update() {
         if button_pressed(0, BUTTON_A) != 0 {
             PRESET_INDEX = (PRESET_INDEX + 1) % PRESET_COUNT as i32;
             load_preset(PRESET_INDEX as usize);
+        }
+        if button_pressed(0, BUTTON_B) != 0 {
+            SHAPE_INDEX = (SHAPE_INDEX + 1) % SHAPE_COUNT as i32;
         }
 
         if ANIMATE != 0 {
@@ -173,7 +184,12 @@ pub extern "C" fn render() {
         set_color(0x222233FF);
         material_metallic(0.9);
         material_roughness(0.1);
-        draw_mesh(SPHERE_MESH);
+        let mesh = match SHAPE_INDEX {
+            0 => SPHERE_MESH,
+            1 => CUBE_MESH,
+            _ => TORUS_MESH,
+        };
+        draw_mesh(mesh);
 
         let title = b"Env Mode 2: Lines";
         draw_text(title.as_ptr(), title.len() as u32, 10.0, 10.0, 20.0, 0xFFFFFFFF);
@@ -186,7 +202,7 @@ pub extern "C" fn render() {
         label[prefix.len()..prefix.len() + name.len()].copy_from_slice(name);
         draw_text(label.as_ptr(), (prefix.len() + name.len()) as u32, 10.0, 40.0, 16.0, 0xCCCCCCFF);
 
-        let hint = b"A: cycle presets | Left stick: camera | F3: debug";
+        let hint = b"A: preset | B: shape | Stick: camera | F4: debug";
         draw_text(hint.as_ptr(), hint.len() as u32, 10.0, 70.0, 14.0, 0x888888FF);
     }
 }

@@ -31,9 +31,13 @@ static mut PRESET_INDEX: i32 = 0;
 
 // Internal state
 static mut SPHERE_MESH: u32 = 0;
+static mut CUBE_MESH: u32 = 0;
+static mut TORUS_MESH: u32 = 0;
+static mut SHAPE_INDEX: i32 = 0;
 static mut CAM_ANGLE: f32 = 0.0;
 static mut CAM_ELEVATION: f32 = 10.0;
 
+const SHAPE_COUNT: usize = 3;
 const PRESET_COUNT: usize = 3;
 const PRESET_NAMES: [&str; PRESET_COUNT] = ["Mountains", "Cityscape", "Forest"];
 
@@ -85,6 +89,8 @@ pub extern "C" fn init() {
         render_mode(2);
         depth_test(1);
         SPHERE_MESH = sphere(1.5, 32, 24);
+        CUBE_MESH = cube(2.0, 2.0, 2.0);
+        TORUS_MESH = torus(1.3, 0.5, 32, 16);
         load_preset(0);
         register_debug_values();
     }
@@ -114,6 +120,9 @@ pub extern "C" fn update() {
             load_preset(PRESET_INDEX as usize);
         }
         if button_pressed(0, BUTTON_B) != 0 {
+            SHAPE_INDEX = (SHAPE_INDEX + 1) % SHAPE_COUNT as i32;
+        }
+        if button_pressed(0, BUTTON_X) != 0 {
             SEED = SEED.wrapping_add(1);
         }
 
@@ -156,7 +165,12 @@ pub extern "C" fn render() {
         set_color(0xCCCCCCFF);
         material_metallic(0.8);
         material_roughness(0.2);
-        draw_mesh(SPHERE_MESH);
+        let mesh = match SHAPE_INDEX {
+            0 => SPHERE_MESH,
+            1 => CUBE_MESH,
+            _ => TORUS_MESH,
+        };
+        draw_mesh(mesh);
 
         let title = b"Env Mode 3: Silhouette";
         draw_text(title.as_ptr(), title.len() as u32, 10.0, 10.0, 20.0, 0xFFFFFFFF);
@@ -169,7 +183,7 @@ pub extern "C" fn render() {
         label[prefix.len()..prefix.len() + name.len()].copy_from_slice(name);
         draw_text(label.as_ptr(), (prefix.len() + name.len()) as u32, 10.0, 40.0, 16.0, 0xCCCCCCFF);
 
-        let hint = b"A: cycle presets | B: new seed | F3: debug";
+        let hint = b"A: preset | B: shape | X: seed | F4: debug";
         draw_text(hint.as_ptr(), hint.len() as u32, 10.0, 70.0, 14.0, 0x888888FF);
     }
 }

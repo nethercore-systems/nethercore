@@ -702,8 +702,42 @@ fn sample_rectangles(data: array<u32, 11>, offset: u32, direction: vec3<f32>) ->
     let phi = asin(clamp(dir.y, -1.0, 1.0));
     var uv = vec2<f32>((theta / 6.28318) + 0.5, (phi / 3.14159) + 0.5);
 
-    // Grid cell size based on density
-    let cell_size = mix(0.2, 0.03, density);
+    // Apply variant-specific UV modifications
+    // Variant 0: Scatter - random placement (default)
+    // Variant 1: Buildings - only in lower half, grid-aligned columns
+    // Variant 2: Bands - horizontal bands with uniform spacing
+    // Variant 3: Panels - uniform grid, centered rectangles
+
+    var effective_density = density;
+    var cell_size = mix(0.2, 0.03, density);
+    var force_grid_center = false;
+
+    switch (variant) {
+        case 1u: { // Buildings - lower half only, vertical columns
+            if (uv.y > 0.55) {
+                return vec4<f32>(0.0);  // Nothing above horizon
+            }
+            cell_size = mix(0.15, 0.04, density);  // Taller cells
+            effective_density = density * 1.2;  // More dense
+        }
+        case 2u: { // Bands - horizontal stripes
+            cell_size = vec2<f32>(mix(0.3, 0.05, density), mix(0.08, 0.02, density)).y;
+            // Modulate density by horizontal bands
+            let band = floor(uv.y / 0.1);
+            if (u32(band) % 2u == 0u) {
+                effective_density = density * 0.3;
+            }
+        }
+        case 3u: { // Panels - uniform grid
+            cell_size = mix(0.12, 0.04, density);
+            force_grid_center = true;  // Center rectangles in cells
+            effective_density = 1.0;  // All cells have rectangles
+        }
+        default: { // Scatter
+            // Keep defaults
+        }
+    }
+
     let cell = floor(uv / cell_size);
     let cell_uv = fract(uv / cell_size);
 
@@ -711,7 +745,7 @@ fn sample_rectangles(data: array<u32, 11>, offset: u32, direction: vec3<f32>) ->
     let cell_hash = hash21(vec2<u32>(u32(cell.x + 500.0) & 0xFFFFu, u32(cell.y + 500.0) & 0xFFFFu));
 
     // Only create rectangle if hash below density
-    if (cell_hash > density) {
+    if (cell_hash > effective_density) {
         return vec4<f32>(0.0);
     }
 
@@ -726,20 +760,33 @@ fn sample_rectangles(data: array<u32, 11>, offset: u32, direction: vec3<f32>) ->
 
     // Rectangle size and position within cell
     let size_hash = hash21(vec2<u32>(u32(cell.x * 13.0 + 200.0) & 0xFFFFu, u32(cell.y * 17.0 + 200.0) & 0xFFFFu));
-    let rect_size = mix(size_min, size_max, size_hash) / cell_size;
+    var rect_size = mix(size_min, size_max, size_hash) / cell_size;
 
-    // Aspect ratio
-    let aspect_mult = 1.0 + aspect * 0.5;
+    // Panels variant uses uniform size
+    if (variant == 3u) {
+        rect_size = size_max / cell_size * 0.7;
+    }
+
+    // Aspect ratio - buildings are taller
+    var aspect_mult = 1.0 + aspect * 0.5;
+    if (variant == 1u) {
+        aspect_mult = 2.0 + aspect;  // Tall windows for buildings
+    }
     let rect_w = rect_size;
     let rect_h = rect_size * aspect_mult;
 
     // Center position
-    let pos_hash_x = hash21(vec2<u32>(u32(cell.x * 19.0 + 300.0) & 0xFFFFu, u32(cell.y * 23.0 + 300.0) & 0xFFFFu));
-    let pos_hash_y = hash21(vec2<u32>(u32(cell.x * 29.0 + 400.0) & 0xFFFFu, u32(cell.y * 31.0 + 400.0) & 0xFFFFu));
-    let rect_center = vec2<f32>(
-        0.5 + (pos_hash_x - 0.5) * (1.0 - rect_w),
-        0.5 + (pos_hash_y - 0.5) * (1.0 - rect_h)
-    );
+    var rect_center: vec2<f32>;
+    if (force_grid_center) {
+        rect_center = vec2<f32>(0.5, 0.5);  // Centered in cell
+    } else {
+        let pos_hash_x = hash21(vec2<u32>(u32(cell.x * 19.0 + 300.0) & 0xFFFFu, u32(cell.y * 23.0 + 300.0) & 0xFFFFu));
+        let pos_hash_y = hash21(vec2<u32>(u32(cell.x * 29.0 + 400.0) & 0xFFFFu, u32(cell.y * 31.0 + 400.0) & 0xFFFFu));
+        rect_center = vec2<f32>(
+            0.5 + (pos_hash_x - 0.5) * (1.0 - rect_w),
+            0.5 + (pos_hash_y - 0.5) * (1.0 - rect_h)
+        );
+    }
 
     // Check if inside rectangle
     let dist_x = abs(cell_uv.x - rect_center.x);
@@ -918,26 +965,28 @@ fn sample_curtains(data: array<u32, 11>, offset: u32, direction: vec3<f32>) -> v
         let pos_hash = hash21(vec2<u32>(u32(cell * 7.0 + 200.0) & 0xFFFFu, layer + 1u));
         let curtain_pos = pos_hash * (1.0 - width / layer_spacing);
 
-        // Distance to curtain center
-        let dist_to_curtain = abs(cell_fract - curtain_pos);
+        // Height of this curtain
+        let height_hash = hash21(vec2<u32>(u32(cell * 11.0 + 300.0) & 0xFFFFu, layer + 2u));
+        let curtain_height = mix(height_min, height_max, height_hash);
+
+        // Vertical position check
+        let curtain_base = -0.3 - layer_depth * 0.2;
+        let curtain_top = curtain_base + curtain_height;
+
+        // Apply waviness - offset curtain position based on vertical position
+        var wave_offset = 0.0;
+        if (waviness > 0.0) {
+            let wave_hash = hash21(vec2<u32>(u32(cell * 13.0) & 0xFFFFu, layer + 3u));
+            // Multiple frequencies for organic look
+            wave_offset = sin((dir.y * 8.0 + wave_hash * 6.28318) + phase * 6.28318 * 2.0) * waviness * 0.03
+                        + sin((dir.y * 15.0 + wave_hash * 3.14159) + phase * 6.28318 * 3.0) * waviness * 0.015;
+        }
+
+        // Distance to curtain center (with waviness applied)
+        let dist_to_curtain = abs(cell_fract - curtain_pos - wave_offset);
         let curtain_width = width / layer_spacing;
 
         if (dist_to_curtain < curtain_width * 0.5) {
-            // Height of this curtain
-            let height_hash = hash21(vec2<u32>(u32(cell * 11.0 + 300.0) & 0xFFFFu, layer + 2u));
-            let curtain_height = mix(height_min, height_max, height_hash);
-
-            // Vertical position check
-            let curtain_base = -0.3 - layer_depth * 0.2;
-            let curtain_top = curtain_base + curtain_height;
-
-            // Apply waviness
-            var wave_offset = 0.0;
-            if (waviness > 0.0) {
-                let wave_hash = hash21(vec2<u32>(u32(cell * 13.0) & 0xFFFFu, layer + 3u));
-                wave_offset = sin((dir.y + wave_hash) * 10.0 + phase * 6.28318) * waviness * 0.05;
-            }
-
             if (dir.y >= curtain_base && dir.y <= curtain_top) {
                 // Color interpolation by depth
                 let curtain_color = mix(color_near, color_far, layer_depth);
