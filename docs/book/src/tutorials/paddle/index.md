@@ -5,7 +5,7 @@ In this tutorial, you'll build a complete Paddle game from scratch. By the end, 
 - Two paddles (player-controlled or AI)
 - Ball physics with collision detection
 - Score tracking and win conditions
-- Sound effects
+- Sound effects loaded from assets
 - Title screen and game over states
 - **Automatic online multiplayer** via Emberware's rollback netcode
 
@@ -16,12 +16,13 @@ In this tutorial, you'll build a complete Paddle game from scratch. By the end, 
 | Part | Topics |
 |------|--------|
 | [Part 1: Setup & Drawing](./01-setup.md) | Project creation, FFI imports, `draw_rect()` |
+| [Part 1.5: Game Assets](./01b-assets.md) | `ember.toml`, `ember build`, loading assets |
 | [Part 2: Paddle Movement](./02-paddles.md) | Input handling, game state |
 | [Part 3: Ball Physics](./03-ball.md) | Velocity, collision detection |
 | [Part 4: AI Opponent](./04-ai.md) | Simple AI for single-player |
 | [Part 5: Multiplayer](./05-multiplayer.md) | The magic of rollback netcode |
 | [Part 6: Scoring & Win States](./06-scoring.md) | Game logic, state machine |
-| [Part 7: Sound Effects](./07-sound.md) | Procedural audio |
+| [Part 7: Sound Effects](./07-sound.md) | Loading and playing sounds from ROM |
 | [Part 8: Polish & Publishing](./08-polish.md) | Title screen, publishing to archive |
 
 ## Prerequisites

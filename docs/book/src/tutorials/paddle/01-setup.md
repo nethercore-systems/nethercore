@@ -309,4 +309,4 @@ pub extern "C" fn render() {
 
 ---
 
-**Next:** [Part 2: Paddle Movement](./02-paddles.md) - Make the paddles respond to input.
+**Next:** [Part 1.5: Game Assets](./01b-assets.md) — Set up the asset pipeline with `ember.toml`.

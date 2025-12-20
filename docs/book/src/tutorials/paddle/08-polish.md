@@ -5,7 +5,7 @@ Your Paddle game is complete! Let's add some final polish and publish it to the 
 ## What You'll Learn
 
 - Adding control hints
-- Creating the game manifest (ember.toml)
+- Final ember.toml configuration
 - Building a release ROM
 - Publishing to emberware.io
 
@@ -36,9 +36,9 @@ fn render_title() {
 }
 ```
 
-## Create the Game Manifest
+## Complete ember.toml
 
-Create `ember.toml` in your project root:
+Back in [Part 1.5](./01b-assets.md), we created our `ember.toml`. Here's the complete version with all metadata:
 
 ```toml
 [game]
@@ -51,35 +51,83 @@ description = "Classic Paddle game with AI and multiplayer support"
 [build]
 script = "cargo build --target wasm32-unknown-unknown --release"
 wasm = "target/wasm32-unknown-unknown/release/paddle.wasm"
+
+# Texture assets
+[[assets.textures]]
+id = "paddle"
+path = "assets/paddle.png"
+
+[[assets.textures]]
+id = "ball"
+path = "assets/ball.png"
+
+# Sound assets
+[[assets.sounds]]
+id = "hit"
+path = "assets/hit.wav"
+
+[[assets.sounds]]
+id = "score"
+path = "assets/score.wav"
+
+[[assets.sounds]]
+id = "win"
+path = "assets/win.wav"
+```
+
+### Project Structure
+
+Your final project should look like:
+
+```
+paddle/
+├── Cargo.toml
+├── ember.toml
+├── assets/
+│   ├── paddle.png
+│   ├── ball.png
+│   ├── hit.wav
+│   ├── score.wav
+│   └── win.wav
+└── src/
+    └── lib.rs
 ```
 
 ## Build for Release
 
-### Option 1: Using ember-cli
+### Using ember build
 
-If you have ember-cli installed:
+Build your game with all assets bundled:
 
 ```bash
 ember build
 ```
 
-This compiles and creates a `.ewzx` ROM file.
+This creates a `.ewz` ROM file containing:
+- Your compiled WASM code
+- All converted and compressed assets
+- Game metadata
 
-### Option 2: Manual Build
+### Verify the Build
+
+Check your ROM was created:
 
 ```bash
-cargo build --target wasm32-unknown-unknown --release
+ls -la *.ewz
 ```
 
-Your WASM file is at: `target/wasm32-unknown-unknown/release/paddle.wasm`
+You should see something like:
+```
+-rw-r--r-- 1 user user 45678 Dec 20 12:00 paddle.ewz
+```
 
 ## Test Your Release Build
 
-```bash
-ember run target/wasm32-unknown-unknown/release/paddle.wasm
-```
+Run the final ROM:
 
-Or use `ember run` if you have a packed ROM.
+```bash
+ember run paddle.ewz
+```
 
 ## Final Checklist
 
@@ -92,7 +140,7 @@ Before publishing, verify:
 - [ ] Scores track correctly
 - [ ] Game ends at 5 points
 - [ ] Victory screen shows correct winner
-- [ ] All sound effects play
+- [ ] All sound effects play with proper panning
 - [ ] Game restarts correctly
 
 ## Publishing to Emberware Archive
@@ -104,8 +152,8 @@ Visit [emberware.io/register](https://emberware.io/register) to create your deve
 ### 2. Prepare Assets
 
 You'll need:
-- **Icon** (64x64 PNG) - Shows in the game library
-- **Screenshot(s)** (optional) - Shows on your game's page
+- **Icon** (64×64 PNG) — Shows in the game library
+- **Screenshot(s)** (optional) — Shows on your game's page
 
 ### 3. Upload Your Game
 
@@ -116,7 +164,7 @@ You'll need:
    - Title: "Paddle"
    - Description: Your game description
    - Category: Arcade
-5. Upload your `.wasm` or `.ewzx` file
+5. Upload your `.ewz` ROM file
 6. Add your icon and screenshots
 7. Click "Publish"
 
@@ -124,7 +172,7 @@ You'll need:
 
 Once published, your game has a unique page at:
 ```
-emberware.io/game/your-game-id
+emberware.io/game/paddle
 ```
 
 Share this link! Anyone with the Emberware player can play your game.
@@ -142,7 +190,8 @@ Congratulations! Your Paddle game includes:
 | **Multiplayer** | Automatic online play via rollback netcode |
 | **Game Flow** | Title, Playing, GameOver states |
 | **Scoring** | Point tracking, win conditions |
-| **Audio** | Procedural sound effects with stereo panning |
+| **Audio** | Sound effects loaded from ROM with stereo panning |
+| **Assets** | Textures and sounds bundled with `ember build` |
 
 ## What's Next?
 
@@ -153,13 +202,15 @@ Ideas to try:
 - Create power-ups that spawn randomly
 - Add particle effects when scoring
 - Implement 4-player mode
+- Use sprite textures for paddles and ball
 
 ### Build More Games
 
 Check out these resources:
-- **[Example Games](https://github.com/emberware/emberware/tree/main/examples)** - 28+ examples
-- **[API Reference](../../cheat-sheet.md)** - All available functions
-- **[Render Modes Guide](../../guides/render-modes.md)** - Advanced graphics
+- **[Example Games](https://github.com/emberware/emberware/tree/main/examples)** — 28+ examples
+- **[API Reference](../../cheat-sheet.md)** — All available functions
+- **[Asset Pipeline](../../guides/asset-pipeline.md)** — Advanced asset workflows
+- **[Render Modes Guide](../../guides/render-modes.md)** — 3D graphics
 
 ### Join the Community
 
@@ -182,14 +233,15 @@ You can compare your code or use it as a reference.
 
 In this tutorial, you learned:
 
-1. **Setup** - Creating an Emberware project
-2. **Drawing** - Using `draw_rect()` for 2D graphics
-3. **Input** - Reading sticks and buttons
-4. **Physics** - Ball movement and collision
-5. **AI** - Simple opponent behavior
-6. **Multiplayer** - How rollback netcode "just works"
-7. **Game Flow** - State machines for menus
-8. **Audio** - Procedural sound generation
-9. **Publishing** - Sharing your game with the world
+1. **Setup** — Creating an Emberware project
+2. **Assets** — Using `ember.toml` and `ember build` for textures and sounds
+3. **Drawing** — Using `draw_rect()` for 2D graphics
+4. **Input** — Reading sticks and buttons
+5. **Physics** — Ball movement and collision
+6. **AI** — Simple opponent behavior
+7. **Multiplayer** — How rollback netcode "just works"
+8. **Game Flow** — State machines for menus
+9. **Audio** — Loading and playing sound effects from ROM
+10. **Publishing** — Sharing your game with the world
 
-**You're now an Emberware game developer!** 🎮
+**You're now an Emberware game developer!**
