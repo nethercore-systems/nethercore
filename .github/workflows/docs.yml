@@ -32,11 +32,6 @@ jobs:
       - name: Build book
         run: mdbook build docs/book
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-        with:
-          enablement: true
-
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
