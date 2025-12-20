@@ -1,11 +1,15 @@
-# Multiplayer Testing Plan
+# Multiplayer Implementation Plan
 
 > **Status:** Proposal
 > **Created:** 2024-12-20
 
 ## Executive Summary
 
-Emberware has a **complete GGRS-based rollback netcode implementation** but currently lacks an accessible way for developers and end users to test multiplayer functionality. This document outlines the current state and proposes a phased implementation plan.
+Emberware has a **complete GGRS-based rollback netcode implementation** but currently lacks an accessible way to use it. This document outlines:
+
+1. **MVP:** Direct IP connection for playing with friends (no matchmaking needed)
+2. **Developer Tools:** Sync test and local P2P testing for game developers
+3. **Future:** Matchmaking service integration (out of scope)
 
 ---
 
@@ -80,7 +84,210 @@ There's no mechanism to:
 
 ## Implementation Plan
 
-### Phase 1: CLI Flags for Session Types
+### Phase 0: Direct IP Connection (MVP)
+
+**Goal:** Allow players to connect directly via IP address to play with friends.
+
+This is the **minimum viable multiplayer** - no matchmaking server required. One player hosts, shares their IP, and friends connect directly.
+
+#### User Flow
+
+**Host (Player 1):**
+1. Launch game → Select "Host Online Game"
+2. See dialog: "Hosting on port 7777. Share your IP with friends."
+3. Wait for friend to connect
+4. Game starts when both players ready
+
+**Join (Player 2):**
+1. Launch game → Select "Join Online Game"
+2. Enter friend's IP address (e.g., `192.168.1.100` or `203.0.113.50`)
+3. Click Connect
+4. Game starts when connected
+
+#### 0.1 Library UI - Host/Join Dialog
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Online Play: Platformer                            │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│  ● Host Game                                        │
+│    Port: [7777]                                     │
+│    Your IP: 192.168.1.100 (LAN) / 203.0.113.50     │
+│                                                     │
+│  ○ Join Game                                        │
+│    Friend's IP: [_______________]                   │
+│    Port: [7777]                                     │
+│                                                     │
+│  ┌─────────────────────────────────────────────┐   │
+│  │ Note: If hosting, you may need to forward   │   │
+│  │ port 7777 on your router for friends        │   │
+│  │ outside your local network.                 │   │
+│  └─────────────────────────────────────────────┘   │
+│                                                     │
+│              [Cancel]  [Start]                      │
+└─────────────────────────────────────────────────────┘
+```
+
+#### 0.2 Connection States UI
+
+**Waiting for connection (Host):**
+```
+┌─────────────────────────────────────────┐
+│  Waiting for Player 2...                │
+│                                         │
+│  Share this with your friend:           │
+│  ┌─────────────────────────────────┐   │
+│  │  IP: 203.0.113.50               │   │
+│  │  Port: 7777                     │   │
+│  └─────────────────────────────────┘   │
+│                                         │
+│  [Copy to Clipboard]  [Cancel]          │
+└─────────────────────────────────────────┘
+```
+
+**Connecting (Client):**
+```
+┌─────────────────────────────────────────┐
+│  Connecting to 203.0.113.50:7777...     │
+│                                         │
+│  ████████░░░░░░░░░░░░                   │
+│                                         │
+│  [Cancel]                               │
+└─────────────────────────────────────────┘
+```
+
+**Connection failed:**
+```
+┌─────────────────────────────────────────┐
+│  Connection Failed                      │
+│                                         │
+│  Could not connect to 203.0.113.50:7777 │
+│                                         │
+│  Possible causes:                       │
+│  • Host hasn't started yet              │
+│  • Firewall blocking connection         │
+│  • Port forwarding not configured       │
+│  • Incorrect IP address                 │
+│                                         │
+│  [Retry]  [Back]                        │
+└─────────────────────────────────────────┘
+```
+
+#### 0.3 Technical Implementation
+
+**Host mode:**
+```rust
+// Bind to all interfaces to accept external connections
+let mut socket = LocalSocket::bind("0.0.0.0:7777")?;
+
+// Wait for peer connection (blocking with timeout)
+let peer_addr = socket.wait_for_peer(Duration::from_secs(60))?;
+
+// Create P2P session
+let players = vec![
+    (0, PlayerType::Local),
+    (1, PlayerType::Remote(peer_addr)),
+];
+let session = RollbackSession::new_p2p(config, socket, players, ram_limit)?;
+```
+
+**Join mode:**
+```rust
+// Bind to any available port
+let mut socket = LocalSocket::bind("0.0.0.0:0")?;
+
+// Connect to host
+socket.connect(&format!("{}:{}", host_ip, host_port))?;
+
+// Create P2P session (we are player 1, they are player 0)
+let players = vec![
+    (0, PlayerType::Remote(host_addr)),
+    (1, PlayerType::Local),
+];
+let session = RollbackSession::new_p2p(config, socket, players, ram_limit)?;
+```
+
+#### 0.4 LocalSocket Enhancements Needed
+
+Current `LocalSocket` needs minor additions:
+
+```rust
+impl LocalSocket {
+    /// Wait for an incoming connection (for host mode)
+    /// Returns the peer address when a GGRS handshake packet is received
+    pub fn wait_for_peer(&mut self, timeout: Duration) -> Result<String, LocalSocketError> {
+        let start = Instant::now();
+        while start.elapsed() < timeout {
+            // Check for incoming packets
+            let messages = self.receive_all_messages();
+            for (addr, _msg) in messages {
+                // First message from a peer establishes the connection
+                self.peer_addr = Some(addr.parse()?);
+                return Ok(addr);
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        Err(LocalSocketError::Timeout)
+    }
+
+    /// Get local IP addresses for display to user
+    pub fn get_local_ips() -> Vec<String> {
+        // Return both LAN IP and public IP (via STUN or similar)
+        // For MVP, just return LAN IPs from network interfaces
+    }
+}
+```
+
+#### 0.5 CLI Support
+
+```bash
+# Host a game (waits for connection)
+cargo run -- platformer --host --port 7777
+
+# Join a friend's game
+cargo run -- platformer --join 192.168.1.100:7777
+```
+
+#### 0.6 Network Considerations
+
+**LAN Play (Same Network):**
+- Works immediately with local IP (192.168.x.x)
+- No port forwarding needed
+
+**Internet Play (Different Networks):**
+- Host needs to forward port 7777 (UDP) on their router
+- Host shares their public IP (from whatismyip.com or similar)
+- Client connects to public IP
+
+**Future Enhancements (Not MVP):**
+- NAT hole punching via STUN
+- Relay server (TURN) for symmetric NAT
+- UPnP automatic port forwarding
+- Matchmaking service
+
+#### Files to Create/Modify
+
+| File | Changes |
+|------|---------|
+| `library/src/ui/online_dialog.rs` | New - Host/Join UI dialog |
+| `library/src/ui/connection_state.rs` | New - Connection progress UI |
+| `core/src/rollback/local_socket.rs` | Add `wait_for_peer()`, `get_local_ips()` |
+| `library/src/main.rs` | Add `--host`, `--join` CLI flags |
+| `core/src/runner.rs` | Accept P2P session config |
+
+#### Success Criteria
+
+- [ ] Player can host a game and see their IP
+- [ ] Player can join by entering friend's IP
+- [ ] Connection establishes and game plays with rollback
+- [ ] Clear error messages for connection failures
+- [ ] Works on LAN without any configuration
+- [ ] Works over internet with port forwarding
+
+---
+
+### Phase 1: CLI Flags for Session Types (Developer Testing)
 
 **Goal:** Enable developers to test different session types from command line.
 
@@ -389,7 +596,18 @@ When desync detected:
 
 ## Success Criteria
 
-### Phase 1 (Minimum Viable)
+### Phase 0 (MVP - Direct IP Connection)
+- [ ] UI shows Host/Join options when launching multiplayer game
+- [ ] Host can see their LAN IP address
+- [ ] Host can wait for incoming connection
+- [ ] Client can enter IP address and connect
+- [ ] Game launches with P2P session after connection
+- [ ] Works on same LAN without configuration
+- [ ] Works over internet with port forwarding
+- [ ] Clear error messages for connection failures
+- [ ] Network stats visible during gameplay
+
+### Phase 1 (Developer Testing)
 - [ ] `--sync-test` flag works
 - [ ] `--players N` flag works
 - [ ] `--input-delay N` flag works
@@ -419,7 +637,9 @@ When desync detected:
 
 ## Appendix: LocalSocket Usage
 
-The `LocalSocket` type (`core/src/rollback/local_socket.rs`) implements GGRS's `NonBlockingSocket` trait for UDP communication:
+The `LocalSocket` type (`core/src/rollback/local_socket.rs`) implements GGRS's `NonBlockingSocket` trait for UDP communication.
+
+### Local Development Testing
 
 ```rust
 // Instance 1 (port 7777)
@@ -438,9 +658,37 @@ let players = vec![
 let session = RollbackSession::new_p2p(config, socket1, players, ram_limit)?;
 ```
 
-### Limitations
-- Localhost only (no NAT traversal)
-- No STUN/TURN (no public internet)
-- Point-to-point (for >2 players, needs manual port assignment)
+### Real Player Connection (LAN/Internet)
 
-For production online play, a proper signaling server with WebRTC would be needed (out of scope for this testing plan).
+```rust
+// Host: Bind to all interfaces
+let mut host_socket = LocalSocket::bind("0.0.0.0:7777")?;
+// Wait for client to connect...
+
+// Client: Bind to any port, connect to host's IP
+let mut client_socket = LocalSocket::bind("0.0.0.0:0")?;
+client_socket.connect("192.168.1.100:7777")?;  // LAN IP
+// or
+client_socket.connect("203.0.113.50:7777")?;   // Public IP (requires port forwarding)
+```
+
+### Network Compatibility
+
+| Scenario | Works? | Notes |
+|----------|--------|-------|
+| Same machine (localhost) | ✅ Yes | Development testing |
+| Same LAN (192.168.x.x) | ✅ Yes | No configuration needed |
+| Different networks (internet) | ✅ Yes | Host must forward port 7777 |
+| Behind symmetric NAT | ⚠️ Partial | May need TURN relay (future) |
+
+### Current Limitations
+- No automatic NAT traversal (requires manual port forwarding for internet play)
+- No STUN (could be added to detect public IP automatically)
+- No TURN relay (players behind symmetric NAT can't connect)
+- Point-to-point only (for >2 players, each pair needs connection)
+
+### Future Enhancements (Post-MVP)
+- **STUN:** Automatic public IP detection
+- **NAT hole punching:** Connect without port forwarding in most cases
+- **TURN relay:** Fallback for symmetric NAT
+- **Matchmaking service:** Find opponents, relay connection info
