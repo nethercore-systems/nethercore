@@ -48,6 +48,7 @@ extern "C" {
 
     // Transform
     fn push_identity();
+    fn push_translate(x: f32, y: f32, z: f32);
 
     // Billboard drawing
     fn draw_billboard(w: f32, h: f32, mode: u32, color: u32);
@@ -590,7 +591,7 @@ fn render_platforms() {
                     let tile_y = platform.y + (ty as f32 + 0.5) * tile_size;
 
                     push_identity();
-                    // TODO: Build translation matrix for (tile_x, tile_y, 0.0) and call transform_set()
+                    push_translate(tile_x, tile_y, 0.0);
                     draw_billboard(tile_size, tile_size, MODE_CYLINDRICAL_Y, 0xFFFFFFFF);
                 }
             }
@@ -613,7 +614,7 @@ fn render_collectibles() {
             let bob = sin_approx(time * 3.0 + collectible.bob_offset) * 0.15;
 
             push_identity();
-            // TODO: Build translation matrix for (collectible.x, collectible.y + bob, 0.1) and call transform_set()
+            push_translate(collectible.x, collectible.y + bob, 0.1);
             draw_billboard(0.6, 0.6, MODE_CYLINDRICAL_Y, 0xFFFFFFFF);
         }
     }
@@ -632,7 +633,7 @@ fn render_players() {
             let scale_x = if player.facing_right { PLAYER_WIDTH } else { -PLAYER_WIDTH };
 
             push_identity();
-            // TODO: Build translation matrix for (player.x, player.y + PLAYER_HEIGHT/2, 0.2) and call transform_set()
+            push_translate(player.x, player.y + PLAYER_HEIGHT / 2.0, 0.2);
 
             // Use player color as tint
             draw_billboard(scale_x, PLAYER_HEIGHT, MODE_CYLINDRICAL_Y, PLAYER_COLORS[i]);

@@ -71,6 +71,11 @@ fn draw_billboard(mut caller: Caller<'_, ZXGameContext>, w: f32, h: f32, mode: u
         state.view_matrices.push(mat);
     }
 
+    // Force lazy push of projection matrix if pending (keeps view/proj indices in sync)
+    if let Some(mat) = state.current_proj_matrix.take() {
+        state.proj_matrices.push(mat);
+    }
+
     // Get current view index (after any pending push)
     let view_idx = (state.view_matrices.len() - 1) as u32;
 
@@ -151,6 +156,11 @@ fn draw_billboard_region(
     // Force lazy push of view matrix if pending (fixes cylindrical billboard bug)
     if let Some(mat) = state.current_view_matrix.take() {
         state.view_matrices.push(mat);
+    }
+
+    // Force lazy push of projection matrix if pending (keeps view/proj indices in sync)
+    if let Some(mat) = state.current_proj_matrix.take() {
+        state.proj_matrices.push(mat);
     }
 
     // Get current view index (after any pending push)

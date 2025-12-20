@@ -67,9 +67,13 @@ extern "C" {
     fn uniform_alpha(level: u32);
     fn dither_offset(x: u32, y: u32);
 
-    // Sky (for lighting)
+    // Sky
     fn sky_set_colors(horizon_color: u32, zenith_color: u32);
-    fn sky_set_sun(dir_x: f32, dir_y: f32, dir_z: f32, color: u32, sharpness: f32);
+
+    // Lighting
+    fn light_set(index: u32, x: f32, y: f32, z: f32);
+    fn light_color(index: u32, color: u32);
+    fn light_intensity(index: u32, intensity: f32);
 
     // Time
     fn elapsed_time() -> f32;
@@ -140,7 +144,9 @@ pub extern "C" fn init() {
 
         // Set up sky for ambient lighting
         sky_set_colors(0x404060FF, 0x202040FF);
-        sky_set_sun(-0.5, -1.0, -0.5, 0xFFEEDDFF, 0.8);
+        light_set(0, -0.5, -1.0, -0.5);
+        light_color(0, 0xFFEEDDFF);
+        light_intensity(0, 1.0);
 
         // Generate meshes
         SPHERE_MESH = sphere(0.8, 24, 12);

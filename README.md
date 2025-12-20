@@ -161,6 +161,11 @@ Visit [emberware.io](https://emberware.io) to create an account and upload your 
 | Max players | 4 | 4 |
 | Netcode | Rollback (GGRS) | Rollback (GGRS) |
 
+## Community
+
+- [Discord](https://discord.gg/xcwSSgW4) — Chat, get help, share your games
+- [GitHub Discussions](https://github.com/emberware-io/emberware/discussions) — Longer-form discussions
+
 ## License
 
 Dual-licensed under MIT OR Apache-2.0 (your choice).

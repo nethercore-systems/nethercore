@@ -63,7 +63,6 @@ extern "C" {
 
     // Sky (all modes)
     fn sky_set_colors(horizon_color: u32, zenith_color: u32);
-    fn sky_set_sun(dir_x: f32, dir_y: f32, dir_z: f32, color: u32, sharpness: f32);
     fn draw_sky();
 
     // Materials (Mode 2/3)
@@ -367,11 +366,9 @@ pub extern "C" fn render() {
             0x99BFD9FF,   // Horizon: light blue
             0x264D99FF    // Zenith: darker blue
         );
-        sky_set_sun(
-            -0.7, -0.2, -0.7,  // Direction: rays from sun near horizon (low elevation, visible)
-            0xFFFAF0FF,        // Color: warm white
-            0.95               // Sharpness: fairly sharp disc
-        );
+        light_set(0, -0.7, -0.2, -0.7);  // Direction: rays from sun near horizon
+        light_color(0, 0xFFFAF0FF);      // Color: warm white
+        light_intensity(0, 1.0);
         draw_sky();
 
         // Update camera position to orbit around the sphere

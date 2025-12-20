@@ -65,9 +65,13 @@ extern "C" {
     fn set_color(color: u32);
     fn depth_test(enabled: u32);
 
-    // Sky (for lighting)
+    // Sky
     fn sky_set_colors(horizon_color: u32, zenith_color: u32);
-    fn sky_set_sun(dir_x: f32, dir_y: f32, dir_z: f32, color: u32, sharpness: f32);
+
+    // Lighting
+    fn light_set(index: u32, x: f32, y: f32, z: f32);
+    fn light_color(index: u32, color: u32);
+    fn light_intensity(index: u32, intensity: f32);
 
     // 2D drawing for UI
     fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);

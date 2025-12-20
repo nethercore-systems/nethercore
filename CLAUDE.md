@@ -5,13 +5,13 @@
 Emberware is a fantasy console platform with built-in rollback netcode, designed to support multiple fantasy consoles (Emberware ZX, Chroma, etc.) with a shared framework.
 
 **Console Status:**
-- **Emberware ZX** — Fully implemented (PS1/N64 aesthetic)
+- **Emberware ZX** — Fully implemented (5th generation aesthetic)
 - **Emberware Chroma** — Coming Soon (documented but not yet implemented)
 
 **Repository Structure:**
 - `/core` — Console trait, WASM runtime, GGRS rollback, ConsoleRunner, debug inspection
 - `/library` — Main binary with library UI, console registry, game launcher
-- `/emberware-zx` — PS1/N64 aesthetic console implementation (library, no binary)
+- `/emberware-zx` — 5th generation aesthetic console implementation (library, no binary)
 - `/z-common` — Z-specific formats, ROM loader
 - `/shared` — API types for platform backend, cart/ROM formats
 - `/tools` — Developer tools (ember-cli, ember-export)
@@ -178,7 +178,7 @@ The core handles GGRS serialization of whatever input type the console uses.
 - winit (windowing)
 
 ### Emberware ZX
-- wgpu (graphics with PS1/N64 aesthetic)
+- wgpu (graphics with 5th generation aesthetic)
 - glam (math: vectors, matrices, quaternions)
 - cpal + ringbuf (per-frame audio generation with rollback support)
 
@@ -193,7 +193,7 @@ The core handles GGRS serialization of whatever input type the console uses.
 
 - `/core` — `emberware-core` crate with Console trait, ConsoleRunner, WASM runtime, GGRS integration, debug inspection
 - `/library` — `emberware-library` binary (default workspace member) with library UI, console registry
-- `/emberware-zx` — `emberware-zx` library implementing Console for PS1/N64 aesthetic
+- `/emberware-zx` — `emberware-zx` library implementing Console for 5th generation aesthetic
 - `/z-common` — Z-specific formats, ZRomLoader implementing RomLoader trait
 - `/shared` — `emberware-shared` crate with API types, cart formats, asset formats
 - `/tools/ember-cli` — Build, pack, and run games (`ember build`, `ember pack`, `ember run`)

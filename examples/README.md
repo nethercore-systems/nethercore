@@ -2,6 +2,23 @@
 
 Example games demonstrating Emberware ZX features. Each example is a standalone WASM game showcasing specific APIs and techniques.
 
+## Learning Path
+
+New to Emberware? Follow this order to learn progressively:
+
+| Step | Example | What You'll Learn |
+|------|---------|-------------------|
+| 1 | **hello-world** | 2D drawing (`draw_rect`, `draw_text`), input handling |
+| 2 | **triangle** | Introduction to 3D rendering |
+| 3 | **textured-quad** | Loading and applying textures |
+| 4 | **cube** | 3D transforms, rotation, camera |
+| 5 | **paddle** | Complete game with AI, multiplayer, sound ([full tutorial](../docs/book/src/tutorials/paddle/index.md)) |
+| 6 | **platformer** | Advanced example: physics, billboards, collision, UI |
+
+After completing the learning path, explore examples by topic below.
+
+---
+
 ## Building and Running
 
 **Prerequisites:**
@@ -91,6 +108,7 @@ cargo run -- lighting
 
 | Example | Description |
 |---------|-------------|
+| **paddle** | Classic 2-player game with AI, rollback multiplayer, sound |
 | **platformer** | Full mini-game: physics, collision, multiple players |
 
 ### Development Tools
@@ -201,6 +219,8 @@ Output: `target/wasm32-unknown-unknown/release/hello_world.wasm`
 
 ## Further Reading
 
-- [FFI Reference](../docs/architecture/ffi.md) — Shared API documentation
-- [Game Developer Book](../docs/book/) — Full API documentation (mdBook)
-- [Rendering Architecture](../docs/architecture/zx/rendering.md) — ZX graphics deep dive
+- **[Developer Book](../docs/book/)** — Complete documentation (build with `mdbook build docs/book`)
+- **[Paddle Tutorial](../docs/book/src/tutorials/paddle/index.md)** — 8-part tutorial building a complete game
+- **[API Cheat Sheet](../docs/book/src/cheat-sheet.md)** — Quick reference for all FFI functions
+- **[Render Modes](../docs/book/src/guides/render-modes.md)** — Graphics modes and materials
+- **[FFI Reference](../docs/architecture/ffi.md)** — Low-level FFI architecture

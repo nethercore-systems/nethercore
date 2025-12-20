@@ -52,9 +52,11 @@ fn unpack_resolution_index(packed: u32) -> u32 {
 // ============================================================================
 
 fn apply_billboard(local_xy: vec2<f32>, size: vec2<f32>, mode: u32, view_matrix: mat4x4<f32>) -> vec3<f32> {
-    let cam_right = vec3<f32>(view_matrix[0].x, view_matrix[0].y, view_matrix[0].z);
-    let cam_up = vec3<f32>(view_matrix[1].x, view_matrix[1].y, view_matrix[1].z);
-    let cam_fwd = -vec3<f32>(view_matrix[2].x, view_matrix[2].y, view_matrix[2].z);
+    // Extract camera basis from view matrix rows (not columns!)
+    // view_matrix[col].component gives us column-major access, so we read across columns to get rows
+    let cam_right = vec3<f32>(view_matrix[0].x, view_matrix[1].x, view_matrix[2].x);
+    let cam_up = vec3<f32>(view_matrix[0].y, view_matrix[1].y, view_matrix[2].y);
+    let cam_fwd = -vec3<f32>(view_matrix[0].z, view_matrix[1].z, view_matrix[2].z);
 
     let scaled_x = local_xy.x * size.x;
     let scaled_y = local_xy.y * size.y;
@@ -62,16 +64,19 @@ fn apply_billboard(local_xy: vec2<f32>, size: vec2<f32>, mode: u32, view_matrix:
     if (mode == BILLBOARD_SPHERICAL) {
         return cam_right * scaled_x + cam_up * scaled_y;
     } else if (mode == BILLBOARD_CYLINDRICAL_Y) {
+        // Rotate around Y axis to face camera (trees, characters)
         let fwd_xz = normalize(vec3<f32>(cam_fwd.x, 0.0, cam_fwd.z));
-        let right = normalize(cross(vec3<f32>(0.0, 1.0, 0.0), fwd_xz));
+        let right = normalize(cross(fwd_xz, vec3<f32>(0.0, 1.0, 0.0)));
         return right * scaled_x + vec3<f32>(0.0, 1.0, 0.0) * scaled_y;
     } else if (mode == BILLBOARD_CYLINDRICAL_X) {
+        // Rotate around X axis to face camera
         let fwd_yz = normalize(vec3<f32>(0.0, cam_fwd.y, cam_fwd.z));
-        let up = normalize(cross(fwd_yz, vec3<f32>(1.0, 0.0, 0.0)));
+        let up = normalize(cross(vec3<f32>(1.0, 0.0, 0.0), fwd_yz));
         return vec3<f32>(1.0, 0.0, 0.0) * scaled_x + up * scaled_y;
     } else if (mode == BILLBOARD_CYLINDRICAL_Z) {
+        // Rotate around Z axis to face camera
         let fwd_xy = normalize(vec3<f32>(cam_fwd.x, cam_fwd.y, 0.0));
-        let right = normalize(cross(vec3<f32>(0.0, 0.0, 1.0), fwd_xy));
+        let right = normalize(cross(fwd_xy, vec3<f32>(0.0, 0.0, 1.0)));
         return right * scaled_x + vec3<f32>(0.0, 0.0, 1.0) * scaled_y;
     }
     return vec3<f32>(scaled_x, scaled_y, 0.0);

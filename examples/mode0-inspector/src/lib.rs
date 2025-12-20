@@ -66,7 +66,6 @@ extern "C" {
 
     // Sky
     fn sky_set_colors(horizon_color: u32, zenith_color: u32);
-    fn sky_set_sun(dir_x: f32, dir_y: f32, dir_z: f32, color: u32, sharpness: f32);
     fn draw_sky();
 
     // Lights (4 dynamic lights)
@@ -267,7 +266,9 @@ pub extern "C" fn render() {
 
         // Configure and draw sky
         sky_set_colors(HORIZON_COLOR, ZENITH_COLOR);
-        sky_set_sun(SUN_DIR_X, SUN_DIR_Y, SUN_DIR_Z, SUN_COLOR, SUN_SHARPNESS);
+        light_set(0, SUN_DIR_X, SUN_DIR_Y, SUN_DIR_Z);
+        light_color(0, SUN_COLOR);
+        light_intensity(0, 1.0);
         draw_sky();
 
         // Update lights from debug values

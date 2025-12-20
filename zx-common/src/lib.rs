@@ -12,10 +12,12 @@
 //! - [`loader`] - ROM loader for Emberware ZX ROM files
 
 pub mod formats;
+#[cfg(feature = "loader")]
 pub mod loader;
 pub mod packing;
 
 // Re-export the ROM loader
+#[cfg(feature = "loader")]
 pub use loader::ZRomLoader;
 
 // Re-export commonly used packing items

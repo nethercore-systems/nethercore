@@ -387,6 +387,245 @@ All assets are embedded in the WASM binary at compile time. There is no runtime 
 
 ---
 
+## Starter Assets
+
+Don't have assets yet? Here are some ready-to-use procedural assets you can copy directly into your game.
+
+### Procedural Textures
+
+**Checkerboard (8x8)**
+```rust
+const CHECKERBOARD: [u8; 256] = {
+    let mut pixels = [0u8; 256];
+    let white = [0xFF, 0xFF, 0xFF, 0xFF];
+    let gray = [0x88, 0x88, 0x88, 0xFF];
+    let mut y = 0;
+    while y < 8 {
+        let mut x = 0;
+        while x < 8 {
+            let idx = (y * 8 + x) * 4;
+            let color = if (x + y) % 2 == 0 { white } else { gray };
+            pixels[idx] = color[0];
+            pixels[idx + 1] = color[1];
+            pixels[idx + 2] = color[2];
+            pixels[idx + 3] = color[3];
+            x += 1;
+        }
+        y += 1;
+    }
+    pixels
+};
+```
+
+**Player Sprite (8x8)**
+```rust
+const PLAYER_SPRITE: [u8; 256] = {
+    let mut pixels = [0u8; 256];
+    let white = [0xFF, 0xFF, 0xFF, 0xFF];
+    let trans = [0x00, 0x00, 0x00, 0x00];
+    let pattern: [[u8; 8]; 8] = [
+        [0, 0, 1, 1, 1, 1, 0, 0],
+        [0, 1, 1, 1, 1, 1, 1, 0],
+        [0, 1, 1, 1, 1, 1, 1, 0],
+        [0, 0, 1, 1, 1, 1, 0, 0],
+        [0, 1, 1, 1, 1, 1, 1, 0],
+        [1, 1, 1, 1, 1, 1, 1, 1],
+        [0, 0, 1, 0, 0, 1, 0, 0],
+        [0, 0, 1, 0, 0, 1, 0, 0],
+    ];
+    let mut y = 0;
+    while y < 8 {
+        let mut x = 0;
+        while x < 8 {
+            let idx = (y * 8 + x) * 4;
+            let color = if pattern[y][x] == 1 { white } else { trans };
+            pixels[idx] = color[0];
+            pixels[idx + 1] = color[1];
+            pixels[idx + 2] = color[2];
+            pixels[idx + 3] = color[3];
+            x += 1;
+        }
+        y += 1;
+    }
+    pixels
+};
+```
+
+**Coin/Collectible (8x8)**
+```rust
+const COIN_SPRITE: [u8; 256] = {
+    let mut pixels = [0u8; 256];
+    let gold = [0xFF, 0xD7, 0x00, 0xFF];
+    let shine = [0xFF, 0xFF, 0x88, 0xFF];
+    let trans = [0x00, 0x00, 0x00, 0x00];
+    let pattern: [[u8; 8]; 8] = [
+        [0, 0, 1, 1, 1, 1, 0, 0],
+        [0, 1, 2, 2, 1, 1, 1, 0],
+        [1, 2, 2, 1, 1, 1, 1, 1],
+        [1, 2, 1, 1, 1, 1, 1, 1],
+        [1, 1, 1, 1, 1, 1, 1, 1],
+        [1, 1, 1, 1, 1, 1, 1, 1],
+        [0, 1, 1, 1, 1, 1, 1, 0],
+        [0, 0, 1, 1, 1, 1, 0, 0],
+    ];
+    let mut y = 0;
+    while y < 8 {
+        let mut x = 0;
+        while x < 8 {
+            let idx = (y * 8 + x) * 4;
+            let color = match pattern[y][x] {
+                0 => trans, 1 => gold, _ => shine,
+            };
+            pixels[idx] = color[0];
+            pixels[idx + 1] = color[1];
+            pixels[idx + 2] = color[2];
+            pixels[idx + 3] = color[3];
+            x += 1;
+        }
+        y += 1;
+    }
+    pixels
+};
+```
+
+### Procedural Sounds
+
+**Beep (short hit sound)**
+```rust
+fn generate_beep() -> [i16; 2205] {
+    let mut samples = [0i16; 2205]; // 0.1 sec @ 22050 Hz
+    for i in 0..2205 {
+        let t = i as f32 / 22050.0;
+        let envelope = 1.0 - (i as f32 / 2205.0);
+        let value = libm::sinf(2.0 * core::f32::consts::PI * 440.0 * t) * envelope;
+        samples[i] = (value * 32767.0 * 0.3) as i16;
+    }
+    samples
+}
+```
+
+**Jump sound (ascending)**
+```rust
+fn generate_jump() -> [i16; 4410] {
+    let mut samples = [0i16; 4410]; // 0.2 sec
+    for i in 0..4410 {
+        let t = i as f32 / 22050.0;
+        let progress = i as f32 / 4410.0;
+        let freq = 200.0 + (400.0 * progress); // 200 → 600 Hz
+        let envelope = 1.0 - progress;
+        let value = libm::sinf(2.0 * core::f32::consts::PI * freq * t) * envelope;
+        samples[i] = (value * 32767.0 * 0.3) as i16;
+    }
+    samples
+}
+```
+
+**Coin collect (sparkle)**
+```rust
+fn generate_collect() -> [i16; 6615] {
+    let mut samples = [0i16; 6615]; // 0.3 sec
+    for i in 0..6615 {
+        let t = i as f32 / 22050.0;
+        let progress = i as f32 / 6615.0;
+        // Two frequencies for shimmer effect
+        let f1 = 880.0;
+        let f2 = 1320.0; // Perfect fifth
+        let envelope = 1.0 - progress;
+        let v1 = libm::sinf(2.0 * core::f32::consts::PI * f1 * t);
+        let v2 = libm::sinf(2.0 * core::f32::consts::PI * f2 * t);
+        let value = (v1 + v2 * 0.5) * envelope;
+        samples[i] = (value * 32767.0 * 0.2) as i16;
+    }
+    samples
+}
+```
+
+### Using Starter Assets
+
+Load procedural assets in your `init()`:
+
+```rust
+static mut PLAYER_TEX: u32 = 0;
+static mut JUMP_SFX: u32 = 0;
+
+#[no_mangle]
+pub extern "C" fn init() {
+    unsafe {
+        // Load texture
+        PLAYER_TEX = load_texture(8, 8, PLAYER_SPRITE.as_ptr());
+        texture_filter(0); // Nearest-neighbor for crisp pixels
+
+        // Load sound
+        let jump = generate_jump();
+        JUMP_SFX = load_sound(jump.as_ptr(), (jump.len() * 2) as u32);
+    }
+}
+```
+
+---
+
+## ember.toml vs include_bytes!()
+
+There are two ways to include assets in your game:
+
+### Method 1: ember.toml + ROM Packing
+
+Best for: Production games with many assets
+
+```toml
+# ember.toml
+[game]
+id = "my-game"
+title = "My Game"
+
+[[assets.textures]]
+id = "player"
+path = "assets/player.png"
+
+[[assets.sounds]]
+id = "jump"
+path = "assets/jump.wav"
+```
+
+Load with ROM functions:
+```rust
+let player_tex = rom_texture(b"player".as_ptr(), 6);
+let jump_sfx = rom_sound(b"jump".as_ptr(), 4);
+```
+
+Benefits:
+- Assets are pre-processed and compressed
+- Single `.ewzx` ROM file
+- Automatic GPU format conversion
+
+### Method 2: include_bytes!() + Procedural
+
+Best for: Small games, prototyping, tutorials
+
+```rust
+// Compile-time embedding
+static TEXTURE_DATA: &[u8] = include_bytes!("../assets/player.ewztex");
+
+// Or generate at runtime
+const PIXELS: [u8; 256] = generate_pixels();
+```
+
+Benefits:
+- Simple, no build step
+- Good for procedural content
+- Self-contained WASM file
+
+### Which Should I Use?
+
+| Scenario | Recommendation |
+|----------|----------------|
+| Learning/prototyping | include_bytes!() or procedural |
+| Simple arcade games | Either works |
+| Complex games with many assets | ember.toml + ROM |
+| Games with large textures | ember.toml (compression) |
+
+---
+
 ## Planned Features
 
 The following features are planned but not yet implemented:

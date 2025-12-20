@@ -379,10 +379,15 @@ pub extern "C" fn update() {
         let stick_x = left_stick_x(0);
         let stick_y = left_stick_y(0);
 
-        // Rotate camera with left stick
-        CAMERA_ANGLE += stick_x * 2.0;
-        CAMERA_HEIGHT += stick_y * 0.1;
-        CAMERA_HEIGHT = clamp(CAMERA_HEIGHT, 1.0, 10.0);
+        // Rotate camera with left stick, or auto-orbit when centered
+        if stick_x.abs() > 0.1 || stick_y.abs() > 0.1 {
+            CAMERA_ANGLE += stick_x * 2.0;
+            CAMERA_HEIGHT += stick_y * 0.1;
+            CAMERA_HEIGHT = clamp(CAMERA_HEIGHT, 1.0, 10.0);
+        } else {
+            // Auto-orbit when stick is centered
+            CAMERA_ANGLE += 0.3;
+        }
 
         update_camera();
 
@@ -415,6 +420,9 @@ fn clamp(v: f32, min: f32, max: f32) -> f32 {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
+        // Set camera every frame (must be in render, not update - clear_frame resets camera state)
+        update_camera();
+
         set_color(0xFFFFFFFF);
 
         // === Draw mode comparison (4 columns) ===
@@ -486,8 +494,6 @@ pub extern "C" fn render() {
         }
 
         // === Draw UI overlay ===
-        draw_rect(10.0, 10.0, 560.0, 240.0, 0x000000AA);
-
         draw_text_str("Billboard Demo", 20.0, 30.0, 24.0, 0xFFFFFFFF);
         draw_text_str("L-Stick: Rotate camera", 20.0, 100.0, 16.0, 0xCCCCCCFF);
         draw_text_str("A: Pause/Resume", 20.0, 145.0, 16.0, 0xCCCCCCFF);

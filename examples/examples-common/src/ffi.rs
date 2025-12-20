@@ -74,10 +74,9 @@ extern "C" {
     pub fn blend_mode(mode: u32);
 
     // ========================================================================
-    // Sky (backwards compatibility)
+    // Sky
     // ========================================================================
     pub fn sky_set_colors(horizon_color: u32, zenith_color: u32);
-    pub fn sky_set_sun(dir_x: f32, dir_y: f32, dir_z: f32, color: u32, sharpness: f32);
     pub fn draw_sky();
 
     // ========================================================================

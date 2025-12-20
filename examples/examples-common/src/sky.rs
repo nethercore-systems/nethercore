@@ -77,13 +77,10 @@ impl DebugSky {
     pub fn apply_and_draw(&self) {
         unsafe {
             sky_set_colors(self.horizon, self.zenith);
-            sky_set_sun(
-                self.sun_dir_x,
-                self.sun_dir_y,
-                self.sun_dir_z,
-                self.sun_color,
-                self.sun_sharpness,
-            );
+            // Use new lighting API (sky_set_sun was removed in Multi-Environment v3)
+            light_set(0, self.sun_dir_x, self.sun_dir_y, self.sun_dir_z);
+            light_color(0, self.sun_color);
+            light_intensity(0, 1.0);
             draw_sky();
         }
     }
@@ -92,13 +89,10 @@ impl DebugSky {
     pub fn apply(&self) {
         unsafe {
             sky_set_colors(self.horizon, self.zenith);
-            sky_set_sun(
-                self.sun_dir_x,
-                self.sun_dir_y,
-                self.sun_dir_z,
-                self.sun_color,
-                self.sun_sharpness,
-            );
+            // Use new lighting API (sky_set_sun was removed in Multi-Environment v3)
+            light_set(0, self.sun_dir_x, self.sun_dir_y, self.sun_dir_z);
+            light_color(0, self.sun_color);
+            light_intensity(0, 1.0);
         }
     }
 }

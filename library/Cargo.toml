@@ -22,8 +22,8 @@ gamepad = ["emberware-core/gamepad", "zx-common/gamepad"]
 # Local crates
 emberware-core = { path = "../core", default-features = false }
 emberware-shared = { path = "../shared" }
-# Note: zx-common provides ZXRomLoader for reading .ewzx ROM metadata
-zx-common = { path = "../zx-common", default-features = false }
+# Note: zx-common provides ZRomLoader for reading .ewzx ROM metadata
+zx-common = { path = "../zx-common", default-features = false, features = ["loader"] }
 
 # Workspace dependencies
 anyhow.workspace = true
