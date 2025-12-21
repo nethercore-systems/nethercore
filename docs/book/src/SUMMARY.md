@@ -12,7 +12,6 @@
 
 - [Build Paddle](./tutorials/paddle/index.md)
   - [Part 1: Setup & Drawing](./tutorials/paddle/01-setup.md)
-  - [Part 1.5: Game Assets](./tutorials/paddle/01b-assets.md)
   - [Part 2: Paddle Movement](./tutorials/paddle/02-paddles.md)
   - [Part 3: Ball Physics](./tutorials/paddle/03-ball.md)
   - [Part 4: AI Opponent](./tutorials/paddle/04-ai.md)

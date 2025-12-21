@@ -38,7 +38,7 @@ fn render_title() {
 
 ## Complete ember.toml
 
-Back in [Part 1.5](./01b-assets.md), we created our `ember.toml`. Here's the complete version with all metadata:
+In [Part 7](./07-sound.md), we created our `ember.toml`. Here's the complete version with all metadata for publishing:
 
 ```toml
 [game]
@@ -47,19 +47,6 @@ title = "Paddle"
 author = "Your Name"
 version = "1.0.0"
 description = "Classic Paddle game with AI and multiplayer support"
-
-[build]
-script = "cargo build --target wasm32-unknown-unknown --release"
-wasm = "target/wasm32-unknown-unknown/release/paddle.wasm"
-
-# Texture assets
-[[assets.textures]]
-id = "paddle"
-path = "assets/paddle.png"
-
-[[assets.textures]]
-id = "ball"
-path = "assets/ball.png"
 
 # Sound assets
 [[assets.sounds]]
@@ -84,8 +71,6 @@ paddle/
 ├── Cargo.toml
 ├── ember.toml
 ├── assets/
-│   ├── paddle.png
-│   ├── ball.png
 │   ├── hit.wav
 │   ├── score.wav
 │   └── win.wav
@@ -191,7 +176,7 @@ Congratulations! Your Paddle game includes:
 | **Game Flow** | Title, Playing, GameOver states |
 | **Scoring** | Point tracking, win conditions |
 | **Audio** | Sound effects loaded from ROM with stereo panning |
-| **Assets** | Textures and sounds bundled with `ember build` |
+| **Assets** | Sounds bundled with `ember build` |
 
 ## What's Next?
 
@@ -234,13 +219,13 @@ You can compare your code or use it as a reference.
 In this tutorial, you learned:
 
 1. **Setup** — Creating an Emberware project
-2. **Assets** — Using `ember.toml` and `ember build` for textures and sounds
-3. **Drawing** — Using `draw_rect()` for 2D graphics
-4. **Input** — Reading sticks and buttons
-5. **Physics** — Ball movement and collision
-6. **AI** — Simple opponent behavior
-7. **Multiplayer** — How rollback netcode "just works"
-8. **Game Flow** — State machines for menus
+2. **Drawing** — Using `draw_rect()` for 2D graphics
+3. **Input** — Reading sticks and buttons
+4. **Physics** — Ball movement and collision
+5. **AI** — Simple opponent behavior
+6. **Multiplayer** — How rollback netcode "just works"
+7. **Game Flow** — State machines for menus
+8. **Assets** — Using `ember.toml` and `ember build` for sounds
 9. **Audio** — Loading and playing sound effects from ROM
 10. **Publishing** — Sharing your game with the world
 
