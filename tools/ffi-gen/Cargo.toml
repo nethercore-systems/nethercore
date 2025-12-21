@@ -1,0 +1,22 @@
+[package]
+name = "ffi-gen"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "ffi-gen"
+path = "src/main.rs"
+
+[dependencies]
+syn = { version = "2", features = ["full", "extra-traits", "parsing"] }
+quote = "1"
+proc-macro2 = "1"
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+handlebars = "5"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[lib]
+name = "ffi_gen"
+path = "src/lib.rs"
