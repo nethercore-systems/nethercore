@@ -177,7 +177,7 @@ void test_types(void) {{
 
 // Test that helper macros work
 void test_helpers(void) {{
-    uint32_t color = ew{}_rgba(255, 128, 64, 255);
+    uint32_t color = nc{}_rgba(255, 128, 64, 255);
     (void)color;
 }}
 "#,

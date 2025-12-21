@@ -4,6 +4,10 @@ target/
 Cargo.lock
 *.pdb
 
+# FFI test artifacts
+*.o
+test_bindings*
+
 # Environment
 .env
 .env.local
