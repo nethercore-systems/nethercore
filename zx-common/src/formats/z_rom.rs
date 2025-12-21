@@ -1,11 +1,11 @@
-//! Emberware ZX ROM format (`.ewzx`)
+//! Nethercore ZX ROM format (`.nczx`)
 //!
-//! Binary ROM format for Emberware ZX games using bitcode serialization.
+//! Binary ROM format for Nethercore ZX games using bitcode serialization.
 //! Each ROM contains game code, metadata, optional data pack, and preview assets.
 //!
 //! # Memory Model
 //!
-//! Emberware ZX uses a **12MB ROM + 4MB RAM** memory model:
+//! Nethercore ZX uses a **12MB ROM + 4MB RAM** memory model:
 //! - ROM (Cartridge): 12 MB total (WASM code + assets via data pack)
 //! - RAM: 4 MB WASM linear memory (code + heap + stack)
 //! - VRAM: 4 MB GPU textures and mesh buffers
@@ -15,31 +15,31 @@
 //!
 //! # Format Constants
 //!
-//! All ROM format constants are defined in [`emberware_shared::ZX_ROM_FORMAT`]:
-//! - Extension: `"ewzx"`
-//! - Magic bytes: `b"EWZX"`
+//! All ROM format constants are defined in [`nethercore_shared::ZX_ROM_FORMAT`]:
+//! - Extension: `"nczx"`
+//! - Magic bytes: `b"NCZX"`
 //! - Version: `1`
 
 use bitcode::{Decode, Encode};
 
-use emberware_shared::local::LocalGameManifest;
-use emberware_shared::ZX_ROM_FORMAT;
+use nethercore_shared::local::LocalGameManifest;
+use nethercore_shared::ZX_ROM_FORMAT;
 
 use super::z_data_pack::ZDataPack;
 
-/// Complete Emberware ZX ROM
+/// Complete Nethercore ZX ROM
 ///
-/// This struct represents a complete game ROM for Emberware ZX, including
+/// This struct represents a complete game ROM for Nethercore ZX, including
 /// all metadata, compiled WASM code, optional data pack, and preview assets.
 ///
 /// # Memory Layout
 ///
 /// ```text
 /// ┌─────────────────────────────────────────────────────────────┐
-/// │                   .ewzx ROM File (≤12MB)                    │
+/// │                   .nczx ROM File (≤12MB)                    │
 /// ├─────────────────────────────────────────────────────────────┤
 /// │  EWZX Header (4 bytes)                                      │
-/// │  ├── Magic: "EWZX"                                          │
+/// │  ├── Magic: "NCZX"                                          │
 /// ├─────────────────────────────────────────────────────────────┤
 /// │  ZRom (bitcode serialized)                                  │
 /// │  ├── version: u32                                           │
@@ -79,7 +79,7 @@ pub struct ZRom {
     pub screenshots: Vec<Vec<u8>>,
 }
 
-/// Emberware ZX specific metadata
+/// Nethercore ZX specific metadata
 #[derive(Debug, Clone, Encode, Decode)]
 pub struct ZMetadata {
     // Core game info
@@ -130,7 +130,7 @@ impl ZRom {
     /// Serialize ROM to bytes with magic header
     ///
     /// The output format is:
-    /// - 4 bytes: Magic bytes "EWZX"
+    /// - 4 bytes: Magic bytes "NCZX"
     /// - Remaining bytes: Bitcode-encoded ZRom struct
     pub fn to_bytes(&self) -> anyhow::Result<Vec<u8>> {
         let mut bytes = ZX_ROM_FORMAT.magic.to_vec();
@@ -147,7 +147,7 @@ impl ZRom {
         if bytes.len() < 4 || &bytes[0..4] != ZX_ROM_FORMAT.magic {
             anyhow::bail!(
                 "Invalid EWZX magic bytes (expected: {:?})",
-                std::str::from_utf8(ZX_ROM_FORMAT.magic).unwrap_or("EWZX")
+                std::str::from_utf8(ZX_ROM_FORMAT.magic).unwrap_or("NCZX")
             );
         }
 

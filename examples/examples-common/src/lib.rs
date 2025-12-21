@@ -1,4 +1,4 @@
-//! Examples Common - Shared utilities for Emberware examples
+//! Examples Common - Shared utilities for Nethercore examples
 //!
 //! Provides common functionality for examples:
 //! - FFI declarations

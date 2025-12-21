@@ -36,7 +36,7 @@ pub struct RomMetadata {
 /// pub struct ZRomLoader;
 ///
 /// impl RomLoader for ZRomLoader {
-///     fn extension(&self) -> &'static str { "ewzx" }
+///     fn extension(&self) -> &'static str { "nczx" }
 ///     fn console_type(&self) -> &'static str { "zx" }
 ///     // ...
 /// }
@@ -44,13 +44,13 @@ pub struct RomMetadata {
 pub trait RomLoader: Send + Sync {
     /// Get the file extension for this ROM format (without the dot).
     ///
-    /// Example: `"ewzx"` for Emberware ZX ROMs.
+    /// Example: `"nczx"` for Nethercore ZX ROMs.
     fn extension(&self) -> &'static str;
 
     /// Get the console type identifier.
     ///
     /// This matches the `console_type` field in game manifests.
-    /// Example: `"z"` for Emberware ZX.
+    /// Example: `"z"` for Nethercore ZX.
     fn console_type(&self) -> &'static str;
 
     /// Load metadata from ROM bytes without fully parsing the ROM.

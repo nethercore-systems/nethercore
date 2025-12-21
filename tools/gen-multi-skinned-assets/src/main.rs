@@ -7,9 +7,9 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::path::PathBuf;
 
-use zx_common::formats::animation::{encode_bone_transform, EmberZAnimationHeader};
-use zx_common::formats::mesh::EmberZMeshHeader;
-use zx_common::formats::skeleton::EmberZSkeletonHeader;
+use zx_common::formats::animation::{encode_bone_transform, NetherZAnimationHeader};
+use zx_common::formats::mesh::NetherZMeshHeader;
+use zx_common::formats::skeleton::NetherZSkeletonHeader;
 use zx_common::packing::{pack_vertex_data, FORMAT_NORMAL, FORMAT_SKINNED};
 
 const FORMAT_POS_NORMAL_SKINNED: u8 = FORMAT_NORMAL | FORMAT_SKINNED;
@@ -65,7 +65,7 @@ fn main() {
 
 /// Generate a skeleton file with inverse bind matrices
 fn generate_skeleton(path: &PathBuf, bone_count: u32, translations: &[[f32; 3]]) {
-    let header = EmberZSkeletonHeader::new(bone_count);
+    let header = NetherZSkeletonHeader::new(bone_count);
 
     let mut file = File::create(path).expect("Failed to create skeleton file");
     file.write_all(&header.to_bytes())
@@ -215,7 +215,7 @@ fn generate_arm_mesh(path: &PathBuf, bone_count: u32, segment_height: f32, _vert
     let packed_vertices = pack_vertex_data(&vertices, FORMAT_POS_NORMAL_SKINNED);
 
     // Write mesh file
-    let header = EmberZMeshHeader::new(vertex_count, index_count, FORMAT_POS_NORMAL_SKINNED);
+    let header = NetherZMeshHeader::new(vertex_count, index_count, FORMAT_POS_NORMAL_SKINNED);
 
     let mut file = File::create(path).expect("Failed to create mesh file");
     file.write_all(&header.to_bytes())
@@ -343,7 +343,7 @@ fn generate_horizontal_arm_mesh(path: &PathBuf, bone_count: u32, segment_length:
 
     let packed_vertices = pack_vertex_data(&vertices, FORMAT_POS_NORMAL_SKINNED);
 
-    let header = EmberZMeshHeader::new(vertex_count, index_count, FORMAT_POS_NORMAL_SKINNED);
+    let header = NetherZMeshHeader::new(vertex_count, index_count, FORMAT_POS_NORMAL_SKINNED);
 
     let mut file = File::create(path).expect("Failed to create mesh file");
     file.write_all(&header.to_bytes())
@@ -365,7 +365,7 @@ fn generate_horizontal_arm_mesh(path: &PathBuf, bone_count: u32, segment_length:
 
 /// Generate vertical arm animation (Z-axis rotations) with proper hierarchical chaining
 fn generate_animation(path: &PathBuf, bone_count: u8, frame_count: u16, params: &[(f32, f32)]) {
-    let header = EmberZAnimationHeader::new(bone_count, frame_count);
+    let header = NetherZAnimationHeader::new(bone_count, frame_count);
 
     let mut file = File::create(path).expect("Failed to create animation file");
     file.write_all(&header.to_bytes())
@@ -435,7 +435,7 @@ fn generate_animation(path: &PathBuf, bone_count: u8, frame_count: u16, params: 
 
 /// Generate horizontal arm animation (Y-axis rotations) with proper hierarchical chaining
 fn generate_horizontal_animation(path: &PathBuf, bone_count: u8, frame_count: u16) {
-    let header = EmberZAnimationHeader::new(bone_count, frame_count);
+    let header = NetherZAnimationHeader::new(bone_count, frame_count);
 
     let mut file = File::create(path).expect("Failed to create animation file");
     file.write_all(&header.to_bytes())

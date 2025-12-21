@@ -1,6 +1,6 @@
 # Publishing Your Game
 
-This guide covers everything you need to know about packaging and publishing your Emberware game.
+This guide covers everything you need to know about packaging and publishing your Nethercore game.
 
 ## Overview
 
@@ -9,24 +9,24 @@ The publishing process:
 1. **Build** your game (compile to WASM)
 2. **Pack** assets into a ROM file (optional)
 3. **Test** the final build
-4. **Upload** to emberware.io
+4. **Upload** to nethercore.systems
 5. **Share** with the world
 
 ## Building for Release
 
-### Using ember-cli (Recommended)
+### Using nether-cli (Recommended)
 
-The ember CLI handles compilation and packaging:
+The nether CLI handles compilation and packaging:
 
 ```bash
 # Build WASM
-ember build
+nether build
 
 # Package into ROM
-ember pack
+nether pack
 
 # Or do both
-ember build && ember pack
+nether build && nether pack
 ```
 
 ### Manual Build
@@ -41,9 +41,9 @@ cargo build --target wasm32-unknown-unknown --release
 ls target/wasm32-unknown-unknown/release/your_game.wasm
 ```
 
-## Game Manifest (ember.toml)
+## Game Manifest (nether.toml)
 
-Create `ember.toml` in your project root:
+Create `nether.toml` in your project root:
 
 ```toml
 [game]
@@ -73,7 +73,7 @@ path = "assets/jump.wav"
 
 ## ROM File Format
 
-Emberware ROMs (`.ewzx` files) bundle:
+Nethercore ROMs (`.nczx` files) bundle:
 
 - Your compiled WASM game
 - Pre-processed assets (textures, meshes, sounds)
@@ -90,10 +90,10 @@ Always test the final build:
 
 ```bash
 # Test the WASM directly
-ember run target/wasm32-unknown-unknown/release/my_game.wasm
+nether run target/wasm32-unknown-unknown/release/my_game.wasm
 
 # Or test the packed ROM
-ember run my_game.ewzx
+nether run my_game.nczx
 ```
 
 Verify:
@@ -108,7 +108,7 @@ Verify:
 
 | File | Format | Description |
 |------|--------|-------------|
-| Game | `.wasm` or `.ewzx` | Your compiled game |
+| Game | `.wasm` or `.nczx` | Your compiled game |
 | Icon | 64×64 PNG | Library thumbnail |
 
 ### Optional Files
@@ -129,11 +129,11 @@ Verify:
 
 ### 1. Create Developer Account
 
-Visit [emberware.io/register](https://emberware.io/register)
+Visit [nethercore.systems/register](https://nethercore.systems/register)
 
 ### 2. Access Dashboard
 
-Log in and go to [emberware.io/dashboard](https://emberware.io/dashboard)
+Log in and go to [nethercore.systems/dashboard](https://nethercore.systems/dashboard)
 
 ### 3. Upload Game
 
@@ -148,14 +148,14 @@ Log in and go to [emberware.io/dashboard](https://emberware.io/dashboard)
 
 Your game gets a public page:
 ```
-emberware.io/game/your-game-id
+nethercore.systems/game/your-game-id
 ```
 
 ## Updating Your Game
 
 To release an update:
 
-1. Bump version in `ember.toml`
+1. Bump version in `nether.toml`
 2. Build and test new version
 3. Go to Dashboard → Your Game → Edit
 4. Upload new game file
@@ -193,7 +193,7 @@ cargo build --target wasm32-unknown-unknown --release
 
 ### "Asset not found"
 
-Asset paths in `ember.toml` are relative to the project root.
+Asset paths in `nether.toml` are relative to the project root.
 
 Verify:
 ```bash
@@ -203,7 +203,7 @@ ls assets/player.png
 
 ### "ROM too large"
 
-Emberware has size limits for fair distribution.
+Nethercore has size limits for fair distribution.
 
 Reduce size:
 - Compress textures
@@ -230,10 +230,10 @@ Debug:
 
 ## Distribution Alternatives
 
-Besides emberware.io, you can distribute:
+Besides nethercore.systems, you can distribute:
 
 ### Direct Download
-Share the `.wasm` or `.ewzx` file directly. Players load it in the Emberware player.
+Share the `.wasm` or `.nczx` file directly. Players load it in the Nethercore player.
 
 ### GitHub Releases
 Host on GitHub as release artifacts.
@@ -243,4 +243,4 @@ Upload as a downloadable file with instructions.
 
 ---
 
-Ready to publish? Head to [emberware.io](https://emberware.io) and share your creation with the world!
+Ready to publish? Head to [nethercore.systems](https://nethercore.systems) and share your creation with the world!

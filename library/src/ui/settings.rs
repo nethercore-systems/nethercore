@@ -2,8 +2,8 @@
 
 use super::UiAction;
 use egui::{ComboBox, Context, Slider};
-use emberware_core::app::config::{Config, ScaleMode};
-use emberware_core::app::input::KeyboardMapping;
+use nethercore_core::app::config::{Config, ScaleMode};
+use nethercore_core::app::input::KeyboardMapping;
 use winit::keyboard::KeyCode;
 
 /// Settings UI state

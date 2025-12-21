@@ -1,6 +1,6 @@
 # Render Modes Guide
 
-Emberware ZX supports 4 rendering modes, each with different lighting and material features.
+Nethercore ZX supports 4 rendering modes, each with different lighting and material features.
 
 ## Overview
 

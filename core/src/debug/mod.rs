@@ -1,7 +1,7 @@
 //! Debug inspection system
 //!
 //! Provides runtime value inspection and modification for fast iteration
-//! during Emberware game development.
+//! during Nethercore game development.
 //!
 //! # Overview
 //!
@@ -46,7 +46,7 @@
 //! - **Zero ship overhead**: Debug code compiles out via `#[cfg(debug_assertions)]`
 //! - **No code path divergence**: Same workflow, just add inspection
 //! - **Game controls visualization**: Console edits data; games draw overlays
-//! - **Cross-console**: Same FFI for all Emberware consoles
+//! - **Cross-console**: Same FFI for all Nethercore consoles
 
 pub mod export;
 pub mod ffi;

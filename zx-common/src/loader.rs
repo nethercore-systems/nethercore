@@ -1,17 +1,17 @@
-//! ROM loader implementation for Emberware ZX
+//! ROM loader implementation for Nethercore ZX
 //!
 //! This module provides the `ZRomLoader` which implements the `RomLoader` trait
-//! from emberware-core, allowing the library system to work with .ewzx ROM files.
+//! from nethercore-core, allowing the library system to work with .nczx ROM files.
 
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use emberware_core::library::{DataDirProvider, LocalGame, RomLoader, RomMetadata};
-use emberware_shared::ZX_ROM_FORMAT;
+use nethercore_core::library::{DataDirProvider, LocalGame, RomLoader, RomMetadata};
+use nethercore_shared::ZX_ROM_FORMAT;
 
 use crate::ZRom;
 
-/// ROM loader for Emberware ZX (.ewzx) files.
+/// ROM loader for Nethercore ZX (.nczx) files.
 ///
 /// This loader handles the ZX console's ROM format, which contains:
 /// - WASM code (compiled game)
@@ -207,7 +207,7 @@ mod tests {
         // Create ROM file
         let rom = create_test_rom();
         let rom_bytes = rom.to_bytes().unwrap();
-        let rom_path = temp_dir.path().join("test-game.ewzx");
+        let rom_path = temp_dir.path().join("test-game.nczx");
         std::fs::write(&rom_path, rom_bytes).unwrap();
 
         // Install ROM

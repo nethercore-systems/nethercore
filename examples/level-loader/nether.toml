@@ -1,0 +1,31 @@
+# Level Loader - nether.toml
+#
+# Demonstrates loading raw binary data from a data pack.
+# Use rom_data_len() and rom_data() for custom file formats.
+
+[game]
+id = "level-loader"
+title = "Level Loader"
+author = "Nethercore Examples"
+version = "0.1.0"
+description = "Demonstrates loading custom binary level data"
+tags = ["demo", "levels"]
+
+# Raw data files are copied as-is into the data pack
+# Use these for custom binary formats: levels, configs, etc.
+[[assets.data]]
+id = "level1"
+path = "../assets/level1.bin"
+
+[[assets.data]]
+id = "level2"
+path = "../assets/level2.bin"
+
+[[assets.data]]
+id = "level3"
+path = "../assets/level3.bin"
+
+# Use the checkerboard texture as a simple tileset
+[[assets.textures]]
+id = "tileset"
+path = "../assets/checkerboard.png"

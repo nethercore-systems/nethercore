@@ -1,15 +1,15 @@
-# Emberware FFI Reference
+# Nethercore FFI Reference
 
-This document covers the **shared FFI** common to all Emberware consoles. For console-specific APIs, see:
+This document covers the **shared FFI** common to all Nethercore consoles. For console-specific APIs, see:
 
-- [Emberware ZX](./emberware-zx.md) — 5th gen (PS1/N64/Saturn)
-- [Emberware Chroma](./emberware-chroma.md) — 4th gen (Genesis/SNES/Neo Geo) *(Coming Soon)*
+- [Nethercore ZX](./nethercore-zx.md) — 5th gen (PS1/N64/Saturn)
+- [Nethercore Chroma](./nethercore-chroma.md) — 4th gen (Genesis/SNES/Neo Geo) *(Coming Soon)*
 
 ---
 
 ## Game Lifecycle
 
-All Emberware games must export these three functions:
+All Nethercore games must export these three functions:
 
 ```rust
 #[no_mangle]
@@ -40,7 +40,7 @@ Certain settings define the "mood" of your game and **must be set in `init()`**.
 ```rust
 fn set_tick_rate(fps: u32)                  // 24, 30, 60, or 120
 fn set_clear_color(color: u32)              // Auto-clear color (0xRRGGBBAA), default: black
-fn render_mode(mode: u32)                   // Emberware ZX only: 0-3
+fn render_mode(mode: u32)                   // Nethercore ZX only: 0-3
 ```
 
 **Why init-only?**
@@ -50,7 +50,7 @@ fn render_mode(mode: u32)                   // Emberware ZX only: 0-3
 
 ### Mode 2 Migration (2025)
 
-**Emberware ZX Mode 2 was migrated from PBR-lite to Metallic-Roughness Blinn-Phong:**
+**Nethercore ZX Mode 2 was migrated from PBR-lite to Metallic-Roughness Blinn-Phong:**
 
 **What changed in the rendering:**
 - Specular model: GGX → Normalized Blinn-Phong (Gotanda 2010)
@@ -79,7 +79,7 @@ fn render_mode(mode: u32)                   // Emberware ZX only: 0-3
 
 ### Rollback Netcode
 
-Emberware uses GGRS for deterministic rollback netcode. Key rules:
+Nethercore uses GGRS for deterministic rollback netcode. Key rules:
 
 - `update()` **MUST** be deterministic (same inputs → same state)
 - Use `random()` for RNG — never external random sources
@@ -91,12 +91,12 @@ Emberware uses GGRS for deterministic rollback netcode. Key rules:
 
 ### Memory Limits
 
-Emberware uses a **split ROM + RAM memory model** for efficient rollback:
+Nethercore uses a **split ROM + RAM memory model** for efficient rollback:
 
 | Console | ROM (Cartridge) | RAM (Linear Memory) | VRAM |
 |---------|-----------------|---------------------|------|
-| **Emberware ZX** | 12 MB | 4 MB | 4 MB |
-| **Emberware Chroma** | 4 MB | 2 MB | 1 MB |
+| **Nethercore ZX** | 12 MB | 4 MB | 4 MB |
+| **Nethercore Chroma** | 4 MB | 2 MB | 1 MB |
 
 **ROM (Cartridge):** Contains WASM code + bundled assets (via data pack). Not snapshotted.
 - WASM bytecode (typically 50-200 KB)
@@ -115,8 +115,8 @@ Emberware uses a **split ROM + RAM memory model** for efficient rollback:
 
 **Rollback Performance:**
 Only RAM is snapshotted for rollback netcode. With xxHash3 checksums:
-- 4MB: ~0.25ms per save (Emberware ZX)
-- 2MB: ~0.10ms per save (Emberware Chroma)
+- 4MB: ~0.25ms per save (Nethercore ZX)
+- 2MB: ~0.10ms per save (Nethercore Chroma)
 
 During an 8-frame rollback at 60fps, the total overhead is ~2ms — well within the 16.67ms frame budget.
 
@@ -247,7 +247,7 @@ let p1_local = (mask & 2) != 0;  // Is player 1 local?
 
 ### Multiplayer Model
 
-Emberware supports up to 4 players in any mix of local and remote:
+Nethercore supports up to 4 players in any mix of local and remote:
 - 4 local players (couch co-op)
 - 1 local + 3 remote (online)
 - 2 local + 2 remote (mixed)
@@ -505,9 +505,9 @@ Each console has its own graphics, input, and audio APIs:
 
 | Console | Input | Graphics | Status | Doc |
 |---------|-------|----------|--------|-----|
-| **Emberware ZX** | Dual analog sticks, analog triggers, 4 face buttons | 2D + 3D, transforms | Available | [emberware-zx.md](./emberware-zx.md) |
-| **Emberware Chroma** | D-pad only, 6 face buttons, no analog | 2D sprites, tilemaps | Coming Soon | [emberware-chroma.md](./emberware-chroma.md) |
+| **Nethercore ZX** | Dual analog sticks, analog triggers, 4 face buttons | 2D + 3D, transforms | Available | [nethercore-zx.md](./nethercore-zx.md) |
+| **Nethercore Chroma** | D-pad only, 6 face buttons, no analog | 2D sprites, tilemaps | Coming Soon | [nethercore-chroma.md](./nethercore-chroma.md) |
 
 ---
 
-Upload your `.wasm` file at [emberware.io](https://emberware.io).
+Upload your `.wasm` file at [nethercore.systems](https://nethercore.systems).

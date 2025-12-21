@@ -1,10 +1,10 @@
-# Emberware ZX Examples
+# Nethercore ZX Examples
 
-Example games demonstrating Emberware ZX features. Each example is a standalone WASM game showcasing specific APIs and techniques.
+Example games demonstrating Nethercore ZX features. Each example is a standalone WASM game showcasing specific APIs and techniques.
 
 ## Learning Path
 
-New to Emberware? Follow this order to learn progressively:
+New to Nethercore? Follow this order to learn progressively:
 
 | Step | Example | What You'll Learn |
 |------|---------|-------------------|
@@ -31,7 +31,7 @@ rustup target add wasm32-unknown-unknown
 cargo xtask build-examples
 ```
 
-This will compile each example to WASM and install them to `~/.emberware/games/`.
+This will compile each example to WASM and install them to `~/.nethercore/games/`.
 
 **Run examples:**
 ```bash
@@ -170,17 +170,17 @@ Debug inspection system demo:
 
 ## Data Pack Workflow
 
-Examples using data packs require the `ember` CLI:
+Examples using data packs require the `nether` CLI:
 
 ```bash
 # 1. Build WASM
-ember build
+nether build
 
-# 2. Bundle assets (reads ember.toml)
-ember pack
+# 2. Bundle assets (reads nether.toml)
+nether pack
 
 # 3. Launch game
-ember run
+nether run
 ```
 
 ### rom_* FFI Functions
@@ -202,7 +202,7 @@ fn init() {
 }
 ```
 
-See `ember.toml` in each data pack example for the manifest format.
+See `nether.toml` in each data pack example for the manifest format.
 
 ---
 

@@ -1,7 +1,7 @@
 //! ROM cart management commands
 //!
 //! This module provides CLI commands for creating, inspecting, and managing
-//! Emberware ROM files (.ewzx, .ewc, etc.).
+//! Nethercore ROM files (.nczx, .ewc, etc.).
 
 pub mod create_zx;
 pub mod info;
@@ -14,7 +14,7 @@ use clap::Subcommand;
 #[derive(Debug, Subcommand)]
 #[allow(clippy::large_enum_variant)]
 pub enum CartCommand {
-    /// Create an Emberware ZX ROM (.ewzx) from a WASM file
+    /// Create an Nethercore ZX ROM (.nczx) from a WASM file
     #[command(name = "create-zx")]
     CreateZx(create_zx::CreateZxArgs),
 

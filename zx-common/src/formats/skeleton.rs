@@ -1,4 +1,4 @@
-//! EmberZSkeleton binary format (.ewzskel)
+//! NetherZSkeleton binary format (.ewzskel)
 //!
 //! ZX console skeleton format containing inverse bind matrices for skeletal animation.
 //! POD format - no magic bytes.
@@ -13,17 +13,17 @@
 //! Each inverse bind matrix is stored as 12 floats in column-major order:
 //! [col0.x, col0.y, col0.z, col1.x, col1.y, col1.z, col2.x, col2.y, col2.z, tx, ty, tz]
 
-/// EmberZSkeleton header (8 bytes)
+/// NetherZSkeleton header (8 bytes)
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
-pub struct EmberZSkeletonHeader {
+pub struct NetherZSkeletonHeader {
     /// Number of bones in the skeleton
     pub bone_count: u32,
     /// Reserved for future use (bone hierarchy, etc.)
     pub reserved: u32,
 }
 
-impl EmberZSkeletonHeader {
+impl NetherZSkeletonHeader {
     pub const SIZE: usize = 8;
 
     pub fn new(bone_count: u32) -> Self {
@@ -62,27 +62,27 @@ mod tests {
 
     #[test]
     fn test_skeleton_header_roundtrip() {
-        let header = EmberZSkeletonHeader::new(42);
+        let header = NetherZSkeletonHeader::new(42);
         assert_eq!(header.bone_count, 42);
         assert_eq!(header.reserved, 0);
 
         let bytes = header.to_bytes();
-        assert_eq!(bytes.len(), EmberZSkeletonHeader::SIZE);
+        assert_eq!(bytes.len(), NetherZSkeletonHeader::SIZE);
 
-        let parsed = EmberZSkeletonHeader::from_bytes(&bytes).unwrap();
+        let parsed = NetherZSkeletonHeader::from_bytes(&bytes).unwrap();
         assert_eq!(parsed.bone_count, header.bone_count);
         assert_eq!(parsed.reserved, header.reserved);
     }
 
     #[test]
     fn test_skeleton_header_size() {
-        assert_eq!(EmberZSkeletonHeader::SIZE, 8);
+        assert_eq!(NetherZSkeletonHeader::SIZE, 8);
         assert_eq!(INVERSE_BIND_MATRIX_SIZE, 48);
     }
 
     #[test]
     fn test_skeleton_header_from_short_bytes() {
         let short_bytes = [0u8; 4];
-        assert!(EmberZSkeletonHeader::from_bytes(&short_bytes).is_none());
+        assert!(NetherZSkeletonHeader::from_bytes(&short_bytes).is_none());
     }
 }

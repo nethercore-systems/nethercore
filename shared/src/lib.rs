@@ -1,10 +1,10 @@
-//! Shared types for Emberware fantasy console platform.
+//! Shared types for Nethercore fantasy console platform.
 //!
-//! This crate provides general types shared between the Emberware platform backend API
+//! This crate provides general types shared between the Nethercore platform backend API
 //! and all console clients. All types are serializable with serde for JSON API communication.
 //!
 //! Console-specific types (like Z ROM formats, asset formats) belong in their respective
-//! console crates (e.g., `zx-common` for Emberware ZX).
+//! console crates (e.g., `zx-common` for Nethercore ZX).
 //!
 //! # Type Categories
 //!
@@ -18,7 +18,7 @@
 //! # Example
 //!
 //! ```ignore
-//! use emberware_shared::{Game, GamesResponse};
+//! use nethercore_shared::{Game, GamesResponse};
 //!
 //! // Parse a games list response from the API
 //! let json = r#"{"games": [], "total": 0, "page": 1, "limit": 10}"#;

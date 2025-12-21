@@ -1,9 +1,9 @@
 //! Asset Test Example
 //!
-//! Demonstrates loading assets from ember-export generated files.
+//! Demonstrates loading assets from nether-export generated files.
 //! Uses load_zmesh and load_ztex FFI functions which parse the binary format host-side.
 //!
-//! Assets were converted using ember-export from:
+//! Assets were converted using nether-export from:
 //! - assets/cube.obj (text format) -> cube.ewzmesh
 //! - assets/checkerboard.png -> checkerboard.ewztex
 
@@ -18,7 +18,7 @@ fn panic(_info: &PanicInfo) -> ! {
 }
 
 // =============================================================================
-// Embedded Asset Data (pre-converted with ember-export)
+// Embedded Asset Data (pre-converted with nether-export)
 // =============================================================================
 
 static CUBE_MESH_DATA: &[u8] = include_bytes!("../assets/cube.ewzmesh");
@@ -30,7 +30,7 @@ static CHECKERBOARD_TEX_DATA: &[u8] = include_bytes!("../assets/checkerboard.ewz
 
 #[link(wasm_import_module = "env")]
 extern "C" {
-    // EmberZ format loading (parses header host-side)
+    // NetherZ format loading (parses header host-side)
     fn load_zmesh(data_ptr: u32, data_len: u32) -> u32;
     fn load_ztex(data_ptr: u32, data_len: u32) -> u32;
 

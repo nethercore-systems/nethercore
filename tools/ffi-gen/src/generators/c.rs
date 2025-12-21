@@ -24,11 +24,11 @@ pub fn generate_c_header(model: &FfiModel, console: &str) -> Result<String> {
     let mut output = String::new();
 
     let console_upper = console.to_uppercase();
-    let header_guard = format!("EMBERWARE_{}_H", console_upper);
+    let header_guard = format!("NETHERCORE_{}_H", console_upper);
 
     // Header comment
     writeln!(output, "// GENERATED FILE - DO NOT EDIT")?;
-    writeln!(output, "// Source: emberware/include/emberware_{}_ffi.rs", console)?;
+    writeln!(output, "// Source: nethercore/include/{}.rs", console)?;
     writeln!(output, "// Generator: tools/ffi-gen")?;
     writeln!(output)?;
 
@@ -156,6 +156,6 @@ mod tests {
 
         assert!(header.contains("EWZX_IMPORT float test_fn(uint32_t x);"));
         assert!(header.contains("/** Test function */"));
-        assert!(header.contains("#ifndef EMBERWARE_TEST_H"));
+        assert!(header.contains("#ifndef NETHERCORE_TEST_H"));
     }
 }

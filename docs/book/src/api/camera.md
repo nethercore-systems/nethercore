@@ -461,7 +461,7 @@ EWZX_EXPORT void update(void) {
     /* Zoom with triggers */
     orbit_distance -= trigger_right(0) * 5.0f * delta_time();
     orbit_distance += trigger_left(0) * 5.0f * delta_time();
-    orbit_distance = ewzx_clampf(orbit_distance, 5.0f, 20.0f);
+    orbit_distance = nczx_clampf(orbit_distance, 5.0f, 20.0f);
 }
 
 EWZX_EXPORT void render(void) {
@@ -554,7 +554,7 @@ EWZX_EXPORT void update(void) {
     /* Look with right stick */
     cam_yaw += right_stick_x(0) * 3.0f * delta_time();
     cam_pitch -= right_stick_y(0) * 2.0f * delta_time();
-    cam_pitch = ewzx_clampf(cam_pitch, -1.4f, 1.4f);
+    cam_pitch = nczx_clampf(cam_pitch, -1.4f, 1.4f);
 
     /* Move with left stick */
     float forward_x = sinf(cam_yaw);

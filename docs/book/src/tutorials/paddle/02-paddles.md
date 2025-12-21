@@ -321,7 +321,7 @@ const Button = struct {
 
 ```bash
 cargo build --target wasm32-unknown-unknown --release
-ember run target/wasm32-unknown-unknown/release/paddle.wasm
+nether run target/wasm32-unknown-unknown/release/paddle.wasm
 ```
 
 Both paddles should now respond to input. Use:

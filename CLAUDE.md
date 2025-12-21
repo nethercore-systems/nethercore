@@ -1,27 +1,27 @@
-# Emberware - Claude Code Instructions
+# Nethercore - Claude Code Instructions
 
 ## Project Overview
 
-Emberware is a fantasy console platform with built-in rollback netcode, designed to support multiple fantasy consoles (Emberware ZX, Chroma, etc.) with a shared framework.
+Nethercore is a fantasy console platform with built-in rollback netcode, designed to support multiple fantasy consoles (Nethercore ZX, Chroma, etc.) with a shared framework.
 
 **Console Status:**
-- **Emberware ZX** — Fully implemented (5th generation aesthetic)
-- **Emberware Chroma** — Coming Soon (documented but not yet implemented)
+- **Nethercore ZX** — Fully implemented (5th generation aesthetic)
+- **Nethercore Chroma** — Coming Soon (documented but not yet implemented)
 
 **Repository Structure:**
 - `/core` — Console trait, WASM runtime, GGRS rollback, ConsoleRunner, debug inspection
 - `/library` — Main binary with library UI, console registry, game launcher
-- `/emberware-zx` — 5th generation aesthetic console implementation (library, no binary)
+- `/nethercore-zx` — 5th generation aesthetic console implementation (library, no binary)
 - `/z-common` — Z-specific formats, ROM loader
 - `/shared` — API types for platform backend, cart/ROM formats
-- `/tools` — Developer tools (ember-cli, ember-export)
+- `/tools` — Developer tools (nether-cli, nether-export)
 - `/docs` — Game developer documentation
 - `/examples` — Example games
 
 **Key Documentation:**
 - [TASKS.md](./TASKS.md) — Development status and implementation plan
 - [docs/architecture/ffi.md](./docs/architecture/ffi.md) — Shared FFI API reference
-- [../emberware-design/consoles/zx-spec.md](../emberware-design/consoles/zx-spec.md) — ZX console specification (source of truth)
+- [../nethercore-design/consoles/zx-spec.md](../nethercore-design/consoles/zx-spec.md) — ZX console specification (source of truth)
 - [docs/architecture/zx/rendering.md](./docs/architecture/zx/rendering.md) — ZX graphics deep dive
 - [docs/architecture/rom-format.md](./docs/architecture/rom-format.md) — ROM/cart format specification
 - [docs/architecture/multiplayer-testing.md](./docs/architecture/multiplayer-testing.md) — Multiplayer and GGRS testing guide
@@ -74,16 +74,16 @@ The [docs/book/](./docs/book/) directory contains comprehensive game developer d
 - [Example Games](./docs/book/src/reference/examples.md) — Overview of all examples
 
 **Contributing:**
-- [Getting Started](./docs/contributing/getting-started.md) — Contributing to Emberware
+- [Getting Started](./docs/contributing/getting-started.md) — Contributing to Nethercore
 - [Distributing Games](./docs/contributing/distributing-games.md) — Publishing guidelines
 
 ## Canonical References
 
 | Reference | File | Purpose |
 |-----------|------|---------|
-| FFI Source of Truth | [emberware_zx_ffi.rs](./include/emberware_zx_ffi.rs) | All ZX FFI function signatures |
+| FFI Source of Truth | [zx.rs](./include/zx.rs) | All ZX FFI function signatures |
 | Shared FFI | [core/src/ffi.rs](./core/src/ffi.rs) | System, input, save, ROM functions |
-| ZX FFI Implementation | [emberware-zx/src/ffi/mod.rs](./emberware-zx/src/ffi/mod.rs) | ZX-specific FFI registration |
+| ZX FFI Implementation | [nethercore-zx/src/ffi/mod.rs](./nethercore-zx/src/ffi/mod.rs) | ZX-specific FFI registration |
 | Console Trait | [core/src/console.rs](./core/src/console.rs) | Console abstraction |
 
 ## Key Source Files
@@ -94,10 +94,10 @@ The [docs/book/](./docs/book/) directory contains comprehensive game developer d
 - [core/src/wasm/mod.rs](./core/src/wasm/mod.rs) — WASM runtime
 - [core/src/rollback/mod.rs](./core/src/rollback/mod.rs) — GGRS integration
 
-### Emberware ZX
-- [emberware-zx/src/lib.rs](./emberware-zx/src/lib.rs) — ZX public API
-- [emberware-zx/src/console.rs](./emberware-zx/src/console.rs) — Console impl
-- [emberware-zx/src/graphics/mod.rs](./emberware-zx/src/graphics/mod.rs) — wgpu rendering
+### Nethercore ZX
+- [nethercore-zx/src/lib.rs](./nethercore-zx/src/lib.rs) — ZX public API
+- [nethercore-zx/src/console.rs](./nethercore-zx/src/console.rs) — Console impl
+- [nethercore-zx/src/graphics/mod.rs](./nethercore-zx/src/graphics/mod.rs) — wgpu rendering
 
 ### Library
 - [library/src/main.rs](./library/src/main.rs) — Entry point
@@ -140,9 +140,9 @@ Located in `examples/` — 28 examples organized by category:
 │  └───────┬───────┘  └──────┬───────┘  └──────────────────┘ │
 │          │                 │                                │
 ├──────────┼─────────────────┼────────────────────────────────┤
-│          │           emberware-zx (lib)                     │
+│          │           nethercore-zx (lib)                     │
 │  ┌───────▼───────┐  ┌─────────────┐  ┌─────────────────┐   │
-│  │ EmberwareZ    │  │ ZGraphics   │  │ Z-specific FFI  │   │
+│  │ NethercoreZ    │  │ ZGraphics   │  │ Z-specific FFI  │   │
 │  │ Console impl  │  │ (wgpu)      │  │ (draw_*, etc)   │   │
 │  └───────┬───────┘  └─────────────┘  └─────────────────┘   │
 │          │          ┌─────────────┐  ┌─────────────────┐   │
@@ -150,7 +150,7 @@ Located in `examples/` — 28 examples organized by category:
 │          │          │ (cpal)      │  │ (audio state)   │   │
 │          │          └─────────────┘  └─────────────────┘   │
 ├──────────┼──────────────────────────────────────────────────┤
-│          │              emberware-core                      │
+│          │              nethercore-core                      │
 │  ┌───────▼───────┐  ┌─────────────┐  ┌─────────────────┐   │
 │  │ Console trait │  │ConsoleRunner│  │ Common FFI      │   │
 │  │ + RollbackState│ │ <C: Console>│  │ (input, save,   │   │
@@ -195,14 +195,14 @@ pub trait ConsoleRollbackState: Pod + Zeroable + Default + Send + 'static {}
 This allows:
 - Shared WASM execution, rollback netcode, and game loop
 - Console-specific rendering, audio, FFI functions, and input layouts
-- Easy addition of future consoles (Emberware Y, X, etc.)
+- Easy addition of future consoles (Nethercore Y, X, etc.)
 
 ### Input Abstraction
 
 Each console defines its own input struct:
 
 ```rust
-// Emberware ZX (PS2/Xbox style)
+// Nethercore ZX (PS2/Xbox style)
 #[repr(C)]
 pub struct ZInput {
     pub buttons: u16,        // D-pad + face + shoulders + start/select
@@ -214,7 +214,7 @@ pub struct ZInput {
     pub right_trigger: u8,
 }
 
-// Emberware Chroma (6-button retro)
+// Nethercore Chroma (6-button retro)
 #[repr(C)]
 pub struct ChromaInput {
     pub buttons: u16,  // D-pad + A/B/C/X/Y/Z + L/R + start/select
@@ -230,7 +230,7 @@ The core handles GGRS serialization of whatever input type the console uses.
 - GGRS (rollback netcode)
 - winit (windowing)
 
-### Emberware ZX
+### Nethercore ZX
 - wgpu (graphics with 5th generation aesthetic)
 - glam (math: vectors, matrices, quaternions)
 - cpal + ringbuf (per-frame audio generation with rollback support)
@@ -244,13 +244,13 @@ The core handles GGRS serialization of whatever input type the console uses.
 
 ## Project Structure
 
-- `/core` — `emberware-core` crate with Console trait, ConsoleRunner, WASM runtime, GGRS integration, debug inspection
-- `/library` — `emberware-library` binary (default workspace member) with library UI, console registry
-- `/emberware-zx` — `emberware-zx` library implementing Console for 5th generation aesthetic
+- `/core` — `nethercore-core` crate with Console trait, ConsoleRunner, WASM runtime, GGRS integration, debug inspection
+- `/library` — `nethercore-library` binary (default workspace member) with library UI, console registry
+- `/nethercore-zx` — `nethercore-zx` library implementing Console for 5th generation aesthetic
 - `/z-common` — Z-specific formats, ZRomLoader implementing RomLoader trait
-- `/shared` — `emberware-shared` crate with API types, cart formats, asset formats
-- `/tools/ember-cli` — Build, pack, and run games (`ember build`, `ember pack`, `ember run`)
-- `/tools/ember-export` — Convert assets to Emberware formats (meshes, textures, audio, skeletons, animations)
+- `/shared` — `nethercore-shared` crate with API types, cart formats, asset formats
+- `/tools/nether-cli` — Build, pack, and run games (`nether build`, `nether pack`, `nether run`)
+- `/tools/nether-export` — Convert assets to Nethercore formats (meshes, textures, audio, skeletons, animations)
 - `/docs/architecture/` — FFI reference and internal architecture
 - `/docs/contributing/` — Contributor guides
 - `/docs/book/` — Game developer documentation (mdBook)
@@ -314,8 +314,8 @@ static MESH: &[u8] = include_bytes!("player.ewzmesh");
 let handle = load_zmesh(MESH.as_ptr() as u32, MESH.len() as u32);
 ```
 
-### Game Manifest (ember.toml)
-Games are packaged using `ember.toml`:
+### Game Manifest (nether.toml)
+Games are packaged using `nether.toml`:
 ```toml
 [game]
 id = "my-game"
@@ -341,7 +341,7 @@ Runtime value editing for development (F3 to open panel):
 - Frame control: F5=pause, F6=step, F7/F8=time scale
 - Zero overhead in release builds (compiles out)
 
-### Rendering Architecture (Emberware ZX)
+### Rendering Architecture (Nethercore ZX)
 
 **Summary:**
 - **4 render modes**: Unlit, Matcap, Metallic-Roughness (MR), Specular-Shininess (SS) — all use Blinn-Phong (set once in `init()`)
@@ -353,7 +353,7 @@ Runtime value editing for development (F3 to open panel):
 
 ### Local Storage
 ```
-~/.emberware/
+~/.nethercore/
 ├── config.toml
 ├── games/{game_id}/
 │   ├── manifest.json
@@ -364,7 +364,7 @@ Runtime value editing for development (F3 to open panel):
 ## Launching Games
 
 ### Deep Links
-`emberware://play/{game_id}` — Download if needed, then play
+`nethercore://play/{game_id}` — Download if needed, then play
 
 ### Command-Line Arguments
 Games can be launched directly from the command line, bypassing the library UI:
@@ -399,4 +399,4 @@ cargo run
 Dual-licensed under MIT OR Apache-2.0 (your choice).
 
 ## Related
-- `emberware-platform` (private) — Backend API, web frontend
+- `nethercore-platform` (private) — Backend API, web frontend

@@ -1,8 +1,8 @@
 /**
- * Hello World - Emberware ZX (C Version)
+ * Hello World - Nethercore ZX (C Version)
  *
  * A simple game that draws a colored square and responds to input.
- * Demonstrates the core concepts of Emberware game development in C.
+ * Demonstrates the core concepts of Nethercore game development in C.
  *
  * Build with wasi-sdk:
  *   clang --target=wasm32-wasi -O2 -Wl,--no-entry \
@@ -10,7 +10,7 @@
  *         -Wl,--allow-undefined -o game.wasm game.c
  */
 
-#include "emberware_zx.h"
+#include "zx.h"
 
 /* Game state - stored in static variables for rollback safety */
 static float square_y = 200.0f;
@@ -35,12 +35,12 @@ EWZX_EXPORT void update(void) {
     }
 
     /* Keep square on screen */
-    square_y = ewzx_clampf(square_y, 20.0f, 450.0f);
+    square_y = nczx_clampf(square_y, 20.0f, 450.0f);
 }
 
 EWZX_EXPORT void render(void) {
     /* Draw title text */
-    EWZX_DRAW_TEXT("Hello Emberware!", 80.0f, 50.0f, 32.0f, EWZX_WHITE);
+    EWZX_DRAW_TEXT("Hello Nethercore!", 80.0f, 50.0f, 32.0f, EWZX_WHITE);
 
     /* Draw the moving square */
     draw_rect(200.0f, square_y, 80.0f, 80.0f, 0xFF6B6BFF);

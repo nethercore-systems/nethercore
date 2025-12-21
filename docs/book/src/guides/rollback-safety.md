@@ -1,10 +1,10 @@
 # Rollback Safety Guide
 
-Writing deterministic code for Emberware's rollback netcode.
+Writing deterministic code for Nethercore's rollback netcode.
 
 ## How Rollback Works
 
-Emberware uses GGRS for deterministic rollback netcode:
+Nethercore uses GGRS for deterministic rollback netcode:
 
 1. **Every tick**, your `update()` receives inputs from all players
 2. **GGRS synchronizes** inputs across the network
@@ -250,7 +250,7 @@ export fn render() void {
 
 ### Floating Point Non-Determinism
 
-Floating point operations can vary across CPUs. Emberware handles most cases, but be careful with:
+Floating point operations can vary across CPUs. Nethercore handles most cases, but be careful with:
 
 {{#tabs global="lang"}}
 
@@ -455,7 +455,7 @@ export fn render() void {
 
 ## Memory Snapshotting
 
-Emberware automatically snapshots your WASM linear memory:
+Nethercore automatically snapshots your WASM linear memory:
 
 ```
 What's Snapshotted (RAM):        What's NOT Snapshotted:

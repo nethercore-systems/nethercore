@@ -1,4 +1,4 @@
-//! API response types for Emberware platform.
+//! API response types for Nethercore platform.
 
 use serde::{Deserialize, Serialize};
 
@@ -11,7 +11,7 @@ pub struct Author {
     pub username: String,
 }
 
-/// A game published on the Emberware platform.
+/// A game published on the Nethercore platform.
 ///
 /// This type serves as the single source of truth for game data. Storage keys
 /// are the authoritative data (stored in DB), while URLs are derived at

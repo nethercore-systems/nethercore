@@ -75,7 +75,7 @@ const Button = struct {
 
 ## Controller Mapping
 
-| Emberware | Xbox | PlayStation | Nintendo |
+| Nethercore | Xbox | PlayStation | Nintendo |
 |-----------|------|-------------|----------|
 | A | A | X (Cross) | B |
 | B | B | O (Circle) | A |

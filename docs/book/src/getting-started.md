@@ -1,6 +1,6 @@
 # Getting Started
 
-Welcome to Emberware ZX game development! This section will guide you through everything you need to start creating games.
+Welcome to Nethercore ZX game development! This section will guide you through everything you need to start creating games.
 
 ## Quick Start Path
 
@@ -14,7 +14,7 @@ After completing the Getting Started guides, continue with:
 
 - **[Build Paddle](./tutorials/paddle/index.md)** - A complete game tutorial from scratch
 - **[API Reference](./cheat-sheet.md)** - All available functions
-- **[Example Games](https://github.com/emberware/emberware/tree/main/examples)** - 28+ examples to learn from
+- **[Example Games](https://github.com/nethercore/nethercore/tree/main/examples)** - 28+ examples to learn from
 
 ## Minimum Requirements
 

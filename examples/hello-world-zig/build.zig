@@ -15,17 +15,17 @@ pub fn build(b: *std.Build) void {
         .optimize = .ReleaseSmall,
     });
 
-    // Configure for Emberware
+    // Configure for Nethercore
     exe.entry = .disabled; // No _start, we use init/update/render
     exe.rdynamic = true; // Export public functions
 
     // Install the artifact
     b.installArtifact(exe);
 
-    // Add a run step (requires ember CLI)
-    const run_cmd = b.addSystemCommand(&.{ "ember", "run", "zig-out/bin/game.wasm" });
+    // Add a run step (requires nether CLI)
+    const run_cmd = b.addSystemCommand(&.{ "nether", "run", "zig-out/bin/game.wasm" });
     run_cmd.step.dependOn(b.getInstallStep());
 
-    const run_step = b.step("run", "Build and run in Emberware player");
+    const run_step = b.step("run", "Build and run in Nethercore player");
     run_step.dependOn(&run_cmd.step);
 }

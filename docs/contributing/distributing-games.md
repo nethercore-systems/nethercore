@@ -1,6 +1,6 @@
-# Distributing Emberware Games
+# Distributing Nethercore Games
 
-This guide covers how to package and distribute your Emberware games as ROM files for players to install and play.
+This guide covers how to package and distribute your Nethercore games as ROM files for players to install and play.
 
 ## Table of Contents
 
@@ -17,10 +17,10 @@ This guide covers how to package and distribute your Emberware games as ROM file
 
 ## Overview
 
-Emberware uses console-specific ROM formats for game distribution:
+Nethercore uses console-specific ROM formats for game distribution:
 
-- **Emberware ZX**: `.ewz` files (PS1/N64 aesthetic)
-- **Emberware Chroma**: `.ewc` files (future - 2D retro aesthetic)
+- **Nethercore ZX**: `.ewz` files (PS1/N64 aesthetic)
+- **Nethercore Chroma**: `.ewc` files (future - 2D retro aesthetic)
 
 ROM files package your game's WASM code, metadata, and assets into a single binary file that players can easily install and play.
 
@@ -41,7 +41,7 @@ cargo xtask build-examples
 
 This creates a simple directory structure:
 ```
-~/.emberware/games/my-game/
+~/.nethercore/games/my-game/
 ├── manifest.json
 └── rom.wasm
 ```
@@ -201,9 +201,9 @@ For thumbnails, you can:
 
 ## Console-Specific Settings
 
-### Emberware ZX Settings
+### Nethercore ZX Settings
 
-When creating an Emberware ZX ROM, you can specify console-specific settings:
+When creating an Nethercore ZX ROM, you can specify console-specific settings:
 
 #### Render Mode
 
@@ -294,7 +294,7 @@ This displays all metadata, settings, and asset information.
 Test the ROM installation process:
 
 ```rust
-use emberware_core::library::{install_z_rom, DataDirProvider};
+use nethercore_core::library::{install_z_rom, DataDirProvider};
 use std::path::Path;
 
 // Install ROM (programmatically)
@@ -310,7 +310,7 @@ Check that the game was installed correctly:
 
 ```bash
 # Check games directory
-ls ~/.emberware/games/my-game/
+ls ~/.nethercore/games/my-game/
 
 # Should contain:
 # - manifest.json
@@ -337,7 +337,7 @@ Launch the game and verify:
 - Players install manually via drag-and-drop or library UI
 
 **2. Platform Upload (Future)**
-- Upload to the official Emberware platform
+- Upload to the official Nethercore platform
 - Players can browse and download from the platform
 - Automatic version updates
 - Player ratings and reviews
@@ -345,7 +345,7 @@ Launch the game and verify:
 **3. Itch.io / Game Jolt**
 - Upload as a downloadable file
 - Add installation instructions
-- Link to Emberware launcher download
+- Link to Nethercore launcher download
 
 **4. GitHub Releases**
 - Tag a release in your game's repository
@@ -373,9 +373,9 @@ Provide players with clear installation instructions:
 ```markdown
 ## How to Play
 
-1. Download and install the [Emberware Launcher](https://emberware.io/download)
+1. Download and install the [Nethercore Launcher](https://nethercore.systems/download)
 2. Download the game ROM file: `my-game.ewz`
-3. Open the Emberware Launcher
+3. Open the Nethercore Launcher
 4. Drag and drop `my-game.ewz` onto the launcher window
 5. Click the game in your library to play!
 ```
@@ -384,7 +384,7 @@ Provide players with clear installation instructions:
 
 ### Platform Foreign Keys
 
-When uploading to the official Emberware platform, the platform will populate foreign keys in your ROM:
+When uploading to the official Nethercore platform, the platform will populate foreign keys in your ROM:
 
 ```bash
 # Platform automatically adds these when you upload
@@ -607,7 +607,7 @@ cargo xtask cart info super-platformer-v1.0.0.ewz
 
 # 5. Test installation
 # - Install via launcher UI
-# - Verify files in ~/.emberware/games/super-platformer/
+# - Verify files in ~/.nethercore/games/super-platformer/
 # - Launch and play
 
 # 6. Distribute
@@ -619,8 +619,8 @@ cargo xtask cart info super-platformer-v1.0.0.ewz
 ## See Also
 
 - [rom-format.md](./rom-format.md) - Technical ROM format specification
-- [ffi.md](./ffi.md) - Emberware FFI API reference
-- [emberware-zx.md](./emberware-zx.md) - Emberware ZX console documentation
+- [ffi.md](./ffi.md) - Nethercore FFI API reference
+- [nethercore-zx.md](./nethercore-zx.md) - Nethercore ZX console documentation
 
 ## Getting Help
 
@@ -629,5 +629,5 @@ If you run into issues:
 1. Check this guide and the [rom-format.md](./rom-format.md) specification
 2. Use `cargo xtask cart --help` for CLI reference
 3. Inspect ROMs with `cargo xtask cart info`
-4. Ask in the Emberware Discord/forums
+4. Ask in the Nethercore Discord/forums
 5. Open an issue on GitHub if you find a bug

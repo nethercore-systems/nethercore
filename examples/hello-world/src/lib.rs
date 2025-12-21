@@ -54,7 +54,7 @@ pub extern "C" fn update() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
-        let title = b"Hello Emberware!";
+        let title = b"Hello Nethercore!";
         draw_text(
             title.as_ptr(),
             title.len() as u32,

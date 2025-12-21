@@ -1,13 +1,13 @@
 # Part 8: Polish & Publishing
 
-Your Paddle game is complete! Let's add some final polish and publish it to the Emberware Archive.
+Your Paddle game is complete! Let's add some final polish and publish it to the Nethercore Archive.
 
 ## What You'll Learn
 
 - Adding control hints
-- Final ember.toml configuration
+- Final nether.toml configuration
 - Building a release ROM
-- Publishing to emberware.io
+- Publishing to nethercore.systems
 
 ## Add Control Hints
 
@@ -88,9 +88,9 @@ fn render_title() void {
 
 {{#endtabs}}
 
-## Complete ember.toml
+## Complete nether.toml
 
-In [Part 7](./07-sound.md), we created our `ember.toml`. Here's the complete version with all metadata for publishing:
+In [Part 7](./07-sound.md), we created our `nether.toml`. Here's the complete version with all metadata for publishing:
 
 ```toml
 [game]
@@ -130,7 +130,7 @@ Your final project should look like:
 ```
 paddle/
 ├── Cargo.toml
-├── ember.toml
+├── nether.toml
 ├── assets/
 │   ├── hit.wav
 │   ├── score.wav
@@ -143,15 +143,15 @@ paddle/
 
 ## Build for Release
 
-### Using ember build
+### Using nether build
 
 Build your game with all assets bundled:
 
 ```bash
-ember build
+nether build
 ```
 
-This creates a `.ewzx` ROM file containing:
+This creates a `.nczx` ROM file containing:
 - Your compiled WASM code
 - All converted and compressed assets
 - Game metadata
@@ -161,12 +161,12 @@ This creates a `.ewzx` ROM file containing:
 Check your ROM was created:
 
 ```bash
-ls -la *.ewzx
+ls -la *.nczx
 ```
 
 You should see something like:
 ```
--rw-r--r-- 1 user user 45678 Dec 20 12:00 paddle.ewzx
+-rw-r--r-- 1 user user 45678 Dec 20 12:00 paddle.nczx
 ```
 
 ## Test Your Release Build
@@ -174,7 +174,7 @@ You should see something like:
 Run the final ROM:
 
 ```bash
-ember run paddle.ewzx
+nether run paddle.nczx
 ```
 
 ## Final Checklist
@@ -191,11 +191,11 @@ Before publishing, verify:
 - [ ] All sound effects play with proper panning
 - [ ] Game restarts correctly
 
-## Publishing to Emberware Archive
+## Publishing to Nethercore Archive
 
 ### 1. Create an Account
 
-Visit [emberware.io/register](https://emberware.io/register) to create your developer account.
+Visit [nethercore.systems/register](https://nethercore.systems/register) to create your developer account.
 
 ### 2. Prepare Assets
 
@@ -205,14 +205,14 @@ You'll need:
 
 ### 3. Upload Your Game
 
-1. Log in to [emberware.io](https://emberware.io)
-2. Go to your [Dashboard](https://emberware.io/dashboard)
+1. Log in to [nethercore.systems](https://nethercore.systems)
+2. Go to your [Dashboard](https://nethercore.systems/dashboard)
 3. Click "Upload New Game"
 4. Fill in the details:
    - Title: "Paddle"
    - Description: Your game description
    - Category: Arcade
-5. Upload your `.ewzx` ROM file
+5. Upload your `.nczx` ROM file
 6. Add your icon and screenshots
 7. Click "Publish"
 
@@ -220,10 +220,10 @@ You'll need:
 
 Once published, your game has a unique page at:
 ```
-emberware.io/game/paddle
+nethercore.systems/game/paddle
 ```
 
-Share this link! Anyone with the Emberware player can play your game.
+Share this link! Anyone with the Nethercore player can play your game.
 
 ## What You've Built
 
@@ -239,7 +239,7 @@ Congratulations! Your Paddle game includes:
 | **Game Flow** | Title, Playing, GameOver states |
 | **Scoring** | Point tracking, win conditions |
 | **Audio** | Sound effects loaded from ROM with stereo panning |
-| **Assets** | Sounds bundled with `ember build` |
+| **Assets** | Sounds bundled with `nether build` |
 
 ## What's Next?
 
@@ -255,14 +255,14 @@ Ideas to try:
 ### Build More Games
 
 Check out these resources:
-- **[Example Games](https://github.com/emberware/emberware/tree/main/examples)** — 28+ examples
+- **[Example Games](https://github.com/nethercore/nethercore/tree/main/examples)** — 28+ examples
 - **[API Reference](../../cheat-sheet.md)** — All available functions
 - **[Asset Pipeline](../../guides/asset-pipeline.md)** — Advanced asset workflows
 - **[Render Modes Guide](../../guides/render-modes.md)** — 3D graphics
 
 ### Join the Community
 
-- Share your game in [GitHub Discussions](https://github.com/emberware/emberware/discussions)
+- Share your game in [GitHub Discussions](https://github.com/nethercore/nethercore/discussions)
 - Report bugs or request features
 - Help other developers
 
@@ -270,7 +270,7 @@ Check out these resources:
 
 The final source code is available at:
 ```
-emberware/examples/paddle/
+nethercore/examples/paddle/
 ```
 
 You can compare your code or use it as a reference.
@@ -281,15 +281,15 @@ You can compare your code or use it as a reference.
 
 In this tutorial, you learned:
 
-1. **Setup** — Creating an Emberware project
+1. **Setup** — Creating an Nethercore project
 2. **Drawing** — Using `draw_rect()` for 2D graphics
 3. **Input** — Reading sticks and buttons
 4. **Physics** — Ball movement and collision
 5. **AI** — Simple opponent behavior
 6. **Multiplayer** — How rollback netcode "just works"
 7. **Game Flow** — State machines for menus
-8. **Assets** — Using `ember.toml` and `ember build` for sounds
+8. **Assets** — Using `nether.toml` and `nether build` for sounds
 9. **Audio** — Loading and playing sound effects from ROM
 10. **Publishing** — Sharing your game with the world
 
-**You're now an Emberware game developer!**
+**You're now an Nethercore game developer!**

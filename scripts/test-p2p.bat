@@ -1,7 +1,7 @@
 @echo off
 REM Local P2P Testing Helper for Windows
 REM
-REM This script launches two instances of emberware-zx for local P2P testing.
+REM This script launches two instances of nethercore-zx for local P2P testing.
 REM The instances connect to each other via localhost UDP sockets.
 REM
 REM Usage: scripts\test-p2p.bat <rom_path> [input_delay]
@@ -33,13 +33,13 @@ echo Player 2: bind=7778, peer=7777, local_player=1
 echo.
 
 REM Start player 2 in a new window
-start "Player 2" cmd /c "cargo run -p emberware-zx --release -- "%ROM_PATH%" --p2p --bind 7778 --peer 7777 --local-player 1 --input-delay %INPUT_DELAY%"
+start "Player 2" cmd /c "cargo run -p nethercore-zx --release -- "%ROM_PATH%" --p2p --bind 7778 --peer 7777 --local-player 1 --input-delay %INPUT_DELAY%"
 
 REM Wait a moment for player 2 to bind
 timeout /t 1 /nobreak >nul
 
 REM Start player 1 in this window
-cargo run -p emberware-zx --release -- "%ROM_PATH%" --p2p --bind 7777 --peer 7778 --local-player 0 --input-delay %INPUT_DELAY%
+cargo run -p nethercore-zx --release -- "%ROM_PATH%" --p2p --bind 7777 --peer 7778 --local-player 0 --input-delay %INPUT_DELAY%
 
 echo.
 echo P2P test complete. Close the Player 2 window if still open.

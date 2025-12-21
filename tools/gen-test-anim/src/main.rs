@@ -6,7 +6,7 @@ use std::f32::consts::TAU;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
-use zx_common::formats::animation::{encode_bone_transform, EmberZAnimationHeader};
+use zx_common::formats::animation::{encode_bone_transform, NetherZAnimationHeader};
 
 fn main() {
     let output_path = PathBuf::from("examples/animation-demo/assets/wave.ewzanim");
@@ -20,7 +20,7 @@ fn main() {
     let bone_count: u8 = 3;
     let frame_count: u16 = 30;
 
-    let header = EmberZAnimationHeader::new(bone_count, frame_count);
+    let header = NetherZAnimationHeader::new(bone_count, frame_count);
 
     let mut file = File::create(&output_path).expect("Failed to create output file");
 

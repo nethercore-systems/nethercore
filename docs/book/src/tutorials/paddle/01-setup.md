@@ -4,7 +4,7 @@ In this part, you'll set up your Paddle project and draw the basic game elements
 
 ## What You'll Learn
 
-- Creating a new Emberware game project
+- Creating a new Nethercore game project
 - Importing FFI functions
 - Drawing rectangles with `draw_rect()`
 - Using colors in RGBA hex format
@@ -55,7 +55,7 @@ fn panic(_info: &PanicInfo) -> ! {
     core::arch::wasm32::unreachable()
 }
 
-// FFI imports from the Emberware runtime
+// FFI imports from the Nethercore runtime
 #[link(wasm_import_module = "env")]
 extern "C" {
     fn set_clear_color(color: u32);
@@ -86,7 +86,7 @@ pub extern "C" fn render() {
 ```c
 #include <stdint.h>
 
-// FFI imports from the Emberware runtime
+// FFI imports from the Nethercore runtime
 EWZX_IMPORT void set_clear_color(uint32_t color);
 EWZX_IMPORT void draw_rect(float x, float y, float w, float h, uint32_t color);
 
@@ -107,7 +107,7 @@ EWZX_EXPORT void render(void) {
 
 {{#tab name="Zig"}}
 ```zig
-// FFI imports from the Emberware runtime
+// FFI imports from the Nethercore runtime
 extern fn set_clear_color(color: u32) void;
 extern fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32) void;
 
@@ -557,7 +557,7 @@ Draw it in `render()` (add after paddles):
 
 ```bash
 cargo build --target wasm32-unknown-unknown --release
-ember run target/wasm32-unknown-unknown/release/paddle.wasm
+nether run target/wasm32-unknown-unknown/release/paddle.wasm
 ```
 
 You should see:

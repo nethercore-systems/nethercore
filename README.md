@@ -1,4 +1,4 @@
-# Emberware
+# Nethercore
 
 A fantasy console platform with built-in rollback netcode.
 
@@ -6,17 +6,17 @@ A fantasy console platform with built-in rollback netcode.
 
 | Console | Generation | Aesthetic | Status | Doc |
 |---------|------------|-----------|--------|-----|
-| **Emberware ZX** | 5th gen | PS1/N64/Saturn | Available | [docs/book/](./docs/book/) |
-| **Emberware Chroma** | 4th gen | Genesis/SNES/Neo Geo | Coming Soon | — |
+| **Nethercore ZX** | 5th gen | PS1/N64/Saturn | Available | [docs/book/](./docs/book/) |
+| **Nethercore Chroma** | 4th gen | Genesis/SNES/Neo Geo | Coming Soon | — |
 
 ## What's Here
 
 | Directory | Description |
 |-----------|-------------|
 | `/core` | Shared console framework (WASM runtime, GGRS rollback, debug inspection) |
-| `/emberware-zx` | Emberware ZX runtime implementation |
+| `/nethercore-zx` | Nethercore ZX runtime implementation |
 | `/shared` | API types shared with platform backend, cart/ROM formats |
-| `/tools` | Developer tools: `ember-cli` (build/pack/run), `ember-export` (asset conversion) |
+| `/tools` | Developer tools: `nether-cli` (build/pack/run), `nether-export` (asset conversion) |
 | `/docs/book` | Game developer documentation (mdBook) |
 | `/docs/architecture` | Internal architecture (FFI, rendering, ROM format) |
 | `/docs/contributing` | Contributor guides |
@@ -53,7 +53,7 @@ cargo build --target wasm32-unknown-unknown --release
 
 ### Testing with Examples
 
-The `/examples` directory contains several example games demonstrating Emberware ZX features. To build and test them:
+The `/examples` directory contains several example games demonstrating Nethercore ZX features. To build and test them:
 
 **Prerequisites:**
 ```bash
@@ -67,7 +67,7 @@ cargo xtask build-examples
 
 This will:
 1. Compile each example to WASM (targeting `wasm32-unknown-unknown`)
-2. Install them to `~/.emberware/games/` (or platform-specific equivalent)
+2. Install them to `~/.nethercore/games/` (or platform-specific equivalent)
 3. Generate a manifest for each game
 
 **Run the examples:**
@@ -81,7 +81,7 @@ cargo run -- plat            # Launch by prefix match
 cargo run -- CUBE            # Case-insensitive
 ```
 
-The examples will appear in the Emberware ZX game library. Use the refresh button if you add new games while the app is running.
+The examples will appear in the Nethercore ZX game library. Use the refresh button if you add new games while the app is running.
 
 **CLI Launch Features:**
 - **Exact matching**: `cargo run -- cube` launches cube
@@ -95,18 +95,18 @@ See [examples/README.md](./examples/README.md) for the complete list with descri
 
 ## Screen Capture
 
-Emberware includes built-in screenshot and GIF recording:
+Nethercore includes built-in screenshot and GIF recording:
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| Screenshot | **F9** | Save PNG to `~/.emberware/Emberware/screenshots/` |
-| GIF Toggle | **F10** | Start/stop GIF recording, saves to `~/.emberware/Emberware/gifs/` |
+| Screenshot | **F9** | Save PNG to `~/.nethercore/Nethercore/screenshots/` |
+| GIF Toggle | **F10** | Start/stop GIF recording, saves to `~/.nethercore/Nethercore/gifs/` |
 
 Filenames include the game name and timestamp: `platformer_screenshot_2025-01-15_14-30-45.png`
 
 ### Configuration
 
-All capture keys are configurable in `~/.emberware/config.toml`:
+All capture keys are configurable in `~/.nethercore/config.toml`:
 
 ```toml
 [capture]
@@ -137,13 +137,13 @@ mdbook serve
 
 ### Upload
 
-Visit [emberware.io](https://emberware.io) to create an account and upload your game.
+Visit [nethercore.systems](https://nethercore.systems) to create an account and upload your game.
 
 ## Console Specs Comparison
 
-*Note: Emberware Chroma is documented but not yet implemented.*
+*Note: Nethercore Chroma is documented but not yet implemented.*
 
-| Spec | Emberware ZX | Emberware Chroma |
+| Spec | Nethercore ZX | Nethercore Chroma |
 |------|-------------|-------------------|
 | Generation | 5th (PS1/N64) | 4th (Genesis/SNES) |
 | Target audience | Experienced devs | Beginners, students |
@@ -163,8 +163,8 @@ Visit [emberware.io](https://emberware.io) to create an account and upload your 
 
 ## Community
 
-- [Discord](https://discord.gg/xcwSSgW4) — Chat, get help, share your games
-- [GitHub Discussions](https://github.com/emberware-io/emberware/discussions) — Longer-form discussions
+- [Discord](https://discord.gg/EaSuKMDF) — Chat, get help, share your games
+- [GitHub Discussions](https://github.com/nethercore-systems/nethercore/discussions) — Longer-form discussions
 
 ## License
 

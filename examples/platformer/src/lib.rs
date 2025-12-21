@@ -1,6 +1,6 @@
 //! Platformer Example
 //!
-//! A full mini-game demonstrating multiple Emberware ZX features:
+//! A full mini-game demonstrating multiple Nethercore ZX features:
 //! - 2D gameplay using 3D renderer (side-scrolling view)
 //! - Textured sprites for player/enemies
 //! - Billboarded sprites in 3D space

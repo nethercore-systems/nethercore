@@ -9,7 +9,7 @@ use smallvec::SmallVec;
 use super::config::MAX_STATE_SIZE;
 
 /// Inline storage size for console rollback state (avoids heap allocation)
-/// 512 bytes covers Emberware ZX's 340-byte AudioPlaybackState with room to spare
+/// 512 bytes covers Nethercore ZX's 340-byte AudioPlaybackState with room to spare
 pub type ConsoleDataVec = SmallVec<[u8; 512]>;
 
 /// Number of pre-allocated state buffers in the pool
@@ -206,8 +206,8 @@ impl RollbackStateManager {
     ///
     /// The `max_state_size` should match the console's RAM limit from `ConsoleSpecs::ram_limit`.
     /// For example:
-    /// - Emberware ZX: 4MB
-    /// - Emberware Chroma: 1MB
+    /// - Nethercore ZX: 4MB
+    /// - Nethercore Chroma: 1MB
     pub fn new(max_state_size: usize) -> Self {
         Self {
             pool: StatePool::new(max_state_size, STATE_POOL_SIZE),

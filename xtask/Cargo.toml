@@ -5,8 +5,8 @@ edition = "2021"
 
 [dependencies]
 # Local crates
-emberware-shared = { path = "../shared" }
-emberware-core = { path = "../core" }
+nethercore-shared = { path = "../shared" }
+nethercore-core = { path = "../core" }
 zx-common = { path = "../zx-common" }
 ffi-gen = { path = "../tools/ffi-gen" }
 

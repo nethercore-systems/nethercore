@@ -786,7 +786,7 @@ fn renderModeIndicator() void {
 
 ```bash
 cargo build --target wasm32-unknown-unknown --release
-ember run target/wasm32-unknown-unknown/release/paddle.wasm
+nether run target/wasm32-unknown-unknown/release/paddle.wasm
 ```
 
 The game now has:

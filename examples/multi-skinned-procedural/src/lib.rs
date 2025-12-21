@@ -1,6 +1,6 @@
 //! Multi-Skinned Procedural Example - Inverse Bind Matrix Validation
 //!
-//! Validates Emberware ZX's inverse bind matrix logic:
+//! Validates Nethercore ZX's inverse bind matrix logic:
 //! - `load_skeleton()` - uploading inverse bind matrices
 //! - `skeleton_bind()` - switching between skeletons
 //! - Multiple meshes with independent animations

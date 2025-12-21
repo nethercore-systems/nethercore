@@ -1,10 +1,10 @@
 [package]
-name = "emberware-shared"
+name = "nethercore-shared"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Shared types for Emberware fantasy console platform"
+description = "Shared types for Nethercore fantasy console platform"
 
 [dependencies]
 serde = { workspace = true }

@@ -4,6 +4,10 @@ target/
 Cargo.lock
 *.pdb
 
+# FFI test artifacts
+*.o
+test_bindings*
+
 # Environment
 .env
 .env.local
@@ -29,3 +33,6 @@ Thumbs.db
 
 # Claude
 .claude/settings.local.json
+
+# mdBook generated output
+docs/book/book/

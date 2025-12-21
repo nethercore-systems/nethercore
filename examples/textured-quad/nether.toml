@@ -1,0 +1,5 @@
+[game]
+id = "textured-quad"
+title = "Textured Quad"
+author = "Nethercore Examples"
+version = "0.1.0"

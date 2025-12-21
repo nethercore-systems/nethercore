@@ -14,7 +14,7 @@ pub const MAX_PLAYERS: usize = 4;
 /// # Examples
 ///
 /// ```
-/// use emberware_core::rollback::PlayerSessionConfig;
+/// use nethercore_core::rollback::PlayerSessionConfig;
 ///
 /// // 4 local players on one machine (couch co-op)
 /// let config = PlayerSessionConfig::all_local(4);
@@ -104,7 +104,7 @@ impl PlayerSessionConfig {
     ///
     /// # Example
     /// ```
-    /// use emberware_core::rollback::PlayerSessionConfig;
+    /// use nethercore_core::rollback::PlayerSessionConfig;
     ///
     /// // 4 players, players 0 and 2 are local
     /// let config = PlayerSessionConfig::with_local_players(4, &[0, 2]);

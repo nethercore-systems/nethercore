@@ -1,4 +1,4 @@
-//! Math types for Emberware
+//! Math types for Nethercore
 //!
 //! Provides POD (Plain Old Data) math types that are serializable and
 //! can be shared across crates without requiring glam as a dependency.

@@ -31,7 +31,7 @@ pub fn generate_zig_bindings(model: &FfiModel, console: &str) -> Result<String> 
 
     // Header comment
     writeln!(output, "// GENERATED FILE - DO NOT EDIT")?;
-    writeln!(output, "// Source: emberware/include/emberware_{}_ffi.rs", console)?;
+    writeln!(output, "// Source: nethercore/include/{}.rs", console)?;
     writeln!(output, "// Generator: tools/ffi-gen")?;
     writeln!(output)?;
 

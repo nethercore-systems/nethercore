@@ -1,11 +1,11 @@
-//! Unified Emberware launcher
+//! Unified Nethercore launcher
 //!
 //! This binary can launch games from any supported console type (Z, Classic, etc.)
 //! by detecting the console type from the game manifest.
 
 use anyhow::Result;
-use emberware_core::library::{DataDirProvider, get_local_games, resolve_game_id};
-use emberware_library::registry::{ConsoleRegistry, PlayerOptions};
+use nethercore_core::library::{DataDirProvider, get_local_games, resolve_game_id};
+use nethercore_library::registry::{ConsoleRegistry, PlayerOptions};
 use std::env;
 use std::path::PathBuf;
 
@@ -14,15 +14,15 @@ struct LauncherDataDirProvider;
 
 impl DataDirProvider for LauncherDataDirProvider {
     fn data_dir(&self) -> Option<PathBuf> {
-        directories::ProjectDirs::from("io.emberware", "", "Emberware")
+        directories::ProjectDirs::from("io.nethercore", "", "Nethercore")
             .map(|dirs| dirs.data_dir().to_path_buf())
     }
 }
 
-/// Parse deep link from command line args (emberware://play/game_id)
+/// Parse deep link from command line args (nethercore://play/game_id)
 fn parse_deep_link(args: &[String]) -> Option<String> {
     for arg in args.iter().skip(1) {
-        if let Some(rest) = arg.strip_prefix("emberware://play/") {
+        if let Some(rest) = arg.strip_prefix("nethercore://play/") {
             let game_id = rest.trim_end_matches('/').to_string();
             if !game_id.is_empty() {
                 return Some(game_id);
@@ -38,7 +38,7 @@ fn is_rom_path(arg: &str) -> Option<PathBuf> {
 
     // Check if it has a ROM extension
     let ext = path.extension().and_then(|e| e.to_str());
-    let is_rom_ext = matches!(ext, Some("ewzx") | Some("wasm"));
+    let is_rom_ext = matches!(ext, Some("nczx") | Some("wasm"));
 
     // If it has a ROM extension and the file exists, treat it as a path
     if is_rom_ext && path.exists() {
@@ -86,7 +86,7 @@ fn main() -> Result<()> {
     // Parse player options from CLI flags
     let options = parse_player_options(&args);
 
-    // Try deep link first (emberware://play/game_id)
+    // Try deep link first (nethercore://play/game_id)
     if let Some(game_id) = parse_deep_link(&args) {
         tracing::info!("Deep link detected: {}", game_id);
 
@@ -119,7 +119,7 @@ fn main() -> Result<()> {
 
         if games.is_empty() {
             eprintln!("No games installed. Download games from the library UI.");
-            eprintln!("Tip: You can also pass a .ewzx file path directly.");
+            eprintln!("Tip: You can also pass a .nczx file path directly.");
             std::process::exit(1);
         }
 
@@ -154,7 +154,7 @@ fn main() -> Result<()> {
         }
     } else {
         // No argument - show unified library UI
-        tracing::info!("Launching Emberware Library");
+        tracing::info!("Launching Nethercore Library");
 
         registry.launch_library()?;
     }

@@ -1,4 +1,4 @@
-//! Configuration management (~/.emberware/config.toml)
+//! Configuration management (~/.nethercore/config.toml)
 //!
 //! Handles loading, saving, and providing defaults for application settings.
 //! Settings are stored in TOML format in the platform-specific config directory.
@@ -192,26 +192,26 @@ impl Default for CaptureConfig {
 
 /// Returns the platform-specific configuration directory.
 ///
-/// On Windows: `%APPDATA%\Emberware\config`
-/// On macOS: `~/Library/Application Support/io.emberware.Emberware`
-/// On Linux: `~/.config/Emberware`
+/// On Windows: `%APPDATA%\Nethercore\config`
+/// On macOS: `~/Library/Application Support/io.nethercore.Nethercore`
+/// On Linux: `~/.config/Nethercore`
 ///
 /// Returns `None` if the home directory cannot be determined.
 pub fn config_dir() -> Option<PathBuf> {
-    directories::ProjectDirs::from("io.emberware", "", "Emberware")
+    directories::ProjectDirs::from("io.nethercore", "", "Nethercore")
         .map(|dirs| dirs.config_dir().to_path_buf())
 }
 
 /// Returns the platform-specific data directory for game storage.
 ///
-/// On Windows: `%APPDATA%\Emberware\data`
-/// On macOS: `~/Library/Application Support/io.emberware.Emberware`
-/// On Linux: `~/.local/share/Emberware`
+/// On Windows: `%APPDATA%\Nethercore\data`
+/// On macOS: `~/Library/Application Support/io.nethercore.Nethercore`
+/// On Linux: `~/.local/share/Nethercore`
 ///
 /// This is where downloaded games and save data are stored.
 /// Returns `None` if the home directory cannot be determined.
 pub fn data_dir() -> Option<PathBuf> {
-    directories::ProjectDirs::from("io.emberware", "", "Emberware")
+    directories::ProjectDirs::from("io.nethercore", "", "Nethercore")
         .map(|dirs| dirs.data_dir().to_path_buf())
 }
 

@@ -1,6 +1,6 @@
-# Emberware Developer Guide
+# Nethercore Developer Guide
 
-This guide walks you through creating your first Emberware game, explains best practices for rollback-safe code, and provides debugging tips.
+This guide walks you through creating your first Nethercore game, explains best practices for rollback-safe code, and provides debugging tips.
 
 **Prerequisites:**
 - Rust (rustup installed)
@@ -117,9 +117,9 @@ cargo build --target wasm32-unknown-unknown --release
 
 Your game is at `target/wasm32-unknown-unknown/release/my_game.wasm`.
 
-### 6. Run in Emberware
+### 6. Run in Nethercore
 
-Place the `.wasm` file in your Emberware library or upload it to [emberware.io](https://emberware.io).
+Place the `.wasm` file in your Nethercore library or upload it to [nethercore.systems](https://nethercore.systems).
 
 ---
 
@@ -127,7 +127,7 @@ Place the `.wasm` file in your Emberware library or upload it to [emberware.io](
 
 ### The Three Functions
 
-Every Emberware game exports three functions:
+Every Nethercore game exports three functions:
 
 | Function | When Called | Purpose |
 |----------|-------------|---------|
@@ -158,7 +158,7 @@ If you call these outside `init()`, they'll be ignored with a warning.
 
 ## Best Practices for Rollback-Safe Code
 
-Emberware uses GGRS rollback netcode. For multiplayer to work correctly, your `update()` must be **deterministic**—identical inputs produce identical results.
+Nethercore uses GGRS rollback netcode. For multiplayer to work correctly, your `update()` must be **deterministic**—identical inputs produce identical results.
 
 ### DO: Use the Host RNG
 
@@ -282,7 +282,7 @@ fn init() {
 
 ### Image Formats
 
-Emberware expects raw RGBA8 pixel data. Convert your images:
+Nethercore expects raw RGBA8 pixel data. Convert your images:
 
 **Using ImageMagick:**
 ```bash
@@ -444,7 +444,7 @@ const TRANSPARENT: u32 = 0x00000000;
 
 ## Next Steps
 
-1. **Read the API reference**: [ffi.md](./ffi.md) and [emberware-zx.md](./emberware-zx.md)
+1. **Read the API reference**: [ffi.md](./ffi.md) and [nethercore-zx.md](./nethercore-zx.md)
 2. **Study the examples**: Each demonstrates specific features
 3. **Build something small**: A simple game teaches more than reading docs
-4. **Join the community**: Share your creations at [emberware.io](https://emberware.io)
+4. **Join the community**: Share your creations at [nethercore.systems](https://nethercore.systems)

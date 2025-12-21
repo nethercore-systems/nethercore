@@ -1,28 +1,28 @@
 [package]
-name = "emberware-library"
+name = "nethercore-library"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Unified Emberware fantasy console launcher"
+description = "Unified Nethercore fantasy console launcher"
 
 [lib]
-name = "emberware_library"
+name = "nethercore_library"
 path = "src/lib.rs"
 
 [[bin]]
-name = "emberware"
+name = "nethercore"
 path = "src/main.rs"
 
 [features]
 default = ["gamepad"]
-gamepad = ["emberware-core/gamepad", "zx-common/gamepad"]
+gamepad = ["nethercore-core/gamepad", "zx-common/gamepad"]
 
 [dependencies]
 # Local crates
-emberware-core = { path = "../core", default-features = false }
-emberware-shared = { path = "../shared" }
-# Note: zx-common provides ZRomLoader for reading .ewzx ROM metadata
+nethercore-core = { path = "../core", default-features = false }
+nethercore-shared = { path = "../shared" }
+# Note: zx-common provides ZRomLoader for reading .nczx ROM metadata
 zx-common = { path = "../zx-common", default-features = false, features = ["loader"] }
 
 # Workspace dependencies

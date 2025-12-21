@@ -1,6 +1,6 @@
 # Your First Game
 
-Let's create a simple game that draws a colored square and responds to input. This will introduce you to the core concepts of Emberware game development.
+Let's create a simple game that draws a colored square and responds to input. This will introduce you to the core concepts of Nethercore game development.
 
 ## Create the Project
 
@@ -19,7 +19,7 @@ mkdir my-first-game
 cd my-first-game
 ```
 
-Copy `emberware_zx.h` from the Emberware repository to your project folder.
+Copy `zx.h` from the Nethercore repository to your project folder.
 {{#endtab}}
 
 {{#tab name="Zig"}}
@@ -28,7 +28,7 @@ mkdir my-first-game
 cd my-first-game
 ```
 
-Copy `emberware_zx.h` from the Emberware repository to your project folder.
+Copy `zx.h` from the Nethercore repository to your project folder.
 {{#endtab}}
 
 {{#endtabs}}
@@ -146,7 +146,7 @@ fn panic(_: &PanicInfo) -> ! {
     core::arch::wasm32::unreachable()
 }
 
-// FFI imports from the Emberware runtime
+// FFI imports from the Nethercore runtime
 #[link(wasm_import_module = "env")]
 extern "C" {
     fn set_clear_color(color: u32);
@@ -196,7 +196,7 @@ pub extern "C" fn update() {
 pub extern "C" fn render() {
     unsafe {
         // Draw title text
-        let title = b"Hello Emberware!";
+        let title = b"Hello Nethercore!";
         draw_text(
             title.as_ptr(),
             title.len() as u32,
@@ -224,7 +224,7 @@ pub extern "C" fn render() {
 Create `game.c`:
 
 ```c
-#include "emberware_zx.h"
+#include "zx.h"
 
 /* Game state - stored in static variables for rollback safety */
 static float square_y = 200.0f;
@@ -249,12 +249,12 @@ EWZX_EXPORT void update(void) {
     }
 
     /* Keep square on screen */
-    square_y = ewzx_clampf(square_y, 20.0f, 450.0f);
+    square_y = nczx_clampf(square_y, 20.0f, 450.0f);
 }
 
 EWZX_EXPORT void render(void) {
     /* Draw title text */
-    EWZX_DRAW_TEXT("Hello Emberware!", 80.0f, 50.0f, 32.0f, EWZX_WHITE);
+    EWZX_DRAW_TEXT("Hello Nethercore!", 80.0f, 50.0f, 32.0f, EWZX_WHITE);
 
     /* Draw the moving square */
     draw_rect(200.0f, square_y, 80.0f, 80.0f, 0xFF6B6BFF);
@@ -268,14 +268,14 @@ The header provides:
 - `EWZX_EXPORT` - Marks functions for WASM export
 - `EWZX_BUTTON_*` - Button constants
 - `EWZX_DRAW_TEXT()` - Helper macro for string literals
-- `ewzx_clampf()` - Clamp float between min and max
+- `nczx_clampf()` - Clamp float between min and max
 {{#endtab}}
 
 {{#tab name="Zig"}}
 Create `src/main.zig`:
 
 ```zig
-// FFI imports from the Emberware runtime
+// FFI imports from the Nethercore runtime
 extern fn set_clear_color(color: u32) void;
 extern fn button_pressed(player: u32, button: u32) u32;
 extern fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32) void;
@@ -314,7 +314,7 @@ export fn update() void {
 
 export fn render() void {
     // Draw title text
-    const title = "Hello Emberware!";
+    const title = "Hello Nethercore!";
     draw_text(title.ptr, title.len, 80.0, 50.0, 32.0, 0xFFFFFFFF);
 
     // Draw the moving square
@@ -343,7 +343,7 @@ Zig's `export fn` automatically exports functions from the WASM module.
 #![no_main]
 ```
 
-Emberware games run in a minimal WebAssembly environment without the Rust standard library. This keeps binaries small and avoids OS dependencies.
+Nethercore games run in a minimal WebAssembly environment without the Rust standard library. This keeps binaries small and avoids OS dependencies.
 {{#endtab}}
 
 {{#tab name="C/C++"}}
@@ -358,7 +358,7 @@ Zig compiles to freestanding WASM by default with `.os_tag = .freestanding`. The
 
 ### FFI Imports
 
-Functions are imported from the Emberware runtime. See the [Cheat Sheet](../cheat-sheet.md) for all available functions.
+Functions are imported from the Nethercore runtime. See the [Cheat Sheet](../cheat-sheet.md) for all available functions.
 
 ### Static Game State
 
@@ -384,7 +384,7 @@ var square_y: f32 = 200.0;
 
 {{#endtabs}}
 
-All game state lives in static/global variables. This is intentional - the Emberware runtime automatically snapshots all WASM memory for rollback netcode. No manual state serialization needed!
+All game state lives in static/global variables. This is intentional - the Nethercore runtime automatically snapshots all WASM memory for rollback netcode. No manual state serialization needed!
 
 ### Colors
 
@@ -406,10 +406,10 @@ cargo build --target wasm32-unknown-unknown --release
 
 Output: `target/wasm32-unknown-unknown/release/my_first_game.wasm`
 
-### Run in the Emberware player:
+### Run in the Nethercore player:
 
 ```bash
-ember run target/wasm32-unknown-unknown/release/my_first_game.wasm
+nether run target/wasm32-unknown-unknown/release/my_first_game.wasm
 ```
 {{#endtab}}
 
@@ -422,10 +422,10 @@ make
 
 Output: `game.wasm`
 
-### Run in the Emberware player:
+### Run in the Nethercore player:
 
 ```bash
-ember run game.wasm
+nether run game.wasm
 ```
 {{#endtab}}
 
@@ -438,16 +438,16 @@ zig build
 
 Output: `zig-out/bin/game.wasm`
 
-### Run in the Emberware player:
+### Run in the Nethercore player:
 
 ```bash
-ember run zig-out/bin/game.wasm
+nether run zig-out/bin/game.wasm
 ```
 {{#endtab}}
 
 {{#endtabs}}
 
-Or load the `.wasm` file directly in the Emberware Library application.
+Or load the `.wasm` file directly in the Nethercore Library application.
 
 ## What You've Learned
 

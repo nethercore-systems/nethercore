@@ -1,6 +1,6 @@
 //! Console trait and associated types
 //!
-//! Each fantasy console (Emberware ZX, Chroma, etc.) implements the `Console` trait
+//! Each fantasy console (Nethercore ZX, Chroma, etc.) implements the `Console` trait
 //! to define its specific graphics, audio, input, and FFI functions.
 
 use std::sync::Arc;
@@ -15,7 +15,7 @@ use crate::debug::DebugStat;
 use crate::wasm::WasmGameContext;
 
 // Re-export ConsoleSpecs from shared crate for convenience
-pub use emberware_shared::ConsoleSpecs;
+pub use nethercore_shared::ConsoleSpecs;
 
 /// Console-specific rollback state (host-side, POD for zero-copy serialization)
 ///
@@ -102,7 +102,7 @@ pub trait Console: Send + 'static {
     ///
     /// This state is written to by FFI functions and consumed by Graphics/Audio backends.
     /// It is rebuilt each frame and is NOT part of rollback state (only GameState is rolled back).
-    /// For example, Emberware ZX uses ZFFIState which holds draw commands, camera, transforms, etc.
+    /// For example, Nethercore ZX uses ZFFIState which holds draw commands, camera, transforms, etc.
     type State: Default + Send + 'static;
     /// Console-specific rollback state (host-side, rolled back with WASM memory)
     ///

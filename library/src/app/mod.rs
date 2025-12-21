@@ -21,8 +21,8 @@ use winit::{
 use crate::graphics::LibraryGraphics;
 use crate::registry::{ConnectionMode, PlayerOptions};
 use crate::ui::{LibraryUi, MultiplayerDialog, UiAction};
-use emberware_core::app::config::Config;
-use emberware_core::library::{LocalGame, RomLoaderRegistry};
+use nethercore_core::app::config::Config;
+use nethercore_core::library::{LocalGame, RomLoaderRegistry};
 
 /// Library application state
 pub struct App {
@@ -72,10 +72,10 @@ impl Default for App {
 impl App {
     /// Create a new library application
     pub fn new() -> Self {
-        let config = emberware_core::app::config::load();
+        let config = nethercore_core::app::config::load();
         let rom_loader_registry = crate::registry::create_rom_loader_registry();
-        let local_games = emberware_core::library::get_local_games_with_loaders(
-            &emberware_core::library::DefaultDataDirProvider,
+        let local_games = nethercore_core::library::get_local_games_with_loaders(
+            &nethercore_core::library::DefaultDataDirProvider,
             &rom_loader_registry,
         );
 
@@ -104,8 +104,8 @@ impl App {
 
     /// Refresh the local games list
     fn refresh_games(&mut self) {
-        self.local_games = emberware_core::library::get_local_games_with_loaders(
-            &emberware_core::library::DefaultDataDirProvider,
+        self.local_games = nethercore_core::library::get_local_games_with_loaders(
+            &nethercore_core::library::DefaultDataDirProvider,
             &self.rom_loader_registry,
         );
     }
@@ -134,8 +134,8 @@ impl App {
             }
             UiAction::DeleteGame(game_id) => {
                 tracing::info!("Deleting game: {}", game_id);
-                if let Err(e) = emberware_core::library::delete_game(
-                    &emberware_core::library::DefaultDataDirProvider,
+                if let Err(e) = nethercore_core::library::delete_game(
+                    &nethercore_core::library::DefaultDataDirProvider,
                     &game_id,
                 ) {
                     tracing::error!("Failed to delete game: {}", e);
@@ -144,7 +144,7 @@ impl App {
                 self.library_ui.selected_game = None;
             }
             UiAction::OpenBrowser => {
-                const PLATFORM_URL: &str = "https://emberware.io";
+                const PLATFORM_URL: &str = "https://nethercore.systems";
                 tracing::info!("Opening browser to {}", PLATFORM_URL);
                 if let Err(e) = open::that(PLATFORM_URL) {
                     tracing::error!("Failed to open browser: {}", e);
@@ -169,8 +169,8 @@ impl App {
                 tracing::info!("Opening file picker to run game directly");
 
                 let file_handle = rfd::FileDialog::new()
-                    .add_filter("Game Files", &["ewzx", "wasm"])
-                    .add_filter("Emberware ROM", &["ewzx"])
+                    .add_filter("Game Files", &["nczx", "wasm"])
+                    .add_filter("Nethercore ROM", &["nczx"])
                     .add_filter("WebAssembly", &["wasm"])
                     .set_title("Open Game File")
                     .pick_file();
@@ -193,14 +193,14 @@ impl App {
                 tracing::info!("Opening file picker for ROM import");
 
                 let file_handle = rfd::FileDialog::new()
-                    .add_filter("Emberware ROM", &["ewzx"])
+                    .add_filter("Nethercore ROM", &["nczx"])
                     .set_title("Import ROM File")
                     .pick_file();
 
                 if let Some(source_path) = file_handle {
                     tracing::info!("Selected ROM file: {}", source_path.display());
 
-                    if let Some(data_dir) = emberware_core::app::config::data_dir() {
+                    if let Some(data_dir) = nethercore_core::app::config::data_dir() {
                         let games_dir = data_dir.join("games");
 
                         if let Err(e) = std::fs::create_dir_all(&games_dir) {
@@ -238,7 +238,7 @@ impl App {
                 tracing::info!("Saving settings...");
                 self.config = new_config.clone();
 
-                if let Err(e) = emberware_core::app::config::save(&self.config) {
+                if let Err(e) = nethercore_core::app::config::save(&self.config) {
                     tracing::error!("Failed to save config: {}", e);
                 } else {
                     tracing::info!("Settings saved successfully");
@@ -567,7 +567,7 @@ impl ApplicationHandler for App {
 
         // Create window
         let window_attrs = WindowAttributes::default()
-            .with_title("Emberware Library")
+            .with_title("Nethercore Library")
             .with_inner_size(winit::dpi::LogicalSize::new(960, 540));
 
         let window = match event_loop.create_window(window_attrs) {
@@ -673,7 +673,7 @@ impl ApplicationHandler for App {
                     };
                     window.set_fullscreen(new_fullscreen);
                     self.config.video.fullscreen = !is_fullscreen;
-                    let _ = emberware_core::app::config::save(&self.config);
+                    let _ = nethercore_core::app::config::save(&self.config);
                 }
             }
             _ => {}
@@ -700,7 +700,7 @@ impl ApplicationHandler for App {
 
 /// Run the library application
 pub fn run() -> Result<(), AppError> {
-    tracing::info!("Starting Emberware Library");
+    tracing::info!("Starting Nethercore Library");
 
     let event_loop = EventLoop::new()
         .map_err(|e| AppError::EventLoop(format!("Failed to create event loop: {}", e)))?;

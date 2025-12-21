@@ -1,10 +1,10 @@
 # Part 5: Multiplayer
 
-This is where Emberware's magic happens. Our Paddle game already supports online multiplayer - and we didn't write any networking code!
+This is where Nethercore's magic happens. Our Paddle game already supports online multiplayer - and we didn't write any networking code!
 
 ## What You'll Learn
 
-- How Emberware's rollback netcode works
+- How Nethercore's rollback netcode works
 - Why all game state must be in static variables
 - Rules for deterministic code
 - What happens during a rollback
@@ -27,7 +27,7 @@ When two players connect over the internet:
 
 Traditional netcode waits for the other player's input before advancing. This causes lag.
 
-Emberware uses **rollback netcode**:
+Nethercore uses **rollback netcode**:
 
 1. **Predict**: Don't have remote input? Guess it (usually "same as last frame")
 2. **Continue**: Run the game with the prediction
@@ -38,7 +38,7 @@ Emberware uses **rollback netcode**:
 
 ### Automatic Snapshots
 
-Every frame, Emberware snapshots your entire WASM memory:
+Every frame, Nethercore snapshots your entire WASM memory:
 
 ```
 Frame 1: [snapshot] → update() → render()
@@ -369,7 +369,7 @@ The `player_count()` function automatically detects connected players.
 
 ## Testing Online Multiplayer
 
-Online play is handled by the Emberware runtime:
+Online play is handled by the Nethercore runtime:
 
 1. Player 1 hosts a game
 2. Player 2 joins via game code or direct connect
@@ -403,14 +403,14 @@ With good connections, predictions are usually correct and rollbacks are rare.
 
 ## Summary
 
-| Traditional Netcode | Emberware Rollback |
+| Traditional Netcode | Nethercore Rollback |
 |--------------------|--------------------|
 | Wait for input → lag | Predict input → smooth |
 | Manual state sync | Automatic snapshots |
 | You write network code | You write game code |
 | State can be anywhere | State must be in WASM |
 
-The key insight: **Emberware handles multiplayer complexity so you can focus on making your game fun.**
+The key insight: **Nethercore handles multiplayer complexity so you can focus on making your game fun.**
 
 ---
 

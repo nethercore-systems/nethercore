@@ -1,12 +1,12 @@
 # Part 7: Sound Effects
 
-Games feel incomplete without audio. So far we've been using `draw_rect()` for everything—but you can't draw a sound! This is where Emberware's asset pipeline comes in.
+Games feel incomplete without audio. So far we've been using `draw_rect()` for everything—but you can't draw a sound! This is where Nethercore's asset pipeline comes in.
 
 ## What You'll Learn
 
 - Setting up an assets folder
-- Creating `ember.toml` to bundle assets
-- Using `ember build` instead of `cargo build`
+- Creating `nether.toml` to bundle assets
+- Using `nether build` instead of `cargo build`
 - Loading sounds with `rom_sound()`
 - Playing sounds with `play_sound()` and stereo panning
 
@@ -16,10 +16,10 @@ Up until now, we've built and tested like this:
 
 ```bash
 cargo build --target wasm32-unknown-unknown --release
-ember run target/wasm32-unknown-unknown/release/paddle.wasm
+nether run target/wasm32-unknown-unknown/release/paddle.wasm
 ```
 
-This works great for graphics—`draw_rect()` handles everything. But sounds need actual audio files. That's where `ember build` comes in: it bundles your code *and* assets into a single ROM file.
+This works great for graphics—`draw_rect()` handles everything. But sounds need actual audio files. That's where `nether build` comes in: it bundles your code *and* assets into a single ROM file.
 
 ## Create the Assets Folder
 
@@ -39,7 +39,7 @@ You need three WAV files for the game:
 | `score.wav` | Descending tone when someone scores | ~0.2s |
 | `win.wav` | Victory fanfare when game ends | ~0.5s |
 
-**Download sample sounds** from the [tutorial assets](https://github.com/emberware-io/emberware/tree/main/docs/book/src/tutorials/paddle/assets), or create your own with:
+**Download sample sounds** from the [tutorial assets](https://github.com/nethercore-systems/nethercore/tree/main/docs/book/src/tutorials/paddle/assets), or create your own with:
 - [JSFXR](https://sfxr.me) — Generate retro sound effects in your browser
 - [Freesound.org](https://freesound.org) — CC-licensed sounds
 - [Audacity](https://www.audacityteam.org) — Record and edit audio
@@ -49,7 +49,7 @@ Put them in your `assets/` folder:
 ```
 paddle/
 ├── Cargo.toml
-├── ember.toml          ← We'll create this next
+├── nether.toml          ← We'll create this next
 ├── assets/
 │   ├── hit.wav
 │   ├── score.wav
@@ -58,9 +58,9 @@ paddle/
     └── lib.rs
 ```
 
-## Create ember.toml
+## Create nether.toml
 
-Create `ember.toml` in your project root. This manifest tells Emberware about your game and its assets:
+Create `nether.toml` in your project root. This manifest tells Nethercore about your game and its assets:
 
 ```toml
 [game]
@@ -85,20 +85,20 @@ path = "assets/win.wav"
 
 Each asset has:
 - **id** — The name you'll use to load it in code
-- **path** — File location relative to `ember.toml`
+- **path** — File location relative to `nether.toml`
 
-## Build with ember build
+## Build with nether build
 
-Now use `ember build` instead of `cargo build`:
+Now use `nether build` instead of `cargo build`:
 
 ```bash
-ember build
+nether build
 ```
 
 This command:
 1. Compiles your Rust code to WASM
 2. Converts WAV files to the optimized format (22050 Hz mono)
-3. Bundles everything into a `paddle.ewzx` ROM file
+3. Bundles everything into a `paddle.nczx` ROM file
 
 You'll see output like:
 
@@ -108,7 +108,7 @@ Building paddle...
   Converting hit.wav → hit.ewzsnd
   Converting score.wav → score.ewzsnd
   Converting win.wav → win.ewzsnd
-  Packing paddle.ewzx (28 KB)
+  Packing paddle.nczx (28 KB)
 Done!
 ```
 
@@ -117,13 +117,13 @@ Done!
 Now run the ROM:
 
 ```bash
-ember run paddle.ewzx
+nether run paddle.nczx
 ```
 
 Or just:
 
 ```bash
-ember run
+nether run
 ```
 
 This builds and runs in one step.
@@ -262,7 +262,7 @@ export fn init() void {
 
 {{#endtabs}}
 
-The `rom_sound()` function loads the sound directly from the bundled ROM—the string IDs match what you put in `ember.toml`.
+The `rom_sound()` function loads the sound directly from the bundled ROM—the string IDs match what you put in `nether.toml`.
 
 ## Play Sounds
 
@@ -471,7 +471,7 @@ pub extern fn play_sound(sound: u32, volume: f32, pan: f32) void;
 
 ## Audio Specs
 
-Emberware uses these audio settings:
+Nethercore uses these audio settings:
 
 | Property | Value |
 |----------|-------|
@@ -479,7 +479,7 @@ Emberware uses these audio settings:
 | Format | 16-bit mono PCM |
 | Channels | Stereo output |
 
-The `ember build` command automatically converts your WAV files to this format.
+The `nether build` command automatically converts your WAV files to this format.
 
 ## Sound Design Tips
 
@@ -493,8 +493,8 @@ The `ember build` command automatically converts your WAV files to this format.
 Rebuild with your sound assets:
 
 ```bash
-ember build
-ember run
+nether build
+nether run
 ```
 
 The game now has:
@@ -509,7 +509,7 @@ Now that we have the asset pipeline set up, we can also use image sprites instea
 
 ### Add Texture Assets
 
-Download `paddle.png` and `ball.png` from the [tutorial assets](https://github.com/emberware-io/emberware/tree/main/docs/book/src/tutorials/paddle/assets), then add them to `ember.toml`:
+Download `paddle.png` and `ball.png` from the [tutorial assets](https://github.com/nethercore-systems/nethercore/tree/main/docs/book/src/tutorials/paddle/assets), then add them to `nether.toml`:
 
 ```toml
 # Texture assets
@@ -660,11 +660,11 @@ The sprite will be tinted by the bound texture. You can also use `draw_sprite_co
 
 | Before (Parts 1-6) | Now (Part 7+) |
 |-------------------|---------------|
-| `cargo build --target wasm32-unknown-unknown --release` | `ember build` |
-| `ember run target/.../paddle.wasm` | `ember run` |
+| `cargo build --target wasm32-unknown-unknown --release` | `nether build` |
+| `nether run target/.../paddle.wasm` | `nether run` |
 | No assets needed | Assets bundled in ROM |
 
-From now on, just use `ember build` and `ember run`!
+From now on, just use `nether build` and `nether run`!
 
 ---
 

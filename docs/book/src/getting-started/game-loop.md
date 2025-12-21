@@ -1,6 +1,6 @@
 # Understanding the Game Loop
 
-Every Emberware game implements three core functions that the runtime calls at specific times. Understanding this lifecycle is key to building robust, multiplayer-ready games.
+Every Nethercore game implements three core functions that the runtime calls at specific times. Understanding this lifecycle is key to building robust, multiplayer-ready games.
 
 ## The Three Functions
 
@@ -380,7 +380,7 @@ set_tick_rate(3);  // 120 ticks per second (fighting games)
 
 ## The Rollback System
 
-Emberware's killer feature is automatic rollback netcode. Here's how it works:
+Nethercore's killer feature is automatic rollback netcode. Here's how it works:
 
 1. **Snapshot:** The runtime snapshots all WASM memory after each `update()`
 2. **Predict:** When waiting for remote player input, the game predicts and continues

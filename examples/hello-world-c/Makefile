@@ -1,4 +1,4 @@
-# Emberware ZX C Game Makefile
+# Nethercore ZX C Game Makefile
 #
 # Prerequisites:
 #   - wasi-sdk: https://github.com/WebAssembly/wasi-sdk/releases
@@ -6,7 +6,7 @@
 # Usage:
 #   make          - Build game.wasm
 #   make clean    - Remove build artifacts
-#   make run      - Build and run in Emberware player
+#   make run      - Build and run in Nethercore player
 
 # Path to wasi-sdk installation
 # Override with: make WASI_SDK_PATH=/your/path
@@ -38,4 +38,4 @@ clean:
 	rm -f $(TARGET)
 
 run: $(TARGET)
-	ember run $(TARGET)
+	nether run $(TARGET)

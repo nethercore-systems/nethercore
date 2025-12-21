@@ -1,4 +1,4 @@
-//! FFI declarations for Emberware ZX
+//! FFI declarations for Nethercore ZX
 //!
 //! Common FFI functions used by all inspector examples.
 
