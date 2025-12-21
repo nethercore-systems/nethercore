@@ -19,7 +19,8 @@ use winit::{
 };
 
 use crate::graphics::LibraryGraphics;
-use crate::ui::{LibraryUi, UiAction};
+use crate::registry::{ConnectionMode, PlayerOptions};
+use crate::ui::{LibraryUi, MultiplayerDialog, UiAction};
 use emberware_core::app::config::Config;
 use emberware_core::library::{LocalGame, RomLoaderRegistry};
 
@@ -43,6 +44,8 @@ pub struct App {
     library_ui: LibraryUi,
     /// Settings UI state
     settings_ui: crate::ui::SettingsUi,
+    /// Multiplayer dialog state
+    multiplayer_dialog: Option<MultiplayerDialog>,
     /// Cached local games list
     local_games: Vec<LocalGame>,
     /// ROM loader registry
@@ -86,6 +89,7 @@ impl App {
             egui_state: None,
             egui_renderer: None,
             library_ui: LibraryUi::new(),
+            multiplayer_dialog: None,
             local_games,
             rom_loader_registry,
             last_error: None,
@@ -260,6 +264,76 @@ impl App {
                 // Scale mode only affects game rendering, which happens in player process
                 // This is a no-op in the library
             }
+            UiAction::ShowMultiplayerDialog(game_id) => {
+                tracing::info!("Opening multiplayer dialog for: {}", game_id);
+                self.multiplayer_dialog = Some(MultiplayerDialog::new(game_id));
+            }
+            UiAction::HostGame {
+                game_id,
+                port,
+                players,
+            } => {
+                tracing::info!(
+                    "Hosting game {} on port {} with {} players",
+                    game_id,
+                    port,
+                    players
+                );
+
+                if let Some(game) = self.local_games.iter().find(|g| g.id == game_id) {
+                    let options = PlayerOptions {
+                        players: Some(players),
+                        connection: Some(ConnectionMode::Host { port }),
+                        ..Default::default()
+                    };
+
+                    match crate::registry::launch_game_by_id_with_options(game, &options) {
+                        Ok(()) => {
+                            tracing::info!("Player process spawned in host mode for: {}", game_id);
+                            self.last_error = None;
+                            self.multiplayer_dialog = None;
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to launch game: {}", e);
+                            self.last_error = Some(format!("Failed to launch: {}", e));
+                        }
+                    }
+                } else {
+                    self.last_error = Some(format!("Game not found: {}", game_id));
+                }
+            }
+            UiAction::JoinGame {
+                game_id,
+                host_ip,
+                port,
+            } => {
+                tracing::info!("Joining game {} at {}:{}", game_id, host_ip, port);
+
+                if let Some(game) = self.local_games.iter().find(|g| g.id == game_id) {
+                    let options = PlayerOptions {
+                        connection: Some(ConnectionMode::Join { host_ip, port }),
+                        ..Default::default()
+                    };
+
+                    match crate::registry::launch_game_by_id_with_options(game, &options) {
+                        Ok(()) => {
+                            tracing::info!("Player process spawned in join mode for: {}", game_id);
+                            self.last_error = None;
+                            self.multiplayer_dialog = None;
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to launch game: {}", e);
+                            self.last_error = Some(format!("Failed to launch: {}", e));
+                        }
+                    }
+                } else {
+                    self.last_error = Some(format!("Game not found: {}", game_id));
+                }
+            }
+            UiAction::CancelMultiplayer => {
+                tracing::info!("Cancelling multiplayer dialog");
+                self.multiplayer_dialog = None;
+            }
         }
     }
 
@@ -330,6 +404,13 @@ impl App {
                 }
             } else if let Some(action) = self.library_ui.show(ctx, &self.local_games) {
                 ui_action = Some(action);
+            }
+
+            // Show multiplayer dialog if open
+            if let Some(ref mut dialog) = self.multiplayer_dialog {
+                if let Some(action) = dialog.show(ctx) {
+                    ui_action = Some(action);
+                }
             }
         });
 

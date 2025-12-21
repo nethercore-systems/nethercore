@@ -6,8 +6,6 @@
 /// function twice during init() is an error and will trap.
 #[derive(Debug, Clone)]
 pub struct ZInitConfig {
-    /// Resolution index (0-3 for Z: 360p, 540p, 720p, 1080p)
-    pub resolution_index: u32,
     /// Tick rate index (0-3 for Z: 24, 30, 60, 120 fps)
     pub tick_rate_index: u32,
     /// Clear/background color (RGBA: 0xRRGGBBAA)
@@ -18,8 +16,6 @@ pub struct ZInitConfig {
     pub modified: bool,
 
     // Duplicate call tracking — each config function can only be called once
-    /// Whether set_resolution() has been called
-    pub resolution_set: bool,
     /// Whether set_tick_rate() has been called
     pub tick_rate_set: bool,
     /// Whether set_clear_color() has been called
@@ -31,13 +27,11 @@ pub struct ZInitConfig {
 impl Default for ZInitConfig {
     fn default() -> Self {
         Self {
-            resolution_index: 1,     // Default 540p
             tick_rate_index: 2,      // Default 60 fps
             clear_color: 0x000000FF, // Black, fully opaque
             render_mode: 0,          // Unlit
             modified: false,
             // No config functions called yet
-            resolution_set: false,
             tick_rate_set: false,
             clear_color_set: false,
             render_mode_set: false,

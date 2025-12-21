@@ -32,8 +32,8 @@
 //! - Simple point-to-point (no mesh networking for >2 players without manual port assignment)
 
 use std::io;
-use std::net::{SocketAddr, UdpSocket};
-use std::time::Duration;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
+use std::time::{Duration, Instant};
 
 use ggrs::NonBlockingSocket;
 
@@ -54,6 +54,8 @@ pub enum LocalSocketError {
     Connect(String),
     /// No peer connected yet
     NoPeer,
+    /// Operation timed out
+    Timeout,
 }
 
 impl std::fmt::Display for LocalSocketError {
@@ -63,6 +65,7 @@ impl std::fmt::Display for LocalSocketError {
             Self::NonBlocking(e) => write!(f, "Failed to set non-blocking: {}", e),
             Self::Connect(e) => write!(f, "Failed to connect: {}", e),
             Self::NoPeer => write!(f, "No peer connected"),
+            Self::Timeout => write!(f, "Operation timed out"),
         }
     }
 }
@@ -187,6 +190,121 @@ impl LocalSocket {
     /// Check if a peer is connected
     pub fn is_connected(&self) -> bool {
         self.peer_addr.is_some()
+    }
+
+    /// Wait for a peer to connect (blocking with timeout)
+    ///
+    /// Blocks until a packet is received from any peer, then sets that
+    /// peer as the connected peer and returns their address.
+    ///
+    /// This is useful for host mode where we wait for a client to connect.
+    ///
+    /// # Arguments
+    ///
+    /// * `timeout` - Maximum time to wait for a peer
+    ///
+    /// # Returns
+    ///
+    /// The peer's address as a string (e.g., "192.168.1.100:7778")
+    ///
+    /// # Errors
+    ///
+    /// Returns `LocalSocketError::Timeout` if no peer connects within the timeout.
+    pub fn wait_for_peer(&mut self, timeout: Duration) -> Result<String, LocalSocketError> {
+        let start = Instant::now();
+
+        // Temporarily set socket to blocking with timeout
+        self.socket
+            .set_read_timeout(Some(Duration::from_millis(100)))
+            .map_err(|e| LocalSocketError::Bind(format!("Failed to set read timeout: {}", e)))?;
+
+        while start.elapsed() < timeout {
+            let mut buf = [0u8; 128];
+            match self.socket.recv_from(&mut buf) {
+                Ok((_len, from)) => {
+                    log::info!("Peer connected from {}", from);
+                    self.peer_addr = Some(from);
+
+                    // Restore non-blocking mode
+                    self.socket
+                        .set_read_timeout(Some(Duration::from_millis(1)))
+                        .ok();
+
+                    return Ok(from.to_string());
+                }
+                Err(e) => {
+                    // Timeout or WouldBlock is expected, keep waiting
+                    if e.kind() != io::ErrorKind::WouldBlock
+                        && e.kind() != io::ErrorKind::TimedOut
+                    {
+                        log::warn!("Unexpected error while waiting for peer: {}", e);
+                    }
+                }
+            }
+        }
+
+        // Restore non-blocking mode
+        self.socket
+            .set_read_timeout(Some(Duration::from_millis(1)))
+            .ok();
+
+        Err(LocalSocketError::Timeout)
+    }
+
+    /// Poll for a peer connection (non-blocking)
+    ///
+    /// Checks if any packets have been received and sets the sender
+    /// as the connected peer.
+    ///
+    /// # Returns
+    ///
+    /// The peer's address if a connection was detected, or `None`.
+    pub fn poll_for_peer(&mut self) -> Option<String> {
+        let mut buf = [0u8; 128];
+        match self.socket.recv_from(&mut buf) {
+            Ok((_len, from)) => {
+                log::info!("Peer connected from {}", from);
+                self.peer_addr = Some(from);
+                Some(from.to_string())
+            }
+            Err(_) => None,
+        }
+    }
+
+    /// Get all local IP addresses for display in host mode
+    ///
+    /// Returns a list of non-loopback IPv4 addresses that can be shared
+    /// with friends to connect.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let ips = LocalSocket::get_local_ips();
+    /// for ip in ips {
+    ///     println!("Share this address: {}:{}", ip, port);
+    /// }
+    /// ```
+    pub fn get_local_ips() -> Vec<String> {
+        let mut ips = Vec::new();
+
+        // Try to get local IP by connecting to a public address
+        // This doesn't actually send data, just determines the route
+        if let Ok(socket) = UdpSocket::bind("0.0.0.0:0") {
+            if socket.connect("8.8.8.8:80").is_ok() {
+                if let Ok(addr) = socket.local_addr() {
+                    if let IpAddr::V4(ipv4) = addr.ip() {
+                        if !ipv4.is_loopback() {
+                            ips.push(ipv4.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        // Also include localhost for local testing
+        ips.push(Ipv4Addr::LOCALHOST.to_string());
+
+        ips
     }
 }
 
@@ -417,5 +535,110 @@ mod tests {
             Err(LocalSocketError::Connect(_)) => {}
             _ => panic!("Expected Connect error"),
         }
+    }
+
+    #[test]
+    fn test_get_local_ips_includes_localhost() {
+        let ips = LocalSocket::get_local_ips();
+        // Should always include localhost for local testing
+        assert!(
+            ips.contains(&"127.0.0.1".to_string()),
+            "get_local_ips should include localhost: {:?}",
+            ips
+        );
+    }
+
+    #[test]
+    fn test_get_local_ips_not_empty() {
+        let ips = LocalSocket::get_local_ips();
+        assert!(!ips.is_empty(), "get_local_ips should return at least one IP");
+    }
+
+    #[test]
+    fn test_poll_for_peer_returns_none_when_no_data() {
+        let mut socket = LocalSocket::bind("127.0.0.1:0").unwrap();
+        // Should return None immediately when no peer has sent data
+        let result = socket.poll_for_peer();
+        assert!(result.is_none());
+        assert!(!socket.is_connected());
+    }
+
+    #[test]
+    fn test_poll_for_peer_detects_connection() {
+        // Create two sockets
+        let mut host = LocalSocket::bind("127.0.0.1:0").unwrap();
+        let client = LocalSocket::bind("127.0.0.1:0").unwrap();
+
+        let host_addr = host.local_addr();
+
+        // Client sends a packet to host
+        client.socket.send_to(b"hello", host_addr).unwrap();
+
+        // Give the packet time to arrive
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        // poll_for_peer should detect the connection
+        let result = host.poll_for_peer();
+        assert!(result.is_some(), "poll_for_peer should detect incoming packet");
+        assert!(host.is_connected(), "Socket should be connected after peer detected");
+    }
+
+    #[test]
+    fn test_wait_for_peer_timeout() {
+        let mut socket = LocalSocket::bind("127.0.0.1:0").unwrap();
+
+        // Wait for a very short timeout (no peer will connect)
+        let start = std::time::Instant::now();
+        let result = socket.wait_for_peer(Duration::from_millis(100));
+        let elapsed = start.elapsed();
+
+        // Should return Timeout error
+        assert!(matches!(result, Err(LocalSocketError::Timeout)));
+
+        // Should have waited at least the timeout duration
+        assert!(
+            elapsed >= Duration::from_millis(90), // Allow 10ms tolerance
+            "Should have waited at least 90ms, but waited {:?}",
+            elapsed
+        );
+
+        // Should not have waited too much longer than the timeout
+        assert!(
+            elapsed < Duration::from_millis(500),
+            "Should not wait much longer than timeout, but waited {:?}",
+            elapsed
+        );
+    }
+
+    #[test]
+    fn test_wait_for_peer_success() {
+        let mut host = LocalSocket::bind("127.0.0.1:0").unwrap();
+        let client = LocalSocket::bind("127.0.0.1:0").unwrap();
+        let host_addr = host.local_addr();
+
+        // Spawn a thread to send a packet after a short delay
+        let handle = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(50));
+            client.socket.send_to(b"hello", host_addr).unwrap();
+        });
+
+        // Wait for peer with sufficient timeout
+        let result = host.wait_for_peer(Duration::from_secs(1));
+
+        handle.join().unwrap();
+
+        assert!(result.is_ok(), "wait_for_peer should succeed: {:?}", result);
+        assert!(host.is_connected(), "Socket should be connected after peer detected");
+    }
+
+    #[test]
+    fn test_timeout_error_display() {
+        let err = LocalSocketError::Timeout;
+        let display = err.to_string();
+        assert!(
+            display.contains("timed out"),
+            "Timeout error display should contain 'timed out': {}",
+            display
+        );
     }
 }

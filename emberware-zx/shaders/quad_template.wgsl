@@ -10,7 +10,7 @@ struct QuadInstance {
     position: vec4<f32>,       // world/screen position (xyz used)
     size: vec2<f32>,           // width, height
     rotation: f32,             // radians (screen-space only)
-    mode_packed: u32,          // bits 0-7: QuadMode, bits 8-9: resolution_index
+    mode_packed: u32,          // bits 0-7: QuadMode (resolution is fixed at 540p)
     uv: vec4<f32>,             // texture atlas rect (u0, v0, u1, v1)
     color: u32,                // packed RGBA8
     shading_state_index: u32,
@@ -29,22 +29,12 @@ const BILLBOARD_CYLINDRICAL_Z: u32 = 3u;
 const SCREEN_SPACE: u32 = 4u;
 const WORLD_SPACE: u32 = 5u;
 
-// Hardcoded resolutions (indexed by bits 8-9 of mode_packed)
-// 0=360p, 1=540p, 2=720p, 3=1080p
-const RESOLUTIONS: array<vec2<f32>, 4> = array<vec2<f32>, 4>(
-    vec2<f32>(640.0, 360.0),
-    vec2<f32>(960.0, 540.0),
-    vec2<f32>(1280.0, 720.0),
-    vec2<f32>(1920.0, 1080.0)
-);
+// Fixed 540p resolution
+const SCREEN_RESOLUTION: vec2<f32> = vec2<f32>(960.0, 540.0);
 
-// Extract mode and resolution from packed u32
+// Extract mode from packed u32
 fn unpack_mode(packed: u32) -> u32 {
     return packed & 0xFFu;
-}
-
-fn unpack_resolution_index(packed: u32) -> u32 {
-    return (packed >> 8u) & 0x3u;
 }
 
 // ============================================================================
@@ -119,10 +109,9 @@ fn vs(in: QuadVertexIn, @builtin(instance_index) instance_idx: u32) -> QuadVerte
     let view_matrix = unified_transforms[instance.view_index];
     let projection_matrix = unified_transforms[instance.proj_index];
 
-    // Unpack mode and resolution from packed field
+    // Unpack mode from packed field
     let mode = unpack_mode(instance.mode_packed);
-    let resolution_idx = unpack_resolution_index(instance.mode_packed);
-    let screen_dims = RESOLUTIONS[resolution_idx];
+    let screen_dims = SCREEN_RESOLUTION;
 
     var world_pos: vec3<f32>;
 

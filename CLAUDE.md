@@ -23,12 +23,65 @@ Emberware is a fantasy console platform with built-in rollback netcode, designed
 - [docs/architecture/ffi.md](./docs/architecture/ffi.md) — Shared FFI API reference
 - [../emberware-design/consoles/zx-spec.md](../emberware-design/consoles/zx-spec.md) — ZX console specification (source of truth)
 - [docs/architecture/zx/rendering.md](./docs/architecture/zx/rendering.md) — ZX graphics deep dive
+- [docs/architecture/rom-format.md](./docs/architecture/rom-format.md) — ROM/cart format specification
+- [docs/architecture/multiplayer-testing.md](./docs/architecture/multiplayer-testing.md) — Multiplayer and GGRS testing guide
+
+## Game Developer Documentation (Book)
+
+The [docs/book/](./docs/book/) directory contains comprehensive game developer documentation in mdBook format:
+
+**Quick Reference:**
+- [Cheat Sheet](./docs/book/src/cheat-sheet.md) — Quick FFI function lookup
+
+**Getting Started:**
+- [Prerequisites](./docs/book/src/getting-started/prerequisites.md)
+- [Your First Game](./docs/book/src/getting-started/first-game.md)
+- [Understanding the Game Loop](./docs/book/src/getting-started/game-loop.md)
+
+**Tutorials:**
+- [Build Paddle](./docs/book/src/tutorials/paddle/index.md) — Complete 8-part tutorial building a paddle game
+
+**API Reference** (FFI functions with examples):
+- [System](./docs/book/src/api/system.md) — Time, logging, quit
+- [Input](./docs/book/src/api/input.md) — Buttons, sticks, triggers
+- [Graphics](./docs/book/src/api/graphics.md) — General graphics overview
+- [Camera](./docs/book/src/api/camera.md) — Camera setup
+- [Transforms](./docs/book/src/api/transforms.md) — Matrix stack operations
+- [Textures](./docs/book/src/api/textures.md) — Texture loading and binding
+- [Meshes](./docs/book/src/api/meshes.md) — Mesh loading and drawing
+- [Materials](./docs/book/src/api/materials.md) — PBR material properties
+- [Lighting](./docs/book/src/api/lighting.md) — Directional and point lights
+- [Skinning](./docs/book/src/api/skinning.md) — Skeletal animation
+- [Animation](./docs/book/src/api/animation.md) — Keyframe animation
+- [Procedural Meshes](./docs/book/src/api/procedural.md) — Shape generation
+- [2D Drawing](./docs/book/src/api/drawing-2d.md) — Sprites, text, rectangles
+- [Billboards](./docs/book/src/api/billboards.md) — Camera-facing quads
+- [Sky](./docs/book/src/api/sky.md) — Sky gradients and sun
+- [Audio](./docs/book/src/api/audio.md) — Sound and music playback
+- [Save Data](./docs/book/src/api/save-data.md) — Persistent storage
+- [ROM Loading](./docs/book/src/api/rom-loading.md) — Asset loading from ROM data pack
+- [Debug](./docs/book/src/api/debug.md) — Debug inspection system
+
+**Guides:**
+- [Render Modes](./docs/book/src/guides/render-modes.md) — Choosing and configuring render modes
+- [Rollback Safety](./docs/book/src/guides/rollback-safety.md) — Writing rollback-compatible code
+- [Asset Pipeline](./docs/book/src/guides/asset-pipeline.md) — Converting and bundling assets
+- [Publishing Your Game](./docs/book/src/guides/publishing.md) — Packaging and distribution
+
+**Reference:**
+- [Button Constants](./docs/book/src/reference/buttons.md) — Input button mappings
+- [Dither Patterns](./docs/book/src/reference/dither-patterns.md) — Available dither patterns
+- [Example Games](./docs/book/src/reference/examples.md) — Overview of all examples
+
+**Contributing:**
+- [Getting Started](./docs/contributing/getting-started.md) — Contributing to Emberware
+- [Distributing Games](./docs/contributing/distributing-games.md) — Publishing guidelines
 
 ## Canonical References
 
 | Reference | File | Purpose |
 |-----------|------|---------|
-| FFI Source of Truth | [emberware-zx-ffi.rs](./emberware-zx-ffi.rs) | All ZX FFI function signatures |
+| FFI Source of Truth | [emberware-zx-ffi.rs](./include/emberware-zx-ffi.rs) | All ZX FFI function signatures |
 | Shared FFI | [core/src/ffi.rs](./core/src/ffi.rs) | System, input, save, ROM functions |
 | ZX FFI Implementation | [emberware-zx/src/ffi/mod.rs](./emberware-zx/src/ffi/mod.rs) | ZX-specific FFI registration |
 | Console Trait | [core/src/console.rs](./core/src/console.rs) | Console abstraction |

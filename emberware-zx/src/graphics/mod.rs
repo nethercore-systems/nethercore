@@ -85,7 +85,6 @@ pub struct ZGraphics {
     // Blit pipeline (for scaling render target to window)
     blit_pipeline: wgpu::RenderPipeline,
     blit_bind_group: wgpu::BindGroup,
-    blit_sampler: wgpu::Sampler,
 
     // Depth buffer (for window-sized UI rendering, no longer used for game content)
     depth_texture: wgpu::Texture,
@@ -156,9 +155,6 @@ pub struct ZGraphics {
     pipeline_cache: PipelineCache,
     current_render_mode: u8,
 
-    // Current render target resolution (for detecting changes)
-    current_resolution_index: u8,
-
     // Scaling mode for render target to window
     scale_mode: emberware_core::app::config::ScaleMode,
 
@@ -174,10 +170,9 @@ pub struct ZGraphics {
 
 impl ZGraphics {
     /// Update render target resolution if changed
-    pub fn update_resolution(&mut self, resolution_index: u8) {
-        if resolution_index != self.current_resolution_index {
-            self.recreate_render_target(resolution_index);
-        }
+    /// Note: Emberware ZX uses a fixed 540p resolution, so this is a no-op
+    pub fn update_resolution(&mut self) {
+        // Fixed resolution - no dynamic changes needed
     }
 
     /// Update scaling mode for render target to window
@@ -190,43 +185,6 @@ impl ZGraphics {
     pub fn invalidate_frame_bind_group(&mut self) {
         self.cached_frame_bind_group = None;
         self.cached_frame_bind_group_hash = 0;
-    }
-
-    fn recreate_render_target(&mut self, resolution_index: u8) {
-        use crate::console::RESOLUTIONS;
-
-        let (width, height) = RESOLUTIONS
-            .get(resolution_index as usize)
-            .copied()
-            .unwrap_or((960, 540));
-
-        tracing::info!(
-            "Recreating render target: {}×{} (index {})",
-            width,
-            height,
-            resolution_index
-        );
-
-        self.render_target =
-            Self::create_render_target(&self.device, width, height, self.config.format);
-
-        let bind_group_layout = self.blit_pipeline.get_bind_group_layout(0);
-        self.blit_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Blit Bind Group"),
-            layout: &bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&self.render_target.color_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&self.blit_sampler),
-                },
-            ],
-        });
-
-        self.current_resolution_index = resolution_index;
     }
 
     // Texture Management

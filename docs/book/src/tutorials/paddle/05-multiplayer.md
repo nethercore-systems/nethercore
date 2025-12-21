@@ -55,55 +55,187 @@ This is why all game state must be in `static mut` variables - they live in WASM
 ### Rule 1: All State in WASM Memory
 
 ✅ **Good** - State in static variables:
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 static mut PLAYER_X: f32 = 0.0;
 static mut SCORE: u32 = 0;
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+static float player_x = 0.0f;
+static uint32_t score = 0;
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+var player_x: f32 = 0.0;
+var score: u32 = 0;
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ❌ **Bad** - State outside WASM (if this were possible):
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 // Don't try to use external state!
 // (Rust's no_std prevents most of this anyway)
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+// Don't try to use external state!
+// All state must be in static variables
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+// Don't try to use external state!
+// All state must be in global variables
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ### Rule 2: Deterministic Update
 
 Given the same inputs, `update()` must produce the same results.
 
 ✅ **Good** - Use `random()` for randomness:
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 let rand = random();  // Deterministic, seeded by runtime
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+uint32_t rand = random_u32();  // Deterministic, seeded by runtime
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+const rand = random_u32();  // Deterministic, seeded by runtime
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ❌ **Bad** - Use system time (if this were possible):
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 // let time = get_system_time();  // Non-deterministic!
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+// uint64_t time = get_system_time();  // Non-deterministic!
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+// const time = get_system_time();  // Non-deterministic!
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ### Rule 3: No State Changes in Render
 
 The `render()` function is **skipped during rollback**. Never modify game state there.
 
 ✅ **Good**:
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 fn render() {
     // Only READ state
     draw_rect(BALL_X, BALL_Y, ...);
 }
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+EWZX_EXPORT void render(void) {
+    // Only READ state
+    draw_rect(ball_x, ball_y, ...);
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+export fn render() void {
+    // Only READ state
+    draw_rect(ball_x, ball_y, ...);
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ❌ **Bad**:
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 fn render() {
     ANIMATION_FRAME += 1;  // This won't replay during rollback!
 }
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+EWZX_EXPORT void render(void) {
+    animation_frame += 1;  // This won't replay during rollback!
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+export fn render() void {
+    animation_frame += 1;  // This won't replay during rollback!
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ## Our Paddle Game Follows the Rules
 
 Let's verify our code is rollback-safe:
 
 ### ✅ All State in Statics
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 static mut PADDLE1_Y: f32 = 0.0;
 static mut PADDLE2_Y: f32 = 0.0;
@@ -112,16 +244,70 @@ static mut BALL_Y: f32 = 0.0;
 static mut BALL_VX: f32 = 0.0;
 static mut BALL_VY: f32 = 0.0;
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+static float paddle1_y = 0.0f;
+static float paddle2_y = 0.0f;
+static float ball_x = 0.0f;
+static float ball_y = 0.0f;
+static float ball_vx = 0.0f;
+static float ball_vy = 0.0f;
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+var paddle1_y: f32 = 0.0;
+var paddle2_y: f32 = 0.0;
+var ball_x: f32 = 0.0;
+var ball_y: f32 = 0.0;
+var ball_vx: f32 = 0.0;
+var ball_vy: f32 = 0.0;
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ### ✅ Deterministic Randomness
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 fn reset_ball(direction: i32) {
     let rand = random() % 100;  // Uses runtime's seeded RNG
     // ...
 }
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+void reset_ball(int32_t direction) {
+    uint32_t rand = random_u32() % 100;  // Uses runtime's seeded RNG
+    // ...
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+fn reset_ball(direction: i32) void {
+    const rand = random_u32() % 100;  // Uses runtime's seeded RNG
+    // ...
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ### ✅ Update Reads Input, Render Just Draws
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 fn update() {
     // Read input
@@ -135,6 +321,41 @@ fn render() {
     draw_rect(PADDLE_MARGIN, PADDLE1_Y, ...);
 }
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+EWZX_EXPORT void update(void) {
+    // Read input
+    int8_t stick_y = left_stick_y(player);
+    // Modify state
+    paddle1_y += movement;
+}
+
+EWZX_EXPORT void render(void) {
+    // Only draw, never modify state
+    draw_rect(PADDLE_MARGIN, paddle1_y, ...);
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+export fn update() void {
+    // Read input
+    const stick_y = left_stick_y(player);
+    // Modify state
+    paddle1_y += movement;
+}
+
+export fn render() void {
+    // Only draw, never modify state
+    draw_rect(PADDLE_MARGIN, paddle1_y, ...);
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ## Testing Multiplayer Locally
 

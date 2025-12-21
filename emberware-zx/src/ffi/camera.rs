@@ -9,7 +9,7 @@ use wasmtime::{Caller, Linker};
 
 use super::ZXGameContext;
 
-use crate::console::RESOLUTIONS;
+use crate::console::RESOLUTION;
 
 /// Register camera FFI functions
 pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
@@ -69,12 +69,8 @@ fn camera_fov(mut caller: Caller<'_, ZXGameContext>, fov_degrees: f32) {
         fov_degrees
     };
 
-    // Get actual viewport dimensions from init config
-    let resolution_index = state.init_config.resolution_index as usize;
-    let (width, height) = RESOLUTIONS
-        .get(resolution_index)
-        .copied()
-        .unwrap_or((960, 540));
+    // Get fixed viewport dimensions (540p)
+    let (width, height) = RESOLUTION;
     let aspect = width as f32 / height as f32;
 
     // Rebuild projection matrix with new FOV

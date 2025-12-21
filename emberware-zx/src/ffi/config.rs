@@ -12,54 +12,13 @@ use wasmtime::{Caller, Linker};
 
 use super::ZXGameContext;
 
-use crate::console::{RESOLUTIONS, TICK_RATES};
+use crate::console::TICK_RATES;
 
 /// Register configuration FFI functions
 pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
-    linker.func_wrap("env", "set_resolution", set_resolution)?;
     linker.func_wrap("env", "set_tick_rate", set_tick_rate)?;
     linker.func_wrap("env", "set_clear_color", set_clear_color)?;
     linker.func_wrap("env", "render_mode", render_mode)?;
-    Ok(())
-}
-
-/// Set the render resolution
-///
-/// Valid indices: 0=360p, 1=540p (default), 2=720p, 3=1080p
-///
-/// **Init-only:** Must be called during `init()`. Calls outside init are ignored.
-/// **Single-call:** Can only be called once. Second call traps with an error.
-fn set_resolution(mut caller: Caller<'_, ZXGameContext>, res: u32) -> Result<()> {
-    // Check if we're in init phase
-    if !caller.data().game.in_init {
-        warn!("set_resolution() called outside init() - ignored");
-        return Ok(());
-    }
-
-    let state = &mut caller.data_mut().ffi;
-
-    // Check for duplicate call
-    if state.init_config.resolution_set {
-        bail!(
-            "set_resolution() called twice - each config function can only be called once during init()"
-        );
-    }
-    state.init_config.resolution_set = true;
-
-    // Validate resolution index
-    if res as usize >= RESOLUTIONS.len() {
-        bail!(
-            "set_resolution({}) invalid - must be 0-{}",
-            res,
-            RESOLUTIONS.len() - 1
-        );
-    }
-
-    state.init_config.resolution_index = res;
-    state.init_config.modified = true;
-
-    let (w, h) = RESOLUTIONS[res as usize];
-    info!("Resolution set to {}x{} (index {})", w, h, res);
     Ok(())
 }
 

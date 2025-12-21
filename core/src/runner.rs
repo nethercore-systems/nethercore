@@ -188,6 +188,77 @@ impl<C: Console> ConsoleRunner<C> {
         Ok(())
     }
 
+    /// Load a game with a pre-configured rollback session.
+    ///
+    /// Use this method when you need to specify a custom session type
+    /// (sync-test, P2P, etc.) instead of the default local session.
+    ///
+    /// # Arguments
+    /// * `console` - Fresh console instance for the game
+    /// * `wasm_bytes` - The compiled WASM code
+    /// * `session` - Pre-configured rollback session
+    ///
+    /// # Errors
+    /// Returns an error if the game fails to load or initialize.
+    pub fn load_game_with_session(
+        &mut self,
+        console: C,
+        wasm_bytes: &[u8],
+        session: RollbackSession<C::Input, C::State, C::RollbackState>,
+    ) -> Result<()> {
+        // Load and validate the WASM module
+        let module = self.wasm_engine.load_module(wasm_bytes)?;
+        WasmEngine::validate_module_memory(&module, self.specs.ram_limit)?;
+
+        // Create a linker and register FFI functions
+        let mut linker: Linker<WasmGameContext<C::Input, C::State, C::RollbackState>> =
+            Linker::new(self.wasm_engine.engine());
+
+        // Register common FFI functions (input, random, save/load, etc.)
+        register_common_ffi(&mut linker)?;
+
+        // Register console-specific FFI functions
+        console.register_ffi(&mut linker)?;
+
+        // Create game instance with the linker
+        let game = GameInstance::with_ram_limit(
+            &self.wasm_engine,
+            &module,
+            &linker,
+            self.specs.ram_limit,
+        )?;
+
+        // Create runtime (takes ownership of console)
+        let mut runtime = Runtime::new(console);
+        runtime.load_game(game);
+        runtime.set_tick_rate(self.specs.tick_rates[self.specs.default_tick_rate]);
+
+        // Create and set audio backend for the runtime
+        let audio = runtime.console().create_audio()?;
+        runtime.set_audio(audio);
+
+        // Set the provided rollback session
+        runtime.set_session(session);
+
+        // Initialize console-specific FFI state before calling game init()
+        runtime.initialize_console_state();
+
+        // Initialize the game (calls init() export)
+        runtime.init_game()?;
+
+        // Create resource manager from console reference
+        let resource_manager = runtime.console().create_resource_manager();
+
+        // Set up game session
+        let mut game_session = GameSession::new(runtime, resource_manager);
+
+        // Process resources created during init
+        game_session.process_pending_resources(&mut self.graphics, &mut self.audio)?;
+
+        self.session = Some(game_session);
+        Ok(())
+    }
+
     /// Unload the current game.
     pub fn unload_game(&mut self) {
         self.session = None;

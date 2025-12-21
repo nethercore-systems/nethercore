@@ -141,23 +141,23 @@ Visit [emberware.io](https://emberware.io) to create an account and upload your 
 
 ## Console Specs Comparison
 
-*Note: Emberware Classic is documented but not yet implemented.*
+*Note: Emberware Chroma is documented but not yet implemented.*
 
-| Spec | Emberware ZX | Emberware Classic |
+| Spec | Emberware ZX | Emberware Chroma |
 |------|-------------|-------------------|
 | Generation | 5th (PS1/N64) | 4th (Genesis/SNES) |
 | Target audience | Experienced devs | Beginners, students |
-| Resolution | 360p-1080p | 8 options (16:9 + 4:3, pixel-perfect) |
-| RAM | 4MB | 4MB |
-| VRAM | 4MB | 2MB |
-| ROM size | 12MB | 16MB |
+| Resolution | 960×540 (fixed) | 256×192 (fixed) |
+| RAM | 4MB | 1MB |
+| VRAM | 4MB | — |
+| ROM size | 16MB | 4MB |
 | 3D support | Yes | No |
 | Analog input | Sticks + triggers | D-pad only |
-| Face buttons | 4 (A/B/X/Y) | 6 (A/B/C/X/Y/Z) |
-| Tilemap layers | No | Yes (4 layers) |
+| Face buttons | 4 (A/B/X/Y) | 4 (A/B/X/Y) |
+| Tilemap layers | No | Yes (2 layers) |
 | Sprite flip/priority | No | Yes |
-| Palette swapping | No | Yes |
-| Tick rate | 24-120 fps | 24-120 fps |
+| Palette swapping | No | No (64-color fixed) |
+| Tick rate | 24-120 fps | 60 fps |
 | Max players | 4 | 4 |
 | Netcode | Rollback (GGRS) | Rollback (GGRS) |
 

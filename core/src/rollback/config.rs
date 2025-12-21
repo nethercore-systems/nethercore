@@ -116,6 +116,28 @@ impl SessionConfig {
             ..Default::default()
         }
     }
+
+    /// Create config for sync test with custom parameters
+    pub fn sync_test_with_params(num_players: usize, input_delay: usize) -> Self {
+        Self {
+            num_players,
+            input_delay,
+            max_prediction_frames: MAX_ROLLBACK_FRAMES,
+            ..Default::default()
+        }
+    }
+
+    /// Set input delay (builder pattern)
+    pub fn with_input_delay(mut self, input_delay: usize) -> Self {
+        self.input_delay = input_delay.min(MAX_INPUT_DELAY);
+        self
+    }
+
+    /// Set number of players (builder pattern)
+    pub fn with_players(mut self, num_players: usize) -> Self {
+        self.num_players = num_players;
+        self
+    }
 }
 
 #[cfg(test)]
@@ -142,5 +164,49 @@ mod tests {
         let config = SessionConfig::online(2);
         assert_eq!(config.num_players, 2);
         assert_eq!(config.input_delay, DEFAULT_ONLINE_INPUT_DELAY);
+    }
+
+    #[test]
+    fn test_session_config_sync_test() {
+        let config = SessionConfig::sync_test();
+        assert_eq!(config.num_players, 1);
+        assert_eq!(config.input_delay, 0);
+        assert_eq!(config.max_prediction_frames, MAX_ROLLBACK_FRAMES);
+    }
+
+    #[test]
+    fn test_session_config_sync_test_with_params() {
+        let config = SessionConfig::sync_test_with_params(3, 5);
+        assert_eq!(config.num_players, 3);
+        assert_eq!(config.input_delay, 5);
+        assert_eq!(config.max_prediction_frames, MAX_ROLLBACK_FRAMES);
+    }
+
+    #[test]
+    fn test_session_config_with_input_delay() {
+        let config = SessionConfig::default().with_input_delay(5);
+        assert_eq!(config.input_delay, 5);
+    }
+
+    #[test]
+    fn test_session_config_with_input_delay_clamped() {
+        // Input delay should be clamped to MAX_INPUT_DELAY
+        let config = SessionConfig::default().with_input_delay(100);
+        assert_eq!(config.input_delay, MAX_INPUT_DELAY);
+    }
+
+    #[test]
+    fn test_session_config_with_players() {
+        let config = SessionConfig::default().with_players(4);
+        assert_eq!(config.num_players, 4);
+    }
+
+    #[test]
+    fn test_session_config_builder_chaining() {
+        let config = SessionConfig::default()
+            .with_players(3)
+            .with_input_delay(2);
+        assert_eq!(config.num_players, 3);
+        assert_eq!(config.input_delay, 2);
     }
 }

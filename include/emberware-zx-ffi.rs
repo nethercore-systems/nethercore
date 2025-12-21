@@ -139,12 +139,6 @@ extern "C" {
     // Configuration Functions (init-only)
     // =========================================================================
 
-    /// Set the render resolution. Must be called during `init()`.
-    ///
-    /// # Arguments
-    /// * `res` — Resolution index: 0=360p, 1=540p (default), 2=720p, 3=1080p
-    pub fn set_resolution(res: u32);
-
     /// Set the tick rate. Must be called during `init()`.
     ///
     /// # Arguments
@@ -1089,14 +1083,6 @@ pub mod billboard {
     pub const CYLINDRICAL_Y: u32 = 2;
     pub const CYLINDRICAL_X: u32 = 3;
     pub const CYLINDRICAL_Z: u32 = 4;
-}
-
-/// Resolution indices for `set_resolution()`
-pub mod resolution {
-    pub const RES_360P: u32 = 0;
-    pub const RES_540P: u32 = 1;
-    pub const RES_720P: u32 = 2;
-    pub const RES_1080P: u32 = 3;
 }
 
 /// Tick rate indices for `set_tick_rate()`

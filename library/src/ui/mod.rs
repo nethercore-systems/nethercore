@@ -4,8 +4,10 @@
 //! The UI displays locally cached games and allows users to play,
 //! delete, or browse for more games online.
 
+mod multiplayer_dialog;
 mod settings;
 
+pub use multiplayer_dialog::MultiplayerDialog;
 pub use settings::SettingsUi;
 
 use emberware_core::library::LocalGame;
@@ -103,12 +105,17 @@ impl LibraryUi {
                     ui.label(format!("By: {}", game.author));
                     ui.add_space(5.0);
 
-                    if ui.button("Play").clicked() {
-                        action = Some(UiAction::PlayGame(game_id.clone()));
-                    }
-                    if ui.button("Delete").clicked() {
-                        action = Some(UiAction::DeleteGame(game_id.clone()));
-                    }
+                    ui.horizontal(|ui| {
+                        if ui.button("Play").clicked() {
+                            action = Some(UiAction::PlayGame(game_id.clone()));
+                        }
+                        if ui.button("Play Online").clicked() {
+                            action = Some(UiAction::ShowMultiplayerDialog(game_id.clone()));
+                        }
+                        if ui.button("Delete").clicked() {
+                            action = Some(UiAction::DeleteGame(game_id.clone()));
+                        }
+                    });
                 }
 
                 ui.separator();
@@ -164,4 +171,20 @@ pub enum UiAction {
     ImportRom,
     /// Open and run a game file directly (without importing to library)
     OpenGame,
+    /// Show multiplayer dialog for a game
+    ShowMultiplayerDialog(String),
+    /// Host a multiplayer game
+    HostGame {
+        game_id: String,
+        port: u16,
+        players: usize,
+    },
+    /// Join a multiplayer game
+    JoinGame {
+        game_id: String,
+        host_ip: String,
+        port: u16,
+    },
+    /// Cancel multiplayer dialog
+    CancelMultiplayer,
 }

@@ -23,6 +23,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::Parser;
 
+use emberware_core::rollback::ConnectionMode;
 use emberware_zx::player::{PlayerConfig, run};
 
 #[derive(Parser)]
@@ -47,6 +48,49 @@ struct Args {
     /// Enable debug overlay on startup
     #[arg(long, short = 'd')]
     debug: bool,
+
+    // === Multiplayer Options ===
+    /// Number of players (1-4)
+    #[arg(long, short = 'p', default_value = "1")]
+    players: usize,
+
+    /// Input delay in frames (0-10, higher = smoother online play)
+    #[arg(long, default_value = "0")]
+    input_delay: usize,
+
+    /// Run in sync-test mode to verify game determinism
+    #[arg(long)]
+    sync_test: bool,
+
+    /// Sync-test check distance (frames between state checksums)
+    #[arg(long, default_value = "2")]
+    check_distance: usize,
+
+    // === P2P Testing (Local Development) ===
+    /// Enable P2P mode for local testing
+    #[arg(long)]
+    p2p: bool,
+
+    /// Local port to bind for P2P/Host mode
+    #[arg(long, default_value = "7777")]
+    bind: u16,
+
+    /// Peer port to connect to in P2P mode
+    #[arg(long, default_value = "7778")]
+    peer: u16,
+
+    /// Which player this instance controls (0 or 1) in P2P mode
+    #[arg(long, default_value = "0")]
+    local_player: usize,
+
+    // === Network Play ===
+    /// Host a multiplayer game on this port
+    #[arg(long)]
+    host: Option<u16>,
+
+    /// Join a multiplayer game at this address (ip:port)
+    #[arg(long)]
+    join: Option<String>,
 }
 
 fn main() -> Result<()> {
@@ -57,11 +101,46 @@ fn main() -> Result<()> {
         anyhow::bail!("ROM file not found: {}", args.rom.display());
     }
 
+    // Validate player count
+    if args.players == 0 || args.players > 4 {
+        anyhow::bail!("Player count must be between 1 and 4");
+    }
+
+    // Validate input delay
+    if args.input_delay > 10 {
+        anyhow::bail!("Input delay must be between 0 and 10");
+    }
+
+    // Determine connection mode from arguments
+    // Priority: join > host > p2p > sync_test > local
+    let connection_mode = if let Some(ref address) = args.join {
+        ConnectionMode::Join {
+            address: address.clone(),
+        }
+    } else if let Some(port) = args.host {
+        ConnectionMode::Host { port }
+    } else if args.p2p {
+        ConnectionMode::P2P {
+            bind_port: args.bind,
+            peer_port: args.peer,
+            local_player: args.local_player,
+        }
+    } else if args.sync_test {
+        ConnectionMode::SyncTest {
+            check_distance: args.check_distance,
+        }
+    } else {
+        ConnectionMode::Local
+    };
+
     let config = PlayerConfig {
         rom_path: args.rom,
         fullscreen: args.fullscreen,
         scale: args.scale,
         debug: args.debug,
+        num_players: args.players,
+        input_delay: args.input_delay,
+        connection_mode,
     };
 
     run(config)

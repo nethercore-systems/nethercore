@@ -7,13 +7,13 @@ Emberware ZX is a 5th-generation fantasy console targeting PS1/N64/Saturn aesthe
 | Spec | Value |
 |------|-------|
 | **Aesthetic** | PS1/N64/Saturn (5th gen) |
-| **Resolution** | 360p, 540p (default), 720p, 1080p |
+| **Resolution** | 960×540 (fixed, upscaled to display) |
 | **Color depth** | RGBA8 |
 | **Tick rate** | 24, 30, 60 (default), 120 fps |
-| **ROM (Cartridge)** | 12MB (WASM code + data pack assets) |
+| **ROM (Cartridge)** | 16MB (WASM code + data pack assets) |
 | **RAM** | 4MB (WASM linear memory for game state) |
 | **VRAM** | 4MB (GPU textures and mesh buffers) |
-| **CPU budget** | 4ms per tick (at 60fps) |
+| **Compute budget** | WASM GAS metering |
 | **Netcode** | Deterministic rollback via GGRS |
 | **Max players** | 4 (any mix of local + remote) |
 
@@ -43,9 +43,9 @@ pub extern "C" fn render() {
 
 ## Memory Model
 
-Emberware ZX uses a **12MB ROM + 4MB RAM** memory model:
+Emberware ZX uses a **16MB ROM + 4MB RAM** memory model:
 
-- **ROM (12MB)**: WASM bytecode + data pack (textures, meshes, sounds)
+- **ROM (16MB)**: WASM bytecode + data pack (textures, meshes, sounds)
 - **RAM (4MB)**: WASM linear memory for game state
 - **VRAM (4MB)**: GPU textures and mesh buffers
 

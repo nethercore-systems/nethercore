@@ -2,7 +2,7 @@
 //!
 //! Static analysis of WASM games to detect configuration at build time.
 //! This analyzes the bytecode without executing it, looking for calls to
-//! init-only config functions like `render_mode()` and `set_resolution()`.
+//! init-only config functions like `render_mode()` and `set_tick_rate()`.
 //!
 //! # Purpose
 //!
@@ -31,9 +31,6 @@ use wasmparser::{Operator, Parser, Payload};
 pub struct AnalysisResult {
     /// Detected render mode (0-3, defaults to 0 if not set)
     pub render_mode: u8,
-
-    /// Resolution index if set (0-3)
-    pub resolution: Option<u32>,
 
     /// Tick rate index if set (0-3)
     pub tick_rate: Option<u32>,
@@ -84,10 +81,6 @@ pub enum AnalysisError {
     #[error("invalid render mode {0} (must be 0-3)")]
     InvalidRenderMode(u8),
 
-    /// Invalid resolution (must be 0-3)
-    #[error("invalid resolution {0} (must be 0-3)")]
-    InvalidResolution(u32),
-
     /// Config function called multiple times
     #[error("{0}() called {1} times - each config function can only be called once")]
     DuplicateCall(String, usize),
@@ -113,7 +106,7 @@ struct ConfigCall {
 /// Analyze WASM bytecode to detect configuration
 ///
 /// Performs static analysis of the WASM module to find calls to
-/// config functions (render_mode, set_resolution, etc.) and extract
+/// config functions (render_mode, set_tick_rate, etc.) and extract
 /// their constant arguments.
 ///
 /// # Errors
@@ -213,14 +206,6 @@ pub fn analyze_wasm(wasm_bytes: &[u8]) -> Result<AnalysisResult, AnalysisError> 
                     result.render_mode = mode as u8;
                 }
             }
-            "set_resolution" => {
-                if let Some(res) = call.arg
-                    && res > 3
-                {
-                    return Err(AnalysisError::InvalidResolution(res));
-                }
-                result.resolution = call.arg;
-            }
             "set_tick_rate" => {
                 result.tick_rate = call.arg;
             }
@@ -238,7 +223,7 @@ pub fn analyze_wasm(wasm_bytes: &[u8]) -> Result<AnalysisResult, AnalysisError> 
 fn is_config_function(name: &str) -> bool {
     matches!(
         name,
-        "render_mode" | "set_resolution" | "set_tick_rate" | "set_clear_color"
+        "render_mode" | "set_tick_rate" | "set_clear_color"
     )
 }
 
@@ -246,11 +231,6 @@ fn is_config_function(name: &str) -> bool {
 pub fn validate_result(result: &AnalysisResult) -> Result<(), AnalysisError> {
     if result.render_mode > 3 {
         return Err(AnalysisError::InvalidRenderMode(result.render_mode));
-    }
-    if let Some(res) = result.resolution
-        && res > 3
-    {
-        return Err(AnalysisError::InvalidResolution(res));
     }
     Ok(())
 }
@@ -390,9 +370,9 @@ mod tests {
     #[test]
     fn test_is_config_function() {
         assert!(is_config_function("render_mode"));
-        assert!(is_config_function("set_resolution"));
         assert!(is_config_function("set_tick_rate"));
         assert!(is_config_function("set_clear_color"));
+        assert!(!is_config_function("set_resolution"));
         assert!(!is_config_function("draw_triangle"));
         assert!(!is_config_function("load_texture"));
     }
@@ -414,7 +394,6 @@ mod tests {
 
         let result = analyze_wasm(&wasm).unwrap();
         assert_eq!(result.render_mode, 0); // Default
-        assert_eq!(result.resolution, None);
     }
 
     #[test]
@@ -437,26 +416,6 @@ mod tests {
 
         let result = analyze_wasm(&wasm).unwrap();
         assert_eq!(result.render_mode, 2);
-    }
-
-    #[test]
-    fn test_analyze_wasm_set_resolution_call() {
-        // WASM that calls set_resolution(3)
-        let wasm = wat::parse_str(
-            r#"
-            (module
-                (import "env" "set_resolution" (func $set_resolution (param i32)))
-                (func (export "init")
-                    i32.const 3
-                    call $set_resolution
-                )
-            )
-        "#,
-        )
-        .unwrap();
-
-        let result = analyze_wasm(&wasm).unwrap();
-        assert_eq!(result.resolution, Some(3));
     }
 
     #[test]
@@ -511,13 +470,10 @@ mod tests {
             r#"
             (module
                 (import "env" "render_mode" (func $render_mode (param i32)))
-                (import "env" "set_resolution" (func $set_resolution (param i32)))
                 (import "env" "set_tick_rate" (func $set_tick_rate (param i32)))
                 (func (export "init")
                     i32.const 2
                     call $render_mode
-                    i32.const 3
-                    call $set_resolution
                     i32.const 2
                     call $set_tick_rate
                 )
@@ -528,75 +484,6 @@ mod tests {
 
         let result = analyze_wasm(&wasm).unwrap();
         assert_eq!(result.render_mode, 2);
-        assert_eq!(result.resolution, Some(3));
         assert_eq!(result.tick_rate, Some(2));
-    }
-
-    #[test]
-    fn test_analyze_wasm_duplicate_set_resolution() {
-        // WASM that calls set_resolution twice - should fail
-        let wasm = wat::parse_str(
-            r#"
-            (module
-                (import "env" "set_resolution" (func $set_resolution (param i32)))
-                (func (export "init")
-                    i32.const 1
-                    call $set_resolution
-                    i32.const 2
-                    call $set_resolution
-                )
-            )
-        "#,
-        )
-        .unwrap();
-
-        let result = analyze_wasm(&wasm);
-        assert!(matches!(
-            result,
-            Err(AnalysisError::DuplicateCall(name, 2)) if name == "set_resolution"
-        ));
-    }
-
-    #[test]
-    fn test_analyze_wasm_invalid_resolution() {
-        // WASM that calls set_resolution(5) - invalid
-        let wasm = wat::parse_str(
-            r#"
-            (module
-                (import "env" "set_resolution" (func $set_resolution (param i32)))
-                (func (export "init")
-                    i32.const 5
-                    call $set_resolution
-                )
-            )
-        "#,
-        )
-        .unwrap();
-
-        let result = analyze_wasm(&wasm);
-        assert!(matches!(result, Err(AnalysisError::InvalidResolution(5))));
-    }
-
-    #[test]
-    fn test_validation_invalid_resolution() {
-        let result = AnalysisResult {
-            resolution: Some(4),
-            ..Default::default()
-        };
-        assert!(matches!(
-            validate_result(&result),
-            Err(AnalysisError::InvalidResolution(4))
-        ));
-    }
-
-    #[test]
-    fn test_validation_valid_resolutions() {
-        for res in 0..=3 {
-            let result = AnalysisResult {
-                resolution: Some(res),
-                ..Default::default()
-            };
-            assert!(validate_result(&result).is_ok());
-        }
     }
 }

@@ -44,6 +44,7 @@
 //! - `local_socket`: UDP socket for local network testing
 
 mod config;
+mod connection;
 mod events;
 pub mod local_socket;
 mod player;
@@ -73,3 +74,6 @@ pub use events::{ConnectionQuality, PlayerNetworkStats, SessionError, SessionEve
 
 // Re-export public types from local_socket
 pub use local_socket::{DEFAULT_LOCAL_PORT, LocalSocket, LocalSocketError};
+
+// Re-export public types from connection
+pub use connection::{ConnectionMode, ConnectionState};

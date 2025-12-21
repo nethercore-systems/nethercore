@@ -6,6 +6,9 @@ All Emberware ZX FFI functions on one page.
 
 ## System
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 delta_time() -> f32                    // Seconds since last tick
 elapsed_time() -> f32                  // Total seconds since start
@@ -16,22 +19,75 @@ random() -> u32                        // Deterministic random
 player_count() -> u32                  // Number of players (1-4)
 local_player_mask() -> u32             // Bitmask of local players
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+float delta_time(void);                // Seconds since last tick
+float elapsed_time(void);              // Total seconds since start
+uint64_t tick_count(void);             // Current tick number
+void log_msg(ptr, len);                // Log message to console
+void quit(void);                       // Exit to library
+uint32_t random_u32(void);             // Deterministic random
+uint32_t player_count(void);           // Number of players (1-4)
+uint32_t local_player_mask(void);      // Bitmask of local players
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+delta_time() f32                       // Seconds since last tick
+elapsed_time() f32                     // Total seconds since start
+tick_count() u64                       // Current tick number
+log_msg(ptr, len) void                 // Log message to console
+quit() void                            // Exit to library
+random_u32() u32                       // Deterministic random
+player_count() u32                     // Number of players (1-4)
+local_player_mask() u32                // Bitmask of local players
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ---
 
 ## Configuration (Init-Only)
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
-set_resolution(res)                    // 0=360p, 1=540p, 2=720p, 3=1080p
 set_tick_rate(fps)                     // 0=24, 1=30, 2=60, 3=120
 set_clear_color(0xRRGGBBAA)            // Background color
 render_mode(mode)                      // 0=Unlit, 1=Matcap, 2=MR, 3=SS
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+void set_tick_rate(uint32_t fps);      // EWZX_TICK_RATE_24/30/60/120
+void set_clear_color(uint32_t color);  // Background color
+void render_mode(uint32_t mode);       // EWZX_RENDER_LAMBERT/MATCAP/PBR/HYBRID
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+set_tick_rate(fps: u32) void           // 0=24, 1=30, 2=60, 3=120
+set_clear_color(color: u32) void       // Background color
+render_mode(mode: u32) void            // 0=Unlit, 1=Matcap, 2=MR, 3=SS
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ---
 
 ## Input
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 // Buttons (player: 0-3, button: 0-13)
 button_held(player, button) -> u32     // 1 if held
@@ -55,22 +111,103 @@ trigger_right(player) -> f32
 ```
 
 **Button Constants:** UP=0, DOWN=1, LEFT=2, RIGHT=3, A=4, B=5, X=6, Y=7, LB=8, RB=9, L3=10, R3=11, START=12, SELECT=13
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+// Buttons (player: 0-3, button: EWZX_BUTTON_*)
+uint32_t button_held(player, button);     // 1 if held
+uint32_t button_pressed(player, button);  // 1 if just pressed
+uint32_t button_released(player, button); // 1 if just released
+uint32_t buttons_held(player);            // Bitmask of held
+uint32_t buttons_pressed(player);         // Bitmask of pressed
+uint32_t buttons_released(player);        // Bitmask of released
+
+// Sticks (-1.0 to 1.0)
+float left_stick_x(player);
+float left_stick_y(player);
+float right_stick_x(player);
+float right_stick_y(player);
+void left_stick(player, float* x, float* y);   // Both axes
+void right_stick(player, float* x, float* y);
+
+// Triggers (0.0 to 1.0)
+float trigger_left(player);
+float trigger_right(player);
+```
+
+**Button Constants:** `EWZX_BUTTON_UP`=0, `EWZX_BUTTON_DOWN`=1, `EWZX_BUTTON_LEFT`=2, `EWZX_BUTTON_RIGHT`=3, `EWZX_BUTTON_A`=4, `EWZX_BUTTON_B`=5, `EWZX_BUTTON_X`=6, `EWZX_BUTTON_Y`=7, `EWZX_BUTTON_L1`=8, `EWZX_BUTTON_R1`=9, `EWZX_BUTTON_L3`=10, `EWZX_BUTTON_R3`=11, `EWZX_BUTTON_START`=12, `EWZX_BUTTON_SELECT`=13
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+// Buttons (player: 0-3, button: Button.*)
+button_held(player: u32, button: u32) u32     // 1 if held
+button_pressed(player: u32, button: u32) u32  // 1 if just pressed
+button_released(player: u32, button: u32) u32 // 1 if just released
+buttons_held(player: u32) u32                 // Bitmask of held
+buttons_pressed(player: u32) u32              // Bitmask of pressed
+buttons_released(player: u32) u32             // Bitmask of released
+
+// Sticks (-1.0 to 1.0)
+left_stick_x(player: u32) f32
+left_stick_y(player: u32) f32
+right_stick_x(player: u32) f32
+right_stick_y(player: u32) f32
+left_stick(player: u32, x: *f32, y: *f32) void  // Both axes
+right_stick(player: u32, x: *f32, y: *f32) void
+
+// Triggers (0.0 to 1.0)
+trigger_left(player: u32) f32
+trigger_right(player: u32) f32
+```
+
+**Button Constants:** `Button.up`=0, `Button.down`=1, `Button.left`=2, `Button.right`=3, `Button.a`=4, `Button.b`=5, `Button.x`=6, `Button.y`=7, `Button.l1`=8, `Button.r1`=9, `Button.l3`=10, `Button.r3`=11, `Button.start`=12, `Button.select`=13
+{{#endtab}}
+
+{{#endtabs}}
 
 ---
 
 ## Camera
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 camera_set(x, y, z, target_x, target_y, target_z)
 camera_fov(degrees)                    // Default: 60
 push_view_matrix(m0..m15)              // Custom 4x4 view matrix
 push_projection_matrix(m0..m15)        // Custom 4x4 projection
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+void camera_set(x, y, z, target_x, target_y, target_z);
+void camera_fov(float degrees);        // Default: 60
+void push_view_matrix(m0..m15);        // Custom 4x4 view matrix
+void push_projection_matrix(m0..m15);  // Custom 4x4 projection
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32) void
+camera_fov(degrees: f32) void          // Default: 60
+// push_view_matrix and push_projection_matrix take 16 f32 parameters
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ---
 
 ## Transforms
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 push_identity()                        // Reset to identity
 transform_set(matrix_ptr)              // Set from 4x4 matrix
@@ -82,11 +219,45 @@ push_rotate(degrees, axis_x, axis_y, axis_z)
 push_scale(x, y, z)
 push_scale_uniform(s)
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+void push_identity(void);              // Reset to identity
+void transform_set(const float* matrix_ptr);  // Set from 4x4 matrix
+void push_translate(float x, float y, float z);
+void push_rotate_x(float degrees);
+void push_rotate_y(float degrees);
+void push_rotate_z(float degrees);
+void push_rotate(float degrees, float axis_x, float axis_y, float axis_z);
+void push_scale(float x, float y, float z);
+void push_scale_uniform(float s);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+push_identity() void                   // Reset to identity
+transform_set(matrix_ptr: [*]const f32) void  // Set from 4x4 matrix
+push_translate(x: f32, y: f32, z: f32) void
+push_rotate_x(degrees: f32) void
+push_rotate_y(degrees: f32) void
+push_rotate_z(degrees: f32) void
+push_rotate(degrees: f32, axis_x: f32, axis_y: f32, axis_z: f32) void
+push_scale(x: f32, y: f32, z: f32) void
+push_scale_uniform(s: f32) void
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ---
 
 ## Render State
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 set_color(0xRRGGBBAA)                  // Tint color
 depth_test(enabled)                    // 0=off, 1=on
@@ -96,22 +267,76 @@ texture_filter(filter)                 // 0=nearest, 1=linear
 uniform_alpha(level)                   // 0-15 dither alpha
 dither_offset(x, y)                    // 0-3 pattern offset
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+void set_color(uint32_t color);        // Tint color
+void depth_test(uint32_t enabled);     // 0=off, 1=on
+void cull_mode(uint32_t mode);         // EWZX_CULL_NONE/BACK/FRONT
+void blend_mode(uint32_t mode);        // EWZX_BLEND_NONE/ALPHA/ADDITIVE/MULTIPLY
+void texture_filter(uint32_t filter);  // 0=nearest, 1=linear
+void uniform_alpha(uint32_t level);    // 0-15 dither alpha
+void dither_offset(uint32_t x, uint32_t y);  // 0-3 pattern offset
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+set_color(color: u32) void             // Tint color
+depth_test(enabled: u32) void          // 0=off, 1=on
+cull_mode(mode: u32) void              // CullMode.none/back/front
+blend_mode(mode: u32) void             // BlendMode.none/alpha/additive/multiply
+texture_filter(filter: u32) void       // 0=nearest, 1=linear
+uniform_alpha(level: u32) void         // 0-15 dither alpha
+dither_offset(x: u32, y: u32) void     // 0-3 pattern offset
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ---
 
 ## Textures
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 load_texture(w, h, pixels_ptr) -> u32  // Init-only, returns handle
 texture_bind(handle)                   // Bind to slot 0
 texture_bind_slot(handle, slot)        // Bind to slot 0-3
 matcap_blend_mode(slot, mode)          // 0=mul, 1=add, 2=hsv
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+uint32_t load_texture(uint32_t w, uint32_t h, const uint8_t* pixels);  // Init-only
+void texture_bind(uint32_t handle);    // Bind to slot 0
+void texture_bind_slot(uint32_t handle, uint32_t slot);  // Bind to slot 0-3
+void matcap_blend_mode(uint32_t slot, uint32_t mode);    // 0=mul, 1=add, 2=hsv
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+load_texture(w: u32, h: u32, pixels: [*]const u8) u32  // Init-only
+texture_bind(handle: u32) void         // Bind to slot 0
+texture_bind_slot(handle: u32, slot: u32) void  // Bind to slot 0-3
+matcap_blend_mode(slot: u32, mode: u32) void    // 0=mul, 1=add, 2=hsv
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ---
 
 ## Meshes
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 // Retained (init-only)
 load_mesh(data_ptr, vertex_count, format) -> u32
@@ -126,11 +351,52 @@ draw_triangles_indexed(data_ptr, vcount, idx_ptr, icount, fmt)
 ```
 
 **Vertex Formats:** POS=0, UV=1, COLOR=2, UV_COLOR=3, NORMAL=4, UV_NORMAL=5, COLOR_NORMAL=6, UV_COLOR_NORMAL=7, +SKINNED=8
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+// Retained (init-only)
+uint32_t load_mesh(const float* data, uint32_t vcount, uint32_t fmt);
+uint32_t load_mesh_indexed(const float* data, uint32_t vcount,
+                           const uint16_t* idx, uint32_t icount, uint32_t fmt);
+uint32_t load_mesh_packed(const uint8_t* data, uint32_t vcount, uint32_t fmt);
+uint32_t load_mesh_indexed_packed(const uint8_t* data, uint32_t vcount,
+                                  const uint16_t* idx, uint32_t icount, uint32_t fmt);
+void draw_mesh(uint32_t handle);
+
+// Immediate
+void draw_triangles(const float* data, uint32_t vcount, uint32_t fmt);
+void draw_triangles_indexed(const float* data, uint32_t vcount,
+                            const uint16_t* idx, uint32_t icount, uint32_t fmt);
+```
+
+**Vertex Formats:** `EWZX_FORMAT_POS`=0, `EWZX_FORMAT_UV`=1, `EWZX_FORMAT_COLOR`=2, `EWZX_FORMAT_NORMAL`=4, `EWZX_FORMAT_SKINNED`=8 (combinable)
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+// Retained (init-only)
+load_mesh(data: [*]const f32, vcount: u32, fmt: u32) u32
+load_mesh_indexed(data: [*]const f32, vcount: u32, idx: [*]const u16, icount: u32, fmt: u32) u32
+draw_mesh(handle: u32) void
+
+// Immediate
+draw_triangles(data: [*]const f32, vcount: u32, fmt: u32) void
+draw_triangles_indexed(data: [*]const f32, vcount: u32, idx: [*]const u16, icount: u32, fmt: u32) void
+```
+
+**Vertex Formats:** `Format.pos`=0, `Format.uv`=1, `Format.color`=2, `Format.normal`=4, `Format.skinned`=8 (combinable)
+{{#endtab}}
+
+{{#endtabs}}
 
 ---
 
 ## Procedural Meshes (Init-Only)
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 cube(sx, sy, sz) -> u32
 sphere(radius, segments, rings) -> u32
@@ -142,11 +408,45 @@ capsule(radius, height, segments, rings) -> u32
 // With explicit UV naming (same behavior)
 cube_uv, sphere_uv, cylinder_uv, plane_uv, torus_uv, capsule_uv
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+uint32_t cube(float sx, float sy, float sz);
+uint32_t sphere(float radius, uint32_t segments, uint32_t rings);
+uint32_t cylinder(float r_bot, float r_top, float height, uint32_t segments);
+uint32_t plane(float sx, float sz, uint32_t subdiv_x, uint32_t subdiv_z);
+uint32_t torus(float major_r, float minor_r, uint32_t major_seg, uint32_t minor_seg);
+uint32_t capsule(float radius, float height, uint32_t segments, uint32_t rings);
+
+// With explicit UV naming (same behavior)
+cube_uv, sphere_uv, cylinder_uv, plane_uv, torus_uv, capsule_uv
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+cube(sx: f32, sy: f32, sz: f32) u32
+sphere(radius: f32, segments: u32, rings: u32) u32
+cylinder(r_bot: f32, r_top: f32, height: f32, segments: u32) u32
+plane(sx: f32, sz: f32, subdiv_x: u32, subdiv_z: u32) u32
+torus(major_r: f32, minor_r: f32, major_seg: u32, minor_seg: u32) u32
+capsule(radius: f32, height: f32, segments: u32, rings: u32) u32
+
+// With explicit UV naming (same behavior)
+cube_uv, sphere_uv, cylinder_uv, plane_uv, torus_uv, capsule_uv
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ---
 
 ## Materials
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 // Mode 2 (Metallic-Roughness)
 material_metallic(value)               // 0.0-1.0
@@ -170,11 +470,69 @@ use_uniform_emissive(enabled)
 use_uniform_specular(enabled)
 use_matcap_reflection(enabled)
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+// Mode 2 (Metallic-Roughness)
+void material_metallic(float value);   // 0.0-1.0
+void material_roughness(float value);  // 0.0-1.0
+void material_emissive(float value);   // Glow intensity
+void material_rim(float intensity, float power);  // Rim light
+void material_albedo(uint32_t texture);    // Bind to slot 0
+void material_mre(uint32_t texture);       // Bind MRE to slot 1
+
+// Mode 3 (Specular-Shininess)
+void material_shininess(float value);  // 0.0-1.0 → 1-256
+void material_specular(uint32_t color);    // Specular color
+void material_specular_color(float r, float g, float b);
+void material_specular_damping(float value);
+
+// Override flags
+void use_uniform_color(uint32_t enabled);
+void use_uniform_metallic(uint32_t enabled);
+void use_uniform_roughness(uint32_t enabled);
+void use_uniform_emissive(uint32_t enabled);
+void use_uniform_specular(uint32_t enabled);
+void use_matcap_reflection(uint32_t enabled);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+// Mode 2 (Metallic-Roughness)
+material_metallic(value: f32) void     // 0.0-1.0
+material_roughness(value: f32) void    // 0.0-1.0
+material_emissive(value: f32) void     // Glow intensity
+material_rim(intensity: f32, power: f32) void  // Rim light
+material_albedo(texture: u32) void     // Bind to slot 0
+material_mre(texture: u32) void        // Bind MRE to slot 1
+
+// Mode 3 (Specular-Shininess)
+material_shininess(value: f32) void    // 0.0-1.0 → 1-256
+material_specular(color: u32) void     // Specular color
+material_specular_color(r: f32, g: f32, b: f32) void
+material_specular_damping(value: f32) void
+
+// Override flags
+use_uniform_color(enabled: u32) void
+use_uniform_metallic(enabled: u32) void
+use_uniform_roughness(enabled: u32) void
+use_uniform_emissive(enabled: u32) void
+use_uniform_specular(enabled: u32) void
+use_matcap_reflection(enabled: u32) void
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ---
 
 ## Lighting
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 // Directional lights (index 0-3)
 light_set(index, dir_x, dir_y, dir_z)
@@ -187,22 +545,82 @@ light_disable(index)
 light_set_point(index, x, y, z)
 light_range(index, range)
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+// Directional lights (index 0-3)
+void light_set(uint32_t index, float dir_x, float dir_y, float dir_z);
+void light_color(uint32_t index, uint32_t color);
+void light_intensity(uint32_t index, float intensity);  // 0.0-8.0
+void light_enable(uint32_t index);
+void light_disable(uint32_t index);
+
+// Point lights
+void light_set_point(uint32_t index, float x, float y, float z);
+void light_range(uint32_t index, float range);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+// Directional lights (index 0-3)
+light_set(index: u32, dir_x: f32, dir_y: f32, dir_z: f32) void
+light_color(index: u32, color: u32) void
+light_intensity(index: u32, intensity: f32) void  // 0.0-8.0
+light_enable(index: u32) void
+light_disable(index: u32) void
+
+// Point lights
+light_set_point(index: u32, x: f32, y: f32, z: f32) void
+light_range(index: u32, range: f32) void
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ---
 
 ## Sky & Matcap
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 sky_set_colors(horizon, zenith)        // 0xRRGGBBAA colors
 sky_set_sun(dx, dy, dz, color, sharpness)
 draw_sky()                             // Call first in render()
 matcap_set(slot, texture)              // Slot 1-3
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+void sky_set_colors(uint32_t horizon, uint32_t zenith);
+void sky_set_sun(float dx, float dy, float dz, uint32_t color, float sharpness);
+void draw_sky(void);                   // Call first in render()
+void matcap_set(uint32_t slot, uint32_t texture);  // Slot 1-3
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+sky_set_colors(horizon: u32, zenith: u32) void
+sky_set_sun(dx: f32, dy: f32, dz: f32, color: u32, sharpness: f32) void
+draw_sky() void                        // Call first in render()
+matcap_set(slot: u32, texture: u32) void  // Slot 1-3
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ---
 
 ## 2D Drawing
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 draw_sprite(x, y, w, h, color)
 draw_sprite_region(x, y, w, h, src_x, src_y, src_w, src_h, color)
@@ -213,31 +631,114 @@ load_font(tex, char_w, char_h, first_cp, count) -> u32
 load_font_ex(tex, widths_ptr, char_h, first_cp, count) -> u32
 font_bind(handle)
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+void draw_sprite(float x, float y, float w, float h, uint32_t color);
+void draw_sprite_region(float x, float y, float w, float h,
+                        float src_x, float src_y, float src_w, float src_h, uint32_t color);
+void draw_sprite_ex(float x, float y, float w, float h,
+                    float src_x, float src_y, float src_w, float src_h,
+                    float ox, float oy, float angle, uint32_t color);
+void draw_rect(float x, float y, float w, float h, uint32_t color);
+void draw_text(const uint8_t* ptr, uint32_t len, float x, float y, float size, uint32_t color);
+uint32_t load_font(uint32_t tex, uint32_t char_w, uint32_t char_h, uint32_t first_cp, uint32_t count);
+uint32_t load_font_ex(uint32_t tex, const uint8_t* widths, uint32_t char_h, uint32_t first_cp, uint32_t count);
+void font_bind(uint32_t handle);
+// Helper: EWZX_DRAW_TEXT("Hello", x, y, size, color)
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+draw_sprite(x: f32, y: f32, w: f32, h: f32, color: u32) void
+draw_sprite_region(x: f32, y: f32, w: f32, h: f32, src_x: f32, src_y: f32, src_w: f32, src_h: f32, color: u32) void
+draw_sprite_ex(x: f32, y: f32, w: f32, h: f32, src_x: f32, src_y: f32, src_w: f32, src_h: f32, ox: f32, oy: f32, angle: f32, color: u32) void
+draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32) void
+draw_text(ptr: [*]const u8, len: u32, x: f32, y: f32, size: f32, color: u32) void
+load_font(tex: u32, char_w: u32, char_h: u32, first_cp: u32, count: u32) u32
+load_font_ex(tex: u32, widths: [*]const u8, char_h: u32, first_cp: u32, count: u32) u32
+font_bind(handle: u32) void
+// Helper: zx.text("Hello", x, y, size, color)
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ---
 
 ## Billboards
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 draw_billboard(w, h, mode, color)      // mode: 1=sphere, 2=cylY, 3=cylX, 4=cylZ
 draw_billboard_region(w, h, sx, sy, sw, sh, mode, color)
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+void draw_billboard(float w, float h, uint32_t mode, uint32_t color);
+void draw_billboard_region(float w, float h, float sx, float sy, float sw, float sh, uint32_t mode, uint32_t color);
+// Modes: EWZX_BILLBOARD_SPHERICAL, EWZX_BILLBOARD_CYLINDRICAL_Y/X/Z
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+draw_billboard(w: f32, h: f32, mode: u32, color: u32) void
+draw_billboard_region(w: f32, h: f32, sx: f32, sy: f32, sw: f32, sh: f32, mode: u32, color: u32) void
+// Modes: Billboard.spherical, Billboard.cylindrical_y/x/z
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ---
 
 ## Skinning
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 load_skeleton(inverse_bind_ptr, bone_count) -> u32  // Init-only
 skeleton_bind(skeleton)                // 0 to disable
 set_bones(matrices_ptr, count)         // 12 floats per bone (3x4)
 set_bones_4x4(matrices_ptr, count)     // 16 floats per bone (4x4)
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+uint32_t load_skeleton(const float* inverse_bind_ptr, uint32_t bone_count);  // Init-only
+void skeleton_bind(uint32_t skeleton); // 0 to disable
+void set_bones(const float* matrices_ptr, uint32_t count);  // 12 floats per bone (3x4)
+void set_bones_4x4(const float* matrices_ptr, uint32_t count);  // 16 floats per bone (4x4)
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+load_skeleton(inverse_bind: [*]const f32, bone_count: u32) u32  // Init-only
+skeleton_bind(skeleton: u32) void      // 0 to disable
+set_bones(matrices: [*]const f32, count: u32) void  // 12 floats per bone (3x4)
+set_bones_4x4(matrices: [*]const f32, count: u32) void  // 16 floats per bone (4x4)
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ---
 
 ## Animation
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 keyframes_load(data_ptr, byte_size) -> u32  // Init-only
 rom_keyframes(id_ptr, id_len) -> u32        // Init-only
@@ -246,11 +747,39 @@ keyframes_frame_count(handle) -> u32
 keyframe_bind(handle, frame_index)          // GPU-side, no CPU decode
 keyframe_read(handle, frame_index, out_ptr) // Read to WASM for blending
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+uint32_t keyframes_load(const uint8_t* data, uint32_t byte_size);  // Init-only
+uint32_t rom_keyframes(uint32_t id_ptr, uint32_t id_len);          // Init-only
+uint32_t keyframes_bone_count(uint32_t handle);
+uint32_t keyframes_frame_count(uint32_t handle);
+void keyframe_bind(uint32_t handle, uint32_t frame_index);  // GPU-side
+void keyframe_read(uint32_t handle, uint32_t frame_index, float* out_ptr);  // Read for blending
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+keyframes_load(data: [*]const u8, byte_size: u32) u32  // Init-only
+rom_keyframes(id_ptr: u32, id_len: u32) u32            // Init-only
+keyframes_bone_count(handle: u32) u32
+keyframes_frame_count(handle: u32) u32
+keyframe_bind(handle: u32, frame_index: u32) void      // GPU-side
+keyframe_read(handle: u32, frame_index: u32, out: [*]f32) void  // Read for blending
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ---
 
 ## Audio
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 load_sound(data_ptr, byte_len) -> u32  // Init-only, 22kHz 16-bit mono
 play_sound(sound, volume, pan)         // Auto-select channel
@@ -261,21 +790,75 @@ music_play(sound, volume)
 music_stop()
 music_set_volume(volume)
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+uint32_t load_sound(const int16_t* data, uint32_t byte_len);  // Init-only
+void play_sound(uint32_t sound, float volume, float pan);  // Auto-select channel
+void channel_play(uint32_t ch, uint32_t sound, float vol, float pan, uint32_t loop);
+void channel_set(uint32_t ch, float volume, float pan);
+void channel_stop(uint32_t ch);
+void music_play(uint32_t sound, float volume);
+void music_stop(void);
+void music_set_volume(float volume);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+load_sound(data: [*]const i16, byte_len: u32) u32  // Init-only
+play_sound(sound: u32, volume: f32, pan: f32) void  // Auto-select channel
+channel_play(ch: u32, sound: u32, vol: f32, pan: f32, loop: u32) void
+channel_set(ch: u32, volume: f32, pan: f32) void
+channel_stop(ch: u32) void
+music_play(sound: u32, volume: f32) void
+music_stop() void
+music_set_volume(volume: f32) void
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ---
 
 ## Save Data
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 save(slot, data_ptr, data_len) -> u32  // 0=ok, 1=bad slot, 2=too big
 load(slot, data_ptr, max_len) -> u32   // Returns bytes read
 delete(slot) -> u32                    // 0=ok, 1=bad slot
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+uint32_t save(uint32_t slot, const uint8_t* data, uint32_t len);  // 0=ok, 1=bad slot, 2=too big
+uint32_t load(uint32_t slot, uint8_t* data, uint32_t max_len);    // Returns bytes read
+uint32_t delete_save(uint32_t slot);   // 0=ok, 1=bad slot
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+save(slot: u32, data: [*]const u8, len: u32) u32  // 0=ok, 1=bad slot, 2=too big
+load(slot: u32, data: [*]u8, max_len: u32) u32    // Returns bytes read
+delete_save(slot: u32) u32             // 0=ok, 1=bad slot
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ---
 
 ## ROM Loading (Init-Only)
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 rom_texture(id_ptr, id_len) -> u32
 rom_mesh(id_ptr, id_len) -> u32
@@ -286,11 +869,44 @@ rom_keyframes(id_ptr, id_len) -> u32
 rom_data_len(id_ptr, id_len) -> u32
 rom_data(id_ptr, id_len, out_ptr, max_len) -> u32
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+uint32_t rom_texture(uint32_t id_ptr, uint32_t id_len);
+uint32_t rom_mesh(uint32_t id_ptr, uint32_t id_len);
+uint32_t rom_skeleton(uint32_t id_ptr, uint32_t id_len);
+uint32_t rom_font(uint32_t id_ptr, uint32_t id_len);
+uint32_t rom_sound(uint32_t id_ptr, uint32_t id_len);
+uint32_t rom_keyframes(uint32_t id_ptr, uint32_t id_len);
+uint32_t rom_data_len(uint32_t id_ptr, uint32_t id_len);
+uint32_t rom_data(uint32_t id_ptr, uint32_t id_len, uint32_t out_ptr, uint32_t max_len);
+// Helpers: EWZX_ROM_TEXTURE("id"), EWZX_ROM_MESH("id"), etc.
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+rom_texture(id_ptr: u32, id_len: u32) u32
+rom_mesh(id_ptr: u32, id_len: u32) u32
+rom_skeleton(id_ptr: u32, id_len: u32) u32
+rom_font(id_ptr: u32, id_len: u32) u32
+rom_sound(id_ptr: u32, id_len: u32) u32
+rom_keyframes(id_ptr: u32, id_len: u32) u32
+rom_data_len(id_ptr: u32, id_len: u32) u32
+rom_data(id_ptr: u32, id_len: u32, out_ptr: u32, max_len: u32) u32
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ---
 
 ## Debug
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 // Registration (init-only)
 debug_register_i8/i16/i32(name_ptr, name_len, ptr)
@@ -315,5 +931,57 @@ debug_group_end()
 debug_is_paused() -> i32               // 1 if paused
 debug_get_time_scale() -> f32          // 1.0 = normal
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+// Registration (init-only)
+void debug_register_i8/i16/i32(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+void debug_register_u8/u16/u32(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+void debug_register_f32(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+void debug_register_bool(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+void debug_register_i32_range(uint32_t name_ptr, uint32_t name_len, uint32_t ptr, int32_t min, int32_t max);
+void debug_register_f32_range(uint32_t name_ptr, uint32_t name_len, uint32_t ptr, float min, float max);
+void debug_register_vec2/vec3/rect/color(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+
+// Watch (read-only)
+void debug_watch_i8/i16/i32/u8/u16/u32/f32/bool(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+void debug_watch_vec2/vec3/rect/color(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+
+// Groups
+void debug_group_begin(uint32_t name_ptr, uint32_t name_len);
+void debug_group_end(void);
+
+// Frame control
+int32_t debug_is_paused(void);         // 1 if paused
+float debug_get_time_scale(void);      // 1.0 = normal
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+// Registration (init-only) - similar pattern for all types
+debug_register_f32(name_ptr: u32, name_len: u32, ptr: u32) void
+debug_register_i32(name_ptr: u32, name_len: u32, ptr: u32) void
+debug_register_bool(name_ptr: u32, name_len: u32, ptr: u32) void
+debug_register_i32_range(name_ptr: u32, name_len: u32, ptr: u32, min: i32, max: i32) void
+debug_register_f32_range(name_ptr: u32, name_len: u32, ptr: u32, min: f32, max: f32) void
+debug_register_vec2/vec3/rect/color(name_ptr: u32, name_len: u32, ptr: u32) void
+
+// Watch (read-only) - similar pattern
+debug_watch_f32(name_ptr: u32, name_len: u32, ptr: u32) void
+debug_watch_vec2/vec3/rect/color(name_ptr: u32, name_len: u32, ptr: u32) void
+
+// Groups
+debug_group_begin(name_ptr: u32, name_len: u32) void
+debug_group_end() void
+
+// Frame control
+debug_is_paused() i32                  // 1 if paused
+debug_get_time_scale() f32             // 1.0 = normal
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 **Keyboard:** F3=panel, F5=pause, F6=step, F7/F8=time scale

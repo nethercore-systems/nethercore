@@ -146,21 +146,6 @@ pub(crate) fn validate_vertex_format(format: u32, fn_name: &str) -> Option<u8> {
     Some(format as u8)
 }
 
-/// Validate a mode/enum value is within range [0, max].
-///
-/// Returns `Some(mode as u8)` if valid, `None` with warning if invalid.
-#[inline]
-pub(crate) fn validate_mode_max(mode: u32, max: u32, fn_name: &str, mode_name: &str) -> Option<u8> {
-    if mode > max {
-        warn!(
-            "{}: invalid {} {} (must be 0-{})",
-            fn_name, mode_name, mode, max
-        );
-        return None;
-    }
-    Some(mode as u8)
-}
-
 /// Validate a count is non-zero.
 ///
 /// Returns `true` if valid (count > 0), `false` with warning if zero.
@@ -168,21 +153,6 @@ pub(crate) fn validate_mode_max(mode: u32, max: u32, fn_name: &str, mode_name: &
 pub(crate) fn validate_count_nonzero(count: u32, fn_name: &str, count_name: &str) -> bool {
     if count == 0 {
         warn!("{}: {} cannot be 0", fn_name, count_name);
-        return false;
-    }
-    true
-}
-
-/// Validate a count doesn't exceed a maximum.
-///
-/// Returns `true` if valid (count <= max), `false` with warning if exceeded.
-#[inline]
-pub(crate) fn validate_count_max(count: u32, max: u32, fn_name: &str, count_name: &str) -> bool {
-    if count > max {
-        warn!(
-            "{}: {} {} exceeds maximum {}",
-            fn_name, count_name, count, max
-        );
         return false;
     }
     true

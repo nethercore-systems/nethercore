@@ -15,11 +15,14 @@ use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Fullscreen, Window};
 
+use ggrs::PlayerType;
+
 use crate::capture::{CaptureSupport, ScreenCapture, read_render_target_pixels};
 use crate::console::{Audio, AudioGenerator, Console, ConsoleResourceManager};
 use crate::debug::registry::RegisteredValue;
 use crate::debug::types::DebugValue;
 use crate::debug::{ActionRequest, FrameController};
+use crate::rollback::{ConnectionMode, ConnectionQuality, LocalSocket, RollbackSession, SessionConfig, SessionType};
 use crate::runner::ConsoleRunner;
 
 use super::config::ScaleMode;
@@ -85,6 +88,12 @@ pub struct StandaloneConfig {
     pub scale: u32,
     /// Enable debug overlay
     pub debug: bool,
+    /// Number of players (1-4)
+    pub num_players: usize,
+    /// Input delay in frames (0-10)
+    pub input_delay: usize,
+    /// Connection mode for multiplayer
+    pub connection_mode: ConnectionMode,
 }
 
 /// Settings action from settings panel.
@@ -360,7 +369,9 @@ where
     capture: ScreenCapture,
     screenshot_key: KeyCode,
     gif_toggle_key: KeyCode,
-    vram_limit: usize,
+    /// Network statistics overlay visibility (F12)
+    network_overlay_visible: bool,
+    _vram_limit: usize,
     _loader_marker: std::marker::PhantomData<L>,
 }
 
@@ -433,7 +444,8 @@ where
             capture,
             screenshot_key,
             gif_toggle_key,
-            vram_limit,
+            network_overlay_visible: false,
+            _vram_limit: vram_limit,
             _loader_marker: std::marker::PhantomData,
         }
     }
@@ -523,7 +535,7 @@ where
                     self.needs_redraw = true;
                 }
                 PhysicalKey::Code(KeyCode::F4) => {
-                    self.debug_panel.toggle();
+                    self.network_overlay_visible = !self.network_overlay_visible;
                     self.needs_redraw = true;
                 }
                 PhysicalKey::Code(KeyCode::F5) => {
@@ -545,6 +557,10 @@ where
                             self.settings_panel.fullscreen = true;
                         }
                     }
+                }
+                PhysicalKey::Code(KeyCode::F12) => {
+                    self.debug_panel.toggle();
+                    self.needs_redraw = true;
                 }
                 PhysicalKey::Code(key) if key == self.screenshot_key => {
                     self.capture.request_screenshot();
@@ -731,7 +747,7 @@ where
         let console = rom.console.clone();
         let specs = C::specs();
 
-        let (render_width, render_height) = specs.resolutions[specs.default_resolution];
+        let (render_width, render_height) = specs.resolution;
         window.set_min_inner_size(Some(winit::dpi::PhysicalSize::new(
             render_width,
             render_height,
@@ -740,9 +756,120 @@ where
         let mut runner = ConsoleRunner::new(console.clone(), window.clone())?;
         runner.graphics_mut().set_scale_mode(self.scale_mode);
 
-        runner
-            .load_game(rom.console, &rom.code, 1)
-            .context("Failed to load game")?;
+        // Create session based on connection mode
+        match &self.config.connection_mode {
+            ConnectionMode::Local => {
+                // Standard local session (no rollback)
+                runner
+                    .load_game(rom.console, &rom.code, self.config.num_players)
+                    .context("Failed to load game")?;
+            }
+            ConnectionMode::SyncTest { check_distance } => {
+                // Sync test session for determinism testing
+                let session_config = SessionConfig::sync_test_with_params(
+                    self.config.num_players,
+                    self.config.input_delay,
+                );
+                let session = RollbackSession::new_sync_test(session_config, specs.ram_limit)
+                    .context("Failed to create sync test session")?;
+                runner
+                    .load_game_with_session(rom.console, &rom.code, session)
+                    .context("Failed to load game with sync test session")?;
+                tracing::info!(
+                    "Sync test mode enabled (check_distance: {})",
+                    check_distance
+                );
+            }
+            ConnectionMode::P2P {
+                bind_port,
+                peer_port,
+                local_player,
+            } => {
+                // Local P2P testing mode
+                let mut socket = LocalSocket::bind(&format!("127.0.0.1:{}", bind_port))
+                    .context("Failed to bind local socket")?;
+                socket
+                    .connect(&format!("127.0.0.1:{}", peer_port))
+                    .context("Failed to connect to peer")?;
+
+                let peer_addr = format!("127.0.0.1:{}", peer_port);
+                let session_config = SessionConfig::online(2)
+                    .with_input_delay(self.config.input_delay);
+
+                let players = vec![
+                    (
+                        0,
+                        if *local_player == 0 {
+                            PlayerType::Local
+                        } else {
+                            PlayerType::Remote(peer_addr.clone())
+                        },
+                    ),
+                    (
+                        1,
+                        if *local_player == 1 {
+                            PlayerType::Local
+                        } else {
+                            PlayerType::Remote(peer_addr)
+                        },
+                    ),
+                ];
+
+                let session =
+                    RollbackSession::new_p2p(session_config, socket, players, specs.ram_limit)
+                        .context("Failed to create P2P session")?;
+                runner
+                    .load_game_with_session(rom.console, &rom.code, session)
+                    .context("Failed to load game with P2P session")?;
+                tracing::info!(
+                    "P2P mode: bind={}, peer={}, local_player={}",
+                    bind_port,
+                    peer_port,
+                    local_player
+                );
+            }
+            ConnectionMode::Host { port } => {
+                // Host mode - bind and wait for connection
+                // For now, create socket and start in waiting state
+                // TODO: Implement proper connection waiting UI
+                let _socket = LocalSocket::bind(&format!("0.0.0.0:{}", port))
+                    .context("Failed to bind host socket")?;
+                tracing::info!("Hosting on port {}, waiting for connection...", port);
+
+                // For MVP, we need to wait for peer before creating session
+                // This will be improved in Phase 0 with proper connection UI
+                anyhow::bail!(
+                    "Host mode not yet fully implemented. Use --p2p for local testing."
+                );
+            }
+            ConnectionMode::Join { address } => {
+                // Join mode - connect to host
+                // TODO: Implement proper connection UI
+                let mut socket = LocalSocket::bind("0.0.0.0:0")
+                    .context("Failed to bind client socket")?;
+                socket
+                    .connect(address)
+                    .context("Failed to connect to host")?;
+                tracing::info!("Joining game at {}", address);
+
+                // For MVP, create P2P session immediately
+                // This will be improved in Phase 0 with proper connection flow
+                let session_config = SessionConfig::online(2)
+                    .with_input_delay(self.config.input_delay);
+
+                let players = vec![
+                    (0, PlayerType::Remote(address.clone())),
+                    (1, PlayerType::Local),
+                ];
+
+                let session =
+                    RollbackSession::new_p2p(session_config, socket, players, specs.ram_limit)
+                        .context("Failed to create P2P session")?;
+                runner
+                    .load_game_with_session(rom.console, &rom.code, session)
+                    .context("Failed to load game with P2P session")?;
+            }
+        }
 
         if let Some(session) = runner.session_mut() {
             if let Some(audio) = session.runtime.audio_mut() {
@@ -906,7 +1033,7 @@ where
             runner.graphics().blit_to_window(&mut encoder, &view);
 
             // Render overlays via egui
-            if self.debug_overlay || self.debug_panel.visible || self.settings_panel.visible || self.error_state.is_some() {
+            if self.debug_overlay || self.debug_panel.visible || self.settings_panel.visible || self.error_state.is_some() || self.network_overlay_visible {
                 let (registry_opt, mem_base, mem_len, has_debug_callback) = {
                     if let Some(session) = runner.session() {
                         if let Some(game) = session.runtime.game() {
@@ -949,6 +1076,26 @@ where
                     let frame_controller = &mut self.frame_controller;
                     let settings_panel = &mut self.settings_panel;
                     let error_state_ref = &self.error_state;
+                    let network_overlay_visible = self.network_overlay_visible;
+
+                    // Get network session info for overlay
+                    let (session_type, network_stats, local_players, total_rollbacks, current_frame) = {
+                        if let Some(game_session) = runner.session() {
+                            if let Some(rollback) = game_session.runtime.session() {
+                                (
+                                    rollback.session_type(),
+                                    rollback.all_player_stats().to_vec(),
+                                    rollback.local_players().to_vec(),
+                                    rollback.total_rollback_frames(),
+                                    rollback.current_frame(),
+                                )
+                            } else {
+                                (SessionType::Local, Vec::new(), Vec::new(), 0, 0)
+                            }
+                        } else {
+                            (SessionType::Local, Vec::new(), Vec::new(), 0, 0)
+                        }
+                    };
 
                     let full_output = self.egui_ctx.run(raw_input, |ctx| {
                         let action = settings_panel.render(ctx);
@@ -967,6 +1114,78 @@ where
                                 render_fps,
                             );
                         }
+
+                        // Network statistics overlay (F4)
+                        if network_overlay_visible && session_type != SessionType::Local {
+                            egui::Window::new("Network")
+                                .anchor(egui::Align2::RIGHT_TOP, [-10.0, 10.0])
+                                .collapsible(false)
+                                .resizable(false)
+                                .show(ctx, |ui| {
+                                    ui.set_min_width(180.0);
+
+                                    // Player stats with quality bar
+                                    for (i, stats) in network_stats.iter().enumerate() {
+                                        let is_local = local_players.contains(&i);
+
+                                        // Quality color and label
+                                        let (color, quality_label) = match stats.quality {
+                                            ConnectionQuality::Excellent => {
+                                                (egui::Color32::GREEN, "Excellent")
+                                            }
+                                            ConnectionQuality::Good => {
+                                                (egui::Color32::from_rgb(144, 238, 144), "Good")
+                                            }
+                                            ConnectionQuality::Fair => {
+                                                (egui::Color32::YELLOW, "Fair")
+                                            }
+                                            ConnectionQuality::Poor => (egui::Color32::RED, "Poor"),
+                                            ConnectionQuality::Disconnected => {
+                                                (egui::Color32::DARK_GRAY, "Disconnected")
+                                            }
+                                        };
+
+                                        if is_local {
+                                            ui.horizontal(|ui| {
+                                                ui.label(format!("P{}: Local", i + 1));
+                                            });
+                                        } else if stats.connected {
+                                            // Show: P2: 45ms ████████ Good
+                                            ui.horizontal(|ui| {
+                                                ui.label(format!("P{}: {}ms ", i + 1, stats.ping_ms));
+
+                                                // Quality bar (8 blocks max)
+                                                let filled = match stats.quality {
+                                                    ConnectionQuality::Excellent => 8,
+                                                    ConnectionQuality::Good => 6,
+                                                    ConnectionQuality::Fair => 4,
+                                                    ConnectionQuality::Poor => 2,
+                                                    ConnectionQuality::Disconnected => 0,
+                                                };
+                                                let bar: String = "\u{2588}"
+                                                    .repeat(filled)
+                                                    .chars()
+                                                    .chain("\u{2591}".repeat(8 - filled).chars())
+                                                    .collect();
+                                                ui.colored_label(color, bar);
+                                                ui.label(quality_label);
+                                            });
+                                        } else {
+                                            ui.horizontal(|ui| {
+                                                ui.colored_label(
+                                                    egui::Color32::DARK_GRAY,
+                                                    format!("P{}: Disconnected", i + 1),
+                                                );
+                                            });
+                                        }
+                                    }
+
+                                    ui.separator();
+                                    ui.label(format!("Rollbacks: {} frames", total_rollbacks));
+                                    ui.label(format!("Frame: {}", current_frame));
+                                });
+                        }
+
                         if debug_panel.visible {
                             if let Some(ref registry) = registry_opt {
                                 let registry_for_read = registry.clone();

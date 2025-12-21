@@ -1,0 +1,7 @@
+[game]
+name = "Hello World (C)"
+version = "1.0.0"
+description = "A simple hello world game written in C"
+
+[build]
+entry = "game.wasm"

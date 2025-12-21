@@ -98,8 +98,7 @@ impl Console for TestConsole {
     fn specs() -> &'static ConsoleSpecs {
         &ConsoleSpecs {
             name: "Test Console",
-            resolutions: &[(320, 240), (640, 480)],
-            default_resolution: 0,
+            resolution: (320, 240),
             tick_rates: &[30, 60],
             default_tick_rate: 1,
             ram_limit: 16 * 1024 * 1024, // 16MB

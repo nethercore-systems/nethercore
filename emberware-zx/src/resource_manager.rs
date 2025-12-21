@@ -357,10 +357,10 @@ impl ConsoleResourceManager for ZResourceManager {
             graphics.invalidate_frame_bind_group();
         }
 
-        // Apply init config to graphics (render mode and resolution from game's init() phase)
-        // Always apply - defaults are sensible (mode 0 = Unlit, resolution 1 = 540p)
+        // Apply init config to graphics (render mode from game's init() phase)
+        // Resolution is fixed at 540p
         graphics.set_render_mode(state.init_config.render_mode);
-        graphics.update_resolution(state.init_config.resolution_index as u8);
+        graphics.update_resolution();
     }
 
     fn execute_draw_commands(&mut self, graphics: &mut Self::Graphics, state: &mut Self::State) {

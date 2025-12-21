@@ -132,6 +132,9 @@ This builds and runs in one step.
 
 Add the audio functions to your FFI imports:
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 #[link(wasm_import_module = "env")]
 extern "C" {
@@ -144,21 +147,69 @@ extern "C" {
     fn play_sound(sound: u32, volume: f32, pan: f32);
 }
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+// ROM loading
+EWZX_IMPORT uint32_t rom_sound(const uint8_t* id_ptr, uint32_t id_len);
+
+// Audio playback
+EWZX_IMPORT void play_sound(uint32_t sound, float volume, float pan);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+// ROM loading
+pub extern fn rom_sound(id_ptr: [*]const u8, id_len: u32) u32;
+
+// Audio playback
+pub extern fn play_sound(sound: u32, volume: f32, pan: f32) void;
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ## Sound Handles
 
 Add static variables to store sound handles:
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 static mut SFX_HIT: u32 = 0;
 static mut SFX_SCORE: u32 = 0;
 static mut SFX_WIN: u32 = 0;
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+static uint32_t SFX_HIT = 0;
+static uint32_t SFX_SCORE = 0;
+static uint32_t SFX_WIN = 0;
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+var SFX_HIT: u32 = 0;
+var SFX_SCORE: u32 = 0;
+var SFX_WIN: u32 = 0;
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ## Load Sounds in init()
 
 Update `init()` to load sounds from the ROM:
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 #[no_mangle]
 pub extern "C" fn init() {
@@ -175,6 +226,41 @@ pub extern "C" fn init() {
     }
 }
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+void init() {
+    set_clear_color(0x1a1a2eFF);
+
+    // Load sounds from ROM
+    SFX_HIT = rom_sound("hit", 3);
+    SFX_SCORE = rom_sound("score", 5);
+    SFX_WIN = rom_sound("win", 3);
+
+    reset_game();
+    STATE = TITLE;
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+export fn init() void {
+    set_clear_color(0x1a1a2eFF);
+
+    // Load sounds from ROM
+    SFX_HIT = rom_sound("hit", 3);
+    SFX_SCORE = rom_sound("score", 5);
+    SFX_WIN = rom_sound("win", 3);
+
+    reset_game();
+    STATE = .Title;
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 The `rom_sound()` function loads the sound directly from the bundled ROM—the string IDs match what you put in `ember.toml`.
 
@@ -184,6 +270,9 @@ Now add sound effects to game events:
 
 ### Wall Bounce
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 // In update_ball(), after wall bounce:
 if BALL_Y <= 0.0 {
@@ -198,9 +287,49 @@ if BALL_Y >= SCREEN_HEIGHT - BALL_SIZE {
     play_sound(SFX_HIT, 0.3, 0.0);
 }
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+// In update_ball(), after wall bounce:
+if (BALL_Y <= 0.0f) {
+    BALL_Y = 0.0f;
+    BALL_VY = -BALL_VY;
+    play_sound(SFX_HIT, 0.3f, 0.0f);  // Center pan
+}
+
+if (BALL_Y >= SCREEN_HEIGHT - BALL_SIZE) {
+    BALL_Y = SCREEN_HEIGHT - BALL_SIZE;
+    BALL_VY = -BALL_VY;
+    play_sound(SFX_HIT, 0.3f, 0.0f);
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+// In update_ball(), after wall bounce:
+if (BALL_Y <= 0.0) {
+    BALL_Y = 0.0;
+    BALL_VY = -BALL_VY;
+    play_sound(SFX_HIT, 0.3, 0.0);  // Center pan
+}
+
+if (BALL_Y >= SCREEN_HEIGHT - BALL_SIZE) {
+    BALL_Y = SCREEN_HEIGHT - BALL_SIZE;
+    BALL_VY = -BALL_VY;
+    play_sound(SFX_HIT, 0.3, 0.0);
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ### Paddle Hit
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 // In paddle 1 collision:
 play_sound(SFX_HIT, 0.5, -0.5);  // Pan left
@@ -208,9 +337,35 @@ play_sound(SFX_HIT, 0.5, -0.5);  // Pan left
 // In paddle 2 collision:
 play_sound(SFX_HIT, 0.5, 0.5);   // Pan right
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+// In paddle 1 collision:
+play_sound(SFX_HIT, 0.5f, -0.5f);  // Pan left
+
+// In paddle 2 collision:
+play_sound(SFX_HIT, 0.5f, 0.5f);   // Pan right
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+// In paddle 1 collision:
+play_sound(SFX_HIT, 0.5, -0.5);  // Pan left
+
+// In paddle 2 collision:
+play_sound(SFX_HIT, 0.5, 0.5);   // Pan right
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ### Scoring
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 // When player 2 scores (ball exits left):
 SCORE2 += 1;
@@ -220,9 +375,39 @@ play_sound(SFX_SCORE, 0.6, 0.5);  // Pan right (scorer's side)
 SCORE1 += 1;
 play_sound(SFX_SCORE, 0.6, -0.5);  // Pan left (scorer's side)
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+// When player 2 scores (ball exits left):
+SCORE2 += 1;
+play_sound(SFX_SCORE, 0.6f, 0.5f);  // Pan right (scorer's side)
+
+// When player 1 scores (ball exits right):
+SCORE1 += 1;
+play_sound(SFX_SCORE, 0.6f, -0.5f);  // Pan left (scorer's side)
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+// When player 2 scores (ball exits left):
+SCORE2 += 1;
+play_sound(SFX_SCORE, 0.6, 0.5);  // Pan right (scorer's side)
+
+// When player 1 scores (ball exits right):
+SCORE1 += 1;
+play_sound(SFX_SCORE, 0.6, -0.5);  // Pan left (scorer's side)
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ### Win
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 // When either player wins:
 if SCORE1 >= WIN_SCORE || SCORE2 >= WIN_SCORE {
@@ -230,12 +415,53 @@ if SCORE1 >= WIN_SCORE || SCORE2 >= WIN_SCORE {
     play_sound(SFX_WIN, 0.8, 0.0);  // Center, louder
 }
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+// When either player wins:
+if (SCORE1 >= WIN_SCORE || SCORE2 >= WIN_SCORE) {
+    STATE = GAME_OVER;
+    play_sound(SFX_WIN, 0.8f, 0.0f);  // Center, louder
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+// When either player wins:
+if (SCORE1 >= WIN_SCORE or SCORE2 >= WIN_SCORE) {
+    STATE = .GameOver;
+    play_sound(SFX_WIN, 0.8, 0.0);  // Center, louder
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ## Understanding play_sound()
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 fn play_sound(sound: u32, volume: f32, pan: f32);
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+void play_sound(uint32_t sound, float volume, float pan);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn play_sound(sound: u32, volume: f32, pan: f32) void;
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 | Parameter | Range | Description |
 |-----------|-------|-------------|
@@ -298,6 +524,9 @@ path = "assets/ball.png"
 
 ### Add Texture FFI
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 #[link(wasm_import_module = "env")]
 extern "C" {
@@ -309,11 +538,35 @@ extern "C" {
     fn draw_sprite(x: f32, y: f32, w: f32, h: f32);
 }
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+// Texture loading and drawing
+EWZX_IMPORT uint32_t rom_texture(const uint8_t* id_ptr, uint32_t id_len);
+EWZX_IMPORT void texture_bind(uint32_t texture);
+EWZX_IMPORT void draw_sprite(float x, float y, float w, float h);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+// Texture loading and drawing
+pub extern fn rom_texture(id_ptr: [*]const u8, id_len: u32) u32;
+pub extern fn texture_bind(texture: u32) void;
+pub extern fn draw_sprite(x: f32, y: f32, w: f32, h: f32) void;
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ### Load Textures
 
 Add handles and load in `init()`:
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 static mut TEX_PADDLE: u32 = 0;
 static mut TEX_BALL: u32 = 0;
@@ -322,11 +575,39 @@ static mut TEX_BALL: u32 = 0;
 TEX_PADDLE = rom_texture(b"paddle".as_ptr(), 6);
 TEX_BALL = rom_texture(b"ball".as_ptr(), 4);
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+static uint32_t TEX_PADDLE = 0;
+static uint32_t TEX_BALL = 0;
+
+// In init():
+TEX_PADDLE = rom_texture("paddle", 6);
+TEX_BALL = rom_texture("ball", 4);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+var TEX_PADDLE: u32 = 0;
+var TEX_BALL: u32 = 0;
+
+// In init():
+TEX_PADDLE = rom_texture("paddle", 6);
+TEX_BALL = rom_texture("ball", 4);
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ### Draw Sprites
 
 Replace `draw_rect()` calls in `render()`:
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 // Instead of: draw_rect(PADDLE_MARGIN, PADDLE1_Y, PADDLE_WIDTH, PADDLE_HEIGHT, COLOR_PLAYER1);
 texture_bind(TEX_PADDLE);
@@ -339,6 +620,39 @@ draw_sprite(SCREEN_WIDTH - PADDLE_MARGIN - PADDLE_WIDTH, PADDLE2_Y, PADDLE_WIDTH
 texture_bind(TEX_BALL);
 draw_sprite(BALL_X, BALL_Y, BALL_SIZE, BALL_SIZE);
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+// Instead of: draw_rect(PADDLE_MARGIN, PADDLE1_Y, PADDLE_WIDTH, PADDLE_HEIGHT, COLOR_PLAYER1);
+texture_bind(TEX_PADDLE);
+draw_sprite(PADDLE_MARGIN, PADDLE1_Y, PADDLE_WIDTH, PADDLE_HEIGHT);
+
+// Second paddle
+draw_sprite(SCREEN_WIDTH - PADDLE_MARGIN - PADDLE_WIDTH, PADDLE2_Y, PADDLE_WIDTH, PADDLE_HEIGHT);
+
+// Instead of: draw_rect(BALL_X, BALL_Y, BALL_SIZE, BALL_SIZE, COLOR_WHITE);
+texture_bind(TEX_BALL);
+draw_sprite(BALL_X, BALL_Y, BALL_SIZE, BALL_SIZE);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+// Instead of: draw_rect(PADDLE_MARGIN, PADDLE1_Y, PADDLE_WIDTH, PADDLE_HEIGHT, COLOR_PLAYER1);
+texture_bind(TEX_PADDLE);
+draw_sprite(PADDLE_MARGIN, PADDLE1_Y, PADDLE_WIDTH, PADDLE_HEIGHT);
+
+// Second paddle
+draw_sprite(SCREEN_WIDTH - PADDLE_MARGIN - PADDLE_WIDTH, PADDLE2_Y, PADDLE_WIDTH, PADDLE_HEIGHT);
+
+// Instead of: draw_rect(BALL_X, BALL_Y, BALL_SIZE, BALL_SIZE, COLOR_WHITE);
+texture_bind(TEX_BALL);
+draw_sprite(BALL_X, BALL_Y, BALL_SIZE, BALL_SIZE);
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 The sprite will be tinted by the bound texture. You can also use `draw_sprite_colored()` if you want to tint sprites with different colors per player.
 

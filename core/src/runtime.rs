@@ -637,7 +637,7 @@ mod tests {
         let specs = TestConsole::specs();
 
         assert_eq!(specs.name, "Test Console");
-        assert_eq!(specs.resolutions.len(), 2);
+        assert_eq!(specs.resolution, (320, 240)); // Fixed resolution
         assert_eq!(specs.tick_rates.len(), 2);
         assert_eq!(specs.ram_limit, 16 * 1024 * 1024); // Shared TestConsole has 16MB
     }

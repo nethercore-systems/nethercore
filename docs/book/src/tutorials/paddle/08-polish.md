@@ -13,6 +13,9 @@ Your Paddle game is complete! Let's add some final polish and publish it to the 
 
 Let's add helpful text on the title screen:
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 fn render_title() {
     unsafe {
@@ -35,6 +38,55 @@ fn render_title() {
     }
 }
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+void render_title() {
+    // Title
+    draw_text("PADDLE", 6, SCREEN_WIDTH / 2.0 - 100.0, 150.0, 64.0, COLOR_WHITE);
+
+    // Mode indicator
+    if (IS_TWO_PLAYER) {
+        draw_text("2 PLAYER MODE", 13, SCREEN_WIDTH / 2.0 - 100.0, 250.0, 24.0, COLOR_WHITE);
+    } else {
+        draw_text("1 PLAYER VS AI", 14, SCREEN_WIDTH / 2.0 - 100.0, 250.0, 24.0, COLOR_WHITE);
+    }
+
+    // Start prompt
+    draw_text("Press A to Start", 16, SCREEN_WIDTH / 2.0 - 120.0, 350.0, 24.0, COLOR_GRAY);
+
+    // Controls hint
+    draw_text("Controls: Left Stick or D-Pad Up/Down", 38,
+              250.0, 450.0, 18.0, COLOR_GRAY);
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+fn render_title() void {
+    // Title
+    draw_text("PADDLE", "PADDLE".len, SCREEN_WIDTH / 2.0 - 100.0, 150.0, 64.0, COLOR_WHITE);
+
+    // Mode indicator
+    if (IS_TWO_PLAYER) {
+        draw_text("2 PLAYER MODE", "2 PLAYER MODE".len, SCREEN_WIDTH / 2.0 - 100.0, 250.0, 24.0, COLOR_WHITE);
+    } else {
+        draw_text("1 PLAYER VS AI", "1 PLAYER VS AI".len, SCREEN_WIDTH / 2.0 - 100.0, 250.0, 24.0, COLOR_WHITE);
+    }
+
+    // Start prompt
+    draw_text("Press A to Start", "Press A to Start".len, SCREEN_WIDTH / 2.0 - 120.0, 350.0, 24.0, COLOR_GRAY);
+
+    // Controls hint
+    draw_text("Controls: Left Stick or D-Pad Up/Down", "Controls: Left Stick or D-Pad Up/Down".len,
+              250.0, 450.0, 18.0, COLOR_GRAY);
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ## Complete ember.toml
 

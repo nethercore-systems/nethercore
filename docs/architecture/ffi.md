@@ -38,20 +38,12 @@ pub extern "C" fn render() {
 Certain settings define the "mood" of your game and **must be set in `init()`**. These cannot be changed at runtime — calling them in `update()` or `render()` will fail/error.
 
 ```rust
-fn set_resolution(res: u32)                 // Console-specific resolution enum (see console docs)
 fn set_tick_rate(fps: u32)                  // 24, 30, 60, or 120
 fn set_clear_color(color: u32)              // Auto-clear color (0xRRGGBBAA), default: black
 fn render_mode(mode: u32)                   // Emberware ZX only: 0-3
 ```
 
-Resolution values are console-specific:
-- **Emberware ZX**: 0=360p, 1=540p (default), 2=720p, 3=1080p
-- **Emberware Chroma**: 0-7 (see console docs for specific resolutions)
-
-If not set, the console uses its defaults (540p @ 60fps for ZX, 384×216 @ 60fps for Chroma).
-
 **Why init-only?**
-- Resolution affects framebuffer allocation
 - Tick rate affects GGRS synchronization
 - Render mode determines shader pipelines
 - Changing these mid-game would break determinism and netplay

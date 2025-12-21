@@ -205,7 +205,7 @@ impl ZGraphics {
         let render_target = Self::create_render_target(&device, 960, 540, surface_format);
 
         // Create blit pipeline for scaling render target to window
-        let (blit_pipeline, blit_bind_group, blit_sampler) =
+        let (blit_pipeline, blit_bind_group, _blit_sampler) =
             Self::create_blit_pipeline(&device, surface_format, &render_target);
 
         // Create static unit quad mesh for GPU-instanced rendering
@@ -263,7 +263,6 @@ impl ZGraphics {
             render_target,
             blit_pipeline,
             blit_bind_group,
-            blit_sampler,
             depth_texture,
             depth_view,
             texture_manager,
@@ -291,7 +290,6 @@ impl ZGraphics {
             command_buffer: super::VirtualRenderPass::new(),
             pipeline_cache: super::pipeline::PipelineCache::new(),
             current_render_mode: 0,      // Default to Mode 0 (Unlit)
-            current_resolution_index: 1, // 960×540 (default)
             scale_mode: emberware_core::app::config::ScaleMode::default(), // PixelPerfect by default
             unit_quad_format,
             unit_quad_base_vertex,

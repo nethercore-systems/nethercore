@@ -64,8 +64,8 @@ impl ZGraphics {
             let view_offset = z_state.model_matrices.len() as u32;
             let proj_offset = (z_state.model_matrices.len() + z_state.view_matrices.len()) as u32;
 
-            // Get resolution index to pack into mode field (bits 8-9)
-            let resolution_index = z_state.init_config.resolution_index;
+            // Resolution is fixed at 540p (index 1) - pack into mode field (bits 8-9)
+            let resolution_index: u32 = 1;
 
             // Clear and reuse scratch buffers (avoids per-frame allocation)
             self.quad_instance_scratch.clear();

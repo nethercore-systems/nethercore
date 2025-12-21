@@ -31,6 +31,9 @@ jump = "audio/jump.wav"
 ember-export build assets.toml
 ```
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 static PLAYER_MESH: &[u8] = include_bytes!("assets/player.ewzmesh");
 static GRASS_TEX: &[u8] = include_bytes!("assets/grass.ewztex");
@@ -40,6 +43,36 @@ fn init() {
     let grass = load_ztex(GRASS_TEX.as_ptr() as u32, GRASS_TEX.len() as u32);
 }
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+// Embed assets at compile time (platform-specific)
+extern const unsigned char player_ewzmesh_data[];
+extern const unsigned int player_ewzmesh_size;
+extern const unsigned char grass_ewztex_data[];
+extern const unsigned int grass_ewztex_size;
+
+EWZX_EXPORT void init(void) {
+    uint32_t player = load_zmesh((uint32_t)player_ewzmesh_data, player_ewzmesh_size);
+    uint32_t grass = load_ztex((uint32_t)grass_ewztex_data, grass_ewztex_size);
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+const player_mesh = @embedFile("assets/player.ewzmesh");
+const grass_tex = @embedFile("assets/grass.ewztex");
+
+export fn init() void {
+    const player = load_zmesh(@intFromPtr(player_mesh.ptr), player_mesh.len);
+    const grass = load_ztex(@intFromPtr(grass_tex.ptr), grass_tex.len);
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 One manifest, one command, simple FFI calls.
 
@@ -193,12 +226,36 @@ Offset | Type  | Description
 
 The Emberware runtime supports 16 vertex format combinations, controlled by format flags.
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
-FORMAT_UV      = 1   // Texture coordinates
-FORMAT_COLOR   = 2   // Per-vertex color
-FORMAT_NORMAL  = 4   // Surface normals
-FORMAT_SKINNED = 8   // Bone weights for skeletal animation
+const FORMAT_UV: u8 = 1;      // Texture coordinates
+const FORMAT_COLOR: u8 = 2;   // Per-vertex color
+const FORMAT_NORMAL: u8 = 4;  // Surface normals
+const FORMAT_SKINNED: u8 = 8; // Bone weights for skeletal animation
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+#define FORMAT_UV      1   // Texture coordinates
+#define FORMAT_COLOR   2   // Per-vertex color
+#define FORMAT_NORMAL  4   // Surface normals
+#define FORMAT_SKINNED 8   // Bone weights for skeletal animation
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+const FORMAT_UV: u8 = 1;      // Texture coordinates
+const FORMAT_COLOR: u8 = 2;   // Per-vertex color
+const FORMAT_NORMAL: u8 = 4;  // Surface normals
+const FORMAT_SKINNED: u8 = 8; // Bone weights for skeletal animation
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ### All 16 Formats
 
@@ -335,6 +392,9 @@ ember-export audio jump.wav -o jump.ewzsnd
 
 The simplest way to load assets is using the EmberZ format functions. These parse the POD headers host-side and upload to GPU.
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 // FFI declarations
 extern "C" {
@@ -354,22 +414,114 @@ fn init() {
     let jump = load_zsound(JUMP_SFX.as_ptr() as u32, JUMP_SFX.len() as u32);
 }
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+// FFI declarations
+EWZX_IMPORT uint32_t load_zmesh(uint32_t data_ptr, uint32_t data_len);
+EWZX_IMPORT uint32_t load_ztex(uint32_t data_ptr, uint32_t data_len);
+EWZX_IMPORT uint32_t load_zsound(uint32_t data_ptr, uint32_t data_len);
+
+// Embed assets at compile time (platform-specific)
+extern const unsigned char player_ewzmesh_data[];
+extern const unsigned int player_ewzmesh_size;
+extern const unsigned char grass_ewztex_data[];
+extern const unsigned int grass_ewztex_size;
+extern const unsigned char jump_ewzsnd_data[];
+extern const unsigned int jump_ewzsnd_size;
+
+EWZX_EXPORT void init(void) {
+    uint32_t player = load_zmesh((uint32_t)player_ewzmesh_data, player_ewzmesh_size);
+    uint32_t grass = load_ztex((uint32_t)grass_ewztex_data, grass_ewztex_size);
+    uint32_t jump = load_zsound((uint32_t)jump_ewzsnd_data, jump_ewzsnd_size);
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+// FFI declarations
+pub extern fn load_zmesh(data_ptr: u32, data_len: u32) u32;
+pub extern fn load_ztex(data_ptr: u32, data_len: u32) u32;
+pub extern fn load_zsound(data_ptr: u32, data_len: u32) u32;
+
+// Embed assets at compile time
+const player_mesh = @embedFile("assets/player.ewzmesh");
+const grass_tex = @embedFile("assets/grass.ewztex");
+const jump_sfx = @embedFile("assets/jump.ewzsnd");
+
+export fn init() void {
+    const player = load_zmesh(@intFromPtr(player_mesh.ptr), player_mesh.len);
+    const grass = load_ztex(@intFromPtr(grass_tex.ptr), grass_tex.len);
+    const jump = load_zsound(@intFromPtr(jump_sfx.ptr), jump_sfx.len);
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ### Raw Data Loading (Advanced)
 
 For fine-grained control, you can bypass the EmberZ format and provide raw data directly:
 
 **Convenience API** (f32 input, auto-packed):
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
-load_mesh(data_ptr, vertex_count, format) -> u32
-load_mesh_indexed(data_ptr, vertex_count, index_ptr, index_count, format) -> u32
+extern "C" {
+    fn load_mesh(data_ptr: u32, vertex_count: u32, format: u8) -> u32;
+    fn load_mesh_indexed(data_ptr: u32, vertex_count: u32, index_ptr: u32, index_count: u32, format: u8) -> u32;
+}
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+EWZX_IMPORT uint32_t load_mesh(uint32_t data_ptr, uint32_t vertex_count, uint8_t format);
+EWZX_IMPORT uint32_t load_mesh_indexed(uint32_t data_ptr, uint32_t vertex_count, uint32_t index_ptr, uint32_t index_count, uint8_t format);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn load_mesh(data_ptr: u32, vertex_count: u32, format: u8) u32;
+pub extern fn load_mesh_indexed(data_ptr: u32, vertex_count: u32, index_ptr: u32, index_count: u32, format: u8) u32;
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 **Power User API** (pre-packed data):
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
-load_mesh_packed(data_ptr, vertex_count, format) -> u32
-load_mesh_indexed_packed(data_ptr, vertex_count, index_ptr, index_count, format) -> u32
+extern "C" {
+    fn load_mesh_packed(data_ptr: u32, vertex_count: u32, format: u8) -> u32;
+    fn load_mesh_indexed_packed(data_ptr: u32, vertex_count: u32, index_ptr: u32, index_count: u32, format: u8) -> u32;
+}
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+EWZX_IMPORT uint32_t load_mesh_packed(uint32_t data_ptr, uint32_t vertex_count, uint8_t format);
+EWZX_IMPORT uint32_t load_mesh_indexed_packed(uint32_t data_ptr, uint32_t vertex_count, uint32_t index_ptr, uint32_t index_count, uint8_t format);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn load_mesh_packed(data_ptr: u32, vertex_count: u32, format: u8) u32;
+pub extern fn load_mesh_indexed_packed(data_ptr: u32, vertex_count: u32, index_ptr: u32, index_count: u32, format: u8) u32;
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ---
 
@@ -394,6 +546,10 @@ Don't have assets yet? Here are some ready-to-use procedural assets you can copy
 ### Procedural Textures
 
 **Checkerboard (8x8)**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 const CHECKERBOARD: [u8; 256] = {
     let mut pixels = [0u8; 256];
@@ -416,8 +572,53 @@ const CHECKERBOARD: [u8; 256] = {
     pixels
 };
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+static const uint8_t CHECKERBOARD[256] = {
+    0xFF, 0xFF, 0xFF, 0xFF,  0x88, 0x88, 0x88, 0xFF,  0xFF, 0xFF, 0xFF, 0xFF,  0x88, 0x88, 0x88, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF,  0x88, 0x88, 0x88, 0xFF,  0xFF, 0xFF, 0xFF, 0xFF,  0x88, 0x88, 0x88, 0xFF,
+    0x88, 0x88, 0x88, 0xFF,  0xFF, 0xFF, 0xFF, 0xFF,  0x88, 0x88, 0x88, 0xFF,  0xFF, 0xFF, 0xFF, 0xFF,
+    0x88, 0x88, 0x88, 0xFF,  0xFF, 0xFF, 0xFF, 0xFF,  0x88, 0x88, 0x88, 0xFF,  0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF,  0x88, 0x88, 0x88, 0xFF,  0xFF, 0xFF, 0xFF, 0xFF,  0x88, 0x88, 0x88, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF,  0x88, 0x88, 0x88, 0xFF,  0xFF, 0xFF, 0xFF, 0xFF,  0x88, 0x88, 0x88, 0xFF,
+    0x88, 0x88, 0x88, 0xFF,  0xFF, 0xFF, 0xFF, 0xFF,  0x88, 0x88, 0x88, 0xFF,  0xFF, 0xFF, 0xFF, 0xFF,
+    0x88, 0x88, 0x88, 0xFF,  0xFF, 0xFF, 0xFF, 0xFF,  0x88, 0x88, 0x88, 0xFF,  0xFF, 0xFF, 0xFF, 0xFF,
+};
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+const CHECKERBOARD: [256]u8 = blk: {
+    var pixels: [256]u8 = undefined;
+    const white = [4]u8{ 0xFF, 0xFF, 0xFF, 0xFF };
+    const gray = [4]u8{ 0x88, 0x88, 0x88, 0xFF };
+    var y: usize = 0;
+    while (y < 8) : (y += 1) {
+        var x: usize = 0;
+        while (x < 8) : (x += 1) {
+            const idx = (y * 8 + x) * 4;
+            const color = if ((x + y) % 2 == 0) white else gray;
+            pixels[idx] = color[0];
+            pixels[idx + 1] = color[1];
+            pixels[idx + 2] = color[2];
+            pixels[idx + 3] = color[3];
+        }
+    }
+    break :blk pixels;
+};
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 **Player Sprite (8x8)**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 const PLAYER_SPRITE: [u8; 256] = {
     let mut pixels = [0u8; 256];
@@ -450,8 +651,77 @@ const PLAYER_SPRITE: [u8; 256] = {
     pixels
 };
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+static void generate_player_sprite(uint8_t pixels[256]) {
+    const uint8_t white[4] = {0xFF, 0xFF, 0xFF, 0xFF};
+    const uint8_t trans[4] = {0x00, 0x00, 0x00, 0x00};
+    const uint8_t pattern[8][8] = {
+        {0, 0, 1, 1, 1, 1, 0, 0},
+        {0, 1, 1, 1, 1, 1, 1, 0},
+        {0, 1, 1, 1, 1, 1, 1, 0},
+        {0, 0, 1, 1, 1, 1, 0, 0},
+        {0, 1, 1, 1, 1, 1, 1, 0},
+        {1, 1, 1, 1, 1, 1, 1, 1},
+        {0, 0, 1, 0, 0, 1, 0, 0},
+        {0, 0, 1, 0, 0, 1, 0, 0},
+    };
+    for (int y = 0; y < 8; y++) {
+        for (int x = 0; x < 8; x++) {
+            int idx = (y * 8 + x) * 4;
+            const uint8_t *color = pattern[y][x] == 1 ? white : trans;
+            pixels[idx] = color[0];
+            pixels[idx + 1] = color[1];
+            pixels[idx + 2] = color[2];
+            pixels[idx + 3] = color[3];
+        }
+    }
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+const PLAYER_SPRITE: [256]u8 = blk: {
+    var pixels: [256]u8 = undefined;
+    const white = [4]u8{ 0xFF, 0xFF, 0xFF, 0xFF };
+    const trans = [4]u8{ 0x00, 0x00, 0x00, 0x00 };
+    const pattern = [8][8]u8{
+        .{ 0, 0, 1, 1, 1, 1, 0, 0 },
+        .{ 0, 1, 1, 1, 1, 1, 1, 0 },
+        .{ 0, 1, 1, 1, 1, 1, 1, 0 },
+        .{ 0, 0, 1, 1, 1, 1, 0, 0 },
+        .{ 0, 1, 1, 1, 1, 1, 1, 0 },
+        .{ 1, 1, 1, 1, 1, 1, 1, 1 },
+        .{ 0, 0, 1, 0, 0, 1, 0, 0 },
+        .{ 0, 0, 1, 0, 0, 1, 0, 0 },
+    };
+    var y: usize = 0;
+    while (y < 8) : (y += 1) {
+        var x: usize = 0;
+        while (x < 8) : (x += 1) {
+            const idx = (y * 8 + x) * 4;
+            const color = if (pattern[y][x] == 1) white else trans;
+            pixels[idx] = color[0];
+            pixels[idx + 1] = color[1];
+            pixels[idx + 2] = color[2];
+            pixels[idx + 3] = color[3];
+        }
+    }
+    break :blk pixels;
+};
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 **Coin/Collectible (8x8)**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 const COIN_SPRITE: [u8; 256] = {
     let mut pixels = [0u8; 256];
@@ -487,10 +757,81 @@ const COIN_SPRITE: [u8; 256] = {
     pixels
 };
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+static void generate_coin_sprite(uint8_t pixels[256]) {
+    const uint8_t gold[4] = {0xFF, 0xD7, 0x00, 0xFF};
+    const uint8_t shine[4] = {0xFF, 0xFF, 0x88, 0xFF};
+    const uint8_t trans[4] = {0x00, 0x00, 0x00, 0x00};
+    const uint8_t pattern[8][8] = {
+        {0, 0, 1, 1, 1, 1, 0, 0},
+        {0, 1, 2, 2, 1, 1, 1, 0},
+        {1, 2, 2, 1, 1, 1, 1, 1},
+        {1, 2, 1, 1, 1, 1, 1, 1},
+        {1, 1, 1, 1, 1, 1, 1, 1},
+        {1, 1, 1, 1, 1, 1, 1, 1},
+        {0, 1, 1, 1, 1, 1, 1, 0},
+        {0, 0, 1, 1, 1, 1, 0, 0},
+    };
+    for (int y = 0; y < 8; y++) {
+        for (int x = 0; x < 8; x++) {
+            int idx = (y * 8 + x) * 4;
+            const uint8_t *color = (pattern[y][x] == 0) ? trans : (pattern[y][x] == 1) ? gold : shine;
+            pixels[idx] = color[0];
+            pixels[idx + 1] = color[1];
+            pixels[idx + 2] = color[2];
+            pixels[idx + 3] = color[3];
+        }
+    }
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+const COIN_SPRITE: [256]u8 = blk: {
+    var pixels: [256]u8 = undefined;
+    const gold = [4]u8{ 0xFF, 0xD7, 0x00, 0xFF };
+    const shine = [4]u8{ 0xFF, 0xFF, 0x88, 0xFF };
+    const trans = [4]u8{ 0x00, 0x00, 0x00, 0x00 };
+    const pattern = [8][8]u8{
+        .{ 0, 0, 1, 1, 1, 1, 0, 0 },
+        .{ 0, 1, 2, 2, 1, 1, 1, 0 },
+        .{ 1, 2, 2, 1, 1, 1, 1, 1 },
+        .{ 1, 2, 1, 1, 1, 1, 1, 1 },
+        .{ 1, 1, 1, 1, 1, 1, 1, 1 },
+        .{ 1, 1, 1, 1, 1, 1, 1, 1 },
+        .{ 0, 1, 1, 1, 1, 1, 1, 0 },
+        .{ 0, 0, 1, 1, 1, 1, 0, 0 },
+    };
+    var y: usize = 0;
+    while (y < 8) : (y += 1) {
+        var x: usize = 0;
+        while (x < 8) : (x += 1) {
+            const idx = (y * 8 + x) * 4;
+            const color = if (pattern[y][x] == 0) trans else if (pattern[y][x] == 1) gold else shine;
+            pixels[idx] = color[0];
+            pixels[idx + 1] = color[1];
+            pixels[idx + 2] = color[2];
+            pixels[idx + 3] = color[3];
+        }
+    }
+    break :blk pixels;
+};
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ### Procedural Sounds
 
 **Beep (short hit sound)**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 fn generate_beep() -> [i16; 2205] {
     let mut samples = [0i16; 2205]; // 0.1 sec @ 22050 Hz
@@ -503,8 +844,45 @@ fn generate_beep() -> [i16; 2205] {
     samples
 }
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+#include <math.h>
+
+void generate_beep(int16_t samples[2205]) {
+    for (int i = 0; i < 2205; i++) {
+        float t = (float)i / 22050.0f;
+        float envelope = 1.0f - ((float)i / 2205.0f);
+        float value = sinf(2.0f * 3.14159265f * 440.0f * t) * envelope;
+        samples[i] = (int16_t)(value * 32767.0f * 0.3f);
+    }
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+fn generate_beep() [2205]i16 {
+    var samples: [2205]i16 = undefined;
+    for (0..2205) |i| {
+        const t = @as(f32, @floatFromInt(i)) / 22050.0;
+        const envelope = 1.0 - (@as(f32, @floatFromInt(i)) / 2205.0);
+        const value = @sin(2.0 * std.math.pi * 440.0 * t) * envelope;
+        samples[i] = @intFromFloat(value * 32767.0 * 0.3);
+    }
+    return samples;
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 **Jump sound (ascending)**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 fn generate_jump() -> [i16; 4410] {
     let mut samples = [0i16; 4410]; // 0.2 sec
@@ -519,8 +897,47 @@ fn generate_jump() -> [i16; 4410] {
     samples
 }
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+void generate_jump(int16_t samples[4410]) {
+    for (int i = 0; i < 4410; i++) {
+        float t = (float)i / 22050.0f;
+        float progress = (float)i / 4410.0f;
+        float freq = 200.0f + (400.0f * progress); // 200 → 600 Hz
+        float envelope = 1.0f - progress;
+        float value = sinf(2.0f * 3.14159265f * freq * t) * envelope;
+        samples[i] = (int16_t)(value * 32767.0f * 0.3f);
+    }
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+fn generate_jump() [4410]i16 {
+    var samples: [4410]i16 = undefined;
+    for (0..4410) |i| {
+        const t = @as(f32, @floatFromInt(i)) / 22050.0;
+        const progress = @as(f32, @floatFromInt(i)) / 4410.0;
+        const freq = 200.0 + (400.0 * progress); // 200 → 600 Hz
+        const envelope = 1.0 - progress;
+        const value = @sin(2.0 * std.math.pi * freq * t) * envelope;
+        samples[i] = @intFromFloat(value * 32767.0 * 0.3);
+    }
+    return samples;
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 **Coin collect (sparkle)**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 fn generate_collect() -> [i16; 6615] {
     let mut samples = [0i16; 6615]; // 0.3 sec
@@ -539,11 +956,57 @@ fn generate_collect() -> [i16; 6615] {
     samples
 }
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+void generate_collect(int16_t samples[6615]) {
+    for (int i = 0; i < 6615; i++) {
+        float t = (float)i / 22050.0f;
+        float progress = (float)i / 6615.0f;
+        // Two frequencies for shimmer effect
+        float f1 = 880.0f;
+        float f2 = 1320.0f; // Perfect fifth
+        float envelope = 1.0f - progress;
+        float v1 = sinf(2.0f * 3.14159265f * f1 * t);
+        float v2 = sinf(2.0f * 3.14159265f * f2 * t);
+        float value = (v1 + v2 * 0.5f) * envelope;
+        samples[i] = (int16_t)(value * 32767.0f * 0.2f);
+    }
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+fn generate_collect() [6615]i16 {
+    var samples: [6615]i16 = undefined;
+    for (0..6615) |i| {
+        const t = @as(f32, @floatFromInt(i)) / 22050.0;
+        const progress = @as(f32, @floatFromInt(i)) / 6615.0;
+        // Two frequencies for shimmer effect
+        const f1 = 880.0;
+        const f2 = 1320.0; // Perfect fifth
+        const envelope = 1.0 - progress;
+        const v1 = @sin(2.0 * std.math.pi * f1 * t);
+        const v2 = @sin(2.0 * std.math.pi * f2 * t);
+        const value = (v1 + v2 * 0.5) * envelope;
+        samples[i] = @intFromFloat(value * 32767.0 * 0.2);
+    }
+    return samples;
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ### Using Starter Assets
 
 Load procedural assets in your `init()`:
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 static mut PLAYER_TEX: u32 = 0;
 static mut JUMP_SFX: u32 = 0;
@@ -561,6 +1024,46 @@ pub extern "C" fn init() {
     }
 }
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+static uint32_t PLAYER_TEX = 0;
+static uint32_t JUMP_SFX = 0;
+
+EWZX_EXPORT void init(void) {
+    // Load texture
+    uint8_t player_sprite[256];
+    generate_player_sprite(player_sprite);
+    PLAYER_TEX = load_texture(8, 8, (uint32_t)player_sprite);
+    texture_filter(0); // Nearest-neighbor for crisp pixels
+
+    // Load sound
+    int16_t jump[4410];
+    generate_jump(jump);
+    JUMP_SFX = load_sound((uint32_t)jump, sizeof(jump));
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+var PLAYER_TEX: u32 = 0;
+var JUMP_SFX: u32 = 0;
+
+export fn init() void {
+    // Load texture
+    PLAYER_TEX = load_texture(8, 8, @intFromPtr(&PLAYER_SPRITE));
+    texture_filter(0); // Nearest-neighbor for crisp pixels
+
+    // Load sound
+    const jump = generate_jump();
+    JUMP_SFX = load_sound(@intFromPtr(&jump), jump.len * 2);
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ---
 
@@ -588,10 +1091,31 @@ path = "assets/jump.wav"
 ```
 
 Load with ROM functions:
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 let player_tex = rom_texture(b"player".as_ptr(), 6);
 let jump_sfx = rom_sound(b"jump".as_ptr(), 4);
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+uint32_t player_tex = rom_texture((uint32_t)"player", 6);
+uint32_t jump_sfx = rom_sound((uint32_t)"jump", 4);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+const player_tex = rom_texture(@intFromPtr("player".ptr), 6);
+const jump_sfx = rom_sound(@intFromPtr("jump".ptr), 4);
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 Benefits:
 - Assets are pre-processed and compressed
@@ -602,6 +1126,9 @@ Benefits:
 
 Best for: Small games, prototyping, tutorials
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 // Compile-time embedding
 static TEXTURE_DATA: &[u8] = include_bytes!("../assets/player.ewztex");
@@ -609,6 +1136,31 @@ static TEXTURE_DATA: &[u8] = include_bytes!("../assets/player.ewztex");
 // Or generate at runtime
 const PIXELS: [u8; 256] = generate_pixels();
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+// Compile-time embedding (platform-specific)
+extern const unsigned char player_ewztex_data[];
+extern const unsigned int player_ewztex_size;
+
+// Or generate at runtime
+uint8_t pixels[256];
+generate_pixels(pixels);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+// Compile-time embedding
+const texture_data = @embedFile("../assets/player.ewztex");
+
+// Or generate at runtime
+const pixels: [256]u8 = generate_pixels();
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 Benefits:
 - Simple, no build step

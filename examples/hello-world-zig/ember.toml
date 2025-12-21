@@ -1,0 +1,7 @@
+[game]
+name = "Hello World (Zig)"
+version = "1.0.0"
+description = "A simple hello world game written in Zig"
+
+[build]
+entry = "zig-out/bin/game.wasm"

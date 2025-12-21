@@ -9,10 +9,8 @@
 pub struct ConsoleSpecs {
     /// Console name (e.g., "Emberware ZX")
     pub name: &'static str,
-    /// Available resolutions (width, height)
-    pub resolutions: &'static [(u32, u32)],
-    /// Default resolution index
-    pub default_resolution: usize,
+    /// Fixed resolution (width, height)
+    pub resolution: (u32, u32),
     /// Available tick rates in Hz
     pub tick_rates: &'static [u32],
     /// Default tick rate index
@@ -29,13 +27,8 @@ pub struct ConsoleSpecs {
 
 // === Emberware ZX Specifications ===
 
-/// Emberware ZX resolutions (16:9 aspect ratio)
-pub const EMBERWARE_ZX_RESOLUTIONS: &[(u32, u32)] = &[
-    (640, 360),   // 360p
-    (960, 540),   // 540p (default)
-    (1280, 720),  // 720p
-    (1920, 1080), // 1080p
-];
+/// Emberware ZX fixed resolution (540p, 16:9 aspect ratio)
+pub const EMBERWARE_ZX_RESOLUTION: (u32, u32) = (960, 540);
 
 /// Emberware ZX tick rates (updates per second)
 pub const EMBERWARE_ZX_TICK_RATES: &[u32] = &[24, 30, 60, 120];
@@ -71,8 +64,7 @@ pub const EMBERWARE_ZX_VRAM_LIMIT: usize = 4 * 1024 * 1024;
 pub const fn emberware_zx_specs() -> &'static ConsoleSpecs {
     &ConsoleSpecs {
         name: "Emberware ZX",
-        resolutions: EMBERWARE_ZX_RESOLUTIONS,
-        default_resolution: 1, // 540p
+        resolution: EMBERWARE_ZX_RESOLUTION, // Fixed 540p
         tick_rates: EMBERWARE_ZX_TICK_RATES,
         default_tick_rate: 2,                // 60 fps
         ram_limit: EMBERWARE_ZX_RAM_LIMIT,   // 4MB linear memory
@@ -90,6 +82,9 @@ pub const EMBERWARE_CHROMA_MEMORY_LIMIT: usize = 2 * 1024 * 1024;
 /// Emberware Chroma VRAM limit (1 MB)
 pub const EMBERWARE_CHROMA_VRAM_LIMIT: usize = 1024 * 1024;
 
+/// Emberware Chroma fixed resolution (288x216, 4:3 aspect ratio)
+pub const EMBERWARE_CHROMA_RESOLUTION: (u32, u32) = (288, 216);
+
 /// Get Emberware Chroma console specifications.
 ///
 /// SNES/Genesis-era aesthetic with 2D-only rendering, tilemaps,
@@ -106,17 +101,7 @@ pub const EMBERWARE_CHROMA_VRAM_LIMIT: usize = 1024 * 1024;
 pub const fn emberware_chroma_specs() -> &'static ConsoleSpecs {
     &ConsoleSpecs {
         name: "Emberware Chroma",
-        resolutions: &[
-            (320, 180), // 0: 16:9, 6× scale to 1080p
-            (384, 216), // 1: 16:9, 5× scale to 1080p
-            (480, 270), // 2: 16:9, 4× scale to 1080p
-            (640, 360), // 3: 16:9, 3× scale to 1080p
-            (240, 180), // 4: 4:3, 6× scale to 1080p
-            (288, 216), // 5: 4:3, 5× scale to 1080p (default)
-            (360, 270), // 6: 4:3, 4× scale to 1080p
-            (480, 360), // 7: 4:3, 3× scale to 1080p
-        ],
-        default_resolution: 5, // 288×216 (4:3)
+        resolution: EMBERWARE_CHROMA_RESOLUTION, // Fixed 288×216 (4:3)
         tick_rates: &[30, 60],
         default_tick_rate: 1,                     // 60 fps
         ram_limit: EMBERWARE_CHROMA_MEMORY_LIMIT, // 2MB unified

@@ -17,9 +17,28 @@ Assets loaded via `rom_*` functions go **directly to VRAM/audio memory**, bypass
 Loads a texture from the data pack.
 
 **Signature:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 fn rom_texture(id_ptr: *const u8, id_len: u32) -> u32
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+EWZX_IMPORT uint32_t rom_texture(const uint8_t* id_ptr, uint32_t id_len);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn rom_texture(id_ptr: [*]const u8, id_len: u32) u32;
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 **Parameters:**
 
@@ -31,6 +50,10 @@ fn rom_texture(id_ptr: *const u8, id_len: u32) -> u32
 **Returns:** Texture handle (non-zero on success, 0 if not found)
 
 **Example:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 fn init() {
     unsafe {
@@ -40,6 +63,29 @@ fn init() {
     }
 }
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+EWZX_EXPORT void init(void) {
+    player_tex = rom_texture("player", 6);
+    enemy_tex = rom_texture("enemy_sheet", 11);
+    terrain_tex = rom_texture("terrain", 7);
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+export fn init() void {
+    player_tex = rom_texture("player", 6);
+    enemy_tex = rom_texture("enemy_sheet", 11);
+    terrain_tex = rom_texture("terrain", 7);
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ---
 
@@ -48,13 +94,36 @@ fn init() {
 Loads a mesh from the data pack.
 
 **Signature:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 fn rom_mesh(id_ptr: *const u8, id_len: u32) -> u32
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+EWZX_IMPORT uint32_t rom_mesh(const uint8_t* id_ptr, uint32_t id_len);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn rom_mesh(id_ptr: [*]const u8, id_len: u32) u32;
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 **Returns:** Mesh handle
 
 **Example:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 fn init() {
     unsafe {
@@ -64,6 +133,29 @@ fn init() {
     }
 }
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+EWZX_EXPORT void init(void) {
+    level_mesh = rom_mesh("level1", 6);
+    player_mesh = rom_mesh("player_model", 12);
+    enemy_mesh = rom_mesh("enemy", 5);
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+export fn init() void {
+    level_mesh = rom_mesh("level1", 6);
+    player_mesh = rom_mesh("player_model", 12);
+    enemy_mesh = rom_mesh("enemy", 5);
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ---
 
@@ -72,13 +164,36 @@ fn init() {
 Loads a skeleton (inverse bind matrices) from the data pack.
 
 **Signature:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 fn rom_skeleton(id_ptr: *const u8, id_len: u32) -> u32
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+EWZX_IMPORT uint32_t rom_skeleton(const uint8_t* id_ptr, uint32_t id_len);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn rom_skeleton(id_ptr: [*]const u8, id_len: u32) u32;
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 **Returns:** Skeleton handle
 
 **Example:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 fn init() {
     unsafe {
@@ -86,6 +201,25 @@ fn init() {
     }
 }
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+EWZX_EXPORT void init(void) {
+    player_skeleton = rom_skeleton("player_rig", 10);
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+export fn init() void {
+    player_skeleton = rom_skeleton("player_rig", 10);
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ---
 
@@ -94,13 +228,36 @@ fn init() {
 Loads a bitmap font from the data pack.
 
 **Signature:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 fn rom_font(id_ptr: *const u8, id_len: u32) -> u32
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+EWZX_IMPORT uint32_t rom_font(const uint8_t* id_ptr, uint32_t id_len);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn rom_font(id_ptr: [*]const u8, id_len: u32) u32;
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 **Returns:** Font handle
 
 **Example:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 fn init() {
     unsafe {
@@ -109,6 +266,27 @@ fn init() {
     }
 }
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+EWZX_EXPORT void init(void) {
+    ui_font = rom_font("ui_font", 7);
+    title_font = rom_font("title_font", 10);
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+export fn init() void {
+    ui_font = rom_font("ui_font", 7);
+    title_font = rom_font("title_font", 10);
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ---
 
@@ -117,13 +295,36 @@ fn init() {
 Loads a sound from the data pack.
 
 **Signature:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 fn rom_sound(id_ptr: *const u8, id_len: u32) -> u32
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+EWZX_IMPORT uint32_t rom_sound(const uint8_t* id_ptr, uint32_t id_len);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn rom_sound(id_ptr: [*]const u8, id_len: u32) u32;
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 **Returns:** Sound handle
 
 **Example:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 fn init() {
     unsafe {
@@ -133,6 +334,29 @@ fn init() {
     }
 }
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+EWZX_EXPORT void init(void) {
+    jump_sfx = rom_sound("jump", 4);
+    coin_sfx = rom_sound("coin", 4);
+    music = rom_sound("level1_bgm", 10);
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+export fn init() void {
+    jump_sfx = rom_sound("jump", 4);
+    coin_sfx = rom_sound("coin", 4);
+    music = rom_sound("level1_bgm", 10);
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ---
 
@@ -145,13 +369,36 @@ For custom data formats (level data, dialog scripts, etc.).
 Gets the size of raw data in the pack.
 
 **Signature:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 fn rom_data_len(id_ptr: *const u8, id_len: u32) -> u32
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+EWZX_IMPORT uint32_t rom_data_len(const uint8_t* id_ptr, uint32_t id_len);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn rom_data_len(id_ptr: [*]const u8, id_len: u32) u32;
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 **Returns:** Size in bytes (0 if not found)
 
 **Example:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 fn init() {
     unsafe {
@@ -162,6 +409,31 @@ fn init() {
     }
 }
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+EWZX_EXPORT void init(void) {
+    uint32_t len = rom_data_len("level1_map", 10);
+    if (len > 0) {
+        // Allocate buffer and load
+    }
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+export fn init() void {
+    const len = rom_data_len("level1_map", 10);
+    if (len > 0) {
+        // Allocate buffer and load
+    }
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ---
 
@@ -170,9 +442,28 @@ fn init() {
 Copies raw data from the pack into WASM memory.
 
 **Signature:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 fn rom_data(id_ptr: *const u8, id_len: u32, out_ptr: *mut u8, max_len: u32) -> u32
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+EWZX_IMPORT uint32_t rom_data(const uint8_t* id_ptr, uint32_t id_len, uint8_t* out_ptr, uint32_t max_len);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn rom_data(id_ptr: [*]const u8, id_len: u32, out_ptr: [*]u8, max_len: u32) u32;
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 **Parameters:**
 
@@ -186,6 +477,10 @@ fn rom_data(id_ptr: *const u8, id_len: u32, out_ptr: *mut u8, max_len: u32) -> u
 **Returns:** Bytes copied (0 if not found or buffer too small)
 
 **Example:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 static mut LEVEL_DATA: [u8; 4096] = [0; 4096];
 
@@ -199,6 +494,37 @@ fn init() {
     }
 }
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+static uint8_t level_data[4096] = {0};
+
+EWZX_EXPORT void init(void) {
+    uint32_t len = rom_data_len("level1", 6);
+    if (len <= 4096) {
+        rom_data("level1", 6, level_data, 4096);
+        parse_level(level_data, len);
+    }
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+var level_data: [4096]u8 = [_]u8{0} ** 4096;
+
+export fn init() void {
+    const len = rom_data_len("level1", 6);
+    if (len <= 4096) {
+        _ = rom_data("level1", 6, &level_data, 4096);
+        parse_level(level_data[0..len]);
+    }
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 ---
 
@@ -289,6 +615,9 @@ ROM (12MB)          RAM (4MB)           VRAM (4MB)
 
 ## Complete Example
 
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
 ```rust
 // Asset handles
 static mut PLAYER_TEX: u32 = 0;
@@ -346,5 +675,120 @@ fn render() {
     }
 }
 ```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+// Asset handles
+static uint32_t player_tex = 0;
+static uint32_t player_mesh = 0;
+static uint32_t player_skel = 0;
+static uint32_t walk_anim = 0;
+static uint32_t idle_anim = 0;
+static uint32_t jump_sfx = 0;
+static uint32_t music = 0;
+static uint32_t ui_font = 0;
+
+// Level data (copied to WASM memory)
+static uint8_t level_data[8192] = {0};
+static uint32_t level_size = 0;
+
+EWZX_EXPORT void init(void) {
+    // Graphics assets → VRAM
+    player_tex = rom_texture("player", 6);
+    player_mesh = rom_mesh("player", 6);
+    player_skel = rom_skeleton("player_rig", 10);
+
+    // Animations → GPU storage
+    walk_anim = rom_keyframes("walk", 4);
+    idle_anim = rom_keyframes("idle", 4);
+
+    // Audio → Audio memory
+    jump_sfx = rom_sound("jump", 4);
+    music = rom_sound("music", 5);
+
+    // Font → VRAM
+    ui_font = rom_font("ui", 2);
+
+    // Level data → WASM RAM (copied)
+    level_size = rom_data_len("level1", 6);
+    if (level_size <= 8192) {
+        rom_data("level1", 6, level_data, 8192);
+    }
+
+    // Start music
+    music_play(music, 0.7);
+}
+
+EWZX_EXPORT void render(void) {
+    // Use loaded assets
+    texture_bind(player_tex);
+    skeleton_bind(player_skel);
+    keyframe_bind(walk_anim, frame);
+    draw_mesh(player_mesh);
+
+    font_bind(ui_font);
+    draw_text("SCORE: 0", 8, 10.0, 10.0, 16.0, 0xFFFFFFFF);
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+// Asset handles
+var player_tex: u32 = 0;
+var player_mesh: u32 = 0;
+var player_skel: u32 = 0;
+var walk_anim: u32 = 0;
+var idle_anim: u32 = 0;
+var jump_sfx: u32 = 0;
+var music: u32 = 0;
+var ui_font: u32 = 0;
+
+// Level data (copied to WASM memory)
+var level_data: [8192]u8 = [_]u8{0} ** 8192;
+var level_size: u32 = 0;
+
+export fn init() void {
+    // Graphics assets → VRAM
+    player_tex = rom_texture("player", 6);
+    player_mesh = rom_mesh("player", 6);
+    player_skel = rom_skeleton("player_rig", 10);
+
+    // Animations → GPU storage
+    walk_anim = rom_keyframes("walk", 4);
+    idle_anim = rom_keyframes("idle", 4);
+
+    // Audio → Audio memory
+    jump_sfx = rom_sound("jump", 4);
+    music = rom_sound("music", 5);
+
+    // Font → VRAM
+    ui_font = rom_font("ui", 2);
+
+    // Level data → WASM RAM (copied)
+    level_size = rom_data_len("level1", 6);
+    if (level_size <= 8192) {
+        _ = rom_data("level1", 6, &level_data, 8192);
+    }
+
+    // Start music
+    music_play(music, 0.7);
+}
+
+export fn render() void {
+    // Use loaded assets
+    texture_bind(player_tex);
+    skeleton_bind(player_skel);
+    keyframe_bind(walk_anim, frame);
+    draw_mesh(player_mesh);
+
+    font_bind(ui_font);
+    draw_text("SCORE: 0", 8, 10.0, 10.0, 16.0, 0xFFFFFFFF);
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
 
 **See Also:** [Textures](./textures.md), [Meshes](./meshes.md), [Audio](./audio.md), [Animation](./animation.md)

@@ -5,41 +5,42 @@
 Emberware uses console-specific binary ROM formats for game distribution. Each fantasy console has its own ROM format with a unique file extension and structure, ensuring type-safety and preventing incompatible games from being loaded on the wrong console.
 
 **Current ROM Formats:**
-- `.ewz` - Emberware ZX (3d Home console)
-- `.ewc` - Emberware Chroma (2d Handheld console)
+- `.ewzx` - Emberware ZX (3D home console)
+- `.ewc` - Emberware Chroma (2D handheld console) - Future
 
 **Why Console-Specific?**
-- ✅ Type-safe - impossible to load wrong ROM in wrong console
-- ✅ Console-specific metadata embedded in ROM structure
-- ✅ Compile-time guarantees about compatibility
-- ✅ No runtime format detection needed
-- ✅ Each console can evolve independently
+- Type-safe - impossible to load wrong ROM in wrong console
+- Console-specific metadata embedded in ROM structure
+- Compile-time guarantees about compatibility
+- No runtime format detection needed
+- Each console can evolve independently
 
 **Why Bitcode?**
-- ✅ Compact binary format with excellent compression
-- ✅ Native Rust struct serialization - type-safe
-- ✅ Fast deserialization (faster than ZIP + TOML parsing)
-- ✅ Games can `#[derive(Encode)]` for ROM metadata
-- ✅ No external dependencies for inspection (just Rust tooling)
+- Compact binary format with excellent compression
+- Native Rust struct serialization via `bitcode::Encode`/`Decode`
+- Fast deserialization (faster than ZIP + TOML parsing)
+- Games can `#[derive(Encode)]` for ROM metadata
+- No external dependencies for inspection (just Rust tooling)
 
-## Emberware ZX ROM Format (.ewz)
+## Emberware ZX ROM Format (.ewzx)
 
 ### File Structure
 
 ```
-game.ewz (binary file)
-├── Magic bytes: "EWZ\0" (4 bytes)
+game.ewzx (binary file, max 12MB)
+├── Magic bytes: "EWZX" (4 bytes)
 └── ZRom (bitcode-encoded):
     ├── version: u32
     ├── metadata: ZMetadata
-    ├── code: Vec<u8> (WASM bytes)
-    ├── thumbnail: Option<Vec<u8>> (PNG, extracted locally)
-    └── screenshots: Vec<Vec<u8>> (PNG, stored in ROM only)
+    ├── code: Vec<u8> (WASM bytes, max 4MB)
+    ├── data_pack: Option<ZDataPack> (bundled assets)
+    ├── thumbnail: Option<Vec<u8>> (256x256 PNG)
+    └── screenshots: Vec<Vec<u8>> (PNG, max 5)
 ```
 
 ### Magic Bytes
 
-All Emberware ZX ROM files start with the magic bytes: `EWZ\0` (hex: `45 57 5A 00`)
+All Emberware ZX ROM files start with the magic bytes: `EWZX` (hex: `45 57 5A 58`)
 
 This allows tools to quickly identify the ROM type and reject invalid files.
 
@@ -53,16 +54,17 @@ pub struct ZRom {
     /// Game metadata
     pub metadata: ZMetadata,
 
-    /// Compiled WASM code
+    /// Compiled WASM code (max 4MB)
     pub code: Vec<u8>,
+
+    /// Optional bundled assets (textures, meshes, sounds, etc.)
+    pub data_pack: Option<ZDataPack>,
 
     /// Optional thumbnail (256x256 PNG, extracted locally during installation)
     pub thumbnail: Option<Vec<u8>>,
 
     /// Optional screenshots (PNG bytes, max 5)
-    /// These are stored in the ROM but NOT extracted during installation
-    /// to save disk space. They can be displayed when viewing ROM info
-    /// or on the platform game page.
+    /// Stored in ROM but NOT extracted during installation to save disk space.
     pub screenshots: Vec<Vec<u8>>,
 }
 ```
@@ -101,7 +103,7 @@ pub struct ZMetadata {
     /// ISO 8601 timestamp when ROM was created
     pub created_at: String,
 
-    /// xtask version that created this ROM
+    /// ember-cli version that created this ROM
     pub tool_version: String,
 
     // Z-specific settings
@@ -116,235 +118,317 @@ pub struct ZMetadata {
 }
 ```
 
-### Field Descriptions
+---
 
-#### Core Fields (Required)
+## ZDataPack (Bundled Assets)
 
-- **id**: Game identifier (slug format, e.g., "super-platformer")
-  - Used for file system directories
-  - Must be unique per author
-  - Should be URL-safe (lowercase, hyphens only)
+Games can bundle pre-processed assets directly in the ROM for efficient loading.
 
-- **title**: Human-readable game title (e.g., "Super Platformer")
-  - Displayed in library UI
-  - Can contain spaces, capitals, special characters
+### Structure
 
-- **author**: Primary author or studio name
-  - Simple string for offline display
-  - Platform backend handles complex credits (multiple authors, roles, etc.)
+```rust
+pub struct ZDataPack {
+    pub textures: Vec<PackedTexture>,      // GPU-ready textures
+    pub meshes: Vec<PackedMesh>,           // GPU-ready meshes
+    pub skeletons: Vec<PackedSkeleton>,    // Inverse bind matrices
+    pub keyframes: Vec<PackedKeyframes>,   // Animation clips
+    pub fonts: Vec<PackedFont>,            // Bitmap font atlases
+    pub sounds: Vec<PackedSound>,          // PCM audio data
+    pub data: Vec<PackedData>,             // Raw opaque data
+}
+```
 
-- **version**: Semantic version string (e.g., "1.0.0")
-  - Must follow semver format: MAJOR.MINOR.PATCH
-  - Used for update detection
+### Textures (PackedTexture)
 
-- **description**: Game description/summary
-  - Short paragraph describing the game
-  - Displayed in library UI and platform
+```rust
+pub struct PackedTexture {
+    pub id: String,             // Asset ID
+    pub width: u16,             // Max 65535 pixels
+    pub height: u16,            // Max 65535 pixels
+    pub format: TextureFormat,  // RGBA8 or BC7
+    pub data: Vec<u8>,          // Raw pixel/block data
+}
 
-- **tags**: Array of category tags
-  - Used for filtering and search
-  - Examples: "platformer", "action", "puzzle", "multiplayer"
+pub enum TextureFormat {
+    Rgba8,  // Uncompressed: 4 bytes/pixel
+    Bc7,    // Compressed: 16 bytes/4x4 block (~4x smaller)
+}
+```
 
-#### Platform Integration (Optional)
+**Compression Selection (automated by ember-cli):**
+- Render Mode 0 (Unlit): RGBA8 (pixel-perfect, full alpha)
+- Render Modes 1-3 (Matcap/PBR/Hybrid): BC7 (4x compression, stipple transparency)
 
-- **platform_game_id**: UUID linking to platform game record
-  - Populated when downloading from platform
-  - Enables "Check for updates", "View on platform"
-  - `null` for offline/local ROMs
+**Size calculation:**
+- RGBA8: `width * height * 4` bytes
+- BC7: `((width+3)/4) * ((height+3)/4) * 16` bytes
 
-- **platform_author_id**: UUID linking to platform user/studio
-  - Links to author profile on platform
-  - `null` for offline/local ROMs
+### Meshes (PackedMesh)
 
-**Note:** The platform backend handles complex credits:
-- Multiple authors/collaborators
-- Specific roles (programmer, artist, composer, etc.)
-- Rich profiles with avatars, bios, social links
-- Game pages with full descriptions and media galleries
+```rust
+pub struct PackedMesh {
+    pub id: String,           // Asset ID
+    pub format: u8,           // Vertex format flags (0-15)
+    pub vertex_count: u32,    // Number of vertices
+    pub index_count: u32,     // Number of indices
+    pub vertex_data: Vec<u8>, // Packed GPU-ready vertices
+    pub index_data: Vec<u16>, // u16 indices
+}
+```
 
-The ROM keeps a simple `author` string for offline display when the platform is unavailable.
+**Vertex Format Flags (bitwise):**
+| Bit | Flag | Adds |
+|-----|------|------|
+| 0 (0x01) | UV | 8 bytes (2x f32) |
+| 1 (0x02) | Color | 4 bytes (RGBA u8) |
+| 2 (0x04) | Normal | 12 bytes (3x f32) |
+| 3 (0x08) | Skinned | 8 bytes (4x u8 indices + 4x u8 weights) |
 
-#### Creation Info (Auto-populated)
+**Base vertex stride:** 12 bytes (position: 3x f32)
 
-- **created_at**: ISO 8601 timestamp
-  - Generated automatically when ROM is created
-  - Example: "2025-01-15T14:30:00Z"
+**Examples:**
+- Format 0: 12 bytes (position only)
+- Format 1: 20 bytes (position + UV)
+- Format 3: 24 bytes (position + UV + color)
+- Format 7: 36 bytes (position + UV + color + normal)
+- Format 15: 44 bytes (all features)
 
-- **tool_version**: Version of xtask that created the ROM
-  - Example: "0.1.0"
-  - Useful for debugging ROM issues
+**Binary File Format (.ewzxmesh):**
+```
+Header (12 bytes):
+  0x00: vertex_count (u32, LE)
+  0x04: index_count (u32, LE)
+  0x08: format (u8)
+  0x09: padding (3 bytes)
 
-#### Console-Specific Settings (Emberware ZX)
+Data:
+  vertex_count * stride bytes: vertex data
+  index_count * 2 bytes: u16 indices (LE)
+```
 
-- **render_mode**: Rendering mode for the game
-  - `0` = Unlit (flat shading, no lighting)
-  - `1` = Matcap (matcap-based lighting)
-  - `2` = PBR-lite (physically-based rendering)
-  - `3` = Hybrid (mix of techniques)
-  - Optional - defaults to PBR-lite if not specified
+### Skeletons (PackedSkeleton)
 
-- **default_resolution**: Preferred window resolution
-  - Format: "WIDTHxHEIGHT" (e.g., "640x480", "1280x720")
-  - Optional - launcher uses default if not specified
+```rust
+pub struct PackedSkeleton {
+    pub id: String,                                // Asset ID
+    pub bone_count: u32,                           // Max 256 bones
+    pub inverse_bind_matrices: Vec<BoneMatrix3x4>, // GPU-ready matrices
+}
+```
 
-- **target_fps**: Target frame rate
-  - Integer FPS value (e.g., 60, 30)
-  - Optional - launcher uses default if not specified
+**Binary File Format (.ewzxskel):**
+```
+Header (8 bytes):
+  0x00: bone_count (u32, LE)
+  0x04: reserved (u32, must be 0)
+
+Data:
+  bone_count * 48 bytes: inverse bind matrices
+  Each matrix: 12 floats (3x4 column-major)
+```
+
+### Keyframes/Animations (PackedKeyframes)
+
+```rust
+pub struct PackedKeyframes {
+    pub id: String,        // Asset ID
+    pub bone_count: u8,    // Max 255 bones per frame
+    pub frame_count: u16,  // Max 65535 frames
+    pub data: Vec<u8>,     // Raw frame data
+}
+```
+
+**Binary File Format (.ewzxanim):**
+```
+Header (4 bytes):
+  0x00: bone_count (u8)
+  0x01: flags (u8, must be 0)
+  0x02: frame_count (u16, LE)
+
+Frame Data (frame_count * bone_count * 16 bytes):
+  Each bone keyframe: 16 bytes
+    rotation: u32 (smallest-three packed quaternion)
+    position: 3x u16 (half-precision floats)
+    scale: 3x u16 (half-precision floats)
+```
+
+### Fonts (PackedFont)
+
+```rust
+pub struct PackedFont {
+    pub id: String,                 // Asset ID
+    pub atlas_width: u32,           // Pixels
+    pub atlas_height: u32,          // Pixels
+    pub atlas_data: Vec<u8>,        // RGBA8 bitmap data
+    pub line_height: f32,           // Pixels
+    pub baseline: f32,              // Pixels from top
+    pub glyphs: Vec<PackedGlyph>,   // Glyph metrics
+}
+
+pub struct PackedGlyph {
+    pub codepoint: u32,   // Unicode codepoint
+    pub x: u16,           // X in atlas (pixels)
+    pub y: u16,           // Y in atlas (pixels)
+    pub w: u16,           // Width (pixels)
+    pub h: u16,           // Height (pixels)
+    pub x_offset: f32,    // Horizontal render offset
+    pub y_offset: f32,    // Vertical render offset
+    pub advance: f32,     // Horizontal advance to next glyph
+}
+```
+
+### Sounds (PackedSound)
+
+```rust
+pub struct PackedSound {
+    pub id: String,      // Asset ID
+    pub data: Vec<i16>,  // PCM samples
+}
+```
+
+**Audio Specification:**
+- Sample rate: 22050 Hz (mono)
+- Format: i16 PCM (2 bytes per sample)
+- Duration: `sample_count / 22050.0` seconds
+
+### Raw Data (PackedData)
+
+```rust
+pub struct PackedData {
+    pub id: String,      // Asset ID
+    pub data: Vec<u8>,   // Opaque byte data
+}
+```
+
+Used for level data, configuration, dialogue, or any custom binary format.
+
+---
+
+## Memory Limits
+
+| Resource | Limit |
+|----------|-------|
+| ROM (total) | 12 MB |
+| WASM code | 4 MB |
+| RAM (linear memory) | 4 MB |
+| VRAM (GPU resources) | 4 MB |
+
+**Asset Loading Model:**
+- Assets loaded via `rom_*` FFI go directly to VRAM/audio memory (host-managed)
+- Only handles (u32) live in game state
+- This enables efficient rollback (only 4MB RAM snapshotted)
+
+---
+
+## Asset File Extensions
+
+| Asset Type | Extension | Format |
+|------------|-----------|--------|
+| ROM | `.ewzx` | Bitcode |
+| Mesh | `.ewzxmesh` | POD binary |
+| Texture | `.ewzxtex` | POD binary |
+| Sound | `.ewzxsnd` | WAV (parsed to PCM) |
+| Skeleton | `.ewzxskel` | POD binary |
+| Animation | `.ewzxanim` | POD binary |
+
+---
 
 ## Validation Rules
 
-When a ROM is loaded, the following validation is performed:
-
 ### Format Validation
-- Magic bytes must be "EWZ\0"
+- Magic bytes must be "EWZX"
 - File must deserialize successfully using bitcode
 
 ### Version Validation
-- ROM version must be ≤ current supported version (currently 1)
+- ROM version must be <= current supported version (currently 1)
 - Future versions may introduce new features while maintaining backward compatibility
 
 ### Metadata Validation
-- Required fields must not be empty:
-  - `id`
-  - `title`
-  - `author`
-  - `version`
-  - `description`
+- Required fields must not be empty: `id`, `title`, `author`, `version`
 
 ### WASM Code Validation
 - Code must be at least 4 bytes
 - Must start with WASM magic bytes: `\0asm` (hex: `00 61 73 6D`)
-- This ensures the WASM module is valid before installation
-
-### Asset Validation
-- Thumbnails and screenshots are NOT validated during ROM creation
-- PNG validation happens during loading (not critical for ROM validity)
-- Max 5 screenshots allowed
+- Required exports: `init`, `update`, `render`
 
 ### Console Settings Validation
 - **render_mode**: Must be 0-3 if specified
-- **default_resolution**: No format validation (parsed at runtime)
-- **target_fps**: No validation (any positive integer)
+- **default_resolution**: Parsed at runtime
+- **target_fps**: Any positive integer
+
+---
+
+## Creating ROMs
+
+Use `ember pack` to create ROM files:
+
+```bash
+ember pack
+```
+
+This reads `ember.toml` in your project and creates the ROM with all assets bundled.
+
+### ember.toml Example
+
+```toml
+[package]
+id = "my-game"
+title = "My Awesome Game"
+author = "YourName"
+version = "1.0.0"
+description = "A fun game!"
+
+[package.tags]
+tags = ["platformer", "action"]
+
+[assets]
+textures = "assets/textures"
+meshes = "assets/meshes"
+sounds = "assets/sounds"
+```
+
+## Inspecting ROMs
+
+```bash
+ember info my-game.ewzx
+```
+
+Displays:
+- Game information (title, author, version, description, tags)
+- Creation info (timestamp, tool version, ROM version)
+- Platform integration (UUIDs if present)
+- Console settings (render mode, resolution, FPS)
+- ROM contents (file sizes, asset counts)
+
+---
 
 ## Installation to Local Library
 
-When a ROM is installed to the local library, the following happens:
+When a ROM is installed to the local library:
 
 ```
 ~/.emberware/games/{game_id}/
-├── manifest.json        # Backward compatibility with existing library UI
+├── manifest.json        # Metadata for library UI
 ├── rom.wasm            # Extracted WASM code
 └── thumbnail.png       # Extracted thumbnail (if present)
                         # Screenshots NOT extracted (save disk space)
 ```
 
-**Why not extract screenshots?**
-- Screenshots are only needed when viewing ROM info or on platform
-- Extracting them wastes disk space (5 screenshots × ~500KB = ~2.5MB per game)
-- They remain in the ROM file and can be displayed on-demand
-
-## Creating ROMs
-
-See [distributing-games.md](./distributing-games.md) for a complete guide on creating and distributing ROM files.
-
-Quick example:
-
-```bash
-cargo xtask cart create-z game.wasm \
-  --id my-game \
-  --title "My Awesome Game" \
-  --author "YourName" \
-  --version "1.0.0" \
-  --description "A fun game!" \
-  --tag platformer \
-  --tag action \
-  --thumbnail assets/thumbnail.png \
-  --screenshot assets/screenshot1.png \
-  --render-mode 2 \
-  --default-resolution "640x480" \
-  --target-fps 60 \
-  --output my-game.ewz
-```
-
-## Inspecting ROMs
-
-You can inspect a ROM's metadata without installing it:
-
-```bash
-cargo xtask cart info my-game.ewz
-```
-
-This displays:
-- Game information (title, author, version, description, tags)
-- Creation info (timestamp, tool version, ROM version)
-- Platform integration (UUIDs if present)
-- Console settings (render mode, resolution, FPS)
-- ROM contents (file sizes, thumbnail, screenshots)
-
-## Future Console Formats
-
-When new consoles are added (e.g., Emberware Chroma), they will follow the same pattern:
-
-```rust
-// Emberware Chroma ROM (.ewc)
-pub const EWC_VERSION: u32 = 1;
-pub const EWC_MAGIC: &[u8; 4] = b"EWC\0";
-
-pub struct ChromaRom {
-    pub version: u32,
-    pub metadata: ChromaMetadata,
-    pub code: Vec<u8>,
-    pub thumbnail: Option<Vec<u8>>,
-    pub screenshots: Vec<Vec<u8>>,
-}
-
-pub struct ChromaMetadata {
-    // Core fields (same as Z for consistency)
-    pub id: String,
-    pub title: String,
-    pub author: String,
-    pub version: String,
-    pub description: String,
-    pub tags: Vec<String>,
-    pub platform_game_id: Option<String>,
-    pub platform_author_id: Option<String>,
-    pub created_at: String,
-    pub tool_version: String,
-
-    // Chroma-specific settings
-    pub palette: Option<String>,     // "nes", "snes", "genesis"
-    pub sprite_limit: Option<u32>,
-    pub audio_channels: Option<u32>,
-}
-```
-
-This ensures:
-- Each console has type-safe ROM handling
-- Console-specific metadata is first-class
-- Tools can dispatch based on file extension
-- No runtime format detection needed
+---
 
 ## Technical Details
 
 ### Bitcode Serialization
 
-ROMs use the [bitcode](https://crates.io/crates/bitcode) crate for serialization with native `Encode`/`Decode` traits (NOT serde).
-
-**Why native Encode/Decode?**
-- Faster encoding/decoding (no serde overhead)
-- Smaller ROM files (~10-20% smaller than serde-bitcode)
-- Simpler dependency tree
-- Purpose-built for binary formats
+ROMs use the [bitcode](https://crates.io/crates/bitcode) crate with native `Encode`/`Decode` traits.
 
 **Format Properties:**
 - Binary (not human-readable)
-- Deterministic (same input → same output)
+- Deterministic (same input -> same output)
 - Compact (better compression than JSON/TOML)
 - Fast (faster than ZIP + parsing)
 
 ### File Size Expectations
-
-Typical ROM sizes:
 
 ```
 Minimal game (hello-world):
@@ -355,27 +439,27 @@ Minimal game (hello-world):
 Medium game:
 - WASM code: ~100KB
 - Thumbnail: ~20KB
-- Metadata: ~500 bytes
-- Total: ~120KB
+- Data pack: ~500KB
+- Total: ~620KB
 
 Large game with assets:
 - WASM code: ~500KB
 - Thumbnail: ~20KB
 - 5 screenshots: ~2.5MB
-- Metadata: ~1KB
-- Total: ~3MB
+- Data pack: ~8MB
+- Total: ~11MB
 ```
+
+---
 
 ## Error Messages
 
-Common validation errors and their meanings:
-
-**"Invalid EWZ magic bytes"**
+**"Invalid EWZX magic bytes"**
 - File is not an Emberware ZX ROM
 - File may be corrupted
-- Wrong ROM type (trying to load .ewc as .ewz)
+- Wrong ROM type
 
-**"Unsupported EWZ version: X"**
+**"Unsupported EWZX version: X"**
 - ROM was created with a newer tool version
 - Update your launcher to support this ROM
 
@@ -384,50 +468,26 @@ Common validation errors and their meanings:
 
 **"Invalid WASM code (missing \\0asm magic bytes)"**
 - WASM file is corrupted or invalid
-- WASM compilation may have failed
 
-**"Failed to decode EWZ ROM"**
+**"Failed to decode EWZX ROM"**
 - ROM file is corrupted
 - ROM was created with incompatible bitcode version
 
-## Backward Compatibility
+---
 
-ROM installation maintains backward compatibility with the existing library system:
+## Source Files
 
-- **manifest.json** is still created during installation
-- Existing library UI works unchanged
-- Raw WASM files can still be loaded for development
-- `build-examples` continues to work as before
+| Component | Location |
+|-----------|----------|
+| ROM Format Constants | `shared/src/rom_format.rs` |
+| ZRom Struct | `zx-common/src/formats/z_rom.rs` |
+| ZDataPack Struct | `zx-common/src/formats/z_data_pack.rs` |
+| Mesh Format | `zx-common/src/formats/mesh.rs` |
+| Skeleton Format | `zx-common/src/formats/skeleton.rs` |
+| Animation Format | `zx-common/src/formats/animation.rs` |
+| Build Process | `tools/ember-cli/src/pack.rs` |
 
-The ROM format is an **addition** for distribution, not a replacement for development workflows.
-
-## Best Practices
-
-1. **Always validate ROMs before distribution**
-   - Use `cargo xtask cart info` to verify metadata
-   - Test installation with `install_z_rom()`
-   - Ensure WASM code runs correctly
-
-2. **Include a thumbnail**
-   - Makes games more discoverable in library UI
-   - 256x256 PNG, will be auto-resized if larger
-   - Keep file size reasonable (~20KB max)
-
-3. **Add descriptive tags**
-   - Helps users find games by genre/category
-   - Use standard tags: "platformer", "puzzle", "action", etc.
-   - Max 5-10 tags recommended
-
-4. **Version ROMs properly**
-   - Use semantic versioning (MAJOR.MINOR.PATCH)
-   - Increment MAJOR for breaking changes
-   - Increment MINOR for new features
-   - Increment PATCH for bug fixes
-
-5. **Test on target console**
-   - ROMs are console-specific
-   - Ensure console settings match your game's needs
-   - Test with different render modes if applicable
+---
 
 ## See Also
 

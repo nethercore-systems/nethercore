@@ -27,7 +27,7 @@ pub const fn zx_specs() -> &'static ConsoleSpecs {
 
 // Re-export constants for FFI validation
 pub use emberware_shared::{
-    EMBERWARE_ZX_RESOLUTIONS as RESOLUTIONS, EMBERWARE_ZX_TICK_RATES as TICK_RATES,
+    EMBERWARE_ZX_RESOLUTION as RESOLUTION, EMBERWARE_ZX_TICK_RATES as TICK_RATES,
     EMBERWARE_ZX_VRAM_LIMIT as VRAM_LIMIT,
 };
 
@@ -415,8 +415,7 @@ mod tests {
         let specs = EmberwareZX::specs();
 
         assert_eq!(specs.name, "Emberware ZX");
-        assert_eq!(specs.resolutions.len(), 4);
-        assert_eq!(specs.resolutions[specs.default_resolution], (960, 540));
+        assert_eq!(specs.resolution, (960, 540)); // Fixed 540p
         assert_eq!(specs.tick_rates[specs.default_tick_rate], 60);
         assert_eq!(specs.ram_limit, 4 * 1024 * 1024);
         assert_eq!(specs.vram_limit, 4 * 1024 * 1024);

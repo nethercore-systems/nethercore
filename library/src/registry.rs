@@ -39,6 +39,15 @@ use emberware_shared::ZX_ROM_FORMAT;
 
 use zx_common::ZRomLoader;
 
+/// Multiplayer connection mode
+#[derive(Debug, Clone)]
+pub enum ConnectionMode {
+    /// Host a game and wait for connections
+    Host { port: u16 },
+    /// Join an existing game
+    Join { host_ip: String, port: u16 },
+}
+
 /// Options to pass to the player process
 #[derive(Debug, Clone, Default)]
 pub struct PlayerOptions {
@@ -46,6 +55,10 @@ pub struct PlayerOptions {
     pub fullscreen: bool,
     /// Enable debug overlay
     pub debug: bool,
+    /// Number of players (1-4)
+    pub players: Option<usize>,
+    /// Multiplayer connection mode
+    pub connection: Option<ConnectionMode>,
 }
 
 /// Enum representing all available console types.
@@ -196,6 +209,67 @@ pub fn run_player(rom_path: &Path, console_type: ConsoleType) -> Result<()> {
     run_player_with_options(rom_path, console_type, &PlayerOptions::default())
 }
 
+/// Build player command with options
+fn build_player_command(
+    rom_path: &Path,
+    console_type: ConsoleType,
+    options: &PlayerOptions,
+) -> Command {
+    let player = find_player_binary(console_type);
+
+    let mut cmd = Command::new(&player);
+    cmd.arg(rom_path);
+
+    if options.fullscreen {
+        cmd.arg("--fullscreen");
+    }
+    if options.debug {
+        cmd.arg("--debug");
+    }
+    if let Some(players) = options.players {
+        cmd.arg("--players");
+        cmd.arg(players.to_string());
+    }
+
+    // Add multiplayer connection args
+    if let Some(ref connection) = options.connection {
+        match connection {
+            ConnectionMode::Host { port } => {
+                cmd.arg("--host");
+                cmd.arg("--port");
+                cmd.arg(port.to_string());
+            }
+            ConnectionMode::Join { host_ip, port } => {
+                cmd.arg("--join");
+                cmd.arg(format!("{}:{}", host_ip, port));
+            }
+        }
+    }
+
+    cmd
+}
+
+/// Launch a game with player options (spawns and returns immediately).
+///
+/// This is used when launching from the library UI with multiplayer options.
+pub fn launch_player_with_options(
+    rom_path: &Path,
+    console_type: ConsoleType,
+    options: &PlayerOptions,
+) -> Result<()> {
+    let mut cmd = build_player_command(rom_path, console_type, options);
+
+    tracing::info!("Launching player with options: {:?}", cmd);
+
+    cmd.spawn().with_context(|| {
+        format!(
+            "Failed to launch player. Make sure it exists in the same directory as the library or in your PATH."
+        )
+    })?;
+
+    Ok(())
+}
+
 /// Run a game with player options and wait for it to finish.
 ///
 /// This is used when launching from CLI with flags like --fullscreen.
@@ -218,15 +292,7 @@ pub fn run_player_with_options(
         if options.debug { " --debug" } else { "" },
     );
 
-    let mut cmd = Command::new(&player);
-    cmd.arg(rom_path);
-
-    if options.fullscreen {
-        cmd.arg("--fullscreen");
-    }
-    if options.debug {
-        cmd.arg("--debug");
-    }
+    let mut cmd = build_player_command(rom_path, console_type, options);
 
     let status = cmd.status().with_context(|| {
         format!(
@@ -252,6 +318,13 @@ pub fn run_player_with_options(
 /// Looks up the game in the local games list and launches the appropriate player.
 /// Used by the library UI when the user clicks Play.
 pub fn launch_game_by_id(game: &LocalGame) -> Result<()> {
+    launch_game_by_id_with_options(game, &PlayerOptions::default())
+}
+
+/// Launch a game by ID with options (spawns and returns immediately).
+///
+/// Used by the library UI for multiplayer games.
+pub fn launch_game_by_id_with_options(game: &LocalGame, options: &PlayerOptions) -> Result<()> {
     let console_type = ConsoleType::parse(&game.console_type).ok_or_else(|| {
         anyhow::anyhow!(
             "Unknown console type: '{}'. Supported consoles: {}",
@@ -264,7 +337,7 @@ pub fn launch_game_by_id(game: &LocalGame) -> Result<()> {
         )
     })?;
 
-    launch_player(&game.rom_path, console_type)
+    launch_player_with_options(&game.rom_path, console_type, options)
 }
 
 /// Run a game by ID and wait for it to finish.
