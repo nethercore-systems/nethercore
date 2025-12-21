@@ -60,6 +60,15 @@ path = "assets/score.wav"
 [[assets.sounds]]
 id = "win"
 path = "assets/win.wav"
+
+# Texture assets (optional - for sprite graphics)
+[[assets.textures]]
+id = "paddle"
+path = "assets/paddle.png"
+
+[[assets.textures]]
+id = "ball"
+path = "assets/ball.png"
 ```
 
 ### Project Structure
@@ -73,7 +82,9 @@ paddle/
 ├── assets/
 │   ├── hit.wav
 │   ├── score.wav
-│   └── win.wav
+│   ├── win.wav
+│   ├── paddle.png    (optional)
+│   └── ball.png      (optional)
 └── src/
     └── lib.rs
 ```

@@ -277,6 +277,71 @@ The game now has:
 - Descending "whomp" when someone scores
 - Victory fanfare when a player wins
 
+## Bonus: Sprite Graphics
+
+Now that we have the asset pipeline set up, we can also use image sprites instead of `draw_rect()`. This is optional—the game works fine with rectangles—but sprites look nicer!
+
+### Add Texture Assets
+
+Download `paddle.png` and `ball.png` from the [tutorial assets](https://github.com/emberware-io/emberware/tree/main/docs/book/src/tutorials/paddle/assets), then add them to `ember.toml`:
+
+```toml
+# Texture assets
+[[assets.textures]]
+id = "paddle"
+path = "assets/paddle.png"
+
+[[assets.textures]]
+id = "ball"
+path = "assets/ball.png"
+```
+
+### Add Texture FFI
+
+```rust
+#[link(wasm_import_module = "env")]
+extern "C" {
+    // ... existing imports ...
+
+    // Texture loading and drawing
+    fn rom_texture(id_ptr: *const u8, id_len: u32) -> u32;
+    fn texture_bind(texture: u32);
+    fn draw_sprite(x: f32, y: f32, w: f32, h: f32);
+}
+```
+
+### Load Textures
+
+Add handles and load in `init()`:
+
+```rust
+static mut TEX_PADDLE: u32 = 0;
+static mut TEX_BALL: u32 = 0;
+
+// In init():
+TEX_PADDLE = rom_texture(b"paddle".as_ptr(), 6);
+TEX_BALL = rom_texture(b"ball".as_ptr(), 4);
+```
+
+### Draw Sprites
+
+Replace `draw_rect()` calls in `render()`:
+
+```rust
+// Instead of: draw_rect(PADDLE_MARGIN, PADDLE1_Y, PADDLE_WIDTH, PADDLE_HEIGHT, COLOR_PLAYER1);
+texture_bind(TEX_PADDLE);
+draw_sprite(PADDLE_MARGIN, PADDLE1_Y, PADDLE_WIDTH, PADDLE_HEIGHT);
+
+// Second paddle
+draw_sprite(SCREEN_WIDTH - PADDLE_MARGIN - PADDLE_WIDTH, PADDLE2_Y, PADDLE_WIDTH, PADDLE_HEIGHT);
+
+// Instead of: draw_rect(BALL_X, BALL_Y, BALL_SIZE, BALL_SIZE, COLOR_WHITE);
+texture_bind(TEX_BALL);
+draw_sprite(BALL_X, BALL_Y, BALL_SIZE, BALL_SIZE);
+```
+
+The sprite will be tinted by the bound texture. You can also use `draw_sprite_colored()` if you want to tint sprites with different colors per player.
+
 ## New Workflow Summary
 
 | Before (Parts 1-6) | Now (Part 7+) |
