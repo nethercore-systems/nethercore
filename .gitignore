@@ -29,3 +29,6 @@ Thumbs.db
 
 # Claude
 .claude/settings.local.json
+
+# mdBook generated output
+docs/book/book/
