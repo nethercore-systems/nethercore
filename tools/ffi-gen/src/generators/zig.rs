@@ -1,39 +1,24 @@
-//! C header generator
+//! Zig binding generator
 
 use anyhow::Result;
 use std::fmt::Write as FmtWrite;
 
 use crate::model::FfiModel;
 
-/// Generate C header file from FFI model
-pub fn generate_c_header(model: &FfiModel) -> Result<String> {
+/// Convert constant name to Zig snake_case
+fn to_zig_constant_name(name: &str) -> String {
+    // SCREAMING_CASE -> snake_case
+    name.to_lowercase()
+}
+
+/// Generate Zig bindings file from FFI model
+pub fn generate_zig_bindings(model: &FfiModel) -> Result<String> {
     let mut output = String::new();
 
     // Header comment
     writeln!(output, "// GENERATED FILE - DO NOT EDIT")?;
     writeln!(output, "// Source: emberware/include/emberware_zx_ffi.rs")?;
     writeln!(output, "// Generator: tools/ffi-gen")?;
-    writeln!(output)?;
-
-    // Header guard
-    writeln!(output, "#ifndef EMBERWARE_ZX_H")?;
-    writeln!(output, "#define EMBERWARE_ZX_H")?;
-    writeln!(output)?;
-
-    // Includes
-    writeln!(output, "#include <stdint.h>")?;
-    writeln!(output, "#include <stdbool.h>")?;
-    writeln!(output)?;
-
-    // WASM attributes
-    writeln!(output, "#define EWZX_EXPORT __attribute__((visibility(\"default\")))")?;
-    writeln!(output, "#define EWZX_IMPORT __attribute__((import_module(\"env\")))")?;
-    writeln!(output)?;
-
-    // C++ compatibility
-    writeln!(output, "#ifdef __cplusplus")?;
-    writeln!(output, "extern \"C\" {{")?;
-    writeln!(output, "#endif")?;
     writeln!(output)?;
 
     // Group functions by category
@@ -51,25 +36,21 @@ pub fn generate_c_header(model: &FfiModel) -> Result<String> {
         // Documentation comment
         if !func.doc_comment.is_empty() {
             for line in func.doc_comment.lines() {
-                writeln!(output, "/** {} */", line.trim())?;
+                writeln!(output, "/// {}", line.trim())?;
             }
         }
 
         // Function declaration
-        write!(output, "EWZX_IMPORT {} {}(", func.return_type.c_type, func.name)?;
+        write!(output, "pub extern \"C\" fn {}(", func.name)?;
 
-        if func.params.is_empty() {
-            write!(output, "void")?;
-        } else {
-            for (i, param) in func.params.iter().enumerate() {
-                if i > 0 {
-                    write!(output, ", ")?;
-                }
-                write!(output, "{} {}", param.ty.c_type, param.name)?;
+        for (i, param) in func.params.iter().enumerate() {
+            if i > 0 {
+                write!(output, ", ")?;
             }
+            write!(output, "{}: {}", param.name, param.ty.zig_type)?;
         }
 
-        writeln!(output, ");")?;
+        writeln!(output, ") {};", func.return_type.zig_type)?;
         writeln!(output)?;
     }
 
@@ -81,33 +62,38 @@ pub fn generate_c_header(model: &FfiModel) -> Result<String> {
         writeln!(output)?;
 
         for module in &model.constants {
-            writeln!(output, "// {} constants", module.name)?;
+            // Create struct for constant grouping
+            let struct_name = if module.name == "color" {
+                "color".to_string()
+            } else {
+                // Convert to PascalCase for struct names
+                let mut result = String::new();
+                for part in module.name.split('_') {
+                    if !part.is_empty() {
+                        result.push(part.chars().next().unwrap().to_uppercase().next().unwrap());
+                        result.push_str(&part[1..]);
+                    }
+                }
+                result
+            };
+
+            writeln!(output, "pub const {} = struct {{", struct_name)?;
             for constant in &module.constants {
-                let const_name = format!("EWZX_{}_{}",
-                    module.name.to_uppercase(),
-                    constant.name.to_uppercase()
-                );
-                writeln!(output, "#define {} {}", const_name, constant.value)?;
+                let const_name = to_zig_constant_name(&constant.name);
+                writeln!(output, "    pub const {}: {} = {};",
+                    const_name, constant.ty, constant.value)?;
             }
+            writeln!(output, "}};")?;
             writeln!(output)?;
         }
     }
-
-    // C++ compatibility close
-    writeln!(output, "#ifdef __cplusplus")?;
-    writeln!(output, "}}")?;
-    writeln!(output, "#endif")?;
-    writeln!(output)?;
 
     // TODO: Append manual helpers from template file
     writeln!(output, "// =============================================================================")?;
     writeln!(output, "// MANUALLY MAINTAINED HELPERS")?;
     writeln!(output, "// =============================================================================")?;
-    writeln!(output, "// TODO: Load from templates/c_helpers.h")?;
+    writeln!(output, "// TODO: Load from templates/zig_helpers.zig")?;
     writeln!(output)?;
-
-    // Header guard close
-    writeln!(output, "#endif /* EMBERWARE_ZX_H */")?;
 
     Ok(output)
 }
@@ -115,10 +101,10 @@ pub fn generate_c_header(model: &FfiModel) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Category, FfiFunction, Parameter, Type};
+    use crate::model::{FfiFunction, Parameter, Type};
 
     #[test]
-    fn test_generate_simple_header() {
+    fn test_generate_simple_zig() {
         let model = FfiModel {
             functions: vec![FfiFunction {
                 name: "test_fn".to_string(),
@@ -134,10 +120,15 @@ mod tests {
             categories: vec![],
         };
 
-        let header = generate_c_header(&model).unwrap();
+        let zig = generate_zig_bindings(&model).unwrap();
 
-        assert!(header.contains("EWZX_IMPORT float test_fn(uint32_t x);"));
-        assert!(header.contains("/** Test function */"));
-        assert!(header.contains("#ifndef EMBERWARE_ZX_H"));
+        assert!(zig.contains("pub extern \"C\" fn test_fn(x: u32) f32;"));
+        assert!(zig.contains("/// Test function"));
+    }
+
+    #[test]
+    fn test_zig_constant_name_conversion() {
+        assert_eq!(to_zig_constant_name("UP"), "up");
+        assert_eq!(to_zig_constant_name("LEFT_STICK"), "left_stick");
     }
 }

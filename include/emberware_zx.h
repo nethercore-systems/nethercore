@@ -1,5 +1,5 @@
 // GENERATED FILE - DO NOT EDIT
-// Source: emberware/include/emberware-zx-ffi.rs
+// Source: emberware/include/emberware_zx_ffi.rs
 // Generator: tools/ffi-gen
 
 #ifndef EMBERWARE_ZX_H

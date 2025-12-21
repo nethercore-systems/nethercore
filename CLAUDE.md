@@ -81,7 +81,7 @@ The [docs/book/](./docs/book/) directory contains comprehensive game developer d
 
 | Reference | File | Purpose |
 |-----------|------|---------|
-| FFI Source of Truth | [emberware-zx-ffi.rs](./include/emberware-zx-ffi.rs) | All ZX FFI function signatures |
+| FFI Source of Truth | [emberware_zx_ffi.rs](./include/emberware_zx_ffi.rs) | All ZX FFI function signatures |
 | Shared FFI | [core/src/ffi.rs](./core/src/ffi.rs) | System, input, save, ROM functions |
 | ZX FFI Implementation | [emberware-zx/src/ffi/mod.rs](./emberware-zx/src/ffi/mod.rs) | ZX-specific FFI registration |
 | Console Trait | [core/src/console.rs](./core/src/console.rs) | Console abstraction |

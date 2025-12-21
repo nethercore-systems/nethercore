@@ -12,7 +12,7 @@ use std::path::PathBuf;
 /// Generate all FFI bindings
 pub fn generate_all() -> Result<()> {
     let workspace_root = find_workspace_root()?;
-    let ffi_source = workspace_root.join("include/emberware-zx-ffi.rs");
+    let ffi_source = workspace_root.join("include/emberware_zx_ffi.rs");
     let c_output = workspace_root.join("include/emberware_zx.h");
 
     // Parse FFI source
@@ -31,7 +31,15 @@ pub fn generate_all() -> Result<()> {
 
     println!("Generated C header: {}", c_output.display());
 
-    // TODO: Generate Zig bindings in Phase 2b
+    // Generate Zig bindings
+    let zig_output = workspace_root.join("include/emberware_zx.zig");
+    let zig_bindings = generators::zig::generate_zig_bindings(&model)
+        .context("Failed to generate Zig bindings")?;
+
+    std::fs::write(&zig_output, zig_bindings)
+        .with_context(|| format!("Failed to write Zig bindings to {}", zig_output.display()))?;
+
+    println!("Generated Zig bindings: {}", zig_output.display());
 
     Ok(())
 }
@@ -39,7 +47,7 @@ pub fn generate_all() -> Result<()> {
 /// Validate that bindings are in sync
 pub fn validate() -> Result<()> {
     let workspace_root = find_workspace_root()?;
-    let ffi_source = workspace_root.join("include/emberware-zx-ffi.rs");
+    let ffi_source = workspace_root.join("include/emberware_zx_ffi.rs");
 
     // Parse FFI source
     let model = parser::parse_ffi_file(&ffi_source)

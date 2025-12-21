@@ -1,247 +1,824 @@
-///! Emberware ZX FFI Bindings for Zig
-///!
-///! This module provides all FFI function declarations for Emberware ZX games.
-///! Import this module and implement init(), update(), and render().
-///!
-///! Usage:
-///!   const zx = @import("emberware_zx.zig");
-///!
-///!   export fn init() void {
-///!       zx.set_clear_color(zx.color.DARK_BLUE);
-///!       zx.render_mode(zx.RenderMode.pbr);
-///!   }
-///!
-///!   export fn update() void {
-///!       if (zx.button_pressed(0, zx.Button.a) != 0) {
-///!           // Handle input
-///!       }
-///!   }
-///!
-///!   export fn render() void {
-///!       zx.draw_sky();
-///!   }
+// GENERATED FILE - DO NOT EDIT
+// Source: emberware/include/emberware_zx_ffi.rs
+// Generator: tools/ffi-gen
 
 // =============================================================================
-// System Functions
+// System
 // =============================================================================
 
 /// Returns the fixed timestep duration in seconds.
-/// This is a CONSTANT based on tick rate, NOT wall-clock time.
-pub extern fn delta_time() f32;
+/// 
+/// This is a **constant value** based on the configured tick rate, NOT wall-clock time.
+/// - 60fps → 0.01666... (1/60)
+/// - 30fps → 0.03333... (1/30)
+/// 
+/// Safe for rollback netcode: identical across all clients regardless of frame timing.
+pub extern "C" fn delta_time() f32;
 
 /// Returns total elapsed game time since start in seconds.
-pub extern fn elapsed_time() f32;
+/// 
+/// This is the **accumulated fixed timestep**, NOT wall-clock time.
+/// Calculated as `tick_count * delta_time`.
+/// 
+/// Safe for rollback netcode: deterministic and identical across all clients.
+pub extern "C" fn elapsed_time() f32;
 
-/// Returns the current tick number (starts at 0).
-pub extern fn tick_count() u64;
+/// Returns the current tick number (starts at 0, increments by 1 each update).
+/// 
+/// Perfectly deterministic: same inputs always produce the same tick count.
+/// Safe for rollback netcode.
+pub extern "C" fn tick_count() u64;
 
 /// Logs a message to the console output.
-pub extern fn log_msg(ptr: [*]const u8, len: u32) void;
+/// 
+/// # Arguments
+/// * `ptr` — Pointer to UTF-8 string data
+/// * `len` — Length of string in bytes
+pub extern "C" fn log(ptr: [*]const u8, len: u32) void;
 
 /// Exits the game and returns to the library.
-pub extern fn quit() void;
+pub extern "C" fn quit() void;
 
 /// Returns a deterministic random u32 from the host's seeded RNG.
-pub extern fn random_u32() u32;
-
-// =============================================================================
-// Session Functions
-// =============================================================================
+/// Always use this instead of external random sources for rollback compatibility.
+pub extern "C" fn random() u32;
 
 /// Returns the number of players in the session (1-4).
-pub extern fn player_count() u32;
+pub extern "C" fn player_count() u32;
 
 /// Returns a bitmask of which players are local to this client.
-pub extern fn local_player_mask() u32;
+/// 
+/// Example: `(local_player_mask() & (1 << player_id)) != 0` checks if player is local.
+pub extern "C" fn local_player_mask() u32;
 
-// =============================================================================
-// Save Data Functions
-// =============================================================================
+/// Saves data to a slot.
+/// 
+/// # Arguments
+/// * `slot` — Save slot (0-7)
+/// * `data_ptr` — Pointer to data in WASM memory
+/// * `data_len` — Length of data in bytes (max 64KB)
+/// 
+/// # Returns
+/// 0 on success, 1 if invalid slot, 2 if data too large.
+pub extern "C" fn save(slot: u32, data_ptr: [*]const u8, data_len: u32) u32;
 
-pub extern fn save(slot: u32, data_ptr: [*]const u8, data_len: u32) u32;
-pub extern fn load(slot: u32, data_ptr: [*]u8, max_len: u32) u32;
-pub extern fn delete_save(slot: u32) u32;
+/// Loads data from a slot.
+/// 
+/// # Arguments
+/// * `slot` — Save slot (0-7)
+/// * `data_ptr` — Pointer to buffer in WASM memory
+/// * `max_len` — Maximum bytes to read
+/// 
+/// # Returns
+/// Bytes read (0 if empty or error).
+pub extern "C" fn load(slot: u32, data_ptr: [*]u8, max_len: u32) u32;
 
-// =============================================================================
-// Configuration Functions (init-only)
-// =============================================================================
+/// Deletes a save slot.
+/// 
+/// # Returns
+/// 0 on success, 1 if invalid slot.
+pub extern "C" fn delete(slot: u32) u32;
 
-pub extern fn set_tick_rate(rate: u32) void;
-pub extern fn set_clear_color(color: u32) void;
-pub extern fn render_mode(mode: u32) void;
+/// Set the tick rate. Must be called during `init()`.
+/// 
+/// # Arguments
+/// * `rate` — Tick rate index: 0=24fps, 1=30fps, 2=60fps (default), 3=120fps
+pub extern "C" fn set_tick_rate(rate: u32) void;
 
-// =============================================================================
-// Camera Functions
-// =============================================================================
+/// Set the clear/background color. Must be called during `init()`.
+/// 
+/// # Arguments
+/// * `color` — Color in 0xRRGGBBAA format (default: black)
+pub extern "C" fn set_clear_color(color: u32) void;
 
-pub extern fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32) void;
-pub extern fn camera_fov(fov_degrees: f32) void;
+/// Set the render mode. Must be called during `init()`.
+/// 
+/// # Arguments
+/// * `mode` — 0=Lambert, 1=Matcap, 2=PBR, 3=Hybrid
+pub extern "C" fn render_mode(mode: u32) void;
 
-// =============================================================================
-// Transform Functions
-// =============================================================================
+/// Set the camera position and target (look-at point).
+/// 
+/// Uses a Y-up, right-handed coordinate system.
+pub extern "C" fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32) void;
 
-pub extern fn push_identity() void;
-pub extern fn transform_set(matrix_ptr: [*]const f32) void;
-pub extern fn push_translate(x: f32, y: f32, z: f32) void;
-pub extern fn push_rotate_x(angle_deg: f32) void;
-pub extern fn push_rotate_y(angle_deg: f32) void;
-pub extern fn push_rotate_z(angle_deg: f32) void;
-pub extern fn push_rotate(angle_deg: f32, axis_x: f32, axis_y: f32, axis_z: f32) void;
-pub extern fn push_scale(x: f32, y: f32, z: f32) void;
-pub extern fn push_scale_uniform(s: f32) void;
+/// Set the camera field of view.
+/// 
+/// # Arguments
+/// * `fov_degrees` — Field of view in degrees (typically 45-90, default 60)
+pub extern "C" fn camera_fov(fov_degrees: f32) void;
 
-// =============================================================================
-// Input Functions
-// =============================================================================
+/// Push a custom view matrix (16 floats, column-major order).
+pub extern "C" fn push_view_matrix(m0: f32, m1: f32, m2: f32, m3: f32, m4: f32, m5: f32, m6: f32, m7: f32, m8: f32, m9: f32, m10: f32, m11: f32, m12: f32, m13: f32, m14: f32, m15: f32) void;
 
-pub extern fn button_held(player: u32, button: u32) u32;
-pub extern fn button_pressed(player: u32, button: u32) u32;
-pub extern fn button_released(player: u32, button: u32) u32;
-pub extern fn buttons_held(player: u32) u32;
-pub extern fn buttons_pressed(player: u32) u32;
-pub extern fn buttons_released(player: u32) u32;
+/// Push a custom projection matrix (16 floats, column-major order).
+pub extern "C" fn push_projection_matrix(m0: f32, m1: f32, m2: f32, m3: f32, m4: f32, m5: f32, m6: f32, m7: f32, m8: f32, m9: f32, m10: f32, m11: f32, m12: f32, m13: f32, m14: f32, m15: f32) void;
 
-pub extern fn left_stick_x(player: u32) f32;
-pub extern fn left_stick_y(player: u32) f32;
-pub extern fn right_stick_x(player: u32) f32;
-pub extern fn right_stick_y(player: u32) f32;
-pub extern fn left_stick(player: u32, out_x: *f32, out_y: *f32) void;
-pub extern fn right_stick(player: u32, out_x: *f32, out_y: *f32) void;
+/// Push identity matrix onto the transform stack.
+pub extern "C" fn push_identity() void;
 
-pub extern fn trigger_left(player: u32) f32;
-pub extern fn trigger_right(player: u32) f32;
+/// Set the current transform from a 4x4 matrix pointer (16 floats, column-major).
+pub extern "C" fn transform_set(matrix_ptr: [*]const f32) void;
 
-// =============================================================================
-// Render State Functions
-// =============================================================================
+/// Push a translation transform.
+pub extern "C" fn push_translate(x: f32, y: f32, z: f32) void;
 
-pub extern fn set_color(color: u32) void;
-pub extern fn depth_test(enabled: u32) void;
-pub extern fn cull_mode(mode: u32) void;
-pub extern fn blend_mode(mode: u32) void;
-pub extern fn texture_filter(filter: u32) void;
+/// Push a rotation around the X axis.
+/// 
+/// # Arguments
+/// * `angle_deg` — Rotation angle in degrees
+pub extern "C" fn push_rotate_x(angle_deg: f32) void;
 
-// =============================================================================
-// Texture Functions
-// =============================================================================
+/// Push a rotation around the Y axis.
+/// 
+/// # Arguments
+/// * `angle_deg` — Rotation angle in degrees
+pub extern "C" fn push_rotate_y(angle_deg: f32) void;
 
-pub extern fn load_texture(width: u32, height: u32, pixels_ptr: [*]const u8) u32;
-pub extern fn texture_bind(handle: u32) void;
-pub extern fn texture_bind_slot(handle: u32, slot: u32) void;
+/// Push a rotation around the Z axis.
+/// 
+/// # Arguments
+/// * `angle_deg` — Rotation angle in degrees
+pub extern "C" fn push_rotate_z(angle_deg: f32) void;
 
-// =============================================================================
-// Mesh Functions
-// =============================================================================
+/// Push a rotation around an arbitrary axis.
+/// 
+/// # Arguments
+/// * `angle_deg` — Rotation angle in degrees
+/// * `axis_x`, `axis_y`, `axis_z` — Rotation axis (will be normalized)
+pub extern "C" fn push_rotate(angle_deg: f32, axis_x: f32, axis_y: f32, axis_z: f32) void;
 
-pub extern fn load_mesh(data_ptr: [*]const f32, vertex_count: u32, format: u32) u32;
-pub extern fn load_mesh_indexed(data_ptr: [*]const f32, vertex_count: u32, index_ptr: [*]const u16, index_count: u32, format: u32) u32;
-pub extern fn draw_mesh(handle: u32) void;
+/// Push a non-uniform scale transform.
+pub extern "C" fn push_scale(x: f32, y: f32, z: f32) void;
 
-// Procedural mesh generation
-pub extern fn cube(size_x: f32, size_y: f32, size_z: f32) u32;
-pub extern fn sphere(radius: f32, segments: u32, rings: u32) u32;
-pub extern fn cylinder(radius_bottom: f32, radius_top: f32, height: f32, segments: u32) u32;
-pub extern fn plane(size_x: f32, size_z: f32, subdivisions_x: u32, subdivisions_z: u32) u32;
-pub extern fn torus(major_radius: f32, minor_radius: f32, major_segments: u32, minor_segments: u32) u32;
-pub extern fn capsule(radius: f32, height: f32, segments: u32, rings: u32) u32;
+/// Push a uniform scale transform.
+pub extern "C" fn push_scale_uniform(s: f32) void;
 
-// UV variants
-pub extern fn sphere_uv(radius: f32, segments: u32, rings: u32) u32;
-pub extern fn plane_uv(size_x: f32, size_z: f32, subdivisions_x: u32, subdivisions_z: u32) u32;
-pub extern fn cube_uv(size_x: f32, size_y: f32, size_z: f32) u32;
-pub extern fn cylinder_uv(radius_bottom: f32, radius_top: f32, height: f32, segments: u32) u32;
-pub extern fn torus_uv(major_radius: f32, minor_radius: f32, major_segments: u32, minor_segments: u32) u32;
-pub extern fn capsule_uv(radius: f32, height: f32, segments: u32, rings: u32) u32;
+/// Check if a button is currently held.
+/// 
+/// # Button indices
+/// 0=UP, 1=DOWN, 2=LEFT, 3=RIGHT, 4=A, 5=B, 6=X, 7=Y,
+/// 8=L1, 9=R1, 10=L3, 11=R3, 12=START, 13=SELECT
+/// 
+/// # Returns
+/// 1 if held, 0 otherwise.
+pub extern "C" fn button_held(player: u32, button: u32) u32;
 
-// Immediate mode
-pub extern fn draw_triangles(data_ptr: [*]const f32, vertex_count: u32, format: u32) void;
-pub extern fn draw_triangles_indexed(data_ptr: [*]const f32, vertex_count: u32, index_ptr: [*]const u16, index_count: u32, format: u32) void;
+/// Check if a button was just pressed this tick.
+/// 
+/// # Returns
+/// 1 if just pressed, 0 otherwise.
+pub extern "C" fn button_pressed(player: u32, button: u32) u32;
 
-// =============================================================================
-// 2D Drawing
-// =============================================================================
+/// Check if a button was just released this tick.
+/// 
+/// # Returns
+/// 1 if just released, 0 otherwise.
+pub extern "C" fn button_released(player: u32, button: u32) u32;
 
-pub extern fn draw_sprite(x: f32, y: f32, w: f32, h: f32, color: u32) void;
-pub extern fn draw_sprite_region(x: f32, y: f32, w: f32, h: f32, src_x: f32, src_y: f32, src_w: f32, src_h: f32, color: u32) void;
-pub extern fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32) void;
-pub extern fn draw_text(ptr: [*]const u8, len: u32, x: f32, y: f32, size: f32, color: u32) void;
+/// Get bitmask of all held buttons.
+pub extern "C" fn buttons_held(player: u32) u32;
 
-pub extern fn load_font(texture: u32, char_width: u32, char_height: u32, first_codepoint: u32, char_count: u32) u32;
-pub extern fn font_bind(font_handle: u32) void;
+/// Get bitmask of all buttons just pressed this tick.
+pub extern "C" fn buttons_pressed(player: u32) u32;
 
-// =============================================================================
-// Billboard Drawing
-// =============================================================================
+/// Get bitmask of all buttons just released this tick.
+pub extern "C" fn buttons_released(player: u32) u32;
 
-pub extern fn draw_billboard(w: f32, h: f32, mode: u32, color: u32) void;
-pub extern fn draw_billboard_region(w: f32, h: f32, src_x: f32, src_y: f32, src_w: f32, src_h: f32, mode: u32, color: u32) void;
+/// Get left stick X axis value (-1.0 to 1.0).
+pub extern "C" fn left_stick_x(player: u32) f32;
 
-// =============================================================================
-// Sky System
-// =============================================================================
+/// Get left stick Y axis value (-1.0 to 1.0).
+pub extern "C" fn left_stick_y(player: u32) f32;
 
-pub extern fn sky_set_colors(horizon_color: u32, zenith_color: u32) void;
-pub extern fn sky_set_sun(dir_x: f32, dir_y: f32, dir_z: f32, color: u32, sharpness: f32) void;
-pub extern fn draw_sky() void;
+/// Get right stick X axis value (-1.0 to 1.0).
+pub extern "C" fn right_stick_x(player: u32) f32;
 
-// =============================================================================
-// Material Functions
-// =============================================================================
+/// Get right stick Y axis value (-1.0 to 1.0).
+pub extern "C" fn right_stick_y(player: u32) f32;
 
-pub extern fn material_mre(texture: u32) void;
-pub extern fn material_albedo(texture: u32) void;
-pub extern fn material_metallic(value: f32) void;
-pub extern fn material_roughness(value: f32) void;
-pub extern fn material_emissive(value: f32) void;
-pub extern fn material_rim(intensity: f32, power: f32) void;
-pub extern fn material_shininess(value: f32) void;
-pub extern fn material_specular(color: u32) void;
+/// Get both left stick axes at once (more efficient).
+/// 
+/// Writes X and Y values to the provided pointers.
+pub extern "C" fn left_stick(player: u32, out_x: [*]f32, out_y: [*]f32) void;
 
-// =============================================================================
-// Lighting Functions
-// =============================================================================
+/// Get both right stick axes at once (more efficient).
+/// 
+/// Writes X and Y values to the provided pointers.
+pub extern "C" fn right_stick(player: u32, out_x: [*]f32, out_y: [*]f32) void;
 
-pub extern fn light_set(index: u32, x: f32, y: f32, z: f32) void;
-pub extern fn light_color(index: u32, color: u32) void;
-pub extern fn light_intensity(index: u32, intensity: f32) void;
-pub extern fn light_enable(index: u32) void;
-pub extern fn light_disable(index: u32) void;
-pub extern fn light_set_point(index: u32, x: f32, y: f32, z: f32) void;
-pub extern fn light_range(index: u32, range: f32) void;
+/// Get left trigger value (0.0 to 1.0).
+pub extern "C" fn trigger_left(player: u32) f32;
 
-// =============================================================================
-// GPU Skinning
-// =============================================================================
+/// Get right trigger value (0.0 to 1.0).
+pub extern "C" fn trigger_right(player: u32) f32;
 
-pub extern fn load_skeleton(inverse_bind_ptr: [*]const f32, bone_count: u32) u32;
-pub extern fn skeleton_bind(skeleton: u32) void;
-pub extern fn set_bones(matrices_ptr: [*]const f32, count: u32) void;
+/// Set the uniform tint color (multiplied with vertex colors and textures).
+/// 
+/// # Arguments
+/// * `color` — Color in 0xRRGGBBAA format
+pub extern "C" fn set_color(color: u32) void;
 
-// =============================================================================
-// Audio Functions
-// =============================================================================
+/// Enable or disable depth testing.
+/// 
+/// # Arguments
+/// * `enabled` — 0 to disable, non-zero to enable (default: enabled)
+pub extern "C" fn depth_test(enabled: u32) void;
 
-pub extern fn load_sound(data_ptr: [*]const i16, byte_len: u32) u32;
-pub extern fn play_sound(sound: u32, volume: f32, pan: f32) void;
-pub extern fn channel_play(channel: u32, sound: u32, volume: f32, pan: f32, looping: u32) void;
-pub extern fn channel_set(channel: u32, volume: f32, pan: f32) void;
-pub extern fn channel_stop(channel: u32) void;
-pub extern fn music_play(sound: u32, volume: f32) void;
-pub extern fn music_stop() void;
-pub extern fn music_set_volume(volume: f32) void;
+/// Set the face culling mode.
+/// 
+/// # Arguments
+/// * `mode` — 0=none, 1=back (default), 2=front
+pub extern "C" fn cull_mode(mode: u32) void;
 
-// =============================================================================
-// ROM Data Pack API
-// =============================================================================
+/// Set the blend mode.
+/// 
+/// # Arguments
+/// * `mode` — 0=none (opaque), 1=alpha, 2=additive, 3=multiply
+pub extern "C" fn blend_mode(mode: u32) void;
 
-pub extern fn rom_texture(id_ptr: u32, id_len: u32) u32;
-pub extern fn rom_mesh(id_ptr: u32, id_len: u32) u32;
-pub extern fn rom_skeleton(id_ptr: u32, id_len: u32) u32;
-pub extern fn rom_font(id_ptr: u32, id_len: u32) u32;
-pub extern fn rom_sound(id_ptr: u32, id_len: u32) u32;
-pub extern fn rom_data_len(id_ptr: u32, id_len: u32) u32;
-pub extern fn rom_data(id_ptr: u32, id_len: u32, dst_ptr: u32, max_len: u32) u32;
+/// Set the texture filtering mode.
+/// 
+/// # Arguments
+/// * `filter` — 0=nearest (pixelated), 1=linear (smooth)
+pub extern "C" fn texture_filter(filter: u32) void;
+
+/// Load a texture from RGBA pixel data.
+/// 
+/// # Arguments
+/// * `width`, `height` — Texture dimensions
+/// * `pixels_ptr` — Pointer to RGBA8 pixel data (width × height × 4 bytes)
+/// 
+/// # Returns
+/// Texture handle (>0) on success, 0 on failure.
+pub extern "C" fn load_texture(width: u32, height: u32, pixels_ptr: [*]const u8) u32;
+
+/// Bind a texture to slot 0 (albedo).
+pub extern "C" fn texture_bind(handle: u32) void;
+
+/// Bind a texture to a specific slot.
+/// 
+/// # Arguments
+/// * `slot` — 0=albedo, 1=MRE/matcap, 2=reserved, 3=matcap
+pub extern "C" fn texture_bind_slot(handle: u32, slot: u32) void;
+
+/// Set matcap blend mode for a texture slot (Mode 1 only).
+/// 
+/// # Arguments
+/// * `slot` — Matcap slot (1-3)
+/// * `mode` — 0=Multiply, 1=Add, 2=HSV Modulate
+pub extern "C" fn matcap_blend_mode(slot: u32, mode: u32) void;
+
+/// Load a non-indexed mesh.
+/// 
+/// # Vertex format flags
+/// - 1 (FORMAT_UV): Has UV coordinates (2 floats)
+/// - 2 (FORMAT_COLOR): Has per-vertex color (3 floats RGB)
+/// - 4 (FORMAT_NORMAL): Has normals (3 floats)
+/// - 8 (FORMAT_SKINNED): Has bone indices/weights
+/// 
+/// # Returns
+/// Mesh handle (>0) on success, 0 on failure.
+pub extern "C" fn load_mesh(data_ptr: [*]const f32, vertex_count: u32, format: u32) u32;
+
+/// Load an indexed mesh.
+/// 
+/// # Returns
+/// Mesh handle (>0) on success, 0 on failure.
+pub extern "C" fn load_mesh_indexed(data_ptr: [*]const f32, vertex_count: u32, index_ptr: [*]const u16, index_count: u32, format: u32) u32;
+
+/// Load packed mesh data (power user API, f16/snorm16/unorm8 encoding).
+pub extern "C" fn load_mesh_packed(data_ptr: [*]const u8, vertex_count: u32, format: u32) u32;
+
+/// Load indexed packed mesh data (power user API).
+pub extern "C" fn load_mesh_indexed_packed(data_ptr: [*]const u8, vertex_count: u32, index_ptr: [*]const u16, index_count: u32, format: u32) u32;
+
+/// Draw a retained mesh with current transform and render state.
+pub extern "C" fn draw_mesh(handle: u32) void;
+
+/// Generate a cube mesh.
+/// 
+/// # Arguments
+/// * `size_x`, `size_y`, `size_z` — Half-extents along each axis
+pub extern "C" fn cube(size_x: f32, size_y: f32, size_z: f32) u32;
+
+/// Generate a UV sphere mesh.
+/// 
+/// # Arguments
+/// * `radius` — Sphere radius
+/// * `segments` — Longitudinal divisions (3-256)
+/// * `rings` — Latitudinal divisions (2-256)
+pub extern "C" fn sphere(radius: f32, segments: u32, rings: u32) u32;
+
+/// Generate a cylinder or cone mesh.
+/// 
+/// # Arguments
+/// * `radius_bottom`, `radius_top` — Radii (>= 0.0, use 0 for cone tip)
+/// * `height` — Cylinder height
+/// * `segments` — Radial divisions (3-256)
+pub extern "C" fn cylinder(radius_bottom: f32, radius_top: f32, height: f32, segments: u32) u32;
+
+/// Generate a plane mesh on the XZ plane.
+/// 
+/// # Arguments
+/// * `size_x`, `size_z` — Dimensions
+/// * `subdivisions_x`, `subdivisions_z` — Subdivisions (1-256)
+pub extern "C" fn plane(size_x: f32, size_z: f32, subdivisions_x: u32, subdivisions_z: u32) u32;
+
+/// Generate a torus (donut) mesh.
+/// 
+/// # Arguments
+/// * `major_radius` — Distance from center to tube center
+/// * `minor_radius` — Tube radius
+/// * `major_segments`, `minor_segments` — Segment counts (3-256)
+pub extern "C" fn torus(major_radius: f32, minor_radius: f32, major_segments: u32, minor_segments: u32) u32;
+
+/// Generate a capsule (pill shape) mesh.
+/// 
+/// # Arguments
+/// * `radius` — Capsule radius
+/// * `height` — Height of cylindrical section (total = height + 2*radius)
+/// * `segments` — Radial divisions (3-256)
+/// * `rings` — Divisions per hemisphere (1-128)
+pub extern "C" fn capsule(radius: f32, height: f32, segments: u32, rings: u32) u32;
+
+/// Generate a UV sphere mesh with equirectangular texture mapping.
+pub extern "C" fn sphere_uv(radius: f32, segments: u32, rings: u32) u32;
+
+/// Generate a plane mesh with UV mapping.
+pub extern "C" fn plane_uv(size_x: f32, size_z: f32, subdivisions_x: u32, subdivisions_z: u32) u32;
+
+/// Generate a cube mesh with box-unwrapped UV mapping.
+pub extern "C" fn cube_uv(size_x: f32, size_y: f32, size_z: f32) u32;
+
+/// Generate a cylinder mesh with cylindrical UV mapping.
+pub extern "C" fn cylinder_uv(radius_bottom: f32, radius_top: f32, height: f32, segments: u32) u32;
+
+/// Generate a torus mesh with wrapped UV mapping.
+pub extern "C" fn torus_uv(major_radius: f32, minor_radius: f32, major_segments: u32, minor_segments: u32) u32;
+
+/// Generate a capsule mesh with hybrid UV mapping.
+pub extern "C" fn capsule_uv(radius: f32, height: f32, segments: u32, rings: u32) u32;
+
+/// Draw triangles immediately (non-indexed).
+/// 
+/// # Arguments
+/// * `vertex_count` — Must be multiple of 3
+/// * `format` — Vertex format flags (0-15)
+pub extern "C" fn draw_triangles(data_ptr: [*]const f32, vertex_count: u32, format: u32) void;
+
+/// Draw indexed triangles immediately.
+/// 
+/// # Arguments
+/// * `index_count` — Must be multiple of 3
+/// * `format` — Vertex format flags (0-15)
+pub extern "C" fn draw_triangles_indexed(data_ptr: [*]const f32, vertex_count: u32, index_ptr: [*]const u16, index_count: u32, format: u32) void;
+
+/// Draw a billboard (camera-facing quad) with full texture.
+/// 
+/// # Arguments
+/// * `w`, `h` — Billboard size in world units
+/// * `mode` — 1=spherical, 2=cylindrical Y, 3=cylindrical X, 4=cylindrical Z
+/// * `color` — Color tint (0xRRGGBBAA)
+pub extern "C" fn draw_billboard(w: f32, h: f32, mode: u32, color: u32) void;
+
+/// Draw a billboard with a UV region from the texture.
+/// 
+/// # Arguments
+/// * `src_x`, `src_y`, `src_w`, `src_h` — UV region (0.0-1.0)
+pub extern "C" fn draw_billboard_region(w: f32, h: f32, src_x: f32, src_y: f32, src_w: f32, src_h: f32, mode: u32, color: u32) void;
+
+/// Draw a sprite with the bound texture.
+/// 
+/// # Arguments
+/// * `x`, `y` — Screen position in pixels (0,0 = top-left)
+/// * `w`, `h` — Sprite size in pixels
+/// * `color` — Color tint (0xRRGGBBAA)
+pub extern "C" fn draw_sprite(x: f32, y: f32, w: f32, h: f32, color: u32) void;
+
+/// Draw a region of a sprite sheet.
+/// 
+/// # Arguments
+/// * `src_x`, `src_y`, `src_w`, `src_h` — UV region (0.0-1.0)
+pub extern "C" fn draw_sprite_region(x: f32, y: f32, w: f32, h: f32, src_x: f32, src_y: f32, src_w: f32, src_h: f32, color: u32) void;
+
+/// Draw a sprite with full control (rotation, origin, UV region).
+/// 
+/// # Arguments
+/// * `origin_x`, `origin_y` — Rotation pivot point (in pixels from sprite top-left)
+/// * `angle_deg` — Rotation angle in degrees (clockwise)
+pub extern "C" fn draw_sprite_ex(x: f32, y: f32, w: f32, h: f32, src_x: f32, src_y: f32, src_w: f32, src_h: f32, origin_x: f32, origin_y: f32, angle_deg: f32, color: u32) void;
+
+/// Draw a solid color rectangle.
+pub extern "C" fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32) void;
+
+/// Draw text with the current font.
+/// 
+/// # Arguments
+/// * `ptr` — Pointer to UTF-8 string data
+/// * `len` — Length in bytes
+/// * `size` — Font size in pixels
+/// * `color` — Text color (0xRRGGBBAA)
+pub extern "C" fn draw_text(ptr: [*]const u8, len: u32, x: f32, y: f32, size: f32, color: u32) void;
+
+/// Load a fixed-width bitmap font.
+/// 
+/// # Arguments
+/// * `texture` — Texture atlas handle
+/// * `char_width`, `char_height` — Glyph dimensions in pixels
+/// * `first_codepoint` — Unicode codepoint of first glyph
+/// * `char_count` — Number of glyphs
+/// 
+/// # Returns
+/// Font handle (use with `font_bind()`).
+pub extern "C" fn load_font(texture: u32, char_width: u32, char_height: u32, first_codepoint: u32, char_count: u32) u32;
+
+/// Load a variable-width bitmap font.
+/// 
+/// # Arguments
+/// * `widths_ptr` — Pointer to array of char_count u8 widths
+pub extern "C" fn load_font_ex(texture: u32, widths_ptr: [*]const u8, char_height: u32, first_codepoint: u32, char_count: u32) u32;
+
+/// Bind a font for subsequent draw_text() calls.
+/// 
+/// Pass 0 for the built-in 8×8 monospace font.
+pub extern "C" fn font_bind(font_handle: u32) void;
+
+/// Set sky gradient colors.
+/// 
+/// # Arguments
+/// * `horizon_color` — Color at eye level (0xRRGGBBAA)
+/// * `zenith_color` — Color directly overhead (0xRRGGBBAA)
+pub extern "C" fn sky_set_colors(horizon_color: u32, zenith_color: u32) void;
+
+/// Set sky sun properties.
+/// 
+/// # Arguments
+/// * `dir_x`, `dir_y`, `dir_z` — Direction light rays travel (from sun toward surface)
+/// * `color` — Sun color (0xRRGGBBAA)
+/// * `sharpness` — Sun disc sharpness (0.0-1.0, higher = smaller/sharper)
+pub extern "C" fn sky_set_sun(dir_x: f32, dir_y: f32, dir_z: f32, color: u32, sharpness: f32) void;
+
+/// Bind a matcap texture to a slot (Mode 1 only).
+/// 
+/// # Arguments
+/// * `slot` — Matcap slot (1-3)
+pub extern "C" fn matcap_set(slot: u32, texture: u32) void;
+
+/// Draw the procedural sky. Call first in render(), before any geometry.
+pub extern "C" fn draw_sky() void;
+
+/// Bind an MRE texture (Metallic-Roughness-Emissive) to slot 1.
+pub extern "C" fn material_mre(texture: u32) void;
+
+/// Bind an albedo texture to slot 0.
+pub extern "C" fn material_albedo(texture: u32) void;
+
+/// Set material metallic value (0.0 = dielectric, 1.0 = metal).
+pub extern "C" fn material_metallic(value: f32) void;
+
+/// Set material roughness value (0.0 = smooth, 1.0 = rough).
+pub extern "C" fn material_roughness(value: f32) void;
+
+/// Set material emissive intensity (0.0 = no emission, >1.0 for HDR).
+pub extern "C" fn material_emissive(value: f32) void;
+
+/// Set rim lighting parameters.
+/// 
+/// # Arguments
+/// * `intensity` — Rim brightness (0.0-1.0)
+/// * `power` — Falloff sharpness (0.0-32.0, higher = tighter)
+pub extern "C" fn material_rim(intensity: f32, power: f32) void;
+
+/// Set shininess (Mode 3 alias for roughness).
+pub extern "C" fn material_shininess(value: f32) void;
+
+/// Set specular color (Mode 3 only).
+/// 
+/// # Arguments
+/// * `color` — Specular color (0xRRGGBBAA, alpha ignored)
+pub extern "C" fn material_specular(color: u32) void;
+
+/// Set light direction (and enable the light).
+/// 
+/// # Arguments
+/// * `index` — Light index (0-3)
+/// * `x`, `y`, `z` — Direction rays travel (from light toward surface)
+/// 
+/// For a light from above, use (0, -1, 0).
+pub extern "C" fn light_set(index: u32, x: f32, y: f32, z: f32) void;
+
+/// Set light color.
+/// 
+/// # Arguments
+/// * `color` — Light color (0xRRGGBBAA, alpha ignored)
+pub extern "C" fn light_color(index: u32, color: u32) void;
+
+/// Set light intensity multiplier.
+/// 
+/// # Arguments
+/// * `intensity` — Typically 0.0-10.0
+pub extern "C" fn light_intensity(index: u32, intensity: f32) void;
+
+/// Enable a light.
+pub extern "C" fn light_enable(index: u32) void;
+
+/// Disable a light (preserves settings for re-enabling).
+pub extern "C" fn light_disable(index: u32) void;
+
+/// Convert a light to a point light at world position.
+/// 
+/// # Arguments
+/// * `index` — Light index (0-3)
+/// * `x`, `y`, `z` — World-space position
+/// 
+/// Enables the light automatically. Default range is 10.0 units.
+pub extern "C" fn light_set_point(index: u32, x: f32, y: f32, z: f32) void;
+
+/// Set point light falloff distance.
+/// 
+/// # Arguments
+/// * `index` — Light index (0-3)
+/// * `range` — Distance at which light reaches zero intensity
+/// 
+/// Only affects point lights (ignored for directional).
+pub extern "C" fn light_range(index: u32, range: f32) void;
+
+/// Load a skeleton's inverse bind matrices to GPU.
+/// 
+/// Call once during `init()` after loading skinned meshes.
+/// The inverse bind matrices transform vertices from model space
+/// to bone-local space at bind time.
+/// 
+/// # Arguments
+/// * `inverse_bind_ptr` — Pointer to array of 3×4 matrices (12 floats per bone, column-major)
+/// * `bone_count` — Number of bones (max 256)
+/// 
+/// # Returns
+/// Skeleton handle (>0) on success, 0 on error.
+pub extern "C" fn load_skeleton(inverse_bind_ptr: [*]const f32, bone_count: u32) u32;
+
+/// Bind a skeleton for subsequent skinned mesh rendering.
+/// 
+/// When bound, `set_bones()` expects model-space transforms and the GPU
+/// automatically applies the inverse bind matrices.
+/// 
+/// # Arguments
+/// * `skeleton` — Skeleton handle from `load_skeleton()`, or 0 to unbind (raw mode)
+/// 
+/// # Behavior
+/// - skeleton > 0: Enable inverse bind mode. `set_bones()` receives model transforms.
+/// - skeleton = 0: Disable inverse bind mode (raw). `set_bones()` receives final matrices.
+pub extern "C" fn skeleton_bind(skeleton: u32) void;
+
+/// Set bone transform matrices for skeletal animation.
+/// 
+/// # Arguments
+/// * `matrices_ptr` — Pointer to array of 3×4 matrices (12 floats per bone, column-major)
+/// * `count` — Number of bones (max 256)
+/// 
+/// Each bone matrix is 12 floats in column-major order:
+/// ```text
+/// [col0.x, col0.y, col0.z]  // X axis
+/// [col1.x, col1.y, col1.z]  // Y axis
+/// [col2.x, col2.y, col2.z]  // Z axis
+/// [tx,     ty,     tz    ]  // translation
+/// // implicit 4th row [0, 0, 0, 1]
+/// ```
+pub extern "C" fn set_bones(matrices_ptr: [*]const f32, count: u32) void;
+
+/// Load raw PCM sound data (22.05kHz, 16-bit signed, mono).
+/// 
+/// Must be called during `init()`.
+/// 
+/// # Arguments
+/// * `data_ptr` — Pointer to i16 PCM samples
+/// * `byte_len` — Length in bytes (must be even)
+/// 
+/// # Returns
+/// Sound handle for use with playback functions.
+pub extern "C" fn load_sound(data_ptr: [*]const i16, byte_len: u32) u32;
+
+/// Play sound on next available channel (fire-and-forget).
+/// 
+/// # Arguments
+/// * `volume` — 0.0 to 1.0
+/// * `pan` — -1.0 (left) to 1.0 (right), 0.0 = center
+pub extern "C" fn play_sound(sound: u32, volume: f32, pan: f32) void;
+
+/// Play sound on a specific channel (for managed/looping audio).
+/// 
+/// # Arguments
+/// * `channel` — Channel index (0-15)
+/// * `looping` — 1 = loop, 0 = play once
+pub extern "C" fn channel_play(channel: u32, sound: u32, volume: f32, pan: f32, looping: u32) void;
+
+/// Update channel parameters (call every frame for positional audio).
+pub extern "C" fn channel_set(channel: u32, volume: f32, pan: f32) void;
+
+/// Stop a channel.
+pub extern "C" fn channel_stop(channel: u32) void;
+
+/// Play music (dedicated looping channel).
+pub extern "C" fn music_play(sound: u32, volume: f32) void;
+
+/// Stop music.
+pub extern "C" fn music_stop() void;
+
+/// Set music volume.
+pub extern "C" fn music_set_volume(volume: f32) void;
+
+/// Load a texture from ROM data pack by ID.
+/// 
+/// # Arguments
+/// * `id_ptr` — Pointer to asset ID string in WASM memory
+/// * `id_len` — Length of asset ID string
+/// 
+/// # Returns
+/// Texture handle (>0) on success. Traps on failure.
+pub extern "C" fn rom_texture(id_ptr: u32, id_len: u32) u32;
+
+/// Load a mesh from ROM data pack by ID.
+/// 
+/// # Returns
+/// Mesh handle (>0) on success. Traps on failure.
+pub extern "C" fn rom_mesh(id_ptr: u32, id_len: u32) u32;
+
+/// Load skeleton inverse bind matrices from ROM data pack by ID.
+/// 
+/// # Returns
+/// Skeleton handle (>0) on success. Traps on failure.
+pub extern "C" fn rom_skeleton(id_ptr: u32, id_len: u32) u32;
+
+/// Load a font atlas from ROM data pack by ID.
+/// 
+/// # Returns
+/// Texture handle for font atlas (>0) on success. Traps on failure.
+pub extern "C" fn rom_font(id_ptr: u32, id_len: u32) u32;
+
+/// Load a sound from ROM data pack by ID.
+/// 
+/// # Returns
+/// Sound handle (>0) on success. Traps on failure.
+pub extern "C" fn rom_sound(id_ptr: u32, id_len: u32) u32;
+
+/// Get the byte size of raw data in the ROM data pack.
+/// 
+/// Use this to allocate a buffer before calling `rom_data()`.
+/// 
+/// # Returns
+/// Byte count on success. Traps if not found.
+pub extern "C" fn rom_data_len(id_ptr: u32, id_len: u32) u32;
+
+/// Copy raw data from ROM data pack into WASM linear memory.
+/// 
+/// # Arguments
+/// * `id_ptr`, `id_len` — Asset ID string
+/// * `dst_ptr` — Pointer to destination buffer in WASM memory
+/// * `max_len` — Maximum bytes to copy (size of destination buffer)
+/// 
+/// # Returns
+/// Bytes written on success. Traps on failure.
+pub extern "C" fn rom_data(id_ptr: u32, id_len: u32, dst_ptr: u32, max_len: u32) u32;
+
+/// Load a mesh from .ewzxmesh binary format.
+/// 
+/// # Arguments
+/// * `data_ptr` — Pointer to .ewzxmesh binary data
+/// * `data_len` — Length of the data in bytes
+/// 
+/// # Returns
+/// Mesh handle (>0) on success, 0 on failure.
+pub extern "C" fn load_zmesh(data_ptr: u32, data_len: u32) u32;
+
+/// Load a texture from .ewzxtex binary format.
+/// 
+/// # Returns
+/// Texture handle (>0) on success, 0 on failure.
+pub extern "C" fn load_ztex(data_ptr: u32, data_len: u32) u32;
+
+/// Load a sound from .ewzxsnd binary format.
+/// 
+/// # Returns
+/// Sound handle (>0) on success, 0 on failure.
+pub extern "C" fn load_zsound(data_ptr: u32, data_len: u32) u32;
+
+/// Register an i8 value for debug inspection.
+pub extern "C" fn debug_register_i8(name_ptr: u32, name_len: u32, ptr: u32) void;
+
+/// Register an i16 value for debug inspection.
+pub extern "C" fn debug_register_i16(name_ptr: u32, name_len: u32, ptr: u32) void;
+
+/// Register an i32 value for debug inspection.
+pub extern "C" fn debug_register_i32(name_ptr: u32, name_len: u32, ptr: u32) void;
+
+/// Register a u8 value for debug inspection.
+pub extern "C" fn debug_register_u8(name_ptr: u32, name_len: u32, ptr: u32) void;
+
+/// Register a u16 value for debug inspection.
+pub extern "C" fn debug_register_u16(name_ptr: u32, name_len: u32, ptr: u32) void;
+
+/// Register a u32 value for debug inspection.
+pub extern "C" fn debug_register_u32(name_ptr: u32, name_len: u32, ptr: u32) void;
+
+/// Register an f32 value for debug inspection.
+pub extern "C" fn debug_register_f32(name_ptr: u32, name_len: u32, ptr: u32) void;
+
+/// Register a bool value for debug inspection.
+pub extern "C" fn debug_register_bool(name_ptr: u32, name_len: u32, ptr: u32) void;
+
+/// Register an i32 with min/max range constraints.
+pub extern "C" fn debug_register_i32_range(name_ptr: u32, name_len: u32, ptr: u32, min: i32, max: i32) void;
+
+/// Register an f32 with min/max range constraints.
+pub extern "C" fn debug_register_f32_range(name_ptr: u32, name_len: u32, ptr: u32, min: f32, max: f32) void;
+
+/// Register a u8 with min/max range constraints.
+pub extern "C" fn debug_register_u8_range(name_ptr: u32, name_len: u32, ptr: u32, min: u32, max: u32) void;
+
+/// Register a u16 with min/max range constraints.
+pub extern "C" fn debug_register_u16_range(name_ptr: u32, name_len: u32, ptr: u32, min: u32, max: u32) void;
+
+/// Register an i16 with min/max range constraints.
+pub extern "C" fn debug_register_i16_range(name_ptr: u32, name_len: u32, ptr: u32, min: i32, max: i32) void;
+
+/// Register a Vec2 (2 floats: x, y) for debug inspection.
+pub extern "C" fn debug_register_vec2(name_ptr: u32, name_len: u32, ptr: u32) void;
+
+/// Register a Vec3 (3 floats: x, y, z) for debug inspection.
+pub extern "C" fn debug_register_vec3(name_ptr: u32, name_len: u32, ptr: u32) void;
+
+/// Register a Rect (4 i16: x, y, w, h) for debug inspection.
+pub extern "C" fn debug_register_rect(name_ptr: u32, name_len: u32, ptr: u32) void;
+
+/// Register a Color (4 u8: RGBA) for debug inspection with color picker.
+pub extern "C" fn debug_register_color(name_ptr: u32, name_len: u32, ptr: u32) void;
+
+/// Register Q8.8 fixed-point (i16) for debug inspection.
+pub extern "C" fn debug_register_fixed_i16_q8(name_ptr: u32, name_len: u32, ptr: u32) void;
+
+/// Register Q16.16 fixed-point (i32) for debug inspection.
+pub extern "C" fn debug_register_fixed_i32_q16(name_ptr: u32, name_len: u32, ptr: u32) void;
+
+/// Register Q24.8 fixed-point (i32) for debug inspection.
+pub extern "C" fn debug_register_fixed_i32_q8(name_ptr: u32, name_len: u32, ptr: u32) void;
+
+/// Register Q8.24 fixed-point (i32) for debug inspection.
+pub extern "C" fn debug_register_fixed_i32_q24(name_ptr: u32, name_len: u32, ptr: u32) void;
+
+/// Watch an i8 value (read-only).
+pub extern "C" fn debug_watch_i8(name_ptr: u32, name_len: u32, ptr: u32) void;
+
+/// Watch an i16 value (read-only).
+pub extern "C" fn debug_watch_i16(name_ptr: u32, name_len: u32, ptr: u32) void;
+
+/// Watch an i32 value (read-only).
+pub extern "C" fn debug_watch_i32(name_ptr: u32, name_len: u32, ptr: u32) void;
+
+/// Watch a u8 value (read-only).
+pub extern "C" fn debug_watch_u8(name_ptr: u32, name_len: u32, ptr: u32) void;
+
+/// Watch a u16 value (read-only).
+pub extern "C" fn debug_watch_u16(name_ptr: u32, name_len: u32, ptr: u32) void;
+
+/// Watch a u32 value (read-only).
+pub extern "C" fn debug_watch_u32(name_ptr: u32, name_len: u32, ptr: u32) void;
+
+/// Watch an f32 value (read-only).
+pub extern "C" fn debug_watch_f32(name_ptr: u32, name_len: u32, ptr: u32) void;
+
+/// Watch a bool value (read-only).
+pub extern "C" fn debug_watch_bool(name_ptr: u32, name_len: u32, ptr: u32) void;
+
+/// Watch a Vec2 value (read-only).
+pub extern "C" fn debug_watch_vec2(name_ptr: u32, name_len: u32, ptr: u32) void;
+
+/// Watch a Vec3 value (read-only).
+pub extern "C" fn debug_watch_vec3(name_ptr: u32, name_len: u32, ptr: u32) void;
+
+/// Watch a Rect value (read-only).
+pub extern "C" fn debug_watch_rect(name_ptr: u32, name_len: u32, ptr: u32) void;
+
+/// Watch a Color value (read-only).
+pub extern "C" fn debug_watch_color(name_ptr: u32, name_len: u32, ptr: u32) void;
+
+/// Begin a collapsible group in the debug UI.
+pub extern "C" fn debug_group_begin(name_ptr: u32, name_len: u32) void;
+
+/// End the current debug group.
+pub extern "C" fn debug_group_end() void;
+
+/// Query if the game is currently paused (debug mode).
+/// 
+/// # Returns
+/// 1 if paused, 0 if running normally.
+pub extern "C" fn debug_is_paused() i32;
+
+/// Get the current time scale multiplier.
+/// 
+/// # Returns
+/// 1.0 = normal, 0.5 = half-speed, 2.0 = double-speed, etc.
+pub extern "C" fn debug_get_time_scale() f32;
 
 // =============================================================================
 // Constants
@@ -264,46 +841,41 @@ pub const Button = struct {
     pub const select: u32 = 13;
 };
 
-pub const RenderMode = struct {
+pub const Render = struct {
     pub const lambert: u32 = 0;
     pub const matcap: u32 = 1;
     pub const pbr: u32 = 2;
     pub const hybrid: u32 = 3;
 };
 
-pub const BlendMode = struct {
+pub const Blend = struct {
     pub const none: u32 = 0;
     pub const alpha: u32 = 1;
     pub const additive: u32 = 2;
     pub const multiply: u32 = 3;
 };
 
-pub const CullMode = struct {
+pub const Cull = struct {
     pub const none: u32 = 0;
     pub const back: u32 = 1;
     pub const front: u32 = 2;
 };
 
 pub const Format = struct {
-    pub const pos: u32 = 0;
-    pub const uv: u32 = 1;
-    pub const color: u32 = 2;
-    pub const normal: u32 = 4;
-    pub const skinned: u32 = 8;
-
-    pub const pos_uv: u32 = uv;
-    pub const pos_color: u32 = color;
-    pub const pos_normal: u32 = normal;
-    pub const pos_uv_normal: u32 = uv | normal;
-    pub const pos_uv_color: u32 = uv | color;
-    pub const pos_uv_color_normal: u32 = uv | color | normal;
-};
-
-pub const TickRate = struct {
-    pub const fps_24: u32 = 0;
-    pub const fps_30: u32 = 1;
-    pub const fps_60: u32 = 2;
-    pub const fps_120: u32 = 3;
+    pub const pos: u8 = 0;
+    pub const uv: u8 = 1;
+    pub const color: u8 = 2;
+    pub const normal: u8 = 4;
+    pub const skinned: u8 = 8;
+    pub const pos_uv: u8 = UV;
+    pub const pos_color: u8 = COLOR;
+    pub const pos_normal: u8 = NORMAL;
+    pub const pos_uv_normal: u8 = UV | NORMAL;
+    pub const pos_uv_color: u8 = UV | COLOR;
+    pub const pos_uv_color_normal: u8 = UV | COLOR | NORMAL;
+    pub const pos_skinned: u8 = SKINNED;
+    pub const pos_normal_skinned: u8 = NORMAL | SKINNED;
+    pub const pos_uv_normal_skinned: u8 = UV | NORMAL | SKINNED;
 };
 
 pub const Billboard = struct {
@@ -313,50 +885,28 @@ pub const Billboard = struct {
     pub const cylindrical_z: u32 = 4;
 };
 
+pub const TickRate = struct {
+    pub const fps_24: u32 = 0;
+    pub const fps_30: u32 = 1;
+    pub const fps_60: u32 = 2;
+    pub const fps_120: u32 = 3;
+};
+
 pub const color = struct {
-    pub const WHITE: u32 = 0xFFFFFFFF;
-    pub const BLACK: u32 = 0x000000FF;
-    pub const RED: u32 = 0xFF0000FF;
-    pub const GREEN: u32 = 0x00FF00FF;
-    pub const BLUE: u32 = 0x0000FFFF;
-    pub const YELLOW: u32 = 0xFFFF00FF;
-    pub const CYAN: u32 = 0x00FFFFFF;
-    pub const MAGENTA: u32 = 0xFF00FFFF;
-    pub const ORANGE: u32 = 0xFF8000FF;
-    pub const TRANSPARENT: u32 = 0x00000000;
-    pub const DARK_BLUE: u32 = 0x1a1a2eFF;
+    pub const white: u32 = 0xFFFFFFFF;
+    pub const black: u32 = 0x000000FF;
+    pub const red: u32 = 0xFF0000FF;
+    pub const green: u32 = 0x00FF00FF;
+    pub const blue: u32 = 0x0000FFFF;
+    pub const yellow: u32 = 0xFFFF00FF;
+    pub const cyan: u32 = 0x00FFFFFF;
+    pub const magenta: u32 = 0xFF00FFFF;
+    pub const orange: u32 = 0xFF8000FF;
+    pub const transparent: u32 = 0x00000000;
 };
 
 // =============================================================================
-// Helper Functions
+// MANUALLY MAINTAINED HELPERS
 // =============================================================================
+// TODO: Load from templates/zig_helpers.zig
 
-/// Pack RGBA color components into a u32.
-pub fn rgba(r: u8, g: u8, b: u8, a: u8) u32 {
-    return (@as(u32, r) << 24) | (@as(u32, g) << 16) | (@as(u32, b) << 8) | @as(u32, a);
-}
-
-/// Pack RGB color components into a u32 (alpha = 255).
-pub fn rgb(r: u8, g: u8, b: u8) u32 {
-    return rgba(r, g, b, 255);
-}
-
-/// Helper to log a string.
-pub fn log(msg: []const u8) void {
-    log_msg(msg.ptr, @intCast(msg.len));
-}
-
-/// Helper to draw text from a slice.
-pub fn text(msg: []const u8, x: f32, y: f32, size: f32, col: u32) void {
-    draw_text(msg.ptr, @intCast(msg.len), x, y, size, col);
-}
-
-/// Clamp a float value between min and max.
-pub fn clampf(val: f32, min: f32, max: f32) f32 {
-    return @max(min, @min(val, max));
-}
-
-/// Linear interpolation.
-pub fn lerpf(a: f32, b: f32, t: f32) f32 {
-    return a + (b - a) * t;
-}
