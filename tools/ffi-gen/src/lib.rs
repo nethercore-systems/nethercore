@@ -11,19 +11,29 @@ use std::path::PathBuf;
 
 /// Generate all FFI bindings
 pub fn generate_all() -> Result<()> {
+    // For now, hardcoded to ZX. TODO: Make this configurable via CLI
+    generate_for_console("zx")
+}
+
+/// Generate bindings for a specific console
+pub fn generate_for_console(console: &str) -> Result<()> {
     let workspace_root = find_workspace_root()?;
-    let ffi_source = workspace_root.join("include/emberware_zx_ffi.rs");
-    let c_output = workspace_root.join("include/emberware_zx.h");
+
+    // Construct console-specific paths
+    let ffi_source = workspace_root.join(format!("include/emberware_{}_ffi.rs", console));
+    let c_output = workspace_root.join(format!("include/emberware_{}.h", console));
+    let zig_output = workspace_root.join(format!("include/emberware_{}.zig", console));
 
     // Parse FFI source
     let model = parser::parse_ffi_file(&ffi_source)
-        .context("Failed to parse FFI source file")?;
+        .with_context(|| format!("Failed to parse FFI source for console '{}'", console))?;
 
+    println!("Console: {}", console.to_uppercase());
     println!("Parsed {} functions", model.functions.len());
     println!("Parsed {} constant modules", model.constants.len());
 
     // Generate C header
-    let c_header = generators::c::generate_c_header(&model)
+    let c_header = generators::c::generate_c_header(&model, console)
         .context("Failed to generate C header")?;
 
     std::fs::write(&c_output, c_header)
@@ -32,8 +42,7 @@ pub fn generate_all() -> Result<()> {
     println!("Generated C header: {}", c_output.display());
 
     // Generate Zig bindings
-    let zig_output = workspace_root.join("include/emberware_zx.zig");
-    let zig_bindings = generators::zig::generate_zig_bindings(&model)
+    let zig_bindings = generators::zig::generate_zig_bindings(&model, console)
         .context("Failed to generate Zig bindings")?;
 
     std::fs::write(&zig_output, zig_bindings)

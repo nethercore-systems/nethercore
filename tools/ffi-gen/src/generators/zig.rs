@@ -2,8 +2,22 @@
 
 use anyhow::Result;
 use std::fmt::Write as FmtWrite;
+use std::path::PathBuf;
 
 use crate::model::FfiModel;
+
+/// Load Zig helper template for a specific console
+fn load_zig_helpers(console: &str) -> Result<String> {
+    let template_path = PathBuf::from(format!("tools/ffi-gen/templates/zig_helpers_{}.zig", console));
+
+    // Try console-specific template first, fall back to generic
+    if template_path.exists() {
+        Ok(std::fs::read_to_string(&template_path)?)
+    } else {
+        let generic_path = PathBuf::from("tools/ffi-gen/templates/zig_helpers.zig");
+        Ok(std::fs::read_to_string(&generic_path)?)
+    }
+}
 
 /// Convert constant name to Zig snake_case
 fn to_zig_constant_name(name: &str) -> String {
@@ -12,12 +26,12 @@ fn to_zig_constant_name(name: &str) -> String {
 }
 
 /// Generate Zig bindings file from FFI model
-pub fn generate_zig_bindings(model: &FfiModel) -> Result<String> {
+pub fn generate_zig_bindings(model: &FfiModel, console: &str) -> Result<String> {
     let mut output = String::new();
 
     // Header comment
     writeln!(output, "// GENERATED FILE - DO NOT EDIT")?;
-    writeln!(output, "// Source: emberware/include/emberware_zx_ffi.rs")?;
+    writeln!(output, "// Source: emberware/include/emberware_{}_ffi.rs", console)?;
     writeln!(output, "// Generator: tools/ffi-gen")?;
     writeln!(output)?;
 
@@ -88,12 +102,13 @@ pub fn generate_zig_bindings(model: &FfiModel) -> Result<String> {
         }
     }
 
-    // TODO: Append manual helpers from template file
-    writeln!(output, "// =============================================================================")?;
-    writeln!(output, "// MANUALLY MAINTAINED HELPERS")?;
-    writeln!(output, "// =============================================================================")?;
-    writeln!(output, "// TODO: Load from templates/zig_helpers.zig")?;
+    // Append manual helpers from template file
     writeln!(output)?;
+    if let Ok(helpers) = load_zig_helpers(console) {
+        write!(output, "{}", helpers)?;
+    } else {
+        writeln!(output, "// Note: No manual helpers template found for console '{}'", console)?;
+    }
 
     Ok(output)
 }
@@ -120,7 +135,7 @@ mod tests {
             categories: vec![],
         };
 
-        let zig = generate_zig_bindings(&model).unwrap();
+        let zig = generate_zig_bindings(&model, "test").unwrap();
 
         assert!(zig.contains("pub extern \"C\" fn test_fn(x: u32) f32;"));
         assert!(zig.contains("/// Test function"));

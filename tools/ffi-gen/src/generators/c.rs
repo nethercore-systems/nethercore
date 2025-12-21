@@ -2,22 +2,39 @@
 
 use anyhow::Result;
 use std::fmt::Write as FmtWrite;
+use std::path::PathBuf;
 
 use crate::model::FfiModel;
 
+/// Load C helper template for a specific console
+fn load_c_helpers(console: &str) -> Result<String> {
+    let template_path = PathBuf::from(format!("tools/ffi-gen/templates/c_helpers_{}.h", console));
+
+    // Try console-specific template first, fall back to generic
+    if template_path.exists() {
+        Ok(std::fs::read_to_string(&template_path)?)
+    } else {
+        let generic_path = PathBuf::from("tools/ffi-gen/templates/c_helpers.h");
+        Ok(std::fs::read_to_string(&generic_path)?)
+    }
+}
+
 /// Generate C header file from FFI model
-pub fn generate_c_header(model: &FfiModel) -> Result<String> {
+pub fn generate_c_header(model: &FfiModel, console: &str) -> Result<String> {
     let mut output = String::new();
+
+    let console_upper = console.to_uppercase();
+    let header_guard = format!("EMBERWARE_{}_H", console_upper);
 
     // Header comment
     writeln!(output, "// GENERATED FILE - DO NOT EDIT")?;
-    writeln!(output, "// Source: emberware/include/emberware_zx_ffi.rs")?;
+    writeln!(output, "// Source: emberware/include/emberware_{}_ffi.rs", console)?;
     writeln!(output, "// Generator: tools/ffi-gen")?;
     writeln!(output)?;
 
     // Header guard
-    writeln!(output, "#ifndef EMBERWARE_ZX_H")?;
-    writeln!(output, "#define EMBERWARE_ZX_H")?;
+    writeln!(output, "#ifndef {}", header_guard)?;
+    writeln!(output, "#define {}", header_guard)?;
     writeln!(output)?;
 
     // Includes
@@ -99,15 +116,16 @@ pub fn generate_c_header(model: &FfiModel) -> Result<String> {
     writeln!(output, "#endif")?;
     writeln!(output)?;
 
-    // TODO: Append manual helpers from template file
-    writeln!(output, "// =============================================================================")?;
-    writeln!(output, "// MANUALLY MAINTAINED HELPERS")?;
-    writeln!(output, "// =============================================================================")?;
-    writeln!(output, "// TODO: Load from templates/c_helpers.h")?;
+    // Append manual helpers from template file
     writeln!(output)?;
+    if let Ok(helpers) = load_c_helpers(console) {
+        write!(output, "{}", helpers)?;
+    } else {
+        writeln!(output, "// Note: No manual helpers template found for console '{}'", console)?;
+    }
 
     // Header guard close
-    writeln!(output, "#endif /* EMBERWARE_ZX_H */")?;
+    writeln!(output, "\n#endif /* {} */", header_guard)?;
 
     Ok(output)
 }
@@ -134,10 +152,10 @@ mod tests {
             categories: vec![],
         };
 
-        let header = generate_c_header(&model).unwrap();
+        let header = generate_c_header(&model, "test").unwrap();
 
         assert!(header.contains("EWZX_IMPORT float test_fn(uint32_t x);"));
         assert!(header.contains("/** Test function */"));
-        assert!(header.contains("#ifndef EMBERWARE_ZX_H"));
+        assert!(header.contains("#ifndef EMBERWARE_TEST_H"));
     }
 }
