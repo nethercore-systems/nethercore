@@ -1,4 +1,5 @@
 mod cart;
+mod ffi;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
@@ -28,6 +29,12 @@ enum Commands {
         #[command(subcommand)]
         command: cart::CartCommand,
     },
+
+    /// FFI binding generation (C/Zig from Rust)
+    Ffi {
+        #[command(subcommand)]
+        command: ffi::FfiCommand,
+    },
 }
 
 fn main() -> Result<()> {
@@ -36,6 +43,7 @@ fn main() -> Result<()> {
     match cli.command {
         Commands::BuildExamples => build_examples(),
         Commands::Cart { command } => cart::execute(command),
+        Commands::Ffi { command } => ffi::execute(command),
     }
 }
 

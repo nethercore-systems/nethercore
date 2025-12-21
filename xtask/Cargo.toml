@@ -8,6 +8,7 @@ edition = "2021"
 emberware-shared = { path = "../shared" }
 emberware-core = { path = "../core" }
 zx-common = { path = "../zx-common" }
+ffi-gen = { path = "../tools/ffi-gen" }
 
 # Workspace dependencies
 anyhow = { workspace = true }

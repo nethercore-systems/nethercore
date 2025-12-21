@@ -1,0 +1,56 @@
+name: FFI Bindings Check
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'include/emberware_*_ffi.rs'
+      - 'include/emberware_*.h'
+      - 'include/emberware_*.zig'
+      - 'tools/ffi-gen/**'
+      - '.github/workflows/ffi-check.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'include/emberware_*_ffi.rs'
+      - 'include/emberware_*.h'
+      - 'include/emberware_*.zig'
+      - 'tools/ffi-gen/**'
+      - '.github/workflows/ffi-check.yml'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: Check FFI Bindings
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-action@stable
+
+      - name: Setup Zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.11.0
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-ffi-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Check bindings are in sync
+        run: cargo xtask ffi check
+
+      - name: Verify bindings compile
+        run: cargo xtask ffi verify
