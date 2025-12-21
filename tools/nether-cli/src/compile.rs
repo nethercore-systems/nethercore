@@ -8,7 +8,7 @@ use clap::Args;
 use std::path::PathBuf;
 use std::process::Command;
 
-use crate::manifest::EmberManifest;
+use crate::manifest::NetherManifest;
 
 /// Arguments for the compile command
 #[derive(Args)]
@@ -38,7 +38,7 @@ pub fn execute(args: CompileArgs) -> Result<PathBuf> {
     let manifest_path = project_dir.join(&args.manifest);
 
     // Load manifest
-    let manifest = EmberManifest::load(&manifest_path)?;
+    let manifest = NetherManifest::load(&manifest_path)?;
 
     println!("Compiling {}...", manifest.game.title);
 

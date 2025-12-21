@@ -307,7 +307,7 @@ EWZX_EXPORT void update(void) {
 
 {{#tab name="Zig"}}
 ```zig
-const zx = @import("nethercore_zx.zig");
+const zx = @import("zx.zig");
 
 export fn init() void {
     zx.log("Game initialized!");

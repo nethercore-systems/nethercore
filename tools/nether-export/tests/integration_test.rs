@@ -9,42 +9,42 @@ use tempfile::tempdir;
 
 /// Test OBJ -> NetherZMesh conversion
 #[test]
-fn test_obj_to_embermesh() {
+fn test_obj_to_nethermesh() {
     let dir = tempdir().expect("Failed to create temp dir");
     let obj_path = dir.path().join("cube.obj");
-    let mesh_path = dir.path().join("cube.embermesh");
+    let mesh_path = dir.path().join("cube.nczmesh");
 
     // Generate test OBJ
     generate_test_assets::generate_cube_obj(&obj_path).expect("Failed to generate OBJ");
     assert!(obj_path.exists(), "OBJ file should exist");
 
     // Convert to NetherZMesh
-    ember_export_convert_obj(&obj_path, &mesh_path);
-    assert!(mesh_path.exists(), "EmberMesh file should exist");
+    nether_export_convert_obj(&obj_path, &mesh_path);
+    assert!(mesh_path.exists(), "NetherMesh file should exist");
 
     // Verify the output file structure
     let data = std::fs::read(&mesh_path).expect("Failed to read mesh file");
-    verify_ember_z_mesh(&data);
+    verify_nether_z_mesh(&data);
 }
 
 /// Test PNG -> NetherZTexture conversion
 #[test]
-fn test_png_to_embertex() {
+fn test_png_to_nethertex() {
     let dir = tempdir().expect("Failed to create temp dir");
     let png_path = dir.path().join("test.png");
-    let tex_path = dir.path().join("test.embertex");
+    let tex_path = dir.path().join("test.ncztex");
 
     // Generate test PNG
     generate_test_assets::generate_checkerboard_png(&png_path).expect("Failed to generate PNG");
     assert!(png_path.exists(), "PNG file should exist");
 
     // Convert to NetherZTexture
-    ember_export_convert_texture(&png_path, &tex_path);
-    assert!(tex_path.exists(), "EmberTexture file should exist");
+    nether_export_convert_texture(&png_path, &tex_path);
+    assert!(tex_path.exists(), "NetherTexture file should exist");
 
     // Verify the output file structure
     let data = std::fs::read(&tex_path).expect("Failed to read texture file");
-    verify_ember_z_texture(&data, 4, 4); // 4x4 checkerboard
+    verify_nether_z_texture(&data, 4, 4); // 4x4 checkerboard
 }
 
 /// Test minimal triangle OBJ
@@ -52,18 +52,18 @@ fn test_png_to_embertex() {
 fn test_triangle_obj() {
     let dir = tempdir().expect("Failed to create temp dir");
     let obj_path = dir.path().join("triangle.obj");
-    let mesh_path = dir.path().join("triangle.embermesh");
+    let mesh_path = dir.path().join("triangle.nczmesh");
 
     generate_test_assets::generate_triangle_obj(&obj_path)
         .expect("Failed to generate triangle OBJ");
-    ember_export_convert_obj(&obj_path, &mesh_path);
+    nether_export_convert_obj(&obj_path, &mesh_path);
 
     let data = std::fs::read(&mesh_path).expect("Failed to read mesh file");
-    verify_ember_z_mesh(&data);
+    verify_nether_z_mesh(&data);
 }
 
 // Helper to run nether-export mesh command
-fn ember_export_convert_obj(input: &Path, output: &Path) {
+fn nether_export_convert_obj(input: &Path, output: &Path) {
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_nether-export"))
         .args([
             "mesh",
@@ -77,7 +77,7 @@ fn ember_export_convert_obj(input: &Path, output: &Path) {
 }
 
 // Helper to run nether-export texture command
-fn ember_export_convert_texture(input: &Path, output: &Path) {
+fn nether_export_convert_texture(input: &Path, output: &Path) {
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_nether-export"))
         .args([
             "texture",
@@ -91,7 +91,7 @@ fn ember_export_convert_texture(input: &Path, output: &Path) {
 }
 
 // Verify NetherZMesh header structure
-fn verify_ember_z_mesh(data: &[u8]) {
+fn verify_nether_z_mesh(data: &[u8]) {
     use zx_common::NetherZMeshHeader;
 
     assert!(
@@ -127,7 +127,7 @@ fn verify_ember_z_mesh(data: &[u8]) {
 }
 
 // Verify NetherZTexture header structure
-fn verify_ember_z_texture(data: &[u8], expected_width: u16, expected_height: u16) {
+fn verify_nether_z_texture(data: &[u8], expected_width: u16, expected_height: u16) {
     use zx_common::NetherZTextureHeader;
 
     assert!(

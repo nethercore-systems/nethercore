@@ -1,14 +1,14 @@
-//! Mesh converter (glTF/OBJ -> .embermesh)
+//! Mesh converter (glTF/OBJ -> .nczmesh)
 
 use anyhow::{bail, Context, Result};
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter};
 use std::path::Path;
 
-use crate::formats::write_ember_mesh;
+use crate::formats::write_nether_mesh;
 use crate::{vertex_stride_packed, FORMAT_NORMAL, FORMAT_UV};
 
-/// Convert a glTF/GLB file to EmberMesh format
+/// Convert a glTF/GLB file to NetherMesh format
 pub fn convert_gltf(input: &Path, output: &Path, format_override: Option<&str>) -> Result<()> {
     let (document, buffers, _images) =
         gltf::import(input).with_context(|| format!("Failed to load glTF: {:?}", input))?;
@@ -68,7 +68,7 @@ pub fn convert_gltf(input: &Path, output: &Path, format_override: Option<&str>) 
         File::create(output).with_context(|| format!("Failed to create output: {:?}", output))?;
     let mut writer = BufWriter::new(file);
 
-    write_ember_mesh(&mut writer, format, &vertex_data, indices.as_deref())?;
+    write_nether_mesh(&mut writer, format, &vertex_data, indices.as_deref())?;
 
     let stride = vertex_stride_packed(format);
     tracing::info!(
@@ -139,7 +139,7 @@ fn pack_vertices(
     data
 }
 
-/// Convert an OBJ file to EmberMesh format
+/// Convert an OBJ file to NetherMesh format
 pub fn convert_obj(input: &Path, output: &Path, format_override: Option<&str>) -> Result<()> {
     let file = File::open(input).with_context(|| format!("Failed to open OBJ: {:?}", input))?;
     let reader = BufReader::new(file);
@@ -259,7 +259,7 @@ pub fn convert_obj(input: &Path, output: &Path, format_override: Option<&str>) -
         File::create(output).with_context(|| format!("Failed to create output: {:?}", output))?;
     let mut writer = BufWriter::new(file);
 
-    write_ember_mesh(&mut writer, format, &vertex_data, Some(&indices))?;
+    write_nether_mesh(&mut writer, format, &vertex_data, Some(&indices))?;
 
     let stride = vertex_stride_packed(format);
     tracing::info!(

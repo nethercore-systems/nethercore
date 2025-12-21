@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 use crate::build::{self, BuildArgs};
-use crate::manifest::EmberManifest;
+use crate::manifest::NetherManifest;
 
 /// Arguments for the run command
 #[derive(Args)]
@@ -72,7 +72,7 @@ pub fn execute(args: RunArgs) -> Result<()> {
     println!("=== Launching ===");
 
     // Read manifest to get game ID
-    let manifest = EmberManifest::load(&manifest_path)?;
+    let manifest = NetherManifest::load(&manifest_path)?;
     let rom_path = project_dir.join(format!(
         "{}.{}",
         manifest.game.id,

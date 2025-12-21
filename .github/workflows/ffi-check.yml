@@ -4,17 +4,35 @@ on:
   push:
     branches: [main]
     paths:
-      - 'include/nethercore_*_ffi.rs'
-      - 'include/nethercore_*.h'
-      - 'include/nethercore_*.zig'
+      - 'include/zx.rs'
+      - 'include/zx.h'
+      - 'include/zx.zig'
+      - 'include/chroma.rs'  # Future consoles
+      - 'include/chroma.h'
+      - 'include/chroma.zig'
+      - 'include/z.rs'
+      - 'include/z.h'
+      - 'include/z.zig'
+      - 'include/one.rs'
+      - 'include/one.h'
+      - 'include/one.zig'
       - 'tools/ffi-gen/**'
       - '.github/workflows/ffi-check.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'include/nethercore_*_ffi.rs'
-      - 'include/nethercore_*.h'
-      - 'include/nethercore_*.zig'
+      - 'include/zx.rs'
+      - 'include/zx.h'
+      - 'include/zx.zig'
+      - 'include/chroma.rs'  # Future consoles
+      - 'include/chroma.h'
+      - 'include/chroma.zig'
+      - 'include/z.rs'
+      - 'include/z.h'
+      - 'include/z.zig'
+      - 'include/one.rs'
+      - 'include/one.h'
+      - 'include/one.zig'
       - 'tools/ffi-gen/**'
       - '.github/workflows/ffi-check.yml'
   workflow_dispatch:

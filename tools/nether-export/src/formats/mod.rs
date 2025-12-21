@@ -11,8 +11,8 @@ use zx_common::formats::{encode_bone_transform, NetherZAnimationHeader};
 
 use crate::animation::BoneTRS;
 
-/// Write a complete EmberMesh file
-pub fn write_ember_mesh<W: Write>(
+/// Write a complete NetherMesh file
+pub fn write_nether_mesh<W: Write>(
     w: &mut W,
     format: u8,
     vertex_data: &[u8],
@@ -35,7 +35,7 @@ pub fn write_ember_mesh<W: Write>(
     Ok(())
 }
 
-/// Write a complete EmberTexture file (RGBA8 or BC7)
+/// Write a complete NetherTexture file (RGBA8 or BC7)
 ///
 /// # Arguments
 /// * `w` - Writer to output to
@@ -43,7 +43,7 @@ pub fn write_ember_mesh<W: Write>(
 /// * `height` - Texture height (u16, max 65535)
 /// * `format` - Texture format (Rgba8, Bc7, or Bc7Linear)
 /// * `data` - Pixel data (RGBA8) or compressed blocks (BC7)
-pub fn write_ember_texture<W: Write>(
+pub fn write_nether_texture<W: Write>(
     w: &mut W,
     width: u16,
     height: u16,
@@ -56,11 +56,11 @@ pub fn write_ember_texture<W: Write>(
     Ok(())
 }
 
-/// Write a complete EmberSound file (QOA compressed format)
+/// Write a complete NetherSound file (QOA compressed format)
 ///
 /// Uses QOA compression (~5:1 ratio) instead of raw PCM.
 /// Format: NetherZSoundHeader (4 bytes) + QOA frame data.
-pub fn write_ember_sound<W: Write>(w: &mut W, samples: &[i16]) -> Result<()> {
+pub fn write_nether_sound<W: Write>(w: &mut W, samples: &[i16]) -> Result<()> {
     let header = NetherZSoundHeader::new(samples.len() as u32);
     w.write_all(&header.to_bytes())?;
 
@@ -69,10 +69,10 @@ pub fn write_ember_sound<W: Write>(w: &mut W, samples: &[i16]) -> Result<()> {
     Ok(())
 }
 
-/// Write a complete EmberSkeleton file
+/// Write a complete NetherSkeleton file
 ///
 /// Inverse bind matrices are stored as 12 floats per bone (3×4 column-major).
-pub fn write_ember_skeleton<W: Write>(
+pub fn write_nether_skeleton<W: Write>(
     w: &mut W,
     inverse_bind_matrices: &[[f32; 12]],
 ) -> Result<()> {
@@ -88,7 +88,7 @@ pub fn write_ember_skeleton<W: Write>(
     Ok(())
 }
 
-/// Write a complete EmberAnimation file (new platform format)
+/// Write a complete NetherAnimation file (new platform format)
 ///
 /// Uses the compressed platform format (16 bytes per bone per frame):
 /// - rotation: u32 (smallest-three packed quaternion)
@@ -99,7 +99,7 @@ pub fn write_ember_skeleton<W: Write>(
 /// * `w` — Writer to output to
 /// * `bone_count` — Number of bones per frame (max 255)
 /// * `frames` — Vector of frames, each containing `bone_count` BoneTRS transforms
-pub fn write_ember_animation<W: Write>(
+pub fn write_nether_animation<W: Write>(
     w: &mut W,
     bone_count: u8,
     frames: &[Vec<BoneTRS>],

@@ -22,8 +22,8 @@ pub fn build(b: *std.Build) void {
     // Install the artifact
     b.installArtifact(exe);
 
-    // Add a run step (requires ember CLI)
-    const run_cmd = b.addSystemCommand(&.{ "ember", "run", "zig-out/bin/game.wasm" });
+    // Add a run step (requires nether CLI)
+    const run_cmd = b.addSystemCommand(&.{ "nether", "run", "zig-out/bin/game.wasm" });
     run_cmd.step.dependOn(b.getInstallStep());
 
     const run_step = b.step("run", "Build and run in Nethercore player");

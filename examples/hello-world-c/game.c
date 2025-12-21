@@ -10,7 +10,7 @@
  *         -Wl,--allow-undefined -o game.wasm game.c
  */
 
-#include "nethercore_zx.h"
+#include "zx.h"
 
 /* Game state - stored in static variables for rollback safety */
 static float square_y = 200.0f;

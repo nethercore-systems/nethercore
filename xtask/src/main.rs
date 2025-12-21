@@ -61,7 +61,7 @@ fn build_examples() -> Result<()> {
     run_asset_generators(&project_root)?;
 
     // Build nether CLI first if needed
-    let ember_exe = ensure_ember_cli(&project_root)?;
+    let nether_exe = ensure_nether_cli(&project_root)?;
 
     // Library crates that shouldn't be built as standalone examples
     let skip_dirs = ["inspector-common", "examples-common"];
@@ -92,14 +92,14 @@ fn build_examples() -> Result<()> {
         let example_name_str = example_name.to_string_lossy();
 
         // Check if this example has nether.toml
-        let ember_toml_path = example_path.join("nether.toml");
-        let has_ember_toml = ember_toml_path.exists();
+        let nether_toml_path = example_path.join("nether.toml");
+        let has_nether_toml = nether_toml_path.exists();
 
         println!("Building {}...", example_name_str);
 
-        if has_ember_toml {
+        if has_nether_toml {
             // Use nether build (compile + pack)
-            match build_with_ember(&ember_exe, &example_path, &games_dir, &example_name_str) {
+            match build_with_nether(&nether_exe, &example_path, &games_dir, &example_name_str) {
                 Ok(_) => {
                     println!("  ✓ {} installed", example_name_str);
                     success_count.fetch_add(1, Ordering::Relaxed);
@@ -222,7 +222,7 @@ fn run_asset_generators(project_root: &Path) -> Result<()> {
 }
 
 /// Ensure nether CLI is built and return path to executable
-fn ensure_ember_cli(project_root: &Path) -> Result<PathBuf> {
+fn ensure_nether_cli(project_root: &Path) -> Result<PathBuf> {
     let nether_path = project_root.join("target/release/nether");
     let nether_path_debug = project_root.join("target/debug/nether");
 
@@ -256,8 +256,8 @@ fn ensure_ember_cli(project_root: &Path) -> Result<PathBuf> {
 }
 
 /// Build an example using nether build (compile + pack)
-fn build_with_ember(
-    ember_exe: &Path,
+fn build_with_nether(
+    nether_exe: &Path,
     example_path: &Path,
     games_dir: &Path,
     example_name: &str,
@@ -270,7 +270,7 @@ fn build_with_ember(
     let rom_output = game_dir.join("rom.nczx");
 
     // Run nether build (compile + pack)
-    let output = Command::new(ember_exe)
+    let output = Command::new(nether_exe)
         .args([
             "build",
             "--manifest",

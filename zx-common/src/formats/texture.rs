@@ -1,4 +1,4 @@
-//! NetherZTexture binary format (.embertex)
+//! NetherZTexture binary format (.ncztex)
 //!
 //! ZX console texture format. Supports RGBA8 (Mode 0) or BC7 (Modes 1-3).
 //! POD format - no magic bytes.

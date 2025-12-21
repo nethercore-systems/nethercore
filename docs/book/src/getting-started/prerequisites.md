@@ -85,10 +85,10 @@ sudo mv wasi-sdk-24.0 /opt/wasi-sdk
 
 ### Get the Nethercore Header
 
-Download `nethercore_zx.h` from the Nethercore repository:
+Download `zx.h` from the Nethercore repository:
 ```bash
 # From the nethercore repo
-cp include/nethercore_zx.h your-game/
+cp include/zx.h your-game/
 ```
 
 Or add the include path to your build.
@@ -131,7 +131,7 @@ export PATH=$PATH:$(pwd)/zig-linux-x86_64-0.13.0
 
 Copy the native Zig bindings from the Nethercore repository:
 ```bash
-cp include/nethercore_zx.zig your-game/
+cp include/zx.zig your-game/
 ```
 
 Or declare the FFI imports directly in your code (see examples).

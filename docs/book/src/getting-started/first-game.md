@@ -19,7 +19,7 @@ mkdir my-first-game
 cd my-first-game
 ```
 
-Copy `nethercore_zx.h` from the Nethercore repository to your project folder.
+Copy `zx.h` from the Nethercore repository to your project folder.
 {{#endtab}}
 
 {{#tab name="Zig"}}
@@ -28,7 +28,7 @@ mkdir my-first-game
 cd my-first-game
 ```
 
-Copy `nethercore_zx.h` from the Nethercore repository to your project folder.
+Copy `zx.h` from the Nethercore repository to your project folder.
 {{#endtab}}
 
 {{#endtabs}}
@@ -224,7 +224,7 @@ pub extern "C" fn render() {
 Create `game.c`:
 
 ```c
-#include "nethercore_zx.h"
+#include "zx.h"
 
 /* Game state - stored in static variables for rollback safety */
 static float square_y = 200.0f;

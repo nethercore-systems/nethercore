@@ -81,7 +81,7 @@ The [docs/book/](./docs/book/) directory contains comprehensive game developer d
 
 | Reference | File | Purpose |
 |-----------|------|---------|
-| FFI Source of Truth | [nethercore_zx_ffi.rs](./include/nethercore_zx_ffi.rs) | All ZX FFI function signatures |
+| FFI Source of Truth | [zx.rs](./include/zx.rs) | All ZX FFI function signatures |
 | Shared FFI | [core/src/ffi.rs](./core/src/ffi.rs) | System, input, save, ROM functions |
 | ZX FFI Implementation | [nethercore-zx/src/ffi/mod.rs](./nethercore-zx/src/ffi/mod.rs) | ZX-specific FFI registration |
 | Console Trait | [core/src/console.rs](./core/src/console.rs) | Console abstraction |

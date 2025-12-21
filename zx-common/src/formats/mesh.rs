@@ -1,4 +1,4 @@
-//! NetherZMesh binary format (.embermesh)
+//! NetherZMesh binary format (.nczmesh)
 //!
 //! ZX console GPU-ready mesh format with packed vertices.
 //! POD format - no magic bytes.

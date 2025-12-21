@@ -1,4 +1,4 @@
-//! Texture converter (PNG/JPG -> .embertex)
+//! Texture converter (PNG/JPG -> .ncztex)
 //!
 //! Supports two output formats:
 //! - RGBA8 (Mode 0): Uncompressed, pixel-perfect, 32 bpp
@@ -12,14 +12,14 @@ use std::path::Path;
 
 use zx_common::TextureFormat;
 
-use crate::formats::write_ember_texture;
+use crate::formats::write_nether_texture;
 
-/// Convert an image file to EmberTexture format (RGBA8)
+/// Convert an image file to NetherTexture format (RGBA8)
 pub fn convert_image(input: &Path, output: &Path) -> Result<()> {
     convert_image_with_format(input, output, TextureFormat::Rgba8)
 }
 
-/// Convert an image file to EmberTexture format with explicit format
+/// Convert an image file to NetherTexture format with explicit format
 pub fn convert_image_with_format(input: &Path, output: &Path, format: TextureFormat) -> Result<()> {
     // Load image
     let img = image::open(input).with_context(|| format!("Failed to load image: {:?}", input))?;
@@ -44,7 +44,7 @@ pub fn convert_image_with_format(input: &Path, output: &Path, format: TextureFor
         File::create(output).with_context(|| format!("Failed to create output: {:?}", output))?;
     let mut writer = BufWriter::new(file);
 
-    write_ember_texture(
+    write_nether_texture(
         &mut writer,
         width as u16,
         height as u16,

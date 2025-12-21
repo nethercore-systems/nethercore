@@ -1,4 +1,4 @@
-# Simple cube for testing ember-export
+# Simple cube for testing nether-export
 
 # Vertices (8 corners of unit cube)
 v -0.5 -0.5  0.5

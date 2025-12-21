@@ -1,13 +1,13 @@
-//! Audio converter (WAV -> .embersnd)
+//! Audio converter (WAV -> .nczsnd)
 
 use anyhow::{bail, Context, Result};
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::Path;
 
-use crate::formats::{write_ember_sound, SAMPLE_RATE};
+use crate::formats::{write_nether_sound, SAMPLE_RATE};
 
-/// Convert a WAV file to EmberSound format
+/// Convert a WAV file to NetherSound format
 pub fn convert_wav(input: &Path, output: &Path) -> Result<()> {
     // Load WAV
     let mut reader = hound::WavReader::open(input)
@@ -59,7 +59,7 @@ pub fn convert_wav(input: &Path, output: &Path) -> Result<()> {
         File::create(output).with_context(|| format!("Failed to create output: {:?}", output))?;
     let mut writer = BufWriter::new(file);
 
-    write_ember_sound(&mut writer, &resampled)?;
+    write_nether_sound(&mut writer, &resampled)?;
 
     // QOA achieves ~5:1 compression (3.2 bits/sample vs 16 bits/sample)
     let pcm_size = resampled.len() * 2;

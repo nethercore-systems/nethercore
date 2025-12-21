@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 /// Nether.toml manifest structure
 #[derive(Debug, Deserialize)]
-pub struct EmberManifest {
+pub struct NetherManifest {
     pub game: GameSection,
     #[serde(default)]
     pub build: BuildSection,
@@ -64,7 +64,7 @@ pub struct AssetEntry {
     pub path: String,
 }
 
-impl EmberManifest {
+impl NetherManifest {
     /// Load manifest from file
     pub fn load(path: &Path) -> Result<Self> {
         let content = std::fs::read_to_string(path)
@@ -150,7 +150,7 @@ mod tests {
 
     #[test]
     fn test_manifest_minimal() {
-        let manifest = EmberManifest::parse(
+        let manifest = NetherManifest::parse(
             r#"
 [game]
 id = "test-game"
@@ -169,7 +169,7 @@ version = "1.0.0"
 
     #[test]
     fn test_manifest_with_build_section() {
-        let manifest = EmberManifest::parse(
+        let manifest = NetherManifest::parse(
             r#"
 [game]
 id = "zig-game"
@@ -196,7 +196,7 @@ wasm = "zig-out/bin/game.wasm"
 
     #[test]
     fn test_manifest_with_assets() {
-        let manifest = EmberManifest::parse(
+        let manifest = NetherManifest::parse(
             r#"
 [game]
 id = "asset-game"
@@ -223,7 +223,7 @@ path = "assets/level.nczxmesh"
 
     #[test]
     fn test_build_script_default() {
-        let manifest = EmberManifest::parse(
+        let manifest = NetherManifest::parse(
             r#"
 [game]
 id = "test"
@@ -246,7 +246,7 @@ version = "1.0.0"
 
     #[test]
     fn test_build_script_custom() {
-        let manifest = EmberManifest::parse(
+        let manifest = NetherManifest::parse(
             r#"
 [game]
 id = "test"

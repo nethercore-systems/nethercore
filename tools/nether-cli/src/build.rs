@@ -12,7 +12,7 @@
 //!
 //! ```ignore
 //! // 1. Read manifest
-//! let manifest = EmberManifest::load(&manifest_path)?;
+//! let manifest = NetherManifest::load(&manifest_path)?;
 //!
 //! // 2. Start compile in background thread
 //! let compile_handle = std::thread::spawn(move || {
@@ -46,7 +46,7 @@ use clap::Args;
 use std::path::PathBuf;
 
 use crate::compile::{self, CompileArgs};
-use crate::manifest::EmberManifest;
+use crate::manifest::NetherManifest;
 use crate::pack::{self, PackArgs};
 
 /// Arguments for the build command
@@ -93,7 +93,7 @@ pub fn execute(args: BuildArgs) -> Result<()> {
     } else {
         println!("=== Skipping compilation ===");
         // Find existing WASM
-        let manifest = EmberManifest::load(&manifest_path)?;
+        let manifest = NetherManifest::load(&manifest_path)?;
         manifest.find_wasm(&project_dir, args.debug)?
     };
 

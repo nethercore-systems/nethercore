@@ -16,7 +16,7 @@ use zx_common::{
     TextureFormat, ZDataPack, ZMetadata, ZRom, INVERSE_BIND_MATRIX_SIZE,
 };
 
-use crate::manifest::{AssetsSection, EmberManifest};
+use crate::manifest::{AssetsSection, NetherManifest};
 
 /// Arguments for the pack command
 #[derive(Args)]
@@ -38,7 +38,7 @@ pub struct PackArgs {
 pub fn execute(args: PackArgs) -> Result<()> {
     // Read manifest
     let manifest_path = &args.manifest;
-    let manifest = EmberManifest::load(manifest_path)?;
+    let manifest = NetherManifest::load(manifest_path)?;
 
     println!(
         "Packing game: {} ({})",
@@ -365,7 +365,7 @@ fn compress_bc7(pixels: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
 
 /// Load a mesh from file
 ///
-/// Supports: .nczxmesh / .embermesh (Nethercore ZX mesh format)
+/// Supports: .nczxmesh / .nczmesh (Nethercore ZX mesh format)
 /// Future: .gltf, .glb, .obj (via nether-export)
 fn load_mesh(id: &str, path: &std::path::Path) -> Result<PackedMesh> {
     let data =
@@ -632,7 +632,7 @@ tags = ["action", "puzzle"]
 
 [assets]
 "#;
-        let manifest = EmberManifest::parse(manifest_toml).unwrap();
+        let manifest = NetherManifest::parse(manifest_toml).unwrap();
         assert_eq!(manifest.game.id, "test-game");
         assert_eq!(manifest.game.title, "Test Game");
         assert_eq!(manifest.game.author, "Test Author");
@@ -666,7 +666,7 @@ path = "assets/jump.wav"
 id = "level1"
 path = "assets/level1.bin"
 "#;
-        let manifest = EmberManifest::parse(manifest_toml).unwrap();
+        let manifest = NetherManifest::parse(manifest_toml).unwrap();
         assert_eq!(manifest.assets.textures.len(), 2);
         assert_eq!(manifest.assets.textures[0].id, "player");
         assert_eq!(manifest.assets.textures[1].id, "enemy");
@@ -685,7 +685,7 @@ title = "Minimal Game"
 author = "Author"
 version = "1.0.0"
 "#;
-        let manifest = EmberManifest::parse(manifest_toml).unwrap();
+        let manifest = NetherManifest::parse(manifest_toml).unwrap();
         assert_eq!(manifest.game.id, "minimal");
         assert!(manifest.game.description.is_empty());
         assert!(manifest.game.tags.is_empty());
@@ -1017,7 +1017,7 @@ path = "assets/walk.nczxanim"
 id = "run"
 path = "assets/run.nczxanim"
 "#;
-        let manifest = EmberManifest::parse(manifest_toml).unwrap();
+        let manifest = NetherManifest::parse(manifest_toml).unwrap();
         assert_eq!(manifest.assets.keyframes.len(), 2);
         assert_eq!(manifest.assets.keyframes[0].id, "walk");
         assert_eq!(manifest.assets.keyframes[1].id, "run");

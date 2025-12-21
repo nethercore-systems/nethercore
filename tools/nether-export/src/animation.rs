@@ -9,7 +9,7 @@ use std::fs::File;
 use std::io::BufWriter;
 use std::path::Path;
 
-use crate::formats::write_ember_animation;
+use crate::formats::write_nether_animation;
 
 /// Default sample rate for animations (frames per second)
 const DEFAULT_FRAME_RATE: f32 = 30.0;
@@ -35,7 +35,7 @@ impl Default for BoneTRS {
     }
 }
 
-/// Convert glTF animation to EmberAnimation format
+/// Convert glTF animation to NetherAnimation format
 pub fn convert_gltf_animation(
     input: &Path,
     output: &Path,
@@ -102,7 +102,7 @@ pub fn convert_gltf_animation(
         File::create(output).with_context(|| format!("Failed to create output: {:?}", output))?;
     let mut writer = BufWriter::new(file);
 
-    write_ember_animation(&mut writer, bone_count as u8, &frames)?;
+    write_nether_animation(&mut writer, bone_count as u8, &frames)?;
 
     tracing::info!(
         "Exported animation '{}': {} bones, {} frames at {} fps ({:.2}s)",

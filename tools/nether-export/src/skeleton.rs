@@ -7,9 +7,9 @@ use std::fs::File;
 use std::io::BufWriter;
 use std::path::Path;
 
-use crate::formats::write_ember_skeleton;
+use crate::formats::write_nether_skeleton;
 
-/// Convert glTF skin data to EmberSkeleton format
+/// Convert glTF skin data to NetherSkeleton format
 pub fn convert_gltf_skeleton(input: &Path, output: &Path, skin_index: Option<usize>) -> Result<()> {
     let (document, buffers, _images) =
         gltf::import(input).with_context(|| format!("Failed to load glTF: {:?}", input))?;
@@ -46,7 +46,7 @@ pub fn convert_gltf_skeleton(input: &Path, output: &Path, skin_index: Option<usi
         File::create(output).with_context(|| format!("Failed to create output: {:?}", output))?;
     let mut writer = BufWriter::new(file);
 
-    write_ember_skeleton(&mut writer, &inverse_bind_matrices)?;
+    write_nether_skeleton(&mut writer, &inverse_bind_matrices)?;
 
     tracing::info!(
         "Exported skeleton: {} bones from skin '{}'",
