@@ -1,28 +1,153 @@
 # Part 7: Sound Effects
 
-Games feel incomplete without audio. Let's add satisfying sound effects.
+Games feel incomplete without audio. So far we've been using `draw_rect()` for everything—but you can't draw a sound! This is where Emberware's asset pipeline comes in.
 
 ## What You'll Learn
 
-- Generating sounds procedurally
-- Loading sounds with `load_sound()`
+- Setting up an assets folder
+- Creating `ember.toml` to bundle assets
+- Using `ember build` instead of `cargo build`
+- Loading sounds with `rom_sound()`
 - Playing sounds with `play_sound()` and stereo panning
-- When to play sounds for best game feel
+
+## Why Assets Now?
+
+Up until now, we've built and tested like this:
+
+```bash
+cargo build --target wasm32-unknown-unknown --release
+ember run target/wasm32-unknown-unknown/release/paddle.wasm
+```
+
+This works great for graphics—`draw_rect()` handles everything. But sounds need actual audio files. That's where `ember build` comes in: it bundles your code *and* assets into a single ROM file.
+
+## Create the Assets Folder
+
+Create an `assets/` folder in your project:
+
+```bash
+mkdir assets
+```
+
+## Get Sound Files
+
+You need three WAV files for the game:
+
+| Sound | Description | Duration |
+|-------|-------------|----------|
+| `hit.wav` | Quick beep for paddle/wall hits | ~0.1s |
+| `score.wav` | Descending tone when someone scores | ~0.2s |
+| `win.wav` | Victory fanfare when game ends | ~0.5s |
+
+**Download sample sounds** from the [tutorial assets](https://github.com/emberware-io/emberware/tree/main/docs/book/src/tutorials/paddle/assets), or create your own with:
+- [JSFXR](https://sfxr.me) — Generate retro sound effects in your browser
+- [Freesound.org](https://freesound.org) — CC-licensed sounds
+- [Audacity](https://www.audacityteam.org) — Record and edit audio
+
+Put them in your `assets/` folder:
+
+```
+paddle/
+├── Cargo.toml
+├── ember.toml          ← We'll create this next
+├── assets/
+│   ├── hit.wav
+│   ├── score.wav
+│   └── win.wav
+└── src/
+    └── lib.rs
+```
+
+## Create ember.toml
+
+Create `ember.toml` in your project root. This manifest tells Emberware about your game and its assets:
+
+```toml
+[game]
+id = "paddle"
+title = "Paddle"
+author = "Your Name"
+version = "0.1.0"
+
+# Sound assets
+[[assets.sounds]]
+id = "hit"
+path = "assets/hit.wav"
+
+[[assets.sounds]]
+id = "score"
+path = "assets/score.wav"
+
+[[assets.sounds]]
+id = "win"
+path = "assets/win.wav"
+```
+
+Each asset has:
+- **id** — The name you'll use to load it in code
+- **path** — File location relative to `ember.toml`
+
+## Build with ember build
+
+Now use `ember build` instead of `cargo build`:
+
+```bash
+ember build
+```
+
+This command:
+1. Compiles your Rust code to WASM
+2. Converts WAV files to the optimized format (22050 Hz mono)
+3. Bundles everything into a `paddle.ewzx` ROM file
+
+You'll see output like:
+
+```
+Building paddle...
+  Compiling paddle v0.1.0
+  Converting hit.wav → hit.ewzsnd
+  Converting score.wav → score.ewzsnd
+  Converting win.wav → win.ewzsnd
+  Packing paddle.ewzx (28 KB)
+Done!
+```
+
+## Run Your Game
+
+Now run the ROM:
+
+```bash
+ember run paddle.ewzx
+```
+
+Or just:
+
+```bash
+ember run
+```
+
+This builds and runs in one step.
 
 ## Add Audio FFI
+
+Add the audio functions to your FFI imports:
 
 ```rust
 #[link(wasm_import_module = "env")]
 extern "C" {
     // ... existing imports ...
-    fn load_sound(data_ptr: *const i16, byte_len: u32) -> u32;
+
+    // ROM loading
+    fn rom_sound(id_ptr: *const u8, id_len: u32) -> u32;
+
+    // Audio playback
     fn play_sound(sound: u32, volume: f32, pan: f32);
 }
 ```
 
 ## Sound Handles
 
-Add static variables for sound handles:
+Add static variables to store sound handles:
 
 ```rust
 static mut SFX_HIT: u32 = 0;
@@ -30,80 +155,9 @@ static mut SFX_SCORE: u32 = 0;
 static mut SFX_WIN: u32 = 0;
 ```
 
-## Generate Sounds Procedurally
+## Load Sounds in init()
 
-Instead of loading audio files, we'll generate simple sounds with code. This keeps our game self-contained.
-
-### Hit Sound (Short Beep)
-
-```rust
-fn generate_hit_sound() -> [i16; 2205] {
-    let mut samples = [0i16; 2205];  // 0.1 seconds at 22050 Hz
-    let frequency = 440.0;
-    let sample_rate = 22050.0;
-
-    for i in 0..2205 {
-        let t = i as f32 / sample_rate;
-        // Quick decay envelope
-        let envelope = 1.0 - (i as f32 / 2205.0);
-        let value = libm::sinf(2.0 * core::f32::consts::PI * frequency * t) * envelope;
-        samples[i] = (value * 32767.0 * 0.3) as i16;
-    }
-    samples
-}
-```
-
-### Score Sound (Descending Tone)
-
-```rust
-fn generate_score_sound() -> [i16; 4410] {
-    let mut samples = [0i16; 4410];  // 0.2 seconds
-    let sample_rate = 22050.0;
-
-    for i in 0..4410 {
-        let t = i as f32 / sample_rate;
-        let progress = i as f32 / 4410.0;
-        // Frequency slides from 880 Hz down to 220 Hz
-        let frequency = 880.0 - (660.0 * progress);
-        let envelope = 1.0 - progress;
-        let value = libm::sinf(2.0 * core::f32::consts::PI * frequency * t) * envelope;
-        samples[i] = (value * 32767.0 * 0.3) as i16;
-    }
-    samples
-}
-```
-
-### Win Sound (Victory Fanfare)
-
-```rust
-fn generate_win_sound() -> [i16; 11025] {
-    let mut samples = [0i16; 11025];  // 0.5 seconds
-    let sample_rate = 22050.0;
-
-    for i in 0..11025 {
-        let t = i as f32 / sample_rate;
-        let progress = i as f32 / 11025.0;
-
-        // Three ascending notes (C-E-G chord arpeggio)
-        let frequency = if progress < 0.33 {
-            523.25  // C5
-        } else if progress < 0.66 {
-            659.25  // E5
-        } else {
-            783.99  // G5
-        };
-
-        let envelope = 1.0 - (progress * 0.5);
-        let value = libm::sinf(2.0 * core::f32::consts::PI * frequency * t) * envelope;
-        samples[i] = (value * 32767.0 * 0.3) as i16;
-    }
-    samples
-}
-```
-
-## Load Sounds in Init
-
-Update `init()` to generate and load sounds:
+Update `init()` to load sounds from the ROM:
 
 ```rust
 #[no_mangle]
@@ -111,15 +165,10 @@ pub extern "C" fn init() {
     unsafe {
         set_clear_color(0x1a1a2eFF);
 
-        // Generate and load sounds
-        let hit_samples = generate_hit_sound();
-        SFX_HIT = load_sound(hit_samples.as_ptr(), (hit_samples.len() * 2) as u32);
-
-        let score_samples = generate_score_sound();
-        SFX_SCORE = load_sound(score_samples.as_ptr(), (score_samples.len() * 2) as u32);
-
-        let win_samples = generate_win_sound();
-        SFX_WIN = load_sound(win_samples.as_ptr(), (win_samples.len() * 2) as u32);
+        // Load sounds from ROM
+        SFX_HIT = rom_sound(b"hit".as_ptr(), 3);
+        SFX_SCORE = rom_sound(b"score".as_ptr(), 5);
+        SFX_WIN = rom_sound(b"win".as_ptr(), 3);
 
         reset_game();
         STATE = GameState::Title;
@@ -127,11 +176,14 @@ pub extern "C" fn init() {
 }
 ```
 
+The `rom_sound()` function loads the sound directly from the bundled ROM—the string IDs match what you put in `ember.toml`.
+
 ## Play Sounds
 
-Add sound effects to game events:
+Now add sound effects to game events:
 
 ### Wall Bounce
+
 ```rust
 // In update_ball(), after wall bounce:
 if BALL_Y <= 0.0 {
@@ -148,6 +200,7 @@ if BALL_Y >= SCREEN_HEIGHT - BALL_SIZE {
 ```
 
 ### Paddle Hit
+
 ```rust
 // In paddle 1 collision:
 play_sound(SFX_HIT, 0.5, -0.5);  // Pan left
@@ -157,17 +210,19 @@ play_sound(SFX_HIT, 0.5, 0.5);   // Pan right
 ```
 
 ### Scoring
-```rust
-// When player 2 scores:
-SCORE2 += 1;
-play_sound(SFX_SCORE, 0.6, 0.5);  // Pan right (their side)
 
-// When player 1 scores:
+```rust
+// When player 2 scores (ball exits left):
+SCORE2 += 1;
+play_sound(SFX_SCORE, 0.6, 0.5);  // Pan right (scorer's side)
+
+// When player 1 scores (ball exits right):
 SCORE1 += 1;
-play_sound(SFX_SCORE, 0.6, -0.5);  // Pan left (their side)
+play_sound(SFX_SCORE, 0.6, -0.5);  // Pan left (scorer's side)
 ```
 
 ### Win
+
 ```rust
 // When either player wins:
 if SCORE1 >= WIN_SCORE || SCORE2 >= WIN_SCORE {
@@ -176,44 +231,127 @@ if SCORE1 >= WIN_SCORE || SCORE2 >= WIN_SCORE {
 }
 ```
 
-## Understanding Audio Parameters
+## Understanding play_sound()
 
-### `load_sound(data_ptr, byte_len)`
-- `data_ptr`: Pointer to 16-bit PCM audio samples
-- `byte_len`: Size in bytes (samples * 2 because i16 = 2 bytes)
-- Returns: Handle to the loaded sound
+```rust
+fn play_sound(sound: u32, volume: f32, pan: f32);
+```
 
-### `play_sound(handle, volume, pan)`
-- `handle`: Sound handle from `load_sound()`
-- `volume`: 0.0 (silent) to 1.0 (full volume)
-- `pan`: -1.0 (left) to 1.0 (right), 0.0 = center
+| Parameter | Range | Description |
+|-----------|-------|-------------|
+| `sound` | Handle | Sound handle from `rom_sound()` |
+| `volume` | 0.0 - 1.0 | 0 = silent, 1 = full volume |
+| `pan` | -1.0 - 1.0 | -1 = left, 0 = center, 1 = right |
 
-### Sample Rate
-Emberware uses 22050 Hz sample rate. This is lower than CD quality (44100 Hz) but:
-- Uses half the memory
-- Sounds fine for retro-style games
-- Matches the aesthetic of older consoles
+## Audio Specs
+
+Emberware uses these audio settings:
+
+| Property | Value |
+|----------|-------|
+| Sample rate | 22050 Hz |
+| Format | 16-bit mono PCM |
+| Channels | Stereo output |
+
+The `ember build` command automatically converts your WAV files to this format.
 
 ## Sound Design Tips
 
-1. **Keep sounds short** - 0.1 to 0.5 seconds is plenty
-2. **Use panning** - Stereo positioning helps players track the action
-3. **Vary volume** - Important sounds louder, ambient sounds quieter
-4. **Match the aesthetic** - Simple synthesized sounds fit retro games
+1. **Keep sounds short** — 0.1 to 0.5 seconds is plenty for effects
+2. **Use panning** — Stereo positioning helps players track action
+3. **Vary volume** — Important sounds louder, ambient sounds quieter
+4. **Match your aesthetic** — Simple sounds fit retro games
 
 ## Build and Test
 
+Rebuild with your sound assets:
+
 ```bash
-cargo build --target wasm32-unknown-unknown --release
-ember run target/wasm32-unknown-unknown/release/paddle.wasm
+ember build
+ember run
 ```
 
 The game now has:
 - "Ping" sound when ball hits walls or paddles
-- Different sounds for left/right paddle (stereo panning)
+- Different panning for left/right paddle hits
 - Descending "whomp" when someone scores
 - Victory fanfare when a player wins
 
+## Bonus: Sprite Graphics
+
+Now that we have the asset pipeline set up, we can also use image sprites instead of `draw_rect()`. This is optional—the game works fine with rectangles—but sprites look nicer!
+
+### Add Texture Assets
+
+Download `paddle.png` and `ball.png` from the [tutorial assets](https://github.com/emberware-io/emberware/tree/main/docs/book/src/tutorials/paddle/assets), then add them to `ember.toml`:
+
+```toml
+# Texture assets
+[[assets.textures]]
+id = "paddle"
+path = "assets/paddle.png"
+
+[[assets.textures]]
+id = "ball"
+path = "assets/ball.png"
+```
+
+### Add Texture FFI
+
+```rust
+#[link(wasm_import_module = "env")]
+extern "C" {
+    // ... existing imports ...
+
+    // Texture loading and drawing
+    fn rom_texture(id_ptr: *const u8, id_len: u32) -> u32;
+    fn texture_bind(texture: u32);
+    fn draw_sprite(x: f32, y: f32, w: f32, h: f32);
+}
+```
+
+### Load Textures
+
+Add handles and load in `init()`:
+
+```rust
+static mut TEX_PADDLE: u32 = 0;
+static mut TEX_BALL: u32 = 0;
+
+// In init():
+TEX_PADDLE = rom_texture(b"paddle".as_ptr(), 6);
+TEX_BALL = rom_texture(b"ball".as_ptr(), 4);
+```
+
+### Draw Sprites
+
+Replace `draw_rect()` calls in `render()`:
+
+```rust
+// Instead of: draw_rect(PADDLE_MARGIN, PADDLE1_Y, PADDLE_WIDTH, PADDLE_HEIGHT, COLOR_PLAYER1);
+texture_bind(TEX_PADDLE);
+draw_sprite(PADDLE_MARGIN, PADDLE1_Y, PADDLE_WIDTH, PADDLE_HEIGHT);
+
+// Second paddle
+draw_sprite(SCREEN_WIDTH - PADDLE_MARGIN - PADDLE_WIDTH, PADDLE2_Y, PADDLE_WIDTH, PADDLE_HEIGHT);
+
+// Instead of: draw_rect(BALL_X, BALL_Y, BALL_SIZE, BALL_SIZE, COLOR_WHITE);
+texture_bind(TEX_BALL);
+draw_sprite(BALL_X, BALL_Y, BALL_SIZE, BALL_SIZE);
+```
+
+The sprite will be tinted by the bound texture. You can also use `draw_sprite_colored()` if you want to tint sprites with different colors per player.
+
+## New Workflow Summary
+
+| Before (Parts 1-6) | Now (Part 7+) |
+|-------------------|---------------|
+| `cargo build --target wasm32-unknown-unknown --release` | `ember build` |
+| `ember run target/.../paddle.wasm` | `ember run` |
+| No assets needed | Assets bundled in ROM |
+
+From now on, just use `ember build` and `ember run`!
+
 ---
 
-**Next:** [Part 8: Polish & Publishing](./08-polish.md) - Final touches and releasing your game.
+**Next:** [Part 8: Polish & Publishing](./08-polish.md) — Final touches and releasing your game.
