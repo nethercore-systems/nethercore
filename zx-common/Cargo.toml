@@ -4,18 +4,18 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Shared types and utilities for Emberware ZX console"
+description = "Shared types and utilities for Nethercore ZX console"
 
 [features]
 default = ["gamepad", "loader"]
-loader = ["dep:emberware-core"]
-gamepad = ["emberware-core?/gamepad"]
+loader = ["dep:nethercore-core"]
+gamepad = ["nethercore-core?/gamepad"]
 
 [dependencies]
 # Local crates
-emberware-shared = { path = "../shared" }
-emberware-core = { path = "../core", default-features = false, optional = true }
-ember-qoa = { path = "../ember-qoa" }
+nethercore-shared = { path = "../shared" }
+nethercore-core = { path = "../core", default-features = false, optional = true }
+nether-qoa = { path = "../nether-qoa" }
 
 # Vertex packing
 glam = { workspace = true }

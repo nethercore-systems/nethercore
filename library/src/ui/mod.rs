@@ -10,7 +10,7 @@ mod settings;
 pub use multiplayer_dialog::MultiplayerDialog;
 pub use settings::SettingsUi;
 
-use emberware_core::library::LocalGame;
+use nethercore_core::library::LocalGame;
 
 /// The game library UI state and rendering.
 ///
@@ -52,7 +52,7 @@ impl LibraryUi {
         let mut action = None;
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("EMBERWARE ZX");
+            ui.heading("NETHERCORE ZX");
             ui.separator();
 
             if games.is_empty() {
@@ -164,9 +164,9 @@ pub enum UiAction {
     /// Refresh the game library
     RefreshLibrary,
     /// Save settings and apply changes
-    SaveSettings(emberware_core::app::config::Config),
+    SaveSettings(nethercore_core::app::config::Config),
     /// Set scale mode immediately (for preview)
-    SetScaleMode(emberware_core::app::config::ScaleMode),
+    SetScaleMode(nethercore_core::app::config::ScaleMode),
     /// Import a ROM file from disk
     ImportRom,
     /// Open and run a game file directly (without importing to library)

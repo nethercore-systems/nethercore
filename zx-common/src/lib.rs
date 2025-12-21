@@ -1,15 +1,15 @@
-//! Shared types and utilities for Emberware ZX console
+//! Shared types and utilities for Nethercore ZX console
 //!
 //! This crate provides ZX-specific utilities shared between:
-//! - `emberware-zx` (runtime)
-//! - `ember-export` (asset pipeline)
-//! - `ember-cli` (build tools)
+//! - `nethercore-zx` (runtime)
+//! - `nether-export` (asset pipeline)
+//! - `nether-cli` (build tools)
 //!
 //! # Modules
 //!
 //! - [`packing`] - Vertex data packing utilities (f32 → f16/snorm16/unorm8)
 //! - [`formats`] - ZX-specific binary asset and ROM formats
-//! - [`loader`] - ROM loader for Emberware ZX ROM files
+//! - [`loader`] - ROM loader for Nethercore ZX ROM files
 
 pub mod formats;
 #[cfg(feature = "loader")]
@@ -33,14 +33,14 @@ pub use packing::{
 pub use formats::{
     BONE_TRANSFORM_SIZE,
     BoneTransform,
-    // ROM format constants (from emberware_shared)
+    // ROM format constants (from nethercore_shared)
     RomFormat,
     ZX_ROM_FORMAT,
-    EmberZAnimationHeader,
+    NetherZAnimationHeader,
     // Mesh/texture/skeleton types
-    EmberZMeshHeader,
-    EmberZSkeletonHeader,
-    EmberZTextureHeader,
+    NetherZMeshHeader,
+    NetherZSkeletonHeader,
+    NetherZTextureHeader,
     INVERSE_BIND_MATRIX_SIZE,
     PLATFORM_BONE_KEYFRAME_SIZE,
     // Data pack types

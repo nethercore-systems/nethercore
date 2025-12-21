@@ -1,4 +1,4 @@
-//! Emberware ZX data pack format
+//! Nethercore ZX data pack format
 //!
 //! Contains GPU-ready asset data bundled with the ROM. Assets loaded via `rom_*` FFI
 //! go directly to VRAM/audio memory on the host, bypassing WASM linear memory.
@@ -62,11 +62,11 @@ impl TextureFormat {
     }
 }
 
-use emberware_shared::math::BoneMatrix3x4;
+use nethercore_shared::math::BoneMatrix3x4;
 
-/// Emberware ZX data pack
+/// Nethercore ZX data pack
 ///
-/// Contains all bundled assets for an Emberware ZX ROM. Assets are stored
+/// Contains all bundled assets for an Nethercore ZX ROM. Assets are stored
 /// in GPU-ready formats and loaded directly to VRAM/audio memory.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Encode, Decode)]
 pub struct ZDataPack {
@@ -397,7 +397,7 @@ impl PackedMesh {
 ///
 /// Contains ONLY the inverse bind matrices needed for GPU skinning.
 /// Bone names, hierarchy, and rest pose belong in WASM memory (generated
-/// by ember-export as Rust const arrays).
+/// by nether-export as Rust const arrays).
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct PackedSkeleton {
     /// Asset ID (e.g., "player_skeleton", "enemy_rig")

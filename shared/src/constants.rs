@@ -1,4 +1,4 @@
-//! Centralized constants for the Emberware platform.
+//! Centralized constants for the Nethercore platform.
 //!
 //! This module provides single-source-of-truth constants used across
 //! both the platform backend and console clients.
@@ -24,4 +24,4 @@ pub const LOCAL_FRONTEND_URL: &str = "http://localhost:4321";
 /// Production API/website URL.
 ///
 /// Used for CORS configuration and production URLs.
-pub const PRODUCTION_URL: &str = "https://emberware.io";
+pub const PRODUCTION_URL: &str = "https://nethercore.systems";

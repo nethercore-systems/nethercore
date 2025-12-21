@@ -13,7 +13,7 @@ use ggrs::{
 use crate::console::{ConsoleInput, ConsoleRollbackState};
 use crate::wasm::GameInstance;
 
-use super::config::{EmberwareConfig, SessionConfig};
+use super::config::{NethercoreConfig, SessionConfig};
 use super::events::{PlayerNetworkStats, SessionError, SessionEvent};
 use super::player::{MAX_PLAYERS, PlayerSessionConfig};
 use super::state::{GameStateSnapshot, LoadStateError, RollbackStateManager, SaveStateError};
@@ -77,11 +77,11 @@ enum SessionInner<I: ConsoleInput> {
     },
     /// Sync test session for determinism testing (boxed to reduce enum size)
     SyncTest {
-        session: Box<SyncTestSession<EmberwareConfig<I>>>,
+        session: Box<SyncTestSession<NethercoreConfig<I>>>,
         current_frame: i32,
     },
     /// P2P session with rollback (boxed to reduce enum size)
-    P2P(Box<P2PSession<EmberwareConfig<I>>>),
+    P2P(Box<P2PSession<NethercoreConfig<I>>>),
 }
 
 /// Frame advantage threshold for warning events
@@ -188,7 +188,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>
         player_config: PlayerSessionConfig,
         max_state_size: usize,
     ) -> Result<Self, GgrsError> {
-        let session = SessionBuilder::<EmberwareConfig<I>>::new()
+        let session = SessionBuilder::<NethercoreConfig<I>>::new()
             .with_num_players(config.num_players)
             .with_max_prediction_window(config.max_prediction_frames)
             .with_input_delay(config.input_delay)
@@ -263,7 +263,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>
     where
         Sock: NonBlockingSocket<String> + 'static,
     {
-        let mut builder = SessionBuilder::<EmberwareConfig<I>>::new()
+        let mut builder = SessionBuilder::<NethercoreConfig<I>>::new()
             .with_num_players(config.num_players)
             .with_max_prediction_window(config.max_prediction_frames)
             .with_input_delay(config.input_delay)
@@ -391,7 +391,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>
     ///
     /// For Local sessions, this returns a simple AdvanceFrame request
     /// with the stored inputs (set via `add_local_input`).
-    pub fn advance_frame(&mut self) -> Result<Vec<GgrsRequest<EmberwareConfig<I>>>, GgrsError> {
+    pub fn advance_frame(&mut self) -> Result<Vec<GgrsRequest<NethercoreConfig<I>>>, GgrsError> {
         match &mut self.inner {
             SessionInner::Local {
                 current_frame,
@@ -424,7 +424,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>
     }
 
     /// Drain events from the session (P2P only)
-    pub fn events(&mut self) -> Vec<GgrsEvent<EmberwareConfig<I>>> {
+    pub fn events(&mut self) -> Vec<GgrsEvent<NethercoreConfig<I>>> {
         match &mut self.inner {
             SessionInner::P2P(session) => session.events().collect(),
             _ => Vec::new(),
@@ -611,7 +611,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>
     pub fn handle_requests(
         &mut self,
         game: &mut GameInstance<I, S, R>,
-        requests: Vec<GgrsRequest<EmberwareConfig<I>>>,
+        requests: Vec<GgrsRequest<NethercoreConfig<I>>>,
     ) -> Result<Vec<Vec<(I, InputStatus)>>, SessionError> {
         let mut advance_inputs = Vec::new();
         let mut rollback_frames_this_call = 0u32;
@@ -684,7 +684,7 @@ mod tests {
     use super::*;
 
     use crate::rollback::ConnectionQuality;
-    use emberware_shared::EMBERWARE_ZX_RAM_LIMIT;
+    use nethercore_shared::NETHERCORE_ZX_RAM_LIMIT;
     // Test input type for unit tests
     #[repr(C)]
     #[derive(
@@ -699,7 +699,7 @@ mod tests {
 
     #[test]
     fn test_rollback_session_local() {
-        let session = RollbackSession::<TestInput, ()>::new_local(2, EMBERWARE_ZX_RAM_LIMIT);
+        let session = RollbackSession::<TestInput, ()>::new_local(2, NETHERCORE_ZX_RAM_LIMIT);
         assert_eq!(session.session_type(), SessionType::Local);
         assert_eq!(session.config().num_players, 2);
         assert_eq!(session.current_frame(), 0);
@@ -710,13 +710,13 @@ mod tests {
     fn test_rollback_session_sync_test() {
         let config = SessionConfig::sync_test();
         let session =
-            RollbackSession::<TestInput, ()>::new_sync_test(config, EMBERWARE_ZX_RAM_LIMIT).unwrap();
+            RollbackSession::<TestInput, ()>::new_sync_test(config, NETHERCORE_ZX_RAM_LIMIT).unwrap();
         assert_eq!(session.session_type(), SessionType::SyncTest);
     }
 
     #[test]
     fn test_local_session_advance() {
-        let mut session = RollbackSession::<TestInput, ()>::new_local(2, EMBERWARE_ZX_RAM_LIMIT);
+        let mut session = RollbackSession::<TestInput, ()>::new_local(2, NETHERCORE_ZX_RAM_LIMIT);
         assert_eq!(session.current_frame(), 0);
 
         let requests = session.advance_frame().unwrap();
@@ -833,26 +833,26 @@ mod tests {
 
     #[test]
     fn test_local_session_has_no_network_stats() {
-        let session = RollbackSession::<TestInput, ()>::new_local(2, EMBERWARE_ZX_RAM_LIMIT);
+        let session = RollbackSession::<TestInput, ()>::new_local(2, NETHERCORE_ZX_RAM_LIMIT);
         assert!(session.all_player_stats().is_empty());
         assert!(session.player_stats(0).is_none());
     }
 
     #[test]
     fn test_local_session_no_desync() {
-        let session = RollbackSession::<TestInput, ()>::new_local(2, EMBERWARE_ZX_RAM_LIMIT);
+        let session = RollbackSession::<TestInput, ()>::new_local(2, NETHERCORE_ZX_RAM_LIMIT);
         assert!(!session.has_desync());
     }
 
     #[test]
     fn test_local_session_total_rollback_frames() {
-        let session = RollbackSession::<TestInput, ()>::new_local(2, EMBERWARE_ZX_RAM_LIMIT);
+        let session = RollbackSession::<TestInput, ()>::new_local(2, NETHERCORE_ZX_RAM_LIMIT);
         assert_eq!(session.total_rollback_frames(), 0);
     }
 
     #[test]
     fn test_local_session_handle_events_empty() {
-        let mut session = RollbackSession::<TestInput, ()>::new_local(2, EMBERWARE_ZX_RAM_LIMIT);
+        let mut session = RollbackSession::<TestInput, ()>::new_local(2, NETHERCORE_ZX_RAM_LIMIT);
         let events = session.handle_events();
         // Local sessions don't produce events
         assert!(events.is_empty());
@@ -890,7 +890,7 @@ mod tests {
 
     #[test]
     fn test_rollback_session_local_has_player_config() {
-        let session = RollbackSession::<TestInput, ()>::new_local(2, EMBERWARE_ZX_RAM_LIMIT);
+        let session = RollbackSession::<TestInput, ()>::new_local(2, NETHERCORE_ZX_RAM_LIMIT);
         let player_config = session.player_config();
         assert_eq!(player_config.num_players(), 2);
         assert_eq!(player_config.local_player_count(), 2);
@@ -903,7 +903,7 @@ mod tests {
         // Create a local session with custom player config
         let player_config = PlayerSessionConfig::new(4, 0b0011); // Only players 0, 1 local
         let session =
-            RollbackSession::<TestInput, ()>::new_local_with_config(player_config, EMBERWARE_ZX_RAM_LIMIT);
+            RollbackSession::<TestInput, ()>::new_local_with_config(player_config, NETHERCORE_ZX_RAM_LIMIT);
 
         assert_eq!(session.player_config().num_players(), 4);
         assert_eq!(session.player_config().local_player_mask(), 0b0011);
@@ -914,7 +914,7 @@ mod tests {
     fn test_rollback_session_sync_test_has_player_config() {
         let config = SessionConfig::sync_test();
         let session =
-            RollbackSession::<TestInput, ()>::new_sync_test(config, EMBERWARE_ZX_RAM_LIMIT).unwrap();
+            RollbackSession::<TestInput, ()>::new_sync_test(config, NETHERCORE_ZX_RAM_LIMIT).unwrap();
         let player_config = session.player_config();
         assert_eq!(player_config.num_players(), 1);
         assert!(player_config.is_local_player(0));

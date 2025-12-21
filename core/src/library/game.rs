@@ -7,7 +7,7 @@
 //! - ROM files in the games directory (detected via RomLoaderRegistry)
 //! - Subdirectories with `manifest.json` and `rom.wasm` (development, backward compatibility)
 
-use emberware_shared::{LocalGameManifest, ZX_ROM_FORMAT};
+use nethercore_shared::{LocalGameManifest, ZX_ROM_FORMAT};
 use std::path::{Path, PathBuf};
 
 use super::DataDirProvider;

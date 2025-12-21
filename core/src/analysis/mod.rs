@@ -12,7 +12,7 @@
 //! # Example
 //!
 //! ```ignore
-//! use emberware_core::analysis::analyze_wasm;
+//! use nethercore_core::analysis::analyze_wasm;
 //!
 //! let wasm_bytes = std::fs::read("game.wasm")?;
 //! let result = analyze_wasm(&wasm_bytes)?;

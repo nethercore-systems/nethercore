@@ -1,0 +1,52 @@
+[package]
+name = "nether-cli"
+version = "0.1.0"
+edition = "2021"
+description = "CLI tool for building Nethercore ZX games"
+
+[[bin]]
+name = "nether"
+path = "src/main.rs"
+
+[features]
+default = ["gamepad"]
+gamepad = ["nethercore-core/gamepad", "zx-common/gamepad"]
+
+[dependencies]
+# Local crates
+nethercore-core = { path = "../../core", default-features = false }
+nethercore-shared = { path = "../../shared" }
+zx-common = { path = "../../zx-common", default-features = false }
+
+# CLI
+clap = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+
+# Serialization
+toml = { workspace = true }
+serde = { workspace = true }
+bitcode = { workspace = true }
+
+# Image processing (for texture conversion)
+image = { workspace = true }  # NOTE: Upgraded from 0.24 to 0.25
+
+# Texture compression
+intel_tex_2 = { workspace = true }  # BC7 compression (ISPC-based, high quality)
+
+# Parallel processing
+rayon = { workspace = true }
+
+# Filesystem
+directories = { workspace = true }
+walkdir = { workspace = true }
+
+# Time
+chrono = { workspace = true }
+
+# Executable finding
+which = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

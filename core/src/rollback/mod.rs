@@ -6,7 +6,7 @@
 //!
 //! GGRS (Good Game Rollback SDK) handles deterministic rollback netcode. This module provides:
 //!
-//! - `EmberwareConfig<I>`: GGRS configuration parameterized by console input type
+//! - `NethercoreConfig<I>`: GGRS configuration parameterized by console input type
 //! - `GameStateSnapshot`: Serialized game state with checksum for desync detection
 //! - `RollbackSession<I>`: Session manager for local, sync-test, and P2P modes
 //! - `StatePool`: Pre-allocated buffer pool to avoid allocations during rollback
@@ -53,7 +53,7 @@ mod state;
 
 // Re-export public types from config
 pub use config::{
-    DEFAULT_INPUT_DELAY, DEFAULT_ONLINE_INPUT_DELAY, EmberwareConfig, MAX_INPUT_DELAY,
+    DEFAULT_INPUT_DELAY, DEFAULT_ONLINE_INPUT_DELAY, NethercoreConfig, MAX_INPUT_DELAY,
     MAX_ROLLBACK_FRAMES, MAX_STATE_SIZE, SessionConfig,
 };
 

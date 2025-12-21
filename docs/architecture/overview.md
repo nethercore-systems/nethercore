@@ -1,8 +1,8 @@
-# Emberware Architecture Guide
+# Nethercore Architecture Guide
 
 ## Overview
 
-This document describes Emberware's codebase organization principles, module structure, and maintainability guidelines. These principles were established after a major refactoring effort that reduced massive monolithic files into focused, maintainable modules.
+This document describes Nethercore's codebase organization principles, module structure, and maintainability guidelines. These principles were established after a major refactoring effort that reduced massive monolithic files into focused, maintainable modules.
 
 ## Core Principles
 
@@ -72,7 +72,7 @@ impl Console for MyConsole {
 
 ### Module Organization
 
-Emberware follows a **2-level module depth maximum** for most code:
+Nethercore follows a **2-level module depth maximum** for most code:
 
 ```
 crate/src/
@@ -185,7 +185,7 @@ fn stop_sound(/* ... */) { /* ... */ }
 
 ### Re-export Strategy
 
-Emberware uses a **3-tier visibility system**:
+Nethercore uses a **3-tier visibility system**:
 
 ```rust
 // lib.rs - Public API (external crates)
@@ -213,18 +213,18 @@ struct PrivateType { /* ... */ }
 - Only expose through lib.rs what external crates need
 - Mark internal helpers as `pub(crate)` if used across modules
 
-## Real Examples from Emberware
+## Real Examples from Nethercore
 
 ### Example 1: FFI Module Split (4,262 → ~150 lines)
 
 **Before:**
 ```
-emberware-zx/src/ffi.rs         4,262 lines   ❌
+nethercore-zx/src/ffi.rs         4,262 lines   ❌
 ```
 
 **After:**
 ```
-emberware-zx/src/ffi/
+nethercore-zx/src/ffi/
 ├── mod.rs              80 lines     ✅  (Registration only)
 ├── audio.rs           200 lines     ✅
 ├── camera.rs          200 lines     ✅
@@ -251,12 +251,12 @@ emberware-zx/src/ffi/
 
 **Before:**
 ```
-emberware-zx/src/app.rs         1,760 lines   ❌
+nethercore-zx/src/app.rs         1,760 lines   ❌
 ```
 
 **After:**
 ```
-emberware-zx/src/app/
+nethercore-zx/src/app/
 ├── mod.rs              700 lines     ✅  (App struct + render loop)
 ├── init.rs             160 lines     ✅  (Initialization)
 ├── game_session.rs     350 lines     ✅  (Game lifecycle)
@@ -274,12 +274,12 @@ emberware-zx/src/app/
 
 **Before:**
 ```
-emberware-zx/src/state.rs       740 lines     ⚠️
+nethercore-zx/src/state.rs       740 lines     ⚠️
 ```
 
 **After:**
 ```
-emberware-zx/src/state/
+nethercore-zx/src/state/
 ├── mod.rs              100 lines     ✅  (Re-exports + QuadBatch)
 ├── config.rs            40 lines     ✅  (Init configuration)
 ├── resources.rs         60 lines     ✅  (Pending resources)
@@ -454,7 +454,7 @@ When reviewing code:
 
 - [FFI Reference](./ffi.md) - Public WebAssembly host function API
 - [Rendering Architecture](./rendering-architecture.md) - Graphics system deep dive
-- [Emberware ZX API](./emberware-zx.md) - ZX console-specific features
+- [Nethercore ZX API](./nethercore-zx.md) - ZX console-specific features
 
 ## Questions?
 

@@ -1,23 +1,23 @@
 # Example Games
 
-The Emberware repository includes 28+ example games organized by category. Each example is a complete, buildable project.
+The Nethercore repository includes 28+ example games organized by category. Each example is a complete, buildable project.
 
 ## Location
 
 ```
-emberware/examples/
+nethercore/examples/
 ```
 
 ## Learning Path
 
-New to Emberware? Follow this progression:
+New to Nethercore? Follow this progression:
 
-1. **[hello-world](https://github.com/emberware/emberware/tree/main/examples/hello-world)** - 2D text and rectangles, basic input
-2. **[triangle](https://github.com/emberware/emberware/tree/main/examples/triangle)** - Your first 3D shape
-3. **[textured-quad](https://github.com/emberware/emberware/tree/main/examples/textured-quad)** - Loading and applying textures
-4. **[cube](https://github.com/emberware/emberware/tree/main/examples/cube)** - Transforms and rotation
-5. **[paddle](https://github.com/emberware/emberware/tree/main/examples/paddle)** - Complete game with the [tutorial](../tutorials/paddle/index.md)
-6. **[platformer](https://github.com/emberware/emberware/tree/main/examples/platformer)** - Advanced example with physics, billboards, UI
+1. **[hello-world](https://github.com/nethercore/nethercore/tree/main/examples/hello-world)** - 2D text and rectangles, basic input
+2. **[triangle](https://github.com/nethercore/nethercore/tree/main/examples/triangle)** - Your first 3D shape
+3. **[textured-quad](https://github.com/nethercore/nethercore/tree/main/examples/textured-quad)** - Loading and applying textures
+4. **[cube](https://github.com/nethercore/nethercore/tree/main/examples/cube)** - Transforms and rotation
+5. **[paddle](https://github.com/nethercore/nethercore/tree/main/examples/paddle)** - Complete game with the [tutorial](../tutorials/paddle/index.md)
+6. **[platformer](https://github.com/nethercore/nethercore/tree/main/examples/platformer)** - Advanced example with physics, billboards, UI
 
 ## By Category
 
@@ -103,7 +103,7 @@ Each example is a standalone Cargo project:
 ```bash
 cd examples/paddle
 cargo build --target wasm32-unknown-unknown --release
-ember run target/wasm32-unknown-unknown/release/paddle.wasm
+nether run target/wasm32-unknown-unknown/release/paddle.wasm
 ```
 
 Or build all examples:
@@ -119,7 +119,7 @@ All examples follow this pattern:
 ```
 example-name/
 ├── Cargo.toml      # Project config
-├── ember.toml      # Game manifest (optional)
+├── nether.toml      # Game manifest (optional)
 ├── src/
 │   └── lib.rs      # Game code
 └── assets/         # Assets (if needed)

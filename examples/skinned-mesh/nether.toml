@@ -1,0 +1,5 @@
+[game]
+id = "skinned-mesh"
+title = "Skinned Mesh"
+author = "Nethercore Examples"
+version = "0.1.0"

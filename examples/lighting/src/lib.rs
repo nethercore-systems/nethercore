@@ -1,6 +1,6 @@
 //! Lighting Example
 //!
-//! Demonstrates Emberware ZX's PBR lighting system (render mode 2).
+//! Demonstrates Nethercore ZX's PBR lighting system (render mode 2).
 //!
 //! Features demonstrated:
 //! - `render_mode()` to select PBR rendering (mode 2)

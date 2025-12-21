@@ -9,10 +9,10 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-/// Emberware build tasks
+/// Nethercore build tasks
 #[derive(Parser)]
 #[command(name = "xtask")]
-#[command(about = "Emberware build and development tasks")]
+#[command(about = "Nethercore build and development tasks")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -60,7 +60,7 @@ fn build_examples() -> Result<()> {
     // Run asset generators first
     run_asset_generators(&project_root)?;
 
-    // Build ember CLI first if needed
+    // Build nether CLI first if needed
     let ember_exe = ensure_ember_cli(&project_root)?;
 
     // Library crates that shouldn't be built as standalone examples
@@ -91,14 +91,14 @@ fn build_examples() -> Result<()> {
         let example_name = example.file_name();
         let example_name_str = example_name.to_string_lossy();
 
-        // Check if this example has ember.toml
-        let ember_toml_path = example_path.join("ember.toml");
+        // Check if this example has nether.toml
+        let ember_toml_path = example_path.join("nether.toml");
         let has_ember_toml = ember_toml_path.exists();
 
         println!("Building {}...", example_name_str);
 
         if has_ember_toml {
-            // Use ember build (compile + pack)
+            // Use nether build (compile + pack)
             match build_with_ember(&ember_exe, &example_path, &games_dir, &example_name_str) {
                 Ok(_) => {
                     println!("  ✓ {} installed", example_name_str);
@@ -120,11 +120,11 @@ fn build_examples() -> Result<()> {
                 }
             }
         } else {
-            // No ember.toml - use legacy WASM-only installation
+            // No nether.toml - use legacy WASM-only installation
             match build_wasm_only(&example_path, &games_dir, &example_name_str) {
                 Ok(_) => {
                     println!(
-                        "  ✓ {} installed (WASM-only, no ember.toml)",
+                        "  ✓ {} installed (WASM-only, no nether.toml)",
                         example_name_str
                     );
                     success_count.fetch_add(1, Ordering::Relaxed);
@@ -145,7 +145,7 @@ fn build_examples() -> Result<()> {
         fail_count.load(Ordering::Relaxed)
     );
     println!("Examples installed to: {}", games_dir.display());
-    println!("You can now run 'cargo run' to play them in Emberware ZX.");
+    println!("You can now run 'cargo run' to play them in Nethercore ZX.");
 
     if skipped_count.load(Ordering::Relaxed) > 0 {
         println!("Note: Skipped examples are templates that demonstrate data pack usage.");
@@ -221,41 +221,41 @@ fn run_asset_generators(project_root: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Ensure ember CLI is built and return path to executable
+/// Ensure nether CLI is built and return path to executable
 fn ensure_ember_cli(project_root: &Path) -> Result<PathBuf> {
-    let ember_path = project_root.join("target/release/ember");
-    let ember_path_debug = project_root.join("target/debug/ember");
+    let nether_path = project_root.join("target/release/nether");
+    let nether_path_debug = project_root.join("target/debug/nether");
 
     // Add .exe extension on Windows
     #[cfg(windows)]
-    let ember_path = ember_path.with_extension("exe");
+    let nether_path = nether_path.with_extension("exe");
     #[cfg(windows)]
-    let ember_path_debug = ember_path_debug.with_extension("exe");
+    let nether_path_debug = nether_path_debug.with_extension("exe");
 
-    if ember_path.exists() {
-        return Ok(ember_path);
+    if nether_path.exists() {
+        return Ok(nether_path);
     }
-    if ember_path_debug.exists() {
-        return Ok(ember_path_debug);
+    if nether_path_debug.exists() {
+        return Ok(nether_path_debug);
     }
 
-    println!("Building ember CLI...");
+    println!("Building nether CLI...");
     let status = Command::new("cargo")
-        .args(["build", "--release", "-p", "ember-cli"])
+        .args(["build", "--release", "-p", "nether-cli"])
         .current_dir(project_root)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::piped())
         .status()
-        .context("Failed to build ember CLI")?;
+        .context("Failed to build nether CLI")?;
 
     if !status.success() {
-        anyhow::bail!("Failed to build ember CLI");
+        anyhow::bail!("Failed to build nether CLI");
     }
 
-    Ok(ember_path)
+    Ok(nether_path)
 }
 
-/// Build an example using ember build (compile + pack)
+/// Build an example using nether build (compile + pack)
 fn build_with_ember(
     ember_exe: &Path,
     example_path: &Path,
@@ -267,20 +267,20 @@ fn build_with_ember(
     fs::create_dir_all(&game_dir)?;
 
     // Output path for the ROM
-    let rom_output = game_dir.join("rom.ewzx");
+    let rom_output = game_dir.join("rom.nczx");
 
-    // Run ember build (compile + pack)
+    // Run nether build (compile + pack)
     let output = Command::new(ember_exe)
         .args([
             "build",
             "--manifest",
-            "ember.toml",
+            "nether.toml",
             "-o",
             &rom_output.to_string_lossy(),
         ])
         .current_dir(example_path)
         .output()
-        .context("Failed to run ember build")?;
+        .context("Failed to run nether build")?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -301,7 +301,7 @@ fn build_with_ember(
     let manifest = serde_json::json!({
         "id": example_name,
         "title": title,
-        "author": "Emberware Examples",
+        "author": "Nethercore Examples",
         "version": "0.1.0",
         "downloaded_at": chrono::Utc::now().to_rfc3339()
     });
@@ -313,7 +313,7 @@ fn build_with_ember(
     Ok(())
 }
 
-/// Build a WASM-only example (no ember.toml)
+/// Build a WASM-only example (no nether.toml)
 fn build_wasm_only(example_path: &Path, games_dir: &Path, example_name: &str) -> Result<()> {
     // Build the example to WASM
     let status = Command::new("cargo")
@@ -357,7 +357,7 @@ fn build_wasm_only(example_path: &Path, games_dir: &Path, example_name: &str) ->
     let manifest = serde_json::json!({
         "id": example_name,
         "title": title,
-        "author": "Emberware Examples",
+        "author": "Nethercore Examples",
         "version": "0.1.0",
         "downloaded_at": chrono::Utc::now().to_rfc3339()
     });
@@ -392,7 +392,7 @@ fn project_root() -> PathBuf {
 }
 
 fn get_games_dir() -> Result<PathBuf> {
-    directories::ProjectDirs::from("io.emberware", "", "Emberware")
+    directories::ProjectDirs::from("io.nethercore", "", "Nethercore")
         .map(|dirs| dirs.data_dir().join("games"))
         .context("Failed to determine data directory")
 }

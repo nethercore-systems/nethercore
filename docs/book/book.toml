@@ -1,21 +1,18 @@
 [book]
-title = "Emberware ZX API Reference"
-authors = ["Emberware Team"]
-description = "Complete API documentation for the Emberware ZX fantasy console"
+title = "Nethercore ZX API Reference"
+authors = ["Nethercore Team"]
+description = "Complete API documentation for the Nethercore ZX fantasy console"
 language = "en"
 src = "src"
 
 [build]
 build-dir = "book"
 
-[preprocessor.tabs]
-# Install with: cargo install mdbook-tabs
-
 [output.html]
 default-theme = "navy"
 preferred-dark-theme = "navy"
-git-repository-url = "https://github.com/emberware/emberware"
-edit-url-template = "https://github.com/emberware/emberware/edit/main/docs/book/{path}"
+git-repository-url = "https://github.com/nethercore/nethercore"
+edit-url-template = "https://github.com/nethercore/nethercore/edit/main/docs/book/{path}"
 
 [output.html.fold]
 enable = true
@@ -25,5 +22,4 @@ level = 1
 enable = true
 limit-results = 30
 teaser-word-count = 30
-use-hierarchical-terms = true
 copy-js = true

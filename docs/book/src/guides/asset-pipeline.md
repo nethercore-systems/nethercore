@@ -1,12 +1,12 @@
-# Emberware Asset Pipeline
+# Nethercore Asset Pipeline
 
-Convert 3D models, textures, and audio into optimized Emberware formats.
+Convert 3D models, textures, and audio into optimized Nethercore formats.
 
 ---
 
 ## Quick Start
 
-Getting assets into an Emberware game is 3 steps:
+Getting assets into an Nethercore game is 3 steps:
 
 **1. Export from your 3D tool** (Blender, Maya, etc.) as glTF, GLB, or OBJ
 
@@ -28,7 +28,7 @@ jump = "audio/jump.wav"
 
 **3. Build and use:**
 ```bash
-ember-export build assets.toml
+nether-export build assets.toml
 ```
 
 {{#tabs global="lang"}}
@@ -145,20 +145,20 @@ jump = "audio/jump.wav"
 
 ```bash
 # Build all assets from manifest
-ember-export build assets.toml
+nether-export build assets.toml
 
 # Validate manifest without building
-ember-export check assets.toml
+nether-export check assets.toml
 
 # Convert individual files
-ember-export mesh player.gltf -o player.ewzmesh
-ember-export texture grass.png -o grass.ewztex
-ember-export audio jump.wav -o jump.ewzsnd
+nether-export mesh player.gltf -o player.ewzmesh
+nether-export texture grass.png -o grass.ewztex
+nether-export audio jump.wav -o jump.ewzsnd
 ```
 
 ### Output Files
 
-Running `ember-export build assets.toml` generates binary asset files:
+Running `nether-export build assets.toml` generates binary asset files:
 - `player.ewzmesh`, `enemy.ewzmesh`, `level.ewzmesh`
 - `player_diffuse.ewztex`
 - `jump.ewzsnd`
@@ -167,7 +167,7 @@ Running `ember-export build assets.toml` generates binary asset files:
 
 ## Output File Formats
 
-### EmberZMesh (.ewzmesh)
+### NetherZMesh (.ewzmesh)
 
 Binary format for 3D meshes with GPU-optimized packed vertex data. POD format (no magic bytes).
 
@@ -186,7 +186,7 @@ Offset | Type | Description
 
 Stride is calculated from the format flags at runtime.
 
-### EmberZTexture (.ewztex)
+### NetherZTexture (.ewztex)
 
 Binary format for textures. POD format (no magic bytes).
 
@@ -204,11 +204,11 @@ Offset | Type | Description
 - **Current format**: 4-byte header with `u16 width + u16 height`
 - If you have old `.ewztex` files, regenerate them with:
   ```bash
-  ember-export texture <source.png> -o <output.ewztex>
+  nether-export texture <source.png> -o <output.ewztex>
   ```
 - **Symptom of old format**: "invalid dimensions" error during load
 
-### EmberZSound (.ewzsnd)
+### NetherZSound (.ewzsnd)
 
 Binary format for audio. POD format (no magic bytes).
 
@@ -224,7 +224,7 @@ Offset | Type  | Description
 
 ## Vertex Formats
 
-The Emberware runtime supports 16 vertex format combinations, controlled by format flags.
+The Nethercore runtime supports 16 vertex format combinations, controlled by format flags.
 
 {{#tabs global="lang"}}
 
@@ -361,36 +361,36 @@ The bottom row `[0, 0, 0, 1]` is implicit (affine transform).
 
 ## Tool Reference
 
-### ember-export
+### nether-export
 
 The asset conversion CLI tool.
 
 **Build from manifest:**
 ```bash
-ember-export build assets.toml           # Build all assets
-ember-export check assets.toml           # Validate only
+nether-export build assets.toml           # Build all assets
+nether-export check assets.toml           # Validate only
 ```
 
 **Convert individual files:**
 ```bash
 # Meshes
-ember-export mesh player.gltf -o player.ewzmesh
-ember-export mesh level.obj -o level.ewzmesh --format POS_UV_NORMAL
+nether-export mesh player.gltf -o player.ewzmesh
+nether-export mesh level.obj -o level.ewzmesh --format POS_UV_NORMAL
 
 # Textures
-ember-export texture grass.png -o grass.ewztex
+nether-export texture grass.png -o grass.ewztex
 
 # Audio
-ember-export audio jump.wav -o jump.ewzsnd
+nether-export audio jump.wav -o jump.ewzsnd
 ```
 
 ---
 
 ## Loading Assets (FFI)
 
-### EmberZ Format Loading (Recommended)
+### NetherZ Format Loading (Recommended)
 
-The simplest way to load assets is using the EmberZ format functions. These parse the POD headers host-side and upload to GPU.
+The simplest way to load assets is using the NetherZ format functions. These parse the POD headers host-side and upload to GPU.
 
 {{#tabs global="lang"}}
 
@@ -463,7 +463,7 @@ export fn init() void {
 
 ### Raw Data Loading (Advanced)
 
-For fine-grained control, you can bypass the EmberZ format and provide raw data directly:
+For fine-grained control, you can bypass the NetherZ format and provide raw data directly:
 
 **Convenience API** (f32 input, auto-packed):
 
@@ -527,7 +527,7 @@ pub extern fn load_mesh_indexed_packed(data_ptr: u32, vertex_count: u32, index_p
 
 ## Constraints
 
-Emberware enforces these limits:
+Nethercore enforces these limits:
 
 | Resource | Limit |
 |----------|-------|
@@ -1067,16 +1067,16 @@ export fn init() void {
 
 ---
 
-## ember.toml vs include_bytes!()
+## nether.toml vs include_bytes!()
 
 There are two ways to include assets in your game:
 
-### Method 1: ember.toml + ROM Packing
+### Method 1: nether.toml + ROM Packing
 
 Best for: Production games with many assets
 
 ```toml
-# ember.toml
+# nether.toml
 [game]
 id = "my-game"
 title = "My Game"
@@ -1119,7 +1119,7 @@ const jump_sfx = rom_sound(@intFromPtr("jump".ptr), 4);
 
 Benefits:
 - Assets are pre-processed and compressed
-- Single `.ewzx` ROM file
+- Single `.nczx` ROM file
 - Automatic GPU format conversion
 
 ### Method 2: include_bytes!() + Procedural
@@ -1173,8 +1173,8 @@ Benefits:
 |----------|----------------|
 | Learning/prototyping | include_bytes!() or procedural |
 | Simple arcade games | Either works |
-| Complex games with many assets | ember.toml + ROM |
-| Games with large textures | ember.toml (compression) |
+| Complex games with many assets | nether.toml + ROM |
+| Games with large textures | nether.toml (compression) |
 
 ---
 
@@ -1183,5 +1183,5 @@ Benefits:
 The following features are planned but not yet implemented:
 
 - **Font conversion** - TTF/OTF to bitmap font atlas (.ewzfont)
-- **Watch mode** - `ember-export build --watch` for auto-rebuild on changes
+- **Watch mode** - `nether-export build --watch` for auto-rebuild on changes
 - **Rust code generation** - Auto-generated asset loading module

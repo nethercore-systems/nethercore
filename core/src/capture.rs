@@ -1,8 +1,8 @@
 //! Screenshot and GIF recording functionality.
 //!
 //! Provides console-agnostic screen capture capabilities for gameplay recording.
-//! - Screenshots saved as PNG to `~/.emberware/screenshots/`
-//! - GIFs saved to `~/.emberware/gifs/`
+//! - Screenshots saved as PNG to `~/.nethercore/screenshots/`
+//! - GIFs saved to `~/.nethercore/gifs/`
 
 use anyhow::{Context, Result};
 use std::path::PathBuf;
@@ -325,7 +325,7 @@ pub fn read_capture_pixels<G: CaptureSupport>(graphics: &G) -> Vec<u8> {
 
 /// Get the screenshots directory, creating it if needed.
 fn screenshots_dir() -> Result<PathBuf> {
-    let dir = directories::ProjectDirs::from("io.emberware", "", "Emberware")
+    let dir = directories::ProjectDirs::from("io.nethercore", "", "Nethercore")
         .context("Failed to get project directories")?
         .data_dir()
         .join("screenshots");
@@ -337,7 +337,7 @@ fn screenshots_dir() -> Result<PathBuf> {
 
 /// Get the GIFs directory, creating it if needed.
 fn gifs_dir() -> Result<PathBuf> {
-    let dir = directories::ProjectDirs::from("io.emberware", "", "Emberware")
+    let dir = directories::ProjectDirs::from("io.nethercore", "", "Nethercore")
         .context("Failed to get project directories")?
         .data_dir()
         .join("gifs");

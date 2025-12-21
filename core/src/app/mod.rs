@@ -1,7 +1,7 @@
 //! Application framework types and utilities
 //!
 //! This module contains console-agnostic application types that are shared
-//! across all fantasy consoles (Emberware ZX, Classic, etc.).
+//! across all fantasy consoles (Nethercore ZX, Classic, etc.).
 
 pub mod config;
 pub mod debug;

@@ -1,0 +1,5 @@
+[game]
+id = "cube"
+title = "Cube"
+author = "Nethercore Examples"
+version = "0.1.0"

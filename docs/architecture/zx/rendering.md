@@ -1,12 +1,12 @@
-# Emberware ZX Rendering Architecture
+# Nethercore ZX Rendering Architecture
 
-This document describes the rendering architecture of Emberware ZX, covering the GPU pipeline, render modes, vertex formats, shader generation, and material system.
+This document describes the rendering architecture of Nethercore ZX, covering the GPU pipeline, render modes, vertex formats, shader generation, and material system.
 
 ---
 
 ## Overview
 
-Emberware ZX uses a **wgpu-based** forward renderer with a command buffer pattern. The architecture separates staging (FFI state) from GPU execution:
+Nethercore ZX uses a **wgpu-based** forward renderer with a command buffer pattern. The architecture separates staging (FFI state) from GPU execution:
 
 ```
 ┌──────────────────┐    ┌────────────────┐    ┌─────────────┐
@@ -83,7 +83,7 @@ The renderer uses a unified buffer layout to minimize binding changes:
 
 ## Render Modes
 
-Emberware ZX supports 4 forward rendering modes, set once in `init()`:
+Nethercore ZX supports 4 forward rendering modes, set once in `init()`:
 
 ```rust
 fn render_mode(mode: u32)  // 0-3, init-only
@@ -519,16 +519,16 @@ Invalidate on:
 
 | File | Description |
 |------|-------------|
-| `emberware-zx/src/graphics/mod.rs` | ZGraphics main implementation |
-| `emberware-zx/src/graphics/frame.rs` | Frame rendering and command execution |
-| `emberware-zx/src/graphics/pipeline.rs` | Pipeline cache and creation |
-| `emberware-zx/src/graphics/vertex.rs` | Vertex format definitions |
-| `emberware-zx/src/graphics/unified_shading_state.rs` | Shading state packing |
-| `emberware-zx/src/graphics/buffer.rs` | Buffer management |
-| `emberware-zx/src/graphics/command_buffer.rs` | Virtual render pass |
-| `emberware-zx/src/graphics/texture_manager.rs` | Texture loading and VRAM tracking |
-| `emberware-zx/src/shader_gen.rs` | Shader permutation system |
-| `emberware-zx/shaders/*.wgsl` | Shader templates |
+| `nethercore-zx/src/graphics/mod.rs` | ZGraphics main implementation |
+| `nethercore-zx/src/graphics/frame.rs` | Frame rendering and command execution |
+| `nethercore-zx/src/graphics/pipeline.rs` | Pipeline cache and creation |
+| `nethercore-zx/src/graphics/vertex.rs` | Vertex format definitions |
+| `nethercore-zx/src/graphics/unified_shading_state.rs` | Shading state packing |
+| `nethercore-zx/src/graphics/buffer.rs` | Buffer management |
+| `nethercore-zx/src/graphics/command_buffer.rs` | Virtual render pass |
+| `nethercore-zx/src/graphics/texture_manager.rs` | Texture loading and VRAM tracking |
+| `nethercore-zx/src/shader_gen.rs` | Shader permutation system |
+| `nethercore-zx/shaders/*.wgsl` | Shader templates |
 
 ---
 

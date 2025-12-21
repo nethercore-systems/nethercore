@@ -1,6 +1,6 @@
-# Emberware ZX API Reference
+# Nethercore ZX API Reference
 
-Emberware ZX is a 5th-generation fantasy console targeting PS1/N64/Saturn aesthetics with modern conveniences like deterministic rollback netcode.
+Nethercore ZX is a 5th-generation fantasy console targeting PS1/N64/Saturn aesthetics with modern conveniences like deterministic rollback netcode.
 
 ## Console Specs
 
@@ -43,7 +43,7 @@ pub extern "C" fn render() {
 
 ## Memory Model
 
-Emberware ZX uses a **16MB ROM + 4MB RAM** memory model:
+Nethercore ZX uses a **16MB ROM + 4MB RAM** memory model:
 
 - **ROM (16MB)**: WASM bytecode + data pack (textures, meshes, sounds)
 - **RAM (4MB)**: WASM linear memory for game state
@@ -85,12 +85,12 @@ The host application includes screenshot and GIF recording capabilities:
 | GIF Toggle | **F10** | Start/stop GIF recording |
 
 Files are saved to:
-- Screenshots: `~/.emberware/Emberware/screenshots/`
-- GIFs: `~/.emberware/Emberware/gifs/`
+- Screenshots: `~/.nethercore/Nethercore/screenshots/`
+- GIFs: `~/.nethercore/Nethercore/gifs/`
 
 Filenames include game name and timestamp (e.g., `platformer_screenshot_2025-01-15_14-30-45.png`).
 
-**Configuration** (`~/.emberware/config.toml`):
+**Configuration** (`~/.nethercore/config.toml`):
 ```toml
 [capture]
 screenshot = "F9"

@@ -1,13 +1,13 @@
 //! Data Pack Demo
 //!
 //! Demonstrates loading assets from a ROM data pack using `rom_*` FFI functions.
-//! Assets are bundled via `ember pack` and go directly to VRAM/audio memory,
+//! Assets are bundled via `nether pack` and go directly to VRAM/audio memory,
 //! bypassing WASM linear memory for efficient rollback.
 //!
 //! Build workflow:
-//!   1. `ember build` — Compile Rust to WASM
-//!   2. `ember pack` — Bundle assets into data pack
-//!   3. `ember run` — Launch in emulator
+//!   1. `nether build` — Compile Rust to WASM
+//!   2. `nether pack` — Bundle assets into data pack
+//!   3. `nether run` — Launch in emulator
 
 #![no_std]
 #![no_main]

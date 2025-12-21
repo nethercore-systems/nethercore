@@ -1,12 +1,12 @@
-# Emberware ROM Format Specification
+# Nethercore ROM Format Specification
 
 ## Overview
 
-Emberware uses console-specific binary ROM formats for game distribution. Each fantasy console has its own ROM format with a unique file extension and structure, ensuring type-safety and preventing incompatible games from being loaded on the wrong console.
+Nethercore uses console-specific binary ROM formats for game distribution. Each fantasy console has its own ROM format with a unique file extension and structure, ensuring type-safety and preventing incompatible games from being loaded on the wrong console.
 
 **Current ROM Formats:**
-- `.ewzx` - Emberware ZX (3D home console)
-- `.ewc` - Emberware Chroma (2D handheld console) - Future
+- `.nczx` - Nethercore ZX (3D home console)
+- `.ewc` - Nethercore Chroma (2D handheld console) - Future
 
 **Why Console-Specific?**
 - Type-safe - impossible to load wrong ROM in wrong console
@@ -22,13 +22,13 @@ Emberware uses console-specific binary ROM formats for game distribution. Each f
 - Games can `#[derive(Encode)]` for ROM metadata
 - No external dependencies for inspection (just Rust tooling)
 
-## Emberware ZX ROM Format (.ewzx)
+## Nethercore ZX ROM Format (.nczx)
 
 ### File Structure
 
 ```
-game.ewzx (binary file, max 12MB)
-├── Magic bytes: "EWZX" (4 bytes)
+game.nczx (binary file, max 12MB)
+├── Magic bytes: "NCZX" (4 bytes)
 └── ZRom (bitcode-encoded):
     ├── version: u32
     ├── metadata: ZMetadata
@@ -40,7 +40,7 @@ game.ewzx (binary file, max 12MB)
 
 ### Magic Bytes
 
-All Emberware ZX ROM files start with the magic bytes: `EWZX` (hex: `45 57 5A 58`)
+All Nethercore ZX ROM files start with the magic bytes: `EWZX` (hex: `45 57 5A 58`)
 
 This allows tools to quickly identify the ROM type and reject invalid files.
 
@@ -103,7 +103,7 @@ pub struct ZMetadata {
     /// ISO 8601 timestamp when ROM was created
     pub created_at: String,
 
-    /// ember-cli version that created this ROM
+    /// nether-cli version that created this ROM
     pub tool_version: String,
 
     // Z-specific settings
@@ -155,7 +155,7 @@ pub enum TextureFormat {
 }
 ```
 
-**Compression Selection (automated by ember-cli):**
+**Compression Selection (automated by nether-cli):**
 - Render Mode 0 (Unlit): RGBA8 (pixel-perfect, full alpha)
 - Render Modes 1-3 (Matcap/PBR/Hybrid): BC7 (4x compression, stipple transparency)
 
@@ -193,7 +193,7 @@ pub struct PackedMesh {
 - Format 7: 36 bytes (position + UV + color + normal)
 - Format 15: 44 bytes (all features)
 
-**Binary File Format (.ewzxmesh):**
+**Binary File Format (.nczxmesh):**
 ```
 Header (12 bytes):
   0x00: vertex_count (u32, LE)
@@ -216,7 +216,7 @@ pub struct PackedSkeleton {
 }
 ```
 
-**Binary File Format (.ewzxskel):**
+**Binary File Format (.nczxskel):**
 ```
 Header (8 bytes):
   0x00: bone_count (u32, LE)
@@ -238,7 +238,7 @@ pub struct PackedKeyframes {
 }
 ```
 
-**Binary File Format (.ewzxanim):**
+**Binary File Format (.nczxanim):**
 ```
 Header (4 bytes):
   0x00: bone_count (u8)
@@ -324,19 +324,19 @@ Used for level data, configuration, dialogue, or any custom binary format.
 
 | Asset Type | Extension | Format |
 |------------|-----------|--------|
-| ROM | `.ewzx` | Bitcode |
-| Mesh | `.ewzxmesh` | POD binary |
-| Texture | `.ewzxtex` | POD binary |
-| Sound | `.ewzxsnd` | WAV (parsed to PCM) |
-| Skeleton | `.ewzxskel` | POD binary |
-| Animation | `.ewzxanim` | POD binary |
+| ROM | `.nczx` | Bitcode |
+| Mesh | `.nczxmesh` | POD binary |
+| Texture | `.nczxtex` | POD binary |
+| Sound | `.nczxsnd` | WAV (parsed to PCM) |
+| Skeleton | `.nczxskel` | POD binary |
+| Animation | `.nczxanim` | POD binary |
 
 ---
 
 ## Validation Rules
 
 ### Format Validation
-- Magic bytes must be "EWZX"
+- Magic bytes must be "NCZX"
 - File must deserialize successfully using bitcode
 
 ### Version Validation
@@ -360,15 +360,15 @@ Used for level data, configuration, dialogue, or any custom binary format.
 
 ## Creating ROMs
 
-Use `ember pack` to create ROM files:
+Use `nether pack` to create ROM files:
 
 ```bash
-ember pack
+nether pack
 ```
 
-This reads `ember.toml` in your project and creates the ROM with all assets bundled.
+This reads `nether.toml` in your project and creates the ROM with all assets bundled.
 
-### ember.toml Example
+### nether.toml Example
 
 ```toml
 [package]
@@ -390,7 +390,7 @@ sounds = "assets/sounds"
 ## Inspecting ROMs
 
 ```bash
-ember info my-game.ewzx
+nether info my-game.nczx
 ```
 
 Displays:
@@ -407,7 +407,7 @@ Displays:
 When a ROM is installed to the local library:
 
 ```
-~/.emberware/games/{game_id}/
+~/.nethercore/games/{game_id}/
 ├── manifest.json        # Metadata for library UI
 ├── rom.wasm            # Extracted WASM code
 └── thumbnail.png       # Extracted thumbnail (if present)
@@ -455,7 +455,7 @@ Large game with assets:
 ## Error Messages
 
 **"Invalid EWZX magic bytes"**
-- File is not an Emberware ZX ROM
+- File is not an Nethercore ZX ROM
 - File may be corrupted
 - Wrong ROM type
 
@@ -485,12 +485,12 @@ Large game with assets:
 | Mesh Format | `zx-common/src/formats/mesh.rs` |
 | Skeleton Format | `zx-common/src/formats/skeleton.rs` |
 | Animation Format | `zx-common/src/formats/animation.rs` |
-| Build Process | `tools/ember-cli/src/pack.rs` |
+| Build Process | `tools/nether-cli/src/pack.rs` |
 
 ---
 
 ## See Also
 
 - [distributing-games.md](./distributing-games.md) - Complete guide for game developers
-- [ffi.md](./ffi.md) - Emberware FFI API reference
-- [emberware-zx.md](./emberware-zx.md) - ZX-specific API documentation
+- [ffi.md](./ffi.md) - Nethercore FFI API reference
+- [nethercore-zx.md](./nethercore-zx.md) - ZX-specific API documentation

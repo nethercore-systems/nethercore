@@ -4,17 +4,17 @@ on:
   push:
     branches: [main]
     paths:
-      - 'include/emberware_*_ffi.rs'
-      - 'include/emberware_*.h'
-      - 'include/emberware_*.zig'
+      - 'include/nethercore_*_ffi.rs'
+      - 'include/nethercore_*.h'
+      - 'include/nethercore_*.zig'
       - 'tools/ffi-gen/**'
       - '.github/workflows/ffi-check.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'include/emberware_*_ffi.rs'
-      - 'include/emberware_*.h'
-      - 'include/emberware_*.zig'
+      - 'include/nethercore_*_ffi.rs'
+      - 'include/nethercore_*.h'
+      - 'include/nethercore_*.zig'
       - 'tools/ffi-gen/**'
       - '.github/workflows/ffi-check.yml'
   workflow_dispatch:

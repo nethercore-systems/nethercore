@@ -1,6 +1,6 @@
 //! Animation Demo - ROM-Backed Keyframe Animation System (Animation System v2)
 //!
-//! Demonstrates Emberware ZX's keyframe animation system:
+//! Demonstrates Nethercore ZX's keyframe animation system:
 //! - Loading keyframes from ROM data pack (no WASM memory used)
 //! - Step-based "stamp" animation with keyframe_bind() - uses static GPU buffers
 //! - Blended animation with keyframe_read() + set_bones_4x4() - uses immediate bones buffer

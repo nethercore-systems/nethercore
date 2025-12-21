@@ -24,14 +24,11 @@ pub fn get_consoles() -> Result<Vec<String>> {
     for entry in std::fs::read_dir(&include_dir)? {
         let entry = entry?;
         let name = entry.file_name().to_string_lossy().to_string();
-        if name.starts_with("emberware_") && name.ends_with("_ffi.rs") {
-            // Extract console name: emberware_{console}_ffi.rs
-            let console = name
-                .strip_prefix("emberware_")
-                .and_then(|s| s.strip_suffix("_ffi.rs"))
-                .map(|s| s.to_string());
-            if let Some(c) = console {
-                consoles.push(c);
+        // New pattern: {console}.rs (exclude non-console files like mod.rs, lib.rs)
+        if name.ends_with(".rs") && !["mod.rs", "lib.rs"].contains(&name.as_str()) {
+            // Extract console name: {console}.rs
+            if let Some(console) = name.strip_suffix(".rs") {
+                consoles.push(console.to_string());
             }
         }
     }
@@ -44,9 +41,9 @@ pub fn generate_for_console(console: &str) -> Result<()> {
     let workspace_root = find_workspace_root()?;
 
     // Construct console-specific paths
-    let ffi_source = workspace_root.join(format!("include/emberware_{}_ffi.rs", console));
-    let c_output = workspace_root.join(format!("include/emberware_{}.h", console));
-    let zig_output = workspace_root.join(format!("include/emberware_{}.zig", console));
+    let ffi_source = workspace_root.join(format!("include/{}.rs", console));
+    let c_output = workspace_root.join(format!("include/{}.h", console));
+    let zig_output = workspace_root.join(format!("include/{}.zig", console));
 
     // Parse FFI source
     let model = parser::parse_ffi_file(&ffi_source)
@@ -85,7 +82,7 @@ pub fn validate() -> Result<()> {
 /// Validate bindings for a specific console
 pub fn validate_for_console(console: &str) -> Result<()> {
     let workspace_root = find_workspace_root()?;
-    let ffi_source = workspace_root.join(format!("include/emberware_{}_ffi.rs", console));
+    let ffi_source = workspace_root.join(format!("include/{}.rs", console));
 
     // Parse FFI source
     let model = parser::parse_ffi_file(&ffi_source)
@@ -103,9 +100,9 @@ pub fn validate_for_console(console: &str) -> Result<()> {
 pub fn check_for_console(console: &str) -> Result<bool> {
     let workspace_root = find_workspace_root()?;
 
-    let c_output = workspace_root.join(format!("include/emberware_{}.h", console));
-    let zig_output = workspace_root.join(format!("include/emberware_{}.zig", console));
-    let ffi_source = workspace_root.join(format!("include/emberware_{}_ffi.rs", console));
+    let c_output = workspace_root.join(format!("include/{}.h", console));
+    let zig_output = workspace_root.join(format!("include/{}.zig", console));
+    let ffi_source = workspace_root.join(format!("include/{}.rs", console));
 
     // Parse FFI source
     let model = parser::parse_ffi_file(&ffi_source)
@@ -144,8 +141,8 @@ pub fn check_for_console(console: &str) -> Result<bool> {
 pub fn verify_with_zig(console: &str) -> Result<()> {
     let workspace_root = find_workspace_root()?;
 
-    let c_header = workspace_root.join(format!("include/emberware_{}.h", console));
-    let zig_bindings = workspace_root.join(format!("include/emberware_{}.zig", console));
+    let c_header = workspace_root.join(format!("include/{}.h", console));
+    let zig_bindings = workspace_root.join(format!("include/{}.zig", console));
 
     println!("Verifying {} bindings with Zig compiler...", console.to_uppercase());
 
@@ -163,8 +160,8 @@ pub fn verify_with_zig(console: &str) -> Result<()> {
 fn verify_c_header(header_path: &PathBuf, console: &str) -> Result<()> {
     let workspace_root = find_workspace_root()?;
     let temp_dir = std::env::temp_dir();
-    let test_c = temp_dir.join(format!("emberware_{}_test.c", console));
-    let output_obj = temp_dir.join(format!("emberware_{}_test.o", console));
+    let test_c = temp_dir.join(format!("{}_test.c", console));
+    let output_obj = temp_dir.join(format!("{}_test.o", console));
 
     // Create a minimal C file that includes the header
     let test_code = format!(
@@ -225,8 +222,8 @@ void test_helpers(void) {{
 /// Verify Zig bindings compile
 fn verify_zig_bindings(zig_path: &PathBuf) -> Result<()> {
     let temp_dir = std::env::temp_dir();
-    let test_zig = temp_dir.join("emberware_test_bindings.zig");
-    let output_obj = temp_dir.join("emberware_test_bindings.o");
+    let test_zig = temp_dir.join("test_bindings.zig");
+    let output_obj = temp_dir.join("test_bindings.o");
 
     // Create a test file that imports the bindings
     let test_code = format!(
@@ -281,14 +278,14 @@ fn find_workspace_root() -> Result<PathBuf> {
     loop {
         let cargo_toml = current.join("Cargo.toml");
         if cargo_toml.exists() {
-            // Check if this is the emberware directory
+            // Check if this is the nethercore directory
             if current.join("include").exists() {
                 return Ok(current);
             }
         }
 
         if !current.pop() {
-            anyhow::bail!("Could not find workspace root (emberware directory)");
+            anyhow::bail!("Could not find workspace root (nethercore directory)");
         }
     }
 }

@@ -1,13 +1,13 @@
-///! Hello World - Emberware ZX (Zig Version)
+///! Hello World - Nethercore ZX (Zig Version)
 ///!
 ///! A simple game that draws a colored square and responds to input.
-///! Demonstrates the core concepts of Emberware game development in Zig.
+///! Demonstrates the core concepts of Nethercore game development in Zig.
 ///!
 ///! Build with: zig build
-///! Run with: ember run zig-out/bin/game.wasm
+///! Run with: nether run zig-out/bin/game.wasm
 
 // =============================================================================
-// FFI Imports from Emberware Runtime
+// FFI Imports from Nethercore Runtime
 // =============================================================================
 
 extern fn set_clear_color(color: u32) void;
@@ -64,7 +64,7 @@ export fn update() void {
 
 export fn render() void {
     // Draw title text
-    const title = "Hello Emberware!";
+    const title = "Hello Nethercore!";
     draw_text(title.ptr, title.len, 80.0, 50.0, 32.0, WHITE);
 
     // Draw the moving square

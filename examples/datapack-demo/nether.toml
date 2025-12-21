@@ -1,0 +1,35 @@
+# Nether Data Pack Manifest
+#
+# This file tells `nether pack` which assets to bundle into the ROM data pack.
+# Assets loaded via rom_* FFI functions bypass WASM memory entirely.
+#
+# Build workflow:
+#   1. nether build          # Compile Rust to WASM
+#   2. nether pack           # Bundle assets into data pack
+#   3. nether run            # Launch in emulator
+
+[game]
+id = "datapack-demo"
+title = "Data Pack Demo"
+author = "Nethercore Examples"
+version = "0.1.0"
+description = "Demonstrates loading textures, meshes, and sounds from a data pack"
+tags = ["demo", "datapack"]
+
+# Textures are converted to RGBA8 format
+# Supported input formats: PNG, JPG, BMP, TGA
+[[assets.textures]]
+id = "cube_texture"
+path = "../assets/checkerboard.png"
+
+# Meshes are stored in pre-packed vertex format
+# Uses .ewzmesh format (converted via nether-export)
+[[assets.meshes]]
+id = "cube_mesh"
+path = "../assets/cube.ewzmesh"
+
+# Sounds are stored as raw PCM (22050 Hz mono i16)
+# Supported input: WAV
+[[assets.sounds]]
+id = "beep"
+path = "../assets/beep.wav"

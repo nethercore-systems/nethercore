@@ -1,11 +1,11 @@
-//! Integration tests for Emberware core framework
+//! Integration tests for Nethercore core framework
 //!
 //! Tests full game lifecycle, rollback simulation, input synchronization,
 //! and resource limit enforcement.
 
 #[cfg(test)]
 mod tests {
-    use emberware_shared::EMBERWARE_ZX_RAM_LIMIT;
+    use nethercore_shared::NETHERCORE_ZX_RAM_LIMIT;
     use wasmtime::Linker;
 
     use crate::{
@@ -482,7 +482,7 @@ mod tests {
         let module = engine.load_module(&wasm).unwrap();
         let mut game = GameInstance::<TestInput, ()>::new(&engine, &module, &linker).unwrap();
 
-        let mut session = RollbackSession::<TestInput, ()>::new_local(2, EMBERWARE_ZX_RAM_LIMIT);
+        let mut session = RollbackSession::<TestInput, ()>::new_local(2, NETHERCORE_ZX_RAM_LIMIT);
 
         game.init().unwrap();
 
@@ -638,7 +638,7 @@ mod tests {
     /// Test RollbackSession input handling
     #[test]
     fn test_rollback_session_input() {
-        let mut session = RollbackSession::<TestInput, ()>::new_local(2, EMBERWARE_ZX_RAM_LIMIT);
+        let mut session = RollbackSession::<TestInput, ()>::new_local(2, NETHERCORE_ZX_RAM_LIMIT);
 
         // Add input for local players
         let input0 = TestInput {
@@ -862,7 +862,7 @@ mod tests {
         runtime.init_game().unwrap();
 
         // Set up 4-player local session
-        let session = RollbackSession::<TestInput, ()>::new_local(4, EMBERWARE_ZX_RAM_LIMIT);
+        let session = RollbackSession::<TestInput, ()>::new_local(4, NETHERCORE_ZX_RAM_LIMIT);
         runtime.set_session(session);
 
         // Verify session is set

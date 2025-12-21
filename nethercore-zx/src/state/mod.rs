@@ -1,0 +1,68 @@
+//! Nethercore ZX FFI state and types
+//!
+//! FFI staging state for Nethercore ZX console.
+//! This state is rebuilt each frame from FFI calls and consumed by ZGraphics.
+//! It is NOT part of rollback state - only GameState is rolled back.
+
+mod config;
+mod ffi_state;
+mod resources;
+mod rollback_state;
+
+pub use config::ZInitConfig;
+pub use ffi_state::ZFFIState;
+pub use resources::{
+    Font, KeyframeGpuInfo, KeyframeSource, PendingKeyframes, PendingMesh, PendingMeshPacked,
+    PendingSkeleton, PendingTexture, SkeletonGpuInfo,
+};
+pub use rollback_state::{AudioPlaybackState, ChannelState, MAX_CHANNELS, ZRollbackState};
+
+/// Maximum number of bones for GPU skinning
+pub const MAX_BONES: usize = 256;
+
+/// Maximum number of skeletons that can be loaded
+pub const MAX_SKELETONS: usize = 64;
+
+/// Maximum number of keyframe collections that can be loaded
+pub const MAX_KEYFRAME_COLLECTIONS: usize = 256;
+
+// Re-export BoneMatrix3x4 from shared (the canonical POD type)
+pub use nethercore_shared::math::BoneMatrix3x4;
+
+/// Skeleton data containing inverse bind matrices
+///
+/// Stored on the CPU side for upload to GPU when bound.
+/// The inverse bind matrices transform vertices from model space
+/// to bone-local space at bind time.
+#[derive(Clone, Debug)]
+pub struct SkeletonData {
+    /// Inverse bind matrices (one per bone, 3x4 row-major format)
+    pub inverse_bind: Vec<BoneMatrix3x4>,
+    /// Number of bones in this skeleton
+    pub bone_count: u32,
+}
+
+/// Loaded keyframe collection (stored on host/ROM)
+///
+/// Contains keyframe data ready for decoding and use.
+/// Data stays on host and is accessed via keyframe_read/keyframe_bind.
+#[derive(Clone, Debug)]
+pub struct LoadedKeyframeCollection {
+    /// Number of bones per frame
+    pub bone_count: u8,
+    /// Number of frames in the collection
+    pub frame_count: u16,
+    /// Raw platform format data (frame_count × bone_count × 16 bytes)
+    pub data: Vec<u8>,
+}
+
+/// A batch of quad instances that share the same texture bindings and blend mode
+#[derive(Debug, Clone)]
+pub struct QuadBatch {
+    /// Texture handles for this batch (snapshot of bound_textures when batch was created)
+    pub textures: [u32; 4],
+    /// Blend mode for this batch (captured when batch was created)
+    pub blend_mode: u8,
+    /// Quad instances in this batch
+    pub instances: Vec<crate::graphics::QuadInstance>,
+}

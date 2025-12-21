@@ -1,4 +1,4 @@
-//! EmberZSound binary format (.ewzsnd)
+//! NetherZSound binary format (.nczxsnd)
 //!
 //! ZX console audio format. QOA compressed.
 //! POD format - no magic bytes.
@@ -14,7 +14,7 @@
 //! # Flags
 //! - Bit 0: Stereo (0 = mono, 1 = stereo) - reserved for future music support
 //!
-//! Sample rate is fixed at 22050Hz (controlled by ember-export).
+//! Sample rate is fixed at 22050Hz (controlled by nether-export).
 
 /// ZX console sample rate (fixed)
 pub const SAMPLE_RATE: u32 = 22050;
@@ -25,16 +25,16 @@ pub mod sound_flags {
     pub const STEREO: u8 = 0b0000_0001;
 }
 
-/// EmberZSound header (8 bytes)
+/// NetherZSound header (8 bytes)
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
-pub struct EmberZSoundHeader {
+pub struct NetherZSoundHeader {
     pub total_samples: u32,
     pub flags: u8,
     pub _reserved: [u8; 3],
 }
 
-impl EmberZSoundHeader {
+impl NetherZSoundHeader {
     pub const SIZE: usize = 8;
 
     pub fn new(total_samples: u32) -> Self {
@@ -81,26 +81,26 @@ impl EmberZSoundHeader {
     }
 }
 
-/// Decode EmberZSound data to PCM samples
+/// Decode NetherZSound data to PCM samples
 ///
 /// Returns decoded PCM samples (mono, 16-bit)
 pub fn decode_sound(data: &[u8]) -> Option<Vec<i16>> {
-    let header = EmberZSoundHeader::from_bytes(data)?;
-    let qoa_data = &data[EmberZSoundHeader::SIZE..];
+    let header = NetherZSoundHeader::from_bytes(data)?;
+    let qoa_data = &data[NetherZSoundHeader::SIZE..];
 
-    ember_qoa::decode_qoa(qoa_data, header.total_samples as usize).ok()
+    nether_qoa::decode_qoa(qoa_data, header.total_samples as usize).ok()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// Helper to create EmberZSound data from PCM samples
+    /// Helper to create NetherZSound data from PCM samples
     fn encode_sound(samples: &[i16]) -> Vec<u8> {
-        let header = EmberZSoundHeader::new(samples.len() as u32);
-        let qoa_data = ember_qoa::encode_qoa(samples);
+        let header = NetherZSoundHeader::new(samples.len() as u32);
+        let qoa_data = nether_qoa::encode_qoa(samples);
 
-        let mut data = Vec::with_capacity(EmberZSoundHeader::SIZE + qoa_data.len());
+        let mut data = Vec::with_capacity(NetherZSoundHeader::SIZE + qoa_data.len());
         data.extend_from_slice(&header.to_bytes());
         data.extend_from_slice(&qoa_data);
         data
@@ -129,25 +129,25 @@ mod tests {
 
     #[test]
     fn test_header_roundtrip() {
-        let header = EmberZSoundHeader::new(12345);
+        let header = NetherZSoundHeader::new(12345);
         let bytes = header.to_bytes();
-        let decoded = EmberZSoundHeader::from_bytes(&bytes).unwrap();
+        let decoded = NetherZSoundHeader::from_bytes(&bytes).unwrap();
         assert_eq!(decoded.total_samples, 12345);
         assert_eq!(decoded.flags, 0);
     }
 
     #[test]
     fn test_header_size() {
-        assert_eq!(EmberZSoundHeader::SIZE, 8);
+        assert_eq!(NetherZSoundHeader::SIZE, 8);
     }
 
     #[test]
     fn test_header_with_flags() {
-        let header = EmberZSoundHeader::with_flags(1000, sound_flags::STEREO);
+        let header = NetherZSoundHeader::with_flags(1000, sound_flags::STEREO);
         assert!(header.is_stereo());
 
         let bytes = header.to_bytes();
-        let decoded = EmberZSoundHeader::from_bytes(&bytes).unwrap();
+        let decoded = NetherZSoundHeader::from_bytes(&bytes).unwrap();
         assert_eq!(decoded.total_samples, 1000);
         assert!(decoded.is_stereo());
     }

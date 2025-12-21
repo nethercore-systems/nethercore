@@ -1,14 +1,14 @@
 #!/bin/bash
 # Local P2P Testing Helper
 #
-# This script launches two instances of emberware-zx for local P2P testing.
+# This script launches two instances of nethercore-zx for local P2P testing.
 # The instances connect to each other via localhost UDP sockets.
 #
 # Usage: ./scripts/test-p2p.sh <rom_path> [input_delay]
 #
 # Examples:
-#   ./scripts/test-p2p.sh games/pong.ewzx
-#   ./scripts/test-p2p.sh games/pong.ewzx 2
+#   ./scripts/test-p2p.sh games/pong.nczx
+#   ./scripts/test-p2p.sh games/pong.nczx 2
 
 set -e
 
@@ -27,7 +27,7 @@ echo "Player 2: bind=7778, peer=7777, local_player=1"
 echo ""
 
 # Start player 2 in background
-cargo run -p emberware-zx --release -- "$ROM_PATH" \
+cargo run -p nethercore-zx --release -- "$ROM_PATH" \
     --p2p \
     --bind 7778 \
     --peer 7777 \
@@ -39,7 +39,7 @@ P2_PID=$!
 sleep 0.5
 
 # Start player 1 in foreground
-cargo run -p emberware-zx --release -- "$ROM_PATH" \
+cargo run -p nethercore-zx --release -- "$ROM_PATH" \
     --p2p \
     --bind 7777 \
     --peer 7778 \

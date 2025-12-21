@@ -1,4 +1,4 @@
-//! ROM format specifications for Emberware fantasy consoles.
+//! ROM format specifications for Nethercore fantasy consoles.
 //!
 //! This module defines the `RomFormat` struct which serves as the single source of truth
 //! for all ROM-related constants (file extensions, magic bytes, asset extensions).
@@ -6,16 +6,16 @@
 //! # Example
 //!
 //! ```
-//! use emberware_shared::ZX_ROM_FORMAT;
+//! use nethercore_shared::ZX_ROM_FORMAT;
 //!
 //! // Get the ROM file extension
-//! assert_eq!(ZX_ROM_FORMAT.extension, "ewzx");
+//! assert_eq!(ZX_ROM_FORMAT.extension, "nczx");
 //!
 //! // Check magic bytes
-//! assert_eq!(ZX_ROM_FORMAT.magic, b"EWZX");
+//! assert_eq!(ZX_ROM_FORMAT.magic, b"NCZX");
 //!
 //! // Get asset extensions
-//! assert_eq!(ZX_ROM_FORMAT.mesh_ext, "ewzxmesh");
+//! assert_eq!(ZX_ROM_FORMAT.mesh_ext, "nczxmesh");
 //! ```
 
 /// ROM format specification for a fantasy console.
@@ -29,7 +29,7 @@ pub struct RomFormat {
     /// Used in manifests and registry to identify the console type.
     pub console_type: &'static str,
 
-    /// ROM file extension without dot (e.g., "ewzx")
+    /// ROM file extension without dot (e.g., "nczx")
     pub extension: &'static str,
 
     /// Magic bytes at start of ROM file (4 bytes)
@@ -38,19 +38,19 @@ pub struct RomFormat {
     /// Format version for backward compatibility
     pub version: u32,
 
-    /// Mesh file extension (e.g., "ewzxmesh")
+    /// Mesh file extension (e.g., "nczxmesh")
     pub mesh_ext: &'static str,
 
-    /// Texture file extension (e.g., "ewzxtex")
+    /// Texture file extension (e.g., "nczxtex")
     pub texture_ext: &'static str,
 
-    /// Sound file extension (e.g., "ewzxsnd")
+    /// Sound file extension (e.g., "nczxsnd")
     pub sound_ext: &'static str,
 
-    /// Skeleton file extension (e.g., "ewzxskel")
+    /// Skeleton file extension (e.g., "nczxskel")
     pub skeleton_ext: &'static str,
 
-    /// Animation file extension (e.g., "ewzxanim")
+    /// Animation file extension (e.g., "nczxanim")
     pub animation_ext: &'static str,
 }
 
@@ -82,23 +82,23 @@ impl RomFormat {
     }
 }
 
-/// Emberware ZX ROM format specification.
+/// Nethercore ZX ROM format specification.
 ///
 /// This is the single source of truth for all ZX ROM format constants:
 /// - Console type: `zx`
-/// - ROM extension: `.ewzx`
+/// - ROM extension: `.nczx`
 /// - Magic bytes: `EWZX`
-/// - Asset extensions: `.ewzxmesh`, `.ewzxtex`, `.ewzxsnd`, `.ewzxskel`, `.ewzxanim`
+/// - Asset extensions: `.nczxmesh`, `.nczxtex`, `.nczxsnd`, `.nczxskel`, `.nczxanim`
 pub const ZX_ROM_FORMAT: RomFormat = RomFormat::new(
     "zx",
-    "ewzx",
-    b"EWZX",
+    "nczx",
+    b"NCZX",
     1,
-    "ewzxmesh",
-    "ewzxtex",
-    "ewzxsnd",
-    "ewzxskel",
-    "ewzxanim",
+    "nczxmesh",
+    "nczxtex",
+    "nczxsnd",
+    "nczxskel",
+    "nczxanim",
 );
 
 #[cfg(test)]
@@ -112,12 +112,12 @@ mod tests {
 
     #[test]
     fn test_zx_rom_format_extension() {
-        assert_eq!(ZX_ROM_FORMAT.extension, "ewzx");
+        assert_eq!(ZX_ROM_FORMAT.extension, "nczx");
     }
 
     #[test]
     fn test_zx_rom_format_magic() {
-        assert_eq!(ZX_ROM_FORMAT.magic, b"EWZX");
+        assert_eq!(ZX_ROM_FORMAT.magic, b"NCZX");
         assert_eq!(ZX_ROM_FORMAT.magic.len(), 4);
     }
 
@@ -128,10 +128,10 @@ mod tests {
 
     #[test]
     fn test_zx_asset_extensions() {
-        assert_eq!(ZX_ROM_FORMAT.mesh_ext, "ewzxmesh");
-        assert_eq!(ZX_ROM_FORMAT.texture_ext, "ewzxtex");
-        assert_eq!(ZX_ROM_FORMAT.sound_ext, "ewzxsnd");
-        assert_eq!(ZX_ROM_FORMAT.skeleton_ext, "ewzxskel");
-        assert_eq!(ZX_ROM_FORMAT.animation_ext, "ewzxanim");
+        assert_eq!(ZX_ROM_FORMAT.mesh_ext, "nczxmesh");
+        assert_eq!(ZX_ROM_FORMAT.texture_ext, "nczxtex");
+        assert_eq!(ZX_ROM_FORMAT.sound_ext, "nczxsnd");
+        assert_eq!(ZX_ROM_FORMAT.skeleton_ext, "nczxskel");
+        assert_eq!(ZX_ROM_FORMAT.animation_ext, "nczxanim");
     }
 }

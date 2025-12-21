@@ -1,10 +1,10 @@
 [package]
-name = "emberware-core"
+name = "nethercore-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Core framework for Emberware fantasy console platform"
+description = "Core framework for Nethercore fantasy console platform"
 
 [features]
 default = ["gamepad"]
@@ -12,7 +12,7 @@ gamepad = ["dep:gilrs"]
 
 [dependencies]
 # Shared types
-emberware-shared = { path = "../shared" }
+nethercore-shared = { path = "../shared" }
 
 # WASM execution
 wasmtime = { workspace = true }

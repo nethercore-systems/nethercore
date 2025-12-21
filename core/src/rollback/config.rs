@@ -4,7 +4,7 @@
 
 use std::marker::PhantomData;
 
-use emberware_shared::EMBERWARE_ZX_RAM_LIMIT;
+use nethercore_shared::NETHERCORE_ZX_RAM_LIMIT;
 use ggrs::Config;
 
 use crate::console::ConsoleInput;
@@ -23,15 +23,15 @@ pub const DEFAULT_INPUT_DELAY: usize = 0;
 /// Default input delay for online play (balance between responsiveness and rollbacks)
 pub const DEFAULT_ONLINE_INPUT_DELAY: usize = 2;
 
-/// Default maximum state buffer size (4MB - matches Emberware ZX RAM limit)
+/// Default maximum state buffer size (4MB - matches Nethercore ZX RAM limit)
 ///
-/// This is the default fallback value matching Emberware ZX's RAM limit.
+/// This is the default fallback value matching Nethercore ZX's RAM limit.
 /// Consoles should use their specific RAM limit from `ConsoleSpecs::ram_limit`
 /// when creating rollback sessions.
 ///
 /// Memory limits:
-/// - Emberware ZX: 4MB RAM (only linear memory is snapshotted)
-/// - Emberware Chroma: 2MB RAM
+/// - Nethercore ZX: 4MB RAM (only linear memory is snapshotted)
+/// - Nethercore Chroma: 2MB RAM
 ///
 /// Note: Assets loaded via `rom_*` FFI go directly to VRAM/audio memory and
 /// are NOT included in rollback snapshots. Only WASM linear memory is saved.
@@ -41,18 +41,18 @@ pub const DEFAULT_ONLINE_INPUT_DELAY: usize = 2;
 /// let max_state_size = console.specs().ram_limit;
 /// let state_manager = RollbackStateManager::new(max_state_size);
 /// ```
-pub const MAX_STATE_SIZE: usize = EMBERWARE_ZX_RAM_LIMIT;
+pub const MAX_STATE_SIZE: usize = NETHERCORE_ZX_RAM_LIMIT;
 
-/// GGRS configuration for Emberware
+/// GGRS configuration for Nethercore
 ///
-/// Parameterized by the console's input type (e.g., `ZInput` for Emberware ZX).
+/// Parameterized by the console's input type (e.g., `ZInput` for Nethercore ZX).
 /// This allows different consoles to use different input layouts while sharing
 /// the rollback infrastructure.
-pub struct EmberwareConfig<I: ConsoleInput> {
+pub struct NethercoreConfig<I: ConsoleInput> {
     _phantom: PhantomData<I>,
 }
 
-impl<I: ConsoleInput> Config for EmberwareConfig<I> {
+impl<I: ConsoleInput> Config for NethercoreConfig<I> {
     type Input = I;
     type State = GameStateSnapshot;
     type Address = String; // WebRTC peer address (e.g., "peer_id")

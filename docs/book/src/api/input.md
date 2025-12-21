@@ -4,7 +4,7 @@ Controller input handling for buttons, analog sticks, and triggers.
 
 ## Controller Layout
 
-Emberware ZX uses a modern PS2/Xbox-style controller:
+Nethercore ZX uses a modern PS2/Xbox-style controller:
 
 ```
          [LB]                    [RB]
@@ -379,7 +379,7 @@ EWZX_EXPORT void update(void) {
 
     /* Charged attack */
     if (button_released(0, EWZX_BUTTON_X)) {
-        float power = ewzx_minf(charge_time, MAX_CHARGE);
+        float power = nczx_minf(charge_time, MAX_CHARGE);
         fire_charged_attack(power);
         charge_time = 0.0f;
     }
@@ -705,7 +705,7 @@ EWZX_EXPORT void update(void) {
 
     /* Apply deadzone */
     float deadzone = 0.15f;
-    if (ewzx_absf(stick_x) > deadzone) {
+    if (nczx_absf(stick_x) > deadzone) {
         player_x += stick_x * MOVE_SPEED * delta_time();
     }
 }
@@ -1233,7 +1233,7 @@ EWZX_EXPORT void update(void) {
     float sy = 0.0f;
     left_stick(0, &sx, &sy);
 
-    if (ewzx_absf(sx) > DEADZONE) {
+    if (nczx_absf(sx) > DEADZONE) {
         player_x += sx * MOVE_SPEED * dt;
     }
 

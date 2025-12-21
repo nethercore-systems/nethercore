@@ -528,9 +528,9 @@ export fn init() void {
 
 ---
 
-## Game Manifest (ember.toml)
+## Game Manifest (nether.toml)
 
-Assets are bundled using the `ember.toml` manifest:
+Assets are bundled using the `nether.toml` manifest:
 
 ```toml
 [game]
@@ -583,8 +583,8 @@ path = "assets/levels/level1.bin"
 
 Build with:
 ```bash
-ember build
-ember pack  # Creates .ewz ROM file
+nether build
+nether pack  # Creates .ewz ROM file
 ```
 
 ---

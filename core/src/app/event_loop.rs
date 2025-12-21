@@ -141,7 +141,7 @@ impl<C: Console, A: ConsoleApp<C>> ApplicationHandler for AppEventHandler<C, A> 
             // Create window (don't set control flow here - about_to_wait will do it)
             // Note: minimum size is set by the app in on_window_created() based on game resolution
             let window_attributes = Window::default_attributes()
-                .with_title("Emberware")
+                .with_title("Nethercore")
                 .with_inner_size(winit::dpi::PhysicalSize::new(960u32, 540u32));
 
             match event_loop.create_window(window_attributes) {
@@ -221,7 +221,7 @@ impl<C: Console, A: ConsoleApp<C>> ApplicationHandler for AppEventHandler<C, A> 
 /// # Example
 ///
 /// ```rust,ignore
-/// use emberware_core::app::{event_loop, AppMode};
+/// use nethercore_core::app::{event_loop, AppMode};
 ///
 /// let app = ZApp::new(AppMode::Library)?;
 /// event_loop::run(app)?;

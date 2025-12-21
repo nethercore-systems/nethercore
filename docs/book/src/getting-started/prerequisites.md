@@ -1,10 +1,10 @@
 # Prerequisites
 
-Before you start building games for Emberware ZX, you'll need to set up your development environment.
+Before you start building games for Nethercore ZX, you'll need to set up your development environment.
 
 ## Choose Your Language
 
-Emberware ZX games are compiled to WebAssembly. You can write games in several languages:
+Nethercore ZX games are compiled to WebAssembly. You can write games in several languages:
 
 | Language | Best For |
 |----------|----------|
@@ -83,12 +83,12 @@ sudo mv wasi-sdk-24.0 /opt/wasi-sdk
 2. Extract to `C:\wasi-sdk`
 3. Add to PATH or set `WASI_SDK_PATH` environment variable
 
-### Get the Emberware Header
+### Get the Nethercore Header
 
-Download `emberware_zx.h` from the Emberware repository:
+Download `nethercore_zx.h` from the Nethercore repository:
 ```bash
-# From the emberware repo
-cp include/emberware_zx.h your-game/
+# From the nethercore repo
+cp include/nethercore_zx.h your-game/
 ```
 
 Or add the include path to your build.
@@ -127,11 +127,11 @@ tar xf zig-linux-x86_64-0.13.0.tar.xz
 export PATH=$PATH:$(pwd)/zig-linux-x86_64-0.13.0
 ```
 
-### Get the Emberware Bindings
+### Get the Nethercore Bindings
 
-Copy the native Zig bindings from the Emberware repository:
+Copy the native Zig bindings from the Nethercore repository:
 ```bash
-cp include/emberware_zx.zig your-game/
+cp include/nethercore_zx.zig your-game/
 ```
 
 Or declare the FFI imports directly in your code (see examples).
@@ -176,18 +176,18 @@ Any text editor works, but we recommend one with language support:
 
 {{#endtabs}}
 
-## Optional: Emberware CLI
+## Optional: Nethercore CLI
 
-The `ember` CLI tool provides convenient commands for building and running games:
+The `nether` CLI tool provides convenient commands for building and running games:
 
 ```bash
-cargo install --path tools/ember-cli
+cargo install --path tools/nether-cli
 ```
 
 This gives you commands like:
-- `ember build` - Compile your game
-- `ember run` - Run your game in the player
-- `ember pack` - Package your game into a ROM file
+- `nether build` - Compile your game
+- `nether run` - Run your game in the player
+- `nether pack` - Package your game into a ROM file
 
 ---
 

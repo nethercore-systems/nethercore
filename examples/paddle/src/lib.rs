@@ -1,6 +1,6 @@
 //! Pong Example
 //!
-//! A complete Pong game demonstrating core Emberware ZX features:
+//! A complete Pong game demonstrating core Nethercore ZX features:
 //! - 2D gameplay with draw_rect()
 //! - Input handling for multiple players
 //! - Simple physics (ball movement, collision)

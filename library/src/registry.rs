@@ -10,11 +10,11 @@
 //! 1. `ConsoleType` enum represents all compile-time known console types
 //! 2. `RomLoaderRegistry` manages ROM loaders for all console types
 //! 3. `launch_player()` spawns the appropriate player binary
-//! 4. Each console has its own player binary (e.g., `emberware-zx`)
+//! 4. Each console has its own player binary (e.g., `nethercore-zx`)
 //!
 //! # Adding a New Console
 //!
-//! 1. Create player binary for the console (e.g., `emberware-chroma`)
+//! 1. Create player binary for the console (e.g., `nethercore-chroma`)
 //! 2. Add variant to `ConsoleType` enum (e.g., `Chroma`)
 //! 3. Update `as_str()` to return the manifest identifier (e.g., `"chroma"`)
 //! 4. Update `from_str()` to parse the identifier
@@ -34,8 +34,8 @@ use std::process::Command;
 
 use anyhow::{Context, Result};
 
-use emberware_core::library::{LocalGame, RomLoaderRegistry};
-use emberware_shared::ZX_ROM_FORMAT;
+use nethercore_core::library::{LocalGame, RomLoaderRegistry};
+use nethercore_shared::ZX_ROM_FORMAT;
 
 use zx_common::ZRomLoader;
 
@@ -66,7 +66,7 @@ pub struct PlayerOptions {
 /// Uses static dispatch for zero-cost abstraction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ConsoleType {
-    /// Emberware ZX (PS1/N64 aesthetic)
+    /// Nethercore ZX (PS1/N64 aesthetic)
     ZX,
     // Future: Chroma, Y, X, etc.
 }
@@ -98,8 +98,8 @@ impl ConsoleType {
     ///
     /// # Returns
     ///
-    /// - `"ewzx"` for Emberware ZX
-    /// - Future: `"ewc"` for Emberware Chroma, etc.
+    /// - `"nczx"` for Nethercore ZX
+    /// - Future: `"ewc"` for Nethercore Chroma, etc.
     #[allow(dead_code)]
     pub fn rom_extension(&self) -> &'static str {
         match self {
@@ -114,7 +114,7 @@ impl ConsoleType {
     ///
     /// # Returns
     ///
-    /// - `Some(ConsoleType::ZX)` for `.ewzx` files
+    /// - `Some(ConsoleType::ZX)` for `.nczx` files
     /// - `None` for unknown extensions
     pub fn from_extension(ext: &str) -> Option<Self> {
         if ext == ZX_ROM_FORMAT.extension {
@@ -134,8 +134,8 @@ impl ConsoleType {
     /// This is the name of the executable that plays games for this console.
     pub fn player_binary_name(&self) -> &'static str {
         match self {
-            ConsoleType::ZX => "emberware-zx",
-            // Future: ConsoleType::Chroma => "emberware-chroma",
+            ConsoleType::ZX => "nethercore-zx",
+            // Future: ConsoleType::Chroma => "nethercore-chroma",
         }
     }
 }
@@ -416,7 +416,7 @@ pub fn run_game_from_path_with_options(path: &Path, options: &PlayerOptions) -> 
 /// Create a ROM loader registry with all supported console ROM loaders.
 ///
 /// This registers loaders for all supported ROM formats:
-/// - `.ewzx` files for Emberware ZX
+/// - `.nczx` files for Nethercore ZX
 pub fn create_rom_loader_registry() -> RomLoaderRegistry {
     let mut registry = RomLoaderRegistry::new();
     registry.register(Box::new(ZRomLoader));
@@ -573,7 +573,7 @@ mod tests {
 
     #[test]
     fn test_console_type_player_binary_name() {
-        assert_eq!(ConsoleType::ZX.player_binary_name(), "emberware-zx");
+        assert_eq!(ConsoleType::ZX.player_binary_name(), "nethercore-zx");
     }
 
     #[test]
@@ -593,7 +593,7 @@ mod tests {
     fn test_console_type_from_extension_invalid() {
         assert_eq!(ConsoleType::from_extension("invalid"), None);
         assert_eq!(ConsoleType::from_extension(""), None);
-        assert_eq!(ConsoleType::from_extension("EWZX"), None); // Case-sensitive
+        assert_eq!(ConsoleType::from_extension("NCZX"), None); // Case-sensitive
         assert_eq!(ConsoleType::from_extension("ewc"), None); // Chroma not yet implemented
     }
 }

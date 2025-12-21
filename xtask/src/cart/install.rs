@@ -2,17 +2,17 @@
 
 use anyhow::{Context, Result};
 use clap::Args;
-use emberware_core::library::RomLoader;
+use nethercore_core::library::RomLoader;
 use std::path::PathBuf;
 use zx_common::ZRomLoader;
 
 #[derive(Debug, Args)]
 pub struct InstallArgs {
-    /// Path to the ROM file (.ewzx)
+    /// Path to the ROM file (.nczx)
     #[arg(value_name = "ROM_FILE")]
     pub rom_path: PathBuf,
 
-    /// Override data directory (default: ~/.emberware)
+    /// Override data directory (default: ~/.nethercore)
     #[arg(long, value_name = "DIR")]
     pub data_dir: Option<PathBuf>,
 }
@@ -42,16 +42,16 @@ pub fn execute(args: InstallArgs) -> Result<()> {
 
     // Install based on extension
     let game = match extension {
-        "ewzx" => {
-            println!("Detected Emberware ZX ROM (.ewzx)");
+        "nczx" => {
+            println!("Detected Nethercore ZX ROM (.nczx)");
             let loader = ZRomLoader;
             loader
                 .install(rom_path, &provider)
-                .context("Failed to install Emberware ZX ROM")?
+                .context("Failed to install Nethercore ZX ROM")?
         }
         _ => {
             anyhow::bail!(
-                "Unsupported ROM extension: .{}\nSupported formats: .ewzx",
+                "Unsupported ROM extension: .{}\nSupported formats: .nczx",
                 extension
             );
         }
@@ -76,12 +76,12 @@ struct DataDirProviderImpl {
     override_dir: Option<PathBuf>,
 }
 
-impl emberware_core::library::DataDirProvider for DataDirProviderImpl {
+impl nethercore_core::library::DataDirProvider for DataDirProviderImpl {
     fn data_dir(&self) -> Option<PathBuf> {
         if let Some(ref dir) = self.override_dir {
             Some(dir.clone())
         } else {
-            directories::ProjectDirs::from("io.emberware", "", "Emberware")
+            directories::ProjectDirs::from("io.nethercore", "", "Nethercore")
                 .map(|dirs| dirs.data_dir().to_path_buf())
         }
     }

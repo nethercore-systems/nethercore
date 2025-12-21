@@ -16,7 +16,7 @@
 pub mod state;
 
 use anyhow::{Context, Result};
-use emberware_shared::EMBERWARE_ZX_RAM_LIMIT;
+use nethercore_shared::NETHERCORE_ZX_RAM_LIMIT;
 use wasmtime::{Engine, ExternType, Instance, Linker, Module, Store, TypedFunc, Val};
 
 use crate::console::{ConsoleInput, ConsoleRollbackState};
@@ -124,8 +124,8 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState> Game
         module: &Module,
         linker: &Linker<WasmGameContext<I, S, R>>,
     ) -> Result<Self> {
-        // Default to 4MB (Emberware ZX RAM limit)
-        Self::with_ram_limit(engine, module, linker, EMBERWARE_ZX_RAM_LIMIT)
+        // Default to 4MB (Nethercore ZX RAM limit)
+        Self::with_ram_limit(engine, module, linker, NETHERCORE_ZX_RAM_LIMIT)
     }
 
     /// Create a new game instance from a module with specified RAM limit
@@ -137,7 +137,7 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState> Game
     /// * `engine` - The WASM engine
     /// * `module` - The compiled WASM module
     /// * `linker` - The linker with FFI functions registered
-    /// * `ram_limit` - Maximum linear memory in bytes (e.g., 8MB for Emberware ZX)
+    /// * `ram_limit` - Maximum linear memory in bytes (e.g., 8MB for Nethercore ZX)
     pub fn with_ram_limit(
         engine: &WasmEngine,
         module: &Module,

@@ -123,7 +123,7 @@ fn render() {
 EWZX_EXPORT void render(void) {
     /* Pulsing effect */
     float pulse = sinf(elapsed_time() * 2.0f) * 0.5f + 0.5f;
-    set_color(ewzx_rgba(255, 255, 255, (uint8_t)(pulse * 255.0f)));
+    set_color(nczx_rgba(255, 255, 255, (uint8_t)(pulse * 255.0f)));
 }
 ```
 {{#endtab}}
@@ -307,7 +307,7 @@ EWZX_EXPORT void update(void) {
 
 {{#tab name="Zig"}}
 ```zig
-const zx = @import("emberware_zx.zig");
+const zx = @import("nethercore_zx.zig");
 
 export fn init() void {
     zx.log("Game initialized!");
@@ -329,7 +329,7 @@ export fn update() void {
 
 ### quit
 
-Exits the game and returns to the Emberware library.
+Exits the game and returns to the Nethercore library.
 
 **Signature:**
 
@@ -733,7 +733,7 @@ export fn render() void {
 
 ### Multiplayer Model
 
-Emberware supports up to 4 players in any combination:
+Nethercore supports up to 4 players in any combination:
 - 4 local players (couch co-op)
 - 1 local + 3 remote (online)
 - 2 local + 2 remote (mixed)

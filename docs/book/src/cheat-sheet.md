@@ -1,6 +1,6 @@
 # Cheat Sheet
 
-All Emberware ZX FFI functions on one page.
+All Nethercore ZX FFI functions on one page.
 
 ---
 

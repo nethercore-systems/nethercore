@@ -1,0 +1,1290 @@
+<!DOCTYPE HTML>
+<html lang="en" class="navy sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Debug - Nethercore ZX API Reference</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="Complete API documentation for the Nethercore ZX fantasy console">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="../favicon-8114d1fc.png">
+        <link rel="stylesheet" href="../css/variables-8adf115d.css">
+        <link rel="stylesheet" href="../css/general-2459343d.css">
+        <link rel="stylesheet" href="../css/chrome-ae938929.css">
+        <link rel="stylesheet" href="../css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="../highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="../tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="../ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "navy";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "../searchindex-34d68c72.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc-f2f77113.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('navy')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Nethercore ZX API Reference</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+                        <a href="https://github.com/nethercore/nethercore" title="Git repository" aria-label="Git repository">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg></span>
+                        </a>
+                        <a href="https://github.com/nethercore/nethercore/edit/main/docs/book/src/api/debug.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
+                            <span class=fa-svg id="git-edit-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M421.7 220.3l-11.3 11.3-22.6 22.6-205 205c-6.6 6.6-14.8 11.5-23.8 14.1L30.8 511c-8.4 2.5-17.5 .2-23.7-6.1S-1.5 489.7 1 481.2L38.7 353.1c2.6-9 7.5-17.2 14.1-23.8l205-205 22.6-22.6 11.3-11.3 33.9 33.9 62.1 62.1 33.9 33.9zM96 353.9l-9.3 9.3c-.9 .9-1.6 2.1-2 3.4l-25.3 86 86-25.3c1.3-.4 2.5-1.1 3.4-2l9.3-9.3H112c-8.8 0-16-7.2-16-16V353.9zM453.3 19.3l39.4 39.4c25 25 25 65.5 0 90.5l-14.5 14.5-22.6 22.6-11.3 11.3-33.9-33.9-62.1-62.1L314.3 67.7l11.3-11.3 22.6-22.6 14.5-14.5c25-25 65.5-25 90.5 0z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="debug-functions"><a class="header" href="#debug-functions">Debug Functions</a></h1>
+<p>Runtime value inspection via the F3 debug panel.</p>
+<h2 id="overview"><a class="header" href="#overview">Overview</a></h2>
+<p>The debug system allows you to register game variables for live editing and monitoring. Press <strong>F3</strong> to open the debug panel during development.</p>
+<p><strong>Features:</strong></p>
+<ul>
+<li>Live value editing (sliders, color pickers)</li>
+<li>Read-only watches</li>
+<li>Grouped organization</li>
+<li>Frame control (pause, step, time scale)</li>
+<li>Zero overhead in release builds</li>
+</ul>
+<hr>
+<h2 id="value-registration"><a class="header" href="#value-registration">Value Registration</a></h2>
+<p>Register editable values in <code>init()</code>. The debug panel will show controls for these values.</p>
+<h3 id="debug_register_i32"><a class="header" href="#debug_register_i32">debug_register_i32</a></h3>
+<p>Registers an editable 32-bit signed integer.</p>
+<p><strong>Signature:</strong>
+{{#tabs global=“lang”}}</p>
+<p>{{#tab name=“Rust”}}</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn debug_register_i32(name_ptr: *const u8, name_len: u32, ptr: *const i32)
+<span class="boring">}</span></code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“C/C++”}}</p>
+<pre><code class="language-c">EWZX_IMPORT void debug_register_i32(const uint8_t* name_ptr, uint32_t name_len, const int32_t* ptr);
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“Zig”}}</p>
+<pre><code class="language-zig">pub extern fn debug_register_i32(name_ptr: [*]const u8, name_len: u32, ptr: *const i32) void;
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#endtabs}}</p>
+<p><strong>Example:</strong>
+{{#tabs global=“lang”}}</p>
+<p>{{#tab name=“Rust”}}</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>static mut ENEMY_COUNT: i32 = 5;
+
+fn init() {
+    unsafe {
+        debug_register_i32(b"Enemy Count".as_ptr(), 11, &amp;ENEMY_COUNT);
+    }
+}
+<span class="boring">}</span></code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“C/C++”}}</p>
+<pre><code class="language-c">static int32_t enemy_count = 5;
+
+EWZX_EXPORT void init(void) {
+    debug_register_i32("Enemy Count", 11, &amp;enemy_count);
+}
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“Zig”}}</p>
+<pre><code class="language-zig">var enemy_count: i32 = 5;
+
+export fn init() void {
+    debug_register_i32("Enemy Count", 11, &amp;enemy_count);
+}
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#endtabs}}</p>
+<hr>
+<h3 id="debug_register_f32"><a class="header" href="#debug_register_f32">debug_register_f32</a></h3>
+<p>Registers an editable 32-bit float.</p>
+<p><strong>Signature:</strong>
+{{#tabs global=“lang”}}</p>
+<p>{{#tab name=“Rust”}}</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn debug_register_f32(name_ptr: *const u8, name_len: u32, ptr: *const f32)
+<span class="boring">}</span></code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“C/C++”}}</p>
+<pre><code class="language-c">EWZX_IMPORT void debug_register_f32(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“Zig”}}</p>
+<pre><code class="language-zig">pub extern fn debug_register_f32(name_ptr: [*]const u8, name_len: u32, ptr: *const f32) void;
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#endtabs}}</p>
+<p><strong>Example:</strong>
+{{#tabs global=“lang”}}</p>
+<p>{{#tab name=“Rust”}}</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>static mut GRAVITY: f32 = 9.8;
+static mut JUMP_FORCE: f32 = 15.0;
+
+fn init() {
+    unsafe {
+        debug_register_f32(b"Gravity".as_ptr(), 7, &amp;GRAVITY);
+        debug_register_f32(b"Jump Force".as_ptr(), 10, &amp;JUMP_FORCE);
+    }
+}
+<span class="boring">}</span></code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“C/C++”}}</p>
+<pre><code class="language-c">static float gravity = 9.8f;
+static float jump_force = 15.0f;
+
+EWZX_EXPORT void init(void) {
+    debug_register_f32("Gravity", 7, &amp;gravity);
+    debug_register_f32("Jump Force", 10, &amp;jump_force);
+}
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“Zig”}}</p>
+<pre><code class="language-zig">var gravity: f32 = 9.8;
+var jump_force: f32 = 15.0;
+
+export fn init() void {
+    debug_register_f32("Gravity", 7, &amp;gravity);
+    debug_register_f32("Jump Force", 10, &amp;jump_force);
+}
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#endtabs}}</p>
+<hr>
+<h3 id="debug_register_bool"><a class="header" href="#debug_register_bool">debug_register_bool</a></h3>
+<p>Registers an editable boolean (checkbox).</p>
+<p><strong>Signature:</strong>
+{{#tabs global=“lang”}}</p>
+<p>{{#tab name=“Rust”}}</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn debug_register_bool(name_ptr: *const u8, name_len: u32, ptr: *const u8)
+<span class="boring">}</span></code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“C/C++”}}</p>
+<pre><code class="language-c">EWZX_IMPORT void debug_register_bool(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“Zig”}}</p>
+<pre><code class="language-zig">pub extern fn debug_register_bool(name_ptr: [*]const u8, name_len: u32, ptr: *const u8) void;
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#endtabs}}</p>
+<p><strong>Example:</strong>
+{{#tabs global=“lang”}}</p>
+<p>{{#tab name=“Rust”}}</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>static mut GOD_MODE: u8 = 0; // 0 = false, 1 = true
+
+fn init() {
+    unsafe {
+        debug_register_bool(b"God Mode".as_ptr(), 8, &amp;GOD_MODE);
+    }
+}
+<span class="boring">}</span></code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“C/C++”}}</p>
+<pre><code class="language-c">static uint8_t god_mode = 0; // 0 = false, 1 = true
+
+EWZX_EXPORT void init(void) {
+    debug_register_bool("God Mode", 8, &amp;god_mode);
+}
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“Zig”}}</p>
+<pre><code class="language-zig">var god_mode: u8 = 0; // 0 = false, 1 = true
+
+export fn init() void {
+    debug_register_bool("God Mode", 8, &amp;god_mode);
+}
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#endtabs}}</p>
+<hr>
+<h3 id="debug_register_u8--u16--u32"><a class="header" href="#debug_register_u8--u16--u32">debug_register_u8 / u16 / u32</a></h3>
+<p>Registers unsigned integers.</p>
+<p>{{#tabs global=“lang”}}</p>
+<p>{{#tab name=“Rust”}}</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn debug_register_u8(name_ptr: *const u8, name_len: u32, ptr: *const u8)
+fn debug_register_u16(name_ptr: *const u8, name_len: u32, ptr: *const u16)
+fn debug_register_u32(name_ptr: *const u8, name_len: u32, ptr: *const u32)
+<span class="boring">}</span></code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“C/C++”}}</p>
+<pre><code class="language-c">EWZX_IMPORT void debug_register_u8(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
+EWZX_IMPORT void debug_register_u16(const uint8_t* name_ptr, uint32_t name_len, const uint16_t* ptr);
+EWZX_IMPORT void debug_register_u32(const uint8_t* name_ptr, uint32_t name_len, const uint32_t* ptr);
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“Zig”}}</p>
+<pre><code class="language-zig">pub extern fn debug_register_u8(name_ptr: [*]const u8, name_len: u32, ptr: *const u8) void;
+pub extern fn debug_register_u16(name_ptr: [*]const u8, name_len: u32, ptr: *const u16) void;
+pub extern fn debug_register_u32(name_ptr: [*]const u8, name_len: u32, ptr: *const u32) void;
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#endtabs}}</p>
+<hr>
+<h3 id="debug_register_i8--i16"><a class="header" href="#debug_register_i8--i16">debug_register_i8 / i16</a></h3>
+<p>Registers signed integers.</p>
+<p>{{#tabs global=“lang”}}</p>
+<p>{{#tab name=“Rust”}}</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn debug_register_i8(name_ptr: *const u8, name_len: u32, ptr: *const i8)
+fn debug_register_i16(name_ptr: *const u8, name_len: u32, ptr: *const i16)
+<span class="boring">}</span></code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“C/C++”}}</p>
+<pre><code class="language-c">EWZX_IMPORT void debug_register_i8(const uint8_t* name_ptr, uint32_t name_len, const int8_t* ptr);
+EWZX_IMPORT void debug_register_i16(const uint8_t* name_ptr, uint32_t name_len, const int16_t* ptr);
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“Zig”}}</p>
+<pre><code class="language-zig">pub extern fn debug_register_i8(name_ptr: [*]const u8, name_len: u32, ptr: *const i8) void;
+pub extern fn debug_register_i16(name_ptr: [*]const u8, name_len: u32, ptr: *const i16) void;
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#endtabs}}</p>
+<hr>
+<h2 id="range-constrained-registration"><a class="header" href="#range-constrained-registration">Range-Constrained Registration</a></h2>
+<h3 id="debug_register_i32_range"><a class="header" href="#debug_register_i32_range">debug_register_i32_range</a></h3>
+<p>Registers an integer with min/max bounds (slider).</p>
+<p><strong>Signature:</strong>
+{{#tabs global=“lang”}}</p>
+<p>{{#tab name=“Rust”}}</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn debug_register_i32_range(
+    name_ptr: *const u8, name_len: u32,
+    ptr: *const i32,
+    min: i32, max: i32
+)
+<span class="boring">}</span></code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“C/C++”}}</p>
+<pre><code class="language-c">EWZX_IMPORT void debug_register_i32_range(
+    const uint8_t* name_ptr, uint32_t name_len,
+    const int32_t* ptr,
+    int32_t min, int32_t max
+);
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“Zig”}}</p>
+<pre><code class="language-zig">pub extern fn debug_register_i32_range(
+    name_ptr: [*]const u8, name_len: u32,
+    ptr: *const i32,
+    min: i32, max: i32
+) void;
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#endtabs}}</p>
+<p><strong>Example:</strong>
+{{#tabs global=“lang”}}</p>
+<p>{{#tab name=“Rust”}}</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>static mut DIFFICULTY: i32 = 2;
+
+fn init() {
+    unsafe {
+        debug_register_i32_range(b"Difficulty".as_ptr(), 10, &amp;DIFFICULTY, 1, 5);
+    }
+}
+<span class="boring">}</span></code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“C/C++”}}</p>
+<pre><code class="language-c">static int32_t difficulty = 2;
+
+EWZX_EXPORT void init(void) {
+    debug_register_i32_range("Difficulty", 10, &amp;difficulty, 1, 5);
+}
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“Zig”}}</p>
+<pre><code class="language-zig">var difficulty: i32 = 2;
+
+export fn init() void {
+    debug_register_i32_range("Difficulty", 10, &amp;difficulty, 1, 5);
+}
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#endtabs}}</p>
+<hr>
+<h3 id="debug_register_f32_range"><a class="header" href="#debug_register_f32_range">debug_register_f32_range</a></h3>
+<p>Registers a float with min/max bounds.</p>
+<p><strong>Signature:</strong>
+{{#tabs global=“lang”}}</p>
+<p>{{#tab name=“Rust”}}</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn debug_register_f32_range(
+    name_ptr: *const u8, name_len: u32,
+    ptr: *const f32,
+    min: f32, max: f32
+)
+<span class="boring">}</span></code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“C/C++”}}</p>
+<pre><code class="language-c">EWZX_IMPORT void debug_register_f32_range(
+    const uint8_t* name_ptr, uint32_t name_len,
+    const float* ptr,
+    float min, float max
+);
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“Zig”}}</p>
+<pre><code class="language-zig">pub extern fn debug_register_f32_range(
+    name_ptr: [*]const u8, name_len: u32,
+    ptr: *const f32,
+    min: f32, max: f32
+) void;
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#endtabs}}</p>
+<p><strong>Example:</strong>
+{{#tabs global=“lang”}}</p>
+<p>{{#tab name=“Rust”}}</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>static mut PLAYER_SPEED: f32 = 5.0;
+
+fn init() {
+    unsafe {
+        debug_register_f32_range(b"Speed".as_ptr(), 5, &amp;PLAYER_SPEED, 0.0, 20.0);
+    }
+}
+<span class="boring">}</span></code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“C/C++”}}</p>
+<pre><code class="language-c">static float player_speed = 5.0f;
+
+EWZX_EXPORT void init(void) {
+    debug_register_f32_range("Speed", 5, &amp;player_speed, 0.0f, 20.0f);
+}
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“Zig”}}</p>
+<pre><code class="language-zig">var player_speed: f32 = 5.0;
+
+export fn init() void {
+    debug_register_f32_range("Speed", 5, &amp;player_speed, 0.0, 20.0);
+}
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#endtabs}}</p>
+<hr>
+<h3 id="debug_register_u8_range--u16_range--i16_range"><a class="header" href="#debug_register_u8_range--u16_range--i16_range">debug_register_u8_range / u16_range / i16_range</a></h3>
+<p>{{#tabs global=“lang”}}</p>
+<p>{{#tab name=“Rust”}}</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn debug_register_u8_range(name_ptr: *const u8, name_len: u32, ptr: *const u8, min: u32, max: u32)
+fn debug_register_u16_range(name_ptr: *const u8, name_len: u32, ptr: *const u16, min: u32, max: u32)
+fn debug_register_i16_range(name_ptr: *const u8, name_len: u32, ptr: *const i16, min: i32, max: i32)
+<span class="boring">}</span></code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“C/C++”}}</p>
+<pre><code class="language-c">EWZX_IMPORT void debug_register_u8_range(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr, uint32_t min, uint32_t max);
+EWZX_IMPORT void debug_register_u16_range(const uint8_t* name_ptr, uint32_t name_len, const uint16_t* ptr, uint32_t min, uint32_t max);
+EWZX_IMPORT void debug_register_i16_range(const uint8_t* name_ptr, uint32_t name_len, const int16_t* ptr, int32_t min, int32_t max);
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“Zig”}}</p>
+<pre><code class="language-zig">pub extern fn debug_register_u8_range(name_ptr: [*]const u8, name_len: u32, ptr: *const u8, min: u32, max: u32) void;
+pub extern fn debug_register_u16_range(name_ptr: [*]const u8, name_len: u32, ptr: *const u16, min: u32, max: u32) void;
+pub extern fn debug_register_i16_range(name_ptr: [*]const u8, name_len: u32, ptr: *const i16, min: i32, max: i32) void;
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#endtabs}}</p>
+<hr>
+<h2 id="compound-types"><a class="header" href="#compound-types">Compound Types</a></h2>
+<h3 id="debug_register_vec2"><a class="header" href="#debug_register_vec2">debug_register_vec2</a></h3>
+<p>Registers a 2D vector (two f32s).</p>
+<p><strong>Signature:</strong>
+{{#tabs global=“lang”}}</p>
+<p>{{#tab name=“Rust”}}</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn debug_register_vec2(name_ptr: *const u8, name_len: u32, ptr: *const f32)
+<span class="boring">}</span></code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“C/C++”}}</p>
+<pre><code class="language-c">EWZX_IMPORT void debug_register_vec2(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“Zig”}}</p>
+<pre><code class="language-zig">pub extern fn debug_register_vec2(name_ptr: [*]const u8, name_len: u32, ptr: *const f32) void;
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#endtabs}}</p>
+<p><strong>Example:</strong>
+{{#tabs global=“lang”}}</p>
+<p>{{#tab name=“Rust”}}</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>static mut PLAYER_POS: [f32; 2] = [0.0, 0.0];
+
+fn init() {
+    unsafe {
+        debug_register_vec2(b"Player Pos".as_ptr(), 10, PLAYER_POS.as_ptr());
+    }
+}
+<span class="boring">}</span></code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“C/C++”}}</p>
+<pre><code class="language-c">static float player_pos[2] = {0.0f, 0.0f};
+
+EWZX_EXPORT void init(void) {
+    debug_register_vec2("Player Pos", 10, player_pos);
+}
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“Zig”}}</p>
+<pre><code class="language-zig">var player_pos: [2]f32 = .{0.0, 0.0};
+
+export fn init() void {
+    debug_register_vec2("Player Pos", 10, &amp;player_pos);
+}
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#endtabs}}</p>
+<hr>
+<h3 id="debug_register_vec3"><a class="header" href="#debug_register_vec3">debug_register_vec3</a></h3>
+<p>Registers a 3D vector (three f32s).</p>
+<p><strong>Signature:</strong>
+{{#tabs global=“lang”}}</p>
+<p>{{#tab name=“Rust”}}</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn debug_register_vec3(name_ptr: *const u8, name_len: u32, ptr: *const f32)
+<span class="boring">}</span></code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“C/C++”}}</p>
+<pre><code class="language-c">EWZX_IMPORT void debug_register_vec3(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“Zig”}}</p>
+<pre><code class="language-zig">pub extern fn debug_register_vec3(name_ptr: [*]const u8, name_len: u32, ptr: *const f32) void;
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#endtabs}}</p>
+<hr>
+<h3 id="debug_register_rect"><a class="header" href="#debug_register_rect">debug_register_rect</a></h3>
+<p>Registers a rectangle (x, y, width, height as four f32s).</p>
+<p><strong>Signature:</strong>
+{{#tabs global=“lang”}}</p>
+<p>{{#tab name=“Rust”}}</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn debug_register_rect(name_ptr: *const u8, name_len: u32, ptr: *const f32)
+<span class="boring">}</span></code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“C/C++”}}</p>
+<pre><code class="language-c">EWZX_IMPORT void debug_register_rect(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“Zig”}}</p>
+<pre><code class="language-zig">pub extern fn debug_register_rect(name_ptr: [*]const u8, name_len: u32, ptr: *const f32) void;
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#endtabs}}</p>
+<hr>
+<h3 id="debug_register_color"><a class="header" href="#debug_register_color">debug_register_color</a></h3>
+<p>Registers a color (RGBA as four u8s).</p>
+<p><strong>Signature:</strong>
+{{#tabs global=“lang”}}</p>
+<p>{{#tab name=“Rust”}}</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn debug_register_color(name_ptr: *const u8, name_len: u32, ptr: *const u8)
+<span class="boring">}</span></code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“C/C++”}}</p>
+<pre><code class="language-c">EWZX_IMPORT void debug_register_color(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“Zig”}}</p>
+<pre><code class="language-zig">pub extern fn debug_register_color(name_ptr: [*]const u8, name_len: u32, ptr: *const u8) void;
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#endtabs}}</p>
+<p><strong>Example:</strong>
+{{#tabs global=“lang”}}</p>
+<p>{{#tab name=“Rust”}}</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>static mut TINT_COLOR: [u8; 4] = [255, 255, 255, 255];
+
+fn init() {
+    unsafe {
+        debug_register_color(b"Tint".as_ptr(), 4, TINT_COLOR.as_ptr());
+    }
+}
+<span class="boring">}</span></code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“C/C++”}}</p>
+<pre><code class="language-c">static uint8_t tint_color[4] = {255, 255, 255, 255};
+
+EWZX_EXPORT void init(void) {
+    debug_register_color("Tint", 4, tint_color);
+}
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“Zig”}}</p>
+<pre><code class="language-zig">var tint_color: [4]u8 = .{255, 255, 255, 255};
+
+export fn init() void {
+    debug_register_color("Tint", 4, &amp;tint_color);
+}
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#endtabs}}</p>
+<hr>
+<h2 id="fixed-point-registration"><a class="header" href="#fixed-point-registration">Fixed-Point Registration</a></h2>
+<p>For games using fixed-point math.</p>
+<p>{{#tabs global=“lang”}}</p>
+<p>{{#tab name=“Rust”}}</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn debug_register_fixed_i16_q8(name_ptr: *const u8, name_len: u32, ptr: *const i16)
+fn debug_register_fixed_i32_q8(name_ptr: *const u8, name_len: u32, ptr: *const i32)
+fn debug_register_fixed_i32_q16(name_ptr: *const u8, name_len: u32, ptr: *const i32)
+fn debug_register_fixed_i32_q24(name_ptr: *const u8, name_len: u32, ptr: *const i32)
+<span class="boring">}</span></code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“C/C++”}}</p>
+<pre><code class="language-c">EWZX_IMPORT void debug_register_fixed_i16_q8(const uint8_t* name_ptr, uint32_t name_len, const int16_t* ptr);
+EWZX_IMPORT void debug_register_fixed_i32_q8(const uint8_t* name_ptr, uint32_t name_len, const int32_t* ptr);
+EWZX_IMPORT void debug_register_fixed_i32_q16(const uint8_t* name_ptr, uint32_t name_len, const int32_t* ptr);
+EWZX_IMPORT void debug_register_fixed_i32_q24(const uint8_t* name_ptr, uint32_t name_len, const int32_t* ptr);
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“Zig”}}</p>
+<pre><code class="language-zig">pub extern fn debug_register_fixed_i16_q8(name_ptr: [*]const u8, name_len: u32, ptr: *const i16) void;
+pub extern fn debug_register_fixed_i32_q8(name_ptr: [*]const u8, name_len: u32, ptr: *const i32) void;
+pub extern fn debug_register_fixed_i32_q16(name_ptr: [*]const u8, name_len: u32, ptr: *const i32) void;
+pub extern fn debug_register_fixed_i32_q24(name_ptr: [*]const u8, name_len: u32, ptr: *const i32) void;
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#endtabs}}</p>
+<hr>
+<h2 id="watch-functions-read-only"><a class="header" href="#watch-functions-read-only">Watch Functions (Read-Only)</a></h2>
+<p>Watches display values without allowing editing.</p>
+<p>{{#tabs global=“lang”}}</p>
+<p>{{#tab name=“Rust”}}</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn debug_watch_i8(name_ptr: *const u8, name_len: u32, ptr: *const i8)
+fn debug_watch_i16(name_ptr: *const u8, name_len: u32, ptr: *const i16)
+fn debug_watch_i32(name_ptr: *const u8, name_len: u32, ptr: *const i32)
+fn debug_watch_u8(name_ptr: *const u8, name_len: u32, ptr: *const u8)
+fn debug_watch_u16(name_ptr: *const u8, name_len: u32, ptr: *const u16)
+fn debug_watch_u32(name_ptr: *const u8, name_len: u32, ptr: *const u32)
+fn debug_watch_f32(name_ptr: *const u8, name_len: u32, ptr: *const f32)
+fn debug_watch_bool(name_ptr: *const u8, name_len: u32, ptr: *const u8)
+fn debug_watch_vec2(name_ptr: *const u8, name_len: u32, ptr: *const f32)
+fn debug_watch_vec3(name_ptr: *const u8, name_len: u32, ptr: *const f32)
+fn debug_watch_rect(name_ptr: *const u8, name_len: u32, ptr: *const f32)
+fn debug_watch_color(name_ptr: *const u8, name_len: u32, ptr: *const u8)
+<span class="boring">}</span></code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“C/C++”}}</p>
+<pre><code class="language-c">EWZX_IMPORT void debug_watch_i8(const uint8_t* name_ptr, uint32_t name_len, const int8_t* ptr);
+EWZX_IMPORT void debug_watch_i16(const uint8_t* name_ptr, uint32_t name_len, const int16_t* ptr);
+EWZX_IMPORT void debug_watch_i32(const uint8_t* name_ptr, uint32_t name_len, const int32_t* ptr);
+EWZX_IMPORT void debug_watch_u8(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
+EWZX_IMPORT void debug_watch_u16(const uint8_t* name_ptr, uint32_t name_len, const uint16_t* ptr);
+EWZX_IMPORT void debug_watch_u32(const uint8_t* name_ptr, uint32_t name_len, const uint32_t* ptr);
+EWZX_IMPORT void debug_watch_f32(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
+EWZX_IMPORT void debug_watch_bool(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
+EWZX_IMPORT void debug_watch_vec2(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
+EWZX_IMPORT void debug_watch_vec3(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
+EWZX_IMPORT void debug_watch_rect(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
+EWZX_IMPORT void debug_watch_color(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“Zig”}}</p>
+<pre><code class="language-zig">pub extern fn debug_watch_i8(name_ptr: [*]const u8, name_len: u32, ptr: *const i8) void;
+pub extern fn debug_watch_i16(name_ptr: [*]const u8, name_len: u32, ptr: *const i16) void;
+pub extern fn debug_watch_i32(name_ptr: [*]const u8, name_len: u32, ptr: *const i32) void;
+pub extern fn debug_watch_u8(name_ptr: [*]const u8, name_len: u32, ptr: *const u8) void;
+pub extern fn debug_watch_u16(name_ptr: [*]const u8, name_len: u32, ptr: *const u16) void;
+pub extern fn debug_watch_u32(name_ptr: [*]const u8, name_len: u32, ptr: *const u32) void;
+pub extern fn debug_watch_f32(name_ptr: [*]const u8, name_len: u32, ptr: *const f32) void;
+pub extern fn debug_watch_bool(name_ptr: [*]const u8, name_len: u32, ptr: *const u8) void;
+pub extern fn debug_watch_vec2(name_ptr: [*]const u8, name_len: u32, ptr: *const f32) void;
+pub extern fn debug_watch_vec3(name_ptr: [*]const u8, name_len: u32, ptr: *const f32) void;
+pub extern fn debug_watch_rect(name_ptr: [*]const u8, name_len: u32, ptr: *const f32) void;
+pub extern fn debug_watch_color(name_ptr: [*]const u8, name_len: u32, ptr: *const u8) void;
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#endtabs}}</p>
+<p><strong>Example:</strong>
+{{#tabs global=“lang”}}</p>
+<p>{{#tab name=“Rust”}}</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>static mut FRAME_COUNT: u32 = 0;
+static mut FPS: f32 = 0.0;
+
+fn init() {
+    unsafe {
+        debug_watch_u32(b"Frame".as_ptr(), 5, &amp;FRAME_COUNT);
+        debug_watch_f32(b"FPS".as_ptr(), 3, &amp;FPS);
+    }
+}
+<span class="boring">}</span></code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“C/C++”}}</p>
+<pre><code class="language-c">static uint32_t frame_count = 0;
+static float fps = 0.0f;
+
+EWZX_EXPORT void init(void) {
+    debug_watch_u32("Frame", 5, &amp;frame_count);
+    debug_watch_f32("FPS", 3, &amp;fps);
+}
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“Zig”}}</p>
+<pre><code class="language-zig">var frame_count: u32 = 0;
+var fps: f32 = 0.0;
+
+export fn init() void {
+    debug_watch_u32("Frame", 5, &amp;frame_count);
+    debug_watch_f32("FPS", 3, &amp;fps);
+}
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#endtabs}}</p>
+<hr>
+<h2 id="grouping"><a class="header" href="#grouping">Grouping</a></h2>
+<h3 id="debug_group_begin"><a class="header" href="#debug_group_begin">debug_group_begin</a></h3>
+<p>Starts a collapsible group in the debug panel.</p>
+<p><strong>Signature:</strong>
+{{#tabs global=“lang”}}</p>
+<p>{{#tab name=“Rust”}}</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn debug_group_begin(name_ptr: *const u8, name_len: u32)
+<span class="boring">}</span></code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“C/C++”}}</p>
+<pre><code class="language-c">EWZX_IMPORT void debug_group_begin(const uint8_t* name_ptr, uint32_t name_len);
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“Zig”}}</p>
+<pre><code class="language-zig">pub extern fn debug_group_begin(name_ptr: [*]const u8, name_len: u32) void;
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#endtabs}}</p>
+<hr>
+<h3 id="debug_group_end"><a class="header" href="#debug_group_end">debug_group_end</a></h3>
+<p>Ends the current group.</p>
+<p><strong>Signature:</strong>
+{{#tabs global=“lang”}}</p>
+<p>{{#tab name=“Rust”}}</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn debug_group_end()
+<span class="boring">}</span></code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“C/C++”}}</p>
+<pre><code class="language-c">EWZX_IMPORT void debug_group_end(void);
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“Zig”}}</p>
+<pre><code class="language-zig">pub extern fn debug_group_end() void;
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#endtabs}}</p>
+<p><strong>Example:</strong>
+{{#tabs global=“lang”}}</p>
+<p>{{#tab name=“Rust”}}</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn init() {
+    unsafe {
+        debug_group_begin(b"Player".as_ptr(), 6);
+        debug_register_vec3(b"Position".as_ptr(), 8, PLAYER_POS.as_ptr());
+        debug_register_f32(b"Health".as_ptr(), 6, &amp;PLAYER_HEALTH);
+        debug_register_f32(b"Speed".as_ptr(), 5, &amp;PLAYER_SPEED);
+        debug_group_end();
+
+        debug_group_begin(b"Physics".as_ptr(), 7);
+        debug_register_f32(b"Gravity".as_ptr(), 7, &amp;GRAVITY);
+        debug_register_f32(b"Friction".as_ptr(), 8, &amp;FRICTION);
+        debug_group_end();
+    }
+}
+<span class="boring">}</span></code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“C/C++”}}</p>
+<pre><code class="language-c">EWZX_EXPORT void init(void) {
+    debug_group_begin("Player", 6);
+    debug_register_vec3("Position", 8, player_pos);
+    debug_register_f32("Health", 6, &amp;player_health);
+    debug_register_f32("Speed", 5, &amp;player_speed);
+    debug_group_end();
+
+    debug_group_begin("Physics", 7);
+    debug_register_f32("Gravity", 7, &amp;gravity);
+    debug_register_f32("Friction", 8, &amp;friction);
+    debug_group_end();
+}
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“Zig”}}</p>
+<pre><code class="language-zig">export fn init() void {
+    debug_group_begin("Player", 6);
+    debug_register_vec3("Position", 8, &amp;player_pos);
+    debug_register_f32("Health", 6, &amp;player_health);
+    debug_register_f32("Speed", 5, &amp;player_speed);
+    debug_group_end();
+
+    debug_group_begin("Physics", 7);
+    debug_register_f32("Gravity", 7, &amp;gravity);
+    debug_register_f32("Friction", 8, &amp;friction);
+    debug_group_end();
+}
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#endtabs}}</p>
+<hr>
+<h2 id="frame-control"><a class="header" href="#frame-control">Frame Control</a></h2>
+<h3 id="debug_is_paused"><a class="header" href="#debug_is_paused">debug_is_paused</a></h3>
+<p>Check if game is paused via debug panel.</p>
+<p><strong>Signature:</strong>
+{{#tabs global=“lang”}}</p>
+<p>{{#tab name=“Rust”}}</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn debug_is_paused() -&gt; i32
+<span class="boring">}</span></code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“C/C++”}}</p>
+<pre><code class="language-c">EWZX_IMPORT int32_t debug_is_paused(void);
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“Zig”}}</p>
+<pre><code class="language-zig">pub extern fn debug_is_paused() i32;
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#endtabs}}</p>
+<p><strong>Returns:</strong> 1 if paused, 0 otherwise</p>
+<hr>
+<h3 id="debug_get_time_scale"><a class="header" href="#debug_get_time_scale">debug_get_time_scale</a></h3>
+<p>Get the current time scale.</p>
+<p><strong>Signature:</strong>
+{{#tabs global=“lang”}}</p>
+<p>{{#tab name=“Rust”}}</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn debug_get_time_scale() -&gt; f32
+<span class="boring">}</span></code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“C/C++”}}</p>
+<pre><code class="language-c">EWZX_IMPORT float debug_get_time_scale(void);
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“Zig”}}</p>
+<pre><code class="language-zig">pub extern fn debug_get_time_scale() f32;
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#endtabs}}</p>
+<p><strong>Returns:</strong> Time scale (1.0 = normal, 0.5 = half speed, 2.0 = double)</p>
+<p><strong>Example:</strong>
+{{#tabs global=“lang”}}</p>
+<p>{{#tab name=“Rust”}}</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn update() {
+    unsafe {
+        if debug_is_paused() != 0 {
+            return; // Skip update when paused
+        }
+
+        let dt = delta_time() * debug_get_time_scale();
+        // Use scaled delta time
+    }
+}
+<span class="boring">}</span></code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“C/C++”}}</p>
+<pre><code class="language-c">EWZX_EXPORT void update(void) {
+    if (debug_is_paused() != 0) {
+        return; // Skip update when paused
+    }
+
+    float dt = delta_time() * debug_get_time_scale();
+    // Use scaled delta time
+}
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“Zig”}}</p>
+<pre><code class="language-zig">export fn update() void {
+    if (debug_is_paused() != 0) {
+        return; // Skip update when paused
+    }
+
+    const dt = delta_time() * debug_get_time_scale();
+    // Use scaled delta time
+}
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#endtabs}}</p>
+<hr>
+<h2 id="debug-keyboard-shortcuts"><a class="header" href="#debug-keyboard-shortcuts">Debug Keyboard Shortcuts</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Key</th><th>Action</th></tr>
+</thead>
+<tbody>
+<tr><td>F3</td><td>Toggle debug panel</td></tr>
+<tr><td>F5</td><td>Pause/unpause</td></tr>
+<tr><td>F6</td><td>Step one frame (while paused)</td></tr>
+<tr><td>F7</td><td>Decrease time scale</td></tr>
+<tr><td>F8</td><td>Increase time scale</td></tr>
+</tbody>
+</table>
+</div>
+<hr>
+<h2 id="complete-example"><a class="header" href="#complete-example">Complete Example</a></h2>
+<p>{{#tabs global=“lang”}}</p>
+<p>{{#tab name=“Rust”}}</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Game state
+static mut PLAYER_X: f32 = 0.0;
+static mut PLAYER_Y: f32 = 0.0;
+static mut PLAYER_VEL_X: f32 = 0.0;
+static mut PLAYER_VEL_Y: f32 = 0.0;
+static mut PLAYER_HEALTH: f32 = 100.0;
+
+// Tuning parameters
+static mut MOVE_SPEED: f32 = 5.0;
+static mut JUMP_FORCE: f32 = 12.0;
+static mut GRAVITY: f32 = 25.0;
+static mut FRICTION: f32 = 0.9;
+
+// Debug
+static mut GOD_MODE: u8 = 0;
+static mut SHOW_HITBOXES: u8 = 0;
+static mut ENEMY_COUNT: i32 = 5;
+
+fn init() {
+    unsafe {
+        // Player group
+        debug_group_begin(b"Player".as_ptr(), 6);
+        debug_watch_f32(b"X".as_ptr(), 1, &amp;PLAYER_X);
+        debug_watch_f32(b"Y".as_ptr(), 1, &amp;PLAYER_Y);
+        debug_watch_f32(b"Vel X".as_ptr(), 5, &amp;PLAYER_VEL_X);
+        debug_watch_f32(b"Vel Y".as_ptr(), 5, &amp;PLAYER_VEL_Y);
+        debug_register_f32_range(b"Health".as_ptr(), 6, &amp;PLAYER_HEALTH, 0.0, 100.0);
+        debug_group_end();
+
+        // Physics group
+        debug_group_begin(b"Physics".as_ptr(), 7);
+        debug_register_f32_range(b"Move Speed".as_ptr(), 10, &amp;MOVE_SPEED, 1.0, 20.0);
+        debug_register_f32_range(b"Jump Force".as_ptr(), 10, &amp;JUMP_FORCE, 5.0, 30.0);
+        debug_register_f32_range(b"Gravity".as_ptr(), 7, &amp;GRAVITY, 10.0, 50.0);
+        debug_register_f32_range(b"Friction".as_ptr(), 8, &amp;FRICTION, 0.5, 1.0);
+        debug_group_end();
+
+        // Debug options
+        debug_group_begin(b"Debug".as_ptr(), 5);
+        debug_register_bool(b"God Mode".as_ptr(), 8, &amp;GOD_MODE);
+        debug_register_bool(b"Show Hitboxes".as_ptr(), 13, &amp;SHOW_HITBOXES);
+        debug_register_i32_range(b"Enemy Count".as_ptr(), 11, &amp;ENEMY_COUNT, 0, 20);
+        debug_group_end();
+    }
+}
+
+fn update() {
+    unsafe {
+        // Respect debug pause
+        if debug_is_paused() != 0 {
+            return;
+        }
+
+        let dt = delta_time() * debug_get_time_scale();
+
+        // Use tunable values
+        PLAYER_VEL_Y += GRAVITY * dt;
+        PLAYER_VEL_X *= FRICTION;
+
+        if button_held(0, BUTTON_RIGHT) != 0 {
+            PLAYER_VEL_X = MOVE_SPEED;
+        }
+        if button_held(0, BUTTON_LEFT) != 0 {
+            PLAYER_VEL_X = -MOVE_SPEED;
+        }
+        if button_pressed(0, BUTTON_A) != 0 {
+            PLAYER_VEL_Y = -JUMP_FORCE;
+        }
+
+        PLAYER_X += PLAYER_VEL_X * dt;
+        PLAYER_Y += PLAYER_VEL_Y * dt;
+    }
+}
+<span class="boring">}</span></code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“C/C++”}}</p>
+<pre><code class="language-c">// Game state
+static float player_x = 0.0f;
+static float player_y = 0.0f;
+static float player_vel_x = 0.0f;
+static float player_vel_y = 0.0f;
+static float player_health = 100.0f;
+
+// Tuning parameters
+static float move_speed = 5.0f;
+static float jump_force = 12.0f;
+static float gravity = 25.0f;
+static float friction = 0.9f;
+
+// Debug
+static uint8_t god_mode = 0;
+static uint8_t show_hitboxes = 0;
+static int32_t enemy_count = 5;
+
+EWZX_EXPORT void init(void) {
+    // Player group
+    debug_group_begin("Player", 6);
+    debug_watch_f32("X", 1, &amp;player_x);
+    debug_watch_f32("Y", 1, &amp;player_y);
+    debug_watch_f32("Vel X", 5, &amp;player_vel_x);
+    debug_watch_f32("Vel Y", 5, &amp;player_vel_y);
+    debug_register_f32_range("Health", 6, &amp;player_health, 0.0f, 100.0f);
+    debug_group_end();
+
+    // Physics group
+    debug_group_begin("Physics", 7);
+    debug_register_f32_range("Move Speed", 10, &amp;move_speed, 1.0f, 20.0f);
+    debug_register_f32_range("Jump Force", 10, &amp;jump_force, 5.0f, 30.0f);
+    debug_register_f32_range("Gravity", 7, &amp;gravity, 10.0f, 50.0f);
+    debug_register_f32_range("Friction", 8, &amp;friction, 0.5f, 1.0f);
+    debug_group_end();
+
+    // Debug options
+    debug_group_begin("Debug", 5);
+    debug_register_bool("God Mode", 8, &amp;god_mode);
+    debug_register_bool("Show Hitboxes", 13, &amp;show_hitboxes);
+    debug_register_i32_range("Enemy Count", 11, &amp;enemy_count, 0, 20);
+    debug_group_end();
+}
+
+EWZX_EXPORT void update(void) {
+    // Respect debug pause
+    if (debug_is_paused() != 0) {
+        return;
+    }
+
+    float dt = delta_time() * debug_get_time_scale();
+
+    // Use tunable values
+    player_vel_y += gravity * dt;
+    player_vel_x *= friction;
+
+    if (button_held(0, EWZX_BUTTON_RIGHT) != 0) {
+        player_vel_x = move_speed;
+    }
+    if (button_held(0, EWZX_BUTTON_LEFT) != 0) {
+        player_vel_x = -move_speed;
+    }
+    if (button_pressed(0, EWZX_BUTTON_A) != 0) {
+        player_vel_y = -jump_force;
+    }
+
+    player_x += player_vel_x * dt;
+    player_y += player_vel_y * dt;
+}
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#tab name=“Zig”}}</p>
+<pre><code class="language-zig">// Game state
+var player_x: f32 = 0.0;
+var player_y: f32 = 0.0;
+var player_vel_x: f32 = 0.0;
+var player_vel_y: f32 = 0.0;
+var player_health: f32 = 100.0;
+
+// Tuning parameters
+var move_speed: f32 = 5.0;
+var jump_force: f32 = 12.0;
+var gravity: f32 = 25.0;
+var friction: f32 = 0.9;
+
+// Debug
+var god_mode: u8 = 0;
+var show_hitboxes: u8 = 0;
+var enemy_count: i32 = 5;
+
+export fn init() void {
+    // Player group
+    debug_group_begin("Player", 6);
+    debug_watch_f32("X", 1, &amp;player_x);
+    debug_watch_f32("Y", 1, &amp;player_y);
+    debug_watch_f32("Vel X", 5, &amp;player_vel_x);
+    debug_watch_f32("Vel Y", 5, &amp;player_vel_y);
+    debug_register_f32_range("Health", 6, &amp;player_health, 0.0, 100.0);
+    debug_group_end();
+
+    // Physics group
+    debug_group_begin("Physics", 7);
+    debug_register_f32_range("Move Speed", 10, &amp;move_speed, 1.0, 20.0);
+    debug_register_f32_range("Jump Force", 10, &amp;jump_force, 5.0, 30.0);
+    debug_register_f32_range("Gravity", 7, &amp;gravity, 10.0, 50.0);
+    debug_register_f32_range("Friction", 8, &amp;friction, 0.5, 1.0);
+    debug_group_end();
+
+    // Debug options
+    debug_group_begin("Debug", 5);
+    debug_register_bool("God Mode", 8, &amp;god_mode);
+    debug_register_bool("Show Hitboxes", 13, &amp;show_hitboxes);
+    debug_register_i32_range("Enemy Count", 11, &amp;enemy_count, 0, 20);
+    debug_group_end();
+}
+
+export fn update() void {
+    // Respect debug pause
+    if (debug_is_paused() != 0) {
+        return;
+    }
+
+    const dt = delta_time() * debug_get_time_scale();
+
+    // Use tunable values
+    player_vel_y += gravity * dt;
+    player_vel_x *= friction;
+
+    if (button_held(0, Button.right) != 0) {
+        player_vel_x = move_speed;
+    }
+    if (button_held(0, Button.left) != 0) {
+        player_vel_x = -move_speed;
+    }
+    if (button_pressed(0, Button.a) != 0) {
+        player_vel_y = -jump_force;
+    }
+
+    player_x += player_vel_x * dt;
+    player_y += player_vel_y * dt;
+}
+</code></pre>
+<p>{{#endtab}}</p>
+<p>{{#endtabs}}</p>
+<p><strong>See Also:</strong> <a href="./system.html">System Functions</a></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../api/rom-loading.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                            </a>
+
+                            <a rel="next prefetch" href="../reference/dither-patterns.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../api/rom-loading.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                    </a>
+
+                    <a rel="next prefetch" href="../reference/dither-patterns.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                    </a>
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr-ef4e11c1.min.js"></script>
+        <script src="../mark-09e88c2c.min.js"></script>
+        <script src="../searcher-c2a407aa.js"></script>
+
+        <script src="../clipboard-1626706a.min.js"></script>
+        <script src="../highlight-abc7f01d.js"></script>
+        <script src="../book-a0b12cfe.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>

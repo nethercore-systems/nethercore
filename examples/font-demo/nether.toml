@@ -1,0 +1,18 @@
+# Font Demo - nether.toml
+#
+# Demonstrates loading texture atlases that could be used for bitmap fonts.
+# Uses rom_texture to load a sample texture atlas.
+
+[game]
+id = "font-demo"
+title = "Font Demo"
+author = "Nethercore Examples"
+version = "0.1.0"
+description = "Demonstrates loading texture atlases for bitmap fonts"
+tags = ["demo", "fonts", "texture"]
+
+# Font atlases are typically texture images containing glyph sprites
+# Here we use a sample texture to demonstrate the loading mechanism
+[[assets.textures]]
+id = "font_atlas"
+path = "../assets/checkerboard.png"

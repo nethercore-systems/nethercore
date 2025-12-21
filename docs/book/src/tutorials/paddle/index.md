@@ -7,7 +7,7 @@ In this tutorial, you'll build a complete Paddle game from scratch. By the end, 
 - Score tracking and win conditions
 - Sound effects loaded from assets
 - Title screen and game over states
-- **Automatic online multiplayer** via Emberware's rollback netcode
+- **Automatic online multiplayer** via Nethercore's rollback netcode
 
 ![Paddle game preview](../../assets/paddle-preview.png)
 
@@ -21,7 +21,7 @@ In this tutorial, you'll build a complete Paddle game from scratch. By the end, 
 | [Part 4: AI Opponent](./04-ai.md) | Simple AI for single-player |
 | [Part 5: Multiplayer](./05-multiplayer.md) | The magic of rollback netcode |
 | [Part 6: Scoring & Win States](./06-scoring.md) | Game logic, state machine |
-| [Part 7: Sound Effects](./07-sound.md) | Assets, `ember build`, audio playback |
+| [Part 7: Sound Effects](./07-sound.md) | Assets, `nether build`, audio playback |
 | [Part 8: Polish & Publishing](./08-polish.md) | Title screen, publishing to archive |
 
 ## Prerequisites
@@ -37,9 +37,9 @@ Before starting this tutorial, you should have:
 The complete source code for this tutorial is available in the examples:
 
 ```
-emberware/examples/paddle/
+nethercore/examples/paddle/
 ├── Cargo.toml
-├── ember.toml
+├── nether.toml
 └── src/
     └── lib.rs
 ```
@@ -49,7 +49,7 @@ You can build and run it with:
 ```bash
 cd examples/paddle
 cargo build --target wasm32-unknown-unknown --release
-ember run target/wasm32-unknown-unknown/release/paddle.wasm
+nether run target/wasm32-unknown-unknown/release/paddle.wasm
 ```
 
 ## Time Investment
