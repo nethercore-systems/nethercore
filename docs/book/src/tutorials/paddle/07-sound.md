@@ -98,7 +98,7 @@ ember build
 This command:
 1. Compiles your Rust code to WASM
 2. Converts WAV files to the optimized format (22050 Hz mono)
-3. Bundles everything into a `paddle.ewz` ROM file
+3. Bundles everything into a `paddle.ewzx` ROM file
 
 You'll see output like:
 
@@ -108,7 +108,7 @@ Building paddle...
   Converting hit.wav → hit.ewzsnd
   Converting score.wav → score.ewzsnd
   Converting win.wav → win.ewzsnd
-  Packing paddle.ewz (28 KB)
+  Packing paddle.ewzx (28 KB)
 Done!
 ```
 
@@ -117,7 +117,7 @@ Done!
 Now run the ROM:
 
 ```bash
-ember run paddle.ewz
+ember run paddle.ewzx
 ```
 
 Or just:

@@ -88,7 +88,7 @@ Build your game with all assets bundled:
 ember build
 ```
 
-This creates a `.ewz` ROM file containing:
+This creates a `.ewzx` ROM file containing:
 - Your compiled WASM code
 - All converted and compressed assets
 - Game metadata
@@ -98,12 +98,12 @@ This creates a `.ewz` ROM file containing:
 Check your ROM was created:
 
 ```bash
-ls -la *.ewz
+ls -la *.ewzx
 ```
 
 You should see something like:
 ```
--rw-r--r-- 1 user user 45678 Dec 20 12:00 paddle.ewz
+-rw-r--r-- 1 user user 45678 Dec 20 12:00 paddle.ewzx
 ```
 
 ## Test Your Release Build
@@ -111,7 +111,7 @@ You should see something like:
 Run the final ROM:
 
 ```bash
-ember run paddle.ewz
+ember run paddle.ewzx
 ```
 
 ## Final Checklist
@@ -149,7 +149,7 @@ You'll need:
    - Title: "Paddle"
    - Description: Your game description
    - Category: Arcade
-5. Upload your `.ewz` ROM file
+5. Upload your `.ewzx` ROM file
 6. Add your icon and screenshots
 7. Click "Publish"
 
