@@ -30,6 +30,11 @@ pub struct CreateGameRequest {
     /// Optional description (Markdown, max 4096 characters).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// Console type (e.g., "zx"). Required.
+    pub console_type: String,
+    /// Optional tags for categorization.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tags: Option<Vec<String>>,
 }
 
 /// Update an existing game (developer endpoint).
@@ -44,6 +49,9 @@ pub struct UpdateGameRequest {
     /// Set published status (true = visible in library).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub published: Option<bool>,
+    /// Update tags (replaces existing).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tags: Option<Vec<String>>,
 }
 
 /// Response after creating a new game.
