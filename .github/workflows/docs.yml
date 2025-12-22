@@ -29,6 +29,9 @@ jobs:
         with:
           mdbook-version: 'latest'
 
+      - name: Install mdbook-tabs
+        run: cargo install mdbook-tabs
+
       - name: Build book
         run: mdbook build docs/book
 

@@ -8,6 +8,8 @@ src = "src"
 [build]
 build-dir = "book"
 
+[preprocessor.tabs]
+
 [output.html]
 default-theme = "navy"
 preferred-dark-theme = "navy"
