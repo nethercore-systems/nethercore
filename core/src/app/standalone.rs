@@ -535,7 +535,7 @@ where
                     self.needs_redraw = true;
                 }
                 PhysicalKey::Code(KeyCode::F4) => {
-                    self.network_overlay_visible = !self.network_overlay_visible;
+                    self.debug_panel.toggle();
                     self.needs_redraw = true;
                 }
                 PhysicalKey::Code(KeyCode::F5) => {
@@ -559,7 +559,7 @@ where
                     }
                 }
                 PhysicalKey::Code(KeyCode::F12) => {
-                    self.debug_panel.toggle();
+                    self.network_overlay_visible = !self.network_overlay_visible;
                     self.needs_redraw = true;
                 }
                 PhysicalKey::Code(key) if key == self.screenshot_key => {
