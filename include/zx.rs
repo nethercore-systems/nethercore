@@ -337,6 +337,27 @@ extern "C" {
     /// * `filter` — 0=nearest (pixelated), 1=linear (smooth)
     pub fn texture_filter(filter: u32);
 
+    /// Set uniform alpha level for dither transparency.
+    ///
+    /// # Arguments
+    /// * `level` — 0-15 (0=fully transparent, 15=fully opaque, default=15)
+    ///
+    /// Controls the dither pattern threshold for screen-door transparency.
+    /// The dither pattern is always active, but with level=15 (default) all fragments pass.
+    pub fn uniform_alpha(level: u32);
+
+    /// Set dither offset for dither transparency.
+    ///
+    /// # Arguments
+    /// * `x` — 0-3 pixel shift in X axis
+    /// * `y` — 0-3 pixel shift in Y axis
+    ///
+    /// Use different offsets for stacked dithered meshes to prevent pattern cancellation.
+    /// When two transparent objects overlap with the same alpha level and offset, their
+    /// dither patterns align and pixels cancel out. Different offsets shift the pattern
+    /// so both objects remain visible.
+    pub fn dither_offset(x: u32, y: u32);
+
     // =========================================================================
     // Texture Functions
     // =========================================================================
@@ -608,23 +629,11 @@ extern "C" {
     pub fn font_bind(font_handle: u32);
 
     // =========================================================================
-    // Sky System
+    // Environment Rendering
     // =========================================================================
 
-    /// Set sky gradient colors.
-    ///
-    /// # Arguments
-    /// * `horizon_color` — Color at eye level (0xRRGGBBAA)
-    /// * `zenith_color` — Color directly overhead (0xRRGGBBAA)
-    pub fn sky_set_colors(horizon_color: u32, zenith_color: u32);
-
-    /// Set sky sun properties.
-    ///
-    /// # Arguments
-    /// * `dir_x`, `dir_y`, `dir_z` — Direction light rays travel (from sun toward surface)
-    /// * `color` — Sun color (0xRRGGBBAA)
-    /// * `sharpness` — Sun disc sharpness (0.0-1.0, higher = smaller/sharper)
-    pub fn sky_set_sun(dir_x: f32, dir_y: f32, dir_z: f32, color: u32, sharpness: f32);
+    /// Render the configured environment. Call first in render(), before any geometry.
+    pub fn draw_env();
 
     /// Bind a matcap texture to a slot (Mode 1 only).
     ///
@@ -632,8 +641,177 @@ extern "C" {
     /// * `slot` — Matcap slot (1-3)
     pub fn matcap_set(slot: u32, texture: u32);
 
-    /// Draw the procedural sky. Call first in render(), before any geometry.
-    pub fn draw_sky();
+    // =========================================================================
+    // Environment Processing Unit (EPU) — Multi-Environment v3
+    // =========================================================================
+
+    /// Configure gradient environment (Mode 0).
+    ///
+    /// Creates a 4-color gradient background with vertical blending.
+    ///
+    /// # Arguments
+    /// * `layer` — Target layer: 0 = base layer, 1 = overlay layer
+    /// * `zenith` — Color directly overhead (0xRRGGBBAA)
+    /// * `sky_horizon` — Sky color at horizon level (0xRRGGBBAA)
+    /// * `ground_horizon` — Ground color at horizon level (0xRRGGBBAA)
+    /// * `nadir` — Color directly below (0xRRGGBBAA)
+    /// * `rotation` — Rotation around Y axis in radians
+    /// * `shift` — Horizon vertical shift (-1.0 to 1.0, 0.0 = equator)
+    ///
+    /// The gradient interpolates: zenith → sky_horizon (Y > 0), sky_horizon → ground_horizon (at Y = 0 + shift), ground_horizon → nadir (Y < 0).
+    ///
+    /// You can configure the same mode on both layers with different parameters for creative effects.
+    pub fn env_gradient(layer: u32, zenith: u32, sky_horizon: u32, ground_horizon: u32, nadir: u32, rotation: f32, shift: f32);
+
+    /// Configure scatter environment (Mode 1: stars, rain, warp).
+    ///
+    /// Creates a procedural particle field.
+    ///
+    /// # Arguments
+    /// * `layer` — Target layer: 0 = base layer, 1 = overlay layer
+    /// * `variant` — 0=Stars, 1=Vertical (rain), 2=Horizontal, 3=Warp
+    /// * `density` — Particle count (0-255)
+    /// * `size` — Particle size (0-255)
+    /// * `glow` — Glow/bloom intensity (0-255)
+    /// * `streak_length` — Elongation for streaks (0-63, 0=points)
+    /// * `color_primary` — Main particle color (0xRRGGBB00)
+    /// * `color_secondary` — Variation/twinkle color (0xRRGGBB00)
+    /// * `parallax_rate` — Layer separation amount (0-255)
+    /// * `parallax_size` — Size variation with depth (0-255)
+    /// * `phase` — Animation phase (0-65535, wraps for seamless looping)
+    pub fn env_scatter(layer: u32, variant: u32, density: u32, size: u32, glow: u32, streak_length: u32,
+                       color_primary: u32, color_secondary: u32, parallax_rate: u32,
+                       parallax_size: u32, phase: u32);
+
+    /// Configure lines environment (Mode 2: synthwave grid, racing track).
+    ///
+    /// Creates an infinite procedural grid.
+    ///
+    /// # Arguments
+    /// * `layer` — Target layer: 0 = base layer, 1 = overlay layer
+    /// * `variant` — 0=Floor, 1=Ceiling, 2=Sphere
+    /// * `line_type` — 0=Horizontal, 1=Vertical, 2=Grid
+    /// * `thickness` — Line thickness (0-255)
+    /// * `spacing` — Distance between lines in world units
+    /// * `fade_distance` — Distance where lines start fading in world units
+    /// * `color_primary` — Main line color (0xRRGGBBAA)
+    /// * `color_accent` — Accent line color (0xRRGGBBAA)
+    /// * `accent_every` — Make every Nth line use accent color
+    /// * `phase` — Scroll phase (0-65535, wraps for seamless looping)
+    pub fn env_lines(layer: u32, variant: u32, line_type: u32, thickness: u32, spacing: f32, fade_distance: f32,
+                     color_primary: u32, color_accent: u32, accent_every: u32, phase: u32);
+
+    /// Configure silhouette environment (Mode 3: mountains, cityscape).
+    ///
+    /// Creates layered terrain silhouettes with procedural noise.
+    ///
+    /// # Arguments
+    /// * `layer` — Target layer: 0 = base layer, 1 = overlay layer
+    /// * `jaggedness` — Terrain roughness (0-255, 0=smooth hills, 255=sharp peaks)
+    /// * `layer_count` — Number of depth layers (1-3)
+    /// * `color_near` — Nearest silhouette color (0xRRGGBBAA)
+    /// * `color_far` — Farthest silhouette color (0xRRGGBBAA)
+    /// * `sky_zenith` — Sky color at zenith behind silhouettes (0xRRGGBBAA)
+    /// * `sky_horizon` — Sky color at horizon behind silhouettes (0xRRGGBBAA)
+    /// * `parallax_rate` — Layer separation amount (0-255)
+    /// * `seed` — Noise seed for terrain shape
+    pub fn env_silhouette(layer: u32, jaggedness: u32, layer_count: u32, color_near: u32, color_far: u32,
+                          sky_zenith: u32, sky_horizon: u32, parallax_rate: u32, seed: u32);
+
+    /// Configure rectangles environment (Mode 4: city windows, control panels).
+    ///
+    /// Creates rectangular light sources like windows or screens.
+    ///
+    /// # Arguments
+    /// * `layer` — Target layer: 0 = base layer, 1 = overlay layer
+    /// * `variant` — 0=Scatter, 1=Buildings, 2=Bands, 3=Panels
+    /// * `density` — How many rectangles (0-255)
+    /// * `lit_ratio` — Percentage of rectangles lit (0-255, 128=50%)
+    /// * `size_min` — Minimum rectangle size (0-63)
+    /// * `size_max` — Maximum rectangle size (0-63)
+    /// * `aspect` — Aspect ratio bias (0-3, 0=square, 3=very tall)
+    /// * `color_primary` — Main window/panel color (0xRRGGBBAA)
+    /// * `color_variation` — Color variation for variety (0xRRGGBBAA)
+    /// * `parallax_rate` — Layer separation (0-255)
+    /// * `phase` — Flicker phase (0-65535, wraps for seamless animation)
+    pub fn env_rectangles(layer: u32, variant: u32, density: u32, lit_ratio: u32, size_min: u32, size_max: u32,
+                          aspect: u32, color_primary: u32, color_variation: u32, parallax_rate: u32, phase: u32);
+
+    /// Configure room environment (Mode 5: interior spaces).
+    ///
+    /// Creates interior of a 3D box with directional lighting.
+    ///
+    /// # Arguments
+    /// * `layer` — Target layer: 0 = base layer, 1 = overlay layer
+    /// * `color_ceiling` — Ceiling color (0xRRGGBB00)
+    /// * `color_floor` — Floor color (0xRRGGBB00)
+    /// * `color_walls` — Wall color (0xRRGGBB00)
+    /// * `panel_size` — Size of wall panel pattern in world units
+    /// * `panel_gap` — Gap between panels (0-255)
+    /// * `light_dir_x`, `light_dir_y`, `light_dir_z` — Light direction
+    /// * `light_intensity` — Directional light strength (0-255)
+    /// * `corner_darken` — Corner/edge darkening amount (0-255)
+    /// * `room_scale` — Room size multiplier
+    /// * `viewer_x`, `viewer_y`, `viewer_z` — Viewer position in room (-128 to 127 = -1.0 to 1.0)
+    pub fn env_room(layer: u32, color_ceiling: u32, color_floor: u32, color_walls: u32, panel_size: f32, panel_gap: u32,
+                    light_dir_x: f32, light_dir_y: f32, light_dir_z: f32, light_intensity: u32,
+                    corner_darken: u32, room_scale: f32, viewer_x: i32, viewer_y: i32, viewer_z: i32);
+
+    /// Configure curtains environment (Mode 6: pillars, trees, vertical structures).
+    ///
+    /// Creates vertical structures arranged around the viewer.
+    ///
+    /// # Arguments
+    /// * `layer` — Target layer: 0 = base layer, 1 = overlay layer
+    /// * `layer_count` — Depth layers (1-3)
+    /// * `density` — Structures per cell (0-255)
+    /// * `height_min` — Minimum height (0-63)
+    /// * `height_max` — Maximum height (0-63)
+    /// * `width` — Structure width (0-31)
+    /// * `spacing` — Gap between structures (0-31)
+    /// * `waviness` — Organic wobble (0-255, 0=straight)
+    /// * `color_near` — Nearest structure color (0xRRGGBBAA)
+    /// * `color_far` — Farthest structure color (0xRRGGBBAA)
+    /// * `glow` — Neon/magical glow intensity (0-255)
+    /// * `parallax_rate` — Layer separation (0-255)
+    /// * `phase` — Horizontal scroll phase (0-65535, wraps for seamless)
+    pub fn env_curtains(layer: u32, layer_count: u32, density: u32, height_min: u32, height_max: u32,
+                        width: u32, spacing: u32, waviness: u32, color_near: u32, color_far: u32,
+                        glow: u32, parallax_rate: u32, phase: u32);
+
+    /// Configure rings environment (Mode 7: portals, tunnels, vortex).
+    ///
+    /// Creates concentric rings for portals or vortex effects.
+    ///
+    /// # Arguments
+    /// * `layer` — Target layer: 0 = base layer, 1 = overlay layer
+    /// * `ring_count` — Number of rings (1-255)
+    /// * `thickness` — Ring thickness (0-255)
+    /// * `color_a` — First alternating color (0xRRGGBBAA)
+    /// * `color_b` — Second alternating color (0xRRGGBBAA)
+    /// * `center_color` — Bright center color (0xRRGGBBAA)
+    /// * `center_falloff` — Center glow falloff (0-255)
+    /// * `spiral_twist` — Spiral rotation in degrees (0=concentric)
+    /// * `axis_x`, `axis_y`, `axis_z` — Ring axis direction (normalized)
+    /// * `phase` — Rotation phase (0-65535 = 0°-360°, wraps for seamless)
+    pub fn env_rings(layer: u32, ring_count: u32, thickness: u32, color_a: u32, color_b: u32,
+                     center_color: u32, center_falloff: u32, spiral_twist: f32,
+                     axis_x: f32, axis_y: f32, axis_z: f32, phase: u32);
+
+    /// Set the blend mode for combining base and overlay layers.
+    ///
+    /// # Arguments
+    /// * `mode` — Blend mode (0-3)
+    ///
+    /// # Blend Modes
+    /// * 0 — Alpha: Standard alpha blending
+    /// * 1 — Add: Additive blending
+    /// * 2 — Multiply: Multiplicative blending
+    /// * 3 — Screen: Screen blending
+    ///
+    /// Controls how the overlay layer composites onto the base layer.
+    /// Use this to create different visual effects when layering environments.
+    pub fn env_blend(mode: u32);
 
     // =========================================================================
     // Material Functions (Mode 2/3)

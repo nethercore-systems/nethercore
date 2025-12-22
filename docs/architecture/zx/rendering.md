@@ -393,23 +393,44 @@ fn light_disable(index: u32)
 
 **Intensity range**: 0.0-8.0 for HDR support. Values >1.0 useful for point light falloff.
 
-### Procedural Sky
+### Procedural Environment
 
-The sky provides ambient lighting and a sun for all modes:
+The environment provides ambient lighting for all modes via the Environment Processing Unit (EPU).
+
+**Dual-Layer Architecture:**
+
+The EPU supports two independent environment layers (base and overlay) that can be blended together:
 
 ```rust
-fn sky_set_gradient(horizon: u32, zenith: u32)  // 0xRRGGBBAA colors
-fn sky_set_sun(dir_x: f32, dir_y: f32, dir_z: f32, color: u32, sharpness: f32)
+// Configure base layer (layer 0)
+fn env_gradient(layer: u32, zenith: u32, sky_horizon: u32, ground_horizon: u32,
+                nadir: u32, rotation: f32, shift: f32)
+
+// Configure overlay layer (layer 1) with a different mode
+fn env_scatter(layer: u32, variant: u32, density: u32, ...)
+
+// Set blend mode for overlay compositing
+fn env_blend(mode: u32)  // 0=alpha, 1=add, 2=multiply, 3=screen
+
+// Render the configured environment
+fn draw_env()
 ```
+
+**Layer System:**
+- Layer 0 (base): Primary environment layer
+- Layer 1 (overlay): Secondary layer composited on top
+- Same mode can be used on both layers with different parameters
+- Example: Stars (layer 0) + rain (layer 1), both using scatter mode
 
 **Ambient calculation:**
 ```
 ambient = sample_sky(normal) * albedo * ambient_factor
 ```
 
-**Sun as key light:**
-- Mode 0 with normals: Simple Lambert from sun direction
-- Modes 2-3: Sun acts as additional directional light
+**Lighting integration:**
+- Mode 0 with normals: Simple Lambert from directional lights
+- Modes 2-3: Dynamic lights + environment ambient
+- See [Environment (EPU) API](../../book/src/api/epu.md) for all 8 procedural modes
 
 ### Packed Light Format
 

@@ -523,7 +523,7 @@ export fn render() void {
 
 ## Common Setup
 
-All lit modes benefit from proper sky and light setup:
+All lit modes benefit from proper environment and light setup:
 
 {{#tabs global="lang"}}
 
@@ -532,15 +532,22 @@ All lit modes benefit from proper sky and light setup:
 fn init() {
     render_mode(2); // or 1 or 3
 
-    // Sky provides ambient light
-    sky_set_colors(0xB2D8F2FF, 0x3366B2FF);
-    sky_set_sun(0.5, 0.7, 0.5, 0xFFF2E6FF, 0.95);
+    // Set up environment (provides ambient light)
+    env_gradient(
+        0,           // layer (0=base)
+        0x3366B2FF,  // zenith (top)
+        0xB2D8F2FF,  // sky horizon
+        0xB2D8F2FF,  // ground horizon
+        0x3366B2FF,  // nadir (bottom)
+        0.0,         // rotation
+        0.0          // shift
+    );
 }
 
 fn render() {
-    draw_sky();
+    draw_env();
 
-    // Main light (match sun direction)
+    // Main directional light
     light_set(0, 0.5, -0.7, 0.5);
     light_color(0, 0xFFF2E6FF);
     light_intensity(0, 1.0);
@@ -562,15 +569,22 @@ fn render() {
 EWZX_EXPORT void init(void) {
     render_mode(2); // or 1 or 3
 
-    // Sky provides ambient light
-    sky_set_colors(0xB2D8F2FF, 0x3366B2FF);
-    sky_set_sun(0.5f, 0.7f, 0.5f, 0xFFF2E6FF, 0.95f);
+    // Set up environment (provides ambient light)
+    env_gradient(
+        0,           // layer (0=base)
+        0x3366B2FF,  // zenith (top)
+        0xB2D8F2FF,  // sky horizon
+        0xB2D8F2FF,  // ground horizon
+        0x3366B2FF,  // nadir (bottom)
+        0.0f,        // rotation
+        0.0f         // shift
+    );
 }
 
 EWZX_EXPORT void render(void) {
-    draw_sky();
+    draw_env();
 
-    // Main light (match sun direction)
+    // Main directional light
     light_set(0, 0.5f, -0.7f, 0.5f);
     light_color(0, 0xFFF2E6FF);
     light_intensity(0, 1.0f);
@@ -592,15 +606,22 @@ EWZX_EXPORT void render(void) {
 export fn init() void {
     render_mode(2); // or 1 or 3
 
-    // Sky provides ambient light
-    sky_set_colors(0xB2D8F2FF, 0x3366B2FF);
-    sky_set_sun(0.5, 0.7, 0.5, 0xFFF2E6FF, 0.95);
+    // Set up environment (provides ambient light)
+    env_gradient(
+        0,           // layer (0=base)
+        0x3366B2FF,  // zenith (top)
+        0xB2D8F2FF,  // sky horizon
+        0xB2D8F2FF,  // ground horizon
+        0x3366B2FF,  // nadir (bottom)
+        0.0,         // rotation
+        0.0          // shift
+    );
 }
 
 export fn render() void {
-    draw_sky();
+    draw_env();
 
-    // Main light (match sun direction)
+    // Main directional light
     light_set(0, 0.5, -0.7, 0.5);
     light_color(0, 0xFFF2E6FF);
     light_intensity(0, 1.0);

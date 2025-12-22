@@ -664,13 +664,13 @@ fn setup_lighting() void {
 {{#tab name="Rust"}}
 ```rust
 fn render() {
-    // Configure sun (matches sky_set_sun direction)
+    // Main directional light
     light_set(0, 0.3, -0.8, 0.5);
     light_color(0, 0xFFF8E6FF);  // Warm sunlight
     light_intensity(0, 1.2);
     light_enable(0);
 
-    // Ambient comes from sky automatically
+    // Ambient comes from environment automatically
 }
 ```
 {{#endtab}}
@@ -678,13 +678,13 @@ fn render() {
 {{#tab name="C/C++"}}
 ```c
 EWZX_EXPORT void render(void) {
-    // Configure sun (matches sky_set_sun direction)
+    // Main directional light
     light_set(0, 0.3f, -0.8f, 0.5f);
     light_color(0, 0xFFF8E6FF);  // Warm sunlight
     light_intensity(0, 1.2f);
     light_enable(0);
 
-    // Ambient comes from sky automatically
+    // Ambient comes from environment automatically
 }
 ```
 {{#endtab}}
@@ -692,13 +692,13 @@ EWZX_EXPORT void render(void) {
 {{#tab name="Zig"}}
 ```zig
 export fn render() void {
-    // Configure sun (matches sky_set_sun direction)
+    // Main directional light
     light_set(0, 0.3, -0.8, 0.5);
     light_color(0, 0xFFF8E6FF); // Warm sunlight
     light_intensity(0, 1.2);
     light_enable(0);
 
-    // Ambient comes from sky automatically
+    // Ambient comes from environment automatically
 }
 ```
 {{#endtab}}
@@ -848,8 +848,7 @@ export fn render() void {
 - **Maximum 4 lights** (indices 0-3)
 - **Directional lights** have no position, only direction
 - **Point lights** have position and range falloff
-- **Sun lighting** comes from `sky_set_sun()` in addition to explicit lights
-- **Ambient** comes from the procedural sky automatically
+- **Ambient** comes from the procedural environment automatically
 - Works only in **Mode 2** (Metallic-Roughness) and **Mode 3** (Specular-Shininess)
 
-**See Also:** [Sky Functions](./sky.md), [Materials](./materials.md), [Render Modes Guide](../guides/render-modes.md)
+**See Also:** [Environment (EPU)](./epu.md), [Materials](./materials.md), [Render Modes Guide](../guides/render-modes.md)

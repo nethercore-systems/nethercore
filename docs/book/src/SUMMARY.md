@@ -44,7 +44,7 @@
 - [Procedural Meshes](./api/procedural.md)
 - [2D Drawing](./api/drawing-2d.md)
 - [Billboards](./api/billboards.md)
-- [Sky](./api/sky.md)
+- [Environment (EPU)](./api/epu.md)
 - [Audio](./api/audio.md)
 - [Save Data](./api/save-data.md)
 - [ROM Loading](./api/rom-loading.md)

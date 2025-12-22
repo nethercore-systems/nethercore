@@ -581,34 +581,64 @@ light_range(index: u32, range: f32) void
 
 ---
 
-## Sky & Matcap
+## Environment (EPU)
 
 {{#tabs global="lang"}}
 
 {{#tab name="Rust"}}
 ```rust
-sky_set_colors(horizon, zenith)        // 0xRRGGBBAA colors
-sky_set_sun(dx, dy, dz, color, sharpness)
-draw_sky()                             // Call first in render()
-matcap_set(slot, texture)              // Slot 1-3
+// 8 Environment Modes (layer: 0=base, 1=overlay)
+env_gradient(layer, zenith, sky_h, ground_h, nadir, rot, shift)  // Mode 0
+env_scatter(layer, variant, density, size, glow, streak, c1, c2, parallax, psize, phase)  // Mode 1
+env_lines(layer, variant, type, thick, spacing, fade, c_prim, c_accent, every, phase)  // Mode 2
+env_silhouette(layer, jagged, layers, c_near, c_far, sky_z, sky_h, parallax, seed)  // Mode 3
+env_rectangles(layer, variant, density, lit, size_min, size_max, aspect, c_prim, c_var, parallax, phase)  // Mode 4
+env_room(layer, c_ceil, c_floor, c_wall, panel_size, panel_gap, light_xyz, light_int, corner, scale, viewer_xyz)  // Mode 5
+env_curtains(layer, layers, density, h_min, h_max, width, spacing, wave, c_near, c_far, glow, parallax, phase)  // Mode 6
+env_rings(layer, count, thick, c_a, c_b, c_center, falloff, twist, axis_xyz, phase)  // Mode 7
+
+// Blending and rendering
+env_blend(mode)               // 0=alpha, 1=add, 2=mul, 3=screen
+draw_env()                    // Call first in render()
+matcap_set(slot, texture)     // Slot 1-3 (Mode 1 only)
 ```
 {{#endtab}}
 
 {{#tab name="C/C++"}}
 ```c
-void sky_set_colors(uint32_t horizon, uint32_t zenith);
-void sky_set_sun(float dx, float dy, float dz, uint32_t color, float sharpness);
-void draw_sky(void);                   // Call first in render()
-void matcap_set(uint32_t slot, uint32_t texture);  // Slot 1-3
+// 8 Environment Modes (layer: 0=base, 1=overlay)
+void env_gradient(u32 layer, u32 zenith, u32 sky_h, u32 ground_h, u32 nadir, f32 rot, f32 shift);  // Mode 0
+void env_scatter(u32 layer, u32 variant, u32 density, u32 size, u32 glow, u32 streak, u32 c1, u32 c2, u32 parallax, u32 psize, u32 phase);  // Mode 1
+void env_lines(u32 layer, u32 variant, u32 type, u32 thick, f32 spacing, f32 fade, u32 c_prim, u32 c_accent, u32 every, u32 phase);  // Mode 2
+void env_silhouette(u32 layer, u32 jagged, u32 layers, u32 c_near, u32 c_far, u32 sky_z, u32 sky_h, u32 parallax, u32 seed);  // Mode 3
+void env_rectangles(u32 layer, u32 variant, u32 density, u32 lit, u32 size_min, u32 size_max, u32 aspect, u32 c_prim, u32 c_var, u32 parallax, u32 phase);  // Mode 4
+void env_room(u32 layer, u32 c_ceil, u32 c_floor, u32 c_wall, f32 panel_size, u32 panel_gap, f32 light_x, f32 light_y, f32 light_z, u32 light_int, u32 corner, f32 scale, i32 viewer_x, i32 viewer_y, i32 viewer_z);  // Mode 5
+void env_curtains(u32 layer, u32 layers, u32 density, u32 h_min, u32 h_max, u32 width, u32 spacing, u32 wave, u32 c_near, u32 c_far, u32 glow, u32 parallax, u32 phase);  // Mode 6
+void env_rings(u32 layer, u32 count, u32 thick, u32 c_a, u32 c_b, u32 c_center, u32 falloff, f32 twist, f32 axis_x, f32 axis_y, f32 axis_z, u32 phase);  // Mode 7
+
+// Blending and rendering
+void env_blend(uint32_t mode);                    // 0=alpha, 1=add, 2=mul, 3=screen
+void draw_env(void);                              // Call first in render()
+void matcap_set(uint32_t slot, uint32_t texture); // Slot 1-3 (Mode 1 only)
 ```
 {{#endtab}}
 
 {{#tab name="Zig"}}
 ```zig
-sky_set_colors(horizon: u32, zenith: u32) void
-sky_set_sun(dx: f32, dy: f32, dz: f32, color: u32, sharpness: f32) void
-draw_sky() void                        // Call first in render()
-matcap_set(slot: u32, texture: u32) void  // Slot 1-3
+// 8 Environment Modes (layer: 0=base, 1=overlay)
+env_gradient(layer: u32, zenith: u32, sky_h: u32, ground_h: u32, nadir: u32, rot: f32, shift: f32) void  // Mode 0
+env_scatter(layer: u32, variant: u32, density: u32, size: u32, glow: u32, streak: u32, c1: u32, c2: u32, parallax: u32, psize: u32, phase: u32) void  // Mode 1
+env_lines(layer: u32, variant: u32, type: u32, thick: u32, spacing: f32, fade: f32, c_prim: u32, c_accent: u32, every: u32, phase: u32) void  // Mode 2
+env_silhouette(layer: u32, jagged: u32, layers: u32, c_near: u32, c_far: u32, sky_z: u32, sky_h: u32, parallax: u32, seed: u32) void  // Mode 3
+env_rectangles(layer: u32, variant: u32, density: u32, lit: u32, size_min: u32, size_max: u32, aspect: u32, c_prim: u32, c_var: u32, parallax: u32, phase: u32) void  // Mode 4
+env_room(layer: u32, c_ceil: u32, c_floor: u32, c_wall: u32, panel_size: f32, panel_gap: u32, light_x: f32, light_y: f32, light_z: f32, light_int: u32, corner: u32, scale: f32, viewer_x: i32, viewer_y: i32, viewer_z: i32) void  // Mode 5
+env_curtains(layer: u32, layers: u32, density: u32, h_min: u32, h_max: u32, width: u32, spacing: u32, wave: u32, c_near: u32, c_far: u32, glow: u32, parallax: u32, phase: u32) void  // Mode 6
+env_rings(layer: u32, count: u32, thick: u32, c_a: u32, c_b: u32, c_center: u32, falloff: u32, twist: f32, axis_x: f32, axis_y: f32, axis_z: f32, phase: u32) void  // Mode 7
+
+// Blending and rendering
+env_blend(mode: u32) void             // 0=alpha, 1=add, 2=mul, 3=screen
+draw_env() void                       // Call first in render()
+matcap_set(slot: u32, texture: u32) void  // Slot 1-3 (Mode 1 only)
 ```
 {{#endtab}}
 

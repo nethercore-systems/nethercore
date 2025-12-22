@@ -13,7 +13,7 @@ use super::ZXGameContext;
 pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     linker.func_wrap("env", "sky_set_colors", sky_set_colors)?;
     linker.func_wrap("env", "matcap_set", matcap_set)?;
-    linker.func_wrap("env", "draw_sky", draw_sky)?;
+    linker.func_wrap("env", "draw_env", draw_env)?;
     Ok(())
 }
 
@@ -55,22 +55,20 @@ fn matcap_set(mut caller: Caller<'_, ZXGameContext>, slot: u32, texture: u32) {
     state.bound_textures[slot as usize] = texture;
 }
 
-/// Draw the procedural sky
+/// Render the configured environment
 ///
-/// Renders a fullscreen gradient from horizon to zenith color with sun disc.
-/// Uses current sky configuration set via `sky_set_colors()` and `sky_set_sun()`.
+/// Renders the procedural environment using the current configuration.
 /// Always renders at far plane (depth=1.0) so geometry appears in front.
 ///
 /// # Usage
 /// Call this **first** in your `render()` function, before any 3D geometry:
 /// ```rust,ignore
 /// fn render() {
-///     // Configure sky colors and sun
-///     sky_set_colors(0xB2D8F2FF, 0x3366B2FF);  // Light blue → darker blue
-///     sky_set_sun(-0.5, -0.707, -0.5, 0xFFF2E6FF, 0.98);  // Warm white sun (rays going down)
+///     // Configure environment (e.g., gradient on base layer)
+///     env_gradient(0, 0x191970FF, 0x87CEEBFF, 0x228B22FF, 0x2F4F4FFF, 0.0, 0.0);
 ///
-///     // Draw sky first (before geometry)
-///     draw_sky();
+///     // Draw environment first (before geometry)
+///     draw_env();
 ///
 ///     // Then draw scene geometry
 ///     draw_mesh(terrain);
@@ -80,20 +78,20 @@ fn matcap_set(mut caller: Caller<'_, ZXGameContext>, slot: u32, texture: u32) {
 ///
 /// # Notes
 /// - Works in all render modes (0-3)
-/// - Sky always renders behind all geometry
-/// - Depth test is disabled for sky rendering
-fn draw_sky(mut caller: Caller<'_, ZXGameContext>) {
+/// - Environment always renders behind all geometry
+/// - Depth test is disabled for environment rendering
+fn draw_env(mut caller: Caller<'_, ZXGameContext>) {
     let state = &mut caller.data_mut().ffi;
 
-    // Get or create shading state index for current sky configuration
-    // This ensures the sky data is uploaded to GPU
+    // Get or create shading state index for current environment configuration
+    // This ensures the environment data is uploaded to GPU
     let shading_idx = state.add_shading_state();
 
-    // Add sky draw command to render pass
+    // Add sky/environment draw command to render pass
     state
         .render_pass
         .add_command(crate::graphics::VRPCommand::Sky {
             shading_state_index: shading_idx.0,
-            depth_test: false, // Sky always behind geometry
+            depth_test: false, // Environment always behind geometry
         });
 }

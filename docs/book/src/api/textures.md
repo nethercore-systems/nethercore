@@ -415,7 +415,7 @@ export fn render() void {
 
 {{#endtabs}}
 
-**See Also:** [matcap_set](./sky.md#matcap_set), [Render Modes Guide](../guides/render-modes.md)
+**See Also:** [matcap_set](./epu.md#matcap_set), [Render Modes Guide](../guides/render-modes.md)
 
 ---
 

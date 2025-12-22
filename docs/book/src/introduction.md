@@ -69,7 +69,7 @@ Assets loaded via `rom_*` functions go directly to VRAM/audio memory, keeping RA
 | [Procedural](./api/procedural.md) | Generated primitives |
 | [2D Drawing](./api/drawing-2d.md) | Sprites, text, rectangles |
 | [Billboards](./api/billboards.md) | Camera-facing quads |
-| [Sky](./api/sky.md) | Procedural sky rendering |
+| [Environment (EPU)](./api/epu.md) | Procedural environments |
 | [Audio](./api/audio.md) | Sound effects and music |
 | [Save Data](./api/save-data.md) | Persistent storage |
 | [ROM Loading](./api/rom-loading.md) | Data pack access |
