@@ -90,11 +90,11 @@ pub fn execute(args: RunArgs) -> Result<()> {
     }
 
     // Find nethercore executable
-    let nethercore_exe = find_nethercore_exe()?;
+    let (nethercore_exe, workspace_dir) = find_nethercore_exe()?;
 
     // Handle P2P test mode (launches two instances)
     if args.p2p_test {
-        return launch_p2p_test(&nethercore_exe, &rom_path, &args);
+        return launch_p2p_test(&nethercore_exe, &workspace_dir, &rom_path, &args);
     }
 
     // Build common arguments
@@ -109,12 +109,14 @@ pub fn execute(args: RunArgs) -> Result<()> {
 
     // Handle special "cargo:run" marker
     let status = if nethercore_exe.to_string_lossy() == "cargo:run" {
-        Command::new("cargo")
-            .args(["run", "-p", "nethercore-zx", "--"])
+        let mut cmd = Command::new("cargo");
+        cmd.args(["run", "-p", "nethercore-zx", "--"])
             .arg(&rom_path)
-            .args(&extra_args)
-            .status()
-            .context("Failed to run 'cargo run'")?
+            .args(&extra_args);
+        if let Some(ref ws) = workspace_dir {
+            cmd.current_dir(ws);
+        }
+        cmd.status().context("Failed to run 'cargo run'")?
     } else {
         Command::new(&nethercore_exe)
             .arg(&rom_path)
@@ -152,7 +154,12 @@ fn build_player_args(args: &RunArgs) -> Vec<String> {
 }
 
 /// Launch a local P2P test with two connected instances
-fn launch_p2p_test(nethercore_exe: &PathBuf, rom_path: &PathBuf, args: &RunArgs) -> Result<()> {
+fn launch_p2p_test(
+    nethercore_exe: &PathBuf,
+    workspace_dir: &Option<PathBuf>,
+    rom_path: &PathBuf,
+    args: &RunArgs,
+) -> Result<()> {
     println!("  Launching P2P test...");
     println!("    Player 1: bind=7777, peer=7778, local_player=0");
     println!("    Player 2: bind=7778, peer=7777, local_player=1");
@@ -168,6 +175,9 @@ fn launch_p2p_test(nethercore_exe: &PathBuf, rom_path: &PathBuf, args: &RunArgs)
         let mut cmd = Command::new("cargo");
         cmd.args(["run", "-p", "nethercore-zx", "--"]);
         cmd.arg(rom_path);
+        if let Some(ref ws) = workspace_dir {
+            cmd.current_dir(ws);
+        }
         cmd
     } else {
         let mut cmd = Command::new(nethercore_exe);
@@ -189,6 +199,9 @@ fn launch_p2p_test(nethercore_exe: &PathBuf, rom_path: &PathBuf, args: &RunArgs)
         let mut cmd = Command::new("cargo");
         cmd.args(["run", "-p", "nethercore-zx", "--"]);
         cmd.arg(rom_path);
+        if let Some(ref ws) = workspace_dir {
+            cmd.current_dir(ws);
+        }
         cmd
     } else {
         let mut cmd = Command::new(nethercore_exe);
@@ -217,24 +230,44 @@ fn launch_p2p_test(nethercore_exe: &PathBuf, rom_path: &PathBuf, args: &RunArgs)
 }
 
 /// Find the nethercore-zx player executable
-fn find_nethercore_exe() -> Result<PathBuf> {
-    // Try PATH first - look for the standalone player
+/// Returns (exe_path, optional_workspace_dir for cargo:run fallback)
+fn find_nethercore_exe() -> Result<(PathBuf, Option<PathBuf>)> {
+    let exe_name = if cfg!(windows) {
+        "nethercore-zx.exe"
+    } else {
+        "nethercore-zx"
+    };
+
+    // 1. Try PATH first (installed globally)
     if let Ok(path) = which::which("nethercore-zx") {
-        return Ok(path);
+        return Ok((path, None));
     }
 
-    // Try cargo run in workspace
-    // This is useful during development
-    let cargo_exe = PathBuf::from("cargo");
+    // 2. Try sibling binary (distributed bundle)
+    // Look for nethercore-zx next to the nether CLI binary
+    if let Ok(current_exe) = std::env::current_exe() {
+        if let Some(exe_dir) = current_exe.parent() {
+            let sibling = exe_dir.join(exe_name);
+            if sibling.exists() {
+                return Ok((sibling, None));
+            }
+        }
+    }
 
-    // Check if we can run cargo
+    // 3. Fall back to cargo run (developers only)
+    let cargo_exe = PathBuf::from("cargo");
     if Command::new(&cargo_exe).arg("--version").output().is_ok() {
-        // Return a special marker that means "use cargo run"
-        return Ok(PathBuf::from("cargo:run"));
+        // CARGO_MANIFEST_DIR points to tools/nether-cli at compile time
+        let cli_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let workspace = cli_dir.parent().and_then(|p| p.parent()).map(|p| p.to_path_buf());
+        return Ok((PathBuf::from("cargo:run"), workspace));
     }
 
     anyhow::bail!(
-        "Could not find nethercore-zx executable. \
-        Make sure it's in your PATH or run from the workspace directory."
+        "Could not find nethercore-zx player.\n\
+        Options:\n\
+        - Install it to PATH: cargo install --path nethercore-zx\n\
+        - Place nethercore-zx binary next to nether CLI\n\
+        - Run from nethercore workspace (developer mode)"
     )
 }
