@@ -19,7 +19,7 @@ fn load_skeleton(inverse_bind_ptr: *const f32, bone_count: u32) -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t load_skeleton(const float* inverse_bind_ptr, uint32_t bone_count);
+NCZX_IMPORT uint32_t load_skeleton(const float* inverse_bind_ptr, uint32_t bone_count);
 ```
 {{#endtab}}
 
@@ -48,7 +48,7 @@ pub extern fn load_skeleton(inverse_bind_ptr: [*]const f32, bone_count: u32) u32
 {{#tab name="Rust"}}
 ```rust
 static mut SKELETON: u32 = 0;
-static INVERSE_BIND: &[u8] = include_bytes!("skeleton.ewzskel");
+static INVERSE_BIND: &[u8] = include_bytes!("skeleton.nczxskel");
 
 fn init() {
     unsafe {
@@ -70,9 +70,9 @@ fn init() {
 ```c
 static uint32_t SKELETON = 0;
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     // Load skeleton binary data
-    const uint8_t* inverse_bind = /* load skeleton.ewzskel */;
+    const uint8_t* inverse_bind = /* load skeleton.nczxskel */;
 
     // Parse bone count from header
     uint32_t bone_count = inverse_bind[0] | (inverse_bind[1] << 8) |
@@ -91,7 +91,7 @@ var SKELETON: u32 = 0;
 
 export fn init() void {
     // Load skeleton binary data
-    const inverse_bind = @embedFile("skeleton.ewzskel");
+    const inverse_bind = @embedFile("skeleton.nczxskel");
 
     // Parse bone count from header
     const bone_count = std.mem.readIntLittle(u32, inverse_bind[0..4]);
@@ -122,7 +122,7 @@ fn skeleton_bind(skeleton: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void skeleton_bind(uint32_t skeleton);
+NCZX_IMPORT void skeleton_bind(uint32_t skeleton);
 ```
 {{#endtab}}
 
@@ -170,7 +170,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Enable inverse bind mode
     skeleton_bind(SKELETON);
 
@@ -221,7 +221,7 @@ fn set_bones(matrices_ptr: *const f32, count: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void set_bones(const float* matrices_ptr, uint32_t count);
+NCZX_IMPORT void set_bones(const float* matrices_ptr, uint32_t count);
 ```
 {{#endtab}}
 
@@ -285,7 +285,7 @@ fn render() {
 ```c
 static float BONE_MATRICES[64 * 12]; // 64 bones max
 
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     // Update bone transforms from animation
     for (int i = 0; i < BONE_COUNT; i++) {
         int offset = i * 12;
@@ -299,7 +299,7 @@ EWZX_EXPORT void update(void) {
     }
 }
 
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     set_bones(BONE_MATRICES, BONE_COUNT);
     draw_mesh(SKINNED_MESH);
 }
@@ -350,7 +350,7 @@ fn set_bones_4x4(matrices_ptr: *const f32, count: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void set_bones_4x4(const float* matrices_ptr, uint32_t count);
+NCZX_IMPORT void set_bones_4x4(const float* matrices_ptr, uint32_t count);
 ```
 {{#endtab}}
 
@@ -392,7 +392,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Using 4x4 matrix arrays (16 floats each)
     float bone_mats[64 * 16];
 
@@ -595,7 +595,7 @@ static uint32_t CHARACTER_MESH = 0;
 static float BONE_MATRICES[32 * 12];
 #define BONE_COUNT 32
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     // Load skeleton
     SKELETON = rom_skeleton("player_rig", 10);
 
@@ -611,12 +611,12 @@ EWZX_EXPORT void init(void) {
     }
 }
 
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     // Animate bones (your animation logic here)
     animate_walk_cycle(BONE_MATRICES, elapsed_time());
 }
 
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Bind skeleton for inverse bind mode
     skeleton_bind(SKELETON);
 

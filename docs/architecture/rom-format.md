@@ -6,7 +6,10 @@ Nethercore uses console-specific binary ROM formats for game distribution. Each 
 
 **Current ROM Formats:**
 - `.nczx` - Nethercore ZX (3D home console)
-- `.ewc` - Nethercore Chroma (2D handheld console) - Future
+- `.ncc` - Nethercore Chroma (2D handheld console) - Future
+- `.ncz` - Nethercore z (3D handheld console) - Future
+- `.nccz` - Nethercore ChroMAX (2D Home console) - Future
+
 
 **Why Console-Specific?**
 - Type-safe - impossible to load wrong ROM in wrong console
@@ -40,7 +43,7 @@ game.nczx (binary file, max 12MB)
 
 ### Magic Bytes
 
-All Nethercore ZX ROM files start with the magic bytes: `EWZX` (hex: `45 57 5A 58`)
+All Nethercore ZX ROM files start with the magic bytes: `NCZX` (hex: `4E 43 5A 58`)
 
 This allows tools to quickly identify the ROM type and reject invalid files.
 
@@ -454,12 +457,12 @@ Large game with assets:
 
 ## Error Messages
 
-**"Invalid EWZX magic bytes"**
+**"Invalid NCZX magic bytes"**
 - File is not an Nethercore ZX ROM
 - File may be corrupted
 - Wrong ROM type
 
-**"Unsupported EWZX version: X"**
+**"Unsupported NCZX version: X"**
 - ROM was created with a newer tool version
 - Update your launcher to support this ROM
 
@@ -469,7 +472,7 @@ Large game with assets:
 **"Invalid WASM code (missing \\0asm magic bytes)"**
 - WASM file is corrupted or invalid
 
-**"Failed to decode EWZX ROM"**
+**"Failed to decode NCZX ROM"**
 - ROM file is corrupted
 - ROM was created with incompatible bitcode version
 

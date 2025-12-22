@@ -122,8 +122,8 @@ pub extern "C" fn render() {
         );
         camera_fov(60.0);
 
-        env_select_pair(5, 5); // Room mode
-        env_room_set(
+        env_room(
+            0, // base layer
             COLOR_CEILING,
             COLOR_FLOOR,
             COLOR_WALLS,
@@ -137,7 +137,7 @@ pub extern "C" fn render() {
             VIEWER_Y,
             VIEWER_Z,
         );
-        draw_sky();
+        draw_env();
 
         // Draw sphere at viewer position (scaled to room)
         push_identity();

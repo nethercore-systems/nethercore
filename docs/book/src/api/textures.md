@@ -19,7 +19,7 @@ fn load_texture(width: u32, height: u32, pixels: *const u8) -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t load_texture(uint32_t width, uint32_t height, const uint8_t* pixels);
+NCZX_IMPORT uint32_t load_texture(uint32_t width, uint32_t height, const uint8_t* pixels);
 ```
 {{#endtab}}
 
@@ -91,7 +91,7 @@ static const uint8_t CHECKER[8 * 8 * 4] = {
     // ... (repeat pattern for remaining rows)
 };
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     player_tex = load_texture(8, 8, CHECKER);
 }
 ```
@@ -150,7 +150,7 @@ fn texture_bind(handle: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void texture_bind(uint32_t handle);
+NCZX_IMPORT void texture_bind(uint32_t handle);
 ```
 {{#endtab}}
 
@@ -185,7 +185,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     texture_bind(player_tex);
     draw_mesh(player_model);
 
@@ -226,7 +226,7 @@ fn texture_bind_slot(handle: u32, slot: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void texture_bind_slot(uint32_t handle, uint32_t slot);
+NCZX_IMPORT void texture_bind_slot(uint32_t handle, uint32_t slot);
 ```
 {{#endtab}}
 
@@ -273,7 +273,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Bind albedo to slot 0
     texture_bind_slot(albedo_tex, 0);
 
@@ -320,7 +320,7 @@ fn matcap_blend_mode(slot: u32, mode: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void matcap_blend_mode(uint32_t slot, uint32_t mode);
+NCZX_IMPORT void matcap_blend_mode(uint32_t slot, uint32_t mode);
 ```
 {{#endtab}}
 
@@ -373,11 +373,11 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     render_mode(1); // Matcap mode
 }
 
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Dark matcap for shadows (multiply)
     matcap_set(1, shadow_matcap);
     matcap_blend_mode(1, 0);
@@ -560,12 +560,12 @@ static const uint8_t CHECKER_PIXELS[16 * 16 * 4] = { /* ... */ };
 // Pre-generated gradient (8x8)
 static const uint8_t GRADIENT_PIXELS[8 * 8 * 4] = { /* ... */ };
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     checker_tex = load_texture(16, 16, CHECKER_PIXELS);
     gradient_tex = load_texture(8, 8, GRADIENT_PIXELS);
 }
 
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Draw floor with checker texture
     texture_bind(checker_tex);
     texture_filter(0); // Nearest for crisp pixels

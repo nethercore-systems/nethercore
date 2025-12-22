@@ -74,15 +74,15 @@ extern "C" {
     pub fn blend_mode(mode: u32);
 
     // ========================================================================
-    // Sky
+    // Environment Rendering
     // ========================================================================
-    pub fn sky_set_colors(horizon_color: u32, zenith_color: u32);
-    pub fn draw_sky();
+    pub fn draw_env();
 
     // ========================================================================
     // Environment (Multi-Environment v3)
     // ========================================================================
-    pub fn env_gradient_set(
+    pub fn env_gradient(
+        layer: u32,
         zenith: u32,
         sky_horizon: u32,
         ground_horizon: u32,
@@ -90,7 +90,8 @@ extern "C" {
         rotation: f32,
         shift: f32,
     );
-    pub fn env_scatter_set(
+    pub fn env_scatter(
+        layer: u32,
         variant: u32,
         density: u32,
         size: u32,
@@ -102,7 +103,8 @@ extern "C" {
         parallax_size: u32,
         phase: u32,
     );
-    pub fn env_lines_set(
+    pub fn env_lines(
+        layer: u32,
         variant: u32,
         line_type: u32,
         thickness: u32,
@@ -113,7 +115,8 @@ extern "C" {
         accent_every: u32,
         phase: u32,
     );
-    pub fn env_silhouette_set(
+    pub fn env_silhouette(
+        layer: u32,
         jaggedness: u32,
         layer_count: u32,
         color_near: u32,
@@ -123,7 +126,8 @@ extern "C" {
         parallax_rate: u32,
         seed: u32,
     );
-    pub fn env_rectangles_set(
+    pub fn env_rectangles(
+        layer: u32,
         variant: u32,
         density: u32,
         lit_ratio: u32,
@@ -135,7 +139,8 @@ extern "C" {
         parallax_rate: u32,
         phase: u32,
     );
-    pub fn env_room_set(
+    pub fn env_room(
+        layer: u32,
         color_ceiling: u32,
         color_floor: u32,
         color_walls: u32,
@@ -151,7 +156,8 @@ extern "C" {
         viewer_y: i32,
         viewer_z: i32,
     );
-    pub fn env_curtains_set(
+    pub fn env_curtains(
+        layer: u32,
         layer_count: u32,
         density: u32,
         height_min: u32,
@@ -165,7 +171,8 @@ extern "C" {
         parallax_rate: u32,
         phase: u32,
     );
-    pub fn env_rings_set(
+    pub fn env_rings(
+        layer: u32,
         ring_count: u32,
         thickness: u32,
         color_a: u32,
@@ -178,8 +185,7 @@ extern "C" {
         axis_z: f32,
         phase: u32,
     );
-    pub fn env_select_pair(base_mode: u32, overlay_mode: u32);
-    pub fn env_blend_mode(mode: u32);
+    pub fn env_blend(mode: u32);
 
     // ========================================================================
     // Lighting (Mode 2 & 3)

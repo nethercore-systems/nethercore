@@ -20,7 +20,7 @@ fn keyframes_load(data_ptr: *const u8, byte_size: u32) -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t keyframes_load(const uint8_t* data_ptr, uint32_t byte_size);
+NCZX_IMPORT uint32_t keyframes_load(const uint8_t* data_ptr, uint32_t byte_size);
 ```
 {{#endtab}}
 
@@ -49,7 +49,7 @@ pub extern fn keyframes_load(data_ptr: [*]const u8, byte_size: u32) u32;
 
 {{#tab name="Rust"}}
 ```rust
-static WALK_DATA: &[u8] = include_bytes!("walk.ewzanim");
+static WALK_DATA: &[u8] = include_bytes!("walk.nczxanim");
 static mut WALK_ANIM: u32 = 0;
 
 fn init() {
@@ -65,7 +65,7 @@ fn init() {
 static const uint8_t WALK_DATA[] = { /* embedded data */ };
 static uint32_t WALK_ANIM = 0;
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     WALK_ANIM = keyframes_load(WALK_DATA, sizeof(WALK_DATA));
 }
 ```
@@ -73,7 +73,7 @@ EWZX_EXPORT void init(void) {
 
 {{#tab name="Zig"}}
 ```zig
-const WALK_DATA = @embedFile("walk.ewzanim");
+const WALK_DATA = @embedFile("walk.nczxanim");
 var WALK_ANIM: u32 = 0;
 
 export fn init() void {
@@ -102,7 +102,7 @@ fn rom_keyframes(id_ptr: *const u8, id_len: u32) -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t rom_keyframes(const uint8_t* id_ptr, uint32_t id_len);
+NCZX_IMPORT uint32_t rom_keyframes(const uint8_t* id_ptr, uint32_t id_len);
 ```
 {{#endtab}}
 
@@ -151,7 +151,7 @@ static uint32_t WALK_ANIM = 0;
 static uint32_t IDLE_ANIM = 0;
 static uint32_t ATTACK_ANIM = 0;
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     WALK_ANIM = rom_keyframes((const uint8_t*)"walk", 4);
     IDLE_ANIM = rom_keyframes((const uint8_t*)"idle", 4);
     ATTACK_ANIM = rom_keyframes((const uint8_t*)"attack", 6);
@@ -195,7 +195,7 @@ fn keyframes_bone_count(handle: u32) -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t keyframes_bone_count(uint32_t handle);
+NCZX_IMPORT uint32_t keyframes_bone_count(uint32_t handle);
 ```
 {{#endtab}}
 
@@ -227,7 +227,7 @@ fn init() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     WALK_ANIM = rom_keyframes((const uint8_t*)"walk", 4);
     uint32_t bones = keyframes_bone_count(WALK_ANIM);
     log_fmt((const uint8_t*)"Walk animation has {} bones", bones);
@@ -265,7 +265,7 @@ fn keyframes_frame_count(handle: u32) -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t keyframes_frame_count(uint32_t handle);
+NCZX_IMPORT uint32_t keyframes_frame_count(uint32_t handle);
 ```
 {{#endtab}}
 
@@ -297,7 +297,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     uint32_t frame_count = keyframes_frame_count(WALK_ANIM);
     uint32_t current_frame = ((uint32_t)ANIM_TIME) % frame_count;
     keyframe_bind(WALK_ANIM, current_frame);
@@ -337,7 +337,7 @@ fn keyframe_bind(handle: u32, index: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void keyframe_bind(uint32_t handle, uint32_t index);
+NCZX_IMPORT void keyframe_bind(uint32_t handle, uint32_t index);
 ```
 {{#endtab}}
 
@@ -387,11 +387,11 @@ fn render() {
 ```c
 static float ANIM_FRAME = 0.0f;
 
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     ANIM_FRAME += delta_time() * 30.0f; // 30 FPS animation
 }
 
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     uint32_t frame_count = keyframes_frame_count(WALK_ANIM);
     uint32_t frame = ((uint32_t)ANIM_FRAME) % frame_count;
 
@@ -441,7 +441,7 @@ fn keyframe_read(handle: u32, index: u32, out_ptr: *mut u8)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void keyframe_read(uint32_t handle, uint32_t index, uint8_t* out_ptr);
+NCZX_IMPORT void keyframe_read(uint32_t handle, uint32_t index, uint8_t* out_ptr);
 ```
 {{#endtab}}
 
@@ -494,7 +494,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     uint32_t frame_count = keyframes_frame_count(WALK_ANIM);
     uint32_t frame_a = ((uint32_t)ANIM_TIME) % frame_count;
     uint32_t frame_b = (frame_a + 1) % frame_count;
@@ -629,14 +629,14 @@ static uint32_t IDLE_ANIM = 0;
 static float ANIM_TIME = 0.0f;
 static bool IS_WALKING = false;
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     SKELETON = rom_skeleton((const uint8_t*)"player_rig", 10);
     CHARACTER = rom_mesh((const uint8_t*)"player", 6);
     WALK_ANIM = rom_keyframes((const uint8_t*)"walk", 4);
     IDLE_ANIM = rom_keyframes((const uint8_t*)"idle", 4);
 }
 
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     // Check movement input
     float stick_x = left_stick_x(0);
     float stick_y = left_stick_y(0);
@@ -647,7 +647,7 @@ EWZX_EXPORT void update(void) {
     ANIM_TIME += delta_time() * anim_speed;
 }
 
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     skeleton_bind(SKELETON);
 
     // Choose animation

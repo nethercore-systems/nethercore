@@ -19,8 +19,8 @@ This guide covers how to package and distribute your Nethercore games as ROM fil
 
 Nethercore uses console-specific ROM formats for game distribution:
 
-- **Nethercore ZX**: `.ewz` files (PS1/N64 aesthetic)
-- **Nethercore Chroma**: `.ewc` files (future - 2D retro aesthetic)
+- **Nethercore ZX**: `.nczx` files (PS1/N64 aesthetic)
+- **Nethercore Chroma**: `.ncc` files (future - 2D retro aesthetic)
 
 ROM files package your game's WASM code, metadata, and assets into a single binary file that players can easily install and play.
 
@@ -63,7 +63,7 @@ cargo xtask cart create-z my-game.wasm \
   --version "1.0.0" \
   --description "A fun platforming adventure!" \
   --tag platformer \
-  --output my-game.ewz
+  --output my-game.nczx
 ```
 
 **Benefits:**
@@ -104,7 +104,7 @@ cargo xtask cart create-z \
   --tag platformer \
   --tag action \
   --tag singleplayer \
-  --output my-game.ewz
+  --output my-game.nczx
 ```
 
 ### Required Arguments
@@ -143,7 +143,7 @@ cargo xtask cart create-z my_game.wasm \
   --version "1.0.0" \
   --description "..." \
   --thumbnail assets/thumbnail.png \
-  --output my-game.ewz
+  --output my-game.nczx
 ```
 
 **Requirements:**
@@ -170,7 +170,7 @@ cargo xtask cart create-z my_game.wasm \
   --screenshot assets/screenshot1.png \
   --screenshot assets/screenshot2.png \
   --screenshot assets/screenshot3.png \
-  --output my-game.ewz
+  --output my-game.nczx
 ```
 
 **Requirements:**
@@ -267,7 +267,7 @@ cargo xtask cart create-z \
   --render-mode 2 \
   --default-resolution "640x480" \
   --target-fps 60 \
-  --output super-platformer.ewz
+  --output super-platformer.nczx
 ```
 
 ## Testing Your ROM
@@ -277,7 +277,7 @@ cargo xtask cart create-z \
 Before distributing, verify the ROM metadata:
 
 ```bash
-cargo xtask cart info my-game.ewz
+cargo xtask cart info my-game.nczx
 ```
 
 This displays all metadata, settings, and asset information.
@@ -298,7 +298,7 @@ use nethercore_core::library::{install_z_rom, DataDirProvider};
 use std::path::Path;
 
 // Install ROM (programmatically)
-let rom_path = Path::new("my-game.ewz");
+let rom_path = Path::new("my-game.nczx");
 let game = install_z_rom(rom_path, &data_dir_provider)?;
 ```
 
@@ -332,7 +332,7 @@ Launch the game and verify:
 ### Sharing Options
 
 **1. Direct Download**
-- Upload your `.ewz` file to a file host
+- Upload your `.nczx` file to a file host
 - Share the download link
 - Players install manually via drag-and-drop or library UI
 
@@ -349,7 +349,7 @@ Launch the game and verify:
 
 **4. GitHub Releases**
 - Tag a release in your game's repository
-- Attach the `.ewz` file as a release asset
+- Attach the `.nczx` file as a release asset
 - Players can download from releases page
 
 ### Distribution Checklist
@@ -374,9 +374,9 @@ Provide players with clear installation instructions:
 ## How to Play
 
 1. Download and install the [Nethercore Launcher](https://nethercore.systems/download)
-2. Download the game ROM file: `my-game.ewz`
+2. Download the game ROM file: `my-game.nczx`
 3. Open the Nethercore Launcher
-4. Drag and drop `my-game.ewz` onto the launcher window
+4. Drag and drop `my-game.nczx` onto the launcher window
 5. Click the game in your library to play!
 ```
 
@@ -448,7 +448,7 @@ When you release a new version:
 
 2. **Create new ROM:**
    ```bash
-   cargo xtask cart create-z ... --version "1.1.0" --output my-game-v1.1.0.ewz
+   cargo xtask cart create-z ... --version "1.1.0" --output my-game-v1.1.0.nczx
    ```
 
 3. **Distribute:**
@@ -535,14 +535,14 @@ Use descriptive filenames:
 
 ```bash
 # Good
-my-game-v1.0.0.ewz
-super-platformer.ewz
-puzzle-quest-v2.1.0.ewz
+my-game-v1.0.0.nczx
+super-platformer.nczx
+puzzle-quest-v2.1.0.nczx
 
 # Avoid
-game.ewz
-test.ewz
-final-final-v2.ewz
+game.nczx
+test.nczx
+final-final-v2.nczx
 ```
 
 ### Metadata Quality
@@ -600,10 +600,10 @@ cargo xtask cart create-z \
   --render-mode 2 \
   --default-resolution "640x480" \
   --target-fps 60 \
-  --output super-platformer-v1.0.0.ewz
+  --output super-platformer-v1.0.0.nczx
 
 # 4. Verify ROM
-cargo xtask cart info super-platformer-v1.0.0.ewz
+cargo xtask cart info super-platformer-v1.0.0.nczx
 
 # 5. Test installation
 # - Install via launcher UI

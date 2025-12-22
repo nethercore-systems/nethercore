@@ -19,7 +19,7 @@ fn light_set(index: u32, x: f32, y: f32, z: f32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void light_set(uint32_t index, float x, float y, float z);
+NCZX_IMPORT void light_set(uint32_t index, float x, float y, float z);
 ```
 {{#endtab}}
 
@@ -57,7 +57,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Sun from upper right
     light_set(0, 0.5f, -0.7f, 0.5f);
     light_enable(0);
@@ -102,7 +102,7 @@ fn light_color(index: u32, color: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void light_color(uint32_t index, uint32_t color);
+NCZX_IMPORT void light_color(uint32_t index, uint32_t color);
 ```
 {{#endtab}}
 
@@ -141,7 +141,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Warm sunlight
     light_color(0, 0xFFF2E6FF);
 
@@ -188,7 +188,7 @@ fn light_intensity(index: u32, intensity: f32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void light_intensity(uint32_t index, float intensity);
+NCZX_IMPORT void light_intensity(uint32_t index, float intensity);
 ```
 {{#endtab}}
 
@@ -230,7 +230,7 @@ fn render() {
 ```c
 #include <math.h>
 
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Bright main light
     light_intensity(0, 1.2f);
 
@@ -281,7 +281,7 @@ fn light_enable(index: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void light_enable(uint32_t index);
+NCZX_IMPORT void light_enable(uint32_t index);
 ```
 {{#endtab}}
 
@@ -308,7 +308,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Enable lights 0 and 1
     light_enable(0);
     light_enable(1);
@@ -345,7 +345,7 @@ fn light_disable(index: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void light_disable(uint32_t index);
+NCZX_IMPORT void light_disable(uint32_t index);
 ```
 {{#endtab}}
 
@@ -373,7 +373,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Disable light 2 when entering dark area
     if (in_dark_zone) {
         light_disable(2);
@@ -414,7 +414,7 @@ fn light_set_point(index: u32, x: f32, y: f32, z: f32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void light_set_point(uint32_t index, float x, float y, float z);
+NCZX_IMPORT void light_set_point(uint32_t index, float x, float y, float z);
 ```
 {{#endtab}}
 
@@ -454,7 +454,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Torch at fixed position
     light_set_point(0, 5.0f, 2.0f, 3.0f);
     light_color(0, 0xFFAA66FF);
@@ -503,7 +503,7 @@ fn light_range(index: u32, range: f32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void light_range(uint32_t index, float range);
+NCZX_IMPORT void light_range(uint32_t index, float range);
 ```
 {{#endtab}}
 
@@ -543,7 +543,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Small candle
     light_set_point(0, candle_x, candle_y, candle_z);
     light_range(0, 3.0f);
@@ -677,7 +677,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Main directional light
     light_set(0, 0.3f, -0.8f, 0.5f);
     light_color(0, 0xFFF8E6FF);  // Warm sunlight
@@ -731,7 +731,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Overhead lamp
     light_set_point(0, room_center_x, ceiling_y - 0.5f, room_center_z);
     light_color(0, 0xFFE6B3FF);
@@ -803,13 +803,13 @@ fn render() {
 ```c
 static float torch_flicker = 0.0f;
 
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     // Randomized flicker
     float r = (float)(random_u32() % 1000) / 1000.0f;
     torch_flicker = 0.7f + r * 0.3f;
 }
 
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     light_set_point(0, torch_x, torch_y, torch_z);
     light_color(0, 0xFF8833FF);
     light_range(0, 6.0f + torch_flicker);

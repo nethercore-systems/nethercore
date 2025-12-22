@@ -376,7 +376,7 @@ fn env_rectangles(
 /// Viewer position affects which walls/ceiling/floor are visible.
 ///
 /// **Position:** snorm8x3 where (0, 0, 0) = center of room:
-/// ```
+/// ```ignore
 /// let norm_x = (player.x / room_half_size).clamp(-1.0, 1.0);
 /// env_room(layer, ..., (norm_x * 127.0) as i32, ...);
 /// ```

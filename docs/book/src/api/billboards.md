@@ -31,7 +31,7 @@ fn draw_billboard(w: f32, h: f32, mode: u32, color: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void draw_billboard(float w, float h, uint32_t mode, uint32_t color);
+NCZX_IMPORT void draw_billboard(float w, float h, uint32_t mode, uint32_t color);
 ```
 {{#endtab}}
 
@@ -82,7 +82,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render() {
+NCZX_EXPORT void render() {
     texture_bind(tree_sprite);
 
     // Trees with cylindrical Y billboards
@@ -153,7 +153,7 @@ fn draw_billboard_region(
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void draw_billboard_region(
+NCZX_IMPORT void draw_billboard_region(
     float w, float h,
     float src_x, float src_y, float src_w, float src_h,
     uint32_t mode,
@@ -210,7 +210,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render() {
+NCZX_EXPORT void render() {
     texture_bind(enemy_sheet);
 
     // Animated enemy sprite
@@ -282,7 +282,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render() {
+NCZX_EXPORT void render() {
     texture_bind(vegetation_atlas);
     blend_mode(1); // Alpha blend for transparency
     cull_mode(0);  // Double-sided
@@ -356,7 +356,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render() {
+NCZX_EXPORT void render() {
     texture_bind(particle_texture);
     blend_mode(2); // Additive for glow
     depth_test(1);
@@ -427,7 +427,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render() {
+NCZX_EXPORT void render() {
     texture_bind(npc_sheet);
     blend_mode(1);
 
@@ -515,7 +515,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render() {
+NCZX_EXPORT void render() {
     // Draw enemies first
     for (int i = 0; i < enemy_count; i++) {
         draw_enemy(&enemies[i]);
@@ -676,12 +676,12 @@ typedef struct {
 
 static Particle particles[100] = {0};
 
-EWZX_EXPORT void init() {
+NCZX_EXPORT void init() {
     tree_tex = rom_texture("tree", 4);
     particle_tex = rom_texture("spark", 5);
 }
 
-EWZX_EXPORT void update() {
+NCZX_EXPORT void update() {
     float dt = delta_time();
     for (int i = 0; i < 100; i++) {
         if (particles[i].life > 0.0) {
@@ -694,7 +694,7 @@ EWZX_EXPORT void update() {
     }
 }
 
-EWZX_EXPORT void render() {
+NCZX_EXPORT void render() {
     // Trees - cylindrical billboards
     texture_bind(tree_tex);
     blend_mode(1);

@@ -1,7 +1,7 @@
 //! ROM cart management commands
 //!
 //! This module provides CLI commands for creating, inspecting, and managing
-//! Nethercore ROM files (.nczx, .ewc, etc.).
+//! Nethercore ROM files (.nczx, .ncc, etc.).
 
 pub mod create_zx;
 pub mod info;

@@ -38,7 +38,7 @@ fn inspect_z_rom(rom_path: &PathBuf) -> Result<()> {
 
     // Deserialize and validate
     let rom = ZRom::from_bytes(&rom_bytes)
-        .with_context(|| format!("Failed to load EWZ ROM: {}", rom_path.display()))?;
+        .with_context(|| format!("Failed to load NCZ ROM: {}", rom_path.display()))?;
 
     // Display metadata
     println!("═══════════════════════════════════════════════════════════");

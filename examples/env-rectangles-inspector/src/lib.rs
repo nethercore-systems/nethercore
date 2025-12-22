@@ -103,8 +103,8 @@ pub extern "C" fn render() {
         );
         camera_fov(60.0);
 
-        env_select_pair(4, 4); // Rectangles mode
-        env_rectangles_set(
+        env_rectangles(
+            0, // base layer
             VARIANT as u32,
             DENSITY as u32,
             LIT_RATIO as u32,
@@ -116,7 +116,7 @@ pub extern "C" fn render() {
             PARALLAX_RATE as u32,
             PHASE,
         );
-        draw_sky();
+        draw_env();
 
         push_identity();
         set_color(0x222233FF);

@@ -171,8 +171,8 @@ pub extern "C" fn render() {
         );
         camera_fov(60.0);
 
-        env_select_pair(1, 1); // Scatter mode
-        env_scatter_set(
+        env_scatter(
+            0, // base layer
             VARIANT as u32,
             DENSITY as u32,
             SIZE as u32,
@@ -184,7 +184,7 @@ pub extern "C" fn render() {
             PARALLAX_SIZE as u32,
             PHASE,
         );
-        draw_sky();
+        draw_env();
 
         push_identity();
         set_color(0x333344FF);

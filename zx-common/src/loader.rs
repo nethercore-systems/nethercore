@@ -53,7 +53,7 @@ impl RomLoader for ZRomLoader {
             .with_context(|| format!("Failed to read ROM file: {}", rom_path.display()))?;
 
         let rom = ZRom::from_bytes(&bytes)
-            .with_context(|| format!("Failed to load EWZX ROM: {}", rom_path.display()))?;
+            .with_context(|| format!("Failed to load NCZX ROM: {}", rom_path.display()))?;
 
         // 2. Get game directory
         let games_dir = data_dir_provider
@@ -178,7 +178,7 @@ mod tests {
         let loader = ZRomLoader;
         assert!(!loader.can_load(b"invalid"));
         assert!(!loader.can_load(b""));
-        assert!(!loader.can_load(b"EW")); // Too short
+        assert!(!loader.can_load(b"NC")); // Too short
     }
 
     #[test]

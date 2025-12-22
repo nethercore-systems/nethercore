@@ -181,8 +181,8 @@ pub extern "C" fn render() {
         );
         camera_fov(60.0);
 
-        env_select_pair(7, 7); // Rings mode
-        env_rings_set(
+        env_rings(
+            0, // base layer
             RING_COUNT as u32,
             THICKNESS as u32,
             COLOR_A,
@@ -195,7 +195,7 @@ pub extern "C" fn render() {
             AXIS_Z,
             PHASE,
         );
-        draw_sky();
+        draw_env();
 
         push_identity();
         set_color(0x222233FF);

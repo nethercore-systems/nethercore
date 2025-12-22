@@ -34,14 +34,14 @@ static inline float nczx_absf(float x) {
 }
 
 // String literal helpers (use sizeof() for compile-time length calculation)
-#define EWZX_LOG(str) log((const uint8_t*)(str), sizeof(str) - 1)
+#define NCZX_LOG(str) log((const uint8_t*)(str), sizeof(str) - 1)
 
-#define EWZX_DRAW_TEXT(str, x, y, size, color) \
+#define NCZX_DRAW_TEXT(str, x, y, size, color) \
     draw_text((const uint8_t*)(str), sizeof(str) - 1, (x), (y), (size), (color))
 
 // ROM loading helpers
-#define EWZX_ROM_TEXTURE(id) rom_texture((uint32_t)(id), sizeof(id) - 1)
-#define EWZX_ROM_MESH(id) rom_mesh((uint32_t)(id), sizeof(id) - 1)
-#define EWZX_ROM_SOUND(id) rom_sound((uint32_t)(id), sizeof(id) - 1)
-#define EWZX_ROM_FONT(id) rom_font((uint32_t)(id), sizeof(id) - 1)
-#define EWZX_ROM_SKELETON(id) rom_skeleton((uint32_t)(id), sizeof(id) - 1)
+#define NCZX_ROM_TEXTURE(id) rom_texture((uint32_t)(id), sizeof(id) - 1)
+#define NCZX_ROM_MESH(id) rom_mesh((uint32_t)(id), sizeof(id) - 1)
+#define NCZX_ROM_SOUND(id) rom_sound((uint32_t)(id), sizeof(id) - 1)
+#define NCZX_ROM_FONT(id) rom_font((uint32_t)(id), sizeof(id) - 1)
+#define NCZX_ROM_SKELETON(id) rom_skeleton((uint32_t)(id), sizeof(id) - 1)

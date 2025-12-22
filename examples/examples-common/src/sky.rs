@@ -76,20 +76,22 @@ impl DebugSky {
     /// Apply sky settings and draw (call in render())
     pub fn apply_and_draw(&self) {
         unsafe {
-            sky_set_colors(self.horizon, self.zenith);
-            // Use new lighting API (sky_set_sun was removed in Multi-Environment v3)
+            // Use env_gradient for 2-color sky (zenith -> horizon for sky, horizon -> same for ground)
+            env_gradient(0, self.zenith, self.horizon, self.horizon, self.zenith, 0.0, 0.0);
+            // Use new lighting API
             light_set(0, self.sun_dir_x, self.sun_dir_y, self.sun_dir_z);
             light_color(0, self.sun_color);
             light_intensity(0, 1.0);
-            draw_sky();
+            draw_env();
         }
     }
 
     /// Just apply settings without drawing (for lighting calculations)
     pub fn apply(&self) {
         unsafe {
-            sky_set_colors(self.horizon, self.zenith);
-            // Use new lighting API (sky_set_sun was removed in Multi-Environment v3)
+            // Use env_gradient for 2-color sky (zenith -> horizon for sky, horizon -> same for ground)
+            env_gradient(0, self.zenith, self.horizon, self.horizon, self.zenith, 0.0, 0.0);
+            // Use new lighting API
             light_set(0, self.sun_dir_x, self.sun_dir_y, self.sun_dir_z);
             light_color(0, self.sun_color);
             light_intensity(0, 1.0);

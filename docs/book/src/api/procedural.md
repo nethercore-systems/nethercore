@@ -26,7 +26,7 @@ fn cube(size_x: f32, size_y: f32, size_z: f32) -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t cube(float size_x, float size_y, float size_z);
+NCZX_IMPORT uint32_t cube(float size_x, float size_y, float size_z);
 ```
 {{#endtab}}
 
@@ -70,7 +70,7 @@ static uint32_t unit_cube = 0;
 static uint32_t tall_box = 0;
 static uint32_t flat_tile = 0;
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     unit_cube = cube(0.5f, 0.5f, 0.5f);      // 1×1×1 cube
     tall_box = cube(1.0f, 3.0f, 1.0f);       // 2×6×2 tall box
     flat_tile = cube(2.0f, 0.1f, 2.0f);      // 4×0.2×4 tile
@@ -112,7 +112,7 @@ fn sphere(radius: f32, segments: u32, rings: u32) -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t sphere(float radius, uint32_t segments, uint32_t rings);
+NCZX_IMPORT uint32_t sphere(float radius, uint32_t segments, uint32_t rings);
 ```
 {{#endtab}}
 
@@ -156,7 +156,7 @@ static uint32_t low_poly_sphere = 0;
 static uint32_t smooth_sphere = 0;
 static uint32_t planet = 0;
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     low_poly_sphere = sphere(1.0f, 8, 6);    // 48 triangles
     smooth_sphere = sphere(1.0f, 32, 16);    // 960 triangles
     planet = sphere(100.0f, 64, 32);         // Large, detailed
@@ -198,7 +198,7 @@ fn cylinder(radius_bottom: f32, radius_top: f32, height: f32, segments: u32) -> 
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t cylinder(float radius_bottom, float radius_top, float height, uint32_t segments);
+NCZX_IMPORT uint32_t cylinder(float radius_bottom, float radius_top, float height, uint32_t segments);
 ```
 {{#endtab}}
 
@@ -245,7 +245,7 @@ static uint32_t cone = 0;
 static uint32_t tapered = 0;
 static uint32_t barrel = 0;
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     pillar = cylinder(0.5f, 0.5f, 3.0f, 12);      // Uniform cylinder
     cone = cylinder(1.0f, 0.0f, 2.0f, 16);        // Cone
     tapered = cylinder(1.0f, 0.5f, 2.0f, 16);     // Tapered cylinder
@@ -290,7 +290,7 @@ fn plane(size_x: f32, size_z: f32, subdivisions_x: u32, subdivisions_z: u32) -> 
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t plane(float size_x, float size_z, uint32_t subdivisions_x, uint32_t subdivisions_z);
+NCZX_IMPORT uint32_t plane(float size_x, float size_z, uint32_t subdivisions_x, uint32_t subdivisions_z);
 ```
 {{#endtab}}
 
@@ -335,7 +335,7 @@ static uint32_t ground = 0;
 static uint32_t terrain = 0;
 static uint32_t water = 0;
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     ground = plane(50.0f, 50.0f, 1, 1);          // 100×100 simple quad
     terrain = plane(100.0f, 100.0f, 32, 32);     // Subdivided for LOD
     water = plane(20.0f, 20.0f, 16, 16);         // Animated water
@@ -377,7 +377,7 @@ fn torus(major_radius: f32, minor_radius: f32, major_segments: u32, minor_segmen
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t torus(float major_radius, float minor_radius, uint32_t major_segments, uint32_t minor_segments);
+NCZX_IMPORT uint32_t torus(float major_radius, float minor_radius, uint32_t major_segments, uint32_t minor_segments);
 ```
 {{#endtab}}
 
@@ -422,7 +422,7 @@ static uint32_t donut = 0;
 static uint32_t ring = 0;
 static uint32_t tire = 0;
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     donut = torus(2.0f, 0.5f, 32, 16);           // Classic donut
     ring = torus(3.0f, 0.1f, 48, 8);             // Thin ring
     tire = torus(1.5f, 0.6f, 24, 12);            // Car tire
@@ -464,7 +464,7 @@ fn capsule(radius: f32, height: f32, segments: u32, rings: u32) -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t capsule(float radius, float height, uint32_t segments, uint32_t rings);
+NCZX_IMPORT uint32_t capsule(float radius, float height, uint32_t segments, uint32_t rings);
 ```
 {{#endtab}}
 
@@ -509,7 +509,7 @@ static uint32_t pill = 0;
 static uint32_t character_collider = 0;
 static uint32_t bullet = 0;
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     pill = capsule(0.5f, 1.0f, 16, 8);           // Pill shape
     character_collider = capsule(0.4f, 1.2f, 8, 4); // Physics capsule
     bullet = capsule(0.1f, 0.3f, 12, 6);         // Projectile
@@ -551,7 +551,7 @@ fn cube_uv(size_x: f32, size_y: f32, size_z: f32) -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t cube_uv(float size_x, float size_y, float size_z);
+NCZX_IMPORT uint32_t cube_uv(float size_x, float size_y, float size_z);
 ```
 {{#endtab}}
 
@@ -579,7 +579,7 @@ fn sphere_uv(radius: f32, segments: u32, rings: u32) -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t sphere_uv(float radius, uint32_t segments, uint32_t rings);
+NCZX_IMPORT uint32_t sphere_uv(float radius, uint32_t segments, uint32_t rings);
 ```
 {{#endtab}}
 
@@ -607,7 +607,7 @@ fn cylinder_uv(radius_bottom: f32, radius_top: f32, height: f32, segments: u32) 
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t cylinder_uv(float radius_bottom, float radius_top, float height, uint32_t segments);
+NCZX_IMPORT uint32_t cylinder_uv(float radius_bottom, float radius_top, float height, uint32_t segments);
 ```
 {{#endtab}}
 
@@ -635,7 +635,7 @@ fn plane_uv(size_x: f32, size_z: f32, subdivisions_x: u32, subdivisions_z: u32) 
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t plane_uv(float size_x, float size_z, uint32_t subdivisions_x, uint32_t subdivisions_z);
+NCZX_IMPORT uint32_t plane_uv(float size_x, float size_z, uint32_t subdivisions_x, uint32_t subdivisions_z);
 ```
 {{#endtab}}
 
@@ -663,7 +663,7 @@ fn torus_uv(major_radius: f32, minor_radius: f32, major_segments: u32, minor_seg
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t torus_uv(float major_radius, float minor_radius, uint32_t major_segments, uint32_t minor_segments);
+NCZX_IMPORT uint32_t torus_uv(float major_radius, float minor_radius, uint32_t major_segments, uint32_t minor_segments);
 ```
 {{#endtab}}
 
@@ -691,7 +691,7 @@ fn capsule_uv(radius: f32, height: f32, segments: u32, rings: u32) -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t capsule_uv(float radius, float height, uint32_t segments, uint32_t rings);
+NCZX_IMPORT uint32_t capsule_uv(float radius, float height, uint32_t segments, uint32_t rings);
 ```
 {{#endtab}}
 
@@ -786,7 +786,7 @@ static uint32_t sphere = 0;
 static uint32_t cube = 0;
 static uint32_t pillar = 0;
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     render_mode(2); // PBR lighting
 
     // Generate primitives
@@ -796,7 +796,7 @@ EWZX_EXPORT void init(void) {
     pillar = cylinder(0.3f, 0.3f, 2.0f, 16);
 }
 
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     camera_set(0.0f, 5.0f, 10.0f, 0.0f, 0.0f, 0.0f);
 
     // Ground

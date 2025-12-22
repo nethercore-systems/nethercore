@@ -19,7 +19,7 @@ fn material_metallic(value: f32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void material_metallic(float value);
+NCZX_IMPORT void material_metallic(float value);
 ```
 {{#endtab}}
 
@@ -60,7 +60,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Non-metallic plastic
     material_metallic(0.0f);
     draw_mesh(plastic_toy);
@@ -113,7 +113,7 @@ fn material_roughness(value: f32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void material_roughness(float value);
+NCZX_IMPORT void material_roughness(float value);
 ```
 {{#endtab}}
 
@@ -154,7 +154,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Mirror-like chrome
     material_roughness(0.1f);
     draw_mesh(chrome_bumper);
@@ -207,7 +207,7 @@ fn material_emissive(value: f32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void material_emissive(float value);
+NCZX_IMPORT void material_emissive(float value);
 ```
 {{#endtab}}
 
@@ -250,7 +250,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Glowing lava
     set_color(0xFF4400FF);
     material_emissive(2.0f);
@@ -307,7 +307,7 @@ fn material_rim(intensity: f32, power: f32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void material_rim(float intensity, float power);
+NCZX_IMPORT void material_rim(float intensity, float power);
 ```
 {{#endtab}}
 
@@ -349,7 +349,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Subtle rim for characters
     material_rim(0.2f, 0.15f);
     draw_mesh(character);
@@ -404,7 +404,7 @@ fn material_shininess(value: f32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void material_shininess(float value);
+NCZX_IMPORT void material_shininess(float value);
 ```
 {{#endtab}}
 
@@ -455,7 +455,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Matte cloth
     material_shininess(0.1f);
     draw_mesh(cloth);
@@ -508,7 +508,7 @@ fn material_specular(color: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void material_specular(uint32_t color);
+NCZX_IMPORT void material_specular(uint32_t color);
 ```
 {{#endtab}}
 
@@ -549,7 +549,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // White specular (default, most materials)
     material_specular(0xFFFFFFFF);
     draw_mesh(plastic);
@@ -602,7 +602,7 @@ fn material_specular_color(r: f32, g: f32, b: f32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void material_specular_color(float r, float g, float b);
+NCZX_IMPORT void material_specular_color(float r, float g, float b);
 ```
 {{#endtab}}
 
@@ -639,7 +639,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Gold specular
     material_specular_color(1.0f, 0.84f, 0.0f);
     draw_mesh(gold);
@@ -684,7 +684,7 @@ fn material_specular_damping(value: f32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void material_specular_damping(float value);
+NCZX_IMPORT void material_specular_damping(float value);
 ```
 {{#endtab}}
 
@@ -721,7 +721,7 @@ fn material_albedo(texture: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void material_albedo(uint32_t texture);
+NCZX_IMPORT void material_albedo(uint32_t texture);
 ```
 {{#endtab}}
 
@@ -758,7 +758,7 @@ fn material_mre(texture: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void material_mre(uint32_t texture);
+NCZX_IMPORT void material_mre(uint32_t texture);
 ```
 {{#endtab}}
 
@@ -796,7 +796,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     material_albedo(character_albedo);
     material_mre(character_mre);
     draw_mesh(character);
@@ -837,7 +837,7 @@ fn use_uniform_color(enabled: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void use_uniform_color(uint32_t enabled);
+NCZX_IMPORT void use_uniform_color(uint32_t enabled);
 ```
 {{#endtab}}
 
@@ -870,7 +870,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Use texture
     use_uniform_color(0);
     texture_bind(wood_tex);
@@ -919,7 +919,7 @@ fn use_uniform_metallic(enabled: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void use_uniform_metallic(uint32_t enabled);
+NCZX_IMPORT void use_uniform_metallic(uint32_t enabled);
 ```
 {{#endtab}}
 
@@ -948,7 +948,7 @@ fn use_uniform_roughness(enabled: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void use_uniform_roughness(uint32_t enabled);
+NCZX_IMPORT void use_uniform_roughness(uint32_t enabled);
 ```
 {{#endtab}}
 
@@ -977,7 +977,7 @@ fn use_uniform_emissive(enabled: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void use_uniform_emissive(uint32_t enabled);
+NCZX_IMPORT void use_uniform_emissive(uint32_t enabled);
 ```
 {{#endtab}}
 
@@ -1006,7 +1006,7 @@ fn use_uniform_specular(enabled: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void use_uniform_specular(uint32_t enabled);
+NCZX_IMPORT void use_uniform_specular(uint32_t enabled);
 ```
 {{#endtab}}
 
@@ -1035,7 +1035,7 @@ fn use_matcap_reflection(enabled: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void use_matcap_reflection(uint32_t enabled);
+NCZX_IMPORT void use_matcap_reflection(uint32_t enabled);
 ```
 {{#endtab}}
 
@@ -1086,11 +1086,11 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     render_mode(2); // Metallic-Roughness
 }
 
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Shiny metal sword
     material_albedo(sword_albedo);
     material_mre(sword_mre);
@@ -1184,11 +1184,11 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     render_mode(3); // Specular-Shininess
 }
 
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Gold armor
     set_color(0xE6B84DFF);  // Gold base color
     material_shininess(0.8f);

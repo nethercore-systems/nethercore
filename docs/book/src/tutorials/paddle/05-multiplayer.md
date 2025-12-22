@@ -179,7 +179,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Only READ state
     draw_rect(ball_x, ball_y, ...);
 }
@@ -211,7 +211,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     animation_frame += 1;  // This won't replay during rollback!
 }
 ```
@@ -325,14 +325,14 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     // Read input
     int8_t stick_y = left_stick_y(player);
     // Modify state
     paddle1_y += movement;
 }
 
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Only draw, never modify state
     draw_rect(PADDLE_MARGIN, paddle1_y, ...);
 }

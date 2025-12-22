@@ -61,9 +61,17 @@ extern "C" {
     fn light_disable(index: u32);
     fn light_enable(index: u32);
 
-    // Sky (all modes)
-    fn sky_set_colors(horizon_color: u32, zenith_color: u32);
-    fn draw_sky();
+    // Environment (all modes)
+    fn env_gradient(
+        layer: u32,
+        zenith: u32,
+        sky_horizon: u32,
+        ground_horizon: u32,
+        nadir: u32,
+        rotation: f32,
+        shift: f32,
+    );
+    fn draw_env();
 
     // Materials (Mode 2/3)
     fn material_metallic(value: f32);
@@ -361,15 +369,20 @@ fn format_float(val: f32, buf: &mut [u8]) -> usize {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
-        // Configure and draw sky (always draw first, before any geometry)
-        sky_set_colors(
-            0x99BFD9FF,   // Horizon: light blue
-            0x264D99FF    // Zenith: darker blue
+        // Configure and draw environment (always draw first, before any geometry)
+        env_gradient(
+            0,            // base layer
+            0x264D99FF,   // Zenith: darker blue
+            0x99BFD9FF,   // Sky horizon: light blue
+            0x99BFD9FF,   // Ground horizon: light blue
+            0x2A2A2AFF,   // Nadir: dark
+            0.0,          // rotation
+            0.0           // shift
         );
         light_set(0, -0.7, -0.2, -0.7);  // Direction: rays from sun near horizon
         light_color(0, 0xFFFAF0FF);      // Color: warm white
         light_intensity(0, 1.0);
-        draw_sky();
+        draw_env();
 
         // Update camera position to orbit around the sphere
         let orbit_radius = 4.0;

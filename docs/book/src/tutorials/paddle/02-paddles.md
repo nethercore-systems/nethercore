@@ -30,12 +30,12 @@ extern "C" {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void set_clear_color(uint32_t color);
-EWZX_IMPORT void draw_rect(float x, float y, float w, float h, uint32_t color);
+NCZX_IMPORT void set_clear_color(uint32_t color);
+NCZX_IMPORT void draw_rect(float x, float y, float w, float h, uint32_t color);
 
 // Input functions
-EWZX_IMPORT float left_stick_y(uint32_t player);
-EWZX_IMPORT uint32_t button_held(uint32_t player, uint32_t button);
+NCZX_IMPORT float left_stick_y(uint32_t player);
+NCZX_IMPORT uint32_t button_held(uint32_t player, uint32_t button);
 ```
 {{#endtab}}
 
@@ -70,8 +70,8 @@ const PADDLE_SPEED: f32 = 8.0;
 {{#tab name="C/C++"}}
 ```c
 // Button constants
-#define EWZX_BUTTON_UP 0
-#define EWZX_BUTTON_DOWN 1
+#define NCZX_BUTTON_UP 0
+#define NCZX_BUTTON_DOWN 1
 
 // Movement speed
 #define PADDLE_SPEED 8.0f
@@ -153,8 +153,8 @@ void update_paddle(float *paddle_y, uint32_t player) {
     float stick_y = left_stick_y(player);
 
     // Read D-pad buttons
-    bool up = button_held(player, EWZX_BUTTON_UP) != 0;
-    bool down = button_held(player, EWZX_BUTTON_DOWN) != 0;
+    bool up = button_held(player, NCZX_BUTTON_UP) != 0;
+    bool down = button_held(player, NCZX_BUTTON_DOWN) != 0;
 
     // Calculate movement
     float movement = -stick_y * PADDLE_SPEED;  // Invert stick
@@ -173,7 +173,7 @@ void update_paddle(float *paddle_y, uint32_t player) {
     *paddle_y = clamp(*paddle_y, 0.0f, SCREEN_HEIGHT - PADDLE_HEIGHT);
 }
 
-EWZX_EXPORT void update() {
+NCZX_EXPORT void update() {
     // Player 1 (left paddle)
     update_paddle(&paddle1_y, 0);
 
@@ -281,18 +281,18 @@ const BUTTON_SELECT: u32 = 13;
 
 {{#tab name="C/C++"}}
 ```c
-#define EWZX_BUTTON_UP 0
-#define EWZX_BUTTON_DOWN 1
-#define EWZX_BUTTON_LEFT 2
-#define EWZX_BUTTON_RIGHT 3
-#define EWZX_BUTTON_A 4
-#define EWZX_BUTTON_B 5
-#define EWZX_BUTTON_X 6
-#define EWZX_BUTTON_Y 7
-#define EWZX_BUTTON_LB 8
-#define EWZX_BUTTON_RB 9
-#define EWZX_BUTTON_START 12
-#define EWZX_BUTTON_SELECT 13
+#define NCZX_BUTTON_UP 0
+#define NCZX_BUTTON_DOWN 1
+#define NCZX_BUTTON_LEFT 2
+#define NCZX_BUTTON_RIGHT 3
+#define NCZX_BUTTON_A 4
+#define NCZX_BUTTON_B 5
+#define NCZX_BUTTON_X 6
+#define NCZX_BUTTON_Y 7
+#define NCZX_BUTTON_LB 8
+#define NCZX_BUTTON_RB 9
+#define NCZX_BUTTON_START 12
+#define NCZX_BUTTON_SELECT 13
 ```
 {{#endtab}}
 
@@ -444,10 +444,10 @@ pub extern "C" fn render() {
 #include <stdint.h>
 #include <stdbool.h>
 
-EWZX_IMPORT void set_clear_color(uint32_t color);
-EWZX_IMPORT void draw_rect(float x, float y, float w, float h, uint32_t color);
-EWZX_IMPORT float left_stick_y(uint32_t player);
-EWZX_IMPORT uint32_t button_held(uint32_t player, uint32_t button);
+NCZX_IMPORT void set_clear_color(uint32_t color);
+NCZX_IMPORT void draw_rect(float x, float y, float w, float h, uint32_t color);
+NCZX_IMPORT float left_stick_y(uint32_t player);
+NCZX_IMPORT uint32_t button_held(uint32_t player, uint32_t button);
 
 #define SCREEN_WIDTH 960.0f
 #define SCREEN_HEIGHT 540.0f
@@ -457,8 +457,8 @@ EWZX_IMPORT uint32_t button_held(uint32_t player, uint32_t button);
 #define PADDLE_SPEED 8.0f
 #define BALL_SIZE 15.0f
 
-#define EWZX_BUTTON_UP 0
-#define EWZX_BUTTON_DOWN 1
+#define NCZX_BUTTON_UP 0
+#define NCZX_BUTTON_DOWN 1
 
 #define COLOR_WHITE 0xFFFFFFFF
 #define COLOR_GRAY 0x666666FF
@@ -478,8 +478,8 @@ float clamp(float v, float min, float max) {
 
 void update_paddle(float *paddle_y, uint32_t player) {
     float stick_y = left_stick_y(player);
-    bool up = button_held(player, EWZX_BUTTON_UP) != 0;
-    bool down = button_held(player, EWZX_BUTTON_DOWN) != 0;
+    bool up = button_held(player, NCZX_BUTTON_UP) != 0;
+    bool down = button_held(player, NCZX_BUTTON_DOWN) != 0;
 
     float movement = -stick_y * PADDLE_SPEED;
     if (up) movement -= PADDLE_SPEED;
@@ -489,7 +489,7 @@ void update_paddle(float *paddle_y, uint32_t player) {
     *paddle_y = clamp(*paddle_y, 0.0f, SCREEN_HEIGHT - PADDLE_HEIGHT);
 }
 
-EWZX_EXPORT void init() {
+NCZX_EXPORT void init() {
     set_clear_color(0x1a1a2eFF);
     paddle1_y = SCREEN_HEIGHT / 2.0f - PADDLE_HEIGHT / 2.0f;
     paddle2_y = SCREEN_HEIGHT / 2.0f - PADDLE_HEIGHT / 2.0f;
@@ -497,12 +497,12 @@ EWZX_EXPORT void init() {
     ball_y = SCREEN_HEIGHT / 2.0f - BALL_SIZE / 2.0f;
 }
 
-EWZX_EXPORT void update() {
+NCZX_EXPORT void update() {
     update_paddle(&paddle1_y, 0);
     update_paddle(&paddle2_y, 1);
 }
 
-EWZX_EXPORT void render() {
+NCZX_EXPORT void render() {
     // Center line
     float dash_height = 20.0f;
     float dash_gap = 15.0f;

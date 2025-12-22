@@ -20,7 +20,7 @@ fn delta_time() -> f32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT float delta_time(void);
+NCZX_IMPORT float delta_time(void);
 ```
 {{#endtab}}
 
@@ -50,7 +50,7 @@ fn update() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     /* Frame-rate independent movement */
     position_x += velocity_x * delta_time();
     position_y += velocity_y * delta_time();
@@ -90,7 +90,7 @@ fn elapsed_time() -> f32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT float elapsed_time(void);
+NCZX_IMPORT float elapsed_time(void);
 ```
 {{#endtab}}
 
@@ -120,7 +120,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     /* Pulsing effect */
     float pulse = sinf(elapsed_time() * 2.0f) * 0.5f + 0.5f;
     set_color(nczx_rgba(255, 255, 255, (uint8_t)(pulse * 255.0f)));
@@ -160,7 +160,7 @@ fn tick_count() -> u64
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint64_t tick_count(void);
+NCZX_IMPORT uint64_t tick_count(void);
 ```
 {{#endtab}}
 
@@ -196,7 +196,7 @@ fn update() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     /* Every second at 60fps */
     if (tick_count() % 60 == 0) {
         spawn_enemy();
@@ -250,8 +250,8 @@ fn log(ptr: *const u8, len: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void log_msg(const uint8_t* ptr, uint32_t len);
-// Helper macro: EWZX_LOG("message")
+NCZX_IMPORT void log_msg(const uint8_t* ptr, uint32_t len);
+// Helper macro: NCZX_LOG("message")
 ```
 {{#endtab}}
 
@@ -293,13 +293,13 @@ fn update() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void init(void) {
-    EWZX_LOG("Game initialized!");
+NCZX_EXPORT void init(void) {
+    NCZX_LOG("Game initialized!");
 }
 
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     if (player_died) {
-        EWZX_LOG("Player died");
+        NCZX_LOG("Player died");
     }
 }
 ```
@@ -343,7 +343,7 @@ fn quit()
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void quit(void);
+NCZX_IMPORT void quit(void);
 ```
 {{#endtab}}
 
@@ -377,9 +377,9 @@ fn update() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     /* Quit on Start + Select held for 60 frames */
-    if (buttons_held(0) & ((1 << EWZX_BUTTON_START) | (1 << EWZX_BUTTON_SELECT))) {
+    if (buttons_held(0) & ((1 << NCZX_BUTTON_START) | (1 << NCZX_BUTTON_SELECT))) {
         quit_timer++;
         if (quit_timer >= 60) {
             quit();
@@ -429,7 +429,7 @@ fn random() -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t random_u32(void);
+NCZX_IMPORT uint32_t random_u32(void);
 ```
 {{#endtab}}
 
@@ -472,7 +472,7 @@ fn update() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     /* Random integer in range [0, 320) */
     float spawn_x = (float)(random_u32() % 320);
 
@@ -534,7 +534,7 @@ fn player_count() -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t player_count(void);
+NCZX_IMPORT uint32_t player_count(void);
 ```
 {{#endtab}}
 
@@ -578,7 +578,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     /* Process all players */
     for (uint32_t p = 0; p < player_count(); p++) {
         process_player_input(p);
@@ -586,7 +586,7 @@ EWZX_EXPORT void update(void) {
     }
 }
 
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     /* Draw viewport split for multiplayer */
     switch (player_count()) {
         case 1: draw_fullscreen_viewport(0); break;
@@ -647,7 +647,7 @@ fn local_player_mask() -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t local_player_mask(void);
+NCZX_IMPORT uint32_t local_player_mask(void);
 ```
 {{#endtab}}
 
@@ -688,7 +688,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     uint32_t mask = local_player_mask();
 
     /* Check if specific player is local */
@@ -756,7 +756,7 @@ fn update() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     /* This code works for any local/remote mix */
     for (uint32_t p = 0; p < player_count(); p++) {
         Input input = get_player_input(p);

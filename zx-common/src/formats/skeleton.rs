@@ -1,4 +1,4 @@
-//! NetherZSkeleton binary format (.ewzskel)
+//! NetherZSkeleton binary format (.nczxskel)
 //!
 //! ZX console skeleton format containing inverse bind matrices for skeletal animation.
 //! POD format - no magic bytes.

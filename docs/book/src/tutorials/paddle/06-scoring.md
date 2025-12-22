@@ -89,13 +89,13 @@ fn button_pressed(player: u32, button: u32) -> u32;
 
 {{#tab name="C/C++"}}
 ```c
-#define EWZX_BUTTON_A 4
+#define NCZX_BUTTON_A 4
 ```
 
 Add to FFI imports:
 
 ```c
-EWZX_IMPORT uint32_t button_pressed(uint32_t player, uint32_t button);
+NCZX_IMPORT uint32_t button_pressed(uint32_t player, uint32_t button);
 ```
 {{#endtab}}
 
@@ -345,14 +345,14 @@ pub extern "C" fn update() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     // Always check player count
     is_two_player = player_count() >= 2;
 
     switch (state) {
         case TITLE:
             // Press A to start
-            if (button_pressed(0, EWZX_BUTTON_A) != 0) {
+            if (button_pressed(0, NCZX_BUTTON_A) != 0) {
                 reset_game();
                 state = PLAYING;
             }
@@ -373,7 +373,7 @@ EWZX_EXPORT void update(void) {
 
         case GAME_OVER:
             // Press A to restart
-            if (button_pressed(0, EWZX_BUTTON_A) != 0 || button_pressed(1, EWZX_BUTTON_A) != 0) {
+            if (button_pressed(0, NCZX_BUTTON_A) != 0 || button_pressed(1, NCZX_BUTTON_A) != 0) {
                 reset_game();
                 state = PLAYING;
             }
@@ -446,7 +446,7 @@ pub extern "C" fn init() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     set_clear_color(0x1a1a2eFF);
     reset_game();
     state = TITLE;
@@ -631,7 +631,7 @@ fn render_mode_indicator() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     switch (state) {
         case TITLE:
             render_court();

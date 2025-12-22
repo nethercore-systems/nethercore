@@ -35,8 +35,8 @@ nether-export build assets.toml
 
 {{#tab name="Rust"}}
 ```rust
-static PLAYER_MESH: &[u8] = include_bytes!("assets/player.ewzmesh");
-static GRASS_TEX: &[u8] = include_bytes!("assets/grass.ewztex");
+static PLAYER_MESH: &[u8] = include_bytes!("assets/player.nczxmesh");
+static GRASS_TEX: &[u8] = include_bytes!("assets/grass.nczxtex");
 
 fn init() {
     let player = load_zmesh(PLAYER_MESH.as_ptr() as u32, PLAYER_MESH.len() as u32);
@@ -48,22 +48,22 @@ fn init() {
 {{#tab name="C/C++"}}
 ```c
 // Embed assets at compile time (platform-specific)
-extern const unsigned char player_ewzmesh_data[];
-extern const unsigned int player_ewzmesh_size;
-extern const unsigned char grass_ewztex_data[];
-extern const unsigned int grass_ewztex_size;
+extern const unsigned char player_nczxmesh_data[];
+extern const unsigned int player_nczxmesh_size;
+extern const unsigned char grass_nczxtex_data[];
+extern const unsigned int grass_nczxtex_size;
 
-EWZX_EXPORT void init(void) {
-    uint32_t player = load_zmesh((uint32_t)player_ewzmesh_data, player_ewzmesh_size);
-    uint32_t grass = load_ztex((uint32_t)grass_ewztex_data, grass_ewztex_size);
+NCZX_EXPORT void init(void) {
+    uint32_t player = load_zmesh((uint32_t)player_nczxmesh_data, player_nczxmesh_size);
+    uint32_t grass = load_ztex((uint32_t)grass_nczxtex_data, grass_nczxtex_size);
 }
 ```
 {{#endtab}}
 
 {{#tab name="Zig"}}
 ```zig
-const player_mesh = @embedFile("assets/player.ewzmesh");
-const grass_tex = @embedFile("assets/grass.ewztex");
+const player_mesh = @embedFile("assets/player.nczxmesh");
+const grass_tex = @embedFile("assets/grass.nczxtex");
 
 export fn init() void {
     const player = load_zmesh(@intFromPtr(player_mesh.ptr), player_mesh.len);
@@ -151,23 +151,23 @@ nether-export build assets.toml
 nether-export check assets.toml
 
 # Convert individual files
-nether-export mesh player.gltf -o player.ewzmesh
-nether-export texture grass.png -o grass.ewztex
-nether-export audio jump.wav -o jump.ewzsnd
+nether-export mesh player.gltf -o player.nczxmesh
+nether-export texture grass.png -o grass.nczxtex
+nether-export audio jump.wav -o jump.nczxsnd
 ```
 
 ### Output Files
 
 Running `nether-export build assets.toml` generates binary asset files:
-- `player.ewzmesh`, `enemy.ewzmesh`, `level.ewzmesh`
-- `player_diffuse.ewztex`
-- `jump.ewzsnd`
+- `player.nczxmesh`, `enemy.nczxmesh`, `level.nczxmesh`
+- `player_diffuse.nczxtex`
+- `jump.nczxsnd`
 
 ---
 
 ## Output File Formats
 
-### NetherZMesh (.ewzmesh)
+### NetherZMesh (.nczxmesh)
 
 Binary format for 3D meshes with GPU-optimized packed vertex data. POD format (no magic bytes).
 
@@ -186,7 +186,7 @@ Offset | Type | Description
 
 Stride is calculated from the format flags at runtime.
 
-### NetherZTexture (.ewztex)
+### NetherZTexture (.nczxtex)
 
 Binary format for textures. POD format (no magic bytes).
 
@@ -202,13 +202,13 @@ Offset | Type | Description
 **⚠️ Format Change (Dec 12, 2024):**
 - **Old format** (before commit 3ed67ef): 8-byte header with `u32 width + u32 height`
 - **Current format**: 4-byte header with `u16 width + u16 height`
-- If you have old `.ewztex` files, regenerate them with:
+- If you have old `.nczxtex` files, regenerate them with:
   ```bash
-  nether-export texture <source.png> -o <output.ewztex>
+  nether-export texture <source.png> -o <output.nczxtex>
   ```
 - **Symptom of old format**: "invalid dimensions" error during load
 
-### NetherZSound (.ewzsnd)
+### NetherZSound (.nczxsnd)
 
 Binary format for audio. POD format (no magic bytes).
 
@@ -374,14 +374,14 @@ nether-export check assets.toml           # Validate only
 **Convert individual files:**
 ```bash
 # Meshes
-nether-export mesh player.gltf -o player.ewzmesh
-nether-export mesh level.obj -o level.ewzmesh --format POS_UV_NORMAL
+nether-export mesh player.gltf -o player.nczxmesh
+nether-export mesh level.obj -o level.nczxmesh --format POS_UV_NORMAL
 
 # Textures
-nether-export texture grass.png -o grass.ewztex
+nether-export texture grass.png -o grass.nczxtex
 
 # Audio
-nether-export audio jump.wav -o jump.ewzsnd
+nether-export audio jump.wav -o jump.nczxsnd
 ```
 
 ---
@@ -404,9 +404,9 @@ extern "C" {
 }
 
 // Embed assets at compile time
-static PLAYER_MESH: &[u8] = include_bytes!("assets/player.ewzmesh");
-static GRASS_TEX: &[u8] = include_bytes!("assets/grass.ewztex");
-static JUMP_SFX: &[u8] = include_bytes!("assets/jump.ewzsnd");
+static PLAYER_MESH: &[u8] = include_bytes!("assets/player.nczxmesh");
+static GRASS_TEX: &[u8] = include_bytes!("assets/grass.nczxtex");
+static JUMP_SFX: &[u8] = include_bytes!("assets/jump.nczxsnd");
 
 fn init() {
     let player = load_zmesh(PLAYER_MESH.as_ptr() as u32, PLAYER_MESH.len() as u32);
@@ -419,22 +419,22 @@ fn init() {
 {{#tab name="C/C++"}}
 ```c
 // FFI declarations
-EWZX_IMPORT uint32_t load_zmesh(uint32_t data_ptr, uint32_t data_len);
-EWZX_IMPORT uint32_t load_ztex(uint32_t data_ptr, uint32_t data_len);
-EWZX_IMPORT uint32_t load_zsound(uint32_t data_ptr, uint32_t data_len);
+NCZX_IMPORT uint32_t load_zmesh(uint32_t data_ptr, uint32_t data_len);
+NCZX_IMPORT uint32_t load_ztex(uint32_t data_ptr, uint32_t data_len);
+NCZX_IMPORT uint32_t load_zsound(uint32_t data_ptr, uint32_t data_len);
 
 // Embed assets at compile time (platform-specific)
-extern const unsigned char player_ewzmesh_data[];
-extern const unsigned int player_ewzmesh_size;
-extern const unsigned char grass_ewztex_data[];
-extern const unsigned int grass_ewztex_size;
-extern const unsigned char jump_ewzsnd_data[];
-extern const unsigned int jump_ewzsnd_size;
+extern const unsigned char player_nczxmesh_data[];
+extern const unsigned int player_nczxmesh_size;
+extern const unsigned char grass_nczxtex_data[];
+extern const unsigned int grass_nczxtex_size;
+extern const unsigned char jump_nczxsnd_data[];
+extern const unsigned int jump_nczxsnd_size;
 
-EWZX_EXPORT void init(void) {
-    uint32_t player = load_zmesh((uint32_t)player_ewzmesh_data, player_ewzmesh_size);
-    uint32_t grass = load_ztex((uint32_t)grass_ewztex_data, grass_ewztex_size);
-    uint32_t jump = load_zsound((uint32_t)jump_ewzsnd_data, jump_ewzsnd_size);
+NCZX_EXPORT void init(void) {
+    uint32_t player = load_zmesh((uint32_t)player_nczxmesh_data, player_nczxmesh_size);
+    uint32_t grass = load_ztex((uint32_t)grass_nczxtex_data, grass_nczxtex_size);
+    uint32_t jump = load_zsound((uint32_t)jump_nczxsnd_data, jump_nczxsnd_size);
 }
 ```
 {{#endtab}}
@@ -447,9 +447,9 @@ pub extern fn load_ztex(data_ptr: u32, data_len: u32) u32;
 pub extern fn load_zsound(data_ptr: u32, data_len: u32) u32;
 
 // Embed assets at compile time
-const player_mesh = @embedFile("assets/player.ewzmesh");
-const grass_tex = @embedFile("assets/grass.ewztex");
-const jump_sfx = @embedFile("assets/jump.ewzsnd");
+const player_mesh = @embedFile("assets/player.nczxmesh");
+const grass_tex = @embedFile("assets/grass.nczxtex");
+const jump_sfx = @embedFile("assets/jump.nczxsnd");
 
 export fn init() void {
     const player = load_zmesh(@intFromPtr(player_mesh.ptr), player_mesh.len);
@@ -480,8 +480,8 @@ extern "C" {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t load_mesh(uint32_t data_ptr, uint32_t vertex_count, uint8_t format);
-EWZX_IMPORT uint32_t load_mesh_indexed(uint32_t data_ptr, uint32_t vertex_count, uint32_t index_ptr, uint32_t index_count, uint8_t format);
+NCZX_IMPORT uint32_t load_mesh(uint32_t data_ptr, uint32_t vertex_count, uint8_t format);
+NCZX_IMPORT uint32_t load_mesh_indexed(uint32_t data_ptr, uint32_t vertex_count, uint32_t index_ptr, uint32_t index_count, uint8_t format);
 ```
 {{#endtab}}
 
@@ -509,8 +509,8 @@ extern "C" {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t load_mesh_packed(uint32_t data_ptr, uint32_t vertex_count, uint8_t format);
-EWZX_IMPORT uint32_t load_mesh_indexed_packed(uint32_t data_ptr, uint32_t vertex_count, uint32_t index_ptr, uint32_t index_count, uint8_t format);
+NCZX_IMPORT uint32_t load_mesh_packed(uint32_t data_ptr, uint32_t vertex_count, uint8_t format);
+NCZX_IMPORT uint32_t load_mesh_indexed_packed(uint32_t data_ptr, uint32_t vertex_count, uint32_t index_ptr, uint32_t index_count, uint8_t format);
 ```
 {{#endtab}}
 
@@ -1031,7 +1031,7 @@ pub extern "C" fn init() {
 static uint32_t PLAYER_TEX = 0;
 static uint32_t JUMP_SFX = 0;
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     // Load texture
     uint8_t player_sprite[256];
     generate_player_sprite(player_sprite);
@@ -1131,7 +1131,7 @@ Best for: Small games, prototyping, tutorials
 {{#tab name="Rust"}}
 ```rust
 // Compile-time embedding
-static TEXTURE_DATA: &[u8] = include_bytes!("../assets/player.ewztex");
+static TEXTURE_DATA: &[u8] = include_bytes!("../assets/player.nczxtex");
 
 // Or generate at runtime
 const PIXELS: [u8; 256] = generate_pixels();
@@ -1141,8 +1141,8 @@ const PIXELS: [u8; 256] = generate_pixels();
 {{#tab name="C/C++"}}
 ```c
 // Compile-time embedding (platform-specific)
-extern const unsigned char player_ewztex_data[];
-extern const unsigned int player_ewztex_size;
+extern const unsigned char player_nczxtex_data[];
+extern const unsigned int player_nczxtex_size;
 
 // Or generate at runtime
 uint8_t pixels[256];
@@ -1153,7 +1153,7 @@ generate_pixels(pixels);
 {{#tab name="Zig"}}
 ```zig
 // Compile-time embedding
-const texture_data = @embedFile("../assets/player.ewztex");
+const texture_data = @embedFile("../assets/player.nczxtex");
 
 // Or generate at runtime
 const pixels: [256]u8 = generate_pixels();
@@ -1182,6 +1182,6 @@ Benefits:
 
 The following features are planned but not yet implemented:
 
-- **Font conversion** - TTF/OTF to bitmap font atlas (.ewzfont)
+- **Font conversion** - TTF/OTF to bitmap font atlas (.nczxfont)
 - **Watch mode** - `nether-export build --watch` for auto-rebuild on changes
 - **Rust code generation** - Auto-generated asset loading module

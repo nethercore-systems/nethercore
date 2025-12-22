@@ -34,7 +34,7 @@ fn debug_register_i32(name_ptr: *const u8, name_len: u32, ptr: *const i32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void debug_register_i32(const uint8_t* name_ptr, uint32_t name_len, const int32_t* ptr);
+NCZX_IMPORT void debug_register_i32(const uint8_t* name_ptr, uint32_t name_len, const int32_t* ptr);
 ```
 {{#endtab}}
 
@@ -65,7 +65,7 @@ fn init() {
 ```c
 static int32_t enemy_count = 5;
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     debug_register_i32("Enemy Count", 11, &enemy_count);
 }
 ```
@@ -100,7 +100,7 @@ fn debug_register_f32(name_ptr: *const u8, name_len: u32, ptr: *const f32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void debug_register_f32(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
+NCZX_IMPORT void debug_register_f32(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
 ```
 {{#endtab}}
 
@@ -134,7 +134,7 @@ fn init() {
 static float gravity = 9.8f;
 static float jump_force = 15.0f;
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     debug_register_f32("Gravity", 7, &gravity);
     debug_register_f32("Jump Force", 10, &jump_force);
 }
@@ -172,7 +172,7 @@ fn debug_register_bool(name_ptr: *const u8, name_len: u32, ptr: *const u8)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void debug_register_bool(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
+NCZX_IMPORT void debug_register_bool(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 ```
 {{#endtab}}
 
@@ -203,7 +203,7 @@ fn init() {
 ```c
 static uint8_t god_mode = 0; // 0 = false, 1 = true
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     debug_register_bool("God Mode", 8, &god_mode);
 }
 ```
@@ -239,9 +239,9 @@ fn debug_register_u32(name_ptr: *const u8, name_len: u32, ptr: *const u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void debug_register_u8(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
-EWZX_IMPORT void debug_register_u16(const uint8_t* name_ptr, uint32_t name_len, const uint16_t* ptr);
-EWZX_IMPORT void debug_register_u32(const uint8_t* name_ptr, uint32_t name_len, const uint32_t* ptr);
+NCZX_IMPORT void debug_register_u8(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
+NCZX_IMPORT void debug_register_u16(const uint8_t* name_ptr, uint32_t name_len, const uint16_t* ptr);
+NCZX_IMPORT void debug_register_u32(const uint8_t* name_ptr, uint32_t name_len, const uint32_t* ptr);
 ```
 {{#endtab}}
 
@@ -272,8 +272,8 @@ fn debug_register_i16(name_ptr: *const u8, name_len: u32, ptr: *const i16)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void debug_register_i8(const uint8_t* name_ptr, uint32_t name_len, const int8_t* ptr);
-EWZX_IMPORT void debug_register_i16(const uint8_t* name_ptr, uint32_t name_len, const int16_t* ptr);
+NCZX_IMPORT void debug_register_i8(const uint8_t* name_ptr, uint32_t name_len, const int8_t* ptr);
+NCZX_IMPORT void debug_register_i16(const uint8_t* name_ptr, uint32_t name_len, const int16_t* ptr);
 ```
 {{#endtab}}
 
@@ -309,7 +309,7 @@ fn debug_register_i32_range(
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void debug_register_i32_range(
+NCZX_IMPORT void debug_register_i32_range(
     const uint8_t* name_ptr, uint32_t name_len,
     const int32_t* ptr,
     int32_t min, int32_t max
@@ -348,7 +348,7 @@ fn init() {
 ```c
 static int32_t difficulty = 2;
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     debug_register_i32_range("Difficulty", 10, &difficulty, 1, 5);
 }
 ```
@@ -387,7 +387,7 @@ fn debug_register_f32_range(
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void debug_register_f32_range(
+NCZX_IMPORT void debug_register_f32_range(
     const uint8_t* name_ptr, uint32_t name_len,
     const float* ptr,
     float min, float max
@@ -426,7 +426,7 @@ fn init() {
 ```c
 static float player_speed = 5.0f;
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     debug_register_f32_range("Speed", 5, &player_speed, 0.0f, 20.0f);
 }
 ```
@@ -460,9 +460,9 @@ fn debug_register_i16_range(name_ptr: *const u8, name_len: u32, ptr: *const i16,
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void debug_register_u8_range(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr, uint32_t min, uint32_t max);
-EWZX_IMPORT void debug_register_u16_range(const uint8_t* name_ptr, uint32_t name_len, const uint16_t* ptr, uint32_t min, uint32_t max);
-EWZX_IMPORT void debug_register_i16_range(const uint8_t* name_ptr, uint32_t name_len, const int16_t* ptr, int32_t min, int32_t max);
+NCZX_IMPORT void debug_register_u8_range(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr, uint32_t min, uint32_t max);
+NCZX_IMPORT void debug_register_u16_range(const uint8_t* name_ptr, uint32_t name_len, const uint16_t* ptr, uint32_t min, uint32_t max);
+NCZX_IMPORT void debug_register_i16_range(const uint8_t* name_ptr, uint32_t name_len, const int16_t* ptr, int32_t min, int32_t max);
 ```
 {{#endtab}}
 
@@ -495,7 +495,7 @@ fn debug_register_vec2(name_ptr: *const u8, name_len: u32, ptr: *const f32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void debug_register_vec2(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
+NCZX_IMPORT void debug_register_vec2(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
 ```
 {{#endtab}}
 
@@ -526,7 +526,7 @@ fn init() {
 ```c
 static float player_pos[2] = {0.0f, 0.0f};
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     debug_register_vec2("Player Pos", 10, player_pos);
 }
 ```
@@ -561,7 +561,7 @@ fn debug_register_vec3(name_ptr: *const u8, name_len: u32, ptr: *const f32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void debug_register_vec3(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
+NCZX_IMPORT void debug_register_vec3(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
 ```
 {{#endtab}}
 
@@ -590,7 +590,7 @@ fn debug_register_rect(name_ptr: *const u8, name_len: u32, ptr: *const f32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void debug_register_rect(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
+NCZX_IMPORT void debug_register_rect(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
 ```
 {{#endtab}}
 
@@ -619,7 +619,7 @@ fn debug_register_color(name_ptr: *const u8, name_len: u32, ptr: *const u8)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void debug_register_color(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
+NCZX_IMPORT void debug_register_color(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 ```
 {{#endtab}}
 
@@ -650,7 +650,7 @@ fn init() {
 ```c
 static uint8_t tint_color[4] = {255, 255, 255, 255};
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     debug_register_color("Tint", 4, tint_color);
 }
 ```
@@ -687,10 +687,10 @@ fn debug_register_fixed_i32_q24(name_ptr: *const u8, name_len: u32, ptr: *const 
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void debug_register_fixed_i16_q8(const uint8_t* name_ptr, uint32_t name_len, const int16_t* ptr);
-EWZX_IMPORT void debug_register_fixed_i32_q8(const uint8_t* name_ptr, uint32_t name_len, const int32_t* ptr);
-EWZX_IMPORT void debug_register_fixed_i32_q16(const uint8_t* name_ptr, uint32_t name_len, const int32_t* ptr);
-EWZX_IMPORT void debug_register_fixed_i32_q24(const uint8_t* name_ptr, uint32_t name_len, const int32_t* ptr);
+NCZX_IMPORT void debug_register_fixed_i16_q8(const uint8_t* name_ptr, uint32_t name_len, const int16_t* ptr);
+NCZX_IMPORT void debug_register_fixed_i32_q8(const uint8_t* name_ptr, uint32_t name_len, const int32_t* ptr);
+NCZX_IMPORT void debug_register_fixed_i32_q16(const uint8_t* name_ptr, uint32_t name_len, const int32_t* ptr);
+NCZX_IMPORT void debug_register_fixed_i32_q24(const uint8_t* name_ptr, uint32_t name_len, const int32_t* ptr);
 ```
 {{#endtab}}
 
@@ -732,18 +732,18 @@ fn debug_watch_color(name_ptr: *const u8, name_len: u32, ptr: *const u8)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void debug_watch_i8(const uint8_t* name_ptr, uint32_t name_len, const int8_t* ptr);
-EWZX_IMPORT void debug_watch_i16(const uint8_t* name_ptr, uint32_t name_len, const int16_t* ptr);
-EWZX_IMPORT void debug_watch_i32(const uint8_t* name_ptr, uint32_t name_len, const int32_t* ptr);
-EWZX_IMPORT void debug_watch_u8(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
-EWZX_IMPORT void debug_watch_u16(const uint8_t* name_ptr, uint32_t name_len, const uint16_t* ptr);
-EWZX_IMPORT void debug_watch_u32(const uint8_t* name_ptr, uint32_t name_len, const uint32_t* ptr);
-EWZX_IMPORT void debug_watch_f32(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
-EWZX_IMPORT void debug_watch_bool(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
-EWZX_IMPORT void debug_watch_vec2(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
-EWZX_IMPORT void debug_watch_vec3(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
-EWZX_IMPORT void debug_watch_rect(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
-EWZX_IMPORT void debug_watch_color(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
+NCZX_IMPORT void debug_watch_i8(const uint8_t* name_ptr, uint32_t name_len, const int8_t* ptr);
+NCZX_IMPORT void debug_watch_i16(const uint8_t* name_ptr, uint32_t name_len, const int16_t* ptr);
+NCZX_IMPORT void debug_watch_i32(const uint8_t* name_ptr, uint32_t name_len, const int32_t* ptr);
+NCZX_IMPORT void debug_watch_u8(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
+NCZX_IMPORT void debug_watch_u16(const uint8_t* name_ptr, uint32_t name_len, const uint16_t* ptr);
+NCZX_IMPORT void debug_watch_u32(const uint8_t* name_ptr, uint32_t name_len, const uint32_t* ptr);
+NCZX_IMPORT void debug_watch_f32(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
+NCZX_IMPORT void debug_watch_bool(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
+NCZX_IMPORT void debug_watch_vec2(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
+NCZX_IMPORT void debug_watch_vec3(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
+NCZX_IMPORT void debug_watch_rect(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
+NCZX_IMPORT void debug_watch_color(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 ```
 {{#endtab}}
 
@@ -788,7 +788,7 @@ fn init() {
 static uint32_t frame_count = 0;
 static float fps = 0.0f;
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     debug_watch_u32("Frame", 5, &frame_count);
     debug_watch_f32("FPS", 3, &fps);
 }
@@ -828,7 +828,7 @@ fn debug_group_begin(name_ptr: *const u8, name_len: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void debug_group_begin(const uint8_t* name_ptr, uint32_t name_len);
+NCZX_IMPORT void debug_group_begin(const uint8_t* name_ptr, uint32_t name_len);
 ```
 {{#endtab}}
 
@@ -857,7 +857,7 @@ fn debug_group_end()
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void debug_group_end(void);
+NCZX_IMPORT void debug_group_end(void);
 ```
 {{#endtab}}
 
@@ -893,7 +893,7 @@ fn init() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     debug_group_begin("Player", 6);
     debug_register_vec3("Position", 8, player_pos);
     debug_register_f32("Health", 6, &player_health);
@@ -946,7 +946,7 @@ fn debug_is_paused() -> i32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT int32_t debug_is_paused(void);
+NCZX_IMPORT int32_t debug_is_paused(void);
 ```
 {{#endtab}}
 
@@ -977,7 +977,7 @@ fn debug_get_time_scale() -> f32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT float debug_get_time_scale(void);
+NCZX_IMPORT float debug_get_time_scale(void);
 ```
 {{#endtab}}
 
@@ -1011,7 +1011,7 @@ fn update() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     if (debug_is_paused() != 0) {
         return; // Skip update when paused
     }
@@ -1153,7 +1153,7 @@ static uint8_t god_mode = 0;
 static uint8_t show_hitboxes = 0;
 static int32_t enemy_count = 5;
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     // Player group
     debug_group_begin("Player", 6);
     debug_watch_f32("X", 1, &player_x);
@@ -1179,7 +1179,7 @@ EWZX_EXPORT void init(void) {
     debug_group_end();
 }
 
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     // Respect debug pause
     if (debug_is_paused() != 0) {
         return;
@@ -1191,13 +1191,13 @@ EWZX_EXPORT void update(void) {
     player_vel_y += gravity * dt;
     player_vel_x *= friction;
 
-    if (button_held(0, EWZX_BUTTON_RIGHT) != 0) {
+    if (button_held(0, NCZX_BUTTON_RIGHT) != 0) {
         player_vel_x = move_speed;
     }
-    if (button_held(0, EWZX_BUTTON_LEFT) != 0) {
+    if (button_held(0, NCZX_BUTTON_LEFT) != 0) {
         player_vel_x = -move_speed;
     }
-    if (button_pressed(0, EWZX_BUTTON_A) != 0) {
+    if (button_pressed(0, NCZX_BUTTON_A) != 0) {
         player_vel_y = -jump_force;
     }
 

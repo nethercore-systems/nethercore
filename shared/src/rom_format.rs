@@ -87,7 +87,7 @@ impl RomFormat {
 /// This is the single source of truth for all ZX ROM format constants:
 /// - Console type: `zx`
 /// - ROM extension: `.nczx`
-/// - Magic bytes: `EWZX`
+/// - Magic bytes: `NCZX`
 /// - Asset extensions: `.nczxmesh`, `.nczxtex`, `.nczxsnd`, `.nczxskel`, `.nczxanim`
 pub const ZX_ROM_FORMAT: RomFormat = RomFormat::new(
     "zx",

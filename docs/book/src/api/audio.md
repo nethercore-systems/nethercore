@@ -20,7 +20,7 @@ fn load_sound(data_ptr: *const u8, byte_len: u32) -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t load_sound(const uint8_t* data_ptr, uint32_t byte_len);
+NCZX_IMPORT uint32_t load_sound(const uint8_t* data_ptr, uint32_t byte_len);
 ```
 {{#endtab}}
 
@@ -69,7 +69,7 @@ static const uint8_t jump_data[] = {
 };
 static uint32_t jump_sfx = 0;
 
-EWZX_EXPORT void init() {
+NCZX_EXPORT void init() {
     jump_sfx = load_sound(jump_data, sizeof(jump_data));
 }
 ```
@@ -110,7 +110,7 @@ fn play_sound(sound: u32, volume: f32, pan: f32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void play_sound(uint32_t sound, float volume, float pan);
+NCZX_IMPORT void play_sound(uint32_t sound, float volume, float pan);
 ```
 {{#endtab}}
 
@@ -153,7 +153,7 @@ fn update() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void update() {
+NCZX_EXPORT void update() {
     if (button_pressed(0, BUTTON_A) != 0) {
         play_sound(JUMP_SFX, 1.0f, 0.0f);
     }
@@ -209,7 +209,7 @@ fn channel_play(channel: u32, sound: u32, volume: f32, pan: f32, looping: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void channel_play(uint32_t channel, uint32_t sound, float volume, float pan, uint32_t looping);
+NCZX_IMPORT void channel_play(uint32_t channel, uint32_t sound, float volume, float pan, uint32_t looping);
 ```
 {{#endtab}}
 
@@ -255,7 +255,7 @@ fn update() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void update() {
+NCZX_EXPORT void update() {
     // Engine sound on dedicated channel (looping)
     if (vehicle.engine_on && !ENGINE_PLAYING) {
         channel_play(0, ENGINE_SFX, 0.8f, 0.0f, 1);
@@ -309,7 +309,7 @@ fn channel_set(channel: u32, volume: f32, pan: f32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void channel_set(uint32_t channel, float volume, float pan);
+NCZX_IMPORT void channel_set(uint32_t channel, float volume, float pan);
 ```
 {{#endtab}}
 
@@ -352,7 +352,7 @@ fn update() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void update() {
+NCZX_EXPORT void update() {
     // Fade out channel 0
     if (fading) {
         fade_vol -= delta_time() * 0.5f;
@@ -404,7 +404,7 @@ fn channel_stop(channel: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void channel_stop(uint32_t channel);
+NCZX_IMPORT void channel_stop(uint32_t channel);
 ```
 {{#endtab}}
 
@@ -439,7 +439,7 @@ fn update() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void update() {
+NCZX_EXPORT void update() {
     if (vehicle.engine_off) {
         channel_stop(0);
         ENGINE_PLAYING = false;
@@ -483,7 +483,7 @@ fn music_play(sound: u32, volume: f32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void music_play(uint32_t sound, float volume);
+NCZX_IMPORT void music_play(uint32_t sound, float volume);
 ```
 {{#endtab}}
 
@@ -523,7 +523,7 @@ fn start_game() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void init() {
+NCZX_EXPORT void init() {
     MENU_MUSIC = rom_sound("menu_bgm", 8);
     GAME_MUSIC = rom_sound("game_bgm", 8);
 }
@@ -567,7 +567,7 @@ fn music_stop()
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void music_stop();
+NCZX_IMPORT void music_stop();
 ```
 {{#endtab}}
 
@@ -630,7 +630,7 @@ fn music_set_volume(volume: f32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void music_set_volume(float volume);
+NCZX_IMPORT void music_set_volume(float volume);
 ```
 {{#endtab}}
 
@@ -667,7 +667,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render() {
+NCZX_EXPORT void render() {
     // Duck music during dialogue
     if (dialogue_active) {
         music_set_volume(0.3f);
@@ -774,7 +774,7 @@ static uint32_t COIN_SFX = 0;
 static uint32_t MUSIC = 0;
 static uint32_t AMBIENT = 0;
 
-EWZX_EXPORT void init() {
+NCZX_EXPORT void init() {
     // Load sounds from ROM
     JUMP_SFX = rom_sound("jump", 4);
     LAND_SFX = rom_sound("land", 4);
@@ -787,7 +787,7 @@ EWZX_EXPORT void init() {
     channel_play(15, AMBIENT, 0.3f, 0.0f, 1); // Looping ambient
 }
 
-EWZX_EXPORT void update() {
+NCZX_EXPORT void update() {
     // Jump sound
     if (button_pressed(0, BUTTON_A) != 0 && player.on_ground) {
         play_sound(JUMP_SFX, 0.8f, 0.0f);

@@ -264,12 +264,12 @@ pub extern "C" fn render() {
         // Apply camera
         CAMERA.apply();
 
-        // Configure and draw sky
-        sky_set_colors(HORIZON_COLOR, ZENITH_COLOR);
+        // Configure and draw environment
+        env_gradient(0, ZENITH_COLOR, HORIZON_COLOR, HORIZON_COLOR, 0x2A2A2AFF, 0.0, 0.0);
         light_set(0, SUN_DIR_X, SUN_DIR_Y, SUN_DIR_Z);
         light_color(0, SUN_COLOR);
         light_intensity(0, 1.0);
-        draw_sky();
+        draw_env();
 
         // Apply lights
         apply_lights();

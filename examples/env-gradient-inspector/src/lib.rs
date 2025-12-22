@@ -145,8 +145,8 @@ pub extern "C" fn render() {
         );
         camera_fov(60.0);
 
-        env_select_pair(0, 0); // Gradient mode
-        env_gradient_set(
+        env_gradient(
+            0, // base layer
             ZENITH_COLOR,
             SKY_HORIZON,
             GROUND_HORIZON,
@@ -154,7 +154,7 @@ pub extern "C" fn render() {
             ROTATION,
             SHIFT,
         );
-        draw_sky();
+        draw_env();
 
         push_identity();
         set_color(0x444455FF);

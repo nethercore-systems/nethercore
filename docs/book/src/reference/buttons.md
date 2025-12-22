@@ -29,22 +29,22 @@ const BUTTON_R3: u32 = 15;    // Right stick click
 
 {{#tab name="C/C++"}}
 ```c
-#define EWZX_BUTTON_UP 0
-#define EWZX_BUTTON_DOWN 1
-#define EWZX_BUTTON_LEFT 2
-#define EWZX_BUTTON_RIGHT 3
-#define EWZX_BUTTON_A 4       // Bottom face button (Xbox A, PlayStation X)
-#define EWZX_BUTTON_B 5       // Right face button (Xbox B, PlayStation O)
-#define EWZX_BUTTON_X 6       // Left face button (Xbox X, PlayStation Square)
-#define EWZX_BUTTON_Y 7       // Top face button (Xbox Y, PlayStation Triangle)
-#define EWZX_BUTTON_LB 8      // Left bumper
-#define EWZX_BUTTON_RB 9      // Right bumper
-#define EWZX_BUTTON_LT 10     // Left trigger (as button)
-#define EWZX_BUTTON_RT 11     // Right trigger (as button)
-#define EWZX_BUTTON_START 12  // Start / Options
-#define EWZX_BUTTON_SELECT 13 // Select / Share / Back
-#define EWZX_BUTTON_L3 14     // Left stick click
-#define EWZX_BUTTON_R3 15     // Right stick click
+#define NCZX_BUTTON_UP 0
+#define NCZX_BUTTON_DOWN 1
+#define NCZX_BUTTON_LEFT 2
+#define NCZX_BUTTON_RIGHT 3
+#define NCZX_BUTTON_A 4       // Bottom face button (Xbox A, PlayStation X)
+#define NCZX_BUTTON_B 5       // Right face button (Xbox B, PlayStation O)
+#define NCZX_BUTTON_X 6       // Left face button (Xbox X, PlayStation Square)
+#define NCZX_BUTTON_Y 7       // Top face button (Xbox Y, PlayStation Triangle)
+#define NCZX_BUTTON_LB 8      // Left bumper
+#define NCZX_BUTTON_RB 9      // Right bumper
+#define NCZX_BUTTON_LT 10     // Left trigger (as button)
+#define NCZX_BUTTON_RT 11     // Right trigger (as button)
+#define NCZX_BUTTON_START 12  // Start / Options
+#define NCZX_BUTTON_SELECT 13 // Select / Share / Back
+#define NCZX_BUTTON_L3 14     // Left stick click
+#define NCZX_BUTTON_R3 15     // Right stick click
 ```
 {{#endtab}}
 
@@ -108,13 +108,13 @@ fn button_released(player: u32, button: u32) -> u32;
 {{#tab name="C/C++"}}
 ```c
 // Returns 1 on the frame button is first pressed, 0 otherwise
-EWZX_IMPORT uint32_t button_pressed(uint32_t player, uint32_t button);
+NCZX_IMPORT uint32_t button_pressed(uint32_t player, uint32_t button);
 
 // Returns 1 every frame the button is held, 0 otherwise
-EWZX_IMPORT uint32_t button_held(uint32_t player, uint32_t button);
+NCZX_IMPORT uint32_t button_held(uint32_t player, uint32_t button);
 
 // Returns 1 on the frame button is released, 0 otherwise
-EWZX_IMPORT uint32_t button_released(uint32_t player, uint32_t button);
+NCZX_IMPORT uint32_t button_released(uint32_t player, uint32_t button);
 ```
 {{#endtab}}
 
@@ -159,17 +159,17 @@ if button_released(0, BUTTON_X) != 0 {
 {{#tab name="C/C++"}}
 ```c
 // Jump on button press
-if (button_pressed(0, EWZX_BUTTON_A) != 0) {
+if (button_pressed(0, NCZX_BUTTON_A) != 0) {
     player_jump();
 }
 
 // Continuous movement while held
-if (button_held(0, EWZX_BUTTON_LEFT) != 0) {
+if (button_held(0, NCZX_BUTTON_LEFT) != 0) {
     player.x -= SPEED;
 }
 
 // Trigger on release (e.g., charge attack)
-if (button_released(0, EWZX_BUTTON_X) != 0) {
+if (button_released(0, NCZX_BUTTON_X) != 0) {
     release_charged_attack();
 }
 ```
@@ -215,12 +215,12 @@ fn right_trigger(player: u32) -> f32;
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT float left_stick_x(uint32_t player);   // -1.0 to 1.0
-EWZX_IMPORT float left_stick_y(uint32_t player);   // -1.0 (up) to 1.0 (down)
-EWZX_IMPORT float right_stick_x(uint32_t player);
-EWZX_IMPORT float right_stick_y(uint32_t player);
-EWZX_IMPORT float left_trigger(uint32_t player);   // 0.0 to 1.0
-EWZX_IMPORT float right_trigger(uint32_t player);
+NCZX_IMPORT float left_stick_x(uint32_t player);   // -1.0 to 1.0
+NCZX_IMPORT float left_stick_y(uint32_t player);   // -1.0 (up) to 1.0 (down)
+NCZX_IMPORT float right_stick_x(uint32_t player);
+NCZX_IMPORT float right_stick_y(uint32_t player);
+NCZX_IMPORT float left_trigger(uint32_t player);   // 0.0 to 1.0
+NCZX_IMPORT float right_trigger(uint32_t player);
 ```
 {{#endtab}}
 
@@ -309,18 +309,18 @@ const BUTTON_SELECT: u32 = 13;
 {{#tab name="C/C++"}}
 ```c
 // Button constants
-#define EWZX_BUTTON_UP 0
-#define EWZX_BUTTON_DOWN 1
-#define EWZX_BUTTON_LEFT 2
-#define EWZX_BUTTON_RIGHT 3
-#define EWZX_BUTTON_A 4
-#define EWZX_BUTTON_B 5
-#define EWZX_BUTTON_X 6
-#define EWZX_BUTTON_Y 7
-#define EWZX_BUTTON_LB 8
-#define EWZX_BUTTON_RB 9
-#define EWZX_BUTTON_START 12
-#define EWZX_BUTTON_SELECT 13
+#define NCZX_BUTTON_UP 0
+#define NCZX_BUTTON_DOWN 1
+#define NCZX_BUTTON_LEFT 2
+#define NCZX_BUTTON_RIGHT 3
+#define NCZX_BUTTON_A 4
+#define NCZX_BUTTON_B 5
+#define NCZX_BUTTON_X 6
+#define NCZX_BUTTON_Y 7
+#define NCZX_BUTTON_LB 8
+#define NCZX_BUTTON_RB 9
+#define NCZX_BUTTON_START 12
+#define NCZX_BUTTON_SELECT 13
 ```
 {{#endtab}}
 

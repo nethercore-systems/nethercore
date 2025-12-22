@@ -62,28 +62,28 @@ const BUTTON_SELECT: u32 = 13;
 {{#tab name="C/C++"}}
 ```c
 // D-Pad
-#define EWZX_BUTTON_UP      0
-#define EWZX_BUTTON_DOWN    1
-#define EWZX_BUTTON_LEFT    2
-#define EWZX_BUTTON_RIGHT   3
+#define NCZX_BUTTON_UP      0
+#define NCZX_BUTTON_DOWN    1
+#define NCZX_BUTTON_LEFT    2
+#define NCZX_BUTTON_RIGHT   3
 
 // Face buttons
-#define EWZX_BUTTON_A       4
-#define EWZX_BUTTON_B       5
-#define EWZX_BUTTON_X       6
-#define EWZX_BUTTON_Y       7
+#define NCZX_BUTTON_A       4
+#define NCZX_BUTTON_B       5
+#define NCZX_BUTTON_X       6
+#define NCZX_BUTTON_Y       7
 
 // Shoulder bumpers
-#define EWZX_BUTTON_L1      8
-#define EWZX_BUTTON_R1      9
+#define NCZX_BUTTON_L1      8
+#define NCZX_BUTTON_R1      9
 
 // Stick clicks
-#define EWZX_BUTTON_L3      10
-#define EWZX_BUTTON_R3      11
+#define NCZX_BUTTON_L3      10
+#define NCZX_BUTTON_R3      11
 
 // Menu
-#define EWZX_BUTTON_START   12
-#define EWZX_BUTTON_SELECT  13
+#define NCZX_BUTTON_START   12
+#define NCZX_BUTTON_SELECT  13
 ```
 {{#endtab}}
 
@@ -139,7 +139,7 @@ fn button_held(player: u32, button: u32) -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t button_held(uint32_t player, uint32_t button);
+NCZX_IMPORT uint32_t button_held(uint32_t player, uint32_t button);
 ```
 {{#endtab}}
 
@@ -180,12 +180,12 @@ fn update() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     /* Continuous movement while held */
-    if (button_held(0, EWZX_BUTTON_RIGHT)) {
+    if (button_held(0, NCZX_BUTTON_RIGHT)) {
         player_x += MOVE_SPEED * delta_time();
     }
-    if (button_held(0, EWZX_BUTTON_LEFT)) {
+    if (button_held(0, NCZX_BUTTON_LEFT)) {
         player_x -= MOVE_SPEED * delta_time();
     }
 }
@@ -228,7 +228,7 @@ fn button_pressed(player: u32, button: u32) -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t button_pressed(uint32_t player, uint32_t button);
+NCZX_IMPORT uint32_t button_pressed(uint32_t player, uint32_t button);
 ```
 {{#endtab}}
 
@@ -272,15 +272,15 @@ fn update() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     /* Jump only triggers once per press */
-    if (button_pressed(0, EWZX_BUTTON_A) && on_ground) {
+    if (button_pressed(0, NCZX_BUTTON_A) && on_ground) {
         velocity_y = JUMP_VELOCITY;
         play_sound(jump_sfx, 1.0f, 0.0f);
     }
 
     /* Cycle weapons */
-    if (button_pressed(0, EWZX_BUTTON_R1)) {
+    if (button_pressed(0, NCZX_BUTTON_R1)) {
         current_weapon = (current_weapon + 1) % NUM_WEAPONS;
     }
 }
@@ -326,7 +326,7 @@ fn button_released(player: u32, button: u32) -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t button_released(uint32_t player, uint32_t button);
+NCZX_IMPORT uint32_t button_released(uint32_t player, uint32_t button);
 ```
 {{#endtab}}
 
@@ -371,14 +371,14 @@ fn update() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     /* Variable jump height (release early = smaller jump) */
-    if (button_released(0, EWZX_BUTTON_A) && velocity_y < 0.0f) {
+    if (button_released(0, NCZX_BUTTON_A) && velocity_y < 0.0f) {
         velocity_y *= 0.5f; /* Cut upward velocity */
     }
 
     /* Charged attack */
-    if (button_released(0, EWZX_BUTTON_X)) {
+    if (button_released(0, NCZX_BUTTON_X)) {
         float power = nczx_minf(charge_time, MAX_CHARGE);
         fire_charged_attack(power);
         charge_time = 0.0f;
@@ -431,7 +431,7 @@ fn buttons_held(player: u32) -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t buttons_held(uint32_t player);
+NCZX_IMPORT uint32_t buttons_held(uint32_t player);
 ```
 {{#endtab}}
 
@@ -475,15 +475,15 @@ fn update() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     uint32_t held = buttons_held(0);
 
     /* Check multiple buttons efficiently */
-    if (held & (1 << EWZX_BUTTON_A)) { /* A held */ }
-    if (held & (1 << EWZX_BUTTON_B)) { /* B held */ }
+    if (held & (1 << NCZX_BUTTON_A)) { /* A held */ }
+    if (held & (1 << NCZX_BUTTON_B)) { /* B held */ }
 
     /* Check for combo (A + B held together) */
-    uint32_t combo = (1 << EWZX_BUTTON_A) | (1 << EWZX_BUTTON_B);
+    uint32_t combo = (1 << NCZX_BUTTON_A) | (1 << NCZX_BUTTON_B);
     if ((held & combo) == combo) {
         perform_combo_attack();
     }
@@ -531,7 +531,7 @@ fn buttons_pressed(player: u32) -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t buttons_pressed(uint32_t player);
+NCZX_IMPORT uint32_t buttons_pressed(uint32_t player);
 ```
 {{#endtab}}
 
@@ -572,12 +572,12 @@ fn update() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     uint32_t pressed = buttons_pressed(0);
 
     /* Check if any face button pressed */
-    uint32_t face_buttons = (1 << EWZX_BUTTON_A) | (1 << EWZX_BUTTON_B) |
-                            (1 << EWZX_BUTTON_X) | (1 << EWZX_BUTTON_Y);
+    uint32_t face_buttons = (1 << NCZX_BUTTON_A) | (1 << NCZX_BUTTON_B) |
+                            (1 << NCZX_BUTTON_X) | (1 << NCZX_BUTTON_Y);
     if (pressed & face_buttons) {
         /* Handle menu selection */
     }
@@ -620,7 +620,7 @@ fn buttons_released(player: u32) -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t buttons_released(uint32_t player);
+NCZX_IMPORT uint32_t buttons_released(uint32_t player);
 ```
 {{#endtab}}
 
@@ -660,7 +660,7 @@ fn left_stick_x(player: u32) -> f32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT float left_stick_x(uint32_t player);
+NCZX_IMPORT float left_stick_x(uint32_t player);
 ```
 {{#endtab}}
 
@@ -700,7 +700,7 @@ fn update() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     float stick_x = left_stick_x(0);
 
     /* Apply deadzone */
@@ -746,7 +746,7 @@ fn left_stick_y(player: u32) -> f32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT float left_stick_y(uint32_t player);
+NCZX_IMPORT float left_stick_y(uint32_t player);
 ```
 {{#endtab}}
 
@@ -778,7 +778,7 @@ fn right_stick_x(player: u32) -> f32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT float right_stick_x(uint32_t player);
+NCZX_IMPORT float right_stick_x(uint32_t player);
 ```
 {{#endtab}}
 
@@ -807,7 +807,7 @@ fn update() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     /* Camera control with right stick */
     camera_yaw += right_stick_x(0) * CAMERA_SPEED * delta_time();
 }
@@ -843,7 +843,7 @@ fn right_stick_y(player: u32) -> f32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT float right_stick_y(uint32_t player);
+NCZX_IMPORT float right_stick_y(uint32_t player);
 ```
 {{#endtab}}
 
@@ -875,7 +875,7 @@ fn left_stick(player: u32, out_x: *mut f32, out_y: *mut f32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void left_stick(uint32_t player, float* out_x, float* out_y);
+NCZX_IMPORT void left_stick(uint32_t player, float* out_x, float* out_y);
 ```
 {{#endtab}}
 
@@ -920,7 +920,7 @@ fn update() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     float x = 0.0f;
     float y = 0.0f;
     left_stick(0, &x, &y);
@@ -976,7 +976,7 @@ fn right_stick(player: u32, out_x: *mut f32, out_y: *mut f32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void right_stick(uint32_t player, float* out_x, float* out_y);
+NCZX_IMPORT void right_stick(uint32_t player, float* out_x, float* out_y);
 ```
 {{#endtab}}
 
@@ -1008,7 +1008,7 @@ fn trigger_left(player: u32) -> f32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT float trigger_left(uint32_t player);
+NCZX_IMPORT float trigger_left(uint32_t player);
 ```
 {{#endtab}}
 
@@ -1047,7 +1047,7 @@ fn update() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     float lt = trigger_left(0);
 
     /* Brake with analog pressure */
@@ -1091,7 +1091,7 @@ fn trigger_right(player: u32) -> f32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT float trigger_right(uint32_t player);
+NCZX_IMPORT float trigger_right(uint32_t player);
 ```
 {{#endtab}}
 
@@ -1128,7 +1128,7 @@ fn update() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     float rt = trigger_right(0);
 
     /* Accelerate with analog pressure */
@@ -1225,7 +1225,7 @@ static float player_y = 0.0f;
 static int on_ground = 1;
 static float vel_y = 0.0f;
 
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     float dt = delta_time();
 
     /* Movement with left stick */
@@ -1238,7 +1238,7 @@ EWZX_EXPORT void update(void) {
     }
 
     /* Jump with A button */
-    if (button_pressed(0, EWZX_BUTTON_A) && on_ground) {
+    if (button_pressed(0, NCZX_BUTTON_A) && on_ground) {
         vel_y = -300.0f;
         on_ground = 0;
     }

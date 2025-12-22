@@ -28,7 +28,7 @@ fn rom_texture(id_ptr: *const u8, id_len: u32) -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t rom_texture(const uint8_t* id_ptr, uint32_t id_len);
+NCZX_IMPORT uint32_t rom_texture(const uint8_t* id_ptr, uint32_t id_len);
 ```
 {{#endtab}}
 
@@ -67,7 +67,7 @@ fn init() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     player_tex = rom_texture("player", 6);
     enemy_tex = rom_texture("enemy_sheet", 11);
     terrain_tex = rom_texture("terrain", 7);
@@ -105,7 +105,7 @@ fn rom_mesh(id_ptr: *const u8, id_len: u32) -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t rom_mesh(const uint8_t* id_ptr, uint32_t id_len);
+NCZX_IMPORT uint32_t rom_mesh(const uint8_t* id_ptr, uint32_t id_len);
 ```
 {{#endtab}}
 
@@ -137,7 +137,7 @@ fn init() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     level_mesh = rom_mesh("level1", 6);
     player_mesh = rom_mesh("player_model", 12);
     enemy_mesh = rom_mesh("enemy", 5);
@@ -175,7 +175,7 @@ fn rom_skeleton(id_ptr: *const u8, id_len: u32) -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t rom_skeleton(const uint8_t* id_ptr, uint32_t id_len);
+NCZX_IMPORT uint32_t rom_skeleton(const uint8_t* id_ptr, uint32_t id_len);
 ```
 {{#endtab}}
 
@@ -205,7 +205,7 @@ fn init() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     player_skeleton = rom_skeleton("player_rig", 10);
 }
 ```
@@ -239,7 +239,7 @@ fn rom_font(id_ptr: *const u8, id_len: u32) -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t rom_font(const uint8_t* id_ptr, uint32_t id_len);
+NCZX_IMPORT uint32_t rom_font(const uint8_t* id_ptr, uint32_t id_len);
 ```
 {{#endtab}}
 
@@ -270,7 +270,7 @@ fn init() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     ui_font = rom_font("ui_font", 7);
     title_font = rom_font("title_font", 10);
 }
@@ -306,7 +306,7 @@ fn rom_sound(id_ptr: *const u8, id_len: u32) -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t rom_sound(const uint8_t* id_ptr, uint32_t id_len);
+NCZX_IMPORT uint32_t rom_sound(const uint8_t* id_ptr, uint32_t id_len);
 ```
 {{#endtab}}
 
@@ -338,7 +338,7 @@ fn init() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     jump_sfx = rom_sound("jump", 4);
     coin_sfx = rom_sound("coin", 4);
     music = rom_sound("level1_bgm", 10);
@@ -380,7 +380,7 @@ fn rom_data_len(id_ptr: *const u8, id_len: u32) -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t rom_data_len(const uint8_t* id_ptr, uint32_t id_len);
+NCZX_IMPORT uint32_t rom_data_len(const uint8_t* id_ptr, uint32_t id_len);
 ```
 {{#endtab}}
 
@@ -413,7 +413,7 @@ fn init() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     uint32_t len = rom_data_len("level1_map", 10);
     if (len > 0) {
         // Allocate buffer and load
@@ -453,7 +453,7 @@ fn rom_data(id_ptr: *const u8, id_len: u32, out_ptr: *mut u8, max_len: u32) -> u
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t rom_data(const uint8_t* id_ptr, uint32_t id_len, uint8_t* out_ptr, uint32_t max_len);
+NCZX_IMPORT uint32_t rom_data(const uint8_t* id_ptr, uint32_t id_len, uint8_t* out_ptr, uint32_t max_len);
 ```
 {{#endtab}}
 
@@ -500,7 +500,7 @@ fn init() {
 ```c
 static uint8_t level_data[4096] = {0};
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     uint32_t len = rom_data_len("level1", 6);
     if (len <= 4096) {
         rom_data("level1", 6, level_data, 4096);
@@ -550,19 +550,19 @@ path = "assets/enemies.png"
 
 [[assets.meshes]]
 id = "level1"
-path = "assets/level1.ewzmesh"
+path = "assets/level1.nczxmesh"
 
 [[assets.meshes]]
 id = "player_model"
-path = "assets/player.ewzmesh"
+path = "assets/player.nczxmesh"
 
 [[assets.skeletons]]
 id = "player_rig"
-path = "assets/player.ewzskel"
+path = "assets/player.nczxskel"
 
 [[assets.animations]]
 id = "walk"
-path = "assets/walk.ewzanim"
+path = "assets/walk.nczxanim"
 
 [[assets.sounds]]
 id = "jump"
@@ -574,7 +574,7 @@ path = "assets/music/level1.raw"
 
 [[assets.fonts]]
 id = "ui_font"
-path = "assets/fonts/ui.ewzfont"
+path = "assets/fonts/ui.nczxfont"
 
 [[assets.data]]
 id = "level1"
@@ -584,7 +584,7 @@ path = "assets/levels/level1.bin"
 Build with:
 ```bash
 nether build
-nether pack  # Creates .ewz ROM file
+nether pack  # Creates .nczx ROM file
 ```
 
 ---
@@ -693,7 +693,7 @@ static uint32_t ui_font = 0;
 static uint8_t level_data[8192] = {0};
 static uint32_t level_size = 0;
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     // Graphics assets → VRAM
     player_tex = rom_texture("player", 6);
     player_mesh = rom_mesh("player", 6);
@@ -720,7 +720,7 @@ EWZX_EXPORT void init(void) {
     music_play(music, 0.7);
 }
 
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Use loaded assets
     texture_bind(player_tex);
     skeleton_bind(player_skel);

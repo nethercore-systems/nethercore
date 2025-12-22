@@ -15,22 +15,22 @@
 /* Game state - stored in static variables for rollback safety */
 static float square_y = 200.0f;
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     /* Set the background color (dark blue) */
     set_clear_color(0x1a1a2eFF);
 }
 
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     /* Move square with D-pad */
-    if (button_pressed(0, EWZX_BUTTON_UP)) {
+    if (button_pressed(0, NCZX_BUTTON_UP)) {
         square_y -= 10.0f;
     }
-    if (button_pressed(0, EWZX_BUTTON_DOWN)) {
+    if (button_pressed(0, NCZX_BUTTON_DOWN)) {
         square_y += 10.0f;
     }
 
     /* Reset position with A button */
-    if (button_pressed(0, EWZX_BUTTON_A)) {
+    if (button_pressed(0, NCZX_BUTTON_A)) {
         square_y = 200.0f;
     }
 
@@ -38,13 +38,13 @@ EWZX_EXPORT void update(void) {
     square_y = nczx_clampf(square_y, 20.0f, 450.0f);
 }
 
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     /* Draw title text */
-    EWZX_DRAW_TEXT("Hello Nethercore!", 80.0f, 50.0f, 32.0f, EWZX_WHITE);
+    NCZX_DRAW_TEXT("Hello Nethercore!", 80.0f, 50.0f, 32.0f, NCZX_COLOR_WHITE);
 
     /* Draw the moving square */
     draw_rect(200.0f, square_y, 80.0f, 80.0f, 0xFF6B6BFF);
 
     /* Draw instructions */
-    EWZX_DRAW_TEXT("D-pad: Move   A: Reset", 60.0f, 500.0f, 18.0f, 0x888888FF);
+    NCZX_DRAW_TEXT("D-pad: Move   A: Reset", 60.0f, 500.0f, 18.0f, 0x888888FF);
 }

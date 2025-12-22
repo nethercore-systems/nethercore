@@ -27,7 +27,7 @@ fn push_identity()
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void push_identity(void);
+NCZX_IMPORT void push_identity(void);
 ```
 {{#endtab}}
 
@@ -59,7 +59,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     /* Reset before drawing each object */
     push_identity();
     draw_mesh(object_a);
@@ -105,7 +105,7 @@ fn transform_set(matrix_ptr: *const f32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void transform_set(const float* matrix_ptr);
+NCZX_IMPORT void transform_set(const float* matrix_ptr);
 ```
 {{#endtab}}
 
@@ -154,7 +154,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     /* Using a math library */
     float transform[16];
     mat4_from_translation_rotation_scale(transform, pos, rot, scale);
@@ -199,7 +199,7 @@ fn push_translate(x: f32, y: f32, z: f32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void push_translate(float x, float y, float z);
+NCZX_IMPORT void push_translate(float x, float y, float z);
 ```
 {{#endtab}}
 
@@ -242,7 +242,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     /* Position object at (10, 5, 0) */
     push_identity();
     push_translate(10.0f, 5.0f, 0.0f);
@@ -296,7 +296,7 @@ fn push_rotate_x(angle_deg: f32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void push_rotate_x(float angle_deg);
+NCZX_IMPORT void push_rotate_x(float angle_deg);
 ```
 {{#endtab}}
 
@@ -330,7 +330,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     push_identity();
     push_rotate_x(45.0f); /* Tilt forward 45 degrees */
     draw_mesh(object);
@@ -368,7 +368,7 @@ fn push_rotate_y(angle_deg: f32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void push_rotate_y(float angle_deg);
+NCZX_IMPORT void push_rotate_y(float angle_deg);
 ```
 {{#endtab}}
 
@@ -396,7 +396,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     push_identity();
     push_rotate_y(elapsed_time() * 90.0f); /* Spin 90 deg/sec */
     draw_mesh(spinning_object);
@@ -434,7 +434,7 @@ fn push_rotate_z(angle_deg: f32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void push_rotate_z(float angle_deg);
+NCZX_IMPORT void push_rotate_z(float angle_deg);
 ```
 {{#endtab}}
 
@@ -462,7 +462,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     push_identity();
     push_rotate_z(45.0f); /* Roll 45 degrees */
     draw_mesh(object);
@@ -500,7 +500,7 @@ fn push_rotate(angle_deg: f32, axis_x: f32, axis_y: f32, axis_z: f32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void push_rotate(float angle_deg, float axis_x, float axis_y, float axis_z);
+NCZX_IMPORT void push_rotate(float angle_deg, float axis_x, float axis_y, float axis_z);
 ```
 {{#endtab}}
 
@@ -536,7 +536,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     push_identity();
     /* Rotate around diagonal axis */
     push_rotate(45.0f, 1.0f, 1.0f, 0.0f);
@@ -578,7 +578,7 @@ fn push_scale(x: f32, y: f32, z: f32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void push_scale(float x, float y, float z);
+NCZX_IMPORT void push_scale(float x, float y, float z);
 ```
 {{#endtab}}
 
@@ -618,7 +618,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     push_identity();
     push_scale(2.0f, 1.0f, 1.0f); /* Stretch horizontally */
     draw_mesh(object);
@@ -664,7 +664,7 @@ fn push_scale_uniform(s: f32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void push_scale_uniform(float s);
+NCZX_IMPORT void push_scale_uniform(float s);
 ```
 {{#endtab}}
 
@@ -702,7 +702,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     push_identity();
     push_scale_uniform(2.0f); /* Double size */
     draw_mesh(big_object);
@@ -755,7 +755,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     push_identity();
     push_translate(5.0f, 0.0f, 0.0f);  /* Applied LAST */
     push_rotate_y(45.0f);               /* Applied SECOND */
@@ -848,7 +848,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     /* Tank body */
     push_identity();
     push_translate(tank_x, tank_y, tank_z);
@@ -910,7 +910,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     push_identity();
     push_translate(pivot_x, pivot_y, pivot_z);  /* Move to pivot */
     push_rotate_y(angle);                        /* Rotate */
@@ -980,11 +980,11 @@ fn render() {
 ```c
 static float angle = 0.0f;
 
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     angle += 90.0f * delta_time(); /* 90 degrees per second */
 }
 
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     camera_set(0.0f, 5.0f, 10.0f, 0.0f, 0.0f, 0.0f);
 
     /* Spinning cube at origin */

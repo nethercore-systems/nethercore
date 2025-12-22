@@ -102,7 +102,7 @@ cargo run -- lighting
 | **datapack-demo** | Full `rom_*` workflow: textures, meshes, sounds |
 | **font-demo** | Custom font loading with `rom_font` |
 | **level-loader** | Loading level data with `rom_data` |
-| **asset-test** | Pre-converted `.ewzmesh` and `.ewztex` assets |
+| **asset-test** | Pre-converted `.nczxmesh` and `.nczxtex` assets |
 
 ### Complete Games
 

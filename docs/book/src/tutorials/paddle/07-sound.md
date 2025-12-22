@@ -105,9 +105,9 @@ You'll see output like:
 ```
 Building paddle...
   Compiling paddle v0.1.0
-  Converting hit.wav → hit.ewzsnd
-  Converting score.wav → score.ewzsnd
-  Converting win.wav → win.ewzsnd
+  Converting hit.wav → hit.nczxsnd
+  Converting score.wav → score.nczxsnd
+  Converting win.wav → win.nczxsnd
   Packing paddle.nczx (28 KB)
 Done!
 ```
@@ -152,10 +152,10 @@ extern "C" {
 {{#tab name="C/C++"}}
 ```c
 // ROM loading
-EWZX_IMPORT uint32_t rom_sound(const uint8_t* id_ptr, uint32_t id_len);
+NCZX_IMPORT uint32_t rom_sound(const uint8_t* id_ptr, uint32_t id_len);
 
 // Audio playback
-EWZX_IMPORT void play_sound(uint32_t sound, float volume, float pan);
+NCZX_IMPORT void play_sound(uint32_t sound, float volume, float pan);
 ```
 {{#endtab}}
 
@@ -543,9 +543,9 @@ extern "C" {
 {{#tab name="C/C++"}}
 ```c
 // Texture loading and drawing
-EWZX_IMPORT uint32_t rom_texture(const uint8_t* id_ptr, uint32_t id_len);
-EWZX_IMPORT void texture_bind(uint32_t texture);
-EWZX_IMPORT void draw_sprite(float x, float y, float w, float h);
+NCZX_IMPORT uint32_t rom_texture(const uint8_t* id_ptr, uint32_t id_len);
+NCZX_IMPORT void texture_bind(uint32_t texture);
+NCZX_IMPORT void draw_sprite(float x, float y, float w, float h);
 ```
 {{#endtab}}
 

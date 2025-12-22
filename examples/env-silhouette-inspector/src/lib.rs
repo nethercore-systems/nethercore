@@ -148,8 +148,8 @@ pub extern "C" fn render() {
         camera_set(dist * cos_e * sin_a, dist * sin_e, dist * cos_e * cos_a, 0.0, 0.0, 0.0);
         camera_fov(60.0);
 
-        env_select_pair(3, 3); // Silhouette mode
-        env_silhouette_set(
+        env_silhouette(
+            0, // base layer
             JAGGEDNESS as u32,
             LAYER_COUNT as u32,
             COLOR_NEAR,
@@ -159,7 +159,7 @@ pub extern "C" fn render() {
             PARALLAX_RATE as u32,
             SEED,
         );
-        draw_sky();
+        draw_env();
 
         push_identity();
         set_color(0xCCCCCCFF);

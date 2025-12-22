@@ -158,8 +158,8 @@ pub extern "C" fn render() {
         );
         camera_fov(60.0);
 
-        env_select_pair(6, 6); // Curtains mode
-        env_curtains_set(
+        env_curtains(
+            0, // base layer
             LAYER_COUNT as u32,
             DENSITY as u32,
             HEIGHT_MIN as u32,
@@ -173,7 +173,7 @@ pub extern "C" fn render() {
             PARALLAX_RATE as u32,
             PHASE,
         );
-        draw_sky();
+        draw_env();
 
         push_identity();
         set_color(0x333344FF);

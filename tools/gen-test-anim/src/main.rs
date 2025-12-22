@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use zx_common::formats::animation::{encode_bone_transform, NetherZAnimationHeader};
 
 fn main() {
-    let output_path = PathBuf::from("examples/animation-demo/assets/wave.ewzanim");
+    let output_path = PathBuf::from("examples/animation-demo/assets/wave.nczxanim");
 
     // Ensure output directory exists
     if let Some(parent) = output_path.parent() {

@@ -578,15 +578,15 @@ impl DebugEnvironment {
     /// Apply environment settings (call in render())
     pub fn apply(&self) {
         unsafe {
-            // Set modes
-            env_select_pair(self.base_mode, self.overlay_mode);
-            env_blend_mode(self.blend_mode);
+            // Set blend mode
+            env_blend(self.blend_mode);
 
             // Apply parameters based on current mode
             match self.base_mode {
                 0 => {
                     // Gradient
-                    env_gradient_set(
+                    env_gradient(
+                        0, // base layer
                         self.gradient.zenith,
                         self.gradient.sky_horizon,
                         self.gradient.ground_horizon,
@@ -597,7 +597,8 @@ impl DebugEnvironment {
                 }
                 1 => {
                     // Scatter
-                    env_scatter_set(
+                    env_scatter(
+                        0, // base layer
                         self.scatter.variant,
                         self.scatter.density,
                         self.scatter.size,
@@ -612,7 +613,8 @@ impl DebugEnvironment {
                 }
                 2 => {
                     // Lines
-                    env_lines_set(
+                    env_lines(
+                        0, // base layer
                         self.lines.variant,
                         self.lines.line_type,
                         self.lines.thickness,
@@ -626,7 +628,8 @@ impl DebugEnvironment {
                 }
                 7 => {
                     // Rings
-                    env_rings_set(
+                    env_rings(
+                        0, // base layer
                         self.rings.ring_count,
                         self.rings.thickness,
                         self.rings.color_a,
@@ -642,7 +645,8 @@ impl DebugEnvironment {
                 }
                 _ => {
                     // Modes 3-6 not yet implemented, fall back to gradient
-                    env_gradient_set(
+                    env_gradient(
+                        0, // base layer
                         self.gradient.zenith,
                         self.gradient.sky_horizon,
                         self.gradient.ground_horizon,
@@ -655,11 +659,11 @@ impl DebugEnvironment {
         }
     }
 
-    /// Apply environment settings and draw sky
+    /// Apply environment settings and draw
     pub fn apply_and_draw(&self) {
         self.apply();
         unsafe {
-            draw_sky();
+            draw_env();
         }
     }
 }

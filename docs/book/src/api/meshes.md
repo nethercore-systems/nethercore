@@ -21,7 +21,7 @@ fn load_mesh(data_ptr: *const u8, vertex_count: u32, format: u32) -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t load_mesh(const uint8_t* data_ptr, uint32_t vertex_count, uint32_t format);
+NCZX_IMPORT uint32_t load_mesh(const uint8_t* data_ptr, uint32_t vertex_count, uint32_t format);
 ```
 {{#endtab}}
 
@@ -68,7 +68,7 @@ fn load_mesh_indexed(
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t load_mesh_indexed(
+NCZX_IMPORT uint32_t load_mesh_indexed(
     const uint8_t* data_ptr,
     uint32_t vertex_count,
     const uint16_t* index_ptr,
@@ -157,7 +157,7 @@ static const uint16_t CUBE_INDICES[36] = {
     // ... more indices
 };
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     cube_mesh = load_mesh_indexed(
         (const uint8_t*)CUBE_VERTS,
         8,
@@ -217,7 +217,7 @@ fn load_mesh_packed(data_ptr: *const u8, vertex_count: u32, format: u32) -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t load_mesh_packed(const uint8_t* data_ptr, uint32_t vertex_count, uint32_t format);
+NCZX_IMPORT uint32_t load_mesh_packed(const uint8_t* data_ptr, uint32_t vertex_count, uint32_t format);
 ```
 {{#endtab}}
 
@@ -254,7 +254,7 @@ fn load_mesh_indexed_packed(
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t load_mesh_indexed_packed(
+NCZX_IMPORT uint32_t load_mesh_indexed_packed(
     const uint8_t* data_ptr,
     uint32_t vertex_count,
     const uint16_t* index_ptr,
@@ -297,7 +297,7 @@ fn draw_mesh(handle: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void draw_mesh(uint32_t handle);
+NCZX_IMPORT void draw_mesh(uint32_t handle);
 ```
 {{#endtab}}
 
@@ -341,7 +341,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Draw at origin
     push_identity();
     draw_mesh(cube);
@@ -404,7 +404,7 @@ fn draw_triangles(data_ptr: *const u8, vertex_count: u32, format: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void draw_triangles(const uint8_t* data_ptr, uint32_t vertex_count, uint32_t format);
+NCZX_IMPORT void draw_triangles(const uint8_t* data_ptr, uint32_t vertex_count, uint32_t format);
 ```
 {{#endtab}}
 
@@ -446,7 +446,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Dynamic triangle
     float verts[18] = {
         // Position (xyz) + Color (rgb)
@@ -503,7 +503,7 @@ fn draw_triangles_indexed(
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void draw_triangles_indexed(
+NCZX_IMPORT void draw_triangles_indexed(
     const uint8_t* data_ptr,
     uint32_t vertex_count,
     const uint16_t* index_ptr,
@@ -703,7 +703,7 @@ static const float QUAD_VERTS[4 * 8] = {
 
 static const uint16_t QUAD_INDICES[6] = {0, 1, 2, 2, 3, 0};
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     // Non-indexed triangle
     triangle = load_mesh(
         (const uint8_t*)TRI_VERTS,
@@ -721,7 +721,7 @@ EWZX_EXPORT void init(void) {
     );
 }
 
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     camera_set(0.0f, 0.0f, 5.0f, 0.0f, 0.0f, 0.0f);
 
     // Draw triangle

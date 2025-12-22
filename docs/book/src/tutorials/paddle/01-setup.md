@@ -87,19 +87,19 @@ pub extern "C" fn render() {
 #include <stdint.h>
 
 // FFI imports from the Nethercore runtime
-EWZX_IMPORT void set_clear_color(uint32_t color);
-EWZX_IMPORT void draw_rect(float x, float y, float w, float h, uint32_t color);
+NCZX_IMPORT void set_clear_color(uint32_t color);
+NCZX_IMPORT void draw_rect(float x, float y, float w, float h, uint32_t color);
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     // Dark background
     set_clear_color(0x1a1a2eFF);
 }
 
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     // Game logic will go here
 }
 
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Drawing will go here
 }
 ```
@@ -231,7 +231,7 @@ pub extern "C" fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Draw center line (dashed)
     float dash_height = 20.0f;
     float dash_gap = 15.0f;
@@ -298,7 +298,7 @@ pub extern "C" fn init() {
 static float paddle1_y = 0.0f;
 static float paddle2_y = 0.0f;
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     set_clear_color(0x1a1a2eFF);
 
     // Center paddles vertically
@@ -371,7 +371,7 @@ pub extern "C" fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Draw center line (dashed)
     float dash_height = 20.0f;
     float dash_gap = 15.0f;
@@ -496,7 +496,7 @@ pub extern "C" fn init() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     set_clear_color(0x1a1a2eFF);
 
     paddle1_y = SCREEN_HEIGHT / 2.0f - PADDLE_HEIGHT / 2.0f;
@@ -650,8 +650,8 @@ pub extern "C" fn render() {
 #include <stdint.h>
 
 // FFI imports
-EWZX_IMPORT void set_clear_color(uint32_t color);
-EWZX_IMPORT void draw_rect(float x, float y, float w, float h, uint32_t color);
+NCZX_IMPORT void set_clear_color(uint32_t color);
+NCZX_IMPORT void draw_rect(float x, float y, float w, float h, uint32_t color);
 
 // Constants
 #define SCREEN_WIDTH 960.0f
@@ -671,7 +671,7 @@ static float paddle2_y = 0.0f;
 static float ball_x = 0.0f;
 static float ball_y = 0.0f;
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     set_clear_color(0x1a1a2eFF);
     paddle1_y = SCREEN_HEIGHT / 2.0f - PADDLE_HEIGHT / 2.0f;
     paddle2_y = SCREEN_HEIGHT / 2.0f - PADDLE_HEIGHT / 2.0f;
@@ -679,9 +679,9 @@ EWZX_EXPORT void init(void) {
     ball_y = SCREEN_HEIGHT / 2.0f - BALL_SIZE / 2.0f;
 }
 
-EWZX_EXPORT void update(void) {}
+NCZX_EXPORT void update(void) {}
 
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Center line
     float dash_height = 20.0f;
     float dash_gap = 15.0f;

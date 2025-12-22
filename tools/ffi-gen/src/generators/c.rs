@@ -43,8 +43,8 @@ pub fn generate_c_header(model: &FfiModel, console: &str) -> Result<String> {
     writeln!(output)?;
 
     // WASM attributes
-    writeln!(output, "#define EWZX_EXPORT __attribute__((visibility(\"default\")))")?;
-    writeln!(output, "#define EWZX_IMPORT __attribute__((import_module(\"env\")))")?;
+    writeln!(output, "#define NCZX_EXPORT __attribute__((visibility(\"default\")))")?;
+    writeln!(output, "#define NCZX_IMPORT __attribute__((import_module(\"env\")))")?;
     writeln!(output)?;
 
     // C++ compatibility
@@ -73,7 +73,7 @@ pub fn generate_c_header(model: &FfiModel, console: &str) -> Result<String> {
         }
 
         // Function declaration
-        write!(output, "EWZX_IMPORT {} {}(", func.return_type.c_type, func.name)?;
+        write!(output, "NCZX_IMPORT {} {}(", func.return_type.c_type, func.name)?;
 
         if func.params.is_empty() {
             write!(output, "void")?;
@@ -100,7 +100,7 @@ pub fn generate_c_header(model: &FfiModel, console: &str) -> Result<String> {
         for module in &model.constants {
             writeln!(output, "// {} constants", module.name)?;
             for constant in &module.constants {
-                let const_name = format!("EWZX_{}_{}",
+                let const_name = format!("NCZX_{}_{}",
                     module.name.to_uppercase(),
                     constant.name.to_uppercase()
                 );
@@ -154,7 +154,7 @@ mod tests {
 
         let header = generate_c_header(&model, "test").unwrap();
 
-        assert!(header.contains("EWZX_IMPORT float test_fn(uint32_t x);"));
+        assert!(header.contains("NCZX_IMPORT float test_fn(uint32_t x);"));
         assert!(header.contains("/** Test function */"));
         assert!(header.contains("#ifndef NETHERCORE_TEST_H"));
     }

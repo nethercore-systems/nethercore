@@ -300,7 +300,7 @@ The console uses GGRS for deterministic rollback netcode. This means:
 ### Asset Loading
 Two approaches for loading assets:
 
-**ROM Data Pack (recommended):** Assets bundled in `.ewz` ROM file, loaded by string ID:
+**ROM Data Pack (recommended):** Assets bundled in `.nczx` ROM file, loaded by string ID:
 ```rust
 // In init() - assets go directly to VRAM, bypass WASM memory
 let texture = rom_texture(b"player".as_ptr(), 6);
@@ -310,7 +310,7 @@ let sound = rom_sound(b"jump".as_ptr(), 4);
 
 **Embedded Assets:** Use `include_bytes!()` with binary formats:
 ```rust
-static MESH: &[u8] = include_bytes!("player.ewzmesh");
+static MESH: &[u8] = include_bytes!("player.nczxmesh");
 let handle = load_zmesh(MESH.as_ptr() as u32, MESH.len() as u32);
 ```
 
@@ -330,7 +330,7 @@ path = "assets/player.png"
 
 [[assets.meshes]]
 id = "level"
-path = "assets/level.ewzmesh"
+path = "assets/level.nczxmesh"
 ```
 
 ### Debug Inspection System

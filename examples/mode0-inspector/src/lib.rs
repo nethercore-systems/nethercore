@@ -64,9 +64,17 @@ extern "C" {
     fn set_color(color: u32);
     fn depth_test(enabled: u32);
 
-    // Sky
-    fn sky_set_colors(horizon_color: u32, zenith_color: u32);
-    fn draw_sky();
+    // Environment
+    fn env_gradient(
+        layer: u32,
+        zenith: u32,
+        sky_horizon: u32,
+        ground_horizon: u32,
+        nadir: u32,
+        rotation: f32,
+        shift: f32,
+    );
+    fn draw_env();
 
     // Lights (4 dynamic lights)
     fn light_set(index: u32, x: f32, y: f32, z: f32);
@@ -264,12 +272,13 @@ pub extern "C" fn render() {
         camera_set(0.0, 2.0, 6.0, 0.0, 0.0, 0.0);
         camera_fov(60.0);
 
-        // Configure and draw sky
-        sky_set_colors(HORIZON_COLOR, ZENITH_COLOR);
+        // Configure and draw environment
+        // Use gradient with 2-color sky (zenith -> horizon for sky, horizon -> darker for ground)
+        env_gradient(0, ZENITH_COLOR, HORIZON_COLOR, HORIZON_COLOR, 0x2A2A2AFF, 0.0, 0.0);
         light_set(0, SUN_DIR_X, SUN_DIR_Y, SUN_DIR_Z);
         light_color(0, SUN_COLOR);
         light_intensity(0, 1.0);
-        draw_sky();
+        draw_env();
 
         // Update lights from debug values
         for i in 0..4u32 {

@@ -38,7 +38,7 @@ use super::z_data_pack::ZDataPack;
 /// ┌─────────────────────────────────────────────────────────────┐
 /// │                   .nczx ROM File (≤12MB)                    │
 /// ├─────────────────────────────────────────────────────────────┤
-/// │  EWZX Header (4 bytes)                                      │
+/// │  NCZX Header (4 bytes)                                      │
 /// │  ├── Magic: "NCZX"                                          │
 /// ├─────────────────────────────────────────────────────────────┤
 /// │  ZRom (bitcode serialized)                                  │
@@ -146,14 +146,14 @@ impl ZRom {
         // Check magic bytes
         if bytes.len() < 4 || &bytes[0..4] != ZX_ROM_FORMAT.magic {
             anyhow::bail!(
-                "Invalid EWZX magic bytes (expected: {:?})",
+                "Invalid NCZX magic bytes (expected: {:?})",
                 std::str::from_utf8(ZX_ROM_FORMAT.magic).unwrap_or("NCZX")
             );
         }
 
         // Decode remaining bytes
         let rom: ZRom = bitcode::decode(&bytes[4..])
-            .map_err(|e| anyhow::anyhow!("Failed to decode EWZX ROM: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to decode NCZX ROM: {}", e))?;
 
         // Validate
         rom.validate()?;
@@ -171,7 +171,7 @@ impl ZRom {
         // Check version
         if self.version > ZX_ROM_FORMAT.version {
             anyhow::bail!(
-                "Unsupported EWZX version: {} (max supported: {})",
+                "Unsupported NCZX version: {} (max supported: {})",
                 self.version,
                 ZX_ROM_FORMAT.version
             );
@@ -278,7 +278,7 @@ mod tests {
             result
                 .unwrap_err()
                 .to_string()
-                .contains("Invalid EWZX magic bytes")
+                .contains("Invalid NCZX magic bytes")
         );
     }
 

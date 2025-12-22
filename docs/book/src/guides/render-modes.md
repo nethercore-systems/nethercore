@@ -25,7 +25,7 @@ fn init() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     render_mode(2); // PBR-style lighting
 }
 ```
@@ -74,11 +74,11 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     render_mode(0);
 }
 
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Color comes purely from texture + set_color tint
     texture_bind(sprite_tex);
     set_color(0xFFFFFFFF);
@@ -159,13 +159,13 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     render_mode(1);
     SHADOW_MATCAP = rom_texture("matcap_shadow", 13);
     HIGHLIGHT_MATCAP = rom_texture("matcap_highlight", 16);
 }
 
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     texture_bind(character_albedo);
     matcap_set(1, SHADOW_MATCAP);
     matcap_blend_mode(1, 0); // Multiply
@@ -292,11 +292,11 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     render_mode(2);
 }
 
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Set up lighting
     light_set(0, 0.5f, -0.7f, 0.5f);
     light_color(0, 0xFFF2E6FF);
@@ -450,11 +450,11 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     render_mode(3);
 }
 
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Gold armor
     set_color(0xE6B84DFF);
     material_shininess(0.8f);
@@ -566,7 +566,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     render_mode(2); // or 1 or 3
 
     // Set up environment (provides ambient light)
@@ -581,7 +581,7 @@ EWZX_EXPORT void init(void) {
     );
 }
 
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     draw_env();
 
     // Main directional light

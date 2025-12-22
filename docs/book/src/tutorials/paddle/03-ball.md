@@ -93,7 +93,7 @@ extern "C" {
 {{#tab name="C/C++"}}
 ```c
 // Add to imports section
-EWZX_IMPORT uint32_t random_u32(void);
+NCZX_IMPORT uint32_t random_u32(void);
 ```
 {{#endtab}}
 
@@ -191,7 +191,7 @@ pub extern "C" fn init() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     set_clear_color(0x1a1a2eFF);
     PADDLE1_Y = SCREEN_HEIGHT / 2.0f - PADDLE_HEIGHT / 2.0f;
     PADDLE2_Y = SCREEN_HEIGHT / 2.0f - PADDLE_HEIGHT / 2.0f;
@@ -310,7 +310,7 @@ pub extern "C" fn update() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     update_paddle(&PADDLE1_Y, 0);
     update_paddle(&PADDLE2_Y, 1);
     update_ball();

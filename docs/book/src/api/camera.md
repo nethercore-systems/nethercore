@@ -20,7 +20,7 @@ fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f3
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void camera_set(float x, float y, float z, float target_x, float target_y, float target_z);
+NCZX_IMPORT void camera_set(float x, float y, float z, float target_x, float target_y, float target_z);
 ```
 {{#endtab}}
 
@@ -64,7 +64,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     /* Fixed camera looking at origin */
     camera_set(0.0f, 5.0f, 10.0f, 0.0f, 0.0f, 0.0f);
 
@@ -120,7 +120,7 @@ fn camera_fov(fov_degrees: f32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void camera_fov(float fov_degrees);
+NCZX_IMPORT void camera_fov(float fov_degrees);
 ```
 {{#endtab}}
 
@@ -163,7 +163,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     /* Normal gameplay */
     camera_fov(60.0f);
 
@@ -224,7 +224,7 @@ fn push_view_matrix(
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void push_view_matrix(
+NCZX_IMPORT void push_view_matrix(
     float m0, float m1, float m2, float m3,
     float m4, float m5, float m6, float m7,
     float m8, float m9, float m10, float m11,
@@ -277,7 +277,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     /* Using a math library for matrix calculation */
     float view[16];
     mat4_look_at(view, eye, target, up);
@@ -328,7 +328,7 @@ fn push_projection_matrix(
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void push_projection_matrix(
+NCZX_IMPORT void push_projection_matrix(
     float m0, float m1, float m2, float m3,
     float m4, float m5, float m6, float m7,
     float m8, float m9, float m10, float m11,
@@ -376,7 +376,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     /* Custom perspective projection */
     float aspect = 16.0f / 9.0f;
     float fov = 60.0f * 3.14159f / 180.0f;
@@ -454,7 +454,7 @@ static float orbit_angle = 0.0f;
 static float orbit_distance = 10.0f;
 static float orbit_height = 5.0f;
 
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     /* Rotate with right stick */
     orbit_angle += right_stick_x(0) * 2.0f * delta_time();
 
@@ -464,7 +464,7 @@ EWZX_EXPORT void update(void) {
     orbit_distance = nczx_clampf(orbit_distance, 5.0f, 20.0f);
 }
 
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     float cam_x = cosf(orbit_angle) * orbit_distance;
     float cam_z = sinf(orbit_angle) * orbit_distance;
     camera_set(cam_x, orbit_height, cam_z, 0.0f, 0.0f, 0.0f);
@@ -550,7 +550,7 @@ static float cam_z = 0.0f;
 static float cam_yaw = 0.0f;
 static float cam_pitch = 0.0f;
 
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     /* Look with right stick */
     cam_yaw += right_stick_x(0) * 3.0f * delta_time();
     cam_pitch -= right_stick_y(0) * 2.0f * delta_time();
@@ -569,7 +569,7 @@ EWZX_EXPORT void update(void) {
     cam_z += left_stick_x(0) * right_z * speed;
 }
 
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     float look_x = cam_x + sinf(cam_yaw) * cosf(cam_pitch);
     float look_y = cam_y + sinf(cam_pitch);
     float look_z = cam_z + cosf(cam_yaw) * cosf(cam_pitch);
@@ -647,7 +647,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     uint32_t count = player_count();
 
     for (uint32_t p = 0; p < count; p++) {

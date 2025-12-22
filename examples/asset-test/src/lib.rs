@@ -4,8 +4,8 @@
 //! Uses load_zmesh and load_ztex FFI functions which parse the binary format host-side.
 //!
 //! Assets were converted using nether-export from:
-//! - assets/cube.obj (text format) -> cube.ewzmesh
-//! - assets/checkerboard.png -> checkerboard.ewztex
+//! - assets/cube.obj (text format) -> cube.nczxmesh
+//! - assets/checkerboard.png -> checkerboard.nczxtex
 
 #![no_std]
 #![no_main]
@@ -21,8 +21,8 @@ fn panic(_info: &PanicInfo) -> ! {
 // Embedded Asset Data (pre-converted with nether-export)
 // =============================================================================
 
-static CUBE_MESH_DATA: &[u8] = include_bytes!("../assets/cube.ewzmesh");
-static CHECKERBOARD_TEX_DATA: &[u8] = include_bytes!("../assets/checkerboard.ewztex");
+static CUBE_MESH_DATA: &[u8] = include_bytes!("../assets/cube.nczxmesh");
+static CHECKERBOARD_TEX_DATA: &[u8] = include_bytes!("../assets/checkerboard.nczxtex");
 
 // =============================================================================
 // FFI Declarations
@@ -86,13 +86,13 @@ pub extern "C" fn init() {
         // Enable depth testing for proper 3D rendering
         depth_test(1);
 
-        // Load mesh from embedded .ewzmesh data (host parses header)
+        // Load mesh from embedded .nczxmesh data (host parses header)
         CUBE_MESH = load_zmesh(
             CUBE_MESH_DATA.as_ptr() as u32,
             CUBE_MESH_DATA.len() as u32,
         );
 
-        // Load texture from embedded .ewztex data (host parses header)
+        // Load texture from embedded .nczxtex data (host parses header)
         CHECKERBOARD_TEX = load_ztex(
             CHECKERBOARD_TEX_DATA.as_ptr() as u32,
             CHECKERBOARD_TEX_DATA.len() as u32,

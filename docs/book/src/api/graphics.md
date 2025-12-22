@@ -22,7 +22,7 @@ fn set_tick_rate(fps: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void set_tick_rate(uint32_t fps);
+NCZX_IMPORT void set_tick_rate(uint32_t fps);
 ```
 {{#endtab}}
 
@@ -59,7 +59,7 @@ fn init() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     set_tick_rate(2); // 60 fps
 }
 ```
@@ -93,7 +93,7 @@ fn set_clear_color(color: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void set_clear_color(uint32_t color);
+NCZX_IMPORT void set_clear_color(uint32_t color);
 ```
 {{#endtab}}
 
@@ -128,7 +128,7 @@ fn init() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     set_clear_color(0x1a1a2eFF); // Dark blue
     set_clear_color(0x87CEEBFF); // Sky blue
 }
@@ -164,7 +164,7 @@ fn render_mode(mode: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void render_mode(uint32_t mode);
+NCZX_IMPORT void render_mode(uint32_t mode);
 ```
 {{#endtab}}
 
@@ -201,7 +201,7 @@ fn init() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     render_mode(2); // PBR-style lighting
 }
 ```
@@ -241,7 +241,7 @@ fn set_color(color: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void set_color(uint32_t color);
+NCZX_IMPORT void set_color(uint32_t color);
 ```
 {{#endtab}}
 
@@ -283,7 +283,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // White (no tint)
     set_color(0xFFFFFFFF);
     draw_mesh(model);
@@ -337,7 +337,7 @@ fn depth_test(enabled: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void depth_test(uint32_t enabled);
+NCZX_IMPORT void depth_test(uint32_t enabled);
 ```
 {{#endtab}}
 
@@ -376,7 +376,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // 3D scene with depth
     depth_test(1);
     draw_mesh(level);
@@ -424,7 +424,7 @@ fn cull_mode(mode: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void cull_mode(uint32_t mode);
+NCZX_IMPORT void cull_mode(uint32_t mode);
 ```
 {{#endtab}}
 
@@ -468,7 +468,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Normal geometry
     cull_mode(1); // Back-face culling
     draw_mesh(solid_object);
@@ -522,7 +522,7 @@ fn blend_mode(mode: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void blend_mode(uint32_t mode);
+NCZX_IMPORT void blend_mode(uint32_t mode);
 ```
 {{#endtab}}
 
@@ -569,7 +569,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Opaque geometry first
     blend_mode(0);
     draw_mesh(level);
@@ -627,7 +627,7 @@ fn texture_filter(filter: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void texture_filter(uint32_t filter);
+NCZX_IMPORT void texture_filter(uint32_t filter);
 ```
 {{#endtab}}
 
@@ -666,7 +666,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Pixel art sprites
     texture_filter(0);
     draw_sprite(0.0f, 0.0f, 64.0f, 64.0f, 0xFFFFFFFF);
@@ -712,7 +712,7 @@ fn uniform_alpha(level: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void uniform_alpha(uint32_t level);
+NCZX_IMPORT void uniform_alpha(uint32_t level);
 ```
 {{#endtab}}
 
@@ -750,7 +750,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Fade in effect
     uint32_t alpha = (uint32_t)(fade_progress * 15.0f);
     uniform_alpha(alpha);
@@ -798,7 +798,7 @@ fn dither_offset(x: u32, y: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void dither_offset(uint32_t x, uint32_t y);
+NCZX_IMPORT void dither_offset(uint32_t x, uint32_t y);
 ```
 {{#endtab}}
 
@@ -833,7 +833,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Animate dither pattern for shimmer effect
     uint32_t frame = (uint32_t)tick_count();
     dither_offset(frame % 4, (frame / 4) % 4);
@@ -894,14 +894,14 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     // Configure console
     set_tick_rate(2);         // 60 fps
     set_clear_color(0x1a1a2eFF);
     render_mode(2);           // PBR lighting
 }
 
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Draw 3D scene
     depth_test(1);
     cull_mode(1);

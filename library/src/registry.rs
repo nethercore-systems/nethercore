@@ -99,7 +99,7 @@ impl ConsoleType {
     /// # Returns
     ///
     /// - `"nczx"` for Nethercore ZX
-    /// - Future: `"ewc"` for Nethercore Chroma, etc.
+    /// - Future: `"ncc"` for Nethercore Chroma, etc.
     #[allow(dead_code)]
     pub fn rom_extension(&self) -> &'static str {
         match self {
@@ -594,6 +594,6 @@ mod tests {
         assert_eq!(ConsoleType::from_extension("invalid"), None);
         assert_eq!(ConsoleType::from_extension(""), None);
         assert_eq!(ConsoleType::from_extension("NCZX"), None); // Case-sensitive
-        assert_eq!(ConsoleType::from_extension("ewc"), None); // Chroma not yet implemented
+        assert_eq!(ConsoleType::from_extension("ncc"), None); // Chroma not yet implemented
     }
 }

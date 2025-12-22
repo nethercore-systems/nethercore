@@ -7,8 +7,8 @@ REM
 REM Usage: scripts\test-p2p.bat <rom_path> [input_delay]
 REM
 REM Examples:
-REM   scripts\test-p2p.bat games\pong.ewzx
-REM   scripts\test-p2p.bat games\pong.ewzx 2
+REM   scripts\test-p2p.bat games\pong.nczx
+REM   scripts\test-p2p.bat games\pong.nczx 2
 
 setlocal
 

@@ -65,9 +65,9 @@ render_mode(mode)                      // 0=Unlit, 1=Matcap, 2=MR, 3=SS
 
 {{#tab name="C/C++"}}
 ```c
-void set_tick_rate(uint32_t fps);      // EWZX_TICK_RATE_24/30/60/120
+void set_tick_rate(uint32_t fps);      // NCZX_TICK_RATE_24/30/60/120
 void set_clear_color(uint32_t color);  // Background color
-void render_mode(uint32_t mode);       // EWZX_RENDER_LAMBERT/MATCAP/PBR/HYBRID
+void render_mode(uint32_t mode);       // NCZX_RENDER_LAMBERT/MATCAP/PBR/HYBRID
 ```
 {{#endtab}}
 
@@ -115,7 +115,7 @@ trigger_right(player) -> f32
 
 {{#tab name="C/C++"}}
 ```c
-// Buttons (player: 0-3, button: EWZX_BUTTON_*)
+// Buttons (player: 0-3, button: NCZX_BUTTON_*)
 uint32_t button_held(player, button);     // 1 if held
 uint32_t button_pressed(player, button);  // 1 if just pressed
 uint32_t button_released(player, button); // 1 if just released
@@ -136,7 +136,7 @@ float trigger_left(player);
 float trigger_right(player);
 ```
 
-**Button Constants:** `EWZX_BUTTON_UP`=0, `EWZX_BUTTON_DOWN`=1, `EWZX_BUTTON_LEFT`=2, `EWZX_BUTTON_RIGHT`=3, `EWZX_BUTTON_A`=4, `EWZX_BUTTON_B`=5, `EWZX_BUTTON_X`=6, `EWZX_BUTTON_Y`=7, `EWZX_BUTTON_L1`=8, `EWZX_BUTTON_R1`=9, `EWZX_BUTTON_L3`=10, `EWZX_BUTTON_R3`=11, `EWZX_BUTTON_START`=12, `EWZX_BUTTON_SELECT`=13
+**Button Constants:** `NCZX_BUTTON_UP`=0, `NCZX_BUTTON_DOWN`=1, `NCZX_BUTTON_LEFT`=2, `NCZX_BUTTON_RIGHT`=3, `NCZX_BUTTON_A`=4, `NCZX_BUTTON_B`=5, `NCZX_BUTTON_X`=6, `NCZX_BUTTON_Y`=7, `NCZX_BUTTON_L1`=8, `NCZX_BUTTON_R1`=9, `NCZX_BUTTON_L3`=10, `NCZX_BUTTON_R3`=11, `NCZX_BUTTON_START`=12, `NCZX_BUTTON_SELECT`=13
 {{#endtab}}
 
 {{#tab name="Zig"}}
@@ -273,8 +273,8 @@ dither_offset(x, y)                    // 0-3 pattern offset
 ```c
 void set_color(uint32_t color);        // Tint color
 void depth_test(uint32_t enabled);     // 0=off, 1=on
-void cull_mode(uint32_t mode);         // EWZX_CULL_NONE/BACK/FRONT
-void blend_mode(uint32_t mode);        // EWZX_BLEND_NONE/ALPHA/ADDITIVE/MULTIPLY
+void cull_mode(uint32_t mode);         // NCZX_CULL_NONE/BACK/FRONT
+void blend_mode(uint32_t mode);        // NCZX_BLEND_NONE/ALPHA/ADDITIVE/MULTIPLY
 void texture_filter(uint32_t filter);  // 0=nearest, 1=linear
 void uniform_alpha(uint32_t level);    // 0-15 dither alpha
 void dither_offset(uint32_t x, uint32_t y);  // 0-3 pattern offset
@@ -370,7 +370,7 @@ void draw_triangles_indexed(const float* data, uint32_t vcount,
                             const uint16_t* idx, uint32_t icount, uint32_t fmt);
 ```
 
-**Vertex Formats:** `EWZX_FORMAT_POS`=0, `EWZX_FORMAT_UV`=1, `EWZX_FORMAT_COLOR`=2, `EWZX_FORMAT_NORMAL`=4, `EWZX_FORMAT_SKINNED`=8 (combinable)
+**Vertex Formats:** `NCZX_FORMAT_POS`=0, `NCZX_FORMAT_UV`=1, `NCZX_FORMAT_COLOR`=2, `NCZX_FORMAT_NORMAL`=4, `NCZX_FORMAT_SKINNED`=8 (combinable)
 {{#endtab}}
 
 {{#tab name="Zig"}}
@@ -676,7 +676,7 @@ void draw_text(const uint8_t* ptr, uint32_t len, float x, float y, float size, u
 uint32_t load_font(uint32_t tex, uint32_t char_w, uint32_t char_h, uint32_t first_cp, uint32_t count);
 uint32_t load_font_ex(uint32_t tex, const uint8_t* widths, uint32_t char_h, uint32_t first_cp, uint32_t count);
 void font_bind(uint32_t handle);
-// Helper: EWZX_DRAW_TEXT("Hello", x, y, size, color)
+// Helper: NCZX_DRAW_TEXT("Hello", x, y, size, color)
 ```
 {{#endtab}}
 
@@ -713,7 +713,7 @@ draw_billboard_region(w, h, sx, sy, sw, sh, mode, color)
 ```c
 void draw_billboard(float w, float h, uint32_t mode, uint32_t color);
 void draw_billboard_region(float w, float h, float sx, float sy, float sw, float sh, uint32_t mode, uint32_t color);
-// Modes: EWZX_BILLBOARD_SPHERICAL, EWZX_BILLBOARD_CYLINDRICAL_Y/X/Z
+// Modes: NCZX_BILLBOARD_SPHERICAL, NCZX_BILLBOARD_CYLINDRICAL_Y/X/Z
 ```
 {{#endtab}}
 
@@ -911,7 +911,7 @@ uint32_t rom_sound(uint32_t id_ptr, uint32_t id_len);
 uint32_t rom_keyframes(uint32_t id_ptr, uint32_t id_len);
 uint32_t rom_data_len(uint32_t id_ptr, uint32_t id_len);
 uint32_t rom_data(uint32_t id_ptr, uint32_t id_len, uint32_t out_ptr, uint32_t max_len);
-// Helpers: EWZX_ROM_TEXTURE("id"), EWZX_ROM_MESH("id"), etc.
+// Helpers: NCZX_ROM_TEXTURE("id"), NCZX_ROM_MESH("id"), etc.
 ```
 {{#endtab}}
 

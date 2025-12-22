@@ -29,7 +29,7 @@ fn save(slot: u32, data_ptr: *const u8, data_len: u32) -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t save(uint32_t slot, const uint8_t* data_ptr, uint32_t data_len);
+NCZX_IMPORT uint32_t save(uint32_t slot, const uint8_t* data_ptr, uint32_t data_len);
 ```
 {{#endtab}}
 
@@ -155,7 +155,7 @@ fn load(slot: u32, data_ptr: *mut u8, max_len: u32) -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t load(uint32_t slot, uint8_t* data_ptr, uint32_t max_len);
+NCZX_IMPORT uint32_t load(uint32_t slot, uint8_t* data_ptr, uint32_t max_len);
 ```
 {{#endtab}}
 
@@ -275,7 +275,7 @@ fn delete(slot: u32) -> u32
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t delete_save(uint32_t slot);
+NCZX_IMPORT uint32_t delete_save(uint32_t slot);
 ```
 {{#endtab}}
 
@@ -632,7 +632,7 @@ fn auto_save() {
 static float LAST_SAVE_TIME = 0.0f;
 const float AUTO_SAVE_INTERVAL = 60.0f; // Every 60 seconds
 
-EWZX_EXPORT void update() {
+NCZX_EXPORT void update() {
     // Auto-save every 60 seconds
     if (elapsed_time() - LAST_SAVE_TIME > AUTO_SAVE_INTERVAL) {
         auto_save();

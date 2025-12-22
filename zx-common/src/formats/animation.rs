@@ -1,4 +1,4 @@
-//! NetherZAnimation binary format (.ewzanim)
+//! NetherZAnimation binary format (.nczxanim)
 //!
 //! ZX console animation clip format containing sampled bone transforms.
 //! POD format with minimal header - no magic bytes.

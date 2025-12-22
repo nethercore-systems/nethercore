@@ -133,7 +133,7 @@ fn update() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     // All calculations based only on:
     // - Current state (in WASM memory)
     // - Player inputs (from GGRS)
@@ -142,7 +142,7 @@ EWZX_EXPORT void update(void) {
 
     float dt = delta_time();
     for (uint32_t p = 0; p < player_count(); p++) {
-        if (button_pressed(p, EWZX_BUTTON_A) != 0) {
+        if (button_pressed(p, NCZX_BUTTON_A) != 0) {
             player_jump(&players[p]);
         }
         players[p].x += left_stick_x(p) * SPEED * dt;
@@ -205,17 +205,17 @@ fn render() {
 {{#tab name="C/C++"}}
 ```c
 // GOOD - Logic in update()
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     animation_frame = (tick_count() / 6) % 4;
 }
 
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Just draw, no state changes
     draw_sprite_region(..., (float)animation_frame * 32.0f, ...);
 }
 
 // BAD - Logic in render()
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     animation_frame++;  // Skipped during rollback = desynced!
     draw_sprite_region(...);
 }
@@ -411,7 +411,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     // Core gameplay - must be deterministic
     if (player_hit_enemy()) {
         enemy_health -= DAMAGE;
@@ -422,7 +422,7 @@ EWZX_EXPORT void update(void) {
     }
 }
 
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     // Visual-only effects
     spawn_particles(player_x, player_y);  // Not critical
 }
@@ -489,7 +489,7 @@ fn update() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     // After each update, log state hash
     uint32_t hash = calculate_state_hash();
     log_fmt((uint32_t)"Tick %u hash: %u", tick_count(), hash);
@@ -622,7 +622,7 @@ void enemy_update(Enemy* enemy, float player_x, float player_y) {
     }
 }
 
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     float px = player_x;
     float py = player_y;
 

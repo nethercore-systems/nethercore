@@ -22,7 +22,7 @@ fn main() {
 
     // Generate assets for character 1 (3-bone vertical arm)
     generate_skeleton(
-        &output_dir.join("arm1.ewzskel"),
+        &output_dir.join("arm1.nczxskel"),
         3,
         &[
             [0.0, 0.0, 0.0],  // Bone 0: origin
@@ -31,10 +31,10 @@ fn main() {
         ],
     );
 
-    generate_arm_mesh(&output_dir.join("arm1.ewzmesh"), 3, 1.5, true);
+    generate_arm_mesh(&output_dir.join("arm1.nczxmesh"), 3, 1.5, true);
 
     generate_animation(
-        &output_dir.join("wave1.ewzanim"),
+        &output_dir.join("wave1.nczxanim"),
         3,
         30,
         &[
@@ -46,7 +46,7 @@ fn main() {
 
     // Generate assets for character 2 (4-bone horizontal arm)
     generate_skeleton(
-        &output_dir.join("arm2.ewzskel"),
+        &output_dir.join("arm2.nczxskel"),
         4,
         &[
             [0.0, 0.0, 0.0],  // Bone 0: origin
@@ -56,9 +56,9 @@ fn main() {
         ],
     );
 
-    generate_horizontal_arm_mesh(&output_dir.join("arm2.ewzmesh"), 4, 1.0);
+    generate_horizontal_arm_mesh(&output_dir.join("arm2.nczxmesh"), 4, 1.0);
 
-    generate_horizontal_animation(&output_dir.join("wave2.ewzanim"), 4, 30);
+    generate_horizontal_animation(&output_dir.join("wave2.nczxanim"), 4, 30);
 
     println!("Assets generated successfully in {}", output_dir.display());
 }

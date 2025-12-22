@@ -64,7 +64,7 @@ path = "assets/player.png"
 
 [[assets.meshes]]
 id = "level"
-path = "assets/level.ewzmesh"
+path = "assets/level.nczxmesh"
 
 [[assets.sounds]]
 id = "jump"

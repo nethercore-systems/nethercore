@@ -21,7 +21,7 @@ pub extern "C" fn init() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     /* Load resources */
     /* Configure graphics settings */
     /* Initialize game state */
@@ -75,11 +75,11 @@ pub extern "C" fn init() {
 ```c
 static uint32_t player_texture = 0;
 
-EWZX_EXPORT void init(void) {
+NCZX_EXPORT void init(void) {
     set_resolution(1);        /* 540p */
     set_tick_rate(2);         /* 60 FPS */
     set_clear_color(0x000000FF);
-    render_mode(EWZX_RENDER_PBR);
+    render_mode(NCZX_RENDER_PBR);
 
     /* Load a texture */
     player_texture = load_texture(8, 8, pixels);
@@ -123,7 +123,7 @@ pub extern "C" fn update() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     /* Read input */
     /* Update game logic */
     /* Handle physics */
@@ -185,12 +185,12 @@ pub extern "C" fn update() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     float dt = delta_time();
 
     /* Read input */
     float move_x = left_stick_x(0);
-    int jump = button_pressed(0, EWZX_BUTTON_A) != 0;
+    int jump = button_pressed(0, NCZX_BUTTON_A) != 0;
 
     /* Update physics */
     player_vy -= GRAVITY;
@@ -246,7 +246,7 @@ pub extern "C" fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     /* Set up camera */
     /* Draw game objects */
     /* Draw UI */
@@ -301,7 +301,7 @@ pub extern "C" fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render(void) {
+NCZX_EXPORT void render(void) {
     /* Set camera */
     camera_set(0.0f, 5.0f, 10.0f, 0.0f, 0.0f, 0.0f);
 
@@ -312,7 +312,7 @@ EWZX_EXPORT void render(void) {
     draw_mesh(player_mesh);
 
     /* Draw UI */
-    EWZX_DRAW_TEXT("Score: ", 10.0f, 10.0f, 20.0f, EWZX_WHITE);
+    NCZX_DRAW_TEXT("Score: ", 10.0f, 10.0f, 20.0f, NCZX_COLOR_WHITE);
 }
 ```
 {{#endtab}}
@@ -360,10 +360,10 @@ set_tick_rate(3);  // 120 ticks per second (fighting games)
 
 {{#tab name="C/C++"}}
 ```c
-set_tick_rate(EWZX_TICK_RATE_24);   /* 24 ticks per second (cinematic) */
-set_tick_rate(EWZX_TICK_RATE_30);   /* 30 ticks per second */
-set_tick_rate(EWZX_TICK_RATE_60);   /* 60 ticks per second (default) */
-set_tick_rate(EWZX_TICK_RATE_120);  /* 120 ticks per second (fighting games) */
+set_tick_rate(NCZX_TICK_RATE_24);   /* 24 ticks per second (cinematic) */
+set_tick_rate(NCZX_TICK_RATE_30);   /* 30 ticks per second */
+set_tick_rate(NCZX_TICK_RATE_60);   /* 60 ticks per second (default) */
+set_tick_rate(NCZX_TICK_RATE_120);  /* 120 ticks per second (fighting games) */
 ```
 {{#endtab}}
 
@@ -463,7 +463,7 @@ typedef enum {
 
 static GameState state = STATE_TITLE;
 
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     switch (state) {
         case STATE_TITLE:    update_title();     break;
         case STATE_PLAYING:  update_gameplay();  break;
@@ -518,7 +518,7 @@ pub extern "C" fn update() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void update(void) {
+NCZX_EXPORT void update(void) {
     float dt = delta_time();
 
     /* Movement is frame-rate independent */

@@ -23,7 +23,7 @@ pub type PlayerConfig = StandaloneConfig;
 
 /// ROM loader for Nethercore ZX
 ///
-/// Handles both .ewz ROM files (with metadata and datapacks) and raw .wasm files.
+/// Handles both .nczx ROM files (with metadata and datapacks) and raw .wasm files.
 pub struct ZXRomLoader;
 
 impl RomLoader for ZXRomLoader {

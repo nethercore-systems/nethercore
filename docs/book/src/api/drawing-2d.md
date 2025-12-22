@@ -20,7 +20,7 @@ fn draw_sprite(x: f32, y: f32, w: f32, h: f32, color: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void draw_sprite(float x, float y, float w, float h, uint32_t color);
+NCZX_IMPORT void draw_sprite(float x, float y, float w, float h, uint32_t color);
 ```
 {{#endtab}}
 
@@ -59,7 +59,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render() {
+NCZX_EXPORT void render() {
     // Draw full texture
     texture_bind(player_sprite);
     draw_sprite(100.0f, 100.0f, 64.0f, 64.0f, 0xFFFFFFFF);
@@ -107,7 +107,7 @@ fn draw_sprite_region(
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void draw_sprite_region(
+NCZX_IMPORT void draw_sprite_region(
     float x, float y, float w, float h,
     float src_x, float src_y, float src_w, float src_h,
     uint32_t color
@@ -159,7 +159,7 @@ fn draw_frame(frame: u32) {
 {{#tab name="C/C++"}}
 ```c
 // Sprite sheet: 4x4 grid of 32x32 sprites
-EWZX_EXPORT void draw_frame(uint32_t frame) {
+NCZX_EXPORT void draw_frame(uint32_t frame) {
     uint32_t col = frame % 4;
     uint32_t row = frame / 4;
     draw_sprite_region(
@@ -212,7 +212,7 @@ fn draw_sprite_ex(
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void draw_sprite_ex(
+NCZX_IMPORT void draw_sprite_ex(
     float x, float y, float w, float h,
     float src_x, float src_y, float src_w, float src_h,
     float origin_x, float origin_y,
@@ -277,7 +277,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render() {
+NCZX_EXPORT void render() {
     // Rotating sprite around center
     draw_sprite_ex(
         200.0f, 200.0f, 64.0f, 64.0f,    // Position and size
@@ -345,7 +345,7 @@ fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void draw_rect(float x, float y, float w, float h, uint32_t color);
+NCZX_IMPORT void draw_rect(float x, float y, float w, float h, uint32_t color);
 ```
 {{#endtab}}
 
@@ -387,7 +387,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render() {
+NCZX_EXPORT void render() {
     // Health bar background
     draw_rect(10.0f, 10.0f, 100.0f, 20.0f, 0x333333FF);
 
@@ -439,7 +439,7 @@ fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void draw_text(const uint8_t* ptr, uint32_t len, float x, float y, float size, uint32_t color);
+NCZX_IMPORT void draw_text(const uint8_t* ptr, uint32_t len, float x, float y, float size, uint32_t color);
 ```
 {{#endtab}}
 
@@ -479,7 +479,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render() {
+NCZX_EXPORT void render() {
     const char* text = "SCORE: 12345";
     draw_text((const uint8_t*)text, strlen(text), 10.0f, 10.0f, 16.0f, 0xFFFFFFFF);
 
@@ -529,7 +529,7 @@ fn load_font(
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t load_font(
+NCZX_IMPORT uint32_t load_font(
     uint32_t texture,
     uint32_t char_width,
     uint32_t char_height,
@@ -585,7 +585,7 @@ fn init() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void init() {
+NCZX_EXPORT void init() {
     FONT_TEXTURE = load_texture(128, 64, FONT_PIXELS);
     // 8x8 font starting at space (32), 96 characters
     MY_FONT = load_font(FONT_TEXTURE, 8, 8, 32, 96);
@@ -629,7 +629,7 @@ fn load_font_ex(
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT uint32_t load_font_ex(
+NCZX_IMPORT uint32_t load_font_ex(
     uint32_t texture,
     const uint8_t* widths_ptr,
     uint32_t char_height,
@@ -697,7 +697,7 @@ static uint8_t CHAR_WIDTHS[96] = {
     // ... etc
 };
 
-EWZX_EXPORT void init() {
+NCZX_EXPORT void init() {
     PROP_FONT = load_font_ex(FONT_TEX, CHAR_WIDTHS, 12, 32, 96);
 }
 ```
@@ -738,7 +738,7 @@ fn font_bind(font_handle: u32)
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_IMPORT void font_bind(uint32_t font_handle);
+NCZX_IMPORT void font_bind(uint32_t font_handle);
 ```
 {{#endtab}}
 
@@ -770,7 +770,7 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
-EWZX_EXPORT void render() {
+NCZX_EXPORT void render() {
     // Use custom font
     font_bind(MY_FONT);
     draw_text((const uint8_t*)"Custom Text", strlen("Custom Text"), 10.0f, 10.0f, 16.0f, 0xFFFFFFFF);
@@ -864,12 +864,12 @@ fn render() {
 static uint32_t UI_FONT = 0;
 static uint32_t ICON_SHEET = 0;
 
-EWZX_EXPORT void init() {
+NCZX_EXPORT void init() {
     UI_FONT = rom_font("ui_font", strlen("ui_font"));
     ICON_SHEET = rom_texture("icons", strlen("icons"));
 }
 
-EWZX_EXPORT void render() {
+NCZX_EXPORT void render() {
     // Disable depth for 2D overlay
     depth_test(0);
     blend_mode(1);

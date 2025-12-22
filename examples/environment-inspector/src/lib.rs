@@ -74,7 +74,8 @@ extern "C" {
     fn cull_mode(mode: u32);
 
     // Environment (Multi-Environment v3)
-    fn env_gradient_set(
+    fn env_gradient(
+        layer: u32,
         zenith: u32,
         sky_horizon: u32,
         ground_horizon: u32,
@@ -82,9 +83,8 @@ extern "C" {
         rotation: f32,
         shift: f32,
     );
-    fn env_select_pair(base_mode: u32, overlay_mode: u32);
-    fn env_blend_mode(mode: u32);
-    fn draw_sky();
+    fn env_blend(mode: u32);
+    fn draw_env();
 
     // Materials (Mode 2 for reflections)
     fn material_metallic(value: f32);
@@ -331,9 +331,9 @@ pub extern "C" fn render() {
         camera_fov(60.0);
 
         // Configure environment
-        env_select_pair(0, 0); // Gradient only (no overlay)
-        env_blend_mode(0);     // Alpha blend (not used with single layer)
-        env_gradient_set(
+        env_blend(0);     // Alpha blend (not used with single layer)
+        env_gradient(
+            0, // base layer
             ZENITH_COLOR,
             SKY_HORIZON_COLOR,
             GROUND_HORIZON_COLOR,
@@ -342,8 +342,8 @@ pub extern "C" fn render() {
             SHIFT,
         );
 
-        // Draw sky
-        draw_sky();
+        // Draw environment
+        draw_env();
 
         // Select mesh based on shape index
         let mesh = match SHAPE_INDEX {
