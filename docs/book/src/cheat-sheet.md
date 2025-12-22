@@ -15,10 +15,15 @@ elapsed_time() -> f32                  // Total seconds since start
 tick_count() -> u64                    // Current tick number
 log(ptr, len)                          // Log message to console
 quit()                                 // Exit to library
-random() -> u32                        // Deterministic random
+random() -> u32                        // Deterministic random u32
+random_range(min, max) -> i32          // Random i32 in [min, max)
+random_f32() -> f32                    // Random f32 in [0.0, 1.0)
+random_f32_range(min, max) -> f32      // Random f32 in [min, max)
 player_count() -> u32                  // Number of players (1-4)
 local_player_mask() -> u32             // Bitmask of local players
 ```
+
+**Screen Constants:** `screen::WIDTH`=960, `screen::HEIGHT`=540
 {{#endtab}}
 
 {{#tab name="C/C++"}}
@@ -28,10 +33,15 @@ float elapsed_time(void);              // Total seconds since start
 uint64_t tick_count(void);             // Current tick number
 void log_msg(ptr, len);                // Log message to console
 void quit(void);                       // Exit to library
-uint32_t random_u32(void);             // Deterministic random
+uint32_t random(void);                 // Deterministic random u32
+int32_t random_range(int32_t min, int32_t max);    // Random i32 in [min, max)
+float random_f32(void);                // Random f32 in [0.0, 1.0)
+float random_f32_range(float min, float max);      // Random f32 in [min, max)
 uint32_t player_count(void);           // Number of players (1-4)
 uint32_t local_player_mask(void);      // Bitmask of local players
 ```
+
+**Screen Constants:** `NCZX_SCREEN_WIDTH`=960, `NCZX_SCREEN_HEIGHT`=540
 {{#endtab}}
 
 {{#tab name="Zig"}}
@@ -41,10 +51,15 @@ elapsed_time() f32                     // Total seconds since start
 tick_count() u64                       // Current tick number
 log_msg(ptr, len) void                 // Log message to console
 quit() void                            // Exit to library
-random_u32() u32                       // Deterministic random
+random() u32                           // Deterministic random u32
+random_range(min: i32, max: i32) i32   // Random i32 in [min, max)
+random_f32() f32                       // Random f32 in [0.0, 1.0)
+random_f32_range(min: f32, max: f32) f32  // Random f32 in [min, max)
 player_count() u32                     // Number of players (1-4)
 local_player_mask() u32                // Bitmask of local players
 ```
+
+**Screen Constants:** `Screen.width`=960, `Screen.height`=540
 {{#endtab}}
 
 {{#endtabs}}
@@ -652,11 +667,20 @@ matcap_set(slot: u32, texture: u32) void  // Slot 1-3 (Mode 1 only)
 
 {{#tab name="Rust"}}
 ```rust
+// Sprites
 draw_sprite(x, y, w, h, color)
 draw_sprite_region(x, y, w, h, src_x, src_y, src_w, src_h, color)
 draw_sprite_ex(x, y, w, h, src_x, src_y, src_w, src_h, ox, oy, angle, color)
+
+// Primitives
 draw_rect(x, y, w, h, color)
+draw_line(x1, y1, x2, y2, thickness, color)
+draw_circle(x, y, radius, color)               // Filled, 16 segments
+draw_circle_outline(x, y, radius, thickness, color)
+
+// Text
 draw_text(ptr, len, x, y, size, color)
+text_width(ptr, len, size) -> f32              // Measure text width
 load_font(tex, char_w, char_h, first_cp, count) -> u32
 load_font_ex(tex, widths_ptr, char_h, first_cp, count) -> u32
 font_bind(handle)
@@ -665,14 +689,23 @@ font_bind(handle)
 
 {{#tab name="C/C++"}}
 ```c
+// Sprites
 void draw_sprite(float x, float y, float w, float h, uint32_t color);
 void draw_sprite_region(float x, float y, float w, float h,
                         float src_x, float src_y, float src_w, float src_h, uint32_t color);
 void draw_sprite_ex(float x, float y, float w, float h,
                     float src_x, float src_y, float src_w, float src_h,
                     float ox, float oy, float angle, uint32_t color);
+
+// Primitives
 void draw_rect(float x, float y, float w, float h, uint32_t color);
+void draw_line(float x1, float y1, float x2, float y2, float thickness, uint32_t color);
+void draw_circle(float x, float y, float radius, uint32_t color);
+void draw_circle_outline(float x, float y, float radius, float thickness, uint32_t color);
+
+// Text
 void draw_text(const uint8_t* ptr, uint32_t len, float x, float y, float size, uint32_t color);
+float text_width(const uint8_t* ptr, uint32_t len, float size);
 uint32_t load_font(uint32_t tex, uint32_t char_w, uint32_t char_h, uint32_t first_cp, uint32_t count);
 uint32_t load_font_ex(uint32_t tex, const uint8_t* widths, uint32_t char_h, uint32_t first_cp, uint32_t count);
 void font_bind(uint32_t handle);
@@ -682,11 +715,20 @@ void font_bind(uint32_t handle);
 
 {{#tab name="Zig"}}
 ```zig
+// Sprites
 draw_sprite(x: f32, y: f32, w: f32, h: f32, color: u32) void
 draw_sprite_region(x: f32, y: f32, w: f32, h: f32, src_x: f32, src_y: f32, src_w: f32, src_h: f32, color: u32) void
 draw_sprite_ex(x: f32, y: f32, w: f32, h: f32, src_x: f32, src_y: f32, src_w: f32, src_h: f32, ox: f32, oy: f32, angle: f32, color: u32) void
+
+// Primitives
 draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32) void
+draw_line(x1: f32, y1: f32, x2: f32, y2: f32, thickness: f32, color: u32) void
+draw_circle(x: f32, y: f32, radius: f32, color: u32) void
+draw_circle_outline(x: f32, y: f32, radius: f32, thickness: f32, color: u32) void
+
+// Text
 draw_text(ptr: [*]const u8, len: u32, x: f32, y: f32, size: f32, color: u32) void
+text_width(ptr: [*]const u8, len: u32, size: f32) f32
 load_font(tex: u32, char_w: u32, char_h: u32, first_cp: u32, count: u32) u32
 load_font_ex(tex: u32, widths: [*]const u8, char_h: u32, first_cp: u32, count: u32) u32
 font_bind(handle: u32) void

@@ -12,6 +12,9 @@ use crate::state::Font;
 /// Default font texture size used when texture dimensions cannot be determined.
 const DEFAULT_FONT_TEXTURE_SIZE: (u32, u32) = (1024, 1024);
 
+/// Number of segments used for circle rendering
+const CIRCLE_SEGMENTS: u32 = 16;
+
 /// Register 2D drawing FFI functions
 pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     linker.func_wrap("env", "draw_sprite", draw_sprite)?;
@@ -19,6 +22,10 @@ pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     linker.func_wrap("env", "draw_sprite_ex", draw_sprite_ex)?;
     linker.func_wrap("env", "draw_rect", draw_rect)?;
     linker.func_wrap("env", "draw_text", draw_text)?;
+    linker.func_wrap("env", "text_width", text_width)?;
+    linker.func_wrap("env", "draw_line", draw_line)?;
+    linker.func_wrap("env", "draw_circle", draw_circle)?;
+    linker.func_wrap("env", "draw_circle_outline", draw_circle_outline)?;
     linker.func_wrap("env", "load_font", load_font)?;
     linker.func_wrap("env", "load_font_ex", load_font_ex)?;
     linker.func_wrap("env", "font_bind", font_bind)?;
@@ -650,4 +657,252 @@ fn font_bind(mut caller: Caller<'_, ZXGameContext>, font_handle: u32) {
     }
 
     state.current_font = font_handle;
+}
+
+/// Measure the width of text when rendered
+///
+/// # Arguments
+/// * `ptr` — Pointer to UTF-8 string data
+/// * `len` — Length of string in bytes
+/// * `size` — Font size in pixels
+///
+/// # Returns
+/// Width in pixels that the text would occupy when rendered.
+fn text_width(caller: Caller<'_, ZXGameContext>, ptr: u32, len: u32, size: f32) -> f32 {
+    // Read UTF-8 string from WASM memory
+    let memory = match caller.data().game.memory {
+        Some(m) => m,
+        None => return 0.0,
+    };
+
+    let text_str = {
+        let mem_data = memory.data(&caller);
+        let ptr = ptr as usize;
+        let len = len as usize;
+
+        if ptr + len > mem_data.len() {
+            return 0.0;
+        }
+
+        match std::str::from_utf8(&mem_data[ptr..ptr + len]) {
+            Ok(s) => s.to_string(),
+            Err(_) => return 0.0,
+        }
+    };
+
+    if text_str.is_empty() {
+        return 0.0;
+    }
+
+    let state = &caller.data().ffi;
+    let font_handle = state.current_font;
+
+    // Calculate width based on font type
+    if font_handle == 0 {
+        // Built-in font: 8x8 fixed-width
+        let scale = size / crate::font::GLYPH_HEIGHT as f32;
+        let glyph_width = crate::font::GLYPH_WIDTH as f32 * scale;
+        text_str.chars().count() as f32 * glyph_width
+    } else {
+        // Custom font
+        let font_index = (font_handle - 1) as usize;
+        if let Some(font) = state.fonts.get(font_index) {
+            let scale = size / font.char_height as f32;
+
+            let mut total_width = 0.0f32;
+            for ch in text_str.chars() {
+                let char_code = ch as u32;
+
+                if char_code < font.first_codepoint
+                    || char_code >= font.first_codepoint + font.char_count
+                {
+                    continue;
+                }
+                let glyph_index = (char_code - font.first_codepoint) as usize;
+
+                let glyph_width_px = font
+                    .char_widths
+                    .as_ref()
+                    .and_then(|widths| widths.get(glyph_index).copied())
+                    .unwrap_or(font.char_width);
+
+                total_width += glyph_width_px as f32 * scale;
+            }
+            total_width
+        } else {
+            0.0
+        }
+    }
+}
+
+/// Draw a line between two points
+///
+/// # Arguments
+/// * `x1`, `y1` — Start point in screen pixels
+/// * `x2`, `y2` — End point in screen pixels
+/// * `thickness` — Line thickness in pixels
+/// * `color` — Line color (0xRRGGBBAA)
+///
+/// Draws a line as a rotated rectangle from start to end point.
+fn draw_line(
+    mut caller: Caller<'_, ZXGameContext>,
+    x1: f32,
+    y1: f32,
+    x2: f32,
+    y2: f32,
+    thickness: f32,
+    color: u32,
+) {
+    let state = &mut caller.data_mut().ffi;
+
+    // Bind white texture for solid color
+    state.bound_textures[0] = u32::MAX;
+
+    // Get shading state index
+    let shading_state_index = state.add_shading_state();
+    let view_idx = (state.view_matrices.len() - 1) as u32;
+
+    // Calculate line geometry
+    let dx = x2 - x1;
+    let dy = y2 - y1;
+    let length = (dx * dx + dy * dy).sqrt();
+
+    if length < 0.001 {
+        return; // Degenerate line
+    }
+
+    let angle = dy.atan2(dx); // Radians
+
+    // Create rotated rectangle
+    // Position the rectangle so it starts at (x1, y1) and extends to (x2, y2)
+    // The rectangle origin is at top-left, so we need to offset by half thickness
+    let instance = crate::graphics::QuadInstance::sprite(
+        x1,
+        y1 - thickness / 2.0,
+        length,
+        thickness,
+        angle,
+        [0.0, 0.0, 1.0, 1.0],
+        color,
+        shading_state_index.0,
+        view_idx,
+    );
+
+    state.add_quad_instance(instance);
+}
+
+/// Draw a filled circle
+///
+/// # Arguments
+/// * `x`, `y` — Center position in screen pixels
+/// * `radius` — Circle radius in pixels
+/// * `color` — Fill color (0xRRGGBBAA)
+///
+/// Rendered as a 16-segment approximation using rotated rectangles.
+fn draw_circle(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, radius: f32, color: u32) {
+    if radius <= 0.0 {
+        return;
+    }
+
+    let state = &mut caller.data_mut().ffi;
+
+    // Bind white texture for solid color
+    state.bound_textures[0] = u32::MAX;
+
+    // Get shading state index
+    let shading_state_index = state.add_shading_state();
+    let view_idx = (state.view_matrices.len() - 1) as u32;
+
+    // Draw circle as pie slices (rotated rectangles from center)
+    // Each slice is a thin rectangle extending from center outward
+    let angle_step = std::f32::consts::TAU / CIRCLE_SEGMENTS as f32;
+
+    // Calculate the width needed for each segment to overlap properly
+    // For 16 segments, each covers 22.5 degrees
+    // Width at the outer edge = 2 * radius * sin(angle_step / 2)
+    let segment_width = 2.0 * radius * (angle_step / 2.0).sin();
+
+    for i in 0..CIRCLE_SEGMENTS {
+        let angle = i as f32 * angle_step;
+
+        // Create a rectangle from center pointing outward
+        // The rectangle extends from center to edge
+        let instance = crate::graphics::QuadInstance::sprite(
+            x - segment_width / 2.0,
+            y,
+            segment_width,
+            radius,
+            angle - std::f32::consts::FRAC_PI_2, // Rotate to point outward
+            [0.0, 0.0, 1.0, 1.0],
+            color,
+            shading_state_index.0,
+            view_idx,
+        );
+
+        state.add_quad_instance(instance);
+    }
+}
+
+/// Draw a circle outline
+///
+/// # Arguments
+/// * `x`, `y` — Center position in screen pixels
+/// * `radius` — Circle radius in pixels
+/// * `thickness` — Line thickness in pixels
+/// * `color` — Outline color (0xRRGGBBAA)
+///
+/// Rendered as 16 line segments forming the circle outline.
+fn draw_circle_outline(
+    mut caller: Caller<'_, ZXGameContext>,
+    x: f32,
+    y: f32,
+    radius: f32,
+    thickness: f32,
+    color: u32,
+) {
+    if radius <= 0.0 {
+        return;
+    }
+
+    let state = &mut caller.data_mut().ffi;
+
+    // Bind white texture for solid color
+    state.bound_textures[0] = u32::MAX;
+
+    let angle_step = std::f32::consts::TAU / CIRCLE_SEGMENTS as f32;
+
+    for i in 0..CIRCLE_SEGMENTS {
+        let angle1 = i as f32 * angle_step;
+        let angle2 = (i + 1) as f32 * angle_step;
+
+        let x1 = x + radius * angle1.cos();
+        let y1 = y + radius * angle1.sin();
+        let x2 = x + radius * angle2.cos();
+        let y2 = y + radius * angle2.sin();
+
+        // Get shading state for each line segment
+        let shading_state_index = state.add_shading_state();
+        let view_idx = (state.view_matrices.len() - 1) as u32;
+
+        // Calculate line geometry
+        let dx = x2 - x1;
+        let dy = y2 - y1;
+        let length = (dx * dx + dy * dy).sqrt();
+        let angle = dy.atan2(dx);
+
+        // Create rotated rectangle for this line segment
+        let instance = crate::graphics::QuadInstance::sprite(
+            x1,
+            y1 - thickness / 2.0,
+            length,
+            thickness,
+            angle,
+            [0.0, 0.0, 1.0, 1.0],
+            color,
+            shading_state_index.0,
+            view_idx,
+        );
+
+        state.add_quad_instance(instance);
+    }
 }

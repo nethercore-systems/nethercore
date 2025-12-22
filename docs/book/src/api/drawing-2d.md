@@ -421,6 +421,263 @@ export fn render() void {
 
 ---
 
+## Lines & Circles
+
+### draw_line
+
+Draws a line between two points.
+
+**Signature:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn draw_line(x1: f32, y1: f32, x2: f32, y2: f32, thickness: f32, color: u32)
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_IMPORT void draw_line(float x1, float y1, float x2, float y2, float thickness, uint32_t color);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn draw_line(x1: f32, y1: f32, x2: f32, y2: f32, thickness: f32, color: u32) void;
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| x1, y1 | `f32` | Start point in screen pixels |
+| x2, y2 | `f32` | End point in screen pixels |
+| thickness | `f32` | Line thickness in pixels |
+| color | `u32` | Line color as `0xRRGGBBAA` |
+
+**Example:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn render() {
+    // Diagonal line
+    draw_line(100.0, 100.0, 300.0, 200.0, 2.0, 0xFFFFFFFF);
+
+    // Box outline
+    draw_line(50.0, 50.0, 150.0, 50.0, 1.0, 0x00FF00FF);
+    draw_line(150.0, 50.0, 150.0, 150.0, 1.0, 0x00FF00FF);
+    draw_line(150.0, 150.0, 50.0, 150.0, 1.0, 0x00FF00FF);
+    draw_line(50.0, 150.0, 50.0, 50.0, 1.0, 0x00FF00FF);
+}
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_EXPORT void render() {
+    // Diagonal line
+    draw_line(100.0f, 100.0f, 300.0f, 200.0f, 2.0f, 0xFFFFFFFF);
+
+    // Box outline
+    draw_line(50.0f, 50.0f, 150.0f, 50.0f, 1.0f, 0x00FF00FF);
+    draw_line(150.0f, 50.0f, 150.0f, 150.0f, 1.0f, 0x00FF00FF);
+    draw_line(150.0f, 150.0f, 50.0f, 150.0f, 1.0f, 0x00FF00FF);
+    draw_line(50.0f, 150.0f, 50.0f, 50.0f, 1.0f, 0x00FF00FF);
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+export fn render() void {
+    // Diagonal line
+    draw_line(100.0, 100.0, 300.0, 200.0, 2.0, 0xFFFFFFFF);
+
+    // Box outline
+    draw_line(50.0, 50.0, 150.0, 50.0, 1.0, 0x00FF00FF);
+    draw_line(150.0, 50.0, 150.0, 150.0, 1.0, 0x00FF00FF);
+    draw_line(150.0, 150.0, 50.0, 150.0, 1.0, 0x00FF00FF);
+    draw_line(50.0, 150.0, 50.0, 50.0, 1.0, 0x00FF00FF);
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+---
+
+### draw_circle
+
+Draws a filled circle.
+
+**Signature:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn draw_circle(x: f32, y: f32, radius: f32, color: u32)
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_IMPORT void draw_circle(float x, float y, float radius, uint32_t color);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn draw_circle(x: f32, y: f32, radius: f32, color: u32) void;
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| x, y | `f32` | Center position in screen pixels |
+| radius | `f32` | Circle radius in pixels |
+| color | `u32` | Fill color as `0xRRGGBBAA` |
+
+**Notes:** Rendered as a 16-segment approximation.
+
+**Example:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn render() {
+    // Player indicator
+    draw_circle(player_x, player_y, 10.0, 0x00FF00FF);
+
+    // Semi-transparent area effect
+    draw_circle(500.0, 300.0, 50.0, 0xFF000040);
+}
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_EXPORT void render() {
+    // Player indicator
+    draw_circle(player_x, player_y, 10.0f, 0x00FF00FF);
+
+    // Semi-transparent area effect
+    draw_circle(500.0f, 300.0f, 50.0f, 0xFF000040);
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+export fn render() void {
+    // Player indicator
+    draw_circle(player_x, player_y, 10.0, 0x00FF00FF);
+
+    // Semi-transparent area effect
+    draw_circle(500.0, 300.0, 50.0, 0xFF000040);
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+---
+
+### draw_circle_outline
+
+Draws a circle outline.
+
+**Signature:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn draw_circle_outline(x: f32, y: f32, radius: f32, thickness: f32, color: u32)
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_IMPORT void draw_circle_outline(float x, float y, float radius, float thickness, uint32_t color);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn draw_circle_outline(x: f32, y: f32, radius: f32, thickness: f32, color: u32) void;
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| x, y | `f32` | Center position in screen pixels |
+| radius | `f32` | Circle radius in pixels |
+| thickness | `f32` | Line thickness in pixels |
+| color | `u32` | Outline color as `0xRRGGBBAA` |
+
+**Notes:** Rendered as 16 line segments.
+
+**Example:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn render() {
+    // Selection ring
+    draw_circle_outline(selected_x, selected_y, 20.0, 2.0, 0xFFFF00FF);
+
+    // Range indicator
+    draw_circle_outline(tower_x, tower_y, attack_range, 1.0, 0x00FF0080);
+}
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_EXPORT void render() {
+    // Selection ring
+    draw_circle_outline(selected_x, selected_y, 20.0f, 2.0f, 0xFFFF00FF);
+
+    // Range indicator
+    draw_circle_outline(tower_x, tower_y, attack_range, 1.0f, 0x00FF0080);
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+export fn render() void {
+    // Selection ring
+    draw_circle_outline(selected_x, selected_y, 20.0, 2.0, 0xFFFF00FF);
+
+    // Range indicator
+    draw_circle_outline(tower_x, tower_y, attack_range, 1.0, 0x00FF0080);
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+---
+
 ## Text
 
 ### draw_text
@@ -502,6 +759,93 @@ export fn render() void {
 {{#endtab}}
 
 {{#endtabs}}
+
+---
+
+### text_width
+
+Measures the width of text when rendered.
+
+**Signature:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn text_width(ptr: *const u8, len: u32, size: f32) -> f32
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_IMPORT float text_width(const uint8_t* ptr, uint32_t len, float size);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn text_width(ptr: [*]const u8, len: u32, size: f32) f32;
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| ptr | `*const u8` | Pointer to UTF-8 string |
+| len | `u32` | String length in bytes |
+| size | `f32` | Font size in pixels |
+
+**Returns:** Width in pixels that the text would occupy when rendered.
+
+**Example:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn render() {
+    let text = b"CENTERED";
+    let width = text_width(text.as_ptr(), text.len() as u32, 32.0);
+
+    // Center text on screen
+    let x = (screen::WIDTH as f32 - width) / 2.0;
+    draw_text(text.as_ptr(), text.len() as u32, x, 270.0, 32.0, 0xFFFFFFFF);
+}
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_EXPORT void render() {
+    const char* text = "CENTERED";
+    float width = text_width((const uint8_t*)text, 8, 32.0f);
+
+    /* Center text on screen */
+    float x = (NCZX_SCREEN_WIDTH - width) / 2.0f;
+    draw_text((const uint8_t*)text, 8, x, 270.0f, 32.0f, 0xFFFFFFFF);
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+export fn render() void {
+    const text = "CENTERED";
+    const width = text_width(text, text.len, 32.0);
+
+    // Center text on screen
+    const x = (@as(f32, @floatFromInt(Screen.width)) - width) / 2.0;
+    draw_text(text, text.len, x, 270.0, 32.0, 0xFFFFFFFF);
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+**See Also:** [draw_text](#draw_text)
 
 ---
 

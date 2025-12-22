@@ -43,6 +43,18 @@ pub extern "C" fn quit() void;
 /// Always use this instead of external random sources for rollback compatibility.
 pub extern "C" fn random() u32;
 
+/// Returns a random i32 in range [min, max).
+/// Uses host's seeded RNG for rollback compatibility.
+pub extern "C" fn random_range(min: i32, max: i32) i32;
+
+/// Returns a random f32 in range [0.0, 1.0).
+/// Uses host's seeded RNG for rollback compatibility.
+pub extern "C" fn random_f32() f32;
+
+/// Returns a random f32 in range [min, max).
+/// Uses host's seeded RNG for rollback compatibility.
+pub extern "C" fn random_f32_range(min: f32, max: f32) f32;
+
 /// Returns the number of players in the session (1-4).
 pub extern "C" fn player_count() u32;
 
@@ -441,6 +453,47 @@ pub extern "C" fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32) void;
 /// * `size` — Font size in pixels
 /// * `color` — Text color (0xRRGGBBAA)
 pub extern "C" fn draw_text(ptr: [*]const u8, len: u32, x: f32, y: f32, size: f32, color: u32) void;
+
+/// Measure the width of text when rendered.
+/// 
+/// # Arguments
+/// * `ptr` — Pointer to UTF-8 string data
+/// * `len` — Length in bytes
+/// * `size` — Font size in pixels
+/// 
+/// # Returns
+/// Width in pixels that the text would occupy when rendered.
+pub extern "C" fn text_width(ptr: [*]const u8, len: u32, size: f32) f32;
+
+/// Draw a line between two points.
+/// 
+/// # Arguments
+/// * `x1`, `y1` — Start point in screen pixels
+/// * `x2`, `y2` — End point in screen pixels
+/// * `thickness` — Line thickness in pixels
+/// * `color` — Line color (0xRRGGBBAA)
+pub extern "C" fn draw_line(x1: f32, y1: f32, x2: f32, y2: f32, thickness: f32, color: u32) void;
+
+/// Draw a filled circle.
+/// 
+/// # Arguments
+/// * `x`, `y` — Center position in screen pixels
+/// * `radius` — Circle radius in pixels
+/// * `color` — Fill color (0xRRGGBBAA)
+/// 
+/// Rendered as a 16-segment triangle fan.
+pub extern "C" fn draw_circle(x: f32, y: f32, radius: f32, color: u32) void;
+
+/// Draw a circle outline.
+/// 
+/// # Arguments
+/// * `x`, `y` — Center position in screen pixels
+/// * `radius` — Circle radius in pixels
+/// * `thickness` — Line thickness in pixels
+/// * `color` — Outline color (0xRRGGBBAA)
+/// 
+/// Rendered as 16 line segments.
+pub extern "C" fn draw_circle_outline(x: f32, y: f32, radius: f32, thickness: f32, color: u32) void;
 
 /// Load a fixed-width bitmap font.
 /// 
@@ -1053,6 +1106,11 @@ pub const TickRate = struct {
     pub const fps_30: u32 = 1;
     pub const fps_60: u32 = 2;
     pub const fps_120: u32 = 3;
+};
+
+pub const Screen = struct {
+    pub const width: u32 = 960;
+    pub const height: u32 = 540;
 };
 
 pub const color = struct {

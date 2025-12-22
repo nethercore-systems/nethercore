@@ -516,6 +516,256 @@ export fn update() void {
 
 ---
 
+### random_range
+
+Returns a random integer in range [min, max).
+
+**Signature:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn random_range(min: i32, max: i32) -> i32
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_IMPORT int32_t random_range(int32_t min, int32_t max);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn random_range(min: i32, max: i32) i32;
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+**Parameters:**
+| Name | Type | Description |
+|------|------|-------------|
+| min | i32 | Minimum value (inclusive) |
+| max | i32 | Maximum value (exclusive) |
+
+**Returns:** Random integer in range [min, max)
+
+**Example:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+let spawn_x = random_range(0, 960);  // 0 to 959
+let damage = random_range(10, 21);   // 10 to 20
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+int spawn_x = random_range(0, 960);  /* 0 to 959 */
+int damage = random_range(10, 21);   /* 10 to 20 */
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+const spawn_x = random_range(0, 960);  // 0 to 959
+const damage = random_range(10, 21);   // 10 to 20
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+---
+
+### random_f32
+
+Returns a random float in range [0.0, 1.0).
+
+**Signature:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn random_f32() -> f32
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_IMPORT float random_f32(void);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn random_f32() f32;
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+**Returns:** Random float in range [0.0, 1.0)
+
+**Example:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+let t = random_f32();  // 0.0 to 0.999...
+let color_variation = random_f32() * 0.2 - 0.1;  // -0.1 to +0.1
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+float t = random_f32();  /* 0.0 to 0.999... */
+float color_variation = random_f32() * 0.2f - 0.1f;  /* -0.1 to +0.1 */
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+const t = random_f32();  // 0.0 to 0.999...
+const color_variation = random_f32() * 0.2 - 0.1;  // -0.1 to +0.1
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+---
+
+### random_f32_range
+
+Returns a random float in range [min, max).
+
+**Signature:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn random_f32_range(min: f32, max: f32) -> f32
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_IMPORT float random_f32_range(float min, float max);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn random_f32_range(min: f32, max: f32) f32;
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+**Parameters:**
+| Name | Type | Description |
+|------|------|-------------|
+| min | f32 | Minimum value (inclusive) |
+| max | f32 | Maximum value (exclusive) |
+
+**Returns:** Random float in range [min, max)
+
+**Example:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+let speed = random_f32_range(5.0, 15.0);  // 5.0 to 14.999...
+let angle = random_f32_range(0.0, 6.28);  // 0 to 2π
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+float speed = random_f32_range(5.0f, 15.0f);  /* 5.0 to 14.999... */
+float angle = random_f32_range(0.0f, 6.28f);  /* 0 to 2π */
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+const speed = random_f32_range(5.0, 15.0);  // 5.0 to 14.999...
+const angle = random_f32_range(0.0, 6.28);  // 0 to 2π
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+---
+
+## Screen Constants
+
+Fixed screen dimensions for the ZX console (540p resolution).
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+screen::WIDTH   // 960
+screen::HEIGHT  // 540
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_SCREEN_WIDTH   // 960
+NCZX_SCREEN_HEIGHT  // 540
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+Screen.width   // 960
+Screen.height  // 540
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+**Example:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+// Center something on screen
+let center_x = screen::WIDTH as f32 / 2.0;
+let center_y = screen::HEIGHT as f32 / 2.0;
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+/* Center something on screen */
+float center_x = NCZX_SCREEN_WIDTH / 2.0f;
+float center_y = NCZX_SCREEN_HEIGHT / 2.0f;
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+// Center something on screen
+const center_x = @as(f32, @floatFromInt(Screen.width)) / 2.0;
+const center_y = @as(f32, @floatFromInt(Screen.height)) / 2.0;
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+---
+
 ## Session Functions
 
 ### player_count

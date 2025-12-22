@@ -212,9 +212,51 @@ Returns a deterministic random number from the host's seeded RNG. **Always use t
 ```rust
 let r = random();
 let spawn_x = (r % 320) as f32;
+```
 
-// Random float 0.0-1.0
-let rf = (random() as f32) / (u32::MAX as f32);
+---
+
+### random_range
+
+```rust
+fn random_range(min: i32, max: i32) -> i32
+```
+
+Returns a random integer in range [min, max). Uses the host's seeded RNG for rollback compatibility.
+
+```rust
+let spawn_x = random_range(0, 960);  // 0 to 959
+let damage = random_range(10, 21);   // 10 to 20
+```
+
+---
+
+### random_f32
+
+```rust
+fn random_f32() -> f32
+```
+
+Returns a random float in range [0.0, 1.0). Uses the host's seeded RNG for rollback compatibility.
+
+```rust
+let t = random_f32();  // 0.0 to 0.999...
+let color_variation = random_f32() * 0.2 - 0.1;  // -0.1 to +0.1
+```
+
+---
+
+### random_f32_range
+
+```rust
+fn random_f32_range(min: f32, max: f32) -> f32
+```
+
+Returns a random float in range [min, max). Uses the host's seeded RNG for rollback compatibility.
+
+```rust
+let speed = random_f32_range(5.0, 15.0);  // 5.0 to 14.999...
+let angle = random_f32_range(0.0, 6.28);  // 0 to 2π
 ```
 
 ---

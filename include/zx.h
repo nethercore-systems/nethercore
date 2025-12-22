@@ -56,6 +56,18 @@ NCZX_IMPORT void quit(void);
 /** Always use this instead of external random sources for rollback compatibility. */
 NCZX_IMPORT uint32_t random(void);
 
+/** Returns a random i32 in range [min, max). */
+/** Uses host's seeded RNG for rollback compatibility. */
+NCZX_IMPORT int32_t random_range(int32_t min, int32_t max);
+
+/** Returns a random f32 in range [0.0, 1.0). */
+/** Uses host's seeded RNG for rollback compatibility. */
+NCZX_IMPORT float random_f32(void);
+
+/** Returns a random f32 in range [min, max). */
+/** Uses host's seeded RNG for rollback compatibility. */
+NCZX_IMPORT float random_f32_range(float min, float max);
+
 /** Returns the number of players in the session (1-4). */
 NCZX_IMPORT uint32_t player_count(void);
 
@@ -454,6 +466,47 @@ NCZX_IMPORT void draw_rect(float x, float y, float w, float h, uint32_t color);
 /** * `size` — Font size in pixels */
 /** * `color` — Text color (0xRRGGBBAA) */
 NCZX_IMPORT void draw_text(const uint8_t* ptr, uint32_t len, float x, float y, float size, uint32_t color);
+
+/** Measure the width of text when rendered. */
+/**  */
+/** # Arguments */
+/** * `ptr` — Pointer to UTF-8 string data */
+/** * `len` — Length in bytes */
+/** * `size` — Font size in pixels */
+/**  */
+/** # Returns */
+/** Width in pixels that the text would occupy when rendered. */
+NCZX_IMPORT float text_width(const uint8_t* ptr, uint32_t len, float size);
+
+/** Draw a line between two points. */
+/**  */
+/** # Arguments */
+/** * `x1`, `y1` — Start point in screen pixels */
+/** * `x2`, `y2` — End point in screen pixels */
+/** * `thickness` — Line thickness in pixels */
+/** * `color` — Line color (0xRRGGBBAA) */
+NCZX_IMPORT void draw_line(float x1, float y1, float x2, float y2, float thickness, uint32_t color);
+
+/** Draw a filled circle. */
+/**  */
+/** # Arguments */
+/** * `x`, `y` — Center position in screen pixels */
+/** * `radius` — Circle radius in pixels */
+/** * `color` — Fill color (0xRRGGBBAA) */
+/**  */
+/** Rendered as a 16-segment triangle fan. */
+NCZX_IMPORT void draw_circle(float x, float y, float radius, uint32_t color);
+
+/** Draw a circle outline. */
+/**  */
+/** # Arguments */
+/** * `x`, `y` — Center position in screen pixels */
+/** * `radius` — Circle radius in pixels */
+/** * `thickness` — Line thickness in pixels */
+/** * `color` — Outline color (0xRRGGBBAA) */
+/**  */
+/** Rendered as 16 line segments. */
+NCZX_IMPORT void draw_circle_outline(float x, float y, float radius, float thickness, uint32_t color);
 
 /** Load a fixed-width bitmap font. */
 /**  */
@@ -1060,6 +1113,10 @@ NCZX_IMPORT float debug_get_time_scale(void);
 #define NCZX_TICK_RATE_FPS_30 1
 #define NCZX_TICK_RATE_FPS_60 2
 #define NCZX_TICK_RATE_FPS_120 3
+
+// screen constants
+#define NCZX_SCREEN_WIDTH 960
+#define NCZX_SCREEN_HEIGHT 540
 
 // color constants
 #define NCZX_COLOR_WHITE 0xFFFFFFFF

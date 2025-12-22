@@ -91,6 +91,18 @@ extern "C" {
     /// Always use this instead of external random sources for rollback compatibility.
     pub fn random() -> u32;
 
+    /// Returns a random i32 in range [min, max).
+    /// Uses host's seeded RNG for rollback compatibility.
+    pub fn random_range(min: i32, max: i32) -> i32;
+
+    /// Returns a random f32 in range [0.0, 1.0).
+    /// Uses host's seeded RNG for rollback compatibility.
+    pub fn random_f32() -> f32;
+
+    /// Returns a random f32 in range [min, max).
+    /// Uses host's seeded RNG for rollback compatibility.
+    pub fn random_f32_range(min: f32, max: f32) -> f32;
+
     // =========================================================================
     // Session Functions
     // =========================================================================
@@ -592,6 +604,47 @@ extern "C" {
     /// * `size` — Font size in pixels
     /// * `color` — Text color (0xRRGGBBAA)
     pub fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
+
+    /// Measure the width of text when rendered.
+    ///
+    /// # Arguments
+    /// * `ptr` — Pointer to UTF-8 string data
+    /// * `len` — Length in bytes
+    /// * `size` — Font size in pixels
+    ///
+    /// # Returns
+    /// Width in pixels that the text would occupy when rendered.
+    pub fn text_width(ptr: *const u8, len: u32, size: f32) -> f32;
+
+    /// Draw a line between two points.
+    ///
+    /// # Arguments
+    /// * `x1`, `y1` — Start point in screen pixels
+    /// * `x2`, `y2` — End point in screen pixels
+    /// * `thickness` — Line thickness in pixels
+    /// * `color` — Line color (0xRRGGBBAA)
+    pub fn draw_line(x1: f32, y1: f32, x2: f32, y2: f32, thickness: f32, color: u32);
+
+    /// Draw a filled circle.
+    ///
+    /// # Arguments
+    /// * `x`, `y` — Center position in screen pixels
+    /// * `radius` — Circle radius in pixels
+    /// * `color` — Fill color (0xRRGGBBAA)
+    ///
+    /// Rendered as a 16-segment triangle fan.
+    pub fn draw_circle(x: f32, y: f32, radius: f32, color: u32);
+
+    /// Draw a circle outline.
+    ///
+    /// # Arguments
+    /// * `x`, `y` — Center position in screen pixels
+    /// * `radius` — Circle radius in pixels
+    /// * `thickness` — Line thickness in pixels
+    /// * `color` — Outline color (0xRRGGBBAA)
+    ///
+    /// Rendered as 16 line segments.
+    pub fn draw_circle_outline(x: f32, y: f32, radius: f32, thickness: f32, color: u32);
 
     /// Load a fixed-width bitmap font.
     ///
@@ -1269,6 +1322,14 @@ pub mod tick_rate {
     pub const FPS_30: u32 = 1;
     pub const FPS_60: u32 = 2;
     pub const FPS_120: u32 = 3;
+}
+
+/// Screen dimensions (fixed 540p resolution)
+pub mod screen {
+    /// Screen width in pixels
+    pub const WIDTH: u32 = 960;
+    /// Screen height in pixels
+    pub const HEIGHT: u32 = 540;
 }
 
 // =============================================================================
