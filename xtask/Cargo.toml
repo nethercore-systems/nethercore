@@ -6,8 +6,8 @@ edition = "2021"
 [dependencies]
 # Local crates
 nethercore-shared = { path = "../shared" }
-nethercore-core = { path = "../core" }
-zx-common = { path = "../zx-common" }
+nethercore-core = { path = "../core", default-features = false }
+zx-common = { path = "../zx-common", default-features = false, features = ["loader"] }
 ffi-gen = { path = "../tools/ffi-gen" }
 
 # Workspace dependencies

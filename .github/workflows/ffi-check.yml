@@ -10,6 +10,9 @@ on:
       - 'include/chroma.rs'  # Future consoles
       - 'include/chroma.h'
       - 'include/chroma.zig'
+      - 'include/chromax.rs'
+      - 'include/chromax.h'
+      - 'include/chromax.zig'
       - 'include/z.rs'
       - 'include/z.h'
       - 'include/z.zig'
@@ -27,6 +30,9 @@ on:
       - 'include/chroma.rs'  # Future consoles
       - 'include/chroma.h'
       - 'include/chroma.zig'
+      - 'include/chromax.rs'
+      - 'include/chromax.h'
+      - 'include/chromax.zig'
       - 'include/z.rs'
       - 'include/z.h'
       - 'include/z.zig'
