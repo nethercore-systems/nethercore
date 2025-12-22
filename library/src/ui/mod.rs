@@ -10,6 +10,7 @@ mod settings;
 pub use multiplayer_dialog::MultiplayerDialog;
 pub use settings::SettingsUi;
 
+use eframe::egui;
 use nethercore_core::library::LocalGame;
 
 /// The game library UI state and rendering.

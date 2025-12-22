@@ -33,18 +33,12 @@ tracing-subscriber = { workspace = true, features = ["env-filter"] }
 directories.workspace = true
 hashbrown.workspace = true
 
-# Windowing
+# UI
+eframe.workspace = true
+
+# For KeyCode in settings UI (keybinding configuration)
 winit.workspace = true
 
-# Graphics
-wgpu.workspace = true
-
-# UI
-egui.workspace = true
-egui-wgpu.workspace = true
-egui-winit.workspace = true
-
 # Utilities
-pollster.workspace = true
 open.workspace = true
 rfd.workspace = true

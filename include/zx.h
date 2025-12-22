@@ -256,6 +256,27 @@ NCZX_IMPORT void blend_mode(uint32_t mode);
 /** * `filter` — 0=nearest (pixelated), 1=linear (smooth) */
 NCZX_IMPORT void texture_filter(uint32_t filter);
 
+/** Set uniform alpha level for dither transparency. */
+/**  */
+/** # Arguments */
+/** * `level` — 0-15 (0=fully transparent, 15=fully opaque, default=15) */
+/**  */
+/** Controls the dither pattern threshold for screen-door transparency. */
+/** The dither pattern is always active, but with level=15 (default) all fragments pass. */
+NCZX_IMPORT void uniform_alpha(uint32_t level);
+
+/** Set dither offset for dither transparency. */
+/**  */
+/** # Arguments */
+/** * `x` — 0-3 pixel shift in X axis */
+/** * `y` — 0-3 pixel shift in Y axis */
+/**  */
+/** Use different offsets for stacked dithered meshes to prevent pattern cancellation. */
+/** When two transparent objects overlap with the same alpha level and offset, their */
+/** dither patterns align and pixels cancel out. Different offsets shift the pattern */
+/** so both objects remain visible. */
+NCZX_IMPORT void dither_offset(uint32_t x, uint32_t y);
+
 /** Load a texture from RGBA pixel data. */
 /**  */
 /** # Arguments */
@@ -457,20 +478,8 @@ NCZX_IMPORT uint32_t load_font_ex(uint32_t texture, const uint8_t* widths_ptr, u
 /** Pass 0 for the built-in 8×8 monospace font. */
 NCZX_IMPORT void font_bind(uint32_t font_handle);
 
-/** Set sky gradient colors. */
-/**  */
-/** # Arguments */
-/** * `horizon_color` — Color at eye level (0xRRGGBBAA) */
-/** * `zenith_color` — Color directly overhead (0xRRGGBBAA) */
-NCZX_IMPORT void sky_set_colors(uint32_t horizon_color, uint32_t zenith_color);
-
-/** Set sky sun properties. */
-/**  */
-/** # Arguments */
-/** * `dir_x`, `dir_y`, `dir_z` — Direction light rays travel (from sun toward surface) */
-/** * `color` — Sun color (0xRRGGBBAA) */
-/** * `sharpness` — Sun disc sharpness (0.0-1.0, higher = smaller/sharper) */
-NCZX_IMPORT void sky_set_sun(float dir_x, float dir_y, float dir_z, uint32_t color, float sharpness);
+/** Render the configured environment. Call first in render(), before any geometry. */
+NCZX_IMPORT void draw_env(void);
 
 /** Bind a matcap texture to a slot (Mode 1 only). */
 /**  */
@@ -478,8 +487,162 @@ NCZX_IMPORT void sky_set_sun(float dir_x, float dir_y, float dir_z, uint32_t col
 /** * `slot` — Matcap slot (1-3) */
 NCZX_IMPORT void matcap_set(uint32_t slot, uint32_t texture);
 
-/** Draw the procedural sky. Call first in render(), before any geometry. */
-NCZX_IMPORT void draw_sky(void);
+/** Configure gradient environment (Mode 0). */
+/**  */
+/** Creates a 4-color gradient background with vertical blending. */
+/**  */
+/** # Arguments */
+/** * `layer` — Target layer: 0 = base layer, 1 = overlay layer */
+/** * `zenith` — Color directly overhead (0xRRGGBBAA) */
+/** * `sky_horizon` — Sky color at horizon level (0xRRGGBBAA) */
+/** * `ground_horizon` — Ground color at horizon level (0xRRGGBBAA) */
+/** * `nadir` — Color directly below (0xRRGGBBAA) */
+/** * `rotation` — Rotation around Y axis in radians */
+/** * `shift` — Horizon vertical shift (-1.0 to 1.0, 0.0 = equator) */
+/**  */
+/** The gradient interpolates: zenith → sky_horizon (Y > 0), sky_horizon → ground_horizon (at Y = 0 + shift), ground_horizon → nadir (Y < 0). */
+/**  */
+/** You can configure the same mode on both layers with different parameters for creative effects. */
+NCZX_IMPORT void env_gradient(uint32_t layer, uint32_t zenith, uint32_t sky_horizon, uint32_t ground_horizon, uint32_t nadir, float rotation, float shift);
+
+/** Configure scatter environment (Mode 1: stars, rain, warp). */
+/**  */
+/** Creates a procedural particle field. */
+/**  */
+/** # Arguments */
+/** * `layer` — Target layer: 0 = base layer, 1 = overlay layer */
+/** * `variant` — 0=Stars, 1=Vertical (rain), 2=Horizontal, 3=Warp */
+/** * `density` — Particle count (0-255) */
+/** * `size` — Particle size (0-255) */
+/** * `glow` — Glow/bloom intensity (0-255) */
+/** * `streak_length` — Elongation for streaks (0-63, 0=points) */
+/** * `color_primary` — Main particle color (0xRRGGBB00) */
+/** * `color_secondary` — Variation/twinkle color (0xRRGGBB00) */
+/** * `parallax_rate` — Layer separation amount (0-255) */
+/** * `parallax_size` — Size variation with depth (0-255) */
+/** * `phase` — Animation phase (0-65535, wraps for seamless looping) */
+NCZX_IMPORT void env_scatter(uint32_t layer, uint32_t variant, uint32_t density, uint32_t size, uint32_t glow, uint32_t streak_length, uint32_t color_primary, uint32_t color_secondary, uint32_t parallax_rate, uint32_t parallax_size, uint32_t phase);
+
+/** Configure lines environment (Mode 2: synthwave grid, racing track). */
+/**  */
+/** Creates an infinite procedural grid. */
+/**  */
+/** # Arguments */
+/** * `layer` — Target layer: 0 = base layer, 1 = overlay layer */
+/** * `variant` — 0=Floor, 1=Ceiling, 2=Sphere */
+/** * `line_type` — 0=Horizontal, 1=Vertical, 2=Grid */
+/** * `thickness` — Line thickness (0-255) */
+/** * `spacing` — Distance between lines in world units */
+/** * `fade_distance` — Distance where lines start fading in world units */
+/** * `color_primary` — Main line color (0xRRGGBBAA) */
+/** * `color_accent` — Accent line color (0xRRGGBBAA) */
+/** * `accent_every` — Make every Nth line use accent color */
+/** * `phase` — Scroll phase (0-65535, wraps for seamless looping) */
+NCZX_IMPORT void env_lines(uint32_t layer, uint32_t variant, uint32_t line_type, uint32_t thickness, float spacing, float fade_distance, uint32_t color_primary, uint32_t color_accent, uint32_t accent_every, uint32_t phase);
+
+/** Configure silhouette environment (Mode 3: mountains, cityscape). */
+/**  */
+/** Creates layered terrain silhouettes with procedural noise. */
+/**  */
+/** # Arguments */
+/** * `layer` — Target layer: 0 = base layer, 1 = overlay layer */
+/** * `jaggedness` — Terrain roughness (0-255, 0=smooth hills, 255=sharp peaks) */
+/** * `layer_count` — Number of depth layers (1-3) */
+/** * `color_near` — Nearest silhouette color (0xRRGGBBAA) */
+/** * `color_far` — Farthest silhouette color (0xRRGGBBAA) */
+/** * `sky_zenith` — Sky color at zenith behind silhouettes (0xRRGGBBAA) */
+/** * `sky_horizon` — Sky color at horizon behind silhouettes (0xRRGGBBAA) */
+/** * `parallax_rate` — Layer separation amount (0-255) */
+/** * `seed` — Noise seed for terrain shape */
+NCZX_IMPORT void env_silhouette(uint32_t layer, uint32_t jaggedness, uint32_t layer_count, uint32_t color_near, uint32_t color_far, uint32_t sky_zenith, uint32_t sky_horizon, uint32_t parallax_rate, uint32_t seed);
+
+/** Configure rectangles environment (Mode 4: city windows, control panels). */
+/**  */
+/** Creates rectangular light sources like windows or screens. */
+/**  */
+/** # Arguments */
+/** * `layer` — Target layer: 0 = base layer, 1 = overlay layer */
+/** * `variant` — 0=Scatter, 1=Buildings, 2=Bands, 3=Panels */
+/** * `density` — How many rectangles (0-255) */
+/** * `lit_ratio` — Percentage of rectangles lit (0-255, 128=50%) */
+/** * `size_min` — Minimum rectangle size (0-63) */
+/** * `size_max` — Maximum rectangle size (0-63) */
+/** * `aspect` — Aspect ratio bias (0-3, 0=square, 3=very tall) */
+/** * `color_primary` — Main window/panel color (0xRRGGBBAA) */
+/** * `color_variation` — Color variation for variety (0xRRGGBBAA) */
+/** * `parallax_rate` — Layer separation (0-255) */
+/** * `phase` — Flicker phase (0-65535, wraps for seamless animation) */
+NCZX_IMPORT void env_rectangles(uint32_t layer, uint32_t variant, uint32_t density, uint32_t lit_ratio, uint32_t size_min, uint32_t size_max, uint32_t aspect, uint32_t color_primary, uint32_t color_variation, uint32_t parallax_rate, uint32_t phase);
+
+/** Configure room environment (Mode 5: interior spaces). */
+/**  */
+/** Creates interior of a 3D box with directional lighting. */
+/**  */
+/** # Arguments */
+/** * `layer` — Target layer: 0 = base layer, 1 = overlay layer */
+/** * `color_ceiling` — Ceiling color (0xRRGGBB00) */
+/** * `color_floor` — Floor color (0xRRGGBB00) */
+/** * `color_walls` — Wall color (0xRRGGBB00) */
+/** * `panel_size` — Size of wall panel pattern in world units */
+/** * `panel_gap` — Gap between panels (0-255) */
+/** * `light_dir_x`, `light_dir_y`, `light_dir_z` — Light direction */
+/** * `light_intensity` — Directional light strength (0-255) */
+/** * `corner_darken` — Corner/edge darkening amount (0-255) */
+/** * `room_scale` — Room size multiplier */
+/** * `viewer_x`, `viewer_y`, `viewer_z` — Viewer position in room (-128 to 127 = -1.0 to 1.0) */
+NCZX_IMPORT void env_room(uint32_t layer, uint32_t color_ceiling, uint32_t color_floor, uint32_t color_walls, float panel_size, uint32_t panel_gap, float light_dir_x, float light_dir_y, float light_dir_z, uint32_t light_intensity, uint32_t corner_darken, float room_scale, int32_t viewer_x, int32_t viewer_y, int32_t viewer_z);
+
+/** Configure curtains environment (Mode 6: pillars, trees, vertical structures). */
+/**  */
+/** Creates vertical structures arranged around the viewer. */
+/**  */
+/** # Arguments */
+/** * `layer` — Target layer: 0 = base layer, 1 = overlay layer */
+/** * `layer_count` — Depth layers (1-3) */
+/** * `density` — Structures per cell (0-255) */
+/** * `height_min` — Minimum height (0-63) */
+/** * `height_max` — Maximum height (0-63) */
+/** * `width` — Structure width (0-31) */
+/** * `spacing` — Gap between structures (0-31) */
+/** * `waviness` — Organic wobble (0-255, 0=straight) */
+/** * `color_near` — Nearest structure color (0xRRGGBBAA) */
+/** * `color_far` — Farthest structure color (0xRRGGBBAA) */
+/** * `glow` — Neon/magical glow intensity (0-255) */
+/** * `parallax_rate` — Layer separation (0-255) */
+/** * `phase` — Horizontal scroll phase (0-65535, wraps for seamless) */
+NCZX_IMPORT void env_curtains(uint32_t layer, uint32_t layer_count, uint32_t density, uint32_t height_min, uint32_t height_max, uint32_t width, uint32_t spacing, uint32_t waviness, uint32_t color_near, uint32_t color_far, uint32_t glow, uint32_t parallax_rate, uint32_t phase);
+
+/** Configure rings environment (Mode 7: portals, tunnels, vortex). */
+/**  */
+/** Creates concentric rings for portals or vortex effects. */
+/**  */
+/** # Arguments */
+/** * `layer` — Target layer: 0 = base layer, 1 = overlay layer */
+/** * `ring_count` — Number of rings (1-255) */
+/** * `thickness` — Ring thickness (0-255) */
+/** * `color_a` — First alternating color (0xRRGGBBAA) */
+/** * `color_b` — Second alternating color (0xRRGGBBAA) */
+/** * `center_color` — Bright center color (0xRRGGBBAA) */
+/** * `center_falloff` — Center glow falloff (0-255) */
+/** * `spiral_twist` — Spiral rotation in degrees (0=concentric) */
+/** * `axis_x`, `axis_y`, `axis_z` — Ring axis direction (normalized) */
+/** * `phase` — Rotation phase (0-65535 = 0°-360°, wraps for seamless) */
+NCZX_IMPORT void env_rings(uint32_t layer, uint32_t ring_count, uint32_t thickness, uint32_t color_a, uint32_t color_b, uint32_t center_color, uint32_t center_falloff, float spiral_twist, float axis_x, float axis_y, float axis_z, uint32_t phase);
+
+/** Set the blend mode for combining base and overlay layers. */
+/**  */
+/** # Arguments */
+/** * `mode` — Blend mode (0-3) */
+/**  */
+/** # Blend Modes */
+/** * 0 — Alpha: Standard alpha blending */
+/** * 1 — Add: Additive blending */
+/** * 2 — Multiply: Multiplicative blending */
+/** * 3 — Screen: Screen blending */
+/**  */
+/** Controls how the overlay layer composites onto the base layer. */
+/** Use this to create different visual effects when layering environments. */
+NCZX_IMPORT void env_blend(uint32_t mode);
 
 /** Bind an MRE texture (Metallic-Roughness-Emissive) to slot 1. */
 NCZX_IMPORT void material_mre(uint32_t texture);

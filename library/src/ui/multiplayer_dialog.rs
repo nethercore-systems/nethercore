@@ -3,6 +3,7 @@
 //! Provides UI for hosting or joining online games via direct IP connection.
 
 use super::UiAction;
+use eframe::egui;
 
 /// Tab selection for multiplayer mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

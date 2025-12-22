@@ -10,6 +10,5 @@
 //! - Easy addition of new console types
 
 pub mod app;
-pub mod graphics;
 pub mod registry;
 pub mod ui;

@@ -1,7 +1,7 @@
 //! Settings UI for configuring video, audio, and input
 
 use super::UiAction;
-use egui::{ComboBox, Context, Slider};
+use eframe::egui::{self, ComboBox, Context, Slider};
 use nethercore_core::app::config::{Config, ScaleMode};
 use nethercore_core::app::input::KeyboardMapping;
 use winit::keyboard::KeyCode;

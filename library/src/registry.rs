@@ -236,7 +236,6 @@ fn build_player_command(
         match connection {
             ConnectionMode::Host { port } => {
                 cmd.arg("--host");
-                cmd.arg("--port");
                 cmd.arg(port.to_string());
             }
             ConnectionMode::Join { host_ip, port } => {

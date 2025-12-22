@@ -6,7 +6,7 @@
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
-use ggrs::GgrsError;
+use ggrs::{GgrsError, SessionState};
 
 use crate::console::Console;
 use crate::rollback::{RollbackSession, SessionEvent};
@@ -191,6 +191,17 @@ impl<C: Console> Runtime<C> {
 
         // If we have a rollback session, use GGRS
         if let Some(session) = &mut self.session {
+            // Check if P2P session is still synchronizing
+            if let Some(state) = session.session_state() {
+                if state != SessionState::Running {
+                    // Session is still synchronizing - poll it but don't advance frames
+                    session.poll_remote_clients();
+                    // Don't consume accumulator - we'll try again next frame
+                    // Return 0 ticks and 0.0 interpolation (no game state to interpolate)
+                    return Ok((0, 0.0));
+                }
+            }
+
             while self.accumulator >= self.tick_duration {
                 let tick_start = Instant::now();
 

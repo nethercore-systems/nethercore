@@ -114,6 +114,27 @@ enum ErrorAction {
     Quit,
 }
 
+/// State for waiting for a peer to connect in Host mode.
+struct WaitingForPeer {
+    /// The socket bound and waiting for connections
+    socket: LocalSocket,
+    /// The port we're hosting on
+    port: u16,
+    /// Local IP addresses to display
+    local_ips: Vec<String>,
+}
+
+impl WaitingForPeer {
+    fn new(socket: LocalSocket, port: u16) -> Self {
+        let local_ips = LocalSocket::get_local_ips();
+        Self {
+            socket,
+            port,
+            local_ips,
+        }
+    }
+}
+
 /// Simple settings panel for the standalone player.
 struct PlayerSettingsPanel {
     visible: bool,
@@ -371,6 +392,8 @@ where
     gif_toggle_key: KeyCode,
     /// Network statistics overlay visibility (F12)
     network_overlay_visible: bool,
+    /// State for waiting for a peer to connect (Host mode)
+    waiting_for_peer: Option<WaitingForPeer>,
     _vram_limit: usize,
     _loader_marker: std::marker::PhantomData<L>,
 }
@@ -445,6 +468,7 @@ where
             screenshot_key,
             gif_toggle_key,
             network_overlay_visible: false,
+            waiting_for_peer: None,
             _vram_limit: vram_limit,
             _loader_marker: std::marker::PhantomData,
         }
@@ -830,17 +854,14 @@ where
             }
             ConnectionMode::Host { port } => {
                 // Host mode - bind and wait for connection
-                // For now, create socket and start in waiting state
-                // TODO: Implement proper connection waiting UI
-                let _socket = LocalSocket::bind(&format!("0.0.0.0:{}", port))
+                let socket = LocalSocket::bind(&format!("0.0.0.0:{}", port))
                     .context("Failed to bind host socket")?;
                 tracing::info!("Hosting on port {}, waiting for connection...", port);
 
-                // For MVP, we need to wait for peer before creating session
-                // This will be improved in Phase 0 with proper connection UI
-                anyhow::bail!(
-                    "Host mode not yet fully implemented. Use --p2p for local testing."
-                );
+                // Enter waiting state - game will be loaded when peer connects
+                self.waiting_for_peer = Some(WaitingForPeer::new(socket, *port));
+
+                // Don't load game yet - will be loaded when peer connects
             }
             ConnectionMode::Join { address } => {
                 // Join mode - connect to host
@@ -940,6 +961,76 @@ where
             return;
         }
 
+        // Poll for peer connection in Host mode
+        if let Some(ref mut waiting) = self.waiting_for_peer {
+            if let Some(peer_addr) = waiting.socket.poll_for_peer() {
+                tracing::info!("Peer connected from {}", peer_addr);
+
+                // Take the waiting state to get ownership of the socket
+                let waiting = self.waiting_for_peer.take().unwrap();
+
+                // Create the P2P session now that we have a peer
+                if let (Some(rom), Some(runner)) = (&self.loaded_rom, &mut self.runner) {
+                    let specs = C::specs();
+                    let session_config = SessionConfig::online(2)
+                        .with_input_delay(self.config.input_delay);
+
+                    // Host is player 0, peer is player 1
+                    let players = vec![
+                        (0, PlayerType::Local),
+                        (1, PlayerType::Remote(peer_addr)),
+                    ];
+
+                    match RollbackSession::new_p2p(
+                        session_config,
+                        waiting.socket,
+                        players,
+                        specs.ram_limit,
+                    ) {
+                        Ok(session) => {
+                            if let Err(e) = runner
+                                .load_game_with_session(rom.console.clone(), &rom.code, session)
+                            {
+                                tracing::error!("Failed to load game with P2P session: {}", e);
+                                self.error_state = Some(GameError {
+                                    summary: "Connection Error".to_string(),
+                                    details: format!("Failed to start game: {}", e),
+                                    stack_trace: None,
+                                    tick: None,
+                                    phase: GameErrorPhase::Update,
+                                    suggestions: vec![],
+                                });
+                            } else {
+                                tracing::info!("Host mode: game started with peer");
+                                // Set audio volume
+                                if let Some(session) = runner.session_mut() {
+                                    if let Some(audio) = session.runtime.audio_mut() {
+                                        audio.set_master_volume(self.settings_panel.master_volume);
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to create P2P session: {}", e);
+                            self.error_state = Some(GameError {
+                                summary: "Connection Error".to_string(),
+                                details: format!("Failed to create session: {}", e),
+                                stack_trace: None,
+                                tick: None,
+                                phase: GameErrorPhase::Update,
+                                suggestions: vec![],
+                            });
+                        }
+                    }
+                }
+
+                self.needs_redraw = true;
+                return;
+            }
+            // Still waiting for peer - don't run game simulation
+            return;
+        }
+
         self.input_manager.update();
 
         let tick_before = self
@@ -1033,7 +1124,7 @@ where
             runner.graphics().blit_to_window(&mut encoder, &view);
 
             // Render overlays via egui
-            if self.debug_overlay || self.debug_panel.visible || self.settings_panel.visible || self.error_state.is_some() || self.network_overlay_visible {
+            if self.debug_overlay || self.debug_panel.visible || self.settings_panel.visible || self.error_state.is_some() || self.network_overlay_visible || self.waiting_for_peer.is_some() {
                 let (registry_opt, mem_base, mem_len, has_debug_callback) = {
                     if let Some(session) = runner.session() {
                         if let Some(game) = session.runtime.game() {
@@ -1076,6 +1167,7 @@ where
                     let frame_controller = &mut self.frame_controller;
                     let settings_panel = &mut self.settings_panel;
                     let error_state_ref = &self.error_state;
+                    let waiting_for_peer_ref = &self.waiting_for_peer;
                     let network_overlay_visible = self.network_overlay_visible;
 
                     // Get network session info for overlay
@@ -1221,6 +1313,49 @@ where
                                     *pending_action.borrow_mut() = Some(action);
                                 }
                             }
+                        }
+
+                        // Waiting for peer connection dialog (Host mode)
+                        if let Some(waiting) = waiting_for_peer_ref {
+                            egui::Window::new("Waiting for Connection")
+                                .collapsible(false)
+                                .resizable(false)
+                                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                                .show(ctx, |ui| {
+                                    ui.set_min_width(300.0);
+
+                                    ui.vertical_centered(|ui| {
+                                        ui.add_space(10.0);
+                                        ui.spinner();
+                                        ui.add_space(10.0);
+                                        ui.label("Waiting for player to connect...");
+                                        ui.add_space(15.0);
+                                    });
+
+                                    ui.separator();
+                                    ui.add_space(10.0);
+
+                                    ui.label("Share one of these addresses with your friend:");
+                                    ui.add_space(5.0);
+
+                                    for ip in &waiting.local_ips {
+                                        let addr = format!("{}:{}", ip, waiting.port);
+                                        ui.horizontal(|ui| {
+                                            ui.monospace(&addr);
+                                            if ui.small_button("Copy").clicked() {
+                                                ctx.copy_text(addr.clone());
+                                            }
+                                        });
+                                    }
+
+                                    ui.add_space(15.0);
+                                    ui.label(
+                                        egui::RichText::new("Your friend should use 'Join Game' with this address")
+                                            .weak()
+                                            .small(),
+                                    );
+                                    ui.add_space(10.0);
+                                });
                         }
 
                         if let Some(error) = error_state_ref {

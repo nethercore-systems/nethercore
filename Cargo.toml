@@ -34,6 +34,7 @@ gilrs = "0.11"
 egui = "0.33"
 egui-wgpu = "0.33"
 egui-winit = "0.33"
+eframe = "0.33"
 
 # Math
 glam = { version = "0.30", features = ["bytemuck"] }
