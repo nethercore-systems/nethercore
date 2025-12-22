@@ -1,12 +1,12 @@
 //! Pong Example
 //!
 //! A complete Pong game demonstrating core Nethercore ZX features:
-//! - 2D gameplay with draw_rect()
+//! - 2D gameplay with sprites from ROM assets
 //! - Input handling for multiple players
 //! - Simple physics (ball movement, collision)
 //! - AI opponent for single-player
 //! - Game states (title, playing, game over)
-//! - Procedural sound effects
+//! - Sound effects loaded from ROM assets
 //! - Rollback-safe game state (all state in statics)
 //!
 //! This example is designed to accompany the "Build Pong" tutorial in the docs.
@@ -44,10 +44,15 @@ extern "C" {
 
     // 2D Drawing
     fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32);
+    fn draw_sprite(x: f32, y: f32, w: f32, h: f32, color: u32);
     fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
+    fn texture_bind(handle: u32);
+
+    // ROM Assets
+    fn rom_texture(id_ptr: *const u8, id_len: u32) -> u32;
+    fn rom_sound(id_ptr: *const u8, id_len: u32) -> u32;
 
     // Audio
-    fn load_sound(data_ptr: *const i16, byte_len: u32) -> u32;
     fn play_sound(sound: u32, volume: f32, pan: f32);
 
     // System
@@ -126,64 +131,18 @@ static mut SFX_HIT: u32 = 0;
 static mut SFX_SCORE: u32 = 0;
 static mut SFX_WIN: u32 = 0;
 
-// === Sound Generation ===
+// Texture handles
+static mut TEX_BALL: u32 = 0;
+static mut TEX_PADDLE: u32 = 0;
 
-// Generate a short beep sound (hit)
-fn generate_hit_sound() -> [i16; 2205] {
-    let mut samples = [0i16; 2205]; // 0.1 seconds at 22050 Hz
-    let frequency = 440.0;
-    let sample_rate = 22050.0;
+// === Helper Functions for ROM Assets ===
 
-    for i in 0..2205 {
-        let t = i as f32 / sample_rate;
-        // Envelope: quick attack, fast decay
-        let envelope = 1.0 - (i as f32 / 2205.0);
-        let value = libm::sinf(2.0 * core::f32::consts::PI * frequency * t) * envelope;
-        samples[i] = (value * 32767.0 * 0.3) as i16;
-    }
-    samples
+fn load_rom_texture(id: &[u8]) -> u32 {
+    unsafe { rom_texture(id.as_ptr(), id.len() as u32) }
 }
 
-// Generate a descending tone (score against)
-fn generate_score_sound() -> [i16; 4410] {
-    let mut samples = [0i16; 4410]; // 0.2 seconds
-    let sample_rate = 22050.0;
-
-    for i in 0..4410 {
-        let t = i as f32 / sample_rate;
-        let progress = i as f32 / 4410.0;
-        // Descending frequency from 880 to 220 Hz
-        let frequency = 880.0 - (660.0 * progress);
-        let envelope = 1.0 - progress;
-        let value = libm::sinf(2.0 * core::f32::consts::PI * frequency * t) * envelope;
-        samples[i] = (value * 32767.0 * 0.3) as i16;
-    }
-    samples
-}
-
-// Generate a victory fanfare
-fn generate_win_sound() -> [i16; 11025] {
-    let mut samples = [0i16; 11025]; // 0.5 seconds
-    let sample_rate = 22050.0;
-
-    for i in 0..11025 {
-        let t = i as f32 / sample_rate;
-        let progress = i as f32 / 11025.0;
-
-        // Three ascending notes
-        let frequency = if progress < 0.33 {
-            523.25 // C5
-        } else if progress < 0.66 {
-            659.25 // E5
-        } else {
-            783.99 // G5
-        };
-
-        let envelope = 1.0 - (progress * 0.5);
-        let value = libm::sinf(2.0 * core::f32::consts::PI * frequency * t) * envelope;
-        samples[i] = (value * 32767.0 * 0.3) as i16;
-    }
-    samples
+fn load_rom_sound(id: &[u8]) -> u32 {
+    unsafe { rom_sound(id.as_ptr(), id.len() as u32) }
 }
 
 // === Helper Functions ===
@@ -245,15 +204,14 @@ pub extern "C" fn init() {
     unsafe {
         set_clear_color(COLOR_DARK);
 
-        // Generate and load sounds
-        let hit_samples = generate_hit_sound();
-        SFX_HIT = load_sound(hit_samples.as_ptr(), (hit_samples.len() * 2) as u32);
+        // Load textures from ROM
+        TEX_BALL = load_rom_texture(b"ball");
+        TEX_PADDLE = load_rom_texture(b"paddle");
 
-        let score_samples = generate_score_sound();
-        SFX_SCORE = load_sound(score_samples.as_ptr(), (score_samples.len() * 2) as u32);
-
-        let win_samples = generate_win_sound();
-        SFX_WIN = load_sound(win_samples.as_ptr(), (win_samples.len() * 2) as u32);
+        // Load sounds from ROM
+        SFX_HIT = load_rom_sound(b"hit");
+        SFX_SCORE = load_rom_sound(b"score");
+        SFX_WIN = load_rom_sound(b"win");
 
         // Initialize game state
         reset_game();
@@ -483,17 +441,20 @@ fn render_court() {
 
 fn render_paddles() {
     unsafe {
-        // Player 1 paddle (blue)
-        draw_rect(PADDLE1.x, PADDLE1.y, PADDLE_WIDTH, PADDLE_HEIGHT, COLOR_PLAYER1);
+        texture_bind(TEX_PADDLE);
 
-        // Player 2 paddle (red)
-        draw_rect(PADDLE2.x, PADDLE2.y, PADDLE_WIDTH, PADDLE_HEIGHT, COLOR_PLAYER2);
+        // Player 1 paddle (blue tint)
+        draw_sprite(PADDLE1.x, PADDLE1.y, PADDLE_WIDTH, PADDLE_HEIGHT, COLOR_PLAYER1);
+
+        // Player 2 paddle (red tint)
+        draw_sprite(PADDLE2.x, PADDLE2.y, PADDLE_WIDTH, PADDLE_HEIGHT, COLOR_PLAYER2);
     }
 }
 
 fn render_ball() {
     unsafe {
-        draw_rect(BALL.x, BALL.y, BALL_SIZE, BALL_SIZE, COLOR_BALL);
+        texture_bind(TEX_BALL);
+        draw_sprite(BALL.x, BALL.y, BALL_SIZE, BALL_SIZE, COLOR_BALL);
     }
 }
 

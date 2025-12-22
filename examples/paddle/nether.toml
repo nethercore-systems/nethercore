@@ -3,3 +3,25 @@ id = "paddle"
 title = "Paddle"
 author = "Nethercore Examples"
 version = "0.1.0"
+description = "Classic Pong game demonstrating 2D sprites, input handling, and sound"
+tags = ["arcade", "multiplayer", "2d"]
+
+[[assets.textures]]
+id = "ball"
+path = "assets/ball.png"
+
+[[assets.textures]]
+id = "paddle"
+path = "assets/paddle.png"
+
+[[assets.sounds]]
+id = "hit"
+path = "assets/hit.wav"
+
+[[assets.sounds]]
+id = "score"
+path = "assets/score.wav"
+
+[[assets.sounds]]
+id = "win"
+path = "assets/win.wav"
