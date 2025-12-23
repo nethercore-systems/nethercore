@@ -54,6 +54,8 @@ pub struct AssetsSection {
     #[serde(default)]
     pub sounds: Vec<AssetEntry>,
     #[serde(default)]
+    pub trackers: Vec<AssetEntry>,
+    #[serde(default)]
     pub data: Vec<AssetEntry>,
 }
 

@@ -1,0 +1,11 @@
+[package]
+name = "gen-tracker-demo"
+version = "0.1.0"
+edition = "2021"
+description = "Generates procedural audio samples and XM tracker file for tracker-demo example"
+
+[dependencies]
+# No external deps - pure Rust procedural generation
+
+[dev-dependencies]
+nether-xm = { path = "../../nether-xm" }

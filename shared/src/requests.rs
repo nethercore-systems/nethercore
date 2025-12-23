@@ -35,6 +35,16 @@ pub struct CreateGameRequest {
     /// Optional tags for categorization.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<Vec<String>>,
+    /// Content rating: "E" (Everyone), "T" (Teen), "M" (Mature 17+). Defaults to "E".
+    #[serde(default = "default_content_rating")]
+    pub content_rating: String,
+    /// Content descriptor tags (e.g., "Violence", "Language").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_tags: Option<Vec<String>>,
+}
+
+fn default_content_rating() -> String {
+    "E".to_string()
 }
 
 /// Update an existing game (developer endpoint).
@@ -52,6 +62,12 @@ pub struct UpdateGameRequest {
     /// Update tags (replaces existing).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<Vec<String>>,
+    /// Update content rating: "E" (Everyone), "T" (Teen), "M" (Mature 17+).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_rating: Option<String>,
+    /// Update content descriptor tags (replaces existing).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_tags: Option<Vec<String>>,
 }
 
 /// Response after creating a new game.

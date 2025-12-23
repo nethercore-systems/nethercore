@@ -594,15 +594,10 @@ fn env_blend(mut caller: Caller<'_, ZXGameContext>, mode: u32) {
 
     // Validate mode
     if mode > 3 {
-        warn!(
-            "env_blend: invalid mode {} (must be 0-3), clamping",
-            mode
-        );
+        warn!("env_blend: invalid mode {} (must be 0-3), clamping", mode);
     }
 
-    state
-        .current_environment_state
-        .set_blend_mode(mode.min(3));
+    state.current_environment_state.set_blend_mode(mode.min(3));
 
     state.environment_dirty = true;
 }

@@ -70,7 +70,6 @@ fn draw_triangles(
     let textures = state.bound_textures;
 
     let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
-    let blend_mode = crate::graphics::BlendMode::from_u8(state.blend_mode);
 
     // Allocate combined MVP+shading buffer index (lazy allocation with deduplication)
     let buffer_index = state.add_mvp_shading_state();
@@ -81,7 +80,6 @@ fn draw_triangles(
         &vertex_data,
         buffer_index,
         textures,
-        blend_mode,
         state.depth_test,
         cull_mode,
     );
@@ -161,7 +159,6 @@ fn draw_triangles_indexed(
     let textures = state.bound_textures;
 
     let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
-    let blend_mode = crate::graphics::BlendMode::from_u8(state.blend_mode);
 
     // Allocate combined MVP+shading buffer index (lazy allocation with deduplication)
     let buffer_index = state.add_mvp_shading_state();
@@ -173,7 +170,6 @@ fn draw_triangles_indexed(
         &index_data,
         buffer_index,
         textures,
-        blend_mode,
         state.depth_test,
         cull_mode,
     );

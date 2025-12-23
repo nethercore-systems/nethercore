@@ -114,8 +114,7 @@ fn generate_manifest(game_id: &str, game_title: &str, is_rust_project: bool) -> 
 
     // Header
     content.push_str("# Nether Game Manifest\n");
-    content
-        .push_str("# See: https://github.com/nethercore-systems/nethercore/docs/book/\n");
+    content.push_str("# See: https://github.com/nethercore-systems/nethercore/docs/book/\n");
     content.push_str("\n");
 
     // Game section

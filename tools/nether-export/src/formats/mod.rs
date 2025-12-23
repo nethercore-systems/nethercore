@@ -7,7 +7,7 @@ pub use zx_common::formats::*;
 use anyhow::Result;
 use std::io::Write;
 
-use zx_common::formats::{encode_bone_transform, NetherZAnimationHeader};
+use zx_common::formats::{encode_bone_transform, NetherZXAnimationHeader};
 
 use crate::animation::BoneTRS;
 
@@ -22,7 +22,7 @@ pub fn write_nether_mesh<W: Write>(
     let vertex_count = (vertex_data.len() / stride) as u32;
     let index_count = indices.map(|i| i.len() as u32).unwrap_or(0);
 
-    let header = NetherZMeshHeader::new(vertex_count, index_count, format);
+    let header = NetherZXMeshHeader::new(vertex_count, index_count, format);
     w.write_all(&header.to_bytes())?;
     w.write_all(vertex_data)?;
 
@@ -50,7 +50,7 @@ pub fn write_nether_texture<W: Write>(
     _format: TextureFormat,
     data: &[u8],
 ) -> Result<()> {
-    let header = NetherZTextureHeader::new(width, height);
+    let header = NetherZXTextureHeader::new(width, height);
     w.write_all(&header.to_bytes())?;
     w.write_all(data)?;
     Ok(())
@@ -59,9 +59,9 @@ pub fn write_nether_texture<W: Write>(
 /// Write a complete NetherSound file (QOA compressed format)
 ///
 /// Uses QOA compression (~5:1 ratio) instead of raw PCM.
-/// Format: NetherZSoundHeader (4 bytes) + QOA frame data.
+/// Format: NetherZXSoundHeader (4 bytes) + QOA frame data.
 pub fn write_nether_sound<W: Write>(w: &mut W, samples: &[i16]) -> Result<()> {
-    let header = NetherZSoundHeader::new(samples.len() as u32);
+    let header = NetherZXSoundHeader::new(samples.len() as u32);
     w.write_all(&header.to_bytes())?;
 
     let qoa_data = nether_qoa::encode_qoa(samples);
@@ -76,7 +76,7 @@ pub fn write_nether_skeleton<W: Write>(
     w: &mut W,
     inverse_bind_matrices: &[[f32; 12]],
 ) -> Result<()> {
-    let header = NetherZSkeletonHeader::new(inverse_bind_matrices.len() as u32);
+    let header = NetherZXSkeletonHeader::new(inverse_bind_matrices.len() as u32);
     w.write_all(&header.to_bytes())?;
 
     for matrix in inverse_bind_matrices {
@@ -115,7 +115,7 @@ pub fn write_nether_animation<W: Write>(
     let frame_count = frames.len() as u16;
 
     // Write header (4 bytes)
-    let header = NetherZAnimationHeader::new(bone_count, frame_count);
+    let header = NetherZXAnimationHeader::new(bone_count, frame_count);
     w.write_all(&header.to_bytes())?;
 
     // Write frame data (frame_count × bone_count × 16 bytes)

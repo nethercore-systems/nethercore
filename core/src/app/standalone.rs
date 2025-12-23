@@ -22,14 +22,15 @@ use crate::console::{Audio, AudioGenerator, Console, ConsoleResourceManager};
 use crate::debug::registry::RegisteredValue;
 use crate::debug::types::DebugValue;
 use crate::debug::{ActionRequest, FrameController};
-use crate::rollback::{ConnectionMode, ConnectionQuality, LocalSocket, RollbackSession, SessionConfig, SessionType};
+use crate::rollback::{
+    ConnectionMode, ConnectionQuality, LocalSocket, RollbackSession, SessionConfig, SessionType,
+};
 use crate::runner::ConsoleRunner;
 
 use super::config::ScaleMode;
 use super::event_loop::ConsoleApp;
 use super::{
-    DebugStats, FRAME_TIME_HISTORY_SIZE, GameError, GameErrorPhase, RuntimeError,
-    parse_wasm_error,
+    DebugStats, FRAME_TIME_HISTORY_SIZE, GameError, GameErrorPhase, RuntimeError, parse_wasm_error,
 };
 
 /// Convert a game name to a URL-safe game ID.
@@ -213,7 +214,10 @@ impl PlayerSettingsPanel {
                 ui.heading("Video");
                 ui.add_space(5.0);
 
-                if ui.checkbox(&mut self.fullscreen, "Fullscreen (F11)").changed() {
+                if ui
+                    .checkbox(&mut self.fullscreen, "Fullscreen (F11)")
+                    .changed()
+                {
                     action = SettingsAction::ToggleFullscreen(self.fullscreen);
                 }
                 ui.add_space(5.0);
@@ -227,9 +231,21 @@ impl PlayerSettingsPanel {
                         ScaleMode::PixelPerfect => "Pixel Perfect",
                     })
                     .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.scale_mode, ScaleMode::Fit, "Fit (Maintain Aspect Ratio)");
-                        ui.selectable_value(&mut self.scale_mode, ScaleMode::Stretch, "Stretch (Fill Window)");
-                        ui.selectable_value(&mut self.scale_mode, ScaleMode::PixelPerfect, "Pixel Perfect (Integer Scaling)");
+                        ui.selectable_value(
+                            &mut self.scale_mode,
+                            ScaleMode::Fit,
+                            "Fit (Maintain Aspect Ratio)",
+                        );
+                        ui.selectable_value(
+                            &mut self.scale_mode,
+                            ScaleMode::Stretch,
+                            "Stretch (Fill Window)",
+                        );
+                        ui.selectable_value(
+                            &mut self.scale_mode,
+                            ScaleMode::PixelPerfect,
+                            "Pixel Perfect (Integer Scaling)",
+                        );
                     });
                 if self.scale_mode != old_scale_mode {
                     action = SettingsAction::SetScaleMode(self.scale_mode);
@@ -265,7 +281,11 @@ impl PlayerSettingsPanel {
                 });
 
                 ui.add_space(5.0);
-                ui.label(egui::RichText::new("Press F2 to toggle this panel").weak().small());
+                ui.label(
+                    egui::RichText::new("Press F2 to toggle this panel")
+                        .weak()
+                        .small(),
+                );
             });
 
         action
@@ -280,7 +300,8 @@ fn render_error_screen(ctx: &egui::Context, error: &GameError) -> ErrorAction {
         .fixed_pos(egui::pos2(0.0, 0.0))
         .order(egui::Order::Background)
         .show(ctx, |ui| {
-            let screen = ctx.input(|i| i.raw.viewport().inner_rect)
+            let screen = ctx
+                .input(|i| i.raw.viewport().inner_rect)
                 .unwrap_or_else(|| egui::Rect::from_min_size(egui::Pos2::ZERO, ctx.used_size()));
             ui.painter().rect_filled(
                 screen,
@@ -296,7 +317,11 @@ fn render_error_screen(ctx: &egui::Context, error: &GameError) -> ErrorAction {
         .default_width(450.0)
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("⚠").size(24.0).color(egui::Color32::YELLOW));
+                ui.label(
+                    egui::RichText::new("⚠")
+                        .size(24.0)
+                        .color(egui::Color32::YELLOW),
+                );
                 ui.heading(&error.summary);
             });
 
@@ -457,11 +482,17 @@ where
         }
 
         let screenshot_key = parse_key_code(&app_config.capture.screenshot).unwrap_or_else(|| {
-            tracing::warn!("Invalid screenshot key '{}', using F9", app_config.capture.screenshot);
+            tracing::warn!(
+                "Invalid screenshot key '{}', using F9",
+                app_config.capture.screenshot
+            );
             KeyCode::F9
         });
         let gif_toggle_key = parse_key_code(&app_config.capture.gif_toggle).unwrap_or_else(|| {
-            tracing::warn!("Invalid GIF toggle key '{}', using F10", app_config.capture.gif_toggle);
+            tracing::warn!(
+                "Invalid GIF toggle key '{}', using F10",
+                app_config.capture.gif_toggle
+            );
             KeyCode::F10
         });
 
@@ -856,8 +887,8 @@ where
                     .context("Failed to connect to peer")?;
 
                 let peer_addr = format!("127.0.0.1:{}", peer_port);
-                let session_config = SessionConfig::online(2)
-                    .with_input_delay(self.config.input_delay);
+                let session_config =
+                    SessionConfig::online(2).with_input_delay(self.config.input_delay);
 
                 let players = vec![
                     (
@@ -907,8 +938,8 @@ where
             ConnectionMode::Join { address } => {
                 // Join mode - connect to host
                 // TODO: Implement proper connection UI
-                let mut socket = LocalSocket::bind("0.0.0.0:0")
-                    .context("Failed to bind client socket")?;
+                let mut socket =
+                    LocalSocket::bind("0.0.0.0:0").context("Failed to bind client socket")?;
                 socket
                     .connect(address)
                     .context("Failed to connect to host")?;
@@ -916,8 +947,8 @@ where
 
                 // For MVP, create P2P session immediately
                 // This will be improved in Phase 0 with proper connection flow
-                let session_config = SessionConfig::online(2)
-                    .with_input_delay(self.config.input_delay);
+                let session_config =
+                    SessionConfig::online(2).with_input_delay(self.config.input_delay);
 
                 let players = vec![
                     (0, PlayerType::Remote(address.clone())),
@@ -983,7 +1014,9 @@ where
                 self.needs_redraw = true;
                 false
             }
-            WindowEvent::KeyboardInput { event: key_event, .. } => {
+            WindowEvent::KeyboardInput {
+                event: key_event, ..
+            } => {
                 self.handle_key_input(key_event.clone());
                 false
             }
@@ -1013,14 +1046,11 @@ where
                 // Create the P2P session now that we have a peer
                 if let (Some(rom), Some(runner)) = (&self.loaded_rom, &mut self.runner) {
                     let specs = C::specs();
-                    let session_config = SessionConfig::online(2)
-                        .with_input_delay(self.config.input_delay);
+                    let session_config =
+                        SessionConfig::online(2).with_input_delay(self.config.input_delay);
 
                     // Host is player 0, peer is player 1
-                    let players = vec![
-                        (0, PlayerType::Local),
-                        (1, PlayerType::Remote(peer_addr)),
-                    ];
+                    let players = vec![(0, PlayerType::Local), (1, PlayerType::Remote(peer_addr))];
 
                     match RollbackSession::new_p2p(
                         session_config,
@@ -1029,9 +1059,11 @@ where
                         specs.ram_limit,
                     ) {
                         Ok(session) => {
-                            if let Err(e) = runner
-                                .load_game_with_session(rom.console.clone(), &rom.code, session)
-                            {
+                            if let Err(e) = runner.load_game_with_session(
+                                rom.console.clone(),
+                                &rom.code,
+                                session,
+                            ) {
                                 tracing::error!("Failed to load game with P2P session: {}", e);
                                 self.error_state = Some(GameError {
                                     summary: "Connection Error".to_string(),
@@ -1102,7 +1134,8 @@ where
                     GameErrorPhase::Update
                 };
 
-                let game_error = parse_wasm_error(&anyhow::anyhow!("{}", error_msg), tick_before, phase);
+                let game_error =
+                    parse_wasm_error(&anyhow::anyhow!("{}", error_msg), tick_before, phase);
                 tracing::error!("Game error: {}", game_error);
                 self.error_state = Some(game_error);
                 self.needs_redraw = true;
@@ -1138,12 +1171,11 @@ where
                 .texture
                 .create_view(&wgpu::TextureViewDescriptor::default());
 
-            let mut encoder = runner
-                .graphics()
-                .device()
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            let mut encoder = runner.graphics().device().create_command_encoder(
+                &wgpu::CommandEncoderDescriptor {
                     label: Some("Standalone Frame Encoder"),
-                });
+                },
+            );
 
             // Render game if we have new content
             if self.last_sim_rendered {
@@ -1165,7 +1197,13 @@ where
             runner.graphics().blit_to_window(&mut encoder, &view);
 
             // Render overlays via egui
-            if self.debug_overlay || self.debug_panel.visible || self.settings_panel.visible || self.error_state.is_some() || self.network_overlay_visible || self.waiting_for_peer.is_some() {
+            if self.debug_overlay
+                || self.debug_panel.visible
+                || self.settings_panel.visible
+                || self.error_state.is_some()
+                || self.network_overlay_visible
+                || self.waiting_for_peer.is_some()
+            {
                 let (registry_opt, mem_base, mem_len, has_debug_callback) = {
                     if let Some(session) = runner.session() {
                         if let Some(game) = session.runtime.game() {
@@ -1191,7 +1229,8 @@ where
                     }
                 };
 
-                let pending_writes: RefCell<Vec<(RegisteredValue, DebugValue)>> = RefCell::new(Vec::new());
+                let pending_writes: RefCell<Vec<(RegisteredValue, DebugValue)>> =
+                    RefCell::new(Vec::new());
                 let pending_action: RefCell<Option<ActionRequest>> = RefCell::new(None);
                 let settings_action: RefCell<SettingsAction> = RefCell::new(SettingsAction::None);
                 let error_action: RefCell<ErrorAction> = RefCell::new(ErrorAction::None);
@@ -1212,7 +1251,13 @@ where
                     let network_overlay_visible = self.network_overlay_visible;
 
                     // Get network session info for overlay
-                    let (session_type, network_stats, local_players, total_rollbacks, current_frame) = {
+                    let (
+                        session_type,
+                        network_stats,
+                        local_players,
+                        total_rollbacks,
+                        current_frame,
+                    ) = {
                         if let Some(game_session) = runner.session() {
                             if let Some(rollback) = game_session.runtime.session() {
                                 (
@@ -1441,7 +1486,9 @@ where
                         pixels_per_point: window.scale_factor() as f32,
                     };
 
-                    let tris = self.egui_ctx.tessellate(full_output.shapes, full_output.pixels_per_point);
+                    let tris = self
+                        .egui_ctx
+                        .tessellate(full_output.shapes, full_output.pixels_per_point);
 
                     for (id, delta) in &full_output.textures_delta.set {
                         egui_renderer.update_texture(
@@ -1498,7 +1545,10 @@ where
                                     let ptr = reg_val.wasm_ptr as usize;
                                     let size = reg_val.value_type.byte_size();
                                     if ptr + size <= data.len() {
-                                        registry.write_value_to_slice(&mut data[ptr..ptr + size], new_val);
+                                        registry.write_value_to_slice(
+                                            &mut data[ptr..ptr + size],
+                                            new_val,
+                                        );
                                     }
                                 }
                             }
@@ -1513,8 +1563,14 @@ where
                 if let Some(action_req) = pending_action.into_inner() {
                     if let Some(session) = runner.session_mut() {
                         if let Some(game) = session.runtime.game_mut() {
-                            if let Err(e) = game.call_action(&action_req.func_name, &action_req.args) {
-                                tracing::warn!("Debug action '{}' failed: {}", action_req.func_name, e);
+                            if let Err(e) =
+                                game.call_action(&action_req.func_name, &action_req.args)
+                            {
+                                tracing::warn!(
+                                    "Debug action '{}' failed: {}",
+                                    action_req.func_name,
+                                    e
+                                );
                             }
                         }
                     }
@@ -1568,7 +1624,10 @@ where
                 }
             }
 
-            runner.graphics().queue().submit(std::iter::once(encoder.finish()));
+            runner
+                .graphics()
+                .queue()
+                .submit(std::iter::once(encoder.finish()));
             surface_texture.present();
 
             // Process screen capture

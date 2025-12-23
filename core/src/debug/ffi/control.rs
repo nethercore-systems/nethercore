@@ -32,11 +32,7 @@ where
     )?;
 
     // Error testing function (for developers to test error recovery)
-    linker.func_wrap(
-        "env",
-        "debug_trigger_error",
-        debug_trigger_error::<I, S, R>,
-    )?;
+    linker.func_wrap("env", "debug_trigger_error", debug_trigger_error::<I, S, R>)?;
 
     // Note: Change callbacks are handled via exported on_debug_change() function
     // No FFI registration needed - console looks for the export directly
@@ -126,8 +122,7 @@ fn debug_trigger_error<I, S, R>(
 {
     // Read custom message if provided
     let custom_msg = if message_len > 0 {
-        read_string(&caller, message_ptr, message_len)
-            .unwrap_or_else(|| "Test error".to_string())
+        read_string(&caller, message_ptr, message_len).unwrap_or_else(|| "Test error".to_string())
     } else {
         "Test error triggered by debug_trigger_error()".to_string()
     };

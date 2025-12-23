@@ -56,10 +56,7 @@ impl MultiplayerDialog {
         #[cfg(not(target_os = "windows"))]
         {
             // On Unix-like systems, use ifaddrs
-            if let Ok(output) = std::process::Command::new("hostname")
-                .arg("-I")
-                .output()
-            {
+            if let Ok(output) = std::process::Command::new("hostname").arg("-I").output() {
                 if let Ok(stdout) = String::from_utf8(output.stdout) {
                     for ip in stdout.split_whitespace() {
                         if !ip.starts_with("127.") && !ip.contains(':') {

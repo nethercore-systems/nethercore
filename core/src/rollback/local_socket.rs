@@ -234,8 +234,7 @@ impl LocalSocket {
                 }
                 Err(e) => {
                     // Timeout or WouldBlock is expected, keep waiting
-                    if e.kind() != io::ErrorKind::WouldBlock
-                        && e.kind() != io::ErrorKind::TimedOut
+                    if e.kind() != io::ErrorKind::WouldBlock && e.kind() != io::ErrorKind::TimedOut
                     {
                         log::warn!("Unexpected error while waiting for peer: {}", e);
                     }
@@ -551,7 +550,10 @@ mod tests {
     #[test]
     fn test_get_local_ips_not_empty() {
         let ips = LocalSocket::get_local_ips();
-        assert!(!ips.is_empty(), "get_local_ips should return at least one IP");
+        assert!(
+            !ips.is_empty(),
+            "get_local_ips should return at least one IP"
+        );
     }
 
     #[test]
@@ -579,8 +581,14 @@ mod tests {
 
         // poll_for_peer should detect the connection
         let result = host.poll_for_peer();
-        assert!(result.is_some(), "poll_for_peer should detect incoming packet");
-        assert!(host.is_connected(), "Socket should be connected after peer detected");
+        assert!(
+            result.is_some(),
+            "poll_for_peer should detect incoming packet"
+        );
+        assert!(
+            host.is_connected(),
+            "Socket should be connected after peer detected"
+        );
     }
 
     #[test]
@@ -628,7 +636,10 @@ mod tests {
         handle.join().unwrap();
 
         assert!(result.is_ok(), "wait_for_peer should succeed: {:?}", result);
-        assert!(host.is_connected(), "Socket should be connected after peer detected");
+        assert!(
+            host.is_connected(),
+            "Socket should be connected after peer detected"
+        );
     }
 
     #[test]

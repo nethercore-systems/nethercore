@@ -3,9 +3,7 @@
 use anyhow::{Context, Result};
 use quote::ToTokens;
 use std::path::Path;
-use syn::{
-    ForeignItem, ForeignItemFn, Item, ItemForeignMod, ItemMod, ReturnType, Type as SynType,
-};
+use syn::{ForeignItem, ForeignItemFn, Item, ItemForeignMod, ItemMod, ReturnType, Type as SynType};
 
 use crate::model::{Category, Constant, ConstantModule, FfiFunction, FfiModel, Parameter, Type};
 
@@ -278,7 +276,13 @@ mod tests {
 
     #[test]
     fn test_type_conversion() {
-        assert_eq!(type_to_string(&syn::parse_str::<SynType>("u32").unwrap()), "u32");
-        assert_eq!(type_to_string(&syn::parse_str::<SynType>("()").unwrap()), "()");
+        assert_eq!(
+            type_to_string(&syn::parse_str::<SynType>("u32").unwrap()),
+            "u32"
+        );
+        assert_eq!(
+            type_to_string(&syn::parse_str::<SynType>("()").unwrap()),
+            "()"
+        );
     }
 }

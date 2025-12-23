@@ -1,6 +1,6 @@
 //! Render state FFI functions
 //!
-//! Functions for setting render state like color, depth testing, culling, blending, and filtering.
+//! Functions for setting render state like color, depth testing, culling, and filtering.
 
 use anyhow::Result;
 use tracing::warn;
@@ -13,7 +13,6 @@ pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     linker.func_wrap("env", "set_color", set_color)?;
     linker.func_wrap("env", "depth_test", depth_test)?;
     linker.func_wrap("env", "cull_mode", cull_mode)?;
-    linker.func_wrap("env", "blend_mode", blend_mode)?;
     linker.func_wrap("env", "texture_filter", texture_filter)?;
     linker.func_wrap("env", "uniform_alpha", uniform_alpha)?;
     linker.func_wrap("env", "dither_offset", dither_offset)?;
@@ -45,9 +44,9 @@ fn depth_test(mut caller: Caller<'_, ZXGameContext>, enabled: u32) {
 /// Set the face culling mode
 ///
 /// # Arguments
-/// * `mode` — 0=none (draw both sides), 1=back (default), 2=front
+/// * `mode` — 0=none (default, draw both sides), 1=back, 2=front
 ///
-/// Back-face culling is the default for solid 3D objects.
+/// Default is none (no culling). Use back-face culling for solid 3D objects for performance.
 fn cull_mode(mut caller: Caller<'_, ZXGameContext>, mode: u32) {
     let state = &mut caller.data_mut().ffi;
 
@@ -58,25 +57,6 @@ fn cull_mode(mut caller: Caller<'_, ZXGameContext>, mode: u32) {
     }
 
     state.cull_mode = mode as u8;
-}
-
-/// Set the blend mode for transparent rendering
-///
-/// # Arguments
-/// * `mode` — 0=none (opaque), 1=alpha, 2=additive, 3=multiply
-///
-/// Default: none (opaque). Use alpha for transparent textures.
-/// Note: Blend mode is stored per-draw command for pipeline selection, not in GPU shading state.
-fn blend_mode(mut caller: Caller<'_, ZXGameContext>, mode: u32) {
-    let state = &mut caller.data_mut().ffi;
-
-    if mode > 3 {
-        warn!("blend_mode({}) invalid - must be 0-3, using 0 (none)", mode);
-        state.blend_mode = 0;
-        return;
-    }
-
-    state.blend_mode = mode as u8;
 }
 
 /// Set the texture filtering mode

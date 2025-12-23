@@ -15,3 +15,4 @@ mod procedural;
 pub mod resource_manager;
 mod shader_gen;
 pub mod state;
+pub mod tracker;

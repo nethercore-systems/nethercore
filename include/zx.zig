@@ -238,16 +238,10 @@ pub extern "C" fn set_color(color: u32) void;
 pub extern "C" fn depth_test(enabled: u32) void;
 
 /// Set the face culling mode.
-/// 
+///
 /// # Arguments
-/// * `mode` — 0=none, 1=back (default), 2=front
+/// * `mode` — 0=none (default), 1=back, 2=front
 pub extern "C" fn cull_mode(mode: u32) void;
-
-/// Set the blend mode.
-/// 
-/// # Arguments
-/// * `mode` — 0=none (opaque), 1=alpha, 2=additive, 3=multiply
-pub extern "C" fn blend_mode(mode: u32) void;
 
 /// Set the texture filtering mode.
 /// 

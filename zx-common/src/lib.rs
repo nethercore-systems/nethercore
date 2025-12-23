@@ -18,7 +18,7 @@ pub mod packing;
 
 // Re-export the ROM loader
 #[cfg(feature = "loader")]
-pub use loader::ZRomLoader;
+pub use loader::ZXRomLoader;
 
 // Re-export commonly used packing items
 pub use packing::{
@@ -33,15 +33,12 @@ pub use packing::{
 pub use formats::{
     BONE_TRANSFORM_SIZE,
     BoneTransform,
-    // ROM format constants (from nethercore_shared)
-    RomFormat,
-    ZX_ROM_FORMAT,
-    NetherZAnimationHeader,
-    // Mesh/texture/skeleton types
-    NetherZMeshHeader,
-    NetherZSkeletonHeader,
-    NetherZTextureHeader,
     INVERSE_BIND_MATRIX_SIZE,
+    NetherZXAnimationHeader,
+    // Mesh/texture/skeleton types
+    NetherZXMeshHeader,
+    NetherZXSkeletonHeader,
+    NetherZXTextureHeader,
     PLATFORM_BONE_KEYFRAME_SIZE,
     // Data pack types
     PackedData,
@@ -52,13 +49,17 @@ pub use formats::{
     PackedSkeleton,
     PackedSound,
     PackedTexture,
+    PackedTracker,
     PlatformBoneKeyframe,
+    // ROM format constants (from nethercore_shared)
+    RomFormat,
     SAMPLE_RATE,
     TextureFormat,
-    ZDataPack,
     // ROM types
     ZMetadata,
-    ZRom,
+    ZX_ROM_FORMAT,
+    ZXDataPack,
+    ZXRom,
     // Animation types
     decode_bone_transform,
     decode_quat_smallest_three,

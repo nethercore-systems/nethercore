@@ -253,14 +253,8 @@ NCZX_IMPORT void depth_test(uint32_t enabled);
 /** Set the face culling mode. */
 /**  */
 /** # Arguments */
-/** * `mode` — 0=none, 1=back (default), 2=front */
+/** * `mode` — 0=none (default), 1=back, 2=front */
 NCZX_IMPORT void cull_mode(uint32_t mode);
-
-/** Set the blend mode. */
-/**  */
-/** # Arguments */
-/** * `mode` — 0=none (opaque), 1=alpha, 2=additive, 3=multiply */
-NCZX_IMPORT void blend_mode(uint32_t mode);
 
 /** Set the texture filtering mode. */
 /**  */
@@ -1074,12 +1068,6 @@ NCZX_IMPORT float debug_get_time_scale(void);
 #define NCZX_RENDER_MATCAP 1
 #define NCZX_RENDER_PBR 2
 #define NCZX_RENDER_HYBRID 3
-
-// blend constants
-#define NCZX_BLEND_NONE 0
-#define NCZX_BLEND_ALPHA 1
-#define NCZX_BLEND_ADDITIVE 2
-#define NCZX_BLEND_MULTIPLY 3
 
 // cull constants
 #define NCZX_CULL_NONE 0

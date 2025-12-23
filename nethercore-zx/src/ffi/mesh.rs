@@ -392,7 +392,6 @@ fn draw_mesh(mut caller: Caller<'_, ZXGameContext>, handle: u32) {
     let textures = state.bound_textures;
 
     let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
-    let blend_mode = crate::graphics::BlendMode::from_u8(state.blend_mode);
 
     // Allocate combined MVP+shading buffer index (lazy allocation with deduplication)
     let buffer_index = state.add_mvp_shading_state();
@@ -406,7 +405,6 @@ fn draw_mesh(mut caller: Caller<'_, ZXGameContext>, handle: u32) {
         mesh_index_offset,
         buffer_index,
         textures,
-        blend_mode,
         state.depth_test,
         cull_mode,
     );

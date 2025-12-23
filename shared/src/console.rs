@@ -69,11 +69,11 @@ pub const fn nethercore_zx_specs() -> &'static ConsoleSpecs {
         name: "Nethercore ZX",
         resolution: NETHERCORE_ZX_RESOLUTION, // Fixed 540p
         tick_rates: NETHERCORE_ZX_TICK_RATES,
-        default_tick_rate: 2,                // 60 fps
+        default_tick_rate: 2,                 // 60 fps
         ram_limit: NETHERCORE_ZX_RAM_LIMIT,   // 4MB linear memory
         vram_limit: NETHERCORE_ZX_VRAM_LIMIT, // 4MB GPU
         rom_limit: NETHERCORE_ZX_ROM_LIMIT,   // 12MB cartridge
-        cpu_budget_us: 4000,                 // 4ms per tick at 60fps
+        cpu_budget_us: 4000,                  // 4ms per tick at 60fps
     }
 }
 
@@ -107,11 +107,11 @@ pub const fn nethercore_chroma_specs() -> &'static ConsoleSpecs {
         name: "Nethercore Chroma",
         resolution: NETHERCORE_CHROMA_RESOLUTION, // Fixed 288×216 (4:3)
         tick_rates: &[30, 60],
-        default_tick_rate: 1,                     // 60 fps
+        default_tick_rate: 1,                      // 60 fps
         ram_limit: NETHERCORE_CHROMA_MEMORY_LIMIT, // 2MB unified
         vram_limit: NETHERCORE_CHROMA_VRAM_LIMIT,  // 1MB GPU
         rom_limit: NETHERCORE_CHROMA_MEMORY_LIMIT, // Same as ram_limit (unified)
-        cpu_budget_us: 4000,                      // 4ms per tick at 60fps
+        cpu_budget_us: 4000,                       // 4ms per tick at 60fps
     }
 }
 
@@ -121,10 +121,7 @@ pub const fn nethercore_chroma_specs() -> &'static ConsoleSpecs {
 ///
 /// This is the single source of truth for all supported consoles.
 /// To add a new console, add its specs function to this array.
-pub const CONSOLES: &[&ConsoleSpecs] = &[
-    nethercore_zx_specs(),
-    nethercore_chroma_specs(),
-];
+pub const CONSOLES: &[&ConsoleSpecs] = &[nethercore_zx_specs(), nethercore_chroma_specs()];
 
 /// Get console specifications by console type identifier.
 ///

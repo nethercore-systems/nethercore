@@ -1,0 +1,16 @@
+[package]
+name = "nether-xm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "XM (Extended Module) tracker format parser for Nethercore"
+
+[dependencies]
+# None - pure Rust, no external dependencies
+
+[dev-dependencies]
+# None needed - simple tests only
+
+[lints.clippy]
+all = "warn"

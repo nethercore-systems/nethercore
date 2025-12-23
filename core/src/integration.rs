@@ -686,7 +686,6 @@ mod tests {
     /// Test console specs are correctly reported
     #[test]
     fn test_console_specs_limits() {
-        let console = TestConsole;
         let specs = TestConsole::specs();
 
         assert_eq!(specs.ram_limit, 16 * 1024 * 1024);

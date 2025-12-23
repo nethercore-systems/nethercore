@@ -2,7 +2,7 @@
 //!
 //! This module handles encoding PCM samples to QOA frame data.
 //! Note: This is a pure codec - no file headers are written. The caller
-//! (z-common) handles the NetherZSoundHeader with total_samples.
+//! (z-common) handles the NetherZXSoundHeader with total_samples.
 
 use crate::{
     QOA_DEQUANT_TAB, QOA_FRAME_HEADER_SIZE, QOA_FRAME_SAMPLES, QOA_LMS_STATE_SIZE, QOA_QUANT_TAB,
@@ -73,7 +73,7 @@ pub fn encode_slice(samples: &[i16], lms: &mut QoaLms) -> u64 {
 /// # Returns
 /// Encoded QOA frame data (no file header - caller handles that)
 ///
-/// Note: This is a pure codec. The caller (z-common's NetherZSoundHeader) is
+/// Note: This is a pure codec. The caller (z-common's NetherZXSoundHeader) is
 /// responsible for storing total_samples. Sample rate is fixed at 22050 Hz
 /// and controlled by the asset pipeline.
 pub fn encode_qoa(samples: &[i16]) -> Vec<u8> {

@@ -15,7 +15,9 @@ pub use resources::{
     Font, KeyframeGpuInfo, KeyframeSource, PendingKeyframes, PendingMesh, PendingMeshPacked,
     PendingSkeleton, PendingTexture, SkeletonGpuInfo,
 };
-pub use rollback_state::{AudioPlaybackState, ChannelState, MAX_CHANNELS, ZRollbackState};
+pub use rollback_state::{
+    AudioPlaybackState, ChannelState, MAX_CHANNELS, TrackerState, ZRollbackState, tracker_flags,
+};
 
 /// Maximum number of bones for GPU skinning
 pub const MAX_BONES: usize = 256;
@@ -56,13 +58,11 @@ pub struct LoadedKeyframeCollection {
     pub data: Vec<u8>,
 }
 
-/// A batch of quad instances that share the same texture bindings and blend mode
+/// A batch of quad instances that share the same texture bindings
 #[derive(Debug, Clone)]
 pub struct QuadBatch {
     /// Texture handles for this batch (snapshot of bound_textures when batch was created)
     pub textures: [u32; 4],
-    /// Blend mode for this batch (captured when batch was created)
-    pub blend_mode: u8,
     /// Quad instances in this batch
     pub instances: Vec<crate::graphics::QuadInstance>,
 }

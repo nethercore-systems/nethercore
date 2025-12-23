@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use clap::Args;
 use nethercore_shared::ZX_ROM_FORMAT;
-use zx_common::{ZMetadata, ZRom};
+use zx_common::{ZMetadata, ZXRom};
 
 /// Arguments for creating an Nethercore ZX ROM
 #[derive(Debug, Args)]
@@ -155,7 +155,7 @@ pub fn execute(args: CreateZxArgs) -> Result<()> {
     };
 
     // 6. Create ROM
-    let rom = ZRom {
+    let rom = ZXRom {
         version: ZX_ROM_FORMAT.version,
         metadata,
         code,

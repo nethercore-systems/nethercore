@@ -36,10 +36,14 @@ Thumbs.db
 
 # mdBook generated output
 docs/book/book/
-# Generated example assets (rebuilt by cargo xtask build-examples)
+# Generated example assets (rebuilt by cargo xtask build-examples or nether-export)
 examples/animation-demo/assets/*.nczxanim
 examples/multi-skinned-rom/assets/*.nczxmesh
 examples/multi-skinned-rom/assets/*.nczxskel
 examples/multi-skinned-rom/assets/*.nczxanim
+examples/tracker-demo/assets/*.wav
+examples/tracker-demo/assets/*.xm
+examples/asset-test/assets/*.nczxmesh
+examples/asset-test/assets/*.nczxtex
 examples/cube/*.nczx
 examples/multi-skinned-rom/*.nczx

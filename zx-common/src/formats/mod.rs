@@ -11,16 +11,16 @@ pub mod mesh;
 pub mod skeleton;
 pub mod sound;
 pub mod texture;
-pub mod z_data_pack;
-pub mod z_rom;
+pub mod zx_data_pack;
+pub mod zx_rom;
 
 pub use animation::*;
 pub use mesh::*;
 pub use skeleton::*;
 pub use sound::*;
 pub use texture::*;
-pub use z_data_pack::*;
-pub use z_rom::*;
+pub use zx_data_pack::*;
+pub use zx_rom::*;
 
 // Re-export ROM format from shared for convenience
 pub use nethercore_shared::{RomFormat, ZX_ROM_FORMAT};

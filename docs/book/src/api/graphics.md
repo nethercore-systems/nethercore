@@ -440,8 +440,8 @@ pub extern fn cull_mode(mode: u32) void;
 
 | Value | Mode | Description |
 |-------|------|-------------|
-| 0 | None | Draw both sides |
-| 1 | Back | Cull back faces (default) |
+| 0 | None | Draw both sides (default) |
+| 1 | Back | Cull back faces |
 | 2 | Front | Cull front faces |
 
 **Example:**
@@ -498,111 +498,6 @@ export fn render() void {
     // Double-sided foliage
     cull_mode(0); // No culling
     draw_mesh(leaves);
-}
-```
-{{#endtab}}
-
-{{#endtabs}}
-
----
-
-### blend_mode
-
-Sets the alpha blending mode.
-
-**Signature:**
-
-{{#tabs global="lang"}}
-
-{{#tab name="Rust"}}
-```rust
-fn blend_mode(mode: u32)
-```
-{{#endtab}}
-
-{{#tab name="C/C++"}}
-```c
-NCZX_IMPORT void blend_mode(uint32_t mode);
-```
-{{#endtab}}
-
-{{#tab name="Zig"}}
-```zig
-pub extern fn blend_mode(mode: u32) void;
-```
-{{#endtab}}
-
-{{#endtabs}}
-
-**Parameters:**
-
-| Value | Mode | Description |
-|-------|------|-------------|
-| 0 | None | No blending (opaque) |
-| 1 | Alpha | Standard transparency |
-| 2 | Additive | Add colors (glow effects) |
-| 3 | Multiply | Multiply colors (shadows) |
-
-**Example:**
-
-{{#tabs global="lang"}}
-
-{{#tab name="Rust"}}
-```rust
-fn render() {
-    // Opaque geometry first
-    blend_mode(0);
-    draw_mesh(level);
-    draw_mesh(player);
-
-    // Transparent objects (sorted back-to-front)
-    blend_mode(1);
-    draw_mesh(window);
-
-    // Additive glow effects
-    blend_mode(2);
-    draw_mesh(fire_particles);
-    draw_mesh(laser_beam);
-}
-```
-{{#endtab}}
-
-{{#tab name="C/C++"}}
-```c
-NCZX_EXPORT void render(void) {
-    // Opaque geometry first
-    blend_mode(0);
-    draw_mesh(level);
-    draw_mesh(player);
-
-    // Transparent objects (sorted back-to-front)
-    blend_mode(1);
-    draw_mesh(window);
-
-    // Additive glow effects
-    blend_mode(2);
-    draw_mesh(fire_particles);
-    draw_mesh(laser_beam);
-}
-```
-{{#endtab}}
-
-{{#tab name="Zig"}}
-```zig
-export fn render() void {
-    // Opaque geometry first
-    blend_mode(0);
-    draw_mesh(level);
-    draw_mesh(player);
-
-    // Transparent objects (sorted back-to-front)
-    blend_mode(1);
-    draw_mesh(window);
-
-    // Additive glow effects
-    blend_mode(2);
-    draw_mesh(fire_particles);
-    draw_mesh(laser_beam);
 }
 ```
 {{#endtab}}
@@ -871,20 +766,20 @@ fn init() {
 fn render() {
     // Draw 3D scene
     depth_test(1);
-    cull_mode(1);
-    blend_mode(0);
+    cull_mode(1);  // Enable back-face culling for performance
     texture_filter(1);
 
     set_color(0xFFFFFFFF);
     draw_mesh(level);
     draw_mesh(player);
 
-    // Draw transparent water
-    blend_mode(1);
-    set_color(0x4080FF80);
+    // Draw semi-transparent water using dithering
+    uniform_alpha(8);  // 50% alpha via ordered dithering
+    set_color(0x4080FFFF);
     draw_mesh(water);
+    uniform_alpha(15);  // Reset to fully opaque
 
-    // Draw UI (no depth, alpha blending)
+    // Draw UI (no depth)
     depth_test(0);
     texture_filter(0);
     draw_sprite(10.0, 10.0, 200.0, 50.0, 0xFFFFFFFF);
@@ -904,20 +799,20 @@ NCZX_EXPORT void init(void) {
 NCZX_EXPORT void render(void) {
     // Draw 3D scene
     depth_test(1);
-    cull_mode(1);
-    blend_mode(0);
+    cull_mode(1);  // Enable back-face culling for performance
     texture_filter(1);
 
     set_color(0xFFFFFFFF);
     draw_mesh(level);
     draw_mesh(player);
 
-    // Draw transparent water
-    blend_mode(1);
-    set_color(0x4080FF80);
+    // Draw semi-transparent water using dithering
+    uniform_alpha(8);  // 50% alpha via ordered dithering
+    set_color(0x4080FFFF);
     draw_mesh(water);
+    uniform_alpha(15);  // Reset to fully opaque
 
-    // Draw UI (no depth, alpha blending)
+    // Draw UI (no depth)
     depth_test(0);
     texture_filter(0);
     draw_sprite(10.0f, 10.0f, 200.0f, 50.0f, 0xFFFFFFFF);
@@ -937,20 +832,20 @@ export fn init() void {
 export fn render() void {
     // Draw 3D scene
     depth_test(1);
-    cull_mode(1);
-    blend_mode(0);
+    cull_mode(1);  // Enable back-face culling for performance
     texture_filter(1);
 
     set_color(0xFFFFFFFF);
     draw_mesh(level);
     draw_mesh(player);
 
-    // Draw transparent water
-    blend_mode(1);
-    set_color(0x4080FF80);
+    // Draw semi-transparent water using dithering
+    uniform_alpha(8);  // 50% alpha via ordered dithering
+    set_color(0x4080FFFF);
     draw_mesh(water);
+    uniform_alpha(15);  // Reset to fully opaque
 
-    // Draw UI (no depth, alpha blending)
+    // Draw UI (no depth)
     depth_test(0);
     texture_filter(0);
     draw_sprite(10.0, 10.0, 200.0, 50.0, 0xFFFFFFFF);

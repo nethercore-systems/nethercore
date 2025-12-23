@@ -28,13 +28,13 @@ pub mod sound_flags {
 /// NetherZSound header (8 bytes)
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
-pub struct NetherZSoundHeader {
+pub struct NetherZXSoundHeader {
     pub total_samples: u32,
     pub flags: u8,
     pub _reserved: [u8; 3],
 }
 
-impl NetherZSoundHeader {
+impl NetherZXSoundHeader {
     pub const SIZE: usize = 8;
 
     pub fn new(total_samples: u32) -> Self {
@@ -85,8 +85,8 @@ impl NetherZSoundHeader {
 ///
 /// Returns decoded PCM samples (mono, 16-bit)
 pub fn decode_sound(data: &[u8]) -> Option<Vec<i16>> {
-    let header = NetherZSoundHeader::from_bytes(data)?;
-    let qoa_data = &data[NetherZSoundHeader::SIZE..];
+    let header = NetherZXSoundHeader::from_bytes(data)?;
+    let qoa_data = &data[NetherZXSoundHeader::SIZE..];
 
     nether_qoa::decode_qoa(qoa_data, header.total_samples as usize).ok()
 }
@@ -97,10 +97,10 @@ mod tests {
 
     /// Helper to create NetherZSound data from PCM samples
     fn encode_sound(samples: &[i16]) -> Vec<u8> {
-        let header = NetherZSoundHeader::new(samples.len() as u32);
+        let header = NetherZXSoundHeader::new(samples.len() as u32);
         let qoa_data = nether_qoa::encode_qoa(samples);
 
-        let mut data = Vec::with_capacity(NetherZSoundHeader::SIZE + qoa_data.len());
+        let mut data = Vec::with_capacity(NetherZXSoundHeader::SIZE + qoa_data.len());
         data.extend_from_slice(&header.to_bytes());
         data.extend_from_slice(&qoa_data);
         data
@@ -129,25 +129,25 @@ mod tests {
 
     #[test]
     fn test_header_roundtrip() {
-        let header = NetherZSoundHeader::new(12345);
+        let header = NetherZXSoundHeader::new(12345);
         let bytes = header.to_bytes();
-        let decoded = NetherZSoundHeader::from_bytes(&bytes).unwrap();
+        let decoded = NetherZXSoundHeader::from_bytes(&bytes).unwrap();
         assert_eq!(decoded.total_samples, 12345);
         assert_eq!(decoded.flags, 0);
     }
 
     #[test]
     fn test_header_size() {
-        assert_eq!(NetherZSoundHeader::SIZE, 8);
+        assert_eq!(NetherZXSoundHeader::SIZE, 8);
     }
 
     #[test]
     fn test_header_with_flags() {
-        let header = NetherZSoundHeader::with_flags(1000, sound_flags::STEREO);
+        let header = NetherZXSoundHeader::with_flags(1000, sound_flags::STEREO);
         assert!(header.is_stereo());
 
         let bytes = header.to_bytes();
-        let decoded = NetherZSoundHeader::from_bytes(&bytes).unwrap();
+        let decoded = NetherZXSoundHeader::from_bytes(&bytes).unwrap();
         assert_eq!(decoded.total_samples, 1000);
         assert!(decoded.is_stereo());
     }

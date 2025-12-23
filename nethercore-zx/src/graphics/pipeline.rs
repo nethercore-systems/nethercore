@@ -15,12 +15,11 @@ pub(crate) enum PipelineKey {
     Regular {
         render_mode: u8,
         vertex_format: u8,
-        blend_mode: u8,
         depth_test: bool,
         cull_mode: u8,
     },
     /// GPU-instanced quad rendering pipeline (billboards, sprites)
-    Quad { blend_mode: u8, depth_test: bool },
+    Quad { depth_test: bool },
     /// Procedural sky rendering pipeline
     Sky,
 }
@@ -31,7 +30,6 @@ impl PipelineKey {
         Self::Regular {
             render_mode,
             vertex_format: format,
-            blend_mode: state.blend_mode as u8,
             depth_test: state.depth_test,
             cull_mode: state.cull_mode as u8,
         }
@@ -40,7 +38,6 @@ impl PipelineKey {
     /// Create a quad pipeline key
     pub fn quad(state: &RenderState) -> Self {
         Self::Quad {
-            blend_mode: state.blend_mode as u8,
             depth_test: state.depth_test,
         }
     }
@@ -113,7 +110,7 @@ pub(crate) fn create_pipeline(
             entry_point: Some("fs"),
             targets: &[Some(wgpu::ColorTargetState {
                 format: surface_format,
-                blend: state.blend_mode.to_wgpu(),
+                blend: None, // All rendering is opaque (dithering used for transparency)
                 write_mask: wgpu::ColorWrites::ALL,
             })],
             compilation_options: Default::default(),
@@ -200,7 +197,7 @@ pub(crate) fn create_quad_pipeline(
             entry_point: Some("fs"),
             targets: &[Some(wgpu::ColorTargetState {
                 format: surface_format,
-                blend: state.blend_mode.to_wgpu(),
+                blend: None, // All rendering is opaque (dithering used for transparency)
                 write_mask: wgpu::ColorWrites::ALL,
             })],
             compilation_options: Default::default(),
@@ -598,10 +595,9 @@ impl PipelineCache {
 
         // Otherwise, create a new pipeline
         tracing::debug!(
-            "Creating pipeline: mode={}, format={}, blend={:?}, depth={}, cull={:?}",
+            "Creating pipeline: mode={}, format={}, depth={}, cull={:?}",
             render_mode,
             format,
-            state.blend_mode,
             state.depth_test,
             state.cull_mode
         );
@@ -634,11 +630,7 @@ impl PipelineCache {
         }
 
         // Otherwise, create a new quad pipeline
-        tracing::debug!(
-            "Creating quad pipeline: blend={:?}, depth={}",
-            state.blend_mode,
-            state.depth_test
-        );
+        tracing::debug!("Creating quad pipeline: depth={}", state.depth_test);
 
         let entry = create_quad_pipeline(device, surface_format, state);
         self.pipelines.insert(key, entry);

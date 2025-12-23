@@ -42,7 +42,49 @@ pub struct AudioPlaybackState {
     pub music: ChannelState,
 }
 
-/// Nethercore ZX rollback state
+/// Tracker playback state flags
+pub mod tracker_flags {
+    /// Tracker is currently playing
+    pub const PLAYING: u32 = 1 << 0;
+    /// Tracker should loop when reaching the end
+    pub const LOOPING: u32 = 1 << 1;
+    /// Tracker playback is paused
+    pub const PAUSED: u32 = 1 << 2;
+}
+
+/// Tracker music playback state (64 bytes, POD)
+///
+/// Minimal state for XM tracker playback that gets rolled back during netcode.
+/// The full channel state is reconstructed from this by seeking to the position
+/// and replaying ticks. This keeps the rollback snapshot small while still
+/// enabling perfect audio synchronization.
+#[repr(C)]
+#[derive(Clone, Copy, Default, Debug, Pod, Zeroable)]
+pub struct TrackerState {
+    /// Tracker module handle (0 = no tracker playing)
+    pub handle: u32,
+    /// Current position in the pattern order table
+    pub order_position: u16,
+    /// Current row within the pattern (0-255)
+    pub row: u16,
+    /// Current tick within the row
+    pub tick: u16,
+    /// Ticks per row (from Fxx speed command, default 6)
+    pub speed: u16,
+    /// Beats per minute (from Fxx tempo command, default 125)
+    pub bpm: u16,
+    /// Volume multiplier (0-256, where 256 = 1.0)
+    pub volume: u16,
+    /// Playback flags (see tracker_flags module)
+    pub flags: u32,
+    /// Sample-accurate position within the current tick
+    pub tick_sample_pos: u32,
+    /// Reserved for future use (maintains 64-byte alignment)
+    /// Using [u32; 10] instead of [u8; 40] because Default is only impl'd for arrays <= 32
+    pub _reserved: [u32; 10],
+}
+
+/// Nethercore ZX rollback state (404 bytes total)
 ///
 /// This is the console-specific state that gets rolled back along with
 /// WASM memory during netcode rollback. It contains audio playback state
@@ -50,8 +92,10 @@ pub struct AudioPlaybackState {
 #[repr(C)]
 #[derive(Clone, Copy, Default, Debug, Pod, Zeroable)]
 pub struct ZRollbackState {
-    /// Audio playback state (channels + music)
+    /// Audio playback state (channels + music) - 340 bytes
     pub audio: AudioPlaybackState,
+    /// Tracker music playback state - 64 bytes
+    pub tracker: TrackerState,
 }
 
 impl ConsoleRollbackState for ZRollbackState {}
@@ -75,6 +119,18 @@ mod tests {
     }
 
     #[test]
+    fn test_tracker_state_size() {
+        // TrackerState must be exactly 64 bytes for efficient rollback
+        assert_eq!(std::mem::size_of::<TrackerState>(), 64);
+    }
+
+    #[test]
+    fn test_z_rollback_state_size() {
+        // 340 bytes audio + 64 bytes tracker = 404 bytes
+        assert_eq!(std::mem::size_of::<ZRollbackState>(), 404);
+    }
+
+    #[test]
     fn test_z_rollback_state_is_pod() {
         // This compiles only if ZRollbackState is Pod
         let state = ZRollbackState::default();
@@ -90,5 +146,19 @@ mod tests {
         assert_eq!(channel.looping, 0);
         assert_eq!(channel.volume, 0.0);
         assert_eq!(channel.pan, 0.0);
+    }
+
+    #[test]
+    fn test_tracker_state_defaults() {
+        let tracker = TrackerState::default();
+        assert_eq!(tracker.handle, 0);
+        assert_eq!(tracker.order_position, 0);
+        assert_eq!(tracker.row, 0);
+        assert_eq!(tracker.tick, 0);
+        assert_eq!(tracker.speed, 0);
+        assert_eq!(tracker.bpm, 0);
+        assert_eq!(tracker.volume, 0);
+        assert_eq!(tracker.flags, 0);
+        assert_eq!(tracker.tick_sample_pos, 0);
     }
 }

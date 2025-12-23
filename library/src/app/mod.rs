@@ -204,9 +204,7 @@ impl App {
                 }
 
                 // Apply fullscreen setting
-                let is_fullscreen = ctx
-                    .input(|i| i.viewport().fullscreen)
-                    .unwrap_or(false);
+                let is_fullscreen = ctx.input(|i| i.viewport().fullscreen).unwrap_or(false);
                 if is_fullscreen != self.config.video.fullscreen {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(
                         self.config.video.fullscreen,
@@ -298,9 +296,7 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Handle F11 for fullscreen toggle
         if ctx.input(|i| i.key_pressed(egui::Key::F11)) {
-            let is_fullscreen = ctx
-                .input(|i| i.viewport().fullscreen)
-                .unwrap_or(false);
+            let is_fullscreen = ctx.input(|i| i.viewport().fullscreen).unwrap_or(false);
             ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(!is_fullscreen));
             self.config.video.fullscreen = !is_fullscreen;
             let _ = nethercore_core::app::config::save(&self.config);

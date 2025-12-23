@@ -17,6 +17,7 @@ gamepad = ["nethercore-core/gamepad", "zx-common/gamepad"]
 nethercore-core = { path = "../../core", default-features = false }
 nethercore-shared = { path = "../../shared" }
 zx-common = { path = "../../zx-common", default-features = false }
+nether-xm = { path = "../../nether-xm" }
 
 # CLI
 clap = { workspace = true }

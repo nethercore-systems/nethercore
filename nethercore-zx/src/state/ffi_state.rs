@@ -5,7 +5,7 @@ use std::sync::Arc;
 use glam::{Mat4, Vec3};
 use hashbrown::HashMap;
 
-use zx_common::ZDataPack;
+use zx_common::ZXDataPack;
 
 use super::{
     BoneMatrix3x4, Font, KeyframeGpuInfo, KeyframeSource, LoadedKeyframeCollection,
@@ -24,12 +24,11 @@ use super::{
 pub struct ZFFIState {
     // Data pack from ROM (set during game loading, immutable after)
     // Assets in the data pack are loaded via `rom_*` FFI and go directly to VRAM
-    pub data_pack: Option<Arc<ZDataPack>>,
+    pub data_pack: Option<Arc<ZXDataPack>>,
 
     // Render state
     pub depth_test: bool,
     pub cull_mode: u8,
-    pub blend_mode: u8,
     pub texture_filter: u8,
     pub bound_textures: [u32; 4],
 
@@ -93,6 +92,11 @@ pub struct ZFFIState {
     // Audio system (sounds stored here for FFI access, playback state in ZRollbackState)
     pub sounds: Vec<Option<crate::audio::Sound>>,
     pub next_sound_handle: u32,
+    /// Sound ID -> handle mapping (for tracker sample resolution)
+    pub sound_id_to_handle: HashMap<String, u32>,
+
+    // Tracker system (XM module playback, state in ZRollbackState, engine here)
+    pub tracker_engine: crate::tracker::TrackerEngine,
 
     // Init configuration
     pub init_config: ZInitConfig,
@@ -160,8 +164,7 @@ impl Default for ZFFIState {
         Self {
             data_pack: None, // Set during game loading
             depth_test: true,
-            cull_mode: 1, // Back-face culling
-            blend_mode: 0,
+            cull_mode: 0,      // None (users opt-in for performance)
             texture_filter: 0, // Nearest
             bound_textures: [0; 4],
             bone_matrices: Vec::new(),
@@ -191,6 +194,8 @@ impl Default for ZFFIState {
             current_font: 0, // 0 = built-in font
             sounds: Vec::new(),
             next_sound_handle: 1, // 0 reserved for invalid
+            sound_id_to_handle: HashMap::new(),
+            tracker_engine: crate::tracker::TrackerEngine::new(),
             init_config: ZInitConfig::default(),
             model_matrices,
             view_matrices,
@@ -341,7 +346,7 @@ impl ZFFIState {
     /// Maps to env_gradient_set() internally for Multi-Environment v3 compatibility.
     /// Ground colors are derived as darker versions of sky colors.
     pub fn update_sky_colors(&mut self, horizon_rgba: u32, zenith_rgba: u32) {
-        use crate::graphics::{env_mode, blend_mode};
+        use crate::graphics::{blend_mode, env_mode};
 
         // Create ground colors by darkening the sky colors
         let darken = |color: u32| -> u32 {
@@ -360,7 +365,8 @@ impl ZFFIState {
             .set_base_mode(env_mode::GRADIENT);
         self.current_environment_state
             .set_overlay_mode(env_mode::GRADIENT);
-        self.current_environment_state.set_blend_mode(blend_mode::ALPHA);
+        self.current_environment_state
+            .set_blend_mode(blend_mode::ALPHA);
 
         // Pack gradient colors
         self.current_environment_state.pack_gradient(
@@ -611,7 +617,9 @@ impl ZFFIState {
         }
 
         // Check if this state already exists (deduplication)
-        if let Some(&existing_idx) = self.environment_state_map.get(&self.current_environment_state)
+        if let Some(&existing_idx) = self
+            .environment_state_map
+            .get(&self.current_environment_state)
         {
             self.environment_dirty = false;
             return existing_idx;
@@ -731,25 +739,23 @@ impl ZFFIState {
         buffer_idx
     }
 
-    /// Add a quad instance to the appropriate batch (auto-batches by texture and blend mode)
+    /// Add a quad instance to the appropriate batch (auto-batches by texture)
     ///
-    /// This automatically groups quads by texture and blend mode to minimize draw calls.
-    /// When bound_textures or blend_mode changes, a new batch is created.
+    /// This automatically groups quads by texture to minimize draw calls.
+    /// When bound_textures changes, a new batch is created.
     pub fn add_quad_instance(&mut self, instance: crate::graphics::QuadInstance) {
         // Check if we can add to the current batch or need a new one
         if let Some(last_batch) = self.quad_batches.last_mut()
             && last_batch.textures == self.bound_textures
-            && last_batch.blend_mode == self.blend_mode
         {
-            // Same textures and blend mode - add to current batch
+            // Same textures - add to current batch
             last_batch.instances.push(instance);
             return;
         }
 
-        // Need a new batch (either first batch, textures changed, or blend mode changed)
+        // Need a new batch (either first batch or textures changed)
         self.quad_batches.push(super::QuadBatch {
             textures: self.bound_textures,
-            blend_mode: self.blend_mode,
             instances: vec![instance],
         });
     }
@@ -816,7 +822,11 @@ impl ZFFIState {
         // The bone_matrices buffer accumulates during the frame and must be reset
         self.bone_matrices.clear();
 
-        // Note: Render state (color, blend_mode, etc.) persists between frames
+        // Reset render state to defaults each frame (immediate-mode consistency)
+        self.depth_test = true;
+        self.cull_mode = 0; // None (users opt-in for culling)
+        self.texture_filter = 0; // Nearest
+        // Note: color and shading state already rebuild each frame via add_shading_state()
     }
 }
 

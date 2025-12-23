@@ -105,6 +105,7 @@ impl Console for TestConsole {
             vram_limit: 8 * 1024 * 1024, // 8MB
             rom_limit: 32 * 1024 * 1024, // 32MB
             cpu_budget_us: 4000,
+            console_type: "tc",
         }
     }
 

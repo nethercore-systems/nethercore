@@ -63,7 +63,6 @@ extern "C" {
     // Render state
     fn set_color(color: u32);
     fn depth_test(enabled: u32);
-    fn blend_mode(mode: u32);
 
     // 2D drawing
     fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
@@ -82,9 +81,6 @@ const MODE_SPHERICAL: u32 = 1;
 const MODE_CYLINDRICAL_Y: u32 = 2;
 const MODE_CYLINDRICAL_X: u32 = 3;
 const MODE_CYLINDRICAL_Z: u32 = 4;
-
-// Blend modes
-const BLEND_ALPHA: u32 = 1;
 
 // Button indices
 const BUTTON_A: u32 = 0;
@@ -330,9 +326,8 @@ pub extern "C" fn init() {
         // Note: Sky uses reasonable defaults (blue gradient with sun) from the renderer
         // No need to set sky explicitly unless you want custom sky settings
 
-        // Enable depth testing and alpha blending
+        // Enable depth testing
         depth_test(1);
-        blend_mode(BLEND_ALPHA);
 
         // Load textures
         SPRITE_TEXTURE = load_texture(8, 8, SPRITE_PIXELS.as_ptr());

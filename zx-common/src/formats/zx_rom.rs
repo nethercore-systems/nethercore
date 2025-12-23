@@ -22,10 +22,10 @@
 
 use bitcode::{Decode, Encode};
 
-use nethercore_shared::local::LocalGameManifest;
 use nethercore_shared::ZX_ROM_FORMAT;
+use nethercore_shared::local::LocalGameManifest;
 
-use super::z_data_pack::ZDataPack;
+use super::zx_data_pack::ZXDataPack;
 
 /// Complete Nethercore ZX ROM
 ///
@@ -41,17 +41,17 @@ use super::z_data_pack::ZDataPack;
 /// │  NCZX Header (4 bytes)                                      │
 /// │  ├── Magic: "NCZX"                                          │
 /// ├─────────────────────────────────────────────────────────────┤
-/// │  ZRom (bitcode serialized)                                  │
+/// │  ZXRom (bitcode serialized)                                  │
 /// │  ├── version: u32                                           │
 /// │  ├── metadata: ZMetadata                                    │
 /// │  ├── code: Vec<u8>         ← WASM bytecode (≤4MB)          │
-/// │  ├── data_pack: Option<ZDataPack>  ← Bundled assets        │
+/// │  ├── data_pack: Option<ZXDataPack>  ← Bundled assets        │
 /// │  ├── thumbnail: Option<Vec<u8>>                            │
 /// │  └── screenshots: Vec<Vec<u8>>                             │
 /// └─────────────────────────────────────────────────────────────┘
 /// ```
 #[derive(Debug, Clone, Encode, Decode)]
-pub struct ZRom {
+pub struct ZXRom {
     /// ROM format version (currently 1)
     pub version: u32,
 
@@ -66,7 +66,7 @@ pub struct ZRom {
     /// Assets in the data pack are loaded via `rom_*` FFI functions and go
     /// directly to VRAM/audio memory, bypassing WASM linear memory.
     /// This enables efficient rollback (only 4MB RAM snapshotted).
-    pub data_pack: Option<ZDataPack>,
+    pub data_pack: Option<ZXDataPack>,
 
     /// Optional thumbnail (256x256 PNG, extracted locally during installation)
     pub thumbnail: Option<Vec<u8>>,
@@ -126,12 +126,12 @@ pub struct ZMetadata {
     pub target_fps: Option<u32>,
 }
 
-impl ZRom {
+impl ZXRom {
     /// Serialize ROM to bytes with magic header
     ///
     /// The output format is:
     /// - 4 bytes: Magic bytes "NCZX"
-    /// - Remaining bytes: Bitcode-encoded ZRom struct
+    /// - Remaining bytes: Bitcode-encoded ZXRom struct
     pub fn to_bytes(&self) -> anyhow::Result<Vec<u8>> {
         let mut bytes = ZX_ROM_FORMAT.magic.to_vec();
         let encoded = bitcode::encode(self);
@@ -152,7 +152,7 @@ impl ZRom {
         }
 
         // Decode remaining bytes
-        let rom: ZRom = bitcode::decode(&bytes[4..])
+        let rom: ZXRom = bitcode::decode(&bytes[4..])
             .map_err(|e| anyhow::anyhow!("Failed to decode NCZX ROM: {}", e))?;
 
         // Validate
@@ -222,8 +222,8 @@ impl ZRom {
 mod tests {
     use super::*;
 
-    fn create_test_rom() -> ZRom {
-        ZRom {
+    fn create_test_rom() -> ZXRom {
+        ZXRom {
             version: ZX_ROM_FORMAT.version,
             metadata: ZMetadata {
                 id: "test-game".to_string(),
@@ -251,7 +251,7 @@ mod tests {
     fn test_rom_roundtrip() {
         let rom = create_test_rom();
         let bytes = rom.to_bytes().unwrap();
-        let decoded = ZRom::from_bytes(&bytes).unwrap();
+        let decoded = ZXRom::from_bytes(&bytes).unwrap();
 
         assert_eq!(decoded.version, rom.version);
         assert_eq!(decoded.metadata.id, rom.metadata.id);
@@ -271,7 +271,7 @@ mod tests {
     #[test]
     fn test_invalid_magic_bytes() {
         let bad_bytes = b"BADMAGIC".to_vec();
-        let result = ZRom::from_bytes(&bad_bytes);
+        let result = ZXRom::from_bytes(&bad_bytes);
 
         assert!(result.is_err());
         assert!(

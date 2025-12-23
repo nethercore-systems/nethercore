@@ -289,7 +289,7 @@ impl ZGraphics {
             buffer_manager,
             command_buffer: super::VirtualRenderPass::new(),
             pipeline_cache: super::pipeline::PipelineCache::new(),
-            current_render_mode: 0,      // Default to Mode 0 (Unlit)
+            current_render_mode: 0, // Default to Mode 0 (Unlit)
             scale_mode: nethercore_core::app::config::ScaleMode::default(), // PixelPerfect by default
             unit_quad_format,
             unit_quad_base_vertex,

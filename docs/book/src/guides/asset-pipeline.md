@@ -167,7 +167,7 @@ Running `nether-export build assets.toml` generates binary asset files:
 
 ## Output File Formats
 
-### NetherZMesh (.nczxmesh)
+### NetherZXMesh (.nczxmesh)
 
 Binary format for 3D meshes with GPU-optimized packed vertex data. POD format (no magic bytes).
 

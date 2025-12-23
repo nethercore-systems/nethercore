@@ -43,8 +43,14 @@ pub fn generate_c_header(model: &FfiModel, console: &str) -> Result<String> {
     writeln!(output)?;
 
     // WASM attributes
-    writeln!(output, "#define NCZX_EXPORT __attribute__((visibility(\"default\")))")?;
-    writeln!(output, "#define NCZX_IMPORT __attribute__((import_module(\"env\")))")?;
+    writeln!(
+        output,
+        "#define NCZX_EXPORT __attribute__((visibility(\"default\")))"
+    )?;
+    writeln!(
+        output,
+        "#define NCZX_IMPORT __attribute__((import_module(\"env\")))"
+    )?;
     writeln!(output)?;
 
     // C++ compatibility
@@ -59,9 +65,15 @@ pub fn generate_c_header(model: &FfiModel, console: &str) -> Result<String> {
         // Category header
         if func.category != current_category {
             current_category = func.category.clone();
-            writeln!(output, "// =============================================================================")?;
+            writeln!(
+                output,
+                "// ============================================================================="
+            )?;
             writeln!(output, "// {}", current_category)?;
-            writeln!(output, "// =============================================================================")?;
+            writeln!(
+                output,
+                "// ============================================================================="
+            )?;
             writeln!(output)?;
         }
 
@@ -73,7 +85,11 @@ pub fn generate_c_header(model: &FfiModel, console: &str) -> Result<String> {
         }
 
         // Function declaration
-        write!(output, "NCZX_IMPORT {} {}(", func.return_type.c_type, func.name)?;
+        write!(
+            output,
+            "NCZX_IMPORT {} {}(",
+            func.return_type.c_type, func.name
+        )?;
 
         if func.params.is_empty() {
             write!(output, "void")?;
@@ -92,15 +108,22 @@ pub fn generate_c_header(model: &FfiModel, console: &str) -> Result<String> {
 
     // Constants section
     if !model.constants.is_empty() {
-        writeln!(output, "// =============================================================================")?;
+        writeln!(
+            output,
+            "// ============================================================================="
+        )?;
         writeln!(output, "// Constants")?;
-        writeln!(output, "// =============================================================================")?;
+        writeln!(
+            output,
+            "// ============================================================================="
+        )?;
         writeln!(output)?;
 
         for module in &model.constants {
             writeln!(output, "// {} constants", module.name)?;
             for constant in &module.constants {
-                let const_name = format!("NCZX_{}_{}",
+                let const_name = format!(
+                    "NCZX_{}_{}",
                     module.name.to_uppercase(),
                     constant.name.to_uppercase()
                 );
@@ -121,7 +144,11 @@ pub fn generate_c_header(model: &FfiModel, console: &str) -> Result<String> {
     if let Ok(helpers) = load_c_helpers(console) {
         write!(output, "{}", helpers)?;
     } else {
-        writeln!(output, "// Note: No manual helpers template found for console '{}'", console)?;
+        writeln!(
+            output,
+            "// Note: No manual helpers template found for console '{}'",
+            console
+        )?;
     }
 
     // Header guard close

@@ -1,6 +1,6 @@
 //! ROM loader implementation for Nethercore ZX
 //!
-//! This module provides the `ZRomLoader` which implements the `RomLoader` trait
+//! This module provides the `ZXRomLoader` which implements the `RomLoader` trait
 //! from nethercore-core, allowing the library system to work with .nczx ROM files.
 
 use std::path::Path;
@@ -9,7 +9,7 @@ use anyhow::{Context, Result};
 use nethercore_core::library::{DataDirProvider, LocalGame, RomLoader, RomMetadata};
 use nethercore_shared::ZX_ROM_FORMAT;
 
-use crate::ZRom;
+use crate::ZXRom;
 
 /// ROM loader for Nethercore ZX (.nczx) files.
 ///
@@ -18,9 +18,9 @@ use crate::ZRom;
 /// - Optional data pack (bundled assets)
 /// - Metadata (title, author, version)
 /// - Optional thumbnail and screenshots
-pub struct ZRomLoader;
+pub struct ZXRomLoader;
 
-impl RomLoader for ZRomLoader {
+impl RomLoader for ZXRomLoader {
     fn extension(&self) -> &'static str {
         ZX_ROM_FORMAT.extension
     }
@@ -30,7 +30,7 @@ impl RomLoader for ZRomLoader {
     }
 
     fn load_metadata(&self, bytes: &[u8]) -> Result<RomMetadata> {
-        let rom = ZRom::from_bytes(bytes)?;
+        let rom = ZXRom::from_bytes(bytes)?;
         Ok(RomMetadata {
             id: rom.metadata.id,
             title: rom.metadata.title,
@@ -52,7 +52,7 @@ impl RomLoader for ZRomLoader {
         let bytes = std::fs::read(rom_path)
             .with_context(|| format!("Failed to read ROM file: {}", rom_path.display()))?;
 
-        let rom = ZRom::from_bytes(&bytes)
+        let rom = ZXRom::from_bytes(&bytes)
             .with_context(|| format!("Failed to load NCZX ROM: {}", rom_path.display()))?;
 
         // 2. Get game directory
@@ -128,8 +128,8 @@ mod tests {
         }
     }
 
-    fn create_test_rom() -> ZRom {
-        ZRom {
+    fn create_test_rom() -> ZXRom {
+        ZXRom {
             version: ZX_ROM_FORMAT.version,
             metadata: ZMetadata {
                 id: "test-game".to_string(),
@@ -155,19 +155,19 @@ mod tests {
 
     #[test]
     fn test_extension() {
-        let loader = ZRomLoader;
+        let loader = ZXRomLoader;
         assert_eq!(loader.extension(), ZX_ROM_FORMAT.extension);
     }
 
     #[test]
     fn test_console_type() {
-        let loader = ZRomLoader;
+        let loader = ZXRomLoader;
         assert_eq!(loader.console_type(), ZX_ROM_FORMAT.console_type);
     }
 
     #[test]
     fn test_can_load_valid() {
-        let loader = ZRomLoader;
+        let loader = ZXRomLoader;
         let rom = create_test_rom();
         let bytes = rom.to_bytes().unwrap();
         assert!(loader.can_load(&bytes));
@@ -175,7 +175,7 @@ mod tests {
 
     #[test]
     fn test_can_load_invalid() {
-        let loader = ZRomLoader;
+        let loader = ZXRomLoader;
         assert!(!loader.can_load(b"invalid"));
         assert!(!loader.can_load(b""));
         assert!(!loader.can_load(b"NC")); // Too short
@@ -183,7 +183,7 @@ mod tests {
 
     #[test]
     fn test_load_metadata() {
-        let loader = ZRomLoader;
+        let loader = ZXRomLoader;
         let rom = create_test_rom();
         let bytes = rom.to_bytes().unwrap();
 
@@ -196,7 +196,7 @@ mod tests {
 
     #[test]
     fn test_install() {
-        let loader = ZRomLoader;
+        let loader = ZXRomLoader;
 
         // Create temp directory
         let temp_dir = TempDir::new().unwrap();

@@ -492,7 +492,7 @@ position = skin_matrix * position;
 Commands are sorted by `(pipeline_key, texture_slots)` to minimize state changes:
 
 ```
-Pipeline key = (format, depth_test, cull_mode, blend_mode)
+Pipeline key = (format, depth_test, cull_mode)
 ```
 
 **Batching benefits:**

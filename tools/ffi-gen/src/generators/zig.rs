@@ -8,7 +8,10 @@ use crate::model::FfiModel;
 
 /// Load Zig helper template for a specific console
 fn load_zig_helpers(console: &str) -> Result<String> {
-    let template_path = PathBuf::from(format!("tools/ffi-gen/templates/zig_helpers_{}.zig", console));
+    let template_path = PathBuf::from(format!(
+        "tools/ffi-gen/templates/zig_helpers_{}.zig",
+        console
+    ));
 
     // Try console-specific template first, fall back to generic
     if template_path.exists() {
@@ -41,9 +44,15 @@ pub fn generate_zig_bindings(model: &FfiModel, console: &str) -> Result<String> 
         // Category header
         if func.category != current_category {
             current_category = func.category.clone();
-            writeln!(output, "// =============================================================================")?;
+            writeln!(
+                output,
+                "// ============================================================================="
+            )?;
             writeln!(output, "// {}", current_category)?;
-            writeln!(output, "// =============================================================================")?;
+            writeln!(
+                output,
+                "// ============================================================================="
+            )?;
             writeln!(output)?;
         }
 
@@ -70,9 +79,15 @@ pub fn generate_zig_bindings(model: &FfiModel, console: &str) -> Result<String> 
 
     // Constants section
     if !model.constants.is_empty() {
-        writeln!(output, "// =============================================================================")?;
+        writeln!(
+            output,
+            "// ============================================================================="
+        )?;
         writeln!(output, "// Constants")?;
-        writeln!(output, "// =============================================================================")?;
+        writeln!(
+            output,
+            "// ============================================================================="
+        )?;
         writeln!(output)?;
 
         for module in &model.constants {
@@ -94,8 +109,11 @@ pub fn generate_zig_bindings(model: &FfiModel, console: &str) -> Result<String> 
             writeln!(output, "pub const {} = struct {{", struct_name)?;
             for constant in &module.constants {
                 let const_name = to_zig_constant_name(&constant.name);
-                writeln!(output, "    pub const {}: {} = {};",
-                    const_name, constant.ty, constant.value)?;
+                writeln!(
+                    output,
+                    "    pub const {}: {} = {};",
+                    const_name, constant.ty, constant.value
+                )?;
             }
             writeln!(output, "}};")?;
             writeln!(output)?;
@@ -107,7 +125,11 @@ pub fn generate_zig_bindings(model: &FfiModel, console: &str) -> Result<String> 
     if let Ok(helpers) = load_zig_helpers(console) {
         write!(output, "{}", helpers)?;
     } else {
-        writeln!(output, "// Note: No manual helpers template found for console '{}'", console)?;
+        writeln!(
+            output,
+            "// Note: No manual helpers template found for console '{}'",
+            console
+        )?;
     }
 
     Ok(output)

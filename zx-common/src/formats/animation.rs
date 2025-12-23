@@ -1,4 +1,4 @@
-//! NetherZAnimation binary format (.nczxanim)
+//! NetherZXMesh binary format (.nczxanim)
 //!
 //! ZX console animation clip format containing sampled bone transforms.
 //! POD format with minimal header - no magic bytes.
@@ -21,12 +21,12 @@
 
 use half::f16;
 
-/// NetherZAnimation header (4 bytes)
+/// NetherZXMesh header (4 bytes)
 ///
 /// Note: Not packed - we use explicit byte serialization.
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
-pub struct NetherZAnimationHeader {
+pub struct NetherZXAnimationHeader {
     /// Number of bones per frame (max 255)
     pub bone_count: u8,
     /// Reserved flags (must be 0)
@@ -35,7 +35,7 @@ pub struct NetherZAnimationHeader {
     pub frame_count: u16,
 }
 
-impl NetherZAnimationHeader {
+impl NetherZXAnimationHeader {
     pub const SIZE: usize = 4;
 
     pub fn new(bone_count: u8, frame_count: u16) -> Self {
@@ -340,15 +340,15 @@ mod tests {
 
     #[test]
     fn test_animation_header_roundtrip() {
-        let header = NetherZAnimationHeader::new(25, 90);
+        let header = NetherZXAnimationHeader::new(25, 90);
         assert_eq!(header.bone_count, 25);
         assert_eq!(header.frame_count, 90);
         assert_eq!(header.flags, 0);
 
         let bytes = header.to_bytes();
-        assert_eq!(bytes.len(), NetherZAnimationHeader::SIZE);
+        assert_eq!(bytes.len(), NetherZXAnimationHeader::SIZE);
 
-        let parsed = NetherZAnimationHeader::from_bytes(&bytes).unwrap();
+        let parsed = NetherZXAnimationHeader::from_bytes(&bytes).unwrap();
         assert_eq!(parsed.bone_count, header.bone_count);
         assert_eq!(parsed.frame_count, header.frame_count);
         assert_eq!(parsed.flags, header.flags);
@@ -356,7 +356,7 @@ mod tests {
 
     #[test]
     fn test_animation_header_size() {
-        assert_eq!(NetherZAnimationHeader::SIZE, 4);
+        assert_eq!(NetherZXAnimationHeader::SIZE, 4);
         assert_eq!(PLATFORM_BONE_KEYFRAME_SIZE, 16);
         assert_eq!(BONE_TRANSFORM_SIZE, 40);
     }
@@ -364,7 +364,7 @@ mod tests {
     #[test]
     fn test_animation_file_size() {
         // Example from spec: 40 bones, 60 frames
-        let header = NetherZAnimationHeader::new(40, 60);
+        let header = NetherZXAnimationHeader::new(40, 60);
         // file_size = 4 + (frame_count x bone_count x 16) = 4 + 38400 = 38404
         assert_eq!(header.file_size(), 38404);
     }
@@ -372,18 +372,18 @@ mod tests {
     #[test]
     fn test_animation_header_from_short_bytes() {
         let short_bytes = [0u8; 2];
-        assert!(NetherZAnimationHeader::from_bytes(&short_bytes).is_none());
+        assert!(NetherZXAnimationHeader::from_bytes(&short_bytes).is_none());
     }
 
     #[test]
     fn test_header_validation() {
-        let valid = NetherZAnimationHeader::new(10, 100);
+        let valid = NetherZXAnimationHeader::new(10, 100);
         assert!(valid.validate());
 
-        let invalid_bones = NetherZAnimationHeader::new(0, 100);
+        let invalid_bones = NetherZXAnimationHeader::new(0, 100);
         assert!(!invalid_bones.validate());
 
-        let invalid_frames = NetherZAnimationHeader::new(10, 0);
+        let invalid_frames = NetherZXAnimationHeader::new(10, 0);
         assert!(!invalid_frames.validate());
     }
 
@@ -713,7 +713,7 @@ mod tests {
     fn test_single_frame_animation() {
         // Minimum valid animation: 1 bone, 1 frame (20 bytes total)
         // Build it programmatically to avoid hardcoding implementation-specific values
-        let header = NetherZAnimationHeader::new(1, 1);
+        let header = NetherZXAnimationHeader::new(1, 1);
         let header_bytes = header.to_bytes();
 
         // Identity transform: no rotation, zero position, unit scale
@@ -732,7 +732,7 @@ mod tests {
         assert_eq!(data.len(), 20); // 4 header + 16 data
 
         // Verify we can parse it back
-        let parsed_header = NetherZAnimationHeader::from_bytes(&data).unwrap();
+        let parsed_header = NetherZXAnimationHeader::from_bytes(&data).unwrap();
         assert_eq!(parsed_header.bone_count, 1);
         assert_eq!(parsed_header.frame_count, 1);
         assert!(parsed_header.validate());
@@ -754,7 +754,7 @@ mod tests {
     #[test]
     fn test_max_bone_count() {
         // Maximum: 255 bones
-        let header = NetherZAnimationHeader::new(255, 1);
+        let header = NetherZXAnimationHeader::new(255, 1);
         assert!(header.validate());
         assert_eq!(header.file_size(), 4 + 255 * 16);
     }
@@ -762,7 +762,7 @@ mod tests {
     #[test]
     fn test_max_frame_count() {
         // Maximum: 65535 frames (at 60fps = ~18 minutes)
-        let header = NetherZAnimationHeader::new(1, 65535);
+        let header = NetherZXAnimationHeader::new(1, 65535);
         assert!(header.validate());
         let expected_size = 4 + (1 * 65535 * 16);
         assert_eq!(header.file_size(), expected_size);

@@ -316,6 +316,9 @@ fn rom_sound(mut caller: Caller<'_, ZXGameContext>, id_ptr: u32, id_len: u32) ->
     }
     state.sounds[handle as usize] = Some(sound_resource);
 
+    // Store ID -> handle mapping for tracker sample resolution
+    state.sound_id_to_handle.insert(id, handle);
+
     Ok(handle)
 }
 

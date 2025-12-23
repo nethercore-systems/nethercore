@@ -710,7 +710,8 @@ mod tests {
     fn test_rollback_session_sync_test() {
         let config = SessionConfig::sync_test();
         let session =
-            RollbackSession::<TestInput, ()>::new_sync_test(config, NETHERCORE_ZX_RAM_LIMIT).unwrap();
+            RollbackSession::<TestInput, ()>::new_sync_test(config, NETHERCORE_ZX_RAM_LIMIT)
+                .unwrap();
         assert_eq!(session.session_type(), SessionType::SyncTest);
     }
 
@@ -902,8 +903,10 @@ mod tests {
     fn test_rollback_session_local_with_config() {
         // Create a local session with custom player config
         let player_config = PlayerSessionConfig::new(4, 0b0011); // Only players 0, 1 local
-        let session =
-            RollbackSession::<TestInput, ()>::new_local_with_config(player_config, NETHERCORE_ZX_RAM_LIMIT);
+        let session = RollbackSession::<TestInput, ()>::new_local_with_config(
+            player_config,
+            NETHERCORE_ZX_RAM_LIMIT,
+        );
 
         assert_eq!(session.player_config().num_players(), 4);
         assert_eq!(session.player_config().local_player_mask(), 0b0011);
@@ -914,7 +917,8 @@ mod tests {
     fn test_rollback_session_sync_test_has_player_config() {
         let config = SessionConfig::sync_test();
         let session =
-            RollbackSession::<TestInput, ()>::new_sync_test(config, NETHERCORE_ZX_RAM_LIMIT).unwrap();
+            RollbackSession::<TestInput, ()>::new_sync_test(config, NETHERCORE_ZX_RAM_LIMIT)
+                .unwrap();
         let player_config = session.player_config();
         assert_eq!(player_config.num_players(), 1);
         assert!(player_config.is_local_player(0));

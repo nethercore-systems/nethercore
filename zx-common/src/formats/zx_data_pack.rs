@@ -69,7 +69,7 @@ use nethercore_shared::math::BoneMatrix3x4;
 /// Contains all bundled assets for an Nethercore ZX ROM. Assets are stored
 /// in GPU-ready formats and loaded directly to VRAM/audio memory.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, Encode, Decode)]
-pub struct ZDataPack {
+pub struct ZXDataPack {
     /// Textures (RGBA8 pixel data)
     pub textures: Vec<PackedTexture>,
 
@@ -90,6 +90,9 @@ pub struct ZDataPack {
 
     /// Raw data (levels, dialogue, custom formats)
     pub data: Vec<PackedData>,
+
+    /// Tracker modules (XM pattern data + sample mappings)
+    pub trackers: Vec<PackedTracker>,
 
     // ========================================================================
     // Index caches for O(1) lookup (built lazily on first access)
@@ -121,9 +124,13 @@ pub struct ZDataPack {
     #[serde(skip)]
     #[bitcode(skip)]
     data_index: OnceLock<HashMap<String, usize>>,
+
+    #[serde(skip)]
+    #[bitcode(skip)]
+    tracker_index: OnceLock<HashMap<String, usize>>,
 }
 
-impl ZDataPack {
+impl ZXDataPack {
     /// Create an empty data pack
     pub fn new() -> Self {
         Self::default()
@@ -138,6 +145,7 @@ impl ZDataPack {
         fonts: Vec<PackedFont>,
         sounds: Vec<PackedSound>,
         data: Vec<PackedData>,
+        trackers: Vec<PackedTracker>,
     ) -> Self {
         Self {
             textures,
@@ -147,6 +155,7 @@ impl ZDataPack {
             fonts,
             sounds,
             data,
+            trackers,
             // Index caches will be lazily initialized on first lookup
             texture_index: OnceLock::new(),
             mesh_index: OnceLock::new(),
@@ -155,6 +164,7 @@ impl ZDataPack {
             font_index: OnceLock::new(),
             sound_index: OnceLock::new(),
             data_index: OnceLock::new(),
+            tracker_index: OnceLock::new(),
         }
     }
 
@@ -167,6 +177,7 @@ impl ZDataPack {
             && self.fonts.is_empty()
             && self.sounds.is_empty()
             && self.data.is_empty()
+            && self.trackers.is_empty()
     }
 
     /// Get total asset count
@@ -178,6 +189,7 @@ impl ZDataPack {
             + self.fonts.len()
             + self.sounds.len()
             + self.data.len()
+            + self.trackers.len()
     }
 
     /// Find a texture by ID (O(1) lookup via lazy-initialized hash index)
@@ -234,6 +246,14 @@ impl ZDataPack {
             .data_index
             .get_or_init(|| build_index(&self.data, |d| &d.id));
         index.get(id).map(|&i| &self.data[i])
+    }
+
+    /// Find a tracker by ID (O(1) lookup via lazy-initialized hash index)
+    pub fn find_tracker(&self, id: &str) -> Option<&PackedTracker> {
+        let index = self
+            .tracker_index
+            .get_or_init(|| build_index(&self.trackers, |t| &t.id));
+        index.get(id).map(|&i| &self.trackers[i])
     }
 }
 
@@ -588,6 +608,47 @@ pub struct PackedData {
     pub data: Vec<u8>,
 }
 
+/// Packed tracker module (XM pattern data + sample mapping)
+///
+/// Contains XM pattern data with sample references resolved at load time.
+/// Samples are loaded separately via `rom_sound()` and mapped by ID.
+#[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
+pub struct PackedTracker {
+    /// Asset ID (e.g., "level1_music", "boss_theme")
+    pub id: String,
+
+    /// XM pattern data (samples stripped, patterns + instrument metadata only)
+    pub pattern_data: Vec<u8>,
+
+    /// Instrument index -> ROM sample ID mapping
+    /// e.g., ["kick", "snare", "bass"] means:
+    /// - Instrument 0 uses ROM sample "kick"
+    /// - Instrument 1 uses ROM sample "snare"
+    /// - Instrument 2 uses ROM sample "bass"
+    pub sample_ids: Vec<String>,
+}
+
+impl PackedTracker {
+    /// Create a new packed tracker
+    pub fn new(id: impl Into<String>, pattern_data: Vec<u8>, sample_ids: Vec<String>) -> Self {
+        Self {
+            id: id.into(),
+            pattern_data,
+            sample_ids,
+        }
+    }
+
+    /// Get the number of instruments/samples
+    pub fn instrument_count(&self) -> usize {
+        self.sample_ids.len()
+    }
+
+    /// Get pattern data size in bytes
+    pub fn pattern_data_size(&self) -> usize {
+        self.pattern_data.len()
+    }
+}
+
 impl PackedData {
     /// Create new packed data
     pub fn new(id: impl Into<String>, data: Vec<u8>) -> Self {
@@ -609,14 +670,14 @@ mod tests {
 
     #[test]
     fn test_empty_data_pack() {
-        let pack = ZDataPack::new();
+        let pack = ZXDataPack::new();
         assert!(pack.is_empty());
         assert_eq!(pack.asset_count(), 0);
     }
 
     #[test]
     fn test_data_pack_with_assets() {
-        let mut pack = ZDataPack::new();
+        let mut pack = ZXDataPack::new();
         pack.textures
             .push(PackedTexture::new("test", 2, 2, vec![0; 16]));
         pack.meshes.push(PackedMesh {
@@ -634,7 +695,7 @@ mod tests {
 
     #[test]
     fn test_find_texture() {
-        let mut pack = ZDataPack::new();
+        let mut pack = ZXDataPack::new();
         pack.textures
             .push(PackedTexture::new("player", 32, 32, vec![0; 32 * 32 * 4]));
         pack.textures
@@ -725,7 +786,7 @@ mod tests {
 
     #[test]
     fn test_find_mesh() {
-        let mut pack = ZDataPack::new();
+        let mut pack = ZXDataPack::new();
         pack.meshes.push(PackedMesh {
             id: "cube".to_string(),
             format: 0b0001, // UV only
@@ -756,7 +817,7 @@ mod tests {
 
     #[test]
     fn test_find_skeleton() {
-        let mut pack = ZDataPack::new();
+        let mut pack = ZXDataPack::new();
         pack.skeletons.push(PackedSkeleton::new(
             "player_rig",
             vec![BoneMatrix3x4::IDENTITY; 20],
@@ -779,7 +840,7 @@ mod tests {
 
     #[test]
     fn test_find_font() {
-        let mut pack = ZDataPack::new();
+        let mut pack = ZXDataPack::new();
         pack.fonts.push(PackedFont {
             id: "pixel".to_string(),
             atlas_width: 256,
@@ -821,7 +882,7 @@ mod tests {
 
     #[test]
     fn test_find_sound() {
-        let mut pack = ZDataPack::new();
+        let mut pack = ZXDataPack::new();
         pack.sounds.push(PackedSound::new("jump", vec![0i16; 2205])); // 0.1 sec
         pack.sounds
             .push(PackedSound::new("explosion", vec![0i16; 22050])); // 1 sec
@@ -839,7 +900,7 @@ mod tests {
 
     #[test]
     fn test_find_data() {
-        let mut pack = ZDataPack::new();
+        let mut pack = ZXDataPack::new();
         pack.data
             .push(PackedData::new("level1", vec![1, 2, 3, 4, 5]));
         pack.data.push(PackedData::new("config", vec![0xFF; 100]));
@@ -857,7 +918,7 @@ mod tests {
 
     #[test]
     fn test_find_keyframes() {
-        let mut pack = ZDataPack::new();
+        let mut pack = ZXDataPack::new();
 
         // Create 2 bones, 3 frames animation (2 * 3 * 16 = 96 bytes)
         let walk_data = vec![0u8; 2 * 3 * 16];
@@ -910,7 +971,7 @@ mod tests {
 
     #[test]
     fn test_serialization_roundtrip() {
-        let mut pack = ZDataPack::new();
+        let mut pack = ZXDataPack::new();
 
         // Add one of each asset type
         pack.textures
@@ -952,7 +1013,7 @@ mod tests {
         let encoded = bitcode::encode(&pack);
 
         // Deserialize
-        let decoded: ZDataPack = bitcode::decode(&encoded).expect("decode failed");
+        let decoded: ZXDataPack = bitcode::decode(&encoded).expect("decode failed");
 
         // Verify all assets survived
         assert_eq!(decoded.asset_count(), 7);
@@ -1087,5 +1148,44 @@ mod tests {
         assert!((glyph.advance - 10.0).abs() < 0.001);
         assert_eq!(glyph.w, 8);
         assert_eq!(glyph.h, 16);
+    }
+
+    #[test]
+    fn test_find_tracker() {
+        let mut pack = ZXDataPack::new();
+        pack.trackers.push(PackedTracker::new(
+            "level1_music",
+            vec![0x45, 0x78, 0x74], // Dummy XM data
+            vec!["kick".to_string(), "snare".to_string()],
+        ));
+        pack.trackers.push(PackedTracker::new(
+            "boss_theme",
+            vec![0x01, 0x02, 0x03],
+            vec!["bass".to_string()],
+        ));
+
+        let level = pack.find_tracker("level1_music");
+        assert!(level.is_some());
+        assert_eq!(level.unwrap().instrument_count(), 2);
+        assert_eq!(level.unwrap().sample_ids[0], "kick");
+
+        let boss = pack.find_tracker("boss_theme");
+        assert!(boss.is_some());
+        assert_eq!(boss.unwrap().instrument_count(), 1);
+
+        assert!(pack.find_tracker("missing").is_none());
+    }
+
+    #[test]
+    fn test_packed_tracker() {
+        let tracker = PackedTracker::new(
+            "test_song",
+            vec![0; 1024],
+            vec!["drum".to_string(), "bass".to_string(), "lead".to_string()],
+        );
+
+        assert_eq!(tracker.id, "test_song");
+        assert_eq!(tracker.instrument_count(), 3);
+        assert_eq!(tracker.pattern_data_size(), 1024);
     }
 }

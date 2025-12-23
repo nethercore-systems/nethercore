@@ -695,11 +695,8 @@ impl DebugPanel {
     ) -> Option<ActionRequest> {
         // Initialize parameter values from defaults if not already set
         if !self.action_params.contains_key(&action_idx) {
-            let defaults: Vec<ActionParamValue> = action
-                .params
-                .iter()
-                .map(|p| p.default_value)
-                .collect();
+            let defaults: Vec<ActionParamValue> =
+                action.params.iter().map(|p| p.default_value).collect();
             self.action_params.insert(action_idx, defaults);
         }
 
@@ -715,10 +712,7 @@ impl DebugPanel {
                     if let Some(value) = params.get_mut(i) {
                         match value {
                             ActionParamValue::I32(v) => {
-                                ui.add(
-                                    egui::DragValue::new(v)
-                                        .prefix(format!("{}: ", param.name)),
-                                );
+                                ui.add(egui::DragValue::new(v).prefix(format!("{}: ", param.name)));
                             }
                             ActionParamValue::F32(v) => {
                                 ui.add(

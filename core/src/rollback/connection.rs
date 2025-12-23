@@ -99,7 +99,10 @@ impl ConnectionMode {
 
     /// Check if this mode requires network connectivity
     pub fn is_networked(&self) -> bool {
-        matches!(self, Self::Host { .. } | Self::Join { .. } | Self::P2P { .. })
+        matches!(
+            self,
+            Self::Host { .. } | Self::Join { .. } | Self::P2P { .. }
+        )
     }
 
     /// Check if this mode uses rollback
@@ -185,7 +188,10 @@ mod tests {
     #[test]
     fn test_connection_mode_sync_test() {
         let mode = ConnectionMode::sync_test();
-        assert!(matches!(mode, ConnectionMode::SyncTest { check_distance: 2 }));
+        assert!(matches!(
+            mode,
+            ConnectionMode::SyncTest { check_distance: 2 }
+        ));
     }
 
     #[test]
@@ -286,8 +292,14 @@ mod tests {
 
     #[test]
     fn test_connection_state_status_messages() {
-        assert_eq!(ConnectionState::Disconnected.status_message(), "Disconnected");
-        assert_eq!(ConnectionState::Binding.status_message(), "Binding to port...");
+        assert_eq!(
+            ConnectionState::Disconnected.status_message(),
+            "Disconnected"
+        );
+        assert_eq!(
+            ConnectionState::Binding.status_message(),
+            "Binding to port..."
+        );
         assert_eq!(
             ConnectionState::WaitingForPeer.status_message(),
             "Waiting for player to connect..."
@@ -301,6 +313,9 @@ mod tests {
             "Synchronizing..."
         );
         assert_eq!(ConnectionState::Connected.status_message(), "Connected");
-        assert_eq!(ConnectionState::Failed.status_message(), "Connection failed");
+        assert_eq!(
+            ConnectionState::Failed.status_message(),
+            "Connection failed"
+        );
     }
 }

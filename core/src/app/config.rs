@@ -293,7 +293,10 @@ pub fn validate_keybindings(config: &Config) -> Vec<String> {
     for (key, name) in debug_keys {
         let key_upper = key.to_uppercase();
         if !used_keys.insert(key_upper.clone()) {
-            warnings.push(format!("{} key '{}' conflicts with another binding", name, key));
+            warnings.push(format!(
+                "{} key '{}' conflicts with another binding",
+                name, key
+            ));
         }
     }
 
@@ -305,7 +308,10 @@ pub fn validate_keybindings(config: &Config) -> Vec<String> {
     for (key, name) in capture_keys {
         let key_upper = key.to_uppercase();
         if !used_keys.insert(key_upper.clone()) {
-            warnings.push(format!("{} key '{}' conflicts with another binding", name, key));
+            warnings.push(format!(
+                "{} key '{}' conflicts with another binding",
+                name, key
+            ));
         }
     }
 

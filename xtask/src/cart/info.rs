@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use clap::Args;
-use zx_common::ZRom;
+use zx_common::ZXRom;
 
 /// Arguments for inspecting ROM metadata
 #[derive(Debug, Args)]
@@ -37,7 +37,7 @@ fn inspect_z_rom(rom_path: &PathBuf) -> Result<()> {
     let file_size = rom_bytes.len();
 
     // Deserialize and validate
-    let rom = ZRom::from_bytes(&rom_bytes)
+    let rom = ZXRom::from_bytes(&rom_bytes)
         .with_context(|| format!("Failed to load NCZ ROM: {}", rom_path.display()))?;
 
     // Display metadata

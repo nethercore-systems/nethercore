@@ -105,7 +105,12 @@ impl ScreenCapture {
 
     /// Start GIF recording.
     fn start_recording(&mut self, width: u32, height: u32) {
-        tracing::info!("GIF recording started ({}x{}, {}fps)", width, height, self.gif_fps);
+        tracing::info!(
+            "GIF recording started ({}x{}, {}fps)",
+            width,
+            height,
+            self.gif_fps
+        );
         self.gif_recorder = Some(GifRecorder {
             frames: Vec::new(),
             width,
@@ -409,13 +414,8 @@ fn save_gif(recorder: GifRecorder) -> Result<PathBuf> {
 
     let file = std::fs::File::create(&path).context("Failed to create GIF file")?;
 
-    let mut encoder = gif::Encoder::new(
-        file,
-        recorder.width as u16,
-        recorder.height as u16,
-        &[],
-    )
-    .context("Failed to create GIF encoder")?;
+    let mut encoder = gif::Encoder::new(file, recorder.width as u16, recorder.height as u16, &[])
+        .context("Failed to create GIF encoder")?;
 
     // Set repeat count (0 = infinite loop)
     encoder
@@ -435,11 +435,8 @@ fn save_gif(recorder: GifRecorder) -> Result<PathBuf> {
             rgb_pixels.push(chunk[2]); // B
         }
 
-        let mut frame = gif::Frame::from_rgb(
-            recorder.width as u16,
-            recorder.height as u16,
-            &rgb_pixels,
-        );
+        let mut frame =
+            gif::Frame::from_rgb(recorder.width as u16, recorder.height as u16, &rgb_pixels);
         frame.delay = frame_delay;
 
         encoder

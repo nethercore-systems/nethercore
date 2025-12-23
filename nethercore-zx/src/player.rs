@@ -14,7 +14,7 @@ use anyhow::{Context, Result};
 use nethercore_core::Console;
 use nethercore_core::app::{LoadedRom, RomLoader, StandaloneConfig, run_standalone};
 use nethercore_shared::ZX_ROM_FORMAT;
-use zx_common::{ZDataPack, ZRom};
+use zx_common::{ZXDataPack, ZXRom};
 
 use crate::console::NethercoreZX;
 
@@ -40,7 +40,7 @@ impl RomLoader for ZXRomLoader {
         if path.extension().and_then(|e| e.to_str()) == Some(ZX_ROM_FORMAT.extension) {
             let rom_bytes = std::fs::read(path).context("Failed to read Nethercore ZX ROM file")?;
 
-            let rom = ZRom::from_bytes(&rom_bytes).context("Failed to parse Nethercore ZX ROM")?;
+            let rom = ZXRom::from_bytes(&rom_bytes).context("Failed to parse Nethercore ZX ROM")?;
 
             // Use metadata title, fall back to file stem if empty
             let game_name = if rom.metadata.title.is_empty() {
@@ -50,7 +50,7 @@ impl RomLoader for ZXRomLoader {
             };
 
             // Create console with datapack
-            let data_pack: Option<Arc<ZDataPack>> = rom.data_pack.map(Arc::new);
+            let data_pack: Option<Arc<ZXDataPack>> = rom.data_pack.map(Arc::new);
             let console = NethercoreZX::with_datapack(data_pack);
 
             Ok(LoadedRom {

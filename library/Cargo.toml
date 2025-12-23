@@ -22,7 +22,7 @@ gamepad = ["nethercore-core/gamepad", "zx-common/gamepad"]
 # Local crates
 nethercore-core = { path = "../core", default-features = false }
 nethercore-shared = { path = "../shared" }
-# Note: zx-common provides ZRomLoader for reading .nczx ROM metadata
+# Note: zx-common provides ZXRomLoader for reading .nczx ROM metadata
 zx-common = { path = "../zx-common", default-features = false, features = ["loader"] }
 
 # Workspace dependencies

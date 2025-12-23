@@ -13,7 +13,7 @@ use tracing::warn;
 use wasmtime::{Caller, Linker};
 
 use zx_common::formats::{
-    BoneTransform, NetherZAnimationHeader, PLATFORM_BONE_KEYFRAME_SIZE, PlatformBoneKeyframe,
+    BoneTransform, NetherZXAnimationHeader, PLATFORM_BONE_KEYFRAME_SIZE, PlatformBoneKeyframe,
     decode_bone_transform,
 };
 
@@ -91,8 +91,8 @@ fn keyframes_load(
     }
 
     // Parse header
-    let header_bytes = &data[start..start + NetherZAnimationHeader::SIZE.min(size)];
-    let header = NetherZAnimationHeader::from_bytes(header_bytes)
+    let header_bytes = &data[start..start + NetherZXAnimationHeader::SIZE.min(size)];
+    let header = NetherZXAnimationHeader::from_bytes(header_bytes)
         .ok_or_else(|| anyhow::anyhow!("keyframes_load: invalid header"))?;
 
     if !header.validate() {
@@ -124,7 +124,7 @@ fn keyframes_load(
     }
 
     // Copy keyframe data (skip header)
-    let data_start = start + NetherZAnimationHeader::SIZE;
+    let data_start = start + NetherZXAnimationHeader::SIZE;
     let data_len = header.data_size();
     let keyframe_data = data[data_start..data_start + data_len].to_vec();
 

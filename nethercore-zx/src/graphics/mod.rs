@@ -44,20 +44,42 @@ pub use buffer::{BufferManager, GrowableBuffer, MeshHandle, RetainedMesh};
 pub use command_buffer::{VRPCommand, VirtualRenderPass};
 pub use matrix_packing::MvpShadingIndices;
 pub use quad_instance::{QuadInstance, QuadMode};
-pub use render_state::{
-    BlendMode, CullMode, MatcapBlendMode, RenderState, TextureFilter, TextureHandle,
-};
+pub use render_state::{CullMode, MatcapBlendMode, RenderState, TextureFilter, TextureHandle};
 pub use unified_shading_state::{
-    DEFAULT_FLAGS, FLAG_DITHER_OFFSET_X_MASK, FLAG_DITHER_OFFSET_X_SHIFT,
-    FLAG_DITHER_OFFSET_Y_MASK, FLAG_DITHER_OFFSET_Y_SHIFT, FLAG_SKINNING_MODE,
-    FLAG_TEXTURE_FILTER_LINEAR, FLAG_UNIFORM_ALPHA_MASK, FLAG_UNIFORM_ALPHA_SHIFT,
-    FLAG_USE_MATCAP_REFLECTION, FLAG_USE_UNIFORM_COLOR, FLAG_USE_UNIFORM_EMISSIVE,
-    FLAG_USE_UNIFORM_METALLIC, FLAG_USE_UNIFORM_ROUGHNESS, FLAG_USE_UNIFORM_SPECULAR, LightType,
-    PackedLight, PackedUnifiedShadingState, ShadingStateIndex, pack_f16, pack_f16x2,
-    pack_matcap_blend_modes, pack_rgb8, pack_unorm8, unpack_f16, unpack_f16x2,
-    unpack_matcap_blend_modes, update_uniform_set_0_byte, update_uniform_set_1_byte,
+    DEFAULT_FLAGS,
+    EnvironmentIndex,
+    FLAG_DITHER_OFFSET_X_MASK,
+    FLAG_DITHER_OFFSET_X_SHIFT,
+    FLAG_DITHER_OFFSET_Y_MASK,
+    FLAG_DITHER_OFFSET_Y_SHIFT,
+    FLAG_SKINNING_MODE,
+    FLAG_TEXTURE_FILTER_LINEAR,
+    FLAG_UNIFORM_ALPHA_MASK,
+    FLAG_UNIFORM_ALPHA_SHIFT,
+    FLAG_USE_MATCAP_REFLECTION,
+    FLAG_USE_UNIFORM_COLOR,
+    FLAG_USE_UNIFORM_EMISSIVE,
+    FLAG_USE_UNIFORM_METALLIC,
+    FLAG_USE_UNIFORM_ROUGHNESS,
+    FLAG_USE_UNIFORM_SPECULAR,
+    LightType,
     // Multi-Environment v3
-    PackedEnvironmentState, EnvironmentIndex, blend_mode, env_mode,
+    PackedEnvironmentState,
+    PackedLight,
+    PackedUnifiedShadingState,
+    ShadingStateIndex,
+    blend_mode,
+    env_mode,
+    pack_f16,
+    pack_f16x2,
+    pack_matcap_blend_modes,
+    pack_rgb8,
+    pack_unorm8,
+    unpack_f16,
+    unpack_f16x2,
+    unpack_matcap_blend_modes,
+    update_uniform_set_0_byte,
+    update_uniform_set_1_byte,
 };
 pub use vertex::{FORMAT_ALL, VERTEX_FORMAT_COUNT, VertexFormatInfo};
 
@@ -165,7 +187,7 @@ pub struct ZGraphics {
 
     // Persistent buffers for quad instance processing (avoids per-frame allocation)
     quad_instance_scratch: Vec<QuadInstance>,
-    quad_batch_scratch: Vec<(u32, u32, [u32; 4], u8)>,
+    quad_batch_scratch: Vec<(u32, u32, [u32; 4])>,
 }
 
 impl ZGraphics {

@@ -14,7 +14,11 @@ use super::types::{GameError, GameErrorPhase};
 /// * `error` - The error to parse (typically from wasmtime)
 /// * `tick` - The tick number when the error occurred (if known)
 /// * `phase` - Which game lifecycle phase failed (init/update/render)
-pub fn parse_wasm_error(error: &anyhow::Error, tick: Option<u64>, phase: GameErrorPhase) -> GameError {
+pub fn parse_wasm_error(
+    error: &anyhow::Error,
+    tick: Option<u64>,
+    phase: GameErrorPhase,
+) -> GameError {
     let error_str = format!("{:#}", error);
 
     // Classify the trap type and get suggestions
@@ -65,7 +69,9 @@ fn classify_trap(error: &str) -> (String, Vec<String>) {
                 "Verify value ranges before operations".to_string(),
             ],
         )
-    } else if error_lower.contains("integer divide by zero") || error_lower.contains("division by zero") {
+    } else if error_lower.contains("integer divide by zero")
+        || error_lower.contains("division by zero")
+    {
         (
             "Division by Zero".to_string(),
             vec![
@@ -74,7 +80,8 @@ fn classify_trap(error: &str) -> (String, Vec<String>) {
                 "Verify loop counters and indices".to_string(),
             ],
         )
-    } else if error_lower.contains("call stack exhausted") || error_lower.contains("stack overflow") {
+    } else if error_lower.contains("call stack exhausted") || error_lower.contains("stack overflow")
+    {
         (
             "Stack Overflow".to_string(),
             vec![
@@ -153,7 +160,14 @@ fn extract_stack_trace(error: &str) -> Option<Vec<String>> {
         // Pattern: "wasm backtrace:"
         if trimmed.starts_with("at ") || trimmed.contains("wasm backtrace") {
             frames.push(trimmed.to_string());
-        } else if trimmed.starts_with("0x") || (trimmed.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) && trimmed.contains(":")) {
+        } else if trimmed.starts_with("0x")
+            || (trimmed
+                .chars()
+                .next()
+                .map(|c| c.is_ascii_digit())
+                .unwrap_or(false)
+                && trimmed.contains(":"))
+        {
             // Numbered frames like "0: 0x1234 - func_name"
             frames.push(trimmed.to_string());
         }
@@ -209,7 +223,9 @@ mod tests {
 
     #[test]
     fn test_parse_wasm_error() {
-        let error = anyhow::anyhow!("WASM update() failed at tick 42: wasm trap: out of bounds memory access");
+        let error = anyhow::anyhow!(
+            "WASM update() failed at tick 42: wasm trap: out of bounds memory access"
+        );
         let game_error = parse_wasm_error(&error, Some(42), GameErrorPhase::Update);
 
         assert_eq!(game_error.summary, "Memory Access Error");

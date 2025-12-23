@@ -33,9 +33,9 @@ pub struct RomMetadata {
 ///
 /// ```ignore
 /// // In zx-common crate:
-/// pub struct ZRomLoader;
+/// pub struct ZXRomLoader;
 ///
-/// impl RomLoader for ZRomLoader {
+/// impl RomLoader for ZXRomLoader {
 ///     fn extension(&self) -> &'static str { "nczx" }
 ///     fn console_type(&self) -> &'static str { "zx" }
 ///     // ...

@@ -20,7 +20,7 @@ use super::{ZXGameContext, get_wasm_memory, guards::check_init_only};
 
 use zx_common::TextureFormat;
 use zx_common::formats::{
-    NetherZMeshHeader, NetherZSkeletonHeader, NetherZTextureHeader, decode_sound,
+    NetherZXMeshHeader, NetherZXSkeletonHeader, NetherZXTextureHeader, decode_sound,
 };
 
 use crate::audio::Sound;
@@ -56,11 +56,11 @@ fn load_zmesh(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len: u3
     let data_len = data_len as usize;
 
     // Validate minimum size
-    if data_len < NetherZMeshHeader::SIZE {
+    if data_len < NetherZXMeshHeader::SIZE {
         warn!(
             "load_zmesh: data too small ({} bytes, need at least {})",
             data_len,
-            NetherZMeshHeader::SIZE
+            NetherZXMeshHeader::SIZE
         );
         return 0;
     }
@@ -90,7 +90,7 @@ fn load_zmesh(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len: u3
         let data = &mem_data[ptr..ptr + data_len];
 
         // Parse header
-        let Some(header) = NetherZMeshHeader::from_bytes(data) else {
+        let Some(header) = NetherZXMeshHeader::from_bytes(data) else {
             warn!("load_zmesh: failed to parse header");
             return 0;
         };
@@ -106,7 +106,7 @@ fn load_zmesh(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len: u3
         let vertex_size = header.vertex_count as usize * stride;
         let index_size = header.index_count as usize * 2; // u16 indices
 
-        let expected_size = NetherZMeshHeader::SIZE + vertex_size + index_size;
+        let expected_size = NetherZXMeshHeader::SIZE + vertex_size + index_size;
         if data_len < expected_size {
             warn!(
                 "load_zmesh: data too small ({} bytes, need {} for {} verts + {} indices)",
@@ -116,7 +116,7 @@ fn load_zmesh(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len: u3
         }
 
         // Copy vertex data
-        let vertex_start = NetherZMeshHeader::SIZE;
+        let vertex_start = NetherZXMeshHeader::SIZE;
         let vertex_data = data[vertex_start..vertex_start + vertex_size].to_vec();
 
         // Copy index data if present
@@ -190,11 +190,11 @@ fn load_ztex(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len: u32
     let data_len = data_len as usize;
 
     // Validate minimum size
-    if data_len < NetherZTextureHeader::SIZE {
+    if data_len < NetherZXTextureHeader::SIZE {
         warn!(
             "load_ztex: data too small ({} bytes, need at least {})",
             data_len,
-            NetherZTextureHeader::SIZE
+            NetherZXTextureHeader::SIZE
         );
         return 0;
     }
@@ -224,7 +224,7 @@ fn load_ztex(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len: u32
         let data = &mem_data[ptr..ptr + data_len];
 
         // Parse header
-        let Some(header) = NetherZTextureHeader::from_bytes(data) else {
+        let Some(header) = NetherZXTextureHeader::from_bytes(data) else {
             warn!(
                 "load_ztex: failed to parse header. \
                 File may be in old 8-byte format (u32+u32). \
@@ -264,7 +264,7 @@ fn load_ztex(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len: u32
         };
         let pixel_size = pixel_size as usize;
 
-        let expected_size = NetherZTextureHeader::SIZE + pixel_size;
+        let expected_size = NetherZXTextureHeader::SIZE + pixel_size;
         if data_len < expected_size {
             warn!(
                 "load_ztex: data too small ({} bytes, need {} for {}x{})",
@@ -275,7 +275,7 @@ fn load_ztex(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len: u32
 
         // Copy pixel data
         let pixel_data =
-            data[NetherZTextureHeader::SIZE..NetherZTextureHeader::SIZE + pixel_size].to_vec();
+            data[NetherZXTextureHeader::SIZE..NetherZXTextureHeader::SIZE + pixel_size].to_vec();
 
         (width, height, pixel_data)
     };
@@ -417,11 +417,11 @@ fn load_zskeleton(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len
     let data_len = data_len as usize;
 
     // Validate minimum size
-    if data_len < NetherZSkeletonHeader::SIZE {
+    if data_len < NetherZXSkeletonHeader::SIZE {
         warn!(
             "load_zskeleton: data too small ({} bytes, need at least {})",
             data_len,
-            NetherZSkeletonHeader::SIZE
+            NetherZXSkeletonHeader::SIZE
         );
         return 0;
     }
@@ -451,7 +451,7 @@ fn load_zskeleton(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len
         let data = &mem_data[ptr..ptr + data_len];
 
         // Parse header
-        let Some(header) = NetherZSkeletonHeader::from_bytes(data) else {
+        let Some(header) = NetherZXSkeletonHeader::from_bytes(data) else {
             warn!("load_zskeleton: failed to parse header");
             return 0;
         };
@@ -472,7 +472,7 @@ fn load_zskeleton(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len
         // Calculate expected data size (48 bytes per bone matrix)
         let matrix_size = 48usize;
         let matrices_size = header.bone_count as usize * matrix_size;
-        let expected_size = NetherZSkeletonHeader::SIZE + matrices_size;
+        let expected_size = NetherZXSkeletonHeader::SIZE + matrices_size;
 
         if data_len < expected_size {
             warn!(
@@ -485,7 +485,7 @@ fn load_zskeleton(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len
         // Parse inverse bind matrices (column-major input, row-major output for GPU)
         let mut inverse_bind = Vec::with_capacity(header.bone_count as usize);
         for i in 0..header.bone_count as usize {
-            let offset = NetherZSkeletonHeader::SIZE + i * matrix_size;
+            let offset = NetherZXSkeletonHeader::SIZE + i * matrix_size;
             let matrix_bytes = &data[offset..offset + matrix_size];
 
             // Convert bytes to f32 array (12 floats in column-major order)

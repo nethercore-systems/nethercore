@@ -49,10 +49,10 @@ pub mod env_mode {
 
 /// Blend mode constants for environment layering
 pub mod blend_mode {
-    pub const ALPHA: u32 = 0;    // lerp(base, overlay, overlay.a)
-    pub const ADD: u32 = 1;      // base + overlay
+    pub const ALPHA: u32 = 0; // lerp(base, overlay, overlay.a)
+    pub const ADD: u32 = 1; // base + overlay
     pub const MULTIPLY: u32 = 2; // base * overlay
-    pub const SCREEN: u32 = 3;   // 1 - (1-base) * (1-overlay)
+    pub const SCREEN: u32 = 3; // 1 - (1-base) * (1-overlay)
 }
 
 impl PackedEnvironmentState {
@@ -123,8 +123,7 @@ impl PackedEnvironmentState {
         env.header = Self::make_header(env_mode::GRADIENT, env_mode::GRADIENT, blend_mode::ALPHA);
         // Blue sky defaults
         env.pack_gradient(
-            0,
-            0x3366B2FF, // zenith: darker blue
+            0, 0x3366B2FF, // zenith: darker blue
             0xB2D8F2FF, // sky_horizon: light blue
             0x8B7355FF, // ground_horizon: tan/brown
             0x4A3728FF, // nadir: dark brown
@@ -146,17 +145,17 @@ impl PackedEnvironmentState {
     pub fn pack_scatter(
         &mut self,
         offset: usize,
-        variant: u32,        // 0-3: Stars, Vertical, Horizontal, Warp
-        density: u32,        // 0-255
-        size: u32,           // 0-255
-        glow: u32,           // 0-255
-        streak_length: u32,  // 0-63
-        color_primary: u32,  // RGB8 (0xRRGGBB00)
+        variant: u32,         // 0-3: Stars, Vertical, Horizontal, Warp
+        density: u32,         // 0-255
+        size: u32,            // 0-255
+        glow: u32,            // 0-255
+        streak_length: u32,   // 0-63
+        color_primary: u32,   // RGB8 (0xRRGGBB00)
         color_secondary: u32, // RGB8 (0xRRGGBB00)
-        parallax_rate: u32,  // 0-255
-        parallax_size: u32,  // 0-255
-        phase: u32,          // 0-65535
-        layer_count: u32,    // 1-3
+        parallax_rate: u32,   // 0-255
+        parallax_size: u32,   // 0-255
+        phase: u32,           // 0-65535
+        layer_count: u32,     // 1-3
     ) {
         // data[0]: variant(2) + density(8) + size(8) + glow(8) + streak_len(6)
         self.data[offset] = (variant & 0x3)
@@ -231,14 +230,14 @@ impl PackedEnvironmentState {
     pub fn pack_silhouette(
         &mut self,
         offset: usize,
-        jaggedness: u32,     // 0-255: 0=smooth hills, 255=sharp peaks
-        layer_count: u32,    // 1-3 depth layers
-        color_near: u32,     // RGBA8 nearest silhouette
-        color_far: u32,      // RGBA8 farthest silhouette
-        sky_zenith: u32,     // RGBA8 sky behind silhouettes
-        sky_horizon: u32,    // RGBA8 horizon behind silhouettes
-        parallax_rate: u32,  // 0-255 layer separation
-        seed: u32,           // Noise seed for terrain shape
+        jaggedness: u32,    // 0-255: 0=smooth hills, 255=sharp peaks
+        layer_count: u32,   // 1-3 depth layers
+        color_near: u32,    // RGBA8 nearest silhouette
+        color_far: u32,     // RGBA8 farthest silhouette
+        sky_zenith: u32,    // RGBA8 sky behind silhouettes
+        sky_horizon: u32,   // RGBA8 horizon behind silhouettes
+        parallax_rate: u32, // 0-255 layer separation
+        seed: u32,          // Noise seed for terrain shape
     ) {
         // data[0]: jaggedness(8) + layer_count(2) + parallax_rate(8) + reserved(14)
         self.data[offset] = (jaggedness & 0xFF)
@@ -322,18 +321,18 @@ impl PackedEnvironmentState {
     pub fn pack_room(
         &mut self,
         offset: usize,
-        color_ceiling: u32,   // RGB8 (alpha byte ignored, used for viewer_x)
-        color_floor: u32,     // RGB8 (alpha byte ignored, used for viewer_y)
-        color_walls: u32,     // RGB8 (alpha byte ignored, used for viewer_z)
-        panel_size: f32,      // World units
-        panel_gap: u32,       // 0-255
+        color_ceiling: u32,    // RGB8 (alpha byte ignored, used for viewer_x)
+        color_floor: u32,      // RGB8 (alpha byte ignored, used for viewer_y)
+        color_walls: u32,      // RGB8 (alpha byte ignored, used for viewer_z)
+        panel_size: f32,       // World units
+        panel_gap: u32,        // 0-255
         light_direction: Vec3, // Normalized light direction
-        light_intensity: u32, // 0-255
-        corner_darken: u32,   // 0-255
-        room_scale: f32,      // Room size multiplier
-        viewer_x: i32,        // snorm8: -128 to 127 = -1.0 to 1.0 (8-bit precision)
-        viewer_y: i32,        // snorm8
-        viewer_z: i32,        // snorm8
+        light_intensity: u32,  // 0-255
+        corner_darken: u32,    // 0-255
+        room_scale: f32,       // Room size multiplier
+        viewer_x: i32,         // snorm8: -128 to 127 = -1.0 to 1.0 (8-bit precision)
+        viewer_y: i32,         // snorm8
+        viewer_z: i32,         // snorm8
     ) {
         // Convert viewer positions from i32 to snorm8 (clamp to -128..127, store as u8)
         let vx = ((viewer_x.clamp(-128, 127) as i8) as u8) as u32;
@@ -604,10 +603,10 @@ impl Default for PackedUnifiedShadingState {
             flags: DEFAULT_FLAGS, // uniform_alpha = 15 (opaque), other flags = 0
             lights: [PackedLight::default(); 4], // All lights disabled
             // Animation System v2 fields (default to no animation)
-            keyframe_base: 0,       // No keyframes bound
-            inverse_bind_base: 0,   // No skeleton bound (raw bone mode)
+            keyframe_base: 0,     // No keyframes bound
+            inverse_bind_base: 0, // No skeleton bound (raw bone mode)
             _pad: 0,
-            environment_index: 0,   // Index 0 = default environment
+            environment_index: 0, // Index 0 = default environment
         }
     }
 }
@@ -1370,8 +1369,7 @@ mod tests {
     fn test_environment_gradient_packing() {
         let mut env = PackedEnvironmentState::default();
         env.pack_gradient(
-            0,
-            0x3366B2FF, // zenith
+            0, 0x3366B2FF, // zenith
             0xB2D8F2FF, // sky_horizon
             0x8B7355FF, // ground_horizon
             0x4A3728FF, // nadir

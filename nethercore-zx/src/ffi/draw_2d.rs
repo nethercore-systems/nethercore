@@ -281,9 +281,6 @@ fn draw_text(
 
     let state = &mut caller.data_mut().ffi;
 
-    // Text uses dithering for transparency (same as all other quads)
-    state.blend_mode = 0; // BlendMode::None (opaque with dithering)
-
     // Text always uses nearest filtering (crisp pixels, no blurry interpolation)
     state.texture_filter = 0;
     state.update_texture_filter(false);

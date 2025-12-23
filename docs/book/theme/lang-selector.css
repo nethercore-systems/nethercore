@@ -1,0 +1,46 @@
+/* Global Language Selector - Nethercore Docs */
+
+/* Hide per-section tab buttons */
+.mdbook-tabs {
+    display: none !important;
+}
+
+/* Global dropdown container in header */
+.lang-selector {
+    display: flex;
+    align-items: center;
+    margin-right: 15px;
+}
+
+.lang-selector label {
+    color: var(--icons);
+    font-size: 0.9em;
+    margin-right: 8px;
+    white-space: nowrap;
+}
+
+.lang-selector select {
+    background: var(--bg);
+    color: var(--fg);
+    border: 1px solid var(--table-border-color);
+    border-radius: 4px;
+    padding: 5px 10px;
+    font-size: 0.9em;
+    cursor: pointer;
+    min-width: 80px;
+}
+
+.lang-selector select:hover {
+    border-color: var(--links);
+}
+
+.lang-selector select:focus {
+    outline: none;
+    border-color: var(--links);
+    box-shadow: 0 0 0 2px rgba(var(--links-rgb, 73, 149, 232), 0.2);
+}
+
+/* Adjust tab content spacing when tabs are hidden */
+.mdbook-tab-content {
+    padding-top: 0.5rem;
+}

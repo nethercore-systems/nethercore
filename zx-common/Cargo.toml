@@ -16,6 +16,7 @@ gamepad = ["nethercore-core?/gamepad"]
 nethercore-shared = { path = "../shared" }
 nethercore-core = { path = "../core", default-features = false, optional = true }
 nether-qoa = { path = "../nether-qoa" }
+nether-xm = { path = "../nether-xm" }
 
 # Vertex packing
 glam = { workspace = true }

@@ -14,7 +14,7 @@ use nethercore_core::{
     debug::DebugStat,
     wasm::WasmGameContext,
 };
-use zx_common::ZDataPack;
+use zx_common::ZXDataPack;
 
 use crate::state::{ZFFIState, ZRollbackState};
 
@@ -186,7 +186,7 @@ impl Audio for ZAudio {
 #[derive(Clone)]
 pub struct NethercoreZX {
     /// Optional datapack for ROM assets (textures, meshes, sounds)
-    data_pack: Option<Arc<ZDataPack>>,
+    data_pack: Option<Arc<ZXDataPack>>,
 }
 
 impl NethercoreZX {
@@ -196,7 +196,7 @@ impl NethercoreZX {
     }
 
     /// Create a new Nethercore ZX console instance with a datapack
-    pub fn with_datapack(data_pack: Option<Arc<ZDataPack>>) -> Self {
+    pub fn with_datapack(data_pack: Option<Arc<ZXDataPack>>) -> Self {
         Self { data_pack }
     }
 }

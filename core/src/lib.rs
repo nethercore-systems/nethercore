@@ -41,8 +41,8 @@ pub use wasm::{
 // Re-export rollback types
 pub use rollback::{
     ConnectionQuality, DEFAULT_INPUT_DELAY, DEFAULT_LOCAL_PORT, DEFAULT_ONLINE_INPUT_DELAY,
-    NethercoreConfig, GameStateSnapshot, LoadStateError, LocalSocket, LocalSocketError,
-    MAX_INPUT_DELAY, MAX_ROLLBACK_FRAMES, MAX_STATE_SIZE, NetworkInput, PlayerNetworkStats,
+    GameStateSnapshot, LoadStateError, LocalSocket, LocalSocketError, MAX_INPUT_DELAY,
+    MAX_ROLLBACK_FRAMES, MAX_STATE_SIZE, NethercoreConfig, NetworkInput, PlayerNetworkStats,
     PlayerSessionConfig, RollbackSession, RollbackStateManager, STATE_POOL_SIZE, SaveStateError,
     SessionConfig, SessionError, SessionEvent, SessionType, StatePool,
 };
@@ -57,4 +57,6 @@ pub use analysis::{AnalysisError, AnalysisResult, TextureFormatHint, analyze_was
 pub use debug::DebugStat;
 
 // Re-export capture types
-pub use capture::{CaptureSupport, SaveResult, ScreenCapture, read_capture_pixels, read_render_target_pixels};
+pub use capture::{
+    CaptureSupport, SaveResult, ScreenCapture, read_capture_pixels, read_render_target_pixels,
+};

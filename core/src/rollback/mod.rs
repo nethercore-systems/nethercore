@@ -53,8 +53,8 @@ mod state;
 
 // Re-export public types from config
 pub use config::{
-    DEFAULT_INPUT_DELAY, DEFAULT_ONLINE_INPUT_DELAY, NethercoreConfig, MAX_INPUT_DELAY,
-    MAX_ROLLBACK_FRAMES, MAX_STATE_SIZE, SessionConfig,
+    DEFAULT_INPUT_DELAY, DEFAULT_ONLINE_INPUT_DELAY, MAX_INPUT_DELAY, MAX_ROLLBACK_FRAMES,
+    MAX_STATE_SIZE, NethercoreConfig, SessionConfig,
 };
 
 // Re-export public types from player

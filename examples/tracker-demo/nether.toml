@@ -1,0 +1,29 @@
+[game]
+id = "tracker-demo"
+title = "Tracker Demo"
+author = "Nethercore Examples"
+version = "0.1.0"
+description = "XM tracker music playback demonstration"
+tags = ["audio", "music", "tracker"]
+
+# Sound samples (required for tracker instrument mapping)
+[[assets.sounds]]
+id = "kick"
+path = "assets/kick.wav"
+
+[[assets.sounds]]
+id = "snare"
+path = "assets/snare.wav"
+
+[[assets.sounds]]
+id = "hihat"
+path = "assets/hihat.wav"
+
+[[assets.sounds]]
+id = "bass"
+path = "assets/bass.wav"
+
+# Tracker module (instruments reference sounds above by name)
+[[assets.trackers]]
+id = "demo"
+path = "assets/demo.xm"

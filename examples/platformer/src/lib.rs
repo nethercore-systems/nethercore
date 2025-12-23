@@ -56,7 +56,6 @@ extern "C" {
     // Render state
     fn set_color(color: u32);
     fn depth_test(enabled: u32);
-    fn blend_mode(mode: u32);
 
     // 2D drawing
     fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
@@ -74,9 +73,6 @@ const BUTTON_START: u32 = 12;
 
 // Billboard modes
 const MODE_CYLINDRICAL_Y: u32 = 2;
-
-// Blend modes
-const BLEND_ALPHA: u32 = 1;
 
 // Game constants
 const MAX_PLAYERS: usize = 4;
@@ -400,7 +396,6 @@ pub extern "C" fn init() {
 
         // Render settings
         depth_test(1);
-        blend_mode(BLEND_ALPHA);
 
         // Load textures
         PLAYER_TEXTURE = load_texture(8, 8, PLAYER_PIXELS.as_ptr());

@@ -54,8 +54,8 @@ pub fn generate_for_console(console: &str) -> Result<()> {
     println!("Parsed {} constant modules", model.constants.len());
 
     // Generate C header
-    let c_header = generators::c::generate_c_header(&model, console)
-        .context("Failed to generate C header")?;
+    let c_header =
+        generators::c::generate_c_header(&model, console).context("Failed to generate C header")?;
 
     std::fs::write(&c_output, c_header)
         .with_context(|| format!("Failed to write C header to {}", c_output.display()))?;
@@ -85,10 +85,10 @@ pub fn validate_for_console(console: &str) -> Result<()> {
     let ffi_source = workspace_root.join(format!("include/{}.rs", console));
 
     // Parse FFI source
-    let model = parser::parse_ffi_file(&ffi_source)
-        .context("Failed to parse FFI source file")?;
+    let model = parser::parse_ffi_file(&ffi_source).context("Failed to parse FFI source file")?;
 
-    println!("✓ Rust FFI: {} functions, {} constant modules",
+    println!(
+        "✓ Rust FFI: {} functions, {} constant modules",
         model.functions.len(),
         model.constants.len()
     );
@@ -144,7 +144,10 @@ pub fn verify_with_zig(console: &str) -> Result<()> {
     let c_header = workspace_root.join(format!("include/{}.h", console));
     let zig_bindings = workspace_root.join(format!("include/{}.zig", console));
 
-    println!("Verifying {} bindings with Zig compiler...", console.to_uppercase());
+    println!(
+        "Verifying {} bindings with Zig compiler...",
+        console.to_uppercase()
+    );
 
     // Verify C header compiles with zig cc
     verify_c_header(&c_header, console)?;
@@ -193,9 +196,10 @@ void test_helpers(void) {{
     let output = Command::new("zig")
         .args([
             "cc",
-            "-c",                                     // Compile only, don't link
-            "-target", "wasm32-freestanding",        // Target WASM (these are WASM bindings)
-            "-Wno-unknown-attributes",               // Suppress import_module warnings
+            "-c", // Compile only, don't link
+            "-target",
+            "wasm32-freestanding",     // Target WASM (these are WASM bindings)
+            "-Wno-unknown-attributes", // Suppress import_module warnings
             "-Wno-incompatible-library-redeclaration", // log() conflicts with math.h
             "-I",
             workspace_root.join("include").to_str().unwrap(),
@@ -252,7 +256,8 @@ pub fn main() void {{}}
     let output = Command::new("zig")
         .args([
             "build-obj",
-            "-target", "wasm32-freestanding",
+            "-target",
+            "wasm32-freestanding",
             test_zig.to_str().unwrap(),
         ])
         .output()

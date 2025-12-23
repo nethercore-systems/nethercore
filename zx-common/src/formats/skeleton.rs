@@ -16,14 +16,14 @@
 /// NetherZSkeleton header (8 bytes)
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
-pub struct NetherZSkeletonHeader {
+pub struct NetherZXSkeletonHeader {
     /// Number of bones in the skeleton
     pub bone_count: u32,
     /// Reserved for future use (bone hierarchy, etc.)
     pub reserved: u32,
 }
 
-impl NetherZSkeletonHeader {
+impl NetherZXSkeletonHeader {
     pub const SIZE: usize = 8;
 
     pub fn new(bone_count: u32) -> Self {
@@ -62,27 +62,27 @@ mod tests {
 
     #[test]
     fn test_skeleton_header_roundtrip() {
-        let header = NetherZSkeletonHeader::new(42);
+        let header = NetherZXSkeletonHeader::new(42);
         assert_eq!(header.bone_count, 42);
         assert_eq!(header.reserved, 0);
 
         let bytes = header.to_bytes();
-        assert_eq!(bytes.len(), NetherZSkeletonHeader::SIZE);
+        assert_eq!(bytes.len(), NetherZXSkeletonHeader::SIZE);
 
-        let parsed = NetherZSkeletonHeader::from_bytes(&bytes).unwrap();
+        let parsed = NetherZXSkeletonHeader::from_bytes(&bytes).unwrap();
         assert_eq!(parsed.bone_count, header.bone_count);
         assert_eq!(parsed.reserved, header.reserved);
     }
 
     #[test]
     fn test_skeleton_header_size() {
-        assert_eq!(NetherZSkeletonHeader::SIZE, 8);
+        assert_eq!(NetherZXSkeletonHeader::SIZE, 8);
         assert_eq!(INVERSE_BIND_MATRIX_SIZE, 48);
     }
 
     #[test]
     fn test_skeleton_header_from_short_bytes() {
         let short_bytes = [0u8; 4];
-        assert!(NetherZSkeletonHeader::from_bytes(&short_bytes).is_none());
+        assert!(NetherZXSkeletonHeader::from_bytes(&short_bytes).is_none());
     }
 }

@@ -65,7 +65,12 @@ pub fn generate_rust_module(manifest: &Manifest, output_path: &Path) -> Result<(
 
     // Meshes
     for name in manifest.meshes.keys() {
-        let output_file = format!("{}/{}.{}", output_dir.display(), name, ZX_ROM_FORMAT.mesh_ext);
+        let output_file = format!(
+            "{}/{}.{}",
+            output_dir.display(),
+            name,
+            ZX_ROM_FORMAT.mesh_ext
+        );
         mesh_assets.push((name, output_file));
     }
 

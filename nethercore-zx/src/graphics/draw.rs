@@ -4,7 +4,7 @@
 //! them into GPU rendering operations.
 
 use super::ZGraphics;
-use super::render_state::{BlendMode, CullMode, TextureHandle};
+use super::render_state::{CullMode, TextureHandle};
 
 impl ZGraphics {
     /// Process all draw commands from ZFFIState and execute them
@@ -106,7 +106,6 @@ impl ZGraphics {
                     base_instance,
                     batch.instances.len() as u32,
                     batch.textures,
-                    batch.blend_mode,
                 ));
             }
 
@@ -118,9 +117,7 @@ impl ZGraphics {
             }
 
             // Create draw commands for each batch with correct base_instance
-            for &(base_instance, instance_count, textures, batch_blend_mode) in
-                &self.quad_batch_scratch
-            {
+            for &(base_instance, instance_count, textures) in &self.quad_batch_scratch {
                 // Map FFI texture handles to graphics texture handles for this batch
                 let texture_slots = [
                     texture_map
@@ -143,7 +140,6 @@ impl ZGraphics {
 
                 // Note: Quad instances contain their own shading_state_index in the instance data.
                 // BufferSource::Quad has no buffer_index - quads read transforms and shading from instance data.
-                // blend_mode comes from the batch (captured when quads were created), not current z_state
                 self.command_buffer
                     .add_command(super::command_buffer::VRPCommand::Quad {
                         base_vertex: self.unit_quad_base_vertex,
@@ -151,7 +147,6 @@ impl ZGraphics {
                         base_instance,
                         instance_count,
                         texture_slots,
-                        blend_mode: BlendMode::from_u8(batch_blend_mode),
                         depth_test: z_state.depth_test,
                         cull_mode: CullMode::from_u8(z_state.cull_mode),
                     });

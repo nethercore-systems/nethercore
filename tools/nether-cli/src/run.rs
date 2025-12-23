@@ -186,7 +186,15 @@ fn launch_p2p_test(
     };
 
     p2_cmd
-        .args(["--p2p", "--bind", "7778", "--peer", "7777", "--local-player", "1"])
+        .args([
+            "--p2p",
+            "--bind",
+            "7778",
+            "--peer",
+            "7777",
+            "--local-player",
+            "1",
+        ])
         .args(["--input-delay", &input_delay]);
 
     let mut p2_child = p2_cmd.spawn().context("Failed to spawn player 2")?;
@@ -210,7 +218,15 @@ fn launch_p2p_test(
     };
 
     p1_cmd
-        .args(["--p2p", "--bind", "7777", "--peer", "7778", "--local-player", "0"])
+        .args([
+            "--p2p",
+            "--bind",
+            "7777",
+            "--peer",
+            "7778",
+            "--local-player",
+            "0",
+        ])
         .args(["--input-delay", &input_delay]);
 
     let status = p1_cmd.status().context("Failed to run player 1")?;
@@ -259,7 +275,10 @@ fn find_nethercore_exe() -> Result<(PathBuf, Option<PathBuf>)> {
     if Command::new(&cargo_exe).arg("--version").output().is_ok() {
         // CARGO_MANIFEST_DIR points to tools/nether-cli at compile time
         let cli_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        let workspace = cli_dir.parent().and_then(|p| p.parent()).map(|p| p.to_path_buf());
+        let workspace = cli_dir
+            .parent()
+            .and_then(|p| p.parent())
+            .map(|p| p.to_path_buf());
         return Ok((PathBuf::from("cargo:run"), workspace));
     }
 

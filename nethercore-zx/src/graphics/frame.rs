@@ -10,7 +10,7 @@ use glam::Mat4;
 use super::ZGraphics;
 use super::command_buffer::{BufferSource, VRPCommand};
 use super::pipeline::PipelineKey;
-use super::render_state::{BlendMode, CullMode, RenderState, TextureHandle};
+use super::render_state::{CullMode, RenderState, TextureHandle};
 use super::vertex::VERTEX_FORMAT_COUNT;
 use zx_common::pack_vertex_data;
 
@@ -254,65 +254,43 @@ impl ZGraphics {
                         }
                     };
 
-                // Extract blend mode from command directly (now stored per-command)
-                let blend_mode = match cmd {
-                    VRPCommand::Mesh { blend_mode, .. } => *blend_mode,
-                    VRPCommand::IndexedMesh { blend_mode, .. } => *blend_mode,
-                    VRPCommand::Quad { blend_mode, .. } => *blend_mode,
-                    VRPCommand::Sky { .. } => BlendMode::None,
-                };
-
-                // Sort key: (render_mode, format, blend_mode, depth_test, cull_mode, texture_slots)
+                // Sort key: (render_mode, format, depth_test, cull_mode, texture_slots)
                 // This groups commands by pipeline first, then by textures
                 // Note: texture_filter is no longer part of pipeline state - it's in
                 // PackedUnifiedShadingState.flags for per-draw shader selection
                 let state = RenderState {
                     depth_test,
                     cull_mode,
-                    blend_mode,
                 };
 
                 // Create sort key based on pipeline type (Regular vs Quad vs Sky)
-                let (render_mode, vertex_format, blend_mode_u8, depth_test_u8, cull_mode_u8) =
-                    if is_sky {
-                        // Sky pipeline: Use lowest sort key to render first (before all geometry)
-                        (0u8, 0u8, 0u8, 0u8, 0u8)
-                    } else if is_quad {
-                        // Quad pipeline: Use special values to group separately
-                        let pipeline_key = PipelineKey::quad(&state);
-                        match pipeline_key {
-                            PipelineKey::Quad {
-                                blend_mode,
-                                depth_test,
-                            } => (255u8, 255u8, blend_mode, depth_test as u8, 0u8),
-                            _ => unreachable!(),
-                        }
-                    } else {
-                        // Regular pipeline: Use actual values
-                        let pipeline_key =
-                            PipelineKey::new(self.current_render_mode, format, &state);
-                        match pipeline_key {
-                            PipelineKey::Regular {
-                                render_mode,
-                                vertex_format,
-                                blend_mode,
-                                depth_test,
-                                cull_mode,
-                            } => (
-                                render_mode,
-                                vertex_format,
-                                blend_mode,
-                                depth_test as u8,
-                                cull_mode,
-                            ),
-                            _ => unreachable!(),
-                        }
-                    };
+                let (render_mode, vertex_format, depth_test_u8, cull_mode_u8) = if is_sky {
+                    // Sky pipeline: Use lowest sort key to render first (before all geometry)
+                    (0u8, 0u8, 0u8, 0u8)
+                } else if is_quad {
+                    // Quad pipeline: Use special values to group separately
+                    let pipeline_key = PipelineKey::quad(&state);
+                    match pipeline_key {
+                        PipelineKey::Quad { depth_test } => (255u8, 255u8, depth_test as u8, 0u8),
+                        _ => unreachable!(),
+                    }
+                } else {
+                    // Regular pipeline: Use actual values
+                    let pipeline_key = PipelineKey::new(self.current_render_mode, format, &state);
+                    match pipeline_key {
+                        PipelineKey::Regular {
+                            render_mode,
+                            vertex_format,
+                            depth_test,
+                            cull_mode,
+                        } => (render_mode, vertex_format, depth_test as u8, cull_mode),
+                        _ => unreachable!(),
+                    }
+                };
 
                 (
                     render_mode,
                     vertex_format,
-                    blend_mode_u8,
                     depth_test_u8,
                     cull_mode_u8,
                     texture_ids[0],
@@ -473,7 +451,6 @@ impl ZGraphics {
                     let first_state = RenderState {
                         depth_test,
                         cull_mode,
-                        blend_mode: BlendMode::None, // Doesn't matter for layout
                     };
                     let pipeline_entry = self.pipeline_cache.get_or_create(
                         &self.device,
@@ -531,7 +508,6 @@ impl ZGraphics {
                 let first_state = RenderState {
                     depth_test,
                     cull_mode,
-                    blend_mode: BlendMode::None, // Doesn't matter for layout
                 };
                 let pipeline_entry = self.pipeline_cache.get_or_create(
                     &self.device,
@@ -651,93 +627,69 @@ impl ZGraphics {
                 // Destructure command variant to extract common fields
                 // For Mesh/IndexedMesh: resolve FFI texture handles to TextureHandle
                 // For Quad: use texture_slots directly (already TextureHandle)
-                let (
-                    format,
-                    depth_test,
-                    cull_mode,
-                    texture_slots,
-                    buffer_source,
-                    is_quad,
-                    is_sky,
-                    cmd_blend_mode,
-                ) = match cmd {
-                    VRPCommand::Mesh {
-                        format,
-                        depth_test,
-                        cull_mode,
-                        textures,
-                        buffer_index,
-                        blend_mode,
-                        ..
-                    } => (
-                        *format,
-                        *depth_test,
-                        *cull_mode,
-                        resolve_textures(textures), // Resolve FFI handles at render time
-                        BufferSource::Immediate(*buffer_index),
-                        false,
-                        false,
-                        Some(*blend_mode),
-                    ),
-                    VRPCommand::IndexedMesh {
-                        format,
-                        depth_test,
-                        cull_mode,
-                        textures,
-                        buffer_index,
-                        blend_mode,
-                        ..
-                    } => (
-                        *format,
-                        *depth_test,
-                        *cull_mode,
-                        resolve_textures(textures), // Resolve FFI handles at render time
-                        BufferSource::Retained(*buffer_index),
-                        false,
-                        false,
-                        Some(*blend_mode),
-                    ),
-                    VRPCommand::Quad {
-                        depth_test,
-                        cull_mode,
-                        blend_mode,
-                        texture_slots,
-                        ..
-                    } => (
-                        self.unit_quad_format,
-                        *depth_test,
-                        *cull_mode,
-                        *texture_slots, // Already TextureHandle
-                        BufferSource::Quad,
-                        true,
-                        false,
-                        Some(*blend_mode),
-                    ),
-                    VRPCommand::Sky { depth_test, .. } => (
-                        self.unit_quad_format, // Sky uses unit quad mesh
-                        *depth_test,
-                        super::render_state::CullMode::None,
-                        [TextureHandle::INVALID; 4], // Default textures (unused)
-                        BufferSource::Quad,          // Sky renders as a fullscreen quad
-                        false,
-                        true,
-                        None,
-                    ),
-                };
+                let (format, depth_test, cull_mode, texture_slots, buffer_source, is_quad, is_sky) =
+                    match cmd {
+                        VRPCommand::Mesh {
+                            format,
+                            depth_test,
+                            cull_mode,
+                            textures,
+                            buffer_index,
+                            ..
+                        } => (
+                            *format,
+                            *depth_test,
+                            *cull_mode,
+                            resolve_textures(textures), // Resolve FFI handles at render time
+                            BufferSource::Immediate(*buffer_index),
+                            false,
+                            false,
+                        ),
+                        VRPCommand::IndexedMesh {
+                            format,
+                            depth_test,
+                            cull_mode,
+                            textures,
+                            buffer_index,
+                            ..
+                        } => (
+                            *format,
+                            *depth_test,
+                            *cull_mode,
+                            resolve_textures(textures), // Resolve FFI handles at render time
+                            BufferSource::Retained(*buffer_index),
+                            false,
+                            false,
+                        ),
+                        VRPCommand::Quad {
+                            depth_test,
+                            cull_mode,
+                            texture_slots,
+                            ..
+                        } => (
+                            self.unit_quad_format,
+                            *depth_test,
+                            *cull_mode,
+                            *texture_slots, // Already TextureHandle
+                            BufferSource::Quad,
+                            true,
+                            false,
+                        ),
+                        VRPCommand::Sky { depth_test, .. } => (
+                            self.unit_quad_format, // Sky uses unit quad mesh
+                            *depth_test,
+                            super::render_state::CullMode::None,
+                            [TextureHandle::INVALID; 4], // Default textures (unused)
+                            BufferSource::Quad,          // Sky renders as a fullscreen quad
+                            false,
+                            true,
+                        ),
+                    };
 
-                // Blend mode is now stored per-command for all variants
-                let blend_mode = if is_sky {
-                    // Sky uses default alpha blending (sky gradient blends with nothing behind)
-                    BlendMode::Alpha
-                } else {
-                    cmd_blend_mode.expect("All non-sky commands should have blend_mode")
-                };
-
-                // Create render state from command + blend mode
+                // Create render state from command
                 let state = RenderState {
                     depth_test,
                     cull_mode,
-                    blend_mode,
                 };
 
                 // Get/create pipeline - use sky/quad/regular pipeline based on command type

@@ -4,8 +4,8 @@
 
 use std::marker::PhantomData;
 
-use nethercore_shared::NETHERCORE_ZX_RAM_LIMIT;
 use ggrs::Config;
+use nethercore_shared::NETHERCORE_ZX_RAM_LIMIT;
 
 use crate::console::ConsoleInput;
 
@@ -203,9 +203,7 @@ mod tests {
 
     #[test]
     fn test_session_config_builder_chaining() {
-        let config = SessionConfig::default()
-            .with_players(3)
-            .with_input_delay(2);
+        let config = SessionConfig::default().with_players(3).with_input_delay(2);
         assert_eq!(config.num_players, 3);
         assert_eq!(config.input_delay, 2);
     }

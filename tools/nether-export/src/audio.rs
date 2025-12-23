@@ -64,7 +64,7 @@ pub fn convert_wav(input: &Path, output: &Path) -> Result<()> {
     // QOA achieves ~5:1 compression (3.2 bits/sample vs 16 bits/sample)
     let pcm_size = resampled.len() * 2;
     let qoa_frame_size = nether_qoa::encode_qoa(&resampled).len();
-    let total_size = zx_common::formats::NetherZSoundHeader::SIZE + qoa_frame_size;
+    let total_size = zx_common::formats::NetherZXSoundHeader::SIZE + qoa_frame_size;
 
     tracing::info!(
         "Converted audio: {} samples ({}Hz -> {}Hz), {} bytes ({:.1}:1 vs PCM)",

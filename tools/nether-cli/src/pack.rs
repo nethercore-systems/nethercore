@@ -11,9 +11,9 @@ use std::path::PathBuf;
 use nethercore_shared::math::BoneMatrix3x4;
 use nethercore_shared::ZX_ROM_FORMAT;
 use zx_common::{
-    vertex_stride_packed, NetherZAnimationHeader, NetherZMeshHeader, NetherZSkeletonHeader,
+    vertex_stride_packed, NetherZXAnimationHeader, NetherZXMeshHeader, NetherZXSkeletonHeader,
     PackedData, PackedKeyframes, PackedMesh, PackedSkeleton, PackedSound, PackedTexture,
-    TextureFormat, ZDataPack, ZMetadata, ZRom, INVERSE_BIND_MATRIX_SIZE,
+    PackedTracker, TextureFormat, ZMetadata, ZXDataPack, ZXRom, INVERSE_BIND_MATRIX_SIZE,
 };
 
 use crate::manifest::{AssetsSection, NetherManifest};
@@ -105,7 +105,7 @@ pub fn execute(args: PackArgs) -> Result<()> {
     };
 
     // Create ROM
-    let rom = ZRom {
+    let rom = ZXRom {
         version: ZX_ROM_FORMAT.version,
         metadata,
         code,
@@ -149,7 +149,7 @@ fn load_assets(
     project_dir: &std::path::Path,
     assets: &AssetsSection,
     texture_format: TextureFormat,
-) -> Result<ZDataPack> {
+) -> Result<ZXDataPack> {
     use rayon::prelude::*;
 
     // Load all asset types in parallel
@@ -216,6 +216,17 @@ fn load_assets(
         .collect();
     let sounds = sounds?;
 
+    // Load trackers in parallel
+    let trackers: Result<Vec<_>> = assets
+        .trackers
+        .par_iter()
+        .map(|entry| {
+            let path = project_dir.join(&entry.path);
+            load_tracker(&entry.id, &path)
+        })
+        .collect();
+    let trackers = trackers?;
+
     // Load raw data in parallel
     let data: Result<Vec<_>> = assets
         .data
@@ -251,6 +262,13 @@ fn load_assets(
     for sound in &sounds {
         println!("  Sound: {} ({:.2}s)", sound.id, sound.duration_seconds());
     }
+    for tracker in &trackers {
+        println!(
+            "  Tracker: {} ({} instruments)",
+            tracker.id,
+            tracker.sample_ids.len()
+        );
+    }
     for d in &data {
         println!("  Data: {} ({} bytes)", d.id, d.data.len());
     }
@@ -266,12 +284,13 @@ fn load_assets(
         + skeletons.len()
         + keyframes.len()
         + sounds.len()
+        + trackers.len()
         + data.len();
     if total > 0 {
         println!("  Total: {} assets", total);
     }
 
-    Ok(ZDataPack::with_assets(
+    Ok(ZXDataPack::with_assets(
         textures,
         meshes,
         skeletons,
@@ -279,6 +298,7 @@ fn load_assets(
         vec![], // fonts: TODO: add font loading when needed
         sounds,
         data,
+        trackers,
     ))
 }
 
@@ -371,8 +391,8 @@ fn load_mesh(id: &str, path: &std::path::Path) -> Result<PackedMesh> {
     let data =
         std::fs::read(path).with_context(|| format!("Failed to load mesh: {}", path.display()))?;
 
-    // Parse NetherZMesh header
-    let header = NetherZMeshHeader::from_bytes(&data)
+    // Parse NetherZXMesh header
+    let header = NetherZXMeshHeader::from_bytes(&data)
         .context("Failed to parse mesh header - file may be corrupted or wrong format")?;
 
     // Validate header
@@ -389,7 +409,7 @@ fn load_mesh(id: &str, path: &std::path::Path) -> Result<PackedMesh> {
     let index_data_size = header.index_count as usize * 2; // u16 indices
 
     // Validate data size
-    let expected_size = NetherZMeshHeader::SIZE + vertex_data_size + index_data_size;
+    let expected_size = NetherZXMeshHeader::SIZE + vertex_data_size + index_data_size;
     if data.len() < expected_size {
         anyhow::bail!(
             "Mesh data too small: {} bytes, expected {} (vertices: {}, indices: {}, format: {})",
@@ -402,7 +422,7 @@ fn load_mesh(id: &str, path: &std::path::Path) -> Result<PackedMesh> {
     }
 
     // Extract vertex and index data
-    let vertex_start = NetherZMeshHeader::SIZE;
+    let vertex_start = NetherZXMeshHeader::SIZE;
     let vertex_end = vertex_start + vertex_data_size;
     let index_end = vertex_end + index_data_size;
 
@@ -434,7 +454,7 @@ fn load_keyframes(id: &str, path: &std::path::Path) -> Result<PackedKeyframes> {
         .with_context(|| format!("Failed to load keyframes: {}", path.display()))?;
 
     // Parse header
-    let header = NetherZAnimationHeader::from_bytes(&data)
+    let header = NetherZXAnimationHeader::from_bytes(&data)
         .context("Failed to parse keyframes header - file may be corrupted or wrong format")?;
 
     // Copy values from packed struct to avoid alignment issues
@@ -466,7 +486,7 @@ fn load_keyframes(id: &str, path: &std::path::Path) -> Result<PackedKeyframes> {
     }
 
     // Extract frame data (skip header)
-    let frame_data = data[NetherZAnimationHeader::SIZE..expected_size].to_vec();
+    let frame_data = data[NetherZXAnimationHeader::SIZE..expected_size].to_vec();
 
     Ok(PackedKeyframes {
         id: id.to_string(),
@@ -537,6 +557,29 @@ fn load_data(id: &str, path: &std::path::Path) -> Result<PackedData> {
     })
 }
 
+/// Load a tracker module from XM file
+///
+/// Parses the XM file, extracts instrument names for sample mapping,
+/// and strips embedded sample data (samples are loaded separately via sounds).
+fn load_tracker(id: &str, path: &std::path::Path) -> Result<PackedTracker> {
+    let data = std::fs::read(path)
+        .with_context(|| format!("Failed to load tracker: {}", path.display()))?;
+
+    // Get instrument names from XM file (for mapping to sounds)
+    let sample_ids = nether_xm::get_instrument_names(&data)
+        .with_context(|| format!("Failed to parse tracker instruments: {}", path.display()))?;
+
+    // Strip sample data from XM (keep only patterns/metadata)
+    let pattern_data = nether_xm::strip_xm_samples(&data)
+        .with_context(|| format!("Failed to strip tracker samples: {}", path.display()))?;
+
+    Ok(PackedTracker {
+        id: id.to_string(),
+        pattern_data,
+        sample_ids,
+    })
+}
+
 /// Load a skeleton from .nczxskel file
 ///
 /// File format:
@@ -547,7 +590,7 @@ fn load_skeleton(id: &str, path: &std::path::Path) -> Result<PackedSkeleton> {
         .with_context(|| format!("Failed to load skeleton: {}", path.display()))?;
 
     // Parse header
-    let header = NetherZSkeletonHeader::from_bytes(&data)
+    let header = NetherZXSkeletonHeader::from_bytes(&data)
         .context("Failed to parse skeleton header - file may be corrupted or wrong format")?;
 
     let bone_count = header.bone_count;
@@ -566,7 +609,7 @@ fn load_skeleton(id: &str, path: &std::path::Path) -> Result<PackedSkeleton> {
 
     // Validate data size
     let expected_size =
-        NetherZSkeletonHeader::SIZE + (bone_count as usize * INVERSE_BIND_MATRIX_SIZE);
+        NetherZXSkeletonHeader::SIZE + (bone_count as usize * INVERSE_BIND_MATRIX_SIZE);
     if data.len() < expected_size {
         anyhow::bail!(
             "Skeleton data too small: {} bytes, expected {} (bones: {})",
@@ -577,7 +620,7 @@ fn load_skeleton(id: &str, path: &std::path::Path) -> Result<PackedSkeleton> {
     }
 
     // Extract inverse bind matrices
-    let matrix_data = &data[NetherZSkeletonHeader::SIZE..expected_size];
+    let matrix_data = &data[NetherZXSkeletonHeader::SIZE..expected_size];
     let mut inverse_bind_matrices = Vec::with_capacity(bone_count as usize);
 
     for i in 0..bone_count as usize {
@@ -826,10 +869,10 @@ version = "1.0.0"
         let dir = tempdir().unwrap();
         let mesh_path = dir.path().join("test.nczxmesh");
 
-        // Create a minimal NetherZMesh file
+        // Create a minimal NetherZXMesh file
         // Format 0 = position only (8 bytes per vertex)
         // 3 vertices, 3 indices (a triangle)
-        let header = NetherZMeshHeader::new(3, 3, 0);
+        let header = NetherZXMeshHeader::new(3, 3, 0);
         let mut mesh_data = header.to_bytes().to_vec();
 
         // Add vertex data (3 vertices * 8 bytes = 24 bytes)
@@ -864,7 +907,7 @@ version = "1.0.0"
         // Format 3 = position (8) + UV (4) + color (4) = 16 bytes per vertex
         let format = FORMAT_UV | FORMAT_COLOR;
 
-        let header = NetherZMeshHeader::new(4, 6, format);
+        let header = NetherZXMeshHeader::new(4, 6, format);
         let mut mesh_data = header.to_bytes().to_vec();
 
         // Add vertex data (4 vertices * 16 bytes = 64 bytes)
@@ -904,7 +947,7 @@ version = "1.0.0"
         let mesh_path = dir.path().join("truncated.nczxmesh");
 
         // Valid header but truncated vertex data
-        let header = NetherZMeshHeader::new(10, 0, 0); // Claims 10 vertices (80 bytes needed)
+        let header = NetherZXMeshHeader::new(10, 0, 0); // Claims 10 vertices (80 bytes needed)
         let mut mesh_data = header.to_bytes().to_vec();
         mesh_data.extend_from_slice(&[0u8; 20]); // Only 20 bytes provided
 
@@ -949,7 +992,7 @@ version = "1.0.0"
 
         // Create a minimal .nczxanim file
         // 2 bones, 3 frames (2 * 3 * 16 = 96 bytes of data)
-        let header = NetherZAnimationHeader::new(2, 3);
+        let header = NetherZXAnimationHeader::new(2, 3);
         let mut anim_data = header.to_bytes().to_vec();
 
         // Add frame data (96 bytes)
@@ -990,7 +1033,7 @@ version = "1.0.0"
         let trunc_path = dir.path().join("truncated.nczxanim");
 
         // Valid header but truncated data
-        let header = NetherZAnimationHeader::new(5, 10); // 5 bones, 10 frames = 800 bytes
+        let header = NetherZXAnimationHeader::new(5, 10); // 5 bones, 10 frames = 800 bytes
         let mut data = header.to_bytes().to_vec();
         data.extend_from_slice(&[0u8; 100]); // Only 100 bytes instead of 800
 

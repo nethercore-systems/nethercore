@@ -37,7 +37,7 @@ use anyhow::{Context, Result};
 use nethercore_core::library::{LocalGame, RomLoaderRegistry};
 use nethercore_shared::ZX_ROM_FORMAT;
 
-use zx_common::ZRomLoader;
+use zx_common::ZXRomLoader;
 
 /// Multiplayer connection mode
 #[derive(Debug, Clone)]
@@ -418,7 +418,7 @@ pub fn run_game_from_path_with_options(path: &Path, options: &PlayerOptions) -> 
 /// - `.nczx` files for Nethercore ZX
 pub fn create_rom_loader_registry() -> RomLoaderRegistry {
     let mut registry = RomLoaderRegistry::new();
-    registry.register(Box::new(ZRomLoader));
+    registry.register(Box::new(ZXRomLoader));
     // Future: registry.register(Box::new(ChromaRomLoader));
     registry
 }

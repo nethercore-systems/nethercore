@@ -30,7 +30,6 @@ pub struct Game {
     pub console_type: String,
 
     // === Storage Keys (single source of truth, not exposed in API) ===
-
     /// R2/storage key for the icon image (e.g., "games/{id}/icon.png").
     /// This is the authoritative data; icon_url is derived from this.
     #[serde(skip_serializing, default)]
@@ -41,7 +40,6 @@ pub struct Game {
     pub screenshot_keys: Vec<String>,
 
     // === Derived URLs (populated before API response) ===
-
     /// URL to the game's icon image (64x64 PNG recommended).
     /// Derived from icon_key before API serialization.
     #[serde(skip_serializing_if = "Option::is_none", skip_deserializing, default)]
@@ -52,7 +50,6 @@ pub struct Game {
     pub screenshots: Vec<String>,
 
     // === Other fields ===
-
     /// ROM file size in bytes (for download progress).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rom_size: Option<i64>,
@@ -67,6 +64,22 @@ pub struct Game {
     pub created_at: String,
     /// ISO 8601 timestamp when the game was last updated.
     pub updated_at: String,
+    /// Content rating: "E" (Everyone), "T" (Teen), "M" (Mature 17+).
+    #[serde(default = "default_content_rating")]
+    pub content_rating: String,
+    /// Content descriptor tags (e.g., "Violence", "Language").
+    #[serde(default)]
+    pub content_tags: Vec<String>,
+    /// Count of thumbs up ratings.
+    #[serde(default)]
+    pub thumbs_up: i64,
+    /// Count of thumbs down ratings.
+    #[serde(default)]
+    pub thumbs_down: i64,
+}
+
+fn default_content_rating() -> String {
+    "E".to_string()
 }
 
 /// Paginated list of games from the API.

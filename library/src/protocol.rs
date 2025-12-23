@@ -76,8 +76,8 @@ fn get_exe_path() -> Result<PathBuf> {
 #[cfg(target_os = "windows")]
 mod windows {
     use super::*;
-    use winreg::enums::*;
     use winreg::RegKey;
+    use winreg::enums::*;
 
     pub fn is_registered() -> bool {
         let hkcu = RegKey::predef(HKEY_CURRENT_USER);

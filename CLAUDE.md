@@ -247,7 +247,7 @@ The core handles GGRS serialization of whatever input type the console uses.
 - `/core` — `nethercore-core` crate with Console trait, ConsoleRunner, WASM runtime, GGRS integration, debug inspection
 - `/library` — `nethercore-library` binary (default workspace member) with library UI, console registry
 - `/nethercore-zx` — `nethercore-zx` library implementing Console for 5th generation aesthetic
-- `/z-common` — Z-specific formats, ZRomLoader implementing RomLoader trait
+- `/z-common` — Z-specific formats, ZXRomLoader implementing RomLoader trait
 - `/shared` — `nethercore-shared` crate with API types, cart formats, asset formats
 - `/tools/nether-cli` — Build, pack, and run games (`nether build`, `nether pack`, `nether run`)
 - `/tools/nether-export` — Convert assets to Nethercore formats (meshes, textures, audio, skeletons, animations)

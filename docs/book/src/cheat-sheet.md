@@ -276,8 +276,7 @@ push_scale_uniform(s: f32) void
 ```rust
 set_color(0xRRGGBBAA)                  // Tint color
 depth_test(enabled)                    // 0=off, 1=on
-cull_mode(mode)                        // 0=none, 1=back, 2=front
-blend_mode(mode)                       // 0=none, 1=alpha, 2=add, 3=mul
+cull_mode(mode)                        // 0=none (default), 1=back, 2=front
 texture_filter(filter)                 // 0=nearest, 1=linear
 uniform_alpha(level)                   // 0-15 dither alpha
 dither_offset(x, y)                    // 0-3 pattern offset
@@ -288,8 +287,7 @@ dither_offset(x, y)                    // 0-3 pattern offset
 ```c
 void set_color(uint32_t color);        // Tint color
 void depth_test(uint32_t enabled);     // 0=off, 1=on
-void cull_mode(uint32_t mode);         // NCZX_CULL_NONE/BACK/FRONT
-void blend_mode(uint32_t mode);        // NCZX_BLEND_NONE/ALPHA/ADDITIVE/MULTIPLY
+void cull_mode(uint32_t mode);         // NCZX_CULL_NONE (default)/BACK/FRONT
 void texture_filter(uint32_t filter);  // 0=nearest, 1=linear
 void uniform_alpha(uint32_t level);    // 0-15 dither alpha
 void dither_offset(uint32_t x, uint32_t y);  // 0-3 pattern offset
@@ -300,8 +298,7 @@ void dither_offset(uint32_t x, uint32_t y);  // 0-3 pattern offset
 ```zig
 set_color(color: u32) void             // Tint color
 depth_test(enabled: u32) void          // 0=off, 1=on
-cull_mode(mode: u32) void              // CullMode.none/back/front
-blend_mode(mode: u32) void             // BlendMode.none/alpha/additive/multiply
+cull_mode(mode: u32) void              // CullMode.none (default)/back/front
 texture_filter(filter: u32) void       // 0=nearest, 1=linear
 uniform_alpha(level: u32) void         // 0-15 dither alpha
 dither_offset(x: u32, y: u32) void     // 0-3 pattern offset
@@ -894,6 +891,94 @@ music_set_volume(volume: f32) void
 
 ---
 
+## Tracker Music (XM)
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+// Loading (init-only)
+rom_tracker(id_ptr, id_len) -> u32     // Load from ROM by ID
+load_tracker(data_ptr, len) -> u32     // Load from raw XM data
+
+// Playback
+tracker_play(handle, volume, loop)     // Start playing (stops PCM music)
+tracker_stop()                          // Stop playback
+tracker_pause(paused)                   // 0=resume, 1=pause
+tracker_set_volume(volume)              // 0.0-1.0
+tracker_is_playing() -> u32             // 1 if playing
+
+// Position (for dynamic music)
+tracker_jump(order, row)                // Jump to position
+tracker_position() -> u32               // (order << 16) | row
+tracker_length(handle) -> u32           // Number of orders
+tracker_set_speed(speed)                // Ticks per row (1-31)
+tracker_set_tempo(bpm)                  // BPM (32-255)
+
+// Query
+tracker_info(handle) -> u32             // (channels<<24)|(patterns<<16)|(instruments<<8)|length
+tracker_name(handle, out_ptr, max) -> u32
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+// Loading (init-only)
+uint32_t rom_tracker(uint32_t id_ptr, uint32_t id_len);  // Load from ROM
+uint32_t load_tracker(const uint8_t* data, uint32_t len);
+
+// Playback
+void tracker_play(uint32_t handle, float volume, uint32_t loop);
+void tracker_stop(void);
+void tracker_pause(uint32_t paused);
+void tracker_set_volume(float volume);
+uint32_t tracker_is_playing(void);
+
+// Position
+void tracker_jump(uint32_t order, uint32_t row);
+uint32_t tracker_position(void);
+uint32_t tracker_length(uint32_t handle);
+void tracker_set_speed(uint32_t speed);
+void tracker_set_tempo(uint32_t bpm);
+
+// Query
+uint32_t tracker_info(uint32_t handle);
+uint32_t tracker_name(uint32_t handle, uint8_t* out, uint32_t max);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+// Loading (init-only)
+rom_tracker(id_ptr: u32, id_len: u32) u32
+load_tracker(data: [*]const u8, len: u32) u32
+
+// Playback
+tracker_play(handle: u32, volume: f32, loop: u32) void
+tracker_stop() void
+tracker_pause(paused: u32) void
+tracker_set_volume(volume: f32) void
+tracker_is_playing() u32
+
+// Position
+tracker_jump(order: u32, row: u32) void
+tracker_position() u32
+tracker_length(handle: u32) u32
+tracker_set_speed(speed: u32) void
+tracker_set_tempo(bpm: u32) void
+
+// Query
+tracker_info(handle: u32) u32
+tracker_name(handle: u32, out: [*]u8, max: u32) u32
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+**Note:** Tracker music (XM format) is mutually exclusive with PCM music. Load samples via `rom_sound()` before `rom_tracker()` to map instruments.
+
+---
+
 ## Save Data
 
 {{#tabs global="lang"}}
@@ -938,6 +1023,7 @@ rom_skeleton(id_ptr, id_len) -> u32
 rom_font(id_ptr, id_len) -> u32
 rom_sound(id_ptr, id_len) -> u32
 rom_keyframes(id_ptr, id_len) -> u32
+rom_tracker(id_ptr, id_len) -> u32     // Load XM tracker
 rom_data_len(id_ptr, id_len) -> u32
 rom_data(id_ptr, id_len, out_ptr, max_len) -> u32
 ```
@@ -951,6 +1037,7 @@ uint32_t rom_skeleton(uint32_t id_ptr, uint32_t id_len);
 uint32_t rom_font(uint32_t id_ptr, uint32_t id_len);
 uint32_t rom_sound(uint32_t id_ptr, uint32_t id_len);
 uint32_t rom_keyframes(uint32_t id_ptr, uint32_t id_len);
+uint32_t rom_tracker(uint32_t id_ptr, uint32_t id_len);  // Load XM tracker
 uint32_t rom_data_len(uint32_t id_ptr, uint32_t id_len);
 uint32_t rom_data(uint32_t id_ptr, uint32_t id_len, uint32_t out_ptr, uint32_t max_len);
 // Helpers: NCZX_ROM_TEXTURE("id"), NCZX_ROM_MESH("id"), etc.
@@ -965,6 +1052,7 @@ rom_skeleton(id_ptr: u32, id_len: u32) u32
 rom_font(id_ptr: u32, id_len: u32) u32
 rom_sound(id_ptr: u32, id_len: u32) u32
 rom_keyframes(id_ptr: u32, id_len: u32) u32
+rom_tracker(id_ptr: u32, id_len: u32) u32  // Load XM tracker
 rom_data_len(id_ptr: u32, id_len: u32) u32
 rom_data(id_ptr: u32, id_len: u32, out_ptr: u32, max_len: u32) u32
 ```

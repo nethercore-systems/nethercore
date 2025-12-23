@@ -32,11 +32,11 @@ Nethercore uses console-specific binary ROM formats for game distribution. Each 
 ```
 game.nczx (binary file, max 12MB)
 ├── Magic bytes: "NCZX" (4 bytes)
-└── ZRom (bitcode-encoded):
+└── ZXRom (bitcode-encoded):
     ├── version: u32
     ├── metadata: ZMetadata
     ├── code: Vec<u8> (WASM bytes, max 4MB)
-    ├── data_pack: Option<ZDataPack> (bundled assets)
+    ├── data_pack: Option<ZXDataPack> (bundled assets)
     ├── thumbnail: Option<Vec<u8>> (256x256 PNG)
     └── screenshots: Vec<Vec<u8>> (PNG, max 5)
 ```
@@ -47,10 +47,10 @@ All Nethercore ZX ROM files start with the magic bytes: `NCZX` (hex: `4E 43 5A 5
 
 This allows tools to quickly identify the ROM type and reject invalid files.
 
-### ZRom Structure
+### ZXRom Structure
 
 ```rust
-pub struct ZRom {
+pub struct ZXRom {
     /// ROM format version (currently 1)
     pub version: u32,
 
@@ -61,7 +61,7 @@ pub struct ZRom {
     pub code: Vec<u8>,
 
     /// Optional bundled assets (textures, meshes, sounds, etc.)
-    pub data_pack: Option<ZDataPack>,
+    pub data_pack: Option<ZXDataPack>,
 
     /// Optional thumbnail (256x256 PNG, extracted locally during installation)
     pub thumbnail: Option<Vec<u8>>,
@@ -123,14 +123,14 @@ pub struct ZMetadata {
 
 ---
 
-## ZDataPack (Bundled Assets)
+## ZXDataPack (Bundled Assets)
 
 Games can bundle pre-processed assets directly in the ROM for efficient loading.
 
 ### Structure
 
 ```rust
-pub struct ZDataPack {
+pub struct ZXDataPack {
     pub textures: Vec<PackedTexture>,      // GPU-ready textures
     pub meshes: Vec<PackedMesh>,           // GPU-ready meshes
     pub skeletons: Vec<PackedSkeleton>,    // Inverse bind matrices
@@ -483,8 +483,8 @@ Large game with assets:
 | Component | Location |
 |-----------|----------|
 | ROM Format Constants | `shared/src/rom_format.rs` |
-| ZRom Struct | `zx-common/src/formats/z_rom.rs` |
-| ZDataPack Struct | `zx-common/src/formats/z_data_pack.rs` |
+| ZXRom Struct | `zx-common/src/formats/z_rom.rs` |
+| ZXDataPack Struct | `zx-common/src/formats/z_data_pack.rs` |
 | Mesh Format | `zx-common/src/formats/mesh.rs` |
 | Skeleton Format | `zx-common/src/formats/skeleton.rs` |
 | Animation Format | `zx-common/src/formats/animation.rs` |

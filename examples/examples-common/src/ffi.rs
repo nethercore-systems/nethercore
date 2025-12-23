@@ -71,7 +71,6 @@ extern "C" {
     pub fn set_color(color: u32);
     pub fn depth_test(enabled: u32);
     pub fn cull_mode(mode: u32);
-    pub fn blend_mode(mode: u32);
 
     // ========================================================================
     // Environment Rendering

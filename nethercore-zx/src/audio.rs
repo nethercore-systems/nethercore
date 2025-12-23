@@ -22,7 +22,8 @@ use ringbuf::{
 };
 use tracing::{debug, error, info, warn};
 
-use crate::state::{AudioPlaybackState, ChannelState};
+use crate::state::{AudioPlaybackState, ChannelState, TrackerState, tracker_flags};
+use crate::tracker::TrackerEngine;
 
 /// Audio sample rate for output (44.1 kHz - native for most hardware)
 pub const OUTPUT_SAMPLE_RATE: u32 = 44_100;
@@ -189,6 +190,40 @@ pub fn generate_audio_frame(
     sample_rate: u32,
     output: &mut Vec<f32>,
 ) {
+    generate_audio_frame_with_tracker(
+        playback_state,
+        &TrackerState::default(),
+        &mut TrackerEngine::new(),
+        sounds,
+        tick_rate,
+        sample_rate,
+        output,
+    );
+}
+
+/// Generate one frame of audio samples with tracker support
+///
+/// This is called once per confirmed game frame (not during rollback).
+/// It reads the current audio state, mixes all active channels including
+/// tracker output, and outputs interleaved stereo samples.
+///
+/// # Arguments
+/// * `playback_state` - Current audio playback state (will be mutated to advance playheads)
+/// * `tracker_state` - Current tracker state (for position, volume, flags)
+/// * `tracker_engine` - Tracker engine instance (for channel state and module data)
+/// * `sounds` - Loaded sound data (indexed by sound handle)
+/// * `tick_rate` - Game tick rate (e.g., 60 for 60fps)
+/// * `sample_rate` - Output sample rate (e.g., 44100)
+/// * `output` - Output buffer for interleaved stereo samples
+pub fn generate_audio_frame_with_tracker(
+    playback_state: &mut AudioPlaybackState,
+    tracker_state: &TrackerState,
+    tracker_engine: &mut TrackerEngine,
+    sounds: &[Option<Sound>],
+    tick_rate: u32,
+    sample_rate: u32,
+    output: &mut Vec<f32>,
+) {
     // Calculate how many output samples per frame
     // At 60fps with 44100Hz: 44100/60 = 735 samples per frame
     let samples_per_frame = sample_rate / tick_rate;
@@ -200,12 +235,22 @@ pub fn generate_audio_frame(
     // Calculate resampling ratio (source is 22050Hz, output is usually 44100Hz)
     let resample_ratio = SOURCE_SAMPLE_RATE as f32 / sample_rate as f32;
 
+    // Check if tracker is active (mutually exclusive with PCM music)
+    let tracker_active = tracker_state.handle != 0
+        && (tracker_state.flags & tracker_flags::PLAYING) != 0
+        && (tracker_state.flags & tracker_flags::PAUSED) == 0;
+
+    // Sync tracker engine to state at start of frame
+    if tracker_active {
+        tracker_engine.sync_to_state(tracker_state, sounds);
+    }
+
     // Generate each output sample
     for _ in 0..samples_per_frame {
         let mut left = 0.0f32;
         let mut right = 0.0f32;
 
-        // Mix all active channels
+        // Mix all active SFX channels
         for channel in playback_state.channels.iter_mut() {
             if channel.sound == 0 {
                 continue; // Channel is silent
@@ -218,11 +263,17 @@ pub fn generate_audio_frame(
             }
         }
 
-        // Mix music channel
-        if playback_state.music.sound != 0
+        // Mix tracker OR PCM music (mutually exclusive)
+        if tracker_active {
+            // Mix tracker output
+            let (tracker_l, tracker_r) =
+                tracker_engine.render_sample(tracker_state, sounds, sample_rate);
+            left += tracker_l;
+            right += tracker_r;
+        } else if playback_state.music.sound != 0
             && let Some(sample) = mix_channel(&mut playback_state.music, sounds, resample_ratio)
         {
-            // Music is centered (no pan)
+            // Mix PCM music (centered, no pan)
             let vol = playback_state.music.volume;
             left += sample * vol;
             right += sample * vol;

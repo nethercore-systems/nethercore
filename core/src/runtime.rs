@@ -364,9 +364,6 @@ mod tests {
 
     #[test]
     fn test_runtime_console_access() {
-        let console = TestConsole;
-        let runtime = Runtime::new(console);
-
         assert_eq!(TestConsole::specs().name, "Test Console");
     }
 
@@ -451,8 +448,10 @@ mod tests {
         let console = TestConsole;
         let mut runtime = Runtime::<TestConsole>::new(console);
 
-        let session =
-            crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, NETHERCORE_ZX_RAM_LIMIT);
+        let session = crate::rollback::RollbackSession::<TestInput, ()>::new_local(
+            2,
+            NETHERCORE_ZX_RAM_LIMIT,
+        );
         runtime.set_session(session);
 
         assert!(runtime.session().is_some());
@@ -464,8 +463,10 @@ mod tests {
         let console = TestConsole;
         let mut runtime = Runtime::<TestConsole>::new(console);
 
-        let session =
-            crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, NETHERCORE_ZX_RAM_LIMIT);
+        let session = crate::rollback::RollbackSession::<TestInput, ()>::new_local(
+            2,
+            NETHERCORE_ZX_RAM_LIMIT,
+        );
         runtime.set_session(session);
 
         // Verify mutable access
@@ -569,8 +570,10 @@ mod tests {
         let console = TestConsole;
         let mut runtime = Runtime::<TestConsole>::new(console);
 
-        let session =
-            crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, NETHERCORE_ZX_RAM_LIMIT);
+        let session = crate::rollback::RollbackSession::<TestInput, ()>::new_local(
+            2,
+            NETHERCORE_ZX_RAM_LIMIT,
+        );
         runtime.set_session(session);
 
         // Local sessions don't use GGRS input, so this should succeed
@@ -603,8 +606,10 @@ mod tests {
         let console = TestConsole;
         let mut runtime = Runtime::<TestConsole>::new(console);
 
-        let session =
-            crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, NETHERCORE_ZX_RAM_LIMIT);
+        let session = crate::rollback::RollbackSession::<TestInput, ()>::new_local(
+            2,
+            NETHERCORE_ZX_RAM_LIMIT,
+        );
         runtime.set_session(session);
 
         // Local sessions don't produce events
@@ -630,8 +635,10 @@ mod tests {
         let console = TestConsole;
         let mut runtime = Runtime::<TestConsole>::new(console);
 
-        let session =
-            crate::rollback::RollbackSession::<TestInput, ()>::new_local(2, NETHERCORE_ZX_RAM_LIMIT);
+        let session = crate::rollback::RollbackSession::<TestInput, ()>::new_local(
+            2,
+            NETHERCORE_ZX_RAM_LIMIT,
+        );
         runtime.set_session(session);
 
         // Should not panic (no-op for local sessions)

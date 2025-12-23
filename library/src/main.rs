@@ -363,19 +363,25 @@ mod tests {
     #[test]
     fn test_parse_play_url() {
         let action = parse_nethercore_url("play/paddle-demo");
-        assert!(matches!(action, Some(DeepLinkAction::Play { game_id }) if game_id == "paddle-demo"));
+        assert!(
+            matches!(action, Some(DeepLinkAction::Play { game_id }) if game_id == "paddle-demo")
+        );
     }
 
     #[test]
     fn test_parse_play_url_with_trailing_slash() {
         let action = parse_nethercore_url("play/paddle-demo/");
-        assert!(matches!(action, Some(DeepLinkAction::Play { game_id }) if game_id == "paddle-demo"));
+        assert!(
+            matches!(action, Some(DeepLinkAction::Play { game_id }) if game_id == "paddle-demo")
+        );
     }
 
     #[test]
     fn test_parse_download_url() {
         let action = parse_nethercore_url("download/my-game");
-        assert!(matches!(action, Some(DeepLinkAction::Download { game_id }) if game_id == "my-game"));
+        assert!(
+            matches!(action, Some(DeepLinkAction::Download { game_id }) if game_id == "my-game")
+        );
     }
 
     #[test]
@@ -427,7 +433,10 @@ mod tests {
 
     #[test]
     fn test_parse_query_param() {
-        assert_eq!(parse_query_param::<u16>("port=8080&host=foo", "port"), Some(8080));
+        assert_eq!(
+            parse_query_param::<u16>("port=8080&host=foo", "port"),
+            Some(8080)
+        );
         assert_eq!(parse_query_param::<usize>("players=4", "players"), Some(4));
         assert_eq!(parse_query_param::<u16>("foo=bar", "port"), None);
     }

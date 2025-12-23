@@ -7,7 +7,7 @@ mod generate_test_assets;
 use std::path::Path;
 use tempfile::tempdir;
 
-/// Test OBJ -> NetherZMesh conversion
+/// Test OBJ -> NetherZXMesh conversion
 #[test]
 fn test_obj_to_nethermesh() {
     let dir = tempdir().expect("Failed to create temp dir");
@@ -18,7 +18,7 @@ fn test_obj_to_nethermesh() {
     generate_test_assets::generate_cube_obj(&obj_path).expect("Failed to generate OBJ");
     assert!(obj_path.exists(), "OBJ file should exist");
 
-    // Convert to NetherZMesh
+    // Convert to NetherZXMesh
     nether_export_convert_obj(&obj_path, &mesh_path);
     assert!(mesh_path.exists(), "NetherMesh file should exist");
 
@@ -90,16 +90,16 @@ fn nether_export_convert_texture(input: &Path, output: &Path) {
     assert!(status.success(), "nether-export texture command failed");
 }
 
-// Verify NetherZMesh header structure
+// Verify NetherZXMesh header structure
 fn verify_nether_z_mesh(data: &[u8]) {
-    use zx_common::NetherZMeshHeader;
+    use zx_common::NetherZXMeshHeader;
 
     assert!(
-        data.len() >= NetherZMeshHeader::SIZE,
+        data.len() >= NetherZXMeshHeader::SIZE,
         "Mesh data too small for header"
     );
 
-    let header = NetherZMeshHeader::from_bytes(data).expect("Failed to parse mesh header");
+    let header = NetherZXMeshHeader::from_bytes(data).expect("Failed to parse mesh header");
 
     assert!(header.vertex_count > 0, "Should have vertices");
     assert!(header.format <= 15, "Format should be valid (0-15)");
@@ -108,7 +108,7 @@ fn verify_nether_z_mesh(data: &[u8]) {
     let stride = calculate_stride(header.format);
     let vertex_size = header.vertex_count as usize * stride;
     let index_size = header.index_count as usize * 2;
-    let expected_size = NetherZMeshHeader::SIZE + vertex_size + index_size;
+    let expected_size = NetherZXMeshHeader::SIZE + vertex_size + index_size;
 
     assert!(
         data.len() >= expected_size,
@@ -128,20 +128,20 @@ fn verify_nether_z_mesh(data: &[u8]) {
 
 // Verify NetherZTexture header structure
 fn verify_nether_z_texture(data: &[u8], expected_width: u16, expected_height: u16) {
-    use zx_common::NetherZTextureHeader;
+    use zx_common::NetherZXTextureHeader;
 
     assert!(
-        data.len() >= NetherZTextureHeader::SIZE,
+        data.len() >= NetherZXTextureHeader::SIZE,
         "Texture data too small for header"
     );
 
-    let header = NetherZTextureHeader::from_bytes(data).expect("Failed to parse texture header");
+    let header = NetherZXTextureHeader::from_bytes(data).expect("Failed to parse texture header");
 
     assert_eq!(header.width, expected_width, "Width mismatch");
     assert_eq!(header.height, expected_height, "Height mismatch");
 
     let pixel_size = header.rgba8_size();
-    let expected_total = NetherZTextureHeader::SIZE + pixel_size;
+    let expected_total = NetherZXTextureHeader::SIZE + pixel_size;
 
     assert_eq!(
         data.len(),

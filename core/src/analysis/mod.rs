@@ -221,10 +221,7 @@ pub fn analyze_wasm(wasm_bytes: &[u8]) -> Result<AnalysisResult, AnalysisError> 
 
 /// Check if a function name is a config function we care about
 fn is_config_function(name: &str) -> bool {
-    matches!(
-        name,
-        "render_mode" | "set_tick_rate" | "set_clear_color"
-    )
+    matches!(name, "render_mode" | "set_tick_rate" | "set_clear_color")
 }
 
 /// Validate analysis result

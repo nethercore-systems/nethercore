@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use clap::Args;
 use nethercore_core::library::RomLoader;
 use std::path::PathBuf;
-use zx_common::ZRomLoader;
+use zx_common::ZXRomLoader;
 
 #[derive(Debug, Args)]
 pub struct InstallArgs {
@@ -44,7 +44,7 @@ pub fn execute(args: InstallArgs) -> Result<()> {
     let game = match extension {
         "nczx" => {
             println!("Detected Nethercore ZX ROM (.nczx)");
-            let loader = ZRomLoader;
+            let loader = ZXRomLoader;
             loader
                 .install(rom_path, &provider)
                 .context("Failed to install Nethercore ZX ROM")?

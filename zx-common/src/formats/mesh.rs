@@ -1,4 +1,4 @@
-//! NetherZMesh binary format (.nczmesh)
+//! NetherZXMesh binary format (.nczmesh)
 //!
 //! ZX console GPU-ready mesh format with packed vertices.
 //! POD format - no magic bytes.
@@ -15,17 +15,17 @@
 //!
 //! For vertex format constants and stride calculation, see `z_common::packing`.
 
-/// NetherZMesh header (12 bytes)
+/// NetherZXMesh header (12 bytes)
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
-pub struct NetherZMeshHeader {
+pub struct NetherZXMeshHeader {
     pub vertex_count: u32,
     pub index_count: u32,
     pub format: u8,
     pub _padding: [u8; 3],
 }
 
-impl NetherZMeshHeader {
+impl NetherZXMeshHeader {
     pub const SIZE: usize = 12;
 
     pub fn new(vertex_count: u32, index_count: u32, format: u8) -> Self {

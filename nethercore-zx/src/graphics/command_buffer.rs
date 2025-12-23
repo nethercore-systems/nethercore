@@ -4,7 +4,7 @@
 //! for flushing to the GPU at frame end. This serves as an intermediate
 //! representation between FFI commands and GPU execution.
 
-use super::render_state::{BlendMode, CullMode, TextureHandle};
+use super::render_state::{CullMode, TextureHandle};
 use super::vertex::{VERTEX_FORMAT_COUNT, vertex_stride, vertex_stride_packed};
 
 /// Specifies which buffer the geometry data comes from
@@ -41,7 +41,6 @@ pub enum VRPCommand {
         /// FFI texture handles captured at command creation time.
         /// Resolved to TextureHandle at render time via texture_map.
         textures: [u32; 4],
-        blend_mode: BlendMode,
         depth_test: bool,
         cull_mode: CullMode,
     },
@@ -55,7 +54,6 @@ pub enum VRPCommand {
         /// FFI texture handles captured at command creation time.
         /// Resolved to TextureHandle at render time via texture_map.
         textures: [u32; 4],
-        blend_mode: BlendMode,
         depth_test: bool,
         cull_mode: CullMode,
     },
@@ -67,7 +65,6 @@ pub enum VRPCommand {
         base_instance: u32,  // Starting instance index in instance buffer
         instance_count: u32, // Number of quad instances to draw
         texture_slots: [TextureHandle; 4],
-        blend_mode: BlendMode,
         depth_test: bool,
         cull_mode: CullMode,
     },
@@ -136,7 +133,6 @@ impl VirtualRenderPass {
         vertex_data: &[f32],
         buffer_index: u32,
         textures: [u32; 4],
-        blend_mode: BlendMode,
         depth_test: bool,
         cull_mode: CullMode,
     ) {
@@ -156,7 +152,6 @@ impl VirtualRenderPass {
             base_vertex,
             buffer_index,
             textures,
-            blend_mode,
             depth_test,
             cull_mode,
         });
@@ -174,7 +169,6 @@ impl VirtualRenderPass {
         index_data: &[u16],
         buffer_index: u32,
         textures: [u32; 4],
-        blend_mode: BlendMode,
         depth_test: bool,
         cull_mode: CullMode,
     ) {
@@ -199,7 +193,6 @@ impl VirtualRenderPass {
             first_index,
             buffer_index,
             textures,
-            blend_mode,
             depth_test,
             cull_mode,
         });
@@ -219,7 +212,6 @@ impl VirtualRenderPass {
         mesh_index_offset: u64,
         buffer_index: u32,
         textures: [u32; 4],
-        blend_mode: BlendMode,
         depth_test: bool,
         cull_mode: CullMode,
     ) {
@@ -237,7 +229,6 @@ impl VirtualRenderPass {
                 first_index,
                 buffer_index,
                 textures,
-                blend_mode,
                 depth_test,
                 cull_mode,
             });
@@ -248,7 +239,6 @@ impl VirtualRenderPass {
                 base_vertex,
                 buffer_index,
                 textures,
-                blend_mode,
                 depth_test,
                 cull_mode,
             });

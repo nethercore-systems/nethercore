@@ -14,12 +14,12 @@
 /// NetherZTexture header (4 bytes)
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
-pub struct NetherZTextureHeader {
+pub struct NetherZXTextureHeader {
     pub width: u16,
     pub height: u16,
 }
 
-impl NetherZTextureHeader {
+impl NetherZXTextureHeader {
     pub const SIZE: usize = 4;
 
     pub fn new(width: u16, height: u16) -> Self {
@@ -72,7 +72,7 @@ mod tests {
 
     #[test]
     fn test_header_size() {
-        assert_eq!(NetherZTextureHeader::SIZE, 4);
+        assert_eq!(NetherZXTextureHeader::SIZE, 4);
     }
 
     #[test]
@@ -83,7 +83,7 @@ mod tests {
             0x20, 0x00, // height = 32 (little-endian u16)
         ];
 
-        let header = NetherZTextureHeader::from_bytes(&data).unwrap();
+        let header = NetherZXTextureHeader::from_bytes(&data).unwrap();
         assert_eq!(header.width, 64);
         assert_eq!(header.height, 32);
     }
@@ -92,7 +92,7 @@ mod tests {
     fn test_header_max_dimensions() {
         // Max supported: 65535×65535
         let data = [0xFF, 0xFF, 0xFF, 0xFF];
-        let header = NetherZTextureHeader::from_bytes(&data).unwrap();
+        let header = NetherZXTextureHeader::from_bytes(&data).unwrap();
 
         assert_eq!(header.width, 65535);
         assert_eq!(header.height, 65535);
@@ -100,9 +100,9 @@ mod tests {
 
     #[test]
     fn test_header_roundtrip() {
-        let header = NetherZTextureHeader::new(128, 256);
+        let header = NetherZXTextureHeader::new(128, 256);
         let bytes = header.to_bytes();
-        let parsed = NetherZTextureHeader::from_bytes(&bytes).unwrap();
+        let parsed = NetherZXTextureHeader::from_bytes(&bytes).unwrap();
 
         assert_eq!(parsed.width, 128);
         assert_eq!(parsed.height, 256);
@@ -110,13 +110,13 @@ mod tests {
 
     #[test]
     fn test_rgba8_size() {
-        let header = NetherZTextureHeader::new(64, 64);
+        let header = NetherZXTextureHeader::new(64, 64);
         assert_eq!(header.rgba8_size(), 64 * 64 * 4); // 16384 bytes
     }
 
     #[test]
     fn test_bc7_size() {
-        let header = NetherZTextureHeader::new(64, 64);
+        let header = NetherZXTextureHeader::new(64, 64);
         // 64/4 = 16 blocks per row, 16 blocks per column
         // 16 × 16 × 16 bytes = 4096 bytes
         assert_eq!(header.bc7_size(), 4096);
@@ -125,13 +125,13 @@ mod tests {
     #[test]
     fn test_bc7_size_non_aligned() {
         // 30×30 → rounds up to 8×8 blocks = 64 blocks × 16 bytes = 1024 bytes
-        let header = NetherZTextureHeader::new(30, 30);
+        let header = NetherZXTextureHeader::new(30, 30);
         assert_eq!(header.bc7_size(), 8 * 8 * 16); // 1024 bytes
     }
 
     #[test]
     fn test_bc7_compression_ratio() {
-        let header = NetherZTextureHeader::new(64, 64);
+        let header = NetherZXTextureHeader::new(64, 64);
         let rgba8 = header.rgba8_size();
         let bc7 = header.bc7_size();
         assert_eq!(rgba8 / bc7, 4); // 4× compression ratio

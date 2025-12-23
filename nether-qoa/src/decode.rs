@@ -2,7 +2,7 @@
 //!
 //! This module handles decoding QOA frame data to PCM samples.
 //! Note: This is a pure codec - no file headers are parsed. The caller
-//! (z-common) provides total_samples from NetherZSoundHeader.
+//! (z-common) provides total_samples from NetherZXSoundHeader.
 
 use crate::{QOA_DEQUANT_TAB, QOA_FRAME_HEADER_SIZE, QOA_SLICE_LEN, QoaError, QoaLms, clamp_i16};
 
@@ -50,13 +50,13 @@ pub fn decode_slice(slice: u64, lms: &mut QoaLms, output: &mut [i16]) -> usize {
 ///
 /// # Arguments
 /// * `qoa_data` - Raw QOA frame data (no file header - caller provides total_samples)
-/// * `total_samples` - Total number of samples to decode (from NetherZSoundHeader)
+/// * `total_samples` - Total number of samples to decode (from NetherZXSoundHeader)
 ///
 /// # Returns
 /// Decoded PCM samples (mono, 16-bit) or error
 ///
 /// Note: This is a pure codec. The caller (z-common) provides total_samples from
-/// NetherZSoundHeader. Sample rate is fixed at 22050 Hz and controlled by the
+/// NetherZXSoundHeader. Sample rate is fixed at 22050 Hz and controlled by the
 /// asset pipeline.
 ///
 /// # Errors
