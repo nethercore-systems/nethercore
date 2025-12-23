@@ -7,6 +7,8 @@
 /// backend for validation and the console clients for enforcement.
 #[derive(Debug, Clone)]
 pub struct ConsoleSpecs {
+    /// Console type identifier (e.g., "zx", "chroma")
+    pub console_type: &'static str,
     /// Console name (e.g., "Nethercore ZX")
     pub name: &'static str,
     /// Fixed resolution (width, height)
@@ -63,6 +65,7 @@ pub const NETHERCORE_ZX_VRAM_LIMIT: usize = 4 * 1024 * 1024;
 /// Only handles (u32 IDs) live in game state, making rollback fast and efficient.
 pub const fn nethercore_zx_specs() -> &'static ConsoleSpecs {
     &ConsoleSpecs {
+        console_type: "zx",
         name: "Nethercore ZX",
         resolution: NETHERCORE_ZX_RESOLUTION, // Fixed 540p
         tick_rates: NETHERCORE_ZX_TICK_RATES,
@@ -100,6 +103,7 @@ pub const NETHERCORE_CHROMA_RESOLUTION: (u32, u32) = (288, 216);
 /// - **VRAM:** 1 MB (GPU textures and sprite buffers)
 pub const fn nethercore_chroma_specs() -> &'static ConsoleSpecs {
     &ConsoleSpecs {
+        console_type: "chroma",
         name: "Nethercore Chroma",
         resolution: NETHERCORE_CHROMA_RESOLUTION, // Fixed 288×216 (4:3)
         tick_rates: &[30, 60],
@@ -109,4 +113,35 @@ pub const fn nethercore_chroma_specs() -> &'static ConsoleSpecs {
         rom_limit: NETHERCORE_CHROMA_MEMORY_LIMIT, // Same as ram_limit (unified)
         cpu_budget_us: 4000,                      // 4ms per tick at 60fps
     }
+}
+
+// === Console Registry ===
+
+/// All known console specifications.
+///
+/// This is the single source of truth for all supported consoles.
+/// To add a new console, add its specs function to this array.
+pub const CONSOLES: &[&ConsoleSpecs] = &[
+    nethercore_zx_specs(),
+    nethercore_chroma_specs(),
+];
+
+/// Get console specifications by console type identifier.
+///
+/// Returns `None` for unknown console types. This is the canonical way to
+/// look up console specs from a console_type string (e.g., from a game record).
+///
+/// # Example
+///
+/// ```
+/// use nethercore_shared::console::get_console_specs;
+///
+/// let specs = get_console_specs("zx").expect("ZX console should exist");
+/// assert_eq!(specs.resolution, (960, 540));
+/// ```
+pub fn get_console_specs(console_type: &str) -> Option<&'static ConsoleSpecs> {
+    CONSOLES
+        .iter()
+        .find(|specs| specs.console_type == console_type)
+        .copied()
 }

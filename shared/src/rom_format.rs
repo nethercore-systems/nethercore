@@ -18,6 +18,8 @@
 //! assert_eq!(ZX_ROM_FORMAT.mesh_ext, "nczxmesh");
 //! ```
 
+use crate::console::nethercore_zx_specs;
+
 /// ROM format specification for a fantasy console.
 ///
 /// Defines the file format constants used for ROM files and assets.
@@ -90,7 +92,7 @@ impl RomFormat {
 /// - Magic bytes: `NCZX`
 /// - Asset extensions: `.nczxmesh`, `.nczxtex`, `.nczxsnd`, `.nczxskel`, `.nczxanim`
 pub const ZX_ROM_FORMAT: RomFormat = RomFormat::new(
-    "zx",
+    nethercore_zx_specs().console_type,
     "nczx",
     b"NCZX",
     1,
