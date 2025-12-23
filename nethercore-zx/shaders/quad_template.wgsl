@@ -116,9 +116,12 @@ fn vs(in: QuadVertexIn, @builtin(instance_index) instance_idx: u32) -> QuadVerte
     var world_pos: vec3<f32>;
 
     if (mode == SCREEN_SPACE) {
+        // Quad vertices are centered (-0.5 to 0.5), but API expects top-left origin.
+        // Add half-size to position so the quad's top-left is at instance.position.
+        let screen_pos = instance.position.xy + instance.size * 0.5;
         let screen_offset = apply_screen_space(in.position.xy, instance.size, instance.rotation);
-        let ndc_x = (instance.position.x + screen_offset.x) / screen_dims.x * 2.0 - 1.0;
-        let ndc_y = 1.0 - (instance.position.y + screen_offset.y) / screen_dims.y * 2.0;
+        let ndc_x = (screen_pos.x + screen_offset.x) / screen_dims.x * 2.0 - 1.0;
+        let ndc_y = 1.0 - (screen_pos.y + screen_offset.y) / screen_dims.y * 2.0;
         out.clip_position = vec4<f32>(ndc_x, ndc_y, instance.position.z, 1.0);
         out.world_position = instance.position.xyz;
     } else if (mode == WORLD_SPACE) {
