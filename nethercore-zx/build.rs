@@ -10,6 +10,7 @@
 use std::env;
 use std::fs;
 use std::path::Path;
+use std::process::Command;
 
 // Vertex format flags (must match vertex.rs)
 const FORMAT_UV: u8 = 1;
@@ -467,7 +468,25 @@ fn generate_quad_shader() -> String {
     shader
 }
 
+/// Generate FFI bindings for all consoles
+fn generate_ffi_bindings() -> Result<(), Box<dyn std::error::Error>> {
+    let status = Command::new("cargo")
+        .args(["xtask", "ffi", "generate"])
+        .status()?;
+
+    if !status.success() {
+        return Err("cargo xtask ffi generate failed".into());
+    }
+
+    Ok(())
+}
+
 fn main() {
+    // Generate FFI bindings
+    if let Err(e) = generate_ffi_bindings() {
+        eprintln!("Warning: FFI generation failed: {}", e);
+    }
+
     // Tell Cargo to rerun this if the shader templates change
     println!("cargo:rerun-if-changed=shaders/common.wgsl");
     println!("cargo:rerun-if-changed=shaders/blinnphong_common.wgsl");
