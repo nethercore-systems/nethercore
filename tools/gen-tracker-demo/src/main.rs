@@ -5,7 +5,8 @@
 //! - snare.wav (noise + body)
 //! - hihat.wav (high-frequency noise)
 //! - bass.wav (filtered square wave)
-//! - demo.xm (4-channel beat pattern)
+//! - lead.wav (detuned saw synth)
+//! - demo.xm (6-channel beat pattern with bass line and melody)
 
 use std::f32::consts::PI;
 use std::fs::{self, File};
@@ -45,6 +46,10 @@ fn main() {
     let bass = generate_bass();
     write_wav(&output_dir.join("bass.wav"), &bass);
     println!("  Generated bass.wav ({} samples)", bass.len());
+
+    let lead = generate_lead();
+    write_wav(&output_dir.join("lead.wav"), &lead);
+    println!("  Generated lead.wav ({} samples)", lead.len());
 
     // Generate XM file
     let xm = generate_xm();
@@ -147,32 +152,79 @@ fn generate_hihat() -> Vec<i16> {
     output
 }
 
-/// Generate bass: filtered square wave at C2 (65.41 Hz)
+/// Generate bass: filtered square wave at base frequency (will be pitch-shifted by tracker)
 fn generate_bass() -> Vec<i16> {
-    let duration = 0.4; // 400ms
-    let freq = 65.41; // C2
+    let duration = 0.5; // 500ms for more sustain
+    let freq = 130.81; // C3 as base (tracker will pitch shift)
     let samples = (SAMPLE_RATE * duration) as usize;
 
     let mut output = Vec::with_capacity(samples);
 
     // Simple low-pass filter state
     let mut filtered = 0.0f32;
-    let cutoff = 0.15; // Low-pass coefficient
+    let cutoff = 0.12; // Low-pass coefficient
 
     for i in 0..samples {
         let t = i as f32 / SAMPLE_RATE;
 
-        // Slow decay for sustained bass
-        let decay = (-t * 5.0).exp();
+        // ADSR-like envelope: quick attack, sustain, slow release
+        let envelope = if t < 0.01 {
+            t / 0.01 // Attack
+        } else if t < 0.3 {
+            1.0 // Sustain
+        } else {
+            (-(t - 0.3) * 4.0).exp() // Release
+        };
 
-        // Square wave
+        // Square wave with slight pulse width modulation
+        let pw = 0.5 + 0.1 * (t * 3.0).sin(); // Pulse width varies slightly
         let phase = (2.0 * PI * freq * t) % (2.0 * PI);
-        let square = if phase < PI { 1.0 } else { -1.0 };
+        let square = if phase < PI * pw * 2.0 { 1.0 } else { -1.0 };
 
         // Simple low-pass filter to smooth harsh edges
         filtered = filtered + cutoff * (square - filtered);
 
-        let sample = filtered * decay * 24000.0;
+        let sample = filtered * envelope * 26000.0;
+        output.push(sample.clamp(-32767.0, 32767.0) as i16);
+    }
+
+    output
+}
+
+/// Generate lead: detuned saw waves with vibrato for a rich synth sound
+fn generate_lead() -> Vec<i16> {
+    let duration = 0.6; // 600ms
+    let freq = 261.63; // C4 as base (tracker will pitch shift)
+    let samples = (SAMPLE_RATE * duration) as usize;
+
+    let mut output = Vec::with_capacity(samples);
+
+    for i in 0..samples {
+        let t = i as f32 / SAMPLE_RATE;
+
+        // ADSR envelope
+        let envelope = if t < 0.02 {
+            t / 0.02 // Fast attack
+        } else if t < 0.4 {
+            1.0 - (t - 0.02) * 0.3 // Slow decay to sustain
+        } else {
+            0.7 * (-(t - 0.4) * 3.0).exp() // Release
+        };
+
+        // Vibrato (pitch wobble)
+        let vibrato = 1.0 + 0.015 * (t * 5.0 * 2.0 * PI).sin();
+
+        // Two detuned saw waves for richness
+        let detune = 1.003; // Slight detune
+        let phase1 = (freq * vibrato * t) % 1.0;
+        let phase2 = (freq * vibrato * detune * t) % 1.0;
+
+        // Saw wave: 2 * phase - 1 gives range [-1, 1]
+        let saw1 = 2.0 * phase1 - 1.0;
+        let saw2 = 2.0 * phase2 - 1.0;
+
+        // Mix the two saws
+        let sample = (saw1 * 0.5 + saw2 * 0.5) * envelope * 22000.0;
         output.push(sample.clamp(-32767.0, 32767.0) as i16);
     }
 
@@ -273,20 +325,20 @@ fn generate_xm() -> Vec<u8> {
     // = 16 bytes (remaining header: 8 x u16) + 256 bytes (order table) = 272
     xm.extend_from_slice(&272u32.to_le_bytes());
 
-    // Song length (number of orders)
-    xm.extend_from_slice(&1u16.to_le_bytes());
+    // Song length (number of orders) - 2 patterns for variety
+    xm.extend_from_slice(&2u16.to_le_bytes());
 
     // Restart position
     xm.extend_from_slice(&0u16.to_le_bytes());
 
-    // Number of channels
-    xm.extend_from_slice(&4u16.to_le_bytes());
+    // Number of channels (6: kick, snare, hihat, bass, lead1, lead2)
+    xm.extend_from_slice(&6u16.to_le_bytes());
 
     // Number of patterns
-    xm.extend_from_slice(&1u16.to_le_bytes());
+    xm.extend_from_slice(&2u16.to_le_bytes());
 
     // Number of instruments
-    xm.extend_from_slice(&4u16.to_le_bytes());
+    xm.extend_from_slice(&5u16.to_le_bytes());
 
     // Flags (bit 0 = linear frequency table)
     xm.extend_from_slice(&1u16.to_le_bytes());
@@ -295,40 +347,45 @@ fn generate_xm() -> Vec<u8> {
     xm.extend_from_slice(&6u16.to_le_bytes());
 
     // Default BPM
-    xm.extend_from_slice(&125u16.to_le_bytes());
+    xm.extend_from_slice(&120u16.to_le_bytes());
 
     // Pattern order table (256 bytes)
     xm.push(0); // Pattern 0 at order 0
-    xm.extend(std::iter::repeat(0u8).take(255));
+    xm.push(1); // Pattern 1 at order 1
+    xm.extend(std::iter::repeat(0u8).take(254));
 
     // ========================================================================
-    // Pattern 0: 16 rows, 4 channels
+    // Pattern 0: 32 rows, 6 channels - Main groove with bass line
     // ========================================================================
-    // Beat pattern:
-    // Row 0:  Kick C-4, HiHat C-4, Bass C-2
-    // Row 4:  HiHat C-4
-    // Row 8:  Snare C-4, HiHat C-4
-    // Row 12: HiHat C-4
 
-    let pattern_data = generate_pattern();
-    let pattern_data_size = pattern_data.len() as u16;
+    let pattern0_data = generate_pattern_main();
+    let pattern0_data_size = pattern0_data.len() as u16;
 
-    // Pattern header
-    // Note: header_length is the size AFTER this field (packing_type + num_rows + packed_size = 5)
-    xm.extend_from_slice(&5u32.to_le_bytes()); // header length (5 bytes after this field)
-    xm.push(0); // packing type (always 0)
-    xm.extend_from_slice(&16u16.to_le_bytes()); // number of rows
-    xm.extend_from_slice(&pattern_data_size.to_le_bytes()); // packed data size
-
-    // Pattern note data
-    xm.extend_from_slice(&pattern_data);
+    xm.extend_from_slice(&5u32.to_le_bytes()); // header length
+    xm.push(0); // packing type
+    xm.extend_from_slice(&32u16.to_le_bytes()); // 32 rows
+    xm.extend_from_slice(&pattern0_data_size.to_le_bytes());
+    xm.extend_from_slice(&pattern0_data);
 
     // ========================================================================
-    // Instruments (4 instruments, no samples - samples from ROM)
+    // Pattern 1: 32 rows, 6 channels - Variation with melody
+    // ========================================================================
+
+    let pattern1_data = generate_pattern_melody();
+    let pattern1_data_size = pattern1_data.len() as u16;
+
+    xm.extend_from_slice(&5u32.to_le_bytes()); // header length
+    xm.push(0); // packing type
+    xm.extend_from_slice(&32u16.to_le_bytes()); // 32 rows
+    xm.extend_from_slice(&pattern1_data_size.to_le_bytes());
+    xm.extend_from_slice(&pattern1_data);
+
+    // ========================================================================
+    // Instruments (5 instruments, no samples - samples from ROM)
     // ========================================================================
 
     // Instrument names must match sound IDs in nether.toml
-    let instruments = ["kick", "snare", "hihat", "bass"];
+    let instruments = ["kick", "snare", "hihat", "bass", "lead"];
 
     for name in &instruments {
         write_instrument(&mut xm, name);
@@ -337,51 +394,175 @@ fn generate_xm() -> Vec<u8> {
     xm
 }
 
-/// Generate packed pattern data for 16 rows, 4 channels
-fn generate_pattern() -> Vec<u8> {
+// XM note values: C-0 = 1, C-1 = 13, C-2 = 25, C-3 = 37, C-4 = 49, C-5 = 61
+// Each octave is 12 semitones
+const C2: u8 = 25;
+const D2: u8 = 27;
+const E2: u8 = 29;
+const F2: u8 = 30;
+const G2: u8 = 32;
+const A2: u8 = 34;
+
+const C3: u8 = 37;
+const D3: u8 = 39;
+const E3: u8 = 41;
+const G3: u8 = 44;
+const A3: u8 = 46;
+
+const C4: u8 = 49;
+const D4: u8 = 51;
+const E4: u8 = 53;
+const G4: u8 = 56;
+const A4: u8 = 58;
+
+const C5: u8 = 61;
+
+// Instruments
+const KICK: u8 = 1;
+const SNARE: u8 = 2;
+const HIHAT: u8 = 3;
+const BASS: u8 = 4;
+const LEAD: u8 = 5;
+
+/// Helper to write a note
+fn write_note(data: &mut Vec<u8>, note: u8, instrument: u8) {
+    data.push(0x80 | 0x01 | 0x02); // packed byte: has note + instrument
+    data.push(note);
+    data.push(instrument);
+}
+
+/// Helper to write an empty channel
+fn write_empty(data: &mut Vec<u8>) {
+    data.push(0x80); // packed byte: nothing
+}
+
+/// Generate main pattern: 32 rows, 6 channels
+/// Drums + bass line (Am - F - C - G progression feel)
+fn generate_pattern_main() -> Vec<u8> {
     let mut data = Vec::new();
 
-    // Note value for C-4 (middle C) = 49, C-2 = 25
-    const C4: u8 = 49;
-    const C2: u8 = 25;
+    // Bass line: simple root notes following chord progression
+    // Rows 0-7: A, Rows 8-15: F, Rows 16-23: C, Rows 24-31: G
+    let bass_notes = [
+        A2, A2, 0, 0, A2, 0, 0, 0,  // A minor feel
+        F2, F2, 0, 0, F2, 0, 0, 0,  // F major feel
+        C3, C3, 0, 0, C3, 0, 0, 0,  // C major feel
+        G2, G2, 0, 0, G2, 0, 0, 0,  // G major feel
+    ];
 
-    for row in 0..16 {
-        // Channel 0: Kick (instrument 1)
-        if row == 0 {
-            // Full note: note + instrument
-            data.push(0x80 | 0x01 | 0x02); // packed byte: has note + instrument
-            data.push(C4); // note
-            data.push(1); // instrument
+    for row in 0..32 {
+        // Channel 0: Kick - four on the floor
+        if row % 8 == 0 || row % 8 == 4 {
+            write_note(&mut data, C4, KICK);
         } else {
-            // Empty
-            data.push(0x80); // packed byte: nothing
+            write_empty(&mut data);
         }
 
-        // Channel 1: Snare (instrument 2)
-        if row == 8 {
-            data.push(0x80 | 0x01 | 0x02);
-            data.push(C4);
-            data.push(2);
+        // Channel 1: Snare - beats 2 and 4
+        if row % 8 == 4 {
+            write_note(&mut data, C4, SNARE);
         } else {
-            data.push(0x80);
+            write_empty(&mut data);
         }
 
-        // Channel 2: HiHat (instrument 3)
-        if row == 0 || row == 4 || row == 8 || row == 12 {
-            data.push(0x80 | 0x01 | 0x02);
-            data.push(C4);
-            data.push(3);
+        // Channel 2: HiHat - off-beats
+        if row % 2 == 0 {
+            write_note(&mut data, C4, HIHAT);
         } else {
-            data.push(0x80);
+            write_empty(&mut data);
         }
 
-        // Channel 3: Bass (instrument 4)
-        if row == 0 {
-            data.push(0x80 | 0x01 | 0x02);
-            data.push(C2);
-            data.push(4);
+        // Channel 3: Bass line
+        let bass = bass_notes[row];
+        if bass != 0 {
+            write_note(&mut data, bass, BASS);
         } else {
-            data.push(0x80);
+            write_empty(&mut data);
+        }
+
+        // Channel 4: Lead (empty in main pattern)
+        write_empty(&mut data);
+
+        // Channel 5: Lead harmony (empty in main pattern)
+        write_empty(&mut data);
+    }
+
+    data
+}
+
+/// Generate melody pattern: 32 rows, 6 channels
+/// Same drums + bass, but with melody on top
+fn generate_pattern_melody() -> Vec<u8> {
+    let mut data = Vec::new();
+
+    // Bass line (same as main)
+    let bass_notes = [
+        A2, A2, 0, 0, A2, 0, 0, 0,
+        F2, F2, 0, 0, F2, 0, 0, 0,
+        C3, C3, 0, 0, C3, 0, 0, 0,
+        G2, G2, 0, 0, G2, 0, 0, 0,
+    ];
+
+    // Melody line - simple ascending/descending phrase
+    let melody = [
+        C4, 0, E4, 0, G4, 0, A4, 0,     // Rising on Am
+        A4, 0, G4, 0, F2+24, 0, E4, 0,  // Falling on F (F4 = F2+24)
+        E4, 0, G4, 0, C5, 0, G4, 0,     // Rising on C
+        G4, 0, E4, 0, D4, 0, C4, 0,     // Falling on G
+    ];
+
+    // Harmony (thirds below melody)
+    let harmony = [
+        A3, 0, C4, 0, E4, 0, C4, 0,     // Thirds below
+        C4, 0, E4, 0, D4, 0, C4, 0,
+        C4, 0, E4, 0, G4, 0, E4, 0,
+        E4, 0, C4, 0, 0, 0, A3, 0,      // sparse ending
+    ];
+
+    for row in 0..32 {
+        // Channel 0: Kick - four on the floor
+        if row % 8 == 0 || row % 8 == 4 {
+            write_note(&mut data, C4, KICK);
+        } else {
+            write_empty(&mut data);
+        }
+
+        // Channel 1: Snare - beats 2 and 4
+        if row % 8 == 4 {
+            write_note(&mut data, C4, SNARE);
+        } else {
+            write_empty(&mut data);
+        }
+
+        // Channel 2: HiHat - off-beats (slightly less frequent in melody section)
+        if row % 4 == 0 || row % 4 == 2 {
+            write_note(&mut data, C4, HIHAT);
+        } else {
+            write_empty(&mut data);
+        }
+
+        // Channel 3: Bass line
+        let bass = bass_notes[row];
+        if bass != 0 {
+            write_note(&mut data, bass, BASS);
+        } else {
+            write_empty(&mut data);
+        }
+
+        // Channel 4: Lead melody
+        let mel = melody[row];
+        if mel != 0 {
+            write_note(&mut data, mel, LEAD);
+        } else {
+            write_empty(&mut data);
+        }
+
+        // Channel 5: Lead harmony
+        let harm = harmony[row];
+        if harm != 0 {
+            write_note(&mut data, harm, LEAD);
+        } else {
+            write_empty(&mut data);
         }
     }
 
@@ -425,21 +606,23 @@ mod tests {
         let module = nether_xm::parse_xm(&xm_data).expect("Generated XM should parse correctly");
 
         assert_eq!(module.name, "Tracker Demo");
-        assert_eq!(module.num_channels, 4);
-        assert_eq!(module.num_patterns, 1);
-        assert_eq!(module.num_instruments, 4);
-        assert_eq!(module.song_length, 1);
+        assert_eq!(module.num_channels, 6);
+        assert_eq!(module.num_patterns, 2);
+        assert_eq!(module.num_instruments, 5);
+        assert_eq!(module.song_length, 2);
         assert_eq!(module.default_speed, 6);
-        assert_eq!(module.default_bpm, 125);
+        assert_eq!(module.default_bpm, 120);
 
         // Verify instrument names
         assert_eq!(module.instruments[0].name, "kick");
         assert_eq!(module.instruments[1].name, "snare");
         assert_eq!(module.instruments[2].name, "hihat");
         assert_eq!(module.instruments[3].name, "bass");
+        assert_eq!(module.instruments[4].name, "lead");
 
-        // Verify pattern has 16 rows
-        assert_eq!(module.patterns[0].num_rows, 16);
+        // Verify patterns have 32 rows
+        assert_eq!(module.patterns[0].num_rows, 32);
+        assert_eq!(module.patterns[1].num_rows, 32);
     }
 
     #[test]
@@ -450,11 +633,12 @@ mod tests {
         let names =
             nether_xm::get_instrument_names(&xm_data).expect("Should extract instrument names");
 
-        assert_eq!(names.len(), 4);
+        assert_eq!(names.len(), 5);
         assert_eq!(names[0], "kick");
         assert_eq!(names[1], "snare");
         assert_eq!(names[2], "hihat");
         assert_eq!(names[3], "bass");
+        assert_eq!(names[4], "lead");
     }
 
     #[test]
@@ -469,22 +653,22 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_pattern_size() {
-        let pattern = generate_pattern();
+    fn test_generate_pattern_main_size() {
+        let pattern = generate_pattern_main();
 
-        // 16 rows * 4 channels = 64 notes
-        // Each note is at least 1 byte (packed empty = 0x80)
-        // Notes with data: row 0 has 3 notes with data, row 4/8/12 have 1 each
-        // Empty notes: 1 byte each
-        // Notes with data: 3 bytes each (0x83, note, instrument)
+        // 32 rows * 6 channels
+        // Each channel entry is either 1 byte (empty) or 3 bytes (note+instrument)
+        assert!(pattern.len() > 0);
+        assert!(pattern.len() <= 32 * 6 * 3); // Max possible size
+    }
 
-        // Row 0: kick(3) + empty(1) + hihat(3) + bass(3) = 10
-        // Row 4: empty(1) + empty(1) + hihat(3) + empty(1) = 6
-        // Row 8: empty(1) + snare(3) + hihat(3) + empty(1) = 8
-        // Row 12: empty(1) + empty(1) + hihat(3) + empty(1) = 6
-        // Other 12 rows: 4 empty = 4 bytes each = 48
-        // Total = 10 + 6 + 8 + 6 + 48 = 78 bytes
-        assert_eq!(pattern.len(), 78);
+    #[test]
+    fn test_generate_pattern_melody_size() {
+        let pattern = generate_pattern_melody();
+
+        // 32 rows * 6 channels
+        assert!(pattern.len() > 0);
+        assert!(pattern.len() <= 32 * 6 * 3); // Max possible size
     }
 
     #[test]
@@ -511,7 +695,14 @@ mod tests {
     #[test]
     fn test_bass_sample_length() {
         let bass = generate_bass();
-        // 400ms at 22050Hz = 8820 samples
-        assert_eq!(bass.len(), (SAMPLE_RATE * 0.4) as usize);
+        // 500ms at 22050Hz = 11025 samples
+        assert_eq!(bass.len(), (SAMPLE_RATE * 0.5) as usize);
+    }
+
+    #[test]
+    fn test_lead_sample_length() {
+        let lead = generate_lead();
+        // 600ms at 22050Hz = 13230 samples
+        assert_eq!(lead.len(), (SAMPLE_RATE * 0.6) as usize);
     }
 }

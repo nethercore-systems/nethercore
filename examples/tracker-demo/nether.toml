@@ -23,6 +23,10 @@ path = "assets/hihat.wav"
 id = "bass"
 path = "assets/bass.wav"
 
+[[assets.sounds]]
+id = "lead"
+path = "assets/lead.wav"
+
 # Tracker module (instruments reference sounds above by name)
 [[assets.trackers]]
 id = "demo"

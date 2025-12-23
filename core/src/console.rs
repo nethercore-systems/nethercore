@@ -56,13 +56,13 @@ pub trait AudioGenerator: Send + 'static {
     ///
     /// # Arguments
     /// * `rollback_state` - Mutable reference to console rollback state (e.g., audio playhead positions)
-    /// * `state` - Reference to console FFI state (e.g., loaded sounds)
+    /// * `state` - Mutable reference to console FFI state (e.g., loaded sounds, tracker engine)
     /// * `tick_rate` - Game tick rate (e.g., 60 for 60fps)
     /// * `sample_rate` - Output sample rate (e.g., 44100)
     /// * `output` - Buffer to append stereo samples to
     fn generate_frame(
         rollback_state: &mut Self::RollbackState,
-        state: &Self::State,
+        state: &mut Self::State,
         tick_rate: u32,
         sample_rate: u32,
         output: &mut Vec<f32>,
@@ -76,7 +76,7 @@ impl AudioGenerator for () {
 
     fn generate_frame(
         _rollback_state: &mut Self::RollbackState,
-        _state: &Self::State,
+        _state: &mut Self::State,
         _tick_rate: u32,
         _sample_rate: u32,
         _output: &mut Vec<f32>,

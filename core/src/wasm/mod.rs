@@ -313,13 +313,13 @@ impl<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState> Game
         &self.store.data().rollback
     }
 
-    /// Get split borrows: immutable FFI state and mutable rollback state
+    /// Get split borrows: mutable FFI state and mutable rollback state
     ///
-    /// This avoids the need to clone data when you need to read from FFI state
-    /// while mutating rollback state (e.g., audio generation).
-    pub fn ffi_and_rollback_mut(&mut self) -> (&S, &mut R) {
+    /// This allows mutating both FFI state (e.g., tracker engine channel positions)
+    /// and rollback state (e.g., audio playhead positions) during audio generation.
+    pub fn ffi_and_rollback_mut(&mut self) -> (&mut S, &mut R) {
         let ctx = self.store.data_mut();
-        (&ctx.ffi, &mut ctx.rollback)
+        (&mut ctx.ffi, &mut ctx.rollback)
     }
 
     /// Set input for a player

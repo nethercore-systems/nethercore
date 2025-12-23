@@ -190,9 +190,12 @@ pub fn generate_audio_frame(
     sample_rate: u32,
     output: &mut Vec<f32>,
 ) {
+    // Default tracker state has handle=0, so tracker_active will be false
+    // and no tracker audio will be generated
+    let mut tracker_state = TrackerState::default();
     generate_audio_frame_with_tracker(
         playback_state,
-        &TrackerState::default(),
+        &mut tracker_state,
         &mut TrackerEngine::new(),
         sounds,
         tick_rate,
@@ -209,7 +212,7 @@ pub fn generate_audio_frame(
 ///
 /// # Arguments
 /// * `playback_state` - Current audio playback state (will be mutated to advance playheads)
-/// * `tracker_state` - Current tracker state (for position, volume, flags)
+/// * `tracker_state` - Current tracker state (will be mutated to advance position)
 /// * `tracker_engine` - Tracker engine instance (for channel state and module data)
 /// * `sounds` - Loaded sound data (indexed by sound handle)
 /// * `tick_rate` - Game tick rate (e.g., 60 for 60fps)
@@ -217,7 +220,7 @@ pub fn generate_audio_frame(
 /// * `output` - Output buffer for interleaved stereo samples
 pub fn generate_audio_frame_with_tracker(
     playback_state: &mut AudioPlaybackState,
-    tracker_state: &TrackerState,
+    tracker_state: &mut TrackerState,
     tracker_engine: &mut TrackerEngine,
     sounds: &[Option<Sound>],
     tick_rate: u32,
@@ -265,9 +268,9 @@ pub fn generate_audio_frame_with_tracker(
 
         // Mix tracker OR PCM music (mutually exclusive)
         if tracker_active {
-            // Mix tracker output
+            // Mix tracker output and advance tracker state
             let (tracker_l, tracker_r) =
-                tracker_engine.render_sample(tracker_state, sounds, sample_rate);
+                tracker_engine.render_sample_and_advance(tracker_state, sounds, sample_rate);
             left += tracker_l;
             right += tracker_r;
         } else if playback_state.music.sound != 0
@@ -487,13 +490,15 @@ impl nethercore_core::AudioGenerator for ZXAudioGenerator {
 
     fn generate_frame(
         rollback_state: &mut Self::RollbackState,
-        state: &Self::State,
+        state: &mut Self::State,
         tick_rate: u32,
         sample_rate: u32,
         output: &mut Vec<f32>,
     ) {
-        generate_audio_frame(
+        generate_audio_frame_with_tracker(
             &mut rollback_state.audio,
+            &mut rollback_state.tracker,
+            &mut state.tracker_engine,
             &state.sounds,
             tick_rate,
             sample_rate,

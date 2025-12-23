@@ -971,13 +971,139 @@ impl TrackerEngine {
             right += r;
         }
 
-        // Advance tick position
-        self.tick_samples_rendered += 1;
-        let samples_per_tick = samples_per_tick(state.bpm, sample_rate);
+        // Scale by tracker volume
+        let vol = state.volume as f32 / 256.0;
+        (left * vol, right * vol)
+    }
 
-        if self.tick_samples_rendered >= samples_per_tick {
-            self.tick_samples_rendered = 0;
-            // Tick advancement is handled by the caller updating TrackerState
+    /// Render one stereo sample and advance the tracker state
+    ///
+    /// This handles the complete playback loop:
+    /// - Renders audio for the current position
+    /// - Advances tick_sample_pos
+    /// - When tick completes, advances tick and processes effects
+    /// - When row completes, advances row and processes notes
+    /// - When pattern completes, advances to next order
+    pub fn render_sample_and_advance(
+        &mut self,
+        state: &mut crate::state::TrackerState,
+        sounds: &[Option<Sound>],
+        sample_rate: u32,
+    ) -> (f32, f32) {
+        if state.handle == 0 || (state.flags & tracker_flags::PLAYING) == 0 {
+            return (0.0, 0.0);
+        }
+
+        if (state.flags & tracker_flags::PAUSED) != 0 {
+            return (0.0, 0.0);
+        }
+
+        // Process tick 0 at the start of a row (trigger notes, process effects)
+        if state.tick == 0 && state.tick_sample_pos == 0 {
+            self.process_row_tick0_internal(state.handle, sounds);
+        }
+
+        // Render the audio sample
+        let module = match self
+            .modules
+            .get(state.handle as usize)
+            .and_then(|m| m.as_ref())
+        {
+            Some(m) => m,
+            None => return (0.0, 0.0),
+        };
+
+        let mut left = 0.0f32;
+        let mut right = 0.0f32;
+
+        // Mix all active channels
+        for (ch_idx, channel) in self.channels.iter_mut().enumerate() {
+            if ch_idx >= module.module.num_channels as usize {
+                break;
+            }
+
+            if !channel.note_on || channel.sample_handle == 0 {
+                continue;
+            }
+
+            // Get sound data
+            let sound = match sounds
+                .get(channel.sample_handle as usize)
+                .and_then(|s| s.as_ref())
+            {
+                Some(s) => s,
+                None => continue,
+            };
+
+            // Sample with interpolation
+            let sample = sample_channel(channel, &sound.data, sample_rate);
+
+            // Apply volume (with envelope if present)
+            let vol = channel.volume * self.global_volume;
+
+            // Apply panning
+            let (l, r) = apply_channel_pan(sample * vol, channel.panning);
+            left += l;
+            right += r;
+        }
+
+        // Advance tick position
+        state.tick_sample_pos += 1;
+        let spt = samples_per_tick(state.bpm, sample_rate);
+
+        if state.tick_sample_pos >= spt {
+            state.tick_sample_pos = 0;
+            state.tick += 1;
+
+            // Process per-tick effects (not on tick 0)
+            if state.tick > 0 {
+                self.process_tick(state.tick, state.speed);
+            }
+
+            // Check if we need to advance to next row
+            if state.tick >= state.speed {
+                state.tick = 0;
+                state.row += 1;
+
+                // Sync engine's current position
+                self.current_row = state.row;
+
+                // Check if we need to advance to next pattern
+                let (num_rows, song_length, restart_position) = {
+                    let loaded = match self.modules.get(state.handle as usize).and_then(|m| m.as_ref()) {
+                        Some(m) => m,
+                        None => return (left * state.volume as f32 / 256.0, right * state.volume as f32 / 256.0),
+                    };
+                    let num_rows = loaded
+                        .module
+                        .pattern_at_order(state.order_position)
+                        .map(|p| p.num_rows)
+                        .unwrap_or(64);
+                    (
+                        num_rows,
+                        loaded.module.song_length,
+                        loaded.module.restart_position,
+                    )
+                };
+
+                if state.row >= num_rows {
+                    state.row = 0;
+                    state.order_position += 1;
+                    self.current_order = state.order_position;
+                    self.current_row = 0;
+
+                    // Check for end of song
+                    if state.order_position >= song_length {
+                        if (state.flags & tracker_flags::LOOPING) != 0 {
+                            state.order_position = restart_position;
+                            self.current_order = restart_position;
+                        } else {
+                            // Stop playback
+                            state.flags &= !tracker_flags::PLAYING;
+                        }
+                    }
+                }
+            }
         }
 
         // Scale by tracker volume
