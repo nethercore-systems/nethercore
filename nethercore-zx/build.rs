@@ -470,12 +470,16 @@ fn generate_quad_shader() -> String {
 
 /// Generate FFI bindings for all consoles
 fn generate_ffi_bindings() -> Result<(), Box<dyn std::error::Error>> {
+    // Tell Cargo to rerun this if FFI source files change
+    println!("cargo:rerun-if-changed=include/zx.rs");
+    println!("cargo:rerun-if-changed=core/src/ffi.rs");
+
     let status = Command::new("cargo")
-        .args(["xtask", "ffi", "generate"])
+        .args(["xtask", "ffi", "all"])
         .status()?;
 
     if !status.success() {
-        return Err("cargo xtask ffi generate failed".into());
+        return Err("cargo xtask ffi all failed".into());
     }
 
     Ok(())
