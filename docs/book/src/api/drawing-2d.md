@@ -2,6 +2,31 @@
 
 Screen-space sprites, rectangles, and text rendering.
 
+## Screen Coordinate System
+
+All 2D drawing uses screen-space coordinates with the following conventions:
+
+| Property | Value |
+|----------|-------|
+| **Resolution** | 960×540 pixels (fixed) |
+| **Origin** | Top-left corner (0, 0) |
+| **X-axis** | Increases rightward (0 to 960) |
+| **Y-axis** | Increases downward (0 to 540) |
+| **Anchor point** | Top-left corner of sprite/rect |
+
+```
+(0,0) ───────────────────────────► X (960)
+  │
+  │   ┌────────┐
+  │   │ sprite │  x,y is top-left corner
+  │   │  w×h   │
+  │   └────────┘
+  ▼
+  Y (540)
+```
+
+The screen is always rendered at 960×540 internally and scaled to fit the window. This ensures pixel-perfect positioning regardless of window size.
+
 ## Sprites
 
 ### draw_sprite

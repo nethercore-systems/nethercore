@@ -51,6 +51,100 @@ Nethercore ZX uses a **16MB ROM + 4MB RAM** memory model:
 
 Assets loaded via `rom_*` functions go directly to VRAM/audio memory, keeping RAM free for game state.
 
+## Coordinate System
+
+Nethercore ZX uses standard graphics conventions with wgpu as the rendering backend.
+
+### Screen Space (2D)
+
+All 2D drawing functions (`draw_sprite`, `draw_rect`, `draw_text`, etc.) use screen coordinates:
+
+| Property | Value |
+|----------|-------|
+| **Resolution** | 960×540 pixels (fixed, 16:9 aspect) |
+| **Origin** | Top-left corner (0, 0) |
+| **X-axis** | Increases rightward (0 → 960) |
+| **Y-axis** | Increases downward (0 → 540) |
+| **Sprite anchor** | Top-left corner of sprite |
+
+```
+(0,0) ────────────────────► X (960)
+  │
+  │     Screen Space
+  │
+  ▼
+  Y (540)
+```
+
+### World Space (3D)
+
+For 3D rendering with `camera_set()` and `draw_mesh()`:
+
+| Property | Value |
+|----------|-------|
+| **Coordinate system** | Right-handed, Y-up |
+| **X-axis** | Right |
+| **Y-axis** | Up |
+| **Z-axis** | Out of screen (toward viewer) |
+| **Handedness** | Right-handed (cross X into Y to get Z) |
+
+```
+        Y (up)
+        │
+        │
+        │
+        └──────► X (right)
+       ╱
+      ╱
+     Z (toward viewer)
+```
+
+### NDC (Normalized Device Coordinates)
+
+The rendering pipeline uses wgpu's standard NDC conventions:
+
+| Property | Value |
+|----------|-------|
+| **X-axis** | -1.0 (left) to +1.0 (right) |
+| **Y-axis** | -1.0 (bottom) to +1.0 (top) |
+| **Z-axis** | 0.0 (near) to 1.0 (far) |
+
+Screen-space drawing functions automatically handle the conversion from screen pixels to NDC. For 3D, the view and projection matrices handle the transformation.
+
+### Texture Coordinates (UV)
+
+| Property | Value |
+|----------|-------|
+| **Origin** | Top-left (0, 0) |
+| **U-axis** | 0 (left) to 1 (right) |
+| **V-axis** | 0 (top) to 1 (bottom) |
+
+### Matrix Conventions
+
+All matrix functions use **column-major** order (standard for wgpu/WGSL):
+
+```
+| m0  m4  m8  m12 |    Column 0: m0, m1, m2, m3
+| m1  m5  m9  m13 |    Column 1: m4, m5, m6, m7
+| m2  m6  m10 m14 |    Column 2: m8, m9, m10, m11
+| m3  m7  m11 m15 |    Column 3: m12, m13, m14, m15
+```
+
+Transformations use **column vectors**: `v' = M × v`
+
+### Default Projection
+
+When using `camera_set()` and `camera_fov()`:
+
+| Property | Value |
+|----------|-------|
+| **Type** | Perspective |
+| **Default FOV** | 60° (vertical) |
+| **Aspect ratio** | 16:9 (fixed) |
+| **Near plane** | 0.1 units |
+| **Far plane** | 1000 units |
+| **Function** | `perspective_rh` (right-handed) |
+
 ## API Categories
 
 | Category | Description |

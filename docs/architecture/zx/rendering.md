@@ -25,6 +25,96 @@ Nethercore ZX uses a **wgpu-based** forward renderer with a command buffer patte
 
 ---
 
+## Coordinate System
+
+Nethercore ZX uses wgpu's standard coordinate conventions throughout the rendering pipeline.
+
+### Screen Space
+
+2D drawing functions use screen-space pixels:
+
+| Property | Value |
+|----------|-------|
+| Resolution | 960×540 (fixed, 16:9) |
+| Origin | Top-left (0, 0) |
+| X-axis | 0 (left) → 960 (right) |
+| Y-axis | 0 (top) → 540 (bottom) |
+
+**Screen to NDC transformation** (in `quad_template.wgsl`):
+
+```wgsl
+let ndc_x = (screen_pos.x / screen_dims.x) * 2.0 - 1.0;  // [0, 960] → [-1, 1]
+let ndc_y = 1.0 - (screen_pos.y / screen_dims.y) * 2.0;  // [0, 540] → [1, -1] (Y flip)
+```
+
+The Y-flip (`1.0 - ...`) converts screen space (Y-down) to NDC space (Y-up).
+
+### World Space (3D)
+
+3D rendering uses a right-handed, Y-up coordinate system:
+
+| Property | Value |
+|----------|-------|
+| Coordinate system | Right-handed, Y-up |
+| +X | Right |
+| +Y | Up |
+| +Z | Toward viewer (out of screen) |
+
+**Camera setup** (in `camera.rs`):
+
+```rust
+let view = Mat4::look_at_rh(position, target, Vec3::Y);  // Right-handed
+let proj = Mat4::perspective_rh(fov, aspect, near, far); // Right-handed
+```
+
+### NDC (Normalized Device Coordinates)
+
+wgpu uses the following NDC conventions:
+
+| Axis | Range |
+|------|-------|
+| X | -1.0 (left) to +1.0 (right) |
+| Y | -1.0 (bottom) to +1.0 (top) |
+| Z | 0.0 (near) to 1.0 (far) |
+
+This is the "Vulkan" NDC convention (Z: 0→1) rather than OpenGL's (-1→1).
+
+### Texture Coordinates (UV)
+
+| Property | Value |
+|----------|-------|
+| Origin | Top-left (0, 0) |
+| U | 0 (left) → 1 (right) |
+| V | 0 (top) → 1 (bottom) |
+
+**UV handling in shaders:**
+
+- Screen-space sprites: UVs used as-is (Y already flipped in NDC calculation)
+- World-space/billboards: V is flipped (`1.0 - v`) to match image file convention
+
+### Matrix Storage
+
+All matrices use **column-major** order (glam/WGSL standard):
+
+| Format | Layout | Usage |
+|--------|--------|-------|
+| 4×4 (16 floats) | `[col0.xyzw, col1.xyzw, col2.xyzw, col3.xyzw]` | View, projection, model |
+| 3×4 (12 floats) | `[col0.xyz, col1.xyz, col2.xyz, col3.xyz]` | Bone matrices (implicit row `[0,0,0,1]`) |
+
+**Transform order:** `clip_pos = projection × view × model × vertex_pos`
+
+### Projection Defaults
+
+| Property | Value |
+|----------|-------|
+| Type | Perspective (right-handed) |
+| Default FOV | 60° (vertical) |
+| Aspect ratio | 16:9 (960÷540) |
+| Near plane | 0.1 units |
+| Far plane | 1000 units |
+
+---
+
 ## Rendering Pipeline
 
 ### Frame Lifecycle

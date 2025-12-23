@@ -2,6 +2,25 @@
 
 Camera position, target, and projection control.
 
+## Coordinate System
+
+The camera uses a **right-handed, Y-up** coordinate system:
+
+- **+X** points right
+- **+Y** points up
+- **+Z** points toward the viewer (out of the screen)
+
+This matches standard OpenGL/wgpu conventions. When using `camera_set()`, positions and targets are specified in world space using these axes.
+
+**Default projection settings:**
+
+| Property | Value |
+|----------|-------|
+| FOV | 60° vertical |
+| Aspect | 16:9 (960×540 fixed resolution) |
+| Near plane | 0.1 units |
+| Far plane | 1000 units |
+
 ## Camera Setup
 
 ### camera_set
