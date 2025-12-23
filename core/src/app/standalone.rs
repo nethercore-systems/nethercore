@@ -32,6 +32,37 @@ use super::{
     parse_wasm_error,
 };
 
+/// Convert a game name to a URL-safe game ID.
+///
+/// - Lowercases the string
+/// - Replaces spaces and underscores with hyphens
+/// - Removes non-alphanumeric characters (except hyphens)
+/// - Collapses multiple hyphens into one
+fn sanitize_game_id(name: &str) -> String {
+    let mut result = String::with_capacity(name.len());
+    let mut last_was_hyphen = false;
+
+    for c in name.chars() {
+        if c.is_ascii_alphanumeric() {
+            result.push(c.to_ascii_lowercase());
+            last_was_hyphen = false;
+        } else if c == ' ' || c == '_' || c == '-' {
+            if !last_was_hyphen && !result.is_empty() {
+                result.push('-');
+                last_was_hyphen = true;
+            }
+        }
+        // Skip other characters
+    }
+
+    // Remove trailing hyphen
+    if result.ends_with('-') {
+        result.pop();
+    }
+
+    result
+}
+
 /// Trait for graphics backends that support standalone player functionality.
 ///
 /// This extends the base Graphics + CaptureSupport traits with methods
@@ -122,16 +153,24 @@ struct WaitingForPeer {
     port: u16,
     /// Local IP addresses to display
     local_ips: Vec<String>,
+    /// Game ID for generating shareable join URLs
+    game_id: String,
 }
 
 impl WaitingForPeer {
-    fn new(socket: LocalSocket, port: u16) -> Self {
+    fn new(socket: LocalSocket, port: u16, game_id: String) -> Self {
         let local_ips = LocalSocket::get_local_ips();
         Self {
             socket,
             port,
             local_ips,
+            game_id,
         }
+    }
+
+    /// Generate a shareable join URL for an IP address
+    fn join_url(&self, ip: &str) -> String {
+        format!("nethercore://join/{}:{}/{}", ip, self.port, self.game_id)
     }
 }
 
@@ -859,7 +898,9 @@ where
                 tracing::info!("Hosting on port {}, waiting for connection...", port);
 
                 // Enter waiting state - game will be loaded when peer connects
-                self.waiting_for_peer = Some(WaitingForPeer::new(socket, *port));
+                // Use a sanitized game ID for URLs (lowercase, no spaces)
+                let game_id = sanitize_game_id(&rom.game_name);
+                self.waiting_for_peer = Some(WaitingForPeer::new(socket, *port, game_id));
 
                 // Don't load game yet - will be loaded when peer connects
             }
@@ -1317,12 +1358,12 @@ where
 
                         // Waiting for peer connection dialog (Host mode)
                         if let Some(waiting) = waiting_for_peer_ref {
-                            egui::Window::new("Waiting for Connection")
+                            egui::Window::new("Hosting Game")
                                 .collapsible(false)
                                 .resizable(false)
                                 .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
                                 .show(ctx, |ui| {
-                                    ui.set_min_width(300.0);
+                                    ui.set_min_width(400.0);
 
                                     ui.vertical_centered(|ui| {
                                         ui.add_space(10.0);
@@ -1335,22 +1376,49 @@ where
                                     ui.separator();
                                     ui.add_space(10.0);
 
-                                    ui.label("Share one of these addresses with your friend:");
+                                    ui.label("Share one of these links with your friend:");
                                     ui.add_space(5.0);
 
                                     for ip in &waiting.local_ips {
-                                        let addr = format!("{}:{}", ip, waiting.port);
+                                        let join_url = waiting.join_url(ip);
                                         ui.horizontal(|ui| {
-                                            ui.monospace(&addr);
+                                            // Show truncated URL for display
+                                            let display_url = if join_url.len() > 50 {
+                                                format!("{}...", &join_url[..47])
+                                            } else {
+                                                join_url.clone()
+                                            };
+                                            ui.monospace(&display_url);
                                             if ui.small_button("Copy").clicked() {
-                                                ctx.copy_text(addr.clone());
+                                                ctx.copy_text(join_url.clone());
                                             }
                                         });
                                     }
 
-                                    ui.add_space(15.0);
+                                    ui.add_space(10.0);
+
+                                    // Collapsible section for manual connection
+                                    ui.collapsing("Manual connection (IP:port)", |ui| {
+                                        ui.label(
+                                            egui::RichText::new("If the link doesn't work, share this address:")
+                                                .weak()
+                                                .small(),
+                                        );
+                                        ui.add_space(5.0);
+                                        for ip in &waiting.local_ips {
+                                            let addr = format!("{}:{}", ip, waiting.port);
+                                            ui.horizontal(|ui| {
+                                                ui.monospace(&addr);
+                                                if ui.small_button("Copy").clicked() {
+                                                    ctx.copy_text(addr.clone());
+                                                }
+                                            });
+                                        }
+                                    });
+
+                                    ui.add_space(10.0);
                                     ui.label(
-                                        egui::RichText::new("Your friend should use 'Join Game' with this address")
+                                        egui::RichText::new("Your friend can paste the link in their browser or use 'Join Game'")
                                             .weak()
                                             .small(),
                                     );
