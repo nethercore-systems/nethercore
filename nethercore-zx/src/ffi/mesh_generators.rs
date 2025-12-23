@@ -6,11 +6,15 @@
 //! Two variants provided:
 //! - Base functions (cube, sphere, etc.): Format 4 (POS_NORMAL) - uniform colors
 //! - _uv variants (sphere_uv, etc.): Format 5 (POS_UV_NORMAL) - textured rendering
+//!
+//! **IMPORTANT**: All procedural mesh functions are init-only. They queue meshes
+//! for GPU upload, which must happen during init() to ensure deterministic rollback.
 
 use anyhow::Result;
 use tracing::{info, warn};
 use wasmtime::{Caller, Linker};
 
+use super::guards::check_init_only;
 use super::ZXGameContext;
 use crate::graphics::{FORMAT_NORMAL, FORMAT_UV};
 use crate::procedural;
@@ -47,7 +51,14 @@ pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
 /// Returns mesh handle (>0) on success, 0 on failure.
 ///
 /// The cube has 24 vertices (4 per face) with flat normals and box-unwrapped UVs.
+///
+/// **Init-only**: Must be called during `init()`.
 fn cube(mut caller: Caller<'_, ZXGameContext>, size_x: f32, size_y: f32, size_z: f32) -> u32 {
+    if let Err(e) = check_init_only(&caller, "cube") {
+        warn!("{}", e);
+        return 0;
+    }
+
     // Validate parameters
     if size_x <= 0.0 || size_y <= 0.0 || size_z <= 0.0 {
         warn!(
@@ -97,7 +108,14 @@ fn cube(mut caller: Caller<'_, ZXGameContext>, size_x: f32, size_y: f32, size_z:
 /// Returns mesh handle (>0) on success, 0 on failure.
 ///
 /// The sphere uses equirectangular UV mapping and smooth normals.
+///
+/// **Init-only**: Must be called during `init()`.
 fn sphere(mut caller: Caller<'_, ZXGameContext>, radius: f32, segments: u32, rings: u32) -> u32 {
+    if let Err(e) = check_init_only(&caller, "sphere") {
+        warn!("{}", e);
+        return 0;
+    }
+
     // Validate parameters
     if radius <= 0.0 {
         warn!("sphere: radius must be > 0.0 (got {})", radius);
@@ -141,6 +159,8 @@ fn sphere(mut caller: Caller<'_, ZXGameContext>, radius: f32, segments: u32, rin
 ///
 /// If radius_bottom != radius_top, creates a tapered cylinder or cone.
 /// Includes top and bottom caps (omitted if radius is 0).
+///
+/// **Init-only**: Must be called during `init()`.
 fn cylinder(
     mut caller: Caller<'_, ZXGameContext>,
     radius_bottom: f32,
@@ -148,6 +168,11 @@ fn cylinder(
     height: f32,
     segments: u32,
 ) -> u32 {
+    if let Err(e) = check_init_only(&caller, "cylinder") {
+        warn!("{}", e);
+        return 0;
+    }
+
     // Validate parameters
     if radius_bottom < 0.0 || radius_top < 0.0 {
         warn!(
@@ -198,6 +223,8 @@ fn cylinder(
 /// Returns mesh handle (>0) on success, 0 on failure.
 ///
 /// The plane is centered at the origin with Y=0, facing up (+Y).
+///
+/// **Init-only**: Must be called during `init()`.
 fn plane(
     mut caller: Caller<'_, ZXGameContext>,
     size_x: f32,
@@ -205,6 +232,11 @@ fn plane(
     subdivisions_x: u32,
     subdivisions_z: u32,
 ) -> u32 {
+    if let Err(e) = check_init_only(&caller, "plane") {
+        warn!("{}", e);
+        return 0;
+    }
+
     // Validate parameters
     if size_x <= 0.0 || size_z <= 0.0 {
         warn!("plane: sizes must be > 0.0 (got {}, {})", size_x, size_z);
@@ -247,6 +279,8 @@ fn plane(
 /// Returns mesh handle (>0) on success, 0 on failure.
 ///
 /// The torus lies in the XZ plane with smooth normals and wrapped UVs.
+///
+/// **Init-only**: Must be called during `init()`.
 fn torus(
     mut caller: Caller<'_, ZXGameContext>,
     major_radius: f32,
@@ -254,6 +288,11 @@ fn torus(
     major_segments: u32,
     minor_segments: u32,
 ) -> u32 {
+    if let Err(e) = check_init_only(&caller, "torus") {
+        warn!("{}", e);
+        return 0;
+    }
+
     // Validate parameters
     if major_radius <= 0.0 || minor_radius <= 0.0 {
         warn!(
@@ -307,6 +346,8 @@ fn torus(
 ///
 /// Total capsule height = height + 2 * radius.
 /// If height is 0, generates a sphere instead.
+///
+/// **Init-only**: Must be called during `init()`.
 fn capsule(
     mut caller: Caller<'_, ZXGameContext>,
     radius: f32,
@@ -314,6 +355,11 @@ fn capsule(
     segments: u32,
     rings: u32,
 ) -> u32 {
+    if let Err(e) = check_init_only(&caller, "capsule") {
+        warn!("{}", e);
+        return 0;
+    }
+
     // Validate parameters
     if radius <= 0.0 {
         warn!("capsule: radius must be > 0.0 (got {})", radius);
@@ -368,7 +414,14 @@ fn capsule(
 /// - V maps 0→1 from north pole to south pole (latitude)
 ///
 /// Perfect for skybox/environment mapping and earth-like textures.
+///
+/// **Init-only**: Must be called during `init()`.
 fn sphere_uv(mut caller: Caller<'_, ZXGameContext>, radius: f32, segments: u32, rings: u32) -> u32 {
+    if let Err(e) = check_init_only(&caller, "sphere_uv") {
+        warn!("{}", e);
+        return 0;
+    }
+
     // Validate parameters
     if radius <= 0.0 {
         warn!("sphere_uv: radius must be > 0.0 (got {})", radius);
@@ -415,6 +468,8 @@ fn sphere_uv(mut caller: Caller<'_, ZXGameContext>, radius: f32, segments: u32, 
 /// - V maps 0→1 along Z axis (front to back)
 ///
 /// Perfect for ground planes, floors, and tiled textures.
+///
+/// **Init-only**: Must be called during `init()`.
 fn plane_uv(
     mut caller: Caller<'_, ZXGameContext>,
     size_x: f32,
@@ -422,6 +477,11 @@ fn plane_uv(
     subdivisions_x: u32,
     subdivisions_z: u32,
 ) -> u32 {
+    if let Err(e) = check_init_only(&caller, "plane_uv") {
+        warn!("{}", e);
+        return 0;
+    }
+
     // Validate parameters
     if size_x <= 0.0 || size_z <= 0.0 {
         warn!("plane_uv: sizes must be > 0.0 (got {}, {})", size_x, size_z);
@@ -468,7 +528,14 @@ fn plane_uv(
 /// - +X/-X: V=[0.0-0.5], +Y/-Y: V=[0.5-1.0], +Z/-Z: mixed
 ///
 /// Perfect for cubemaps and multi-texture cubes.
+///
+/// **Init-only**: Must be called during `init()`.
 fn cube_uv(mut caller: Caller<'_, ZXGameContext>, size_x: f32, size_y: f32, size_z: f32) -> u32 {
+    if let Err(e) = check_init_only(&caller, "cube_uv") {
+        warn!("{}", e);
+        return 0;
+    }
+
     // Validate parameters
     if size_x <= 0.0 || size_y <= 0.0 || size_z <= 0.0 {
         warn!(
@@ -524,6 +591,8 @@ fn cube_uv(mut caller: Caller<'_, ZXGameContext>, size_x: f32, size_y: f32, size
 /// - Bottom cap: Radial mapping centered at U=0.5, V=0.25
 ///
 /// Perfect for barrel, can, pillar textures.
+///
+/// **Init-only**: Must be called during `init()`.
 fn cylinder_uv(
     mut caller: Caller<'_, ZXGameContext>,
     radius_bottom: f32,
@@ -531,6 +600,11 @@ fn cylinder_uv(
     height: f32,
     segments: u32,
 ) -> u32 {
+    if let Err(e) = check_init_only(&caller, "cylinder_uv") {
+        warn!("{}", e);
+        return 0;
+    }
+
     // Validate parameters
     if radius_bottom < 0.0 || radius_top < 0.0 {
         warn!(
@@ -585,6 +659,8 @@ fn cylinder_uv(
 /// - V wraps 0→1 around the minor circle (tube)
 ///
 /// Perfect for donut, ring, tire textures with repeating patterns.
+///
+/// **Init-only**: Must be called during `init()`.
 fn torus_uv(
     mut caller: Caller<'_, ZXGameContext>,
     major_radius: f32,
@@ -592,6 +668,11 @@ fn torus_uv(
     major_segments: u32,
     minor_segments: u32,
 ) -> u32 {
+    if let Err(e) = check_init_only(&caller, "torus_uv") {
+        warn!("{}", e);
+        return 0;
+    }
+
     // Validate parameters
     if major_radius <= 0.0 || minor_radius <= 0.0 {
         warn!(
@@ -650,6 +731,8 @@ fn torus_uv(
 /// - U wraps 0→1 around circumference for all sections
 ///
 /// Perfect for pill, barrel, character body textures.
+///
+/// **Init-only**: Must be called during `init()`.
 fn capsule_uv(
     mut caller: Caller<'_, ZXGameContext>,
     radius: f32,
@@ -657,6 +740,11 @@ fn capsule_uv(
     segments: u32,
     rings: u32,
 ) -> u32 {
+    if let Err(e) = check_init_only(&caller, "capsule_uv") {
+        warn!("{}", e);
+        return 0;
+    }
+
     // Validate parameters
     if radius <= 0.0 {
         warn!("capsule_uv: radius must be > 0.0 (got {})", radius);

@@ -438,16 +438,18 @@ extern "C" {
     pub fn draw_mesh(handle: u32);
 
     // =========================================================================
-    // Procedural Mesh Generation
+    // Procedural Mesh Generation (init-only)
     // =========================================================================
+    // All procedural mesh functions must be called during init().
+    // They queue meshes for GPU upload which must happen before the game loop.
 
-    /// Generate a cube mesh.
+    /// Generate a cube mesh. **Init-only.**
     ///
     /// # Arguments
     /// * `size_x`, `size_y`, `size_z` — Half-extents along each axis
     pub fn cube(size_x: f32, size_y: f32, size_z: f32) -> u32;
 
-    /// Generate a UV sphere mesh.
+    /// Generate a UV sphere mesh. **Init-only.**
     ///
     /// # Arguments
     /// * `radius` — Sphere radius
@@ -455,7 +457,7 @@ extern "C" {
     /// * `rings` — Latitudinal divisions (2-256)
     pub fn sphere(radius: f32, segments: u32, rings: u32) -> u32;
 
-    /// Generate a cylinder or cone mesh.
+    /// Generate a cylinder or cone mesh. **Init-only.**
     ///
     /// # Arguments
     /// * `radius_bottom`, `radius_top` — Radii (>= 0.0, use 0 for cone tip)
@@ -463,14 +465,14 @@ extern "C" {
     /// * `segments` — Radial divisions (3-256)
     pub fn cylinder(radius_bottom: f32, radius_top: f32, height: f32, segments: u32) -> u32;
 
-    /// Generate a plane mesh on the XZ plane.
+    /// Generate a plane mesh on the XZ plane. **Init-only.**
     ///
     /// # Arguments
     /// * `size_x`, `size_z` — Dimensions
     /// * `subdivisions_x`, `subdivisions_z` — Subdivisions (1-256)
     pub fn plane(size_x: f32, size_z: f32, subdivisions_x: u32, subdivisions_z: u32) -> u32;
 
-    /// Generate a torus (donut) mesh.
+    /// Generate a torus (donut) mesh. **Init-only.**
     ///
     /// # Arguments
     /// * `major_radius` — Distance from center to tube center
@@ -478,7 +480,7 @@ extern "C" {
     /// * `major_segments`, `minor_segments` — Segment counts (3-256)
     pub fn torus(major_radius: f32, minor_radius: f32, major_segments: u32, minor_segments: u32) -> u32;
 
-    /// Generate a capsule (pill shape) mesh.
+    /// Generate a capsule (pill shape) mesh. **Init-only.**
     ///
     /// # Arguments
     /// * `radius` — Capsule radius
@@ -487,24 +489,24 @@ extern "C" {
     /// * `rings` — Divisions per hemisphere (1-128)
     pub fn capsule(radius: f32, height: f32, segments: u32, rings: u32) -> u32;
 
-    // UV-enabled variants (Format 5: POS_UV_NORMAL)
+    // UV-enabled variants (Format 5: POS_UV_NORMAL) — also init-only
 
-    /// Generate a UV sphere mesh with equirectangular texture mapping.
+    /// Generate a UV sphere mesh with equirectangular texture mapping. **Init-only.**
     pub fn sphere_uv(radius: f32, segments: u32, rings: u32) -> u32;
 
-    /// Generate a plane mesh with UV mapping.
+    /// Generate a plane mesh with UV mapping. **Init-only.**
     pub fn plane_uv(size_x: f32, size_z: f32, subdivisions_x: u32, subdivisions_z: u32) -> u32;
 
-    /// Generate a cube mesh with box-unwrapped UV mapping.
+    /// Generate a cube mesh with box-unwrapped UV mapping. **Init-only.**
     pub fn cube_uv(size_x: f32, size_y: f32, size_z: f32) -> u32;
 
-    /// Generate a cylinder mesh with cylindrical UV mapping.
+    /// Generate a cylinder mesh with cylindrical UV mapping. **Init-only.**
     pub fn cylinder_uv(radius_bottom: f32, radius_top: f32, height: f32, segments: u32) -> u32;
 
-    /// Generate a torus mesh with wrapped UV mapping.
+    /// Generate a torus mesh with wrapped UV mapping. **Init-only.**
     pub fn torus_uv(major_radius: f32, minor_radius: f32, major_segments: u32, minor_segments: u32) -> u32;
 
-    /// Generate a capsule mesh with hybrid UV mapping.
+    /// Generate a capsule mesh with hybrid UV mapping. **Init-only.**
     pub fn capsule_uv(radius: f32, height: f32, segments: u32, rings: u32) -> u32;
 
     // =========================================================================
