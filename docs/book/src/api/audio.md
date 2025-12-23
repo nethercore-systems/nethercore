@@ -463,235 +463,307 @@ export fn update() void {
 
 ---
 
-## Music
+## Unified Music API
 
-Music uses a dedicated stereo channel, separate from the 16 SFX channels.
+A unified API for playing both PCM music and XM tracker modules. The handle type is detected automatically:
+- **PCM handles** (from `load_sound`/`rom_sound`) have bit 31 = 0
+- **Tracker handles** (from `load_tracker`/`rom_tracker`) have bit 31 = 1
 
-### music_play
+Starting one type automatically stops the other (mutually exclusive). All music functions support rollback netcode.
 
-Plays background music (looping).
+### rom_tracker
+
+Loads an XM tracker module from the ROM data pack.
 
 **Signature:**
 
-{{#tabs global="lang"}}
-
-{{#tab name="Rust"}}
 ```rust
-fn music_play(sound: u32, volume: f32)
+fn rom_tracker(id_ptr: *const u8, id_len: u32) -> u32
 ```
-{{#endtab}}
-
-{{#tab name="C/C++"}}
-```c
-NCZX_IMPORT void music_play(uint32_t sound, float volume);
-```
-{{#endtab}}
-
-{{#tab name="Zig"}}
-```zig
-pub extern fn music_play(sound: u32, volume: f32) void;
-```
-{{#endtab}}
-
-{{#endtabs}}
 
 **Parameters:**
 
 | Name | Type | Description |
 |------|------|-------------|
-| sound | `u32` | Sound handle |
+| id_ptr | `*const u8` | Pointer to tracker ID string |
+| id_len | `u32` | Length of tracker ID string |
+
+**Returns:** Tracker handle (with bit 31 set) on success, 0 on failure.
+
+**Constraints:** Init-only. Load instrument samples via `rom_sound()` before loading the tracker.
+
+---
+
+### load_tracker
+
+Loads an XM tracker module from WASM memory.
+
+**Signature:**
+
+```rust
+fn load_tracker(data_ptr: u32, data_len: u32) -> u32
+```
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| data_ptr | `u32` | Pointer to XM file data |
+| data_len | `u32` | Length in bytes |
+
+**Returns:** Tracker handle (with bit 31 set) on success, 0 on failure.
+
+**Constraints:** Init-only.
+
+---
+
+### music_play
+
+Plays music (PCM sound or XM tracker module).
+
+**Signature:**
+
+```rust
+fn music_play(handle: u32, volume: f32, looping: u32)
+```
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| handle | `u32` | Sound handle (from `load_sound`) or tracker handle (from `rom_tracker`) |
 | volume | `f32` | Volume (0.0-1.0) |
+| looping | `u32` | 1 = loop, 0 = play once |
+
+**Behavior:** Automatically stops any currently playing music of the other type.
 
 **Example:**
 
-{{#tabs global="lang"}}
-
-{{#tab name="Rust"}}
 ```rust
-fn init() {
-    unsafe {
-        MENU_MUSIC = rom_sound(b"menu_bgm".as_ptr(), 8);
-        GAME_MUSIC = rom_sound(b"game_bgm".as_ptr(), 8);
-    }
-}
+// PCM music
+let bgm = rom_sound(b"menu_bgm".as_ptr(), 8);
+music_play(bgm, 0.7, 1); // Loop
 
-fn start_game() {
-    music_play(GAME_MUSIC, 0.7);
-}
+// XM tracker music
+let tracker = rom_tracker(b"level1".as_ptr(), 6);
+music_play(tracker, 0.8, 1); // Loop
 ```
-{{#endtab}}
-
-{{#tab name="C/C++"}}
-```c
-NCZX_EXPORT void init() {
-    MENU_MUSIC = rom_sound("menu_bgm", 8);
-    GAME_MUSIC = rom_sound("game_bgm", 8);
-}
-
-void start_game() {
-    music_play(GAME_MUSIC, 0.7f);
-}
-```
-{{#endtab}}
-
-{{#tab name="Zig"}}
-```zig
-export fn init() void {
-    MENU_MUSIC = rom_sound("menu_bgm".ptr, 8);
-    GAME_MUSIC = rom_sound("game_bgm".ptr, 8);
-}
-
-fn start_game() void {
-    music_play(GAME_MUSIC, 0.7);
-}
-```
-{{#endtab}}
-
-{{#endtabs}}
 
 ---
 
 ### music_stop
 
-Stops the currently playing music.
+Stops currently playing music (both PCM and tracker).
 
 **Signature:**
 
-{{#tabs global="lang"}}
-
-{{#tab name="Rust"}}
 ```rust
 fn music_stop()
 ```
-{{#endtab}}
-
-{{#tab name="C/C++"}}
-```c
-NCZX_IMPORT void music_stop();
-```
-{{#endtab}}
-
-{{#tab name="Zig"}}
-```zig
-pub extern fn music_stop() void;
-```
-{{#endtab}}
-
-{{#endtabs}}
-
-**Example:**
-
-{{#tabs global="lang"}}
-
-{{#tab name="Rust"}}
-```rust
-fn game_over() {
-    music_stop();
-    play_sound(GAME_OVER_SFX, 1.0, 0.0);
-}
-```
-{{#endtab}}
-
-{{#tab name="C/C++"}}
-```c
-void game_over() {
-    music_stop();
-    play_sound(GAME_OVER_SFX, 1.0f, 0.0f);
-}
-```
-{{#endtab}}
-
-{{#tab name="Zig"}}
-```zig
-fn game_over() void {
-    music_stop();
-    play_sound(GAME_OVER_SFX, 1.0, 0.0);
-}
-```
-{{#endtab}}
-
-{{#endtabs}}
 
 ---
 
-### music_set_volume
+### music_pause
 
-Changes the music volume.
+Pauses or resumes music playback (tracker only, no-op for PCM).
 
 **Signature:**
 
-{{#tabs global="lang"}}
-
-{{#tab name="Rust"}}
 ```rust
-fn music_set_volume(volume: f32)
+fn music_pause(paused: u32)
 ```
-{{#endtab}}
-
-{{#tab name="C/C++"}}
-```c
-NCZX_IMPORT void music_set_volume(float volume);
-```
-{{#endtab}}
-
-{{#tab name="Zig"}}
-```zig
-pub extern fn music_set_volume(volume: f32) void;
-```
-{{#endtab}}
-
-{{#endtabs}}
 
 **Parameters:**
 
 | Name | Type | Description |
 |------|------|-------------|
-| volume | `f32` | New volume (0.0-1.0) |
+| paused | `u32` | 1 = pause, 0 = resume |
 
-**Example:**
+---
 
-{{#tabs global="lang"}}
+### music_set_volume
 
-{{#tab name="Rust"}}
+Sets the music volume (works for both PCM and tracker).
+
+**Signature:**
+
 ```rust
-fn render() {
-    // Duck music during dialogue
-    if dialogue_active {
-        music_set_volume(0.3);
-    } else {
-        music_set_volume(0.7);
-    }
-}
+fn music_set_volume(volume: f32)
 ```
-{{#endtab}}
 
-{{#tab name="C/C++"}}
-```c
-NCZX_EXPORT void render() {
-    // Duck music during dialogue
-    if (dialogue_active) {
-        music_set_volume(0.3f);
-    } else {
-        music_set_volume(0.7f);
-    }
-}
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| volume | `f32` | Volume (0.0-1.0) |
+
+---
+
+### music_is_playing
+
+Checks if music is currently playing.
+
+**Signature:**
+
+```rust
+fn music_is_playing() -> u32
 ```
-{{#endtab}}
 
-{{#tab name="Zig"}}
-```zig
-export fn render() void {
-    // Duck music during dialogue
-    if (dialogue_active) {
-        music_set_volume(0.3);
-    } else {
-        music_set_volume(0.7);
-    }
-}
+**Returns:** 1 if playing (and not paused), 0 otherwise.
+
+---
+
+### music_type
+
+Gets the current music type.
+
+**Signature:**
+
+```rust
+fn music_type() -> u32
 ```
-{{#endtab}}
 
-{{#endtabs}}
+**Returns:**
+- 0 = none
+- 1 = PCM
+- 2 = tracker
+
+---
+
+### music_jump
+
+Jumps to a specific position (tracker only, no-op for PCM).
+
+**Signature:**
+
+```rust
+fn music_jump(order: u32, row: u32)
+```
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| order | `u32` | Order position (0-based) |
+| row | `u32` | Row within pattern (0-based) |
+
+---
+
+### music_position
+
+Gets the current music position.
+
+**Signature:**
+
+```rust
+fn music_position() -> u32
+```
+
+**Returns:**
+- For tracker: `(order << 16) | row`
+- For PCM: sample position
+
+---
+
+### music_length
+
+Gets the music length.
+
+**Signature:**
+
+```rust
+fn music_length(handle: u32) -> u32
+```
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| handle | `u32` | Music handle (PCM or tracker) |
+
+**Returns:**
+- For tracker: number of orders
+- For PCM: number of samples
+
+---
+
+### music_set_speed
+
+Sets tracker speed (tracker only, ticks per row).
+
+**Signature:**
+
+```rust
+fn music_set_speed(speed: u32)
+```
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| speed | `u32` | 1-31 (XM default is 6) |
+
+---
+
+### music_set_tempo
+
+Sets tracker tempo (tracker only, BPM).
+
+**Signature:**
+
+```rust
+fn music_set_tempo(bpm: u32)
+```
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| bpm | `u32` | 32-255 (XM default is 125) |
+
+---
+
+### music_info
+
+Gets music info.
+
+**Signature:**
+
+```rust
+fn music_info(handle: u32) -> u32
+```
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| handle | `u32` | Music handle (PCM or tracker) |
+
+**Returns:**
+- For tracker: `(num_channels << 24) | (num_patterns << 16) | (num_instruments << 8) | song_length`
+- For PCM: `(sample_rate << 16) | (channels << 8) | bits_per_sample`
+
+---
+
+### music_name
+
+Gets the music name (tracker only, returns 0 for PCM).
+
+**Signature:**
+
+```rust
+fn music_name(handle: u32, out_ptr: *mut u8, max_len: u32) -> u32
+```
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| handle | `u32` | Music handle |
+| out_ptr | `*mut u8` | Output buffer pointer |
+| max_len | `u32` | Maximum bytes to write |
+
+**Returns:** Actual length written (0 if PCM or invalid handle).
 
 ---
 

@@ -32,9 +32,9 @@ pub const OUTPUT_SAMPLE_RATE: u32 = 44_100;
 pub const SOURCE_SAMPLE_RATE: u32 = 22_050;
 
 /// Ring buffer size in samples (stereo frames * 2 channels)
-/// ~150ms buffer at 44.1kHz = 6615 frames * 2 channels = 13230 samples
-/// Larger buffer provides more headroom for frame timing jitter
-const RING_BUFFER_SIZE: usize = 13230;
+/// ~100ms buffer at 44.1kHz = 4410 frames * 2 channels = 8820 samples
+/// This provides ~6 frames of headroom at 60fps - enough for minor jitter.
+const RING_BUFFER_SIZE: usize = 8820; // ~100ms buffer
 
 /// Sound data (raw PCM)
 #[derive(Clone, Debug)]

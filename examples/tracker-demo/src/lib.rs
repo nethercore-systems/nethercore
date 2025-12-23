@@ -5,12 +5,14 @@
 //! - 4-channel XM beat pattern
 //! - Interactive playback controls
 //! - Visual beat indicator
+//! - Real-time pattern/position display
 //!
 //! Controls:
 //! - A button: Pause/Resume playback
 //! - B button: Restart from beginning
 //! - Up/Down: Adjust tempo (+/- 10 BPM)
 //! - Left/Right: Adjust volume
+//! - L/R Shoulder: Adjust speed (+/- 1 tick)
 
 #![no_std]
 #![no_main]
@@ -41,15 +43,19 @@ extern "C" {
     fn rom_sound(id_ptr: *const u8, id_len: u32) -> u32;
     fn rom_tracker(id_ptr: *const u8, id_len: u32) -> u32;
 
-    // Tracker Audio
-    fn tracker_play(handle: u32, volume: f32, looping: u32);
-    fn tracker_stop();
-    fn tracker_pause(paused: u32);
-    fn tracker_set_volume(volume: f32);
-    fn tracker_is_playing() -> u32;
-    fn tracker_jump(order: u32, row: u32);
-    fn tracker_position() -> u32;
-    fn tracker_set_tempo(bpm: u32);
+    // Unified Music API (works with both PCM and tracker handles)
+    fn music_play(handle: u32, volume: f32, looping: u32);
+    fn music_stop();
+    fn music_pause(paused: u32);
+    fn music_set_volume(volume: f32);
+    fn music_is_playing() -> u32;
+    fn music_jump(order: u32, row: u32);
+    fn music_position() -> u32;
+    fn music_length(handle: u32) -> u32;
+    fn music_set_speed(speed: u32);
+    fn music_set_tempo(bpm: u32);
+    fn music_info(handle: u32) -> u32;
+    fn music_name(handle: u32, out_ptr: *mut u8, max_len: u32) -> u32;
 }
 
 // === Constants ===
@@ -65,6 +71,8 @@ const BUTTON_LEFT: u32 = 2;
 const BUTTON_RIGHT: u32 = 3;
 const BUTTON_A: u32 = 4;
 const BUTTON_B: u32 = 5;
+const BUTTON_L: u32 = 8;
+const BUTTON_R: u32 = 9;
 
 // Colors
 const COLOR_BG: u32 = 0x1a1a2eFF;
@@ -80,8 +88,17 @@ const COLOR_PAUSED: u32 = 0xFFAA00FF;
 
 static mut TRACKER_HANDLE: u32 = 0;
 static mut CURRENT_TEMPO: u32 = 125;
+static mut CURRENT_SPEED: u32 = 6;
 static mut VOLUME: f32 = 0.8;
 static mut IS_PAUSED: bool = false;
+
+// Tracker info (cached from init)
+static mut SONG_LENGTH: u32 = 0;
+static mut NUM_CHANNELS: u32 = 0;
+static mut NUM_PATTERNS: u32 = 0;
+static mut NUM_INSTRUMENTS: u32 = 0;
+static mut SONG_NAME: [u8; 32] = [0u8; 32];
+static mut SONG_NAME_LEN: u32 = 0;
 
 // === Helper Functions ===
 
@@ -112,10 +129,23 @@ pub extern "C" fn init() {
         load_rom_sound(b"snare");
         load_rom_sound(b"hihat");
         load_rom_sound(b"bass");
+        load_rom_sound(b"lead");
 
         // Load and start tracker
         TRACKER_HANDLE = load_rom_tracker(b"demo");
-        tracker_play(TRACKER_HANDLE, VOLUME, 1); // Looping
+
+        // Cache tracker info
+        let info = music_info(TRACKER_HANDLE);
+        NUM_CHANNELS = (info >> 24) & 0xFF;
+        NUM_PATTERNS = (info >> 16) & 0xFF;
+        NUM_INSTRUMENTS = (info >> 8) & 0xFF;
+        SONG_LENGTH = info & 0xFF;
+
+        // Get song name
+        SONG_NAME_LEN = music_name(TRACKER_HANDLE, SONG_NAME.as_mut_ptr(), 32);
+
+        // Start playback
+        music_play(TRACKER_HANDLE, VOLUME, 1); // Looping
     }
 }
 
@@ -127,26 +157,26 @@ pub extern "C" fn update() {
         // A button: Toggle pause/resume
         if button_pressed(0, BUTTON_A) != 0 {
             IS_PAUSED = !IS_PAUSED;
-            tracker_pause(if IS_PAUSED { 1 } else { 0 });
+            music_pause(if IS_PAUSED { 1 } else { 0 });
         }
 
         // B button: Restart from beginning
         if button_pressed(0, BUTTON_B) != 0 {
-            tracker_jump(0, 0);
+            music_jump(0, 0);
             if IS_PAUSED {
                 IS_PAUSED = false;
-                tracker_pause(0);
+                music_pause(0);
             }
         }
 
         // Up/Down: Adjust tempo
         if button_pressed(0, BUTTON_UP) != 0 {
             CURRENT_TEMPO = if CURRENT_TEMPO < 250 { CURRENT_TEMPO + 10 } else { 250 };
-            tracker_set_tempo(CURRENT_TEMPO);
+            music_set_tempo(CURRENT_TEMPO);
         }
         if button_pressed(0, BUTTON_DOWN) != 0 {
             CURRENT_TEMPO = if CURRENT_TEMPO > 60 { CURRENT_TEMPO - 10 } else { 60 };
-            tracker_set_tempo(CURRENT_TEMPO);
+            music_set_tempo(CURRENT_TEMPO);
         }
 
         // Left/Right: Adjust volume
@@ -155,32 +185,62 @@ pub extern "C" fn update() {
             if VOLUME > 1.0 {
                 VOLUME = 1.0;
             }
-            tracker_set_volume(VOLUME);
+            music_set_volume(VOLUME);
         }
         if button_held(0, BUTTON_LEFT) != 0 {
             VOLUME -= 0.02;
             if VOLUME < 0.0 {
                 VOLUME = 0.0;
             }
-            tracker_set_volume(VOLUME);
+            music_set_volume(VOLUME);
+        }
+
+        // L/R: Adjust speed (ticks per row)
+        if button_pressed(0, BUTTON_R) != 0 {
+            CURRENT_SPEED = if CURRENT_SPEED < 31 { CURRENT_SPEED + 1 } else { 31 };
+            music_set_speed(CURRENT_SPEED);
+        }
+        if button_pressed(0, BUTTON_L) != 0 {
+            CURRENT_SPEED = if CURRENT_SPEED > 1 { CURRENT_SPEED - 1 } else { 1 };
+            music_set_speed(CURRENT_SPEED);
         }
     }
 }
 
 // === Render ===
 
+/// Helper to format a number as 2 digits
+fn format_2digit(n: u32) -> [u8; 2] {
+    [b'0' + ((n / 10) % 10) as u8, b'0' + (n % 10) as u8]
+}
+
+/// Helper to format a number as 3 digits
+fn format_3digit(n: u32) -> [u8; 3] {
+    [
+        b'0' + ((n / 100) % 10) as u8,
+        b'0' + ((n / 10) % 10) as u8,
+        b'0' + (n % 10) as u8,
+    ]
+}
+
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
-        let pos = tracker_position();
+        let pos = music_position();
         let order = (pos >> 16) as u32;
         let row = (pos & 0xFFFF) as u32;
 
-        // Title
-        draw_text_str(b"XM Tracker Demo", 340.0, 40.0, 36.0, COLOR_WHITE);
+        // === Header Section ===
 
-        // Playback status
-        let is_playing = tracker_is_playing() != 0 && !IS_PAUSED;
+        // Title (song name if available, otherwise default)
+        if SONG_NAME_LEN > 0 {
+            draw_text(SONG_NAME.as_ptr(), SONG_NAME_LEN, 340.0, 30.0, 32.0, COLOR_WHITE);
+        } else {
+            draw_text_str(b"XM Tracker Demo", 340.0, 30.0, 32.0, COLOR_WHITE);
+        }
+
+        // Playback status indicator
+        let is_playing = music_is_playing() != 0 && !IS_PAUSED;
         let status_color = if is_playing { COLOR_PLAYING } else { COLOR_PAUSED };
         let status_text: &[u8] = if IS_PAUSED {
             b"PAUSED"
@@ -189,41 +249,76 @@ pub extern "C" fn render() {
         } else {
             b"STOPPED"
         };
-        draw_text_str(status_text, 430.0, 90.0, 24.0, status_color);
+        draw_text_str(status_text, 440.0, 70.0, 20.0, status_color);
 
-        // Position info
-        draw_text_str(b"Position:", 100.0, 150.0, 20.0, COLOR_GRAY);
+        // === Left Panel: Position & Timing ===
 
-        // Order display
-        draw_text_str(b"Order:", 100.0, 180.0, 18.0, COLOR_DARK_GRAY);
-        let order_digit = b'0' + (order % 10) as u8;
-        let order_text = [order_digit];
-        draw_text(order_text.as_ptr(), 1, 180.0, 180.0, 18.0, COLOR_WHITE);
+        let left_x = 60.0;
+        let mut y = 120.0;
 
-        // Row display
-        draw_text_str(b"Row:", 100.0, 210.0, 18.0, COLOR_DARK_GRAY);
-        let row_tens = b'0' + ((row / 10) % 10) as u8;
-        let row_ones = b'0' + (row % 10) as u8;
-        let row_text = [row_tens, row_ones];
-        draw_text(row_text.as_ptr(), 2, 160.0, 210.0, 18.0, COLOR_WHITE);
+        draw_text_str(b"POSITION", left_x, y, 18.0, COLOR_GRAY);
+        y += 30.0;
 
-        // Tempo display
-        draw_text_str(b"Tempo:", 100.0, 260.0, 18.0, COLOR_DARK_GRAY);
-        let tempo_hundreds = b'0' + ((CURRENT_TEMPO / 100) % 10) as u8;
-        let tempo_tens = b'0' + ((CURRENT_TEMPO / 10) % 10) as u8;
-        let tempo_ones = b'0' + (CURRENT_TEMPO % 10) as u8;
-        let tempo_text = [tempo_hundreds, tempo_tens, tempo_ones];
-        draw_text(tempo_text.as_ptr(), 3, 180.0, 260.0, 18.0, COLOR_WHITE);
-        draw_text_str(b"BPM", 220.0, 260.0, 18.0, COLOR_DARK_GRAY);
+        // Order / Song Length progress bar
+        draw_text_str(b"Order:", left_x, y, 16.0, COLOR_DARK_GRAY);
+        let order_text = format_2digit(order);
+        draw_text(order_text.as_ptr(), 2, left_x + 70.0, y, 16.0, COLOR_WHITE);
+        draw_text_str(b"/", left_x + 95.0, y, 16.0, COLOR_DARK_GRAY);
+        let len_text = format_2digit(SONG_LENGTH);
+        draw_text(len_text.as_ptr(), 2, left_x + 105.0, y, 16.0, COLOR_WHITE);
+
+        // Order progress bar
+        let bar_x = left_x + 140.0;
+        draw_rect(bar_x, y, 150.0, 14.0, COLOR_DARK_GRAY);
+        if SONG_LENGTH > 0 {
+            let progress = (order as f32 / SONG_LENGTH as f32) * 150.0;
+            draw_rect(bar_x, y, progress, 14.0, COLOR_ACCENT2);
+        }
+        y += 25.0;
+
+        // Row display with progress
+        draw_text_str(b"Row:", left_x, y, 16.0, COLOR_DARK_GRAY);
+        let row_text = format_2digit(row);
+        draw_text(row_text.as_ptr(), 2, left_x + 70.0, y, 16.0, COLOR_WHITE);
+        draw_text_str(b"/32", left_x + 95.0, y, 16.0, COLOR_DARK_GRAY);
+
+        // Row progress bar
+        draw_rect(bar_x, y, 150.0, 14.0, COLOR_DARK_GRAY);
+        let row_progress = (row as f32 / 32.0) * 150.0;
+        draw_rect(bar_x, y, row_progress, 14.0, COLOR_ACCENT);
+        y += 35.0;
+
+        // === Timing Section ===
+        draw_text_str(b"TIMING", left_x, y, 18.0, COLOR_GRAY);
+        y += 30.0;
+
+        // Tempo
+        draw_text_str(b"Tempo:", left_x, y, 16.0, COLOR_DARK_GRAY);
+        let tempo_text = format_3digit(CURRENT_TEMPO);
+        draw_text(tempo_text.as_ptr(), 3, left_x + 70.0, y, 16.0, COLOR_WHITE);
+        draw_text_str(b"BPM", left_x + 110.0, y, 14.0, COLOR_DARK_GRAY);
+        y += 22.0;
+
+        // Speed
+        draw_text_str(b"Speed:", left_x, y, 16.0, COLOR_DARK_GRAY);
+        let speed_text = format_2digit(CURRENT_SPEED);
+        draw_text(speed_text.as_ptr(), 2, left_x + 70.0, y, 16.0, COLOR_WHITE);
+        draw_text_str(b"ticks/row", left_x + 100.0, y, 14.0, COLOR_DARK_GRAY);
+        y += 35.0;
 
         // Volume bar
-        draw_text_str(b"Volume:", 100.0, 300.0, 18.0, COLOR_DARK_GRAY);
-        draw_rect(180.0, 300.0, 200.0, 20.0, COLOR_DARK_GRAY);
-        draw_rect(180.0, 300.0, 200.0 * VOLUME, 20.0, COLOR_ACCENT2);
+        draw_text_str(b"Volume:", left_x, y, 16.0, COLOR_DARK_GRAY);
+        draw_rect(left_x + 70.0, y, 180.0, 16.0, COLOR_DARK_GRAY);
+        draw_rect(left_x + 70.0, y, 180.0 * VOLUME, 16.0, COLOR_ACCENT2);
+        let vol_pct = (VOLUME * 100.0) as u32;
+        let vol_text = format_3digit(vol_pct);
+        draw_text(vol_text.as_ptr(), 3, left_x + 260.0, y, 14.0, COLOR_WHITE);
+        draw_text_str(b"%", left_x + 295.0, y, 14.0, COLOR_DARK_GRAY);
 
-        // Beat visualizer - large pulsing rectangle
+        // === Center: Beat Visualizer ===
+
         let center_x = SCREEN_WIDTH / 2.0;
-        let center_y = SCREEN_HEIGHT / 2.0 + 50.0;
+        let center_y = SCREEN_HEIGHT / 2.0 + 30.0;
 
         // Different colors for different beats
         let beat_color = match row % 4 {
@@ -235,19 +330,21 @@ pub extern "C" fn render() {
         // Pulse effect: larger on beat, smaller between
         let row_frac = (row % 4) as f32 / 4.0;
         let pulse = 1.0 - row_frac * 0.3;
-        let base_size = 150.0;
+        let base_size = 120.0;
         let size = base_size * pulse;
 
         let rect_x = center_x - size / 2.0;
         let rect_y = center_y - size / 2.0;
         draw_rect(rect_x, rect_y, size, size, beat_color);
 
-        // Row indicator dots (16 rows in pattern)
+        // Row indicator dots (32 rows in pattern, shown in 2 rows of 16)
         let dot_start_x = center_x - 120.0;
-        let dot_y = center_y + 130.0;
+        let dot_y = center_y + 90.0;
+
+        // First row of dots (rows 0-15)
         for i in 0..16u32 {
             let dot_x = dot_start_x + (i as f32) * 16.0;
-            let dot_color = if i == row {
+            let dot_color = if i == row && row < 16 {
                 COLOR_WHITE
             } else if i % 4 == 0 {
                 COLOR_ACCENT
@@ -257,26 +354,124 @@ pub extern "C" fn render() {
             draw_rect(dot_x, dot_y, 10.0, 10.0, dot_color);
         }
 
-        // Controls help
-        draw_text_str(b"Controls:", 100.0, 450.0, 18.0, COLOR_GRAY);
-        draw_text_str(b"[A] Pause/Resume   [B] Restart", 100.0, 475.0, 16.0, COLOR_DARK_GRAY);
-        draw_text_str(b"[Up/Down] Tempo   [Left/Right] Volume", 100.0, 495.0, 16.0, COLOR_DARK_GRAY);
+        // Second row of dots (rows 16-31)
+        let dot_y2 = dot_y + 16.0;
+        for i in 0..16u32 {
+            let dot_x = dot_start_x + (i as f32) * 16.0;
+            let actual_row = i + 16;
+            let dot_color = if actual_row == row {
+                COLOR_WHITE
+            } else if i % 4 == 0 {
+                COLOR_ACCENT
+            } else {
+                COLOR_DARK_GRAY
+            };
+            draw_rect(dot_x, dot_y2, 10.0, 10.0, dot_color);
+        }
 
-        // Channel activity (simple visualization)
-        draw_text_str(b"Channels:", 600.0, 150.0, 18.0, COLOR_GRAY);
+        // === Right Panel: Track Info ===
 
-        // Show which instruments are active based on row
-        let kick_active = row == 0;
-        let snare_active = row == 8;
-        let hihat_active = row % 4 == 0;
-        let bass_active = row == 0;
+        let right_x = 700.0;
+        let mut y = 120.0;
+
+        draw_text_str(b"TRACK INFO", right_x, y, 18.0, COLOR_GRAY);
+        y += 30.0;
+
+        // Number of channels
+        draw_text_str(b"Channels:", right_x, y, 16.0, COLOR_DARK_GRAY);
+        let ch_text = format_2digit(NUM_CHANNELS);
+        draw_text(ch_text.as_ptr(), 2, right_x + 100.0, y, 16.0, COLOR_WHITE);
+        y += 22.0;
+
+        // Number of patterns
+        draw_text_str(b"Patterns:", right_x, y, 16.0, COLOR_DARK_GRAY);
+        let pat_text = format_2digit(NUM_PATTERNS);
+        draw_text(pat_text.as_ptr(), 2, right_x + 100.0, y, 16.0, COLOR_WHITE);
+        y += 22.0;
+
+        // Number of instruments
+        draw_text_str(b"Instruments:", right_x, y, 16.0, COLOR_DARK_GRAY);
+        let inst_text = format_2digit(NUM_INSTRUMENTS);
+        draw_text(inst_text.as_ptr(), 2, right_x + 120.0, y, 16.0, COLOR_WHITE);
+        y += 35.0;
+
+        // Channel activity
+        draw_text_str(b"CHANNELS", right_x, y, 18.0, COLOR_GRAY);
+        y += 25.0;
+
+        // Pattern order: 0=Intro, 1=Main, 2=Melody, 3=Breakdown
+        // Order table: [0, 1, 1, 2, 1, 2, 3, 1] - we can infer pattern from order
+        let pattern = match order % 8 {
+            0 => 0, // Intro
+            1 | 2 | 4 | 7 => 1, // Main
+            3 | 5 => 2, // Melody
+            6 => 3, // Breakdown
+            _ => 1,
+        };
+
+        // Activity based on actual pattern data
+        let kick_active = match pattern {
+            0 => if row < 16 { row == 0 } else { row % 8 == 0 || row % 8 == 4 },
+            1 | 2 => row % 8 == 0 || row % 8 == 4,
+            3 => if row < 16 { row % 8 == 0 } else if row < 24 { row % 4 == 0 } else { row % 2 == 0 },
+            _ => false,
+        };
+
+        let snare_active = match pattern {
+            0 => row >= 16 && row % 8 == 4,
+            1 | 2 => row % 8 == 4,
+            3 => row == 12 || row == 28 || row == 30,
+            _ => false,
+        };
+
+        let hihat_active = match pattern {
+            0 => if row < 8 { row % 8 == 0 } else if row < 16 { row % 4 == 0 } else { row % 2 == 0 },
+            1 => row % 2 == 0,
+            2 => row % 2 == 0,
+            3 => if row < 24 { row % 8 == 0 } else { row % 2 == 0 },
+            _ => false,
+        };
+
+        // Bass: has notes on specific rows in all patterns
+        let bass_active = match pattern {
+            0 => row >= 16 && (row == 16 || row == 17 || row == 20 || row == 24 || row == 25 || row == 28 || row == 30),
+            1 | 2 => row % 8 < 2 || row % 8 == 4, // First 2 rows + beat 2 of each 8-row section
+            3 => row % 4 == 0 || row >= 28, // Quarter notes + rapid at end
+            _ => false,
+        };
+
+        // Lead: only in melody and breakdown patterns
+        let lead_active = match pattern {
+            2 => row % 2 == 0, // Melody has notes on even rows
+            3 => row >= 24 || row == 7 || row == 15 || row == 22, // Sparse + build at end
+            _ => false,
+        };
+
+        // Lead harmony: only in melody pattern
+        let lead2_active = pattern == 2 && row % 2 == 0;
 
         let active_color = COLOR_PLAYING;
         let inactive_color = COLOR_DARK_GRAY;
 
-        draw_text_str(b"Kick", 600.0, 180.0, 16.0, if kick_active { active_color } else { inactive_color });
-        draw_text_str(b"Snare", 600.0, 205.0, 16.0, if snare_active { active_color } else { inactive_color });
-        draw_text_str(b"HiHat", 600.0, 230.0, 16.0, if hihat_active { active_color } else { inactive_color });
-        draw_text_str(b"Bass", 600.0, 255.0, 16.0, if bass_active { active_color } else { inactive_color });
+        // Channel indicators with activity bars (6 channels)
+        let ch_names: [&[u8]; 6] = [b"CH1 Kick", b"CH2 Snare", b"CH3 HiHat", b"CH4 Bass", b"CH5 Lead", b"CH6 Harm"];
+        let ch_active = [kick_active, snare_active, hihat_active, bass_active, lead_active, lead2_active];
+
+        for i in 0..6 {
+            let color = if ch_active[i] { active_color } else { inactive_color };
+            draw_text(ch_names[i].as_ptr(), ch_names[i].len() as u32, right_x, y, 14.0, color);
+            // Activity indicator
+            if ch_active[i] {
+                draw_rect(right_x + 100.0, y + 2.0, 40.0, 10.0, active_color);
+            }
+            y += 18.0;
+        }
+
+        // === Bottom: Controls Help ===
+
+        let help_y = SCREEN_HEIGHT - 60.0;
+        draw_text_str(b"Controls:", 60.0, help_y, 16.0, COLOR_GRAY);
+        draw_text_str(b"[A] Pause   [B] Restart   [Up/Down] Tempo   [Left/Right] Volume   [L/R] Speed",
+            60.0, help_y + 22.0, 14.0, COLOR_DARK_GRAY);
     }
 }

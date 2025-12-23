@@ -12,8 +12,16 @@ use wasmtime::{Caller, Linker};
 
 use crate::audio::Sound;
 use crate::state::{MAX_CHANNELS, tracker_flags};
+use crate::tracker::{is_tracker_handle, raw_tracker_handle};
 
 use super::{ZXGameContext, get_wasm_memory, guards::check_init_only, helpers::read_wasm_i16s};
+
+/// Music type constants for music_type() return value
+pub mod music_type {
+    pub const NONE: u32 = 0;
+    pub const PCM: u32 = 1;
+    pub const TRACKER: u32 = 2;
+}
 
 /// Clamp a float value, treating NaN as the minimum value
 #[inline]
@@ -33,25 +41,26 @@ pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     linker.func_wrap("env", "channel_play", channel_play)?;
     linker.func_wrap("env", "channel_set", channel_set)?;
     linker.func_wrap("env", "channel_stop", channel_stop)?;
-    linker.func_wrap("env", "music_play", music_play)?;
-    linker.func_wrap("env", "music_stop", music_stop)?;
-    linker.func_wrap("env", "music_set_volume", music_set_volume)?;
 
-    // Tracker playback (XM module music)
+    // Tracker loading (returns flagged handles for unified music API)
     linker.func_wrap("env", "rom_tracker", rom_tracker)?;
     linker.func_wrap("env", "load_tracker", load_tracker)?;
-    linker.func_wrap("env", "tracker_play", tracker_play)?;
-    linker.func_wrap("env", "tracker_stop", tracker_stop)?;
-    linker.func_wrap("env", "tracker_pause", tracker_pause)?;
-    linker.func_wrap("env", "tracker_set_volume", tracker_set_volume)?;
-    linker.func_wrap("env", "tracker_is_playing", tracker_is_playing)?;
-    linker.func_wrap("env", "tracker_jump", tracker_jump)?;
-    linker.func_wrap("env", "tracker_position", tracker_position)?;
-    linker.func_wrap("env", "tracker_length", tracker_length)?;
-    linker.func_wrap("env", "tracker_set_speed", tracker_set_speed)?;
-    linker.func_wrap("env", "tracker_set_tempo", tracker_set_tempo)?;
-    linker.func_wrap("env", "tracker_info", tracker_info)?;
-    linker.func_wrap("env", "tracker_name", tracker_name)?;
+
+    // Unified Music API (works with both PCM and tracker handles)
+    linker.func_wrap("env", "music_play", music_play)?;
+    linker.func_wrap("env", "music_stop", music_stop)?;
+    linker.func_wrap("env", "music_pause", music_pause)?;
+    linker.func_wrap("env", "music_set_volume", music_set_volume)?;
+    linker.func_wrap("env", "music_is_playing", music_is_playing)?;
+    linker.func_wrap("env", "music_type", music_type_fn)?;
+    linker.func_wrap("env", "music_jump", music_jump)?;
+    linker.func_wrap("env", "music_position", music_position)?;
+    linker.func_wrap("env", "music_length", music_length)?;
+    linker.func_wrap("env", "music_set_speed", music_set_speed)?;
+    linker.func_wrap("env", "music_set_tempo", music_set_tempo)?;
+    linker.func_wrap("env", "music_info", music_info)?;
+    linker.func_wrap("env", "music_name", music_name)?;
+
     Ok(())
 }
 
@@ -211,45 +220,156 @@ fn channel_stop(mut caller: Caller<'_, ZXGameContext>, channel: u32) {
     ch.looping = 0;
 }
 
-/// Play music (looping, dedicated channel)
+/// Play music (unified API for PCM sounds and tracker modules)
+///
+/// Automatically stops any currently playing music of either type.
+/// Detects handle type by checking bit 31 (set for tracker handles).
 ///
 /// # Parameters
-/// - `sound`: Sound handle from load_sound()
+/// - `handle`: Sound handle from load_sound() or tracker handle from rom_tracker()/load_tracker()
 /// - `volume`: 0.0 to 1.0
-fn music_play(mut caller: Caller<'_, ZXGameContext>, sound: u32, volume: f32) {
+/// - `looping`: 1 = loop, 0 = play once
+fn music_play(mut caller: Caller<'_, ZXGameContext>, handle: u32, volume: f32, looping: u32) {
     let ctx = caller.data_mut();
-    let music = &mut ctx.rollback.audio.music;
 
-    // If same music is already playing, just update volume
-    if music.sound == sound && music.sound != 0 {
+    if is_tracker_handle(handle) {
+        // Tracker music - stop PCM music first
+        ctx.rollback.audio.music.sound = 0;
+        ctx.rollback.audio.music.position = 0;
+
+        // Set up tracker state with raw handle (strip flag)
+        let raw_handle = raw_tracker_handle(handle);
+        let tracker = &mut ctx.rollback.tracker;
+        tracker.handle = raw_handle;
+        tracker.order_position = 0;
+        tracker.row = 0;
+        tracker.tick = 0;
+        tracker.speed = crate::tracker::DEFAULT_SPEED;
+        tracker.bpm = crate::tracker::DEFAULT_BPM;
+        tracker.volume = (clamp_safe(volume, 0.0, 1.0) * 256.0) as u16;
+        tracker.tick_sample_pos = 0;
+
+        let mut flags = tracker_flags::PLAYING;
+        if looping != 0 {
+            flags |= tracker_flags::LOOPING;
+        }
+        tracker.flags = flags;
+
+        // Reset the tracker engine
+        ctx.ffi.tracker_engine.reset();
+    } else {
+        // PCM music - stop tracker first
+        ctx.rollback.tracker.handle = 0;
+        ctx.rollback.tracker.flags = 0;
+
+        let music = &mut ctx.rollback.audio.music;
+
+        // If same music is already playing with same looping, just update volume
+        if music.sound == handle && music.looping == looping && music.sound != 0 {
+            music.volume = clamp_safe(volume, 0.0, 1.0);
+            return;
+        }
+
+        // Start new PCM music
+        music.sound = handle;
+        music.position = 0;
+        music.looping = looping;
         music.volume = clamp_safe(volume, 0.0, 1.0);
-        return;
+        music.pan = 0.0; // Music is always centered
     }
-
-    // Start new music
-    music.sound = sound;
-    music.position = 0;
-    music.looping = 1; // Music always loops
-    music.volume = clamp_safe(volume, 0.0, 1.0);
-    music.pan = 0.0; // Music is always centered
 }
 
-/// Stop music
+/// Stop music (unified - stops both PCM and tracker)
 fn music_stop(mut caller: Caller<'_, ZXGameContext>) {
     let ctx = caller.data_mut();
+
+    // Stop PCM music
     let music = &mut ctx.rollback.audio.music;
     music.sound = 0;
     music.position = 0;
     music.looping = 0;
+
+    // Stop tracker music
+    let tracker = &mut ctx.rollback.tracker;
+    tracker.handle = 0;
+    tracker.flags = 0;
+    tracker.order_position = 0;
+    tracker.row = 0;
+    tracker.tick = 0;
 }
 
-/// Set music volume
+/// Pause or resume music (tracker only, no-op for PCM)
+///
+/// # Parameters
+/// - `paused`: 1 = pause, 0 = resume
+fn music_pause(mut caller: Caller<'_, ZXGameContext>, paused: u32) {
+    let ctx = caller.data_mut();
+    let tracker = &mut ctx.rollback.tracker;
+
+    if paused != 0 {
+        tracker.flags |= tracker_flags::PAUSED;
+    } else {
+        tracker.flags &= !tracker_flags::PAUSED;
+    }
+}
+
+/// Set music volume (works for both PCM and tracker)
 ///
 /// # Parameters
 /// - `volume`: 0.0 to 1.0
 fn music_set_volume(mut caller: Caller<'_, ZXGameContext>, volume: f32) {
     let ctx = caller.data_mut();
+
+    // Set PCM music volume
     ctx.rollback.audio.music.volume = clamp_safe(volume, 0.0, 1.0);
+
+    // Set tracker volume
+    ctx.rollback.tracker.volume = (clamp_safe(volume, 0.0, 1.0) * 256.0) as u16;
+}
+
+/// Check if music is currently playing
+///
+/// # Returns
+/// 1 if playing (and not paused), 0 otherwise
+fn music_is_playing(caller: Caller<'_, ZXGameContext>) -> u32 {
+    let ctx = caller.data();
+
+    // Check tracker
+    let tracker = &ctx.rollback.tracker;
+    if tracker.handle != 0
+        && (tracker.flags & tracker_flags::PLAYING) != 0
+        && (tracker.flags & tracker_flags::PAUSED) == 0
+    {
+        return 1;
+    }
+
+    // Check PCM music
+    if ctx.rollback.audio.music.sound != 0 {
+        return 1;
+    }
+
+    0
+}
+
+/// Get current music type
+///
+/// # Returns
+/// 0 = none, 1 = PCM, 2 = tracker
+fn music_type_fn(caller: Caller<'_, ZXGameContext>) -> u32 {
+    let ctx = caller.data();
+
+    // Check tracker first (higher priority)
+    let tracker = &ctx.rollback.tracker;
+    if tracker.handle != 0 && (tracker.flags & tracker_flags::PLAYING) != 0 {
+        return music_type::TRACKER;
+    }
+
+    // Check PCM music
+    if ctx.rollback.audio.music.sound != 0 {
+        return music_type::PCM;
+    }
+
+    music_type::NONE
 }
 
 // ============================================================================
@@ -421,101 +541,16 @@ fn load_tracker(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len: 
     handle
 }
 
-/// Start tracker playback
-///
-/// Starts playing the specified tracker module.
-/// This stops any currently playing PCM music.
-///
-/// # Parameters
-/// - `handle`: Tracker handle from rom_tracker/load_tracker
-/// - `volume`: 0.0 to 1.0
-/// - `looping`: 1 = loop at end, 0 = stop at end
-fn tracker_play(mut caller: Caller<'_, ZXGameContext>, handle: u32, volume: f32, looping: u32) {
-    let ctx = caller.data_mut();
-    let tracker = &mut ctx.rollback.tracker;
+// ============================================================================
+// Music Position/Control Functions (tracker-specific, no-op for PCM)
+// ============================================================================
 
-    // Stop PCM music when tracker starts
-    ctx.rollback.audio.music.sound = 0;
-    ctx.rollback.audio.music.position = 0;
-
-    // Set up tracker state
-    tracker.handle = handle;
-    tracker.order_position = 0;
-    tracker.row = 0;
-    tracker.tick = 0;
-    tracker.speed = crate::tracker::DEFAULT_SPEED;
-    tracker.bpm = crate::tracker::DEFAULT_BPM;
-    tracker.volume = (clamp_safe(volume, 0.0, 1.0) * 256.0) as u16;
-    tracker.tick_sample_pos = 0;
-
-    let mut flags = tracker_flags::PLAYING;
-    if looping != 0 {
-        flags |= tracker_flags::LOOPING;
-    }
-    tracker.flags = flags;
-
-    // Reset the tracker engine
-    ctx.ffi.tracker_engine.reset();
-}
-
-/// Stop tracker playback
-fn tracker_stop(mut caller: Caller<'_, ZXGameContext>) {
-    let ctx = caller.data_mut();
-    let tracker = &mut ctx.rollback.tracker;
-
-    tracker.handle = 0;
-    tracker.flags = 0;
-    tracker.order_position = 0;
-    tracker.row = 0;
-    tracker.tick = 0;
-}
-
-/// Pause/resume tracker playback
-///
-/// # Parameters
-/// - `paused`: 1 = pause, 0 = resume
-fn tracker_pause(mut caller: Caller<'_, ZXGameContext>, paused: u32) {
-    let ctx = caller.data_mut();
-    let tracker = &mut ctx.rollback.tracker;
-
-    if paused != 0 {
-        tracker.flags |= tracker_flags::PAUSED;
-    } else {
-        tracker.flags &= !tracker_flags::PAUSED;
-    }
-}
-
-/// Set tracker volume
-///
-/// # Parameters
-/// - `volume`: 0.0 to 1.0
-fn tracker_set_volume(mut caller: Caller<'_, ZXGameContext>, volume: f32) {
-    let ctx = caller.data_mut();
-    ctx.rollback.tracker.volume = (clamp_safe(volume, 0.0, 1.0) * 256.0) as u16;
-}
-
-/// Check if tracker is currently playing
-///
-/// # Returns
-/// 1 if playing, 0 if stopped or paused
-fn tracker_is_playing(caller: Caller<'_, ZXGameContext>) -> u32 {
-    let tracker = &caller.data().rollback.tracker;
-    if tracker.handle != 0
-        && (tracker.flags & tracker_flags::PLAYING) != 0
-        && (tracker.flags & tracker_flags::PAUSED) == 0
-    {
-        1
-    } else {
-        0
-    }
-}
-
-/// Jump to a specific position in the tracker
+/// Jump to a specific position (tracker only, no-op for PCM)
 ///
 /// # Parameters
 /// - `order`: Order position (0-based)
 /// - `row`: Row within the pattern (0-based)
-fn tracker_jump(mut caller: Caller<'_, ZXGameContext>, order: u32, row: u32) {
+fn music_jump(mut caller: Caller<'_, ZXGameContext>, order: u32, row: u32) {
     let ctx = caller.data_mut();
     let tracker = &mut ctx.rollback.tracker;
 
@@ -525,83 +560,122 @@ fn tracker_jump(mut caller: Caller<'_, ZXGameContext>, order: u32, row: u32) {
     tracker.tick_sample_pos = 0;
 }
 
-/// Get current tracker position
+/// Get current music position
+///
+/// For tracker: (order << 16) | row
+/// For PCM: sample position
 ///
 /// # Returns
-/// (order << 16) | row
-fn tracker_position(caller: Caller<'_, ZXGameContext>) -> u32 {
-    let tracker = &caller.data().rollback.tracker;
-    ((tracker.order_position as u32) << 16) | (tracker.row as u32)
+/// Position value
+fn music_position(caller: Caller<'_, ZXGameContext>) -> u32 {
+    let ctx = caller.data();
+
+    // Check if tracker is playing
+    let tracker = &ctx.rollback.tracker;
+    if tracker.handle != 0 && (tracker.flags & tracker_flags::PLAYING) != 0 {
+        return ((tracker.order_position as u32) << 16) | (tracker.row as u32);
+    }
+
+    // Return PCM position
+    ctx.rollback.audio.music.position
 }
 
-/// Get tracker length (number of orders)
+/// Get music length
+///
+/// For tracker: number of orders
+/// For PCM: number of samples (if known, otherwise 0)
 ///
 /// # Parameters
-/// - `handle`: Tracker handle
+/// - `handle`: Music handle (PCM or tracker)
 ///
 /// # Returns
-/// Number of orders in the song
-fn tracker_length(caller: Caller<'_, ZXGameContext>, handle: u32) -> u32 {
+/// Length value
+fn music_length(caller: Caller<'_, ZXGameContext>, handle: u32) -> u32 {
     let ctx = caller.data();
-    if let Some(module) = ctx.ffi.tracker_engine.get_module(handle) {
-        module.song_length as u32
+
+    if is_tracker_handle(handle) {
+        // Tracker length in orders
+        if let Some(module) = ctx.ffi.tracker_engine.get_module(handle) {
+            return module.song_length as u32;
+        }
     } else {
-        0
+        // PCM length in samples
+        if let Some(sound) = ctx.ffi.sounds.get(handle as usize).and_then(|s| s.as_ref()) {
+            return sound.data.len() as u32;
+        }
     }
+
+    0
 }
 
-/// Set tracker speed (ticks per row)
+/// Set music speed (ticks per row, tracker only)
 ///
 /// # Parameters
 /// - `speed`: 1-31 (XM default is 6)
-fn tracker_set_speed(mut caller: Caller<'_, ZXGameContext>, speed: u32) {
+fn music_set_speed(mut caller: Caller<'_, ZXGameContext>, speed: u32) {
     let ctx = caller.data_mut();
     ctx.rollback.tracker.speed = (speed.clamp(1, 31)) as u16;
 }
 
-/// Set tracker tempo (BPM)
+/// Set music tempo (BPM, tracker only)
 ///
 /// # Parameters
 /// - `bpm`: 32-255 (XM default is 125)
-fn tracker_set_tempo(mut caller: Caller<'_, ZXGameContext>, bpm: u32) {
+fn music_set_tempo(mut caller: Caller<'_, ZXGameContext>, bpm: u32) {
     let ctx = caller.data_mut();
     ctx.rollback.tracker.bpm = (bpm.clamp(32, 255)) as u16;
 }
 
-/// Get tracker info
+/// Get music info
+///
+/// For tracker: (num_channels << 24) | (num_patterns << 16) | (num_instruments << 8) | song_length
+/// For PCM: (sample_rate << 16) | (1 << 8) | 0 (1 channel, mono)
 ///
 /// # Parameters
-/// - `handle`: Tracker handle
+/// - `handle`: Music handle (PCM or tracker)
 ///
 /// # Returns
-/// (num_channels << 24) | (num_patterns << 16) | (num_instruments << 8) | song_length
-fn tracker_info(caller: Caller<'_, ZXGameContext>, handle: u32) -> u32 {
+/// Packed info value
+fn music_info(caller: Caller<'_, ZXGameContext>, handle: u32) -> u32 {
     let ctx = caller.data();
-    if let Some(module) = ctx.ffi.tracker_engine.get_module(handle) {
-        ((module.num_channels as u32) << 24)
-            | ((module.num_patterns as u32) << 16)
-            | ((module.num_instruments as u32) << 8)
-            | (module.song_length as u32)
+
+    if is_tracker_handle(handle) {
+        if let Some(module) = ctx.ffi.tracker_engine.get_module(handle) {
+            return ((module.num_channels as u32) << 24)
+                | ((module.num_patterns as u32) << 16)
+                | ((module.num_instruments as u32) << 8)
+                | (module.song_length as u32);
+        }
     } else {
-        0
+        // PCM info: sample_rate=22050, channels=1, bits=16
+        if ctx.ffi.sounds.get(handle as usize).and_then(|s| s.as_ref()).is_some() {
+            return (22050 << 16) | (1 << 8) | 16;
+        }
     }
+
+    0
 }
 
-/// Get tracker name
+/// Get music name (tracker only, returns 0 for PCM)
 ///
 /// # Parameters
-/// - `handle`: Tracker handle
+/// - `handle`: Music handle
 /// - `out_ptr`: Pointer to output buffer in WASM memory
 /// - `max_len`: Maximum bytes to write
 ///
 /// # Returns
-/// Actual length written (0 if handle invalid)
-fn tracker_name(
+/// Actual length written (0 if handle invalid or PCM)
+fn music_name(
     mut caller: Caller<'_, ZXGameContext>,
     handle: u32,
     out_ptr: u32,
     max_len: u32,
 ) -> u32 {
+    // Only tracker handles have names
+    if !is_tracker_handle(handle) {
+        return 0;
+    }
+
     let name = {
         let ctx = caller.data();
         if let Some(module) = ctx.ffi.tracker_engine.get_module(handle) {
@@ -631,3 +705,4 @@ fn tracker_name(
     data[start..end].copy_from_slice(&bytes[..write_len]);
     write_len as u32
 }
+

@@ -29,6 +29,32 @@ pub const DEFAULT_SPEED: u16 = 6;
 /// Default XM tempo (BPM)
 pub const DEFAULT_BPM: u16 = 125;
 
+/// Number of samples for fade-out (anti-pop) at 44.1kHz
+/// ~3ms fade-out = 132 samples, enough to avoid pops while being inaudible
+pub const FADE_OUT_SAMPLES: u16 = 132;
+
+/// Number of samples for fade-in (anti-pop) at 44.1kHz
+/// ~2ms fade-in = 88 samples, short enough to not affect attack
+pub const FADE_IN_SAMPLES: u16 = 88;
+
+/// Flag bit for tracker handles (bit 31)
+///
+/// Tracker handles have this bit set to distinguish them from PCM sound handles.
+/// This enables the unified music API to detect which type of music to play.
+pub const TRACKER_HANDLE_FLAG: u32 = 0x80000000;
+
+/// Check if a handle is a tracker handle
+#[inline]
+pub fn is_tracker_handle(handle: u32) -> bool {
+    (handle & TRACKER_HANDLE_FLAG) != 0
+}
+
+/// Get the raw handle value (strip the tracker flag)
+#[inline]
+pub fn raw_tracker_handle(handle: u32) -> u32 {
+    handle & !TRACKER_HANDLE_FLAG
+}
+
 /// Main tracker playback engine
 ///
 /// This contains the "heavy" state that doesn't need to be rolled back.
@@ -167,6 +193,14 @@ pub struct TrackerChannel {
     // Pattern loop (per-channel in XM)
     pub pattern_loop_row: u16,
     pub pattern_loop_count: u8,
+
+    // Fade state for smooth transitions (anti-pop)
+    /// Fade-out samples remaining (0 = not fading out, >0 = fading out)
+    pub fade_out_samples: u16,
+    /// Fade-in samples remaining (0 = fully faded in, >0 = still fading in)
+    pub fade_in_samples: u16,
+    /// Previous sample value for crossfade during note transitions
+    pub prev_sample: f32,
 }
 
 impl TrackerChannel {
@@ -175,6 +209,9 @@ impl TrackerChannel {
         *self = Self::default();
         self.sample_direction = 1;
         self.volume_fadeout = 65535;
+        self.fade_out_samples = 0;
+        self.fade_in_samples = 0;
+        self.prev_sample = 0.0;
     }
 
     /// Trigger a new note
@@ -186,6 +223,9 @@ impl TrackerChannel {
         self.volume_envelope_pos = 0;
         self.panning_envelope_pos = 0;
         self.volume_fadeout = 65535;
+        self.fade_out_samples = 0; // Cancel any fade-out
+        self.fade_in_samples = FADE_IN_SAMPLES; // Start fade-in for crossfade
+        // Note: prev_sample is preserved for crossfade blending
 
         // Reset vibrato/tremolo positions on new note
         if self.vibrato_waveform < 4 {
@@ -319,13 +359,15 @@ impl TrackerEngine {
 
     /// Load a module with resolved sound handles
     ///
-    /// Returns a handle for later playback (1-indexed, 0 is invalid)
+    /// Returns a handle for later playback (1-indexed, 0 is invalid).
+    /// The returned handle has TRACKER_HANDLE_FLAG set (bit 31) to distinguish
+    /// it from PCM sound handles in the unified music API.
     pub fn load_module(&mut self, module: XmModule, sound_handles: Vec<u32>) -> u32 {
-        let handle = self.next_handle;
+        let raw_handle = self.next_handle;
         self.next_handle += 1;
 
         // Extend modules vector if needed
-        let idx = handle as usize;
+        let idx = raw_handle as usize;
         if idx >= self.modules.len() {
             self.modules.resize_with(idx + 1, || None);
         }
@@ -335,13 +377,17 @@ impl TrackerEngine {
             sound_handles,
         });
 
-        handle
+        // Return flagged handle so unified music API can detect tracker vs PCM
+        raw_handle | TRACKER_HANDLE_FLAG
     }
 
     /// Get a loaded module by handle
+    ///
+    /// Accepts both flagged (from load_module) and raw handles.
     pub fn get_module(&self, handle: u32) -> Option<&XmModule> {
+        let raw = raw_tracker_handle(handle);
         self.modules
-            .get(handle as usize)
+            .get(raw as usize)
             .and_then(|m| m.as_ref())
             .map(|m| &m.module)
     }
@@ -563,6 +609,9 @@ impl TrackerEngine {
             channel.volume_envelope_pos = 0;
             channel.panning_envelope_pos = 0;
             channel.volume_fadeout = 65535;
+            channel.fade_out_samples = 0; // Cancel any fade-out
+            channel.fade_in_samples = FADE_IN_SAMPLES; // Start fade-in for crossfade
+            // Note: prev_sample is preserved for crossfade blending
 
             // Reset vibrato/tremolo on new note
             if channel.vibrato_waveform < 4 {
@@ -1112,10 +1161,27 @@ impl TrackerEngine {
     }
 }
 
-/// Sample a channel with linear interpolation
+/// Sample a channel with linear interpolation and anti-pop fade-in/out
 fn sample_channel(channel: &mut TrackerChannel, data: &[i16], _sample_rate: u32) -> f32 {
     if data.is_empty() {
         return 0.0;
+    }
+
+    // Handle fade-out phase (anti-pop when sample ends)
+    if channel.fade_out_samples > 0 {
+        let fade_ratio = channel.fade_out_samples as f32 / FADE_OUT_SAMPLES as f32;
+        channel.fade_out_samples -= 1;
+
+        // Fade from previous sample value to zero
+        let sample = channel.prev_sample * fade_ratio;
+
+        // When fade-out completes, stop the channel
+        if channel.fade_out_samples == 0 {
+            channel.note_on = false;
+            channel.prev_sample = 0.0;
+        }
+
+        return sample;
     }
 
     let pos = channel.sample_pos as usize;
@@ -1131,13 +1197,32 @@ fn sample_channel(channel: &mut TrackerChannel, data: &[i16], _sample_rate: u32)
     let sample2 = if pos + 1 < data.len() {
         data[pos + 1] as f32 / 32768.0
     } else if channel.sample_loop_type != 0 && channel.sample_loop_end > channel.sample_loop_start {
-        // Wrap to loop start
-        data[channel.sample_loop_start as usize] as f32 / 32768.0
+        // Wrap to loop start for smooth loop interpolation
+        let loop_start = channel.sample_loop_start as usize;
+        if loop_start < data.len() {
+            data[loop_start] as f32 / 32768.0
+        } else {
+            sample1
+        }
     } else {
         sample1
     };
 
-    let sample = sample1 + (sample2 - sample1) * frac;
+    let mut sample = sample1 + (sample2 - sample1) * frac;
+
+    // Handle fade-in phase (crossfade from previous sample when new note triggers)
+    if channel.fade_in_samples > 0 {
+        let fade_ratio = 1.0 - (channel.fade_in_samples as f32 / FADE_IN_SAMPLES as f32);
+        channel.fade_in_samples -= 1;
+
+        // Crossfade: blend from previous sample value to new sample
+        sample = channel.prev_sample * (1.0 - fade_ratio) + sample * fade_ratio;
+    }
+
+    // Store current sample for future crossfade (only update after fade-in complete)
+    if channel.fade_in_samples == 0 {
+        channel.prev_sample = sample;
+    }
 
     // Calculate playback rate from period
     // XM uses: frequency = 8363 * 2^((6*12*16*4 - period) / (12*16*4))
@@ -1170,8 +1255,8 @@ fn sample_channel(channel: &mut TrackerChannel, data: &[i16], _sample_rate: u32)
                 + (channel.sample_loop_start as f64 - channel.sample_pos);
         }
     } else if channel.sample_pos >= data.len() as f64 {
-        // No loop - stop playback
-        channel.note_on = false;
+        // No loop - start fade-out instead of abrupt stop (anti-pop)
+        channel.fade_out_samples = FADE_OUT_SAMPLES;
     }
 
     sample
@@ -1245,16 +1330,81 @@ fn note_to_period(note: u8, finetune: i8) -> f32 {
     period.max(1) as f32
 }
 
-/// Convert period to frequency (Hz)
+/// Lookup table for 2^(i/768) where i = 0..768
+///
+/// This is the canonical XM optimization used by MilkyTracker, ModPlug, etc.
+/// The XM spec itself recommends: "To avoid floating point operations, you can
+/// use a 768 doubleword array."
+///
+/// 768 = 12 * 16 * 4 (12 notes × 16 finetune levels × 4 for portamento precision)
+/// Entry 768 is included for interpolation at the boundary.
+const LINEAR_FREQ_TABLE: [f32; 769] = {
+    let mut table = [0.0f32; 769];
+    let mut i = 0;
+    while i < 769 {
+        // 2^(i/768) using const-compatible computation
+        // We use the identity: 2^x = e^(x * ln(2))
+        // For const eval, we compute this at compile time
+        let x = i as f64 / 768.0;
+        // 2^x where x is in [0, 1]
+        // Using a high-precision polynomial approximation for const context
+        // P(x) ≈ 2^x, accurate to ~10 decimal places for x in [0,1]
+        let ln2 = 0.693147180559945309417232121458176568;
+        let t = x * ln2;
+        // e^t Taylor series (enough terms for f32 precision)
+        let e_t = 1.0
+            + t * (1.0
+                + t * (0.5
+                    + t * (0.16666666666666666
+                        + t * (0.041666666666666664
+                            + t * (0.008333333333333333
+                                + t * (0.001388888888888889
+                                    + t * 0.0001984126984126984))))));
+        table[i] = e_t as f32;
+        i += 1;
+    }
+    table
+};
+
+/// Convert period to frequency (Hz) using lookup table
 ///
 /// XM frequency formula:
-/// Frequency = 8363 * 2^((6*12*16*4 - Period) / (12*16*4))
+/// Frequency = 8363 * 2^((4608 - Period) / 768)
+///
+/// This uses a 768-entry lookup table for the fractional part of the exponent,
+/// making it O(1) and fast even in debug builds (no powf() calls).
+#[inline]
 fn period_to_frequency(period: f32) -> f32 {
     if period <= 0.0 {
         return 0.0;
     }
-    let exp = (6.0 * 12.0 * 16.0 * 4.0 - period) / (12.0 * 16.0 * 4.0);
-    8363.0 * 2.0_f32.powf(exp)
+
+    // 4608 = 6 * 12 * 16 * 4 (middle C-4 reference point)
+    let diff = 4608.0 - period;
+
+    // Split into octave (integer) and fractional parts
+    // diff / 768 = number of octaves from C-4
+    let octaves = (diff / 768.0).floor();
+    let frac = diff - (octaves * 768.0);
+
+    // Table lookup with linear interpolation for fractional indices
+    let idx = frac as usize;
+    let t = frac - idx as f32;
+
+    // Clamp index to valid range (handles edge cases)
+    let idx = idx.min(767);
+    let freq_frac = LINEAR_FREQ_TABLE[idx] * (1.0 - t) + LINEAR_FREQ_TABLE[idx + 1] * t;
+
+    // Apply octave scaling: multiply by 2^octaves
+    // For positive octaves: multiply by 2^n
+    // For negative octaves: divide by 2^|n|
+    let octave_scale = if octaves >= 0.0 {
+        (1u32 << (octaves as u32).min(31)) as f32
+    } else {
+        1.0 / (1u32 << ((-octaves) as u32).min(31)) as f32
+    };
+
+    8363.0 * freq_frac * octave_scale
 }
 
 #[cfg(test)]
@@ -1320,5 +1470,50 @@ mod tests {
         assert_eq!(ch.volume, 0.0);
         assert!(!ch.note_on);
         assert_eq!(ch.sample_direction, 1);
+    }
+
+    #[test]
+    fn test_lut_accuracy() {
+        // Verify the LUT matches the original formula within acceptable tolerance
+        // Human pitch perception threshold is ~0.3%, we should be well under that
+        fn reference_period_to_frequency(period: f32) -> f32 {
+            if period <= 0.0 {
+                return 0.0;
+            }
+            let exp = (4608.0 - period) / 768.0;
+            8363.0 * 2.0_f32.powf(exp)
+        }
+
+        // Test across the full XM period range (roughly 50-7680)
+        for period_int in (50..7680).step_by(10) {
+            let period = period_int as f32;
+            let lut_freq = period_to_frequency(period);
+            let ref_freq = reference_period_to_frequency(period);
+
+            let error_pct = ((lut_freq - ref_freq) / ref_freq).abs() * 100.0;
+            assert!(
+                error_pct < 0.01, // Less than 0.01% error
+                "Period {} LUT={} ref={} error={}%",
+                period,
+                lut_freq,
+                ref_freq,
+                error_pct
+            );
+        }
+
+        // Also test fractional periods (for vibrato/portamento)
+        for i in 0..100 {
+            let period = 4608.0 + (i as f32 * 0.37); // Arbitrary fractional steps
+            let lut_freq = period_to_frequency(period);
+            let ref_freq = reference_period_to_frequency(period);
+
+            let error_pct = ((lut_freq - ref_freq) / ref_freq).abs() * 100.0;
+            assert!(
+                error_pct < 0.01,
+                "Fractional period {} error={}%",
+                period,
+                error_pct
+            );
+        }
     }
 }

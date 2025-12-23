@@ -844,7 +844,7 @@ keyframe_read(handle: u32, frame_index: u32, out: [*]f32) void  // Read for blen
 
 ---
 
-## Audio
+## Audio (SFX)
 
 {{#tabs global="lang"}}
 
@@ -855,9 +855,6 @@ play_sound(sound, volume, pan)         // Auto-select channel
 channel_play(ch, sound, vol, pan, loop)
 channel_set(ch, volume, pan)
 channel_stop(ch)
-music_play(sound, volume)
-music_stop()
-music_set_volume(volume)
 ```
 {{#endtab}}
 
@@ -868,9 +865,6 @@ void play_sound(uint32_t sound, float volume, float pan);  // Auto-select channe
 void channel_play(uint32_t ch, uint32_t sound, float vol, float pan, uint32_t loop);
 void channel_set(uint32_t ch, float volume, float pan);
 void channel_stop(uint32_t ch);
-void music_play(uint32_t sound, float volume);
-void music_stop(void);
-void music_set_volume(float volume);
 ```
 {{#endtab}}
 
@@ -881,9 +875,6 @@ play_sound(sound: u32, volume: f32, pan: f32) void  // Auto-select channel
 channel_play(ch: u32, sound: u32, vol: f32, pan: f32, loop: u32) void
 channel_set(ch: u32, volume: f32, pan: f32) void
 channel_stop(ch: u32) void
-music_play(sound: u32, volume: f32) void
-music_stop() void
-music_set_volume(volume: f32) void
 ```
 {{#endtab}}
 
@@ -891,91 +882,96 @@ music_set_volume(volume: f32) void
 
 ---
 
-## Tracker Music (XM)
+## Unified Music API (PCM + XM Tracker)
+
+Works with both PCM sounds and XM tracker modules. Handle type detected by bit 31 (0=PCM, 1=tracker).
 
 {{#tabs global="lang"}}
 
 {{#tab name="Rust"}}
 ```rust
 // Loading (init-only)
-rom_tracker(id_ptr, id_len) -> u32     // Load from ROM by ID
-load_tracker(data_ptr, len) -> u32     // Load from raw XM data
+rom_tracker(id_ptr, id_len) -> u32     // Load XM from ROM (returns tracker handle)
+load_tracker(data_ptr, len) -> u32     // Load XM from raw data
 
-// Playback
-tracker_play(handle, volume, loop)     // Start playing (stops PCM music)
-tracker_stop()                          // Stop playback
-tracker_pause(paused)                   // 0=resume, 1=pause
-tracker_set_volume(volume)              // 0.0-1.0
-tracker_is_playing() -> u32             // 1 if playing
+// Playback (works for both PCM and tracker)
+music_play(handle, volume, looping)    // Start playing (auto-stops other type)
+music_stop()                            // Stop all music
+music_pause(paused)                     // 0=resume, 1=pause (tracker only)
+music_set_volume(volume)                // 0.0-1.0
+music_is_playing() -> u32               // 1 if playing
+music_type() -> u32                     // 0=none, 1=PCM, 2=tracker
 
-// Position (for dynamic music)
-tracker_jump(order, row)                // Jump to position
-tracker_position() -> u32               // (order << 16) | row
-tracker_length(handle) -> u32           // Number of orders
-tracker_set_speed(speed)                // Ticks per row (1-31)
-tracker_set_tempo(bpm)                  // BPM (32-255)
+// Position (tracker-specific, no-op for PCM)
+music_jump(order, row)                  // Jump to position
+music_position() -> u32                 // Tracker: (order << 16) | row, PCM: sample pos
+music_length(handle) -> u32             // Tracker: orders, PCM: samples
+music_set_speed(speed)                  // Ticks per row (1-31)
+music_set_tempo(bpm)                    // BPM (32-255)
 
 // Query
-tracker_info(handle) -> u32             // (channels<<24)|(patterns<<16)|(instruments<<8)|length
-tracker_name(handle, out_ptr, max) -> u32
+music_info(handle) -> u32               // Tracker: (ch<<24)|(pat<<16)|(inst<<8)|len
+music_name(handle, out_ptr, max) -> u32 // Tracker only (returns 0 for PCM)
 ```
 {{#endtab}}
 
 {{#tab name="C/C++"}}
 ```c
 // Loading (init-only)
-uint32_t rom_tracker(uint32_t id_ptr, uint32_t id_len);  // Load from ROM
+uint32_t rom_tracker(uint32_t id_ptr, uint32_t id_len);  // Load XM from ROM
 uint32_t load_tracker(const uint8_t* data, uint32_t len);
 
-// Playback
-void tracker_play(uint32_t handle, float volume, uint32_t loop);
-void tracker_stop(void);
-void tracker_pause(uint32_t paused);
-void tracker_set_volume(float volume);
-uint32_t tracker_is_playing(void);
+// Playback (works for both PCM and tracker)
+void music_play(uint32_t handle, float volume, uint32_t looping);
+void music_stop(void);
+void music_pause(uint32_t paused);      // Tracker only
+void music_set_volume(float volume);
+uint32_t music_is_playing(void);
+uint32_t music_type(void);              // 0=none, 1=PCM, 2=tracker
 
-// Position
-void tracker_jump(uint32_t order, uint32_t row);
-uint32_t tracker_position(void);
-uint32_t tracker_length(uint32_t handle);
-void tracker_set_speed(uint32_t speed);
-void tracker_set_tempo(uint32_t bpm);
+// Position (tracker-specific)
+void music_jump(uint32_t order, uint32_t row);
+uint32_t music_position(void);
+uint32_t music_length(uint32_t handle);
+void music_set_speed(uint32_t speed);
+void music_set_tempo(uint32_t bpm);
 
 // Query
-uint32_t tracker_info(uint32_t handle);
-uint32_t tracker_name(uint32_t handle, uint8_t* out, uint32_t max);
+uint32_t music_info(uint32_t handle);
+uint32_t music_name(uint32_t handle, uint8_t* out, uint32_t max);
 ```
 {{#endtab}}
 
 {{#tab name="Zig"}}
 ```zig
 // Loading (init-only)
-rom_tracker(id_ptr: u32, id_len: u32) u32
+rom_tracker(id_ptr: u32, id_len: u32) u32  // Load XM from ROM
 load_tracker(data: [*]const u8, len: u32) u32
 
-// Playback
-tracker_play(handle: u32, volume: f32, loop: u32) void
-tracker_stop() void
-tracker_pause(paused: u32) void
-tracker_set_volume(volume: f32) void
-tracker_is_playing() u32
+// Playback (works for both PCM and tracker)
+music_play(handle: u32, volume: f32, looping: u32) void
+music_stop() void
+music_pause(paused: u32) void           // Tracker only
+music_set_volume(volume: f32) void
+music_is_playing() u32
+music_type() u32                        // 0=none, 1=PCM, 2=tracker
 
-// Position
-tracker_jump(order: u32, row: u32) void
-tracker_position() u32
-tracker_length(handle: u32) u32
-tracker_set_speed(speed: u32) void
-tracker_set_tempo(bpm: u32) void
+// Position (tracker-specific)
+music_jump(order: u32, row: u32) void
+music_position() u32
+music_length(handle: u32) u32
+music_set_speed(speed: u32) void
+music_set_tempo(bpm: u32) void
 
 // Query
-tracker_info(handle: u32) u32
-tracker_name(handle: u32, out: [*]u8, max: u32) u32
+music_info(handle: u32) u32
+music_name(handle: u32, out: [*]u8, max: u32) u32
 ```
 {{#endtab}}
 
 {{#endtabs}}
 
-**Note:** Tracker music (XM format) is mutually exclusive with PCM music. Load samples via `rom_sound()` before `rom_tracker()` to map instruments.
+**Note:** PCM and tracker music are mutually exclusive. Starting one stops the other. Load samples via `rom_sound()` before `rom_tracker()` to map tracker instruments.
 
 ---
 
