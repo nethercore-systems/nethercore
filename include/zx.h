@@ -336,13 +336,13 @@ NCZX_IMPORT uint32_t load_mesh_indexed_packed(const uint8_t* data_ptr, uint32_t 
 /** Draw a retained mesh with current transform and render state. */
 NCZX_IMPORT void draw_mesh(uint32_t handle);
 
-/** Generate a cube mesh. */
+/** Generate a cube mesh. **Init-only.** */
 /**  */
 /** # Arguments */
 /** * `size_x`, `size_y`, `size_z` — Half-extents along each axis */
 NCZX_IMPORT uint32_t cube(float size_x, float size_y, float size_z);
 
-/** Generate a UV sphere mesh. */
+/** Generate a UV sphere mesh. **Init-only.** */
 /**  */
 /** # Arguments */
 /** * `radius` — Sphere radius */
@@ -350,7 +350,7 @@ NCZX_IMPORT uint32_t cube(float size_x, float size_y, float size_z);
 /** * `rings` — Latitudinal divisions (2-256) */
 NCZX_IMPORT uint32_t sphere(float radius, uint32_t segments, uint32_t rings);
 
-/** Generate a cylinder or cone mesh. */
+/** Generate a cylinder or cone mesh. **Init-only.** */
 /**  */
 /** # Arguments */
 /** * `radius_bottom`, `radius_top` — Radii (>= 0.0, use 0 for cone tip) */
@@ -358,14 +358,14 @@ NCZX_IMPORT uint32_t sphere(float radius, uint32_t segments, uint32_t rings);
 /** * `segments` — Radial divisions (3-256) */
 NCZX_IMPORT uint32_t cylinder(float radius_bottom, float radius_top, float height, uint32_t segments);
 
-/** Generate a plane mesh on the XZ plane. */
+/** Generate a plane mesh on the XZ plane. **Init-only.** */
 /**  */
 /** # Arguments */
 /** * `size_x`, `size_z` — Dimensions */
 /** * `subdivisions_x`, `subdivisions_z` — Subdivisions (1-256) */
 NCZX_IMPORT uint32_t plane(float size_x, float size_z, uint32_t subdivisions_x, uint32_t subdivisions_z);
 
-/** Generate a torus (donut) mesh. */
+/** Generate a torus (donut) mesh. **Init-only.** */
 /**  */
 /** # Arguments */
 /** * `major_radius` — Distance from center to tube center */
@@ -373,7 +373,7 @@ NCZX_IMPORT uint32_t plane(float size_x, float size_z, uint32_t subdivisions_x, 
 /** * `major_segments`, `minor_segments` — Segment counts (3-256) */
 NCZX_IMPORT uint32_t torus(float major_radius, float minor_radius, uint32_t major_segments, uint32_t minor_segments);
 
-/** Generate a capsule (pill shape) mesh. */
+/** Generate a capsule (pill shape) mesh. **Init-only.** */
 /**  */
 /** # Arguments */
 /** * `radius` — Capsule radius */
@@ -382,22 +382,22 @@ NCZX_IMPORT uint32_t torus(float major_radius, float minor_radius, uint32_t majo
 /** * `rings` — Divisions per hemisphere (1-128) */
 NCZX_IMPORT uint32_t capsule(float radius, float height, uint32_t segments, uint32_t rings);
 
-/** Generate a UV sphere mesh with equirectangular texture mapping. */
+/** Generate a UV sphere mesh with equirectangular texture mapping. **Init-only.** */
 NCZX_IMPORT uint32_t sphere_uv(float radius, uint32_t segments, uint32_t rings);
 
-/** Generate a plane mesh with UV mapping. */
+/** Generate a plane mesh with UV mapping. **Init-only.** */
 NCZX_IMPORT uint32_t plane_uv(float size_x, float size_z, uint32_t subdivisions_x, uint32_t subdivisions_z);
 
-/** Generate a cube mesh with box-unwrapped UV mapping. */
+/** Generate a cube mesh with box-unwrapped UV mapping. **Init-only.** */
 NCZX_IMPORT uint32_t cube_uv(float size_x, float size_y, float size_z);
 
-/** Generate a cylinder mesh with cylindrical UV mapping. */
+/** Generate a cylinder mesh with cylindrical UV mapping. **Init-only.** */
 NCZX_IMPORT uint32_t cylinder_uv(float radius_bottom, float radius_top, float height, uint32_t segments);
 
-/** Generate a torus mesh with wrapped UV mapping. */
+/** Generate a torus mesh with wrapped UV mapping. **Init-only.** */
 NCZX_IMPORT uint32_t torus_uv(float major_radius, float minor_radius, uint32_t major_segments, uint32_t minor_segments);
 
-/** Generate a capsule mesh with hybrid UV mapping. */
+/** Generate a capsule mesh with hybrid UV mapping. **Init-only.** */
 NCZX_IMPORT uint32_t capsule_uv(float radius, float height, uint32_t segments, uint32_t rings);
 
 /** Draw triangles immediately (non-indexed). */
@@ -842,14 +842,134 @@ NCZX_IMPORT void channel_set(uint32_t channel, float volume, float pan);
 /** Stop a channel. */
 NCZX_IMPORT void channel_stop(uint32_t channel);
 
-/** Play music (dedicated looping channel). */
-NCZX_IMPORT void music_play(uint32_t sound, float volume);
+/** Load a tracker module from ROM data pack by ID. */
+/**  */
+/** Must be called during `init()`. */
+/** Returns a handle with bit 31 set (tracker handle). */
+/**  */
+/** # Arguments */
+/** * `id_ptr` — Pointer to tracker ID string */
+/** * `id_len` — Length of tracker ID string */
+/**  */
+/** # Returns */
+/** Tracker handle (>0) on success, 0 on failure. */
+NCZX_IMPORT uint32_t rom_tracker(uint32_t id_ptr, uint32_t id_len);
 
-/** Stop music. */
+/** Load a tracker module from raw XM data. */
+/**  */
+/** Must be called during `init()`. */
+/** Returns a handle with bit 31 set (tracker handle). */
+/**  */
+/** # Arguments */
+/** * `data_ptr` — Pointer to XM file data */
+/** * `data_len` — Length of XM data in bytes */
+/**  */
+/** # Returns */
+/** Tracker handle (>0) on success, 0 on failure. */
+NCZX_IMPORT uint32_t load_tracker(uint32_t data_ptr, uint32_t data_len);
+
+/** Play music (PCM sound or tracker module). */
+/**  */
+/** Automatically stops any currently playing music of the other type. */
+/** Handle type is detected by bit 31 (0=PCM, 1=tracker). */
+/**  */
+/** # Arguments */
+/** * `handle` — Sound handle (from load_sound) or tracker handle (from rom_tracker) */
+/** * `volume` — 0.0 to 1.0 */
+/** * `looping` — 1 = loop, 0 = play once */
+NCZX_IMPORT void music_play(uint32_t handle, float volume, uint32_t looping);
+
+/** Stop music (both PCM and tracker). */
 NCZX_IMPORT void music_stop(void);
 
-/** Set music volume. */
+/** Pause or resume music (tracker only, no-op for PCM). */
+/**  */
+/** # Arguments */
+/** * `paused` — 1 = pause, 0 = resume */
+NCZX_IMPORT void music_pause(uint32_t paused);
+
+/** Set music volume (works for both PCM and tracker). */
+/**  */
+/** # Arguments */
+/** * `volume` — 0.0 to 1.0 */
 NCZX_IMPORT void music_set_volume(float volume);
+
+/** Check if music is currently playing. */
+/**  */
+/** # Returns */
+/** 1 if playing (and not paused), 0 otherwise. */
+NCZX_IMPORT uint32_t music_is_playing(void);
+
+/** Get current music type. */
+/**  */
+/** # Returns */
+/** 0 = none, 1 = PCM, 2 = tracker */
+NCZX_IMPORT uint32_t music_type(void);
+
+/** Jump to a specific position (tracker only, no-op for PCM). */
+/**  */
+/** Use for dynamic music systems (e.g., jump to outro pattern). */
+/**  */
+/** # Arguments */
+/** * `order` — Order position (0-based) */
+/** * `row` — Row within the pattern (0-based) */
+NCZX_IMPORT void music_jump(uint32_t order, uint32_t row);
+
+/** Get current music position. */
+/**  */
+/** For tracker: (order << 16) | row */
+/** For PCM: sample position */
+/**  */
+/** # Returns */
+/** Position value (format depends on music type). */
+NCZX_IMPORT uint32_t music_position(void);
+
+/** Get music length. */
+/**  */
+/** For tracker: number of orders in the song. */
+/** For PCM: number of samples. */
+/**  */
+/** # Arguments */
+/** * `handle` — Music handle (PCM or tracker) */
+/**  */
+/** # Returns */
+/** Length value. */
+NCZX_IMPORT uint32_t music_length(uint32_t handle);
+
+/** Set music speed (tracker only, ticks per row). */
+/**  */
+/** # Arguments */
+/** * `speed` — 1-31 (XM default is 6) */
+NCZX_IMPORT void music_set_speed(uint32_t speed);
+
+/** Set music tempo (tracker only, BPM). */
+/**  */
+/** # Arguments */
+/** * `bpm` — 32-255 (XM default is 125) */
+NCZX_IMPORT void music_set_tempo(uint32_t bpm);
+
+/** Get music info. */
+/**  */
+/** For tracker: (num_channels << 24) | (num_patterns << 16) | (num_instruments << 8) | song_length */
+/** For PCM: (sample_rate << 16) | (channels << 8) | bits_per_sample */
+/**  */
+/** # Arguments */
+/** * `handle` — Music handle (PCM or tracker) */
+/**  */
+/** # Returns */
+/** Packed info value. */
+NCZX_IMPORT uint32_t music_info(uint32_t handle);
+
+/** Get music name (tracker only, returns 0 for PCM). */
+/**  */
+/** # Arguments */
+/** * `handle` — Music handle */
+/** * `out_ptr` — Pointer to output buffer */
+/** * `max_len` — Maximum bytes to write */
+/**  */
+/** # Returns */
+/** Actual length written (0 if PCM or invalid handle). */
+NCZX_IMPORT uint32_t music_name(uint32_t handle, uint8_t* out_ptr, uint32_t max_len);
 
 /** Load a texture from ROM data pack by ID. */
 /**  */
