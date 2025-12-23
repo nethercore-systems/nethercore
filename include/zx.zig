@@ -238,7 +238,7 @@ pub extern "C" fn set_color(color: u32) void;
 pub extern "C" fn depth_test(enabled: u32) void;
 
 /// Set the face culling mode.
-///
+/// 
 /// # Arguments
 /// * `mode` — 0=none (default), 1=back, 2=front
 pub extern "C" fn cull_mode(mode: u32) void;
@@ -323,13 +323,13 @@ pub extern "C" fn load_mesh_indexed_packed(data_ptr: [*]const u8, vertex_count: 
 /// Draw a retained mesh with current transform and render state.
 pub extern "C" fn draw_mesh(handle: u32) void;
 
-/// Generate a cube mesh.
+/// Generate a cube mesh. **Init-only.**
 /// 
 /// # Arguments
 /// * `size_x`, `size_y`, `size_z` — Half-extents along each axis
 pub extern "C" fn cube(size_x: f32, size_y: f32, size_z: f32) u32;
 
-/// Generate a UV sphere mesh.
+/// Generate a UV sphere mesh. **Init-only.**
 /// 
 /// # Arguments
 /// * `radius` — Sphere radius
@@ -337,7 +337,7 @@ pub extern "C" fn cube(size_x: f32, size_y: f32, size_z: f32) u32;
 /// * `rings` — Latitudinal divisions (2-256)
 pub extern "C" fn sphere(radius: f32, segments: u32, rings: u32) u32;
 
-/// Generate a cylinder or cone mesh.
+/// Generate a cylinder or cone mesh. **Init-only.**
 /// 
 /// # Arguments
 /// * `radius_bottom`, `radius_top` — Radii (>= 0.0, use 0 for cone tip)
@@ -345,14 +345,14 @@ pub extern "C" fn sphere(radius: f32, segments: u32, rings: u32) u32;
 /// * `segments` — Radial divisions (3-256)
 pub extern "C" fn cylinder(radius_bottom: f32, radius_top: f32, height: f32, segments: u32) u32;
 
-/// Generate a plane mesh on the XZ plane.
+/// Generate a plane mesh on the XZ plane. **Init-only.**
 /// 
 /// # Arguments
 /// * `size_x`, `size_z` — Dimensions
 /// * `subdivisions_x`, `subdivisions_z` — Subdivisions (1-256)
 pub extern "C" fn plane(size_x: f32, size_z: f32, subdivisions_x: u32, subdivisions_z: u32) u32;
 
-/// Generate a torus (donut) mesh.
+/// Generate a torus (donut) mesh. **Init-only.**
 /// 
 /// # Arguments
 /// * `major_radius` — Distance from center to tube center
@@ -360,7 +360,7 @@ pub extern "C" fn plane(size_x: f32, size_z: f32, subdivisions_x: u32, subdivisi
 /// * `major_segments`, `minor_segments` — Segment counts (3-256)
 pub extern "C" fn torus(major_radius: f32, minor_radius: f32, major_segments: u32, minor_segments: u32) u32;
 
-/// Generate a capsule (pill shape) mesh.
+/// Generate a capsule (pill shape) mesh. **Init-only.**
 /// 
 /// # Arguments
 /// * `radius` — Capsule radius
@@ -369,22 +369,22 @@ pub extern "C" fn torus(major_radius: f32, minor_radius: f32, major_segments: u3
 /// * `rings` — Divisions per hemisphere (1-128)
 pub extern "C" fn capsule(radius: f32, height: f32, segments: u32, rings: u32) u32;
 
-/// Generate a UV sphere mesh with equirectangular texture mapping.
+/// Generate a UV sphere mesh with equirectangular texture mapping. **Init-only.**
 pub extern "C" fn sphere_uv(radius: f32, segments: u32, rings: u32) u32;
 
-/// Generate a plane mesh with UV mapping.
+/// Generate a plane mesh with UV mapping. **Init-only.**
 pub extern "C" fn plane_uv(size_x: f32, size_z: f32, subdivisions_x: u32, subdivisions_z: u32) u32;
 
-/// Generate a cube mesh with box-unwrapped UV mapping.
+/// Generate a cube mesh with box-unwrapped UV mapping. **Init-only.**
 pub extern "C" fn cube_uv(size_x: f32, size_y: f32, size_z: f32) u32;
 
-/// Generate a cylinder mesh with cylindrical UV mapping.
+/// Generate a cylinder mesh with cylindrical UV mapping. **Init-only.**
 pub extern "C" fn cylinder_uv(radius_bottom: f32, radius_top: f32, height: f32, segments: u32) u32;
 
-/// Generate a torus mesh with wrapped UV mapping.
+/// Generate a torus mesh with wrapped UV mapping. **Init-only.**
 pub extern "C" fn torus_uv(major_radius: f32, minor_radius: f32, major_segments: u32, minor_segments: u32) u32;
 
-/// Generate a capsule mesh with hybrid UV mapping.
+/// Generate a capsule mesh with hybrid UV mapping. **Init-only.**
 pub extern "C" fn capsule_uv(radius: f32, height: f32, segments: u32, rings: u32) u32;
 
 /// Draw triangles immediately (non-indexed).
@@ -829,14 +829,134 @@ pub extern "C" fn channel_set(channel: u32, volume: f32, pan: f32) void;
 /// Stop a channel.
 pub extern "C" fn channel_stop(channel: u32) void;
 
-/// Play music (dedicated looping channel).
-pub extern "C" fn music_play(sound: u32, volume: f32) void;
+/// Load a tracker module from ROM data pack by ID.
+/// 
+/// Must be called during `init()`.
+/// Returns a handle with bit 31 set (tracker handle).
+/// 
+/// # Arguments
+/// * `id_ptr` — Pointer to tracker ID string
+/// * `id_len` — Length of tracker ID string
+/// 
+/// # Returns
+/// Tracker handle (>0) on success, 0 on failure.
+pub extern "C" fn rom_tracker(id_ptr: u32, id_len: u32) u32;
 
-/// Stop music.
+/// Load a tracker module from raw XM data.
+/// 
+/// Must be called during `init()`.
+/// Returns a handle with bit 31 set (tracker handle).
+/// 
+/// # Arguments
+/// * `data_ptr` — Pointer to XM file data
+/// * `data_len` — Length of XM data in bytes
+/// 
+/// # Returns
+/// Tracker handle (>0) on success, 0 on failure.
+pub extern "C" fn load_tracker(data_ptr: u32, data_len: u32) u32;
+
+/// Play music (PCM sound or tracker module).
+/// 
+/// Automatically stops any currently playing music of the other type.
+/// Handle type is detected by bit 31 (0=PCM, 1=tracker).
+/// 
+/// # Arguments
+/// * `handle` — Sound handle (from load_sound) or tracker handle (from rom_tracker)
+/// * `volume` — 0.0 to 1.0
+/// * `looping` — 1 = loop, 0 = play once
+pub extern "C" fn music_play(handle: u32, volume: f32, looping: u32) void;
+
+/// Stop music (both PCM and tracker).
 pub extern "C" fn music_stop() void;
 
-/// Set music volume.
+/// Pause or resume music (tracker only, no-op for PCM).
+/// 
+/// # Arguments
+/// * `paused` — 1 = pause, 0 = resume
+pub extern "C" fn music_pause(paused: u32) void;
+
+/// Set music volume (works for both PCM and tracker).
+/// 
+/// # Arguments
+/// * `volume` — 0.0 to 1.0
 pub extern "C" fn music_set_volume(volume: f32) void;
+
+/// Check if music is currently playing.
+/// 
+/// # Returns
+/// 1 if playing (and not paused), 0 otherwise.
+pub extern "C" fn music_is_playing() u32;
+
+/// Get current music type.
+/// 
+/// # Returns
+/// 0 = none, 1 = PCM, 2 = tracker
+pub extern "C" fn music_type() u32;
+
+/// Jump to a specific position (tracker only, no-op for PCM).
+/// 
+/// Use for dynamic music systems (e.g., jump to outro pattern).
+/// 
+/// # Arguments
+/// * `order` — Order position (0-based)
+/// * `row` — Row within the pattern (0-based)
+pub extern "C" fn music_jump(order: u32, row: u32) void;
+
+/// Get current music position.
+/// 
+/// For tracker: (order << 16) | row
+/// For PCM: sample position
+/// 
+/// # Returns
+/// Position value (format depends on music type).
+pub extern "C" fn music_position() u32;
+
+/// Get music length.
+/// 
+/// For tracker: number of orders in the song.
+/// For PCM: number of samples.
+/// 
+/// # Arguments
+/// * `handle` — Music handle (PCM or tracker)
+/// 
+/// # Returns
+/// Length value.
+pub extern "C" fn music_length(handle: u32) u32;
+
+/// Set music speed (tracker only, ticks per row).
+/// 
+/// # Arguments
+/// * `speed` — 1-31 (XM default is 6)
+pub extern "C" fn music_set_speed(speed: u32) void;
+
+/// Set music tempo (tracker only, BPM).
+/// 
+/// # Arguments
+/// * `bpm` — 32-255 (XM default is 125)
+pub extern "C" fn music_set_tempo(bpm: u32) void;
+
+/// Get music info.
+/// 
+/// For tracker: (num_channels << 24) | (num_patterns << 16) | (num_instruments << 8) | song_length
+/// For PCM: (sample_rate << 16) | (channels << 8) | bits_per_sample
+/// 
+/// # Arguments
+/// * `handle` — Music handle (PCM or tracker)
+/// 
+/// # Returns
+/// Packed info value.
+pub extern "C" fn music_info(handle: u32) u32;
+
+/// Get music name (tracker only, returns 0 for PCM).
+/// 
+/// # Arguments
+/// * `handle` — Music handle
+/// * `out_ptr` — Pointer to output buffer
+/// * `max_len` — Maximum bytes to write
+/// 
+/// # Returns
+/// Actual length written (0 if PCM or invalid handle).
+pub extern "C" fn music_name(handle: u32, out_ptr: [*]u8, max_len: u32) u32;
 
 /// Load a texture from ROM data pack by ID.
 /// 
@@ -1056,13 +1176,6 @@ pub const Render = struct {
     pub const matcap: u32 = 1;
     pub const pbr: u32 = 2;
     pub const hybrid: u32 = 3;
-};
-
-pub const Blend = struct {
-    pub const none: u32 = 0;
-    pub const alpha: u32 = 1;
-    pub const additive: u32 = 2;
-    pub const multiply: u32 = 3;
 };
 
 pub const Cull = struct {
