@@ -506,6 +506,7 @@ where
             app_config.capture.gif_fps,
             app_config.capture.gif_max_seconds,
             initial_game_name,
+            C::specs().console_type.to_string(),
         );
 
         Self {

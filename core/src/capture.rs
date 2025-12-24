@@ -3,8 +3,16 @@
 //! Provides console-agnostic screen capture capabilities for gameplay recording.
 //! - Screenshots saved as PNG to `~/.nethercore/screenshots/`
 //! - GIFs saved to `~/.nethercore/gifs/`
+//!
+//! Screenshots are signed with HMAC to verify they came from the Nethercore player
+//! when uploaded to the platform.
 
 use anyhow::{Context, Result};
+use nethercore_shared::screenshot::{
+    compute_pixel_hash, sign_screenshot, ScreenshotPayload, SCREENSHOT_SIGNATURE_KEYWORD,
+};
+use std::fs::File;
+use std::io::BufWriter;
 use std::path::PathBuf;
 use std::sync::mpsc;
 use std::thread;
@@ -41,6 +49,8 @@ pub struct ScreenCapture {
     gif_max_seconds: u32,
     /// Game name for filename prefixes
     game_name: String,
+    /// Console type for screenshot signing (e.g., "zx", "chroma")
+    console_type: String,
 }
 
 /// GIF recorder state.
@@ -69,8 +79,12 @@ pub enum SaveResult {
 impl ScreenCapture {
     /// Create a new screen capture manager.
     ///
-    /// The `game_name` is used as a prefix in saved filenames.
-    pub fn new(gif_fps: u32, gif_max_seconds: u32, game_name: String) -> Self {
+    /// # Arguments
+    /// * `gif_fps` - Target FPS for GIF recording
+    /// * `gif_max_seconds` - Maximum GIF recording duration
+    /// * `game_name` - Used as a prefix in saved filenames
+    /// * `console_type` - Console identifier for screenshot signing (e.g., "zx", "chroma")
+    pub fn new(gif_fps: u32, gif_max_seconds: u32, game_name: String, console_type: String) -> Self {
         Self {
             screenshot_pending: false,
             gif_recorder: None,
@@ -78,12 +92,18 @@ impl ScreenCapture {
             gif_fps,
             gif_max_seconds,
             game_name,
+            console_type,
         }
     }
 
     /// Update the game name (e.g., after loading a new game).
     pub fn set_game_name(&mut self, name: String) {
         self.game_name = name;
+    }
+
+    /// Update the console type (e.g., after loading a new game).
+    pub fn set_console_type(&mut self, console_type: String) {
+        self.console_type = console_type;
     }
 
     /// Request a screenshot to be taken on the next frame.
@@ -175,11 +195,12 @@ impl ScreenCapture {
             // Save in background thread
             let screenshot_pixels = pixels.clone();
             let game_name = self.game_name.clone();
+            let console_type = self.console_type.clone();
             let (tx, rx) = mpsc::channel();
             self.save_receiver = Some(rx);
 
             thread::spawn(move || {
-                let result = save_screenshot(screenshot_pixels, width, height, &game_name);
+                let result = save_screenshot(screenshot_pixels, width, height, &game_name, &console_type);
                 let _ = tx.send(SaveResult::Screenshot(result));
             });
         }
@@ -388,18 +409,46 @@ fn timestamped_filename(game_name: &str, suffix: &str, extension: &str) -> Strin
     )
 }
 
-/// Save screenshot as PNG.
-fn save_screenshot(pixels: Vec<u8>, width: u32, height: u32, game_name: &str) -> Result<PathBuf> {
+/// Save screenshot as PNG with embedded signature for origin verification.
+///
+/// The signature is embedded as a PNG iTXt chunk and can be verified by the
+/// platform backend to ensure the screenshot came from the Nethercore player.
+fn save_screenshot(
+    pixels: Vec<u8>,
+    width: u32,
+    height: u32,
+    game_name: &str,
+    console_type: &str,
+) -> Result<PathBuf> {
     let dir = screenshots_dir()?;
     let filename = timestamped_filename(game_name, "screenshot", "png");
     let path = dir.join(&filename);
 
-    // Create image buffer
-    let img = image::RgbaImage::from_raw(width, height, pixels)
-        .context("Failed to create image from pixel data")?;
+    // Compute pixel hash for the signature
+    let pixel_hash = compute_pixel_hash(&pixels);
 
-    // Save as PNG
-    img.save(&path).context("Failed to save screenshot")?;
+    // Create and sign the payload
+    let payload = ScreenshotPayload::new(&pixel_hash, console_type, width, height);
+    let signed = sign_screenshot(&payload).context("Failed to sign screenshot")?;
+    let signed_json = signed.to_json().context("Failed to serialize signature")?;
+
+    // Create PNG file with signature embedded as iTXt chunk
+    let file = File::create(&path).context("Failed to create screenshot file")?;
+    let ref mut writer = BufWriter::new(file);
+
+    let mut encoder = png::Encoder::new(writer, width, height);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+
+    // Add signature as iTXt chunk
+    encoder
+        .add_itxt_chunk(SCREENSHOT_SIGNATURE_KEYWORD.to_string(), signed_json)
+        .context("Failed to add signature chunk")?;
+
+    let mut png_writer = encoder.write_header().context("Failed to write PNG header")?;
+    png_writer
+        .write_image_data(&pixels)
+        .context("Failed to write PNG data")?;
 
     tracing::info!("Screenshot saved: {}", path.display());
 

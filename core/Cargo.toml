@@ -67,7 +67,8 @@ serde_json = { workspace = true }    # JSON for game manifests
 
 # Screen capture dependencies
 wgpu = { workspace = true }          # GPU texture readback
-image = { workspace = true }         # PNG encoding
+image = { workspace = true }         # PNG encoding (for reading)
+png = { workspace = true }           # PNG encoding with metadata (for signed screenshots)
 gif = { workspace = true }           # GIF encoding
 chrono = { workspace = true }        # Timestamps for filenames
 

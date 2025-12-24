@@ -8,6 +8,13 @@ description = "Shared types for Nethercore fantasy console platform"
 
 [dependencies]
 serde = { workspace = true }
+serde_json = { workspace = true }
 bitcode = { workspace = true }
 chrono = { workspace = true }
 anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Screenshot signing
+sha2 = { workspace = true }
+hmac = { workspace = true }
+hex = { workspace = true }

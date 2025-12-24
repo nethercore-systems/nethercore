@@ -35,6 +35,7 @@ pub mod local;
 pub mod math;
 pub mod requests;
 pub mod rom_format;
+pub mod screenshot;
 
 // Re-export all public items for convenience
 pub use api::*;
