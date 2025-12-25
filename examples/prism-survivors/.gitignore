@@ -1,0 +1,28 @@
+# Generated assets (regenerate with: cargo run -p mesh-gen)
+assets/meshes/*.obj
+assets/meshes/*.gltf
+assets/meshes/*.glb
+assets/textures/*.png
+assets/textures/*.jpg
+assets/audio/*.wav
+assets/audio/*.raw
+
+# Keep the directories but not the contents
+!assets/meshes/.gitkeep
+!assets/textures/.gitkeep
+!assets/audio/.gitkeep
+
+# Mesh generator output directory
+tools/mesh-gen/output/
+
+# Build artifacts
+target/
+*.wasm
+
+# ROM pack (generated)
+*.rom
+data.pack
+
+# OS files
+.DS_Store
+Thumbs.db

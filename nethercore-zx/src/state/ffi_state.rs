@@ -31,6 +31,8 @@ pub struct ZFFIState {
     pub cull_mode: u8,
     pub texture_filter: u8,
     pub bound_textures: [u32; 4],
+    /// Current layer for 2D draw ordering (higher = closer to camera)
+    pub current_layer: u32,
 
     // GPU skinning (3x4 matrices for 25% memory savings)
     pub bone_matrices: Vec<BoneMatrix3x4>,
@@ -167,6 +169,7 @@ impl Default for ZFFIState {
             cull_mode: 0,      // None (users opt-in for performance)
             texture_filter: 0, // Nearest
             bound_textures: [0; 4],
+            current_layer: 0,
             bone_matrices: Vec::new(),
             bone_count: 0,
             skeletons: Vec::new(),
@@ -744,17 +747,22 @@ impl ZFFIState {
     /// This automatically groups quads by texture to minimize draw calls.
     /// When bound_textures changes, a new batch is created.
     pub fn add_quad_instance(&mut self, instance: crate::graphics::QuadInstance) {
+        // Determine if this is a screen-space quad (2D)
+        let is_screen_space = instance.mode == crate::graphics::QuadMode::ScreenSpace as u32;
+
         // Check if we can add to the current batch or need a new one
         if let Some(last_batch) = self.quad_batches.last_mut()
             && last_batch.textures == self.bound_textures
+            && last_batch.is_screen_space == is_screen_space
         {
-            // Same textures - add to current batch
+            // Same textures and mode - add to current batch
             last_batch.instances.push(instance);
             return;
         }
 
-        // Need a new batch (either first batch or textures changed)
+        // Need a new batch (either first batch, textures changed, or mode changed)
         self.quad_batches.push(super::QuadBatch {
+            is_screen_space,
             textures: self.bound_textures,
             instances: vec![instance],
         });
@@ -826,6 +834,7 @@ impl ZFFIState {
         self.depth_test = true;
         self.cull_mode = 0; // None (users opt-in for culling)
         self.texture_filter = 0; // Nearest
+        self.current_layer = 0; // Reset layer to background
         // Note: color and shading state already rebuild each frame via add_shading_state()
     }
 }

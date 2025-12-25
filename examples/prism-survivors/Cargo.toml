@@ -1,0 +1,27 @@
+[workspace]
+members = ["tools/mesh-gen"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+[package]
+name = "prism-survivors"
+version.workspace = true
+edition.workspace = true
+description = "4-player co-op fantasy survival game for Nethercore ZX"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# Math utilities
+glam = "0.29"
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
+panic = "abort"
+codegen-units = 1

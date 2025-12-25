@@ -114,10 +114,14 @@ impl QuadInstance {
     }
 
     /// Create a screen-space sprite instance
+    ///
+    /// # Arguments
+    /// * `depth` — Z depth for layer ordering (0.0 = near/front, 1.0 = far/back)
     #[allow(clippy::too_many_arguments)]
     pub fn sprite(
         screen_x: f32,
         screen_y: f32,
+        depth: f32,
         width: f32,
         height: f32,
         rotation: f32,
@@ -127,7 +131,7 @@ impl QuadInstance {
         view_index: u32,
     ) -> Self {
         Self {
-            position: [screen_x, screen_y, 0.0, 0.0], // w = padding
+            position: [screen_x, screen_y, depth, 0.0], // z = depth for layer ordering
             size: [width, height],
             rotation,
             mode: QuadMode::ScreenSpace as u32,

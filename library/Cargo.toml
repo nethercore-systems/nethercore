@@ -44,5 +44,20 @@ open.workspace = true
 rfd.workspace = true
 dirs = "5.0"
 
+# HTTP client for update checking
+reqwest = { workspace = true, features = ["rustls-tls"] }
+
+# Async runtime for update checking
+tokio = { workspace = true, features = ["rt", "time"] }
+
+# Serialization for API responses
+serde_json.workspace = true
+
+# Timestamp handling for manifest updates
+chrono.workspace = true
+
+# Serialization for update checking
+serde = { workspace = true, features = ["derive"] }
+
 [target.'cfg(target_os = "windows")'.dependencies]
 winreg = "0.52"

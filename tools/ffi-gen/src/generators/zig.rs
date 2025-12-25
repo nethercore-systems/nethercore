@@ -28,6 +28,17 @@ fn to_zig_constant_name(name: &str) -> String {
     name.to_lowercase()
 }
 
+/// Transform constant value expression to use Zig snake_case identifiers
+fn transform_constant_value(value: &str) -> String {
+    use regex::Regex;
+
+    // Match SCREAMING_CASE identifiers (all uppercase letters, may have underscores/digits)
+    let re = Regex::new(r"\b([A-Z][A-Z0-9_]*)\b").unwrap();
+
+    re.replace_all(value, |caps: &regex::Captures| caps[1].to_lowercase())
+        .to_string()
+}
+
 /// Generate Zig bindings file from FFI model
 pub fn generate_zig_bindings(model: &FfiModel, console: &str) -> Result<String> {
     let mut output = String::new();
@@ -109,10 +120,11 @@ pub fn generate_zig_bindings(model: &FfiModel, console: &str) -> Result<String> 
             writeln!(output, "pub const {} = struct {{", struct_name)?;
             for constant in &module.constants {
                 let const_name = to_zig_constant_name(&constant.name);
+                let transformed_value = transform_constant_value(&constant.value);
                 writeln!(
                     output,
                     "    pub const {}: {} = {};",
-                    const_name, constant.ty, constant.value
+                    const_name, constant.ty, transformed_value
                 )?;
             }
             writeln!(output, "}};")?;
@@ -167,5 +179,27 @@ mod tests {
     fn test_zig_constant_name_conversion() {
         assert_eq!(to_zig_constant_name("UP"), "up");
         assert_eq!(to_zig_constant_name("LEFT_STICK"), "left_stick");
+    }
+
+    #[test]
+    fn test_transform_constant_value() {
+        // Single identifier
+        assert_eq!(transform_constant_value("UV"), "uv");
+        assert_eq!(transform_constant_value("SKINNED"), "skinned");
+
+        // Bitwise OR expressions
+        assert_eq!(transform_constant_value("UV | NORMAL"), "uv | normal");
+        assert_eq!(
+            transform_constant_value("UV | COLOR | NORMAL"),
+            "uv | color | normal"
+        );
+
+        // Numeric literals should be unchanged
+        assert_eq!(transform_constant_value("1"), "1");
+        assert_eq!(transform_constant_value("0"), "0");
+        assert_eq!(transform_constant_value("255"), "255");
+
+        // Mixed expressions
+        assert_eq!(transform_constant_value("NORMAL | SKINNED"), "normal | skinned");
     }
 }

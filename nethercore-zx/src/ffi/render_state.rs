@@ -16,6 +16,7 @@ pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     linker.func_wrap("env", "texture_filter", texture_filter)?;
     linker.func_wrap("env", "uniform_alpha", uniform_alpha)?;
     linker.func_wrap("env", "dither_offset", dither_offset)?;
+    linker.func_wrap("env", "layer", layer)?;
     Ok(())
 }
 
@@ -124,4 +125,19 @@ fn dither_offset(mut caller: Caller<'_, ZXGameContext>, x: u32, y: u32) {
     }
 
     state.update_dither_offset(x.min(3) as u8, y.min(3) as u8);
+}
+
+/// Set the draw layer for 2D ordering control
+///
+/// # Arguments
+/// * `n` — Layer value (0 = back, higher values = front)
+///
+/// Higher layer values are drawn on top of lower values.
+/// Use this to ensure UI elements appear over game content
+/// regardless of texture bindings or draw order.
+///
+/// Default: 0 (resets each frame)
+fn layer(mut caller: Caller<'_, ZXGameContext>, n: u32) {
+    let state = &mut caller.data_mut().ffi;
+    state.current_layer = n;
 }

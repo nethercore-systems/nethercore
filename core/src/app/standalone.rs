@@ -29,6 +29,7 @@ use crate::runner::ConsoleRunner;
 
 use super::config::ScaleMode;
 use super::event_loop::ConsoleApp;
+use super::ui::{SettingsAction, SharedSettingsUi};
 use super::{
     DebugStats, FRAME_TIME_HISTORY_SIZE, GameError, GameErrorPhase, RuntimeError, parse_wasm_error,
 };
@@ -128,15 +129,6 @@ pub struct StandaloneConfig {
     pub connection_mode: ConnectionMode,
 }
 
-/// Settings action from settings panel.
-#[derive(Debug, Clone, Copy)]
-enum SettingsAction {
-    None,
-    ToggleFullscreen(bool),
-    SetScaleMode(ScaleMode),
-    SetVolume(f32),
-    SaveConfig,
-}
 
 /// Action from error screen UI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -175,122 +167,6 @@ impl WaitingForPeer {
     }
 }
 
-/// Simple settings panel for the standalone player.
-struct PlayerSettingsPanel {
-    visible: bool,
-    scale_mode: ScaleMode,
-    fullscreen: bool,
-    master_volume: f32,
-}
-
-impl PlayerSettingsPanel {
-    fn new(config: &super::config::Config, fullscreen: bool) -> Self {
-        Self {
-            visible: false,
-            scale_mode: config.video.scale_mode,
-            fullscreen,
-            master_volume: config.audio.master_volume,
-        }
-    }
-
-    fn toggle(&mut self) {
-        self.visible = !self.visible;
-    }
-
-    fn render(&mut self, ctx: &egui::Context) -> SettingsAction {
-        let mut action = SettingsAction::None;
-
-        if !self.visible {
-            return action;
-        }
-
-        egui::Window::new("Settings")
-            .collapsible(false)
-            .resizable(false)
-            .default_width(280.0)
-            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-            .show(ctx, |ui| {
-                ui.set_min_width(250.0);
-                ui.heading("Video");
-                ui.add_space(5.0);
-
-                if ui
-                    .checkbox(&mut self.fullscreen, "Fullscreen (F11)")
-                    .changed()
-                {
-                    action = SettingsAction::ToggleFullscreen(self.fullscreen);
-                }
-                ui.add_space(5.0);
-
-                ui.label("Scale Mode:");
-                let old_scale_mode = self.scale_mode;
-                egui::ComboBox::from_id_salt("scale_mode")
-                    .selected_text(match self.scale_mode {
-                        ScaleMode::Stretch => "Stretch",
-                        ScaleMode::Fit => "Fit",
-                        ScaleMode::PixelPerfect => "Pixel Perfect",
-                    })
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(
-                            &mut self.scale_mode,
-                            ScaleMode::Fit,
-                            "Fit (Maintain Aspect Ratio)",
-                        );
-                        ui.selectable_value(
-                            &mut self.scale_mode,
-                            ScaleMode::Stretch,
-                            "Stretch (Fill Window)",
-                        );
-                        ui.selectable_value(
-                            &mut self.scale_mode,
-                            ScaleMode::PixelPerfect,
-                            "Pixel Perfect (Integer Scaling)",
-                        );
-                    });
-                if self.scale_mode != old_scale_mode {
-                    action = SettingsAction::SetScaleMode(self.scale_mode);
-                }
-
-                ui.add_space(15.0);
-                ui.heading("Audio");
-                ui.add_space(5.0);
-
-                let old_volume = self.master_volume;
-                ui.add(
-                    egui::Slider::new(&mut self.master_volume, 0.0..=1.0)
-                        .text("Master Volume")
-                        .custom_formatter(|n, _| format!("{:.0}%", n * 100.0)),
-                );
-                if (self.master_volume - old_volume).abs() > f32::EPSILON {
-                    action = SettingsAction::SetVolume(self.master_volume);
-                }
-
-                ui.add_space(15.0);
-                ui.separator();
-                ui.add_space(5.0);
-
-                ui.horizontal(|ui| {
-                    if ui.button("Close (F2)").clicked() {
-                        self.visible = false;
-                    }
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button("Save to Config").clicked() {
-                            action = SettingsAction::SaveConfig;
-                        }
-                    });
-                });
-
-                ui.add_space(5.0);
-                ui.label(
-                    egui::RichText::new("Press F2 to toggle this panel")
-                        .weak()
-                        .small(),
-                );
-            });
-
-        action
-    }
-}
 
 /// Render the error screen overlay.
 fn render_error_screen(ctx: &egui::Context, error: &GameError) -> ErrorAction {
@@ -435,7 +311,7 @@ where
     runner: Option<ConsoleRunner<C>>,
     input_manager: super::InputManager,
     scale_mode: ScaleMode,
-    settings_panel: PlayerSettingsPanel,
+    settings_ui: SharedSettingsUi,
     debug_overlay: bool,
     debug_panel: crate::debug::DebugPanel,
     frame_controller: FrameController,
@@ -474,7 +350,7 @@ where
         let app_config = super::config::load();
         let input_config = app_config.input.clone();
         let scale_mode = app_config.video.scale_mode;
-        let settings_panel = PlayerSettingsPanel::new(&app_config, config.fullscreen);
+        let settings_ui = SharedSettingsUi::new(&app_config);
 
         let warnings = super::config::validate_keybindings(&app_config);
         for warning in warnings {
@@ -517,7 +393,7 @@ where
             runner: None,
             input_manager: super::InputManager::new(input_config),
             scale_mode,
-            settings_panel,
+            settings_ui,
             frame_controller: FrameController::new(),
             next_tick: now,
             last_sim_rendered: false,
@@ -605,7 +481,8 @@ where
 
             if let Some(session) = runner.session_mut() {
                 if let Some(audio) = session.runtime.audio_mut() {
-                    audio.set_master_volume(self.settings_panel.master_volume);
+                    let config = super::config::load();
+                    audio.set_master_volume(config.audio.master_volume);
                 }
             }
         }
@@ -616,13 +493,25 @@ where
     }
 
     fn handle_key_input(&mut self, event: KeyEvent) {
+        // First, let settings UI consume key if waiting for rebind
+        if event.state == ElementState::Pressed {
+            if let PhysicalKey::Code(key_code) = event.physical_key {
+                if self.settings_ui.is_waiting_for_key() {
+                    if self.settings_ui.handle_key_press(key_code) {
+                        self.needs_redraw = true;
+                        return; // Key was consumed by settings UI
+                    }
+                }
+            }
+        }
+
         if event.state == ElementState::Pressed {
             match event.physical_key {
                 PhysicalKey::Code(KeyCode::Escape) => {
                     self.should_exit = true;
                 }
                 PhysicalKey::Code(KeyCode::F2) => {
-                    self.settings_panel.toggle();
+                    self.settings_ui.toggle();
                     self.needs_redraw = true;
                 }
                 PhysicalKey::Code(KeyCode::F3) => {
@@ -646,10 +535,8 @@ where
                         let is_fullscreen = window.fullscreen().is_some();
                         if is_fullscreen {
                             window.set_fullscreen(None);
-                            self.settings_panel.fullscreen = false;
                         } else {
                             window.set_fullscreen(Some(Fullscreen::Borderless(None)));
-                            self.settings_panel.fullscreen = true;
                         }
                     }
                 }
@@ -967,7 +854,8 @@ where
 
         if let Some(session) = runner.session_mut() {
             if let Some(audio) = session.runtime.audio_mut() {
-                audio.set_master_volume(self.settings_panel.master_volume);
+                let config = super::config::load();
+                audio.set_master_volume(config.audio.master_volume);
             }
         }
 
@@ -1079,7 +967,8 @@ where
                                 // Set audio volume
                                 if let Some(session) = runner.session_mut() {
                                     if let Some(audio) = session.runtime.audio_mut() {
-                                        audio.set_master_volume(self.settings_panel.master_volume);
+                                        let config = super::config::load();
+                                        audio.set_master_volume(config.audio.master_volume);
                                     }
                                 }
                             }
@@ -1200,7 +1089,7 @@ where
             // Render overlays via egui
             if self.debug_overlay
                 || self.debug_panel.visible
-                || self.settings_panel.visible
+                || self.settings_ui.visible
                 || self.error_state.is_some()
                 || self.network_overlay_visible
                 || self.waiting_for_peer.is_some()
@@ -1246,7 +1135,7 @@ where
                     let game_tick_times = &self.game_tick_times;
                     let debug_panel = &mut self.debug_panel;
                     let frame_controller = &mut self.frame_controller;
-                    let settings_panel = &mut self.settings_panel;
+                    let settings_ui = &mut self.settings_ui;
                     let error_state_ref = &self.error_state;
                     let waiting_for_peer_ref = &self.waiting_for_peer;
                     let network_overlay_visible = self.network_overlay_visible;
@@ -1277,7 +1166,7 @@ where
                     };
 
                     let full_output = self.egui_ctx.run(raw_input, |ctx| {
-                        let action = settings_panel.render(ctx);
+                        let action = settings_ui.show_as_window(ctx);
                         if !matches!(action, SettingsAction::None) {
                             *settings_action.borrow_mut() = action;
                         }
@@ -1580,6 +1469,9 @@ where
                 // Apply settings actions
                 match settings_action.into_inner() {
                     SettingsAction::None => {}
+                    SettingsAction::Close => {
+                        // Settings panel was closed, nothing else to do
+                    }
                     SettingsAction::ToggleFullscreen(fullscreen) => {
                         if let Some(window) = &self.window {
                             if fullscreen {
@@ -1589,7 +1481,7 @@ where
                             }
                         }
                     }
-                    SettingsAction::SetScaleMode(scale_mode) => {
+                    SettingsAction::PreviewScaleMode(scale_mode) => {
                         self.scale_mode = scale_mode;
                         runner.graphics_mut().set_scale_mode(scale_mode);
                     }
@@ -1600,11 +1492,28 @@ where
                             }
                         }
                     }
-                    SettingsAction::SaveConfig => {
-                        let mut config = super::config::load();
-                        config.video.scale_mode = self.settings_panel.scale_mode;
-                        config.video.fullscreen = self.settings_panel.fullscreen;
-                        config.audio.master_volume = self.settings_panel.master_volume;
+                    SettingsAction::ResetDefaults => {
+                        // Defaults were applied to temp config in UI, nothing else needed
+                    }
+                    SettingsAction::Save(config) => {
+                        // Update local state from the saved config
+                        self.scale_mode = config.video.scale_mode;
+                        runner.graphics_mut().set_scale_mode(config.video.scale_mode);
+                        if let Some(window) = &self.window {
+                            if config.video.fullscreen {
+                                window.set_fullscreen(Some(Fullscreen::Borderless(None)));
+                            } else {
+                                window.set_fullscreen(None);
+                            }
+                        }
+                        if let Some(session) = runner.session_mut() {
+                            if let Some(audio) = session.runtime.audio_mut() {
+                                audio.set_master_volume(config.audio.master_volume);
+                            }
+                        }
+                        // Update input manager with new keyboard mappings
+                        self.input_manager.update_config(config.input.clone());
+                        // Save to disk
                         if let Err(e) = super::config::save(&config) {
                             tracing::error!("Failed to save config: {}", e);
                         } else {

@@ -13,3 +13,4 @@ pub mod app;
 pub mod protocol;
 pub mod registry;
 pub mod ui;
+pub mod update;

@@ -11,6 +11,7 @@ pub mod input;
 pub mod session;
 pub mod standalone;
 pub mod types;
+pub mod ui;
 
 pub use config::Config;
 pub use debug::{calculate_fps, render_debug_overlay, update_frame_times};
@@ -26,3 +27,4 @@ pub use types::{
     AppMode, DebugStats, FRAME_TIME_HISTORY_SIZE, GRAPH_MAX_FRAME_TIME_MS, GameError,
     GameErrorPhase, RuntimeError, TARGET_FRAME_TIME_MS,
 };
+pub use ui::{SettingsAction, SettingsTab, SharedSettingsUi};

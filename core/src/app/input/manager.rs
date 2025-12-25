@@ -134,6 +134,11 @@ impl InputManager {
         self.player_inputs
     }
 
+    /// Update the input configuration (keyboard mappings, deadzones, etc.)
+    pub fn update_config(&mut self, config: InputConfig) {
+        self.config = config;
+    }
+
     /// Read keyboard input and map to RawInput
     fn read_keyboard_input(&self) -> RawInput {
         let is_pressed =

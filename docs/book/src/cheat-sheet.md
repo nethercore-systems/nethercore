@@ -280,6 +280,7 @@ cull_mode(mode)                        // 0=none (default), 1=back, 2=front
 texture_filter(filter)                 // 0=nearest, 1=linear
 uniform_alpha(level)                   // 0-15 dither alpha
 dither_offset(x, y)                    // 0-3 pattern offset
+layer(n)                               // 2D draw layer (0=back, higher=front)
 ```
 {{#endtab}}
 
@@ -291,6 +292,7 @@ void cull_mode(uint32_t mode);         // NCZX_CULL_NONE (default)/BACK/FRONT
 void texture_filter(uint32_t filter);  // 0=nearest, 1=linear
 void uniform_alpha(uint32_t level);    // 0-15 dither alpha
 void dither_offset(uint32_t x, uint32_t y);  // 0-3 pattern offset
+void layer(uint32_t n);                // 2D draw layer (0=back, higher=front)
 ```
 {{#endtab}}
 
@@ -302,6 +304,7 @@ cull_mode(mode: u32) void              // CullMode.none (default)/back/front
 texture_filter(filter: u32) void       // 0=nearest, 1=linear
 uniform_alpha(level: u32) void         // 0-15 dither alpha
 dither_offset(x: u32, y: u32) void     // 0-3 pattern offset
+layer(n: u32) void                     // 2D draw layer (0=back, higher=front)
 ```
 {{#endtab}}
 

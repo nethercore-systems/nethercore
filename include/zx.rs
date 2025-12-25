@@ -364,6 +364,16 @@ extern "C" {
     /// so both objects remain visible.
     pub fn dither_offset(x: u32, y: u32);
 
+    /// Set draw layer for 2D ordering.
+    ///
+    /// # Arguments
+    /// * `n` — Layer value (0 = back, higher = front)
+    ///
+    /// Higher layer values are drawn on top. Use this to ensure
+    /// UI elements appear over game content regardless of texture bindings.
+    /// Default: 0 (resets each frame)
+    pub fn layer(n: u32);
+
     // =========================================================================
     // Texture Functions
     // =========================================================================

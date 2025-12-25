@@ -270,6 +270,16 @@ pub extern "C" fn uniform_alpha(level: u32) void;
 /// so both objects remain visible.
 pub extern "C" fn dither_offset(x: u32, y: u32) void;
 
+/// Set draw layer for 2D ordering.
+/// 
+/// # Arguments
+/// * `n` — Layer value (0 = back, higher = front)
+/// 
+/// Higher layer values are drawn on top. Use this to ensure
+/// UI elements appear over game content regardless of texture bindings.
+/// Default: 0 (resets each frame)
+pub extern "C" fn layer(n: u32) void;
+
 /// Load a texture from RGBA pixel data.
 /// 
 /// # Arguments
@@ -1190,15 +1200,15 @@ pub const Format = struct {
     pub const color: u8 = 2;
     pub const normal: u8 = 4;
     pub const skinned: u8 = 8;
-    pub const pos_uv: u8 = UV;
-    pub const pos_color: u8 = COLOR;
-    pub const pos_normal: u8 = NORMAL;
-    pub const pos_uv_normal: u8 = UV | NORMAL;
-    pub const pos_uv_color: u8 = UV | COLOR;
-    pub const pos_uv_color_normal: u8 = UV | COLOR | NORMAL;
-    pub const pos_skinned: u8 = SKINNED;
-    pub const pos_normal_skinned: u8 = NORMAL | SKINNED;
-    pub const pos_uv_normal_skinned: u8 = UV | NORMAL | SKINNED;
+    pub const pos_uv: u8 = uv;
+    pub const pos_color: u8 = color;
+    pub const pos_normal: u8 = normal;
+    pub const pos_uv_normal: u8 = uv | normal;
+    pub const pos_uv_color: u8 = uv | color;
+    pub const pos_uv_color_normal: u8 = uv | color | normal;
+    pub const pos_skinned: u8 = skinned;
+    pub const pos_normal_skinned: u8 = normal | skinned;
+    pub const pos_uv_normal_skinned: u8 = uv | normal | skinned;
 };
 
 pub const Billboard = struct {

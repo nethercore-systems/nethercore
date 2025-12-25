@@ -6,3 +6,4 @@ RUST_BACKTRACE = "1"
 [alias]
 xtask = "run --package xtask --"
 ba = "build --workspace"
+dev = "build --release -p nethercore-zx -p nether-cli"

@@ -12,6 +12,7 @@ syn = { version = "2", features = ["full", "extra-traits", "parsing"] }
 quote = "1"
 proc-macro2 = "1"
 anyhow = "1"
+regex = "1"
 clap = { version = "4", features = ["derive"] }
 handlebars = "5"
 serde = { version = "1", features = ["derive"] }

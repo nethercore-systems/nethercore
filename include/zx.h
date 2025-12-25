@@ -283,6 +283,16 @@ NCZX_IMPORT void uniform_alpha(uint32_t level);
 /** so both objects remain visible. */
 NCZX_IMPORT void dither_offset(uint32_t x, uint32_t y);
 
+/** Set draw layer for 2D ordering. */
+/**  */
+/** # Arguments */
+/** * `n` — Layer value (0 = back, higher = front) */
+/**  */
+/** Higher layer values are drawn on top. Use this to ensure */
+/** UI elements appear over game content regardless of texture bindings. */
+/** Default: 0 (resets each frame) */
+NCZX_IMPORT void layer(uint32_t n);
+
 /** Load a texture from RGBA pixel data. */
 /**  */
 /** # Arguments */

@@ -12,8 +12,9 @@
 //! - `nethercore://join/{ip}:{port}/{game_id}` - Join a hosted multiplayer game
 
 use anyhow::Result;
-use nethercore_core::library::{DataDirProvider, get_local_games, resolve_game_id};
+use nethercore_core::library::{DataDirProvider, LocalGame, get_local_games, resolve_game_id};
 use nethercore_library::registry::{ConnectionMode, ConsoleRegistry, PlayerOptions};
+use nethercore_library::update::check_and_prompt_for_update;
 use std::env;
 use std::path::PathBuf;
 
@@ -182,6 +183,35 @@ fn parse_player_options(args: &[String]) -> PlayerOptions {
     options
 }
 
+/// Run a game with update checking
+///
+/// Checks for updates before launching. If an update is available and the user
+/// accepts, downloads and installs it, then reloads the game data before launching.
+fn run_game_with_update_check(
+    game: &LocalGame,
+    registry: &ConsoleRegistry,
+    provider: &impl DataDirProvider,
+    options: &PlayerOptions,
+) -> Result<()> {
+    // Get data directory for update operations
+    if let Some(data_dir) = provider.data_dir() {
+        // Check for updates (has 3-second timeout, won't block if offline)
+        let updated = check_and_prompt_for_update(game, &data_dir);
+
+        if updated {
+            // Reload game data to get updated version
+            let games = get_local_games(provider);
+            if let Some(updated_game) = games.iter().find(|g| g.id == game.id) {
+                tracing::info!("Launching updated game: {} v{}", updated_game.title, updated_game.version);
+                return registry.run_game_with_options(updated_game, options);
+            }
+        }
+    }
+
+    // Launch with original game data (no update or update check failed)
+    registry.run_game_with_options(game, options)
+}
+
 fn main() -> Result<()> {
     // Initialize logging
     tracing_subscriber::fmt()
@@ -240,8 +270,8 @@ fn main() -> Result<()> {
                 if let Some(game) = games.iter().find(|g| g.id == game_id) {
                     tracing::info!("Running '{}' (console: {})", game.title, game.console_type);
 
-                    // Run and wait (no library UI)
-                    registry.run_game_with_options(game, &options)?;
+                    // Check for updates and run
+                    run_game_with_update_check(game, &registry, &provider, &options)?;
                 } else {
                     eprintln!("Game '{}' not found", game_id);
                     std::process::exit(1);
@@ -285,7 +315,7 @@ fn handle_deep_link_action(
         DeepLinkAction::Play { game_id } => {
             tracing::info!("Playing game: {}", game_id);
             if let Some(game) = games.iter().find(|g| g.id == game_id) {
-                registry.run_game_with_options(game, base_options)?;
+                run_game_with_update_check(game, registry, provider, base_options)?;
             } else {
                 eprintln!(
                     "Game '{}' not found locally. Install it from nethercore.systems",
@@ -299,7 +329,7 @@ fn handle_deep_link_action(
             // If already installed, just play it
             if let Some(game) = games.iter().find(|g| g.id == game_id) {
                 tracing::info!("Game already installed, launching");
-                registry.run_game_with_options(game, base_options)?;
+                run_game_with_update_check(game, registry, provider, base_options)?;
             } else {
                 // Not installed - open browser to download page
                 let url = format!("https://nethercore.systems/game/{}", game_id);
@@ -327,7 +357,7 @@ fn handle_deep_link_action(
                     connection: Some(ConnectionMode::Host { port }),
                     ..base_options.clone()
                 };
-                registry.run_game_with_options(game, &options)?;
+                run_game_with_update_check(game, registry, provider, &options)?;
             } else {
                 eprintln!("Game '{}' not found. Install it first.", game_id);
                 std::process::exit(1);
@@ -344,7 +374,7 @@ fn handle_deep_link_action(
                     connection: Some(ConnectionMode::Join { host_ip, port }),
                     ..base_options.clone()
                 };
-                registry.run_game_with_options(game, &options)?;
+                run_game_with_update_check(game, registry, provider, &options)?;
             } else {
                 eprintln!("Game '{}' not found. Install it first.", game_id);
                 // Could offer to download then join, but for now just exit

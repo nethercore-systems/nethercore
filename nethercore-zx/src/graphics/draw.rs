@@ -106,6 +106,7 @@ impl ZGraphics {
                     base_instance,
                     batch.instances.len() as u32,
                     batch.textures,
+                    batch.is_screen_space,
                 ));
             }
 
@@ -117,7 +118,8 @@ impl ZGraphics {
             }
 
             // Create draw commands for each batch with correct base_instance
-            for &(base_instance, instance_count, textures) in &self.quad_batch_scratch {
+            for &(base_instance, instance_count, textures, is_screen_space) in &self.quad_batch_scratch
+            {
                 // Map FFI texture handles to graphics texture handles for this batch
                 let texture_slots = [
                     texture_map
@@ -140,6 +142,7 @@ impl ZGraphics {
 
                 // Note: Quad instances contain their own shading_state_index in the instance data.
                 // BufferSource::Quad has no buffer_index - quads read transforms and shading from instance data.
+                // For screen-space quads (2D), always enable depth testing for layer ordering.
                 self.command_buffer
                     .add_command(super::command_buffer::VRPCommand::Quad {
                         base_vertex: self.unit_quad_base_vertex,
@@ -147,7 +150,7 @@ impl ZGraphics {
                         base_instance,
                         instance_count,
                         texture_slots,
-                        depth_test: z_state.depth_test,
+                        depth_test: is_screen_space || z_state.depth_test,
                         cull_mode: CullMode::from_u8(z_state.cull_mode),
                     });
             }

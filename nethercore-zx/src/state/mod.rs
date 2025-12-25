@@ -61,6 +61,8 @@ pub struct LoadedKeyframeCollection {
 /// A batch of quad instances that share the same texture bindings
 #[derive(Debug, Clone)]
 pub struct QuadBatch {
+    /// True if this batch contains screen-space quads (2D), which forces depth_test on
+    pub is_screen_space: bool,
     /// Texture handles for this batch (snapshot of bound_textures when batch was created)
     pub textures: [u32; 4],
     /// Quad instances in this batch
