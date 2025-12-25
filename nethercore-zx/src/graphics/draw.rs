@@ -118,7 +118,8 @@ impl ZGraphics {
             }
 
             // Create draw commands for each batch with correct base_instance
-            for &(base_instance, instance_count, textures, is_screen_space) in &self.quad_batch_scratch
+            for &(base_instance, instance_count, textures, is_screen_space) in
+                &self.quad_batch_scratch
             {
                 // Map FFI texture handles to graphics texture handles for this batch
                 let texture_slots = [

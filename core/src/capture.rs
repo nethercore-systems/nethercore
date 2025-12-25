@@ -9,7 +9,7 @@
 
 use anyhow::{Context, Result};
 use nethercore_shared::screenshot::{
-    compute_pixel_hash, sign_screenshot, ScreenshotPayload, SCREENSHOT_SIGNATURE_KEYWORD,
+    SCREENSHOT_SIGNATURE_KEYWORD, ScreenshotPayload, compute_pixel_hash, sign_screenshot,
 };
 use std::fs::File;
 use std::io::BufWriter;
@@ -84,7 +84,12 @@ impl ScreenCapture {
     /// * `gif_max_seconds` - Maximum GIF recording duration
     /// * `game_name` - Used as a prefix in saved filenames
     /// * `console_type` - Console identifier for screenshot signing (e.g., "zx", "chroma")
-    pub fn new(gif_fps: u32, gif_max_seconds: u32, game_name: String, console_type: String) -> Self {
+    pub fn new(
+        gif_fps: u32,
+        gif_max_seconds: u32,
+        game_name: String,
+        console_type: String,
+    ) -> Self {
         Self {
             screenshot_pending: false,
             gif_recorder: None,
@@ -200,7 +205,8 @@ impl ScreenCapture {
             self.save_receiver = Some(rx);
 
             thread::spawn(move || {
-                let result = save_screenshot(screenshot_pixels, width, height, &game_name, &console_type);
+                let result =
+                    save_screenshot(screenshot_pixels, width, height, &game_name, &console_type);
                 let _ = tx.send(SaveResult::Screenshot(result));
             });
         }
@@ -445,7 +451,9 @@ fn save_screenshot(
         .add_itxt_chunk(SCREENSHOT_SIGNATURE_KEYWORD.to_string(), signed_json)
         .context("Failed to add signature chunk")?;
 
-    let mut png_writer = encoder.write_header().context("Failed to write PNG header")?;
+    let mut png_writer = encoder
+        .write_header()
+        .context("Failed to write PNG header")?;
     png_writer
         .write_image_data(&pixels)
         .context("Failed to write PNG data")?;

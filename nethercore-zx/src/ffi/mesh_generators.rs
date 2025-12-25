@@ -14,8 +14,8 @@ use anyhow::Result;
 use tracing::{info, warn};
 use wasmtime::{Caller, Linker};
 
-use super::guards::check_init_only;
 use super::ZXGameContext;
+use super::guards::check_init_only;
 use crate::graphics::{FORMAT_NORMAL, FORMAT_UV};
 use crate::procedural;
 use crate::state::PendingMeshPacked;

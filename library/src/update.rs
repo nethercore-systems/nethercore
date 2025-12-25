@@ -62,12 +62,12 @@ pub fn check_for_update(game: &LocalGame) -> UpdateCheckResult {
         .build()
     {
         Ok(rt) => rt,
-        Err(e) => return UpdateCheckResult::CheckFailed(format!("Failed to create runtime: {}", e)),
+        Err(e) => {
+            return UpdateCheckResult::CheckFailed(format!("Failed to create runtime: {}", e));
+        }
     };
 
-    rt.block_on(async {
-        check_for_update_async(game).await
-    })
+    rt.block_on(async { check_for_update_async(game).await })
 }
 
 async fn check_for_update_async(game: &LocalGame) -> UpdateCheckResult {
@@ -79,14 +79,13 @@ async fn check_for_update_async(game: &LocalGame) -> UpdateCheckResult {
         .build()
     {
         Ok(c) => c,
-        Err(e) => return UpdateCheckResult::CheckFailed(format!("Failed to create HTTP client: {}", e)),
+        Err(e) => {
+            return UpdateCheckResult::CheckFailed(format!("Failed to create HTTP client: {}", e));
+        }
     };
 
     // Make the request with timeout
-    let response = match tokio::time::timeout(
-        UPDATE_CHECK_TIMEOUT,
-        client.get(&url).send()
-    ).await {
+    let response = match tokio::time::timeout(UPDATE_CHECK_TIMEOUT, client.get(&url).send()).await {
         Ok(Ok(resp)) => resp,
         Ok(Err(e)) => return UpdateCheckResult::CheckFailed(format!("Network error: {}", e)),
         Err(_) => return UpdateCheckResult::CheckFailed("Request timed out".to_string()),
@@ -100,7 +99,9 @@ async fn check_for_update_async(game: &LocalGame) -> UpdateCheckResult {
     // Parse response
     let version_info: VersionResponse = match response.json().await {
         Ok(v) => v,
-        Err(e) => return UpdateCheckResult::CheckFailed(format!("Failed to parse response: {}", e)),
+        Err(e) => {
+            return UpdateCheckResult::CheckFailed(format!("Failed to parse response: {}", e));
+        }
     };
 
     // Compare versions
@@ -142,7 +143,8 @@ pub fn prompt_for_update(update: &UpdateInfo) -> bool {
         .set_title("Update Available")
         .set_description(&message)
         .set_buttons(rfd::MessageButtons::YesNo)
-        .show() == rfd::MessageDialogResult::Yes
+        .show()
+        == rfd::MessageDialogResult::Yes
 }
 
 /// Download and install a game update
@@ -155,9 +157,7 @@ pub fn download_update(update: &UpdateInfo, data_dir: &Path) -> Result<()> {
         .build()
         .context("Failed to create runtime")?;
 
-    rt.block_on(async {
-        download_update_async(update, data_dir).await
-    })
+    rt.block_on(async { download_update_async(update, data_dir).await })
 }
 
 async fn download_update_async(update: &UpdateInfo, data_dir: &Path) -> Result<()> {
@@ -198,30 +198,32 @@ async fn download_update_async(update: &UpdateInfo, data_dir: &Path) -> Result<(
     let game_dir = data_dir.join("games").join(&update.game_id);
     let rom_path = game_dir.join("rom.nczx"); // TODO: Support other console types
 
-    std::fs::write(&rom_path, &rom_bytes)
-        .context("Failed to write ROM file")?;
+    std::fs::write(&rom_path, &rom_bytes).context("Failed to write ROM file")?;
 
     // 4. Update the manifest with the new version
     let manifest_path = game_dir.join("manifest.json");
     if manifest_path.exists() {
-        let manifest_content = std::fs::read_to_string(&manifest_path)
-            .context("Failed to read manifest")?;
+        let manifest_content =
+            std::fs::read_to_string(&manifest_path).context("Failed to read manifest")?;
 
         // Parse, update version, and write back
-        let mut manifest: serde_json::Value = serde_json::from_str(&manifest_content)
-            .context("Failed to parse manifest")?;
+        let mut manifest: serde_json::Value =
+            serde_json::from_str(&manifest_content).context("Failed to parse manifest")?;
 
         manifest["version"] = serde_json::Value::String(update.remote_version.clone());
         manifest["updated_at"] = serde_json::Value::String(chrono::Utc::now().to_rfc3339());
 
-        let updated_manifest = serde_json::to_string_pretty(&manifest)
-            .context("Failed to serialize manifest")?;
+        let updated_manifest =
+            serde_json::to_string_pretty(&manifest).context("Failed to serialize manifest")?;
 
-        std::fs::write(&manifest_path, updated_manifest)
-            .context("Failed to write manifest")?;
+        std::fs::write(&manifest_path, updated_manifest).context("Failed to write manifest")?;
     }
 
-    tracing::info!("Update installed successfully: v{} -> v{}", update.local_version, update.remote_version);
+    tracing::info!(
+        "Update installed successfully: v{} -> v{}",
+        update.local_version,
+        update.remote_version
+    );
     Ok(())
 }
 

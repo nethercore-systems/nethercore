@@ -76,7 +76,12 @@ impl ScreenshotPayload {
     /// * `console_type` - Console identifier (e.g., "zx", "chroma")
     /// * `width` - Image width in pixels
     /// * `height` - Image height in pixels
-    pub fn new(pixel_hash: impl Into<String>, console_type: impl Into<String>, width: u32, height: u32) -> Self {
+    pub fn new(
+        pixel_hash: impl Into<String>,
+        console_type: impl Into<String>,
+        width: u32,
+        height: u32,
+    ) -> Self {
         Self {
             version: 1,
             pixel_hash: pixel_hash.into(),
@@ -130,7 +135,9 @@ pub enum ScreenshotSignError {
 /// Sign a screenshot payload with HMAC-SHA256.
 ///
 /// Returns a `SignedScreenshot` containing the payload and signature.
-pub fn sign_screenshot(payload: &ScreenshotPayload) -> Result<SignedScreenshot, ScreenshotSignError> {
+pub fn sign_screenshot(
+    payload: &ScreenshotPayload,
+) -> Result<SignedScreenshot, ScreenshotSignError> {
     let payload_json = serde_json::to_string(payload)?;
 
     let mut mac = HmacSha256::new_from_slice(SCREENSHOT_HMAC_SECRET)
@@ -150,7 +157,9 @@ pub fn sign_screenshot(payload: &ScreenshotPayload) -> Result<SignedScreenshot, 
 pub fn verify_screenshot(signed: &SignedScreenshot) -> Result<(), ScreenshotSignError> {
     // Check version
     if signed.payload.version != 1 {
-        return Err(ScreenshotSignError::UnsupportedVersion(signed.payload.version));
+        return Err(ScreenshotSignError::UnsupportedVersion(
+            signed.payload.version,
+        ));
     }
 
     // Recompute signature
@@ -204,12 +213,7 @@ mod tests {
 
     #[test]
     fn test_tampered_payload_fails() {
-        let payload = ScreenshotPayload::new(
-            "abcd1234".repeat(8),
-            "zx",
-            960,
-            540,
-        );
+        let payload = ScreenshotPayload::new("abcd1234".repeat(8), "zx", 960, 540);
 
         let mut signed = sign_screenshot(&payload).unwrap();
         // Tamper with the payload
@@ -223,12 +227,7 @@ mod tests {
 
     #[test]
     fn test_invalid_signature_fails() {
-        let payload = ScreenshotPayload::new(
-            "abcd1234".repeat(8),
-            "zx",
-            960,
-            540,
-        );
+        let payload = ScreenshotPayload::new("abcd1234".repeat(8), "zx", 960, 540);
 
         let mut signed = sign_screenshot(&payload).unwrap();
         // Tamper with the signature
@@ -259,12 +258,7 @@ mod tests {
 
     #[test]
     fn test_json_roundtrip() {
-        let payload = ScreenshotPayload::new(
-            "abcd1234".repeat(8),
-            "zx",
-            960,
-            540,
-        );
+        let payload = ScreenshotPayload::new("abcd1234".repeat(8), "zx", 960, 540);
 
         let signed = sign_screenshot(&payload).unwrap();
         let json = signed.to_json().unwrap();

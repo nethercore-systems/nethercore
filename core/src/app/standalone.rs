@@ -129,7 +129,6 @@ pub struct StandaloneConfig {
     pub connection_mode: ConnectionMode,
 }
 
-
 /// Action from error screen UI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ErrorAction {
@@ -166,7 +165,6 @@ impl WaitingForPeer {
         format!("nethercore://join/{}:{}/{}", ip, self.port, self.game_id)
     }
 }
-
 
 /// Render the error screen overlay.
 fn render_error_screen(ctx: &egui::Context, error: &GameError) -> ErrorAction {
@@ -1498,7 +1496,9 @@ where
                     SettingsAction::Save(config) => {
                         // Update local state from the saved config
                         self.scale_mode = config.video.scale_mode;
-                        runner.graphics_mut().set_scale_mode(config.video.scale_mode);
+                        runner
+                            .graphics_mut()
+                            .set_scale_mode(config.video.scale_mode);
                         if let Some(window) = &self.window {
                             if config.video.fullscreen {
                                 window.set_fullscreen(Some(Fullscreen::Borderless(None)));

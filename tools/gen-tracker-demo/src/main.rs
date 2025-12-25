@@ -579,10 +579,10 @@ fn generate_pattern_main() -> Vec<u8> {
     // Bass line: simple root notes following chord progression
     // Rows 0-7: A, Rows 8-15: F, Rows 16-23: C, Rows 24-31: G
     let bass_notes = [
-        A2, A2, 0, 0, A2, 0, 0, 0,  // A minor feel
-        F2, F2, 0, 0, F2, 0, 0, 0,  // F major feel
-        C3, C3, 0, 0, C3, 0, 0, 0,  // C major feel
-        G2, G2, 0, 0, G2, 0, 0, 0,  // G major feel
+        A2, A2, 0, 0, A2, 0, 0, 0, // A minor feel
+        F2, F2, 0, 0, F2, 0, 0, 0, // F major feel
+        C3, C3, 0, 0, C3, 0, 0, 0, // C major feel
+        G2, G2, 0, 0, G2, 0, 0, 0, // G major feel
     ];
 
     for row in 0..32 {
@@ -632,26 +632,51 @@ fn generate_pattern_melody() -> Vec<u8> {
 
     // Bass line (same as main)
     let bass_notes = [
-        A2, A2, 0, 0, A2, 0, 0, 0,
-        F2, F2, 0, 0, F2, 0, 0, 0,
-        C3, C3, 0, 0, C3, 0, 0, 0,
-        G2, G2, 0, 0, G2, 0, 0, 0,
+        A2, A2, 0, 0, A2, 0, 0, 0, F2, F2, 0, 0, F2, 0, 0, 0, C3, C3, 0, 0, C3, 0, 0, 0, G2, G2, 0,
+        0, G2, 0, 0, 0,
     ];
 
     // Melody line - simple ascending/descending phrase
     let melody = [
-        C4, 0, E4, 0, G4, 0, A4, 0,     // Rising on Am
-        A4, 0, G4, 0, F2+24, 0, E4, 0,  // Falling on F (F4 = F2+24)
-        E4, 0, G4, 0, C5, 0, G4, 0,     // Rising on C
-        G4, 0, E4, 0, D4, 0, C4, 0,     // Falling on G
+        C4,
+        0,
+        E4,
+        0,
+        G4,
+        0,
+        A4,
+        0, // Rising on Am
+        A4,
+        0,
+        G4,
+        0,
+        F2 + 24,
+        0,
+        E4,
+        0, // Falling on F (F4 = F2+24)
+        E4,
+        0,
+        G4,
+        0,
+        C5,
+        0,
+        G4,
+        0, // Rising on C
+        G4,
+        0,
+        E4,
+        0,
+        D4,
+        0,
+        C4,
+        0, // Falling on G
     ];
 
     // Harmony (thirds below melody)
     let harmony = [
-        A3, 0, C4, 0, E4, 0, C4, 0,     // Thirds below
-        C4, 0, E4, 0, D4, 0, C4, 0,
-        C4, 0, E4, 0, G4, 0, E4, 0,
-        E4, 0, C4, 0, 0, 0, A3, 0,      // sparse ending
+        A3, 0, C4, 0, E4, 0, C4, 0, // Thirds below
+        C4, 0, E4, 0, D4, 0, C4, 0, C4, 0, E4, 0, G4, 0, E4, 0, E4, 0, C4, 0, 0, 0, A3,
+        0, // sparse ending
     ];
 
     for row in 0..32 {
@@ -711,18 +736,17 @@ fn generate_pattern_breakdown() -> Vec<u8> {
 
     // Descending bass line for tension
     let bass_notes = [
-        A2, 0, 0, 0, G2, 0, 0, 0,   // Descending
-        F2, 0, 0, 0, E2, 0, 0, 0,   // More descent
-        D2, 0, 0, 0, E2, 0, 0, 0,   // Bottom and back up
+        A2, 0, 0, 0, G2, 0, 0, 0, // Descending
+        F2, 0, 0, 0, E2, 0, 0, 0, // More descent
+        D2, 0, 0, 0, E2, 0, 0, 0, // Bottom and back up
         F2, 0, G2, 0, A2, 0, A2, A2, // Build up with rapid notes at end
     ];
 
     // Sparse lead - just accents
     let lead_accents = [
-        0, 0, 0, 0, 0, 0, 0, E4,    // Anticipation
-        0, 0, 0, 0, 0, 0, 0, D4,
-        0, 0, 0, 0, 0, 0, C4, 0,
-        E4, 0, G4, 0, A4, 0, C5, 0, // Ascending run to build
+        0, 0, 0, 0, 0, 0, 0, E4, // Anticipation
+        0, 0, 0, 0, 0, 0, 0, D4, 0, 0, 0, 0, 0, 0, C4, 0, E4, 0, G4, 0, A4, 0, C5,
+        0, // Ascending run to build
     ];
 
     for row in 0..32 {

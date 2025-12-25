@@ -1119,9 +1119,18 @@ impl TrackerEngine {
 
                 // Check if we need to advance to next pattern
                 let (num_rows, song_length, restart_position) = {
-                    let loaded = match self.modules.get(state.handle as usize).and_then(|m| m.as_ref()) {
+                    let loaded = match self
+                        .modules
+                        .get(state.handle as usize)
+                        .and_then(|m| m.as_ref())
+                    {
                         Some(m) => m,
-                        None => return (left * state.volume as f32 / 256.0, right * state.volume as f32 / 256.0),
+                        None => {
+                            return (
+                                left * state.volume as f32 / 256.0,
+                                right * state.volume as f32 / 256.0,
+                            );
+                        }
                     };
                     let num_rows = loaded
                         .module
@@ -1358,8 +1367,7 @@ const LINEAR_FREQ_TABLE: [f32; 769] = {
                     + t * (0.16666666666666666
                         + t * (0.041666666666666664
                             + t * (0.008333333333333333
-                                + t * (0.001388888888888889
-                                    + t * 0.0001984126984126984))))));
+                                + t * (0.001388888888888889 + t * 0.0001984126984126984))))));
         table[i] = e_t as f32;
         i += 1;
     }

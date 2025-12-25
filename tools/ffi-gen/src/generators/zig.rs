@@ -200,6 +200,9 @@ mod tests {
         assert_eq!(transform_constant_value("255"), "255");
 
         // Mixed expressions
-        assert_eq!(transform_constant_value("NORMAL | SKINNED"), "normal | skinned");
+        assert_eq!(
+            transform_constant_value("NORMAL | SKINNED"),
+            "normal | skinned"
+        );
     }
 }

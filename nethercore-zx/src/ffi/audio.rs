@@ -648,7 +648,13 @@ fn music_info(caller: Caller<'_, ZXGameContext>, handle: u32) -> u32 {
         }
     } else {
         // PCM info: sample_rate=22050, channels=1, bits=16
-        if ctx.ffi.sounds.get(handle as usize).and_then(|s| s.as_ref()).is_some() {
+        if ctx
+            .ffi
+            .sounds
+            .get(handle as usize)
+            .and_then(|s| s.as_ref())
+            .is_some()
+        {
             return (22050 << 16) | (1 << 8) | 16;
         }
     }
@@ -705,4 +711,3 @@ fn music_name(
     data[start..end].copy_from_slice(&bytes[..write_len]);
     write_len as u32
 }
-

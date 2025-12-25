@@ -202,7 +202,11 @@ fn run_game_with_update_check(
             // Reload game data to get updated version
             let games = get_local_games(provider);
             if let Some(updated_game) = games.iter().find(|g| g.id == game.id) {
-                tracing::info!("Launching updated game: {} v{}", updated_game.title, updated_game.version);
+                tracing::info!(
+                    "Launching updated game: {} v{}",
+                    updated_game.title,
+                    updated_game.version
+                );
                 return registry.run_game_with_options(updated_game, options);
             }
         }
