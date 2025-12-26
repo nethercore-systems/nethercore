@@ -91,7 +91,7 @@ fn draw_billboard(mut caller: Caller<'_, ZXGameContext>, w: f32, h: f32, mode: u
         view_idx,
     );
 
-    state.add_quad_instance(instance);
+    state.add_quad_instance(instance, 0); // Billboards use layer 0 (3D, not layered)
 }
 
 /// Draw a billboard with a UV region from the texture
@@ -178,5 +178,5 @@ fn draw_billboard_region(
         view_idx,
     );
 
-    state.add_quad_instance(instance);
+    state.add_quad_instance(instance, 0); // Billboards use layer 0 (3D, not layered)
 }

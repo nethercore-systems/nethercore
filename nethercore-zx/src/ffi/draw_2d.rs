@@ -15,9 +15,15 @@ const DEFAULT_FONT_TEXTURE_SIZE: (u32, u32) = (1024, 1024);
 /// Number of segments used for circle rendering
 const CIRCLE_SEGMENTS: u32 = 16;
 
-/// Convert layer value to Z depth for 2D ordering
+/// Convert layer value to Z depth for quad instance data
 ///
-/// Higher layer values = closer to camera = smaller Z value (passes depth test)
+/// NOTE: Screen-space quads (2D) now rely on CPU-side layer-based sorting,
+/// not GPU depth testing. This function still populates the depth value in
+/// quad instance data for consistency, but depth testing is disabled for
+/// screen-space quads. World-space quads (3D billboards) can still use depth
+/// testing if needed.
+///
+/// Higher layer values = closer to camera = smaller Z value
 /// Maps layer 0 -> 1.0 (far), layer 65535 -> 0.0 (near)
 #[inline]
 fn layer_to_depth(layer: u32) -> f32 {
@@ -84,7 +90,7 @@ fn draw_sprite(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, w: f32, h:
         view_idx,
     );
 
-    state.add_quad_instance(instance);
+    state.add_quad_instance(instance, state.current_layer);
 }
 
 /// Draw a region of a sprite sheet
@@ -146,7 +152,7 @@ fn draw_sprite_region(
         (state.view_matrices.len() - 1) as u32,
     );
 
-    state.add_quad_instance(instance);
+    state.add_quad_instance(instance, state.current_layer);
 }
 
 /// Draw a sprite with full control (rotation, origin, UV region)
@@ -216,7 +222,7 @@ fn draw_sprite_ex(
         (state.view_matrices.len() - 1) as u32,
     );
 
-    state.add_quad_instance(instance);
+    state.add_quad_instance(instance, state.current_layer);
 }
 
 /// Draw a solid color rectangle
@@ -260,7 +266,7 @@ fn draw_rect(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, w: f32, h: f
         (state.view_matrices.len() - 1) as u32,
     );
 
-    state.add_quad_instance(instance);
+    state.add_quad_instance(instance, state.current_layer);
 }
 
 /// Draw text with the built-in font
@@ -448,7 +454,7 @@ fn draw_text(
                 shading_state_index.0,
                 view_idx,
             );
-            state.add_quad_instance(instance);
+            state.add_quad_instance(instance, state.current_layer);
 
             cursor_x += glyph_width;
         }
@@ -477,7 +483,7 @@ fn draw_text(
                 shading_state_index.0,
                 view_idx,
             );
-            state.add_quad_instance(instance);
+            state.add_quad_instance(instance, state.current_layer);
 
             cursor_x += glyph_width;
         }
@@ -850,7 +856,7 @@ fn draw_line(
         view_idx,
     );
 
-    state.add_quad_instance(instance);
+    state.add_quad_instance(instance, state.current_layer);
 }
 
 /// Draw a filled circle
@@ -910,7 +916,7 @@ fn draw_circle(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, radius: f3
             view_idx,
         );
 
-        state.add_quad_instance(instance);
+        state.add_quad_instance(instance, state.current_layer);
     }
 }
 
@@ -983,6 +989,6 @@ fn draw_circle_outline(
             view_idx,
         );
 
-        state.add_quad_instance(instance);
+        state.add_quad_instance(instance, state.current_layer);
     }
 }

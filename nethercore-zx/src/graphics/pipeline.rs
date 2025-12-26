@@ -314,7 +314,7 @@ pub(crate) fn create_quad_pipeline(
             format: wgpu::TextureFormat::Depth24PlusStencil8,
             depth_write_enabled: state.depth_test,
             depth_compare: if state.depth_test {
-                wgpu::CompareFunction::LessEqual  // LessEqual for quads to support layer 0 (depth=1.0)
+                wgpu::CompareFunction::Less  // Less - proper layer sorting handles 2D ordering
             } else {
                 wgpu::CompareFunction::Always
             },

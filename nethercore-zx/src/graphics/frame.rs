@@ -211,9 +211,11 @@ impl ZGraphics {
                     texture_slots,
                     viewport,
                     stencil_mode,
+                    layer,
                     ..
                 } => CommandSortKey::quad(
                     *viewport,
+                    *layer,
                     *stencil_mode,
                     *depth_test,
                     [texture_slots[0].0, texture_slots[1].0, texture_slots[2].0, texture_slots[3].0],

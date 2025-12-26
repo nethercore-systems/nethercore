@@ -80,6 +80,8 @@ pub enum VRPCommand {
         viewport: Viewport,
         /// Stencil mode for masked rendering (0=disabled, 1=writing, 2=testing, 3=testing_inverted)
         stencil_mode: u8,
+        /// Layer for 2D ordering (higher layers render on top)
+        layer: u32,
     },
     /// Sky draw (fullscreen gradient + sun)
     Sky {
@@ -96,14 +98,17 @@ pub enum VRPCommand {
 ///
 /// Commands are sorted to minimize GPU state changes:
 /// 1. Viewport (split-screen regions)
-/// 2. Stencil mode (masked rendering groups)
-/// 3. Pipeline type (sky → regular → quad)
-/// 4. Render state (depth test, cull mode)
-/// 5. Textures (minimize bind calls)
+/// 2. Layer (2D ordering for quads - higher layers render on top)
+/// 3. Stencil mode (masked rendering groups)
+/// 4. Pipeline type (sky → regular → quad)
+/// 5. Render state (depth test, cull mode)
+/// 6. Textures (minimize bind calls)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CommandSortKey {
     /// Viewport region (grouped first to minimize GPU viewport/scissor changes)
     pub viewport: Viewport,
+    /// Layer for 2D ordering (only used for quads, 0 for other commands)
+    pub layer: u32,
     /// Stencil mode (0=disabled, 1=writing, 2=testing, 3=inverted)
     pub stencil_mode: u8,
     /// Render type: 0=sky, 1-254=regular (by format), 255=quad
@@ -123,6 +128,7 @@ impl CommandSortKey {
     pub fn sky(viewport: Viewport, stencil_mode: u8) -> Self {
         Self {
             viewport,
+            layer: 0, // Sky doesn't use layers
             stencil_mode,
             render_type: 0, // Sky renders first
             vertex_format: 0,
@@ -143,6 +149,7 @@ impl CommandSortKey {
     ) -> Self {
         Self {
             viewport,
+            layer: 0, // Meshes don't use layers
             stencil_mode,
             render_type: 1 + vertex_format, // Regular pipelines: 1-254
             vertex_format,
@@ -155,12 +162,14 @@ impl CommandSortKey {
     /// Create sort key for a quad command
     pub fn quad(
         viewport: Viewport,
+        layer: u32,
         stencil_mode: u8,
         depth_test: bool,
         textures: [u32; 4],
     ) -> Self {
         Self {
             viewport,
+            layer,
             stencil_mode,
             render_type: 255, // Quads render last
             vertex_format: 0,
