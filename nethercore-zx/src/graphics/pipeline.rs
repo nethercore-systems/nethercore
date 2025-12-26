@@ -118,8 +118,19 @@ fn get_stencil_state(stencil_mode: u8) -> wgpu::StencilState {
             }
         }
         _ => {
-            // Disabled (0) or invalid: default stencil state
-            wgpu::StencilState::default()
+            // Disabled (0) or invalid: explicitly disable stencil testing
+            let face = wgpu::StencilFaceState {
+                compare: wgpu::CompareFunction::Always,  // Always pass - never reject fragments
+                fail_op: wgpu::StencilOperation::Keep,
+                depth_fail_op: wgpu::StencilOperation::Keep,
+                pass_op: wgpu::StencilOperation::Keep,
+            };
+            wgpu::StencilState {
+                front: face,
+                back: face,
+                read_mask: 0xFF,
+                write_mask: 0x00,  // CRITICAL: Never write to stencil buffer in disabled mode
+            }
         }
     }
 }
@@ -303,7 +314,7 @@ pub(crate) fn create_quad_pipeline(
             format: wgpu::TextureFormat::Depth24PlusStencil8,
             depth_write_enabled: state.depth_test,
             depth_compare: if state.depth_test {
-                wgpu::CompareFunction::Less
+                wgpu::CompareFunction::LessEqual  // LessEqual for quads to support layer 0 (depth=1.0)
             } else {
                 wgpu::CompareFunction::Always
             },
