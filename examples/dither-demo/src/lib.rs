@@ -67,8 +67,17 @@ extern "C" {
     fn uniform_alpha(level: u32);
     fn dither_offset(x: u32, y: u32);
 
-    // Sky
-    fn sky_set_colors(horizon_color: u32, zenith_color: u32);
+    // Environment
+    fn env_gradient(
+        layer: u32,
+        zenith: u32,
+        sky_horizon: u32,
+        ground_horizon: u32,
+        nadir: u32,
+        rotation: f32,
+        shift: f32,
+    );
+    fn draw_env();
 
     // Lighting
     fn light_set(index: u32, x: f32, y: f32, z: f32);
@@ -142,8 +151,7 @@ pub extern "C" fn init() {
         // Enable depth testing
         depth_test(1);
 
-        // Set up sky for ambient lighting
-        sky_set_colors(0x404060FF, 0x202040FF);
+        // Set up lighting
         light_set(0, -0.5, -1.0, -0.5);
         light_color(0, 0xFFEEDDFF);
         light_intensity(0, 1.0);

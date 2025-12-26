@@ -63,8 +63,17 @@ extern "C" {
     fn set_color(color: u32);
     fn depth_test(enabled: u32);
 
-    // Sky
-    fn sky_set_colors(horizon_color: u32, zenith_color: u32);
+    // Environment
+    fn env_gradient(
+        layer: u32,
+        zenith: u32,
+        sky_horizon: u32,
+        ground_horizon: u32,
+        nadir: u32,
+        rotation: f32,
+        shift: f32,
+    );
+    fn draw_env();
 
     // 2D drawing
     fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
@@ -218,9 +227,40 @@ unsafe fn setup_camera() {
     camera_fov(75.0);
 }
 
+/// Set camera for portal view - looking from destination portal
+/// src_portal: the portal we're looking through
+/// dst_portal: the portal we'd exit from (camera position)
+unsafe fn setup_portal_camera(src_x: f32, src_z: f32, dst_x: f32, dst_z: f32) {
+    // Calculate relative position from source portal
+    let rel_x = PLAYER_X - src_x;
+    let rel_z = PLAYER_Z - src_z;
+
+    // Mirror the position to the destination portal
+    // Portals face opposite directions, so we negate the Z offset
+    let cam_x = dst_x + rel_x;
+    let cam_z = dst_z - rel_z;
+
+    // Mirror the yaw (looking in opposite direction through portal)
+    let mirrored_yaw = PLAYER_YAW + 180.0;
+    let yaw_rad = mirrored_yaw.to_radians();
+    let pitch_rad = PLAYER_PITCH.to_radians();
+
+    let cos_pitch = libm::cosf(pitch_rad);
+    let sin_pitch = libm::sinf(pitch_rad);
+
+    let look_x = cam_x + libm::sinf(yaw_rad) * cos_pitch * 10.0;
+    let look_y = 1.8 + sin_pitch * 10.0;
+    let look_z = cam_z + libm::cosf(yaw_rad) * cos_pitch * 10.0;
+
+    camera_set(cam_x, 1.8, cam_z, look_x, look_y, look_z);
+    camera_fov(75.0);
+}
+
 /// Draw blue world (world 0)
 unsafe fn draw_blue_world() {
-    sky_set_colors(0x4488FFFF, 0x1144AAFF);
+    // Blue sky gradient
+    env_gradient(0, 0x1144AAFF, 0x4488FFFF, 0x4488FFFF, 0x223366FF, 0.0, 0.0);
+    draw_env();
 
     // Blue floor
     push_identity();
@@ -255,7 +295,9 @@ unsafe fn draw_blue_world() {
 
 /// Draw orange world (world 1)
 unsafe fn draw_orange_world() {
-    sky_set_colors(0xFF8844FF, 0xAA4411FF);
+    // Orange sky gradient
+    env_gradient(0, 0xAA4411FF, 0xFF8844FF, 0xFF8844FF, 0x663322FF, 0.0, 0.0);
+    draw_env();
 
     // Orange floor
     push_identity();
@@ -343,9 +385,14 @@ pub extern "C" fn render() {
             stencil_end();
 
             // Inside portal: render orange world from portal2's perspective
+            // Set camera as if looking from the destination portal
+            setup_portal_camera(PORTAL1_X, PORTAL1_Z, PORTAL2_X, PORTAL2_Z);
             draw_orange_world();
 
             stencil_clear();
+
+            // Restore main camera for portal frame
+            setup_camera();
 
             // Draw portal frames on top
             draw_portal(PORTAL1_X, PORTAL1_Z, 0xFF8844FF, true); // Orange portal (leads to orange)
@@ -359,31 +406,77 @@ pub extern "C" fn render() {
             stencil_end();
 
             // Inside portal: render blue world from portal1's perspective
+            setup_portal_camera(PORTAL2_X, PORTAL2_Z, PORTAL1_X, PORTAL1_Z);
             draw_blue_world();
 
             stencil_clear();
+
+            // Restore main camera for portal frame
+            setup_camera();
 
             // Draw portal frame
             draw_portal(PORTAL2_X, PORTAL2_Z, 0x4488FFFF, false); // Blue portal (leads to blue)
         }
 
-        // UI
-        let world_text = if CURRENT_WORLD == 0 { "Blue Dimension" } else { "Orange Dimension" };
+        // UI - Title
+        let title = "PORTAL STENCIL DEMO";
+        draw_text(
+            title.as_ptr(),
+            title.len() as u32,
+            10.0,
+            10.0,
+            24.0,
+            0xFFFFFFFF,
+        );
+
+        // Current dimension
+        let world_text = if CURRENT_WORLD == 0 { "Current: Blue Dimension" } else { "Current: Orange Dimension" };
         draw_text(
             world_text.as_ptr(),
             world_text.len() as u32,
             10.0,
-            10.0,
-            24.0,
+            40.0,
+            16.0,
             if CURRENT_WORLD == 0 { 0x4488FFFF } else { 0xFF8844FF },
         );
 
-        let instr = "Walk into portal to teleport";
+        // Explanation
+        let explain1 = "Portals use stencil masking to show other dimension";
+        draw_text(
+            explain1.as_ptr(),
+            explain1.len() as u32,
+            10.0,
+            65.0,
+            12.0,
+            0x888888FF,
+        );
+        let explain2 = "Camera transforms to destination portal perspective";
+        draw_text(
+            explain2.as_ptr(),
+            explain2.len() as u32,
+            10.0,
+            80.0,
+            12.0,
+            0x888888FF,
+        );
+
+        // Controls at bottom
+        let controls = "Controls: Left Stick = Move | Right Stick = Look";
+        draw_text(
+            controls.as_ptr(),
+            controls.len() as u32,
+            10.0,
+            500.0,
+            14.0,
+            0xAAAAAAFF,
+        );
+
+        let instr = "Walk into the portal ring to teleport!";
         draw_text(
             instr.as_ptr(),
             instr.len() as u32,
             10.0,
-            500.0,
+            520.0,
             14.0,
             0xCCCCCCFF,
         );

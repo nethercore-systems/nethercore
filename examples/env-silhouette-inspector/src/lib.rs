@@ -183,7 +183,7 @@ pub extern "C" fn render() {
         label[prefix.len()..prefix.len() + name.len()].copy_from_slice(name);
         draw_text(label.as_ptr(), (prefix.len() + name.len()) as u32, 10.0, 40.0, 16.0, 0xCCCCCCFF);
 
-        let hint = b"A: preset | B: shape | X: seed | F4: debug";
+        let hint = b"A: preset | B: shape | X: seed | F3: debug panel";
         draw_text(hint.as_ptr(), hint.len() as u32, 10.0, 70.0, 14.0, 0x888888FF);
     }
 }

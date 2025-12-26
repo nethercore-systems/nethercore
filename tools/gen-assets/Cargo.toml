@@ -8,5 +8,6 @@ name = "gen-assets"
 path = "src/main.rs"
 
 [dependencies]
-proc-gen = { path = "../proc-gen" }
+proc-gen = { path = "../proc-gen", features = ["wav-export"] }
+proc-gen-showcase-defs = { path = "../../examples/proc-gen-showcase-defs" }
 clap = { version = "4", features = ["derive"] }

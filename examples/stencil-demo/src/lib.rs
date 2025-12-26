@@ -66,8 +66,8 @@ extern "C" {
 // Vertex format: position only (for stencil mask shapes)
 const VF_POS: u32 = 0;
 
-// Input
-const BUTTON_A: u32 = 1;
+// Input (button indices from zx.rs)
+const BUTTON_A: u32 = 4;
 
 // Screen dimensions
 const SCREEN_WIDTH: f32 = 960.0;
@@ -88,12 +88,19 @@ static mut ROTATION: f32 = 0.0;
 const CIRCLE_SEGMENTS: usize = 32;
 static mut CIRCLE_VERTICES: [f32; CIRCLE_SEGMENTS * 3 * 3] = [0.0; CIRCLE_SEGMENTS * 3 * 3];
 
-// Demo mode names
+// Demo mode names and descriptions
 static DEMO_NAMES: [&str; 4] = [
-    "Circle Mask (Render Inside)",
-    "Inverted Mask (Vignette)",
-    "Diagonal Split",
-    "Animated Portal",
+    "1. Circle Mask",
+    "2. Inverted Mask (Vignette)",
+    "3. Diagonal Split",
+    "4. Animated Portal",
+];
+
+static DEMO_DESCRIPTIONS: [&str; 4] = [
+    "stencil_begin/end: Only render inside circle",
+    "stencil_invert: Render outside mask (dark edges)",
+    "Two masks: Different colors per half",
+    "Animated radius creates pulsing portal view",
 ];
 
 #[no_mangle]
@@ -364,25 +371,59 @@ pub extern "C" fn render() {
             _ => {}
         }
 
-        // UI overlay
+        // UI overlay - Title
+        let title = "STENCIL DEMO";
+        draw_text(
+            title.as_ptr(),
+            title.len() as u32,
+            10.0,
+            10.0,
+            28.0,
+            0xFFFFFFFF,
+        );
+
+        // Current demo name
         let demo_name = DEMO_NAMES[DEMO_MODE as usize];
         draw_text(
             demo_name.as_ptr(),
             demo_name.len() as u32,
             10.0,
-            10.0,
-            24.0,
-            0xFFFFFFFF,
+            45.0,
+            20.0,
+            0x88FF88FF,
         );
 
-        let instruction = "Press A to cycle demos";
+        // Demo description
+        let demo_desc = DEMO_DESCRIPTIONS[DEMO_MODE as usize];
         draw_text(
-            instruction.as_ptr(),
-            instruction.len() as u32,
+            demo_desc.as_ptr(),
+            demo_desc.len() as u32,
             10.0,
-            40.0,
-            16.0,
+            70.0,
+            14.0,
+            0xCCCCCCFF,
+        );
+
+        // Controls
+        let controls = "Controls: A = Next Demo | Left Stick = Rotate Scene";
+        draw_text(
+            controls.as_ptr(),
+            controls.len() as u32,
+            10.0,
+            SCREEN_HEIGHT - 30.0,
+            14.0,
             0xAAAAAAFF,
+        );
+
+        // Explanation
+        let explanation = "Stencil buffer masks which pixels can be drawn";
+        draw_text(
+            explanation.as_ptr(),
+            explanation.len() as u32,
+            10.0,
+            SCREEN_HEIGHT - 50.0,
+            12.0,
+            0x888888FF,
         );
     }
 }

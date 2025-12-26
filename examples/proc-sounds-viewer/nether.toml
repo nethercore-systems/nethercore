@@ -1,0 +1,48 @@
+[game]
+id = "proc-sounds-viewer"
+title = "Procedural Sounds Viewer"
+author = "Nethercore Examples"
+version = "0.1.0"
+render_mode = 0  # Unlit (no 3D needed)
+
+# =============================================================================
+# Showcase Sound Assets
+# =============================================================================
+# When adding a new showcase sound:
+# 1. Add definition to examples/proc-gen-showcase-defs/src/lib.rs
+# 2. Add generator to tools/proc-gen/src/audio/showcase.rs
+# 3. Add asset entry here (unfortunately this step is still manual)
+#
+# Future: Could use a build script to auto-generate this section
+
+[[assets.sounds]]
+id = "coin"
+path = "assets/coin.wav"
+
+[[assets.sounds]]
+id = "jump"
+path = "assets/jump.wav"
+
+[[assets.sounds]]
+id = "laser"
+path = "assets/laser.wav"
+
+[[assets.sounds]]
+id = "explosion"
+path = "assets/explosion.wav"
+
+[[assets.sounds]]
+id = "hit"
+path = "assets/hit.wav"
+
+[[assets.sounds]]
+id = "click"
+path = "assets/click.wav"
+
+[[assets.sounds]]
+id = "powerup"
+path = "assets/powerup.wav"
+
+[[assets.sounds]]
+id = "death"
+path = "assets/death.wav"

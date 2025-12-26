@@ -65,14 +65,22 @@ const SCREEN_WIDTH: f32 = 960.0;
 const SCREEN_HEIGHT: f32 = 540.0;
 
 // Button constants
-const BUTTON_UP: u32 = 0;
-const BUTTON_DOWN: u32 = 1;
-const BUTTON_LEFT: u32 = 2;
-const BUTTON_RIGHT: u32 = 3;
-const BUTTON_A: u32 = 4;
-const BUTTON_B: u32 = 5;
-const BUTTON_L: u32 = 8;
-const BUTTON_R: u32 = 9;
+pub mod button {
+    pub const UP: u32 = 0;
+    pub const DOWN: u32 = 1;
+    pub const LEFT: u32 = 2;
+    pub const RIGHT: u32 = 3;
+    pub const A: u32 = 4;
+    pub const B: u32 = 5;
+    pub const X: u32 = 6;
+    pub const Y: u32 = 7;
+    pub const L1: u32 = 8;
+    pub const R1: u32 = 9;
+    pub const L3: u32 = 10;
+    pub const R3: u32 = 11;
+    pub const START: u32 = 12;
+    pub const SELECT: u32 = 13;
+}
 
 // Colors
 const COLOR_BG: u32 = 0x1a1a2eFF;
@@ -155,13 +163,13 @@ pub extern "C" fn init() {
 pub extern "C" fn update() {
     unsafe {
         // A button: Toggle pause/resume
-        if button_pressed(0, BUTTON_A) != 0 {
+        if button_pressed(0, button::A) != 0 {
             IS_PAUSED = !IS_PAUSED;
             music_pause(if IS_PAUSED { 1 } else { 0 });
         }
 
         // B button: Restart from beginning
-        if button_pressed(0, BUTTON_B) != 0 {
+        if button_pressed(0, button::B) != 0 {
             music_jump(0, 0);
             if IS_PAUSED {
                 IS_PAUSED = false;
@@ -170,24 +178,24 @@ pub extern "C" fn update() {
         }
 
         // Up/Down: Adjust tempo
-        if button_pressed(0, BUTTON_UP) != 0 {
+        if button_pressed(0, button::UP) != 0 {
             CURRENT_TEMPO = if CURRENT_TEMPO < 250 { CURRENT_TEMPO + 10 } else { 250 };
             music_set_tempo(CURRENT_TEMPO);
         }
-        if button_pressed(0, BUTTON_DOWN) != 0 {
+        if button_pressed(0, button::DOWN) != 0 {
             CURRENT_TEMPO = if CURRENT_TEMPO > 60 { CURRENT_TEMPO - 10 } else { 60 };
             music_set_tempo(CURRENT_TEMPO);
         }
 
         // Left/Right: Adjust volume
-        if button_held(0, BUTTON_RIGHT) != 0 {
+        if button_held(0, button::RIGHT) != 0 {
             VOLUME += 0.02;
             if VOLUME > 1.0 {
                 VOLUME = 1.0;
             }
             music_set_volume(VOLUME);
         }
-        if button_held(0, BUTTON_LEFT) != 0 {
+        if button_held(0, button::LEFT) != 0 {
             VOLUME -= 0.02;
             if VOLUME < 0.0 {
                 VOLUME = 0.0;
@@ -196,11 +204,11 @@ pub extern "C" fn update() {
         }
 
         // L/R: Adjust speed (ticks per row)
-        if button_pressed(0, BUTTON_R) != 0 {
+        if button_pressed(0, button::R1) != 0 {
             CURRENT_SPEED = if CURRENT_SPEED < 31 { CURRENT_SPEED + 1 } else { 31 };
             music_set_speed(CURRENT_SPEED);
         }
-        if button_pressed(0, BUTTON_L) != 0 {
+        if button_pressed(0, button::L1) != 0 {
             CURRENT_SPEED = if CURRENT_SPEED > 1 { CURRENT_SPEED - 1 } else { 1 };
             music_set_speed(CURRENT_SPEED);
         }

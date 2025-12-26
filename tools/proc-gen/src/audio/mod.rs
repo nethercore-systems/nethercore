@@ -30,6 +30,7 @@ mod envelope;
 mod filters;
 mod synth;
 mod export;
+pub mod showcase;
 
 /// ZX console sample rate (22.05kHz)
 pub const SAMPLE_RATE: u32 = 22050;

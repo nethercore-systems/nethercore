@@ -495,7 +495,11 @@ fn draw_ui() {
         let info3 = b"Target: red sphere";
         draw_text(info3.as_ptr(), info3.len() as u32, 10.0, y + line_h * 6.0, 10.0, 0xFF6060FF);
 
-        let controls = b"B: Reset target";
-        draw_text(controls.as_ptr(), controls.len() as u32, 10.0, y + line_h * 7.5, 10.0, 0x666666FF);
+        // Controls
+        let ctrl1 = b"Left stick: Move IK target | A: Toggle auto/manual";
+        draw_text(ctrl1.as_ptr(), ctrl1.len() as u32, 10.0, y + line_h * 7.5, 10.0, 0x888888FF);
+
+        let ctrl2 = b"B: Reset target";
+        draw_text(ctrl2.as_ptr(), ctrl2.len() as u32, 10.0, y + line_h * 8.5, 10.0, 0x888888FF);
     }
 }

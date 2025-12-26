@@ -390,13 +390,13 @@ unsafe fn draw_ui() {
     let mat_info = b"Explicit specular color control";
     draw_text(mat_info.as_ptr(), mat_info.len() as u32, 10.0, 60.0, 14.0, 0xFFAAAAFF);
 
-    // Instructions
-    let hint1 = b"Press A to cycle shapes";
+    // Instructions - comprehensive controls
+    let hint1 = b"A: Cycle shapes | Left stick: Rotate";
     draw_text(hint1.as_ptr(), hint1.len() as u32, 10.0, 90.0, 14.0, 0x888888FF);
 
-    let hint2 = b"Left stick: rotate | Right stick: orbit camera";
+    let hint2 = b"Right stick: Orbit camera";
     draw_text(hint2.as_ptr(), hint2.len() as u32, 10.0, 110.0, 14.0, 0x888888FF);
 
-    let hint3 = b"F3 to open debug panel";
+    let hint3 = b"F3: Debug panel (edit specular, shininess, lights)";
     draw_text(hint3.as_ptr(), hint3.len() as u32, 10.0, 130.0, 14.0, 0x888888FF);
 }

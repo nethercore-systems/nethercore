@@ -55,16 +55,25 @@ extern "C" {
     fn set_color(color: u32);
     fn depth_test(enabled: u32);
 
-    // Sky
-    fn sky_set_colors(horizon_color: u32, zenith_color: u32);
+    // Environment
+    fn env_gradient(
+        layer: u32,
+        zenith: u32,
+        sky_horizon: u32,
+        ground_horizon: u32,
+        nadir: u32,
+        rotation: f32,
+        shift: f32,
+    );
+    fn draw_env();
 
     // 2D drawing
     fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
     fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32);
 }
 
-// Input
-const BUTTON_A: u32 = 1;
+// Input (button indices from zx.rs)
+const BUTTON_A: u32 = 4;
 
 // Screen dimensions
 const SCREEN_WIDTH: u32 = 960;
@@ -102,9 +111,6 @@ pub extern "C" fn init() {
         set_clear_color(0x87CEEBFF);
         render_mode(0);
         depth_test(1);
-
-        // Set sky colors
-        sky_set_colors(0xADD8E6FF, 0x4169E1FF);
 
         // Generate meshes
         CAR_BODY = cube(2.0, 0.8, 4.0);      // Car body
@@ -290,31 +296,72 @@ pub extern "C" fn render() {
         // HUD
         viewport_clear();
 
-        // Speed display
-        let speed_val = (SPEED.abs() * 10.0) as i32;
-        let speed_text = if speed_val > 99 { "99 MPH" } else if speed_val > 9 {
-            "   MPH" // Placeholder - real impl would format
-        } else {
-            "   MPH"
-        };
+        // Title
+        let title = "REAR-VIEW MIRROR DEMO";
         draw_text(
-            speed_text.as_ptr(),
-            speed_text.len() as u32,
-            SCREEN_WIDTH as f32 - 100.0,
-            SCREEN_HEIGHT as f32 - 40.0,
-            20.0,
+            title.as_ptr(),
+            title.len() as u32,
+            10.0,
+            10.0,
+            24.0,
             0xFFFFFFFF,
         );
 
-        // Instructions
-        let instr = "Stick: Drive | A: Toggle Mirror";
+        // Explanation
+        let explain = "Uses viewport() for picture-in-picture mirror view";
         draw_text(
-            instr.as_ptr(),
-            instr.len() as u32,
+            explain.as_ptr(),
+            explain.len() as u32,
+            10.0,
+            40.0,
+            12.0,
+            0x888888FF,
+        );
+
+        // Mirror status
+        let mirror_status = if SHOW_MIRROR { "Mirror: ON" } else { "Mirror: OFF" };
+        draw_text(
+            mirror_status.as_ptr(),
+            mirror_status.len() as u32,
+            10.0,
+            60.0,
+            14.0,
+            if SHOW_MIRROR { 0x88FF88FF } else { 0xFF8888FF },
+        );
+
+        // Speed display
+        let speed_label = "Speed: ";
+        draw_text(
+            speed_label.as_ptr(),
+            speed_label.len() as u32,
+            SCREEN_WIDTH as f32 - 150.0,
+            SCREEN_HEIGHT as f32 - 60.0,
+            16.0,
+            0xAAAAAAFF,
+        );
+
+        // Controls at bottom
+        let controls = "Controls: Left Stick = Steer/Accelerate | A = Toggle Mirror";
+        draw_text(
+            controls.as_ptr(),
+            controls.len() as u32,
             10.0,
             SCREEN_HEIGHT as f32 - 30.0,
             14.0,
-            0xCCCCCCFF,
+            0xAAAAAAFF,
         );
+
+        // Red car warning if visible in mirror
+        if SHOW_MIRROR {
+            let warning = "Watch for red car behind you!";
+            draw_text(
+                warning.as_ptr(),
+                warning.len() as u32,
+                SCREEN_WIDTH as f32 / 2.0 - 100.0,
+                SCREEN_HEIGHT as f32 - 50.0,
+                12.0,
+                0xFF4444FF,
+            );
+        }
     }
 }

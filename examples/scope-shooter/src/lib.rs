@@ -4,7 +4,7 @@
 //!
 //! Controls:
 //! - Left stick: Look around
-//! - Right trigger (or B button): Toggle scope
+//! - Right trigger (or B button): Hold to scope
 //! - A button: Fire (visual feedback only)
 
 #![no_std]
@@ -31,12 +31,13 @@ extern "C" {
     fn stencil_begin();
     fn stencil_end();
     fn stencil_clear();
+    fn stencil_invert();
 
     // Input
     fn button_held(player: u32, button: u32) -> u32;
     fn left_stick_x(player: u32) -> f32;
     fn left_stick_y(player: u32) -> f32;
-    fn right_trigger(player: u32) -> f32;
+    fn trigger_right(player: u32) -> f32;
 
     // Procedural mesh generation
     fn cube(size_x: f32, size_y: f32, size_z: f32) -> u32;
@@ -68,9 +69,9 @@ extern "C" {
 // Vertex format
 const VF_POS: u32 = 0;
 
-// Input
-const BUTTON_A: u32 = 1;
-const BUTTON_B: u32 = 2;
+// Input (button indices from zx.rs)
+const BUTTON_A: u32 = 4;
+const BUTTON_B: u32 = 5;
 
 // Screen dimensions
 const SCREEN_WIDTH: f32 = 960.0;
@@ -150,7 +151,7 @@ pub extern "C" fn update() {
         let stick_y = left_stick_y(0);
 
         let sensitivity = if IS_SCOPED { 0.5 } else { 2.0 };
-        CAMERA_YAW += stick_x * sensitivity;
+        CAMERA_YAW -= stick_x * sensitivity; // Negate: right stick = turn right
         CAMERA_PITCH -= stick_y * sensitivity;
 
         // Clamp pitch
@@ -161,20 +162,14 @@ pub extern "C" fn update() {
             CAMERA_PITCH = -60.0;
         }
 
-        // Toggle scope with B button or right trigger
+        // Scope control: Hold right trigger OR hold B button
         let b_button = button_held(0, BUTTON_B);
-        let trigger = right_trigger(0);
+        let trigger = trigger_right(0);
 
-        if (b_button != 0 && PREV_B_BUTTON == 0) || trigger > 0.5 {
-            IS_SCOPED = !IS_SCOPED || trigger > 0.5;
-        }
-        if trigger <= 0.5 && b_button == 0 {
-            // Release scope when trigger released (if using trigger)
-        }
-        PREV_B_BUTTON = b_button;
-
-        // Use trigger to hold scope
+        // Hold to scope (not toggle)
         IS_SCOPED = trigger > 0.5 || (b_button != 0);
+
+        PREV_B_BUTTON = b_button;
 
         // Fire with A button
         let a_button = button_held(0, BUTTON_A);
@@ -324,9 +319,8 @@ unsafe fn draw_reticle() {
 /// Draw scope border ring
 unsafe fn draw_scope_border() {
     let border_color = 0x111111FF;
-    let border_width = 8.0;
 
-    // Draw black vignette outside scope
+    // Draw black vignette outside scope (non-overlapping rectangles)
     // Top
     draw_rect(0.0, 0.0, SCREEN_WIDTH, CENTER_Y - SCOPE_RADIUS, border_color);
     // Bottom
@@ -337,14 +331,20 @@ unsafe fn draw_scope_border() {
         SCREEN_HEIGHT - (CENTER_Y + SCOPE_RADIUS),
         border_color,
     );
-    // Left
-    draw_rect(0.0, 0.0, CENTER_X - SCOPE_RADIUS, SCREEN_HEIGHT, border_color);
-    // Right
+    // Left (only the middle band to avoid overlap)
+    draw_rect(
+        0.0,
+        CENTER_Y - SCOPE_RADIUS,
+        CENTER_X - SCOPE_RADIUS,
+        SCOPE_RADIUS * 2.0,
+        border_color,
+    );
+    // Right (only the middle band to avoid overlap)
     draw_rect(
         CENTER_X + SCOPE_RADIUS,
-        0.0,
+        CENTER_Y - SCOPE_RADIUS,
         SCREEN_WIDTH - (CENTER_X + SCOPE_RADIUS),
-        SCREEN_HEIGHT,
+        SCOPE_RADIUS * 2.0,
         border_color,
     );
 }
@@ -353,18 +353,19 @@ unsafe fn draw_scope_border() {
 pub extern "C" fn render() {
     unsafe {
         if IS_SCOPED {
-            // Draw scope mask to stencil
+            // Draw black border outside scope using inverted stencil
+            stencil_begin();
+            draw_scope_mask();
+            stencil_invert(); // Render OUTSIDE the circle
+            draw_rect(0.0, 0.0, SCREEN_WIDTH, SCREEN_HEIGHT, 0x111111FF);
+            stencil_clear();
+
+            // Draw zoomed scene inside scope
             stencil_begin();
             draw_scope_mask();
             stencil_end();
-
-            // Draw zoomed scene inside scope
             draw_scene(SCOPED_FOV);
-
             stencil_clear();
-
-            // Draw black border outside scope
-            draw_scope_border();
 
             // Draw reticle on top
             draw_reticle();
@@ -409,19 +410,54 @@ pub extern "C" fn render() {
             draw_rect(0.0, 0.0, SCREEN_WIDTH, SCREEN_HEIGHT, flash_color);
         }
 
-        // UI
-        let status = if IS_SCOPED {
-            "SCOPED (Release RT to unscope)"
+        // UI - Title (top left, only when not scoped)
+        if !IS_SCOPED {
+            let title = "SNIPER SCOPE DEMO";
+            draw_text(
+                title.as_ptr(),
+                title.len() as u32,
+                10.0,
+                10.0,
+                24.0,
+                0xFFFFFFFF,
+            );
+
+            // Explanation
+            let explain = "Stencil masks the scope view to a circle";
+            draw_text(
+                explain.as_ptr(),
+                explain.len() as u32,
+                10.0,
+                40.0,
+                12.0,
+                0x888888FF,
+            );
+        }
+
+        // Controls at bottom
+        let controls = if IS_SCOPED {
+            "Controls: Left Stick = Aim | Release B/Right Trigger = Unscope | A = Fire"
         } else {
-            "Hold RT or B to scope | A to fire"
+            "Controls: Left Stick = Look | Hold B or Right Trigger = Scope | A = Fire"
         };
+        draw_text(
+            controls.as_ptr(),
+            controls.len() as u32,
+            10.0,
+            SCREEN_HEIGHT - 30.0,
+            14.0,
+            0xAAAAAAFF,
+        );
+
+        // Status indicator
+        let status = if IS_SCOPED { "SCOPED - 8x Zoom" } else { "Hip Fire" };
         draw_text(
             status.as_ptr(),
             status.len() as u32,
+            SCREEN_WIDTH - 150.0,
             10.0,
-            SCREEN_HEIGHT - 30.0,
             16.0,
-            0xFFFFFFFF,
+            if IS_SCOPED { 0x00FF00FF } else { 0xFFFFFFFF },
         );
     }
 }

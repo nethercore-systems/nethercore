@@ -25,11 +25,23 @@ extern "C" {
     fn channel_stop(channel: u32);
 }
 
-// Button constants (Z input layout)
-const BUTTON_LEFT: u32 = 2;
-const BUTTON_RIGHT: u32 = 3;
-const BUTTON_A: u32 = 4;
-const BUTTON_B: u32 = 5;
+// Button constants
+pub mod button {
+    pub const UP: u32 = 0;
+    pub const DOWN: u32 = 1;
+    pub const LEFT: u32 = 2;
+    pub const RIGHT: u32 = 3;
+    pub const A: u32 = 4;
+    pub const B: u32 = 5;
+    pub const X: u32 = 6;
+    pub const Y: u32 = 7;
+    pub const L1: u32 = 8;
+    pub const R1: u32 = 9;
+    pub const L3: u32 = 10;
+    pub const R3: u32 = 11;
+    pub const START: u32 = 12;
+    pub const SELECT: u32 = 13;
+}
 
 // Global state
 static mut BEEP_SOUND: u32 = 0;
@@ -91,7 +103,7 @@ pub extern "C" fn init() {
 pub extern "C" fn update() {
     unsafe {
         // Toggle auto mode with B button
-        if button_pressed(0, BUTTON_B) != 0 {
+        if button_pressed(0, button::B) != 0 {
             AUTO_MODE = !AUTO_MODE;
             if !AUTO_MODE {
                 AUTO_TIMER = 0.0;
@@ -111,13 +123,13 @@ pub extern "C" fn update() {
             };
         } else {
             // Manual mode: use D-pad to control pan
-            if button_held(0, BUTTON_LEFT) != 0 {
+            if button_held(0, button::LEFT) != 0 {
                 PAN_POSITION -= 0.02;
                 if PAN_POSITION < -1.0 {
                     PAN_POSITION = -1.0;
                 }
             }
-            if button_held(0, BUTTON_RIGHT) != 0 {
+            if button_held(0, button::RIGHT) != 0 {
                 PAN_POSITION += 0.02;
                 if PAN_POSITION > 1.0 {
                     PAN_POSITION = 1.0;
@@ -126,7 +138,7 @@ pub extern "C" fn update() {
         }
 
         // Toggle playback with A button
-        if button_pressed(0, BUTTON_A) != 0 {
+        if button_pressed(0, button::A) != 0 {
             if IS_PLAYING {
                 channel_stop(0);
                 IS_PLAYING = false;

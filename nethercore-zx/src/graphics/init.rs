@@ -73,12 +73,23 @@ impl ZGraphics {
 
         tracing::info!("Using GPU adapter: {:?}", adapter.get_info().name);
 
+        // Check for BC texture compression support (required for BC7)
+        let adapter_features = adapter.features();
+        let mut required_features = wgpu::Features::empty();
+
+        if adapter_features.contains(wgpu::Features::TEXTURE_COMPRESSION_BC) {
+            required_features |= wgpu::Features::TEXTURE_COMPRESSION_BC;
+            tracing::info!("BC texture compression enabled");
+        } else {
+            tracing::warn!("BC texture compression not supported - BC7 textures will fail to load");
+        }
+
         // Request device and queue with default limits
         // Unified buffer architecture uses only 4 storage buffers (well under default limit of 8)
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("Nethercore ZX Device"),
-                required_features: wgpu::Features::default(),
+                required_features,
                 required_limits: wgpu::Limits::default(),
                 memory_hints: wgpu::MemoryHints::Performance,
                 experimental_features: Default::default(),

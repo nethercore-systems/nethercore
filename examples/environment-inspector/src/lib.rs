@@ -20,7 +20,7 @@
 //! 1. Run the game
 //! 2. Press A/B to cycle presets forward/backward
 //! 3. Press X to cycle shapes
-//! 4. Press F4 to open debug panel for fine-tuning
+//! 4. Press F3 to open debug panel for fine-tuning
 //! 5. Left stick to rotate camera around object
 
 #![no_std]
@@ -413,6 +413,6 @@ unsafe fn draw_ui() {
     let hint3 = b"Left stick: Orbit camera";
     draw_text(hint3.as_ptr(), hint3.len() as u32, 10.0, 130.0, 14.0, 0x888888FF);
 
-    let hint4 = b"F4: Debug panel";
+    let hint4 = b"F3: Debug panel (edit sky colors, object material)";
     draw_text(hint4.as_ptr(), hint4.len() as u32, 10.0, 150.0, 14.0, 0x888888FF);
 }

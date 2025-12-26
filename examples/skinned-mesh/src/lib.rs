@@ -37,7 +37,7 @@
 #![no_main]
 
 use core::panic::PanicInfo;
-use examples_common::{DebugCamera, StickControl};
+use examples_common::{button, DebugCamera, StickControl};
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
@@ -80,11 +80,6 @@ extern "C" {
     // 2D UI
     fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
 }
-
-// Button constants
-const BUTTON_UP: u32 = 0;
-const BUTTON_DOWN: u32 = 1;
-const BUTTON_A: u32 = 4;
 
 /// Vertex format flags
 const FORMAT_NORMAL: u32 = 4;
@@ -410,15 +405,15 @@ pub extern "C" fn update() {
         // Update camera
         CAMERA.update();
 
-        if button_pressed(0, BUTTON_A) != 0 {
+        if button_pressed(0, button::A) != 0 {
             PAUSED = !PAUSED;
         }
 
-        if button_held(0, BUTTON_UP) != 0 {
+        if button_held(0, button::UP) != 0 {
             ANIM_SPEED += 0.02;
             if ANIM_SPEED > 3.0 { ANIM_SPEED = 3.0; }
         }
-        if button_held(0, BUTTON_DOWN) != 0 {
+        if button_held(0, button::DOWN) != 0 {
             ANIM_SPEED -= 0.02;
             if ANIM_SPEED < 0.1 { ANIM_SPEED = 0.1; }
         }
@@ -495,7 +490,11 @@ pub extern "C" fn render() {
         let bones_label = b"3 bones, 12 floats/bone (25% savings)";
         draw_text(bones_label.as_ptr(), bones_label.len() as u32, 10.0, y + line_h * 3.5, 10.0, 0x888888FF);
 
-        let hint = b"L-Stick: Rotate view";
-        draw_text(hint.as_ptr(), hint.len() as u32, 10.0, y + line_h * 4.5, 10.0, 0x666666FF);
+        // Controls
+        let ctrl1 = b"Left stick: Rotate view | A: Toggle pause";
+        draw_text(ctrl1.as_ptr(), ctrl1.len() as u32, 10.0, y + line_h * 4.5, 10.0, 0x666666FF);
+
+        let ctrl2 = b"D-pad Up/Down: Animation speed";
+        draw_text(ctrl2.as_ptr(), ctrl2.len() as u32, 10.0, y + line_h * 5.5, 10.0, 0x666666FF);
     }
 }

@@ -56,11 +56,13 @@ extern "C" {
     // Render state
     fn set_color(color: u32);
     fn depth_test(enabled: u32);
+
+    // 2D Drawing
+    fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
 }
 
 /// Cube mesh handle
 static mut CUBE_MESH: u32 = 0;
-
 
 /// Current rotation angles (degrees)
 static mut ROTATION_X: f32 = 0.0;
@@ -119,5 +121,12 @@ pub extern "C" fn render() {
 
         // Draw the cube
         draw_mesh(CUBE_MESH);
+
+        // Control hints
+        let title = b"Rotating Cube";
+        draw_text(title.as_ptr(), title.len() as u32, 10.0, 10.0, 20.0, 0xFFFFFFFF);
+
+        let hint = b"Left stick: Rotate | Auto-rotates when centered";
+        draw_text(hint.as_ptr(), hint.len() as u32, 10.0, 40.0, 14.0, 0x888888FF);
     }
 }

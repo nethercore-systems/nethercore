@@ -52,22 +52,31 @@ extern "C" {
     fn push_rotate_y(angle_deg: f32);
     fn push_rotate_x(angle_deg: f32);
     fn push_scale(x: f32, y: f32, z: f32);
-    fn push_matrix(m0: f32, m1: f32, m2: f32, m3: f32, m4: f32, m5: f32, m6: f32, m7: f32, m8: f32, m9: f32, m10: f32, m11: f32, m12: f32, m13: f32, m14: f32, m15: f32);
+    fn transform_set(matrix_ptr: *const f32);
 
     // Render state
     fn set_color(color: u32);
     fn depth_test(enabled: u32);
 
-    // Sky
-    fn sky_set_colors(horizon_color: u32, zenith_color: u32);
+    // Environment
+    fn env_gradient(
+        layer: u32,
+        zenith: u32,
+        sky_horizon: u32,
+        ground_horizon: u32,
+        nadir: u32,
+        rotation: f32,
+        shift: f32,
+    );
+    fn draw_env();
 
     // 2D drawing
     fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
     fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32);
 }
 
-// Input
-const BUTTON_A: u32 = 1;
+// Input (button indices from zx.rs)
+const BUTTON_A: u32 = 4;
 
 // Mesh handles
 static mut CUBE: u32 = 0;
@@ -92,8 +101,6 @@ pub extern "C" fn init() {
         set_clear_color(0x87CEEBFF);
         render_mode(0);
         depth_test(1);
-
-        sky_set_colors(0xADD8E6FF, 0x4169E1FF);
 
         // Generate meshes
         CUBE = cube(2.0, 2.0, 2.0);
@@ -145,22 +152,21 @@ unsafe fn get_light_pos() -> (f32, f32, f32) {
 }
 
 /// Create a shadow projection matrix for a plane at y=0
-/// This projects vertices onto the ground plane based on light position
+/// This projects vertices onto the ground plane based on light position.
+///
+/// Uses the standard planar shadow matrix: M = (n·L)I - L⊗n
+/// For ground plane y=0 with normal n=(0,1,0) and light at L=(lx,ly,lz).
 unsafe fn shadow_matrix(light_x: f32, light_y: f32, light_z: f32) -> [f32; 16] {
-    // Shadow matrix for plane y = 0 (ground)
-    // P = L - dot(L, N) * I + outer(N, L)
-    // Where L is light position, N is plane normal (0,1,0)
+    let ly = light_y;
 
-    // Simplified for y=0 plane:
-    // The shadow matrix flattens geometry onto y=0 based on light direction
-    let d = light_y; // Height of light above ground
-
-    // Shadow projection matrix (column-major for WebGL/wgpu)
+    // Shadow projection matrix (column-major for wgpu)
+    // Transforms point P to its shadow position on y=0 plane
+    // Result needs perspective divide: (x', 0, z') = (x/w, 0, z/w)
     [
-        d,       0.0, 0.0, 0.0,      // Column 0
-        -light_x, 0.0, -light_z, 0.0, // Column 1 (projects to y=0)
-        0.0,     0.0, d,    0.0,      // Column 2
-        0.0,     0.0, 0.0,  d,        // Column 3
+        ly,        0.0, 0.0, 0.0,       // Column 0: x' = ly * x
+        -light_x,  0.0, -light_z, -1.0, // Column 1: contribution from y (note: -1 for w)
+        0.0,       0.0, ly,  0.0,       // Column 2: z' = ly * z
+        0.0,       0.0, 0.0, ly,        // Column 3: w offset
     ]
 }
 
@@ -198,12 +204,7 @@ unsafe fn draw_shadow() {
 
     push_identity();
     // Apply shadow projection matrix
-    push_matrix(
-        shadow[0], shadow[1], shadow[2], shadow[3],
-        shadow[4], shadow[5], shadow[6], shadow[7],
-        shadow[8], shadow[9], shadow[10], shadow[11],
-        shadow[12], shadow[13], shadow[14], shadow[15],
-    );
+    transform_set(shadow.as_ptr());
     push_translate(0.0, 2.0, 0.0);
     push_rotate_y(TIME * 30.0);
 
@@ -236,6 +237,10 @@ pub extern "C" fn render() {
         camera_set(12.0, 10.0, 12.0, 0.0, 0.0, 0.0);
         camera_fov(60.0);
 
+        // Draw sky
+        env_gradient(0, 0x4169E1FF, 0xADD8E6FF, 0xADD8E6FF, 0x87CEEBFF, 0.0, 0.0);
+        draw_env();
+
         // Draw ground first
         push_identity();
         set_color(0x88AA88FF); // Light green
@@ -261,37 +266,87 @@ pub extern "C" fn render() {
         set_color(0xFFFF0088);
         draw_mesh(CUBE);
 
-        // UI
-        let objects = ["Cube", "Sphere", "Torus"];
-        let obj_name = objects[CURRENT_OBJECT as usize];
+        // UI - Title
+        let title = "STENCIL SHADOW DEMO";
         draw_text(
-            obj_name.as_ptr(),
-            obj_name.len() as u32,
+            title.as_ptr(),
+            title.len() as u32,
             10.0,
             10.0,
             24.0,
             0xFFFFFFFF,
         );
 
-        let instr = "Stick: Move light | A: Change object";
+        // Current object
+        let objects = ["Cube", "Sphere", "Torus"];
+        let obj_label = "Object: ";
         draw_text(
-            instr.as_ptr(),
-            instr.len() as u32,
+            obj_label.as_ptr(),
+            obj_label.len() as u32,
+            10.0,
+            40.0,
+            16.0,
+            0xAAAAAAFF,
+        );
+        let obj_name = objects[CURRENT_OBJECT as usize];
+        draw_text(
+            obj_name.as_ptr(),
+            obj_name.len() as u32,
+            90.0,
+            40.0,
+            16.0,
+            0x88FF88FF,
+        );
+
+        // Explanation
+        let explain1 = "Shadows use stencil buffer to mask ground plane";
+        draw_text(
+            explain1.as_ptr(),
+            explain1.len() as u32,
+            10.0,
+            70.0,
+            12.0,
+            0x888888FF,
+        );
+        let explain2 = "1. Draw projected shape to stencil";
+        draw_text(
+            explain2.as_ptr(),
+            explain2.len() as u32,
+            10.0,
+            85.0,
+            12.0,
+            0x888888FF,
+        );
+        let explain3 = "2. Draw dark overlay where stencil was written";
+        draw_text(
+            explain3.as_ptr(),
+            explain3.len() as u32,
+            10.0,
+            100.0,
+            12.0,
+            0x888888FF,
+        );
+
+        // Controls at bottom
+        let controls = "Controls: Left Stick = Move Light | A = Change Object";
+        draw_text(
+            controls.as_ptr(),
+            controls.len() as u32,
             10.0,
             500.0,
             14.0,
-            0xCCCCCCFF,
+            0xAAAAAAFF,
         );
 
-        // Light info
-        let height_text = "Light height: ";
+        // Light indicator
+        let light_info = "Yellow sphere = Light source (orbiting)";
         draw_text(
-            height_text.as_ptr(),
-            height_text.len() as u32,
+            light_info.as_ptr(),
+            light_info.len() as u32,
             10.0,
-            40.0,
-            14.0,
-            0xAAAAFFFF,
+            520.0,
+            12.0,
+            0xFFFF88FF,
         );
     }
 }

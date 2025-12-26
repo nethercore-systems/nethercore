@@ -160,7 +160,7 @@ pub extern "C" fn render() {
         let title = b"Env Mode 5: Room";
         draw_text(title.as_ptr(), title.len() as u32, 10.0, 10.0, 20.0, 0xFFFFFFFF);
 
-        let hint = b"L-stick: XZ | Triggers: Y | R-stick: cam | B: shape | F4: debug";
+        let hint = b"L-stick: XZ | Triggers: Y | R-stick: cam | B: shape | F3: debug panel";
         draw_text(hint.as_ptr(), hint.len() as u32, 10.0, 40.0, 14.0, 0x888888FF);
     }
 }

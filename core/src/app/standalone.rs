@@ -579,13 +579,32 @@ where
             .session_mut()
             .ok_or_else(|| RuntimeError("No session".to_string()))?;
 
-        let raw_input = self.input_manager.get_player_input(0);
-        let console_input = session.runtime.console().map_input(&raw_input);
+        // Get local player handles from session (e.g., [0] for host, [1] for joiner)
+        let local_players: Vec<usize> = session
+            .runtime
+            .session()
+            .map(|s| s.local_players().to_vec())
+            .unwrap_or_else(|| vec![0]);
 
-        if let Some(game) = session.runtime.game_mut() {
-            game.set_input(0, console_input);
+        // Log once at startup (not every frame)
+        static LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        if !LOGGED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+            tracing::info!("run_game_frame: local_players = {:?}", local_players);
         }
-        let _ = session.runtime.add_local_input(0, console_input);
+
+        for &player_handle in &local_players {
+            let raw_input = self.input_manager.get_player_input(player_handle);
+            let console_input = session.runtime.console().map_input(&raw_input);
+
+            if let Some(game) = session.runtime.game_mut() {
+                game.set_input(player_handle, console_input);
+            }
+
+            // Always add input - GGRS will handle synchronization
+            if let Err(e) = session.runtime.add_local_input(player_handle, console_input) {
+                tracing::error!("Failed to add local input for handle {}: {:?}", player_handle, e);
+            }
+        }
 
         let should_run = self.frame_controller.should_run_tick();
         let time_scale = self.frame_controller.time_scale();
@@ -840,10 +859,12 @@ where
                     (0, PlayerType::Remote(address.clone())),
                     (1, PlayerType::Local),
                 ];
+                tracing::info!("Join mode: creating session with players {:?}", players);
 
                 let session =
                     RollbackSession::new_p2p(session_config, socket, players, specs.ram_limit)
                         .context("Failed to create P2P session")?;
+                tracing::info!("Join mode: session created, local_players = {:?}", session.local_players());
                 runner
                     .load_game_with_session(rom.console, &rom.code, session)
                     .context("Failed to load game with P2P session")?;
@@ -937,7 +958,8 @@ where
                         SessionConfig::online(2).with_input_delay(self.config.input_delay);
 
                     // Host is player 0, peer is player 1
-                    let players = vec![(0, PlayerType::Local), (1, PlayerType::Remote(peer_addr))];
+                    let players = vec![(0, PlayerType::Local), (1, PlayerType::Remote(peer_addr.clone()))];
+                    tracing::info!("Host mode: creating P2P session (host=local p0, peer=remote p1)");
 
                     match RollbackSession::new_p2p(
                         session_config,
@@ -946,6 +968,7 @@ where
                         specs.ram_limit,
                     ) {
                         Ok(session) => {
+                            tracing::info!("Host mode: session created, local_players = {:?}", session.local_players());
                             if let Err(e) = runner.load_game_with_session(
                                 rom.console.clone(),
                                 &rom.code,

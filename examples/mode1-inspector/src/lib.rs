@@ -668,16 +668,22 @@ unsafe fn draw_ui() {
     let slot3_y = slot2_y + slot_spacing;
     draw_slot_info(3, MATCAP3_ENABLED != 0, MATCAP3_INDEX, MATCAP3_BLEND, text_x, slot3_y, 0xFFFFAAAA);
 
-    // Controls hint at bottom right
+    // Controls hint at bottom right - comprehensive
     draw_text(
-        b"A/B: Cycle shape".as_ptr(),
-        16,
+        b"A/B: Cycle shape | X/Y: Select slot".as_ptr(),
+        37,
+        text_x, 486.0, 10.0,
+        0xFF888888,
+    );
+    draw_text(
+        b"L-Stick: Rotate | R-Stick: Camera".as_ptr(),
+        34,
         text_x, 500.0, 10.0,
         0xFF888888,
     );
     draw_text(
-        b"LStick: Rotate  RStick: Camera".as_ptr(),
-        31,
+        b"F3: Debug panel (edit blend modes)".as_ptr(),
+        35,
         text_x, 514.0, 10.0,
         0xFF888888,
     );

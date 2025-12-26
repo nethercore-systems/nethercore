@@ -18,7 +18,7 @@
 #![no_main]
 
 use core::panic::PanicInfo;
-use examples_common::{DebugCamera, StickControl};
+use examples_common::{button, DebugCamera, StickControl};
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
@@ -60,14 +60,6 @@ extern "C" {
 
     fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
 }
-
-// ============================================================================
-// Constants
-// ============================================================================
-
-const BUTTON_UP: u32 = 0;
-const BUTTON_DOWN: u32 = 1;
-const BUTTON_A: u32 = 4;
 
 // ============================================================================
 // Game State
@@ -133,18 +125,18 @@ pub extern "C" fn update() {
         CAMERA.update();
 
         // Toggle pause
-        if button_pressed(0, BUTTON_A) != 0 {
+        if button_pressed(0, button::A) != 0 {
             PAUSED = !PAUSED;
         }
 
         // Adjust speed
-        if button_held(0, BUTTON_UP) != 0 {
+        if button_held(0, button::UP) != 0 {
             ANIM_SPEED += 0.02;
             if ANIM_SPEED > 3.0 {
                 ANIM_SPEED = 3.0;
             }
         }
-        if button_held(0, BUTTON_DOWN) != 0 {
+        if button_held(0, button::DOWN) != 0 {
             ANIM_SPEED -= 0.02;
             if ANIM_SPEED < 0.1 {
                 ANIM_SPEED = 0.1;
@@ -223,10 +215,14 @@ fn draw_ui() {
         };
         draw_text(status.as_ptr(), status.len() as u32, 10.0, y + line_h * 5.0, 10.0, 0x888888FF);
 
-        let controls = b"D-pad: Speed, L-Stick: View";
-        draw_text(controls.as_ptr(), controls.len() as u32, 10.0, y + line_h * 6.0, 10.0, 0x666666FF);
+        // Controls
+        let ctrl1 = b"Left stick: Rotate view | A: Toggle pause";
+        draw_text(ctrl1.as_ptr(), ctrl1.len() as u32, 10.0, y + line_h * 6.0, 10.0, 0x666666FF);
+
+        let ctrl2 = b"D-pad Up/Down: Animation speed";
+        draw_text(ctrl2.as_ptr(), ctrl2.len() as u32, 10.0, y + line_h * 7.0, 10.0, 0x666666FF);
 
         let info = b"Uses skeleton_bind + keyframe_bind";
-        draw_text(info.as_ptr(), info.len() as u32, 10.0, y + line_h * 7.5, 10.0, 0x44FF44FF);
+        draw_text(info.as_ptr(), info.len() as u32, 10.0, y + line_h * 8.5, 10.0, 0x44FF44FF);
     }
 }

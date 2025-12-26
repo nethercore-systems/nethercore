@@ -1,0 +1,10 @@
+[package]
+name = "proc-gen-showcase-defs"
+version = "0.1.0"
+edition = "2021"
+description = "Shared showcase sound definitions (no_std compatible)"
+
+[lib]
+
+[dependencies]
+# No dependencies - this is pure data definitions

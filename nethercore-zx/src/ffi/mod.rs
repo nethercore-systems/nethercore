@@ -66,7 +66,6 @@ mod mesh_generators;
 mod render_state;
 mod rom;
 mod skinning;
-mod sky;
 mod texture;
 mod transform;
 mod viewport;
@@ -120,10 +119,8 @@ pub fn register_zx_ffi(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     // 2D drawing (screen space)
     draw_2d::register(linker)?;
 
-    // Sky system + matcap (backwards compatibility)
-    sky::register(linker)?;
-
     // Environment system (Multi-Environment v3)
+    // Includes matcap_set and draw_env
     environment::register(linker)?;
 
     // Material functions

@@ -124,6 +124,14 @@ impl<C: Console> Runtime<C> {
         input: C::Input,
     ) -> Result<(), GgrsError> {
         if let Some(session) = &mut self.session {
+            let frame = session.current_frame();
+            let state = session.session_state();
+            tracing::info!(
+                "add_local_input: handle={}, frame={}, state={:?}",
+                player_handle,
+                frame,
+                state
+            );
             session.add_local_input(player_handle, input)?;
         }
         Ok(())
@@ -196,16 +204,27 @@ impl<C: Console> Runtime<C> {
                 if state != SessionState::Running {
                     // Session is still synchronizing - poll it but don't advance frames
                     session.poll_remote_clients();
-                    // Don't consume accumulator - we'll try again next frame
+                    // Reset accumulator to prevent catchup burst when session starts
+                    self.accumulator = Duration::ZERO;
                     // Return 0 ticks and 0.0 interpolation (no game state to interpolate)
                     return Ok((0, 0.0));
                 }
             }
 
+            // For P2P sessions, only advance once per render frame to match input cadence
+            // (we only add input once per run_game_frame call)
+            let is_p2p = session.session_state().is_some();
+
             while self.accumulator >= self.tick_duration {
                 let tick_start = Instant::now();
 
                 // Advance GGRS frame and get requests
+                let frame_before = session.current_frame();
+                tracing::info!(
+                    "advance_frame: about to advance, current_frame={}, state={:?}",
+                    frame_before,
+                    session.session_state()
+                );
                 let requests = session
                     .advance_frame()
                     .map_err(|e| anyhow::anyhow!("GGRS advance_frame failed: {}", e))?;
@@ -241,6 +260,17 @@ impl<C: Console> Runtime<C> {
                         tick_time,
                         self.config.cpu_budget
                     );
+                }
+
+                // For P2P sessions, only advance once per render frame
+                // We only receive one input per run_game_frame call, so we can't
+                // advance multiple times without new input
+                if is_p2p {
+                    // Clamp remaining accumulator to prevent runaway catchup
+                    if self.accumulator > self.tick_duration {
+                        self.accumulator = self.tick_duration;
+                    }
+                    break;
                 }
             }
         } else {

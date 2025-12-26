@@ -65,8 +65,17 @@ extern "C" {
     fn set_color(color: u32);
     fn depth_test(enabled: u32);
 
-    // Sky
-    fn sky_set_colors(horizon_color: u32, zenith_color: u32);
+    // Environment
+    fn env_gradient(
+        layer: u32,
+        zenith: u32,
+        sky_horizon: u32,
+        ground_horizon: u32,
+        nadir: u32,
+        rotation: f32,
+        shift: f32,
+    );
+    fn draw_env();
 
     // Lighting
     fn light_set(index: u32, x: f32, y: f32, z: f32);

@@ -436,7 +436,11 @@ macro_rules! viewer {
     };
 }
 
-/// Generate an asset preview viewer that loads ROM meshes.
+/// Generate an asset preview viewer that loads ROM meshes with proper material setup.
+///
+/// This macro creates mode-aware viewers that properly configure materials:
+/// - Mode 2 (PBR): Uses metallic/roughness properties
+/// - Mode 3 (Blinn-Phong): Uses specular/shininess properties
 ///
 /// Usage:
 /// ```ignore
@@ -479,6 +483,10 @@ macro_rules! asset_viewer {
 
             // ROM asset loading
             fn rom_mesh(id_ptr: *const u8, id_len: u32) -> u32;
+            fn rom_texture(id_ptr: *const u8, id_len: u32) -> u32;
+
+            // Textures
+            fn texture_bind(handle: u32);
 
             // Procedural mesh (for grid)
             fn plane(size_x: f32, size_z: f32, subdivisions_x: u32, subdivisions_z: u32) -> u32;
@@ -494,6 +502,15 @@ macro_rules! asset_viewer {
             // Render state
             fn set_color(color: u32);
             fn depth_test(enabled: u32);
+
+            // Materials - Mode 2 (PBR)
+            fn material_metallic(value: f32);
+            fn material_roughness(value: f32);
+            fn material_emissive(value: f32);
+
+            // Materials - Mode 3 (Blinn-Phong)
+            fn material_shininess(value: f32);
+            fn material_specular(color: u32);
 
             // Lighting
             fn light_set(index: u32, x: f32, y: f32, z: f32);
@@ -537,12 +554,34 @@ macro_rules! asset_viewer {
         const ASSET_IDS: &[&str] = &[$($id),*];
         const ASSET_NAMES: &[&str] = &[$($name),*];
         const NUM_ASSETS: u32 = { let mut n = 0u32; $(let _ = $id; n += 1;)* n };
+        const RENDER_MODE: u32 = $render_mode;
+
+        // Color palette for assets (distinct colors per asset)
+        const ASSET_COLORS: [u32; 16] = [
+            0xE57373FF, // Red
+            0x64B5F6FF, // Blue
+            0x81C784FF, // Green
+            0xFFD54FFF, // Amber
+            0xBA68C8FF, // Purple
+            0x4DD0E1FF, // Cyan
+            0xFF8A65FF, // Deep Orange
+            0xA1887FFF, // Brown
+            0x90A4AEFF, // Blue Grey
+            0xF06292FF, // Pink
+            0xAED581FF, // Light Green
+            0xFFB74DFF, // Orange
+            0x7986CBFF, // Indigo
+            0x4FC3F7FF, // Light Blue
+            0xDCE775FF, // Lime
+            0x9575CDFF, // Deep Purple
+        ];
 
         // =============================================================================
         // Constants
         // =============================================================================
 
         const BUTTON_A: u32 = 4;
+        const BUTTON_B: u32 = 5;
         const BUTTON_L1: u32 = 8;
         const BUTTON_R1: u32 = 9;
         const BUTTON_START: u32 = 12;
@@ -562,6 +601,7 @@ macro_rules! asset_viewer {
         static mut SHOW_GRID: bool = true;
 
         static mut MESH_HANDLES: [u32; MAX_ASSETS] = [0; MAX_ASSETS];
+        static mut TEXTURE_HANDLES: [u32; MAX_ASSETS] = [0; MAX_ASSETS];
         static mut GRID_MESH: u32 = 0;
 
         // =============================================================================
@@ -572,7 +612,7 @@ macro_rules! asset_viewer {
         pub extern "C" fn init() {
             unsafe {
                 set_clear_color(0x1a1a2eFF);
-                render_mode($render_mode);
+                render_mode(RENDER_MODE);
                 depth_test(1);
 
                 // Load all assets from ROM
@@ -580,6 +620,8 @@ macro_rules! asset_viewer {
                 $(
                     let id_bytes = $id.as_bytes();
                     MESH_HANDLES[i] = rom_mesh(id_bytes.as_ptr(), id_bytes.len() as u32);
+                    // Try to load matching texture (may return 0 if not found)
+                    TEXTURE_HANDLES[i] = rom_texture(id_bytes.as_ptr(), id_bytes.len() as u32);
                     i += 1;
                 )*
                 let _ = i; // Suppress unused warning
@@ -587,16 +629,22 @@ macro_rules! asset_viewer {
                 // Grid for floor
                 GRID_MESH = plane(10.0, 10.0, 20, 20);
 
-                // Set up lighting
+                // Set up lighting - brighter for showcase
                 light_set(0, 0.5, -0.7, 0.5);
-                light_color(0, 0xFFF2E6FF);
-                light_intensity(0, 1.8);
+                light_color(0, 0xFFF8F0FF);
+                light_intensity(0, 2.0);
                 light_enable(0);
 
                 light_set(1, -0.5, -0.3, -0.5);
-                light_color(1, 0x99B3FFFF);
-                light_intensity(1, 0.6);
+                light_color(1, 0xB0C0FFFF);
+                light_intensity(1, 0.8);
                 light_enable(1);
+
+                // Third light for rim/backlight
+                light_set(2, 0.0, 0.3, -0.8);
+                light_color(2, 0xFFFFFFFF);
+                light_intensity(2, 0.4);
+                light_enable(2);
             }
         }
 
@@ -681,8 +729,14 @@ macro_rules! asset_viewer {
                 camera_set(cam_x, cam_y, cam_z, 0.0, 0.0, 0.0);
                 camera_fov(60.0);
 
-                // Environment
-                env_gradient(0, 0x1a1a2eFF, 0x2d2d4dFF, 0x2d2d4dFF, 0x0a0a14FF, 0.0, 0.0);
+                // Environment - mode-specific colors
+                if RENDER_MODE == 2 {
+                    // Cyberpunk/neon aesthetic for Mode 2
+                    env_gradient(0, 0x0a0a1aFF, 0x1a1a3aFF, 0x1a1a3aFF, 0x050510FF, 0.0, 0.0);
+                } else {
+                    // Fantasy/warm aesthetic for Mode 3
+                    env_gradient(0, 0x1a1a2eFF, 0x2d2d4dFF, 0x2d2d4dFF, 0x0a0a14FF, 0.0, 0.0);
+                }
 
                 if SHOW_GRID {
                     env_lines(1, 0, 2, 2, 1.0, 20.0, 0x404060FF, 0x606080FF, 5, 0);
@@ -698,10 +752,38 @@ macro_rules! asset_viewer {
                     draw_mesh(GRID_MESH);
                 }
 
+                // Set up material based on render mode
+                let asset_color = ASSET_COLORS[(CURRENT_ASSET as usize) % 16];
+
+                if RENDER_MODE == 2 {
+                    // Mode 2: PBR (Metallic-Roughness)
+                    // Vary metallic/roughness based on asset index for variety
+                    let metallic = 0.3 + (((CURRENT_ASSET * 17) % 7) as f32) * 0.1;
+                    let roughness = 0.3 + (((CURRENT_ASSET * 13) % 5) as f32) * 0.1;
+                    material_metallic(metallic);
+                    material_roughness(roughness);
+                    material_emissive(0.0);
+                } else {
+                    // Mode 3: Blinn-Phong (Specular-Shininess)
+                    // Vary shininess based on asset index
+                    let shininess = 0.3 + (((CURRENT_ASSET * 11) % 6) as f32) * 0.1;
+                    material_shininess(shininess);
+                    material_specular(0xFFFFFFFF); // White specular highlights
+                }
+
+                // Bind texture if available
+                let tex_handle = TEXTURE_HANDLES[CURRENT_ASSET as usize];
+                if tex_handle != 0 {
+                    texture_bind(tex_handle);
+                }
+
                 // Current asset with rotation
                 push_identity();
                 push_rotate_y(ROTATION);
-                set_color(0xFFFFFFFF);
+
+                // Use distinct color per asset
+                set_color(asset_color);
+
                 let handle = MESH_HANDLES[CURRENT_ASSET as usize];
                 draw_mesh(handle);
 
@@ -715,27 +797,36 @@ macro_rules! asset_viewer {
         // =============================================================================
 
         unsafe fn draw_ui() {
-            draw_rect(5.0, 5.0, 300.0, 100.0, 0x00000088);
+            draw_rect(5.0, 5.0, 320.0, 120.0, 0x00000088);
 
             // Title
             let title = $title;
             let title_bytes = title.as_bytes();
             draw_text(title_bytes.as_ptr(), title_bytes.len() as u32, 15.0, 15.0, 18.0, 0xFFFFFFFF);
 
+            // Render mode indicator
+            if RENDER_MODE == 2 {
+                let mode_text = b"PBR (Metallic-Roughness)";
+                draw_text(mode_text.as_ptr(), mode_text.len() as u32, 15.0, 40.0, 12.0, 0x88AAFFFF);
+            } else {
+                let mode_text = b"Blinn-Phong (Specular)";
+                draw_text(mode_text.as_ptr(), mode_text.len() as u32, 15.0, 40.0, 12.0, 0x88AAFFFF);
+            }
+
             // Current asset name
             let name = ASSET_NAMES[CURRENT_ASSET as usize];
             let name_bytes = name.as_bytes();
-            draw_text(b"Asset:".as_ptr(), 6, 15.0, 45.0, 14.0, 0xAAAAAAFF);
-            draw_text(name_bytes.as_ptr(), name_bytes.len() as u32, 80.0, 45.0, 14.0, 0x88FF88FF);
+            draw_text(b"Asset:".as_ptr(), 6, 15.0, 65.0, 14.0, 0xAAAAAAFF);
+            draw_text(name_bytes.as_ptr(), name_bytes.len() as u32, 80.0, 65.0, 14.0, 0x88FF88FF);
 
             // Asset counter
             let mut buf = [0u8; 16];
             let len = format_counter(CURRENT_ASSET + 1, NUM_ASSETS, &mut buf);
-            draw_text(buf.as_ptr(), len as u32, 15.0, 70.0, 12.0, 0x888888FF);
+            draw_text(buf.as_ptr(), len as u32, 15.0, 90.0, 12.0, 0x888888FF);
 
-            // Controls
-            let controls = b"L1/R1:Asset  A:Grid  START:Reset";
-            draw_text(controls.as_ptr(), controls.len() as u32, 10.0, 520.0, 12.0, 0x888888FF);
+            // Controls - more detailed
+            let controls = b"L1/R1:Asset  A:Grid  START:Reset  L-Stick:Orbit  R-Stick:Zoom";
+            draw_text(controls.as_ptr(), controls.len() as u32, 10.0, 520.0, 11.0, 0x888888FF);
         }
 
         fn format_counter(current: u32, total: u32, buf: &mut [u8; 16]) -> usize {

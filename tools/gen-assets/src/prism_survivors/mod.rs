@@ -4,6 +4,8 @@
 //! Heroes: Knight, Mage, Ranger, Cleric
 //! Enemies: Golem, Crawler, Wisp, Skeleton
 
+mod textures;
+
 use proc_gen::mesh::*;
 use proc_gen::texture::*;
 use std::path::Path;
@@ -36,8 +38,8 @@ pub fn generate_all(output_dir: &Path) {
     generate_skeleton(&meshes_dir);
 
     // Textures
-    generate_hero_textures(&textures_dir);
-    generate_enemy_textures(&textures_dir);
+    textures::generate_hero_textures(&textures_dir);
+    textures::generate_enemy_textures(&textures_dir);
 }
 
 // === TEST ASSETS ===
@@ -376,54 +378,3 @@ fn generate_skeleton(output_dir: &Path) {
     );
 }
 
-// === TEXTURES ===
-
-fn generate_hero_textures(output_dir: &Path) {
-    println!("\n  Generating hero textures...");
-
-    let knight_tex = metal(64, 64, [140, 140, 150, 255], 42);
-    let path = output_dir.join("knight.png");
-    write_png(&knight_tex, &path).expect("Failed to write PNG");
-    println!("    -> {}", path.display());
-
-    let mut mage_tex = gradient_v(64, 64, [80, 40, 120, 255], [40, 20, 80, 255]);
-    mage_tex.apply(Contrast { factor: 1.1 });
-    let path = output_dir.join("mage.png");
-    write_png(&mage_tex, &path).expect("Failed to write PNG");
-    println!("    -> {}", path.display());
-
-    let ranger_tex = gradient_v(64, 64, [60, 80, 40, 255], [40, 50, 30, 255]);
-    let path = output_dir.join("ranger.png");
-    write_png(&ranger_tex, &path).expect("Failed to write PNG");
-    println!("    -> {}", path.display());
-
-    let cleric_tex = gradient_v(64, 64, [240, 230, 200, 255], [200, 180, 140, 255]);
-    let path = output_dir.join("cleric.png");
-    write_png(&cleric_tex, &path).expect("Failed to write PNG");
-    println!("    -> {}", path.display());
-}
-
-fn generate_enemy_textures(output_dir: &Path) {
-    println!("\n  Generating enemy textures...");
-
-    let golem_tex = stone(64, 64, [100, 90, 80, 255], 42);
-    let path = output_dir.join("golem.png");
-    write_png(&golem_tex, &path).expect("Failed to write PNG");
-    println!("    -> {}", path.display());
-
-    let mut crawler_tex = solid(64, 64, [40, 35, 45, 255]);
-    crawler_tex.apply(Contrast { factor: 1.2 });
-    let path = output_dir.join("crawler.png");
-    write_png(&crawler_tex, &path).expect("Failed to write PNG");
-    println!("    -> {}", path.display());
-
-    let wisp_tex = gradient_radial(64, 64, [255, 200, 100, 255], [255, 150, 50, 200]);
-    let path = output_dir.join("wisp.png");
-    write_png(&wisp_tex, &path).expect("Failed to write PNG");
-    println!("    -> {}", path.display());
-
-    let skeleton_tex = solid(64, 64, [220, 210, 190, 255]);
-    let path = output_dir.join("skeleton.png");
-    write_png(&skeleton_tex, &path).expect("Failed to write PNG");
-    println!("    -> {}", path.display());
-}

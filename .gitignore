@@ -43,6 +43,7 @@ examples/multi-skinned-rom/assets/*.nczxskel
 examples/multi-skinned-rom/assets/*.nczxanim
 examples/tracker-demo/assets/*.wav
 examples/tracker-demo/assets/*.xm
+examples/proc-sounds-viewer/assets/*.wav
 examples/asset-test/assets/*.nczxmesh
 examples/asset-test/assets/*.nczxtex
 examples/cube/*.nczx

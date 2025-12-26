@@ -544,7 +544,7 @@ fn draw_ui() {
         );
 
         // Controls
-        let ctrl1 = b"A: Toggle mode";
+        let ctrl1 = b"A: Toggle mode | D-pad: Speed";
         draw_text(
             ctrl1.as_ptr(),
             ctrl1.len() as u32,
@@ -553,7 +553,7 @@ fn draw_ui() {
             10.0,
             0x888888FF,
         );
-        let ctrl2 = b"D-pad: Speed";
+        let ctrl2 = b"Left stick: Rotate view";
         draw_text(
             ctrl2.as_ptr(),
             ctrl2.len() as u32,

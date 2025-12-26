@@ -1,6 +1,6 @@
 [env]
 # or debug, trace, warn, error
-RUST_LOG = "core=debug,nethercore_z=debug"           
+RUST_LOG = "core=warn,nethercore_zx=info"           
 RUST_BACKTRACE = "1"
 
 [alias]
