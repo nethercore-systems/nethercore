@@ -8,25 +8,8 @@ use clap::{Parser, Subcommand};
 use nethercore_shared::ZX_ROM_FORMAT;
 use std::path::PathBuf;
 
-mod animation;
-mod audio;
-mod codegen;
-mod formats;
-mod manifest;
-mod mesh;
-mod skeleton;
-mod texture;
-// mod font;  // Deferred
-
-// Re-export packing functions and vertex format constants from zx-common
-pub use zx_common::{
-    pack_bone_weights_unorm8, pack_color_rgba_unorm8, pack_normal_octahedral, pack_normal_snorm16,
-    pack_position_f16, pack_uv_f16, pack_uv_unorm16, pack_vertex_data, unpack_octahedral_u32,
-    vertex_stride, vertex_stride_packed, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV,
-};
-
-// Re-export ROM format from shared (includes all extension constants)
-pub use nethercore_shared::RomFormat;
+// Use modules from library
+use nether_export::{animation, audio, manifest, mesh, skeleton, texture};
 
 #[derive(Parser)]
 #[command(name = "nether-export")]

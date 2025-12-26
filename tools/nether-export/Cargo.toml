@@ -5,6 +5,10 @@ edition = "2021"
 license = "MIT"
 description = "Nethercore asset export tool - converts raw assets to GPU-ready binary formats"
 
+[lib]
+name = "nether_export"
+path = "src/lib.rs"
+
 [[bin]]
 name = "nether-export"
 path = "src/main.rs"

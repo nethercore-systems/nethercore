@@ -385,9 +385,62 @@ fn compress_bc7(pixels: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
 
 /// Load a mesh from file
 ///
-/// Supports: .nczxmesh / .nczmesh (Nethercore ZX mesh format)
-/// Future: .gltf, .glb, .obj (via nether-export)
+/// Supports:
+/// - .nczxmesh / .nczmesh (Nethercore ZX mesh format) - direct load
+/// - .obj (Wavefront OBJ) - auto-converted via nether-export
+/// - .gltf / .glb (glTF 2.0) - auto-converted via nether-export
 fn load_mesh(id: &str, path: &std::path::Path) -> Result<PackedMesh> {
+    // Detect format by extension
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_lowercase())
+        .unwrap_or_default();
+
+    match ext.as_str() {
+        // Native format - direct load
+        "nczmesh" | "nczxmesh" => load_mesh_native(id, path),
+
+        // OBJ - convert via nether-export
+        "obj" => {
+            let converted = nether_export::convert_obj_to_memory(path)
+                .with_context(|| format!("Failed to convert OBJ: {}", path.display()))?;
+
+            Ok(PackedMesh {
+                id: id.to_string(),
+                format: converted.format,
+                vertex_count: converted.vertex_count,
+                index_count: converted.index_count,
+                vertex_data: converted.vertex_data,
+                index_data: converted.indices,
+            })
+        }
+
+        // glTF/GLB - convert via nether-export
+        "gltf" | "glb" => {
+            let converted = nether_export::convert_gltf_to_memory(path)
+                .with_context(|| format!("Failed to convert glTF: {}", path.display()))?;
+
+            Ok(PackedMesh {
+                id: id.to_string(),
+                format: converted.format,
+                vertex_count: converted.vertex_count,
+                index_count: converted.index_count,
+                vertex_data: converted.vertex_data,
+                index_data: converted.indices,
+            })
+        }
+
+        _ => anyhow::bail!(
+            "Unsupported mesh format '{}': {} (use .nczmesh, .obj, .gltf, or .glb)",
+            ext,
+            path.display()
+        ),
+    }
+}
+
+/// Load a native .nczmesh/.nczxmesh file
+fn load_mesh_native(id: &str, path: &std::path::Path) -> Result<PackedMesh> {
     let data =
         std::fs::read(path).with_context(|| format!("Failed to load mesh: {}", path.display()))?;
 

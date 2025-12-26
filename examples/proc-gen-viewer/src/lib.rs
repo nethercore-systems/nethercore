@@ -8,7 +8,6 @@
 //! - Left stick: Orbit camera (rotate around object)
 //! - Right stick: Adjust camera distance (Y axis)
 //! - A button: Toggle grid overlay
-//! - B button: Cycle render modes (Lambert, Matcap, PBR, Hybrid)
 //! - X button: Increase subdivision level
 //! - Y button: Decrease subdivision level
 //! - L1/R1: Cycle through shapes
@@ -261,11 +260,8 @@ pub extern "C" fn update() {
             SHOW_GRID = !SHOW_GRID;
         }
 
-        // B button: Cycle render modes
-        if button_pressed(0, BUTTON_B) != 0 {
-            CURRENT_RENDER_MODE = (CURRENT_RENDER_MODE + 1) % 4;
-            render_mode(CURRENT_RENDER_MODE);
-        }
+        // B button: (render mode switching not available at runtime)
+        // render_mode() can only be called once during init
 
         // X button: Increase subdivision
         if button_pressed(0, BUTTON_X) != 0 {

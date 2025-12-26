@@ -64,7 +64,7 @@ fn build_examples() -> Result<()> {
     let nether_exe = ensure_nether_cli(&project_root)?;
 
     // Library crates that shouldn't be built as standalone examples
-    let skip_dirs = ["inspector-common", "examples-common"];
+    let skip_dirs = ["inspector-common", "examples-common", "proc-gen-common"];
 
     // Get all example directories that have a Cargo.toml (are buildable)
     let examples: Vec<_> = fs::read_dir(&examples_dir)
@@ -192,8 +192,9 @@ fn run_asset_generators(project_root: &Path) -> Result<()> {
             let name = generator.file_name();
             let name_str = name.to_string_lossy().to_string();
 
+            // Run with 'all' subcommand to generate all assets + preview viewers
             let output = Command::new("cargo")
-                .args(["run", "-p", &name_str, "--release"])
+                .args(["run", "-p", &name_str, "--release", "--", "all"])
                 .current_dir(project_root)
                 .output();
 

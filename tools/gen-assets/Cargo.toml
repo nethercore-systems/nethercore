@@ -1,10 +1,10 @@
 [package]
-name = "asset-gen"
+name = "gen-assets"
 version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "asset-gen"
+name = "gen-assets"
 path = "src/main.rs"
 
 [dependencies]

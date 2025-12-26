@@ -1,0 +1,10 @@
+[package]
+name = "proc-gen-common"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+# This is a regular lib, not a cdylib - the wrapper crates are cdylibs
+
+[dependencies]
+libm = "0.2"

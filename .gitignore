@@ -47,6 +47,8 @@ examples/asset-test/assets/*.nczxmesh
 examples/asset-test/assets/*.nczxtex
 examples/cube/*.nczx
 examples/multi-skinned-rom/*.nczx
+examples/proc-gen-mode2/*.nczx
+examples/proc-gen-mode3/*.nczx
 
 # =========================
 # Generated Showcase Assets
@@ -56,10 +58,12 @@ examples/multi-skinned-rom/*.nczx
 
 # Generated meshes
 examples/*/assets/meshes/*.obj
+examples/*/assets/models/meshes/*.obj
 examples/*/tools/*/output/*.obj
 
 # Generated textures
 examples/*/assets/textures/*.png
+examples/*/assets/models/textures/*.png
 examples/*/tools/*/output/*.png
 
 # Generated audio

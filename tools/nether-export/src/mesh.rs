@@ -8,6 +8,198 @@ use std::path::Path;
 use crate::formats::write_nether_mesh;
 use crate::{vertex_stride_packed, FORMAT_NORMAL, FORMAT_UV};
 
+/// Result of in-memory mesh conversion
+pub struct ConvertedMesh {
+    /// Format flags (UV, normal, etc.)
+    pub format: u8,
+    /// Number of vertices
+    pub vertex_count: u32,
+    /// Number of indices
+    pub index_count: u32,
+    /// Packed vertex data
+    pub vertex_data: Vec<u8>,
+    /// Index data (u16)
+    pub indices: Vec<u16>,
+}
+
+/// Convert an OBJ file to in-memory mesh data (for direct ROM packing)
+pub fn convert_obj_to_memory(input: &Path) -> Result<ConvertedMesh> {
+    let file = File::open(input).with_context(|| format!("Failed to open OBJ: {:?}", input))?;
+    let reader = BufReader::new(file);
+
+    let mut positions: Vec<[f32; 3]> = Vec::new();
+    let mut tex_coords: Vec<[f32; 2]> = Vec::new();
+    let mut normals_raw: Vec<[f32; 3]> = Vec::new();
+
+    // Final vertex data (expanded from faces)
+    let mut final_positions: Vec<[f32; 3]> = Vec::new();
+    let mut final_uvs: Vec<[f32; 2]> = Vec::new();
+    let mut final_normals: Vec<[f32; 3]> = Vec::new();
+    let mut indices: Vec<u16> = Vec::new();
+
+    for line in reader.lines() {
+        let line = line?;
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.is_empty() {
+            continue;
+        }
+
+        match parts[0] {
+            "v" if parts.len() >= 4 => {
+                let x: f32 = parts[1].parse().unwrap_or(0.0);
+                let y: f32 = parts[2].parse().unwrap_or(0.0);
+                let z: f32 = parts[3].parse().unwrap_or(0.0);
+                positions.push([x, y, z]);
+            }
+            "vt" if parts.len() >= 3 => {
+                let u: f32 = parts[1].parse().unwrap_or(0.0);
+                let v: f32 = parts[2].parse().unwrap_or(0.0);
+                tex_coords.push([u, v]);
+            }
+            "vn" if parts.len() >= 4 => {
+                let x: f32 = parts[1].parse().unwrap_or(0.0);
+                let y: f32 = parts[2].parse().unwrap_or(0.0);
+                let z: f32 = parts[3].parse().unwrap_or(0.0);
+                normals_raw.push([x, y, z]);
+            }
+            "f" if parts.len() >= 4 => {
+                // Parse face vertices (triangulate if needed)
+                let face_verts: Vec<(usize, Option<usize>, Option<usize>)> = parts[1..]
+                    .iter()
+                    .filter_map(|v| parse_obj_vertex(v))
+                    .collect();
+
+                if face_verts.len() < 3 {
+                    continue;
+                }
+
+                // Triangulate (fan triangulation for convex polygons)
+                for i in 1..face_verts.len() - 1 {
+                    for &idx in &[0, i, i + 1] {
+                        let (vi, vti, vni) = face_verts[idx];
+
+                        let base_idx = final_positions.len() as u16;
+                        indices.push(base_idx);
+
+                        final_positions.push(positions.get(vi).copied().unwrap_or([0.0; 3]));
+
+                        if let Some(ti) = vti {
+                            final_uvs.push(tex_coords.get(ti).copied().unwrap_or([0.0; 2]));
+                        }
+
+                        if let Some(ni) = vni {
+                            final_normals
+                                .push(normals_raw.get(ni).copied().unwrap_or([0.0, 1.0, 0.0]));
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if final_positions.is_empty() {
+        bail!("No vertices found in OBJ file");
+    }
+
+    // Determine format
+    let has_uvs = !final_uvs.is_empty() && final_uvs.len() == final_positions.len();
+    let has_normals = !final_normals.is_empty() && final_normals.len() == final_positions.len();
+
+    let mut format = 0u8;
+    if has_uvs {
+        format |= FORMAT_UV;
+    }
+    if has_normals {
+        format |= FORMAT_NORMAL;
+    }
+
+    // Pack vertex data
+    let uvs = if has_uvs {
+        Some(final_uvs.as_slice())
+    } else {
+        None
+    };
+    let normals = if has_normals {
+        Some(final_normals.as_slice())
+    } else {
+        None
+    };
+    let vertex_data = pack_vertices(&final_positions, uvs, normals, format);
+
+    Ok(ConvertedMesh {
+        format,
+        vertex_count: final_positions.len() as u32,
+        index_count: indices.len() as u32,
+        vertex_data,
+        indices,
+    })
+}
+
+/// Convert a glTF/GLB file to in-memory mesh data (for direct ROM packing)
+pub fn convert_gltf_to_memory(input: &Path) -> Result<ConvertedMesh> {
+    let (document, buffers, _images) =
+        gltf::import(input).with_context(|| format!("Failed to load glTF: {:?}", input))?;
+
+    // Get the first mesh
+    let mesh = document
+        .meshes()
+        .next()
+        .context("No meshes found in glTF")?;
+    let primitive = mesh
+        .primitives()
+        .next()
+        .context("No primitives found in mesh")?;
+
+    // Extract vertex data
+    let reader = primitive.reader(|buffer| Some(&buffers[buffer.index()]));
+
+    // Positions (required)
+    let positions: Vec<[f32; 3]> = reader
+        .read_positions()
+        .context("No positions in mesh")?
+        .collect();
+
+    // UVs (optional)
+    let uvs: Option<Vec<[f32; 2]>> = reader
+        .read_tex_coords(0)
+        .map(|iter| iter.into_f32().collect());
+
+    // Normals (optional)
+    let normals: Option<Vec<[f32; 3]>> = reader.read_normals().map(|iter| iter.collect());
+
+    // Indices (optional)
+    let indices: Vec<u16> = reader
+        .read_indices()
+        .map(|iter| iter.into_u32().map(|i| i as u16).collect())
+        .unwrap_or_default();
+
+    // Determine format
+    let mut format = 0u8;
+    if uvs.is_some() {
+        format |= FORMAT_UV;
+    }
+    if normals.is_some() {
+        format |= FORMAT_NORMAL;
+    }
+
+    // Pack vertex data
+    let vertex_data = pack_vertices(&positions, uvs.as_deref(), normals.as_deref(), format);
+
+    Ok(ConvertedMesh {
+        format,
+        vertex_count: positions.len() as u32,
+        index_count: indices.len() as u32,
+        vertex_data,
+        indices,
+    })
+}
+
 /// Convert a glTF/GLB file to NetherMesh format
 pub fn convert_gltf(input: &Path, output: &Path, format_override: Option<&str>) -> Result<()> {
     let (document, buffers, _images) =

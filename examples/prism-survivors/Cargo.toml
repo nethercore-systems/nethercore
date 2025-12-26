@@ -1,15 +1,7 @@
-[workspace]
-members = ["tools/mesh-gen"]
-resolver = "2"
-
-[workspace.package]
-version = "0.1.0"
-edition = "2021"
-
 [package]
 name = "prism-survivors"
-version.workspace = true
-edition.workspace = true
+version = "0.1.0"
+edition = "2021"
 description = "4-player co-op fantasy survival game for Nethercore ZX"
 
 [lib]

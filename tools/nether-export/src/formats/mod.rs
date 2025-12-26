@@ -7,7 +7,8 @@ pub use zx_common::formats::*;
 use anyhow::Result;
 use std::io::Write;
 
-use zx_common::formats::{encode_bone_transform, NetherZXAnimationHeader};
+// Note: encode_bone_transform and NetherZXAnimationHeader are already available
+// through the glob re-export above
 
 use crate::animation::BoneTRS;
 
