@@ -1,0 +1,5 @@
+[game]
+id = "proc-gen-viewer"
+title = "Procedural Generation Viewer"
+author = "Nethercore Examples"
+version = "0.1.0"

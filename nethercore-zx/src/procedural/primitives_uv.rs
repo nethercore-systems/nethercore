@@ -7,7 +7,7 @@ use glam::Vec3;
 use std::f32::consts::PI;
 use tracing::warn;
 
-use super::types::{MeshDataUV, VertexUV};
+use super::types::MeshBuilderUV;
 
 /// Generate a UV sphere mesh with smooth normals and equirectangular UV mapping
 ///
@@ -22,7 +22,7 @@ use super::types::{MeshDataUV, VertexUV};
 /// # UV Mapping
 /// - U (horizontal): Longitude (theta) wraps 0→1 around equator
 /// - V (vertical): Latitude (phi) maps 0→1 from north pole to south pole
-pub fn generate_sphere_uv(radius: f32, segments: u32, rings: u32) -> MeshDataUV {
+pub fn generate_sphere_uv<M: MeshBuilderUV + Default>(radius: f32, segments: u32, rings: u32) -> M {
     // Validate and clamp parameters
     let radius = if radius <= 0.0 {
         warn!("generate_sphere_uv: radius must be > 0.0, clamping to 0.001");
@@ -34,7 +34,7 @@ pub fn generate_sphere_uv(radius: f32, segments: u32, rings: u32) -> MeshDataUV 
     let segments = segments.clamp(3, 256);
     let rings = rings.clamp(2, 256);
 
-    let mut mesh = MeshDataUV::new();
+    let mut mesh = M::default();
 
     // Generate vertices with equirectangular UV mapping
     for ring in 0..=rings {
@@ -52,7 +52,7 @@ pub fn generate_sphere_uv(radius: f32, segments: u32, rings: u32) -> MeshDataUV 
             let position = Vec3::new(x, y, z);
             let normal = position.normalize(); // Smooth normals point from center
 
-            mesh.add_vertex(VertexUV::new(position, (u, v), normal));
+            mesh.add_vertex_uv(position, (u, v), normal);
         }
     }
 
@@ -89,12 +89,12 @@ pub fn generate_sphere_uv(radius: f32, segments: u32, rings: u32) -> MeshDataUV 
 /// # UV Mapping
 /// - U maps 0→1 along X axis (left to right)
 /// - V maps 0→1 along Z axis (front to back)
-pub fn generate_plane_uv(
+pub fn generate_plane_uv<M: MeshBuilderUV + Default>(
     size_x: f32,
     size_z: f32,
     subdivisions_x: u32,
     subdivisions_z: u32,
-) -> MeshDataUV {
+) -> M {
     // Validate and clamp parameters
     let size_x = if size_x <= 0.0 {
         warn!("generate_plane_uv: size_x must be > 0.0, clamping to 0.001");
@@ -113,7 +113,7 @@ pub fn generate_plane_uv(
     let subdivisions_x = subdivisions_x.clamp(1, 256);
     let subdivisions_z = subdivisions_z.clamp(1, 256);
 
-    let mut mesh = MeshDataUV::new();
+    let mut mesh = M::default();
     let normal = Vec3::new(0.0, 1.0, 0.0); // Up
 
     // Generate vertices with UVs
@@ -126,7 +126,7 @@ pub fn generate_plane_uv(
             let pos_z = -size_z * 0.5 + v * size_z;
 
             let position = Vec3::new(pos_x, 0.0, pos_z);
-            mesh.add_vertex(VertexUV::new(position, (u, v), normal));
+            mesh.add_vertex_uv(position, (u, v), normal);
         }
     }
 
@@ -165,7 +165,7 @@ pub fn generate_plane_uv(
 /// - Bottom (-Y): U [0.5, 1.0], V [0.5, 1.0]
 /// - Right (+X): Wraps to front-right corner
 /// - Left (-X): Wraps to front-left corner
-pub fn generate_cube_uv(size_x: f32, size_y: f32, size_z: f32) -> MeshDataUV {
+pub fn generate_cube_uv<M: MeshBuilderUV + Default>(size_x: f32, size_y: f32, size_z: f32) -> M {
     // Validate and clamp parameters
     let size_x = if size_x <= 0.0 {
         warn!("generate_cube_uv: size_x must be > 0.0, clamping to 0.001");
@@ -188,11 +188,11 @@ pub fn generate_cube_uv(size_x: f32, size_y: f32, size_z: f32) -> MeshDataUV {
         size_z
     };
 
-    let mut mesh = MeshDataUV::new();
+    let mut mesh = M::default();
 
     // Helper to add a quad with UVs
     #[allow(clippy::too_many_arguments)]
-    let add_quad = |mesh: &mut MeshDataUV,
+    let add_quad = |mesh: &mut M,
                     v0: Vec3,
                     v1: Vec3,
                     v2: Vec3,
@@ -202,10 +202,10 @@ pub fn generate_cube_uv(size_x: f32, size_y: f32, size_z: f32) -> MeshDataUV {
                     uv1: (f32, f32),
                     uv2: (f32, f32),
                     uv3: (f32, f32)| {
-        let i0 = mesh.add_vertex(VertexUV::new(v0, uv0, normal));
-        let i1 = mesh.add_vertex(VertexUV::new(v1, uv1, normal));
-        let i2 = mesh.add_vertex(VertexUV::new(v2, uv2, normal));
-        let i3 = mesh.add_vertex(VertexUV::new(v3, uv3, normal));
+        let i0 = mesh.add_vertex_uv(v0, uv0, normal);
+        let i1 = mesh.add_vertex_uv(v1, uv1, normal);
+        let i2 = mesh.add_vertex_uv(v2, uv2, normal);
+        let i3 = mesh.add_vertex_uv(v3, uv3, normal);
 
         mesh.add_triangle(i0, i1, i2);
         mesh.add_triangle(i0, i2, i3);
@@ -312,12 +312,12 @@ pub fn generate_cube_uv(size_x: f32, size_y: f32, size_z: f32) -> MeshDataUV {
 /// # UV Mapping
 /// - Body: U wraps 0→1 around circumference, V maps 0→1 from bottom to top
 /// - Caps: Radial mapping from center (0.5, 0.5)
-pub fn generate_cylinder_uv(
+pub fn generate_cylinder_uv<M: MeshBuilderUV + Default>(
     radius_bottom: f32,
     radius_top: f32,
     height: f32,
     segments: u32,
-) -> MeshDataUV {
+) -> M {
     let radius_bottom = if radius_bottom < 0.0 {
         warn!("generate_cylinder_uv: radius_bottom must be >= 0.0, clamping to 0.0");
         0.0
@@ -341,7 +341,7 @@ pub fn generate_cylinder_uv(
 
     let segments = segments.clamp(3, 256);
 
-    let mut mesh = MeshDataUV::new();
+    let mut mesh = M::default();
     let half_height = height * 0.5;
 
     // Generate body vertices with cylindrical UVs
@@ -362,8 +362,8 @@ pub fn generate_cylinder_uv(
         let slope = Vec3::new(0.0, radius_bottom - radius_top, 0.0);
         let normal = (tangent + slope.normalize_or_zero()).normalize();
 
-        mesh.add_vertex(VertexUV::new(bottom_pos, (u, 0.0), normal));
-        mesh.add_vertex(VertexUV::new(top_pos, (u, 1.0), normal));
+        mesh.add_vertex_uv(bottom_pos, (u, 0.0), normal);
+        mesh.add_vertex_uv(top_pos, (u, 1.0), normal);
     }
 
     // Generate body indices
@@ -380,11 +380,11 @@ pub fn generate_cylinder_uv(
 
     // Bottom cap (if radius > 0)
     if radius_bottom > 0.0 {
-        let center_idx = mesh.add_vertex(VertexUV::new(
+        let center_idx = mesh.add_vertex_uv(
             Vec3::new(0.0, -half_height, 0.0),
             (0.5, 0.5),
             Vec3::new(0.0, -1.0, 0.0),
-        ));
+        );
 
         for i in 0..segments {
             let next_i = (i + 1) % segments;
@@ -396,7 +396,7 @@ pub fn generate_cylinder_uv(
             let u1 = 0.5 + 0.5 * next_theta.cos();
             let v1 = 0.5 + 0.5 * next_theta.sin();
 
-            let i0 = mesh.add_vertex(VertexUV::new(
+            let i0 = mesh.add_vertex_uv(
                 Vec3::new(
                     radius_bottom * theta.cos(),
                     -half_height,
@@ -404,9 +404,9 @@ pub fn generate_cylinder_uv(
                 ),
                 (u0, v0),
                 Vec3::new(0.0, -1.0, 0.0),
-            ));
+            );
 
-            let i1 = mesh.add_vertex(VertexUV::new(
+            let i1 = mesh.add_vertex_uv(
                 Vec3::new(
                     radius_bottom * next_theta.cos(),
                     -half_height,
@@ -414,7 +414,7 @@ pub fn generate_cylinder_uv(
                 ),
                 (u1, v1),
                 Vec3::new(0.0, -1.0, 0.0),
-            ));
+            );
 
             mesh.add_triangle(center_idx, i0, i1);
         }
@@ -422,11 +422,11 @@ pub fn generate_cylinder_uv(
 
     // Top cap (if radius > 0)
     if radius_top > 0.0 {
-        let center_idx = mesh.add_vertex(VertexUV::new(
+        let center_idx = mesh.add_vertex_uv(
             Vec3::new(0.0, half_height, 0.0),
             (0.5, 0.5),
             Vec3::new(0.0, 1.0, 0.0),
-        ));
+        );
 
         for i in 0..segments {
             let next_i = (i + 1) % segments;
@@ -438,7 +438,7 @@ pub fn generate_cylinder_uv(
             let u1 = 0.5 + 0.5 * next_theta.cos();
             let v1 = 0.5 + 0.5 * next_theta.sin();
 
-            let i0 = mesh.add_vertex(VertexUV::new(
+            let i0 = mesh.add_vertex_uv(
                 Vec3::new(
                     radius_top * theta.cos(),
                     half_height,
@@ -446,9 +446,9 @@ pub fn generate_cylinder_uv(
                 ),
                 (u0, v0),
                 Vec3::new(0.0, 1.0, 0.0),
-            ));
+            );
 
-            let i1 = mesh.add_vertex(VertexUV::new(
+            let i1 = mesh.add_vertex_uv(
                 Vec3::new(
                     radius_top * next_theta.cos(),
                     half_height,
@@ -456,7 +456,7 @@ pub fn generate_cylinder_uv(
                 ),
                 (u1, v1),
                 Vec3::new(0.0, 1.0, 0.0),
-            ));
+            );
 
             mesh.add_triangle(center_idx, i1, i0);
         }
@@ -479,12 +479,12 @@ pub fn generate_cylinder_uv(
 /// # UV Mapping
 /// - U wraps 0→1 around major circle (XZ plane)
 /// - V wraps 0→1 around minor circle (tube cross-section)
-pub fn generate_torus_uv(
+pub fn generate_torus_uv<M: MeshBuilderUV + Default>(
     major_radius: f32,
     minor_radius: f32,
     major_segments: u32,
     minor_segments: u32,
-) -> MeshDataUV {
+) -> M {
     let major_radius = if major_radius <= 0.0 {
         warn!("generate_torus_uv: major_radius must be > 0.0, clamping to 0.001");
         0.001
@@ -502,7 +502,7 @@ pub fn generate_torus_uv(
     let major_segments = major_segments.clamp(3, 256);
     let minor_segments = minor_segments.clamp(3, 256);
 
-    let mut mesh = MeshDataUV::new();
+    let mut mesh = M::default();
 
     // Generate vertices with wrapped UVs
     for i in 0..major_segments {
@@ -525,7 +525,7 @@ pub fn generate_torus_uv(
             let tube_center = Vec3::new(major_radius * cos_theta, 0.0, major_radius * sin_theta);
             let normal = (position - tube_center).normalize();
 
-            mesh.add_vertex(VertexUV::new(position, (u, v), normal));
+            mesh.add_vertex_uv(position, (u, v), normal);
         }
     }
 
@@ -564,7 +564,7 @@ pub fn generate_torus_uv(
 /// - Cylinder body: U wraps 0→1, V maps from 0.25→0.75
 /// - Top hemisphere: V maps from 0.75→1.0
 /// - Bottom hemisphere: V maps from 0.0→0.25
-pub fn generate_capsule_uv(radius: f32, height: f32, segments: u32, rings: u32) -> MeshDataUV {
+pub fn generate_capsule_uv<M: MeshBuilderUV + Default>(radius: f32, height: f32, segments: u32, rings: u32) -> M {
     let radius = if radius <= 0.0 {
         warn!("generate_capsule_uv: radius must be > 0.0, clamping to 0.001");
         0.001
@@ -582,7 +582,7 @@ pub fn generate_capsule_uv(radius: f32, height: f32, segments: u32, rings: u32) 
     let segments = segments.clamp(3, 256);
     let rings = rings.clamp(1, 128);
 
-    let mut mesh = MeshDataUV::new();
+    let mut mesh = M::default();
     let half_height = height * 0.5;
 
     // If height is 0, just generate a sphere with full UV range
@@ -601,8 +601,8 @@ pub fn generate_capsule_uv(radius: f32, height: f32, segments: u32, rings: u32) 
         let top_pos = Vec3::new(radius * cos_theta, half_height, radius * sin_theta);
         let normal = Vec3::new(cos_theta, 0.0, sin_theta);
 
-        mesh.add_vertex(VertexUV::new(bottom_pos, (u, 0.25), normal));
-        mesh.add_vertex(VertexUV::new(top_pos, (u, 0.75), normal));
+        mesh.add_vertex_uv(bottom_pos, (u, 0.25), normal);
+        mesh.add_vertex_uv(top_pos, (u, 0.75), normal);
     }
 
     // Generate cylinder body indices
@@ -634,7 +634,7 @@ pub fn generate_capsule_uv(radius: f32, height: f32, segments: u32, rings: u32) 
             let sphere_center = Vec3::new(0.0, half_height, 0.0);
             let normal = (position - sphere_center).normalize();
 
-            mesh.add_vertex(VertexUV::new(position, (u, v), normal));
+            mesh.add_vertex_uv(position, (u, v), normal);
         }
     }
 
@@ -671,7 +671,7 @@ pub fn generate_capsule_uv(radius: f32, height: f32, segments: u32, rings: u32) 
             let sphere_center = Vec3::new(0.0, -half_height, 0.0);
             let normal = (position - sphere_center).normalize();
 
-            mesh.add_vertex(VertexUV::new(position, (u, v), normal));
+            mesh.add_vertex_uv(position, (u, v), normal);
         }
     }
 

@@ -17,7 +17,7 @@ use wasmtime::{Caller, Linker};
 use super::ZXGameContext;
 use super::guards::check_init_only;
 use crate::graphics::{FORMAT_NORMAL, FORMAT_UV};
-use crate::procedural;
+use crate::procedural::{self, MeshData, MeshDataUV};
 use crate::state::PendingMeshPacked;
 
 /// Register procedural mesh generation FFI functions
@@ -69,7 +69,7 @@ fn cube(mut caller: Caller<'_, ZXGameContext>, size_x: f32, size_y: f32, size_z:
     }
 
     // Generate PACKED mesh data (Vec<u8>)
-    let mesh_data = procedural::generate_cube(size_x, size_y, size_z);
+    let mesh_data: MeshData = procedural::generate_cube(size_x, size_y, size_z);
 
     let vertex_count = mesh_data.vertices.len() / 16; // 16 bytes per POS_NORMAL vertex
     let index_count = mesh_data.indices.len();
@@ -123,7 +123,7 @@ fn sphere(mut caller: Caller<'_, ZXGameContext>, radius: f32, segments: u32, rin
     }
 
     // Generate PACKED mesh data (Vec<u8>)
-    let mesh_data = procedural::generate_sphere(radius, segments, rings);
+    let mesh_data: MeshData = procedural::generate_sphere(radius, segments, rings);
 
     let vertex_count = mesh_data.vertices.len() / 16; // 16 bytes per POS_NORMAL vertex
     let index_count = mesh_data.indices.len();
@@ -188,7 +188,7 @@ fn cylinder(
     }
 
     // Generate PACKED mesh data (Vec<u8>)
-    let mesh_data = procedural::generate_cylinder(radius_bottom, radius_top, height, segments);
+    let mesh_data: MeshData = procedural::generate_cylinder(radius_bottom, radius_top, height, segments);
 
     let vertex_count = mesh_data.vertices.len() / 16; // 16 bytes per POS_NORMAL vertex
     let index_count = mesh_data.indices.len();
@@ -244,7 +244,7 @@ fn plane(
     }
 
     // Generate PACKED mesh data (Vec<u8>)
-    let mesh_data = procedural::generate_plane(size_x, size_z, subdivisions_x, subdivisions_z);
+    let mesh_data: MeshData = procedural::generate_plane(size_x, size_z, subdivisions_x, subdivisions_z);
 
     let vertex_count = mesh_data.vertices.len() / 16; // 16 bytes per POS_NORMAL vertex
     let index_count = mesh_data.indices.len();
@@ -303,7 +303,7 @@ fn torus(
     }
 
     // Generate PACKED mesh data (Vec<u8>)
-    let mesh_data =
+    let mesh_data: MeshData =
         procedural::generate_torus(major_radius, minor_radius, major_segments, minor_segments);
 
     let vertex_count = mesh_data.vertices.len() / 16; // 16 bytes per POS_NORMAL vertex
@@ -372,7 +372,7 @@ fn capsule(
     }
 
     // Generate PACKED mesh data (Vec<u8>)
-    let mesh_data = procedural::generate_capsule(radius, height, segments, rings);
+    let mesh_data: MeshData = procedural::generate_capsule(radius, height, segments, rings);
 
     let vertex_count = mesh_data.vertices.len() / 16; // 16 bytes per POS_NORMAL vertex
     let index_count = mesh_data.indices.len();
@@ -429,7 +429,7 @@ fn sphere_uv(mut caller: Caller<'_, ZXGameContext>, radius: f32, segments: u32, 
     }
 
     // Generate PACKED mesh data with UVs (clamping happens in procedural function)
-    let mesh_data = procedural::generate_sphere_uv(radius, segments, rings);
+    let mesh_data: MeshDataUV = procedural::generate_sphere_uv(radius, segments, rings);
 
     let vertex_count = mesh_data.vertices.len() / 20; // 20 bytes per POS_UV_NORMAL vertex
     let index_count = mesh_data.indices.len();
@@ -489,7 +489,7 @@ fn plane_uv(
     }
 
     // Generate PACKED mesh data with UVs
-    let mesh_data = procedural::generate_plane_uv(size_x, size_z, subdivisions_x, subdivisions_z);
+    let mesh_data: MeshDataUV = procedural::generate_plane_uv(size_x, size_z, subdivisions_x, subdivisions_z);
 
     let vertex_count = mesh_data.vertices.len() / 20; // 20 bytes per POS_UV_NORMAL vertex
     let index_count = mesh_data.indices.len();
@@ -546,7 +546,7 @@ fn cube_uv(mut caller: Caller<'_, ZXGameContext>, size_x: f32, size_y: f32, size
     }
 
     // Generate PACKED mesh data with UVs
-    let mesh_data = procedural::generate_cube_uv(size_x, size_y, size_z);
+    let mesh_data: MeshDataUV = procedural::generate_cube_uv(size_x, size_y, size_z);
 
     let vertex_count = mesh_data.vertices.len() / 20; // 20 bytes per POS_UV_NORMAL vertex
     let index_count = mesh_data.indices.len();
@@ -620,7 +620,7 @@ fn cylinder_uv(
     }
 
     // Generate PACKED mesh data with UVs
-    let mesh_data = procedural::generate_cylinder_uv(radius_bottom, radius_top, height, segments);
+    let mesh_data: MeshDataUV = procedural::generate_cylinder_uv(radius_bottom, radius_top, height, segments);
 
     let vertex_count = mesh_data.vertices.len() / 20; // 20 bytes per POS_UV_NORMAL vertex
     let index_count = mesh_data.indices.len();
@@ -683,7 +683,7 @@ fn torus_uv(
     }
 
     // Generate PACKED mesh data with UVs
-    let mesh_data =
+    let mesh_data: MeshDataUV =
         procedural::generate_torus_uv(major_radius, minor_radius, major_segments, minor_segments);
 
     let vertex_count = mesh_data.vertices.len() / 20; // 20 bytes per POS_UV_NORMAL vertex
@@ -757,7 +757,7 @@ fn capsule_uv(
     }
 
     // Generate PACKED mesh data with UVs
-    let mesh_data = procedural::generate_capsule_uv(radius, height, segments, rings);
+    let mesh_data: MeshDataUV = procedural::generate_capsule_uv(radius, height, segments, rings);
 
     let vertex_count = mesh_data.vertices.len() / 20; // 20 bytes per POS_UV_NORMAL vertex
     let index_count = mesh_data.indices.len();

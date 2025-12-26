@@ -375,6 +375,102 @@ extern "C" {
     pub fn layer(n: u32);
 
     // =========================================================================
+    // Viewport Functions (Split-Screen)
+    // =========================================================================
+
+    /// Set the viewport for subsequent draw calls.
+    ///
+    /// All 3D and 2D rendering will be clipped to this region.
+    /// Camera aspect ratio automatically adjusts to viewport dimensions.
+    /// 2D coordinates (draw_sprite, draw_text, etc.) become viewport-relative.
+    ///
+    /// # Arguments
+    /// * `x` — Left edge in pixels (0-959)
+    /// * `y` — Top edge in pixels (0-539)
+    /// * `width` — Width in pixels (1-960)
+    /// * `height` — Height in pixels (1-540)
+    ///
+    /// # Example (2-player horizontal split)
+    /// ```rust,ignore
+    /// // Player 1: left half
+    /// viewport(0, 0, 480, 540);
+    /// camera_set(p1_x, p1_y, p1_z, p1_tx, p1_ty, p1_tz);
+    /// draw_env();
+    /// draw_mesh(scene);
+    ///
+    /// // Player 2: right half
+    /// viewport(480, 0, 480, 540);
+    /// camera_set(p2_x, p2_y, p2_z, p2_tx, p2_ty, p2_tz);
+    /// draw_env();
+    /// draw_mesh(scene);
+    ///
+    /// // Reset for HUD
+    /// viewport_clear();
+    /// draw_text_str("PAUSED", 400.0, 270.0, 32.0, 0xFFFFFFFF);
+    /// ```
+    pub fn viewport(x: u32, y: u32, width: u32, height: u32);
+
+    /// Reset viewport to fullscreen (960×540).
+    ///
+    /// Call this at the end of split-screen rendering to restore full-screen
+    /// coordinates for HUD elements or between frames.
+    pub fn viewport_clear();
+
+    // =========================================================================
+    // Stencil Functions (Masked Rendering)
+    // =========================================================================
+
+    /// Begin writing to the stencil buffer (mask creation mode).
+    ///
+    /// After calling this, subsequent draw calls will write to the stencil buffer
+    /// but NOT to the color buffer. Use this to create a mask shape.
+    ///
+    /// # Example (circular scope mask)
+    /// ```rust,ignore
+    /// stencil_begin();           // Start mask creation
+    /// draw_mesh(circle_mesh);    // Draw circle to stencil only
+    /// stencil_end();             // Enable testing
+    /// draw_env();                // Only visible inside circle
+    /// draw_mesh(scene);          // Only visible inside circle
+    /// stencil_clear();           // Back to normal rendering
+    /// ```
+    pub fn stencil_begin();
+
+    /// End stencil mask creation and begin stencil testing.
+    ///
+    /// After calling this, subsequent draw calls will only render where
+    /// the stencil buffer was written (inside the mask).
+    ///
+    /// Must be called after stencil_begin() has created a mask shape.
+    pub fn stencil_end();
+
+    /// Clear stencil state and return to normal rendering.
+    ///
+    /// Disables stencil operations. The stencil buffer itself is cleared
+    /// at the start of each frame during render pass creation.
+    ///
+    /// Call this when finished with masked rendering to restore normal behavior.
+    pub fn stencil_clear();
+
+    /// Enable inverted stencil testing.
+    ///
+    /// After calling this, subsequent draw calls will only render where
+    /// the stencil buffer was NOT written (outside the mask).
+    ///
+    /// Use this for effects like vignettes or rendering outside portals.
+    ///
+    /// # Example (vignette effect)
+    /// ```rust,ignore
+    /// stencil_begin();           // Start mask creation
+    /// draw_mesh(rounded_rect);   // Draw center area to stencil
+    /// stencil_invert();          // Render OUTSIDE the mask
+    /// set_color(0x000000FF);     // Black vignette color
+    /// draw_rect(0.0, 0.0, 960.0, 540.0, 0x000000FF);  // Fill outside
+    /// stencil_clear();           // Back to normal
+    /// ```
+    pub fn stencil_invert();
+
+    // =========================================================================
     // Texture Functions
     // =========================================================================
 

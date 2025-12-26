@@ -107,6 +107,8 @@ impl ZGraphics {
                     batch.instances.len() as u32,
                     batch.textures,
                     batch.is_screen_space,
+                    batch.viewport,
+                    batch.stencil_mode,
                 ));
             }
 
@@ -118,7 +120,7 @@ impl ZGraphics {
             }
 
             // Create draw commands for each batch with correct base_instance
-            for &(base_instance, instance_count, textures, is_screen_space) in
+            for &(base_instance, instance_count, textures, is_screen_space, viewport, stencil_mode) in
                 &self.quad_batch_scratch
             {
                 // Map FFI texture handles to graphics texture handles for this batch
@@ -153,6 +155,8 @@ impl ZGraphics {
                         texture_slots,
                         depth_test: is_screen_space || z_state.depth_test,
                         cull_mode: CullMode::from_u8(z_state.cull_mode),
+                        viewport,
+                        stencil_mode,
                     });
             }
         }

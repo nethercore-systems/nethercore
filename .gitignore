@@ -47,3 +47,31 @@ examples/asset-test/assets/*.nczxmesh
 examples/asset-test/assets/*.nczxtex
 examples/cube/*.nczx
 examples/multi-skinned-rom/*.nczx
+
+# =========================
+# Generated Showcase Assets
+# =========================
+# Regenerate with: cargo run -p asset-gen
+# Keeps repo size small - don't commit generated files
+
+# Generated meshes
+examples/*/assets/meshes/*.obj
+examples/*/tools/*/output/*.obj
+
+# Generated textures
+examples/*/assets/textures/*.png
+examples/*/tools/*/output/*.png
+
+# Generated audio
+examples/*/assets/audio/*.wav
+examples/*/assets/audio/*.raw
+examples/*/tools/*/output/*.wav
+
+# Tracker music
+examples/*/assets/audio/*.xm
+
+# Output directories (catch-all)
+examples/*/tools/*/output/
+
+# Proc-gen test outputs
+tools/proc-gen/test_*.obj

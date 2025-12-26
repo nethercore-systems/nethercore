@@ -11,7 +11,7 @@ pub mod graphics;
 pub mod input;
 pub mod library;
 pub mod player;
-mod procedural;
+pub mod procedural;
 pub mod resource_manager;
 mod shader_gen;
 pub mod state;

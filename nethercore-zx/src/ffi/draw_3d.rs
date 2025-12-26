@@ -71,6 +71,12 @@ fn draw_triangles(
 
     let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
 
+    // Capture current viewport for split-screen rendering
+    let viewport = state.current_viewport;
+
+    // Capture stencil mode for masked rendering
+    let stencil_mode = state.stencil_mode;
+
     // Allocate combined MVP+shading buffer index (lazy allocation with deduplication)
     let buffer_index = state.add_mvp_shading_state();
 
@@ -82,6 +88,8 @@ fn draw_triangles(
         textures,
         state.depth_test,
         cull_mode,
+        viewport,
+        stencil_mode,
     );
 }
 
@@ -160,6 +168,12 @@ fn draw_triangles_indexed(
 
     let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
 
+    // Capture current viewport for split-screen rendering
+    let viewport = state.current_viewport;
+
+    // Capture stencil mode for masked rendering
+    let stencil_mode = state.stencil_mode;
+
     // Allocate combined MVP+shading buffer index (lazy allocation with deduplication)
     let buffer_index = state.add_mvp_shading_state();
 
@@ -172,5 +186,7 @@ fn draw_triangles_indexed(
         textures,
         state.depth_test,
         cull_mode,
+        viewport,
+        stencil_mode,
     );
 }

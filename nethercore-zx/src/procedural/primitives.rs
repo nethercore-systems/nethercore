@@ -7,7 +7,7 @@ use glam::Vec3;
 use std::f32::consts::PI;
 use tracing::warn;
 
-use super::types::{MeshData, Vertex};
+use super::types::MeshBuilder;
 
 /// Generate a cube mesh with flat normals
 ///
@@ -18,7 +18,7 @@ use super::types::{MeshData, Vertex};
 ///
 /// # Returns
 /// Mesh with 24 vertices (4 per face) and 36 indices (6 faces × 2 triangles × 3)
-pub fn generate_cube(size_x: f32, size_y: f32, size_z: f32) -> MeshData {
+pub fn generate_cube<M: MeshBuilder + Default>(size_x: f32, size_y: f32, size_z: f32) -> M {
     // Validate and clamp parameters
     let size_x = if size_x <= 0.0 {
         warn!("generate_cube: size_x must be > 0.0, clamping to 0.001");
@@ -41,14 +41,14 @@ pub fn generate_cube(size_x: f32, size_y: f32, size_z: f32) -> MeshData {
         size_z
     };
 
-    let mut mesh = MeshData::new();
+    let mut mesh = M::default();
 
     // Helper to add a quad (4 vertices, 2 triangles)
-    let add_quad = |mesh: &mut MeshData, v0: Vec3, v1: Vec3, v2: Vec3, v3: Vec3, normal: Vec3| {
-        let i0 = mesh.add_vertex(Vertex::new(v0, normal));
-        let i1 = mesh.add_vertex(Vertex::new(v1, normal));
-        let i2 = mesh.add_vertex(Vertex::new(v2, normal));
-        let i3 = mesh.add_vertex(Vertex::new(v3, normal));
+    let add_quad = |mesh: &mut M, v0: Vec3, v1: Vec3, v2: Vec3, v3: Vec3, normal: Vec3| {
+        let i0 = mesh.add_vertex(v0, normal);
+        let i1 = mesh.add_vertex(v1, normal);
+        let i2 = mesh.add_vertex(v2, normal);
+        let i3 = mesh.add_vertex(v3, normal);
 
         // Two triangles with CCW winding when viewed from front
         // For a quad: v0=BL, v1=BR, v2=TR, v3=TL
@@ -128,7 +128,7 @@ pub fn generate_cube(size_x: f32, size_y: f32, size_z: f32) -> MeshData {
 ///
 /// # Returns
 /// Mesh with `(rings + 1) × segments` vertices
-pub fn generate_sphere(radius: f32, segments: u32, rings: u32) -> MeshData {
+pub fn generate_sphere<M: MeshBuilder + Default>(radius: f32, segments: u32, rings: u32) -> M {
     // Validate and clamp parameters
     let radius = if radius <= 0.0 {
         warn!("generate_sphere: radius must be > 0.0, clamping to 0.001");
@@ -140,7 +140,7 @@ pub fn generate_sphere(radius: f32, segments: u32, rings: u32) -> MeshData {
     let segments = segments.clamp(3, 256);
     let rings = rings.clamp(2, 256);
 
-    let mut mesh = MeshData::new();
+    let mut mesh = M::default();
 
     // Generate vertices
     for ring in 0..=rings {
@@ -156,7 +156,7 @@ pub fn generate_sphere(radius: f32, segments: u32, rings: u32) -> MeshData {
             let position = Vec3::new(x, y, z);
             let normal = position.normalize(); // Smooth normals point from center
 
-            mesh.add_vertex(Vertex::new(position, normal));
+            mesh.add_vertex(position, normal);
         }
     }
 
@@ -191,12 +191,12 @@ pub fn generate_sphere(radius: f32, segments: u32, rings: u32) -> MeshData {
 ///
 /// # Returns
 /// Mesh with `(subdivisions_x + 1) × (subdivisions_z + 1)` vertices
-pub fn generate_plane(
+pub fn generate_plane<M: MeshBuilder + Default>(
     size_x: f32,
     size_z: f32,
     subdivisions_x: u32,
     subdivisions_z: u32,
-) -> MeshData {
+) -> M {
     // Validate and clamp parameters
     let size_x = if size_x <= 0.0 {
         warn!("generate_plane: size_x must be > 0.0, clamping to 0.001");
@@ -215,7 +215,7 @@ pub fn generate_plane(
     let subdivisions_x = subdivisions_x.clamp(1, 256);
     let subdivisions_z = subdivisions_z.clamp(1, 256);
 
-    let mut mesh = MeshData::new();
+    let mut mesh = M::default();
     let normal = Vec3::new(0.0, 1.0, 0.0); // Up
 
     // Generate vertices
@@ -228,7 +228,7 @@ pub fn generate_plane(
             let pos_z = -size_z * 0.5 + v * size_z;
 
             let position = Vec3::new(pos_x, 0.0, pos_z);
-            mesh.add_vertex(Vertex::new(position, normal));
+            mesh.add_vertex(position, normal);
         }
     }
 
@@ -260,12 +260,12 @@ pub fn generate_plane(
 ///
 /// # Returns
 /// Mesh with body and caps (if radii > 0)
-pub fn generate_cylinder(
+pub fn generate_cylinder<M: MeshBuilder + Default>(
     radius_bottom: f32,
     radius_top: f32,
     height: f32,
     segments: u32,
-) -> MeshData {
+) -> M {
     // Validate and clamp parameters
     let radius_bottom = if radius_bottom < 0.0 {
         warn!("generate_cylinder: radius_bottom must be >= 0.0, clamping to 0.0");
@@ -290,11 +290,11 @@ pub fn generate_cylinder(
 
     let segments = segments.clamp(3, 256);
 
-    let mut mesh = MeshData::new();
+    let mut mesh = M::default();
     let half_height = height * 0.5;
 
     // Generate body vertices (two rings: bottom and top)
-    let body_start_index = mesh.vertices.len() / 12;
+    let mut body_indices = Vec::with_capacity((segments * 2) as usize);
 
     for i in 0..segments {
         let theta = (i as f32 / segments as f32) * 2.0 * PI;
@@ -317,18 +317,20 @@ pub fn generate_cylinder(
         let slope = Vec3::new(0.0, radius_bottom - radius_top, 0.0);
         let normal = (tangent + slope.normalize_or_zero()).normalize();
 
-        mesh.add_vertex(Vertex::new(bottom_pos, normal));
-        mesh.add_vertex(Vertex::new(top_pos, normal));
+        let bottom_idx = mesh.add_vertex(bottom_pos, normal);
+        let top_idx = mesh.add_vertex(top_pos, normal);
+        body_indices.push(bottom_idx);
+        body_indices.push(top_idx);
     }
 
     // Generate body indices
     for i in 0..segments {
         let next_i = (i + 1) % segments;
 
-        let i0 = (body_start_index + (i * 2) as usize) as u16;
-        let i1 = i0 + 1;
-        let i2 = (body_start_index + (next_i * 2) as usize) as u16;
-        let i3 = i2 + 1;
+        let i0 = body_indices[(i * 2) as usize];
+        let i1 = body_indices[(i * 2 + 1) as usize];
+        let i2 = body_indices[(next_i * 2) as usize];
+        let i3 = body_indices[(next_i * 2 + 1) as usize];
 
         // Two triangles per quad (CCW winding for outward normals)
         // Vertex layout: i0=BR, i1=TR (seg i), i2=BL, i3=TL (seg i+1)
@@ -339,33 +341,33 @@ pub fn generate_cylinder(
 
     // Generate bottom cap (if radius > 0)
     if radius_bottom > 0.0 {
-        let cap_center_index = mesh.add_vertex(Vertex::new(
+        let cap_center_index = mesh.add_vertex(
             Vec3::new(0.0, -half_height, 0.0),
             Vec3::new(0.0, -1.0, 0.0),
-        ));
+        );
 
         for i in 0..segments {
             let next_i = (i + 1) % segments;
             let theta = (i as f32 / segments as f32) * 2.0 * PI;
             let next_theta = (next_i as f32 / segments as f32) * 2.0 * PI;
 
-            let i0 = mesh.add_vertex(Vertex::new(
+            let i0 = mesh.add_vertex(
                 Vec3::new(
                     radius_bottom * theta.cos(),
                     -half_height,
                     radius_bottom * theta.sin(),
                 ),
                 Vec3::new(0.0, -1.0, 0.0),
-            ));
+            );
 
-            let i1 = mesh.add_vertex(Vertex::new(
+            let i1 = mesh.add_vertex(
                 Vec3::new(
                     radius_bottom * next_theta.cos(),
                     -half_height,
                     radius_bottom * next_theta.sin(),
                 ),
                 Vec3::new(0.0, -1.0, 0.0),
-            ));
+            );
 
             // CCW winding for -Y normal (viewed from below)
             mesh.add_triangle(cap_center_index, i0, i1);
@@ -374,33 +376,33 @@ pub fn generate_cylinder(
 
     // Generate top cap (if radius > 0)
     if radius_top > 0.0 {
-        let cap_center_index = mesh.add_vertex(Vertex::new(
+        let cap_center_index = mesh.add_vertex(
             Vec3::new(0.0, half_height, 0.0),
             Vec3::new(0.0, 1.0, 0.0),
-        ));
+        );
 
         for i in 0..segments {
             let next_i = (i + 1) % segments;
             let theta = (i as f32 / segments as f32) * 2.0 * PI;
             let next_theta = (next_i as f32 / segments as f32) * 2.0 * PI;
 
-            let i0 = mesh.add_vertex(Vertex::new(
+            let i0 = mesh.add_vertex(
                 Vec3::new(
                     radius_top * theta.cos(),
                     half_height,
                     radius_top * theta.sin(),
                 ),
                 Vec3::new(0.0, 1.0, 0.0),
-            ));
+            );
 
-            let i1 = mesh.add_vertex(Vertex::new(
+            let i1 = mesh.add_vertex(
                 Vec3::new(
                     radius_top * next_theta.cos(),
                     half_height,
                     radius_top * next_theta.sin(),
                 ),
                 Vec3::new(0.0, 1.0, 0.0),
-            ));
+            );
 
             mesh.add_triangle(cap_center_index, i1, i0);
         }
@@ -419,12 +421,12 @@ pub fn generate_cylinder(
 ///
 /// # Returns
 /// Mesh with `major_segments × minor_segments` vertices
-pub fn generate_torus(
+pub fn generate_torus<M: MeshBuilder + Default>(
     major_radius: f32,
     minor_radius: f32,
     major_segments: u32,
     minor_segments: u32,
-) -> MeshData {
+) -> M {
     // Validate and clamp parameters
     let major_radius = if major_radius <= 0.0 {
         warn!("generate_torus: major_radius must be > 0.0, clamping to 0.001");
@@ -443,7 +445,7 @@ pub fn generate_torus(
     let major_segments = major_segments.clamp(3, 256);
     let minor_segments = minor_segments.clamp(3, 256);
 
-    let mut mesh = MeshData::new();
+    let mut mesh = M::default();
 
     // Generate vertices
     for i in 0..major_segments {
@@ -467,7 +469,7 @@ pub fn generate_torus(
             let tube_center = Vec3::new(major_radius * cos_theta, 0.0, major_radius * sin_theta);
             let normal = (position - tube_center).normalize();
 
-            mesh.add_vertex(Vertex::new(position, normal));
+            mesh.add_vertex(position, normal);
         }
     }
 
@@ -506,7 +508,7 @@ pub fn generate_torus(
 /// # Returns
 /// Mesh with cylinder body and two hemispheres
 /// Total height = height + 2 * radius
-pub fn generate_capsule(radius: f32, height: f32, segments: u32, rings: u32) -> MeshData {
+pub fn generate_capsule<M: MeshBuilder + Default>(radius: f32, height: f32, segments: u32, rings: u32) -> M {
     // Validate and clamp parameters
     let radius = if radius <= 0.0 {
         warn!("generate_capsule: radius must be > 0.0, clamping to 0.001");
@@ -525,7 +527,7 @@ pub fn generate_capsule(radius: f32, height: f32, segments: u32, rings: u32) -> 
     let segments = segments.clamp(3, 256);
     let rings = rings.clamp(1, 128);
 
-    let mut mesh = MeshData::new();
+    let mut mesh = M::default();
     let half_height = height * 0.5;
 
     // If height is 0, just generate a sphere
@@ -534,7 +536,7 @@ pub fn generate_capsule(radius: f32, height: f32, segments: u32, rings: u32) -> 
     }
 
     // Generate cylinder body vertices (two rings)
-    let body_start_index = mesh.vertices.len() / 12;
+    let mut body_indices = Vec::with_capacity((segments * 2) as usize);
 
     for i in 0..segments {
         let theta = (i as f32 / segments as f32) * 2.0 * PI;
@@ -546,18 +548,20 @@ pub fn generate_capsule(radius: f32, height: f32, segments: u32, rings: u32) -> 
 
         let normal = Vec3::new(cos_theta, 0.0, sin_theta); // Radial normal
 
-        mesh.add_vertex(Vertex::new(bottom_pos, normal));
-        mesh.add_vertex(Vertex::new(top_pos, normal));
+        let bottom_idx = mesh.add_vertex(bottom_pos, normal);
+        let top_idx = mesh.add_vertex(top_pos, normal);
+        body_indices.push(bottom_idx);
+        body_indices.push(top_idx);
     }
 
     // Generate cylinder body indices
     for i in 0..segments {
         let next_i = (i + 1) % segments;
 
-        let i0 = (body_start_index + (i * 2) as usize) as u16;
-        let i1 = i0 + 1;
-        let i2 = (body_start_index + (next_i * 2) as usize) as u16;
-        let i3 = i2 + 1;
+        let i0 = body_indices[(i * 2) as usize];
+        let i1 = body_indices[(i * 2 + 1) as usize];
+        let i2 = body_indices[(next_i * 2) as usize];
+        let i3 = body_indices[(next_i * 2 + 1) as usize];
 
         // Two triangles per quad (CCW winding for outward normals)
         // Same layout as cylinder body: i0=BR, i1=TR, i2=BL, i3=TL
@@ -565,6 +569,9 @@ pub fn generate_capsule(radius: f32, height: f32, segments: u32, rings: u32) -> 
         mesh.add_triangle(i0, i1, i3);
         mesh.add_triangle(i0, i3, i2);
     }
+
+    // Track starting index for top hemisphere
+    let top_hemisphere_start = (segments * 2) as u32;
 
     // Generate top hemisphere
     for ring in 0..=rings {
@@ -581,12 +588,11 @@ pub fn generate_capsule(radius: f32, height: f32, segments: u32, rings: u32) -> 
             let sphere_center = Vec3::new(0.0, half_height, 0.0);
             let normal = (position - sphere_center).normalize();
 
-            mesh.add_vertex(Vertex::new(position, normal));
+            mesh.add_vertex(position, normal);
         }
     }
 
     // Generate top hemisphere indices
-    let top_hemisphere_start = (body_start_index + (segments * 2) as usize) as u32;
 
     for ring in 0..rings {
         for seg in 0..segments {
@@ -620,7 +626,7 @@ pub fn generate_capsule(radius: f32, height: f32, segments: u32, rings: u32) -> 
             let sphere_center = Vec3::new(0.0, -half_height, 0.0);
             let normal = (position - sphere_center).normalize();
 
-            mesh.add_vertex(Vertex::new(position, normal));
+            mesh.add_vertex(position, normal);
         }
     }
 

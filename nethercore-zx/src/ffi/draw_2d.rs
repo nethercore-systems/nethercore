@@ -56,6 +56,11 @@ pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
 fn draw_sprite(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, w: f32, h: f32, color: u32) {
     let state = &mut caller.data_mut().ffi;
 
+    // Offset by viewport origin for split-screen support
+    let vp = state.current_viewport;
+    let screen_x = vp.x as f32 + x;
+    let screen_y = vp.y as f32 + y;
+
     // Get shading state index
     let shading_state_index = state.add_shading_state();
 
@@ -67,8 +72,8 @@ fn draw_sprite(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, w: f32, h:
 
     // Create screen-space quad instance
     let instance = crate::graphics::QuadInstance::sprite(
-        x,
-        y,
+        screen_x,
+        screen_y,
         depth,
         w,
         h,
@@ -110,6 +115,11 @@ fn draw_sprite_region(
 ) {
     let state = &mut caller.data_mut().ffi;
 
+    // Offset by viewport origin for split-screen support
+    let vp = state.current_viewport;
+    let screen_x = vp.x as f32 + x;
+    let screen_y = vp.y as f32 + y;
+
     // Get shading state index
     let shading_state_index = state.add_shading_state();
 
@@ -124,8 +134,8 @@ fn draw_sprite_region(
 
     // Create screen-space quad instance
     let instance = crate::graphics::QuadInstance::sprite(
-        x,
-        y,
+        screen_x,
+        screen_y,
         depth,
         w,
         h,
@@ -173,6 +183,9 @@ fn draw_sprite_ex(
 ) {
     let state = &mut caller.data_mut().ffi;
 
+    // Offset by viewport origin for split-screen support
+    let vp = state.current_viewport;
+
     // Get shading state index
     let shading_state_index = state.add_shading_state();
 
@@ -182,17 +195,17 @@ fn draw_sprite_ex(
     let u1 = src_x + src_w;
     let v1 = src_y + src_h;
 
-    // Apply origin offset to position
-    let adjusted_x = x - origin_x;
-    let adjusted_y = y - origin_y;
+    // Apply origin offset and viewport offset to position
+    let screen_x = vp.x as f32 + x - origin_x;
+    let screen_y = vp.y as f32 + y - origin_y;
 
     // Convert layer to depth for ordering
     let depth = layer_to_depth(state.current_layer);
 
     // Create screen-space quad instance with rotation
     let instance = crate::graphics::QuadInstance::sprite(
-        adjusted_x,
-        adjusted_y,
+        screen_x,
+        screen_y,
         depth,
         w,
         h,
@@ -219,6 +232,11 @@ fn draw_sprite_ex(
 fn draw_rect(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, w: f32, h: f32, color: u32) {
     let state = &mut caller.data_mut().ffi;
 
+    // Offset by viewport origin for split-screen support
+    let vp = state.current_viewport;
+    let screen_x = vp.x as f32 + x;
+    let screen_y = vp.y as f32 + y;
+
     // Bind white texture (handle 0xFFFFFFFF) to slot 0
     state.bound_textures[0] = u32::MAX;
 
@@ -230,8 +248,8 @@ fn draw_rect(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, w: f32, h: f
 
     // Create screen-space quad instance (rects use white/fallback texture)
     let instance = crate::graphics::QuadInstance::sprite(
-        x,
-        y,
+        screen_x,
+        screen_y,
         depth,
         w,
         h,
@@ -307,6 +325,11 @@ fn draw_text(
 
     let state = &mut caller.data_mut().ffi;
 
+    // Offset by viewport origin for split-screen support
+    let vp = state.current_viewport;
+    let screen_x = vp.x as f32 + x;
+    let screen_y = vp.y as f32 + y;
+
     // Text always uses nearest filtering (crisp pixels, no blurry interpolation)
     state.texture_filter = 0;
     state.update_texture_filter(false);
@@ -361,7 +384,7 @@ fn draw_text(
     }
 
     // Generate quad instances for each character
-    let mut cursor_x = x;
+    let mut cursor_x = screen_x;
 
     if let Some((
         _texture,
@@ -415,7 +438,7 @@ fn draw_text(
             // Create quad instance for this glyph
             let instance = crate::graphics::QuadInstance::sprite(
                 cursor_x,
-                y,
+                screen_y,
                 depth,
                 glyph_width,
                 glyph_height,
@@ -444,7 +467,7 @@ fn draw_text(
             // Create quad instance for this glyph
             let instance = crate::graphics::QuadInstance::sprite(
                 cursor_x,
-                y,
+                screen_y,
                 depth,
                 glyph_width,
                 glyph_height,
@@ -783,6 +806,13 @@ fn draw_line(
 ) {
     let state = &mut caller.data_mut().ffi;
 
+    // Offset by viewport origin for split-screen support
+    let vp = state.current_viewport;
+    let screen_x1 = vp.x as f32 + x1;
+    let screen_y1 = vp.y as f32 + y1;
+    let screen_x2 = vp.x as f32 + x2;
+    let screen_y2 = vp.y as f32 + y2;
+
     // Bind white texture for solid color
     state.bound_textures[0] = u32::MAX;
 
@@ -794,8 +824,8 @@ fn draw_line(
     let depth = layer_to_depth(state.current_layer);
 
     // Calculate line geometry
-    let dx = x2 - x1;
-    let dy = y2 - y1;
+    let dx = screen_x2 - screen_x1;
+    let dy = screen_y2 - screen_y1;
     let length = (dx * dx + dy * dy).sqrt();
 
     if length < 0.001 {
@@ -808,8 +838,8 @@ fn draw_line(
     // Position the rectangle so it starts at (x1, y1) and extends to (x2, y2)
     // The rectangle origin is at top-left, so we need to offset by half thickness
     let instance = crate::graphics::QuadInstance::sprite(
-        x1,
-        y1 - thickness / 2.0,
+        screen_x1,
+        screen_y1 - thickness / 2.0,
         depth,
         length,
         thickness,
@@ -838,6 +868,11 @@ fn draw_circle(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, radius: f3
 
     let state = &mut caller.data_mut().ffi;
 
+    // Offset by viewport origin for split-screen support
+    let vp = state.current_viewport;
+    let screen_x = vp.x as f32 + x;
+    let screen_y = vp.y as f32 + y;
+
     // Bind white texture for solid color
     state.bound_textures[0] = u32::MAX;
 
@@ -863,8 +898,8 @@ fn draw_circle(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, radius: f3
         // Create a rectangle from center pointing outward
         // The rectangle extends from center to edge
         let instance = crate::graphics::QuadInstance::sprite(
-            x - segment_width / 2.0,
-            y,
+            screen_x - segment_width / 2.0,
+            screen_y,
             depth,
             segment_width,
             radius,
@@ -902,6 +937,11 @@ fn draw_circle_outline(
 
     let state = &mut caller.data_mut().ffi;
 
+    // Offset by viewport origin for split-screen support
+    let vp = state.current_viewport;
+    let screen_x = vp.x as f32 + x;
+    let screen_y = vp.y as f32 + y;
+
     // Bind white texture for solid color
     state.bound_textures[0] = u32::MAX;
 
@@ -914,10 +954,10 @@ fn draw_circle_outline(
         let angle1 = i as f32 * angle_step;
         let angle2 = (i + 1) as f32 * angle_step;
 
-        let x1 = x + radius * angle1.cos();
-        let y1 = y + radius * angle1.sin();
-        let x2 = x + radius * angle2.cos();
-        let y2 = y + radius * angle2.sin();
+        let x1 = screen_x + radius * angle1.cos();
+        let y1 = screen_y + radius * angle1.sin();
+        let x2 = screen_x + radius * angle2.cos();
+        let y2 = screen_y + radius * angle2.sin();
 
         // Get shading state for each line segment
         let shading_state_index = state.add_shading_state();

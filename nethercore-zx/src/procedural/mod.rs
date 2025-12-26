@@ -6,13 +6,17 @@
 //! - Format 4 (POS_NORMAL): 12 bytes/vertex (f16x4 + octahedral u32)
 //! - Format 5 (POS_UV_NORMAL): 16 bytes/vertex (f16x4 + unorm16x2 + octahedral u32)
 
+mod export;
 mod primitives;
 mod primitives_uv;
 mod types;
 
 // Re-export types (used by generator return types, fields accessed externally)
 #[allow(unused_imports)] // Types accessed via return type inference
-pub use types::{MeshData, MeshDataUV};
+pub use types::{MeshBuilder, MeshBuilderUV, MeshData, MeshDataUV, UnpackedMesh};
+
+// Re-export OBJ export
+pub use export::write_obj;
 
 // Re-export non-UV primitives
 pub use primitives::{
@@ -55,14 +59,14 @@ mod tests {
 
     #[test]
     fn test_cube_counts() {
-        let mesh = generate_cube(1.0, 1.0, 1.0);
+        let mesh: MeshData = generate_cube(1.0, 1.0, 1.0);
         assert_eq!(mesh.vertices.len(), 24 * 12); // 24 vertices × 12 bytes (POS_NORMAL packed)
         assert_eq!(mesh.indices.len(), 36); // 6 faces × 2 triangles × 3
     }
 
     #[test]
     fn test_sphere_counts() {
-        let mesh = generate_sphere(1.0, 16, 8);
+        let mesh: MeshData = generate_sphere(1.0, 16, 8);
         let expected_verts = (8 + 1) * 16; // (rings + 1) × segments
         let expected_indices = 8 * 16 * 6; // rings × segments × 6
         assert_eq!(mesh.vertices.len(), expected_verts * 12); // 12 bytes per vertex (packed)
@@ -71,7 +75,7 @@ mod tests {
 
     #[test]
     fn test_plane_counts() {
-        let mesh = generate_plane(2.0, 2.0, 4, 4);
+        let mesh: MeshData = generate_plane(2.0, 2.0, 4, 4);
         let expected_verts = (4 + 1) * (4 + 1); // (subdivisions_x + 1) × (subdivisions_z + 1)
         let expected_indices = 4 * 4 * 6; // subdivisions_x × subdivisions_z × 6
         assert_eq!(mesh.vertices.len(), expected_verts * 12); // 12 bytes per vertex (packed)
@@ -80,7 +84,7 @@ mod tests {
 
     #[test]
     fn test_normals_normalized() {
-        let mesh = generate_sphere(1.0, 16, 8);
+        let mesh: MeshData = generate_sphere(1.0, 16, 8);
         let vertex_count = mesh.vertices.len() / 12; // 12 bytes per vertex
 
         // Check every normal is unit length
@@ -98,7 +102,7 @@ mod tests {
 
     #[test]
     fn test_cube_flat_normals() {
-        let mesh = generate_cube(1.0, 1.0, 1.0);
+        let mesh: MeshData = generate_cube(1.0, 1.0, 1.0);
 
         // First 4 vertices (front face) should all have normal (0, 0, 1)
         for i in 0..4 {
@@ -112,12 +116,12 @@ mod tests {
     #[test]
     fn test_invalid_params_safe() {
         // Should not panic, should clamp
-        let _ = generate_cube(0.0, 1.0, 1.0);
-        let _ = generate_sphere(-1.0, 3, 2);
-        let _ = generate_cylinder(1.0, 1.0, 1.0, 2);
-        let _ = generate_plane(1.0, 1.0, 0, 0);
-        let _ = generate_torus(0.5, 1.0, 3, 3);
-        let _ = generate_capsule(1.0, 0.0, 3, 1);
+        let _: MeshData = generate_cube(0.0, 1.0, 1.0);
+        let _: MeshData = generate_sphere(-1.0, 3, 2);
+        let _: MeshData = generate_cylinder(1.0, 1.0, 1.0, 2);
+        let _: MeshData = generate_plane(1.0, 1.0, 0, 0);
+        let _: MeshData = generate_torus(0.5, 1.0, 3, 3);
+        let _: MeshData = generate_capsule(1.0, 0.0, 3, 1);
     }
 
     // ========================================================================
@@ -248,7 +252,7 @@ mod tests {
 
     #[test]
     fn test_winding_cube() {
-        let mesh = generate_cube(2.0, 2.0, 2.0);
+        let mesh: MeshData = generate_cube(2.0, 2.0, 2.0);
         let (_passed, failed, skipped, total) = verify_outward_normals(&mesh, [0.0, 0.0, 0.0]);
 
         assert_eq!(
@@ -262,7 +266,7 @@ mod tests {
 
     #[test]
     fn test_winding_sphere() {
-        let mesh = generate_sphere(1.0, 32, 16);
+        let mesh: MeshData = generate_sphere(1.0, 32, 16);
         let (passed, failed, skipped, _total) = verify_outward_normals(&mesh, [0.0, 0.0, 0.0]);
 
         // Sphere has degenerate triangles at poles where all vertices share the same position
@@ -286,7 +290,7 @@ mod tests {
 
     #[test]
     fn test_winding_plane() {
-        let mesh = generate_plane(2.0, 2.0, 4, 4);
+        let mesh: MeshData = generate_plane(2.0, 2.0, 4, 4);
 
         // For plane, all normals should point +Y (upward)
         let mut correct = 0;
@@ -321,7 +325,7 @@ mod tests {
 
     #[test]
     fn test_winding_cylinder() {
-        let mesh = generate_cylinder(1.0, 1.0, 2.0, 32);
+        let mesh: MeshData = generate_cylinder(1.0, 1.0, 2.0, 32);
 
         // Cylinder is centered at origin with height along Y
         // Body normals should point radially outward (XZ plane)
@@ -402,7 +406,7 @@ mod tests {
         // Use proper torus proportions: major > minor to avoid self-intersection
         let major_radius = 1.0; // Distance from torus center to tube center
         let minor_radius = 0.3; // Tube radius
-        let mesh = generate_torus(major_radius, minor_radius, 32, 16);
+        let mesh: MeshData = generate_torus(major_radius, minor_radius, 32, 16);
 
         // Torus: major radius in XZ plane, minor radius forms the tube
         // For each triangle, the normal should point away from the tube center
@@ -455,7 +459,7 @@ mod tests {
 
     #[test]
     fn test_winding_capsule() {
-        let mesh = generate_capsule(0.5, 2.0, 32, 16);
+        let mesh: MeshData = generate_capsule(0.5, 2.0, 32, 16);
 
         // Capsule: cylinder body with hemisphere caps
         // All normals should point radially outward from the capsule axis
@@ -540,7 +544,7 @@ mod tests {
     /// This verifies the actual normal data, not just the winding order
     #[test]
     fn test_sphere_vertex_normals_point_outward() {
-        let mesh = generate_sphere(1.0, 16, 8);
+        let mesh: MeshData = generate_sphere(1.0, 16, 8);
         let vertex_count = mesh.vertices.len() / 12; // 12 bytes per vertex (POS_NORMAL packed)
 
         // For a unit sphere centered at origin, the vertex normal should equal
@@ -604,7 +608,7 @@ mod tests {
     /// Test that cube vertex normals match face directions
     #[test]
     fn test_cube_vertex_normals_match_faces() {
-        let mesh = generate_cube(1.0, 1.0, 1.0);
+        let mesh: MeshData = generate_cube(1.0, 1.0, 1.0);
 
         // Each face has 4 vertices, all with the same normal
         // Faces in order: +Z, -Z, +Y, -Y, +X, -X

@@ -393,6 +393,12 @@ fn draw_mesh(mut caller: Caller<'_, ZXGameContext>, handle: u32) {
 
     let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
 
+    // Capture current viewport for split-screen rendering
+    let viewport = state.current_viewport;
+
+    // Capture stencil mode for masked rendering
+    let stencil_mode = state.stencil_mode;
+
     // Allocate combined MVP+shading buffer index (lazy allocation with deduplication)
     let buffer_index = state.add_mvp_shading_state();
 
@@ -407,5 +413,7 @@ fn draw_mesh(mut caller: Caller<'_, ZXGameContext>, handle: u32) {
         textures,
         state.depth_test,
         cull_mode,
+        viewport,
+        stencil_mode,
     );
 }

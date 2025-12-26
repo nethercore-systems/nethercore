@@ -17,6 +17,11 @@ pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     linker.func_wrap("env", "uniform_alpha", uniform_alpha)?;
     linker.func_wrap("env", "dither_offset", dither_offset)?;
     linker.func_wrap("env", "layer", layer)?;
+    // Stencil functions for masked rendering (Tier 2)
+    linker.func_wrap("env", "stencil_begin", stencil_begin)?;
+    linker.func_wrap("env", "stencil_end", stencil_end)?;
+    linker.func_wrap("env", "stencil_clear", stencil_clear)?;
+    linker.func_wrap("env", "stencil_invert", stencil_invert)?;
     Ok(())
 }
 
@@ -140,4 +145,70 @@ fn dither_offset(mut caller: Caller<'_, ZXGameContext>, x: u32, y: u32) {
 fn layer(mut caller: Caller<'_, ZXGameContext>, n: u32) {
     let state = &mut caller.data_mut().ffi;
     state.current_layer = n;
+}
+
+// ============================================================================
+// Stencil Functions (Tier 2 - Masked Rendering)
+// ============================================================================
+
+/// Begin writing to the stencil buffer (mask creation mode).
+///
+/// After calling this, subsequent draw calls will write to the stencil buffer
+/// but NOT to the color buffer. Use this to create a mask shape.
+///
+/// # Example (circular scope mask)
+/// ```rust,ignore
+/// stencil_begin();           // Start mask creation
+/// draw_mesh(circle_mesh);    // Draw circle to stencil only
+/// stencil_end();             // Enable testing
+/// draw_env();                // Only visible inside circle
+/// draw_mesh(scene);          // Only visible inside circle
+/// stencil_clear();           // Back to normal rendering
+/// ```
+fn stencil_begin(mut caller: Caller<'_, ZXGameContext>) {
+    let state = &mut caller.data_mut().ffi;
+    state.stencil_mode = 1; // Writing mode
+}
+
+/// End stencil mask creation and begin stencil testing.
+///
+/// After calling this, subsequent draw calls will only render where
+/// the stencil buffer was written (inside the mask).
+///
+/// Must be called after stencil_begin() has created a mask shape.
+fn stencil_end(mut caller: Caller<'_, ZXGameContext>) {
+    let state = &mut caller.data_mut().ffi;
+    state.stencil_mode = 2; // Testing mode (render where stencil == 1)
+}
+
+/// Clear stencil state and return to normal rendering.
+///
+/// Disables stencil operations. The stencil buffer itself is cleared
+/// at the start of each frame during render pass creation.
+///
+/// Call this when finished with masked rendering to restore normal behavior.
+fn stencil_clear(mut caller: Caller<'_, ZXGameContext>) {
+    let state = &mut caller.data_mut().ffi;
+    state.stencil_mode = 0; // Disabled
+}
+
+/// Enable inverted stencil testing.
+///
+/// After calling this, subsequent draw calls will only render where
+/// the stencil buffer was NOT written (outside the mask).
+///
+/// Use this for effects like vignettes or rendering outside portals.
+///
+/// # Example (vignette effect)
+/// ```rust,ignore
+/// stencil_begin();           // Start mask creation
+/// draw_mesh(rounded_rect);   // Draw center area to stencil
+/// stencil_invert();          // Render OUTSIDE the mask
+/// set_color(0x000000FF);     // Black vignette color
+/// draw_rect(0.0, 0.0, 960.0, 540.0, 0x000000FF);  // Fill outside
+/// stencil_clear();           // Back to normal
+/// ```
+fn stencil_invert(mut caller: Caller<'_, ZXGameContext>) {
+    let state = &mut caller.data_mut().ffi;
+    state.stencil_mode = 3; // Testing inverted mode (render where stencil == 0)
 }

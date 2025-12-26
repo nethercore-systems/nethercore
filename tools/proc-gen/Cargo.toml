@@ -1,0 +1,20 @@
+[package]
+name = "proc-gen"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+nethercore-zx = { path = "../../nethercore-zx", default-features = false }
+glam = { workspace = true }
+
+# Texture dependencies
+noise = "0.9"
+png = { workspace = true }
+
+# Audio dependencies (optional)
+hound = { workspace = true, optional = true }
+
+[features]
+default = []
+wav-export = ["hound"]

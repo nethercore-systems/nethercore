@@ -87,11 +87,19 @@ fn draw_env(mut caller: Caller<'_, ZXGameContext>) {
     // This ensures the environment data is uploaded to GPU
     let shading_idx = state.add_shading_state();
 
+    // Capture current viewport for split-screen rendering
+    let viewport = state.current_viewport;
+
+    // Capture stencil mode for masked rendering
+    let stencil_mode = state.stencil_mode;
+
     // Add sky/environment draw command to render pass
     state
         .render_pass
         .add_command(crate::graphics::VRPCommand::Sky {
             shading_state_index: shading_idx.0,
             depth_test: false, // Environment always behind geometry
+            viewport,
+            stencil_mode,
         });
 }

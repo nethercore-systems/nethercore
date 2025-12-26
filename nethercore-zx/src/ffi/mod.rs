@@ -69,6 +69,7 @@ mod skinning;
 mod sky;
 mod texture;
 mod transform;
+mod viewport;
 
 use anyhow::Result;
 use wasmtime::{Caller, Extern, Linker, Memory};
@@ -97,6 +98,9 @@ pub fn register_zx_ffi(linker: &mut Linker<ZXGameContext>) -> Result<()> {
 
     // Render state functions
     render_state::register(linker)?;
+
+    // Viewport functions (split-screen)
+    viewport::register(linker)?;
 
     // Texture functions
     texture::register(linker)?;

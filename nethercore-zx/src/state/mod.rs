@@ -58,7 +58,7 @@ pub struct LoadedKeyframeCollection {
     pub data: Vec<u8>,
 }
 
-/// A batch of quad instances that share the same texture bindings
+/// A batch of quad instances that share the same texture bindings and viewport
 #[derive(Debug, Clone)]
 pub struct QuadBatch {
     /// True if this batch contains screen-space quads (2D), which forces depth_test on
@@ -67,4 +67,8 @@ pub struct QuadBatch {
     pub textures: [u32; 4],
     /// Quad instances in this batch
     pub instances: Vec<crate::graphics::QuadInstance>,
+    /// Viewport for this batch (snapshot of current_viewport when batch was created)
+    pub viewport: crate::graphics::Viewport,
+    /// Stencil mode for this batch (snapshot of stencil_mode when batch was created)
+    pub stencil_mode: u8,
 }

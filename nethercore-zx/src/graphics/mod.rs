@@ -41,7 +41,7 @@ pub use zx_common::{
 
 // Re-export public types from submodules
 pub use buffer::{BufferManager, GrowableBuffer, MeshHandle, RetainedMesh};
-pub use command_buffer::{VRPCommand, VirtualRenderPass};
+pub use command_buffer::{CommandSortKey, VRPCommand, VirtualRenderPass};
 pub use matrix_packing::MvpShadingIndices;
 pub use quad_instance::{QuadInstance, QuadMode};
 pub use render_state::{CullMode, MatcapBlendMode, RenderState, TextureFilter, TextureHandle};
@@ -85,6 +85,67 @@ pub use vertex::{FORMAT_ALL, VERTEX_FORMAT_COUNT, VertexFormatInfo};
 
 // Re-export for crate-internal use
 pub(crate) use init::RenderTarget;
+
+// =============================================================================
+// VIEWPORT (Split-Screen Rendering)
+// =============================================================================
+
+/// Rectangular viewport for split-screen rendering.
+///
+/// Defines the screen region where rendering occurs. Each viewport can have
+/// its own camera, and 2D coordinates are relative to the viewport origin.
+///
+/// # Example
+/// ```ignore
+/// // 2-player horizontal split
+/// viewport(0, 0, 480, 540);     // Player 1: left half
+/// viewport(480, 0, 480, 540);   // Player 2: right half
+///
+/// // 4-player quad split
+/// viewport(0, 0, 480, 270);     // Player 1: top-left
+/// viewport(480, 0, 480, 270);   // Player 2: top-right
+/// viewport(0, 270, 480, 270);   // Player 3: bottom-left
+/// viewport(480, 270, 480, 270); // Player 4: bottom-right
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct Viewport {
+    /// X coordinate of top-left corner (pixels from left edge)
+    pub x: u32,
+    /// Y coordinate of top-left corner (pixels from top edge)
+    pub y: u32,
+    /// Width of viewport in pixels
+    pub width: u32,
+    /// Height of viewport in pixels
+    pub height: u32,
+}
+
+impl Viewport {
+    /// Full-screen viewport (960×540, the ZX native resolution)
+    pub const FULLSCREEN: Viewport = Viewport {
+        x: 0,
+        y: 0,
+        width: 960,
+        height: 540,
+    };
+
+    /// Calculate aspect ratio (width / height)
+    ///
+    /// Used by camera functions to create correct perspective projection.
+    #[inline]
+    pub fn aspect_ratio(&self) -> f32 {
+        if self.height == 0 {
+            1.0 // Avoid division by zero
+        } else {
+            self.width as f32 / self.height as f32
+        }
+    }
+
+    /// Check if viewport is valid (non-zero dimensions)
+    #[inline]
+    pub fn is_valid(&self) -> bool {
+        self.width > 0 && self.height > 0
+    }
+}
 
 use pipeline::PipelineCache;
 use texture_manager::TextureManager;
@@ -187,8 +248,8 @@ pub struct ZGraphics {
 
     // Persistent buffers for quad instance processing (avoids per-frame allocation)
     quad_instance_scratch: Vec<QuadInstance>,
-    /// (base_instance, instance_count, textures, is_screen_space)
-    quad_batch_scratch: Vec<(u32, u32, [u32; 4], bool)>,
+    /// (base_instance, instance_count, textures, is_screen_space, viewport)
+    quad_batch_scratch: Vec<(u32, u32, [u32; 4], bool, Viewport, u8)>,
 }
 
 impl ZGraphics {
@@ -373,7 +434,7 @@ impl ZGraphics {
     }
 
     pub fn depth_format(&self) -> wgpu::TextureFormat {
-        wgpu::TextureFormat::Depth32Float
+        wgpu::TextureFormat::Depth24PlusStencil8
     }
 
     pub fn depth_view(&self) -> &wgpu::TextureView {

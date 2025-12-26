@@ -6,6 +6,7 @@
 
 use super::render_state::{CullMode, TextureHandle};
 use super::vertex::{VERTEX_FORMAT_COUNT, vertex_stride, vertex_stride_packed};
+use super::Viewport;
 
 /// Specifies which buffer the geometry data comes from
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,6 +44,10 @@ pub enum VRPCommand {
         textures: [u32; 4],
         depth_test: bool,
         cull_mode: CullMode,
+        /// Viewport for split-screen rendering (captured at command creation)
+        viewport: Viewport,
+        /// Stencil mode for masked rendering (0=disabled, 1=writing, 2=testing, 3=testing_inverted)
+        stencil_mode: u8,
     },
     /// Indexed mesh draw (draw_mesh, load_mesh_indexed)
     IndexedMesh {
@@ -56,6 +61,10 @@ pub enum VRPCommand {
         textures: [u32; 4],
         depth_test: bool,
         cull_mode: CullMode,
+        /// Viewport for split-screen rendering (captured at command creation)
+        viewport: Viewport,
+        /// Stencil mode for masked rendering (0=disabled, 1=writing, 2=testing, 3=testing_inverted)
+        stencil_mode: u8,
     },
     /// GPU-instanced quad draw (billboards, sprites, text, rects)
     /// All quads share a single unit quad mesh (4 vertices, 6 indices)
@@ -67,12 +76,99 @@ pub enum VRPCommand {
         texture_slots: [TextureHandle; 4],
         depth_test: bool,
         cull_mode: CullMode,
+        /// Viewport for split-screen rendering (captured at command creation)
+        viewport: Viewport,
+        /// Stencil mode for masked rendering (0=disabled, 1=writing, 2=testing, 3=testing_inverted)
+        stencil_mode: u8,
     },
     /// Sky draw (fullscreen gradient + sun)
     Sky {
         shading_state_index: u32, // Index into shading_states for sky data
         depth_test: bool,         // Should be false (always behind)
+        /// Viewport for split-screen rendering (captured at command creation)
+        viewport: Viewport,
+        /// Stencil mode for masked rendering (0=disabled, 1=writing, 2=testing, 3=testing_inverted)
+        stencil_mode: u8,
     },
+}
+
+/// Sort key for draw command ordering
+///
+/// Commands are sorted to minimize GPU state changes:
+/// 1. Viewport (split-screen regions)
+/// 2. Stencil mode (masked rendering groups)
+/// 3. Pipeline type (sky → regular → quad)
+/// 4. Render state (depth test, cull mode)
+/// 5. Textures (minimize bind calls)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct CommandSortKey {
+    /// Viewport region (grouped first to minimize GPU viewport/scissor changes)
+    pub viewport: Viewport,
+    /// Stencil mode (0=disabled, 1=writing, 2=testing, 3=inverted)
+    pub stencil_mode: u8,
+    /// Render type: 0=sky, 1-254=regular (by format), 255=quad
+    pub render_type: u8,
+    /// Vertex format (for regular pipelines)
+    pub vertex_format: u8,
+    /// Depth test (false=0, true=1)
+    pub depth_test: u8,
+    /// Cull mode (none=0, back=1, front=2)
+    pub cull_mode: u8,
+    /// Texture slots (for grouping by bound textures)
+    pub textures: [u32; 4],
+}
+
+impl CommandSortKey {
+    /// Create sort key for a sky command
+    pub fn sky(viewport: Viewport, stencil_mode: u8) -> Self {
+        Self {
+            viewport,
+            stencil_mode,
+            render_type: 0, // Sky renders first
+            vertex_format: 0,
+            depth_test: 0,
+            cull_mode: 0,
+            textures: [0; 4],
+        }
+    }
+
+    /// Create sort key for a mesh command
+    pub fn mesh(
+        viewport: Viewport,
+        stencil_mode: u8,
+        vertex_format: u8,
+        depth_test: bool,
+        cull_mode: CullMode,
+        textures: [u32; 4],
+    ) -> Self {
+        Self {
+            viewport,
+            stencil_mode,
+            render_type: 1 + vertex_format, // Regular pipelines: 1-254
+            vertex_format,
+            depth_test: depth_test as u8,
+            cull_mode: cull_mode as u8,
+            textures,
+        }
+    }
+
+    /// Create sort key for a quad command
+    pub fn quad(
+        viewport: Viewport,
+        stencil_mode: u8,
+        depth_test: bool,
+        textures: [u32; 4],
+    ) -> Self {
+        Self {
+            viewport,
+            stencil_mode,
+            render_type: 255, // Quads render last
+            vertex_format: 0,
+            depth_test: depth_test as u8,
+            cull_mode: 0,
+            textures,
+        }
+    }
 }
 
 /// Virtual Render Pass for batching immediate-mode draws
@@ -135,6 +231,8 @@ impl VirtualRenderPass {
         textures: [u32; 4],
         depth_test: bool,
         cull_mode: CullMode,
+        viewport: Viewport,
+        stencil_mode: u8,
     ) {
         let format_idx = format as usize;
         let stride = vertex_stride(format) as usize;
@@ -154,6 +252,8 @@ impl VirtualRenderPass {
             textures,
             depth_test,
             cull_mode,
+            viewport,
+            stencil_mode,
         });
     }
 
@@ -171,6 +271,8 @@ impl VirtualRenderPass {
         textures: [u32; 4],
         depth_test: bool,
         cull_mode: CullMode,
+        viewport: Viewport,
+        stencil_mode: u8,
     ) {
         let format_idx = format as usize;
         let stride = vertex_stride(format) as usize;
@@ -195,6 +297,8 @@ impl VirtualRenderPass {
             textures,
             depth_test,
             cull_mode,
+            viewport,
+            stencil_mode,
         });
     }
 
@@ -214,6 +318,8 @@ impl VirtualRenderPass {
         textures: [u32; 4],
         depth_test: bool,
         cull_mode: CullMode,
+        viewport: Viewport,
+        stencil_mode: u8,
     ) {
         // Use packed stride since retained meshes are stored in packed format
         let stride = vertex_stride_packed(mesh_format) as u64;
@@ -231,6 +337,8 @@ impl VirtualRenderPass {
                 textures,
                 depth_test,
                 cull_mode,
+                viewport,
+                stencil_mode,
             });
         } else {
             self.commands.push(VRPCommand::Mesh {
@@ -241,6 +349,8 @@ impl VirtualRenderPass {
                 textures,
                 depth_test,
                 cull_mode,
+                viewport,
+                stencil_mode,
             });
         }
     }

@@ -30,9 +30,12 @@ pub struct ZFFIState {
     pub depth_test: bool,
     pub cull_mode: u8,
     pub texture_filter: u8,
+    pub stencil_mode: u8,
     pub bound_textures: [u32; 4],
     /// Current layer for 2D draw ordering (higher = closer to camera)
     pub current_layer: u32,
+    /// Current viewport for split-screen rendering (default: fullscreen)
+    pub current_viewport: crate::graphics::Viewport,
 
     // GPU skinning (3x4 matrices for 25% memory savings)
     pub bone_matrices: Vec<BoneMatrix3x4>,
@@ -168,8 +171,10 @@ impl Default for ZFFIState {
             depth_test: true,
             cull_mode: 0,      // None (users opt-in for performance)
             texture_filter: 0, // Nearest
+            stencil_mode: 0,   // Disabled (no stencil operations)
             bound_textures: [0; 4],
             current_layer: 0,
+            current_viewport: crate::graphics::Viewport::FULLSCREEN,
             bone_matrices: Vec::new(),
             bone_count: 0,
             skeletons: Vec::new(),
@@ -742,10 +747,10 @@ impl ZFFIState {
         buffer_idx
     }
 
-    /// Add a quad instance to the appropriate batch (auto-batches by texture)
+    /// Add a quad instance to the appropriate batch (auto-batches by texture and viewport)
     ///
-    /// This automatically groups quads by texture to minimize draw calls.
-    /// When bound_textures changes, a new batch is created.
+    /// This automatically groups quads by texture and viewport to minimize draw calls.
+    /// When bound_textures or current_viewport changes, a new batch is created.
     pub fn add_quad_instance(&mut self, instance: crate::graphics::QuadInstance) {
         // Determine if this is a screen-space quad (2D)
         let is_screen_space = instance.mode == crate::graphics::QuadMode::ScreenSpace as u32;
@@ -754,17 +759,21 @@ impl ZFFIState {
         if let Some(last_batch) = self.quad_batches.last_mut()
             && last_batch.textures == self.bound_textures
             && last_batch.is_screen_space == is_screen_space
+            && last_batch.viewport == self.current_viewport
+            && last_batch.stencil_mode == self.stencil_mode
         {
-            // Same textures and mode - add to current batch
+            // Same textures, mode, viewport, and stencil - add to current batch
             last_batch.instances.push(instance);
             return;
         }
 
-        // Need a new batch (either first batch, textures changed, or mode changed)
+        // Need a new batch (first batch, textures changed, mode changed, viewport changed, or stencil changed)
         self.quad_batches.push(super::QuadBatch {
             is_screen_space,
             textures: self.bound_textures,
             instances: vec![instance],
+            viewport: self.current_viewport,
+            stencil_mode: self.stencil_mode,
         });
     }
 
@@ -834,7 +843,9 @@ impl ZFFIState {
         self.depth_test = true;
         self.cull_mode = 0; // None (users opt-in for culling)
         self.texture_filter = 0; // Nearest
+        self.stencil_mode = 0; // Disabled (no stencil operations)
         self.current_layer = 0; // Reset layer to background
+        self.current_viewport = crate::graphics::Viewport::FULLSCREEN; // Reset viewport to fullscreen
         // Note: color and shading state already rebuild each frame via add_shading_state()
     }
 }

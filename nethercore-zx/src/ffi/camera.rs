@@ -9,8 +9,6 @@ use wasmtime::{Caller, Linker};
 
 use super::ZXGameContext;
 
-use crate::console::RESOLUTION;
-
 /// Register camera FFI functions
 pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     linker.func_wrap("env", "camera_set", camera_set)?;
@@ -69,9 +67,8 @@ fn camera_fov(mut caller: Caller<'_, ZXGameContext>, fov_degrees: f32) {
         fov_degrees
     };
 
-    // Get fixed viewport dimensions (540p)
-    let (width, height) = RESOLUTION;
-    let aspect = width as f32 / height as f32;
+    // Use viewport aspect ratio for split-screen support
+    let aspect = state.current_viewport.aspect_ratio();
 
     // Rebuild projection matrix with new FOV
     let proj = Mat4::perspective_rh(clamped_fov.to_radians(), aspect, 0.1, 1000.0);

@@ -8,7 +8,7 @@
 use glam::Mat4;
 
 use super::ZGraphics;
-use super::command_buffer::{BufferSource, VRPCommand};
+use super::command_buffer::{BufferSource, CommandSortKey, VRPCommand};
 use super::pipeline::PipelineKey;
 use super::render_state::{CullMode, RenderState, TextureHandle};
 use super::vertex::VERTEX_FORMAT_COUNT;
@@ -179,125 +179,45 @@ impl ZGraphics {
             }
         }
 
-        // OPTIMIZATION 3: Sort draw commands IN-PLACE by (pipeline_key, texture_slots) to minimize state changes
+        // OPTIMIZATION 3: Sort draw commands IN-PLACE by CommandSortKey to minimize state changes
         // Commands are reset at the start of next frame, so no need to preserve original order or clone
+        // Sort order: viewport → stencil → render_type → depth/cull → textures
         self.command_buffer
             .commands_mut()
-            .sort_unstable_by_key(|cmd| {
-                // Extract fields from command variant
-                // For sorting, we use raw u32 texture values (consistent ordering is all we need)
-                let (format, depth_test, cull_mode, texture_ids, _buffer_index, is_quad, is_sky) =
-                    match cmd {
-                        VRPCommand::Mesh {
-                            format,
-                            depth_test,
-                            cull_mode,
-                            textures,
-                            buffer_index,
-                            ..
-                        } => (
-                            *format,
-                            *depth_test,
-                            *cull_mode,
-                            *textures, // FFI handles as [u32; 4]
-                            Some(*buffer_index),
-                            false,
-                            false,
-                        ),
-                        VRPCommand::IndexedMesh {
-                            format,
-                            depth_test,
-                            cull_mode,
-                            textures,
-                            buffer_index,
-                            ..
-                        } => (
-                            *format,
-                            *depth_test,
-                            *cull_mode,
-                            *textures, // FFI handles as [u32; 4]
-                            Some(*buffer_index),
-                            false,
-                            false,
-                        ),
-                        VRPCommand::Quad {
-                            depth_test,
-                            cull_mode,
-                            texture_slots,
-                            ..
-                        } => (
-                            self.unit_quad_format,
-                            *depth_test,
-                            *cull_mode,
-                            // Extract inner u32 from TextureHandle for consistent sort key type
-                            [
-                                texture_slots[0].0,
-                                texture_slots[1].0,
-                                texture_slots[2].0,
-                                texture_slots[3].0,
-                            ],
-                            None,
-                            true,
-                            false,
-                        ),
-                        VRPCommand::Sky { depth_test, .. } => {
-                            // Sky uses unique sort key to render first (before all geometry)
-                            (
-                                0,
-                                *depth_test,
-                                super::render_state::CullMode::None,
-                                [0u32; 4], // Sky doesn't use textures
-                                None,
-                                false,
-                                true,
-                            )
-                        }
-                    };
-
-                // Sort key: (render_mode, format, depth_test, cull_mode, texture_slots)
-                // This groups commands by pipeline first, then by textures
-                // Note: texture_filter is no longer part of pipeline state - it's in
-                // PackedUnifiedShadingState.flags for per-draw shader selection
-                let state = RenderState {
+            .sort_unstable_by_key(|cmd| match cmd {
+                VRPCommand::Mesh {
+                    format,
                     depth_test,
                     cull_mode,
-                };
-
-                // Create sort key based on pipeline type (Regular vs Quad vs Sky)
-                let (render_mode, vertex_format, depth_test_u8, cull_mode_u8) = if is_sky {
-                    // Sky pipeline: Use lowest sort key to render first (before all geometry)
-                    (0u8, 0u8, 0u8, 0u8)
-                } else if is_quad {
-                    // Quad pipeline: Use special values to group separately
-                    let pipeline_key = PipelineKey::quad(&state);
-                    match pipeline_key {
-                        PipelineKey::Quad { depth_test } => (255u8, 255u8, depth_test as u8, 0u8),
-                        _ => unreachable!(),
-                    }
-                } else {
-                    // Regular pipeline: Use actual values
-                    let pipeline_key = PipelineKey::new(self.current_render_mode, format, &state);
-                    match pipeline_key {
-                        PipelineKey::Regular {
-                            render_mode,
-                            vertex_format,
-                            depth_test,
-                            cull_mode,
-                        } => (render_mode, vertex_format, depth_test as u8, cull_mode),
-                        _ => unreachable!(),
-                    }
-                };
-
-                (
-                    render_mode,
-                    vertex_format,
-                    depth_test_u8,
-                    cull_mode_u8,
-                    texture_ids[0],
-                    texture_ids[1],
-                    texture_ids[2],
-                    texture_ids[3],
-                )
+                    textures,
+                    viewport,
+                    stencil_mode,
+                    ..
+                } => CommandSortKey::mesh(*viewport, *stencil_mode, *format, *depth_test, *cull_mode, *textures),
+                VRPCommand::IndexedMesh {
+                    format,
+                    depth_test,
+                    cull_mode,
+                    textures,
+                    viewport,
+                    stencil_mode,
+                    ..
+                } => CommandSortKey::mesh(*viewport, *stencil_mode, *format, *depth_test, *cull_mode, *textures),
+                VRPCommand::Quad {
+                    depth_test,
+                    texture_slots,
+                    viewport,
+                    stencil_mode,
+                    ..
+                } => CommandSortKey::quad(
+                    *viewport,
+                    *stencil_mode,
+                    *depth_test,
+                    [texture_slots[0].0, texture_slots[1].0, texture_slots[2].0, texture_slots[3].0],
+                ),
+                VRPCommand::Sky { viewport, stencil_mode, .. } => {
+                    CommandSortKey::sky(*viewport, *stencil_mode)
+                }
             });
 
         // =================================================================
@@ -452,12 +372,14 @@ impl ZGraphics {
                         depth_test,
                         cull_mode,
                     };
+                    // Use stencil_mode=0 for bind group layout - all pipelines share the same layout
                     let pipeline_entry = self.pipeline_cache.get_or_create(
                         &self.device,
                         self.config.format,
                         self.current_render_mode,
                         format,
                         &first_state,
+                        0, // Bind group layout is same for all stencil modes
                     );
 
                     // Bind group layout (grouped by purpose):
@@ -509,12 +431,14 @@ impl ZGraphics {
                     depth_test,
                     cull_mode,
                 };
+                // Use stencil_mode=0 for bind group layout - all pipelines share the same layout
                 let pipeline_entry = self.pipeline_cache.get_or_create(
                     &self.device,
                     self.config.format,
                     self.current_render_mode,
                     format,
                     &first_state,
+                    0, // Bind group layout is same for all stencil modes
                 );
 
                 // Bind group layout (grouped by purpose):
@@ -595,7 +519,9 @@ impl ZGraphics {
                 occlusion_query_set: None,
             });
 
-            // State tracking to skip redundant GPU calls (commands are sorted by pipeline/texture)
+            // State tracking to skip redundant GPU calls (commands are sorted by viewport/pipeline/texture)
+            let mut current_viewport: Option<super::Viewport> = None;
+            let mut current_stencil_mode: Option<u8> = None;
             let mut bound_pipeline: Option<PipelineKey> = None;
             let mut bound_texture_slots: Option<[TextureHandle; 4]> = None;
             let mut bound_vertex_format: Option<(u8, BufferSource)> = None;
@@ -627,7 +553,7 @@ impl ZGraphics {
                 // Destructure command variant to extract common fields
                 // For Mesh/IndexedMesh: resolve FFI texture handles to TextureHandle
                 // For Quad: use texture_slots directly (already TextureHandle)
-                let (format, depth_test, cull_mode, texture_slots, buffer_source, is_quad, is_sky) =
+                let (cmd_viewport, cmd_stencil_mode, format, depth_test, cull_mode, texture_slots, buffer_source, is_quad, is_sky) =
                     match cmd {
                         VRPCommand::Mesh {
                             format,
@@ -635,8 +561,12 @@ impl ZGraphics {
                             cull_mode,
                             textures,
                             buffer_index,
+                            viewport,
+                            stencil_mode,
                             ..
                         } => (
+                            *viewport,
+                            *stencil_mode,
                             *format,
                             *depth_test,
                             *cull_mode,
@@ -651,8 +581,12 @@ impl ZGraphics {
                             cull_mode,
                             textures,
                             buffer_index,
+                            viewport,
+                            stencil_mode,
                             ..
                         } => (
+                            *viewport,
+                            *stencil_mode,
                             *format,
                             *depth_test,
                             *cull_mode,
@@ -665,8 +599,12 @@ impl ZGraphics {
                             depth_test,
                             cull_mode,
                             texture_slots,
+                            viewport,
+                            stencil_mode,
                             ..
                         } => (
+                            *viewport,
+                            *stencil_mode,
                             self.unit_quad_format,
                             *depth_test,
                             *cull_mode,
@@ -675,7 +613,9 @@ impl ZGraphics {
                             true,
                             false,
                         ),
-                        VRPCommand::Sky { depth_test, .. } => (
+                        VRPCommand::Sky { depth_test, viewport, stencil_mode, .. } => (
+                            *viewport,
+                            *stencil_mode,
                             self.unit_quad_format, // Sky uses unit quad mesh
                             *depth_test,
                             super::render_state::CullMode::None,
@@ -685,6 +625,35 @@ impl ZGraphics {
                             true,
                         ),
                     };
+
+                // Set viewport and scissor rect if changed (split-screen support)
+                if current_viewport != Some(cmd_viewport) {
+                    render_pass.set_viewport(
+                        cmd_viewport.x as f32,
+                        cmd_viewport.y as f32,
+                        cmd_viewport.width as f32,
+                        cmd_viewport.height as f32,
+                        0.0,
+                        1.0,
+                    );
+                    render_pass.set_scissor_rect(
+                        cmd_viewport.x,
+                        cmd_viewport.y,
+                        cmd_viewport.width,
+                        cmd_viewport.height,
+                    );
+                    current_viewport = Some(cmd_viewport);
+                }
+
+                // Set stencil reference if stencil mode changed and requires testing
+                // StencilMode: 0=Disabled, 1=Writing, 2=Testing, 3=TestingInverted
+                if current_stencil_mode != Some(cmd_stencil_mode) {
+                    // Set stencil reference to 1 for testing modes (value written by stencil_begin)
+                    if cmd_stencil_mode >= 2 {
+                        render_pass.set_stencil_reference(1);
+                    }
+                    current_stencil_mode = Some(cmd_stencil_mode);
+                }
 
                 // Create render state from command
                 let state = RenderState {
@@ -696,19 +665,20 @@ impl ZGraphics {
                 if is_sky {
                     // Sky rendering: Ensure sky pipeline exists
                     self.pipeline_cache
-                        .get_or_create_sky(&self.device, self.config.format);
+                        .get_or_create_sky(&self.device, self.config.format, cmd_stencil_mode);
                 } else if is_quad {
                     // Quad rendering: Ensure quad pipeline exists
                     self.pipeline_cache.get_or_create_quad(
                         &self.device,
                         self.config.format,
                         &state,
+                        cmd_stencil_mode,
                     );
                 } else {
                     // Regular mesh rendering: Ensure format-specific pipeline exists
                     if !self
                         .pipeline_cache
-                        .contains(self.current_render_mode, format, &state)
+                        .contains(self.current_render_mode, format, &state, cmd_stencil_mode)
                     {
                         self.pipeline_cache.get_or_create(
                             &self.device,
@@ -716,17 +686,18 @@ impl ZGraphics {
                             self.current_render_mode,
                             format,
                             &state,
+                            cmd_stencil_mode,
                         );
                     }
                 }
 
                 // Now get immutable reference to pipeline entry (avoiding borrow issues)
                 let pipeline_key = if is_sky {
-                    PipelineKey::Sky
+                    PipelineKey::sky(cmd_stencil_mode)
                 } else if is_quad {
-                    PipelineKey::quad(&state)
+                    PipelineKey::quad(&state, cmd_stencil_mode)
                 } else {
-                    PipelineKey::new(self.current_render_mode, format, &state)
+                    PipelineKey::new(self.current_render_mode, format, &state, cmd_stencil_mode)
                 };
 
                 let pipeline_entry = self
