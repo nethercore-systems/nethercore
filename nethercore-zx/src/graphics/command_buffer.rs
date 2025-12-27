@@ -14,6 +14,41 @@ use super::Viewport;
 /// They're sorted by render_type instead (Sky=0, Mesh=1-254, Quad=255).
 const NO_LAYER: u32 = 0;
 
+/// Render type value for sky commands (renders first)
+pub const SKY_RENDER_TYPE: u8 = 0;
+
+/// Render type value for quad commands (renders last)
+pub const QUAD_RENDER_TYPE: u8 = 255;
+
+/// Stencil mode for masked rendering
+///
+/// Controls how the stencil buffer is used for masking effects.
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum StencilMode {
+    /// Stencil testing disabled (normal rendering)
+    Disabled = 0,
+    /// Writing to stencil buffer (mask creation, no color output)
+    Writing = 1,
+    /// Testing against stencil buffer (render inside mask)
+    Testing = 2,
+    /// Inverted testing (render outside mask)
+    TestingInverted = 3,
+}
+
+impl StencilMode {
+    /// Convert from u8 value, defaulting to Disabled for invalid values
+    pub fn from_u8(value: u8) -> Self {
+        match value {
+            0 => Self::Disabled,
+            1 => Self::Writing,
+            2 => Self::Testing,
+            3 => Self::TestingInverted,
+            _ => Self::Disabled,
+        }
+    }
+}
+
 /// Specifies which buffer the geometry data comes from
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BufferSource {
@@ -131,12 +166,12 @@ pub struct CommandSortKey {
 
 impl CommandSortKey {
     /// Create sort key for a sky command
-    pub fn sky(viewport: Viewport, stencil_mode: u8) -> Self {
+    pub fn sky(viewport: Viewport, stencil_mode: StencilMode) -> Self {
         Self {
             viewport,
             layer: NO_LAYER,
-            stencil_mode,
-            render_type: 0, // Sky renders first
+            stencil_mode: stencil_mode as u8,
+            render_type: SKY_RENDER_TYPE,
             vertex_format: 0,
             depth_test: 0,
             cull_mode: 0,
@@ -147,7 +182,7 @@ impl CommandSortKey {
     /// Create sort key for a mesh command
     pub fn mesh(
         viewport: Viewport,
-        stencil_mode: u8,
+        stencil_mode: StencilMode,
         vertex_format: u8,
         depth_test: bool,
         cull_mode: CullMode,
@@ -156,7 +191,7 @@ impl CommandSortKey {
         Self {
             viewport,
             layer: NO_LAYER,
-            stencil_mode,
+            stencil_mode: stencil_mode as u8,
             render_type: 1 + vertex_format, // Regular pipelines: 1-254
             vertex_format,
             depth_test: depth_test as u8,
@@ -169,15 +204,15 @@ impl CommandSortKey {
     pub fn quad(
         viewport: Viewport,
         layer: u32,
-        stencil_mode: u8,
+        stencil_mode: StencilMode,
         depth_test: bool,
         textures: [u32; 4],
     ) -> Self {
         Self {
             viewport,
             layer,
-            stencil_mode,
-            render_type: 255, // Quads render last
+            stencil_mode: stencil_mode as u8,
+            render_type: QUAD_RENDER_TYPE,
             vertex_format: 0,
             depth_test: depth_test as u8,
             cull_mode: 0,
