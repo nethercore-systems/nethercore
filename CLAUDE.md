@@ -402,12 +402,12 @@ Dual-licensed under MIT OR Apache-2.0 (your choice).
 
 This repository includes a Claude Code plugin for ZX game development assistance.
 
-**Location:** `plugins/nethercore-zx-dev/`
+**Location:** `../nethercore-ai-plugins/nethercore-zx-dev/`
 
 ### Plugin Structure
 
 ```
-plugins/nethercore-zx-dev/
+../nethercore-ai-plugins/nethercore-zx-dev/
 ├── plugin.json                    # Plugin manifest
 ├── README.md
 ├── .claude-plugin/
@@ -430,43 +430,22 @@ plugins/nethercore-zx-dev/
 
 ### Installation
 
-**Option 1: From GitHub (recommended for external developers)**
 
-Add to your project's `.claude/settings.json` or `.claude/settings.local.json`:
+Add to your global Claude settings (`~/.claude/settings.json`) or project settings:
 
 ```json
 {
   "extraKnownMarketplaces": {
-    "nethercore-plugins": {
+    "nethercore-ai-plugins": {
       "source": {
         "source": "github",
-        "repo": "nethercore/nethercore",
-        "path": "plugins/nethercore-zx-dev"
+        "repo": "nethercore-systems/nethercore-ai-plugins",
+        "path": "nethercore-zx-dev"
       }
     }
   },
   "enabledPlugins": {
-    "nethercore-zx-dev@nethercore-plugins": true
-  }
-}
-```
-
-**Option 2: Local directory (for nethercore contributors)**
-
-If you have the nethercore repo cloned locally:
-
-```json
-{
-  "extraKnownMarketplaces": {
-    "nethercore-plugins": {
-      "source": {
-        "source": "directory",
-        "path": "./nethercore/plugins/nethercore-zx-dev"
-      }
-    }
-  },
-  "enabledPlugins": {
-    "nethercore-zx-dev@nethercore-plugins": true
+    "nethercore-zx-dev@nethercore-ai-plugins": true
   }
 }
 ```
