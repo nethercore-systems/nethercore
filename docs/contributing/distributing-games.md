@@ -56,7 +56,7 @@ This creates a simple directory structure:
 When you're ready to share your game, create a ROM file:
 
 ```bash
-cargo xtask cart create-z my-game.wasm \
+cargo xtask cart create-zx my-game.wasm \
   --id my-game \
   --title "My Awesome Game" \
   --author "YourName" \
@@ -91,10 +91,10 @@ target/wasm32-unknown-unknown/release/my_game.wasm
 
 ### Step 2: Create the ROM
 
-Use the `cart create-z` command with your game's metadata:
+Use the `cart create-zx` command with your game's metadata:
 
 ```bash
-cargo xtask cart create-z \
+cargo xtask cart create-zx \
   target/wasm32-unknown-unknown/release/my_game.wasm \
   --id my-game \
   --title "My Awesome Game" \
@@ -136,7 +136,7 @@ cargo xtask cart create-z \
 Thumbnails are displayed in the game library UI:
 
 ```bash
-cargo xtask cart create-z my_game.wasm \
+cargo xtask cart create-zx my_game.wasm \
   --id my-game \
   --title "My Game" \
   --author "YourName" \
@@ -161,7 +161,7 @@ cargo xtask cart create-z my_game.wasm \
 Screenshots are stored in the ROM for viewing in ROM info or on the platform:
 
 ```bash
-cargo xtask cart create-z my_game.wasm \
+cargo xtask cart create-zx my_game.wasm \
   --id my-game \
   --title "My Game" \
   --author "YourName" \
@@ -250,7 +250,7 @@ This is a hint to the launcher but doesn't enforce the frame rate.
 ### Full Example with All Settings
 
 ```bash
-cargo xtask cart create-z \
+cargo xtask cart create-zx \
   target/wasm32-unknown-unknown/release/my_game.wasm \
   --id my-platformer \
   --title "Super Platformer Adventure" \
@@ -448,7 +448,7 @@ When you release a new version:
 
 2. **Create new ROM:**
    ```bash
-   cargo xtask cart create-z ... --version "1.1.0" --output my-game-v1.1.0.nczx
+   cargo xtask cart create-zx ... --version "1.1.0" --output my-game-v1.1.0.nczx
    ```
 
 3. **Distribute:**
@@ -583,7 +583,7 @@ cargo build --target wasm32-unknown-unknown --release
 # - assets/screenshot3.png (level select)
 
 # 3. Create ROM
-cargo xtask cart create-z \
+cargo xtask cart create-zx \
   target/wasm32-unknown-unknown/release/my_platformer.wasm \
   --id super-platformer \
   --title "Super Platformer Adventure" \
