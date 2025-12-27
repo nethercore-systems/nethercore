@@ -5,6 +5,7 @@
 
 use hashbrown::HashMap;
 
+use super::command_buffer::StencilMode;
 use super::render_state::RenderState;
 use super::vertex::VertexFormatInfo;
 
@@ -64,15 +65,9 @@ pub(crate) struct PipelineEntry {
 }
 
 /// Get stencil state configuration for the given stencil mode
-///
-/// Stencil modes:
-/// - 0 (Disabled): Normal rendering, no stencil operations
-/// - 1 (Writing): Write to stencil buffer (mask creation), no color output
-/// - 2 (Testing): Only render where stencil == 1 (inside mask)
-/// - 3 (TestingInverted): Only render where stencil == 0 (outside mask)
-fn get_stencil_state(stencil_mode: u8) -> wgpu::StencilState {
+fn get_stencil_state(stencil_mode: StencilMode) -> wgpu::StencilState {
     match stencil_mode {
-        1 => {
+        StencilMode::Writing => {
             // Writing mode: Always pass, replace stencil with reference value
             let face = wgpu::StencilFaceState {
                 compare: wgpu::CompareFunction::Always,
@@ -87,7 +82,7 @@ fn get_stencil_state(stencil_mode: u8) -> wgpu::StencilState {
                 write_mask: 0xFF,
             }
         }
-        2 => {
+        StencilMode::Testing => {
             // Testing mode: Only pass where stencil == reference (1)
             let face = wgpu::StencilFaceState {
                 compare: wgpu::CompareFunction::Equal,
@@ -102,7 +97,7 @@ fn get_stencil_state(stencil_mode: u8) -> wgpu::StencilState {
                 write_mask: 0x00, // Don't modify stencil during testing
             }
         }
-        3 => {
+        StencilMode::TestingInverted => {
             // Testing inverted mode: Only pass where stencil != reference (0)
             let face = wgpu::StencilFaceState {
                 compare: wgpu::CompareFunction::NotEqual,
@@ -117,8 +112,8 @@ fn get_stencil_state(stencil_mode: u8) -> wgpu::StencilState {
                 write_mask: 0x00, // Don't modify stencil during testing
             }
         }
-        _ => {
-            // Disabled (0) or invalid: explicitly disable stencil testing
+        StencilMode::Disabled => {
+            // Disabled: explicitly disable stencil testing
             let face = wgpu::StencilFaceState {
                 compare: wgpu::CompareFunction::Always,  // Always pass - never reject fragments
                 fail_op: wgpu::StencilOperation::Keep,
@@ -137,13 +132,12 @@ fn get_stencil_state(stencil_mode: u8) -> wgpu::StencilState {
 
 /// Get color write mask for the given stencil mode
 ///
-/// Writing mode (1) disables color output - only stencil is modified.
+/// Writing mode disables color output - only stencil is modified.
 /// All other modes write color normally.
-fn get_color_write_mask(stencil_mode: u8) -> wgpu::ColorWrites {
-    if stencil_mode == 1 {
-        wgpu::ColorWrites::empty() // No color output during mask creation
-    } else {
-        wgpu::ColorWrites::ALL
+fn get_color_write_mask(stencil_mode: StencilMode) -> wgpu::ColorWrites {
+    match stencil_mode {
+        StencilMode::Writing => wgpu::ColorWrites::empty(), // No color output during mask creation
+        _ => wgpu::ColorWrites::ALL,
     }
 }
 
@@ -154,7 +148,7 @@ pub(crate) fn create_pipeline(
     render_mode: u8,
     format: u8,
     state: &RenderState,
-    stencil_mode: u8,
+    stencil_mode: StencilMode,
 ) -> PipelineEntry {
     use crate::shader_gen::generate_shader;
 
@@ -254,7 +248,7 @@ pub(crate) fn create_quad_pipeline(
     device: &wgpu::Device,
     surface_format: wgpu::TextureFormat,
     state: &RenderState,
-    stencil_mode: u8,
+    stencil_mode: StencilMode,
 ) -> PipelineEntry {
     // Load quad shader (generated from quad_template.wgsl by build.rs)
     use crate::shader_gen::QUAD_SHADER;
@@ -312,12 +306,8 @@ pub(crate) fn create_quad_pipeline(
         },
         depth_stencil: Some(wgpu::DepthStencilState {
             format: wgpu::TextureFormat::Depth24PlusStencil8,
-            depth_write_enabled: state.depth_test,
-            depth_compare: if state.depth_test {
-                wgpu::CompareFunction::LessEqual  // LessEqual for quads to support layer 0 (depth=1.0)
-            } else {
-                wgpu::CompareFunction::Always
-            },
+            depth_write_enabled: true,  // Always write depth for early-z optimization
+            depth_compare: wgpu::CompareFunction::Always,  // Quads always draw (sorting via sort key)
             stencil: get_stencil_state(stencil_mode),
             bias: wgpu::DepthBiasState::default(),
         }),
@@ -341,7 +331,7 @@ pub(crate) fn create_quad_pipeline(
 pub(crate) fn create_sky_pipeline(
     device: &wgpu::Device,
     surface_format: wgpu::TextureFormat,
-    stencil_mode: u8,
+    stencil_mode: StencilMode,
 ) -> PipelineEntry {
     // Load sky shader (generated from common.wgsl + sky_template.wgsl by build.rs)
     use crate::shader_gen::SKY_SHADER;
@@ -394,8 +384,8 @@ pub(crate) fn create_sky_pipeline(
         },
         depth_stencil: Some(wgpu::DepthStencilState {
             format: wgpu::TextureFormat::Depth24PlusStencil8,
-            depth_write_enabled: false, // Don't write depth
-            depth_compare: wgpu::CompareFunction::Always, // Always pass
+            depth_write_enabled: false,  // Sky is infinitely far, don't write depth
+            depth_compare: wgpu::CompareFunction::GreaterOrEqual,  // Only render where nothing else drew
             stencil: get_stencil_state(stencil_mode),
             bias: wgpu::DepthBiasState::default(),
         }),
@@ -704,7 +694,7 @@ impl PipelineCache {
             stencil_mode
         );
 
-        let entry = create_pipeline(device, surface_format, render_mode, format, state, stencil_mode);
+        let entry = create_pipeline(device, surface_format, render_mode, format, state, StencilMode::from_u8(stencil_mode));
         self.pipelines.insert(key, entry);
         &self.pipelines[&key]
     }
@@ -735,7 +725,7 @@ impl PipelineCache {
         // Otherwise, create a new quad pipeline
         tracing::debug!("Creating quad pipeline: depth={}, stencil={}", state.depth_test, stencil_mode);
 
-        let entry = create_quad_pipeline(device, surface_format, state, stencil_mode);
+        let entry = create_quad_pipeline(device, surface_format, state, StencilMode::from_u8(stencil_mode));
         self.pipelines.insert(key, entry);
         &self.pipelines[&key]
     }
@@ -759,7 +749,7 @@ impl PipelineCache {
         // Otherwise, create a new sky pipeline
         tracing::debug!("Creating sky pipeline: stencil={}", stencil_mode);
 
-        let entry = create_sky_pipeline(device, surface_format, stencil_mode);
+        let entry = create_sky_pipeline(device, surface_format, StencilMode::from_u8(stencil_mode));
         self.pipelines.insert(key, entry);
         &self.pipelines[&key]
     }

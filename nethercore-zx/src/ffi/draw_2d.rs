@@ -15,15 +15,17 @@ const DEFAULT_FONT_TEXTURE_SIZE: (u32, u32) = (1024, 1024);
 /// Number of segments used for circle rendering
 const CIRCLE_SEGMENTS: u32 = 16;
 
-/// Convert layer value to Z depth for 2D ordering
+/// Depth value for all screen-space 2D quads
 ///
-/// Higher layer values = closer to camera = smaller Z value (passes depth test)
-/// Maps layer 0 -> 1.0 (far), layer 65535 -> 0.0 (near)
-#[inline]
-fn layer_to_depth(layer: u32) -> f32 {
-    // Use u16 range to avoid float precision issues with full u32
-    1.0 - (layer.min(65535) as f32 / 65535.0)
-}
+/// All 2D UI elements render at depth 0.0 (near plane) for early-z optimization.
+/// This allows 3D geometry behind UI elements to be culled via early depth testing,
+/// saving fragment shader invocations.
+///
+/// Layer ordering is handled by CPU-side sorting (render_type=0, sorted by layer field).
+/// All layers render in order at the same depth, with later layers overwriting earlier ones
+/// in the framebuffer. The `discard` instruction in the quad shader prevents depth writes
+/// for transparent dithered pixels, allowing 3D content to show through.
+const SCREEN_SPACE_DEPTH: f32 = 0.0;
 
 /// Register 2D drawing FFI functions
 pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
@@ -68,7 +70,7 @@ fn draw_sprite(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, w: f32, h:
     let view_idx = (state.view_matrices.len() - 1) as u32;
 
     // Convert layer to depth for ordering
-    let depth = layer_to_depth(state.current_layer);
+    let depth = SCREEN_SPACE_DEPTH;
 
     // Create screen-space quad instance
     let instance = crate::graphics::QuadInstance::sprite(
@@ -84,7 +86,7 @@ fn draw_sprite(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, w: f32, h:
         view_idx,
     );
 
-    state.add_quad_instance(instance);
+    state.add_quad_instance(instance, state.current_layer);
 }
 
 /// Draw a region of a sprite sheet
@@ -130,7 +132,7 @@ fn draw_sprite_region(
     let v1 = src_y + src_h;
 
     // Convert layer to depth for ordering
-    let depth = layer_to_depth(state.current_layer);
+    let depth = SCREEN_SPACE_DEPTH;
 
     // Create screen-space quad instance
     let instance = crate::graphics::QuadInstance::sprite(
@@ -146,7 +148,7 @@ fn draw_sprite_region(
         (state.view_matrices.len() - 1) as u32,
     );
 
-    state.add_quad_instance(instance);
+    state.add_quad_instance(instance, state.current_layer);
 }
 
 /// Draw a sprite with full control (rotation, origin, UV region)
@@ -200,7 +202,7 @@ fn draw_sprite_ex(
     let screen_y = vp.y as f32 + y - origin_y;
 
     // Convert layer to depth for ordering
-    let depth = layer_to_depth(state.current_layer);
+    let depth = SCREEN_SPACE_DEPTH;
 
     // Create screen-space quad instance with rotation
     let instance = crate::graphics::QuadInstance::sprite(
@@ -216,7 +218,7 @@ fn draw_sprite_ex(
         (state.view_matrices.len() - 1) as u32,
     );
 
-    state.add_quad_instance(instance);
+    state.add_quad_instance(instance, state.current_layer);
 }
 
 /// Draw a solid color rectangle
@@ -244,7 +246,7 @@ fn draw_rect(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, w: f32, h: f
     let shading_state_index = state.add_shading_state();
 
     // Convert layer to depth for ordering
-    let depth = layer_to_depth(state.current_layer);
+    let depth = SCREEN_SPACE_DEPTH;
 
     // Create screen-space quad instance (rects use white/fallback texture)
     let instance = crate::graphics::QuadInstance::sprite(
@@ -260,7 +262,7 @@ fn draw_rect(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, w: f32, h: f
         (state.view_matrices.len() - 1) as u32,
     );
 
-    state.add_quad_instance(instance);
+    state.add_quad_instance(instance, state.current_layer);
 }
 
 /// Draw text with the built-in font
@@ -348,7 +350,7 @@ fn draw_text(
     let view_idx = (state.view_matrices.len() - 1) as u32;
 
     // Convert layer to depth for ordering
-    let depth = layer_to_depth(state.current_layer);
+    let depth = SCREEN_SPACE_DEPTH;
 
     // Determine which font to use
     let font_handle = state.current_font;
@@ -448,7 +450,7 @@ fn draw_text(
                 shading_state_index.0,
                 view_idx,
             );
-            state.add_quad_instance(instance);
+            state.add_quad_instance(instance, state.current_layer);
 
             cursor_x += glyph_width;
         }
@@ -477,7 +479,7 @@ fn draw_text(
                 shading_state_index.0,
                 view_idx,
             );
-            state.add_quad_instance(instance);
+            state.add_quad_instance(instance, state.current_layer);
 
             cursor_x += glyph_width;
         }
@@ -821,7 +823,7 @@ fn draw_line(
     let view_idx = (state.view_matrices.len() - 1) as u32;
 
     // Convert layer to depth for ordering
-    let depth = layer_to_depth(state.current_layer);
+    let depth = SCREEN_SPACE_DEPTH;
 
     // Calculate line geometry
     let dx = screen_x2 - screen_x1;
@@ -850,7 +852,7 @@ fn draw_line(
         view_idx,
     );
 
-    state.add_quad_instance(instance);
+    state.add_quad_instance(instance, state.current_layer);
 }
 
 /// Draw a filled circle
@@ -881,7 +883,7 @@ fn draw_circle(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, radius: f3
     let view_idx = (state.view_matrices.len() - 1) as u32;
 
     // Convert layer to depth for ordering
-    let depth = layer_to_depth(state.current_layer);
+    let depth = SCREEN_SPACE_DEPTH;
 
     // Draw circle as pie slices (rotated rectangles from center)
     // Each slice is a thin rectangle extending from center outward
@@ -910,7 +912,7 @@ fn draw_circle(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, radius: f3
             view_idx,
         );
 
-        state.add_quad_instance(instance);
+        state.add_quad_instance(instance, state.current_layer);
     }
 }
 
@@ -946,7 +948,7 @@ fn draw_circle_outline(
     state.bound_textures[0] = u32::MAX;
 
     // Convert layer to depth for ordering (computed once, used for all segments)
-    let depth = layer_to_depth(state.current_layer);
+    let depth = SCREEN_SPACE_DEPTH;
 
     let angle_step = std::f32::consts::TAU / CIRCLE_SEGMENTS as f32;
 
@@ -983,6 +985,6 @@ fn draw_circle_outline(
             view_idx,
         );
 
-        state.add_quad_instance(instance);
+        state.add_quad_instance(instance, state.current_layer);
     }
 }

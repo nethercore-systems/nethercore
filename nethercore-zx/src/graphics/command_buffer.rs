@@ -8,6 +8,71 @@ use super::render_state::{CullMode, TextureHandle};
 use super::vertex::{VERTEX_FORMAT_COUNT, vertex_stride, vertex_stride_packed};
 use super::Viewport;
 
+/// Layer value for commands that don't participate in 2D layer ordering
+///
+/// Sky and mesh commands use layer 0 as they don't use the 2D layering system.
+/// They're sorted by render_type instead.
+const NO_LAYER: u32 = 0;
+
+/// Render type for command sorting and pipeline selection
+///
+/// Determines rendering order and which pipeline to use:
+/// - Quad: Screen-space 2D UI (renders first for early-z optimization)
+/// - Mesh: 3D geometry (renders second, culled behind UI)
+/// - Sky: Procedural background (renders last, fills gaps)
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum RenderType {
+    /// Screen-space quads (2D UI, sprites, text)
+    ///
+    /// Renders first with depth writes enabled at depth=0.0. This allows 3D meshes
+    /// behind opaque UI elements to be culled via early-z rejection, saving fragment
+    /// shader cost.
+    Quad = 0,
+
+    /// 3D meshes and geometry
+    ///
+    /// Renders second, after 2D UI. Fragments behind opaque UI are culled by
+    /// early depth testing.
+    Mesh = 1,
+
+    /// Procedural sky background
+    ///
+    /// Renders last with depth test enabled (GreaterOrEqual). Only fragments where
+    /// depth == 1.0 (clear value) pass, avoiding expensive sky shader invocations
+    /// for pixels already covered by geometry.
+    Sky = 2,
+}
+
+/// Stencil mode for masked rendering
+///
+/// Controls how the stencil buffer is used for masking effects.
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum StencilMode {
+    /// Stencil testing disabled (normal rendering)
+    Disabled = 0,
+    /// Writing to stencil buffer (mask creation, no color output)
+    Writing = 1,
+    /// Testing against stencil buffer (render inside mask)
+    Testing = 2,
+    /// Inverted testing (render outside mask)
+    TestingInverted = 3,
+}
+
+impl StencilMode {
+    /// Convert from u8 value, defaulting to Disabled for invalid values
+    pub fn from_u8(value: u8) -> Self {
+        match value {
+            0 => Self::Disabled,
+            1 => Self::Writing,
+            2 => Self::Testing,
+            3 => Self::TestingInverted,
+            _ => Self::Disabled,
+        }
+    }
+}
+
 /// Specifies which buffer the geometry data comes from
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BufferSource {
@@ -80,6 +145,8 @@ pub enum VRPCommand {
         viewport: Viewport,
         /// Stencil mode for masked rendering (0=disabled, 1=writing, 2=testing, 3=testing_inverted)
         stencil_mode: u8,
+        /// Layer for 2D ordering (higher layers render on top)
+        layer: u32,
     },
     /// Sky draw (fullscreen gradient + sun)
     Sky {
@@ -96,18 +163,21 @@ pub enum VRPCommand {
 ///
 /// Commands are sorted to minimize GPU state changes:
 /// 1. Viewport (split-screen regions)
-/// 2. Stencil mode (masked rendering groups)
-/// 3. Pipeline type (sky → regular → quad)
-/// 4. Render state (depth test, cull mode)
-/// 5. Textures (minimize bind calls)
+/// 2. Layer (2D ordering for quads - higher layers render on top)
+/// 3. Stencil mode (masked rendering groups)
+/// 4. Render type (Quad → Mesh → Sky for optimal early-z)
+/// 5. Render state (depth test, cull mode)
+/// 6. Textures (minimize bind calls)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CommandSortKey {
     /// Viewport region (grouped first to minimize GPU viewport/scissor changes)
     pub viewport: Viewport,
+    /// Layer for 2D ordering (only used for quads, 0 for other commands)
+    pub layer: u32,
     /// Stencil mode (0=disabled, 1=writing, 2=testing, 3=inverted)
     pub stencil_mode: u8,
-    /// Render type: 0=sky, 1-254=regular (by format), 255=quad
-    pub render_type: u8,
+    /// Render type (Quad=0, Mesh=1, Sky=2)
+    pub render_type: RenderType,
     /// Vertex format (for regular pipelines)
     pub vertex_format: u8,
     /// Depth test (false=0, true=1)
@@ -120,11 +190,12 @@ pub struct CommandSortKey {
 
 impl CommandSortKey {
     /// Create sort key for a sky command
-    pub fn sky(viewport: Viewport, stencil_mode: u8) -> Self {
+    pub fn sky(viewport: Viewport, stencil_mode: StencilMode) -> Self {
         Self {
             viewport,
-            stencil_mode,
-            render_type: 0, // Sky renders first
+            layer: NO_LAYER,
+            stencil_mode: stencil_mode as u8,
+            render_type: RenderType::Sky,
             vertex_format: 0,
             depth_test: 0,
             cull_mode: 0,
@@ -135,7 +206,7 @@ impl CommandSortKey {
     /// Create sort key for a mesh command
     pub fn mesh(
         viewport: Viewport,
-        stencil_mode: u8,
+        stencil_mode: StencilMode,
         vertex_format: u8,
         depth_test: bool,
         cull_mode: CullMode,
@@ -143,8 +214,9 @@ impl CommandSortKey {
     ) -> Self {
         Self {
             viewport,
-            stencil_mode,
-            render_type: 1 + vertex_format, // Regular pipelines: 1-254
+            layer: NO_LAYER,
+            stencil_mode: stencil_mode as u8,
+            render_type: RenderType::Mesh,
             vertex_format,
             depth_test: depth_test as u8,
             cull_mode: cull_mode as u8,
@@ -155,14 +227,16 @@ impl CommandSortKey {
     /// Create sort key for a quad command
     pub fn quad(
         viewport: Viewport,
-        stencil_mode: u8,
+        layer: u32,
+        stencil_mode: StencilMode,
         depth_test: bool,
         textures: [u32; 4],
     ) -> Self {
         Self {
             viewport,
-            stencil_mode,
-            render_type: 255, // Quads render last
+            layer,
+            stencil_mode: stencil_mode as u8,
+            render_type: RenderType::Quad,
             vertex_format: 0,
             depth_test: depth_test as u8,
             cull_mode: 0,
