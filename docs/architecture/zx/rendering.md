@@ -115,6 +115,78 @@ All matrices use **column-major** order (glam/WGSL standard):
 
 ---
 
+## 2D Layer Ordering
+
+Nethercore ZX uses **CPU-side layer sorting** for 2D elements (sprites, text, UI), following industry standards (Unity, Unreal, Bevy).
+
+### Layer System
+
+```rust
+fn layer(n: u32)  // Set current layer (0 = back, higher = front)
+```
+
+**Key concepts:**
+
+- **Layer 0** = Background (default, resets each frame)
+- **Higher layers** = Render on top (layer 2 appears above layer 1)
+- **No depth testing for 2D**: Screen-space quads rely entirely on layer sorting
+- **Separate from 3D depth**: Billboards and 3D meshes use depth buffer, not layers
+
+### Render Order
+
+Commands are sorted by layer (ascending), so rendering happens in this order:
+
+```
+Layer 0 (background) → Layer 1 → Layer 2 → ... (foreground)
+```
+
+**Example:**
+```rust
+// Background sprite
+layer(0);
+draw_sprite(bg_x, bg_y, bg_w, bg_h, bg_color);
+
+// Character (layer 1)
+layer(1);
+draw_sprite(char_x, char_y, char_w, char_h, char_color);
+
+// UI text (layer 2 - on top)
+layer(2);
+draw_text("Score: 100", 10.0, 10.0, 16.0, WHITE);
+```
+
+### Batching Within Layers
+
+Quads at the **same layer** are batched by texture for performance:
+
+- Same layer + same texture → Single draw call
+- Same layer + different textures → Multiple draw calls (sorted by texture ID)
+- Different layers → **Never batched** (ensures correct ordering)
+
+### 3D vs 2D Rendering
+
+| Type | Ordering Method | Depth Test | Layer Used |
+|------|----------------|------------|------------|
+| Screen-space quads (2D) | Layer sorting (CPU) | Disabled | Current layer |
+| World-space quads (billboards) | Depth buffer (GPU) | Enabled | 0 (fixed) |
+| 3D meshes | Depth buffer (GPU) | Enabled | 0 (fixed) |
+
+**Design rationale:**
+
+- 2D elements don't need depth buffer (wastes GPU resources)
+- Layer sorting is deterministic and matches game dev expectations
+- Separates 2D UI from 3D world rendering concerns
+
+### Constants
+
+The implementation uses semantic constants to avoid magic numbers:
+
+- `DEFAULT_LAYER` (0) — Background layer for 2D rendering
+- `BILLBOARD_LAYER` (0) — Layer for 3D billboards (use depth testing)
+- `NO_LAYER` (0) — Layer for commands that don't participate in layering (Sky, Mesh)
+
+---
+
 ## Rendering Pipeline
 
 ### Frame Lifecycle
@@ -135,7 +207,7 @@ render_frame()
     │
     ├──▶ Upload vertex/index data to GPU buffers
     │
-    ├──▶ Sort commands by (pipeline_key, texture_slots)
+    ├──▶ Sort commands by (viewport, layer, stencil, pipeline, textures)
     │
     ├──▶ Upload transforms, shading states, animation data
     │
@@ -579,13 +651,27 @@ position = skin_matrix * position;
 
 ### Draw Call Optimization
 
-Commands are sorted by `(pipeline_key, texture_slots)` to minimize state changes:
+Commands are sorted by a multi-level key to minimize state changes and ensure correct rendering order:
 
 ```
-Pipeline key = (format, depth_test, cull_mode)
+Sort order (ascending):
+1. Viewport region (split-screen)
+2. Layer (2D ordering - higher = on top)
+3. Stencil mode (masking groups)
+4. Render type (Sky=0, Mesh=1-254, Quad=255)
+5. Depth test & cull mode
+6. Texture bindings
 ```
+
+**Key principles:**
+
+- **Layer-first sorting for 2D**: Quads at different layers never batch together, ensuring correct 2D ordering
+- **Screen-space quads**: Use CPU-side layer sorting, NOT depth buffer (depth test disabled)
+- **World-space quads/billboards**: Use depth testing for 3D occlusion (layer 0)
+- **Within same layer**: Batch by texture for performance
 
 **Batching benefits:**
+- Correct 2D layer ordering (no depth buffer edge cases)
 - Fewer pipeline switches
 - Fewer texture bind group changes
 - Better GPU parallelism
