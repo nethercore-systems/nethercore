@@ -5,15 +5,16 @@ This guide covers how to package and distribute your Nethercore games as ROM fil
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [Development vs. Distribution](#development-vs-distribution)
-3. [Creating a ROM](#creating-a-rom)
-4. [Adding Assets (Thumbnails & Screenshots)](#adding-assets-thumbnails--screenshots)
-5. [Console-Specific Settings](#console-specific-settings)
-6. [Testing Your ROM](#testing-your-rom)
-7. [Distributing Your Game](#distributing-your-game)
-8. [Platform Integration](#platform-integration)
-9. [Versioning and Updates](#versioning-and-updates)
-10. [Troubleshooting](#troubleshooting)
+2. [Development Workflow](#development-workflow)
+3. [Creating a nether.toml Manifest](#creating-a-nethert oml-manifest)
+4. [Building Your Game](#building-your-game)
+5. [Adding Assets (Thumbnails & Screenshots)](#adding-assets-thumbnails--screenshots)
+6. [Console-Specific Settings](#console-specific-settings)
+7. [Testing Your ROM](#testing-your-rom)
+8. [Distributing Your Game](#distributing-your-game)
+9. [Platform Integration](#platform-integration)
+10. [Versioning and Updates](#versioning-and-updates)
+11. [Troubleshooting](#troubleshooting)
 
 ## Overview
 
@@ -24,126 +25,139 @@ Nethercore uses console-specific ROM formats for game distribution:
 
 ROM files package your game's WASM code, metadata, and assets into a single binary file that players can easily install and play.
 
-## Development vs. Distribution
+## Development Workflow
 
-### During Development
+The `nether` CLI is your main build tool for Nethercore games. It handles everything from creating project manifests to building and running your games.
 
-While developing, you can use raw WASM files for fast iteration:
-
-```bash
-# Build your game
-cd my-game
-cargo build --target wasm32-unknown-unknown --release
-
-# Copy to games directory manually or use build-examples
-cargo xtask build-examples
-```
-
-This creates a simple directory structure:
-```
-~/.nethercore/games/my-game/
-├── manifest.json
-└── rom.wasm
-```
-
-**Benefits:**
-- Fast iteration
-- No packaging overhead
-- Easy to debug
-
-### For Distribution
-
-When you're ready to share your game, create a ROM file:
+### Quick Start
 
 ```bash
-cargo xtask cart create-zx my-game.wasm \
-  --id my-game \
-  --title "My Awesome Game" \
-  --author "YourName" \
-  --version "1.0.0" \
-  --description "A fun platforming adventure!" \
-  --tag platformer \
-  --output my-game.nczx
+# Create a new project manifest
+nether init
+
+# Build your game (compile + pack into .nczx ROM)
+nether build
+
+# Build and launch in emulator
+nether run
 ```
 
-**Benefits:**
-- Single file for distribution
-- Rich metadata (title, description, tags)
-- Thumbnails and screenshots
-- Version tracking
-- Platform integration
+### Workflow Overview
 
-## Creating a ROM
+1. **Development**: Use `nether run` for fast iteration
+2. **Testing**: Use `nether build` to create a ROM file for testing
+3. **Distribution**: Share the `.nczx` ROM file with players
 
-### Step 1: Build Your Game
+## Creating a nether.toml Manifest
 
-First, compile your game to WASM:
+The `nether.toml` file contains all metadata and configuration for your game.
+
+### Step 1: Initialize Manifest
 
 ```bash
 cd my-game
-cargo build --target wasm32-unknown-unknown --release
+nether init
 ```
 
-The WASM file will be at:
-```
-target/wasm32-unknown-unknown/release/my_game.wasm
+This creates a `nether.toml` file with default values.
+
+### Step 2: Configure Metadata
+
+Edit `nether.toml` to add your game's information:
+
+```toml
+[game]
+id = "my-game"                          # Unique identifier (lowercase, hyphens only)
+title = "My Awesome Game"                # Display name
+author = "YourName"                      # Your name or studio
+version = "1.0.0"                        # Semantic version
+description = "A fun platforming adventure!"  # Game description
+tags = ["platformer", "action", "singleplayer"]  # Category tags
+render_mode = 2                          # 0=Lambert, 1=Matcap, 2=PBR (default), 3=Hybrid
+
+[build]
+# Build script to compile your game to WASM
+# For Rust projects:
+command = "cargo build --target wasm32-unknown-unknown --release"
+wasm_path = "target/wasm32-unknown-unknown/release/my_game.wasm"
+
+# For C projects:
+# command = "zig build"
+# wasm_path = "zig-out/bin/game.wasm"
+
+# For Zig projects:
+# command = "zig build"
+# wasm_path = "zig-out/bin/game.wasm"
 ```
 
-### Step 2: Create the ROM
+### Required Fields
 
-Use the `cart create-zx` command with your game's metadata:
+- **id**: Unique game identifier (slug format: lowercase, hyphens)
+- **title**: Display name shown in library
+- **author**: Developer name or studio
+- **version**: Semantic version (MAJOR.MINOR.PATCH)
+- **description**: Brief game description
+- **build.command**: Command to compile your game
+- **build.wasm_path**: Path to compiled WASM output
+
+### Optional Fields
+
+- **tags**: Category tags (e.g., "platformer", "puzzle", "multiplayer")
+- **render_mode**: Visual style (0-3, see Console-Specific Settings)
+- **default_resolution**: Suggested window size (e.g., "640x480")
+- **target_fps**: Target frame rate (e.g., 60)
+
+## Building Your Game
+
+### Build and Package
 
 ```bash
-cargo xtask cart create-zx \
-  target/wasm32-unknown-unknown/release/my_game.wasm \
-  --id my-game \
-  --title "My Awesome Game" \
-  --author "YourName" \
-  --version "1.0.0" \
-  --description "An exciting platforming adventure through mysterious worlds!" \
-  --tag platformer \
-  --tag action \
-  --tag singleplayer \
-  --output my-game.nczx
+# Build WASM and create .nczx ROM
+nether build
+
+# Specify custom manifest location
+nether build --manifest path/to/nether.toml
+
+# Specify custom output path
+nether build --output my-game.nczx
 ```
 
-### Required Arguments
+This will:
+1. Run your build command to compile WASM
+2. Bundle WASM + assets into a `.nczx` ROM file
+3. Output the ROM to `{game-id}.nczx` (or path specified with `--output`)
 
-- **WASM file path**: Path to your compiled `.wasm` file
-- `--id`: Game identifier (slug format, e.g., "my-game")
-  - Use lowercase and hyphens only
-  - Must be unique (used for file system directories)
-- `--title`: Display name (e.g., "My Awesome Game")
-- `--author`: Your name or studio name
-- `--version`: Semantic version (e.g., "1.0.0")
-- `--description`: Game description/summary
-- `--output` / `-o`: Output ROM file path
+### Build and Run
 
-### Optional Arguments
+```bash
+# Build and launch in emulator (fast iteration)
+nether run
+```
 
-- `--tag`: Category tags (can be specified multiple times)
-  - Examples: platformer, puzzle, action, adventure, multiplayer
-- `--thumbnail`: Thumbnail image (PNG, auto-resized to 256x256)
-- `--screenshot`: Screenshot images (PNG, max 5)
-- `--render-mode`: Rendering mode (0-3, see below)
-- `--default-resolution`: Default window size (e.g., "640x480")
-- `--target-fps`: Target frame rate (e.g., 60)
+This builds your game and immediately launches it in the Nethercore player.
+
+### Pack Only (Skip Compilation)
+
+If you've already compiled your WASM manually:
+
+```bash
+# Just pack WASM + assets into ROM
+nether pack
+
+# Override WASM path
+nether pack --wasm path/to/custom.wasm
+```
 
 ## Adding Assets (Thumbnails & Screenshots)
 
 ### Thumbnails
 
-Thumbnails are displayed in the game library UI:
+Thumbnails are displayed in the game library UI. Add to your `nether.toml`:
 
-```bash
-cargo xtask cart create-zx my_game.wasm \
-  --id my-game \
-  --title "My Game" \
-  --author "YourName" \
-  --version "1.0.0" \
-  --description "..." \
-  --thumbnail assets/thumbnail.png \
-  --output my-game.nczx
+```toml
+[game]
+# ... other fields ...
+thumbnail = "assets/thumbnail.png"
 ```
 
 **Requirements:**
@@ -158,19 +172,20 @@ cargo xtask cart create-zx my_game.wasm \
 
 ### Screenshots
 
-Screenshots are stored in the ROM for viewing in ROM info or on the platform:
+Screenshots are stored in the ROM for viewing on the platform or in ROM info:
 
-```bash
-cargo xtask cart create-zx my_game.wasm \
-  --id my-game \
-  --title "My Game" \
-  --author "YourName" \
-  --version "1.0.0" \
-  --description "..." \
-  --screenshot assets/screenshot1.png \
-  --screenshot assets/screenshot2.png \
-  --screenshot assets/screenshot3.png \
-  --output my-game.nczx
+```toml
+[game]
+# ... other fields ...
+
+[[screenshots]]
+path = "assets/screenshot1.png"
+
+[[screenshots]]
+path = "assets/screenshot2.png"
+
+[[screenshots]]
+path = "assets/screenshot3.png"
 ```
 
 **Requirements:**
@@ -180,19 +195,38 @@ cargo xtask cart create-zx my_game.wasm \
 
 **Important:** Screenshots are NOT extracted during installation to save disk space. They remain in the ROM file and are displayed when viewing ROM info.
 
+### Example Manifest with Assets
+
+```toml
+[game]
+id = "super-platformer"
+title = "Super Platformer Adventure"
+author = "Indie Dev Studio"
+version = "1.0.0"
+description = "Jump, run, and explore in this retro-inspired platformer!"
+tags = ["platformer", "action", "retro"]
+thumbnail = "assets/thumbnail.png"
+render_mode = 2
+default_resolution = "640x480"
+target_fps = 60
+
+[build]
+command = "cargo build --target wasm32-unknown-unknown --release"
+wasm_path = "target/wasm32-unknown-unknown/release/my_platformer.wasm"
+
+[[screenshots]]
+path = "assets/screenshot1.png"
+
+[[screenshots]]
+path = "assets/screenshot2.png"
+
+[[screenshots]]
+path = "assets/screenshot3.png"
+```
+
 ### Creating Assets
 
-You can capture screenshots during gameplay using your OS's screenshot tool, or add a screenshot key to your game:
-
-```rust
-// Example: F12 to save screenshot
-fn update() {
-    if key_pressed(KEY_F12) {
-        // Use your graphics backend to capture the frame buffer
-        save_screenshot("screenshot.png");
-    }
-}
-```
+You can capture screenshots during gameplay using Nethercore's built-in screenshot feature (F9 by default) or your OS's screenshot tool.
 
 For thumbnails, you can:
 - Capture a representative gameplay moment
@@ -203,23 +237,22 @@ For thumbnails, you can:
 
 ### Nethercore ZX Settings
 
-When creating an Nethercore ZX ROM, you can specify console-specific settings:
-
 #### Render Mode
 
 The render mode determines the visual style of your game:
 
-```bash
---render-mode 0  # Lambert (simple diffuse shading)
---render-mode 1  # Matcap (matcap-based lighting)
---render-mode 2  # PBR-lite (physically-based rendering) - default
---render-mode 3  # Hybrid (mix of techniques)
+```toml
+[game]
+render_mode = 0  # Lambert (simple diffuse shading)
+# render_mode = 1  # Matcap (matcap-based lighting)
+# render_mode = 2  # PBR-lite (physically-based rendering) - default
+# render_mode = 3  # Hybrid (mix of techniques)
 ```
 
 **Which to choose?**
 - **Lambert (0)**: Retro flat-shaded look (e.g., early 3D games)
 - **Matcap (1)**: Stylized lighting with matcap textures
-- **PBR-lite (2)**: Modern PBR look (most realistic)
+- **PBR-lite (2)**: Modern PBR look (most realistic) - **default**
 - **Hybrid (3)**: Mix matcap and PBR for unique styles
 
 If not specified, defaults to PBR-lite (mode 2).
@@ -228,10 +261,11 @@ If not specified, defaults to PBR-lite (mode 2).
 
 Suggest a default window size for your game:
 
-```bash
---default-resolution "640x480"   # Retro 4:3
---default-resolution "1280x720"  # HD 16:9
---default-resolution "1920x1080" # Full HD
+```toml
+[game]
+default_resolution = "640x480"    # Retro 4:3
+# default_resolution = "1280x720"  # HD 16:9
+# default_resolution = "1920x1080" # Full HD
 ```
 
 Players can still resize the window, but this sets the initial size.
@@ -240,69 +274,39 @@ Players can still resize the window, but this sets the initial size.
 
 Specify your game's target frame rate:
 
-```bash
---target-fps 60   # Smooth 60fps gameplay
---target-fps 30   # Cinematic 30fps
+```toml
+[game]
+target_fps = 60   # Smooth 60fps gameplay
+# target_fps = 30  # Cinematic 30fps
 ```
 
 This is a hint to the launcher but doesn't enforce the frame rate.
 
-### Full Example with All Settings
-
-```bash
-cargo xtask cart create-zx \
-  target/wasm32-unknown-unknown/release/my_game.wasm \
-  --id my-platformer \
-  --title "Super Platformer Adventure" \
-  --author "Indie Dev Studio" \
-  --version "1.0.0" \
-  --description "Jump, run, and explore in this retro-inspired platformer!" \
-  --tag platformer \
-  --tag action \
-  --tag retro \
-  --thumbnail assets/thumbnail.png \
-  --screenshot assets/screenshot1.png \
-  --screenshot assets/screenshot2.png \
-  --screenshot assets/screenshot3.png \
-  --render-mode 2 \
-  --default-resolution "640x480" \
-  --target-fps 60 \
-  --output super-platformer.nczx
-```
-
 ## Testing Your ROM
 
-### 1. Inspect the ROM
-
-Before distributing, verify the ROM metadata:
+### 1. Build and Test Locally
 
 ```bash
-cargo xtask cart info my-game.nczx
+# Build and run in emulator
+nether run
 ```
 
-This displays all metadata, settings, and asset information.
+This is the fastest way to test during development.
 
-**Check for:**
-- Correct title, author, version
-- Description is clear and accurate
-- Tags are appropriate
-- Console settings match your game
-- File sizes are reasonable
+### 2. Test ROM Installation
 
-### 2. Install Locally
+Build a ROM and verify it works:
 
-Test the ROM installation process:
+```bash
+# Create ROM file
+nether build --output my-game.nczx
 
-```rust
-use nethercore_core::library::{install_z_rom, DataDirProvider};
-use std::path::Path;
+# Launch the game library
+cargo run -p nethercore-library
 
-// Install ROM (programmatically)
-let rom_path = Path::new("my-game.nczx");
-let game = install_z_rom(rom_path, &data_dir_provider)?;
+# Or copy ROM to games directory manually
+cp my-game.nczx ~/.nethercore/roms/
 ```
-
-Or use the launcher's library UI to install and play.
 
 ### 3. Verify Installation
 
@@ -337,7 +341,7 @@ Launch the game and verify:
 - Players install manually via drag-and-drop or library UI
 
 **2. Platform Upload (Future)**
-- Upload to the official Nethercore platform
+- Upload to the official Nethercore platform at [nethercore.systems](https://nethercore.systems)
 - Players can browse and download from the platform
 - Automatic version updates
 - Player ratings and reviews
@@ -356,7 +360,8 @@ Launch the game and verify:
 
 Before distributing:
 
-- ✅ ROM validates successfully (`cargo xtask cart info`)
+- ✅ Game builds successfully with `nether build`
+- ✅ Game runs correctly with `nether run`
 - ✅ Version number follows semantic versioning
 - ✅ Description is clear and accurate
 - ✅ Appropriate tags are set
@@ -384,15 +389,7 @@ Provide players with clear installation instructions:
 
 ### Platform Foreign Keys
 
-When uploading to the official Nethercore platform, the platform will populate foreign keys in your ROM:
-
-```bash
-# Platform automatically adds these when you upload
---platform-game-id "uuid-of-game-record"
---platform-author-id "uuid-of-your-profile"
-```
-
-These UUIDs enable:
+When uploading to the official Nethercore platform, the platform will populate foreign keys in your ROM metadata. These enable:
 - "Check for updates" functionality
 - "View on platform" links
 - Download statistics
@@ -404,9 +401,10 @@ You don't need to set these manually - the platform handles it during upload.
 
 The ROM format uses a simple `author` field for offline display. For complex credits:
 
-**In ROM:**
-```
-author: "Indie Dev Studio"
+**In nether.toml:**
+```toml
+[game]
+author = "Indie Dev Studio"
 ```
 
 **On Platform:**
@@ -421,15 +419,11 @@ The platform backend manages the complex credit system, while the ROM keeps it s
 
 ### Semantic Versioning
 
-Use semantic versioning for your ROM files:
+Use semantic versioning in your `nether.toml`:
 
-```
-MAJOR.MINOR.PATCH
-
-1.0.0 - Initial release
-1.0.1 - Bug fix
-1.1.0 - New feature
-2.0.0 - Breaking change
+```toml
+[game]
+version = "1.0.0"  # MAJOR.MINOR.PATCH
 ```
 
 **When to increment:**
@@ -437,18 +431,27 @@ MAJOR.MINOR.PATCH
 - **MINOR**: New features, additions (new levels, characters)
 - **PATCH**: Bug fixes, small improvements
 
+**Examples:**
+```
+1.0.0 - Initial release
+1.0.1 - Bug fix
+1.1.0 - New feature
+2.0.0 - Breaking change
+```
+
 ### Publishing Updates
 
 When you release a new version:
 
-1. **Update version number:**
-   ```bash
-   --version "1.1.0"
+1. **Update version in nether.toml:**
+   ```toml
+   [game]
+   version = "1.1.0"
    ```
 
-2. **Create new ROM:**
+2. **Build new ROM:**
    ```bash
-   cargo xtask cart create-zx ... --version "1.1.0" --output my-game-v1.1.0.nczx
+   nether build --output my-game-v1.1.0.nczx
    ```
 
 3. **Distribute:**
@@ -475,17 +478,18 @@ When updating, consider save file compatibility:
 **Cause:** WASM file is invalid or corrupted
 
 **Fix:**
-1. Rebuild your game: `cargo build --target wasm32-unknown-unknown --release`
+1. Rebuild your game: `nether build`
 2. Verify the WASM file exists and is not empty
-3. Check for build errors in cargo output
+3. Check for build errors in output
 
 ### "Game ID cannot be empty"
 
-**Cause:** Missing or empty `--id` argument
+**Cause:** Missing or empty `id` field in nether.toml
 
 **Fix:**
-```bash
---id my-game  # Must be specified
+```toml
+[game]
+id = "my-game"  # Must be specified
 ```
 
 ### "ROM file too large"
@@ -503,11 +507,12 @@ When updating, consider save file compatibility:
 **Cause:** Render mode must be 0-3
 
 **Fix:**
-```bash
---render-mode 2  # Valid: 0, 1, 2, or 3
+```toml
+[game]
+render_mode = 2  # Valid: 0, 1, 2, or 3
 ```
 
-### ROM installs but game won't launch
+### ROM builds but game won't launch
 
 **Possible causes:**
 1. WASM file has runtime errors (check launcher console)
@@ -515,34 +520,43 @@ When updating, consider save file compatibility:
 3. Incompatible with current launcher version
 
 **Fix:**
-1. Test game with `cargo run` during development
+1. Test game with `nether run` during development
 2. Check launcher version compatibility
 3. Review error messages in launcher console
+
+### Build command fails
+
+**Cause:** Build command in nether.toml is incorrect
+
+**Fix:**
+1. Verify the build command works independently
+2. Check that `wasm_path` points to the correct output
+3. Ensure all build dependencies are installed
 
 ## Best Practices
 
 ### Development Workflow
 
-1. **Develop with raw WASM** for fast iteration
-2. **Create ROM for testing** before each release
+1. **Use `nether run`** for fast iteration during development
+2. **Create ROM for testing** before each release with `nether build`
 3. **Version consistently** using semantic versioning
 4. **Test installation** on a clean setup
 5. **Document changes** in update notes
 
 ### ROM File Naming
 
-Use descriptive filenames:
+Use descriptive filenames when building:
 
 ```bash
 # Good
-my-game-v1.0.0.nczx
-super-platformer.nczx
-puzzle-quest-v2.1.0.nczx
+nether build --output my-game-v1.0.0.nczx
+nether build --output super-platformer.nczx
+nether build --output puzzle-quest-v2.1.0.nczx
 
 # Avoid
-game.nczx
-test.nczx
-final-final-v2.nczx
+nether build --output game.nczx
+nether build --output test.nczx
+nether build --output final-final-v2.nczx
 ```
 
 ### Metadata Quality
@@ -572,62 +586,70 @@ final-final-v2.nczx
 Here's a complete example of preparing a game for distribution:
 
 ```bash
-# 1. Build the game
+# 1. Navigate to your project
 cd my-platformer
-cargo build --target wasm32-unknown-unknown --release
 
-# 2. Create assets (manually or with tools)
+# 2. Ensure nether.toml is complete
+cat nether.toml
+```
+
+```toml
+[game]
+id = "super-platformer"
+title = "Super Platformer Adventure"
+author = "Indie Dev Studio"
+version = "1.0.0"
+description = "Jump, run, and explore through mysterious worlds filled with challenging platforming and hidden secrets! Featuring 20 unique levels, boss battles, and unlockable characters."
+tags = ["platformer", "action", "adventure"]
+thumbnail = "assets/thumbnail.png"
+render_mode = 2
+default_resolution = "640x480"
+target_fps = 60
+
+[build]
+command = "cargo build --target wasm32-unknown-unknown --release"
+wasm_path = "target/wasm32-unknown-unknown/release/my_platformer.wasm"
+
+[[screenshots]]
+path = "assets/screenshot1.png"
+
+[[screenshots]]
+path = "assets/screenshot2.png"
+
+[[screenshots]]
+path = "assets/screenshot3.png"
+```
+
+```bash
+# 3. Create assets (if not already done)
 # - assets/thumbnail.png (256x256)
 # - assets/screenshot1.png (gameplay)
 # - assets/screenshot2.png (boss fight)
 # - assets/screenshot3.png (level select)
 
-# 3. Create ROM
-cargo xtask cart create-zx \
-  target/wasm32-unknown-unknown/release/my_platformer.wasm \
-  --id super-platformer \
-  --title "Super Platformer Adventure" \
-  --author "Indie Dev Studio" \
-  --version "1.0.0" \
-  --description "Jump, run, and explore through mysterious worlds filled with challenging platforming and hidden secrets! Featuring 20 unique levels, boss battles, and unlockable characters." \
-  --tag platformer \
-  --tag action \
-  --tag adventure \
-  --thumbnail assets/thumbnail.png \
-  --screenshot assets/screenshot1.png \
-  --screenshot assets/screenshot2.png \
-  --screenshot assets/screenshot3.png \
-  --render-mode 2 \
-  --default-resolution "640x480" \
-  --target-fps 60 \
-  --output super-platformer-v1.0.0.nczx
+# 4. Build ROM
+nether build --output super-platformer-v1.0.0.nczx
 
-# 4. Verify ROM
-cargo xtask cart info super-platformer-v1.0.0.nczx
-
-# 5. Test installation
-# - Install via launcher UI
-# - Verify files in ~/.nethercore/games/super-platformer/
-# - Launch and play
+# 5. Test the ROM
+nether run
 
 # 6. Distribute
-# - Upload to platform or file host
+# - Upload to nethercore.systems
+# - Upload to itch.io/GitHub releases
 # - Share download link
-# - Add to itch.io/GitHub releases
 ```
 
 ## See Also
 
-- [rom-format.md](./rom-format.md) - Technical ROM format specification
-- [ffi.md](./ffi.md) - Nethercore FFI API reference
-- [nethercore-zx.md](./nethercore-zx.md) - Nethercore ZX console documentation
+- [rom-format.md](../architecture/rom-format.md) - Technical ROM format specification
+- [Getting Started](../book/src/getting-started/first-game.md) - Build your first game
+- [Asset Pipeline](../book/src/guides/asset-pipeline.md) - Converting and bundling assets
 
 ## Getting Help
 
 If you run into issues:
 
-1. Check this guide and the [rom-format.md](./rom-format.md) specification
-2. Use `cargo xtask cart --help` for CLI reference
-3. Inspect ROMs with `cargo xtask cart info`
-4. Ask in the Nethercore Discord/forums
-5. Open an issue on GitHub if you find a bug
+1. Check this guide and the [rom-format.md](../architecture/rom-format.md) specification
+2. Use `nether --help` for CLI reference
+3. Ask in the Nethercore Discord/forums
+4. Open an issue on GitHub if you find a bug

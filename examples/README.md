@@ -20,11 +20,30 @@ examples/
 
 ## 🚀 Quick Start
 
+### For Game Developers
+
+Build individual examples using the `nether` CLI:
+
 ```bash
-# Build all examples (installs to ~/.nethercore/games/)
+# Navigate to an example
+cd examples/7-games/paddle
+
+# Build and run
+nether run
+
+# Or just build the ROM
+nether build
+```
+
+### For Nethercore Contributors
+
+Build all examples at once:
+
+```bash
+# From repository root - builds all examples and installs to ~/.nethercore/games/
 cargo xtask build-examples
 
-# Run any example
+# Run any example from the library
 cargo run -- <example-name>
 
 # Example: Run the paddle game

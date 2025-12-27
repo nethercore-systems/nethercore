@@ -48,7 +48,14 @@ pub extern "C" fn render() {
 ### Build Your Game
 
 ```bash
-cargo build --target wasm32-unknown-unknown --release
+# Create a manifest (first time only)
+nether init
+
+# Build and package your game
+nether build
+
+# Build and run in emulator
+nether run
 ```
 
 ### Testing with Examples

@@ -136,19 +136,26 @@ New to Nethercore? Follow this progression:
 
 ## Building Examples
 
-Each example is a standalone Cargo project:
+### Using nether CLI (Recommended for Game Developers)
+
+Each example includes a `nether.toml` manifest:
 
 ```bash
 cd examples/7-games/paddle
-cargo build --target wasm32-unknown-unknown --release
-nether run target/wasm32-unknown-unknown/release/paddle.wasm
+nether build   # Build WASM and create .nczx ROM
+nether run     # Build and launch in emulator
 ```
 
-Or build all examples:
+### Building All Examples (For Nethercore Contributors)
+
+To build and install all examples at once:
 
 ```bash
+# From nethercore repository root
 cargo xtask build-examples
 ```
+
+This compiles all examples and installs them to `~/.nethercore/games/` for testing in the library UI.
 
 ## Example Structure
 

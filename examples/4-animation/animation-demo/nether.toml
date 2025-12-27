@@ -11,7 +11,8 @@
 # - Immediate bones buffer supports multiple bone states per frame
 #
 # Build workflow:
-#   1. cargo xtask build-examples  # Builds all examples including this one
+#   1. nether build    # Build WASM and create .nczx ROM
+#   2. nether run      # Build and launch in emulator
 
 [game]
 id = "animation-demo"

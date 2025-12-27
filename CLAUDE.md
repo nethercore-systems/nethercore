@@ -109,12 +109,17 @@ The [docs/book/](./docs/book/) directory contains comprehensive game developer d
 # Run all tests
 cargo test
 
-# Build all examples
+# Build all examples (for Nethercore contributors)
 cargo xtask build-examples
 
-# Run specific example
+# Run specific example from library
 cargo run -- platformer
 cargo run -- hello-world
+
+# Build a game using nether CLI (for game developers)
+cd examples/platformer
+nether build
+nether run
 ```
 
 ## Example Games
