@@ -418,6 +418,10 @@ This repository works with Claude Code plugins for ZX game development assistanc
 | `nethercore-zx-procgen` | Procedural asset generation - textures, meshes, sounds, animations |
 | `nethercore-zx-publish` | Publishing workflow - ROM packaging, platform upload |
 | `nethercore-zx-orchestrator` | Meta-orchestration - coordinates full development pipeline |
+| `nethercore-zx-test` | Testing and QA - sync tests, replay regression, determinism |
+| `nethercore-zx-optimize` | Optimization - resource budgets, performance tuning |
+| `nethercore-zx-cicd` | CI/CD automation - GitHub Actions, quality gates |
+| `game-design` | Platform-agnostic design - world building, narrative, replayability |
 
 ### Plugin Structure
 
@@ -428,6 +432,10 @@ This repository works with Claude Code plugins for ZX game development assistanc
 ├── nethercore-zx-procgen/       # Procedural asset generation
 ├── nethercore-zx-publish/       # Publishing workflow
 ├── nethercore-zx-orchestrator/  # Meta-orchestration
+├── nethercore-zx-test/          # Testing and QA
+├── nethercore-zx-optimize/      # Optimization
+├── nethercore-zx-cicd/          # CI/CD automation
+├── game-design/                 # Platform-agnostic design
 ├── LICENSE-MIT
 ├── LICENSE-APACHE
 └── README.md
@@ -458,7 +466,11 @@ Add to your global Claude settings (`~/.claude/settings.json`) or project settin
     "nethercore-zx-game-design@nethercore-ai-plugins": true,
     "nethercore-zx-procgen@nethercore-ai-plugins": true,
     "nethercore-zx-publish@nethercore-ai-plugins": true,
-    "nethercore-zx-orchestrator@nethercore-ai-plugins": true
+    "nethercore-zx-orchestrator@nethercore-ai-plugins": true,
+    "nethercore-zx-test@nethercore-ai-plugins": true,
+    "nethercore-zx-optimize@nethercore-ai-plugins": true,
+    "nethercore-zx-cicd@nethercore-ai-plugins": true,
+    "game-design@nethercore-ai-plugins": true
   }
 }
 ```
