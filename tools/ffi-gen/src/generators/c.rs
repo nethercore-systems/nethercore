@@ -160,7 +160,7 @@ pub fn generate_c_header(model: &FfiModel, console: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Category, FfiFunction, Parameter, Type};
+    use crate::model::{FfiFunction, Parameter, Type};
 
     #[test]
     fn test_generate_simple_header() {

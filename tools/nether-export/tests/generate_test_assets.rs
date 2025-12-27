@@ -7,23 +7,6 @@ use std::fs;
 use std::io::Write;
 use std::path::Path;
 
-/// Generate a minimal 2x2 RGBA PNG image using the image crate
-pub fn generate_test_png(path: &Path) -> std::io::Result<()> {
-    let width = 2u32;
-    let height = 2u32;
-
-    // 2x2 image: red, green, blue, white
-    let pixels: Vec<u8> = vec![
-        255, 0, 0, 255, // Red
-        0, 255, 0, 255, // Green
-        0, 0, 255, 255, // Blue
-        255, 255, 255, 255, // White
-    ];
-
-    image::save_buffer(path, &pixels, width, height, image::ColorType::Rgba8)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
-}
-
 /// Generate a simple 4x4 checkerboard PNG
 pub fn generate_checkerboard_png(path: &Path) -> std::io::Result<()> {
     let width = 4u32;

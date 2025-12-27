@@ -92,8 +92,6 @@ fn viewport_clear(mut caller: Caller<'_, ZXGameContext>) {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_viewport_fullscreen_constant() {
         let vp = crate::graphics::Viewport::FULLSCREEN;

@@ -461,6 +461,7 @@ fn generate_xm() -> Vec<u8> {
 
 // XM note values: C-0 = 1, C-1 = 13, C-2 = 25, C-3 = 37, C-4 = 49, C-5 = 61
 // Each octave is 12 semitones
+#[allow(dead_code)]
 const C2: u8 = 25;
 const D2: u8 = 27;
 const E2: u8 = 29;
@@ -477,8 +478,11 @@ const AS2: u8 = 35; // A#2
 const B2: u8 = 36;
 
 const C3: u8 = 37;
+#[allow(dead_code)]
 const D3: u8 = 39;
+#[allow(dead_code)]
 const E3: u8 = 41;
+#[allow(dead_code)]
 const G3: u8 = 44;
 const A3: u8 = 46;
 
