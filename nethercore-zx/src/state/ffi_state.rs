@@ -13,6 +13,12 @@ use super::{
     SkeletonData, SkeletonGpuInfo, ZInitConfig,
 };
 
+/// Default layer for 2D rendering (background layer)
+///
+/// Layer 0 represents the back-most layer. Higher values render on top.
+/// This is the default layer that's reset each frame.
+pub const DEFAULT_LAYER: u32 = 0;
+
 /// FFI staging state for Nethercore ZX
 ///
 /// This state is written to by FFI functions during update()/render() calls,
@@ -173,7 +179,7 @@ impl Default for ZFFIState {
             texture_filter: 0, // Nearest
             stencil_mode: 0,   // Disabled (no stencil operations)
             bound_textures: [0; 4],
-            current_layer: 0,
+            current_layer: DEFAULT_LAYER,
             current_viewport: crate::graphics::Viewport::FULLSCREEN,
             bone_matrices: Vec::new(),
             bone_count: 0,
@@ -846,7 +852,7 @@ impl ZFFIState {
         self.cull_mode = 0; // None (users opt-in for culling)
         self.texture_filter = 0; // Nearest
         self.stencil_mode = 0; // Disabled (no stencil operations)
-        self.current_layer = 0; // Reset layer to background
+        self.current_layer = DEFAULT_LAYER; // Reset layer to background
         self.current_viewport = crate::graphics::Viewport::FULLSCREEN; // Reset viewport to fullscreen
         // Note: color and shading state already rebuild each frame via add_shading_state()
     }

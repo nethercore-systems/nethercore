@@ -8,6 +8,12 @@ use super::render_state::{CullMode, TextureHandle};
 use super::vertex::{VERTEX_FORMAT_COUNT, vertex_stride, vertex_stride_packed};
 use super::Viewport;
 
+/// Layer value for commands that don't participate in 2D layer ordering
+///
+/// Sky and mesh commands use layer 0 as they don't use the 2D layering system.
+/// They're sorted by render_type instead (Sky=0, Mesh=1-254, Quad=255).
+const NO_LAYER: u32 = 0;
+
 /// Specifies which buffer the geometry data comes from
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BufferSource {
@@ -128,7 +134,7 @@ impl CommandSortKey {
     pub fn sky(viewport: Viewport, stencil_mode: u8) -> Self {
         Self {
             viewport,
-            layer: 0, // Sky doesn't use layers
+            layer: NO_LAYER,
             stencil_mode,
             render_type: 0, // Sky renders first
             vertex_format: 0,
@@ -149,7 +155,7 @@ impl CommandSortKey {
     ) -> Self {
         Self {
             viewport,
-            layer: 0, // Meshes don't use layers
+            layer: NO_LAYER,
             stencil_mode,
             render_type: 1 + vertex_format, // Regular pipelines: 1-254
             vertex_format,

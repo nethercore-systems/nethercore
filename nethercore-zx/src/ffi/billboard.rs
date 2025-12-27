@@ -9,6 +9,12 @@ use wasmtime::{Caller, Linker};
 
 use super::ZXGameContext;
 
+/// Layer value for 3D billboards (world-space quads)
+///
+/// Billboards don't participate in 2D layer ordering - they use depth testing
+/// for proper 3D occlusion. Layer 0 ensures they render before 2D UI elements.
+const BILLBOARD_LAYER: u32 = 0;
+
 /// Register billboard drawing FFI functions
 pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     linker.func_wrap("env", "draw_billboard", draw_billboard)?;
@@ -91,7 +97,7 @@ fn draw_billboard(mut caller: Caller<'_, ZXGameContext>, w: f32, h: f32, mode: u
         view_idx,
     );
 
-    state.add_quad_instance(instance, 0); // Billboards use layer 0 (3D, not layered)
+    state.add_quad_instance(instance, BILLBOARD_LAYER);
 }
 
 /// Draw a billboard with a UV region from the texture
@@ -178,5 +184,5 @@ fn draw_billboard_region(
         view_idx,
     );
 
-    state.add_quad_instance(instance, 0); // Billboards use layer 0 (3D, not layered)
+    state.add_quad_instance(instance, BILLBOARD_LAYER);
 }
