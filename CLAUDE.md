@@ -403,38 +403,43 @@ cargo run
 
 Dual-licensed under MIT OR Apache-2.0 (your choice).
 
-## Claude Code Plugin
+## Claude Code Plugins
 
-This repository includes a Claude Code plugin for ZX game development assistance.
+This repository works with Claude Code plugins for ZX game development assistance.
 
-**Location:** `../nethercore-ai-plugins/nethercore-zx-dev/`
+**Location:** `../nethercore-ai-plugins/`
+
+### Available Plugins
+
+| Plugin | Purpose |
+|--------|---------|
+| `nethercore-zx-dev` | Core game development - FFI specs, project templates, debugging |
+| `nethercore-zx-game-design` | Game design workflow - GDDs, constraints, multiplayer patterns |
+| `nethercore-zx-procgen` | Procedural asset generation - textures, meshes, sounds, animations |
+| `nethercore-zx-publish` | Publishing workflow - ROM packaging, platform upload |
+| `nethercore-zx-orchestrator` | Meta-orchestration - coordinates full development pipeline |
 
 ### Plugin Structure
 
 ```
-../nethercore-ai-plugins/nethercore-zx-dev/
-├── plugin.json                    # Plugin manifest
-├── README.md
-├── .claude-plugin/
-│   └── marketplace.json           # Marketplace listing for discovery
-└── skills/
-    └── zx-game-development/
-        ├── SKILL.md               # Main skill content
-        ├── examples/              # Code examples (Rust, C, Zig)
-        └── references/            # Quick reference guides
+../nethercore-ai-plugins/
+├── nethercore-zx-dev/           # Core game development
+├── nethercore-zx-game-design/   # Game design workflow
+├── nethercore-zx-procgen/       # Procedural asset generation
+├── nethercore-zx-publish/       # Publishing workflow
+├── nethercore-zx-orchestrator/  # Meta-orchestration
+├── LICENSE-MIT
+├── LICENSE-APACHE
+└── README.md
 ```
 
-### What it Provides
-
-- **Auto-triggering skill** for ZX game development queries
-- **FFI specifications** pointing to source files (`include/zx.rs`, `include/zx.h`, `include/zx.zig`)
-- **Project templates** for Rust, C, and Zig
-- **Build workflow** guidance (`nether init`, `nether build`, `nether run`)
-- **Asset pipeline** documentation
-- **Working code examples** for common patterns
+Each plugin contains:
+- `.claude-plugin/plugin.json` - Plugin manifest
+- `skills/` - Auto-triggering knowledge skills
+- `commands/` - Slash commands
+- `agents/` - Specialized sub-agents
 
 ### Installation
-
 
 Add to your global Claude settings (`~/.claude/settings.json`) or project settings:
 
@@ -444,36 +449,36 @@ Add to your global Claude settings (`~/.claude/settings.json`) or project settin
     "nethercore-ai-plugins": {
       "source": {
         "source": "github",
-        "repo": "nethercore-systems/nethercore-ai-plugins",
-        "path": "nethercore-zx-dev"
+        "repo": "nethercore-systems/nethercore-ai-plugins"
       }
     }
   },
   "enabledPlugins": {
-    "nethercore-zx-dev@nethercore-ai-plugins": true
+    "nethercore-zx-dev@nethercore-ai-plugins": true,
+    "nethercore-zx-game-design@nethercore-ai-plugins": true,
+    "nethercore-zx-procgen@nethercore-ai-plugins": true,
+    "nethercore-zx-publish@nethercore-ai-plugins": true,
+    "nethercore-zx-orchestrator@nethercore-ai-plugins": true
   }
 }
 ```
 
-### Trigger Phrases
+### Key Commands
 
-The skill auto-activates when you mention:
-- "Create a Nethercore ZX game"
-- "ZX FFI functions"
-- "nether.toml" / "nether build" / "nether run"
-- "ZX graphics" / "ZX audio" / "ZX input"
-- "Rollback netcode game"
-- "WASM game with assets"
+- `/new-game [language] [name]` - Scaffold a new ZX game project
+- `/design-game` - Interactive GDD builder wizard
+- `/generate-asset [type] [description]` - Quick asset generation
+- `/publish-game` - Full publishing workflow
 
 ### Example Queries
 
 - "Create a new Nethercore ZX game in Rust"
 - "How do I handle input in ZX?"
-- "Create a nether.toml with textures, meshes, and sounds"
-- "Build a hello world in Zig"
+- "Generate a procedural texture for a brick wall"
+- "Check my game for rollback issues"
 - "What FFI functions are available for 3D rendering?"
 
-The skill references actual source files for FFI specs, ensuring it stays current as the codebase evolves.
+The plugins reference actual source files for FFI specs, ensuring they stay current as the codebase evolves.
 
 ## Related
 - `nethercore-platform` (private) — Backend API, web frontend
