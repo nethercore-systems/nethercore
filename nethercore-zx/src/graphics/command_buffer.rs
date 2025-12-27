@@ -4,7 +4,7 @@
 //! for flushing to the GPU at frame end. This serves as an intermediate
 //! representation between FFI commands and GPU execution.
 
-use super::render_state::{CullMode, TextureHandle};
+use super::render_state::{CullMode, StencilMode, TextureHandle};
 use super::vertex::{VERTEX_FORMAT_COUNT, vertex_stride, vertex_stride_packed};
 use super::Viewport;
 
@@ -42,35 +42,6 @@ pub enum RenderType {
     /// depth == 1.0 (clear value) pass, avoiding expensive sky shader invocations
     /// for pixels already covered by geometry.
     Sky = 2,
-}
-
-/// Stencil mode for masked rendering
-///
-/// Controls how the stencil buffer is used for masking effects.
-#[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum StencilMode {
-    /// Stencil testing disabled (normal rendering)
-    Disabled = 0,
-    /// Writing to stencil buffer (mask creation, no color output)
-    Writing = 1,
-    /// Testing against stencil buffer (render inside mask)
-    Testing = 2,
-    /// Inverted testing (render outside mask)
-    TestingInverted = 3,
-}
-
-impl StencilMode {
-    /// Convert from u8 value, defaulting to Disabled for invalid values
-    pub fn from_u8(value: u8) -> Self {
-        match value {
-            0 => Self::Disabled,
-            1 => Self::Writing,
-            2 => Self::Testing,
-            3 => Self::TestingInverted,
-            _ => Self::Disabled,
-        }
-    }
 }
 
 /// Specifies which buffer the geometry data comes from
@@ -111,8 +82,8 @@ pub enum VRPCommand {
         cull_mode: CullMode,
         /// Viewport for split-screen rendering (captured at command creation)
         viewport: Viewport,
-        /// Stencil mode for masked rendering (0=disabled, 1=writing, 2=testing, 3=testing_inverted)
-        stencil_mode: u8,
+        /// Stencil mode for masked rendering
+        stencil_mode: StencilMode,
     },
     /// Indexed mesh draw (draw_mesh, load_mesh_indexed)
     IndexedMesh {
@@ -128,8 +99,8 @@ pub enum VRPCommand {
         cull_mode: CullMode,
         /// Viewport for split-screen rendering (captured at command creation)
         viewport: Viewport,
-        /// Stencil mode for masked rendering (0=disabled, 1=writing, 2=testing, 3=testing_inverted)
-        stencil_mode: u8,
+        /// Stencil mode for masked rendering
+        stencil_mode: StencilMode,
     },
     /// GPU-instanced quad draw (billboards, sprites, text, rects)
     /// All quads share a single unit quad mesh (4 vertices, 6 indices)
@@ -143,8 +114,8 @@ pub enum VRPCommand {
         cull_mode: CullMode,
         /// Viewport for split-screen rendering (captured at command creation)
         viewport: Viewport,
-        /// Stencil mode for masked rendering (0=disabled, 1=writing, 2=testing, 3=testing_inverted)
-        stencil_mode: u8,
+        /// Stencil mode for masked rendering
+        stencil_mode: StencilMode,
         /// Layer for 2D ordering (higher layers render on top)
         layer: u32,
     },
@@ -154,8 +125,8 @@ pub enum VRPCommand {
         depth_test: bool,         // Should be false (always behind)
         /// Viewport for split-screen rendering (captured at command creation)
         viewport: Viewport,
-        /// Stencil mode for masked rendering (0=disabled, 1=writing, 2=testing, 3=testing_inverted)
-        stencil_mode: u8,
+        /// Stencil mode for masked rendering
+        stencil_mode: StencilMode,
     },
 }
 
@@ -174,8 +145,8 @@ pub struct CommandSortKey {
     pub viewport: Viewport,
     /// Layer for 2D ordering (only used for quads, 0 for other commands)
     pub layer: u32,
-    /// Stencil mode (0=disabled, 1=writing, 2=testing, 3=inverted)
-    pub stencil_mode: u8,
+    /// Stencil mode for masked rendering
+    pub stencil_mode: StencilMode,
     /// Render type (Quad=0, Mesh=1, Sky=2)
     pub render_type: RenderType,
     /// Vertex format (for regular pipelines)
@@ -194,7 +165,7 @@ impl CommandSortKey {
         Self {
             viewport,
             layer: NO_LAYER,
-            stencil_mode: stencil_mode as u8,
+            stencil_mode,
             render_type: RenderType::Sky,
             vertex_format: 0,
             depth_test: 0,
@@ -215,7 +186,7 @@ impl CommandSortKey {
         Self {
             viewport,
             layer: NO_LAYER,
-            stencil_mode: stencil_mode as u8,
+            stencil_mode,
             render_type: RenderType::Mesh,
             vertex_format,
             depth_test: depth_test as u8,
@@ -235,7 +206,7 @@ impl CommandSortKey {
         Self {
             viewport,
             layer,
-            stencil_mode: stencil_mode as u8,
+            stencil_mode,
             render_type: RenderType::Quad,
             vertex_format: 0,
             depth_test: depth_test as u8,
@@ -306,7 +277,7 @@ impl VirtualRenderPass {
         depth_test: bool,
         cull_mode: CullMode,
         viewport: Viewport,
-        stencil_mode: u8,
+        stencil_mode: StencilMode,
     ) {
         let format_idx = format as usize;
         let stride = vertex_stride(format) as usize;
@@ -346,7 +317,7 @@ impl VirtualRenderPass {
         depth_test: bool,
         cull_mode: CullMode,
         viewport: Viewport,
-        stencil_mode: u8,
+        stencil_mode: StencilMode,
     ) {
         let format_idx = format as usize;
         let stride = vertex_stride(format) as usize;
@@ -393,7 +364,7 @@ impl VirtualRenderPass {
         depth_test: bool,
         cull_mode: CullMode,
         viewport: Viewport,
-        stencil_mode: u8,
+        stencil_mode: StencilMode,
     ) {
         // Use packed stride since retained meshes are stored in packed format
         let stride = vertex_stride_packed(mesh_format) as u64;

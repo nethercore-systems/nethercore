@@ -123,7 +123,7 @@ impl MatcapBlendMode {
 }
 
 /// Stencil mode for masked rendering (split-screen, portals, scopes)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Hash)]
 #[repr(u8)]
 pub enum StencilMode {
     /// Normal rendering, no stencil operations

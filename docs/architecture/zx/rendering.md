@@ -10,7 +10,7 @@ Nethercore ZX uses a **wgpu-based** forward renderer with a command buffer patte
 
 ```
 ┌──────────────────┐    ┌────────────────┐    ┌─────────────┐
-│  FFI Functions   │───▶│   ZFFIState    │───▶│  ZGraphics  │
+│  FFI Functions   │───▶│   ZXFFIState    │───▶│  ZGraphics  │
 │  (WASM calls)    │    │   (staging)    │    │  (GPU exec) │
 └──────────────────┘    └────────────────┘    └─────────────┘
 ```
@@ -203,7 +203,7 @@ begin_frame()
     ▼
 ┌────────────────────────────────────────────────────┐
 │  Game's render() function                          │
-│  - FFI calls write to ZFFIState                    │
+│  - FFI calls write to ZXFFIState                    │
 │  - Commands buffered in VirtualRenderPass          │
 │  - Shading states interned for deduplication       │
 └────────────────────────────────────────────────────┘

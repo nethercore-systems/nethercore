@@ -457,9 +457,9 @@ impl ZAudio {
     /// Get a reference to the sounds storage
     ///
     /// This is used to access loaded sounds for audio generation.
-    /// Sounds are stored in ZFFIState.sounds, not here.
-    pub fn sounds<'a>(&self, _state: &'a crate::state::ZFFIState) -> &'a [Option<Sound>] {
-        // Sounds are stored in ZFFIState, this method exists for API consistency
+    /// Sounds are stored in ZXFFIState.sounds, not here.
+    pub fn sounds<'a>(&self, _state: &'a crate::state::ZXFFIState) -> &'a [Option<Sound>] {
+        // Sounds are stored in ZXFFIState, this method exists for API consistency
         // but the actual sounds slice comes from the state
         &[]
     }
@@ -482,7 +482,7 @@ pub struct ZXAudioGenerator;
 
 impl nethercore_core::AudioGenerator for ZXAudioGenerator {
     type RollbackState = crate::state::ZRollbackState;
-    type State = crate::state::ZFFIState;
+    type State = crate::state::ZXFFIState;
 
     fn default_sample_rate() -> u32 {
         OUTPUT_SAMPLE_RATE

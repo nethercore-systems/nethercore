@@ -95,7 +95,7 @@ pub struct GameState<I: ConsoleInput> {
 /// Combines core GameState, console-specific FFI state, and rollback state.
 /// The generic parameters are:
 /// - `I`: Console-specific input type (e.g., ZInput)
-/// - `S`: Console-specific FFI state (e.g., ZFFIState) - NOT rolled back
+/// - `S`: Console-specific FFI state (e.g., ZXFFIState) - NOT rolled back
 /// - `R`: Console-specific rollback state (e.g., ZRollbackState) - IS rolled back
 pub struct WasmGameContext<I: ConsoleInput, S, R: ConsoleRollbackState = ()> {
     /// Core WASM game state (memory snapshots from this)

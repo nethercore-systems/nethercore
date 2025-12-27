@@ -5,7 +5,7 @@
 /// All config functions are **init-only** and **single-call** — calling the same
 /// function twice during init() is an error and will trap.
 #[derive(Debug, Clone)]
-pub struct ZInitConfig {
+pub struct ZXInitConfig {
     /// Tick rate index (0-3 for Z: 24, 30, 60, 120 fps)
     pub tick_rate_index: u32,
     /// Clear/background color (RGBA: 0xRRGGBBAA)
@@ -24,7 +24,7 @@ pub struct ZInitConfig {
     pub render_mode_set: bool,
 }
 
-impl Default for ZInitConfig {
+impl Default for ZXInitConfig {
     fn default() -> Self {
         Self {
             tick_rate_index: 2,      // Default 60 fps

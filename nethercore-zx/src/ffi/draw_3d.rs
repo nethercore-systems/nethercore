@@ -69,7 +69,7 @@ fn draw_triangles(
     // They are resolved to TextureHandle at render time via texture_map
     let textures = state.bound_textures;
 
-    let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
+    let cull_mode = state.cull_mode;
 
     // Capture current viewport for split-screen rendering
     let viewport = state.current_viewport;
@@ -166,7 +166,7 @@ fn draw_triangles_indexed(
     // They are resolved to TextureHandle at render time via texture_map
     let textures = state.bound_textures;
 
-    let cull_mode = crate::graphics::CullMode::from_u8(state.cull_mode);
+    let cull_mode = state.cull_mode;
 
     // Capture current viewport for split-screen rendering
     let viewport = state.current_viewport;

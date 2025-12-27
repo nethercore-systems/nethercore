@@ -102,7 +102,7 @@ pub trait Console: Send + 'static {
     ///
     /// This state is written to by FFI functions and consumed by Graphics/Audio backends.
     /// It is rebuilt each frame and is NOT part of rollback state (only GameState is rolled back).
-    /// For example, Nethercore ZX uses ZFFIState which holds draw commands, camera, transforms, etc.
+    /// For example, Nethercore ZX uses ZXFFIState which holds draw commands, camera, transforms, etc.
     type State: Default + Send + 'static;
     /// Console-specific rollback state (host-side, rolled back with WASM memory)
     ///

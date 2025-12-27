@@ -76,10 +76,10 @@ use wasmtime::{Caller, Extern, Linker, Memory};
 use nethercore_core::wasm::WasmGameContext;
 
 use crate::console::ZInput;
-use crate::state::{ZFFIState, ZRollbackState};
+use crate::state::{ZXFFIState, ZRollbackState};
 
 /// Type alias for Nethercore ZX WASM game context
-pub type ZXGameContext = WasmGameContext<ZInput, ZFFIState, ZRollbackState>;
+pub type ZXGameContext = WasmGameContext<ZInput, ZXFFIState, ZRollbackState>;
 
 /// Register all Nethercore ZX FFI functions with the linker
 pub fn register_zx_ffi(linker: &mut Linker<ZXGameContext>) -> Result<()> {

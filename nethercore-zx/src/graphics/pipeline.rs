@@ -5,8 +5,7 @@
 
 use hashbrown::HashMap;
 
-use super::command_buffer::StencilMode;
-use super::render_state::RenderState;
+use super::render_state::{RenderState, StencilMode};
 use super::vertex::VertexFormatInfo;
 
 /// Key for pipeline cache lookup
@@ -33,27 +32,27 @@ pub(crate) enum PipelineKey {
 
 impl PipelineKey {
     /// Create a new regular pipeline key from render state
-    pub fn new(render_mode: u8, format: u8, state: &RenderState, stencil_mode: u8) -> Self {
+    pub fn new(render_mode: u8, format: u8, state: &RenderState, stencil_mode: StencilMode) -> Self {
         Self::Regular {
             render_mode,
             vertex_format: format,
             depth_test: state.depth_test,
             cull_mode: state.cull_mode as u8,
-            stencil_mode,
+            stencil_mode: stencil_mode as u8,
         }
     }
 
     /// Create a quad pipeline key
-    pub fn quad(state: &RenderState, stencil_mode: u8) -> Self {
+    pub fn quad(state: &RenderState, stencil_mode: StencilMode) -> Self {
         Self::Quad {
             depth_test: state.depth_test,
-            stencil_mode,
+            stencil_mode: stencil_mode as u8,
         }
     }
 
     /// Create a sky pipeline key
-    pub fn sky(stencil_mode: u8) -> Self {
-        Self::Sky { stencil_mode }
+    pub fn sky(stencil_mode: StencilMode) -> Self {
+        Self::Sky { stencil_mode: stencil_mode as u8 }
     }
 }
 
@@ -247,7 +246,6 @@ pub(crate) fn create_pipeline(
 pub(crate) fn create_quad_pipeline(
     device: &wgpu::Device,
     surface_format: wgpu::TextureFormat,
-    state: &RenderState,
     stencil_mode: StencilMode,
 ) -> PipelineEntry {
     // Load quad shader (generated from quad_template.wgsl by build.rs)
@@ -385,7 +383,7 @@ pub(crate) fn create_sky_pipeline(
         depth_stencil: Some(wgpu::DepthStencilState {
             format: wgpu::TextureFormat::Depth24PlusStencil8,
             depth_write_enabled: false,  // Sky is infinitely far, don't write depth
-            depth_compare: wgpu::CompareFunction::GreaterOrEqual,  // Only render where nothing else drew
+            depth_compare: wgpu::CompareFunction::GreaterEqual,  // Only render where nothing else drew
             stencil: get_stencil_state(stencil_mode),
             bias: wgpu::DepthBiasState::default(),
         }),
@@ -675,7 +673,7 @@ impl PipelineCache {
         render_mode: u8,
         format: u8,
         state: &RenderState,
-        stencil_mode: u8,
+        stencil_mode: StencilMode,
     ) -> &PipelineEntry {
         let key = PipelineKey::new(render_mode, format, state, stencil_mode);
 
@@ -686,7 +684,7 @@ impl PipelineCache {
 
         // Otherwise, create a new pipeline
         tracing::debug!(
-            "Creating pipeline: mode={}, format={}, depth={}, cull={:?}, stencil={}",
+            "Creating pipeline: mode={}, format={}, depth={}, cull={:?}, stencil={:?}",
             render_mode,
             format,
             state.depth_test,
@@ -694,13 +692,13 @@ impl PipelineCache {
             stencil_mode
         );
 
-        let entry = create_pipeline(device, surface_format, render_mode, format, state, StencilMode::from_u8(stencil_mode));
+        let entry = create_pipeline(device, surface_format, render_mode, format, state, stencil_mode);
         self.pipelines.insert(key, entry);
         &self.pipelines[&key]
     }
 
     /// Check if a pipeline exists in the cache
-    pub fn contains(&self, render_mode: u8, format: u8, state: &RenderState, stencil_mode: u8) -> bool {
+    pub fn contains(&self, render_mode: u8, format: u8, state: &RenderState, stencil_mode: StencilMode) -> bool {
         let key = PipelineKey::new(render_mode, format, state, stencil_mode);
         self.pipelines.contains_key(&key)
     }
@@ -713,7 +711,7 @@ impl PipelineCache {
         device: &wgpu::Device,
         surface_format: wgpu::TextureFormat,
         state: &RenderState,
-        stencil_mode: u8,
+        stencil_mode: StencilMode,
     ) -> &PipelineEntry {
         let key = PipelineKey::quad(state, stencil_mode);
 
@@ -723,9 +721,9 @@ impl PipelineCache {
         }
 
         // Otherwise, create a new quad pipeline
-        tracing::debug!("Creating quad pipeline: depth={}, stencil={}", state.depth_test, stencil_mode);
+        tracing::debug!("Creating quad pipeline: depth={}, stencil={:?}", state.depth_test, stencil_mode);
 
-        let entry = create_quad_pipeline(device, surface_format, state, StencilMode::from_u8(stencil_mode));
+        let entry = create_quad_pipeline(device, surface_format, stencil_mode);
         self.pipelines.insert(key, entry);
         &self.pipelines[&key]
     }
@@ -737,7 +735,7 @@ impl PipelineCache {
         &mut self,
         device: &wgpu::Device,
         surface_format: wgpu::TextureFormat,
-        stencil_mode: u8,
+        stencil_mode: StencilMode,
     ) -> &PipelineEntry {
         let key = PipelineKey::sky(stencil_mode);
 
@@ -747,9 +745,9 @@ impl PipelineCache {
         }
 
         // Otherwise, create a new sky pipeline
-        tracing::debug!("Creating sky pipeline: stencil={}", stencil_mode);
+        tracing::debug!("Creating sky pipeline: stencil={:?}", stencil_mode);
 
-        let entry = create_sky_pipeline(device, surface_format, StencilMode::from_u8(stencil_mode));
+        let entry = create_sky_pipeline(device, surface_format, stencil_mode);
         self.pipelines.insert(key, entry);
         &self.pipelines[&key]
     }

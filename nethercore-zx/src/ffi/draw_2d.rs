@@ -333,7 +333,7 @@ fn draw_text(
     let screen_y = vp.y as f32 + y;
 
     // Text always uses nearest filtering (crisp pixels, no blurry interpolation)
-    state.texture_filter = 0;
+    state.texture_filter = crate::graphics::TextureFilter::Nearest;
     state.update_texture_filter(false);
 
     // Ensure material color is white so it doesn't interfere with text instance color

@@ -7,6 +7,7 @@ use tracing::warn;
 use wasmtime::{Caller, Linker};
 
 use super::ZXGameContext;
+use crate::graphics::{CullMode, StencilMode, TextureFilter};
 
 /// Register render state FFI functions
 pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
@@ -58,11 +59,11 @@ fn cull_mode(mut caller: Caller<'_, ZXGameContext>, mode: u32) {
 
     if mode > 2 {
         warn!("cull_mode({}) invalid - must be 0-2, using 0 (none)", mode);
-        state.cull_mode = 0;
+        state.cull_mode = CullMode::None;
         return;
     }
 
-    state.cull_mode = mode as u8;
+    state.cull_mode = CullMode::from_u32(mode);
 }
 
 /// Set the texture filtering mode
@@ -80,12 +81,12 @@ fn texture_filter(mut caller: Caller<'_, ZXGameContext>, filter: u32) {
             "texture_filter({}) invalid - must be 0-1, using 0 (nearest)",
             filter
         );
-        state.texture_filter = 0;
+        state.texture_filter = TextureFilter::Nearest;
         state.update_texture_filter(false);
         return;
     }
 
-    state.texture_filter = filter as u8;
+    state.texture_filter = TextureFilter::from_u32(filter);
     state.update_texture_filter(filter == 1);
 }
 
@@ -167,7 +168,7 @@ fn layer(mut caller: Caller<'_, ZXGameContext>, n: u32) {
 /// ```
 fn stencil_begin(mut caller: Caller<'_, ZXGameContext>) {
     let state = &mut caller.data_mut().ffi;
-    state.stencil_mode = 1; // Writing mode
+    state.stencil_mode = StencilMode::Writing;
 }
 
 /// End stencil mask creation and begin stencil testing.
@@ -178,7 +179,7 @@ fn stencil_begin(mut caller: Caller<'_, ZXGameContext>) {
 /// Must be called after stencil_begin() has created a mask shape.
 fn stencil_end(mut caller: Caller<'_, ZXGameContext>) {
     let state = &mut caller.data_mut().ffi;
-    state.stencil_mode = 2; // Testing mode (render where stencil == 1)
+    state.stencil_mode = StencilMode::Testing;
 }
 
 /// Clear stencil state and return to normal rendering.
@@ -189,7 +190,7 @@ fn stencil_end(mut caller: Caller<'_, ZXGameContext>) {
 /// Call this when finished with masked rendering to restore normal behavior.
 fn stencil_clear(mut caller: Caller<'_, ZXGameContext>) {
     let state = &mut caller.data_mut().ffi;
-    state.stencil_mode = 0; // Disabled
+    state.stencil_mode = StencilMode::Disabled;
 }
 
 /// Enable inverted stencil testing.
@@ -210,5 +211,5 @@ fn stencil_clear(mut caller: Caller<'_, ZXGameContext>) {
 /// ```
 fn stencil_invert(mut caller: Caller<'_, ZXGameContext>) {
     let state = &mut caller.data_mut().ffi;
-    state.stencil_mode = 3; // Testing inverted mode (render where stencil == 0)
+    state.stencil_mode = StencilMode::TestingInverted;
 }

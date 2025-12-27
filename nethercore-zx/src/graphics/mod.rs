@@ -5,10 +5,10 @@
 //!
 //! # Architecture
 //!
-//! **ZFFIState** (staging) → **ZGraphics** (GPU execution)
+//! **ZXFFIState** (staging) → **ZGraphics** (GPU execution)
 //!
-//! - FFI functions write draw commands, transforms, and render state to ZFFIState
-//! - App.rs passes ZFFIState to ZGraphics each frame
+//! - FFI functions write draw commands, transforms, and render state to ZXFFIState
+//! - App.rs passes ZXFFIState to ZGraphics each frame
 //! - ZGraphics consumes commands and executes them on the GPU
 //! - ZGraphics owns all actual GPU resources (textures, meshes, buffers, pipelines)
 
@@ -44,7 +44,7 @@ pub use buffer::{BufferManager, GrowableBuffer, MeshHandle, RetainedMesh};
 pub use command_buffer::{CommandSortKey, VRPCommand, VirtualRenderPass};
 pub use matrix_packing::MvpShadingIndices;
 pub use quad_instance::{QuadInstance, QuadMode};
-pub use render_state::{CullMode, MatcapBlendMode, RenderState, TextureFilter, TextureHandle};
+pub use render_state::{CullMode, MatcapBlendMode, RenderState, StencilMode, TextureFilter, TextureHandle};
 pub use unified_shading_state::{
     DEFAULT_FLAGS,
     EnvironmentIndex,
@@ -249,7 +249,7 @@ pub struct ZGraphics {
     // Persistent buffers for quad instance processing (avoids per-frame allocation)
     quad_instance_scratch: Vec<QuadInstance>,
     /// (base_instance, instance_count, textures, is_screen_space, viewport, stencil_mode, layer)
-    quad_batch_scratch: Vec<(u32, u32, [u32; 4], bool, Viewport, u8, u32)>,
+    quad_batch_scratch: Vec<(u32, u32, [u32; 4], bool, Viewport, StencilMode, u32)>,
 }
 
 impl ZGraphics {
@@ -343,7 +343,7 @@ impl ZGraphics {
 
     // Note: Render state methods (set_depth_test, set_cull_mode, set_blend_mode,
     // set_texture_filter, render_state(), current_sampler()) have been removed.
-    // Render state is now captured per-command from ZFFIState in draw.rs.
+    // Render state is now captured per-command from ZXFFIState in draw.rs.
     // Texture filter is stored in PackedUnifiedShadingState.flags (bit 1) for
     // per-draw shader selection via sample_filtered() helper.
 

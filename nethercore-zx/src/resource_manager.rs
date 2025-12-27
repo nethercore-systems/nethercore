@@ -6,7 +6,7 @@
 use crate::graphics::{MeshHandle, TextureHandle, ZGraphics, pack_vertex_data};
 use crate::state::{
     BoneMatrix3x4, KeyframeGpuInfo, LoadedKeyframeCollection, SkeletonData, SkeletonGpuInfo,
-    ZFFIState,
+    ZXFFIState,
 };
 use nethercore_core::console::{Audio, ConsoleResourceManager};
 use zx_common::formats::{
@@ -90,7 +90,7 @@ impl ZResourceManager {
 
 impl ConsoleResourceManager for ZResourceManager {
     type Graphics = ZGraphics;
-    type State = ZFFIState;
+    type State = ZXFFIState;
 
     fn process_pending_resources(
         &mut self,

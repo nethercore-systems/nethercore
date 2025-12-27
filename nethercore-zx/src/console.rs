@@ -16,7 +16,7 @@ use nethercore_core::{
 };
 use zx_common::ZXDataPack;
 
-use crate::state::{ZFFIState, ZRollbackState};
+use crate::state::{ZXFFIState, ZRollbackState};
 
 use crate::graphics::ZGraphics;
 
@@ -211,7 +211,7 @@ impl Console for NethercoreZX {
     type Graphics = ZGraphics;
     type Audio = ZAudio;
     type Input = ZInput;
-    type State = ZFFIState;
+    type State = ZXFFIState;
     type RollbackState = ZRollbackState;
     type ResourceManager = crate::resource_manager::ZResourceManager;
     type AudioGenerator = crate::audio::ZXAudioGenerator;
@@ -222,7 +222,7 @@ impl Console for NethercoreZX {
 
     fn register_ffi(
         &self,
-        linker: &mut Linker<WasmGameContext<ZInput, ZFFIState, ZRollbackState>>,
+        linker: &mut Linker<WasmGameContext<ZInput, ZXFFIState, ZRollbackState>>,
     ) -> Result<()> {
         // Register all ZX-specific FFI functions (graphics, input, transforms, camera, etc.)
         crate::ffi::register_zx_ffi(linker)?;
@@ -317,7 +317,7 @@ impl Console for NethercoreZX {
         crate::resource_manager::ZResourceManager::new()
     }
 
-    fn debug_stats(&self, state: &ZFFIState) -> Vec<DebugStat> {
+    fn debug_stats(&self, state: &ZXFFIState) -> Vec<DebugStat> {
         vec![
             DebugStat::number("Draw Calls", state.render_pass.commands().len()),
             DebugStat::number("Textures", state.next_texture_handle.saturating_sub(1)),
@@ -330,7 +330,7 @@ impl Console for NethercoreZX {
         ]
     }
 
-    fn initialize_ffi_state(&self, state: &mut ZFFIState) {
+    fn initialize_ffi_state(&self, state: &mut ZXFFIState) {
         // Set datapack for rom_* FFI functions
         state.data_pack = self.data_pack.clone();
     }

@@ -9,8 +9,8 @@ mod ffi_state;
 mod resources;
 mod rollback_state;
 
-pub use config::ZInitConfig;
-pub use ffi_state::ZFFIState;
+pub use config::ZXInitConfig;
+pub use ffi_state::ZXFFIState;
 pub use resources::{
     Font, KeyframeGpuInfo, KeyframeSource, PendingKeyframes, PendingMesh, PendingMeshPacked,
     PendingSkeleton, PendingTexture, SkeletonGpuInfo,
@@ -70,7 +70,7 @@ pub struct QuadBatch {
     /// Viewport for this batch (snapshot of current_viewport when batch was created)
     pub viewport: crate::graphics::Viewport,
     /// Stencil mode for this batch (snapshot of stencil_mode when batch was created)
-    pub stencil_mode: u8,
+    pub stencil_mode: crate::graphics::StencilMode,
     /// Layer for 2D ordering (higher layers render on top)
     pub layer: u32,
 }

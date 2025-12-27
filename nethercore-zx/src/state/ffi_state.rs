@@ -10,7 +10,7 @@ use zx_common::ZXDataPack;
 use super::{
     BoneMatrix3x4, Font, KeyframeGpuInfo, KeyframeSource, LoadedKeyframeCollection,
     PendingKeyframes, PendingMesh, PendingMeshPacked, PendingSkeleton, PendingTexture,
-    SkeletonData, SkeletonGpuInfo, ZInitConfig,
+    SkeletonData, SkeletonGpuInfo, ZXInitConfig,
 };
 
 /// Default layer for 2D rendering (background layer)
@@ -27,16 +27,16 @@ pub const DEFAULT_LAYER: u32 = 0;
 ///
 /// This is NOT serialized for rollback - only core GameState is rolled back.
 #[derive(Debug)]
-pub struct ZFFIState {
+pub struct ZXFFIState {
     // Data pack from ROM (set during game loading, immutable after)
     // Assets in the data pack are loaded via `rom_*` FFI and go directly to VRAM
     pub data_pack: Option<Arc<ZXDataPack>>,
 
     // Render state
     pub depth_test: bool,
-    pub cull_mode: u8,
-    pub texture_filter: u8,
-    pub stencil_mode: u8,
+    pub cull_mode: crate::graphics::CullMode,
+    pub texture_filter: crate::graphics::TextureFilter,
+    pub stencil_mode: crate::graphics::StencilMode,
     pub bound_textures: [u32; 4],
     /// Current layer for 2D draw ordering (higher = closer to camera)
     pub current_layer: u32,
@@ -110,7 +110,7 @@ pub struct ZFFIState {
     pub tracker_engine: crate::tracker::TrackerEngine,
 
     // Init configuration
-    pub init_config: ZInitConfig,
+    pub init_config: ZXInitConfig,
 
     // Matrix pools (reset each frame)
     pub model_matrices: Vec<Mat4>,
@@ -148,7 +148,7 @@ pub struct ZFFIState {
     pub quad_batches: Vec<super::QuadBatch>,
 }
 
-impl Default for ZFFIState {
+impl Default for ZXFFIState {
     fn default() -> Self {
         let mut model_matrices = Vec::with_capacity(256);
         let mut view_matrices = Vec::with_capacity(4);
@@ -175,9 +175,9 @@ impl Default for ZFFIState {
         Self {
             data_pack: None, // Set during game loading
             depth_test: true,
-            cull_mode: 0,      // None (users opt-in for performance)
-            texture_filter: 0, // Nearest
-            stencil_mode: 0,   // Disabled (no stencil operations)
+            cull_mode: crate::graphics::CullMode::None,
+            texture_filter: crate::graphics::TextureFilter::Nearest,
+            stencil_mode: crate::graphics::StencilMode::Disabled,
             bound_textures: [0; 4],
             current_layer: DEFAULT_LAYER,
             current_viewport: crate::graphics::Viewport::FULLSCREEN,
@@ -210,7 +210,7 @@ impl Default for ZFFIState {
             next_sound_handle: 1, // 0 reserved for invalid
             sound_id_to_handle: HashMap::new(),
             tracker_engine: crate::tracker::TrackerEngine::new(),
-            init_config: ZInitConfig::default(),
+            init_config: ZXInitConfig::default(),
             model_matrices,
             view_matrices,
             proj_matrices,
@@ -233,7 +233,7 @@ impl Default for ZFFIState {
     }
 }
 
-impl ZFFIState {
+impl ZXFFIState {
     /// Create new FFI state with default values (test helper)
     #[cfg(test)]
     pub fn new() -> Self {
@@ -849,9 +849,9 @@ impl ZFFIState {
 
         // Reset render state to defaults each frame (immediate-mode consistency)
         self.depth_test = true;
-        self.cull_mode = 0; // None (users opt-in for culling)
-        self.texture_filter = 0; // Nearest
-        self.stencil_mode = 0; // Disabled (no stencil operations)
+        self.cull_mode = crate::graphics::CullMode::None;
+        self.texture_filter = crate::graphics::TextureFilter::Nearest;
+        self.stencil_mode = crate::graphics::StencilMode::Disabled;
         self.current_layer = DEFAULT_LAYER; // Reset layer to background
         self.current_viewport = crate::graphics::Viewport::FULLSCREEN; // Reset viewport to fullscreen
         // Note: color and shading state already rebuild each frame via add_shading_state()
@@ -864,7 +864,7 @@ mod tests {
 
     #[test]
     fn test_default_state_has_default_matrices() {
-        let state = ZFFIState::default();
+        let state = ZXFFIState::default();
 
         // Should have one default view matrix
         assert_eq!(state.view_matrices.len(), 1);
@@ -886,7 +886,7 @@ mod tests {
 
     #[test]
     fn test_lazy_allocation_with_option_pattern() {
-        let mut state = ZFFIState::default();
+        let mut state = ZXFFIState::default();
 
         // Initially, current matrices should be None (use defaults from pool)
         assert_eq!(state.current_model_matrix, None);
@@ -913,7 +913,7 @@ mod tests {
 
     #[test]
     fn test_mvp_shading_deduplication() {
-        let mut state = ZFFIState::default();
+        let mut state = ZXFFIState::default();
 
         // Set transform and color
         state.current_model_matrix = Some(Mat4::from_translation(Vec3::new(1.0, 0.0, 0.0)));
@@ -942,7 +942,7 @@ mod tests {
 
     #[test]
     fn test_multiple_draws_share_buffer_index() {
-        let mut state = ZFFIState::default();
+        let mut state = ZXFFIState::default();
 
         // Set transform once
         state.current_model_matrix = Some(Mat4::IDENTITY);
@@ -964,7 +964,7 @@ mod tests {
 
     #[test]
     fn test_different_transforms_different_indices() {
-        let mut state = ZFFIState::default();
+        let mut state = ZXFFIState::default();
 
         // Draw 1: Transform A
         state.current_model_matrix = Some(Mat4::from_translation(Vec3::new(1.0, 0.0, 0.0)));
@@ -995,7 +995,7 @@ mod tests {
 
     #[test]
     fn test_clear_frame_resets_mvp_state() {
-        let mut state = ZFFIState::default();
+        let mut state = ZXFFIState::default();
 
         // Add some MVP states
         state.current_model_matrix = Some(Mat4::from_translation(Vec3::new(1.0, 2.0, 3.0)));
@@ -1031,7 +1031,7 @@ mod tests {
 
     #[test]
     fn test_none_uses_last_in_pool() {
-        let mut state = ZFFIState::default();
+        let mut state = ZXFFIState::default();
 
         // Add a matrix explicitly
         state.current_model_matrix = Some(Mat4::from_translation(Vec3::new(5.0, 0.0, 0.0)));
@@ -1060,7 +1060,7 @@ mod tests {
     fn test_uniform_alpha_update() {
         use crate::graphics::{FLAG_UNIFORM_ALPHA_MASK, FLAG_UNIFORM_ALPHA_SHIFT};
 
-        let mut ffi_state = ZFFIState::default();
+        let mut ffi_state = ZXFFIState::default();
 
         // Default should be opaque (alpha = 15)
         let alpha = (ffi_state.current_shading_state.flags & FLAG_UNIFORM_ALPHA_MASK)
@@ -1094,7 +1094,7 @@ mod tests {
             FLAG_DITHER_OFFSET_Y_SHIFT,
         };
 
-        let mut ffi_state = ZFFIState::default();
+        let mut ffi_state = ZXFFIState::default();
 
         // Default should be (0, 0)
         let x = (ffi_state.current_shading_state.flags & FLAG_DITHER_OFFSET_X_MASK)
@@ -1124,7 +1124,7 @@ mod tests {
             FLAG_UNIFORM_ALPHA_SHIFT,
         };
 
-        let mut ffi_state = ZFFIState::default();
+        let mut ffi_state = ZXFFIState::default();
 
         // Set some other flags first
         ffi_state.update_skinning_mode(true);
@@ -1181,7 +1181,7 @@ mod tests {
     fn test_uniform_alpha_clamping() {
         use crate::graphics::{FLAG_UNIFORM_ALPHA_MASK, FLAG_UNIFORM_ALPHA_SHIFT};
 
-        let mut ffi_state = ZFFIState::default();
+        let mut ffi_state = ZXFFIState::default();
 
         // Values > 15 should be clamped to 15
         ffi_state.update_uniform_alpha(100);
@@ -1203,7 +1203,7 @@ mod tests {
             FLAG_DITHER_OFFSET_Y_SHIFT,
         };
 
-        let mut ffi_state = ZFFIState::default();
+        let mut ffi_state = ZXFFIState::default();
 
         // Values > 3 should be clamped
         ffi_state.update_dither_offset(100, 200);

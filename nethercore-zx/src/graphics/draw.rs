@@ -1,15 +1,15 @@
 //! Draw command processing
 //!
-//! This module handles processing draw commands from ZFFIState and converting
+//! This module handles processing draw commands from ZXFFIState and converting
 //! them into GPU rendering operations.
 
 use super::ZGraphics;
-use super::render_state::{CullMode, TextureHandle};
+use super::render_state::TextureHandle;
 
 impl ZGraphics {
-    /// Process all draw commands from ZFFIState and execute them
+    /// Process all draw commands from ZXFFIState and execute them
     ///
-    /// This method consumes draw commands from the ZFFIState and executes them
+    /// This method consumes draw commands from the ZXFFIState and executes them
     /// on the GPU, directly translating FFI state into graphics calls without
     /// an intermediate unpacking/repacking step.
     ///
@@ -17,7 +17,7 @@ impl ZGraphics {
     /// eliminating redundant data translation and simplifying the architecture.
     pub fn process_draw_commands(
         &mut self,
-        z_state: &mut crate::state::ZFFIState,
+        z_state: &mut crate::state::ZXFFIState,
         texture_map: &hashbrown::HashMap<u32, TextureHandle>,
     ) {
         // Note: render mode is set once after init() in App::flush_post_init_resources()
@@ -156,7 +156,7 @@ impl ZGraphics {
                         instance_count,
                         texture_slots,
                         depth_test: !is_screen_space && z_state.depth_test,
-                        cull_mode: CullMode::from_u8(z_state.cull_mode),
+                        cull_mode: z_state.cull_mode,
                         viewport,
                         stencil_mode,
                         layer,

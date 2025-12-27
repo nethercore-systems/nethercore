@@ -118,7 +118,7 @@ pub fn generate_coral_branch(output_dir: &Path) {
     tip3.apply(Transform::translate(0.0, 0.25, 0.08));
 
     // Base
-    let mut base: UnpackedMesh = generate_cylinder(0.05, 0.05, 0.02, 6);
+    let base: UnpackedMesh = generate_cylinder(0.05, 0.05, 0.02, 6);
 
     let mesh = combine(&[
         &trunk, &branch1, &branch2, &branch3, &twig1, &twig2, &tip1, &tip2, &tip3, &base,
@@ -205,7 +205,7 @@ pub fn generate_anemone(output_dir: &Path) {
     }
 
     // Base (pedal disc)
-    let mut base: UnpackedMesh = generate_cylinder(0.08, 0.08, 0.02, 8);
+    let base: UnpackedMesh = generate_cylinder(0.08, 0.08, 0.02, 8);
 
     let tent_refs: Vec<&UnpackedMesh> = tentacles.iter().collect();
     let mut parts = vec![&column, &disc, &base];

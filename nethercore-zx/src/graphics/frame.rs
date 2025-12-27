@@ -8,9 +8,9 @@
 use glam::Mat4;
 
 use super::ZGraphics;
-use super::command_buffer::{BufferSource, CommandSortKey, StencilMode, VRPCommand};
+use super::command_buffer::{BufferSource, CommandSortKey, VRPCommand};
 use super::pipeline::PipelineKey;
-use super::render_state::{CullMode, RenderState, TextureHandle};
+use super::render_state::{CullMode, RenderState, StencilMode, TextureHandle};
 use super::vertex::VERTEX_FORMAT_COUNT;
 use zx_common::pack_vertex_data;
 
@@ -112,7 +112,7 @@ impl ZGraphics {
     pub fn render_frame(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
-        z_state: &crate::state::ZFFIState,
+        z_state: &crate::state::ZXFFIState,
         texture_map: &hashbrown::HashMap<u32, TextureHandle>,
         clear_color: [f32; 4],
     ) {
@@ -198,7 +198,7 @@ impl ZGraphics {
                     ..
                 } => CommandSortKey::mesh(
                     *viewport,
-                    StencilMode::from_u8(*stencil_mode),
+                    *stencil_mode,
                     *format,
                     *depth_test,
                     *cull_mode,
@@ -214,7 +214,7 @@ impl ZGraphics {
                     ..
                 } => CommandSortKey::mesh(
                     *viewport,
-                    StencilMode::from_u8(*stencil_mode),
+                    *stencil_mode,
                     *format,
                     *depth_test,
                     *cull_mode,
@@ -230,12 +230,12 @@ impl ZGraphics {
                 } => CommandSortKey::quad(
                     *viewport,
                     *layer,
-                    StencilMode::from_u8(*stencil_mode),
+                    *stencil_mode,
                     *depth_test,
                     [texture_slots[0].0, texture_slots[1].0, texture_slots[2].0, texture_slots[3].0],
                 ),
                 VRPCommand::Sky { viewport, stencil_mode, .. } => {
-                    CommandSortKey::sky(*viewport, StencilMode::from_u8(*stencil_mode))
+                    CommandSortKey::sky(*viewport, *stencil_mode)
                 }
             });
 
@@ -398,7 +398,7 @@ impl ZGraphics {
                         self.current_render_mode,
                         format,
                         &first_state,
-                        0, // Bind group layout is same for all stencil modes
+                        StencilMode::Disabled, // Bind group layout is same for all stencil modes
                     );
 
                     // Bind group layout (grouped by purpose):
@@ -457,7 +457,7 @@ impl ZGraphics {
                     self.current_render_mode,
                     format,
                     &first_state,
-                    0, // Bind group layout is same for all stencil modes
+                    StencilMode::Disabled, // Bind group layout is same for all stencil modes
                 );
 
                 // Bind group layout (grouped by purpose):
@@ -543,7 +543,7 @@ impl ZGraphics {
 
             // State tracking to skip redundant GPU calls (commands are sorted by viewport/pipeline/texture)
             let mut current_viewport: Option<super::Viewport> = None;
-            let mut current_stencil_mode: Option<u8> = None;
+            let mut current_stencil_mode: Option<StencilMode> = None;
             let mut bound_pipeline: Option<PipelineKey> = None;
             let mut bound_texture_slots: Option<[TextureHandle; 4]> = None;
             let mut bound_vertex_format: Option<(u8, BufferSource)> = None;
@@ -668,10 +668,9 @@ impl ZGraphics {
                 }
 
                 // Set stencil reference if stencil mode changed and requires testing
-                // StencilMode: 0=Disabled, 1=Writing, 2=Testing, 3=TestingInverted
                 if current_stencil_mode != Some(cmd_stencil_mode) {
                     // Set stencil reference to 1 for testing modes (value written by stencil_begin)
-                    if cmd_stencil_mode >= 2 {
+                    if matches!(cmd_stencil_mode, StencilMode::Testing | StencilMode::TestingInverted) {
                         render_pass.set_stencil_reference(1);
                     }
                     current_stencil_mode = Some(cmd_stencil_mode);
