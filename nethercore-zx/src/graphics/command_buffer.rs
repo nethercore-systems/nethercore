@@ -14,21 +14,35 @@ use super::Viewport;
 /// They're sorted by render_type instead.
 const NO_LAYER: u32 = 0;
 
-/// Render type value for quad commands (renders first for early-z optimization)
+/// Render type for command sorting and pipeline selection
 ///
-/// Quads render first with depth writes enabled. This allows 3D meshes behind
-/// opaque UI elements to be culled via early-z rejection, saving fragment shader cost.
-pub const QUAD_RENDER_TYPE: u8 = 0;
+/// Determines rendering order and which pipeline to use:
+/// - Quad: Screen-space 2D UI (renders first for early-z optimization)
+/// - Mesh: 3D geometry (renders second, culled behind UI)
+/// - Sky: Procedural background (renders last, fills gaps)
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum RenderType {
+    /// Screen-space quads (2D UI, sprites, text)
+    ///
+    /// Renders first with depth writes enabled at depth=0.0. This allows 3D meshes
+    /// behind opaque UI elements to be culled via early-z rejection, saving fragment
+    /// shader cost.
+    Quad = 0,
 
-/// Render type value for mesh commands
-pub const MESH_RENDER_TYPE: u8 = 1;
+    /// 3D meshes and geometry
+    ///
+    /// Renders second, after 2D UI. Fragments behind opaque UI are culled by
+    /// early depth testing.
+    Mesh = 1,
 
-/// Render type value for sky commands (renders last to fill background)
-///
-/// Sky renders after all 3D geometry with depth test enabled. Only fragments where
-/// depth == 1.0 (clear value) pass, avoiding expensive sky shader invocations for
-/// pixels already covered by geometry.
-pub const SKY_RENDER_TYPE: u8 = 2;
+    /// Procedural sky background
+    ///
+    /// Renders last with depth test enabled (GreaterOrEqual). Only fragments where
+    /// depth == 1.0 (clear value) pass, avoiding expensive sky shader invocations
+    /// for pixels already covered by geometry.
+    Sky = 2,
+}
 
 /// Stencil mode for masked rendering
 ///
@@ -151,7 +165,7 @@ pub enum VRPCommand {
 /// 1. Viewport (split-screen regions)
 /// 2. Layer (2D ordering for quads - higher layers render on top)
 /// 3. Stencil mode (masked rendering groups)
-/// 4. Pipeline type (sky → regular → quad)
+/// 4. Render type (Quad → Mesh → Sky for optimal early-z)
 /// 5. Render state (depth test, cull mode)
 /// 6. Textures (minimize bind calls)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -162,8 +176,8 @@ pub struct CommandSortKey {
     pub layer: u32,
     /// Stencil mode (0=disabled, 1=writing, 2=testing, 3=inverted)
     pub stencil_mode: u8,
-    /// Render type: 0=sky, 1-254=regular (by format), 255=quad
-    pub render_type: u8,
+    /// Render type (Quad=0, Mesh=1, Sky=2)
+    pub render_type: RenderType,
     /// Vertex format (for regular pipelines)
     pub vertex_format: u8,
     /// Depth test (false=0, true=1)
@@ -181,7 +195,7 @@ impl CommandSortKey {
             viewport,
             layer: NO_LAYER,
             stencil_mode: stencil_mode as u8,
-            render_type: SKY_RENDER_TYPE,
+            render_type: RenderType::Sky,
             vertex_format: 0,
             depth_test: 0,
             cull_mode: 0,
@@ -202,7 +216,7 @@ impl CommandSortKey {
             viewport,
             layer: NO_LAYER,
             stencil_mode: stencil_mode as u8,
-            render_type: MESH_RENDER_TYPE,
+            render_type: RenderType::Mesh,
             vertex_format,
             depth_test: depth_test as u8,
             cull_mode: cull_mode as u8,
@@ -222,7 +236,7 @@ impl CommandSortKey {
             viewport,
             layer,
             stencil_mode: stencil_mode as u8,
-            render_type: QUAD_RENDER_TYPE,
+            render_type: RenderType::Quad,
             vertex_format: 0,
             depth_test: depth_test as u8,
             cull_mode: 0,
