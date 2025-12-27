@@ -11,14 +11,24 @@ use super::Viewport;
 /// Layer value for commands that don't participate in 2D layer ordering
 ///
 /// Sky and mesh commands use layer 0 as they don't use the 2D layering system.
-/// They're sorted by render_type instead (Sky=0, Mesh=1-254, Quad=255).
+/// They're sorted by render_type instead.
 const NO_LAYER: u32 = 0;
 
-/// Render type value for sky commands (renders first)
-pub const SKY_RENDER_TYPE: u8 = 0;
+/// Render type value for quad commands (renders first for early-z optimization)
+///
+/// Quads render first with depth writes enabled. This allows 3D meshes behind
+/// opaque UI elements to be culled via early-z rejection, saving fragment shader cost.
+pub const QUAD_RENDER_TYPE: u8 = 0;
 
-/// Render type value for quad commands (renders last)
-pub const QUAD_RENDER_TYPE: u8 = 255;
+/// Render type value for mesh commands
+pub const MESH_RENDER_TYPE: u8 = 1;
+
+/// Render type value for sky commands (renders last to fill background)
+///
+/// Sky renders after all 3D geometry with depth test enabled. Only fragments where
+/// depth == 1.0 (clear value) pass, avoiding expensive sky shader invocations for
+/// pixels already covered by geometry.
+pub const SKY_RENDER_TYPE: u8 = 2;
 
 /// Stencil mode for masked rendering
 ///
@@ -192,7 +202,7 @@ impl CommandSortKey {
             viewport,
             layer: NO_LAYER,
             stencil_mode: stencil_mode as u8,
-            render_type: 1 + vertex_format, // Regular pipelines: 1-254
+            render_type: MESH_RENDER_TYPE,
             vertex_format,
             depth_test: depth_test as u8,
             cull_mode: cull_mode as u8,

@@ -306,12 +306,8 @@ pub(crate) fn create_quad_pipeline(
         },
         depth_stencil: Some(wgpu::DepthStencilState {
             format: wgpu::TextureFormat::Depth24PlusStencil8,
-            depth_write_enabled: state.depth_test,
-            depth_compare: if state.depth_test {
-                wgpu::CompareFunction::Less  // Less - proper layer sorting handles 2D ordering
-            } else {
-                wgpu::CompareFunction::Always
-            },
+            depth_write_enabled: true,  // Always write depth for early-z optimization
+            depth_compare: wgpu::CompareFunction::Always,  // Quads always draw (sorting via sort key)
             stencil: get_stencil_state(stencil_mode),
             bias: wgpu::DepthBiasState::default(),
         }),
@@ -388,8 +384,8 @@ pub(crate) fn create_sky_pipeline(
         },
         depth_stencil: Some(wgpu::DepthStencilState {
             format: wgpu::TextureFormat::Depth24PlusStencil8,
-            depth_write_enabled: false, // Don't write depth
-            depth_compare: wgpu::CompareFunction::Always, // Always pass
+            depth_write_enabled: false,  // Sky is infinitely far, don't write depth
+            depth_compare: wgpu::CompareFunction::GreaterOrEqual,  // Only render where nothing else drew
             stencil: get_stencil_state(stencil_mode),
             bias: wgpu::DepthBiasState::default(),
         }),

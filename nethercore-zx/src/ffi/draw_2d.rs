@@ -17,18 +17,17 @@ const CIRCLE_SEGMENTS: u32 = 16;
 
 /// Convert layer value to Z depth for quad instance data
 ///
-/// NOTE: Screen-space quads (2D) now rely on CPU-side layer-based sorting,
-/// not GPU depth testing. This function still populates the depth value in
-/// quad instance data for consistency, but depth testing is disabled for
-/// screen-space quads. World-space quads (3D billboards) can still use depth
-/// testing if needed.
+/// All 2D screen-space quads render at depth 0.0 (near plane) for early-z optimization.
+/// This allows 3D geometry behind UI elements to be culled via early depth testing,
+/// saving fragment shader invocations.
 ///
-/// Higher layer values = closer to camera = smaller Z value
-/// Maps layer 0 -> 1.0 (far), layer 65535 -> 0.0 (near)
+/// Layer ordering is handled by CPU-side sorting (render_type=0, sorted by layer field).
+/// All layers render in order at the same depth, with later layers overwriting earlier ones
+/// in the framebuffer. The `discard` instruction in the quad shader prevents depth writes
+/// for transparent dithered pixels, allowing 3D content to show through.
 #[inline]
-fn layer_to_depth(layer: u32) -> f32 {
-    // Use u16 range to avoid float precision issues with full u32
-    1.0 - (layer.min(65535) as f32 / 65535.0)
+fn layer_to_depth(_layer: u32) -> f32 {
+    0.0  // All 2D at near plane for early-z optimization
 }
 
 /// Register 2D drawing FFI functions

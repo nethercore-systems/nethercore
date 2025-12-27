@@ -165,17 +165,31 @@ Quads at the **same layer** are batched by texture for performance:
 
 ### 3D vs 2D Rendering
 
-| Type | Ordering Method | Depth Test | Layer Used |
-|------|----------------|------------|------------|
-| Screen-space quads (2D) | Layer sorting (CPU) | Disabled | Current layer |
-| World-space quads (billboards) | Depth buffer (GPU) | Enabled | 0 (fixed) |
-| 3D meshes | Depth buffer (GPU) | Enabled | 0 (fixed) |
+| Type | Ordering Method | Depth Test | Depth Write | Layer Used |
+|------|----------------|------------|-------------|------------|
+| Screen-space quads (2D) | Layer sorting (CPU) | Always pass | Enabled (0.0) | Current layer |
+| World-space quads (billboards) | Depth buffer (GPU) | Enabled | Enabled | 0 (fixed) |
+| 3D meshes | Depth buffer (GPU) | Enabled | Enabled | 0 (fixed) |
+| Sky | Depth buffer (GPU) | GreaterOrEqual | Disabled | 0 (fixed) |
+
+**Early-Z Optimization:**
+
+Screen-space quads (2D UI) render **first** with depth writes enabled at depth=0.0 (near plane). This allows:
+- 3D geometry behind opaque UI elements to be culled via early depth testing
+- Significant fragment shader savings (e.g., 15% fewer invocations if UI covers 15% of screen)
+- Transparent dithered pixels use `discard`, preventing depth writes and allowing 3D to show through
+
+**Render order:**
+1. **2D UI** (render_type=0): Sorted by layers, all render at depth=0.0
+2. **3D Meshes** (render_type=1): Culled where 2D wrote depth
+3. **Sky** (render_type=2): Only renders where depth==1.0 (background fill)
 
 **Design rationale:**
 
-- 2D elements don't need depth buffer (wastes GPU resources)
 - Layer sorting is deterministic and matches game dev expectations
-- Separates 2D UI from 3D world rendering concerns
+- Early-z reduces fragment shader cost for 3D behind UI
+- Sky renders last to avoid wasting shader invocations on covered pixels
+- Dithering enables order-independent transparency without alpha blending
 
 ### Constants
 
@@ -658,20 +672,30 @@ Sort order (ascending):
 1. Viewport region (split-screen)
 2. Layer (2D ordering - higher = on top)
 3. Stencil mode (masking groups)
-4. Render type (Sky=0, Mesh=1-254, Quad=255)
-5. Depth test & cull mode
-6. Texture bindings
+4. Render type (Quad=0, Mesh=1, Sky=2)
+5. Vertex format (meshes only)
+6. Depth test & cull mode
+7. Texture bindings
 ```
+
+**Render type ordering (optimized for performance):**
+
+- **Quad=0**: Renders first, writes depth=0.0 for early-z culling of 3D behind UI
+- **Mesh=1**: Renders second, culled where quads wrote depth
+- **Sky=2**: Renders last, only fills gaps where depth==1.0 (background)
 
 **Key principles:**
 
 - **Layer-first sorting for 2D**: Quads at different layers never batch together, ensuring correct 2D ordering
-- **Screen-space quads**: Use CPU-side layer sorting, NOT depth buffer (depth test disabled)
+- **Screen-space quads**: Render first with depth writes (early-z optimization)
 - **World-space quads/billboards**: Use depth testing for 3D occlusion (layer 0)
 - **Within same layer**: Batch by texture for performance
+- **Sky last**: Depth test skips pixels covered by geometry, saving shader invocations
 
 **Batching benefits:**
-- Correct 2D layer ordering (no depth buffer edge cases)
+- Early-z culling reduces 3D fragment shader cost behind UI
+- Correct 2D layer ordering via CPU sorting
+- Sky optimization avoids unnecessary shader invocations
 - Fewer pipeline switches
 - Fewer texture bind group changes
 - Better GPU parallelism
