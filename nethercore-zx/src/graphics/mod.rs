@@ -248,8 +248,8 @@ pub struct ZGraphics {
 
     // Persistent buffers for quad instance processing (avoids per-frame allocation)
     quad_instance_scratch: Vec<QuadInstance>,
-    /// (base_instance, instance_count, textures, is_screen_space, viewport)
-    quad_batch_scratch: Vec<(u32, u32, [u32; 4], bool, Viewport, u8)>,
+    /// (base_instance, instance_count, textures, is_screen_space, viewport, stencil_mode, layer)
+    quad_batch_scratch: Vec<(u32, u32, [u32; 4], bool, Viewport, u8, u32)>,
 }
 
 impl ZGraphics {

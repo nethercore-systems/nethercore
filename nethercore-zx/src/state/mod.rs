@@ -71,4 +71,6 @@ pub struct QuadBatch {
     pub viewport: crate::graphics::Viewport,
     /// Stencil mode for this batch (snapshot of stencil_mode when batch was created)
     pub stencil_mode: u8,
+    /// Layer for 2D ordering (higher layers render on top)
+    pub layer: u32,
 }

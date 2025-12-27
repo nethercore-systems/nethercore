@@ -229,15 +229,15 @@ depth_compare: if state.depth_test {
 
 ## Implementation Checklist
 
-- [ ] Phase 1.1: Add `layer` field to `VRPCommand::Quad`
-- [ ] Phase 1.2: Update `CommandSortKey::quad()` to include layer
-- [ ] Phase 1.3: Capture layer when creating quad commands
-- [ ] Phase 1.4: Add layer to `QuadBatch` struct
-- [ ] Phase 1.5: Update frame rendering sort to use layer
-- [ ] Phase 2.1: Disable depth testing for screen-space quads
-- [ ] Phase 3.1: Document/simplify `layer_to_depth`
-- [ ] Phase 4.1: Revert `LessOrEqual` to `Less`
-- [ ] Phase 4.2: Verify stencil fix remains
+- [x] Phase 1.1: Add `layer` field to `VRPCommand::Quad`
+- [x] Phase 1.2: Update `CommandSortKey::quad()` to include layer
+- [x] Phase 1.3: Capture layer when creating quad commands
+- [x] Phase 1.4: Add layer to `QuadBatch` struct
+- [x] Phase 1.5: Update frame rendering sort to use layer
+- [x] Phase 2.1: Disable depth testing for screen-space quads
+- [x] Phase 3.1: Document/simplify `layer_to_depth`
+- [x] Phase 4.1: Revert `LessOrEqual` to `Less`
+- [x] Phase 4.2: Verify stencil fix remains
 
 ## Testing Plan
 

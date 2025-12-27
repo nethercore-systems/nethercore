@@ -13,6 +13,12 @@ use super::{
     SkeletonData, SkeletonGpuInfo, ZInitConfig,
 };
 
+/// Default layer for 2D rendering (background layer)
+///
+/// Layer 0 represents the back-most layer. Higher values render on top.
+/// This is the default layer that's reset each frame.
+pub const DEFAULT_LAYER: u32 = 0;
+
 /// FFI staging state for Nethercore ZX
 ///
 /// This state is written to by FFI functions during update()/render() calls,
@@ -173,7 +179,7 @@ impl Default for ZFFIState {
             texture_filter: 0, // Nearest
             stencil_mode: 0,   // Disabled (no stencil operations)
             bound_textures: [0; 4],
-            current_layer: 0,
+            current_layer: DEFAULT_LAYER,
             current_viewport: crate::graphics::Viewport::FULLSCREEN,
             bone_matrices: Vec::new(),
             bone_count: 0,
@@ -749,9 +755,9 @@ impl ZFFIState {
 
     /// Add a quad instance to the appropriate batch (auto-batches by texture and viewport)
     ///
-    /// This automatically groups quads by texture and viewport to minimize draw calls.
-    /// When bound_textures or current_viewport changes, a new batch is created.
-    pub fn add_quad_instance(&mut self, instance: crate::graphics::QuadInstance) {
+    /// This automatically groups quads by texture, viewport, and layer to minimize draw calls.
+    /// When bound_textures, current_viewport, or layer changes, a new batch is created.
+    pub fn add_quad_instance(&mut self, instance: crate::graphics::QuadInstance, layer: u32) {
         // Determine if this is a screen-space quad (2D)
         let is_screen_space = instance.mode == crate::graphics::QuadMode::ScreenSpace as u32;
 
@@ -761,19 +767,21 @@ impl ZFFIState {
             && last_batch.is_screen_space == is_screen_space
             && last_batch.viewport == self.current_viewport
             && last_batch.stencil_mode == self.stencil_mode
+            && last_batch.layer == layer
         {
-            // Same textures, mode, viewport, and stencil - add to current batch
+            // Same textures, mode, viewport, stencil, and layer - add to current batch
             last_batch.instances.push(instance);
             return;
         }
 
-        // Need a new batch (first batch, textures changed, mode changed, viewport changed, or stencil changed)
+        // Need a new batch (first batch, textures changed, mode changed, viewport changed, stencil changed, or layer changed)
         self.quad_batches.push(super::QuadBatch {
             is_screen_space,
             textures: self.bound_textures,
             instances: vec![instance],
             viewport: self.current_viewport,
             stencil_mode: self.stencil_mode,
+            layer,
         });
     }
 
@@ -844,7 +852,7 @@ impl ZFFIState {
         self.cull_mode = 0; // None (users opt-in for culling)
         self.texture_filter = 0; // Nearest
         self.stencil_mode = 0; // Disabled (no stencil operations)
-        self.current_layer = 0; // Reset layer to background
+        self.current_layer = DEFAULT_LAYER; // Reset layer to background
         self.current_viewport = crate::graphics::Viewport::FULLSCREEN; // Reset viewport to fullscreen
         // Note: color and shading state already rebuild each frame via add_shading_state()
     }

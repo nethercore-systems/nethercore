@@ -8,7 +8,7 @@
 use glam::Mat4;
 
 use super::ZGraphics;
-use super::command_buffer::{BufferSource, CommandSortKey, VRPCommand};
+use super::command_buffer::{BufferSource, CommandSortKey, StencilMode, VRPCommand};
 use super::pipeline::PipelineKey;
 use super::render_state::{CullMode, RenderState, TextureHandle};
 use super::vertex::VERTEX_FORMAT_COUNT;
@@ -196,7 +196,14 @@ impl ZGraphics {
                     viewport,
                     stencil_mode,
                     ..
-                } => CommandSortKey::mesh(*viewport, *stencil_mode, *format, *depth_test, *cull_mode, *textures),
+                } => CommandSortKey::mesh(
+                    *viewport,
+                    StencilMode::from_u8(*stencil_mode),
+                    *format,
+                    *depth_test,
+                    *cull_mode,
+                    *textures,
+                ),
                 VRPCommand::IndexedMesh {
                     format,
                     depth_test,
@@ -205,21 +212,30 @@ impl ZGraphics {
                     viewport,
                     stencil_mode,
                     ..
-                } => CommandSortKey::mesh(*viewport, *stencil_mode, *format, *depth_test, *cull_mode, *textures),
+                } => CommandSortKey::mesh(
+                    *viewport,
+                    StencilMode::from_u8(*stencil_mode),
+                    *format,
+                    *depth_test,
+                    *cull_mode,
+                    *textures,
+                ),
                 VRPCommand::Quad {
                     depth_test,
                     texture_slots,
                     viewport,
                     stencil_mode,
+                    layer,
                     ..
                 } => CommandSortKey::quad(
                     *viewport,
-                    *stencil_mode,
+                    *layer,
+                    StencilMode::from_u8(*stencil_mode),
                     *depth_test,
                     [texture_slots[0].0, texture_slots[1].0, texture_slots[2].0, texture_slots[3].0],
                 ),
                 VRPCommand::Sky { viewport, stencil_mode, .. } => {
-                    CommandSortKey::sky(*viewport, *stencil_mode)
+                    CommandSortKey::sky(*viewport, StencilMode::from_u8(*stencil_mode))
                 }
             });
 

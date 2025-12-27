@@ -115,6 +115,84 @@ All matrices use **column-major** order (glam/WGSL standard):
 
 ---
 
+## 2D Layer Ordering
+
+Nethercore ZX uses **CPU-side layer sorting** for 2D elements (sprites, text, UI), following industry standards (Unity, Unreal, Bevy).
+
+### Layer System
+
+```rust
+fn layer(n: u32)  // Set current layer (0 = back, higher = front)
+```
+
+**Key concepts:**
+
+- **Layer 0** = Background (default, resets each frame)
+- **Higher layers** = Render on top (layer 2 appears above layer 1)
+- **No depth testing for 2D**: Screen-space quads rely entirely on layer sorting
+- **Separate from 3D depth**: Billboards and 3D meshes use depth buffer, not layers
+
+### Render Order
+
+Commands are sorted by layer (ascending), so rendering happens in this order:
+
+```
+Layer 0 (background) → Layer 1 → Layer 2 → ... (foreground)
+```
+
+**Example:**
+```rust
+// Background sprite
+layer(0);
+draw_sprite(bg_x, bg_y, bg_w, bg_h, bg_color);
+
+// Character (layer 1)
+layer(1);
+draw_sprite(char_x, char_y, char_w, char_h, char_color);
+
+// UI text (layer 2 - on top)
+layer(2);
+draw_text("Score: 100", 10.0, 10.0, 16.0, WHITE);
+```
+
+### Batching Within Layers
+
+Quads at the **same layer** are batched by texture for performance:
+
+- Same layer + same texture → Single draw call
+- Same layer + different textures → Multiple draw calls (sorted by texture ID)
+- Different layers → **Never batched** (ensures correct ordering)
+
+### 3D vs 2D Rendering
+
+| Type | Ordering Method | Depth Test | Depth Write | Layer Used |
+|------|----------------|------------|-------------|------------|
+| Screen-space quads (2D) | Layer sorting (CPU) | Always pass | Enabled (0.0) | Current layer |
+| World-space quads (billboards) | Depth buffer (GPU) | Enabled | Enabled | 0 (fixed) |
+| 3D meshes | Depth buffer (GPU) | Enabled | Enabled | 0 (fixed) |
+| Sky | Depth buffer (GPU) | GreaterOrEqual | Disabled | 0 (fixed) |
+
+**Early-Z Optimization:**
+
+Screen-space quads (2D UI) render **first** with depth writes enabled at depth=0.0 (near plane). This allows:
+- 3D geometry behind opaque UI elements to be culled via early depth testing
+- Significant fragment shader savings (e.g., 15% fewer invocations if UI covers 15% of screen)
+- Transparent dithered pixels use `discard`, preventing depth writes and allowing 3D to show through
+
+**Render order:**
+1. **2D UI** (render_type=0): Sorted by layers, all render at depth=0.0
+2. **3D Meshes** (render_type=1): Culled where 2D wrote depth
+3. **Sky** (render_type=2): Only renders where depth==1.0 (background fill)
+
+**Design rationale:**
+
+- Layer sorting is deterministic and matches game dev expectations
+- Early-z reduces fragment shader cost for 3D behind UI
+- Sky renders last to avoid wasting shader invocations on covered pixels
+- Dithering enables order-independent transparency without alpha blending
+
+---
+
 ## Rendering Pipeline
 
 ### Frame Lifecycle
@@ -135,7 +213,7 @@ render_frame()
     │
     ├──▶ Upload vertex/index data to GPU buffers
     │
-    ├──▶ Sort commands by (pipeline_key, texture_slots)
+    ├──▶ Sort commands by (viewport, layer, stencil, pipeline, textures)
     │
     ├──▶ Upload transforms, shading states, animation data
     │
@@ -579,13 +657,37 @@ position = skin_matrix * position;
 
 ### Draw Call Optimization
 
-Commands are sorted by `(pipeline_key, texture_slots)` to minimize state changes:
+Commands are sorted by a multi-level key to minimize state changes and ensure correct rendering order:
 
 ```
-Pipeline key = (format, depth_test, cull_mode)
+Sort order (ascending):
+1. Viewport region (split-screen)
+2. Layer (2D ordering - higher = on top)
+3. Stencil mode (masking groups)
+4. Render type (Quad=0, Mesh=1, Sky=2)
+5. Vertex format (meshes only)
+6. Depth test & cull mode
+7. Texture bindings
 ```
+
+**Render type ordering (optimized for performance):**
+
+- **Quad=0**: Renders first, writes depth=0.0 for early-z culling of 3D behind UI
+- **Mesh=1**: Renders second, culled where quads wrote depth
+- **Sky=2**: Renders last, only fills gaps where depth==1.0 (background)
+
+**Key principles:**
+
+- **Layer-first sorting for 2D**: Quads at different layers never batch together, ensuring correct 2D ordering
+- **Screen-space quads**: Render first with depth writes (early-z optimization)
+- **World-space quads/billboards**: Use depth testing for 3D occlusion (layer 0)
+- **Within same layer**: Batch by texture for performance
+- **Sky last**: Depth test skips pixels covered by geometry, saving shader invocations
 
 **Batching benefits:**
+- Early-z culling reduces 3D fragment shader cost behind UI
+- Correct 2D layer ordering via CPU sorting
+- Sky optimization avoids unnecessary shader invocations
 - Fewer pipeline switches
 - Fewer texture bind group changes
 - Better GPU parallelism
