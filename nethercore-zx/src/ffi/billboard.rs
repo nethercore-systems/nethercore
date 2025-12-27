@@ -11,8 +11,9 @@ use super::ZXGameContext;
 
 /// Layer value for 3D billboards (world-space quads)
 ///
-/// Billboards don't participate in 2D layer ordering - they use depth testing
-/// for proper 3D occlusion. Layer 0 ensures they render before 2D UI elements.
+/// Billboards don't participate in 2D layer ordering. The layer value is only
+/// used for the sort key grouping. Actual rendering order is determined by
+/// depth testing using the billboard's world-space Z position after camera transform.
 const BILLBOARD_LAYER: u32 = 0;
 
 /// Register billboard drawing FFI functions

@@ -191,14 +191,6 @@ Screen-space quads (2D UI) render **first** with depth writes enabled at depth=0
 - Sky renders last to avoid wasting shader invocations on covered pixels
 - Dithering enables order-independent transparency without alpha blending
 
-### Constants
-
-The implementation uses semantic constants to avoid magic numbers:
-
-- `DEFAULT_LAYER` (0) — Background layer for 2D rendering
-- `BILLBOARD_LAYER` (0) — Layer for 3D billboards (use depth testing)
-- `NO_LAYER` (0) — Layer for commands that don't participate in layering (Sky, Mesh)
-
 ---
 
 ## Rendering Pipeline
