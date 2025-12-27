@@ -1,0 +1,172 @@
+[game]
+id = "neon-drift"
+title = "NEON DRIFT"
+author = "Nethercore Showcase"
+version = "1.0.0"
+render_mode = 2  # Mode 2: Metallic-Roughness PBR
+
+# === VEHICLES ===
+[[assets.meshes]]
+id = "speedster"
+path = "assets/models/meshes/speedster.obj"
+
+[[assets.meshes]]
+id = "muscle"
+path = "assets/models/meshes/muscle.obj"
+
+[[assets.meshes]]
+id = "racer"
+path = "assets/models/meshes/racer.obj"
+
+[[assets.meshes]]
+id = "drift"
+path = "assets/models/meshes/drift.obj"
+
+# === TRACK SEGMENTS ===
+[[assets.meshes]]
+id = "track_straight"
+path = "assets/models/meshes/track_straight.obj"
+
+[[assets.meshes]]
+id = "track_curve_left"
+path = "assets/models/meshes/track_curve_left.obj"
+
+[[assets.meshes]]
+id = "track_tunnel"
+path = "assets/models/meshes/track_tunnel.obj"
+
+[[assets.meshes]]
+id = "track_jump"
+path = "assets/models/meshes/track_jump.obj"
+
+# === PROPS ===
+[[assets.meshes]]
+id = "prop_barrier"
+path = "assets/models/meshes/prop_barrier.obj"
+
+[[assets.meshes]]
+id = "prop_boost_pad"
+path = "assets/models/meshes/prop_boost_pad.obj"
+
+[[assets.meshes]]
+id = "prop_billboard"
+path = "assets/models/meshes/prop_billboard.obj"
+
+[[assets.meshes]]
+id = "prop_building"
+path = "assets/models/meshes/prop_building.obj"
+
+# === TEXTURES (Base Albedo) ===
+[[assets.textures]]
+id = "speedster"
+path = "assets/models/textures/speedster.png"
+
+[[assets.textures]]
+id = "muscle"
+path = "assets/models/textures/muscle.png"
+
+[[assets.textures]]
+id = "racer"
+path = "assets/models/textures/racer.png"
+
+[[assets.textures]]
+id = "drift"
+path = "assets/models/textures/drift.png"
+
+[[assets.textures]]
+id = "track_straight"
+path = "assets/models/textures/track_straight.png"
+
+[[assets.textures]]
+id = "track_curve"
+path = "assets/models/textures/track_curve.png"
+
+[[assets.textures]]
+id = "track_tunnel"
+path = "assets/models/textures/track_tunnel.png"
+
+[[assets.textures]]
+id = "track_jump"
+path = "assets/models/textures/track_jump.png"
+
+[[assets.textures]]
+id = "prop_barrier"
+path = "assets/models/textures/prop_barrier.png"
+
+[[assets.textures]]
+id = "prop_boost_pad"
+path = "assets/models/textures/prop_boost_pad.png"
+
+[[assets.textures]]
+id = "prop_billboard"
+path = "assets/models/textures/prop_billboard.png"
+
+[[assets.textures]]
+id = "prop_building"
+path = "assets/models/textures/prop_building.png"
+
+# === TEXTURES (Emissive Maps for Mode 2 PBR) ===
+[[assets.textures]]
+id = "speedster_emissive"
+path = "assets/models/textures/speedster_emissive.png"
+
+[[assets.textures]]
+id = "muscle_emissive"
+path = "assets/models/textures/muscle_emissive.png"
+
+[[assets.textures]]
+id = "racer_emissive"
+path = "assets/models/textures/racer_emissive.png"
+
+[[assets.textures]]
+id = "drift_emissive"
+path = "assets/models/textures/drift_emissive.png"
+
+[[assets.textures]]
+id = "prop_boost_pad_emissive"
+path = "assets/models/textures/prop_boost_pad_emissive.png"
+
+# === SOUNDS ===
+[[assets.sounds]]
+id = "engine_idle"
+path = "assets/audio/engine_idle.wav"
+
+[[assets.sounds]]
+id = "engine_rev"
+path = "assets/audio/engine_rev.wav"
+
+[[assets.sounds]]
+id = "boost"
+path = "assets/audio/boost.wav"
+
+[[assets.sounds]]
+id = "drift"
+path = "assets/audio/drift.wav"
+
+[[assets.sounds]]
+id = "brake"
+path = "assets/audio/brake.wav"
+
+[[assets.sounds]]
+id = "shift"
+path = "assets/audio/shift.wav"
+
+[[assets.sounds]]
+id = "wall"
+path = "assets/audio/wall.wav"
+
+[[assets.sounds]]
+id = "barrier"
+path = "assets/audio/barrier.wav"
+
+[[assets.sounds]]
+id = "countdown"
+path = "assets/audio/countdown.wav"
+
+[[assets.sounds]]
+id = "checkpoint"
+path = "assets/audio/checkpoint.wav"
+
+[[assets.sounds]]
+id = "finish"
+path = "assets/audio/finish.wav"
