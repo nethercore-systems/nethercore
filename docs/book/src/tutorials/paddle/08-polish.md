@@ -270,7 +270,7 @@ Check out these resources:
 
 The final source code is available at:
 ```
-nethercore/examples/paddle/
+nethercore/examples/7-games/paddle/
 ```
 
 You can compare your code or use it as a reference.

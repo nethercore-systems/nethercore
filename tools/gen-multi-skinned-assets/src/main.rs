@@ -15,7 +15,7 @@ use zx_common::packing::{pack_vertex_data, FORMAT_NORMAL, FORMAT_SKINNED};
 const FORMAT_POS_NORMAL_SKINNED: u8 = FORMAT_NORMAL | FORMAT_SKINNED;
 
 fn main() {
-    let output_dir = PathBuf::from("examples/multi-skinned-rom/assets");
+    let output_dir = PathBuf::from("examples/4-animation/multi-skinned-rom/assets");
 
     // Ensure output directory exists
     fs::create_dir_all(&output_dir).expect("Failed to create output directory");

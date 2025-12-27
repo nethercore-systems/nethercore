@@ -1,226 +1,278 @@
-# Nethercore ZX Examples
+# Nethercore Examples
 
-Example games demonstrating Nethercore ZX features. Each example is a standalone WASM game showcasing specific APIs and techniques.
+**46 working examples** organized into 9 categories to help you learn game development with Nethercore.
 
-## Learning Path
+## 📁 Organization
 
-New to Nethercore? Follow this order to learn progressively:
+```
+examples/
+├── 1-getting-started/   →  4 examples   (FFI basics, languages)
+├── 2-graphics/          →  6 examples   (Rendering, meshes, materials)
+├── 3-inspectors/        → 12 examples   (Render modes, environments)
+├── 4-animation/         →  6 examples   (Skeletal animation, IK)
+├── 5-audio/             →  2 examples   (Sound effects, music)
+├── 6-assets/            →  4 examples   (ROM loading, data packs)
+├── 7-games/             →  5 examples   (Complete games, templates)
+├── 8-advanced/          →  5 examples   (Stencils, viewports, mirrors)
+├── 9-debug/             →  5 examples   (Dev tools, viewers)
+└── _lib/                →  Support libraries
+```
 
-| Step | Example | What You'll Learn |
-|------|---------|-------------------|
-| 1 | **hello-world** | 2D drawing (`draw_rect`, `draw_text`), input handling |
-| 2 | **triangle** | Introduction to 3D rendering |
-| 3 | **textured-quad** | Loading and applying textures |
-| 4 | **cube** | 3D transforms, rotation, camera |
-| 5 | **paddle** | Complete game with AI, multiplayer, sound ([full tutorial](../docs/book/src/tutorials/paddle/index.md)) |
-| 6 | **platformer** | Advanced example: physics, billboards, collision, UI |
+## 🚀 Quick Start
 
-After completing the learning path, explore examples by topic below.
+```bash
+# Build all examples (installs to ~/.nethercore/games/)
+cargo xtask build-examples
+
+# Run any example
+cargo run -- <example-name>
+
+# Example: Run the paddle game
+cargo run -- paddle
+```
+
+## 📚 Learning Path
+
+**New to Nethercore?** Follow this progression:
+
+| # | Example | Category | What You'll Learn |
+|---|---------|----------|-------------------|
+| 1 | **hello-world** | 1-getting-started | 2D drawing, text, rectangles, input handling |
+| 2 | **triangle** | 1-getting-started | Your first 3D shape, minimal rendering |
+| 3 | **textured-quad** | 2-graphics | Loading textures, sprite rendering |
+| 4 | **procedural-shapes** | 2-graphics | 7 built-in mesh generators, texture toggle |
+| 5 | **lighting** | 2-graphics | PBR materials, dynamic lights, sky system |
+| 6 | **paddle** | 7-games | Complete game with [tutorial](../docs/book/src/tutorials/paddle/index.md) |
 
 ---
 
-## Building and Running
+## 📂 All Examples by Category
 
-**Prerequisites:**
-```bash
-rustup target add wasm32-unknown-unknown
-```
+### 1. Getting Started (4 examples)
 
-**Build all examples:**
+Learn the basics across multiple languages.
+
+| Example | Description | Difficulty | Language |
+|---------|-------------|------------|----------|
+| **hello-world** | 2D drawing, text, rectangles, basic input | 🟢 Beginner | Rust |
+| **hello-world-c** | Identical to hello-world, demonstrates C FFI | 🟢 Beginner | C |
+| **hello-world-zig** | Identical to hello-world, demonstrates Zig FFI | 🟢 Beginner | Zig |
+| **triangle** | Minimal 3D rendering with a single colored triangle | 🟢 Beginner | Rust |
+
+---
+
+### 2. Graphics & Rendering (6 examples)
+
+Core rendering techniques and procedural meshes.
+
+| Example | Description | Difficulty | Key Features |
+|---------|-------------|------------|--------------|
+| **textured-quad** | Texture loading and sprite rendering | 🟢 Beginner | `load_texture()`, `texture_bind()` |
+| **procedural-shapes** | 7 built-in mesh generators with texture toggle | 🟡 Intermediate | B button toggles textured/plain modes |
+| **lighting** | Full PBR lighting with 4 dynamic lights | 🟡 Intermediate | Mode 2 PBR, sky system, metallic/roughness |
+| **billboard** | GPU-instanced billboards, camera-facing sprites | 🟡 Intermediate | Instancing, orientation |
+| **dither-demo** | PS1-style ordered dithering effects | 🟡 Intermediate | Retro aesthetic |
+| **material-override** | Per-draw material property overrides | 🟡 Intermediate | Dynamic materials |
+
+---
+
+### 3. Inspectors (12 examples)
+
+Interactive debuggers for render modes and environment effects.
+
+#### Render Mode Inspectors (4)
+
+| Example | Mode | Description |
+|---------|------|-------------|
+| **mode0-inspector** | Mode 0 | Unlit rendering with interactive controls |
+| **mode1-inspector** | Mode 1 | Matcap/image-based lighting explorer |
+| **mode2-inspector** | Mode 2 | Metallic-Roughness PBR (Mode 2) explorer |
+| **mode3-inspector** | Mode 3 | Specular-Shininess Blinn-Phong explorer |
+
+#### Environment Inspectors (8)
+
+| Example | Effect Type | Description |
+|---------|-------------|-------------|
+| **env-gradient-inspector** | Gradient | 4-point gradient with 4 presets, debug controls |
+| **env-curtains-inspector** | Curtains | Curtain-style environment effect |
+| **env-lines-inspector** | Lines | Line-based procedural environment |
+| **env-rectangles-inspector** | Rectangles | Rectangle pattern environment |
+| **env-rings-inspector** | Rings | Concentric ring environment |
+| **env-room-inspector** | Room | Room-style enclosed environment |
+| **env-scatter-inspector** | Scatter | Particle scatter environment |
+| **env-silhouette-inspector** | Silhouette | Silhouette-based environment |
+
+**Difficulty:** 🟡 Intermediate | **Key Features:** F3 debug panels, real-time parameter tweaking
+
+---
+
+### 4. Animation & Skinning (6 examples)
+
+GPU skeletal animation and inverse kinematics.
+
+| Example | Description | Difficulty | Key Features |
+|---------|-------------|------------|--------------|
+| **skinned-mesh** | GPU skeletal animation basics | 🟡 Intermediate | `set_bones()`, basic transforms |
+| **animation-demo** | Keyframe animation playback from ROM | 🟡 Intermediate | ROM-based anim data |
+| **ik-demo** | Inverse kinematics (procedural animation) | 🔴 Advanced | Runtime IK solving |
+| **multi-skinned-procedural** | Multiple animated characters (procedural bones) | 🟡 Intermediate | Procedural skeleton |
+| **multi-skinned-rom** | Multiple animated characters (ROM data) | 🟡 Intermediate | ROM skeleton + anim |
+| **skeleton-stress-test** | Performance test with many skeletons | 🔴 Advanced | Stress testing |
+
+---
+
+### 5. Audio (2 examples)
+
+Sound effects and music playback.
+
+| Example | Description | Difficulty | Key Features |
+|---------|-------------|------------|--------------|
+| **audio-demo** | Sound effects, panning, channels, looping | 🟢 Beginner | `play_sound()`, channels, panning |
+| **tracker-demo** | XM tracker music playback with controls | 🟡 Intermediate | Tracker music, interactive controls |
+
+---
+
+### 6. Asset Loading (4 examples)
+
+ROM-based asset workflows and data packs.
+
+| Example | Description | Difficulty | Key Features |
+|---------|-------------|------------|--------------|
+| **datapack-demo** | Full ROM workflow: textures, meshes, sounds | 🟡 Intermediate | `rom_texture()`, `rom_mesh()`, `rom_sound()` |
+| **font-demo** | Custom font loading with `rom_font()` | 🟢 Beginner | Bitmap fonts, text rendering |
+| **level-loader** | Level data loading with `rom_data()` | 🟡 Intermediate | Binary data, custom formats |
+| **asset-test** | Pre-converted asset testing (.nczxmesh, .nczxtex) | 🟡 Intermediate | Asset pipeline validation |
+
+---
+
+### 7. Complete Games (5 examples)
+
+Fully playable games and templates.
+
+| Example | Description | Status | Key Features |
+|---------|-------------|--------|--------------|
+| **paddle** | Classic 2-player paddle game | ✅ Complete | AI, rollback netcode, sound, [tutorial](../docs/book/src/tutorials/paddle/index.md) |
+| **platformer** | 2D platformer mini-game | ✅ Complete | Physics, collision, billboards, UI |
+| **prism-survivors** | Top-down fantasy co-op shooter | 🚧 Template | Project structure, assets |
+| **lumina-depths** | Underwater exploration game | 🚧 Template | Project structure, assets |
+| **neon-drift** | Arcade racer | 🚧 Template | Project structure, assets |
+
+---
+
+### 8. Advanced Rendering (5 examples)
+
+Stencil buffers, viewports, and advanced techniques.
+
+| Example | Description | Difficulty | Key Features |
+|---------|-------------|------------|--------------|
+| **stencil-demo** | All 4 stencil masking modes | 🔴 Advanced | Circle, inverted, diagonal, multiple masks |
+| **portal-demo** | Portal rendering using stencil masking | 🔴 Advanced | Stencil + teleportation |
+| **viewport-test** | Split-screen rendering (2P, 4P) | 🟡 Intermediate | Multiple viewports |
+| **rear-mirror** | Rear-view mirror for racing | 🔴 Advanced | Secondary viewport |
+| **scope-shooter** | Sniper scope mechanic | 🔴 Advanced | Stencil masking + zoom |
+
+---
+
+### 9. Debug & Development Tools (5 examples)
+
+Procedural generation viewers and debug systems.
+
+| Example | Description | Difficulty | Purpose |
+|---------|-------------|------------|---------|
+| **debug-demo** | Debug inspection system (F3 panel) | 🟡 Intermediate | Frame controls, inspection |
+| **proc-gen-viewer** | Interactive viewer for all procedural meshes | 🟡 Intermediate | Orbit camera, all shapes |
+| **proc-gen-mode2** | Mode 2 asset preview (Neon Drift showcase) | 🟡 Intermediate | Auto-generated preview |
+| **proc-gen-mode3** | Mode 3 asset preview (Lumina Depths showcase) | 🟡 Intermediate | Auto-generated preview |
+| **proc-sounds-viewer** | Procedural sound effect viewer | 🟡 Intermediate | Interactive audio explorer |
+
+---
+
+## 🛠️ Support Libraries
+
+Located in `_lib/` (not standalone examples):
+
+| Library | Description | Used By |
+|---------|-------------|---------|
+| **examples-common** | Reusable utilities (DebugCamera, StickControl, math helpers) | Multiple inspectors |
+| **proc-gen-showcase-defs** | Shared definitions for procedural generation showcases | proc-gen-* examples |
+| **assets** | Shared assets used by multiple examples | Various |
+
+---
+
+## 📊 Statistics
+
+- **Total Examples:** 46 working examples
+- **Beginner-Friendly:** 10 examples (🟢)
+- **Intermediate:** 23 examples (🟡)
+- **Advanced:** 13 examples (🔴)
+- **Languages:** Rust, C, Zig
+- **Complete Games:** 2 (+ 3 templates)
+- **Deleted:** 5 redundant examples (shadow-demo, blinn-phong, cube, textured-procedural, environment-inspector)
+
+---
+
+## 🎮 Running Examples
+
+### Option 1: From the Library (Recommended)
+
 ```bash
+# Build all examples once
 cargo xtask build-examples
-```
 
-This will compile each example to WASM and install them to `~/.nethercore/games/`.
-
-**Run examples:**
-```bash
-# Launch library UI
+# Launch the library browser
 cargo run
 
-# Or launch directly by name
-cargo run -- hello-world
+# Select any game from the grid
+```
+
+### Option 2: Direct Launch
+
+```bash
+# Run by name (no path needed)
+cargo run -- paddle
 cargo run -- platformer
-cargo run -- lighting
+cargo run -- triangle
 ```
 
----
-
-## Available Examples
-
-### Getting Started
-
-| Example | Description |
-|---------|-------------|
-| **hello-world** | Basic 2D drawing with `draw_text`, `draw_rect`, input handling |
-| **triangle** | Minimal 3D — single colored triangle |
-| **textured-quad** | Textured sprite rendering with `load_texture`, `texture_bind` |
-| **cube** | Rotating textured cube with transforms |
-
-### Graphics & Rendering
-
-| Example | Description |
-|---------|-------------|
-| **lighting** | PBR lighting (mode 2) with 4 dynamic lights, sky, materials |
-| **blinn-phong** | Classic Blinn-Phong (mode 3) with specular and rim lighting |
-| **billboard** | GPU-instanced billboards and sprites |
-| **procedural-shapes** | Built-in generators: `cube()`, `sphere()`, `cylinder()`, etc. |
-| **textured-procedural** | Procedural shapes with texture mapping |
-| **dither-demo** | PS1-style ordered dithering effects |
-| **material-override** | Per-draw material property overrides |
-
-### Render Mode Inspectors
-
-| Example | Description |
-|---------|-------------|
-| **mode0-inspector** | Interactive inspector for Unlit mode |
-| **mode1-inspector** | Interactive inspector for Matcap mode (blend modes) |
-| **mode2-inspector** | Interactive inspector for MR-Blinn-Phong mode |
-| **mode3-inspector** | Interactive inspector for Blinn-Phong mode |
-
-### Animation & Skinning
-
-| Example | Description |
-|---------|-------------|
-| **skinned-mesh** | GPU skeletal animation basics with `set_bones` |
-| **animation-demo** | Keyframe animation playback from ROM data |
-| **ik-demo** | Inverse kinematics (procedural animation) |
-| **multi-skinned-procedural** | Multiple animated characters (procedural bones) |
-| **multi-skinned-rom** | Multiple animated characters (ROM data) |
-| **skeleton-stress-test** | Performance testing with many skeletons |
-
-### Audio
-
-| Example | Description |
-|---------|-------------|
-| **audio-demo** | Sound effects, panning, channels, looping |
-
-### Asset Loading (Data Packs)
-
-| Example | Description |
-|---------|-------------|
-| **datapack-demo** | Full `rom_*` workflow: textures, meshes, sounds |
-| **font-demo** | Custom font loading with `rom_font` |
-| **level-loader** | Loading level data with `rom_data` |
-| **asset-test** | Pre-converted `.nczxmesh` and `.nczxtex` assets |
-
-### Complete Games
-
-| Example | Description |
-|---------|-------------|
-| **paddle** | Classic 2-player game with AI, rollback multiplayer, sound |
-| **platformer** | Full mini-game: physics, collision, multiple players |
-
-### Development Tools
-
-| Example | Description |
-|---------|-------------|
-| **debug-demo** | Debug inspection system (F3 panel, frame control) |
-
-### Shared Library
-
-| Directory | Description |
-|-----------|-------------|
-| **examples-common** | Shared utilities: `DebugCamera`, `StickControl`, math |
-
----
-
-## Example Details
-
-### hello-world
-Basic 2D drawing with text and rectangles. Controls: D-pad moves square, A resets.
-
-### lighting
-Full PBR demo with interactive material and light controls:
-- Left stick: Rotate sphere
-- Right stick: Move light
-- Triggers: Metallic (LT) / Roughness (RT)
-- D-pad: Light intensity
-- A/B/X/Y: Toggle lights
-
-### skinned-mesh
-GPU skeletal animation with 3x4 bone matrices and smooth weight blending.
-- Left stick: Rotate view
-- A: Toggle animation
-- D-pad: Animation speed
-
-### audio-demo
-Audio system demo with panning and channel control:
-- Left/Right: Adjust pan
-- A: Play sound
-- B: Stop sound
-
-### platformer
-Complete mini-game demonstrating:
-- 2D gameplay using 3D renderer
-- Billboarded sprites
-- Simple physics (gravity, friction)
-- AABB collision detection
-- Multiple players
-- 2D UI overlay
-
-### debug-demo
-Debug inspection system demo:
-- F3: Toggle debug panel
-- F5: Pause/resume
-- F6: Step frame
-- F7/F8: Time scale
-
----
-
-## Data Pack Workflow
-
-Examples using data packs require the `nether` CLI:
+### Option 3: Manual Build
 
 ```bash
-# 1. Build WASM
-nether build
+# Navigate to example
+cd 2-graphics/lighting
 
-# 2. Bundle assets (reads nether.toml)
-nether pack
-
-# 3. Launch game
-nether run
-```
-
-### rom_* FFI Functions
-
-Data pack assets bypass WASM memory, going directly to VRAM/audio:
-
-```rust
-fn init() {
-    // Load from data pack (init-only)
-    let tex = rom_texture(b"player".as_ptr(), 6);
-    let mesh = rom_mesh(b"enemy".as_ptr(), 5);
-    let sfx = rom_sound(b"jump".as_ptr(), 4);
-    let font = rom_font(b"ui_font".as_ptr(), 7);
-
-    // Raw data is copied to WASM memory
-    let len = rom_data_len(b"level1".as_ptr(), 6);
-    let mut buf = vec![0u8; len as usize];
-    rom_data(b"level1".as_ptr(), 6, buf.as_mut_ptr(), len);
-}
-```
-
-See `nether.toml` in each data pack example for the manifest format.
-
----
-
-## Building Individual Examples
-
-```bash
-cd examples/hello-world
+# Build WASM
 cargo build --target wasm32-unknown-unknown --release
-```
 
-Output: `target/wasm32-unknown-unknown/release/hello_world.wasm`
+# Run with nether CLI
+nether run target/wasm32-unknown-unknown/release/lighting.wasm
+```
 
 ---
 
-## Further Reading
+## 📖 Documentation
 
-- **[Developer Book](../docs/book/)** — Complete documentation (build with `mdbook build docs/book`)
-- **[Paddle Tutorial](../docs/book/src/tutorials/paddle/index.md)** — 8-part tutorial building a complete game
-- **[API Cheat Sheet](../docs/book/src/cheat-sheet.md)** — Quick reference for all FFI functions
-- **[Render Modes](../docs/book/src/guides/render-modes.md)** — Graphics modes and materials
-- **[FFI Reference](../docs/architecture/ffi.md)** — Low-level FFI architecture
+- **API Reference:** See [`../docs/book/`](../docs/book/src/SUMMARY.md)
+- **Tutorial:** [Build Paddle from Scratch](../docs/book/src/tutorials/paddle/index.md)
+- **FFI Cheat Sheet:** [`../docs/book/src/cheat-sheet.md`](../docs/book/src/cheat-sheet.md)
+- **Example Reference:** [`../docs/book/src/reference/examples.md`](../docs/book/src/reference/examples.md)
+
+---
+
+## 🤝 Contributing
+
+Want to add an example? Follow the structure:
+
+```
+<category>/<your-example>/
+├── Cargo.toml       # Standard WASM project
+├── nether.toml      # Game manifest (title, description, assets)
+├── src/
+│   └── lib.rs       # Game code with FFI exports
+└── assets/          # Optional: textures, sounds, etc.
+```
+
+See [`../docs/contributing/`](../docs/contributing/) for guidelines.
+
+---
+
+**Questions?** Check the [book](../docs/book/) or open an issue on GitHub!

@@ -37,7 +37,7 @@ Before starting this tutorial, you should have:
 The complete source code for this tutorial is available in the examples:
 
 ```
-nethercore/examples/paddle/
+nethercore/examples/7-games/paddle/
 ├── Cargo.toml
 ├── nether.toml
 └── src/
@@ -47,7 +47,7 @@ nethercore/examples/paddle/
 You can build and run it with:
 
 ```bash
-cd examples/paddle
+cd examples/7-games/paddle
 cargo build --target wasm32-unknown-unknown --release
 nether run target/wasm32-unknown-unknown/release/paddle.wasm
 ```

@@ -126,25 +126,25 @@ enum Commands {
     /// Generate PRISM SURVIVORS assets (player, enemies, projectiles, pickups)
     PrismSurvivors {
         /// Output directory for generated assets
-        #[arg(short, long, default_value = "examples/prism-survivors/assets/models")]
+        #[arg(short, long, default_value = "examples/7-games/prism-survivors/assets/models")]
         output: PathBuf,
     },
     /// Generate NEON DRIFT assets (cars, track elements)
     NeonDrift {
         /// Output directory for generated assets
-        #[arg(short, long, default_value = "examples/neon-drift/assets/models")]
+        #[arg(short, long, default_value = "examples/7-games/neon-drift/assets/models")]
         output: PathBuf,
     },
     /// Generate LUMINA DEPTHS assets (submersible, creatures, flora, terrain)
     LuminaDepths {
         /// Output directory for generated assets
-        #[arg(short, long, default_value = "examples/lumina-depths/assets/models")]
+        #[arg(short, long, default_value = "examples/7-games/lumina-depths/assets/models")]
         output: PathBuf,
     },
     /// Generate showcase sound effects
     Sounds {
         /// Output directory for generated audio
-        #[arg(short, long, default_value = "examples/proc-sounds-viewer/assets")]
+        #[arg(short, long, default_value = "examples/9-debug/proc-sounds-viewer/assets")]
         output: PathBuf,
     },
     /// Generate all showcase game assets

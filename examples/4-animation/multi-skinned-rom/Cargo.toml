@@ -1,0 +1,17 @@
+[package]
+name = "multi-skinned-rom"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+examples-common = { path = "../../_lib/examples-common" }
+libm = "0.2"
+
+[profile.release]
+opt-level = "s"
+lto = true
+
+[workspace]

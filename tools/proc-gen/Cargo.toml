@@ -7,7 +7,7 @@ license.workspace = true
 [dependencies]
 nethercore-zx = { path = "../../nethercore-zx", default-features = false }
 glam = { workspace = true }
-proc-gen-showcase-defs = { path = "../../examples/proc-gen-showcase-defs" }
+proc-gen-showcase-defs = { path = "../../examples/_lib/proc-gen-showcase-defs" }
 
 # Texture dependencies
 noise = "0.9"

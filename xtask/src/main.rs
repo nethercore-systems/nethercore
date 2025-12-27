@@ -8,6 +8,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use walkdir::WalkDir;
 
 /// Nethercore build tasks
 #[derive(Parser)]
@@ -67,8 +68,11 @@ fn build_examples() -> Result<()> {
     let skip_dirs = ["inspector-common", "examples-common", "proc-gen-common", "proc-gen-showcase-defs"];
 
     // Get all example directories that have a Cargo.toml (are buildable)
-    let examples: Vec<_> = fs::read_dir(&examples_dir)
-        .context("Failed to read examples directory")?
+    // Supports both flat structure (examples/example-name/) and nested structure (examples/category/example-name/)
+    let examples: Vec<_> = WalkDir::new(&examples_dir)
+        .min_depth(1) // Skip the examples/ root directory
+        .max_depth(2) // Support up to examples/category/example/ (depth 2)
+        .into_iter()
         .filter_map(|entry| entry.ok())
         .filter(|entry| {
             let path = entry.path();
@@ -77,6 +81,7 @@ fn build_examples() -> Result<()> {
             path.is_dir()
                 && path.join("Cargo.toml").exists()
                 && !skip_dirs.contains(&name_str.as_ref())
+                && !name_str.starts_with('_') // Skip _lib/ and other private directories
         })
         .collect();
 

@@ -9,5 +9,5 @@ path = "src/main.rs"
 
 [dependencies]
 proc-gen = { path = "../proc-gen", features = ["wav-export"] }
-proc-gen-showcase-defs = { path = "../../examples/proc-gen-showcase-defs" }
+proc-gen-showcase-defs = { path = "../../examples/_lib/proc-gen-showcase-defs" }
 clap = { version = "4", features = ["derive"] }
