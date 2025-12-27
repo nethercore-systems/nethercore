@@ -89,7 +89,7 @@ fn inspect_z_rom(rom_path: &PathBuf) -> Result<()> {
 
         if let Some(mode) = rom.metadata.render_mode {
             let mode_name = match mode {
-                0 => "Unlit",
+                0 => "Lambert",
                 1 => "Matcap",
                 2 => "PBR-lite",
                 3 => "Hybrid",

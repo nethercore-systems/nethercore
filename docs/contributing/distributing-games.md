@@ -210,14 +210,14 @@ When creating an Nethercore ZX ROM, you can specify console-specific settings:
 The render mode determines the visual style of your game:
 
 ```bash
---render-mode 0  # Unlit (flat shading, no lighting)
+--render-mode 0  # Lambert (simple diffuse shading)
 --render-mode 1  # Matcap (matcap-based lighting)
 --render-mode 2  # PBR-lite (physically-based rendering) - default
 --render-mode 3  # Hybrid (mix of techniques)
 ```
 
 **Which to choose?**
-- **Unlit (0)**: Retro flat-shaded look (e.g., early 3D games)
+- **Lambert (0)**: Retro flat-shaded look (e.g., early 3D games)
 - **Matcap (1)**: Stylized lighting with matcap textures
 - **PBR-lite (2)**: Modern PBR look (most realistic)
 - **Hybrid (3)**: Mix matcap and PBR for unique styles

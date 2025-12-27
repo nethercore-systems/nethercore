@@ -158,7 +158,7 @@ fn generate_manifest(game_id: &str, game_title: &str, is_rust_project: bool) -> 
     // Render mode explanation
     content.push_str("# Render Mode\n");
     content.push_str("# Set in your game code by calling render_mode(N) in init():\n");
-    content.push_str("#   0 = Unlit (RGBA8 textures, no lighting)\n");
+    content.push_str("#   0 = Lambert (RGBA8 textures, simple Lambert shading)\n");
     content.push_str("#   1 = Matcap (stylized lighting via matcap texture)\n");
     content.push_str("#   2 = PBR Metallic-Roughness (physically based rendering)\n");
     content.push_str("#   3 = Blinn-Phong Specular-Shininess (classic lighting)\n");

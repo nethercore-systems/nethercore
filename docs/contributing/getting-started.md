@@ -147,7 +147,7 @@ fn init() {
         set_resolution(2);        // 720p (0=360p, 1=540p, 2=720p, 3=1080p)
         set_tick_rate(60);        // 60 updates per second
         set_clear_color(0x000000FF);
-        render_mode(0);           // Unlit rendering
+        render_mode(0);           // Lambert rendering
     }
 }
 ```

@@ -412,7 +412,7 @@ Render modes 1-3 require normals (FORMAT_NORMAL flag):
 
 | Mode | Valid Formats |
 |------|---------------|
-| 0 (Unlit) | All 16 formats |
+| 0 (Lambert) | All 16 formats |
 | 1 (Matcap) | 4, 5, 6, 7, 12, 13, 14, 15 |
 | 2 (MR-Blinn-Phong) | 4, 5, 6, 7, 12, 13, 14, 15 |
 | 3 (Blinn-Phong) | 4, 5, 6, 7, 12, 13, 14, 15 |

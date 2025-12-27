@@ -6,7 +6,7 @@ Nethercore ZX supports 4 rendering modes, each with different lighting and mater
 
 | Mode | Name | Lighting | Best For |
 |------|------|----------|----------|
-| 0 | Unlit | None | Flat colors, UI, retro 2D |
+| 0 | Lambert | Simple diffuse | Flat colors, UI, retro 2D |
 | 1 | Matcap | Pre-baked | Stylized, toon, sculpted look |
 | 2 | Metallic-Roughness | PBR-style Blinn-Phong | Realistic materials |
 | 3 | Specular-Shininess | Traditional Blinn-Phong | Classic 3D, arcade |
@@ -43,9 +43,9 @@ export fn init() void {
 
 ---
 
-## Mode 0: Unlit
+## Mode 0: Lambert
 
-No lighting calculations. Colors come directly from textures and `set_color()`.
+Supports both flat shading (without normals) and Lambert diffuse shading (with normals). Without normals, colors come directly from textures and `set_color()`. With normals, applies Lambert lighting from environment and dynamic lights.
 
 **Features:**
 - Fastest rendering
@@ -510,7 +510,7 @@ export fn render() void {
 
 | If you need... | Use Mode |
 |----------------|----------|
-| Fastest rendering, no lighting | 0 (Unlit) |
+| Fastest rendering, simple lighting | 0 (Lambert) |
 | Stylized, consistent lighting | 1 (Matcap) |
 | PBR workflow with MRE textures | 2 (Metallic-Roughness) |
 | Colored specular, artist control | 3 (Specular-Shininess) |

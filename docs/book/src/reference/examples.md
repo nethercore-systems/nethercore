@@ -57,7 +57,7 @@ New to Nethercore? Follow this progression:
 
 | Example | Description |
 |---------|-------------|
-| **mode0-inspector** | Interactive Mode 0 (Unlit) explorer |
+| **mode0-inspector** | Interactive Mode 0 (Lambert) explorer |
 | **mode1-inspector** | Interactive Mode 1 (Matcap) explorer |
 | **mode2-inspector** | Interactive Mode 2 (PBR) explorer |
 | **mode3-inspector** | Interactive Mode 3 (Blinn-Phong) explorer |

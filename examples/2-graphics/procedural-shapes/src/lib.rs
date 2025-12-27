@@ -167,7 +167,7 @@ pub extern "C" fn init() {
     unsafe {
         // Configure rendering
         set_clear_color(0x1a1a2eFF); // Dark blue
-        render_mode(0); // Unlit
+        render_mode(0); // Lambert
         depth_test(1); // Enable depth testing
 
         // Generate all 7 plain procedural shapes

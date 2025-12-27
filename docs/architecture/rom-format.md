@@ -110,7 +110,7 @@ pub struct ZMetadata {
     pub tool_version: String,
 
     // Z-specific settings
-    /// Render mode: 0=Unlit, 1=Matcap, 2=PBR, 3=Hybrid
+    /// Render mode: 0=Lambert, 1=Matcap, 2=PBR, 3=Hybrid
     pub render_mode: Option<u32>,
 
     /// Default resolution (e.g., "640x480")
@@ -159,7 +159,7 @@ pub enum TextureFormat {
 ```
 
 **Compression Selection (automated by nether-cli):**
-- Render Mode 0 (Unlit): RGBA8 (pixel-perfect, full alpha)
+- Render Mode 0 (Lambert): RGBA8 (pixel-perfect, full alpha)
 - Render Modes 1-3 (Matcap/PBR/Hybrid): BC7 (4x compression, stipple transparency)
 
 **Size calculation:**

@@ -116,7 +116,7 @@ pub struct ZMetadata {
     pub tool_version: String,
 
     // Z-specific settings
-    /// Render mode: 0=Unlit, 1=Matcap, 2=PBR, 3=Hybrid
+    /// Render mode: 0=Lambert, 1=Matcap, 2=PBR, 3=Hybrid
     pub render_mode: Option<u32>,
 
     /// Default resolution (e.g., "640x480")

@@ -53,7 +53,7 @@ pub struct CreateZxArgs {
     #[arg(long)]
     pub platform_author_id: Option<String>,
 
-    /// Render mode: 0=Unlit, 1=Matcap, 2=PBR, 3=Hybrid
+    /// Render mode: 0=Lambert, 1=Matcap, 2=PBR, 3=Hybrid
     #[arg(long)]
     pub render_mode: Option<u32>,
 

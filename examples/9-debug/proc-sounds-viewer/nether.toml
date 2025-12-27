@@ -3,7 +3,7 @@ id = "proc-sounds-viewer"
 title = "Procedural Sounds Viewer"
 author = "Nethercore Examples"
 version = "0.1.0"
-render_mode = 0  # Unlit (no 3D needed)
+render_mode = 0  # Lambert (no 3D needed)
 
 # =============================================================================
 # Showcase Sound Assets

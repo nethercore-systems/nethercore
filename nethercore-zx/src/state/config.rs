@@ -10,7 +10,7 @@ pub struct ZXInitConfig {
     pub tick_rate_index: u32,
     /// Clear/background color (RGBA: 0xRRGGBBAA)
     pub clear_color: u32,
-    /// Render mode (0-3: Unlit, Matcap, PBR, Hybrid)
+    /// Render mode (0-3: Lambert, Matcap, PBR, Hybrid)
     pub render_mode: u8,
     /// Whether any config was changed during init
     pub modified: bool,
@@ -29,7 +29,7 @@ impl Default for ZXInitConfig {
         Self {
             tick_rate_index: 2,      // Default 60 fps
             clear_color: 0x000000FF, // Black, fully opaque
-            render_mode: 0,          // Unlit
+            render_mode: 0,          // Lambert
             modified: false,
             // No config functions called yet
             tick_rate_set: false,

@@ -180,12 +180,12 @@ pub extern fn render_mode(mode: u32) void;
 
 | Value | Mode | Description |
 |-------|------|-------------|
-| 0 | Unlit | Flat colors, no lighting |
+| 0 | Lambert | Simple diffuse shading |
 | 1 | Matcap | Pre-baked lighting via matcap textures |
 | 2 | Metallic-Roughness | PBR-style Blinn-Phong with MRE textures |
 | 3 | Specular-Shininess | Traditional Blinn-Phong |
 
-**Constraints:** Init-only. Default is mode 0 (Unlit).
+**Constraints:** Init-only. Default is mode 0 (Lambert).
 
 **Example:**
 

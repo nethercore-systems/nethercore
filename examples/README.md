@@ -84,7 +84,7 @@ Interactive debuggers for render modes and environment effects.
 
 | Example | Mode | Description |
 |---------|------|-------------|
-| **mode0-inspector** | Mode 0 | Unlit rendering with interactive controls |
+| **mode0-inspector** | Mode 0 | Lambert rendering with interactive controls |
 | **mode1-inspector** | Mode 1 | Matcap/image-based lighting explorer |
 | **mode2-inspector** | Mode 2 | Metallic-Roughness PBR (Mode 2) explorer |
 | **mode3-inspector** | Mode 3 | Specular-Shininess Blinn-Phong explorer |

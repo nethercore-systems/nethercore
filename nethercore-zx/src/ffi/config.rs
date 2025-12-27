@@ -106,7 +106,7 @@ fn set_clear_color(mut caller: Caller<'_, ZXGameContext>, color: u32) -> Result<
 /// Set the render mode
 ///
 /// Valid modes:
-/// - 0 = Unlit (no lighting, flat colors)
+/// - 0 = Lambert (simple Lambert diffuse shading with/without normals)
 /// - 1 = Matcap (view-space normal mapped to matcap textures)
 /// - 2 = PBR (physically-based rendering with up to 4 lights)
 /// - 3 = Hybrid (PBR direct + matcap ambient)
@@ -139,7 +139,7 @@ fn render_mode(mut caller: Caller<'_, ZXGameContext>, mode: u32) -> Result<()> {
     state.init_config.modified = true;
 
     let mode_name = match mode {
-        0 => "Unlit",
+        0 => "Lambert",
         1 => "Matcap",
         2 => "PBR",
         3 => "Hybrid",

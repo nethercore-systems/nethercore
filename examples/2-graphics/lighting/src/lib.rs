@@ -142,7 +142,7 @@ const BUTTON_B: u32 = 5;
 const BUTTON_X: u32 = 6;
 const BUTTON_Y: u32 = 7;
 
-/// Render mode: 0=Unlit, 1=Matcap, 2=PBR, 3=Hybrid
+/// Render mode: 0=Lambert, 1=Matcap, 2=PBR, 3=Hybrid
 /// Change this and rebuild to see different modes
 const RENDER_MODE: u32 = 2;
 
@@ -409,7 +409,7 @@ pub extern "C" fn render() {
 
         // Mode indicator
         let mode_text = match RENDER_MODE {
-            0 => b"Mode 0: Unlit" as &[u8],
+            0 => b"Mode 0: Lambert" as &[u8],
             1 => b"Mode 1: Matcap" as &[u8],
             2 => b"Mode 2: PBR" as &[u8],
             3 => b"Mode 3: Hybrid" as &[u8],

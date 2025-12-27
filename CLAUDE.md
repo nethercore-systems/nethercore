@@ -322,7 +322,7 @@ id = "my-game"
 title = "My Game"
 author = "Developer"
 version = "1.0.0"
-render_mode = 2  # 0=Unlit, 1=Matcap, 2=PBR, 3=Hybrid
+render_mode = 2  # 0=Lambert, 1=Matcap, 2=PBR, 3=Hybrid
 
 [[assets.textures]]
 id = "player"
@@ -344,7 +344,7 @@ Runtime value editing for development (F3 to open panel):
 ### Rendering Architecture (Nethercore ZX)
 
 **Summary:**
-- **4 render modes**: Unlit, Matcap, Metallic-Roughness (MR), Specular-Shininess (SS) — all use Blinn-Phong (set once in `init()`)
+- **4 render modes**: Lambert, Matcap, Metallic-Roughness (MR), Specular-Shininess (SS) — all use Blinn-Phong (set once in `init()`)
 - **16 vertex formats**: Position + optional UV/Color/Normal + optional Skinned (runtime permutations)
 - **40 shader permutations**: Generated from templates at compile-time
 - **One vertex buffer per stride**: Avoids padding waste
@@ -397,6 +397,99 @@ cargo run
 ## License
 
 Dual-licensed under MIT OR Apache-2.0 (your choice).
+
+## Claude Code Plugin
+
+This repository includes a Claude Code plugin for ZX game development assistance.
+
+**Location:** `plugins/nethercore-zx-dev/`
+
+### Plugin Structure
+
+```
+plugins/nethercore-zx-dev/
+├── plugin.json                    # Plugin manifest
+├── README.md
+├── .claude-plugin/
+│   └── marketplace.json           # Marketplace listing for discovery
+└── skills/
+    └── zx-game-development/
+        ├── SKILL.md               # Main skill content
+        ├── examples/              # Code examples (Rust, C, Zig)
+        └── references/            # Quick reference guides
+```
+
+### What it Provides
+
+- **Auto-triggering skill** for ZX game development queries
+- **FFI specifications** pointing to source files (`include/zx.rs`, `include/zx.h`, `include/zx.zig`)
+- **Project templates** for Rust, C, and Zig
+- **Build workflow** guidance (`nether init`, `nether build`, `nether run`)
+- **Asset pipeline** documentation
+- **Working code examples** for common patterns
+
+### Installation
+
+**Option 1: From GitHub (recommended for external developers)**
+
+Add to your project's `.claude/settings.json` or `.claude/settings.local.json`:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "nethercore-plugins": {
+      "source": {
+        "source": "github",
+        "repo": "nethercore/nethercore",
+        "path": "plugins/nethercore-zx-dev"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "nethercore-zx-dev@nethercore-plugins": true
+  }
+}
+```
+
+**Option 2: Local directory (for nethercore contributors)**
+
+If you have the nethercore repo cloned locally:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "nethercore-plugins": {
+      "source": {
+        "source": "directory",
+        "path": "./nethercore/plugins/nethercore-zx-dev"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "nethercore-zx-dev@nethercore-plugins": true
+  }
+}
+```
+
+### Trigger Phrases
+
+The skill auto-activates when you mention:
+- "Create a Nethercore ZX game"
+- "ZX FFI functions"
+- "nether.toml" / "nether build" / "nether run"
+- "ZX graphics" / "ZX audio" / "ZX input"
+- "Rollback netcode game"
+- "WASM game with assets"
+
+### Example Queries
+
+- "Create a new Nethercore ZX game in Rust"
+- "How do I handle input in ZX?"
+- "Create a nether.toml with textures, meshes, and sounds"
+- "Build a hello world in Zig"
+- "What FFI functions are available for 3D rendering?"
+
+The skill references actual source files for FFI specs, ensuring it stays current as the codebase evolves.
 
 ## Related
 - `nethercore-platform` (private) — Backend API, web frontend

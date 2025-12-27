@@ -74,7 +74,7 @@ local_player_mask() u32                // Bitmask of local players
 ```rust
 set_tick_rate(fps)                     // 0=24, 1=30, 2=60, 3=120
 set_clear_color(0xRRGGBBAA)            // Background color
-render_mode(mode)                      // 0=Unlit, 1=Matcap, 2=MR, 3=SS
+render_mode(mode)                      // 0=Lambert, 1=Matcap, 2=MR, 3=SS
 ```
 {{#endtab}}
 
@@ -90,7 +90,7 @@ void render_mode(uint32_t mode);       // NCZX_RENDER_LAMBERT/MATCAP/PBR/HYBRID
 ```zig
 set_tick_rate(fps: u32) void           // 0=24, 1=30, 2=60, 3=120
 set_clear_color(color: u32) void       // Background color
-render_mode(mode: u32) void            // 0=Unlit, 1=Matcap, 2=MR, 3=SS
+render_mode(mode: u32) void            // 0=Lambert, 1=Matcap, 2=MR, 3=SS
 ```
 {{#endtab}}
 
