@@ -83,6 +83,14 @@ pub struct TrackerEngine {
 
     /// Row state cache for fast rollback seeks
     row_cache: RowStateCache,
+
+    /// Pattern delay (EEx) - number of times to repeat current row
+    pattern_delay: u8,
+    /// Pattern delay counter - tracks how many times row has been repeated
+    pattern_delay_count: u8,
+
+    /// Global volume slide memory (Hxy effect)
+    last_global_vol_slide: u8,
 }
 
 /// A loaded tracker module with resolved sample handles
@@ -194,6 +202,33 @@ pub struct TrackerChannel {
     pub pattern_loop_row: u16,
     pub pattern_loop_count: u8,
 
+    // Note cut/delay (ECx/EDx)
+    pub note_cut_tick: u8,
+    pub note_delay_tick: u8,
+    pub delayed_note: u8,
+    pub delayed_instrument: u8,
+
+    // Volume column effect state
+    pub vol_col_effect: u8,
+    pub vol_col_param: u8,
+
+    // Glissando control (E3x)
+    pub glissando: bool,
+
+    // Auto-vibrato (instrument) - copied from instrument on note trigger
+    pub auto_vibrato_pos: u16,
+    pub auto_vibrato_sweep: u16,
+    pub auto_vibrato_type: u8,
+    pub auto_vibrato_depth: u8,
+    pub auto_vibrato_rate: u8,
+    pub auto_vibrato_sweep_len: u8,
+
+    // High sample offset (SAx extended command)
+    pub sample_offset_high: u8,
+
+    // Key off timing (Kxx)
+    pub key_off_tick: u8,
+
     // Fade state for smooth transitions (anti-pop)
     /// Fade-out samples remaining (0 = not fading out, >0 = fading out)
     pub fade_out_samples: u16,
@@ -234,6 +269,10 @@ impl TrackerChannel {
         if self.tremolo_waveform < 4 {
             self.tremolo_pos = 0;
         }
+
+        // Reset auto-vibrato state (instrument vibrato)
+        self.auto_vibrato_pos = 0;
+        self.auto_vibrato_sweep = 0;
 
         // Set period from note
         if let Some(instr) = instrument {
@@ -354,6 +393,9 @@ impl TrackerEngine {
             current_tick: 0,
             tick_samples_rendered: 0,
             row_cache: RowStateCache::default(),
+            pattern_delay: 0,
+            pattern_delay_count: 0,
+            last_global_vol_slide: 0,
         }
     }
 
@@ -583,7 +625,7 @@ impl TrackerEngine {
 
         // Handle note
         if note.has_note() {
-            let (finetune, loop_start, loop_end, loop_type) = {
+            let (finetune, loop_start, loop_end, loop_type, vib_type, vib_depth, vib_rate, vib_sweep) = {
                 let loaded = match self.modules.get(handle as usize).and_then(|m| m.as_ref()) {
                     Some(m) => m,
                     None => return,
@@ -595,9 +637,13 @@ impl TrackerEngine {
                         instr.sample_loop_start,
                         instr.sample_loop_start + instr.sample_loop_length,
                         instr.sample_loop_type,
+                        instr.vibrato_type,
+                        instr.vibrato_depth,
+                        instr.vibrato_rate,
+                        instr.vibrato_sweep,
                     )
                 } else {
-                    (0, 0, 0, 0)
+                    (0, 0, 0, 0, 0, 0, 0, 0)
                 }
             };
 
@@ -627,6 +673,14 @@ impl TrackerEngine {
             channel.sample_loop_start = loop_start;
             channel.sample_loop_end = loop_end;
             channel.sample_loop_type = loop_type;
+
+            // Copy auto-vibrato settings from instrument
+            channel.auto_vibrato_pos = 0;
+            channel.auto_vibrato_sweep = 0;
+            channel.auto_vibrato_type = vib_type;
+            channel.auto_vibrato_depth = vib_depth;
+            channel.auto_vibrato_rate = vib_rate;
+            channel.auto_vibrato_sweep_len = vib_sweep;
         } else if note.is_note_off() {
             self.channels[ch_idx].key_off = true;
         }
@@ -636,8 +690,43 @@ impl TrackerEngine {
             self.channels[ch_idx].volume = vol as f32 / 64.0;
         }
 
+        // Handle volume column effects
+        let channel = &mut self.channels[ch_idx];
+        if let Some((effect_type, param)) = note.get_volume_effect() {
+            channel.vol_col_effect = effect_type;
+            channel.vol_col_param = param;
+
+            // Tick 0 effects (fine slides, set vibrato speed, set panning)
+            match effect_type {
+                0x8 => {
+                    // Fine volume slide down
+                    channel.volume = (channel.volume - param as f32 / 64.0).max(0.0);
+                }
+                0x9 => {
+                    // Fine volume slide up
+                    channel.volume = (channel.volume + param as f32 / 64.0).min(1.0);
+                }
+                0xA => {
+                    // Set vibrato speed
+                    channel.vibrato_speed = param;
+                }
+                0xC => {
+                    // Set panning (coarse, 0-15)
+                    channel.panning = (param as f32 / 15.0) * 2.0 - 1.0;
+                }
+                0xF => {
+                    // Tone portamento - set porta speed from volume column
+                    // Volume column uses param * 16 for speed
+                    channel.porta_speed = param * 16;
+                }
+                _ => {}
+            }
+        } else {
+            channel.vol_col_effect = 0;
+        }
+
         // Handle effects (tick 0 processing)
-        self.process_effect_tick0(ch_idx, note.effect, note.effect_param);
+        self.process_effect_tick0(ch_idx, note.effect, note.effect_param, note.note, note.instrument);
     }
 
     /// Process effect at tick 0 (row start)
@@ -647,6 +736,8 @@ impl TrackerEngine {
         ch_idx: usize,
         effect: u8,
         param: u8,
+        note_num: u8,
+        note_instrument: u8,
     ) -> (Option<u16>, Option<u16>) {
         let channel = &mut self.channels[ch_idx];
         let mut position_jump = None;
@@ -767,6 +858,10 @@ impl TrackerEngine {
                         let p = channel.last_fine_porta_down;
                         channel.period += p as f32 * 4.0;
                     }
+                    // E3x: Glissando control (rounded tone portamento)
+                    0x3 => {
+                        channel.glissando = sub_param != 0;
+                    }
                     // E4x: Set vibrato waveform
                     0x4 => {
                         channel.vibrato_waveform = sub_param & 0x07;
@@ -808,10 +903,22 @@ impl TrackerEngine {
                     0xB => {
                         channel.volume = (channel.volume - sub_param as f32 / 64.0).max(0.0);
                     }
-                    // ECx: Note cut (handled in tick processing)
-                    0xC => {}
-                    // EDx: Note delay (handled in tick processing)
-                    0xD => {}
+                    // ECx: Note cut at tick x
+                    0xC => {
+                        channel.note_cut_tick = sub_param;
+                    }
+                    // EDx: Note delay - trigger note at tick x
+                    0xD => {
+                        channel.note_delay_tick = sub_param;
+                        channel.delayed_note = note_num;
+                        channel.delayed_instrument = note_instrument;
+                    }
+                    // EEx: Pattern delay - repeat current row x times
+                    0xE => {
+                        if sub_param > 0 && self.pattern_delay == 0 {
+                            self.pattern_delay = sub_param;
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -826,12 +933,16 @@ impl TrackerEngine {
             }
             // Hxy: Global volume slide
             0x11 => {
-                // Store for per-tick processing
+                if param != 0 {
+                    self.last_global_vol_slide = param;
+                }
             }
             // Kxx: Key off (at tick xx)
             0x14 => {
                 if param == 0 {
                     channel.trigger_key_off();
+                } else {
+                    channel.key_off_tick = param;
                 }
             }
             // Lxx: Set envelope position
@@ -927,20 +1038,54 @@ impl TrackerEngine {
                 }
             }
 
-            // Vibrato
+            // Vibrato (FT2-compatible depth and speed)
+            // Depth: 128.0/15.0 ≈ 8.533 gives ±2 semitones (±128 period units) at depth=15
+            // Speed: 4x faster oscillation to match libxm/FT2
             if channel.vibrato_depth > 0 {
                 let vibrato = get_waveform_value(channel.vibrato_waveform, channel.vibrato_pos);
-                let delta = vibrato * channel.vibrato_depth as f32 * 4.0;
+                let delta = vibrato * channel.vibrato_depth as f32 * (128.0 / 15.0);
                 channel.period = channel.base_period + delta;
-                channel.vibrato_pos = (channel.vibrato_pos + channel.vibrato_speed) & 0x3F;
+                channel.vibrato_pos =
+                    channel.vibrato_pos.wrapping_add(channel.vibrato_speed << 2) & 0x3F;
             }
 
-            // Tremolo
+            // Auto-vibrato (instrument vibrato, applied in addition to pattern vibrato)
+            // Rate is 4x slower than pattern vibrato, uses sweep envelope to ramp in
+            if channel.auto_vibrato_depth > 0 {
+                // Get waveform value using stored instrument waveform type
+                let auto_vib = get_waveform_value(channel.auto_vibrato_type, (channel.auto_vibrato_pos >> 2) as u8);
+
+                // Apply sweep envelope (ramps in over vibrato_sweep ticks)
+                let sweep_factor = if channel.auto_vibrato_sweep_len > 0 {
+                    let sweep_progress = channel.auto_vibrato_sweep as f32
+                        / (channel.auto_vibrato_sweep_len as f32 * 256.0);
+                    sweep_progress.min(1.0)
+                } else {
+                    1.0
+                };
+
+                // Apply auto-vibrato to period (adds to current period, not base)
+                let delta = auto_vib * channel.auto_vibrato_depth as f32 * sweep_factor * (128.0 / 15.0);
+                channel.period += delta;
+
+                // Advance auto-vibrato position (slower rate than pattern vibrato)
+                channel.auto_vibrato_pos = channel.auto_vibrato_pos.wrapping_add(channel.auto_vibrato_rate as u16);
+
+                // Advance sweep
+                if channel.auto_vibrato_sweep < 65535 {
+                    channel.auto_vibrato_sweep = channel.auto_vibrato_sweep.saturating_add(1);
+                }
+            }
+
+            // Tremolo (FT2-compatible depth and speed)
+            // Depth: * 4.0 / 128.0 matches libxm formula
+            // Speed: 4x faster oscillation to match libxm/FT2
             if channel.tremolo_depth > 0 {
                 let tremolo = get_waveform_value(channel.tremolo_waveform, channel.tremolo_pos);
-                let delta = tremolo * channel.tremolo_depth as f32 / 64.0;
+                let delta = tremolo * channel.tremolo_depth as f32 * 4.0 / 128.0;
                 channel.volume = (channel.volume + delta).clamp(0.0, 1.0);
-                channel.tremolo_pos = (channel.tremolo_pos + channel.tremolo_speed) & 0x3F;
+                channel.tremolo_pos =
+                    channel.tremolo_pos.wrapping_add(channel.tremolo_speed << 2) & 0x3F;
             }
 
             // Retrigger
@@ -956,6 +1101,94 @@ impl TrackerEngine {
             if channel.panning_slide != 0 {
                 channel.panning =
                     (channel.panning + channel.panning_slide as f32 / 255.0).clamp(-1.0, 1.0);
+            }
+
+            // Note cut (ECx) - cut note at tick x
+            if channel.note_cut_tick > 0 && tick == channel.note_cut_tick as u16 {
+                channel.volume = 0.0;
+                channel.note_on = false;
+            }
+
+            // Note delay (EDx) - trigger note at tick x
+            // Note: The actual note triggering with instrument data happens in process_note
+            // Here we just set the period/volume if delayed note data is stored
+            if channel.note_delay_tick > 0 && tick == channel.note_delay_tick as u16 {
+                if channel.delayed_note > 0 && channel.delayed_note <= 96 {
+                    // Reset sample position and trigger note-like behavior
+                    channel.sample_pos = 0.0;
+                    channel.note_on = true;
+                    channel.key_off = false;
+                    channel.volume_envelope_pos = 0;
+                    channel.panning_envelope_pos = 0;
+                    channel.volume_fadeout = 65535;
+                    // Reset vibrato/tremolo positions
+                    if channel.vibrato_waveform < 4 {
+                        channel.vibrato_pos = 0;
+                    }
+                    if channel.tremolo_waveform < 4 {
+                        channel.tremolo_pos = 0;
+                    }
+                    // Set period from delayed note
+                    channel.base_period = note_to_period(channel.delayed_note, channel.finetune);
+                    channel.period = channel.base_period;
+                }
+                // Clear the delay tick so it doesn't trigger again
+                channel.note_delay_tick = 0;
+            }
+
+            // Key off timing (Kxx) - key off at tick x
+            if channel.key_off_tick > 0 && tick == channel.key_off_tick as u16 {
+                channel.key_off = true;
+            }
+
+            // Volume column effects (per-tick)
+            match channel.vol_col_effect {
+                0x6 => {
+                    // Volume slide down
+                    channel.volume =
+                        (channel.volume - channel.vol_col_param as f32 / 64.0).max(0.0);
+                }
+                0x7 => {
+                    // Volume slide up
+                    channel.volume =
+                        (channel.volume + channel.vol_col_param as f32 / 64.0).min(1.0);
+                }
+                0xB => {
+                    // Vibrato with set depth (vibrato already applied above if depth > 0)
+                    channel.vibrato_depth = channel.vol_col_param;
+                }
+                0xD => {
+                    // Panning slide left
+                    channel.panning =
+                        (channel.panning - channel.vol_col_param as f32 / 16.0).clamp(-1.0, 1.0);
+                }
+                0xE => {
+                    // Panning slide right
+                    channel.panning =
+                        (channel.panning + channel.vol_col_param as f32 / 16.0).clamp(-1.0, 1.0);
+                }
+                0xF => {
+                    // Tone portamento from volume column - porta_speed already set on tick 0
+                    // The actual tone portamento is handled above in the tone portamento section
+                }
+                _ => {}
+            }
+
+            // Glissando - round period to semitone if enabled during tone portamento
+            if channel.glissando && channel.target_period > 0.0 {
+                // Round to nearest 64 period units (one semitone)
+                channel.period = (channel.period / 64.0).round() * 64.0;
+            }
+        }
+
+        // Global volume slide (Hxy) - applied outside channel loop
+        if self.last_global_vol_slide != 0 {
+            let up = (self.last_global_vol_slide >> 4) as f32 / 64.0;
+            let down = (self.last_global_vol_slide & 0x0F) as f32 / 64.0;
+            if up > 0.0 {
+                self.global_volume = (self.global_volume + up).min(1.0);
+            } else if down > 0.0 {
+                self.global_volume = (self.global_volume - down).max(0.0);
             }
         }
     }
@@ -1290,35 +1523,53 @@ fn samples_per_tick(bpm: u16, sample_rate: u32) -> u32 {
     (sample_rate * 5 / 2) / bpm as u32
 }
 
+/// FT2 16-point quarter-sine lookup table for vibrato/tremolo
+/// Values represent sin(i * π/32) * 127 for i = 0..15
+const SINE_LUT: [i8; 16] = [0, 12, 24, 37, 48, 60, 71, 81, 90, 98, 106, 112, 118, 122, 125, 127];
+
 /// Get waveform value for vibrato/tremolo
 ///
+/// Uses FT2-compatible integer lookup tables for byte-exact compatibility.
+///
 /// Waveform types:
-/// - 0: Sine (default)
-/// - 1: Ramp down
+/// - 0: Sine (FT2 LUT with quadrant mirroring)
+/// - 1: Ramp down (FT2-style sawtooth)
 /// - 2: Square
-/// - 3: Random (approximated with pseudo-random)
+/// - 3: Random (deterministic pseudo-random)
 fn get_waveform_value(waveform: u8, position: u8) -> f32 {
-    let pos = (position & 0x3F) as f32; // 0-63
+    let pos = position & 0x3F; // 0-63
 
     match waveform & 0x03 {
         0 => {
-            // Sine wave: sin(position * 2π / 64)
-            (pos * std::f32::consts::PI * 2.0 / 64.0).sin()
+            // FT2 sine LUT with quadrant mirroring
+            // Quarter 0 (0-15): ascending from 0 to 127
+            // Quarter 1 (16-31): descending from 127 to 0
+            // Quarter 2 (32-47): ascending from 0 to -127
+            // Quarter 3 (48-63): descending from -127 to 0
+            let idx = (pos & 0x0F) as usize;
+            let val = if (pos & 0x10) != 0 {
+                // Quarters 1 and 3: mirror the LUT
+                SINE_LUT[15 - idx]
+            } else {
+                // Quarters 0 and 2: direct LUT lookup
+                SINE_LUT[idx]
+            };
+            let signed = if pos < 32 { val } else { -val };
+            signed as f32 / 127.0
         }
         1 => {
-            // Ramp down: 1.0 at 0, -1.0 at 32, back to 1.0 at 64
-            if pos < 32.0 {
-                1.0 - pos / 16.0
-            } else {
-                -1.0 + (pos - 32.0) / 16.0
-            }
+            // Ramp down (FT2-style sawtooth)
+            // FT2/libxm: "ramp down table is upside down" - starts high, goes low
+            // Position 0 = +1.0, position 32 = -1.0, position 63 = ~+1.0
+            let ramp = 32i8 - (pos as i8);
+            (ramp as f32) / 32.0
         }
         2 => {
             // Square wave: 1.0 for first half, -1.0 for second
-            if pos < 32.0 { 1.0 } else { -1.0 }
+            if pos < 32 { 1.0 } else { -1.0 }
         }
         _ => {
-            // "Random" - use a simple hash-like function
+            // "Random" - deterministic pseudo-random using position as seed
             let x = position.wrapping_mul(0x9E) ^ 0x5C;
             (x as f32 / 127.5) - 1.0
         }
