@@ -509,6 +509,333 @@ pub fn generate_vent_shrimp(output_dir: &Path) {
     );
 }
 
+// === ADDITIONAL ZONE 1 ===
+
+/// Coral crab - boxy body with claws (~80 tris)
+pub fn generate_coral_crab(output_dir: &Path) {
+    println!("  Generating: coral_crab.obj");
+
+    // Boxy carapace
+    let mut body: UnpackedMesh = generate_cube(0.06, 0.04, 0.08);
+    body.apply(Transform::translate(0.0, 0.02, 0.0));
+
+    // Eyes on stalks
+    let mut eye_stalk_l: UnpackedMesh = generate_cylinder(0.005, 0.005, 0.02, 4);
+    eye_stalk_l.apply(Transform::translate(0.02, 0.05, -0.02));
+
+    let mut eye_stalk_r: UnpackedMesh = generate_cylinder(0.005, 0.005, 0.02, 4);
+    eye_stalk_r.apply(Transform::translate(0.02, 0.05, 0.02));
+
+    let mut eye_l: UnpackedMesh = generate_sphere(0.008, 4, 3);
+    eye_l.apply(Transform::translate(0.02, 0.07, -0.02));
+
+    let mut eye_r: UnpackedMesh = generate_sphere(0.008, 4, 3);
+    eye_r.apply(Transform::translate(0.02, 0.07, 0.02));
+
+    // Claws (large pincers)
+    let mut claw_l_arm: UnpackedMesh = generate_capsule(0.012, 0.03, 4, 2);
+    claw_l_arm.apply(Transform::rotate_z(-40.0));
+    claw_l_arm.apply(Transform::translate(0.04, 0.01, -0.06));
+
+    let mut claw_l_pincer: UnpackedMesh = generate_cube(0.025, 0.015, 0.01);
+    claw_l_pincer.apply(Transform::translate(0.06, 0.025, -0.06));
+
+    let mut claw_r_arm: UnpackedMesh = generate_capsule(0.012, 0.03, 4, 2);
+    claw_r_arm.apply(Transform::rotate_z(-40.0));
+    claw_r_arm.apply(Transform::translate(0.04, 0.01, 0.06));
+
+    let mut claw_r_pincer: UnpackedMesh = generate_cube(0.025, 0.015, 0.01);
+    claw_r_pincer.apply(Transform::translate(0.06, 0.025, 0.06));
+
+    // Walking legs (4 pairs)
+    let mut legs = Vec::new();
+    for i in 0..4 {
+        let z_offset = -0.03 + (i as f32) * 0.02;
+
+        let mut leg_l: UnpackedMesh = generate_cylinder(0.004, 0.004, 0.03, 3);
+        leg_l.apply(Transform::rotate_z(60.0));
+        leg_l.apply(Transform::translate(-0.02, 0.0, z_offset - 0.02));
+        legs.push(leg_l);
+
+        let mut leg_r: UnpackedMesh = generate_cylinder(0.004, 0.004, 0.03, 3);
+        leg_r.apply(Transform::rotate_z(60.0));
+        leg_r.apply(Transform::translate(-0.02, 0.0, z_offset + 0.02));
+        legs.push(leg_r);
+    }
+
+    let leg_refs: Vec<&UnpackedMesh> = legs.iter().collect();
+    let mut parts = vec![
+        &body, &eye_stalk_l, &eye_stalk_r, &eye_l, &eye_r,
+        &claw_l_arm, &claw_l_pincer, &claw_r_arm, &claw_r_pincer,
+    ];
+    parts.extend(leg_refs);
+
+    let mesh = combine(&parts);
+
+    let path = output_dir.join("coral_crab.obj");
+    write_obj(&mesh, &path, "coral_crab").expect("Failed to write OBJ file");
+    println!(
+        "    -> Written: {} ({} verts, {} tris)",
+        path.display(),
+        mesh.positions.len(),
+        mesh.indices.len() / 3
+    );
+}
+
+// === ADDITIONAL ZONE 2 ===
+
+/// Giant squid - torpedo body with long tentacles (~350 tris)
+pub fn generate_giant_squid(output_dir: &Path) {
+    println!("  Generating: giant_squid.obj");
+
+    // Torpedo-shaped mantle
+    let mut mantle: UnpackedMesh = generate_capsule(0.15, 0.5, 10, 8);
+    mantle.apply(Transform::rotate_z(90.0));
+    mantle.apply(Transform::scale(1.0, 0.8, 0.8));
+
+    // Fins at rear
+    let mut fin_l: UnpackedMesh = generate_sphere(0.1, 6, 4);
+    fin_l.apply(Transform::scale(0.3, 1.0, 1.5));
+    fin_l.apply(Transform::translate(-0.35, 0.0, -0.12));
+
+    let mut fin_r: UnpackedMesh = generate_sphere(0.1, 6, 4);
+    fin_r.apply(Transform::scale(0.3, 1.0, 1.5));
+    fin_r.apply(Transform::translate(-0.35, 0.0, 0.12));
+
+    // Head with large eyes
+    let mut head: UnpackedMesh = generate_sphere(0.12, 8, 6);
+    head.apply(Transform::translate(0.35, 0.0, 0.0));
+
+    let mut eye_l: UnpackedMesh = generate_sphere(0.06, 6, 5);
+    eye_l.apply(Transform::translate(0.38, 0.04, -0.1));
+
+    let mut eye_r: UnpackedMesh = generate_sphere(0.06, 6, 5);
+    eye_r.apply(Transform::translate(0.38, 0.04, 0.1));
+
+    // 8 arms (shorter)
+    let mut arms = Vec::new();
+    for i in 0..8 {
+        let angle = (i as f32) * 45.0;
+        let angle_rad = angle.to_radians();
+        let mut arm: UnpackedMesh = generate_cylinder(0.02, 0.01, 0.25, 5);
+        arm.apply(Transform::rotate_z(-30.0));
+        arm.apply(Transform::translate(
+            0.5 + angle_rad.cos() * 0.05,
+            angle_rad.sin() * 0.08,
+            angle_rad.cos() * 0.08,
+        ));
+        arms.push(arm);
+    }
+
+    // 2 long tentacles
+    let mut tentacle_l: UnpackedMesh = generate_cylinder(0.015, 0.008, 0.6, 6);
+    tentacle_l.apply(Transform::rotate_z(-15.0));
+    tentacle_l.apply(Transform::translate(0.55, -0.03, -0.05));
+
+    let mut tentacle_r: UnpackedMesh = generate_cylinder(0.015, 0.008, 0.6, 6);
+    tentacle_r.apply(Transform::rotate_z(-15.0));
+    tentacle_r.apply(Transform::translate(0.55, -0.03, 0.05));
+
+    // Tentacle clubs
+    let mut club_l: UnpackedMesh = generate_sphere(0.03, 5, 4);
+    club_l.apply(Transform::scale(1.5, 0.6, 1.0));
+    club_l.apply(Transform::translate(1.1, -0.15, -0.05));
+
+    let mut club_r: UnpackedMesh = generate_sphere(0.03, 5, 4);
+    club_r.apply(Transform::scale(1.5, 0.6, 1.0));
+    club_r.apply(Transform::translate(1.1, -0.15, 0.05));
+
+    let arm_refs: Vec<&UnpackedMesh> = arms.iter().collect();
+    let mut parts = vec![
+        &mantle, &fin_l, &fin_r, &head, &eye_l, &eye_r,
+        &tentacle_l, &tentacle_r, &club_l, &club_r,
+    ];
+    parts.extend(arm_refs);
+
+    let mesh = combine(&parts);
+
+    let path = output_dir.join("giant_squid.obj");
+    write_obj(&mesh, &path, "giant_squid").expect("Failed to write OBJ file");
+    println!(
+        "    -> Written: {} ({} verts, {} tris)",
+        path.display(),
+        mesh.positions.len(),
+        mesh.indices.len() / 3
+    );
+}
+
+// === ADDITIONAL ZONE 3 ===
+
+/// Vampire squid - webbed arms with spines (~200 tris)
+pub fn generate_vampire_squid(output_dir: &Path) {
+    println!("  Generating: vampire_squid.obj");
+
+    // Round mantle (smaller than giant squid)
+    let mut mantle: UnpackedMesh = generate_sphere(0.1, 10, 8);
+    mantle.apply(Transform::scale(1.2, 0.9, 0.9));
+
+    // Fins (ear-like)
+    let mut fin_l: UnpackedMesh = generate_sphere(0.05, 6, 4);
+    fin_l.apply(Transform::scale(0.3, 0.8, 1.0));
+    fin_l.apply(Transform::translate(-0.05, 0.06, -0.1));
+
+    let mut fin_r: UnpackedMesh = generate_sphere(0.05, 6, 4);
+    fin_r.apply(Transform::scale(0.3, 0.8, 1.0));
+    fin_r.apply(Transform::translate(-0.05, 0.06, 0.1));
+
+    // Large eyes (proportionally huge)
+    let mut eye_l: UnpackedMesh = generate_sphere(0.035, 6, 5);
+    eye_l.apply(Transform::translate(0.08, 0.02, -0.06));
+
+    let mut eye_r: UnpackedMesh = generate_sphere(0.035, 6, 5);
+    eye_r.apply(Transform::translate(0.08, 0.02, 0.06));
+
+    // Webbed arms (8 arms connected by web)
+    let mut arms = Vec::new();
+    for i in 0..8 {
+        let angle = (i as f32) * 45.0;
+        let angle_rad = angle.to_radians();
+
+        // Arm with spines
+        let mut arm: UnpackedMesh = generate_cylinder(0.012, 0.008, 0.15, 4);
+        arm.apply(Transform::rotate_z(20.0));
+        arm.apply(Transform::rotate_y(angle));
+        arm.apply(Transform::translate(0.12, -0.02, 0.0));
+        arms.push(arm);
+
+        // Spine on arm
+        let mut spine: UnpackedMesh = generate_cylinder(0.003, 0.003, 0.03, 3);
+        spine.apply(Transform::rotate_z(60.0));
+        spine.apply(Transform::rotate_y(angle));
+        spine.apply(Transform::translate(0.18, 0.0, 0.0));
+        arms.push(spine);
+    }
+
+    // Web between arms (simplified as thin disk)
+    let mut web: UnpackedMesh = generate_cylinder(0.12, 0.12, 0.005, 8);
+    web.apply(Transform::translate(0.1, -0.05, 0.0));
+
+    // Bioluminescent photophores (dots)
+    let mut photo1: UnpackedMesh = generate_sphere(0.008, 3, 2);
+    photo1.apply(Transform::translate(0.0, 0.08, 0.0));
+
+    let mut photo2: UnpackedMesh = generate_sphere(0.008, 3, 2);
+    photo2.apply(Transform::translate(-0.06, 0.05, 0.0));
+
+    let arm_refs: Vec<&UnpackedMesh> = arms.iter().collect();
+    let mut parts = vec![
+        &mantle, &fin_l, &fin_r, &eye_l, &eye_r, &web, &photo1, &photo2,
+    ];
+    parts.extend(arm_refs);
+
+    let mesh = combine(&parts);
+
+    let path = output_dir.join("vampire_squid.obj");
+    write_obj(&mesh, &path, "vampire_squid").expect("Failed to write OBJ file");
+    println!(
+        "    -> Written: {} ({} verts, {} tris)",
+        path.display(),
+        mesh.positions.len(),
+        mesh.indices.len() / 3
+    );
+}
+
+// === ADDITIONAL ZONE 4 ===
+
+/// Ghost fish - ethereal, minimal form (~60 tris)
+pub fn generate_ghost_fish(output_dir: &Path) {
+    println!("  Generating: ghost_fish.obj");
+
+    // Elongated translucent body
+    let mut body: UnpackedMesh = generate_capsule(0.03, 0.12, 6, 4);
+    body.apply(Transform::rotate_z(90.0));
+    body.apply(Transform::scale(1.0, 0.6, 0.4));
+
+    // Barely visible fins
+    let mut dorsal: UnpackedMesh = generate_cube(0.06, 0.02, 0.003);
+    dorsal.apply(Transform::translate(0.0, 0.025, 0.0));
+
+    let mut tail: UnpackedMesh = generate_cube(0.02, 0.03, 0.003);
+    tail.apply(Transform::translate(-0.08, 0.0, 0.0));
+
+    // Ghostly pale eyes (large, adapted to darkness)
+    let mut eye_l: UnpackedMesh = generate_sphere(0.01, 4, 3);
+    eye_l.apply(Transform::translate(0.05, 0.01, -0.015));
+
+    let mut eye_r: UnpackedMesh = generate_sphere(0.01, 4, 3);
+    eye_r.apply(Transform::translate(0.05, 0.01, 0.015));
+
+    let mesh = combine(&[&body, &dorsal, &tail, &eye_l, &eye_r]);
+
+    let path = output_dir.join("ghost_fish.obj");
+    write_obj(&mesh, &path, "ghost_fish").expect("Failed to write OBJ file");
+    println!(
+        "    -> Written: {} ({} verts, {} tris)",
+        path.display(),
+        mesh.positions.len(),
+        mesh.indices.len() / 3
+    );
+}
+
+/// Vent octopus - pale with long arms (~180 tris)
+pub fn generate_vent_octopus(output_dir: &Path) {
+    println!("  Generating: vent_octopus.obj");
+
+    // Smaller, flatter mantle than dumbo
+    let mut mantle: UnpackedMesh = generate_sphere(0.08, 8, 6);
+    mantle.apply(Transform::scale(1.0, 0.7, 0.9));
+
+    // Small head bump
+    let mut head: UnpackedMesh = generate_sphere(0.04, 6, 5);
+    head.apply(Transform::translate(0.06, 0.02, 0.0));
+
+    // Eyes
+    let mut eye_l: UnpackedMesh = generate_sphere(0.015, 4, 3);
+    eye_l.apply(Transform::translate(0.08, 0.03, -0.03));
+
+    let mut eye_r: UnpackedMesh = generate_sphere(0.015, 4, 3);
+    eye_r.apply(Transform::translate(0.08, 0.03, 0.03));
+
+    // 8 long, thin arms
+    let mut arms = Vec::new();
+    for i in 0..8 {
+        let angle = (i as f32) * 45.0;
+        let angle_rad = angle.to_radians();
+
+        // Long arm tapering
+        let mut arm: UnpackedMesh = generate_cylinder(0.012, 0.004, 0.18, 5);
+        arm.apply(Transform::rotate_x(angle_rad));
+        arm.apply(Transform::rotate_z(30.0));
+        arm.apply(Transform::translate(0.03, -0.05, angle_rad.sin() * 0.06));
+        arms.push(arm);
+
+        // Bioluminescent arm tip
+        let mut tip: UnpackedMesh = generate_sphere(0.006, 3, 2);
+        tip.apply(Transform::rotate_x(angle_rad));
+        tip.apply(Transform::translate(
+            0.03 + 0.15,
+            -0.05 - 0.08,
+            angle_rad.sin() * 0.06,
+        ));
+        arms.push(tip);
+    }
+
+    let arm_refs: Vec<&UnpackedMesh> = arms.iter().collect();
+    let mut parts = vec![&mantle, &head, &eye_l, &eye_r];
+    parts.extend(arm_refs);
+
+    let mesh = combine(&parts);
+
+    let path = output_dir.join("vent_octopus.obj");
+    write_obj(&mesh, &path, "vent_octopus").expect("Failed to write OBJ file");
+    println!(
+        "    -> Written: {} ({} verts, {} tris)",
+        path.display(),
+        mesh.positions.len(),
+        mesh.indices.len() / 3
+    );
+}
+
 // === EPIC ENCOUNTERS ===
 
 /// Blue whale - massive silhouette (~600 tris)
@@ -569,6 +896,183 @@ pub fn generate_blue_whale(output_dir: &Path) {
 
     let path = output_dir.join("blue_whale.obj");
     write_obj(&mesh, &path, "blue_whale").expect("Failed to write OBJ file");
+    println!(
+        "    -> Written: {} ({} verts, {} tris)",
+        path.display(),
+        mesh.positions.len(),
+        mesh.indices.len() / 3
+    );
+}
+
+/// Sperm whale - massive with boxy head (~550 tris)
+pub fn generate_sperm_whale(output_dir: &Path) {
+    println!("  Generating: sperm_whale.obj");
+
+    // Distinctive boxy head (spermaceti organ)
+    let mut head: UnpackedMesh = generate_cube(0.5, 0.35, 0.3);
+    head.apply(Transform::translate(0.8, 0.0, 0.0));
+
+    // Rounded snout
+    let mut snout: UnpackedMesh = generate_sphere(0.25, 8, 6);
+    snout.apply(Transform::scale(1.0, 0.7, 0.8));
+    snout.apply(Transform::translate(1.15, -0.05, 0.0));
+
+    // Streamlined body (tapers toward tail)
+    let mut body: UnpackedMesh = generate_capsule(0.28, 1.5, 12, 8);
+    body.apply(Transform::rotate_z(90.0));
+    body.apply(Transform::scale(1.0, 0.8, 0.7));
+
+    // Tail peduncle (narrow section before flukes)
+    let mut peduncle: UnpackedMesh = generate_cylinder(0.08, 0.08, 0.4, 6);
+    peduncle.apply(Transform::rotate_z(90.0));
+    peduncle.apply(Transform::translate(-1.0, 0.0, 0.0));
+
+    // Tail flukes (horizontal)
+    let mut fluke_l: UnpackedMesh = generate_sphere(0.2, 6, 4);
+    fluke_l.apply(Transform::scale(1.5, 0.12, 1.0));
+    fluke_l.apply(Transform::rotate_y(25.0));
+    fluke_l.apply(Transform::translate(-1.3, 0.0, -0.15));
+
+    let mut fluke_r: UnpackedMesh = generate_sphere(0.2, 6, 4);
+    fluke_r.apply(Transform::scale(1.5, 0.12, 1.0));
+    fluke_r.apply(Transform::rotate_y(-25.0));
+    fluke_r.apply(Transform::translate(-1.3, 0.0, 0.15));
+
+    // Small pectoral flippers
+    let mut flipper_l: UnpackedMesh = generate_capsule(0.05, 0.2, 4, 3);
+    flipper_l.apply(Transform::rotate_z(70.0));
+    flipper_l.apply(Transform::translate(0.4, -0.1, -0.25));
+    flipper_l.apply(Transform::scale(1.0, 0.3, 1.0));
+
+    let mut flipper_r: UnpackedMesh = generate_capsule(0.05, 0.2, 4, 3);
+    flipper_r.apply(Transform::rotate_z(70.0));
+    flipper_r.apply(Transform::translate(0.4, -0.1, 0.25));
+    flipper_r.apply(Transform::scale(1.0, 0.3, 1.0));
+
+    // Lower jaw (smaller, offset down)
+    let mut jaw: UnpackedMesh = generate_capsule(0.08, 0.35, 6, 4);
+    jaw.apply(Transform::rotate_z(90.0));
+    jaw.apply(Transform::translate(1.0, -0.2, 0.0));
+
+    // Eye (small relative to head)
+    let mut eye: UnpackedMesh = generate_sphere(0.03, 5, 4);
+    eye.apply(Transform::translate(0.55, 0.05, 0.28));
+
+    // Blowhole
+    let mut blowhole: UnpackedMesh = generate_cylinder(0.03, 0.03, 0.02, 4);
+    blowhole.apply(Transform::translate(0.9, 0.18, 0.08));
+
+    let mesh = combine(&[
+        &head, &snout, &body, &peduncle, &fluke_l, &fluke_r,
+        &flipper_l, &flipper_r, &jaw, &eye, &blowhole,
+    ]);
+
+    let path = output_dir.join("sperm_whale.obj");
+    write_obj(&mesh, &path, "sperm_whale").expect("Failed to write OBJ file");
+    println!(
+        "    -> Written: {} ({} verts, {} tris)",
+        path.display(),
+        mesh.positions.len(),
+        mesh.indices.len() / 3
+    );
+}
+
+/// Giant isopod - large crustacean with segmented body (~250 tris)
+pub fn generate_giant_isopod(output_dir: &Path) {
+    println!("  Generating: giant_isopod.obj");
+
+    // Segmented body (7 thorax segments + pleon)
+    let mut segments = Vec::new();
+    for i in 0..8 {
+        let x_offset = 0.08 - (i as f32) * 0.025;
+        let width = if i < 7 { 0.06 - (i as f32) * 0.003 } else { 0.04 };
+        let height = 0.03 - (i as f32) * 0.002;
+
+        let mut segment: UnpackedMesh = generate_sphere(width, 6, 4);
+        segment.apply(Transform::scale(0.8, height / width, 1.0));
+        segment.apply(Transform::translate(x_offset, 0.0, 0.0));
+        segments.push(segment);
+    }
+
+    // Head shield (cephalon)
+    let mut head: UnpackedMesh = generate_sphere(0.05, 8, 6);
+    head.apply(Transform::scale(1.2, 0.6, 1.0));
+    head.apply(Transform::translate(0.12, 0.0, 0.0));
+
+    // Large compound eyes
+    let mut eye_l: UnpackedMesh = generate_sphere(0.015, 5, 4);
+    eye_l.apply(Transform::translate(0.14, 0.02, -0.04));
+
+    let mut eye_r: UnpackedMesh = generate_sphere(0.015, 5, 4);
+    eye_r.apply(Transform::translate(0.14, 0.02, 0.04));
+
+    // Antennae (2 pairs)
+    let mut antenna1_l: UnpackedMesh = generate_cylinder(0.003, 0.003, 0.06, 3);
+    antenna1_l.apply(Transform::rotate_z(-30.0));
+    antenna1_l.apply(Transform::rotate_y(-20.0));
+    antenna1_l.apply(Transform::translate(0.16, 0.02, -0.02));
+
+    let mut antenna1_r: UnpackedMesh = generate_cylinder(0.003, 0.003, 0.06, 3);
+    antenna1_r.apply(Transform::rotate_z(-30.0));
+    antenna1_r.apply(Transform::rotate_y(20.0));
+    antenna1_r.apply(Transform::translate(0.16, 0.02, 0.02));
+
+    let mut antenna2_l: UnpackedMesh = generate_cylinder(0.002, 0.002, 0.04, 3);
+    antenna2_l.apply(Transform::rotate_z(-45.0));
+    antenna2_l.apply(Transform::rotate_y(-35.0));
+    antenna2_l.apply(Transform::translate(0.15, 0.015, -0.025));
+
+    let mut antenna2_r: UnpackedMesh = generate_cylinder(0.002, 0.002, 0.04, 3);
+    antenna2_r.apply(Transform::rotate_z(-45.0));
+    antenna2_r.apply(Transform::rotate_y(35.0));
+    antenna2_r.apply(Transform::translate(0.15, 0.015, 0.025));
+
+    // 7 pairs of walking legs (pereopods)
+    let mut legs = Vec::new();
+    for i in 0..7 {
+        let x_offset = 0.06 - (i as f32) * 0.02;
+
+        let mut leg_l: UnpackedMesh = generate_cylinder(0.004, 0.003, 0.04, 3);
+        leg_l.apply(Transform::rotate_z(80.0));
+        leg_l.apply(Transform::rotate_y(-30.0));
+        leg_l.apply(Transform::translate(x_offset, -0.01, -0.055));
+        legs.push(leg_l);
+
+        let mut leg_r: UnpackedMesh = generate_cylinder(0.004, 0.003, 0.04, 3);
+        leg_r.apply(Transform::rotate_z(80.0));
+        leg_r.apply(Transform::rotate_y(30.0));
+        leg_r.apply(Transform::translate(x_offset, -0.01, 0.055));
+        legs.push(leg_r);
+    }
+
+    // Tail (telson) - rounded end plate
+    let mut telson: UnpackedMesh = generate_sphere(0.035, 6, 4);
+    telson.apply(Transform::scale(1.0, 0.4, 1.2));
+    telson.apply(Transform::translate(-0.12, -0.005, 0.0));
+
+    // Uropods (tail appendages)
+    let mut uropod_l: UnpackedMesh = generate_sphere(0.02, 4, 3);
+    uropod_l.apply(Transform::scale(1.5, 0.3, 1.0));
+    uropod_l.apply(Transform::translate(-0.14, -0.01, -0.035));
+
+    let mut uropod_r: UnpackedMesh = generate_sphere(0.02, 4, 3);
+    uropod_r.apply(Transform::scale(1.5, 0.3, 1.0));
+    uropod_r.apply(Transform::translate(-0.14, -0.01, 0.035));
+
+    let segment_refs: Vec<&UnpackedMesh> = segments.iter().collect();
+    let leg_refs: Vec<&UnpackedMesh> = legs.iter().collect();
+    let mut parts = vec![
+        &head, &eye_l, &eye_r,
+        &antenna1_l, &antenna1_r, &antenna2_l, &antenna2_r,
+        &telson, &uropod_l, &uropod_r,
+    ];
+    parts.extend(segment_refs);
+    parts.extend(leg_refs);
+
+    let mesh = combine(&parts);
+
+    let path = output_dir.join("giant_isopod.obj");
+    write_obj(&mesh, &path, "giant_isopod").expect("Failed to write OBJ file");
     println!(
         "    -> Written: {} ({} verts, {} tris)",
         path.display(),

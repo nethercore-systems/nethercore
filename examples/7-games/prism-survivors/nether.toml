@@ -1,0 +1,282 @@
+[game]
+id = "prism-survivors"
+title = "PRISM SURVIVORS"
+author = "Nethercore Studios"
+version = "0.1.0"
+render_mode = 3  # Mode 3: Specular-Shininess Blinn-Phong
+
+# === HEROES ===
+[[assets.meshes]]
+id = "knight"
+path = "assets/models/meshes/knight.obj"
+
+[[assets.meshes]]
+id = "mage"
+path = "assets/models/meshes/mage.obj"
+
+[[assets.meshes]]
+id = "ranger"
+path = "assets/models/meshes/ranger.obj"
+
+[[assets.meshes]]
+id = "cleric"
+path = "assets/models/meshes/cleric.obj"
+
+[[assets.meshes]]
+id = "necromancer"
+path = "assets/models/meshes/necromancer.obj"
+
+[[assets.meshes]]
+id = "paladin"
+path = "assets/models/meshes/paladin.obj"
+
+# === BASIC ENEMIES ===
+[[assets.meshes]]
+id = "golem"
+path = "assets/models/meshes/golem.obj"
+
+[[assets.meshes]]
+id = "crawler"
+path = "assets/models/meshes/crawler.obj"
+
+[[assets.meshes]]
+id = "wisp"
+path = "assets/models/meshes/wisp.obj"
+
+[[assets.meshes]]
+id = "skeleton"
+path = "assets/models/meshes/skeleton.obj"
+
+[[assets.meshes]]
+id = "shade"
+path = "assets/models/meshes/shade.obj"
+
+[[assets.meshes]]
+id = "berserker"
+path = "assets/models/meshes/berserker.obj"
+
+[[assets.meshes]]
+id = "arcane_sentinel"
+path = "assets/models/meshes/arcane_sentinel.obj"
+
+# === ELITE ENEMIES ===
+[[assets.meshes]]
+id = "crystal_knight"
+path = "assets/models/meshes/crystal_knight.obj"
+
+[[assets.meshes]]
+id = "void_mage"
+path = "assets/models/meshes/void_mage.obj"
+
+[[assets.meshes]]
+id = "golem_titan"
+path = "assets/models/meshes/golem_titan.obj"
+
+[[assets.meshes]]
+id = "specter_lord"
+path = "assets/models/meshes/specter_lord.obj"
+
+# === BOSSES ===
+[[assets.meshes]]
+id = "prism_colossus"
+path = "assets/models/meshes/prism_colossus.obj"
+
+[[assets.meshes]]
+id = "void_dragon"
+path = "assets/models/meshes/void_dragon.obj"
+
+# === PICKUPS ===
+[[assets.meshes]]
+id = "xp_gem"
+path = "assets/models/meshes/xp_gem.obj"
+
+[[assets.meshes]]
+id = "coin"
+path = "assets/models/meshes/coin.obj"
+
+[[assets.meshes]]
+id = "powerup_orb"
+path = "assets/models/meshes/powerup_orb.obj"
+
+# === ARENA ===
+[[assets.meshes]]
+id = "arena_floor"
+path = "assets/models/meshes/arena_floor.obj"
+
+# === PROJECTILES ===
+[[assets.meshes]]
+id = "frost_shard"
+path = "assets/models/meshes/frost_shard.obj"
+
+[[assets.meshes]]
+id = "void_orb"
+path = "assets/models/meshes/void_orb.obj"
+
+[[assets.meshes]]
+id = "lightning_bolt"
+path = "assets/models/meshes/lightning_bolt.obj"
+
+# === HERO TEXTURES ===
+[[assets.textures]]
+id = "knight"
+path = "assets/models/textures/knight.png"
+
+[[assets.textures]]
+id = "mage"
+path = "assets/models/textures/mage.png"
+
+[[assets.textures]]
+id = "ranger"
+path = "assets/models/textures/ranger.png"
+
+[[assets.textures]]
+id = "cleric"
+path = "assets/models/textures/cleric.png"
+
+[[assets.textures]]
+id = "necromancer"
+path = "assets/models/textures/necromancer.png"
+
+[[assets.textures]]
+id = "paladin"
+path = "assets/models/textures/paladin.png"
+
+# === BASIC ENEMY TEXTURES ===
+[[assets.textures]]
+id = "golem"
+path = "assets/models/textures/golem.png"
+
+[[assets.textures]]
+id = "crawler"
+path = "assets/models/textures/crawler.png"
+
+[[assets.textures]]
+id = "wisp"
+path = "assets/models/textures/wisp.png"
+
+[[assets.textures]]
+id = "skeleton"
+path = "assets/models/textures/skeleton.png"
+
+[[assets.textures]]
+id = "shade"
+path = "assets/models/textures/shade.png"
+
+[[assets.textures]]
+id = "berserker"
+path = "assets/models/textures/berserker.png"
+
+[[assets.textures]]
+id = "arcane_sentinel"
+path = "assets/models/textures/arcane_sentinel.png"
+
+# === ELITE ENEMY TEXTURES ===
+[[assets.textures]]
+id = "crystal_knight"
+path = "assets/models/textures/crystal_knight.png"
+
+[[assets.textures]]
+id = "void_mage"
+path = "assets/models/textures/void_mage.png"
+
+[[assets.textures]]
+id = "golem_titan"
+path = "assets/models/textures/golem_titan.png"
+
+[[assets.textures]]
+id = "specter_lord"
+path = "assets/models/textures/specter_lord.png"
+
+# === BOSS TEXTURES ===
+[[assets.textures]]
+id = "prism_colossus"
+path = "assets/models/textures/prism_colossus.png"
+
+[[assets.textures]]
+id = "void_dragon"
+path = "assets/models/textures/void_dragon.png"
+
+# === PICKUP TEXTURES ===
+[[assets.textures]]
+id = "xp_gem"
+path = "assets/models/textures/xp_gem.png"
+
+[[assets.textures]]
+id = "coin"
+path = "assets/models/textures/coin.png"
+
+[[assets.textures]]
+id = "powerup_orb"
+path = "assets/models/textures/powerup_orb.png"
+
+# === ARENA TEXTURES ===
+[[assets.textures]]
+id = "arena_floor"
+path = "assets/models/textures/arena_floor.png"
+
+# === PROJECTILE TEXTURES ===
+[[assets.textures]]
+id = "frost_shard"
+path = "assets/models/textures/frost_shard.png"
+
+[[assets.textures]]
+id = "void_orb"
+path = "assets/models/textures/void_orb.png"
+
+[[assets.textures]]
+id = "lightning_bolt"
+path = "assets/models/textures/lightning_bolt.png"
+
+# === FONT ===
+[[assets.textures]]
+id = "prism_font"
+path = "assets/models/textures/prism_font.png"
+
+# === SOUND EFFECTS ===
+[[assets.sounds]]
+id = "shoot"
+path = "assets/audio/shoot.wav"
+
+[[assets.sounds]]
+id = "hit"
+path = "assets/audio/hit.wav"
+
+[[assets.sounds]]
+id = "death"
+path = "assets/audio/death.wav"
+
+[[assets.sounds]]
+id = "dash"
+path = "assets/audio/dash.wav"
+
+[[assets.sounds]]
+id = "level_up"
+path = "assets/audio/level_up.wav"
+
+[[assets.sounds]]
+id = "hurt"
+path = "assets/audio/hurt.wav"
+
+[[assets.sounds]]
+id = "xp"
+path = "assets/audio/xp.wav"
+
+[[assets.sounds]]
+id = "coin"
+path = "assets/audio/coin.wav"
+
+[[assets.sounds]]
+id = "powerup"
+path = "assets/audio/powerup.wav"
+
+[[assets.sounds]]
+id = "menu"
+path = "assets/audio/menu.wav"
+
+[[assets.sounds]]
+id = "select"
+path = "assets/audio/select.wav"
+
+[[assets.sounds]]
+id = "back"
+path = "assets/audio/back.wav"

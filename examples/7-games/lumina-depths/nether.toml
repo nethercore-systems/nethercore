@@ -1,0 +1,436 @@
+[game]
+id = "lumina-depths"
+title = "LUMINA DEPTHS"
+author = "Nethercore Showcase"
+version = "1.0.0"
+render_mode = 3  # Mode 3: Specular-Shininess Blinn-Phong
+
+# === PLAYER ===
+[[assets.meshes]]
+id = "submersible"
+path = "assets/models/meshes/submersible.obj"
+
+# === ZONE 1: SUNLIT WATERS ===
+[[assets.meshes]]
+id = "reef_fish"
+path = "assets/models/meshes/reef_fish.obj"
+
+[[assets.meshes]]
+id = "sea_turtle"
+path = "assets/models/meshes/sea_turtle.obj"
+
+[[assets.meshes]]
+id = "manta_ray"
+path = "assets/models/meshes/manta_ray.obj"
+
+[[assets.meshes]]
+id = "coral_crab"
+path = "assets/models/meshes/coral_crab.obj"
+
+# === ZONE 2: TWILIGHT REALM ===
+[[assets.meshes]]
+id = "moon_jelly"
+path = "assets/models/meshes/moon_jelly.obj"
+
+[[assets.meshes]]
+id = "lanternfish"
+path = "assets/models/meshes/lanternfish.obj"
+
+[[assets.meshes]]
+id = "siphonophore"
+path = "assets/models/meshes/siphonophore.obj"
+
+[[assets.meshes]]
+id = "giant_squid"
+path = "assets/models/meshes/giant_squid.obj"
+
+# === ZONE 3: MIDNIGHT ABYSS ===
+[[assets.meshes]]
+id = "anglerfish"
+path = "assets/models/meshes/anglerfish.obj"
+
+[[assets.meshes]]
+id = "gulper_eel"
+path = "assets/models/meshes/gulper_eel.obj"
+
+[[assets.meshes]]
+id = "dumbo_octopus"
+path = "assets/models/meshes/dumbo_octopus.obj"
+
+[[assets.meshes]]
+id = "vampire_squid"
+path = "assets/models/meshes/vampire_squid.obj"
+
+# === ZONE 4: HYDROTHERMAL VENTS ===
+[[assets.meshes]]
+id = "tube_worms"
+path = "assets/models/meshes/tube_worms.obj"
+
+[[assets.meshes]]
+id = "vent_shrimp"
+path = "assets/models/meshes/vent_shrimp.obj"
+
+[[assets.meshes]]
+id = "ghost_fish"
+path = "assets/models/meshes/ghost_fish.obj"
+
+[[assets.meshes]]
+id = "vent_octopus"
+path = "assets/models/meshes/vent_octopus.obj"
+
+# === EPIC ENCOUNTERS ===
+[[assets.meshes]]
+id = "blue_whale"
+path = "assets/models/meshes/blue_whale.obj"
+
+[[assets.meshes]]
+id = "sperm_whale"
+path = "assets/models/meshes/sperm_whale.obj"
+
+[[assets.meshes]]
+id = "giant_isopod"
+path = "assets/models/meshes/giant_isopod.obj"
+
+# === FLORA ===
+[[assets.meshes]]
+id = "coral_brain"
+path = "assets/models/meshes/coral_brain.obj"
+
+[[assets.meshes]]
+id = "coral_fan"
+path = "assets/models/meshes/coral_fan.obj"
+
+[[assets.meshes]]
+id = "coral_branch"
+path = "assets/models/meshes/coral_branch.obj"
+
+[[assets.meshes]]
+id = "kelp"
+path = "assets/models/meshes/kelp.obj"
+
+[[assets.meshes]]
+id = "anemone"
+path = "assets/models/meshes/anemone.obj"
+
+[[assets.meshes]]
+id = "sea_grass"
+path = "assets/models/meshes/sea_grass.obj"
+
+# === TERRAIN ===
+[[assets.meshes]]
+id = "rock_boulder"
+path = "assets/models/meshes/rock_boulder.obj"
+
+[[assets.meshes]]
+id = "rock_pillar"
+path = "assets/models/meshes/rock_pillar.obj"
+
+[[assets.meshes]]
+id = "vent_chimney"
+path = "assets/models/meshes/vent_chimney.obj"
+
+[[assets.meshes]]
+id = "seafloor_patch"
+path = "assets/models/meshes/seafloor_patch.obj"
+
+# === EFFECTS ===
+[[assets.meshes]]
+id = "bubble_cluster"
+path = "assets/models/meshes/bubble_cluster.obj"
+
+# === TEXTURES ===
+# Player
+[[assets.textures]]
+id = "submersible"
+path = "assets/models/textures/submersible.png"
+
+# Zone 1: Sunlit Waters
+[[assets.textures]]
+id = "reef_fish"
+path = "assets/models/textures/reef_fish.png"
+
+[[assets.textures]]
+id = "sea_turtle"
+path = "assets/models/textures/sea_turtle.png"
+
+[[assets.textures]]
+id = "manta_ray"
+path = "assets/models/textures/manta_ray.png"
+
+[[assets.textures]]
+id = "coral_crab"
+path = "assets/models/textures/coral_crab.png"
+
+# Zone 2: Twilight Realm
+[[assets.textures]]
+id = "moon_jelly"
+path = "assets/models/textures/moon_jelly.png"
+
+[[assets.textures]]
+id = "lanternfish"
+path = "assets/models/textures/lanternfish.png"
+
+[[assets.textures]]
+id = "siphonophore"
+path = "assets/models/textures/siphonophore.png"
+
+[[assets.textures]]
+id = "giant_squid"
+path = "assets/models/textures/giant_squid.png"
+
+# Zone 3: Midnight Abyss
+[[assets.textures]]
+id = "anglerfish"
+path = "assets/models/textures/anglerfish.png"
+
+[[assets.textures]]
+id = "gulper_eel"
+path = "assets/models/textures/gulper_eel.png"
+
+[[assets.textures]]
+id = "dumbo_octopus"
+path = "assets/models/textures/dumbo_octopus.png"
+
+[[assets.textures]]
+id = "vampire_squid"
+path = "assets/models/textures/vampire_squid.png"
+
+# Zone 4: Hydrothermal Vents
+[[assets.textures]]
+id = "tube_worms"
+path = "assets/models/textures/tube_worms.png"
+
+[[assets.textures]]
+id = "vent_shrimp"
+path = "assets/models/textures/vent_shrimp.png"
+
+[[assets.textures]]
+id = "ghost_fish"
+path = "assets/models/textures/ghost_fish.png"
+
+[[assets.textures]]
+id = "vent_octopus"
+path = "assets/models/textures/vent_octopus.png"
+
+# Epic Encounters
+[[assets.textures]]
+id = "blue_whale"
+path = "assets/models/textures/blue_whale.png"
+
+[[assets.textures]]
+id = "sperm_whale"
+path = "assets/models/textures/sperm_whale.png"
+
+[[assets.textures]]
+id = "giant_isopod"
+path = "assets/models/textures/giant_isopod.png"
+
+# Flora
+[[assets.textures]]
+id = "coral_brain"
+path = "assets/models/textures/coral_brain.png"
+
+[[assets.textures]]
+id = "coral_fan"
+path = "assets/models/textures/coral_fan.png"
+
+[[assets.textures]]
+id = "coral_branch"
+path = "assets/models/textures/coral_branch.png"
+
+[[assets.textures]]
+id = "kelp"
+path = "assets/models/textures/kelp.png"
+
+[[assets.textures]]
+id = "anemone"
+path = "assets/models/textures/anemone.png"
+
+[[assets.textures]]
+id = "sea_grass"
+path = "assets/models/textures/sea_grass.png"
+
+# Terrain
+[[assets.textures]]
+id = "rock_boulder"
+path = "assets/models/textures/rock_boulder.png"
+
+[[assets.textures]]
+id = "rock_pillar"
+path = "assets/models/textures/rock_pillar.png"
+
+[[assets.textures]]
+id = "vent_chimney"
+path = "assets/models/textures/vent_chimney.png"
+
+[[assets.textures]]
+id = "seafloor_patch"
+path = "assets/models/textures/seafloor_patch.png"
+
+[[assets.textures]]
+id = "bubble_cluster"
+path = "assets/models/textures/bubble_cluster.png"
+
+# UI
+[[assets.textures]]
+id = "lumina_font"
+path = "assets/models/textures/lumina_font.png"
+
+# === SOUNDS ===
+# Submersible
+[[assets.sounds]]
+id = "sonar"
+path = "assets/audio/sonar.wav"
+
+[[assets.sounds]]
+id = "propeller"
+path = "assets/audio/propeller.wav"
+
+[[assets.sounds]]
+id = "surface"
+path = "assets/audio/surface.wav"
+
+[[assets.sounds]]
+id = "hull_creak"
+path = "assets/audio/hull_creak.wav"
+
+[[assets.sounds]]
+id = "pressure_warning"
+path = "assets/audio/pressure_warning.wav"
+
+[[assets.sounds]]
+id = "headlight_on"
+path = "assets/audio/headlight_on.wav"
+
+[[assets.sounds]]
+id = "headlight_off"
+path = "assets/audio/headlight_off.wav"
+
+# Zone Ambients
+[[assets.sounds]]
+id = "ambient_sunlit"
+path = "assets/audio/ambient_sunlit.wav"
+
+[[assets.sounds]]
+id = "ambient_twilight"
+path = "assets/audio/ambient_twilight.wav"
+
+[[assets.sounds]]
+id = "ambient_midnight"
+path = "assets/audio/ambient_midnight.wav"
+
+[[assets.sounds]]
+id = "ambient_vents"
+path = "assets/audio/ambient_vents.wav"
+
+# Creature Sounds
+[[assets.sounds]]
+id = "whale"
+path = "assets/audio/whale.wav"
+
+[[assets.sounds]]
+id = "whale_echo"
+path = "assets/audio/whale_echo.wav"
+
+[[assets.sounds]]
+id = "fish"
+path = "assets/audio/fish.wav"
+
+[[assets.sounds]]
+id = "jellyfish"
+path = "assets/audio/jellyfish.wav"
+
+[[assets.sounds]]
+id = "squid"
+path = "assets/audio/squid.wav"
+
+[[assets.sounds]]
+id = "anglerfish_lure"
+path = "assets/audio/anglerfish_lure.wav"
+
+[[assets.sounds]]
+id = "crab_click"
+path = "assets/audio/crab_click.wav"
+
+[[assets.sounds]]
+id = "shrimp_snap"
+path = "assets/audio/shrimp_snap.wav"
+
+[[assets.sounds]]
+id = "octopus_move"
+path = "assets/audio/octopus_move.wav"
+
+[[assets.sounds]]
+id = "eel_hiss"
+path = "assets/audio/eel_hiss.wav"
+
+[[assets.sounds]]
+id = "isopod_scuttle"
+path = "assets/audio/isopod_scuttle.wav"
+
+# Environment
+[[assets.sounds]]
+id = "bubbles"
+path = "assets/audio/bubbles.wav"
+
+[[assets.sounds]]
+id = "bubbles_small"
+path = "assets/audio/bubbles_small.wav"
+
+[[assets.sounds]]
+id = "vent"
+path = "assets/audio/vent.wav"
+
+[[assets.sounds]]
+id = "vent_hiss"
+path = "assets/audio/vent_hiss.wav"
+
+[[assets.sounds]]
+id = "cave"
+path = "assets/audio/cave.wav"
+
+[[assets.sounds]]
+id = "current"
+path = "assets/audio/current.wav"
+
+[[assets.sounds]]
+id = "sediment"
+path = "assets/audio/sediment.wav"
+
+# Discovery & UI
+[[assets.sounds]]
+id = "artifact"
+path = "assets/audio/artifact.wav"
+
+[[assets.sounds]]
+id = "scan"
+path = "assets/audio/scan.wav"
+
+[[assets.sounds]]
+id = "log"
+path = "assets/audio/log.wav"
+
+[[assets.sounds]]
+id = "discovery"
+path = "assets/audio/discovery.wav"
+
+[[assets.sounds]]
+id = "zone_enter"
+path = "assets/audio/zone_enter.wav"
+
+[[assets.sounds]]
+id = "depth_milestone"
+path = "assets/audio/depth_milestone.wav"
+
+# Encounters
+[[assets.sounds]]
+id = "encounter_start"
+path = "assets/audio/encounter_start.wav"
+
+[[assets.sounds]]
+id = "encounter_end"
+path = "assets/audio/encounter_end.wav"
+
+[[assets.sounds]]
+id = "danger_near"
+path = "assets/audio/danger_near.wav"

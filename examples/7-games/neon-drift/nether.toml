@@ -22,6 +22,18 @@ path = "assets/models/meshes/racer.obj"
 id = "drift"
 path = "assets/models/meshes/drift.obj"
 
+[[assets.meshes]]
+id = "phantom"
+path = "assets/models/meshes/phantom.obj"
+
+[[assets.meshes]]
+id = "titan"
+path = "assets/models/meshes/titan.obj"
+
+[[assets.meshes]]
+id = "viper"
+path = "assets/models/meshes/viper.obj"
+
 # === TRACK SEGMENTS ===
 [[assets.meshes]]
 id = "track_straight"
@@ -32,6 +44,10 @@ id = "track_curve_left"
 path = "assets/models/meshes/track_curve_left.obj"
 
 [[assets.meshes]]
+id = "track_curve_right"
+path = "assets/models/meshes/track_curve_right.obj"
+
+[[assets.meshes]]
 id = "track_tunnel"
 path = "assets/models/meshes/track_tunnel.obj"
 
@@ -39,7 +55,33 @@ path = "assets/models/meshes/track_tunnel.obj"
 id = "track_jump"
 path = "assets/models/meshes/track_jump.obj"
 
-# === PROPS ===
+# === CRYSTAL CAVERN ===
+[[assets.meshes]]
+id = "crystal_formation"
+path = "assets/models/meshes/crystal_formation.obj"
+
+[[assets.meshes]]
+id = "track_cavern_scurve"
+path = "assets/models/meshes/track_cavern_scurve.obj"
+
+[[assets.meshes]]
+id = "track_cavern_low"
+path = "assets/models/meshes/track_cavern_low.obj"
+
+# === SOLAR HIGHWAY ===
+[[assets.meshes]]
+id = "track_solar_straight"
+path = "assets/models/meshes/track_solar_straight.obj"
+
+[[assets.meshes]]
+id = "track_solar_curve"
+path = "assets/models/meshes/track_solar_curve.obj"
+
+[[assets.meshes]]
+id = "track_solar_jump"
+path = "assets/models/meshes/track_solar_jump.obj"
+
+# === PROPS (Generic) ===
 [[assets.meshes]]
 id = "prop_barrier"
 path = "assets/models/meshes/prop_barrier.obj"
@@ -55,6 +97,47 @@ path = "assets/models/meshes/prop_billboard.obj"
 [[assets.meshes]]
 id = "prop_building"
 path = "assets/models/meshes/prop_building.obj"
+
+# === SUNSET STRIP PROPS ===
+[[assets.meshes]]
+id = "prop_palm_tree"
+path = "assets/models/meshes/prop_palm_tree.obj"
+
+[[assets.meshes]]
+id = "prop_highway_sign"
+path = "assets/models/meshes/prop_highway_sign.obj"
+
+# === NEON CITY PROPS ===
+[[assets.meshes]]
+id = "prop_hologram_ad"
+path = "assets/models/meshes/prop_hologram_ad.obj"
+
+[[assets.meshes]]
+id = "prop_street_lamp"
+path = "assets/models/meshes/prop_street_lamp.obj"
+
+# === VOID TUNNEL PROPS ===
+[[assets.meshes]]
+id = "prop_energy_pillar"
+path = "assets/models/meshes/prop_energy_pillar.obj"
+
+[[assets.meshes]]
+id = "prop_portal_ring"
+path = "assets/models/meshes/prop_portal_ring.obj"
+
+# === CRYSTAL CAVERN PROPS ===
+[[assets.meshes]]
+id = "prop_mushrooms"
+path = "assets/models/meshes/prop_mushrooms.obj"
+
+# === SOLAR HIGHWAY PROPS ===
+[[assets.meshes]]
+id = "prop_heat_vent"
+path = "assets/models/meshes/prop_heat_vent.obj"
+
+[[assets.meshes]]
+id = "prop_solar_beacon"
+path = "assets/models/meshes/prop_solar_beacon.obj"
 
 # === TEXTURES (Base Albedo) ===
 [[assets.textures]]
@@ -74,12 +157,24 @@ id = "drift"
 path = "assets/models/textures/drift.png"
 
 [[assets.textures]]
+id = "phantom"
+path = "assets/models/textures/phantom.png"
+
+[[assets.textures]]
+id = "titan"
+path = "assets/models/textures/titan.png"
+
+[[assets.textures]]
+id = "viper"
+path = "assets/models/textures/viper.png"
+
+[[assets.textures]]
 id = "track_straight"
 path = "assets/models/textures/track_straight.png"
 
 [[assets.textures]]
-id = "track_curve"
-path = "assets/models/textures/track_curve.png"
+id = "track_curve_left"
+path = "assets/models/textures/track_curve_left.png"
 
 [[assets.textures]]
 id = "track_tunnel"
@@ -105,6 +200,73 @@ path = "assets/models/textures/prop_billboard.png"
 id = "prop_building"
 path = "assets/models/textures/prop_building.png"
 
+# === SUNSET STRIP PROP TEXTURES ===
+[[assets.textures]]
+id = "prop_palm_tree"
+path = "assets/models/textures/prop_palm_tree.png"
+
+[[assets.textures]]
+id = "prop_highway_sign"
+path = "assets/models/textures/prop_highway_sign.png"
+
+# === NEON CITY PROP TEXTURES ===
+[[assets.textures]]
+id = "prop_hologram_ad"
+path = "assets/models/textures/prop_hologram_ad.png"
+
+[[assets.textures]]
+id = "prop_street_lamp"
+path = "assets/models/textures/prop_street_lamp.png"
+
+# === VOID TUNNEL PROP TEXTURES ===
+[[assets.textures]]
+id = "prop_energy_pillar"
+path = "assets/models/textures/prop_energy_pillar.png"
+
+[[assets.textures]]
+id = "prop_portal_ring"
+path = "assets/models/textures/prop_portal_ring.png"
+
+# === CRYSTAL CAVERN PROP TEXTURES ===
+[[assets.textures]]
+id = "prop_mushrooms"
+path = "assets/models/textures/prop_mushrooms.png"
+
+# === SOLAR HIGHWAY PROP TEXTURES ===
+[[assets.textures]]
+id = "prop_heat_vent"
+path = "assets/models/textures/prop_heat_vent.png"
+
+[[assets.textures]]
+id = "prop_solar_beacon"
+path = "assets/models/textures/prop_solar_beacon.png"
+
+# === CRYSTAL CAVERN TEXTURES ===
+[[assets.textures]]
+id = "crystal_formation"
+path = "assets/models/textures/crystal_formation.png"
+
+[[assets.textures]]
+id = "track_cavern_scurve"
+path = "assets/models/textures/track_cavern_scurve.png"
+
+[[assets.textures]]
+id = "track_cavern_low"
+path = "assets/models/textures/track_cavern_low.png"
+
+# === SOLAR HIGHWAY TEXTURES ===
+[[assets.textures]]
+id = "track_solar_straight"
+path = "assets/models/textures/track_solar_straight.png"
+
+[[assets.textures]]
+id = "track_solar_curve"
+path = "assets/models/textures/track_solar_curve.png"
+
+[[assets.textures]]
+id = "track_solar_jump"
+path = "assets/models/textures/track_solar_jump.png"
+
 # === TEXTURES (Emissive Maps for Mode 2 PBR) ===
 [[assets.textures]]
 id = "speedster_emissive"
@@ -123,8 +285,202 @@ id = "drift_emissive"
 path = "assets/models/textures/drift_emissive.png"
 
 [[assets.textures]]
+id = "phantom_emissive"
+path = "assets/models/textures/phantom_emissive.png"
+
+[[assets.textures]]
+id = "titan_emissive"
+path = "assets/models/textures/titan_emissive.png"
+
+[[assets.textures]]
+id = "viper_emissive"
+path = "assets/models/textures/viper_emissive.png"
+
+# === VEHICLE COLOR VARIANTS (Base) ===
+[[assets.textures]]
+id = "speedster_red"
+path = "assets/models/textures/speedster_red.png"
+
+[[assets.textures]]
+id = "speedster_gold"
+path = "assets/models/textures/speedster_gold.png"
+
+[[assets.textures]]
+id = "muscle_blue"
+path = "assets/models/textures/muscle_blue.png"
+
+[[assets.textures]]
+id = "muscle_green"
+path = "assets/models/textures/muscle_green.png"
+
+[[assets.textures]]
+id = "racer_black"
+path = "assets/models/textures/racer_black.png"
+
+[[assets.textures]]
+id = "racer_cyan"
+path = "assets/models/textures/racer_cyan.png"
+
+[[assets.textures]]
+id = "drift_orange"
+path = "assets/models/textures/drift_orange.png"
+
+[[assets.textures]]
+id = "drift_pink"
+path = "assets/models/textures/drift_pink.png"
+
+[[assets.textures]]
+id = "phantom_purple"
+path = "assets/models/textures/phantom_purple.png"
+
+[[assets.textures]]
+id = "phantom_ice"
+path = "assets/models/textures/phantom_ice.png"
+
+[[assets.textures]]
+id = "titan_gold"
+path = "assets/models/textures/titan_gold.png"
+
+[[assets.textures]]
+id = "titan_midnight"
+path = "assets/models/textures/titan_midnight.png"
+
+[[assets.textures]]
+id = "viper_green"
+path = "assets/models/textures/viper_green.png"
+
+[[assets.textures]]
+id = "viper_black"
+path = "assets/models/textures/viper_black.png"
+
+# === VEHICLE COLOR VARIANTS (Emissive) ===
+[[assets.textures]]
+id = "speedster_red_emissive"
+path = "assets/models/textures/speedster_red_emissive.png"
+
+[[assets.textures]]
+id = "speedster_gold_emissive"
+path = "assets/models/textures/speedster_gold_emissive.png"
+
+[[assets.textures]]
+id = "muscle_blue_emissive"
+path = "assets/models/textures/muscle_blue_emissive.png"
+
+[[assets.textures]]
+id = "muscle_green_emissive"
+path = "assets/models/textures/muscle_green_emissive.png"
+
+[[assets.textures]]
+id = "racer_black_emissive"
+path = "assets/models/textures/racer_black_emissive.png"
+
+[[assets.textures]]
+id = "racer_cyan_emissive"
+path = "assets/models/textures/racer_cyan_emissive.png"
+
+[[assets.textures]]
+id = "drift_orange_emissive"
+path = "assets/models/textures/drift_orange_emissive.png"
+
+[[assets.textures]]
+id = "drift_pink_emissive"
+path = "assets/models/textures/drift_pink_emissive.png"
+
+[[assets.textures]]
+id = "phantom_purple_emissive"
+path = "assets/models/textures/phantom_purple_emissive.png"
+
+[[assets.textures]]
+id = "phantom_ice_emissive"
+path = "assets/models/textures/phantom_ice_emissive.png"
+
+[[assets.textures]]
+id = "titan_gold_emissive"
+path = "assets/models/textures/titan_gold_emissive.png"
+
+[[assets.textures]]
+id = "titan_midnight_emissive"
+path = "assets/models/textures/titan_midnight_emissive.png"
+
+[[assets.textures]]
+id = "viper_green_emissive"
+path = "assets/models/textures/viper_green_emissive.png"
+
+[[assets.textures]]
+id = "viper_black_emissive"
+path = "assets/models/textures/viper_black_emissive.png"
+
+[[assets.textures]]
 id = "prop_boost_pad_emissive"
 path = "assets/models/textures/prop_boost_pad_emissive.png"
+
+[[assets.textures]]
+id = "prop_billboard_emissive"
+path = "assets/models/textures/prop_billboard_emissive.png"
+
+# === CRYSTAL CAVERN EMISSIVE ===
+[[assets.textures]]
+id = "crystal_formation_emissive"
+path = "assets/models/textures/crystal_formation_emissive.png"
+
+[[assets.textures]]
+id = "track_cavern_scurve_emissive"
+path = "assets/models/textures/track_cavern_scurve_emissive.png"
+
+[[assets.textures]]
+id = "track_cavern_low_emissive"
+path = "assets/models/textures/track_cavern_low_emissive.png"
+
+# === SOLAR HIGHWAY EMISSIVE ===
+[[assets.textures]]
+id = "track_solar_straight_emissive"
+path = "assets/models/textures/track_solar_straight_emissive.png"
+
+[[assets.textures]]
+id = "track_solar_curve_emissive"
+path = "assets/models/textures/track_solar_curve_emissive.png"
+
+[[assets.textures]]
+id = "track_solar_jump_emissive"
+path = "assets/models/textures/track_solar_jump_emissive.png"
+
+# === ENVIRONMENT PROP EMISSIVE ===
+[[assets.textures]]
+id = "prop_highway_sign_emissive"
+path = "assets/models/textures/prop_highway_sign_emissive.png"
+
+[[assets.textures]]
+id = "prop_hologram_ad_emissive"
+path = "assets/models/textures/prop_hologram_ad_emissive.png"
+
+[[assets.textures]]
+id = "prop_street_lamp_emissive"
+path = "assets/models/textures/prop_street_lamp_emissive.png"
+
+[[assets.textures]]
+id = "prop_energy_pillar_emissive"
+path = "assets/models/textures/prop_energy_pillar_emissive.png"
+
+[[assets.textures]]
+id = "prop_portal_ring_emissive"
+path = "assets/models/textures/prop_portal_ring_emissive.png"
+
+[[assets.textures]]
+id = "prop_mushrooms_emissive"
+path = "assets/models/textures/prop_mushrooms_emissive.png"
+
+[[assets.textures]]
+id = "prop_heat_vent_emissive"
+path = "assets/models/textures/prop_heat_vent_emissive.png"
+
+[[assets.textures]]
+id = "prop_solar_beacon_emissive"
+path = "assets/models/textures/prop_solar_beacon_emissive.png"
+
+# === FONT ===
+[[assets.textures]]
+id = "neon_font"
+path = "assets/models/textures/neon_font.png"
 
 # === SOUNDS ===
 [[assets.sounds]]

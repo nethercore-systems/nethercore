@@ -81,11 +81,34 @@ const SHOWCASES: &[ShowcaseDef] = &[
             ("mage", "Mage"),
             ("ranger", "Ranger"),
             ("cleric", "Cleric"),
-            // Enemies
+            ("necromancer", "Necromancer"),
+            ("paladin", "Paladin"),
+            // Basic Enemies
             ("golem", "Golem"),
             ("crawler", "Crawler"),
             ("wisp", "Wisp"),
             ("skeleton", "Skeleton"),
+            ("shade", "Shade"),
+            ("berserker", "Berserker"),
+            ("arcane_sentinel", "Arcane Sentinel"),
+            // Elite Enemies
+            ("crystal_knight", "Crystal Knight"),
+            ("void_mage", "Void Mage"),
+            ("golem_titan", "Golem Titan"),
+            ("specter_lord", "Specter Lord"),
+            // Bosses
+            ("prism_colossus", "Prism Colossus"),
+            ("void_dragon", "Void Dragon"),
+            // Pickups
+            ("xp_gem", "XP Gem"),
+            ("coin", "Coin"),
+            ("powerup_orb", "Powerup Orb"),
+            // Projectiles
+            ("frost_shard", "Frost Shard"),
+            ("void_orb", "Void Orb"),
+            ("lightning_bolt", "Lightning Bolt"),
+            // Arena
+            ("arena_floor", "Arena Floor"),
         ],
     },
     ShowcaseDef {

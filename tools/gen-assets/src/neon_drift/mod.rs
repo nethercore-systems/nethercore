@@ -32,6 +32,9 @@ pub fn generate_all(output_dir: &Path) {
     cars::generate_muscle(&meshes_dir);
     cars::generate_racer(&meshes_dir);
     cars::generate_drift(&meshes_dir);
+    cars::generate_phantom(&meshes_dir);
+    cars::generate_titan(&meshes_dir);
+    cars::generate_viper(&meshes_dir);
 
     // Track segments
     println!("\n  --- Track Segments ---");
@@ -41,18 +44,58 @@ pub fn generate_all(output_dir: &Path) {
     track::generate_tunnel(&meshes_dir);
     track::generate_jump_ramp(&meshes_dir);
 
-    // Props
+    // Props (generic)
     println!("\n  --- Props ---");
     track::generate_barrier(&meshes_dir);
     track::generate_boost_pad(&meshes_dir);
     track::generate_billboard(&meshes_dir);
     track::generate_building(&meshes_dir);
 
+    // Sunset Strip props
+    println!("\n  --- Sunset Strip Props ---");
+    track::generate_palm_tree(&meshes_dir);
+    track::generate_highway_sign(&meshes_dir);
+
+    // Neon City props
+    println!("\n  --- Neon City Props ---");
+    track::generate_hologram_ad(&meshes_dir);
+    track::generate_street_lamp(&meshes_dir);
+
+    // Void Tunnel props
+    println!("\n  --- Void Tunnel Props ---");
+    track::generate_energy_pillar(&meshes_dir);
+    track::generate_portal_ring(&meshes_dir);
+
+    // Crystal Cavern props
+    println!("\n  --- Crystal Cavern Props ---");
+    track::generate_glowing_mushrooms(&meshes_dir);
+
+    // Solar Highway props
+    println!("\n  --- Solar Highway Props ---");
+    track::generate_heat_vent(&meshes_dir);
+    track::generate_solar_beacon(&meshes_dir);
+
+    // Crystal Cavern segments
+    println!("\n  --- Crystal Cavern ---");
+    track::generate_crystal_formation(&meshes_dir);
+    track::generate_cavern_scurve(&meshes_dir);
+    track::generate_cavern_low_ceiling(&meshes_dir);
+
+    // Solar Highway segments
+    println!("\n  --- Solar Highway ---");
+    track::generate_solar_straight(&meshes_dir);
+    track::generate_solar_curve(&meshes_dir);
+    track::generate_solar_flare_jump(&meshes_dir);
+
     // Textures
     println!("\n  --- Textures ---");
     textures::generate_vehicle_textures(&textures_dir);
     textures::generate_track_textures(&textures_dir);
     textures::generate_prop_textures(&textures_dir);
+
+    // Font
+    println!("\n  --- Font ---");
+    textures::generate_font_texture(&textures_dir);
 
     // Sounds
     println!("\n  --- Sounds ---");

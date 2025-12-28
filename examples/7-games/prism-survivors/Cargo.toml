@@ -8,8 +8,9 @@ description = "4-player co-op fantasy survival game for Nethercore ZX"
 crate-type = ["cdylib"]
 
 [dependencies]
-# Math utilities
-glam = "0.29"
+# Math utilities for no_std WASM
+libm = "0.2"
+glam = { version = "0.29", default-features = false, features = ["libm"] }
 
 [profile.release]
 opt-level = "z"

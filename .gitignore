@@ -71,3 +71,6 @@ examples/**/assets/**/*.zm
 
 # Output directories (catch-all)
 examples/**/tools/**/output/
+
+# gen-assets tool output (generated example assets)
+tools/gen-assets/examples/
