@@ -242,9 +242,6 @@ struct Submersible {
     velocity_y: f32,
     headlight_on: bool,
     headlight_pulse: u32,
-    // Camera look offset (right stick)
-    look_yaw: f32,
-    look_pitch: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -325,8 +322,6 @@ impl Submersible {
             velocity_y: 0.0,
             headlight_on: true,
             headlight_pulse: 0,
-            look_yaw: 0.0,
-            look_pitch: 0.0,
         }
     }
 }
@@ -430,10 +425,13 @@ static mut GOD_RAYS_INITIALIZED: bool = false;
 static mut SHIMMER_POSITIONS: [(f32, f32); SHIMMER_COLUMNS] = [(0.0, 0.0); SHIMMER_COLUMNS];
 static mut SHIMMER_INITIALIZED: bool = false;
 
-// Camera state
+// Camera state - orbit camera around submersible
 static mut CAM_X: f32 = 0.0;
 static mut CAM_Y: f32 = 5.0;
 static mut CAM_Z: f32 = -15.0;
+// Orbit angles (controlled by right stick)
+static mut CAM_ORBIT_YAW: f32 = 0.0;   // Horizontal orbit angle offset
+static mut CAM_ORBIT_PITCH: f32 = 0.0; // Vertical orbit angle
 
 // === Asset Handles ===
 
@@ -646,6 +644,10 @@ pub extern "C" fn init() {
         // Initialize submersible
         SUB.velocity_y = -DESCENT_SPEED;
         SUB.headlight_on = true;
+
+        // Initialize camera orbit (start looking slightly down at submersible)
+        CAM_ORBIT_YAW = 0.0;
+        CAM_ORBIT_PITCH = 15.0; // Default: slightly above and behind
 
         // Start ambient propeller sound
         channel_play(0, SND_PROPELLER, 0.3, 0.0, 1); // Loop propeller sound
@@ -982,38 +984,43 @@ fn update_input(dt: f32) {
         if SUB.pitch > 45.0 { SUB.pitch = 45.0; }
         if SUB.pitch < -45.0 { SUB.pitch = -45.0; }
 
-        // Right stick camera look (relative to submersible facing)
-        const LOOK_SPEED: f32 = 60.0;
-        const LOOK_MAX_YAW: f32 = 90.0;
-        const LOOK_MAX_PITCH: f32 = 60.0;
+        // Right stick controls camera orbit around submersible
+        const ORBIT_SPEED: f32 = 90.0;      // Degrees per second
+        const ORBIT_MAX_YAW: f32 = 180.0;   // Full rotation allowed
+        const ORBIT_MAX_PITCH: f32 = 60.0;  // Look up/down limits
+        const ORBIT_MIN_PITCH: f32 = -30.0; // Can't look too far down
 
-        SUB.look_yaw += look_x * LOOK_SPEED * dt;
-        SUB.look_pitch += look_y * LOOK_SPEED * dt;
+        CAM_ORBIT_YAW += look_x * ORBIT_SPEED * dt;
+        CAM_ORBIT_PITCH -= look_y * ORBIT_SPEED * dt; // Inverted for natural feel
 
-        // Clamp look angles
-        if SUB.look_yaw > LOOK_MAX_YAW { SUB.look_yaw = LOOK_MAX_YAW; }
-        if SUB.look_yaw < -LOOK_MAX_YAW { SUB.look_yaw = -LOOK_MAX_YAW; }
-        if SUB.look_pitch > LOOK_MAX_PITCH { SUB.look_pitch = LOOK_MAX_PITCH; }
-        if SUB.look_pitch < -LOOK_MAX_PITCH { SUB.look_pitch = -LOOK_MAX_PITCH; }
+        // Wrap yaw for full 360 rotation
+        while CAM_ORBIT_YAW > 180.0 { CAM_ORBIT_YAW -= 360.0; }
+        while CAM_ORBIT_YAW < -180.0 { CAM_ORBIT_YAW += 360.0; }
 
-        // Return look to center when stick released
-        const LOOK_RETURN_SPEED: f32 = 120.0;
+        // Clamp pitch
+        if CAM_ORBIT_PITCH > ORBIT_MAX_PITCH { CAM_ORBIT_PITCH = ORBIT_MAX_PITCH; }
+        if CAM_ORBIT_PITCH < ORBIT_MIN_PITCH { CAM_ORBIT_PITCH = ORBIT_MIN_PITCH; }
+
+        // Gradually return orbit to behind submersible when stick released
+        const ORBIT_RETURN_SPEED: f32 = 45.0;
         if look_x.abs() < 0.1 {
-            if SUB.look_yaw > 0.0 {
-                SUB.look_yaw -= LOOK_RETURN_SPEED * dt;
-                if SUB.look_yaw < 0.0 { SUB.look_yaw = 0.0; }
-            } else if SUB.look_yaw < 0.0 {
-                SUB.look_yaw += LOOK_RETURN_SPEED * dt;
-                if SUB.look_yaw > 0.0 { SUB.look_yaw = 0.0; }
+            if CAM_ORBIT_YAW > 0.0 {
+                CAM_ORBIT_YAW -= ORBIT_RETURN_SPEED * dt;
+                if CAM_ORBIT_YAW < 0.0 { CAM_ORBIT_YAW = 0.0; }
+            } else if CAM_ORBIT_YAW < 0.0 {
+                CAM_ORBIT_YAW += ORBIT_RETURN_SPEED * dt;
+                if CAM_ORBIT_YAW > 0.0 { CAM_ORBIT_YAW = 0.0; }
             }
         }
         if look_y.abs() < 0.1 {
-            if SUB.look_pitch > 0.0 {
-                SUB.look_pitch -= LOOK_RETURN_SPEED * dt;
-                if SUB.look_pitch < 0.0 { SUB.look_pitch = 0.0; }
-            } else if SUB.look_pitch < 0.0 {
-                SUB.look_pitch += LOOK_RETURN_SPEED * dt;
-                if SUB.look_pitch > 0.0 { SUB.look_pitch = 0.0; }
+            // Return pitch to slightly above (15 degrees)
+            const DEFAULT_PITCH: f32 = 15.0;
+            if CAM_ORBIT_PITCH > DEFAULT_PITCH {
+                CAM_ORBIT_PITCH -= ORBIT_RETURN_SPEED * dt;
+                if CAM_ORBIT_PITCH < DEFAULT_PITCH { CAM_ORBIT_PITCH = DEFAULT_PITCH; }
+            } else if CAM_ORBIT_PITCH < DEFAULT_PITCH {
+                CAM_ORBIT_PITCH += ORBIT_RETURN_SPEED * dt;
+                if CAM_ORBIT_PITCH > DEFAULT_PITCH { CAM_ORBIT_PITCH = DEFAULT_PITCH; }
             }
         }
 
@@ -1041,7 +1048,8 @@ fn update_input(dt: f32) {
 fn update_submersible(dt: f32) {
     unsafe {
         // Convert yaw to radians
-        let yaw_rad = SUB.yaw * 3.14159 / 180.0;
+        // Add 90 degrees because the submersible model faces +X, not +Z
+        let yaw_rad = (SUB.yaw + 90.0) * 3.14159 / 180.0;
 
         // Calculate forward direction
         let forward_x = sin_approx(yaw_rad);
@@ -1197,7 +1205,8 @@ fn update_bubbles(dt: f32) {
             for bubble in BUBBLES.iter_mut() {
                 if !bubble.active {
                     // Spawn behind and below submersible
-                    let yaw_rad = SUB.yaw * 3.14159 / 180.0;
+                    // Add 90 degrees because the submersible model faces +X
+                    let yaw_rad = (SUB.yaw + 90.0) * 3.14159 / 180.0;
                     let offset_x = -sin_approx(yaw_rad) * 1.5;
                     let offset_z = -cos_approx(yaw_rad) * 1.5;
 
@@ -1357,15 +1366,36 @@ fn update_isopod_encounter(dt: f32) {
 
 fn update_camera(_dt: f32) {
     unsafe {
-        let yaw_rad = SUB.yaw * 3.14159 / 180.0;
+        // Camera orbit parameters
+        const CAM_DISTANCE: f32 = 12.0;  // Distance from submersible
+        const CAM_HEIGHT_OFFSET: f32 = 2.0; // Base height above submersible
 
-        // Camera offset (15 units behind, 3 units up)
-        let desired_x = SUB.x - sin_approx(yaw_rad) * 15.0;
-        let desired_y = SUB.y + 3.0;
-        let desired_z = SUB.z - cos_approx(yaw_rad) * 15.0;
+        // Calculate total camera angle (submersible yaw + orbit offset)
+        // Add 90 degrees because the submersible model faces +X, not +Z
+        let total_yaw = SUB.yaw + CAM_ORBIT_YAW + 90.0;
+        let total_yaw_rad = total_yaw * 3.14159 / 180.0;
+        let pitch_rad = CAM_ORBIT_PITCH * 3.14159 / 180.0;
 
-        // Smooth interpolation
-        let lerp = 0.08;
+        // Calculate camera position in orbit around submersible
+        // Camera is behind (-forward) and elevated based on pitch
+        let cos_pitch = cos_approx(pitch_rad);
+        let sin_pitch = sin_approx(pitch_rad);
+
+        // Horizontal distance from submersible (shrinks as we look up/down)
+        let horizontal_dist = CAM_DISTANCE * cos_pitch;
+
+        // Camera position relative to submersible
+        // -sin and -cos because we want to be BEHIND the submersible
+        let offset_x = -sin_approx(total_yaw_rad) * horizontal_dist;
+        let offset_y = CAM_HEIGHT_OFFSET + CAM_DISTANCE * sin_pitch;
+        let offset_z = -cos_approx(total_yaw_rad) * horizontal_dist;
+
+        let desired_x = SUB.x + offset_x;
+        let desired_y = SUB.y + offset_y;
+        let desired_z = SUB.z + offset_z;
+
+        // Smooth interpolation for fluid camera movement
+        let lerp = 0.12;
         CAM_X += (desired_x - CAM_X) * lerp;
         CAM_Y += (desired_y - CAM_Y) * lerp;
         CAM_Z += (desired_z - CAM_Z) * lerp;
@@ -1377,21 +1407,20 @@ fn update_camera(_dt: f32) {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
-        // Calculate camera target with look offset
-        let total_yaw = SUB.yaw + SUB.look_yaw;
-        let total_pitch = SUB.look_pitch;
-        let yaw_rad = total_yaw * 3.14159 / 180.0;
-        let pitch_rad = total_pitch * 3.14159 / 180.0;
+        // Camera target: look at the submersible with slight forward offset
+        // This keeps the submersible centered in view as we orbit around it
+        // Add 90 degrees because the submersible model faces +X, not +Z
+        let sub_yaw_rad = (SUB.yaw + 90.0) * 3.14159 / 180.0;
 
-        // Look direction (forward vector with look offset)
-        let look_dist = 10.0;
-        let target_x = SUB.x + sin_approx(yaw_rad) * cos_approx(pitch_rad) * look_dist;
-        let target_y = SUB.y + sin_approx(pitch_rad) * look_dist;
-        let target_z = SUB.z + cos_approx(yaw_rad) * cos_approx(pitch_rad) * look_dist;
+        // Target is slightly ahead of submersible (where it's heading)
+        let forward_offset = 2.0;
+        let target_x = SUB.x + sin_approx(sub_yaw_rad) * forward_offset;
+        let target_y = SUB.y + 0.5; // Look at slightly above center of submersible
+        let target_z = SUB.z + cos_approx(sub_yaw_rad) * forward_offset;
 
-        // Setup camera
+        // Setup camera - looking from orbit position toward submersible
         camera_set(CAM_X, CAM_Y, CAM_Z, target_x, target_y, target_z);
-        camera_fov(70.0);
+        camera_fov(65.0); // Slightly narrower for better framing
 
         // Setup environment and lighting for current zone
         setup_zone_environment(CURRENT_ZONE);
@@ -1557,9 +1586,9 @@ fn render_submersible() {
 
 fn render_bubbles() {
     unsafe {
-        // Semi-transparent white bubbles
+        // Semi-transparent white bubbles (shiny glass-like)
         material_specular(0xFFFFFFFF);
-        material_shininess(64.0);
+        material_shininess(0.95);
         uniform_alpha(11); // Slightly translucent (0-15 range)
 
         for bubble in BUBBLES.iter() {
@@ -1907,7 +1936,8 @@ fn render_isopod() {
         };
 
         // Position in front of submersible glass
-        let yaw_rad = SUB.yaw * 3.14159 / 180.0;
+        // Add 90 degrees because the submersible model faces +X
+        let yaw_rad = (SUB.yaw + 90.0) * 3.14159 / 180.0;
         let isopod_x = SUB.x + sin_approx(yaw_rad) * approach_dist;
         let isopod_y = SUB.y - 0.5; // Slightly below eye level
         let isopod_z = SUB.z + cos_approx(yaw_rad) * approach_dist;

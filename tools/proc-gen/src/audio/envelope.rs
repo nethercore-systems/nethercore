@@ -109,6 +109,8 @@ impl Envelope {
     ///
     /// The envelope is applied based on the total sound duration.
     /// The sustain phase fills the time between attack+decay and the release phase.
+    /// The release phase overlays on top of the base envelope, fading from the
+    /// current level to zero.
     ///
     /// # Arguments
     /// * `samples` - Audio samples to shape
@@ -125,43 +127,33 @@ impl Envelope {
         let decay_samples = (self.decay * sample_rate as f32) as usize;
         let release_samples = (self.release * sample_rate as f32) as usize;
 
-        // Calculate where release starts
-        let release_start = if total_samples > release_samples {
-            total_samples - release_samples
-        } else {
-            0
-        };
+        // Calculate where release starts (release overlays on top of base envelope)
+        let release_start = total_samples.saturating_sub(release_samples);
 
-        // Calculate where sustain phase is
+        // Calculate where sustain phase begins
         let sustain_start = attack_samples + decay_samples;
 
         for (i, sample) in samples.iter_mut().enumerate() {
-            let amplitude = if i < attack_samples {
+            // First calculate base envelope level (attack/decay/sustain)
+            let base_level = if i < attack_samples {
                 // Attack phase: ramp up from 0 to 1
                 i as f32 / attack_samples.max(1) as f32
-            } else if i < sustain_start && i < release_start {
+            } else if i < sustain_start {
                 // Decay phase: ramp down from 1 to sustain
                 let decay_progress = (i - attack_samples) as f32 / decay_samples.max(1) as f32;
                 1.0 - decay_progress * (1.0 - self.sustain)
-            } else if i < release_start {
+            } else {
                 // Sustain phase: hold at sustain level
                 self.sustain
+            };
+
+            // Then apply release fade if we're in the release region
+            // Release fades from current base_level to 0
+            let amplitude = if i >= release_start && release_samples > 0 {
+                let release_progress = (i - release_start) as f32 / release_samples as f32;
+                base_level * (1.0 - release_progress)
             } else {
-                // Release phase: ramp down from current level to 0
-                let release_progress = (i - release_start) as f32 / release_samples.max(1) as f32;
-                // Start from sustain level (or wherever we are)
-                let start_level = if release_start >= sustain_start {
-                    self.sustain
-                } else if release_start >= attack_samples {
-                    // In decay phase
-                    let decay_progress =
-                        (release_start - attack_samples) as f32 / decay_samples.max(1) as f32;
-                    1.0 - decay_progress * (1.0 - self.sustain)
-                } else {
-                    // Still in attack
-                    release_start as f32 / attack_samples.max(1) as f32
-                };
-                start_level * (1.0 - release_progress)
+                base_level
             };
 
             *sample *= amplitude;
@@ -250,5 +242,35 @@ mod tests {
         let mut samples: Vec<f32> = vec![];
         env.apply(&mut samples, TEST_SAMPLE_RATE);
         assert!(samples.is_empty());
+    }
+
+    #[test]
+    fn test_envelope_short_sound_with_long_release() {
+        // Regression test: when sound duration <= release time, envelope should
+        // still produce audible output (not near-zero amplitude throughout)
+        let env = Envelope::pluck(); // release = 0.1s
+        let duration = 0.1; // Same as release time
+        let mut samples = vec![1.0; (duration * TEST_SAMPLE_RATE as f32) as usize];
+        env.apply(&mut samples, TEST_SAMPLE_RATE);
+
+        // The peak amplitude should be significant (not just clicks)
+        let max_amplitude = samples.iter().cloned().fold(0.0f32, f32::max);
+        assert!(
+            max_amplitude > 0.5,
+            "Short sound should have significant amplitude, got {}",
+            max_amplitude
+        );
+
+        // Attack should still ramp up at the beginning
+        assert!(samples[0] < 0.1, "First sample should be near 0 (attack start)");
+
+        // Samples after attack should have meaningful amplitude
+        let attack_samples = (0.001 * TEST_SAMPLE_RATE as f32) as usize;
+        if samples.len() > attack_samples + 10 {
+            assert!(
+                samples[attack_samples + 10] > 0.3,
+                "Post-attack samples should have amplitude"
+            );
+        }
     }
 }

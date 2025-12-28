@@ -1,10 +1,12 @@
 //! Texture definitions for PRISM SURVIVORS
 //!
-//! Uses the convention-based texture system. Each asset has:
+//! Uses the convention-based texture system with category-based filtering.
+//! Each asset has:
 //! - `{id}.png` - Base texture
 //! - Mode 3 uses Blinn-Phong (no emissive textures needed)
 
-use crate::texture::{AssetTexture, TextureStyle};
+use crate::texture::{AssetCategory, AssetTexture, TextureStyle, generate_textures_by_category};
+use std::path::Path;
 
 /// All PRISM SURVIVORS asset textures - single source of truth
 pub const TEXTURES: &[AssetTexture] = &[
@@ -12,6 +14,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Knight - polished metal armor
     AssetTexture {
         id: "knight",
+        category: AssetCategory::Hero,
         base_color: [140, 140, 150, 255],
         style: TextureStyle::Metal { seed: 42 },
         size: (64, 64),
@@ -21,6 +24,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Mage - mystical purple robes
     AssetTexture {
         id: "mage",
+        category: AssetCategory::Hero,
         base_color: [80, 40, 120, 255],
         style: TextureStyle::GradientV,
         size: (64, 64),
@@ -30,6 +34,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Ranger - forest green leather
     AssetTexture {
         id: "ranger",
+        category: AssetCategory::Hero,
         base_color: [60, 80, 40, 255],
         style: TextureStyle::GradientV,
         size: (64, 64),
@@ -39,6 +44,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Cleric - holy white/gold robes
     AssetTexture {
         id: "cleric",
+        category: AssetCategory::Hero,
         base_color: [240, 230, 200, 255],
         style: TextureStyle::GradientV,
         size: (64, 64),
@@ -48,6 +54,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Necromancer - dark purple/green robes with skull motif
     AssetTexture {
         id: "necromancer",
+        category: AssetCategory::Hero,
         base_color: [30, 20, 35, 255],
         style: TextureStyle::GradientV,
         size: (64, 64),
@@ -57,6 +64,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Paladin - golden holy armor
     AssetTexture {
         id: "paladin",
+        category: AssetCategory::Hero,
         base_color: [220, 190, 100, 255],
         style: TextureStyle::Metal { seed: 777 },
         size: (64, 64),
@@ -68,6 +76,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Golem - rocky stone
     AssetTexture {
         id: "golem",
+        category: AssetCategory::Enemy,
         base_color: [100, 90, 80, 255],
         style: TextureStyle::Stone { seed: 42 },
         size: (64, 64),
@@ -77,6 +86,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Crawler - dark chitinous shell
     AssetTexture {
         id: "crawler",
+        category: AssetCategory::Enemy,
         base_color: [40, 35, 45, 255],
         style: TextureStyle::Solid,
         size: (64, 64),
@@ -86,6 +96,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Wisp - glowing ethereal
     AssetTexture {
         id: "wisp",
+        category: AssetCategory::Enemy,
         base_color: [255, 200, 100, 255],
         style: TextureStyle::GradientRadial,
         size: (64, 64),
@@ -95,6 +106,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Skeleton - bone white
     AssetTexture {
         id: "skeleton",
+        category: AssetCategory::Enemy,
         base_color: [220, 210, 190, 255],
         style: TextureStyle::Solid,
         size: (64, 64),
@@ -104,6 +116,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Shade - dark ethereal shadow
     AssetTexture {
         id: "shade",
+        category: AssetCategory::Enemy,
         base_color: [20, 15, 30, 255],
         style: TextureStyle::GradientRadial,
         size: (64, 64),
@@ -113,6 +126,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Berserker - blood red fury
     AssetTexture {
         id: "berserker",
+        category: AssetCategory::Enemy,
         base_color: [160, 40, 30, 255],
         style: TextureStyle::GradientV,
         size: (64, 64),
@@ -122,6 +136,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Arcane Sentinel - magical construct
     AssetTexture {
         id: "arcane_sentinel",
+        category: AssetCategory::Enemy,
         base_color: [100, 80, 180, 255],
         style: TextureStyle::Metal { seed: 555 },
         size: (64, 64),
@@ -133,6 +148,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Crystal Knight - iridescent crystalline armor
     AssetTexture {
         id: "crystal_knight",
+        category: AssetCategory::Elite,
         base_color: [150, 200, 220, 255],
         style: TextureStyle::Metal { seed: 123 },
         size: (64, 64),
@@ -142,6 +158,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Void Mage - deep purple with void energy
     AssetTexture {
         id: "void_mage",
+        category: AssetCategory::Elite,
         base_color: [40, 20, 60, 255],
         style: TextureStyle::GradientV,
         size: (64, 64),
@@ -151,6 +168,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Golem Titan - darker, more imposing stone
     AssetTexture {
         id: "golem_titan",
+        category: AssetCategory::Elite,
         base_color: [70, 60, 55, 255],
         style: TextureStyle::Stone { seed: 789 },
         size: (64, 64),
@@ -160,6 +178,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Specter Lord - ethereal blue-white
     AssetTexture {
         id: "specter_lord",
+        category: AssetCategory::Elite,
         base_color: [180, 200, 255, 255],
         style: TextureStyle::GradientRadial,
         size: (64, 64),
@@ -171,6 +190,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Prism Colossus - prismatic rainbow crystal
     AssetTexture {
         id: "prism_colossus",
+        category: AssetCategory::Boss,
         base_color: [200, 180, 220, 255],
         style: TextureStyle::Metal { seed: 456 },
         size: (128, 128),
@@ -180,6 +200,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Void Dragon - deep black with purple accents
     AssetTexture {
         id: "void_dragon",
+        category: AssetCategory::Boss,
         base_color: [30, 20, 40, 255],
         style: TextureStyle::GradientV,
         size: (128, 128),
@@ -191,6 +212,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // XP Gem - glowing blue crystal
     AssetTexture {
         id: "xp_gem",
+        category: AssetCategory::Pickup,
         base_color: [80, 150, 255, 255],
         style: TextureStyle::GradientRadial,
         size: (32, 32),
@@ -200,6 +222,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Coin - shiny gold
     AssetTexture {
         id: "coin",
+        category: AssetCategory::Pickup,
         base_color: [255, 200, 50, 255],
         style: TextureStyle::Metal { seed: 333 },
         size: (32, 32),
@@ -209,6 +232,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Powerup Orb - radiant white
     AssetTexture {
         id: "powerup_orb",
+        category: AssetCategory::Pickup,
         base_color: [255, 255, 255, 255],
         style: TextureStyle::GradientRadial,
         size: (32, 32),
@@ -220,6 +244,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Arena Floor - stone tiles
     AssetTexture {
         id: "arena_floor",
+        category: AssetCategory::Arena,
         base_color: [80, 75, 70, 255],
         style: TextureStyle::Stone { seed: 999 },
         size: (256, 256),
@@ -231,6 +256,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Frost Shard - icy blue-white
     AssetTexture {
         id: "frost_shard",
+        category: AssetCategory::Projectile,
         base_color: [180, 220, 255, 255],
         style: TextureStyle::GradientRadial,
         size: (32, 32),
@@ -240,6 +266,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Void Orb - dark purple energy
     AssetTexture {
         id: "void_orb",
+        category: AssetCategory::Projectile,
         base_color: [60, 20, 80, 255],
         style: TextureStyle::GradientRadial,
         size: (32, 32),
@@ -249,6 +276,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Lightning Bolt - electric yellow-blue
     AssetTexture {
         id: "lightning_bolt",
+        category: AssetCategory::Projectile,
         base_color: [255, 255, 100, 255],
         style: TextureStyle::GradientRadial,
         size: (32, 32),
@@ -257,68 +285,12 @@ pub const TEXTURES: &[AssetTexture] = &[
     },
 ];
 
-use std::path::Path;
-use crate::texture::generate_all_textures;
+/// Generate all textures for Prism Survivors
+pub fn generate_all(output_dir: &Path) {
+    use AssetCategory::*;
 
-pub fn generate_hero_textures(output_dir: &Path) {
-    println!("\n  Generating hero textures...");
-    let heroes: Vec<_> = TEXTURES.iter()
-        .filter(|t| ["knight", "mage", "ranger", "cleric", "necromancer", "paladin"].contains(&t.id))
-        .cloned()
-        .collect();
-    generate_all_textures(&heroes, output_dir);
-}
-
-pub fn generate_enemy_textures(output_dir: &Path) {
-    println!("\n  Generating enemy textures...");
-    let enemies: Vec<_> = TEXTURES.iter()
-        .filter(|t| ["golem", "crawler", "wisp", "skeleton", "shade", "berserker", "arcane_sentinel"].contains(&t.id))
-        .cloned()
-        .collect();
-    generate_all_textures(&enemies, output_dir);
-}
-
-pub fn generate_elite_textures(output_dir: &Path) {
-    println!("\n  Generating elite enemy textures...");
-    let elites: Vec<_> = TEXTURES.iter()
-        .filter(|t| ["crystal_knight", "void_mage", "golem_titan", "specter_lord"].contains(&t.id))
-        .cloned()
-        .collect();
-    generate_all_textures(&elites, output_dir);
-}
-
-pub fn generate_boss_textures(output_dir: &Path) {
-    println!("\n  Generating boss textures...");
-    let bosses: Vec<_> = TEXTURES.iter()
-        .filter(|t| ["prism_colossus", "void_dragon"].contains(&t.id))
-        .cloned()
-        .collect();
-    generate_all_textures(&bosses, output_dir);
-}
-
-pub fn generate_pickup_textures(output_dir: &Path) {
-    println!("\n  Generating pickup textures...");
-    let pickups: Vec<_> = TEXTURES.iter()
-        .filter(|t| ["xp_gem", "coin", "powerup_orb"].contains(&t.id))
-        .cloned()
-        .collect();
-    generate_all_textures(&pickups, output_dir);
-}
-
-pub fn generate_arena_textures(output_dir: &Path) {
-    println!("\n  Generating arena textures...");
-    let arena: Vec<_> = TEXTURES.iter()
-        .filter(|t| ["arena_floor"].contains(&t.id))
-        .cloned()
-        .collect();
-    generate_all_textures(&arena, output_dir);
-}
-
-pub fn generate_projectile_textures(output_dir: &Path) {
-    println!("\n  Generating projectile textures...");
-    let projectiles: Vec<_> = TEXTURES.iter()
-        .filter(|t| ["frost_shard", "void_orb", "lightning_bolt"].contains(&t.id))
-        .cloned()
-        .collect();
-    generate_all_textures(&projectiles, output_dir);
+    // Generate all categories using the consolidated function
+    for category in [Hero, Enemy, Elite, Boss, Pickup, Arena, Projectile] {
+        generate_textures_by_category(TEXTURES, category, output_dir);
+    }
 }

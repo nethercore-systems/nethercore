@@ -1,0 +1,27 @@
+[package]
+name = "override"
+version = "0.1.0"
+edition = "2021"
+description = "Asymmetric 1v3 multiplayer - Overseer vs Runners"
+authors = ["Nethercore"]
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# Will add nethercore-zx runtime dependencies here
+
+[build-dependencies]
+image = "0.25"
+hound = "3.5"  # WAV file output for procedural audio
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
+panic = "abort"

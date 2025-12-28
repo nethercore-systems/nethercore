@@ -526,3 +526,57 @@ path = "assets/audio/checkpoint.wav"
 [[assets.sounds]]
 id = "finish"
 path = "assets/audio/finish.wav"
+
+# === SYNTHWAVE MUSIC SAMPLES (used by XM trackers) ===
+[[assets.sounds]]
+id = "synth_kick"
+path = "assets/audio/synth_kick.wav"
+
+[[assets.sounds]]
+id = "synth_snare"
+path = "assets/audio/synth_snare.wav"
+
+[[assets.sounds]]
+id = "synth_hihat"
+path = "assets/audio/synth_hihat.wav"
+
+[[assets.sounds]]
+id = "synth_openhat"
+path = "assets/audio/synth_openhat.wav"
+
+[[assets.sounds]]
+id = "synth_bass"
+path = "assets/audio/synth_bass.wav"
+
+[[assets.sounds]]
+id = "synth_lead"
+path = "assets/audio/synth_lead.wav"
+
+[[assets.sounds]]
+id = "synth_pad"
+path = "assets/audio/synth_pad.wav"
+
+[[assets.sounds]]
+id = "synth_arp"
+path = "assets/audio/synth_arp.wav"
+
+# === MUSIC TRACKS (XM Tracker Format) ===
+[[assets.trackers]]
+id = "sunset_strip"
+path = "assets/audio/music/sunset_strip.xm"
+
+[[assets.trackers]]
+id = "neon_city"
+path = "assets/audio/music/neon_city.xm"
+
+[[assets.trackers]]
+id = "void_tunnel"
+path = "assets/audio/music/void_tunnel.xm"
+
+[[assets.trackers]]
+id = "crystal_cavern"
+path = "assets/audio/music/crystal_cavern.xm"
+
+[[assets.trackers]]
+id = "solar_highway"
+path = "assets/audio/music/solar_highway.xm"

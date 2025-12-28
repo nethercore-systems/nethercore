@@ -1,0 +1,9 @@
+# Generated procedural assets (regenerate with cargo build)
+# These are created by build.rs and should not be committed
+/assets/
+
+# Rust build artifacts
+/target/
+
+# Cargo.lock for libraries (optional, but cdylib is effectively a binary)
+# Cargo.lock

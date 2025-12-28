@@ -4,345 +4,354 @@
 //! - `{id}.png` - Base texture
 //! - Mode 3 uses Blinn-Phong (underwater lighting)
 //!
+//! Color palette designed for coherent underwater aesthetic:
+//! - Sunlit zone: Warm corals, oranges, yellows, bright greens
+//! - Twilight zone: Cool blues, purples, silvers
+//! - Midnight zone: Deep blacks, bioluminescent accents
+//! - Vent zone: Reds, oranges, pale whites
+//!
 //! Also includes custom bitmap font generation for the underwater UI.
 
-use crate::texture::{AssetTexture, TextureStyle};
+use crate::texture::{AssetCategory, AssetTexture, TextureStyle, generate_textures_by_category};
 use proc_gen::texture::{TextureBuffer, write_png};
 
 /// All LUMINA DEPTHS asset textures - single source of truth
 pub const TEXTURES: &[AssetTexture] = &[
     // === SUBMERSIBLE ===
+    // Deep sea research vessel - weathered metal with barnacle accents
     AssetTexture {
         id: "submersible",
-        base_color: [140, 150, 160, 255],
-        style: TextureStyle::Metal { seed: 11 },
-        size: (64, 64),
-        secondary_color: None,
+        category: AssetCategory::Hero,
+        base_color: [120, 140, 160, 255],  // Cool steel blue
+        style: TextureStyle::Barnacles { seed: 11 },
+        size: (128, 128),
+        secondary_color: Some([80, 100, 120, 255]),  // Darker weathered areas
         emissive: None,
     },
 
-    // === CREATURES ===
-    // Reef fish - tropical orange with stripes
+    // === SUNLIT ZONE CREATURES (0-200m) ===
+    // Reef fish - vibrant tropical scales
     AssetTexture {
         id: "reef_fish",
-        base_color: [255, 140, 50, 255],
-        style: TextureStyle::GradientV,
+        category: AssetCategory::Enemy,
+        base_color: [255, 160, 60, 255],   // Bright tropical orange
+        style: TextureStyle::Scales { seed: 101 },
         size: (64, 64),
-        secondary_color: Some([215, 100, 10, 255]),
+        secondary_color: Some([255, 200, 100, 255]),  // Golden highlights
         emissive: None,
     },
-    // Sea turtle - mottled green shell
+    // Sea turtle - mottled shell pattern
     AssetTexture {
         id: "sea_turtle",
-        base_color: [60, 80, 50, 255],
-        style: TextureStyle::Stone { seed: 42 },
+        category: AssetCategory::Enemy,
+        base_color: [70, 90, 50, 255],     // Olive green
+        style: TextureStyle::Shell { seed: 102 },
         size: (64, 64),
-        secondary_color: None,
+        secondary_color: Some([90, 110, 70, 255]),  // Lighter shell bands
         emissive: None,
     },
-    // Manta ray - dark dorsal
+    // Manta ray - smooth gradient with subtle pattern
     AssetTexture {
         id: "manta_ray",
-        base_color: [30, 35, 40, 255],
-        style: TextureStyle::GradientV,
+        category: AssetCategory::Enemy,
+        base_color: [30, 35, 45, 255],     // Dark slate
+        style: TextureStyle::Organic { seed: 103 },
         size: (64, 64),
-        secondary_color: Some([20, 25, 30, 255]),
+        secondary_color: Some([50, 55, 65, 255]),  // Subtle markings
         emissive: None,
     },
-    // Coral crab - orange-red shell with texture
+    // Coral crab - encrusted shell
     AssetTexture {
         id: "coral_crab",
-        base_color: [180, 80, 50, 255],
-        style: TextureStyle::Stone { seed: 55 },
+        category: AssetCategory::Enemy,
+        base_color: [180, 90, 60, 255],    // Rust orange
+        style: TextureStyle::Barnacles { seed: 104 },
         size: (64, 64),
-        secondary_color: None,
+        secondary_color: Some([140, 70, 50, 255]),  // Darker shell
         emissive: None,
     },
-    // Moon jelly - translucent blue bioluminescent
+
+    // === TWILIGHT ZONE CREATURES (200-1000m) ===
+    // Moon jelly - translucent organic membrane
     AssetTexture {
         id: "moon_jelly",
-        base_color: [180, 200, 255, 180],
-        style: TextureStyle::GradientRadial,
+        category: AssetCategory::Enemy,
+        base_color: [180, 200, 240, 140],  // Translucent blue-white
+        style: TextureStyle::Organic { seed: 201 },
         size: (64, 64),
-        secondary_color: Some([120, 140, 200, 100]),
-        emissive: None,
+        secondary_color: Some([140, 160, 200, 100]),  // Vein structure
+        emissive: Some([160, 200, 255, 180]),  // Soft glow
     },
-    // Lanternfish - silvery with light organs
+    // Lanternfish - silvery scales with light organs
     AssetTexture {
         id: "lanternfish",
-        base_color: [120, 140, 160, 255],
-        style: TextureStyle::Metal { seed: 21 },
+        category: AssetCategory::Enemy,
+        base_color: [150, 160, 180, 255],  // Silver
+        style: TextureStyle::Scales { seed: 202 },
         size: (64, 64),
-        secondary_color: None,
-        emissive: Some([100, 200, 255, 255]),
+        secondary_color: Some([180, 190, 210, 255]),  // Bright silver
+        emissive: Some([100, 200, 255, 255]),  // Blue photophores
     },
-    // Siphonophore - translucent chain colony
+    // Siphonophore - bioluminescent chain colony
     AssetTexture {
         id: "siphonophore",
-        base_color: [200, 180, 255, 140],
-        style: TextureStyle::GradientV,
+        category: AssetCategory::Enemy,
+        base_color: [200, 160, 220, 100],  // Translucent purple
+        style: TextureStyle::Organic { seed: 203 },
         size: (64, 64),
-        secondary_color: Some([150, 120, 200, 100]),
-        emissive: Some([180, 150, 255, 200]),
+        secondary_color: Some([160, 120, 180, 80]),  // Darker segments
+        emissive: Some([220, 180, 255, 200]),  // Purple glow
     },
-    // Giant squid - dark body with red tones
+    // Giant squid - deep coloration with chromatophores
     AssetTexture {
         id: "giant_squid",
-        base_color: [40, 30, 50, 255],
-        style: TextureStyle::GradientV,
+        category: AssetCategory::Enemy,
+        base_color: [60, 40, 70, 255],     // Deep purple-black
+        style: TextureStyle::Organic { seed: 204 },
         size: (64, 64),
-        secondary_color: Some([20, 15, 30, 255]),
+        secondary_color: Some([40, 25, 50, 255]),  // Darker patches
         emissive: None,
     },
-    // Anglerfish - deep dark body
+
+    // === MIDNIGHT ZONE CREATURES (1000-4000m) ===
+    // Anglerfish - dark rough skin
     AssetTexture {
         id: "anglerfish",
-        base_color: [15, 15, 20, 255],
-        style: TextureStyle::Stone { seed: 66 },
+        category: AssetCategory::Enemy,
+        base_color: [20, 18, 25, 255],     // Near black
+        style: TextureStyle::Barnacles { seed: 301 },
         size: (64, 64),
-        secondary_color: None,
-        emissive: None,
+        secondary_color: Some([35, 30, 40, 255]),  // Slightly lighter bumps
+        emissive: Some([255, 240, 150, 255]),  // Lure glow
     },
-    // Gulper eel - black with bioluminescent spots
+    // Gulper eel - smooth black with bioluminescent spots
     AssetTexture {
         id: "gulper_eel",
-        base_color: [10, 10, 15, 255],
-        style: TextureStyle::Solid,
+        category: AssetCategory::Enemy,
+        base_color: [12, 10, 18, 255],     // Deep black
+        style: TextureStyle::Bioluminescent { seed: 302 },
         size: (64, 64),
-        secondary_color: None,
+        secondary_color: Some([255, 120, 180, 255]),  // Pink spots
         emissive: Some([255, 100, 150, 255]),
     },
-    // Dumbo octopus - pink translucent
+    // Dumbo octopus - soft translucent pink
     AssetTexture {
         id: "dumbo_octopus",
-        base_color: [255, 180, 200, 200],
-        style: TextureStyle::GradientRadial,
+        category: AssetCategory::Enemy,
+        base_color: [255, 200, 210, 180],  // Translucent pink
+        style: TextureStyle::Organic { seed: 303 },
         size: (64, 64),
-        secondary_color: Some([220, 150, 170, 180]),
+        secondary_color: Some([240, 180, 190, 150]),  // Vein patterns
         emissive: None,
     },
-    // Vampire squid - deep red with webbing
+    // Vampire squid - deep red webbing with bioluminescence
     AssetTexture {
         id: "vampire_squid",
-        base_color: [80, 20, 30, 255],
-        style: TextureStyle::GradientRadial,
+        category: AssetCategory::Enemy,
+        base_color: [80, 25, 35, 255],     // Deep crimson
+        style: TextureStyle::Organic { seed: 304 },
         size: (64, 64),
-        secondary_color: Some([40, 10, 20, 255]),
-        emissive: Some([100, 150, 255, 150]),
+        secondary_color: Some([50, 15, 25, 255]),  // Darker areas
+        emissive: Some([100, 180, 255, 150]),  // Blue photophore tips
     },
-    // Tube worms - red plumes
+
+    // === VENT ZONE CREATURES (hydrothermal) ===
+    // Tube worms - bright red plumes
     AssetTexture {
         id: "tube_worms",
-        base_color: [200, 40, 40, 255],
-        style: TextureStyle::GradientV,
+        category: AssetCategory::Enemy,
+        base_color: [220, 50, 40, 255],    // Vivid red
+        style: TextureStyle::Seaweed { seed: 401 },
         size: (64, 64),
-        secondary_color: Some([150, 20, 20, 255]),
+        secondary_color: Some([180, 30, 25, 255]),  // Darker ridges
         emissive: None,
     },
-    // Vent shrimp - pale with red accents
+    // Vent shrimp - pale with bacterial coating
     AssetTexture {
         id: "vent_shrimp",
-        base_color: [240, 220, 200, 255],
-        style: TextureStyle::Solid,
+        category: AssetCategory::Enemy,
+        base_color: [245, 235, 220, 255],  // Pale cream
+        style: TextureStyle::Shell { seed: 402 },
         size: (64, 64),
-        secondary_color: None,
+        secondary_color: Some([230, 220, 200, 255]),  // Shell segments
         emissive: None,
     },
     // Ghost fish - nearly transparent pale
     AssetTexture {
         id: "ghost_fish",
-        base_color: [200, 210, 220, 80],
-        style: TextureStyle::GradientV,
+        category: AssetCategory::Enemy,
+        base_color: [220, 225, 235, 60],   // Very translucent
+        style: TextureStyle::Scales { seed: 403 },
         size: (64, 64),
-        secondary_color: Some([180, 190, 200, 60]),
+        secondary_color: Some([200, 205, 215, 40]),  // Faint scale pattern
         emissive: None,
     },
     // Vent octopus - pale white-pink
     AssetTexture {
         id: "vent_octopus",
-        base_color: [220, 200, 210, 255],
-        style: TextureStyle::GradientRadial,
+        category: AssetCategory::Enemy,
+        base_color: [235, 220, 225, 255],  // Pale pink-white
+        style: TextureStyle::Organic { seed: 404 },
         size: (64, 64),
-        secondary_color: Some([180, 160, 170, 255]),
+        secondary_color: Some([210, 195, 200, 255]),  // Vein patterns
         emissive: None,
     },
-    // Blue whale - blue-gray skin with barnacles
+
+    // === MEGAFAUNA (zone-spanning) ===
+    // Blue whale - textured skin with barnacle patches
     AssetTexture {
         id: "blue_whale",
-        base_color: [60, 70, 85, 255],
-        style: TextureStyle::Stone { seed: 77 },
+        category: AssetCategory::Enemy,
+        base_color: [65, 75, 90, 255],     // Blue-gray
+        style: TextureStyle::Barnacles { seed: 501 },
         size: (128, 128),
-        secondary_color: None,
+        secondary_color: Some([85, 95, 110, 255]),  // Lighter mottling
         emissive: None,
     },
-    // Sperm whale - gray-brown scarred skin
+    // Sperm whale - scarred gray-brown
     AssetTexture {
         id: "sperm_whale",
-        base_color: [70, 65, 60, 255],
-        style: TextureStyle::Stone { seed: 88 },
+        category: AssetCategory::Enemy,
+        base_color: [75, 70, 65, 255],     // Warm gray
+        style: TextureStyle::Barnacles { seed: 502 },
         size: (128, 128),
-        secondary_color: None,
+        secondary_color: Some([95, 90, 85, 255]),  // Scars and marks
         emissive: None,
     },
-    // Giant isopod - pale armored plates
+    // Giant isopod - armored plates
     AssetTexture {
         id: "giant_isopod",
-        base_color: [180, 170, 150, 255],
-        style: TextureStyle::Stone { seed: 99 },
+        category: AssetCategory::Enemy,
+        base_color: [170, 160, 145, 255],  // Pale tan
+        style: TextureStyle::Shell { seed: 503 },
         size: (64, 64),
-        secondary_color: None,
+        secondary_color: Some([190, 180, 165, 255]),  // Plate segments
         emissive: None,
     },
 
     // === FLORA ===
-    // Brain coral - pinkish tan ridged surface
+    // Brain coral - ridged organic surface
     AssetTexture {
         id: "coral_brain",
-        base_color: [180, 140, 120, 255],
-        style: TextureStyle::Stone { seed: 33 },
+        category: AssetCategory::Pickup,
+        base_color: [190, 150, 130, 255],  // Pinkish tan
+        style: TextureStyle::Coral { seed: 601 },
         size: (64, 64),
-        secondary_color: None,
+        secondary_color: Some([160, 120, 100, 255]),  // Ridge shadows
         emissive: None,
     },
-    // Fan coral - purple-pink delicate
+    // Fan coral - delicate purple-pink
     AssetTexture {
         id: "coral_fan",
-        base_color: [180, 100, 150, 255],
-        style: TextureStyle::GradientV,
+        category: AssetCategory::Pickup,
+        base_color: [190, 110, 160, 255],  // Pink-purple
+        style: TextureStyle::Seaweed { seed: 602 },
         size: (64, 64),
-        secondary_color: Some([140, 70, 120, 255]),
+        secondary_color: Some([150, 80, 130, 255]),  // Darker veins
         emissive: None,
     },
-    // Branch coral - orange branching
+    // Branch coral - vibrant orange
     AssetTexture {
         id: "coral_branch",
-        base_color: [255, 160, 100, 255],
-        style: TextureStyle::Solid,
+        category: AssetCategory::Pickup,
+        base_color: [255, 170, 110, 255],  // Coral orange
+        style: TextureStyle::Coral { seed: 603 },
         size: (64, 64),
-        secondary_color: None,
+        secondary_color: Some([230, 140, 80, 255]),  // Texture detail
         emissive: None,
     },
-    // Kelp - green-brown long blades
+    // Kelp - organic green-brown
     AssetTexture {
         id: "kelp",
-        base_color: [60, 80, 40, 255],
-        style: TextureStyle::GradientV,
+        category: AssetCategory::Pickup,
+        base_color: [70, 95, 50, 255],     // Kelp green
+        style: TextureStyle::Seaweed { seed: 604 },
         size: (64, 64),
-        secondary_color: Some([40, 60, 30, 255]),
+        secondary_color: Some([50, 70, 35, 255]),  // Darker edges
         emissive: None,
     },
-    // Anemone - pink radial tentacles
+    // Anemone - radial organic pattern
     AssetTexture {
         id: "anemone",
-        base_color: [255, 150, 180, 255],
-        style: TextureStyle::GradientRadial,
+        category: AssetCategory::Pickup,
+        base_color: [255, 140, 170, 255],  // Pink
+        style: TextureStyle::Organic { seed: 605 },
         size: (64, 64),
-        secondary_color: Some([200, 100, 130, 255]),
+        secondary_color: Some([220, 100, 130, 255]),  // Center darker
         emissive: None,
     },
-    // Sea grass - soft green blades
+    // Sea grass - soft vertical stripes
     AssetTexture {
         id: "sea_grass",
-        base_color: [80, 120, 60, 255],
-        style: TextureStyle::GradientV,
+        category: AssetCategory::Pickup,
+        base_color: [90, 130, 70, 255],    // Bright green
+        style: TextureStyle::Seaweed { seed: 606 },
         size: (64, 64),
-        secondary_color: Some([60, 100, 40, 255]),
+        secondary_color: Some([70, 110, 50, 255]),  // Darker veins
         emissive: None,
     },
 
     // === TERRAIN ===
-    // Boulder - mossy gray rock
+    // Boulder - mossy encrusted rock
     AssetTexture {
         id: "rock_boulder",
-        base_color: [90, 95, 85, 255],
-        style: TextureStyle::Stone { seed: 111 },
+        category: AssetCategory::Arena,
+        base_color: [85, 90, 80, 255],     // Gray-green rock
+        style: TextureStyle::Barnacles { seed: 701 },
         size: (64, 64),
-        secondary_color: None,
+        secondary_color: Some([65, 80, 60, 255]),  // Moss patches
         emissive: None,
     },
-    // Rock pillar - dark volcanic column
+    // Rock pillar - volcanic column
     AssetTexture {
         id: "rock_pillar",
-        base_color: [60, 55, 50, 255],
-        style: TextureStyle::Stone { seed: 122 },
+        category: AssetCategory::Arena,
+        base_color: [55, 50, 48, 255],     // Dark volcanic
+        style: TextureStyle::Stone { seed: 702 },
         size: (64, 64),
         secondary_color: None,
         emissive: None,
     },
-    // Vent chimney - dark volcanic with mineral deposits
+    // Vent chimney - mineral-encrusted smoker
     AssetTexture {
         id: "vent_chimney",
-        base_color: [50, 45, 40, 255],
-        style: TextureStyle::GradientV,
+        category: AssetCategory::Arena,
+        base_color: [45, 40, 38, 255],     // Dark volcanic
+        style: TextureStyle::Barnacles { seed: 703 },
         size: (64, 64),
-        secondary_color: Some([30, 28, 25, 255]),
-        emissive: None,
+        secondary_color: Some([70, 60, 50, 255]),  // Mineral deposits
+        emissive: Some([255, 180, 100, 100]),  // Faint heat glow
     },
-    // Seafloor - sandy sediment
+    // Seafloor - layered sediment
     AssetTexture {
         id: "seafloor_patch",
-        base_color: [140, 130, 110, 255],
-        style: TextureStyle::Stone { seed: 133 },
+        category: AssetCategory::Arena,
+        base_color: [130, 120, 100, 255],  // Sandy tan
+        style: TextureStyle::Sediment { seed: 704 },
         size: (64, 64),
-        secondary_color: None,
+        secondary_color: Some([150, 140, 120, 255]),  // Layer variation
         emissive: None,
     },
     // Bubble cluster - translucent spheres
     AssetTexture {
         id: "bubble_cluster",
-        base_color: [200, 220, 255, 100],
+        category: AssetCategory::Arena,
+        base_color: [200, 220, 255, 80],   // Very translucent
         style: TextureStyle::GradientRadial,
         size: (32, 32),
-        secondary_color: Some([255, 255, 255, 60]),
+        secondary_color: Some([255, 255, 255, 40]),  // Bright center
         emissive: None,
     },
 ];
 
 use std::path::Path;
-use crate::texture::generate_all_textures;
 
-pub fn generate_creature_textures(output_dir: &Path) {
-    let creatures: Vec<_> = TEXTURES.iter()
-        .filter(|t| [
-            "reef_fish", "sea_turtle", "manta_ray", "coral_crab",
-            "moon_jelly", "lanternfish", "siphonophore", "giant_squid",
-            "anglerfish", "gulper_eel", "dumbo_octopus", "vampire_squid",
-            "tube_worms", "vent_shrimp", "ghost_fish", "vent_octopus",
-            "blue_whale", "sperm_whale", "giant_isopod"
-        ].contains(&t.id))
-        .cloned()
-        .collect();
-    generate_all_textures(&creatures, output_dir);
-}
-
-pub fn generate_flora_textures(output_dir: &Path) {
-    let flora: Vec<_> = TEXTURES.iter()
-        .filter(|t| [
-            "coral_brain", "coral_fan", "coral_branch",
-            "kelp", "anemone", "sea_grass"
-        ].contains(&t.id))
-        .cloned()
-        .collect();
-    generate_all_textures(&flora, output_dir);
-}
-
-pub fn generate_terrain_textures(output_dir: &Path) {
-    let terrain: Vec<_> = TEXTURES.iter()
-        .filter(|t| [
-            "rock_boulder", "rock_pillar", "vent_chimney",
-            "seafloor_patch", "bubble_cluster"
-        ].contains(&t.id))
-        .cloned()
-        .collect();
-    generate_all_textures(&terrain, output_dir);
-}
-
-pub fn generate_submersible_textures(output_dir: &Path) {
-    let sub: Vec<_> = TEXTURES.iter()
-        .filter(|t| t.id == "submersible")
-        .cloned()
-        .collect();
-    generate_all_textures(&sub, output_dir);
+/// Generate all textures for Lumina Depths
+pub fn generate_all(output_dir: &Path) {
+    use AssetCategory::*;
+    for category in [Hero, Enemy, Pickup, Arena] {
+        generate_textures_by_category(TEXTURES, category, output_dir);
+    }
 }
 
 // =============================================================================
@@ -561,9 +570,10 @@ pub fn generate_font(output_dir: &Path) {
 
     let mut buffer = TextureBuffer::new(tex_width, tex_height);
 
-    // Deep ocean color scheme
-    let glow_color: [u8; 4] = [140, 200, 255, 255];      // Bioluminescent blue-white
-    let edge_color: [u8; 4] = [60, 120, 180, 200];        // Darker blue edge
+    // Deep ocean bioluminescent color scheme
+    let glow_color: [u8; 4] = [140, 220, 255, 255];      // Bright cyan-white
+    let edge_color: [u8; 4] = [60, 140, 200, 200];       // Medium blue edge
+    let outer_glow: [u8; 4] = [30, 80, 120, 100];        // Faint outer glow
 
     for (char_idx, glyph_data) in FONT_DATA.iter().enumerate() {
         let col = (char_idx as u32) % CHARS_PER_ROW;
@@ -571,19 +581,30 @@ pub fn generate_font(output_dir: &Path) {
         let base_x = col * GLYPH_WIDTH;
         let base_y = row * GLYPH_HEIGHT;
 
-        // Draw each row of the glyph
+        // First pass: outer glow (2-pixel radius)
         for (py, &row_bits) in glyph_data.iter().enumerate() {
             for px in 0..5 {
                 let bit = (row_bits >> (4 - px)) & 1;
                 if bit == 1 {
-                    let x = base_x + px;
-                    let y = base_y + py as u32;
-                    buffer.set_pixel(x, y, glow_color);
+                    // Add faint outer glow
+                    for dy in -2i32..=2 {
+                        for dx in -2i32..=2 {
+                            if dx.abs() + dy.abs() > 2 { continue; }
+                            let gx = base_x as i32 + px as i32 + dx;
+                            let gy = base_y as i32 + py as i32 + dy;
+                            if gx >= 0 && gx < tex_width as i32 && gy >= 0 && gy < tex_height as i32 {
+                                let existing = buffer.get_pixel(gx as u32, gy as u32);
+                                if existing[3] < outer_glow[3] {
+                                    buffer.set_pixel(gx as u32, gy as u32, outer_glow);
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
 
-        // Add subtle glow effect by checking edges
+        // Second pass: edge glow (1-pixel radius)
         for (py, &row_bits) in glyph_data.iter().enumerate() {
             for px in 0..5 {
                 let bit = (row_bits >> (4 - px)) & 1;
@@ -611,6 +632,18 @@ pub fn generate_font(output_dir: &Path) {
                         let y = base_y + py as u32;
                         buffer.set_pixel(x, y, edge_color);
                     }
+                }
+            }
+        }
+
+        // Third pass: main glyph pixels
+        for (py, &row_bits) in glyph_data.iter().enumerate() {
+            for px in 0..5 {
+                let bit = (row_bits >> (4 - px)) & 1;
+                if bit == 1 {
+                    let x = base_x + px;
+                    let y = base_y + py as u32;
+                    buffer.set_pixel(x, y, glow_color);
                 }
             }
         }

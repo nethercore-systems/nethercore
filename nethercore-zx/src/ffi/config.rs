@@ -141,8 +141,8 @@ fn render_mode(mut caller: Caller<'_, ZXGameContext>, mode: u32) -> Result<()> {
     let mode_name = match mode {
         0 => "Lambert",
         1 => "Matcap",
-        2 => "PBR",
-        3 => "Hybrid",
+        2 => "MR BP",
+        3 => "SS BP",
         _ => "Unknown",
     };
     info!("Render mode set to {} (mode {})", mode_name, mode);

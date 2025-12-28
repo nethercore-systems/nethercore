@@ -1,7 +1,7 @@
 # Asset manifest for asset-test example
 
 [output]
-dir = "assets/converted/"
+dir = "assets/"
 
 [codegen]
 rust = "src/assets.rs"

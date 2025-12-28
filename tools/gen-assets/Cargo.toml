@@ -11,3 +11,4 @@ path = "src/main.rs"
 proc-gen = { path = "../proc-gen", features = ["wav-export"] }
 proc-gen-showcase-defs = { path = "../../examples/_lib/proc-gen-showcase-defs" }
 clap = { version = "4", features = ["derive"] }
+noise = "0.9"

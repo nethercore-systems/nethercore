@@ -20,16 +20,16 @@ tags = ["demo", "datapack"]
 # Supported input formats: PNG, JPG, BMP, TGA
 [[assets.textures]]
 id = "cube_texture"
-path = "../assets/checkerboard.png"
+path = "../../assets/checkerboard.png"
 
 # Meshes are stored in pre-packed vertex format
 # Uses .nczxmesh format (converted via nether-export)
 [[assets.meshes]]
 id = "cube_mesh"
-path = "../assets/cube.nczxmesh"
+path = "../../assets/cube.nczxmesh"
 
 # Sounds are stored as raw PCM (22050 Hz mono i16)
 # Supported input: WAV
 [[assets.sounds]]
 id = "beep"
-path = "../assets/beep.wav"
+path = "../../assets/beep.wav"

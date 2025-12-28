@@ -10,99 +10,99 @@ version = "0.1.0"
 # NEON DRIFT meshes
 [[assets.meshes]]
 id = "speedster"
-path = "../neon-drift/assets/models/meshes/speedster.obj"
+path = "../../7-games/neon-drift/assets/models/meshes/speedster.obj"
 
 [[assets.meshes]]
 id = "muscle"
-path = "../neon-drift/assets/models/meshes/muscle.obj"
+path = "../../7-games/neon-drift/assets/models/meshes/muscle.obj"
 
 [[assets.meshes]]
 id = "racer"
-path = "../neon-drift/assets/models/meshes/racer.obj"
+path = "../../7-games/neon-drift/assets/models/meshes/racer.obj"
 
 [[assets.meshes]]
 id = "drift"
-path = "../neon-drift/assets/models/meshes/drift.obj"
+path = "../../7-games/neon-drift/assets/models/meshes/drift.obj"
 
 [[assets.meshes]]
 id = "track_straight"
-path = "../neon-drift/assets/models/meshes/track_straight.obj"
+path = "../../7-games/neon-drift/assets/models/meshes/track_straight.obj"
 
 [[assets.meshes]]
 id = "track_curve_left"
-path = "../neon-drift/assets/models/meshes/track_curve_left.obj"
+path = "../../7-games/neon-drift/assets/models/meshes/track_curve_left.obj"
 
 [[assets.meshes]]
 id = "track_tunnel"
-path = "../neon-drift/assets/models/meshes/track_tunnel.obj"
+path = "../../7-games/neon-drift/assets/models/meshes/track_tunnel.obj"
 
 [[assets.meshes]]
 id = "track_jump"
-path = "../neon-drift/assets/models/meshes/track_jump.obj"
+path = "../../7-games/neon-drift/assets/models/meshes/track_jump.obj"
 
 [[assets.meshes]]
 id = "prop_barrier"
-path = "../neon-drift/assets/models/meshes/prop_barrier.obj"
+path = "../../7-games/neon-drift/assets/models/meshes/prop_barrier.obj"
 
 [[assets.meshes]]
 id = "prop_boost_pad"
-path = "../neon-drift/assets/models/meshes/prop_boost_pad.obj"
+path = "../../7-games/neon-drift/assets/models/meshes/prop_boost_pad.obj"
 
 [[assets.meshes]]
 id = "prop_billboard"
-path = "../neon-drift/assets/models/meshes/prop_billboard.obj"
+path = "../../7-games/neon-drift/assets/models/meshes/prop_billboard.obj"
 
 [[assets.meshes]]
 id = "prop_building"
-path = "../neon-drift/assets/models/meshes/prop_building.obj"
+path = "../../7-games/neon-drift/assets/models/meshes/prop_building.obj"
 
 
 # NEON DRIFT textures
 [[assets.textures]]
 id = "speedster"
-path = "../neon-drift/assets/models/textures/speedster.png"
+path = "../../7-games/neon-drift/assets/models/textures/speedster.png"
 
 [[assets.textures]]
 id = "muscle"
-path = "../neon-drift/assets/models/textures/muscle.png"
+path = "../../7-games/neon-drift/assets/models/textures/muscle.png"
 
 [[assets.textures]]
 id = "racer"
-path = "../neon-drift/assets/models/textures/racer.png"
+path = "../../7-games/neon-drift/assets/models/textures/racer.png"
 
 [[assets.textures]]
 id = "drift"
-path = "../neon-drift/assets/models/textures/drift.png"
+path = "../../7-games/neon-drift/assets/models/textures/drift.png"
 
 [[assets.textures]]
 id = "track_straight"
-path = "../neon-drift/assets/models/textures/track_straight.png"
+path = "../../7-games/neon-drift/assets/models/textures/track_straight.png"
 
 [[assets.textures]]
 id = "track_curve_left"
-path = "../neon-drift/assets/models/textures/track_curve_left.png"
+path = "../../7-games/neon-drift/assets/models/textures/track_curve_left.png"
 
 [[assets.textures]]
 id = "track_tunnel"
-path = "../neon-drift/assets/models/textures/track_tunnel.png"
+path = "../../7-games/neon-drift/assets/models/textures/track_tunnel.png"
 
 [[assets.textures]]
 id = "track_jump"
-path = "../neon-drift/assets/models/textures/track_jump.png"
+path = "../../7-games/neon-drift/assets/models/textures/track_jump.png"
 
 [[assets.textures]]
 id = "prop_barrier"
-path = "../neon-drift/assets/models/textures/prop_barrier.png"
+path = "../../7-games/neon-drift/assets/models/textures/prop_barrier.png"
 
 [[assets.textures]]
 id = "prop_boost_pad"
-path = "../neon-drift/assets/models/textures/prop_boost_pad.png"
+path = "../../7-games/neon-drift/assets/models/textures/prop_boost_pad.png"
 
 [[assets.textures]]
 id = "prop_billboard"
-path = "../neon-drift/assets/models/textures/prop_billboard.png"
+path = "../../7-games/neon-drift/assets/models/textures/prop_billboard.png"
 
 [[assets.textures]]
 id = "prop_building"
-path = "../neon-drift/assets/models/textures/prop_building.png"
+path = "../../7-games/neon-drift/assets/models/textures/prop_building.png"
 

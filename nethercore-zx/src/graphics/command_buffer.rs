@@ -38,7 +38,7 @@ pub enum RenderType {
 
     /// Procedural sky background
     ///
-    /// Renders last with depth test enabled (GreaterOrEqual). Only fragments where
+    /// Renders last with depth test enabled (LessEqual). Only fragments where
     /// depth == 1.0 (clear value) pass, avoiding expensive sky shader invocations
     /// for pixels already covered by geometry.
     Sky = 2,

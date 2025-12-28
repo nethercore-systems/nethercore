@@ -29,6 +29,7 @@ use std::fs;
 use std::path::PathBuf;
 
 mod lumina_depths;
+mod mesh_helpers;
 mod neon_drift;
 mod prism_survivors;
 pub mod audio;
@@ -202,16 +203,16 @@ fn main() {
             println!("=== Generating ALL Showcase Assets ===\n");
 
             println!("--- PRISM SURVIVORS ---");
-            prism_survivors::generate_all(&output.join("prism-survivors/assets/models"));
+            prism_survivors::generate_all(&output.join("7-games/prism-survivors/assets/models"));
 
             println!("\n--- NEON DRIFT ---");
-            neon_drift::generate_all(&output.join("neon-drift/assets/models"));
+            neon_drift::generate_all(&output.join("7-games/neon-drift/assets/models"));
 
             println!("\n--- LUMINA DEPTHS ---");
-            lumina_depths::generate_all(&output.join("lumina-depths/assets/models"));
+            lumina_depths::generate_all(&output.join("7-games/lumina-depths/assets/models"));
 
             println!("\n--- SHOWCASE SOUNDS ---");
-            audio::generate_showcase_sounds(&output.join("proc-sounds-viewer/assets"));
+            audio::generate_showcase_sounds(&output.join("9-debug/proc-sounds-viewer/assets"));
 
             // Auto-generate preview viewers
             println!("\n=== Generating Preview Viewers ===");
@@ -239,7 +240,7 @@ fn generate_preview_viewers(examples_dir: &PathBuf) {
 
 /// Generate nether.toml and lib.rs for a specific render mode
 fn generate_mode_preview(examples_dir: &PathBuf, mode: u8, showcases: &[&ShowcaseDef]) {
-    let preview_dir = examples_dir.join(format!("proc-gen-mode{}", mode));
+    let preview_dir = examples_dir.join(format!("9-debug/proc-gen-mode{}", mode));
 
     // Collect showcase names for title
     let showcase_names: Vec<_> = showcases.iter().map(|s| s.name).collect();
@@ -272,7 +273,7 @@ version = "0.1.0"
             toml.push_str(&format!(
                 r#"[[assets.meshes]]
 id = "{id}"
-path = "../{folder}/assets/models/meshes/{id}.obj"
+path = "../../7-games/{folder}/assets/models/meshes/{id}.obj"
 
 "#,
                 id = id,
@@ -287,7 +288,7 @@ path = "../{folder}/assets/models/meshes/{id}.obj"
             toml.push_str(&format!(
                 r#"[[assets.textures]]
 id = "{id}"
-path = "../{folder}/assets/models/textures/{id}.png"
+path = "../../7-games/{folder}/assets/models/textures/{id}.png"
 
 "#,
                 id = id,

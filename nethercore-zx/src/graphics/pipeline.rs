@@ -383,7 +383,7 @@ pub(crate) fn create_sky_pipeline(
         depth_stencil: Some(wgpu::DepthStencilState {
             format: wgpu::TextureFormat::Depth24PlusStencil8,
             depth_write_enabled: false,  // Sky is infinitely far, don't write depth
-            depth_compare: wgpu::CompareFunction::GreaterEqual,  // Only render where nothing else drew
+            depth_compare: wgpu::CompareFunction::LessEqual,  // Only render where depth == 1.0 (cleared, nothing drew)
             stencil: get_stencil_state(stencil_mode),
             bias: wgpu::DepthBiasState::default(),
         }),

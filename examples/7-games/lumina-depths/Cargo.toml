@@ -8,7 +8,7 @@ description = "Meditative underwater exploration for Nethercore ZX"
 crate-type = ["cdylib"]
 
 [dependencies]
-glam = "0.29"
+glam = { version = "0.29", default-features = false, features = ["libm"] }
 
 [profile.release]
 opt-level = "z"

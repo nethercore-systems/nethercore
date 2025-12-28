@@ -10,166 +10,310 @@ version = "0.1.0"
 # PRISM SURVIVORS meshes
 [[assets.meshes]]
 id = "knight"
-path = "../prism-survivors/assets/models/meshes/knight.obj"
+path = "../../7-games/prism-survivors/assets/models/meshes/knight.obj"
 
 [[assets.meshes]]
 id = "mage"
-path = "../prism-survivors/assets/models/meshes/mage.obj"
+path = "../../7-games/prism-survivors/assets/models/meshes/mage.obj"
 
 [[assets.meshes]]
 id = "ranger"
-path = "../prism-survivors/assets/models/meshes/ranger.obj"
+path = "../../7-games/prism-survivors/assets/models/meshes/ranger.obj"
 
 [[assets.meshes]]
 id = "cleric"
-path = "../prism-survivors/assets/models/meshes/cleric.obj"
+path = "../../7-games/prism-survivors/assets/models/meshes/cleric.obj"
+
+[[assets.meshes]]
+id = "necromancer"
+path = "../../7-games/prism-survivors/assets/models/meshes/necromancer.obj"
+
+[[assets.meshes]]
+id = "paladin"
+path = "../../7-games/prism-survivors/assets/models/meshes/paladin.obj"
 
 [[assets.meshes]]
 id = "golem"
-path = "../prism-survivors/assets/models/meshes/golem.obj"
+path = "../../7-games/prism-survivors/assets/models/meshes/golem.obj"
 
 [[assets.meshes]]
 id = "crawler"
-path = "../prism-survivors/assets/models/meshes/crawler.obj"
+path = "../../7-games/prism-survivors/assets/models/meshes/crawler.obj"
 
 [[assets.meshes]]
 id = "wisp"
-path = "../prism-survivors/assets/models/meshes/wisp.obj"
+path = "../../7-games/prism-survivors/assets/models/meshes/wisp.obj"
 
 [[assets.meshes]]
 id = "skeleton"
-path = "../prism-survivors/assets/models/meshes/skeleton.obj"
+path = "../../7-games/prism-survivors/assets/models/meshes/skeleton.obj"
+
+[[assets.meshes]]
+id = "shade"
+path = "../../7-games/prism-survivors/assets/models/meshes/shade.obj"
+
+[[assets.meshes]]
+id = "berserker"
+path = "../../7-games/prism-survivors/assets/models/meshes/berserker.obj"
+
+[[assets.meshes]]
+id = "arcane_sentinel"
+path = "../../7-games/prism-survivors/assets/models/meshes/arcane_sentinel.obj"
+
+[[assets.meshes]]
+id = "crystal_knight"
+path = "../../7-games/prism-survivors/assets/models/meshes/crystal_knight.obj"
+
+[[assets.meshes]]
+id = "void_mage"
+path = "../../7-games/prism-survivors/assets/models/meshes/void_mage.obj"
+
+[[assets.meshes]]
+id = "golem_titan"
+path = "../../7-games/prism-survivors/assets/models/meshes/golem_titan.obj"
+
+[[assets.meshes]]
+id = "specter_lord"
+path = "../../7-games/prism-survivors/assets/models/meshes/specter_lord.obj"
+
+[[assets.meshes]]
+id = "prism_colossus"
+path = "../../7-games/prism-survivors/assets/models/meshes/prism_colossus.obj"
+
+[[assets.meshes]]
+id = "void_dragon"
+path = "../../7-games/prism-survivors/assets/models/meshes/void_dragon.obj"
+
+[[assets.meshes]]
+id = "xp_gem"
+path = "../../7-games/prism-survivors/assets/models/meshes/xp_gem.obj"
+
+[[assets.meshes]]
+id = "coin"
+path = "../../7-games/prism-survivors/assets/models/meshes/coin.obj"
+
+[[assets.meshes]]
+id = "powerup_orb"
+path = "../../7-games/prism-survivors/assets/models/meshes/powerup_orb.obj"
+
+[[assets.meshes]]
+id = "frost_shard"
+path = "../../7-games/prism-survivors/assets/models/meshes/frost_shard.obj"
+
+[[assets.meshes]]
+id = "void_orb"
+path = "../../7-games/prism-survivors/assets/models/meshes/void_orb.obj"
+
+[[assets.meshes]]
+id = "lightning_bolt"
+path = "../../7-games/prism-survivors/assets/models/meshes/lightning_bolt.obj"
+
+[[assets.meshes]]
+id = "arena_floor"
+path = "../../7-games/prism-survivors/assets/models/meshes/arena_floor.obj"
 
 
 # PRISM SURVIVORS textures
 [[assets.textures]]
 id = "knight"
-path = "../prism-survivors/assets/models/textures/knight.png"
+path = "../../7-games/prism-survivors/assets/models/textures/knight.png"
 
 [[assets.textures]]
 id = "mage"
-path = "../prism-survivors/assets/models/textures/mage.png"
+path = "../../7-games/prism-survivors/assets/models/textures/mage.png"
 
 [[assets.textures]]
 id = "ranger"
-path = "../prism-survivors/assets/models/textures/ranger.png"
+path = "../../7-games/prism-survivors/assets/models/textures/ranger.png"
 
 [[assets.textures]]
 id = "cleric"
-path = "../prism-survivors/assets/models/textures/cleric.png"
+path = "../../7-games/prism-survivors/assets/models/textures/cleric.png"
+
+[[assets.textures]]
+id = "necromancer"
+path = "../../7-games/prism-survivors/assets/models/textures/necromancer.png"
+
+[[assets.textures]]
+id = "paladin"
+path = "../../7-games/prism-survivors/assets/models/textures/paladin.png"
 
 [[assets.textures]]
 id = "golem"
-path = "../prism-survivors/assets/models/textures/golem.png"
+path = "../../7-games/prism-survivors/assets/models/textures/golem.png"
 
 [[assets.textures]]
 id = "crawler"
-path = "../prism-survivors/assets/models/textures/crawler.png"
+path = "../../7-games/prism-survivors/assets/models/textures/crawler.png"
 
 [[assets.textures]]
 id = "wisp"
-path = "../prism-survivors/assets/models/textures/wisp.png"
+path = "../../7-games/prism-survivors/assets/models/textures/wisp.png"
 
 [[assets.textures]]
 id = "skeleton"
-path = "../prism-survivors/assets/models/textures/skeleton.png"
+path = "../../7-games/prism-survivors/assets/models/textures/skeleton.png"
+
+[[assets.textures]]
+id = "shade"
+path = "../../7-games/prism-survivors/assets/models/textures/shade.png"
+
+[[assets.textures]]
+id = "berserker"
+path = "../../7-games/prism-survivors/assets/models/textures/berserker.png"
+
+[[assets.textures]]
+id = "arcane_sentinel"
+path = "../../7-games/prism-survivors/assets/models/textures/arcane_sentinel.png"
+
+[[assets.textures]]
+id = "crystal_knight"
+path = "../../7-games/prism-survivors/assets/models/textures/crystal_knight.png"
+
+[[assets.textures]]
+id = "void_mage"
+path = "../../7-games/prism-survivors/assets/models/textures/void_mage.png"
+
+[[assets.textures]]
+id = "golem_titan"
+path = "../../7-games/prism-survivors/assets/models/textures/golem_titan.png"
+
+[[assets.textures]]
+id = "specter_lord"
+path = "../../7-games/prism-survivors/assets/models/textures/specter_lord.png"
+
+[[assets.textures]]
+id = "prism_colossus"
+path = "../../7-games/prism-survivors/assets/models/textures/prism_colossus.png"
+
+[[assets.textures]]
+id = "void_dragon"
+path = "../../7-games/prism-survivors/assets/models/textures/void_dragon.png"
+
+[[assets.textures]]
+id = "xp_gem"
+path = "../../7-games/prism-survivors/assets/models/textures/xp_gem.png"
+
+[[assets.textures]]
+id = "coin"
+path = "../../7-games/prism-survivors/assets/models/textures/coin.png"
+
+[[assets.textures]]
+id = "powerup_orb"
+path = "../../7-games/prism-survivors/assets/models/textures/powerup_orb.png"
+
+[[assets.textures]]
+id = "frost_shard"
+path = "../../7-games/prism-survivors/assets/models/textures/frost_shard.png"
+
+[[assets.textures]]
+id = "void_orb"
+path = "../../7-games/prism-survivors/assets/models/textures/void_orb.png"
+
+[[assets.textures]]
+id = "lightning_bolt"
+path = "../../7-games/prism-survivors/assets/models/textures/lightning_bolt.png"
+
+[[assets.textures]]
+id = "arena_floor"
+path = "../../7-games/prism-survivors/assets/models/textures/arena_floor.png"
 
 # LUMINA DEPTHS meshes
 [[assets.meshes]]
 id = "submersible"
-path = "../lumina-depths/assets/models/meshes/submersible.obj"
+path = "../../7-games/lumina-depths/assets/models/meshes/submersible.obj"
 
 [[assets.meshes]]
 id = "reef_fish"
-path = "../lumina-depths/assets/models/meshes/reef_fish.obj"
+path = "../../7-games/lumina-depths/assets/models/meshes/reef_fish.obj"
 
 [[assets.meshes]]
 id = "sea_turtle"
-path = "../lumina-depths/assets/models/meshes/sea_turtle.obj"
+path = "../../7-games/lumina-depths/assets/models/meshes/sea_turtle.obj"
 
 [[assets.meshes]]
 id = "manta_ray"
-path = "../lumina-depths/assets/models/meshes/manta_ray.obj"
+path = "../../7-games/lumina-depths/assets/models/meshes/manta_ray.obj"
 
 [[assets.meshes]]
 id = "moon_jelly"
-path = "../lumina-depths/assets/models/meshes/moon_jelly.obj"
+path = "../../7-games/lumina-depths/assets/models/meshes/moon_jelly.obj"
 
 [[assets.meshes]]
 id = "anglerfish"
-path = "../lumina-depths/assets/models/meshes/anglerfish.obj"
+path = "../../7-games/lumina-depths/assets/models/meshes/anglerfish.obj"
 
 [[assets.meshes]]
 id = "blue_whale"
-path = "../lumina-depths/assets/models/meshes/blue_whale.obj"
+path = "../../7-games/lumina-depths/assets/models/meshes/blue_whale.obj"
 
 [[assets.meshes]]
 id = "coral_brain"
-path = "../lumina-depths/assets/models/meshes/coral_brain.obj"
+path = "../../7-games/lumina-depths/assets/models/meshes/coral_brain.obj"
 
 [[assets.meshes]]
 id = "kelp"
-path = "../lumina-depths/assets/models/meshes/kelp.obj"
+path = "../../7-games/lumina-depths/assets/models/meshes/kelp.obj"
 
 [[assets.meshes]]
 id = "anemone"
-path = "../lumina-depths/assets/models/meshes/anemone.obj"
+path = "../../7-games/lumina-depths/assets/models/meshes/anemone.obj"
 
 [[assets.meshes]]
 id = "vent_chimney"
-path = "../lumina-depths/assets/models/meshes/vent_chimney.obj"
+path = "../../7-games/lumina-depths/assets/models/meshes/vent_chimney.obj"
 
 [[assets.meshes]]
 id = "tube_worms"
-path = "../lumina-depths/assets/models/meshes/tube_worms.obj"
+path = "../../7-games/lumina-depths/assets/models/meshes/tube_worms.obj"
 
 
 # LUMINA DEPTHS textures
 [[assets.textures]]
 id = "submersible"
-path = "../lumina-depths/assets/models/textures/submersible.png"
+path = "../../7-games/lumina-depths/assets/models/textures/submersible.png"
 
 [[assets.textures]]
 id = "reef_fish"
-path = "../lumina-depths/assets/models/textures/reef_fish.png"
+path = "../../7-games/lumina-depths/assets/models/textures/reef_fish.png"
 
 [[assets.textures]]
 id = "sea_turtle"
-path = "../lumina-depths/assets/models/textures/sea_turtle.png"
+path = "../../7-games/lumina-depths/assets/models/textures/sea_turtle.png"
 
 [[assets.textures]]
 id = "manta_ray"
-path = "../lumina-depths/assets/models/textures/manta_ray.png"
+path = "../../7-games/lumina-depths/assets/models/textures/manta_ray.png"
 
 [[assets.textures]]
 id = "moon_jelly"
-path = "../lumina-depths/assets/models/textures/moon_jelly.png"
+path = "../../7-games/lumina-depths/assets/models/textures/moon_jelly.png"
 
 [[assets.textures]]
 id = "anglerfish"
-path = "../lumina-depths/assets/models/textures/anglerfish.png"
+path = "../../7-games/lumina-depths/assets/models/textures/anglerfish.png"
 
 [[assets.textures]]
 id = "blue_whale"
-path = "../lumina-depths/assets/models/textures/blue_whale.png"
+path = "../../7-games/lumina-depths/assets/models/textures/blue_whale.png"
 
 [[assets.textures]]
 id = "coral_brain"
-path = "../lumina-depths/assets/models/textures/coral_brain.png"
+path = "../../7-games/lumina-depths/assets/models/textures/coral_brain.png"
 
 [[assets.textures]]
 id = "kelp"
-path = "../lumina-depths/assets/models/textures/kelp.png"
+path = "../../7-games/lumina-depths/assets/models/textures/kelp.png"
 
 [[assets.textures]]
 id = "anemone"
-path = "../lumina-depths/assets/models/textures/anemone.png"
+path = "../../7-games/lumina-depths/assets/models/textures/anemone.png"
 
 [[assets.textures]]
 id = "vent_chimney"
-path = "../lumina-depths/assets/models/textures/vent_chimney.png"
+path = "../../7-games/lumina-depths/assets/models/textures/vent_chimney.png"
 
 [[assets.textures]]
 id = "tube_worms"
-path = "../lumina-depths/assets/models/textures/tube_worms.png"
+path = "../../7-games/lumina-depths/assets/models/textures/tube_worms.png"
 

@@ -186,6 +186,9 @@ pub struct UnpackedMesh {
     pub normals: Vec<[f32; 3]>,
     /// UV coordinates as [u, v] (empty if no UVs)
     pub uvs: Vec<[f32; 2]>,
+    /// Vertex colors as [r, g, b, a] (empty if no colors)
+    /// Essential for PS1/PS2/N64 style baked lighting and AO
+    pub colors: Vec<[u8; 4]>,
     /// Triangle indices (u16 for GPU compatibility)
     pub indices: Vec<u16>,
 }
@@ -197,7 +200,15 @@ impl UnpackedMesh {
             positions: Vec::new(),
             normals: Vec::new(),
             uvs: Vec::new(),
+            colors: Vec::new(),
             indices: Vec::new(),
+        }
+    }
+
+    /// Ensure colors array is initialized (fill with white if empty)
+    pub fn ensure_colors(&mut self) {
+        if self.colors.is_empty() && !self.positions.is_empty() {
+            self.colors = vec![[255, 255, 255, 255]; self.positions.len()];
         }
     }
 

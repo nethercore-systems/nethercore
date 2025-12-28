@@ -431,7 +431,7 @@ fn sphere_uv(mut caller: Caller<'_, ZXGameContext>, radius: f32, segments: u32, 
     // Generate PACKED mesh data with UVs (clamping happens in procedural function)
     let mesh_data: MeshDataUV = procedural::generate_sphere_uv(radius, segments, rings);
 
-    let vertex_count = mesh_data.vertices.len() / 20; // 20 bytes per POS_UV_NORMAL vertex
+    let vertex_count = mesh_data.vertices.len() / 16; // 16 bytes per POS_UV_NORMAL vertex
     let index_count = mesh_data.indices.len();
 
     // Allocate handle and queue mesh
@@ -491,7 +491,7 @@ fn plane_uv(
     // Generate PACKED mesh data with UVs
     let mesh_data: MeshDataUV = procedural::generate_plane_uv(size_x, size_z, subdivisions_x, subdivisions_z);
 
-    let vertex_count = mesh_data.vertices.len() / 20; // 20 bytes per POS_UV_NORMAL vertex
+    let vertex_count = mesh_data.vertices.len() / 16; // 16 bytes per POS_UV_NORMAL vertex
     let index_count = mesh_data.indices.len();
 
     // Allocate handle and queue mesh
@@ -548,7 +548,7 @@ fn cube_uv(mut caller: Caller<'_, ZXGameContext>, size_x: f32, size_y: f32, size
     // Generate PACKED mesh data with UVs
     let mesh_data: MeshDataUV = procedural::generate_cube_uv(size_x, size_y, size_z);
 
-    let vertex_count = mesh_data.vertices.len() / 20; // 20 bytes per POS_UV_NORMAL vertex
+    let vertex_count = mesh_data.vertices.len() / 16; // 16 bytes per POS_UV_NORMAL vertex
     let index_count = mesh_data.indices.len();
 
     // Allocate handle and queue mesh
@@ -622,7 +622,7 @@ fn cylinder_uv(
     // Generate PACKED mesh data with UVs
     let mesh_data: MeshDataUV = procedural::generate_cylinder_uv(radius_bottom, radius_top, height, segments);
 
-    let vertex_count = mesh_data.vertices.len() / 20; // 20 bytes per POS_UV_NORMAL vertex
+    let vertex_count = mesh_data.vertices.len() / 16; // 16 bytes per POS_UV_NORMAL vertex
     let index_count = mesh_data.indices.len();
 
     // Allocate handle and queue mesh
@@ -686,7 +686,7 @@ fn torus_uv(
     let mesh_data: MeshDataUV =
         procedural::generate_torus_uv(major_radius, minor_radius, major_segments, minor_segments);
 
-    let vertex_count = mesh_data.vertices.len() / 20; // 20 bytes per POS_UV_NORMAL vertex
+    let vertex_count = mesh_data.vertices.len() / 16; // 16 bytes per POS_UV_NORMAL vertex
     let index_count = mesh_data.indices.len();
 
     // Allocate handle and queue mesh
@@ -759,7 +759,7 @@ fn capsule_uv(
     // Generate PACKED mesh data with UVs
     let mesh_data: MeshDataUV = procedural::generate_capsule_uv(radius, height, segments, rings);
 
-    let vertex_count = mesh_data.vertices.len() / 20; // 20 bytes per POS_UV_NORMAL vertex
+    let vertex_count = mesh_data.vertices.len() / 16; // 16 bytes per POS_UV_NORMAL vertex
     let index_count = mesh_data.indices.len();
 
     // Allocate handle and queue mesh

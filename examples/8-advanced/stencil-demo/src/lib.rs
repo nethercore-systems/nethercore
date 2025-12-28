@@ -4,7 +4,7 @@
 //! - Circle mask (render inside)
 //! - Inverted mask (render outside / vignette)
 //! - Diagonal split
-//! - Multiple masks
+//! - Animated portal
 //!
 //! Press A to cycle through demo modes.
 
@@ -35,7 +35,7 @@ extern "C" {
     fn stencil_invert();
 
     // Input
-    fn button_held(player: u32, button: u32) -> u32;
+    fn button_pressed(player: u32, button: u32) -> u32;
     fn left_stick_x(player: u32) -> f32;
 
     // Procedural mesh generation
@@ -45,9 +45,6 @@ extern "C" {
 
     // Mesh drawing
     fn draw_mesh(handle: u32);
-
-    // Immediate mode triangles
-    fn draw_triangles(data_ptr: *const f32, vertex_count: u32, format: u32);
 
     // Transform
     fn push_identity();
@@ -61,10 +58,8 @@ extern "C" {
     // 2D drawing
     fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
     fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32);
+    fn draw_circle(x: f32, y: f32, radius: f32, color: u32);
 }
-
-// Vertex format: position only (for stencil mask shapes)
-const VF_POS: u32 = 0;
 
 // Input (button indices from zx.rs)
 const BUTTON_A: u32 = 4;
@@ -72,6 +67,8 @@ const BUTTON_A: u32 = 4;
 // Screen dimensions
 const SCREEN_WIDTH: f32 = 960.0;
 const SCREEN_HEIGHT: f32 = 540.0;
+const SCREEN_CX: f32 = SCREEN_WIDTH / 2.0;
+const SCREEN_CY: f32 = SCREEN_HEIGHT / 2.0;
 
 // Mesh handles
 static mut CUBE_MESH: u32 = 0;
@@ -80,13 +77,8 @@ static mut FLOOR_MESH: u32 = 0;
 
 // State
 static mut DEMO_MODE: u32 = 0;
-static mut PREV_A_BUTTON: u32 = 0;
 static mut TIME: f32 = 0.0;
 static mut ROTATION: f32 = 0.0;
-
-// Circle mesh data (generated at init)
-const CIRCLE_SEGMENTS: usize = 32;
-static mut CIRCLE_VERTICES: [f32; CIRCLE_SEGMENTS * 3 * 3] = [0.0; CIRCLE_SEGMENTS * 3 * 3];
 
 // Demo mode names and descriptions
 static DEMO_NAMES: [&str; 4] = [
@@ -99,51 +91,21 @@ static DEMO_NAMES: [&str; 4] = [
 static DEMO_DESCRIPTIONS: [&str; 4] = [
     "stencil_begin/end: Only render inside circle",
     "stencil_invert: Render outside mask (dark edges)",
-    "Two masks: Different colors per half",
-    "Animated radius creates pulsing portal view",
+    "Two masks: Different tints per half",
+    "Pulsing portal with different camera inside",
 ];
 
 #[no_mangle]
 pub extern "C" fn init() {
     unsafe {
         set_clear_color(0x1a1a2eFF);
-        render_mode(0);
+        render_mode(0); // Lambert mode
         depth_test(1);
 
         // Generate scene objects
         CUBE_MESH = cube(1.0, 1.0, 1.0);
         SPHERE_MESH = sphere(0.5, 16, 8);
         FLOOR_MESH = plane(10.0, 10.0, 4, 4);
-
-        // Generate circle mesh vertices (triangle fan centered at screen center)
-        generate_circle_mesh(SCREEN_WIDTH / 2.0, SCREEN_HEIGHT / 2.0, 200.0);
-    }
-}
-
-/// Generate a circle mesh as a triangle fan (position only format)
-unsafe fn generate_circle_mesh(cx: f32, cy: f32, radius: f32) {
-    let angle_step = core::f32::consts::TAU / CIRCLE_SEGMENTS as f32;
-
-    for i in 0..CIRCLE_SEGMENTS {
-        let angle1 = i as f32 * angle_step;
-        let angle2 = (i + 1) as f32 * angle_step;
-
-        let x1 = cx + libm::cosf(angle1) * radius;
-        let y1 = cy + libm::sinf(angle1) * radius;
-        let x2 = cx + libm::cosf(angle2) * radius;
-        let y2 = cy + libm::sinf(angle2) * radius;
-
-        // Triangle: center, edge1, edge2 (CCW winding)
-        let base = i * 9;
-        CIRCLE_VERTICES[base + 0] = cx;
-        CIRCLE_VERTICES[base + 1] = cy;
-        CIRCLE_VERTICES[base + 2] = 0.0;
-        CIRCLE_VERTICES[base + 3] = x1;
-        CIRCLE_VERTICES[base + 4] = y1;
-        CIRCLE_VERTICES[base + 5] = 0.0;
-        CIRCLE_VERTICES[base + 6] = x2;
-        CIRCLE_VERTICES[base + 7] = y2;
-        CIRCLE_VERTICES[base + 8] = 0.0;
     }
 }
 
@@ -153,11 +115,9 @@ pub extern "C" fn update() {
         TIME += 1.0 / 60.0;
 
         // Cycle demo modes with A button
-        let a_button = button_held(0, BUTTON_A);
-        if a_button != 0 && PREV_A_BUTTON == 0 {
+        if button_pressed(0, BUTTON_A) != 0 {
             DEMO_MODE = (DEMO_MODE + 1) % 4;
         }
-        PREV_A_BUTTON = a_button;
 
         // Rotate scene with stick
         let stick_x = left_stick_x(0);
@@ -169,10 +129,15 @@ pub extern "C" fn update() {
     }
 }
 
-/// Draw the 3D scene
+/// Draw the 3D scene with default camera
 unsafe fn draw_scene() {
-    camera_set(0.0, 5.0, 10.0, 0.0, 0.0, 0.0);
-    camera_fov(60.0);
+    draw_scene_with_camera(0.0, 5.0, 10.0, 60.0);
+}
+
+/// Draw the 3D scene with custom camera position
+unsafe fn draw_scene_with_camera(cam_x: f32, cam_y: f32, cam_z: f32, fov: f32) {
+    camera_set(cam_x, cam_y, cam_z, 0.0, 0.0, 0.0);
+    camera_fov(fov);
 
     // Floor
     push_identity();
@@ -202,52 +167,64 @@ unsafe fn draw_scene() {
     }
 }
 
-/// Draw the circle mask shape to stencil buffer
-unsafe fn draw_circle_mask() {
-    // Use 2D camera for screen-space mask
-    camera_set(0.0, 0.0, 1.0, 0.0, 0.0, 0.0);
-    camera_fov(90.0);
+/// Draw the 3D scene with a color tint applied to all objects
+unsafe fn draw_scene_tinted(tint: u32) {
+    camera_set(0.0, 5.0, 10.0, 0.0, 0.0, 0.0);
+    camera_fov(60.0);
 
+    // Extract tint RGB components (0-255)
+    let tint_r = ((tint >> 24) & 0xFF) as f32 / 255.0;
+    let tint_g = ((tint >> 16) & 0xFF) as f32 / 255.0;
+    let tint_b = ((tint >> 8) & 0xFF) as f32 / 255.0;
+
+    // Floor - tinted
     push_identity();
+    push_translate(0.0, -1.0, 0.0);
+    let floor_base = 0x404050FF_u32;
+    set_color(tint_color(floor_base, tint_r, tint_g, tint_b));
+    draw_mesh(FLOOR_MESH);
 
-    // Draw circle as immediate triangles
-    draw_triangles(
-        CIRCLE_VERTICES.as_ptr(),
-        (CIRCLE_SEGMENTS * 3) as u32,
-        VF_POS,
-    );
+    // Central cube - tinted
+    push_identity();
+    push_rotate_y(ROTATION);
+    set_color(tint_color(0xFF6644FF, tint_r, tint_g, tint_b));
+    draw_mesh(CUBE_MESH);
+
+    // Orbiting spheres - tinted
+    let colors = [0x44FF88FF_u32, 0x4488FFFF, 0xFF44AAFF, 0xFFAA44FF];
+    for i in 0..4 {
+        let angle = TIME * 60.0 + (i as f32) * 90.0;
+        let rad = angle.to_radians();
+        let x = libm::cosf(rad) * 3.0;
+        let z = libm::sinf(rad) * 3.0;
+
+        push_identity();
+        push_translate(x, 0.0, z);
+        set_color(tint_color(colors[i], tint_r, tint_g, tint_b));
+        draw_mesh(SPHERE_MESH);
+    }
 }
 
-/// Draw a diagonal triangle for split mask
-unsafe fn draw_diagonal_mask(top_left: bool) {
-    camera_set(0.0, 0.0, 1.0, 0.0, 0.0, 0.0);
-    camera_fov(90.0);
-
-    push_identity();
-
-    // Triangle covering half the screen diagonally
-    let vertices: [f32; 9] = if top_left {
-        [
-            0.0, 0.0, 0.0,           // Top-left
-            SCREEN_WIDTH, 0.0, 0.0,  // Top-right
-            0.0, SCREEN_HEIGHT, 0.0, // Bottom-left
-        ]
-    } else {
-        [
-            SCREEN_WIDTH, 0.0, 0.0,           // Top-right
-            SCREEN_WIDTH, SCREEN_HEIGHT, 0.0, // Bottom-right
-            0.0, SCREEN_HEIGHT, 0.0,          // Bottom-left
-        ]
-    };
-
-    draw_triangles(vertices.as_ptr(), 3, VF_POS);
+/// Apply a tint to a color
+fn tint_color(color: u32, tint_r: f32, tint_g: f32, tint_b: f32) -> u32 {
+    let r = ((color >> 24) & 0xFF) as f32 * tint_r;
+    let g = ((color >> 16) & 0xFF) as f32 * tint_g;
+    let b = ((color >> 8) & 0xFF) as f32 * tint_b;
+    let a = color & 0xFF;
+    ((r.min(255.0) as u32) << 24)
+        | ((g.min(255.0) as u32) << 16)
+        | ((b.min(255.0) as u32) << 8)
+        | a
 }
 
 /// Demo 0: Circle mask - render scene only inside circle
 unsafe fn demo_circle_mask() {
+    // First, fill the background with black (this will be visible outside the mask)
+    draw_rect(0.0, 0.0, SCREEN_WIDTH, SCREEN_HEIGHT, 0x000000FF);
+
     // Draw circle shape to stencil buffer
     stencil_begin();
-    draw_circle_mask();
+    draw_circle(SCREEN_CX, SCREEN_CY, 200.0, 0xFFFFFFFF);
     stencil_end();
 
     // Draw scene - only visible inside circle
@@ -255,50 +232,51 @@ unsafe fn demo_circle_mask() {
 
     // Return to normal rendering
     stencil_clear();
-
-    // Draw outside area with solid color
-    draw_rect(0.0, 0.0, SCREEN_WIDTH, SCREEN_HEIGHT, 0x000000FF);
 }
 
 /// Demo 1: Inverted mask - vignette effect
 unsafe fn demo_inverted_mask() {
-    // Draw circle shape to stencil buffer
+    // First draw the scene (visible everywhere)
+    draw_scene();
+
+    // Create circle mask
     stencil_begin();
-    draw_circle_mask();
-    stencil_invert(); // Render OUTSIDE the mask
+    draw_circle(SCREEN_CX, SCREEN_CY, 250.0, 0xFFFFFFFF);
+    stencil_end();
+
+    // Invert the mask to render OUTSIDE the circle
+    stencil_invert();
 
     // Draw dark vignette overlay only outside circle
-    set_color(0x000000AA);
     draw_rect(0.0, 0.0, SCREEN_WIDTH, SCREEN_HEIGHT, 0x000000AA);
 
     // Return to normal rendering
     stencil_clear();
-
-    // Draw scene (visible everywhere, vignette was already applied)
-    draw_scene();
 }
 
-/// Demo 2: Diagonal split - different rendering on each side
+/// Demo 2: Diagonal split - different tints on each side
 unsafe fn demo_diagonal_split() {
-    // First half: top-left triangle
+    // First half: top-left triangle (using a rect for simplicity, we'll mask diagonally)
+    // For a true diagonal, we'd use draw_triangles, but let's do left/right split instead
+    // which is simpler and still demonstrates the concept
+
+    // Left half mask
     stencil_begin();
-    draw_diagonal_mask(true);
+    draw_rect(0.0, 0.0, SCREEN_WIDTH / 2.0, SCREEN_HEIGHT, 0xFFFFFFFF);
     stencil_end();
 
-    // Draw scene with warm tint
-    set_color(0xFFAA88FF);
-    draw_scene();
+    // Draw scene with warm tint (left side)
+    draw_scene_tinted(0xFFCC99FF); // Warm orange tint
 
     stencil_clear();
 
-    // Second half: bottom-right triangle
+    // Right half mask
     stencil_begin();
-    draw_diagonal_mask(false);
+    draw_rect(SCREEN_WIDTH / 2.0, 0.0, SCREEN_WIDTH / 2.0, SCREEN_HEIGHT, 0xFFFFFFFF);
     stencil_end();
 
-    // Draw scene with cool tint
-    set_color(0x88AAFFFF);
-    draw_scene();
+    // Draw scene with cool tint (right side)
+    draw_scene_tinted(0x99CCFFFF); // Cool blue tint
 
     stencil_clear();
 }
@@ -309,60 +287,61 @@ unsafe fn demo_animated_portal() {
     let base_radius = 150.0;
     let pulse = libm::sinf(TIME * 3.0) * 30.0;
     let radius = base_radius + pulse;
+    let ring_width = 6.0;
 
-    // Regenerate circle with animated radius
-    generate_circle_mesh(SCREEN_WIDTH / 2.0, SCREEN_HEIGHT / 2.0, radius);
-
-    // Draw portal mask
+    // Step 1: Draw the portal ring border first (underneath everything)
+    // Use outer circle mask, then invert to draw OUTSIDE it
     stencil_begin();
-    draw_circle_mask();
+    draw_circle(SCREEN_CX, SCREEN_CY, radius, 0xFFFFFFFF);
     stencil_end();
 
-    // Inside portal: zoomed-in scene with different camera
-    camera_set(0.0, 2.0, 5.0, 0.0, 0.0, 0.0);
-    camera_fov(90.0);
-
-    // Purple tinted "other dimension"
-    set_color(0xAA44FFFF);
-    draw_scene();
-
-    stencil_clear();
-
-    // Draw portal ring border
-    let ring_color = 0x8800FFFF;
-    let ring_width = 4.0;
-
-    // Draw outer edge (larger circle)
-    generate_circle_mesh(SCREEN_WIDTH / 2.0, SCREEN_HEIGHT / 2.0, radius + ring_width);
-    stencil_begin();
-    draw_circle_mask();
+    // Invert - now we can only draw OUTSIDE the inner circle
     stencil_invert();
 
-    // Inner part should be cut out
-    generate_circle_mesh(SCREEN_WIDTH / 2.0, SCREEN_HEIGHT / 2.0, radius);
-    stencil_begin();
-    draw_circle_mask();
-    stencil_end();
+    // Mask additionally by inner edge of ring (we want ring area only)
+    // Draw the ring color as a full-screen rect, but it only appears outside inner circle
+    // We need to also limit to inside outer circle - use nested approach
 
-    set_color(ring_color);
-    draw_rect(0.0, 0.0, SCREEN_WIDTH, SCREEN_HEIGHT, ring_color);
+    // Actually simpler: just draw the ring as a circle outline
+    stencil_clear();
+
+    // Draw outer scene first (normal view)
+    // Mask: everything EXCEPT the portal area
+    stencil_begin();
+    draw_circle(SCREEN_CX, SCREEN_CY, radius, 0xFFFFFFFF);
+    stencil_end();
+    stencil_invert(); // Draw OUTSIDE the portal
+
+    draw_scene(); // Normal scene outside portal
 
     stencil_clear();
 
-    // Restore circle for next frame
-    generate_circle_mesh(SCREEN_WIDTH / 2.0, SCREEN_HEIGHT / 2.0, radius);
+    // Draw portal ring (between radius and radius+ring_width)
+    // Outer circle mask
+    stencil_begin();
+    draw_circle(SCREEN_CX, SCREEN_CY, radius + ring_width, 0xFFFFFFFF);
+    stencil_end();
+
+    // Draw purple, but only inside outer circle
+    draw_rect(0.0, 0.0, SCREEN_WIDTH, SCREEN_HEIGHT, 0x8800FFFF);
+
+    stencil_clear();
+
+    // Now cut out the inner part by drawing portal scene over it
+    stencil_begin();
+    draw_circle(SCREEN_CX, SCREEN_CY, radius, 0xFFFFFFFF);
+    stencil_end();
+
+    // Inside portal: close-up view with wider FOV
+    draw_scene_with_camera(0.0, 2.0, 5.0, 90.0);
+
+    stencil_clear();
 }
 
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
-        // Clear background first for vignette demo
-        if DEMO_MODE == 1 {
-            // Draw scene first for vignette (scene is behind the vignette)
-            draw_scene();
-        }
-
-        // Run current demo
+        // Run current demo (each demo handles its own scene drawing)
         match DEMO_MODE {
             0 => demo_circle_mask(),
             1 => demo_inverted_mask(),

@@ -1,9 +1,10 @@
 //! Procedural texture generation
 //!
 //! This module provides tools for generating textures procedurally,
-//! including patterns, noise functions, and material presets.
+//! including patterns, noise functions, material presets, and advanced
+//! multi-layer composition for professional-quality game assets.
 //!
-//! # Example
+//! # Basic Example
 //! ```no_run
 //! use proc_gen::texture::*;
 //!
@@ -26,6 +27,11 @@ mod noise;
 mod modifiers;
 mod materials;
 mod export;
+pub mod color;
+pub mod features;
+pub mod layers;
+pub mod normal;
+pub mod quality;
 
 // Core type
 pub use self::buffer::TextureBuffer;
@@ -44,6 +50,44 @@ pub use materials::{crystal, metal, stone, MaterialBuilder};
 
 // Export
 pub use export::write_png;
+
+// Color utilities
+pub use color::{
+    rgb_to_hsv, hsv_to_rgb, apply_temperature,
+    ColorVariation, ColorVariationSample, ApplyColorVariation,
+    HueShift, Saturation, Temperature,
+};
+
+// Feature generators
+pub use features::{
+    Scratches, ScratchDirection,
+    Cracks, CrackPattern,
+    Grain, GrainDirection,
+    Pores,
+    Rust, RustPattern, RustColor,
+    WaterStains,
+    Dust,
+    EdgeHighlight,
+};
+
+// Layer system
+pub use layers::{
+    LayeredTextureBuilder, TextureLayer,
+    FeatureType, WeatheringType,
+};
+
+// Normal maps
+pub use normal::{
+    normal_from_height, flat_normal, blend_normals,
+    ProceduralNormalMap, DetailNormalMap, AddNormalDetail,
+    TextureOutput,
+};
+
+// Quality assessment
+pub use quality::{
+    assess_quality, QualityThresholds,
+    TextureQualityReport, TextureMetrics, QualityIssue, IssueSeverity,
+};
 
 mod buffer {
     /// RGBA texture buffer for procedural texture generation

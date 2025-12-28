@@ -89,7 +89,6 @@ fn build_examples() -> Result<()> {
 
     let success_count = AtomicUsize::new(0);
     let fail_count = AtomicUsize::new(0);
-    let skipped_count = AtomicUsize::new(0);
 
     examples.par_iter().for_each(|example| {
         let example_path = example.path();
@@ -110,18 +109,8 @@ fn build_examples() -> Result<()> {
                     success_count.fetch_add(1, Ordering::Relaxed);
                 }
                 Err(e) => {
-                    // Check if it's just missing assets (template example)
-                    let err_str = e.to_string();
-                    if err_str.contains("Failed to load") || err_str.contains("No such file") {
-                        println!(
-                            "  ⊘ {} skipped (missing assets - template example)",
-                            example_name_str
-                        );
-                        skipped_count.fetch_add(1, Ordering::Relaxed);
-                    } else {
-                        println!("  ✗ {} failed: {}", example_name_str, e);
-                        fail_count.fetch_add(1, Ordering::Relaxed);
-                    }
+                    println!("  ✗ {} failed: {}", example_name_str, e);
+                    fail_count.fetch_add(1, Ordering::Relaxed);
                 }
             }
         } else {
@@ -144,18 +133,12 @@ fn build_examples() -> Result<()> {
 
     println!();
     println!(
-        "Done! {} succeeded, {} skipped, {} failed",
+        "Done! {} succeeded, {} failed",
         success_count.load(Ordering::Relaxed),
-        skipped_count.load(Ordering::Relaxed),
         fail_count.load(Ordering::Relaxed)
     );
     println!("Examples installed to: {}", games_dir.display());
     println!("You can now run 'cargo run' to play them in Nethercore ZX.");
-
-    if skipped_count.load(Ordering::Relaxed) > 0 {
-        println!("Note: Skipped examples are templates that demonstrate data pack usage.");
-        println!("      Add assets to their assets/ folder and rebuild to use them.");
-    }
 
     Ok(())
 }

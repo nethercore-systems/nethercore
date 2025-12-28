@@ -716,7 +716,7 @@ pub fn generate_solar_flare_jump(output_dir: &Path) {
 /// Generate a crystal shape (hexagonal prism with pointed top)
 fn generate_crystal(radius: f32, height: f32, sides: u32) -> UnpackedMesh {
     // Base is a cylinder (tapers slightly)
-    let mut base: UnpackedMesh = generate_cylinder(radius, radius * 0.7, height * 0.7, sides);
+    let base: UnpackedMesh = generate_cylinder(radius, radius * 0.7, height * 0.7, sides);
 
     // Tip is a tapered cylinder (cone-like: top radius = 0)
     let mut tip: UnpackedMesh = generate_cylinder(radius * 0.7, 0.01, height * 0.3, sides);

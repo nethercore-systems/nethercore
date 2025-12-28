@@ -1,0 +1,364 @@
+[game]
+id = "override"
+title = "OVERRIDE"
+author = "Nethercore"
+version = "0.1.0"
+description = "Asymmetric 1v3 multiplayer - One Overseer controls the facility while three Runners try to escape"
+render_mode = 0  # Lambert mode for 2D tile-based rendering
+
+# === TILESETS ===
+[[assets.textures]]
+id = "floor_metal"
+path = "assets/tilesets/floor_metal.png"
+
+[[assets.textures]]
+id = "floor_grate"
+path = "assets/tilesets/floor_grate.png"
+
+[[assets.textures]]
+id = "floor_panel"
+path = "assets/tilesets/floor_panel.png"
+
+[[assets.textures]]
+id = "floor_damaged"
+path = "assets/tilesets/floor_damaged.png"
+
+[[assets.textures]]
+id = "wall_solid"
+path = "assets/tilesets/wall_solid.png"
+
+[[assets.textures]]
+id = "wall_window"
+path = "assets/tilesets/wall_window.png"
+
+[[assets.textures]]
+id = "wall_vent"
+path = "assets/tilesets/wall_vent.png"
+
+[[assets.textures]]
+id = "wall_pipe"
+path = "assets/tilesets/wall_pipe.png"
+
+[[assets.textures]]
+id = "wall_screen"
+path = "assets/tilesets/wall_screen.png"
+
+[[assets.textures]]
+id = "wall_doorframe"
+path = "assets/tilesets/wall_doorframe.png"
+
+# === SPRITES - DOORS ===
+[[assets.textures]]
+id = "door_open"
+path = "assets/sprites/door_open.png"
+
+[[assets.textures]]
+id = "door_closed"
+path = "assets/sprites/door_closed.png"
+
+[[assets.textures]]
+id = "door_locked"
+path = "assets/sprites/door_locked.png"
+
+# === SPRITES - TRAPS ===
+[[assets.textures]]
+id = "trap_spike"
+path = "assets/sprites/trap_spike.png"
+
+[[assets.textures]]
+id = "trap_gas"
+path = "assets/sprites/trap_gas.png"
+
+[[assets.textures]]
+id = "trap_laser"
+path = "assets/sprites/trap_laser.png"
+
+# === SPRITES - RUNNER ===
+[[assets.textures]]
+id = "runner_idle_0"
+path = "assets/sprites/runner_idle_0.png"
+
+[[assets.textures]]
+id = "runner_idle_1"
+path = "assets/sprites/runner_idle_1.png"
+
+[[assets.textures]]
+id = "runner_idle_2"
+path = "assets/sprites/runner_idle_2.png"
+
+[[assets.textures]]
+id = "runner_idle_3"
+path = "assets/sprites/runner_idle_3.png"
+
+[[assets.textures]]
+id = "runner_walk_0"
+path = "assets/sprites/runner_walk_0.png"
+
+[[assets.textures]]
+id = "runner_walk_1"
+path = "assets/sprites/runner_walk_1.png"
+
+[[assets.textures]]
+id = "runner_walk_2"
+path = "assets/sprites/runner_walk_2.png"
+
+[[assets.textures]]
+id = "runner_walk_3"
+path = "assets/sprites/runner_walk_3.png"
+
+[[assets.textures]]
+id = "runner_sprint_0"
+path = "assets/sprites/runner_sprint_0.png"
+
+[[assets.textures]]
+id = "runner_sprint_1"
+path = "assets/sprites/runner_sprint_1.png"
+
+[[assets.textures]]
+id = "runner_sprint_2"
+path = "assets/sprites/runner_sprint_2.png"
+
+[[assets.textures]]
+id = "runner_sprint_3"
+path = "assets/sprites/runner_sprint_3.png"
+
+[[assets.textures]]
+id = "runner_crouch_0"
+path = "assets/sprites/runner_crouch_0.png"
+
+[[assets.textures]]
+id = "runner_crouch_1"
+path = "assets/sprites/runner_crouch_1.png"
+
+[[assets.textures]]
+id = "runner_crouch_2"
+path = "assets/sprites/runner_crouch_2.png"
+
+[[assets.textures]]
+id = "runner_crouch_3"
+path = "assets/sprites/runner_crouch_3.png"
+
+[[assets.textures]]
+id = "runner_death_0"
+path = "assets/sprites/runner_death_0.png"
+
+[[assets.textures]]
+id = "runner_death_1"
+path = "assets/sprites/runner_death_1.png"
+
+[[assets.textures]]
+id = "runner_death_2"
+path = "assets/sprites/runner_death_2.png"
+
+[[assets.textures]]
+id = "runner_death_3"
+path = "assets/sprites/runner_death_3.png"
+
+# === SPRITES - DRONE ===
+[[assets.textures]]
+id = "drone_hover_0"
+path = "assets/sprites/drone_hover_0.png"
+
+[[assets.textures]]
+id = "drone_hover_1"
+path = "assets/sprites/drone_hover_1.png"
+
+[[assets.textures]]
+id = "drone_hover_2"
+path = "assets/sprites/drone_hover_2.png"
+
+[[assets.textures]]
+id = "drone_hover_3"
+path = "assets/sprites/drone_hover_3.png"
+
+# === VFX ===
+[[assets.textures]]
+id = "core_glow_0"
+path = "assets/vfx/core_glow_0.png"
+
+[[assets.textures]]
+id = "core_glow_1"
+path = "assets/vfx/core_glow_1.png"
+
+[[assets.textures]]
+id = "core_glow_2"
+path = "assets/vfx/core_glow_2.png"
+
+[[assets.textures]]
+id = "core_glow_3"
+path = "assets/vfx/core_glow_3.png"
+
+[[assets.textures]]
+id = "gas_cloud_0"
+path = "assets/vfx/gas_cloud_0.png"
+
+[[assets.textures]]
+id = "gas_cloud_1"
+path = "assets/vfx/gas_cloud_1.png"
+
+[[assets.textures]]
+id = "gas_cloud_2"
+path = "assets/vfx/gas_cloud_2.png"
+
+[[assets.textures]]
+id = "gas_cloud_3"
+path = "assets/vfx/gas_cloud_3.png"
+
+[[assets.textures]]
+id = "laser_beam"
+path = "assets/vfx/laser_beam.png"
+
+# === UI ===
+[[assets.textures]]
+id = "energy_bar_0"
+path = "assets/ui/energy_bar_0.png"
+
+[[assets.textures]]
+id = "energy_bar_25"
+path = "assets/ui/energy_bar_25.png"
+
+[[assets.textures]]
+id = "energy_bar_50"
+path = "assets/ui/energy_bar_50.png"
+
+[[assets.textures]]
+id = "energy_bar_75"
+path = "assets/ui/energy_bar_75.png"
+
+[[assets.textures]]
+id = "energy_bar_100"
+path = "assets/ui/energy_bar_100.png"
+
+[[assets.textures]]
+id = "timer_digit_0"
+path = "assets/ui/timer_digit_0.png"
+
+[[assets.textures]]
+id = "timer_digit_1"
+path = "assets/ui/timer_digit_1.png"
+
+[[assets.textures]]
+id = "timer_digit_2"
+path = "assets/ui/timer_digit_2.png"
+
+[[assets.textures]]
+id = "timer_digit_3"
+path = "assets/ui/timer_digit_3.png"
+
+[[assets.textures]]
+id = "timer_digit_4"
+path = "assets/ui/timer_digit_4.png"
+
+[[assets.textures]]
+id = "timer_digit_5"
+path = "assets/ui/timer_digit_5.png"
+
+[[assets.textures]]
+id = "timer_digit_6"
+path = "assets/ui/timer_digit_6.png"
+
+[[assets.textures]]
+id = "timer_digit_7"
+path = "assets/ui/timer_digit_7.png"
+
+[[assets.textures]]
+id = "timer_digit_8"
+path = "assets/ui/timer_digit_8.png"
+
+[[assets.textures]]
+id = "timer_digit_9"
+path = "assets/ui/timer_digit_9.png"
+
+[[assets.textures]]
+id = "core_indicator_active"
+path = "assets/ui/core_indicator_active.png"
+
+[[assets.textures]]
+id = "core_indicator_inactive"
+path = "assets/ui/core_indicator_inactive.png"
+
+# === AUDIO - SFX ===
+[[assets.sounds]]
+id = "footstep"
+path = "assets/audio/sfx/footstep.wav"
+
+[[assets.sounds]]
+id = "footstep_sprint"
+path = "assets/audio/sfx/footstep_sprint.wav"
+
+[[assets.sounds]]
+id = "door_open"
+path = "assets/audio/sfx/door_open.wav"
+
+[[assets.sounds]]
+id = "door_close"
+path = "assets/audio/sfx/door_close.wav"
+
+[[assets.sounds]]
+id = "door_locked"
+path = "assets/audio/sfx/door_locked.wav"
+
+[[assets.sounds]]
+id = "trap_spike"
+path = "assets/audio/sfx/trap_spike.wav"
+
+[[assets.sounds]]
+id = "trap_gas"
+path = "assets/audio/sfx/trap_gas.wav"
+
+[[assets.sounds]]
+id = "trap_laser"
+path = "assets/audio/sfx/trap_laser.wav"
+
+[[assets.sounds]]
+id = "core_pickup"
+path = "assets/audio/sfx/core_pickup.wav"
+
+[[assets.sounds]]
+id = "drone_hover"
+path = "assets/audio/sfx/drone_hover.wav"
+
+[[assets.sounds]]
+id = "drone_spawn"
+path = "assets/audio/sfx/drone_spawn.wav"
+
+[[assets.sounds]]
+id = "runner_death"
+path = "assets/audio/sfx/runner_death.wav"
+
+[[assets.sounds]]
+id = "alarm"
+path = "assets/audio/sfx/alarm.wav"
+
+[[assets.sounds]]
+id = "extraction_open"
+path = "assets/audio/sfx/extraction_open.wav"
+
+[[assets.sounds]]
+id = "lights_off"
+path = "assets/audio/sfx/lights_off.wav"
+
+[[assets.sounds]]
+id = "timer_warning"
+path = "assets/audio/sfx/timer_warning.wav"
+
+# === AUDIO - MUSIC ===
+[[assets.music]]
+id = "menu"
+path = "assets/audio/music/menu.wav"
+
+[[assets.music]]
+id = "gameplay"
+path = "assets/audio/music/gameplay.wav"
+
+[[assets.music]]
+id = "chase"
+path = "assets/audio/music/chase.wav"
+
+[[assets.music]]
+id = "victory"
+path = "assets/audio/music/victory.wav"
+
+[[assets.music]]
+id = "defeat"
+path = "assets/audio/music/defeat.wav"

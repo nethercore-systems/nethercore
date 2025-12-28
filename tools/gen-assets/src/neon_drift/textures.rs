@@ -4,7 +4,7 @@
 //! - `{id}.png` - Base texture
 //! - `{id}_emissive.png` - Emissive glow (for neon effects)
 
-use crate::texture::{AssetTexture, TextureStyle};
+use crate::texture::{AssetCategory, AssetTexture, TextureStyle, generate_textures_by_category};
 
 /// All NEON DRIFT asset textures - single source of truth
 pub const TEXTURES: &[AssetTexture] = &[
@@ -12,6 +12,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Sleek silver with cyan neon
     AssetTexture {
         id: "speedster",
+        category: AssetCategory::Hero,
         base_color: [180, 190, 200, 255],
         style: TextureStyle::Metal { seed: 1 },
         size: (128, 128),
@@ -21,6 +22,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Dark gunmetal with orange neon
     AssetTexture {
         id: "muscle",
+        category: AssetCategory::Hero,
         base_color: [60, 60, 70, 255],
         style: TextureStyle::Metal { seed: 2 },
         size: (128, 128),
@@ -30,6 +32,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Clean white with magenta neon
     AssetTexture {
         id: "racer",
+        category: AssetCategory::Hero,
         base_color: [240, 240, 250, 255],
         style: TextureStyle::GradientH,
         size: (128, 128),
@@ -39,6 +42,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Dark purple with violet neon
     AssetTexture {
         id: "drift",
+        category: AssetCategory::Hero,
         base_color: [80, 80, 100, 255],
         style: TextureStyle::GradientV,
         size: (128, 128),
@@ -48,6 +52,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Dark charcoal with toxic green neon (stealth supercar)
     AssetTexture {
         id: "phantom",
+        category: AssetCategory::Hero,
         base_color: [40, 45, 50, 255],
         style: TextureStyle::Metal { seed: 5 },
         size: (128, 128),
@@ -57,6 +62,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Gunmetal silver with pure white neon (luxury GT)
     AssetTexture {
         id: "titan",
+        category: AssetCategory::Hero,
         base_color: [100, 105, 115, 255],
         style: TextureStyle::Metal { seed: 6 },
         size: (128, 128),
@@ -66,6 +72,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Venom red with gold neon (hypercar)
     AssetTexture {
         id: "viper",
+        category: AssetCategory::Hero,
         base_color: [180, 20, 30, 255],
         style: TextureStyle::GradientV,
         size: (128, 128),
@@ -77,6 +84,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Speedster variants
     AssetTexture {
         id: "speedster_red",
+        category: AssetCategory::Hero,
         base_color: [200, 60, 60, 255],
         style: TextureStyle::Metal { seed: 11 },
         size: (128, 128),
@@ -85,6 +93,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     },
     AssetTexture {
         id: "speedster_gold",
+        category: AssetCategory::Hero,
         base_color: [200, 180, 100, 255],
         style: TextureStyle::Metal { seed: 12 },
         size: (128, 128),
@@ -94,6 +103,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Muscle variants
     AssetTexture {
         id: "muscle_blue",
+        category: AssetCategory::Hero,
         base_color: [40, 50, 90, 255],
         style: TextureStyle::Metal { seed: 21 },
         size: (128, 128),
@@ -102,6 +112,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     },
     AssetTexture {
         id: "muscle_green",
+        category: AssetCategory::Hero,
         base_color: [50, 70, 50, 255],
         style: TextureStyle::Metal { seed: 22 },
         size: (128, 128),
@@ -111,6 +122,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Racer variants
     AssetTexture {
         id: "racer_black",
+        category: AssetCategory::Hero,
         base_color: [30, 30, 35, 255],
         style: TextureStyle::GradientH,
         size: (128, 128),
@@ -119,6 +131,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     },
     AssetTexture {
         id: "racer_cyan",
+        category: AssetCategory::Hero,
         base_color: [200, 240, 250, 255],
         style: TextureStyle::GradientH,
         size: (128, 128),
@@ -128,6 +141,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Drift variants
     AssetTexture {
         id: "drift_orange",
+        category: AssetCategory::Hero,
         base_color: [120, 60, 30, 255],
         style: TextureStyle::GradientV,
         size: (128, 128),
@@ -136,6 +150,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     },
     AssetTexture {
         id: "drift_pink",
+        category: AssetCategory::Hero,
         base_color: [120, 60, 100, 255],
         style: TextureStyle::GradientV,
         size: (128, 128),
@@ -145,6 +160,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Phantom variants
     AssetTexture {
         id: "phantom_purple",
+        category: AssetCategory::Hero,
         base_color: [50, 40, 60, 255],
         style: TextureStyle::Metal { seed: 51 },
         size: (128, 128),
@@ -153,6 +169,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     },
     AssetTexture {
         id: "phantom_ice",
+        category: AssetCategory::Hero,
         base_color: [60, 70, 80, 255],
         style: TextureStyle::Metal { seed: 52 },
         size: (128, 128),
@@ -162,6 +179,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Titan variants
     AssetTexture {
         id: "titan_gold",
+        category: AssetCategory::Hero,
         base_color: [150, 130, 80, 255],
         style: TextureStyle::Metal { seed: 61 },
         size: (128, 128),
@@ -170,6 +188,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     },
     AssetTexture {
         id: "titan_midnight",
+        category: AssetCategory::Hero,
         base_color: [30, 35, 50, 255],
         style: TextureStyle::Metal { seed: 62 },
         size: (128, 128),
@@ -179,6 +198,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Viper variants
     AssetTexture {
         id: "viper_green",
+        category: AssetCategory::Hero,
         base_color: [30, 120, 50, 255],
         style: TextureStyle::GradientV,
         size: (128, 128),
@@ -187,6 +207,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     },
     AssetTexture {
         id: "viper_black",
+        category: AssetCategory::Hero,
         base_color: [25, 25, 30, 255],
         style: TextureStyle::GradientV,
         size: (128, 128),
@@ -198,6 +219,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Asphalt road surface
     AssetTexture {
         id: "track_straight",
+        category: AssetCategory::Arena,
         base_color: [40, 40, 45, 255],
         style: TextureStyle::Stone { seed: 42 },
         size: (256, 256),
@@ -207,6 +229,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Curved road surface (slight variation)
     AssetTexture {
         id: "track_curve_left",
+        category: AssetCategory::Arena,
         base_color: [42, 42, 48, 255],
         style: TextureStyle::Stone { seed: 57 },
         size: (256, 256),
@@ -216,6 +239,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Metallic tunnel walls
     AssetTexture {
         id: "track_tunnel",
+        category: AssetCategory::Arena,
         base_color: [50, 50, 60, 255],
         style: TextureStyle::Metal { seed: 77 },
         size: (128, 128),
@@ -225,6 +249,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Jump ramp with hazard stripes
     AssetTexture {
         id: "track_jump",
+        category: AssetCategory::Arena,
         base_color: [255, 200, 0, 255],
         style: TextureStyle::Checker { cell_size: 8 },
         size: (64, 64),
@@ -236,6 +261,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Glowing crystal formations
     AssetTexture {
         id: "crystal_formation",
+        category: AssetCategory::Effect,
         base_color: [80, 0, 120, 255],
         style: TextureStyle::GradientRadial,
         size: (128, 128),
@@ -245,6 +271,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Cavern S-curve with crystal reflections
     AssetTexture {
         id: "track_cavern_scurve",
+        category: AssetCategory::Arena,
         base_color: [25, 20, 35, 255],
         style: TextureStyle::Stone { seed: 201 },
         size: (256, 256),
@@ -254,6 +281,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Low ceiling cavern section
     AssetTexture {
         id: "track_cavern_low",
+        category: AssetCategory::Arena,
         base_color: [30, 25, 40, 255],
         style: TextureStyle::Stone { seed: 202 },
         size: (256, 256),
@@ -265,6 +293,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Long high-speed straight with solar panels
     AssetTexture {
         id: "track_solar_straight",
+        category: AssetCategory::Arena,
         base_color: [60, 55, 50, 255],
         style: TextureStyle::Metal { seed: 301 },
         size: (256, 256),
@@ -274,6 +303,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Wide sweeping solar curve
     AssetTexture {
         id: "track_solar_curve",
+        category: AssetCategory::Arena,
         base_color: [55, 50, 48, 255],
         style: TextureStyle::Metal { seed: 302 },
         size: (256, 256),
@@ -283,6 +313,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Dramatic solar flare jump
     AssetTexture {
         id: "track_solar_jump",
+        category: AssetCategory::Arena,
         base_color: [255, 180, 50, 255],
         style: TextureStyle::GradientV,
         size: (128, 128),
@@ -294,6 +325,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Concrete barrier
     AssetTexture {
         id: "prop_barrier",
+        category: AssetCategory::Pickup,
         base_color: [80, 75, 70, 255],
         style: TextureStyle::Stone { seed: 123 },
         size: (64, 64),
@@ -303,6 +335,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Glowing boost pad
     AssetTexture {
         id: "prop_boost_pad",
+        category: AssetCategory::Pickup,
         base_color: [0, 255, 255, 255],
         style: TextureStyle::GradientRadial,
         size: (64, 64),
@@ -312,6 +345,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Billboard backing
     AssetTexture {
         id: "prop_billboard",
+        category: AssetCategory::Pickup,
         base_color: [20, 20, 30, 255],
         style: TextureStyle::Solid,
         size: (128, 64),
@@ -321,6 +355,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // City building facade
     AssetTexture {
         id: "prop_building",
+        category: AssetCategory::Pickup,
         base_color: [30, 35, 50, 255],
         style: TextureStyle::GradientV,
         size: (128, 256),
@@ -332,6 +367,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Palm tree bark and fronds
     AssetTexture {
         id: "prop_palm_tree",
+        category: AssetCategory::Pickup,
         base_color: [110, 80, 50, 255],
         style: TextureStyle::Stone { seed: 401 },
         size: (128, 128),
@@ -341,6 +377,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Retro highway sign
     AssetTexture {
         id: "prop_highway_sign",
+        category: AssetCategory::Pickup,
         base_color: [40, 80, 40, 255],
         style: TextureStyle::Solid,
         size: (128, 64),
@@ -352,6 +389,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Holographic advertisement
     AssetTexture {
         id: "prop_hologram_ad",
+        category: AssetCategory::Pickup,
         base_color: [20, 30, 60, 255],
         style: TextureStyle::GradientRadial,
         size: (128, 128),
@@ -361,6 +399,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Neon street lamp
     AssetTexture {
         id: "prop_street_lamp",
+        category: AssetCategory::Pickup,
         base_color: [60, 60, 70, 255],
         style: TextureStyle::Metal { seed: 402 },
         size: (64, 128),
@@ -372,6 +411,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Energy pillar
     AssetTexture {
         id: "prop_energy_pillar",
+        category: AssetCategory::Pickup,
         base_color: [15, 15, 30, 255],
         style: TextureStyle::GradientV,
         size: (64, 128),
@@ -381,6 +421,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Portal ring
     AssetTexture {
         id: "prop_portal_ring",
+        category: AssetCategory::Pickup,
         base_color: [10, 10, 20, 255],
         style: TextureStyle::Metal { seed: 403 },
         size: (128, 128),
@@ -392,6 +433,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Glowing mushrooms
     AssetTexture {
         id: "prop_mushrooms",
+        category: AssetCategory::Pickup,
         base_color: [60, 40, 80, 255],
         style: TextureStyle::GradientRadial,
         size: (64, 64),
@@ -403,6 +445,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Heat vent
     AssetTexture {
         id: "prop_heat_vent",
+        category: AssetCategory::Pickup,
         base_color: [80, 60, 40, 255],
         style: TextureStyle::Metal { seed: 404 },
         size: (64, 64),
@@ -412,6 +455,7 @@ pub const TEXTURES: &[AssetTexture] = &[
     // Solar beacon
     AssetTexture {
         id: "prop_solar_beacon",
+        category: AssetCategory::Pickup,
         base_color: [180, 160, 140, 255],
         style: TextureStyle::Metal { seed: 405 },
         size: (64, 128),
@@ -421,8 +465,19 @@ pub const TEXTURES: &[AssetTexture] = &[
 ];
 
 use std::path::Path;
-use crate::texture::generate_all_textures;
 use proc_gen::texture::*;
+
+/// Generate all textures for Neon Drift
+pub fn generate_all(output_dir: &Path) {
+    use AssetCategory::*;
+    for category in [Hero, Arena, Effect, Pickup] {
+        generate_textures_by_category(TEXTURES, category, output_dir);
+    }
+    // Additional procedural textures
+    generate_road_with_markings(output_dir);
+    generate_building_varieties(output_dir);
+    generate_chevron_boost_pad(output_dir);
+}
 
 /// Generate the custom neon font texture
 /// Layout: 16 chars per row, 6 rows = 96 characters (space through ~)
@@ -610,27 +665,6 @@ pub fn generate_font_texture(output_dir: &Path) {
     println!("    -> {} ({}x{}, 95 chars)", path.display(), TEX_W, TEX_H);
 }
 
-pub fn generate_vehicle_textures(output_dir: &Path) {
-    // Include base cars and all color variants
-    let vehicle_prefixes = ["speedster", "muscle", "racer", "drift", "phantom", "titan", "viper"];
-    let vehicles: Vec<_> = TEXTURES.iter()
-        .filter(|t| vehicle_prefixes.iter().any(|prefix| t.id.starts_with(prefix)))
-        .cloned()
-        .collect();
-    generate_all_textures(&vehicles, output_dir);
-}
-
-pub fn generate_track_textures(output_dir: &Path) {
-    let tracks: Vec<_> = TEXTURES.iter()
-        .filter(|t| t.id.starts_with("track_") || t.id.starts_with("crystal_"))
-        .cloned()
-        .collect();
-    generate_all_textures(&tracks, output_dir);
-
-    // Generate road textures with markings overlay
-    generate_road_with_markings(output_dir);
-}
-
 /// Generate road textures with centerline and edge markings
 fn generate_road_with_markings(output_dir: &Path) {
     // Starting grid texture
@@ -705,20 +739,6 @@ fn generate_road_with_markings(output_dir: &Path) {
     let path = output_dir.join("track_finish_line.png");
     write_png(&finish_tex, &path).expect("Failed to write finish line texture");
     println!("    -> {} (finish line)", path.display());
-}
-
-pub fn generate_prop_textures(output_dir: &Path) {
-    let props: Vec<_> = TEXTURES.iter()
-        .filter(|t| t.id.starts_with("prop_"))
-        .cloned()
-        .collect();
-    generate_all_textures(&props, output_dir);
-
-    // Generate additional building varieties
-    generate_building_varieties(output_dir);
-
-    // Generate improved boost pad with chevrons
-    generate_chevron_boost_pad(output_dir);
 }
 
 /// Generate additional building facade textures
