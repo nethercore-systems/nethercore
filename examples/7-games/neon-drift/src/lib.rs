@@ -57,29 +57,26 @@ pub extern "C" fn init() {
         depth_test(1);
         set_tick_rate(2); // 60 FPS
 
-        // Create procedural car meshes (simplified box cars)
-        // ZX coordinate system: Y-up, +Z is forward
-        // Car dimensions: width (X) x height (Y) x length (Z)
-        MESH_SPEEDSTER = cube_uv(1.0, 0.4, 2.0);   // Sleek, low
-        MESH_MUSCLE = cube_uv(1.2, 0.5, 2.0);      // Wide, boxy
-        MESH_RACER = cube_uv(0.9, 0.35, 2.2);      // Narrow, long
-        MESH_DRIFT = cube_uv(1.0, 0.45, 1.8);      // Compact
-        MESH_PHANTOM = cube_uv(1.1, 0.4, 2.1);     // Sleek
-        MESH_TITAN = cube_uv(1.3, 0.6, 2.0);       // Big, heavy
-        MESH_VIPER = cube_uv(0.95, 0.38, 2.3);     // Long, fast
+        // Load car meshes from ROM
+        MESH_SPEEDSTER = load_rom_mesh(b"speedster");
+        MESH_MUSCLE = load_rom_mesh(b"muscle");
+        MESH_RACER = load_rom_mesh(b"racer");
+        MESH_DRIFT = load_rom_mesh(b"drift");
+        MESH_PHANTOM = load_rom_mesh(b"phantom");
+        MESH_TITAN = load_rom_mesh(b"titan");
+        MESH_VIPER = load_rom_mesh(b"viper");
 
-        // Create procedural track meshes
-        // Track segment: 10 units wide (X), ground plane at Y=0, 10 units long (Z)
-        MESH_TRACK_STRAIGHT = plane_uv(10.0, 10.0, 1, 1);
-        MESH_TRACK_CURVE_LEFT = plane_uv(10.0, 10.0, 1, 1);  // Same for now
-        MESH_TRACK_TUNNEL = plane_uv(10.0, 10.0, 1, 1);
-        MESH_TRACK_JUMP = plane_uv(10.0, 10.0, 1, 1);
+        // Load track meshes from ROM
+        MESH_TRACK_STRAIGHT = load_rom_mesh(b"track_straight");
+        MESH_TRACK_CURVE_LEFT = load_rom_mesh(b"track_curve_left");
+        MESH_TRACK_TUNNEL = load_rom_mesh(b"track_tunnel");
+        MESH_TRACK_JUMP = load_rom_mesh(b"track_jump");
 
-        // Create procedural prop meshes
-        MESH_PROP_BARRIER = cube_uv(0.5, 1.0, 0.5);
-        MESH_PROP_BOOST_PAD = plane_uv(2.0, 3.0, 1, 1);
-        MESH_PROP_BILLBOARD = cube_uv(4.0, 3.0, 0.2);
-        MESH_PROP_BUILDING = cube_uv(3.0, 8.0, 3.0);
+        // Load prop meshes from ROM
+        MESH_PROP_BARRIER = load_rom_mesh(b"prop_barrier");
+        MESH_PROP_BOOST_PAD = load_rom_mesh(b"prop_boost_pad");
+        MESH_PROP_BILLBOARD = load_rom_mesh(b"prop_billboard");
+        MESH_PROP_BUILDING = load_rom_mesh(b"prop_building");
 
         // Load car textures (albedo)
         TEX_SPEEDSTER = load_rom_texture(b"speedster");

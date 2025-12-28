@@ -27,6 +27,12 @@ pub struct GameSection {
     pub description: String,
     #[serde(default)]
     pub tags: Vec<String>,
+
+    /// Enable BC7 texture compression (4:1 ratio).
+    /// Recommended for Matcap/PBR/Hybrid render modes.
+    /// Default: false (uncompressed RGBA8)
+    #[serde(default)]
+    pub compress_textures: bool,
 }
 
 /// Build configuration section

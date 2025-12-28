@@ -3,3 +3,4 @@ id = "hello-world"
 title = "Hello World"
 author = "Nethercore Examples"
 version = "0.1.0"
+# compress_textures = true  # Optional: Enable BC7 compression (4:1 ratio) for Matcap/PBR modes

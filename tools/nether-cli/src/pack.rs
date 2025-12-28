@@ -6,6 +6,7 @@
 
 use anyhow::{Context, Result};
 use clap::Args;
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 use nethercore_shared::math::BoneMatrix3x4;
@@ -63,26 +64,32 @@ pub fn execute(args: PackArgs) -> Result<()> {
         .with_context(|| format!("Failed to read WASM file: {}", wasm_path.display()))?;
     println!("  WASM: {} ({} bytes)", wasm_path.display(), code.len());
 
-    // Analyze WASM to get render mode
+    // Analyze WASM to get render mode (for metadata)
     let analysis =
         nethercore_core::analysis::analyze_wasm(&code).context("Failed to analyze WASM file")?;
     let render_mode = analysis.render_mode;
+    println!("  Render mode: {}", render_mode);
 
-    // Determine texture format based on render mode
-    let texture_format = if render_mode == 0 {
-        TextureFormat::Rgba8
-    } else {
+    // Determine texture format based on explicit compress_textures flag
+    let texture_format = if manifest.game.compress_textures {
+        println!("  Texture compression: enabled (BC7, 4:1 ratio)");
         TextureFormat::Bc7
+    } else {
+        println!("  Texture compression: disabled (RGBA8, uncompressed)");
+        TextureFormat::Rgba8
     };
 
-    let format_name = match texture_format {
-        TextureFormat::Rgba8 => "RGBA8 (uncompressed)",
-        TextureFormat::Bc7 => "BC7 (4× compressed)",
-    };
-    println!(
-        "  Render mode: {} -> textures: {}",
-        render_mode, format_name
-    );
+    // Validation: warn if compress_textures doesn't match render_mode
+    if render_mode > 0 && !manifest.game.compress_textures {
+        eprintln!("  ⚠️  Warning: Detected render_mode {} (Matcap/PBR/Hybrid) but compress_textures=false.", render_mode);
+        eprintln!("      Consider enabling texture compression for better performance:");
+        eprintln!("      Add 'compress_textures = true' to [game] section in nether.toml");
+    }
+    if render_mode == 0 && manifest.game.compress_textures {
+        eprintln!("  ⚠️  Warning: Detected render_mode 0 (Lambert) but compress_textures=true.");
+        eprintln!("      Lambert mode works best with uncompressed RGBA8 textures.");
+        eprintln!("      Consider setting 'compress_textures = false' in nether.toml");
+    }
 
     // Load assets into data pack
     let data_pack = load_assets(project_dir, &manifest.assets, texture_format)?;
@@ -216,13 +223,19 @@ fn load_assets(
         .collect();
     let sounds = sounds?;
 
+    // Build set of available sound IDs for validation
+    let available_sound_ids: HashSet<String> = sounds
+        .iter()
+        .map(|s| s.id.clone())
+        .collect();
+
     // Load trackers in parallel
     let trackers: Result<Vec<_>> = assets
         .trackers
         .par_iter()
         .map(|entry| {
             let path = project_dir.join(&entry.path);
-            load_tracker(&entry.id, &path)
+            load_tracker(&entry.id, &path, &available_sound_ids)
         })
         .collect();
     let trackers = trackers?;
@@ -610,17 +623,77 @@ fn load_data(id: &str, path: &std::path::Path) -> Result<PackedData> {
     })
 }
 
+/// Validate that all non-empty instrument names in a tracker
+/// reference loaded sounds in the manifest
+fn validate_tracker_samples(
+    tracker_id: &str,
+    tracker_path: &std::path::Path,
+    sample_ids: &[String],
+    available_sound_ids: &HashSet<String>,
+) -> Result<()> {
+    // Filter out empty/blank instrument names (intentionally silent)
+    let non_empty_samples: Vec<&String> = sample_ids
+        .iter()
+        .filter(|name| !name.trim().is_empty())
+        .collect();
+
+    // Check each sample against available sound IDs
+    let mut missing_samples = Vec::new();
+    for sample_id in non_empty_samples {
+        if !available_sound_ids.contains(sample_id) {
+            missing_samples.push(sample_id.clone());
+        }
+    }
+
+    // If any samples are missing, fail with helpful error
+    if !missing_samples.is_empty() {
+        let mut available_sounds: Vec<&String> = available_sound_ids
+            .iter()
+            .collect();
+        available_sounds.sort(); // Sort alphabetically for better readability
+
+        let available_list = if available_sounds.is_empty() {
+            "(none - add sounds to [[assets.sounds]] in nether.toml)".to_string()
+        } else {
+            available_sounds
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join("\n  ")
+        };
+
+        return Err(anyhow::anyhow!(
+            "Tracker '{}' ({}) references {} missing sample(s):\n  {}\n\n\
+             Available sounds in manifest:\n  {}",
+            tracker_id,
+            tracker_path.display(),
+            missing_samples.len(),
+            missing_samples.join("\n  "),
+            available_list
+        ));
+    }
+
+    Ok(())
+}
+
 /// Load a tracker module from XM file
 ///
 /// Parses the XM file, extracts instrument names for sample mapping,
 /// and strips embedded sample data (samples are loaded separately via sounds).
-fn load_tracker(id: &str, path: &std::path::Path) -> Result<PackedTracker> {
+fn load_tracker(
+    id: &str,
+    path: &std::path::Path,
+    available_sound_ids: &HashSet<String>,
+) -> Result<PackedTracker> {
     let data = std::fs::read(path)
         .with_context(|| format!("Failed to load tracker: {}", path.display()))?;
 
     // Get instrument names from XM file (for mapping to sounds)
     let sample_ids = nether_xm::get_instrument_names(&data)
         .with_context(|| format!("Failed to parse tracker instruments: {}", path.display()))?;
+
+    // Validate sample references against loaded sounds
+    validate_tracker_samples(id, path, &sample_ids, available_sound_ids)?;
 
     // Strip sample data from XM (keep only patterns/metadata)
     let pattern_data = nether_xm::strip_xm_samples(&data)

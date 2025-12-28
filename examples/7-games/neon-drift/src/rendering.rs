@@ -8,12 +8,12 @@ use crate::state::*;
 use crate::particles::{render_particles, render_speed_lines, render_vignette};
 use crate::hud::render_hud;
 
-pub fn load_rom_mesh(id: &[u8]) -> u32 {
-    unsafe { rom_mesh(id.as_ptr() as u32, id.len() as u32) }
-}
-
 pub fn load_rom_texture(id: &[u8]) -> u32 {
     unsafe { rom_texture(id.as_ptr() as u32, id.len() as u32) }
+}
+
+pub fn load_rom_mesh(id: &[u8]) -> u32 {
+    unsafe { rom_mesh(id.as_ptr() as u32, id.len() as u32) }
 }
 
 pub fn load_rom_sound(id: &[u8]) -> u32 {
@@ -95,115 +95,314 @@ pub fn render_track() {
         material_roughness(0.8);
         material_emissive(0.2);
 
-        // Render each track segment with its position and rotation
+        // Render each track segment with full 3D transformation
         for i in 0..TRACK_SEGMENT_COUNT {
             let segment = &TRACK_SEGMENTS[i];
+            let half_len = segment.length * 0.5;
 
-            // Select mesh based on segment type
-            let mesh = match segment.segment_type {
-                SegmentType::Straight => MESH_TRACK_STRAIGHT,
-                SegmentType::CurveLeft => MESH_TRACK_CURVE_LEFT,  // Could be custom curve mesh
-                SegmentType::CurveRight => MESH_TRACK_STRAIGHT,   // Using straight for now
-                SegmentType::Tunnel => MESH_TRACK_TUNNEL,
-                SegmentType::Jump => MESH_TRACK_JUMP,
+            // Determine base color from style
+            let style_color = match segment.style {
+                SegmentStyle::Tunnel => 0x1A1A30FF,   // Dark blue/purple
+                SegmentStyle::Bridge => 0x2A2A3AFF,   // Metallic grey
+                SegmentStyle::Canyon => 0x302820FF,   // Rocky brown
+                SegmentStyle::Coastal => 0x201830FF,  // Ocean-tinted
+                SegmentStyle::Open => if i % 2 == 0 { track_color_a } else { track_color_b },
             };
 
-            // Alternate track segment colors for visibility
-            let track_color = if i % 2 == 0 { track_color_a } else { track_color_b };
-
-            // Special colors for segment types
-            let segment_color = match segment.segment_type {
-                SegmentType::Tunnel => 0x1A1A30FF,  // Darker for tunnel
-                SegmentType::Jump => 0x302018FF,    // Brown/orange tint for jump
-                _ => track_color,
+            // Modify color based on elevation
+            let segment_color = match segment.elevation {
+                Elevation::Jump => blend_color(style_color, 0xFFAA00FF, 0.3),   // Orange tint for jumps
+                Elevation::Bridge => blend_color(style_color, 0x4444FFFF, 0.2), // Blue tint for bridges
+                Elevation::SteepUp | Elevation::SteepDown => blend_color(style_color, 0x00FF00FF, 0.1), // Green tint for slopes
+                _ => style_color,
             };
 
             set_color(segment_color);
 
+            // Full 3D transform: position, rotation, pitch, roll
+            // Track mesh is 10x10 centered at origin, scale to fit segment length
             push_identity();
-            push_translate(segment.x, 0.0, segment.z);
+            push_translate(segment.x, segment.y, segment.z);
             push_rotate_y(segment.rotation);
-            draw_mesh(mesh);
+            push_translate(0.0, 0.0, half_len);  // Center the mesh on the segment
+            push_rotate_x(segment.pitch());      // Elevation tilt
+            push_rotate_z(segment.roll());       // Banking
+            push_scale(1.0, 1.0, segment.length / 10.0);  // Scale for length
+            draw_mesh(MESH_TRACK_STRAIGHT);
 
-            // Draw lane markings with track-specific color
+            // Lane markings
             set_color(lane_color);
             material_emissive(2.0);
 
-            // Left lane marker
+            // Left lane marker (follows terrain)
             push_identity();
-            push_translate(segment.x, 0.01, segment.z);
+            push_translate(segment.x, segment.y + 0.02, segment.z);
             push_rotate_y(segment.rotation);
-            push_translate(-4.0, 0.0, 5.0);
-            push_scale(0.1, 0.01, 8.0);
+            push_rotate_x(segment.pitch());
+            push_rotate_z(segment.roll());
+            push_translate(-4.0, 0.0, half_len);
+            push_scale(0.1, 0.02, segment.length * 0.8);
             draw_mesh(MESH_PROP_BARRIER);
 
             // Right lane marker
             push_identity();
-            push_translate(segment.x, 0.01, segment.z);
+            push_translate(segment.x, segment.y + 0.02, segment.z);
             push_rotate_y(segment.rotation);
-            push_translate(4.0, 0.0, 5.0);
-            push_scale(0.1, 0.01, 8.0);
+            push_rotate_x(segment.pitch());
+            push_rotate_z(segment.roll());
+            push_translate(4.0, 0.0, half_len);
+            push_scale(0.1, 0.02, segment.length * 0.8);
             draw_mesh(MESH_PROP_BARRIER);
 
-            // Add special visuals for segment types
-            match segment.segment_type {
-                SegmentType::Tunnel => {
-                    // Draw tunnel walls/ceiling hint
-                    set_color(0x3030AAFF);
-                    material_emissive(3.0);
-                    push_identity();
-                    push_translate(segment.x, 0.0, segment.z);
-                    push_rotate_y(segment.rotation);
-                    push_translate(-5.5, 2.0, 5.0);
-                    push_scale(0.3, 4.0, 10.0);
-                    draw_mesh(MESH_PROP_BARRIER);
+            // Style-specific decorations
+            render_segment_style(segment, lane_color);
 
-                    push_identity();
-                    push_translate(segment.x, 0.0, segment.z);
-                    push_rotate_y(segment.rotation);
-                    push_translate(5.5, 2.0, 5.0);
-                    push_scale(0.3, 4.0, 10.0);
-                    draw_mesh(MESH_PROP_BARRIER);
-                }
-                SegmentType::Jump => {
-                    // Draw ramp indicator
-                    set_color(0xFFAA00FF);
-                    material_emissive(4.0);
-                    push_identity();
-                    push_translate(segment.x, 0.0, segment.z);
-                    push_rotate_y(segment.rotation);
-                    push_translate(0.0, 0.3, 5.0);
-                    push_rotate_x(-15.0);  // Tilted ramp surface
-                    push_scale(5.0, 0.1, 5.0);
-                    draw_mesh(MESH_TRACK_STRAIGHT);
-                }
-                SegmentType::CurveLeft | SegmentType::CurveRight => {
-                    // Add corner markers
-                    let marker_color = if segment.segment_type == SegmentType::CurveLeft {
-                        0xFF0000FF  // Red for left curve
-                    } else {
-                        0x0000FFFF  // Blue for right curve
-                    };
-                    set_color(marker_color);
-                    material_emissive(3.0);
+            // Turn markers for curves
+            render_turn_markers(segment);
 
-                    // Outer corner marker
-                    let outer_x = if segment.segment_type == SegmentType::CurveLeft { 5.0 } else { -5.0 };
-                    push_identity();
-                    push_translate(segment.x, 0.0, segment.z);
-                    push_rotate_y(segment.rotation);
-                    push_translate(outer_x, 1.0, 8.0);
-                    push_scale(0.5, 2.0, 0.5);
-                    draw_mesh(MESH_PROP_BARRIER);
-                }
-                _ => {}
-            }
+            // Elevation indicators
+            render_elevation_markers(segment);
 
             material_emissive(0.2);
         }
 
         set_color(0xFFFFFFFF);
         render_track_props_along_segments();
+    }
+}
+
+/// Blend two RGBA colors
+fn blend_color(base: u32, tint: u32, amount: f32) -> u32 {
+    let r1 = ((base >> 24) & 0xFF) as f32;
+    let g1 = ((base >> 16) & 0xFF) as f32;
+    let b1 = ((base >> 8) & 0xFF) as f32;
+    let r2 = ((tint >> 24) & 0xFF) as f32;
+    let g2 = ((tint >> 16) & 0xFF) as f32;
+    let b2 = ((tint >> 8) & 0xFF) as f32;
+
+    let r = (r1 * (1.0 - amount) + r2 * amount) as u32;
+    let g = (g1 * (1.0 - amount) + g2 * amount) as u32;
+    let b = (b1 * (1.0 - amount) + b2 * amount) as u32;
+
+    (r << 24) | (g << 16) | (b << 8) | 0xFF
+}
+
+/// Render style-specific decorations (tunnels, bridges, canyons)
+fn render_segment_style(segment: &TrackSegment, lane_color: u32) {
+    unsafe {
+        let half_len = segment.length * 0.5;
+
+        match segment.style {
+            SegmentStyle::Tunnel => {
+                // Tunnel walls
+                set_color(0x2020AAFF);
+                material_emissive(2.0);
+
+                // Left wall
+                push_identity();
+                push_translate(segment.x, segment.y, segment.z);
+                push_rotate_y(segment.rotation);
+                push_rotate_x(segment.pitch());
+                push_translate(-5.5, 2.0, half_len);
+                push_scale(0.3, 4.0, segment.length);
+                draw_mesh(MESH_PROP_BARRIER);
+
+                // Right wall
+                push_identity();
+                push_translate(segment.x, segment.y, segment.z);
+                push_rotate_y(segment.rotation);
+                push_rotate_x(segment.pitch());
+                push_translate(5.5, 2.0, half_len);
+                push_scale(0.3, 4.0, segment.length);
+                draw_mesh(MESH_PROP_BARRIER);
+
+                // Ceiling (neon strip)
+                set_color(lane_color);
+                material_emissive(5.0);
+                push_identity();
+                push_translate(segment.x, segment.y, segment.z);
+                push_rotate_y(segment.rotation);
+                push_rotate_x(segment.pitch());
+                push_translate(0.0, 4.5, half_len);
+                push_scale(0.3, 0.1, segment.length);
+                draw_mesh(MESH_PROP_BARRIER);
+            }
+            SegmentStyle::Bridge => {
+                // Bridge railings
+                set_color(0x666688FF);
+                material_emissive(1.5);
+
+                // Left railing
+                push_identity();
+                push_translate(segment.x, segment.y, segment.z);
+                push_rotate_y(segment.rotation);
+                push_translate(-5.2, 0.5, half_len);
+                push_scale(0.15, 1.0, segment.length);
+                draw_mesh(MESH_PROP_BARRIER);
+
+                // Right railing
+                push_identity();
+                push_translate(segment.x, segment.y, segment.z);
+                push_rotate_y(segment.rotation);
+                push_translate(5.2, 0.5, half_len);
+                push_scale(0.15, 1.0, segment.length);
+                draw_mesh(MESH_PROP_BARRIER);
+
+                // Support pillars (every other segment)
+                if (segment.x as i32 / 20) % 2 == 0 {
+                    set_color(0x444466FF);
+                    push_identity();
+                    push_translate(segment.x, segment.y - 5.0, segment.z);
+                    push_rotate_y(segment.rotation);
+                    push_translate(-4.0, 0.0, half_len);
+                    push_scale(0.5, 10.0, 0.5);
+                    draw_mesh(MESH_PROP_BARRIER);
+
+                    push_identity();
+                    push_translate(segment.x, segment.y - 5.0, segment.z);
+                    push_rotate_y(segment.rotation);
+                    push_translate(4.0, 0.0, half_len);
+                    push_scale(0.5, 10.0, 0.5);
+                    draw_mesh(MESH_PROP_BARRIER);
+                }
+            }
+            SegmentStyle::Canyon => {
+                // Canyon walls
+                set_color(0x403020FF);
+                material_emissive(0.5);
+
+                // Left cliff wall
+                push_identity();
+                push_translate(segment.x, segment.y, segment.z);
+                push_rotate_y(segment.rotation);
+                push_translate(-7.0, 4.0, half_len);
+                push_scale(1.5, 8.0, segment.length);
+                draw_mesh(MESH_PROP_BUILDING);
+
+                // Right cliff wall
+                push_identity();
+                push_translate(segment.x, segment.y, segment.z);
+                push_rotate_y(segment.rotation);
+                push_translate(7.0, 4.0, half_len);
+                push_scale(1.5, 8.0, segment.length);
+                draw_mesh(MESH_PROP_BUILDING);
+            }
+            SegmentStyle::Coastal => {
+                // Water hint on one side
+                set_color(0x004488AA);
+                material_emissive(2.0);
+
+                push_identity();
+                push_translate(segment.x, segment.y - 2.0, segment.z);
+                push_rotate_y(segment.rotation);
+                push_translate(-15.0, 0.0, half_len);
+                push_scale(10.0, 0.1, segment.length * 2.0);
+                draw_mesh(MESH_TRACK_STRAIGHT);
+            }
+            SegmentStyle::Open => {}
+        }
+    }
+}
+
+/// Render turn apex markers
+fn render_turn_markers(segment: &TrackSegment) {
+    unsafe {
+        let turn_deg = segment.turn.degrees();
+        if turn_deg.abs() < 10.0 { return; }  // No markers for straights
+
+        let half_len = segment.length * 0.5;
+
+        // Color based on turn direction
+        let marker_color = if turn_deg < 0.0 { 0xFF3333FF } else { 0x3333FFFF };
+        set_color(marker_color);
+        material_emissive(4.0);
+
+        // Outer apex marker
+        let outer_x = if turn_deg < 0.0 { 5.0 } else { -5.0 };
+
+        push_identity();
+        push_translate(segment.x, segment.y, segment.z);
+        push_rotate_y(segment.rotation);
+        push_translate(outer_x, 1.0, half_len);
+        push_scale(0.4, 2.0, 0.4);
+        draw_mesh(MESH_PROP_BARRIER);
+
+        // For hairpins, add extra warning markers
+        if turn_deg.abs() >= 90.0 {
+            set_color(0xFFFF00FF);  // Yellow warning
+            material_emissive(5.0);
+
+            push_identity();
+            push_translate(segment.x, segment.y, segment.z);
+            push_rotate_y(segment.rotation);
+            push_translate(outer_x * 0.8, 2.5, half_len);
+            push_scale(0.6, 0.6, 0.6);
+            draw_mesh(MESH_PROP_BARRIER);
+        }
+    }
+}
+
+/// Render elevation change indicators
+fn render_elevation_markers(segment: &TrackSegment) {
+    unsafe {
+        let half_len = segment.length * 0.5;
+
+        match segment.elevation {
+            Elevation::Jump => {
+                // Chevron arrows pointing up for jump
+                set_color(0xFFAA00FF);
+                material_emissive(6.0);
+
+                for j in 0..3 {
+                    push_identity();
+                    push_translate(segment.x, segment.y + 0.1, segment.z);
+                    push_rotate_y(segment.rotation);
+                    push_translate(0.0, 0.0, half_len - 2.0 + (j as f32) * 2.0);
+                    push_rotate_x(-20.0);
+                    push_scale(3.0, 0.1, 1.0);
+                    draw_mesh(MESH_PROP_BOOST_PAD);
+                }
+            }
+            Elevation::SteepUp | Elevation::GentleUp => {
+                // Uphill indicator
+                set_color(0x00FF66FF);
+                material_emissive(3.0);
+
+                push_identity();
+                push_translate(segment.x, segment.y + 0.1, segment.z);
+                push_rotate_y(segment.rotation);
+                push_translate(-4.5, 0.0, half_len);
+                push_rotate_x(-segment.pitch());
+                push_scale(0.2, 0.1, 2.0);
+                draw_mesh(MESH_PROP_BARRIER);
+            }
+            Elevation::SteepDown | Elevation::GentleDown => {
+                // Downhill indicator
+                set_color(0xFF6600FF);
+                material_emissive(3.0);
+
+                push_identity();
+                push_translate(segment.x, segment.y + 0.1, segment.z);
+                push_rotate_y(segment.rotation);
+                push_translate(-4.5, 0.0, half_len);
+                push_rotate_x(-segment.pitch());
+                push_scale(0.2, 0.1, 2.0);
+                draw_mesh(MESH_PROP_BARRIER);
+            }
+            Elevation::Crest => {
+                // Peak indicator
+                set_color(0xFFFF00FF);
+                material_emissive(4.0);
+
+                push_identity();
+                push_translate(segment.x, segment.y + 1.0, segment.z);
+                push_rotate_y(segment.rotation);
+                push_translate(0.0, 0.0, half_len);
+                push_scale(0.5, 0.5, 0.5);
+                draw_mesh(MESH_PROP_BARRIER);
+            }
+            _ => {}
+        }
     }
 }
 
@@ -216,10 +415,6 @@ fn get_track_colors(track: TrackId) -> (u32, u32, u32) {
         TrackId::CrystalCavern => (0x1A2030FF, 0x152028FF, 0x8B5CF6FF), // Dark blue/grey, purple lanes
         TrackId::SolarHighway => (0x2A2010FF, 0x251A08FF, 0xFFAA00FF),  // Dark orange/brown, gold lanes
     }
-}
-
-pub fn render_track_props() {
-    render_track_props_along_segments();
 }
 
 /// Render props positioned along track segments
@@ -285,8 +480,8 @@ fn render_track_props_along_segments() {
                 draw_mesh(MESH_PROP_BILLBOARD);
             }
 
-            // Boost pads on specific segments
-            if i % 4 == 1 && segment.segment_type == SegmentType::Straight {
+            // Boost pads on straight segments only
+            if i % 4 == 1 && segment.turn == TurnAngle::Straight {
                 set_color(boost_color);
                 material_emissive(5.0);
                 let x_offset = if i % 8 < 4 { -2.0 } else { 2.0 };
@@ -351,40 +546,36 @@ pub fn render_all_cars() {
             let car = &CARS[i];
             let is_ai = i >= ACTIVE_PLAYER_COUNT as usize;
 
-            // Car colors based on type (using set_color since textures may not exist)
-            let (mesh, mut color) = match car.car_type {
-                CarType::Speedster => (MESH_SPEEDSTER, 0xFF3333FF),  // Red
-                CarType::Muscle => (MESH_MUSCLE, 0x3366FFFF),        // Blue
-                CarType::Racer => (MESH_RACER, 0x33FF33FF),          // Green
-                CarType::Drift => (MESH_DRIFT, 0xFF9900FF),          // Orange
-                CarType::Phantom => (MESH_PHANTOM, 0x9933FFFF),      // Purple
-                CarType::Titan => (MESH_TITAN, 0xFFCC00FF),          // Gold
-                CarType::Viper => (MESH_VIPER, 0x00FFFFFF),          // Cyan
+            // Get mesh and textures for car type
+            let (mesh, tex_albedo, tex_emissive) = match car.car_type {
+                CarType::Speedster => (MESH_SPEEDSTER, TEX_SPEEDSTER, TEX_SPEEDSTER_EMISSIVE),
+                CarType::Muscle => (MESH_MUSCLE, TEX_MUSCLE, TEX_MUSCLE_EMISSIVE),
+                CarType::Racer => (MESH_RACER, TEX_RACER, TEX_RACER_EMISSIVE),
+                CarType::Drift => (MESH_DRIFT, TEX_DRIFT, TEX_DRIFT_EMISSIVE),
+                CarType::Phantom => (MESH_PHANTOM, TEX_PHANTOM, TEX_PHANTOM_EMISSIVE),
+                CarType::Titan => (MESH_TITAN, TEX_TITAN, TEX_TITAN_EMISSIVE),
+                CarType::Viper => (MESH_VIPER, TEX_VIPER, TEX_VIPER_EMISSIVE),
             };
 
-            // AI cars have slightly darker/desaturated colors to distinguish them
-            if is_ai {
-                // Darken AI car colors by reducing RGB components
-                let r = ((color >> 24) & 0xFF) * 7 / 10;
-                let g = ((color >> 16) & 0xFF) * 7 / 10;
-                let b = ((color >> 8) & 0xFF) * 7 / 10;
-                let a = color & 0xFF;
-                color = (r << 24) | (g << 16) | (b << 8) | a;
-            }
+            // Bind textures for PBR rendering
+            set_color(0xFFFFFFFF);  // White base - let texture show through
+            texture_bind(tex_albedo);
+            texture_bind_slot(tex_emissive, 1);  // Slot 1 for emissive/MRE
 
-            // Use vertex color instead of texture for now
-            set_color(color);
-            material_metallic(0.8);
-            material_roughness(0.2);
-            material_emissive(if is_ai { 1.0 } else { 1.5 });
+            // PBR material properties
+            material_metallic(0.7);
+            material_roughness(0.3);
+            material_emissive(if is_ai { 1.5 } else { 2.5 });  // Neon glow
 
             push_identity();
             push_translate(car.x, car.y + 0.2, car.z);  // Lift car slightly above ground
-            push_rotate_y(car.rotation_y);
+            push_rotate_y(car.rotation_y);  // Physics and mesh both use -Z as forward
             draw_mesh(mesh);
         }
 
-        // Reset color
+        // Reset textures and color
+        texture_bind(0);
+        texture_bind_slot(0, 1);
         set_color(0xFFFFFFFF);
     }
 }

@@ -117,7 +117,8 @@ pub fn spawn_collision_sparks(x: f32, z: f32) {
 
 pub fn update_particles(dt: f32) {
     unsafe {
-        for p in PARTICLES.iter_mut() {
+        for i in 0..MAX_PARTICLES {
+            let p = &mut PARTICLES[i];
             if !p.active { continue; }
 
             p.x += p.vel_x * dt;
@@ -153,7 +154,8 @@ pub fn update_particles(dt: f32) {
 
 pub fn render_particles() {
     unsafe {
-        for p in PARTICLES.iter() {
+        for i in 0..MAX_PARTICLES {
+            let p = &PARTICLES[i];
             if !p.active { continue; }
 
             let alpha = ((p.life / p.max_life) * 255.0) as u32;

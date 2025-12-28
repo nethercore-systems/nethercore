@@ -11,7 +11,7 @@ pub fn update_car_physics(car: &mut Car, player_idx: u32, dt: f32) {
     unsafe {
         let gas = trigger_right(player_idx);
         let brake = trigger_left(player_idx);
-        let steer_x = left_stick_x(player_idx);
+        let steer_x = left_stick_x(player_idx) * -1.0;
         let boost_pressed = button_pressed(player_idx, BUTTON_A);
 
         // Acceleration/braking
@@ -71,10 +71,11 @@ pub fn update_car_physics(car: &mut Car, player_idx: u32, dt: f32) {
         car.rotation_y += car.angular_velocity * dt;
 
         // Update position
+        // Forward is -Z when rotation_y = 0 (into screen)
         let sin_rot = libm::sinf(car.rotation_y * 3.14159 / 180.0);
         let cos_rot = libm::cosf(car.rotation_y * 3.14159 / 180.0);
-        let forward_x = sin_rot;
-        let forward_z = cos_rot;
+        let forward_x = -sin_rot;
+        let forward_z = -cos_rot;
         let right_x = cos_rot;
         let right_z = -sin_rot;
 
@@ -158,7 +159,7 @@ pub fn check_track_collision(car: &mut Car) {
             }
         }
 
-        // Get the nearest segment for local collision
+        // Get the nearest segment for local collision and elevation
         if TRACK_SEGMENT_COUNT > 0 {
             let seg = &TRACK_SEGMENTS[nearest_seg_idx];
             let sin_r = libm::sinf(seg.rotation * 3.14159 / 180.0);
@@ -172,8 +173,16 @@ pub fn check_track_collision(car: &mut Car) {
             let local_x = rel_x * cos_r - rel_z * sin_r;
             let local_z = rel_x * sin_r + rel_z * cos_r;
 
+            // Calculate progress through segment (0 to 1)
+            let progress = (local_z / seg.length).clamp(0.0, 1.0);
+
+            // Update car height based on segment elevation
+            // Interpolate from segment start to end height
+            let target_y = seg.y + seg.elevation.height_delta() * progress;
+            car.y = car.y + (target_y - car.y) * 0.15; // Smooth transition
+
             // Clamp to track bounds in local space
-            let track_half_width = 5.0;
+            let track_half_width = seg.width * 0.5;
             let clamped = local_x.clamp(-track_half_width, track_half_width);
 
             if local_x != clamped {
@@ -210,20 +219,23 @@ pub fn update_ai_car(car: &mut Car, dt: f32) {
             car.velocity_forward += car.acceleration * 0.8 * dt;
             car.velocity_forward = car.velocity_forward.min(car.max_speed * 0.9);
 
+            // Forward is -Z when rotation_y = 0
             let sin_rot = libm::sinf(car.rotation_y * 3.14159 / 180.0);
             let cos_rot = libm::cosf(car.rotation_y * 3.14159 / 180.0);
-            car.x += sin_rot * car.velocity_forward * dt;
-            car.z += cos_rot * car.velocity_forward * dt;
+            car.x -= sin_rot * car.velocity_forward * dt;
+            car.z -= cos_rot * car.velocity_forward * dt;
             check_track_collision(car);
             return;
         }
 
         let target = WAYPOINTS[car.current_waypoint];
 
-        // Calculate direction to waypoint
+        // Calculate direction to waypoint (using 3D distance)
         let dx = target.x - car.x;
+        let dy = target.y - car.y;
         let dz = target.z - car.z;
-        let dist = libm::sqrtf(dx * dx + dz * dz);
+        let dist = libm::sqrtf(dx * dx + dz * dz); // 2D distance for reach check
+        let _ = dy; // Y difference used for camera, not steering
 
         // Check if we've reached the waypoint
         if dist < 8.0 {
@@ -236,7 +248,8 @@ pub fn update_ai_car(car: &mut Car, dt: f32) {
         }
 
         // Calculate target angle (angle to waypoint)
-        let target_angle = libm::atan2f(dx, dz) * 180.0 / 3.14159;
+        // Use -dx, -dz because forward is -Z when rotation_y = 0
+        let target_angle = libm::atan2f(-dx, -dz) * 180.0 / 3.14159;
 
         // Normalize angles
         let mut angle_diff = target_angle - car.rotation_y;
@@ -264,11 +277,11 @@ pub fn update_ai_car(car: &mut Car, dt: f32) {
         while car.rotation_y > 360.0 { car.rotation_y -= 360.0; }
         while car.rotation_y < 0.0 { car.rotation_y += 360.0; }
 
-        // Update position
+        // Update position (forward is -Z when rotation_y = 0)
         let sin_rot = libm::sinf(car.rotation_y * 3.14159 / 180.0);
         let cos_rot = libm::cosf(car.rotation_y * 3.14159 / 180.0);
-        car.x += sin_rot * car.velocity_forward * dt;
-        car.z += cos_rot * car.velocity_forward * dt;
+        car.x -= sin_rot * car.velocity_forward * dt;
+        car.z -= cos_rot * car.velocity_forward * dt;
 
         check_track_collision(car);
     }

@@ -52,8 +52,8 @@ pub static mut CHECKPOINT_Z: [f32; NUM_CHECKPOINTS] = [0.0, 50.0, 100.0, 150.0];
 pub static mut TRACK_SEGMENTS: [TrackSegment; MAX_TRACK_SEGMENTS] = [TrackSegment::new(); MAX_TRACK_SEGMENTS];
 pub static mut TRACK_SEGMENT_COUNT: usize = 0;
 
-// AI Waypoints
-pub static mut WAYPOINTS: [Waypoint; MAX_WAYPOINTS] = [Waypoint::new(0.0, 0.0); MAX_WAYPOINTS];
+// AI Waypoints (3D)
+pub static mut WAYPOINTS: [Waypoint; MAX_WAYPOINTS] = [Waypoint::new(0.0, 0.0, 0.0); MAX_WAYPOINTS];
 pub static mut WAYPOINT_COUNT: usize = 0;
 
 // Animation state

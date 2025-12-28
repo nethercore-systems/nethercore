@@ -17,9 +17,9 @@ use std::sync::OnceLock;
 
 /// Texture compression format
 ///
-/// Determined by render mode:
-/// - Mode 0 (Lambert): RGBA8 — pixel-perfect, full alpha
-/// - Mode 1-3 (Matcap/MRBP/SSBP): BC7 — 4× compression, stipple transparency
+/// Determined by the `compress_textures` flag in nether.toml at pack time.
+/// - compress_textures = false: RGBA8 — pixel-perfect, full alpha
+/// - compress_textures = true: BC7 — 4× compression, stipple transparency
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Encode, Decode)]
 pub enum TextureFormat {
     /// Uncompressed RGBA8 (4 bytes per pixel)
@@ -272,7 +272,7 @@ where
 /// Packed texture (RGBA8 or BC7 compressed)
 ///
 /// Ready for direct GPU upload via `wgpu::Queue::write_texture()`.
-/// Format is determined by render mode at build time.
+/// Format is determined by the `compress_textures` flag in nether.toml at pack time.
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct PackedTexture {
     /// Asset ID (e.g., "player_idle", "stage1_tileset")

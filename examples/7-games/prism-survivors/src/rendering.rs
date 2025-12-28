@@ -46,8 +46,8 @@ extern "C" {
     // Font
     fn font_bind(handle: u32);
 
-    // Billboard (for VFX)
-    fn draw_billboard(x: f32, y: f32, z: f32, w: f32, h: f32, color: u32);
+    // Billboard (for VFX) - canonical API uses transform stack for position
+    fn draw_billboard(w: f32, h: f32, mode: u32, color: u32);
 
     // Procedural shapes
     fn sphere(radius: f32, segments: u32, rings: u32) -> u32;
@@ -427,7 +427,9 @@ pub fn render_vfx() {
                 VfxType::HitSpark => {
                     // Small spark particle
                     let size = 0.3 * v.scale * (1.0 - progress);
-                    draw_billboard(v.x, 0.5, v.y, size, size, color_with_alpha);
+                    push_identity();
+                    push_translate(v.x, 0.5, v.y);
+                    draw_billboard(size, size, 1, color_with_alpha);
                 }
                 VfxType::DamageNumber => {
                     // Floating damage text - rises up and fades
@@ -438,7 +440,9 @@ pub fn render_vfx() {
 
                     // Draw as billboard in world space (damage value affects size)
                     let dmg_scale = (v.value / 20.0).min(2.0).max(0.5);
-                    draw_billboard(v.x, 0.5 + y_offset, v.y, size * dmg_scale, size * dmg_scale, color_with_alpha);
+                    push_identity();
+                    push_translate(v.x, 0.5 + y_offset, v.y);
+                    draw_billboard(size * dmg_scale, size * dmg_scale, 1, color_with_alpha);
                 }
                 VfxType::HolyBurst => {
                     // Expanding ring
@@ -453,7 +457,9 @@ pub fn render_vfx() {
                 }
                 VfxType::SoulDrainBeam => {
                     // Beam effect (would need line drawing)
-                    draw_billboard(v.x, 0.5, v.y, 0.3, 0.3, color_with_alpha);
+                    push_identity();
+                    push_translate(v.x, 0.5, v.y);
+                    draw_billboard(0.3, 0.3, 1, color_with_alpha);
                 }
                 VfxType::PlayerHurt => {
                     // Handled separately as screen flash
@@ -462,9 +468,15 @@ pub fn render_vfx() {
                     // Golden rising particles
                     let y_offset = progress * 2.0;
                     let scale = v.scale * (1.0 - progress * 0.5);
-                    draw_billboard(v.x - 0.5, 0.5 + y_offset, v.y, scale * 0.2, scale * 0.4, color_with_alpha);
-                    draw_billboard(v.x + 0.5, 0.5 + y_offset * 0.8, v.y, scale * 0.15, scale * 0.3, color_with_alpha);
-                    draw_billboard(v.x, 0.5 + y_offset * 1.2, v.y - 0.3, scale * 0.25, scale * 0.5, color_with_alpha);
+                    push_identity();
+                    push_translate(v.x - 0.5, 0.5 + y_offset, v.y);
+                    draw_billboard(scale * 0.2, scale * 0.4, 1, color_with_alpha);
+                    push_identity();
+                    push_translate(v.x + 0.5, 0.5 + y_offset * 0.8, v.y);
+                    draw_billboard(scale * 0.15, scale * 0.3, 1, color_with_alpha);
+                    push_identity();
+                    push_translate(v.x, 0.5 + y_offset * 1.2, v.y - 0.3);
+                    draw_billboard(scale * 0.25, scale * 0.5, 1, color_with_alpha);
                 }
                 VfxType::EnemyDeath => {
                     // Burst of particles
@@ -473,8 +485,10 @@ pub fn render_vfx() {
                         let angle = (i as f32 * 90.0 + progress * 180.0) * 0.0175;
                         let dist = progress * 0.8;
                         let px = v.x + cos(angle) * dist;
-                        let py = v.y + sin(angle) * dist;
-                        draw_billboard(px, 0.3 + progress * 0.5, py, scale * 0.15, scale * 0.15, color_with_alpha);
+                        let pz = v.y + sin(angle) * dist;
+                        push_identity();
+                        push_translate(px, 0.3 + progress * 0.5, pz);
+                        draw_billboard(scale * 0.15, scale * 0.15, 1, color_with_alpha);
                     }
                 }
             }

@@ -1,7 +1,7 @@
 mod cart;
 mod ffi;
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use rayon::prelude::*;
 use std::fs;
@@ -149,6 +149,24 @@ fn run_asset_generators(project_root: &Path) -> Result<()> {
 
     if !tools_dir.exists() {
         return Ok(());
+    }
+
+    // Run gen-basic-assets first (must run before other generators)
+    let basic_gen = tools_dir.join("gen-basic-assets");
+    if basic_gen.join("Cargo.toml").exists() {
+        println!("Running gen-basic-assets...");
+        let output = Command::new("cargo")
+            .args(["run", "-p", "gen-basic-assets", "--release", "--", "all"])
+            .current_dir(project_root)
+            .output()
+            .context("Failed to run gen-basic-assets")?;
+
+        if output.status.success() {
+            println!("  ✓ gen-basic-assets completed\n");
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("gen-basic-assets failed: {}", stderr);
+        }
     }
 
     // Find all gen-* directories in tools/

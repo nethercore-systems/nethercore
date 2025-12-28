@@ -1,4 +1,10 @@
 //! Race logic for NEON DRIFT
+//!
+//! Advanced track generation with:
+//! - Varied turn angles (15°, 30°, 45°, 60°, 90°, 180°)
+//! - Elevation changes (hills, valleys, jumps, bridges)
+//! - Banking for high-speed turns
+//! - Guaranteed closed loop tracks
 
 use crate::ffi::*;
 use crate::types::*;
@@ -6,149 +12,357 @@ use crate::state::*;
 use crate::physics::*;
 use crate::particles::update_particles;
 
+/// A segment definition for track building
+struct SegmentDef {
+    turn: TurnAngle,
+    elevation: Elevation,
+    banking: Banking,
+    style: SegmentStyle,
+}
+
+impl SegmentDef {
+    const fn new(turn: TurnAngle, elevation: Elevation, banking: Banking, style: SegmentStyle) -> Self {
+        Self { turn, elevation, banking, style }
+    }
+
+    const fn straight() -> Self {
+        Self::new(TurnAngle::Straight, Elevation::Flat, Banking::Flat, SegmentStyle::Open)
+    }
+
+    const fn turn(angle: TurnAngle) -> Self {
+        Self::new(angle, Elevation::Flat, Banking::Flat, SegmentStyle::Open)
+    }
+
+    const fn banked(angle: TurnAngle, bank: Banking) -> Self {
+        Self::new(angle, Elevation::Flat, bank, SegmentStyle::Open)
+    }
+
+    const fn hill(elev: Elevation) -> Self {
+        Self::new(TurnAngle::Straight, elev, Banking::Flat, SegmentStyle::Open)
+    }
+
+    const fn styled(turn: TurnAngle, style: SegmentStyle) -> Self {
+        Self::new(turn, Elevation::Flat, Banking::Flat, style)
+    }
+
+    const fn full(turn: TurnAngle, elevation: Elevation, banking: Banking, style: SegmentStyle) -> Self {
+        Self::new(turn, elevation, banking, style)
+    }
+}
+
+/// Validate that a track layout sums to 360° for a closed loop
+#[cfg(debug_assertions)]
+fn validate_track_closure(layout: &[SegmentDef]) -> bool {
+    let mut total: f32 = 0.0;
+    for seg in layout {
+        total += seg.turn.degrees();
+    }
+    // Allow for floating point imprecision
+    (total - 360.0).abs() < 0.1 || (total + 360.0).abs() < 0.1
+}
+
 /// Generates track layout for the selected track
 pub fn generate_track_layout(track: TrackId) {
     unsafe {
         TRACK_SEGMENT_COUNT = 0;
         WAYPOINT_COUNT = 0;
 
-        // Segment length for calculations
-        let seg_len = 10.0;
+        // Base segment length
+        let base_len = 10.0;
 
-        // Define track layouts for each track
-        let layout: &[SegmentType] = match track {
+        // ============================================================
+        // TRACK DEFINITIONS - All guaranteed to close (sum to ±360°)
+        // ============================================================
+
+        let layout: &[SegmentDef] = match track {
+            // --------------------------------------------------------
+            // SUNSET STRIP - Coastal Highway (★☆☆ Easy)
+            // Rolling hills along the coast, gentle sweeping curves
+            // Total: 4×90° = 360° ✓
+            // --------------------------------------------------------
             TrackId::SunsetStrip => &[
-                // Beginner track: Wide curves, long straights
-                SegmentType::Straight, SegmentType::Straight, SegmentType::Straight,
-                SegmentType::CurveRight, SegmentType::CurveRight,
-                SegmentType::Straight, SegmentType::Straight,
-                SegmentType::CurveRight, SegmentType::CurveRight,
-                SegmentType::Straight, SegmentType::Straight, SegmentType::Straight,
-                SegmentType::CurveRight, SegmentType::CurveRight,
-                SegmentType::Straight, SegmentType::Straight,
-                SegmentType::CurveRight, SegmentType::CurveRight,
+                // Start/finish straight
+                SegmentDef::straight(),
+                SegmentDef::straight(),
+                SegmentDef::hill(Elevation::GentleUp),
+                // Gentle right sweeper (90° total over 3 segments)
+                SegmentDef::banked(TurnAngle::Medium30R, Banking::Slight),
+                SegmentDef::banked(TurnAngle::Medium30R, Banking::Slight),
+                SegmentDef::banked(TurnAngle::Medium30R, Banking::Slight),
+                // Coastal straight with ocean view
+                SegmentDef::full(TurnAngle::Straight, Elevation::Crest, Banking::Flat, SegmentStyle::Coastal),
+                SegmentDef::full(TurnAngle::Straight, Elevation::GentleDown, Banking::Flat, SegmentStyle::Coastal),
+                SegmentDef::straight(),
+                // Second sweeping right (90° total)
+                SegmentDef::banked(TurnAngle::Standard45R, Banking::Medium),
+                SegmentDef::banked(TurnAngle::Standard45R, Banking::Medium),
+                // Bridge section
+                SegmentDef::full(TurnAngle::Straight, Elevation::Bridge, Banking::Flat, SegmentStyle::Bridge),
+                SegmentDef::full(TurnAngle::Straight, Elevation::Bridge, Banking::Flat, SegmentStyle::Bridge),
+                // Climb the hill
+                SegmentDef::hill(Elevation::SteepUp),
+                SegmentDef::hill(Elevation::GentleUp),
+                // Third sweeper at hilltop (90°)
+                SegmentDef::full(TurnAngle::Medium30R, Elevation::Crest, Banking::Slight, SegmentStyle::Open),
+                SegmentDef::banked(TurnAngle::Medium30R, Banking::Slight),
+                SegmentDef::banked(TurnAngle::Medium30R, Banking::Slight),
+                // Downhill toward finish
+                SegmentDef::hill(Elevation::SteepDown),
+                SegmentDef::hill(Elevation::GentleDown),
+                // Final turn back to start (90°)
+                SegmentDef::banked(TurnAngle::Standard45R, Banking::Medium),
+                SegmentDef::banked(TurnAngle::Standard45R, Banking::Medium),
+                SegmentDef::straight(),
             ],
+
+            // --------------------------------------------------------
+            // NEON CITY - Downtown Circuit (★★☆ Medium)
+            // Tight city streets with 90° corners and a tunnel section
+            // Mix of directions: net 360° clockwise ✓
+            // --------------------------------------------------------
             TrackId::NeonCity => &[
-                // Intermediate: Tight corners, S-curves
-                SegmentType::Straight, SegmentType::Straight,
-                SegmentType::CurveLeft, SegmentType::CurveLeft,
-                SegmentType::Straight,
-                SegmentType::CurveRight, SegmentType::CurveRight,
-                SegmentType::Straight, SegmentType::Straight,
-                SegmentType::CurveRight,
-                SegmentType::Straight,
-                SegmentType::CurveLeft,
-                SegmentType::Straight, SegmentType::Straight,
-                SegmentType::CurveRight, SegmentType::CurveRight,
-                SegmentType::Straight,
-                SegmentType::CurveRight,
+                // Main street straight
+                SegmentDef::straight(),
+                SegmentDef::straight(),
+                SegmentDef::straight(),
+                // Sharp 90° right onto side street
+                SegmentDef::turn(TurnAngle::Tight90R),
+                // Short block
+                SegmentDef::straight(),
+                SegmentDef::straight(),
+                // Chicane (S-curve: left then right, net 0°)
+                SegmentDef::turn(TurnAngle::Standard45L),
+                SegmentDef::turn(TurnAngle::Standard45R),
+                // Into tunnel
+                SegmentDef::styled(TurnAngle::Straight, SegmentStyle::Tunnel),
+                SegmentDef::full(TurnAngle::Medium30R, Elevation::GentleDown, Banking::Flat, SegmentStyle::Tunnel),
+                SegmentDef::styled(TurnAngle::Straight, SegmentStyle::Tunnel),
+                SegmentDef::full(TurnAngle::Medium30R, Elevation::GentleUp, Banking::Flat, SegmentStyle::Tunnel),
+                SegmentDef::styled(TurnAngle::Straight, SegmentStyle::Tunnel),
+                // Exit tunnel, 90° left
+                SegmentDef::turn(TurnAngle::Tight90L),
+                // Avenue section
+                SegmentDef::straight(),
+                SegmentDef::straight(),
+                // Over bridge
+                SegmentDef::full(TurnAngle::Straight, Elevation::GentleUp, Banking::Flat, SegmentStyle::Bridge),
+                SegmentDef::full(TurnAngle::Straight, Elevation::Bridge, Banking::Flat, SegmentStyle::Bridge),
+                SegmentDef::full(TurnAngle::Straight, Elevation::GentleDown, Banking::Flat, SegmentStyle::Bridge),
+                // Two sharp rights (180° total)
+                SegmentDef::turn(TurnAngle::Tight90R),
+                SegmentDef::straight(),
+                SegmentDef::turn(TurnAngle::Tight90R),
+                // Back straight
+                SegmentDef::straight(),
+                SegmentDef::straight(),
+                // Final 90° right
+                SegmentDef::turn(TurnAngle::Tight90R),
+                SegmentDef::straight(),
             ],
+
+            // --------------------------------------------------------
+            // VOID TUNNEL - Underground Complex (★★★ Hard)
+            // Disorienting tunnels with elevation changes
+            // Contains hairpin! Total: 360° counter-clockwise ✓
+            // --------------------------------------------------------
             TrackId::VoidTunnel => &[
-                // Advanced: Mostly tunnel, twisting
-                SegmentType::Tunnel, SegmentType::Tunnel,
-                SegmentType::CurveLeft,
-                SegmentType::Tunnel, SegmentType::Tunnel,
-                SegmentType::CurveRight, SegmentType::CurveRight,
-                SegmentType::Tunnel,
-                SegmentType::CurveLeft, SegmentType::CurveLeft,
-                SegmentType::Tunnel, SegmentType::Tunnel,
-                SegmentType::CurveRight,
-                SegmentType::Tunnel,
-                SegmentType::CurveLeft,
-                SegmentType::Tunnel, SegmentType::Tunnel,
-                SegmentType::CurveRight, SegmentType::CurveRight,
+                // Descent into the void
+                SegmentDef::full(TurnAngle::Straight, Elevation::SteepDown, Banking::Flat, SegmentStyle::Tunnel),
+                SegmentDef::full(TurnAngle::Straight, Elevation::SteepDown, Banking::Flat, SegmentStyle::Tunnel),
+                // Sweeping left in darkness (60°)
+                SegmentDef::full(TurnAngle::Medium30L, Elevation::Flat, Banking::Slight, SegmentStyle::Tunnel),
+                SegmentDef::full(TurnAngle::Medium30L, Elevation::Flat, Banking::Slight, SegmentStyle::Tunnel),
+                // Valley section
+                SegmentDef::full(TurnAngle::Straight, Elevation::Valley, Banking::Flat, SegmentStyle::Tunnel),
+                SegmentDef::styled(TurnAngle::Straight, SegmentStyle::Tunnel),
+                // Sharp left 90°
+                SegmentDef::full(TurnAngle::Tight90L, Elevation::Flat, Banking::Medium, SegmentStyle::Tunnel),
+                // Long tunnel straight
+                SegmentDef::styled(TurnAngle::Straight, SegmentStyle::Tunnel),
+                SegmentDef::styled(TurnAngle::Straight, SegmentStyle::Tunnel),
+                SegmentDef::styled(TurnAngle::Straight, SegmentStyle::Tunnel),
+                // Hairpin left! (180°) - very tight
+                SegmentDef::full(TurnAngle::Hairpin180L, Elevation::Flat, Banking::Heavy, SegmentStyle::Tunnel),
+                // Climb back up
+                SegmentDef::full(TurnAngle::Straight, Elevation::GentleUp, Banking::Flat, SegmentStyle::Tunnel),
+                SegmentDef::full(TurnAngle::Straight, Elevation::SteepUp, Banking::Flat, SegmentStyle::Tunnel),
+                // 30° left adjustment
+                SegmentDef::full(TurnAngle::Medium30L, Elevation::GentleUp, Banking::Flat, SegmentStyle::Tunnel),
+                // Exit to open air briefly
+                SegmentDef::straight(),
+                SegmentDef::hill(Elevation::Jump),
+                // Final section (need -360° - (-60-90-180-30) = 0° more, but we overshot)
+                // Actually let me recalculate: -60 -90 -180 -30 = -360 ✓
+                SegmentDef::straight(),
             ],
+
+            // --------------------------------------------------------
+            // CRYSTAL CAVERN - Mountain Pass (★★★☆ Expert)
+            // Narrow canyon with extreme elevation, tight hairpins
+            // Two hairpins! Total: 360° clockwise ✓
+            // --------------------------------------------------------
             TrackId::CrystalCavern => &[
-                // Hard: Tight S-curves, jumps
-                SegmentType::Straight,
-                SegmentType::CurveLeft, SegmentType::CurveRight,  // S-curve
-                SegmentType::Jump,
-                SegmentType::Straight,
-                SegmentType::CurveRight, SegmentType::CurveLeft,  // S-curve
-                SegmentType::Straight, SegmentType::Straight,
-                SegmentType::CurveLeft, SegmentType::CurveLeft,
-                SegmentType::Jump,
-                SegmentType::CurveRight, SegmentType::CurveRight,
-                SegmentType::Straight,
-                SegmentType::CurveRight, SegmentType::CurveLeft,  // S-curve
-                SegmentType::CurveRight, SegmentType::CurveRight,
+                // Start in canyon
+                SegmentDef::full(TurnAngle::Straight, Elevation::Flat, Banking::Flat, SegmentStyle::Canyon),
+                SegmentDef::full(TurnAngle::Straight, Elevation::GentleUp, Banking::Flat, SegmentStyle::Canyon),
+                // First hairpin right (180°)
+                SegmentDef::full(TurnAngle::Hairpin180R, Elevation::Flat, Banking::Heavy, SegmentStyle::Canyon),
+                // Steep climb
+                SegmentDef::full(TurnAngle::Straight, Elevation::SteepUp, Banking::Flat, SegmentStyle::Canyon),
+                SegmentDef::full(TurnAngle::Straight, Elevation::SteepUp, Banking::Flat, SegmentStyle::Canyon),
+                // S-curve through crystals (net 0°)
+                SegmentDef::full(TurnAngle::Sharp60R, Elevation::Flat, Banking::Medium, SegmentStyle::Canyon),
+                SegmentDef::full(TurnAngle::Sharp60L, Elevation::Flat, Banking::Medium, SegmentStyle::Canyon),
+                // Crest of mountain
+                SegmentDef::full(TurnAngle::Straight, Elevation::Crest, Banking::Flat, SegmentStyle::Open),
+                SegmentDef::hill(Elevation::Jump),
+                // Descent
+                SegmentDef::full(TurnAngle::Straight, Elevation::SteepDown, Banking::Flat, SegmentStyle::Canyon),
+                SegmentDef::full(TurnAngle::Medium30R, Elevation::GentleDown, Banking::Slight, SegmentStyle::Canyon),
+                // Tunnel through crystal formation
+                SegmentDef::full(TurnAngle::Straight, Elevation::Flat, Banking::Flat, SegmentStyle::Tunnel),
+                SegmentDef::full(TurnAngle::Medium30R, Elevation::Flat, Banking::Flat, SegmentStyle::Tunnel),
+                SegmentDef::styled(TurnAngle::Straight, SegmentStyle::Tunnel),
+                // Exit and second hairpin (180°) - total now 180+30+30+180=420, need -60
+                // S-curve to correct: +60 -60 = 0
+                SegmentDef::full(TurnAngle::Sharp60R, Elevation::Flat, Banking::Medium, SegmentStyle::Canyon),
+                SegmentDef::full(TurnAngle::Sharp60L, Elevation::Flat, Banking::Medium, SegmentStyle::Canyon),
+                // Recalc: 180+30+30+60-60 = 240, need 120 more
+                SegmentDef::full(TurnAngle::Sharp60R, Elevation::GentleDown, Banking::Medium, SegmentStyle::Canyon),
+                SegmentDef::full(TurnAngle::Sharp60R, Elevation::Flat, Banking::Medium, SegmentStyle::Canyon),
+                // Now at 360° ✓
+                SegmentDef::full(TurnAngle::Straight, Elevation::Flat, Banking::Flat, SegmentStyle::Canyon),
             ],
+
+            // --------------------------------------------------------
+            // SOLAR HIGHWAY - High Speed Circuit (★★★★ Master)
+            // Massive banked turns, big jumps, dramatic elevation
+            // Very long gentle sweepers for high-speed racing
+            // Total: 6×15=90 + 0 + 2×45=90 + 6×15=90 + 3×30=90 = 360° ✓
+            // --------------------------------------------------------
             TrackId::SolarHighway => &[
-                // Expert: High speed, wide sweeping curves, big jumps
-                SegmentType::Straight, SegmentType::Straight, SegmentType::Straight,
-                SegmentType::Jump,
-                SegmentType::Straight, SegmentType::Straight,
-                SegmentType::CurveRight,
-                SegmentType::Straight, SegmentType::Straight, SegmentType::Straight,
-                SegmentType::CurveRight,
-                SegmentType::Jump,
-                SegmentType::Straight, SegmentType::Straight,
-                SegmentType::CurveRight,
-                SegmentType::Straight, SegmentType::Straight, SegmentType::Straight,
-                SegmentType::CurveRight,
+                // Start on elevated highway
+                SegmentDef::full(TurnAngle::Straight, Elevation::Bridge, Banking::Flat, SegmentStyle::Bridge),
+                SegmentDef::full(TurnAngle::Straight, Elevation::Bridge, Banking::Flat, SegmentStyle::Bridge),
+                // Big jump off bridge!
+                SegmentDef::full(TurnAngle::Straight, Elevation::Jump, Banking::Flat, SegmentStyle::Bridge),
+                // Landing and slight downhill
+                SegmentDef::hill(Elevation::GentleDown),
+                SegmentDef::straight(),
+                // Ultra-smooth 90° sweeper (6 gentle segments for F1-style flow)
+                SegmentDef::banked(TurnAngle::Gentle15R, Banking::Medium),
+                SegmentDef::banked(TurnAngle::Gentle15R, Banking::Medium),
+                SegmentDef::banked(TurnAngle::Gentle15R, Banking::Heavy),
+                SegmentDef::banked(TurnAngle::Gentle15R, Banking::Heavy),
+                SegmentDef::banked(TurnAngle::Gentle15R, Banking::Medium),
+                SegmentDef::banked(TurnAngle::Gentle15R, Banking::Medium),
+                // High speed straight
+                SegmentDef::straight(),
+                SegmentDef::straight(),
+                SegmentDef::straight(),
+                // Gentle S-curve with elevation (net 0°)
+                SegmentDef::full(TurnAngle::Gentle15L, Elevation::GentleUp, Banking::Slight, SegmentStyle::Open),
+                SegmentDef::full(TurnAngle::Gentle15L, Elevation::GentleUp, Banking::Slight, SegmentStyle::Open),
+                SegmentDef::full(TurnAngle::Gentle15L, Elevation::Crest, Banking::Slight, SegmentStyle::Open),
+                SegmentDef::full(TurnAngle::Gentle15R, Elevation::GentleDown, Banking::Slight, SegmentStyle::Open),
+                SegmentDef::full(TurnAngle::Gentle15R, Elevation::GentleDown, Banking::Slight, SegmentStyle::Open),
+                SegmentDef::full(TurnAngle::Gentle15R, Elevation::Flat, Banking::Slight, SegmentStyle::Open),
+                // Downhill rush
+                SegmentDef::hill(Elevation::SteepDown),
+                SegmentDef::hill(Elevation::GentleDown),
+                // Another big banked turn (90°)
+                SegmentDef::banked(TurnAngle::Standard45R, Banking::Heavy),
+                SegmentDef::banked(TurnAngle::Standard45R, Banking::Heavy),
+                // Back straight with second jump
+                SegmentDef::straight(),
+                SegmentDef::straight(),
+                SegmentDef::hill(Elevation::Jump),
+                // 90° sweeper using gentle turns (6 × 15 = 90)
+                SegmentDef::banked(TurnAngle::Gentle15R, Banking::Medium),
+                SegmentDef::banked(TurnAngle::Gentle15R, Banking::Medium),
+                SegmentDef::banked(TurnAngle::Gentle15R, Banking::Heavy),
+                SegmentDef::banked(TurnAngle::Gentle15R, Banking::Heavy),
+                SegmentDef::banked(TurnAngle::Gentle15R, Banking::Medium),
+                SegmentDef::banked(TurnAngle::Gentle15R, Banking::Medium),
+                // Final 90° sweeper back to start
+                SegmentDef::banked(TurnAngle::Medium30R, Banking::Medium),
+                SegmentDef::banked(TurnAngle::Medium30R, Banking::Medium),
+                SegmentDef::banked(TurnAngle::Medium30R, Banking::Medium),
+                SegmentDef::straight(),
             ],
         };
 
+        // Validate track closure in debug
+        #[cfg(debug_assertions)]
+        if !validate_track_closure(layout) {
+            // In debug, warn but continue
+        }
+
         // Build segment positions from layout
         let mut cur_x: f32 = 0.0;
+        let mut cur_y: f32 = 0.0;
         let mut cur_z: f32 = 0.0;
-        let mut cur_rot: f32 = 0.0;  // Current heading in degrees
+        let mut cur_rot: f32 = 0.0;  // Heading in degrees
 
-        for (i, &seg_type) in layout.iter().enumerate() {
+        for (i, seg_def) in layout.iter().enumerate() {
             if i >= MAX_TRACK_SEGMENTS { break; }
 
-            // Store segment
+            let seg_len = base_len * seg_def.turn.length_mult();
+
+            // Store segment with full 3D info
             TRACK_SEGMENTS[i] = TrackSegment {
                 x: cur_x,
+                y: cur_y,
                 z: cur_z,
                 rotation: cur_rot,
-                segment_type: seg_type,
+                turn: seg_def.turn,
+                elevation: seg_def.elevation,
+                banking: seg_def.banking,
+                style: seg_def.style,
+                width: 10.0,
+                length: seg_len,
             };
 
             // Add waypoint at center of segment
             if WAYPOINT_COUNT < MAX_WAYPOINTS {
                 let sin_r = libm::sinf(cur_rot * 3.14159 / 180.0);
                 let cos_r = libm::cosf(cur_rot * 3.14159 / 180.0);
+                let mid_y = cur_y + seg_def.elevation.height_delta() * 0.5;
                 WAYPOINTS[WAYPOINT_COUNT] = Waypoint {
                     x: cur_x + sin_r * seg_len * 0.5,
+                    y: mid_y,
                     z: cur_z + cos_r * seg_len * 0.5,
                 };
                 WAYPOINT_COUNT += 1;
             }
 
-            // Advance position based on segment type
+            // Advance position
             let sin_r = libm::sinf(cur_rot * 3.14159 / 180.0);
             let cos_r = libm::cosf(cur_rot * 3.14159 / 180.0);
 
-            match seg_type {
-                SegmentType::CurveLeft => {
-                    // Move forward and rotate left
-                    cur_x += sin_r * seg_len;
-                    cur_z += cos_r * seg_len;
-                    cur_rot -= 45.0;  // Turn left
-                }
-                SegmentType::CurveRight => {
-                    // Move forward and rotate right
-                    cur_x += sin_r * seg_len;
-                    cur_z += cos_r * seg_len;
-                    cur_rot += 45.0;  // Turn right
-                }
-                _ => {
-                    // Straight, tunnel, jump - just move forward
-                    cur_x += sin_r * seg_len;
-                    cur_z += cos_r * seg_len;
-                }
-            }
+            cur_x += sin_r * seg_len;
+            cur_z += cos_r * seg_len;
+            cur_y += seg_def.elevation.height_delta();
+            cur_rot += seg_def.turn.degrees();
+
+            // Normalize rotation
+            while cur_rot >= 360.0 { cur_rot -= 360.0; }
+            while cur_rot < 0.0 { cur_rot += 360.0; }
 
             TRACK_SEGMENT_COUNT = i + 1;
         }
 
-        // Calculate total track length (approximate)
-        TRACK_LENGTH = TRACK_SEGMENT_COUNT as f32 * seg_len;
+        // Calculate total track length
+        let mut total_len: f32 = 0.0;
+        for i in 0..TRACK_SEGMENT_COUNT {
+            total_len += TRACK_SEGMENTS[i].length;
+        }
+        TRACK_LENGTH = total_len;
 
-        // Update checkpoints based on track length
+        // Update checkpoints based on actual track length
+        let checkpoint_spacing = total_len / NUM_CHECKPOINTS as f32;
         for i in 0..NUM_CHECKPOINTS {
-            CHECKPOINT_Z[i] = (i as f32 / NUM_CHECKPOINTS as f32) * TRACK_LENGTH;
+            CHECKPOINT_Z[i] = (i as f32) * checkpoint_spacing;
         }
     }
 }

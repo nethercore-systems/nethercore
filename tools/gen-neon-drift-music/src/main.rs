@@ -568,7 +568,9 @@ fn write_xm_header(xm: &mut Vec<u8>, name: &str, num_patterns: u16, num_orders: 
 fn write_pattern(xm: &mut Vec<u8>, pattern_data: &[u8], num_rows: u16) {
     let data_size = pattern_data.len() as u16;
 
-    xm.extend_from_slice(&9u32.to_le_bytes()); // header length
+    // XM pattern header: 5 bytes (4 for header length field + 1 for packing type)
+    // Note: header length value doesn't include itself
+    xm.extend_from_slice(&5u32.to_le_bytes()); // header length (not including this field)
     xm.push(0); // packing type
     xm.extend_from_slice(&num_rows.to_le_bytes());
     xm.extend_from_slice(&data_size.to_le_bytes());

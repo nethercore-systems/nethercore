@@ -15,4 +15,4 @@ tags = ["demo", "fonts", "texture"]
 # Here we use a sample texture to demonstrate the loading mechanism
 [[assets.textures]]
 id = "font_atlas"
-path = "../../assets/checkerboard.png"
+path = "../../_lib/assets/checkerboard.png"

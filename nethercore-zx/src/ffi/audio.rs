@@ -381,6 +381,10 @@ fn music_type_fn(caller: Caller<'_, ZXGameContext>) -> u32 {
 /// Must be called during `init()`. Returns tracker handle (u32).
 /// The tracker's instruments are mapped to ROM sound IDs by name.
 ///
+/// Samples referenced by the tracker are automatically loaded from the data pack
+/// if not already loaded. If a sample is not found in the data pack, a warning
+/// is logged and the instrument will be silent.
+///
 /// # Parameters
 /// - `id_ptr`: Pointer to tracker ID string in WASM memory
 /// - `id_len`: Length of tracker ID string
@@ -449,22 +453,46 @@ fn rom_tracker(mut caller: Caller<'_, ZXGameContext>, id_ptr: u32, id_len: u32) 
     };
 
     // Resolve instrument names to sound handles
-    // The game must load samples via rom_sound() before loading the tracker
+    // Auto-load samples from data pack if they're not already loaded
     let mut sound_handles = Vec::new();
     for sample_id in &packed_tracker.sample_ids {
-        // Look up the sound handle from the ID -> handle mapping
-        let sound_handle = ctx
-            .ffi
-            .sound_id_to_handle
-            .get(sample_id)
-            .copied()
-            .unwrap_or_else(|| {
-                warn!(
-                    "rom_tracker: sample '{}' not loaded, tracker instrument will be silent",
-                    sample_id
-                );
-                0
-            });
+        // Check if already loaded
+        let sound_handle = if let Some(&existing_handle) = ctx.ffi.sound_id_to_handle.get(sample_id) {
+            existing_handle
+        } else {
+            // Try to auto-load from data pack
+            match data_pack.find_sound(sample_id) {
+                Some(sound) => {
+                    // Allocate new handle
+                    let handle = ctx.ffi.next_sound_handle;
+                    ctx.ffi.next_sound_handle += 1;
+
+                    // Create Sound resource
+                    let sound_resource = Sound {
+                        data: std::sync::Arc::new(sound.data.clone()),
+                    };
+
+                    // Ensure sounds vector is large enough
+                    while ctx.ffi.sounds.len() <= handle as usize {
+                        ctx.ffi.sounds.push(None);
+                    }
+                    ctx.ffi.sounds[handle as usize] = Some(sound_resource);
+
+                    // Store ID -> handle mapping
+                    ctx.ffi.sound_id_to_handle.insert(sample_id.clone(), handle);
+
+                    info!("rom_tracker: auto-loaded sample '{}' as handle {}", sample_id, handle);
+                    handle
+                }
+                None => {
+                    warn!(
+                        "rom_tracker: sample '{}' not found in data pack, tracker instrument will be silent",
+                        sample_id
+                    );
+                    0
+                }
+            }
+        };
         sound_handles.push(sound_handle);
     }
 

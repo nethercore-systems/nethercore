@@ -84,6 +84,34 @@ Benefits of ROM packaging:
 - **Single file** - Easy to distribute
 - **Verified** - Content integrity checked
 
+## Texture Compression
+
+ZX supports BC7 texture compression (4:1 ratio) for render modes 1-3 (Matcap/PBR/Hybrid).
+
+### Enabling Compression
+
+Add to your `nether.toml`:
+
+```toml
+[game]
+# ... other fields ...
+compress_textures = true  # Enable BC7 compression (default: false)
+```
+
+### When to Use Compression
+
+✅ **Use compression when:**
+- Using Matcap (mode 1), PBR (mode 2), or Hybrid (mode 3) render modes
+- ROM size is a concern (compression reduces size by ~75%)
+- Shipping production builds
+
+❌ **Don't use compression when:**
+- Using Lambert (mode 0) render mode - works best with RGBA8
+- Rapid prototyping (faster build times without compression)
+- You need pixel-perfect uncompressed textures
+
+**Note:** The packer will warn you if your `compress_textures` setting doesn't match your render mode.
+
 ## Testing Your Build
 
 Always test the final build:
@@ -206,7 +234,7 @@ ls assets/player.png
 Nethercore has size limits for fair distribution.
 
 Reduce size:
-- Compress textures
+- **Compress textures** - Add `compress_textures = true` to `nether.toml` (see Texture Compression section)
 - Use smaller audio sample rates
 - Remove unused assets
 
