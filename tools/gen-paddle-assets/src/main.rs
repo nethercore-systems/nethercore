@@ -215,7 +215,6 @@ fn generate_win_wav(path: &Path) {
     let gap = 0.02;
 
     for (note_idx, &freq) in notes.iter().enumerate() {
-        let start_time = note_idx as f32 * (note_duration + gap);
         let samples = (SAMPLE_RATE * note_duration) as usize;
 
         for i in 0..samples {

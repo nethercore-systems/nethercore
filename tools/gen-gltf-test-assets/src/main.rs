@@ -174,6 +174,7 @@ struct MeshData {
 
 /// Skeleton data container
 struct SkeletonData {
+    #[allow(dead_code)]
     bone_translations: Vec<[f32; 3]>,
     inverse_bind_matrices: Vec<[f32; 16]>,
 }
