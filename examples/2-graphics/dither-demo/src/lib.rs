@@ -99,7 +99,7 @@ extern "C" {
 }
 
 // Button constants
-const BUTTON_A: u32 = 1;
+const BUTTON_A: u32 = 4;
 
 // ============================================================================
 // State

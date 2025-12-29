@@ -83,8 +83,8 @@ const MODE_CYLINDRICAL_X: u32 = 3;
 const MODE_CYLINDRICAL_Z: u32 = 4;
 
 // Button indices
-const BUTTON_A: u32 = 0;
-const BUTTON_B: u32 = 1;
+const BUTTON_A: u32 = 4;
+const BUTTON_B: u32 = 5;
 
 // Texture handles
 static mut SPRITE_TEXTURE: u32 = 0;

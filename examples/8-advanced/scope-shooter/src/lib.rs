@@ -63,11 +63,9 @@ extern "C" {
     // 2D drawing
     fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
     fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32);
+    fn draw_circle(x: f32, y: f32, radius: f32, color: u32);
     fn draw_line(x1: f32, y1: f32, x2: f32, y2: f32, thickness: f32, color: u32);
 }
-
-// Vertex format
-const VF_POS: u32 = 0;
 
 // Input (button indices from zx.rs)
 const BUTTON_A: u32 = 4;
@@ -96,10 +94,6 @@ static mut IS_SCOPED: bool = false;
 static mut PREV_B_BUTTON: u32 = 0;
 static mut FIRE_FLASH: f32 = 0.0;
 
-// Circle mesh data
-const CIRCLE_SEGMENTS: usize = 48;
-static mut CIRCLE_VERTICES: [f32; CIRCLE_SEGMENTS * 3 * 3] = [0.0; CIRCLE_SEGMENTS * 3 * 3];
-
 #[no_mangle]
 pub extern "C" fn init() {
     unsafe {
@@ -111,35 +105,6 @@ pub extern "C" fn init() {
         CUBE_MESH = cube(2.0, 2.0, 2.0);
         SPHERE_MESH = sphere(1.0, 16, 8);
         FLOOR_MESH = plane(100.0, 100.0, 8, 8);
-
-        // Generate scope circle mesh
-        generate_circle_mesh(CENTER_X, CENTER_Y, SCOPE_RADIUS);
-    }
-}
-
-/// Generate a circle mesh as a triangle fan
-unsafe fn generate_circle_mesh(cx: f32, cy: f32, radius: f32) {
-    let angle_step = core::f32::consts::TAU / CIRCLE_SEGMENTS as f32;
-
-    for i in 0..CIRCLE_SEGMENTS {
-        let angle1 = i as f32 * angle_step;
-        let angle2 = (i + 1) as f32 * angle_step;
-
-        let x1 = cx + libm::cosf(angle1) * radius;
-        let y1 = cy + libm::sinf(angle1) * radius;
-        let x2 = cx + libm::cosf(angle2) * radius;
-        let y2 = cy + libm::sinf(angle2) * radius;
-
-        let base = i * 9;
-        CIRCLE_VERTICES[base + 0] = cx;
-        CIRCLE_VERTICES[base + 1] = cy;
-        CIRCLE_VERTICES[base + 2] = 0.0;
-        CIRCLE_VERTICES[base + 3] = x1;
-        CIRCLE_VERTICES[base + 4] = y1;
-        CIRCLE_VERTICES[base + 5] = 0.0;
-        CIRCLE_VERTICES[base + 6] = x2;
-        CIRCLE_VERTICES[base + 7] = y2;
-        CIRCLE_VERTICES[base + 8] = 0.0;
     }
 }
 
@@ -239,15 +204,7 @@ unsafe fn draw_scene(fov: f32) {
 
 /// Draw the scope circle mask
 unsafe fn draw_scope_mask() {
-    camera_set(0.0, 0.0, 1.0, 0.0, 0.0, 0.0);
-    camera_fov(90.0);
-    push_identity();
-
-    draw_triangles(
-        CIRCLE_VERTICES.as_ptr(),
-        (CIRCLE_SEGMENTS * 3) as u32,
-        VF_POS,
-    );
+    draw_circle(CENTER_X, CENTER_Y, SCOPE_RADIUS, 0xFFFFFFFF);
 }
 
 /// Draw scope reticle (crosshairs)

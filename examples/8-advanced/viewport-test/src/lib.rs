@@ -63,7 +63,7 @@ extern "C" {
 }
 
 // Input button constants
-const BUTTON_A: u32 = 1;
+const BUTTON_A: u32 = 4;
 
 // Screen dimensions
 const SCREEN_WIDTH: u32 = 960;

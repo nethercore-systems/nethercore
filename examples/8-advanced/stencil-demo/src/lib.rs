@@ -219,9 +219,6 @@ fn tint_color(color: u32, tint_r: f32, tint_g: f32, tint_b: f32) -> u32 {
 
 /// Demo 0: Circle mask - render scene only inside circle
 unsafe fn demo_circle_mask() {
-    // First, fill the background with black (this will be visible outside the mask)
-    draw_rect(0.0, 0.0, SCREEN_WIDTH, SCREEN_HEIGHT, 0x000000FF);
-
     // Draw circle shape to stencil buffer
     stencil_begin();
     draw_circle(SCREEN_CX, SCREEN_CY, 200.0, 0xFFFFFFFF);
@@ -242,9 +239,6 @@ unsafe fn demo_inverted_mask() {
     // Create circle mask
     stencil_begin();
     draw_circle(SCREEN_CX, SCREEN_CY, 250.0, 0xFFFFFFFF);
-    stencil_end();
-
-    // Invert the mask to render OUTSIDE the circle
     stencil_invert();
 
     // Draw dark vignette overlay only outside circle
@@ -256,26 +250,14 @@ unsafe fn demo_inverted_mask() {
 
 /// Demo 2: Diagonal split - different tints on each side
 unsafe fn demo_diagonal_split() {
-    // First half: top-left triangle (using a rect for simplicity, we'll mask diagonally)
-    // For a true diagonal, we'd use draw_triangles, but let's do left/right split instead
-    // which is simpler and still demonstrates the concept
-
     // Left half mask
     stencil_begin();
     draw_rect(0.0, 0.0, SCREEN_WIDTH / 2.0, SCREEN_HEIGHT, 0xFFFFFFFF);
     stencil_end();
-
-    // Draw scene with warm tint (left side)
     draw_scene_tinted(0xFFCC99FF); // Warm orange tint
 
-    stencil_clear();
-
-    // Right half mask
-    stencil_begin();
-    draw_rect(SCREEN_WIDTH / 2.0, 0.0, SCREEN_WIDTH / 2.0, SCREEN_HEIGHT, 0xFFFFFFFF);
-    stencil_end();
-
-    // Draw scene with cool tint (right side)
+    // Right half - invert stencil to draw other side
+    stencil_invert();
     draw_scene_tinted(0x99CCFFFF); // Cool blue tint
 
     stencil_clear();
@@ -287,54 +269,24 @@ unsafe fn demo_animated_portal() {
     let base_radius = 150.0;
     let pulse = libm::sinf(TIME * 3.0) * 30.0;
     let radius = base_radius + pulse;
-    let ring_width = 6.0;
 
-    // Step 1: Draw the portal ring border first (underneath everything)
-    // Use outer circle mask, then invert to draw OUTSIDE it
+    // 1. Draw scene outside portal (inverted stencil)
     stencil_begin();
     draw_circle(SCREEN_CX, SCREEN_CY, radius, 0xFFFFFFFF);
-    stencil_end();
-
-    // Invert - now we can only draw OUTSIDE the inner circle
     stencil_invert();
-
-    // Mask additionally by inner edge of ring (we want ring area only)
-    // Draw the ring color as a full-screen rect, but it only appears outside inner circle
-    // We need to also limit to inside outer circle - use nested approach
-
-    // Actually simpler: just draw the ring as a circle outline
+    draw_scene();
     stencil_clear();
 
-    // Draw outer scene first (normal view)
-    // Mask: everything EXCEPT the portal area
+    // 2. Draw portal ring (no stencil - just 2D)
+    let ring_width = 6.0;
+    draw_circle(SCREEN_CX, SCREEN_CY, radius + ring_width / 2.0, 0x8800FFFF);
+    draw_circle(SCREEN_CX, SCREEN_CY, radius - ring_width / 2.0, 0x000000FF);
+
+    // 3. Draw portal interior (zoomed view)
     stencil_begin();
-    draw_circle(SCREEN_CX, SCREEN_CY, radius, 0xFFFFFFFF);
+    draw_circle(SCREEN_CX, SCREEN_CY, radius - ring_width / 2.0, 0xFFFFFFFF);
     stencil_end();
-    stencil_invert(); // Draw OUTSIDE the portal
-
-    draw_scene(); // Normal scene outside portal
-
-    stencil_clear();
-
-    // Draw portal ring (between radius and radius+ring_width)
-    // Outer circle mask
-    stencil_begin();
-    draw_circle(SCREEN_CX, SCREEN_CY, radius + ring_width, 0xFFFFFFFF);
-    stencil_end();
-
-    // Draw purple, but only inside outer circle
-    draw_rect(0.0, 0.0, SCREEN_WIDTH, SCREEN_HEIGHT, 0x8800FFFF);
-
-    stencil_clear();
-
-    // Now cut out the inner part by drawing portal scene over it
-    stencil_begin();
-    draw_circle(SCREEN_CX, SCREEN_CY, radius, 0xFFFFFFFF);
-    stencil_end();
-
-    // Inside portal: close-up view with wider FOV
     draw_scene_with_camera(0.0, 2.0, 5.0, 90.0);
-
     stencil_clear();
 }
 

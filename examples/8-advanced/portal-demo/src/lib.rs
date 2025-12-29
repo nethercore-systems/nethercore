@@ -181,8 +181,8 @@ pub extern "C" fn update() {
         let yaw_rad = PLAYER_YAW.to_radians();
         let forward_x = libm::sinf(yaw_rad);
         let forward_z = libm::cosf(yaw_rad);
-        let right_x = libm::cosf(yaw_rad);
-        let right_z = -libm::sinf(yaw_rad);
+        let right_x = forward_z;
+        let right_z = -forward_x;
 
         let speed = 0.15;
         PLAYER_X += (forward_x * ly + right_x * lx) * speed;
@@ -387,7 +387,9 @@ pub extern "C" fn render() {
             // Inside portal: render orange world from portal2's perspective
             // Set camera as if looking from the destination portal
             setup_portal_camera(PORTAL1_X, PORTAL1_Z, PORTAL2_X, PORTAL2_Z);
+            depth_test(0);  // Disable depth test
             draw_orange_world();
+            depth_test(1);  // Re-enable depth test
 
             stencil_clear();
 
@@ -407,7 +409,9 @@ pub extern "C" fn render() {
 
             // Inside portal: render blue world from portal1's perspective
             setup_portal_camera(PORTAL2_X, PORTAL2_Z, PORTAL1_X, PORTAL1_Z);
+            depth_test(0);  // Disable depth test
             draw_blue_world();
+            depth_test(1);  // Re-enable depth test
 
             stencil_clear();
 

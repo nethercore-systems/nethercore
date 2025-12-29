@@ -145,7 +145,7 @@ pub extern "C" fn update() {
 
         // Steering with stick X (only when moving)
         if SPEED.abs() > 0.5 {
-            PLAYER_ANGLE += stick_x * 2.0 * (SPEED / 10.0);
+            PLAYER_ANGLE -= stick_x * 2.0 * (SPEED / 10.0);
         }
 
         // Move forward

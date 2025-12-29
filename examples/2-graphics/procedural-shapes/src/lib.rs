@@ -81,8 +81,8 @@ extern "C" {
 }
 
 // Input button constants
-const BUTTON_A: u32 = 1;
-const BUTTON_B: u32 = 2;
+const BUTTON_A: u32 = 4;
+const BUTTON_B: u32 = 5;
 
 /// Current shape index (0-6 in plain mode, 0-5 in textured mode)
 static mut CURRENT_SHAPE: u32 = 0;
