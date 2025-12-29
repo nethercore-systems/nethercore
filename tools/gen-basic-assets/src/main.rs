@@ -49,57 +49,51 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn generate_all_assets(examples_root: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    // Output locations
+    // All assets go to the shared examples/assets folder
     let shared_assets = examples_root.join("assets");
-    let asset_test_assets = examples_root.join("6-assets/asset-test/assets");
-
-    // Create directories if they don't exist
     fs::create_dir_all(&shared_assets)?;
-    fs::create_dir_all(&asset_test_assets)?;
 
-    // Generate assets in both locations
-    let locations = [
-        ("assets", &shared_assets),
-        ("6-assets/asset-test/assets", &asset_test_assets),
-    ];
+    println!("  Generating assets in examples/assets/...");
 
-    for (name, path) in &locations {
-        println!("  Generating assets in {}...", name);
+    let checkerboard_path = shared_assets.join("checkerboard.png");
+    generate_checkerboard_png(&checkerboard_path)?;
+    println!("    ✓ checkerboard.png");
 
-        let checkerboard_path = path.join("checkerboard.png");
-        generate_checkerboard_png(&checkerboard_path)?;
-        println!("    ✓ checkerboard.png");
+    // Generate checkerboard.nczxtex (converted from checkerboard.png)
+    let checkerboard_tex_path = shared_assets.join("checkerboard.nczxtex");
+    generate_checkerboard_nczxtex(&checkerboard_tex_path)?;
+    println!("    ✓ checkerboard.nczxtex");
 
-        let cube_path = path.join("cube.obj");
-        generate_cube_obj(&cube_path)?;
-        println!("    ✓ cube.obj");
+    let cube_path = shared_assets.join("cube.obj");
+    generate_cube_obj(&cube_path)?;
+    println!("    ✓ cube.obj");
 
-        // Generate cube.nczxmesh (converted from cube.obj)
-        let cube_mesh_path = path.join("cube.nczxmesh");
-        generate_cube_nczxmesh(&cube_mesh_path)?;
-        println!("    ✓ cube.nczxmesh");
+    // Generate cube.nczxmesh (converted from cube.obj)
+    let cube_mesh_path = shared_assets.join("cube.nczxmesh");
+    generate_cube_nczxmesh(&cube_mesh_path)?;
+    println!("    ✓ cube.nczxmesh");
 
-        // Generate beep.wav
-        let beep_path = path.join("beep.wav");
-        generate_beep_wav(&beep_path)?;
-        println!("    ✓ beep.wav");
+    // Generate beep.wav
+    let beep_path = shared_assets.join("beep.wav");
+    generate_beep_wav(&beep_path)?;
+    println!("    ✓ beep.wav");
 
-        // Generate level files
-        for level_num in 1..=3u8 {
-            let level_path = path.join(format!("level{}.bin", level_num));
-            generate_level_bin(&level_path, level_num)?;
-            println!("    ✓ level{}.bin", level_num);
-        }
+    // Generate level files
+    for level_num in 1..=3u8 {
+        let level_path = shared_assets.join(format!("level{}.bin", level_num));
+        generate_level_bin(&level_path, level_num)?;
+        println!("    ✓ level{}.bin", level_num);
     }
 
     Ok(())
 }
 
 fn clean_all_assets(examples_root: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    let locations = ["assets", "6-assets/asset-test/assets"];
+    let shared_assets = examples_root.join("assets");
 
     let asset_names = [
         "checkerboard.png",
+        "checkerboard.nczxtex",
         "cube.obj",
         "cube.nczxmesh",
         "beep.wav",
@@ -108,13 +102,11 @@ fn clean_all_assets(examples_root: &Path) -> Result<(), Box<dyn std::error::Erro
         "level3.bin",
     ];
 
-    for location in &locations {
-        for asset_name in &asset_names {
-            let asset_path = examples_root.join(location).join(asset_name);
-            if asset_path.exists() {
-                fs::remove_file(&asset_path)?;
-                println!("  Removed {}", asset_path.display());
-            }
+    for asset_name in &asset_names {
+        let asset_path = shared_assets.join(asset_name);
+        if asset_path.exists() {
+            fs::remove_file(&asset_path)?;
+            println!("  Removed {}", asset_path.display());
         }
     }
 
@@ -224,6 +216,19 @@ fn generate_cube_nczxmesh(path: &Path) -> std::io::Result<()> {
 
     // Convert OBJ -> nczxmesh using nether-export
     nether_export::mesh::convert_obj(&obj_path, path, None)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+}
+
+/// Generate checkerboard.nczxtex from checkerboard.png using nether-export
+fn generate_checkerboard_nczxtex(path: &Path) -> std::io::Result<()> {
+    // First ensure checkerboard.png exists in the same directory
+    let png_path = path.with_extension("png");
+    if !png_path.exists() {
+        generate_checkerboard_png(&png_path)?;
+    }
+
+    // Convert PNG -> nczxtex using nether-export
+    nether_export::texture::convert_image(&png_path, path)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
 }
 

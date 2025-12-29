@@ -6,7 +6,7 @@ use std::io::{BufRead, BufReader, BufWriter};
 use std::path::Path;
 
 use crate::formats::write_nether_mesh;
-use crate::{pack_bone_weights_unorm8, vertex_stride_packed, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV};
+use crate::{pack_bone_weights_unorm8, vertex_stride_packed, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV};
 
 /// Result of in-memory mesh conversion
 pub struct ConvertedMesh {
@@ -176,6 +176,11 @@ pub fn convert_gltf_to_memory(input: &Path) -> Result<ConvertedMesh> {
     // Normals (optional)
     let normals: Option<Vec<[f32; 3]>> = reader.read_normals().map(|iter| iter.collect());
 
+    // Colors (optional) - COLOR_0 as RGBA
+    let colors: Option<Vec<[f32; 4]>> = reader
+        .read_colors(0)
+        .map(|iter| iter.into_rgba_f32().collect());
+
     // Skinning data (optional) - JOINTS_0 and WEIGHTS_0
     let joints: Option<Vec<[u8; 4]>> = reader
         .read_joints(0)
@@ -207,6 +212,9 @@ pub fn convert_gltf_to_memory(input: &Path) -> Result<ConvertedMesh> {
     if uvs.is_some() {
         format |= FORMAT_UV;
     }
+    if colors.is_some() {
+        format |= FORMAT_COLOR;
+    }
     if normals.is_some() {
         format |= FORMAT_NORMAL;
     }
@@ -218,6 +226,7 @@ pub fn convert_gltf_to_memory(input: &Path) -> Result<ConvertedMesh> {
     let vertex_data = pack_vertices_skinned(
         &positions,
         uvs.as_deref(),
+        colors.as_deref(),
         normals.as_deref(),
         skinning,
         format,
@@ -330,26 +339,28 @@ fn pack_vertices(
     normals: Option<&[[f32; 3]]>,
     format: u8,
 ) -> Vec<u8> {
-    // Delegate to the skinned version with no skinning data
-    pack_vertices_skinned(positions, uvs, normals, None, format)
+    // Delegate to the skinned version with no skinning data or colors
+    pack_vertices_skinned(positions, uvs, None, normals, None, format)
 }
 
-/// Pack vertices with optional skinning support
+/// Pack vertices with optional color and skinning support
 ///
-/// Skinning adds 8 bytes per vertex:
-/// - 4 bytes: bone indices (u8 × 4)
-/// - 4 bytes: bone weights (unorm8 × 4)
+/// Vertex layout (in order): Position → UV → Color → Normal → Skinning
+/// - Color adds 4 bytes per vertex (unorm8 × 4)
+/// - Skinning adds 8 bytes per vertex (bone indices u8×4 + weights unorm8×4)
 fn pack_vertices_skinned(
     positions: &[[f32; 3]],
     uvs: Option<&[[f32; 2]]>,
+    colors: Option<&[[f32; 4]]>,
     normals: Option<&[[f32; 3]]>,
     skinning: Option<(&[[u8; 4]], &[[f32; 4]])>,
     format: u8,
 ) -> Vec<u8> {
-    use crate::{pack_normal_octahedral, pack_position_f16, pack_uv_unorm16};
+    use crate::{pack_color_rgba_unorm8, pack_normal_octahedral, pack_position_f16, pack_uv_unorm16};
     use bytemuck::cast_slice;
 
     let has_uv = format & FORMAT_UV != 0;
+    let has_color = format & FORMAT_COLOR != 0;
     let has_normal = format & FORMAT_NORMAL != 0;
     let has_skinning = format & FORMAT_SKINNED != 0;
 
@@ -367,6 +378,13 @@ fn pack_vertices_skinned(
             let uv = uvs.map(|u| u[i]).unwrap_or([0.0, 0.0]);
             let packed_uv = pack_uv_unorm16(uv[0], uv[1]);
             data.extend_from_slice(cast_slice(&packed_uv));
+        }
+
+        // Color (unorm8x4) - 4 bytes
+        if has_color {
+            let c = colors.map(|c| c[i]).unwrap_or([1.0, 1.0, 1.0, 1.0]);
+            let packed_color = pack_color_rgba_unorm8(c[0], c[1], c[2], c[3]);
+            data.extend_from_slice(&packed_color);
         }
 
         // Normal (octahedral u32) - 4 bytes

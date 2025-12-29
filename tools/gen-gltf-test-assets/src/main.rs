@@ -1,60 +1,184 @@
-//! Programmatic GLB generation for integration tests.
+//! Generate test assets for gltf-test example
 //!
-//! Generates a complete GLB file with:
-//! - Skinned mesh (positions, normals, UVs, joints, weights, indices)
-//! - 3-bone skeleton with inverse bind matrices
-//! - 30-frame wave animation
+//! Creates:
+//! - Skinned mesh with UV coordinates (from programmatically generated GLB)
+//! - Skeleton with inverse bind matrices
+//! - Wave animation
+//! - Checkerboard texture for UV visualization
+//!
+//! Usage:
+//!   cargo run -p gen-gltf-test-assets
 
+use anyhow::{Context, Result};
 use gltf_json as json;
+use image::{ImageBuffer, Rgba};
 use json::validation::Checked::Valid;
 use std::f32::consts::TAU;
+use std::fs;
+use std::path::PathBuf;
+use zx_common::formats::animation::NetherZXAnimationHeader;
+use zx_common::formats::mesh::NetherZXMeshHeader;
+use zx_common::formats::skeleton::NetherZXSkeletonHeader;
 
 /// Bone count for the test skeleton
-pub const BONE_COUNT: usize = 3;
+const BONE_COUNT: usize = 3;
 /// Frame count for the test animation
-pub const FRAME_COUNT: usize = 30;
+const FRAME_COUNT: usize = 30;
 /// Segment height between bones
 const SEGMENT_HEIGHT: f32 = 1.0;
+/// Animation frame rate (FPS)
+const FRAME_RATE: f32 = 30.0;
 
-/// Generate a complete skinned GLB for testing.
-///
-/// Contains:
-/// - 3 stacked box segments (one per bone)
-/// - 3-bone skeleton (Root → Spine → Head)
-/// - 30-frame wave animation
-pub fn generate_skinned_glb() -> Vec<u8> {
-    // Build mesh data
-    let mesh = create_mesh_data();
-    let skeleton = create_skeleton();
-    let animation = create_animation();
+fn main() -> Result<()> {
+    // Output to shared examples/assets folder with gltf-test- prefix
+    let output_dir = PathBuf::from("examples/assets");
 
-    // Pack all binary data
-    let (buffer_data, buffer_views, accessors) =
-        pack_binary_data(&mesh, &skeleton, &animation);
+    // Ensure output directory exists
+    fs::create_dir_all(&output_dir).context("Failed to create output directory")?;
 
-    // Build GLTF JSON
-    let root = build_gltf_json(&mesh, &buffer_views, &accessors);
+    println!("Generating GLTF test assets to shared examples/assets...\n");
 
-    // Assemble GLB
-    assemble_glb(&root, &buffer_data)
+    // Step 1: Generate checkerboard texture (use existing one in shared assets)
+    // The shared checkerboard.png already exists, but we generate a larger one for better UV visibility
+    generate_checkerboard_texture(&output_dir.join("gltf-test-checker.png"))?;
+
+    // Step 2: Generate GLB file
+    let glb_path = output_dir.join("gltf-test.glb");
+    let glb_data = generate_skinned_glb();
+    fs::write(&glb_path, &glb_data).context("Failed to write GLB file")?;
+    println!("Generated GLB: {} ({} bytes)", glb_path.display(), glb_data.len());
+
+    // Step 3: Convert GLB to native formats using nether-export
+    convert_glb_to_native(&glb_path, &output_dir, "gltf-test")?;
+
+    println!("\nAll assets generated successfully!");
+    println!("\nNext steps:");
+    println!("  1. cd examples/6-assets/gltf-test");
+    println!("  2. nether build");
+    println!("  3. nether pack");
+    println!("  4. nether run");
+
+    Ok(())
 }
 
-/// Mesh data for the test asset
-pub struct MeshData {
-    pub positions: Vec<[f32; 3]>,
-    pub normals: Vec<[f32; 3]>,
-    pub uvs: Vec<[f32; 2]>,
-    pub joints: Vec<[u8; 4]>,
-    pub weights: Vec<[f32; 4]>,
-    pub indices: Vec<u16>,
+/// Generate a checkerboard texture for UV visualization
+fn generate_checkerboard_texture(path: &PathBuf) -> Result<()> {
+    const SIZE: u32 = 64;
+    const CHECKER_SIZE: u32 = 8;
+
+    let mut img = ImageBuffer::new(SIZE, SIZE);
+
+    for y in 0..SIZE {
+        for x in 0..SIZE {
+            let checker_x = (x / CHECKER_SIZE) % 2;
+            let checker_y = (y / CHECKER_SIZE) % 2;
+            let is_white = (checker_x + checker_y) % 2 == 0;
+
+            let color = if is_white {
+                Rgba([255u8, 255, 255, 255])
+            } else {
+                Rgba([80u8, 80, 80, 255])
+            };
+            img.put_pixel(x, y, color);
+        }
+    }
+
+    img.save(path).context("Failed to save checkerboard texture")?;
+    println!("Generated texture: {} ({}x{})", path.display(), SIZE, SIZE);
+
+    Ok(())
 }
 
-/// Skeleton data
+/// Convert GLB to native .nczxmesh, .nczxskel, .nczxanim formats
+fn convert_glb_to_native(glb_path: &PathBuf, output_dir: &PathBuf, prefix: &str) -> Result<()> {
+    // Convert mesh
+    let mesh_path = output_dir.join(format!("{}.nczxmesh", prefix));
+    let mesh = nether_export::convert_gltf_to_memory(glb_path)
+        .context("Failed to convert mesh")?;
+
+    // Build mesh file with header
+    let header = NetherZXMeshHeader::new(mesh.vertex_count, mesh.index_count, mesh.format);
+    let mut mesh_data = header.to_bytes().to_vec();
+    mesh_data.extend_from_slice(&mesh.vertex_data);
+    for idx in &mesh.indices {
+        mesh_data.extend_from_slice(&idx.to_le_bytes());
+    }
+    fs::write(&mesh_path, &mesh_data).context("Failed to write mesh file")?;
+    println!(
+        "Generated mesh: {} ({} vertices, {} indices, format 0x{:02X})",
+        mesh_path.display(),
+        mesh.vertex_count,
+        mesh.index_count,
+        mesh.format
+    );
+
+    // Convert skeleton
+    let skel_path = output_dir.join(format!("{}.nczxskel", prefix));
+    let skeleton = nether_export::convert_gltf_skeleton_to_memory(glb_path, None)
+        .context("Failed to convert skeleton")?;
+
+    // Build skeleton file with header
+    let skel_header = NetherZXSkeletonHeader::new(skeleton.bone_count);
+    let mut skel_data = skel_header.to_bytes().to_vec();
+    for ibm in &skeleton.inverse_bind_matrices {
+        for f in ibm {
+            skel_data.extend_from_slice(&f.to_le_bytes());
+        }
+    }
+    fs::write(&skel_path, &skel_data).context("Failed to write skeleton file")?;
+    println!(
+        "Generated skeleton: {} ({} bones)",
+        skel_path.display(),
+        skeleton.bone_count
+    );
+
+    // Convert animation
+    let anim_path = output_dir.join(format!("{}.nczxanim", prefix));
+    let animation = nether_export::convert_gltf_animation_to_memory(
+        glb_path,
+        None, // First animation
+        None, // First skin
+        Some(FRAME_RATE),
+    )
+    .context("Failed to convert animation")?;
+
+    // Build animation file with header
+    let anim_header = NetherZXAnimationHeader::new(animation.bone_count, animation.frame_count);
+    let mut anim_data = anim_header.to_bytes().to_vec();
+    anim_data.extend_from_slice(&animation.data);
+    fs::write(&anim_path, &anim_data).context("Failed to write animation file")?;
+    println!(
+        "Generated animation: {} ({} bones, {} frames)",
+        anim_path.display(),
+        animation.bone_count,
+        animation.frame_count
+    );
+
+    Ok(())
+}
+
+// ============================================================================
+// GLB Generation (based on gltf_generator.rs from tests)
+// ============================================================================
+
+/// Mesh data container
+struct MeshData {
+    positions: Vec<[f32; 3]>,
+    normals: Vec<[f32; 3]>,
+    uvs: Vec<[f32; 2]>,
+    colors: Vec<[f32; 4]>,  // RGBA vertex colors
+    joints: Vec<[u8; 4]>,
+    weights: Vec<[f32; 4]>,
+    indices: Vec<u16>,
+}
+
+/// Skeleton data container
 struct SkeletonData {
-    inverse_bind_matrices: Vec<[[f32; 4]; 4]>,
+    bone_translations: Vec<[f32; 3]>,
+    inverse_bind_matrices: Vec<[f32; 16]>,
 }
 
-/// Animation data
+/// Animation data container
 struct AnimationData {
     times: Vec<f32>,
     translations: Vec<Vec<[f32; 3]>>,
@@ -62,99 +186,118 @@ struct AnimationData {
     scales: Vec<Vec<[f32; 3]>>,
 }
 
-/// Create mesh data: 3 stacked boxes with skinning
+/// Generate a complete GLB with skinned mesh, skeleton, and animation
+fn generate_skinned_glb() -> Vec<u8> {
+    let mesh = create_mesh_data();
+    let skeleton = create_skeleton();
+    let animation = create_animation();
+
+    let (buffer_data, buffer_views, accessors) =
+        pack_binary_data(&mesh, &skeleton, &animation);
+
+    let mut root = build_gltf_json(&mesh, &buffer_views, &accessors);
+
+    // Update buffer size
+    root.buffers[0].byte_length = (buffer_data.len() as u64).into();
+
+    assemble_glb(&root, &buffer_data)
+}
+
+/// Create mesh data: 3 stacked cubes with proper UV mapping and vertex colors
 fn create_mesh_data() -> MeshData {
+    let half_w = 0.3;
     let mut positions = Vec::new();
     let mut normals = Vec::new();
     let mut uvs = Vec::new();
+    let mut colors = Vec::new();
     let mut joints = Vec::new();
     let mut weights = Vec::new();
     let mut indices = Vec::new();
 
-    let half_w = 0.15;
+    // Distinct colors for each bone segment (RGB + alpha)
+    let segment_colors: [[f32; 4]; 3] = [
+        [1.0, 0.2, 0.2, 1.0],  // Red for root
+        [0.2, 1.0, 0.2, 1.0],  // Green for spine
+        [0.2, 0.2, 1.0, 1.0],  // Blue for head
+    ];
 
     for seg in 0..BONE_COUNT {
         let y_base = seg as f32 * SEGMENT_HEIGHT;
         let bone = seg as u8;
         let base_vert = (seg * 24) as u16;
 
-        // 6 faces, 4 vertices each = 24 vertices per segment
-        let faces: Vec<([f32; 3], [[f32; 3]; 4], [[f32; 2]; 4])> = vec![
+        // Face definitions: (normal, corners with UVs)
+        let faces: Vec<([f32; 3], [([f32; 3], [f32; 2]); 4])> = vec![
             // Front (+Z)
             (
                 [0.0, 0.0, 1.0],
                 [
-                    [-half_w, y_base, half_w],
-                    [half_w, y_base, half_w],
-                    [half_w, y_base + SEGMENT_HEIGHT, half_w],
-                    [-half_w, y_base + SEGMENT_HEIGHT, half_w],
+                    ([-half_w, y_base, half_w], [0.0, 0.0]),
+                    ([half_w, y_base, half_w], [1.0, 0.0]),
+                    ([half_w, y_base + SEGMENT_HEIGHT, half_w], [1.0, 1.0]),
+                    ([-half_w, y_base + SEGMENT_HEIGHT, half_w], [0.0, 1.0]),
                 ],
-                [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]],
             ),
             // Back (-Z)
             (
                 [0.0, 0.0, -1.0],
                 [
-                    [half_w, y_base, -half_w],
-                    [-half_w, y_base, -half_w],
-                    [-half_w, y_base + SEGMENT_HEIGHT, -half_w],
-                    [half_w, y_base + SEGMENT_HEIGHT, -half_w],
+                    ([half_w, y_base, -half_w], [0.0, 0.0]),
+                    ([-half_w, y_base, -half_w], [1.0, 0.0]),
+                    ([-half_w, y_base + SEGMENT_HEIGHT, -half_w], [1.0, 1.0]),
+                    ([half_w, y_base + SEGMENT_HEIGHT, -half_w], [0.0, 1.0]),
                 ],
-                [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]],
             ),
             // Right (+X)
             (
                 [1.0, 0.0, 0.0],
                 [
-                    [half_w, y_base, half_w],
-                    [half_w, y_base, -half_w],
-                    [half_w, y_base + SEGMENT_HEIGHT, -half_w],
-                    [half_w, y_base + SEGMENT_HEIGHT, half_w],
+                    ([half_w, y_base, half_w], [0.0, 0.0]),
+                    ([half_w, y_base, -half_w], [1.0, 0.0]),
+                    ([half_w, y_base + SEGMENT_HEIGHT, -half_w], [1.0, 1.0]),
+                    ([half_w, y_base + SEGMENT_HEIGHT, half_w], [0.0, 1.0]),
                 ],
-                [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]],
             ),
             // Left (-X)
             (
                 [-1.0, 0.0, 0.0],
                 [
-                    [-half_w, y_base, -half_w],
-                    [-half_w, y_base, half_w],
-                    [-half_w, y_base + SEGMENT_HEIGHT, half_w],
-                    [-half_w, y_base + SEGMENT_HEIGHT, -half_w],
+                    ([-half_w, y_base, -half_w], [0.0, 0.0]),
+                    ([-half_w, y_base, half_w], [1.0, 0.0]),
+                    ([-half_w, y_base + SEGMENT_HEIGHT, half_w], [1.0, 1.0]),
+                    ([-half_w, y_base + SEGMENT_HEIGHT, -half_w], [0.0, 1.0]),
                 ],
-                [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]],
             ),
             // Top (+Y)
             (
                 [0.0, 1.0, 0.0],
                 [
-                    [-half_w, y_base + SEGMENT_HEIGHT, half_w],
-                    [half_w, y_base + SEGMENT_HEIGHT, half_w],
-                    [half_w, y_base + SEGMENT_HEIGHT, -half_w],
-                    [-half_w, y_base + SEGMENT_HEIGHT, -half_w],
+                    ([-half_w, y_base + SEGMENT_HEIGHT, half_w], [0.0, 0.0]),
+                    ([half_w, y_base + SEGMENT_HEIGHT, half_w], [1.0, 0.0]),
+                    ([half_w, y_base + SEGMENT_HEIGHT, -half_w], [1.0, 1.0]),
+                    ([-half_w, y_base + SEGMENT_HEIGHT, -half_w], [0.0, 1.0]),
                 ],
-                [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]],
             ),
             // Bottom (-Y)
             (
                 [0.0, -1.0, 0.0],
                 [
-                    [-half_w, y_base, -half_w],
-                    [half_w, y_base, -half_w],
-                    [half_w, y_base, half_w],
-                    [-half_w, y_base, half_w],
+                    ([-half_w, y_base, -half_w], [0.0, 0.0]),
+                    ([half_w, y_base, -half_w], [1.0, 0.0]),
+                    ([half_w, y_base, half_w], [1.0, 1.0]),
+                    ([-half_w, y_base, half_w], [0.0, 1.0]),
                 ],
-                [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]],
             ),
         ];
 
-        for (face_idx, (normal, corners, face_uvs)) in faces.iter().enumerate() {
+        for (face_idx, (normal, corners)) in faces.iter().enumerate() {
             let face_base = base_vert + (face_idx * 4) as u16;
 
-            for (i, corner) in corners.iter().enumerate() {
-                positions.push(*corner);
+            for (pos, uv) in corners {
+                positions.push(*pos);
                 normals.push(*normal);
-                uvs.push(face_uvs[i]);
+                uvs.push(*uv);
+                colors.push(segment_colors[seg]);
                 joints.push([bone, 0, 0, 0]);
                 weights.push([1.0, 0.0, 0.0, 0.0]);
             }
@@ -173,59 +316,86 @@ fn create_mesh_data() -> MeshData {
         positions,
         normals,
         uvs,
+        colors,
         joints,
         weights,
         indices,
     }
 }
 
-/// Create skeleton with 3 bones
+/// Create skeleton data: 3-bone vertical chain
 fn create_skeleton() -> SkeletonData {
-    // Inverse bind matrices (4x4 column-major)
-    // For a simple vertical bone chain, the inverse bind matrix
-    // is just an inverse translation
-    let inverse_bind_matrices = vec![
-        // Bone 0: at origin
-        mat4_identity(),
-        // Bone 1: at Y = 1.0
-        mat4_translate(0.0, -SEGMENT_HEIGHT, 0.0),
-        // Bone 2: at Y = 2.0
-        mat4_translate(0.0, -2.0 * SEGMENT_HEIGHT, 0.0),
-    ];
+    let mut bone_translations = Vec::new();
+    let mut inverse_bind_matrices = Vec::new();
+
+    for i in 0..BONE_COUNT {
+        let y = i as f32 * SEGMENT_HEIGHT;
+        bone_translations.push([0.0, y, 0.0]);
+
+        // Inverse bind matrix: translate by -y
+        #[rustfmt::skip]
+        let ibm: [f32; 16] = [
+            1.0, 0.0, 0.0, 0.0,
+            0.0, 1.0, 0.0, 0.0,
+            0.0, 0.0, 1.0, 0.0,
+            0.0, -y, 0.0, 1.0,
+        ];
+        inverse_bind_matrices.push(ibm);
+    }
 
     SkeletonData {
+        bone_translations,
         inverse_bind_matrices,
     }
 }
 
-/// Create animation: 30-frame wave
+/// Create animation data: wave animation (Z-axis rotation)
 fn create_animation() -> AnimationData {
-    let duration = 1.0f32;
-    let mut times = Vec::with_capacity(FRAME_COUNT);
+    let mut times = Vec::new();
     let mut translations: Vec<Vec<[f32; 3]>> = vec![Vec::new(); BONE_COUNT];
     let mut rotations: Vec<Vec<[f32; 4]>> = vec![Vec::new(); BONE_COUNT];
     let mut scales: Vec<Vec<[f32; 3]>> = vec![Vec::new(); BONE_COUNT];
 
+    let duration = FRAME_COUNT as f32 / FRAME_RATE;
+
     for frame in 0..FRAME_COUNT {
-        let t = frame as f32 / (FRAME_COUNT - 1) as f32;
+        let t = frame as f32 / FRAME_COUNT as f32;
         times.push(t * duration);
 
-        let phase = t * TAU;
+        let wave_time = t * TAU;
+
+        // Compute hierarchical transforms
+        let mut accumulated_angle = 0.0f32;
 
         for bone in 0..BONE_COUNT {
-            let bone_phase = bone as f32 * 0.5;
-            let amplitude = 0.3 + (bone as f32 * 0.1);
-            let angle = (phase + bone_phase).sin() * amplitude;
+            let phase = bone as f32 * 0.5;
+            let amplitude = 0.4 + (bone as f32 * 0.1);
 
-            // Rotation around Z axis
-            let half = angle * 0.5;
-            let quat = [0.0, 0.0, half.sin(), half.cos()]; // [x, y, z, w]
+            // Local rotation
+            let local_angle = (wave_time + phase).sin() * amplitude;
+            accumulated_angle += local_angle;
 
-            // Translation: bone position in bind pose
-            let translation = [0.0, bone as f32 * SEGMENT_HEIGHT, 0.0];
+            // World position
+            let world_pos = if bone == 0 {
+                [0.0, 0.0, 0.0]
+            } else {
+                let parent_pos = translations[bone - 1].last().unwrap();
+                let parent_angle = accumulated_angle - local_angle;
 
-            translations[bone].push(translation);
-            rotations[bone].push(quat);
+                let c = parent_angle.cos();
+                let s = parent_angle.sin();
+                let dx = -SEGMENT_HEIGHT * s;
+                let dy = SEGMENT_HEIGHT * c;
+
+                [parent_pos[0] + dx, parent_pos[1] + dy, parent_pos[2]]
+            };
+
+            // World rotation quaternion (Z-axis)
+            let half_angle = accumulated_angle * 0.5;
+            let world_quat = [0.0, 0.0, half_angle.sin(), half_angle.cos()];
+
+            translations[bone].push(world_pos);
+            rotations[bone].push(world_quat);
             scales[bone].push([1.0, 1.0, 1.0]);
         }
     }
@@ -238,7 +408,29 @@ fn create_animation() -> AnimationData {
     }
 }
 
-/// Pack all binary data into a single buffer
+/// Compute bounding box for positions
+fn compute_bounds(positions: &[[f32; 3]]) -> (Vec<f32>, Vec<f32>) {
+    let mut min = [f32::MAX; 3];
+    let mut max = [f32::MIN; 3];
+
+    for pos in positions {
+        for i in 0..3 {
+            min[i] = min[i].min(pos[i]);
+            max[i] = max[i].max(pos[i]);
+        }
+    }
+
+    (min.to_vec(), max.to_vec())
+}
+
+/// Align buffer to 4-byte boundary
+fn align_buffer(buffer: &mut Vec<u8>) {
+    while buffer.len() % 4 != 0 {
+        buffer.push(0);
+    }
+}
+
+/// Pack all binary data into buffer
 fn pack_binary_data(
     mesh: &MeshData,
     skeleton: &SkeletonData,
@@ -247,15 +439,6 @@ fn pack_binary_data(
     let mut buffer = Vec::new();
     let mut views = Vec::new();
     let mut accessors = Vec::new();
-
-    // Helper to align buffer to 4 bytes
-    fn align_buffer(buffer: &mut Vec<u8>) {
-        while buffer.len() % 4 != 0 {
-            buffer.push(0);
-        }
-    }
-
-    // Accessor indices
     let mut accessor_idx = 0u32;
 
     // --- Mesh data ---
@@ -265,11 +448,10 @@ fn pack_binary_data(
     for pos in &mesh.positions {
         buffer.extend_from_slice(bytemuck::cast_slice(pos));
     }
-    let pos_len = buffer.len() - pos_offset;
     views.push(json::buffer::View {
         buffer: json::Index::new(0),
-        byte_length: pos_len.into(),
-        byte_offset: Some(pos_offset.into()),
+        byte_length: (mesh.positions.len() * 12).into(),
+        byte_offset: Some((pos_offset as u64).into()),
         byte_stride: None,
         extensions: Default::default(),
         extras: Default::default(),
@@ -302,11 +484,10 @@ fn pack_binary_data(
     for norm in &mesh.normals {
         buffer.extend_from_slice(bytemuck::cast_slice(norm));
     }
-    let norm_len = buffer.len() - norm_offset;
     views.push(json::buffer::View {
         buffer: json::Index::new(0),
-        byte_length: norm_len.into(),
-        byte_offset: Some(norm_offset.into()),
+        byte_length: (mesh.normals.len() * 12).into(),
+        byte_offset: Some((norm_offset as u64).into()),
         byte_stride: None,
         extensions: Default::default(),
         extras: Default::default(),
@@ -338,11 +519,10 @@ fn pack_binary_data(
     for uv in &mesh.uvs {
         buffer.extend_from_slice(bytemuck::cast_slice(uv));
     }
-    let uv_len = buffer.len() - uv_offset;
     views.push(json::buffer::View {
         buffer: json::Index::new(0),
-        byte_length: uv_len.into(),
-        byte_offset: Some(uv_offset.into()),
+        byte_length: (mesh.uvs.len() * 8).into(),
+        byte_offset: Some((uv_offset as u64).into()),
         byte_stride: None,
         extensions: Default::default(),
         extras: Default::default(),
@@ -369,16 +549,50 @@ fn pack_binary_data(
     accessor_idx += 1;
     align_buffer(&mut buffer);
 
+    // Colors (COLOR_0)
+    let color_offset = buffer.len();
+    for color in &mesh.colors {
+        buffer.extend_from_slice(bytemuck::cast_slice(color));
+    }
+    views.push(json::buffer::View {
+        buffer: json::Index::new(0),
+        byte_length: (mesh.colors.len() * 16).into(), // vec4 f32 = 16 bytes
+        byte_offset: Some((color_offset as u64).into()),
+        byte_stride: None,
+        extensions: Default::default(),
+        extras: Default::default(),
+        name: None,
+        target: Some(Valid(json::buffer::Target::ArrayBuffer)),
+    });
+    accessors.push(json::Accessor {
+        buffer_view: Some(json::Index::new(views.len() as u32 - 1)),
+        byte_offset: Some(0u64.into()),
+        count: mesh.colors.len().into(),
+        component_type: Valid(json::accessor::GenericComponentType(
+            json::accessor::ComponentType::F32,
+        )),
+        extensions: Default::default(),
+        extras: Default::default(),
+        type_: Valid(json::accessor::Type::Vec4),
+        min: None,
+        max: None,
+        name: None,
+        normalized: false,
+        sparse: None,
+    });
+    let _color_accessor = accessor_idx;
+    accessor_idx += 1;
+    align_buffer(&mut buffer);
+
     // Joints (JOINTS_0)
     let joints_offset = buffer.len();
     for joint in &mesh.joints {
         buffer.extend_from_slice(joint);
     }
-    let joints_len = buffer.len() - joints_offset;
     views.push(json::buffer::View {
         buffer: json::Index::new(0),
-        byte_length: joints_len.into(),
-        byte_offset: Some(joints_offset.into()),
+        byte_length: (mesh.joints.len() * 4).into(),
+        byte_offset: Some((joints_offset as u64).into()),
         byte_stride: None,
         extensions: Default::default(),
         extras: Default::default(),
@@ -410,11 +624,10 @@ fn pack_binary_data(
     for weight in &mesh.weights {
         buffer.extend_from_slice(bytemuck::cast_slice(weight));
     }
-    let weights_len = buffer.len() - weights_offset;
     views.push(json::buffer::View {
         buffer: json::Index::new(0),
-        byte_length: weights_len.into(),
-        byte_offset: Some(weights_offset.into()),
+        byte_length: (mesh.weights.len() * 16).into(),
+        byte_offset: Some((weights_offset as u64).into()),
         byte_stride: None,
         extensions: Default::default(),
         extras: Default::default(),
@@ -446,11 +659,10 @@ fn pack_binary_data(
     for idx in &mesh.indices {
         buffer.extend_from_slice(&idx.to_le_bytes());
     }
-    let indices_len = buffer.len() - indices_offset;
     views.push(json::buffer::View {
         buffer: json::Index::new(0),
-        byte_length: indices_len.into(),
-        byte_offset: Some(indices_offset.into()),
+        byte_length: (mesh.indices.len() * 2).into(),
+        byte_offset: Some((indices_offset as u64).into()),
         byte_stride: None,
         extensions: Default::default(),
         extras: Default::default(),
@@ -482,15 +694,14 @@ fn pack_binary_data(
     // Inverse bind matrices
     let ibm_offset = buffer.len();
     for mat in &skeleton.inverse_bind_matrices {
-        for col in mat {
-            buffer.extend_from_slice(bytemuck::cast_slice(col));
+        for f in mat {
+            buffer.extend_from_slice(&f.to_le_bytes());
         }
     }
-    let ibm_len = buffer.len() - ibm_offset;
     views.push(json::buffer::View {
         buffer: json::Index::new(0),
-        byte_length: ibm_len.into(),
-        byte_offset: Some(ibm_offset.into()),
+        byte_length: (skeleton.inverse_bind_matrices.len() * 64).into(),
+        byte_offset: Some((ibm_offset as u64).into()),
         byte_stride: None,
         extensions: Default::default(),
         extras: Default::default(),
@@ -524,11 +735,10 @@ fn pack_binary_data(
     for t in &animation.times {
         buffer.extend_from_slice(&t.to_le_bytes());
     }
-    let times_len = buffer.len() - times_offset;
     views.push(json::buffer::View {
         buffer: json::Index::new(0),
-        byte_length: times_len.into(),
-        byte_offset: Some(times_offset.into()),
+        byte_length: (animation.times.len() * 4).into(),
+        byte_offset: Some((times_offset as u64).into()),
         byte_stride: None,
         extensions: Default::default(),
         extras: Default::default(),
@@ -556,17 +766,16 @@ fn pack_binary_data(
     align_buffer(&mut buffer);
 
     // Animation translations (one accessor per bone)
-    let mut trans_accessors = Vec::new();
+    let mut _trans_accessors = Vec::new();
     for bone_trans in &animation.translations {
         let offset = buffer.len();
         for t in bone_trans {
             buffer.extend_from_slice(bytemuck::cast_slice(t));
         }
-        let len = buffer.len() - offset;
         views.push(json::buffer::View {
             buffer: json::Index::new(0),
-            byte_length: len.into(),
-            byte_offset: Some(offset.into()),
+            byte_length: (bone_trans.len() * 12).into(),
+            byte_offset: Some((offset as u64).into()),
             byte_stride: None,
             extensions: Default::default(),
             extras: Default::default(),
@@ -589,23 +798,22 @@ fn pack_binary_data(
             normalized: false,
             sparse: None,
         });
-        trans_accessors.push(accessor_idx);
+        _trans_accessors.push(accessor_idx);
         accessor_idx += 1;
         align_buffer(&mut buffer);
     }
 
     // Animation rotations (one accessor per bone)
-    let mut rot_accessors = Vec::new();
+    let mut _rot_accessors = Vec::new();
     for bone_rot in &animation.rotations {
         let offset = buffer.len();
         for r in bone_rot {
             buffer.extend_from_slice(bytemuck::cast_slice(r));
         }
-        let len = buffer.len() - offset;
         views.push(json::buffer::View {
             buffer: json::Index::new(0),
-            byte_length: len.into(),
-            byte_offset: Some(offset.into()),
+            byte_length: (bone_rot.len() * 16).into(),
+            byte_offset: Some((offset as u64).into()),
             byte_stride: None,
             extensions: Default::default(),
             extras: Default::default(),
@@ -628,23 +836,22 @@ fn pack_binary_data(
             normalized: false,
             sparse: None,
         });
-        rot_accessors.push(accessor_idx);
+        _rot_accessors.push(accessor_idx);
         accessor_idx += 1;
         align_buffer(&mut buffer);
     }
 
     // Animation scales (one accessor per bone)
-    let mut scale_accessors = Vec::new();
+    let mut _scale_accessors = Vec::new();
     for bone_scale in &animation.scales {
         let offset = buffer.len();
         for s in bone_scale {
             buffer.extend_from_slice(bytemuck::cast_slice(s));
         }
-        let len = buffer.len() - offset;
         views.push(json::buffer::View {
             buffer: json::Index::new(0),
-            byte_length: len.into(),
-            byte_offset: Some(offset.into()),
+            byte_length: (bone_scale.len() * 12).into(),
+            byte_offset: Some((offset as u64).into()),
             byte_stride: None,
             extensions: Default::default(),
             extras: Default::default(),
@@ -667,15 +874,10 @@ fn pack_binary_data(
             normalized: false,
             sparse: None,
         });
-        scale_accessors.push(accessor_idx);
+        _scale_accessors.push(accessor_idx);
         accessor_idx += 1;
         align_buffer(&mut buffer);
     }
-
-    // Store accessor indices in a way that build_gltf_json can use
-    // For simplicity, we'll use the accessor vector order:
-    // 0: positions, 1: normals, 2: uvs, 3: joints, 4: weights, 5: indices
-    // 6: IBM, 7: times, 8-10: translations, 11-13: rotations, 14-16: scales
 
     (buffer, views, accessors)
 }
@@ -692,19 +894,9 @@ fn build_gltf_json(
     const HEAD_NODE: u32 = 2;
     const MESH_NODE: u32 = 3;
 
-    // Accessor indices (must match pack_binary_data order)
-    const POS_ACCESSOR: u32 = 0;
-    const NORM_ACCESSOR: u32 = 1;
-    const UV_ACCESSOR: u32 = 2;
-    const JOINTS_ACCESSOR: u32 = 3;
-    const WEIGHTS_ACCESSOR: u32 = 4;
-    const INDICES_ACCESSOR: u32 = 5;
-    const IBM_ACCESSOR: u32 = 6;
-    const TIMES_ACCESSOR: u32 = 7;
-
-    // Create bone nodes
+    // Create nodes
     let nodes = vec![
-        // Node 0: Root bone
+        // Root bone (index 0)
         json::Node {
             camera: None,
             children: Some(vec![json::Index::new(SPINE_NODE)]),
@@ -715,11 +907,11 @@ fn build_gltf_json(
             name: Some("Root".to_string()),
             rotation: None,
             scale: None,
-            translation: Some([0.0, 0.0, 0.0]),
             skin: None,
+            translation: Some([0.0, 0.0, 0.0]),
             weights: None,
         },
-        // Node 1: Spine bone
+        // Spine bone (index 1)
         json::Node {
             camera: None,
             children: Some(vec![json::Index::new(HEAD_NODE)]),
@@ -730,11 +922,11 @@ fn build_gltf_json(
             name: Some("Spine".to_string()),
             rotation: None,
             scale: None,
-            translation: Some([0.0, SEGMENT_HEIGHT, 0.0]),
             skin: None,
+            translation: Some([0.0, SEGMENT_HEIGHT, 0.0]),
             weights: None,
         },
-        // Node 2: Head bone
+        // Head bone (index 2)
         json::Node {
             camera: None,
             children: None,
@@ -745,11 +937,11 @@ fn build_gltf_json(
             name: Some("Head".to_string()),
             rotation: None,
             scale: None,
-            translation: Some([0.0, SEGMENT_HEIGHT, 0.0]),
             skin: None,
+            translation: Some([0.0, SEGMENT_HEIGHT, 0.0]),
             weights: None,
         },
-        // Node 3: Mesh node with skin
+        // Mesh node (index 3)
         json::Node {
             camera: None,
             children: None,
@@ -760,44 +952,52 @@ fn build_gltf_json(
             name: Some("SkinnedMesh".to_string()),
             rotation: None,
             scale: None,
-            translation: None,
             skin: Some(json::Index::new(0)),
+            translation: None,
             weights: None,
         },
     ];
 
-    // Create mesh primitive
-    let mut attributes = std::collections::BTreeMap::new();
-    attributes.insert(
-        Valid(json::mesh::Semantic::Positions),
-        json::Index::new(POS_ACCESSOR),
-    );
-    attributes.insert(
-        Valid(json::mesh::Semantic::Normals),
-        json::Index::new(NORM_ACCESSOR),
-    );
-    attributes.insert(
-        Valid(json::mesh::Semantic::TexCoords(0)),
-        json::Index::new(UV_ACCESSOR),
-    );
-    attributes.insert(
-        Valid(json::mesh::Semantic::Joints(0)),
-        json::Index::new(JOINTS_ACCESSOR),
-    );
-    attributes.insert(
-        Valid(json::mesh::Semantic::Weights(0)),
-        json::Index::new(WEIGHTS_ACCESSOR),
-    );
-
+    // Create mesh with primitive
+    // Accessor indices after adding colors:
+    // 0=positions, 1=normals, 2=uvs, 3=colors, 4=joints, 5=weights, 6=indices
+    // 7=inverse_bind_matrices, 8=times, 9-11=translations, 12-14=rotations, 15-17=scales
     let meshes = vec![json::Mesh {
         extensions: Default::default(),
         extras: Default::default(),
         name: Some("TestMesh".to_string()),
         primitives: vec![json::mesh::Primitive {
-            attributes,
+            attributes: {
+                let mut attrs = std::collections::BTreeMap::new();
+                attrs.insert(
+                    Valid(json::mesh::Semantic::Positions),
+                    json::Index::new(0),
+                );
+                attrs.insert(
+                    Valid(json::mesh::Semantic::Normals),
+                    json::Index::new(1),
+                );
+                attrs.insert(
+                    Valid(json::mesh::Semantic::TexCoords(0)),
+                    json::Index::new(2),
+                );
+                attrs.insert(
+                    Valid(json::mesh::Semantic::Colors(0)),
+                    json::Index::new(3),
+                );
+                attrs.insert(
+                    Valid(json::mesh::Semantic::Joints(0)),
+                    json::Index::new(4),
+                );
+                attrs.insert(
+                    Valid(json::mesh::Semantic::Weights(0)),
+                    json::Index::new(5),
+                );
+                attrs
+            },
             extensions: Default::default(),
             extras: Default::default(),
-            indices: Some(json::Index::new(INDICES_ACCESSOR)),
+            indices: Some(json::Index::new(6)),
             material: None,
             mode: Valid(json::mesh::Mode::Triangles),
             targets: None,
@@ -805,43 +1005,40 @@ fn build_gltf_json(
         weights: None,
     }];
 
-    // Create skin
+    // Create skin (inverse_bind_matrices is accessor 7 now)
     let skins = vec![json::Skin {
         extensions: Default::default(),
         extras: Default::default(),
-        inverse_bind_matrices: Some(json::Index::new(IBM_ACCESSOR)),
+        inverse_bind_matrices: Some(json::Index::new(7)),
         joints: vec![
             json::Index::new(ROOT_NODE),
             json::Index::new(SPINE_NODE),
             json::Index::new(HEAD_NODE),
         ],
-        name: Some("TestSkeleton".to_string()),
+        name: Some("TestSkin".to_string()),
         skeleton: Some(json::Index::new(ROOT_NODE)),
     }];
 
     // Create animation
+    // Accessor indices (after adding colors): 8=times, 9-11=trans, 12-14=rot, 15-17=scale
     let mut samplers = Vec::new();
     let mut channels = Vec::new();
 
     for bone in 0..BONE_COUNT {
-        let bone_node = bone as u32;
-        let trans_accessor = 8 + bone as u32;
-        let rot_accessor = 8 + BONE_COUNT as u32 + bone as u32;
-        let scale_accessor = 8 + 2 * BONE_COUNT as u32 + bone as u32;
+        let bone_u32 = bone as u32;
 
-        // Translation sampler and channel
-        let trans_sampler = samplers.len() as u32;
+        // Translation sampler
         samplers.push(json::animation::Sampler {
-            input: json::Index::new(TIMES_ACCESSOR),
+            input: json::Index::new(8), // times
             interpolation: Valid(json::animation::Interpolation::Linear),
-            output: json::Index::new(trans_accessor),
+            output: json::Index::new(9 + bone_u32), // translations[bone]
             extensions: Default::default(),
             extras: Default::default(),
         });
         channels.push(json::animation::Channel {
-            sampler: json::Index::new(trans_sampler),
+            sampler: json::Index::new(samplers.len() as u32 - 1),
             target: json::animation::Target {
-                node: json::Index::new(bone_node),
+                node: json::Index::new(bone_u32),
                 path: Valid(json::animation::Property::Translation),
                 extensions: Default::default(),
                 extras: Default::default(),
@@ -850,19 +1047,18 @@ fn build_gltf_json(
             extras: Default::default(),
         });
 
-        // Rotation sampler and channel
-        let rot_sampler = samplers.len() as u32;
+        // Rotation sampler
         samplers.push(json::animation::Sampler {
-            input: json::Index::new(TIMES_ACCESSOR),
+            input: json::Index::new(8), // times
             interpolation: Valid(json::animation::Interpolation::Linear),
-            output: json::Index::new(rot_accessor),
+            output: json::Index::new(12 + bone_u32), // rotations[bone]
             extensions: Default::default(),
             extras: Default::default(),
         });
         channels.push(json::animation::Channel {
-            sampler: json::Index::new(rot_sampler),
+            sampler: json::Index::new(samplers.len() as u32 - 1),
             target: json::animation::Target {
-                node: json::Index::new(bone_node),
+                node: json::Index::new(bone_u32),
                 path: Valid(json::animation::Property::Rotation),
                 extensions: Default::default(),
                 extras: Default::default(),
@@ -871,19 +1067,18 @@ fn build_gltf_json(
             extras: Default::default(),
         });
 
-        // Scale sampler and channel
-        let scale_sampler = samplers.len() as u32;
+        // Scale sampler
         samplers.push(json::animation::Sampler {
-            input: json::Index::new(TIMES_ACCESSOR),
+            input: json::Index::new(8), // times
             interpolation: Valid(json::animation::Interpolation::Linear),
-            output: json::Index::new(scale_accessor),
+            output: json::Index::new(15 + bone_u32), // scales[bone]
             extensions: Default::default(),
             extras: Default::default(),
         });
         channels.push(json::animation::Channel {
-            sampler: json::Index::new(scale_sampler),
+            sampler: json::Index::new(samplers.len() as u32 - 1),
             target: json::animation::Target {
-                node: json::Index::new(bone_node),
+                node: json::Index::new(bone_u32),
                 path: Valid(json::animation::Property::Scale),
                 extensions: Default::default(),
                 extras: Default::default(),
@@ -905,16 +1100,16 @@ fn build_gltf_json(
     let scenes = vec![json::Scene {
         extensions: Default::default(),
         extras: Default::default(),
-        name: Some("TestScene".to_string()),
+        name: Some("Scene".to_string()),
         nodes: vec![
             json::Index::new(ROOT_NODE),
             json::Index::new(MESH_NODE),
         ],
     }];
 
-    // Create buffer (byte length will be set by assemble_glb)
+    // Create buffer (byte length will be updated later)
     let buffers = vec![json::Buffer {
-        byte_length: 0u64.into(), // Will be updated
+        byte_length: 0u64.into(),
         extensions: Default::default(),
         extras: Default::default(),
         name: None,
@@ -928,7 +1123,7 @@ fn build_gltf_json(
             copyright: None,
             extensions: Default::default(),
             extras: Default::default(),
-            generator: Some("nether-export-test".to_string()),
+            generator: Some("gen-gltf-test-assets".to_string()),
             min_version: None,
             version: "2.0".to_string(),
         },
@@ -936,9 +1131,9 @@ fn build_gltf_json(
         buffer_views: buffer_views.to_vec(),
         cameras: Vec::new(),
         extensions: Default::default(),
-        extras: Default::default(),
         extensions_required: Vec::new(),
         extensions_used: Vec::new(),
+        extras: Default::default(),
         images: Vec::new(),
         materials: Vec::new(),
         meshes,
@@ -951,14 +1146,9 @@ fn build_gltf_json(
     }
 }
 
-/// Assemble the final GLB binary
+/// Assemble GLB binary from JSON and buffer data
 fn assemble_glb(root: &json::Root, buffer_data: &[u8]) -> Vec<u8> {
-    // Update buffer byte length in root
-    let mut root = root.clone();
-    root.buffers[0].byte_length = buffer_data.len().into();
-
-    // Serialize JSON
-    let json_string = json::serialize::to_string(&root).expect("Failed to serialize JSON");
+    let json_string = json::serialize::to_string(root).expect("Failed to serialize GLTF JSON");
     let json_bytes = json_string.as_bytes();
 
     // Pad JSON to 4-byte alignment
@@ -969,62 +1159,31 @@ fn assemble_glb(root: &json::Root, buffer_data: &[u8]) -> Vec<u8> {
     let buffer_padding = (4 - (buffer_data.len() % 4)) % 4;
     let buffer_chunk_length = buffer_data.len() + buffer_padding;
 
-    // Calculate total length
+    // Total file length
     let total_length = 12 + 8 + json_chunk_length + 8 + buffer_chunk_length;
 
-    // Build GLB
     let mut glb = Vec::with_capacity(total_length);
 
-    // Header
-    glb.extend_from_slice(b"glTF"); // magic
+    // GLB header
+    glb.extend_from_slice(b"glTF");
     glb.extend_from_slice(&2u32.to_le_bytes()); // version
-    glb.extend_from_slice(&(total_length as u32).to_le_bytes()); // length
+    glb.extend_from_slice(&(total_length as u32).to_le_bytes());
 
     // JSON chunk
-    glb.extend_from_slice(&(json_chunk_length as u32).to_le_bytes()); // chunk length
-    glb.extend_from_slice(&0x4E4F534Au32.to_le_bytes()); // chunk type "JSON"
+    glb.extend_from_slice(&(json_chunk_length as u32).to_le_bytes());
+    glb.extend_from_slice(&0x4E4F534Au32.to_le_bytes()); // "JSON"
     glb.extend_from_slice(json_bytes);
-    glb.extend(std::iter::repeat(0x20u8).take(json_padding)); // pad with spaces
-
-    // BIN chunk
-    glb.extend_from_slice(&(buffer_chunk_length as u32).to_le_bytes()); // chunk length
-    glb.extend_from_slice(&0x004E4942u32.to_le_bytes()); // chunk type "BIN\0"
-    glb.extend_from_slice(buffer_data);
-    glb.extend(std::iter::repeat(0u8).take(buffer_padding)); // pad with zeros
-
-    glb
-}
-
-// Helper functions
-
-fn mat4_identity() -> [[f32; 4]; 4] {
-    [
-        [1.0, 0.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0, 0.0],
-        [0.0, 0.0, 1.0, 0.0],
-        [0.0, 0.0, 0.0, 1.0],
-    ]
-}
-
-fn mat4_translate(x: f32, y: f32, z: f32) -> [[f32; 4]; 4] {
-    [
-        [1.0, 0.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0, 0.0],
-        [0.0, 0.0, 1.0, 0.0],
-        [x, y, z, 1.0],
-    ]
-}
-
-fn compute_bounds(positions: &[[f32; 3]]) -> (Vec<f32>, Vec<f32>) {
-    let mut min = [f32::MAX; 3];
-    let mut max = [f32::MIN; 3];
-
-    for pos in positions {
-        for i in 0..3 {
-            min[i] = min[i].min(pos[i]);
-            max[i] = max[i].max(pos[i]);
-        }
+    for _ in 0..json_padding {
+        glb.push(0x20); // Space for JSON padding
     }
 
-    (min.to_vec(), max.to_vec())
+    // Binary chunk
+    glb.extend_from_slice(&(buffer_chunk_length as u32).to_le_bytes());
+    glb.extend_from_slice(&0x004E4942u32.to_le_bytes()); // "BIN\0"
+    glb.extend_from_slice(buffer_data);
+    for _ in 0..buffer_padding {
+        glb.push(0);
+    }
+
+    glb
 }

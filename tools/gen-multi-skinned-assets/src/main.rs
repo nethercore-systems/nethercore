@@ -15,14 +15,15 @@ use zx_common::packing::{pack_vertex_data, FORMAT_NORMAL, FORMAT_SKINNED};
 const FORMAT_POS_NORMAL_SKINNED: u8 = FORMAT_NORMAL | FORMAT_SKINNED;
 
 fn main() {
-    let output_dir = PathBuf::from("examples/4-animation/multi-skinned-rom/assets");
+    // Output to shared examples/assets folder with multi-skinned- prefix
+    let output_dir = PathBuf::from("examples/assets");
 
     // Ensure output directory exists
     fs::create_dir_all(&output_dir).expect("Failed to create output directory");
 
     // Generate assets for character 1 (3-bone vertical arm)
     generate_skeleton(
-        &output_dir.join("arm1.nczxskel"),
+        &output_dir.join("multi-skinned-arm1.nczxskel"),
         3,
         &[
             [0.0, 0.0, 0.0],  // Bone 0: origin
@@ -31,10 +32,10 @@ fn main() {
         ],
     );
 
-    generate_arm_mesh(&output_dir.join("arm1.nczxmesh"), 3, 1.5, true);
+    generate_arm_mesh(&output_dir.join("multi-skinned-arm1.nczxmesh"), 3, 1.5, true);
 
     generate_animation(
-        &output_dir.join("wave1.nczxanim"),
+        &output_dir.join("multi-skinned-wave1.nczxanim"),
         3,
         30,
         &[
@@ -46,7 +47,7 @@ fn main() {
 
     // Generate assets for character 2 (4-bone horizontal arm)
     generate_skeleton(
-        &output_dir.join("arm2.nczxskel"),
+        &output_dir.join("multi-skinned-arm2.nczxskel"),
         4,
         &[
             [0.0, 0.0, 0.0],  // Bone 0: origin
@@ -56,9 +57,9 @@ fn main() {
         ],
     );
 
-    generate_horizontal_arm_mesh(&output_dir.join("arm2.nczxmesh"), 4, 1.0);
+    generate_horizontal_arm_mesh(&output_dir.join("multi-skinned-arm2.nczxmesh"), 4, 1.0);
 
-    generate_horizontal_animation(&output_dir.join("wave2.nczxanim"), 4, 30);
+    generate_horizontal_animation(&output_dir.join("multi-skinned-wave2.nczxanim"), 4, 30);
 
     println!("Assets generated successfully in {}", output_dir.display());
 }

@@ -4,8 +4,8 @@
 //! Uses load_zmesh and load_ztex FFI functions which parse the binary format host-side.
 //!
 //! Assets were converted using nether-export from:
-//! - assets/cube.obj (text format) -> cube.nczxmesh
-//! - assets/checkerboard.png -> checkerboard.nczxtex
+//! - examples/assets/cube.obj (text format) -> cube.nczxmesh
+//! - examples/assets/checkerboard.png -> checkerboard.nczxtex
 
 #![no_std]
 #![no_main]
@@ -19,10 +19,11 @@ fn panic(_info: &PanicInfo) -> ! {
 
 // =============================================================================
 // Embedded Asset Data (pre-converted with nether-export)
+// Uses shared assets from examples/assets/ folder
 // =============================================================================
 
-static CUBE_MESH_DATA: &[u8] = include_bytes!("../assets/cube.nczxmesh");
-static CHECKERBOARD_TEX_DATA: &[u8] = include_bytes!("../assets/checkerboard.nczxtex");
+static CUBE_MESH_DATA: &[u8] = include_bytes!("../../../assets/cube.nczxmesh");
+static CHECKERBOARD_TEX_DATA: &[u8] = include_bytes!("../../../assets/checkerboard.nczxtex");
 
 // =============================================================================
 // FFI Declarations

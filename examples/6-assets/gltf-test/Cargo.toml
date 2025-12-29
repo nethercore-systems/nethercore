@@ -1,0 +1,18 @@
+[package]
+name = "gltf-test"
+version = "0.1.0"
+edition = "2021"
+description = "GLTF pipeline test - textured, animated skinned mesh from GLB"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+examples-common = { path = "../../examples-common" }
+libm = "0.2"
+
+[profile.release]
+opt-level = "s"
+lto = true
+
+[workspace]

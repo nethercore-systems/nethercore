@@ -17,28 +17,28 @@ version = "0.1.0"
 description = "Multiple ROM-loaded skinned meshes with inverse bind matrices"
 tags = ["animation", "skeleton", "skinning", "rom"]
 
-# Character 1: 3-bone vertical arm
+# Character 1: 3-bone vertical arm (from shared assets)
 [[assets.skeletons]]
 id = "arm1_skel"
-path = "assets/arm1.nczxskel"
+path = "../../assets/multi-skinned-arm1.nczxskel"
 
 [[assets.meshes]]
 id = "arm1_mesh"
-path = "assets/arm1.nczxmesh"
+path = "../../assets/multi-skinned-arm1.nczxmesh"
 
 [[assets.animations]]
 id = "wave1"
-path = "assets/wave1.nczxanim"
+path = "../../assets/multi-skinned-wave1.nczxanim"
 
-# Character 2: 4-bone horizontal arm
+# Character 2: 4-bone horizontal arm (from shared assets)
 [[assets.skeletons]]
 id = "arm2_skel"
-path = "assets/arm2.nczxskel"
+path = "../../assets/multi-skinned-arm2.nczxskel"
 
 [[assets.meshes]]
 id = "arm2_mesh"
-path = "assets/arm2.nczxmesh"
+path = "../../assets/multi-skinned-arm2.nczxmesh"
 
 [[assets.animations]]
 id = "wave2"
-path = "assets/wave2.nczxanim"
+path = "../../assets/multi-skinned-wave2.nczxanim"

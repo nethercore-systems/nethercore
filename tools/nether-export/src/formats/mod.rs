@@ -13,6 +13,8 @@ use std::io::Write;
 use crate::animation::BoneTRS;
 
 /// Write a complete NetherMesh file
+///
+/// Index data is padded to 4-byte alignment for GPU compatibility (wgpu COPY_BUFFER_ALIGNMENT).
 pub fn write_nether_mesh<W: Write>(
     w: &mut W,
     format: u8,
@@ -30,6 +32,12 @@ pub fn write_nether_mesh<W: Write>(
     if let Some(idx) = indices {
         for i in idx {
             w.write_all(&i.to_le_bytes())?;
+        }
+        // Pad index data to 4-byte alignment for wgpu COPY_BUFFER_ALIGNMENT
+        let index_bytes = idx.len() * 2;
+        let padding = (4 - (index_bytes % 4)) % 4;
+        if padding > 0 {
+            w.write_all(&vec![0u8; padding])?;
         }
     }
 

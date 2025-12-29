@@ -40,20 +40,19 @@ fn apply_fades(samples: &mut [i16]) {
 }
 
 fn main() {
+    // Output to shared examples/assets folder with tracker- prefix
     let output_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
         .parent()
         .unwrap()
         .join("examples")
-        .join("5-audio")
-        .join("tracker-demo")
         .join("assets");
 
     // Create output directory if it doesn't exist
     fs::create_dir_all(&output_dir).expect("Failed to create assets directory");
 
-    println!("Generating tracker-demo assets to {:?}", output_dir);
+    println!("Generating tracker-demo assets to shared examples/assets...");
 
     // Generate Funky Jazz song (default)
     println!("\n=== Generating 'Nether Groove' (Funky Jazz) ===");
@@ -75,41 +74,41 @@ fn main() {
 // ============================================================================
 
 fn generate_funk_assets(output_dir: &Path) {
-    // Generate funk instruments
+    // Generate funk instruments (with tracker- prefix for shared assets folder)
     let mut kick = generate_kick_funk();
     apply_fades(&mut kick);
-    write_wav(&output_dir.join("kick_funk.wav"), &kick);
-    println!("  Generated kick_funk.wav ({} samples)", kick.len());
+    write_wav(&output_dir.join("tracker-kick_funk.wav"), &kick);
+    println!("  Generated tracker-kick_funk.wav ({} samples)", kick.len());
 
     let mut snare = generate_snare_funk();
     apply_fades(&mut snare);
-    write_wav(&output_dir.join("snare_funk.wav"), &snare);
-    println!("  Generated snare_funk.wav ({} samples)", snare.len());
+    write_wav(&output_dir.join("tracker-snare_funk.wav"), &snare);
+    println!("  Generated tracker-snare_funk.wav ({} samples)", snare.len());
 
     let mut hihat = generate_hihat_funk();
     apply_fades(&mut hihat);
-    write_wav(&output_dir.join("hihat_funk.wav"), &hihat);
-    println!("  Generated hihat_funk.wav ({} samples)", hihat.len());
+    write_wav(&output_dir.join("tracker-hihat_funk.wav"), &hihat);
+    println!("  Generated tracker-hihat_funk.wav ({} samples)", hihat.len());
 
     let mut bass = generate_bass_funk();
     apply_fades(&mut bass);
-    write_wav(&output_dir.join("bass_funk.wav"), &bass);
-    println!("  Generated bass_funk.wav ({} samples)", bass.len());
+    write_wav(&output_dir.join("tracker-bass_funk.wav"), &bass);
+    println!("  Generated tracker-bass_funk.wav ({} samples)", bass.len());
 
     let mut epiano = generate_epiano();
     apply_fades(&mut epiano);
-    write_wav(&output_dir.join("epiano.wav"), &epiano);
-    println!("  Generated epiano.wav ({} samples)", epiano.len());
+    write_wav(&output_dir.join("tracker-epiano.wav"), &epiano);
+    println!("  Generated tracker-epiano.wav ({} samples)", epiano.len());
 
     let mut lead = generate_lead_jazz();
     apply_fades(&mut lead);
-    write_wav(&output_dir.join("lead_jazz.wav"), &lead);
-    println!("  Generated lead_jazz.wav ({} samples)", lead.len());
+    write_wav(&output_dir.join("tracker-lead_jazz.wav"), &lead);
+    println!("  Generated tracker-lead_jazz.wav ({} samples)", lead.len());
 
     // Generate XM file
     let xm = generate_funk_xm();
-    fs::write(output_dir.join("nether_groove.xm"), &xm).expect("Failed to write nether_groove.xm");
-    println!("  Generated nether_groove.xm ({} bytes)", xm.len());
+    fs::write(output_dir.join("tracker-nether_groove.xm"), &xm).expect("Failed to write tracker-nether_groove.xm");
+    println!("  Generated tracker-nether_groove.xm ({} bytes)", xm.len());
 }
 
 /// Funk kick: warmer, less aggressive pitch sweep, good pocket feel
@@ -365,46 +364,46 @@ fn generate_lead_jazz() -> Vec<i16> {
 // ============================================================================
 
 fn generate_eurobeat_assets(output_dir: &Path) {
-    // Generate eurobeat instruments
+    // Generate eurobeat instruments (with tracker- prefix for shared assets folder)
     let mut kick = generate_kick_euro();
     apply_fades(&mut kick);
-    write_wav(&output_dir.join("kick_euro.wav"), &kick);
-    println!("  Generated kick_euro.wav ({} samples)", kick.len());
+    write_wav(&output_dir.join("tracker-kick_euro.wav"), &kick);
+    println!("  Generated tracker-kick_euro.wav ({} samples)", kick.len());
 
     let mut snare = generate_snare_euro();
     apply_fades(&mut snare);
-    write_wav(&output_dir.join("snare_euro.wav"), &snare);
-    println!("  Generated snare_euro.wav ({} samples)", snare.len());
+    write_wav(&output_dir.join("tracker-snare_euro.wav"), &snare);
+    println!("  Generated tracker-snare_euro.wav ({} samples)", snare.len());
 
     let mut hihat = generate_hihat_euro();
     apply_fades(&mut hihat);
-    write_wav(&output_dir.join("hihat_euro.wav"), &hihat);
-    println!("  Generated hihat_euro.wav ({} samples)", hihat.len());
+    write_wav(&output_dir.join("tracker-hihat_euro.wav"), &hihat);
+    println!("  Generated tracker-hihat_euro.wav ({} samples)", hihat.len());
 
     let mut bass = generate_bass_euro();
     apply_fades(&mut bass);
-    write_wav(&output_dir.join("bass_euro.wav"), &bass);
-    println!("  Generated bass_euro.wav ({} samples)", bass.len());
+    write_wav(&output_dir.join("tracker-bass_euro.wav"), &bass);
+    println!("  Generated tracker-bass_euro.wav ({} samples)", bass.len());
 
     let mut supersaw = generate_supersaw();
     apply_fades(&mut supersaw);
-    write_wav(&output_dir.join("supersaw.wav"), &supersaw);
-    println!("  Generated supersaw.wav ({} samples)", supersaw.len());
+    write_wav(&output_dir.join("tracker-supersaw.wav"), &supersaw);
+    println!("  Generated tracker-supersaw.wav ({} samples)", supersaw.len());
 
     let mut brass = generate_brass_euro();
     apply_fades(&mut brass);
-    write_wav(&output_dir.join("brass_euro.wav"), &brass);
-    println!("  Generated brass_euro.wav ({} samples)", brass.len());
+    write_wav(&output_dir.join("tracker-brass_euro.wav"), &brass);
+    println!("  Generated tracker-brass_euro.wav ({} samples)", brass.len());
 
     let mut pad = generate_pad_euro();
     apply_fades(&mut pad);
-    write_wav(&output_dir.join("pad_euro.wav"), &pad);
-    println!("  Generated pad_euro.wav ({} samples)", pad.len());
+    write_wav(&output_dir.join("tracker-pad_euro.wav"), &pad);
+    println!("  Generated tracker-pad_euro.wav ({} samples)", pad.len());
 
     // Generate XM file
     let xm = generate_eurobeat_xm();
-    fs::write(output_dir.join("nether_fire.xm"), &xm).expect("Failed to write nether_fire.xm");
-    println!("  Generated nether_fire.xm ({} bytes)", xm.len());
+    fs::write(output_dir.join("tracker-nether_fire.xm"), &xm).expect("Failed to write tracker-nether_fire.xm");
+    println!("  Generated tracker-nether_fire.xm ({} bytes)", xm.len());
 }
 
 /// Eurobeat kick: 909-style, punchy with aggressive pitch sweep
@@ -786,8 +785,9 @@ fn generate_funk_xm() -> Vec<u8> {
     // Version
     xm.extend_from_slice(&0x0104u16.to_le_bytes());
 
-    // Header size (272 = 16 bytes of header fields + 256 byte order table)
-    xm.extend_from_slice(&272u32.to_le_bytes());
+    // Header size (276 = 4 bytes header_size + 16 bytes of header fields + 256 byte order table)
+    // Per XM spec, header_size is measured from the position of this field itself
+    xm.extend_from_slice(&276u32.to_le_bytes());
 
     // Song length (10 orders)
     xm.extend_from_slice(&10u16.to_le_bytes());
@@ -832,7 +832,7 @@ fn generate_funk_xm() -> Vec<u8> {
         };
         let pattern_size = pattern_data.len() as u16;
 
-        xm.extend_from_slice(&9u32.to_le_bytes()); // header length (includes length field: 4+1+2+2=9)
+        xm.extend_from_slice(&9u32.to_le_bytes()); // header length (including length field: 4+1+2+2=9)
         xm.push(0); // packing type
         xm.extend_from_slice(&32u16.to_le_bytes()); // 32 rows
         xm.extend_from_slice(&pattern_size.to_le_bytes());
@@ -1412,8 +1412,9 @@ fn generate_eurobeat_xm() -> Vec<u8> {
     // Version
     xm.extend_from_slice(&0x0104u16.to_le_bytes());
 
-    // Header size (272 = 16 bytes of header fields + 256 byte order table)
-    xm.extend_from_slice(&272u32.to_le_bytes());
+    // Header size (276 = 4 bytes header_size + 16 bytes of header fields + 256 byte order table)
+    // Per XM spec, header_size is measured from the position of this field itself
+    xm.extend_from_slice(&276u32.to_le_bytes());
 
     // Song length (15 orders)
     xm.extend_from_slice(&15u16.to_le_bytes());
@@ -1460,7 +1461,7 @@ fn generate_eurobeat_xm() -> Vec<u8> {
         };
         let pattern_size = pattern_data.len() as u16;
 
-        xm.extend_from_slice(&9u32.to_le_bytes()); // header length (includes length field: 4+1+2+2=9)
+        xm.extend_from_slice(&9u32.to_le_bytes()); // header length (including length field: 4+1+2+2=9)
         xm.push(0);
         xm.extend_from_slice(&32u16.to_le_bytes());
         xm.extend_from_slice(&pattern_size.to_le_bytes());
@@ -2201,46 +2202,46 @@ fn write_instrument(xm: &mut Vec<u8>, name: &str) {
 // ============================================================================
 
 fn generate_synthwave_assets(output_dir: &Path) {
-    // Generate synthwave instruments
+    // Generate synthwave instruments (with tracker- prefix for shared assets folder)
     let mut kick = generate_kick_synth();
     apply_fades(&mut kick);
-    write_wav(&output_dir.join("kick_synth.wav"), &kick);
-    println!("  Generated kick_synth.wav ({} samples)", kick.len());
+    write_wav(&output_dir.join("tracker-kick_synth.wav"), &kick);
+    println!("  Generated tracker-kick_synth.wav ({} samples)", kick.len());
 
     let mut snare = generate_snare_synth();
     apply_fades(&mut snare);
-    write_wav(&output_dir.join("snare_synth.wav"), &snare);
-    println!("  Generated snare_synth.wav ({} samples)", snare.len());
+    write_wav(&output_dir.join("tracker-snare_synth.wav"), &snare);
+    println!("  Generated tracker-snare_synth.wav ({} samples)", snare.len());
 
     let mut hihat = generate_hihat_synth();
     apply_fades(&mut hihat);
-    write_wav(&output_dir.join("hihat_synth.wav"), &hihat);
-    println!("  Generated hihat_synth.wav ({} samples)", hihat.len());
+    write_wav(&output_dir.join("tracker-hihat_synth.wav"), &hihat);
+    println!("  Generated tracker-hihat_synth.wav ({} samples)", hihat.len());
 
     let mut bass = generate_bass_synth();
     apply_fades(&mut bass);
-    write_wav(&output_dir.join("bass_synth.wav"), &bass);
-    println!("  Generated bass_synth.wav ({} samples)", bass.len());
+    write_wav(&output_dir.join("tracker-bass_synth.wav"), &bass);
+    println!("  Generated tracker-bass_synth.wav ({} samples)", bass.len());
 
     let mut lead = generate_lead_synth();
     apply_fades(&mut lead);
-    write_wav(&output_dir.join("lead_synth.wav"), &lead);
-    println!("  Generated lead_synth.wav ({} samples)", lead.len());
+    write_wav(&output_dir.join("tracker-lead_synth.wav"), &lead);
+    println!("  Generated tracker-lead_synth.wav ({} samples)", lead.len());
 
     let mut arp = generate_arp_synth();
     apply_fades(&mut arp);
-    write_wav(&output_dir.join("arp_synth.wav"), &arp);
-    println!("  Generated arp_synth.wav ({} samples)", arp.len());
+    write_wav(&output_dir.join("tracker-arp_synth.wav"), &arp);
+    println!("  Generated tracker-arp_synth.wav ({} samples)", arp.len());
 
     let mut pad = generate_pad_synth();
     apply_fades(&mut pad);
-    write_wav(&output_dir.join("pad_synth.wav"), &pad);
-    println!("  Generated pad_synth.wav ({} samples)", pad.len());
+    write_wav(&output_dir.join("tracker-pad_synth.wav"), &pad);
+    println!("  Generated tracker-pad_synth.wav ({} samples)", pad.len());
 
     // Generate XM file
     let xm = generate_synthwave_xm();
-    fs::write(output_dir.join("nether_drive.xm"), &xm).expect("Failed to write nether_drive.xm");
-    println!("  Generated nether_drive.xm ({} bytes)", xm.len());
+    fs::write(output_dir.join("tracker-nether_drive.xm"), &xm).expect("Failed to write tracker-nether_drive.xm");
+    println!("  Generated tracker-nether_drive.xm ({} bytes)", xm.len());
 }
 
 /// Synthwave kick: 808-style with longer decay, warm and round
@@ -2551,8 +2552,9 @@ fn generate_synthwave_xm() -> Vec<u8> {
     // Version
     xm.extend_from_slice(&0x0104u16.to_le_bytes());
 
-    // Header size (272 = 16 bytes of header fields + 256 byte order table)
-    xm.extend_from_slice(&272u32.to_le_bytes());
+    // Header size (276 = 4 bytes header_size + 16 bytes of header fields + 256 byte order table)
+    // Per XM spec, header_size is measured from the position of this field itself
+    xm.extend_from_slice(&276u32.to_le_bytes());
 
     // Song length (12 orders)
     xm.extend_from_slice(&12u16.to_le_bytes());
@@ -2598,7 +2600,7 @@ fn generate_synthwave_xm() -> Vec<u8> {
         };
         let pattern_size = pattern_data.len() as u16;
 
-        xm.extend_from_slice(&9u32.to_le_bytes()); // header length (includes length field: 4+1+2+2=9)
+        xm.extend_from_slice(&9u32.to_le_bytes()); // header length (including length field: 4+1+2+2=9)
         xm.push(0);
         xm.extend_from_slice(&32u16.to_le_bytes());
         xm.extend_from_slice(&pattern_size.to_le_bytes());

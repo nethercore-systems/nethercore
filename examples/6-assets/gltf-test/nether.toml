@@ -1,0 +1,40 @@
+# Nether Data Pack Manifest - GLTF Pipeline Test
+#
+# Demonstrates the full GLTF/GLB asset pipeline:
+# - Textured skinned mesh with UV coordinates
+# - Skeleton with inverse bind matrices
+# - Keyframe animation
+#
+# Build workflow:
+#   1. cargo run -p gen-gltf-test-assets   # Generate assets from GLB
+#   2. nether build                         # Compile Rust to WASM
+#   3. nether pack                          # Bundle assets into data pack
+#   4. nether run                           # Launch in emulator
+
+[game]
+id = "gltf-test"
+title = "GLTF Pipeline Test"
+author = "Nethercore Examples"
+version = "0.1.0"
+description = "Tests GLTF import: textured UV-mapped mesh, skeleton, and animation"
+tags = ["test", "gltf", "animation", "texture"]
+
+# Checkerboard texture for UV visualization (from shared assets)
+[[assets.textures]]
+id = "checker_texture"
+path = "../../assets/gltf-test-checker.png"
+
+# Skinned mesh converted from GLB (from shared assets)
+[[assets.meshes]]
+id = "test_mesh"
+path = "../../assets/gltf-test.nczxmesh"
+
+# Skeleton with inverse bind matrices (from shared assets)
+[[assets.skeletons]]
+id = "test_skeleton"
+path = "../../assets/gltf-test.nczxskel"
+
+# Wave animation keyframes (from shared assets)
+[[assets.animations]]
+id = "test_anim"
+path = "../../assets/gltf-test.nczxanim"

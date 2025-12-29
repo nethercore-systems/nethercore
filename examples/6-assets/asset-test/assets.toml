@@ -1,13 +1,15 @@
 # Asset manifest for asset-test example
+#
+# Uses shared assets from examples/assets/ folder
 
 [output]
-dir = "assets/"
+dir = "../../assets/"
 
 [codegen]
 rust = "src/assets.rs"
 
 [meshes]
-cube = "assets/cube.obj"
+cube = "../../assets/cube.obj"
 
 [textures]
-checkerboard = "assets/checkerboard.png"
+checkerboard = "../../assets/checkerboard.png"

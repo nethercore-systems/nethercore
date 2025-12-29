@@ -55,6 +55,10 @@ examples/**/assets/**/*.obj
 examples/**/tools/**/output/*.obj
 tools/proc-gen/test_*.obj
 
+# Generated meshes (OBJ format)
+examples/**/assets/**/*.glb
+examples/**/tools/**/output/*.glb
+
 # Generated textures
 examples/**/assets/**/*.png
 examples/**/tools/**/output/*.png

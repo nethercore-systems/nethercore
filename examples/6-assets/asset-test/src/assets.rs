@@ -5,9 +5,9 @@
 
 #![allow(dead_code)]
 
-// Embedded asset data
-static CUBE_MESH: &[u8] = include_bytes!("assets//cube.nczxmesh");
-static CHECKERBOARD_TEX: &[u8] = include_bytes!("assets//checkerboard.nczxtex");
+// Embedded asset data (from shared examples/assets/ folder)
+static CUBE_MESH: &[u8] = include_bytes!("../../../assets/cube.nczxmesh");
+static CHECKERBOARD_TEX: &[u8] = include_bytes!("../../../assets/checkerboard.nczxtex");
 
 // FFI functions for loading assets
 extern "C" {
