@@ -8,7 +8,7 @@
 //! Controls:
 //! - Left stick: Rotate scene
 //! - A button: Toggle between comparison mode and single group
-//! - F3: Open debug panel to tweak alpha levels and offsets
+//! - F4: Open Debug Inspector to tweak alpha levels and offsets
 //! - F5: Pause, F6: Step frame
 //!
 //! The dither system uses a 4x4 Bayer matrix for classic PS1/Saturn-style
@@ -416,7 +416,7 @@ unsafe fn render_ui() {
         draw_text(instruction.as_ptr(), instruction.len() as u32, 10.0, 60.0, 14.0, 0x888888FF);
     }
 
-    let controls = "Left Stick: Rotate | F3: Debug Panel";
+    let controls = "Left Stick: Rotate | F4: Debug Inspector";
     draw_text(controls.as_ptr(), controls.len() as u32, 10.0, 80.0, 12.0, 0x666666FF);
 }
 

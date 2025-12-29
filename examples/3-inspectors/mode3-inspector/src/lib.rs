@@ -12,7 +12,7 @@
 //!
 //! Usage:
 //! 1. Run the game
-//! 2. Press F3 to open the debug panel
+//! 2. Press F4 to open the Debug Inspector
 //! 3. Tweak values and see immediate visual changes
 
 #![no_std]
@@ -397,6 +397,6 @@ unsafe fn draw_ui() {
     let hint2 = b"Right stick: Orbit camera";
     draw_text(hint2.as_ptr(), hint2.len() as u32, 10.0, 110.0, 14.0, 0x888888FF);
 
-    let hint3 = b"F3: Debug panel (edit specular, shininess, lights)";
+    let hint3 = b"F4: Debug Inspector (edit specular, shininess, lights)";
     draw_text(hint3.as_ptr(), hint3.len() as u32, 10.0, 130.0, 14.0, 0x888888FF);
 }

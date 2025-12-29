@@ -682,8 +682,8 @@ unsafe fn draw_ui() {
         0xFF888888,
     );
     draw_text(
-        b"F3: Debug panel (edit blend modes)".as_ptr(),
-        35,
+        b"F4: Debug Inspector (edit blend modes)".as_ptr(),
+        38,
         text_x, 514.0, 10.0,
         0xFF888888,
     );

@@ -1143,4 +1143,4 @@ debug_get_time_scale() f32             // 1.0 = normal
 
 {{#endtabs}}
 
-**Keyboard:** F3=panel, F5=pause, F6=step, F7/F8=time scale
+**Keyboard:** F3=stats, F4=inspector, F5=pause, F6=step, F7/F8=time scale

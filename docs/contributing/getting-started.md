@@ -342,9 +342,9 @@ fn update() {
 }
 ```
 
-### Debug Overlay
+### Runtime Stats Panel
 
-Press **F3** during gameplay to toggle the debug overlay showing:
+Press **F3** during gameplay to toggle the Runtime Stats Panel showing:
 - FPS and frame time
 - VRAM usage
 - Network stats (when in multiplayer)

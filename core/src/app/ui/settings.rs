@@ -578,7 +578,8 @@ impl SharedSettingsUi {
             ui.add_space(5.0);
             show_hotkey(ui, "F11", "Toggle borderless fullscreen");
             show_hotkey(ui, "F2", "Toggle settings panel");
-            show_hotkey(ui, "F3", "Toggle debug overlay (FPS, timing, etc.)");
+            show_hotkey(ui, "F3", "Toggle Runtime Stats Panel");
+            show_hotkey(ui, "F4", "Toggle Debug Inspector");
         });
 
         ui.add_space(10.0);

@@ -1,10 +1,10 @@
 # Debug Functions
 
-Runtime value inspection via the F3 debug panel.
+Runtime value inspection via the F4 Debug Inspector.
 
 ## Overview
 
-The debug system allows you to register game variables for live editing and monitoring. Press **F3** to open the debug panel during development.
+The debug system allows you to register game variables for live editing and monitoring. Press **F4** to open the Debug Inspector during development.
 
 **Features:**
 - Live value editing (sliders, color pickers)
@@ -1043,7 +1043,8 @@ export fn update() void {
 
 | Key | Action |
 |-----|--------|
-| F3 | Toggle debug panel |
+| F3 | Toggle Runtime Stats Panel |
+| F4 | Toggle Debug Inspector |
 | F5 | Pause/unpause |
 | F6 | Step one frame (while paused) |
 | F7 | Decrease time scale |

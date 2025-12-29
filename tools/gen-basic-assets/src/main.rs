@@ -7,7 +7,7 @@
 use clap::{Parser, Subcommand};
 use std::fs;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 #[derive(Parser)]
 #[command(name = "gen-basic-assets")]
@@ -50,16 +50,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 fn generate_all_assets(examples_root: &Path) -> Result<(), Box<dyn std::error::Error>> {
     // Output locations
-    let lib_assets = examples_root.join("_lib/assets");
+    let shared_assets = examples_root.join("assets");
     let asset_test_assets = examples_root.join("6-assets/asset-test/assets");
 
     // Create directories if they don't exist
-    fs::create_dir_all(&lib_assets)?;
+    fs::create_dir_all(&shared_assets)?;
     fs::create_dir_all(&asset_test_assets)?;
 
     // Generate assets in both locations
     let locations = [
-        ("_lib/assets", &lib_assets),
+        ("assets", &shared_assets),
         ("6-assets/asset-test/assets", &asset_test_assets),
     ];
 
@@ -73,23 +73,48 @@ fn generate_all_assets(examples_root: &Path) -> Result<(), Box<dyn std::error::E
         let cube_path = path.join("cube.obj");
         generate_cube_obj(&cube_path)?;
         println!("    ✓ cube.obj");
+
+        // Generate cube.nczxmesh (converted from cube.obj)
+        let cube_mesh_path = path.join("cube.nczxmesh");
+        generate_cube_nczxmesh(&cube_mesh_path)?;
+        println!("    ✓ cube.nczxmesh");
+
+        // Generate beep.wav
+        let beep_path = path.join("beep.wav");
+        generate_beep_wav(&beep_path)?;
+        println!("    ✓ beep.wav");
+
+        // Generate level files
+        for level_num in 1..=3u8 {
+            let level_path = path.join(format!("level{}.bin", level_num));
+            generate_level_bin(&level_path, level_num)?;
+            println!("    ✓ level{}.bin", level_num);
+        }
     }
 
     Ok(())
 }
 
 fn clean_all_assets(examples_root: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    let assets_to_clean = [
-        examples_root.join("_lib/assets/checkerboard.png"),
-        examples_root.join("_lib/assets/cube.obj"),
-        examples_root.join("6-assets/asset-test/assets/checkerboard.png"),
-        examples_root.join("6-assets/asset-test/assets/cube.obj"),
+    let locations = ["assets", "6-assets/asset-test/assets"];
+
+    let asset_names = [
+        "checkerboard.png",
+        "cube.obj",
+        "cube.nczxmesh",
+        "beep.wav",
+        "level1.bin",
+        "level2.bin",
+        "level3.bin",
     ];
 
-    for asset_path in &assets_to_clean {
-        if asset_path.exists() {
-            fs::remove_file(asset_path)?;
-            println!("  Removed {}", asset_path.display());
+    for location in &locations {
+        for asset_name in &asset_names {
+            let asset_path = examples_root.join(location).join(asset_name);
+            if asset_path.exists() {
+                fs::remove_file(&asset_path)?;
+                println!("  Removed {}", asset_path.display());
+            }
         }
     }
 
@@ -187,4 +212,123 @@ fn generate_cube_obj(path: &Path) -> std::io::Result<()> {
     writeln!(file, "f 5/1/6 2/3/6 1/4/6")?;
 
     Ok(())
+}
+
+/// Generate cube.nczxmesh from cube.obj using nether-export
+fn generate_cube_nczxmesh(path: &Path) -> std::io::Result<()> {
+    // First ensure cube.obj exists in the same directory
+    let obj_path = path.with_extension("obj");
+    if !obj_path.exists() {
+        generate_cube_obj(&obj_path)?;
+    }
+
+    // Convert OBJ -> nczxmesh using nether-export
+    nether_export::mesh::convert_obj(&obj_path, path, None)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+}
+
+/// Generate a soft, bouncy "boing" jump sound effect
+fn generate_beep_wav(path: &Path) -> std::io::Result<()> {
+    let spec = hound::WavSpec {
+        channels: 1,
+        sample_rate: 22050, // ZX standard audio rate
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let mut writer = hound::WavWriter::create(path, spec)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+
+    // Soft bouncy "boing" sound - like a spring or rubber band
+    let duration_samples = 22050 / 5; // ~0.2 seconds
+    let sample_rate = 22050.0;
+    let pi = std::f32::consts::PI;
+
+    // Track phase for smooth frequency transitions
+    let mut phase = 0.0f32;
+
+    for i in 0..duration_samples {
+        let progress = i as f32 / duration_samples as f32;
+
+        // Frequency drops from 800Hz to 200Hz (bouncy descending pitch)
+        let freq = 800.0 * (-3.0 * progress).exp() + 200.0;
+
+        // Smooth exponential decay envelope
+        let envelope = (-4.0 * progress).exp();
+
+        // Accumulate phase for continuous waveform
+        phase += freq / sample_rate;
+
+        // Pure sine wave - soft and pleasant
+        let fundamental = (phase * 2.0 * pi).sin();
+
+        // Add subtle second harmonic for warmth (one octave up, quieter)
+        let harmonic = (phase * 4.0 * pi).sin() * 0.2;
+
+        // Combine with slight vibrato for organic feel
+        let vibrato = 1.0 + 0.02 * (progress * 40.0 * pi).sin();
+        let sample = (fundamental + harmonic) * envelope * vibrato;
+
+        writer
+            .write_sample((sample * 10000.0) as i16)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+    }
+    writer
+        .finalize()
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+    Ok(())
+}
+
+/// Generate level binary file in ELVL format
+///
+/// Level format (simple tilemap):
+/// - Bytes 0-3: Magic "ELVL"
+/// - Byte 4: Version (u8)
+/// - Byte 5: Level number (u8)
+/// - Bytes 6-7: Width (u16 little-endian)
+/// - Bytes 8-9: Height (u16 little-endian)
+/// - Remaining: Tile indices (1 byte per tile)
+fn generate_level_bin(path: &Path, level_num: u8) -> std::io::Result<()> {
+    let mut data = Vec::new();
+
+    // Header
+    data.extend_from_slice(b"ELVL"); // Magic
+    data.push(1); // Version
+    data.push(level_num); // Level number
+    data.extend_from_slice(&8u16.to_le_bytes()); // Width
+    data.extend_from_slice(&8u16.to_le_bytes()); // Height
+
+    // 8x8 tile data - pattern varies by level
+    for y in 0..8u8 {
+        for x in 0..8u8 {
+            let tile = match level_num {
+                // Level 1: Border walls
+                1 => {
+                    if x == 0 || x == 7 || y == 0 || y == 7 {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                // Level 2: Checkerboard pattern
+                2 => {
+                    if (x + y) % 2 == 0 {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                // Level 3: Grid pattern with decoration
+                _ => {
+                    if x % 3 == 0 || y % 3 == 0 {
+                        2
+                    } else {
+                        0
+                    }
+                }
+            };
+            data.push(tile);
+        }
+    }
+
+    fs::write(path, data)
 }

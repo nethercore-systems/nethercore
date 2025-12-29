@@ -31,7 +31,7 @@ pub fn draw_common_hints(y_start: f32) {
     draw_hint(b"Press A to cycle shapes", y_start);
     draw_hint(b"Left stick to rotate object", y_start + 20.0);
     draw_hint(b"Right stick to orbit camera", y_start + 40.0);
-    draw_hint(b"F3 to open debug panel", y_start + 60.0);
+    draw_hint(b"F4 to open Debug Inspector", y_start + 60.0);
 }
 
 /// Register a directional light's debug values
