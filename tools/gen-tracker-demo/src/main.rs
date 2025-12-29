@@ -832,7 +832,7 @@ fn generate_funk_xm() -> Vec<u8> {
         };
         let pattern_size = pattern_data.len() as u16;
 
-        xm.extend_from_slice(&5u32.to_le_bytes()); // header length (packing + rows + data_size = 1+2+2)
+        xm.extend_from_slice(&9u32.to_le_bytes()); // header length (includes length field: 4+1+2+2=9)
         xm.push(0); // packing type
         xm.extend_from_slice(&32u16.to_le_bytes()); // 32 rows
         xm.extend_from_slice(&pattern_size.to_le_bytes());
@@ -1460,7 +1460,7 @@ fn generate_eurobeat_xm() -> Vec<u8> {
         };
         let pattern_size = pattern_data.len() as u16;
 
-        xm.extend_from_slice(&5u32.to_le_bytes()); // header length (packing + rows + data_size = 1+2+2)
+        xm.extend_from_slice(&9u32.to_le_bytes()); // header length (includes length field: 4+1+2+2=9)
         xm.push(0);
         xm.extend_from_slice(&32u16.to_le_bytes());
         xm.extend_from_slice(&pattern_size.to_le_bytes());
@@ -2598,7 +2598,7 @@ fn generate_synthwave_xm() -> Vec<u8> {
         };
         let pattern_size = pattern_data.len() as u16;
 
-        xm.extend_from_slice(&5u32.to_le_bytes()); // header length
+        xm.extend_from_slice(&9u32.to_le_bytes()); // header length (includes length field: 4+1+2+2=9)
         xm.push(0);
         xm.extend_from_slice(&32u16.to_le_bytes());
         xm.extend_from_slice(&pattern_size.to_le_bytes());

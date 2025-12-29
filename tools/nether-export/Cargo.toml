@@ -51,3 +51,4 @@ tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+gltf-json = "1"  # For programmatic GLB construction in tests

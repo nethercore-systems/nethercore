@@ -56,9 +56,10 @@ pub fn parse_xm(data: &[u8]) -> Result<XmModule, XmError> {
         return Err(XmError::UnsupportedVersion(version));
     }
 
-    // Header size from this point (4 bytes)
+    // Header size (4 bytes)
+    // Per XM spec, header_size is measured from the position of this field itself
+    let header_start = cursor.position(); // Position BEFORE reading header_size (offset 60)
     let header_size = read_u32(&mut cursor)?;
-    let header_start = cursor.position();
 
     // Song length (2 bytes)
     let song_length = read_u16(&mut cursor)?;
@@ -134,8 +135,9 @@ pub fn parse_xm(data: &[u8]) -> Result<XmModule, XmError> {
 /// Parse a single pattern from the cursor
 fn parse_pattern(cursor: &mut Cursor<&[u8]>, num_channels: u8) -> Result<XmPattern, XmError> {
     // Pattern header length (4 bytes)
+    // Per XM spec, this value INCLUDES the 4-byte length field itself
+    let header_start = cursor.position(); // Position BEFORE reading header_length
     let header_length = read_u32(cursor)?;
-    let header_start = cursor.position();
 
     // Packing type (1 byte) - always 0
     let _packing_type = read_u8(cursor)?;
@@ -149,7 +151,7 @@ fn parse_pattern(cursor: &mut Cursor<&[u8]>, num_channels: u8) -> Result<XmPatte
     // Packed pattern data size (2 bytes)
     let packed_size = read_u16(cursor)?;
 
-    // Seek to end of pattern header
+    // Seek to end of pattern header (header_length includes the 4-byte length field)
     cursor.seek(SeekFrom::Start(header_start + header_length as u64))?;
 
     // Unpack pattern data
@@ -424,8 +426,10 @@ fn rebuild_xm_without_samples(original_data: &[u8], module: &XmModule) -> Result
     // Version (2 bytes)
     write_u16(&mut output, XM_VERSION);
 
-    // Header size (4 bytes) - use 272 (0x110) for minimal XM format
-    write_u32(&mut output, 272);
+    // Header size (4 bytes) - per XM spec, includes this 4-byte field itself
+    // 276 = 4 (header_size) + 2 (song_length) + 2 (restart) + 2 (channels) + 2 (patterns)
+    //     + 2 (instruments) + 2 (flags) + 2 (speed) + 2 (bpm) + 256 (order_table)
+    write_u32(&mut output, 276);
 
     // Song length (2 bytes)
     write_u16(&mut output, module.song_length);
@@ -464,8 +468,9 @@ fn rebuild_xm_without_samples(original_data: &[u8], module: &XmModule) -> Result
     // ========== Write Pattern Data ==========
 
     for pattern in &module.patterns {
-        // Pattern header length (4 bytes) - use minimal format (5 bytes)
-        write_u32(&mut output, 5);
+        // Pattern header length (4 bytes) - per XM spec, includes the 4-byte length field itself
+        // Standard value: 9 = 4 (length) + 1 (packing) + 2 (rows) + 2 (packed_size)
+        write_u32(&mut output, 9);
 
         // Packing type (1 byte) - always 0
         write_u8(&mut output, 0);
