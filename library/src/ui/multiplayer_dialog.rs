@@ -94,6 +94,21 @@ impl MultiplayerDialog {
         ips
     }
 
+    /// Validate an IPv4 address format
+    fn is_valid_ip(ip: &str) -> bool {
+        let parts: Vec<&str> = ip.split('.').collect();
+        if parts.len() != 4 {
+            return false;
+        }
+        for part in parts {
+            match part.parse::<u8>() {
+                Ok(_) => continue,
+                Err(_) => return false,
+            }
+        }
+        true
+    }
+
     /// Render the dialog and return any action
     pub fn show(&mut self, ctx: &egui::Context) -> Option<UiAction> {
         let mut action = None;
@@ -238,6 +253,22 @@ impl MultiplayerDialog {
         if ui.button("Connect").clicked() {
             if self.host_ip.is_empty() {
                 self.error = Some("Please enter an IP address".to_string());
+            } else if self.host_ip.contains(':') {
+                // User likely pasted IP:port format - extract and auto-fill
+                if let Some((ip, port_str)) = self.host_ip.split_once(':') {
+                    if let Ok(port) = port_str.parse::<u16>() {
+                        let ip_clone = ip.to_string();
+                        self.host_ip = ip_clone.clone();
+                        self.port = port.to_string();
+                        self.error = Some("Extracted port from IP - click Connect again".to_string());
+                    } else {
+                        self.error = Some("Invalid port in IP:port format".to_string());
+                    }
+                } else {
+                    self.error = Some("Invalid IP:port format".to_string());
+                }
+            } else if !Self::is_valid_ip(&self.host_ip) {
+                self.error = Some("Invalid IP address format".to_string());
             } else if let Ok(port) = self.port.parse::<u16>() {
                 *action = Some(UiAction::JoinGame {
                     game_id: self.game_id.clone(),

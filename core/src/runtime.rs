@@ -124,14 +124,6 @@ impl<C: Console> Runtime<C> {
         input: C::Input,
     ) -> Result<(), GgrsError> {
         if let Some(session) = &mut self.session {
-            let frame = session.current_frame();
-            let state = session.session_state();
-            tracing::info!(
-                "add_local_input: handle={}, frame={}, state={:?}",
-                player_handle,
-                frame,
-                state
-            );
             session.add_local_input(player_handle, input)?;
         }
         Ok(())
@@ -219,12 +211,6 @@ impl<C: Console> Runtime<C> {
                 let tick_start = Instant::now();
 
                 // Advance GGRS frame and get requests
-                let frame_before = session.current_frame();
-                tracing::info!(
-                    "advance_frame: about to advance, current_frame={}, state={:?}",
-                    frame_before,
-                    session.session_state()
-                );
                 let requests = session
                     .advance_frame()
                     .map_err(|e| anyhow::anyhow!("GGRS advance_frame failed: {}", e))?;
