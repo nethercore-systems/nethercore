@@ -13,7 +13,7 @@
 //! The engine is designed to reconstruct its full state from TrackerState by seeking
 //! to the correct position and replaying ticks. This keeps rollback snapshots small.
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use nether_xm::{XmInstrument, XmModule, XmNote};
 
@@ -229,6 +229,26 @@ pub struct TrackerChannel {
     // Key off timing (Kxx)
     pub key_off_tick: u8,
 
+    // Envelope data (cached from instrument at note trigger)
+    /// Volume envelope enabled
+    pub volume_envelope_enabled: bool,
+    /// Volume envelope sustain tick (None if no sustain)
+    pub volume_envelope_sustain_tick: Option<u16>,
+    /// Volume envelope loop range (start_tick, end_tick), None if no loop
+    pub volume_envelope_loop: Option<(u16, u16)>,
+    /// Instrument fadeout rate (subtracted from volume_fadeout per tick after key-off)
+    pub instrument_fadeout_rate: u16,
+
+    /// Panning envelope enabled
+    pub panning_envelope_enabled: bool,
+    /// Panning envelope sustain tick
+    pub panning_envelope_sustain_tick: Option<u16>,
+    /// Panning envelope loop range
+    pub panning_envelope_loop: Option<(u16, u16)>,
+
+    // Retrigger mode for multiplicative volume (Rxy)
+    pub retrigger_mode: u8,
+
     // Fade state for smooth transitions (anti-pop)
     /// Fade-out samples remaining (0 = not fading out, >0 = fading out)
     pub fade_out_samples: u16,
@@ -295,10 +315,12 @@ impl TrackerChannel {
 }
 
 /// Row state cache for fast rollback reconstruction
+///
+/// Uses BTreeMap for O(log n) range queries instead of O(n) linear search.
 #[derive(Debug)]
 struct RowStateCache {
-    /// Cached channel states: (order, row) -> channels
-    cache: HashMap<(u16, u16), CachedRowState>,
+    /// Cached channel states: (order, row) -> channels (sorted by key)
+    cache: BTreeMap<(u16, u16), CachedRowState>,
     /// Maximum cache entries
     max_entries: usize,
 }
@@ -312,7 +334,7 @@ struct CachedRowState {
 impl Default for RowStateCache {
     fn default() -> Self {
         Self {
-            cache: HashMap::new(),
+            cache: BTreeMap::new(),
             max_entries: 256, // ~256 * 32 channels * ~200 bytes = ~1.6MB max
         }
     }
@@ -324,18 +346,16 @@ impl RowStateCache {
         row % 4 == 0
     }
 
-    /// Find nearest cached state before target position
+    /// Find nearest cached state before or at target position (O(log n) with BTreeMap)
     fn find_nearest(
         &self,
         target_order: u16,
         target_row: u16,
     ) -> Option<((u16, u16), &CachedRowState)> {
+        // Use range query to find the greatest key <= (target_order, target_row)
         self.cache
-            .iter()
-            .filter(|((order, row), _)| {
-                *order < target_order || (*order == target_order && *row <= target_row)
-            })
-            .max_by_key(|((order, row), _)| (*order, *row))
+            .range(..=(target_order, target_row))
+            .next_back()
             .map(|(pos, state)| (*pos, state))
     }
 
@@ -347,7 +367,7 @@ impl RowStateCache {
         channels: &[TrackerChannel; MAX_TRACKER_CHANNELS],
         global_volume: f32,
     ) {
-        // Evict if at capacity (simple FIFO for now)
+        // Evict oldest entry if at capacity (BTreeMap keeps entries sorted, so first is oldest by position)
         if self.cache.len() >= self.max_entries {
             if let Some(&key) = self.cache.keys().next() {
                 self.cache.remove(&key);
@@ -625,14 +645,29 @@ impl TrackerEngine {
 
         // Handle note
         if note.has_note() {
-            let (finetune, loop_start, loop_end, loop_type, vib_type, vib_depth, vib_rate, vib_sweep) = {
+            // Fetch all instrument data we need for note trigger
+            let instr_data = {
                 let loaded = match self.modules.get(handle as usize).and_then(|m| m.as_ref()) {
                     Some(m) => m,
                     None => return,
                 };
                 let instr_idx = (self.channels[ch_idx].instrument.saturating_sub(1)) as usize;
                 if let Some(instr) = loaded.module.instruments.get(instr_idx) {
-                    (
+                    // Extract envelope data
+                    let (vol_env_enabled, vol_env_sustain, vol_env_loop) =
+                        if let Some(ref env) = instr.volume_envelope {
+                            (env.enabled, env.sustain_tick(), env.loop_range())
+                        } else {
+                            (false, None, None)
+                        };
+                    let (pan_env_enabled, pan_env_sustain, pan_env_loop) =
+                        if let Some(ref env) = instr.panning_envelope {
+                            (env.enabled, env.sustain_tick(), env.loop_range())
+                        } else {
+                            (false, None, None)
+                        };
+
+                    Some((
                         instr.sample_finetune,
                         instr.sample_loop_start,
                         instr.sample_loop_start + instr.sample_loop_length,
@@ -641,11 +676,38 @@ impl TrackerEngine {
                         instr.vibrato_depth,
                         instr.vibrato_rate,
                         instr.vibrato_sweep,
-                    )
+                        instr.sample_relative_note,
+                        instr.volume_fadeout,
+                        vol_env_enabled,
+                        vol_env_sustain,
+                        vol_env_loop,
+                        pan_env_enabled,
+                        pan_env_sustain,
+                        pan_env_loop,
+                    ))
                 } else {
-                    (0, 0, 0, 0, 0, 0, 0, 0)
+                    None
                 }
             };
+
+            let (
+                finetune,
+                loop_start,
+                loop_end,
+                loop_type,
+                vib_type,
+                vib_depth,
+                vib_rate,
+                vib_sweep,
+                relative_note,
+                fadeout_rate,
+                vol_env_enabled,
+                vol_env_sustain,
+                vol_env_loop,
+                pan_env_enabled,
+                pan_env_sustain,
+                pan_env_loop,
+            ) = instr_data.unwrap_or((0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false, None, None, false, None, None));
 
             let channel = &mut self.channels[ch_idx];
             channel.note_on = true;
@@ -667,12 +729,24 @@ impl TrackerEngine {
                 channel.tremolo_pos = 0;
             }
 
-            channel.base_period = note_to_period(note.note, finetune);
+            // Apply sample relative note offset to pitch calculation
+            let effective_note = (note.note as i16 + relative_note as i16).clamp(1, 96) as u8;
+            channel.base_period = note_to_period(effective_note, finetune);
             channel.period = channel.base_period;
             channel.finetune = finetune;
             channel.sample_loop_start = loop_start;
             channel.sample_loop_end = loop_end;
             channel.sample_loop_type = loop_type;
+
+            // Copy envelope settings from instrument
+            channel.volume_envelope_enabled = vol_env_enabled;
+            channel.volume_envelope_sustain_tick = vol_env_sustain;
+            channel.volume_envelope_loop = vol_env_loop;
+            channel.instrument_fadeout_rate = fadeout_rate;
+
+            channel.panning_envelope_enabled = pan_env_enabled;
+            channel.panning_envelope_sustain_tick = pan_env_sustain;
+            channel.panning_envelope_loop = pan_env_loop;
 
             // Copy auto-vibrato settings from instrument
             channel.auto_vibrato_pos = 0;
@@ -815,7 +889,10 @@ impl TrackerEngine {
                 if param != 0 {
                     channel.last_sample_offset = param;
                 }
-                channel.sample_pos = (channel.last_sample_offset as u32 * 256) as f64;
+                // Combine high byte (from SAx) and low byte (from 9xx)
+                let offset = ((channel.sample_offset_high as u32) << 16)
+                    | ((channel.last_sample_offset as u32) << 8);
+                channel.sample_pos = offset as f64;
             }
             // Axy: Volume slide
             0x0A => {
@@ -956,23 +1033,35 @@ impl TrackerEngine {
             // Rxy: Multi retrigger
             0x1B => {
                 channel.retrigger_tick = param & 0x0F;
+                channel.retrigger_mode = param >> 4;
+                // Additive volume changes (modes 1-5 decrease, 9-13 increase)
                 channel.retrigger_volume = match param >> 4 {
                     1 => -1,
                     2 => -2,
                     3 => -4,
                     4 => -8,
                     5 => -16,
-                    6 => 0, // * 2/3 not supported, use 0
-                    7 => 0, // * 1/2 not supported, use 0
+                    // 6, 7 = multiplicative (handled in process_tick)
                     9 => 1,
                     10 => 2,
                     11 => 4,
                     12 => 8,
                     13 => 16,
-                    14 => 0, // * 3/2 not supported
-                    15 => 0, // * 2 not supported
+                    // 14, 15 = multiplicative (handled in process_tick)
                     _ => 0,
                 };
+            }
+            // Sxy: Extended commands (OpenMPT/FT2 extended)
+            0x1C => {
+                let sub_cmd = param >> 4;
+                let sub_param = param & 0x0F;
+                match sub_cmd {
+                    // SAx: Set high sample offset byte
+                    0xA => {
+                        channel.sample_offset_high = sub_param;
+                    }
+                    _ => {}
+                }
             }
             _ => {}
         }
@@ -1091,9 +1180,21 @@ impl TrackerEngine {
             // Retrigger
             if channel.retrigger_tick > 0 && tick % channel.retrigger_tick as u16 == 0 {
                 channel.sample_pos = 0.0;
-                if channel.retrigger_volume != 0 {
-                    channel.volume =
-                        (channel.volume + channel.retrigger_volume as f32 / 64.0).clamp(0.0, 1.0);
+                // Apply volume change based on retrigger mode
+                match channel.retrigger_mode {
+                    // Multiplicative modes
+                    6 => channel.volume = (channel.volume * (2.0 / 3.0)).clamp(0.0, 1.0),
+                    7 => channel.volume = (channel.volume * 0.5).clamp(0.0, 1.0),
+                    14 => channel.volume = (channel.volume * 1.5).clamp(0.0, 1.0),
+                    15 => channel.volume = (channel.volume * 2.0).clamp(0.0, 1.0),
+                    // Additive modes (use stored delta)
+                    _ => {
+                        if channel.retrigger_volume != 0 {
+                            channel.volume =
+                                (channel.volume + channel.retrigger_volume as f32 / 64.0)
+                                    .clamp(0.0, 1.0);
+                        }
+                    }
                 }
             }
 
@@ -1179,6 +1280,59 @@ impl TrackerEngine {
                 // Round to nearest 64 period units (one semitone)
                 channel.period = (channel.period / 64.0).round() * 64.0;
             }
+
+            // Volume envelope advancement
+            if channel.volume_envelope_enabled {
+                // Check sustain - don't advance past sustain point unless key-off
+                let at_sustain = if let Some(sus_tick) = channel.volume_envelope_sustain_tick {
+                    channel.volume_envelope_pos >= sus_tick && !channel.key_off
+                } else {
+                    false
+                };
+
+                if !at_sustain {
+                    channel.volume_envelope_pos += 1;
+                }
+
+                // Handle envelope loop
+                if let Some((loop_start, loop_end)) = channel.volume_envelope_loop {
+                    if channel.volume_envelope_pos >= loop_end {
+                        channel.volume_envelope_pos = loop_start;
+                    }
+                }
+            }
+
+            // Panning envelope advancement
+            if channel.panning_envelope_enabled {
+                // Check sustain
+                let at_sustain = if let Some(sus_tick) = channel.panning_envelope_sustain_tick {
+                    channel.panning_envelope_pos >= sus_tick && !channel.key_off
+                } else {
+                    false
+                };
+
+                if !at_sustain {
+                    channel.panning_envelope_pos += 1;
+                }
+
+                // Handle envelope loop
+                if let Some((loop_start, loop_end)) = channel.panning_envelope_loop {
+                    if channel.panning_envelope_pos >= loop_end {
+                        channel.panning_envelope_pos = loop_start;
+                    }
+                }
+            }
+
+            // Volume fadeout after key-off
+            if channel.key_off && channel.instrument_fadeout_rate > 0 {
+                channel.volume_fadeout =
+                    channel.volume_fadeout.saturating_sub(channel.instrument_fadeout_rate);
+
+                // When fadeout reaches 0, stop the note
+                if channel.volume_fadeout == 0 {
+                    channel.note_on = false;
+                }
+            }
         }
 
         // Global volume slide (Hxy) - applied outside channel loop
@@ -1244,11 +1398,45 @@ impl TrackerEngine {
             // Sample with interpolation
             let sample = sample_channel(channel, &sound.data, sample_rate);
 
-            // Apply volume (with envelope if present)
-            let vol = channel.volume * self.global_volume;
+            // Apply volume with envelope processing
+            let mut vol = channel.volume;
 
-            // Apply panning
-            let (l, r) = apply_channel_pan(sample * vol, channel.panning);
+            // Apply volume envelope if enabled
+            if channel.volume_envelope_enabled {
+                let instr_idx = channel.instrument.saturating_sub(1) as usize;
+                if let Some(instr) = module.module.instruments.get(instr_idx) {
+                    if let Some(ref env) = instr.volume_envelope {
+                        if env.enabled {
+                            let env_val = env.value_at(channel.volume_envelope_pos) as f32 / 64.0;
+                            vol *= env_val;
+                        }
+                    }
+                }
+            }
+
+            // Apply volume fadeout after key-off
+            if channel.key_off {
+                vol *= channel.volume_fadeout as f32 / 65535.0;
+            }
+
+            vol *= self.global_volume;
+
+            // Apply panning with envelope
+            let mut pan = channel.panning;
+            if channel.panning_envelope_enabled {
+                let instr_idx = channel.instrument.saturating_sub(1) as usize;
+                if let Some(instr) = module.module.instruments.get(instr_idx) {
+                    if let Some(ref env) = instr.panning_envelope {
+                        if env.enabled {
+                            // Panning envelope: 0-64 maps to -1.0 to 1.0 (32 = center)
+                            let env_val = env.value_at(channel.panning_envelope_pos) as f32;
+                            pan = (env_val - 32.0) / 32.0;
+                        }
+                    }
+                }
+            }
+
+            let (l, r) = apply_channel_pan(sample * vol, pan);
             left += l;
             right += r;
         }
@@ -1320,11 +1508,45 @@ impl TrackerEngine {
             // Sample with interpolation
             let sample = sample_channel(channel, &sound.data, sample_rate);
 
-            // Apply volume (with envelope if present)
-            let vol = channel.volume * self.global_volume;
+            // Apply volume with envelope processing
+            let mut vol = channel.volume;
 
-            // Apply panning
-            let (l, r) = apply_channel_pan(sample * vol, channel.panning);
+            // Apply volume envelope if enabled
+            if channel.volume_envelope_enabled {
+                let instr_idx = channel.instrument.saturating_sub(1) as usize;
+                if let Some(instr) = module.module.instruments.get(instr_idx) {
+                    if let Some(ref env) = instr.volume_envelope {
+                        if env.enabled {
+                            let env_val = env.value_at(channel.volume_envelope_pos) as f32 / 64.0;
+                            vol *= env_val;
+                        }
+                    }
+                }
+            }
+
+            // Apply volume fadeout after key-off
+            if channel.key_off {
+                vol *= channel.volume_fadeout as f32 / 65535.0;
+            }
+
+            vol *= self.global_volume;
+
+            // Apply panning with envelope
+            let mut pan = channel.panning;
+            if channel.panning_envelope_enabled {
+                let instr_idx = channel.instrument.saturating_sub(1) as usize;
+                if let Some(instr) = module.module.instruments.get(instr_idx) {
+                    if let Some(ref env) = instr.panning_envelope {
+                        if env.enabled {
+                            // Panning envelope: 0-64 maps to -1.0 to 1.0 (32 = center)
+                            let env_val = env.value_at(channel.panning_envelope_pos) as f32;
+                            pan = (env_val - 32.0) / 32.0;
+                        }
+                    }
+                }
+            }
+
+            let (l, r) = apply_channel_pan(sample * vol, pan);
             left += l;
             right += r;
         }
@@ -1345,6 +1567,22 @@ impl TrackerEngine {
             // Check if we need to advance to next row
             if state.tick >= state.speed {
                 state.tick = 0;
+
+                // Pattern delay (EEx): repeat current row for pattern_delay additional times
+                if self.pattern_delay > 0 {
+                    if self.pattern_delay_count < self.pattern_delay {
+                        self.pattern_delay_count += 1;
+                        // Don't advance row, just repeat it
+                        // Next tick will re-process the same row
+                        let vol = state.volume as f32 / 256.0;
+                        return (left * vol, right * vol);
+                    } else {
+                        // Delay complete, reset and advance normally
+                        self.pattern_delay = 0;
+                        self.pattern_delay_count = 0;
+                    }
+                }
+
                 state.row += 1;
 
                 // Sync engine's current position
@@ -1504,12 +1742,31 @@ fn sample_channel(channel: &mut TrackerChannel, data: &[i16], _sample_rate: u32)
     sample
 }
 
-/// Apply panning to a sample
+/// Fast panning gains using the existing SINE_LUT with interpolation
+///
+/// Uses the 16-point sine LUT already defined for vibrato/tremolo.
+/// cos(x) = sin(π/2 - x), so we read the LUT in reverse for left channel.
+#[inline]
+fn fast_pan_gains(pan: f32) -> (f32, f32) {
+    // Map pan [-1, 1] to [0, 15] range for LUT indexing
+    let pos = (pan + 1.0) * 7.5;
+    let idx = (pos as usize).min(14);
+    let frac = pos - idx as f32;
+
+    // Linear interpolation between LUT points
+    // Right channel uses sin (direct LUT), left uses cos (reversed LUT)
+    let sin_val = SINE_LUT[idx] as f32 * (1.0 - frac) + SINE_LUT[idx + 1] as f32 * frac;
+    let cos_val =
+        SINE_LUT[15 - idx] as f32 * (1.0 - frac) + SINE_LUT[14 - idx.min(14)] as f32 * frac;
+
+    // Scale from [0, 127] to [0, 1]
+    (cos_val / 127.0, sin_val / 127.0)
+}
+
+/// Apply panning to a sample using fast LUT lookup
+#[inline]
 fn apply_channel_pan(sample: f32, pan: f32) -> (f32, f32) {
-    // Equal-power panning
-    let angle = (pan + 1.0) * 0.25 * std::f32::consts::PI;
-    let left_gain = angle.cos();
-    let right_gain = angle.sin();
+    let (left_gain, right_gain) = fast_pan_gains(pan);
     (sample * left_gain, sample * right_gain)
 }
 
