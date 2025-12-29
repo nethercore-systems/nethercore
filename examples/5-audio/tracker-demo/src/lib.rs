@@ -1,15 +1,17 @@
 //! XM Tracker Demo
 //!
 //! Demonstrates XM tracker music playback with Nethercore ZX:
-//! - Procedurally generated drum and synth sounds
-//! - 4-channel XM beat pattern
+//! - Multiple songs with different genres
+//! - 8-channel XM playback with genre-specific instruments
 //! - Interactive playback controls
 //! - Visual beat indicator
 //! - Real-time pattern/position display
 //!
 //! Controls:
-//! - A button: Pause/Resume playback
-//! - B button: Restart from beginning
+//! - A button: Next song
+//! - B button: Previous song
+//! - X button: Pause/Resume playback
+//! - Y button: Restart from beginning
 //! - Up/Down: Adjust tempo (+/- 10 BPM)
 //! - Left/Right: Adjust volume
 //! - L/R Shoulder: Adjust speed (+/- 1 tick)
@@ -51,7 +53,6 @@ extern "C" {
     fn music_is_playing() -> u32;
     fn music_jump(order: u32, row: u32);
     fn music_position() -> u32;
-    fn music_length(handle: u32) -> u32;
     fn music_set_speed(speed: u32);
     fn music_set_tempo(bpm: u32);
     fn music_info(handle: u32) -> u32;
@@ -76,10 +77,6 @@ pub mod button {
     pub const Y: u32 = 7;
     pub const L1: u32 = 8;
     pub const R1: u32 = 9;
-    pub const L3: u32 = 10;
-    pub const R3: u32 = 11;
-    pub const START: u32 = 12;
-    pub const SELECT: u32 = 13;
 }
 
 // Colors
@@ -91,16 +88,29 @@ const COLOR_ACCENT: u32 = 0xFF6B6BFF;
 const COLOR_ACCENT2: u32 = 0x4ECDC4FF;
 const COLOR_PLAYING: u32 = 0x00FF00FF;
 const COLOR_PAUSED: u32 = 0xFFAA00FF;
+const COLOR_FUNK: u32 = 0xE040FBFF;    // Purple for funk
+const COLOR_EURO: u32 = 0xFF5722FF;    // Orange for eurobeat
+const COLOR_SYNTH: u32 = 0x4CAF50FF;   // Green for synthwave
+
+// Song indices and count
+const SONG_FUNK: u32 = 0;
+const SONG_EURO: u32 = 1;
+const SONG_SYNTH: u32 = 2;
+const NUM_SONGS: u32 = 3;
+
+// Default tempos per song
+const TEMPOS: [u32; 3] = [110, 155, 105]; // Funk, Euro, Synth
 
 // === Global State ===
 
-static mut TRACKER_HANDLE: u32 = 0;
-static mut CURRENT_TEMPO: u32 = 125;
+static mut TRACKER_HANDLES: [u32; 3] = [0; 3];
+static mut CURRENT_SONG: u32 = SONG_FUNK;
+static mut CURRENT_TEMPO: u32 = 110; // Start with funk tempo
 static mut CURRENT_SPEED: u32 = 6;
 static mut VOLUME: f32 = 0.8;
 static mut IS_PAUSED: bool = false;
 
-// Tracker info (cached from init)
+// Tracker info (cached from current song)
 static mut SONG_LENGTH: u32 = 0;
 static mut NUM_CHANNELS: u32 = 0;
 static mut NUM_PATTERNS: u32 = 0;
@@ -124,6 +134,54 @@ fn load_rom_tracker(id: &[u8]) -> u32 {
     unsafe { rom_tracker(id.as_ptr(), id.len() as u32) }
 }
 
+fn cache_song_info(handle: u32) {
+    unsafe {
+        let info = music_info(handle);
+        NUM_CHANNELS = (info >> 24) & 0xFF;
+        NUM_PATTERNS = (info >> 16) & 0xFF;
+        NUM_INSTRUMENTS = (info >> 8) & 0xFF;
+        SONG_LENGTH = info & 0xFF;
+        SONG_NAME_LEN = music_name(handle, SONG_NAME.as_mut_ptr(), 32);
+    }
+}
+
+fn switch_to_song(song_index: u32) {
+    unsafe {
+        if CURRENT_SONG == song_index {
+            return;
+        }
+
+        music_stop();
+        CURRENT_SONG = song_index;
+
+        // Reset tempo and speed to defaults for the new song
+        CURRENT_TEMPO = TEMPOS[song_index as usize];
+        CURRENT_SPEED = 6; // Reset to default XM speed (ticks per row)
+
+        let handle = TRACKER_HANDLES[song_index as usize];
+        cache_song_info(handle);
+
+        music_play(handle, VOLUME, 1);
+        music_set_tempo(CURRENT_TEMPO);
+        music_set_speed(CURRENT_SPEED);
+        IS_PAUSED = false;
+    }
+}
+
+fn next_song() {
+    unsafe {
+        let next = (CURRENT_SONG + 1) % NUM_SONGS;
+        switch_to_song(next);
+    }
+}
+
+fn prev_song() {
+    unsafe {
+        let prev = if CURRENT_SONG == 0 { NUM_SONGS - 1 } else { CURRENT_SONG - 1 };
+        switch_to_song(prev);
+    }
+}
+
 // === Initialization ===
 
 #[no_mangle]
@@ -131,29 +189,43 @@ pub extern "C" fn init() {
     unsafe {
         set_clear_color(COLOR_BG);
 
-        // Load sound samples first (required for tracker instrument mapping)
-        // The tracker's instruments reference these by name
-        load_rom_sound(b"kick");
-        load_rom_sound(b"snare");
-        load_rom_sound(b"hihat");
-        load_rom_sound(b"bass");
-        load_rom_sound(b"lead");
+        // Load Funky Jazz instruments
+        load_rom_sound(b"kick_funk");
+        load_rom_sound(b"snare_funk");
+        load_rom_sound(b"hihat_funk");
+        load_rom_sound(b"bass_funk");
+        load_rom_sound(b"epiano");
+        load_rom_sound(b"lead_jazz");
 
-        // Load and start tracker
-        TRACKER_HANDLE = load_rom_tracker(b"demo");
+        // Load Eurobeat instruments
+        load_rom_sound(b"kick_euro");
+        load_rom_sound(b"snare_euro");
+        load_rom_sound(b"hihat_euro");
+        load_rom_sound(b"bass_euro");
+        load_rom_sound(b"supersaw");
+        load_rom_sound(b"brass_euro");
+        load_rom_sound(b"pad_euro");
 
-        // Cache tracker info
-        let info = music_info(TRACKER_HANDLE);
-        NUM_CHANNELS = (info >> 24) & 0xFF;
-        NUM_PATTERNS = (info >> 16) & 0xFF;
-        NUM_INSTRUMENTS = (info >> 8) & 0xFF;
-        SONG_LENGTH = info & 0xFF;
+        // Load Synthwave instruments
+        load_rom_sound(b"kick_synth");
+        load_rom_sound(b"snare_synth");
+        load_rom_sound(b"hihat_synth");
+        load_rom_sound(b"bass_synth");
+        load_rom_sound(b"lead_synth");
+        load_rom_sound(b"arp_synth");
+        load_rom_sound(b"pad_synth");
 
-        // Get song name
-        SONG_NAME_LEN = music_name(TRACKER_HANDLE, SONG_NAME.as_mut_ptr(), 32);
+        // Load tracker modules
+        TRACKER_HANDLES[SONG_FUNK as usize] = load_rom_tracker(b"nether_groove");
+        TRACKER_HANDLES[SONG_EURO as usize] = load_rom_tracker(b"nether_fire");
+        TRACKER_HANDLES[SONG_SYNTH as usize] = load_rom_tracker(b"nether_drive");
 
-        // Start playback
-        music_play(TRACKER_HANDLE, VOLUME, 1); // Looping
+        // Cache info for default song (Funky Jazz)
+        cache_song_info(TRACKER_HANDLES[SONG_FUNK as usize]);
+
+        // Start playback with Funky Jazz
+        music_play(TRACKER_HANDLES[SONG_FUNK as usize], VOLUME, 1);
+        music_set_tempo(CURRENT_TEMPO);
     }
 }
 
@@ -162,14 +234,24 @@ pub extern "C" fn init() {
 #[no_mangle]
 pub extern "C" fn update() {
     unsafe {
-        // A button: Toggle pause/resume
+        // A button: Next song
         if button_pressed(0, button::A) != 0 {
+            next_song();
+        }
+
+        // B button: Previous song
+        if button_pressed(0, button::B) != 0 {
+            prev_song();
+        }
+
+        // X button: Toggle pause/resume
+        if button_pressed(0, button::X) != 0 {
             IS_PAUSED = !IS_PAUSED;
             music_pause(if IS_PAUSED { 1 } else { 0 });
         }
 
-        // B button: Restart from beginning
-        if button_pressed(0, button::B) != 0 {
+        // Y button: Restart from beginning
+        if button_pressed(0, button::Y) != 0 {
             music_jump(0, 0);
             if IS_PAUSED {
                 IS_PAUSED = false;
@@ -240,12 +322,42 @@ pub extern "C" fn render() {
 
         // === Header Section ===
 
+        // Song navigation indicator
+        let song_color = match CURRENT_SONG {
+            SONG_FUNK => COLOR_FUNK,
+            SONG_EURO => COLOR_EURO,
+            _ => COLOR_SYNTH,
+        };
+        draw_text_str(b"[B] Prev", 60.0, 30.0, 14.0, COLOR_GRAY);
+        draw_text_str(b"[A] Next", 140.0, 30.0, 14.0, COLOR_GRAY);
+
+        // Song number indicator
+        let song_num: &[u8] = match CURRENT_SONG {
+            SONG_FUNK => b"1/3",
+            SONG_EURO => b"2/3",
+            _ => b"3/3",
+        };
+        draw_text_str(song_num, 220.0, 30.0, 14.0, song_color);
+
         // Title (song name if available, otherwise default)
         if SONG_NAME_LEN > 0 {
-            draw_text(SONG_NAME.as_ptr(), SONG_NAME_LEN, 340.0, 30.0, 32.0, COLOR_WHITE);
+            draw_text(SONG_NAME.as_ptr(), SONG_NAME_LEN, 380.0, 30.0, 32.0, song_color);
         } else {
-            draw_text_str(b"XM Tracker Demo", 340.0, 30.0, 32.0, COLOR_WHITE);
+            let title: &[u8] = match CURRENT_SONG {
+                SONG_FUNK => b"Nether Groove",
+                SONG_EURO => b"Nether Fire",
+                _ => b"Nether Drive",
+            };
+            draw_text_str(title, 380.0, 30.0, 32.0, song_color);
         }
+
+        // Genre indicator
+        let genre: &[u8] = match CURRENT_SONG {
+            SONG_FUNK => b"Funky Jazz",
+            SONG_EURO => b"Eurobeat",
+            _ => b"Synthwave",
+        };
+        draw_text_str(genre, 420.0, 65.0, 16.0, COLOR_GRAY);
 
         // Playback status indicator
         let is_playing = music_is_playing() != 0 && !IS_PAUSED;
@@ -257,12 +369,12 @@ pub extern "C" fn render() {
         } else {
             b"STOPPED"
         };
-        draw_text_str(status_text, 440.0, 70.0, 20.0, status_color);
+        draw_text_str(status_text, 780.0, 30.0, 20.0, status_color);
 
         // === Left Panel: Position & Timing ===
 
         let left_x = 60.0;
-        let mut y = 120.0;
+        let mut y = 110.0;
 
         draw_text_str(b"POSITION", left_x, y, 18.0, COLOR_GRAY);
         y += 30.0;
@@ -328,11 +440,23 @@ pub extern "C" fn render() {
         let center_x = SCREEN_WIDTH / 2.0;
         let center_y = SCREEN_HEIGHT / 2.0 + 30.0;
 
-        // Different colors for different beats
-        let beat_color = match row % 4 {
-            0 => COLOR_ACCENT,   // Kick beat (red)
-            2 => COLOR_ACCENT2,  // Snare beat (teal)
-            _ => COLOR_GRAY,     // Hi-hat beats
+        // Different colors for different beats (genre-themed)
+        let beat_color = match CURRENT_SONG {
+            SONG_FUNK => match row % 4 {
+                0 => COLOR_FUNK,      // Kick beat (purple)
+                2 => COLOR_ACCENT2,   // Snare beat (teal)
+                _ => COLOR_GRAY,      // Hi-hat beats
+            },
+            SONG_EURO => match row % 4 {
+                0 => COLOR_EURO,      // Kick beat (orange)
+                2 => COLOR_ACCENT,    // Snare beat (red)
+                _ => COLOR_GRAY,      // Hi-hat beats
+            },
+            _ => match row % 4 {
+                0 => COLOR_SYNTH,     // Kick beat (green)
+                2 => COLOR_ACCENT2,   // Snare beat (teal)
+                _ => COLOR_GRAY,      // Hi-hat beats
+            },
         };
 
         // Pulse effect: larger on beat, smaller between
@@ -355,7 +479,7 @@ pub extern "C" fn render() {
             let dot_color = if i == row && row < 16 {
                 COLOR_WHITE
             } else if i % 4 == 0 {
-                COLOR_ACCENT
+                song_color
             } else {
                 COLOR_DARK_GRAY
             };
@@ -370,7 +494,7 @@ pub extern "C" fn render() {
             let dot_color = if actual_row == row {
                 COLOR_WHITE
             } else if i % 4 == 0 {
-                COLOR_ACCENT
+                song_color
             } else {
                 COLOR_DARK_GRAY
             };
@@ -380,7 +504,7 @@ pub extern "C" fn render() {
         // === Right Panel: Track Info ===
 
         let right_x = 700.0;
-        let mut y = 120.0;
+        let mut y = 110.0;
 
         draw_text_str(b"TRACK INFO", right_x, y, 18.0, COLOR_GRAY);
         y += 30.0;
@@ -407,79 +531,123 @@ pub extern "C" fn render() {
         draw_text_str(b"CHANNELS", right_x, y, 18.0, COLOR_GRAY);
         y += 25.0;
 
-        // Pattern order: 0=Intro, 1=Main, 2=Melody, 3=Breakdown
-        // Order table: [0, 1, 1, 2, 1, 2, 3, 1] - we can infer pattern from order
-        let pattern = match order % 8 {
-            0 => 0, // Intro
-            1 | 2 | 4 | 7 => 1, // Main
-            3 | 5 => 2, // Melody
-            6 => 3, // Breakdown
-            _ => 1,
-        };
-
-        // Activity based on actual pattern data
-        let kick_active = match pattern {
-            0 => if row < 16 { row == 0 } else { row % 8 == 0 || row % 8 == 4 },
-            1 | 2 => row % 8 == 0 || row % 8 == 4,
-            3 => if row < 16 { row % 8 == 0 } else if row < 24 { row % 4 == 0 } else { row % 2 == 0 },
-            _ => false,
-        };
-
-        let snare_active = match pattern {
-            0 => row >= 16 && row % 8 == 4,
-            1 | 2 => row % 8 == 4,
-            3 => row == 12 || row == 28 || row == 30,
-            _ => false,
-        };
-
-        let hihat_active = match pattern {
-            0 => if row < 8 { row % 8 == 0 } else if row < 16 { row % 4 == 0 } else { row % 2 == 0 },
-            1 => row % 2 == 0,
-            2 => row % 2 == 0,
-            3 => if row < 24 { row % 8 == 0 } else { row % 2 == 0 },
-            _ => false,
-        };
-
-        // Bass: has notes on specific rows in all patterns
-        let bass_active = match pattern {
-            0 => row >= 16 && (row == 16 || row == 17 || row == 20 || row == 24 || row == 25 || row == 28 || row == 30),
-            1 | 2 => row % 8 < 2 || row % 8 == 4, // First 2 rows + beat 2 of each 8-row section
-            3 => row % 4 == 0 || row >= 28, // Quarter notes + rapid at end
-            _ => false,
-        };
-
-        // Lead: only in melody and breakdown patterns
-        let lead_active = match pattern {
-            2 => row % 2 == 0, // Melody has notes on even rows
-            3 => row >= 24 || row == 7 || row == 15 || row == 22, // Sparse + build at end
-            _ => false,
-        };
-
-        // Lead harmony: only in melody pattern
-        let lead2_active = pattern == 2 && row % 2 == 0;
-
         let active_color = COLOR_PLAYING;
         let inactive_color = COLOR_DARK_GRAY;
 
-        // Channel indicators with activity bars (6 channels)
-        let ch_names: [&[u8]; 6] = [b"CH1 Kick", b"CH2 Snare", b"CH3 HiHat", b"CH4 Bass", b"CH5 Lead", b"CH6 Harm"];
-        let ch_active = [kick_active, snare_active, hihat_active, bass_active, lead_active, lead2_active];
+        // 8 channel indicators based on current song
+        match CURRENT_SONG {
+            SONG_FUNK => {
+                // Funky Jazz channels
+                let ch_names: [&[u8]; 8] = [
+                    b"CH1 Kick",
+                    b"CH2 Snare",
+                    b"CH3 HiHat",
+                    b"CH4 Bass",
+                    b"CH5 Lead",
+                    b"CH6 E.Piano",
+                    b"CH7 EPComp",
+                    b"CH8 Resp",
+                ];
 
-        for i in 0..6 {
-            let color = if ch_active[i] { active_color } else { inactive_color };
-            draw_text(ch_names[i].as_ptr(), ch_names[i].len() as u32, right_x, y, 14.0, color);
-            // Activity indicator
-            if ch_active[i] {
-                draw_rect(right_x + 100.0, y + 2.0, 40.0, 10.0, active_color);
+                // Simplified activity based on typical funk patterns
+                let kick_active = row % 8 == 0 || row % 8 == 6;
+                let snare_active = row % 8 == 4 || (row % 4 == 2 && order > 0);
+                let hihat_active = row % 2 == 0;
+                let bass_active = row % 4 < 2 || row % 8 == 6;
+                let lead_active = order > 0 && row % 4 == 0;
+                let ep_active = row % 4 == 0 || row % 4 == 2;
+                let comp_active = order > 1 && row % 2 == 0;
+                let resp_active = order > 0 && row % 8 == 4;
+
+                let ch_active = [kick_active, snare_active, hihat_active, bass_active,
+                               lead_active, ep_active, comp_active, resp_active];
+
+                for i in 0..8 {
+                    let color = if ch_active[i] { active_color } else { inactive_color };
+                    draw_text(ch_names[i].as_ptr(), ch_names[i].len() as u32, right_x, y, 14.0, color);
+                    if ch_active[i] {
+                        draw_rect(right_x + 95.0, y + 2.0, 40.0, 10.0, active_color);
+                    }
+                    y += 18.0;
+                }
+            },
+            SONG_EURO => {
+                // Eurobeat channels
+                let ch_names: [&[u8]; 8] = [
+                    b"CH1 Kick",
+                    b"CH2 Snare",
+                    b"CH3 HiHat",
+                    b"CH4 Bass",
+                    b"CH5 Supersaw",
+                    b"CH6 Brass",
+                    b"CH7 Pad",
+                    b"CH8 Harmony",
+                ];
+
+                // Eurobeat: 4-on-floor kick, constant hihat, octave bass
+                let kick_active = row % 4 == 0;
+                let snare_active = row % 8 == 4;
+                let hihat_active = row % 2 == 0;
+                let bass_active = row % 2 == 0; // Octave bouncing
+                let supersaw_active = order >= 4 && row % 4 == 0;
+                let brass_active = order >= 1 && (row % 8 == 0 || row % 8 == 6);
+                let pad_active = order > 0; // Always on after intro
+                let harmony_active = order >= 5 && row % 4 == 0;
+
+                let ch_active = [kick_active, snare_active, hihat_active, bass_active,
+                               supersaw_active, brass_active, pad_active, harmony_active];
+
+                for i in 0..8 {
+                    let color = if ch_active[i] { active_color } else { inactive_color };
+                    draw_text(ch_names[i].as_ptr(), ch_names[i].len() as u32, right_x, y, 14.0, color);
+                    if ch_active[i] {
+                        draw_rect(right_x + 95.0, y + 2.0, 40.0, 10.0, active_color);
+                    }
+                    y += 18.0;
+                }
+            },
+            _ => {
+                // Synthwave channels
+                let ch_names: [&[u8]; 8] = [
+                    b"CH1 Kick",
+                    b"CH2 Snare",
+                    b"CH3 HiHat",
+                    b"CH4 Bass",
+                    b"CH5 Lead",
+                    b"CH6 Arp",
+                    b"CH7 Pad",
+                    b"CH8 Harmony",
+                ];
+
+                // Synthwave: steady beat, arpeggios, pads
+                let kick_active = row % 8 == 0 || row % 8 == 4;
+                let snare_active = row % 8 == 2 || row % 8 == 6;
+                let hihat_active = row % 2 == 0;
+                let bass_active = row % 4 == 0; // Quarter notes
+                let lead_active = order >= 1 && (row % 4 == 0 || row % 4 == 2);
+                let arp_active = order > 0; // Constant arpeggios
+                let pad_active = order > 0; // Always after intro
+                let harmony_active = order >= 3 && row % 4 == 0;
+
+                let ch_active = [kick_active, snare_active, hihat_active, bass_active,
+                               lead_active, arp_active, pad_active, harmony_active];
+
+                for i in 0..8 {
+                    let color = if ch_active[i] { active_color } else { inactive_color };
+                    draw_text(ch_names[i].as_ptr(), ch_names[i].len() as u32, right_x, y, 14.0, color);
+                    if ch_active[i] {
+                        draw_rect(right_x + 95.0, y + 2.0, 40.0, 10.0, active_color);
+                    }
+                    y += 18.0;
+                }
             }
-            y += 18.0;
         }
 
         // === Bottom: Controls Help ===
 
         let help_y = SCREEN_HEIGHT - 60.0;
         draw_text_str(b"Controls:", 60.0, help_y, 16.0, COLOR_GRAY);
-        draw_text_str(b"[A] Pause   [B] Restart   [Up/Down] Tempo   [Left/Right] Volume   [L/R] Speed",
+        draw_text_str(b"[A/B] Songs  [X] Pause  [Y] Restart  [Up/Dn] Tempo  [L/R] Vol  [LB/RB] Speed",
             60.0, help_y + 22.0, 14.0, COLOR_DARK_GRAY);
     }
 }

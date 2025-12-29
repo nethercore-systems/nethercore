@@ -2,32 +2,114 @@
 id = "tracker-demo"
 title = "Tracker Demo"
 author = "Nethercore Examples"
-version = "0.1.0"
-description = "XM tracker music playback demonstration"
+version = "0.3.0"
+description = "XM tracker music playback demonstration with three songs: Funky Jazz, Eurobeat, and Synthwave"
 tags = ["audio", "music", "tracker"]
 
-# Sound samples (required for tracker instrument mapping)
-[[assets.sounds]]
-id = "kick"
-path = "assets/kick.wav"
+# ============================================================================
+# Funky Jazz Instruments - "Nether Groove"
+# ============================================================================
 
 [[assets.sounds]]
-id = "snare"
-path = "assets/snare.wav"
+id = "kick_funk"
+path = "assets/kick_funk.wav"
 
 [[assets.sounds]]
-id = "hihat"
-path = "assets/hihat.wav"
+id = "snare_funk"
+path = "assets/snare_funk.wav"
 
 [[assets.sounds]]
-id = "bass"
-path = "assets/bass.wav"
+id = "hihat_funk"
+path = "assets/hihat_funk.wav"
 
 [[assets.sounds]]
-id = "lead"
-path = "assets/lead.wav"
+id = "bass_funk"
+path = "assets/bass_funk.wav"
 
-# Tracker module (instruments reference sounds above by name)
+[[assets.sounds]]
+id = "epiano"
+path = "assets/epiano.wav"
+
+[[assets.sounds]]
+id = "lead_jazz"
+path = "assets/lead_jazz.wav"
+
+# ============================================================================
+# Eurobeat Instruments - "Nether Fire"
+# ============================================================================
+
+[[assets.sounds]]
+id = "kick_euro"
+path = "assets/kick_euro.wav"
+
+[[assets.sounds]]
+id = "snare_euro"
+path = "assets/snare_euro.wav"
+
+[[assets.sounds]]
+id = "hihat_euro"
+path = "assets/hihat_euro.wav"
+
+[[assets.sounds]]
+id = "bass_euro"
+path = "assets/bass_euro.wav"
+
+[[assets.sounds]]
+id = "supersaw"
+path = "assets/supersaw.wav"
+
+[[assets.sounds]]
+id = "brass_euro"
+path = "assets/brass_euro.wav"
+
+[[assets.sounds]]
+id = "pad_euro"
+path = "assets/pad_euro.wav"
+
+# ============================================================================
+# Synthwave Instruments - "Nether Drive"
+# ============================================================================
+
+[[assets.sounds]]
+id = "kick_synth"
+path = "assets/kick_synth.wav"
+
+[[assets.sounds]]
+id = "snare_synth"
+path = "assets/snare_synth.wav"
+
+[[assets.sounds]]
+id = "hihat_synth"
+path = "assets/hihat_synth.wav"
+
+[[assets.sounds]]
+id = "bass_synth"
+path = "assets/bass_synth.wav"
+
+[[assets.sounds]]
+id = "lead_synth"
+path = "assets/lead_synth.wav"
+
+[[assets.sounds]]
+id = "arp_synth"
+path = "assets/arp_synth.wav"
+
+[[assets.sounds]]
+id = "pad_synth"
+path = "assets/pad_synth.wav"
+
+# ============================================================================
+# Tracker Modules
+# ============================================================================
+
 [[assets.trackers]]
-id = "demo"
-path = "assets/demo.xm"
+id = "nether_groove"
+path = "assets/nether_groove.xm"
+
+[[assets.trackers]]
+id = "nether_fire"
+path = "assets/nether_fire.xm"
+
+[[assets.trackers]]
+id = "nether_drive"
+path = "assets/nether_drive.xm"
