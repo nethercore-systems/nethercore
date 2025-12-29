@@ -6,7 +6,7 @@
 use anyhow::{bail, Context, Result};
 use hashbrown::HashMap;
 use std::fs::File;
-use std::io::BufWriter;
+use std::io::{BufWriter, Cursor};
 use std::path::Path;
 
 use crate::formats::write_nether_animation;
@@ -33,6 +33,109 @@ impl Default for BoneTRS {
             scale: [1.0, 1.0, 1.0],
         }
     }
+}
+
+/// Result of in-memory animation conversion
+#[derive(Debug, Clone)]
+pub struct ConvertedAnimation {
+    /// Number of bones per frame
+    pub bone_count: u8,
+    /// Number of frames
+    pub frame_count: u16,
+    /// Packed animation data (frame_count × bone_count × 16 bytes)
+    /// Does NOT include the 4-byte header
+    pub data: Vec<u8>,
+}
+
+/// Convert glTF animation to in-memory format (for direct ROM packing)
+///
+/// # Arguments
+/// * `input` - Path to the glTF/GLB file
+/// * `animation_name` - Optional animation name to select (uses first animation if None)
+/// * `skin_name` - Optional skin name to select (uses first skin if None)
+/// * `frame_rate` - Optional frame rate for sampling (defaults to 30 FPS)
+pub fn convert_gltf_animation_to_memory(
+    input: &Path,
+    animation_name: Option<&str>,
+    skin_name: Option<&str>,
+    frame_rate: Option<f32>,
+) -> Result<ConvertedAnimation> {
+    let (document, buffers, _images) =
+        gltf::import(input).with_context(|| format!("Failed to load glTF: {:?}", input))?;
+
+    // Find skin by name or use first
+    let skin = if let Some(name) = skin_name {
+        document
+            .skins()
+            .find(|s| s.name() == Some(name))
+            .with_context(|| format!("Skin '{}' not found in glTF", name))?
+    } else {
+        document
+            .skins()
+            .next()
+            .context("No skins found in glTF file")?
+    };
+
+    // Find animation by name or use first
+    let animation = if let Some(name) = animation_name {
+        document
+            .animations()
+            .find(|a| a.name() == Some(name))
+            .with_context(|| {
+                let available: Vec<_> = document
+                    .animations()
+                    .filter_map(|a| a.name())
+                    .collect();
+                format!(
+                    "Animation '{}' not found in glTF. Available animations: {:?}",
+                    name, available
+                )
+            })?
+    } else {
+        document
+            .animations()
+            .next()
+            .context("No animations found in glTF file")?
+    };
+
+    let frame_rate = frame_rate.unwrap_or(DEFAULT_FRAME_RATE);
+
+    // Sample the animation (returns TRS per bone per frame)
+    let (frames, bone_count) = sample_animation(&animation, &skin, &buffers, frame_rate)?;
+
+    if frames.is_empty() {
+        bail!("Animation produced no frames");
+    }
+
+    // Validate bone count
+    if bone_count > 255 {
+        bail!(
+            "Animation has {} bones, maximum is 255 for new format",
+            bone_count
+        );
+    }
+
+    // Validate frame count
+    if frames.len() > 65535 {
+        bail!(
+            "Animation has {} frames, maximum is 65535 for new format",
+            frames.len()
+        );
+    }
+
+    // Write to in-memory buffer
+    let mut buffer = Cursor::new(Vec::new());
+    write_nether_animation(&mut buffer, bone_count as u8, &frames)?;
+
+    // Extract data (skip 4-byte header)
+    let full_data = buffer.into_inner();
+    let data = full_data[4..].to_vec();
+
+    Ok(ConvertedAnimation {
+        bone_count: bone_count as u8,
+        frame_count: frames.len() as u16,
+        data,
+    })
 }
 
 /// Convert glTF animation to NetherAnimation format

@@ -190,7 +190,7 @@ fn load_assets(
         .par_iter()
         .map(|entry| {
             let path = project_dir.join(&entry.path);
-            load_skeleton(&entry.id, &path)
+            load_skeleton(&entry.id, &path, entry.skin_name.as_deref())
         })
         .collect();
     let skeletons = skeletons?;
@@ -207,7 +207,12 @@ fn load_assets(
         .par_iter()
         .map(|entry| {
             let path = project_dir.join(&entry.path);
-            load_keyframes(&entry.id, &path)
+            load_keyframes(
+                &entry.id,
+                &path,
+                entry.animation_name.as_deref(),
+                entry.skin_name.as_deref(),
+            )
         })
         .collect();
     let keyframes = keyframes?;
@@ -510,12 +515,56 @@ fn load_mesh_native(id: &str, path: &std::path::Path) -> Result<PackedMesh> {
     })
 }
 
-/// Load keyframes from .nczxanim file
+/// Load keyframes from file
 ///
-/// The new platform format (16 bytes per bone per frame):
-/// - Header: 4 bytes (bone_count u8, flags u8, frame_count u16 LE)
-/// - Data: frame_count × bone_count × 16 bytes
-fn load_keyframes(id: &str, path: &std::path::Path) -> Result<PackedKeyframes> {
+/// Supports:
+/// - .nczxanim (Nethercore animation format) - direct load
+/// - .gltf / .glb (glTF 2.0) - auto-converted via nether-export
+fn load_keyframes(
+    id: &str,
+    path: &std::path::Path,
+    animation_name: Option<&str>,
+    skin_name: Option<&str>,
+) -> Result<PackedKeyframes> {
+    // Detect format by extension
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_lowercase())
+        .unwrap_or_default();
+
+    match ext.as_str() {
+        // Native format - direct load
+        "nczxanim" => load_keyframes_native(id, path),
+
+        // glTF/GLB - convert via nether-export
+        "gltf" | "glb" => {
+            let converted = nether_export::convert_gltf_animation_to_memory(
+                path,
+                animation_name,
+                skin_name,
+                None, // Use default 30 FPS
+            )
+            .with_context(|| format!("Failed to convert glTF animation: {}", path.display()))?;
+
+            Ok(PackedKeyframes {
+                id: id.to_string(),
+                bone_count: converted.bone_count,
+                frame_count: converted.frame_count,
+                data: converted.data,
+            })
+        }
+
+        _ => anyhow::bail!(
+            "Unsupported animation format '{}': {} (use .nczxanim, .gltf, or .glb)",
+            ext,
+            path.display()
+        ),
+    }
+}
+
+/// Load keyframes from native .nczxanim file
+fn load_keyframes_native(id: &str, path: &std::path::Path) -> Result<PackedKeyframes> {
     let data = std::fs::read(path)
         .with_context(|| format!("Failed to load keyframes: {}", path.display()))?;
 
@@ -706,12 +755,63 @@ fn load_tracker(
     })
 }
 
-/// Load a skeleton from .nczxskel file
+/// Load a skeleton from file
 ///
-/// File format:
-/// - Header: 8 bytes (bone_count u32, reserved u32)
-/// - Data: bone_count × 48 bytes (inverse bind matrices, 12 floats each)
-fn load_skeleton(id: &str, path: &std::path::Path) -> Result<PackedSkeleton> {
+/// Supports:
+/// - .nczxskel (Nethercore skeleton format) - direct load
+/// - .gltf / .glb (glTF 2.0) - auto-converted via nether-export
+fn load_skeleton(
+    id: &str,
+    path: &std::path::Path,
+    skin_name: Option<&str>,
+) -> Result<PackedSkeleton> {
+    // Detect format by extension
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_lowercase())
+        .unwrap_or_default();
+
+    match ext.as_str() {
+        // Native format - direct load
+        "nczxskel" => load_skeleton_native(id, path),
+
+        // glTF/GLB - convert via nether-export
+        "gltf" | "glb" => {
+            let converted = nether_export::convert_gltf_skeleton_to_memory(path, skin_name)
+                .with_context(|| format!("Failed to convert glTF skeleton: {}", path.display()))?;
+
+            // Convert [f32; 12] column-major to BoneMatrix3x4 row-major
+            let inverse_bind_matrices: Vec<BoneMatrix3x4> = converted
+                .inverse_bind_matrices
+                .iter()
+                .map(|mat| {
+                    // Input is column-major: [col0.xyz, col1.xyz, col2.xyz, col3.xyz]
+                    BoneMatrix3x4::from_rows(
+                        [mat[0], mat[3], mat[6], mat[9]],  // row 0
+                        [mat[1], mat[4], mat[7], mat[10]], // row 1
+                        [mat[2], mat[5], mat[8], mat[11]], // row 2
+                    )
+                })
+                .collect();
+
+            Ok(PackedSkeleton {
+                id: id.to_string(),
+                bone_count: converted.bone_count,
+                inverse_bind_matrices,
+            })
+        }
+
+        _ => anyhow::bail!(
+            "Unsupported skeleton format '{}': {} (use .nczxskel, .gltf, or .glb)",
+            ext,
+            path.display()
+        ),
+    }
+}
+
+/// Load a skeleton from native .nczxskel file
+fn load_skeleton_native(id: &str, path: &std::path::Path) -> Result<PackedSkeleton> {
     let data = std::fs::read(path)
         .with_context(|| format!("Failed to load skeleton: {}", path.display()))?;
 
@@ -1127,7 +1227,7 @@ version = "1.0.0"
         std::fs::write(&anim_path, &anim_data).unwrap();
 
         // Load it
-        let packed = load_keyframes("test_anim", &anim_path).unwrap();
+        let packed = load_keyframes("test_anim", &anim_path, None, None).unwrap();
         assert_eq!(packed.id, "test_anim");
         assert_eq!(packed.bone_count, 2);
         assert_eq!(packed.frame_count, 3);
@@ -1149,7 +1249,7 @@ version = "1.0.0"
 
         std::fs::write(&bad_path, &data).unwrap();
 
-        let result = load_keyframes("bad", &bad_path);
+        let result = load_keyframes("bad", &bad_path, None, None);
         assert!(result.is_err());
     }
 
@@ -1165,7 +1265,7 @@ version = "1.0.0"
 
         std::fs::write(&trunc_path, &data).unwrap();
 
-        let result = load_keyframes("truncated", &trunc_path);
+        let result = load_keyframes("truncated", &trunc_path, None, None);
         assert!(result.is_err());
     }
 

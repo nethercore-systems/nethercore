@@ -9,6 +9,60 @@ use std::path::Path;
 
 use crate::formats::write_nether_skeleton;
 
+/// Result of in-memory skeleton conversion
+#[derive(Debug, Clone)]
+pub struct ConvertedSkeleton {
+    /// Number of bones in the skeleton
+    pub bone_count: u32,
+    /// Inverse bind matrices in column-major 3x4 format (12 floats per bone)
+    pub inverse_bind_matrices: Vec<[f32; 12]>,
+}
+
+/// Convert glTF skeleton to in-memory format (for direct ROM packing)
+///
+/// # Arguments
+/// * `input` - Path to the glTF/GLB file
+/// * `skin_name` - Optional skin name to select (uses first skin if None)
+pub fn convert_gltf_skeleton_to_memory(
+    input: &Path,
+    skin_name: Option<&str>,
+) -> Result<ConvertedSkeleton> {
+    let (document, buffers, _images) =
+        gltf::import(input).with_context(|| format!("Failed to load glTF: {:?}", input))?;
+
+    // Find skin by name or use first
+    let skin = if let Some(name) = skin_name {
+        document
+            .skins()
+            .find(|s| s.name() == Some(name))
+            .with_context(|| format!("Skin '{}' not found in glTF", name))?
+    } else {
+        document
+            .skins()
+            .next()
+            .context("No skins found in glTF file")?
+    };
+
+    // Get inverse bind matrices
+    let inverse_bind_matrices = extract_inverse_bind_matrices(&skin, &buffers)?;
+
+    if inverse_bind_matrices.is_empty() {
+        bail!("No bones found in skin");
+    }
+
+    if inverse_bind_matrices.len() > 256 {
+        bail!(
+            "Skeleton has {} bones, but maximum is 256",
+            inverse_bind_matrices.len()
+        );
+    }
+
+    Ok(ConvertedSkeleton {
+        bone_count: inverse_bind_matrices.len() as u32,
+        inverse_bind_matrices,
+    })
+}
+
 /// Convert glTF skin data to NetherSkeleton format
 pub fn convert_gltf_skeleton(input: &Path, output: &Path, skin_index: Option<usize>) -> Result<()> {
     let (document, buffers, _images) =

@@ -70,6 +70,16 @@ pub struct AssetsSection {
 pub struct AssetEntry {
     pub id: String,
     pub path: String,
+
+    /// Animation name to extract from GLB file (for animations/keyframes).
+    /// If not specified, uses the first animation in the file.
+    #[serde(default)]
+    pub animation_name: Option<String>,
+
+    /// Skin name to extract from GLB file (for skeletons and skinned meshes).
+    /// If not specified, uses the first skin in the file.
+    #[serde(default)]
+    pub skin_name: Option<String>,
 }
 
 impl NetherManifest {

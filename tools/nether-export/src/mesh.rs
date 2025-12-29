@@ -6,7 +6,7 @@ use std::io::{BufRead, BufReader, BufWriter};
 use std::path::Path;
 
 use crate::formats::write_nether_mesh;
-use crate::{vertex_stride_packed, FORMAT_NORMAL, FORMAT_UV};
+use crate::{pack_bone_weights_unorm8, vertex_stride_packed, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV};
 
 /// Result of in-memory mesh conversion
 pub struct ConvertedMesh {
@@ -142,6 +142,9 @@ pub fn convert_obj_to_memory(input: &Path) -> Result<ConvertedMesh> {
 }
 
 /// Convert a glTF/GLB file to in-memory mesh data (for direct ROM packing)
+///
+/// Automatically detects and includes skinning data (bone indices + weights)
+/// when present in the glTF file.
 pub fn convert_gltf_to_memory(input: &Path) -> Result<ConvertedMesh> {
     let (document, buffers, _images) =
         gltf::import(input).with_context(|| format!("Failed to load glTF: {:?}", input))?;
@@ -173,6 +176,26 @@ pub fn convert_gltf_to_memory(input: &Path) -> Result<ConvertedMesh> {
     // Normals (optional)
     let normals: Option<Vec<[f32; 3]>> = reader.read_normals().map(|iter| iter.collect());
 
+    // Skinning data (optional) - JOINTS_0 and WEIGHTS_0
+    let joints: Option<Vec<[u8; 4]>> = reader
+        .read_joints(0)
+        .map(|iter| iter.into_u16().map(|j| [j[0] as u8, j[1] as u8, j[2] as u8, j[3] as u8]).collect());
+    let weights: Option<Vec<[f32; 4]>> = reader
+        .read_weights(0)
+        .map(|iter| iter.into_f32().collect());
+
+    // Validate skinning data consistency
+    let skinning = match (&joints, &weights) {
+        (Some(j), Some(w)) if j.len() == positions.len() && w.len() == positions.len() => {
+            Some((j.as_slice(), w.as_slice()))
+        }
+        (Some(_), None) | (None, Some(_)) => {
+            tracing::warn!("Mesh has partial skinning data (joints or weights missing), ignoring skinning");
+            None
+        }
+        _ => None,
+    };
+
     // Indices (optional)
     let indices: Vec<u16> = reader
         .read_indices()
@@ -187,9 +210,18 @@ pub fn convert_gltf_to_memory(input: &Path) -> Result<ConvertedMesh> {
     if normals.is_some() {
         format |= FORMAT_NORMAL;
     }
+    if skinning.is_some() {
+        format |= FORMAT_SKINNED;
+    }
 
     // Pack vertex data
-    let vertex_data = pack_vertices(&positions, uvs.as_deref(), normals.as_deref(), format);
+    let vertex_data = pack_vertices_skinned(
+        &positions,
+        uvs.as_deref(),
+        normals.as_deref(),
+        skinning,
+        format,
+    );
 
     Ok(ConvertedMesh {
         format,
@@ -298,33 +330,65 @@ fn pack_vertices(
     normals: Option<&[[f32; 3]]>,
     format: u8,
 ) -> Vec<u8> {
+    // Delegate to the skinned version with no skinning data
+    pack_vertices_skinned(positions, uvs, normals, None, format)
+}
+
+/// Pack vertices with optional skinning support
+///
+/// Skinning adds 8 bytes per vertex:
+/// - 4 bytes: bone indices (u8 × 4)
+/// - 4 bytes: bone weights (unorm8 × 4)
+fn pack_vertices_skinned(
+    positions: &[[f32; 3]],
+    uvs: Option<&[[f32; 2]]>,
+    normals: Option<&[[f32; 3]]>,
+    skinning: Option<(&[[u8; 4]], &[[f32; 4]])>,
+    format: u8,
+) -> Vec<u8> {
     use crate::{pack_normal_octahedral, pack_position_f16, pack_uv_unorm16};
     use bytemuck::cast_slice;
 
     let has_uv = format & FORMAT_UV != 0;
     let has_normal = format & FORMAT_NORMAL != 0;
+    let has_skinning = format & FORMAT_SKINNED != 0;
 
     let stride = vertex_stride_packed(format) as usize;
     let mut data = Vec::with_capacity(positions.len() * stride);
 
     for i in 0..positions.len() {
-        // Position (f16x4)
+        // Position (f16x4) - 8 bytes
         let pos = positions[i];
         let packed_pos = pack_position_f16(pos[0], pos[1], pos[2]);
         data.extend_from_slice(cast_slice(&packed_pos));
 
-        // UV (unorm16x2)
+        // UV (unorm16x2) - 4 bytes
         if has_uv {
             let uv = uvs.map(|u| u[i]).unwrap_or([0.0, 0.0]);
             let packed_uv = pack_uv_unorm16(uv[0], uv[1]);
             data.extend_from_slice(cast_slice(&packed_uv));
         }
 
-        // Normal (octahedral u32)
+        // Normal (octahedral u32) - 4 bytes
         if has_normal {
             let n = normals.map(|n| n[i]).unwrap_or([0.0, 1.0, 0.0]);
             let packed_normal = pack_normal_octahedral(n[0], n[1], n[2]);
             data.extend_from_slice(&packed_normal.to_le_bytes());
+        }
+
+        // Skinning (bone indices + weights) - 8 bytes
+        if has_skinning {
+            if let Some((joints, weights)) = skinning {
+                // Bone indices (u8 × 4)
+                data.extend_from_slice(&joints[i]);
+                // Bone weights (unorm8 × 4)
+                let packed_weights = pack_bone_weights_unorm8(weights[i]);
+                data.extend_from_slice(&packed_weights);
+            } else {
+                // No skinning data provided but format says skinned - use defaults
+                data.extend_from_slice(&[0u8; 4]); // bone indices
+                data.extend_from_slice(&[255, 0, 0, 0]); // full weight on bone 0
+            }
         }
     }
 

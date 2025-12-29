@@ -23,3 +23,9 @@ pub use nethercore_shared::RomFormat;
 
 // Re-export key types for mesh conversion
 pub use mesh::{convert_gltf_to_memory, convert_obj_to_memory, ConvertedMesh};
+
+// Re-export skeleton conversion types
+pub use skeleton::{convert_gltf_skeleton_to_memory, ConvertedSkeleton};
+
+// Re-export animation conversion types
+pub use animation::{convert_gltf_animation_to_memory, ConvertedAnimation};
