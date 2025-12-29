@@ -1,0 +1,18 @@
+[package]
+name = "glb-rigid"
+version = "0.1.0"
+edition = "2021"
+description = "Demonstrates rigid transform animation from GLB (no skinning)"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+examples-common = { path = "../../examples-common" }
+libm = "0.2"
+
+[profile.release]
+opt-level = "s"
+lto = true
+
+[workspace]

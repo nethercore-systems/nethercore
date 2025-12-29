@@ -3,6 +3,8 @@
 //! Provides auto-growing buffers for efficient GPU memory management
 //! and retained mesh storage.
 
+use std::borrow::Cow;
+
 use hashbrown::HashMap;
 
 use anyhow::Result;
@@ -348,13 +350,23 @@ impl BufferManager {
         self.retained_vertex_buffers[format_idx].ensure_capacity(device, packed_data.len() as u64);
 
         // Ensure retained index buffer has capacity
+        // Pad index data to 4-byte alignment for wgpu COPY_BUFFER_ALIGNMENT (only if needed)
         let index_byte_data: &[u8] = bytemuck::cast_slice(indices);
+        let index_data_to_write: Cow<[u8]> = if index_byte_data.len() % 4 == 0 {
+            Cow::Borrowed(index_byte_data)
+        } else {
+            let padded_len = (index_byte_data.len() + 3) & !3;
+            let mut padded = index_byte_data.to_vec();
+            padded.resize(padded_len, 0);
+            Cow::Owned(padded)
+        };
+
         self.retained_index_buffers[format_idx]
-            .ensure_capacity(device, index_byte_data.len() as u64);
+            .ensure_capacity(device, index_data_to_write.len() as u64);
 
         // Write to retained buffers (packed vertex data + indices)
         let vertex_offset = self.retained_vertex_buffers[format_idx].write(queue, &packed_data);
-        let index_offset = self.retained_index_buffers[format_idx].write(queue, index_byte_data);
+        let index_offset = self.retained_index_buffers[format_idx].write(queue, &index_data_to_write);
 
         // Create mesh handle
         let handle = MeshHandle(self.next_mesh_id);
@@ -474,13 +486,23 @@ impl BufferManager {
         self.retained_vertex_buffers[format_idx].ensure_capacity(device, data.len() as u64);
 
         // Ensure retained index buffer has capacity
+        // Pad index data to 4-byte alignment for wgpu COPY_BUFFER_ALIGNMENT (only if needed)
         let index_byte_data: &[u8] = bytemuck::cast_slice(indices);
+        let index_data_to_write: Cow<[u8]> = if index_byte_data.len() % 4 == 0 {
+            Cow::Borrowed(index_byte_data)
+        } else {
+            let padded_len = (index_byte_data.len() + 3) & !3;
+            let mut padded = index_byte_data.to_vec();
+            padded.resize(padded_len, 0);
+            Cow::Owned(padded)
+        };
+
         self.retained_index_buffers[format_idx]
-            .ensure_capacity(device, index_byte_data.len() as u64);
+            .ensure_capacity(device, index_data_to_write.len() as u64);
 
         // Write to retained buffers
         let vertex_offset = self.retained_vertex_buffers[format_idx].write(queue, data);
-        let index_offset = self.retained_index_buffers[format_idx].write(queue, index_byte_data);
+        let index_offset = self.retained_index_buffers[format_idx].write(queue, &index_data_to_write);
 
         // Create mesh handle
         let handle = MeshHandle(self.next_mesh_id);
@@ -630,5 +652,54 @@ mod tests {
         };
         assert_eq!(mesh.vertex_count, 8);
         assert_eq!(mesh.index_count, 36);
+    }
+
+    /// Test that index data alignment padding works correctly for wgpu COPY_BUFFER_ALIGNMENT
+    #[test]
+    fn test_index_data_alignment_padding() {
+        // Helper to compute padded index data (same logic as load_mesh_indexed*)
+        fn pad_index_data(indices: &[u16]) -> Cow<'_, [u8]> {
+            let index_byte_data: &[u8] = bytemuck::cast_slice(indices);
+            if index_byte_data.len() % 4 == 0 {
+                Cow::Borrowed(index_byte_data)
+            } else {
+                let padded_len = (index_byte_data.len() + 3) & !3;
+                let mut padded = index_byte_data.to_vec();
+                padded.resize(padded_len, 0);
+                Cow::Owned(padded)
+            }
+        }
+
+        // Even number of indices (e.g., 200) = 400 bytes = already 4-byte aligned
+        let even_indices: Vec<u16> = (0..200).collect();
+        let padded = pad_index_data(&even_indices);
+        assert_eq!(padded.len(), 400);
+        assert_eq!(padded.len() % 4, 0);
+        assert!(matches!(padded, Cow::Borrowed(_)), "Should borrow when already aligned");
+
+        // Odd number of indices (e.g., 201) = 402 bytes = needs padding to 404
+        let odd_indices: Vec<u16> = (0..201).collect();
+        let padded = pad_index_data(&odd_indices);
+        assert_eq!(padded.len(), 404);
+        assert_eq!(padded.len() % 4, 0);
+        assert!(matches!(padded, Cow::Owned(_)), "Should allocate when padding needed");
+
+        // Edge case: 1 index = 2 bytes = needs padding to 4
+        let one_index: Vec<u16> = vec![42];
+        let padded = pad_index_data(&one_index);
+        assert_eq!(padded.len(), 4);
+        assert_eq!(padded.len() % 4, 0);
+
+        // Edge case: 3 indices = 6 bytes = needs padding to 8
+        let three_indices: Vec<u16> = vec![1, 2, 3];
+        let padded = pad_index_data(&three_indices);
+        assert_eq!(padded.len(), 8);
+        assert_eq!(padded.len() % 4, 0);
+
+        // Edge case: empty = 0 bytes = already aligned
+        let empty: Vec<u16> = vec![];
+        let padded = pad_index_data(&empty);
+        assert_eq!(padded.len(), 0);
+        assert!(matches!(padded, Cow::Borrowed(_)));
     }
 }

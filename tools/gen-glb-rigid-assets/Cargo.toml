@@ -1,0 +1,14 @@
+[package]
+name = "gen-glb-rigid-assets"
+version = "0.1.0"
+edition = "2021"
+description = "Generate multi-mesh rigid animation GLB for glb-rigid example"
+
+[dependencies]
+# For GLB construction
+gltf-json = "1"
+gltf = { workspace = true }
+bytemuck = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }

@@ -2640,7 +2640,7 @@ const D4_S: u8 = 51;
 const E4_S: u8 = 53;
 const F4_S: u8 = 54;
 const G4_S: u8 = 56;
-#[ignore(dead_code)]
+#[ignore]
 const GS4_S: u8 = 57; // G#4 for E major chord
 const A4_S: u8 = 58;
 const B4_S: u8 = 60;

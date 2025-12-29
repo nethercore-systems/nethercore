@@ -459,7 +459,20 @@ pub extern fn keyframe_read(handle: u32, index: u32, out_ptr: [*]u8) void;
 |------|------|-------------|
 | handle | `u32` | Keyframe collection handle |
 | index | `u32` | Frame index |
-| out_ptr | `*mut u8` | Destination buffer (must be large enough for all bone matrices) |
+| out_ptr | `*mut u8` | Destination buffer (must be `bone_count × 40` bytes) |
+
+**Output Format (TRS, 40 bytes per bone):**
+
+```
+Per-bone layout:
+  [0..16]  rotation: [f32; 4]  (quaternion x, y, z, w)
+  [16..28] position: [f32; 3]  (translation x, y, z)
+  [28..40] scale:    [f32; 3]  (scale x, y, z)
+```
+
+> **Note:** This returns TRS (Translation-Rotation-Scale) format, NOT matrices.
+> Use this for CPU-side interpolation/blending. For stamp animation without
+> blending, use `keyframe_bind()` which uses pre-converted matrices on GPU.
 
 **Example:**
 
@@ -467,6 +480,9 @@ pub extern fn keyframe_read(handle: u32, index: u32, out_ptr: [*]u8) void;
 
 {{#tab name="Rust"}}
 ```rust
+const BONE_COUNT: usize = 64;
+const TRS_SIZE: usize = 40; // 10 floats per bone (quat[4] + pos[3] + scale[3])
+
 fn render() {
     unsafe {
         let frame_count = keyframes_frame_count(WALK_ANIM);
@@ -474,18 +490,19 @@ fn render() {
         let frame_b = (frame_a + 1) % frame_count;
         let blend = ANIM_TIME.fract();
 
-        // Read frames for interpolation
-        let mut buf_a = [0u8; 64 * 12 * 4]; // 64 bones × 12 floats × 4 bytes
-        let mut buf_b = [0u8; 64 * 12 * 4];
+        // Read TRS frames for interpolation
+        let mut buf_a = [0u8; BONE_COUNT * TRS_SIZE];
+        let mut buf_b = [0u8; BONE_COUNT * TRS_SIZE];
 
         keyframe_read(WALK_ANIM, frame_a, buf_a.as_mut_ptr());
         keyframe_read(WALK_ANIM, frame_b, buf_b.as_mut_ptr());
 
-        // Interpolate on CPU
-        let blended = interpolate_bones(&buf_a, &buf_b, blend);
+        // Interpolate TRS on CPU (SLERP quaternions, LERP position/scale)
+        let blended_trs = interpolate_trs(&buf_a, &buf_b, blend);
 
-        // Upload blended result
-        set_bones(blended.as_ptr(), bone_count);
+        // Convert TRS to matrices and upload
+        let matrices = trs_to_matrices(&blended_trs, BONE_COUNT);
+        set_bones_4x4(matrices.as_ptr(), BONE_COUNT as u32);
         draw_mesh(CHARACTER_MESH);
     }
 }
@@ -494,25 +511,30 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
+#define BONE_COUNT 64
+#define TRS_SIZE 40  // 10 floats per bone (quat[4] + pos[3] + scale[3])
+
 NCZX_EXPORT void render(void) {
     uint32_t frame_count = keyframes_frame_count(WALK_ANIM);
     uint32_t frame_a = ((uint32_t)ANIM_TIME) % frame_count;
     uint32_t frame_b = (frame_a + 1) % frame_count;
     float blend = ANIM_TIME - (float)((uint32_t)ANIM_TIME);
 
-    // Read frames for interpolation
-    uint8_t buf_a[64 * 12 * 4]; // 64 bones × 12 floats × 4 bytes
-    uint8_t buf_b[64 * 12 * 4];
+    // Read TRS frames for interpolation
+    uint8_t buf_a[BONE_COUNT * TRS_SIZE];
+    uint8_t buf_b[BONE_COUNT * TRS_SIZE];
 
     keyframe_read(WALK_ANIM, frame_a, buf_a);
     keyframe_read(WALK_ANIM, frame_b, buf_b);
 
-    // Interpolate on CPU
-    uint8_t blended[64 * 12 * 4];
-    interpolate_bones(buf_a, buf_b, blend, blended);
+    // Interpolate TRS on CPU (SLERP quaternions, LERP position/scale)
+    uint8_t blended_trs[BONE_COUNT * TRS_SIZE];
+    interpolate_trs(buf_a, buf_b, blend, blended_trs);
 
-    // Upload blended result
-    set_bones(blended, bone_count);
+    // Convert TRS to matrices and upload
+    float matrices[BONE_COUNT * 16];
+    trs_to_matrices(blended_trs, BONE_COUNT, matrices);
+    set_bones_4x4(matrices, BONE_COUNT);
     draw_mesh(CHARACTER_MESH);
 }
 ```
@@ -520,25 +542,30 @@ NCZX_EXPORT void render(void) {
 
 {{#tab name="Zig"}}
 ```zig
+const BONE_COUNT = 64;
+const TRS_SIZE = 40; // 10 floats per bone (quat[4] + pos[3] + scale[3])
+
 export fn render() void {
     const frame_count = keyframes_frame_count(WALK_ANIM);
     const frame_a = @as(u32, @intFromFloat(ANIM_TIME)) % frame_count;
     const frame_b = (frame_a + 1) % frame_count;
     const blend = ANIM_TIME - @floor(ANIM_TIME);
 
-    // Read frames for interpolation
-    var buf_a: [64 * 12 * 4]u8 = undefined; // 64 bones × 12 floats × 4 bytes
-    var buf_b: [64 * 12 * 4]u8 = undefined;
+    // Read TRS frames for interpolation
+    var buf_a: [BONE_COUNT * TRS_SIZE]u8 = undefined;
+    var buf_b: [BONE_COUNT * TRS_SIZE]u8 = undefined;
 
     keyframe_read(WALK_ANIM, frame_a, &buf_a);
     keyframe_read(WALK_ANIM, frame_b, &buf_b);
 
-    // Interpolate on CPU
-    var blended: [64 * 12 * 4]u8 = undefined;
-    interpolate_bones(&buf_a, &buf_b, blend, &blended);
+    // Interpolate TRS on CPU (SLERP quaternions, LERP position/scale)
+    var blended_trs: [BONE_COUNT * TRS_SIZE]u8 = undefined;
+    interpolateTrs(&buf_a, &buf_b, blend, &blended_trs);
 
-    // Upload blended result
-    set_bones(&blended, bone_count);
+    // Convert TRS to matrices and upload
+    var matrices: [BONE_COUNT * 16]f32 = undefined;
+    trsToMatrices(&blended_trs, BONE_COUNT, &matrices);
+    set_bones_4x4(&matrices, BONE_COUNT);
     draw_mesh(CHARACTER_MESH);
 }
 ```

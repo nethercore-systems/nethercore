@@ -1,0 +1,14 @@
+[package]
+name = "gen-glb-inline-assets"
+version = "0.1.0"
+edition = "2021"
+description = "Generate multi-animation GLB for glb-inline example"
+
+[dependencies]
+# For GLB construction
+gltf-json = "1"
+gltf = { workspace = true }
+bytemuck = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }

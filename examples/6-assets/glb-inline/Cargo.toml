@@ -1,0 +1,18 @@
+[package]
+name = "glb-inline"
+version = "0.1.0"
+edition = "2021"
+description = "Demonstrates raw GLB file references with multiple animations"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+examples-common = { path = "../../examples-common" }
+libm = "0.2"
+
+[profile.release]
+opt-level = "s"
+lto = true
+
+[workspace]

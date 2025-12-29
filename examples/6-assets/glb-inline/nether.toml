@@ -1,0 +1,62 @@
+# GLB Inline Example - Raw GLB References with Multiple Animations
+#
+# This example demonstrates referencing raw .glb files directly in nether.toml.
+# The build system auto-converts GLB to native formats at pack time.
+#
+# Key features demonstrated:
+# - Direct .glb file paths (no pre-conversion needed)
+# - skin_name selector for skeleton extraction
+# - animation_name selector for extracting specific animations from one file
+# - Loading multiple animations from the SAME GLB file
+#
+# Build:
+#   cargo xtask build-examples   # Runs gen-glb-inline-assets, then nether build/pack
+#   nether run                   # Launch the example
+
+[game]
+id = "glb-inline"
+title = "GLB Inline Example"
+author = "Nethercore Examples"
+version = "0.1.0"
+description = "Demonstrates raw GLB file references with multiple animations"
+tags = ["gltf", "glb", "animation", "inline"]
+
+# Texture for UV visualization (reusing existing asset)
+[[assets.textures]]
+id = "checker"
+path = "../../assets/gltf-test-checker.png"
+
+# MESH: Direct GLB reference - auto-converted at pack time
+# No need to pre-convert to .nczxmesh!
+[[assets.meshes]]
+id = "character"
+path = "../../assets/glb-inline-multi.glb"
+
+# SKELETON: Direct GLB reference with explicit skin selection
+# The skin_name selector picks which skin to extract from the GLB
+[[assets.skeletons]]
+id = "skeleton"
+path = "../../assets/glb-inline-multi.glb"
+skin_name = "CharacterSkin"
+
+# ANIMATIONS: Multiple animations from the SAME GLB file!
+# Each entry uses animation_name to select a specific animation.
+# This is the key feature - one GLB, multiple assets extracted by name.
+
+[[assets.animations]]
+id = "anim_wave"
+path = "../../assets/glb-inline-multi.glb"
+animation_name = "Wave"
+skin_name = "CharacterSkin"
+
+[[assets.animations]]
+id = "anim_bounce"
+path = "../../assets/glb-inline-multi.glb"
+animation_name = "Bounce"
+skin_name = "CharacterSkin"
+
+[[assets.animations]]
+id = "anim_twist"
+path = "../../assets/glb-inline-multi.glb"
+animation_name = "Twist"
+skin_name = "CharacterSkin"

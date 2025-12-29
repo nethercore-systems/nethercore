@@ -1,0 +1,57 @@
+# GLB Rigid Example - Multiple Meshes with Imported Animation
+#
+# This example demonstrates rigid transform animation using multiple
+# mesh pieces loaded from separate GLB files. Unlike skinned animation,
+# rigid animation applies transforms to entire meshes (no bone deformation).
+#
+# Key features demonstrated:
+# - Multiple .glb files for separate mesh pieces
+# - Animation imported from GLB via keyframe_read() (not procedural!)
+# - Rigid animation (no skeleton_bind, but uses skeleton for keyframe access)
+#
+# The meshes are:
+# - Base: rotating platform
+# - Arm: extending segment
+# - Claw: opening/closing gripper
+#
+# Key difference from skinned animation:
+# - Skinned: skeleton_bind() + keyframe_bind() + one deformable mesh
+# - Rigid: keyframe_read() + push_translate/push_rotate + multiple meshes
+#
+# Build:
+#   cargo xtask build-examples   # Runs gen-glb-rigid-assets, then nether build/pack
+#   nether run                   # Launch the example
+
+[game]
+id = "glb-rigid"
+title = "GLB Rigid Transform Animation"
+author = "Nethercore Examples"
+version = "0.1.0"
+description = "Demonstrates rigid transform animation from GLB (no skinning)"
+tags = ["gltf", "glb", "animation", "rigid", "hierarchical"]
+
+# MESHES: Each piece is a separate GLB file
+[[assets.meshes]]
+id = "mesh_base"
+path = "../../assets/glb-rigid-base.glb"
+
+[[assets.meshes]]
+id = "mesh_arm"
+path = "../../assets/glb-rigid-arm.glb"
+
+[[assets.meshes]]
+id = "mesh_claw"
+path = "../../assets/glb-rigid-claw.glb"
+
+# SKELETON: Required for keyframe_read() to work
+# This is NOT used for skinning - just for animation data access
+[[assets.skeletons]]
+id = "rigid_skeleton"
+path = "../../assets/glb-rigid-anim.glb"
+
+# ANIMATION: Imported from GLB, read via keyframe_read()
+# (NOT keyframe_bind - that's for skinned animation)
+[[assets.animations]]
+id = "anim_operate"
+path = "../../assets/glb-rigid-anim.glb"
+animation_name = "Operate"
