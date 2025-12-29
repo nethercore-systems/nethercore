@@ -1,6 +1,6 @@
 # Nethercore Examples
 
-**46 working examples** organized into 9 categories to help you learn game development with Nethercore.
+**42 working examples** organized into 8 categories to help you learn game development with Nethercore.
 
 ## 📁 Organization
 
@@ -8,14 +8,13 @@
 examples/
 ├── 1-getting-started/   →  4 examples   (FFI basics, languages)
 ├── 2-graphics/          →  6 examples   (Rendering, meshes, materials)
-├── 3-inspectors/        → 12 examples   (Render modes, environments)
+├── 3-inspectors/        → 13 examples   (Debug inspector, render modes, environments)
 ├── 4-animation/         →  6 examples   (Skeletal animation, IK)
 ├── 5-audio/             →  2 examples   (Sound effects, music)
 ├── 6-assets/            →  4 examples   (ROM loading, data packs)
-├── 7-games/             →  5 examples   (Complete games, templates)
+├── 7-games/             →  2 examples   (Complete games)
 ├── 8-advanced/          →  5 examples   (Stencils, viewports, mirrors)
-├── 9-debug/             →  5 examples   (Dev tools, viewers)
-└── _lib/                →  Support libraries
+└── examples-common/     →  Support library
 ```
 
 ## 🚀 Quick Start
@@ -95,7 +94,7 @@ Core rendering techniques and procedural meshes.
 
 ---
 
-### 3. Inspectors (12 examples)
+### 3. Inspectors (13 examples)
 
 Interactive debuggers for render modes and environment effects.
 
@@ -108,10 +107,11 @@ Interactive debuggers for render modes and environment effects.
 | **mode2-inspector** | Mode 2 | Metallic-Roughness PBR (Mode 2) explorer |
 | **mode3-inspector** | Mode 3 | Specular-Shininess Blinn-Phong explorer |
 
-#### Environment Inspectors (8)
+#### Environment Inspectors + Debug (9)
 
 | Example | Effect Type | Description |
 |---------|-------------|-------------|
+| **debug-demo** | Debug inspection system (F4 panel) | Frame controls, inspection |
 | **env-gradient-inspector** | Gradient | 4-point gradient with 4 presets, debug controls |
 | **env-curtains-inspector** | Curtains | Curtain-style environment effect |
 | **env-lines-inspector** | Lines | Line-based procedural environment |
@@ -121,7 +121,7 @@ Interactive debuggers for render modes and environment effects.
 | **env-scatter-inspector** | Scatter | Particle scatter environment |
 | **env-silhouette-inspector** | Silhouette | Silhouette-based environment |
 
-**Difficulty:** 🟡 Intermediate | **Key Features:** F3 debug panels, real-time parameter tweaking
+**Difficulty:** 🟡 Intermediate | **Key Features:** F4 debug panels, real-time parameter tweaking
 
 ---
 
@@ -164,17 +164,14 @@ ROM-based asset workflows and data packs.
 
 ---
 
-### 7. Complete Games (5 examples)
+### 7. Complete Games (2 examples)
 
-Fully playable games and templates.
+Fully playable games demonstrating complete game loops.
 
-| Example | Description | Status | Key Features |
-|---------|-------------|--------|--------------|
-| **paddle** | Classic 2-player paddle game | ✅ Complete | AI, rollback netcode, sound, [tutorial](../docs/book/src/tutorials/paddle/index.md) |
-| **platformer** | 2D platformer mini-game | ✅ Complete | Physics, collision, billboards, UI |
-| **prism-survivors** | Top-down fantasy co-op shooter | 🚧 Template | Project structure, assets |
-| **lumina-depths** | Underwater exploration game | 🚧 Template | Project structure, assets |
-| **neon-drift** | Arcade racer | 🚧 Template | Project structure, assets |
+| Example | Description | Difficulty | Key Features |
+|---------|-------------|------------|--------------|
+| **paddle** | Classic 2-player paddle game | 🟢 Beginner | AI, rollback netcode, sound, [tutorial](../docs/book/src/tutorials/paddle/index.md) |
+| **platformer** | 2D platformer mini-game | 🟡 Intermediate | Physics, collision, billboards, UI |
 
 ---
 
@@ -192,41 +189,23 @@ Stencil buffers, viewports, and advanced techniques.
 
 ---
 
-### 9. Debug & Development Tools (5 examples)
-
-Procedural generation viewers and debug systems.
-
-| Example | Description | Difficulty | Purpose |
-|---------|-------------|------------|---------|
-| **debug-demo** | Debug inspection system (F3 panel) | 🟡 Intermediate | Frame controls, inspection |
-| **proc-gen-viewer** | Interactive viewer for all procedural meshes | 🟡 Intermediate | Orbit camera, all shapes |
-| **proc-gen-mode2** | Mode 2 asset preview (Neon Drift showcase) | 🟡 Intermediate | Auto-generated preview |
-| **proc-gen-mode3** | Mode 3 asset preview (Lumina Depths showcase) | 🟡 Intermediate | Auto-generated preview |
-| **proc-sounds-viewer** | Procedural sound effect viewer | 🟡 Intermediate | Interactive audio explorer |
-
----
-
-## 🛠️ Support Libraries
-
-Located in `_lib/` (not standalone examples):
+## 🛠️ Support Library
 
 | Library | Description | Used By |
 |---------|-------------|---------|
 | **examples-common** | Reusable utilities (DebugCamera, StickControl, math helpers) | Multiple inspectors |
-| **proc-gen-showcase-defs** | Shared definitions for procedural generation showcases | proc-gen-* examples |
-| **assets** | Shared assets used by multiple examples | Various |
+| **assets/** | Shared assets used by multiple examples | Various |
 
 ---
 
 ## 📊 Statistics
 
-- **Total Examples:** 46 working examples
+- **Total Examples:** 42 working examples
 - **Beginner-Friendly:** 10 examples (🟢)
 - **Intermediate:** 23 examples (🟡)
 - **Advanced:** 13 examples (🔴)
 - **Languages:** Rust, C, Zig
-- **Complete Games:** 2 (+ 3 templates)
-- **Deleted:** 5 redundant examples (shadow-demo, blinn-phong, cube, textured-procedural, environment-inspector)
+- **Complete Games:** 2
 
 ---
 

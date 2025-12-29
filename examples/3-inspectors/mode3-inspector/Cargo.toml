@@ -8,7 +8,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 libm = "0.2"
-examples-common = { path = "../../_lib/examples-common" }
+examples-common = { path = "../../examples-common" }
 
 [profile.release]
 opt-level = "s"

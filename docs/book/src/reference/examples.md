@@ -1,6 +1,6 @@
 # Example Games
 
-The Nethercore repository includes 46 working examples organized into 9 categories. Each example is a complete, buildable project.
+The Nethercore repository includes 42 working examples organized into 8 categories. Each example is a complete, buildable project.
 
 ## Location
 
@@ -10,14 +10,13 @@ Examples are organized by category:
 nethercore/examples/
 ├── 1-getting-started/   (4 examples)
 ├── 2-graphics/          (6 examples)
-├── 3-inspectors/        (12 examples)
+├── 3-inspectors/        (13 examples)
 ├── 4-animation/         (6 examples)
 ├── 5-audio/             (2 examples)
 ├── 6-assets/            (4 examples)
-├── 7-games/             (5 examples)
+├── 7-games/             (2 examples)
 ├── 8-advanced/          (5 examples)
-├── 9-debug/             (5 examples)
-└── _lib/                (support libraries)
+└── examples-common/     (support library)
 ```
 
 ## Learning Path
@@ -57,6 +56,7 @@ New to Nethercore? Follow this progression:
 
 | Example | Description |
 |---------|-------------|
+| **debug-demo** | Debug inspection system (F4 panel) |
 | **mode0-inspector** | Interactive Mode 0 (Lambert) explorer |
 | **mode1-inspector** | Interactive Mode 1 (Matcap) explorer |
 | **mode2-inspector** | Interactive Mode 2 (PBR) explorer |
@@ -103,9 +103,6 @@ New to Nethercore? Follow this progression:
 |---------|-------------|
 | **paddle** | Classic 2-player paddle game with AI and rollback netcode |
 | **platformer** | Full mini-game with 2D gameplay, physics, collision, UI |
-| **prism-survivors** | Top-down shooter template (stub) |
-| **lumina-depths** | Underwater exploration template (stub) |
-| **neon-drift** | Arcade racer template (stub) |
 
 ### 8. Advanced Rendering
 
@@ -117,22 +114,11 @@ New to Nethercore? Follow this progression:
 | **rear-mirror** | Rear-view mirror using viewport |
 | **scope-shooter** | Sniper scope mechanic with stencil |
 
-### 9. Debug & Development Tools
-
-| Example | Description |
-|---------|-------------|
-| **debug-demo** | Debug inspection system (F3 panel) |
-| **proc-gen-viewer** | Interactive procedural mesh viewer |
-| **proc-gen-mode2** | Mode 2 asset preview (Neon Drift) |
-| **proc-gen-mode3** | Mode 3 asset preview (Lumina Depths) |
-| **proc-sounds-viewer** | Procedural sound effect viewer |
-
-### Support Libraries
+### Support Library
 
 | Library | Description |
 |---------|-------------|
 | **examples-common** | Reusable utilities (DebugCamera, StickControl, math helpers) |
-| **proc-gen-showcase-defs** | Shared definitions for procedural showcases |
 
 ## Building Examples
 

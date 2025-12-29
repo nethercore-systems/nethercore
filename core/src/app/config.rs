@@ -73,7 +73,7 @@ pub struct AudioConfig {
 /// Configures hotkeys and behavior for the debug inspection panel.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DebugConfig {
-    /// Toggle debug inspection panel (default: F3)
+    /// Toggle debug inspection panel (default: F4)
     #[serde(default = "default_panel_toggle")]
     pub panel_toggle: String,
     /// Toggle pause/resume (default: F5)

@@ -65,7 +65,7 @@ fn build_examples() -> Result<()> {
     let nether_exe = ensure_nether_cli(&project_root)?;
 
     // Library crates that shouldn't be built as standalone examples
-    let skip_dirs = ["inspector-common", "examples-common", "proc-gen-common", "proc-gen-showcase-defs"];
+    let skip_dirs = ["examples-common"];
 
     // Get all example directories that have a Cargo.toml (are buildable)
     // Supports both flat structure (examples/example-name/) and nested structure (examples/category/example-name/)

@@ -7,7 +7,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-examples-common = { path = "../../_lib/examples-common" }
+examples-common = { path = "../../examples-common" }
 
 [profile.release]
 opt-level = "s"
