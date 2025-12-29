@@ -443,11 +443,11 @@ fn rom_tracker(mut caller: Caller<'_, ZXGameContext>, id_ptr: u32, id_len: u32) 
         }
     };
 
-    // Parse the XM data
-    let module = match nether_xm::parse_xm(&packed_tracker.pattern_data) {
+    // Parse the tracker data (auto-detects NCXM minimal or standard XM format)
+    let module = match nether_xm::parse_xm_minimal(&packed_tracker.pattern_data) {
         Ok(m) => m,
         Err(e) => {
-            warn!("rom_tracker: failed to parse XM for '{}': {:?}", id, e);
+            warn!("rom_tracker: failed to parse tracker data for '{}': {:?}", id, e);
             return 0;
         }
     };
@@ -540,11 +540,11 @@ fn load_tracker(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len: 
         data[start..end].to_vec()
     };
 
-    // Parse the XM data
-    let module = match nether_xm::parse_xm(&xm_data) {
+    // Parse the tracker data (auto-detects NCXM minimal or standard XM format)
+    let module = match nether_xm::parse_xm_minimal(&xm_data) {
         Ok(m) => m,
         Err(e) => {
-            warn!("load_tracker: failed to parse XM: {:?}", e);
+            warn!("load_tracker: failed to parse tracker data: {:?}", e);
             return 0;
         }
     };

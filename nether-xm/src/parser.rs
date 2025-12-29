@@ -400,7 +400,7 @@ fn parse_instrument(cursor: &mut Cursor<&[u8]>) -> Result<XmInstrument, XmError>
 ///
 /// This creates a new XM file with the same structure but with all sample data removed.
 /// Sample lengths are set to 0, making the file much smaller while remaining valid XM format.
-fn rebuild_xm_without_samples(original_data: &[u8], module: &XmModule) -> Result<Vec<u8>, XmError> {
+pub(crate) fn rebuild_xm_without_samples(original_data: &[u8], module: &XmModule) -> Result<Vec<u8>, XmError> {
     let mut output = Vec::with_capacity(original_data.len() / 4); // Estimate smaller size
 
     // Helper to write little-endian values
@@ -681,7 +681,7 @@ fn rebuild_xm_without_samples(original_data: &[u8], module: &XmModule) -> Result
 ///   - Bit 2 (0x04): Volume present
 ///   - Bit 3 (0x08): Effect present
 ///   - Bit 4 (0x10): Effect param present
-fn pack_pattern_data(pattern: &XmPattern, num_channels: u8) -> Vec<u8> {
+pub(crate) fn pack_pattern_data(pattern: &XmPattern, num_channels: u8) -> Vec<u8> {
     let mut output = Vec::new();
 
     for row in &pattern.notes {
