@@ -383,8 +383,9 @@ fn update_ball() {
 #[no_mangle]
 pub extern "C" fn update() {
     unsafe {
-        // Check if player count changed (someone connected/disconnected)
-        IS_TWO_PLAYER = player_count() >= 2;
+        // NOTE: IS_TWO_PLAYER is set in reset_game() at game start.
+        // Do NOT poll player_count() every frame - it's non-deterministic
+        // during rollback and causes network desync.
 
         match STATE {
             GameState::Title => {

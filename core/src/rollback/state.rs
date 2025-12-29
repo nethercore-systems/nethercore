@@ -8,9 +8,58 @@ use smallvec::SmallVec;
 
 use super::config::MAX_STATE_SIZE;
 
+// ============================================================================
+// Host Rollback State
+// ============================================================================
+
+/// Size of HostRollbackState in bytes (for inline storage)
+pub const HOST_STATE_SIZE: usize = std::mem::size_of::<HostRollbackState>();
+
+/// Host-side state that must be rolled back for determinism
+///
+/// This state lives on the host (not in WASM memory) but affects game
+/// simulation and must be restored during rollback.
+#[derive(Clone, Copy, Default, Debug, PartialEq)]
+#[repr(C)]
+pub struct HostRollbackState {
+    /// RNG state for deterministic random numbers
+    pub rng_state: u64,
+    /// Current tick count
+    pub tick_count: u64,
+    /// Elapsed time in seconds (f32 stored as bits for Pod compatibility)
+    pub elapsed_time_bits: u32,
+    /// Padding for alignment
+    _padding: u32,
+}
+
+// SAFETY: HostRollbackState is #[repr(C)] with only primitive types
+unsafe impl bytemuck::Zeroable for HostRollbackState {}
+unsafe impl bytemuck::Pod for HostRollbackState {}
+
+impl HostRollbackState {
+    /// Create from game state values
+    pub fn new(rng_state: u64, tick_count: u64, elapsed_time: f32) -> Self {
+        Self {
+            rng_state,
+            tick_count,
+            elapsed_time_bits: elapsed_time.to_bits(),
+            _padding: 0,
+        }
+    }
+
+    /// Get elapsed time as f32
+    pub fn elapsed_time(&self) -> f32 {
+        f32::from_bits(self.elapsed_time_bits)
+    }
+}
+
 /// Inline storage size for console rollback state (avoids heap allocation)
 /// 512 bytes covers Nethercore ZX's 340-byte AudioPlaybackState with room to spare
 pub type ConsoleDataVec = SmallVec<[u8; 512]>;
+
+/// Inline storage size for input state (avoids heap allocation)
+/// 128 bytes covers ZInput (8 bytes) × 4 players × 2 (prev+curr) = 64 bytes with room to spare
+pub type InputDataVec = SmallVec<[u8; 128]>;
 
 /// Number of pre-allocated state buffers in the pool
 pub const STATE_POOL_SIZE: usize = super::config::MAX_ROLLBACK_FRAMES + 2;
@@ -22,7 +71,7 @@ pub const STATE_POOL_SIZE: usize = super::config::MAX_ROLLBACK_FRAMES + 2;
 /// Snapshot of game state for rollback
 ///
 /// Contains the serialized WASM game state, console-specific rollback data,
-/// and a checksum for desync detection.
+/// host-side rollback state, input state, and a checksum for desync detection.
 /// The data comes from calling `GameInstance::save_state()` which snapshots
 /// the entire WASM linear memory.
 #[derive(Clone)]
@@ -32,7 +81,12 @@ pub struct GameStateSnapshot {
     /// Console-specific rollback state (POD, serialized via bytemuck)
     /// Uses SmallVec to store inline (no heap allocation for typical console states)
     pub console_data: ConsoleDataVec,
-    /// xxHash3 checksum for desync detection (covers both data and console_data)
+    /// Input state (input_prev + input_curr) serialized via bytemuck
+    /// Required for button_pressed() to work correctly after rollback
+    pub input_data: InputDataVec,
+    /// Host-side state (RNG, tick count, elapsed time) that must be rolled back
+    pub host_state: HostRollbackState,
+    /// xxHash3 checksum for desync detection (covers all state)
     pub checksum: u64,
     /// Frame number this snapshot was taken at
     pub frame: i32,
@@ -44,28 +98,41 @@ impl GameStateSnapshot {
         Self {
             data: Vec::new(),
             console_data: SmallVec::new(),
+            input_data: SmallVec::new(),
+            host_state: HostRollbackState::default(),
             checksum: 0,
             frame: -1,
         }
     }
 
-    /// Create a snapshot from serialized data (no console data)
+    /// Create a snapshot from serialized data (no console, input, or host data)
     pub fn from_data(data: Vec<u8>, frame: i32) -> Self {
-        let checksum = Self::compute_checksum(&data, &[]);
+        let host_state = HostRollbackState::default();
+        let checksum = Self::compute_checksum(&data, &[], &[], &host_state);
         Self {
             data,
             console_data: SmallVec::new(),
+            input_data: SmallVec::new(),
+            host_state,
             checksum,
             frame,
         }
     }
 
-    /// Create a snapshot from WASM data and console rollback data
-    pub fn from_data_with_console(data: Vec<u8>, console_data: ConsoleDataVec, frame: i32) -> Self {
-        let checksum = Self::compute_checksum(&data, &console_data);
+    /// Create a complete snapshot with all rollback state
+    pub fn from_full_state(
+        data: Vec<u8>,
+        console_data: ConsoleDataVec,
+        input_data: InputDataVec,
+        host_state: HostRollbackState,
+        frame: i32,
+    ) -> Self {
+        let checksum = Self::compute_checksum(&data, &console_data, &input_data, &host_state);
         Self {
             data,
             console_data,
+            input_data,
+            host_state,
             checksum,
             frame,
         }
@@ -74,10 +141,13 @@ impl GameStateSnapshot {
     /// Create a snapshot from a pre-allocated buffer (avoids allocation)
     pub fn from_buffer(buffer: &mut Vec<u8>, len: usize, frame: i32) -> Self {
         buffer.truncate(len);
-        let checksum = Self::compute_checksum(buffer, &[]);
+        let host_state = HostRollbackState::default();
+        let checksum = Self::compute_checksum(buffer, &[], &[], &host_state);
         Self {
             data: std::mem::take(buffer),
             console_data: SmallVec::new(),
+            input_data: SmallVec::new(),
+            host_state,
             checksum,
             frame,
         }
@@ -93,21 +163,28 @@ impl GameStateSnapshot {
         self.data.len()
     }
 
-    /// Get total snapshot size including console data
+    /// Get total snapshot size including all state
     pub fn total_len(&self) -> usize {
-        self.data.len() + self.console_data.len()
+        self.data.len() + self.console_data.len() + self.input_data.len() + HOST_STATE_SIZE
     }
 
     /// Compute xxHash3 checksum for desync detection
     ///
     /// xxHash3 is SIMD-optimized (~50 GB/s throughput) for fast checksumming
     /// of large state buffers. We use this to detect desyncs between clients.
-    /// Checksum covers both WASM memory and console rollback state.
-    fn compute_checksum(data: &[u8], console_data: &[u8]) -> u64 {
+    /// Checksum covers WASM memory, console rollback state, input state, and host state.
+    fn compute_checksum(
+        data: &[u8],
+        console_data: &[u8],
+        input_data: &[u8],
+        host_state: &HostRollbackState,
+    ) -> u64 {
         use xxhash_rust::xxh3::Xxh3;
         let mut hasher = Xxh3::new();
         hasher.update(data);
         hasher.update(console_data);
+        hasher.update(input_data);
+        hasher.update(bytemuck::bytes_of(host_state));
         hasher.digest()
     }
 }
@@ -226,7 +303,9 @@ impl RollbackStateManager {
     /// Save the current game state
     ///
     /// Calls `game.save_state()` to snapshot the entire WASM linear memory,
-    /// and serializes the console rollback state via bytemuck.
+    /// serializes the console rollback state via bytemuck, captures input state
+    /// (for button_pressed to work correctly), and host-side state (RNG, tick
+    /// count, elapsed time) for determinism.
     /// Returns a `GameStateSnapshot` with checksum.
     pub fn save_state<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>(
         &mut self,
@@ -242,7 +321,21 @@ impl RollbackStateManager {
         // SmallVec stores inline (no heap allocation) for typical console states (<512 bytes)
         let console_data = SmallVec::from_slice(bytemuck::bytes_of(game.rollback_state()));
 
-        let total_size = snapshot_data.len() + console_data.len();
+        // Serialize input state (input_prev and input_curr)
+        // Required for button_pressed() to work correctly after rollback
+        let game_state = game.state();
+        let mut input_data: InputDataVec = SmallVec::new();
+        input_data.extend_from_slice(bytemuck::cast_slice(&game_state.input_prev));
+        input_data.extend_from_slice(bytemuck::cast_slice(&game_state.input_curr));
+
+        // Capture host-side state that affects game simulation
+        let host_state = HostRollbackState::new(
+            game_state.rng_state,
+            game_state.tick_count,
+            game_state.elapsed_time,
+        );
+
+        let total_size = snapshot_data.len() + console_data.len() + input_data.len() + HOST_STATE_SIZE;
         if total_size > self.max_state_size {
             return Err(SaveStateError::StateTooLarge {
                 size: total_size,
@@ -250,10 +343,12 @@ impl RollbackStateManager {
             });
         }
 
-        // Create snapshot with checksum covering both WASM and console data
-        Ok(GameStateSnapshot::from_data_with_console(
+        // Create snapshot with checksum covering all state
+        Ok(GameStateSnapshot::from_full_state(
             snapshot_data,
             console_data,
+            input_data,
+            host_state,
             frame,
         ))
     }
@@ -261,12 +356,16 @@ impl RollbackStateManager {
     /// Load a game state from a snapshot
     ///
     /// Calls `game.load_state()` to restore the WASM linear memory,
-    /// and deserializes the console rollback state via bytemuck.
+    /// deserializes the console rollback state via bytemuck, restores input
+    /// state (for button_pressed to work correctly), and host-side state
+    /// (RNG, tick count, elapsed time) for determinism.
     pub fn load_state<I: ConsoleInput, S: Send + Default + 'static, R: ConsoleRollbackState>(
         &mut self,
         game: &mut GameInstance<I, S, R>,
         snapshot: &GameStateSnapshot,
     ) -> Result<(), LoadStateError> {
+        use crate::wasm::state::MAX_PLAYERS;
+
         if snapshot.is_empty() {
             // Nothing to load
             return Ok(());
@@ -286,6 +385,33 @@ impl RollbackStateManager {
                 ));
             }
         }
+
+        // Restore input state if present
+        // Input data layout: [input_prev × MAX_PLAYERS][input_curr × MAX_PLAYERS]
+        let input_size = std::mem::size_of::<I>();
+        let expected_input_len = input_size * MAX_PLAYERS * 2;
+        if snapshot.input_data.len() == expected_input_len {
+            let game_state = game.state_mut();
+            let input_bytes = &snapshot.input_data[..];
+
+            // Restore input_prev (first half)
+            let prev_bytes = &input_bytes[..input_size * MAX_PLAYERS];
+            if let Ok(prev_inputs) = bytemuck::try_cast_slice::<u8, I>(prev_bytes) {
+                game_state.input_prev.copy_from_slice(prev_inputs);
+            }
+
+            // Restore input_curr (second half)
+            let curr_bytes = &input_bytes[input_size * MAX_PLAYERS..];
+            if let Ok(curr_inputs) = bytemuck::try_cast_slice::<u8, I>(curr_bytes) {
+                game_state.input_curr.copy_from_slice(curr_inputs);
+            }
+        }
+
+        // Restore host-side state for determinism
+        let game_state = game.state_mut();
+        game_state.rng_state = snapshot.host_state.rng_state;
+        game_state.tick_count = snapshot.host_state.tick_count;
+        game_state.elapsed_time = snapshot.host_state.elapsed_time();
 
         Ok(())
     }
@@ -410,5 +536,82 @@ mod tests {
         // Pool should allocate a new buffer when exhausted
         let buf2 = pool.acquire();
         assert!(buf2.capacity() >= 1024);
+    }
+
+    #[test]
+    fn test_host_rollback_state() {
+        let host_state = HostRollbackState::new(12345, 100, 1.5);
+        assert_eq!(host_state.rng_state, 12345);
+        assert_eq!(host_state.tick_count, 100);
+        assert_eq!(host_state.elapsed_time(), 1.5);
+    }
+
+    #[test]
+    fn test_host_rollback_state_serialization() {
+        let host_state = HostRollbackState::new(0xDEADBEEF, 42, 3.14159);
+        let bytes = bytemuck::bytes_of(&host_state);
+        assert_eq!(bytes.len(), HOST_STATE_SIZE);
+
+        let restored: &HostRollbackState = bytemuck::from_bytes(bytes);
+        assert_eq!(restored.rng_state, host_state.rng_state);
+        assert_eq!(restored.tick_count, host_state.tick_count);
+        assert_eq!(restored.elapsed_time_bits, host_state.elapsed_time_bits);
+    }
+
+    #[test]
+    fn test_snapshot_with_host_state() {
+        let data = vec![1, 2, 3, 4, 5];
+        let console_data = SmallVec::new();
+        let input_data = SmallVec::new();
+        let host_state = HostRollbackState::new(999, 50, 2.5);
+
+        let snapshot = GameStateSnapshot::from_full_state(
+            data.clone(),
+            console_data,
+            input_data,
+            host_state,
+            10,
+        );
+
+        assert_eq!(snapshot.host_state.rng_state, 999);
+        assert_eq!(snapshot.host_state.tick_count, 50);
+        assert_eq!(snapshot.host_state.elapsed_time(), 2.5);
+        assert_eq!(snapshot.frame, 10);
+    }
+
+    #[test]
+    fn test_snapshot_checksum_includes_host_state() {
+        let data = vec![1, 2, 3];
+        let console_data = SmallVec::new();
+        let input_data = SmallVec::new();
+
+        // Same data but different host state should produce different checksums
+        let host1 = HostRollbackState::new(100, 1, 1.0);
+        let host2 = HostRollbackState::new(200, 2, 2.0);
+
+        let snapshot1 =
+            GameStateSnapshot::from_full_state(data.clone(), console_data.clone(), input_data.clone(), host1, 0);
+        let snapshot2 =
+            GameStateSnapshot::from_full_state(data, console_data, input_data, host2, 0);
+
+        assert_ne!(snapshot1.checksum, snapshot2.checksum);
+    }
+
+    #[test]
+    fn test_snapshot_checksum_includes_input_state() {
+        let data = vec![1, 2, 3];
+        let console_data = SmallVec::new();
+        let host_state = HostRollbackState::default();
+
+        // Same data but different input state should produce different checksums
+        let input1: InputDataVec = SmallVec::from_slice(&[1, 2, 3, 4]);
+        let input2: InputDataVec = SmallVec::from_slice(&[5, 6, 7, 8]);
+
+        let snapshot1 =
+            GameStateSnapshot::from_full_state(data.clone(), console_data.clone(), input1, host_state, 0);
+        let snapshot2 =
+            GameStateSnapshot::from_full_state(data, console_data, input2, host_state, 0);
+
+        assert_ne!(snapshot1.checksum, snapshot2.checksum);
     }
 }
