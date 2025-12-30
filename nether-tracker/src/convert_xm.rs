@@ -299,6 +299,29 @@ fn convert_xm_instrument(xm_instr: &nether_xm::XmInstrument) -> TrackerInstrumen
         _ => LoopType::None,
     };
 
+    // Calculate original sample rate from finetune + relative_note
+    // This is the same calculation used in audio_convert::convert_xm_sample()
+    // Base frequency for C-4 (Amiga standard) = 8363 Hz
+    let original_sample_rate = {
+        const BASE_FREQ: f64 = 8363.0;
+        let total_semitones = xm_instr.sample_relative_note as f64
+            + (xm_instr.sample_finetune as f64 / 128.0);
+        let freq = BASE_FREQ * 2.0_f64.powf(total_semitones / 12.0);
+        (freq.round() as u32).clamp(100, 96000)
+    };
+
+    // Convert loop points to match the resampled 22050 Hz sample
+    // If original was 44100 Hz, loop point 1000 becomes 500 after resampling
+    const TARGET_RATE: u32 = 22050;
+    let (sample_loop_start, sample_loop_length) = if original_sample_rate == TARGET_RATE {
+        (xm_instr.sample_loop_start, xm_instr.sample_loop_length)
+    } else {
+        let ratio = TARGET_RATE as f64 / original_sample_rate as f64;
+        let new_start = (xm_instr.sample_loop_start as f64 * ratio).round() as u32;
+        let new_length = (xm_instr.sample_loop_length as f64 * ratio).round() as u32;
+        (new_start, new_length)
+    };
+
     TrackerInstrument {
         name: xm_instr.name.clone(),
         nna: NewNoteAction::Cut, // XM doesn't have NNA
@@ -322,9 +345,11 @@ fn convert_xm_instrument(xm_instr: &nether_xm::XmInstrument) -> TrackerInstrumen
         pitch_pan_separation: 0, // XM doesn't have pitch-pan separation
         pitch_pan_center: 60,    // Default center = C-5
 
-        // Sample metadata - XM stores these per-instrument
-        sample_loop_start: xm_instr.sample_loop_start,
-        sample_loop_end: xm_instr.sample_loop_start + xm_instr.sample_loop_length,
+        // Sample loop points - CONVERTED to match resampled 22050 Hz sample
+        // Original loop points are in the source sample's sample space, but the
+        // sample data has been resampled during ROM packing.
+        sample_loop_start,
+        sample_loop_end: sample_loop_start + sample_loop_length,
         sample_loop_type,
         // Finetune and relative_note are ZEROED because they're already baked into the
         // resampled 22050 Hz sample during ROM packing (via audio_convert::convert_xm_sample).
@@ -418,14 +443,16 @@ mod tests {
     #[test]
     fn test_convert_xm_instrument_sample_loop() {
         // Create an XM instrument with sample loop info
+        // Using relative_note=17, finetune=-16 which gives ~22050 Hz sample rate
+        // This means the sample doesn't need resampling, so loop points stay the same
         let xm_instr = nether_xm::XmInstrument {
             name: "Test".to_string(),
             num_samples: 1,
             sample_loop_start: 1000,
             sample_loop_length: 2000,
             sample_loop_type: 1, // Forward loop
-            sample_finetune: -5,
-            sample_relative_note: 3,
+            sample_finetune: -16,
+            sample_relative_note: 17, // ~22050 Hz, so ratio ≈ 1
             volume_envelope: None,
             panning_envelope: None,
             volume_fadeout: 512,
@@ -437,9 +464,9 @@ mod tests {
 
         let tracker_instr = convert_xm_instrument(&xm_instr);
 
-        // Verify sample loop data is correctly converted
-        assert_eq!(tracker_instr.sample_loop_start, 1000);
-        assert_eq!(tracker_instr.sample_loop_end, 3000); // start + length
+        // Loop points should be approximately the same since sample rate ≈ 22050 Hz
+        // (small rounding differences may occur)
+        assert!(tracker_instr.sample_loop_start >= 990 && tracker_instr.sample_loop_start <= 1010);
         assert_eq!(tracker_instr.sample_loop_type, LoopType::Forward);
         // Finetune and relative_note are zeroed because pitch adjustment is baked
         // into the resampled 22050 Hz sample during ROM packing
@@ -451,6 +478,46 @@ mod tests {
         assert_eq!(tracker_instr.auto_vibrato_sweep, 128);
         assert_eq!(tracker_instr.auto_vibrato_depth, 16);
         assert_eq!(tracker_instr.auto_vibrato_rate, 8);
+    }
+
+    #[test]
+    fn test_convert_xm_instrument_loop_points_scaled() {
+        // Test that loop points are properly scaled when resampling
+        // Using relative_note=0, finetune=0 which gives 8363 Hz base sample rate
+        // Ratio = 22050 / 8363 ≈ 2.636
+        let xm_instr = nether_xm::XmInstrument {
+            name: "ScaledLoop".to_string(),
+            num_samples: 1,
+            sample_loop_start: 1000,
+            sample_loop_length: 2000,
+            sample_loop_type: 1, // Forward loop
+            sample_finetune: 0,
+            sample_relative_note: 0, // 8363 Hz base rate
+            volume_envelope: None,
+            panning_envelope: None,
+            volume_fadeout: 0,
+            vibrato_type: 0,
+            vibrato_sweep: 0,
+            vibrato_depth: 0,
+            vibrato_rate: 0,
+        };
+
+        let tracker_instr = convert_xm_instrument(&xm_instr);
+
+        // Expected: loop_start = 1000 * (22050/8363) ≈ 2636
+        // Expected: loop_length = 2000 * (22050/8363) ≈ 5273
+        // Allow small tolerance for rounding
+        assert!(
+            tracker_instr.sample_loop_start >= 2630 && tracker_instr.sample_loop_start <= 2640,
+            "Loop start should be ~2636, got {}",
+            tracker_instr.sample_loop_start
+        );
+        let loop_length = tracker_instr.sample_loop_end - tracker_instr.sample_loop_start;
+        assert!(
+            loop_length >= 5265 && loop_length <= 5280,
+            "Loop length should be ~5273, got {}",
+            loop_length
+        );
     }
 
     #[test]
