@@ -21,6 +21,14 @@ pub enum TrackerEffect {
     /// IT: Txx, XM: Fxx (when param >= 0x20)
     SetTempo(u8),
 
+    /// Tempo slide up (IT only)
+    /// IT: T1x (slide up by x BPM per tick)
+    TempoSlideUp(u8),
+
+    /// Tempo slide down (IT only)
+    /// IT: T0x (slide down by x BPM per tick)
+    TempoSlideDown(u8),
+
     // =========================================================================
     // Pattern Flow Control
     // =========================================================================
@@ -39,6 +47,15 @@ pub enum TrackerEffect {
     /// Pattern loop
     /// IT: SBx, XM: E6x
     PatternLoop(u8),
+
+    /// Fine pattern delay (extra ticks added to current row)
+    /// IT: S6x - adds x extra ticks to the row
+    FinePatternDelay(u8),
+
+    /// High sample offset multiplier (IT only)
+    /// IT: SAx - sets high byte for next Oxx command
+    /// offset = (SAx_value << 16) + (Oxx_value << 8)
+    HighSampleOffset(u8),
 
     // =========================================================================
     // Volume Effects
@@ -65,6 +82,14 @@ pub enum TrackerEffect {
     /// IT: Wxy, XM: Hxy
     GlobalVolumeSlide { up: u8, down: u8 },
 
+    /// Fine global volume slide up (IT only)
+    /// IT: WxF (tick 0 only)
+    FineGlobalVolumeUp(u8),
+
+    /// Fine global volume slide down (IT only)
+    /// IT: WFx (tick 0 only)
+    FineGlobalVolumeDown(u8),
+
     /// Channel volume (IT only)
     /// IT: Mxx (when in channel mode)
     SetChannelVolume(u8),
@@ -72,6 +97,14 @@ pub enum TrackerEffect {
     /// Channel volume slide (IT only)
     /// IT: Nxy
     ChannelVolumeSlide { up: u8, down: u8 },
+
+    /// Fine channel volume slide up (IT only)
+    /// IT: NxF (tick 0 only)
+    FineChannelVolumeUp(u8),
+
+    /// Fine channel volume slide down (IT only)
+    /// IT: NFx (tick 0 only)
+    FineChannelVolumeDown(u8),
 
     // =========================================================================
     // Pitch Effects
@@ -141,6 +174,14 @@ pub enum TrackerEffect {
     /// Panning slide
     /// IT: Pxy, XM: Pxy
     PanningSlide { left: u8, right: u8 },
+
+    /// Fine panning slide left (IT only)
+    /// IT: PFx (tick 0 only)
+    FinePanningLeft(u8),
+
+    /// Fine panning slide right (IT only)
+    /// IT: PxF (tick 0 only)
+    FinePanningRight(u8),
 
     /// Panbrello (IT only)
     /// IT: Yxy
@@ -250,8 +291,12 @@ impl TrackerEffect {
                 | Self::FineVolumeDown(_)
                 | Self::SetGlobalVolume(_)
                 | Self::GlobalVolumeSlide { .. }
+                | Self::FineGlobalVolumeUp(_)
+                | Self::FineGlobalVolumeDown(_)
                 | Self::SetChannelVolume(_)
                 | Self::ChannelVolumeSlide { .. }
+                | Self::FineChannelVolumeUp(_)
+                | Self::FineChannelVolumeDown(_)
                 | Self::Tremolo { .. }
                 | Self::Tremor { .. }
         )
@@ -261,7 +306,11 @@ impl TrackerEffect {
     pub fn affects_panning(&self) -> bool {
         matches!(
             self,
-            Self::SetPanning(_) | Self::PanningSlide { .. } | Self::Panbrello { .. }
+            Self::SetPanning(_)
+                | Self::PanningSlide { .. }
+                | Self::FinePanningLeft(_)
+                | Self::FinePanningRight(_)
+                | Self::Panbrello { .. }
         )
     }
 

@@ -102,8 +102,23 @@ pub struct TrackerEngine {
     /// Pattern delay counter - tracks how many times row has been repeated
     pattern_delay_count: u8,
 
+    /// Fine pattern delay (S6x) - extra ticks to add to current row
+    fine_pattern_delay: u8,
+
     /// Global volume slide memory (Hxy effect)
     last_global_vol_slide: u8,
+
+    /// Whether current module is IT format (affects vibrato depth, etc.)
+    is_it_format: bool,
+
+    /// Old effects mode (S3M compatibility - affects vibrato/tremolo depth)
+    old_effects_mode: bool,
+
+    /// Link G memory with E/F for portamento
+    link_g_memory: bool,
+
+    /// Tempo slide amount per tick (positive = up, negative = down, 0 = none)
+    tempo_slide: i8,
 }
 
 /// A loaded tracker module with resolved sample handles
@@ -201,6 +216,8 @@ pub struct TrackerChannel {
     pub last_vibrato: u8,
     pub last_tremolo: u8,
     pub last_sample_offset: u8,
+    /// Shared E/F/G portamento memory (used when LINK_G_MEMORY flag is set)
+    pub shared_efg_memory: u8,
 
     // Arpeggio
     pub arpeggio_tick: u8,
@@ -280,6 +297,8 @@ pub struct TrackerChannel {
     pub arpeggio_active: bool,
     /// Panning slide is active this row
     pub panning_slide_active: bool,
+    /// Channel volume slide is active this row (IT only)
+    pub channel_volume_slide_active: bool,
 
     // Fade state for smooth transitions (anti-pop)
     /// Fade-out samples remaining (0 = not fading out, >0 = fading out)
@@ -355,6 +374,18 @@ pub struct TrackerChannel {
     /// IT channel volume slide
     pub channel_volume_slide: i8,
 
+    // --- IT Instrument Volume ---
+    /// Instrument global volume (0-64, from TrackerInstrument.global_volume)
+    pub instrument_global_volume: u8,
+
+    // --- IT Pitch-Pan Separation ---
+    /// Pitch-pan separation (-32 to +32)
+    pub pitch_pan_separation: i8,
+    /// Pitch-pan center note (0-119)
+    pub pitch_pan_center: u8,
+    /// Current note being played (for pitch-pan separation calculation)
+    pub current_note: u8,
+
     // --- IT Tremor Effect ---
     /// Tremor on ticks (Ixy: x = on ticks)
     pub tremor_on_ticks: u8,
@@ -392,6 +423,9 @@ impl TrackerChannel {
 
         // IT-specific defaults
         self.channel_volume = 64; // Full channel volume
+        self.instrument_global_volume = 64; // Full instrument volume
+        self.pitch_pan_separation = 0;
+        self.pitch_pan_center = 60; // C-5
         self.filter_cutoff = 1.0; // Wide open filter
         self.filter_b0 = 1.0; // Passthrough filter
     }
@@ -400,6 +434,7 @@ impl TrackerChannel {
     pub fn trigger_note(&mut self, note: u8, instrument: Option<&TrackerInstrument>) {
         self.note_on = true;
         self.key_off = false;
+        self.current_note = note; // Store for pitch-pan separation
         self.sample_pos = 0.0;
         self.sample_direction = 1;
         self.volume_envelope_pos = 0;
@@ -453,6 +488,13 @@ impl TrackerChannel {
             // Copy fadeout rate
             self.instrument_fadeout_rate = instr.fadeout;
 
+            // Copy instrument global volume (IT feature)
+            self.instrument_global_volume = instr.global_volume;
+
+            // Copy pitch-pan separation (IT feature)
+            self.pitch_pan_separation = instr.pitch_pan_separation;
+            self.pitch_pan_center = instr.pitch_pan_center;
+
             // Set up filter from instrument defaults
             if let Some(cutoff) = instr.filter_cutoff {
                 self.filter_cutoff = cutoff as f32 / 127.0;
@@ -490,6 +532,7 @@ impl TrackerChannel {
         self.tremolo_active = false;
         self.arpeggio_active = false;
         self.panning_slide_active = false;
+        self.channel_volume_slide_active = false;
         self.tremor_active = false;
         self.panbrello_active = false;
 
@@ -666,7 +709,12 @@ impl TrackerEngine {
             row_cache: RowStateCache::default(),
             pattern_delay: 0,
             pattern_delay_count: 0,
+            fine_pattern_delay: 0,
             last_global_vol_slide: 0,
+            is_it_format: false,
+            old_effects_mode: false,
+            link_g_memory: false,
+            tempo_slide: 0,
         }
     }
 
@@ -722,6 +770,13 @@ impl TrackerEngine {
             .get(raw as usize)
             .and_then(|m| m.as_ref())
             .map(|m| &m.module)
+    }
+
+    /// Get the tempo slide amount for this row
+    /// Returns BPM adjustment per tick (positive = faster, negative = slower)
+    /// IT effect: T0x = slide down by x, T1x = slide up by x
+    pub fn get_tempo_slide(&self) -> i8 {
+        self.tempo_slide
     }
 
     /// Reset playback to the beginning
@@ -847,7 +902,7 @@ impl TrackerEngine {
     fn process_row_tick0_internal(&mut self, handle: u32, sounds: &[Option<Sound>]) {
         // Get module data - need to access by index to work around borrow checker
         let raw_handle = raw_tracker_handle(handle);
-        let (num_channels, pattern_info) = {
+        let (num_channels, pattern_info, is_it, old_effects, link_g) = {
             let loaded = match self.modules.get(raw_handle as usize).and_then(|m| m.as_ref()) {
                 Some(m) => m,
                 None => return,
@@ -857,6 +912,20 @@ impl TrackerEngine {
                 None => return,
             };
 
+            // Check format flags (affects effect processing)
+            let is_it = loaded
+                .module
+                .format
+                .contains(nether_tracker::FormatFlags::IS_IT_FORMAT);
+            let old_effects = loaded
+                .module
+                .format
+                .contains(nether_tracker::FormatFlags::OLD_EFFECTS);
+            let link_g = loaded
+                .module
+                .format
+                .contains(nether_tracker::FormatFlags::LINK_G_MEMORY);
+
             // Collect note data for this row
             let mut notes = Vec::new();
             for ch_idx in 0..loaded.module.num_channels as usize {
@@ -864,8 +933,16 @@ impl TrackerEngine {
                     notes.push((ch_idx, *note));
                 }
             }
-            (loaded.module.num_channels, notes)
+            (loaded.module.num_channels, notes, is_it, old_effects, link_g)
         };
+
+        // Store format flags for use in effect processing
+        self.is_it_format = is_it;
+        self.old_effects_mode = old_effects;
+        self.link_g_memory = link_g;
+
+        // Reset tempo slide (only active during the row it appears on)
+        self.tempo_slide = 0;
 
         // Reset per-row effect state for all channels before processing
         // XM/IT effects only apply during the row they appear on
@@ -1103,6 +1180,16 @@ impl TrackerEngine {
                 // These modify TrackerState, handled in FFI layer
             }
 
+            TrackerEffect::TempoSlideUp(amount) => {
+                // T1x = slide tempo up by x BPM per tick
+                self.tempo_slide = *amount as i8;
+            }
+
+            TrackerEffect::TempoSlideDown(amount) => {
+                // T0x = slide tempo down by x BPM per tick
+                self.tempo_slide = -(*amount as i8);
+            }
+
             // =====================================================================
             // Pattern Flow (handled by caller)
             // =====================================================================
@@ -1122,6 +1209,17 @@ impl TrackerEngine {
                 } else {
                     channel.pattern_loop_count -= 1;
                 }
+            }
+
+            TrackerEffect::FinePatternDelay(ticks) => {
+                // S6x - adds x extra ticks to the current row
+                // Unlike SEx (pattern delay) which repeats the row, this just extends the tick count
+                self.fine_pattern_delay = *ticks;
+            }
+
+            TrackerEffect::HighSampleOffset(value) => {
+                // SAx - sets high byte for next Oxx command
+                channel.sample_offset_high = *value;
             }
 
             // =====================================================================
@@ -1152,14 +1250,35 @@ impl TrackerEngine {
                     self.last_global_vol_slide = param;
                 }
             }
+            TrackerEffect::FineGlobalVolumeUp(val) => {
+                // Fine global volume slide up - applies on tick 0 only
+                self.global_volume = (self.global_volume + *val as f32 / 64.0).min(1.0);
+            }
+            TrackerEffect::FineGlobalVolumeDown(val) => {
+                // Fine global volume slide down - applies on tick 0 only
+                self.global_volume = (self.global_volume - *val as f32 / 64.0).max(0.0);
+            }
             TrackerEffect::SetChannelVolume(vol) => {
-                channel.volume = ((*vol).min(64) as f32) / 64.0;
+                channel.channel_volume = (*vol).min(64);
             }
             TrackerEffect::ChannelVolumeSlide { up, down } => {
+                channel.channel_volume_slide_active = true;
                 let param = (*up << 4) | *down;
                 if param != 0 {
-                    channel.last_volume_slide = param;
+                    channel.channel_volume_slide = if *up > 0 {
+                        *up as i8
+                    } else {
+                        -(*down as i8)
+                    };
                 }
+            }
+            TrackerEffect::FineChannelVolumeUp(val) => {
+                // Fine channel volume slide up - applies on tick 0 only
+                channel.channel_volume = channel.channel_volume.saturating_add(*val).min(64);
+            }
+            TrackerEffect::FineChannelVolumeDown(val) => {
+                // Fine channel volume slide down - applies on tick 0 only
+                channel.channel_volume = channel.channel_volume.saturating_sub(*val);
             }
 
             // =====================================================================
@@ -1170,6 +1289,10 @@ impl TrackerEngine {
                 let v = *val as u8;
                 if v != 0 {
                     channel.last_porta_up = v;
+                    // Update shared E/F/G memory when LINK_G_MEMORY is set
+                    if self.link_g_memory {
+                        channel.shared_efg_memory = v;
+                    }
                 }
             }
             TrackerEffect::PortamentoDown(val) => {
@@ -1177,6 +1300,10 @@ impl TrackerEngine {
                 let v = *val as u8;
                 if v != 0 {
                     channel.last_porta_down = v;
+                    // Update shared E/F/G memory when LINK_G_MEMORY is set
+                    if self.link_g_memory {
+                        channel.shared_efg_memory = v;
+                    }
                 }
             }
             TrackerEffect::FinePortaUp(val) => {
@@ -1204,6 +1331,13 @@ impl TrackerEngine {
                 let v = *speed as u8;
                 if v != 0 {
                     channel.porta_speed = v;
+                    // Update shared E/F/G memory when LINK_G_MEMORY is set
+                    if self.link_g_memory {
+                        channel.shared_efg_memory = v;
+                    }
+                } else if self.link_g_memory && channel.shared_efg_memory != 0 {
+                    // When G00 and LINK_G_MEMORY, use shared E/F/G memory
+                    channel.porta_speed = channel.shared_efg_memory;
                 }
                 // Set target period from note if a note was triggered
                 if note_num > 0 && note_num <= 96 {
@@ -1298,6 +1432,15 @@ impl TrackerEngine {
                 // Store for per-tick processing
                 // Positive = right, negative = left
                 channel.panning_slide = (*right as i8) - (*left as i8);
+            }
+            TrackerEffect::FinePanningRight(amount) => {
+                // Fine panning slide right - apply immediately on tick 0 only
+                // Panning is -1.0 to 1.0, amount is 0-15
+                channel.panning = (channel.panning + *amount as f32 / 64.0).clamp(-1.0, 1.0);
+            }
+            TrackerEffect::FinePanningLeft(amount) => {
+                // Fine panning slide left - apply immediately on tick 0 only
+                channel.panning = (channel.panning - *amount as f32 / 64.0).clamp(-1.0, 1.0);
             }
             TrackerEffect::Panbrello { speed, depth } => {
                 channel.panbrello_active = true;
@@ -1437,38 +1580,96 @@ impl TrackerEngine {
                 }
             }
 
+            // Channel volume slide (IT only) - apply if active this row
+            if channel.channel_volume_slide_active && channel.channel_volume_slide != 0 {
+                if channel.channel_volume_slide > 0 {
+                    channel.channel_volume = channel
+                        .channel_volume
+                        .saturating_add(channel.channel_volume_slide as u8)
+                        .min(64);
+                } else {
+                    channel.channel_volume = channel
+                        .channel_volume
+                        .saturating_sub((-channel.channel_volume_slide) as u8);
+                }
+            }
+
             // Portamento up - only apply if portamento up effect is active this row
             if channel.porta_up_active && channel.last_porta_up != 0 {
-                channel.period = (channel.period - channel.last_porta_up as f32 * 4.0).max(1.0);
+                if self.is_it_format {
+                    // IT linear slide: freq = freq * 2^(slide/768)
+                    channel.period = apply_it_linear_slide(channel.period, channel.last_porta_up as i16);
+                } else {
+                    // XM linear period slide
+                    channel.period = (channel.period - channel.last_porta_up as f32 * 4.0).max(1.0);
+                }
             }
 
             // Portamento down - only apply if portamento down effect is active this row
             if channel.porta_down_active && channel.last_porta_down != 0 {
-                channel.period += channel.last_porta_down as f32 * 4.0;
+                if self.is_it_format {
+                    // IT linear slide: freq = freq / 2^(slide/768)
+                    channel.period = apply_it_linear_slide(channel.period, -(channel.last_porta_down as i16));
+                } else {
+                    // XM linear period slide
+                    channel.period += channel.last_porta_down as f32 * 4.0;
+                }
             }
 
             // Tone portamento (slide toward target) - only apply if tone porta is active
             if channel.tone_porta_active && channel.target_period > 0.0 && channel.porta_speed > 0 {
                 let diff = channel.target_period - channel.period;
-                let speed = channel.porta_speed as f32 * 4.0;
-                if diff.abs() < speed {
-                    channel.period = channel.target_period;
-                } else if diff > 0.0 {
-                    channel.period += speed;
+                if self.is_it_format {
+                    // IT linear tone portamento
+                    let slide = channel.porta_speed as i16;
+                    if diff > 0.0 {
+                        // Slide down (toward lower frequency, higher period)
+                        let new_period = apply_it_linear_slide(channel.period, -slide);
+                        if new_period >= channel.target_period {
+                            channel.period = channel.target_period;
+                        } else {
+                            channel.period = new_period;
+                        }
+                    } else if diff < 0.0 {
+                        // Slide up (toward higher frequency, lower period)
+                        let new_period = apply_it_linear_slide(channel.period, slide);
+                        if new_period <= channel.target_period {
+                            channel.period = channel.target_period;
+                        } else {
+                            channel.period = new_period;
+                        }
+                    }
                 } else {
-                    channel.period -= speed;
+                    // XM linear period slide
+                    let speed = channel.porta_speed as f32 * 4.0;
+                    if diff.abs() < speed {
+                        channel.period = channel.target_period;
+                    } else if diff > 0.0 {
+                        channel.period += speed;
+                    } else {
+                        channel.period -= speed;
+                    }
                 }
             }
 
-            // Vibrato (FT2-compatible depth and speed) - only apply if vibrato is active
-            // Depth: 128.0/15.0 ≈ 8.533 gives ±2 semitones (±128 period units) at depth=15
+            // Vibrato - only apply if vibrato is active
+            // XM depth: 128.0/15.0 ≈ 8.533 gives ±2 semitones (±128 period units) at depth=15
+            // IT depth: 4x finer than XM (per ITTECH.TXT spec)
+            // OLD_EFFECTS: Use S3M-compatible (coarser) depth like XM
             // Speed: 4x faster oscillation to match libxm/FT2
             if channel.vibrato_active && channel.vibrato_depth > 0 {
                 let vibrato = get_waveform_value(channel.vibrato_waveform, channel.vibrato_pos);
-                let delta = vibrato * channel.vibrato_depth as f32 * (128.0 / 15.0);
+                // IT vibrato is 4x finer than XM, unless OLD_EFFECTS mode
+                let depth_scale = if self.is_it_format && !self.old_effects_mode {
+                    32.0 / 15.0
+                } else {
+                    128.0 / 15.0
+                };
+                let delta = vibrato * channel.vibrato_depth as f32 * depth_scale;
                 channel.period = channel.base_period + delta;
+                // Update position for 256-point table (speed * 4 gives good wrap behavior)
                 channel.vibrato_pos =
-                    channel.vibrato_pos.wrapping_add(channel.vibrato_speed << 2) & 0x3F;
+                    channel.vibrato_pos.wrapping_add(channel.vibrato_speed << 2);
             }
 
             // Auto-vibrato (instrument vibrato, applied in addition to pattern vibrato)
@@ -1487,7 +1688,13 @@ impl TrackerEngine {
                 };
 
                 // Apply auto-vibrato to period (adds to current period, not base)
-                let delta = auto_vib * channel.auto_vibrato_depth as f32 * sweep_factor * (128.0 / 15.0);
+                // IT vibrato is 4x finer than XM, unless OLD_EFFECTS mode
+                let depth_scale = if self.is_it_format && !self.old_effects_mode {
+                    32.0 / 15.0
+                } else {
+                    128.0 / 15.0
+                };
+                let delta = auto_vib * channel.auto_vibrato_depth as f32 * sweep_factor * depth_scale;
                 channel.period += delta;
 
                 // Advance auto-vibrato position (slower rate than pattern vibrato)
@@ -1506,8 +1713,9 @@ impl TrackerEngine {
                 let tremolo = get_waveform_value(channel.tremolo_waveform, channel.tremolo_pos);
                 let delta = tremolo * channel.tremolo_depth as f32 * 4.0 / 128.0;
                 channel.volume = (channel.volume + delta).clamp(0.0, 1.0);
+                // Update position for 256-point table
                 channel.tremolo_pos =
-                    channel.tremolo_pos.wrapping_add(channel.tremolo_speed << 2) & 0x3F;
+                    channel.tremolo_pos.wrapping_add(channel.tremolo_speed << 2);
             }
 
             // Retrigger - note: retrigger_tick is reset per-row in reset_row_effects
@@ -1860,6 +2068,9 @@ impl TrackerEngine {
             // Apply channel volume (IT feature)
             vol *= channel.channel_volume as f32 / 64.0;
 
+            // Apply instrument global volume (IT feature)
+            vol *= channel.instrument_global_volume as f32 / 64.0;
+
             // Apply tremor mute (IT feature)
             if channel.tremor_mute {
                 vol = 0.0;
@@ -1867,6 +2078,16 @@ impl TrackerEngine {
 
             // Apply panning with envelope
             let mut pan = channel.panning;
+
+            // Apply pitch-pan separation (IT feature)
+            // Formula: NotePan = NotePan + (Note - PPCenter) × PPSeparation / 8
+            // IT uses 0-64 panning, we use -1.0 to 1.0, so divide by additional 32
+            if channel.pitch_pan_separation != 0 {
+                let note_offset = channel.current_note as i16 - channel.pitch_pan_center as i16;
+                let pan_offset = (note_offset * channel.pitch_pan_separation as i16) as f32 / 256.0;
+                pan = (pan + pan_offset).clamp(-1.0, 1.0);
+            }
+
             if channel.panning_envelope_enabled {
                 let instr_idx = channel.instrument.saturating_sub(1) as usize;
                 if let Some(instr) = module.module.instruments.get(instr_idx) {
@@ -1883,8 +2104,8 @@ impl TrackerEngine {
             // Apply panbrello offset (IT feature)
             // Calculate panbrello offset from depth and waveform position
             if channel.panbrello_active && channel.panbrello_depth > 0 {
-                let waveform_value = SINE_LUT[(channel.panbrello_pos >> 4) as usize & 0xF];
-                let panbrello_offset = (waveform_value * channel.panbrello_depth as i8 as f32) / (64.0 * 256.0);
+                let waveform_value = SINE_LUT[(channel.panbrello_pos >> 4) as usize & 0xF] as f32;
+                let panbrello_offset = (waveform_value * channel.panbrello_depth as f32) / (64.0 * 256.0);
                 pan = (pan + panbrello_offset).clamp(-1.0, 1.0);
             }
 
@@ -2042,6 +2263,9 @@ impl TrackerEngine {
             // Apply channel volume (IT feature)
             vol *= channel.channel_volume as f32 / 64.0;
 
+            // Apply instrument global volume (IT feature)
+            vol *= channel.instrument_global_volume as f32 / 64.0;
+
             // Apply tremor mute (IT feature)
             if channel.tremor_mute {
                 vol = 0.0;
@@ -2049,6 +2273,16 @@ impl TrackerEngine {
 
             // Apply panning with envelope
             let mut pan = channel.panning;
+
+            // Apply pitch-pan separation (IT feature)
+            // Formula: NotePan = NotePan + (Note - PPCenter) × PPSeparation / 8
+            // IT uses 0-64 panning, we use -1.0 to 1.0, so divide by additional 32
+            if channel.pitch_pan_separation != 0 {
+                let note_offset = channel.current_note as i16 - channel.pitch_pan_center as i16;
+                let pan_offset = (note_offset * channel.pitch_pan_separation as i16) as f32 / 256.0;
+                pan = (pan + pan_offset).clamp(-1.0, 1.0);
+            }
+
             if channel.panning_envelope_enabled {
                 let instr_idx = channel.instrument.saturating_sub(1) as usize;
                 if let Some(instr) = module.module.instruments.get(instr_idx) {
@@ -2078,11 +2312,21 @@ impl TrackerEngine {
             // Process per-tick effects (not on tick 0)
             if state.tick > 0 {
                 self.process_tick(state.tick, state.speed);
+
+                // Apply tempo slide (IT Txy where x<2)
+                // Slides BPM by the slide amount each tick
+                if self.tempo_slide != 0 {
+                    let new_bpm = (state.bpm as i16 + self.tempo_slide as i16).clamp(32, 255) as u16;
+                    state.bpm = new_bpm;
+                }
             }
 
             // Check if we need to advance to next row
-            if state.tick >= state.speed {
+            // S6x (fine pattern delay) extends the row by extra ticks
+            let effective_speed = state.speed + self.fine_pattern_delay as u16;
+            if state.tick >= effective_speed {
                 state.tick = 0;
+                self.fine_pattern_delay = 0; // Reset fine pattern delay for next row
 
                 // Pattern delay (EEx): repeat current row for pattern_delay additional times
                 if self.pattern_delay > 0 {
@@ -2295,50 +2539,57 @@ fn samples_per_tick(bpm: u16, sample_rate: u32) -> u32 {
     (sample_rate * 5 / 2) / bpm as u32
 }
 
-/// FT2 16-point quarter-sine lookup table for vibrato/tremolo
-/// Values represent sin(i * π/32) * 127 for i = 0..15
+/// 64-point quarter-sine lookup table for vibrato/tremolo (IT-compatible resolution)
+/// Values represent sin(i * π/128) * 127 for i = 0..63
+/// This gives 256 effective positions when mirrored across 4 quadrants
+const SINE_LUT_64: [i8; 64] = [
+    0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30,
+    32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62,
+    64, 66, 68, 70, 72, 74, 76, 78, 80, 82, 84, 86, 88, 89, 91, 93,
+    95, 96, 98, 100, 101, 103, 104, 106, 107, 108, 110, 111, 112, 113, 114, 115,
+];
+
+/// Legacy 16-point quarter-sine for XM/FT2 compatibility (used for panning calculations)
 const SINE_LUT: [i8; 16] = [0, 12, 24, 37, 48, 60, 71, 81, 90, 98, 106, 112, 118, 122, 125, 127];
 
 /// Get waveform value for vibrato/tremolo
 ///
-/// Uses FT2-compatible integer lookup tables for byte-exact compatibility.
+/// Uses IT-compatible 64-point quarter-sine table (256 effective positions)
 ///
 /// Waveform types:
-/// - 0: Sine (FT2 LUT with quadrant mirroring)
-/// - 1: Ramp down (FT2-style sawtooth)
+/// - 0: Sine (IT LUT with quadrant mirroring)
+/// - 1: Ramp down (sawtooth)
 /// - 2: Square
 /// - 3: Random (deterministic pseudo-random)
 fn get_waveform_value(waveform: u8, position: u8) -> f32 {
-    let pos = position & 0x3F; // 0-63
+    let pos = position & 0xFF; // Full 256 positions for IT compatibility
 
     match waveform & 0x03 {
         0 => {
-            // FT2 sine LUT with quadrant mirroring
-            // Quarter 0 (0-15): ascending from 0 to 127
-            // Quarter 1 (16-31): descending from 127 to 0
-            // Quarter 2 (32-47): ascending from 0 to -127
-            // Quarter 3 (48-63): descending from -127 to 0
-            let idx = (pos & 0x0F) as usize;
-            let val = if (pos & 0x10) != 0 {
-                // Quarters 1 and 3: mirror the LUT
-                SINE_LUT[15 - idx]
-            } else {
-                // Quarters 0 and 2: direct LUT lookup
-                SINE_LUT[idx]
+            // IT 256-point sine using 64-point quarter table with mirroring
+            // Quarter 0 (0-63): ascending from 0 to peak
+            // Quarter 1 (64-127): descending from peak to 0
+            // Quarter 2 (128-191): ascending from 0 to -peak
+            // Quarter 3 (192-255): descending from -peak to 0
+            let quarter = pos >> 6; // 0-3
+            let idx = (pos & 0x3F) as usize; // 0-63
+            let val = match quarter {
+                0 => SINE_LUT_64[idx],           // 0-63: ascending
+                1 => SINE_LUT_64[63 - idx],     // 64-127: descending
+                2 => -SINE_LUT_64[idx],          // 128-191: negative ascending
+                _ => -SINE_LUT_64[63 - idx],    // 192-255: negative descending
             };
-            let signed = if pos < 32 { val } else { -val };
-            signed as f32 / 127.0
+            val as f32 / 115.0 // Normalize to roughly -1.0 to 1.0
         }
         1 => {
-            // Ramp down (FT2-style sawtooth)
-            // FT2/libxm: "ramp down table is upside down" - starts high, goes low
-            // Position 0 = +1.0, position 32 = -1.0, position 63 = ~+1.0
-            let ramp = 32i8 - (pos as i8);
-            (ramp as f32) / 32.0
+            // Ramp down (sawtooth)
+            // Position 0 = +1.0, position 128 = -1.0, position 255 = ~+1.0
+            let ramp = 128i16 - (pos as i16);
+            (ramp as f32) / 128.0
         }
         2 => {
             // Square wave: 1.0 for first half, -1.0 for second
-            if pos < 32 { 1.0 } else { -1.0 }
+            if pos < 128 { 1.0 } else { -1.0 }
         }
         _ => {
             // "Random" - deterministic pseudo-random using position as seed
@@ -2360,6 +2611,46 @@ fn note_to_period(note: u8, finetune: i8) -> f32 {
     let ft = finetune as i32;
     let period = 10 * 12 * 16 * 4 - n * 16 * 4 - ft / 2;
     period.max(1) as f32
+}
+
+/// Apply IT linear slide to period (ITTECH.TXT formula)
+///
+/// IT linear slides modify frequency by 2^(slide_amount/768) per tick.
+/// Since period is inversely proportional to frequency:
+/// - Pitch up: new_period = old_period / 2^(slide/768)
+/// - Pitch down: new_period = old_period * 2^(slide/768)
+///
+/// Uses the LINEAR_FREQ_TABLE for accurate 2^(x/768) lookup.
+#[inline]
+fn apply_it_linear_slide(period: f32, slide: i16) -> f32 {
+    if slide == 0 || period <= 0.0 {
+        return period;
+    }
+
+    // Get 2^(|slide|/768) from the lookup table
+    let abs_slide = slide.unsigned_abs() as usize;
+
+    // For large slides, compute in octave chunks
+    let octaves = abs_slide / 768;
+    let frac = abs_slide % 768;
+
+    // Table lookup for fractional part
+    let frac_mult = if frac < 768 {
+        LINEAR_FREQ_TABLE[frac]
+    } else {
+        LINEAR_FREQ_TABLE[767]
+    };
+
+    // Combine with octave scaling
+    let full_mult = frac_mult * (1u32 << octaves.min(8)) as f32;
+
+    if slide > 0 {
+        // Pitch up: divide period (increase frequency)
+        (period / full_mult).max(1.0)
+    } else {
+        // Pitch down: multiply period (decrease frequency)
+        period * full_mult
+    }
 }
 
 /// Lookup table for 2^(i/768) where i = 0..768

@@ -318,6 +318,8 @@ fn convert_xm_instrument(xm_instr: &nether_xm::XmInstrument) -> TrackerInstrumen
         pitch_envelope: None, // XM doesn't have pitch envelope
         filter_cutoff: None,  // XM doesn't have filters
         filter_resonance: None,
+        pitch_pan_separation: 0, // XM doesn't have pitch-pan separation
+        pitch_pan_center: 60,    // Default center = C-5
 
         // Sample metadata - XM stores these per-instrument
         sample_loop_start: xm_instr.sample_loop_start,

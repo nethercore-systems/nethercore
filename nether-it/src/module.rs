@@ -80,6 +80,16 @@ impl ItModule {
     pub fn uses_linear_slides(&self) -> bool {
         self.flags.contains(ItFlags::LINEAR_SLIDES)
     }
+
+    /// Check if the module uses old effects mode (S3M compatibility)
+    pub fn uses_old_effects(&self) -> bool {
+        self.flags.contains(ItFlags::OLD_EFFECTS)
+    }
+
+    /// Check if the module links G memory with E/F for portamento
+    pub fn uses_link_g_memory(&self) -> bool {
+        self.flags.contains(ItFlags::LINK_G_MEMORY)
+    }
 }
 
 impl Default for ItModule {

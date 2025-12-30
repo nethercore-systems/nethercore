@@ -29,6 +29,12 @@ pub fn from_it_module(it: &nether_it::ItModule) -> TrackerModule {
     if it.uses_instruments() {
         format = format | FormatFlags::INSTRUMENTS;
     }
+    if it.uses_old_effects() {
+        format = format | FormatFlags::OLD_EFFECTS;
+    }
+    if it.uses_link_g_memory() {
+        format = format | FormatFlags::LINK_G_MEMORY;
+    }
 
     TrackerModule {
         name: it.name.clone(),
@@ -104,11 +110,22 @@ fn convert_it_effect(effect: u8, param: u8, volume: u8) -> TrackerEffect {
         // Cxx - Pattern break
         nether_it::effects::PATTERN_BREAK => TrackerEffect::PatternBreak(param),
 
-        // Dxy - Volume slide
+        // Dxy - Volume slide (IT spec order: Dx0, D0x, DxF fine up, DFx fine down)
         nether_it::effects::VOLUME_SLIDE => {
             let up = param >> 4;
             let down = param & 0x0F;
-            TrackerEffect::VolumeSlide { up, down }
+            // DxF (x != 0, x != F) = Fine volume slide up (tick 0 only)
+            if down == 0x0F && up != 0 && up != 0x0F {
+                TrackerEffect::FineVolumeUp(up)
+            }
+            // DFx (x != 0, x != F) = Fine volume slide down (tick 0 only)
+            else if up == 0x0F && down != 0 && down != 0x0F {
+                TrackerEffect::FineVolumeDown(down)
+            }
+            // Regular volume slide (every tick except tick 0)
+            else {
+                TrackerEffect::VolumeSlide { up, down }
+            }
         }
 
         // Exx - Portamento down
@@ -167,21 +184,43 @@ fn convert_it_effect(effect: u8, param: u8, volume: u8) -> TrackerEffect {
         // Mxx - Set channel volume
         nether_it::effects::SET_CHANNEL_VOLUME => TrackerEffect::SetChannelVolume(param),
 
-        // Nxy - Channel volume slide
+        // Nxy - Channel volume slide (same fine slide rules as Dxy)
         nether_it::effects::CHANNEL_VOLUME_SLIDE => {
             let up = param >> 4;
             let down = param & 0x0F;
-            TrackerEffect::ChannelVolumeSlide { up, down }
+            // NxF (x != 0, x != F) = Fine channel volume slide up (tick 0 only)
+            if down == 0x0F && up != 0 && up != 0x0F {
+                TrackerEffect::FineChannelVolumeUp(up)
+            }
+            // NFx (x != 0, x != F) = Fine channel volume slide down (tick 0 only)
+            else if up == 0x0F && down != 0 && down != 0x0F {
+                TrackerEffect::FineChannelVolumeDown(down)
+            }
+            // Regular channel volume slide
+            else {
+                TrackerEffect::ChannelVolumeSlide { up, down }
+            }
         }
 
         // Oxx - Sample offset
         nether_it::effects::SAMPLE_OFFSET => TrackerEffect::SampleOffset(param as u32 * 256),
 
-        // Pxy - Panning slide
+        // Pxy - Panning slide (IT spec order: Px0, P0x, PxF fine right, PFx fine left)
         nether_it::effects::PANNING_SLIDE => {
             let right = param >> 4;
             let left = param & 0x0F;
-            TrackerEffect::PanningSlide { left, right }
+            // PxF (x != 0, x != F) = Fine panning slide right (tick 0 only)
+            if left == 0x0F && right != 0 && right != 0x0F {
+                TrackerEffect::FinePanningRight(right)
+            }
+            // PFx (x != 0, x != F) = Fine panning slide left (tick 0 only)
+            else if right == 0x0F && left != 0 && left != 0x0F {
+                TrackerEffect::FinePanningLeft(left)
+            }
+            // Regular panning slide (every tick except tick 0)
+            else {
+                TrackerEffect::PanningSlide { left, right }
+            }
         }
 
         // Qxy - Retrigger
@@ -204,8 +243,22 @@ fn convert_it_effect(effect: u8, param: u8, volume: u8) -> TrackerEffect {
         // Sxy - Extended effects
         nether_it::effects::EXTENDED => convert_it_extended_effect(param),
 
-        // Txx - Set tempo
-        nether_it::effects::SET_TEMPO => TrackerEffect::SetTempo(param),
+        // Txx - Set tempo / tempo slide
+        // T0x = tempo slide down by x BPM per tick
+        // T1x = tempo slide up by x BPM per tick
+        // Txx (xx >= 0x20) = set tempo directly
+        nether_it::effects::SET_TEMPO => {
+            if param < 0x10 {
+                // T0x = tempo slide down
+                TrackerEffect::TempoSlideDown(param)
+            } else if param < 0x20 {
+                // T1x = tempo slide up
+                TrackerEffect::TempoSlideUp(param & 0x0F)
+            } else {
+                // Txx = set tempo directly
+                TrackerEffect::SetTempo(param)
+            }
+        }
 
         // Uxy - Fine vibrato
         nether_it::effects::FINE_VIBRATO => {
@@ -217,11 +270,22 @@ fn convert_it_effect(effect: u8, param: u8, volume: u8) -> TrackerEffect {
         // Vxx - Set global volume
         nether_it::effects::SET_GLOBAL_VOLUME => TrackerEffect::SetGlobalVolume(param),
 
-        // Wxy - Global volume slide
+        // Wxy - Global volume slide (same fine slide rules as Dxy)
         nether_it::effects::GLOBAL_VOLUME_SLIDE => {
             let up = param >> 4;
             let down = param & 0x0F;
-            TrackerEffect::GlobalVolumeSlide { up, down }
+            // WxF (x != 0, x != F) = Fine global volume slide up (tick 0 only)
+            if down == 0x0F && up != 0 && up != 0x0F {
+                TrackerEffect::FineGlobalVolumeUp(up)
+            }
+            // WFx (x != 0, x != F) = Fine global volume slide down (tick 0 only)
+            else if up == 0x0F && down != 0 && down != 0x0F {
+                TrackerEffect::FineGlobalVolumeDown(down)
+            }
+            // Regular global volume slide
+            else {
+                TrackerEffect::GlobalVolumeSlide { up, down }
+            }
         }
 
         // Xxx - Set panning
@@ -265,10 +329,21 @@ fn convert_it_extended_effect(param: u8) -> TrackerEffect {
         nether_it::extended_effects::VIBRATO_WAVEFORM => TrackerEffect::VibratoWaveform(value),
         nether_it::extended_effects::TREMOLO_WAVEFORM => TrackerEffect::TremoloWaveform(value),
         nether_it::extended_effects::PANBRELLO_WAVEFORM => TrackerEffect::PanbrelloWaveform(value),
+        nether_it::extended_effects::FINE_PATTERN_DELAY => TrackerEffect::FinePatternDelay(value),
+        // S7x - Instrument control (NNA/envelope) - complex, rarely used in practice
+        nether_it::extended_effects::INSTRUMENT_CONTROL => TrackerEffect::None,
+        // S8x - coarse panning: value * 4 + 2 (centers 0-15 to 2-62)
+        nether_it::extended_effects::SET_PANNING_COARSE => {
+            TrackerEffect::SetPanning((value * 4).saturating_add(2).min(64))
+        }
+        // S9x - Sound control (surround/reverse) - rarely used
+        nether_it::extended_effects::SOUND_CONTROL => TrackerEffect::None,
+        nether_it::extended_effects::HIGH_SAMPLE_OFFSET => TrackerEffect::HighSampleOffset(value),
         nether_it::extended_effects::PATTERN_LOOP => TrackerEffect::PatternLoop(value),
         nether_it::extended_effects::NOTE_CUT => TrackerEffect::NoteCut(value),
         nether_it::extended_effects::NOTE_DELAY => TrackerEffect::NoteDelay(value),
         nether_it::extended_effects::PATTERN_DELAY => TrackerEffect::PatternDelay(value),
+        nether_it::extended_effects::SET_ACTIVE_MACRO => TrackerEffect::None, // MIDI macro
         _ => TrackerEffect::None,
     }
 }
@@ -305,7 +380,9 @@ fn convert_it_instrument(it_instr: &nether_it::ItInstrument) -> TrackerInstrumen
         nna: convert_it_nna(it_instr.nna),
         dct: convert_it_dct(it_instr.dct),
         dca: convert_it_dca(it_instr.dca),
-        fadeout: it_instr.fadeout,
+        // IT spec: NFC starts at 1024, fadeout subtracted each tick
+        // We use 65535 for more precision, so scale by 64 (65535/1024)
+        fadeout: it_instr.fadeout.saturating_mul(64),
         global_volume: (it_instr.global_volume / 2).min(64), // IT uses 0-128, we use 0-64
         default_pan: it_instr.default_pan,
         note_sample_table: it_instr.note_sample_table,
@@ -320,6 +397,8 @@ fn convert_it_instrument(it_instr: &nether_it::ItInstrument) -> TrackerInstrumen
         pitch_envelope: it_instr.pitch_envelope.as_ref().map(convert_it_envelope),
         filter_cutoff: it_instr.filter_cutoff,
         filter_resonance: it_instr.filter_resonance,
+        pitch_pan_separation: it_instr.pitch_pan_separation,
+        pitch_pan_center: it_instr.pitch_pan_center,
 
         // IT stores sample metadata per-sample, not per-instrument.
         // The playback engine should look up from TrackerModule.samples

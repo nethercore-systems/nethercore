@@ -93,6 +93,16 @@ impl TrackerModule {
     pub fn uses_instruments(&self) -> bool {
         self.format.contains(FormatFlags::INSTRUMENTS)
     }
+
+    /// Check if this module uses old effects mode (S3M compatibility)
+    pub fn uses_old_effects(&self) -> bool {
+        self.format.contains(FormatFlags::OLD_EFFECTS)
+    }
+
+    /// Check if this module links G memory with E/F for portamento
+    pub fn uses_link_g_memory(&self) -> bool {
+        self.format.contains(FormatFlags::LINK_G_MEMORY)
+    }
 }
 
 /// Format-specific flags
@@ -108,6 +118,10 @@ impl FormatFlags {
     pub const IS_IT_FORMAT: Self = Self(0x0004);
     /// Original format was XM
     pub const IS_XM_FORMAT: Self = Self(0x0008);
+    /// Use old effects (S3M compatibility - affects vibrato/tremolo depth)
+    pub const OLD_EFFECTS: Self = Self(0x0010);
+    /// Link G memory with E/F for portamento
+    pub const LINK_G_MEMORY: Self = Self(0x0020);
 
     pub const fn empty() -> Self {
         Self(0)
@@ -244,6 +258,10 @@ pub struct TrackerInstrument {
     pub filter_cutoff: Option<u8>,
     /// Initial filter resonance (0-127, IT only)
     pub filter_resonance: Option<u8>,
+    /// Pitch-pan separation (-32 to +32, IT only)
+    pub pitch_pan_separation: i8,
+    /// Pitch-pan center note (0-119, IT only)
+    pub pitch_pan_center: u8,
 
     // =========================================================================
     // Sample metadata (XM stores these per-instrument, IT per-sample)
@@ -296,6 +314,8 @@ impl Default for TrackerInstrument {
             pitch_envelope: None,
             filter_cutoff: None,
             filter_resonance: None,
+            pitch_pan_separation: 0,
+            pitch_pan_center: 60, // C-5
             // Sample metadata
             sample_loop_start: 0,
             sample_loop_end: 0,
