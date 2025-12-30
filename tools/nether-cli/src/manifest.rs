@@ -80,6 +80,12 @@ pub struct AssetEntry {
     /// If not specified, uses the first skin in the file.
     #[serde(default)]
     pub skin_name: Option<String>,
+
+    /// For tracker assets: whether to include patterns (default: true).
+    /// Set to false to use XM file only as a sample library without
+    /// registering it as a playable tracker.
+    #[serde(default)]
+    pub patterns: Option<bool>,
 }
 
 impl NetherManifest {

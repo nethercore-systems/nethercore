@@ -6,7 +6,8 @@
 
 use anyhow::{Context, Result};
 use clap::Args;
-use std::collections::HashSet;
+use sha2::{Digest, Sha256};
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use nethercore_shared::math::BoneMatrix3x4;
@@ -151,6 +152,59 @@ pub fn execute(args: PackArgs) -> Result<()> {
     Ok(())
 }
 
+/// Sanitize XM instrument name to valid sound ID
+///
+/// Converts instrument names like "  My Kick!  " to "my_kick"
+/// Empty names are auto-generated from tracker ID and instrument index
+fn sanitize_name(name: &str, tracker_id: &str, index: u8) -> String {
+    let trimmed = name.trim();
+
+    if trimmed.is_empty() {
+        return format!("{}_inst{}", tracker_id, index);
+    }
+
+    let sanitized = trimmed
+        .to_lowercase()
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>();
+
+    // Collapse consecutive underscores and trim leading/trailing underscores
+    let mut result = String::new();
+    let mut prev_was_underscore = false;
+
+    for c in sanitized.chars() {
+        if c == '_' {
+            if !prev_was_underscore {
+                result.push(c);
+            }
+            prev_was_underscore = true;
+        } else {
+            result.push(c);
+            prev_was_underscore = false;
+        }
+    }
+
+    result.trim_matches('_').to_string()
+}
+
+/// Calculate SHA-256 hash of sample data for deduplication
+fn hash_sample_data(data: &[i16]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+
+    // Hash the sample data as bytes
+    let bytes = bytemuck::cast_slice::<i16, u8>(data);
+    hasher.update(bytes);
+
+    hasher.finalize().into()
+}
+
 /// Load assets from disk into a data pack (parallel)
 fn load_assets(
     project_dir: &std::path::Path,
@@ -226,24 +280,106 @@ fn load_assets(
             load_sound(&entry.id, &path)
         })
         .collect();
-    let sounds = sounds?;
+    let explicit_sounds = sounds?;
 
-    // Build set of available sound IDs for validation
-    let available_sound_ids: HashSet<String> = sounds
-        .iter()
-        .map(|s| s.id.clone())
+    // Build sound map from explicit sounds
+    let mut sound_map: HashMap<String, PackedSound> = explicit_sounds
+        .into_iter()
+        .map(|s| (s.id.clone(), s))
         .collect();
 
-    // Load trackers in parallel
+    // Track content hashes for deduplication
+    let mut hash_to_id: HashMap<[u8; 32], String> = HashMap::new();
+    for sound in sound_map.values() {
+        let hash = hash_sample_data(&sound.data);
+        hash_to_id.insert(hash, sound.id.clone());
+    }
+
+    // Extract samples from ALL XM tracker files
+    println!("  Extracting samples from XM files...");
+    for entry in &assets.trackers {
+        let path = project_dir.join(&entry.path);
+        let xm_data = std::fs::read(&path)
+            .with_context(|| format!("Failed to read tracker: {}", path.display()))?;
+
+        // Try to extract samples, but if it fails (sample-less XM), continue with empty list
+        let extracted_samples = match nether_xm::extract_samples(&xm_data) {
+            Ok(samples) => samples,
+            Err(e) => {
+                // Sample-less XM file or extraction error - log and continue
+                println!("    Note: {} ({})", path.file_name().unwrap().to_string_lossy(), e);
+                println!("          No samples extracted (this is expected for sample-less XM files)");
+                Vec::new()
+            }
+        };
+
+        for sample in extracted_samples {
+            // Skip empty samples
+            if sample.data.is_empty() {
+                continue;
+            }
+
+            // Convert sample to 22050 Hz
+            let converted_data = crate::audio_convert::convert_xm_sample(&sample);
+            if converted_data.is_empty() {
+                continue;
+            }
+
+            // Calculate hash for deduplication
+            let hash = hash_sample_data(&converted_data);
+
+            // Sanitize name
+            let sample_id = sanitize_name(&sample.name, &entry.id, sample.instrument_index);
+
+            // Check for collision with explicit sounds
+            if let Some(existing) = sound_map.get(&sample_id) {
+                let existing_hash = hash_sample_data(&existing.data);
+                if existing_hash != hash {
+                    return Err(anyhow::anyhow!(
+                        "Collision: XM instrument '{}' in tracker '{}' conflicts with explicit sound '{}' (different content)",
+                        sample.name,
+                        entry.id,
+                        sample_id
+                    ));
+                }
+                // Same content = deduplicated, continue
+                continue;
+            }
+
+            // Check for hash match (same content, different name)
+            if let Some(existing_name) = hash_to_id.get(&hash) {
+                // Alias: same content already exists under different name
+                println!("    Note: '{}' is identical to '{}', deduplicating", sample_id, existing_name);
+                continue;
+            }
+
+            // Add new sample
+            println!("    Extracted: {} from {}", sample_id, entry.id);
+            sound_map.insert(sample_id.clone(), PackedSound {
+                id: sample_id.clone(),
+                data: converted_data,
+            });
+            hash_to_id.insert(hash, sample_id);
+        }
+    }
+
+    // Build set of available sound IDs for validation
+    let available_sound_ids: HashSet<String> = sound_map.keys().cloned().collect();
+
+    // Load trackers in parallel (check patterns field)
     let trackers: Result<Vec<_>> = assets
         .trackers
         .par_iter()
+        .filter(|entry| entry.patterns.unwrap_or(true)) // Default to true
         .map(|entry| {
             let path = project_dir.join(&entry.path);
             load_tracker(&entry.id, &path, &available_sound_ids)
         })
         .collect();
     let trackers = trackers?;
+
+    // Convert sound_map back to Vec for data pack
+    let sounds: Vec<PackedSound> = sound_map.into_values().collect();
 
     // Load raw data in parallel
     let data: Result<Vec<_>> = assets
@@ -1293,5 +1429,179 @@ path = "assets/run.nczxanim"
         assert_eq!(manifest.assets.keyframes.len(), 2);
         assert_eq!(manifest.assets.keyframes[0].id, "walk");
         assert_eq!(manifest.assets.keyframes[1].id, "run");
+    }
+
+    // =========================================================================
+    // Tests for XM Sample Extraction Helper Functions
+    // =========================================================================
+
+    #[test]
+    fn test_sanitize_name_basic() {
+        // Basic sanitization
+        assert_eq!(sanitize_name("kick", "track", 0), "kick");
+        assert_eq!(sanitize_name("Kick", "track", 0), "kick");
+        assert_eq!(sanitize_name("KICK", "track", 0), "kick");
+    }
+
+    #[test]
+    fn test_sanitize_name_whitespace() {
+        // Whitespace trimming
+        assert_eq!(sanitize_name("  kick  ", "track", 0), "kick");
+        assert_eq!(sanitize_name("\tkick\t", "track", 0), "kick");
+        assert_eq!(sanitize_name("  My Kick  ", "track", 0), "my_kick");
+    }
+
+    #[test]
+    fn test_sanitize_name_special_chars() {
+        // Special character replacement
+        assert_eq!(sanitize_name("My Kick!", "track", 0), "my_kick");
+        assert_eq!(sanitize_name("kick@drum", "track", 0), "kick_drum");
+        assert_eq!(sanitize_name("kick#1", "track", 0), "kick_1");
+        assert_eq!(sanitize_name("kick$drum", "track", 0), "kick_drum");
+        assert_eq!(sanitize_name("kick%drum", "track", 0), "kick_drum");
+    }
+
+    #[test]
+    fn test_sanitize_name_multiple_underscores() {
+        // Multiple special chars should not create consecutive underscores
+        assert_eq!(sanitize_name("kick!!!drum", "track", 0), "kick_drum");
+        assert_eq!(sanitize_name("kick   drum", "track", 0), "kick_drum");
+    }
+
+    #[test]
+    fn test_sanitize_name_valid_chars() {
+        // Valid characters should be preserved
+        assert_eq!(sanitize_name("kick_drum", "track", 0), "kick_drum");
+        assert_eq!(sanitize_name("kick-drum", "track", 0), "kick-drum");
+        assert_eq!(sanitize_name("kick123", "track", 0), "kick123");
+    }
+
+    #[test]
+    fn test_sanitize_name_empty() {
+        // Empty names should generate from tracker ID and index
+        assert_eq!(sanitize_name("", "boss_theme", 0), "boss_theme_inst0");
+        assert_eq!(sanitize_name("  ", "boss_theme", 1), "boss_theme_inst1");
+        assert_eq!(sanitize_name("\t\n", "boss_theme", 5), "boss_theme_inst5");
+    }
+
+    #[test]
+    fn test_sanitize_name_leading_trailing_underscores() {
+        // Leading/trailing underscores should be removed
+        assert_eq!(sanitize_name("_kick_", "track", 0), "kick");
+        assert_eq!(sanitize_name("___kick___", "track", 0), "kick");
+    }
+
+    #[test]
+    fn test_sanitize_name_unicode() {
+        // Unicode characters should be replaced
+        assert_eq!(sanitize_name("kick♪drum", "track", 0), "kick_drum");
+        assert_eq!(sanitize_name("kick🥁drum", "track", 0), "kick_drum");
+    }
+
+    #[test]
+    fn test_sanitize_name_real_world_examples() {
+        // Real-world instrument names from tracker files
+        assert_eq!(sanitize_name("BD_KICK_01", "track", 0), "bd_kick_01");
+        assert_eq!(sanitize_name("Snare (layered)", "track", 0), "snare_layered");
+        assert_eq!(sanitize_name("Hi-Hat [Closed]", "track", 0), "hi-hat_closed");
+        assert_eq!(sanitize_name("Bass: Deep Sub", "track", 0), "bass_deep_sub");
+    }
+
+    #[test]
+    fn test_hash_sample_data_consistency() {
+        // Same data should produce same hash
+        let data1 = vec![100i16, 200, 300, 400, 500];
+        let data2 = vec![100i16, 200, 300, 400, 500];
+
+        let hash1 = hash_sample_data(&data1);
+        let hash2 = hash_sample_data(&data2);
+
+        assert_eq!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_hash_sample_data_different() {
+        // Different data should produce different hashes
+        let data1 = vec![100i16, 200, 300, 400, 500];
+        let data2 = vec![100i16, 200, 300, 400, 501]; // Last value different
+
+        let hash1 = hash_sample_data(&data1);
+        let hash2 = hash_sample_data(&data2);
+
+        assert_ne!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_hash_sample_data_empty() {
+        // Empty data should hash successfully
+        let empty: Vec<i16> = Vec::new();
+        let hash = hash_sample_data(&empty);
+
+        // Should produce a valid 32-byte hash
+        assert_eq!(hash.len(), 32);
+
+        // Empty data should produce consistent hash
+        let hash2 = hash_sample_data(&empty);
+        assert_eq!(hash, hash2);
+    }
+
+    #[test]
+    fn test_hash_sample_data_single_sample() {
+        // Single sample should hash
+        let data = vec![42i16];
+        let hash = hash_sample_data(&data);
+        assert_eq!(hash.len(), 32);
+    }
+
+    #[test]
+    fn test_hash_sample_data_large() {
+        // Large sample (simulating real audio)
+        let data: Vec<i16> = (0..22050).map(|i| (i % 1000) as i16).collect();
+        let hash = hash_sample_data(&data);
+        assert_eq!(hash.len(), 32);
+
+        // Should be deterministic
+        let hash2 = hash_sample_data(&data);
+        assert_eq!(hash, hash2);
+    }
+
+    #[test]
+    fn test_hash_sample_data_order_matters() {
+        // Order should matter for hashing
+        let data1 = vec![1i16, 2, 3, 4, 5];
+        let data2 = vec![5i16, 4, 3, 2, 1]; // Reversed
+
+        let hash1 = hash_sample_data(&data1);
+        let hash2 = hash_sample_data(&data2);
+
+        assert_ne!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_hash_sample_data_similar_but_different() {
+        // Very similar data should still produce different hashes
+        let data1 = vec![1000i16; 100]; // 100 samples of value 1000
+        let data2 = vec![1001i16; 100]; // 100 samples of value 1001
+
+        let hash1 = hash_sample_data(&data1);
+        let hash2 = hash_sample_data(&data2);
+
+        assert_ne!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_hash_collision_resistance() {
+        // Generate multiple different samples and verify no collisions
+        let mut hashes = std::collections::HashSet::new();
+
+        for i in 0..100 {
+            let data: Vec<i16> = vec![i as i16; 10];
+            let hash = hash_sample_data(&data);
+
+            // Should be no collisions
+            assert!(hashes.insert(hash), "Hash collision detected!");
+        }
+
+        assert_eq!(hashes.len(), 100);
     }
 }

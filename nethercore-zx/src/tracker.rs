@@ -730,6 +730,7 @@ impl TrackerEngine {
             }
 
             // Apply sample relative note offset to pitch calculation
+            // XM spec: RealNote = PatternNote + RelativeTone
             let effective_note = (note.note as i16 + relative_note as i16).clamp(1, 96) as u8;
             channel.base_period = note_to_period(effective_note, finetune);
             channel.period = channel.base_period;
@@ -1642,7 +1643,7 @@ impl TrackerEngine {
 }
 
 /// Sample a channel with linear interpolation and anti-pop fade-in/out
-fn sample_channel(channel: &mut TrackerChannel, data: &[i16], _sample_rate: u32) -> f32 {
+fn sample_channel(channel: &mut TrackerChannel, data: &[i16], sample_rate: u32) -> f32 {
     if data.is_empty() {
         return 0.0;
     }
@@ -1705,10 +1706,10 @@ fn sample_channel(channel: &mut TrackerChannel, data: &[i16], _sample_rate: u32)
     }
 
     // Calculate playback rate from period
-    // XM uses: frequency = 8363 * 2^((6*12*16*4 - period) / (12*16*4))
-    // Simplified for 22050Hz source: rate = 22050 / period_to_freq
+    // XM frequency tells us the target playback frequency
+    // Divide by output sample rate to get sample increment per output sample
     let freq = period_to_frequency(channel.period);
-    let rate = freq / 22050.0;
+    let rate = freq / sample_rate as f32;
 
     // Advance sample position
     channel.sample_pos += rate as f64 * channel.sample_direction as f64;

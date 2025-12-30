@@ -31,6 +31,10 @@ toml = { workspace = true }
 serde = { workspace = true }
 bitcode = { workspace = true }
 
+# Hashing and binary conversion
+sha2 = { workspace = true }
+bytemuck = { workspace = true }
+
 # Image processing (for texture conversion)
 image = { workspace = true }  # NOTE: Upgraded from 0.24 to 0.25
 

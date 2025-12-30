@@ -2,114 +2,34 @@
 id = "tracker-demo"
 title = "Tracker Demo"
 author = "Nethercore Examples"
-version = "0.3.0"
-description = "XM tracker music playback demonstration with three songs: Funky Jazz, Eurobeat, and Synthwave"
+version = "1.0.0"
+description = "XM tracker music playback with three songs: Funky Jazz, Eurobeat, and Synthwave"
 tags = ["audio", "music", "tracker"]
 
 # ============================================================================
-# Funky Jazz Instruments - "Nether Groove"
+# Tracker Modules with Auto-Extraction
 # ============================================================================
-
-[[assets.sounds]]
-id = "kick_funk"
-path = "../../assets/tracker-kick_funk.wav"
-
-[[assets.sounds]]
-id = "snare_funk"
-path = "../../assets/tracker-snare_funk.wav"
-
-[[assets.sounds]]
-id = "hihat_funk"
-path = "../../assets/tracker-hihat_funk.wav"
-
-[[assets.sounds]]
-id = "bass_funk"
-path = "../../assets/tracker-bass_funk.wav"
-
-[[assets.sounds]]
-id = "epiano"
-path = "../../assets/tracker-epiano.wav"
-
-[[assets.sounds]]
-id = "lead_jazz"
-path = "../../assets/tracker-lead_jazz.wav"
-
-# ============================================================================
-# Eurobeat Instruments - "Nether Fire"
-# ============================================================================
-
-[[assets.sounds]]
-id = "kick_euro"
-path = "../../assets/tracker-kick_euro.wav"
-
-[[assets.sounds]]
-id = "snare_euro"
-path = "../../assets/tracker-snare_euro.wav"
-
-[[assets.sounds]]
-id = "hihat_euro"
-path = "../../assets/tracker-hihat_euro.wav"
-
-[[assets.sounds]]
-id = "bass_euro"
-path = "../../assets/tracker-bass_euro.wav"
-
-[[assets.sounds]]
-id = "supersaw"
-path = "../../assets/tracker-supersaw.wav"
-
-[[assets.sounds]]
-id = "brass_euro"
-path = "../../assets/tracker-brass_euro.wav"
-
-[[assets.sounds]]
-id = "pad_euro"
-path = "../../assets/tracker-pad_euro.wav"
-
-# ============================================================================
-# Synthwave Instruments - "Nether Drive"
-# ============================================================================
-
-[[assets.sounds]]
-id = "kick_synth"
-path = "../../assets/tracker-kick_synth.wav"
-
-[[assets.sounds]]
-id = "snare_synth"
-path = "../../assets/tracker-snare_synth.wav"
-
-[[assets.sounds]]
-id = "hihat_synth"
-path = "../../assets/tracker-hihat_synth.wav"
-
-[[assets.sounds]]
-id = "bass_synth"
-path = "../../assets/tracker-bass_synth.wav"
-
-[[assets.sounds]]
-id = "lead_synth"
-path = "../../assets/tracker-lead_synth.wav"
-
-[[assets.sounds]]
-id = "arp_synth"
-path = "../../assets/tracker-arp_synth.wav"
-
-[[assets.sounds]]
-id = "pad_synth"
-path = "../../assets/tracker-pad_synth.wav"
-
-# ============================================================================
-# Tracker Modules
+#
+# These XM files contain embedded sample data. At pack time, nether-cli automatically:
+# - Extracts all samples from each XM file
+# - Converts them to 22050 Hz mono i16 format
+# - Creates sound IDs from instrument names (e.g., "kick_funk" → rom_sound("kick_funk"))
+# - Deduplicates identical samples across files
+#
+# No manual [[assets.sounds]] entries needed! The samples are automatically available:
+#   - "Nether Groove" (Funky Jazz): kick_funk, snare_funk, hihat_funk, bass_funk, epiano, lead_jazz
+#   - "Nether Fire" (Eurobeat): kick_euro, snare_euro, hihat_euro, bass_euro, supersaw, brass_euro, pad_euro
+#   - "Nether Drive" (Synthwave): kick_synth, snare_synth, hihat_synth, bass_synth, lead_synth, arp_synth, pad_synth
 # ============================================================================
 
 [[assets.trackers]]
 id = "nether_groove"
-path = "../../assets/tracker-nether_groove.xm"
+path = "../../assets/tracker-nether_groove-embedded.xm"
 
 [[assets.trackers]]
 id = "nether_fire"
-path = "../../assets/tracker-nether_fire.xm"
+path = "../../assets/tracker-nether_fire-embedded.xm"
 
 [[assets.trackers]]
 id = "nether_drive"
-path = "../../assets/tracker-nether_drive.xm"
+path = "../../assets/tracker-nether_drive-embedded.xm"

@@ -899,10 +899,10 @@ mod tests {
 
     /// Load demo.xm for testing
     fn load_demo_xm() -> Option<Vec<u8>> {
-        // Try to load from examples directory
+        // Load one of the generated tracker XM files for testing
         let demo_path = concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../examples/5-audio/tracker-demo/assets/demo.xm"
+            "/../examples/assets/tracker-nether_groove.xm"
         );
         std::fs::read(demo_path).ok()
     }

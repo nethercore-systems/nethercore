@@ -7,6 +7,7 @@
 //! - `nether pack` - Bundle WASM + assets into .nczx ROM (no compilation)
 //! - `nether build` - Build game: compile + pack (main command)
 //! - `nether run` - Build and launch in emulator
+//! - `nether preview` - Browse ROM assets without running the game
 //!
 //! # Usage
 //!
@@ -45,11 +46,13 @@
 //! path = "assets/player.png"
 //! ```
 
+mod audio_convert;
 mod build;
 mod compile;
 mod init;
 mod manifest;
 mod pack;
+mod preview;
 mod run;
 
 use anyhow::Result;
@@ -81,6 +84,9 @@ enum Commands {
 
     /// Build and launch in emulator
     Run(run::RunArgs),
+
+    /// Browse ROM assets without running the game
+    Preview(preview::PreviewArgs),
 }
 
 fn main() -> Result<()> {
@@ -95,5 +101,6 @@ fn main() -> Result<()> {
         Commands::Pack(args) => pack::execute(args),
         Commands::Build(args) => build::execute(args),
         Commands::Run(args) => run::execute(args),
+        Commands::Preview(args) => preview::execute(args),
     }
 }

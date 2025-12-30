@@ -105,10 +105,16 @@ fn generate_funk_assets(output_dir: &Path) {
     write_wav(&output_dir.join("tracker-lead_jazz.wav"), &lead);
     println!("  Generated tracker-lead_jazz.wav ({} samples)", lead.len());
 
-    // Generate XM file
+    // Generate sample-less XM file
     let xm = generate_funk_xm();
     fs::write(output_dir.join("tracker-nether_groove.xm"), &xm).expect("Failed to write tracker-nether_groove.xm");
     println!("  Generated tracker-nether_groove.xm ({} bytes)", xm.len());
+
+    // Generate embedded XM file
+    let samples = vec![kick, snare, hihat, bass, epiano, lead];
+    let xm_embedded = generate_funk_xm_embedded(&samples);
+    fs::write(output_dir.join("tracker-nether_groove-embedded.xm"), &xm_embedded).expect("Failed to write tracker-nether_groove-embedded.xm");
+    println!("  Generated tracker-nether_groove-embedded.xm ({} bytes)", xm_embedded.len());
 }
 
 /// Funk kick: warmer, less aggressive pitch sweep, good pocket feel
@@ -400,10 +406,16 @@ fn generate_eurobeat_assets(output_dir: &Path) {
     write_wav(&output_dir.join("tracker-pad_euro.wav"), &pad);
     println!("  Generated tracker-pad_euro.wav ({} samples)", pad.len());
 
-    // Generate XM file
+    // Generate sample-less XM file
     let xm = generate_eurobeat_xm();
     fs::write(output_dir.join("tracker-nether_fire.xm"), &xm).expect("Failed to write tracker-nether_fire.xm");
     println!("  Generated tracker-nether_fire.xm ({} bytes)", xm.len());
+
+    // Generate embedded XM file
+    let samples = vec![kick, snare, hihat, bass, supersaw, brass, pad];
+    let xm_embedded = generate_eurobeat_xm_embedded(&samples);
+    fs::write(output_dir.join("tracker-nether_fire-embedded.xm"), &xm_embedded).expect("Failed to write tracker-nether_fire-embedded.xm");
+    println!("  Generated tracker-nether_fire-embedded.xm ({} bytes)", xm_embedded.len());
 }
 
 /// Eurobeat kick: 909-style, punchy with aggressive pitch sweep
@@ -832,6 +844,12 @@ fn generate_funk_xm() -> Vec<u8> {
         };
         let pattern_size = pattern_data.len() as u16;
 
+        // Debug validation
+        eprintln!("Funk Pattern {}: size={} bytes", i, pattern_size);
+        if pattern_size < 256 {
+            eprintln!("WARNING: Funk Pattern {} too small (expected min 256)", i);
+        }
+
         xm.extend_from_slice(&9u32.to_le_bytes()); // header length (including length field: 4+1+2+2=9)
         xm.push(0); // packing type
         xm.extend_from_slice(&32u16.to_le_bytes()); // 32 rows
@@ -850,6 +868,95 @@ fn generate_funk_xm() -> Vec<u8> {
     ];
     for name in &instruments {
         write_instrument(&mut xm, name);
+    }
+
+    xm
+}
+
+fn generate_funk_xm_embedded(samples: &[Vec<i16>]) -> Vec<u8> {
+    let mut xm = Vec::new();
+
+    // XM Header
+    xm.extend_from_slice(b"Extended Module: ");
+
+    // Module name (20 bytes)
+    let name = b"Nether Groove";
+    xm.extend_from_slice(name);
+    xm.extend(std::iter::repeat(0u8).take(20 - name.len()));
+
+    xm.push(0x1A);
+
+    // Tracker name
+    let tracker = b"gen-tracker-demo";
+    xm.extend_from_slice(tracker);
+    xm.extend(std::iter::repeat(0u8).take(20 - tracker.len()));
+
+    // Version
+    xm.extend_from_slice(&0x0104u16.to_le_bytes());
+
+    // Header size (276 = 4 bytes header_size + 16 bytes of header fields + 256 byte order table)
+    xm.extend_from_slice(&276u32.to_le_bytes());
+
+    // Song length (10 orders)
+    xm.extend_from_slice(&10u16.to_le_bytes());
+
+    // Restart position
+    xm.extend_from_slice(&1u16.to_le_bytes());
+
+    // Number of channels (8)
+    xm.extend_from_slice(&8u16.to_le_bytes());
+
+    // Number of patterns (6)
+    xm.extend_from_slice(&6u16.to_le_bytes());
+
+    // Number of instruments (6)
+    xm.extend_from_slice(&6u16.to_le_bytes());
+
+    // Flags (linear frequency table)
+    xm.extend_from_slice(&1u16.to_le_bytes());
+
+    // Default speed (6 ticks per row)
+    xm.extend_from_slice(&6u16.to_le_bytes());
+
+    // Default BPM (110 for funk)
+    xm.extend_from_slice(&110u16.to_le_bytes());
+
+    // Pattern order table
+    let order = [0u8, 1, 2, 1, 2, 3, 4, 1, 2, 5];
+    xm.extend_from_slice(&order);
+    xm.extend(std::iter::repeat(0u8).take(256 - order.len()));
+
+    // Generate patterns (same as sample-less version)
+    for i in 0..6 {
+        let pattern_data = match i {
+            0 => generate_funk_pattern_intro(),
+            1 => generate_funk_pattern_groove_a(),
+            2 => generate_funk_pattern_groove_b(),
+            3 => generate_funk_pattern_bridge(),
+            4 => generate_funk_pattern_solo(),
+            5 => generate_funk_pattern_outro(),
+            _ => unreachable!(),
+        };
+        let pattern_size = pattern_data.len() as u16;
+
+        xm.extend_from_slice(&9u32.to_le_bytes());
+        xm.push(0);
+        xm.extend_from_slice(&32u16.to_le_bytes());
+        xm.extend_from_slice(&pattern_size.to_le_bytes());
+        xm.extend_from_slice(&pattern_data);
+    }
+
+    // Instruments WITH embedded samples
+    let instruments = [
+        "kick_funk",
+        "snare_funk",
+        "hihat_funk",
+        "bass_funk",
+        "epiano",
+        "lead_jazz",
+    ];
+    for (i, name) in instruments.iter().enumerate() {
+        write_instrument_with_sample(&mut xm, name, &samples[i]);
     }
 
     xm
@@ -1461,6 +1568,12 @@ fn generate_eurobeat_xm() -> Vec<u8> {
         };
         let pattern_size = pattern_data.len() as u16;
 
+        // Debug validation
+        eprintln!("Eurobeat Pattern {}: size={} bytes", i, pattern_size);
+        if pattern_size < 256 {
+            eprintln!("WARNING: Eurobeat Pattern {} too small (expected min 256)", i);
+        }
+
         xm.extend_from_slice(&9u32.to_le_bytes()); // header length (including length field: 4+1+2+2=9)
         xm.push(0);
         xm.extend_from_slice(&32u16.to_le_bytes());
@@ -1480,6 +1593,74 @@ fn generate_eurobeat_xm() -> Vec<u8> {
     ];
     for name in &instruments {
         write_instrument(&mut xm, name);
+    }
+
+    xm
+}
+
+fn generate_eurobeat_xm_embedded(samples: &[Vec<i16>]) -> Vec<u8> {
+    let mut xm = Vec::new();
+
+    // XM Header
+    xm.extend_from_slice(b"Extended Module: ");
+
+    let name = b"Nether Fire";
+    xm.extend_from_slice(name);
+    xm.extend(std::iter::repeat(0u8).take(20 - name.len()));
+
+    xm.push(0x1A);
+
+    let tracker = b"gen-tracker-demo";
+    xm.extend_from_slice(tracker);
+    xm.extend(std::iter::repeat(0u8).take(20 - tracker.len()));
+
+    xm.extend_from_slice(&0x0104u16.to_le_bytes());
+    xm.extend_from_slice(&276u32.to_le_bytes());
+    xm.extend_from_slice(&15u16.to_le_bytes());
+    xm.extend_from_slice(&3u16.to_le_bytes());
+    xm.extend_from_slice(&8u16.to_le_bytes());
+    xm.extend_from_slice(&8u16.to_le_bytes());
+    xm.extend_from_slice(&7u16.to_le_bytes());
+    xm.extend_from_slice(&1u16.to_le_bytes());
+    xm.extend_from_slice(&6u16.to_le_bytes());
+    xm.extend_from_slice(&155u16.to_le_bytes());
+
+    let order = [0u8, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 6, 7, 4, 5];
+    xm.extend_from_slice(&order);
+    xm.extend(std::iter::repeat(0u8).take(256 - order.len()));
+
+    for i in 0..8 {
+        let pattern_data = match i {
+            0 => generate_euro_pattern_intro(),
+            1 => generate_euro_pattern_verse_a(),
+            2 => generate_euro_pattern_verse_b(),
+            3 => generate_euro_pattern_prechorus(),
+            4 => generate_euro_pattern_chorus_a(),
+            5 => generate_euro_pattern_chorus_b(),
+            6 => generate_euro_pattern_breakdown(),
+            7 => generate_euro_pattern_drop(),
+            _ => unreachable!(),
+        };
+        let pattern_size = pattern_data.len() as u16;
+
+        xm.extend_from_slice(&9u32.to_le_bytes());
+        xm.push(0);
+        xm.extend_from_slice(&32u16.to_le_bytes());
+        xm.extend_from_slice(&pattern_size.to_le_bytes());
+        xm.extend_from_slice(&pattern_data);
+    }
+
+    let instruments = [
+        "kick_euro",
+        "snare_euro",
+        "hihat_euro",
+        "bass_euro",
+        "supersaw",
+        "brass_euro",
+        "pad_euro",
+    ];
+    for (i, name) in instruments.iter().enumerate() {
+        write_instrument_with_sample(&mut xm, name, &samples[i]);
     }
 
     xm
@@ -2184,8 +2365,10 @@ fn generate_euro_pattern_drop() -> Vec<u8> {
     data
 }
 
-/// Write a minimal instrument header
+/// Write a minimal instrument header (sample-less)
 fn write_instrument(xm: &mut Vec<u8>, name: &str) {
+    // Header size includes the 4-byte field itself: 4 + 22 name + 1 type + 2 num_samples = 29
+    // Parser seeks to: header_start + header_size - 4
     let header_size: u32 = 29;
     xm.extend_from_slice(&header_size.to_le_bytes());
 
@@ -2195,6 +2378,139 @@ fn write_instrument(xm: &mut Vec<u8>, name: &str) {
 
     xm.push(0); // instrument type
     xm.extend_from_slice(&0u16.to_le_bytes()); // num samples = 0
+}
+
+/// Downsample from 22050 Hz to 8363 Hz (Amiga base rate)
+fn downsample_to_8363(samples: &[i16]) -> Vec<i16> {
+    let ratio = 22050.0 / 8363.0; // ~2.636
+    let new_len = (samples.len() as f32 / ratio) as usize;
+    let mut resampled = Vec::with_capacity(new_len);
+
+    for i in 0..new_len {
+        let src_pos = i as f32 * ratio;
+        let src_idx = src_pos as usize;
+
+        // Linear interpolation
+        if src_idx + 1 < samples.len() {
+            let frac = src_pos - src_idx as f32;
+            let s0 = samples[src_idx] as f32;
+            let s1 = samples[src_idx + 1] as f32;
+            let interpolated = s0 + (s1 - s0) * frac;
+            resampled.push(interpolated.round() as i16);
+        } else if src_idx < samples.len() {
+            resampled.push(samples[src_idx]);
+        }
+    }
+
+    resampled
+}
+
+/// Write an instrument header with embedded sample data
+fn write_instrument_with_sample(xm: &mut Vec<u8>, name: &str, sample_data: &[i16]) {
+    // Extended instrument header size INCLUDES the 4-byte field itself
+    // Parser does: cursor.seek(header_start + header_size - 4)
+    // Content: 22 name + 1 type + 2 num_samples + 4 sample_header_size + 96 mapping +
+    // 48 vol_env + 48 pan_env + 2 num_points + 6 sustain/loop + 2 env_flags +
+    // 4 vibrato + 2 fadeout + 2 reserved = 239
+    // Total with field: 4 + 239 = 243
+    let header_size: u32 = 243;
+    xm.extend_from_slice(&header_size.to_le_bytes());
+
+    // Instrument name (22 bytes)
+    let name_bytes = name.as_bytes();
+    xm.extend_from_slice(&name_bytes[..name_bytes.len().min(22)]);
+    xm.extend(std::iter::repeat(0u8).take(22 - name_bytes.len().min(22)));
+
+    // Instrument type (0)
+    xm.push(0);
+
+    // Number of samples (1)
+    xm.extend_from_slice(&1u16.to_le_bytes());
+
+    // Sample header size (40 bytes)
+    xm.extend_from_slice(&40u32.to_le_bytes());
+
+    // Sample mapping (96 bytes - all notes map to sample 0)
+    xm.extend(std::iter::repeat(0u8).take(96));
+
+    // Volume envelope points (48 bytes) - simple sustain envelope
+    xm.extend_from_slice(&0u16.to_le_bytes()); // Point 0: x=0
+    xm.extend_from_slice(&64u16.to_le_bytes()); // Point 0: y=64
+    xm.extend(std::iter::repeat(0u8).take(44)); // Remaining 11 points
+
+    // Panning envelope points (48 bytes) - disabled
+    xm.extend(std::iter::repeat(0u8).take(48));
+
+    // Number of volume/panning envelope points
+    xm.push(1); // num_vol_points
+    xm.push(1); // num_pan_points
+
+    // Volume envelope sustain/loop points (3 bytes)
+    xm.push(0); // vol_sustain
+    xm.push(0); // vol_loop_start
+    xm.push(0); // vol_loop_end
+
+    // Panning envelope sustain/loop points (3 bytes)
+    xm.push(0); // pan_sustain
+    xm.push(0); // pan_loop_start
+    xm.push(0); // pan_loop_end
+
+    // Envelope type flags (2 bytes)
+    xm.push(0x01); // vol_type (volume envelope enabled)
+    xm.push(0x00); // pan_type (panning envelope disabled)
+
+    // Vibrato (4 bytes)
+    xm.push(0); // vibrato_type
+    xm.push(0); // vibrato_sweep
+    xm.push(0); // vibrato_depth
+    xm.push(0); // vibrato_rate
+
+    // Volume fadeout (2 bytes)
+    xm.extend_from_slice(&328u16.to_le_bytes());
+
+    // Reserved (2 bytes to reach header_size - 4)
+    xm.extend_from_slice(&[0u8; 2]);
+
+    // Sample header
+    let sample_len = (sample_data.len() * 2) as u32; // 16-bit samples
+    xm.extend_from_slice(&sample_len.to_le_bytes());
+
+    // Loop start/length (no loop)
+    xm.extend_from_slice(&0u32.to_le_bytes());
+    xm.extend_from_slice(&0u32.to_le_bytes());
+
+    // Volume (64 = max)
+    xm.push(64);
+
+    // Finetune: +101 for precise 22050 Hz
+    // 22050/8363 = 2.637 → log2(2.637) = 1.399 → 1.399*12 = 16.787 semitones
+    // Fractional: 0.787 * 128 = 100.74 ≈ 101
+    xm.push(101);
+
+    // Type (0x10 = 16-bit)
+    xm.push(0x10);
+
+    // Panning (128 = center)
+    xm.push(128);
+
+    // Relative note: +16 (integer part of 16.787 semitones)
+    // Formula: 8363 * 2^((16 + 101/128) / 12) ≈ 22050 Hz
+    xm.push(16);
+
+    // Reserved
+    xm.push(0);
+
+    // Sample name (22 bytes) - same as instrument name
+    xm.extend_from_slice(&name_bytes[..name_bytes.len().min(22)]);
+    xm.extend(std::iter::repeat(0u8).take(22 - name_bytes.len().min(22)));
+
+    // Sample data (delta-encoded 16-bit)
+    let mut old = 0i16;
+    for &sample in sample_data {
+        let delta = sample.wrapping_sub(old);
+        xm.extend_from_slice(&delta.to_le_bytes());
+        old = sample;
+    }
 }
 
 // ============================================================================
@@ -2238,10 +2554,16 @@ fn generate_synthwave_assets(output_dir: &Path) {
     write_wav(&output_dir.join("tracker-pad_synth.wav"), &pad);
     println!("  Generated tracker-pad_synth.wav ({} samples)", pad.len());
 
-    // Generate XM file
+    // Generate sample-less XM file
     let xm = generate_synthwave_xm();
     fs::write(output_dir.join("tracker-nether_drive.xm"), &xm).expect("Failed to write tracker-nether_drive.xm");
     println!("  Generated tracker-nether_drive.xm ({} bytes)", xm.len());
+
+    // Generate embedded XM file
+    let samples = vec![kick, snare, hihat, bass, lead, arp, pad];
+    let xm_embedded = generate_synthwave_xm_embedded(&samples);
+    fs::write(output_dir.join("tracker-nether_drive-embedded.xm"), &xm_embedded).expect("Failed to write tracker-nether_drive-embedded.xm");
+    println!("  Generated tracker-nether_drive-embedded.xm ({} bytes)", xm_embedded.len());
 }
 
 /// Synthwave kick: 808-style with longer decay, warm and round
@@ -2600,6 +2922,12 @@ fn generate_synthwave_xm() -> Vec<u8> {
         };
         let pattern_size = pattern_data.len() as u16;
 
+        // Debug validation
+        eprintln!("Synthwave Pattern {}: size={} bytes", i, pattern_size);
+        if pattern_size < 256 {
+            eprintln!("WARNING: Synthwave Pattern {} too small (expected min 256)", i);
+        }
+
         xm.extend_from_slice(&9u32.to_le_bytes()); // header length (including length field: 4+1+2+2=9)
         xm.push(0);
         xm.extend_from_slice(&32u16.to_le_bytes());
@@ -2619,6 +2947,74 @@ fn generate_synthwave_xm() -> Vec<u8> {
     ];
     for name in &instruments {
         write_instrument(&mut xm, name);
+    }
+
+    xm
+}
+
+fn generate_synthwave_xm_embedded(samples: &[Vec<i16>]) -> Vec<u8> {
+    let mut xm = Vec::new();
+
+    // XM Header
+    xm.extend_from_slice(b"Extended Module: ");
+
+    let name = b"Nether Drive";
+    xm.extend_from_slice(name);
+    xm.extend(std::iter::repeat(0u8).take(20 - name.len()));
+
+    xm.push(0x1A);
+
+    let tracker = b"gen-tracker-demo";
+    xm.extend_from_slice(tracker);
+    xm.extend(std::iter::repeat(0u8).take(20 - tracker.len()));
+
+    xm.extend_from_slice(&0x0104u16.to_le_bytes());
+    xm.extend_from_slice(&276u32.to_le_bytes());
+    xm.extend_from_slice(&12u16.to_le_bytes());
+    xm.extend_from_slice(&1u16.to_le_bytes());
+    xm.extend_from_slice(&8u16.to_le_bytes());
+    xm.extend_from_slice(&8u16.to_le_bytes());
+    xm.extend_from_slice(&7u16.to_le_bytes());
+    xm.extend_from_slice(&1u16.to_le_bytes());
+    xm.extend_from_slice(&6u16.to_le_bytes());
+    xm.extend_from_slice(&105u16.to_le_bytes());
+
+    let order = [0u8, 1, 2, 3, 4, 1, 2, 5, 6, 3, 4, 7];
+    xm.extend_from_slice(&order);
+    xm.extend(std::iter::repeat(0u8).take(256 - order.len()));
+
+    for i in 0..8 {
+        let pattern_data = match i {
+            0 => generate_synth_pattern_intro(),
+            1 => generate_synth_pattern_verse_a(),
+            2 => generate_synth_pattern_verse_b(),
+            3 => generate_synth_pattern_chorus_a(),
+            4 => generate_synth_pattern_chorus_b(),
+            5 => generate_synth_pattern_bridge(),
+            6 => generate_synth_pattern_build(),
+            7 => generate_synth_pattern_outro(),
+            _ => unreachable!(),
+        };
+        let pattern_size = pattern_data.len() as u16;
+
+        xm.extend_from_slice(&9u32.to_le_bytes());
+        xm.push(0);
+        xm.extend_from_slice(&32u16.to_le_bytes());
+        xm.extend_from_slice(&pattern_size.to_le_bytes());
+        xm.extend_from_slice(&pattern_data);
+    }
+
+    let instruments = [
+        "kick_synth",
+        "snare_synth",
+        "hihat_synth",
+        "bass_synth",
+        "lead_synth",
+        "arp_synth",
+        "pad_synth",
+    ];
+    for (i, name) in instruments.iter().enumerate() {
+        write_instrument_with_sample(&mut xm, name, &samples[i]);
     }
 
     xm

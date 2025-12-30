@@ -8,6 +8,8 @@
 //! nethercore-zx path/to/game.nczx
 //! nethercore-zx game.nczx --fullscreen
 //! nethercore-zx game.nczx --debug
+//! nethercore-zx game.nczx --preview
+//! nethercore-zx game.nczx --preview --asset textures/player
 //! ```
 //!
 //! # Keyboard Shortcuts
@@ -25,6 +27,7 @@ use clap::Parser;
 
 use nethercore_core::rollback::ConnectionMode;
 use nethercore_zx::player::{PlayerConfig, run};
+use nethercore_zx::preview::{PreviewConfig, run as run_preview};
 
 #[derive(Parser)]
 #[command(name = "nethercore-zx")]
@@ -91,6 +94,15 @@ struct Args {
     /// Join a multiplayer game at this address (ip:port)
     #[arg(long)]
     join: Option<String>,
+
+    // === Preview Mode ===
+    /// Run in preview mode to inspect ROM assets
+    #[arg(long)]
+    preview: bool,
+
+    /// Specific asset to focus on in preview mode (e.g., "textures/player")
+    #[arg(long)]
+    asset: Option<String>,
 }
 
 fn main() -> Result<()> {
@@ -99,6 +111,16 @@ fn main() -> Result<()> {
     // Validate ROM path exists
     if !args.rom.exists() {
         anyhow::bail!("ROM file not found: {}", args.rom.display());
+    }
+
+    // Handle preview mode
+    if args.preview {
+        let config = PreviewConfig {
+            rom_path: args.rom,
+            asset_path: args.asset,
+            scale: args.scale,
+        };
+        return run_preview(config);
     }
 
     // Validate player count

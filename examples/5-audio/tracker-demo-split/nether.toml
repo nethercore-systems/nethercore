@@ -1,0 +1,115 @@
+[game]
+id = "tracker-demo-split"
+title = "Tracker Demo (Split Samples)"
+author = "Nethercore Examples"
+version = "0.3.0"
+description = "XM tracker music with split sample workflow - samples loaded separately from WAV files"
+tags = ["audio", "music", "tracker", "split-samples"]
+
+# ============================================================================
+# Funky Jazz Instruments - "Nether Groove"
+# ============================================================================
+
+[[assets.sounds]]
+id = "kick_funk"
+path = "../../assets/tracker-kick_funk.wav"
+
+[[assets.sounds]]
+id = "snare_funk"
+path = "../../assets/tracker-snare_funk.wav"
+
+[[assets.sounds]]
+id = "hihat_funk"
+path = "../../assets/tracker-hihat_funk.wav"
+
+[[assets.sounds]]
+id = "bass_funk"
+path = "../../assets/tracker-bass_funk.wav"
+
+[[assets.sounds]]
+id = "epiano"
+path = "../../assets/tracker-epiano.wav"
+
+[[assets.sounds]]
+id = "lead_jazz"
+path = "../../assets/tracker-lead_jazz.wav"
+
+# ============================================================================
+# Eurobeat Instruments - "Nether Fire"
+# ============================================================================
+
+[[assets.sounds]]
+id = "kick_euro"
+path = "../../assets/tracker-kick_euro.wav"
+
+[[assets.sounds]]
+id = "snare_euro"
+path = "../../assets/tracker-snare_euro.wav"
+
+[[assets.sounds]]
+id = "hihat_euro"
+path = "../../assets/tracker-hihat_euro.wav"
+
+[[assets.sounds]]
+id = "bass_euro"
+path = "../../assets/tracker-bass_euro.wav"
+
+[[assets.sounds]]
+id = "supersaw"
+path = "../../assets/tracker-supersaw.wav"
+
+[[assets.sounds]]
+id = "brass_euro"
+path = "../../assets/tracker-brass_euro.wav"
+
+[[assets.sounds]]
+id = "pad_euro"
+path = "../../assets/tracker-pad_euro.wav"
+
+# ============================================================================
+# Synthwave Instruments - "Nether Drive"
+# ============================================================================
+
+[[assets.sounds]]
+id = "kick_synth"
+path = "../../assets/tracker-kick_synth.wav"
+
+[[assets.sounds]]
+id = "snare_synth"
+path = "../../assets/tracker-snare_synth.wav"
+
+[[assets.sounds]]
+id = "hihat_synth"
+path = "../../assets/tracker-hihat_synth.wav"
+
+[[assets.sounds]]
+id = "bass_synth"
+path = "../../assets/tracker-bass_synth.wav"
+
+[[assets.sounds]]
+id = "lead_synth"
+path = "../../assets/tracker-lead_synth.wav"
+
+[[assets.sounds]]
+id = "arp_synth"
+path = "../../assets/tracker-arp_synth.wav"
+
+[[assets.sounds]]
+id = "pad_synth"
+path = "../../assets/tracker-pad_synth.wav"
+
+# ============================================================================
+# Tracker Modules
+# ============================================================================
+
+[[assets.trackers]]
+id = "nether_groove"
+path = "../../assets/tracker-nether_groove.xm"
+
+[[assets.trackers]]
+id = "nether_fire"
+path = "../../assets/tracker-nether_fire.xm"
+
+[[assets.trackers]]
+id = "nether_drive"
+path = "../../assets/tracker-nether_drive.xm"

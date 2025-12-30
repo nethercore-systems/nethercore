@@ -45,11 +45,13 @@
 //! - <https://github.com/milkytracker/MilkyTracker/blob/master/resources/reference/xm-form.txt>
 
 mod error;
+mod extract;
 mod minimal;
 mod module;
 mod parser;
 
 pub use error::XmError;
+pub use extract::{extract_samples, ExtractedSample};
 pub use minimal::{pack_xm_minimal, parse_xm_minimal};
 pub use module::{XmEnvelope, XmInstrument, XmModule, XmNote, XmPattern};
 pub use parser::{get_instrument_names, parse_xm, strip_xm_samples};

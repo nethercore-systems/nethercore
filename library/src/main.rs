@@ -172,10 +172,17 @@ fn is_rom_path(arg: &str) -> Option<PathBuf> {
 fn parse_player_options(args: &[String]) -> PlayerOptions {
     let mut options = PlayerOptions::default();
 
-    for arg in args.iter().skip(1) {
+    let mut iter = args.iter().skip(1);
+    while let Some(arg) = iter.next() {
         match arg.as_str() {
             "-f" | "--fullscreen" => options.fullscreen = true,
             "-d" | "--debug" => options.debug = true,
+            "--preview" => options.preview = true,
+            "--asset" => {
+                if let Some(asset_name) = iter.next() {
+                    options.preview_asset = Some(asset_name.clone());
+                }
+            }
             _ => {}
         }
     }

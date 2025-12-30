@@ -100,6 +100,36 @@ The `/examples` directory contains 42 example games covering graphics, animation
 
 See [examples/README.md](./examples/README.md) for the complete list with descriptions.
 
+## Preview Mode
+
+Browse ROM assets without running game code:
+
+```bash
+# Using nether CLI
+nether preview paddle
+
+# Using library launcher
+cargo run -- paddle --preview
+
+# Focus on specific asset
+nether preview paddle --asset player_texture
+cargo run -- paddle --preview --asset player_texture
+```
+
+Preview mode supports:
+- **Textures** - View with zoom/pan controls
+- **Sounds** - Waveform visualization with playback
+- **Meshes** - 3D mesh inspection
+- **Animations** - Skeletal animation preview
+- **Fonts** - Font character inspection
+- **Trackers** - Music tracker data
+- **Data** - Raw data inspection
+
+Smart ROM lookup works in preview mode:
+- `nether preview pad` matches `paddle.nczx` (prefix)
+- `nether preview PADDLE` works (case-insensitive)
+- Typo suggestions: `nether preview padde` suggests `paddle`
+
 ## Screen Capture
 
 Nethercore includes built-in screenshot and GIF recording:

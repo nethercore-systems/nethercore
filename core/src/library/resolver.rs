@@ -1,66 +1,87 @@
-//! Game ID resolution from user queries
+//! Generic ID resolution from user queries
 //!
-//! This module provides fuzzy matching for game IDs, supporting:
+//! This module provides fuzzy matching for IDs, supporting:
 //! - Exact case-sensitive matches
 //! - Case-insensitive matches
 //! - Prefix matching (if unique)
 //! - Typo suggestions using Levenshtein distance
+//!
+//! The generic `resolve_id` function works with any type via a closure,
+//! while `resolve_game_id` provides a convenient wrapper for `LocalGame`.
 
 use super::LocalGame;
 
 #[derive(Debug, Clone)]
-pub struct GameResolutionError {
+pub struct ResolutionError {
     pub message: String,
     pub suggestion: Option<Vec<String>>,
 }
 
-/// Resolve a game ID from a user query string
+/// Backwards compatibility alias
+pub type GameResolutionError = ResolutionError;
+
+/// Generic ID resolution from a user query string.
+///
+/// Works with any item type by using a closure to extract the ID.
 ///
 /// Priority order:
 /// 1. Exact case-sensitive match
 /// 2. Exact case-insensitive match
 /// 3. Case-insensitive prefix match (if unique)
-/// 4. Error with suggestions for similar games
-pub fn resolve_game_id(
+/// 4. Error with suggestions for similar IDs
+///
+/// # Example
+/// ```ignore
+/// let roms = vec![PathBuf::from("paddle.nczx"), PathBuf::from("cube.nczx")];
+/// let result = resolve_id("pad", &roms, |p| {
+///     p.file_stem().unwrap().to_str().unwrap()
+/// });
+/// ```
+pub fn resolve_id<'a, T, F>(
     query: &str,
-    available_games: &[LocalGame],
-) -> Result<String, GameResolutionError> {
+    items: &'a [T],
+    get_id: F,
+    item_kind: &str,
+) -> Result<&'a T, ResolutionError>
+where
+    F: Fn(&T) -> &str,
+{
     if query.is_empty() {
-        return Err(GameResolutionError {
-            message: "Empty game ID".to_string(),
+        return Err(ResolutionError {
+            message: format!("Empty {} ID", item_kind),
             suggestion: None,
         });
     }
 
     // Fast path: exact case-sensitive match
-    if let Some(game) = available_games.iter().find(|g| g.id == query) {
-        return Ok(game.id.clone());
+    if let Some(item) = items.iter().find(|item| get_id(item) == query) {
+        return Ok(item);
     }
 
     let lower_query = query.to_lowercase();
 
     // Exact case-insensitive match
-    let case_insensitive_matches: Vec<&LocalGame> = available_games
+    let case_insensitive_matches: Vec<&T> = items
         .iter()
-        .filter(|g| g.id.to_lowercase() == lower_query)
+        .filter(|item| get_id(item).to_lowercase() == lower_query)
         .collect();
 
     if case_insensitive_matches.len() == 1 {
-        return Ok(case_insensitive_matches[0].id.clone());
+        return Ok(case_insensitive_matches[0]);
     }
 
     // Prefix matching (case-insensitive)
-    let prefix_matches: Vec<&LocalGame> = available_games
+    let prefix_matches: Vec<&T> = items
         .iter()
-        .filter(|g| g.id.to_lowercase().starts_with(&lower_query))
+        .filter(|item| get_id(item).to_lowercase().starts_with(&lower_query))
         .collect();
 
     match prefix_matches.len() {
         0 => {
-            // Not found - suggest similar games
-            let suggestions = find_similar_games(query, available_games);
-            Err(GameResolutionError {
-                message: format!("Game '{}' not found", query),
+            // Not found - suggest similar items
+            let suggestions = find_similar(query, items, &get_id);
+            Err(ResolutionError {
+                message: format!("{} '{}' not found", item_kind, query),
                 suggestion: if suggestions.is_empty() {
                     None
                 } else {
@@ -70,26 +91,46 @@ pub fn resolve_game_id(
         }
         1 => {
             // Unique prefix match
-            Ok(prefix_matches[0].id.clone())
+            Ok(prefix_matches[0])
         }
         _ => {
             // Multiple matches - ambiguous
-            let candidates: Vec<String> = prefix_matches.iter().map(|g| g.id.clone()).collect();
-            Err(GameResolutionError {
-                message: format!("Ambiguous game ID '{}' matches multiple games", query),
+            let candidates: Vec<String> = prefix_matches
+                .iter()
+                .map(|item| get_id(item).to_string())
+                .collect();
+            Err(ResolutionError {
+                message: format!("Ambiguous {} '{}' matches multiple items", item_kind, query),
                 suggestion: Some(candidates),
             })
         }
     }
 }
 
-/// Find games with similar IDs using Levenshtein distance
-fn find_similar_games(query: &str, available_games: &[LocalGame]) -> Vec<String> {
+/// Resolve a game ID from a user query string.
+///
+/// Convenience wrapper around `resolve_id` for `LocalGame`.
+pub fn resolve_game_id(
+    query: &str,
+    available_games: &[LocalGame],
+) -> Result<String, ResolutionError> {
+    resolve_id(query, available_games, |g| g.id.as_str(), "Game")
+        .map(|g| g.id.clone())
+}
+
+/// Find items with similar IDs using Levenshtein distance.
+pub fn find_similar<T, F>(query: &str, items: &[T], get_id: F) -> Vec<String>
+where
+    F: Fn(&T) -> &str,
+{
     const DISTANCE_THRESHOLD: usize = 3;
 
-    let mut matches: Vec<(String, usize)> = available_games
+    let mut matches: Vec<(String, usize)> = items
         .iter()
-        .map(|g| (g.id.clone(), levenshtein_distance(query, &g.id)))
+        .map(|item| {
+            let id = get_id(item);
+            (id.to_string(), levenshtein_distance(query, id))
+        })
         .filter(|(_, dist)| *dist <= DISTANCE_THRESHOLD)
         .collect();
 
@@ -97,8 +138,8 @@ fn find_similar_games(query: &str, available_games: &[LocalGame]) -> Vec<String>
     matches.into_iter().take(3).map(|(id, _)| id).collect()
 }
 
-/// Calculate Levenshtein distance between two strings
-fn levenshtein_distance(s1: &str, s2: &str) -> usize {
+/// Calculate Levenshtein distance between two strings.
+pub fn levenshtein_distance(s1: &str, s2: &str) -> usize {
     // Pre-collect chars to avoid O(n) .chars().nth() calls
     let chars1: Vec<char> = s1.chars().collect();
     let chars2: Vec<char> = s2.chars().collect();

@@ -59,6 +59,10 @@ pub struct PlayerOptions {
     pub players: Option<usize>,
     /// Multiplayer connection mode
     pub connection: Option<ConnectionMode>,
+    /// Enable preview mode (asset browser without running game code)
+    pub preview: bool,
+    /// Initial asset to focus in preview mode
+    pub preview_asset: Option<String>,
 }
 
 /// Enum representing all available console types.
@@ -242,6 +246,15 @@ fn build_player_command(
                 cmd.arg("--join");
                 cmd.arg(format!("{}:{}", host_ip, port));
             }
+        }
+    }
+
+    // Add preview mode args
+    if options.preview {
+        cmd.arg("--preview");
+        if let Some(ref asset) = options.preview_asset {
+            cmd.arg("--asset");
+            cmd.arg(asset);
         }
     }
 

@@ -8,6 +8,7 @@ pub mod debug;
 pub mod error_parsing;
 pub mod event_loop;
 pub mod input;
+pub mod preview;
 pub mod session;
 pub mod standalone;
 pub mod types;
@@ -19,6 +20,10 @@ pub use error_parsing::parse_wasm_error;
 pub use event_loop::{AppEventHandler, ConsoleApp, run};
 pub use input::InputManager;
 pub use session::GameSession;
+pub use preview::{
+    AssetCategory, AssetViewer, PreviewApp, PreviewConfig, PreviewData, PreviewMetadata,
+    PreviewRomLoader, run_preview,
+};
 pub use standalone::{
     LoadedRom, RomLoader, StandaloneApp, StandaloneConfig, StandaloneGraphicsSupport,
     run_standalone,
