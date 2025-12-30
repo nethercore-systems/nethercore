@@ -401,8 +401,8 @@ impl ZXAssetViewer {
     /// Start tracker playback
     pub fn start_tracker_playback(&mut self) {
         if let Some(tracker) = self.selected_tracker() {
-            // Parse XM module
-            let xm_result = nether_xm::parse_xm(&tracker.pattern_data);
+            // Parse XM module (supports both full XM and minimal NCXM formats)
+            let xm_result = nether_xm::parse_xm_minimal(&tracker.pattern_data);
             let xm_module = match xm_result {
                 Ok(m) => m,
                 Err(e) => {
