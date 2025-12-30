@@ -129,7 +129,7 @@ fn play_sound(mut caller: Caller<'_, ZXGameContext>, sound: u32, volume: f32, pa
     for channel in ctx.rollback.audio.channels.iter_mut() {
         if channel.sound == 0 {
             channel.sound = sound;
-            channel.position = 0;
+            channel.reset_position();
             channel.looping = 0;
             channel.volume = clamp_safe(volume, 0.0, 1.0);
             channel.pan = clamp_safe(pan, -1.0, 1.0);
@@ -177,7 +177,7 @@ fn channel_play(
 
     // Start new sound
     ch.sound = sound;
-    ch.position = 0;
+    ch.reset_position();
     ch.looping = looping;
     ch.volume = clamp_safe(volume, 0.0, 1.0);
     ch.pan = clamp_safe(pan, -1.0, 1.0);
@@ -216,7 +216,7 @@ fn channel_stop(mut caller: Caller<'_, ZXGameContext>, channel: u32) {
     let ctx = caller.data_mut();
     let ch = &mut ctx.rollback.audio.channels[channel_idx];
     ch.sound = 0;
-    ch.position = 0;
+    ch.reset_position();
     ch.looping = 0;
 }
 
@@ -235,7 +235,7 @@ fn music_play(mut caller: Caller<'_, ZXGameContext>, handle: u32, volume: f32, l
     if is_tracker_handle(handle) {
         // Tracker music - stop PCM music first
         ctx.rollback.audio.music.sound = 0;
-        ctx.rollback.audio.music.position = 0;
+        ctx.rollback.audio.music.reset_position();
 
         // Set up tracker state with raw handle (strip flag)
         let raw_handle = raw_tracker_handle(handle);
@@ -272,7 +272,7 @@ fn music_play(mut caller: Caller<'_, ZXGameContext>, handle: u32, volume: f32, l
 
         // Start new PCM music
         music.sound = handle;
-        music.position = 0;
+        music.reset_position();
         music.looping = looping;
         music.volume = clamp_safe(volume, 0.0, 1.0);
         music.pan = 0.0; // Music is always centered
@@ -286,7 +286,7 @@ fn music_stop(mut caller: Caller<'_, ZXGameContext>) {
     // Stop PCM music
     let music = &mut ctx.rollback.audio.music;
     music.sound = 0;
-    music.position = 0;
+    music.reset_position();
     music.looping = 0;
 
     // Stop tracker music

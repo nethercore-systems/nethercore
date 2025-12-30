@@ -13,12 +13,19 @@ use nethercore_core::console::ConsoleRollbackState;
 pub const MAX_CHANNELS: usize = 16;
 
 /// State for a single audio channel (20 bytes, POD)
+///
+/// Position is stored in 24.8 fixed-point format:
+/// - Upper 24 bits: integer sample position (0..16,777,215 ≈ 761 seconds at 22050 Hz)
+/// - Lower 8 bits: fractional position (1/256 sample precision ≈ 0.02ms)
+///
+/// This fixed-point encoding enables smooth sub-sample interpolation while maintaining
+/// deterministic rollback behavior and binary compatibility (same 4-byte u32 size).
 #[repr(C)]
 #[derive(Clone, Copy, Default, Debug, Pod, Zeroable)]
 pub struct ChannelState {
     /// Sound handle (0 = silent/no sound)
     pub sound: u32,
-    /// Playhead position in samples
+    /// Playhead position in samples (24.8 fixed-point)
     pub position: u32,
     /// Whether the channel is looping (0 = no, 1 = yes)
     pub looping: u32,
@@ -26,6 +33,50 @@ pub struct ChannelState {
     pub volume: f32,
     /// Pan (-1.0 = left, 0.0 = center, 1.0 = right)
     pub pan: f32,
+}
+
+impl ChannelState {
+    /// Number of fractional bits in fixed-point position encoding
+    pub const FRAC_BITS: u32 = 8;
+    /// Mask for extracting fractional part
+    pub const FRAC_MASK: u32 = (1 << Self::FRAC_BITS) - 1;
+    /// Fixed-point value representing 1.0
+    pub const FRAC_ONE: u32 = 1 << Self::FRAC_BITS;
+
+    /// Get position as (integer_part, fractional_part)
+    ///
+    /// Returns the sample position split into integer and fractional components.
+    /// The fractional part is in the range [0.0, 1.0).
+    #[inline]
+    pub fn get_position(&self) -> (usize, f32) {
+        let int_part = (self.position >> Self::FRAC_BITS) as usize;
+        let frac_part = (self.position & Self::FRAC_MASK) as f32 / Self::FRAC_ONE as f32;
+        (int_part, frac_part)
+    }
+
+    /// Set position from floating-point value
+    ///
+    /// Converts a floating-point position to 24.8 fixed-point format.
+    #[inline]
+    pub fn set_position(&mut self, pos: f32) {
+        self.position = (pos * Self::FRAC_ONE as f32) as u32;
+    }
+
+    /// Advance position by fractional delta
+    ///
+    /// Adds a floating-point delta to the current position, maintaining
+    /// sub-sample precision. Uses wrapping addition for determinism.
+    #[inline]
+    pub fn advance_position(&mut self, delta: f32) {
+        let delta_fixed = (delta * Self::FRAC_ONE as f32) as u32;
+        self.position = self.position.wrapping_add(delta_fixed);
+    }
+
+    /// Reset position to zero
+    #[inline]
+    pub fn reset_position(&mut self) {
+        self.position = 0;
+    }
 }
 
 /// Audio playback state (340 bytes total)
@@ -160,5 +211,104 @@ mod tests {
         assert_eq!(tracker.volume, 0);
         assert_eq!(tracker.flags, 0);
         assert_eq!(tracker.tick_sample_pos, 0);
+    }
+
+    #[test]
+    fn test_channel_position_fixed_point_encoding() {
+        let mut channel = ChannelState::default();
+
+        // Test integer positions
+        channel.set_position(0.0);
+        let (int_pos, frac_pos) = channel.get_position();
+        assert_eq!(int_pos, 0);
+        assert!((frac_pos - 0.0).abs() < 0.001);
+
+        channel.set_position(100.0);
+        let (int_pos, frac_pos) = channel.get_position();
+        assert_eq!(int_pos, 100);
+        assert!((frac_pos - 0.0).abs() < 0.001);
+
+        // Test fractional positions
+        channel.set_position(100.5);
+        let (int_pos, frac_pos) = channel.get_position();
+        assert_eq!(int_pos, 100);
+        assert!((frac_pos - 0.5).abs() < 0.01, "Expected ~0.5, got {}", frac_pos);
+
+        channel.set_position(42.25);
+        let (int_pos, frac_pos) = channel.get_position();
+        assert_eq!(int_pos, 42);
+        assert!((frac_pos - 0.25).abs() < 0.01, "Expected ~0.25, got {}", frac_pos);
+
+        channel.set_position(99.75);
+        let (int_pos, frac_pos) = channel.get_position();
+        assert_eq!(int_pos, 99);
+        assert!((frac_pos - 0.75).abs() < 0.01, "Expected ~0.75, got {}", frac_pos);
+    }
+
+    #[test]
+    fn test_channel_position_advance() {
+        let mut channel = ChannelState::default();
+        channel.set_position(0.0);
+
+        // Advance by 0.5 repeatedly (simulating 44.1kHz output from 22.05kHz source)
+        for _ in 0..512 {
+            channel.advance_position(0.5);
+        }
+
+        let (int_pos, frac_pos) = channel.get_position();
+        assert_eq!(int_pos, 256, "After 512 advances of 0.5, position should be 256");
+        assert!(frac_pos.abs() < 0.01, "Fractional part should be ~0, got {}", frac_pos);
+    }
+
+    #[test]
+    fn test_channel_position_sub_sample_precision() {
+        let mut channel = ChannelState::default();
+        channel.set_position(0.0);
+
+        // Test precise fractional advancement
+        for _ in 0..100 {
+            channel.advance_position(0.3);
+        }
+
+        let (int_pos, _frac_pos) = channel.get_position();
+        // 100 * 0.3 = 30.0 (but with fixed-point rounding, may be 29 or 30)
+        assert!(
+            int_pos == 29 || int_pos == 30,
+            "Expected ~30 (with rounding tolerance), got {}",
+            int_pos
+        );
+    }
+
+    #[test]
+    fn test_channel_reset_position() {
+        let mut channel = ChannelState::default();
+        channel.set_position(1234.567);
+        channel.reset_position();
+
+        let (int_pos, frac_pos) = channel.get_position();
+        assert_eq!(int_pos, 0);
+        assert!((frac_pos - 0.0).abs() < 0.001);
+        assert_eq!(channel.position, 0);
+    }
+
+    #[test]
+    fn test_channel_position_determinism() {
+        // Two channels with same operations should have identical position
+        let mut ch1 = ChannelState::default();
+        let mut ch2 = ChannelState::default();
+
+        for _ in 0..1000 {
+            ch1.advance_position(0.5);
+            ch2.advance_position(0.5);
+        }
+
+        assert_eq!(ch1.position, ch2.position, "Determinism: positions must be bit-identical");
+    }
+
+    #[test]
+    fn test_fixed_point_constants() {
+        assert_eq!(ChannelState::FRAC_BITS, 8);
+        assert_eq!(ChannelState::FRAC_ONE, 256);
+        assert_eq!(ChannelState::FRAC_MASK, 255);
     }
 }

@@ -292,26 +292,24 @@ fn mix_channel(
         return None;
     }
 
-    // Get current position (in source samples)
-    let source_pos = channel.position as f32 * resample_ratio;
-    let source_idx = source_pos as usize;
+    // Get current position (24.8 fixed-point) as (integer, fraction)
+    let (source_idx, frac) = channel.get_position();
 
     // Check if we've reached the end
     if source_idx >= data.len() {
         if channel.looping != 0 {
             // Loop back to start
-            channel.position = 0;
+            channel.reset_position();
             return mix_channel(channel, sounds, resample_ratio);
         } else {
             // Sound finished
             channel.sound = 0;
-            channel.position = 0;
+            channel.reset_position();
             return None;
         }
     }
 
     // Linear interpolation for smoother resampling
-    let frac = source_pos.fract();
     let sample1 = data[source_idx] as f32 / 32768.0;
     let sample2 = if source_idx + 1 < data.len() {
         data[source_idx + 1] as f32 / 32768.0
@@ -322,8 +320,8 @@ fn mix_channel(
     };
     let sample = sample1 + (sample2 - sample1) * frac;
 
-    // Advance playhead (in output sample rate)
-    channel.position += 1;
+    // Advance playhead by fractional resample ratio for smooth sub-sample tracking
+    channel.advance_position(resample_ratio);
 
     Some(sample)
 }

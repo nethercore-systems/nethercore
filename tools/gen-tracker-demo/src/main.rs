@@ -124,23 +124,56 @@ fn generate_kick_funk() -> Vec<i16> {
 
     let mut output = Vec::with_capacity(samples);
     let mut phase = 0.0f32;
+    let mut click_phase = 0.0f32;
+
+    // Multi-pole filter state (2-pole for smoother tone)
+    let mut lp1 = 0.0f32;
+    let mut lp2 = 0.0f32;
 
     for i in 0..samples {
         let t = i as f32 / SAMPLE_RATE;
 
-        // Slower decay for warmer tone
-        let decay = (-t * 10.0).exp();
+        // Two-stage decay: fast transient + body sustain
+        let decay = if t < 0.05 {
+            (-t * 8.0).exp()
+        } else {
+            0.67 * (-((t - 0.05) * 9.0)).exp()
+        };
 
-        // Gentler pitch sweep: 120Hz down to 45Hz
-        let freq = 120.0 * (-t * 12.0).exp() + 45.0;
+        // Two-stage pitch sweep for more character
+        // Initial click: 250Hz → 120Hz (first 30ms)
+        // Body: 120Hz → 45Hz (rest of duration)
+        let freq = if t < 0.03 {
+            250.0 * (-t * 40.0).exp() + 120.0
+        } else {
+            120.0 * (-((t - 0.03) * 10.0)).exp() + 45.0
+        };
 
+        // Main body oscillator
         phase += 2.0 * PI * freq / SAMPLE_RATE;
+        let body = phase.sin();
 
-        // Add slight saturation for warmth
-        let mut sample = phase.sin() * decay;
-        sample = (sample * 1.2).tanh(); // Soft clip
+        // Click transient (high-pitched, very short)
+        click_phase += 2.0 * PI * 800.0 / SAMPLE_RATE;
+        let click_env = (-t * 150.0).exp();
+        let click = click_phase.sin() * click_env * 0.25;
 
-        output.push((sample * 30000.0).clamp(-32767.0, 32767.0) as i16);
+        // Add subtle 2nd harmonic for punch
+        let harmonic = (phase * 2.0).sin() * 0.15 * (-t * 18.0).exp();
+
+        // Combine layers
+        let raw = body + click + harmonic;
+
+        // 2-pole low-pass filter for warmth (cutoff ~800Hz)
+        let cutoff = 0.18;
+        lp1 += cutoff * (raw - lp1);
+        lp2 += cutoff * (lp1 - lp2);
+
+        // Soft saturation with musical curve
+        let saturated = (lp2 * 1.3).tanh();
+
+        let sample = saturated * decay * 31000.0;
+        output.push(sample.clamp(-32767.0, 32767.0) as i16);
     }
 
     output
@@ -154,31 +187,58 @@ fn generate_snare_funk() -> Vec<i16> {
     let mut output = Vec::with_capacity(samples);
     let mut rng = SimpleRng::new(12345);
 
-    // Filter state
-    let mut lp_state = 0.0f32;
+    // Multi-pole filter states (2-pole LP + 1-pole HP for band-pass)
+    let mut lp1 = 0.0f32;
+    let mut lp2 = 0.0f32;
+    let mut hp_prev_in = 0.0f32;
+    let mut hp_prev_out = 0.0f32;
 
     for i in 0..samples {
         let t = i as f32 / SAMPLE_RATE;
 
-        // Medium decay envelope
-        let decay = (-t * 15.0).exp();
+        // Two-stage envelope: fast attack + medium release with tail
+        let amp_env = if t < 0.002 {
+            t / 0.002 // 2ms attack for snap
+        } else if t < 0.12 {
+            (-((t - 0.002) * 12.0)).exp()
+        } else {
+            0.30 * (-((t - 0.12) * 8.0)).exp() // Subtle tail
+        };
 
-        // Noise component (slightly filtered for warmth)
-        let noise = rng.next_f32() * 2.0 - 1.0;
+        // Shaped noise (pink-ish for warmth)
+        let white_noise = rng.next_f32() * 2.0 - 1.0;
 
-        // Body component at 160Hz (warmer)
-        let body = (2.0 * PI * 160.0 * t).sin();
+        // High-pass filter for brightness
+        let hp_alpha = 0.70;
+        let hp_out = hp_alpha * (hp_prev_out + white_noise - hp_prev_in);
+        hp_prev_in = white_noise;
+        hp_prev_out = hp_out;
 
-        // Second harmonic for snap
-        let snap = (2.0 * PI * 320.0 * t).sin() * (-t * 30.0).exp();
+        // Body resonances (multiple modes like a real snare shell)
+        let body1 = (2.0 * PI * 160.0 * t).sin() * 0.40; // Fundamental
+        let body2 = (2.0 * PI * 210.0 * t).sin() * 0.25; // Second mode
+        let body3 = (2.0 * PI * 295.0 * t).sin() * 0.15; // Third mode
+        let body = (body1 + body2 + body3) * (-t * 18.0).exp();
 
-        // Mix: more body for funk feel
-        let raw = noise * 0.5 + body * 0.35 + snap * 0.15;
+        // Snare wire rattle (high-frequency burst)
+        let rattle_env = (-t * 35.0).exp();
+        let rattle = hp_out * rattle_env;
 
-        // Gentle low-pass
-        lp_state += 0.4 * (raw - lp_state);
+        // Transient snap (very short)
+        let snap = (2.0 * PI * 380.0 * t).sin() * (-t * 45.0).exp() * 0.20;
 
-        let sample = lp_state * decay * 28000.0;
+        // Mix components
+        let raw = body + rattle * 0.50 + snap;
+
+        // 2-pole low-pass for smoothness
+        let cutoff = 0.35;
+        lp1 += cutoff * (raw - lp1);
+        lp2 += cutoff * (lp1 - lp2);
+
+        // Gentle saturation
+        let saturated = (lp2 * 1.15).tanh();
+
+        let sample = saturated * amp_env * 29000.0;
         output.push(sample.clamp(-32767.0, 32767.0) as i16);
     }
 
@@ -193,34 +253,54 @@ fn generate_hihat_funk() -> Vec<i16> {
     let mut output = Vec::with_capacity(samples);
     let mut rng = SimpleRng::new(54321);
 
-    // Band-pass filter states
-    let mut hp_prev_in = 0.0f32;
-    let mut hp_prev_out = 0.0f32;
-    let mut lp_state = 0.0f32;
+    // Multi-stage filter states (HP + multi-pole BP for metallic character)
+    let mut hp1_prev_in = 0.0f32;
+    let mut hp1_prev_out = 0.0f32;
+    let mut hp2_prev_in = 0.0f32;
+    let mut hp2_prev_out = 0.0f32;
+    let mut lp1 = 0.0f32;
+    let mut lp2 = 0.0f32;
 
     for i in 0..samples {
         let t = i as f32 / SAMPLE_RATE;
 
-        // Decay with slight sustain
-        let decay = if t < 0.02 {
-            t / 0.02 // Quick attack
+        // Two-stage envelope with attack
+        let amp_env = if t < 0.005 {
+            t / 0.005 // 5ms attack for smoothness
+        } else if t < 0.025 {
+            1.0 - (t - 0.005) * 0.2 // Quick initial decay
         } else {
-            (-((t - 0.02) * 25.0)).exp()
+            0.80 * (-((t - 0.025) * 22.0)).exp()
         };
 
-        // Noise
+        // Generate noise
         let noise = rng.next_f32() * 2.0 - 1.0;
 
-        // High-pass (less aggressive for warmer tone)
-        let hp_alpha = 0.85;
-        let hp_out = hp_alpha * (hp_prev_out + noise - hp_prev_in);
-        hp_prev_in = noise;
-        hp_prev_out = hp_out;
+        // 2-stage high-pass for brightness (cascaded for steeper slope)
+        let hp_alpha = 0.88;
+        let hp1_out = hp_alpha * (hp1_prev_out + noise - hp1_prev_in);
+        hp1_prev_in = noise;
+        hp1_prev_out = hp1_out;
 
-        // Gentle low-pass to tame harshness
-        lp_state += 0.6 * (hp_out - lp_state);
+        let hp2_out = hp_alpha * (hp2_prev_out + hp1_out - hp2_prev_in);
+        hp2_prev_in = hp1_out;
+        hp2_prev_out = hp2_out;
 
-        let sample = lp_state * decay * 22000.0;
+        // Add metallic resonances (multiple inharmonic modes)
+        let metal1 = (2.0 * PI * 7200.0 * t).sin() * 0.08;
+        let metal2 = (2.0 * PI * 9300.0 * t).sin() * 0.05;
+        let metal3 = (2.0 * PI * 11500.0 * t).sin() * 0.03;
+        let metallic = (metal1 + metal2 + metal3) * (-t * 30.0).exp();
+
+        // Combine noise and metallic components
+        let raw = hp2_out * 0.85 + metallic;
+
+        // 2-pole low-pass for smooth tone (not harsh)
+        let cutoff = 0.55;
+        lp1 += cutoff * (raw - lp1);
+        lp2 += cutoff * (lp1 - lp2);
+
+        let sample = lp2 * amp_env * 23000.0;
         output.push(sample.clamp(-32767.0, 32767.0) as i16);
     }
 
@@ -228,58 +308,73 @@ fn generate_hihat_funk() -> Vec<i16> {
 }
 
 /// Funk bass: sawtooth with filter envelope "pluck", chromatic-friendly
-/// IMPROVED: Smoother attack and sustain, less choppy
+/// IMPROVED: Richer harmonics, better filter, tighter low-end
 fn generate_bass_funk() -> Vec<i16> {
-    // From nether-groove.spec.md:
-    // - Sawtooth with filter envelope "pluck"
-    // - Attack: 5ms (fast but not instant)
-    // - Filter sweep creates "slap" without click
-    // - Slight pitch bend down on attack (funky!)
-    // - Sustain: 400ms for smooth groove
-    // - Sub sine at -1 octave for weight
     let duration = 0.55; // 550ms total (400ms sustain + release)
     let freq = 87.31; // F2 as base
     let samples = (SAMPLE_RATE * duration) as usize;
 
     let mut output = Vec::with_capacity(samples);
-    let mut filtered = 0.0f32;
+
+    // Multi-pole filter (3-pole for resonant character)
+    let mut lp1 = 0.0f32;
+    let mut lp2 = 0.0f32;
+    let mut lp3 = 0.0f32;
+    let mut phase = 0.0f32;
+    let mut sub_phase = 0.0f32;
 
     for i in 0..samples {
         let t = i as f32 / SAMPLE_RATE;
 
-        // EXACT SPEC: 5ms attack, linear ramp (not quadratic)
+        // Improved envelope with smooth attack
         let amp_env = if t < 0.005 {
-            t / 0.005 // Linear ramp - 5ms attack
+            (t / 0.005).powf(0.8) // Slightly curved for smoothness
         } else if t < 0.4 {
-            1.0 - (t - 0.005) * 0.15 // Slow decay to sustain
+            1.0 - (t - 0.005) * 0.12 // Slow decay to sustain
         } else {
-            0.94 * (-(t - 0.4) * 3.0).exp() // Smooth release
+            0.95 * (-(t - 0.4) * 3.2).exp() // Smooth release
         };
 
-        // EXACT SPEC: Filter envelope creates "pluck" without click
-        let filter_env = 0.08 + 0.25 * (-t * 20.0).exp();
+        // Filter envelope with resonance peak for "slap"
+        let filter_env = 0.06 + 0.32 * (-t * 18.0).exp();
+        let resonance = 0.15 * (-t * 25.0).exp();
 
-        // Subtle pitch bend down on attack (funky but smooth)
-        let pitch_bend = 1.0 + 0.02 * (-t * 25.0).exp();
+        // Subtle pitch bend down on attack (funky!)
+        let pitch_bend = 1.0 + 0.018 * (-t * 28.0).exp();
 
-        // Sawtooth wave
-        let phase = (freq * pitch_bend * t) % 1.0;
+        // Main sawtooth with proper phase accumulation
+        phase += freq * pitch_bend / SAMPLE_RATE;
+        phase = phase % 1.0;
         let saw = 2.0 * phase - 1.0;
 
-        // Sub sine at -1 octave for weight
-        let sub = (2.0 * PI * freq * 0.5 * t).sin() * 0.35;
+        // Add subtle square wave for more harmonics (20% mix)
+        let square = if phase < 0.5 { 1.0 } else { -1.0 };
+        let osc_mix = saw * 0.80 + square * 0.20;
 
-        // Dynamic low-pass filter
-        filtered += filter_env * (saw - filtered);
+        // Sub oscillator with proper phase tracking
+        sub_phase += (freq * 0.5 * pitch_bend) / SAMPLE_RATE;
+        sub_phase = sub_phase % 1.0;
+        let sub = (sub_phase * 2.0 * PI).sin() * 0.38;
 
-        let sample = (filtered * 0.65 + sub) * amp_env * 28000.0;
+        // 3-pole resonant filter (adds character)
+        lp1 += filter_env * (osc_mix - lp1) + resonance * (osc_mix - lp1);
+        lp2 += filter_env * (lp1 - lp2);
+        lp3 += filter_env * (lp2 - lp3);
+
+        // Mix filtered oscillator with sub
+        let mixed = lp3 * 0.68 + sub;
+
+        // Gentle saturation for analog warmth
+        let saturated = (mixed * 1.2).tanh();
+
+        let sample = saturated * amp_env * 29000.0;
         output.push(sample.clamp(-32767.0, 32767.0) as i16);
     }
 
     output
 }
 
-/// Electric Piano: FM synthesis for Rhodes/Wurlitzer bell-like tone
+/// Electric Piano: Enhanced FM synthesis for Rhodes/Wurlitzer bell-like tone
 fn generate_epiano() -> Vec<i16> {
     let duration = 1.0; // 1 second for chord sustain
     let freq = 261.63; // C4 as base
@@ -287,78 +382,125 @@ fn generate_epiano() -> Vec<i16> {
 
     let mut output = Vec::with_capacity(samples);
 
+    // Filter state for warmth
+    let mut lp1 = 0.0f32;
+    let mut lp2 = 0.0f32;
+
     for i in 0..samples {
         let t = i as f32 / SAMPLE_RATE;
 
-        // ADSR envelope
-        let amp_env = if t < 0.01 {
-            t / 0.01 // Fast attack
-        } else if t < 0.3 {
-            1.0 - (t - 0.01) * 0.3 // Decay to 91%
-        } else if t < 0.7 {
-            0.91 - (t - 0.3) * 0.2 // Slow decay to sustain
+        // Improved ADSR envelope (more natural decay)
+        let amp_env = if t < 0.008 {
+            (t / 0.008).powf(0.7) // Curved attack for smoothness
+        } else if t < 0.25 {
+            1.0 - (t - 0.008) * 0.35 // Faster initial decay
+        } else if t < 0.65 {
+            0.92 - (t - 0.25) * 0.25 // Gradual sustain decay
         } else {
-            0.83 * (-(t - 0.7) * 4.0).exp() // Release
+            0.82 * (-(t - 0.65) * 4.5).exp() // Release
         };
 
-        // FM synthesis: carrier + modulator
-        // Modulator frequency = 2x carrier (creates bell-like harmonics)
-        let mod_freq = freq * 2.0;
-        let mod_index = 2.5 * (-t * 8.0).exp(); // Decaying modulation for bell attack
+        // FM synthesis with multiple operators for richer tone
+        // Operator 1: Main bell tone (2:1 ratio)
+        let mod_freq1 = freq * 2.0;
+        let mod_index1 = 2.8 * (-t * 9.0).exp(); // Decaying modulation
+        let modulator1 = (2.0 * PI * mod_freq1 * t).sin() * mod_index1;
+        let carrier1 = (2.0 * PI * freq * t + modulator1).sin();
 
-        let modulator = (2.0 * PI * mod_freq * t).sin() * mod_index;
-        let carrier = (2.0 * PI * freq * t + modulator).sin();
+        // Operator 2: Subtle inharmonic component (2.73:1 for character)
+        let mod_freq2 = freq * 2.73;
+        let mod_index2 = 1.2 * (-t * 12.0).exp();
+        let modulator2 = (2.0 * PI * mod_freq2 * t).sin() * mod_index2;
+        let carrier2 = (2.0 * PI * freq * 1.01 * t + modulator2).sin() * 0.25; // Slightly detuned
 
-        // Add subtle second partial for warmth
-        let partial2 = (2.0 * PI * freq * 2.0 * t).sin() * 0.15 * (-t * 12.0).exp();
+        // Operator 3: Upper partial (3:1 ratio for brightness)
+        let partial3 = (2.0 * PI * freq * 3.0 * t).sin() * 0.12 * (-t * 15.0).exp();
 
-        let sample = (carrier + partial2) * amp_env * 24000.0;
+        // Low-frequency body resonance (characteristic of Rhodes)
+        let body = (2.0 * PI * freq * 0.5 * t).sin() * 0.08 * (-t * 6.0).exp();
+
+        // Mix operators
+        let mixed = carrier1 * 0.70 + carrier2 + partial3 + body;
+
+        // Gentle 2-pole low-pass for warmth (simulates speaker/pickup)
+        let cutoff = 0.28;
+        lp1 += cutoff * (mixed - lp1);
+        lp2 += cutoff * (lp1 - lp2);
+
+        // Subtle saturation for analog character
+        let saturated = (lp2 * 1.15).tanh();
+
+        let sample = saturated * amp_env * 25000.0;
         output.push(sample.clamp(-32767.0, 32767.0) as i16);
     }
 
     output
 }
 
-/// Jazz lead: filtered square with vibrato, smooth attack
+/// Jazz lead: Enhanced filtered square with vibrato and breath
 fn generate_lead_jazz() -> Vec<i16> {
     let duration = 0.8; // 800ms
     let freq = 261.63; // C4 as base
     let samples = (SAMPLE_RATE * duration) as usize;
 
     let mut output = Vec::with_capacity(samples);
-    let mut filtered = 0.0f32;
-    let mut phase = 0.0f32; // Proper phase accumulator
+
+    // Multi-pole filter states (3-pole for smooth rolloff)
+    let mut lp1 = 0.0f32;
+    let mut lp2 = 0.0f32;
+    let mut lp3 = 0.0f32;
+
+    let mut phase = 0.0f32;
     let mut vibrato_phase = 0.0f32;
+    let mut breath_phase = 0.0f32;
 
     for i in 0..samples {
         let t = i as f32 / SAMPLE_RATE;
 
-        // Smooth ADSR envelope
-        let envelope = if t < 0.03 {
-            t / 0.03 // Smooth attack (30ms)
-        } else if t < 0.5 {
-            1.0 - (t - 0.03) * 0.2 // Slow decay to 90%
+        // Improved ADSR envelope (smoother curves)
+        let envelope = if t < 0.025 {
+            (t / 0.025).powf(0.6) // Curved attack for breath-like onset
+        } else if t < 0.45 {
+            1.0 - (t - 0.025) * 0.18 // Slow decay to sustain
         } else {
-            0.9 * (-(t - 0.5) * 3.5).exp() // Release
+            0.91 * (-(t - 0.45) * 3.8).exp() // Release
         };
 
-        // Delayed vibrato (jazz style) - using phase accumulator
-        let vibrato_amount = if t < 0.15 { 0.0 } else { 0.004 * ((t - 0.15) * 2.0).min(1.0) };
-        vibrato_phase += 5.0 / SAMPLE_RATE; // 5 Hz vibrato rate
+        // Delayed vibrato (jazz style) with gradual fade-in
+        let vibrato_amount = if t < 0.12 {
+            0.0
+        } else {
+            0.0045 * ((t - 0.12) * 2.5).min(1.0).powf(0.7)
+        };
+        vibrato_phase += 5.2 / SAMPLE_RATE; // 5.2 Hz vibrato rate
         let vibrato = 1.0 + vibrato_amount * (vibrato_phase * 2.0 * PI).sin();
 
-        // Accumulate phase properly (prevents discontinuities)
-        phase += freq * vibrato / SAMPLE_RATE;
+        // Subtle breath modulation (very low frequency)
+        breath_phase += 0.8 / SAMPLE_RATE;
+        let breath_mod = 1.0 + 0.015 * (breath_phase * 2.0 * PI).sin();
+
+        // Accumulate phase with modulations
+        phase += freq * vibrato * breath_mod / SAMPLE_RATE;
         phase = phase % 1.0;
 
-        // Square wave with variable pulse width
-        let pw = 0.5 + 0.03 * (t * 2.0).sin();
+        // Variable pulse width square wave (adds harmonic movement)
+        let pw = 0.48 + 0.04 * (t * 1.8).sin();
         let square = if phase < pw { 1.0 } else { -1.0 };
 
-        // Warm low-pass filter
-        filtered += 0.12 * (square - filtered);
+        // Add subtle triangle wave for warmth (10% mix)
+        let triangle = 4.0 * (phase - 0.5).abs() - 1.0;
+        let osc_mix = square * 0.90 + triangle * 0.10;
 
-        let sample = filtered * envelope * 22000.0;
+        // 3-pole low-pass filter with envelope control
+        let filter_cutoff = 0.10 + 0.05 * envelope;
+        lp1 += filter_cutoff * (osc_mix - lp1);
+        lp2 += filter_cutoff * (lp1 - lp2);
+        lp3 += filter_cutoff * (lp2 - lp3);
+
+        // Gentle saturation for tube-like warmth
+        let saturated = (lp3 * 1.1).tanh();
+
+        let sample = saturated * envelope * 23000.0;
         output.push(sample.clamp(-32767.0, 32767.0) as i16);
     }
 
@@ -419,43 +561,66 @@ fn generate_eurobeat_assets(output_dir: &Path) {
 }
 
 /// Eurobeat kick: 909-style, punchy with aggressive pitch sweep
+/// Eurobeat kick: Improved 909-style with aggressive punch and harmonics
 fn generate_kick_euro() -> Vec<i16> {
     let duration = 0.3; // 300ms
     let samples = (SAMPLE_RATE * duration) as usize;
 
     let mut output = Vec::with_capacity(samples);
     let mut phase = 0.0f32;
+    let mut click_phase = 0.0f32;
 
     for i in 0..samples {
         let t = i as f32 / SAMPLE_RATE;
 
-        // Fast decay for punch
-        let decay = (-t * 18.0).exp();
-
-        // Aggressive pitch sweep: 200Hz down to 40Hz
-        let freq = 200.0 * (-t * 25.0).exp() + 40.0;
-
-        phase += 2.0 * PI * freq / SAMPLE_RATE;
-
-        // Add click transient
-        let click = if t < 0.003 {
-            (t / 0.003) * (1.0 - t / 0.003)
+        // Two-stage decay for maximum punch
+        let decay = if t < 0.04 {
+            (-t * 16.0).exp()
         } else {
-            0.0
+            0.52 * (-((t - 0.04) * 20.0)).exp()
         };
 
-        let sample = (phase.sin() + click * 0.3) * decay;
+        // Aggressive three-stage pitch sweep for 909 character
+        let freq = if t < 0.015 {
+            // Initial click/snap: 300Hz → 200Hz
+            300.0 * (-t * 50.0).exp() + 200.0
+        } else if t < 0.06 {
+            // Main body: 200Hz → 60Hz
+            200.0 * (-((t - 0.015) * 22.0)).exp() + 60.0
+        } else {
+            // Tail: 60Hz → 40Hz
+            60.0 * (-((t - 0.06) * 10.0)).exp() + 40.0
+        };
 
-        // Hard clip for punch
-        let clipped = (sample * 1.3).clamp(-1.0, 1.0);
+        // Main body oscillator
+        phase += 2.0 * PI * freq / SAMPLE_RATE;
+        let body = phase.sin();
 
-        output.push((clipped * 32000.0).clamp(-32767.0, 32767.0) as i16);
+        // High-frequency click transient (beater impact)
+        click_phase += 2.0 * PI * 1200.0 / SAMPLE_RATE;
+        let click_env = (-t * 180.0).exp();
+        let click = click_phase.sin() * click_env * 0.35;
+
+        // Add 2nd harmonic for punch
+        let harmonic = (phase * 2.0).sin() * 0.18 * (-t * 22.0).exp();
+
+        // Combine layers
+        let raw = body + click + harmonic;
+
+        // Hard saturation for 909-style punch
+        let saturated = (raw * 1.4).clamp(-1.0, 1.0);
+
+        // Add subtle bit-crush effect for digital punch
+        let crushed = (saturated * 28.0).round() / 28.0;
+
+        let sample = crushed * decay * 32000.0;
+        output.push(sample.clamp(-32767.0, 32767.0) as i16);
     }
 
     output
 }
 
-/// Eurobeat snare: tight, crisp, with reverb tail feel
+/// Eurobeat snare: Improved crisp attack with gated reverb tail
 fn generate_snare_euro() -> Vec<i16> {
     let duration = 0.22; // 220ms
     let samples = (SAMPLE_RATE * duration) as usize;
@@ -463,33 +628,66 @@ fn generate_snare_euro() -> Vec<i16> {
     let mut output = Vec::with_capacity(samples);
     let mut rng = SimpleRng::new(99999);
 
+    // Band-pass filter states
+    let mut bp1 = 0.0f32;
+    let mut bp2 = 0.0f32;
+    let mut hp_prev_in = 0.0f32;
+    let mut hp_prev_out = 0.0f32;
+
     for i in 0..samples {
         let t = i as f32 / SAMPLE_RATE;
 
-        // Two-stage decay: fast initial, slower tail
-        let decay = if t < 0.05 {
-            (-t * 35.0).exp()
+        // Three-stage envelope for gated reverb character
+        let amp_env = if t < 0.003 {
+            t / 0.003 // Instant attack
+        } else if t < 0.045 {
+            (-((t - 0.003) * 32.0)).exp() // Fast initial decay
+        } else if t < 0.12 {
+            // Gated sustain plateau
+            0.20 * (1.0 - (t - 0.045) * 0.8)
         } else {
-            0.17 * (-(t - 0.05) * 12.0).exp() // "Reverb" tail
+            // Gate close
+            0.14 * (-(t - 0.12) * 15.0).exp()
         };
 
-        // Noise burst
-        let noise = rng.next_f32() * 2.0 - 1.0;
+        // White noise
+        let white_noise = rng.next_f32() * 2.0 - 1.0;
 
-        // Body at 180Hz
-        let body = (2.0 * PI * 180.0 * t).sin() * (-t * 40.0).exp();
+        // High-pass for brightness
+        let hp_alpha = 0.75;
+        let hp_out = hp_alpha * (hp_prev_out + white_noise - hp_prev_in);
+        hp_prev_in = white_noise;
+        hp_prev_out = hp_out;
 
-        // High harmonic for crack
-        let crack = (2.0 * PI * 400.0 * t).sin() * (-t * 50.0).exp();
+        // Multiple body resonances for realistic shell
+        let body1 = (2.0 * PI * 180.0 * t).sin() * 0.42;
+        let body2 = (2.0 * PI * 240.0 * t).sin() * 0.28;
+        let body3 = (2.0 * PI * 315.0 * t).sin() * 0.18;
+        let body = (body1 + body2 + body3) * (-t * 38.0).exp();
 
-        let sample = (noise * 0.55 + body * 0.30 + crack * 0.15) * decay * 30000.0;
+        // High crack transient
+        let crack1 = (2.0 * PI * 420.0 * t).sin() * 0.25 * (-t * 55.0).exp();
+        let crack2 = (2.0 * PI * 680.0 * t).sin() * 0.15 * (-t * 70.0).exp();
+
+        // Mix components
+        let raw = hp_out * 0.50 + body + crack1 + crack2;
+
+        // Band-pass for tightness (remove extreme lows/highs)
+        let cutoff = 0.40;
+        bp1 += cutoff * (raw - bp1);
+        bp2 += cutoff * (bp1 - bp2);
+
+        // Hard saturation for snap
+        let saturated = (bp2 * 1.25).tanh();
+
+        let sample = saturated * amp_env * 31000.0;
         output.push(sample.clamp(-32767.0, 32767.0) as i16);
     }
 
     output
 }
 
-/// Eurobeat hi-hat: bright, cutting, fast decay for 16th note patterns
+/// Eurobeat hi-hat: Improved bright, cutting sound with metallic character
 fn generate_hihat_euro() -> Vec<i16> {
     let duration = 0.08; // 80ms - very short for rapid patterns
     let samples = (SAMPLE_RATE * duration) as usize;
@@ -497,76 +695,117 @@ fn generate_hihat_euro() -> Vec<i16> {
     let mut output = Vec::with_capacity(samples);
     let mut rng = SimpleRng::new(77777);
 
-    let mut hp_prev_in = 0.0f32;
-    let mut hp_prev_out = 0.0f32;
+    // Multi-stage high-pass filtering
+    let mut hp1_prev_in = 0.0f32;
+    let mut hp1_prev_out = 0.0f32;
+    let mut hp2_prev_in = 0.0f32;
+    let mut hp2_prev_out = 0.0f32;
 
     for i in 0..samples {
         let t = i as f32 / SAMPLE_RATE;
 
-        // Very fast decay
-        let decay = (-t * 50.0).exp();
+        // Very fast exponential decay
+        let decay = (-t * 55.0).exp();
 
+        // Generate noise
         let noise = rng.next_f32() * 2.0 - 1.0;
 
-        // Aggressive high-pass for brightness
-        let hp_alpha = 0.95;
-        let hp_out = hp_alpha * (hp_prev_out + noise - hp_prev_in);
-        hp_prev_in = noise;
-        hp_prev_out = hp_out;
+        // 2-stage high-pass for extreme brightness
+        let hp_alpha = 0.96;
+        let hp1_out = hp_alpha * (hp1_prev_out + noise - hp1_prev_in);
+        hp1_prev_in = noise;
+        hp1_prev_out = hp1_out;
 
-        let sample = hp_out * decay * 24000.0;
+        let hp2_out = hp_alpha * (hp2_prev_out + hp1_out - hp2_prev_in);
+        hp2_prev_in = hp1_out;
+        hp2_prev_out = hp2_out;
+
+        // Add metallic resonances for character
+        let metal1 = (2.0 * PI * 8200.0 * t).sin() * 0.10 * (-t * 45.0).exp();
+        let metal2 = (2.0 * PI * 10500.0 * t).sin() * 0.08 * (-t * 50.0).exp();
+        let metal3 = (2.0 * PI * 12800.0 * t).sin() * 0.05 * (-t * 60.0).exp();
+
+        // Mix noise and metallics
+        let raw = hp2_out * 0.88 + metal1 + metal2 + metal3;
+
+        // Subtle saturation for digital edge
+        let saturated = (raw * 1.15).tanh();
+
+        let sample = saturated * decay * 25000.0;
         output.push(sample.clamp(-32767.0, 32767.0) as i16);
     }
 
     output
 }
 
-/// Eurobeat bass: bouncy square wave, octave-jump friendly
-/// IMPROVED: Smoother attack/release for better bounce feel without harshness
+/// Eurobeat bass: Enhanced bouncy bass with richer harmonics
 fn generate_bass_euro() -> Vec<i16> {
-    // From nether-fire.spec.md:
-    // - THE HAPPY BOUNCING BASS (critical for Eurobeat)
-    // - Square wave (45% pulse width) + saw blend
-    // - Snappy envelope: 2ms attack, short sustain, fast decay
-    // - Sub sine for weight
-    // - Duration: 250ms (short for bounce, not legato)
-    let duration = 0.25; // EXACT SPEC: 250ms - short for bounce
+    let duration = 0.25; // 250ms - short for bounce
     let freq = 73.42; // D2 as base
     let samples = (SAMPLE_RATE * duration) as usize;
 
     let mut output = Vec::with_capacity(samples);
 
+    // Filter state for punch
+    let mut lp1 = 0.0f32;
+    let mut lp2 = 0.0f32;
+    let mut phase = 0.0f32;
+    let mut sub_phase = 0.0f32;
+
     for i in 0..samples {
         let t = i as f32 / SAMPLE_RATE;
 
-        // EXACT SPEC: 2ms attack, 50ms sustain, fast decay
+        // Snappy envelope with slight curve for smoothness
         let envelope = if t < 0.002 {
-            t / 0.002 // 2ms attack - INSTANT
-        } else if t < 0.05 {
-            1.0 // Short sustain (50ms)
+            (t / 0.002).powf(0.9) // Nearly instant attack
+        } else if t < 0.048 {
+            1.0 // Short sustain
         } else {
-            (-(t - 0.05) * 12.0).exp() // Fast decay
+            (-(t - 0.048) * 13.5).exp() // Fast decay
         };
 
-        // EXACT SPEC: pulse (45% duty) + saw blend
-        let phase = (freq * t) % 1.0;
-        let pulse = if phase < 0.45 { 1.0 } else { -1.0 };
+        // Subtle pitch envelope for punch (very short)
+        let pitch_env = 1.0 + 0.012 * (-t * 80.0).exp();
+
+        // Proper phase accumulation
+        phase += freq * pitch_env / SAMPLE_RATE;
+        phase = phase % 1.0;
+
+        // Pulse wave (45% duty) with slight detuning for width
+        let pulse1 = if phase < 0.45 { 1.0 } else { -1.0 };
+        let phase2 = (phase + 0.003) % 1.0; // Slight phase offset
+        let pulse2 = if phase2 < 0.45 { 1.0 } else { -1.0 };
+
+        // Saw wave for brightness
         let saw = 2.0 * phase - 1.0;
 
-        // EXACT SPEC: 70% pulse + 30% saw
-        let mix = pulse * 0.7 + saw * 0.3;
+        // Mix oscillators
+        let osc_mix = pulse1 * 0.55 + pulse2 * 0.15 + saw * 0.30;
 
-        // Sub sine for weight
-        let sub = (2.0 * PI * freq * 0.5 * t).sin() * 0.25;
+        // Sub oscillator with proper phase tracking
+        sub_phase += (freq * 0.5) / SAMPLE_RATE;
+        sub_phase = sub_phase % 1.0;
+        let sub = (sub_phase * 2.0 * PI).sin() * 0.28;
 
-        let sample = (mix * 0.75 + sub) * envelope * 26000.0;
+        // 2-pole low-pass filter for punch
+        let cutoff = 0.35;
+        lp1 += cutoff * (osc_mix - lp1);
+        lp2 += cutoff * (lp1 - lp2);
+
+        // Mix filtered oscillator with sub
+        let mixed = lp2 * 0.72 + sub;
+
+        // Saturation for energy
+        let saturated = (mixed * 1.2).tanh();
+
+        let sample = saturated * envelope * 27000.0;
         output.push(sample.clamp(-32767.0, 32767.0) as i16);
     }
 
     output
 }
 
-/// Supersaw: the classic Eurobeat lead - 5 detuned saw oscillators
+/// Supersaw: Enhanced 7-oscillator supersaw with maximum width
 fn generate_supersaw() -> Vec<i16> {
     let duration = 0.8; // 800ms
     let freq = 261.63; // C4 as base
@@ -574,138 +813,189 @@ fn generate_supersaw() -> Vec<i16> {
 
     let mut output = Vec::with_capacity(samples);
 
-    // 5 oscillator detune amounts in cents (converted to frequency ratios)
-    let detune_cents: [f32; 5] = [-15.0, -7.0, 0.0, 7.0, 15.0];
+    // 7 oscillator detune for wider, richer sound
+    let detune_cents: [f32; 7] = [-18.0, -10.0, -4.0, 0.0, 4.0, 10.0, 18.0];
     let detune_ratios: Vec<f32> = detune_cents
         .iter()
         .map(|c| 2.0f32.powf(c / 1200.0))
         .collect();
 
-    let mut filtered = 0.0f32;
-    let mut phases = [0.0f32; 5]; // Proper phase accumulators for each oscillator
+    // 2-pole filter for smoother tone
+    let mut lp1 = 0.0f32;
+    let mut lp2 = 0.0f32;
+    let mut phases = [0.0f32; 7];
     let mut vibrato_phase = 0.0f32;
 
     for i in 0..samples {
         let t = i as f32 / SAMPLE_RATE;
 
-        // ADSR envelope
-        let envelope = if t < 0.01 {
-            t / 0.01 // Fast attack
-        } else if t < 0.5 {
-            1.0 - (t - 0.01) * 0.15
+        // Improved ADSR envelope
+        let envelope = if t < 0.008 {
+            (t / 0.008).powf(0.7) // Curved attack
+        } else if t < 0.48 {
+            1.0 - (t - 0.008) * 0.14
         } else {
-            0.85 * (-(t - 0.5) * 3.0).exp()
+            0.86 * (-(t - 0.48) * 3.2).exp()
         };
 
-        // Subtle vibrato with proper phase accumulation
-        vibrato_phase += 5.5 / SAMPLE_RATE;
-        let vibrato = 1.0 + 0.003 * (vibrato_phase * 2.0 * PI).sin();
+        // Subtle vibrato
+        vibrato_phase += 5.8 / SAMPLE_RATE;
+        let vibrato = 1.0 + 0.0035 * (vibrato_phase * 2.0 * PI).sin();
 
-        // Sum 5 detuned saw waves with proper phase accumulation
+        // Sum 7 detuned saws with proper phase accumulation
         let mut saw_sum = 0.0f32;
         for (idx, ratio) in detune_ratios.iter().enumerate() {
             let osc_freq = freq * ratio * vibrato;
             phases[idx] += osc_freq / SAMPLE_RATE;
             phases[idx] = phases[idx] % 1.0;
-            saw_sum += 2.0 * phases[idx] - 1.0;
+
+            // Saw wave
+            let saw = 2.0 * phases[idx] - 1.0;
+            saw_sum += saw;
         }
-        saw_sum /= 5.0; // Normalize
+        saw_sum /= 7.0; // Normalize
 
-        // Bright low-pass filter (higher cutoff for Eurobeat brightness)
-        filtered += 0.25 * (saw_sum - filtered);
+        // Add subtle pulse wave layer for character (8% mix)
+        let pulse = if phases[3] < 0.5 { 1.0 } else { -1.0 };
+        let mixed = saw_sum * 0.92 + pulse * 0.08;
 
-        let sample = filtered * envelope * 26000.0;
+        // 2-pole low-pass with high cutoff for brightness
+        let cutoff = 0.30 + 0.08 * envelope; // Filter opens with envelope
+        lp1 += cutoff * (mixed - lp1);
+        lp2 += cutoff * (lp1 - lp2);
+
+        // Subtle saturation for energy
+        let saturated = (lp2 * 1.1).tanh();
+
+        let sample = saturated * envelope * 27000.0;
         output.push(sample.clamp(-32767.0, 32767.0) as i16);
     }
 
     output
 }
 
-/// Eurobeat brass: detuned pulse waves with pitch bend envelope
+/// Eurobeat brass: Enhanced with richer harmonics and filter resonance
 fn generate_brass_euro() -> Vec<i16> {
     let duration = 0.7; // 700ms
     let freq = 261.63; // C4 as base
     let samples = (SAMPLE_RATE * duration) as usize;
 
     let mut output = Vec::with_capacity(samples);
-    let mut filtered = 0.0f32;
+
+    // 3-pole resonant filter
+    let mut lp1 = 0.0f32;
+    let mut lp2 = 0.0f32;
+    let mut lp3 = 0.0f32;
+    let mut phase1 = 0.0f32;
+    let mut phase2 = 0.0f32;
+    let mut phase3 = 0.0f32;
 
     for i in 0..samples {
         let t = i as f32 / SAMPLE_RATE;
 
-        // ADSR envelope
-        let envelope = if t < 0.015 {
-            t / 0.015 // Fast attack
-        } else if t < 0.4 {
-            1.0 - (t - 0.015) * 0.2
+        // Improved ADSR envelope
+        let envelope = if t < 0.012 {
+            (t / 0.012).powf(0.6) // Curved attack
+        } else if t < 0.38 {
+            1.0 - (t - 0.012) * 0.18
         } else {
-            0.8 * (-(t - 0.4) * 3.5).exp()
+            0.82 * (-(t - 0.38) * 3.8).exp()
         };
 
-        // Pitch bend: slight rise then settle (Eurobeat characteristic)
-        let pitch_bend = 1.0 + 0.015 * (1.0 - (-t * 15.0).exp());
+        // Pitch bend with overshoot for realism
+        let pitch_bend = 1.0 + 0.018 * (1.0 - (-t * 18.0).exp()) - 0.003 * (-t * 12.0).exp();
 
-        // Two detuned pulse waves (40% duty cycle)
-        let detune = 1.005;
-        let pw = 0.4;
+        // Three detuned pulse waves for thickness
+        phase1 += freq * pitch_bend / SAMPLE_RATE;
+        phase1 = phase1 % 1.0;
+        phase2 += freq * pitch_bend * 1.005 / SAMPLE_RATE;
+        phase2 = phase2 % 1.0;
+        phase3 += freq * pitch_bend * 0.995 / SAMPLE_RATE;
+        phase3 = phase3 % 1.0;
 
-        let phase1 = (freq * pitch_bend * t) % 1.0;
-        let phase2 = (freq * pitch_bend * detune * t) % 1.0;
-
+        let pw = 0.38; // Narrow pulse for brass character
         let pulse1 = if phase1 < pw { 1.0 } else { -1.0 };
         let pulse2 = if phase2 < pw { 1.0 } else { -1.0 };
+        let pulse3 = if phase3 < pw { 1.0 } else { -1.0 };
 
-        // Add saw wave for brightness
-        let phase_saw = (freq * pitch_bend * t) % 1.0;
-        let saw = 2.0 * phase_saw - 1.0;
+        // Add saw for brightness
+        let saw = 2.0 * phase1 - 1.0;
 
-        let mix = pulse1 * 0.4 + pulse2 * 0.4 + saw * 0.2;
+        // Mix oscillators
+        let osc_mix = pulse1 * 0.35 + pulse2 * 0.30 + pulse3 * 0.15 + saw * 0.20;
 
-        // Resonant filter with envelope
-        let cutoff = 0.1 + 0.15 * envelope;
-        filtered += cutoff * (mix - filtered);
+        // 3-pole resonant filter with envelope
+        let filter_cutoff = 0.08 + 0.18 * envelope;
+        let resonance = 0.12 * envelope; // Adds brass "buzz"
+        lp1 += filter_cutoff * (osc_mix - lp1) + resonance * (osc_mix - lp1);
+        lp2 += filter_cutoff * (lp1 - lp2);
+        lp3 += filter_cutoff * (lp2 - lp3);
 
-        let sample = filtered * envelope * 25000.0;
+        // Saturation for punch
+        let saturated = (lp3 * 1.2).tanh();
+
+        let sample = saturated * envelope * 26000.0;
         output.push(sample.clamp(-32767.0, 32767.0) as i16);
     }
 
     output
 }
 
-/// Eurobeat pad: sustained, detuned for chord swells
+/// Eurobeat pad: Enhanced lush pad with 5 oscillators and movement
 fn generate_pad_euro() -> Vec<i16> {
     let duration = 1.5; // 1.5 seconds for long sustain
     let freq = 261.63; // C4 as base
     let samples = (SAMPLE_RATE * duration) as usize;
 
     let mut output = Vec::with_capacity(samples);
-    let mut filtered = 0.0f32;
+
+    // 3-pole filter for smooth character
+    let mut lp1 = 0.0f32;
+    let mut lp2 = 0.0f32;
+    let mut lp3 = 0.0f32;
+
+    let mut phases = [0.0f32; 5];
+    let mut lfo_phase = 0.0f32;
+
+    // 5 oscillator detuning for width
+    let detune_amounts = [0.992, 0.997, 1.0, 1.003, 1.008];
 
     for i in 0..samples {
         let t = i as f32 / SAMPLE_RATE;
 
-        // Slow attack, long sustain
-        let envelope = if t < 0.1 {
-            t / 0.1 // 100ms attack
-        } else if t < 1.0 {
+        // Slow, smooth attack
+        let envelope = if t < 0.12 {
+            (t / 0.12).powf(1.5) // Very smooth attack curve
+        } else if t < 0.95 {
             1.0
         } else {
-            (-(t - 1.0) * 2.0).exp()
+            (-(t - 0.95) * 2.2).exp()
         };
 
-        // Three slightly detuned saws for width
-        let detune_amounts = [0.995, 1.0, 1.005];
-        let mut sum = 0.0f32;
-        for d in detune_amounts {
-            let phase = (freq * d * t) % 1.0;
-            sum += 2.0 * phase - 1.0;
+        // Subtle LFO for movement
+        lfo_phase += 0.3 / SAMPLE_RATE;
+        let lfo = (lfo_phase * 2.0 * PI).sin() * 0.002;
+
+        // 5 detuned saws with proper phase accumulation
+        let mut saw_sum = 0.0f32;
+        for (idx, detune) in detune_amounts.iter().enumerate() {
+            phases[idx] += freq * detune * (1.0 + lfo) / SAMPLE_RATE;
+            phases[idx] = phases[idx] % 1.0;
+
+            // Mix saw and triangle for warmth
+            let saw = 2.0 * phases[idx] - 1.0;
+            let tri = 4.0 * (phases[idx] - 0.5).abs() - 1.0;
+            saw_sum += saw * 0.75 + tri * 0.25;
         }
-        sum /= 3.0;
+        saw_sum /= 5.0;
 
-        // Gentle low-pass for pad character
-        filtered += 0.06 * (sum - filtered);
+        // 3-pole low-pass for ultra-smooth pad character
+        let cutoff = 0.05;
+        lp1 += cutoff * (saw_sum - lp1);
+        lp2 += cutoff * (lp1 - lp2);
+        lp3 += cutoff * (lp2 - lp3);
 
-        let sample = filtered * envelope * 20000.0;
+        let sample = lp3 * envelope * 21000.0;
         output.push(sample.clamp(-32767.0, 32767.0) as i16);
     }
 
@@ -1669,14 +1959,17 @@ fn generate_eurobeat_xm_embedded(samples: &[Vec<i16>]) -> Vec<u8> {
 // Eurobeat note constants (D minor: D E F G A Bb C)
 const D2_E: u8 = 27;
 const F2_E: u8 = 30;
+const G2_E: u8 = 32; // G for Gm bass
 const A2_E: u8 = 34;
 const BB2_E: u8 = 35;
 const C3_E: u8 = 37;
 const D3_E: u8 = 39;
 const F3_E: u8 = 42;
+const G3_E: u8 = 44; // G for Gm bass
 const A3_E: u8 = 46;
 const BB3_E: u8 = 47;
 const C4_E: u8 = 49;
+const CS4_E: u8 = 50; // C# for A major (harmonic minor)
 const D4_E: u8 = 51;
 const E4_E: u8 = 53;
 const F4_E: u8 = 54;
@@ -1684,11 +1977,13 @@ const G4_E: u8 = 56;
 const A4_E: u8 = 58;
 const BB4_E: u8 = 59;
 const C5_E: u8 = 61;
+const CS5_E: u8 = 62; // C# for A major (harmonic minor)
 const D5_E: u8 = 63;
 const E5_E: u8 = 65;
 const F5_E: u8 = 66;
 const G5_E: u8 = 68;
 const A5_E: u8 = 70;
+const BB5_E: u8 = 71; // Bb for Gm high register
 // D Major for Picardy third
 const FS4_E: u8 = 55; // F# for D major
 
@@ -1780,17 +2075,17 @@ fn generate_euro_pattern_intro() -> Vec<u8> {
 fn generate_euro_pattern_verse_a() -> Vec<u8> {
     let mut data = Vec::new();
 
-    // Octave-bouncing bass on 8th notes: Dm -> C -> Bb -> C
+    // Octave-bouncing bass on 8th notes: Dm -> Gm -> A -> Dm (i -> iv -> V -> i)
     // Each chord gets 8 rows, bass plays on even rows (0,2,4,6)
     let bass_pattern: [(u8, u8); 16] = [
         // Dm (rows 0-7)
         (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E),
-        // C (rows 8-15)
-        (C3_E, C4_E), (C3_E, C4_E), (C3_E, C4_E), (C3_E, C4_E),
-        // Bb (rows 16-23)
-        (BB2_E, BB3_E), (BB2_E, BB3_E), (BB2_E, BB3_E), (BB2_E, BB3_E),
-        // C (rows 24-31)
-        (C3_E, C4_E), (C3_E, C4_E), (C3_E, C4_E), (C3_E, C4_E),
+        // Gm (rows 8-15)
+        (G2_E, G3_E), (G2_E, G3_E), (G2_E, G3_E), (G2_E, G3_E),
+        // A (rows 16-23)
+        (A2_E, A3_E), (A2_E, A3_E), (A2_E, A3_E), (A2_E, A3_E),
+        // Dm (rows 24-31)
+        (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E),
     ];
 
     for row in 0..32 {
@@ -1829,24 +2124,28 @@ fn generate_euro_pattern_verse_a() -> Vec<u8> {
         // Ch5: Supersaw - silent in verse A
         write_empty(&mut data);
 
-        // Ch6: Brass - chord stabs
+        // Ch6: Brass - chord stabs (roots of Dm -> Gm -> A -> Dm)
         if row == 0 {
             write_note(&mut data, D4_E, BRASS);
         } else if row == 8 {
-            write_note(&mut data, C4_E, BRASS);
+            write_note(&mut data, G4_E, BRASS);
         } else if row == 16 {
-            write_note(&mut data, BB3_E, BRASS);
+            write_note(&mut data, A4_E, BRASS);
         } else if row == 24 {
-            write_note(&mut data, C4_E, BRASS);
+            write_note(&mut data, D4_E, BRASS);
         } else {
             write_empty(&mut data);
         }
 
-        // Ch7: Pad - sustained chords
+        // Ch7: Pad - sustained chords (thirds: F for Dm, Bb for Gm, CS for A, F for Dm)
         if row == 0 {
-            write_note(&mut data, F3_E, PAD);
+            write_note(&mut data, F3_E, PAD); // Dm (D-F-A)
+        } else if row == 8 {
+            write_note(&mut data, BB3_E, PAD); // Gm (G-Bb-D)
         } else if row == 16 {
-            write_note(&mut data, D3_E, PAD);
+            write_note(&mut data, CS4_E, PAD); // A major (A-C#-E)
+        } else if row == 24 {
+            write_note(&mut data, F3_E, PAD); // Dm (D-F-A)
         } else {
             write_empty(&mut data);
         }
@@ -1862,24 +2161,24 @@ fn generate_euro_pattern_verse_a() -> Vec<u8> {
 fn generate_euro_pattern_verse_b() -> Vec<u8> {
     let mut data = Vec::new();
 
-    // Bass pattern on 8th notes: Dm -> C -> Bb -> A (harmonic minor resolution!)
+    // Bass pattern on 8th notes: Dm -> Gm -> A -> Dm (i -> iv -> V -> i)
     let bass_pattern: [(u8, u8); 16] = [
         // Dm (rows 0-7)
         (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E),
-        // C (rows 8-15)
-        (C3_E, C4_E), (C3_E, C4_E), (C3_E, C4_E), (C3_E, C4_E),
-        // Bb (rows 16-23)
-        (BB2_E, BB3_E), (BB2_E, BB3_E), (BB2_E, BB3_E), (BB2_E, BB3_E),
-        // A (rows 24-31) - harmonic minor!
+        // Gm (rows 8-15)
+        (G2_E, G3_E), (G2_E, G3_E), (G2_E, G3_E), (G2_E, G3_E),
+        // A (rows 16-23) - harmonic minor with C#!
         (A2_E, A3_E), (A2_E, A3_E), (A2_E, A3_E), (A2_E, A3_E),
+        // Dm (rows 24-31)
+        (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E),
     ];
 
     // Simple verse melody on 8th notes
     let melody: [u8; 16] = [
-        D4_E, F4_E, A4_E, F4_E, // Dm arpeggio
-        C4_E, E4_E, G4_E, E4_E, // C arpeggio
-        BB3_E, D4_E, F4_E, D4_E, // Bb arpeggio
-        A3_E, C4_E, E4_E, A4_E, // A (harmonic minor!)
+        D4_E, F4_E, A4_E, F4_E,     // Dm arpeggio (D-F-A)
+        G4_E, BB4_E, D5_E, BB4_E,   // Gm arpeggio (G-Bb-D)
+        A4_E, CS5_E, E5_E, CS5_E,   // A major arpeggio (A-C#-E)
+        D5_E, F5_E, A5_E, D5_E,     // Dm arpeggio high (D-F-A)
     ];
 
     for row in 0..32 {
@@ -1922,22 +2221,22 @@ fn generate_euro_pattern_verse_b() -> Vec<u8> {
             write_empty(&mut data);
         }
 
-        // Ch6: Brass counter
+        // Ch6: Brass counter (complementing Dm -> Gm -> A -> Dm)
         if row == 4 {
-            write_note(&mut data, F4_E, BRASS);
+            write_note(&mut data, F4_E, BRASS); // Third of Dm
         } else if row == 12 {
-            write_note(&mut data, E4_E, BRASS);
+            write_note(&mut data, D4_E, BRASS); // Fifth of Gm
         } else if row == 20 {
-            write_note(&mut data, D4_E, BRASS);
+            write_note(&mut data, E4_E, BRASS); // Fifth of A
         } else if row == 28 {
-            write_note(&mut data, C4_E, BRASS);
+            write_note(&mut data, A4_E, BRASS); // Fifth of Dm
         } else {
             write_empty(&mut data);
         }
 
-        // Ch7: Pad
+        // Ch7: Pad (sustained root of Dm)
         if row == 0 {
-            write_note(&mut data, A3_E, PAD);
+            write_note(&mut data, D3_E, PAD);
         } else {
             write_empty(&mut data);
         }
@@ -1991,9 +2290,16 @@ fn generate_euro_pattern_prechorus() -> Vec<u8> {
             write_note(&mut data, C4_E, HIHAT_E); // 16th notes
         }
 
-        // Ch4: Bass - A pedal, octave bounce on 8th notes
+        // Ch4: Bass - Am -> Bb -> C -> A progression, octave bounce on 8th notes
         if row % 2 == 0 {
-            let note = if (row / 2) % 2 == 0 { A2_E } else { A3_E };
+            let (low, high) = match row {
+                0..=7 => (A2_E, A3_E),      // Am (v)
+                8..=15 => (BB2_E, BB3_E),   // Bb (VI)
+                16..=23 => (C3_E, C4_E),    // C (VII)
+                24..=31 => (A2_E, A3_E),    // A (V) - dominant tension!
+                _ => (A2_E, A3_E),
+            };
+            let note = if (row / 2) % 2 == 0 { low } else { high };
             write_note(&mut data, note, BASS_E);
         } else {
             write_empty(&mut data);
@@ -2007,24 +2313,28 @@ fn generate_euro_pattern_prechorus() -> Vec<u8> {
             write_empty(&mut data);
         }
 
-        // Ch6: Brass - building
+        // Ch6: Brass - building through chord progression
         if row == 0 {
-            write_note(&mut data, E4_E, BRASS);
+            write_note(&mut data, C4_E, BRASS); // Third of Am
         } else if row == 8 {
-            write_note(&mut data, A4_E, BRASS);
+            write_note(&mut data, D4_E, BRASS); // Third of Bb
         } else if row == 16 {
-            write_note(&mut data, C5_E, BRASS);
+            write_note(&mut data, E4_E, BRASS); // Third of C
         } else if row == 24 {
-            write_note(&mut data, E5_E, BRASS);
+            write_note(&mut data, CS5_E, BRASS); // Third of A major
         } else {
             write_empty(&mut data);
         }
 
-        // Ch7: Pad swell
+        // Ch7: Pad swell (ascending through chords)
         if row == 0 {
-            write_note(&mut data, A3_E, PAD);
+            write_note(&mut data, A3_E, PAD); // Root of Am
+        } else if row == 8 {
+            write_note(&mut data, BB3_E, PAD); // Root of Bb
         } else if row == 16 {
-            write_note(&mut data, E4_E, PAD);
+            write_note(&mut data, C4_E, PAD); // Root of C
+        } else if row == 24 {
+            write_note(&mut data, E4_E, PAD); // Fifth of A (tension)
         } else {
             write_empty(&mut data);
         }
@@ -2040,26 +2350,26 @@ fn generate_euro_pattern_prechorus() -> Vec<u8> {
 fn generate_euro_pattern_chorus_a() -> Vec<u8> {
     let mut data = Vec::new();
 
-    // Bass on 8th notes: Dm -> C -> Bb -> C
+    // Bass on 8th notes: F -> Gm -> A -> Dm (III -> iv -> V -> i / I -> ii -> V -> vi)
     let bass_pattern: [(u8, u8); 16] = [
+        (F2_E, F3_E), (F2_E, F3_E), (F2_E, F3_E), (F2_E, F3_E),
+        (G2_E, G3_E), (G2_E, G3_E), (G2_E, G3_E), (G2_E, G3_E),
+        (A2_E, A3_E), (A2_E, A3_E), (A2_E, A3_E), (A2_E, A3_E),
         (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E),
-        (C3_E, C4_E), (C3_E, C4_E), (C3_E, C4_E), (C3_E, C4_E),
-        (BB2_E, BB3_E), (BB2_E, BB3_E), (BB2_E, BB3_E), (BB2_E, BB3_E),
-        (C3_E, C4_E), (C3_E, C4_E), (C3_E, C4_E), (C3_E, C4_E),
     ];
 
     // THE HOOK - fast arpeggio runs (16ths for energy!)
     let melody = [
-        D5_E, F5_E, A5_E, D5_E, A4_E, F5_E, D5_E, A4_E, // Dm fast arp
-        C5_E, E5_E, G5_E, C5_E, G4_E, E5_E, C5_E, G4_E, // C fast arp
-        BB4_E, D5_E, F5_E, BB4_E, F4_E, D5_E, BB4_E, F4_E, // Bb fast arp
-        C5_E, E5_E, G5_E, C5_E, G4_E, E5_E, C5_E, G4_E, // C fast arp
+        F5_E, A5_E, C5_E, F5_E, A4_E, C5_E, F5_E, A5_E,  // F major fast arp
+        G5_E, BB5_E, D5_E, G5_E, BB4_E, D5_E, G5_E, BB5_E, // Gm fast arp
+        A5_E, CS5_E, E5_E, A5_E, CS5_E, E5_E, A5_E, CS5_E, // A major fast arp (C#!)
+        D5_E, F5_E, A5_E, D5_E, F5_E, A5_E, D5_E, F5_E,  // Dm fast arp
     ];
 
-    // Counter riff on 8th notes
+    // Counter riff on 8th notes (complementing F -> Gm -> A -> Dm)
     let brass_counter: [u8; 16] = [
-        F4_E, A4_E, D5_E, A4_E, E4_E, G4_E, C5_E, G4_E,
-        D4_E, F4_E, BB4_E, F4_E, E4_E, G4_E, C5_E, E5_E,
+        A4_E, C5_E, F5_E, C5_E, D4_E, G4_E, BB4_E, G4_E,
+        E4_E, A4_E, CS5_E, A4_E, F4_E, A4_E, D5_E, F5_E,
     ];
 
     for row in 0..32 {
@@ -2101,15 +2411,15 @@ fn generate_euro_pattern_chorus_a() -> Vec<u8> {
             write_empty(&mut data);
         }
 
-        // Ch7: Pad - full chords
+        // Ch7: Pad - full chords (F -> Gm -> A -> Dm)
         if row == 0 {
-            write_note(&mut data, D4_E, PAD);
+            write_note(&mut data, F3_E, PAD); // F major root
         } else if row == 8 {
-            write_note(&mut data, C4_E, PAD);
+            write_note(&mut data, G3_E, PAD); // Gm root
         } else if row == 16 {
-            write_note(&mut data, BB3_E, PAD);
+            write_note(&mut data, A3_E, PAD); // A major root
         } else if row == 24 {
-            write_note(&mut data, C4_E, PAD);
+            write_note(&mut data, D4_E, PAD); // Dm root
         } else {
             write_empty(&mut data);
         }
@@ -2125,26 +2435,26 @@ fn generate_euro_pattern_chorus_a() -> Vec<u8> {
 fn generate_euro_pattern_chorus_b() -> Vec<u8> {
     let mut data = Vec::new();
 
-    // Bass on 8th notes: Dm -> F -> C -> D MAJOR (Picardy!)
+    // Bass on 8th notes: Dm -> Gm -> A -> D MAJOR (i -> iv -> V -> I with Picardy!)
     let bass_pattern: [(u8, u8); 16] = [
         (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E),
-        (F2_E, F3_E), (F2_E, F3_E), (F2_E, F3_E), (F2_E, F3_E),
-        (C3_E, C4_E), (C3_E, C4_E), (C3_E, C4_E), (C3_E, C4_E),
+        (G2_E, G3_E), (G2_E, G3_E), (G2_E, G3_E), (G2_E, G3_E),
+        (A2_E, A3_E), (A2_E, A3_E), (A2_E, A3_E), (A2_E, A3_E),
         (D3_E, D4_E), (D3_E, D4_E), (D3_E, D4_E), (D3_E, D4_E),
     ];
 
     // Triumphant melody on 8th notes
     let melody: [u8; 16] = [
-        D5_E, F5_E, A5_E, D5_E, // Dm
-        F5_E, A5_E, C5_E, F5_E, // F major
-        C5_E, E5_E, G5_E, C5_E, // C major
-        D5_E, FS4_E, A4_E, D5_E, // D MAJOR! (F# = Picardy)
+        D5_E, F5_E, A5_E, D5_E,     // Dm (D-F-A)
+        G5_E, BB5_E, D5_E, G5_E,    // Gm (G-Bb-D)
+        A5_E, CS5_E, E5_E, A5_E,    // A major (A-C#-E)
+        D5_E, FS4_E, A4_E, D5_E,    // D MAJOR! (D-F#-A, Picardy third!)
     ];
 
-    // Main brass riff on 8th notes
+    // Main brass riff on 8th notes (complementing Dm -> Gm -> A -> D major)
     let brass_riff: [u8; 16] = [
-        A4_E, D5_E, F5_E, A5_E, A4_E, C5_E, F5_E, A5_E,
-        G4_E, C5_E, E5_E, G5_E, FS4_E, A4_E, D5_E, FS4_E + 12,
+        A4_E, D5_E, F5_E, A5_E, D4_E, G4_E, BB4_E, D5_E,
+        E4_E, A4_E, CS5_E, E5_E, FS4_E, A4_E, D5_E, FS4_E + 12,
     ];
 
     for row in 0..32 {
@@ -2191,15 +2501,15 @@ fn generate_euro_pattern_chorus_b() -> Vec<u8> {
             write_empty(&mut data);
         }
 
-        // Ch7: Triumphant pad
+        // Ch7: Triumphant pad (Dm -> Gm -> A -> D major)
         if row == 0 {
-            write_note(&mut data, F4_E, PAD);
+            write_note(&mut data, F4_E, PAD); // Third of Dm
         } else if row == 8 {
-            write_note(&mut data, A4_E, PAD);
+            write_note(&mut data, BB4_E, PAD); // Third of Gm
         } else if row == 16 {
-            write_note(&mut data, G4_E, PAD);
+            write_note(&mut data, CS4_E, PAD); // Third of A major
         } else if row == 24 {
-            write_note(&mut data, FS4_E, PAD); // F# for D major!
+            write_note(&mut data, FS4_E, PAD); // Third of D MAJOR! (Picardy!)
         } else {
             write_empty(&mut data);
         }
@@ -2282,11 +2592,11 @@ fn generate_euro_pattern_breakdown() -> Vec<u8> {
 fn generate_euro_pattern_drop() -> Vec<u8> {
     let mut data = Vec::new();
 
-    // Bass on 8th notes: Dm -> C -> Bb -> A (harmonic minor climax!)
+    // Bass on 8th notes: Dm -> C -> Gm -> A (i -> VII -> iv -> V climax!)
     let bass_pattern: [(u8, u8); 16] = [
         (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E),
         (C3_E, C4_E), (C3_E, C4_E), (C3_E, C4_E), (C3_E, C4_E),
-        (BB2_E, BB3_E), (BB2_E, BB3_E), (BB2_E, BB3_E), (BB2_E, BB3_E),
+        (G2_E, G3_E), (G2_E, G3_E), (G2_E, G3_E), (G2_E, G3_E),
         (A2_E, A3_E), (A2_E, A3_E), (A2_E, A3_E), (A2_E, A3_E),
     ];
 
@@ -2294,14 +2604,14 @@ fn generate_euro_pattern_drop() -> Vec<u8> {
     let melody = [
         D5_E, F5_E, A5_E, D5_E, F5_E, A5_E, D5_E, F5_E, // Dm ultra fast
         C5_E, E5_E, G5_E, C5_E, E5_E, G5_E, C5_E, E5_E, // C ultra fast
-        BB4_E, D5_E, F5_E, BB4_E, D5_E, F5_E, BB4_E, D5_E, // Bb ultra fast
-        A4_E, C5_E, E5_E, A5_E, E5_E, C5_E, A4_E, A5_E, // A (harmonic minor) climax!
+        G5_E, BB5_E, D5_E, G5_E, BB5_E, D5_E, G5_E, BB5_E, // Gm ultra fast
+        A4_E, CS5_E, E5_E, A5_E, E5_E, CS5_E, A4_E, A5_E, // A major (C#!) climax!
     ];
 
-    // Brass riff on 8th notes
+    // Brass riff on 8th notes (complementing Dm -> C -> Gm -> A)
     let brass_notes: [u8; 16] = [
         F4_E, A4_E, D5_E, F5_E, E4_E, G4_E, C5_E, E5_E,
-        D4_E, F4_E, BB4_E, D5_E, C4_E, E4_E, A4_E, C5_E,
+        D4_E, G4_E, BB4_E, D5_E, CS4_E, E4_E, A4_E, CS5_E,
     ];
 
     for row in 0..32 {
@@ -2344,15 +2654,15 @@ fn generate_euro_pattern_drop() -> Vec<u8> {
             write_empty(&mut data);
         }
 
-        // Ch7: Pad - full chords
+        // Ch7: Pad - full chords (Dm -> C -> Gm -> A)
         if row == 0 {
-            write_note(&mut data, D4_E, PAD);
+            write_note(&mut data, D4_E, PAD); // Dm root
         } else if row == 8 {
-            write_note(&mut data, C4_E, PAD);
+            write_note(&mut data, C4_E, PAD); // C root
         } else if row == 16 {
-            write_note(&mut data, BB3_E, PAD);
+            write_note(&mut data, G4_E, PAD); // Gm root
         } else if row == 24 {
-            write_note(&mut data, A3_E, PAD);
+            write_note(&mut data, A3_E, PAD); // A root
         } else {
             write_empty(&mut data);
         }
@@ -2687,7 +2997,7 @@ fn generate_synthwave_assets(output_dir: &Path) {
     println!("  Generated tracker-nether_drive-embedded.xm ({} bytes)", xm_embedded.len());
 }
 
-/// Synthwave kick: 808-style with longer decay, warm and round
+/// Synthwave kick: Enhanced 808-style with rich harmonics and warmth
 fn generate_kick_synth() -> Vec<i16> {
     let duration = 0.4; // 400ms for that 80s thump
     let samples = (SAMPLE_RATE * duration) as usize;
@@ -2695,28 +3005,56 @@ fn generate_kick_synth() -> Vec<i16> {
     let mut output = Vec::with_capacity(samples);
     let mut phase = 0.0f32;
 
+    // 2-pole filter for warm character
+    let mut lp1 = 0.0f32;
+    let mut lp2 = 0.0f32;
+
     for i in 0..samples {
         let t = i as f32 / SAMPLE_RATE;
 
-        // Longer decay for warmth
-        let decay = (-t * 8.0).exp();
+        // Long, smooth decay for 808 character
+        let decay = if t < 0.08 {
+            (-t * 6.5).exp()
+        } else {
+            0.52 * (-((t - 0.08) * 7.5)).exp()
+        };
 
-        // Pitch sweep: 150Hz down to 45Hz - slower than eurobeat
-        let freq = 150.0 * (-t * 15.0).exp() + 45.0;
+        // Gentle pitch sweep for warm thump
+        let freq = if t < 0.04 {
+            170.0 * (-t * 22.0).exp() + 65.0
+        } else {
+            65.0 * (-((t - 0.04) * 12.0)).exp() + 45.0
+        };
 
+        // Main sine oscillator
         phase += 2.0 * PI * freq / SAMPLE_RATE;
+        let sine = phase.sin();
 
-        // Sine with soft saturation for analog warmth
-        let mut sample = phase.sin() * decay;
-        sample = (sample * 1.1).tanh(); // Gentle soft clip
+        // Add subtle 2nd harmonic for depth
+        let harmonic = (phase * 2.0).sin() * 0.12 * (-t * 15.0).exp();
 
-        output.push((sample * 30000.0).clamp(-32767.0, 32767.0) as i16);
+        // Sub harmonic (808 characteristic)
+        let sub = (phase * 0.5).sin() * 0.18 * (-t * 10.0).exp();
+
+        // Combine oscillators
+        let raw = sine + harmonic + sub;
+
+        // 2-pole low-pass for vintage warmth
+        let cutoff = 0.22;
+        lp1 += cutoff * (raw - lp1);
+        lp2 += cutoff * (lp1 - lp2);
+
+        // Soft saturation for analog character
+        let saturated = (lp2 * 1.15).tanh();
+
+        let sample = saturated * decay * 31000.0;
+        output.push(sample.clamp(-32767.0, 32767.0) as i16);
     }
 
     output
 }
 
-/// Synthwave snare: gated reverb style - short burst with abrupt cutoff
+/// Synthwave snare: Enhanced gated reverb with rich body
 fn generate_snare_synth() -> Vec<i16> {
     let duration = 0.18; // 180ms - gated feel
     let samples = (SAMPLE_RATE * duration) as usize;
@@ -2724,34 +3062,59 @@ fn generate_snare_synth() -> Vec<i16> {
     let mut output = Vec::with_capacity(samples);
     let mut rng = SimpleRng::new(88888);
 
+    // Filter states
+    let mut lp1 = 0.0f32;
+    let mut lp2 = 0.0f32;
+    let mut hp_prev_in = 0.0f32;
+    let mut hp_prev_out = 0.0f32;
+
     for i in 0..samples {
         let t = i as f32 / SAMPLE_RATE;
 
-        // Gated reverb envelope: sustains then cuts abruptly
-        let envelope = if t < 0.02 {
-            t / 0.02 // Fast attack
-        } else if t < 0.12 {
-            1.0 - (t - 0.02) * 0.3 // Slight decay during sustain
+        // Classic gated reverb envelope
+        let envelope = if t < 0.015 {
+            (t / 0.015).powf(0.8) // Smooth attack
+        } else if t < 0.11 {
+            1.0 - (t - 0.015) * 0.25 // Sustain plateau
         } else {
-            // Abrupt gate cutoff (characteristic of 80s gated reverb)
-            0.7 * (1.0 - ((t - 0.12) / 0.06)).max(0.0)
+            // Abrupt gate close (iconic 80s sound)
+            0.75 * (1.0 - ((t - 0.11) / 0.07).powf(1.5)).max(0.0)
         };
 
-        // Noise component
-        let noise = rng.next_f32() * 2.0 - 1.0;
+        // Noise burst
+        let white_noise = rng.next_f32() * 2.0 - 1.0;
 
-        // Body at 200Hz
-        let body = (2.0 * PI * 200.0 * t).sin() * (-t * 20.0).exp();
+        // High-pass for clarity
+        let hp_alpha = 0.72;
+        let hp_out = hp_alpha * (hp_prev_out + white_noise - hp_prev_in);
+        hp_prev_in = white_noise;
+        hp_prev_out = hp_out;
 
-        // Mix - more body for 80s feel
-        let sample = (noise * 0.55 + body * 0.45) * envelope * 28000.0;
+        // Multiple body modes
+        let body1 = (2.0 * PI * 195.0 * t).sin() * 0.48;
+        let body2 = (2.0 * PI * 260.0 * t).sin() * 0.30;
+        let body_env = (-t * 18.0).exp();
+        let body = (body1 + body2) * body_env;
+
+        // Mix components
+        let raw = hp_out * 0.50 + body;
+
+        // 2-pole low-pass for smoothness
+        let cutoff = 0.38;
+        lp1 += cutoff * (raw - lp1);
+        lp2 += cutoff * (lp1 - lp2);
+
+        // Soft saturation
+        let saturated = (lp2 * 1.18).tanh();
+
+        let sample = saturated * envelope * 29000.0;
         output.push(sample.clamp(-32767.0, 32767.0) as i16);
     }
 
     output
 }
 
-/// Synthwave hi-hat: crisp but not harsh, medium decay
+/// Synthwave hi-hat: Enhanced with metallic resonances
 fn generate_hihat_synth() -> Vec<i16> {
     let duration = 0.1; // 100ms
     let samples = (SAMPLE_RATE * duration) as usize;
@@ -2759,211 +3122,294 @@ fn generate_hihat_synth() -> Vec<i16> {
     let mut output = Vec::with_capacity(samples);
     let mut rng = SimpleRng::new(66666);
 
+    // Filter states
     let mut hp_prev_in = 0.0f32;
     let mut hp_prev_out = 0.0f32;
-    let mut lp_state = 0.0f32;
+    let mut lp1 = 0.0f32;
+    let mut lp2 = 0.0f32;
 
     for i in 0..samples {
         let t = i as f32 / SAMPLE_RATE;
 
-        // Medium decay
-        let decay = (-t * 35.0).exp();
+        // Smooth envelope
+        let decay = if t < 0.008 {
+            t / 0.008 // Short attack
+        } else {
+            (-((t - 0.008) * 32.0)).exp()
+        };
 
+        // White noise
         let noise = rng.next_f32() * 2.0 - 1.0;
 
-        // High-pass
-        let hp_alpha = 0.9;
+        // High-pass for brightness
+        let hp_alpha = 0.92;
         let hp_out = hp_alpha * (hp_prev_out + noise - hp_prev_in);
         hp_prev_in = noise;
         hp_prev_out = hp_out;
 
-        // Gentle low-pass to take edge off
-        lp_state += 0.5 * (hp_out - lp_state);
+        // Add metallic character
+        let metal1 = (2.0 * PI * 7500.0 * t).sin() * 0.09 * (-t * 38.0).exp();
+        let metal2 = (2.0 * PI * 9800.0 * t).sin() * 0.06 * (-t * 42.0).exp();
 
-        let sample = lp_state * decay * 22000.0;
+        // Mix
+        let raw = hp_out * 0.88 + metal1 + metal2;
+
+        // 2-pole low-pass for smoothness
+        let cutoff = 0.48;
+        lp1 += cutoff * (raw - lp1);
+        lp2 += cutoff * (lp1 - lp2);
+
+        let sample = lp2 * decay * 23000.0;
         output.push(sample.clamp(-32767.0, 32767.0) as i16);
     }
 
     output
 }
 
-/// Synthwave bass: pulsing sawtooth with filter envelope
-/// Smooth, warm, drives the groove without harshness
+/// Synthwave bass: Enhanced pulsing bass with rich sub harmonics
 fn generate_bass_synth() -> Vec<i16> {
-    // From nether-drive.spec.md:
-    // - Pulsing sawtooth with filter envelope
-    // - Attack: 10ms (not instant - removes "pop")
-    // - Filter sweep: 800Hz → 200Hz over 200ms
-    // - Sustain longer for smooth groove
-    // - Duration: 350ms (overlap slightly for legato feel)
-    // - Sub oscillator: sine at -1 octave, 30% mix
-    let duration = 0.35; // EXACT SPEC: 350ms
+    let duration = 0.35; // 350ms
     let freq = 55.0; // A1 as base
     let samples = (SAMPLE_RATE * duration) as usize;
 
     let mut output = Vec::with_capacity(samples);
-    let mut filtered = 0.0f32;
+
+    // 3-pole filter for warm character
+    let mut lp1 = 0.0f32;
+    let mut lp2 = 0.0f32;
+    let mut lp3 = 0.0f32;
+    let mut phase = 0.0f32;
+    let mut sub_phase = 0.0f32;
 
     for i in 0..samples {
         let t = i as f32 / SAMPLE_RATE;
 
-        // EXACT SPEC: 10ms attack (linear for smoothness)
+        // Smooth envelope
         let envelope = if t < 0.010 {
-            t / 0.010 // 10ms linear attack
-        } else if t < 0.25 {
-            1.0 - (t - 0.01) * 0.05 // Gentle sustain decay
+            (t / 0.010).powf(0.85) // Slightly curved attack
+        } else if t < 0.24 {
+            1.0 - (t - 0.010) * 0.048
         } else {
-            0.95 * (-(t - 0.25) * 6.0).exp() // Smooth release
+            0.96 * (-(t - 0.24) * 6.5).exp()
         };
 
-        // EXACT SPEC: Filter sweep 800Hz → 200Hz over 200ms
-        // Convert to one-pole coefficient: coeff = 2 * pi * fc / sr (simplified)
-        let filter_fc = if t < 0.2 {
-            800.0 - (t / 0.2) * 600.0 // 800Hz → 200Hz over 200ms
+        // Filter sweep with resonance
+        let filter_cutoff = if t < 0.19 {
+            0.45 - (t / 0.19) * 0.35 // 800Hz → 200Hz sweep
         } else {
-            200.0 // Sustain at 200Hz
+            0.10 // Low sustain
         };
-        let filter_coeff = (2.0 * PI * filter_fc / SAMPLE_RATE).min(0.99);
+        let resonance = 0.08 * (-t * 12.0).exp(); // Resonance peak at attack
 
-        // Sawtooth oscillator
-        let phase = (freq * t) % 1.0;
+        // Main sawtooth with phase accumulation
+        phase += freq / SAMPLE_RATE;
+        phase = phase % 1.0;
         let saw = 2.0 * phase - 1.0;
 
-        // EXACT SPEC: Sub oscillator sine at -1 octave, 30% mix
-        let sub = (2.0 * PI * freq * t).sin() * 0.30;
+        // Add subtle pulse for warmth (15% mix)
+        let pulse = if phase < 0.5 { 1.0 } else { -1.0 };
+        let osc_mix = saw * 0.85 + pulse * 0.15;
 
-        // Dynamic low-pass filter
-        filtered += filter_coeff * (saw - filtered);
+        // Sub oscillator with proper phase tracking
+        sub_phase += (freq * 0.5) / SAMPLE_RATE;
+        sub_phase = sub_phase % 1.0;
+        let sub = (sub_phase * 2.0 * PI).sin() * 0.32;
 
-        let sample = (filtered * 0.70 + sub) * envelope * 28000.0;
+        // 3-pole resonant filter
+        lp1 += filter_cutoff * (osc_mix - lp1) + resonance * (osc_mix - lp1);
+        lp2 += filter_cutoff * (lp1 - lp2);
+        lp3 += filter_cutoff * (lp2 - lp3);
+
+        // Mix filtered oscillator with sub
+        let mixed = lp3 * 0.70 + sub;
+
+        // Warm saturation
+        let saturated = (mixed * 1.15).tanh();
+
+        let sample = saturated * envelope * 29000.0;
         output.push(sample.clamp(-32767.0, 32767.0) as i16);
     }
 
     output
 }
 
-/// Synthwave lead: two detuned saws with vibrato, warm and soaring
+/// Synthwave lead: Enhanced soaring lead with 3 oscillators and warmth
 fn generate_lead_synth() -> Vec<i16> {
     let duration = 0.9; // 900ms
     let freq = 220.0; // A3 as base
     let samples = (SAMPLE_RATE * duration) as usize;
 
     let mut output = Vec::with_capacity(samples);
-    let mut filtered = 0.0f32;
-    let mut phase1 = 0.0f32; // Proper phase accumulators
-    let mut phase2 = 0.0f32;
+
+    // Multi-pole filter
+    let mut lp1 = 0.0f32;
+    let mut lp2 = 0.0f32;
+    let mut lp3 = 0.0f32;
+
+    let mut phases = [0.0f32; 3];
     let mut vibrato_phase = 0.0f32;
 
-    // Detune ratio for second oscillator (~12 cents)
-    let detune = 1.007f32;
+    // 3 oscillators for width
+    let detune_ratios = [0.9965, 1.0, 1.0072]; // ~12 cents spread
 
     for i in 0..samples {
         let t = i as f32 / SAMPLE_RATE;
 
         // Smooth ADSR envelope
-        let envelope = if t < 0.02 {
-            t / 0.02 // 20ms attack
-        } else if t < 0.6 {
-            1.0 - (t - 0.02) * 0.1
+        let envelope = if t < 0.018 {
+            (t / 0.018).powf(0.65) // Smooth curved attack
+        } else if t < 0.58 {
+            1.0 - (t - 0.018) * 0.092
         } else {
-            0.9 * (-(t - 0.6) * 3.0).exp()
+            0.91 * (-(t - 0.58) * 3.2).exp()
         };
 
-        // Delayed vibrato with proper phase accumulation
-        let vibrato_amount = if t < 0.1 { 0.0 } else { 0.005 * ((t - 0.1) * 2.0).min(1.0) };
-        vibrato_phase += 5.0 / SAMPLE_RATE;
+        // Delayed vibrato
+        let vibrato_amount = if t < 0.08 {
+            0.0
+        } else {
+            0.0055 * ((t - 0.08) * 2.2).min(1.0)
+        };
+        vibrato_phase += 5.2 / SAMPLE_RATE;
         let vibrato = 1.0 + vibrato_amount * (vibrato_phase * 2.0 * PI).sin();
 
-        // Two detuned saw oscillators with proper phase accumulation
-        phase1 += freq * vibrato / SAMPLE_RATE;
-        phase1 = phase1 % 1.0;
-        phase2 += freq * vibrato * detune / SAMPLE_RATE;
-        phase2 = phase2 % 1.0;
+        // 3 detuned saw oscillators
+        let mut saw_sum = 0.0f32;
+        for (idx, ratio) in detune_ratios.iter().enumerate() {
+            phases[idx] += freq * ratio * vibrato / SAMPLE_RATE;
+            phases[idx] = phases[idx] % 1.0;
 
-        let saw1 = 2.0 * phase1 - 1.0;
-        let saw2 = 2.0 * phase2 - 1.0;
+            // Mix saw and triangle for warmth
+            let saw = 2.0 * phases[idx] - 1.0;
+            let tri = 4.0 * (phases[idx] - 0.5).abs() - 1.0;
+            saw_sum += saw * 0.82 + tri * 0.18;
+        }
+        saw_sum /= 3.0;
 
-        // Mix the two saws
-        let mix = (saw1 + saw2) * 0.5;
+        // 3-pole low-pass with envelope control
+        let filter_cutoff = 0.12 + 0.06 * envelope;
+        lp1 += filter_cutoff * (saw_sum - lp1);
+        lp2 += filter_cutoff * (lp1 - lp2);
+        lp3 += filter_cutoff * (lp2 - lp3);
 
-        // Warm low-pass filter
-        filtered += 0.15 * (mix - filtered);
+        // Gentle saturation
+        let saturated = (lp3 * 1.08).tanh();
 
-        let sample = filtered * envelope * 24000.0;
+        let sample = saturated * envelope * 25000.0;
         output.push(sample.clamp(-32767.0, 32767.0) as i16);
     }
 
     output
 }
 
-/// Synthwave arpeggiator: plucky square wave for rhythmic sparkle
+/// Synthwave arpeggiator: Enhanced plucky sound with sparkle
 fn generate_arp_synth() -> Vec<i16> {
     let duration = 0.3; // 300ms
     let freq = 440.0; // A4 as base
     let samples = (SAMPLE_RATE * duration) as usize;
 
     let mut output = Vec::with_capacity(samples);
-    let mut filtered = 0.0f32;
+
+    // 2-pole filter
+    let mut lp1 = 0.0f32;
+    let mut lp2 = 0.0f32;
+    let mut phase = 0.0f32;
 
     for i in 0..samples {
         let t = i as f32 / SAMPLE_RATE;
 
-        // Plucky envelope - fast attack, medium decay
-        let envelope = if t < 0.003 {
-            t / 0.003
+        // Plucky envelope - fast attack, smooth decay
+        let envelope = if t < 0.002 {
+            (t / 0.002).powf(0.7)
         } else {
-            (-(t - 0.003) * 8.0).exp()
+            (-(t - 0.002) * 8.5).exp()
         };
 
-        // Square wave
-        let phase = (freq * t) % 1.0;
-        let square = if phase < 0.5 { 1.0 } else { -1.0 };
+        // Phase accumulation
+        phase += freq / SAMPLE_RATE;
+        phase = phase % 1.0;
 
-        // Filter envelope for pluck character
-        let filter_env = 0.15 + 0.35 * (-t * 15.0).exp();
-        filtered += filter_env * (square - filtered);
+        // Square wave with variable pulse width for character
+        let pw = 0.48 + 0.04 * (t * 8.0).sin();
+        let square = if phase < pw { 1.0 } else { -1.0 };
 
-        let sample = filtered * envelope * 20000.0;
+        // Add subtle saw for brightness (10% mix)
+        let saw = 2.0 * phase - 1.0;
+        let osc_mix = square * 0.90 + saw * 0.10;
+
+        // Filter envelope creates pluck character
+        let filter_cutoff = 0.12 + 0.42 * (-t * 16.0).exp();
+        lp1 += filter_cutoff * (osc_mix - lp1);
+        lp2 += filter_cutoff * (lp1 - lp2);
+
+        // Gentle saturation for digital sparkle
+        let saturated = (lp2 * 1.05).tanh();
+
+        let sample = saturated * envelope * 21000.0;
         output.push(sample.clamp(-32767.0, 32767.0) as i16);
     }
 
     output
 }
 
-/// Synthwave pad: lush, 3 detuned saws with slow attack
+/// Synthwave pad: Ultra-lush 5-oscillator pad with movement
 fn generate_pad_synth() -> Vec<i16> {
     let duration = 2.0; // 2 seconds for long sustain
     let freq = 220.0; // A3 as base
     let samples = (SAMPLE_RATE * duration) as usize;
 
     let mut output = Vec::with_capacity(samples);
-    let mut filtered = 0.0f32;
+
+    // 4-pole filter for ultra-smooth character
+    let mut lp1 = 0.0f32;
+    let mut lp2 = 0.0f32;
+    let mut lp3 = 0.0f32;
+    let mut lp4 = 0.0f32;
+
+    let mut phases = [0.0f32; 5];
+    let mut lfo_phase = 0.0f32;
+
+    // 5 oscillators for maximum width
+    let detune_amounts = [0.990, 0.996, 1.0, 1.004, 1.010];
 
     for i in 0..samples {
         let t = i as f32 / SAMPLE_RATE;
 
-        // Very slow attack, long sustain for lush pad
-        let envelope = if t < 0.3 {
-            t / 0.3 // 300ms attack
-        } else if t < 1.5 {
+        // Very slow, smooth attack curve
+        let envelope = if t < 0.35 {
+            (t / 0.35).powf(1.8) // Ultra-smooth attack
+        } else if t < 1.45 {
             1.0
         } else {
-            (-(t - 1.5) * 2.0).exp()
+            (-(t - 1.45) * 2.3).exp()
         };
 
-        // Three detuned saw oscillators for width
-        let detune_amounts = [0.993, 1.0, 1.007];
-        let mut sum = 0.0f32;
-        for d in detune_amounts {
-            let phase = (freq * d * t) % 1.0;
-            sum += 2.0 * phase - 1.0;
+        // Subtle LFO for movement (very slow)
+        lfo_phase += 0.25 / SAMPLE_RATE;
+        let lfo = (lfo_phase * 2.0 * PI).sin() * 0.0018;
+
+        // 5 detuned oscillators
+        let mut osc_sum = 0.0f32;
+        for (idx, detune) in detune_amounts.iter().enumerate() {
+            phases[idx] += freq * detune * (1.0 + lfo) / SAMPLE_RATE;
+            phases[idx] = phases[idx] % 1.0;
+
+            // Mix saw, triangle, and sine for ultra-smooth character
+            let saw = 2.0 * phases[idx] - 1.0;
+            let tri = 4.0 * (phases[idx] - 0.5).abs() - 1.0;
+            let sine = (phases[idx] * 2.0 * PI).sin();
+            osc_sum += saw * 0.50 + tri * 0.30 + sine * 0.20;
         }
-        sum /= 3.0;
+        osc_sum /= 5.0;
 
-        // Warm low-pass filter
-        filtered += 0.05 * (sum - filtered);
+        // 4-pole low-pass for vintage warmth
+        let cutoff = 0.042;
+        lp1 += cutoff * (osc_sum - lp1);
+        lp2 += cutoff * (lp1 - lp2);
+        lp3 += cutoff * (lp2 - lp3);
+        lp4 += cutoff * (lp3 - lp4);
 
-        let sample = filtered * envelope * 18000.0;
+        let sample = lp4 * envelope * 19000.0;
         output.push(sample.clamp(-32767.0, 32767.0) as i16);
     }
 

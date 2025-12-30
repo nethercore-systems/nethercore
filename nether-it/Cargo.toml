@@ -1,0 +1,16 @@
+[package]
+name = "nether-it"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "IT (Impulse Tracker) module format parser and writer for Nethercore"
+
+[dependencies]
+# None - pure Rust, no external dependencies
+
+[dev-dependencies]
+# None needed - simple tests only
+
+[lints.clippy]
+all = "warn"

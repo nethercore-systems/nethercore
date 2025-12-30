@@ -1,6 +1,9 @@
-//! XM Tracker playback engine
+//! Tracker playback engine (XM and IT formats)
 //!
-//! This module implements the playback engine for XM (Extended Module) tracker music.
+//! This module implements the playback engine for tracker music, supporting both:
+//! - XM (Extended Module) - FastTracker II format, up to 32 channels
+//! - IT (Impulse Tracker) - Impulse Tracker format, up to 64 channels
+//!
 //! It integrates with the existing audio system to provide era-authentic music playback
 //! with full rollback netcode support.
 //!
@@ -8,10 +11,18 @@
 //!
 //! - **TrackerState** (in rollback_state.rs) - Minimal 64-byte POD state for rollback
 //! - **TrackerEngine** (this module) - Full playback engine with channel state
-//! - **XmModule** (from nether-xm) - Parsed pattern and instrument data
+//! - **XmModule** (from nether-xm) - Parsed XM pattern and instrument data
+//! - **ItModule** (from nether-it) - Parsed IT pattern and instrument data
 //!
 //! The engine is designed to reconstruct its full state from TrackerState by seeking
 //! to the correct position and replaying ticks. This keeps rollback snapshots small.
+//!
+//! # IT-Specific Features
+//!
+//! - **NNA (New Note Action)** - Cut, Continue, NoteOff, or NoteFade when new note arrives
+//! - **Pitch Envelope** - Modulate pitch over time with envelope points
+//! - **Filter Envelope** - Resonant low-pass filter with cutoff envelope
+//! - **64 Channels** - Twice the channel count of XM
 
 use std::collections::BTreeMap;
 
@@ -20,8 +31,8 @@ use nether_xm::{XmInstrument, XmModule, XmNote};
 use crate::audio::Sound;
 use crate::state::tracker_flags;
 
-/// Maximum number of tracker channels (XM supports up to 32)
-pub const MAX_TRACKER_CHANNELS: usize = 32;
+/// Maximum number of tracker channels (XM: 32, IT: 64)
+pub const MAX_TRACKER_CHANNELS: usize = 64;
 
 /// Default XM speed (ticks per row)
 pub const DEFAULT_SPEED: u16 = 6;
@@ -256,6 +267,72 @@ pub struct TrackerChannel {
     pub fade_in_samples: u16,
     /// Previous sample value for crossfade during note transitions
     pub prev_sample: f32,
+
+    // ==========================================================================
+    // IT-specific fields (used only when playing IT modules)
+    // ==========================================================================
+
+    // --- Pitch Envelope (IT only) ---
+    /// Pitch envelope enabled
+    pub pitch_envelope_enabled: bool,
+    /// Pitch envelope position (ticks)
+    pub pitch_envelope_pos: u16,
+    /// Pitch envelope sustain tick
+    pub pitch_envelope_sustain_tick: Option<u16>,
+    /// Pitch envelope loop range
+    pub pitch_envelope_loop: Option<(u16, u16)>,
+    /// Current pitch envelope value (semitones offset, -32 to +32)
+    pub pitch_envelope_value: f32,
+
+    // --- Filter Envelope (IT only) ---
+    /// Filter envelope enabled
+    pub filter_envelope_enabled: bool,
+    /// Filter envelope position (ticks)
+    pub filter_envelope_pos: u16,
+    /// Filter envelope sustain tick
+    pub filter_envelope_sustain_tick: Option<u16>,
+    /// Filter envelope loop range
+    pub filter_envelope_loop: Option<(u16, u16)>,
+
+    // --- Filter DSP State (IT resonant low-pass filter) ---
+    /// Filter cutoff (0.0-1.0 normalized)
+    pub filter_cutoff: f32,
+    /// Filter resonance (0.0-1.0)
+    pub filter_resonance: f32,
+    /// Biquad coefficient a1
+    pub filter_a1: f32,
+    /// Biquad coefficient a2
+    pub filter_a2: f32,
+    /// Biquad coefficient b0
+    pub filter_b0: f32,
+    /// Biquad coefficient b1
+    pub filter_b1: f32,
+    /// Biquad coefficient b2
+    pub filter_b2: f32,
+    /// Filter state z^-1
+    pub filter_z1: f32,
+    /// Filter state z^-2
+    pub filter_z2: f32,
+    /// Whether filter coefficients need recalculation
+    pub filter_dirty: bool,
+
+    // --- NNA (New Note Action, IT only) ---
+    /// New Note Action (0=Cut, 1=Continue, 2=NoteOff, 3=NoteFade)
+    pub nna: u8,
+    /// Duplicate Check Type (0=Off, 1=Note, 2=Sample, 3=Instrument)
+    pub dct: u8,
+    /// Duplicate Check Action (0=Cut, 1=NoteOff, 2=NoteFade)
+    pub dca: u8,
+    /// This channel is a "background" NNA channel (virtualized)
+    pub is_background: bool,
+    /// Parent channel index for background channels
+    pub parent_channel: u8,
+
+    // --- IT Channel Volume ---
+    /// IT channel volume (0-64, separate from sample volume)
+    pub channel_volume: u8,
+    /// IT channel volume slide
+    pub channel_volume_slide: i8,
 }
 
 impl TrackerChannel {
@@ -267,6 +344,11 @@ impl TrackerChannel {
         self.fade_out_samples = 0;
         self.fade_in_samples = 0;
         self.prev_sample = 0.0;
+
+        // IT-specific defaults
+        self.channel_volume = 64; // Full channel volume
+        self.filter_cutoff = 1.0; // Wide open filter
+        self.filter_b0 = 1.0; // Passthrough filter
     }
 
     /// Trigger a new note
