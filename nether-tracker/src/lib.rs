@@ -244,6 +244,34 @@ pub struct TrackerInstrument {
     pub filter_cutoff: Option<u8>,
     /// Initial filter resonance (0-127, IT only)
     pub filter_resonance: Option<u8>,
+
+    // =========================================================================
+    // Sample metadata (XM stores these per-instrument, IT per-sample)
+    // =========================================================================
+
+    /// Sample loop start position (in samples)
+    pub sample_loop_start: u32,
+    /// Sample loop end position (in samples)
+    pub sample_loop_end: u32,
+    /// Sample loop type
+    pub sample_loop_type: LoopType,
+    /// Sample finetune (-128 to 127)
+    pub sample_finetune: i8,
+    /// Sample relative note (semitones offset)
+    pub sample_relative_note: i8,
+
+    // =========================================================================
+    // Auto-vibrato settings (XM feature, applied automatically to notes)
+    // =========================================================================
+
+    /// Auto-vibrato waveform (0=sine, 1=square, 2=ramp down, 3=ramp up)
+    pub auto_vibrato_type: u8,
+    /// Auto-vibrato sweep (frames to reach full depth)
+    pub auto_vibrato_sweep: u8,
+    /// Auto-vibrato depth
+    pub auto_vibrato_depth: u8,
+    /// Auto-vibrato rate (speed)
+    pub auto_vibrato_rate: u8,
 }
 
 impl Default for TrackerInstrument {
@@ -268,6 +296,17 @@ impl Default for TrackerInstrument {
             pitch_envelope: None,
             filter_cutoff: None,
             filter_resonance: None,
+            // Sample metadata
+            sample_loop_start: 0,
+            sample_loop_end: 0,
+            sample_loop_type: LoopType::None,
+            sample_finetune: 0,
+            sample_relative_note: 0,
+            // Auto-vibrato
+            auto_vibrato_type: 0,
+            auto_vibrato_sweep: 0,
+            auto_vibrato_depth: 0,
+            auto_vibrato_rate: 0,
         }
     }
 }

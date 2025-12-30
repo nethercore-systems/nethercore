@@ -262,6 +262,25 @@ pub struct TrackerChannel {
     // Retrigger mode for multiplicative volume (Rxy)
     pub retrigger_mode: u8,
 
+    // Per-row effect activity flags (reset at row start, set by effects)
+    // These track whether an effect is ACTIVE this row, not just remembered
+    /// Volume slide is active this row
+    pub volume_slide_active: bool,
+    /// Portamento up is active this row
+    pub porta_up_active: bool,
+    /// Portamento down is active this row
+    pub porta_down_active: bool,
+    /// Tone portamento is active this row
+    pub tone_porta_active: bool,
+    /// Vibrato is active this row
+    pub vibrato_active: bool,
+    /// Tremolo is active this row
+    pub tremolo_active: bool,
+    /// Arpeggio is active this row
+    pub arpeggio_active: bool,
+    /// Panning slide is active this row
+    pub panning_slide_active: bool,
+
     // Fade state for smooth transitions (anti-pop)
     /// Fade-out samples remaining (0 = not fading out, >0 = fading out)
     pub fade_out_samples: u16,
@@ -335,6 +354,30 @@ pub struct TrackerChannel {
     pub channel_volume: u8,
     /// IT channel volume slide
     pub channel_volume_slide: i8,
+
+    // --- IT Tremor Effect ---
+    /// Tremor on ticks (Ixy: x = on ticks)
+    pub tremor_on_ticks: u8,
+    /// Tremor off ticks (Ixy: y = off ticks)
+    pub tremor_off_ticks: u8,
+    /// Tremor tick counter
+    pub tremor_counter: u8,
+    /// Tremor is currently in mute phase
+    pub tremor_mute: bool,
+    /// Tremor is active this row
+    pub tremor_active: bool,
+
+    // --- IT Panbrello Effect ---
+    /// Panbrello position (0-255)
+    pub panbrello_pos: u8,
+    /// Panbrello speed
+    pub panbrello_speed: u8,
+    /// Panbrello depth
+    pub panbrello_depth: u8,
+    /// Panbrello waveform (0=sine, 1=ramp, 2=square, 3=random)
+    pub panbrello_waveform: u8,
+    /// Panbrello is active this row
+    pub panbrello_active: bool,
 }
 
 impl TrackerChannel {
@@ -431,6 +474,34 @@ impl TrackerChannel {
     /// Trigger key-off (release)
     pub fn trigger_key_off(&mut self) {
         self.key_off = true;
+    }
+
+    /// Reset per-row effect activity flags (called at the start of each row)
+    ///
+    /// XM/IT effects only apply during the row they appear. Memory values persist
+    /// for "use last param" functionality, but the effect itself doesn't continue
+    /// unless explicitly present on the new row.
+    pub fn reset_row_effects(&mut self) {
+        self.volume_slide_active = false;
+        self.porta_up_active = false;
+        self.porta_down_active = false;
+        self.tone_porta_active = false;
+        self.vibrato_active = false;
+        self.tremolo_active = false;
+        self.arpeggio_active = false;
+        self.panning_slide_active = false;
+        self.tremor_active = false;
+        self.panbrello_active = false;
+
+        // Also reset per-row timing effects
+        self.note_cut_tick = 0;
+        self.note_delay_tick = 0;
+        self.key_off_tick = 0;
+        self.retrigger_tick = 0;
+
+        // Reset arpeggio notes (arpeggio only applies on the row it appears)
+        self.arpeggio_note1 = 0;
+        self.arpeggio_note2 = 0;
     }
 
     /// Apply resonant low-pass filter to sample (IT only)
@@ -692,10 +763,11 @@ impl TrackerEngine {
         target_row: u16,
         sounds: &[Option<Sound>],
     ) {
+        let raw_handle = raw_tracker_handle(handle);
         // Validate handle exists
         if self
             .modules
-            .get(handle as usize)
+            .get(raw_handle as usize)
             .and_then(|m| m.as_ref())
             .is_none()
         {
@@ -738,7 +810,7 @@ impl TrackerEngine {
 
             // Get current pattern length
             let (num_rows, song_length) = {
-                let loaded = match self.modules.get(handle as usize).and_then(|m| m.as_ref()) {
+                let loaded = match self.modules.get(raw_handle as usize).and_then(|m| m.as_ref()) {
                     Some(m) => m,
                     None => return,
                 };
@@ -774,8 +846,9 @@ impl TrackerEngine {
     /// Internal version that accesses module by handle to avoid borrow issues
     fn process_row_tick0_internal(&mut self, handle: u32, sounds: &[Option<Sound>]) {
         // Get module data - need to access by index to work around borrow checker
-        let (_num_channels, pattern_info) = {
-            let loaded = match self.modules.get(handle as usize).and_then(|m| m.as_ref()) {
+        let raw_handle = raw_tracker_handle(handle);
+        let (num_channels, pattern_info) = {
+            let loaded = match self.modules.get(raw_handle as usize).and_then(|m| m.as_ref()) {
                 Some(m) => m,
                 None => return,
             };
@@ -794,6 +867,12 @@ impl TrackerEngine {
             (loaded.module.num_channels, notes)
         };
 
+        // Reset per-row effect state for all channels before processing
+        // XM/IT effects only apply during the row they appear on
+        for ch_idx in 0..num_channels as usize {
+            self.channels[ch_idx].reset_row_effects();
+        }
+
         // Process each note
         for (ch_idx, note) in pattern_info {
             self.process_note_internal(ch_idx, &note, handle, sounds);
@@ -808,6 +887,7 @@ impl TrackerEngine {
         handle: u32,
         _sounds: &[Option<Sound>],
     ) {
+        let raw_handle = raw_tracker_handle(handle);
         // Handle instrument change
         if note.has_instrument() {
             let instr_idx = (note.instrument - 1) as usize;
@@ -815,15 +895,22 @@ impl TrackerEngine {
 
             // Get sound handle and instrument data
             let (sound_handle, loop_start, loop_end, loop_type, finetune) = {
-                let loaded = match self.modules.get(handle as usize).and_then(|m| m.as_ref()) {
+                let loaded = match self.modules.get(raw_handle as usize).and_then(|m| m.as_ref()) {
                     Some(m) => m,
                     None => return,
                 };
                 let sound_handle = loaded.sound_handles.get(instr_idx).copied().unwrap_or(0);
-                // TrackerInstrument doesn't have sample properties directly
-                // (they're in the samples array via note_sample_table)
-                // Loop properties are set from ROM sample data elsewhere
-                (sound_handle, 0, 0, 0, 0)
+                // Get sample metadata from TrackerInstrument
+                if let Some(instr) = loaded.module.instruments.get(instr_idx) {
+                    let loop_type = match instr.sample_loop_type {
+                        nether_tracker::LoopType::None => 0,
+                        nether_tracker::LoopType::Forward => 1,
+                        nether_tracker::LoopType::PingPong => 2,
+                    };
+                    (sound_handle, instr.sample_loop_start, instr.sample_loop_end, loop_type, instr.sample_finetune)
+                } else {
+                    (sound_handle, 0, 0, 0, 0)
+                }
             };
 
             self.channels[ch_idx].sample_handle = sound_handle;
@@ -838,7 +925,7 @@ impl TrackerEngine {
         if note.has_note() {
             // Fetch all instrument data we need for note trigger
             let instr_data = {
-                let loaded = match self.modules.get(handle as usize).and_then(|m| m.as_ref()) {
+                let loaded = match self.modules.get(raw_handle as usize).and_then(|m| m.as_ref()) {
                     Some(m) => m,
                     None => return,
                 };
@@ -884,19 +971,22 @@ impl TrackerEngine {
                             (false, None, None)
                         };
 
-                    // TrackerInstrument doesn't have per-instrument sample properties
-                    // (those are in the samples array via note_sample_table)
-                    // For now, use defaults - sample properties are set elsewhere
+                    // Get sample metadata from TrackerInstrument
+                    let loop_type = match instr.sample_loop_type {
+                        nether_tracker::LoopType::None => 0u8,
+                        nether_tracker::LoopType::Forward => 1u8,
+                        nether_tracker::LoopType::PingPong => 2u8,
+                    };
                     Some((
-                        0i8,        // finetune (default)
-                        0u32,       // loop_start (set from sample later)
-                        0u32,       // loop_end (set from sample later)
-                        0u8,        // loop_type (set from sample later)
-                        0u8,        // vib_type (XM-specific, not in TrackerInstrument)
-                        0u8,        // vib_depth
-                        0u8,        // vib_rate
-                        0u8,        // vib_sweep
-                        0i8,        // relative_note (XM-specific)
+                        instr.sample_finetune,
+                        instr.sample_loop_start,
+                        instr.sample_loop_end,
+                        loop_type,
+                        instr.auto_vibrato_type,
+                        instr.auto_vibrato_depth,
+                        instr.auto_vibrato_rate,
+                        instr.auto_vibrato_sweep,
+                        instr.sample_relative_note,
                         instr.fadeout,
                         vol_env_enabled,
                         vol_env_sustain,
@@ -1041,6 +1131,7 @@ impl TrackerEngine {
                 channel.volume = ((*vol).min(64) as f32) / 64.0;
             }
             TrackerEffect::VolumeSlide { up, down } => {
+                channel.volume_slide_active = true;
                 let param = (*up << 4) | *down;
                 if param != 0 {
                     channel.last_volume_slide = param;
@@ -1075,12 +1166,14 @@ impl TrackerEngine {
             // Pitch Effects
             // =====================================================================
             TrackerEffect::PortamentoUp(val) => {
+                channel.porta_up_active = true;
                 let v = *val as u8;
                 if v != 0 {
                     channel.last_porta_up = v;
                 }
             }
             TrackerEffect::PortamentoDown(val) => {
+                channel.porta_down_active = true;
                 let v = *val as u8;
                 if v != 0 {
                     channel.last_porta_down = v;
@@ -1107,6 +1200,7 @@ impl TrackerEngine {
                 channel.period += *val as f32;
             }
             TrackerEffect::TonePortamento(speed) => {
+                channel.tone_porta_active = true;
                 let v = *speed as u8;
                 if v != 0 {
                     channel.porta_speed = v;
@@ -1117,6 +1211,8 @@ impl TrackerEngine {
                 }
             }
             TrackerEffect::TonePortaVolSlide { porta: _, vol_up, vol_down } => {
+                channel.tone_porta_active = true;
+                channel.volume_slide_active = true;
                 let param = (*vol_up << 4) | *vol_down;
                 if param != 0 {
                     channel.last_volume_slide = param;
@@ -1128,6 +1224,7 @@ impl TrackerEngine {
             // Modulation Effects
             // =====================================================================
             TrackerEffect::Vibrato { speed, depth } => {
+                channel.vibrato_active = true;
                 let param = (*speed << 4) | *depth;
                 if param != 0 {
                     channel.last_vibrato = param;
@@ -1141,6 +1238,8 @@ impl TrackerEngine {
                 }
             }
             TrackerEffect::VibratoVolSlide { vib_speed: _, vib_depth: _, vol_up, vol_down } => {
+                channel.vibrato_active = true;
+                channel.volume_slide_active = true;
                 let param = (*vol_up << 4) | *vol_down;
                 if param != 0 {
                     channel.last_volume_slide = param;
@@ -1148,6 +1247,7 @@ impl TrackerEngine {
                 // Vibrato uses memory
             }
             TrackerEffect::FineVibrato { speed, depth } => {
+                channel.vibrato_active = true;
                 if *speed != 0 {
                     channel.vibrato_speed = *speed;
                 }
@@ -1157,6 +1257,7 @@ impl TrackerEngine {
                 }
             }
             TrackerEffect::Tremolo { speed, depth } => {
+                channel.tremolo_active = true;
                 let param = (*speed << 4) | *depth;
                 if param != 0 {
                     channel.last_tremolo = param;
@@ -1169,10 +1270,17 @@ impl TrackerEngine {
                     channel.tremolo_depth = p & 0x0F;
                 }
             }
-            TrackerEffect::Tremor { ontime: _, offtime: _ } => {
-                // IT tremor effect - not commonly used in XM
+            TrackerEffect::Tremor { ontime, offtime } => {
+                channel.tremor_active = true;
+                if *ontime != 0 || *offtime != 0 {
+                    channel.tremor_on_ticks = *ontime;
+                    channel.tremor_off_ticks = *offtime;
+                }
+                channel.tremor_counter = 0;
+                channel.tremor_mute = false;
             }
             TrackerEffect::Arpeggio { note1, note2 } => {
+                channel.arpeggio_active = true;
                 channel.arpeggio_note1 = *note1;
                 channel.arpeggio_note2 = *note2;
                 channel.arpeggio_tick = 0;
@@ -1186,12 +1294,19 @@ impl TrackerEngine {
                 channel.panning = (*pan as f32 / 64.0) * 2.0 - 1.0;
             }
             TrackerEffect::PanningSlide { left, right } => {
+                channel.panning_slide_active = true;
                 // Store for per-tick processing
                 // Positive = right, negative = left
                 channel.panning_slide = (*right as i8) - (*left as i8);
             }
-            TrackerEffect::Panbrello { speed: _, depth: _ } => {
-                // IT-only panbrello
+            TrackerEffect::Panbrello { speed, depth } => {
+                channel.panbrello_active = true;
+                if *speed != 0 {
+                    channel.panbrello_speed = *speed;
+                }
+                if *depth != 0 {
+                    channel.panbrello_depth = *depth;
+                }
             }
 
             // =====================================================================
@@ -1229,11 +1344,13 @@ impl TrackerEngine {
             // =====================================================================
             // Filter Effects (IT only)
             // =====================================================================
-            TrackerEffect::SetFilterCutoff(_cutoff) => {
-                // IT resonant filter - not implemented for XM
+            TrackerEffect::SetFilterCutoff(cutoff) => {
+                channel.filter_cutoff = *cutoff as f32 / 127.0;
+                channel.filter_dirty = true;
             }
-            TrackerEffect::SetFilterResonance(_res) => {
-                // IT resonant filter - not implemented for XM
+            TrackerEffect::SetFilterResonance(res) => {
+                channel.filter_resonance = *res as f32 / 127.0;
+                channel.filter_dirty = true;
             }
 
             // =====================================================================
@@ -1245,8 +1362,8 @@ impl TrackerEngine {
             TrackerEffect::TremoloWaveform(wf) => {
                 channel.tremolo_waveform = *wf & 0x07;
             }
-            TrackerEffect::PanbrelloWaveform(_wf) => {
-                // IT-only
+            TrackerEffect::PanbrelloWaveform(wf) => {
+                channel.panbrello_waveform = *wf & 0x07;
             }
 
             // =====================================================================
@@ -1282,273 +1399,6 @@ impl TrackerEngine {
         }
     }
 
-    /// Process legacy XM effect at tick 0 (row start, XM-style u8 + param)
-    /// Returns (position_jump, pattern_break) if those effects are triggered
-    #[allow(dead_code)]
-    fn process_effect_tick0(
-        &mut self,
-        ch_idx: usize,
-        effect: u8,
-        param: u8,
-        note_num: u8,
-        note_instrument: u8,
-    ) -> (Option<u16>, Option<u16>) {
-        let channel = &mut self.channels[ch_idx];
-        let mut position_jump = None;
-        let mut pattern_break = None;
-
-        match effect {
-            // 0xy: Arpeggio
-            0x00 if param != 0 => {
-                channel.arpeggio_note1 = param >> 4;
-                channel.arpeggio_note2 = param & 0x0F;
-                channel.arpeggio_tick = 0;
-            }
-            // 1xx: Portamento up
-            0x01 => {
-                if param != 0 {
-                    channel.last_porta_up = param;
-                }
-            }
-            // 2xx: Portamento down
-            0x02 => {
-                if param != 0 {
-                    channel.last_porta_down = param;
-                }
-            }
-            // 3xx: Tone portamento
-            0x03 => {
-                if param != 0 {
-                    channel.porta_speed = param;
-                }
-            }
-            // 4xy: Vibrato
-            0x04 => {
-                if param != 0 {
-                    channel.last_vibrato = param;
-                }
-                let p = channel.last_vibrato;
-                if p >> 4 != 0 {
-                    channel.vibrato_speed = p >> 4;
-                }
-                if p & 0x0F != 0 {
-                    channel.vibrato_depth = p & 0x0F;
-                }
-            }
-            // 5xy: Tone portamento + volume slide
-            0x05 => {
-                if param != 0 {
-                    channel.last_volume_slide = param;
-                }
-            }
-            // 6xy: Vibrato + volume slide
-            0x06 => {
-                if param != 0 {
-                    channel.last_volume_slide = param;
-                }
-            }
-            // 7xy: Tremolo
-            0x07 => {
-                if param != 0 {
-                    channel.last_tremolo = param;
-                }
-                let p = channel.last_tremolo;
-                if p >> 4 != 0 {
-                    channel.tremolo_speed = p >> 4;
-                }
-                if p & 0x0F != 0 {
-                    channel.tremolo_depth = p & 0x0F;
-                }
-            }
-            // 8xx: Set panning
-            0x08 => {
-                channel.panning = (param as f32 / 255.0) * 2.0 - 1.0;
-            }
-            // 9xx: Sample offset
-            0x09 => {
-                if param != 0 {
-                    channel.last_sample_offset = param;
-                }
-                // Combine high byte (from SAx) and low byte (from 9xx)
-                let offset = ((channel.sample_offset_high as u32) << 16)
-                    | ((channel.last_sample_offset as u32) << 8);
-                channel.sample_pos = offset as f64;
-            }
-            // Axy: Volume slide
-            0x0A => {
-                if param != 0 {
-                    channel.last_volume_slide = param;
-                }
-            }
-            // Bxx: Position jump
-            0x0B => {
-                position_jump = Some(param as u16);
-            }
-            // Cxx: Set volume
-            0x0C => {
-                channel.volume = (param.min(64) as f32) / 64.0;
-            }
-            // Dxx: Pattern break
-            0x0D => {
-                // Parameter is BCD row: high nibble * 10 + low nibble
-                let row = (param >> 4) * 10 + (param & 0x0F);
-                pattern_break = Some(row as u16);
-            }
-            // Exy: Extended commands
-            0x0E => {
-                let sub_cmd = param >> 4;
-                let sub_param = param & 0x0F;
-                match sub_cmd {
-                    // E1x: Fine portamento up
-                    0x1 => {
-                        if sub_param != 0 {
-                            channel.last_fine_porta_up = sub_param;
-                        }
-                        let p = channel.last_fine_porta_up;
-                        channel.period = (channel.period - p as f32 * 4.0).max(1.0);
-                    }
-                    // E2x: Fine portamento down
-                    0x2 => {
-                        if sub_param != 0 {
-                            channel.last_fine_porta_down = sub_param;
-                        }
-                        let p = channel.last_fine_porta_down;
-                        channel.period += p as f32 * 4.0;
-                    }
-                    // E3x: Glissando control (rounded tone portamento)
-                    0x3 => {
-                        channel.glissando = sub_param != 0;
-                    }
-                    // E4x: Set vibrato waveform
-                    0x4 => {
-                        channel.vibrato_waveform = sub_param & 0x07;
-                    }
-                    // E5x: Set finetune
-                    0x5 => {
-                        channel.finetune = (sub_param as i8) - 8;
-                    }
-                    // E6x: Pattern loop
-                    0x6 => {
-                        if sub_param == 0 {
-                            // Set loop start
-                            channel.pattern_loop_row = self.current_row;
-                        } else if channel.pattern_loop_count == 0 {
-                            // Start loop
-                            channel.pattern_loop_count = sub_param;
-                        } else {
-                            channel.pattern_loop_count -= 1;
-                        }
-                        // Note: actual loop jump handled in caller
-                    }
-                    // E7x: Set tremolo waveform
-                    0x7 => {
-                        channel.tremolo_waveform = sub_param & 0x07;
-                    }
-                    // E8x: Set panning (coarse)
-                    0x8 => {
-                        channel.panning = (sub_param as f32 / 15.0) * 2.0 - 1.0;
-                    }
-                    // E9x: Retrigger note
-                    0x9 => {
-                        channel.retrigger_tick = sub_param;
-                    }
-                    // EAx: Fine volume slide up
-                    0xA => {
-                        channel.volume = (channel.volume + sub_param as f32 / 64.0).min(1.0);
-                    }
-                    // EBx: Fine volume slide down
-                    0xB => {
-                        channel.volume = (channel.volume - sub_param as f32 / 64.0).max(0.0);
-                    }
-                    // ECx: Note cut at tick x
-                    0xC => {
-                        channel.note_cut_tick = sub_param;
-                    }
-                    // EDx: Note delay - trigger note at tick x
-                    0xD => {
-                        channel.note_delay_tick = sub_param;
-                        channel.delayed_note = note_num;
-                        channel.delayed_instrument = note_instrument;
-                    }
-                    // EEx: Pattern delay - repeat current row x times
-                    0xE => {
-                        if sub_param > 0 && self.pattern_delay == 0 {
-                            self.pattern_delay = sub_param;
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            // Fxx: Set speed/tempo
-            0x0F => {
-                // This effect modifies TrackerState, which we don't have here
-                // It will be handled in the FFI layer
-            }
-            // Gxx: Set global volume
-            0x10 => {
-                self.global_volume = (param.min(64) as f32) / 64.0;
-            }
-            // Hxy: Global volume slide
-            0x11 => {
-                if param != 0 {
-                    self.last_global_vol_slide = param;
-                }
-            }
-            // Kxx: Key off (at tick xx)
-            0x14 => {
-                if param == 0 {
-                    channel.trigger_key_off();
-                } else {
-                    channel.key_off_tick = param;
-                }
-            }
-            // Lxx: Set envelope position
-            0x15 => {
-                channel.volume_envelope_pos = param as u16;
-            }
-            // Pxy: Panning slide
-            0x19 => {
-                // Store for per-tick processing
-            }
-            // Rxy: Multi retrigger
-            0x1B => {
-                channel.retrigger_tick = param & 0x0F;
-                channel.retrigger_mode = param >> 4;
-                // Additive volume changes (modes 1-5 decrease, 9-13 increase)
-                channel.retrigger_volume = match param >> 4 {
-                    1 => -1,
-                    2 => -2,
-                    3 => -4,
-                    4 => -8,
-                    5 => -16,
-                    // 6, 7 = multiplicative (handled in process_tick)
-                    9 => 1,
-                    10 => 2,
-                    11 => 4,
-                    12 => 8,
-                    13 => 16,
-                    // 14, 15 = multiplicative (handled in process_tick)
-                    _ => 0,
-                };
-            }
-            // Sxy: Extended commands (OpenMPT/FT2 extended)
-            0x1C => {
-                let sub_cmd = param >> 4;
-                let sub_param = param & 0x0F;
-                match sub_cmd {
-                    // SAx: Set high sample offset byte
-                    0xA => {
-                        channel.sample_offset_high = sub_param;
-                    }
-                    _ => {}
-                }
-            }
-            _ => {}
-        }
-
-        (position_jump, pattern_break)
-    }
-
     /// Process per-tick effects (called every tick except tick 0)
     pub fn process_tick(&mut self, tick: u16, _speed: u16) {
         for ch_idx in 0..MAX_TRACKER_CHANNELS {
@@ -1558,9 +1408,10 @@ impl TrackerEngine {
             }
 
             // Apply per-tick effects based on stored parameters
+            // Effects only apply if they were present on this row (active flag set)
 
-            // Arpeggio
-            if channel.arpeggio_note1 != 0 || channel.arpeggio_note2 != 0 {
+            // Arpeggio - only apply if arpeggio effect is active this row
+            if channel.arpeggio_active && (channel.arpeggio_note1 != 0 || channel.arpeggio_note2 != 0) {
                 channel.arpeggio_tick = ((channel.arpeggio_tick as u16 + 1) % 3) as u8;
                 let note_offset = match channel.arpeggio_tick {
                     0 => 0,
@@ -1572,30 +1423,32 @@ impl TrackerEngine {
                 channel.period = arp_period.max(1.0);
             }
 
-            // Volume slide
-            let vol_slide = channel.last_volume_slide;
-            if vol_slide != 0 {
-                let up = (vol_slide >> 4) as f32 / 64.0;
-                let down = (vol_slide & 0x0F) as f32 / 64.0;
-                if up > 0.0 {
-                    channel.volume = (channel.volume + up).min(1.0);
-                } else {
-                    channel.volume = (channel.volume - down).max(0.0);
+            // Volume slide - only apply if volume slide effect is active this row
+            if channel.volume_slide_active {
+                let vol_slide = channel.last_volume_slide;
+                if vol_slide != 0 {
+                    let up = (vol_slide >> 4) as f32 / 64.0;
+                    let down = (vol_slide & 0x0F) as f32 / 64.0;
+                    if up > 0.0 {
+                        channel.volume = (channel.volume + up).min(1.0);
+                    } else {
+                        channel.volume = (channel.volume - down).max(0.0);
+                    }
                 }
             }
 
-            // Portamento up
-            if channel.last_porta_up != 0 {
+            // Portamento up - only apply if portamento up effect is active this row
+            if channel.porta_up_active && channel.last_porta_up != 0 {
                 channel.period = (channel.period - channel.last_porta_up as f32 * 4.0).max(1.0);
             }
 
-            // Portamento down
-            if channel.last_porta_down != 0 {
+            // Portamento down - only apply if portamento down effect is active this row
+            if channel.porta_down_active && channel.last_porta_down != 0 {
                 channel.period += channel.last_porta_down as f32 * 4.0;
             }
 
-            // Tone portamento (slide toward target)
-            if channel.target_period > 0.0 && channel.porta_speed > 0 {
+            // Tone portamento (slide toward target) - only apply if tone porta is active
+            if channel.tone_porta_active && channel.target_period > 0.0 && channel.porta_speed > 0 {
                 let diff = channel.target_period - channel.period;
                 let speed = channel.porta_speed as f32 * 4.0;
                 if diff.abs() < speed {
@@ -1607,10 +1460,10 @@ impl TrackerEngine {
                 }
             }
 
-            // Vibrato (FT2-compatible depth and speed)
+            // Vibrato (FT2-compatible depth and speed) - only apply if vibrato is active
             // Depth: 128.0/15.0 ≈ 8.533 gives ±2 semitones (±128 period units) at depth=15
             // Speed: 4x faster oscillation to match libxm/FT2
-            if channel.vibrato_depth > 0 {
+            if channel.vibrato_active && channel.vibrato_depth > 0 {
                 let vibrato = get_waveform_value(channel.vibrato_waveform, channel.vibrato_pos);
                 let delta = vibrato * channel.vibrato_depth as f32 * (128.0 / 15.0);
                 channel.period = channel.base_period + delta;
@@ -1646,10 +1499,10 @@ impl TrackerEngine {
                 }
             }
 
-            // Tremolo (FT2-compatible depth and speed)
+            // Tremolo (FT2-compatible depth and speed) - only apply if tremolo is active
             // Depth: * 4.0 / 128.0 matches libxm formula
             // Speed: 4x faster oscillation to match libxm/FT2
-            if channel.tremolo_depth > 0 {
+            if channel.tremolo_active && channel.tremolo_depth > 0 {
                 let tremolo = get_waveform_value(channel.tremolo_waveform, channel.tremolo_pos);
                 let delta = tremolo * channel.tremolo_depth as f32 * 4.0 / 128.0;
                 channel.volume = (channel.volume + delta).clamp(0.0, 1.0);
@@ -1657,7 +1510,7 @@ impl TrackerEngine {
                     channel.tremolo_pos.wrapping_add(channel.tremolo_speed << 2) & 0x3F;
             }
 
-            // Retrigger
+            // Retrigger - note: retrigger_tick is reset per-row in reset_row_effects
             if channel.retrigger_tick > 0 && tick % channel.retrigger_tick as u16 == 0 {
                 channel.sample_pos = 0.0;
                 // Apply volume change based on retrigger mode
@@ -1678,10 +1531,36 @@ impl TrackerEngine {
                 }
             }
 
-            // Panning slide
-            if channel.panning_slide != 0 {
+            // Panning slide - only apply if panning slide is active this row
+            if channel.panning_slide_active && channel.panning_slide != 0 {
                 channel.panning =
                     (channel.panning + channel.panning_slide as f32 / 255.0).clamp(-1.0, 1.0);
+            }
+
+            // Tremor (IT Ixy) - rapidly switch volume on/off
+            if channel.tremor_active && (channel.tremor_on_ticks > 0 || channel.tremor_off_ticks > 0) {
+                channel.tremor_counter = channel.tremor_counter.saturating_add(1);
+                if channel.tremor_mute {
+                    // Currently in off phase
+                    if channel.tremor_counter >= channel.tremor_off_ticks {
+                        channel.tremor_mute = false;
+                        channel.tremor_counter = 0;
+                    }
+                } else {
+                    // Currently in on phase
+                    if channel.tremor_counter >= channel.tremor_on_ticks {
+                        channel.tremor_mute = true;
+                        channel.tremor_counter = 0;
+                    }
+                }
+            }
+
+            // Panbrello (IT Yxy) - oscillate panning
+            if channel.panbrello_active && channel.panbrello_depth > 0 {
+                let panbrello = get_waveform_value(channel.panbrello_waveform, channel.panbrello_pos);
+                let delta = panbrello * channel.panbrello_depth as f32 / 64.0;
+                channel.panning = (channel.panning + delta).clamp(-1.0, 1.0);
+                channel.panbrello_pos = channel.panbrello_pos.wrapping_add(channel.panbrello_speed);
             }
 
             // Note cut (ECx) - cut note at tick x
@@ -1886,9 +1765,10 @@ impl TrackerEngine {
             return (0.0, 0.0);
         }
 
+        let raw_handle = raw_tracker_handle(state.handle);
         let module = match self
             .modules
-            .get(state.handle as usize)
+            .get(raw_handle as usize)
             .and_then(|m| m.as_ref())
         {
             Some(m) => m,
@@ -1977,6 +1857,14 @@ impl TrackerEngine {
 
             vol *= self.global_volume;
 
+            // Apply channel volume (IT feature)
+            vol *= channel.channel_volume as f32 / 64.0;
+
+            // Apply tremor mute (IT feature)
+            if channel.tremor_mute {
+                vol = 0.0;
+            }
+
             // Apply panning with envelope
             let mut pan = channel.panning;
             if channel.panning_envelope_enabled {
@@ -1990,6 +1878,14 @@ impl TrackerEngine {
                         }
                     }
                 }
+            }
+
+            // Apply panbrello offset (IT feature)
+            // Calculate panbrello offset from depth and waveform position
+            if channel.panbrello_active && channel.panbrello_depth > 0 {
+                let waveform_value = SINE_LUT[(channel.panbrello_pos >> 4) as usize & 0xF];
+                let panbrello_offset = (waveform_value * channel.panbrello_depth as i8 as f32) / (64.0 * 256.0);
+                pan = (pan + panbrello_offset).clamp(-1.0, 1.0);
             }
 
             let (l, r) = apply_channel_pan(sample * vol, pan);
@@ -2030,9 +1926,10 @@ impl TrackerEngine {
         }
 
         // Render the audio sample
+        let raw_handle = raw_tracker_handle(state.handle);
         let module = match self
             .modules
-            .get(state.handle as usize)
+            .get(raw_handle as usize)
             .and_then(|m| m.as_ref())
         {
             Some(m) => m,
@@ -2043,9 +1940,19 @@ impl TrackerEngine {
         let mut right = 0.0f32;
 
         // Mix all active channels
+        static mut DEBUG_RENDER_COUNTER: u32 = 0;
         for (ch_idx, channel) in self.channels.iter_mut().enumerate() {
             if ch_idx >= module.module.num_channels as usize {
                 break;
+            }
+
+            // Debug: periodically log channel state
+            unsafe {
+                DEBUG_RENDER_COUNTER = DEBUG_RENDER_COUNTER.wrapping_add(1);
+                if DEBUG_RENDER_COUNTER % 50000 == 1 && ch_idx == 0 {
+                    eprintln!("DEBUG ch{}: note_on={}, sample_handle={}, sounds.len()={}",
+                        ch_idx, channel.note_on, channel.sample_handle, sounds.len());
+                }
             }
 
             if !channel.note_on || channel.sample_handle == 0 {
@@ -2058,7 +1965,18 @@ impl TrackerEngine {
                 .and_then(|s| s.as_ref())
             {
                 Some(s) => s,
-                None => continue,
+                None => {
+                    // Debug: log failed sound lookup
+                    static mut SOUND_FAIL_COUNTER: u32 = 0;
+                    unsafe {
+                        SOUND_FAIL_COUNTER += 1;
+                        if SOUND_FAIL_COUNTER % 1000 == 1 {
+                            eprintln!("DEBUG ch{}: sample_handle={} NOT FOUND in sounds (len={})",
+                                ch_idx, channel.sample_handle, sounds.len());
+                        }
+                    }
+                    continue;
+                }
             };
 
             // Apply pitch envelope (IT only) - modifies period before sampling
@@ -2120,6 +2038,14 @@ impl TrackerEngine {
             }
 
             vol *= self.global_volume;
+
+            // Apply channel volume (IT feature)
+            vol *= channel.channel_volume as f32 / 64.0;
+
+            // Apply tremor mute (IT feature)
+            if channel.tremor_mute {
+                vol = 0.0;
+            }
 
             // Apply panning with envelope
             let mut pan = channel.panning;
@@ -2182,7 +2108,7 @@ impl TrackerEngine {
                 let (num_rows, song_length) = {
                     let loaded = match self
                         .modules
-                        .get(state.handle as usize)
+                        .get(raw_handle as usize)
                         .and_then(|m| m.as_ref())
                     {
                         Some(m) => m,

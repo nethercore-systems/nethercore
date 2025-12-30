@@ -235,7 +235,19 @@ fn convert_it_effect(effect: u8, param: u8, volume: u8) -> TrackerEffect {
         }
 
         // Zxx - MIDI macro / filter
-        nether_it::effects::MIDI_MACRO => TrackerEffect::SetFilterCutoff(param),
+        // Z00-Z7F: Filter cutoff (0-127)
+        // Z80-Z8F: Filter resonance (0-15 mapped to 0-127)
+        nether_it::effects::MIDI_MACRO => {
+            if param <= 0x7F {
+                TrackerEffect::SetFilterCutoff(param)
+            } else if param <= 0x8F {
+                // Resonance 0-15, scale to 0-127 for consistency
+                TrackerEffect::SetFilterResonance((param & 0x0F) * 8)
+            } else {
+                // Z90-ZFF: Other MIDI macros, not commonly used for filters
+                TrackerEffect::None
+            }
+        }
 
         _ => TrackerEffect::None,
     }
@@ -277,7 +289,7 @@ fn convert_it_volume_effect(vol: u8) -> Option<TrackerEffect> {
         }),
         105..=114 => Some(TrackerEffect::FinePortaDown((vol - 105) as u16 * 4)),
         115..=124 => Some(TrackerEffect::FinePortaUp((vol - 115) as u16 * 4)),
-        128..=192 => None, // Panning, handled separately
+        128..=192 => Some(TrackerEffect::SetPanning(vol - 128)), // 0-64 panning
         193..=202 => Some(TrackerEffect::TonePortamento((vol - 193) as u16 * 4)),
         203..=212 => Some(TrackerEffect::Vibrato {
             speed: 0,
@@ -308,6 +320,22 @@ fn convert_it_instrument(it_instr: &nether_it::ItInstrument) -> TrackerInstrumen
         pitch_envelope: it_instr.pitch_envelope.as_ref().map(convert_it_envelope),
         filter_cutoff: it_instr.filter_cutoff,
         filter_resonance: it_instr.filter_resonance,
+
+        // IT stores sample metadata per-sample, not per-instrument.
+        // The playback engine should look up from TrackerModule.samples
+        // using note_sample_table. For now, use defaults.
+        sample_loop_start: 0,
+        sample_loop_end: 0,
+        sample_loop_type: LoopType::None,
+        sample_finetune: 0,
+        sample_relative_note: 0,
+
+        // IT doesn't have XM-style auto-vibrato per instrument
+        // (IT uses sample vibrato instead)
+        auto_vibrato_type: 0,
+        auto_vibrato_sweep: 0,
+        auto_vibrato_depth: 0,
+        auto_vibrato_rate: 0,
     }
 }
 
@@ -438,5 +466,34 @@ mod tests {
 
         // Direct volume
         assert_eq!(convert_it_volume_effect(32), None);
+    }
+
+    #[test]
+    fn test_convert_it_volume_effect_panning() {
+        // IT volume column panning: 128-192 maps to panning 0-64
+        assert_eq!(
+            convert_it_volume_effect(128),
+            Some(TrackerEffect::SetPanning(0)) // Full left
+        );
+        assert_eq!(
+            convert_it_volume_effect(160),
+            Some(TrackerEffect::SetPanning(32)) // Center
+        );
+        assert_eq!(
+            convert_it_volume_effect(192),
+            Some(TrackerEffect::SetPanning(64)) // Full right
+        );
+    }
+
+    #[test]
+    fn test_convert_it_filter_effects() {
+        // Filter cutoff (Zxx where xx = 00-7F)
+        let effect = convert_it_effect(nether_it::effects::MIDI_MACRO, 0x40, 0);
+        assert_eq!(effect, TrackerEffect::SetFilterCutoff(0x40));
+
+        // Filter resonance (Zxx where xx = 80-8F)
+        // 0x85 = resonance 5, scaled by 8 for 0-127 range
+        let effect = convert_it_effect(nether_it::effects::MIDI_MACRO, 0x85, 0);
+        assert_eq!(effect, TrackerEffect::SetFilterResonance(5 * 8));
     }
 }

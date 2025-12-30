@@ -291,6 +291,13 @@ fn convert_xm_instrument(xm_instr: &nether_xm::XmInstrument) -> TrackerInstrumen
         // All notes map to sample 1 (XM has simpler mapping)
     }
 
+    // Convert sample loop type
+    let sample_loop_type = match xm_instr.sample_loop_type {
+        1 => LoopType::Forward,
+        2 => LoopType::PingPong,
+        _ => LoopType::None,
+    };
+
     TrackerInstrument {
         name: xm_instr.name.clone(),
         nna: NewNoteAction::Cut, // XM doesn't have NNA
@@ -311,6 +318,19 @@ fn convert_xm_instrument(xm_instr: &nether_xm::XmInstrument) -> TrackerInstrumen
         pitch_envelope: None, // XM doesn't have pitch envelope
         filter_cutoff: None,  // XM doesn't have filters
         filter_resonance: None,
+
+        // Sample metadata - XM stores these per-instrument
+        sample_loop_start: xm_instr.sample_loop_start,
+        sample_loop_end: xm_instr.sample_loop_start + xm_instr.sample_loop_length,
+        sample_loop_type,
+        sample_finetune: xm_instr.sample_finetune,
+        sample_relative_note: xm_instr.sample_relative_note,
+
+        // Auto-vibrato settings
+        auto_vibrato_type: xm_instr.vibrato_type,
+        auto_vibrato_sweep: xm_instr.vibrato_sweep,
+        auto_vibrato_depth: xm_instr.vibrato_depth,
+        auto_vibrato_rate: xm_instr.vibrato_rate,
     }
 }
 
@@ -386,5 +406,87 @@ mod tests {
             effect,
             TrackerEffect::VolumeSlide { up: 5, down: 2 }
         );
+    }
+
+    #[test]
+    fn test_convert_xm_instrument_sample_loop() {
+        // Create an XM instrument with sample loop info
+        let xm_instr = nether_xm::XmInstrument {
+            name: "Test".to_string(),
+            num_samples: 1,
+            sample_loop_start: 1000,
+            sample_loop_length: 2000,
+            sample_loop_type: 1, // Forward loop
+            sample_finetune: -5,
+            sample_relative_note: 3,
+            volume_envelope: None,
+            panning_envelope: None,
+            volume_fadeout: 512,
+            vibrato_type: 1,
+            vibrato_sweep: 128,
+            vibrato_depth: 16,
+            vibrato_rate: 8,
+        };
+
+        let tracker_instr = convert_xm_instrument(&xm_instr);
+
+        // Verify sample loop data is correctly converted
+        assert_eq!(tracker_instr.sample_loop_start, 1000);
+        assert_eq!(tracker_instr.sample_loop_end, 3000); // start + length
+        assert_eq!(tracker_instr.sample_loop_type, LoopType::Forward);
+        assert_eq!(tracker_instr.sample_finetune, -5);
+        assert_eq!(tracker_instr.sample_relative_note, 3);
+
+        // Verify auto-vibrato
+        assert_eq!(tracker_instr.auto_vibrato_type, 1);
+        assert_eq!(tracker_instr.auto_vibrato_sweep, 128);
+        assert_eq!(tracker_instr.auto_vibrato_depth, 16);
+        assert_eq!(tracker_instr.auto_vibrato_rate, 8);
+    }
+
+    #[test]
+    fn test_convert_xm_instrument_pingpong_loop() {
+        let xm_instr = nether_xm::XmInstrument {
+            name: "PingPong".to_string(),
+            num_samples: 1,
+            sample_loop_start: 500,
+            sample_loop_length: 1500,
+            sample_loop_type: 2, // Ping-pong loop
+            sample_finetune: 0,
+            sample_relative_note: 0,
+            volume_envelope: None,
+            panning_envelope: None,
+            volume_fadeout: 0,
+            vibrato_type: 0,
+            vibrato_sweep: 0,
+            vibrato_depth: 0,
+            vibrato_rate: 0,
+        };
+
+        let tracker_instr = convert_xm_instrument(&xm_instr);
+        assert_eq!(tracker_instr.sample_loop_type, LoopType::PingPong);
+    }
+
+    #[test]
+    fn test_convert_xm_instrument_no_loop() {
+        let xm_instr = nether_xm::XmInstrument {
+            name: "NoLoop".to_string(),
+            num_samples: 1,
+            sample_loop_start: 0,
+            sample_loop_length: 0,
+            sample_loop_type: 0, // No loop
+            sample_finetune: 0,
+            sample_relative_note: 0,
+            volume_envelope: None,
+            panning_envelope: None,
+            volume_fadeout: 0,
+            vibrato_type: 0,
+            vibrato_sweep: 0,
+            vibrato_depth: 0,
+            vibrato_rate: 0,
+        };
+
+        let tracker_instr = convert_xm_instrument(&xm_instr);
+        assert_eq!(tracker_instr.sample_loop_type, LoopType::None);
     }
 }

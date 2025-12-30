@@ -2171,38 +2171,32 @@ fn generate_euro_pattern_verse_a() -> Vec<u8> {
             write_empty(&mut data);
         }
 
-        // Ch5: Supersaw - STEPWISE MELODY with real contour
-        // Bars 1-2 (Dm): Rising phrase A4-Bb4-C5-D5
-        // Bars 3-4 (Gm): Answer phrase D5-C5-Bb4-A4
-        // Bars 5-6 (Bb): 16th run building F4-G4-A4-Bb4-A4-G4-F4-E4
-        // Bars 7-8 (A): HOOK VARIANT D5-F5-A5-A5-G5-F5-E5-E5 (tension ending)
+        // Ch5: Supersaw - SPARSE melody (drums carry energy!)
+        // Only 2 notes per 8-row phrase, let the hook stand out
         match row {
-            // Bars 1-2 (Dm): Rising stepwise melody
-            0 => write_note(&mut data, A4_E, SUPERSAW),
-            2 => write_note(&mut data, BB4_E, SUPERSAW),
-            4 => write_note(&mut data, C5_E, SUPERSAW),
-            6 => write_note(&mut data, D5_E, SUPERSAW),
-            // Bars 3-4 (Gm): Descending answer
-            8 => write_note(&mut data, D5_E, SUPERSAW),
-            10 => write_note(&mut data, C5_E, SUPERSAW),
-            12 => write_note(&mut data, BB4_E, SUPERSAW),
-            14 => write_note(&mut data, A4_E, SUPERSAW),
-            // Bars 5-6 (Bb): 16th note run - building energy
-            16 => write_note(&mut data, F4_E, SUPERSAW),
-            17 => write_note(&mut data, G4_E, SUPERSAW),
-            18 => write_note(&mut data, A4_E, SUPERSAW),
-            19 => write_note(&mut data, BB4_E, SUPERSAW),
-            20 => write_note(&mut data, A4_E, SUPERSAW),
-            21 => write_note(&mut data, G4_E, SUPERSAW),
-            22 => write_note(&mut data, F4_E, SUPERSAW),
-            23 => write_note(&mut data, E4_E, SUPERSAW),
-            // Bars 7-8 (A): HOOK VARIANT - ends on E5 (2nd degree) for tension
+            // Bars 1-2 (Dm): Just 2 notes - sparse and impactful
+            0 => write_note(&mut data, A4_E, SUPERSAW),   // downbeat
+            4 => write_note(&mut data, D5_E, SUPERSAW),   // & of 2
+
+            // Bars 3-4 (Gm): Answer phrase - 2 notes
+            8 => write_note(&mut data, D5_E, SUPERSAW),   // downbeat
+            12 => write_note(&mut data, A4_E, SUPERSAW),  // & of 2
+
+            // Bars 5-6 (Bb): SPARSE phrase (NOT a run!) - 5 notes
+            16 => write_note(&mut data, F4_E, SUPERSAW),  // downbeat
+            18 => write_note(&mut data, A4_E, SUPERSAW),  // 8th
+            20 => write_note(&mut data, BB4_E, SUPERSAW), // peak!
+            21 => write_note(&mut data, A4_E, SUPERSAW),  // 16th accent
+            22 => write_note(&mut data, F4_E, SUPERSAW),  // resolution
+            // Row 23: SILENCE before hook
+
+            // Bars 7-8 (A): HOOK VARIANT - the payoff! (4 notes)
             24 => write_note(&mut data, D5_E, SUPERSAW),
             26 => write_note(&mut data, F5_E, SUPERSAW),
             28 => write_note(&mut data, A5_E, SUPERSAW),
-            29 => write_note(&mut data, A5_E, SUPERSAW), // 16th repeat
-            30 => write_note(&mut data, G5_E, SUPERSAW),
-            31 => write_note(&mut data, E5_E, SUPERSAW), // Tension! Not resolved to D
+            29 => write_note(&mut data, A5_E, SUPERSAW),  // 16th accent
+            // Rows 30-31: SILENCE (tension ending, unresolved)
+
             _ => write_empty(&mut data),
         }
 
@@ -2291,58 +2285,45 @@ fn generate_euro_pattern_verse_b() -> Vec<u8> {
             write_empty(&mut data);
         }
 
-        // Ch5: Supersaw - STEPWISE MELODY (not arpeggios!)
-        // Bars 1-2 (Dm): Inverted contour - starts high, dips, rises
-        //   D5-C5-Bb4-A4 | Bb4-C5-D5 (arch shape)
-        // Bars 3-4 (C): Descending phrase
-        //   E5-D5-C5-Bb4-A4 (long descent)
-        // Bars 5-6 (Bb): Ascending 16th run building energy
-        //   Bb4-C5-D5-E5-F5-E5-D5-C5
-        // Bars 7-8 (C): FULL HOOK RETURN - D5-F5-A5-A5-G5-F5-E5-D5
+        // Ch5: Supersaw - SPARSE melody leading to FULL HOOK payoff
+        // Bars 1-4: Just melodic hints (4 notes total)
+        // Bars 5-6: Simple peak phrase (NOT a run!)
+        // Bars 7-8: FULL HOOK - the reward for sparse buildup
         match row {
-            // Bars 1-2 (Dm): Arch shape - high start, dip, rise
-            0 => write_note(&mut data, D5_E, SUPERSAW),
-            2 => write_note(&mut data, C5_E, SUPERSAW),
-            4 => write_note(&mut data, BB4_E, SUPERSAW),
-            5 => write_note(&mut data, A4_E, SUPERSAW),  // Quick dip
-            6 => write_note(&mut data, BB4_E, SUPERSAW),
-            7 => write_note(&mut data, C5_E, SUPERSAW),  // Rising back
-            // Bars 3-4 (C): Long descending line
-            8 => write_note(&mut data, E5_E, SUPERSAW),
-            10 => write_note(&mut data, D5_E, SUPERSAW),
-            12 => write_note(&mut data, C5_E, SUPERSAW),
-            13 => write_note(&mut data, BB4_E, SUPERSAW),
-            14 => write_note(&mut data, A4_E, SUPERSAW),
-            // Bars 5-6 (Bb): 16th note ascending run - maximum energy buildup
-            16 => write_note(&mut data, BB4_E, SUPERSAW),
-            17 => write_note(&mut data, C5_E, SUPERSAW),
-            18 => write_note(&mut data, D5_E, SUPERSAW),
-            19 => write_note(&mut data, E5_E, SUPERSAW),
-            20 => write_note(&mut data, F5_E, SUPERSAW), // Peak!
-            21 => write_note(&mut data, E5_E, SUPERSAW),
-            22 => write_note(&mut data, D5_E, SUPERSAW),
-            23 => write_note(&mut data, C5_E, SUPERSAW),
-            // Bars 7-8 (C): FULL HOOK - resolves to D5 (tonic)
+            // Bars 1-2 (Dm): Just 2 sparse notes
+            0 => write_note(&mut data, D5_E, SUPERSAW),   // downbeat
+            4 => write_note(&mut data, C5_E, SUPERSAW),   // & of 2
+
+            // Bars 3-4 (C): Just 2 sparse notes
+            8 => write_note(&mut data, E5_E, SUPERSAW),   // downbeat
+            12 => write_note(&mut data, D5_E, SUPERSAW),  // & of 2
+
+            // Bars 5-6 (Bb): SPARSE peak phrase (NOT a run!) - 4 notes
+            16 => write_note(&mut data, BB4_E, SUPERSAW), // downbeat
+            20 => write_note(&mut data, F5_E, SUPERSAW),  // peak!
+            21 => write_note(&mut data, F5_E, SUPERSAW),  // 16th accent
+            22 => write_note(&mut data, D5_E, SUPERSAW),  // falling
+            // Row 23: SILENCE before hook
+
+            // Bars 7-8 (C): FULL HOOK - the payoff! (6 notes)
             24 => write_note(&mut data, D5_E, SUPERSAW),
             26 => write_note(&mut data, F5_E, SUPERSAW),
             28 => write_note(&mut data, A5_E, SUPERSAW),
-            29 => write_note(&mut data, A5_E, SUPERSAW), // 16th repeat (signature!)
+            29 => write_note(&mut data, A5_E, SUPERSAW),  // 16th accent
             30 => write_note(&mut data, G5_E, SUPERSAW),
-            31 => write_note(&mut data, D5_E, SUPERSAW), // RESOLVED to tonic!
+            31 => write_note(&mut data, D5_E, SUPERSAW),  // RESOLVED!
+
             _ => write_empty(&mut data),
         }
 
-        // Ch6: Brass - CALL AND RESPONSE
-        // Answers melody phrases, silent during hook
+        // Ch6: Brass - CALL AND RESPONSE (sparse melody = sparse answers)
+        // Only answer at phrase endings, silent during hook
         match row {
-            // Answer to arch shape (bars 1-2)
-            3 => write_note(&mut data, F4_E, BRASS),  // Dm chord tone
-            // Answer to descent (bars 3-4)
-            11 => write_note(&mut data, G4_E, BRASS), // C chord tone
-            15 => write_note(&mut data, E4_E, BRASS), // Resolution answer
-            // Accent the 16th run peak (bars 5-6)
-            20 => write_note(&mut data, F4_E, BRASS), // Peak accent
-            // SILENT during full hook (bars 7-8) - let it shine!
+            // Answer after Dm phrase
+            7 => write_note(&mut data, F4_E, BRASS),  // Stab
+            // Answer after C phrase
+            15 => write_note(&mut data, E4_E, BRASS), // Stab
+            // SILENT during peak phrase and hook (let them breathe!)
             _ => write_empty(&mut data),
         }
 
@@ -2451,30 +2432,22 @@ fn generate_euro_pattern_prechorus() -> Vec<u8> {
             18 => write_note(&mut data, G5_E, SUPERSAW),
             20 => write_note(&mut data, F5_E, SUPERSAW),
             22 => write_note(&mut data, D5_E, SUPERSAW),
-            // Bars 7-8: 16th ASCENDING RUN - maximum energy into chorus!
-            24 => write_note(&mut data, F4_E, SUPERSAW),
-            25 => write_note(&mut data, G4_E, SUPERSAW),
-            26 => write_note(&mut data, A4_E, SUPERSAW),
-            27 => write_note(&mut data, BB4_E, SUPERSAW),
-            28 => write_note(&mut data, C5_E, SUPERSAW),
-            29 => write_note(&mut data, D5_E, SUPERSAW),
-            30 => write_note(&mut data, E5_E, SUPERSAW),
-            31 => write_note(&mut data, F5_E, SUPERSAW), // Launches into chorus!
+            // Bars 7-8: SPARSE ascending build (NOT a continuous run!)
+            // Only hit key notes - silence creates anticipation
+            24 => write_note(&mut data, F4_E, SUPERSAW),  // low anchor
+            26 => write_note(&mut data, A4_E, SUPERSAW),  // 3rd
+            28 => write_note(&mut data, C5_E, SUPERSAW),  // 5th
+            31 => write_note(&mut data, F5_E, SUPERSAW),  // LAUNCH into chorus!
             _ => write_empty(&mut data),
         }
 
-        // Ch6: Brass - building sustained pads then stabs
+        // Ch6: Brass - sparse stabs (less is more!)
         match row {
             0 => write_note(&mut data, F4_E, BRASS),   // F chord
             8 => write_note(&mut data, G4_E, BRASS),   // Gm
-            12 => write_note(&mut data, A4_E, BRASS),  // A major stab
-            14 => write_note(&mut data, CS5_E, BRASS), // C# for A major (harmonic minor!)
-            16 => write_note(&mut data, A4_E, BRASS),  // A sustained
-            // Brass doubles the ascending run octave lower
-            24 => write_note(&mut data, F3_E, BRASS),
-            26 => write_note(&mut data, A3_E, BRASS),
-            28 => write_note(&mut data, C4_E, BRASS),
-            30 => write_note(&mut data, E4_E, BRASS),
+            16 => write_note(&mut data, A4_E, BRASS),  // A dominant
+            // Only one brass hit during build - let lead shine
+            28 => write_note(&mut data, C4_E, BRASS),  // VII chord accent
             _ => write_empty(&mut data),
         }
 
@@ -2487,12 +2460,9 @@ fn generate_euro_pattern_prechorus() -> Vec<u8> {
             _ => write_empty(&mut data),
         }
 
-        // Ch8: Harmony - octave up during ascending run
+        // Ch8: Harmony - just the LAUNCH note (sparse!)
         match row {
-            28 => write_note(&mut data, C6_E, SUPERSAW),
-            29 => write_note(&mut data, D6_E, SUPERSAW),
-            30 => write_note(&mut data, E6_E, SUPERSAW),
-            31 => write_note(&mut data, F6_E, SUPERSAW),
+            31 => write_note(&mut data, F6_E, SUPERSAW), // Octave up LAUNCH only
             _ => write_empty(&mut data),
         }
     }
@@ -2545,52 +2515,38 @@ fn generate_euro_pattern_chorus_a() -> Vec<u8> {
             write_empty(&mut data);
         }
 
-        // Ch5: THE HOOK with Bb5 EXTENSION!
-        // Bars 1-2 (Dm): D5-F5-A5-A5-Bb5-A5-G5-F5 (hook with extension to Bb5!)
-        // Bars 3-4 (Bb): G5-F5-E5-D5 (resolution) then pause
-        // Bars 5-6 (C): REPEAT hook D5-F5-A5-A5-Bb5-A5-G5-F5
-        // Bars 7-8 (Dm): G5-F5-E5-D5 (final resolution to tonic)
+        // Ch5: THE HOOK - SPARSE (drums carry the drive!)
+        // Let the hook notes be stars, not a wall of sound
         match row {
-            // Bars 1-2 (Dm): HOOK with Bb5 extension!
+            // Bars 1-2 (Dm): HOOK core (5 notes)
             0 => write_note(&mut data, D5_E, SUPERSAW),
             2 => write_note(&mut data, F5_E, SUPERSAW),
             4 => write_note(&mut data, A5_E, SUPERSAW),
-            5 => write_note(&mut data, A5_E, SUPERSAW),   // 16th repeat (signature!)
-            6 => write_note(&mut data, BB5_E, SUPERSAW),  // Bb5 EXTENSION - goes UP!
-            7 => write_note(&mut data, A5_E, SUPERSAW),
-            // Bars 3-4 (Bb): Descending resolution
+            5 => write_note(&mut data, A5_E, SUPERSAW),   // 16th accent!
+            6 => write_note(&mut data, BB5_E, SUPERSAW),  // Bb5 peak
+
+            // Bars 3-4 (Bb): Resolution - just 2 notes!
             8 => write_note(&mut data, G5_E, SUPERSAW),
-            10 => write_note(&mut data, F5_E, SUPERSAW),
-            12 => write_note(&mut data, E5_E, SUPERSAW),
-            14 => write_note(&mut data, D5_E, SUPERSAW),
-            // Bars 5-6 (C): HOOK REPEAT
+            14 => write_note(&mut data, D5_E, SUPERSAW),  // resolve
+
+            // Bars 5-6 (C): Abbreviated hook (3 notes)
             16 => write_note(&mut data, D5_E, SUPERSAW),
-            18 => write_note(&mut data, F5_E, SUPERSAW),
             20 => write_note(&mut data, A5_E, SUPERSAW),
-            21 => write_note(&mut data, A5_E, SUPERSAW),  // 16th repeat
-            22 => write_note(&mut data, BB5_E, SUPERSAW), // Bb5 extension
-            23 => write_note(&mut data, A5_E, SUPERSAW),
-            // Bars 7-8 (Dm): Final resolution
+            21 => write_note(&mut data, A5_E, SUPERSAW),  // 16th accent
+
+            // Bars 7-8 (Dm): Final (2 notes)
             24 => write_note(&mut data, G5_E, SUPERSAW),
-            26 => write_note(&mut data, F5_E, SUPERSAW),
-            28 => write_note(&mut data, E5_E, SUPERSAW),
-            30 => write_note(&mut data, D5_E, SUPERSAW),  // RESOLVED to tonic!
+            30 => write_note(&mut data, D5_E, SUPERSAW),  // RESOLVED!
+
             _ => write_empty(&mut data),
         }
 
-        // Ch6: Brass - stabs on beats 2 and 4, silent during hook peaks
+        // Ch6: Brass - SPARSE stabs (let hook breathe!)
         match row {
-            // Stabs during resolution phrases
-            9 => write_note(&mut data, BB4_E, BRASS),  // Bb chord tone
-            11 => write_note(&mut data, D5_E, BRASS),  // High answer
-            13 => write_note(&mut data, F4_E, BRASS),  // Low stab
-            // During second hook - counter melody
-            17 => write_note(&mut data, C5_E, BRASS),  // C chord tone
-            19 => write_note(&mut data, E5_E, BRASS),
-            // Resolution emphasis
-            25 => write_note(&mut data, D4_E, BRASS),  // Dm chord
-            27 => write_note(&mut data, F4_E, BRASS),
-            29 => write_note(&mut data, A4_E, BRASS),
+            // Just chord stabs on phrase boundaries
+            7 => write_note(&mut data, D4_E, BRASS),   // After hook
+            15 => write_note(&mut data, BB4_E, BRASS), // After resolution
+            23 => write_note(&mut data, C4_E, BRASS),  // After abbreviated hook
             31 => write_note(&mut data, D5_E, BRASS),  // Final hit
             _ => write_empty(&mut data),
         }
@@ -2604,20 +2560,12 @@ fn generate_euro_pattern_chorus_a() -> Vec<u8> {
             _ => write_empty(&mut data),
         }
 
-        // Ch8: Harmony - octave below during hook statements
+        // Ch8: Harmony - only on key accents (sparse!)
         match row {
-            // Harmony during hook bars 1-2
-            0 => write_note(&mut data, D4_E, SUPERSAW),
-            2 => write_note(&mut data, F4_E, SUPERSAW),
-            4 => write_note(&mut data, A4_E, SUPERSAW),
-            6 => write_note(&mut data, BB4_E, SUPERSAW),
-            // Harmony during hook bars 5-6
-            16 => write_note(&mut data, D4_E, SUPERSAW),
-            18 => write_note(&mut data, F4_E, SUPERSAW),
-            20 => write_note(&mut data, A4_E, SUPERSAW),
-            22 => write_note(&mut data, BB4_E, SUPERSAW),
-            // Final resolution harmony
-            30 => write_note(&mut data, D4_E, SUPERSAW),
+            // Harmony only on the 16th accents and resolution
+            5 => write_note(&mut data, A4_E, SUPERSAW),  // 16th accent
+            21 => write_note(&mut data, A4_E, SUPERSAW), // 16th accent
+            30 => write_note(&mut data, D4_E, SUPERSAW), // Resolution
             _ => write_empty(&mut data),
         }
     }
@@ -2670,53 +2618,40 @@ fn generate_euro_pattern_chorus_b() -> Vec<u8> {
             write_empty(&mut data);
         }
 
-        // Ch5: OCTAVE-LEAP HOOK VARIANT with CLIMAX at D6!
-        // Bars 1-2 (Dm): F5-A5-D6-D6-C6-Bb5-A5-G5 (JUMPED to D6!)
-        // Bars 3-4 (Bb): Descending resolution A5-G5-F5-E5
-        // Bars 5-6 (Gm->A): Building G5-A5-Bb5-C6-C#6-D6 (harmonic minor!)
-        // Bars 7-8 (Dm): D6-F6-A6-A6-G6-F6-E6-D6 (HOOK AT HIGHEST OCTAVE!)
+        // Ch5: SPARSE BUILD TO CLIMAX - save energy for final hook!
         match row {
-            // Bars 1-2 (Dm): Octave-leap variant - JUMPED UP to D6!
+            // Bars 1-2 (Dm): Octave-leap (4 notes)
             0 => write_note(&mut data, F5_E, SUPERSAW),
-            2 => write_note(&mut data, A5_E, SUPERSAW),
             4 => write_note(&mut data, D6_E, SUPERSAW),  // OCTAVE LEAP!
-            5 => write_note(&mut data, D6_E, SUPERSAW),  // 16th repeat
-            6 => write_note(&mut data, C6_E, SUPERSAW),
-            7 => write_note(&mut data, BB5_E, SUPERSAW),
-            // Bars 3-4 (Bb): Descending
+            5 => write_note(&mut data, D6_E, SUPERSAW),  // 16th accent
+
+            // Bars 3-4 (Bb): Resolution (2 notes)
             8 => write_note(&mut data, A5_E, SUPERSAW),
-            10 => write_note(&mut data, G5_E, SUPERSAW),
-            12 => write_note(&mut data, F5_E, SUPERSAW),
             14 => write_note(&mut data, E5_E, SUPERSAW),
-            // Bars 5-6 (Gm -> A): Ascending to CLIMAX with C#6 (harmonic minor!)
+
+            // Bars 5-6 (Gm -> A): Sparse C# build (4 notes)
             16 => write_note(&mut data, G5_E, SUPERSAW),
-            17 => write_note(&mut data, A5_E, SUPERSAW),
-            18 => write_note(&mut data, BB5_E, SUPERSAW),
             19 => write_note(&mut data, C6_E, SUPERSAW),
             20 => write_note(&mut data, CS6_E, SUPERSAW), // C# harmonic minor!
-            22 => write_note(&mut data, D6_E, SUPERSAW),  // Peak before final hook
-            // Bars 7-8 (Dm): THE ULTIMATE HOOK - HIGHEST OCTAVE!
+            22 => write_note(&mut data, D6_E, SUPERSAW),  // Peak!
+
+            // Bars 7-8 (Dm): THE ULTIMATE HOOK - HIGHEST OCTAVE! (6 notes)
             24 => write_note(&mut data, D6_E, SUPERSAW),
             26 => write_note(&mut data, F6_E, SUPERSAW),
             28 => write_note(&mut data, A6_E, SUPERSAW),  // HIGHEST NOTE!
-            29 => write_note(&mut data, A6_E, SUPERSAW),  // 16th repeat
+            29 => write_note(&mut data, A6_E, SUPERSAW),  // 16th accent
             30 => write_note(&mut data, G6_E, SUPERSAW),
-            31 => write_note(&mut data, D6_E, SUPERSAW),  // Triumphant resolution!
+            31 => write_note(&mut data, D6_E, SUPERSAW),  // Triumphant!
+
             _ => write_empty(&mut data),
         }
 
-        // Ch6: Brass - sustained pads building to climax, then big hit
+        // Ch6: Brass - SPARSE (let climax hook shine!)
         match row {
             0 => write_note(&mut data, D4_E, BRASS),   // Dm foundation
-            8 => write_note(&mut data, BB3_E, BRASS),  // Bb
-            16 => write_note(&mut data, G4_E, BRASS),  // Gm
-            20 => write_note(&mut data, A4_E, BRASS),  // A - building
-            21 => write_note(&mut data, CS5_E, BRASS), // C# - harmonic minor!
-            // Big brass hit during final hook
-            24 => write_note(&mut data, D4_E, BRASS),
-            26 => write_note(&mut data, F4_E, BRASS),
-            28 => write_note(&mut data, A4_E, BRASS),
-            30 => write_note(&mut data, D5_E, BRASS),  // Final triumphant hit
+            20 => write_note(&mut data, CS5_E, BRASS), // C# harmonic minor!
+            // Single big brass hit on climax resolution
+            31 => write_note(&mut data, D5_E, BRASS),  // Triumphant!
             _ => write_empty(&mut data),
         }
 
@@ -2730,14 +2665,11 @@ fn generate_euro_pattern_chorus_b() -> Vec<u8> {
             _ => write_empty(&mut data),
         }
 
-        // Ch8: Harmony - octave below during climax hook
+        // Ch8: Harmony - only on 16th accent and resolution (sparse!)
         match row {
-            // Harmony during final hook (bars 7-8)
-            24 => write_note(&mut data, D5_E, SUPERSAW),
-            26 => write_note(&mut data, F5_E, SUPERSAW),
-            28 => write_note(&mut data, A5_E, SUPERSAW),
-            30 => write_note(&mut data, G5_E, SUPERSAW),
-            31 => write_note(&mut data, D5_E, SUPERSAW),
+            // Harmony only on the key moments
+            29 => write_note(&mut data, A5_E, SUPERSAW),  // 16th accent
+            31 => write_note(&mut data, D5_E, SUPERSAW),  // Resolution
             _ => write_empty(&mut data),
         }
     }
@@ -2822,18 +2754,9 @@ fn generate_euro_pattern_drop() -> Vec<u8> {
         (A2_E, A3_E), (A2_E, A3_E), (A2_E, A3_E), (A2_E, A3_E),
     ];
 
-    // 16TH NOTE HOOK FRAGMENTS - rapid fire hook variations!
-    // Each 8-bar section uses hook rhythm (D-F-A-A-G-F-E-D) transposed
-    let melody: [u8; 32] = [
-        // Dm (rows 0-7): Hook at D5
-        D5_E, D5_E, F5_E, F5_E, A5_E, A5_E, A5_E, G5_E,
-        // C (rows 8-15): Hook rhythm on C chord
-        C5_E, C5_E, E5_E, E5_E, G5_E, G5_E, G5_E, E5_E,
-        // Bb (rows 16-23): Hook rhythm on Bb chord
-        BB4_E, BB4_E, D5_E, D5_E, F5_E, F5_E, F5_E, D5_E,
-        // A (rows 24-31): Hook rhythm with C# harmonic minor!
-        A4_E, A4_E, CS5_E, CS5_E, E5_E, E5_E, E5_E, A5_E,
-    ];
+    // SPARSE HOOK RHYTHM - let drums drive, notes are stars!
+    // Pattern per 8-row chord: downbeat(0), 8th(2), 8th(4), 16th-accent(5), resolution(6)
+    // This creates the eurobeat "push" feel without wall-of-sound
 
     for row in 0..32 {
         // Ch1: Kick - DOUBLE TIME (every other 16th)
@@ -2865,8 +2788,43 @@ fn generate_euro_pattern_drop() -> Vec<u8> {
             write_empty(&mut data);
         }
 
-        // Ch5: SUPERSAW - 16th note hook fragments, every single row!
-        write_note(&mut data, melody[row as usize], SUPERSAW);
+        // Ch5: SUPERSAW - SPARSE hook rhythm (5 notes per 8-row section)
+        // Rhythm: downbeat(0), 8th(2), 8th(4), 16th-accent(5), resolution(6)
+        match row {
+            // Dm (rows 0-7): Hook at D5
+            0 => write_note(&mut data, D5_E, SUPERSAW),   // downbeat
+            2 => write_note(&mut data, F5_E, SUPERSAW),   // 8th
+            4 => write_note(&mut data, A5_E, SUPERSAW),   // 8th
+            5 => write_note(&mut data, A5_E, SUPERSAW),   // 16th accent!
+            6 => write_note(&mut data, G5_E, SUPERSAW),   // resolution
+            // Row 7: SILENCE - phrase boundary
+
+            // C (rows 8-15): Hook rhythm on C chord
+            8 => write_note(&mut data, C5_E, SUPERSAW),
+            10 => write_note(&mut data, E5_E, SUPERSAW),
+            12 => write_note(&mut data, G5_E, SUPERSAW),
+            13 => write_note(&mut data, G5_E, SUPERSAW),  // 16th accent
+            14 => write_note(&mut data, E5_E, SUPERSAW),
+            // Row 15: SILENCE
+
+            // Bb (rows 16-23): Hook rhythm on Bb chord
+            16 => write_note(&mut data, BB4_E, SUPERSAW),
+            18 => write_note(&mut data, D5_E, SUPERSAW),
+            20 => write_note(&mut data, F5_E, SUPERSAW),
+            21 => write_note(&mut data, F5_E, SUPERSAW),  // 16th accent
+            22 => write_note(&mut data, D5_E, SUPERSAW),
+            // Row 23: SILENCE
+
+            // A (rows 24-31): Hook rhythm with C# harmonic minor!
+            24 => write_note(&mut data, A4_E, SUPERSAW),
+            26 => write_note(&mut data, CS5_E, SUPERSAW),
+            28 => write_note(&mut data, E5_E, SUPERSAW),
+            29 => write_note(&mut data, E5_E, SUPERSAW),  // 16th accent
+            30 => write_note(&mut data, A5_E, SUPERSAW),  // Launch!
+            // Row 31: SILENCE - phrase boundary before loop
+
+            _ => write_empty(&mut data),
+        }
 
         // Ch6: Brass - sustained power chords, big stabs on downbeats
         match row {
@@ -2892,8 +2850,19 @@ fn generate_euro_pattern_drop() -> Vec<u8> {
             _ => write_empty(&mut data),
         }
 
-        // Ch8: Harmony - octave up for maximum thickness, every 16th!
-        write_note(&mut data, melody[row as usize].saturating_add(12).min(A6_E), SUPERSAW);
+        // Ch8: Harmony - octave up on key hits ONLY (sparse)
+        match row {
+            // Only add harmony on the strong hits (downbeats and accents)
+            0 => write_note(&mut data, D6_E, SUPERSAW),   // Dm octave up
+            5 => write_note(&mut data, A6_E, SUPERSAW),   // accent!
+            8 => write_note(&mut data, C6_E, SUPERSAW),   // C octave up
+            13 => write_note(&mut data, G6_E, SUPERSAW),  // accent
+            16 => write_note(&mut data, BB5_E, SUPERSAW), // Bb octave up
+            21 => write_note(&mut data, F6_E, SUPERSAW),  // accent
+            24 => write_note(&mut data, A5_E, SUPERSAW),  // A octave up
+            29 => write_note(&mut data, E6_E, SUPERSAW),  // accent
+            _ => write_empty(&mut data),
+        }
     }
 
     data

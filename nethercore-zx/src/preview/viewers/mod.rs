@@ -3,6 +3,8 @@
 //! This module provides specialized viewers for each asset type in a ZX ROM data pack.
 //! Each viewer handles rendering, interaction, and playback for its specific asset type.
 
+use std::sync::Arc;
+
 use zx_common::ZXDataPack;
 use nethercore_core::app::preview::{AssetViewer as CoreAssetViewer, PreviewData as CorePreviewData, AssetCategory as CoreAssetCategory};
 use crate::console::NethercoreZX;
@@ -60,6 +62,8 @@ pub struct ZXAssetViewer {
     tracker_state: Option<TrackerState>,
     /// Whether tracker is playing
     tracker_playing: bool,
+    /// Loaded sounds for tracker playback (indexed by sound handle)
+    tracker_sounds: Vec<Option<Sound>>,
 
     // === Animation viewer state ===
     /// Current animation frame
@@ -106,6 +110,7 @@ impl ZXAssetViewer {
             tracker_engine: None,
             tracker_state: None,
             tracker_playing: false,
+            tracker_sounds: Vec::new(),
 
             // Animation state
             animation_frame: 0,
@@ -400,48 +405,79 @@ impl ZXAssetViewer {
 
     /// Start tracker playback
     pub fn start_tracker_playback(&mut self) {
-        if let Some(tracker) = self.selected_tracker() {
-            // Parse XM module (supports both full XM and minimal NCXM formats)
-            let xm_result = nether_xm::parse_xm_minimal(&tracker.pattern_data);
-            let xm_module = match xm_result {
-                Ok(m) => m,
+        // Get tracker data (clone what we need to avoid borrow conflicts)
+        let (pattern_data, sample_ids) = match self.selected_tracker() {
+            Some(tracker) => (tracker.pattern_data.clone(), tracker.sample_ids.clone()),
+            None => return,
+        };
+
+        // Parse XM module (supports both full XM and minimal NCXM formats)
+        let xm_module = match nether_xm::parse_xm_minimal(&pattern_data) {
+            Ok(m) => m,
+            Err(e) => {
+                eprintln!("Failed to parse XM: {:?}", e);
+                return;
+            }
+        };
+
+        // Initialize audio output if needed
+        if self.audio_output.is_none() {
+            match AudioOutput::new() {
+                Ok(output) => {
+                    self.audio_output = Some(output);
+                }
                 Err(e) => {
-                    eprintln!("Failed to parse XM: {:?}", e);
+                    eprintln!("Failed to initialize audio: {}", e);
                     return;
                 }
-            };
-
-            // Initialize audio output if needed
-            if self.audio_output.is_none() {
-                match AudioOutput::new() {
-                    Ok(output) => {
-                        self.audio_output = Some(output);
-                    }
-                    Err(e) => {
-                        eprintln!("Failed to initialize audio: {}", e);
-                        return;
-                    }
-                }
             }
-
-            // Create sound handles for instruments (we'll use dummy sound handles)
-            // In a real game, these would be pre-loaded sounds
-            let sound_handles: Vec<u32> = (1..=xm_module.instruments.len() as u32).collect();
-
-            // Initialize tracker engine
-            let mut engine = TrackerEngine::new();
-            let handle = engine.load_module(xm_module.clone(), sound_handles);
-
-            // Initialize tracker state
-            let mut state = TrackerState::default();
-            state.handle = handle;
-            state.flags = tracker_flags::PLAYING;
-            state.volume = 256; // Full volume
-
-            self.tracker_engine = Some(engine);
-            self.tracker_state = Some(state);
-            self.tracker_playing = true;
         }
+
+        // Load sounds from data pack using tracker's sample_ids
+        // Sound handles are 1-indexed (0 = no sound)
+        let mut sounds: Vec<Option<Sound>> = vec![None]; // Index 0 is unused
+        let mut sound_handles: Vec<u32> = Vec::new();
+
+        eprintln!("DEBUG: Starting tracker playback");
+        eprintln!("DEBUG: Tracker has {} sample_ids: {:?}", sample_ids.len(), sample_ids);
+        eprintln!("DEBUG: Data pack has {} sounds: {:?}",
+            self.data_pack.sounds.len(),
+            self.data_pack.sounds.iter().map(|s| &s.id).collect::<Vec<_>>()
+        );
+
+        for sample_id in &sample_ids {
+            if let Some(packed_sound) = self.data_pack.sounds.iter().find(|s| &s.id == sample_id) {
+                // Convert PackedSound to Sound
+                let sound = Sound {
+                    data: Arc::new(packed_sound.data.clone()),
+                };
+                eprintln!("DEBUG: Loaded sample '{}' with {} samples, handle={}",
+                    sample_id, packed_sound.data.len(), sounds.len());
+                sounds.push(Some(sound));
+                sound_handles.push(sounds.len() as u32 - 1); // Handle points to index
+            } else {
+                eprintln!("Warning: tracker sample '{}' not found in data pack", sample_id);
+                sounds.push(None);
+                sound_handles.push(sounds.len() as u32 - 1);
+            }
+        }
+
+        eprintln!("DEBUG: Total sounds loaded: {}, sound_handles: {:?}", sounds.len(), sound_handles);
+        self.tracker_sounds = sounds;
+
+        // Initialize tracker engine
+        let mut engine = TrackerEngine::new();
+        let handle = engine.load_xm_module(xm_module.clone(), sound_handles);
+
+        // Initialize tracker state
+        let mut state = TrackerState::default();
+        state.handle = handle;
+        state.flags = tracker_flags::PLAYING;
+        state.volume = 256; // Full volume
+
+        self.tracker_engine = Some(engine);
+        self.tracker_state = Some(state);
+        self.tracker_playing = true;
     }
 
     /// Seek sound to position (0.0 - 1.0)
@@ -1265,28 +1301,39 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
 
         // Update tracker playback - generate and push samples
         if self.tracker_playing {
-            if let (Some(engine), Some(state), Some(audio_output)) =
-                (&mut self.tracker_engine, &mut self.tracker_state, &mut self.audio_output) {
+            // Calculate how many samples to generate for this frame
+            let samples_to_generate = (dt * OUTPUT_SAMPLE_RATE as f32) as usize;
 
-                // Calculate how many samples to generate for this frame
-                let samples_to_generate = (dt * OUTPUT_SAMPLE_RATE as f32) as usize;
+            // Generate samples using loaded sounds from data pack
+            let mut stereo_samples = Vec::with_capacity(samples_to_generate * 2);
+            let mut max_sample = 0.0f32;
 
-                // Create empty sounds list (instruments use their embedded samples)
-                let sounds: Vec<Option<Sound>> = vec![];
-
-                // Generate samples
-                let mut stereo_samples = Vec::with_capacity(samples_to_generate * 2);
+            if let (Some(engine), Some(state)) =
+                (&mut self.tracker_engine, &mut self.tracker_state) {
                 for _ in 0..samples_to_generate {
                     let (left, right) = engine.render_sample_and_advance(
                         state,
-                        &sounds,
+                        &self.tracker_sounds,
                         OUTPUT_SAMPLE_RATE,
                     );
+                    max_sample = max_sample.max(left.abs()).max(right.abs());
                     stereo_samples.push(left);
                     stereo_samples.push(right);
                 }
+            }
 
-                // Push to audio output
+            // Debug: print once per second approximately
+            static mut DEBUG_COUNTER: u32 = 0;
+            unsafe {
+                DEBUG_COUNTER += 1;
+                if DEBUG_COUNTER % 30 == 0 {
+                    eprintln!("DEBUG render: {} samples, max_sample={:.4}, tracker_sounds.len()={}",
+                        samples_to_generate, max_sample, self.tracker_sounds.len());
+                }
+            }
+
+            // Push to audio output
+            if let Some(audio_output) = &mut self.audio_output {
                 audio_output.push_samples(&stereo_samples);
             }
         }
