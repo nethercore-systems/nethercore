@@ -996,18 +996,288 @@ impl TrackerEngine {
     /// Process unified TrackerEffect at tick 0 (row start)
     fn process_unified_effect_tick0(
         &mut self,
-        _ch_idx: usize,
+        ch_idx: usize,
         effect: &TrackerEffect,
-        _note_num: u8,
+        note_num: u8,
         _note_instrument: u8,
     ) {
-        // TODO: Implement unified effect processing
-        // For now, just handle None
+        let channel = &mut self.channels[ch_idx];
+
         match effect {
             TrackerEffect::None => {},
-            _ => {
-                // Other effects will be implemented as needed
-                // This allows compilation to proceed
+
+            // =====================================================================
+            // Speed and Tempo (handled by caller via return value in legacy code)
+            // =====================================================================
+            TrackerEffect::SetSpeed(_) | TrackerEffect::SetTempo(_) => {
+                // These modify TrackerState, handled in FFI layer
+            }
+
+            // =====================================================================
+            // Pattern Flow (handled by caller)
+            // =====================================================================
+            TrackerEffect::PositionJump(_) | TrackerEffect::PatternBreak(_) => {
+                // Handled by caller after row processing
+            }
+            TrackerEffect::PatternDelay(rows) => {
+                if *rows > 0 && self.pattern_delay == 0 {
+                    self.pattern_delay = *rows;
+                }
+            }
+            TrackerEffect::PatternLoop(count) => {
+                if *count == 0 {
+                    channel.pattern_loop_row = self.current_row;
+                } else if channel.pattern_loop_count == 0 {
+                    channel.pattern_loop_count = *count;
+                } else {
+                    channel.pattern_loop_count -= 1;
+                }
+            }
+
+            // =====================================================================
+            // Volume Effects
+            // =====================================================================
+            TrackerEffect::SetVolume(vol) => {
+                channel.volume = ((*vol).min(64) as f32) / 64.0;
+            }
+            TrackerEffect::VolumeSlide { up, down } => {
+                let param = (*up << 4) | *down;
+                if param != 0 {
+                    channel.last_volume_slide = param;
+                }
+            }
+            TrackerEffect::FineVolumeUp(val) => {
+                channel.volume = (channel.volume + *val as f32 / 64.0).min(1.0);
+            }
+            TrackerEffect::FineVolumeDown(val) => {
+                channel.volume = (channel.volume - *val as f32 / 64.0).max(0.0);
+            }
+            TrackerEffect::SetGlobalVolume(vol) => {
+                self.global_volume = ((*vol).min(64) as f32) / 64.0;
+            }
+            TrackerEffect::GlobalVolumeSlide { up, down } => {
+                let param = (*up << 4) | *down;
+                if param != 0 {
+                    self.last_global_vol_slide = param;
+                }
+            }
+            TrackerEffect::SetChannelVolume(vol) => {
+                channel.volume = ((*vol).min(64) as f32) / 64.0;
+            }
+            TrackerEffect::ChannelVolumeSlide { up, down } => {
+                let param = (*up << 4) | *down;
+                if param != 0 {
+                    channel.last_volume_slide = param;
+                }
+            }
+
+            // =====================================================================
+            // Pitch Effects
+            // =====================================================================
+            TrackerEffect::PortamentoUp(val) => {
+                let v = *val as u8;
+                if v != 0 {
+                    channel.last_porta_up = v;
+                }
+            }
+            TrackerEffect::PortamentoDown(val) => {
+                let v = *val as u8;
+                if v != 0 {
+                    channel.last_porta_down = v;
+                }
+            }
+            TrackerEffect::FinePortaUp(val) => {
+                let v = (*val as u8) & 0x0F;
+                if v != 0 {
+                    channel.last_fine_porta_up = v;
+                }
+                channel.period = (channel.period - channel.last_fine_porta_up as f32 * 4.0).max(1.0);
+            }
+            TrackerEffect::FinePortaDown(val) => {
+                let v = (*val as u8) & 0x0F;
+                if v != 0 {
+                    channel.last_fine_porta_down = v;
+                }
+                channel.period += channel.last_fine_porta_down as f32 * 4.0;
+            }
+            TrackerEffect::ExtraFinePortaUp(val) => {
+                channel.period = (channel.period - *val as f32).max(1.0);
+            }
+            TrackerEffect::ExtraFinePortaDown(val) => {
+                channel.period += *val as f32;
+            }
+            TrackerEffect::TonePortamento(speed) => {
+                let v = *speed as u8;
+                if v != 0 {
+                    channel.porta_speed = v;
+                }
+                // Set target period from note if a note was triggered
+                if note_num > 0 && note_num <= 96 {
+                    channel.target_period = note_to_period(note_num, channel.finetune);
+                }
+            }
+            TrackerEffect::TonePortaVolSlide { porta: _, vol_up, vol_down } => {
+                let param = (*vol_up << 4) | *vol_down;
+                if param != 0 {
+                    channel.last_volume_slide = param;
+                }
+                // Portamento uses memory, don't update porta_speed
+            }
+
+            // =====================================================================
+            // Modulation Effects
+            // =====================================================================
+            TrackerEffect::Vibrato { speed, depth } => {
+                let param = (*speed << 4) | *depth;
+                if param != 0 {
+                    channel.last_vibrato = param;
+                }
+                let p = channel.last_vibrato;
+                if p >> 4 != 0 {
+                    channel.vibrato_speed = p >> 4;
+                }
+                if p & 0x0F != 0 {
+                    channel.vibrato_depth = p & 0x0F;
+                }
+            }
+            TrackerEffect::VibratoVolSlide { vib_speed: _, vib_depth: _, vol_up, vol_down } => {
+                let param = (*vol_up << 4) | *vol_down;
+                if param != 0 {
+                    channel.last_volume_slide = param;
+                }
+                // Vibrato uses memory
+            }
+            TrackerEffect::FineVibrato { speed, depth } => {
+                if *speed != 0 {
+                    channel.vibrato_speed = *speed;
+                }
+                if *depth != 0 {
+                    // Fine vibrato has 4x smaller depth
+                    channel.vibrato_depth = (*depth).min(15);
+                }
+            }
+            TrackerEffect::Tremolo { speed, depth } => {
+                let param = (*speed << 4) | *depth;
+                if param != 0 {
+                    channel.last_tremolo = param;
+                }
+                let p = channel.last_tremolo;
+                if p >> 4 != 0 {
+                    channel.tremolo_speed = p >> 4;
+                }
+                if p & 0x0F != 0 {
+                    channel.tremolo_depth = p & 0x0F;
+                }
+            }
+            TrackerEffect::Tremor { ontime: _, offtime: _ } => {
+                // IT tremor effect - not commonly used in XM
+            }
+            TrackerEffect::Arpeggio { note1, note2 } => {
+                channel.arpeggio_note1 = *note1;
+                channel.arpeggio_note2 = *note2;
+                channel.arpeggio_tick = 0;
+            }
+
+            // =====================================================================
+            // Panning Effects
+            // =====================================================================
+            TrackerEffect::SetPanning(pan) => {
+                // TrackerEffect uses 0-64 panning, convert to -1.0 to 1.0
+                channel.panning = (*pan as f32 / 64.0) * 2.0 - 1.0;
+            }
+            TrackerEffect::PanningSlide { left, right } => {
+                // Store for per-tick processing
+                // Positive = right, negative = left
+                channel.panning_slide = (*right as i8) - (*left as i8);
+            }
+            TrackerEffect::Panbrello { speed: _, depth: _ } => {
+                // IT-only panbrello
+            }
+
+            // =====================================================================
+            // Sample Effects
+            // =====================================================================
+            TrackerEffect::SampleOffset(offset) => {
+                // TrackerEffect stores full offset, but we need to extract for memory
+                let high = (*offset >> 16) as u8;
+                let low = ((*offset >> 8) & 0xFF) as u8;
+                if low != 0 {
+                    channel.last_sample_offset = low;
+                }
+                if high != 0 {
+                    channel.sample_offset_high = high;
+                }
+                let full_offset = ((channel.sample_offset_high as u32) << 16)
+                    | ((channel.last_sample_offset as u32) << 8);
+                channel.sample_pos = full_offset as f64;
+            }
+            TrackerEffect::Retrigger { ticks, volume_change } => {
+                channel.retrigger_tick = *ticks;
+                channel.retrigger_volume = *volume_change;
+            }
+            TrackerEffect::NoteCut(tick) => {
+                channel.note_cut_tick = *tick;
+            }
+            TrackerEffect::NoteDelay(tick) => {
+                channel.note_delay_tick = *tick;
+                channel.delayed_note = note_num;
+            }
+            TrackerEffect::SetFinetune(val) => {
+                channel.finetune = *val;
+            }
+
+            // =====================================================================
+            // Filter Effects (IT only)
+            // =====================================================================
+            TrackerEffect::SetFilterCutoff(_cutoff) => {
+                // IT resonant filter - not implemented for XM
+            }
+            TrackerEffect::SetFilterResonance(_res) => {
+                // IT resonant filter - not implemented for XM
+            }
+
+            // =====================================================================
+            // Waveform Control
+            // =====================================================================
+            TrackerEffect::VibratoWaveform(wf) => {
+                channel.vibrato_waveform = *wf & 0x07;
+            }
+            TrackerEffect::TremoloWaveform(wf) => {
+                channel.tremolo_waveform = *wf & 0x07;
+            }
+            TrackerEffect::PanbrelloWaveform(_wf) => {
+                // IT-only
+            }
+
+            // =====================================================================
+            // Other Effects
+            // =====================================================================
+            TrackerEffect::SetEnvelopePosition(pos) => {
+                channel.volume_envelope_pos = *pos as u16;
+            }
+            TrackerEffect::KeyOff => {
+                channel.key_off = true;
+            }
+            TrackerEffect::SetGlissando(enabled) => {
+                channel.glissando = *enabled;
+            }
+            TrackerEffect::MultiRetrigNote { ticks, volume } => {
+                channel.retrigger_tick = *ticks;
+                channel.retrigger_mode = *volume;
+                // Convert volume mode to additive delta
+                channel.retrigger_volume = match *volume {
+                    1 => -1,
+                    2 => -2,
+                    3 => -4,
+                    4 => -8,
+                    5 => -16,
+                    9 => 1,
+                    10 => 2,
+                    11 => 4,
+                    12 => 8,
+                    13 => 16,
+                    _ => 0,
+                };
             }
         }
     }
@@ -2203,8 +2473,12 @@ const LINEAR_FREQ_TABLE: [f32; 769] = {
 
 /// Convert period to frequency (Hz) using lookup table
 ///
-/// XM frequency formula:
-/// Frequency = 8363 * 2^((4608 - Period) / 768)
+/// Modified XM frequency formula for 22050 Hz samples:
+/// Frequency = 22050 * 2^((4608 - Period) / 768)
+///
+/// The original XM formula used 8363 Hz (Amiga C-4 rate), but since all our
+/// samples are resampled to 22050 Hz, we use that as the base frequency.
+/// This ensures samples play at their natural pitch at C-4.
 ///
 /// This uses a 768-entry lookup table for the fractional part of the exponent,
 /// making it O(1) and fast even in debug builds (no powf() calls).
@@ -2239,7 +2513,9 @@ fn period_to_frequency(period: f32) -> f32 {
         1.0 / (1u32 << ((-octaves) as u32).min(31)) as f32
     };
 
-    8363.0 * freq_frac * octave_scale
+    // Base frequency is 22050 Hz (our standardized sample rate)
+    // This replaces the original 8363 Hz (Amiga C-4 rate)
+    22050.0 * freq_frac * octave_scale
 }
 
 #[cfg(test)]
@@ -2259,15 +2535,15 @@ mod tests {
 
     #[test]
     fn test_period_to_frequency() {
-        // XM frequency is sample playback rate, not musical note frequency
-        // C-4 (note 49) with 8363 Hz sample base produces 8363 Hz playback
+        // Frequency is sample playback rate for 22050 Hz samples
+        // C-4 (note 49) produces 22050 Hz playback (sample plays at natural speed)
         // Period = 10*12*16*4 - 48*16*4 = 7680 - 3072 = 4608
-        // exp = (4608 - 4608) / 768 = 0, freq = 8363 * 2^0 = 8363
+        // exp = (4608 - 4608) / 768 = 0, freq = 22050 * 2^0 = 22050
         let period = note_to_period(49, 0);
         let freq = period_to_frequency(period);
         assert!(
-            (freq - 8363.0).abs() < 1.0,
-            "Expected ~8363 Hz, got {}",
+            (freq - 22050.0).abs() < 1.0,
+            "Expected ~22050 Hz, got {}",
             freq
         );
 
@@ -2316,7 +2592,7 @@ mod tests {
                 return 0.0;
             }
             let exp = (4608.0 - period) / 768.0;
-            8363.0 * 2.0_f32.powf(exp)
+            22050.0 * 2.0_f32.powf(exp)
         }
 
         // Test across the full XM period range (roughly 50-7680)

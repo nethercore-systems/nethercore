@@ -281,6 +281,140 @@ impl ItNote {
             None
         }
     }
+
+    // ========== Builder Methods ==========
+
+    /// Create a note with pitch, instrument, and volume
+    ///
+    /// # Arguments
+    /// * `note` - Note name like "C-4" or note number (0-119)
+    /// * `instrument` - Instrument number (1-99)
+    /// * `volume` - Volume (0-64)
+    ///
+    /// # Examples
+    /// ```
+    /// use nether_it::ItNote;
+    /// let note = ItNote::play("C-4", 1, 64);
+    /// let note2 = ItNote::play_note(60, 1, 64); // Same as C-5
+    /// ```
+    pub fn play(note_name: &str, instrument: u8, volume: u8) -> Self {
+        let note = note_from_name(note_name).unwrap_or(0);
+        Self {
+            note,
+            instrument,
+            volume: volume.min(64),
+            effect: 0,
+            effect_param: 0,
+        }
+    }
+
+    /// Create a note with note number instead of name
+    pub fn play_note(note: u8, instrument: u8, volume: u8) -> Self {
+        Self {
+            note: note.min(119),
+            instrument,
+            volume: volume.min(64),
+            effect: 0,
+            effect_param: 0,
+        }
+    }
+
+    /// Create a note-off (^^^)
+    pub fn off() -> Self {
+        Self {
+            note: crate::NOTE_OFF,
+            instrument: 0,
+            volume: 0,
+            effect: 0,
+            effect_param: 0,
+        }
+    }
+
+    /// Create a note-cut (===)
+    pub fn cut() -> Self {
+        Self {
+            note: crate::NOTE_CUT,
+            instrument: 0,
+            volume: 0,
+            effect: 0,
+            effect_param: 0,
+        }
+    }
+
+    /// Create a note-fade
+    pub fn fade() -> Self {
+        Self {
+            note: crate::NOTE_FADE,
+            instrument: 0,
+            volume: 0,
+            effect: 0,
+            effect_param: 0,
+        }
+    }
+
+    /// Create a note with an effect
+    pub fn with_effect(mut self, effect: u8, effect_param: u8) -> Self {
+        self.effect = effect;
+        self.effect_param = effect_param;
+        self
+    }
+
+    /// Create a note with volume column
+    pub fn with_volume_column(mut self, volume: u8) -> Self {
+        self.volume = volume;
+        self
+    }
+}
+
+/// Convert note name to note number
+///
+/// Supports formats:
+/// - "C-4" = Middle C (note 48)
+/// - "C#4" or "Db4" = C# (note 49)
+/// - "---" = No note (0)
+///
+/// Returns None for invalid note names
+pub fn note_from_name(name: &str) -> Option<u8> {
+    let name = name.trim();
+
+    if name == "---" || name.is_empty() {
+        return Some(0);
+    }
+
+    let name = name.replace('-', "");
+    if name.len() < 2 {
+        return None;
+    }
+
+    let semitone = match &name[0..1] {
+        "C" => 0,
+        "D" => 2,
+        "E" => 4,
+        "F" => 5,
+        "G" => 7,
+        "A" => 9,
+        "B" => 11,
+        _ => return None,
+    };
+
+    let mut offset = 1;
+    let sharp = if name.len() > offset && &name[offset..offset+1] == "#" {
+        offset += 1;
+        1
+    } else if name.len() > offset && &name[offset..offset+1] == "b" {
+        offset += 1;
+        -1
+    } else {
+        0
+    };
+
+    let octave: i32 = name[offset..].parse().ok()?;
+    if !(0..=9).contains(&octave) {
+        return None;
+    }
+
+    let note = (octave * 12 + semitone as i32 + sharp).clamp(0, 119) as u8;
+    Some(note)
 }
 
 /// Volume column effect types

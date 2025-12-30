@@ -52,10 +52,12 @@ pub use compression::{decompress_it215_16bit, decompress_it215_8bit};
 pub use error::ItError;
 pub use minimal::{pack_it_minimal, strip_it_samples};
 pub use module::{
-    DuplicateCheckAction, DuplicateCheckType, ItEnvelope, ItEnvelopeFlags, ItFlags, ItInstrument,
-    ItModule, ItNote, ItPattern, ItSample, ItSampleFlags, NewNoteAction,
+    note_from_name, DuplicateCheckAction, DuplicateCheckType, ItEnvelope, ItEnvelopeFlags,
+    ItFlags, ItInstrument, ItModule, ItNote, ItPattern, ItSample, ItSampleFlags, NewNoteAction,
 };
-pub use parser::{get_instrument_names, get_sample_names, parse_it};
+pub use parser::{
+    get_instrument_names, get_sample_names, load_sample_data, parse_it, SampleData, SampleInfo,
+};
 pub use writer::ItWriter;
 
 // =============================================================================
@@ -104,6 +106,9 @@ pub const NOTE_CUT: u8 = 254;
 
 /// Note value for "note off" (^^^)
 pub const NOTE_OFF: u8 = 255;
+
+/// Note value for "note fade"
+pub const NOTE_FADE: u8 = 253;
 
 /// Minimum valid note (C-0)
 pub const NOTE_MIN: u8 = 0;

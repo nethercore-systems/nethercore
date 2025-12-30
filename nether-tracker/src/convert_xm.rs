@@ -62,11 +62,13 @@ fn convert_xm_pattern(xm_pat: &nether_xm::XmPattern) -> TrackerPattern {
 
 fn convert_xm_note(xm_note: &nether_xm::XmNote) -> TrackerNote {
     // XM note numbering: 0=none, 1-96=C-0..B-7, 97=note-off
-    // TrackerNote: 0-119=C-0..B-9, 254=cut, 255=off
+    // TrackerNote uses XM-style 1-based numbering for compatibility with note_to_period()
+    // XM C-4 (note 49) = middle C = 8363 Hz sample playback (now 22050 Hz after base freq fix)
     let note = if xm_note.note == nether_xm::NOTE_OFF {
         TrackerNote::NOTE_OFF
     } else if xm_note.note >= nether_xm::NOTE_MIN && xm_note.note <= nether_xm::NOTE_MAX {
-        xm_note.note - 1 // XM starts at 1, we start at 0
+        // Pass through unchanged - note_to_period() expects 1-based XM notes
+        xm_note.note
     } else {
         0 // No note
     };
@@ -349,7 +351,8 @@ mod tests {
 
     #[test]
     fn test_convert_xm_note() {
-        // XM note 49 (middle C-4) should convert to tracker note 48 (C-4)
+        // XM note 49 (C-4, middle C) passes through unchanged
+        // note_to_period() expects 1-based XM notes where 49 = C-4
         let xm_note = nether_xm::XmNote {
             note: 49,
             instrument: 1,
@@ -359,7 +362,7 @@ mod tests {
         };
 
         let tracker_note = convert_xm_note(&xm_note);
-        assert_eq!(tracker_note.note, 48); // C-4 in 0-based
+        assert_eq!(tracker_note.note, 49); // C-4, unchanged from XM
         assert_eq!(tracker_note.instrument, 1);
         assert_eq!(tracker_note.volume, 32);
     }

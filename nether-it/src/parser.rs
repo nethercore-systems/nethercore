@@ -2,9 +2,7 @@
 
 use std::io::{Cursor, Read, Seek, SeekFrom};
 
-// Compression functions available for loading sample data from IT files
-// Currently unused as we strip sample data during packing
-#[allow(unused_imports)]
+// Compression functions for loading sample data from IT files
 use crate::compression::{decompress_it215_16bit, decompress_it215_8bit};
 use crate::error::ItError;
 use crate::module::{
@@ -177,8 +175,8 @@ pub fn parse_it(data: &[u8]) -> Result<ItModule, ItError> {
         }
 
         cursor.seek(SeekFrom::Start(offset as u64))?;
-        let sample = parse_sample(&mut cursor).map_err(|_| ItError::InvalidSample(idx as u16))?;
-        samples.push(sample);
+        let sample_info = parse_sample(&mut cursor).map_err(|_| ItError::InvalidSample(idx as u16))?;
+        samples.push(sample_info.sample);
     }
 
     // Parse patterns
@@ -392,7 +390,7 @@ fn parse_envelope(cursor: &mut Cursor<&[u8]>) -> Result<Option<ItEnvelope>, ItEr
 }
 
 /// Parse a single sample header
-fn parse_sample(cursor: &mut Cursor<&[u8]>) -> Result<ItSample, ItError> {
+fn parse_sample(cursor: &mut Cursor<&[u8]>) -> Result<SampleInfo, ItError> {
     // Read magic "IMPS"
     let mut magic = [0u8; 4];
     cursor.read_exact(&mut magic)?;
@@ -451,8 +449,8 @@ fn parse_sample(cursor: &mut Cursor<&[u8]>) -> Result<ItSample, ItError> {
     // SusLEnd (4 bytes)
     let sustain_loop_end = read_u32(cursor)?;
 
-    // SmpPoint (4 bytes) - offset to sample data (we skip reading actual data)
-    let _sample_offset = read_u32(cursor)?;
+    // SmpPoint (4 bytes) - offset to sample data
+    let data_offset = read_u32(cursor)?;
 
     // ViS, ViD, ViR, ViT (vibrato)
     let vibrato_speed = read_u8(cursor)?;
@@ -460,23 +458,26 @@ fn parse_sample(cursor: &mut Cursor<&[u8]>) -> Result<ItSample, ItError> {
     let vibrato_rate = read_u8(cursor)?;
     let vibrato_type = read_u8(cursor)?;
 
-    Ok(ItSample {
-        name,
-        filename,
-        global_volume,
-        flags,
-        default_volume,
-        default_pan,
-        length,
-        loop_begin,
-        loop_end,
-        c5_speed,
-        sustain_loop_begin,
-        sustain_loop_end,
-        vibrato_speed,
-        vibrato_depth,
-        vibrato_rate,
-        vibrato_type,
+    Ok(SampleInfo {
+        sample: ItSample {
+            name,
+            filename,
+            global_volume,
+            flags,
+            default_volume,
+            default_pan,
+            length,
+            loop_begin,
+            loop_end,
+            c5_speed,
+            sustain_loop_begin,
+            sustain_loop_end,
+            vibrato_speed,
+            vibrato_depth,
+            vibrato_rate,
+            vibrato_type,
+        },
+        data_offset,
     })
 }
 
@@ -627,6 +628,106 @@ pub fn get_sample_names(data: &[u8]) -> Result<Vec<String>, ItError> {
 // Helper functions for reading data
 // =============================================================================
 
+/// Load sample data from an IT file, automatically decompressing if needed
+///
+/// This function is useful for extracting sample data from IT files,
+/// particularly when samples use IT215 compression. The nether-pack tool
+/// strips samples during ROM packing, but this function is available for
+/// tools that need to access the original sample data.
+///
+/// # Arguments
+/// * `data` - Complete IT file bytes
+/// * `sample_offset` - Offset to sample data (from sample header)
+/// * `sample` - Sample header information (contains flags, length)
+///
+/// # Returns
+/// * 8-bit samples: `Ok(SampleData::I8(Vec<i8>))`
+/// * 16-bit samples: `Ok(SampleData::I16(Vec<i16>))`
+pub fn load_sample_data(
+    data: &[u8],
+    sample_offset: u32,
+    sample: &ItSample,
+) -> Result<SampleData, ItError> {
+    if sample_offset == 0 || sample.length == 0 {
+        // No sample data
+        return if sample.flags.contains(ItSampleFlags::SAMPLE_16BIT) {
+            Ok(SampleData::I16(Vec::new()))
+        } else {
+            Ok(SampleData::I8(Vec::new()))
+        };
+    }
+
+    let offset = sample_offset as usize;
+    if offset >= data.len() {
+        return Err(ItError::InvalidSample(0));
+    }
+
+    let is_16bit = sample.flags.contains(ItSampleFlags::SAMPLE_16BIT);
+    let is_compressed = sample.flags.contains(ItSampleFlags::COMPRESSED);
+
+    if is_compressed {
+        // IT215 compression
+        let compressed_data = &data[offset..];
+
+        if is_16bit {
+            let samples = decompress_it215_16bit(compressed_data, sample.length as usize)?;
+            Ok(SampleData::I16(samples))
+        } else {
+            let samples = decompress_it215_8bit(compressed_data, sample.length as usize)?;
+            Ok(SampleData::I8(samples))
+        }
+    } else {
+        // Uncompressed sample data
+        let sample_size = if is_16bit {
+            sample.length as usize * 2
+        } else {
+            sample.length as usize
+        };
+
+        if offset + sample_size > data.len() {
+            return Err(ItError::InvalidSample(0));
+        }
+
+        if is_16bit {
+            let mut samples = Vec::with_capacity(sample.length as usize);
+            for i in 0..sample.length as usize {
+                let idx = offset + i * 2;
+                let sample_val = i16::from_le_bytes([data[idx], data[idx + 1]]);
+                samples.push(sample_val);
+            }
+            Ok(SampleData::I16(samples))
+        } else {
+            let samples: Vec<i8> = data[offset..offset + sample_size]
+                .iter()
+                .map(|&b| b as i8)
+                .collect();
+            Ok(SampleData::I8(samples))
+        }
+    }
+}
+
+/// Represents sample data loaded from an IT file
+#[derive(Debug, Clone)]
+pub enum SampleData {
+    /// 8-bit signed samples
+    I8(Vec<i8>),
+    /// 16-bit signed samples
+    I16(Vec<i16>),
+}
+
+/// Sample metadata including offset for loading sample data
+#[derive(Debug, Clone)]
+pub struct SampleInfo {
+    /// Sample header information
+    pub sample: ItSample,
+    /// Offset to sample data in the IT file
+    pub data_offset: u32,
+}
+
+// =============================================================================
+// Helper Functions
+// =============================================================================
+
 fn read_u8(cursor: &mut Cursor<&[u8]>) -> Result<u8, ItError> {
     let mut buf = [0u8; 1];
     cursor
@@ -690,5 +791,169 @@ mod tests {
         let data = b"IMPM test";
         let result = parse_it(data);
         assert!(matches!(result, Err(ItError::TooSmall)));
+    }
+
+    #[test]
+    fn test_load_sample_data_uncompressed_8bit() {
+        // Create a simple uncompressed 8-bit sample
+        let original_samples: Vec<i8> = vec![0, 10, -10, 50, -50, 127, -128, 0];
+
+        // Build a minimal IT file with this sample
+        let mut it_data = Vec::new();
+
+        // Create sample at offset 1000 (arbitrary)
+        it_data.resize(1000, 0);
+        for &sample in &original_samples {
+            it_data.push(sample as u8);
+        }
+
+        // Create sample header
+        let sample = ItSample {
+            name: "Test".into(),
+            filename: "test.raw".into(),
+            length: original_samples.len() as u32,
+            flags: ItSampleFlags::empty(), // Uncompressed, 8-bit
+            ..Default::default()
+        };
+
+        // Load the sample data
+        let result = load_sample_data(&it_data, 1000, &sample).unwrap();
+
+        match result {
+            SampleData::I8(loaded) => {
+                assert_eq!(loaded.len(), original_samples.len());
+                assert_eq!(loaded, original_samples);
+            }
+            _ => panic!("Expected I8 sample data"),
+        }
+    }
+
+    #[test]
+    fn test_load_sample_data_uncompressed_16bit() {
+        // Create a simple uncompressed 16-bit sample
+        let original_samples: Vec<i16> = vec![0, 1000, -1000, 10000, -10000, 32767, -32768, 0];
+
+        // Build sample data
+        let mut it_data = Vec::new();
+        it_data.resize(1000, 0);
+        for &sample in &original_samples {
+            it_data.extend_from_slice(&sample.to_le_bytes());
+        }
+
+        // Create sample header
+        let sample = ItSample {
+            name: "Test".into(),
+            filename: "test.raw".into(),
+            length: original_samples.len() as u32,
+            flags: ItSampleFlags::SAMPLE_16BIT, // Uncompressed, 16-bit
+            ..Default::default()
+        };
+
+        // Load the sample data
+        let result = load_sample_data(&it_data, 1000, &sample).unwrap();
+
+        match result {
+            SampleData::I16(loaded) => {
+                assert_eq!(loaded.len(), original_samples.len());
+                assert_eq!(loaded, original_samples);
+            }
+            _ => panic!("Expected I16 sample data"),
+        }
+    }
+
+    #[test]
+    fn test_load_sample_data_compressed_8bit() {
+        use crate::compression::compress_it215_8bit;
+
+        // Create a sample
+        let original_samples: Vec<i8> = vec![0, 10, -10, 50, -50, 127, -128, 0];
+
+        // Compress it
+        let compressed = compress_it215_8bit(&original_samples);
+
+        // Build IT file data
+        let mut it_data = Vec::new();
+        it_data.resize(1000, 0);
+        it_data.extend_from_slice(&compressed);
+
+        // Create sample header with compression flag
+        let sample = ItSample {
+            name: "Test".into(),
+            filename: "test.it".into(),
+            length: original_samples.len() as u32,
+            flags: ItSampleFlags::COMPRESSED, // Compressed, 8-bit
+            ..Default::default()
+        };
+
+        // Load and decompress
+        let result = load_sample_data(&it_data, 1000, &sample).unwrap();
+
+        match result {
+            SampleData::I8(loaded) => {
+                assert_eq!(loaded.len(), original_samples.len());
+                // Note: Due to delta encoding, values should match exactly
+                for (i, (&loaded_val, &orig_val)) in loaded.iter().zip(&original_samples).enumerate() {
+                    assert_eq!(loaded_val, orig_val, "Mismatch at index {}", i);
+                }
+            }
+            _ => panic!("Expected I8 sample data"),
+        }
+    }
+
+    #[test]
+    fn test_load_sample_data_compressed_16bit() {
+        use crate::compression::compress_it215_16bit;
+
+        // Create a sample
+        let original_samples: Vec<i16> = vec![0, 1000, -1000, 10000, -10000, 32767, -32768, 0];
+
+        // Compress it
+        let compressed = compress_it215_16bit(&original_samples);
+
+        // Build IT file data
+        let mut it_data = Vec::new();
+        it_data.resize(1000, 0);
+        it_data.extend_from_slice(&compressed);
+
+        // Create sample header with compression flag
+        let sample = ItSample {
+            name: "Test".into(),
+            filename: "test.it".into(),
+            length: original_samples.len() as u32,
+            flags: ItSampleFlags::SAMPLE_16BIT | ItSampleFlags::COMPRESSED, // Compressed, 16-bit
+            ..Default::default()
+        };
+
+        // Load and decompress
+        let result = load_sample_data(&it_data, 1000, &sample).unwrap();
+
+        match result {
+            SampleData::I16(loaded) => {
+                assert_eq!(loaded.len(), original_samples.len());
+                // Values should match exactly
+                for (i, (&loaded_val, &orig_val)) in loaded.iter().zip(&original_samples).enumerate() {
+                    assert_eq!(loaded_val, orig_val, "Mismatch at index {}", i);
+                }
+            }
+            _ => panic!("Expected I16 sample data"),
+        }
+    }
+
+    #[test]
+    fn test_load_sample_data_empty() {
+        let it_data = vec![0u8; 1000];
+
+        let sample = ItSample {
+            name: "Empty".into(),
+            length: 0, // No samples
+            ..Default::default()
+        };
+
+        let result = load_sample_data(&it_data, 0, &sample).unwrap();
+
+        match result {
+            SampleData::I8(loaded) => assert_eq!(loaded.len(), 0),
+            _ => panic!("Expected I8 sample data"),
+        }
     }
 }
