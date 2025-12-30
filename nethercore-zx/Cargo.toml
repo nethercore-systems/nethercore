@@ -27,6 +27,7 @@ nethercore-shared = { path = "../shared" }
 zx-common = { path = "../zx-common", default-features = false }
 nether-xm = { path = "../nether-xm" }
 nether-it = { path = "../nether-it" }
+nether-tracker = { path = "../nether-tracker" }
 
 # WASM runtime
 wasmtime = { workspace = true }

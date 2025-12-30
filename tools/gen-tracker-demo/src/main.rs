@@ -990,12 +990,12 @@ fn generate_pad_euro() -> Vec<i16> {
         saw_sum /= 5.0;
 
         // 3-pole low-pass for ultra-smooth pad character
-        let cutoff = 0.05;
+        let cutoff = 0.18; // FIXED: Was 0.05 (way too aggressive!)
         lp1 += cutoff * (saw_sum - lp1);
         lp2 += cutoff * (lp1 - lp2);
         lp3 += cutoff * (lp2 - lp3);
 
-        let sample = lp3 * envelope * 21000.0;
+        let sample = lp3 * envelope * 32000.0; // Increased gain to compensate for filtering
         output.push(sample.clamp(-32767.0, 32767.0) as i16);
     }
 
@@ -2075,17 +2075,17 @@ fn generate_euro_pattern_intro() -> Vec<u8> {
 fn generate_euro_pattern_verse_a() -> Vec<u8> {
     let mut data = Vec::new();
 
-    // Octave-bouncing bass on 8th notes: Dm -> Gm -> A -> Dm (i -> iv -> V -> i)
+    // Octave-bouncing bass on 8th notes: Dm -> C -> Bb -> C
     // Each chord gets 8 rows, bass plays on even rows (0,2,4,6)
     let bass_pattern: [(u8, u8); 16] = [
         // Dm (rows 0-7)
         (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E),
-        // Gm (rows 8-15)
-        (G2_E, G3_E), (G2_E, G3_E), (G2_E, G3_E), (G2_E, G3_E),
-        // A (rows 16-23)
-        (A2_E, A3_E), (A2_E, A3_E), (A2_E, A3_E), (A2_E, A3_E),
-        // Dm (rows 24-31)
-        (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E),
+        // C (rows 8-15)
+        (C3_E, C4_E), (C3_E, C4_E), (C3_E, C4_E), (C3_E, C4_E),
+        // Bb (rows 16-23)
+        (BB2_E, BB3_E), (BB2_E, BB3_E), (BB2_E, BB3_E), (BB2_E, BB3_E),
+        // C (rows 24-31)
+        (C3_E, C4_E), (C3_E, C4_E), (C3_E, C4_E), (C3_E, C4_E),
     ];
 
     for row in 0..32 {
@@ -2124,28 +2124,60 @@ fn generate_euro_pattern_verse_a() -> Vec<u8> {
         // Ch5: Supersaw - silent in verse A
         write_empty(&mut data);
 
-        // Ch6: Brass - chord stabs (roots of Dm -> Gm -> A -> Dm)
+        // Ch6: Brass - EVOLVING across 32 rows (NOT repeating every 8!)
+        // Starts sparse, builds intensity, creates transition to Verse B
         if row == 0 {
-            write_note(&mut data, D4_E, BRASS);
+            write_note(&mut data, D4_E, BRASS); // Opening stab
+        } else if row == 2 {
+            write_note(&mut data, F4_E, BRASS); // Answer
+        } else if row == 6 {
+            write_note(&mut data, A4_E, BRASS); // Upbeat stab (sparse start)
+        // Building (8-15): More active
         } else if row == 8 {
-            write_note(&mut data, G4_E, BRASS);
+            write_note(&mut data, C4_E, BRASS); // Chord change
+        } else if row == 10 {
+            write_note(&mut data, E4_E, BRASS); // Upbeat
+        } else if row == 11 {
+            write_note(&mut data, G4_E, BRASS); // 16th (getting busier!)
+        } else if row == 13 {
+            write_note(&mut data, C5_E, BRASS); // High stab
+        } else if row == 14 {
+            write_note(&mut data, G4_E, BRASS); // Upbeat
+        // Peak (16-23): Maximum energy
         } else if row == 16 {
-            write_note(&mut data, A4_E, BRASS);
+            write_note(&mut data, BB3_E, BRASS); // Strong downbeat
+        } else if row == 17 {
+            write_note(&mut data, D4_E, BRASS); // 16th run START
+        } else if row == 18 {
+            write_note(&mut data, F4_E, BRASS); // 16th run
+        } else if row == 19 {
+            write_note(&mut data, BB4_E, BRASS); // 16th run peak!
+        } else if row == 21 {
+            write_note(&mut data, F4_E, BRASS); // Offbeat
+        } else if row == 22 {
+            write_note(&mut data, D4_E, BRASS); // Upbeat
+        // Transition (24-31): Lead into Verse B with anticipation
         } else if row == 24 {
-            write_note(&mut data, D4_E, BRASS);
+            write_note(&mut data, C4_E, BRASS); // Final phrase
+        } else if row == 26 {
+            write_note(&mut data, E4_E, BRASS); // Building...
+        } else if row == 27 {
+            write_note(&mut data, G4_E, BRASS); // 16th
+        } else if row == 28 {
+            write_note(&mut data, C5_E, BRASS); // 16th
+        } else if row == 29 {
+            write_note(&mut data, A4_E, BRASS); // 16th anticipation
+        } else if row == 30 {
+            write_note(&mut data, E4_E, BRASS); // Sets up Verse B (keeps energy!)
         } else {
             write_empty(&mut data);
         }
 
-        // Ch7: Pad - sustained chords (thirds: F for Dm, Bb for Gm, CS for A, F for Dm)
+        // Ch7: Pad - sustained chords
         if row == 0 {
-            write_note(&mut data, F3_E, PAD); // Dm (D-F-A)
-        } else if row == 8 {
-            write_note(&mut data, BB3_E, PAD); // Gm (G-Bb-D)
+            write_note(&mut data, F3_E, PAD);
         } else if row == 16 {
-            write_note(&mut data, CS4_E, PAD); // A major (A-C#-E)
-        } else if row == 24 {
-            write_note(&mut data, F3_E, PAD); // Dm (D-F-A)
+            write_note(&mut data, D3_E, PAD);
         } else {
             write_empty(&mut data);
         }
@@ -2161,24 +2193,24 @@ fn generate_euro_pattern_verse_a() -> Vec<u8> {
 fn generate_euro_pattern_verse_b() -> Vec<u8> {
     let mut data = Vec::new();
 
-    // Bass pattern on 8th notes: Dm -> Gm -> A -> Dm (i -> iv -> V -> i)
+    // Bass pattern on 8th notes: Dm -> C -> Bb -> A (harmonic minor resolution!)
     let bass_pattern: [(u8, u8); 16] = [
         // Dm (rows 0-7)
         (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E),
-        // Gm (rows 8-15)
-        (G2_E, G3_E), (G2_E, G3_E), (G2_E, G3_E), (G2_E, G3_E),
-        // A (rows 16-23) - harmonic minor with C#!
+        // C (rows 8-15)
+        (C3_E, C4_E), (C3_E, C4_E), (C3_E, C4_E), (C3_E, C4_E),
+        // Bb (rows 16-23)
+        (BB2_E, BB3_E), (BB2_E, BB3_E), (BB2_E, BB3_E), (BB2_E, BB3_E),
+        // A (rows 24-31) - harmonic minor!
         (A2_E, A3_E), (A2_E, A3_E), (A2_E, A3_E), (A2_E, A3_E),
-        // Dm (rows 24-31)
-        (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E),
     ];
 
     // Simple verse melody on 8th notes
     let melody: [u8; 16] = [
-        D4_E, F4_E, A4_E, F4_E,     // Dm arpeggio (D-F-A)
-        G4_E, BB4_E, D5_E, BB4_E,   // Gm arpeggio (G-Bb-D)
-        A4_E, CS5_E, E5_E, CS5_E,   // A major arpeggio (A-C#-E)
-        D5_E, F5_E, A5_E, D5_E,     // Dm arpeggio high (D-F-A)
+        D4_E, F4_E, A4_E, F4_E, // Dm arpeggio
+        C4_E, E4_E, G4_E, E4_E, // C arpeggio
+        BB3_E, D4_E, F4_E, D4_E, // Bb arpeggio
+        A3_E, C4_E, E4_E, A4_E, // A (harmonic minor!)
     ];
 
     for row in 0..32 {
@@ -2221,22 +2253,63 @@ fn generate_euro_pattern_verse_b() -> Vec<u8> {
             write_empty(&mut data);
         }
 
-        // Ch6: Brass counter (complementing Dm -> Gm -> A -> Dm)
-        if row == 4 {
-            write_note(&mut data, F4_E, BRASS); // Third of Dm
+        // Ch6: Brass - CONTINUES from Verse A (call-and-response with melody!)
+        // Picks up the energy and interacts with the supersaw melody
+        // Start energetic (continuing Verse A's momentum)
+        if row == 1 {
+            write_note(&mut data, D5_E, BRASS); // High answer to melody (energy!)
+        } else if row == 3 {
+            write_note(&mut data, A4_E, BRASS); // 16th response
+        } else if row == 4 {
+            write_note(&mut data, F4_E, BRASS); // Quick fill
+        } else if row == 6 {
+            write_note(&mut data, D4_E, BRASS); // Upbeat (playing between melody)
+        // Middle section (8-15): Call and response with melody
+        } else if row == 9 {
+            write_note(&mut data, G4_E, BRASS); // Offbeat answer
+        } else if row == 10 {
+            write_note(&mut data, E4_E, BRASS); // Quick stab
         } else if row == 12 {
-            write_note(&mut data, D4_E, BRASS); // Fifth of Gm
+            write_note(&mut data, C5_E, BRASS); // High response
+        } else if row == 14 {
+            write_note(&mut data, G4_E, BRASS); // Upbeat
+        } else if row == 15 {
+            write_note(&mut data, E4_E, BRASS); // 16th anticipation
+        // Building section (16-23): Getting busier
+        } else if row == 16 {
+            write_note(&mut data, BB3_E, BRASS); // Low punch
+        } else if row == 17 {
+            write_note(&mut data, D4_E, BRASS); // 16th
+        } else if row == 18 {
+            write_note(&mut data, F4_E, BRASS); // 16th
         } else if row == 20 {
-            write_note(&mut data, E4_E, BRASS); // Fifth of A
+            write_note(&mut data, BB4_E, BRASS); // High stab
+        } else if row == 22 {
+            write_note(&mut data, F4_E, BRASS); // Upbeat
+        } else if row == 23 {
+            write_note(&mut data, D4_E, BRASS); // 16th fill
+        // Climax (24-31): Maximum energy into pre-chorus
+        } else if row == 24 {
+            write_note(&mut data, A3_E, BRASS); // Low power
+        } else if row == 25 {
+            write_note(&mut data, C4_E, BRASS); // 16th run
+        } else if row == 26 {
+            write_note(&mut data, E4_E, BRASS); // 16th run
+        } else if row == 27 {
+            write_note(&mut data, A4_E, BRASS); // 16th run peak
         } else if row == 28 {
-            write_note(&mut data, A4_E, BRASS); // Fifth of Dm
+            write_note(&mut data, E4_E, BRASS); // Down
+        } else if row == 30 {
+            write_note(&mut data, C5_E, BRASS); // Launch into pre-chorus!
+        } else if row == 31 {
+            write_note(&mut data, A4_E, BRASS); // Final 16th anticipation!
         } else {
             write_empty(&mut data);
         }
 
-        // Ch7: Pad (sustained root of Dm)
+        // Ch7: Pad
         if row == 0 {
-            write_note(&mut data, D3_E, PAD);
+            write_note(&mut data, A3_E, PAD);
         } else {
             write_empty(&mut data);
         }
@@ -2290,16 +2363,9 @@ fn generate_euro_pattern_prechorus() -> Vec<u8> {
             write_note(&mut data, C4_E, HIHAT_E); // 16th notes
         }
 
-        // Ch4: Bass - Am -> Bb -> C -> A progression, octave bounce on 8th notes
+        // Ch4: Bass - A pedal, octave bounce on 8th notes
         if row % 2 == 0 {
-            let (low, high) = match row {
-                0..=7 => (A2_E, A3_E),      // Am (v)
-                8..=15 => (BB2_E, BB3_E),   // Bb (VI)
-                16..=23 => (C3_E, C4_E),    // C (VII)
-                24..=31 => (A2_E, A3_E),    // A (V) - dominant tension!
-                _ => (A2_E, A3_E),
-            };
-            let note = if (row / 2) % 2 == 0 { low } else { high };
+            let note = if (row / 2) % 2 == 0 { A2_E } else { A3_E };
             write_note(&mut data, note, BASS_E);
         } else {
             write_empty(&mut data);
@@ -2313,28 +2379,24 @@ fn generate_euro_pattern_prechorus() -> Vec<u8> {
             write_empty(&mut data);
         }
 
-        // Ch6: Brass - building through chord progression
+        // Ch6: Brass - building
         if row == 0 {
-            write_note(&mut data, C4_E, BRASS); // Third of Am
+            write_note(&mut data, E4_E, BRASS);
         } else if row == 8 {
-            write_note(&mut data, D4_E, BRASS); // Third of Bb
+            write_note(&mut data, A4_E, BRASS);
         } else if row == 16 {
-            write_note(&mut data, E4_E, BRASS); // Third of C
+            write_note(&mut data, C5_E, BRASS);
         } else if row == 24 {
-            write_note(&mut data, CS5_E, BRASS); // Third of A major
+            write_note(&mut data, E5_E, BRASS);
         } else {
             write_empty(&mut data);
         }
 
-        // Ch7: Pad swell (ascending through chords)
+        // Ch7: Pad swell
         if row == 0 {
-            write_note(&mut data, A3_E, PAD); // Root of Am
-        } else if row == 8 {
-            write_note(&mut data, BB3_E, PAD); // Root of Bb
+            write_note(&mut data, A3_E, PAD);
         } else if row == 16 {
-            write_note(&mut data, C4_E, PAD); // Root of C
-        } else if row == 24 {
-            write_note(&mut data, E4_E, PAD); // Fifth of A (tension)
+            write_note(&mut data, E4_E, PAD);
         } else {
             write_empty(&mut data);
         }
@@ -2592,11 +2654,11 @@ fn generate_euro_pattern_breakdown() -> Vec<u8> {
 fn generate_euro_pattern_drop() -> Vec<u8> {
     let mut data = Vec::new();
 
-    // Bass on 8th notes: Dm -> C -> Gm -> A (i -> VII -> iv -> V climax!)
+    // Bass on 8th notes: Dm -> C -> Bb -> A (harmonic minor climax!)
     let bass_pattern: [(u8, u8); 16] = [
         (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E),
         (C3_E, C4_E), (C3_E, C4_E), (C3_E, C4_E), (C3_E, C4_E),
-        (G2_E, G3_E), (G2_E, G3_E), (G2_E, G3_E), (G2_E, G3_E),
+        (BB2_E, BB3_E), (BB2_E, BB3_E), (BB2_E, BB3_E), (BB2_E, BB3_E),
         (A2_E, A3_E), (A2_E, A3_E), (A2_E, A3_E), (A2_E, A3_E),
     ];
 
@@ -2604,14 +2666,14 @@ fn generate_euro_pattern_drop() -> Vec<u8> {
     let melody = [
         D5_E, F5_E, A5_E, D5_E, F5_E, A5_E, D5_E, F5_E, // Dm ultra fast
         C5_E, E5_E, G5_E, C5_E, E5_E, G5_E, C5_E, E5_E, // C ultra fast
-        G5_E, BB5_E, D5_E, G5_E, BB5_E, D5_E, G5_E, BB5_E, // Gm ultra fast
-        A4_E, CS5_E, E5_E, A5_E, E5_E, CS5_E, A4_E, A5_E, // A major (C#!) climax!
+        BB4_E, D5_E, F5_E, BB4_E, D5_E, F5_E, BB4_E, D5_E, // Bb ultra fast
+        A4_E, C5_E, E5_E, A5_E, E5_E, C5_E, A4_E, A5_E, // A (harmonic minor) climax!
     ];
 
-    // Brass riff on 8th notes (complementing Dm -> C -> Gm -> A)
+    // Brass riff on 8th notes
     let brass_notes: [u8; 16] = [
         F4_E, A4_E, D5_E, F5_E, E4_E, G4_E, C5_E, E5_E,
-        D4_E, G4_E, BB4_E, D5_E, CS4_E, E4_E, A4_E, CS5_E,
+        D4_E, F4_E, BB4_E, D5_E, C4_E, E4_E, A4_E, C5_E,
     ];
 
     for row in 0..32 {
@@ -2654,15 +2716,15 @@ fn generate_euro_pattern_drop() -> Vec<u8> {
             write_empty(&mut data);
         }
 
-        // Ch7: Pad - full chords (Dm -> C -> Gm -> A)
+        // Ch7: Pad - full chords
         if row == 0 {
-            write_note(&mut data, D4_E, PAD); // Dm root
+            write_note(&mut data, D4_E, PAD);
         } else if row == 8 {
-            write_note(&mut data, C4_E, PAD); // C root
+            write_note(&mut data, C4_E, PAD);
         } else if row == 16 {
-            write_note(&mut data, G4_E, PAD); // Gm root
+            write_note(&mut data, BB3_E, PAD);
         } else if row == 24 {
-            write_note(&mut data, A3_E, PAD); // A root
+            write_note(&mut data, A3_E, PAD);
         } else {
             write_empty(&mut data);
         }
@@ -3403,13 +3465,13 @@ fn generate_pad_synth() -> Vec<i16> {
         osc_sum /= 5.0;
 
         // 4-pole low-pass for vintage warmth
-        let cutoff = 0.042;
+        let cutoff = 0.16; // FIXED: Was 0.042 (way too aggressive for 4 poles!)
         lp1 += cutoff * (osc_sum - lp1);
         lp2 += cutoff * (lp1 - lp2);
         lp3 += cutoff * (lp2 - lp3);
         lp4 += cutoff * (lp3 - lp4);
 
-        let sample = lp4 * envelope * 19000.0;
+        let sample = lp4 * envelope * 30000.0; // Increased gain to compensate
         output.push(sample.clamp(-32767.0, 32767.0) as i16);
     }
 

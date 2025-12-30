@@ -1,0 +1,18 @@
+[package]
+name = "nether-tracker"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Unified tracker module format for Nethercore (XM/IT abstraction)"
+
+[dependencies]
+# Dependencies for conversion
+nether-it = { path = "../nether-it" }
+nether-xm = { path = "../nether-xm" }
+
+[dev-dependencies]
+# None needed
+
+[lints.clippy]
+all = "warn"

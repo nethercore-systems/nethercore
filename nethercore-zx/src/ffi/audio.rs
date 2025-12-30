@@ -624,7 +624,7 @@ fn music_length(caller: Caller<'_, ZXGameContext>, handle: u32) -> u32 {
     if is_tracker_handle(handle) {
         // Tracker length in orders
         if let Some(module) = ctx.ffi.tracker_engine.get_module(handle) {
-            return module.song_length as u32;
+            return module.order_table.len() as u32;
         }
     } else {
         // PCM length in samples
@@ -670,9 +670,9 @@ fn music_info(caller: Caller<'_, ZXGameContext>, handle: u32) -> u32 {
     if is_tracker_handle(handle) {
         if let Some(module) = ctx.ffi.tracker_engine.get_module(handle) {
             return ((module.num_channels as u32) << 24)
-                | ((module.num_patterns as u32) << 16)
-                | ((module.num_instruments as u32) << 8)
-                | (module.song_length as u32);
+                | ((module.patterns.len() as u32) << 16)
+                | ((module.instruments.len() as u32) << 8)
+                | (module.order_table.len() as u32);
         }
     } else {
         // PCM info: sample_rate=22050, channels=1, bits=16
