@@ -326,8 +326,12 @@ fn convert_xm_instrument(xm_instr: &nether_xm::XmInstrument) -> TrackerInstrumen
         sample_loop_start: xm_instr.sample_loop_start,
         sample_loop_end: xm_instr.sample_loop_start + xm_instr.sample_loop_length,
         sample_loop_type,
-        sample_finetune: xm_instr.sample_finetune,
-        sample_relative_note: xm_instr.sample_relative_note,
+        // Finetune and relative_note are ZEROED because they're already baked into the
+        // resampled 22050 Hz sample during ROM packing (via audio_convert::convert_xm_sample).
+        // If we passed them through here, they would be applied AGAIN during playback,
+        // causing notes to play way too high (often 1+ octave off).
+        sample_finetune: 0,
+        sample_relative_note: 0,
 
         // Auto-vibrato settings
         auto_vibrato_type: xm_instr.vibrato_type,
@@ -437,8 +441,10 @@ mod tests {
         assert_eq!(tracker_instr.sample_loop_start, 1000);
         assert_eq!(tracker_instr.sample_loop_end, 3000); // start + length
         assert_eq!(tracker_instr.sample_loop_type, LoopType::Forward);
-        assert_eq!(tracker_instr.sample_finetune, -5);
-        assert_eq!(tracker_instr.sample_relative_note, 3);
+        // Finetune and relative_note are zeroed because pitch adjustment is baked
+        // into the resampled 22050 Hz sample during ROM packing
+        assert_eq!(tracker_instr.sample_finetune, 0);
+        assert_eq!(tracker_instr.sample_relative_note, 0);
 
         // Verify auto-vibrato
         assert_eq!(tracker_instr.auto_vibrato_type, 1);
