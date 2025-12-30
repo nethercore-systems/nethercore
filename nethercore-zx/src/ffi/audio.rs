@@ -497,7 +497,7 @@ fn rom_tracker(mut caller: Caller<'_, ZXGameContext>, id_ptr: u32, id_len: u32) 
     }
 
     // Load the module into the tracker engine
-    let handle = ctx.ffi.tracker_engine.load_module(module, sound_handles);
+    let handle = ctx.ffi.tracker_engine.load_xm_module(module, sound_handles);
 
     info!("Loaded tracker '{}' as handle {}", id, handle);
     handle
@@ -560,7 +560,7 @@ fn load_tracker(mut caller: Caller<'_, ZXGameContext>, data_ptr: u32, data_len: 
     let sound_handles = vec![0u32; num_instruments as usize];
 
     // Load the module into the tracker engine
-    let handle = ctx.ffi.tracker_engine.load_module(module, sound_handles);
+    let handle = ctx.ffi.tracker_engine.load_xm_module(module, sound_handles);
 
     info!(
         "Loaded tracker with {} patterns, {} instruments as handle {}",

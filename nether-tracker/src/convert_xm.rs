@@ -40,6 +40,7 @@ pub fn from_xm_module(xm: &nether_xm::XmModule) -> TrackerModule {
         samples,
         format,
         message: None, // XM doesn't have song message
+        restart_position: xm.restart_position,
     }
 }
 

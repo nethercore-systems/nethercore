@@ -458,13 +458,26 @@ impl TrackerChannel {
         self.auto_vibrato_pos = 0;
         self.auto_vibrato_sweep = 0;
 
-        // Set period from note
-        // Note: For TrackerInstrument, we use the note_sample_table to get the right sample
-        // but period calculation is done elsewhere
-        self.base_period = note_to_period(note, 0);
+        // Set period from note with finetune
+        if let Some(instr) = instrument {
+            // Apply finetune from instrument (critical for XM pitch accuracy)
+            self.base_period = note_to_period(note, instr.sample_finetune);
+            self.finetune = instr.sample_finetune;
+
+            // Copy sample loop data (critical for XM sample looping)
+            self.sample_loop_start = instr.sample_loop_start;
+            self.sample_loop_end = instr.sample_loop_end;
+            self.sample_loop_type = match instr.sample_loop_type {
+                nether_tracker::LoopType::None => 0,
+                nether_tracker::LoopType::Forward => 1,
+                nether_tracker::LoopType::PingPong => 2,
+            };
+        } else {
+            self.base_period = note_to_period(note, 0);
+        }
         self.period = self.base_period;
 
-        // Initialize IT-specific instrument properties
+        // Initialize instrument properties (both XM and IT)
         if let Some(instr) = instrument {
             // Copy NNA settings from instrument
             self.nna = match instr.nna {
@@ -755,12 +768,6 @@ impl TrackerEngine {
         raw_handle | TRACKER_HANDLE_FLAG
     }
 
-    /// Legacy compatibility: load an XM module directly
-    #[deprecated(note = "Use load_xm_module instead")]
-    pub fn load_module(&mut self, xm_module: XmModule, sound_handles: Vec<u32>) -> u32 {
-        self.load_xm_module(xm_module, sound_handles)
-    }
-
     /// Get a loaded module by handle
     ///
     /// Accepts both flagged (from load_module) and raw handles.
@@ -863,8 +870,8 @@ impl TrackerEngine {
             // Advance to next row - inline the logic to avoid borrow issues
             self.current_row += 1;
 
-            // Get current pattern length
-            let (num_rows, song_length) = {
+            // Get current pattern length and restart position
+            let (num_rows, song_length, restart_position) = {
                 let loaded = match self.modules.get(raw_handle as usize).and_then(|m| m.as_ref()) {
                     Some(m) => m,
                     None => return,
@@ -877,12 +884,13 @@ impl TrackerEngine {
                 (
                     num_rows,
                     loaded.module.order_table.len() as u16,
+                    loaded.module.restart_position,
                 )
             };
 
             if num_rows == 0 {
                 // No pattern at this order - end of song
-                self.current_order = 0; // Loop to beginning
+                self.current_order = restart_position;
                 self.current_row = 0;
             } else if self.current_row >= num_rows {
                 // End of pattern
@@ -890,7 +898,7 @@ impl TrackerEngine {
                 self.current_row = 0;
 
                 if self.current_order >= song_length {
-                    self.current_order = 0; // Loop to beginning
+                    self.current_order = restart_position;
                 }
             }
         }
@@ -1242,7 +1250,8 @@ impl TrackerEngine {
                 channel.volume = (channel.volume - *val as f32 / 64.0).max(0.0);
             }
             TrackerEffect::SetGlobalVolume(vol) => {
-                self.global_volume = ((*vol).min(64) as f32) / 64.0;
+                // Global volume is 0-128 in unified format (XM: 0-64 * 2, IT: native 0-128)
+                self.global_volume = ((*vol).min(128) as f32) / 128.0;
             }
             TrackerEffect::GlobalVolumeSlide { up, down } => {
                 let param = (*up << 4) | *down;
@@ -2349,7 +2358,7 @@ impl TrackerEngine {
                 self.current_row = state.row;
 
                 // Check if we need to advance to next pattern
-                let (num_rows, song_length) = {
+                let (num_rows, song_length, restart_position) = {
                     let loaded = match self
                         .modules
                         .get(raw_handle as usize)
@@ -2371,6 +2380,7 @@ impl TrackerEngine {
                     (
                         num_rows,
                         loaded.module.order_table.len() as u16,
+                        loaded.module.restart_position,
                     )
                 };
 
@@ -2383,8 +2393,8 @@ impl TrackerEngine {
                     // Check for end of song
                     if state.order_position >= song_length {
                         if (state.flags & tracker_flags::LOOPING) != 0 {
-                            state.order_position = 0; // Loop to beginning
-                            self.current_order = 0;
+                            state.order_position = restart_position;
+                            self.current_order = restart_position;
                         } else {
                             // Stop playback
                             state.flags &= !tracker_flags::PLAYING;

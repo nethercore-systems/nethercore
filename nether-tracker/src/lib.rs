@@ -72,6 +72,8 @@ pub struct TrackerModule {
     pub format: FormatFlags,
     /// Optional song message
     pub message: Option<String>,
+    /// Restart position for song looping (XM feature, IT uses 0)
+    pub restart_position: u16,
 }
 
 impl TrackerModule {

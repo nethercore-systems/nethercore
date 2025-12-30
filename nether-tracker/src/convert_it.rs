@@ -48,6 +48,7 @@ pub fn from_it_module(it: &nether_it::ItModule) -> TrackerModule {
         samples,
         format,
         message: it.message.clone(),
+        restart_position: 0, // IT doesn't have restart position feature
     }
 }
 
