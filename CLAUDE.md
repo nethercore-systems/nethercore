@@ -147,11 +147,11 @@ Located in `examples/` — 28 examples organized by category:
 ├──────────┼─────────────────┼────────────────────────────────┤
 │          │           nethercore-zx (lib)                     │
 │  ┌───────▼───────┐  ┌─────────────┐  ┌─────────────────┐   │
-│  │ NethercoreZ    │  │ ZGraphics   │  │ Z-specific FFI  │   │
+│  │ NethercoreZ    │  │ ZXGraphics   │  │ Z-specific FFI  │   │
 │  │ Console impl  │  │ (wgpu)      │  │ (draw_*, etc)   │   │
 │  └───────┬───────┘  └─────────────┘  └─────────────────┘   │
 │          │          ┌─────────────┐  ┌─────────────────┐   │
-│          │          │ ZAudio      │  │ ZRollbackState  │   │
+│          │          │ ZXAudio      │  │ ZRollbackState  │   │
 │          │          │ (cpal)      │  │ (audio state)   │   │
 │          │          └─────────────┘  └─────────────────┘   │
 ├──────────┼──────────────────────────────────────────────────┤

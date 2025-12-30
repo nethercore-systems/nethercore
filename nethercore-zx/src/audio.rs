@@ -424,7 +424,7 @@ fn soft_clip(x: f32) -> f32 {
 /// Nethercore ZX audio backend
 ///
 /// Wraps AudioOutput and provides the Console::Audio interface.
-pub struct ZAudio {
+pub struct ZXAudio {
     /// Audio output (cpal stream + ring buffer)
     output: Option<AudioOutput>,
     /// Master volume (0.0 - 1.0)
@@ -433,7 +433,7 @@ pub struct ZAudio {
     scale_buffer: Vec<f32>,
 }
 
-impl ZAudio {
+impl ZXAudio {
     /// Create new audio backend
     pub fn new() -> Result<Self, String> {
         match AudioOutput::new() {
@@ -500,7 +500,7 @@ impl ZAudio {
     }
 }
 
-impl Default for ZAudio {
+impl Default for ZXAudio {
     fn default() -> Self {
         Self::new().unwrap_or(Self {
             output: None,

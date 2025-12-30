@@ -10,7 +10,7 @@ Nethercore ZX uses a **wgpu-based** forward renderer with a command buffer patte
 
 ```
 ┌──────────────────┐    ┌────────────────┐    ┌─────────────┐
-│  FFI Functions   │───▶│   ZXFFIState    │───▶│  ZGraphics  │
+│  FFI Functions   │───▶│   ZXFFIState    │───▶│  ZXGraphics  │
 │  (WASM calls)    │    │   (staging)    │    │  (GPU exec) │
 └──────────────────┘    └────────────────┘    └─────────────┘
 ```
@@ -732,7 +732,7 @@ Invalidate on:
 
 | File | Description |
 |------|-------------|
-| `nethercore-zx/src/graphics/mod.rs` | ZGraphics main implementation |
+| `nethercore-zx/src/graphics/mod.rs` | ZXGraphics main implementation |
 | `nethercore-zx/src/graphics/frame.rs` | Frame rendering and command execution |
 | `nethercore-zx/src/graphics/pipeline.rs` | Pipeline cache and creation |
 | `nethercore-zx/src/graphics/vertex.rs` | Vertex format definitions |

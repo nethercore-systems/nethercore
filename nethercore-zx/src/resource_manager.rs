@@ -3,7 +3,7 @@
 //! Manages the mapping between game resource handles (u32) and
 //! graphics backend handles (TextureHandle, MeshHandle).
 
-use crate::graphics::{MeshHandle, TextureHandle, ZGraphics, pack_vertex_data};
+use crate::graphics::{MeshHandle, TextureHandle, ZXGraphics, pack_vertex_data};
 use crate::state::{
     BoneMatrix3x4, KeyframeGpuInfo, LoadedKeyframeCollection, SkeletonData, SkeletonGpuInfo,
     ZXFFIState,
@@ -89,7 +89,7 @@ impl ZResourceManager {
 }
 
 impl ConsoleResourceManager for ZResourceManager {
-    type Graphics = ZGraphics;
+    type Graphics = ZXGraphics;
     type State = ZXFFIState;
 
     fn process_pending_resources(
@@ -364,7 +364,7 @@ impl ConsoleResourceManager for ZResourceManager {
     }
 
     fn execute_draw_commands(&mut self, graphics: &mut Self::Graphics, state: &mut Self::State) {
-        // Process draw commands - ZGraphics consumes draw commands directly
+        // Process draw commands - ZXGraphics consumes draw commands directly
         graphics.process_draw_commands(state, &self.texture_map);
     }
 

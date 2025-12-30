@@ -18,7 +18,7 @@ use zx_common::ZXDataPack;
 
 use crate::state::{ZXFFIState, ZRollbackState};
 
-use crate::graphics::ZGraphics;
+use crate::graphics::ZXGraphics;
 
 /// Get Nethercore ZX console specifications
 pub const fn zx_specs() -> &'static ConsoleSpecs {
@@ -149,12 +149,12 @@ impl ZInput {
 
 impl ConsoleInput for ZInput {}
 
-// ZGraphics is now implemented in graphics.rs
+// ZXGraphics is now implemented in graphics.rs
 
-/// Re-export ZAudio from audio module
-pub use crate::audio::ZAudio;
+/// Re-export ZXAudio from audio module
+pub use crate::audio::ZXAudio;
 
-impl Audio for ZAudio {
+impl Audio for ZXAudio {
     fn play(&mut self, _handle: SoundHandle, _volume: f32, _looping: bool) {
         // Legacy Audio trait - not used in ZX console
         // Audio is handled via per-frame generation from ZRollbackState
@@ -165,15 +165,15 @@ impl Audio for ZAudio {
     }
 
     fn set_master_volume(&mut self, volume: f32) {
-        ZAudio::set_master_volume(self, volume);
+        ZXAudio::set_master_volume(self, volume);
     }
 
     fn sample_rate(&self) -> u32 {
-        ZAudio::sample_rate(self)
+        ZXAudio::sample_rate(self)
     }
 
     fn push_samples(&mut self, samples: &[f32]) {
-        ZAudio::push_samples(self, samples);
+        ZXAudio::push_samples(self, samples);
     }
 }
 
@@ -208,8 +208,8 @@ impl Default for NethercoreZX {
 }
 
 impl Console for NethercoreZX {
-    type Graphics = ZGraphics;
-    type Audio = ZAudio;
+    type Graphics = ZXGraphics;
+    type Audio = ZXAudio;
     type Input = ZInput;
     type State = ZXFFIState;
     type RollbackState = ZRollbackState;
@@ -230,11 +230,11 @@ impl Console for NethercoreZX {
     }
 
     fn create_graphics(&self, window: Arc<Window>) -> Result<Self::Graphics> {
-        ZGraphics::new_blocking(window)
+        ZXGraphics::new_blocking(window)
     }
 
     fn create_audio(&self) -> Result<Self::Audio> {
-        ZAudio::new().map_err(|e| anyhow::anyhow!("Failed to create audio: {}", e))
+        ZXAudio::new().map_err(|e| anyhow::anyhow!("Failed to create audio: {}", e))
     }
 
     fn map_input(&self, raw: &RawInput) -> Self::Input {

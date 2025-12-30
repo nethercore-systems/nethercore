@@ -22,7 +22,7 @@ pub const DEFAULT_LAYER: u32 = 0;
 /// FFI staging state for Nethercore ZX
 ///
 /// This state is written to by FFI functions during update()/render() calls,
-/// then consumed by ZGraphics at the end of each frame. It is cleared after
+/// then consumed by ZXGraphics at the end of each frame. It is cleared after
 /// rendering and does not persist between frames.
 ///
 /// This is NOT serialized for rollback - only core GameState is rolled back.

@@ -1,6 +1,6 @@
 //! Graphics initialization and setup
 //!
-//! This module contains all initialization logic for ZGraphics including:
+//! This module contains all initialization logic for ZXGraphics including:
 //! - Creating the wgpu instance, device, and surface
 //! - Setting up render targets and depth buffers
 //! - Creating the blit pipeline for scaling render target to window
@@ -11,7 +11,7 @@ use glam::Mat4;
 use std::sync::Arc;
 use winit::window::Window;
 
-use super::ZGraphics;
+use super::ZXGraphics;
 use super::vertex::{FORMAT_COLOR, FORMAT_UV, vertex_stride_packed};
 
 /// Offscreen render target for fixed internal resolution
@@ -25,7 +25,7 @@ use super::vertex::{FORMAT_COLOR, FORMAT_UV, vertex_stride_packed};
 /// after creation, but they MUST be stored here because wgpu::TextureView does
 /// not own the underlying texture. Dropping the texture would invalidate the views.
 ///
-/// This is separate from `ZGraphics::depth_texture/depth_view` which is used for
+/// This is separate from `ZXGraphics::depth_texture/depth_view` which is used for
 /// window-sized UI rendering (not game content). The separation allows:
 /// - Game renders at fixed resolution (pixel-perfect, stable coordinates)
 /// - UI renders at window resolution (crisp regardless of window size)
@@ -41,8 +41,8 @@ pub(crate) struct RenderTarget {
     pub(super) height: u32,
 }
 
-impl ZGraphics {
-    /// Create a new ZGraphics instance
+impl ZXGraphics {
+    /// Create a new ZXGraphics instance
     ///
     /// This initializes wgpu with the given window and sets up all core resources.
     pub async fn new(window: Arc<Window>) -> Result<Self> {
@@ -318,7 +318,7 @@ impl ZGraphics {
         Ok(graphics)
     }
 
-    /// Create a new ZGraphics instance (blocking version for sync contexts)
+    /// Create a new ZXGraphics instance (blocking version for sync contexts)
     pub fn new_blocking(window: Arc<Window>) -> Result<Self> {
         pollster::block_on(Self::new(window))
     }

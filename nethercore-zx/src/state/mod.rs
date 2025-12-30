@@ -1,7 +1,7 @@
 //! Nethercore ZX FFI state and types
 //!
 //! FFI staging state for Nethercore ZX console.
-//! This state is rebuilt each frame from FFI calls and consumed by ZGraphics.
+//! This state is rebuilt each frame from FFI calls and consumed by ZXGraphics.
 //! It is NOT part of rollback state - only GameState is rolled back.
 
 mod config;

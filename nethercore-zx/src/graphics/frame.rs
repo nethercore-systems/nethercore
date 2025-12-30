@@ -7,14 +7,14 @@
 
 use glam::Mat4;
 
-use super::ZGraphics;
+use super::ZXGraphics;
 use super::command_buffer::{BufferSource, CommandSortKey, VRPCommand};
 use super::pipeline::PipelineKey;
 use super::render_state::{CullMode, RenderState, StencilMode, TextureHandle};
 use super::vertex::VERTEX_FORMAT_COUNT;
 use zx_common::pack_vertex_data;
 
-impl ZGraphics {
+impl ZXGraphics {
     /// Blit the render target to the window surface
     /// Call this every frame to display the last rendered content
     pub fn blit_to_window(&self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {

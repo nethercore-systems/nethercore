@@ -5,12 +5,12 @@
 //!
 //! # Architecture
 //!
-//! **ZXFFIState** (staging) → **ZGraphics** (GPU execution)
+//! **ZXFFIState** (staging) → **ZXGraphics** (GPU execution)
 //!
 //! - FFI functions write draw commands, transforms, and render state to ZXFFIState
-//! - App.rs passes ZXFFIState to ZGraphics each frame
-//! - ZGraphics consumes commands and executes them on the GPU
-//! - ZGraphics owns all actual GPU resources (textures, meshes, buffers, pipelines)
+//! - App.rs passes ZXFFIState to ZXGraphics each frame
+//! - ZXGraphics consumes commands and executes them on the GPU
+//! - ZXGraphics owns all actual GPU resources (textures, meshes, buffers, pipelines)
 
 mod buffer;
 mod command_buffer;
@@ -155,7 +155,7 @@ use texture_manager::TextureManager;
 /// Manages wgpu device, textures, render state, and frame presentation.
 /// Implements the vertex buffer architecture with one buffer per stride
 /// and command buffer pattern for draw batching.
-pub struct ZGraphics {
+pub struct ZXGraphics {
     // Core wgpu objects
     surface: wgpu::Surface<'static>,
     device: wgpu::Device,
@@ -252,7 +252,7 @@ pub struct ZGraphics {
     quad_batch_scratch: Vec<(u32, u32, [u32; 4], bool, Viewport, StencilMode, u32)>,
 }
 
-impl ZGraphics {
+impl ZXGraphics {
     /// Update render target resolution if changed
     /// Note: Nethercore ZX uses a fixed 540p resolution, so this is a no-op
     pub fn update_resolution(&mut self) {
@@ -623,7 +623,7 @@ fn bone_matrices_to_bytes(matrices: &[crate::state::BoneMatrix3x4]) -> Vec<u8> {
     bytes
 }
 
-impl Graphics for ZGraphics {
+impl Graphics for ZXGraphics {
     fn resize(&mut self, width: u32, height: u32) {
         if width == 0 || height == 0 {
             return;
@@ -676,7 +676,7 @@ impl Graphics for ZGraphics {
     }
 }
 
-impl nethercore_core::capture::CaptureSupport for ZGraphics {
+impl nethercore_core::capture::CaptureSupport for ZXGraphics {
     fn device(&self) -> &wgpu::Device {
         &self.device
     }
@@ -694,7 +694,7 @@ impl nethercore_core::capture::CaptureSupport for ZGraphics {
     }
 }
 
-impl nethercore_core::app::StandaloneGraphicsSupport for ZGraphics {
+impl nethercore_core::app::StandaloneGraphicsSupport for ZXGraphics {
     fn surface_format(&self) -> wgpu::TextureFormat {
         self.config.format
     }
@@ -713,7 +713,7 @@ impl nethercore_core::app::StandaloneGraphicsSupport for ZGraphics {
 
     fn blit_to_window(&self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
         // Delegate to existing method in frame.rs
-        ZGraphics::blit_to_window(self, encoder, view)
+        ZXGraphics::blit_to_window(self, encoder, view)
     }
 
     fn set_scale_mode(&mut self, mode: nethercore_core::app::config::ScaleMode) {

@@ -3,10 +3,10 @@
 //! This module handles processing draw commands from ZXFFIState and converting
 //! them into GPU rendering operations.
 
-use super::ZGraphics;
+use super::ZXGraphics;
 use super::render_state::TextureHandle;
 
-impl ZGraphics {
+impl ZXGraphics {
     /// Process all draw commands from ZXFFIState and execute them
     ///
     /// This method consumes draw commands from the ZXFFIState and executes them
