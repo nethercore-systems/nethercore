@@ -20,6 +20,26 @@ use zx_common::{
 
 use crate::manifest::{AssetsSection, NetherManifest};
 
+/// Tracker format enum
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TrackerFormat {
+    XM,
+    IT,
+}
+
+/// Detect tracker format by magic bytes
+fn detect_tracker_format(data: &[u8]) -> Option<TrackerFormat> {
+    // Check for XM magic: "Extended Module: " (17 bytes)
+    if data.len() >= 17 && &data[0..17] == b"Extended Module: " {
+        return Some(TrackerFormat::XM);
+    }
+    // Check for IT magic: "IMPM" (4 bytes)
+    if data.len() >= 4 && &data[0..4] == b"IMPM" {
+        return Some(TrackerFormat::IT);
+    }
+    None
+}
+
 /// Arguments for the pack command
 #[derive(Args)]
 pub struct PackArgs {
@@ -295,20 +315,38 @@ fn load_assets(
         hash_to_id.insert(hash, sound.id.clone());
     }
 
-    // Extract samples from ALL XM tracker files
-    println!("  Extracting samples from XM files...");
+    // Extract samples from ALL tracker files (both XM and IT)
+    println!("  Extracting samples from tracker files...");
     for entry in &assets.trackers {
         let path = project_dir.join(&entry.path);
-        let xm_data = std::fs::read(&path)
+        let tracker_data = std::fs::read(&path)
             .with_context(|| format!("Failed to read tracker: {}", path.display()))?;
 
-        // Try to extract samples, but if it fails (sample-less XM), continue with empty list
-        let extracted_samples = match nether_xm::extract_samples(&xm_data) {
-            Ok(samples) => samples,
-            Err(e) => {
-                // Sample-less XM file or extraction error - log and continue
-                println!("    Note: {} ({})", path.file_name().unwrap().to_string_lossy(), e);
-                println!("          No samples extracted (this is expected for sample-less XM files)");
+        // Detect format
+        let format = detect_tracker_format(&tracker_data);
+
+        // Try to extract samples based on format
+        let extracted_samples = match format {
+            Some(TrackerFormat::XM) => {
+                match nether_xm::extract_samples(&tracker_data) {
+                    Ok(samples) => samples,
+                    Err(e) => {
+                        // Sample-less XM file or extraction error - log and continue
+                        println!("    Note: {} ({})", path.file_name().unwrap().to_string_lossy(), e);
+                        println!("          No samples extracted (this is expected for sample-less tracker files)");
+                        Vec::new()
+                    }
+                }
+            }
+            Some(TrackerFormat::IT) => {
+                // IT files don't use extract_samples - we get instrument names instead
+                // and expect samples to be explicitly declared in manifest
+                println!("    Note: IT file {} - samples must be explicitly declared in manifest",
+                         path.file_name().unwrap().to_string_lossy());
+                Vec::new()
+            }
+            None => {
+                println!("    Warning: Unknown tracker format: {}", path.display());
                 Vec::new()
             }
         };
@@ -336,7 +374,7 @@ fn load_assets(
                 let existing_hash = hash_sample_data(&existing.data);
                 if existing_hash != hash {
                     return Err(anyhow::anyhow!(
-                        "Collision: XM instrument '{}' in tracker '{}' conflicts with explicit sound '{}' (different content)",
+                        "Collision: Tracker instrument '{}' in '{}' conflicts with explicit sound '{}' (different content)",
                         sample.name,
                         entry.id,
                         sample_id
@@ -861,9 +899,9 @@ fn validate_tracker_samples(
     Ok(())
 }
 
-/// Load a tracker module from XM file
+/// Load a tracker module from XM or IT file
 ///
-/// Parses the XM file, extracts instrument names for sample mapping,
+/// Parses the tracker file, extracts instrument names for sample mapping,
 /// and strips embedded sample data (samples are loaded separately via sounds).
 fn load_tracker(
     id: &str,
@@ -873,19 +911,46 @@ fn load_tracker(
     let data = std::fs::read(path)
         .with_context(|| format!("Failed to load tracker: {}", path.display()))?;
 
-    // Get instrument names from XM file (for mapping to sounds)
-    let sample_ids = nether_xm::get_instrument_names(&data)
-        .with_context(|| format!("Failed to parse tracker instruments: {}", path.display()))?;
+    // Detect format
+    let format = detect_tracker_format(&data)
+        .ok_or_else(|| anyhow::anyhow!("Unknown tracker format: {}", path.display()))?;
 
-    // Validate sample references against loaded sounds
-    validate_tracker_samples(id, path, &sample_ids, available_sound_ids)?;
+    // Get instrument names and pack based on format
+    let (sample_ids, pattern_data) = match format {
+        TrackerFormat::XM => {
+            // Get instrument names from XM file (for mapping to sounds)
+            let sample_ids = nether_xm::get_instrument_names(&data)
+                .with_context(|| format!("Failed to parse XM tracker instruments: {}", path.display()))?;
 
-    // Parse XM and pack to minimal format (removes all overhead)
-    let module = nether_xm::parse_xm(&data)
-        .with_context(|| format!("Failed to parse tracker: {}", path.display()))?;
+            // Validate sample references against loaded sounds
+            validate_tracker_samples(id, path, &sample_ids, available_sound_ids)?;
 
-    let pattern_data = nether_xm::pack_xm_minimal(&module)
-        .with_context(|| format!("Failed to pack tracker to minimal format: {}", path.display()))?;
+            // Parse XM and pack to minimal format (removes all overhead)
+            let module = nether_xm::parse_xm(&data)
+                .with_context(|| format!("Failed to parse XM tracker: {}", path.display()))?;
+
+            let pattern_data = nether_xm::pack_xm_minimal(&module)
+                .with_context(|| format!("Failed to pack XM tracker to minimal format: {}", path.display()))?;
+
+            (sample_ids, pattern_data)
+        }
+        TrackerFormat::IT => {
+            // Get instrument names from IT file (for mapping to sounds)
+            let sample_ids = nether_it::get_instrument_names(&data)
+                .with_context(|| format!("Failed to parse IT tracker instruments: {}", path.display()))?;
+
+            // Validate sample references against loaded sounds
+            validate_tracker_samples(id, path, &sample_ids, available_sound_ids)?;
+
+            // Parse IT and pack to minimal format (removes all overhead)
+            let module = nether_it::parse_it(&data)
+                .with_context(|| format!("Failed to parse IT tracker: {}", path.display()))?;
+
+            let pattern_data = nether_it::pack_it_minimal(&module);
+
+            (sample_ids, pattern_data)
+        }
+    };
 
     Ok(PackedTracker {
         id: id.to_string(),

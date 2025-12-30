@@ -18,6 +18,7 @@ nethercore-core = { path = "../../core", default-features = false }
 nethercore-shared = { path = "../../shared" }
 zx-common = { path = "../../zx-common", default-features = false }
 nether-xm = { path = "../../nether-xm" }
+nether-it = { path = "../../nether-it" }
 nether-export = { path = "../nether-export", default-features = false }
 
 # CLI
