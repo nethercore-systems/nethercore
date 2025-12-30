@@ -744,9 +744,12 @@ fn load_tracker(
     // Validate sample references against loaded sounds
     validate_tracker_samples(id, path, &sample_ids, available_sound_ids)?;
 
-    // Strip sample data from XM (keep only patterns/metadata)
-    let pattern_data = nether_xm::strip_xm_samples(&data)
-        .with_context(|| format!("Failed to strip tracker samples: {}", path.display()))?;
+    // Parse XM and pack to minimal format (removes all overhead)
+    let module = nether_xm::parse_xm(&data)
+        .with_context(|| format!("Failed to parse tracker: {}", path.display()))?;
+
+    let pattern_data = nether_xm::pack_xm_minimal(&module)
+        .with_context(|| format!("Failed to pack tracker to minimal format: {}", path.display()))?;
 
     Ok(PackedTracker {
         id: id.to_string(),
