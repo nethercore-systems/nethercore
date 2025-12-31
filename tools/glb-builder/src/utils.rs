@@ -19,7 +19,7 @@ pub fn compute_bounds(positions: &[[f32; 3]]) -> (Vec<f32>, Vec<f32>) {
 
 /// Align buffer to 4-byte boundary
 pub fn align_buffer(buffer: &mut Vec<u8>) {
-    while buffer.len() % 4 != 0 {
+    while !buffer.len().is_multiple_of(4) {
         buffer.push(0);
     }
 }
@@ -51,17 +51,13 @@ pub fn assemble_glb(root: &json::Root, buffer_data: &[u8]) -> Vec<u8> {
     glb.extend_from_slice(&(json_chunk_length as u32).to_le_bytes());
     glb.extend_from_slice(&0x4E4F534Au32.to_le_bytes()); // "JSON"
     glb.extend_from_slice(json_bytes);
-    for _ in 0..json_padding {
-        glb.push(0x20); // Space for JSON padding
-    }
+    glb.resize(glb.len() + json_padding, 0x20); // Space padding for JSON
 
     // Binary chunk
     glb.extend_from_slice(&(buffer_chunk_length as u32).to_le_bytes());
     glb.extend_from_slice(&0x004E4942u32.to_le_bytes()); // "BIN\0"
     glb.extend_from_slice(buffer_data);
-    for _ in 0..buffer_padding {
-        glb.push(0);
-    }
+    glb.resize(glb.len() + buffer_padding, 0); // Zero padding for binary
 
     glb
 }

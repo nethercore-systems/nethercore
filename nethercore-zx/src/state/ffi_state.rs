@@ -978,8 +978,8 @@ mod tests {
         state.add_mvp_shading_state();
 
         // Should have multiple entries
-        assert!(state.mvp_shading_states.len() > 0);
-        assert!(state.mvp_shading_map.len() > 0);
+        assert!(!state.mvp_shading_states.is_empty());
+        assert!(!state.mvp_shading_map.is_empty());
         assert!(state.model_matrices.len() > 1);
 
         // Clear frame

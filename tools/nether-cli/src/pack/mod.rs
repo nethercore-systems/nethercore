@@ -607,8 +607,8 @@ fn compress_bc7(pixels: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
     let h = height as usize;
 
     // Calculate block dimensions (round up to 4×4 blocks)
-    let blocks_x = (w + 3) / 4;
-    let blocks_y = (h + 3) / 4;
+    let blocks_x = w.div_ceil(4);
+    let blocks_y = h.div_ceil(4);
     let output_size = blocks_x * blocks_y * 16;
 
     let mut output = vec![0u8; output_size];
@@ -1446,7 +1446,7 @@ version = "1.0.0"
         let mesh_path = dir.path().join("bad.nczxmesh");
 
         // File too small to contain header
-        std::fs::write(&mesh_path, &[0u8; 5]).unwrap();
+        std::fs::write(&mesh_path, [0u8; 5]).unwrap();
 
         let result = load_mesh("bad", &mesh_path);
         assert!(result.is_err());

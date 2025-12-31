@@ -572,7 +572,7 @@ pub fn generate_capsule<M: MeshBuilder + Default>(
     }
 
     // Track starting index for top hemisphere
-    let top_hemisphere_start = (segments * 2) as u32;
+    let top_hemisphere_start = segments * 2;
 
     // Generate top hemisphere
     for ring in 0..=rings {

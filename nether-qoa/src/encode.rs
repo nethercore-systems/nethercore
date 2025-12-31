@@ -128,7 +128,7 @@ mod tests {
         let slice = encode_slice(&samples, &mut lms);
 
         // Should encode to something (we don't check exact value, just that it doesn't panic)
-        assert!(slice != 0 || slice == 0); // Always true, just testing no panic
+        let _ = slice; // Verify no panic
     }
 
     #[test]
@@ -138,7 +138,7 @@ mod tests {
         let slice = encode_slice(&samples, &mut lms);
 
         // Should encode partial slice without panic
-        assert!(slice != 0 || slice == 0);
+        let _ = slice; // Verify no panic
     }
 
     #[test]

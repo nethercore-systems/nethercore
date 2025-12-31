@@ -77,7 +77,7 @@ fn generate_checkerboard_texture(path: &PathBuf) -> Result<()> {
         for x in 0..SIZE {
             let checker_x = (x / CHECKER_SIZE) % 2;
             let checker_y = (y / CHECKER_SIZE) % 2;
-            let is_white = (checker_x + checker_y) % 2 == 0;
+            let is_white = (checker_x + checker_y).is_multiple_of(2);
 
             let color = if is_white {
                 Rgba([255u8, 255, 255, 255])

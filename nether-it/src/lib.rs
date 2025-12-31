@@ -241,8 +241,6 @@ mod tests {
         assert_eq!(IT_MAGIC.len(), 4);
         assert_eq!(INSTRUMENT_MAGIC.len(), 4);
         assert_eq!(SAMPLE_MAGIC.len(), 4);
-        assert!(MAX_CHANNELS <= 64);
-        assert!(MAX_PATTERNS <= 256);
     }
 
     #[test]

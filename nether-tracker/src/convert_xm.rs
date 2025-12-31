@@ -519,7 +519,7 @@ mod tests {
         );
         let loop_length = tracker_instr.sample_loop_end - tracker_instr.sample_loop_start;
         assert!(
-            loop_length >= 5265 && loop_length <= 5280,
+            (5265..=5280).contains(&loop_length),
             "Loop length should be ~5273, got {}",
             loop_length
         );

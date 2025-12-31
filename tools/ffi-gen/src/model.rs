@@ -70,11 +70,9 @@ pub struct Category {
 
 /// Map Rust type to C type
 pub fn map_rust_to_c(rust_type: &str) -> String {
-    if rust_type.starts_with("*const ") {
-        let inner = &rust_type[7..];
+    if let Some(inner) = rust_type.strip_prefix("*const ") {
         return format!("const {}*", map_rust_to_c(inner));
-    } else if rust_type.starts_with("*mut ") {
-        let inner = &rust_type[5..];
+    } else if let Some(inner) = rust_type.strip_prefix("*mut ") {
         return format!("{}*", map_rust_to_c(inner));
     }
 
@@ -96,11 +94,9 @@ pub fn map_rust_to_c(rust_type: &str) -> String {
 
 /// Map Rust type to Zig type
 pub fn map_rust_to_zig(rust_type: &str) -> String {
-    if rust_type.starts_with("*const ") {
-        let inner = &rust_type[7..];
+    if let Some(inner) = rust_type.strip_prefix("*const ") {
         return format!("[*]const {}", map_rust_to_zig(inner));
-    } else if rust_type.starts_with("*mut ") {
-        let inner = &rust_type[5..];
+    } else if let Some(inner) = rust_type.strip_prefix("*mut ") {
         return format!("[*]{}", map_rust_to_zig(inner));
     }
 

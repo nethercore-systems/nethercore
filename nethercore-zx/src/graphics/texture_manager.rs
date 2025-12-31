@@ -178,8 +178,8 @@ impl TextureManager {
         track_vram: bool,
     ) -> Result<TextureHandle> {
         // BC7: 4×4 blocks, 16 bytes per block
-        let blocks_x = (width + 3) / 4;
-        let blocks_y = (height + 3) / 4;
+        let blocks_x = width.div_ceil(4);
+        let blocks_y = height.div_ceil(4);
         let expected_size = (blocks_x * blocks_y * 16) as usize;
 
         if data.len() != expected_size {

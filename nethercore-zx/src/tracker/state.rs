@@ -37,7 +37,7 @@ impl Default for RowStateCache {
 impl RowStateCache {
     /// Check if we should cache this row (every 4 rows or pattern boundary)
     pub fn should_cache(row: u16) -> bool {
-        row % 4 == 0
+        row.is_multiple_of(4)
     }
 
     /// Find nearest cached state before or at target position (O(log n) with BTreeMap)
@@ -62,11 +62,10 @@ impl RowStateCache {
         global_volume: f32,
     ) {
         // Evict oldest entry if at capacity (BTreeMap keeps entries sorted, so first is oldest by position)
-        if self.cache.len() >= self.max_entries {
-            if let Some(&key) = self.cache.keys().next() {
+        if self.cache.len() >= self.max_entries
+            && let Some(&key) = self.cache.keys().next() {
                 self.cache.remove(&key);
             }
-        }
 
         self.cache.insert(
             (order, row),

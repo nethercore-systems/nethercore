@@ -161,12 +161,11 @@ pub fn sanitize_game_id(name: &str) -> String {
         if c.is_ascii_alphanumeric() {
             result.push(c.to_ascii_lowercase());
             last_was_hyphen = false;
-        } else if c == ' ' || c == '_' || c == '-' {
-            if !last_was_hyphen && !result.is_empty() {
+        } else if (c == ' ' || c == '_' || c == '-')
+            && !last_was_hyphen && !result.is_empty() {
                 result.push('-');
                 last_was_hyphen = true;
             }
-        }
         // Skip other characters
     }
 

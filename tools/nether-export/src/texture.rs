@@ -94,8 +94,8 @@ pub fn compress_bc7(pixels: &[u8], width: u32, height: u32) -> Result<Vec<u8>> {
     let h = height as usize;
 
     // Calculate block dimensions (round up to 4×4 blocks)
-    let blocks_x = (w + 3) / 4;
-    let blocks_y = (h + 3) / 4;
+    let blocks_x = w.div_ceil(4);
+    let blocks_y = h.div_ceil(4);
     let output_size = blocks_x * blocks_y * 16;
 
     let mut output = vec![0u8; output_size];
@@ -169,7 +169,7 @@ mod tests {
         // Create a simple 4×4 solid color image
         let width = 4u32;
         let height = 4u32;
-        let pixels: Vec<u8> = vec![255, 0, 0, 255].repeat(16); // Red
+        let pixels: Vec<u8> = [255, 0, 0, 255].repeat(16); // Red
 
         let compressed = compress_bc7(&pixels, width, height).unwrap();
 
@@ -182,7 +182,7 @@ mod tests {
         // 64×64 image = 16×16 blocks = 256 blocks × 16 bytes = 4096 bytes
         let width = 64u32;
         let height = 64u32;
-        let pixels: Vec<u8> = vec![0, 128, 255, 255].repeat((width * height) as usize);
+        let pixels: Vec<u8> = [0, 128, 255, 255].repeat((width * height) as usize);
 
         let compressed = compress_bc7(&pixels, width, height).unwrap();
 
@@ -194,7 +194,7 @@ mod tests {
         // 30×30 image should be padded to 32×32 (8×8 blocks)
         let width = 30u32;
         let height = 30u32;
-        let pixels: Vec<u8> = vec![128, 128, 128, 255].repeat((width * height) as usize);
+        let pixels: Vec<u8> = [128, 128, 128, 255].repeat((width * height) as usize);
 
         let compressed = compress_bc7(&pixels, width, height).unwrap();
 

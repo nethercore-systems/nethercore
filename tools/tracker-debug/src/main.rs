@@ -77,8 +77,8 @@ fn run_player(path: &Path, via_ncxm: bool, via_ncit: bool, verbose: bool) -> Res
 fn main_loop(player: &Arc<Mutex<DebugPlayer>>, display: &mut Display) -> Result<()> {
     loop {
         // Poll for keyboard input with timeout
-        if event::poll(Duration::from_millis(16))? {
-            if let Event::Key(key) = event::read()? {
+        if event::poll(Duration::from_millis(16))?
+            && let Event::Key(key) = event::read()? {
                 // Only handle key press events (not release)
                 if key.kind != KeyEventKind::Press {
                     continue;
@@ -106,7 +106,6 @@ fn main_loop(player: &Arc<Mutex<DebugPlayer>>, display: &mut Display) -> Result<
                     player.lock().unwrap().handle_command(cmd);
                 }
             }
-        }
 
         // Update display
         let state = player.lock().unwrap().get_display_state();

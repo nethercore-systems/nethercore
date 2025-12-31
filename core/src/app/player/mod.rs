@@ -227,12 +227,11 @@ where
                 return;
             }
 
-            if let Some(session) = runner.session_mut() {
-                if let Some(audio) = session.runtime.audio_mut() {
+            if let Some(session) = runner.session_mut()
+                && let Some(audio) = session.runtime.audio_mut() {
                     let config = super::config::load();
                     audio.set_master_volume(config.audio.master_volume);
                 }
-            }
         }
 
         self.next_tick = Instant::now();
@@ -242,16 +241,13 @@ where
 
     fn handle_key_input(&mut self, event: KeyEvent) {
         // First, let settings UI consume key if waiting for rebind
-        if event.state == ElementState::Pressed {
-            if let PhysicalKey::Code(key_code) = event.physical_key {
-                if self.settings_ui.is_waiting_for_key() {
-                    if self.settings_ui.handle_key_press(key_code) {
+        if event.state == ElementState::Pressed
+            && let PhysicalKey::Code(key_code) = event.physical_key
+                && self.settings_ui.is_waiting_for_key()
+                    && self.settings_ui.handle_key_press(key_code) {
                         self.needs_redraw = true;
                         return; // Key was consumed by settings UI
                     }
-                }
-            }
-        }
 
         if event.state == ElementState::Pressed {
             match event.physical_key {
@@ -634,12 +630,11 @@ where
             }
         }
 
-        if let Some(session) = runner.session_mut() {
-            if let Some(audio) = session.runtime.audio_mut() {
+        if let Some(session) = runner.session_mut()
+            && let Some(audio) = session.runtime.audio_mut() {
                 let config = super::config::load();
                 audio.set_master_volume(config.audio.master_volume);
             }
-        }
 
         let egui_state = egui_winit::State::new(
             self.egui_ctx.clone(),
@@ -757,12 +752,11 @@ where
                             } else {
                                 tracing::info!("Host mode: game started with peer");
                                 // Set audio volume
-                                if let Some(session) = runner.session_mut() {
-                                    if let Some(audio) = session.runtime.audio_mut() {
+                                if let Some(session) = runner.session_mut()
+                                    && let Some(audio) = session.runtime.audio_mut() {
                                         let config = super::config::load();
                                         audio.set_master_volume(config.audio.master_volume);
                                     }
-                                }
                             }
                         }
                         Err(e) => {
@@ -1046,8 +1040,8 @@ where
                                 });
                         }
 
-                        if debug_panel.visible {
-                            if let Some(ref registry) = registry_opt {
+                        if debug_panel.visible
+                            && let Some(ref registry) = registry_opt {
                                 let registry_for_read = registry.clone();
 
                                 let read_value = |reg_val: &RegisteredValue| -> Option<DebugValue> {
@@ -1081,7 +1075,6 @@ where
                                     *pending_action.borrow_mut() = Some(action);
                                 }
                             }
-                        }
 
                         // Waiting for peer connection dialog (Host mode)
                         if let Some(waiting) = waiting_for_peer_ref {
@@ -1216,9 +1209,9 @@ where
 
                 // Apply pending writes
                 let writes = pending_writes.into_inner();
-                if !writes.is_empty() {
-                    if let Some(session) = runner.session_mut() {
-                        if let Some(game) = session.runtime.game_mut() {
+                if !writes.is_empty()
+                    && let Some(session) = runner.session_mut()
+                        && let Some(game) = session.runtime.game_mut() {
                             let memory = game.store().data().game.memory;
                             if let Some(mem) = memory {
                                 let registry = game.store().data().debug_registry.clone();
@@ -1238,14 +1231,12 @@ where
                                 game.call_on_debug_change();
                             }
                         }
-                    }
-                }
 
                 // Apply pending action
-                if let Some(action_req) = pending_action.into_inner() {
-                    if let Some(session) = runner.session_mut() {
-                        if let Some(game) = session.runtime.game_mut() {
-                            if let Err(e) =
+                if let Some(action_req) = pending_action.into_inner()
+                    && let Some(session) = runner.session_mut()
+                        && let Some(game) = session.runtime.game_mut()
+                            && let Err(e) =
                                 game.call_action(&action_req.func_name, &action_req.args)
                             {
                                 tracing::warn!(
@@ -1254,9 +1245,6 @@ where
                                     e
                                 );
                             }
-                        }
-                    }
-                }
 
                 // Apply settings actions
                 match settings_action.into_inner() {
@@ -1278,11 +1266,10 @@ where
                         runner.graphics_mut().set_scale_mode(scale_mode);
                     }
                     SettingsAction::SetVolume(volume) => {
-                        if let Some(session) = runner.session_mut() {
-                            if let Some(audio) = session.runtime.audio_mut() {
+                        if let Some(session) = runner.session_mut()
+                            && let Some(audio) = session.runtime.audio_mut() {
                                 audio.set_master_volume(volume);
                             }
-                        }
                     }
                     SettingsAction::ResetDefaults => {
                         // Defaults were applied to temp config in UI, nothing else needed
@@ -1300,11 +1287,10 @@ where
                                 window.set_fullscreen(None);
                             }
                         }
-                        if let Some(session) = runner.session_mut() {
-                            if let Some(audio) = session.runtime.audio_mut() {
+                        if let Some(session) = runner.session_mut()
+                            && let Some(audio) = session.runtime.audio_mut() {
                                 audio.set_master_volume(config.audio.master_volume);
                             }
-                        }
                         // Update input manager with new keyboard mappings
                         self.input_manager.update_config(config.input.clone());
                         // Save to disk

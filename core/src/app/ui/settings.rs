@@ -19,7 +19,7 @@ pub enum SettingsAction {
     /// Close the settings panel
     Close,
     /// Save settings to disk
-    Save(Config),
+    Save(Box<Config>),
     /// Reset to defaults
     ResetDefaults,
     /// Preview scale mode change (apply immediately for feedback)
@@ -322,7 +322,7 @@ impl SharedSettingsUi {
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui.button("Apply & Save").clicked() {
-                    action = SettingsAction::Save(self.temp_config.clone());
+                    action = SettingsAction::Save(Box::new(self.temp_config.clone()));
                 }
 
                 if ui.button("Reset to Defaults").clicked() {

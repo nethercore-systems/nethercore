@@ -735,9 +735,9 @@ mod tests {
 
         // Test f32
         let mut data = [0u8; 4];
-        registry.write_value_to_slice(&mut data, &DebugValue::F32(3.14));
+        registry.write_value_to_slice(&mut data, &DebugValue::F32(3.125));
         let read = registry.read_value_from_slice(&data, ValueType::F32);
-        assert_eq!(read, DebugValue::F32(3.14));
+        assert_eq!(read, DebugValue::F32(3.125));
 
         // Test i32
         let mut data = [0u8; 4];

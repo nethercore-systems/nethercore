@@ -312,9 +312,9 @@ impl ZXAssetViewer {
     /// Update the viewer state (called each frame)
     pub fn update(&mut self, dt: f32) {
         // Update animation playback
-        if self.animation_playing {
-            if let Some(id) = &self.selected_id {
-                if let Some(anim) = self.data_pack.keyframes.iter().find(|k| &k.id == id) {
+        if self.animation_playing
+            && let Some(id) = &self.selected_id
+                && let Some(anim) = self.data_pack.keyframes.iter().find(|k| &k.id == id) {
                     // Advance frame based on delta time (assuming 30 fps animations)
                     let frames_per_second = 30.0 * self.animation_speed;
                     let frame_advance = dt * frames_per_second;
@@ -322,13 +322,11 @@ impl ZXAssetViewer {
                     self.animation_frame = ((self.animation_frame as f32 + frame_advance) as u16)
                         % anim.frame_count.max(1);
                 }
-            }
-        }
 
         // Update sound playback position
-        if self.sound_playing {
-            if let Some(id) = &self.selected_id {
-                if let Some(sound) = self.data_pack.sounds.iter().find(|s| &s.id == id) {
+        if self.sound_playing
+            && let Some(id) = &self.selected_id
+                && let Some(sound) = self.data_pack.sounds.iter().find(|s| &s.id == id) {
                     // Advance position based on delta time (22050 Hz sample rate)
                     let samples_advance = (dt * 22050.0) as usize;
                     self.sound_position += samples_advance;
@@ -339,8 +337,6 @@ impl ZXAssetViewer {
                         self.sound_playing = false;
                     }
                 }
-            }
-        }
     }
 
     // === Texture viewer controls ===
@@ -532,25 +528,23 @@ impl ZXAssetViewer {
 
     /// Seek sound to position (0.0 - 1.0)
     pub fn sound_seek(&mut self, position: f32) {
-        if let Some(id) = &self.selected_id {
-            if let Some(sound) = self.data_pack.sounds.iter().find(|s| &s.id == id) {
+        if let Some(id) = &self.selected_id
+            && let Some(sound) = self.data_pack.sounds.iter().find(|s| &s.id == id) {
                 self.sound_position = ((position.clamp(0.0, 1.0) * sound.data.len() as f32)
                     as usize)
                     .min(sound.data.len().saturating_sub(1));
             }
-        }
     }
 
     /// Get sound playback progress (0.0 - 1.0)
     pub fn sound_progress(&self) -> f32 {
-        if let Some(id) = &self.selected_id {
-            if let Some(sound) = self.data_pack.sounds.iter().find(|s| &s.id == id) {
+        if let Some(id) = &self.selected_id
+            && let Some(sound) = self.data_pack.sounds.iter().find(|s| &s.id == id) {
                 if sound.data.is_empty() {
                     return 0.0;
                 }
                 return self.sound_position as f32 / sound.data.len() as f32;
             }
-        }
         0.0
     }
 
@@ -568,33 +562,30 @@ impl ZXAssetViewer {
 
     /// Set animation frame
     pub fn animation_set_frame(&mut self, frame: u16) {
-        if let Some(id) = &self.selected_id {
-            if let Some(anim) = self.data_pack.keyframes.iter().find(|k| &k.id == id) {
+        if let Some(id) = &self.selected_id
+            && let Some(anim) = self.data_pack.keyframes.iter().find(|k| &k.id == id) {
                 self.animation_frame = frame.min(anim.frame_count.saturating_sub(1));
             }
-        }
     }
 
     /// Step animation forward one frame
     pub fn animation_step_forward(&mut self) {
-        if let Some(id) = &self.selected_id {
-            if let Some(anim) = self.data_pack.keyframes.iter().find(|k| &k.id == id) {
+        if let Some(id) = &self.selected_id
+            && let Some(anim) = self.data_pack.keyframes.iter().find(|k| &k.id == id) {
                 self.animation_frame = (self.animation_frame + 1) % anim.frame_count.max(1);
             }
-        }
     }
 
     /// Step animation backward one frame
     pub fn animation_step_back(&mut self) {
-        if let Some(id) = &self.selected_id {
-            if let Some(anim) = self.data_pack.keyframes.iter().find(|k| &k.id == id) {
+        if let Some(id) = &self.selected_id
+            && let Some(anim) = self.data_pack.keyframes.iter().find(|k| &k.id == id) {
                 if self.animation_frame == 0 {
                     self.animation_frame = anim.frame_count.saturating_sub(1);
                 } else {
                     self.animation_frame -= 1;
                 }
             }
-        }
     }
 
     /// Get current animation frame
@@ -732,6 +723,7 @@ impl ZXAssetViewer {
 }
 
 // Convert between local and core AssetCategory
+#[allow(dead_code)]
 fn to_core_category(cat: AssetCategory) -> CoreAssetCategory {
     match cat {
         AssetCategory::Textures => CoreAssetCategory::Textures,
@@ -901,10 +893,8 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
                                     if ui.button("⏸ Stop").clicked() {
                                         self.sound_stop();
                                     }
-                                } else {
-                                    if ui.button("▶ Play").clicked() {
-                                        self.sound_toggle_play();
-                                    }
+                                } else if ui.button("▶ Play").clicked() {
+                                    self.sound_toggle_play();
                                 }
                                 ui.label(format!("Position: {:.1}%", progress * 100.0));
                             });
@@ -1225,10 +1215,8 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
                                     if ui.button("⏸ Stop").clicked() {
                                         self.tracker_playing = false;
                                     }
-                                } else {
-                                    if ui.button("▶ Play").clicked() {
-                                        self.start_tracker_playback();
-                                    }
+                                } else if ui.button("▶ Play").clicked() {
+                                    self.start_tracker_playback();
                                 }
 
                                 // Show position if playing
@@ -1457,9 +1445,9 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
         }
 
         // Update sound playback position (just for UI visualization)
-        if self.sound_playing {
-            if let Some(id) = &self.selected_id {
-                if let Some(sound) = self.data_pack.sounds.iter().find(|s| &s.id == id) {
+        if self.sound_playing
+            && let Some(id) = &self.selected_id
+                && let Some(sound) = self.data_pack.sounds.iter().find(|s| &s.id == id) {
                     // Track position for waveform visualization
                     let samples_per_second = 22050.0;
                     let samples_to_advance = (samples_per_second * dt) as usize;
@@ -1470,8 +1458,6 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
                         self.sound_position = 0;
                     }
                 }
-            }
-        }
 
         // Update tracker playback - generate and push samples
         if self.tracker_playing {
@@ -1500,7 +1486,7 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
             static mut DEBUG_COUNTER: u32 = 0;
             unsafe {
                 DEBUG_COUNTER += 1;
-                if DEBUG_COUNTER % 30 == 0 {
+                if DEBUG_COUNTER.is_multiple_of(30) {
                     eprintln!(
                         "DEBUG render: {} samples, max_sample={:.4}, tracker_sounds.len()={}",
                         samples_to_generate,

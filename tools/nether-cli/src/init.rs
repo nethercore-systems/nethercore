@@ -115,7 +115,7 @@ fn generate_manifest(game_id: &str, game_title: &str, is_rust_project: bool) -> 
     // Header
     content.push_str("# Nether Game Manifest\n");
     content.push_str("# See: https://github.com/nethercore-systems/nethercore/docs/book/\n");
-    content.push_str("\n");
+    content.push('\n');
 
     // Game section
     content.push_str("[game]\n");
@@ -123,11 +123,11 @@ fn generate_manifest(game_id: &str, game_title: &str, is_rust_project: bool) -> 
     content.push_str(&format!("title = \"{}\"\n", game_title));
     content.push_str("author = \"Your Name\"\n");
     content.push_str("version = \"0.1.0\"\n");
-    content.push_str("\n");
+    content.push('\n');
     content.push_str("# Optional metadata\n");
     content.push_str("# description = \"A short description of your game\"\n");
     content.push_str("# tags = [\"action\", \"puzzle\"]\n");
-    content.push_str("\n");
+    content.push('\n');
 
     // Build section
     content.push_str("# Build Configuration\n");
@@ -153,7 +153,7 @@ fn generate_manifest(game_id: &str, game_title: &str, is_rust_project: bool) -> 
         content.push_str("# script = \"make release\"\n");
         content.push_str("# wasm = \"build/game.wasm\"\n");
     }
-    content.push_str("\n");
+    content.push('\n');
 
     // Render mode explanation
     content.push_str("# Render Mode\n");
@@ -166,7 +166,7 @@ fn generate_manifest(game_id: &str, game_title: &str, is_rust_project: bool) -> 
     content.push_str("# Textures are automatically compressed based on render mode:\n");
     content.push_str("#   Mode 0: RGBA8 (uncompressed)\n");
     content.push_str("#   Mode 1-3: BC7 (4x compression)\n");
-    content.push_str("\n");
+    content.push('\n');
 
     // Assets section
     content.push_str("# Assets\n");

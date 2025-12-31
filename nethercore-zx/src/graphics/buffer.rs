@@ -352,7 +352,7 @@ impl BufferManager {
         // Ensure retained index buffer has capacity
         // Pad index data to 4-byte alignment for wgpu COPY_BUFFER_ALIGNMENT (only if needed)
         let index_byte_data: &[u8] = bytemuck::cast_slice(indices);
-        let index_data_to_write: Cow<[u8]> = if index_byte_data.len() % 4 == 0 {
+        let index_data_to_write: Cow<[u8]> = if index_byte_data.len().is_multiple_of(4) {
             Cow::Borrowed(index_byte_data)
         } else {
             let padded_len = (index_byte_data.len() + 3) & !3;
@@ -489,7 +489,7 @@ impl BufferManager {
         // Ensure retained index buffer has capacity
         // Pad index data to 4-byte alignment for wgpu COPY_BUFFER_ALIGNMENT (only if needed)
         let index_byte_data: &[u8] = bytemuck::cast_slice(indices);
-        let index_data_to_write: Cow<[u8]> = if index_byte_data.len() % 4 == 0 {
+        let index_data_to_write: Cow<[u8]> = if index_byte_data.len().is_multiple_of(4) {
             Cow::Borrowed(index_byte_data)
         } else {
             let padded_len = (index_byte_data.len() + 3) & !3;
@@ -662,7 +662,7 @@ mod tests {
         // Helper to compute padded index data (same logic as load_mesh_indexed*)
         fn pad_index_data(indices: &[u16]) -> Cow<'_, [u8]> {
             let index_byte_data: &[u8] = bytemuck::cast_slice(indices);
-            if index_byte_data.len() % 4 == 0 {
+            if index_byte_data.len().is_multiple_of(4) {
                 Cow::Borrowed(index_byte_data)
             } else {
                 let padded_len = (index_byte_data.len() + 3) & !3;

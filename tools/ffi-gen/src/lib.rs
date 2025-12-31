@@ -7,7 +7,7 @@ pub mod model;
 pub mod parser;
 
 use anyhow::{Context, Result};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// Generate all FFI bindings
@@ -160,7 +160,7 @@ pub fn verify_with_zig(console: &str) -> Result<()> {
 }
 
 /// Verify C header compiles with zig cc
-fn verify_c_header(header_path: &PathBuf, console: &str) -> Result<()> {
+fn verify_c_header(header_path: &Path, console: &str) -> Result<()> {
     let workspace_root = find_workspace_root()?;
     let temp_dir = std::env::temp_dir();
     let test_c = temp_dir.join(format!("{}_test.c", console));
@@ -224,7 +224,7 @@ void test_helpers(void) {{
 }
 
 /// Verify Zig bindings compile
-fn verify_zig_bindings(zig_path: &PathBuf) -> Result<()> {
+fn verify_zig_bindings(zig_path: &Path) -> Result<()> {
     let temp_dir = std::env::temp_dir();
     let test_zig = temp_dir.join("test_bindings.zig");
     let output_obj = temp_dir.join("test_bindings.o");

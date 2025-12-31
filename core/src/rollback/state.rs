@@ -549,7 +549,7 @@ mod tests {
 
     #[test]
     fn test_host_rollback_state_serialization() {
-        let host_state = HostRollbackState::new(0xDEADBEEF, 42, 3.14159);
+        let host_state = HostRollbackState::new(0xDEADBEEF, 42, 2.5);
         let bytes = bytemuck::bytes_of(&host_state);
         assert_eq!(bytes.len(), HOST_STATE_SIZE);
 

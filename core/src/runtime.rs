@@ -192,8 +192,8 @@ impl<C: Console> Runtime<C> {
         // If we have a rollback session, use GGRS
         if let Some(session) = &mut self.session {
             // Check if P2P session is still synchronizing
-            if let Some(state) = session.session_state() {
-                if state != SessionState::Running {
+            if let Some(state) = session.session_state()
+                && state != SessionState::Running {
                     // Session is still synchronizing - poll it but don't advance frames
                     session.poll_remote_clients();
                     // Reset accumulator to prevent catchup burst when session starts
@@ -201,7 +201,6 @@ impl<C: Console> Runtime<C> {
                     // Return 0 ticks and 0.0 interpolation (no game state to interpolate)
                     return Ok((0, 0.0));
                 }
-            }
 
             // For P2P sessions, only advance once per render frame to match input cadence
             // (we only add input once per run_game_frame call)

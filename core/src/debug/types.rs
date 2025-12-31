@@ -267,7 +267,7 @@ mod tests {
     #[test]
     fn test_debug_value_as_f32() {
         assert_eq!(DebugValue::I32(100).as_f32(), 100.0);
-        assert_eq!(DebugValue::F32(3.14).as_f32(), 3.14);
+        assert_eq!(DebugValue::F32(3.125).as_f32(), 3.125);
         assert_eq!(DebugValue::Bool(true).as_f32(), 1.0);
         assert_eq!(DebugValue::Bool(false).as_f32(), 0.0);
         // Q16.16: 65536 raw = 1.0 float

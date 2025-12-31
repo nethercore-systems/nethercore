@@ -911,8 +911,7 @@ mod tests {
         let original_samples: Vec<i16> = vec![0, 1000, -1000, 10000, -10000, 32767, -32768, 0];
 
         // Build sample data
-        let mut it_data = Vec::new();
-        it_data.resize(1000, 0);
+        let mut it_data = vec![0; 1000];
         for &sample in &original_samples {
             it_data.extend_from_slice(&sample.to_le_bytes());
         }
@@ -949,8 +948,7 @@ mod tests {
         let compressed = compress_it215_8bit(&original_samples);
 
         // Build IT file data
-        let mut it_data = Vec::new();
-        it_data.resize(1000, 0);
+        let mut it_data = vec![0; 1000];
         it_data.extend_from_slice(&compressed);
 
         // Create sample header with compression flag
@@ -990,8 +988,7 @@ mod tests {
         let compressed = compress_it215_16bit(&original_samples);
 
         // Build IT file data
-        let mut it_data = Vec::new();
-        it_data.resize(1000, 0);
+        let mut it_data = vec![0; 1000];
         it_data.extend_from_slice(&compressed);
 
         // Create sample header with compression flag

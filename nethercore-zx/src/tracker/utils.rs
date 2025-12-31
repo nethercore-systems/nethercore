@@ -35,7 +35,7 @@ pub const LINEAR_FREQ_TABLE: [f32; 769] = {
         // 2^x where x is in [0, 1]
         // Using a high-precision polynomial approximation for const context
         // P(x) ≈ 2^x, accurate to ~10 decimal places for x in [0,1]
-        let ln2 = 0.693147180559945309417232121458176568;
+        let ln2 = std::f64::consts::LN_2;
         let t = x * ln2;
         // e^t Taylor series (enough terms for f32 precision)
         let e_t = 1.0

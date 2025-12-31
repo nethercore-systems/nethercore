@@ -1050,8 +1050,8 @@ mod tests {
 
         for dir in &tests {
             let (u, v) = encode_octahedral(*dir);
-            assert!(u >= -1.0 && u <= 1.0, "u out of range for {:?}", dir);
-            assert!(v >= -1.0 && v <= 1.0, "v out of range for {:?}", dir);
+            assert!((-1.0..=1.0).contains(&u), "u out of range for {:?}", dir);
+            assert!((-1.0..=1.0).contains(&v), "v out of range for {:?}", dir);
 
             // Verify packing doesn't panic and produces valid output
             let packed = pack_octahedral_u32(*dir);
@@ -1072,8 +1072,8 @@ mod tests {
         // Test diagonal directions (challenging for octahedral)
         let diag = Vec3::new(0.577, 0.577, 0.577).normalize();
         let (u, v) = encode_octahedral(diag);
-        assert!(u >= -1.0 && u <= 1.0);
-        assert!(v >= -1.0 && v <= 1.0);
+        assert!((-1.0..=1.0).contains(&u));
+        assert!((-1.0..=1.0).contains(&v));
     }
 
     #[test]

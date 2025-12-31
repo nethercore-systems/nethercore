@@ -249,7 +249,7 @@ fn pack_binary_data(
 
     // Helper to align buffer to 4 bytes
     fn align_buffer(buffer: &mut Vec<u8>) {
-        while buffer.len() % 4 != 0 {
+        while !buffer.len().is_multiple_of(4) {
             buffer.push(0);
         }
     }
@@ -984,13 +984,13 @@ fn assemble_glb(root: &json::Root, buffer_data: &[u8]) -> Vec<u8> {
     glb.extend_from_slice(&(json_chunk_length as u32).to_le_bytes()); // chunk length
     glb.extend_from_slice(&0x4E4F534Au32.to_le_bytes()); // chunk type "JSON"
     glb.extend_from_slice(json_bytes);
-    glb.extend(std::iter::repeat(0x20u8).take(json_padding)); // pad with spaces
+    glb.extend(std::iter::repeat_n(0x20u8, json_padding)); // pad with spaces
 
     // BIN chunk
     glb.extend_from_slice(&(buffer_chunk_length as u32).to_le_bytes()); // chunk length
     glb.extend_from_slice(&0x004E4942u32.to_le_bytes()); // chunk type "BIN\0"
     glb.extend_from_slice(buffer_data);
-    glb.extend(std::iter::repeat(0u8).take(buffer_padding)); // pad with zeros
+    glb.extend(std::iter::repeat_n(0u8, buffer_padding)); // pad with zeros
 
     glb
 }

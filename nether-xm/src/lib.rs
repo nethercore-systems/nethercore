@@ -192,7 +192,6 @@ mod tests {
     fn test_constants() {
         assert_eq!(XM_MAGIC.len(), 17);
         assert_eq!(XM_VERSION, 0x0104);
-        assert!(MAX_CHANNELS <= 32);
     }
 
     #[test]

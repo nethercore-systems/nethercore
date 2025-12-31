@@ -242,7 +242,7 @@ impl DebugPlayer {
         MAX_LEVEL.fetch_max(level, std::sync::atomic::Ordering::Relaxed);
 
         // Write to log file every ~2 seconds
-        if count % 88200 == 0 && count > 0 {
+        if count.is_multiple_of(88200) && count > 0 {
             use std::io::Write;
             let nonzero = NONZERO_COUNT.load(std::sync::atomic::Ordering::Relaxed);
             let max = MAX_LEVEL.load(std::sync::atomic::Ordering::Relaxed);
@@ -280,7 +280,7 @@ impl DebugPlayer {
             let rows = m
                 .patterns
                 .get(pattern_idx as usize)
-                .map(|p| p.num_rows as u16)
+                .map(|p| p.num_rows)
                 .unwrap_or(64);
             (pattern_idx, rows)
         } else {

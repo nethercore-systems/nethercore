@@ -269,7 +269,7 @@ pub fn read_render_target_pixels(
     let bytes_per_pixel = 4u32;
     let unpadded_bytes_per_row = width * bytes_per_pixel;
     let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
-    let padded_bytes_per_row = (unpadded_bytes_per_row + align - 1) / align * align;
+    let padded_bytes_per_row = unpadded_bytes_per_row.div_ceil(align) * align;
     let buffer_size = (padded_bytes_per_row * height) as u64;
 
     // Create staging buffer
@@ -440,7 +440,7 @@ fn save_screenshot(
 
     // Create PNG file with signature embedded as iTXt chunk
     let file = File::create(&path).context("Failed to create screenshot file")?;
-    let ref mut writer = BufWriter::new(file);
+    let writer = &mut BufWriter::new(file);
 
     let mut encoder = png::Encoder::new(writer, width, height);
     encoder.set_color(png::ColorType::Rgba);

@@ -176,11 +176,10 @@ impl<C: Console> ConsoleRunner<C> {
                 s.player_config().local_player_mask(),
             )
         });
-        if let Some((player_count, local_mask)) = session_info {
-            if let Some(game) = runtime.game_mut() {
+        if let Some((player_count, local_mask)) = session_info
+            && let Some(game) = runtime.game_mut() {
                 game.configure_session(player_count, local_mask);
             }
-        }
 
         // Initialize console-specific FFI state before calling game init()
         // (e.g., set datapack for rom_* functions)
@@ -262,11 +261,10 @@ impl<C: Console> ConsoleRunner<C> {
                 s.player_config().local_player_mask(),
             )
         });
-        if let Some((num_players, local_mask)) = session_info {
-            if let Some(game) = runtime.game_mut() {
+        if let Some((num_players, local_mask)) = session_info
+            && let Some(game) = runtime.game_mut() {
                 game.configure_session(num_players, local_mask);
             }
-        }
 
         // Initialize console-specific FFI state before calling game init()
         runtime.initialize_console_state();

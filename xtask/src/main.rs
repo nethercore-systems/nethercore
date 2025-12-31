@@ -103,7 +103,7 @@ fn build_examples() -> Result<()> {
 
         if has_nether_toml {
             // Use nether build (compile + pack)
-            match build_with_nether(&nether_exe, &example_path, &games_dir, &example_name_str) {
+            match build_with_nether(&nether_exe, example_path, &games_dir, &example_name_str) {
                 Ok(_) => {
                     println!("  ✓ {} installed", example_name_str);
                     success_count.fetch_add(1, Ordering::Relaxed);
@@ -115,7 +115,7 @@ fn build_examples() -> Result<()> {
             }
         } else {
             // No nether.toml - use legacy WASM-only installation
-            match build_wasm_only(&example_path, &games_dir, &example_name_str) {
+            match build_wasm_only(example_path, &games_dir, &example_name_str) {
                 Ok(_) => {
                     println!(
                         "  ✓ {} installed (WASM-only, no nether.toml)",

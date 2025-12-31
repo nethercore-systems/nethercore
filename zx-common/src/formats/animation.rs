@@ -478,7 +478,8 @@ mod tests {
     #[test]
     fn test_quat_half_angle_90_x_roundtrip() {
         // 90° X (half-angle form): [0.707107, 0, 0, 0.707107]
-        let q = [0.707107, 0.0, 0.0, 0.707107];
+        let sqrt2_inv = std::f32::consts::FRAC_1_SQRT_2;
+        let q = [sqrt2_inv, 0.0, 0.0, sqrt2_inv];
         let encoded = encode_quat_smallest_three(q);
         let decoded = decode_quat_smallest_three(encoded);
 
@@ -654,7 +655,7 @@ mod tests {
     #[test]
     fn test_extreme_values_roundtrip() {
         let input = BoneTransform {
-            rotation: [0.707107, 0.0, 0.707107, 0.0], // 180° around [1,0,1]
+            rotation: [std::f32::consts::FRAC_1_SQRT_2, 0.0, std::f32::consts::FRAC_1_SQRT_2, 0.0], // 180° around [1,0,1]
             position: [1000.0, -500.0, 0.001],
             scale: [0.5, 1.0, 2.5], // Non-uniform scale
         };
@@ -764,7 +765,7 @@ mod tests {
         // Maximum: 65535 frames (at 60fps = ~18 minutes)
         let header = NetherZXAnimationHeader::new(1, 65535);
         assert!(header.validate());
-        let expected_size = 4 + (1 * 65535 * 16);
+        let expected_size = 4 + (65535 * 16);
         assert_eq!(header.file_size(), expected_size);
         assert_eq!(expected_size, 1048564); // ~1MB for single bone
     }

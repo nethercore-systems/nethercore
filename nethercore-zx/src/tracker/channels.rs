@@ -400,19 +400,19 @@ impl TrackerChannel {
             self.volume_envelope_enabled = instr
                 .volume_envelope
                 .as_ref()
-                .map_or(false, |e| e.is_enabled());
+                .is_some_and(|e| e.is_enabled());
             self.panning_envelope_enabled = instr
                 .panning_envelope
                 .as_ref()
-                .map_or(false, |e| e.is_enabled());
+                .is_some_and(|e| e.is_enabled());
             self.pitch_envelope_enabled = instr
                 .pitch_envelope
                 .as_ref()
-                .map_or(false, |e| e.is_enabled());
+                .is_some_and(|e| e.is_enabled());
             self.filter_envelope_enabled = instr
                 .pitch_envelope
                 .as_ref()
-                .map_or(false, |e| e.is_filter());
+                .is_some_and(|e| e.is_filter());
         }
     }
 
