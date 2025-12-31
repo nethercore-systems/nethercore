@@ -6,11 +6,13 @@
 
 mod config;
 mod ffi_state;
+mod pool;
 mod resources;
 mod rollback_state;
 
 pub use config::ZXInitConfig;
 pub use ffi_state::ZXFFIState;
+pub use pool::{PoolIndex, StatePool};
 pub use resources::{
     Font, KeyframeGpuInfo, KeyframeSource, PendingKeyframes, PendingMesh, PendingMeshPacked,
     PendingSkeleton, PendingTexture, SkeletonGpuInfo,

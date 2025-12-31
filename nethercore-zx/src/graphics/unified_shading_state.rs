@@ -469,6 +469,16 @@ impl EnvironmentIndex {
     pub const INVALID: Self = Self(u32::MAX);
 }
 
+impl crate::state::PoolIndex for EnvironmentIndex {
+    fn from_raw(value: u32) -> Self {
+        EnvironmentIndex(value)
+    }
+
+    fn as_raw(&self) -> u32 {
+        self.0
+    }
+}
+
 /// Light type stored in bit 7 of data1
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -617,6 +627,16 @@ pub struct ShadingStateIndex(pub u32);
 
 impl ShadingStateIndex {
     pub const INVALID: Self = Self(u32::MAX);
+}
+
+impl crate::state::PoolIndex for ShadingStateIndex {
+    fn from_raw(value: u32) -> Self {
+        ShadingStateIndex(value)
+    }
+
+    fn as_raw(&self) -> u32 {
+        self.0
+    }
 }
 
 // ============================================================================

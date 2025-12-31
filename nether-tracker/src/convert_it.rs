@@ -1,6 +1,10 @@
 //! IT → TrackerModule conversion
 
-use crate::*;
+use crate::{
+    DuplicateCheckAction, DuplicateCheckType, EnvelopeFlags, FormatFlags, LoopType,
+    NewNoteAction, TrackerEffect, TrackerEnvelope, TrackerInstrument, TrackerModule,
+    TrackerNote, TrackerPattern, TrackerSample,
+};
 
 /// Convert an IT module to the unified TrackerModule format
 pub fn from_it_module(it: &nether_it::ItModule) -> TrackerModule {

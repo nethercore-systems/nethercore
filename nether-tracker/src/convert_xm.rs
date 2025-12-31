@@ -1,6 +1,10 @@
 //! XM → TrackerModule conversion
 
-use crate::*;
+use crate::{
+    DuplicateCheckAction, DuplicateCheckType, EnvelopeFlags, FormatFlags, LoopType,
+    NewNoteAction, TrackerEffect, TrackerEnvelope, TrackerInstrument, TrackerModule,
+    TrackerNote, TrackerPattern,
+};
 
 /// Convert an XM module to the unified TrackerModule format
 pub fn from_xm_module(xm: &nether_xm::XmModule) -> TrackerModule {

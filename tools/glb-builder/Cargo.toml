@@ -1,0 +1,12 @@
+[package]
+name = "glb-builder"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Shared GLB/GLTF generation utilities for nethercore asset tools"
+
+[dependencies]
+gltf-json = "1"
+gltf = { workspace = true }
+bytemuck = { workspace = true }
+anyhow = { workspace = true }
