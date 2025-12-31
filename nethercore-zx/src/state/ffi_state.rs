@@ -10,7 +10,7 @@ use zx_common::ZXDataPack;
 use super::{
     BoneMatrix3x4, Font, KeyframeGpuInfo, KeyframeSource, LoadedKeyframeCollection,
     PendingKeyframes, PendingMesh, PendingMeshPacked, PendingSkeleton, PendingTexture,
-    SkeletonData, SkeletonGpuInfo, ZXInitConfig,
+    SkeletonData, SkeletonGpuInfo, StatePool, ZXInitConfig,
 };
 
 /// Default layer for 2D rendering (background layer)
@@ -129,17 +129,19 @@ pub struct ZXFFIState {
     pub mvp_shading_map: HashMap<crate::graphics::MvpShadingIndices, u32>, // indices -> buffer_index
 
     // Unified shading state system (deduplication + dirty tracking)
-    pub shading_states: Vec<crate::graphics::PackedUnifiedShadingState>,
-    pub shading_state_map:
-        HashMap<crate::graphics::PackedUnifiedShadingState, crate::graphics::ShadingStateIndex>,
+    pub shading_pool: StatePool<
+        crate::graphics::PackedUnifiedShadingState,
+        crate::graphics::ShadingStateIndex,
+    >,
     pub current_shading_state: crate::graphics::PackedUnifiedShadingState,
     pub shading_state_dirty: bool,
 
     // Environment state system (Multi-Environment v3)
     // Pool of unique environment states (deduplicated)
-    pub environment_states: Vec<crate::graphics::PackedEnvironmentState>,
-    pub environment_state_map:
-        HashMap<crate::graphics::PackedEnvironmentState, crate::graphics::EnvironmentIndex>,
+    pub environment_pool: StatePool<
+        crate::graphics::PackedEnvironmentState,
+        crate::graphics::EnvironmentIndex,
+    >,
     // Current staging state (modified by env_* FFI calls)
     pub current_environment_state: crate::graphics::PackedEnvironmentState,
     pub environment_dirty: bool,
@@ -219,13 +221,11 @@ impl Default for ZXFFIState {
             current_proj_matrix: None,
             mvp_shading_states: Vec::with_capacity(256),
             mvp_shading_map: HashMap::with_capacity(256),
-            shading_states: Vec::new(),
-            shading_state_map: HashMap::new(),
+            shading_pool: StatePool::new("Shading state", 65536),
             current_shading_state: crate::graphics::PackedUnifiedShadingState::default(),
             shading_state_dirty: true, // Start dirty so first draw creates state 0
             // Environment state system (Multi-Environment v3)
-            environment_states: Vec::new(),
-            environment_state_map: HashMap::new(),
+            environment_pool: StatePool::new("Environment state", 65536),
             current_environment_state: crate::graphics::PackedEnvironmentState::default_gradient(),
             environment_dirty: true, // Start dirty so first draw creates environment 0
             quad_batches: Vec::new(),
@@ -622,33 +622,19 @@ impl ZXFFIState {
 
     /// Add current environment state to the pool if dirty, returning its index
     ///
-    /// Uses deduplication via HashMap - if this exact state already exists, returns existing index.
+    /// Uses deduplication via StatePool - if this exact state already exists, returns existing index.
     /// Otherwise adds a new entry.
     pub fn add_environment_state(&mut self) -> crate::graphics::EnvironmentIndex {
-        // If not dirty, return the last added state (should be at index states.len() - 1)
-        if !self.environment_dirty && !self.environment_states.is_empty() {
-            return crate::graphics::EnvironmentIndex(self.environment_states.len() as u32 - 1);
+        // If not dirty, return the last added state
+        if !self.environment_dirty && !self.environment_pool.is_empty() {
+            return self
+                .environment_pool
+                .last_index()
+                .unwrap_or(crate::graphics::EnvironmentIndex(0));
         }
 
-        // Check if this state already exists (deduplication)
-        if let Some(&existing_idx) = self
-            .environment_state_map
-            .get(&self.current_environment_state)
-        {
-            self.environment_dirty = false;
-            return existing_idx;
-        }
-
-        // Add new state
-        let idx = self.environment_states.len() as u32;
-        if idx >= 65536 {
-            panic!("Environment state pool overflow! Maximum 65,536 unique states per frame.");
-        }
-
-        let env_idx = crate::graphics::EnvironmentIndex(idx);
-        self.environment_states.push(self.current_environment_state);
-        self.environment_state_map
-            .insert(self.current_environment_state, env_idx);
+        // Add to pool (handles deduplication and overflow internally)
+        let env_idx = self.environment_pool.add(self.current_environment_state);
         self.environment_dirty = false;
 
         env_idx
@@ -656,7 +642,7 @@ impl ZXFFIState {
 
     /// Add current shading state to the pool if dirty, returning its index
     ///
-    /// Uses deduplication via HashMap - if this exact state already exists, returns existing index.
+    /// Uses deduplication via StatePool - if this exact state already exists, returns existing index.
     /// Otherwise adds a new entry.
     /// Also syncs the current environment state index into the shading state.
     pub fn add_shading_state(&mut self) -> crate::graphics::ShadingStateIndex {
@@ -670,27 +656,16 @@ impl ZXFFIState {
             self.shading_state_dirty = true;
         }
 
-        // If not dirty, return the last added state (should be at index states.len() - 1)
-        if !self.shading_state_dirty && !self.shading_states.is_empty() {
-            return crate::graphics::ShadingStateIndex(self.shading_states.len() as u32 - 1);
+        // If not dirty, return the last added state
+        if !self.shading_state_dirty && !self.shading_pool.is_empty() {
+            return self
+                .shading_pool
+                .last_index()
+                .unwrap_or(crate::graphics::ShadingStateIndex(0));
         }
 
-        // Check if this state already exists (deduplication)
-        if let Some(&existing_idx) = self.shading_state_map.get(&self.current_shading_state) {
-            self.shading_state_dirty = false;
-            return existing_idx;
-        }
-
-        // Add new state
-        let idx = self.shading_states.len() as u32;
-        if idx >= 65536 {
-            panic!("Shading state pool overflow! Maximum 65,536 unique states per frame.");
-        }
-
-        let shading_idx = crate::graphics::ShadingStateIndex(idx);
-        self.shading_states.push(self.current_shading_state);
-        self.shading_state_map
-            .insert(self.current_shading_state, shading_idx);
+        // Add to pool (handles deduplication and overflow internally)
+        let shading_idx = self.shading_pool.add(self.current_shading_state);
         self.shading_state_dirty = false;
 
         shading_idx
@@ -831,13 +806,11 @@ impl ZXFFIState {
         self.mvp_shading_map.clear();
 
         // Reset shading state pool for next frame
-        self.shading_states.clear();
-        self.shading_state_map.clear();
+        self.shading_pool.clear();
         self.shading_state_dirty = true; // Mark dirty so first draw creates state 0
 
         // Reset environment state pool for next frame (Multi-Environment v3)
-        self.environment_states.clear();
-        self.environment_state_map.clear();
+        self.environment_pool.clear();
         self.environment_dirty = true; // Mark dirty so first draw creates environment 0
 
         // Clear GPU-instanced quad batches for next frame

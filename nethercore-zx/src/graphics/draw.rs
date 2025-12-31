@@ -49,7 +49,7 @@ impl ZXGraphics {
         //
         // This ensures state 0 always exists, using the current render state defaults
         // (color, blend mode, material properties, etc.) from z_state.current_shading_state.
-        if z_state.shading_states.is_empty() {
+        if z_state.shading_pool.is_empty() {
             z_state.add_shading_state();
         }
 

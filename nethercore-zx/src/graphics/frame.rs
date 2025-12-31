@@ -264,16 +264,16 @@ impl ZXGraphics {
         }
 
         // 2. Upload shading states
-        if !z_state.shading_states.is_empty() {
-            self.ensure_shading_state_buffer_capacity(z_state.shading_states.len());
-            let data = bytemuck::cast_slice(&z_state.shading_states);
+        if !z_state.shading_pool.is_empty() {
+            self.ensure_shading_state_buffer_capacity(z_state.shading_pool.len());
+            let data = bytemuck::cast_slice(z_state.shading_pool.as_slice());
             self.queue.write_buffer(&self.shading_state_buffer, 0, data);
         }
 
         // 2b. Upload environment states (Multi-Environment v3)
-        if !z_state.environment_states.is_empty() {
-            self.ensure_environment_states_buffer_capacity(z_state.environment_states.len());
-            let data = bytemuck::cast_slice(&z_state.environment_states);
+        if !z_state.environment_pool.is_empty() {
+            self.ensure_environment_states_buffer_capacity(z_state.environment_pool.len());
+            let data = bytemuck::cast_slice(z_state.environment_pool.as_slice());
             self.queue
                 .write_buffer(&self.environment_states_buffer, 0, data);
         }

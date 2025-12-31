@@ -326,7 +326,7 @@ impl Console for NethercoreZX {
             DebugStat::number("Keyframes", state.next_keyframe_handle.saturating_sub(1)),
             DebugStat::number("Fonts", state.next_font_handle.saturating_sub(1)),
             DebugStat::number("MVP States", state.mvp_shading_states.len()),
-            DebugStat::number("Shading States", state.shading_states.len()),
+            DebugStat::number("Shading States", state.shading_pool.len()),
         ]
     }
 

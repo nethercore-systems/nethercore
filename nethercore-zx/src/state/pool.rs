@@ -63,6 +63,20 @@ where
     map: HashMap<T, I>,
 }
 
+impl<T, I> std::fmt::Debug for StatePool<T, I>
+where
+    T: Eq + Hash + Clone,
+    I: PoolIndex,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StatePool")
+            .field("name", &self.name)
+            .field("max_capacity", &self.max_capacity)
+            .field("len", &self.states.len())
+            .finish()
+    }
+}
+
 impl<T, I> StatePool<T, I>
 where
     T: Eq + Hash + Clone,
