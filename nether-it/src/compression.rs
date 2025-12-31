@@ -15,6 +15,20 @@ use crate::ItError;
 /// # Returns
 /// Decompressed 8-bit signed samples
 pub fn decompress_it215_8bit(compressed: &[u8], output_length: usize) -> Result<Vec<i8>, ItError> {
+    let (samples, _bytes_consumed) = decompress_it215_8bit_with_size(compressed, output_length)?;
+    Ok(samples)
+}
+
+/// Decompress IT215 8-bit sample data, returning bytes consumed
+///
+/// This is useful for stereo samples where we need to know where the right channel starts.
+///
+/// # Returns
+/// (Decompressed samples, bytes consumed from input)
+pub fn decompress_it215_8bit_with_size(
+    compressed: &[u8],
+    output_length: usize,
+) -> Result<(Vec<i8>, usize), ItError> {
     let mut output = Vec::with_capacity(output_length);
     let mut reader = BitReader::new(compressed);
 
@@ -33,7 +47,14 @@ pub fn decompress_it215_8bit(compressed: &[u8], output_length: usize) -> Result<
         output.push(0);
     }
 
-    Ok(output)
+    // Calculate bytes consumed (round up to next byte if we're mid-byte)
+    let bytes_consumed = if reader.bit_pos > 0 {
+        reader.byte_pos + 1
+    } else {
+        reader.byte_pos
+    };
+
+    Ok((output, bytes_consumed))
 }
 
 /// Decompress IT215 16-bit sample data
@@ -48,6 +69,20 @@ pub fn decompress_it215_16bit(
     compressed: &[u8],
     output_length: usize,
 ) -> Result<Vec<i16>, ItError> {
+    let (samples, _bytes_consumed) = decompress_it215_16bit_with_size(compressed, output_length)?;
+    Ok(samples)
+}
+
+/// Decompress IT215 16-bit sample data, returning bytes consumed
+///
+/// This is useful for stereo samples where we need to know where the right channel starts.
+///
+/// # Returns
+/// (Decompressed samples, bytes consumed from input)
+pub fn decompress_it215_16bit_with_size(
+    compressed: &[u8],
+    output_length: usize,
+) -> Result<(Vec<i16>, usize), ItError> {
     let mut output = Vec::with_capacity(output_length);
     let mut reader = BitReader::new(compressed);
 
@@ -66,7 +101,14 @@ pub fn decompress_it215_16bit(
         output.push(0);
     }
 
-    Ok(output)
+    // Calculate bytes consumed (round up to next byte if we're mid-byte)
+    let bytes_consumed = if reader.bit_pos > 0 {
+        reader.byte_pos + 1
+    } else {
+        reader.byte_pos
+    };
+
+    Ok((output, bytes_consumed))
 }
 
 /// Decompress a single 8-bit block

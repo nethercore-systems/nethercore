@@ -781,12 +781,7 @@ fn unpack_pattern_data(
     for _ in 0..num_rows {
         let mut row = vec![ItNote::default(); num_channels as usize];
 
-        loop {
-            let channel_var = match read_u8(&mut cursor) {
-                Ok(b) => b,
-                Err(_) => break, // End of data
-            };
-
+        while let Ok(channel_var) = read_u8(&mut cursor) {
             if channel_var == 0 {
                 // End of row
                 break;

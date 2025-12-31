@@ -339,11 +339,67 @@ fn load_assets(
                 }
             }
             Some(TrackerFormat::IT) => {
-                // IT files don't use extract_samples - we get instrument names instead
-                // and expect samples to be explicitly declared in manifest
-                println!("    Note: IT file {} - samples must be explicitly declared in manifest",
-                         path.file_name().unwrap().to_string_lossy());
-                Vec::new()
+                // Extract samples from IT file
+                match nether_it::extract_samples(&tracker_data) {
+                    Ok(it_samples) => {
+                        // Process IT samples directly here since they have different types
+                        for sample in it_samples {
+                            // Skip empty samples
+                            if sample.data.is_empty() {
+                                continue;
+                            }
+
+                            // Convert sample to 22050 Hz mono
+                            let converted_data = crate::audio_convert::convert_it_sample(&sample);
+                            if converted_data.is_empty() {
+                                continue;
+                            }
+
+                            // Calculate hash for deduplication
+                            let hash = hash_sample_data(&converted_data);
+
+                            // Sanitize name (use sample_index for IT)
+                            let sample_id = sanitize_name(&sample.name, &entry.id, sample.sample_index);
+
+                            // Check for collision with explicit sounds
+                            if let Some(existing) = sound_map.get(&sample_id) {
+                                let existing_hash = hash_sample_data(&existing.data);
+                                if existing_hash != hash {
+                                    return Err(anyhow::anyhow!(
+                                        "Collision: IT sample '{}' in '{}' conflicts with explicit sound '{}' (different content)",
+                                        sample.name,
+                                        entry.id,
+                                        sample_id
+                                    ));
+                                }
+                                // Same content = deduplicated, continue
+                                continue;
+                            }
+
+                            // Check for hash match (same content, different name)
+                            if let Some(existing_name) = hash_to_id.get(&hash) {
+                                println!("    Note: '{}' is identical to '{}', deduplicating", sample_id, existing_name);
+                                continue;
+                            }
+
+                            // Add new sample
+                            println!("    Extracted: {} from {}", sample_id, entry.id);
+                            sound_map.insert(sample_id.clone(), PackedSound {
+                                id: sample_id.clone(),
+                                data: converted_data,
+                            });
+                            hash_to_id.insert(hash, sample_id);
+                        }
+                        // Return empty since we processed IT samples inline
+                        Vec::new()
+                    }
+                    Err(e) => {
+                        // Sample-less IT file or extraction error
+                        println!("    Note: {} ({})", path.file_name().unwrap().to_string_lossy(), e);
+                        println!("          No samples extracted (this is expected for sample-less tracker files)");
+                        Vec::new()
+                    }
+                }
             }
             None => {
                 println!("    Warning: Unknown tracker format: {}", path.display());

@@ -1,0 +1,26 @@
+[package]
+name = "tracker-debug"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "tracker-debug"
+path = "src/main.rs"
+
+[dependencies]
+# Local crates
+nether-xm = { path = "../../nether-xm" }
+nether-it = { path = "../../nether-it" }
+nether-tracker = { path = "../../nether-tracker" }
+nethercore-zx = { path = "../../nethercore-zx" }
+
+# CLI & Terminal
+clap = { workspace = true }
+ratatui = { workspace = true }
+crossterm = { workspace = true }
+
+# Audio
+cpal = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }

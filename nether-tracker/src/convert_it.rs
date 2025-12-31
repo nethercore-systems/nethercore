@@ -5,21 +5,13 @@ use crate::*;
 /// Convert an IT module to the unified TrackerModule format
 pub fn from_it_module(it: &nether_it::ItModule) -> TrackerModule {
     // Convert patterns
-    let patterns = it
-        .patterns
-        .iter()
-        .map(|pat| convert_it_pattern(pat))
-        .collect();
+    let patterns = it.patterns.iter().map(convert_it_pattern).collect();
 
     // Convert instruments
-    let instruments = it
-        .instruments
-        .iter()
-        .map(|instr| convert_it_instrument(instr))
-        .collect();
+    let instruments = it.instruments.iter().map(convert_it_instrument).collect();
 
     // Convert samples
-    let samples = it.samples.iter().map(|smp| convert_it_sample(smp)).collect();
+    let samples = it.samples.iter().map(convert_it_sample).collect();
 
     // Convert format flags
     let mut format = FormatFlags::IS_IT_FORMAT;
@@ -92,10 +84,8 @@ fn convert_it_volume(vol: u8) -> u8 {
 /// Convert IT effect to unified TrackerEffect
 fn convert_it_effect(effect: u8, param: u8, volume: u8) -> TrackerEffect {
     // Check volume column for volume-column effects first
-    if volume > 64 {
-        if let Some(vol_effect) = convert_it_volume_effect(volume) {
-            return vol_effect;
-        }
+    if volume > 64 && let Some(vol_effect) = convert_it_volume_effect(volume) {
+        return vol_effect;
     }
 
     // Convert main effect command

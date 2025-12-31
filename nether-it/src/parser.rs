@@ -3,7 +3,10 @@
 use std::io::{Cursor, Read, Seek, SeekFrom};
 
 // Compression functions for loading sample data from IT files
-use crate::compression::{decompress_it215_16bit, decompress_it215_8bit};
+use crate::compression::{
+    decompress_it215_16bit, decompress_it215_16bit_with_size, decompress_it215_8bit,
+    decompress_it215_8bit_with_size,
+};
 use crate::error::ItError;
 use crate::module::{
     DuplicateCheckAction, DuplicateCheckType, ItEnvelope, ItEnvelopeFlags, ItFlags, ItInstrument,
@@ -390,7 +393,7 @@ fn parse_envelope(cursor: &mut Cursor<&[u8]>) -> Result<Option<ItEnvelope>, ItEr
 }
 
 /// Parse a single sample header
-fn parse_sample(cursor: &mut Cursor<&[u8]>) -> Result<SampleInfo, ItError> {
+pub fn parse_sample(cursor: &mut Cursor<&[u8]>) -> Result<SampleInfo, ItError> {
     // Read magic "IMPS"
     let mut magic = [0u8; 4];
     cursor.read_exact(&mut magic)?;
@@ -664,40 +667,114 @@ pub fn load_sample_data(
 
     let is_16bit = sample.flags.contains(ItSampleFlags::SAMPLE_16BIT);
     let is_compressed = sample.flags.contains(ItSampleFlags::COMPRESSED);
+    let is_stereo = sample.flags.contains(ItSampleFlags::STEREO);
+
+    // For stereo, IT stores Left channel first, then Right channel (sequential, not interleaved)
+    // We read both channels and interleave them for compatibility with standard audio processing
+    let channel_count = if is_stereo { 2 } else { 1 };
+    let samples_per_channel = sample.length as usize;
+    let total_samples = samples_per_channel * channel_count;
 
     if is_compressed {
-        // IT215 compression
+        // IT215 compression - for stereo, each channel is compressed separately
         let compressed_data = &data[offset..];
 
         if is_16bit {
-            let samples = decompress_it215_16bit(compressed_data, sample.length as usize)?;
-            Ok(SampleData::I16(samples))
+            if is_stereo {
+                // Decompress left channel and get bytes consumed to find right channel offset
+                let (left, left_bytes_consumed) =
+                    decompress_it215_16bit_with_size(compressed_data, samples_per_channel)?;
+
+                // Right channel starts after left channel's compressed data
+                let right_offset = left_bytes_consumed;
+                let right = if right_offset < compressed_data.len() {
+                    decompress_it215_16bit(&compressed_data[right_offset..], samples_per_channel)?
+                } else {
+                    // No right channel data available, fill with zeros
+                    vec![0i16; samples_per_channel]
+                };
+
+                // Interleave left and right channels
+                let mut interleaved = Vec::with_capacity(total_samples);
+                for i in 0..samples_per_channel {
+                    interleaved.push(left.get(i).copied().unwrap_or(0));
+                    interleaved.push(right.get(i).copied().unwrap_or(0));
+                }
+                Ok(SampleData::I16(interleaved))
+            } else {
+                let samples = decompress_it215_16bit(compressed_data, samples_per_channel)?;
+                Ok(SampleData::I16(samples))
+            }
+        } else if is_stereo {
+            // Decompress left channel and get bytes consumed to find right channel offset
+            let (left, left_bytes_consumed) =
+                decompress_it215_8bit_with_size(compressed_data, samples_per_channel)?;
+
+            // Right channel starts after left channel's compressed data
+            let right_offset = left_bytes_consumed;
+            let right = if right_offset < compressed_data.len() {
+                decompress_it215_8bit(&compressed_data[right_offset..], samples_per_channel)?
+            } else {
+                // No right channel data available, fill with zeros
+                vec![0i8; samples_per_channel]
+            };
+
+            // Interleave left and right channels
+            let mut interleaved = Vec::with_capacity(total_samples);
+            for i in 0..samples_per_channel {
+                interleaved.push(left.get(i).copied().unwrap_or(0));
+                interleaved.push(right.get(i).copied().unwrap_or(0));
+            }
+            Ok(SampleData::I8(interleaved))
         } else {
-            let samples = decompress_it215_8bit(compressed_data, sample.length as usize)?;
+            let samples = decompress_it215_8bit(compressed_data, samples_per_channel)?;
             Ok(SampleData::I8(samples))
         }
     } else {
         // Uncompressed sample data
-        let sample_size = if is_16bit {
-            sample.length as usize * 2
-        } else {
-            sample.length as usize
-        };
+        let bytes_per_sample = if is_16bit { 2 } else { 1 };
+        let total_size = total_samples * bytes_per_sample;
 
-        if offset + sample_size > data.len() {
+        if offset + total_size > data.len() {
             return Err(ItError::InvalidSample(0));
         }
 
         if is_16bit {
-            let mut samples = Vec::with_capacity(sample.length as usize);
-            for i in 0..sample.length as usize {
-                let idx = offset + i * 2;
-                let sample_val = i16::from_le_bytes([data[idx], data[idx + 1]]);
-                samples.push(sample_val);
+            if is_stereo {
+                // Read left channel, then right channel, then interleave
+                let mut interleaved = Vec::with_capacity(total_samples);
+                for i in 0..samples_per_channel {
+                    // Left sample
+                    let left_idx = offset + i * 2;
+                    let left = i16::from_le_bytes([data[left_idx], data[left_idx + 1]]);
+                    // Right sample (offset by samples_per_channel * 2 bytes)
+                    let right_idx = offset + (samples_per_channel + i) * 2;
+                    let right = i16::from_le_bytes([data[right_idx], data[right_idx + 1]]);
+                    interleaved.push(left);
+                    interleaved.push(right);
+                }
+                Ok(SampleData::I16(interleaved))
+            } else {
+                let mut samples = Vec::with_capacity(samples_per_channel);
+                for i in 0..samples_per_channel {
+                    let idx = offset + i * 2;
+                    let sample_val = i16::from_le_bytes([data[idx], data[idx + 1]]);
+                    samples.push(sample_val);
+                }
+                Ok(SampleData::I16(samples))
             }
-            Ok(SampleData::I16(samples))
+        } else if is_stereo {
+            // Read left channel, then right channel, then interleave
+            let mut interleaved = Vec::with_capacity(total_samples);
+            for i in 0..samples_per_channel {
+                let left = data[offset + i] as i8;
+                let right = data[offset + samples_per_channel + i] as i8;
+                interleaved.push(left);
+                interleaved.push(right);
+            }
+            Ok(SampleData::I8(interleaved))
         } else {
-            let samples: Vec<i8> = data[offset..offset + sample_size]
+            let samples: Vec<i8> = data[offset..offset + samples_per_channel]
                 .iter()
                 .map(|&b| b as i8)
                 .collect();

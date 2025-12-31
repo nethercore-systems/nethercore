@@ -2170,19 +2170,9 @@ impl TrackerEngine {
         let mut right = 0.0f32;
 
         // Mix all active channels
-        static mut DEBUG_RENDER_COUNTER: u32 = 0;
         for (ch_idx, channel) in self.channels.iter_mut().enumerate() {
             if ch_idx >= module.module.num_channels as usize {
                 break;
-            }
-
-            // Debug: periodically log channel state
-            unsafe {
-                DEBUG_RENDER_COUNTER = DEBUG_RENDER_COUNTER.wrapping_add(1);
-                if DEBUG_RENDER_COUNTER % 50000 == 1 && ch_idx == 0 {
-                    eprintln!("DEBUG ch{}: note_on={}, sample_handle={}, sounds.len()={}",
-                        ch_idx, channel.note_on, channel.sample_handle, sounds.len());
-                }
             }
 
             if !channel.note_on || channel.sample_handle == 0 {
@@ -2195,18 +2185,7 @@ impl TrackerEngine {
                 .and_then(|s| s.as_ref())
             {
                 Some(s) => s,
-                None => {
-                    // Debug: log failed sound lookup
-                    static mut SOUND_FAIL_COUNTER: u32 = 0;
-                    unsafe {
-                        SOUND_FAIL_COUNTER += 1;
-                        if SOUND_FAIL_COUNTER % 1000 == 1 {
-                            eprintln!("DEBUG ch{}: sample_handle={} NOT FOUND in sounds (len={})",
-                                ch_idx, channel.sample_handle, sounds.len());
-                        }
-                    }
-                    continue;
-                }
+                None => continue,
             };
 
             // Apply pitch envelope (IT only) - modifies period before sampling
@@ -2443,16 +2422,26 @@ fn sample_channel(channel: &mut TrackerChannel, data: &[i16], sample_rate: u32) 
         0.0
     };
 
-    let sample2 = if pos + 1 < data.len() {
-        data[pos + 1] as f32 / 32768.0
-    } else if channel.sample_loop_type != 0 && channel.sample_loop_end > channel.sample_loop_start {
-        // Wrap to loop start for smooth loop interpolation
-        let loop_start = channel.sample_loop_start as usize;
-        if loop_start < data.len() {
-            data[loop_start] as f32 / 32768.0
+    // For interpolation sample2, we need to handle the loop boundary correctly.
+    // If we're at or past (loop_end - 1), we should wrap to loop_start.
+    let sample2 = if channel.sample_loop_type != 0 && channel.sample_loop_end > channel.sample_loop_start {
+        // Check if we're at the loop boundary (pos is the last sample before loop_end)
+        let loop_end = channel.sample_loop_end as usize;
+        if pos + 1 >= loop_end {
+            // Wrap to loop start for smooth loop interpolation
+            let loop_start = channel.sample_loop_start as usize;
+            if loop_start < data.len() {
+                data[loop_start] as f32 / 32768.0
+            } else {
+                sample1
+            }
+        } else if pos + 1 < data.len() {
+            data[pos + 1] as f32 / 32768.0
         } else {
             sample1
         }
+    } else if pos + 1 < data.len() {
+        data[pos + 1] as f32 / 32768.0
     } else {
         sample1
     };
@@ -2853,5 +2842,585 @@ mod tests {
                 error_pct
             );
         }
+    }
+
+    #[test]
+    fn test_instrument_change_preserves_loop_points() {
+        // Regression test for unified tracker bug where loop points were
+        // reset to 0 when an instrument was set without a note.
+        // This broke XM playback where patterns often set instruments
+        // without triggering new notes (to change the active instrument).
+
+        use nether_tracker::{LoopType, TrackerInstrument, TrackerModule, TrackerNote, TrackerPattern, FormatFlags, TrackerEffect};
+
+        let mut engine = TrackerEngine::new();
+
+        // Create an instrument with loop points
+        let mut instrument = TrackerInstrument::default();
+        instrument.name = "TestInstr".to_string();
+        instrument.sample_loop_start = 1000;
+        instrument.sample_loop_end = 3000;
+        instrument.sample_loop_type = LoopType::Forward;
+        instrument.sample_finetune = 10;
+
+        // Create a minimal tracker module
+        let module = TrackerModule {
+            name: "Test".to_string(),
+            num_channels: 4,
+            initial_speed: 6,
+            initial_tempo: 125,
+            global_volume: 64,
+            order_table: vec![0],
+            patterns: vec![TrackerPattern::empty(64, 4)],
+            instruments: vec![instrument],
+            samples: vec![],
+            format: FormatFlags::IS_XM_FORMAT | FormatFlags::INSTRUMENTS,
+            message: None,
+            restart_position: 0,
+        };
+
+        // Load the module (with dummy sound handle)
+        let handle = engine.load_tracker_module(module, vec![42]); // sound_handle=42
+
+        // Create a note with ONLY an instrument number (no note)
+        // This is common in tracker music to change the active instrument
+        let note = TrackerNote {
+            note: 0,           // No note
+            instrument: 1,     // Set instrument 1
+            volume: 0,         // No volume
+            effect: TrackerEffect::None,
+        };
+
+        // Process the note (this simulates what happens during playback)
+        engine.process_note_internal(0, &note, handle, &[]);
+
+        // Verify that the loop points are set correctly
+        let channel = &engine.channels[0];
+        assert_eq!(channel.sample_handle, 42, "Sample handle should be set");
+        assert_eq!(channel.sample_loop_start, 1000, "Loop start should be preserved from instrument");
+        assert_eq!(channel.sample_loop_end, 3000, "Loop end should be preserved from instrument");
+        assert_eq!(channel.sample_loop_type, 1, "Loop type should be Forward (1)");
+        assert_eq!(channel.finetune, 10, "Finetune should be preserved from instrument");
+    }
+
+    #[test]
+    fn test_note_without_instrument_preserves_loop_points() {
+        // Test that when a note is triggered without an instrument number,
+        // it uses the loop points from the currently active instrument.
+        // This is critical for XM playback where notes often don't repeat the instrument number.
+
+        use nether_tracker::{LoopType, TrackerInstrument, TrackerModule, TrackerNote, TrackerPattern, FormatFlags, TrackerEffect};
+
+        let mut engine = TrackerEngine::new();
+
+        // Create an instrument with loop points
+        let mut instrument = TrackerInstrument::default();
+        instrument.name = "TestInstr".to_string();
+        instrument.sample_loop_start = 1000;
+        instrument.sample_loop_end = 3000;
+        instrument.sample_loop_type = LoopType::Forward;
+        instrument.sample_finetune = 10;
+        instrument.sample_relative_note = 2; // Transpose up 2 semitones
+
+        // Create a minimal tracker module
+        let module = TrackerModule {
+            name: "Test".to_string(),
+            num_channels: 4,
+            initial_speed: 6,
+            initial_tempo: 125,
+            global_volume: 64,
+            order_table: vec![0],
+            patterns: vec![TrackerPattern::empty(64, 4)],
+            instruments: vec![instrument],
+            samples: vec![],
+            format: FormatFlags::IS_XM_FORMAT | FormatFlags::INSTRUMENTS,
+            message: None,
+            restart_position: 0,
+        };
+
+        // Load the module (with dummy sound handle)
+        let handle = engine.load_tracker_module(module, vec![42]); // sound_handle=42
+
+        // First, set the instrument
+        let note1 = TrackerNote {
+            note: 0,           // No note yet
+            instrument: 1,     // Set instrument 1
+            volume: 0,
+            effect: TrackerEffect::None,
+        };
+        engine.process_note_internal(0, &note1, handle, &[]);
+
+        // Now trigger a note WITHOUT specifying the instrument
+        // This should use the loop points from instrument 1 (currently active)
+        let note2 = TrackerNote {
+            note: 49,          // C-4
+            instrument: 0,     // No instrument specified
+            volume: 0,
+            effect: TrackerEffect::None,
+        };
+        engine.process_note_internal(0, &note2, handle, &[]);
+
+        // Verify that the loop points are STILL set from instrument 1
+        let channel = &engine.channels[0];
+        assert_eq!(channel.sample_handle, 42, "Sample handle should still be 42");
+        assert_eq!(channel.sample_loop_start, 1000, "Loop start should be preserved from instrument 1");
+        assert_eq!(channel.sample_loop_end, 3000, "Loop end should be preserved from instrument 1");
+        assert_eq!(channel.sample_loop_type, 1, "Loop type should be Forward (1)");
+    }
+
+    #[test]
+    fn test_sample_loop_wraps_correctly() {
+        // Test that sample playback wraps at the loop end point
+        let mut channel = TrackerChannel::default();
+        channel.sample_loop_start = 100;
+        channel.sample_loop_end = 200;
+        channel.sample_loop_type = 1; // Forward loop
+        channel.sample_direction = 1;
+        channel.note_on = true;
+        channel.period = 4608.0; // C-4, plays at 1x speed
+
+        // Create sample data (larger than loop end)
+        let mut data = vec![0i16; 500];
+        // Put some markers at key positions
+        for i in 0..500 {
+            data[i] = i as i16; // Ascending values
+        }
+
+        // Position sample just before loop end
+        channel.sample_pos = 198.0;
+
+        // Sample a few times to trigger the loop wrap
+        let sample_rate = 22050;
+        let _ = sample_channel(&mut channel, &data, sample_rate);
+
+        // Check if sample wrapped (should still be moving forward, but position should have wrapped)
+        // After several samples, we should have moved past loop_end=200 and wrapped back
+        for _ in 0..10 {
+            let _ = sample_channel(&mut channel, &data, sample_rate);
+        }
+
+        // Sample position should be in the loop range, not past loop_end
+        assert!(
+            channel.sample_pos >= channel.sample_loop_start as f64
+                && channel.sample_pos < channel.sample_loop_end as f64,
+            "Sample position {} should be within loop range [{}, {})",
+            channel.sample_pos,
+            channel.sample_loop_start,
+            channel.sample_loop_end
+        );
+    }
+
+    #[test]
+    fn test_sample_interpolation_at_loop_boundary() {
+        // Test that interpolation at loop boundary reads from loop_start, not past loop_end
+        let mut channel = TrackerChannel::default();
+        channel.sample_loop_start = 100;
+        channel.sample_loop_end = 200;
+        channel.sample_loop_type = 1; // Forward loop
+        channel.sample_direction = 1;
+        channel.note_on = true;
+        channel.period = 4608.0;
+
+        // Create sample data with distinct values
+        let mut data = vec![0i16; 500];
+        data[199] = 1000;   // Last sample in loop (loop_end - 1)
+        data[200] = -9999;  // First sample AFTER loop (should NOT be read)
+        data[100] = 2000;   // First sample of loop (should be used for interpolation)
+
+        // Position at 199.5 (between last loop sample and what would be next)
+        channel.sample_pos = 199.5;
+
+        // If interpolation is correct, it should interpolate between
+        // data[199] (1000) and data[loop_start=100] (2000), not data[200] (-9999)
+        let sample = sample_channel(&mut channel, &data, 22050);
+
+        // Normalized: sample1 = 1000/32768 ≈ 0.0305, sample2 should be 2000/32768 ≈ 0.061
+        // With frac=0.5, result ≈ 0.0458
+        // If buggy (using data[200]=-9999), result would be negative
+
+        // The sample should be positive (interpolating between 1000 and 2000)
+        // If it's negative or very different, interpolation is reading past loop_end
+        assert!(
+            sample > 0.0,
+            "Sample at loop boundary should be positive (interpolating within loop), got {}",
+            sample
+        );
+    }
+
+    #[test]
+    fn test_sample_keeps_looping_indefinitely() {
+        // Test that a looping sample continues playing indefinitely
+        // without note_on being set to false
+        let mut channel = TrackerChannel::default();
+        channel.sample_loop_start = 50;
+        channel.sample_loop_end = 150;
+        channel.sample_loop_type = 1; // Forward loop
+        channel.sample_direction = 1;
+        channel.note_on = true;
+        channel.period = 4608.0; // C-4, plays at 1x speed
+        channel.volume = 1.0;
+
+        // Create sample data - loop is within the data
+        let data = vec![1000i16; 200];
+
+        // Simulate playing through many loop iterations
+        let sample_rate = 22050;
+        for iteration in 0..1000 {
+            let _ = sample_channel(&mut channel, &data, sample_rate);
+
+            // Check that note is still on
+            assert!(
+                channel.note_on,
+                "Note should still be on after {} samples, but was turned off. sample_pos={}, fade_out={}",
+                iteration, channel.sample_pos, channel.fade_out_samples
+            );
+
+            // Check sample position is within valid range
+            assert!(
+                channel.sample_pos >= 0.0 && channel.sample_pos < data.len() as f64,
+                "Sample position {} is out of bounds [0, {})",
+                channel.sample_pos, data.len()
+            );
+        }
+
+        // After 1000 samples at 1x speed, we should have looped many times
+        // but the note should still be playing
+        assert!(channel.note_on, "Note should still be playing after extended playback");
+    }
+
+    #[test]
+    fn test_non_looping_sample_stops() {
+        // Test that a non-looping sample stops when it reaches the end
+        let mut channel = TrackerChannel::default();
+        channel.sample_loop_start = 0;
+        channel.sample_loop_end = 0;
+        channel.sample_loop_type = 0; // No loop
+        channel.sample_direction = 1;
+        channel.note_on = true;
+        channel.period = 4608.0;
+        channel.volume = 1.0;
+
+        // Create short sample data
+        let data = vec![1000i16; 100];
+
+        // Play through the sample until it ends
+        let sample_rate = 22050;
+        let mut stopped = false;
+        for _ in 0..500 {
+            let _ = sample_channel(&mut channel, &data, sample_rate);
+            if !channel.note_on {
+                stopped = true;
+                break;
+            }
+        }
+
+        assert!(stopped, "Non-looping sample should have stopped when reaching end, final pos={}, fade_out={}", channel.sample_pos, channel.fade_out_samples);
+    }
+
+    #[test]
+    fn test_xm_module_loop_points_flow_through() {
+        // Test that loop points from XM instruments correctly flow through
+        // to the tracker channel during playback
+        use nether_xm::XmModule;
+
+        // Create a minimal XM module with a looping instrument
+        let xm_module = XmModule {
+            name: "Test".to_string(),
+            num_channels: 4,
+            song_length: 1,
+            restart_position: 0,
+            num_patterns: 1,
+            num_instruments: 1,
+            linear_frequency_table: true,
+            default_speed: 6,
+            default_bpm: 125,
+            order_table: vec![0],
+            patterns: vec![nether_xm::XmPattern {
+                num_rows: 64,
+                notes: vec![vec![nether_xm::XmNote::default(); 4]; 64],
+            }],
+            instruments: vec![nether_xm::XmInstrument {
+                name: "LoopingInstr".to_string(),
+                num_samples: 1,
+                sample_loop_start: 100,
+                sample_loop_length: 200,
+                sample_loop_type: 1, // Forward loop
+                sample_finetune: 0,
+                sample_relative_note: 17, // ~22050 Hz (so no scaling needed)
+                volume_envelope: None,
+                panning_envelope: None,
+                volume_fadeout: 0,
+                vibrato_type: 0,
+                vibrato_sweep: 0,
+                vibrato_depth: 0,
+                vibrato_rate: 0,
+            }],
+        };
+
+        // Load into tracker engine
+        let mut engine = TrackerEngine::new();
+        let handle = engine.load_xm_module(xm_module, vec![42]); // dummy sound handle
+
+        // Get the loaded module and check the TrackerInstrument
+        let module = engine.get_module(handle).expect("Module should be loaded");
+        let instr = &module.instruments[0];
+
+        // Loop points should be approximately 100 and 300 (100+200) since sample rate ≈ 22050 Hz
+        assert!(
+            instr.sample_loop_start >= 95 && instr.sample_loop_start <= 105,
+            "Loop start should be ~100, got {}",
+            instr.sample_loop_start
+        );
+        assert!(
+            instr.sample_loop_end >= 295 && instr.sample_loop_end <= 305,
+            "Loop end should be ~300, got {}",
+            instr.sample_loop_end
+        );
+        assert_eq!(
+            instr.sample_loop_type,
+            nether_tracker::LoopType::Forward,
+            "Loop type should be Forward"
+        );
+
+        // Now simulate triggering a note and check the channel
+        let note = nether_tracker::TrackerNote {
+            note: 49,      // C-4
+            instrument: 1, // Instrument 1
+            volume: 64,
+            effect: nether_tracker::TrackerEffect::None,
+        };
+        engine.process_note_internal(0, &note, handle, &[]);
+
+        // Check channel has correct loop settings
+        let channel = &engine.channels[0];
+
+        assert!(
+            channel.sample_loop_start >= 95 && channel.sample_loop_start <= 105,
+            "Channel loop start should be ~100, got {}",
+            channel.sample_loop_start
+        );
+        assert!(
+            channel.sample_loop_end >= 295 && channel.sample_loop_end <= 305,
+            "Channel loop end should be ~300, got {}",
+            channel.sample_loop_end
+        );
+        assert_eq!(
+            channel.sample_loop_type, 1,
+            "Channel loop type should be 1 (Forward)"
+        );
+    }
+
+    #[test]
+    fn test_volume_envelope_with_sustain_holds_note() {
+        // Test that a note with volume envelope sustain holds indefinitely
+        // until key_off is triggered
+        use nether_tracker::{TrackerEnvelope, EnvelopeFlags};
+
+        // Create a volume envelope with sustain at point 1 (tick 20, value 64)
+        // The envelope goes: (0, 64) -> (20, 64) -> (50, 0)
+        // Sustain at point 1 (tick 20) should hold at volume 64
+        let envelope = TrackerEnvelope {
+            points: vec![(0, 64), (20, 64), (50, 0)],
+            sustain_begin: 1,
+            sustain_end: 1,
+            loop_begin: 0,
+            loop_end: 0,
+            flags: EnvelopeFlags::from_bits(0x01 | 0x04), // ENABLED | SUSTAIN_LOOP
+        };
+
+        assert!(envelope.is_enabled(), "Envelope should be enabled");
+        assert!(envelope.has_sustain(), "Envelope should have sustain");
+
+        // Test envelope values
+        assert_eq!(envelope.value_at(0), 64, "Value at tick 0 should be 64");
+        assert_eq!(envelope.value_at(20), 64, "Value at tick 20 (sustain) should be 64");
+        assert_eq!(envelope.value_at(50), 0, "Value at tick 50 (after sustain) should be 0");
+
+        // Now test with a channel
+        let mut channel = TrackerChannel::default();
+        channel.note_on = true;
+        channel.key_off = false;
+        channel.volume = 1.0;
+        channel.volume_envelope_enabled = true;
+        channel.volume_envelope_pos = 0;
+        // Sustain is at tick 20 (the x-coordinate of point 1)
+        channel.volume_envelope_sustain_tick = Some(20);
+
+        // Advance the envelope 50 times - it should stop at sustain (tick 20)
+        for i in 0..50 {
+            // Check if at sustain point
+            let at_sustain = if let Some(sus_tick) = channel.volume_envelope_sustain_tick {
+                channel.volume_envelope_pos >= sus_tick && !channel.key_off
+            } else {
+                false
+            };
+
+            if !at_sustain {
+                channel.volume_envelope_pos += 1;
+            }
+
+            // After 20 iterations, envelope should be held at sustain
+            if i >= 20 {
+                assert_eq!(
+                    channel.volume_envelope_pos, 20,
+                    "Envelope should be held at sustain point 20, not advancing to {}",
+                    channel.volume_envelope_pos
+                );
+            }
+        }
+
+        // Now trigger key_off and verify envelope continues past sustain
+        channel.key_off = true;
+
+        for _ in 0..35 {
+            let at_sustain = if let Some(sus_tick) = channel.volume_envelope_sustain_tick {
+                channel.volume_envelope_pos >= sus_tick && !channel.key_off
+            } else {
+                false
+            };
+
+            if !at_sustain {
+                channel.volume_envelope_pos += 1;
+            }
+        }
+
+        // After key_off and 35 more iterations, envelope should have advanced to ~55
+        assert!(
+            channel.volume_envelope_pos > 50,
+            "After key_off, envelope should continue past sustain, got {}",
+            channel.volume_envelope_pos
+        );
+    }
+
+    #[test]
+    fn test_held_note_with_looping_sample_and_envelope() {
+        // This test simulates what happens during real playback:
+        // 1. A note with a looping sample
+        // 2. A volume envelope with sustain
+        // 3. Extended playback without key_off
+        // The note should continue playing indefinitely
+        use crate::audio::Sound;
+        use std::sync::Arc;
+
+        // Create sample data (400 samples, loops from 100-300)
+        let sample_data: Vec<i16> = (0..400).map(|i| ((i as f32 * 0.1).sin() * 16000.0) as i16).collect();
+        let sound = Sound {
+            data: Arc::new(sample_data.clone()),
+        };
+        let sounds: Vec<Option<Sound>> = vec![None, Some(sound)];
+
+        // Create an XM module with a looping instrument and volume envelope
+        let xm_module = nether_xm::XmModule {
+            name: "HeldNoteTest".to_string(),
+            num_channels: 4,
+            song_length: 1,
+            restart_position: 0,
+            num_patterns: 1,
+            num_instruments: 1,
+            linear_frequency_table: true,
+            default_speed: 6,
+            default_bpm: 125,
+            order_table: vec![0],
+            patterns: vec![nether_xm::XmPattern {
+                num_rows: 64,
+                notes: vec![
+                    // Row 0: Note C-4 with instrument 1
+                    vec![
+                        nether_xm::XmNote {
+                            note: 49, // C-4
+                            instrument: 1,
+                            volume: 0x40, // Full volume
+                            effect: 0,
+                            effect_param: 0,
+                        },
+                        nether_xm::XmNote::default(),
+                        nether_xm::XmNote::default(),
+                        nether_xm::XmNote::default(),
+                    ],
+                    // Rows 1-63: Empty
+                ].into_iter().chain(std::iter::repeat_with(|| vec![
+                    nether_xm::XmNote::default(),
+                    nether_xm::XmNote::default(),
+                    nether_xm::XmNote::default(),
+                    nether_xm::XmNote::default(),
+                ]).take(63)).collect(),
+            }],
+            instruments: vec![nether_xm::XmInstrument {
+                name: "LoopingWithEnvelope".to_string(),
+                num_samples: 1,
+                sample_loop_start: 100,
+                sample_loop_length: 200,
+                sample_loop_type: 1, // Forward loop
+                sample_finetune: -16,
+                sample_relative_note: 17, // ~22050 Hz
+                volume_envelope: Some(nether_xm::XmEnvelope {
+                    points: vec![(0, 64), (20, 64), (100, 0)],
+                    sustain_point: 1, // Sustain at point 1 (tick 20)
+                    loop_start: 0,
+                    loop_end: 0,
+                    enabled: true,
+                    sustain_enabled: true,
+                    loop_enabled: false,
+                }),
+                panning_envelope: None,
+                volume_fadeout: 0,
+                vibrato_type: 0,
+                vibrato_sweep: 0,
+                vibrato_depth: 0,
+                vibrato_rate: 0,
+            }],
+        };
+
+        // Load the module
+        let mut engine = TrackerEngine::new();
+        let handle = engine.load_xm_module(xm_module, vec![1]); // sound_handle 1 points to sounds[1]
+
+        // Initialize tracker state
+        let mut state = crate::state::TrackerState::default();
+        state.handle = handle;
+        state.flags = crate::state::tracker_flags::PLAYING;
+        state.volume = 256;
+        state.bpm = 125; // Default XM tempo
+        state.speed = 6; // Default XM speed
+        // state.tick and state.tick_sample_pos are 0 by default
+        // This means the first call to render_sample_and_advance will process tick 0
+
+        // First sync to state (this doesn't process notes, just syncs position)
+        engine.sync_to_state(&state, &sounds);
+
+        // Render the first sample - this triggers tick 0 processing on the first row
+        let sample_rate = 22050u32;
+        let _ = engine.render_sample_and_advance(&mut state, &sounds, sample_rate);
+
+        // Verify the channel is set up correctly after the first render
+        let channel = &engine.channels[0];
+        assert!(channel.note_on, "Note should be on after triggering");
+        assert_eq!(channel.sample_loop_type, 1, "Loop type should be Forward");
+
+        // Render many samples - the note should keep playing
+        let samples_to_render = 50000; // About 2+ seconds worth
+
+        for i in 0..samples_to_render {
+            let _ = engine.render_sample_and_advance(&mut state, &sounds, sample_rate);
+
+            // The note should still be on (not cut off)
+            if !engine.channels[0].note_on {
+                panic!("Note stopped at sample {} - note_on became false", i);
+            }
+        }
+
+        // Verify envelope advanced (should be at sustain point 20 or higher)
+        // With BPM=125, speed=6, sample_rate=22050:
+        // samples_per_tick = 22050 * 2.5 / 125 = 441
+        // 50000 samples = ~113 ticks = ~18 rows
+        // Envelope should have reached sustain point at tick 20
+        assert!(
+            engine.channels[0].volume_envelope_pos >= 20,
+            "Envelope should have advanced to sustain point (20), but is at {}",
+            engine.channels[0].volume_envelope_pos
+        );
+
+        // After extended playback, note should still be on
+        assert!(engine.channels[0].note_on, "Note should still be playing after extended playback");
     }
 }

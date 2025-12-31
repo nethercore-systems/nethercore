@@ -5,18 +5,10 @@ use crate::*;
 /// Convert an XM module to the unified TrackerModule format
 pub fn from_xm_module(xm: &nether_xm::XmModule) -> TrackerModule {
     // Convert patterns
-    let patterns = xm
-        .patterns
-        .iter()
-        .map(|pat| convert_xm_pattern(pat))
-        .collect();
+    let patterns = xm.patterns.iter().map(convert_xm_pattern).collect();
 
     // Convert instruments
-    let instruments = xm
-        .instruments
-        .iter()
-        .map(|instr| convert_xm_instrument(instr))
-        .collect();
+    let instruments = xm.instruments.iter().map(convert_xm_instrument).collect();
 
     // XM doesn't have separate samples at the module level (they're in instruments)
     // Create placeholder samples from instrument metadata
@@ -85,7 +77,7 @@ fn convert_xm_note(xm_note: &nether_xm::XmNote) -> TrackerNote {
 /// Convert XM volume column (0x10-0x50 for volume, others for effects)
 fn convert_xm_volume(vol: u8) -> u8 {
     // XM volume column: 0x10-0x50 = volume 0-64
-    if vol >= 0x10 && vol <= 0x50 {
+    if (0x10..=0x50).contains(&vol) {
         vol - 0x10
     } else {
         0
@@ -95,10 +87,11 @@ fn convert_xm_volume(vol: u8) -> u8 {
 /// Convert XM effect to unified TrackerEffect
 fn convert_xm_effect(effect: u8, param: u8, volume: u8) -> TrackerEffect {
     // Check volume column for volume-column effects first
-    if volume != 0 && (volume < 0x10 || volume > 0x50) {
-        if let Some(vol_effect) = convert_xm_volume_effect(volume) {
-            return vol_effect;
-        }
+    if volume != 0
+        && !(0x10..=0x50).contains(&volume)
+        && let Some(vol_effect) = convert_xm_volume_effect(volume)
+    {
+        return vol_effect;
     }
 
     // Convert main effect command

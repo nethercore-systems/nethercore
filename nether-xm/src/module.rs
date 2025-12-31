@@ -166,7 +166,7 @@ impl XmNote {
 }
 
 /// XM instrument metadata (no sample data - that's in ROM)
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct XmInstrument {
     /// Instrument name (used to map to ROM sample ID)
     pub name: String,
@@ -196,27 +196,6 @@ pub struct XmInstrument {
     pub sample_loop_length: u32,
     /// Sample loop type (0=none, 1=forward, 2=ping-pong)
     pub sample_loop_type: u8,
-}
-
-impl Default for XmInstrument {
-    fn default() -> Self {
-        Self {
-            name: String::new(),
-            num_samples: 0,
-            volume_envelope: None,
-            panning_envelope: None,
-            vibrato_type: 0,
-            vibrato_sweep: 0,
-            vibrato_depth: 0,
-            vibrato_rate: 0,
-            volume_fadeout: 0,
-            sample_finetune: 0,
-            sample_relative_note: 0,
-            sample_loop_start: 0,
-            sample_loop_length: 0,
-            sample_loop_type: 0,
-        }
-    }
 }
 
 impl XmInstrument {

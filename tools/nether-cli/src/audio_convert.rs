@@ -105,6 +105,29 @@ pub fn convert_xm_sample(sample: &nether_xm::ExtractedSample) -> Vec<i16> {
     resample_to_22050(&sample.data, sample.sample_rate)
 }
 
+/// Full conversion pipeline for IT samples
+///
+/// Converts an IT sample to Nethercore's standard format:
+/// - Convert stereo to mono if needed
+/// - Resample to 22050 Hz
+///
+/// # Arguments
+/// * `sample` - Extracted IT sample
+///
+/// # Returns
+/// * Converted audio data ready for ROM packing
+pub fn convert_it_sample(sample: &nether_it::ExtractedSample) -> Vec<i16> {
+    // Convert stereo to mono if needed
+    let mono_data = if sample.is_stereo {
+        stereo_to_mono(&sample.data)
+    } else {
+        sample.data.clone()
+    };
+
+    // Resample to 22050 Hz
+    resample_to_22050(&mono_data, sample.sample_rate)
+}
+
 /// Apply loop to sample if specified
 ///
 /// This doesn't modify the sample data, but calculates the loop points

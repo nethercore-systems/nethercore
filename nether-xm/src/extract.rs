@@ -347,7 +347,7 @@ mod tests {
 
         // One octave down (-12 semitones) should halve frequency
         let rate_down = ExtractedSample::calculate_sample_rate(0, -12);
-        assert!((rate_down as f32 - 4181.0).abs() < 1.0);
+        assert!((rate_down as f32 - 4182.0).abs() < 1.0); // 8363/2 = 4181.5, rounds to 4182
 
         // Test finetune adjustment (1/128th of a semitone)
         let with_finetune = ExtractedSample::calculate_sample_rate(64, 0);

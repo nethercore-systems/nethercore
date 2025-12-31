@@ -261,7 +261,7 @@ impl ItNote {
     /// - 0-64: Set volume
     /// - 65-74 (a-j): Fine volume up
     /// - 75-84 (k-t): Fine volume down
-    /// etc. (see IT spec)
+    /// - etc. (see IT spec)
     pub fn parse_volume(&self) -> Option<(VolumeEffect, u8)> {
         if self.volume == 0 {
             return None;
@@ -423,7 +423,7 @@ pub fn note_from_name(name: &str) -> Option<u8> {
         return None;
     }
 
-    let note = (octave * 12 + semitone as i32 + sharp).clamp(0, 119) as u8;
+    let note = (octave * 12 + semitone + sharp).clamp(0, 119) as u8;
     Some(note)
 }
 

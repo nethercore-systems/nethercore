@@ -210,9 +210,9 @@ impl TrackerNote {
         self.note == Self::NOTE_OFF
     }
 
-    /// Check if this has a valid note
+    /// Check if this has a valid note (0 = no note)
     pub fn has_note(&self) -> bool {
-        self.note <= Self::NOTE_MAX
+        self.note > 0 && self.note <= Self::NOTE_MAX
     }
 
     /// Check if this has an instrument

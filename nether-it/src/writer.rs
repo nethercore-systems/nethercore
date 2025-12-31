@@ -25,10 +25,11 @@ impl Default for ItWriter {
 impl ItWriter {
     /// Create a new IT writer with the given song name
     pub fn new(name: &str) -> Self {
-        let mut module = ItModule::default();
-        module.name = name.chars().take(26).collect();
         Self {
-            module,
+            module: ItModule {
+                name: name.chars().take(26).collect(),
+                ..Default::default()
+            },
             sample_data: Vec::new(),
         }
     }
@@ -111,12 +112,11 @@ impl ItWriter {
 
     /// Set a note in a pattern
     pub fn set_note(&mut self, pattern: u8, row: u16, channel: u8, note: ItNote) {
-        if let Some(pat) = self.module.patterns.get_mut(pattern as usize) {
-            if let Some(row_data) = pat.notes.get_mut(row as usize) {
-                if let Some(cell) = row_data.get_mut(channel as usize) {
-                    *cell = note;
-                }
-            }
+        if let Some(pat) = self.module.patterns.get_mut(pattern as usize)
+            && let Some(row_data) = pat.notes.get_mut(row as usize)
+            && let Some(cell) = row_data.get_mut(channel as usize)
+        {
+            *cell = note;
         }
     }
 

@@ -5,9 +5,10 @@
 //! unified representation during parsing.
 
 /// Unified tracker effect (normalized from XM/IT)
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TrackerEffect {
     /// No effect
+    #[default]
     None,
 
     // =========================================================================
@@ -253,12 +254,6 @@ pub enum TrackerEffect {
     /// Multi retrig note (XM only)
     /// XM: Rxy
     MultiRetrigNote { ticks: u8, volume: u8 },
-}
-
-impl Default for TrackerEffect {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 impl TrackerEffect {

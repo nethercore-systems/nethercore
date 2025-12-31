@@ -137,6 +137,7 @@ impl ZXDataPack {
     }
 
     /// Create a data pack with the given assets
+    #[allow(clippy::too_many_arguments)]
     pub fn with_assets(
         textures: Vec<PackedTexture>,
         meshes: Vec<PackedMesh>,
