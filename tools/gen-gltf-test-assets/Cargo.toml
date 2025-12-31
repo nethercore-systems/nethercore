@@ -5,10 +5,9 @@ edition = "2021"
 description = "Generate test assets for gltf-test example - GLB conversion and texture generation"
 
 [dependencies]
-# For GLB construction
+# Shared GLB construction library
+glb-builder = { path = "../glb-builder" }
 gltf-json = "1"
-gltf = { workspace = true }
-bytemuck = { workspace = true }
 
 # For asset conversion
 nether-export = { path = "../nether-export" }

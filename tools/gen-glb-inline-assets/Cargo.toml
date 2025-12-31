@@ -5,10 +5,9 @@ edition = "2021"
 description = "Generate multi-animation GLB for glb-inline example"
 
 [dependencies]
-# For GLB construction
+# Shared GLB construction library
+glb-builder = { path = "../glb-builder" }
 gltf-json = "1"
-gltf = { workspace = true }
-bytemuck = { workspace = true }
 
 # Error handling
 anyhow = { workspace = true }
