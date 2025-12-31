@@ -50,7 +50,7 @@ mod writer;
 
 pub use compression::{decompress_it215_16bit, decompress_it215_8bit};
 pub use error::ItError;
-pub use minimal::{pack_it_minimal, strip_it_samples};
+pub use minimal::{pack_it_minimal, pack_ncit, parse_it_minimal, parse_ncit, strip_it_samples};
 pub use module::{
     note_from_name, DuplicateCheckAction, DuplicateCheckType, ItEnvelope, ItEnvelopeFlags,
     ItFlags, ItInstrument, ItModule, ItNote, ItPattern, ItSample, ItSampleFlags, NewNoteAction,

@@ -942,11 +942,11 @@ fn load_tracker(
             // Validate sample references against loaded sounds
             validate_tracker_samples(id, path, &sample_ids, available_sound_ids)?;
 
-            // Parse IT and pack to minimal format (removes all overhead)
+            // Parse IT and pack to NCIT minimal format (removes all overhead)
             let module = nether_it::parse_it(&data)
                 .with_context(|| format!("Failed to parse IT tracker: {}", path.display()))?;
 
-            let pattern_data = nether_it::pack_it_minimal(&module);
+            let pattern_data = nether_it::pack_ncit(&module);
 
             (sample_ids, pattern_data)
         }
