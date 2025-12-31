@@ -1,5 +1,8 @@
 //! XM → TrackerModule conversion
 
+/// Target sample rate for Nethercore audio
+const TARGET_SAMPLE_RATE: u32 = 22050;
+
 use crate::{
     DuplicateCheckAction, DuplicateCheckType, EnvelopeFlags, FormatFlags, LoopType,
     NewNoteAction, TrackerEffect, TrackerEnvelope, TrackerInstrument, TrackerModule,
@@ -258,6 +261,30 @@ fn convert_xm_extended_effect(param: u8) -> TrackerEffect {
     }
 }
 
+/// Convert loop points from one sample rate to TARGET_SAMPLE_RATE (22050 Hz)
+///
+/// This calculates the loop points at the new sample rate after resampling.
+///
+/// # Arguments
+/// * `original_rate` - Original sample rate
+/// * `loop_start` - Loop start in original samples
+/// * `loop_length` - Loop length in original samples
+///
+/// # Returns
+/// * `(new_loop_start, new_loop_length)` at 22050 Hz
+pub fn convert_loop_points(original_rate: u32, loop_start: u32, loop_length: u32) -> (u32, u32) {
+    if original_rate == TARGET_SAMPLE_RATE {
+        return (loop_start, loop_length);
+    }
+
+    let ratio = TARGET_SAMPLE_RATE as f64 / original_rate as f64;
+
+    let new_start = (loop_start as f64 * ratio).round() as u32;
+    let new_length = (loop_length as f64 * ratio).round() as u32;
+
+    (new_start, new_length)
+}
+
 /// Convert XM volume column effects
 fn convert_xm_volume_effect(vol: u8) -> Option<TrackerEffect> {
     match vol {
@@ -308,16 +335,11 @@ fn convert_xm_instrument(xm_instr: &nether_xm::XmInstrument) -> TrackerInstrumen
     };
 
     // Convert loop points to match the resampled 22050 Hz sample
-    // If original was 44100 Hz, loop point 1000 becomes 500 after resampling
-    const TARGET_RATE: u32 = 22050;
-    let (sample_loop_start, sample_loop_length) = if original_sample_rate == TARGET_RATE {
-        (xm_instr.sample_loop_start, xm_instr.sample_loop_length)
-    } else {
-        let ratio = TARGET_RATE as f64 / original_sample_rate as f64;
-        let new_start = (xm_instr.sample_loop_start as f64 * ratio).round() as u32;
-        let new_length = (xm_instr.sample_loop_length as f64 * ratio).round() as u32;
-        (new_start, new_length)
-    };
+    let (sample_loop_start, sample_loop_length) = convert_loop_points(
+        original_sample_rate,
+        xm_instr.sample_loop_start,
+        xm_instr.sample_loop_length,
+    );
 
     TrackerInstrument {
         name: xm_instr.name.clone(),

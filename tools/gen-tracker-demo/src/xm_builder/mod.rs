@@ -118,7 +118,7 @@ pub fn write_instrument_with_pitch(xm: &mut Vec<u8>, name: &str, sample_rate: u3
     // Instrument name (22 bytes)
     let name_bytes = name.as_bytes();
     xm.extend_from_slice(&name_bytes[..name_bytes.len().min(22)]);
-    xm.extend(std::iter::repeat(0u8).take(22 - name_bytes.len().min(22)));
+    xm.extend(std::iter::repeat_n(0u8, 22 - name_bytes.len().min(22)));
 
     // Instrument type (0)
     xm.push(0);
@@ -130,15 +130,15 @@ pub fn write_instrument_with_pitch(xm: &mut Vec<u8>, name: &str, sample_rate: u3
     xm.extend_from_slice(&40u32.to_le_bytes());
 
     // Sample mapping (96 bytes - all notes map to sample 0)
-    xm.extend(std::iter::repeat(0u8).take(96));
+    xm.extend(std::iter::repeat_n(0u8, 96));
 
     // Volume envelope points (48 bytes) - simple sustain envelope
     xm.extend_from_slice(&0u16.to_le_bytes()); // Point 0: x=0
     xm.extend_from_slice(&64u16.to_le_bytes()); // Point 0: y=64
-    xm.extend(std::iter::repeat(0u8).take(44)); // Remaining 11 points
+    xm.extend(std::iter::repeat_n(0u8, 44)); // Remaining 11 points
 
     // Panning envelope points (48 bytes) - disabled
-    xm.extend(std::iter::repeat(0u8).take(48));
+    xm.extend(std::iter::repeat_n(0u8, 48));
 
     // Number of volume/panning envelope points
     xm.push(1); // num_vol_points
@@ -202,7 +202,7 @@ pub fn write_instrument_with_pitch(xm: &mut Vec<u8>, name: &str, sample_rate: u3
 
     // Sample name (22 bytes) - same as instrument name
     xm.extend_from_slice(&name_bytes[..name_bytes.len().min(22)]);
-    xm.extend(std::iter::repeat(0u8).take(22 - name_bytes.len().min(22)));
+    xm.extend(std::iter::repeat_n(0u8, 22 - name_bytes.len().min(22)));
 
     // NO SAMPLE DATA - sample comes from ROM at runtime
 }
@@ -221,7 +221,7 @@ pub fn write_instrument_with_sample(xm: &mut Vec<u8>, name: &str, sample_data: &
     // Instrument name (22 bytes)
     let name_bytes = name.as_bytes();
     xm.extend_from_slice(&name_bytes[..name_bytes.len().min(22)]);
-    xm.extend(std::iter::repeat(0u8).take(22 - name_bytes.len().min(22)));
+    xm.extend(std::iter::repeat_n(0u8, 22 - name_bytes.len().min(22)));
 
     // Instrument type (0)
     xm.push(0);
@@ -233,15 +233,15 @@ pub fn write_instrument_with_sample(xm: &mut Vec<u8>, name: &str, sample_data: &
     xm.extend_from_slice(&40u32.to_le_bytes());
 
     // Sample mapping (96 bytes - all notes map to sample 0)
-    xm.extend(std::iter::repeat(0u8).take(96));
+    xm.extend(std::iter::repeat_n(0u8, 96));
 
     // Volume envelope points (48 bytes) - simple sustain envelope
     xm.extend_from_slice(&0u16.to_le_bytes()); // Point 0: x=0
     xm.extend_from_slice(&64u16.to_le_bytes()); // Point 0: y=64
-    xm.extend(std::iter::repeat(0u8).take(44)); // Remaining 11 points
+    xm.extend(std::iter::repeat_n(0u8, 44)); // Remaining 11 points
 
     // Panning envelope points (48 bytes) - disabled
-    xm.extend(std::iter::repeat(0u8).take(48));
+    xm.extend(std::iter::repeat_n(0u8, 48));
 
     // Number of volume/panning envelope points
     xm.push(1); // num_vol_points
@@ -304,7 +304,7 @@ pub fn write_instrument_with_sample(xm: &mut Vec<u8>, name: &str, sample_data: &
 
     // Sample name (22 bytes) - same as instrument name
     xm.extend_from_slice(&name_bytes[..name_bytes.len().min(22)]);
-    xm.extend(std::iter::repeat(0u8).take(22 - name_bytes.len().min(22)));
+    xm.extend(std::iter::repeat_n(0u8, 22 - name_bytes.len().min(22)));
 
     // Sample data (delta-encoded 16-bit)
     let mut old = 0i16;

@@ -41,7 +41,7 @@ mod converter;
 mod effects;
 
 pub use convert_it::from_it_module;
-pub use convert_xm::from_xm_module;
+pub use convert_xm::{convert_loop_points, from_xm_module};
 pub use converter::{ItConverter, ModuleConverter, XmConverter};
 pub use effects::TrackerEffect;
 

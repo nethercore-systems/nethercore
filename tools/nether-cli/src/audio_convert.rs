@@ -128,35 +128,6 @@ pub fn convert_it_sample(sample: &nether_it::ExtractedSample) -> Vec<i16> {
     resample_to_22050(&mono_data, sample.sample_rate)
 }
 
-/// Apply loop to sample if specified
-///
-/// This doesn't modify the sample data, but calculates the loop points
-/// at the new sample rate after resampling.
-///
-/// # Arguments
-/// * `original_rate` - Original sample rate
-/// * `loop_start` - Loop start in original samples
-/// * `loop_length` - Loop length in original samples
-///
-/// # Returns
-/// * `(new_loop_start, new_loop_length)` at 22050 Hz
-pub fn convert_loop_points(
-    original_rate: u32,
-    loop_start: u32,
-    loop_length: u32,
-) -> (u32, u32) {
-    if original_rate == TARGET_SAMPLE_RATE {
-        return (loop_start, loop_length);
-    }
-
-    let ratio = TARGET_SAMPLE_RATE as f64 / original_rate as f64;
-
-    let new_start = (loop_start as f64 * ratio).round() as u32;
-    let new_length = (loop_length as f64 * ratio).round() as u32;
-
-    (new_start, new_length)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -226,33 +197,6 @@ mod tests {
         let stereo: Vec<i16> = Vec::new();
         let mono = stereo_to_mono(&stereo);
         assert!(mono.is_empty());
-    }
-
-    #[test]
-    fn test_convert_loop_points_identity() {
-        let (start, length) = convert_loop_points(TARGET_SAMPLE_RATE, 100, 500);
-        assert_eq!(start, 100);
-        assert_eq!(length, 500);
-    }
-
-    #[test]
-    fn test_convert_loop_points_downsample() {
-        // 44100 Hz -> 22050 Hz (half the rate)
-        let (start, length) = convert_loop_points(44100, 1000, 2000);
-
-        // Should be roughly half
-        assert!((start as i32 - 500).abs() <= 1);
-        assert!((length as i32 - 1000).abs() <= 1);
-    }
-
-    #[test]
-    fn test_convert_loop_points_upsample() {
-        // 11025 Hz -> 22050 Hz (double the rate)
-        let (start, length) = convert_loop_points(11025, 500, 1000);
-
-        // Should be roughly double
-        assert!((start as i32 - 1000).abs() <= 2);
-        assert!((length as i32 - 2000).abs() <= 2);
     }
 
     #[test]

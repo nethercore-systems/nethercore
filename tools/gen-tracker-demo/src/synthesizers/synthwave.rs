@@ -211,7 +211,7 @@ pub fn generate_bass_synth() -> Vec<i16> {
 
         // Main sawtooth with phase accumulation
         phase += freq / SAMPLE_RATE;
-        phase = phase % 1.0;
+        phase %= 1.0;
         let saw = 2.0 * phase - 1.0;
 
         // Add subtle pulse for warmth (15% mix)
@@ -220,7 +220,7 @@ pub fn generate_bass_synth() -> Vec<i16> {
 
         // Sub oscillator with proper phase tracking
         sub_phase += (freq * 0.5) / SAMPLE_RATE;
-        sub_phase = sub_phase % 1.0;
+        sub_phase %= 1.0;
         let sub = (sub_phase * 2.0 * PI).sin() * 0.32;
 
         // 3-pole resonant filter
@@ -285,7 +285,7 @@ pub fn generate_lead_synth() -> Vec<i16> {
         let mut saw_sum = 0.0f32;
         for (idx, ratio) in detune_ratios.iter().enumerate() {
             phases[idx] += freq * ratio * vibrato / SAMPLE_RATE;
-            phases[idx] = phases[idx] % 1.0;
+            phases[idx] %= 1.0;
 
             // Mix saw and triangle for warmth
             let saw = 2.0 * phases[idx] - 1.0;
@@ -335,7 +335,7 @@ pub fn generate_arp_synth() -> Vec<i16> {
 
         // Phase accumulation
         phase += freq / SAMPLE_RATE;
-        phase = phase % 1.0;
+        phase %= 1.0;
 
         // Square wave with variable pulse width for character
         let pw = 0.48 + 0.04 * (t * 8.0).sin();
@@ -400,7 +400,7 @@ pub fn generate_pad_synth() -> Vec<i16> {
         let mut osc_sum = 0.0f32;
         for (idx, detune) in detune_amounts.iter().enumerate() {
             phases[idx] += freq * detune * (1.0 + lfo) / SAMPLE_RATE;
-            phases[idx] = phases[idx] % 1.0;
+            phases[idx] %= 1.0;
 
             // Mix saw, triangle, and sine for ultra-smooth character
             let saw = 2.0 * phases[idx] - 1.0;

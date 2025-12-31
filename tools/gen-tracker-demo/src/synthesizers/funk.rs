@@ -232,7 +232,7 @@ pub fn generate_bass_funk() -> Vec<i16> {
 
         // Main sawtooth with proper phase accumulation
         phase += freq * pitch_bend / SAMPLE_RATE;
-        phase = phase % 1.0;
+        phase %= 1.0;
         let saw = 2.0 * phase - 1.0;
 
         // Add subtle square wave for more harmonics (20% mix)
@@ -241,7 +241,7 @@ pub fn generate_bass_funk() -> Vec<i16> {
 
         // Sub oscillator with proper phase tracking
         sub_phase += (freq * 0.5 * pitch_bend) / SAMPLE_RATE;
-        sub_phase = sub_phase % 1.0;
+        sub_phase %= 1.0;
         let sub = (sub_phase * 2.0 * PI).sin() * 0.38;
 
         // 3-pole resonant filter (adds character)
@@ -369,7 +369,7 @@ pub fn generate_lead_jazz() -> Vec<i16> {
 
         // Accumulate phase with modulations
         phase += freq * vibrato * breath_mod / SAMPLE_RATE;
-        phase = phase % 1.0;
+        phase %= 1.0;
 
         // Variable pulse width square wave (adds harmonic movement)
         let pw = 0.48 + 0.04 * (t * 1.8).sin();

@@ -213,7 +213,7 @@ pub fn generate_bass_euro() -> Vec<i16> {
 
         // Proper phase accumulation
         phase += freq * pitch_env / SAMPLE_RATE;
-        phase = phase % 1.0;
+        phase %= 1.0;
 
         // Pulse wave (45% duty) with slight detuning for width
         let pulse1 = if phase < 0.45 { 1.0 } else { -1.0 };
@@ -228,7 +228,7 @@ pub fn generate_bass_euro() -> Vec<i16> {
 
         // Sub oscillator with proper phase tracking
         sub_phase += (freq * 0.5) / SAMPLE_RATE;
-        sub_phase = sub_phase % 1.0;
+        sub_phase %= 1.0;
         let sub = (sub_phase * 2.0 * PI).sin() * 0.28;
 
         // 2-pole low-pass filter for punch
@@ -291,7 +291,7 @@ pub fn generate_supersaw() -> Vec<i16> {
         for (idx, ratio) in detune_ratios.iter().enumerate() {
             let osc_freq = freq * ratio * vibrato;
             phases[idx] += osc_freq / SAMPLE_RATE;
-            phases[idx] = phases[idx] % 1.0;
+            phases[idx] %= 1.0;
 
             // Saw wave
             let saw = 2.0 * phases[idx] - 1.0;
@@ -351,11 +351,11 @@ pub fn generate_brass_euro() -> Vec<i16> {
 
         // Three detuned pulse waves for thickness
         phase1 += freq * pitch_bend / SAMPLE_RATE;
-        phase1 = phase1 % 1.0;
+        phase1 %= 1.0;
         phase2 += freq * pitch_bend * 1.005 / SAMPLE_RATE;
-        phase2 = phase2 % 1.0;
+        phase2 %= 1.0;
         phase3 += freq * pitch_bend * 0.995 / SAMPLE_RATE;
-        phase3 = phase3 % 1.0;
+        phase3 %= 1.0;
 
         let pw = 0.38; // Narrow pulse for brass character
         let pulse1 = if phase1 < pw { 1.0 } else { -1.0 };
@@ -424,7 +424,7 @@ pub fn generate_pad_euro() -> Vec<i16> {
         let mut saw_sum = 0.0f32;
         for (idx, detune) in detune_amounts.iter().enumerate() {
             phases[idx] += freq * detune * (1.0 + lfo) / SAMPLE_RATE;
-            phases[idx] = phases[idx] % 1.0;
+            phases[idx] %= 1.0;
 
             // Mix saw and triangle for warmth
             let saw = 2.0 * phases[idx] - 1.0;
