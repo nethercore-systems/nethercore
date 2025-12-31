@@ -82,10 +82,7 @@ pub fn convert_gltf_animation_to_memory(
             .animations()
             .find(|a| a.name() == Some(name))
             .with_context(|| {
-                let available: Vec<_> = document
-                    .animations()
-                    .filter_map(|a| a.name())
-                    .collect();
+                let available: Vec<_> = document.animations().filter_map(|a| a.name()).collect();
                 format!(
                     "Animation '{}' not found in glTF. Available animations: {:?}",
                     name, available

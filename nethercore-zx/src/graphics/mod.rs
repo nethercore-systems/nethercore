@@ -44,7 +44,9 @@ pub use buffer::{BufferManager, GrowableBuffer, MeshHandle, RetainedMesh};
 pub use command_buffer::{CommandSortKey, VRPCommand, VirtualRenderPass};
 pub use matrix_packing::MvpShadingIndices;
 pub use quad_instance::{QuadInstance, QuadMode};
-pub use render_state::{CullMode, MatcapBlendMode, RenderState, StencilMode, TextureFilter, TextureHandle};
+pub use render_state::{
+    CullMode, MatcapBlendMode, RenderState, StencilMode, TextureFilter, TextureHandle,
+};
 pub use unified_shading_state::{
     DEFAULT_FLAGS,
     EnvironmentIndex,

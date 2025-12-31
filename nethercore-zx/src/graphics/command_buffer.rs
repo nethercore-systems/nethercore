@@ -4,9 +4,9 @@
 //! for flushing to the GPU at frame end. This serves as an intermediate
 //! representation between FFI commands and GPU execution.
 
+use super::Viewport;
 use super::render_state::{CullMode, StencilMode, TextureHandle};
 use super::vertex::{VERTEX_FORMAT_COUNT, vertex_stride, vertex_stride_packed};
-use super::Viewport;
 
 /// Layer value for commands that don't participate in 2D layer ordering
 ///

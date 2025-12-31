@@ -5,8 +5,8 @@
 
 use nether_tracker::TrackerInstrument;
 
-use super::utils::note_to_period;
 use super::FADE_IN_SAMPLES;
+use super::utils::note_to_period;
 
 /// Per-channel playback state
 #[derive(Clone, Default, Debug)]

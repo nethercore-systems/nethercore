@@ -195,10 +195,7 @@ fn test_glb_skeleton_conversion() {
         spine_ibm[10]
     );
 
-    println!(
-        "Skeleton conversion validated: {} bones",
-        result.bone_count
-    );
+    println!("Skeleton conversion validated: {} bones", result.bone_count);
 }
 
 /// Test animation conversion through nether-export
@@ -230,8 +227,7 @@ fn test_glb_animation_conversion() {
     );
 
     // Verify data size (16 bytes per bone per frame)
-    let expected_data_size =
-        result.frame_count as usize * result.bone_count as usize * 16;
+    let expected_data_size = result.frame_count as usize * result.bone_count as usize * 16;
     assert_eq!(
         result.data.len(),
         expected_data_size,
@@ -264,8 +260,7 @@ fn test_full_glb_pipeline() {
 
     // Verify consistency between mesh and skeleton
     assert_eq!(
-        skeleton.bone_count as u8,
-        animation.bone_count,
+        skeleton.bone_count as u8, animation.bone_count,
         "Skeleton and animation bone counts should match"
     );
 
@@ -287,9 +282,18 @@ fn test_full_glb_pipeline() {
     let total_size = mesh_size + skeleton_size + animation_size;
 
     println!("Full pipeline validated:");
-    println!("  Mesh:      {} bytes ({} vertices, {} indices)", mesh_size, mesh.vertex_count, mesh.index_count);
-    println!("  Skeleton:  {} bytes ({} bones)", skeleton_size, skeleton.bone_count);
-    println!("  Animation: {} bytes ({} frames)", animation_size, animation.frame_count);
+    println!(
+        "  Mesh:      {} bytes ({} vertices, {} indices)",
+        mesh_size, mesh.vertex_count, mesh.index_count
+    );
+    println!(
+        "  Skeleton:  {} bytes ({} bones)",
+        skeleton_size, skeleton.bone_count
+    );
+    println!(
+        "  Animation: {} bytes ({} frames)",
+        animation_size, animation.frame_count
+    );
     println!("  Total:     {} bytes", total_size);
 }
 
@@ -430,21 +434,22 @@ path = "{}"
 
     let toml_path = dir.path().join("nether.toml");
     let mut file = std::fs::File::create(&toml_path).expect("Failed to create nether.toml");
-    file.write_all(nether_toml.as_bytes()).expect("Failed to write nether.toml");
+    file.write_all(nether_toml.as_bytes())
+        .expect("Failed to write nether.toml");
 
     // Create minimal WASM (just needs to be valid)
     // For this test, we'll skip the WASM and just test if pack can process the assets
     // by running nether-export build (which validates the manifest and processes assets)
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_nether-export"))
-        .args([
-            "check",
-            toml_path.to_str().unwrap(),
-        ])
+        .args(["check", toml_path.to_str().unwrap()])
         .current_dir(dir.path())
         .status()
         .expect("Failed to run nether-export check");
 
-    assert!(status.success(), "nether-export check should pass with GLB manifest");
+    assert!(
+        status.success(),
+        "nether-export check should pass with GLB manifest"
+    );
 
     println!("nether-cli GLB integration validated successfully");
 }
@@ -470,10 +475,7 @@ fn verify_nczxmesh_header(data: &[u8]) {
 
     // Note: CLI doesn't support skinned mesh export yet (only in-memory API does)
     // Verify at least UV and NORMAL are present
-    assert!(
-        header.format & FORMAT_UV != 0,
-        "Should have UV flag"
-    );
+    assert!(header.format & FORMAT_UV != 0, "Should have UV flag");
     assert!(
         header.format & FORMAT_NORMAL != 0,
         "Should have NORMAL flag"
@@ -489,10 +491,7 @@ fn verify_nczxskel_header(data: &[u8], expected_bones: u32) {
     );
 
     let header = NetherZXSkeletonHeader::from_bytes(data).expect("Failed to parse skeleton header");
-    assert_eq!(
-        header.bone_count, expected_bones,
-        "Bone count mismatch"
-    );
+    assert_eq!(header.bone_count, expected_bones, "Bone count mismatch");
 
     // Verify data size (48 bytes per bone)
     let expected_size = NetherZXSkeletonHeader::SIZE + expected_bones as usize * 48;
@@ -509,10 +508,7 @@ fn verify_nczxanim_header(data: &[u8], expected_bones: u8) {
 
     let header =
         NetherZXAnimationHeader::from_bytes(data).expect("Failed to parse animation header");
-    assert_eq!(
-        header.bone_count, expected_bones,
-        "Bone count mismatch"
-    );
+    assert_eq!(header.bone_count, expected_bones, "Bone count mismatch");
     assert!(header.frame_count > 0, "Should have frames");
 
     // Verify data size (16 bytes per bone per frame)

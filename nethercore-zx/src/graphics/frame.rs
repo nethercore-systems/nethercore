@@ -232,11 +232,18 @@ impl ZXGraphics {
                     *layer,
                     *stencil_mode,
                     *depth_test,
-                    [texture_slots[0].0, texture_slots[1].0, texture_slots[2].0, texture_slots[3].0],
+                    [
+                        texture_slots[0].0,
+                        texture_slots[1].0,
+                        texture_slots[2].0,
+                        texture_slots[3].0,
+                    ],
                 ),
-                VRPCommand::Sky { viewport, stencil_mode, .. } => {
-                    CommandSortKey::sky(*viewport, *stencil_mode)
-                }
+                VRPCommand::Sky {
+                    viewport,
+                    stencil_mode,
+                    ..
+                } => CommandSortKey::sky(*viewport, *stencil_mode),
             });
 
         // =================================================================
@@ -575,78 +582,92 @@ impl ZXGraphics {
                 // Destructure command variant to extract common fields
                 // For Mesh/IndexedMesh: resolve FFI texture handles to TextureHandle
                 // For Quad: use texture_slots directly (already TextureHandle)
-                let (cmd_viewport, cmd_stencil_mode, format, depth_test, cull_mode, texture_slots, buffer_source, is_quad, is_sky) =
-                    match cmd {
-                        VRPCommand::Mesh {
-                            format,
-                            depth_test,
-                            cull_mode,
-                            textures,
-                            buffer_index,
-                            viewport,
-                            stencil_mode,
-                            ..
-                        } => (
-                            *viewport,
-                            *stencil_mode,
-                            *format,
-                            *depth_test,
-                            *cull_mode,
-                            resolve_textures(textures), // Resolve FFI handles at render time
-                            BufferSource::Immediate(*buffer_index),
-                            false,
-                            false,
-                        ),
-                        VRPCommand::IndexedMesh {
-                            format,
-                            depth_test,
-                            cull_mode,
-                            textures,
-                            buffer_index,
-                            viewport,
-                            stencil_mode,
-                            ..
-                        } => (
-                            *viewport,
-                            *stencil_mode,
-                            *format,
-                            *depth_test,
-                            *cull_mode,
-                            resolve_textures(textures), // Resolve FFI handles at render time
-                            BufferSource::Retained(*buffer_index),
-                            false,
-                            false,
-                        ),
-                        VRPCommand::Quad {
-                            depth_test,
-                            cull_mode,
-                            texture_slots,
-                            viewport,
-                            stencil_mode,
-                            ..
-                        } => (
-                            *viewport,
-                            *stencil_mode,
-                            self.unit_quad_format,
-                            *depth_test,
-                            *cull_mode,
-                            *texture_slots, // Already TextureHandle
-                            BufferSource::Quad,
-                            true,
-                            false,
-                        ),
-                        VRPCommand::Sky { depth_test, viewport, stencil_mode, .. } => (
-                            *viewport,
-                            *stencil_mode,
-                            self.unit_quad_format, // Sky uses unit quad mesh
-                            *depth_test,
-                            super::render_state::CullMode::None,
-                            [TextureHandle::INVALID; 4], // Default textures (unused)
-                            BufferSource::Quad,          // Sky renders as a fullscreen quad
-                            false,
-                            true,
-                        ),
-                    };
+                let (
+                    cmd_viewport,
+                    cmd_stencil_mode,
+                    format,
+                    depth_test,
+                    cull_mode,
+                    texture_slots,
+                    buffer_source,
+                    is_quad,
+                    is_sky,
+                ) = match cmd {
+                    VRPCommand::Mesh {
+                        format,
+                        depth_test,
+                        cull_mode,
+                        textures,
+                        buffer_index,
+                        viewport,
+                        stencil_mode,
+                        ..
+                    } => (
+                        *viewport,
+                        *stencil_mode,
+                        *format,
+                        *depth_test,
+                        *cull_mode,
+                        resolve_textures(textures), // Resolve FFI handles at render time
+                        BufferSource::Immediate(*buffer_index),
+                        false,
+                        false,
+                    ),
+                    VRPCommand::IndexedMesh {
+                        format,
+                        depth_test,
+                        cull_mode,
+                        textures,
+                        buffer_index,
+                        viewport,
+                        stencil_mode,
+                        ..
+                    } => (
+                        *viewport,
+                        *stencil_mode,
+                        *format,
+                        *depth_test,
+                        *cull_mode,
+                        resolve_textures(textures), // Resolve FFI handles at render time
+                        BufferSource::Retained(*buffer_index),
+                        false,
+                        false,
+                    ),
+                    VRPCommand::Quad {
+                        depth_test,
+                        cull_mode,
+                        texture_slots,
+                        viewport,
+                        stencil_mode,
+                        ..
+                    } => (
+                        *viewport,
+                        *stencil_mode,
+                        self.unit_quad_format,
+                        *depth_test,
+                        *cull_mode,
+                        *texture_slots, // Already TextureHandle
+                        BufferSource::Quad,
+                        true,
+                        false,
+                    ),
+                    VRPCommand::Sky {
+                        depth_test,
+                        viewport,
+                        stencil_mode,
+                        ..
+                    } => (
+                        *viewport,
+                        *stencil_mode,
+                        self.unit_quad_format, // Sky uses unit quad mesh
+                        *depth_test,
+                        super::render_state::CullMode::None,
+                        [TextureHandle::INVALID; 4], // Default textures (unused)
+                        BufferSource::Quad,          // Sky renders as a fullscreen quad
+                        false,
+                        true,
+                    ),
+                };
 
                 // Set viewport and scissor rect if changed (split-screen support)
                 if current_viewport != Some(cmd_viewport) {
@@ -670,7 +691,10 @@ impl ZXGraphics {
                 // Set stencil reference if stencil mode changed and requires testing
                 if current_stencil_mode != Some(cmd_stencil_mode) {
                     // Set stencil reference to 1 for testing modes (value written by stencil_begin)
-                    if matches!(cmd_stencil_mode, StencilMode::Testing | StencilMode::TestingInverted) {
+                    if matches!(
+                        cmd_stencil_mode,
+                        StencilMode::Testing | StencilMode::TestingInverted
+                    ) {
                         render_pass.set_stencil_reference(1);
                     }
                     current_stencil_mode = Some(cmd_stencil_mode);
@@ -685,8 +709,11 @@ impl ZXGraphics {
                 // Get/create pipeline - use sky/quad/regular pipeline based on command type
                 if is_sky {
                     // Sky rendering: Ensure sky pipeline exists
-                    self.pipeline_cache
-                        .get_or_create_sky(&self.device, self.config.format, cmd_stencil_mode);
+                    self.pipeline_cache.get_or_create_sky(
+                        &self.device,
+                        self.config.format,
+                        cmd_stencil_mode,
+                    );
                 } else if is_quad {
                     // Quad rendering: Ensure quad pipeline exists
                     self.pipeline_cache.get_or_create_quad(
@@ -697,10 +724,12 @@ impl ZXGraphics {
                     );
                 } else {
                     // Regular mesh rendering: Ensure format-specific pipeline exists
-                    if !self
-                        .pipeline_cache
-                        .contains(self.current_render_mode, format, &state, cmd_stencil_mode)
-                    {
+                    if !self.pipeline_cache.contains(
+                        self.current_render_mode,
+                        format,
+                        &state,
+                        cmd_stencil_mode,
+                    ) {
                         self.pipeline_cache.get_or_create(
                             &self.device,
                             self.config.format,

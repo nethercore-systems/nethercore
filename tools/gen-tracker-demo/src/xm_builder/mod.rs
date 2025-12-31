@@ -3,15 +3,15 @@
 //! This module provides the XM file format generation for tracker-demo.
 //! Each genre has its own pattern module.
 
-pub mod funk;
 pub mod eurobeat;
+pub mod funk;
 pub mod synthwave;
 
 use crate::synthesizers::SAMPLE_RATE;
 
 // Re-export pattern generators
-pub use funk::{generate_funk_xm, generate_funk_xm_embedded};
 pub use eurobeat::{generate_eurobeat_xm, generate_eurobeat_xm_embedded};
+pub use funk::{generate_funk_xm, generate_funk_xm_embedded};
 pub use synthwave::{generate_synthwave_xm, generate_synthwave_xm_embedded};
 
 // ============================================================================

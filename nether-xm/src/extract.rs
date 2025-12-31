@@ -102,13 +102,11 @@ pub fn extract_samples(data: &[u8]) -> Result<Vec<ExtractedSample>, XmError> {
 
     // Extract samples from each instrument
     for (inst_idx, instrument) in module.instruments.iter().enumerate() {
-        match extract_instrument_samples(
-            &mut cursor,
-            inst_idx as u8,
-            instrument,
-        ) {
+        match extract_instrument_samples(&mut cursor, inst_idx as u8, instrument) {
             Ok(instrument_samples) => samples.extend(instrument_samples),
-            Err(XmError::UnexpectedEof) | Err(XmError::IoError(_)) if inst_idx == 0 && samples.is_empty() => {
+            Err(XmError::UnexpectedEof) | Err(XmError::IoError(_))
+                if inst_idx == 0 && samples.is_empty() =>
+            {
                 // Sample-less XM file - first instrument has no readable data
                 // This is expected for XM files with no embedded samples
                 return Ok(Vec::new());
@@ -171,16 +169,10 @@ fn extract_instrument_samples(
             continue; // Skip empty samples
         }
 
-        let sample_data = read_sample_data(
-            cursor,
-            sample_info.length,
-            sample_info.is_16bit,
-        )?;
+        let sample_data = read_sample_data(cursor, sample_info.length, sample_info.is_16bit)?;
 
-        let sample_rate = ExtractedSample::calculate_sample_rate(
-            sample_info.finetune,
-            sample_info.relative_note,
-        );
+        let sample_rate =
+            ExtractedSample::calculate_sample_rate(sample_info.finetune, sample_info.relative_note);
 
         results.push(ExtractedSample {
             instrument_index: inst_idx,
@@ -209,10 +201,7 @@ struct SampleInfo {
 }
 
 /// Read a sample header
-fn read_sample_header(
-    cursor: &mut Cursor<&[u8]>,
-    header_size: u32,
-) -> Result<SampleInfo, XmError> {
+fn read_sample_header(cursor: &mut Cursor<&[u8]>, header_size: u32) -> Result<SampleInfo, XmError> {
     // Sample length (4 bytes)
     let length = read_u32(cursor)?;
 
@@ -466,8 +455,8 @@ mod tests {
         // Test the little-endian read helpers
         let data: Vec<u8> = vec![
             0x12, 0x34, 0x56, 0x78, // u32: 0x78563412
-            0xAB, 0xCD,             // u16: 0xCDAB
-            0xFF,                   // u8: 0xFF
+            0xAB, 0xCD, // u16: 0xCDAB
+            0xFF, // u8: 0xFF
         ];
 
         let mut cursor = Cursor::new(data.as_slice());
@@ -486,10 +475,10 @@ mod tests {
     fn test_read_signed_values() {
         // Test signed value reading
         let data: Vec<u8> = vec![
-            0xFF, 0xFF,  // i16: -1
-            0xFF,        // i8: -1
-            0x00, 0x80,  // i16: -32768 (min value)
-            0x80,        // i8: -128 (min value)
+            0xFF, 0xFF, // i16: -1
+            0xFF, // i8: -1
+            0x00, 0x80, // i16: -32768 (min value)
+            0x80, // i8: -128 (min value)
         ];
 
         let mut cursor = Cursor::new(data.as_slice());
@@ -523,14 +512,22 @@ mod tests {
         // Test extraction from an actual XM file (sample-less)
         let test_file = "../../examples/assets/tracker-nether_groove.xm";
         if let Ok(data) = std::fs::read(test_file) {
-            println!("Testing extraction from {} ({} bytes)", test_file, data.len());
+            println!(
+                "Testing extraction from {} ({} bytes)",
+                test_file,
+                data.len()
+            );
 
             match extract_samples(&data) {
                 Ok(samples) => {
                     println!("Successfully extracted {} samples", samples.len());
                     for sample in samples {
-                        println!("  - {} ({} samples, {} Hz)",
-                            sample.name, sample.data.len(), sample.sample_rate);
+                        println!(
+                            "  - {} ({} samples, {} Hz)",
+                            sample.name,
+                            sample.data.len(),
+                            sample.sample_rate
+                        );
                     }
                 }
                 Err(e) => {

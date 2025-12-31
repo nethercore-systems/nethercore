@@ -170,9 +170,12 @@ impl<C: Console> ConsoleRunner<C> {
 
         // Configure the game with session player info before init()
         // This ensures player_count() and local_player_mask() FFI return correct values
-        let session_info = runtime
-            .session()
-            .map(|s| (s.player_config().num_players(), s.player_config().local_player_mask()));
+        let session_info = runtime.session().map(|s| {
+            (
+                s.player_config().num_players(),
+                s.player_config().local_player_mask(),
+            )
+        });
         if let Some((player_count, local_mask)) = session_info {
             if let Some(game) = runtime.game_mut() {
                 game.configure_session(player_count, local_mask);
@@ -253,9 +256,12 @@ impl<C: Console> ConsoleRunner<C> {
 
         // Configure the game with session player info before init()
         // This ensures player_count() and local_player_mask() FFI return correct values
-        let session_info = runtime
-            .session()
-            .map(|s| (s.player_config().num_players(), s.player_config().local_player_mask()));
+        let session_info = runtime.session().map(|s| {
+            (
+                s.player_config().num_players(),
+                s.player_config().local_player_mask(),
+            )
+        });
         if let Some((num_players, local_mask)) = session_info {
             if let Some(game) = runtime.game_mut() {
                 game.configure_session(num_players, local_mask);

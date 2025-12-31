@@ -404,8 +404,8 @@ where
         window.set_title(&format!("{} - Asset Preview", C::specs().name));
 
         // Load ROM for preview
-        let preview_data = L::load_for_preview(&self.config.rom_path)
-            .context("Failed to load ROM for preview")?;
+        let preview_data =
+            L::load_for_preview(&self.config.rom_path).context("Failed to load ROM for preview")?;
 
         self.metadata = preview_data.metadata.clone();
         window.set_title(&format!(

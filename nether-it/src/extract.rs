@@ -7,7 +7,7 @@
 use std::io::{Cursor, Read, Seek, SeekFrom};
 
 use crate::error::ItError;
-use crate::parser::{load_sample_data, parse_sample, SampleData};
+use crate::parser::{SampleData, load_sample_data, parse_sample};
 use crate::{IT_MAGIC, MAX_SAMPLES, MIN_COMPATIBLE_VERSION};
 
 /// Extracted sample data from IT file
@@ -119,11 +119,11 @@ pub fn extract_samples(data: &[u8]) -> Result<Vec<ExtractedSample>, ItError> {
         }
 
         // Load sample data (handles IT215 compression automatically)
-        let sample_data =
-            match load_sample_data(data, sample_info.data_offset, &sample_info.sample) {
-                Ok(d) => d,
-                Err(_) => continue, // Skip samples with load errors
-            };
+        let sample_data = match load_sample_data(data, sample_info.data_offset, &sample_info.sample)
+        {
+            Ok(d) => d,
+            Err(_) => continue, // Skip samples with load errors
+        };
 
         // Convert to i16
         let data_i16 = match sample_data {
@@ -274,7 +274,12 @@ mod tests {
         let extracted = extract_samples(&it_bytes).expect("Failed to extract samples");
 
         // Verify we got one sample
-        assert_eq!(extracted.len(), 1, "Expected 1 sample, got {}", extracted.len());
+        assert_eq!(
+            extracted.len(),
+            1,
+            "Expected 1 sample, got {}",
+            extracted.len()
+        );
 
         let sample = &extracted[0];
         assert_eq!(sample.name, "TestKick");
@@ -402,9 +407,9 @@ mod tests {
         // Test that the stereo -> mono pipeline works correctly
         // Simulating interleaved stereo data (L, R, L, R, ...)
         let stereo_data: Vec<i16> = vec![
-            100, 200,   // Frame 0: L=100, R=200
-            300, 400,   // Frame 1: L=300, R=400
-            500, 600,   // Frame 2: L=500, R=600
+            100, 200, // Frame 0: L=100, R=200
+            300, 400, // Frame 1: L=300, R=400
+            500, 600, // Frame 2: L=500, R=600
         ];
 
         // Test the stereo_to_mono conversion directly
@@ -431,7 +436,11 @@ mod tests {
         // Place a test IT file at the specified path to enable this test
         let test_file = "../../examples/assets/test_samples.it";
         if let Ok(data) = std::fs::read(test_file) {
-            println!("Testing extraction from {} ({} bytes)", test_file, data.len());
+            println!(
+                "Testing extraction from {} ({} bytes)",
+                test_file,
+                data.len()
+            );
 
             match extract_samples(&data) {
                 Ok(samples) => {

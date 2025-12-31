@@ -2,8 +2,8 @@
 //!
 //! Instruments for "Nether Drive" - Synthwave at 105 BPM in A minor
 
-use std::f32::consts::PI;
 use super::common::{SimpleRng, SAMPLE_RATE};
+use std::f32::consts::PI;
 
 /// Synthwave kick: Enhanced 808-style with rich harmonics and warmth
 pub fn generate_kick_synth() -> Vec<i16> {

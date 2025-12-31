@@ -6,7 +6,10 @@ use std::io::{BufRead, BufReader, BufWriter};
 use std::path::Path;
 
 use crate::formats::write_nether_mesh;
-use crate::{pack_bone_weights_unorm8, vertex_stride_packed, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED, FORMAT_UV};
+use crate::{
+    pack_bone_weights_unorm8, vertex_stride_packed, FORMAT_COLOR, FORMAT_NORMAL, FORMAT_SKINNED,
+    FORMAT_UV,
+};
 
 /// Result of in-memory mesh conversion
 pub struct ConvertedMesh {
@@ -182,12 +185,13 @@ pub fn convert_gltf_to_memory(input: &Path) -> Result<ConvertedMesh> {
         .map(|iter| iter.into_rgba_f32().collect());
 
     // Skinning data (optional) - JOINTS_0 and WEIGHTS_0
-    let joints: Option<Vec<[u8; 4]>> = reader
-        .read_joints(0)
-        .map(|iter| iter.into_u16().map(|j| [j[0] as u8, j[1] as u8, j[2] as u8, j[3] as u8]).collect());
-    let weights: Option<Vec<[f32; 4]>> = reader
-        .read_weights(0)
-        .map(|iter| iter.into_f32().collect());
+    let joints: Option<Vec<[u8; 4]>> = reader.read_joints(0).map(|iter| {
+        iter.into_u16()
+            .map(|j| [j[0] as u8, j[1] as u8, j[2] as u8, j[3] as u8])
+            .collect()
+    });
+    let weights: Option<Vec<[f32; 4]>> =
+        reader.read_weights(0).map(|iter| iter.into_f32().collect());
 
     // Validate skinning data consistency
     let skinning = match (&joints, &weights) {
@@ -195,7 +199,9 @@ pub fn convert_gltf_to_memory(input: &Path) -> Result<ConvertedMesh> {
             Some((j.as_slice(), w.as_slice()))
         }
         (Some(_), None) | (None, Some(_)) => {
-            tracing::warn!("Mesh has partial skinning data (joints or weights missing), ignoring skinning");
+            tracing::warn!(
+                "Mesh has partial skinning data (joints or weights missing), ignoring skinning"
+            );
             None
         }
         _ => None,
@@ -356,7 +362,9 @@ fn pack_vertices_skinned(
     skinning: Option<(&[[u8; 4]], &[[f32; 4]])>,
     format: u8,
 ) -> Vec<u8> {
-    use crate::{pack_color_rgba_unorm8, pack_normal_octahedral, pack_position_f16, pack_uv_unorm16};
+    use crate::{
+        pack_color_rgba_unorm8, pack_normal_octahedral, pack_position_f16, pack_uv_unorm16,
+    };
     use bytemuck::cast_slice;
 
     let has_uv = format & FORMAT_UV != 0;

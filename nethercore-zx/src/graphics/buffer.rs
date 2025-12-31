@@ -366,7 +366,8 @@ impl BufferManager {
 
         // Write to retained buffers (packed vertex data + indices)
         let vertex_offset = self.retained_vertex_buffers[format_idx].write(queue, &packed_data);
-        let index_offset = self.retained_index_buffers[format_idx].write(queue, &index_data_to_write);
+        let index_offset =
+            self.retained_index_buffers[format_idx].write(queue, &index_data_to_write);
 
         // Create mesh handle
         let handle = MeshHandle(self.next_mesh_id);
@@ -502,7 +503,8 @@ impl BufferManager {
 
         // Write to retained buffers
         let vertex_offset = self.retained_vertex_buffers[format_idx].write(queue, data);
-        let index_offset = self.retained_index_buffers[format_idx].write(queue, &index_data_to_write);
+        let index_offset =
+            self.retained_index_buffers[format_idx].write(queue, &index_data_to_write);
 
         // Create mesh handle
         let handle = MeshHandle(self.next_mesh_id);
@@ -675,14 +677,20 @@ mod tests {
         let padded = pad_index_data(&even_indices);
         assert_eq!(padded.len(), 400);
         assert_eq!(padded.len() % 4, 0);
-        assert!(matches!(padded, Cow::Borrowed(_)), "Should borrow when already aligned");
+        assert!(
+            matches!(padded, Cow::Borrowed(_)),
+            "Should borrow when already aligned"
+        );
 
         // Odd number of indices (e.g., 201) = 402 bytes = needs padding to 404
         let odd_indices: Vec<u16> = (0..201).collect();
         let padded = pad_index_data(&odd_indices);
         assert_eq!(padded.len(), 404);
         assert_eq!(padded.len() % 4, 0);
-        assert!(matches!(padded, Cow::Owned(_)), "Should allocate when padding needed");
+        assert!(
+            matches!(padded, Cow::Owned(_)),
+            "Should allocate when padding needed"
+        );
 
         // Edge case: 1 index = 2 bytes = needs padding to 4
         let one_index: Vec<u16> = vec![42];

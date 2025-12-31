@@ -16,23 +16,36 @@ use std::path::Path;
 
 use synthesizers::{
     apply_fades,
-    // Funk instruments
-    generate_kick_funk, generate_snare_funk, generate_hihat_funk,
-    generate_bass_funk, generate_epiano, generate_lead_jazz,
+    generate_arp_synth,
+    generate_bass_euro,
+    generate_bass_funk,
+    generate_bass_synth,
+    generate_brass_euro,
+    generate_epiano,
+    generate_hihat_euro,
+    generate_hihat_funk,
+    generate_hihat_synth,
     // Eurobeat instruments
-    generate_kick_euro, generate_snare_euro, generate_hihat_euro,
-    generate_bass_euro, generate_supersaw, generate_brass_euro, generate_pad_euro,
+    generate_kick_euro,
+    // Funk instruments
+    generate_kick_funk,
     // Synthwave instruments
-    generate_kick_synth, generate_snare_synth, generate_hihat_synth,
-    generate_bass_synth, generate_lead_synth, generate_arp_synth, generate_pad_synth,
+    generate_kick_synth,
+    generate_lead_jazz,
+    generate_lead_synth,
+    generate_pad_euro,
+    generate_pad_synth,
+    generate_snare_euro,
+    generate_snare_funk,
+    generate_snare_synth,
+    generate_supersaw,
 };
 
 use wav_writer::write_wav;
 
 use xm_builder::{
-    generate_funk_xm, generate_funk_xm_embedded,
-    generate_eurobeat_xm, generate_eurobeat_xm_embedded,
-    generate_synthwave_xm, generate_synthwave_xm_embedded,
+    generate_eurobeat_xm, generate_eurobeat_xm_embedded, generate_funk_xm,
+    generate_funk_xm_embedded, generate_synthwave_xm, generate_synthwave_xm_embedded,
 };
 
 fn main() {
@@ -79,12 +92,18 @@ fn generate_funk_assets(output_dir: &Path) {
     let mut snare = generate_snare_funk();
     apply_fades(&mut snare);
     write_wav(&output_dir.join("tracker-snare_funk.wav"), &snare);
-    println!("  Generated tracker-snare_funk.wav ({} samples)", snare.len());
+    println!(
+        "  Generated tracker-snare_funk.wav ({} samples)",
+        snare.len()
+    );
 
     let mut hihat = generate_hihat_funk();
     apply_fades(&mut hihat);
     write_wav(&output_dir.join("tracker-hihat_funk.wav"), &hihat);
-    println!("  Generated tracker-hihat_funk.wav ({} samples)", hihat.len());
+    println!(
+        "  Generated tracker-hihat_funk.wav ({} samples)",
+        hihat.len()
+    );
 
     let mut bass = generate_bass_funk();
     apply_fades(&mut bass);
@@ -103,14 +122,22 @@ fn generate_funk_assets(output_dir: &Path) {
 
     // Generate sample-less XM file
     let xm = generate_funk_xm();
-    fs::write(output_dir.join("tracker-nether_groove.xm"), &xm).expect("Failed to write tracker-nether_groove.xm");
+    fs::write(output_dir.join("tracker-nether_groove.xm"), &xm)
+        .expect("Failed to write tracker-nether_groove.xm");
     println!("  Generated tracker-nether_groove.xm ({} bytes)", xm.len());
 
     // Generate embedded XM file
     let samples = vec![kick, snare, hihat, bass, epiano, lead];
     let xm_embedded = generate_funk_xm_embedded(&samples);
-    fs::write(output_dir.join("tracker-nether_groove-embedded.xm"), &xm_embedded).expect("Failed to write tracker-nether_groove-embedded.xm");
-    println!("  Generated tracker-nether_groove-embedded.xm ({} bytes)", xm_embedded.len());
+    fs::write(
+        output_dir.join("tracker-nether_groove-embedded.xm"),
+        &xm_embedded,
+    )
+    .expect("Failed to write tracker-nether_groove-embedded.xm");
+    println!(
+        "  Generated tracker-nether_groove-embedded.xm ({} bytes)",
+        xm_embedded.len()
+    );
 }
 
 // ============================================================================
@@ -127,12 +154,18 @@ fn generate_eurobeat_assets(output_dir: &Path) {
     let mut snare = generate_snare_euro();
     apply_fades(&mut snare);
     write_wav(&output_dir.join("tracker-snare_euro.wav"), &snare);
-    println!("  Generated tracker-snare_euro.wav ({} samples)", snare.len());
+    println!(
+        "  Generated tracker-snare_euro.wav ({} samples)",
+        snare.len()
+    );
 
     let mut hihat = generate_hihat_euro();
     apply_fades(&mut hihat);
     write_wav(&output_dir.join("tracker-hihat_euro.wav"), &hihat);
-    println!("  Generated tracker-hihat_euro.wav ({} samples)", hihat.len());
+    println!(
+        "  Generated tracker-hihat_euro.wav ({} samples)",
+        hihat.len()
+    );
 
     let mut bass = generate_bass_euro();
     apply_fades(&mut bass);
@@ -142,12 +175,18 @@ fn generate_eurobeat_assets(output_dir: &Path) {
     let mut supersaw = generate_supersaw();
     apply_fades(&mut supersaw);
     write_wav(&output_dir.join("tracker-supersaw.wav"), &supersaw);
-    println!("  Generated tracker-supersaw.wav ({} samples)", supersaw.len());
+    println!(
+        "  Generated tracker-supersaw.wav ({} samples)",
+        supersaw.len()
+    );
 
     let mut brass = generate_brass_euro();
     apply_fades(&mut brass);
     write_wav(&output_dir.join("tracker-brass_euro.wav"), &brass);
-    println!("  Generated tracker-brass_euro.wav ({} samples)", brass.len());
+    println!(
+        "  Generated tracker-brass_euro.wav ({} samples)",
+        brass.len()
+    );
 
     let mut pad = generate_pad_euro();
     apply_fades(&mut pad);
@@ -156,14 +195,22 @@ fn generate_eurobeat_assets(output_dir: &Path) {
 
     // Generate sample-less XM file
     let xm = generate_eurobeat_xm();
-    fs::write(output_dir.join("tracker-nether_fire.xm"), &xm).expect("Failed to write tracker-nether_fire.xm");
+    fs::write(output_dir.join("tracker-nether_fire.xm"), &xm)
+        .expect("Failed to write tracker-nether_fire.xm");
     println!("  Generated tracker-nether_fire.xm ({} bytes)", xm.len());
 
     // Generate embedded XM file
     let samples = vec![kick, snare, hihat, bass, supersaw, brass, pad];
     let xm_embedded = generate_eurobeat_xm_embedded(&samples);
-    fs::write(output_dir.join("tracker-nether_fire-embedded.xm"), &xm_embedded).expect("Failed to write tracker-nether_fire-embedded.xm");
-    println!("  Generated tracker-nether_fire-embedded.xm ({} bytes)", xm_embedded.len());
+    fs::write(
+        output_dir.join("tracker-nether_fire-embedded.xm"),
+        &xm_embedded,
+    )
+    .expect("Failed to write tracker-nether_fire-embedded.xm");
+    println!(
+        "  Generated tracker-nether_fire-embedded.xm ({} bytes)",
+        xm_embedded.len()
+    );
 }
 
 // ============================================================================
@@ -175,27 +222,42 @@ fn generate_synthwave_assets(output_dir: &Path) {
     let mut kick = generate_kick_synth();
     apply_fades(&mut kick);
     write_wav(&output_dir.join("tracker-kick_synth.wav"), &kick);
-    println!("  Generated tracker-kick_synth.wav ({} samples)", kick.len());
+    println!(
+        "  Generated tracker-kick_synth.wav ({} samples)",
+        kick.len()
+    );
 
     let mut snare = generate_snare_synth();
     apply_fades(&mut snare);
     write_wav(&output_dir.join("tracker-snare_synth.wav"), &snare);
-    println!("  Generated tracker-snare_synth.wav ({} samples)", snare.len());
+    println!(
+        "  Generated tracker-snare_synth.wav ({} samples)",
+        snare.len()
+    );
 
     let mut hihat = generate_hihat_synth();
     apply_fades(&mut hihat);
     write_wav(&output_dir.join("tracker-hihat_synth.wav"), &hihat);
-    println!("  Generated tracker-hihat_synth.wav ({} samples)", hihat.len());
+    println!(
+        "  Generated tracker-hihat_synth.wav ({} samples)",
+        hihat.len()
+    );
 
     let mut bass = generate_bass_synth();
     apply_fades(&mut bass);
     write_wav(&output_dir.join("tracker-bass_synth.wav"), &bass);
-    println!("  Generated tracker-bass_synth.wav ({} samples)", bass.len());
+    println!(
+        "  Generated tracker-bass_synth.wav ({} samples)",
+        bass.len()
+    );
 
     let mut lead = generate_lead_synth();
     apply_fades(&mut lead);
     write_wav(&output_dir.join("tracker-lead_synth.wav"), &lead);
-    println!("  Generated tracker-lead_synth.wav ({} samples)", lead.len());
+    println!(
+        "  Generated tracker-lead_synth.wav ({} samples)",
+        lead.len()
+    );
 
     let mut arp = generate_arp_synth();
     apply_fades(&mut arp);
@@ -209,14 +271,22 @@ fn generate_synthwave_assets(output_dir: &Path) {
 
     // Generate sample-less XM file
     let xm = generate_synthwave_xm();
-    fs::write(output_dir.join("tracker-nether_drive.xm"), &xm).expect("Failed to write tracker-nether_drive.xm");
+    fs::write(output_dir.join("tracker-nether_drive.xm"), &xm)
+        .expect("Failed to write tracker-nether_drive.xm");
     println!("  Generated tracker-nether_drive.xm ({} bytes)", xm.len());
 
     // Generate embedded XM file
     let samples = vec![kick, snare, hihat, bass, lead, arp, pad];
     let xm_embedded = generate_synthwave_xm_embedded(&samples);
-    fs::write(output_dir.join("tracker-nether_drive-embedded.xm"), &xm_embedded).expect("Failed to write tracker-nether_drive-embedded.xm");
-    println!("  Generated tracker-nether_drive-embedded.xm ({} bytes)", xm_embedded.len());
+    fs::write(
+        output_dir.join("tracker-nether_drive-embedded.xm"),
+        &xm_embedded,
+    )
+    .expect("Failed to write tracker-nether_drive-embedded.xm");
+    println!(
+        "  Generated tracker-nether_drive-embedded.xm ({} bytes)",
+        xm_embedded.len()
+    );
 }
 
 // ============================================================================
@@ -230,8 +300,7 @@ mod tests {
     #[test]
     fn test_funk_xm_parses() {
         let xm_data = generate_funk_xm();
-        let module =
-            nether_xm::parse_xm(&xm_data).expect("Funk XM should parse");
+        let module = nether_xm::parse_xm(&xm_data).expect("Funk XM should parse");
 
         assert_eq!(module.name, "Nether Groove");
         assert_eq!(module.num_channels, 8);
@@ -243,8 +312,7 @@ mod tests {
     #[test]
     fn test_eurobeat_xm_parses() {
         let xm_data = generate_eurobeat_xm();
-        let module =
-            nether_xm::parse_xm(&xm_data).expect("Eurobeat XM should parse");
+        let module = nether_xm::parse_xm(&xm_data).expect("Eurobeat XM should parse");
 
         assert_eq!(module.name, "Nether Fire");
         assert_eq!(module.num_channels, 8);
@@ -256,8 +324,7 @@ mod tests {
     #[test]
     fn test_synthwave_xm_parses() {
         let xm_data = generate_synthwave_xm();
-        let module =
-            nether_xm::parse_xm(&xm_data).expect("Synthwave XM should parse");
+        let module = nether_xm::parse_xm(&xm_data).expect("Synthwave XM should parse");
 
         assert_eq!(module.name, "Nether Drive");
         assert_eq!(module.num_channels, 8);
@@ -269,8 +336,8 @@ mod tests {
     #[test]
     fn test_funk_instrument_names() {
         let xm_data = generate_funk_xm();
-        let names = nether_xm::get_instrument_names(&xm_data)
-            .expect("Should get funk instrument names");
+        let names =
+            nether_xm::get_instrument_names(&xm_data).expect("Should get funk instrument names");
 
         assert_eq!(names.len(), 6);
         assert_eq!(names[0], "kick_funk");

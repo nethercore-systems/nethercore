@@ -2,7 +2,9 @@
 //!
 //! Patterns for "Nether Drive" - Synthwave at 105 BPM in A minor
 
-use super::{write_note, write_note_vol, write_empty, write_instrument, write_instrument_with_sample};
+use super::{
+    write_empty, write_instrument, write_instrument_with_sample, write_note, write_note_vol,
+};
 
 // ============================================================================
 // Synthwave Note Constants (A minor: A B C D E F G, plus G# for E major chord)
@@ -120,7 +122,10 @@ pub fn generate_synthwave_xm() -> Vec<u8> {
         // Debug validation
         eprintln!("Synthwave Pattern {}: size={} bytes", i, pattern_size);
         if pattern_size < 256 {
-            eprintln!("WARNING: Synthwave Pattern {} too small (expected min 256)", i);
+            eprintln!(
+                "WARNING: Synthwave Pattern {} too small (expected min 256)",
+                i
+            );
         }
 
         xm.extend_from_slice(&9u32.to_le_bytes()); // header length (including length field: 4+1+2+2=9)
@@ -289,9 +294,7 @@ fn generate_pattern_verse_a() -> Vec<u8> {
 
     // Simple melodic line
     let melody = [
-        0, 0, E4_S, 0, D4_S, 0, C4_S, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, C4_S, 0, D4_S, 0, E4_S, 0,
+        0, 0, E4_S, 0, D4_S, 0, C4_S, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, C4_S, 0, D4_S, 0, E4_S, 0,
         0, 0, D4_S, 0, 0, 0, 0, 0,
     ];
 
@@ -371,10 +374,8 @@ fn generate_pattern_verse_b() -> Vec<u8> {
 
     // More active melody
     let melody = [
-        E4_S, 0, D4_S, C4_S, 0, 0, B3_S, 0,
-        A3_S, 0, 0, 0, C4_S, 0, D4_S, 0,
-        E4_S, 0, G4_S, 0, E4_S, 0, D4_S, 0,
-        C4_S, 0, B3_S, 0, A3_S, 0, 0, 0,
+        E4_S, 0, D4_S, C4_S, 0, 0, B3_S, 0, A3_S, 0, 0, 0, C4_S, 0, D4_S, 0, E4_S, 0, G4_S, 0,
+        E4_S, 0, D4_S, 0, C4_S, 0, B3_S, 0, A3_S, 0, 0, 0,
     ];
 
     for row in 0..32 {
@@ -456,17 +457,16 @@ fn generate_pattern_chorus_a() -> Vec<u8> {
     let mut data = Vec::new();
 
     // Bass: F - G - Am - Am
-    let bass_roots = [F3_S, F3_S, F3_S, F3_S, F3_S, F3_S, F3_S, F3_S,
-                      G3_S, G3_S, G3_S, G3_S, G3_S, G3_S, G3_S, G3_S,
-                      A2_S, A2_S, A2_S, A2_S, A2_S, A2_S, A2_S, A2_S,
-                      A2_S, A2_S, A2_S, A2_S, A2_S, A2_S, A2_S, A2_S];
+    let bass_roots = [
+        F3_S, F3_S, F3_S, F3_S, F3_S, F3_S, F3_S, F3_S, G3_S, G3_S, G3_S, G3_S, G3_S, G3_S, G3_S,
+        G3_S, A2_S, A2_S, A2_S, A2_S, A2_S, A2_S, A2_S, A2_S, A2_S, A2_S, A2_S, A2_S, A2_S, A2_S,
+        A2_S, A2_S,
+    ];
 
     // Soaring chorus melody
     let melody = [
-        A4_S, 0, C5_S, 0, 0, 0, B4_S, A4_S,
-        G4_S, 0, 0, 0, A4_S, 0, B4_S, 0,
-        C5_S, 0, 0, 0, B4_S, 0, A4_S, 0,
-        G4_S, 0, E4_S, 0, A4_S, 0, 0, 0,
+        A4_S, 0, C5_S, 0, 0, 0, B4_S, A4_S, G4_S, 0, 0, 0, A4_S, 0, B4_S, 0, C5_S, 0, 0, 0, B4_S,
+        0, A4_S, 0, G4_S, 0, E4_S, 0, A4_S, 0, 0, 0,
     ];
 
     for row in 0..32 {
@@ -537,17 +537,16 @@ fn generate_pattern_chorus_b() -> Vec<u8> {
     let mut data = Vec::new();
 
     // Bass: F - G - C - E (major chord for drama)
-    let bass_roots = [F3_S, F3_S, F3_S, F3_S, F3_S, F3_S, F3_S, F3_S,
-                      G3_S, G3_S, G3_S, G3_S, G3_S, G3_S, G3_S, G3_S,
-                      C3_S, C3_S, C3_S, C3_S, C3_S, C3_S, C3_S, C3_S,
-                      E3_S, E3_S, E3_S, E3_S, E3_S, E3_S, E3_S, E3_S];
+    let bass_roots = [
+        F3_S, F3_S, F3_S, F3_S, F3_S, F3_S, F3_S, F3_S, G3_S, G3_S, G3_S, G3_S, G3_S, G3_S, G3_S,
+        G3_S, C3_S, C3_S, C3_S, C3_S, C3_S, C3_S, C3_S, C3_S, E3_S, E3_S, E3_S, E3_S, E3_S, E3_S,
+        E3_S, E3_S,
+    ];
 
     // Triumphant melody with higher reach
     let melody = [
-        C5_S, 0, E5_S, 0, D5_S, 0, C5_S, 0,
-        B4_S, 0, D5_S, 0, C5_S, 0, B4_S, 0,
-        C5_S, 0, 0, 0, E5_S, 0, D5_S, 0,
-        C5_S, 0, B4_S, 0, A4_S, 0, 0, 0,
+        C5_S, 0, E5_S, 0, D5_S, 0, C5_S, 0, B4_S, 0, D5_S, 0, C5_S, 0, B4_S, 0, C5_S, 0, 0, 0,
+        E5_S, 0, D5_S, 0, C5_S, 0, B4_S, 0, A4_S, 0, 0, 0,
     ];
 
     for row in 0..32 {
@@ -593,7 +592,11 @@ fn generate_pattern_chorus_b() -> Vec<u8> {
             [E3_S, GS3_S, B3_S, GS3_S], // E major (E-G#-B)
         ];
         let chord_idx = (row / 8) as usize;
-        write_note(&mut data, arp_patterns[chord_idx][(row % 4) as usize], ARP_S);
+        write_note(
+            &mut data,
+            arp_patterns[chord_idx][(row % 4) as usize],
+            ARP_S,
+        );
 
         // Ch7: Pad
         if row == 0 {
@@ -650,9 +653,7 @@ fn generate_pattern_bridge() -> Vec<u8> {
 
         // Ch5: Lead - introspective phrase
         let melody = [
-            E4_S, 0, 0, 0, D4_S, 0, 0, 0,
-            C4_S, 0, 0, 0, 0, 0, 0, 0,
-            A3_S, 0, 0, 0, B3_S, 0, 0, 0,
+            E4_S, 0, 0, 0, D4_S, 0, 0, 0, C4_S, 0, 0, 0, 0, 0, 0, 0, A3_S, 0, 0, 0, B3_S, 0, 0, 0,
             C4_S, 0, 0, 0, 0, 0, 0, 0,
         ];
         let mel = melody[row as usize];
@@ -742,10 +743,8 @@ fn generate_pattern_build() -> Vec<u8> {
 
         // Ch5: Lead - rising
         let melody = [
-            A3_S, 0, 0, 0, B3_S, 0, 0, 0,
-            C4_S, 0, 0, 0, D4_S, 0, 0, 0,
-            E4_S, 0, 0, 0, F4_S, 0, 0, 0,
-            G4_S, 0, A4_S, 0, B4_S, 0, C5_S, 0,
+            A3_S, 0, 0, 0, B3_S, 0, 0, 0, C4_S, 0, 0, 0, D4_S, 0, 0, 0, E4_S, 0, 0, 0, F4_S, 0, 0,
+            0, G4_S, 0, A4_S, 0, B4_S, 0, C5_S, 0,
         ];
         let mel = melody[row as usize];
         if mel != 0 {
@@ -806,10 +805,8 @@ fn generate_pattern_outro() -> Vec<u8> {
 
         // Ch4: Bass - descending
         let bass_notes = [
-            A3_S, 0, 0, 0, G3_S, 0, 0, 0,
-            F3_S, 0, 0, 0, E3_S, 0, 0, 0,
-            D3_S, 0, 0, 0, C3_S, 0, 0, 0,
-            A2_S, 0, 0, 0, 0, 0, 0, 0,
+            A3_S, 0, 0, 0, G3_S, 0, 0, 0, F3_S, 0, 0, 0, E3_S, 0, 0, 0, D3_S, 0, 0, 0, C3_S, 0, 0,
+            0, A2_S, 0, 0, 0, 0, 0, 0, 0,
         ];
         let bass = bass_notes[row as usize];
         if bass != 0 {
@@ -820,10 +817,8 @@ fn generate_pattern_outro() -> Vec<u8> {
 
         // Ch5: Lead - final phrase
         let melody = [
-            E4_S, 0, D4_S, 0, C4_S, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0,
-            A3_S, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0,
+            E4_S, 0, D4_S, 0, C4_S, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, A3_S, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0,
         ];
         let mel = melody[row as usize];
         if mel != 0 {

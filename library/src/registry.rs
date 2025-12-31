@@ -73,7 +73,10 @@ pub struct PlayerOptions {
 #[derive(Debug, Clone)]
 pub enum LaunchTarget {
     /// ROM file path with console type
-    Rom { path: PathBuf, console_type: ConsoleType },
+    Rom {
+        path: PathBuf,
+        console_type: ConsoleType,
+    },
     /// Local game reference
     Game(LocalGame),
 }
@@ -250,7 +253,11 @@ impl PlayerLauncher {
             "Running player: {} {}{}{}",
             player.display(),
             rom_path.display(),
-            if self.options.fullscreen { " --fullscreen" } else { "" },
+            if self.options.fullscreen {
+                " --fullscreen"
+            } else {
+                ""
+            },
             if self.options.debug { " --debug" } else { "" },
         );
 

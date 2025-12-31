@@ -580,7 +580,12 @@ pub fn generate_torus_uv<M: MeshBuilderUV + Default>(
 /// - Bottom hemisphere: V maps from 0.0→0.25
 ///
 /// Note: Includes duplicate seam vertices at U=1.0 for correct texture wrapping.
-pub fn generate_capsule_uv<M: MeshBuilderUV + Default>(radius: f32, height: f32, segments: u32, rings: u32) -> M {
+pub fn generate_capsule_uv<M: MeshBuilderUV + Default>(
+    radius: f32,
+    height: f32,
+    segments: u32,
+    rings: u32,
+) -> M {
     let radius = if radius <= 0.0 {
         warn!("generate_capsule_uv: radius must be > 0.0, clamping to 0.001");
         0.001

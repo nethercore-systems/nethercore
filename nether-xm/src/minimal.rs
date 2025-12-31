@@ -112,7 +112,9 @@ pub fn pack_xm_minimal(module: &XmModule) -> Result<Vec<u8>, XmError> {
     output.write_all(&[0, 0]).unwrap();
 
     // ========== Write Pattern Order Table (only song_length entries) ==========
-    output.write_all(&module.order_table[..module.song_length as usize]).unwrap();
+    output
+        .write_all(&module.order_table[..module.song_length as usize])
+        .unwrap();
 
     // ========== Write Patterns ==========
     for pattern in &module.patterns {
@@ -149,12 +151,14 @@ pub fn pack_xm_minimal(module: &XmModule) -> Result<Vec<u8>, XmError> {
         }
 
         // Write vibrato parameters
-        output.write_all(&[
-            instrument.vibrato_type,
-            instrument.vibrato_sweep,
-            instrument.vibrato_depth,
-            instrument.vibrato_rate,
-        ]).unwrap();
+        output
+            .write_all(&[
+                instrument.vibrato_type,
+                instrument.vibrato_sweep,
+                instrument.vibrato_depth,
+                instrument.vibrato_rate,
+            ])
+            .unwrap();
 
         // Write volume fadeout
         write_u16(&mut output, instrument.volume_fadeout);
@@ -163,8 +167,12 @@ pub fn pack_xm_minimal(module: &XmModule) -> Result<Vec<u8>, XmError> {
         if instrument.num_samples > 0 {
             write_u32(&mut output, instrument.sample_loop_start);
             write_u32(&mut output, instrument.sample_loop_length);
-            output.write_all(&[instrument.sample_finetune as u8]).unwrap();
-            output.write_all(&[instrument.sample_relative_note as u8]).unwrap();
+            output
+                .write_all(&[instrument.sample_finetune as u8])
+                .unwrap();
+            output
+                .write_all(&[instrument.sample_relative_note as u8])
+                .unwrap();
             output.write_all(&[instrument.sample_loop_type]).unwrap();
             output.write_all(&[0]).unwrap(); // reserved
         }
@@ -180,13 +188,21 @@ fn write_envelope<W: Write>(output: &mut W, env: &XmEnvelope) -> Result<(), XmEr
     output.write_all(&[num_points]).unwrap();
 
     // Write sustain/loop points
-    output.write_all(&[env.sustain_point, env.loop_start, env.loop_end]).unwrap();
+    output
+        .write_all(&[env.sustain_point, env.loop_start, env.loop_end])
+        .unwrap();
 
     // Pack envelope flags
     let mut flags = 0u8;
-    if env.enabled { flags |= 0x01; }
-    if env.sustain_enabled { flags |= 0x02; }
-    if env.loop_enabled { flags |= 0x04; }
+    if env.enabled {
+        flags |= 0x01;
+    }
+    if env.sustain_enabled {
+        flags |= 0x02;
+    }
+    if env.loop_enabled {
+        flags |= 0x04;
+    }
     output.write_all(&[flags]).unwrap();
 
     // Write envelope points
@@ -308,7 +324,11 @@ fn read_pattern(cursor: &mut Cursor<&[u8]>, num_channels: u8) -> Result<XmPatter
 }
 
 /// Unpack pattern data from XM packed format
-fn unpack_pattern_data(data: &[u8], num_rows: u16, num_channels: u8) -> Result<Vec<Vec<crate::XmNote>>, XmError> {
+fn unpack_pattern_data(
+    data: &[u8],
+    num_rows: u16,
+    num_channels: u8,
+) -> Result<Vec<Vec<crate::XmNote>>, XmError> {
     let mut cursor = Cursor::new(data);
     let mut notes = Vec::with_capacity(num_rows as usize);
 
@@ -400,18 +420,23 @@ fn read_instrument(cursor: &mut Cursor<&[u8]>) -> Result<XmInstrument, XmError> 
     let volume_fadeout = read_u16(cursor)?;
 
     // Read sample metadata
-    let (sample_loop_start, sample_loop_length, sample_finetune, sample_relative_note, sample_loop_type) =
-        if num_samples > 0 {
-            let loop_start = read_u32(cursor)?;
-            let loop_length = read_u32(cursor)?;
-            let finetune = read_u8(cursor)? as i8;
-            let relative_note = read_u8(cursor)? as i8;
-            let loop_type = read_u8(cursor)?;
-            cursor.seek(SeekFrom::Current(1))?; // skip reserved byte
-            (loop_start, loop_length, finetune, relative_note, loop_type)
-        } else {
-            (0, 0, 0, 0, 0)
-        };
+    let (
+        sample_loop_start,
+        sample_loop_length,
+        sample_finetune,
+        sample_relative_note,
+        sample_loop_type,
+    ) = if num_samples > 0 {
+        let loop_start = read_u32(cursor)?;
+        let loop_length = read_u32(cursor)?;
+        let finetune = read_u8(cursor)? as i8;
+        let relative_note = read_u8(cursor)? as i8;
+        let loop_type = read_u8(cursor)?;
+        cursor.seek(SeekFrom::Current(1))?; // skip reserved byte
+        (loop_start, loop_length, finetune, relative_note, loop_type)
+    } else {
+        (0, 0, 0, 0, 0)
+    };
 
     Ok(XmInstrument {
         name: String::new(), // Not stored in minimal format
@@ -475,19 +500,25 @@ fn write_u32<W: Write>(output: &mut W, val: u32) {
 
 fn read_u8(cursor: &mut Cursor<&[u8]>) -> Result<u8, XmError> {
     let mut buf = [0u8; 1];
-    cursor.read_exact(&mut buf).map_err(|_| XmError::UnexpectedEof)?;
+    cursor
+        .read_exact(&mut buf)
+        .map_err(|_| XmError::UnexpectedEof)?;
     Ok(buf[0])
 }
 
 fn read_u16(cursor: &mut Cursor<&[u8]>) -> Result<u16, XmError> {
     let mut buf = [0u8; 2];
-    cursor.read_exact(&mut buf).map_err(|_| XmError::UnexpectedEof)?;
+    cursor
+        .read_exact(&mut buf)
+        .map_err(|_| XmError::UnexpectedEof)?;
     Ok(u16::from_le_bytes(buf))
 }
 
 fn read_u32(cursor: &mut Cursor<&[u8]>) -> Result<u32, XmError> {
     let mut buf = [0u8; 4];
-    cursor.read_exact(&mut buf).map_err(|_| XmError::UnexpectedEof)?;
+    cursor
+        .read_exact(&mut buf)
+        .map_err(|_| XmError::UnexpectedEof)?;
     Ok(u32::from_le_bytes(buf))
 }
 
@@ -889,12 +920,18 @@ mod tests {
         println!("Minimal NCXM size: {} bytes", minimal.len());
         println!("  Header: {} bytes", HEADER_SIZE);
         println!("  Pattern order: {} bytes", module.song_length);
-        println!("  Patterns + instruments: {} bytes", minimal.len() - HEADER_SIZE - module.song_length as usize);
+        println!(
+            "  Patterns + instruments: {} bytes",
+            minimal.len() - HEADER_SIZE - module.song_length as usize
+        );
 
         // Verify it's compact (no magic, no padding, no names)
         // Header (16) + order (4) + 4 patterns (64 rows each) + 1 instrument
         // Should be under 1000 bytes for this module
-        assert!(minimal.len() < 1000, "Minimal format should be very compact");
+        assert!(
+            minimal.len() < 1000,
+            "Minimal format should be very compact"
+        );
 
         // Verify it parses correctly
         let parsed = parse_xm_minimal(&minimal).unwrap();

@@ -270,7 +270,6 @@ pub struct TrackerInstrument {
     // =========================================================================
     // Sample metadata (XM stores these per-instrument, IT per-sample)
     // =========================================================================
-
     /// Sample loop start position (in samples)
     pub sample_loop_start: u32,
     /// Sample loop end position (in samples)
@@ -285,7 +284,6 @@ pub struct TrackerInstrument {
     // =========================================================================
     // Auto-vibrato settings (XM feature, applied automatically to notes)
     // =========================================================================
-
     /// Auto-vibrato waveform (0=sine, 1=square, 2=ramp down, 3=ramp up)
     pub auto_vibrato_type: u8,
     /// Auto-vibrato sweep (frames to reach full depth)
@@ -340,11 +338,7 @@ impl TrackerInstrument {
     pub fn sample_for_note(&self, note: u8) -> Option<u8> {
         if note < 120 {
             let (_, sample) = self.note_sample_table[note as usize];
-            if sample > 0 {
-                Some(sample)
-            } else {
-                None
-            }
+            if sample > 0 { Some(sample) } else { None }
         } else {
             None
         }

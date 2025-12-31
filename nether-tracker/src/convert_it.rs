@@ -1,9 +1,9 @@
 //! IT → TrackerModule conversion
 
 use crate::{
-    DuplicateCheckAction, DuplicateCheckType, EnvelopeFlags, FormatFlags, LoopType,
-    NewNoteAction, TrackerEffect, TrackerEnvelope, TrackerInstrument, TrackerModule,
-    TrackerNote, TrackerPattern, TrackerSample,
+    DuplicateCheckAction, DuplicateCheckType, EnvelopeFlags, FormatFlags, LoopType, NewNoteAction,
+    TrackerEffect, TrackerEnvelope, TrackerInstrument, TrackerModule, TrackerNote, TrackerPattern,
+    TrackerSample,
 };
 
 /// Convert an IT module to the unified TrackerModule format
@@ -78,17 +78,15 @@ fn convert_it_note(it_note: &nether_it::ItNote) -> TrackerNote {
 fn convert_it_volume(vol: u8) -> u8 {
     // Simple volume (0-64) is preserved
     // Volume effects are handled in convert_it_effect
-    if vol <= 64 {
-        vol
-    } else {
-        0
-    }
+    if vol <= 64 { vol } else { 0 }
 }
 
 /// Convert IT effect to unified TrackerEffect
 fn convert_it_effect(effect: u8, param: u8, volume: u8) -> TrackerEffect {
     // Check volume column for volume-column effects first
-    if volume > 64 && let Some(vol_effect) = convert_it_volume_effect(volume) {
+    if volume > 64
+        && let Some(vol_effect) = convert_it_volume_effect(volume)
+    {
         return vol_effect;
     }
 
@@ -381,14 +379,8 @@ fn convert_it_instrument(it_instr: &nether_it::ItInstrument) -> TrackerInstrumen
         global_volume: (it_instr.global_volume / 2).min(64), // IT uses 0-128, we use 0-64
         default_pan: it_instr.default_pan,
         note_sample_table: it_instr.note_sample_table,
-        volume_envelope: it_instr
-            .volume_envelope
-            .as_ref()
-            .map(convert_it_envelope),
-        panning_envelope: it_instr
-            .panning_envelope
-            .as_ref()
-            .map(convert_it_envelope),
+        volume_envelope: it_instr.volume_envelope.as_ref().map(convert_it_envelope),
+        panning_envelope: it_instr.panning_envelope.as_ref().map(convert_it_envelope),
         pitch_envelope: it_instr.pitch_envelope.as_ref().map(convert_it_envelope),
         filter_cutoff: it_instr.filter_cutoff,
         filter_resonance: it_instr.filter_resonance,
@@ -518,10 +510,7 @@ mod tests {
     #[test]
     fn test_convert_it_effect_volume_slide() {
         let effect = convert_it_effect(nether_it::effects::VOLUME_SLIDE, 0x52, 0); // Up 5, down 2
-        assert_eq!(
-            effect,
-            TrackerEffect::VolumeSlide { up: 5, down: 2 }
-        );
+        assert_eq!(effect, TrackerEffect::VolumeSlide { up: 5, down: 2 });
     }
 
     #[test]

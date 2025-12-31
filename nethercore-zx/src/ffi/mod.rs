@@ -76,7 +76,7 @@ use wasmtime::{Caller, Extern, Linker, Memory};
 use nethercore_core::wasm::WasmGameContext;
 
 use crate::console::ZInput;
-use crate::state::{ZXFFIState, ZRollbackState};
+use crate::state::{ZRollbackState, ZXFFIState};
 
 /// Type alias for Nethercore ZX WASM game context
 pub type ZXGameContext = WasmGameContext<ZInput, ZXFFIState, ZRollbackState>;

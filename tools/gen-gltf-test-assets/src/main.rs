@@ -88,7 +88,8 @@ fn generate_checkerboard_texture(path: &PathBuf) -> Result<()> {
         }
     }
 
-    img.save(path).context("Failed to save checkerboard texture")?;
+    img.save(path)
+        .context("Failed to save checkerboard texture")?;
     println!("Generated texture: {} ({}x{})", path.display(), SIZE, SIZE);
 
     Ok(())
@@ -98,8 +99,7 @@ fn generate_checkerboard_texture(path: &PathBuf) -> Result<()> {
 fn convert_glb_to_native(glb_path: &PathBuf, output_dir: &PathBuf, prefix: &str) -> Result<()> {
     // Convert mesh
     let mesh_path = output_dir.join(format!("{}.nczxmesh", prefix));
-    let mesh =
-        nether_export::convert_gltf_to_memory(glb_path).context("Failed to convert mesh")?;
+    let mesh = nether_export::convert_gltf_to_memory(glb_path).context("Failed to convert mesh")?;
 
     // Build mesh file with header
     let header = NetherZXMeshHeader::new(mesh.vertex_count, mesh.index_count, mesh.format);

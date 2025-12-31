@@ -2,8 +2,8 @@
 //!
 //! Instruments for "Nether Fire" - Eurobeat at 155 BPM in D minor
 
-use std::f32::consts::PI;
 use super::common::{SimpleRng, SAMPLE_RATE};
+use std::f32::consts::PI;
 
 /// Eurobeat kick: Improved 909-style with aggressive punch and harmonics
 pub fn generate_kick_euro() -> Vec<i16> {

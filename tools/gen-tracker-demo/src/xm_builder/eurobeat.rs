@@ -2,7 +2,9 @@
 //!
 //! 155 BPM, D minor, 8 patterns, 7 instruments
 
-use super::{write_note, write_note_vol, write_empty, write_instrument, write_instrument_with_sample};
+use super::{
+    write_empty, write_instrument, write_instrument_with_sample, write_note, write_note_vol,
+};
 
 // Eurobeat note constants (D minor: D E F G A Bb C)
 const D2_E: u8 = 27;
@@ -69,12 +71,12 @@ pub fn generate_eurobeat_xm() -> Vec<u8> {
     xm.extend_from_slice(&0x0104u16.to_le_bytes());
     xm.extend_from_slice(&276u32.to_le_bytes());
     xm.extend_from_slice(&15u16.to_le_bytes()); // Song length
-    xm.extend_from_slice(&3u16.to_le_bytes());  // Restart position
-    xm.extend_from_slice(&8u16.to_le_bytes());  // Channels
-    xm.extend_from_slice(&8u16.to_le_bytes());  // Patterns
-    xm.extend_from_slice(&7u16.to_le_bytes());  // Instruments
-    xm.extend_from_slice(&1u16.to_le_bytes());  // Flags
-    xm.extend_from_slice(&6u16.to_le_bytes());  // Speed
+    xm.extend_from_slice(&3u16.to_le_bytes()); // Restart position
+    xm.extend_from_slice(&8u16.to_le_bytes()); // Channels
+    xm.extend_from_slice(&8u16.to_le_bytes()); // Patterns
+    xm.extend_from_slice(&7u16.to_le_bytes()); // Instruments
+    xm.extend_from_slice(&1u16.to_le_bytes()); // Flags
+    xm.extend_from_slice(&6u16.to_le_bytes()); // Speed
     xm.extend_from_slice(&155u16.to_le_bytes()); // BPM
 
     let order = [0u8, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 6, 7, 4, 5];
@@ -107,8 +109,13 @@ pub fn generate_eurobeat_xm() -> Vec<u8> {
 
     // Instruments
     let instruments = [
-        "kick_euro", "snare_euro", "hihat_euro", "bass_euro",
-        "supersaw", "brass_euro", "pad_euro",
+        "kick_euro",
+        "snare_euro",
+        "hihat_euro",
+        "bass_euro",
+        "supersaw",
+        "brass_euro",
+        "pad_euro",
     ];
     for name in &instruments {
         write_instrument(&mut xm, name);
@@ -170,8 +177,13 @@ pub fn generate_eurobeat_xm_embedded(samples: &[Vec<i16>]) -> Vec<u8> {
     }
 
     let instruments = [
-        "kick_euro", "snare_euro", "hihat_euro", "bass_euro",
-        "supersaw", "brass_euro", "pad_euro",
+        "kick_euro",
+        "snare_euro",
+        "hihat_euro",
+        "bass_euro",
+        "supersaw",
+        "brass_euro",
+        "pad_euro",
     ];
     for (i, name) in instruments.iter().enumerate() {
         write_instrument_with_sample(&mut xm, name, &samples[i]);
@@ -289,10 +301,22 @@ fn generate_pattern_verse_a() -> Vec<u8> {
     let mut data = Vec::new();
 
     let bass_pattern: [(u8, u8); 16] = [
-        (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E),
-        (G2_E, G3_E), (G2_E, G3_E), (G2_E, G3_E), (G2_E, G3_E),
-        (BB2_E, BB3_E), (BB2_E, BB3_E), (BB2_E, BB3_E), (BB2_E, BB3_E),
-        (A2_E, A3_E), (A2_E, A3_E), (A2_E, A3_E), (A2_E, A3_E),
+        (D2_E, D3_E),
+        (D2_E, D3_E),
+        (D2_E, D3_E),
+        (D2_E, D3_E),
+        (G2_E, G3_E),
+        (G2_E, G3_E),
+        (G2_E, G3_E),
+        (G2_E, G3_E),
+        (BB2_E, BB3_E),
+        (BB2_E, BB3_E),
+        (BB2_E, BB3_E),
+        (BB2_E, BB3_E),
+        (A2_E, A3_E),
+        (A2_E, A3_E),
+        (A2_E, A3_E),
+        (A2_E, A3_E),
     ];
 
     for row in 0..32 {
@@ -379,10 +403,22 @@ fn generate_pattern_verse_b() -> Vec<u8> {
     let mut data = Vec::new();
 
     let bass_pattern: [(u8, u8); 16] = [
-        (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E),
-        (C3_E, C4_E), (C3_E, C4_E), (C3_E, C4_E), (C3_E, C4_E),
-        (BB2_E, BB3_E), (BB2_E, BB3_E), (BB2_E, BB3_E), (BB2_E, BB3_E),
-        (C3_E, C4_E), (C3_E, C4_E), (C3_E, C4_E), (C3_E, C4_E),
+        (D2_E, D3_E),
+        (D2_E, D3_E),
+        (D2_E, D3_E),
+        (D2_E, D3_E),
+        (C3_E, C4_E),
+        (C3_E, C4_E),
+        (C3_E, C4_E),
+        (C3_E, C4_E),
+        (BB2_E, BB3_E),
+        (BB2_E, BB3_E),
+        (BB2_E, BB3_E),
+        (BB2_E, BB3_E),
+        (C3_E, C4_E),
+        (C3_E, C4_E),
+        (C3_E, C4_E),
+        (C3_E, C4_E),
     ];
 
     for row in 0..32 {
@@ -507,9 +543,27 @@ fn generate_pattern_prechorus() -> Vec<u8> {
 
         // Ch4: Bass
         let bass_note = match row {
-            0..=7 => if (row / 2) % 2 == 0 { F2_E } else { F3_E },
-            8..=15 => if (row / 2) % 2 == 0 { G2_E } else { G3_E },
-            16..=31 => if (row / 2) % 2 == 0 { A2_E } else { A3_E },
+            0..=7 => {
+                if (row / 2) % 2 == 0 {
+                    F2_E
+                } else {
+                    F3_E
+                }
+            }
+            8..=15 => {
+                if (row / 2) % 2 == 0 {
+                    G2_E
+                } else {
+                    G3_E
+                }
+            }
+            16..=31 => {
+                if (row / 2) % 2 == 0 {
+                    A2_E
+                } else {
+                    A3_E
+                }
+            }
             _ => A2_E,
         };
         if row % 2 == 0 {
@@ -572,10 +626,22 @@ fn generate_pattern_chorus_a() -> Vec<u8> {
     let mut data = Vec::new();
 
     let bass_pattern: [(u8, u8); 16] = [
-        (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E),
-        (BB2_E, BB3_E), (BB2_E, BB3_E), (BB2_E, BB3_E), (BB2_E, BB3_E),
-        (C3_E, C4_E), (C3_E, C4_E), (C3_E, C4_E), (C3_E, C4_E),
-        (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E),
+        (D2_E, D3_E),
+        (D2_E, D3_E),
+        (D2_E, D3_E),
+        (D2_E, D3_E),
+        (BB2_E, BB3_E),
+        (BB2_E, BB3_E),
+        (BB2_E, BB3_E),
+        (BB2_E, BB3_E),
+        (C3_E, C4_E),
+        (C3_E, C4_E),
+        (C3_E, C4_E),
+        (C3_E, C4_E),
+        (D2_E, D3_E),
+        (D2_E, D3_E),
+        (D2_E, D3_E),
+        (D2_E, D3_E),
     ];
 
     for row in 0..32 {
@@ -657,10 +723,22 @@ fn generate_pattern_chorus_b() -> Vec<u8> {
     let mut data = Vec::new();
 
     let bass_pattern: [(u8, u8); 16] = [
-        (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E),
-        (BB2_E, BB3_E), (BB2_E, BB3_E), (BB2_E, BB3_E), (BB2_E, BB3_E),
-        (G2_E, G3_E), (G2_E, G3_E), (A2_E, A3_E), (A2_E, A3_E),
-        (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E),
+        (D2_E, D3_E),
+        (D2_E, D3_E),
+        (D2_E, D3_E),
+        (D2_E, D3_E),
+        (BB2_E, BB3_E),
+        (BB2_E, BB3_E),
+        (BB2_E, BB3_E),
+        (BB2_E, BB3_E),
+        (G2_E, G3_E),
+        (G2_E, G3_E),
+        (A2_E, A3_E),
+        (A2_E, A3_E),
+        (D2_E, D3_E),
+        (D2_E, D3_E),
+        (D2_E, D3_E),
+        (D2_E, D3_E),
     ];
 
     for row in 0..32 {
@@ -804,10 +882,22 @@ fn generate_pattern_drop() -> Vec<u8> {
     let mut data = Vec::new();
 
     let bass_pattern: [(u8, u8); 16] = [
-        (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E), (D2_E, D3_E),
-        (C3_E, C4_E), (C3_E, C4_E), (C3_E, C4_E), (C3_E, C4_E),
-        (BB2_E, BB3_E), (BB2_E, BB3_E), (BB2_E, BB3_E), (BB2_E, BB3_E),
-        (A2_E, A3_E), (A2_E, A3_E), (A2_E, A3_E), (A2_E, A3_E),
+        (D2_E, D3_E),
+        (D2_E, D3_E),
+        (D2_E, D3_E),
+        (D2_E, D3_E),
+        (C3_E, C4_E),
+        (C3_E, C4_E),
+        (C3_E, C4_E),
+        (C3_E, C4_E),
+        (BB2_E, BB3_E),
+        (BB2_E, BB3_E),
+        (BB2_E, BB3_E),
+        (BB2_E, BB3_E),
+        (A2_E, A3_E),
+        (A2_E, A3_E),
+        (A2_E, A3_E),
+        (A2_E, A3_E),
     ];
 
     for row in 0..32 {

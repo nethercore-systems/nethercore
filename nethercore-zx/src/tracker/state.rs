@@ -5,8 +5,8 @@
 
 use std::collections::BTreeMap;
 
-use super::channels::TrackerChannel;
 use super::MAX_TRACKER_CHANNELS;
+use super::channels::TrackerChannel;
 
 /// Row state cache for fast rollback reconstruction
 ///

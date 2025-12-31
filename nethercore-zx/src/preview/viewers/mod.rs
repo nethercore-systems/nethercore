@@ -5,13 +5,16 @@
 
 use std::sync::Arc;
 
-use zx_common::ZXDataPack;
-use nethercore_core::app::preview::{AssetViewer as CoreAssetViewer, PreviewData as CorePreviewData, AssetCategory as CoreAssetCategory};
+use crate::audio::{AudioOutput, OUTPUT_SAMPLE_RATE, Sound};
 use crate::console::NethercoreZX;
 use crate::graphics::ZXGraphics;
-use crate::audio::{AudioOutput, Sound, OUTPUT_SAMPLE_RATE};
-use crate::tracker::TrackerEngine;
 use crate::state::{TrackerState, tracker_flags};
+use crate::tracker::TrackerEngine;
+use nethercore_core::app::preview::{
+    AssetCategory as CoreAssetCategory, AssetViewer as CoreAssetViewer,
+    PreviewData as CorePreviewData,
+};
+use zx_common::ZXDataPack;
 
 use super::{AssetCategory, PreviewData};
 
@@ -127,30 +130,34 @@ impl ZXAssetViewer {
     /// Get all asset IDs for a given category
     pub fn asset_ids(&self, category: AssetCategory) -> Vec<String> {
         match category {
-            AssetCategory::Textures => {
-                self.data_pack.textures.iter().map(|t| t.id.clone()).collect()
-            }
-            AssetCategory::Meshes => {
-                self.data_pack.meshes.iter().map(|m| m.id.clone()).collect()
-            }
-            AssetCategory::Sounds => {
-                self.data_pack.sounds.iter().map(|s| s.id.clone()).collect()
-            }
-            AssetCategory::Trackers => {
-                self.data_pack.trackers.iter().map(|t| t.id.clone()).collect()
-            }
-            AssetCategory::Animations => {
-                self.data_pack.keyframes.iter().map(|k| k.id.clone()).collect()
-            }
-            AssetCategory::Skeletons => {
-                self.data_pack.skeletons.iter().map(|s| s.id.clone()).collect()
-            }
-            AssetCategory::Fonts => {
-                self.data_pack.fonts.iter().map(|f| f.id.clone()).collect()
-            }
-            AssetCategory::Data => {
-                self.data_pack.data.iter().map(|d| d.id.clone()).collect()
-            }
+            AssetCategory::Textures => self
+                .data_pack
+                .textures
+                .iter()
+                .map(|t| t.id.clone())
+                .collect(),
+            AssetCategory::Meshes => self.data_pack.meshes.iter().map(|m| m.id.clone()).collect(),
+            AssetCategory::Sounds => self.data_pack.sounds.iter().map(|s| s.id.clone()).collect(),
+            AssetCategory::Trackers => self
+                .data_pack
+                .trackers
+                .iter()
+                .map(|t| t.id.clone())
+                .collect(),
+            AssetCategory::Animations => self
+                .data_pack
+                .keyframes
+                .iter()
+                .map(|k| k.id.clone())
+                .collect(),
+            AssetCategory::Skeletons => self
+                .data_pack
+                .skeletons
+                .iter()
+                .map(|s| s.id.clone())
+                .collect(),
+            AssetCategory::Fonts => self.data_pack.fonts.iter().map(|f| f.id.clone()).collect(),
+            AssetCategory::Data => self.data_pack.data.iter().map(|d| d.id.clone()).collect(),
         }
     }
 
@@ -201,81 +208,104 @@ impl ZXAssetViewer {
 
         match self.selected_category {
             AssetCategory::Textures => {
-                self.data_pack.textures.iter()
+                self.data_pack
+                    .textures
+                    .iter()
                     .find(|t| &t.id == id)
-                    .map(|t| format!(
-                        "{}x{} {:?} ({} bytes)",
-                        t.width, t.height, t.format,
-                        t.data.len()
-                    ))
-            }
-            AssetCategory::Meshes => {
-                self.data_pack.meshes.iter()
-                    .find(|m| &m.id == id)
-                    .map(|m| {
-                        let mut flags = Vec::new();
-                        if m.has_uv() { flags.push("UV"); }
-                        if m.has_color() { flags.push("Color"); }
-                        if m.has_normal() { flags.push("Normal"); }
-                        if m.is_skinned() { flags.push("Skinned"); }
+                    .map(|t| {
                         format!(
-                            "{} verts, {} indices, stride {} [{}]",
-                            m.vertex_count, m.index_count, m.stride(),
-                            flags.join(", ")
+                            "{}x{} {:?} ({} bytes)",
+                            t.width,
+                            t.height,
+                            t.format,
+                            t.data.len()
                         )
                     })
             }
-            AssetCategory::Sounds => {
-                self.data_pack.sounds.iter()
-                    .find(|s| &s.id == id)
-                    .map(|s| format!(
-                        "{} samples ({:.2}s @ 22050Hz)",
-                        s.data.len(),
-                        s.duration_seconds()
-                    ))
-            }
+            AssetCategory::Meshes => self.data_pack.meshes.iter().find(|m| &m.id == id).map(|m| {
+                let mut flags = Vec::new();
+                if m.has_uv() {
+                    flags.push("UV");
+                }
+                if m.has_color() {
+                    flags.push("Color");
+                }
+                if m.has_normal() {
+                    flags.push("Normal");
+                }
+                if m.is_skinned() {
+                    flags.push("Skinned");
+                }
+                format!(
+                    "{} verts, {} indices, stride {} [{}]",
+                    m.vertex_count,
+                    m.index_count,
+                    m.stride(),
+                    flags.join(", ")
+                )
+            }),
+            AssetCategory::Sounds => self.data_pack.sounds.iter().find(|s| &s.id == id).map(|s| {
+                format!(
+                    "{} samples ({:.2}s @ 22050Hz)",
+                    s.data.len(),
+                    s.duration_seconds()
+                )
+            }),
             AssetCategory::Trackers => {
-                self.data_pack.trackers.iter()
+                self.data_pack
+                    .trackers
+                    .iter()
                     .find(|t| &t.id == id)
-                    .map(|t| format!(
-                        "XM Tracker, {} instruments, {} bytes pattern data",
-                        t.instrument_count(),
-                        t.pattern_data_size()
-                    ))
+                    .map(|t| {
+                        format!(
+                            "XM Tracker, {} instruments, {} bytes pattern data",
+                            t.instrument_count(),
+                            t.pattern_data_size()
+                        )
+                    })
             }
             AssetCategory::Animations => {
-                self.data_pack.keyframes.iter()
+                self.data_pack
+                    .keyframes
+                    .iter()
                     .find(|k| &k.id == id)
-                    .map(|k| format!(
-                        "{} bones, {} frames ({} bytes)",
-                        k.bone_count, k.frame_count,
-                        k.data.len()
-                    ))
+                    .map(|k| {
+                        format!(
+                            "{} bones, {} frames ({} bytes)",
+                            k.bone_count,
+                            k.frame_count,
+                            k.data.len()
+                        )
+                    })
             }
             AssetCategory::Skeletons => {
-                self.data_pack.skeletons.iter()
+                self.data_pack
+                    .skeletons
+                    .iter()
                     .find(|s| &s.id == id)
-                    .map(|s| format!(
-                        "{} bones, {} inverse bind matrices",
-                        s.bone_count,
-                        s.inverse_bind_matrices.len()
-                    ))
+                    .map(|s| {
+                        format!(
+                            "{} bones, {} inverse bind matrices",
+                            s.bone_count,
+                            s.inverse_bind_matrices.len()
+                        )
+                    })
             }
-            AssetCategory::Fonts => {
-                self.data_pack.fonts.iter()
-                    .find(|f| &f.id == id)
-                    .map(|f| format!(
-                        "{}x{} atlas, {} glyphs, line height {:.1}",
-                        f.atlas_width, f.atlas_height,
-                        f.glyphs.len(),
-                        f.line_height
-                    ))
-            }
-            AssetCategory::Data => {
-                self.data_pack.data.iter()
-                    .find(|d| &d.id == id)
-                    .map(|d| format!("{} bytes", d.data.len()))
-            }
+            AssetCategory::Fonts => self.data_pack.fonts.iter().find(|f| &f.id == id).map(|f| {
+                format!(
+                    "{}x{} atlas, {} glyphs, line height {:.1}",
+                    f.atlas_width,
+                    f.atlas_height,
+                    f.glyphs.len(),
+                    f.line_height
+                )
+            }),
+            AssetCategory::Data => self
+                .data_pack
+                .data
+                .iter()
+                .find(|d| &d.id == id)
+                .map(|d| format!("{} bytes", d.data.len())),
         }
     }
 
@@ -439,10 +469,19 @@ impl ZXAssetViewer {
         let mut sound_handles: Vec<u32> = Vec::new();
 
         eprintln!("DEBUG: Starting tracker playback");
-        eprintln!("DEBUG: Tracker has {} sample_ids: {:?}", sample_ids.len(), sample_ids);
-        eprintln!("DEBUG: Data pack has {} sounds: {:?}",
+        eprintln!(
+            "DEBUG: Tracker has {} sample_ids: {:?}",
+            sample_ids.len(),
+            sample_ids
+        );
+        eprintln!(
+            "DEBUG: Data pack has {} sounds: {:?}",
             self.data_pack.sounds.len(),
-            self.data_pack.sounds.iter().map(|s| &s.id).collect::<Vec<_>>()
+            self.data_pack
+                .sounds
+                .iter()
+                .map(|s| &s.id)
+                .collect::<Vec<_>>()
         );
 
         for sample_id in &sample_ids {
@@ -451,18 +490,29 @@ impl ZXAssetViewer {
                 let sound = Sound {
                     data: Arc::new(packed_sound.data.clone()),
                 };
-                eprintln!("DEBUG: Loaded sample '{}' with {} samples, handle={}",
-                    sample_id, packed_sound.data.len(), sounds.len());
+                eprintln!(
+                    "DEBUG: Loaded sample '{}' with {} samples, handle={}",
+                    sample_id,
+                    packed_sound.data.len(),
+                    sounds.len()
+                );
                 sounds.push(Some(sound));
                 sound_handles.push(sounds.len() as u32 - 1); // Handle points to index
             } else {
-                eprintln!("Warning: tracker sample '{}' not found in data pack", sample_id);
+                eprintln!(
+                    "Warning: tracker sample '{}' not found in data pack",
+                    sample_id
+                );
                 sounds.push(None);
                 sound_handles.push(sounds.len() as u32 - 1);
             }
         }
 
-        eprintln!("DEBUG: Total sounds loaded: {}, sound_handles: {:?}", sounds.len(), sound_handles);
+        eprintln!(
+            "DEBUG: Total sounds loaded: {}, sound_handles: {:?}",
+            sounds.len(),
+            sound_handles
+        );
         self.tracker_sounds = sounds;
 
         // Initialize tracker engine
@@ -484,7 +534,8 @@ impl ZXAssetViewer {
     pub fn sound_seek(&mut self, position: f32) {
         if let Some(id) = &self.selected_id {
             if let Some(sound) = self.data_pack.sounds.iter().find(|s| &s.id == id) {
-                self.sound_position = ((position.clamp(0.0, 1.0) * sound.data.len() as f32) as usize)
+                self.sound_position = ((position.clamp(0.0, 1.0) * sound.data.len() as f32)
+                    as usize)
                     .min(sound.data.len().saturating_sub(1));
             }
         }
@@ -774,7 +825,14 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
 
                             ui.separator();
 
-                            if ui.button(if self.texture_linear_filter { "Linear" } else { "Nearest" }).clicked() {
+                            if ui
+                                .button(if self.texture_linear_filter {
+                                    "Linear"
+                                } else {
+                                    "Nearest"
+                                })
+                                .clicked()
+                            {
                                 self.texture_linear_filter = !self.texture_linear_filter;
                                 // Invalidate cache to recreate texture with new filter
                                 self.cached_texture = None;
@@ -818,13 +876,11 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
 
                             // Use the cached texture
                             if let Some(ref texture_handle) = self.cached_texture {
-                                let display_size = egui::vec2(
-                                    width as f32 * zoom,
-                                    height as f32 * zoom,
-                                );
+                                let display_size =
+                                    egui::vec2(width as f32 * zoom, height as f32 * zoom);
                                 ui.add(
                                     egui::Image::new(texture_handle)
-                                        .fit_to_exact_size(display_size)
+                                        .fit_to_exact_size(display_size),
                                 );
                             }
                         } else {
@@ -873,13 +929,17 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
                                 // Center line
                                 let center_y = rect.center().y;
                                 painter.line_segment(
-                                    [rect.left_top() + egui::vec2(0.0, waveform_height / 2.0),
-                                     rect.right_top() + egui::vec2(0.0, waveform_height / 2.0)],
+                                    [
+                                        rect.left_top() + egui::vec2(0.0, waveform_height / 2.0),
+                                        rect.right_top() + egui::vec2(0.0, waveform_height / 2.0),
+                                    ],
                                     egui::Stroke::new(1.0, egui::Color32::from_gray(60)),
                                 );
 
                                 // Draw waveform
-                                let samples_per_pixel = (sound_samples.len() as f32 / available_width).max(1.0) as usize;
+                                let samples_per_pixel =
+                                    (sound_samples.len() as f32 / available_width).max(1.0)
+                                        as usize;
 
                                 for x in 0..(available_width as usize) {
                                     let sample_idx = x * samples_per_pixel;
@@ -914,7 +974,10 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
                                     // Draw line for this pixel column
                                     painter.line_segment(
                                         [egui::pos2(x_pos, min_y), egui::pos2(x_pos, max_y)],
-                                        egui::Stroke::new(1.0, egui::Color32::from_rgb(100, 200, 255)),
+                                        egui::Stroke::new(
+                                            1.0,
+                                            egui::Color32::from_rgb(100, 200, 255),
+                                        ),
                                     );
                                 }
 
@@ -922,8 +985,14 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
                                 if is_playing {
                                     let pos_x = rect.left() + progress * available_width;
                                     painter.line_segment(
-                                        [egui::pos2(pos_x, rect.top()), egui::pos2(pos_x, rect.bottom())],
-                                        egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 100, 100)),
+                                        [
+                                            egui::pos2(pos_x, rect.top()),
+                                            egui::pos2(pos_x, rect.bottom()),
+                                        ],
+                                        egui::Stroke::new(
+                                            2.0,
+                                            egui::Color32::from_rgb(255, 100, 100),
+                                        ),
                                     );
                                 }
                             }
@@ -938,13 +1007,24 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
                             ui.label(format!("Vertices: {}", mesh.vertex_count));
                             ui.label(format!("Indices: {}", mesh.index_count));
                             ui.label(format!("Stride: {} bytes", mesh.stride()));
-                            ui.label(format!("Total size: {} bytes", mesh.vertex_data.len() + mesh.index_data.len() * 2));
+                            ui.label(format!(
+                                "Total size: {} bytes",
+                                mesh.vertex_data.len() + mesh.index_data.len() * 2
+                            ));
 
                             let mut flags = Vec::new();
-                            if mesh.has_uv() { flags.push("UV"); }
-                            if mesh.has_color() { flags.push("Color"); }
-                            if mesh.has_normal() { flags.push("Normal"); }
-                            if mesh.is_skinned() { flags.push("Skinned"); }
+                            if mesh.has_uv() {
+                                flags.push("UV");
+                            }
+                            if mesh.has_color() {
+                                flags.push("Color");
+                            }
+                            if mesh.has_normal() {
+                                flags.push("Normal");
+                            }
+                            if mesh.is_skinned() {
+                                flags.push("Skinned");
+                            }
                             ui.label(format!("Features: {}", flags.join(", ")));
 
                             ui.separator();
@@ -972,28 +1052,51 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
 
                             // Show sample vertices
                             ui.label("Sample Vertex Data (first 3 vertices):");
-                            egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
-                                let stride = mesh.stride();
-                                for i in 0..3.min(mesh.vertex_count as usize) {
-                                    let offset = i * stride;
-                                    if offset + 12 <= mesh.vertex_data.len() {
-                                        ui.collapsing(format!("Vertex {}", i), |ui| {
-                                            // Read position (first 12 bytes)
-                                            let pos_bytes = &mesh.vertex_data[offset..offset + 12];
-                                            let x = f32::from_le_bytes([pos_bytes[0], pos_bytes[1], pos_bytes[2], pos_bytes[3]]);
-                                            let y = f32::from_le_bytes([pos_bytes[4], pos_bytes[5], pos_bytes[6], pos_bytes[7]]);
-                                            let z = f32::from_le_bytes([pos_bytes[8], pos_bytes[9], pos_bytes[10], pos_bytes[11]]);
-                                            ui.code(format!("pos: ({:.3}, {:.3}, {:.3})", x, y, z));
-                                        });
+                            egui::ScrollArea::vertical()
+                                .max_height(200.0)
+                                .show(ui, |ui| {
+                                    let stride = mesh.stride();
+                                    for i in 0..3.min(mesh.vertex_count as usize) {
+                                        let offset = i * stride;
+                                        if offset + 12 <= mesh.vertex_data.len() {
+                                            ui.collapsing(format!("Vertex {}", i), |ui| {
+                                                // Read position (first 12 bytes)
+                                                let pos_bytes =
+                                                    &mesh.vertex_data[offset..offset + 12];
+                                                let x = f32::from_le_bytes([
+                                                    pos_bytes[0],
+                                                    pos_bytes[1],
+                                                    pos_bytes[2],
+                                                    pos_bytes[3],
+                                                ]);
+                                                let y = f32::from_le_bytes([
+                                                    pos_bytes[4],
+                                                    pos_bytes[5],
+                                                    pos_bytes[6],
+                                                    pos_bytes[7],
+                                                ]);
+                                                let z = f32::from_le_bytes([
+                                                    pos_bytes[8],
+                                                    pos_bytes[9],
+                                                    pos_bytes[10],
+                                                    pos_bytes[11],
+                                                ]);
+                                                ui.code(format!(
+                                                    "pos: ({:.3}, {:.3}, {:.3})",
+                                                    x, y, z
+                                                ));
+                                            });
+                                        }
                                     }
-                                }
-                            });
+                                });
 
                             ui.separator();
 
                             // Show sample indices
                             ui.label("Index Data (first 12 indices):");
-                            let sample_indices: Vec<String> = mesh.index_data.iter()
+                            let sample_indices: Vec<String> = mesh
+                                .index_data
+                                .iter()
                                 .take(12)
                                 .map(|idx| format!("{}", idx))
                                 .collect();
@@ -1009,9 +1112,9 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
                         ui.heading("Animation Preview");
 
                         // Extract animation data to avoid borrow issues
-                        let anim_data = self.selected_animation().map(|a| {
-                            (a.frame_count, a.bone_count, a.data.clone())
-                        });
+                        let anim_data = self
+                            .selected_animation()
+                            .map(|a| (a.frame_count, a.bone_count, a.data.clone()));
 
                         if let Some((frame_count, bone_count, keyframe_data)) = anim_data {
                             let keyframe_data_size = keyframe_data.len();
@@ -1019,7 +1122,10 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
                             let current_frame = self.animation_frame;
 
                             ui.horizontal(|ui| {
-                                if ui.button(if is_playing { "⏸ Pause" } else { "▶ Play" }).clicked() {
+                                if ui
+                                    .button(if is_playing { "⏸ Pause" } else { "▶ Play" })
+                                    .clicked()
+                                {
                                     self.animation_playing = !self.animation_playing;
                                 }
                                 ui.label(format!("Frame: {}/{}", current_frame, frame_count));
@@ -1029,7 +1135,10 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
 
                             ui.label(format!("Bones: {}", bone_count));
                             ui.label(format!("Frames: {}", frame_count));
-                            ui.label(format!("Duration: {:.2}s @ 30fps", frame_count as f32 / 30.0));
+                            ui.label(format!(
+                                "Duration: {:.2}s @ 30fps",
+                                frame_count as f32 / 30.0
+                            ));
                             ui.label(format!("Keyframe data: {} bytes", keyframe_data_size));
 
                             ui.separator();
@@ -1060,22 +1169,35 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
                             if bone_count > 0 && frame_count > 0 {
                                 let frame_idx = (current_frame as usize) % (frame_count as usize);
                                 let bone_idx = 0;
-                                let matrix_offset = (frame_idx * bone_count as usize + bone_idx) * 12 * 4;
+                                let matrix_offset =
+                                    (frame_idx * bone_count as usize + bone_idx) * 12 * 4;
 
                                 if matrix_offset + 48 <= keyframe_data_size {
                                     ui.collapsing("Transform Matrix", |ui| {
-                                        let data = &keyframe_data[matrix_offset..matrix_offset + 48];
+                                        let data =
+                                            &keyframe_data[matrix_offset..matrix_offset + 48];
                                         let mut floats = Vec::new();
                                         for chunk in data.chunks(4) {
-                                            floats.push(f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]));
+                                            floats.push(f32::from_le_bytes([
+                                                chunk[0], chunk[1], chunk[2], chunk[3],
+                                            ]));
                                         }
                                         ui.code(format!(
                                             "[ {:.3}, {:.3}, {:.3}, {:.3} ]\n\
                                              [ {:.3}, {:.3}, {:.3}, {:.3} ]\n\
                                              [ {:.3}, {:.3}, {:.3}, {:.3} ]",
-                                            floats[0], floats[1], floats[2], floats[3],
-                                            floats[4], floats[5], floats[6], floats[7],
-                                            floats[8], floats[9], floats[10], floats[11],
+                                            floats[0],
+                                            floats[1],
+                                            floats[2],
+                                            floats[3],
+                                            floats[4],
+                                            floats[5],
+                                            floats[6],
+                                            floats[7],
+                                            floats[8],
+                                            floats[9],
+                                            floats[10],
+                                            floats[11],
                                         ));
                                     });
                                 }
@@ -1089,7 +1211,10 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
 
                         if let Some(tracker) = self.selected_tracker() {
                             ui.label(format!("Instruments: {}", tracker.instrument_count()));
-                            ui.label(format!("Pattern data: {} bytes", tracker.pattern_data_size()));
+                            ui.label(format!(
+                                "Pattern data: {} bytes",
+                                tracker.pattern_data_size()
+                            ));
 
                             ui.separator();
 
@@ -1118,26 +1243,42 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
                         ui.heading("Skeleton Preview");
                         if let Some(skeleton) = self.selected_skeleton() {
                             ui.label(format!("Bones: {}", skeleton.bone_count));
-                            ui.label(format!("Inverse bind matrices: {}", skeleton.inverse_bind_matrices.len()));
+                            ui.label(format!(
+                                "Inverse bind matrices: {}",
+                                skeleton.inverse_bind_matrices.len()
+                            ));
 
                             ui.separator();
 
                             // Show bone matrices in a scrollable area
                             ui.label("Bone Transforms:");
-                            egui::ScrollArea::vertical().max_height(300.0).show(ui, |ui| {
-                                for (i, matrix) in skeleton.inverse_bind_matrices.iter().enumerate() {
-                                    ui.collapsing(format!("Bone {}", i), |ui| {
-                                        ui.code(format!(
-                                            "[ {:.3}, {:.3}, {:.3}, {:.3} ]\n\
+                            egui::ScrollArea::vertical()
+                                .max_height(300.0)
+                                .show(ui, |ui| {
+                                    for (i, matrix) in
+                                        skeleton.inverse_bind_matrices.iter().enumerate()
+                                    {
+                                        ui.collapsing(format!("Bone {}", i), |ui| {
+                                            ui.code(format!(
+                                                "[ {:.3}, {:.3}, {:.3}, {:.3} ]\n\
                                              [ {:.3}, {:.3}, {:.3}, {:.3} ]\n\
                                              [ {:.3}, {:.3}, {:.3}, {:.3} ]",
-                                            matrix.row0[0], matrix.row0[1], matrix.row0[2], matrix.row0[3],
-                                            matrix.row1[0], matrix.row1[1], matrix.row1[2], matrix.row1[3],
-                                            matrix.row2[0], matrix.row2[1], matrix.row2[2], matrix.row2[3],
-                                        ));
-                                    });
-                                }
-                            });
+                                                matrix.row0[0],
+                                                matrix.row0[1],
+                                                matrix.row0[2],
+                                                matrix.row0[3],
+                                                matrix.row1[0],
+                                                matrix.row1[1],
+                                                matrix.row1[2],
+                                                matrix.row1[3],
+                                                matrix.row2[0],
+                                                matrix.row2[1],
+                                                matrix.row2[2],
+                                                matrix.row2[3],
+                                            ));
+                                        });
+                                    }
+                                });
                         } else {
                             ui.label("Failed to load skeleton");
                         }
@@ -1147,12 +1288,31 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
 
                         // Extract font data to avoid borrow issues
                         let font_data = self.selected_font().map(|f| {
-                            (f.atlas_width, f.atlas_height, f.line_height, f.baseline,
-                             f.glyphs.len(), f.atlas_data.clone(),
-                             f.glyphs.iter().take(20).map(|g| g.codepoint).collect::<Vec<_>>())
+                            (
+                                f.atlas_width,
+                                f.atlas_height,
+                                f.line_height,
+                                f.baseline,
+                                f.glyphs.len(),
+                                f.atlas_data.clone(),
+                                f.glyphs
+                                    .iter()
+                                    .take(20)
+                                    .map(|g| g.codepoint)
+                                    .collect::<Vec<_>>(),
+                            )
                         });
 
-                        if let Some((width, height, line_height, baseline, glyph_count, atlas_data, sample_glyphs)) = font_data {
+                        if let Some((
+                            width,
+                            height,
+                            line_height,
+                            baseline,
+                            glyph_count,
+                            atlas_data,
+                            sample_glyphs,
+                        )) = font_data
+                        {
                             ui.label(format!("Atlas: {}x{}", width, height));
                             ui.label(format!("Glyphs: {}", glyph_count));
                             ui.label(format!("Line height: {:.1}", line_height));
@@ -1177,7 +1337,14 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
 
                                 ui.separator();
 
-                                if ui.button(if self.texture_linear_filter { "Linear" } else { "Nearest" }).clicked() {
+                                if ui
+                                    .button(if self.texture_linear_filter {
+                                        "Linear"
+                                    } else {
+                                        "Nearest"
+                                    })
+                                    .clicked()
+                                {
                                     self.texture_linear_filter = !self.texture_linear_filter;
                                     // Invalidate cache to recreate texture with new filter
                                     self.cached_texture = None;
@@ -1216,11 +1383,12 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
 
                             // Use the cached texture
                             if let Some(ref texture_handle) = self.cached_texture {
-                                let display_size = egui::vec2(
-                                    width as f32 * zoom,
-                                    height as f32 * zoom,
+                                let display_size =
+                                    egui::vec2(width as f32 * zoom, height as f32 * zoom);
+                                ui.add(
+                                    egui::Image::new(texture_handle)
+                                        .fit_to_exact_size(display_size),
                                 );
-                                ui.add(egui::Image::new(texture_handle).fit_to_exact_size(display_size));
                             }
 
                             ui.separator();
@@ -1250,22 +1418,28 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
                             let preview_bytes = data.data.len().min(256);
                             ui.label(format!("First {} bytes (hex):", preview_bytes));
 
-                            egui::ScrollArea::vertical().max_height(300.0).show(ui, |ui| {
-                                ui.code(
-                                    data.data[..preview_bytes]
-                                        .chunks(16)
-                                        .enumerate()
-                                        .map(|(i, chunk)| {
-                                            format!(
-                                                "{:04x}: {}",
-                                                i * 16,
-                                                chunk.iter().map(|b| format!("{:02x}", b)).collect::<Vec<_>>().join(" ")
-                                            )
-                                        })
-                                        .collect::<Vec<_>>()
-                                        .join("\n")
-                                );
-                            });
+                            egui::ScrollArea::vertical()
+                                .max_height(300.0)
+                                .show(ui, |ui| {
+                                    ui.code(
+                                        data.data[..preview_bytes]
+                                            .chunks(16)
+                                            .enumerate()
+                                            .map(|(i, chunk)| {
+                                                format!(
+                                                    "{:04x}: {}",
+                                                    i * 16,
+                                                    chunk
+                                                        .iter()
+                                                        .map(|b| format!("{:02x}", b))
+                                                        .collect::<Vec<_>>()
+                                                        .join(" ")
+                                                )
+                                            })
+                                            .collect::<Vec<_>>()
+                                            .join("\n"),
+                                    );
+                                });
                         }
                     }
                 }
@@ -1308,8 +1482,8 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
             let mut stereo_samples = Vec::with_capacity(samples_to_generate * 2);
             let mut max_sample = 0.0f32;
 
-            if let (Some(engine), Some(state)) =
-                (&mut self.tracker_engine, &mut self.tracker_state) {
+            if let (Some(engine), Some(state)) = (&mut self.tracker_engine, &mut self.tracker_state)
+            {
                 for _ in 0..samples_to_generate {
                     let (left, right) = engine.render_sample_and_advance(
                         state,
@@ -1327,8 +1501,12 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
             unsafe {
                 DEBUG_COUNTER += 1;
                 if DEBUG_COUNTER % 30 == 0 {
-                    eprintln!("DEBUG render: {} samples, max_sample={:.4}, tracker_sounds.len()={}",
-                        samples_to_generate, max_sample, self.tracker_sounds.len());
+                    eprintln!(
+                        "DEBUG render: {} samples, max_sample={:.4}, tracker_sounds.len()={}",
+                        samples_to_generate,
+                        max_sample,
+                        self.tracker_sounds.len()
+                    );
                 }
             }
 
@@ -1349,10 +1527,14 @@ mod tests {
         let mut data_pack = ZXDataPack::default();
 
         // Add a test texture
-        data_pack.textures.push(PackedTexture::new("test_tex", 64, 64, vec![0; 64 * 64 * 4]));
+        data_pack
+            .textures
+            .push(PackedTexture::new("test_tex", 64, 64, vec![0; 64 * 64 * 4]));
 
         // Add a test sound (0.5 seconds)
-        data_pack.sounds.push(PackedSound::new("test_sfx", vec![0i16; 11025]));
+        data_pack
+            .sounds
+            .push(PackedSound::new("test_sfx", vec![0i16; 11025]));
 
         PreviewData {
             data_pack,

@@ -129,19 +129,15 @@ pub struct ZXFFIState {
     pub mvp_shading_map: HashMap<crate::graphics::MvpShadingIndices, u32>, // indices -> buffer_index
 
     // Unified shading state system (deduplication + dirty tracking)
-    pub shading_pool: StatePool<
-        crate::graphics::PackedUnifiedShadingState,
-        crate::graphics::ShadingStateIndex,
-    >,
+    pub shading_pool:
+        StatePool<crate::graphics::PackedUnifiedShadingState, crate::graphics::ShadingStateIndex>,
     pub current_shading_state: crate::graphics::PackedUnifiedShadingState,
     pub shading_state_dirty: bool,
 
     // Environment state system (Multi-Environment v3)
     // Pool of unique environment states (deduplicated)
-    pub environment_pool: StatePool<
-        crate::graphics::PackedEnvironmentState,
-        crate::graphics::EnvironmentIndex,
-    >,
+    pub environment_pool:
+        StatePool<crate::graphics::PackedEnvironmentState, crate::graphics::EnvironmentIndex>,
     // Current staging state (modified by env_* FFI calls)
     pub current_environment_state: crate::graphics::PackedEnvironmentState,
     pub environment_dirty: bool,

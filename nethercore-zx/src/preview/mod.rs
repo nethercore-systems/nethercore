@@ -128,8 +128,8 @@ impl AssetCategory {
 /// This is the main entry point for preview mode. It loads the ROM,
 /// creates the preview window, and runs the asset viewer UI.
 pub fn run(config: PreviewConfig) -> Result<()> {
-    use nethercore_core::app::preview::{PreviewApp, PreviewConfig as CorePreviewConfig};
     use nethercore_core::app::event_loop;
+    use nethercore_core::app::preview::{PreviewApp, PreviewConfig as CorePreviewConfig};
 
     // Convert config to core format
     let core_config = CorePreviewConfig {

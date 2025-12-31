@@ -57,7 +57,10 @@ fn viewport(mut caller: Caller<'_, ZXGameContext>, x: u32, y: u32, width: u32, h
 
     // Validate dimensions are non-zero
     if width == 0 || height == 0 {
-        warn!("viewport: dimensions must be > 0 (got {}x{})", width, height);
+        warn!(
+            "viewport: dimensions must be > 0 (got {}x{})",
+            width, height
+        );
         return;
     }
 

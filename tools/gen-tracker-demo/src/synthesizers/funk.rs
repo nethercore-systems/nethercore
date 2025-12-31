@@ -2,8 +2,8 @@
 //!
 //! Instruments for "Nether Groove" - Funky Jazz at 110 BPM in F Dorian
 
-use std::f32::consts::PI;
 use super::common::{SimpleRng, SAMPLE_RATE};
+use std::f32::consts::PI;
 
 /// Funk kick: warmer, less aggressive pitch sweep, good pocket feel
 pub fn generate_kick_funk() -> Vec<i16> {

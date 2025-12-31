@@ -335,7 +335,8 @@ impl RollbackStateManager {
             game_state.elapsed_time,
         );
 
-        let total_size = snapshot_data.len() + console_data.len() + input_data.len() + HOST_STATE_SIZE;
+        let total_size =
+            snapshot_data.len() + console_data.len() + input_data.len() + HOST_STATE_SIZE;
         if total_size > self.max_state_size {
             return Err(SaveStateError::StateTooLarge {
                 size: total_size,
@@ -589,8 +590,13 @@ mod tests {
         let host1 = HostRollbackState::new(100, 1, 1.0);
         let host2 = HostRollbackState::new(200, 2, 2.0);
 
-        let snapshot1 =
-            GameStateSnapshot::from_full_state(data.clone(), console_data.clone(), input_data.clone(), host1, 0);
+        let snapshot1 = GameStateSnapshot::from_full_state(
+            data.clone(),
+            console_data.clone(),
+            input_data.clone(),
+            host1,
+            0,
+        );
         let snapshot2 =
             GameStateSnapshot::from_full_state(data, console_data, input_data, host2, 0);
 
@@ -607,8 +613,13 @@ mod tests {
         let input1: InputDataVec = SmallVec::from_slice(&[1, 2, 3, 4]);
         let input2: InputDataVec = SmallVec::from_slice(&[5, 6, 7, 8]);
 
-        let snapshot1 =
-            GameStateSnapshot::from_full_state(data.clone(), console_data.clone(), input1, host_state, 0);
+        let snapshot1 = GameStateSnapshot::from_full_state(
+            data.clone(),
+            console_data.clone(),
+            input1,
+            host_state,
+            0,
+        );
         let snapshot2 =
             GameStateSnapshot::from_full_state(data, console_data, input2, host_state, 0);
 

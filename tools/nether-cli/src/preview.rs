@@ -143,11 +143,12 @@ fn resolve_rom_path(input: &str) -> Result<PathBuf> {
     }
 
     // Use the shared resolver with a closure to extract ROM name
-    match resolve_id(input, &available_roms, |p| {
-        p.file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("")
-    }, "ROM") {
+    match resolve_id(
+        input,
+        &available_roms,
+        |p| p.file_stem().and_then(|s| s.to_str()).unwrap_or(""),
+        "ROM",
+    ) {
         Ok(rom) => Ok(rom.clone()),
         Err(err) => {
             let mut msg = err.message;
@@ -155,7 +156,9 @@ fn resolve_rom_path(input: &str) -> Result<PathBuf> {
                 msg.push_str("\n\nDid you mean:\n  ");
                 msg.push_str(&suggestions.join("\n  "));
             }
-            msg.push_str("\n\nTip: Use prefix matching, e.g., 'nether preview pad' for 'paddle.nczx'");
+            msg.push_str(
+                "\n\nTip: Use prefix matching, e.g., 'nether preview pad' for 'paddle.nczx'",
+            );
             anyhow::bail!(msg);
         }
     }
@@ -177,7 +180,9 @@ fn find_local_roms() -> Result<Vec<PathBuf>> {
         if path.is_file() && path.extension().and_then(|e| e.to_str()) == Some("nczx") {
             // Skip target directories (build artifacts from other projects)
             let path_str = path.to_string_lossy();
-            if !path_str.contains("target") || path_str.contains(&current_dir.to_string_lossy().to_string()) {
+            if !path_str.contains("target")
+                || path_str.contains(&current_dir.to_string_lossy().to_string())
+            {
                 roms.push(path.to_path_buf());
             }
         }

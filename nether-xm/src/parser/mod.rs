@@ -400,7 +400,10 @@ fn parse_instrument(cursor: &mut Cursor<&[u8]>) -> Result<XmInstrument, XmError>
 ///
 /// This creates a new XM file with the same structure but with all sample data removed.
 /// Sample lengths are set to 0, making the file much smaller while remaining valid XM format.
-pub(crate) fn rebuild_xm_without_samples(original_data: &[u8], module: &XmModule) -> Result<Vec<u8>, XmError> {
+pub(crate) fn rebuild_xm_without_samples(
+    original_data: &[u8],
+    module: &XmModule,
+) -> Result<Vec<u8>, XmError> {
     let mut output = Vec::with_capacity(original_data.len() / 4); // Estimate smaller size
 
     // Helper to write little-endian values
@@ -552,42 +555,70 @@ pub(crate) fn rebuild_xm_without_samples(original_data: &[u8], module: &XmModule
             }
 
             // Number of volume envelope points (1 byte)
-            let num_vol_points = instrument.volume_envelope.as_ref().map_or(0, |e| e.points.len() as u8);
+            let num_vol_points = instrument
+                .volume_envelope
+                .as_ref()
+                .map_or(0, |e| e.points.len() as u8);
             write_u8(&mut output, num_vol_points);
 
             // Number of panning envelope points (1 byte)
-            let num_pan_points = instrument.panning_envelope.as_ref().map_or(0, |e| e.points.len() as u8);
+            let num_pan_points = instrument
+                .panning_envelope
+                .as_ref()
+                .map_or(0, |e| e.points.len() as u8);
             write_u8(&mut output, num_pan_points);
 
             // Volume sustain point (1 byte)
-            let vol_sustain = instrument.volume_envelope.as_ref().map_or(0, |e| e.sustain_point);
+            let vol_sustain = instrument
+                .volume_envelope
+                .as_ref()
+                .map_or(0, |e| e.sustain_point);
             write_u8(&mut output, vol_sustain);
 
             // Volume loop start (1 byte)
-            let vol_loop_start = instrument.volume_envelope.as_ref().map_or(0, |e| e.loop_start);
+            let vol_loop_start = instrument
+                .volume_envelope
+                .as_ref()
+                .map_or(0, |e| e.loop_start);
             write_u8(&mut output, vol_loop_start);
 
             // Volume loop end (1 byte)
-            let vol_loop_end = instrument.volume_envelope.as_ref().map_or(0, |e| e.loop_end);
+            let vol_loop_end = instrument
+                .volume_envelope
+                .as_ref()
+                .map_or(0, |e| e.loop_end);
             write_u8(&mut output, vol_loop_end);
 
             // Panning sustain point (1 byte)
-            let pan_sustain = instrument.panning_envelope.as_ref().map_or(0, |e| e.sustain_point);
+            let pan_sustain = instrument
+                .panning_envelope
+                .as_ref()
+                .map_or(0, |e| e.sustain_point);
             write_u8(&mut output, pan_sustain);
 
             // Panning loop start (1 byte)
-            let pan_loop_start = instrument.panning_envelope.as_ref().map_or(0, |e| e.loop_start);
+            let pan_loop_start = instrument
+                .panning_envelope
+                .as_ref()
+                .map_or(0, |e| e.loop_start);
             write_u8(&mut output, pan_loop_start);
 
             // Panning loop end (1 byte)
-            let pan_loop_end = instrument.panning_envelope.as_ref().map_or(0, |e| e.loop_end);
+            let pan_loop_end = instrument
+                .panning_envelope
+                .as_ref()
+                .map_or(0, |e| e.loop_end);
             write_u8(&mut output, pan_loop_end);
 
             // Volume type (1 byte)
             let vol_type = if let Some(ref env) = instrument.volume_envelope {
                 let mut flags = if env.enabled { 1 } else { 0 };
-                if env.sustain_enabled { flags |= 2; }
-                if env.loop_enabled { flags |= 4; }
+                if env.sustain_enabled {
+                    flags |= 2;
+                }
+                if env.loop_enabled {
+                    flags |= 4;
+                }
                 flags
             } else {
                 0
@@ -597,8 +628,12 @@ pub(crate) fn rebuild_xm_without_samples(original_data: &[u8], module: &XmModule
             // Panning type (1 byte)
             let pan_type = if let Some(ref env) = instrument.panning_envelope {
                 let mut flags = if env.enabled { 1 } else { 0 };
-                if env.sustain_enabled { flags |= 2; }
-                if env.loop_enabled { flags |= 4; }
+                if env.sustain_enabled {
+                    flags |= 2;
+                }
+                if env.loop_enabled {
+                    flags |= 4;
+                }
                 flags
             } else {
                 0
@@ -691,8 +726,12 @@ pub(crate) fn pack_pattern_data(pattern: &XmPattern, num_channels: u8) -> Vec<u8
             }
 
             // Check if note is completely empty
-            if note.note == 0 && note.instrument == 0 && note.volume == 0
-               && note.effect == 0 && note.effect_param == 0 {
+            if note.note == 0
+                && note.instrument == 0
+                && note.volume == 0
+                && note.effect == 0
+                && note.effect_param == 0
+            {
                 // Empty note: just the packed marker
                 output.push(0x80);
                 continue;
@@ -911,7 +950,10 @@ mod tests {
     fn test_load_demo_xm() {
         let xm = load_demo_xm().expect("demo.xm should be available");
         let module = parse_xm(&xm).expect("demo.xm should parse");
-        println!("Demo XM: {} instruments, {} patterns", module.num_instruments, module.num_patterns);
+        println!(
+            "Demo XM: {} instruments, {} patterns",
+            module.num_instruments, module.num_patterns
+        );
         for (i, pattern) in module.patterns.iter().enumerate().take(2) {
             println!("Pattern {}: {} rows", i, pattern.num_rows);
         }
@@ -958,7 +1000,12 @@ mod tests {
         assert_eq!(module.patterns.len(), before.patterns.len());
 
         // 3. Pattern data is preserved (verify row counts match)
-        for (i, (orig_pattern, stripped_pattern)) in before.patterns.iter().zip(module.patterns.iter()).enumerate() {
+        for (i, (orig_pattern, stripped_pattern)) in before
+            .patterns
+            .iter()
+            .zip(module.patterns.iter())
+            .enumerate()
+        {
             assert_eq!(
                 orig_pattern.num_rows, stripped_pattern.num_rows,
                 "Pattern {} row count should be preserved",
@@ -968,7 +1015,12 @@ mod tests {
 
         // 4. Instrument names preserved (critical for ROM mapping!)
         assert_eq!(module.num_instruments, before.num_instruments);
-        for (i, (orig, stripped)) in before.instruments.iter().zip(module.instruments.iter()).enumerate() {
+        for (i, (orig, stripped)) in before
+            .instruments
+            .iter()
+            .zip(module.instruments.iter())
+            .enumerate()
+        {
             assert_eq!(
                 orig.name, stripped.name,
                 "Instrument {} name should be preserved",
@@ -979,7 +1031,10 @@ mod tests {
         // 5. File size should be similar or smaller (packed format keeps it compact)
         // For files with large embedded samples, stripped will be much smaller
         // For minimal files like demo.xm (already small), size should be comparable
-        println!("Original: {} bytes, Stripped: {} bytes", original_size, stripped_size);
+        println!(
+            "Original: {} bytes, Stripped: {} bytes",
+            original_size, stripped_size
+        );
 
         // Stripped file shouldn't be massively larger (allow up to 20% increase for overhead)
         assert!(
@@ -1056,7 +1111,10 @@ mod tests {
         assert_eq!(after.num_instruments, before.num_instruments);
 
         // Rebuilt should be similar size (both use packed format)
-        println!("Packed input: {} bytes → Rebuilt: {} bytes", original_size, rebuilt_size);
+        println!(
+            "Packed input: {} bytes → Rebuilt: {} bytes",
+            original_size, rebuilt_size
+        );
         assert!(
             rebuilt_size <= original_size * 12 / 10,
             "Rebuilt packed format should be compact"
@@ -1111,7 +1169,9 @@ mod tests {
         if unpacked_module.is_err() {
             // If parsing fails due to missing instrument data, that's OK for this test
             // The key is that we tested unpacked pattern reading
-            println!("Note: Unpacked XM parsing incomplete (missing instrument data), but pattern reading works");
+            println!(
+                "Note: Unpacked XM parsing incomplete (missing instrument data), but pattern reading works"
+            );
             return;
         }
 
@@ -1119,10 +1179,14 @@ mod tests {
         let unpacked_size = unpacked_xm.len();
 
         // Rebuild it (should output packed format)
-        let rebuilt = rebuild_xm_without_samples(&unpacked_xm, &unpacked_module).expect("Rebuild should work");
+        let rebuilt = rebuild_xm_without_samples(&unpacked_xm, &unpacked_module)
+            .expect("Rebuild should work");
         let rebuilt_size = rebuilt.len();
 
-        println!("Unpacked input: {} bytes → Rebuilt (packed): {} bytes", unpacked_size, rebuilt_size);
+        println!(
+            "Unpacked input: {} bytes → Rebuilt (packed): {} bytes",
+            unpacked_size, rebuilt_size
+        );
 
         // Rebuilt should be SMALLER (packed format compression)
         assert!(
@@ -1165,14 +1229,23 @@ mod tests {
         assert_eq!(packed.len(), 7, "Packed format should compress empty notes");
 
         // First note: flag byte with note+instrument+volume
-        assert_eq!(packed[0], 0x87, "Flag should indicate note(0x01) + instrument(0x02) + volume(0x04) present");
+        assert_eq!(
+            packed[0], 0x87,
+            "Flag should indicate note(0x01) + instrument(0x02) + volume(0x04) present"
+        );
         assert_eq!(packed[1], 0x31, "Note should be C#-1");
         assert_eq!(packed[2], 1, "Instrument should be 1");
         assert_eq!(packed[3], 64, "Volume should be 64");
 
         // Remaining notes are empty (just 0x80 marker)
         assert_eq!(packed[4], 0x80, "Second note (ch 1) should be empty marker");
-        assert_eq!(packed[5], 0x80, "Third note (row 1, ch 0) should be empty marker");
-        assert_eq!(packed[6], 0x80, "Fourth note (row 1, ch 1) should be empty marker");
+        assert_eq!(
+            packed[5], 0x80,
+            "Third note (row 1, ch 0) should be empty marker"
+        );
+        assert_eq!(
+            packed[6], 0x80,
+            "Fourth note (row 1, ch 1) should be empty marker"
+        );
     }
 }

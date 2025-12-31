@@ -50,20 +50,20 @@ mod parser;
 mod writer;
 
 pub use compression::{
-    decompress_it215_16bit, decompress_it215_16bit_with_size, decompress_it215_8bit,
-    decompress_it215_8bit_with_size,
+    decompress_it215_8bit, decompress_it215_8bit_with_size, decompress_it215_16bit,
+    decompress_it215_16bit_with_size,
 };
 pub use error::ItError;
+pub use extract::{ExtractedSample, extract_samples};
 pub use minimal::{pack_it_minimal, pack_ncit, parse_it_minimal, parse_ncit, strip_it_samples};
 pub use module::{
-    note_from_name, DuplicateCheckAction, DuplicateCheckType, ItEnvelope, ItEnvelopeFlags,
-    ItFlags, ItInstrument, ItModule, ItNote, ItPattern, ItSample, ItSampleFlags, NewNoteAction,
+    DuplicateCheckAction, DuplicateCheckType, ItEnvelope, ItEnvelopeFlags, ItFlags, ItInstrument,
+    ItModule, ItNote, ItPattern, ItSample, ItSampleFlags, NewNoteAction, note_from_name,
 };
 pub use parser::{
-    get_instrument_names, get_sample_names, load_sample_data, parse_it, parse_sample, SampleData,
-    SampleInfo,
+    SampleData, SampleInfo, get_instrument_names, get_sample_names, load_sample_data, parse_it,
+    parse_sample,
 };
-pub use extract::{extract_samples, ExtractedSample};
 pub use writer::ItWriter;
 
 // =============================================================================

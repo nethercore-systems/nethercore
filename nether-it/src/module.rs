@@ -408,10 +408,10 @@ pub fn note_from_name(name: &str) -> Option<u8> {
     };
 
     let mut offset = 1;
-    let sharp = if name.len() > offset && &name[offset..offset+1] == "#" {
+    let sharp = if name.len() > offset && &name[offset..offset + 1] == "#" {
         offset += 1;
         1
-    } else if name.len() > offset && &name[offset..offset+1] == "b" {
+    } else if name.len() > offset && &name[offset..offset + 1] == "b" {
         offset += 1;
         -1
     } else {
@@ -618,11 +618,7 @@ impl ItInstrument {
     pub fn sample_for_note(&self, note: u8) -> Option<u8> {
         if note < 120 {
             let (_, sample) = self.note_sample_table[note as usize];
-            if sample > 0 {
-                Some(sample)
-            } else {
-                None
-            }
+            if sample > 0 { Some(sample) } else { None }
         } else {
             None
         }
@@ -985,10 +981,7 @@ mod tests {
             volume: 32,
             ..Default::default()
         };
-        assert_eq!(
-            note_vol.parse_volume(),
-            Some((VolumeEffect::SetVolume, 32))
-        );
+        assert_eq!(note_vol.parse_volume(), Some((VolumeEffect::SetVolume, 32)));
 
         let note_pan = ItNote {
             volume: 160, // 128 + 32 = center pan

@@ -37,7 +37,9 @@ use super::{
 };
 
 // Re-export types from submodules
-pub use error_ui::{ErrorAction, WaitingForPeer, render_error_screen, sanitize_game_id, parse_key_code};
+pub use error_ui::{
+    ErrorAction, WaitingForPeer, parse_key_code, render_error_screen, sanitize_game_id,
+};
 pub use types::{LoadedRom, RomLoader, StandaloneConfig, StandaloneGraphicsSupport};
 
 /// Generic standalone player application.
@@ -352,8 +354,15 @@ where
             }
 
             // Always add input - GGRS will handle synchronization
-            if let Err(e) = session.runtime.add_local_input(player_handle, console_input) {
-                tracing::error!("Failed to add local input for handle {}: {:?}", player_handle, e);
+            if let Err(e) = session
+                .runtime
+                .add_local_input(player_handle, console_input)
+            {
+                tracing::error!(
+                    "Failed to add local input for handle {}: {:?}",
+                    player_handle,
+                    e
+                );
             }
         }
 
@@ -615,7 +624,10 @@ where
                 let session =
                     RollbackSession::new_p2p(session_config, socket, players, specs.ram_limit)
                         .context("Failed to create P2P session")?;
-                tracing::info!("Join mode: session created, local_players = {:?}", session.local_players());
+                tracing::info!(
+                    "Join mode: session created, local_players = {:?}",
+                    session.local_players()
+                );
                 runner
                     .load_game_with_session(rom.console, &rom.code, session)
                     .context("Failed to load game with P2P session")?;
@@ -709,8 +721,13 @@ where
                         SessionConfig::online(2).with_input_delay(self.config.input_delay);
 
                     // Host is player 0, peer is player 1
-                    let players = vec![(0, PlayerType::Local), (1, PlayerType::Remote(peer_addr.clone()))];
-                    tracing::info!("Host mode: creating P2P session (host=local p0, peer=remote p1)");
+                    let players = vec![
+                        (0, PlayerType::Local),
+                        (1, PlayerType::Remote(peer_addr.clone())),
+                    ];
+                    tracing::info!(
+                        "Host mode: creating P2P session (host=local p0, peer=remote p1)"
+                    );
 
                     match RollbackSession::new_p2p(
                         session_config,
@@ -719,7 +736,10 @@ where
                         specs.ram_limit,
                     ) {
                         Ok(session) => {
-                            tracing::info!("Host mode: session created, local_players = {:?}", session.local_players());
+                            tracing::info!(
+                                "Host mode: session created, local_players = {:?}",
+                                session.local_players()
+                            );
                             if let Err(e) = runner.load_game_with_session(
                                 rom.console.clone(),
                                 &rom.code,

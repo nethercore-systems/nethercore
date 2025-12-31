@@ -29,8 +29,7 @@ pub fn generate_skinned_glb() -> Vec<u8> {
     let animation = create_animation();
 
     // Pack all binary data
-    let (buffer_data, buffer_views, accessors) =
-        pack_binary_data(&mesh, &skeleton, &animation);
+    let (buffer_data, buffer_views, accessors) = pack_binary_data(&mesh, &skeleton, &animation);
 
     // Build GLTF JSON
     let root = build_gltf_json(&mesh, &buffer_views, &accessors);
@@ -287,8 +286,12 @@ fn pack_binary_data(
         extensions: Default::default(),
         extras: Default::default(),
         type_: Valid(json::accessor::Type::Vec3),
-        min: Some(json::Value::Array(min.into_iter().map(json::Value::from).collect())),
-        max: Some(json::Value::Array(max.into_iter().map(json::Value::from).collect())),
+        min: Some(json::Value::Array(
+            min.into_iter().map(json::Value::from).collect(),
+        )),
+        max: Some(json::Value::Array(
+            max.into_iter().map(json::Value::from).collect(),
+        )),
         name: None,
         normalized: false,
         sparse: None,
@@ -906,10 +909,7 @@ fn build_gltf_json(
         extensions: Default::default(),
         extras: Default::default(),
         name: Some("TestScene".to_string()),
-        nodes: vec![
-            json::Index::new(ROOT_NODE),
-            json::Index::new(MESH_NODE),
-        ],
+        nodes: vec![json::Index::new(ROOT_NODE), json::Index::new(MESH_NODE)],
     }];
 
     // Create buffer (byte length will be set by assemble_glb)

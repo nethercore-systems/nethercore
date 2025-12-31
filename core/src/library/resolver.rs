@@ -114,8 +114,7 @@ pub fn resolve_game_id(
     query: &str,
     available_games: &[LocalGame],
 ) -> Result<String, ResolutionError> {
-    resolve_id(query, available_games, |g| g.id.as_str(), "Game")
-        .map(|g| g.id.clone())
+    resolve_id(query, available_games, |g| g.id.as_str(), "Game").map(|g| g.id.clone())
 }
 
 /// Find items with similar IDs using Levenshtein distance.

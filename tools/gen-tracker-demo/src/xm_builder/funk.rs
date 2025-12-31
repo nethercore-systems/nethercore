@@ -2,7 +2,9 @@
 //!
 //! 110 BPM, F Dorian mode, 6 patterns, 6 instruments
 
-use super::{write_note, write_note_vol, write_empty, write_instrument, write_instrument_with_sample};
+use super::{
+    write_empty, write_instrument, write_instrument_with_sample, write_note, write_note_vol,
+};
 
 // Funk note constants (F Dorian: F G Ab Bb C D Eb)
 const F2: u8 = 30;
@@ -264,26 +266,20 @@ fn generate_pattern_groove_a() -> Vec<u8> {
 
     // Syncopated bass line for Fm7 -> Bb7
     let bass_notes = [
-        F2, 0, 0, AB2, 0, C3, 0, EB3,
-        F2, 0, F3, 0, EB3, 0, C3, 0,
-        BB2, 0, 0, D3, 0, F3, 0, AB3,
+        F2, 0, 0, AB2, 0, C3, 0, EB3, F2, 0, F3, 0, EB3, 0, C3, 0, BB2, 0, 0, D3, 0, F3, 0, AB3,
         BB2, 0, BB3, 0, AB3, 0, F3, 0,
     ];
 
     // Call melody
     let melody = [
-        0, 0, 0, 0, C5, 0, EB5, 0,
-        F5, 0, EB5, 0, C5, 0, 0, 0,
-        0, 0, 0, 0, D4, 0, F4, 0,
-        AB4, 0, F4, 0, D4, 0, 0, 0,
+        0, 0, 0, 0, C5, 0, EB5, 0, F5, 0, EB5, 0, C5, 0, 0, 0, 0, 0, 0, 0, D4, 0, F4, 0, AB4, 0,
+        F4, 0, D4, 0, 0, 0,
     ];
 
     // Response melody
     let response = [
-        0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, AB4, 0,
-        C5, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, BB4, 0, AB4, 0, F4, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, AB4, 0, C5, 0, 0, 0, 0, 0, 0, 0, 0, 0, BB4, 0,
+        AB4, 0, F4, 0,
     ];
 
     for row in 0..32 {
@@ -368,18 +364,14 @@ fn generate_pattern_groove_b() -> Vec<u8> {
 
     // Bass line Eb7 -> Fm7
     let bass_notes = [
-        EB3, 0, 0, G3, 0, BB3, 0, 0,
-        EB3, 0, 0, 0, D3, 0, EB3, 0,
-        F2, 0, 0, AB2, 0, C3, 0, EB3,
-        F2, 0, F3, 0, C3, 0, AB2, 0,
+        EB3, 0, 0, G3, 0, BB3, 0, 0, EB3, 0, 0, 0, D3, 0, EB3, 0, F2, 0, 0, AB2, 0, C3, 0, EB3, F2,
+        0, F3, 0, C3, 0, AB2, 0,
     ];
 
     // Counter melody
     let melody = [
-        BB4, 0, G4, 0, EB4, 0, 0, 0,
-        0, 0, D4, 0, EB4, 0, G4, 0,
-        AB4, 0, 0, 0, C5, 0, AB4, 0,
-        F4, 0, 0, 0, 0, 0, 0, 0,
+        BB4, 0, G4, 0, EB4, 0, 0, 0, 0, 0, D4, 0, EB4, 0, G4, 0, AB4, 0, 0, 0, C5, 0, AB4, 0, F4,
+        0, 0, 0, 0, 0, 0, 0,
     ];
 
     for row in 0..32 {
@@ -457,17 +449,13 @@ fn generate_pattern_bridge() -> Vec<u8> {
 
     // Chromatic walking bass
     let bass_notes = [
-        F2, 0, 0, 0, G2, 0, 0, 0,
-        AB2, 0, 0, 0, BB2, 0, 0, 0,
-        C3, 0, 0, 0, D3, 0, 0, 0,
-        EB3, 0, D3, 0, C3, 0, BB2, 0,
+        F2, 0, 0, 0, G2, 0, 0, 0, AB2, 0, 0, 0, BB2, 0, 0, 0, C3, 0, 0, 0, D3, 0, 0, 0, EB3, 0, D3,
+        0, C3, 0, BB2, 0,
     ];
 
     // Jazz runs
     let melody = [
-        C5, EB5, F5, 0, EB5, C5, BB4, 0,
-        AB4, 0, G4, 0, F4, 0, 0, 0,
-        C5, 0, D4, 0, EB4, 0, F4, 0,
+        C5, EB5, F5, 0, EB5, C5, BB4, 0, AB4, 0, G4, 0, F4, 0, 0, 0, C5, 0, D4, 0, EB4, 0, F4, 0,
         G4, AB4, BB4, C5, EB5, 0, F5, 0,
     ];
 
@@ -542,14 +530,14 @@ fn generate_pattern_solo() -> Vec<u8> {
 
     // Vamp bass on Fm7
     let bass_notes = [
-        F2, 0, 0, AB2, 0, C3, 0, 0, F2, 0, 0, 0, C3, 0, AB2, 0, F2, 0, 0, AB2, 0, C3, 0, EB3, F3, 0,
-        EB3, 0, C3, 0, AB2, 0,
+        F2, 0, 0, AB2, 0, C3, 0, 0, F2, 0, 0, 0, C3, 0, AB2, 0, F2, 0, 0, AB2, 0, C3, 0, EB3, F3,
+        0, EB3, 0, C3, 0, AB2, 0,
     ];
 
     // EP "solo" - improvisatory feel
     let ep_solo = [
-        C5, 0, AB4, 0, F4, 0, 0, 0, AB4, C5, EB5, 0, C5, 0, 0, 0, F5, 0, EB5, 0, C5, 0, AB4, 0, BB4,
-        0, AB4, 0, F4, 0, 0, 0,
+        C5, 0, AB4, 0, F4, 0, 0, 0, AB4, C5, EB5, 0, C5, 0, 0, 0, F5, 0, EB5, 0, C5, 0, AB4, 0,
+        BB4, 0, AB4, 0, F4, 0, 0, 0,
     ];
 
     for row in 0..32 {
@@ -623,8 +611,8 @@ fn generate_pattern_outro() -> Vec<u8> {
 
     // Final melody phrase
     let melody = [
-        C5, 0, AB4, 0, F4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, AB4, 0, F4, 0, C4, 0, 0, 0, F4, 0, 0, 0,
-        0, 0, 0, 0,
+        C5, 0, AB4, 0, F4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, AB4, 0, F4, 0, C4, 0, 0, 0, F4, 0, 0,
+        0, 0, 0, 0, 0,
     ];
 
     for row in 0..32 {

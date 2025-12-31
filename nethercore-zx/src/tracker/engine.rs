@@ -10,10 +10,10 @@ use nether_tracker::{TrackerEffect, TrackerNote};
 
 use super::state::RowStateCache;
 use super::utils::{
-    apply_channel_pan, apply_it_linear_slide, get_waveform_value, note_to_period, sample_channel,
-    samples_per_tick, SINE_LUT,
+    SINE_LUT, apply_channel_pan, apply_it_linear_slide, get_waveform_value, note_to_period,
+    sample_channel, samples_per_tick,
 };
-use super::{raw_tracker_handle, TrackerEngine, FADE_IN_SAMPLES, MAX_TRACKER_CHANNELS};
+use super::{FADE_IN_SAMPLES, MAX_TRACKER_CHANNELS, TrackerEngine, raw_tracker_handle};
 use crate::audio::Sound;
 use crate::state::tracker_flags;
 
@@ -91,7 +91,11 @@ impl TrackerEngine {
 
             // Get current pattern length and restart position
             let (num_rows, song_length, restart_position) = {
-                let loaded = match self.modules.get(raw_handle as usize).and_then(|m| m.as_ref()) {
+                let loaded = match self
+                    .modules
+                    .get(raw_handle as usize)
+                    .and_then(|m| m.as_ref())
+                {
                     Some(m) => m,
                     None => return,
                 };
@@ -130,7 +134,11 @@ impl TrackerEngine {
         // Get module data - need to access by index to work around borrow checker
         let raw_handle = raw_tracker_handle(handle);
         let (num_channels, pattern_info, is_it, old_effects, link_g) = {
-            let loaded = match self.modules.get(raw_handle as usize).and_then(|m| m.as_ref()) {
+            let loaded = match self
+                .modules
+                .get(raw_handle as usize)
+                .and_then(|m| m.as_ref())
+            {
                 Some(m) => m,
                 None => return,
             };
@@ -160,7 +168,13 @@ impl TrackerEngine {
                     notes.push((ch_idx, *note));
                 }
             }
-            (loaded.module.num_channels, notes, is_it, old_effects, link_g)
+            (
+                loaded.module.num_channels,
+                notes,
+                is_it,
+                old_effects,
+                link_g,
+            )
         };
 
         // Store format flags for use in effect processing
@@ -199,7 +213,11 @@ impl TrackerEngine {
 
             // Get sound handle and instrument data
             let (sound_handle, loop_start, loop_end, loop_type, finetune) = {
-                let loaded = match self.modules.get(raw_handle as usize).and_then(|m| m.as_ref()) {
+                let loaded = match self
+                    .modules
+                    .get(raw_handle as usize)
+                    .and_then(|m| m.as_ref())
+                {
                     Some(m) => m,
                     None => return,
                 };
@@ -235,7 +253,11 @@ impl TrackerEngine {
         if note.has_note() {
             // Fetch all instrument data we need for note trigger
             let instr_data = {
-                let loaded = match self.modules.get(raw_handle as usize).and_then(|m| m.as_ref()) {
+                let loaded = match self
+                    .modules
+                    .get(raw_handle as usize)
+                    .and_then(|m| m.as_ref())
+                {
                     Some(m) => m,
                     None => return,
                 };
@@ -347,7 +369,9 @@ impl TrackerEngine {
                 pan_env_enabled,
                 pan_env_sustain,
                 pan_env_loop,
-            ) = instr_data.unwrap_or((0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false, None, None, false, None, None));
+            ) = instr_data.unwrap_or((
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false, None, None, false, None, None,
+            ));
 
             let channel = &mut self.channels[ch_idx];
             channel.note_on = true;
@@ -498,11 +522,7 @@ impl TrackerEngine {
                 channel.channel_volume_slide_active = true;
                 let param = (*up << 4) | *down;
                 if param != 0 {
-                    channel.channel_volume_slide = if *up > 0 {
-                        *up as i8
-                    } else {
-                        -(*down as i8)
-                    };
+                    channel.channel_volume_slide = if *up > 0 { *up as i8 } else { -(*down as i8) };
                 }
             }
             TrackerEffect::FineChannelVolumeUp(val) => {
@@ -538,7 +558,8 @@ impl TrackerEngine {
                 if v != 0 {
                     channel.last_fine_porta_up = v;
                 }
-                channel.period = (channel.period - channel.last_fine_porta_up as f32 * 4.0).max(1.0);
+                channel.period =
+                    (channel.period - channel.last_fine_porta_up as f32 * 4.0).max(1.0);
             }
             TrackerEffect::FinePortaDown(val) => {
                 let v = (*val as u8) & 0x0F;
@@ -811,8 +832,7 @@ impl TrackerEngine {
                     channel.period =
                         apply_it_linear_slide(channel.period, channel.last_porta_up as i16);
                 } else {
-                    channel.period =
-                        (channel.period - channel.last_porta_up as f32 * 4.0).max(1.0);
+                    channel.period = (channel.period - channel.last_porta_up as f32 * 4.0).max(1.0);
                 }
             }
 
@@ -1223,8 +1243,7 @@ impl TrackerEngine {
 
             if channel.pitch_pan_separation != 0 {
                 let note_offset = channel.current_note as i16 - channel.pitch_pan_center as i16;
-                let pan_offset =
-                    (note_offset * channel.pitch_pan_separation as i16) as f32 / 256.0;
+                let pan_offset = (note_offset * channel.pitch_pan_separation as i16) as f32 / 256.0;
                 pan = (pan + pan_offset).clamp(-1.0, 1.0);
             }
 
@@ -1368,8 +1387,7 @@ impl TrackerEngine {
 
             if channel.pitch_pan_separation != 0 {
                 let note_offset = channel.current_note as i16 - channel.pitch_pan_center as i16;
-                let pan_offset =
-                    (note_offset * channel.pitch_pan_separation as i16) as f32 / 256.0;
+                let pan_offset = (note_offset * channel.pitch_pan_separation as i16) as f32 / 256.0;
                 pan = (pan + pan_offset).clamp(-1.0, 1.0);
             }
 

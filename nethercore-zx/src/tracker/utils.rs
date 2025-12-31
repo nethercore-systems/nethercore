@@ -238,11 +238,7 @@ pub fn get_waveform_value(waveform: u8, position: u8) -> f32 {
         }
         2 => {
             // Square wave: 1.0 for first half, -1.0 for second
-            if pos < 128 {
-                1.0
-            } else {
-                -1.0
-            }
+            if pos < 128 { 1.0 } else { -1.0 }
         }
         _ => {
             // "Random" - deterministic pseudo-random using position as seed

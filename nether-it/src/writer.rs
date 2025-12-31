@@ -154,7 +154,12 @@ impl ItWriter {
         } else {
             0
         };
-        let message_size = self.module.message.as_ref().map(|m| m.len() + 1).unwrap_or(0);
+        let message_size = self
+            .module
+            .message
+            .as_ref()
+            .map(|m| m.len() + 1)
+            .unwrap_or(0);
 
         // Instruments start after message
         let instruments_start = offset_table_start + offset_table_size + message_size;
@@ -505,8 +510,12 @@ fn pack_pattern(pattern: &ItPattern, num_channels: u8) -> Vec<u8> {
     for row in &pattern.notes {
         for (channel, note) in row.iter().enumerate().take(num_channels as usize) {
             // Skip empty notes
-            if note.note == 0 && note.instrument == 0 && note.volume == 0
-               && note.effect == 0 && note.effect_param == 0 {
+            if note.note == 0
+                && note.instrument == 0
+                && note.volume == 0
+                && note.effect == 0
+                && note.effect_param == 0
+            {
                 continue;
             }
 
@@ -535,7 +544,9 @@ fn pack_pattern(pattern: &ItPattern, num_channels: u8) -> Vec<u8> {
             }
 
             if (note.effect != 0 || note.effect_param != 0)
-               && (note.effect != prev_effect[channel] || note.effect_param != prev_effect_param[channel]) {
+                && (note.effect != prev_effect[channel]
+                    || note.effect_param != prev_effect_param[channel])
+            {
                 mask |= 0x08;
                 prev_effect[channel] = note.effect;
                 prev_effect_param[channel] = note.effect_param;
@@ -597,7 +608,11 @@ mod tests {
 
         // Try to parse it back
         let result = parse_it(&data);
-        assert!(result.is_ok(), "Failed to parse written IT: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Failed to parse written IT: {:?}",
+            result.err()
+        );
 
         let module = result.unwrap();
         assert_eq!(module.name, "Test Song");

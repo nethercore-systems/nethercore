@@ -447,7 +447,10 @@ fn rom_tracker(mut caller: Caller<'_, ZXGameContext>, id_ptr: u32, id_len: u32) 
     let module = match nether_xm::parse_xm_minimal(&packed_tracker.pattern_data) {
         Ok(m) => m,
         Err(e) => {
-            warn!("rom_tracker: failed to parse tracker data for '{}': {:?}", id, e);
+            warn!(
+                "rom_tracker: failed to parse tracker data for '{}': {:?}",
+                id, e
+            );
             return 0;
         }
     };
@@ -457,7 +460,8 @@ fn rom_tracker(mut caller: Caller<'_, ZXGameContext>, id_ptr: u32, id_len: u32) 
     let mut sound_handles = Vec::new();
     for sample_id in &packed_tracker.sample_ids {
         // Check if already loaded
-        let sound_handle = if let Some(&existing_handle) = ctx.ffi.sound_id_to_handle.get(sample_id) {
+        let sound_handle = if let Some(&existing_handle) = ctx.ffi.sound_id_to_handle.get(sample_id)
+        {
             existing_handle
         } else {
             // Try to auto-load from data pack
@@ -481,7 +485,10 @@ fn rom_tracker(mut caller: Caller<'_, ZXGameContext>, id_ptr: u32, id_len: u32) 
                     // Store ID -> handle mapping
                     ctx.ffi.sound_id_to_handle.insert(sample_id.clone(), handle);
 
-                    info!("rom_tracker: auto-loaded sample '{}' as handle {}", sample_id, handle);
+                    info!(
+                        "rom_tracker: auto-loaded sample '{}' as handle {}",
+                        sample_id, handle
+                    );
                     handle
                 }
                 None => {

@@ -34,13 +34,13 @@
 
 use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 
+use crate::IT_MAGIC;
 use crate::error::ItError;
 use crate::module::{
     DuplicateCheckAction, DuplicateCheckType, ItEnvelope, ItEnvelopeFlags, ItFlags, ItInstrument,
     ItModule, ItNote, ItPattern, ItSample, ItSampleFlags, NewNoteAction,
 };
 use crate::parser::parse_it;
-use crate::IT_MAGIC;
 
 /// NCIT header size in bytes
 const NCIT_HEADER_SIZE: usize = 24;
@@ -210,9 +210,10 @@ fn pack_instrument(output: &mut Vec<u8>, instr: &ItInstrument) {
 fn pack_note_sample_table(output: &mut Vec<u8>, table: &[(u8, u8); 120]) {
     // Check if uniform (all entries map to same sample with identity note mapping)
     let first_sample = table[0].1;
-    let is_uniform = table.iter().enumerate().all(|(i, &(note, sample))| {
-        note == i as u8 && sample == first_sample
-    });
+    let is_uniform = table
+        .iter()
+        .enumerate()
+        .all(|(i, &(note, sample))| note == i as u8 && sample == first_sample);
 
     if is_uniform {
         // Type 0: Uniform - all notes use same sample
@@ -1210,7 +1211,10 @@ mod tests {
         assert_eq!(parsed1.num_channels, parsed2.num_channels);
         assert_eq!(parsed1.num_patterns, parsed2.num_patterns);
         assert_eq!(parsed1.initial_speed, parsed2.initial_speed);
-        assert_eq!(ncit1, ncit2, "NCIT data should be identical after round-trip");
+        assert_eq!(
+            ncit1, ncit2,
+            "NCIT data should be identical after round-trip"
+        );
     }
 
     #[test]
@@ -1236,10 +1240,19 @@ mod tests {
         let parsed = parse_ncit(&ncit).unwrap();
 
         // Verify channel panning preserved
-        assert_eq!(parsed.channel_pan[0], 0, "Channel 0 pan should be hard left");
-        assert_eq!(parsed.channel_pan[1], 64, "Channel 1 pan should be hard right");
+        assert_eq!(
+            parsed.channel_pan[0], 0,
+            "Channel 0 pan should be hard left"
+        );
+        assert_eq!(
+            parsed.channel_pan[1], 64,
+            "Channel 1 pan should be hard right"
+        );
         assert_eq!(parsed.channel_pan[2], 32, "Channel 2 pan should be center");
-        assert_eq!(parsed.channel_pan[3], 48, "Channel 3 pan should be right-center");
+        assert_eq!(
+            parsed.channel_pan[3], 48,
+            "Channel 3 pan should be right-center"
+        );
 
         // Verify channel volume preserved
         assert_eq!(parsed.channel_vol[0], 48, "Channel 0 vol should be 75%");

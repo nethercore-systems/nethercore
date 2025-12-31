@@ -1,7 +1,7 @@
 //! Error screen UI and network waiting screen
 
-use crate::rollback::LocalSocket;
 use super::super::GameError;
+use crate::rollback::LocalSocket;
 
 /// Action from error screen UI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

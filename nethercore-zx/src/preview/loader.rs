@@ -7,10 +7,12 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use zx_common::{ZXDataPack, ZXRom};
 
-use nethercore_core::app::preview::{PreviewData as CorePreviewData, PreviewRomLoader as CorePreviewRomLoader};
-use crate::console::NethercoreZX;
 use super::viewers::ZXAssetViewer;
 use super::{PreviewData, PreviewMetadata};
+use crate::console::NethercoreZX;
+use nethercore_core::app::preview::{
+    PreviewData as CorePreviewData, PreviewRomLoader as CorePreviewRomLoader,
+};
 
 /// ROM loader for ZX preview mode
 ///
@@ -133,6 +135,8 @@ mod tests {
 
     #[test]
     fn test_is_valid_rom_nonexistent() {
-        assert!(!ZXPreviewLoader::is_valid_rom(Path::new("/nonexistent/path.nczx")));
+        assert!(!ZXPreviewLoader::is_valid_rom(Path::new(
+            "/nonexistent/path.nczx"
+        )));
     }
 }

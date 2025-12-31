@@ -5,7 +5,7 @@
 
 use anyhow::{Context, Result};
 use nethercore_zx::audio::Sound;
-use nethercore_zx::state::{tracker_flags, TrackerState};
+use nethercore_zx::state::{TrackerState, tracker_flags};
 use nethercore_zx::tracker::TrackerEngine;
 use std::path::Path;
 
@@ -76,8 +76,12 @@ impl DebugPlayer {
             .filter_map(|s| s.as_ref().map(|snd| snd.data.len()))
             .collect();
         println!("Loaded {} samples, sizes: {:?}", sample_count, sample_sizes);
-        println!("Module: {} channels, {} instruments, {} orders",
-            xm_module.num_channels, xm_module.instruments.len(), xm_module.song_length);
+        println!(
+            "Module: {} channels, {} instruments, {} orders",
+            xm_module.num_channels,
+            xm_module.instruments.len(),
+            xm_module.song_length
+        );
 
         // Create sound handles: maps instrument index (0-based) to sound array index
         // sounds = [None, sample1, sample2, ...] where index N corresponds to instrument N
@@ -85,16 +89,32 @@ impl DebugPlayer {
         // But only for valid instruments (sounds.len() - 1 instruments since index 0 is unused)
         let num_instruments = sounds.len().saturating_sub(1);
         let sound_handles: Vec<u32> = (0..num_instruments).map(|i| (i + 1) as u32).collect();
-        println!("sound_handles ({} entries): {:?}", sound_handles.len(), &sound_handles[..sound_handles.len().min(10)]);
+        println!(
+            "sound_handles ({} entries): {:?}",
+            sound_handles.len(),
+            &sound_handles[..sound_handles.len().min(10)]
+        );
 
         // Debug: Print first pattern's first few rows
         if let Some(pattern) = xm_module.patterns.first() {
-            println!("First pattern: {} rows, {} channels", pattern.num_rows, pattern.notes.first().map(|r| r.len()).unwrap_or(0));
+            println!(
+                "First pattern: {} rows, {} channels",
+                pattern.num_rows,
+                pattern.notes.first().map(|r| r.len()).unwrap_or(0)
+            );
             for (row_idx, row) in pattern.notes.iter().take(4).enumerate() {
                 for (ch_idx, note) in row.iter().take(4).enumerate() {
                     if note.note != 0 || note.instrument != 0 {
-                        println!("  Row {} Ch {}: note={} instr={} vol={} eff={:02X} param={:02X}",
-                            row_idx, ch_idx, note.note, note.instrument, note.volume, note.effect, note.effect_param);
+                        println!(
+                            "  Row {} Ch {}: note={} instr={} vol={} eff={:02X} param={:02X}",
+                            row_idx,
+                            ch_idx,
+                            note.note,
+                            note.instrument,
+                            note.volume,
+                            note.effect,
+                            note.effect_param
+                        );
                     }
                 }
             }
@@ -150,9 +170,10 @@ impl DebugPlayer {
         };
 
         // Extract samples from original file
-        let original_module = nether_it::parse_it(&data).context("Failed to parse IT for samples")?;
-        let sounds =
-            sound_loader::load_it_samples(&data, &original_module).context("Failed to extract samples")?;
+        let original_module =
+            nether_it::parse_it(&data).context("Failed to parse IT for samples")?;
+        let sounds = sound_loader::load_it_samples(&data, &original_module)
+            .context("Failed to extract samples")?;
 
         // Check if we actually have samples
         let has_samples = sounds.iter().any(|s| s.is_some());
@@ -205,8 +226,9 @@ impl DebugPlayer {
         if self.paused {
             return (0.0, 0.0);
         }
-        let (left, right) = self.engine
-            .render_sample_and_advance(&mut self.state, &self.sounds, sample_rate);
+        let (left, right) =
+            self.engine
+                .render_sample_and_advance(&mut self.state, &self.sounds, sample_rate);
 
         // Debug: track if we're producing non-zero audio
         static SAMPLE_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -224,10 +246,19 @@ impl DebugPlayer {
             use std::io::Write;
             let nonzero = NONZERO_COUNT.load(std::sync::atomic::Ordering::Relaxed);
             let max = MAX_LEVEL.load(std::sync::atomic::Ordering::Relaxed);
-            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("tracker-debug.log") {
-                let _ = writeln!(f, "[Audio] samples: {}, nonzero: {} ({:.1}%), max_level: {:.4}",
-                    count, nonzero, 100.0 * nonzero as f64 / count.max(1) as f64,
-                    max as f64 / 10000.0);
+            if let Ok(mut f) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open("tracker-debug.log")
+            {
+                let _ = writeln!(
+                    f,
+                    "[Audio] samples: {}, nonzero: {} ({:.1}%), max_level: {:.4}",
+                    count,
+                    nonzero,
+                    100.0 * nonzero as f64 / count.max(1) as f64,
+                    max as f64 / 10000.0
+                );
             }
         }
 
@@ -286,8 +317,8 @@ impl DebugPlayer {
                 self.state.tick_sample_pos = 0;
             }
             PlayerCommand::SeekPattern(delta) => {
-                let new_order =
-                    (self.state.order_position as i32 + delta).clamp(0, self.total_orders as i32 - 1) as u16;
+                let new_order = (self.state.order_position as i32 + delta)
+                    .clamp(0, self.total_orders as i32 - 1) as u16;
                 self.state.order_position = new_order;
                 self.state.row = 0;
                 self.state.tick = 0;

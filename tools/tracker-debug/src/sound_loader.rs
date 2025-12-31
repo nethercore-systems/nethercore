@@ -14,8 +14,13 @@ pub fn load_xm_samples(data: &[u8]) -> Result<Vec<Option<Sound>>> {
     // Debug: show which instruments have samples
     println!("Extracted {} samples:", extracted.len());
     for (i, sample) in extracted.iter().enumerate() {
-        println!("  Sample {}: instrument_index={}, name='{}', {} samples",
-            i, sample.instrument_index, sample.name, sample.data.len());
+        println!(
+            "  Sample {}: instrument_index={}, name='{}', {} samples",
+            i,
+            sample.instrument_index,
+            sample.name,
+            sample.data.len()
+        );
     }
 
     // XM instruments are 1-indexed in the module, so sample 0 is unused

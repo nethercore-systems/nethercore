@@ -51,11 +51,7 @@ impl GltfBuilder {
     }
 
     /// Add a mesh with primitive
-    pub fn add_mesh_from_accessors(
-        mut self,
-        name: &str,
-        accessors: &MeshAccessors,
-    ) -> Self {
+    pub fn add_mesh_from_accessors(mut self, name: &str, accessors: &MeshAccessors) -> Self {
         let mut attributes = BTreeMap::new();
         attributes.insert(
             Valid(json::mesh::Semantic::Positions),

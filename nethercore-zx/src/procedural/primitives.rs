@@ -341,10 +341,8 @@ pub fn generate_cylinder<M: MeshBuilder + Default>(
 
     // Generate bottom cap (if radius > 0)
     if radius_bottom > 0.0 {
-        let cap_center_index = mesh.add_vertex(
-            Vec3::new(0.0, -half_height, 0.0),
-            Vec3::new(0.0, -1.0, 0.0),
-        );
+        let cap_center_index =
+            mesh.add_vertex(Vec3::new(0.0, -half_height, 0.0), Vec3::new(0.0, -1.0, 0.0));
 
         for i in 0..segments {
             let next_i = (i + 1) % segments;
@@ -376,10 +374,8 @@ pub fn generate_cylinder<M: MeshBuilder + Default>(
 
     // Generate top cap (if radius > 0)
     if radius_top > 0.0 {
-        let cap_center_index = mesh.add_vertex(
-            Vec3::new(0.0, half_height, 0.0),
-            Vec3::new(0.0, 1.0, 0.0),
-        );
+        let cap_center_index =
+            mesh.add_vertex(Vec3::new(0.0, half_height, 0.0), Vec3::new(0.0, 1.0, 0.0));
 
         for i in 0..segments {
             let next_i = (i + 1) % segments;
@@ -508,7 +504,12 @@ pub fn generate_torus<M: MeshBuilder + Default>(
 /// # Returns
 /// Mesh with cylinder body and two hemispheres
 /// Total height = height + 2 * radius
-pub fn generate_capsule<M: MeshBuilder + Default>(radius: f32, height: f32, segments: u32, rings: u32) -> M {
+pub fn generate_capsule<M: MeshBuilder + Default>(
+    radius: f32,
+    height: f32,
+    segments: u32,
+    rings: u32,
+) -> M {
     // Validate and clamp parameters
     let radius = if radius <= 0.0 {
         warn!("generate_capsule: radius must be > 0.0, clamping to 0.001");

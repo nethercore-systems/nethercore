@@ -16,7 +16,7 @@ use nethercore_core::{
 };
 use zx_common::ZXDataPack;
 
-use crate::state::{ZXFFIState, ZRollbackState};
+use crate::state::{ZRollbackState, ZXFFIState};
 
 use crate::graphics::ZXGraphics;
 

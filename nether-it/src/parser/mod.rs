@@ -4,8 +4,8 @@ use std::io::{Cursor, Read, Seek, SeekFrom};
 
 // Compression functions for loading sample data from IT files
 use crate::compression::{
-    decompress_it215_16bit, decompress_it215_16bit_with_size, decompress_it215_8bit,
-    decompress_it215_8bit_with_size,
+    decompress_it215_8bit, decompress_it215_8bit_with_size, decompress_it215_16bit,
+    decompress_it215_16bit_with_size,
 };
 use crate::error::ItError;
 use crate::module::{
@@ -125,11 +125,7 @@ pub fn parse_it(data: &[u8]) -> Result<ItModule, ItError> {
 
     // Calculate number of used channels from channel_pan
     // Channels with pan >= 128 are disabled
-    let num_channels = channel_pan
-        .iter()
-        .take_while(|&&p| p < 128)
-        .count()
-        .max(1) as u8;
+    let num_channels = channel_pan.iter().take_while(|&&p| p < 128).count().max(1) as u8;
 
     if num_channels > MAX_CHANNELS {
         return Err(ItError::TooManyChannels(num_channels));
@@ -164,8 +160,8 @@ pub fn parse_it(data: &[u8]) -> Result<ItModule, ItError> {
         }
 
         cursor.seek(SeekFrom::Start(offset as u64))?;
-        let instrument =
-            parse_instrument(&mut cursor, compatible_with).map_err(|_| ItError::InvalidInstrument(idx as u16))?;
+        let instrument = parse_instrument(&mut cursor, compatible_with)
+            .map_err(|_| ItError::InvalidInstrument(idx as u16))?;
         instruments.push(instrument);
     }
 
@@ -178,7 +174,8 @@ pub fn parse_it(data: &[u8]) -> Result<ItModule, ItError> {
         }
 
         cursor.seek(SeekFrom::Start(offset as u64))?;
-        let sample_info = parse_sample(&mut cursor).map_err(|_| ItError::InvalidSample(idx as u16))?;
+        let sample_info =
+            parse_sample(&mut cursor).map_err(|_| ItError::InvalidSample(idx as u16))?;
         samples.push(sample_info.sample);
     }
 
@@ -238,7 +235,10 @@ pub fn parse_it(data: &[u8]) -> Result<ItModule, ItError> {
 }
 
 /// Parse a single instrument
-fn parse_instrument(cursor: &mut Cursor<&[u8]>, compatible_with: u16) -> Result<ItInstrument, ItError> {
+fn parse_instrument(
+    cursor: &mut Cursor<&[u8]>,
+    compatible_with: u16,
+) -> Result<ItInstrument, ItError> {
     // Read magic "IMPI"
     let mut magic = [0u8; 4];
     cursor.read_exact(&mut magic)?;
@@ -969,7 +969,9 @@ mod tests {
             SampleData::I8(loaded) => {
                 assert_eq!(loaded.len(), original_samples.len());
                 // Note: Due to delta encoding, values should match exactly
-                for (i, (&loaded_val, &orig_val)) in loaded.iter().zip(&original_samples).enumerate() {
+                for (i, (&loaded_val, &orig_val)) in
+                    loaded.iter().zip(&original_samples).enumerate()
+                {
                     assert_eq!(loaded_val, orig_val, "Mismatch at index {}", i);
                 }
             }
@@ -1008,7 +1010,9 @@ mod tests {
             SampleData::I16(loaded) => {
                 assert_eq!(loaded.len(), original_samples.len());
                 // Values should match exactly
-                for (i, (&loaded_val, &orig_val)) in loaded.iter().zip(&original_samples).enumerate() {
+                for (i, (&loaded_val, &orig_val)) in
+                    loaded.iter().zip(&original_samples).enumerate()
+                {
                     assert_eq!(loaded_val, orig_val, "Mismatch at index {}", i);
                 }
             }

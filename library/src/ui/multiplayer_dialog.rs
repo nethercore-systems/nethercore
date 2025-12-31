@@ -260,7 +260,8 @@ impl MultiplayerDialog {
                         let ip_clone = ip.to_string();
                         self.host_ip = ip_clone.clone();
                         self.port = port.to_string();
-                        self.error = Some("Extracted port from IP - click Connect again".to_string());
+                        self.error =
+                            Some("Extracted port from IP - click Connect again".to_string());
                     } else {
                         self.error = Some("Invalid port in IP:port format".to_string());
                     }

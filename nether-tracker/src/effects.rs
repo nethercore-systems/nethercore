@@ -136,7 +136,11 @@ pub enum TrackerEffect {
 
     /// Tone portamento + volume slide
     /// IT: Lxy, XM: 5xy
-    TonePortaVolSlide { porta: u16, vol_up: u8, vol_down: u8 },
+    TonePortaVolSlide {
+        porta: u16,
+        vol_up: u8,
+        vol_down: u8,
+    },
 
     // =========================================================================
     // Modulation Effects
@@ -147,7 +151,12 @@ pub enum TrackerEffect {
 
     /// Vibrato + volume slide
     /// IT: Kxy, XM: 6xy
-    VibratoVolSlide { vib_speed: u8, vib_depth: u8, vol_up: u8, vol_down: u8 },
+    VibratoVolSlide {
+        vib_speed: u8,
+        vib_depth: u8,
+        vol_up: u8,
+        vol_down: u8,
+    },
 
     /// Fine vibrato (IT only)
     /// IT: Uxy

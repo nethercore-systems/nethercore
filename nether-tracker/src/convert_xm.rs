@@ -4,9 +4,8 @@
 const TARGET_SAMPLE_RATE: u32 = 22050;
 
 use crate::{
-    DuplicateCheckAction, DuplicateCheckType, EnvelopeFlags, FormatFlags, LoopType,
-    NewNoteAction, TrackerEffect, TrackerEnvelope, TrackerInstrument, TrackerModule,
-    TrackerNote, TrackerPattern,
+    DuplicateCheckAction, DuplicateCheckType, EnvelopeFlags, FormatFlags, LoopType, NewNoteAction,
+    TrackerEffect, TrackerEnvelope, TrackerInstrument, TrackerModule, TrackerNote, TrackerPattern,
 };
 
 /// Convert an XM module to the unified TrackerModule format
@@ -328,8 +327,8 @@ fn convert_xm_instrument(xm_instr: &nether_xm::XmInstrument) -> TrackerInstrumen
     // Base frequency for C-4 (Amiga standard) = 8363 Hz
     let original_sample_rate = {
         const BASE_FREQ: f64 = 8363.0;
-        let total_semitones = xm_instr.sample_relative_note as f64
-            + (xm_instr.sample_finetune as f64 / 128.0);
+        let total_semitones =
+            xm_instr.sample_relative_note as f64 + (xm_instr.sample_finetune as f64 / 128.0);
         let freq = BASE_FREQ * 2.0_f64.powf(total_semitones / 12.0);
         (freq.round() as u32).clamp(100, 96000)
     };
@@ -350,14 +349,8 @@ fn convert_xm_instrument(xm_instr: &nether_xm::XmInstrument) -> TrackerInstrumen
         global_volume: 64, // XM doesn't have global volume per instrument
         default_pan: None, // XM doesn't have default pan per instrument
         note_sample_table,
-        volume_envelope: xm_instr
-            .volume_envelope
-            .as_ref()
-            .map(convert_xm_envelope),
-        panning_envelope: xm_instr
-            .panning_envelope
-            .as_ref()
-            .map(convert_xm_envelope),
+        volume_envelope: xm_instr.volume_envelope.as_ref().map(convert_xm_envelope),
+        panning_envelope: xm_instr.panning_envelope.as_ref().map(convert_xm_envelope),
         pitch_envelope: None, // XM doesn't have pitch envelope
         filter_cutoff: None,  // XM doesn't have filters
         filter_resonance: None,
@@ -387,11 +380,7 @@ fn convert_xm_instrument(xm_instr: &nether_xm::XmInstrument) -> TrackerInstrumen
 
 fn convert_xm_envelope(xm_env: &nether_xm::XmEnvelope) -> TrackerEnvelope {
     TrackerEnvelope {
-        points: xm_env
-            .points
-            .iter()
-            .map(|&(x, y)| (x, y as i8))
-            .collect(),
+        points: xm_env.points.iter().map(|&(x, y)| (x, y as i8)).collect(),
         loop_begin: xm_env.loop_start,
         loop_end: xm_env.loop_end,
         sustain_begin: xm_env.sustain_point,
@@ -453,10 +442,7 @@ mod tests {
     #[test]
     fn test_convert_xm_volume_slide() {
         let effect = convert_xm_effect(nether_xm::effects::VOLUME_SLIDE, 0x52, 0);
-        assert_eq!(
-            effect,
-            TrackerEffect::VolumeSlide { up: 5, down: 2 }
-        );
+        assert_eq!(effect, TrackerEffect::VolumeSlide { up: 5, down: 2 });
     }
 
     #[test]

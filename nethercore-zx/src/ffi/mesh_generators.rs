@@ -188,7 +188,8 @@ fn cylinder(
     }
 
     // Generate PACKED mesh data (Vec<u8>)
-    let mesh_data: MeshData = procedural::generate_cylinder(radius_bottom, radius_top, height, segments);
+    let mesh_data: MeshData =
+        procedural::generate_cylinder(radius_bottom, radius_top, height, segments);
 
     let vertex_count = mesh_data.vertices.len() / 16; // 16 bytes per POS_NORMAL vertex
     let index_count = mesh_data.indices.len();
@@ -244,7 +245,8 @@ fn plane(
     }
 
     // Generate PACKED mesh data (Vec<u8>)
-    let mesh_data: MeshData = procedural::generate_plane(size_x, size_z, subdivisions_x, subdivisions_z);
+    let mesh_data: MeshData =
+        procedural::generate_plane(size_x, size_z, subdivisions_x, subdivisions_z);
 
     let vertex_count = mesh_data.vertices.len() / 16; // 16 bytes per POS_NORMAL vertex
     let index_count = mesh_data.indices.len();
@@ -489,7 +491,8 @@ fn plane_uv(
     }
 
     // Generate PACKED mesh data with UVs
-    let mesh_data: MeshDataUV = procedural::generate_plane_uv(size_x, size_z, subdivisions_x, subdivisions_z);
+    let mesh_data: MeshDataUV =
+        procedural::generate_plane_uv(size_x, size_z, subdivisions_x, subdivisions_z);
 
     let vertex_count = mesh_data.vertices.len() / 16; // 16 bytes per POS_UV_NORMAL vertex
     let index_count = mesh_data.indices.len();
@@ -620,7 +623,8 @@ fn cylinder_uv(
     }
 
     // Generate PACKED mesh data with UVs
-    let mesh_data: MeshDataUV = procedural::generate_cylinder_uv(radius_bottom, radius_top, height, segments);
+    let mesh_data: MeshDataUV =
+        procedural::generate_cylinder_uv(radius_bottom, radius_top, height, segments);
 
     let vertex_count = mesh_data.vertices.len() / 16; // 16 bytes per POS_UV_NORMAL vertex
     let index_count = mesh_data.indices.len();

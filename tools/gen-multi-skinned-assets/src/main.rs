@@ -32,7 +32,12 @@ fn main() {
         ],
     );
 
-    generate_arm_mesh(&output_dir.join("multi-skinned-arm1.nczxmesh"), 3, 1.5, true);
+    generate_arm_mesh(
+        &output_dir.join("multi-skinned-arm1.nczxmesh"),
+        3,
+        1.5,
+        true,
+    );
 
     generate_animation(
         &output_dir.join("multi-skinned-wave1.nczxanim"),

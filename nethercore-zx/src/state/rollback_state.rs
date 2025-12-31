@@ -232,17 +232,29 @@ mod tests {
         channel.set_position(100.5);
         let (int_pos, frac_pos) = channel.get_position();
         assert_eq!(int_pos, 100);
-        assert!((frac_pos - 0.5).abs() < 0.01, "Expected ~0.5, got {}", frac_pos);
+        assert!(
+            (frac_pos - 0.5).abs() < 0.01,
+            "Expected ~0.5, got {}",
+            frac_pos
+        );
 
         channel.set_position(42.25);
         let (int_pos, frac_pos) = channel.get_position();
         assert_eq!(int_pos, 42);
-        assert!((frac_pos - 0.25).abs() < 0.01, "Expected ~0.25, got {}", frac_pos);
+        assert!(
+            (frac_pos - 0.25).abs() < 0.01,
+            "Expected ~0.25, got {}",
+            frac_pos
+        );
 
         channel.set_position(99.75);
         let (int_pos, frac_pos) = channel.get_position();
         assert_eq!(int_pos, 99);
-        assert!((frac_pos - 0.75).abs() < 0.01, "Expected ~0.75, got {}", frac_pos);
+        assert!(
+            (frac_pos - 0.75).abs() < 0.01,
+            "Expected ~0.75, got {}",
+            frac_pos
+        );
     }
 
     #[test]
@@ -256,8 +268,15 @@ mod tests {
         }
 
         let (int_pos, frac_pos) = channel.get_position();
-        assert_eq!(int_pos, 256, "After 512 advances of 0.5, position should be 256");
-        assert!(frac_pos.abs() < 0.01, "Fractional part should be ~0, got {}", frac_pos);
+        assert_eq!(
+            int_pos, 256,
+            "After 512 advances of 0.5, position should be 256"
+        );
+        assert!(
+            frac_pos.abs() < 0.01,
+            "Fractional part should be ~0, got {}",
+            frac_pos
+        );
     }
 
     #[test]
@@ -302,7 +321,10 @@ mod tests {
             ch2.advance_position(0.5);
         }
 
-        assert_eq!(ch1.position, ch2.position, "Determinism: positions must be bit-identical");
+        assert_eq!(
+            ch1.position, ch2.position,
+            "Determinism: positions must be bit-identical"
+        );
     }
 
     #[test]

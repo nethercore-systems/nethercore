@@ -32,9 +32,9 @@ mod utils;
 pub use channels::TrackerChannel;
 pub use state::{CachedRowState, RowStateCache};
 pub use utils::{
-    apply_channel_pan, apply_it_linear_slide, fast_pan_gains, get_waveform_value, note_to_period,
-    period_to_frequency, sample_channel, samples_per_tick, LINEAR_FREQ_TABLE, SINE_LUT,
-    SINE_LUT_64,
+    LINEAR_FREQ_TABLE, SINE_LUT, SINE_LUT_64, apply_channel_pan, apply_it_linear_slide,
+    fast_pan_gains, get_waveform_value, note_to_period, period_to_frequency, sample_channel,
+    samples_per_tick,
 };
 
 use nether_it::ItModule;

@@ -332,7 +332,11 @@ fn load_assets(
                     Ok(samples) => samples,
                     Err(e) => {
                         // Sample-less XM file or extraction error - log and continue
-                        println!("    Note: {} ({})", path.file_name().unwrap().to_string_lossy(), e);
+                        println!(
+                            "    Note: {} ({})",
+                            path.file_name().unwrap().to_string_lossy(),
+                            e
+                        );
                         println!("          No samples extracted (this is expected for sample-less tracker files)");
                         Vec::new()
                     }
@@ -359,7 +363,8 @@ fn load_assets(
                             let hash = hash_sample_data(&converted_data);
 
                             // Sanitize name (use sample_index for IT)
-                            let sample_id = sanitize_name(&sample.name, &entry.id, sample.sample_index);
+                            let sample_id =
+                                sanitize_name(&sample.name, &entry.id, sample.sample_index);
 
                             // Check for collision with explicit sounds
                             if let Some(existing) = sound_map.get(&sample_id) {
@@ -378,16 +383,22 @@ fn load_assets(
 
                             // Check for hash match (same content, different name)
                             if let Some(existing_name) = hash_to_id.get(&hash) {
-                                println!("    Note: '{}' is identical to '{}', deduplicating", sample_id, existing_name);
+                                println!(
+                                    "    Note: '{}' is identical to '{}', deduplicating",
+                                    sample_id, existing_name
+                                );
                                 continue;
                             }
 
                             // Add new sample
                             println!("    Extracted: {} from {}", sample_id, entry.id);
-                            sound_map.insert(sample_id.clone(), PackedSound {
-                                id: sample_id.clone(),
-                                data: converted_data,
-                            });
+                            sound_map.insert(
+                                sample_id.clone(),
+                                PackedSound {
+                                    id: sample_id.clone(),
+                                    data: converted_data,
+                                },
+                            );
                             hash_to_id.insert(hash, sample_id);
                         }
                         // Return empty since we processed IT samples inline
@@ -395,7 +406,11 @@ fn load_assets(
                     }
                     Err(e) => {
                         // Sample-less IT file or extraction error
-                        println!("    Note: {} ({})", path.file_name().unwrap().to_string_lossy(), e);
+                        println!(
+                            "    Note: {} ({})",
+                            path.file_name().unwrap().to_string_lossy(),
+                            e
+                        );
                         println!("          No samples extracted (this is expected for sample-less tracker files)");
                         Vec::new()
                     }
@@ -443,16 +458,22 @@ fn load_assets(
             // Check for hash match (same content, different name)
             if let Some(existing_name) = hash_to_id.get(&hash) {
                 // Alias: same content already exists under different name
-                println!("    Note: '{}' is identical to '{}', deduplicating", sample_id, existing_name);
+                println!(
+                    "    Note: '{}' is identical to '{}', deduplicating",
+                    sample_id, existing_name
+                );
                 continue;
             }
 
             // Add new sample
             println!("    Extracted: {} from {}", sample_id, entry.id);
-            sound_map.insert(sample_id.clone(), PackedSound {
-                id: sample_id.clone(),
-                data: converted_data,
-            });
+            sound_map.insert(
+                sample_id.clone(),
+                PackedSound {
+                    id: sample_id.clone(),
+                    data: converted_data,
+                },
+            );
             hash_to_id.insert(hash, sample_id);
         }
     }
@@ -926,9 +947,7 @@ fn validate_tracker_samples(
 
     // If any samples are missing, fail with helpful error
     if !missing_samples.is_empty() {
-        let mut available_sounds: Vec<&String> = available_sound_ids
-            .iter()
-            .collect();
+        let mut available_sounds: Vec<&String> = available_sound_ids.iter().collect();
         available_sounds.sort(); // Sort alphabetically for better readability
 
         let available_list = if available_sounds.is_empty() {
@@ -975,8 +994,9 @@ fn load_tracker(
     let (sample_ids, pattern_data) = match format {
         TrackerFormat::XM => {
             // Get instrument names from XM file (for mapping to sounds)
-            let sample_ids = nether_xm::get_instrument_names(&data)
-                .with_context(|| format!("Failed to parse XM tracker instruments: {}", path.display()))?;
+            let sample_ids = nether_xm::get_instrument_names(&data).with_context(|| {
+                format!("Failed to parse XM tracker instruments: {}", path.display())
+            })?;
 
             // Validate sample references against loaded sounds
             validate_tracker_samples(id, path, &sample_ids, available_sound_ids)?;
@@ -985,15 +1005,20 @@ fn load_tracker(
             let module = nether_xm::parse_xm(&data)
                 .with_context(|| format!("Failed to parse XM tracker: {}", path.display()))?;
 
-            let pattern_data = nether_xm::pack_xm_minimal(&module)
-                .with_context(|| format!("Failed to pack XM tracker to minimal format: {}", path.display()))?;
+            let pattern_data = nether_xm::pack_xm_minimal(&module).with_context(|| {
+                format!(
+                    "Failed to pack XM tracker to minimal format: {}",
+                    path.display()
+                )
+            })?;
 
             (sample_ids, pattern_data)
         }
         TrackerFormat::IT => {
             // Get instrument names from IT file (for mapping to sounds)
-            let sample_ids = nether_it::get_instrument_names(&data)
-                .with_context(|| format!("Failed to parse IT tracker instruments: {}", path.display()))?;
+            let sample_ids = nether_it::get_instrument_names(&data).with_context(|| {
+                format!("Failed to parse IT tracker instruments: {}", path.display())
+            })?;
 
             // Validate sample references against loaded sounds
             validate_tracker_samples(id, path, &sample_ids, available_sound_ids)?;
@@ -1623,8 +1648,14 @@ path = "assets/run.nczxanim"
     fn test_sanitize_name_real_world_examples() {
         // Real-world instrument names from tracker files
         assert_eq!(sanitize_name("BD_KICK_01", "track", 0), "bd_kick_01");
-        assert_eq!(sanitize_name("Snare (layered)", "track", 0), "snare_layered");
-        assert_eq!(sanitize_name("Hi-Hat [Closed]", "track", 0), "hi-hat_closed");
+        assert_eq!(
+            sanitize_name("Snare (layered)", "track", 0),
+            "snare_layered"
+        );
+        assert_eq!(
+            sanitize_name("Hi-Hat [Closed]", "track", 0),
+            "hi-hat_closed"
+        );
         assert_eq!(sanitize_name("Bass: Deep Sub", "track", 0), "bass_deep_sub");
     }
 

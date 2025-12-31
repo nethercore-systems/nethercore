@@ -22,11 +22,11 @@ pub use debug::{calculate_fps, render_debug_overlay, update_frame_times};
 pub use error_parsing::parse_wasm_error;
 pub use event_loop::{AppEventHandler, ConsoleApp, run};
 pub use input::InputManager;
-pub use session::GameSession;
 pub use preview::{
     AssetCategory, AssetViewer, PreviewApp, PreviewConfig, PreviewData, PreviewMetadata,
     PreviewRomLoader, run_preview,
 };
+pub use session::GameSession;
 pub use standalone::{
     LoadedRom, RomLoader, StandaloneApp, StandaloneConfig, StandaloneGraphicsSupport,
     run_standalone,

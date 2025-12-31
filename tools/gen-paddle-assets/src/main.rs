@@ -72,7 +72,7 @@ fn generate_ball_png(path: &Path) {
                 } else {
                     255
                 };
-                pixels[idx] = 255;     // R
+                pixels[idx] = 255; // R
                 pixels[idx + 1] = 255; // G
                 pixels[idx + 2] = 255; // B
                 pixels[idx + 3] = alpha; // A
@@ -121,7 +121,7 @@ fn generate_paddle_png(path: &Path) {
             let corner_dist = (dx * dx + dy * dy).sqrt();
 
             if corner_dist <= corner_radius || (dx == 0.0 || dy == 0.0) {
-                pixels[idx] = 255;     // R
+                pixels[idx] = 255; // R
                 pixels[idx + 1] = 255; // G
                 pixels[idx + 2] = 255; // B
                 pixels[idx + 3] = 255; // A

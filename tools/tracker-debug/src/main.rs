@@ -9,7 +9,7 @@ mod display;
 mod player;
 mod sound_loader;
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use clap::Parser;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use std::path::Path;
