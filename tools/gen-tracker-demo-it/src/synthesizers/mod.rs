@@ -14,9 +14,9 @@ pub use common::{apply_fades, SAMPLE_RATE};
 
 // Re-export ambient instrument generators
 pub use ambient::{
-    generate_atmos_wind, generate_bass_sub, generate_bell_glass, generate_lead_ghost,
-    generate_noise_breath, generate_pad_air, generate_pad_cold, generate_pad_sub,
-    generate_pad_warm, generate_reverb_sim,
+    generate_atmos_wind, generate_bass_sub, generate_bell_glass, generate_hit_dark,
+    generate_lead_echo, generate_lead_ghost, generate_noise_breath, generate_pad_air,
+    generate_pad_cold, generate_pad_sub, generate_pad_warm, generate_reverb_sim,
 };
 
 // Re-export DnB instrument generators

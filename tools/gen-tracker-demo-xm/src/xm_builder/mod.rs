@@ -38,6 +38,36 @@ pub fn write_empty(data: &mut Vec<u8>) {
     data.push(0x80); // packed byte: nothing
 }
 
+/// Helper to write a note with volume and effect (e.g., note-cut)
+/// effect_type: 0x0C = note cut (ECx), 0x0F = set speed, etc.
+/// effect_param: parameter for the effect (e.g., tick to cut at)
+pub fn write_note_vol_fx(
+    data: &mut Vec<u8>,
+    note: u8,
+    instrument: u8,
+    volume: u8,
+    effect_type: u8,
+    effect_param: u8,
+) {
+    // packed byte: has note + instrument + volume + effect type + effect param
+    data.push(0x80 | 0x01 | 0x02 | 0x04 | 0x08 | 0x10);
+    data.push(note);
+    data.push(instrument);
+    data.push(volume);
+    data.push(effect_type);
+    data.push(effect_param);
+}
+
+/// Helper to write a note with effect (no explicit volume)
+pub fn write_note_fx(data: &mut Vec<u8>, note: u8, instrument: u8, effect_type: u8, effect_param: u8) {
+    // packed byte: has note + instrument + effect type + effect param
+    data.push(0x80 | 0x01 | 0x02 | 0x08 | 0x10);
+    data.push(note);
+    data.push(instrument);
+    data.push(effect_type);
+    data.push(effect_param);
+}
+
 // ============================================================================
 // Pitch Correction
 // ============================================================================

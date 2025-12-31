@@ -360,7 +360,7 @@ pub fn generate_noise_breath() -> Vec<i16> {
             (-(t - 2.4) * 2.0).exp()
         };
 
-        let sample = filtered * env * 20000.0;
+        let sample = filtered * env * 25000.0;
         output.push(sample.clamp(-32767.0, 32767.0) as i16);
     }
 
@@ -585,7 +585,126 @@ pub fn generate_atmos_wind() -> Vec<i16> {
             (-(t - 4.2) * 1.5).exp()
         };
 
-        let sample = filtered * env * 16000.0;
+        let sample = filtered * env * 22000.0;
+        output.push(sample.clamp(-32767.0, 32767.0) as i16);
+    }
+
+    output
+}
+
+// ============================================================================
+// Dark Hit - Low impact accent
+// ============================================================================
+
+pub fn generate_hit_dark() -> Vec<i16> {
+    let duration = 1.5;
+    let freq = 55.0; // Low A1 fundamental
+    let samples = (SAMPLE_RATE * duration) as usize;
+    let mut output = Vec::with_capacity(samples);
+    let mut rng = SimpleRng::new(44444);
+
+    let mut phase = 0.0f32;
+    let mut lp = Biquad::new();
+    lp.set_lowpass(200.0, 0.8);
+
+    for i in 0..samples {
+        let t = i as f32 / SAMPLE_RATE;
+
+        // Pitch drop on attack (impact characteristic)
+        let pitch_env = if t < 0.05 { 1.5 - t * 10.0 } else { 1.0 };
+        let actual_freq = freq * pitch_env;
+
+        phase += actual_freq / SAMPLE_RATE;
+        if phase >= 1.0 {
+            phase -= 1.0;
+        }
+
+        // Sine with subtle noise layer
+        let sine = (phase * TWO_PI).sin();
+        let noise = (rng.next_f32() * 2.0 - 1.0) * 0.1;
+
+        let filtered = lp.process(sine + noise);
+
+        // Fast attack, exponential decay
+        let env = if t < 0.01 { t / 0.01 } else { (-t * 3.0).exp() };
+
+        let sample = filtered * env * 28000.0;
+        output.push(sample.clamp(-32767.0, 32767.0) as i16);
+    }
+
+    output
+}
+
+// ============================================================================
+// Echo Lead - Delayed ethereal melody voice
+// ============================================================================
+
+pub fn generate_lead_echo() -> Vec<i16> {
+    let duration = 2.5;
+    let freq = 293.66; // D4
+    let samples = (SAMPLE_RATE * duration) as usize;
+    let mut output = Vec::with_capacity(samples);
+
+    let mut phases = [0.0f32; 2];
+    let detune = [0.995, 1.005]; // Wider detune for washy echo
+    let mut vibrato_phase = 0.0f32;
+
+    let mut svf = StateVariableFilter::new();
+
+    // Simple delay buffer for echo effect
+    let delay_samples = (SAMPLE_RATE * 0.35) as usize; // 350ms delay
+    let mut delay_buffer = vec![0.0f32; delay_samples];
+    let mut delay_idx = 0usize;
+
+    for i in 0..samples {
+        let t = i as f32 / SAMPLE_RATE;
+
+        // Slow vibrato
+        let vib_depth = if t > 0.3 {
+            ((t - 0.3) / 0.5).min(1.0)
+        } else {
+            0.0
+        };
+        vibrato_phase += 3.5 / SAMPLE_RATE;
+        let vibrato = 1.0 + 0.012 * vib_depth * (vibrato_phase * TWO_PI).sin();
+
+        let actual_freq = freq * vibrato;
+
+        // Detuned triangles for softer character
+        let mut sum = 0.0f32;
+        for (j, d) in detune.iter().enumerate() {
+            phases[j] += actual_freq * d / SAMPLE_RATE;
+            if phases[j] >= 1.0 {
+                phases[j] -= 1.0;
+            }
+            let tri = if phases[j] < 0.5 {
+                4.0 * phases[j] - 1.0
+            } else {
+                3.0 - 4.0 * phases[j]
+            };
+            sum += tri;
+        }
+        sum /= 2.0;
+
+        // Very soft filtering
+        let (low, _, _) = svf.process(sum, 0.06, 0.15);
+
+        // Add delayed signal (echo)
+        let delayed = delay_buffer[delay_idx];
+        delay_buffer[delay_idx] = low;
+        delay_idx = (delay_idx + 1) % delay_samples;
+
+        let mixed = low + delayed * 0.5; // 50% wet echo
+
+        let env = if t < 0.15 {
+            (t / 0.15).powf(1.5)
+        } else if t < 1.8 {
+            1.0 - (t - 0.15) * 0.05
+        } else {
+            0.9 * (-(t - 1.8) * 2.0).exp()
+        };
+
+        let sample = mixed * env * 24000.0;
         output.push(sample.clamp(-32767.0, 32767.0) as i16);
     }
 

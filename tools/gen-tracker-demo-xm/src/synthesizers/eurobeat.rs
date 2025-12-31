@@ -318,9 +318,9 @@ pub fn generate_supersaw() -> Vec<i16> {
     output
 }
 
-/// Eurobeat brass: Enhanced with richer harmonics and filter resonance
+/// Eurobeat brass: Short punchy stabs with tight envelope
 pub fn generate_brass_euro() -> Vec<i16> {
-    let duration = 0.7; // 700ms
+    let duration = 0.2; // 200ms - SHORT for punchy stabs!
     let freq = 261.63; // C4 as base
     let samples = (SAMPLE_RATE * duration) as usize;
 
@@ -337,17 +337,20 @@ pub fn generate_brass_euro() -> Vec<i16> {
     for i in 0..samples {
         let t = i as f32 / SAMPLE_RATE;
 
-        // Improved ADSR envelope
-        let envelope = if t < 0.012 {
-            (t / 0.012).powf(0.6) // Curved attack
-        } else if t < 0.38 {
-            1.0 - (t - 0.012) * 0.18
+        // PUNCHY ADSR envelope - fast attack, quick decay, clean release
+        let envelope = if t < 0.005 {
+            t / 0.005 // 5ms attack (super fast!)
+        } else if t < 0.08 {
+            1.0 - (t - 0.005) * 6.0 // Fast decay to ~55%
+        } else if t < 0.15 {
+            0.55 // Short sustain
         } else {
-            0.82 * (-(t - 0.38) * 3.8).exp()
+            0.55 * (-(t - 0.15) * 20.0).exp() // Quick release
         };
 
-        // Pitch bend with overshoot for realism
-        let pitch_bend = 1.0 + 0.018 * (1.0 - (-t * 18.0).exp()) - 0.003 * (-t * 12.0).exp();
+        // Subtle pitch bend: start slightly sharp, settle to correct pitch (Eurobeat brass is TIGHT)
+        // Only 0.3% max deviation (5 cents), settles quickly
+        let pitch_bend = 1.0 + 0.003 * (-t * 25.0).exp();
 
         // Three detuned pulse waves for thickness
         phase1 += freq * pitch_bend / SAMPLE_RATE;

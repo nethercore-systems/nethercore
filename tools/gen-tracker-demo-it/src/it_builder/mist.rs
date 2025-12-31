@@ -93,6 +93,20 @@ pub fn generate_mist_it() -> (Vec<u8>, Vec<(&'static str, Vec<i16>)>) {
     writer.add_sample(wind_sample, &samples.last().unwrap().1);
     writer.add_instrument(make_instrument_continue("Wind", 10));
 
+    // 11. Dark hit (accent)
+    let hit_data = synthesizers::generate_hit_dark();
+    samples.push(("hit_dark", hit_data));
+    let hit_sample = make_sample("Dark Hit", sample_rate);
+    writer.add_sample(hit_sample, &samples.last().unwrap().1);
+    writer.add_instrument(make_instrument_continue("Hit", 11));
+
+    // 12. Echo lead (counter melody)
+    let echo_data = synthesizers::generate_lead_echo();
+    samples.push(("lead_echo", echo_data));
+    let echo_sample = make_sample("Echo Lead", sample_rate);
+    writer.add_sample(echo_sample, &samples.last().unwrap().1);
+    writer.add_instrument(make_instrument_fade("Echo", 12, 384));
+
     // Create patterns (6 patterns, 64 rows each)
     // Pattern 0: Intro (emergence)
     let pat0 = writer.add_pattern(64);
@@ -131,144 +145,247 @@ pub fn generate_mist_it() -> (Vec<u8>, Vec<(&'static str, Vec<i16>)>) {
 // D4=50, E4=52, F4=53, G4=55, A4=57, Bb4=58, C5=60, D5=62
 const D2: u8 = 26;
 const A2: u8 = 33;
+const BB2: u8 = 34;
 const D3: u8 = 38;
 const F3: u8 = 41;
 const A3: u8 = 45;
 const D4: u8 = 50;
+const E4: u8 = 52;
 const F4: u8 = 53;
 const A4: u8 = 57;
 const D5: u8 = 62;
 
 fn build_intro_pattern(writer: &mut ItWriter, pat: u8) {
     // Intro: Emergence from silence
-    // Wind fades in first
+    // Wind fades in first (retriggered for continuous texture)
     writer.set_note(pat, 0, 9, ItNote::play_note(D3, 10, 15));
+    writer.set_note(pat, 32, 9, ItNote::play_note(D3, 10, 18));
 
     // Sub drone enters slowly
-    writer.set_note(pat, 16, 0, ItNote::play_note(D2, 1, 25));
+    writer.set_note(pat, 16, 0, ItNote::play_note(D2, 1, 22));
+    writer.set_note(pat, 48, 0, ItNote::play_note(D2, 1, 26));
 
     // Breath texture
-    writer.set_note(pat, 32, 4, ItNote::play_note(D4, 5, 20));
+    writer.set_note(pat, 24, 4, ItNote::play_note(D4, 5, 18));
+    writer.set_note(pat, 48, 4, ItNote::play_note(A3, 5, 20));
 
-    // Single bell at end
-    writer.set_note(pat, 48, 5, ItNote::play_note(A4, 6, 35));
+    // Bell accents (every 12 rows)
+    writer.set_note(pat, 36, 5, ItNote::play_note(D5, 6, 28));
+    writer.set_note(pat, 52, 5, ItNote::play_note(A4, 6, 30));
+
+    // Ghost melody hint at end
+    writer.set_note(pat, 56, 7, ItNote::play_note(D4, 8, 25));
 }
 
 fn build_texture_pattern(writer: &mut ItWriter, pat: u8) {
     // A1: Basic texture established
-    // Sub drone continues
-    writer.set_note(pat, 0, 0, ItNote::play_note(D2, 1, 35));
+    // Sub drone continuous
+    writer.set_note(pat, 0, 0, ItNote::play_note(D2, 1, 38));
+    writer.set_note(pat, 32, 0, ItNote::play_note(D2, 1, 40));
 
-    // Warm pad layer
-    writer.set_note(pat, 0, 2, ItNote::play_note(D3, 3, 30));
-    writer.set_note(pat, 32, 2, ItNote::play_note(A2, 3, 28));
+    // Warm pad layer - chord movement
+    writer.set_note(pat, 0, 2, ItNote::play_note(D3, 3, 35));
+    writer.set_note(pat, 24, 2, ItNote::play_note(F3, 3, 33));
+    writer.set_note(pat, 48, 2, ItNote::play_note(A2, 3, 35));
 
     // Air pad (high)
-    writer.set_note(pat, 8, 1, ItNote::play_note(D5, 2, 25));
+    writer.set_note(pat, 8, 1, ItNote::play_note(D5, 2, 30));
+    writer.set_note(pat, 40, 1, ItNote::play_note(A4, 2, 28));
 
-    // Wind continues
-    writer.set_note(pat, 0, 9, ItNote::play_note(D3, 10, 20));
+    // Wind continuous (retrigger every 24 rows)
+    writer.set_note(pat, 0, 9, ItNote::play_note(D3, 10, 24));
+    writer.set_note(pat, 24, 9, ItNote::play_note(D3, 10, 26));
+    writer.set_note(pat, 48, 9, ItNote::play_note(D3, 10, 25));
 
-    // Bell accents
-    writer.set_note(pat, 16, 5, ItNote::play_note(A4, 6, 30));
-    writer.set_note(pat, 48, 5, ItNote::play_note(F4, 6, 28));
+    // Bell accents (every 10-12 rows)
+    writer.set_note(pat, 8, 5, ItNote::play_note(A4, 6, 35));
+    writer.set_note(pat, 20, 5, ItNote::play_note(D5, 6, 32));
+    writer.set_note(pat, 32, 5, ItNote::play_note(F4, 6, 34));
+    writer.set_note(pat, 48, 5, ItNote::play_note(A4, 6, 30));
+
+    // Breath texture (retriggered)
+    writer.set_note(pat, 16, 4, ItNote::play_note(D4, 5, 28));
+    writer.set_note(pat, 48, 4, ItNote::play_note(A3, 5, 26));
 
     // Bass on root
-    writer.set_note(pat, 0, 6, ItNote::play_note(D2, 7, 40));
+    writer.set_note(pat, 0, 6, ItNote::play_note(D2, 7, 42));
+    writer.set_note(pat, 32, 6, ItNote::play_note(A2, 7, 40));
+
+    // Ghost melody enters
+    writer.set_note(pat, 24, 7, ItNote::play_note(D4, 8, 32));
+    writer.set_note(pat, 56, 7, ItNote::play_note(F4, 8, 30));
 }
 
 fn build_thick_pattern(writer: &mut ItWriter, pat: u8) {
-    // A2: More layers, thickening
-    // All pads active
-    writer.set_note(pat, 0, 0, ItNote::play_note(D2, 1, 38));
-    writer.set_note(pat, 0, 1, ItNote::play_note(D5, 2, 28));
-    writer.set_note(pat, 0, 2, ItNote::play_note(D3, 3, 32));
-    writer.set_note(pat, 0, 3, ItNote::play_note(A3, 4, 25));
+    // A2: More layers, thickening - PEAK DENSITY
+    // All pads active with movement
+    writer.set_note(pat, 0, 0, ItNote::play_note(D2, 1, 48));
+    writer.set_note(pat, 32, 0, ItNote::play_note(D2, 1, 50));
 
-    // Chord change at bar 3
-    writer.set_note(pat, 32, 2, ItNote::play_note(F3, 3, 30));
-    writer.set_note(pat, 32, 3, ItNote::play_note(A3, 4, 26));
+    writer.set_note(pat, 0, 1, ItNote::play_note(D5, 2, 38));
+    writer.set_note(pat, 32, 1, ItNote::play_note(A4, 2, 36));
 
-    // Ghost lead melody
-    writer.set_note(pat, 16, 7, ItNote::play_note(D4, 8, 30));
-    writer.set_note(pat, 40, 7, ItNote::play_note(F4, 8, 28));
+    writer.set_note(pat, 0, 2, ItNote::play_note(D3, 3, 45));
+    writer.set_note(pat, 24, 2, ItNote::play_note(F3, 3, 43));
+    writer.set_note(pat, 48, 2, ItNote::play_note(A3, 3, 45));
 
-    // Multiple bells
-    writer.set_note(pat, 0, 5, ItNote::play_note(A4, 6, 32));
-    writer.set_note(pat, 24, 5, ItNote::play_note(D5, 6, 28));
-    writer.set_note(pat, 48, 5, ItNote::play_note(F4, 6, 25));
+    writer.set_note(pat, 0, 3, ItNote::play_note(A3, 4, 40));
+    writer.set_note(pat, 32, 3, ItNote::play_note(F3, 4, 42));
 
-    // Breath texture
-    writer.set_note(pat, 16, 4, ItNote::play_note(D4, 5, 22));
-    writer.set_note(pat, 48, 4, ItNote::play_note(A3, 5, 20));
+    // Ghost lead melody (more active)
+    writer.set_note(pat, 8, 7, ItNote::play_note(D4, 8, 44));
+    writer.set_note(pat, 20, 7, ItNote::play_note(F4, 8, 42));
+    writer.set_note(pat, 36, 7, ItNote::play_note(E4, 8, 46));
+    writer.set_note(pat, 52, 7, ItNote::play_note(D4, 8, 44));
+
+    // Bells every 8-10 rows
+    writer.set_note(pat, 0, 5, ItNote::play_note(A4, 6, 45));
+    writer.set_note(pat, 10, 5, ItNote::play_note(D5, 6, 43));
+    writer.set_note(pat, 20, 5, ItNote::play_note(F4, 6, 42));
+    writer.set_note(pat, 32, 5, ItNote::play_note(A4, 6, 48));
+    writer.set_note(pat, 44, 5, ItNote::play_note(D5, 6, 44));
+    writer.set_note(pat, 56, 5, ItNote::play_note(F4, 6, 42));
+
+    // Breath texture (continuous)
+    writer.set_note(pat, 8, 4, ItNote::play_note(D4, 5, 36));
+    writer.set_note(pat, 32, 4, ItNote::play_note(A3, 5, 34));
+    writer.set_note(pat, 56, 4, ItNote::play_note(D4, 5, 32));
 
     // Bass movement
-    writer.set_note(pat, 0, 6, ItNote::play_note(D2, 7, 42));
-    writer.set_note(pat, 32, 6, ItNote::play_note(A2, 7, 38));
+    writer.set_note(pat, 0, 6, ItNote::play_note(D2, 7, 52));
+    writer.set_note(pat, 24, 6, ItNote::play_note(F3 - 12, 7, 50)); // F2
+    writer.set_note(pat, 48, 6, ItNote::play_note(A2, 7, 52));
+
+    // Wind continuous
+    writer.set_note(pat, 0, 9, ItNote::play_note(D3, 10, 32));
+    writer.set_note(pat, 32, 9, ItNote::play_note(D3, 10, 35));
+
+    // NEW: Accent hit at climax points
+    writer.set_note(pat, 0, 10, ItNote::play_note(D2, 11, 48));
+    writer.set_note(pat, 32, 10, ItNote::play_note(D2, 11, 50));
+
+    // NEW: Counter melody echo
+    writer.set_note(pat, 16, 11, ItNote::play_note(A3, 12, 38));
+    writer.set_note(pat, 44, 11, ItNote::play_note(D4, 12, 36));
 }
 
 fn build_descent_pattern(writer: &mut ItWriter, pat: u8) {
-    // B: Descent - darker, lower
-    // Cold pad takes over
-    writer.set_note(pat, 0, 3, ItNote::play_note(D3, 4, 35));
-    writer.set_note(pat, 32, 3, ItNote::play_note(A2, 4, 38));
+    // B: Descent - darker, lower, building tension
+    // Cold pad takes over with Bb for tension
+    writer.set_note(pat, 0, 3, ItNote::play_note(D3, 4, 45));
+    writer.set_note(pat, 24, 3, ItNote::play_note(BB2, 4, 48)); // Bb for tension
+    writer.set_note(pat, 48, 3, ItNote::play_note(A2, 4, 50));
 
-    // Sub stays low
-    writer.set_note(pat, 0, 0, ItNote::play_note(D2, 1, 40));
+    // Sub stays low, more prominent
+    writer.set_note(pat, 0, 0, ItNote::play_note(D2, 1, 48));
+    writer.set_note(pat, 32, 0, ItNote::play_note(D2, 1, 50));
 
-    // Bass descends
-    writer.set_note(pat, 0, 6, ItNote::play_note(D2, 7, 45));
-    writer.set_note(pat, 32, 6, ItNote::play_note(A2 - 12, 7, 42)); // A1
+    // Bass descends chromatically
+    writer.set_note(pat, 0, 6, ItNote::play_note(D2, 7, 50));
+    writer.set_note(pat, 16, 6, ItNote::play_note(BB2 - 12, 7, 48)); // Bb1
+    writer.set_note(pat, 32, 6, ItNote::play_note(A2 - 12, 7, 50)); // A1
+    writer.set_note(pat, 48, 6, ItNote::play_note(D2, 7, 48));
 
     // Reverb swells
-    writer.set_note(pat, 16, 8, ItNote::play_note(D4, 9, 30));
-    writer.set_note(pat, 48, 8, ItNote::play_note(A3, 9, 28));
+    writer.set_note(pat, 8, 8, ItNote::play_note(D4, 9, 38));
+    writer.set_note(pat, 24, 8, ItNote::play_note(A3, 9, 40));
+    writer.set_note(pat, 48, 8, ItNote::play_note(D4, 9, 38));
 
-    // Sparse bell
-    writer.set_note(pat, 32, 5, ItNote::play_note(D4, 6, 25));
+    // Ghost melody becomes plaintive
+    writer.set_note(pat, 0, 7, ItNote::play_note(A4, 8, 45));
+    writer.set_note(pat, 16, 7, ItNote::play_note(F4, 8, 43));
+    writer.set_note(pat, 32, 7, ItNote::play_note(E4, 8, 46));
+    writer.set_note(pat, 48, 7, ItNote::play_note(D4, 8, 44));
+
+    // Bells more sparse but present
+    writer.set_note(pat, 12, 5, ItNote::play_note(D4, 6, 40));
+    writer.set_note(pat, 36, 5, ItNote::play_note(A4, 6, 38));
+    writer.set_note(pat, 56, 5, ItNote::play_note(F4, 6, 36));
 
     // Wind more prominent
-    writer.set_note(pat, 0, 9, ItNote::play_note(D3, 10, 28));
+    writer.set_note(pat, 0, 9, ItNote::play_note(D3, 10, 38));
+    writer.set_note(pat, 32, 9, ItNote::play_note(D3, 10, 40));
+
+    // Breath continues
+    writer.set_note(pat, 16, 4, ItNote::play_note(A3, 5, 35));
+    writer.set_note(pat, 48, 4, ItNote::play_note(D4, 5, 33));
+
+    // Accent hits building unease
+    writer.set_note(pat, 24, 10, ItNote::play_note(D2, 11, 50));
+    writer.set_note(pat, 56, 10, ItNote::play_note(A2 - 12, 11, 52));
+
+    // Counter melody echoes
+    writer.set_note(pat, 8, 11, ItNote::play_note(F4, 12, 36));
+    writer.set_note(pat, 40, 11, ItNote::play_note(D4, 12, 34));
 }
 
 fn build_resolution_pattern(writer: &mut ItWriter, pat: u8) {
     // A3: Resolution - return to warmth
-    // Warm pad returns
-    writer.set_note(pat, 0, 2, ItNote::play_note(D3, 3, 35));
-    writer.set_note(pat, 32, 2, ItNote::play_note(F3, 3, 32));
+    // Warm pad returns strongly
+    writer.set_note(pat, 0, 2, ItNote::play_note(D3, 3, 45));
+    writer.set_note(pat, 24, 2, ItNote::play_note(F3, 3, 43));
+    writer.set_note(pat, 48, 2, ItNote::play_note(A3, 3, 45));
 
     // Sub drone
-    writer.set_note(pat, 0, 0, ItNote::play_note(D2, 1, 36));
+    writer.set_note(pat, 0, 0, ItNote::play_note(D2, 1, 44));
+    writer.set_note(pat, 32, 0, ItNote::play_note(D2, 1, 46));
 
     // Air pad
-    writer.set_note(pat, 0, 1, ItNote::play_note(D5, 2, 26));
+    writer.set_note(pat, 0, 1, ItNote::play_note(D5, 2, 36));
+    writer.set_note(pat, 32, 1, ItNote::play_note(A4, 2, 34));
 
-    // Ghost lead resolves
-    writer.set_note(pat, 0, 7, ItNote::play_note(A4, 8, 30));
-    writer.set_note(pat, 32, 7, ItNote::play_note(D4, 8, 32));
+    // Ghost lead resolves melodically
+    writer.set_note(pat, 0, 7, ItNote::play_note(A4, 8, 42));
+    writer.set_note(pat, 16, 7, ItNote::play_note(F4, 8, 40));
+    writer.set_note(pat, 32, 7, ItNote::play_note(E4, 8, 42));
+    writer.set_note(pat, 48, 7, ItNote::play_note(D4, 8, 45));
 
     // Bells in harmony
-    writer.set_note(pat, 16, 5, ItNote::play_note(D5, 6, 30));
-    writer.set_note(pat, 40, 5, ItNote::play_note(A4, 6, 28));
+    writer.set_note(pat, 8, 5, ItNote::play_note(D5, 6, 40));
+    writer.set_note(pat, 24, 5, ItNote::play_note(A4, 6, 38));
+    writer.set_note(pat, 40, 5, ItNote::play_note(F4, 6, 36));
+    writer.set_note(pat, 56, 5, ItNote::play_note(D5, 6, 40));
 
     // Bass on root
-    writer.set_note(pat, 0, 6, ItNote::play_note(D2, 7, 40));
+    writer.set_note(pat, 0, 6, ItNote::play_note(D2, 7, 48));
+    writer.set_note(pat, 32, 6, ItNote::play_note(A2, 7, 46));
+
+    // Wind
+    writer.set_note(pat, 0, 9, ItNote::play_note(D3, 10, 30));
+    writer.set_note(pat, 32, 9, ItNote::play_note(D3, 10, 32));
+
+    // Breath
+    writer.set_note(pat, 16, 4, ItNote::play_note(D4, 5, 30));
+    writer.set_note(pat, 48, 4, ItNote::play_note(A3, 5, 28));
+
+    // Counter melody
+    writer.set_note(pat, 24, 11, ItNote::play_note(D4, 12, 32));
 }
 
 fn build_outro_pattern(writer: &mut ItWriter, pat: u8) {
     // Outro: Fade to silence
     // Sub drone fading
     writer.set_note(pat, 0, 0, ItNote::play_note(D2, 1, 28));
+    writer.set_note(pat, 32, 0, ItNote::play_note(D2, 1, 22));
 
     // Warm pad fades
-    writer.set_note(pat, 0, 2, ItNote::play_note(D3, 3, 22));
+    writer.set_note(pat, 0, 2, ItNote::play_note(D3, 3, 26));
+    writer.set_note(pat, 32, 2, ItNote::play_note(A2, 3, 20));
 
     // Wind continues quietly
-    writer.set_note(pat, 0, 9, ItNote::play_note(D3, 10, 15));
+    writer.set_note(pat, 0, 9, ItNote::play_note(D3, 10, 18));
+    writer.set_note(pat, 32, 9, ItNote::play_note(D3, 10, 15));
 
-    // Final bell
-    writer.set_note(pat, 32, 5, ItNote::play_note(D5, 6, 20));
+    // Final bells (gentle)
+    writer.set_note(pat, 16, 5, ItNote::play_note(A4, 6, 24));
+    writer.set_note(pat, 40, 5, ItNote::play_note(D5, 6, 20));
+
+    // Ghost melody final note
+    writer.set_note(pat, 48, 7, ItNote::play_note(D4, 8, 24));
 
     // Reverb trail
-    writer.set_note(pat, 48, 8, ItNote::play_note(D4, 9, 18));
+    writer.set_note(pat, 56, 8, ItNote::play_note(D4, 9, 18));
+
+    // Breath fades
+    writer.set_note(pat, 24, 4, ItNote::play_note(D4, 5, 18));
 }
