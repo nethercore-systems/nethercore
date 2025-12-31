@@ -17,6 +17,37 @@ use super::{FADE_IN_SAMPLES, MAX_TRACKER_CHANNELS, TrackerEngine, raw_tracker_ha
 use crate::audio::Sound;
 use crate::state::tracker_flags;
 
+// ============================================================================
+// Tracker Audio Constants
+// ============================================================================
+
+/// Maximum volume level for volume envelopes (XM/IT spec)
+const VOLUME_ENVELOPE_MAX: f32 = 64.0;
+
+/// Maximum volume fadeout value (16-bit)
+const VOLUME_FADEOUT_MAX: f32 = 65535.0;
+
+/// Maximum tracker volume (8-bit state volume)
+const TRACKER_VOLUME_MAX: f32 = 256.0;
+
+/// Maximum channel volume (IT-style, 0-64)
+const CHANNEL_VOLUME_MAX: f32 = 64.0;
+
+/// Maximum global volume (IT-style, 0-128)
+const GLOBAL_VOLUME_MAX: f32 = 128.0;
+
+/// Panning envelope center value
+const PAN_ENVELOPE_CENTER: f32 = 32.0;
+
+/// Maximum panning note range
+const PAN_NOTE_RANGE: f32 = 256.0;
+
+/// Minimum BPM value
+const MIN_BPM: i16 = 32;
+
+/// Maximum BPM value
+const MAX_BPM: i16 = 255;
+
 impl TrackerEngine {
     /// Sync engine state to rollback state
     ///
@@ -380,7 +411,7 @@ impl TrackerEngine {
             channel.sample_direction = 1;
             channel.volume_envelope_pos = 0;
             channel.panning_envelope_pos = 0;
-            channel.volume_fadeout = 65535;
+            channel.volume_fadeout = VOLUME_FADEOUT_MAX as u16;
             channel.fade_out_samples = 0; // Cancel any fade-out
             channel.fade_in_samples = FADE_IN_SAMPLES; // Start fade-in for crossfade
 
@@ -425,7 +456,7 @@ impl TrackerEngine {
 
         // Handle volume column (TrackerNote has volume directly as 0-64)
         if note.volume > 0 {
-            self.channels[ch_idx].volume = note.volume as f32 / 64.0;
+            self.channels[ch_idx].volume = note.volume as f32 / CHANNEL_VOLUME_MAX;
         }
 
         // Handle effects (tick 0 processing)
@@ -485,7 +516,7 @@ impl TrackerEngine {
 
             // Volume Effects
             TrackerEffect::SetVolume(vol) => {
-                channel.volume = ((*vol).min(64) as f32) / 64.0;
+                channel.volume = ((*vol).min(64) as f32) / CHANNEL_VOLUME_MAX;
             }
             TrackerEffect::VolumeSlide { up, down } => {
                 channel.volume_slide_active = true;
@@ -495,13 +526,13 @@ impl TrackerEngine {
                 }
             }
             TrackerEffect::FineVolumeUp(val) => {
-                channel.volume = (channel.volume + *val as f32 / 64.0).min(1.0);
+                channel.volume = (channel.volume + *val as f32 / CHANNEL_VOLUME_MAX).min(1.0);
             }
             TrackerEffect::FineVolumeDown(val) => {
-                channel.volume = (channel.volume - *val as f32 / 64.0).max(0.0);
+                channel.volume = (channel.volume - *val as f32 / CHANNEL_VOLUME_MAX).max(0.0);
             }
             TrackerEffect::SetGlobalVolume(vol) => {
-                self.global_volume = ((*vol).min(128) as f32) / 128.0;
+                self.global_volume = ((*vol).min(128) as f32) / GLOBAL_VOLUME_MAX;
             }
             TrackerEffect::GlobalVolumeSlide { up, down } => {
                 let param = (*up << 4) | *down;
@@ -510,10 +541,10 @@ impl TrackerEngine {
                 }
             }
             TrackerEffect::FineGlobalVolumeUp(val) => {
-                self.global_volume = (self.global_volume + *val as f32 / 64.0).min(1.0);
+                self.global_volume = (self.global_volume + *val as f32 / CHANNEL_VOLUME_MAX).min(1.0);
             }
             TrackerEffect::FineGlobalVolumeDown(val) => {
-                self.global_volume = (self.global_volume - *val as f32 / 64.0).max(0.0);
+                self.global_volume = (self.global_volume - *val as f32 / CHANNEL_VOLUME_MAX).max(0.0);
             }
             TrackerEffect::SetChannelVolume(vol) => {
                 channel.channel_volume = (*vol).min(64);
@@ -991,7 +1022,7 @@ impl TrackerEngine {
                     channel.key_off = false;
                     channel.volume_envelope_pos = 0;
                     channel.panning_envelope_pos = 0;
-                    channel.volume_fadeout = 65535;
+                    channel.volume_fadeout = VOLUME_FADEOUT_MAX as u16;
                     if channel.vibrato_waveform < 4 {
                         channel.vibrato_pos = 0;
                     }
@@ -1120,8 +1151,8 @@ impl TrackerEngine {
 
         // Global volume slide
         if self.last_global_vol_slide != 0 {
-            let up = (self.last_global_vol_slide >> 4) as f32 / 64.0;
-            let down = (self.last_global_vol_slide & 0x0F) as f32 / 64.0;
+            let up = (self.last_global_vol_slide >> 4) as f32 / CHANNEL_VOLUME_MAX;
+            let down = (self.last_global_vol_slide & 0x0F) as f32 / CHANNEL_VOLUME_MAX;
             if up > 0.0 {
                 self.global_volume = (self.global_volume + up).min(1.0);
             } else if down > 0.0 {
@@ -1130,37 +1161,35 @@ impl TrackerEngine {
         }
     }
 
-    /// Render one stereo sample from the tracker
-    pub fn render_sample(
+    // ========================================================================
+    // Channel Mixing (shared between render methods)
+    // ========================================================================
+
+    /// Mix all active channels into a stereo sample.
+    ///
+    /// This is the core mixing logic shared by `render_sample` and
+    /// `render_sample_and_advance`. Extracts the common ~100 lines of
+    /// channel processing, envelope handling, and panning.
+    ///
+    /// Takes `raw_handle` instead of a module reference to avoid borrow conflicts.
+    fn mix_channels(
         &mut self,
-        state: &crate::state::TrackerState,
+        raw_handle: u32,
         sounds: &[Option<Sound>],
         sample_rate: u32,
     ) -> (f32, f32) {
-        if state.handle == 0 || (state.flags & tracker_flags::PLAYING) == 0 {
-            return (0.0, 0.0);
-        }
-
-        if (state.flags & tracker_flags::PAUSED) != 0 {
-            return (0.0, 0.0);
-        }
-
-        let raw_handle = raw_tracker_handle(state.handle);
-        let module = match self
+        let num_channels = self
             .modules
             .get(raw_handle as usize)
             .and_then(|m| m.as_ref())
-        {
-            Some(m) => m,
-            None => return (0.0, 0.0),
-        };
+            .map(|m| m.module.num_channels as usize)
+            .unwrap_or(0);
 
         let mut left = 0.0f32;
         let mut right = 0.0f32;
 
-        // Mix all active channels
         for (ch_idx, channel) in self.channels.iter_mut().enumerate() {
-            if ch_idx >= module.module.num_channels as usize {
+            if ch_idx >= num_channels {
                 break;
             }
 
@@ -1176,10 +1205,13 @@ impl TrackerEngine {
                 None => continue,
             };
 
+            // Get instrument reference for envelope processing (scoped to avoid borrow conflicts)
+            let instr_idx = channel.instrument.saturating_sub(1) as usize;
+
             // Apply pitch envelope (IT only)
             if channel.pitch_envelope_enabled {
-                let instr_idx = channel.instrument.saturating_sub(1) as usize;
-                if let Some(instr) = module.module.instruments.get(instr_idx)
+                if let Some(loaded) = self.modules.get(raw_handle as usize).and_then(|m| m.as_ref())
+                    && let Some(instr) = loaded.module.instruments.get(instr_idx)
                     && let Some(ref env) = instr.pitch_envelope
                     && env.is_enabled()
                     && !env.is_filter()
@@ -1191,13 +1223,13 @@ impl TrackerEngine {
 
             // Update filter envelope (IT only)
             if channel.filter_envelope_enabled {
-                let instr_idx = channel.instrument.saturating_sub(1) as usize;
-                if let Some(instr) = module.module.instruments.get(instr_idx)
+                if let Some(loaded) = self.modules.get(raw_handle as usize).and_then(|m| m.as_ref())
+                    && let Some(instr) = loaded.module.instruments.get(instr_idx)
                     && let Some(ref env) = instr.pitch_envelope
                     && env.is_filter()
                 {
                     let env_val = env.value_at(channel.filter_envelope_pos) as f32;
-                    channel.filter_cutoff = (env_val / 64.0).clamp(0.0, 1.0);
+                    channel.filter_cutoff = (env_val / VOLUME_ENVELOPE_MAX).clamp(0.0, 1.0);
                     channel.filter_dirty = true;
                 }
             }
@@ -1214,23 +1246,24 @@ impl TrackerEngine {
             let mut vol = channel.volume;
 
             if channel.volume_envelope_enabled {
-                let instr_idx = channel.instrument.saturating_sub(1) as usize;
-                if let Some(instr) = module.module.instruments.get(instr_idx)
+                if let Some(loaded) = self.modules.get(raw_handle as usize).and_then(|m| m.as_ref())
+                    && let Some(instr) = loaded.module.instruments.get(instr_idx)
                     && let Some(ref env) = instr.volume_envelope
                     && env.is_enabled()
                 {
-                    let env_val = env.value_at(channel.volume_envelope_pos) as f32 / 64.0;
+                    let env_val = env.value_at(channel.volume_envelope_pos) as f32
+                        / VOLUME_ENVELOPE_MAX;
                     vol *= env_val;
                 }
             }
 
             if channel.key_off {
-                vol *= channel.volume_fadeout as f32 / 65535.0;
+                vol *= channel.volume_fadeout as f32 / VOLUME_FADEOUT_MAX;
             }
 
             vol *= self.global_volume;
-            vol *= channel.channel_volume as f32 / 64.0;
-            vol *= channel.instrument_global_volume as f32 / 64.0;
+            vol *= channel.channel_volume as f32 / CHANNEL_VOLUME_MAX;
+            vol *= channel.instrument_global_volume as f32 / CHANNEL_VOLUME_MAX;
 
             if channel.tremor_mute {
                 vol = 0.0;
@@ -1241,25 +1274,26 @@ impl TrackerEngine {
 
             if channel.pitch_pan_separation != 0 {
                 let note_offset = channel.current_note as i16 - channel.pitch_pan_center as i16;
-                let pan_offset = (note_offset * channel.pitch_pan_separation as i16) as f32 / 256.0;
+                let pan_offset =
+                    (note_offset * channel.pitch_pan_separation as i16) as f32 / PAN_NOTE_RANGE;
                 pan = (pan + pan_offset).clamp(-1.0, 1.0);
             }
 
             if channel.panning_envelope_enabled {
-                let instr_idx = channel.instrument.saturating_sub(1) as usize;
-                if let Some(instr) = module.module.instruments.get(instr_idx)
+                if let Some(loaded) = self.modules.get(raw_handle as usize).and_then(|m| m.as_ref())
+                    && let Some(instr) = loaded.module.instruments.get(instr_idx)
                     && let Some(ref env) = instr.panning_envelope
                     && env.is_enabled()
                 {
                     let env_val = env.value_at(channel.panning_envelope_pos) as f32;
-                    pan = (env_val - 32.0) / 32.0;
+                    pan = (env_val - PAN_ENVELOPE_CENTER) / PAN_ENVELOPE_CENTER;
                 }
             }
 
             if channel.panbrello_active && channel.panbrello_depth > 0 {
                 let waveform_value = SINE_LUT[(channel.panbrello_pos >> 4) as usize & 0xF] as f32;
-                let panbrello_offset =
-                    (waveform_value * channel.panbrello_depth as f32) / (64.0 * 256.0);
+                let panbrello_offset = (waveform_value * channel.panbrello_depth as f32)
+                    / (CHANNEL_VOLUME_MAX * PAN_NOTE_RANGE);
                 pan = (pan + panbrello_offset).clamp(-1.0, 1.0);
             }
 
@@ -1268,7 +1302,42 @@ impl TrackerEngine {
             right += r;
         }
 
-        let vol = state.volume as f32 / 256.0;
+        (left, right)
+    }
+
+    // ========================================================================
+    // Public Render Methods
+    // ========================================================================
+
+    /// Render one stereo sample from the tracker (read-only, no state advance)
+    pub fn render_sample(
+        &mut self,
+        state: &crate::state::TrackerState,
+        sounds: &[Option<Sound>],
+        sample_rate: u32,
+    ) -> (f32, f32) {
+        if state.handle == 0 || (state.flags & tracker_flags::PLAYING) == 0 {
+            return (0.0, 0.0);
+        }
+
+        if (state.flags & tracker_flags::PAUSED) != 0 {
+            return (0.0, 0.0);
+        }
+
+        let raw_handle = raw_tracker_handle(state.handle);
+
+        // Early return if module not found
+        if self
+            .modules
+            .get(raw_handle as usize)
+            .and_then(|m| m.as_ref())
+            .is_none()
+        {
+            return (0.0, 0.0);
+        }
+
+        let (left, right) = self.mix_channels(raw_handle, sounds, sample_rate);
+        let vol = state.volume as f32 / TRACKER_VOLUME_MAX;
         (left * vol, right * vol)
     }
 
@@ -1293,114 +1362,18 @@ impl TrackerEngine {
         }
 
         let raw_handle = raw_tracker_handle(state.handle);
-        let module = match self
+
+        // Early return if module not found
+        if self
             .modules
             .get(raw_handle as usize)
             .and_then(|m| m.as_ref())
+            .is_none()
         {
-            Some(m) => m,
-            None => return (0.0, 0.0),
-        };
-
-        let mut left = 0.0f32;
-        let mut right = 0.0f32;
-
-        // Mix all active channels (same as render_sample)
-        for (ch_idx, channel) in self.channels.iter_mut().enumerate() {
-            if ch_idx >= module.module.num_channels as usize {
-                break;
-            }
-
-            if !channel.note_on || channel.sample_handle == 0 {
-                continue;
-            }
-
-            let sound = match sounds
-                .get(channel.sample_handle as usize)
-                .and_then(|s| s.as_ref())
-            {
-                Some(s) => s,
-                None => continue,
-            };
-
-            if channel.pitch_envelope_enabled {
-                let instr_idx = channel.instrument.saturating_sub(1) as usize;
-                if let Some(instr) = module.module.instruments.get(instr_idx)
-                    && let Some(ref env) = instr.pitch_envelope
-                    && env.is_enabled()
-                    && !env.is_filter()
-                {
-                    let env_val = env.value_at(channel.pitch_envelope_pos) as f32;
-                    channel.pitch_envelope_value = env_val;
-                }
-            }
-
-            if channel.filter_envelope_enabled {
-                let instr_idx = channel.instrument.saturating_sub(1) as usize;
-                if let Some(instr) = module.module.instruments.get(instr_idx)
-                    && let Some(ref env) = instr.pitch_envelope
-                    && env.is_filter()
-                {
-                    let env_val = env.value_at(channel.filter_envelope_pos) as f32;
-                    channel.filter_cutoff = (env_val / 64.0).clamp(0.0, 1.0);
-                    channel.filter_dirty = true;
-                }
-            }
-
-            let mut sample = sample_channel(channel, &sound.data, sample_rate);
-
-            if channel.filter_cutoff < 1.0 {
-                sample = channel.apply_filter(sample);
-            }
-
-            let mut vol = channel.volume;
-
-            if channel.volume_envelope_enabled {
-                let instr_idx = channel.instrument.saturating_sub(1) as usize;
-                if let Some(instr) = module.module.instruments.get(instr_idx)
-                    && let Some(ref env) = instr.volume_envelope
-                    && env.is_enabled()
-                {
-                    let env_val = env.value_at(channel.volume_envelope_pos) as f32 / 64.0;
-                    vol *= env_val;
-                }
-            }
-
-            if channel.key_off {
-                vol *= channel.volume_fadeout as f32 / 65535.0;
-            }
-
-            vol *= self.global_volume;
-            vol *= channel.channel_volume as f32 / 64.0;
-            vol *= channel.instrument_global_volume as f32 / 64.0;
-
-            if channel.tremor_mute {
-                vol = 0.0;
-            }
-
-            let mut pan = channel.panning;
-
-            if channel.pitch_pan_separation != 0 {
-                let note_offset = channel.current_note as i16 - channel.pitch_pan_center as i16;
-                let pan_offset = (note_offset * channel.pitch_pan_separation as i16) as f32 / 256.0;
-                pan = (pan + pan_offset).clamp(-1.0, 1.0);
-            }
-
-            if channel.panning_envelope_enabled {
-                let instr_idx = channel.instrument.saturating_sub(1) as usize;
-                if let Some(instr) = module.module.instruments.get(instr_idx)
-                    && let Some(ref env) = instr.panning_envelope
-                    && env.is_enabled()
-                {
-                    let env_val = env.value_at(channel.panning_envelope_pos) as f32;
-                    pan = (env_val - 32.0) / 32.0;
-                }
-            }
-
-            let (l, r) = apply_channel_pan(sample * vol, pan);
-            left += l;
-            right += r;
+            return (0.0, 0.0);
         }
+
+        let (left, right) = self.mix_channels(raw_handle, sounds, sample_rate);
 
         // Advance tick position
         state.tick_sample_pos += 1;
@@ -1414,8 +1387,8 @@ impl TrackerEngine {
                 self.process_tick(state.tick, state.speed);
 
                 if self.tempo_slide != 0 {
-                    let new_bpm =
-                        (state.bpm as i16 + self.tempo_slide as i16).clamp(32, 255) as u16;
+                    let new_bpm = (state.bpm as i16 + self.tempo_slide as i16)
+                        .clamp(MIN_BPM, MAX_BPM) as u16;
                     state.bpm = new_bpm;
                 }
             }
@@ -1428,7 +1401,7 @@ impl TrackerEngine {
                 if self.pattern_delay > 0 {
                     if self.pattern_delay_count < self.pattern_delay {
                         self.pattern_delay_count += 1;
-                        let vol = state.volume as f32 / 256.0;
+                        let vol = state.volume as f32 / TRACKER_VOLUME_MAX;
                         return (left * vol, right * vol);
                     } else {
                         self.pattern_delay = 0;
@@ -1448,8 +1421,8 @@ impl TrackerEngine {
                         Some(m) => m,
                         None => {
                             return (
-                                left * state.volume as f32 / 256.0,
-                                right * state.volume as f32 / 256.0,
+                                left * state.volume as f32 / TRACKER_VOLUME_MAX,
+                                right * state.volume as f32 / TRACKER_VOLUME_MAX,
                             );
                         }
                     };
@@ -1457,7 +1430,7 @@ impl TrackerEngine {
                         .module
                         .pattern_at_order(state.order_position)
                         .map(|p| p.num_rows)
-                        .unwrap_or(64);
+                        .unwrap_or(CHANNEL_VOLUME_MAX as u16);
                     (
                         num_rows,
                         loaded.module.order_table.len() as u16,
@@ -1483,7 +1456,7 @@ impl TrackerEngine {
             }
         }
 
-        let vol = state.volume as f32 / 256.0;
+        let vol = state.volume as f32 / TRACKER_VOLUME_MAX;
         (left * vol, right * vol)
     }
 }

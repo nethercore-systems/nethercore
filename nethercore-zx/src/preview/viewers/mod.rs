@@ -375,6 +375,40 @@ impl ZXAssetViewer {
         self.texture_pan
     }
 
+    /// Update texture cache if needed and return the cached handle.
+    ///
+    /// This is a helper method to reduce duplication between texture and font preview.
+    /// Creates or updates the cached egui texture handle based on the cache_id.
+    fn update_texture_cache(
+        &mut self,
+        ctx: &egui::Context,
+        cache_id: &str,
+        texture_name: &str,
+        width: u32,
+        height: u32,
+        rgba_data: &[u8],
+    ) {
+        if self.cached_texture_id.as_ref() != Some(&cache_id.to_string()) {
+            let color_image = egui::ColorImage::from_rgba_unmultiplied(
+                [width as usize, height as usize],
+                rgba_data,
+            );
+
+            let filter = if self.texture_linear_filter {
+                egui::TextureFilter::Linear
+            } else {
+                egui::TextureFilter::Nearest
+            };
+
+            let mut options = egui::TextureOptions::default();
+            options.magnification = filter;
+            options.minification = filter;
+
+            self.cached_texture = Some(ctx.load_texture(texture_name, color_image, options));
+            self.cached_texture_id = Some(cache_id.to_string());
+        }
+    }
+
     // === Sound viewer controls ===
 
     /// Toggle sound playback
@@ -844,33 +878,17 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
                         if let Some(texture) = self.selected_texture() {
                             let width = texture.width;
                             let height = texture.height;
+                            let texture_data = texture.data.clone();
 
-                            // Check if we need to create/update the cached texture
-                            if self.cached_texture_id.as_ref() != Some(&id_owned) {
-                                let texture_data = texture.data.clone();
-                                let color_image = egui::ColorImage::from_rgba_unmultiplied(
-                                    [width as usize, height as usize],
-                                    &texture_data,
-                                );
-
-                                // Apply filtering mode
-                                let filter = if self.texture_linear_filter {
-                                    egui::TextureFilter::Linear
-                                } else {
-                                    egui::TextureFilter::Nearest
-                                };
-
-                                let mut options = egui::TextureOptions::default();
-                                options.magnification = filter;
-                                options.minification = filter;
-
-                                self.cached_texture = Some(ctx.load_texture(
-                                    format!("preview_{}", id_owned),
-                                    color_image,
-                                    options,
-                                ));
-                                self.cached_texture_id = Some(id_owned.clone());
-                            }
+                            // Update cache if needed
+                            self.update_texture_cache(
+                                ctx,
+                                &id_owned,
+                                &format!("preview_{}", id_owned),
+                                width as u32,
+                                height as u32,
+                                &texture_data,
+                            );
 
                             // Use the cached texture
                             if let Some(ref texture_handle) = self.cached_texture {
@@ -1348,32 +1366,16 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
 
                             ui.separator();
 
-                            // Check if we need to create/update the cached texture
+                            // Update cache if needed
                             let font_id = format!("font_{}", id_owned);
-                            if self.cached_texture_id.as_ref() != Some(&font_id) {
-                                let color_image = egui::ColorImage::from_rgba_unmultiplied(
-                                    [width as usize, height as usize],
-                                    &atlas_data,
-                                );
-
-                                // Apply filtering mode
-                                let filter = if self.texture_linear_filter {
-                                    egui::TextureFilter::Linear
-                                } else {
-                                    egui::TextureFilter::Nearest
-                                };
-
-                                let mut options = egui::TextureOptions::default();
-                                options.magnification = filter;
-                                options.minification = filter;
-
-                                self.cached_texture = Some(ctx.load_texture(
-                                    format!("font_atlas_{}", id_owned),
-                                    color_image,
-                                    options,
-                                ));
-                                self.cached_texture_id = Some(font_id);
-                            }
+                            self.update_texture_cache(
+                                ctx,
+                                &font_id,
+                                &format!("font_atlas_{}", id_owned),
+                                width,
+                                height,
+                                &atlas_data,
+                            );
 
                             // Use the cached texture
                             if let Some(ref texture_handle) = self.cached_texture {
