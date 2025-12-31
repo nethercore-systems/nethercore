@@ -1,5 +1,5 @@
 [workspace]
-members = ["core", "nethercore-zx", "shared", "zx-common", "library", "xtask", "nether-qoa", "nether-xm", "nether-it", "nether-tracker", "tools/nether-export", "tools/nether-cli", "tools/ffi-gen", "tools/gen-test-anim", "tools/gen-multi-skinned-assets", "tools/gen-tracker-demo", "tools/gen-basic-assets", "tools/gen-gltf-test-assets", "tools/gen-paddle-assets", "tools/gen-glb-inline-assets", "tools/gen-glb-rigid-assets", "tools/glb-builder", "tools/tracker-debug"]
+members = ["core", "nethercore-zx", "shared", "zx-common", "library", "xtask", "nether-qoa", "nether-xm", "nether-it", "nether-tracker", "tools/nether-export", "tools/nether-cli", "tools/ffi-gen", "tools/gen-test-anim", "tools/gen-multi-skinned-assets", "tools/gen-tracker-common", "tools/gen-tracker-demo-xm", "tools/gen-tracker-demo-it", "tools/gen-basic-assets", "tools/gen-gltf-test-assets", "tools/gen-paddle-assets", "tools/gen-glb-inline-assets", "tools/gen-glb-rigid-assets", "tools/glb-builder", "tools/tracker-debug"]
 default-members = ["library"]
 resolver = "2"
 

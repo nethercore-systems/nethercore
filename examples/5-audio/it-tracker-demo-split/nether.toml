@@ -1,0 +1,206 @@
+[game]
+id = "it-tracker-demo-split"
+title = "IT Tracker Demo (Split Assets)"
+author = "Nethercore Examples"
+version = "1.0.0"
+description = "IT tracker demo with separate sample assets - demonstrates explicit sample loading"
+tags = ["audio", "music", "tracker", "impulse-tracker", "split-assets"]
+
+# ============================================================================
+# IT Tracker Modules
+# ============================================================================
+#
+# These IT files contain embedded sample data. The samples are also loaded
+# explicitly below as [[assets.sounds]] entries, demonstrating that samples
+# can be accessed independently of the tracker module for sound effects or
+# other audio needs.
+# ============================================================================
+
+[[assets.trackers]]
+id = "nether_dawn"
+path = "../../assets/tracker-nether_dawn-embedded.it"
+
+[[assets.trackers]]
+id = "nether_mist"
+path = "../../assets/tracker-nether_mist-embedded.it"
+
+[[assets.trackers]]
+id = "nether_storm"
+path = "../../assets/tracker-nether_storm-embedded.it"
+
+# ============================================================================
+# Explicit Sample Assets (Split Loading)
+# ============================================================================
+#
+# These WAV files are the same samples used in the IT files, but loaded
+# explicitly as sound assets. This demonstrates:
+# - Samples can be used for both tracker playback AND standalone sound effects
+# - Modular asset management for reuse across different systems
+# ============================================================================
+
+# --- Nether Dawn (Orchestral) Samples ---
+[[assets.sounds]]
+id = "strings_cello"
+path = "../../assets/tracker-dawn_strings_cello.wav"
+
+[[assets.sounds]]
+id = "strings_viola"
+path = "../../assets/tracker-dawn_strings_viola.wav"
+
+[[assets.sounds]]
+id = "strings_violin"
+path = "../../assets/tracker-dawn_strings_violin.wav"
+
+[[assets.sounds]]
+id = "brass_horn"
+path = "../../assets/tracker-dawn_brass_horn.wav"
+
+[[assets.sounds]]
+id = "brass_trumpet"
+path = "../../assets/tracker-dawn_brass_trumpet.wav"
+
+[[assets.sounds]]
+id = "flute"
+path = "../../assets/tracker-dawn_flute.wav"
+
+[[assets.sounds]]
+id = "timpani"
+path = "../../assets/tracker-dawn_timpani.wav"
+
+[[assets.sounds]]
+id = "snare_orch"
+path = "../../assets/tracker-dawn_snare_orch.wav"
+
+[[assets.sounds]]
+id = "cymbal_crash"
+path = "../../assets/tracker-dawn_cymbal_crash.wav"
+
+[[assets.sounds]]
+id = "harp_gliss"
+path = "../../assets/tracker-dawn_harp_gliss.wav"
+
+[[assets.sounds]]
+id = "choir_ah"
+path = "../../assets/tracker-dawn_choir_ah.wav"
+
+[[assets.sounds]]
+id = "choir_oh"
+path = "../../assets/tracker-dawn_choir_oh.wav"
+
+[[assets.sounds]]
+id = "piano"
+path = "../../assets/tracker-dawn_piano.wav"
+
+[[assets.sounds]]
+id = "bass_epic"
+path = "../../assets/tracker-dawn_bass_epic.wav"
+
+[[assets.sounds]]
+id = "pad_orchestra"
+path = "../../assets/tracker-dawn_pad_orchestra.wav"
+
+[[assets.sounds]]
+id = "fx_epic"
+path = "../../assets/tracker-dawn_fx_epic.wav"
+
+# --- Nether Mist (Ambient) Samples ---
+[[assets.sounds]]
+id = "pad_sub"
+path = "../../assets/tracker-mist_pad_sub.wav"
+
+[[assets.sounds]]
+id = "pad_air"
+path = "../../assets/tracker-mist_pad_air.wav"
+
+[[assets.sounds]]
+id = "pad_warm"
+path = "../../assets/tracker-mist_pad_warm.wav"
+
+[[assets.sounds]]
+id = "pad_cold"
+path = "../../assets/tracker-mist_pad_cold.wav"
+
+[[assets.sounds]]
+id = "noise_breath"
+path = "../../assets/tracker-mist_noise_breath.wav"
+
+[[assets.sounds]]
+id = "bell_glass"
+path = "../../assets/tracker-mist_bell_glass.wav"
+
+[[assets.sounds]]
+id = "bass_sub"
+path = "../../assets/tracker-mist_bass_sub.wav"
+
+[[assets.sounds]]
+id = "lead_ghost"
+path = "../../assets/tracker-mist_lead_ghost.wav"
+
+[[assets.sounds]]
+id = "reverb_sim"
+path = "../../assets/tracker-mist_reverb_sim.wav"
+
+[[assets.sounds]]
+id = "atmos_wind"
+path = "../../assets/tracker-mist_atmos_wind.wav"
+
+# --- Nether Storm (DnB) Samples ---
+[[assets.sounds]]
+id = "kick_dnb"
+path = "../../assets/tracker-storm_kick_dnb.wav"
+
+[[assets.sounds]]
+id = "snare_dnb"
+path = "../../assets/tracker-storm_snare_dnb.wav"
+
+[[assets.sounds]]
+id = "hihat_closed"
+path = "../../assets/tracker-storm_hihat_closed.wav"
+
+[[assets.sounds]]
+id = "hihat_open"
+path = "../../assets/tracker-storm_hihat_open.wav"
+
+[[assets.sounds]]
+id = "break_slice"
+path = "../../assets/tracker-storm_break_slice.wav"
+
+[[assets.sounds]]
+id = "cymbal"
+path = "../../assets/tracker-storm_cymbal.wav"
+
+[[assets.sounds]]
+id = "bass_sub_dnb"
+path = "../../assets/tracker-storm_bass_sub.wav"
+
+[[assets.sounds]]
+id = "bass_reese"
+path = "../../assets/tracker-storm_bass_reese.wav"
+
+[[assets.sounds]]
+id = "bass_wobble"
+path = "../../assets/tracker-storm_bass_wobble.wav"
+
+[[assets.sounds]]
+id = "pad_dark"
+path = "../../assets/tracker-storm_pad_dark.wav"
+
+[[assets.sounds]]
+id = "lead_stab"
+path = "../../assets/tracker-storm_lead_stab.wav"
+
+[[assets.sounds]]
+id = "lead_main"
+path = "../../assets/tracker-storm_lead_main.wav"
+
+[[assets.sounds]]
+id = "fx_riser"
+path = "../../assets/tracker-storm_fx_riser.wav"
+
+[[assets.sounds]]
+id = "fx_impact"
+path = "../../assets/tracker-storm_fx_impact.wav"
+
+[[assets.sounds]]
+id = "atmos_storm"
+path = "../../assets/tracker-storm_atmos_storm.wav"

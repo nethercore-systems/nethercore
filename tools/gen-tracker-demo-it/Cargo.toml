@@ -1,0 +1,12 @@
+[package]
+name = "gen-tracker-demo-it"
+version = "0.1.0"
+edition = "2021"
+description = "Generates procedural audio samples and IT tracker files for Nethercore"
+
+[dependencies]
+gen-tracker-common = { path = "../gen-tracker-common" }
+nether-it = { path = "../../nether-it" }
+
+[dev-dependencies]
+# Tests use nether-it for validation

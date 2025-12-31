@@ -70,8 +70,7 @@ examples/**/tools/**/output/*.wav
 
 # Tracker music files
 examples/**/assets/**/*.xm
-examples/**/assets/**/*.zm
-**/*.zm
+examples/**/assets/**/*.it
 
 # Output directories (catch-all)
 examples/**/tools/**/output/

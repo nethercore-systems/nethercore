@@ -1,0 +1,18 @@
+[package]
+name = "it-tracker-demo"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "IT tracker music playback demo for Nethercore ZX"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+
+[profile.release]
+lto = true
+opt-level = 'z'
+panic = "abort"
+
+[workspace]

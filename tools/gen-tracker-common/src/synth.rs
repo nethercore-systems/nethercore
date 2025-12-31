@@ -1,4 +1,4 @@
-//! Common synthesizer utilities shared across all genres
+//! Common synthesizer utilities shared across all tracker generators
 
 pub const SAMPLE_RATE: f32 = 22050.0;
 
@@ -51,4 +51,31 @@ impl SimpleRng {
     pub fn next_f32(&mut self) -> f32 {
         self.next() as f32 / u32::MAX as f32
     }
+}
+
+/// Generate formant-filtered waveform for choir/vocal synthesis
+/// vowel: 0.0 = "ah", 0.5 = "oh", 1.0 = "ee"
+pub fn formant_filter(input: f32, vowel: f32, state: &mut [f32; 4]) -> f32 {
+    // Simplified formant frequencies for different vowels
+    let (f1, f2) = if vowel < 0.33 {
+        (800.0, 1200.0) // "ah"
+    } else if vowel < 0.66 {
+        (450.0, 800.0) // "oh"
+    } else {
+        (300.0, 2300.0) // "ee"
+    };
+
+    // Two bandpass filters for formants
+    let cutoff1 = (2.0 * std::f32::consts::PI * f1 / SAMPLE_RATE).min(0.5);
+    let cutoff2 = (2.0 * std::f32::consts::PI * f2 / SAMPLE_RATE).min(0.5);
+
+    state[0] += cutoff1 * (input - state[0]);
+    state[1] += cutoff1 * (state[0] - state[1]);
+    let formant1 = state[0] - state[1];
+
+    state[2] += cutoff2 * (input - state[2]);
+    state[3] += cutoff2 * (state[2] - state[3]);
+    let formant2 = state[2] - state[3];
+
+    formant1 * 0.6 + formant2 * 0.4
 }

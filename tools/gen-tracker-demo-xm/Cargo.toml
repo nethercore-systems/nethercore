@@ -1,0 +1,11 @@
+[package]
+name = "gen-tracker-demo-xm"
+version = "0.1.0"
+edition = "2021"
+description = "Generates procedural audio samples and XM tracker files for tracker-demo example"
+
+[dependencies]
+gen-tracker-common = { path = "../gen-tracker-common" }
+
+[dev-dependencies]
+nether-xm = { path = "../../nether-xm" }

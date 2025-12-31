@@ -21,7 +21,9 @@ const BB3_E: u8 = 47;
 const C4_E: u8 = 49;
 const CS4_E: u8 = 50;
 const D4_E: u8 = 51;
+const DS4_E: u8 = 52;
 const E4_E: u8 = 53;
+const FS4_E: u8 = 55;
 const F4_E: u8 = 54;
 const G4_E: u8 = 56;
 const A4_E: u8 = 58;
@@ -31,6 +33,7 @@ const CS5_E: u8 = 62;
 const D5_E: u8 = 63;
 const E5_E: u8 = 65;
 const F5_E: u8 = 66;
+const FS5_E: u8 = 67;
 const G5_E: u8 = 68;
 const A5_E: u8 = 70;
 const BB5_E: u8 = 71;
@@ -200,7 +203,7 @@ fn generate_pattern_intro() -> Vec<u8> {
     let mut data = Vec::new();
 
     for row in 0..32 {
-        // Ch1: Kick
+        // Ch1: Kick - sparse, building
         if row < 16 {
             if row == 0 {
                 write_note(&mut data, C4_E, KICK_E);
@@ -213,14 +216,14 @@ fn generate_pattern_intro() -> Vec<u8> {
             write_empty(&mut data);
         }
 
-        // Ch2: Snare
+        // Ch2: Snare - enters late
         if row >= 24 && row % 8 == 4 {
             write_note(&mut data, C4_E, SNARE_E);
         } else {
             write_empty(&mut data);
         }
 
-        // Ch3: Hi-hat
+        // Ch3: Hi-hat - gradual build
         if row < 8 {
             if row == 0 {
                 write_note(&mut data, C4_E, HIHAT_E);
@@ -239,7 +242,7 @@ fn generate_pattern_intro() -> Vec<u8> {
             write_empty(&mut data);
         }
 
-        // Ch4: Bass
+        // Ch4: Bass - Dm pedal, then octave bounce
         if row == 0 {
             write_note(&mut data, D2_E, BASS_E);
         } else if row >= 16 && row % 2 == 0 {
@@ -249,48 +252,34 @@ fn generate_pattern_intro() -> Vec<u8> {
             write_empty(&mut data);
         }
 
-        // Ch5: Supersaw - HOOK TEASER
+        // Ch5: Supersaw - Hook teaser (D-F-A arpeggio motif)
+        // Simple ascending: D→F→A, then D→F→G→A
         match row {
             0 => write_note(&mut data, D5_E, SUPERSAW),
-            2 => write_note(&mut data, F5_E, SUPERSAW),
-            4 => write_note(&mut data, A5_E, SUPERSAW),
-            8 => write_note(&mut data, D5_E, SUPERSAW),
-            10 => write_note(&mut data, F5_E, SUPERSAW),
-            12 => write_note(&mut data, G5_E, SUPERSAW),
+            4 => write_note(&mut data, F5_E, SUPERSAW),
+            8 => write_note(&mut data, A5_E, SUPERSAW),
             16 => write_note(&mut data, D5_E, SUPERSAW),
-            18 => write_note(&mut data, F5_E, SUPERSAW),
-            20 => write_note(&mut data, A5_E, SUPERSAW),
-            21 => write_note(&mut data, A5_E, SUPERSAW),
-            22 => write_note(&mut data, G5_E, SUPERSAW),
-            24 => write_note(&mut data, F5_E, SUPERSAW),
-            26 => write_note(&mut data, E5_E, SUPERSAW),
-            28 => write_note(&mut data, D5_E, SUPERSAW),
-            30 => write_note(&mut data, CS5_E, SUPERSAW),
+            20 => write_note(&mut data, F5_E, SUPERSAW),
+            24 => write_note(&mut data, G5_E, SUPERSAW),
+            28 => write_note(&mut data, A5_E, SUPERSAW),
             _ => write_empty(&mut data),
         }
 
-        // Ch6: Brass
+        // Ch6: Brass - Sparse accents
         match row {
-            6 => write_note(&mut data, A4_E, BRASS),
-            14 => write_note(&mut data, G4_E, BRASS),
-            30 => write_note(&mut data, A3_E, BRASS),
+            12 => write_note(&mut data, A3_E, BRASS),
+            30 => write_note(&mut data, A4_E, BRASS),
             _ => write_empty(&mut data),
         }
 
-        // Ch7: Pad
-        if row == 0 {
-            write_note(&mut data, D3_E, PAD);
-        } else if row == 8 {
-            write_note(&mut data, BB3_E, PAD);
-        } else if row == 16 {
-            write_note(&mut data, C4_E, PAD);
-        } else if row == 24 {
-            write_note(&mut data, A3_E, PAD);
-        } else {
-            write_empty(&mut data);
+        // Ch7: Pad - Dm swell
+        match row {
+            0 => write_note(&mut data, D3_E, PAD),
+            16 => write_note(&mut data, F3_E, PAD),
+            _ => write_empty(&mut data),
         }
 
-        // Ch8: Silent
+        // Ch8: Harmony - Silent in intro
         write_empty(&mut data);
     }
 
@@ -300,6 +289,7 @@ fn generate_pattern_intro() -> Vec<u8> {
 fn generate_pattern_verse_a() -> Vec<u8> {
     let mut data = Vec::new();
 
+    // Chord: Dm → G → Bb → A
     let bass_pattern: [(u8, u8); 16] = [
         (D2_E, D3_E),
         (D2_E, D3_E),
@@ -320,28 +310,28 @@ fn generate_pattern_verse_a() -> Vec<u8> {
     ];
 
     for row in 0..32 {
-        // Ch1: Kick
+        // Ch1: Kick - 4-on-floor
         if row % 4 == 0 {
             write_note(&mut data, C4_E, KICK_E);
         } else {
             write_empty(&mut data);
         }
 
-        // Ch2: Snare
+        // Ch2: Snare - 2 and 4
         if row % 8 == 4 {
             write_note(&mut data, C4_E, SNARE_E);
         } else {
             write_empty(&mut data);
         }
 
-        // Ch3: Hi-hat
+        // Ch3: Hi-hat - 8th notes
         if row % 2 == 0 {
             write_note(&mut data, C4_E, HIHAT_E);
         } else {
             write_empty(&mut data);
         }
 
-        // Ch4: Bass
+        // Ch4: Bass - octave bounce
         if row % 2 == 0 {
             let idx = (row / 2) as usize;
             let (low, high) = bass_pattern[idx];
@@ -351,47 +341,36 @@ fn generate_pattern_verse_a() -> Vec<u8> {
             write_empty(&mut data);
         }
 
-        // Ch5: Supersaw - sparse melody
+        // Ch5: Supersaw - Simple call-and-response melody
+        // Phrase 1 (0-14): A→D→D (establishing tonic)
+        // Phrase 2 (16-30): Bb→F→A (answering, leading back)
         match row {
             0 => write_note(&mut data, A4_E, SUPERSAW),
-            4 => write_note(&mut data, D5_E, SUPERSAW),
-            8 => write_note(&mut data, D5_E, SUPERSAW),
-            12 => write_note(&mut data, A4_E, SUPERSAW),
-            16 => write_note(&mut data, F4_E, SUPERSAW),
-            18 => write_note(&mut data, A4_E, SUPERSAW),
-            20 => write_note(&mut data, BB4_E, SUPERSAW),
-            21 => write_note(&mut data, A4_E, SUPERSAW),
+            6 => write_note(&mut data, D5_E, SUPERSAW),
+            12 => write_note(&mut data, D5_E, SUPERSAW),
+            16 => write_note(&mut data, BB4_E, SUPERSAW),
             22 => write_note(&mut data, F4_E, SUPERSAW),
-            24 => write_note(&mut data, D5_E, SUPERSAW),
-            26 => write_note(&mut data, F5_E, SUPERSAW),
-            28 => write_note(&mut data, A5_E, SUPERSAW),
-            29 => write_note(&mut data, A5_E, SUPERSAW),
+            28 => write_note(&mut data, A4_E, SUPERSAW),
             _ => write_empty(&mut data),
         }
 
-        // Ch6: Brass
+        // Ch6: Brass - Off-beat stabs (sparse, building)
         match row {
-            7 => write_note(&mut data, D4_E, BRASS),
-            15 => write_note(&mut data, G4_E, BRASS),
-            19 => write_note(&mut data, BB4_E, BRASS),
-            23 => write_note(&mut data, E4_E, BRASS),
+            12 => write_note(&mut data, D4_E, BRASS),
+            28 => write_note(&mut data, E4_E, BRASS),
             _ => write_empty(&mut data),
         }
 
-        // Ch7: Pad
+        // Ch7: Pad - Chord changes
         match row {
             0 => write_note(&mut data, D3_E, PAD),
-            8 => write_note(&mut data, G3_E, PAD),
-            16 => write_note(&mut data, BB3_E, PAD),
-            24 => write_note(&mut data, A3_E, PAD),
+            16 => write_note(&mut data, G3_E, PAD),
             _ => write_empty(&mut data),
         }
 
-        // Ch8: Harmony
+        // Ch8: Harmony - Light support
         match row {
-            6 => write_note(&mut data, F5_E, SUPERSAW),
-            14 => write_note(&mut data, C5_E, SUPERSAW),
-            28 => write_note(&mut data, C5_E, SUPERSAW),
+            12 => write_note(&mut data, A4_E, SUPERSAW),
             _ => write_empty(&mut data),
         }
     }
@@ -402,6 +381,7 @@ fn generate_pattern_verse_a() -> Vec<u8> {
 fn generate_pattern_verse_b() -> Vec<u8> {
     let mut data = Vec::new();
 
+    // Chord: Dm → C → Bb → C
     let bass_pattern: [(u8, u8); 16] = [
         (D2_E, D3_E),
         (D2_E, D3_E),
@@ -443,7 +423,7 @@ fn generate_pattern_verse_b() -> Vec<u8> {
             write_empty(&mut data);
         }
 
-        // Ch4: Bass
+        // Ch4: Bass - octave bounce
         if row % 2 == 0 {
             let idx = (row / 2) as usize;
             let (low, high) = bass_pattern[idx];
@@ -453,48 +433,41 @@ fn generate_pattern_verse_b() -> Vec<u8> {
             write_empty(&mut data);
         }
 
-        // Ch5: Supersaw
+        // Ch5: Supersaw - More active, building energy
+        // Phrase 1: D→E→F then E→D (rise and fall)
+        // Phrase 2: Bb→C→D→E→F (ascending, setting up pre-chorus)
         match row {
             0 => write_note(&mut data, D5_E, SUPERSAW),
-            4 => write_note(&mut data, C5_E, SUPERSAW),
-            8 => write_note(&mut data, E5_E, SUPERSAW),
-            12 => write_note(&mut data, D5_E, SUPERSAW),
+            4 => write_note(&mut data, E5_E, SUPERSAW),
+            6 => write_note(&mut data, F5_E, SUPERSAW),
+            12 => write_note(&mut data, E5_E, SUPERSAW),
+            14 => write_note(&mut data, D5_E, SUPERSAW),
             16 => write_note(&mut data, BB4_E, SUPERSAW),
-            20 => write_note(&mut data, F5_E, SUPERSAW),
-            21 => write_note(&mut data, F5_E, SUPERSAW),
+            20 => write_note(&mut data, C5_E, SUPERSAW),
             22 => write_note(&mut data, D5_E, SUPERSAW),
-            24 => write_note(&mut data, D5_E, SUPERSAW),
-            26 => write_note(&mut data, F5_E, SUPERSAW),
-            28 => write_note(&mut data, A5_E, SUPERSAW),
-            29 => write_note(&mut data, A5_E, SUPERSAW),
-            30 => write_note(&mut data, G5_E, SUPERSAW),
-            31 => write_note(&mut data, D5_E, SUPERSAW),
+            28 => write_note(&mut data, E5_E, SUPERSAW),
+            30 => write_note(&mut data, F5_E, SUPERSAW),
             _ => write_empty(&mut data),
         }
 
-        // Ch6: Brass
+        // Ch6: Brass - Counter rhythm
         match row {
-            7 => write_note(&mut data, F4_E, BRASS),
-            15 => write_note(&mut data, E4_E, BRASS),
+            12 => write_note(&mut data, F4_E, BRASS),
+            28 => write_note(&mut data, G4_E, BRASS),
             _ => write_empty(&mut data),
         }
 
         // Ch7: Pad
         match row {
             0 => write_note(&mut data, D3_E, PAD),
-            8 => write_note(&mut data, C4_E, PAD),
-            16 => write_note(&mut data, BB3_E, PAD),
-            24 => write_note(&mut data, C4_E, PAD),
+            16 => write_note(&mut data, C4_E, PAD),
             _ => write_empty(&mut data),
         }
 
-        // Ch8: Harmony
+        // Ch8: Harmony - Third below on key notes
         match row {
-            24 => write_note(&mut data, D4_E, SUPERSAW),
-            26 => write_note(&mut data, F4_E, SUPERSAW),
-            28 => write_note(&mut data, A4_E, SUPERSAW),
-            30 => write_note(&mut data, G4_E, SUPERSAW),
-            31 => write_note(&mut data, D4_E, SUPERSAW),
+            6 => write_note(&mut data, D5_E, SUPERSAW),
+            22 => write_note(&mut data, BB4_E, SUPERSAW),
             _ => write_empty(&mut data),
         }
     }
@@ -505,8 +478,10 @@ fn generate_pattern_verse_b() -> Vec<u8> {
 fn generate_pattern_prechorus() -> Vec<u8> {
     let mut data = Vec::new();
 
+    // Chord: F → G → A pedal (building tension)
+
     for row in 0..32 {
-        // Ch1: Kick
+        // Ch1: Kick - builds to double-time
         if row < 16 {
             if row % 4 == 0 {
                 write_note(&mut data, C4_E, KICK_E);
@@ -519,7 +494,7 @@ fn generate_pattern_prechorus() -> Vec<u8> {
             write_empty(&mut data);
         }
 
-        // Ch2: Snare
+        // Ch2: Snare - builds with rolls
         if row < 24 {
             if row % 8 == 4 {
                 write_note(&mut data, C4_E, SNARE_E);
@@ -527,10 +502,11 @@ fn generate_pattern_prechorus() -> Vec<u8> {
                 write_empty(&mut data);
             }
         } else {
+            // Snare roll in last 8 rows
             write_note(&mut data, C4_E, SNARE_E);
         }
 
-        // Ch3: Hi-hat
+        // Ch3: Hi-hat - 8ths then 16ths
         if row < 16 {
             if row % 2 == 0 {
                 write_note(&mut data, C4_E, HIHAT_E);
@@ -541,7 +517,7 @@ fn generate_pattern_prechorus() -> Vec<u8> {
             write_note(&mut data, C4_E, HIHAT_E);
         }
 
-        // Ch4: Bass
+        // Ch4: Bass - F → G → A pedal
         let bass_note = match row {
             0..=7 => {
                 if (row / 2) % 2 == 0 {
@@ -572,49 +548,45 @@ fn generate_pattern_prechorus() -> Vec<u8> {
             write_empty(&mut data);
         }
 
-        // Ch5: Supersaw
+        // Ch5: Supersaw - Rising intensity, accelerating rhythm
+        // Phrase 1 (0-14): A→C→E→F (rising through F major)
+        // Phrase 2 (16-30): G→G→A→A→Bb→A (climbs to Bb, pulls back to A = leading tone!)
         match row {
             0 => write_note(&mut data, A4_E, SUPERSAW),
-            2 => write_note(&mut data, C5_E, SUPERSAW),
             4 => write_note(&mut data, C5_E, SUPERSAW),
-            6 => write_note(&mut data, BB4_E, SUPERSAW),
             8 => write_note(&mut data, E5_E, SUPERSAW),
-            10 => write_note(&mut data, E5_E, SUPERSAW),
             12 => write_note(&mut data, E5_E, SUPERSAW),
-            13 => write_note(&mut data, F5_E, SUPERSAW),
-            14 => write_note(&mut data, G5_E, SUPERSAW),
-            16 => write_note(&mut data, A5_E, SUPERSAW),
-            18 => write_note(&mut data, G5_E, SUPERSAW),
-            20 => write_note(&mut data, F5_E, SUPERSAW),
-            22 => write_note(&mut data, D5_E, SUPERSAW),
-            24 => write_note(&mut data, F4_E, SUPERSAW),
-            26 => write_note(&mut data, A4_E, SUPERSAW),
-            28 => write_note(&mut data, C5_E, SUPERSAW),
-            31 => write_note(&mut data, F5_E, SUPERSAW),
+            14 => write_note(&mut data, F5_E, SUPERSAW),
+            16 => write_note(&mut data, G5_E, SUPERSAW),
+            20 => write_note(&mut data, G5_E, SUPERSAW),
+            22 => write_note(&mut data, A5_E, SUPERSAW),
+            26 => write_note(&mut data, A5_E, SUPERSAW),
+            28 => write_note(&mut data, BB5_E, SUPERSAW),
+            30 => write_note(&mut data, A5_E, SUPERSAW), // Leading tone!
             _ => write_empty(&mut data),
         }
 
-        // Ch6: Brass
+        // Ch6: Brass - Building stabs (accelerating)
         match row {
             0 => write_note(&mut data, F4_E, BRASS),
             8 => write_note(&mut data, G4_E, BRASS),
             16 => write_note(&mut data, A4_E, BRASS),
-            28 => write_note(&mut data, C4_E, BRASS),
+            24 => write_note(&mut data, A4_E, BRASS),
+            28 => write_note(&mut data, A4_E, BRASS),
             _ => write_empty(&mut data),
         }
 
-        // Ch7: Pad
+        // Ch7: Pad - Swelling
         match row {
             0 => write_note(&mut data, F3_E, PAD),
-            8 => write_note(&mut data, G3_E, PAD),
-            16 => write_note(&mut data, A3_E, PAD),
-            24 => write_note(&mut data, C4_E, PAD),
+            16 => write_note(&mut data, G3_E, PAD),
             _ => write_empty(&mut data),
         }
 
-        // Ch8: Harmony
+        // Ch8: Harmony - Building to unison at climax
         match row {
-            31 => write_note(&mut data, F6_E, SUPERSAW),
+            28 => write_note(&mut data, A5_E, SUPERSAW),
+            30 => write_note(&mut data, A5_E, SUPERSAW),
             _ => write_empty(&mut data),
         }
     }
