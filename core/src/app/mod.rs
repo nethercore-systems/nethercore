@@ -8,11 +8,14 @@ pub mod debug;
 pub mod error_parsing;
 pub mod event_loop;
 pub mod input;
+pub mod player;
 pub mod preview;
 pub mod session;
-pub mod standalone;
 pub mod types;
 pub mod ui;
+
+// Backwards compatibility alias
+pub use player as standalone;
 
 pub use config::Config;
 pub use debug::{calculate_fps, render_debug_overlay, update_frame_times};
