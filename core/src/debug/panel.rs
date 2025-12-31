@@ -252,9 +252,10 @@ impl DebugPanel {
                 }
                 TreeNode::Action(idx) => {
                     if let Some(reg_action) = registry.actions.get(*idx)
-                        && let Some(request) = self.render_action(ui, *idx, reg_action) {
-                            action_request = Some(request);
-                        }
+                        && let Some(request) = self.render_action(ui, *idx, reg_action)
+                    {
+                        action_request = Some(request);
+                    }
                 }
             }
         }

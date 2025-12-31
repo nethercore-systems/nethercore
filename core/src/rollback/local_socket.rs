@@ -290,11 +290,12 @@ impl LocalSocket {
         // This doesn't actually send data, just determines the route
         if let Ok(socket) = UdpSocket::bind("0.0.0.0:0")
             && socket.connect("8.8.8.8:80").is_ok()
-                && let Ok(addr) = socket.local_addr()
-                    && let IpAddr::V4(ipv4) = addr.ip()
-                        && !ipv4.is_loopback() {
-                            ips.push(ipv4.to_string());
-                        }
+            && let Ok(addr) = socket.local_addr()
+            && let IpAddr::V4(ipv4) = addr.ip()
+            && !ipv4.is_loopback()
+        {
+            ips.push(ipv4.to_string());
+        }
 
         // Also include localhost for local testing
         ips.push(Ipv4Addr::LOCALHOST.to_string());

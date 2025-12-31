@@ -71,17 +71,19 @@ impl MultiplayerDialog {
         {
             // On Windows, parse ipconfig output
             if let Ok(output) = std::process::Command::new("ipconfig").output()
-                && let Ok(stdout) = String::from_utf8(output.stdout) {
-                    for line in stdout.lines() {
-                        if line.contains("IPv4")
-                            && let Some(ip) = line.split(':').nth(1) {
-                                let ip = ip.trim();
-                                if !ip.starts_with("127.") {
-                                    ips.push(ip.to_string());
-                                }
-                            }
+                && let Ok(stdout) = String::from_utf8(output.stdout)
+            {
+                for line in stdout.lines() {
+                    if line.contains("IPv4")
+                        && let Some(ip) = line.split(':').nth(1)
+                    {
+                        let ip = ip.trim();
+                        if !ip.starts_with("127.") {
+                            ips.push(ip.to_string());
+                        }
                     }
                 }
+            }
         }
 
         // Fallback if no IPs found

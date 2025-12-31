@@ -655,7 +655,12 @@ mod tests {
     #[test]
     fn test_extreme_values_roundtrip() {
         let input = BoneTransform {
-            rotation: [std::f32::consts::FRAC_1_SQRT_2, 0.0, std::f32::consts::FRAC_1_SQRT_2, 0.0], // 180° around [1,0,1]
+            rotation: [
+                std::f32::consts::FRAC_1_SQRT_2,
+                0.0,
+                std::f32::consts::FRAC_1_SQRT_2,
+                0.0,
+            ], // 180° around [1,0,1]
             position: [1000.0, -500.0, 0.001],
             scale: [0.5, 1.0, 2.5], // Non-uniform scale
         };

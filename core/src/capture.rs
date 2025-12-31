@@ -388,8 +388,6 @@ fn sanitize_filename(name: &str) -> String {
         .map(|c| {
             if c.is_alphanumeric() {
                 c.to_ascii_lowercase()
-            } else if c == ' ' || c == '-' {
-                '_'
             } else {
                 '_'
             }

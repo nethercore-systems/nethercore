@@ -215,8 +215,7 @@ fn generate_cube_nczxmesh(path: &Path) -> std::io::Result<()> {
     }
 
     // Convert OBJ -> nczxmesh using nether-export
-    nether_export::mesh::convert_obj(&obj_path, path, None)
-        .map_err(std::io::Error::other)
+    nether_export::mesh::convert_obj(&obj_path, path, None).map_err(std::io::Error::other)
 }
 
 /// Generate checkerboard.nczxtex from checkerboard.png using nether-export
@@ -228,8 +227,7 @@ fn generate_checkerboard_nczxtex(path: &Path) -> std::io::Result<()> {
     }
 
     // Convert PNG -> nczxtex using nether-export
-    nether_export::texture::convert_image(&png_path, path)
-        .map_err(std::io::Error::other)
+    nether_export::texture::convert_image(&png_path, path).map_err(std::io::Error::other)
 }
 
 /// Generate a soft, bouncy "boing" jump sound effect
@@ -240,8 +238,7 @@ fn generate_beep_wav(path: &Path) -> std::io::Result<()> {
         bits_per_sample: 16,
         sample_format: hound::SampleFormat::Int,
     };
-    let mut writer = hound::WavWriter::create(path, spec)
-        .map_err(std::io::Error::other)?;
+    let mut writer = hound::WavWriter::create(path, spec).map_err(std::io::Error::other)?;
 
     // Soft bouncy "boing" sound - like a spring or rubber band
     let duration_samples = 22050 / 5; // ~0.2 seconds
@@ -277,9 +274,7 @@ fn generate_beep_wav(path: &Path) -> std::io::Result<()> {
             .write_sample((sample * 10000.0) as i16)
             .map_err(std::io::Error::other)?;
     }
-    writer
-        .finalize()
-        .map_err(std::io::Error::other)?;
+    writer.finalize().map_err(std::io::Error::other)?;
     Ok(())
 }
 

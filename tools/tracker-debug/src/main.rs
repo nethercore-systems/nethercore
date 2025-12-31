@@ -78,34 +78,35 @@ fn main_loop(player: &Arc<Mutex<DebugPlayer>>, display: &mut Display) -> Result<
     loop {
         // Poll for keyboard input with timeout
         if event::poll(Duration::from_millis(16))?
-            && let Event::Key(key) = event::read()? {
-                // Only handle key press events (not release)
-                if key.kind != KeyEventKind::Press {
-                    continue;
-                }
-
-                let cmd = match key.code {
-                    KeyCode::Char(' ') => Some(PlayerCommand::TogglePause),
-                    KeyCode::Left => Some(PlayerCommand::SeekRow(-1)),
-                    KeyCode::Right => Some(PlayerCommand::SeekRow(1)),
-                    KeyCode::Up => Some(PlayerCommand::SeekPattern(-1)),
-                    KeyCode::Down => Some(PlayerCommand::SeekPattern(1)),
-                    KeyCode::Char('+') | KeyCode::Char('=') => Some(PlayerCommand::AdjustTempo(1)),
-                    KeyCode::Char('-') => Some(PlayerCommand::AdjustTempo(-1)),
-                    KeyCode::Char('v') | KeyCode::Char('V') => Some(PlayerCommand::ToggleVerbose),
-                    KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => {
-                        return Ok(());
-                    }
-                    KeyCode::Char(c) if c.is_ascii_digit() && c != '0' => {
-                        Some(PlayerCommand::ToggleMute(c.to_digit(10).unwrap() as u8 - 1))
-                    }
-                    _ => None,
-                };
-
-                if let Some(cmd) = cmd {
-                    player.lock().unwrap().handle_command(cmd);
-                }
+            && let Event::Key(key) = event::read()?
+        {
+            // Only handle key press events (not release)
+            if key.kind != KeyEventKind::Press {
+                continue;
             }
+
+            let cmd = match key.code {
+                KeyCode::Char(' ') => Some(PlayerCommand::TogglePause),
+                KeyCode::Left => Some(PlayerCommand::SeekRow(-1)),
+                KeyCode::Right => Some(PlayerCommand::SeekRow(1)),
+                KeyCode::Up => Some(PlayerCommand::SeekPattern(-1)),
+                KeyCode::Down => Some(PlayerCommand::SeekPattern(1)),
+                KeyCode::Char('+') | KeyCode::Char('=') => Some(PlayerCommand::AdjustTempo(1)),
+                KeyCode::Char('-') => Some(PlayerCommand::AdjustTempo(-1)),
+                KeyCode::Char('v') | KeyCode::Char('V') => Some(PlayerCommand::ToggleVerbose),
+                KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => {
+                    return Ok(());
+                }
+                KeyCode::Char(c) if c.is_ascii_digit() && c != '0' => {
+                    Some(PlayerCommand::ToggleMute(c.to_digit(10).unwrap() as u8 - 1))
+                }
+                _ => None,
+            };
+
+            if let Some(cmd) = cmd {
+                player.lock().unwrap().handle_command(cmd);
+            }
+        }
 
         // Update display
         let state = player.lock().unwrap().get_display_state();

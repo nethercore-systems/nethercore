@@ -1050,9 +1050,10 @@ impl TrackerEngine {
                     channel.volume_envelope_pos += 1;
                 }
                 if let Some((loop_start, loop_end)) = channel.volume_envelope_loop
-                    && channel.volume_envelope_pos >= loop_end {
-                        channel.volume_envelope_pos = loop_start;
-                    }
+                    && channel.volume_envelope_pos >= loop_end
+                {
+                    channel.volume_envelope_pos = loop_start;
+                }
             }
 
             // Panning envelope advancement
@@ -1066,9 +1067,10 @@ impl TrackerEngine {
                     channel.panning_envelope_pos += 1;
                 }
                 if let Some((loop_start, loop_end)) = channel.panning_envelope_loop
-                    && channel.panning_envelope_pos >= loop_end {
-                        channel.panning_envelope_pos = loop_start;
-                    }
+                    && channel.panning_envelope_pos >= loop_end
+                {
+                    channel.panning_envelope_pos = loop_start;
+                }
             }
 
             // Pitch envelope advancement (IT only)
@@ -1082,9 +1084,10 @@ impl TrackerEngine {
                     channel.pitch_envelope_pos += 1;
                 }
                 if let Some((loop_start, loop_end)) = channel.pitch_envelope_loop
-                    && channel.pitch_envelope_pos >= loop_end {
-                        channel.pitch_envelope_pos = loop_start;
-                    }
+                    && channel.pitch_envelope_pos >= loop_end
+                {
+                    channel.pitch_envelope_pos = loop_start;
+                }
             }
 
             // Filter envelope advancement (IT only)
@@ -1098,9 +1101,10 @@ impl TrackerEngine {
                     channel.filter_envelope_pos += 1;
                 }
                 if let Some((loop_start, loop_end)) = channel.filter_envelope_loop
-                    && channel.filter_envelope_pos >= loop_end {
-                        channel.filter_envelope_pos = loop_start;
-                    }
+                    && channel.filter_envelope_pos >= loop_end
+                {
+                    channel.filter_envelope_pos = loop_start;
+                }
             }
 
             // Volume fadeout after key-off
@@ -1177,10 +1181,12 @@ impl TrackerEngine {
                 let instr_idx = channel.instrument.saturating_sub(1) as usize;
                 if let Some(instr) = module.module.instruments.get(instr_idx)
                     && let Some(ref env) = instr.pitch_envelope
-                        && env.is_enabled() && !env.is_filter() {
-                            let env_val = env.value_at(channel.pitch_envelope_pos) as f32;
-                            channel.pitch_envelope_value = env_val;
-                        }
+                    && env.is_enabled()
+                    && !env.is_filter()
+                {
+                    let env_val = env.value_at(channel.pitch_envelope_pos) as f32;
+                    channel.pitch_envelope_value = env_val;
+                }
             }
 
             // Update filter envelope (IT only)
@@ -1188,11 +1194,12 @@ impl TrackerEngine {
                 let instr_idx = channel.instrument.saturating_sub(1) as usize;
                 if let Some(instr) = module.module.instruments.get(instr_idx)
                     && let Some(ref env) = instr.pitch_envelope
-                        && env.is_filter() {
-                            let env_val = env.value_at(channel.filter_envelope_pos) as f32;
-                            channel.filter_cutoff = (env_val / 64.0).clamp(0.0, 1.0);
-                            channel.filter_dirty = true;
-                        }
+                    && env.is_filter()
+                {
+                    let env_val = env.value_at(channel.filter_envelope_pos) as f32;
+                    channel.filter_cutoff = (env_val / 64.0).clamp(0.0, 1.0);
+                    channel.filter_dirty = true;
+                }
             }
 
             // Sample with interpolation
@@ -1210,10 +1217,11 @@ impl TrackerEngine {
                 let instr_idx = channel.instrument.saturating_sub(1) as usize;
                 if let Some(instr) = module.module.instruments.get(instr_idx)
                     && let Some(ref env) = instr.volume_envelope
-                        && env.is_enabled() {
-                            let env_val = env.value_at(channel.volume_envelope_pos) as f32 / 64.0;
-                            vol *= env_val;
-                        }
+                    && env.is_enabled()
+                {
+                    let env_val = env.value_at(channel.volume_envelope_pos) as f32 / 64.0;
+                    vol *= env_val;
+                }
             }
 
             if channel.key_off {
@@ -1241,10 +1249,11 @@ impl TrackerEngine {
                 let instr_idx = channel.instrument.saturating_sub(1) as usize;
                 if let Some(instr) = module.module.instruments.get(instr_idx)
                     && let Some(ref env) = instr.panning_envelope
-                        && env.is_enabled() {
-                            let env_val = env.value_at(channel.panning_envelope_pos) as f32;
-                            pan = (env_val - 32.0) / 32.0;
-                        }
+                    && env.is_enabled()
+                {
+                    let env_val = env.value_at(channel.panning_envelope_pos) as f32;
+                    pan = (env_val - 32.0) / 32.0;
+                }
             }
 
             if channel.panbrello_active && channel.panbrello_depth > 0 {
@@ -1318,21 +1327,24 @@ impl TrackerEngine {
                 let instr_idx = channel.instrument.saturating_sub(1) as usize;
                 if let Some(instr) = module.module.instruments.get(instr_idx)
                     && let Some(ref env) = instr.pitch_envelope
-                        && env.is_enabled() && !env.is_filter() {
-                            let env_val = env.value_at(channel.pitch_envelope_pos) as f32;
-                            channel.pitch_envelope_value = env_val;
-                        }
+                    && env.is_enabled()
+                    && !env.is_filter()
+                {
+                    let env_val = env.value_at(channel.pitch_envelope_pos) as f32;
+                    channel.pitch_envelope_value = env_val;
+                }
             }
 
             if channel.filter_envelope_enabled {
                 let instr_idx = channel.instrument.saturating_sub(1) as usize;
                 if let Some(instr) = module.module.instruments.get(instr_idx)
                     && let Some(ref env) = instr.pitch_envelope
-                        && env.is_filter() {
-                            let env_val = env.value_at(channel.filter_envelope_pos) as f32;
-                            channel.filter_cutoff = (env_val / 64.0).clamp(0.0, 1.0);
-                            channel.filter_dirty = true;
-                        }
+                    && env.is_filter()
+                {
+                    let env_val = env.value_at(channel.filter_envelope_pos) as f32;
+                    channel.filter_cutoff = (env_val / 64.0).clamp(0.0, 1.0);
+                    channel.filter_dirty = true;
+                }
             }
 
             let mut sample = sample_channel(channel, &sound.data, sample_rate);
@@ -1347,10 +1359,11 @@ impl TrackerEngine {
                 let instr_idx = channel.instrument.saturating_sub(1) as usize;
                 if let Some(instr) = module.module.instruments.get(instr_idx)
                     && let Some(ref env) = instr.volume_envelope
-                        && env.is_enabled() {
-                            let env_val = env.value_at(channel.volume_envelope_pos) as f32 / 64.0;
-                            vol *= env_val;
-                        }
+                    && env.is_enabled()
+                {
+                    let env_val = env.value_at(channel.volume_envelope_pos) as f32 / 64.0;
+                    vol *= env_val;
+                }
             }
 
             if channel.key_off {
@@ -1377,10 +1390,11 @@ impl TrackerEngine {
                 let instr_idx = channel.instrument.saturating_sub(1) as usize;
                 if let Some(instr) = module.module.instruments.get(instr_idx)
                     && let Some(ref env) = instr.panning_envelope
-                        && env.is_enabled() {
-                            let env_val = env.value_at(channel.panning_envelope_pos) as f32;
-                            pan = (env_val - 32.0) / 32.0;
-                        }
+                    && env.is_enabled()
+                {
+                    let env_val = env.value_at(channel.panning_envelope_pos) as f32;
+                    pan = (env_val - 32.0) / 32.0;
+                }
             }
 
             let (l, r) = apply_channel_pan(sample * vol, pan);

@@ -190,9 +190,10 @@ where
 
     fn handle_key_input(&mut self, event: KeyEvent) {
         if event.state == ElementState::Pressed
-            && let PhysicalKey::Code(KeyCode::Escape) = event.physical_key {
-                self.should_exit = true;
-            }
+            && let PhysicalKey::Code(KeyCode::Escape) = event.physical_key
+        {
+            self.should_exit = true;
+        }
     }
 
     fn render_ui(&mut self) {
@@ -303,9 +304,10 @@ where
         }
         if new_asset != self.selected_asset {
             if let Some(ref id) = new_asset
-                && let Some(viewer) = &mut self.viewer {
-                    viewer.select_asset(self.selected_category, id);
-                }
+                && let Some(viewer) = &mut self.viewer
+            {
+                viewer.select_asset(self.selected_category, id);
+            }
             self.selected_asset = new_asset;
         }
         if exit_requested {
@@ -443,16 +445,17 @@ where
 
         // Select initial asset if specified
         if let Some(asset) = &self.config.initial_asset
-            && let Some(viewer) = &mut self.viewer {
-                for cat in AssetCategory::all() {
-                    if viewer.asset_ids(*cat).contains(asset) {
-                        self.selected_category = *cat;
-                        self.selected_asset = Some(asset.clone());
-                        viewer.select_asset(*cat, asset);
-                        break;
-                    }
+            && let Some(viewer) = &mut self.viewer
+        {
+            for cat in AssetCategory::all() {
+                if viewer.asset_ids(*cat).contains(asset) {
+                    self.selected_category = *cat;
+                    self.selected_asset = Some(asset.clone());
+                    viewer.select_asset(*cat, asset);
+                    break;
                 }
             }
+        }
 
         tracing::info!("Preview mode loaded: {}", self.config.rom_path.display());
         Ok(())

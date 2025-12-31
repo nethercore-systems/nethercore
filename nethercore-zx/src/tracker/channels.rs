@@ -409,10 +409,8 @@ impl TrackerChannel {
                 .pitch_envelope
                 .as_ref()
                 .is_some_and(|e| e.is_enabled());
-            self.filter_envelope_enabled = instr
-                .pitch_envelope
-                .as_ref()
-                .is_some_and(|e| e.is_filter());
+            self.filter_envelope_enabled =
+                instr.pitch_envelope.as_ref().is_some_and(|e| e.is_filter());
         }
     }
 

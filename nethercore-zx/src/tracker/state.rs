@@ -63,9 +63,10 @@ impl RowStateCache {
     ) {
         // Evict oldest entry if at capacity (BTreeMap keeps entries sorted, so first is oldest by position)
         if self.cache.len() >= self.max_entries
-            && let Some(&key) = self.cache.keys().next() {
-                self.cache.remove(&key);
-            }
+            && let Some(&key) = self.cache.keys().next()
+        {
+            self.cache.remove(&key);
+        }
 
         self.cache.insert(
             (order, row),
