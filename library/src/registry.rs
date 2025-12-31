@@ -490,9 +490,7 @@ pub fn launch_player_with_options(
     tracing::info!("Launching player with options: {:?}", cmd);
 
     cmd.spawn().with_context(|| {
-        format!(
-            "Failed to launch player. Make sure it exists in the same directory as the library or in your PATH."
-        )
+        "Failed to launch player. Make sure it exists in the same directory as the library or in your PATH.".to_string()
     })?;
 
     Ok(())

@@ -138,11 +138,10 @@ fn parse_nethercore_url(path: &str) -> Option<DeepLinkAction> {
 /// Parse a query parameter value from a query string
 fn parse_query_param<T: std::str::FromStr>(query: &str, key: &str) -> Option<T> {
     for pair in query.split('&') {
-        if let Some((k, v)) = pair.split_once('=') {
-            if k == key {
+        if let Some((k, v)) = pair.split_once('=')
+            && k == key {
                 return v.parse().ok();
             }
-        }
     }
     None
 }

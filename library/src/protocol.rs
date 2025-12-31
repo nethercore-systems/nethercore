@@ -16,7 +16,7 @@ use std::path::PathBuf;
 pub fn is_registered() -> bool {
     #[cfg(target_os = "windows")]
     {
-        return windows::is_registered();
+        windows::is_registered()
     }
 
     #[cfg(target_os = "macos")]

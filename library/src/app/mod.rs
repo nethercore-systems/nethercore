@@ -326,11 +326,10 @@ impl eframe::App for App {
         }
 
         // Show multiplayer dialog if open
-        if let Some(ref mut dialog) = self.multiplayer_dialog {
-            if let Some(action) = dialog.show(ctx) {
+        if let Some(ref mut dialog) = self.multiplayer_dialog
+            && let Some(action) = dialog.show(ctx) {
                 ui_action = Some(action);
             }
-        }
 
         // Handle UI action
         if let Some(action) = ui_action {

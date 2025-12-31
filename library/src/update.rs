@@ -254,7 +254,7 @@ pub fn check_and_prompt_for_update(game: &LocalGame, data_dir: &Path) -> bool {
                         // Show success message
                         rfd::MessageDialog::new()
                             .set_title("Update Complete")
-                            .set_description(&format!(
+                            .set_description(format!(
                                 "{} has been updated to version {}",
                                 update.game_title, update.remote_version
                             ))
@@ -266,7 +266,7 @@ pub fn check_and_prompt_for_update(game: &LocalGame, data_dir: &Path) -> bool {
                         tracing::error!("Update download failed: {}", e);
                         rfd::MessageDialog::new()
                             .set_title("Update Failed")
-                            .set_description(&format!(
+                            .set_description(format!(
                                 "Failed to download update: {}\n\nThe game will launch with the current version.",
                                 e
                             ))
