@@ -46,7 +46,7 @@ fn blep_square(phase: f32, dt: f32) -> f32 {
 }
 
 /// Band-limited triangle (integrated square)
-fn blep_triangle(phase: f32, dt: f32) -> f32 {
+fn _blep_triangle(phase: f32, dt: f32) -> f32 {
     // Use a simple approximation that's still cleaner than naive
     let square = blep_square(phase, dt);
     // First-order integrator (leaky)
@@ -667,7 +667,7 @@ pub fn generate_harp_gliss() -> Vec<i16> {
     let mut phase = 0.0f32;
     let mut filter = BiquadLP::new(6000.0, 0.5);
 
-    let dt = freq / SAMPLE_RATE;
+    let _dt = freq / SAMPLE_RATE;
 
     for i in 0..samples {
         let t = i as f32 / SAMPLE_RATE;

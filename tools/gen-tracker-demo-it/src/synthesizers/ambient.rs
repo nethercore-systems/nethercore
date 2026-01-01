@@ -13,7 +13,7 @@ const TWO_PI: f32 = 2.0 * PI;
 // ============================================================================
 
 /// Soft saturation
-fn soft_saturate(x: f32) -> f32 {
+fn _soft_saturate(x: f32) -> f32 {
     x.tanh()
 }
 

@@ -1744,7 +1744,7 @@ path = "assets/run.nczxanim"
     #[test]
     fn test_hash_collision_resistance() {
         // Generate multiple different samples and verify no collisions
-        let mut hashes = hashbrown::HashSet::new();
+        let mut hashes = std::collections::HashSet::new();
 
         for i in 0..100 {
             let data: Vec<i16> = vec![i as i16; 10];

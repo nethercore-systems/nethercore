@@ -657,14 +657,14 @@ pub fn unpack_unorm8(value: u8) -> f32 {
 
 /// Pack an f32 normalized value [-1.0, 1.0] to i16 snorm16 [-32767, 32767]
 #[inline]
-#[allow(dead_code)]
+#[allow(dead_code)] // Used in tests
 pub fn pack_snorm16(value: f32) -> i16 {
     (value.clamp(-1.0, 1.0) * 32767.0).round() as i16
 }
 
 /// Unpack snorm16 [-32767, 32767] to f32 [-1.0, 1.0]
 #[inline]
-#[allow(dead_code)]
+#[allow(dead_code)] // Reserved for future use
 pub fn unpack_snorm16(value: i16) -> f32 {
     value as f32 / 32767.0
 }

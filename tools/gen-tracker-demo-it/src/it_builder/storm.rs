@@ -14,38 +14,38 @@ use nether_it::{ItFlags, ItNote, ItWriter};
 
 // Octave 1 (sub bass range)
 const F1: u8 = 17;
-const GB1: u8 = 18;
-const AB1: u8 = 20;
-const BB1: u8 = 22;
+const _GB1: u8 = 18;
+const _AB1: u8 = 20;
+const _BB1: u8 = 22;
 const C2: u8 = 24;
 const DB1: u8 = 13;
 const EB1: u8 = 15;
 
 // Octave 2 (main bass range)
 const F2: u8 = 29;
-const GB2: u8 = 30;
-const AB2: u8 = 32;
-const BB2: u8 = 34;
+const _GB2: u8 = 30;
+const _AB2: u8 = 32;
+const _BB2: u8 = 34;
 const C3: u8 = 36;
 const DB2: u8 = 25;
 const EB2: u8 = 27;
 
 // Octave 3 (upper bass / pad range)
 const F3: u8 = 41;
-const GB3: u8 = 42;
+const _GB3: u8 = 42;
 const AB3: u8 = 44;
-const BB3: u8 = 46;
-const C4: u8 = 48;
+const _BB3: u8 = 46;
+const _C4: u8 = 48;
 const DB3: u8 = 37;
-const EB3: u8 = 39;
+const _EB3: u8 = 39;
 
 // Octave 4 (lead range)
 const F4: u8 = 53;
-const GB4: u8 = 54;
+const _GB4: u8 = 54;
 const AB4: u8 = 56;
-const BB4: u8 = 58;
+const _BB4: u8 = 58;
 const C5: u8 = 60;
-const DB4: u8 = 49;
+const _DB4: u8 = 49;
 const EB4: u8 = 51;
 
 // Octave 5 (high lead range)

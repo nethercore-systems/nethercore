@@ -10,7 +10,7 @@ pub mod common;
 pub mod dnb;
 pub mod orchestral;
 
-pub use common::{apply_fades, SAMPLE_RATE};
+// Note: Common utilities are imported directly where needed
 
 // Re-export ambient instrument generators
 pub use ambient::{

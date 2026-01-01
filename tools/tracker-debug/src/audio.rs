@@ -11,7 +11,7 @@ use crate::player::DebugPlayer;
 /// Audio player that renders from a shared DebugPlayer
 pub struct AudioPlayer {
     _stream: cpal::Stream,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Stored for potential future use
     sample_rate: u32,
 }
 

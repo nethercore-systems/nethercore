@@ -360,7 +360,7 @@ impl<'a> BitReader<'a> {
 ///
 /// Note: This is optional for the writer - we can also write uncompressed samples.
 /// Currently unused but available for future optimization.
-#[allow(dead_code)]
+#[allow(dead_code)] // Used in tests
 pub fn compress_it215_8bit(samples: &[i8]) -> Vec<u8> {
     // For simplicity, we'll implement a basic compression that works
     // but may not be optimal. The decompression is what matters most.
@@ -385,7 +385,6 @@ pub fn compress_it215_8bit(samples: &[i8]) -> Vec<u8> {
 }
 
 /// Compress a single 8-bit block
-#[allow(dead_code)]
 fn compress_block_8bit(samples: &[i8], writer: &mut BitWriter) {
     let mut last_value: i8 = 0;
 
@@ -407,7 +406,7 @@ fn compress_block_8bit(samples: &[i8], writer: &mut BitWriter) {
 
 /// Compress 16-bit sample data using IT215 algorithm
 /// Currently unused but available for future optimization.
-#[allow(dead_code)]
+#[allow(dead_code)] // Used in tests
 pub fn compress_it215_16bit(samples: &[i16]) -> Vec<u8> {
     let mut output = Vec::new();
     let mut writer = BitWriter::new();
@@ -428,7 +427,6 @@ pub fn compress_it215_16bit(samples: &[i16]) -> Vec<u8> {
 }
 
 /// Compress a single 16-bit block
-#[allow(dead_code)]
 fn compress_block_16bit(samples: &[i16], writer: &mut BitWriter) {
     let mut last_value: i16 = 0;
 
@@ -448,14 +446,14 @@ fn compress_block_16bit(samples: &[i16], writer: &mut BitWriter) {
 }
 
 /// Bit writer for compression
-#[allow(dead_code)]
+#[allow(dead_code)] // Used by compress functions which are used in tests
 struct BitWriter {
     data: Vec<u8>,
     current_byte: u8,
     bit_pos: u8,
 }
 
-#[allow(dead_code)]
+#[allow(dead_code)] // Used by compress functions which are used in tests
 impl BitWriter {
     fn new() -> Self {
         Self {

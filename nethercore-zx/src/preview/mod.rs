@@ -145,8 +145,7 @@ pub fn run(config: PreviewConfig) -> Result<()> {
 }
 
 /// Parse an asset path like "textures/player" into (category, id)
-#[allow(dead_code)]
-fn parse_asset_path(path: &str) -> Option<(AssetCategory, String)> {
+fn _parse_asset_path(path: &str) -> Option<(AssetCategory, String)> {
     let parts: Vec<&str> = path.splitn(2, '/').collect();
     if parts.len() != 2 {
         return None;

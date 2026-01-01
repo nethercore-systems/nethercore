@@ -765,8 +765,7 @@ impl ZXAssetViewer {
 }
 
 // Convert between local and core AssetCategory
-#[allow(dead_code)]
-fn to_core_category(cat: AssetCategory) -> CoreAssetCategory {
+fn _to_core_category(cat: AssetCategory) -> CoreAssetCategory {
     match cat {
         AssetCategory::Textures => CoreAssetCategory::Textures,
         AssetCategory::Meshes => CoreAssetCategory::Meshes,

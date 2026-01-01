@@ -41,7 +41,7 @@ pub fn write_empty(data: &mut Vec<u8>) {
 /// Helper to write a note with volume and effect (e.g., note-cut)
 /// effect_type: 0x0C = note cut (ECx), 0x0F = set speed, etc.
 /// effect_param: parameter for the effect (e.g., tick to cut at)
-pub fn write_note_vol_fx(
+pub fn _write_note_vol_fx(
     data: &mut Vec<u8>,
     note: u8,
     instrument: u8,

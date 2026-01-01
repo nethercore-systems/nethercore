@@ -11,7 +11,6 @@
 
 mod it_builder;
 mod synthesizers;
-mod wav_writer;
 
 use gen_tracker_common::write_wav;
 use std::fs;
