@@ -5,7 +5,29 @@
 //! - Processing and executing draw commands
 //! - Managing render passes and GPU state
 
+use std::hash::{Hash, Hasher};
+
 use glam::Mat4;
+
+/// Key for detecting when frame bind group needs recreation.
+/// When any buffer capacity or render mode changes, the bind group must be recreated.
+#[derive(Hash, PartialEq, Eq)]
+struct BindGroupKey {
+    unified_transforms_capacity: usize,
+    unified_animation_capacity: usize,
+    shading_state_capacity: usize,
+    mvp_indices_capacity: usize,
+    render_mode: u8,
+    quad_instance_capacity: u64,
+}
+
+impl BindGroupKey {
+    fn hash_value(&self) -> u64 {
+        let mut hasher = xxhash_rust::xxh3::Xxh3::new();
+        self.hash(&mut hasher);
+        hasher.finish()
+    }
+}
 
 use super::ZXGraphics;
 use super::command_buffer::{BufferSource, CommandSortKey, VRPCommand};
@@ -371,21 +393,15 @@ impl ZXGraphics {
 
             // Compute hash based on buffer capacities and render mode
             // When any capacity changes, buffer is recreated and bind group must be recreated
-            let bind_group_hash = {
-                use std::hash::{Hash, Hasher};
-                let mut hasher = std::collections::hash_map::DefaultHasher::new();
-                // Unified buffer capacities
-                self.unified_transforms_capacity.hash(&mut hasher);
-                self.unified_animation_capacity.hash(&mut hasher);
-                self.shading_state_capacity.hash(&mut hasher);
-                self.mvp_indices_capacity.hash(&mut hasher);
-                self.current_render_mode.hash(&mut hasher);
-                // Include quad instance buffer capacity
-                self.buffer_manager
-                    .quad_instance_capacity()
-                    .hash(&mut hasher);
-                hasher.finish()
-            };
+            let bind_group_hash = BindGroupKey {
+                unified_transforms_capacity: self.unified_transforms_capacity,
+                unified_animation_capacity: self.unified_animation_capacity,
+                shading_state_capacity: self.shading_state_capacity,
+                mvp_indices_capacity: self.mvp_indices_capacity,
+                render_mode: self.current_render_mode,
+                quad_instance_capacity: self.buffer_manager.quad_instance_capacity(),
+            }
+            .hash_value();
 
             // Check if cached bind group is still valid
             if let Some(ref cached) = self.cached_frame_bind_group {

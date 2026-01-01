@@ -53,6 +53,7 @@ mod init;
 mod manifest;
 mod pack;
 mod preview;
+mod replay;
 mod run;
 
 use anyhow::Result;
@@ -87,6 +88,12 @@ enum Commands {
 
     /// Browse ROM assets without running the game
     Preview(preview::PreviewArgs),
+
+    /// Replay commands: record, play, execute scripts
+    Replay {
+        #[command(subcommand)]
+        action: replay::ReplayAction,
+    },
 }
 
 fn main() -> Result<()> {
@@ -102,5 +109,6 @@ fn main() -> Result<()> {
         Commands::Build(args) => build::execute(args),
         Commands::Run(args) => run::execute(args),
         Commands::Preview(args) => preview::execute(args),
+        Commands::Replay { action } => replay::execute(action),
     }
 }

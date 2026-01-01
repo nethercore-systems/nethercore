@@ -275,12 +275,6 @@ impl ConsoleResourceManager for ZResourceManager {
                 graphics.upload_static_inverse_bind(&all_inverse_bind);
                 // Sync inverse_bind_end to state for offset computation
                 state.inverse_bind_end = graphics.inverse_bind_end as u32;
-                tracing::info!(
-                    "Uploaded {} skeletons ({} total inverse bind matrices, inverse_bind_end={})",
-                    state.skeletons.iter().filter(|s| s.bone_count > 0).count(),
-                    all_inverse_bind.len(),
-                    state.inverse_bind_end
-                );
             }
         }
 
@@ -337,12 +331,6 @@ impl ConsoleResourceManager for ZResourceManager {
                 graphics.upload_static_keyframes(&all_keyframes);
                 // Sync animation_static_end to state for offset computation
                 state.animation_static_end = graphics.animation_static_end as u32;
-                tracing::info!(
-                    "Uploaded {} keyframe collections ({} total bone matrices, animation_static_end={})",
-                    state.keyframes.iter().filter(|k| k.frame_count > 0).count(),
-                    all_keyframes.len(),
-                    state.animation_static_end
-                );
             } else {
                 // No keyframes loaded - animation_static_end = inverse_bind_end
                 // IMPORTANT: Must sync to graphics.animation_static_end so frame.rs uploads

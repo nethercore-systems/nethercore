@@ -3,7 +3,7 @@
 //! Functions for loading and drawing retained meshes.
 
 use anyhow::Result;
-use tracing::{info, warn};
+use tracing::warn;
 use wasmtime::{Caller, Linker};
 
 use super::helpers::{
@@ -91,11 +91,6 @@ fn load_mesh(
         vertex_data,
         index_data: None,
     });
-
-    info!(
-        "load_mesh: created mesh {} with {} vertices, format {}",
-        handle, vertex_count, format
-    );
 
     handle
 }
@@ -190,11 +185,6 @@ fn load_mesh_indexed(
         index_data: Some(index_data),
     });
 
-    info!(
-        "{}: created mesh {} with {} vertices, {} indices, format {}",
-        FN_NAME, handle, vertex_count, index_count, format
-    );
-
     handle
 }
 
@@ -253,11 +243,6 @@ fn load_mesh_packed(
         vertex_data,
         index_data: None,
     });
-
-    info!(
-        "{}: created mesh {} with {} vertices, format {}, {} bytes",
-        FN_NAME, handle, vertex_count, format, byte_size
-    );
 
     handle
 }
@@ -347,11 +332,6 @@ fn load_mesh_indexed_packed(
         vertex_data,
         index_data: Some(index_data),
     });
-
-    info!(
-        "{}: created mesh {} with {} vertices, {} indices, format {}, {} bytes",
-        FN_NAME, handle, vertex_count, index_count, format, vertex_byte_size
-    );
 
     handle
 }

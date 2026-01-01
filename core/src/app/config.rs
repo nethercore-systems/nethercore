@@ -272,7 +272,7 @@ pub fn parse_key_name(s: &str) -> Option<&'static str> {
 /// Checks all configurable keys against reserved system keys and each other.
 /// Returns a list of warning messages for any conflicts found.
 pub fn validate_keybindings(config: &Config) -> Vec<String> {
-    use std::collections::HashSet;
+    use hashbrown::HashSet;
     let mut warnings = Vec::new();
     let mut used_keys: HashSet<String> = HashSet::new();
 

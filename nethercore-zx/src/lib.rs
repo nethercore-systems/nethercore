@@ -13,6 +13,7 @@ pub mod library;
 pub mod player;
 pub mod preview;
 pub mod procedural;
+pub mod replay;
 pub mod resource_manager;
 mod shader_gen;
 pub mod state;

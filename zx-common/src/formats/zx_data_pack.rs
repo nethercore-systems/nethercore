@@ -394,23 +394,15 @@ impl PackedMesh {
     }
 
     /// Get the stride (bytes per vertex) for this format
+    ///
+    /// Returns the packed stride matching the GPU vertex layout:
+    /// - Position: f16x4 = 8 bytes
+    /// - UV: unorm16x2 = 4 bytes
+    /// - Color: unorm8x4 = 4 bytes
+    /// - Normal: octahedral u32 = 4 bytes
+    /// - Skinning: u8x4 + unorm8x4 = 8 bytes
     pub fn stride(&self) -> usize {
-        let mut stride = 12; // Position: 3 * f32
-
-        if self.has_uv() {
-            stride += 8; // UV: 2 * f32
-        }
-        if self.has_color() {
-            stride += 4; // Color: 4 * u8 (RGBA)
-        }
-        if self.has_normal() {
-            stride += 12; // Normal: 3 * f32
-        }
-        if self.is_skinned() {
-            stride += 8; // Bone indices: 4 * u8 + bone weights: 4 * u8
-        }
-
-        stride
+        crate::vertex_stride_packed(self.format) as usize
     }
 }
 
@@ -735,7 +727,7 @@ mod tests {
 
     #[test]
     fn test_mesh_stride() {
-        // Position only
+        // Position only (f16x4 = 8 bytes)
         let pos_only = PackedMesh {
             id: "test".to_string(),
             format: 0,
@@ -744,9 +736,9 @@ mod tests {
             vertex_data: vec![],
             index_data: vec![],
         };
-        assert_eq!(pos_only.stride(), 12);
+        assert_eq!(pos_only.stride(), 8);
 
-        // Position + UV + Normal
+        // Position + UV + Normal (f16x4 + unorm16x2 + octahedral = 8 + 4 + 4 = 16)
         let pos_uv_norm = PackedMesh {
             id: "test".to_string(),
             format: 0b0101, // UV + Normal
@@ -755,9 +747,9 @@ mod tests {
             vertex_data: vec![],
             index_data: vec![],
         };
-        assert_eq!(pos_uv_norm.stride(), 12 + 8 + 12);
+        assert_eq!(pos_uv_norm.stride(), 16);
 
-        // Full skinned
+        // Full skinned (f16x4 + unorm16x2 + unorm8x4 + octahedral + u8x4 + unorm8x4 = 8+4+4+4+4+4 = 28)
         let skinned = PackedMesh {
             id: "test".to_string(),
             format: 0b1111, // All flags
@@ -766,7 +758,7 @@ mod tests {
             vertex_data: vec![],
             index_data: vec![],
         };
-        assert_eq!(skinned.stride(), 12 + 8 + 4 + 12 + 8);
+        assert_eq!(skinned.stride(), 28);
     }
 
     #[test]

@@ -94,6 +94,9 @@ impl GrowableBuffer {
     ///
     /// Returns the byte offset where data was written.
     /// Panics if there's not enough capacity (call ensure_capacity first).
+    ///
+    /// **Alignment**: After writing, `self.used` is aligned to the next 4-byte boundary
+    /// to satisfy wgpu's COPY_BUFFER_ALIGNMENT requirement for subsequent writes.
     pub fn write(&mut self, queue: &wgpu::Queue, data: &[u8]) -> u64 {
         let offset = self.used;
         assert!(
@@ -105,7 +108,12 @@ impl GrowableBuffer {
         );
 
         queue.write_buffer(&self.buffer, offset, data);
-        self.used += data.len() as u64;
+
+        // Align to next 4-byte boundary for wgpu COPY_BUFFER_ALIGNMENT
+        // This prevents misalignment when multiple meshes are packed together
+        let bytes_written = data.len() as u64;
+        let aligned_size = (bytes_written + 3) & !3;
+        self.used += aligned_size;
 
         offset
     }

@@ -81,8 +81,5 @@ pub fn run(config: PlayerConfig) -> Result<()> {
         )
         .init();
 
-    tracing::info!("Starting Nethercore ZX player");
-    tracing::info!("ROM: {}", config.rom_path.display());
-
     run_standalone::<NethercoreZX, ZXRomLoader>(config)
 }

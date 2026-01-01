@@ -74,6 +74,9 @@ open = { workspace = true }
 # Performance - faster HashMap/HashSet
 hashbrown = { workspace = true }
 
+# Fast hashing
+xxhash-rust = { workspace = true }
+
 # Screenshot/GIF capture
 image = { workspace = true }
 gif = "0.13"

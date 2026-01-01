@@ -19,6 +19,7 @@ pub mod ffi;
 #[cfg(test)]
 mod integration;
 pub mod library;
+pub mod replay;
 pub mod rollback;
 pub mod runner;
 pub mod runtime;

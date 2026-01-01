@@ -65,6 +65,11 @@ egui-wgpu = { workspace = true }     # egui wgpu renderer
 egui-winit = { workspace = true }    # egui winit integration
 serde_json = { workspace = true }    # JSON for game manifests
 
+# Replay system
+lz4_flex = { workspace = true }      # Compression for replay data
+byteorder = { workspace = true }     # Byte order handling for binary format
+bitflags = { workspace = true }      # Replay flags
+
 # Screen capture dependencies
 wgpu = { workspace = true }          # GPU texture readback
 image = { workspace = true }         # PNG encoding (for reading)

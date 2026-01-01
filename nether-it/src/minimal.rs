@@ -224,7 +224,7 @@ fn pack_note_sample_table(output: &mut Vec<u8>, table: &[(u8, u8); 120]) {
 
     // Check if sparse (most entries are uniform with few exceptions)
     // Find the most common (note_offset, sample) pair
-    let mut counts: std::collections::HashMap<(i8, u8), u32> = std::collections::HashMap::new();
+    let mut counts: hashbrown::HashMap<(i8, u8), u32> = hashbrown::HashMap::new();
     for (i, (note, sample)) in table.iter().enumerate() {
         let offset = *note as i8 - i as i8;
         *counts.entry((offset, *sample)).or_insert(0) += 1;

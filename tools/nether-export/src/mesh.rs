@@ -1,6 +1,14 @@
 //! Mesh converter (glTF/OBJ -> .nczmesh)
 
 use anyhow::{bail, Context, Result};
+
+/// Maximum index value for u16 indices (65535)
+/// Meshes with more vertices must be split before export.
+const MAX_INDEX_VALUE: u32 = u16::MAX as u32;
+
+/// Maximum joint index for u8 storage (255)
+/// Skeletons with more bones are not supported.
+const MAX_JOINT_INDEX: u16 = u8::MAX as u16;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter};
 use std::path::Path;
@@ -110,6 +118,16 @@ pub fn convert_obj_to_memory(input: &Path) -> Result<ConvertedMesh> {
         bail!("No vertices found in OBJ file");
     }
 
+    // Validate vertex count fits in u16 index range
+    if final_positions.len() > MAX_INDEX_VALUE as usize + 1 {
+        bail!(
+            "OBJ mesh has {} vertices, exceeds maximum {} for u16 indices. \
+            Split the mesh into smaller parts.",
+            final_positions.len(),
+            MAX_INDEX_VALUE + 1
+        );
+    }
+
     // Determine format
     let has_uvs = !final_uvs.is_empty() && final_uvs.len() == final_positions.len();
     let has_normals = !final_normals.is_empty() && final_normals.len() == final_positions.len();
@@ -185,11 +203,31 @@ pub fn convert_gltf_to_memory(input: &Path) -> Result<ConvertedMesh> {
         .map(|iter| iter.into_rgba_f32().collect());
 
     // Skinning data (optional) - JOINTS_0 and WEIGHTS_0
-    let joints: Option<Vec<[u8; 4]>> = reader.read_joints(0).map(|iter| {
-        iter.into_u16()
-            .map(|j| [j[0] as u8, j[1] as u8, j[2] as u8, j[3] as u8])
-            .collect()
-    });
+    let joints: Option<Vec<[u8; 4]>> = if let Some(iter) = reader.read_joints(0) {
+        let u16_joints: Vec<[u16; 4]> = iter.into_u16().collect();
+
+        // Validate joint indices fit in u8 (max 256 bones)
+        for (vertex_idx, joint_set) in u16_joints.iter().enumerate() {
+            for (component, &joint_idx) in joint_set.iter().enumerate() {
+                if joint_idx > MAX_JOINT_INDEX {
+                    bail!(
+                        "Joint index {} at vertex {} component {} exceeds maximum {} for u8 storage. \
+                        Reduce skeleton bone count to ≤256.",
+                        joint_idx, vertex_idx, component, MAX_JOINT_INDEX
+                    );
+                }
+            }
+        }
+
+        Some(
+            u16_joints
+                .into_iter()
+                .map(|j| [j[0] as u8, j[1] as u8, j[2] as u8, j[3] as u8])
+                .collect(),
+        )
+    } else {
+        None
+    };
     let weights: Option<Vec<[f32; 4]>> =
         reader.read_weights(0).map(|iter| iter.into_f32().collect());
 
@@ -207,11 +245,27 @@ pub fn convert_gltf_to_memory(input: &Path) -> Result<ConvertedMesh> {
         _ => None,
     };
 
-    // Indices (optional)
-    let indices: Vec<u16> = reader
-        .read_indices()
-        .map(|iter| iter.into_u32().map(|i| i as u16).collect())
-        .unwrap_or_default();
+    // Indices (optional) - validate before truncating to u16
+    let indices: Vec<u16> = if let Some(iter) = reader.read_indices() {
+        let u32_indices: Vec<u32> = iter.into_u32().collect();
+
+        // Validate all indices fit in u16
+        if let Some((idx, &value)) = u32_indices
+            .iter()
+            .enumerate()
+            .find(|(_, &v)| v > MAX_INDEX_VALUE)
+        {
+            bail!(
+                "Index {} at position {} exceeds maximum {} for u16 indices. \
+                The mesh has too many vertices (>65536). Split the mesh into smaller parts.",
+                value, idx, MAX_INDEX_VALUE
+            );
+        }
+
+        u32_indices.into_iter().map(|i| i as u16).collect()
+    } else {
+        Vec::new()
+    };
 
     // Determine format
     let mut format = 0u8;
@@ -294,10 +348,27 @@ pub fn convert_gltf(input: &Path, output: &Path, format_override: Option<&str>) 
         fmt
     };
 
-    // Indices (optional)
-    let indices: Option<Vec<u16>> = reader
-        .read_indices()
-        .map(|iter| iter.into_u32().map(|i| i as u16).collect());
+    // Indices (optional) - validate before truncating to u16
+    let indices: Option<Vec<u16>> = if let Some(iter) = reader.read_indices() {
+        let u32_indices: Vec<u32> = iter.into_u32().collect();
+
+        // Validate all indices fit in u16
+        if let Some((idx, &value)) = u32_indices
+            .iter()
+            .enumerate()
+            .find(|(_, &v)| v > MAX_INDEX_VALUE)
+        {
+            bail!(
+                "Index {} at position {} exceeds maximum {} for u16 indices. \
+                The mesh has too many vertices (>65536). Split the mesh into smaller parts.",
+                value, idx, MAX_INDEX_VALUE
+            );
+        }
+
+        Some(u32_indices.into_iter().map(|i| i as u16).collect())
+    } else {
+        None
+    };
 
     // Pack vertex data
     let vertex_data = pack_vertices(&positions, uvs.as_deref(), normals.as_deref(), format);
@@ -504,6 +575,16 @@ pub fn convert_obj(input: &Path, output: &Path, format_override: Option<&str>) -
 
     if final_positions.is_empty() {
         bail!("No vertices found in OBJ file");
+    }
+
+    // Validate vertex count fits in u16 index range
+    if final_positions.len() > MAX_INDEX_VALUE as usize + 1 {
+        bail!(
+            "OBJ mesh has {} vertices, exceeds maximum {} for u16 indices. \
+            Split the mesh into smaller parts.",
+            final_positions.len(),
+            MAX_INDEX_VALUE + 1
+        );
     }
 
     // Determine format

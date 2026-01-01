@@ -30,6 +30,7 @@ anyhow = { workspace = true }
 # Serialization
 toml = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 bitcode = { workspace = true }
 
 # Hashing and binary conversion

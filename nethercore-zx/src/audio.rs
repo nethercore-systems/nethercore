@@ -20,7 +20,7 @@ use ringbuf::{
     HeapRb,
     traits::{Consumer, Producer, Split},
 };
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, warn};
 
 use crate::state::{AudioPlaybackState, ChannelState, TrackerState, tracker_flags};
 use crate::tracker::TrackerEngine;
@@ -67,12 +67,6 @@ impl AudioOutput {
             .map_err(|e| format!("Failed to get default output config: {}", e))?;
 
         let sample_rate = config.sample_rate().0;
-
-        info!(
-            "Audio output: {} channels, {} Hz",
-            config.channels(),
-            sample_rate
-        );
 
         // Create ring buffer
         let ring = HeapRb::<f32>::new(RING_BUFFER_SIZE);

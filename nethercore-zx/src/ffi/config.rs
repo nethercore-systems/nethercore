@@ -57,8 +57,6 @@ fn set_tick_rate(mut caller: Caller<'_, ZXGameContext>, rate: u32) -> Result<()>
     state.init_config.tick_rate_index = rate;
     state.init_config.modified = true;
 
-    let fps = TICK_RATES[rate as usize];
-    info!("Tick rate set to {} fps (index {})", fps, rate);
     Ok(())
 }
 
@@ -89,17 +87,6 @@ fn set_clear_color(mut caller: Caller<'_, ZXGameContext>, color: u32) -> Result<
     state.init_config.clear_color = color;
     state.init_config.modified = true;
 
-    let r = (color >> 24) & 0xFF;
-    let g = (color >> 16) & 0xFF;
-    let b = (color >> 8) & 0xFF;
-    let a = color & 0xFF;
-    info!(
-        "Clear color set to rgba({}, {}, {}, {})",
-        r,
-        g,
-        b,
-        a as f32 / 255.0
-    );
     Ok(())
 }
 

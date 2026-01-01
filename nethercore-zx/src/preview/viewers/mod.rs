@@ -5,6 +5,8 @@
 
 use std::sync::Arc;
 
+use half::f16;
+
 use crate::audio::{AudioOutput, OUTPUT_SAMPLE_RATE, Sound};
 use crate::console::NethercoreZX;
 use crate::graphics::ZXGraphics;
@@ -1072,29 +1074,26 @@ impl CoreAssetViewer<NethercoreZX, ZXDataPack> for ZXAssetViewer {
                                     let stride = mesh.stride();
                                     for i in 0..3.min(mesh.vertex_count as usize) {
                                         let offset = i * stride;
-                                        if offset + 12 <= mesh.vertex_data.len() {
+                                        if offset + 8 <= mesh.vertex_data.len() {
                                             ui.collapsing(format!("Vertex {}", i), |ui| {
-                                                // Read position (first 12 bytes)
+                                                // Read position (first 8 bytes: f16x4)
                                                 let pos_bytes =
-                                                    &mesh.vertex_data[offset..offset + 12];
-                                                let x = f32::from_le_bytes([
+                                                    &mesh.vertex_data[offset..offset + 8];
+                                                let x = f16::from_le_bytes([
                                                     pos_bytes[0],
                                                     pos_bytes[1],
+                                                ])
+                                                .to_f32();
+                                                let y = f16::from_le_bytes([
                                                     pos_bytes[2],
                                                     pos_bytes[3],
-                                                ]);
-                                                let y = f32::from_le_bytes([
+                                                ])
+                                                .to_f32();
+                                                let z = f16::from_le_bytes([
                                                     pos_bytes[4],
                                                     pos_bytes[5],
-                                                    pos_bytes[6],
-                                                    pos_bytes[7],
-                                                ]);
-                                                let z = f32::from_le_bytes([
-                                                    pos_bytes[8],
-                                                    pos_bytes[9],
-                                                    pos_bytes[10],
-                                                    pos_bytes[11],
-                                                ]);
+                                                ])
+                                                .to_f32();
                                                 ui.code(format!(
                                                     "pos: ({:.3}, {:.3}, {:.3})",
                                                     x, y, z
