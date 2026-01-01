@@ -128,3 +128,9 @@ bitflags = "2.4"
 # Dev dependencies (used in multiple crates)
 tempfile = "3"
 wat = "1"
+
+# Release profile optimizations
+[profile.release]
+lto = "fat"         # Full link-time optimization (maximum optimization)
+strip = true        # Strip debug symbols to reduce binary size
+panic = "abort"     # Abort on panic (smaller binaries, no unwinding)

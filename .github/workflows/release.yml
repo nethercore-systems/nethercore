@@ -1,0 +1,181 @@
+name: Latest Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build - ${{ matrix.platform.name }}
+    runs-on: ${{ matrix.platform.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - name: Windows x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bin_ext: .exe
+            archive_name: nethercore-windows-x86_64.zip
+
+          - name: macOS x86_64
+            os: macos-latest
+            target: x86_64-apple-darwin
+            bin_ext: ''
+            archive_name: nethercore-macos-x86_64.tar.gz
+
+          - name: macOS aarch64
+            os: macos-latest
+            target: aarch64-apple-darwin
+            bin_ext: ''
+            archive_name: nethercore-macos-aarch64.tar.gz
+
+          - name: Linux x86_64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            bin_ext: ''
+            archive_name: nethercore-linux-x86_64.tar.gz
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform.target }}
+
+      - name: Install Linux dependencies
+        if: matrix.platform.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev \
+            libudev-dev \
+            libxkbcommon-dev \
+            libwayland-dev \
+            libxkbcommon-x11-0
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-registry-
+
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-index-
+
+      - name: Cache target directory
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-${{ matrix.platform.target }}-cargo-target-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.platform.target }}-cargo-target-
+
+      - name: Build release binaries
+        run: |
+          cargo build --release --target ${{ matrix.platform.target }} -p nethercore-library -p nether-cli
+
+      - name: Prepare release directory
+        shell: bash
+        run: |
+          mkdir -p release
+          cp target/${{ matrix.platform.target }}/release/nethercore${{ matrix.platform.bin_ext }} release/
+          cp target/${{ matrix.platform.target }}/release/nether${{ matrix.platform.bin_ext }} release/
+          cp LICENSE-MIT release/
+          cp LICENSE-APACHE release/
+          cp README.md release/
+
+      - name: Create archive (Windows)
+        if: matrix.platform.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path release\* -DestinationPath ${{ matrix.platform.archive_name }}
+
+      - name: Create archive (Unix)
+        if: matrix.platform.os != 'windows-latest'
+        shell: bash
+        run: |
+          tar -czf ${{ matrix.platform.archive_name }} -C release .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform.archive_name }}
+          path: ${{ matrix.platform.archive_name }}
+          retention-days: 1
+
+  release:
+    name: Create Latest Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          find artifacts -type f -name "*.zip" -o -name "*.tar.gz" | while read file; do
+            cp "$file" release-assets/
+          done
+          ls -lh release-assets/
+
+      - name: Get commit info
+        id: commit_info
+        run: |
+          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "commit_date=$(git log -1 --format=%cd --date=format:'%Y-%m-%d %H:%M')" >> $GITHUB_OUTPUT
+
+      - name: Create/Update Latest Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest Build
+          body: |
+            ## Latest Nethercore Build
+
+            **Commit:** ${{ steps.commit_info.outputs.sha_short }}
+            **Built:** ${{ steps.commit_info.outputs.commit_date }} UTC
+
+            ### Downloads
+
+            Choose the appropriate package for your platform:
+
+            - **Windows**: `nethercore-windows-x86_64.zip`
+            - **macOS (Intel)**: `nethercore-macos-x86_64.tar.gz`
+            - **macOS (Apple Silicon)**: `nethercore-macos-aarch64.tar.gz`
+            - **Linux**: `nethercore-linux-x86_64.tar.gz`
+
+            Each package contains:
+            - `nethercore` - The library app for browsing and playing games
+            - `nether` - CLI tool for building, packing, and running games
+
+            ---
+            *This is a rolling release that is updated automatically with each push to main.*
+          files: release-assets/*
+          prerelease: false
+          draft: false
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

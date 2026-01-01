@@ -2,6 +2,64 @@
 
 A fantasy console platform with built-in rollback netcode.
 
+## Installation
+
+### Pre-built Binaries (Recommended)
+
+Download the latest build for your platform from the [Releases page](https://github.com/nethercore-systems/nethercore/releases/latest):
+
+- **Windows**: `nethercore-windows-x86_64.zip`
+- **macOS (Intel)**: `nethercore-macos-x86_64.tar.gz`
+- **macOS (Apple Silicon)**: `nethercore-macos-aarch64.tar.gz`
+- **Linux**: `nethercore-linux-x86_64.tar.gz`
+
+Each package contains:
+- `nethercore` — Library app for browsing and playing games
+- `nether` — CLI tool for building, packing, and running games
+
+The "Latest" release is automatically updated with each push to main.
+
+**After extracting:**
+
+```bash
+# Add to PATH (recommended)
+# Linux/macOS
+export PATH="$PATH:/path/to/nethercore"
+
+# Windows
+# Add the extracted folder to your PATH environment variable
+
+# Or run directly
+./nethercore  # Launch library
+./nether --help  # CLI tool
+```
+
+### Build from Source
+
+If you prefer to build from source:
+
+```bash
+# Clone and build
+git clone https://github.com/nethercore-systems/nethercore
+cd nethercore
+cargo build --release
+
+# Binaries will be in target/release/
+```
+
+**To build and run the examples:**
+
+```bash
+# Add WASM target (needed for compiling games)
+rustup target add wasm32-unknown-unknown
+
+# Build all examples
+cargo xtask build-examples
+
+# Run the library to browse examples
+cargo run
+```
+
 ## Consoles
 
 | Console | Generation | Aesthetic | Status | Doc |
