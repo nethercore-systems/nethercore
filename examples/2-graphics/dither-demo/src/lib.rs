@@ -29,77 +29,10 @@ fn panic(_info: &PanicInfo) -> ! {
 // FFI Declarations
 // ============================================================================
 
-#[link(wasm_import_module = "env")]
-extern "C" {
-    // Configuration
-    fn set_clear_color(color: u32);
-    fn render_mode(mode: u32);
-
-    // Camera
-    fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
-    fn camera_fov(fov_degrees: f32);
-
-    // Input
-    fn button_pressed(player: u32, button: u32) -> u32;
-    fn left_stick_x(player: u32) -> f32;
-    fn left_stick_y(player: u32) -> f32;
-
-    // Procedural mesh generation
-    fn cube(size_x: f32, size_y: f32, size_z: f32) -> u32;
-    fn sphere(radius: f32, segments: u32, rings: u32) -> u32;
-    fn torus(major_radius: f32, minor_radius: f32, major_segments: u32, minor_segments: u32) -> u32;
-    fn plane(size_x: f32, size_z: f32, subdivisions_x: u32, subdivisions_z: u32) -> u32;
-
-    // Mesh drawing
-    fn draw_mesh(handle: u32);
-
-    // Transform
-    fn push_identity();
-    fn push_translate(x: f32, y: f32, z: f32);
-    fn push_rotate_x(angle_deg: f32);
-    fn push_rotate_y(angle_deg: f32);
-
-    // Render state
-    fn set_color(color: u32);
-    fn depth_test(enabled: u32);
-
-    // Dither transparency
-    fn uniform_alpha(level: u32);
-    fn dither_offset(x: u32, y: u32);
-
-    // Environment
-    fn env_gradient(
-        layer: u32,
-        zenith: u32,
-        sky_horizon: u32,
-        ground_horizon: u32,
-        nadir: u32,
-        rotation: f32,
-        shift: f32,
-    );
-    fn draw_env();
-
-    // Lighting
-    fn light_set(index: u32, x: f32, y: f32, z: f32);
-    fn light_color(index: u32, color: u32);
-    fn light_intensity(index: u32, intensity: f32);
-
-    // Time
-    fn elapsed_time() -> f32;
-
-    // 2D drawing for UI
-    fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
-
-    // Debug inspection
-    fn debug_group_begin(name: *const u8, name_len: u32);
-    fn debug_group_end();
-    fn debug_register_i32(name: *const u8, name_len: u32, ptr: *const i32);
-    fn debug_register_f32(name: *const u8, name_len: u32, ptr: *const f32);
-    fn debug_register_bool(name: *const u8, name_len: u32, ptr: *const u8);
-}
-
-// Button constants
-const BUTTON_A: u32 = 4;
+// Import the canonical FFI bindings
+#[path = "../../../../include/zx.rs"]
+mod ffi;
+use ffi::*;
 
 // ============================================================================
 // State
@@ -199,7 +132,7 @@ unsafe fn register_debug_values() {
 pub extern "C" fn update() {
     unsafe {
         // Toggle display mode with A button
-        if button_pressed(0, BUTTON_A) != 0 {
+        if button_pressed(0, button::A) != 0 {
             DISPLAY_MODE = if DISPLAY_MODE == 0 { 1 } else { 0 };
         }
 
@@ -385,24 +318,30 @@ unsafe fn render_single_mode() {
 /// Render UI text
 unsafe fn render_ui() {
     let title = "Dither Transparency Demo";
-    draw_text(title.as_ptr(), title.len() as u32, 10.0, 10.0, 24.0, 0xFFFFFFFF);
+    set_color(0xFFFFFFFF);
+        draw_text(title.as_ptr(), title.len() as u32, 10.0, 10.0, 24.0);
 
     if DISPLAY_MODE == 0 {
         // Comparison mode labels
         let left_label = "SAME OFFSETS";
-        draw_text(left_label.as_ptr(), left_label.len() as u32, 80.0, 420.0, 18.0, 0xFF8888FF);
+        set_color(0xFF8888FF);
+        draw_text(left_label.as_ptr(), left_label.len() as u32, 80.0, 420.0, 18.0);
 
         let right_label = "UNIQUE OFFSETS";
-        draw_text(right_label.as_ptr(), right_label.len() as u32, 440.0, 420.0, 18.0, 0x88FF88FF);
+        set_color(0x88FF88FF);
+        draw_text(right_label.as_ptr(), right_label.len() as u32, 440.0, 420.0, 18.0);
 
         let left_desc = "(pattern cancellation)";
-        draw_text(left_desc.as_ptr(), left_desc.len() as u32, 60.0, 445.0, 12.0, 0xAAAAFFFF);
+        set_color(0xAAAAFFFF);
+        draw_text(left_desc.as_ptr(), left_desc.len() as u32, 60.0, 445.0, 12.0);
 
         let right_desc = "(correct layering)";
-        draw_text(right_desc.as_ptr(), right_desc.len() as u32, 450.0, 445.0, 12.0, 0xAAFFAAFF);
+        set_color(0xAAFFAAFF);
+        draw_text(right_desc.as_ptr(), right_desc.len() as u32, 450.0, 445.0, 12.0);
 
         let instruction = "Press A to switch to single-group mode";
-        draw_text(instruction.as_ptr(), instruction.len() as u32, 10.0, 40.0, 14.0, 0xAAAAAAFF);
+        set_color(0xAAAAAAFF);
+        draw_text(instruction.as_ptr(), instruction.len() as u32, 10.0, 40.0, 14.0);
     } else {
         // Single mode
         let mode_text = if USE_UNIQUE_OFFSETS != 0 {
@@ -410,14 +349,17 @@ unsafe fn render_ui() {
         } else {
             "Mode: SAME OFFSETS (use F3 to toggle)"
         };
-        draw_text(mode_text.as_ptr(), mode_text.len() as u32, 10.0, 40.0, 14.0, 0xAAAAAAFF);
+        set_color(0xAAAAAAFF);
+        draw_text(mode_text.as_ptr(), mode_text.len() as u32, 10.0, 40.0, 14.0);
 
         let instruction = "Press A to switch to comparison mode";
-        draw_text(instruction.as_ptr(), instruction.len() as u32, 10.0, 60.0, 14.0, 0x888888FF);
+        set_color(0x888888FF);
+        draw_text(instruction.as_ptr(), instruction.len() as u32, 10.0, 60.0, 14.0);
     }
 
     let controls = "Left Stick: Rotate | F4: Debug Inspector";
-    draw_text(controls.as_ptr(), controls.len() as u32, 10.0, 80.0, 12.0, 0x666666FF);
+    set_color(0x666666FF);
+        draw_text(controls.as_ptr(), controls.len() as u32, 10.0, 80.0, 12.0);
 }
 
 /// Clamp alpha to valid range 0-15

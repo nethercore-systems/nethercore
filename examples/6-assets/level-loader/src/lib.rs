@@ -25,34 +25,11 @@ fn panic(_info: &PanicInfo) -> ! {
 // FFI Declarations
 // =============================================================================
 
-#[link(wasm_import_module = "env")]
-extern "C" {
-    // ROM Data Pack Loading
-    fn rom_texture(id_ptr: *const u8, id_len: u32) -> u32;
-    fn rom_data_len(id_ptr: *const u8, id_len: u32) -> u32;
-    fn rom_data(id_ptr: *const u8, id_len: u32, dst_ptr: *mut u8, max_len: u32) -> u32;
+// Import the canonical FFI bindings
+#[path = "../../../../include/zx.rs"]
+mod ffi;
+use ffi::*;
 
-    // Configuration (init-only)
-    fn set_clear_color(color: u32);
-
-    // Camera
-    fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
-    fn camera_fov(fov_degrees: f32);
-
-    // Input
-    fn button_pressed(player: u32, button: u32) -> u32;
-    fn left_stick_x(player: u32) -> f32;
-    fn left_stick_y(player: u32) -> f32;
-
-    // Drawing
-    fn texture_bind(handle: u32);
-    fn draw_sprite_region(x: f32, y: f32, w: f32, h: f32, u0: f32, v0: f32, u1: f32, v1: f32, color: u32);
-    fn draw_rect(x: f32, y: f32, width: f32, height: f32, color: u32);
-    fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, scale: f32, color: u32);
-
-    // Render state
-    fn set_color(color: u32);
-}
 
 // Button constants
 const BUTTON_LEFT: u32 = 2;
@@ -244,56 +221,72 @@ pub extern "C" fn render() {
                 let color = TILE_COLORS[(tile as usize) % TILE_COLORS.len()];
 
                 // Draw tile as colored rectangle
-                draw_rect(screen_x, screen_y, TILE_SIZE - 2.0, TILE_SIZE - 2.0, color);
+                set_color(color);
+        draw_rect(screen_x, screen_y, TILE_SIZE - 2.0, TILE_SIZE - 2.0);
             }
         }
 
         // UI overlay (proper text sizes for 540p)
         let title = b"Level Loader Demo";
-        draw_text(title.as_ptr(), title.len() as u32, 20.0, 20.0, 28.0, 0xFFFFFFFF);
+        set_color(0xFFFFFFFF);
+        draw_text(title.as_ptr(), title.len() as u32, 20.0, 20.0, 28.0);
 
         // Level indicator with visual arrows
         let left_arrow = if CURRENT_LEVEL > 0 { b"<< " } else { b"   " };
         let right_arrow = if CURRENT_LEVEL < 2 { b" >>" } else { b"   " };
 
-        draw_text(left_arrow.as_ptr(), 3, 20.0, 60.0, 24.0, 0x88FF88FF);
+        set_color(0x88FF88FF);
+        draw_text(left_arrow.as_ptr(), 3, 20.0, 60.0, 24.0);
 
         let level_text = match CURRENT_LEVEL {
             0 => b"Level 1 of 3" as &[u8],
             1 => b"Level 2 of 3" as &[u8],
             _ => b"Level 3 of 3" as &[u8],
         };
-        draw_text(level_text.as_ptr(), level_text.len() as u32, 80.0, 60.0, 24.0, 0xFFFF00FF);
-        draw_text(right_arrow.as_ptr(), 3, 300.0, 60.0, 24.0, 0x88FF88FF);
+        set_color(0xFFFF00FF);
+        draw_text(level_text.as_ptr(), level_text.len() as u32, 80.0, 60.0, 24.0);
+        set_color(0x88FF88FF);
+        draw_text(right_arrow.as_ptr(), 3, 300.0, 60.0, 24.0);
 
         // Controls hint
         let hint = b"[D-Pad] Switch  [Stick] Pan";
-        draw_text(hint.as_ptr(), hint.len() as u32, 20.0, 100.0, 18.0, 0xAAAAAAFF);
+        set_color(0xAAAAAAFF);
+        draw_text(hint.as_ptr(), hint.len() as u32, 20.0, 100.0, 18.0);
 
         // Tile legend on the right side
         let legend_x = 700.0;
         let legend = b"Legend:";
-        draw_text(legend.as_ptr(), legend.len() as u32, legend_x, 150.0, 20.0, 0xFFFFFFFF);
+        set_color(0xFFFFFFFF);
+        draw_text(legend.as_ptr(), legend.len() as u32, legend_x, 150.0, 20.0);
 
         // Draw color swatches with labels (larger)
-        draw_rect(legend_x, 185.0, 24.0, 24.0, TILE_COLORS[0]);
+        set_color(TILE_COLORS[0]);
+        draw_rect(legend_x, 185.0, 24.0, 24.0);
         let floor = b"Floor";
-        draw_text(floor.as_ptr(), floor.len() as u32, legend_x + 35.0, 185.0, 18.0, 0xCCCCCCFF);
+        set_color(0xCCCCCCFF);
+        draw_text(floor.as_ptr(), floor.len() as u32, legend_x + 35.0, 185.0, 18.0);
 
-        draw_rect(legend_x, 220.0, 24.0, 24.0, TILE_COLORS[1]);
+        set_color(TILE_COLORS[1]);
+        draw_rect(legend_x, 220.0, 24.0, 24.0);
         let wall = b"Wall";
-        draw_text(wall.as_ptr(), wall.len() as u32, legend_x + 35.0, 220.0, 18.0, 0xCCCCCCFF);
+        set_color(0xCCCCCCFF);
+        draw_text(wall.as_ptr(), wall.len() as u32, legend_x + 35.0, 220.0, 18.0);
 
-        draw_rect(legend_x, 255.0, 24.0, 24.0, TILE_COLORS[2]);
+        set_color(TILE_COLORS[2]);
+        draw_rect(legend_x, 255.0, 24.0, 24.0);
         let deco = b"Decor";
-        draw_text(deco.as_ptr(), deco.len() as u32, legend_x + 35.0, 255.0, 18.0, 0xCCCCCCFF);
+        set_color(0xCCCCCCFF);
+        draw_text(deco.as_ptr(), deco.len() as u32, legend_x + 35.0, 255.0, 18.0);
 
-        draw_rect(legend_x, 290.0, 24.0, 24.0, TILE_COLORS[3]);
+        set_color(TILE_COLORS[3]);
+        draw_rect(legend_x, 290.0, 24.0, 24.0);
         let other = b"Other";
-        draw_text(other.as_ptr(), other.len() as u32, legend_x + 35.0, 290.0, 18.0, 0xCCCCCCFF);
+        set_color(0xCCCCCCFF);
+        draw_text(other.as_ptr(), other.len() as u32, legend_x + 35.0, 290.0, 18.0);
 
         // Info at bottom
         let info = b"Data loaded via rom_data()";
-        draw_text(info.as_ptr(), info.len() as u32, 20.0, 500.0, 16.0, 0x888888FF);
+        set_color(0x888888FF);
+        draw_text(info.as_ptr(), info.len() as u32, 20.0, 500.0, 16.0);
     }
 }

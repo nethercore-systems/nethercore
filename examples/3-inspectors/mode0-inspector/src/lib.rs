@@ -29,74 +29,10 @@ fn panic(_info: &PanicInfo) -> ! {
 // FFI Declarations
 // ============================================================================
 
-#[link(wasm_import_module = "env")]
-extern "C" {
-    // Configuration (init-only)
-    fn set_clear_color(color: u32);
-    fn render_mode(mode: u32);
-
-    // Camera
-    fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
-    fn camera_fov(fov_degrees: f32);
-
-    // Input
-    fn left_stick_x(player: u32) -> f32;
-    fn left_stick_y(player: u32) -> f32;
-    fn button_pressed(player: u32, button: u32) -> u32;
-
-    // Time
-    fn elapsed_time() -> f32;
-
-    // Procedural mesh generation
-    fn cube(size_x: f32, size_y: f32, size_z: f32) -> u32;
-    fn sphere(radius: f32, segments: u32, rings: u32) -> u32;
-    fn torus(major_radius: f32, minor_radius: f32, major_segments: u32, minor_segments: u32) -> u32;
-
-    // Mesh drawing
-    fn draw_mesh(handle: u32);
-
-    // Transform
-    fn push_identity();
-    fn push_rotate_x(angle_deg: f32);
-    fn push_rotate_y(angle_deg: f32);
-
-    // Render state
-    fn set_color(color: u32);
-    fn depth_test(enabled: u32);
-
-    // Environment
-    fn env_gradient(
-        layer: u32,
-        zenith: u32,
-        sky_horizon: u32,
-        ground_horizon: u32,
-        nadir: u32,
-        rotation: f32,
-        shift: f32,
-    );
-    fn draw_env();
-
-    // Lights (4 dynamic lights)
-    fn light_set(index: u32, x: f32, y: f32, z: f32);
-    fn light_color(index: u32, color: u32);
-    fn light_intensity(index: u32, intensity: f32);
-    fn light_enable(index: u32);
-    fn light_disable(index: u32);
-
-    // 2D UI
-    fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
-
-    // Debug inspection
-    fn debug_group_begin(name: *const u8, name_len: u32);
-    fn debug_group_end();
-    fn debug_register_f32(name: *const u8, name_len: u32, ptr: *const f32);
-    fn debug_register_i32(name: *const u8, name_len: u32, ptr: *const i32);
-    fn debug_register_u8(name: *const u8, name_len: u32, ptr: *const u8);
-    fn debug_register_color(name: *const u8, name_len: u32, ptr: *const u8);
-}
-
-// Button constants
-const BUTTON_A: u32 = 4;
+// Import the canonical FFI bindings
+#[path = "../../../../include/zx.rs"]
+mod ffi;
+use ffi::*;
 
 // ============================================================================
 // Debug Values - Exposed in the debug panel
@@ -247,7 +183,7 @@ unsafe fn register_light_debug(index: usize, name: &[u8]) {
 pub extern "C" fn update() {
     unsafe {
         // Shape cycling with A button
-        if button_pressed(0, BUTTON_A) != 0 {
+        if button_pressed(0, button::A) != 0 {
             SHAPE_INDEX = (SHAPE_INDEX + 1) % 3;
         }
 
@@ -315,7 +251,8 @@ pub extern "C" fn render() {
 unsafe fn draw_ui() {
     // Title
     let title = b"Mode 0: Lambert";
-    draw_text(title.as_ptr(), title.len() as u32, 10.0, 10.0, 20.0, 0xFFFFFFFF);
+    set_color(0xFFFFFFFF);
+        draw_text(title.as_ptr(), title.len() as u32, 10.0, 10.0, 20.0);
 
     // Current shape
     let shape_name = SHAPE_NAMES[SHAPE_INDEX as usize];
@@ -324,22 +261,21 @@ unsafe fn draw_ui() {
     label[..prefix.len()].copy_from_slice(prefix);
     let name_bytes = shape_name.as_bytes();
     label[prefix.len()..prefix.len() + name_bytes.len()].copy_from_slice(name_bytes);
-    draw_text(
-        label.as_ptr(),
-        (prefix.len() + name_bytes.len()) as u32,
-        10.0,
-        40.0,
-        16.0,
-        0xCCCCCCFF,
+    set_color(0xCCCCCCFF,
     );
+        draw_text(
+        label.as_ptr(), (prefix.len() + name_bytes.len()) as u32, 10.0, 40.0, 16.0);
 
     // Instructions - comprehensive controls
     let hint1 = b"A: Cycle shapes | Left stick: Rotate";
-    draw_text(hint1.as_ptr(), hint1.len() as u32, 10.0, 70.0, 14.0, 0x888888FF);
+    set_color(0x888888FF);
+        draw_text(hint1.as_ptr(), hint1.len() as u32, 10.0, 70.0, 14.0);
 
     let hint2 = b"Right stick: Orbit camera";
-    draw_text(hint2.as_ptr(), hint2.len() as u32, 10.0, 90.0, 14.0, 0x888888FF);
+    set_color(0x888888FF);
+        draw_text(hint2.as_ptr(), hint2.len() as u32, 10.0, 90.0, 14.0);
 
     let hint3 = b"F4: Debug Inspector (edit material properties)";
-    draw_text(hint3.as_ptr(), hint3.len() as u32, 10.0, 110.0, 14.0, 0x888888FF);
+    set_color(0x888888FF);
+        draw_text(hint3.as_ptr(), hint3.len() as u32, 10.0, 110.0, 14.0);
 }

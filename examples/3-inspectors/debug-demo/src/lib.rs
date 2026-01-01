@@ -32,60 +32,10 @@ fn panic(_info: &PanicInfo) -> ! {
 // FFI Declarations
 // ============================================================================
 
-#[link(wasm_import_module = "env")]
-extern "C" {
-    // Configuration
-    fn set_clear_color(color: u32);
-
-    // Camera
-    fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
-    fn camera_fov(fov_degrees: f32);
-
-    // Procedural mesh generation
-    fn cube(size_x: f32, size_y: f32, size_z: f32) -> u32;
-    fn sphere(radius: f32, segments: u32, rings: u32) -> u32;
-
-    // Mesh drawing
-    fn draw_mesh(handle: u32);
-
-    // Transform (push_identity resets, push_* compose onto current)
-    fn push_identity();
-    fn push_translate(x: f32, y: f32, z: f32);
-    fn push_rotate_y(angle_deg: f32);
-    fn push_scale(x: f32, y: f32, z: f32);
-
-    // Render state
-    fn set_color(color: u32);
-    fn depth_test(enabled: u32);
-
-    // Time
-    fn elapsed_time() -> f32;
-
-    // Debug inspection FFI (compile out in release builds)
-    fn debug_group_begin(name: *const u8, name_len: u32);
-    fn debug_group_end();
-    fn debug_register_f32(name: *const u8, name_len: u32, ptr: *const f32);
-    fn debug_register_i32(name: *const u8, name_len: u32, ptr: *const i32);
-    fn debug_register_bool(name: *const u8, name_len: u32, ptr: *const u8);
-    fn debug_register_color(name: *const u8, name_len: u32, ptr: *const u8);
-    // Watch (read-only) variants - display only, can't be edited
-    fn debug_watch_i32(name: *const u8, name_len: u32, ptr: *const i32);
-    // Action buttons - call WASM functions when clicked
-    fn debug_register_action(
-        name: *const u8,
-        name_len: u32,
-        func_name: *const u8,
-        func_name_len: u32,
-    );
-    fn debug_action_begin(
-        name: *const u8,
-        name_len: u32,
-        func_name: *const u8,
-        func_name_len: u32,
-    );
-    fn debug_action_param_i32(name: *const u8, name_len: u32, default_value: i32);
-    fn debug_action_end();
-}
+// Import the canonical FFI bindings
+#[path = "../../../../include/zx.rs"]
+mod ffi;
+use ffi::*;
 
 // ============================================================================
 // Debug Values - These will be exposed in the debug panel

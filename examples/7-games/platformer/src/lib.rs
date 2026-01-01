@@ -25,45 +25,11 @@ fn panic(_info: &PanicInfo) -> ! {
     core::arch::wasm32::unreachable()
 }
 
-#[link(wasm_import_module = "env")]
-extern "C" {
-    // Configuration
-    fn set_clear_color(color: u32);
+// Import the canonical FFI bindings
+#[path = "../../../../include/zx.rs"]
+mod ffi;
+use ffi::*;
 
-    // Camera
-    fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
-    fn camera_fov(fov_degrees: f32);
-
-    // Input
-    fn left_stick_x(player: u32) -> f32;
-    fn left_stick_y(player: u32) -> f32;
-    fn button_pressed(player: u32, button: u32) -> u32;
-    fn button_held(player: u32, button: u32) -> u32;
-    fn player_count() -> u32;
-
-    // Textures
-    fn load_texture(width: u32, height: u32, pixels: *const u8) -> u32;
-    fn texture_bind(handle: u32);
-    fn texture_filter(filter: u32);
-
-    // Transform
-    fn push_identity();
-    fn push_translate(x: f32, y: f32, z: f32);
-
-    // Billboard drawing
-    fn draw_billboard(w: f32, h: f32, mode: u32, color: u32);
-
-    // Render state
-    fn set_color(color: u32);
-    fn depth_test(enabled: u32);
-
-    // 2D drawing
-    fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
-    fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32);
-
-    // System
-    fn random() -> u32;
-}
 
 // === Constants ===
 
@@ -302,7 +268,8 @@ const COIN_PIXELS: [u8; 8 * 8 * 4] = {
 
 fn draw_text_str(s: &str, x: f32, y: f32, size: f32, color: u32) {
     unsafe {
-        draw_text(s.as_ptr(), s.len() as u32, x, y, size, color);
+        set_color(color);
+        draw_text(s.as_ptr(), s.len() as u32, x, y, size);
     }
 }
 
@@ -639,7 +606,8 @@ fn render_players() {
 fn render_ui() {
     unsafe {
         // Background panel for scores
-        draw_rect(10.0, 10.0, 300.0, 80.0 + (player_count() as f32 * 70.0), 0x000000AA);
+        set_color(0x000000AA);
+        draw_rect(10.0, 10.0, 300.0, 80.0 + (player_count() as f32 * 70.0));
 
         draw_text_str("PLATFORMER", 20.0, 30.0, 24.0, 0xFFFFFFFF);
 
@@ -667,8 +635,10 @@ fn render_ui() {
                 _ => b"P4: ",
             };
 
-            draw_text(label.as_ptr(), 4, 20.0, y_offset, 20.0, PLAYER_COLORS[i]);
-            draw_text(digits.as_ptr(), 4, 100.0, y_offset, 20.0, 0xFFFFFFFF);
+            set_color(PLAYER_COLORS[i]);
+        draw_text(label.as_ptr(), 4, 20.0, y_offset, 20.0);
+            set_color(0xFFFFFFFF);
+        draw_text(digits.as_ptr(), 4, 100.0, y_offset, 20.0);
             y_offset += 70.0;
         }
 
@@ -684,16 +654,19 @@ fn render_ui() {
             b'C', b'o', b'i', b'n', b's', b':', b' ',
             b'0' + (coins_left % 10) as u8,
         ];
-        draw_text(coins_text.as_ptr(), 8, 20.0, y_offset + 20.0, 18.0, 0xFFD700FF);
+        set_color(0xFFD700FF);
+        draw_text(coins_text.as_ptr(), 8, 20.0, y_offset + 20.0, 18.0);
 
         // Controls hint
-        draw_rect(10.0, 480.0, 480.0, 90.0, 0x000000AA);
+        set_color(0x000000AA);
+        draw_rect(10.0, 480.0, 480.0, 90.0);
         draw_text_str("L-Stick: Move  A: Jump", 20.0, 500.0, 16.0, 0xCCCCCCFF);
         draw_text_str("Collect all coins!", 20.0, 540.0, 16.0, 0xFFD700FF);
 
         // Game over overlay
         if GAME_OVER {
-            draw_rect(150.0, 200.0, 660.0, 140.0, 0x000000DD);
+            set_color(0x000000DD);
+        draw_rect(150.0, 200.0, 660.0, 140.0);
             draw_text_str("ALL COINS COLLECTED!", 200.0, 240.0, 28.0, 0xFFD700FF);
             draw_text_str("Press START to restart", 240.0, 290.0, 20.0, 0xCCCCCCFF);
         }

@@ -14,8 +14,10 @@ extern "C" {
     fn button_pressed(player: u32, button: u32) -> u32;
 
     // Drawing
-    fn draw_text(text_ptr: *const u8, text_len: u32, x: f32, y: f32, scale: f32, color: u32);
-    fn draw_rect(x: f32, y: f32, width: f32, height: f32, color: u32);
+    fn set_color(color: u32);
+        draw_text(text_ptr: *const u8, text_len: u32, x: f32, y: f32, scale: f32);
+    fn set_color(color: u32);
+        draw_rect(x: f32, y: f32, width: f32, height: f32);
 
     // Audio
     fn load_sound(data_ptr: *const i16, byte_len: u32) -> u32;
@@ -164,7 +166,8 @@ pub extern "C" fn render() {
 
         // Title
         let title = b"Audio Panning Demo";
-        draw_text(title.as_ptr(), title.len() as u32, 20.0, 20.0, 32.0, 0xFFFFFFFF);
+        set_color(0xFFFFFFFF);
+        draw_text(title.as_ptr(), title.len() as u32, 20.0, 20.0, 32.0);
 
         // Instructions
         let line1: &[u8] = if AUTO_MODE {
@@ -172,33 +175,41 @@ pub extern "C" fn render() {
         } else {
             b"Mode: MANUAL (use D-pad to pan)"
         };
-        draw_text(line1.as_ptr(), line1.len() as u32, 20.0, 70.0, 18.0, 0xFFAAAAFF);
+        set_color(0xFFAAAAFF);
+        draw_text(line1.as_ptr(), line1.len() as u32, 20.0, 70.0, 18.0);
 
         let line2 = b"Controls:";
-        draw_text(line2.as_ptr(), line2.len() as u32, 20.0, 110.0, 20.0, 0xFFFFFFFF);
+        set_color(0xFFFFFFFF);
+        draw_text(line2.as_ptr(), line2.len() as u32, 20.0, 110.0, 20.0);
 
         let line3 = b"  [A] Play/Stop";
-        draw_text(line3.as_ptr(), line3.len() as u32, 20.0, 145.0, 18.0, 0xCCCCCCFF);
+        set_color(0xCCCCCCFF);
+        draw_text(line3.as_ptr(), line3.len() as u32, 20.0, 145.0, 18.0);
 
         let line4 = b"  [B] Toggle Auto/Manual";
-        draw_text(line4.as_ptr(), line4.len() as u32, 20.0, 175.0, 18.0, 0xCCCCCCFF);
+        set_color(0xCCCCCCFF);
+        draw_text(line4.as_ptr(), line4.len() as u32, 20.0, 175.0, 18.0);
 
         let line5: &[u8] = if AUTO_MODE {
             b"  (Auto mode active)"
         } else {
             b"  [D-pad] Adjust pan"
         };
-        draw_text(line5.as_ptr(), line5.len() as u32, 20.0, 205.0, 18.0, 0xCCCCCCFF);
+        set_color(0xCCCCCCFF);
+        draw_text(line5.as_ptr(), line5.len() as u32, 20.0, 205.0, 18.0);
 
         // Visual pan indicator
         let line6 = b"Pan Position:";
-        draw_text(line6.as_ptr(), line6.len() as u32, 20.0, 260.0, 20.0, 0xFFFFFFFF);
+        set_color(0xFFFFFFFF);
+        draw_text(line6.as_ptr(), line6.len() as u32, 20.0, 260.0, 20.0);
 
         // Draw pan slider background
-        draw_rect(80.0, 300.0, 480.0, 30.0, 0x333333FF);
+        set_color(0x333333FF);
+        draw_rect(80.0, 300.0, 480.0, 30.0);
 
         // Draw center line
-        draw_rect(318.0, 290.0, 4.0, 50.0, 0x666666FF);
+        set_color(0x666666FF);
+        draw_rect(318.0, 290.0, 4.0, 50.0);
 
         // Draw pan indicator
         let indicator_x = 320.0 + (PAN_POSITION * 240.0);
@@ -207,20 +218,24 @@ pub extern "C" fn render() {
         } else {
             0x666666FF  // Gray when stopped
         };
-        draw_rect(indicator_x - 10.0, 290.0, 20.0, 50.0, indicator_color);
+        set_color(indicator_color);
+        draw_rect(indicator_x - 10.0, 290.0, 20.0, 50.0);
 
         // Draw speaker labels
         let left_label = b"L";
-        draw_text(left_label.as_ptr(), left_label.len() as u32, 50.0, 300.0, 24.0, 0xFFFFFFFF);
+        set_color(0xFFFFFFFF);
+        draw_text(left_label.as_ptr(), left_label.len() as u32, 50.0, 300.0, 24.0);
 
         let right_label = b"R";
-        draw_text(right_label.as_ptr(), right_label.len() as u32, 575.0, 300.0, 24.0, 0xFFFFFFFF);
+        set_color(0xFFFFFFFF);
+        draw_text(right_label.as_ptr(), right_label.len() as u32, 575.0, 300.0, 24.0);
 
         // Show pan value
         let mut pan_text = [0u8; 32];
         let pan_percent = (PAN_POSITION * 100.0) as i32;
         let pan_str = format_pan(pan_percent, &mut pan_text);
-        draw_text(pan_str.as_ptr(), pan_str.len() as u32, 260.0, 370.0, 20.0, 0xFFFFFFFF);
+        set_color(0xFFFFFFFF);
+        draw_text(pan_str.as_ptr(), pan_str.len() as u32, 260.0, 370.0, 20.0);
 
         // Status
         let status: &[u8] = if IS_PLAYING {
@@ -229,7 +244,8 @@ pub extern "C" fn render() {
             b"Status: STOPPED"
         };
         let status_color = if IS_PLAYING { 0x00FF00FF } else { 0xFF0000FF };  // Green/Red
-        draw_text(status.as_ptr(), status.len() as u32, 20.0, 420.0, 20.0, status_color);
+        set_color(status_color);
+        draw_text(status.as_ptr(), status.len() as u32, 20.0, 420.0, 20.0);
     }
 }
 

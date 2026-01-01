@@ -46,7 +46,10 @@ fn draw_billboard(mut caller: Caller<'_, ZXGameContext>, w: f32, h: f32, mode: u
 
     let state = &mut caller.data_mut().ffi;
 
-    // Get shading state index IMMEDIATELY (while current_shading_state is valid)
+    // Set color in shading state before creating shading state index
+    state.update_color(color);
+
+    // Get shading state index (now includes the color we just set)
     let shading_state_index = state.add_shading_state();
 
     // Convert FFI mode (1-4) to QuadMode enum (0-3)
@@ -93,7 +96,6 @@ fn draw_billboard(mut caller: Caller<'_, ZXGameContext>, w: f32, h: f32, mode: u
         h,
         quad_mode,
         [0.0, 0.0, 1.0, 1.0], // Full texture
-        color,
         shading_state_index.0,
         view_idx,
     );
@@ -133,7 +135,10 @@ fn draw_billboard_region(
 
     let state = &mut caller.data_mut().ffi;
 
-    // Get shading state index IMMEDIATELY (while current_shading_state is valid)
+    // Set color in shading state before creating shading state index
+    state.update_color(color);
+
+    // Get shading state index (now includes the color we just set)
     let shading_state_index = state.add_shading_state();
 
     // Convert FFI mode (1-4) to QuadMode enum (0-3)
@@ -180,7 +185,6 @@ fn draw_billboard_region(
         h,
         quad_mode,
         [src_x, src_y, src_x + src_w, src_y + src_h], // UV rect
-        color,
         shading_state_index.0,
         view_idx,
     );

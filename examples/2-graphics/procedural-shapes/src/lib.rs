@@ -29,60 +29,10 @@ fn panic(_info: &PanicInfo) -> ! {
     core::arch::wasm32::unreachable()
 }
 
-#[link(wasm_import_module = "env")]
-extern "C" {
-    // Configuration
-    fn set_clear_color(color: u32);
-    fn render_mode(mode: u32);
-
-    // Camera
-    fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
-    fn camera_fov(fov_degrees: f32);
-
-    // Input
-    fn button_held(player: u32, button: u32) -> u32;
-    fn left_stick_x(player: u32) -> f32;
-    fn left_stick_y(player: u32) -> f32;
-
-    // Textures
-    fn load_texture(width: u32, height: u32, pixels: *const u8) -> u32;
-    fn texture_bind(handle: u32);
-
-    // Procedural mesh generation (non-UV)
-    fn cube(size_x: f32, size_y: f32, size_z: f32) -> u32;
-    fn sphere(radius: f32, segments: u32, rings: u32) -> u32;
-    fn cylinder(radius_bottom: f32, radius_top: f32, height: f32, segments: u32) -> u32;
-    fn plane(size_x: f32, size_z: f32, subdivisions_x: u32, subdivisions_z: u32) -> u32;
-    fn torus(major_radius: f32, minor_radius: f32, major_segments: u32, minor_segments: u32) -> u32;
-    fn capsule(radius: f32, height: f32, segments: u32, rings: u32) -> u32;
-
-    // UV-enabled procedural mesh generation
-    fn sphere_uv(radius: f32, segments: u32, rings: u32) -> u32;
-    fn plane_uv(size_x: f32, size_z: f32, subdivisions_x: u32, subdivisions_z: u32) -> u32;
-    fn cube_uv(size_x: f32, size_y: f32, size_z: f32) -> u32;
-    fn cylinder_uv(radius_bottom: f32, radius_top: f32, height: f32, segments: u32) -> u32;
-    fn torus_uv(major_radius: f32, minor_radius: f32, major_segments: u32, minor_segments: u32) -> u32;
-    fn capsule_uv(radius: f32, height: f32, segments: u32, rings: u32) -> u32;
-
-    // Mesh drawing
-    fn draw_mesh(handle: u32);
-
-    // Transform
-    fn push_identity();
-    fn push_rotate_x(angle_deg: f32);
-    fn push_rotate_y(angle_deg: f32);
-
-    // Render state
-    fn set_color(color: u32);
-    fn depth_test(enabled: u32);
-
-    // 2D drawing for UI
-    fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
-}
-
-// Input button constants
-const BUTTON_A: u32 = 4;
-const BUTTON_B: u32 = 5;
+// Import the canonical FFI bindings
+#[path = "../../../../include/zx.rs"]
+mod ffi;
+use ffi::*;
 
 /// Current shape index (0-6 in plain mode, 0-5 in textured mode)
 static mut CURRENT_SHAPE: u32 = 0;
@@ -198,7 +148,7 @@ pub extern "C" fn init() {
 pub extern "C" fn update() {
     unsafe {
         // B button toggles texture mode
-        let b_button = button_held(0, BUTTON_B);
+        let b_button = button_held(0, button::B);
         if b_button != 0 && PREV_B_BUTTON == 0 {
             TEXTURED_MODE = !TEXTURED_MODE;
 
@@ -211,7 +161,7 @@ pub extern "C" fn update() {
         PREV_B_BUTTON = b_button;
 
         // A button cycles through shapes
-        let a_button = button_held(0, BUTTON_A);
+        let a_button = button_held(0, button::A);
         if a_button != 0 && PREV_A_BUTTON == 0 {
             let max_shapes = if TEXTURED_MODE { 6 } else { 7 };
             CURRENT_SHAPE = (CURRENT_SHAPE + 1) % max_shapes;
@@ -276,14 +226,10 @@ pub extern "C" fn render() {
         } else {
             "Mode: PLAIN"
         };
-        draw_text(
-            mode_text.as_ptr(),
-            mode_text.len() as u32,
-            10.0,
-            10.0,
-            20.0,
-            if TEXTURED_MODE { 0x88FF88FF } else { 0xFFFFFFFF },
+        set_color(if TEXTURED_MODE { 0x88FF88FF } else { 0xFFFFFFFF },
         );
+        draw_text(
+            mode_text.as_ptr(), mode_text.len() as u32, 10.0, 10.0, 20.0);
 
         // Draw shape name
         let shape_name = if TEXTURED_MODE {
@@ -291,37 +237,25 @@ pub extern "C" fn render() {
         } else {
             SHAPE_NAMES_PLAIN[CURRENT_SHAPE as usize]
         };
-        draw_text(
-            shape_name.as_ptr(),
-            shape_name.len() as u32,
-            10.0,
-            35.0,
-            18.0,
-            0xFFFFFFFF,
+        set_color(0xFFFFFFFF,
         );
+        draw_text(
+            shape_name.as_ptr(), shape_name.len() as u32, 10.0, 35.0, 18.0);
 
         // Draw controls
         let instruction = "A: cycle shapes | B: toggle texture | Stick: rotate";
-        draw_text(
-            instruction.as_ptr(),
-            instruction.len() as u32,
-            10.0,
-            60.0,
-            14.0,
-            0xAAAAAAFF,
+        set_color(0xAAAAAAFF,
         );
+        draw_text(
+            instruction.as_ptr(), instruction.len() as u32, 10.0, 60.0, 14.0);
 
         // Draw UV info when in textured mode
         if TEXTURED_MODE {
             let uv_info = "UV Debug: Red=U, Green=V, Blue=Checker";
-            draw_text(
-                uv_info.as_ptr(),
-                uv_info.len() as u32,
-                10.0,
-                85.0,
-                12.0,
-                0x88FF88FF,
+            set_color(0x88FF88FF,
             );
+        draw_text(
+                uv_info.as_ptr(), uv_info.len() as u32, 10.0, 85.0, 12.0);
         }
     }
 }

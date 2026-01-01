@@ -670,8 +670,7 @@ extern "C" {
     /// # Arguments
     /// * `x`, `y` — Screen position in pixels (0,0 = top-left)
     /// * `w`, `h` — Sprite size in pixels
-    /// * `color` — Color tint (0xRRGGBBAA)
-    pub fn draw_sprite(x: f32, y: f32, w: f32, h: f32, color: u32);
+    pub fn draw_sprite(x: f32, y: f32, w: f32, h: f32);
 
     /// Draw a region of a sprite sheet.
     ///
@@ -680,7 +679,6 @@ extern "C" {
     pub fn draw_sprite_region(
         x: f32, y: f32, w: f32, h: f32,
         src_x: f32, src_y: f32, src_w: f32, src_h: f32,
-        color: u32,
     );
 
     /// Draw a sprite with full control (rotation, origin, UV region).
@@ -692,11 +690,10 @@ extern "C" {
         x: f32, y: f32, w: f32, h: f32,
         src_x: f32, src_y: f32, src_w: f32, src_h: f32,
         origin_x: f32, origin_y: f32, angle_deg: f32,
-        color: u32,
     );
 
     /// Draw a solid color rectangle.
-    pub fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32);
+    pub fn draw_rect(x: f32, y: f32, w: f32, h: f32);
 
     /// Draw text with the current font.
     ///
@@ -704,8 +701,7 @@ extern "C" {
     /// * `ptr` — Pointer to UTF-8 string data
     /// * `len` — Length in bytes
     /// * `size` — Font size in pixels
-    /// * `color` — Text color (0xRRGGBBAA)
-    pub fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
+    pub fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32);
 
     /// Measure the width of text when rendered.
     ///
@@ -724,18 +720,16 @@ extern "C" {
     /// * `x1`, `y1` — Start point in screen pixels
     /// * `x2`, `y2` — End point in screen pixels
     /// * `thickness` — Line thickness in pixels
-    /// * `color` — Line color (0xRRGGBBAA)
-    pub fn draw_line(x1: f32, y1: f32, x2: f32, y2: f32, thickness: f32, color: u32);
+    pub fn draw_line(x1: f32, y1: f32, x2: f32, y2: f32, thickness: f32);
 
     /// Draw a filled circle.
     ///
     /// # Arguments
     /// * `x`, `y` — Center position in screen pixels
     /// * `radius` — Circle radius in pixels
-    /// * `color` — Fill color (0xRRGGBBAA)
     ///
     /// Rendered as a 16-segment triangle fan.
-    pub fn draw_circle(x: f32, y: f32, radius: f32, color: u32);
+    pub fn draw_circle(x: f32, y: f32, radius: f32);
 
     /// Draw a circle outline.
     ///
@@ -743,10 +737,9 @@ extern "C" {
     /// * `x`, `y` — Center position in screen pixels
     /// * `radius` — Circle radius in pixels
     /// * `thickness` — Line thickness in pixels
-    /// * `color` — Outline color (0xRRGGBBAA)
     ///
     /// Rendered as 16 line segments.
-    pub fn draw_circle_outline(x: f32, y: f32, radius: f32, thickness: f32, color: u32);
+    pub fn draw_circle_outline(x: f32, y: f32, radius: f32, thickness: f32);
 
     /// Load a fixed-width bitmap font.
     ///
@@ -1431,34 +1424,34 @@ extern "C" {
     // --- Watch Functions (Read-Only Display) ---
 
     /// Watch an i8 value (read-only).
-    pub fn debug_watch_i8(name_ptr: u32, name_len: u32, ptr: u32);
+    pub fn debug_watch_i8(name_ptr: *const u8, name_len: u32, ptr: *const i8);
     /// Watch an i16 value (read-only).
-    pub fn debug_watch_i16(name_ptr: u32, name_len: u32, ptr: u32);
+    pub fn debug_watch_i16(name_ptr: *const u8, name_len: u32, ptr: *const i16);
     /// Watch an i32 value (read-only).
-    pub fn debug_watch_i32(name_ptr: u32, name_len: u32, ptr: u32);
+    pub fn debug_watch_i32(name_ptr: *const u8, name_len: u32, ptr: *const i32);
     /// Watch a u8 value (read-only).
-    pub fn debug_watch_u8(name_ptr: u32, name_len: u32, ptr: u32);
+    pub fn debug_watch_u8(name_ptr: *const u8, name_len: u32, ptr: *const u8);
     /// Watch a u16 value (read-only).
-    pub fn debug_watch_u16(name_ptr: u32, name_len: u32, ptr: u32);
+    pub fn debug_watch_u16(name_ptr: *const u8, name_len: u32, ptr: *const u16);
     /// Watch a u32 value (read-only).
-    pub fn debug_watch_u32(name_ptr: u32, name_len: u32, ptr: u32);
+    pub fn debug_watch_u32(name_ptr: *const u8, name_len: u32, ptr: *const u32);
     /// Watch an f32 value (read-only).
-    pub fn debug_watch_f32(name_ptr: u32, name_len: u32, ptr: u32);
+    pub fn debug_watch_f32(name_ptr: *const u8, name_len: u32, ptr: *const f32);
     /// Watch a bool value (read-only).
-    pub fn debug_watch_bool(name_ptr: u32, name_len: u32, ptr: u32);
+    pub fn debug_watch_bool(name_ptr: *const u8, name_len: u32, ptr: *const u8);
     /// Watch a Vec2 value (read-only).
-    pub fn debug_watch_vec2(name_ptr: u32, name_len: u32, ptr: u32);
+    pub fn debug_watch_vec2(name_ptr: *const u8, name_len: u32, ptr: *const f32);
     /// Watch a Vec3 value (read-only).
-    pub fn debug_watch_vec3(name_ptr: u32, name_len: u32, ptr: u32);
+    pub fn debug_watch_vec3(name_ptr: *const u8, name_len: u32, ptr: *const f32);
     /// Watch a Rect value (read-only).
-    pub fn debug_watch_rect(name_ptr: u32, name_len: u32, ptr: u32);
+    pub fn debug_watch_rect(name_ptr: *const u8, name_len: u32, ptr: *const i16);
     /// Watch a Color value (read-only).
-    pub fn debug_watch_color(name_ptr: u32, name_len: u32, ptr: u32);
+    pub fn debug_watch_color(name_ptr: *const u8, name_len: u32, ptr: *const u8);
 
     // --- Grouping Functions ---
 
     /// Begin a collapsible group in the debug UI.
-    pub fn debug_group_begin(name_ptr: u32, name_len: u32);
+    pub fn debug_group_begin(name_ptr: *const u8, name_len: u32);
     /// End the current debug group.
     pub fn debug_group_end();
 
@@ -1577,9 +1570,9 @@ pub fn log_str(s: &str) {
 
 /// Helper to draw a text string slice.
 #[inline]
-pub fn draw_text_str(s: &str, x: f32, y: f32, size: f32, color: u32) {
+pub fn draw_text_str(s: &str, x: f32, y: f32, size: f32) {
     unsafe {
-        draw_text(s.as_ptr(), s.len() as u32, x, y, size, color);
+        draw_text(s.as_ptr(), s.len() as u32, x, y, size);
     }
 }
 

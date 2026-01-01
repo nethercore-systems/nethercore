@@ -31,33 +31,11 @@ fn panic(_info: &PanicInfo) -> ! {
 
 // === FFI Imports ===
 
-#[link(wasm_import_module = "env")]
-extern "C" {
-    // Configuration
-    fn set_clear_color(color: u32);
+// Import the canonical FFI bindings
+#[path = "../../../../include/zx.rs"]
+mod ffi;
+use ffi::*;
 
-    // Input
-    fn left_stick_y(player: u32) -> f32;
-    fn button_pressed(player: u32, button: u32) -> u32;
-    fn button_held(player: u32, button: u32) -> u32;
-    fn player_count() -> u32;
-
-    // 2D Drawing
-    fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32);
-    fn draw_sprite(x: f32, y: f32, w: f32, h: f32, color: u32);
-    fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
-    fn texture_bind(handle: u32);
-
-    // ROM Assets
-    fn rom_texture(id_ptr: *const u8, id_len: u32) -> u32;
-    fn rom_sound(id_ptr: *const u8, id_len: u32) -> u32;
-
-    // Audio
-    fn play_sound(sound: u32, volume: f32, pan: f32);
-
-    // System
-    fn random() -> u32;
-}
 
 // === Constants ===
 
@@ -149,7 +127,8 @@ fn load_rom_sound(id: &[u8]) -> u32 {
 
 fn draw_text_str(s: &[u8], x: f32, y: f32, size: f32, color: u32) {
     unsafe {
-        draw_text(s.as_ptr(), s.len() as u32, x, y, size, color);
+        set_color(color);
+        draw_text(s.as_ptr(), s.len() as u32, x, y, size);
     }
 }
 
@@ -434,7 +413,8 @@ fn render_court() {
 
         let mut y = 10.0;
         while y < SCREEN_HEIGHT - 10.0 {
-            draw_rect(center_x, y, dash_width, dash_height, COLOR_GRAY);
+            set_color(COLOR_GRAY);
+        draw_rect(center_x, y, dash_width, dash_height);
             y += dash_height + dash_gap;
         }
     }
@@ -469,10 +449,12 @@ fn render_scores() {
         let score2_text = [score2_digit];
 
         // Player 1 score (left side)
-        draw_text(score1_text.as_ptr(), 1, SCREEN_WIDTH / 4.0, 30.0, 48.0, COLOR_PLAYER1);
+        set_color(COLOR_PLAYER1);
+        draw_text(score1_text.as_ptr(), 1, SCREEN_WIDTH / 4.0, 30.0, 48.0);
 
         // Player 2 score (right side)
-        draw_text(score2_text.as_ptr(), 1, SCREEN_WIDTH * 3.0 / 4.0, 30.0, 48.0, COLOR_PLAYER2);
+        set_color(COLOR_PLAYER2);
+        draw_text(score2_text.as_ptr(), 1, SCREEN_WIDTH * 3.0 / 4.0, 30.0, 48.0);
     }
 }
 
@@ -499,8 +481,8 @@ fn render_title() {
 fn render_game_over() {
     unsafe {
         // Overlay
-        draw_rect(SCREEN_WIDTH / 4.0, SCREEN_HEIGHT / 3.0,
-                  SCREEN_WIDTH / 2.0, SCREEN_HEIGHT / 3.0, 0x000000CC);
+        set_color(0x000000CC);
+        draw_rect(SCREEN_WIDTH / 4.0, SCREEN_HEIGHT / 3.0, SCREEN_WIDTH / 2.0, SCREEN_HEIGHT / 3.0);
 
         // Winner text
         if WINNER == 1 {

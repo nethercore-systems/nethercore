@@ -18,48 +18,11 @@ fn panic(_info: &PanicInfo) -> ! {
     core::arch::wasm32::unreachable()
 }
 
-#[link(wasm_import_module = "env")]
-extern "C" {
-    // Configuration
-    fn set_clear_color(color: u32);
-    fn render_mode(mode: u32);
+// Import the canonical FFI bindings
+#[path = "../../../../include/zx.rs"]
+mod ffi;
+use ffi::*;
 
-    // Camera
-    fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
-    fn camera_fov(fov_degrees: f32);
-
-    // Stencil functions
-    fn stencil_begin();
-    fn stencil_end();
-    fn stencil_clear();
-    fn stencil_invert();
-
-    // Input
-    fn button_pressed(player: u32, button: u32) -> u32;
-    fn left_stick_x(player: u32) -> f32;
-
-    // Procedural mesh generation
-    fn cube(size_x: f32, size_y: f32, size_z: f32) -> u32;
-    fn sphere(radius: f32, segments: u32, rings: u32) -> u32;
-    fn plane(size_x: f32, size_z: f32, subdivisions_x: u32, subdivisions_z: u32) -> u32;
-
-    // Mesh drawing
-    fn draw_mesh(handle: u32);
-
-    // Transform
-    fn push_identity();
-    fn push_translate(x: f32, y: f32, z: f32);
-    fn push_rotate_y(angle_deg: f32);
-
-    // Render state
-    fn set_color(color: u32);
-    fn depth_test(enabled: u32);
-
-    // 2D drawing
-    fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
-    fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32);
-    fn draw_circle(x: f32, y: f32, radius: f32, color: u32);
-}
 
 // Input (button indices from zx.rs)
 const BUTTON_A: u32 = 4;
@@ -242,7 +205,8 @@ unsafe fn demo_inverted_mask() {
     stencil_invert();
 
     // Draw dark vignette overlay only outside circle
-    draw_rect(0.0, 0.0, SCREEN_WIDTH, SCREEN_HEIGHT, 0x000000AA);
+    set_color(0x000000AA);
+        draw_rect(0.0, 0.0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
     // Return to normal rendering
     stencil_clear();
@@ -252,7 +216,8 @@ unsafe fn demo_inverted_mask() {
 unsafe fn demo_diagonal_split() {
     // Left half mask
     stencil_begin();
-    draw_rect(0.0, 0.0, SCREEN_WIDTH / 2.0, SCREEN_HEIGHT, 0xFFFFFFFF);
+    set_color(0xFFFFFFFF);
+        draw_rect(0.0, 0.0, SCREEN_WIDTH / 2.0, SCREEN_HEIGHT);
     stencil_end();
     draw_scene_tinted(0xFFCC99FF); // Warm orange tint
 
@@ -304,57 +269,37 @@ pub extern "C" fn render() {
 
         // UI overlay - Title
         let title = "STENCIL DEMO";
-        draw_text(
-            title.as_ptr(),
-            title.len() as u32,
-            10.0,
-            10.0,
-            28.0,
-            0xFFFFFFFF,
+        set_color(0xFFFFFFFF,
         );
+        draw_text(
+            title.as_ptr(), title.len() as u32, 10.0, 10.0, 28.0);
 
         // Current demo name
         let demo_name = DEMO_NAMES[DEMO_MODE as usize];
-        draw_text(
-            demo_name.as_ptr(),
-            demo_name.len() as u32,
-            10.0,
-            45.0,
-            20.0,
-            0x88FF88FF,
+        set_color(0x88FF88FF,
         );
+        draw_text(
+            demo_name.as_ptr(), demo_name.len() as u32, 10.0, 45.0, 20.0);
 
         // Demo description
         let demo_desc = DEMO_DESCRIPTIONS[DEMO_MODE as usize];
-        draw_text(
-            demo_desc.as_ptr(),
-            demo_desc.len() as u32,
-            10.0,
-            70.0,
-            14.0,
-            0xCCCCCCFF,
+        set_color(0xCCCCCCFF,
         );
+        draw_text(
+            demo_desc.as_ptr(), demo_desc.len() as u32, 10.0, 70.0, 14.0);
 
         // Controls
         let controls = "Controls: A = Next Demo | Left Stick = Rotate Scene";
-        draw_text(
-            controls.as_ptr(),
-            controls.len() as u32,
-            10.0,
-            SCREEN_HEIGHT - 30.0,
-            14.0,
-            0xAAAAAAFF,
+        set_color(0xAAAAAAFF,
         );
+        draw_text(
+            controls.as_ptr(), controls.len() as u32, 10.0, SCREEN_HEIGHT - 30.0, 14.0);
 
         // Explanation
         let explanation = "Stencil buffer masks which pixels can be drawn";
-        draw_text(
-            explanation.as_ptr(),
-            explanation.len() as u32,
-            10.0,
-            SCREEN_HEIGHT - 50.0,
-            12.0,
-            0x888888FF,
+        set_color(0x888888FF,
         );
+        draw_text(
+            explanation.as_ptr(), explanation.len() as u32, 10.0, SCREEN_HEIGHT - 50.0, 12.0);
     }
 }

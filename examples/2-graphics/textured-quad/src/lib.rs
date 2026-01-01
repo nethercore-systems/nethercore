@@ -23,15 +23,10 @@ fn panic(_info: &PanicInfo) -> ! {
     core::arch::wasm32::unreachable()
 }
 
-#[link(wasm_import_module = "env")]
-extern "C" {
-    fn set_clear_color(color: u32);
-    fn elapsed_time() -> f32;
-    fn load_texture(width: u32, height: u32, pixels: *const u8) -> u32;
-    fn texture_bind(handle: u32);
-    fn draw_sprite(x: f32, y: f32, w: f32, h: f32, color: u32);
-    fn texture_filter(filter: u32);
-}
+// Import the canonical FFI bindings
+#[path = "../../../../include/zx.rs"]
+mod ffi;
+use ffi::*;
 
 /// Texture handle for our checkerboard
 static mut TEXTURE: u32 = 0;

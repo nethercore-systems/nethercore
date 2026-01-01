@@ -28,40 +28,11 @@ fn panic(_info: &PanicInfo) -> ! {
 // FFI Imports
 // ============================================================================
 
-#[link(wasm_import_module = "env")]
-extern "C" {
-    fn set_clear_color(color: u32);
-    fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
-    fn camera_fov(fov_degrees: f32);
+// Import the canonical FFI bindings
+#[path = "../../../../include/zx.rs"]
+mod ffi;
+use ffi::*;
 
-    fn left_stick_x(player: u32) -> f32;
-    fn left_stick_y(player: u32) -> f32;
-    fn button_pressed(player: u32, button: u32) -> u32;
-
-    fn load_mesh_indexed(
-        data: *const f32,
-        vertex_count: u32,
-        indices: *const u16,
-        index_count: u32,
-        format: u32,
-    ) -> u32;
-    fn draw_mesh(handle: u32);
-
-    // Procedural shapes
-    fn sphere(radius: f32, segments: u32, rings: u32) -> u32;
-
-    fn load_skeleton(inverse_bind_ptr: *const f32, bone_count: u32) -> u32;
-    fn skeleton_bind(skeleton: u32);
-    fn set_bones(matrices_ptr: *const f32, count: u32);
-
-    fn push_identity();
-    fn push_translate(x: f32, y: f32, z: f32);
-
-    fn set_color(color: u32);
-    fn depth_test(enabled: u32);
-
-    fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
-}
 
 // ============================================================================
 // Constants
@@ -474,32 +445,40 @@ fn draw_ui() {
         let line_h = 18.0;
 
         let title = b"IK Demo - Two-Bone Solver";
-        draw_text(title.as_ptr(), title.len() as u32, 10.0, y, 16.0, 0xFFFFFFFF);
+        set_color(0xFFFFFFFF);
+        draw_text(title.as_ptr(), title.len() as u32, 10.0, y, 16.0);
 
         let subtitle = b"Tests inverse bind with procedural IK";
-        draw_text(subtitle.as_ptr(), subtitle.len() as u32, 10.0, y + line_h, 12.0, 0xAAAAAAFF);
+        set_color(0xAAAAAAFF);
+        draw_text(subtitle.as_ptr(), subtitle.len() as u32, 10.0, y + line_h, 12.0);
 
         let mode = if AUTO_MODE {
             b"Mode: Auto circle (A to toggle)" as &[u8]
         } else {
             b"Mode: Stick control (A to toggle)" as &[u8]
         };
-        draw_text(mode.as_ptr(), mode.len() as u32, 10.0, y + line_h * 2.5, 10.0, 0x88FF88FF);
+        set_color(0x88FF88FF);
+        draw_text(mode.as_ptr(), mode.len() as u32, 10.0, y + line_h * 2.5, 10.0);
 
         let info1 = b"Upper arm: 2.0 units (green)";
-        draw_text(info1.as_ptr(), info1.len() as u32, 10.0, y + line_h * 4.0, 10.0, 0x888888FF);
+        set_color(0x888888FF);
+        draw_text(info1.as_ptr(), info1.len() as u32, 10.0, y + line_h * 4.0, 10.0);
 
         let info2 = b"Lower arm: 2.0 units";
-        draw_text(info2.as_ptr(), info2.len() as u32, 10.0, y + line_h * 5.0, 10.0, 0x888888FF);
+        set_color(0x888888FF);
+        draw_text(info2.as_ptr(), info2.len() as u32, 10.0, y + line_h * 5.0, 10.0);
 
         let info3 = b"Target: red sphere";
-        draw_text(info3.as_ptr(), info3.len() as u32, 10.0, y + line_h * 6.0, 10.0, 0xFF6060FF);
+        set_color(0xFF6060FF);
+        draw_text(info3.as_ptr(), info3.len() as u32, 10.0, y + line_h * 6.0, 10.0);
 
         // Controls
         let ctrl1 = b"Left stick: Move IK target | A: Toggle auto/manual";
-        draw_text(ctrl1.as_ptr(), ctrl1.len() as u32, 10.0, y + line_h * 7.5, 10.0, 0x888888FF);
+        set_color(0x888888FF);
+        draw_text(ctrl1.as_ptr(), ctrl1.len() as u32, 10.0, y + line_h * 7.5, 10.0);
 
         let ctrl2 = b"B: Reset target";
-        draw_text(ctrl2.as_ptr(), ctrl2.len() as u32, 10.0, y + line_h * 8.5, 10.0, 0x888888FF);
+        set_color(0x888888FF);
+        draw_text(ctrl2.as_ptr(), ctrl2.len() as u32, 10.0, y + line_h * 8.5, 10.0);
     }
 }

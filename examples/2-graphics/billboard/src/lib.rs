@@ -28,63 +28,10 @@ fn panic(_info: &PanicInfo) -> ! {
     core::arch::wasm32::unreachable()
 }
 
-#[link(wasm_import_module = "env")]
-extern "C" {
-    // Configuration
-    fn set_clear_color(color: u32);
-
-    // Camera
-    fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
-    fn camera_fov(fov_degrees: f32);
-
-    // Input
-    fn left_stick_x(player: u32) -> f32;
-    fn left_stick_y(player: u32) -> f32;
-    fn button_pressed(player: u32, button: u32) -> u32;
-
-    // Textures
-    fn load_texture(width: u32, height: u32, pixels: *const u8) -> u32;
-    fn texture_bind(handle: u32);
-    fn texture_filter(filter: u32);
-
-    // Transform
-    fn push_identity();
-    fn push_translate(x: f32, y: f32, z: f32);
-    fn transform_set(matrix_ptr: u32);
-
-    // Billboard drawing
-    fn draw_billboard(w: f32, h: f32, mode: u32, color: u32);
-    fn draw_billboard_region(
-        w: f32, h: f32,
-        src_x: f32, src_y: f32, src_w: f32, src_h: f32,
-        mode: u32, color: u32,
-    );
-
-    // Render state
-    fn set_color(color: u32);
-    fn depth_test(enabled: u32);
-
-    // 2D drawing
-    fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
-    fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32);
-
-    // Timing
-    fn elapsed_time() -> f32;
-    fn delta_time() -> f32;
-
-    // Random (deterministic)
-    fn random() -> u32;
-}
-
-// Billboard modes
-const MODE_SPHERICAL: u32 = 1;
-const MODE_CYLINDRICAL_Y: u32 = 2;
-const MODE_CYLINDRICAL_X: u32 = 3;
-const MODE_CYLINDRICAL_Z: u32 = 4;
-
-// Button indices
-const BUTTON_A: u32 = 4;
-const BUTTON_B: u32 = 5;
+// Import the canonical FFI bindings
+#[path = "../../../../include/zx.rs"]
+mod ffi;
+use ffi::*;
 
 // Texture handles
 static mut SPRITE_TEXTURE: u32 = 0;
@@ -313,7 +260,8 @@ const PARTICLE_PIXELS: [u8; 8 * 8 * 4] = {
 
 fn draw_text_str(s: &str, x: f32, y: f32, size: f32, color: u32) {
     unsafe {
-        draw_text(s.as_ptr(), s.len() as u32, x, y, size, color);
+        set_color(color);
+        draw_text(s.as_ptr(), s.len() as u32, x, y, size);
     }
 }
 
@@ -387,7 +335,7 @@ pub extern "C" fn update() {
         update_camera();
 
         // Toggle pause with A button
-        if button_pressed(0, BUTTON_A) != 0 {
+        if button_pressed(0, button::A) != 0 {
             PAUSED = !PAUSED;
         }
 
@@ -425,10 +373,10 @@ pub extern "C" fn render() {
 
         let spacing = 4.0;
         let positions = [
-            (-spacing * 1.5, 0.0, 0.0, MODE_SPHERICAL, "Spherical"),
-            (-spacing * 0.5, 0.0, 0.0, MODE_CYLINDRICAL_Y, "Cylindrical Y"),
-            (spacing * 0.5, 0.0, 0.0, MODE_CYLINDRICAL_X, "Cylindrical X"),
-            (spacing * 1.5, 0.0, 0.0, MODE_CYLINDRICAL_Z, "Cylindrical Z"),
+            (-spacing * 1.5, 0.0, 0.0, billboard::SPHERICAL, "Spherical"),
+            (-spacing * 0.5, 0.0, 0.0, billboard::CYLINDRICAL_Y, "Cylindrical Y"),
+            (spacing * 0.5, 0.0, 0.0, billboard::CYLINDRICAL_X, "Cylindrical X"),
+            (spacing * 1.5, 0.0, 0.0, billboard::CYLINDRICAL_Z, "Cylindrical Z"),
         ];
 
         // Draw mode comparison sprites
@@ -453,7 +401,7 @@ pub extern "C" fn render() {
         for &(x, _y, z) in &tree_positions {
             push_identity();
             push_translate(x, 1.0, z);
-            draw_billboard(2.0, 2.0, MODE_CYLINDRICAL_Y, 0xFFFFFFFF);
+            draw_billboard(2.0, 2.0, billboard::CYLINDRICAL_Y, 0xFFFFFFFF);
         }
 
         // === Draw particle system (Spherical - particles always face camera) ===
@@ -468,7 +416,7 @@ pub extern "C" fn render() {
                 let alpha = p.alpha();
                 let color = (p.color & 0xFFFFFF00) | (alpha as u32);
 
-                draw_billboard(p.size, p.size, MODE_SPHERICAL, color);
+                draw_billboard(p.size, p.size, billboard::SPHERICAL, color);
             }
         }
 
@@ -485,7 +433,7 @@ pub extern "C" fn render() {
         for &(x, y, z) in &ground_markers {
             push_identity();
             push_translate(x, y, z);
-            draw_billboard(0.5, 0.5, MODE_SPHERICAL, 0x88888888);
+            draw_billboard(0.5, 0.5, billboard::SPHERICAL, 0x88888888);
         }
 
         // === Draw UI overlay ===
@@ -498,7 +446,8 @@ pub extern "C" fn render() {
         draw_text_str("1=Spherical 2=CylY 3=CylX 4=CylZ", 20.0, 235.0, 16.0, 0xAAAAAAFF);
 
         if PAUSED {
-            draw_rect(340.0, 240.0, 280.0, 120.0, 0x000000CC);
+            set_color(0x000000CC);
+        draw_rect(340.0, 240.0, 280.0, 120.0);
             draw_text_str("PAUSED", 380.0, 280.0, 32.0, 0xFFFF00FF);
         }
     }

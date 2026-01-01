@@ -17,20 +17,10 @@ fn panic(_info: &PanicInfo) -> ! {
     core::arch::wasm32::unreachable()
 }
 
-#[link(wasm_import_module = "env")]
-extern "C" {
-    fn set_clear_color(color: u32);
-    fn button_pressed(player: u32, button: u32) -> u32;
-    fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
-    fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32);
-}
-
-/// Button indices for input functions
-pub mod button {
-    pub const UP: u32 = 0;
-    pub const DOWN: u32 = 1;
-    pub const A: u32 = 4;
-}
+// Import the canonical FFI bindings
+#[path = "../../../../include/zx.rs"]
+mod ffi;
+use ffi::*;
 
 static mut Y_POS: f32 = 120.0;
 
@@ -61,22 +51,23 @@ pub extern "C" fn update() {
 #[no_mangle]
 pub extern "C" fn render() {
     unsafe {
+        // Draw title in white
+        set_color(0xFFFFFFFF);
         let title = b"Hello Nethercore!";
+        set_color( );
         draw_text(
-            title.as_ptr(),
-            title.len() as u32,
-            80.0,
-            30.0,
-            24.0,
-            0xFFFFFFFF,
-        );
-        draw_rect(140.0, Y_POS, 40.0, 40.0, 0xFF6B6BFF);
+            title.as_ptr(), title.len() as u32, 80.0, 30.0, 24.0);
 
-        // Control hints
+        // Draw red square
+        set_color(0xFF6B6BFF);
+        draw_rect(140.0, Y_POS, 40.0, 40.0);
+
+        // Control hints in gray
+        set_color(0x888888FF);
         let hint1 = b"D-pad Up/Down: Move square";
-        draw_text(hint1.as_ptr(), hint1.len() as u32, 10.0, 240.0, 14.0, 0x888888FF);
+        draw_text(hint1.as_ptr(), hint1.len() as u32, 10.0, 240.0, 14.0);
 
         let hint2 = b"A button: Reset position";
-        draw_text(hint2.as_ptr(), hint2.len() as u32, 10.0, 260.0, 14.0, 0x888888FF);
+        draw_text(hint2.as_ptr(), hint2.len() as u32, 10.0, 260.0, 14.0);
     }
 }

@@ -34,66 +34,10 @@ fn panic(_info: &PanicInfo) -> ! {
     core::arch::wasm32::unreachable()
 }
 
-#[link(wasm_import_module = "env")]
-extern "C" {
-    // Configuration (init-only)
-    fn set_clear_color(color: u32);
-    fn render_mode(mode: u32);
-
-    // Camera
-    fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
-    fn camera_fov(fov_degrees: f32);
-
-    // Input
-    fn left_stick_x(player: u32) -> f32;
-    fn left_stick_y(player: u32) -> f32;
-    fn right_stick_x(player: u32) -> f32;
-    fn right_stick_y(player: u32) -> f32;
-    fn trigger_left(player: u32) -> f32;
-    fn trigger_right(player: u32) -> f32;
-    fn button_pressed(player: u32, button: u32) -> u32;
-    fn button_held(player: u32, button: u32) -> u32;
-
-    // Lighting (Mode 2/3)
-    fn light_set(index: u32, x: f32, y: f32, z: f32);
-    fn light_color(index: u32, color: u32);
-    fn light_intensity(index: u32, intensity: f32);
-    fn light_disable(index: u32);
-    fn light_enable(index: u32);
-
-    // Environment (all modes)
-    fn env_gradient(
-        layer: u32,
-        zenith: u32,
-        sky_horizon: u32,
-        ground_horizon: u32,
-        nadir: u32,
-        rotation: f32,
-        shift: f32,
-    );
-    fn draw_env();
-
-    // Materials (Mode 2/3)
-    fn material_metallic(value: f32);
-    fn material_roughness(value: f32);
-
-    // Procedural mesh generation
-    fn sphere(radius: f32, segments: u32, rings: u32) -> u32;
-
-    // Mesh drawing
-    fn draw_mesh(handle: u32);
-
-    // Transform
-    fn push_identity();
-
-    // Render state
-    fn set_color(color: u32);
-    fn depth_test(enabled: u32);
-
-    // 2D UI
-    fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
-    fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32);
-}
+// Import the canonical FFI bindings
+#[path = "../../../../include/zx.rs"]
+mod ffi;
+use ffi::*;
 
 /// Fast inverse square root (Quake III style)
 /// Good enough for normalizing vectors
@@ -134,13 +78,6 @@ fn fast_cos(x: f32) -> f32 {
     fast_sin(x + HALF_PI)
 }
 
-// Button constants
-const BUTTON_UP: u32 = 0;
-const BUTTON_DOWN: u32 = 1;
-const BUTTON_A: u32 = 4;
-const BUTTON_B: u32 = 5;
-const BUTTON_X: u32 = 6;
-const BUTTON_Y: u32 = 7;
 
 /// Render mode: 0=Lambert, 1=Matcap, 2=PBR, 3=Hybrid
 /// Change this and rebuild to see different modes
@@ -274,7 +211,7 @@ pub extern "C" fn update() {
         }
 
         // Adjust intensity with D-pad
-        if button_held(0, BUTTON_UP) != 0 {
+        if button_held(0, button::UP) != 0 {
             LIGHT_INTENSITY += 0.02;
             if LIGHT_INTENSITY > 5.0 {
                 LIGHT_INTENSITY = 5.0;
@@ -285,7 +222,7 @@ pub extern "C" fn update() {
                 }
             }
         }
-        if button_held(0, BUTTON_DOWN) != 0 {
+        if button_held(0, button::DOWN) != 0 {
             LIGHT_INTENSITY -= 0.02;
             if LIGHT_INTENSITY < 0.0 {
                 LIGHT_INTENSITY = 0.0;
@@ -298,7 +235,7 @@ pub extern "C" fn update() {
         }
 
         // Toggle lights with face buttons
-        if button_pressed(0, BUTTON_A) != 0 {
+        if button_pressed(0, button::A) != 0 {
             LIGHT_ENABLED[0] = !LIGHT_ENABLED[0];
             if LIGHT_ENABLED[0] {
                 light_enable(0);
@@ -306,7 +243,7 @@ pub extern "C" fn update() {
                 light_disable(0);
             }
         }
-        if button_pressed(0, BUTTON_B) != 0 {
+        if button_pressed(0, button::B) != 0 {
             LIGHT_ENABLED[1] = !LIGHT_ENABLED[1];
             if LIGHT_ENABLED[1] {
                 light_enable(1);
@@ -314,7 +251,7 @@ pub extern "C" fn update() {
                 light_disable(1);
             }
         }
-        if button_pressed(0, BUTTON_X) != 0 {
+        if button_pressed(0, button::X) != 0 {
             LIGHT_ENABLED[2] = !LIGHT_ENABLED[2];
             if LIGHT_ENABLED[2] {
                 light_enable(2);
@@ -322,7 +259,7 @@ pub extern "C" fn update() {
                 light_disable(2);
             }
         }
-        if button_pressed(0, BUTTON_Y) != 0 {
+        if button_pressed(0, button::Y) != 0 {
             LIGHT_ENABLED[3] = !LIGHT_ENABLED[3];
             if LIGHT_ENABLED[3] {
                 light_enable(3);
@@ -415,7 +352,8 @@ pub extern "C" fn render() {
             3 => b"Mode 3: Hybrid" as &[u8],
             _ => b"Unknown Mode" as &[u8],
         };
-        draw_text(mode_text.as_ptr(), mode_text.len() as u32, 20.0, y, 20.0, 0xFFFFFFFF);
+        set_color(0xFFFFFFFF);
+        draw_text(mode_text.as_ptr(), mode_text.len() as u32, 20.0, y, 20.0);
 
         // Material properties
         let mut buf = [0u8; 32];
@@ -424,23 +362,27 @@ pub extern "C" fn render() {
         let prefix = b"Metallic (LT): ";
         let len = format_float(METALLIC, &mut buf[prefix.len()..]);
         buf[..prefix.len()].copy_from_slice(prefix);
-        draw_text(buf.as_ptr(), (prefix.len() + len) as u32, 20.0, y + line_h, 16.0, 0xCCCCCCFF);
+        set_color(0xCCCCCCFF);
+        draw_text(buf.as_ptr(), (prefix.len() + len) as u32, 20.0, y + line_h, 16.0);
 
         // Roughness
         let prefix = b"Roughness (RT): ";
         let len = format_float(ROUGHNESS, &mut buf[prefix.len()..]);
         buf[..prefix.len()].copy_from_slice(prefix);
-        draw_text(buf.as_ptr(), (prefix.len() + len) as u32, 20.0, y + line_h * 2.0, 16.0, 0xCCCCCCFF);
+        set_color(0xCCCCCCFF);
+        draw_text(buf.as_ptr(), (prefix.len() + len) as u32, 20.0, y + line_h * 2.0, 16.0);
 
         // Intensity
         let prefix = b"Intensity (D-pad): ";
         let len = format_float(LIGHT_INTENSITY, &mut buf[prefix.len()..]);
         buf[..prefix.len()].copy_from_slice(prefix);
-        draw_text(buf.as_ptr(), (prefix.len() + len) as u32, 20.0, y + line_h * 3.0, 16.0, 0xCCCCCCFF);
+        set_color(0xCCCCCCFF);
+        draw_text(buf.as_ptr(), (prefix.len() + len) as u32, 20.0, y + line_h * 3.0, 16.0);
 
         // Light status
         let lights_label = b"Lights (A/B/X/Y):";
-        draw_text(lights_label.as_ptr(), lights_label.len() as u32, 20.0, y + line_h * 4.5, 16.0, 0xCCCCCCFF);
+        set_color(0xCCCCCCFF);
+        draw_text(lights_label.as_ptr(), lights_label.len() as u32, 20.0, y + line_h * 4.5, 16.0);
 
         // Draw light indicators
         for i in 0..4 {
@@ -450,11 +392,13 @@ pub extern "C" fn render() {
             } else {
                 0x404040FF // Dim gray when off
             };
-            draw_rect(x, y + line_h * 5.5, 40.0, 30.0, color);
+            set_color(color);
+        draw_rect(x, y + line_h * 5.5, 40.0, 30.0);
         }
 
         // Controls hint
         let hint = b"L-Stick: Rotate  R-Stick: Move Light";
-        draw_text(hint.as_ptr(), hint.len() as u32, 20.0, y + line_h * 7.0, 14.0, 0x888888FF);
+        set_color(0x888888FF);
+        draw_text(hint.as_ptr(), hint.len() as u32, 20.0, y + line_h * 7.0, 14.0);
     }
 }

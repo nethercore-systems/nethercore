@@ -17,19 +17,10 @@ fn panic(_info: &PanicInfo) -> ! {
     core::arch::wasm32::unreachable()
 }
 
-#[link(wasm_import_module = "env")]
-extern "C" {
-    fn set_clear_color(color: u32);
-    fn elapsed_time() -> f32;
-    fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
-    fn push_identity();
-    fn push_rotate(angle_deg: f32, x: f32, y: f32, z: f32);
-    fn draw_triangles(data: *const f32, vertex_count: u32, format: u32);
-}
-
-/// Vertex format: POS_COLOR = 2
-/// Each vertex: position (3 floats) + color (3 floats) = 6 floats
-const FORMAT_POS_COLOR: u32 = 2;
+// Import the canonical FFI bindings
+#[path = "../../../../include/zx.rs"]
+mod ffi;
+use ffi::*;
 
 /// Triangle vertices: 3 vertices × 6 floats = 18 floats
 /// Colors: red, green, blue at each corner
@@ -71,6 +62,6 @@ pub extern "C" fn render() {
         push_rotate(time * rotation_speed, 0.0, 1.0, 0.0);
 
         // Draw the triangle with POS_COLOR format
-        draw_triangles(TRIANGLE.as_ptr(), 3, FORMAT_POS_COLOR);
+        draw_triangles(TRIANGLE.as_ptr(), 3, format::POS_COLOR as u32);
     }
 }

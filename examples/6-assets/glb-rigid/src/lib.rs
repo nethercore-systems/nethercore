@@ -42,38 +42,11 @@ fn panic(_info: &PanicInfo) -> ! {
 // FFI Imports
 // ============================================================================
 
-#[link(wasm_import_module = "env")]
-extern "C" {
-    fn set_clear_color(color: u32);
+// Import the canonical FFI bindings
+#[path = "../../../../include/zx.rs"]
+mod ffi;
+use ffi::*;
 
-    fn button_pressed(player: u32, button: u32) -> u32;
-    fn button_held(player: u32, button: u32) -> u32;
-
-    // ROM asset loading
-    fn rom_mesh(id_ptr: *const u8, id_len: u32) -> u32;
-    fn rom_skeleton(id_ptr: *const u8, id_len: u32) -> u32;
-    fn rom_keyframes(id_ptr: *const u8, id_len: u32) -> u32;
-
-    // Keyframe queries
-    fn keyframes_frame_count(handle: u32) -> u16;
-    fn keyframes_bone_count(handle: u32) -> u8;
-
-    // Keyframe reading (for rigid animation)
-    fn keyframe_read(handle: u32, index: u32, out_ptr: *mut u8);
-
-    fn draw_mesh(handle: u32);
-
-    // Transform stack
-    fn push_identity();
-    fn push_translate(x: f32, y: f32, z: f32);
-    fn push_rotate_x(angle_deg: f32);
-    fn push_rotate_y(angle_deg: f32);
-
-    fn set_color(color: u32);
-    fn depth_test(enabled: u32);
-
-    fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
-}
 
 // ============================================================================
 // BoneTransform Parsing (from keyframe_read)
@@ -300,58 +273,38 @@ fn draw_ui(current_frame: u32) {
 
         // Title
         let title = b"GLB Rigid Transform Animation";
-        draw_text(
-            title.as_ptr(),
-            title.len() as u32,
-            10.0,
-            y,
-            16.0,
-            0xFFFFFFFF,
+        set_color(0xFFFFFFFF,
         );
+        draw_text(
+            title.as_ptr(), title.len() as u32, 10.0, y, 16.0);
 
         // Subtitle
         let subtitle = b"Imported animation via keyframe_read()";
-        draw_text(
-            subtitle.as_ptr(),
-            subtitle.len() as u32,
-            10.0,
-            y + line_h,
-            12.0,
-            0xAAAAAAFF,
+        set_color(0xAAAAAAFF,
         );
+        draw_text(
+            subtitle.as_ptr(), subtitle.len() as u32, 10.0, y + line_h, 12.0);
 
         // Mesh info
         let mesh_info = b"3 meshes: Base (gray), Arm (orange), Claw (blue)";
-        draw_text(
-            mesh_info.as_ptr(),
-            mesh_info.len() as u32,
-            10.0,
-            y + line_h * 2.5,
-            10.0,
-            0x88FF88FF,
+        set_color(0x88FF88FF,
         );
+        draw_text(
+            mesh_info.as_ptr(), mesh_info.len() as u32, 10.0, y + line_h * 2.5, 10.0);
 
         // Animation type
         let anim_info = b"Animation: keyframe_read() + push_translate/rotate";
-        draw_text(
-            anim_info.as_ptr(),
-            anim_info.len() as u32,
-            10.0,
-            y + line_h * 3.5,
-            10.0,
-            0x8888FFFF,
+        set_color(0x8888FFFF,
         );
+        draw_text(
+            anim_info.as_ptr(), anim_info.len() as u32, 10.0, y + line_h * 3.5, 10.0);
 
         // Key difference
         let diff_info = b"Uses keyframe_read() (NOT keyframe_bind!)";
-        draw_text(
-            diff_info.as_ptr(),
-            diff_info.len() as u32,
-            10.0,
-            y + line_h * 4.5,
-            10.0,
-            0xFFFF88FF,
+        set_color(0xFFFF88FF,
         );
+        draw_text(
+            diff_info.as_ptr(), diff_info.len() as u32, 10.0, y + line_h * 4.5, 10.0);
 
         // Status
         let status = if PAUSED {
@@ -359,45 +312,29 @@ fn draw_ui(current_frame: u32) {
         } else {
             b"Status: Playing" as &[u8]
         };
-        draw_text(
-            status.as_ptr(),
-            status.len() as u32,
-            10.0,
-            y + line_h * 6.0,
-            10.0,
-            0x888888FF,
+        set_color(0x888888FF,
         );
+        draw_text(
+            status.as_ptr(), status.len() as u32, 10.0, y + line_h * 6.0, 10.0);
 
         // Controls
         let ctrl1 = b"Left stick: Rotate view | A: Toggle pause";
-        draw_text(
-            ctrl1.as_ptr(),
-            ctrl1.len() as u32,
-            10.0,
-            y + line_h * 7.5,
-            10.0,
-            0x666666FF,
+        set_color(0x666666FF,
         );
+        draw_text(
+            ctrl1.as_ptr(), ctrl1.len() as u32, 10.0, y + line_h * 7.5, 10.0);
 
         let ctrl2 = b"D-pad Up/Down: Animation speed";
-        draw_text(
-            ctrl2.as_ptr(),
-            ctrl2.len() as u32,
-            10.0,
-            y + line_h * 8.5,
-            10.0,
-            0x666666FF,
+        set_color(0x666666FF,
         );
+        draw_text(
+            ctrl2.as_ptr(), ctrl2.len() as u32, 10.0, y + line_h * 8.5, 10.0);
 
         // Use case
         let usecase = b"Use case: Machines, doors, turrets, vehicles";
-        draw_text(
-            usecase.as_ptr(),
-            usecase.len() as u32,
-            10.0,
-            y + line_h * 10.0,
-            10.0,
-            0x44FF44FF,
+        set_color(0x44FF44FF,
         );
+        draw_text(
+            usecase.as_ptr(), usecase.len() as u32, 10.0, y + line_h * 10.0, 10.0);
     }
 }

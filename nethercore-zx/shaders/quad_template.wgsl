@@ -12,10 +12,10 @@ struct QuadInstance {
     rotation: f32,             // radians (screen-space only)
     mode_packed: u32,          // bits 0-7: QuadMode (resolution is fixed at 540p)
     uv: vec4<f32>,             // texture atlas rect (u0, v0, u1, v1)
-    color: u32,                // packed RGBA8
     shading_state_index: u32,
     view_index: u32,           // Absolute index into unified_transforms
     proj_index: u32,           // Absolute index into unified_transforms
+    _pad: u32,                 // Padding to maintain 64-byte alignment
 }
 
 // Binding 5: quad_instances (only used by quad shader)
@@ -96,9 +96,8 @@ struct QuadVertexOut {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) world_position: vec3<f32>,
     @location(1) uv: vec2<f32>,
-    @location(2) color: vec4<f32>,
-    @location(3) @interpolate(flat) shading_state_index: u32,
-    @location(4) @interpolate(flat) mode: u32,
+    @location(2) @interpolate(flat) shading_state_index: u32,
+    @location(3) @interpolate(flat) mode: u32,
 }
 
 @vertex
@@ -143,7 +142,6 @@ fn vs(in: QuadVertexIn, @builtin(instance_index) instance_idx: u32) -> QuadVerte
         vertex_uv.y = 1.0 - vertex_uv.y;
     }
     out.uv = mix(instance.uv.xy, instance.uv.zw, vertex_uv);
-    out.color = unpack_rgba8(instance.color);
     out.shading_state_index = instance.shading_state_index;
     out.mode = mode;
     return out;
@@ -154,8 +152,8 @@ fn fs(in: QuadVertexOut) -> @location(0) vec4<f32> {
     let shading = shading_states[in.shading_state_index];
     let material_color = unpack_rgba8(shading.color_rgba8);
     let tex_color = sample_filtered(slot0, shading.flags, in.uv);
-    let color = tex_color.rgb * in.color.rgb * material_color.rgb;
-    let base_alpha = tex_color.a * in.color.a * material_color.a;
+    let color = tex_color.rgb * material_color.rgb;
+    let base_alpha = tex_color.a * material_color.a;
 
     // Dither transparency for all quads (including screen-space text/sprites)
     if should_discard_dither(in.clip_position.xy, shading.flags, base_alpha) {

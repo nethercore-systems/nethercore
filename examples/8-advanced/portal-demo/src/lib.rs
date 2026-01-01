@@ -19,66 +19,11 @@ fn panic(_info: &PanicInfo) -> ! {
     core::arch::wasm32::unreachable()
 }
 
-#[link(wasm_import_module = "env")]
-extern "C" {
-    // Configuration
-    fn set_clear_color(color: u32);
-    fn render_mode(mode: u32);
+// Import the canonical FFI bindings
+#[path = "../../../../include/zx.rs"]
+mod ffi;
+use ffi::*;
 
-    // Camera
-    fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
-    fn camera_fov(fov_degrees: f32);
-
-    // Stencil
-    fn stencil_begin();
-    fn stencil_end();
-    fn stencil_clear();
-
-    // Input
-    fn left_stick_x(player: u32) -> f32;
-    fn left_stick_y(player: u32) -> f32;
-    fn right_stick_x(player: u32) -> f32;
-    fn right_stick_y(player: u32) -> f32;
-
-    // Procedural mesh generation
-    fn cube(size_x: f32, size_y: f32, size_z: f32) -> u32;
-    fn sphere(radius: f32, segments: u32, rings: u32) -> u32;
-    fn plane(size_x: f32, size_z: f32, subdivisions_x: u32, subdivisions_z: u32) -> u32;
-    fn torus(major_radius: f32, minor_radius: f32, major_segments: u32, minor_segments: u32) -> u32;
-
-    // Mesh drawing
-    fn draw_mesh(handle: u32);
-
-    // Immediate triangles
-    fn draw_triangles(data_ptr: *const f32, vertex_count: u32, format: u32);
-
-    // Transform
-    fn push_identity();
-    fn push_translate(x: f32, y: f32, z: f32);
-    fn push_rotate_y(angle_deg: f32);
-    fn push_rotate_x(angle_deg: f32);
-    fn push_scale(x: f32, y: f32, z: f32);
-
-    // Render state
-    fn set_color(color: u32);
-    fn depth_test(enabled: u32);
-
-    // Environment
-    fn env_gradient(
-        layer: u32,
-        zenith: u32,
-        sky_horizon: u32,
-        ground_horizon: u32,
-        nadir: u32,
-        rotation: f32,
-        shift: f32,
-    );
-    fn draw_env();
-
-    // 2D drawing
-    fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
-    fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32);
-}
 
 // Vertex format
 const VF_POS: u32 = 0;
@@ -424,65 +369,41 @@ pub extern "C" fn render() {
 
         // UI - Title
         let title = "PORTAL STENCIL DEMO";
-        draw_text(
-            title.as_ptr(),
-            title.len() as u32,
-            10.0,
-            10.0,
-            24.0,
-            0xFFFFFFFF,
+        set_color(0xFFFFFFFF,
         );
+        draw_text(
+            title.as_ptr(), title.len() as u32, 10.0, 10.0, 24.0);
 
         // Current dimension
         let world_text = if CURRENT_WORLD == 0 { "Current: Blue Dimension" } else { "Current: Orange Dimension" };
-        draw_text(
-            world_text.as_ptr(),
-            world_text.len() as u32,
-            10.0,
-            40.0,
-            16.0,
-            if CURRENT_WORLD == 0 { 0x4488FFFF } else { 0xFF8844FF },
+        set_color(if CURRENT_WORLD == 0 { 0x4488FFFF } else { 0xFF8844FF },
         );
+        draw_text(
+            world_text.as_ptr(), world_text.len() as u32, 10.0, 40.0, 16.0);
 
         // Explanation
         let explain1 = "Portals use stencil masking to show other dimension";
-        draw_text(
-            explain1.as_ptr(),
-            explain1.len() as u32,
-            10.0,
-            65.0,
-            12.0,
-            0x888888FF,
+        set_color(0x888888FF,
         );
+        draw_text(
+            explain1.as_ptr(), explain1.len() as u32, 10.0, 65.0, 12.0);
         let explain2 = "Camera transforms to destination portal perspective";
-        draw_text(
-            explain2.as_ptr(),
-            explain2.len() as u32,
-            10.0,
-            80.0,
-            12.0,
-            0x888888FF,
+        set_color(0x888888FF,
         );
+        draw_text(
+            explain2.as_ptr(), explain2.len() as u32, 10.0, 80.0, 12.0);
 
         // Controls at bottom
         let controls = "Controls: Left Stick = Move | Right Stick = Look";
-        draw_text(
-            controls.as_ptr(),
-            controls.len() as u32,
-            10.0,
-            500.0,
-            14.0,
-            0xAAAAAAFF,
+        set_color(0xAAAAAAFF,
         );
+        draw_text(
+            controls.as_ptr(), controls.len() as u32, 10.0, 500.0, 14.0);
 
         let instr = "Walk into the portal ring to teleport!";
-        draw_text(
-            instr.as_ptr(),
-            instr.len() as u32,
-            10.0,
-            520.0,
-            14.0,
-            0xCCCCCCFF,
+        set_color(0xCCCCCCFF,
         );
+        draw_text(
+            instr.as_ptr(), instr.len() as u32, 10.0, 520.0, 14.0);
     }
 }

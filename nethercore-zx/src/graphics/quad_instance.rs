@@ -47,9 +47,6 @@ pub struct QuadInstance {
     /// UV rectangle for texture atlas (u0, v0, u1, v1)
     pub uv: [f32; 4], // 16 bytes
 
-    /// Packed RGBA8 color (0xRRGGBBAA)
-    pub color: u32, // 4 bytes
-
     /// Index into shading_states buffer for material properties
     pub shading_state_index: u32, // 4 bytes
 
@@ -60,6 +57,9 @@ pub struct QuadInstance {
     /// Absolute index into unified_transforms for projection matrix
     /// (Set by GPU upload transform, computed from logical view index)
     pub proj_index: u32, // 4 bytes
+
+    /// Padding to maintain 64-byte size and 16-byte alignment
+    pub _pad: u32, // 4 bytes
 }
 
 // Safety: QuadInstance is repr(C) with only primitive types and explicit padding
@@ -73,7 +73,6 @@ impl QuadInstance {
         size: [f32; 2],
         mode: QuadMode,
         uv: [f32; 4],
-        color: u32,
         shading_state_index: u32,
         view_index: u32,
     ) -> Self {
@@ -83,10 +82,10 @@ impl QuadInstance {
             rotation: 0.0,
             mode: mode as u32,
             uv,
-            color,
             shading_state_index,
             view_index,
             proj_index: 0, // Set by GPU upload transform
+            _pad: 0,
         }
     }
 
@@ -98,7 +97,6 @@ impl QuadInstance {
         height: f32,
         mode: QuadMode,
         uv: [f32; 4],
-        color: u32,
         shading_state_index: u32,
         view_index: u32,
     ) -> Self {
@@ -107,7 +105,6 @@ impl QuadInstance {
             [width, height],
             mode,
             uv,
-            color,
             shading_state_index,
             view_index,
         )
@@ -126,7 +123,6 @@ impl QuadInstance {
         height: f32,
         rotation: f32,
         uv: [f32; 4],
-        color: u32,
         shading_state_index: u32,
         view_index: u32,
     ) -> Self {
@@ -136,10 +132,10 @@ impl QuadInstance {
             rotation,
             mode: QuadMode::ScreenSpace as u32,
             uv,
-            color,
             shading_state_index,
             view_index,
             proj_index: 0, // Set by GPU upload transform
+            _pad: 0,
         }
     }
 }
@@ -162,10 +158,10 @@ mod tests {
         // offset 24: rotation f32 (4 bytes) = 4 bytes
         // offset 28: mode u32 (4 bytes) = 4 bytes
         // offset 32: uv vec4<f32> (16 bytes) = 16 bytes
-        // offset 48: color u32 (4 bytes) = 4 bytes
-        // offset 52: shading_state_index u32 (4 bytes) = 4 bytes
-        // offset 56: view_index u32 (4 bytes) = 4 bytes
-        // offset 60: proj_index u32 (4 bytes) = 4 bytes
+        // offset 48: shading_state_index u32 (4 bytes) = 4 bytes
+        // offset 52: view_index u32 (4 bytes) = 4 bytes
+        // offset 56: proj_index u32 (4 bytes) = 4 bytes
+        // offset 60: _pad u32 (4 bytes) = 4 bytes
         // Total: 64 bytes (16-byte aligned)
 
         assert_eq!(
@@ -180,7 +176,6 @@ mod tests {
             [1.0, 1.0],
             QuadMode::BillboardSpherical,
             [0.0, 0.0, 1.0, 1.0],
-            0xFFFFFFFF,
             0,
             0,
         );
@@ -219,21 +214,27 @@ mod tests {
         );
 
         assert_eq!(
-            &instance.color as *const _ as usize - base_ptr,
-            48,
-            "color must be at offset 48"
-        );
-
-        assert_eq!(
             &instance.shading_state_index as *const _ as usize - base_ptr,
-            52,
-            "shading_state_index must be at offset 52"
+            48,
+            "shading_state_index must be at offset 48"
         );
 
         assert_eq!(
             &instance.view_index as *const _ as usize - base_ptr,
+            52,
+            "view_index must be at offset 52"
+        );
+
+        assert_eq!(
+            &instance.proj_index as *const _ as usize - base_ptr,
             56,
-            "view_index must be at offset 56"
+            "proj_index must be at offset 56"
+        );
+
+        assert_eq!(
+            &instance._pad as *const _ as usize - base_ptr,
+            60,
+            "_pad must be at offset 60"
         );
     }
 
@@ -246,7 +247,6 @@ mod tests {
             5.0,
             QuadMode::BillboardSpherical,
             [0.0, 0.0, 1.0, 1.0],
-            0xAABBCCDD,
             10,
             20,
         );

@@ -130,7 +130,8 @@ pub extern "C" fn render() {
         draw_mesh(mesh);
 
         let title = b"Env Mode 4: Rectangles";
-        draw_text(title.as_ptr(), title.len() as u32, 10.0, 10.0, 20.0, 0xFFFFFFFF);
+        set_color(0xFFFFFFFF);
+        draw_text(title.as_ptr(), title.len() as u32, 10.0, 10.0, 20.0);
 
         let variant_name = VARIANT_NAMES[VARIANT as usize];
         let mut label = [0u8; 32];
@@ -138,9 +139,11 @@ pub extern "C" fn render() {
         label[..prefix.len()].copy_from_slice(prefix);
         let name = variant_name.as_bytes();
         label[prefix.len()..prefix.len() + name.len()].copy_from_slice(name);
-        draw_text(label.as_ptr(), (prefix.len() + name.len()) as u32, 10.0, 40.0, 16.0, 0xCCCCCCFF);
+        set_color(0xCCCCCCFF);
+        draw_text(label.as_ptr(), (prefix.len() + name.len()) as u32, 10.0, 40.0, 16.0);
 
         let hint = b"A: variant | B: shape | Stick: camera | F4: Debug Inspector";
-        draw_text(hint.as_ptr(), hint.len() as u32, 10.0, 70.0, 14.0, 0x888888FF);
+        set_color(0x888888FF);
+        draw_text(hint.as_ptr(), hint.len() as u32, 10.0, 70.0, 14.0);
     }
 }

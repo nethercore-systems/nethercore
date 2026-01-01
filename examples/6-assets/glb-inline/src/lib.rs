@@ -29,43 +29,11 @@ fn panic(_info: &PanicInfo) -> ! {
 // FFI Imports
 // ============================================================================
 
-#[link(wasm_import_module = "env")]
-extern "C" {
-    fn set_clear_color(color: u32);
-    fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
-    fn camera_fov(fov_degrees: f32);
+// Import the canonical FFI bindings
+#[path = "../../../../include/zx.rs"]
+mod ffi;
+use ffi::*;
 
-    fn button_pressed(player: u32, button: u32) -> u32;
-    fn button_held(player: u32, button: u32) -> u32;
-
-    // ROM asset loading
-    fn rom_texture(id_ptr: *const u8, id_len: u32) -> u32;
-    fn rom_mesh(id_ptr: *const u8, id_len: u32) -> u32;
-    fn rom_skeleton(id_ptr: *const u8, id_len: u32) -> u32;
-    fn rom_keyframes(id_ptr: *const u8, id_len: u32) -> u32;
-
-    // Keyframe queries
-    fn keyframes_frame_count(handle: u32) -> u16;
-    fn keyframes_bone_count(handle: u32) -> u8;
-
-    // Texture binding
-    fn texture_bind(handle: u32);
-
-    // Skeleton & animation binding
-    fn skeleton_bind(skeleton: u32);
-    fn keyframe_bind(handle: u32, frame_index: u32);
-
-    fn draw_mesh(handle: u32);
-
-    fn push_identity();
-    fn push_translate(x: f32, y: f32, z: f32);
-    fn push_rotate_y(angle_deg: f32);
-
-    fn set_color(color: u32);
-    fn depth_test(enabled: u32);
-
-    fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
-}
 
 // ============================================================================
 // Animation Names (for UI display)
@@ -244,23 +212,28 @@ fn draw_ui(current_frame: u32) {
 
         // Title
         let title = b"GLB Inline Example";
-        draw_text(title.as_ptr(), title.len() as u32, 10.0, y, 16.0, 0xFFFFFFFF);
+        set_color(0xFFFFFFFF);
+        draw_text(title.as_ptr(), title.len() as u32, 10.0, y, 16.0);
 
         // Subtitle
         let subtitle = b"Raw .glb file references - auto-converted at pack time";
-        draw_text(subtitle.as_ptr(), subtitle.len() as u32, 10.0, y + line_h, 11.0, 0xAAAAAAFF);
+        set_color(0xAAAAAAFF);
+        draw_text(subtitle.as_ptr(), subtitle.len() as u32, 10.0, y + line_h, 11.0);
 
         // Current animation
         let anim_label = b"Animation: ";
-        draw_text(anim_label.as_ptr(), anim_label.len() as u32, 10.0, y + line_h * 2.5, 12.0, 0x88FF88FF);
+        set_color(0x88FF88FF);
+        draw_text(anim_label.as_ptr(), anim_label.len() as u32, 10.0, y + line_h * 2.5, 12.0);
 
         let anim_name = ANIMATION_NAMES[CURRENT_ANIM];
-        draw_text(anim_name.as_ptr(), anim_name.len() as u32, 100.0, y + line_h * 2.5, 12.0, 0xFFFF88FF);
+        set_color(0xFFFF88FF);
+        draw_text(anim_name.as_ptr(), anim_name.len() as u32, 100.0, y + line_h * 2.5, 12.0);
 
         // Animation info
         let frame_count = FRAME_COUNTS[CURRENT_ANIM];
         let info = b"(L1/R1 to switch, 3 anims from 1 GLB)";
-        draw_text(info.as_ptr(), info.len() as u32, 10.0, y + line_h * 3.5, 10.0, 0x8888FFFF);
+        set_color(0x8888FFFF);
+        draw_text(info.as_ptr(), info.len() as u32, 10.0, y + line_h * 3.5, 10.0);
 
         // Status
         let status = if PAUSED {
@@ -268,20 +241,25 @@ fn draw_ui(current_frame: u32) {
         } else {
             b"Status: Playing" as &[u8]
         };
-        draw_text(status.as_ptr(), status.len() as u32, 10.0, y + line_h * 5.0, 10.0, 0x888888FF);
+        set_color(0x888888FF);
+        draw_text(status.as_ptr(), status.len() as u32, 10.0, y + line_h * 5.0, 10.0);
 
         // Key feature explanation
         let feature1 = b"KEY: nether.toml references .glb directly";
-        draw_text(feature1.as_ptr(), feature1.len() as u32, 10.0, y + line_h * 6.5, 10.0, 0x44FF44FF);
+        set_color(0x44FF44FF);
+        draw_text(feature1.as_ptr(), feature1.len() as u32, 10.0, y + line_h * 6.5, 10.0);
 
         let feature2 = b"animation_name selects which anim to extract";
-        draw_text(feature2.as_ptr(), feature2.len() as u32, 10.0, y + line_h * 7.5, 10.0, 0x44FF44FF);
+        set_color(0x44FF44FF);
+        draw_text(feature2.as_ptr(), feature2.len() as u32, 10.0, y + line_h * 7.5, 10.0);
 
         // Controls
         let ctrl1 = b"L1/R1: Switch anim | A: Pause | D-pad: Speed";
-        draw_text(ctrl1.as_ptr(), ctrl1.len() as u32, 10.0, y + line_h * 9.0, 10.0, 0x666666FF);
+        set_color(0x666666FF);
+        draw_text(ctrl1.as_ptr(), ctrl1.len() as u32, 10.0, y + line_h * 9.0, 10.0);
 
         let ctrl2 = b"Left stick: Rotate view";
-        draw_text(ctrl2.as_ptr(), ctrl2.len() as u32, 10.0, y + line_h * 10.0, 10.0, 0x666666FF);
+        set_color(0x666666FF);
+        draw_text(ctrl2.as_ptr(), ctrl2.len() as u32, 10.0, y + line_h * 10.0, 10.0);
     }
 }

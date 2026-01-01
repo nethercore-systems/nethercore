@@ -32,50 +32,11 @@ fn panic(_info: &PanicInfo) -> ! {
 // FFI Imports
 // ============================================================================
 
-#[link(wasm_import_module = "env")]
-extern "C" {
-    // Configuration
-    fn set_clear_color(color: u32);
+// Import the canonical FFI bindings
+#[path = "../../../../include/zx.rs"]
+mod ffi;
+use ffi::*;
 
-    // Camera
-    fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
-    fn camera_fov(fov_degrees: f32);
-
-    // Input
-    fn button_pressed(player: u32, button: u32) -> u32;
-    fn button_held(player: u32, button: u32) -> u32;
-
-    // Mesh
-    fn load_mesh_indexed(
-        data: *const f32,
-        vertex_count: u32,
-        indices: *const u16,
-        index_count: u32,
-        format: u32,
-    ) -> u32;
-    fn draw_mesh(handle: u32);
-
-    // Keyframe Animation (NEW!)
-    fn rom_keyframes(id_ptr: *const u8, id_len: u32) -> u32;
-    fn keyframes_bone_count(handle: u32) -> u8;
-    fn keyframes_frame_count(handle: u32) -> u16;
-    fn keyframe_read(handle: u32, index: u32, out_ptr: *mut u8);
-    fn keyframe_bind(handle: u32, index: u32);
-
-    // Skinning
-    fn set_bones(matrices_ptr: *const f32, count: u32);
-    fn set_bones_4x4(matrices_ptr: *const f32, count: u32);
-
-    // Transform
-    fn push_identity();
-
-    // Render state
-    fn set_color(color: u32);
-    fn depth_test(enabled: u32);
-
-    // 2D UI
-    fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
-}
 
 // ============================================================================
 // Constants
@@ -498,7 +459,8 @@ fn draw_ui() {
         let line_h = 18.0;
 
         let title = b"Animation Demo";
-        draw_text(title.as_ptr(), title.len() as u32, 10.0, y, 16.0, 0xFFFFFFFF);
+        set_color(0xFFFFFFFF);
+        draw_text(title.as_ptr(), title.len() as u32, 10.0, y, 16.0);
 
         // Mode indicator
         let mode_text = if BLENDED_MODE {
@@ -506,14 +468,10 @@ fn draw_ui() {
         } else {
             b"Mode: STAMP (keyframe_bind)" as &[u8]
         };
-        draw_text(
-            mode_text.as_ptr(),
-            mode_text.len() as u32,
-            10.0,
-            y + line_h,
-            12.0,
-            if BLENDED_MODE { 0x90EE90FF } else { 0xFFB6C1FF },
+        set_color(if BLENDED_MODE { 0x90EE90FF } else { 0xFFB6C1FF },
         );
+        draw_text(
+            mode_text.as_ptr(), mode_text.len() as u32, 10.0, y + line_h, 12.0);
 
         // Frame info
         let frame = ANIM_TIME as u32 % FRAME_COUNT as u32;
@@ -521,47 +479,31 @@ fn draw_ui() {
         let prefix = b"Frame: ";
         buf[..prefix.len()].copy_from_slice(prefix);
         let len = format_int(frame as i32, &mut buf[prefix.len()..]);
-        draw_text(
-            buf.as_ptr(),
-            (prefix.len() + len) as u32,
-            10.0,
-            y + line_h * 2.0,
-            12.0,
-            0xCCCCCCFF,
+        set_color(0xCCCCCCFF,
         );
+        draw_text(
+            buf.as_ptr(), (prefix.len() + len) as u32, 10.0, y + line_h * 2.0, 12.0);
 
         // Speed
         let prefix = b"Speed: ";
         buf[..prefix.len()].copy_from_slice(prefix);
         let len = format_float(ANIM_SPEED, &mut buf[prefix.len()..]);
-        draw_text(
-            buf.as_ptr(),
-            (prefix.len() + len) as u32,
-            10.0,
-            y + line_h * 3.0,
-            12.0,
-            0xCCCCCCFF,
+        set_color(0xCCCCCCFF,
         );
+        draw_text(
+            buf.as_ptr(), (prefix.len() + len) as u32, 10.0, y + line_h * 3.0, 12.0);
 
         // Controls
         let ctrl1 = b"A: Toggle mode | D-pad: Speed";
-        draw_text(
-            ctrl1.as_ptr(),
-            ctrl1.len() as u32,
-            10.0,
-            y + line_h * 4.5,
-            10.0,
-            0x888888FF,
+        set_color(0x888888FF,
         );
+        draw_text(
+            ctrl1.as_ptr(), ctrl1.len() as u32, 10.0, y + line_h * 4.5, 10.0);
         let ctrl2 = b"Left stick: Rotate view";
-        draw_text(
-            ctrl2.as_ptr(),
-            ctrl2.len() as u32,
-            10.0,
-            y + line_h * 5.5,
-            10.0,
-            0x888888FF,
+        set_color(0x888888FF,
         );
+        draw_text(
+            ctrl2.as_ptr(), ctrl2.len() as u32, 10.0, y + line_h * 5.5, 10.0);
     }
 }
 

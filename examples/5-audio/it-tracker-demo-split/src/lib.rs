@@ -33,39 +33,11 @@ fn panic(_info: &PanicInfo) -> ! {
 
 // === FFI Imports ===
 
-#[link(wasm_import_module = "env")]
-extern "C" {
-    // Configuration
-    fn set_clear_color(color: u32);
+// Import the canonical FFI bindings
+#[path = "../../../../include/zx.rs"]
+mod ffi;
+use ffi::*;
 
-    // Input
-    fn button_pressed(player: u32, button: u32) -> u32;
-    fn button_held(player: u32, button: u32) -> u32;
-
-    // 2D Drawing
-    fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32);
-    fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
-
-    // ROM Assets
-    fn rom_sound(id_ptr: *const u8, id_len: u32) -> u32;
-    fn rom_tracker(id_ptr: *const u8, id_len: u32) -> u32;
-
-    // Sound playback
-    fn sound_play(handle: u32, volume: f32);
-
-    // Unified Music API
-    fn music_play(handle: u32, volume: f32, looping: u32);
-    fn music_stop();
-    fn music_pause(paused: u32);
-    fn music_set_volume(volume: f32);
-    fn music_is_playing() -> u32;
-    fn music_jump(order: u32, row: u32);
-    fn music_position() -> u32;
-    fn music_set_speed(speed: u32);
-    fn music_set_tempo(bpm: u32);
-    fn music_info(handle: u32) -> u32;
-    fn music_name(handle: u32, out_ptr: *mut u8, max_len: u32) -> u32;
-}
 
 // === Constants ===
 
@@ -164,7 +136,8 @@ const STORM_SAMPLE_NAMES: [&[u8]; 15] = [
 
 fn draw_text_str(s: &[u8], x: f32, y: f32, size: f32, color: u32) {
     unsafe {
-        draw_text(s.as_ptr(), s.len() as u32, x, y, size, color);
+        set_color(color);
+        draw_text(s.as_ptr(), s.len() as u32, x, y, size);
     }
 }
 
@@ -450,16 +423,19 @@ pub extern "C" fn render() {
 
                 // Selection indicator
                 if is_selected {
-                    draw_rect(x - 20.0, y, 12.0, 18.0, COLOR_PREVIEW);
+                    set_color(COLOR_PREVIEW);
+        draw_rect(x - 20.0, y, 12.0, 18.0);
                 }
 
                 // Sample number
                 let num = format_2digit(i + 1);
-                draw_text(num.as_ptr(), 2, x, y, 16.0, COLOR_DARK_GRAY);
+                set_color(COLOR_DARK_GRAY);
+        draw_text(num.as_ptr(), 2, x, y, 16.0);
 
                 // Sample name
                 let name = sample_names[i as usize];
-                draw_text(name.as_ptr(), name.len() as u32, x + 35.0, y, 16.0, color);
+                set_color(color);
+        draw_text(name.as_ptr(), name.len() as u32, x + 35.0, y, 16.0);
             }
 
             // Instructions
@@ -478,7 +454,8 @@ pub extern "C" fn render() {
 
             // Title
             if SONG_NAME_LEN > 0 {
-                draw_text(SONG_NAME.as_ptr(), SONG_NAME_LEN, 420.0, 30.0, 32.0, song_color);
+                set_color(song_color);
+        draw_text(SONG_NAME.as_ptr(), SONG_NAME_LEN, 420.0, 30.0, 32.0);
             } else {
                 let title: &[u8] = match CURRENT_SONG {
                     SONG_DAWN => b"Nether Dawn",
@@ -511,27 +488,34 @@ pub extern "C" fn render() {
 
             draw_text_str(b"Order:", left_x, y, 16.0, COLOR_DARK_GRAY);
             let order_text = format_2digit(order);
-            draw_text(order_text.as_ptr(), 2, left_x + 70.0, y, 16.0, COLOR_WHITE);
+            set_color(COLOR_WHITE);
+        draw_text(order_text.as_ptr(), 2, left_x + 70.0, y, 16.0);
             draw_text_str(b"/", left_x + 95.0, y, 16.0, COLOR_DARK_GRAY);
             let len_text = format_2digit(SONG_LENGTH);
-            draw_text(len_text.as_ptr(), 2, left_x + 105.0, y, 16.0, COLOR_WHITE);
+            set_color(COLOR_WHITE);
+        draw_text(len_text.as_ptr(), 2, left_x + 105.0, y, 16.0);
 
             let bar_x = left_x + 140.0;
-            draw_rect(bar_x, y, 150.0, 14.0, COLOR_DARK_GRAY);
+            set_color(COLOR_DARK_GRAY);
+        draw_rect(bar_x, y, 150.0, 14.0);
             if SONG_LENGTH > 0 {
                 let progress = (order as f32 / SONG_LENGTH as f32) * 150.0;
-                draw_rect(bar_x, y, progress, 14.0, COLOR_ACCENT2);
+                set_color(COLOR_ACCENT2);
+        draw_rect(bar_x, y, progress, 14.0);
             }
             y += 25.0;
 
             draw_text_str(b"Row:", left_x, y, 16.0, COLOR_DARK_GRAY);
             let row_text = format_2digit(row);
-            draw_text(row_text.as_ptr(), 2, left_x + 70.0, y, 16.0, COLOR_WHITE);
+            set_color(COLOR_WHITE);
+        draw_text(row_text.as_ptr(), 2, left_x + 70.0, y, 16.0);
             draw_text_str(b"/64", left_x + 95.0, y, 16.0, COLOR_DARK_GRAY);
 
-            draw_rect(bar_x, y, 150.0, 14.0, COLOR_DARK_GRAY);
+            set_color(COLOR_DARK_GRAY);
+        draw_rect(bar_x, y, 150.0, 14.0);
             let row_progress = (row as f32 / 64.0) * 150.0;
-            draw_rect(bar_x, y, row_progress, 14.0, COLOR_ACCENT);
+            set_color(COLOR_ACCENT);
+        draw_rect(bar_x, y, row_progress, 14.0);
             y += 35.0;
 
             // Timing
@@ -540,13 +524,16 @@ pub extern "C" fn render() {
 
             draw_text_str(b"Tempo:", left_x, y, 16.0, COLOR_DARK_GRAY);
             let tempo_text = format_3digit(CURRENT_TEMPO);
-            draw_text(tempo_text.as_ptr(), 3, left_x + 70.0, y, 16.0, COLOR_WHITE);
+            set_color(COLOR_WHITE);
+        draw_text(tempo_text.as_ptr(), 3, left_x + 70.0, y, 16.0);
             draw_text_str(b"BPM", left_x + 110.0, y, 14.0, COLOR_DARK_GRAY);
             y += 22.0;
 
             draw_text_str(b"Volume:", left_x, y, 16.0, COLOR_DARK_GRAY);
-            draw_rect(left_x + 70.0, y, 180.0, 16.0, COLOR_DARK_GRAY);
-            draw_rect(left_x + 70.0, y, 180.0 * VOLUME, 16.0, COLOR_ACCENT2);
+            set_color(COLOR_DARK_GRAY);
+        draw_rect(left_x + 70.0, y, 180.0, 16.0);
+            set_color(COLOR_ACCENT2);
+        draw_rect(left_x + 70.0, y, 180.0 * VOLUME, 16.0);
 
             // Center visualizer
             let center_x = SCREEN_WIDTH / 2.0;
@@ -567,7 +554,8 @@ pub extern "C" fn render() {
             let pulse = 1.0 - row_frac * 0.3;
             let size = 120.0 * pulse;
 
-            draw_rect(center_x - size / 2.0, center_y - size / 2.0, size, size, beat_color);
+            set_color(beat_color);
+        draw_rect(center_x - size / 2.0, center_y - size / 2.0, size, size);
 
             // Track info (right panel)
             let right_x = 700.0;
@@ -578,18 +566,21 @@ pub extern "C" fn render() {
 
             draw_text_str(b"Channels:", right_x, y, 16.0, COLOR_DARK_GRAY);
             let ch_text = format_2digit(NUM_CHANNELS);
-            draw_text(ch_text.as_ptr(), 2, right_x + 100.0, y, 16.0, COLOR_WHITE);
+            set_color(COLOR_WHITE);
+        draw_text(ch_text.as_ptr(), 2, right_x + 100.0, y, 16.0);
             y += 22.0;
 
             draw_text_str(b"Patterns:", right_x, y, 16.0, COLOR_DARK_GRAY);
             let pat_text = format_2digit(NUM_PATTERNS);
-            draw_text(pat_text.as_ptr(), 2, right_x + 100.0, y, 16.0, COLOR_WHITE);
+            set_color(COLOR_WHITE);
+        draw_text(pat_text.as_ptr(), 2, right_x + 100.0, y, 16.0);
             y += 22.0;
 
             draw_text_str(b"Samples:", right_x, y, 16.0, COLOR_DARK_GRAY);
             let sample_count = get_sample_count();
             let samp_text = format_2digit(sample_count);
-            draw_text(samp_text.as_ptr(), 2, right_x + 100.0, y, 16.0, COLOR_WHITE);
+            set_color(COLOR_WHITE);
+        draw_text(samp_text.as_ptr(), 2, right_x + 100.0, y, 16.0);
             y += 35.0;
 
             draw_text_str(b"SPLIT ASSETS MODE", right_x, y, 14.0, COLOR_PREVIEW);

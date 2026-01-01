@@ -29,36 +29,11 @@ fn panic(_info: &PanicInfo) -> ! {
 
 // === FFI Imports ===
 
-#[link(wasm_import_module = "env")]
-extern "C" {
-    // Configuration
-    fn set_clear_color(color: u32);
+// Import the canonical FFI bindings
+#[path = "../../../../include/zx.rs"]
+mod ffi;
+use ffi::*;
 
-    // Input
-    fn button_pressed(player: u32, button: u32) -> u32;
-    fn button_held(player: u32, button: u32) -> u32;
-
-    // 2D Drawing
-    fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32);
-    fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
-
-    // ROM Assets
-    fn rom_sound(id_ptr: *const u8, id_len: u32) -> u32;
-    fn rom_tracker(id_ptr: *const u8, id_len: u32) -> u32;
-
-    // Unified Music API (works with both PCM and tracker handles)
-    fn music_play(handle: u32, volume: f32, looping: u32);
-    fn music_stop();
-    fn music_pause(paused: u32);
-    fn music_set_volume(volume: f32);
-    fn music_is_playing() -> u32;
-    fn music_jump(order: u32, row: u32);
-    fn music_position() -> u32;
-    fn music_set_speed(speed: u32);
-    fn music_set_tempo(bpm: u32);
-    fn music_info(handle: u32) -> u32;
-    fn music_name(handle: u32, out_ptr: *mut u8, max_len: u32) -> u32;
-}
 
 // === Constants ===
 
@@ -128,7 +103,8 @@ static mut SONG_NAME_LEN: u32 = 0;
 
 fn draw_text_str(s: &[u8], x: f32, y: f32, size: f32, color: u32) {
     unsafe {
-        draw_text(s.as_ptr(), s.len() as u32, x, y, size, color);
+        set_color(color);
+        draw_text(s.as_ptr(), s.len() as u32, x, y, size);
     }
 }
 
@@ -368,7 +344,8 @@ pub extern "C" fn render() {
 
         // Title (song name if available, otherwise default)
         if SONG_NAME_LEN > 0 {
-            draw_text(SONG_NAME.as_ptr(), SONG_NAME_LEN, 380.0, 30.0, 32.0, song_color);
+            set_color(song_color);
+        draw_text(SONG_NAME.as_ptr(), SONG_NAME_LEN, 380.0, 30.0, 32.0);
         } else {
             let title: &[u8] = match CURRENT_SONG {
                 SONG_DAWN => b"Nether Dawn",
@@ -409,30 +386,37 @@ pub extern "C" fn render() {
         // Order / Song Length progress bar
         draw_text_str(b"Order:", left_x, y, 16.0, COLOR_DARK_GRAY);
         let order_text = format_2digit(order);
-        draw_text(order_text.as_ptr(), 2, left_x + 70.0, y, 16.0, COLOR_WHITE);
+        set_color(COLOR_WHITE);
+        draw_text(order_text.as_ptr(), 2, left_x + 70.0, y, 16.0);
         draw_text_str(b"/", left_x + 95.0, y, 16.0, COLOR_DARK_GRAY);
         let len_text = format_2digit(SONG_LENGTH);
-        draw_text(len_text.as_ptr(), 2, left_x + 105.0, y, 16.0, COLOR_WHITE);
+        set_color(COLOR_WHITE);
+        draw_text(len_text.as_ptr(), 2, left_x + 105.0, y, 16.0);
 
         // Order progress bar
         let bar_x = left_x + 140.0;
-        draw_rect(bar_x, y, 150.0, 14.0, COLOR_DARK_GRAY);
+        set_color(COLOR_DARK_GRAY);
+        draw_rect(bar_x, y, 150.0, 14.0);
         if SONG_LENGTH > 0 {
             let progress = (order as f32 / SONG_LENGTH as f32) * 150.0;
-            draw_rect(bar_x, y, progress, 14.0, COLOR_ACCENT2);
+            set_color(COLOR_ACCENT2);
+        draw_rect(bar_x, y, progress, 14.0);
         }
         y += 25.0;
 
         // Row display with progress (64 rows for IT patterns)
         draw_text_str(b"Row:", left_x, y, 16.0, COLOR_DARK_GRAY);
         let row_text = format_2digit(row);
-        draw_text(row_text.as_ptr(), 2, left_x + 70.0, y, 16.0, COLOR_WHITE);
+        set_color(COLOR_WHITE);
+        draw_text(row_text.as_ptr(), 2, left_x + 70.0, y, 16.0);
         draw_text_str(b"/64", left_x + 95.0, y, 16.0, COLOR_DARK_GRAY);
 
         // Row progress bar
-        draw_rect(bar_x, y, 150.0, 14.0, COLOR_DARK_GRAY);
+        set_color(COLOR_DARK_GRAY);
+        draw_rect(bar_x, y, 150.0, 14.0);
         let row_progress = (row as f32 / 64.0) * 150.0;
-        draw_rect(bar_x, y, row_progress, 14.0, COLOR_ACCENT);
+        set_color(COLOR_ACCENT);
+        draw_rect(bar_x, y, row_progress, 14.0);
         y += 35.0;
 
         // === Timing Section ===
@@ -442,24 +426,29 @@ pub extern "C" fn render() {
         // Tempo
         draw_text_str(b"Tempo:", left_x, y, 16.0, COLOR_DARK_GRAY);
         let tempo_text = format_3digit(CURRENT_TEMPO);
-        draw_text(tempo_text.as_ptr(), 3, left_x + 70.0, y, 16.0, COLOR_WHITE);
+        set_color(COLOR_WHITE);
+        draw_text(tempo_text.as_ptr(), 3, left_x + 70.0, y, 16.0);
         draw_text_str(b"BPM", left_x + 110.0, y, 14.0, COLOR_DARK_GRAY);
         y += 22.0;
 
         // Speed
         draw_text_str(b"Speed:", left_x, y, 16.0, COLOR_DARK_GRAY);
         let speed_text = format_2digit(CURRENT_SPEED);
-        draw_text(speed_text.as_ptr(), 2, left_x + 70.0, y, 16.0, COLOR_WHITE);
+        set_color(COLOR_WHITE);
+        draw_text(speed_text.as_ptr(), 2, left_x + 70.0, y, 16.0);
         draw_text_str(b"ticks/row", left_x + 100.0, y, 14.0, COLOR_DARK_GRAY);
         y += 35.0;
 
         // Volume bar
         draw_text_str(b"Volume:", left_x, y, 16.0, COLOR_DARK_GRAY);
-        draw_rect(left_x + 70.0, y, 180.0, 16.0, COLOR_DARK_GRAY);
-        draw_rect(left_x + 70.0, y, 180.0 * VOLUME, 16.0, COLOR_ACCENT2);
+        set_color(COLOR_DARK_GRAY);
+        draw_rect(left_x + 70.0, y, 180.0, 16.0);
+        set_color(COLOR_ACCENT2);
+        draw_rect(left_x + 70.0, y, 180.0 * VOLUME, 16.0);
         let vol_pct = (VOLUME * 100.0) as u32;
         let vol_text = format_3digit(vol_pct);
-        draw_text(vol_text.as_ptr(), 3, left_x + 260.0, y, 14.0, COLOR_WHITE);
+        set_color(COLOR_WHITE);
+        draw_text(vol_text.as_ptr(), 3, left_x + 260.0, y, 14.0);
         draw_text_str(b"%", left_x + 295.0, y, 14.0, COLOR_DARK_GRAY);
 
         // === Center: Beat Visualizer ===
@@ -502,7 +491,8 @@ pub extern "C" fn render() {
 
         let rect_x = center_x - size / 2.0;
         let rect_y = center_y - size / 2.0;
-        draw_rect(rect_x, rect_y, size, size, beat_color);
+        set_color(beat_color);
+        draw_rect(rect_x, rect_y, size, size);
 
         // Row indicator dots (64 rows in pattern, shown in 4 rows of 16)
         let dot_start_x = center_x - 120.0;
@@ -521,7 +511,8 @@ pub extern "C" fn render() {
                 } else {
                     COLOR_DARK_GRAY
                 };
-                draw_rect(dot_x, dot_row_y, 10.0, 10.0, dot_color);
+                set_color(dot_color);
+        draw_rect(dot_x, dot_row_y, 10.0, 10.0);
             }
         }
 
@@ -536,19 +527,22 @@ pub extern "C" fn render() {
         // Number of channels
         draw_text_str(b"Channels:", right_x, y, 16.0, COLOR_DARK_GRAY);
         let ch_text = format_2digit(NUM_CHANNELS);
-        draw_text(ch_text.as_ptr(), 2, right_x + 100.0, y, 16.0, COLOR_WHITE);
+        set_color(COLOR_WHITE);
+        draw_text(ch_text.as_ptr(), 2, right_x + 100.0, y, 16.0);
         y += 22.0;
 
         // Number of patterns
         draw_text_str(b"Patterns:", right_x, y, 16.0, COLOR_DARK_GRAY);
         let pat_text = format_2digit(NUM_PATTERNS);
-        draw_text(pat_text.as_ptr(), 2, right_x + 100.0, y, 16.0, COLOR_WHITE);
+        set_color(COLOR_WHITE);
+        draw_text(pat_text.as_ptr(), 2, right_x + 100.0, y, 16.0);
         y += 22.0;
 
         // Number of instruments
         draw_text_str(b"Instruments:", right_x, y, 16.0, COLOR_DARK_GRAY);
         let inst_text = format_2digit(NUM_INSTRUMENTS);
-        draw_text(inst_text.as_ptr(), 2, right_x + 120.0, y, 16.0, COLOR_WHITE);
+        set_color(COLOR_WHITE);
+        draw_text(inst_text.as_ptr(), 2, right_x + 120.0, y, 16.0);
         y += 35.0;
 
         // Channel activity
@@ -588,9 +582,11 @@ pub extern "C" fn render() {
 
                 for i in 0..8 {
                     let color = if ch_active[i] { active_color } else { inactive_color };
-                    draw_text(ch_names[i].as_ptr(), ch_names[i].len() as u32, right_x, y, 14.0, color);
+                    set_color(color);
+        draw_text(ch_names[i].as_ptr(), ch_names[i].len() as u32, right_x, y, 14.0);
                     if ch_active[i] {
-                        draw_rect(right_x + 80.0, y + 2.0, 40.0, 10.0, active_color);
+                        set_color(active_color);
+        draw_rect(right_x + 80.0, y + 2.0, 40.0, 10.0);
                     }
                     y += 18.0;
                 }
@@ -623,9 +619,11 @@ pub extern "C" fn render() {
 
                 for i in 0..8 {
                     let color = if ch_active[i] { active_color } else { inactive_color };
-                    draw_text(ch_names[i].as_ptr(), ch_names[i].len() as u32, right_x, y, 14.0, color);
+                    set_color(color);
+        draw_text(ch_names[i].as_ptr(), ch_names[i].len() as u32, right_x, y, 14.0);
                     if ch_active[i] {
-                        draw_rect(right_x + 80.0, y + 2.0, 40.0, 10.0, active_color);
+                        set_color(active_color);
+        draw_rect(right_x + 80.0, y + 2.0, 40.0, 10.0);
                     }
                     y += 18.0;
                 }
@@ -658,9 +656,11 @@ pub extern "C" fn render() {
 
                 for i in 0..8 {
                     let color = if ch_active[i] { active_color } else { inactive_color };
-                    draw_text(ch_names[i].as_ptr(), ch_names[i].len() as u32, right_x, y, 14.0, color);
+                    set_color(color);
+        draw_text(ch_names[i].as_ptr(), ch_names[i].len() as u32, right_x, y, 14.0);
                     if ch_active[i] {
-                        draw_rect(right_x + 80.0, y + 2.0, 40.0, 10.0, active_color);
+                        set_color(active_color);
+        draw_rect(right_x + 80.0, y + 2.0, 40.0, 10.0);
                     }
                     y += 18.0;
                 }

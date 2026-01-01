@@ -44,42 +44,11 @@ fn panic(_info: &PanicInfo) -> ! {
     core::arch::wasm32::unreachable()
 }
 
-#[link(wasm_import_module = "env")]
-extern "C" {
-    // Configuration
-    fn set_clear_color(color: u32);
+// Import the canonical FFI bindings
+#[path = "../../../../include/zx.rs"]
+mod ffi;
+use ffi::*;
 
-    // Camera
-    fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
-    fn camera_fov(fov_degrees: f32);
-
-    // Input
-    fn button_pressed(player: u32, button: u32) -> u32;
-    fn button_held(player: u32, button: u32) -> u32;
-
-    // Mesh
-    fn load_mesh_indexed(
-        data: *const f32,
-        vertex_count: u32,
-        indices: *const u16,
-        index_count: u32,
-        format: u32,
-    ) -> u32;
-    fn draw_mesh(handle: u32);
-
-    // GPU Skinning - 3x4 matrices (12 floats per bone, row-major)
-    fn set_bones(matrices_ptr: *const f32, count: u32);
-
-    // Transform
-    fn push_identity();
-
-    // Render state
-    fn set_color(color: u32);
-    fn depth_test(enabled: u32);
-
-    // 2D UI
-    fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
-}
 
 /// Vertex format flags
 const FORMAT_NORMAL: u32 = 4;
@@ -475,26 +444,32 @@ pub extern "C" fn render() {
         let line_h = 18.0;
 
         let title = b"GPU Skinning (3x4 Matrices)";
-        draw_text(title.as_ptr(), title.len() as u32, 10.0, y, 16.0, 0xFFFFFFFF);
+        set_color(0xFFFFFFFF);
+        draw_text(title.as_ptr(), title.len() as u32, 10.0, y, 16.0);
 
         let mut buf = [0u8; 32];
 
         let prefix = b"Speed (D-pad): ";
         let len = format_float(ANIM_SPEED, &mut buf[prefix.len()..]);
         buf[..prefix.len()].copy_from_slice(prefix);
-        draw_text(buf.as_ptr(), (prefix.len() + len) as u32, 10.0, y + line_h, 12.0, 0xCCCCCCFF);
+        set_color(0xCCCCCCFF);
+        draw_text(buf.as_ptr(), (prefix.len() + len) as u32, 10.0, y + line_h, 12.0);
 
         let status = if PAUSED { b"Status: PAUSED (A)" as &[u8] } else { b"Status: Playing (A)" as &[u8] };
-        draw_text(status.as_ptr(), status.len() as u32, 10.0, y + line_h * 2.0, 12.0, 0xCCCCCCFF);
+        set_color(0xCCCCCCFF);
+        draw_text(status.as_ptr(), status.len() as u32, 10.0, y + line_h * 2.0, 12.0);
 
         let bones_label = b"3 bones, 12 floats/bone (25% savings)";
-        draw_text(bones_label.as_ptr(), bones_label.len() as u32, 10.0, y + line_h * 3.5, 10.0, 0x888888FF);
+        set_color(0x888888FF);
+        draw_text(bones_label.as_ptr(), bones_label.len() as u32, 10.0, y + line_h * 3.5, 10.0);
 
         // Controls
         let ctrl1 = b"Left stick: Rotate view | A: Toggle pause";
-        draw_text(ctrl1.as_ptr(), ctrl1.len() as u32, 10.0, y + line_h * 4.5, 10.0, 0x666666FF);
+        set_color(0x666666FF);
+        draw_text(ctrl1.as_ptr(), ctrl1.len() as u32, 10.0, y + line_h * 4.5, 10.0);
 
         let ctrl2 = b"D-pad Up/Down: Animation speed";
-        draw_text(ctrl2.as_ptr(), ctrl2.len() as u32, 10.0, y + line_h * 5.5, 10.0, 0x666666FF);
+        set_color(0x666666FF);
+        draw_text(ctrl2.as_ptr(), ctrl2.len() as u32, 10.0, y + line_h * 5.5, 10.0);
     }
 }

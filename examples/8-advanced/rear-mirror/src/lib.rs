@@ -17,60 +17,11 @@ fn panic(_info: &PanicInfo) -> ! {
     core::arch::wasm32::unreachable()
 }
 
-#[link(wasm_import_module = "env")]
-extern "C" {
-    // Configuration
-    fn set_clear_color(color: u32);
-    fn render_mode(mode: u32);
+// Import the canonical FFI bindings
+#[path = "../../../../include/zx.rs"]
+mod ffi;
+use ffi::*;
 
-    // Camera
-    fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
-    fn camera_fov(fov_degrees: f32);
-
-    // Viewport
-    fn viewport(x: u32, y: u32, width: u32, height: u32);
-    fn viewport_clear();
-
-    // Input
-    fn button_held(player: u32, button: u32) -> u32;
-    fn left_stick_x(player: u32) -> f32;
-    fn left_stick_y(player: u32) -> f32;
-
-    // Procedural mesh generation
-    fn cube(size_x: f32, size_y: f32, size_z: f32) -> u32;
-    fn sphere(radius: f32, segments: u32, rings: u32) -> u32;
-    fn plane(size_x: f32, size_z: f32, subdivisions_x: u32, subdivisions_z: u32) -> u32;
-    fn cylinder(radius_bottom: f32, radius_top: f32, height: f32, segments: u32) -> u32;
-
-    // Mesh drawing
-    fn draw_mesh(handle: u32);
-
-    // Transform
-    fn push_identity();
-    fn push_translate(x: f32, y: f32, z: f32);
-    fn push_rotate_y(angle_deg: f32);
-    fn push_scale(x: f32, y: f32, z: f32);
-
-    // Render state
-    fn set_color(color: u32);
-    fn depth_test(enabled: u32);
-
-    // Environment
-    fn env_gradient(
-        layer: u32,
-        zenith: u32,
-        sky_horizon: u32,
-        ground_horizon: u32,
-        nadir: u32,
-        rotation: f32,
-        shift: f32,
-    );
-    fn draw_env();
-
-    // 2D drawing
-    fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
-    fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32);
-}
 
 // Input (button indices from zx.rs)
 const BUTTON_A: u32 = 4;
@@ -268,13 +219,10 @@ pub extern "C" fn render() {
         if SHOW_MIRROR {
             // Draw mirror frame/border
             viewport_clear();
-            draw_rect(
-                MIRROR_X as f32 - 4.0,
-                MIRROR_Y as f32 - 4.0,
-                MIRROR_WIDTH as f32 + 8.0,
-                MIRROR_HEIGHT as f32 + 8.0,
-                0x222222FF,
+            set_color(0x222222FF,
             );
+        draw_rect(
+                MIRROR_X as f32 - 4.0, MIRROR_Y as f32 - 4.0, MIRROR_WIDTH as f32 + 8.0, MIRROR_HEIGHT as f32 + 8.0);
 
             // Draw mirror contents
             viewport(MIRROR_X, MIRROR_Y, MIRROR_WIDTH, MIRROR_HEIGHT);
@@ -283,14 +231,10 @@ pub extern "C" fn render() {
             // Mirror label
             viewport_clear();
             let mirror_text = "REAR VIEW";
-            draw_text(
-                mirror_text.as_ptr(),
-                mirror_text.len() as u32,
-                MIRROR_X as f32 + MIRROR_WIDTH as f32 / 2.0 - 40.0,
-                MIRROR_Y as f32 + MIRROR_HEIGHT as f32 + 8.0,
-                12.0,
-                0x888888FF,
+            set_color(0x888888FF,
             );
+        draw_text(
+                mirror_text.as_ptr(), mirror_text.len() as u32, MIRROR_X as f32 + MIRROR_WIDTH as f32 / 2.0 - 40.0, MIRROR_Y as f32 + MIRROR_HEIGHT as f32 + 8.0, 12.0);
         }
 
         // HUD
@@ -298,70 +242,46 @@ pub extern "C" fn render() {
 
         // Title
         let title = "REAR-VIEW MIRROR DEMO";
-        draw_text(
-            title.as_ptr(),
-            title.len() as u32,
-            10.0,
-            10.0,
-            24.0,
-            0xFFFFFFFF,
+        set_color(0xFFFFFFFF,
         );
+        draw_text(
+            title.as_ptr(), title.len() as u32, 10.0, 10.0, 24.0);
 
         // Explanation
         let explain = "Uses viewport() for picture-in-picture mirror view";
-        draw_text(
-            explain.as_ptr(),
-            explain.len() as u32,
-            10.0,
-            40.0,
-            12.0,
-            0x888888FF,
+        set_color(0x888888FF,
         );
+        draw_text(
+            explain.as_ptr(), explain.len() as u32, 10.0, 40.0, 12.0);
 
         // Mirror status
         let mirror_status = if SHOW_MIRROR { "Mirror: ON" } else { "Mirror: OFF" };
-        draw_text(
-            mirror_status.as_ptr(),
-            mirror_status.len() as u32,
-            10.0,
-            60.0,
-            14.0,
-            if SHOW_MIRROR { 0x88FF88FF } else { 0xFF8888FF },
+        set_color(if SHOW_MIRROR { 0x88FF88FF } else { 0xFF8888FF },
         );
+        draw_text(
+            mirror_status.as_ptr(), mirror_status.len() as u32, 10.0, 60.0, 14.0);
 
         // Speed display
         let speed_label = "Speed: ";
-        draw_text(
-            speed_label.as_ptr(),
-            speed_label.len() as u32,
-            SCREEN_WIDTH as f32 - 150.0,
-            SCREEN_HEIGHT as f32 - 60.0,
-            16.0,
-            0xAAAAAAFF,
+        set_color(0xAAAAAAFF,
         );
+        draw_text(
+            speed_label.as_ptr(), speed_label.len() as u32, SCREEN_WIDTH as f32 - 150.0, SCREEN_HEIGHT as f32 - 60.0, 16.0);
 
         // Controls at bottom
         let controls = "Controls: Left Stick = Steer/Accelerate | A = Toggle Mirror";
-        draw_text(
-            controls.as_ptr(),
-            controls.len() as u32,
-            10.0,
-            SCREEN_HEIGHT as f32 - 30.0,
-            14.0,
-            0xAAAAAAFF,
+        set_color(0xAAAAAAFF,
         );
+        draw_text(
+            controls.as_ptr(), controls.len() as u32, 10.0, SCREEN_HEIGHT as f32 - 30.0, 14.0);
 
         // Red car warning if visible in mirror
         if SHOW_MIRROR {
             let warning = "Watch for red car behind you!";
-            draw_text(
-                warning.as_ptr(),
-                warning.len() as u32,
-                SCREEN_WIDTH as f32 / 2.0 - 100.0,
-                SCREEN_HEIGHT as f32 - 50.0,
-                12.0,
-                0xFF4444FF,
+            set_color(0xFF4444FF,
             );
+        draw_text(
+                warning.as_ptr(), warning.len() as u32, SCREEN_WIDTH as f32 / 2.0 - 100.0, SCREEN_HEIGHT as f32 - 50.0, 12.0);
         }
     }
 }

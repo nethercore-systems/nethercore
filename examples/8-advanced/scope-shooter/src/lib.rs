@@ -17,55 +17,11 @@ fn panic(_info: &PanicInfo) -> ! {
     core::arch::wasm32::unreachable()
 }
 
-#[link(wasm_import_module = "env")]
-extern "C" {
-    // Configuration
-    fn set_clear_color(color: u32);
-    fn render_mode(mode: u32);
+// Import the canonical FFI bindings
+#[path = "../../../../include/zx.rs"]
+mod ffi;
+use ffi::*;
 
-    // Camera
-    fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
-    fn camera_fov(fov_degrees: f32);
-
-    // Stencil functions
-    fn stencil_begin();
-    fn stencil_end();
-    fn stencil_clear();
-    fn stencil_invert();
-
-    // Input
-    fn button_held(player: u32, button: u32) -> u32;
-    fn left_stick_x(player: u32) -> f32;
-    fn left_stick_y(player: u32) -> f32;
-    fn trigger_right(player: u32) -> f32;
-
-    // Procedural mesh generation
-    fn cube(size_x: f32, size_y: f32, size_z: f32) -> u32;
-    fn sphere(radius: f32, segments: u32, rings: u32) -> u32;
-    fn plane(size_x: f32, size_z: f32, subdivisions_x: u32, subdivisions_z: u32) -> u32;
-
-    // Mesh drawing
-    fn draw_mesh(handle: u32);
-
-    // Immediate mode triangles
-    fn draw_triangles(data_ptr: *const f32, vertex_count: u32, format: u32);
-
-    // Transform
-    fn push_identity();
-    fn push_translate(x: f32, y: f32, z: f32);
-    fn push_rotate_y(angle_deg: f32);
-    fn push_scale(x: f32, y: f32, z: f32);
-
-    // Render state
-    fn set_color(color: u32);
-    fn depth_test(enabled: u32);
-
-    // 2D drawing
-    fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
-    fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32);
-    fn draw_circle(x: f32, y: f32, radius: f32, color: u32);
-    fn draw_line(x1: f32, y1: f32, x2: f32, y2: f32, thickness: f32, color: u32);
-}
 
 // Input (button indices from zx.rs)
 const BUTTON_A: u32 = 4;
@@ -251,25 +207,20 @@ unsafe fn draw_reticle() {
     );
 
     // Center dot
-    draw_rect(CENTER_X - 2.0, CENTER_Y - 2.0, 4.0, 4.0, reticle_color);
+    set_color(reticle_color);
+        draw_rect(CENTER_X - 2.0, CENTER_Y - 2.0, 4.0, 4.0);
 
     // Mil-dots on horizontal line
     for i in 1..5 {
         let offset = i as f32 * 30.0;
-        draw_rect(
-            CENTER_X + offset - 1.5,
-            CENTER_Y - 4.0,
-            3.0,
-            8.0,
-            reticle_color,
+        set_color(reticle_color,
         );
         draw_rect(
-            CENTER_X - offset - 1.5,
-            CENTER_Y - 4.0,
-            3.0,
-            8.0,
-            reticle_color,
+            CENTER_X + offset - 1.5, CENTER_Y - 4.0, 3.0, 8.0);
+        set_color(reticle_color,
         );
+        draw_rect(
+            CENTER_X - offset - 1.5, CENTER_Y - 4.0, 3.0, 8.0);
     }
 }
 
@@ -279,31 +230,23 @@ unsafe fn draw_scope_border() {
 
     // Draw black vignette outside scope (non-overlapping rectangles)
     // Top
-    draw_rect(0.0, 0.0, SCREEN_WIDTH, CENTER_Y - SCOPE_RADIUS, border_color);
+    set_color(border_color);
+        draw_rect(0.0, 0.0, SCREEN_WIDTH, CENTER_Y - SCOPE_RADIUS);
     // Bottom
-    draw_rect(
-        0.0,
-        CENTER_Y + SCOPE_RADIUS,
-        SCREEN_WIDTH,
-        SCREEN_HEIGHT - (CENTER_Y + SCOPE_RADIUS),
-        border_color,
+    set_color(border_color,
     );
+        draw_rect(
+        0.0, CENTER_Y + SCOPE_RADIUS, SCREEN_WIDTH, SCREEN_HEIGHT - (CENTER_Y + SCOPE_RADIUS));
     // Left (only the middle band to avoid overlap)
-    draw_rect(
-        0.0,
-        CENTER_Y - SCOPE_RADIUS,
-        CENTER_X - SCOPE_RADIUS,
-        SCOPE_RADIUS * 2.0,
-        border_color,
+    set_color(border_color,
     );
+        draw_rect(
+        0.0, CENTER_Y - SCOPE_RADIUS, CENTER_X - SCOPE_RADIUS, SCOPE_RADIUS * 2.0);
     // Right (only the middle band to avoid overlap)
-    draw_rect(
-        CENTER_X + SCOPE_RADIUS,
-        CENTER_Y - SCOPE_RADIUS,
-        SCREEN_WIDTH - (CENTER_X + SCOPE_RADIUS),
-        SCOPE_RADIUS * 2.0,
-        border_color,
+    set_color(border_color,
     );
+        draw_rect(
+        CENTER_X + SCOPE_RADIUS, CENTER_Y - SCOPE_RADIUS, SCREEN_WIDTH - (CENTER_X + SCOPE_RADIUS), SCOPE_RADIUS * 2.0);
 }
 
 #[no_mangle]
@@ -314,7 +257,8 @@ pub extern "C" fn render() {
             stencil_begin();
             draw_scope_mask();
             stencil_invert(); // Render OUTSIDE the circle
-            draw_rect(0.0, 0.0, SCREEN_WIDTH, SCREEN_HEIGHT, 0x111111FF);
+            set_color(0x111111FF);
+        draw_rect(0.0, 0.0, SCREEN_WIDTH, SCREEN_HEIGHT);
             stencil_clear();
 
             // Draw zoomed scene inside scope
@@ -329,14 +273,10 @@ pub extern "C" fn render() {
 
             // Scope frame text
             let zoom_text = "8x ZOOM";
-            draw_text(
-                zoom_text.as_ptr(),
-                zoom_text.len() as u32,
-                CENTER_X - SCOPE_RADIUS + 20.0,
-                CENTER_Y + SCOPE_RADIUS - 30.0,
-                14.0,
-                0x00FF00AA,
+            set_color(0x00FF00AA,
             );
+        draw_text(
+                zoom_text.as_ptr(), zoom_text.len() as u32, CENTER_X - SCOPE_RADIUS + 20.0, CENTER_Y + SCOPE_RADIUS - 30.0, 14.0);
         } else {
             // Normal unscoped view
             draw_scene(NORMAL_FOV);
@@ -364,31 +304,24 @@ pub extern "C" fn render() {
         if FIRE_FLASH > 0.0 {
             let alpha = (FIRE_FLASH * 255.0 * 2.0) as u32;
             let flash_color = 0xFFFF00 << 8 | alpha.min(255);
-            draw_rect(0.0, 0.0, SCREEN_WIDTH, SCREEN_HEIGHT, flash_color);
+            set_color(flash_color);
+        draw_rect(0.0, 0.0, SCREEN_WIDTH, SCREEN_HEIGHT);
         }
 
         // UI - Title (top left, only when not scoped)
         if !IS_SCOPED {
             let title = "SNIPER SCOPE DEMO";
-            draw_text(
-                title.as_ptr(),
-                title.len() as u32,
-                10.0,
-                10.0,
-                24.0,
-                0xFFFFFFFF,
+            set_color(0xFFFFFFFF,
             );
+        draw_text(
+                title.as_ptr(), title.len() as u32, 10.0, 10.0, 24.0);
 
             // Explanation
             let explain = "Stencil masks the scope view to a circle";
-            draw_text(
-                explain.as_ptr(),
-                explain.len() as u32,
-                10.0,
-                40.0,
-                12.0,
-                0x888888FF,
+            set_color(0x888888FF,
             );
+        draw_text(
+                explain.as_ptr(), explain.len() as u32, 10.0, 40.0, 12.0);
         }
 
         // Controls at bottom
@@ -397,24 +330,16 @@ pub extern "C" fn render() {
         } else {
             "Controls: Left Stick = Look | Hold B or Right Trigger = Scope | A = Fire"
         };
-        draw_text(
-            controls.as_ptr(),
-            controls.len() as u32,
-            10.0,
-            SCREEN_HEIGHT - 30.0,
-            14.0,
-            0xAAAAAAFF,
+        set_color(0xAAAAAAFF,
         );
+        draw_text(
+            controls.as_ptr(), controls.len() as u32, 10.0, SCREEN_HEIGHT - 30.0, 14.0);
 
         // Status indicator
         let status = if IS_SCOPED { "SCOPED - 8x Zoom" } else { "Hip Fire" };
-        draw_text(
-            status.as_ptr(),
-            status.len() as u32,
-            SCREEN_WIDTH - 150.0,
-            10.0,
-            16.0,
-            if IS_SCOPED { 0x00FF00FF } else { 0xFFFFFFFF },
+        set_color(if IS_SCOPED { 0x00FF00FF } else { 0xFFFFFFFF },
         );
+        draw_text(
+            status.as_ptr(), status.len() as u32, SCREEN_WIDTH - 150.0, 10.0, 16.0);
     }
 }

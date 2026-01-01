@@ -21,46 +21,11 @@ fn panic(_info: &PanicInfo) -> ! {
     core::arch::wasm32::unreachable()
 }
 
-#[link(wasm_import_module = "env")]
-extern "C" {
-    // Configuration
-    fn set_clear_color(color: u32);
-    fn render_mode(mode: u32);
+// Import the canonical FFI bindings
+#[path = "../../../../include/zx.rs"]
+mod ffi;
+use ffi::*;
 
-    // Camera
-    fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
-    fn camera_fov(fov_degrees: f32);
-
-    // Viewport (split-screen)
-    fn viewport(x: u32, y: u32, width: u32, height: u32);
-    fn viewport_clear();
-
-    // Input
-    fn button_held(player: u32, button: u32) -> u32;
-    fn left_stick_x(player: u32) -> f32;
-    fn left_stick_y(player: u32) -> f32;
-
-    // Procedural mesh generation
-    fn cube(size_x: f32, size_y: f32, size_z: f32) -> u32;
-    fn sphere(radius: f32, segments: u32, rings: u32) -> u32;
-    fn plane(size_x: f32, size_z: f32, subdivisions_x: u32, subdivisions_z: u32) -> u32;
-
-    // Mesh drawing
-    fn draw_mesh(handle: u32);
-
-    // Transform
-    fn push_identity();
-    fn push_translate(x: f32, y: f32, z: f32);
-    fn push_rotate_y(angle_deg: f32);
-
-    // Render state
-    fn set_color(color: u32);
-    fn depth_test(enabled: u32);
-
-    // 2D drawing
-    fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
-    fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32);
-}
 
 // Input button constants
 const BUTTON_A: u32 = 4;
@@ -172,7 +137,8 @@ unsafe fn draw_player_label(player: usize) {
         3 => "P4",
         _ => "??",
     };
-    draw_text(text.as_ptr(), text.len() as u32, 10.0, 10.0, 24.0, 0xFFFFFFFF);
+    set_color(0xFFFFFFFF);
+        draw_text(text.as_ptr(), text.len() as u32, 10.0, 10.0, 24.0);
 }
 
 #[no_mangle]
@@ -209,8 +175,10 @@ pub extern "C" fn render() {
 
             // Draw divider lines on fullscreen viewport
             viewport_clear();
-            draw_rect(half_w as f32 - 1.0, 0.0, 2.0, SCREEN_HEIGHT as f32, 0x000000FF);
-            draw_rect(0.0, half_h as f32 - 1.0, SCREEN_WIDTH as f32, 2.0, 0x000000FF);
+            set_color(0x000000FF);
+        draw_rect(half_w as f32 - 1.0, 0.0, 2.0, SCREEN_HEIGHT as f32);
+            set_color(0x000000FF);
+        draw_rect(0.0, half_h as f32 - 1.0, SCREEN_WIDTH as f32, 2.0);
         } else {
             // 2-player horizontal split
             let half_w = SCREEN_WIDTH / 2;
@@ -229,19 +197,16 @@ pub extern "C" fn render() {
 
             // Draw divider line on fullscreen viewport
             viewport_clear();
-            draw_rect(half_w as f32 - 1.0, 0.0, 2.0, SCREEN_HEIGHT as f32, 0x000000FF);
+            set_color(0x000000FF);
+        draw_rect(half_w as f32 - 1.0, 0.0, 2.0, SCREEN_HEIGHT as f32);
         }
 
         // HUD overlay on fullscreen
         viewport_clear();
         let mode_text = if IS_4_PLAYER { "4-Player Mode (Press A to switch)" } else { "2-Player Mode (Press A to switch)" };
-        draw_text(
-            mode_text.as_ptr(),
-            mode_text.len() as u32,
-            SCREEN_WIDTH as f32 / 2.0 - 180.0,
-            SCREEN_HEIGHT as f32 - 30.0,
-            16.0,
-            0xCCCCCCFF,
+        set_color(0xCCCCCCFF,
         );
+        draw_text(
+            mode_text.as_ptr(), mode_text.len() as u32, SCREEN_WIDTH as f32 / 2.0 - 180.0, SCREEN_HEIGHT as f32 - 30.0, 16.0);
     }
 }

@@ -375,7 +375,8 @@ unsafe fn draw_light_indicators() {
 unsafe fn draw_ui() {
     // Title
     let title = b"Mode 3: Blinn-Phong (Specular-Shininess)";
-    draw_text(title.as_ptr(), title.len() as u32, 10.0, 10.0, 20.0, 0xFFFFFFFF);
+    set_color(0xFFFFFFFF);
+        draw_text(title.as_ptr(), title.len() as u32, 10.0, 10.0, 20.0);
 
     // Current shape
     let shape_name = SHAPE_NAMES[SHAPE_INDEX as usize];
@@ -384,19 +385,24 @@ unsafe fn draw_ui() {
     label[..prefix.len()].copy_from_slice(prefix);
     let name_bytes = shape_name.as_bytes();
     label[prefix.len()..prefix.len() + name_bytes.len()].copy_from_slice(name_bytes);
-    draw_text(label.as_ptr(), (prefix.len() + name_bytes.len()) as u32, 10.0, 40.0, 16.0, 0xCCCCCCFF);
+    set_color(0xCCCCCCFF);
+        draw_text(label.as_ptr(), (prefix.len() + name_bytes.len()) as u32, 10.0, 40.0, 16.0);
 
     // Material info
     let mat_info = b"Explicit specular color control";
-    draw_text(mat_info.as_ptr(), mat_info.len() as u32, 10.0, 60.0, 14.0, 0xFFAAAAFF);
+    set_color(0xFFAAAAFF);
+        draw_text(mat_info.as_ptr(), mat_info.len() as u32, 10.0, 60.0, 14.0);
 
     // Instructions - comprehensive controls
     let hint1 = b"A: Cycle shapes | Left stick: Rotate";
-    draw_text(hint1.as_ptr(), hint1.len() as u32, 10.0, 90.0, 14.0, 0x888888FF);
+    set_color(0x888888FF);
+        draw_text(hint1.as_ptr(), hint1.len() as u32, 10.0, 90.0, 14.0);
 
     let hint2 = b"Right stick: Orbit camera";
-    draw_text(hint2.as_ptr(), hint2.len() as u32, 10.0, 110.0, 14.0, 0x888888FF);
+    set_color(0x888888FF);
+        draw_text(hint2.as_ptr(), hint2.len() as u32, 10.0, 110.0, 14.0);
 
     let hint3 = b"F4: Debug Inspector (edit specular, shininess, lights)";
-    draw_text(hint3.as_ptr(), hint3.len() as u32, 10.0, 130.0, 14.0, 0x888888FF);
+    set_color(0x888888FF);
+        draw_text(hint3.as_ptr(), hint3.len() as u32, 10.0, 130.0, 14.0);
 }

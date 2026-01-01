@@ -635,12 +635,10 @@ unsafe fn draw_ui() {
     let slot_spacing = preview_size + padding;  // Match preview quad spacing
 
     // Draw header on right side
-    draw_text(
-        b"MODE 1: MATCAP".as_ptr(),
-        14,
-        text_x, 10.0, 14.0,
-        0xFFFFFFFF,
+    set_color(0xFFFFFFFF,
     );
+        draw_text(
+        b"MODE 1: MATCAP".as_ptr(), 14, text_x, 10.0, 14.0);
 
     // Shape info
     let shape_name = match SHAPE_INDEX {
@@ -653,7 +651,8 @@ unsafe fn draw_ui() {
         1 => 11,
         _ => 12,
     };
-    draw_text(shape_name, shape_len, text_x, 28.0, 11.0, 0xFFCCCCCC);
+    set_color(0xFFCCCCCC);
+        draw_text(shape_name, shape_len, text_x, 28.0, 11.0);
 
     // Slot info - positioned to align with preview quads
     // Slot 1 info (aligned with first preview at y=10)
@@ -669,24 +668,18 @@ unsafe fn draw_ui() {
     draw_slot_info(3, MATCAP3_ENABLED != 0, MATCAP3_INDEX, MATCAP3_BLEND, text_x, slot3_y, 0xFFFFAAAA);
 
     // Controls hint at bottom right - comprehensive
-    draw_text(
-        b"A/B: Cycle shape | X/Y: Select slot".as_ptr(),
-        37,
-        text_x, 486.0, 10.0,
-        0xFF888888,
+    set_color(0xFF888888,
     );
-    draw_text(
-        b"L-Stick: Rotate | R-Stick: Camera".as_ptr(),
-        34,
-        text_x, 500.0, 10.0,
-        0xFF888888,
+        draw_text(
+        b"A/B: Cycle shape | X/Y: Select slot".as_ptr(), 37, text_x, 486.0, 10.0);
+    set_color(0xFF888888,
     );
-    draw_text(
-        b"F4: Debug Inspector (edit blend modes)".as_ptr(),
-        38,
-        text_x, 514.0, 10.0,
-        0xFF888888,
+        draw_text(
+        b"L-Stick: Rotate | R-Stick: Camera".as_ptr(), 34, text_x, 500.0, 10.0);
+    set_color(0xFF888888,
     );
+        draw_text(
+        b"F4: Debug Inspector (edit blend modes)".as_ptr(), 38, text_x, 514.0, 10.0);
 }
 
 unsafe fn draw_slot_info(slot: i32, enabled: bool, matcap_idx: i32, blend_mode: i32, x: f32, y: f32, color: u32) {
@@ -696,10 +689,12 @@ unsafe fn draw_slot_info(slot: i32, enabled: bool, matcap_idx: i32, blend_mode: 
         2 => b"Slot2:".as_ptr(),
         _ => b"Slot3:".as_ptr(),
     };
-    draw_text(slot_label, 6, x, y, 11.0, color);
+    set_color(color);
+        draw_text(slot_label, 6, x, y, 11.0);
 
     if !enabled {
-        draw_text(b"OFF".as_ptr(), 3, x + 100.0, y, 11.0, 0xFF666666);
+        set_color(0xFF666666);
+        draw_text(b"OFF".as_ptr(), 3, x + 100.0, y, 11.0);
         return;
     }
 
@@ -708,18 +703,27 @@ unsafe fn draw_slot_info(slot: i32, enabled: bool, matcap_idx: i32, blend_mode: 
 
     // Line 1: Name [Role]
     // Name starts after "Slot1:" (~100px), longest name is "StudioWarm" (10 chars * 15 = 150px)
-    draw_text(name.as_ptr(), name.len() as u32, x + 100.0, y, 11.0, 0xFFFFFFFF);
-    draw_text(b"[".as_ptr(), 1, x + 260.0, y, 11.0, 0xFF666666);
-    draw_text(role.as_ptr(), role.len() as u32, x + 275.0, y, 11.0, 0xFF888888);
-    draw_text(b"]".as_ptr(), 1, x + 355.0, y, 11.0, 0xFF666666);
+    set_color(0xFFFFFFFF);
+        draw_text(name.as_ptr(), name.len() as u32, x + 100.0, y, 11.0);
+    set_color(0xFF666666);
+        draw_text(b"[".as_ptr(), 1, x + 260.0, y, 11.0);
+    set_color(0xFF888888);
+        draw_text(role.as_ptr(), role.len() as u32, x + 275.0, y, 11.0);
+    set_color(0xFF666666);
+        draw_text(b"]".as_ptr(), 1, x + 355.0, y, 11.0);
 
     // Line 2: Blend mode and best recommendation
-    draw_text(b"Blend:".as_ptr(), 6, x + 100.0, y + 14.0, 10.0, 0xFF888888);
-    draw_text(blend.as_ptr(), blend.len() as u32, x + 195.0, y + 14.0, 10.0, color);
+    set_color(0xFF888888);
+        draw_text(b"Blend:".as_ptr(), 6, x + 100.0, y + 14.0, 10.0);
+    set_color(color);
+        draw_text(blend.as_ptr(), blend.len() as u32, x + 195.0, y + 14.0, 10.0);
 
     if !best.is_empty() {
-        draw_text(b"(best:".as_ptr(), 6, x + 250.0, y + 14.0, 10.0, 0xFF555555);
-        draw_text(best.as_ptr(), best.len() as u32, x + 345.0, y + 14.0, 10.0, 0xFF777777);
-        draw_text(b")".as_ptr(), 1, x + 400.0, y + 14.0, 10.0, 0xFF555555);
+        set_color(0xFF555555);
+        draw_text(b"(best:".as_ptr(), 6, x + 250.0, y + 14.0, 10.0);
+        set_color(0xFF777777);
+        draw_text(best.as_ptr(), best.len() as u32, x + 345.0, y + 14.0, 10.0);
+        set_color(0xFF555555);
+        draw_text(b")".as_ptr(), 1, x + 400.0, y + 14.0, 10.0);
     }
 }

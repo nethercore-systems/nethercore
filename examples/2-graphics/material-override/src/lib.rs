@@ -30,69 +30,10 @@ fn panic(_info: &PanicInfo) -> ! {
 // FFI Declarations
 // ============================================================================
 
-#[link(wasm_import_module = "env")]
-extern "C" {
-    // Configuration
-    fn render_mode(mode: u32);
-    fn set_clear_color(color: u32);
-
-    // Camera
-    fn camera_set(
-        eye_x: f32,
-        eye_y: f32,
-        eye_z: f32,
-        center_x: f32,
-        center_y: f32,
-        center_z: f32,
-    );
-    fn camera_fov(fov_degrees: f32);
-
-    // Transform
-    fn push_identity();
-    fn push_translate(x: f32, y: f32, z: f32);
-    fn push_rotate_y(angle_degrees: f32);
-    fn push_scale_uniform(scale: f32);
-
-    // Material uniform values
-    fn set_color(rgba: u32);
-    fn material_metallic(value: f32);
-    fn material_roughness(value: f32);
-    fn material_emissive(value: f32);
-
-    // Material override flags
-    fn use_uniform_color(enabled: u32);
-    fn use_uniform_metallic(enabled: u32);
-    fn use_uniform_roughness(enabled: u32);
-    fn use_uniform_emissive(enabled: u32);
-
-    // Sky and lighting
-    fn light_set(index: u32, x: f32, y: f32, z: f32);
-    fn light_color(index: u32, color: u32);
-    fn light_intensity(index: u32, intensity: f32);
-
-    // Procedural mesh generation
-    fn sphere_uv(radius: f32, segments: u32, rings: u32) -> u32;
-    fn sphere(radius: f32, segments: u32, rings: u32) -> u32;
-
-    // Texture loading and binding
-    fn load_texture(width: u32, height: u32, data_ptr: *const u8) -> u32;
-    fn texture_bind(handle: u32);
-    fn texture_bind_slot(handle: u32, slot: u32);
-
-    // Mesh drawing
-    fn draw_mesh(handle: u32);
-
-    // Text rendering
-    fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
-
-    // Debug inspection
-    fn debug_group_begin(name: *const u8, name_len: u32);
-    fn debug_group_end();
-    fn debug_register_bool(name: *const u8, name_len: u32, ptr: *const u8);
-    fn debug_register_u8(name: *const u8, name_len: u32, ptr: *const u8);
-    fn debug_register_f32(name: *const u8, name_len: u32, ptr: *const f32);
-    fn debug_register_color(name: *const u8, name_len: u32, ptr: *const u8);
-}
+// Import the canonical FFI bindings
+#[path = "../../../../include/zx.rs"]
+mod ffi;
+use ffi::*;
 
 // ============================================================================
 // State
@@ -226,56 +167,32 @@ pub extern "C" fn render() {
         let label_color = 0xCCCCCCFF;
         let title_color = 0xFFCC66FF;
 
-        draw_text(
-            b"Material Override Demo".as_ptr(),
-            21,
-            -0.25,
-            0.42,
-            0.035,
-            title_color,
+        set_color(title_color,
         );
         draw_text(
-            b"Press F4 for debug panel".as_ptr(),
-            24,
-            -0.2,
-            0.35,
-            0.02,
-            0x888888FF,
+            b"Material Override Demo".as_ptr(), 21, -0.25, 0.42, 0.035);
+        set_color(0x888888FF,
         );
+        draw_text(
+            b"Press F4 for debug panel".as_ptr(), 24, -0.2, 0.35, 0.02);
 
-        draw_text(
-            b"UV Sphere".as_ptr(),
-            9,
-            -0.40,
-            -0.28,
-            label_size,
-            label_color,
+        set_color(label_color,
         );
         draw_text(
-            b"(textured)".as_ptr(),
-            10,
-            -0.40,
-            -0.33,
-            0.018,
-            0x888888FF,
+            b"UV Sphere".as_ptr(), 9, -0.40, -0.28, label_size);
+        set_color(0x888888FF,
         );
+        draw_text(
+            b"(textured)".as_ptr(), 10, -0.40, -0.33, 0.018);
 
-        draw_text(
-            b"Non-UV Sphere".as_ptr(),
-            13,
-            0.13,
-            -0.28,
-            label_size,
-            label_color,
+        set_color(label_color,
         );
         draw_text(
-            b"(material_* funcs)".as_ptr(),
-            18,
-            0.10,
-            -0.33,
-            0.018,
-            0x888888FF,
+            b"Non-UV Sphere".as_ptr(), 13, 0.13, -0.28, label_size);
+        set_color(0x888888FF,
         );
+        draw_text(
+            b"(material_* funcs)".as_ptr(), 18, 0.10, -0.33, 0.018);
 
         // Status text
         let all_overrides = USE_UNIFORM_COLOR_FLAG != 0
@@ -284,23 +201,15 @@ pub extern "C" fn render() {
             && USE_UNIFORM_EMISSIVE_FLAG != 0;
 
         if all_overrides {
-            draw_text(
-                b"All overrides ON - spheres match!".as_ptr(),
-                33,
-                -0.28,
-                -0.42,
-                0.022,
-                0x66FF66FF,
+            set_color(0x66FF66FF,
             );
+        draw_text(
+                b"All overrides ON - spheres match!".as_ptr(), 33, -0.28, -0.42, 0.022);
         } else {
-            draw_text(
-                b"Toggle overrides to match spheres".as_ptr(),
-                33,
-                -0.28,
-                -0.42,
-                0.022,
-                0xFFCC66FF,
+            set_color(0xFFCC66FF,
             );
+        draw_text(
+                b"Toggle overrides to match spheres".as_ptr(), 33, -0.28, -0.42, 0.022);
         }
     }
 }

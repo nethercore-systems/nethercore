@@ -22,31 +22,11 @@ fn panic(_info: &PanicInfo) -> ! {
 // FFI Declarations
 // =============================================================================
 
-#[link(wasm_import_module = "env")]
-extern "C" {
-    // ROM Data Pack Loading (init-only)
-    fn rom_texture(id_ptr: *const u8, id_len: u32) -> u32;
+// Import the canonical FFI bindings
+#[path = "../../../../include/zx.rs"]
+mod ffi;
+use ffi::*;
 
-    // Configuration (init-only)
-    fn set_clear_color(color: u32);
-
-    // Camera
-    fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
-    fn camera_fov(fov_degrees: f32);
-
-    // Input
-    fn left_stick_y(player: u32) -> f32;
-
-    // Built-in text drawing (uses default font)
-    fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, scale: f32, color: u32);
-
-    // Sprite drawing (for custom font rendering)
-    fn texture_bind(handle: u32);
-    fn draw_sprite_region(x: f32, y: f32, w: f32, h: f32, u0: f32, v0: f32, u1: f32, v1: f32, color: u32);
-
-    // Render state
-    fn set_color(color: u32);
-}
 
 // =============================================================================
 // Game State
@@ -103,14 +83,17 @@ pub extern "C" fn render() {
 
         // Title using built-in font
         let title = b"Font Atlas Demo";
-        draw_text(title.as_ptr(), title.len() as u32, 20.0, 20.0, 32.0, 0xFFFF00FF);
+        set_color(0xFFFF00FF);
+        draw_text(title.as_ptr(), title.len() as u32, 20.0, 20.0, 32.0);
 
         // Instructions
         let hint = b"[Stick] Scroll the atlas";
-        draw_text(hint.as_ptr(), hint.len() as u32, 20.0, 70.0, 20.0, 0xAAAAAAFF);
+        set_color(0xAAAAAAFF);
+        draw_text(hint.as_ptr(), hint.len() as u32, 20.0, 70.0, 20.0);
 
         let info = b"Texture atlas loaded from ROM";
-        draw_text(info.as_ptr(), info.len() as u32, 20.0, 100.0, 18.0, 0x88FF88FF);
+        set_color(0x88FF88FF);
+        draw_text(info.as_ptr(), info.len() as u32, 20.0, 100.0, 18.0);
 
         // Bind the font atlas texture
         texture_bind(FONT_ATLAS);
@@ -134,7 +117,8 @@ pub extern "C" fn render() {
 
         // Label for full atlas
         let label1 = b"Full Atlas";
-        draw_text(label1.as_ptr(), label1.len() as u32, 50.0, base_y - 30.0, 18.0, 0xFFFFFFFF);
+        set_color(0xFFFFFFFF);
+        draw_text(label1.as_ptr(), label1.len() as u32, 50.0, base_y - 30.0, 18.0);
 
         // Draw individual "glyphs" (quarters of the texture) - larger and spaced better
         // This demonstrates how you'd render individual characters
@@ -146,7 +130,8 @@ pub extern "C" fn render() {
 
         // Label for glyph regions
         let label2 = b"UV Regions";
-        draw_text(label2.as_ptr(), label2.len() as u32, glyph_x + 40.0, base_y - 30.0, 18.0, 0xFFFFFFFF);
+        set_color(0xFFFFFFFF);
+        draw_text(label2.as_ptr(), label2.len() as u32, glyph_x + 40.0, base_y - 30.0, 18.0);
 
         // Top-left quarter
         draw_sprite_region(glyph_x, base_y, glyph_size, glyph_size, 0.0, 0.0, 0.5, 0.5, 0xFFFFFFFF);
@@ -159,6 +144,7 @@ pub extern "C" fn render() {
 
         // Explanation text at bottom
         let note = b"Shows how sprite regions extract glyphs";
-        draw_text(note.as_ptr(), note.len() as u32, 20.0, 480.0, 16.0, 0x888888FF);
+        set_color(0x888888FF);
+        draw_text(note.as_ptr(), note.len() as u32, 20.0, 480.0, 16.0);
     }
 }

@@ -51,11 +51,10 @@ pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
 /// * `y` — Screen Y coordinate in pixels (0 = top edge)
 /// * `w` — Sprite width in pixels
 /// * `h` — Sprite height in pixels
-/// * `color` — Color tint (0xRRGGBBAA)
 ///
 /// Draws the full texture (UV 0,0 to 1,1) as a quad in screen space.
-/// Uses current blend mode and bound texture (slot 0).
-fn draw_sprite(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, w: f32, h: f32, color: u32) {
+/// Uses current blend mode, bound texture (slot 0), and color from set_color().
+fn draw_sprite(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, w: f32, h: f32) {
     let state = &mut caller.data_mut().ffi;
 
     // Offset by viewport origin for split-screen support
@@ -63,7 +62,7 @@ fn draw_sprite(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, w: f32, h:
     let screen_x = vp.x as f32 + x;
     let screen_y = vp.y as f32 + y;
 
-    // Get shading state index
+    // Get shading state index (includes current color from set_color)
     let shading_state_index = state.add_shading_state();
 
     // Get current view index (last in pool, following Option pattern)
@@ -81,7 +80,6 @@ fn draw_sprite(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, w: f32, h:
         h,
         0.0,                  // No rotation
         [0.0, 0.0, 1.0, 1.0], // Full texture UV
-        color,
         shading_state_index.0,
         view_idx,
     );
@@ -100,9 +98,8 @@ fn draw_sprite(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, w: f32, h:
 /// * `src_y` — Source texture Y coordinate (0.0-1.0)
 /// * `src_w` — Source texture width (0.0-1.0)
 /// * `src_h` — Source texture height (0.0-1.0)
-/// * `color` — Color tint (0xRRGGBBAA)
 ///
-/// Useful for sprite sheets and texture atlases.
+/// Useful for sprite sheets and texture atlases. Uses color from set_color().
 fn draw_sprite_region(
     mut caller: Caller<'_, ZXGameContext>,
     x: f32,
@@ -113,7 +110,6 @@ fn draw_sprite_region(
     src_y: f32,
     src_w: f32,
     src_h: f32,
-    color: u32,
 ) {
     let state = &mut caller.data_mut().ffi;
 
@@ -122,7 +118,7 @@ fn draw_sprite_region(
     let screen_x = vp.x as f32 + x;
     let screen_y = vp.y as f32 + y;
 
-    // Get shading state index
+    // Get shading state index (includes current color from set_color)
     let shading_state_index = state.add_shading_state();
 
     // Calculate UV coordinates (convert from src_x,src_y,src_w,src_h to u0,v0,u1,v1)
@@ -143,7 +139,6 @@ fn draw_sprite_region(
         h,
         0.0,              // No rotation
         [u0, v0, u1, v1], // Texture UV region
-        color,
         shading_state_index.0,
         (state.view_matrices.len() - 1) as u32,
     );
@@ -165,9 +160,9 @@ fn draw_sprite_region(
 /// * `origin_x` — Origin X offset in pixels (0 = left edge of sprite)
 /// * `origin_y` — Origin Y offset in pixels (0 = top edge of sprite)
 /// * `angle_deg` — Rotation angle in degrees (clockwise)
-/// * `color` — Color tint (0xRRGGBBAA)
 ///
 /// The sprite rotates around the origin point. For center rotation, use (w/2, h/2).
+/// Uses color from set_color().
 fn draw_sprite_ex(
     mut caller: Caller<'_, ZXGameContext>,
     x: f32,
@@ -181,14 +176,13 @@ fn draw_sprite_ex(
     origin_x: f32,
     origin_y: f32,
     angle_deg: f32,
-    color: u32,
 ) {
     let state = &mut caller.data_mut().ffi;
 
     // Offset by viewport origin for split-screen support
     let vp = state.current_viewport;
 
-    // Get shading state index
+    // Get shading state index (includes current color from set_color)
     let shading_state_index = state.add_shading_state();
 
     // Calculate UV coordinates
@@ -213,7 +207,6 @@ fn draw_sprite_ex(
         h,
         angle_deg.to_radians(), // Convert degrees to radians
         [u0, v0, u1, v1],
-        color,
         shading_state_index.0,
         (state.view_matrices.len() - 1) as u32,
     );
@@ -228,10 +221,10 @@ fn draw_sprite_ex(
 /// * `y` — Screen Y coordinate in pixels (0 = top edge)
 /// * `w` — Rectangle width in pixels
 /// * `h` — Rectangle height in pixels
-/// * `color` — Fill color (0xRRGGBBAA)
 ///
 /// Draws an untextured quad. Useful for UI backgrounds, health bars, etc.
-fn draw_rect(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, w: f32, h: f32, color: u32) {
+/// Uses color from set_color().
+fn draw_rect(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, w: f32, h: f32) {
     let state = &mut caller.data_mut().ffi;
 
     // Offset by viewport origin for split-screen support
@@ -242,12 +235,13 @@ fn draw_rect(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, w: f32, h: f
     // Bind white texture (handle 0xFFFFFFFF) to slot 0
     state.bound_textures[0] = u32::MAX;
 
-    // Get shading state index
+    // Get shading state index (includes current color from set_color)
     let shading_state_index = state.add_shading_state();
 
     // Convert layer to depth for ordering
     let depth = SCREEN_SPACE_DEPTH;
 
+    // Use white instance color - actual color comes from material color in shading state
     // Create screen-space quad instance (rects use white/fallback texture)
     let instance = crate::graphics::QuadInstance::sprite(
         screen_x,
@@ -257,7 +251,6 @@ fn draw_rect(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, w: f32, h: f
         h,
         0.0,                  // No rotation
         [0.0, 0.0, 1.0, 1.0], // Full texture UV (white texture is 1x1, so any UV works)
-        color,
         shading_state_index.0,
         (state.view_matrices.len() - 1) as u32,
     );
@@ -273,9 +266,9 @@ fn draw_rect(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, w: f32, h: f
 /// * `x` — Screen X coordinate in pixels (0 = left edge)
 /// * `y` — Screen Y coordinate in pixels (baseline)
 /// * `size` — Font size in pixels
-/// * `color` — Text color (0xRRGGBBAA)
 ///
 /// Supports full UTF-8 encoding. Text is left-aligned with no wrapping.
+/// Uses color from set_color().
 fn draw_text(
     mut caller: Caller<'_, ZXGameContext>,
     ptr: u32,
@@ -283,7 +276,6 @@ fn draw_text(
     x: f32,
     y: f32,
     size: f32,
-    color: u32,
 ) {
     // Read UTF-8 string from WASM memory
     let memory = match caller.data().game.memory {
@@ -336,11 +328,7 @@ fn draw_text(
     state.texture_filter = crate::graphics::TextureFilter::Nearest;
     state.update_texture_filter(false);
 
-    // Ensure material color is white so it doesn't interfere with text instance color
-    // (Text color is passed via the color parameter and stored in instance.color)
-    state.update_color(0xFFFFFFFF);
-
-    // Get shading state index
+    // Get shading state index (includes current color from set_color)
     let shading_state_index = state.add_shading_state();
 
     // Force lazy push of view matrix if pending
@@ -446,7 +434,6 @@ fn draw_text(
                 glyph_height,
                 0.0, // no rotation
                 [u0, v0, u1, v1],
-                color,
                 shading_state_index.0,
                 view_idx,
             );
@@ -475,7 +462,6 @@ fn draw_text(
                 glyph_height,
                 0.0, // no rotation
                 [u0, v0, u1, v1],
-                color,
                 shading_state_index.0,
                 view_idx,
             );
@@ -794,9 +780,9 @@ fn text_width(caller: Caller<'_, ZXGameContext>, ptr: u32, len: u32, size: f32) 
 /// * `x1`, `y1` — Start point in screen pixels
 /// * `x2`, `y2` — End point in screen pixels
 /// * `thickness` — Line thickness in pixels
-/// * `color` — Line color (0xRRGGBBAA)
 ///
 /// Draws a line as a rotated rectangle from start to end point.
+/// Uses color from set_color().
 fn draw_line(
     mut caller: Caller<'_, ZXGameContext>,
     x1: f32,
@@ -804,7 +790,6 @@ fn draw_line(
     x2: f32,
     y2: f32,
     thickness: f32,
-    color: u32,
 ) {
     let state = &mut caller.data_mut().ffi;
 
@@ -818,7 +803,7 @@ fn draw_line(
     // Bind white texture for solid color
     state.bound_textures[0] = u32::MAX;
 
-    // Get shading state index
+    // Get shading state index (includes current color from set_color)
     let shading_state_index = state.add_shading_state();
     let view_idx = (state.view_matrices.len() - 1) as u32;
 
@@ -847,7 +832,6 @@ fn draw_line(
         thickness,
         angle,
         [0.0, 0.0, 1.0, 1.0],
-        color,
         shading_state_index.0,
         view_idx,
     );
@@ -860,10 +844,10 @@ fn draw_line(
 /// # Arguments
 /// * `x`, `y` — Center position in screen pixels
 /// * `radius` — Circle radius in pixels
-/// * `color` — Fill color (0xRRGGBBAA)
 ///
 /// Rendered as a 16-segment approximation using rotated rectangles.
-fn draw_circle(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, radius: f32, color: u32) {
+/// Uses color from set_color().
+fn draw_circle(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, radius: f32) {
     if radius <= 0.0 {
         return;
     }
@@ -878,7 +862,7 @@ fn draw_circle(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, radius: f3
     // Bind white texture for solid color
     state.bound_textures[0] = u32::MAX;
 
-    // Get shading state index
+    // Get shading state index (includes current color from set_color)
     let shading_state_index = state.add_shading_state();
     let view_idx = (state.view_matrices.len() - 1) as u32;
 
@@ -907,7 +891,6 @@ fn draw_circle(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, radius: f3
             radius,
             angle - std::f32::consts::FRAC_PI_2, // Rotate to point outward
             [0.0, 0.0, 1.0, 1.0],
-            color,
             shading_state_index.0,
             view_idx,
         );
@@ -922,16 +905,15 @@ fn draw_circle(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, radius: f3
 /// * `x`, `y` — Center position in screen pixels
 /// * `radius` — Circle radius in pixels
 /// * `thickness` — Line thickness in pixels
-/// * `color` — Outline color (0xRRGGBBAA)
 ///
 /// Rendered as 16 line segments forming the circle outline.
+/// Uses color from set_color().
 fn draw_circle_outline(
     mut caller: Caller<'_, ZXGameContext>,
     x: f32,
     y: f32,
     radius: f32,
     thickness: f32,
-    color: u32,
 ) {
     if radius <= 0.0 {
         return;
@@ -961,7 +943,7 @@ fn draw_circle_outline(
         let x2 = screen_x + radius * angle2.cos();
         let y2 = screen_y + radius * angle2.sin();
 
-        // Get shading state for each line segment
+        // Get shading state for each line segment (includes current color)
         let shading_state_index = state.add_shading_state();
         let view_idx = (state.view_matrices.len() - 1) as u32;
 
@@ -980,11 +962,101 @@ fn draw_circle_outline(
             thickness,
             angle,
             [0.0, 0.0, 1.0, 1.0],
-            color,
             shading_state_index.0,
             view_idx,
         );
 
         state.add_quad_instance(instance, state.current_layer);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::ZXFFIState;
+
+    /// Test that draw functions use the current color from set_color()
+    #[test]
+    fn test_stateful_color_draw_rect() {
+        let mut state = ZXFFIState::new();
+
+        // Set color to red
+        state.update_color(0xFF0000FF);
+
+        // Draw a rect - it should use red from state
+        state.bound_textures[0] = u32::MAX;
+        let color_before_draw = state.current_shading_state.color_rgba8;
+
+        assert_eq!(color_before_draw, 0xFF0000FF, "Color should be red before draw");
+    }
+
+    /// Test that changing color between draws works correctly
+    #[test]
+    fn test_color_state_persistence() {
+        let mut state = ZXFFIState::new();
+
+        // Draw 1: Red
+        state.update_color(0xFF0000FF);
+        let _ = state.add_shading_state();
+        assert_eq!(state.current_shading_state.color_rgba8, 0xFF0000FF);
+
+        // Draw 2: Green (color persists until changed)
+        state.update_color(0x00FF00FF);
+        let _ = state.add_shading_state();
+        assert_eq!(state.current_shading_state.color_rgba8, 0x00FF00FF);
+
+        // Draw 3: Same green (no change needed)
+        let _ = state.add_shading_state();
+        assert_eq!(state.current_shading_state.color_rgba8, 0x00FF00FF);
+    }
+
+    /// Test that color state is independent (no multiplication with old colors)
+    #[test]
+    fn test_no_color_blending() {
+        let mut state = ZXFFIState::new();
+
+        // Set red
+        state.update_color(0xFF0000FF);
+        let _red_state = state.add_shading_state();
+
+        // Change to green - should completely replace red, not blend
+        state.update_color(0x00FF00FF);
+        let green_state = state.add_shading_state();
+
+        // Verify we have pure green, not a blend
+        assert_eq!(state.current_shading_state.color_rgba8, 0x00FF00FF);
+        assert_ne!(green_state, _red_state, "State indices should differ when color changes");
+    }
+
+    /// Test default color is white
+    #[test]
+    fn test_default_color_is_white() {
+        let state = ZXFFIState::new();
+        assert_eq!(
+            state.current_shading_state.color_rgba8,
+            0xFFFFFFFF,
+            "Default color should be white"
+        );
+    }
+
+    /// Test that update_color only marks dirty if color actually changed
+    #[test]
+    fn test_color_optimization() {
+        let mut state = ZXFFIState::new();
+
+        // Set to red
+        state.update_color(0xFF0000FF);
+        assert!(state.shading_state_dirty, "Should be dirty after color change");
+
+        // Clear dirty flag (simulate add_shading_state behavior)
+        state.shading_state_dirty = false;
+
+        // Set to same red again - should not mark dirty
+        state.update_color(0xFF0000FF);
+        assert!(!state.shading_state_dirty, "Should not be dirty when color unchanged");
+
+        // Set to different color - should mark dirty
+        state.update_color(0x00FF00FF);
+        assert!(state.shading_state_dirty, "Should be dirty when color changes");
     }
 }

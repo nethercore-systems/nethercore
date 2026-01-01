@@ -29,38 +29,11 @@ static CHECKERBOARD_TEX_DATA: &[u8] = include_bytes!("../../../assets/checkerboa
 // FFI Declarations
 // =============================================================================
 
-#[link(wasm_import_module = "env")]
-extern "C" {
-    // NetherZ format loading (parses header host-side)
-    fn load_zmesh(data_ptr: u32, data_len: u32) -> u32;
-    fn load_ztex(data_ptr: u32, data_len: u32) -> u32;
+// Import the canonical FFI bindings
+#[path = "../../../../include/zx.rs"]
+mod ffi;
+use ffi::*;
 
-    // Configuration
-    fn set_clear_color(color: u32);
-
-    // Camera
-    fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
-    fn camera_fov(fov_degrees: f32);
-
-    // Input
-    fn left_stick_x(player: u32) -> f32;
-    fn left_stick_y(player: u32) -> f32;
-
-    // Texture
-    fn texture_bind(handle: u32);
-
-    // Mesh drawing
-    fn draw_mesh(handle: u32);
-
-    // Transform
-    fn push_identity();
-    fn push_rotate_x(angle_deg: f32);
-    fn push_rotate_y(angle_deg: f32);
-
-    // Render state
-    fn set_color(color: u32);
-    fn depth_test(enabled: u32);
-}
 
 // =============================================================================
 // Game State

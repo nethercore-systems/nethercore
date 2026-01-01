@@ -531,24 +531,23 @@ NCZX_IMPORT void draw_billboard_region(float w, float h, float src_x, float src_
 /** # Arguments */
 /** * `x`, `y` — Screen position in pixels (0,0 = top-left) */
 /** * `w`, `h` — Sprite size in pixels */
-/** * `color` — Color tint (0xRRGGBBAA) */
-NCZX_IMPORT void draw_sprite(float x, float y, float w, float h, uint32_t color);
+NCZX_IMPORT void draw_sprite(float x, float y, float w, float h);
 
 /** Draw a region of a sprite sheet. */
 /**  */
 /** # Arguments */
 /** * `src_x`, `src_y`, `src_w`, `src_h` — UV region (0.0-1.0) */
-NCZX_IMPORT void draw_sprite_region(float x, float y, float w, float h, float src_x, float src_y, float src_w, float src_h, uint32_t color);
+NCZX_IMPORT void draw_sprite_region(float x, float y, float w, float h, float src_x, float src_y, float src_w, float src_h);
 
 /** Draw a sprite with full control (rotation, origin, UV region). */
 /**  */
 /** # Arguments */
 /** * `origin_x`, `origin_y` — Rotation pivot point (in pixels from sprite top-left) */
 /** * `angle_deg` — Rotation angle in degrees (clockwise) */
-NCZX_IMPORT void draw_sprite_ex(float x, float y, float w, float h, float src_x, float src_y, float src_w, float src_h, float origin_x, float origin_y, float angle_deg, uint32_t color);
+NCZX_IMPORT void draw_sprite_ex(float x, float y, float w, float h, float src_x, float src_y, float src_w, float src_h, float origin_x, float origin_y, float angle_deg);
 
 /** Draw a solid color rectangle. */
-NCZX_IMPORT void draw_rect(float x, float y, float w, float h, uint32_t color);
+NCZX_IMPORT void draw_rect(float x, float y, float w, float h);
 
 /** Draw text with the current font. */
 /**  */
@@ -556,8 +555,7 @@ NCZX_IMPORT void draw_rect(float x, float y, float w, float h, uint32_t color);
 /** * `ptr` — Pointer to UTF-8 string data */
 /** * `len` — Length in bytes */
 /** * `size` — Font size in pixels */
-/** * `color` — Text color (0xRRGGBBAA) */
-NCZX_IMPORT void draw_text(const uint8_t* ptr, uint32_t len, float x, float y, float size, uint32_t color);
+NCZX_IMPORT void draw_text(const uint8_t* ptr, uint32_t len, float x, float y, float size);
 
 /** Measure the width of text when rendered. */
 /**  */
@@ -576,18 +574,16 @@ NCZX_IMPORT float text_width(const uint8_t* ptr, uint32_t len, float size);
 /** * `x1`, `y1` — Start point in screen pixels */
 /** * `x2`, `y2` — End point in screen pixels */
 /** * `thickness` — Line thickness in pixels */
-/** * `color` — Line color (0xRRGGBBAA) */
-NCZX_IMPORT void draw_line(float x1, float y1, float x2, float y2, float thickness, uint32_t color);
+NCZX_IMPORT void draw_line(float x1, float y1, float x2, float y2, float thickness);
 
 /** Draw a filled circle. */
 /**  */
 /** # Arguments */
 /** * `x`, `y` — Center position in screen pixels */
 /** * `radius` — Circle radius in pixels */
-/** * `color` — Fill color (0xRRGGBBAA) */
 /**  */
-/** Rendered as a 16-segment triangle fan. */
-NCZX_IMPORT void draw_circle(float x, float y, float radius, uint32_t color);
+/** Rendered as a 16-segment triangle fan. Uses color from `set_color()`. */
+NCZX_IMPORT void draw_circle(float x, float y, float radius);
 
 /** Draw a circle outline. */
 /**  */
@@ -595,10 +591,9 @@ NCZX_IMPORT void draw_circle(float x, float y, float radius, uint32_t color);
 /** * `x`, `y` — Center position in screen pixels */
 /** * `radius` — Circle radius in pixels */
 /** * `thickness` — Line thickness in pixels */
-/** * `color` — Outline color (0xRRGGBBAA) */
 /**  */
-/** Rendered as 16 line segments. */
-NCZX_IMPORT void draw_circle_outline(float x, float y, float radius, float thickness, uint32_t color);
+/** Rendered as 16 line segments. Uses color from `set_color()`. */
+NCZX_IMPORT void draw_circle_outline(float x, float y, float radius, float thickness);
 
 /** Load a fixed-width bitmap font. */
 /**  */
@@ -1178,73 +1173,73 @@ NCZX_IMPORT void debug_register_f32_range(uint32_t name_ptr, uint32_t name_len, 
 NCZX_IMPORT void debug_register_u8_range(uint32_t name_ptr, uint32_t name_len, uint32_t ptr, uint32_t min, uint32_t max);
 
 /** Register a u16 with min/max range constraints. */
-NCZX_IMPORT void debug_register_u16_range(uint32_t name_ptr, uint32_t name_len, uint32_t ptr, uint32_t min, uint32_t max);
+NCZX_IMPORT void debug_register_u16_range(const uint8_t* name_ptr, uint32_t name_len, const uint16_t* ptr, uint32_t min, uint32_t max);
 
 /** Register an i16 with min/max range constraints. */
-NCZX_IMPORT void debug_register_i16_range(uint32_t name_ptr, uint32_t name_len, uint32_t ptr, int32_t min, int32_t max);
+NCZX_IMPORT void debug_register_i16_range(const uint8_t* name_ptr, uint32_t name_len, const int16_t* ptr, int32_t min, int32_t max);
 
 /** Register a Vec2 (2 floats: x, y) for debug inspection. */
-NCZX_IMPORT void debug_register_vec2(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_register_vec2(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
 
 /** Register a Vec3 (3 floats: x, y, z) for debug inspection. */
-NCZX_IMPORT void debug_register_vec3(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_register_vec3(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
 
 /** Register a Rect (4 i16: x, y, w, h) for debug inspection. */
-NCZX_IMPORT void debug_register_rect(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_register_rect(const uint8_t* name_ptr, uint32_t name_len, const int16_t* ptr);
 
 /** Register a Color (4 u8: RGBA) for debug inspection with color picker. */
-NCZX_IMPORT void debug_register_color(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_register_color(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Register Q8.8 fixed-point (i16) for debug inspection. */
-NCZX_IMPORT void debug_register_fixed_i16_q8(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_register_fixed_i16_q8(const uint8_t* name_ptr, uint32_t name_len, const int16_t* ptr);
 
 /** Register Q16.16 fixed-point (i32) for debug inspection. */
-NCZX_IMPORT void debug_register_fixed_i32_q16(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_register_fixed_i32_q16(const uint8_t* name_ptr, uint32_t name_len, const int32_t* ptr);
 
 /** Register Q24.8 fixed-point (i32) for debug inspection. */
-NCZX_IMPORT void debug_register_fixed_i32_q8(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_register_fixed_i32_q8(const uint8_t* name_ptr, uint32_t name_len, const int32_t* ptr);
 
 /** Register Q8.24 fixed-point (i32) for debug inspection. */
-NCZX_IMPORT void debug_register_fixed_i32_q24(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_register_fixed_i32_q24(const uint8_t* name_ptr, uint32_t name_len, const int32_t* ptr);
 
 /** Watch an i8 value (read-only). */
-NCZX_IMPORT void debug_watch_i8(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_watch_i8(const uint8_t* name_ptr, uint32_t name_len, const int8_t* ptr);
 
 /** Watch an i16 value (read-only). */
-NCZX_IMPORT void debug_watch_i16(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_watch_i16(const uint8_t* name_ptr, uint32_t name_len, const int16_t* ptr);
 
 /** Watch an i32 value (read-only). */
-NCZX_IMPORT void debug_watch_i32(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_watch_i32(const uint8_t* name_ptr, uint32_t name_len, const int32_t* ptr);
 
 /** Watch a u8 value (read-only). */
-NCZX_IMPORT void debug_watch_u8(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_watch_u8(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Watch a u16 value (read-only). */
-NCZX_IMPORT void debug_watch_u16(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_watch_u16(const uint8_t* name_ptr, uint32_t name_len, const uint16_t* ptr);
 
 /** Watch a u32 value (read-only). */
-NCZX_IMPORT void debug_watch_u32(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_watch_u32(const uint8_t* name_ptr, uint32_t name_len, const uint32_t* ptr);
 
 /** Watch an f32 value (read-only). */
-NCZX_IMPORT void debug_watch_f32(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_watch_f32(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
 
 /** Watch a bool value (read-only). */
-NCZX_IMPORT void debug_watch_bool(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_watch_bool(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Watch a Vec2 value (read-only). */
-NCZX_IMPORT void debug_watch_vec2(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_watch_vec2(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
 
 /** Watch a Vec3 value (read-only). */
-NCZX_IMPORT void debug_watch_vec3(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_watch_vec3(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
 
 /** Watch a Rect value (read-only). */
-NCZX_IMPORT void debug_watch_rect(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_watch_rect(const uint8_t* name_ptr, uint32_t name_len, const int16_t* ptr);
 
 /** Watch a Color value (read-only). */
-NCZX_IMPORT void debug_watch_color(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_watch_color(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Begin a collapsible group in the debug UI. */
-NCZX_IMPORT void debug_group_begin(uint32_t name_ptr, uint32_t name_len);
+NCZX_IMPORT void debug_group_begin(const uint8_t* name_ptr, uint32_t name_len);
 
 /** End the current debug group. */
 NCZX_IMPORT void debug_group_end(void);

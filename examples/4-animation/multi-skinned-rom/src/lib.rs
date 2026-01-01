@@ -29,37 +29,11 @@ fn panic(_info: &PanicInfo) -> ! {
 // FFI Imports
 // ============================================================================
 
-#[link(wasm_import_module = "env")]
-extern "C" {
-    fn set_clear_color(color: u32);
-    fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
-    fn camera_fov(fov_degrees: f32);
+// Import the canonical FFI bindings
+#[path = "../../../../include/zx.rs"]
+mod ffi;
+use ffi::*;
 
-    fn button_pressed(player: u32, button: u32) -> u32;
-    fn button_held(player: u32, button: u32) -> u32;
-
-    // ROM asset loading
-    fn rom_mesh(id_ptr: *const u8, id_len: u32) -> u32;
-    fn rom_skeleton(id_ptr: *const u8, id_len: u32) -> u32;
-    fn rom_keyframes(id_ptr: *const u8, id_len: u32) -> u32;
-
-    // Keyframe queries
-    fn keyframes_frame_count(handle: u32) -> u16;
-
-    // Skeleton & animation binding
-    fn skeleton_bind(skeleton: u32);
-    fn keyframe_bind(handle: u32, frame_index: u32);
-
-    fn draw_mesh(handle: u32);
-
-    fn push_identity();
-    fn push_translate(x: f32, y: f32, z: f32);
-
-    fn set_color(color: u32);
-    fn depth_test(enabled: u32);
-
-    fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32);
-}
 
 // ============================================================================
 // Game State
@@ -197,32 +171,40 @@ fn draw_ui() {
         let line_h = 18.0;
 
         let title = b"Multi-Skinned ROM";
-        draw_text(title.as_ptr(), title.len() as u32, 10.0, y, 16.0, 0xFFFFFFFF);
+        set_color(0xFFFFFFFF);
+        draw_text(title.as_ptr(), title.len() as u32, 10.0, y, 16.0);
 
         let subtitle = b"ROM-loaded skeletons with keyframe_bind";
-        draw_text(subtitle.as_ptr(), subtitle.len() as u32, 10.0, y + line_h, 12.0, 0xAAAAAAFF);
+        set_color(0xAAAAAAFF);
+        draw_text(subtitle.as_ptr(), subtitle.len() as u32, 10.0, y + line_h, 12.0);
 
         let arm1_info = b"Arm 1: 3 bones, vertical (orange)";
-        draw_text(arm1_info.as_ptr(), arm1_info.len() as u32, 10.0, y + line_h * 2.5, 10.0, 0xE09060FF);
+        set_color(0xE09060FF);
+        draw_text(arm1_info.as_ptr(), arm1_info.len() as u32, 10.0, y + line_h * 2.5, 10.0);
 
         let arm2_info = b"Arm 2: 4 bones, horizontal (blue)";
-        draw_text(arm2_info.as_ptr(), arm2_info.len() as u32, 10.0, y + line_h * 3.5, 10.0, 0x60A0E0FF);
+        set_color(0x60A0E0FF);
+        draw_text(arm2_info.as_ptr(), arm2_info.len() as u32, 10.0, y + line_h * 3.5, 10.0);
 
         let status = if PAUSED {
             b"Status: PAUSED (A)" as &[u8]
         } else {
             b"Status: Playing (A)" as &[u8]
         };
-        draw_text(status.as_ptr(), status.len() as u32, 10.0, y + line_h * 5.0, 10.0, 0x888888FF);
+        set_color(0x888888FF);
+        draw_text(status.as_ptr(), status.len() as u32, 10.0, y + line_h * 5.0, 10.0);
 
         // Controls
         let ctrl1 = b"Left stick: Rotate view | A: Toggle pause";
-        draw_text(ctrl1.as_ptr(), ctrl1.len() as u32, 10.0, y + line_h * 6.0, 10.0, 0x666666FF);
+        set_color(0x666666FF);
+        draw_text(ctrl1.as_ptr(), ctrl1.len() as u32, 10.0, y + line_h * 6.0, 10.0);
 
         let ctrl2 = b"D-pad Up/Down: Animation speed";
-        draw_text(ctrl2.as_ptr(), ctrl2.len() as u32, 10.0, y + line_h * 7.0, 10.0, 0x666666FF);
+        set_color(0x666666FF);
+        draw_text(ctrl2.as_ptr(), ctrl2.len() as u32, 10.0, y + line_h * 7.0, 10.0);
 
         let info = b"Uses skeleton_bind + keyframe_bind";
-        draw_text(info.as_ptr(), info.len() as u32, 10.0, y + line_h * 8.5, 10.0, 0x44FF44FF);
+        set_color(0x44FF44FF);
+        draw_text(info.as_ptr(), info.len() as u32, 10.0, y + line_h * 8.5, 10.0);
     }
 }

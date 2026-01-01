@@ -24,48 +24,11 @@ fn panic(_info: &PanicInfo) -> ! {
 // FFI Declarations
 // =============================================================================
 
-#[link(wasm_import_module = "env")]
-extern "C" {
-    // ROM Data Pack Loading (init-only)
-    // These load assets directly to VRAM/audio memory, bypassing WASM memory
-    fn rom_texture(id_ptr: *const u8, id_len: u32) -> u32;
-    fn rom_mesh(id_ptr: *const u8, id_len: u32) -> u32;
-    fn rom_sound(id_ptr: *const u8, id_len: u32) -> u32;
+// Import the canonical FFI bindings
+#[path = "../../../../include/zx.rs"]
+mod ffi;
+use ffi::*;
 
-    // Configuration (init-only)
-    fn set_clear_color(color: u32);
-
-    // Camera
-    fn camera_set(x: f32, y: f32, z: f32, target_x: f32, target_y: f32, target_z: f32);
-    fn camera_fov(fov_degrees: f32);
-
-    // Input
-    fn left_stick_x(player: u32) -> f32;
-    fn left_stick_y(player: u32) -> f32;
-    fn button_pressed(player: u32, button: u32) -> u32;
-
-    // Transform
-    fn push_identity();
-    fn push_translate(x: f32, y: f32, z: f32);
-    fn push_rotate_x(angle_deg: f32);
-    fn push_rotate_y(angle_deg: f32);
-
-    // Texture
-    fn texture_bind(handle: u32);
-
-    // Mesh drawing
-    fn draw_mesh(handle: u32);
-
-    // Render state
-    fn set_color(color: u32);
-    fn depth_test(enabled: u32);
-
-    // Audio
-    fn play_sound(sound: u32, volume: f32, pan: f32);
-
-    // Text
-    fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, scale: f32, color: u32);
-}
 
 // Button constants
 const BUTTON_A: u32 = 4;
@@ -159,12 +122,15 @@ pub extern "C" fn render() {
 
         // Draw instructions
         let title = b"Data Pack Demo";
-        draw_text(title.as_ptr(), title.len() as u32, 20.0, 20.0, 32.0, 0xFFFFFFFF);
+        set_color(0xFFFFFFFF);
+        draw_text(title.as_ptr(), title.len() as u32, 20.0, 20.0, 32.0);
 
         let hint = b"[A] Play sound  [Stick] Rotate";
-        draw_text(hint.as_ptr(), hint.len() as u32, 20.0, 70.0, 20.0, 0xAAAAAAFF);
+        set_color(0xAAAAAAFF);
+        draw_text(hint.as_ptr(), hint.len() as u32, 20.0, 70.0, 20.0);
 
         let info = b"Assets loaded from ROM data pack";
-        draw_text(info.as_ptr(), info.len() as u32, 20.0, 100.0, 18.0, 0x88FF88FF);
+        set_color(0x88FF88FF);
+        draw_text(info.as_ptr(), info.len() as u32, 20.0, 100.0, 18.0);
     }
 }
