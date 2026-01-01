@@ -1203,43 +1203,43 @@ NCZX_IMPORT void debug_register_fixed_i32_q8(uint32_t name_ptr, uint32_t name_le
 NCZX_IMPORT void debug_register_fixed_i32_q24(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
 
 /** Watch an i8 value (read-only). */
-NCZX_IMPORT void debug_watch_i8(const uint8_t* name_ptr, uint32_t name_len, const int8_t* ptr);
+NCZX_IMPORT void debug_watch_i8(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
 
 /** Watch an i16 value (read-only). */
-NCZX_IMPORT void debug_watch_i16(const uint8_t* name_ptr, uint32_t name_len, const int16_t* ptr);
+NCZX_IMPORT void debug_watch_i16(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
 
 /** Watch an i32 value (read-only). */
-NCZX_IMPORT void debug_watch_i32(const uint8_t* name_ptr, uint32_t name_len, const int32_t* ptr);
+NCZX_IMPORT void debug_watch_i32(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
 
 /** Watch a u8 value (read-only). */
-NCZX_IMPORT void debug_watch_u8(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
+NCZX_IMPORT void debug_watch_u8(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
 
 /** Watch a u16 value (read-only). */
-NCZX_IMPORT void debug_watch_u16(const uint8_t* name_ptr, uint32_t name_len, const uint16_t* ptr);
+NCZX_IMPORT void debug_watch_u16(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
 
 /** Watch a u32 value (read-only). */
-NCZX_IMPORT void debug_watch_u32(const uint8_t* name_ptr, uint32_t name_len, const uint32_t* ptr);
+NCZX_IMPORT void debug_watch_u32(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
 
 /** Watch an f32 value (read-only). */
-NCZX_IMPORT void debug_watch_f32(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
+NCZX_IMPORT void debug_watch_f32(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
 
 /** Watch a bool value (read-only). */
-NCZX_IMPORT void debug_watch_bool(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
+NCZX_IMPORT void debug_watch_bool(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
 
 /** Watch a Vec2 value (read-only). */
-NCZX_IMPORT void debug_watch_vec2(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
+NCZX_IMPORT void debug_watch_vec2(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
 
 /** Watch a Vec3 value (read-only). */
-NCZX_IMPORT void debug_watch_vec3(const uint8_t* name_ptr, uint32_t name_len, const float* ptr);
+NCZX_IMPORT void debug_watch_vec3(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
 
 /** Watch a Rect value (read-only). */
-NCZX_IMPORT void debug_watch_rect(const uint8_t* name_ptr, uint32_t name_len, const int16_t* ptr);
+NCZX_IMPORT void debug_watch_rect(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
 
 /** Watch a Color value (read-only). */
-NCZX_IMPORT void debug_watch_color(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
+NCZX_IMPORT void debug_watch_color(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
 
 /** Begin a collapsible group in the debug UI. */
-NCZX_IMPORT void debug_group_begin(const uint8_t* name_ptr, uint32_t name_len);
+NCZX_IMPORT void debug_group_begin(uint32_t name_ptr, uint32_t name_len);
 
 /** End the current debug group. */
 NCZX_IMPORT void debug_group_end(void);

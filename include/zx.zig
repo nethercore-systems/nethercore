@@ -1190,43 +1190,43 @@ pub extern "C" fn debug_register_fixed_i32_q8(name_ptr: u32, name_len: u32, ptr:
 pub extern "C" fn debug_register_fixed_i32_q24(name_ptr: u32, name_len: u32, ptr: u32) void;
 
 /// Watch an i8 value (read-only).
-pub extern "C" fn debug_watch_i8(name_ptr: [*]const u8, name_len: u32, ptr: [*]const i8) void;
+pub extern "C" fn debug_watch_i8(name_ptr: u32, name_len: u32, ptr: u32) void;
 
 /// Watch an i16 value (read-only).
-pub extern "C" fn debug_watch_i16(name_ptr: [*]const u8, name_len: u32, ptr: [*]const i16) void;
+pub extern "C" fn debug_watch_i16(name_ptr: u32, name_len: u32, ptr: u32) void;
 
 /// Watch an i32 value (read-only).
-pub extern "C" fn debug_watch_i32(name_ptr: [*]const u8, name_len: u32, ptr: [*]const i32) void;
+pub extern "C" fn debug_watch_i32(name_ptr: u32, name_len: u32, ptr: u32) void;
 
 /// Watch a u8 value (read-only).
-pub extern "C" fn debug_watch_u8(name_ptr: [*]const u8, name_len: u32, ptr: [*]const u8) void;
+pub extern "C" fn debug_watch_u8(name_ptr: u32, name_len: u32, ptr: u32) void;
 
 /// Watch a u16 value (read-only).
-pub extern "C" fn debug_watch_u16(name_ptr: [*]const u8, name_len: u32, ptr: [*]const u16) void;
+pub extern "C" fn debug_watch_u16(name_ptr: u32, name_len: u32, ptr: u32) void;
 
 /// Watch a u32 value (read-only).
-pub extern "C" fn debug_watch_u32(name_ptr: [*]const u8, name_len: u32, ptr: [*]const u32) void;
+pub extern "C" fn debug_watch_u32(name_ptr: u32, name_len: u32, ptr: u32) void;
 
 /// Watch an f32 value (read-only).
-pub extern "C" fn debug_watch_f32(name_ptr: [*]const u8, name_len: u32, ptr: [*]const f32) void;
+pub extern "C" fn debug_watch_f32(name_ptr: u32, name_len: u32, ptr: u32) void;
 
 /// Watch a bool value (read-only).
-pub extern "C" fn debug_watch_bool(name_ptr: [*]const u8, name_len: u32, ptr: [*]const u8) void;
+pub extern "C" fn debug_watch_bool(name_ptr: u32, name_len: u32, ptr: u32) void;
 
 /// Watch a Vec2 value (read-only).
-pub extern "C" fn debug_watch_vec2(name_ptr: [*]const u8, name_len: u32, ptr: [*]const f32) void;
+pub extern "C" fn debug_watch_vec2(name_ptr: u32, name_len: u32, ptr: u32) void;
 
 /// Watch a Vec3 value (read-only).
-pub extern "C" fn debug_watch_vec3(name_ptr: [*]const u8, name_len: u32, ptr: [*]const f32) void;
+pub extern "C" fn debug_watch_vec3(name_ptr: u32, name_len: u32, ptr: u32) void;
 
 /// Watch a Rect value (read-only).
-pub extern "C" fn debug_watch_rect(name_ptr: [*]const u8, name_len: u32, ptr: [*]const i16) void;
+pub extern "C" fn debug_watch_rect(name_ptr: u32, name_len: u32, ptr: u32) void;
 
 /// Watch a Color value (read-only).
-pub extern "C" fn debug_watch_color(name_ptr: [*]const u8, name_len: u32, ptr: [*]const u8) void;
+pub extern "C" fn debug_watch_color(name_ptr: u32, name_len: u32, ptr: u32) void;
 
 /// Begin a collapsible group in the debug UI.
-pub extern "C" fn debug_group_begin(name_ptr: [*]const u8, name_len: u32) void;
+pub extern "C" fn debug_group_begin(name_ptr: u32, name_len: u32) void;
 
 /// End the current debug group.
 pub extern "C" fn debug_group_end() void;
