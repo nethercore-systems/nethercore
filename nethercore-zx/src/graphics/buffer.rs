@@ -40,7 +40,7 @@ impl GrowableBuffer {
         let buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some(label),
             size: INITIAL_BUFFER_SIZE,
-            usage: usage | wgpu::BufferUsages::COPY_DST,
+            usage: usage | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
@@ -55,9 +55,9 @@ impl GrowableBuffer {
 
     /// Ensure the buffer has enough capacity for additional bytes
     ///
-    /// If the buffer needs to grow, creates a new larger buffer and returns true.
-    /// The old buffer contents are NOT preserved (call this before writing).
-    pub fn ensure_capacity(&mut self, device: &wgpu::Device, additional_bytes: u64) -> bool {
+    /// If the buffer needs to grow, creates a new larger buffer and copies existing data.
+    /// Returns true if the buffer was grown, false otherwise.
+    pub fn ensure_capacity(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, additional_bytes: u64) -> bool {
         let required = self.used + additional_bytes;
         if required <= self.capacity {
             return false;
@@ -70,22 +70,33 @@ impl GrowableBuffer {
         }
 
         tracing::debug!(
-            "Growing buffer '{}': {} -> {} bytes",
+            "Growing buffer '{}': {} -> {} bytes (preserving {} bytes)",
             self.label,
             self.capacity,
-            new_capacity
+            new_capacity,
+            self.used
         );
 
-        // Create new buffer
-        self.buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        // Create new buffer with COPY_SRC for data preservation
+        let new_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some(&self.label),
             size: new_capacity,
-            usage: self.usage | wgpu::BufferUsages::COPY_DST,
+            usage: self.usage | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
+
+        // Copy existing data to new buffer
+        if self.used > 0 {
+            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Buffer Grow Copy"),
+            });
+            encoder.copy_buffer_to_buffer(&self.buffer, 0, &new_buffer, 0, self.used);
+            queue.submit(std::iter::once(encoder.finish()));
+        }
+
+        self.buffer = new_buffer;
         self.capacity = new_capacity;
-        // Reset used since data needs to be re-uploaded
-        self.used = 0;
+        // CRITICAL: Don't reset used! Data has been preserved.
 
         true
     }
@@ -287,7 +298,7 @@ impl BufferManager {
         let packed_data = pack_vertex_data(data, format);
 
         // Ensure retained buffer has capacity
-        self.retained_vertex_buffers[format_idx].ensure_capacity(device, packed_data.len() as u64);
+        self.retained_vertex_buffers[format_idx].ensure_capacity(device, queue, packed_data.len() as u64);
 
         // Write packed data to retained buffer
         let vertex_offset = self.retained_vertex_buffers[format_idx].write(queue, &packed_data);
@@ -355,7 +366,7 @@ impl BufferManager {
         let packed_data = pack_vertex_data(data, format);
 
         // Ensure retained vertex buffer has capacity
-        self.retained_vertex_buffers[format_idx].ensure_capacity(device, packed_data.len() as u64);
+        self.retained_vertex_buffers[format_idx].ensure_capacity(device, queue, packed_data.len() as u64);
 
         // Ensure retained index buffer has capacity
         // Pad index data to 4-byte alignment for wgpu COPY_BUFFER_ALIGNMENT (only if needed)
@@ -370,7 +381,7 @@ impl BufferManager {
         };
 
         self.retained_index_buffers[format_idx]
-            .ensure_capacity(device, index_data_to_write.len() as u64);
+            .ensure_capacity(device, queue, index_data_to_write.len() as u64);
 
         // Write to retained buffers (packed vertex data + indices)
         let vertex_offset = self.retained_vertex_buffers[format_idx].write(queue, &packed_data);
@@ -432,7 +443,7 @@ impl BufferManager {
         }
 
         // Ensure retained buffer has capacity
-        self.retained_vertex_buffers[format_idx].ensure_capacity(device, data.len() as u64);
+        self.retained_vertex_buffers[format_idx].ensure_capacity(device, queue, data.len() as u64);
 
         // Write to retained buffer
         let vertex_offset = self.retained_vertex_buffers[format_idx].write(queue, data);
@@ -492,7 +503,7 @@ impl BufferManager {
         }
 
         // Ensure retained vertex buffer has capacity
-        self.retained_vertex_buffers[format_idx].ensure_capacity(device, data.len() as u64);
+        self.retained_vertex_buffers[format_idx].ensure_capacity(device, queue, data.len() as u64);
 
         // Ensure retained index buffer has capacity
         // Pad index data to 4-byte alignment for wgpu COPY_BUFFER_ALIGNMENT (only if needed)
@@ -507,7 +518,7 @@ impl BufferManager {
         };
 
         self.retained_index_buffers[format_idx]
-            .ensure_capacity(device, index_data_to_write.len() as u64);
+            .ensure_capacity(device, queue, index_data_to_write.len() as u64);
 
         // Write to retained buffers
         let vertex_offset = self.retained_vertex_buffers[format_idx].write(queue, data);
@@ -596,7 +607,7 @@ impl BufferManager {
     ) -> Result<()> {
         let byte_data = bytemuck::cast_slice(instances);
         self.quad_instance_buffer
-            .ensure_capacity(device, byte_data.len() as u64);
+            .ensure_capacity(device, queue, byte_data.len() as u64);
         // Reset used before writing new frame data
         self.quad_instance_buffer.reset();
         self.quad_instance_buffer.write(queue, byte_data);

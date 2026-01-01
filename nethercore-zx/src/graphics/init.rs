@@ -249,7 +249,7 @@ impl ZXGraphics {
 
         // Write packed vertex data to buffer
         let retained_vertex_buf_mut = buffer_manager.retained_vertex_buffer_mut(unit_quad_format);
-        retained_vertex_buf_mut.ensure_capacity(&device, packed_vertices.len() as u64);
+        retained_vertex_buf_mut.ensure_capacity(&device, &queue, packed_vertices.len() as u64);
         retained_vertex_buf_mut.write(&queue, &packed_vertices);
 
         // Upload unit quad to retained index buffer
@@ -263,7 +263,7 @@ impl ZXGraphics {
 
         // Write index data to buffer
         let retained_index_buf_mut = buffer_manager.retained_index_buffer_mut(unit_quad_format);
-        retained_index_buf_mut.ensure_capacity(&device, index_bytes.len() as u64);
+        retained_index_buf_mut.ensure_capacity(&device, &queue, index_bytes.len() as u64);
         retained_index_buf_mut.write(&queue, index_bytes);
 
         let mut graphics = Self {

@@ -203,6 +203,26 @@ impl ScriptExecutor {
         passed
     }
 
+    /// Record an assertion result
+    ///
+    /// Used by headless runners to manually record assertion results.
+    pub fn record_assertion_result(
+        &mut self,
+        frame: u64,
+        condition: String,
+        passed: bool,
+        actual: Option<f64>,
+        expected: Option<String>,
+    ) {
+        self.assertion_results.push(AssertionResult {
+            frame,
+            condition,
+            passed,
+            actual,
+            expected,
+        });
+    }
+
     /// Advance to the next frame
     pub fn advance_frame(&mut self) {
         self.current_frame += 1;
@@ -218,12 +238,17 @@ impl ScriptExecutor {
         let failed = self.assertion_results.iter().filter(|r| !r.passed).count();
 
         ExecutionReport {
+            version: "1.0".to_string(),
+            script: None, // Set by caller if available
+            executed_at: None, // Set by caller if available
+            duration_ms: None, // Set by caller if available
             console: self.script.console.clone(),
             seed: self.script.seed,
             frames_executed: self.current_frame,
             total_frames: self.script.frame_count,
             snapshots: self.snapshots.clone(),
             assertions: self.assertion_results.clone(),
+            registered_variables: None, // Set by caller if available
             summary: ReportSummary {
                 frames_with_snap: self.snapshots.len(),
                 assertions_passed: passed,
@@ -314,6 +339,18 @@ fn format_expected(value: &CompiledAssertValue, resolved: Option<f64>) -> String
 /// Execution report
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ExecutionReport {
+    /// Report format version
+    #[serde(default = "default_version")]
+    pub version: String,
+    /// Script file name (if available)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub script: Option<String>,
+    /// Execution timestamp
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub executed_at: Option<String>,
+    /// Execution duration in milliseconds
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration_ms: Option<u64>,
     /// Console name
     pub console: String,
     /// Random seed used
@@ -326,8 +363,27 @@ pub struct ExecutionReport {
     pub snapshots: Vec<Snapshot>,
     /// Assertion results
     pub assertions: Vec<AssertionResult>,
+    /// List of registered debug variables
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub registered_variables: Option<Vec<DebugVariableInfo>>,
     /// Summary statistics
     pub summary: ReportSummary,
+}
+
+fn default_version() -> String {
+    "1.0".to_string()
+}
+
+/// Debug variable metadata for reporting
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DebugVariableInfo {
+    /// Variable name (e.g., "$player_x")
+    pub name: String,
+    /// Type name (e.g., "i32", "f32", "bool")
+    #[serde(rename = "type")]
+    pub type_name: String,
+    /// Human-readable description
+    pub description: String,
 }
 
 /// Report summary

@@ -128,6 +128,6 @@ pub use script::{
 
 // Re-export runtime
 pub use runtime::{
-    ExecutionReport, Player, PlayerConfig, Recorder, RecorderConfig, ReportSummary,
-    ScriptExecutor, SeekResult, StepResult, StopReason,
+    DebugVariableInfo, ExecutionReport, HeadlessConfig, HeadlessRunner, Player, PlayerConfig,
+    Recorder, RecorderConfig, ReportSummary, ScriptExecutor, SeekResult, StepResult, StopReason,
 };

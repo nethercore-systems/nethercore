@@ -186,7 +186,7 @@ impl ZXGraphics {
 
                 self.buffer_manager
                     .vertex_buffer_mut(format)
-                    .ensure_capacity(&self.device, packed_data.len() as u64);
+                    .ensure_capacity(&self.device, &self.queue, packed_data.len() as u64);
                 self.buffer_manager
                     .vertex_buffer(format)
                     .write_at(&self.queue, 0, &packed_data);
@@ -197,7 +197,7 @@ impl ZXGraphics {
                 let index_bytes: &[u8] = bytemuck::cast_slice(index_data);
                 self.buffer_manager
                     .index_buffer_mut(format)
-                    .ensure_capacity(&self.device, index_bytes.len() as u64);
+                    .ensure_capacity(&self.device, &self.queue, index_bytes.len() as u64);
                 self.buffer_manager
                     .index_buffer(format)
                     .write_at(&self.queue, 0, index_bytes);
