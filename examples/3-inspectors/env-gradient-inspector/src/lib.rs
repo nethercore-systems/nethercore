@@ -94,8 +94,8 @@ pub extern "C" fn init() {
         debug_register_color(b"sky_horiz".as_ptr(), 9, &SKY_HORIZON as *const u32 as *const u8);
         debug_register_color(b"gnd_horiz".as_ptr(), 9, &GROUND_HORIZON as *const u32 as *const u8);
         debug_register_color(b"nadir".as_ptr(), 5, &NADIR_COLOR as *const u32 as *const u8);
-        debug_register_f32(b"rotation".as_ptr(), 8, &ROTATION);
-        debug_register_f32(b"shift".as_ptr(), 5, &SHIFT);
+        debug_register_f32(b"rotation".as_ptr(), 8, &ROTATION as *const f32 as *const u8);
+        debug_register_f32(b"shift".as_ptr(), 5, &SHIFT as *const f32 as *const u8);
         debug_group_end();
 
         debug_group_begin(b"animation".as_ptr(), 9);
@@ -103,7 +103,7 @@ pub extern "C" fn init() {
         debug_group_end();
 
         debug_group_begin(b"preset".as_ptr(), 6);
-        debug_register_i32(b"index".as_ptr(), 5, &PRESET_INDEX);
+        debug_register_i32(b"index".as_ptr(), 5, &PRESET_INDEX as *const i32 as *const u8);
         debug_group_end();
     }
 }
@@ -111,11 +111,11 @@ pub extern "C" fn init() {
 #[no_mangle]
 pub extern "C" fn update() {
     unsafe {
-        if button_pressed(0, BUTTON_A) != 0 {
+        if button_pressed(0, button::A) != 0 {
             PRESET_INDEX = (PRESET_INDEX + 1) % PRESET_COUNT as i32;
             load_preset(PRESET_INDEX as usize);
         }
-        if button_pressed(0, BUTTON_B) != 0 {
+        if button_pressed(0, button::B) != 0 {
             SHAPE_INDEX = (SHAPE_INDEX + 1) % SHAPE_COUNT as i32;
         }
 

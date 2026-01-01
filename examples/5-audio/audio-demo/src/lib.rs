@@ -15,9 +15,8 @@ extern "C" {
 
     // Drawing
     fn set_color(color: u32);
-        draw_text(text_ptr: *const u8, text_len: u32, x: f32, y: f32, scale: f32);
-    fn set_color(color: u32);
-        draw_rect(x: f32, y: f32, width: f32, height: f32);
+    fn draw_text(text_ptr: *const u8, text_len: u32, x: f32, y: f32, scale: f32);
+    fn draw_rect(x: f32, y: f32, width: f32, height: f32);
 
     // Audio
     fn load_sound(data_ptr: *const i16, byte_len: u32) -> u32;

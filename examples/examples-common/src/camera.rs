@@ -133,10 +133,10 @@ impl DebugCamera {
     pub fn register_debug(&self, distance: &f32, elevation: &f32, azimuth: &f32, auto_speed: &f32) {
         unsafe {
             debug_group_begin(b"camera".as_ptr(), 6);
-            debug_register_f32(b"distance".as_ptr(), 8, distance);
-            debug_register_f32(b"elevation".as_ptr(), 9, elevation);
-            debug_register_f32(b"azimuth".as_ptr(), 7, azimuth);
-            debug_register_f32(b"auto_orbit".as_ptr(), 10, auto_speed);
+            debug_register_f32(b"distance".as_ptr(), 8, distance as *const f32 as *const u8);
+            debug_register_f32(b"elevation".as_ptr(), 9, elevation as *const f32 as *const u8);
+            debug_register_f32(b"azimuth".as_ptr(), 7, azimuth as *const f32 as *const u8);
+            debug_register_f32(b"auto_orbit".as_ptr(), 10, auto_speed as *const f32 as *const u8);
             debug_group_end();
         }
     }

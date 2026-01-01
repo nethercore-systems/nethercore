@@ -395,35 +395,35 @@ fn hsv_to_rgb(h: f32, s: f32, v: f32) -> (u8, u8, u8) {
 unsafe fn register_debug_values() {
     // Shape group
     debug_group_begin(b"shape".as_ptr(), 5);
-    debug_register_i32(b"shape".as_ptr(), 5, &SHAPE_INDEX);
-    debug_register_f32(b"rotation".as_ptr(), 8, &ROTATION_SPEED);
+    debug_register_i32(b"shape".as_ptr(), 5, &SHAPE_INDEX as *const i32 as *const u8);
+    debug_register_f32(b"rotation".as_ptr(), 8, &ROTATION_SPEED as *const f32 as *const u8);
     debug_register_color(b"color".as_ptr(), 5, &OBJECT_COLOR as *const u32 as *const u8);
     debug_group_end();
 
     // Rendering group
     debug_group_begin(b"rendering".as_ptr(), 9);
-    debug_register_i32(b"filter".as_ptr(), 6, &FILTER_MODE);
+    debug_register_i32(b"filter".as_ptr(), 6, &FILTER_MODE as *const i32 as *const u8);
     debug_group_end();
 
     // Matcap slot 1
     debug_group_begin(b"slot_1".as_ptr(), 6);
     debug_register_bool(b"enabled".as_ptr(), 7, &MATCAP1_ENABLED);
-    debug_register_i32(b"matcap".as_ptr(), 6, &MATCAP1_INDEX);
-    debug_register_i32(b"blend".as_ptr(), 5, &MATCAP1_BLEND);
+    debug_register_i32(b"matcap".as_ptr(), 6, &MATCAP1_INDEX as *const i32 as *const u8);
+    debug_register_i32(b"blend".as_ptr(), 5, &MATCAP1_BLEND as *const i32 as *const u8);
     debug_group_end();
 
     // Matcap slot 2
     debug_group_begin(b"slot_2".as_ptr(), 6);
     debug_register_bool(b"enabled".as_ptr(), 7, &MATCAP2_ENABLED);
-    debug_register_i32(b"matcap".as_ptr(), 6, &MATCAP2_INDEX);
-    debug_register_i32(b"blend".as_ptr(), 5, &MATCAP2_BLEND);
+    debug_register_i32(b"matcap".as_ptr(), 6, &MATCAP2_INDEX as *const i32 as *const u8);
+    debug_register_i32(b"blend".as_ptr(), 5, &MATCAP2_BLEND as *const i32 as *const u8);
     debug_group_end();
 
     // Matcap slot 3
     debug_group_begin(b"slot_3".as_ptr(), 6);
     debug_register_bool(b"enabled".as_ptr(), 7, &MATCAP3_ENABLED);
-    debug_register_i32(b"matcap".as_ptr(), 6, &MATCAP3_INDEX);
-    debug_register_i32(b"blend".as_ptr(), 5, &MATCAP3_BLEND);
+    debug_register_i32(b"matcap".as_ptr(), 6, &MATCAP3_INDEX as *const i32 as *const u8);
+    debug_register_i32(b"blend".as_ptr(), 5, &MATCAP3_BLEND as *const i32 as *const u8);
     debug_group_end();
 }
 
@@ -467,10 +467,10 @@ pub extern "C" fn init() {
 pub extern "C" fn update() {
     unsafe {
         // Handle shape cycling with A/B buttons
-        if button_pressed(0, BUTTON_A) != 0 {
+        if button_pressed(0, button::A) != 0 {
             SHAPE_INDEX = (SHAPE_INDEX + 1) % 3;
         }
-        if button_pressed(0, BUTTON_B) != 0 {
+        if button_pressed(0, button::B) != 0 {
             SHAPE_INDEX = (SHAPE_INDEX + 2) % 3;  // -1 mod 3
         }
 
@@ -566,19 +566,22 @@ unsafe fn draw_preview_quads() {
     // Preview for slot 1
     if MATCAP1_ENABLED != 0 {
         texture_bind(MATCAP_TEXTURES[MATCAP1_INDEX as usize]);
-        draw_sprite(base_x, base_y, preview_size, preview_size, 0xFFFFFFFF);
+        set_color(0xFFFFFFFF);
+        draw_sprite(base_x, base_y, preview_size, preview_size);
     }
 
     // Preview for slot 2
     if MATCAP2_ENABLED != 0 {
         texture_bind(MATCAP_TEXTURES[MATCAP2_INDEX as usize]);
-        draw_sprite(base_x, base_y + preview_size + padding, preview_size, preview_size, 0xFFFFFFFF);
+        set_color(0xFFFFFFFF);
+        draw_sprite(base_x, base_y + preview_size + padding, preview_size, preview_size);
     }
 
     // Preview for slot 3
     if MATCAP3_ENABLED != 0 {
         texture_bind(MATCAP_TEXTURES[MATCAP3_INDEX as usize]);
-        draw_sprite(base_x, base_y + (preview_size + padding) * 2.0, preview_size, preview_size, 0xFFFFFFFF);
+        set_color(0xFFFFFFFF);
+        draw_sprite(base_x, base_y + (preview_size + padding) * 2.0, preview_size, preview_size);
     }
 
     // Unbind texture

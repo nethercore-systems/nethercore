@@ -161,8 +161,8 @@ pub extern "C" fn init() {
 unsafe fn register_debug_values() {
     // Shape group
     debug_group_begin(b"shape".as_ptr(), 5);
-    debug_register_i32(b"index (0-2)".as_ptr(), 11, &SHAPE_INDEX);
-    debug_register_f32(b"rotation_speed".as_ptr(), 14, &ROTATION_SPEED);
+    debug_register_i32(b"index (0-2)".as_ptr(), 11, &SHAPE_INDEX as *const i32 as *const u8);
+    debug_register_f32(b"rotation_speed".as_ptr(), 14, &ROTATION_SPEED as *const f32 as *const u8);
     debug_register_color(b"color".as_ptr(), 5, &OBJECT_COLOR as *const u32 as *const u8);
     debug_group_end();
 
@@ -170,9 +170,9 @@ unsafe fn register_debug_values() {
     debug_group_begin(b"material".as_ptr(), 8);
     debug_register_u8(b"metallic".as_ptr(), 8, &METALLIC);
     debug_register_u8(b"roughness".as_ptr(), 9, &ROUGHNESS);
-    debug_register_f32(b"emissive".as_ptr(), 8, &EMISSIVE);
-    debug_register_f32(b"rim_intensity".as_ptr(), 13, &RIM_INTENSITY);
-    debug_register_f32(b"rim_power".as_ptr(), 9, &RIM_POWER);
+    debug_register_f32(b"emissive".as_ptr(), 8, &EMISSIVE as *const f32 as *const u8);
+    debug_register_f32(b"rim_intensity".as_ptr(), 13, &RIM_INTENSITY as *const f32 as *const u8);
+    debug_register_f32(b"rim_power".as_ptr(), 9, &RIM_POWER as *const f32 as *const u8);
     debug_group_end();
 
     // Sky group
@@ -183,53 +183,53 @@ unsafe fn register_debug_values() {
 
     // Sun group
     debug_group_begin(b"sun".as_ptr(), 3);
-    debug_register_f32(b"dir_x".as_ptr(), 5, &SUN_DIR_X);
-    debug_register_f32(b"dir_y".as_ptr(), 5, &SUN_DIR_Y);
-    debug_register_f32(b"dir_z".as_ptr(), 5, &SUN_DIR_Z);
+    debug_register_f32(b"dir_x".as_ptr(), 5, &SUN_DIR_X as *const f32 as *const u8);
+    debug_register_f32(b"dir_y".as_ptr(), 5, &SUN_DIR_Y as *const f32 as *const u8);
+    debug_register_f32(b"dir_z".as_ptr(), 5, &SUN_DIR_Z as *const f32 as *const u8);
     debug_register_color(b"color".as_ptr(), 5, &SUN_COLOR as *const u32 as *const u8);
-    debug_register_f32(b"sharpness".as_ptr(), 9, &SUN_SHARPNESS);
+    debug_register_f32(b"sharpness".as_ptr(), 9, &SUN_SHARPNESS as *const f32 as *const u8);
     debug_group_end();
 
     // Directional Light 0
     debug_group_begin(b"dir_light_0".as_ptr(), 11);
     debug_register_bool(b"enabled".as_ptr(), 7, &DIR0_ENABLED);
-    debug_register_f32(b"dir_x".as_ptr(), 5, &DIR0_X);
-    debug_register_f32(b"dir_y".as_ptr(), 5, &DIR0_Y);
-    debug_register_f32(b"dir_z".as_ptr(), 5, &DIR0_Z);
+    debug_register_f32(b"dir_x".as_ptr(), 5, &DIR0_X as *const f32 as *const u8);
+    debug_register_f32(b"dir_y".as_ptr(), 5, &DIR0_Y as *const f32 as *const u8);
+    debug_register_f32(b"dir_z".as_ptr(), 5, &DIR0_Z as *const f32 as *const u8);
     debug_register_color(b"color".as_ptr(), 5, &DIR0_COLOR as *const u32 as *const u8);
-    debug_register_f32(b"intensity".as_ptr(), 9, &DIR0_INTENSITY);
+    debug_register_f32(b"intensity".as_ptr(), 9, &DIR0_INTENSITY as *const f32 as *const u8);
     debug_group_end();
 
     // Directional Light 1
     debug_group_begin(b"dir_light_1".as_ptr(), 11);
     debug_register_bool(b"enabled".as_ptr(), 7, &DIR1_ENABLED);
-    debug_register_f32(b"dir_x".as_ptr(), 5, &DIR1_X);
-    debug_register_f32(b"dir_y".as_ptr(), 5, &DIR1_Y);
-    debug_register_f32(b"dir_z".as_ptr(), 5, &DIR1_Z);
+    debug_register_f32(b"dir_x".as_ptr(), 5, &DIR1_X as *const f32 as *const u8);
+    debug_register_f32(b"dir_y".as_ptr(), 5, &DIR1_Y as *const f32 as *const u8);
+    debug_register_f32(b"dir_z".as_ptr(), 5, &DIR1_Z as *const f32 as *const u8);
     debug_register_color(b"color".as_ptr(), 5, &DIR1_COLOR as *const u32 as *const u8);
-    debug_register_f32(b"intensity".as_ptr(), 9, &DIR1_INTENSITY);
+    debug_register_f32(b"intensity".as_ptr(), 9, &DIR1_INTENSITY as *const f32 as *const u8);
     debug_group_end();
 
     // Point Light 0
     debug_group_begin(b"point_light_0".as_ptr(), 13);
     debug_register_bool(b"enabled".as_ptr(), 7, &POINT0_ENABLED);
-    debug_register_f32(b"pos_x".as_ptr(), 5, &POINT0_X);
-    debug_register_f32(b"pos_y".as_ptr(), 5, &POINT0_Y);
-    debug_register_f32(b"pos_z".as_ptr(), 5, &POINT0_Z);
+    debug_register_f32(b"pos_x".as_ptr(), 5, &POINT0_X as *const f32 as *const u8);
+    debug_register_f32(b"pos_y".as_ptr(), 5, &POINT0_Y as *const f32 as *const u8);
+    debug_register_f32(b"pos_z".as_ptr(), 5, &POINT0_Z as *const f32 as *const u8);
     debug_register_color(b"color".as_ptr(), 5, &POINT0_COLOR as *const u32 as *const u8);
-    debug_register_f32(b"intensity".as_ptr(), 9, &POINT0_INTENSITY);
-    debug_register_f32(b"range".as_ptr(), 5, &POINT0_RANGE);
+    debug_register_f32(b"intensity".as_ptr(), 9, &POINT0_INTENSITY as *const f32 as *const u8);
+    debug_register_f32(b"range".as_ptr(), 5, &POINT0_RANGE as *const f32 as *const u8);
     debug_group_end();
 
     // Point Light 1
     debug_group_begin(b"point_light_1".as_ptr(), 13);
     debug_register_bool(b"enabled".as_ptr(), 7, &POINT1_ENABLED);
-    debug_register_f32(b"pos_x".as_ptr(), 5, &POINT1_X);
-    debug_register_f32(b"pos_y".as_ptr(), 5, &POINT1_Y);
-    debug_register_f32(b"pos_z".as_ptr(), 5, &POINT1_Z);
+    debug_register_f32(b"pos_x".as_ptr(), 5, &POINT1_X as *const f32 as *const u8);
+    debug_register_f32(b"pos_y".as_ptr(), 5, &POINT1_Y as *const f32 as *const u8);
+    debug_register_f32(b"pos_z".as_ptr(), 5, &POINT1_Z as *const f32 as *const u8);
     debug_register_color(b"color".as_ptr(), 5, &POINT1_COLOR as *const u32 as *const u8);
-    debug_register_f32(b"intensity".as_ptr(), 9, &POINT1_INTENSITY);
-    debug_register_f32(b"range".as_ptr(), 5, &POINT1_RANGE);
+    debug_register_f32(b"intensity".as_ptr(), 9, &POINT1_INTENSITY as *const f32 as *const u8);
+    debug_register_f32(b"range".as_ptr(), 5, &POINT1_RANGE as *const f32 as *const u8);
     debug_group_end();
 }
 
@@ -237,7 +237,7 @@ unsafe fn register_debug_values() {
 pub extern "C" fn update() {
     unsafe {
         // Shape cycling with A button
-        if button_pressed(0, BUTTON_A) != 0 {
+        if button_pressed(0, button::A) != 0 {
             SHAPE_INDEX = (SHAPE_INDEX + 1) % 3;
         }
 

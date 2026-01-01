@@ -117,10 +117,10 @@ pub unsafe fn register_sky_debug(
     debug_group_end();
 
     debug_group_begin(b"sun".as_ptr(), 3);
-    debug_register_f32(b"dir_x".as_ptr(), 5, sun_dir_x);
-    debug_register_f32(b"dir_y".as_ptr(), 5, sun_dir_y);
-    debug_register_f32(b"dir_z".as_ptr(), 5, sun_dir_z);
+    debug_register_f32(b"dir_x".as_ptr(), 5, sun_dir_x as *const u8);
+    debug_register_f32(b"dir_y".as_ptr(), 5, sun_dir_y as *const u8);
+    debug_register_f32(b"dir_z".as_ptr(), 5, sun_dir_z as *const u8);
     debug_register_color(b"color".as_ptr(), 5, sun_color);
-    debug_register_f32(b"sharpness".as_ptr(), 9, sun_sharpness);
+    debug_register_f32(b"sharpness".as_ptr(), 9, sun_sharpness as *const u8);
     debug_group_end();
 }

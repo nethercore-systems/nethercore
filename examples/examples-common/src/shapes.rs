@@ -127,7 +127,7 @@ impl ShapeRotation {
 /// Returns true if shape changed
 pub fn handle_shape_cycling(shape_index: &mut i32) -> bool {
     unsafe {
-        if button_pressed(0, BUTTON_A) != 0 {
+        if button_pressed(0, A) != 0 {
             *shape_index = (*shape_index + 1) % ShapeType::COUNT;
             true
         } else {
@@ -153,8 +153,8 @@ pub unsafe fn register_shape_debug(
     color: *const u8,
 ) {
     debug_group_begin(b"shape".as_ptr(), 5);
-    debug_register_i32(b"index (0-2)".as_ptr(), 11, shape_index);
-    debug_register_f32(b"rotation_speed".as_ptr(), 14, rotation_speed);
+    debug_register_i32(b"index (0-2)".as_ptr(), 11, shape_index as *const u8);
+    debug_register_f32(b"rotation_speed".as_ptr(), 14, rotation_speed as *const u8);
     debug_register_color(b"color".as_ptr(), 5, color);
     debug_group_end();
 }

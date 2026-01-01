@@ -54,7 +54,6 @@ pub extern "C" fn render() {
         // Draw title in white
         set_color(0xFFFFFFFF);
         let title = b"Hello Nethercore!";
-        set_color( );
         draw_text(
             title.as_ptr(), title.len() as u32, 80.0, 30.0, 24.0);
 

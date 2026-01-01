@@ -425,17 +425,20 @@ fn render_paddles() {
         texture_bind(TEX_PADDLE);
 
         // Player 1 paddle (blue tint)
-        draw_sprite(PADDLE1.x, PADDLE1.y, PADDLE_WIDTH, PADDLE_HEIGHT, COLOR_PLAYER1);
+        set_color(COLOR_PLAYER1);
+        draw_sprite(PADDLE1.x, PADDLE1.y, PADDLE_WIDTH, PADDLE_HEIGHT);
 
         // Player 2 paddle (red tint)
-        draw_sprite(PADDLE2.x, PADDLE2.y, PADDLE_WIDTH, PADDLE_HEIGHT, COLOR_PLAYER2);
+        set_color(COLOR_PLAYER2);
+        draw_sprite(PADDLE2.x, PADDLE2.y, PADDLE_WIDTH, PADDLE_HEIGHT);
     }
 }
 
 fn render_ball() {
     unsafe {
         texture_bind(TEX_BALL);
-        draw_sprite(BALL.x, BALL.y, BALL_SIZE, BALL_SIZE, COLOR_BALL);
+        set_color(COLOR_BALL);
+        draw_sprite(BALL.x, BALL.y, BALL_SIZE, BALL_SIZE);
     }
 }
 

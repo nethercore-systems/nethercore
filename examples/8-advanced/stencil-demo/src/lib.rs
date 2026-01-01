@@ -184,7 +184,8 @@ fn tint_color(color: u32, tint_r: f32, tint_g: f32, tint_b: f32) -> u32 {
 unsafe fn demo_circle_mask() {
     // Draw circle shape to stencil buffer
     stencil_begin();
-    draw_circle(SCREEN_CX, SCREEN_CY, 200.0, 0xFFFFFFFF);
+    set_color(0xFFFFFFFF);
+    draw_circle(SCREEN_CX, SCREEN_CY, 200.0);
     stencil_end();
 
     // Draw scene - only visible inside circle
@@ -201,7 +202,8 @@ unsafe fn demo_inverted_mask() {
 
     // Create circle mask
     stencil_begin();
-    draw_circle(SCREEN_CX, SCREEN_CY, 250.0, 0xFFFFFFFF);
+    set_color(0xFFFFFFFF);
+    draw_circle(SCREEN_CX, SCREEN_CY, 250.0);
     stencil_invert();
 
     // Draw dark vignette overlay only outside circle
@@ -237,19 +239,23 @@ unsafe fn demo_animated_portal() {
 
     // 1. Draw scene outside portal (inverted stencil)
     stencil_begin();
-    draw_circle(SCREEN_CX, SCREEN_CY, radius, 0xFFFFFFFF);
+    set_color(0xFFFFFFFF);
+    draw_circle(SCREEN_CX, SCREEN_CY, radius);
     stencil_invert();
     draw_scene();
     stencil_clear();
 
     // 2. Draw portal ring (no stencil - just 2D)
     let ring_width = 6.0;
-    draw_circle(SCREEN_CX, SCREEN_CY, radius + ring_width / 2.0, 0x8800FFFF);
-    draw_circle(SCREEN_CX, SCREEN_CY, radius - ring_width / 2.0, 0x000000FF);
+    set_color(0x8800FFFF);
+    draw_circle(SCREEN_CX, SCREEN_CY, radius + ring_width / 2.0);
+    set_color(0x000000FF);
+    draw_circle(SCREEN_CX, SCREEN_CY, radius - ring_width / 2.0);
 
     // 3. Draw portal interior (zoomed view)
     stencil_begin();
-    draw_circle(SCREEN_CX, SCREEN_CY, radius - ring_width / 2.0, 0xFFFFFFFF);
+    set_color(0xFFFFFFFF);
+    draw_circle(SCREEN_CX, SCREEN_CY, radius - ring_width / 2.0);
     stencil_end();
     draw_scene_with_camera(0.0, 2.0, 5.0, 90.0);
     stencil_clear();

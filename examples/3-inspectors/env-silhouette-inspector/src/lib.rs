@@ -108,21 +108,21 @@ unsafe fn register_debug_values() {
     debug_group_end();
 
     debug_group_begin(b"preset".as_ptr(), 6);
-    debug_register_i32(b"index".as_ptr(), 5, &PRESET_INDEX);
+    debug_register_i32(b"index".as_ptr(), 5, &PRESET_INDEX as *const i32 as *const u8);
     debug_group_end();
 }
 
 #[no_mangle]
 pub extern "C" fn update() {
     unsafe {
-        if button_pressed(0, BUTTON_A) != 0 {
+        if button_pressed(0, button::A) != 0 {
             PRESET_INDEX = (PRESET_INDEX + 1) % PRESET_COUNT as i32;
             load_preset(PRESET_INDEX as usize);
         }
-        if button_pressed(0, BUTTON_B) != 0 {
+        if button_pressed(0, button::B) != 0 {
             SHAPE_INDEX = (SHAPE_INDEX + 1) % SHAPE_COUNT as i32;
         }
-        if button_pressed(0, BUTTON_X) != 0 {
+        if button_pressed(0, button::X) != 0 {
             SEED = SEED.wrapping_add(1);
         }
 

@@ -62,13 +62,13 @@ pub extern "C" fn init() {
 
         // Load mesh from embedded .nczxmesh data (host parses header)
         CUBE_MESH = load_zmesh(
-            CUBE_MESH_DATA.as_ptr() as u32,
+            CUBE_MESH_DATA.as_ptr(),
             CUBE_MESH_DATA.len() as u32,
         );
 
         // Load texture from embedded .nczxtex data (host parses header)
         CHECKERBOARD_TEX = load_ztex(
-            CHECKERBOARD_TEX_DATA.as_ptr() as u32,
+            CHECKERBOARD_TEX_DATA.as_ptr(),
             CHECKERBOARD_TEX_DATA.len() as u32,
         );
     }

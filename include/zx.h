@@ -806,6 +806,42 @@ NCZX_IMPORT void material_emissive(float value);
 /** * `power` — Falloff sharpness (0.0-32.0, higher = tighter) */
 NCZX_IMPORT void material_rim(float intensity, float power);
 
+/** Enable/disable uniform color override. */
+/**  */
+/** When enabled, uses the last set_color() value for all subsequent draws, */
+/** overriding vertex colors and material albedo. */
+/**  */
+/** # Arguments */
+/** * `enabled` — 1 to enable, 0 to disable */
+NCZX_IMPORT void use_uniform_color(uint32_t enabled);
+
+/** Enable/disable uniform metallic override. */
+/**  */
+/** When enabled, uses the last material_metallic() value for all subsequent draws, */
+/** overriding per-vertex or per-material metallic values. */
+/**  */
+/** # Arguments */
+/** * `enabled` — 1 to enable, 0 to disable */
+NCZX_IMPORT void use_uniform_metallic(uint32_t enabled);
+
+/** Enable/disable uniform roughness override. */
+/**  */
+/** When enabled, uses the last material_roughness() value for all subsequent draws, */
+/** overriding per-vertex or per-material roughness values. */
+/**  */
+/** # Arguments */
+/** * `enabled` — 1 to enable, 0 to disable */
+NCZX_IMPORT void use_uniform_roughness(uint32_t enabled);
+
+/** Enable/disable uniform emissive override. */
+/**  */
+/** When enabled, uses the last material_emissive() value for all subsequent draws, */
+/** overriding per-vertex or per-material emissive values. */
+/**  */
+/** # Arguments */
+/** * `enabled` — 1 to enable, 0 to disable */
+NCZX_IMPORT void use_uniform_emissive(uint32_t enabled);
+
 /** Set shininess (Mode 3 alias for roughness). */
 NCZX_IMPORT void material_shininess(float value);
 
@@ -903,6 +939,97 @@ NCZX_IMPORT void skeleton_bind(uint32_t skeleton);
 /** ``` */
 NCZX_IMPORT void set_bones(const float* matrices_ptr, uint32_t count);
 
+/** Set bone transform matrices for skeletal animation using 4x4 matrices. */
+/**  */
+/** Alternative to `set_bones()` that accepts full 4x4 matrices instead of 3x4. */
+/**  */
+/** # Arguments */
+/** * `matrices_ptr` — Pointer to array of 4×4 matrices (16 floats per bone, column-major) */
+/** * `count` — Number of bones (max 256) */
+/**  */
+/** Each bone matrix is 16 floats in column-major order: */
+/** ```text */
+/** [col0.x, col0.y, col0.z, col0.w]  // X axis + w */
+/** [col1.x, col1.y, col1.z, col1.w]  // Y axis + w */
+/** [col2.x, col2.y, col2.z, col2.w]  // Z axis + w */
+/** [tx,     ty,     tz,     tw    ]  // translation + w */
+/** ``` */
+NCZX_IMPORT void set_bones_4x4(const float* matrices_ptr, uint32_t count);
+
+/** Load keyframe animation data from WASM memory. */
+/**  */
+/** Must be called during `init()`. */
+/**  */
+/** # Arguments */
+/** * `data_ptr` — Pointer to .nczxanim data in WASM memory */
+/** * `byte_size` — Total size of the data in bytes */
+/**  */
+/** # Returns */
+/** Keyframe collection handle (>0) on success. Traps on failure. */
+NCZX_IMPORT uint32_t keyframes_load(const uint8_t* data_ptr, uint32_t byte_size);
+
+/** Load keyframe animation data from ROM data pack by ID. */
+/**  */
+/** Must be called during `init()`. */
+/**  */
+/** # Arguments */
+/** * `id_ptr` — Pointer to asset ID string in WASM memory */
+/** * `id_len` — Length of asset ID string */
+/**  */
+/** # Returns */
+/** Keyframe collection handle (>0) on success. Traps on failure. */
+NCZX_IMPORT uint32_t rom_keyframes(const uint8_t* id_ptr, uint32_t id_len);
+
+/** Get the bone count for a keyframe collection. */
+/**  */
+/** # Arguments */
+/** * `handle` — Keyframe collection handle from keyframes_load() or rom_keyframes() */
+/**  */
+/** # Returns */
+/** Bone count (0 on invalid handle) */
+NCZX_IMPORT uint32_t keyframes_bone_count(uint32_t handle);
+
+/** Get the frame count for a keyframe collection. */
+/**  */
+/** # Arguments */
+/** * `handle` — Keyframe collection handle from keyframes_load() or rom_keyframes() */
+/**  */
+/** # Returns */
+/** Frame count (0 on invalid handle) */
+NCZX_IMPORT uint32_t keyframes_frame_count(uint32_t handle);
+
+/** Read a decoded keyframe into WASM memory. */
+/**  */
+/** Decodes the platform format to BoneTransform format (40 bytes/bone): */
+/** - rotation: [f32; 4] quaternion [x, y, z, w] */
+/** - position: [f32; 3] */
+/** - scale: [f32; 3] */
+/**  */
+/** # Arguments */
+/** * `handle` — Keyframe collection handle */
+/** * `index` — Frame index (0-based) */
+/** * `out_ptr` — Pointer to output buffer in WASM memory (must be bone_count × 40 bytes) */
+/**  */
+/** # Traps */
+/** - Invalid handle (0 or not loaded) */
+/** - Frame index out of bounds */
+/** - Output buffer out of bounds */
+NCZX_IMPORT void keyframe_read(uint32_t handle, uint32_t index, uint8_t* out_ptr);
+
+/** Bind a keyframe directly from the static GPU buffer. */
+/**  */
+/** Points subsequent skinned draws to use pre-decoded matrices from the GPU buffer. */
+/** No CPU decoding or data transfer needed at draw time. */
+/**  */
+/** # Arguments */
+/** * `handle` — Keyframe collection handle (0 to unbind) */
+/** * `index` — Frame index (0-based) */
+/**  */
+/** # Traps */
+/** - Invalid handle (not loaded) */
+/** - Frame index out of bounds */
+NCZX_IMPORT void keyframe_bind(uint32_t handle, uint32_t index);
+
 /** Load raw PCM sound data (22.05kHz, 16-bit signed, mono). */
 /**  */
 /** Must be called during `init()`. */
@@ -946,7 +1073,7 @@ NCZX_IMPORT void channel_stop(uint32_t channel);
 /**  */
 /** # Returns */
 /** Tracker handle (>0) on success, 0 on failure. */
-NCZX_IMPORT uint32_t rom_tracker(uint32_t id_ptr, uint32_t id_len);
+NCZX_IMPORT uint32_t rom_tracker(const uint8_t* id_ptr, uint32_t id_len);
 
 /** Load a tracker module from raw XM data. */
 /**  */
@@ -959,7 +1086,7 @@ NCZX_IMPORT uint32_t rom_tracker(uint32_t id_ptr, uint32_t id_len);
 /**  */
 /** # Returns */
 /** Tracker handle (>0) on success, 0 on failure. */
-NCZX_IMPORT uint32_t load_tracker(uint32_t data_ptr, uint32_t data_len);
+NCZX_IMPORT uint32_t load_tracker(const uint8_t* data_ptr, uint32_t data_len);
 
 /** Play music (PCM sound or tracker module). */
 /**  */
@@ -1072,31 +1199,31 @@ NCZX_IMPORT uint32_t music_name(uint32_t handle, uint8_t* out_ptr, uint32_t max_
 /**  */
 /** # Returns */
 /** Texture handle (>0) on success. Traps on failure. */
-NCZX_IMPORT uint32_t rom_texture(uint32_t id_ptr, uint32_t id_len);
+NCZX_IMPORT uint32_t rom_texture(const uint8_t* id_ptr, uint32_t id_len);
 
 /** Load a mesh from ROM data pack by ID. */
 /**  */
 /** # Returns */
 /** Mesh handle (>0) on success. Traps on failure. */
-NCZX_IMPORT uint32_t rom_mesh(uint32_t id_ptr, uint32_t id_len);
+NCZX_IMPORT uint32_t rom_mesh(const uint8_t* id_ptr, uint32_t id_len);
 
 /** Load skeleton inverse bind matrices from ROM data pack by ID. */
 /**  */
 /** # Returns */
 /** Skeleton handle (>0) on success. Traps on failure. */
-NCZX_IMPORT uint32_t rom_skeleton(uint32_t id_ptr, uint32_t id_len);
+NCZX_IMPORT uint32_t rom_skeleton(const uint8_t* id_ptr, uint32_t id_len);
 
 /** Load a font atlas from ROM data pack by ID. */
 /**  */
 /** # Returns */
 /** Texture handle for font atlas (>0) on success. Traps on failure. */
-NCZX_IMPORT uint32_t rom_font(uint32_t id_ptr, uint32_t id_len);
+NCZX_IMPORT uint32_t rom_font(const uint8_t* id_ptr, uint32_t id_len);
 
 /** Load a sound from ROM data pack by ID. */
 /**  */
 /** # Returns */
 /** Sound handle (>0) on success. Traps on failure. */
-NCZX_IMPORT uint32_t rom_sound(uint32_t id_ptr, uint32_t id_len);
+NCZX_IMPORT uint32_t rom_sound(const uint8_t* id_ptr, uint32_t id_len);
 
 /** Get the byte size of raw data in the ROM data pack. */
 /**  */
@@ -1104,7 +1231,7 @@ NCZX_IMPORT uint32_t rom_sound(uint32_t id_ptr, uint32_t id_len);
 /**  */
 /** # Returns */
 /** Byte count on success. Traps if not found. */
-NCZX_IMPORT uint32_t rom_data_len(uint32_t id_ptr, uint32_t id_len);
+NCZX_IMPORT uint32_t rom_data_len(const uint8_t* id_ptr, uint32_t id_len);
 
 /** Copy raw data from ROM data pack into WASM linear memory. */
 /**  */
@@ -1115,7 +1242,7 @@ NCZX_IMPORT uint32_t rom_data_len(uint32_t id_ptr, uint32_t id_len);
 /**  */
 /** # Returns */
 /** Bytes written on success. Traps on failure. */
-NCZX_IMPORT uint32_t rom_data(uint32_t id_ptr, uint32_t id_len, uint32_t dst_ptr, uint32_t max_len);
+NCZX_IMPORT uint32_t rom_data(const uint8_t* id_ptr, uint32_t id_len, const uint8_t* dst_ptr, uint32_t max_len);
 
 /** Load a mesh from .nczxmesh binary format. */
 /**  */
@@ -1125,124 +1252,167 @@ NCZX_IMPORT uint32_t rom_data(uint32_t id_ptr, uint32_t id_len, uint32_t dst_ptr
 /**  */
 /** # Returns */
 /** Mesh handle (>0) on success, 0 on failure. */
-NCZX_IMPORT uint32_t load_zmesh(uint32_t data_ptr, uint32_t data_len);
+NCZX_IMPORT uint32_t load_zmesh(const uint8_t* data_ptr, uint32_t data_len);
 
 /** Load a texture from .nczxtex binary format. */
 /**  */
 /** # Returns */
 /** Texture handle (>0) on success, 0 on failure. */
-NCZX_IMPORT uint32_t load_ztex(uint32_t data_ptr, uint32_t data_len);
+NCZX_IMPORT uint32_t load_ztex(const uint8_t* data_ptr, uint32_t data_len);
 
 /** Load a sound from .nczxsnd binary format. */
 /**  */
 /** # Returns */
 /** Sound handle (>0) on success, 0 on failure. */
-NCZX_IMPORT uint32_t load_zsound(uint32_t data_ptr, uint32_t data_len);
+NCZX_IMPORT uint32_t load_zsound(const uint8_t* data_ptr, uint32_t data_len);
 
 /** Register an i8 value for debug inspection. */
-NCZX_IMPORT void debug_register_i8(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_register_i8(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Register an i16 value for debug inspection. */
-NCZX_IMPORT void debug_register_i16(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_register_i16(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Register an i32 value for debug inspection. */
-NCZX_IMPORT void debug_register_i32(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_register_i32(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Register a u8 value for debug inspection. */
-NCZX_IMPORT void debug_register_u8(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_register_u8(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Register a u16 value for debug inspection. */
-NCZX_IMPORT void debug_register_u16(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_register_u16(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Register a u32 value for debug inspection. */
-NCZX_IMPORT void debug_register_u32(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_register_u32(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Register an f32 value for debug inspection. */
-NCZX_IMPORT void debug_register_f32(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_register_f32(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Register a bool value for debug inspection. */
-NCZX_IMPORT void debug_register_bool(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_register_bool(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Register an i32 with min/max range constraints. */
-NCZX_IMPORT void debug_register_i32_range(uint32_t name_ptr, uint32_t name_len, uint32_t ptr, int32_t min, int32_t max);
+NCZX_IMPORT void debug_register_i32_range(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr, int32_t min, int32_t max);
 
 /** Register an f32 with min/max range constraints. */
-NCZX_IMPORT void debug_register_f32_range(uint32_t name_ptr, uint32_t name_len, uint32_t ptr, float min, float max);
+NCZX_IMPORT void debug_register_f32_range(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr, float min, float max);
 
 /** Register a u8 with min/max range constraints. */
-NCZX_IMPORT void debug_register_u8_range(uint32_t name_ptr, uint32_t name_len, uint32_t ptr, uint32_t min, uint32_t max);
+NCZX_IMPORT void debug_register_u8_range(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr, uint32_t min, uint32_t max);
 
 /** Register a u16 with min/max range constraints. */
-NCZX_IMPORT void debug_register_u16_range(uint32_t name_ptr, uint32_t name_len, uint32_t ptr, uint32_t min, uint32_t max);
+NCZX_IMPORT void debug_register_u16_range(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr, uint32_t min, uint32_t max);
 
 /** Register an i16 with min/max range constraints. */
-NCZX_IMPORT void debug_register_i16_range(uint32_t name_ptr, uint32_t name_len, uint32_t ptr, int32_t min, int32_t max);
+NCZX_IMPORT void debug_register_i16_range(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr, int32_t min, int32_t max);
 
 /** Register a Vec2 (2 floats: x, y) for debug inspection. */
-NCZX_IMPORT void debug_register_vec2(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_register_vec2(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Register a Vec3 (3 floats: x, y, z) for debug inspection. */
-NCZX_IMPORT void debug_register_vec3(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_register_vec3(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Register a Rect (4 i16: x, y, w, h) for debug inspection. */
-NCZX_IMPORT void debug_register_rect(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_register_rect(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Register a Color (4 u8: RGBA) for debug inspection with color picker. */
-NCZX_IMPORT void debug_register_color(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_register_color(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Register Q8.8 fixed-point (i16) for debug inspection. */
-NCZX_IMPORT void debug_register_fixed_i16_q8(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_register_fixed_i16_q8(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Register Q16.16 fixed-point (i32) for debug inspection. */
-NCZX_IMPORT void debug_register_fixed_i32_q16(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_register_fixed_i32_q16(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Register Q24.8 fixed-point (i32) for debug inspection. */
-NCZX_IMPORT void debug_register_fixed_i32_q8(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_register_fixed_i32_q8(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Register Q8.24 fixed-point (i32) for debug inspection. */
-NCZX_IMPORT void debug_register_fixed_i32_q24(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_register_fixed_i32_q24(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Watch an i8 value (read-only). */
-NCZX_IMPORT void debug_watch_i8(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_watch_i8(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Watch an i16 value (read-only). */
-NCZX_IMPORT void debug_watch_i16(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_watch_i16(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Watch an i32 value (read-only). */
-NCZX_IMPORT void debug_watch_i32(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_watch_i32(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Watch a u8 value (read-only). */
-NCZX_IMPORT void debug_watch_u8(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_watch_u8(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Watch a u16 value (read-only). */
-NCZX_IMPORT void debug_watch_u16(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_watch_u16(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Watch a u32 value (read-only). */
-NCZX_IMPORT void debug_watch_u32(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_watch_u32(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Watch an f32 value (read-only). */
-NCZX_IMPORT void debug_watch_f32(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_watch_f32(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Watch a bool value (read-only). */
-NCZX_IMPORT void debug_watch_bool(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_watch_bool(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Watch a Vec2 value (read-only). */
-NCZX_IMPORT void debug_watch_vec2(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_watch_vec2(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Watch a Vec3 value (read-only). */
-NCZX_IMPORT void debug_watch_vec3(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_watch_vec3(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Watch a Rect value (read-only). */
-NCZX_IMPORT void debug_watch_rect(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_watch_rect(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Watch a Color value (read-only). */
-NCZX_IMPORT void debug_watch_color(uint32_t name_ptr, uint32_t name_len, uint32_t ptr);
+NCZX_IMPORT void debug_watch_color(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* ptr);
 
 /** Begin a collapsible group in the debug UI. */
-NCZX_IMPORT void debug_group_begin(uint32_t name_ptr, uint32_t name_len);
+NCZX_IMPORT void debug_group_begin(const uint8_t* name_ptr, uint32_t name_len);
 
 /** End the current debug group. */
 NCZX_IMPORT void debug_group_end(void);
+
+/** Register a simple action with no parameters. */
+/**  */
+/** Creates a button in the debug UI that calls the specified WASM function when clicked. */
+/**  */
+/** # Parameters */
+/** - `name_ptr`: Pointer to button label string */
+/** - `name_len`: Length of button label */
+/** - `func_name_ptr`: Pointer to WASM function name string */
+/** - `func_name_len`: Length of function name */
+NCZX_IMPORT void debug_register_action(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* func_name_ptr, uint32_t func_name_len);
+
+/** Begin building an action with parameters. */
+/**  */
+/** Use with debug_action_param_* and debug_action_end() to create an action with input fields. */
+/**  */
+/** # Parameters */
+/** - `name_ptr`: Pointer to button label string */
+/** - `name_len`: Length of button label */
+/** - `func_name_ptr`: Pointer to WASM function name string */
+/** - `func_name_len`: Length of function name */
+NCZX_IMPORT void debug_action_begin(const uint8_t* name_ptr, uint32_t name_len, const uint8_t* func_name_ptr, uint32_t func_name_len);
+
+/** Add an i32 parameter to the pending action. */
+/**  */
+/** # Parameters */
+/** - `name_ptr`: Pointer to parameter label string */
+/** - `name_len`: Length of parameter label */
+/** - `default_value`: Default value for the parameter */
+NCZX_IMPORT void debug_action_param_i32(const uint8_t* name_ptr, uint32_t name_len, int32_t default_value);
+
+/** Add an f32 parameter to the pending action. */
+/**  */
+/** # Parameters */
+/** - `name_ptr`: Pointer to parameter label string */
+/** - `name_len`: Length of parameter label */
+/** - `default_value`: Default value for the parameter */
+NCZX_IMPORT void debug_action_param_f32(const uint8_t* name_ptr, uint32_t name_len, float default_value);
+
+/** Finish building the pending action. */
+/**  */
+/** Completes the action registration started with debug_action_begin(). */
+NCZX_IMPORT void debug_action_end(void);
 
 /** Query if the game is currently paused (debug mode). */
 /**  */

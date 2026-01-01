@@ -134,7 +134,7 @@ unsafe fn register_debug_values() {
     debug_register_color(b"color".as_ptr(), 5, &UNIFORM_COLOR as *const u32 as *const u8);
     debug_register_u8(b"metallic".as_ptr(), 8, &UNIFORM_METALLIC);
     debug_register_u8(b"roughness".as_ptr(), 9, &UNIFORM_ROUGHNESS);
-    debug_register_f32(b"emissive".as_ptr(), 8, &UNIFORM_EMISSIVE);
+    debug_register_f32(b"emissive".as_ptr(), 8, &UNIFORM_EMISSIVE as *const f32 as *const u8);
     debug_group_end();
 }
 

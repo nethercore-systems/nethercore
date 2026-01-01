@@ -102,29 +102,29 @@ pub extern "C" fn init() {
 unsafe fn register_debug_values() {
     // Display mode
     debug_group_begin(b"display".as_ptr(), 7);
-    debug_register_i32(b"mode (0=compare, 1=single)".as_ptr(), 25, &DISPLAY_MODE);
+    debug_register_i32(b"mode (0=compare, 1=single)".as_ptr(), 25, &DISPLAY_MODE as *const i32 as *const u8);
     debug_group_end();
 
     // Alpha levels group
     debug_group_begin(b"alpha levels".as_ptr(), 12);
-    debug_register_i32(b"front (0-15)".as_ptr(), 11, &ALPHA_FRONT);
-    debug_register_i32(b"mid (0-15)".as_ptr(), 9, &ALPHA_MID);
-    debug_register_i32(b"back (0-15)".as_ptr(), 10, &ALPHA_BACK);
-    debug_register_i32(b"ground (0-15)".as_ptr(), 12, &ALPHA_GROUND);
+    debug_register_i32(b"front (0-15)".as_ptr(), 11, &ALPHA_FRONT as *const i32 as *const u8);
+    debug_register_i32(b"mid (0-15)".as_ptr(), 9, &ALPHA_MID as *const i32 as *const u8);
+    debug_register_i32(b"back (0-15)".as_ptr(), 10, &ALPHA_BACK as *const i32 as *const u8);
+    debug_register_i32(b"ground (0-15)".as_ptr(), 12, &ALPHA_GROUND as *const i32 as *const u8);
     debug_group_end();
 
     // Dither offsets group (for single-group mode)
     debug_group_begin(b"offsets (single mode)".as_ptr(), 20);
-    debug_register_bool(b"use_unique_offsets".as_ptr(), 18, &USE_UNIQUE_OFFSETS);
-    debug_register_i32(b"front (0-3)".as_ptr(), 10, &OFFSET_FRONT);
-    debug_register_i32(b"mid (0-3)".as_ptr(), 8, &OFFSET_MID);
-    debug_register_i32(b"back (0-3)".as_ptr(), 9, &OFFSET_BACK);
+    debug_register_bool(b"use_unique_offsets".as_ptr(), 18, &USE_UNIQUE_OFFSETS as *const u8);
+    debug_register_i32(b"front (0-3)".as_ptr(), 10, &OFFSET_FRONT as *const i32 as *const u8);
+    debug_register_i32(b"mid (0-3)".as_ptr(), 8, &OFFSET_MID as *const i32 as *const u8);
+    debug_register_i32(b"back (0-3)".as_ptr(), 9, &OFFSET_BACK as *const i32 as *const u8);
     debug_group_end();
 
     // Animation group
     debug_group_begin(b"animation".as_ptr(), 9);
-    debug_register_bool(b"auto_rotate".as_ptr(), 11, &AUTO_ROTATE);
-    debug_register_f32(b"speed (deg/s)".as_ptr(), 12, &ROTATION_SPEED);
+    debug_register_bool(b"auto_rotate".as_ptr(), 11, &AUTO_ROTATE as *const u8);
+    debug_register_f32(b"speed (deg/s)".as_ptr(), 12, &ROTATION_SPEED as *const f32 as *const u8);
     debug_group_end();
 }
 

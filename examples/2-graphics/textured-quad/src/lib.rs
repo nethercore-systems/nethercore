@@ -87,13 +87,15 @@ pub extern "C" fn render() {
         let x = (960.0 - sprite_size) / 2.0;
         let y = (540.0 - sprite_size) / 2.0;
 
-        // Draw with color tint (pass tint directly to draw_sprite)
-        draw_sprite(x, y, sprite_size, sprite_size, tint);
+        // Draw with color tint
+        set_color(tint);
+        draw_sprite(x, y, sprite_size, sprite_size);
 
         // Draw a few more at corners to show multiple sprites (white, no tint)
-        draw_sprite(16.0, 16.0, 64.0, 64.0, 0xFFFFFFFF);
-        draw_sprite(960.0 - 80.0, 16.0, 64.0, 64.0, 0xFFFFFFFF);
-        draw_sprite(16.0, 540.0 - 80.0, 64.0, 64.0, 0xFFFFFFFF);
-        draw_sprite(960.0 - 80.0, 540.0 - 80.0, 64.0, 64.0, 0xFFFFFFFF);
+        set_color(0xFFFFFFFF);
+        draw_sprite(16.0, 16.0, 64.0, 64.0);
+        draw_sprite(960.0 - 80.0, 16.0, 64.0, 64.0);
+        draw_sprite(16.0, 540.0 - 80.0, 64.0, 64.0);
+        draw_sprite(960.0 - 80.0, 540.0 - 80.0, 64.0, 64.0);
     }
 }

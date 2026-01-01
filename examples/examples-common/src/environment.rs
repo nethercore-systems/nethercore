@@ -684,7 +684,7 @@ pub unsafe fn register_environment_debug(
     debug_register_color(b"sky_horizon".as_ptr(), 11, sky_horizon);
     debug_register_color(b"ground_horizon".as_ptr(), 14, ground_horizon);
     debug_register_color(b"nadir".as_ptr(), 5, nadir);
-    debug_register_f32(b"rotation".as_ptr(), 8, rotation);
-    debug_register_f32(b"shift".as_ptr(), 5, shift);
+    debug_register_f32(b"rotation".as_ptr(), 8, rotation as *const u8);
+    debug_register_f32(b"shift".as_ptr(), 5, shift as *const u8);
     debug_group_end();
 }

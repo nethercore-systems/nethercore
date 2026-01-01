@@ -124,22 +124,22 @@ pub extern "C" fn init() {
         debug_register_color(b"color_b".as_ptr(), 7, &COLOR_B as *const u32 as *const u8);
         debug_register_color(b"center".as_ptr(), 6, &CENTER_COLOR as *const u32 as *const u8);
         debug_register_u8(b"center_fall".as_ptr(), 11, &CENTER_FALLOFF);
-        debug_register_f32(b"spiral".as_ptr(), 6, &SPIRAL_TWIST);
+        debug_register_f32(b"spiral".as_ptr(), 6, &SPIRAL_TWIST as *const f32 as *const u8);
         debug_group_end();
 
         debug_group_begin(b"axis".as_ptr(), 4);
-        debug_register_f32(b"x".as_ptr(), 1, &AXIS_X);
-        debug_register_f32(b"y".as_ptr(), 1, &AXIS_Y);
-        debug_register_f32(b"z".as_ptr(), 1, &AXIS_Z);
+        debug_register_f32(b"x".as_ptr(), 1, &AXIS_X as *const f32 as *const u8);
+        debug_register_f32(b"y".as_ptr(), 1, &AXIS_Y as *const f32 as *const u8);
+        debug_register_f32(b"z".as_ptr(), 1, &AXIS_Z as *const f32 as *const u8);
         debug_group_end();
 
         debug_group_begin(b"animation".as_ptr(), 9);
         debug_register_u8(b"animate".as_ptr(), 7, &ANIMATE);
-        debug_register_f32(b"speed".as_ptr(), 5, &SPIN_SPEED);
+        debug_register_f32(b"speed".as_ptr(), 5, &SPIN_SPEED as *const f32 as *const u8);
         debug_group_end();
 
         debug_group_begin(b"preset".as_ptr(), 6);
-        debug_register_i32(b"index".as_ptr(), 5, &PRESET_INDEX);
+        debug_register_i32(b"index".as_ptr(), 5, &PRESET_INDEX as *const i32 as *const u8);
         debug_group_end();
     }
 }
@@ -147,11 +147,11 @@ pub extern "C" fn init() {
 #[no_mangle]
 pub extern "C" fn update() {
     unsafe {
-        if button_pressed(0, BUTTON_A) != 0 {
+        if button_pressed(0, button::A) != 0 {
             PRESET_INDEX = (PRESET_INDEX + 1) % PRESET_COUNT as i32;
             load_preset(PRESET_INDEX as usize);
         }
-        if button_pressed(0, BUTTON_B) != 0 {
+        if button_pressed(0, button::B) != 0 {
             SHAPE_INDEX = (SHAPE_INDEX + 1) % SHAPE_COUNT as i32;
         }
 

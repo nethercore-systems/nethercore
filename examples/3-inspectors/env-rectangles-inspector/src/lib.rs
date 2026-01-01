@@ -70,10 +70,10 @@ pub extern "C" fn init() {
 #[no_mangle]
 pub extern "C" fn update() {
     unsafe {
-        if button_pressed(0, BUTTON_A) != 0 {
+        if button_pressed(0, button::A) != 0 {
             VARIANT = (VARIANT + 1) % 4;
         }
-        if button_pressed(0, BUTTON_B) != 0 {
+        if button_pressed(0, button::B) != 0 {
             SHAPE_INDEX = (SHAPE_INDEX + 1) % SHAPE_COUNT as i32;
         }
 

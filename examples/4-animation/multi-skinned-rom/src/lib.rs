@@ -82,13 +82,13 @@ pub extern "C" fn init() {
         ARM1_MESH = rom_mesh(b"arm1_mesh".as_ptr(), 9);
         ARM1_SKELETON = rom_skeleton(b"arm1_skel".as_ptr(), 9);
         ARM1_ANIM = rom_keyframes(b"wave1".as_ptr(), 5);
-        ARM1_FRAME_COUNT = keyframes_frame_count(ARM1_ANIM);
+        ARM1_FRAME_COUNT = keyframes_frame_count(ARM1_ANIM) as u16;
 
         // Load character 2 assets from ROM
         ARM2_MESH = rom_mesh(b"arm2_mesh".as_ptr(), 9);
         ARM2_SKELETON = rom_skeleton(b"arm2_skel".as_ptr(), 9);
         ARM2_ANIM = rom_keyframes(b"wave2".as_ptr(), 5);
-        ARM2_FRAME_COUNT = keyframes_frame_count(ARM2_ANIM);
+        ARM2_FRAME_COUNT = keyframes_frame_count(ARM2_ANIM) as u16;
     }
 }
 

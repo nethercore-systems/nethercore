@@ -367,7 +367,7 @@ pub extern "C" fn init() {
         WAVE_ANIM = rom_keyframes(wave_id.as_ptr(), wave_id.len() as u32);
 
         // Query animation info
-        FRAME_COUNT = keyframes_frame_count(WAVE_ANIM);
+        FRAME_COUNT = keyframes_frame_count(WAVE_ANIM) as u16;
     }
 }
 

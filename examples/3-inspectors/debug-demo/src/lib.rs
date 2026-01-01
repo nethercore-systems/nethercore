@@ -134,18 +134,18 @@ pub extern "C" fn init() {
 unsafe fn register_debug_values() {
     // Player group
     debug_group_begin(b"player".as_ptr(), 6);
-    debug_register_f32(b"x".as_ptr(), 1, &PLAYER_X);
-    debug_register_f32(b"y".as_ptr(), 1, &PLAYER_Y);
-    debug_register_f32(b"speed".as_ptr(), 5, &PLAYER_SPEED);
-    debug_register_f32(b"scale".as_ptr(), 5, &PLAYER_SCALE);
+    debug_register_f32(b"x".as_ptr(), 1, &PLAYER_X as *const f32 as *const u8);
+    debug_register_f32(b"y".as_ptr(), 1, &PLAYER_Y as *const f32 as *const u8);
+    debug_register_f32(b"speed".as_ptr(), 5, &PLAYER_SPEED as *const f32 as *const u8);
+    debug_register_f32(b"scale".as_ptr(), 5, &PLAYER_SCALE as *const f32 as *const u8);
     debug_register_color(b"color".as_ptr(), 5, &PLAYER_COLOR as *const u32 as *const u8);
     debug_group_end();
 
     // World group
     debug_group_begin(b"world".as_ptr(), 5);
-    debug_register_f32(b"rotation_speed".as_ptr(), 14, &ROTATION_SPEED);
-    debug_register_i32(b"object_count".as_ptr(), 12, &OBJECT_COUNT);
-    debug_register_f32(b"orbit_radius".as_ptr(), 12, &ORBIT_RADIUS);
+    debug_register_f32(b"rotation_speed".as_ptr(), 14, &ROTATION_SPEED as *const f32 as *const u8);
+    debug_register_i32(b"object_count".as_ptr(), 12, &OBJECT_COUNT as *const i32 as *const u8);
+    debug_register_f32(b"orbit_radius".as_ptr(), 12, &ORBIT_RADIUS as *const f32 as *const u8);
     debug_group_end();
 
     // Effects group
@@ -157,8 +157,8 @@ unsafe fn register_debug_values() {
     // Stats group (derived values, updated by change callback)
     // These use debug_watch_* (read-only) since they're computed, not editable
     debug_group_begin(b"stats".as_ptr(), 5);
-    debug_watch_i32(b"change_count".as_ptr(), 12, &CHANGE_COUNT);
-    debug_watch_i32(b"total_spheres".as_ptr(), 13, &TOTAL_SPHERES);
+    debug_watch_i32(b"change_count".as_ptr(), 12, &CHANGE_COUNT as *const i32 as *const u8);
+    debug_watch_i32(b"total_spheres".as_ptr(), 13, &TOTAL_SPHERES as *const i32 as *const u8);
     debug_group_end();
 
     // Actions group - demonstrates debug action buttons
@@ -180,7 +180,7 @@ unsafe fn register_debug_values() {
     debug_action_end();
 
     // Watch value to show action results
-    debug_watch_i32(b"click_count".as_ptr(), 11, &ACTION_CLICK_COUNT);
+    debug_watch_i32(b"click_count".as_ptr(), 11, &ACTION_CLICK_COUNT as *const i32 as *const u8);
 
     debug_group_end();
 }

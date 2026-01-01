@@ -60,17 +60,17 @@ pub extern "C" fn init() {
         debug_register_color(b"ceiling".as_ptr(), 7, &COLOR_CEILING as *const u32 as *const u8);
         debug_register_color(b"floor".as_ptr(), 5, &COLOR_FLOOR as *const u32 as *const u8);
         debug_register_color(b"walls".as_ptr(), 5, &COLOR_WALLS as *const u32 as *const u8);
-        debug_register_f32(b"panel_size".as_ptr(), 10, &PANEL_SIZE);
+        debug_register_f32(b"panel_size".as_ptr(), 10, &PANEL_SIZE as *const f32 as *const u8);
         debug_register_u8(b"panel_gap".as_ptr(), 9, &PANEL_GAP);
         debug_register_u8(b"light".as_ptr(), 5, &LIGHT_INTENSITY);
         debug_register_u8(b"corner_dark".as_ptr(), 11, &CORNER_DARKEN);
-        debug_register_f32(b"scale".as_ptr(), 5, &ROOM_SCALE);
+        debug_register_f32(b"scale".as_ptr(), 5, &ROOM_SCALE as *const f32 as *const u8);
         debug_group_end();
 
         debug_group_begin(b"viewer".as_ptr(), 6);
-        debug_register_i32(b"x".as_ptr(), 1, &VIEWER_X);
-        debug_register_i32(b"y".as_ptr(), 1, &VIEWER_Y);
-        debug_register_i32(b"z".as_ptr(), 1, &VIEWER_Z);
+        debug_register_i32(b"x".as_ptr(), 1, &VIEWER_X as *const i32 as *const u8);
+        debug_register_i32(b"y".as_ptr(), 1, &VIEWER_Y as *const i32 as *const u8);
+        debug_register_i32(b"z".as_ptr(), 1, &VIEWER_Z as *const i32 as *const u8);
         debug_group_end();
     }
 }
@@ -78,7 +78,7 @@ pub extern "C" fn init() {
 #[no_mangle]
 pub extern "C" fn update() {
     unsafe {
-        if button_pressed(0, BUTTON_B) != 0 {
+        if button_pressed(0, button::B) != 0 {
             SHAPE_INDEX = (SHAPE_INDEX + 1) % SHAPE_COUNT as i32;
         }
 

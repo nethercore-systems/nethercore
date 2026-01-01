@@ -141,8 +141,8 @@ pub extern "C" fn init() {
 unsafe fn register_debug_values() {
     // Shape group
     debug_group_begin(b"shape".as_ptr(), 5);
-    debug_register_i32(b"index (0-2)".as_ptr(), 11, &SHAPE_INDEX);
-    debug_register_f32(b"rotation_speed".as_ptr(), 14, &ROTATION_SPEED);
+    debug_register_i32(b"index (0-2)".as_ptr(), 11, &SHAPE_INDEX as *const i32 as *const u8);
+    debug_register_f32(b"rotation_speed".as_ptr(), 14, &ROTATION_SPEED as *const f32 as *const u8);
     debug_register_color(b"color".as_ptr(), 5, &OBJECT_COLOR as *const u32 as *const u8);
     debug_group_end();
 
@@ -154,11 +154,11 @@ unsafe fn register_debug_values() {
 
     // Sun group
     debug_group_begin(b"sun".as_ptr(), 3);
-    debug_register_f32(b"dir_x".as_ptr(), 5, &SUN_DIR_X);
-    debug_register_f32(b"dir_y".as_ptr(), 5, &SUN_DIR_Y);
-    debug_register_f32(b"dir_z".as_ptr(), 5, &SUN_DIR_Z);
+    debug_register_f32(b"dir_x".as_ptr(), 5, &SUN_DIR_X as *const f32 as *const u8);
+    debug_register_f32(b"dir_y".as_ptr(), 5, &SUN_DIR_Y as *const f32 as *const u8);
+    debug_register_f32(b"dir_z".as_ptr(), 5, &SUN_DIR_Z as *const f32 as *const u8);
     debug_register_color(b"color".as_ptr(), 5, &SUN_COLOR as *const u32 as *const u8);
-    debug_register_f32(b"sharpness".as_ptr(), 9, &SUN_SHARPNESS);
+    debug_register_f32(b"sharpness".as_ptr(), 9, &SUN_SHARPNESS as *const f32 as *const u8);
     debug_group_end();
 
     // Light groups (4 lights)
@@ -171,11 +171,11 @@ unsafe fn register_debug_values() {
 unsafe fn register_light_debug(index: usize, name: &[u8]) {
     debug_group_begin(name.as_ptr(), name.len() as u32);
     debug_register_u8(b"enabled".as_ptr(), 7, &LIGHT_ENABLED[index]);
-    debug_register_f32(b"dir_x".as_ptr(), 5, &LIGHT_DIRS[index][0]);
-    debug_register_f32(b"dir_y".as_ptr(), 5, &LIGHT_DIRS[index][1]);
-    debug_register_f32(b"dir_z".as_ptr(), 5, &LIGHT_DIRS[index][2]);
+    debug_register_f32(b"dir_x".as_ptr(), 5, &LIGHT_DIRS[index][0] as *const f32 as *const u8);
+    debug_register_f32(b"dir_y".as_ptr(), 5, &LIGHT_DIRS[index][1] as *const f32 as *const u8);
+    debug_register_f32(b"dir_z".as_ptr(), 5, &LIGHT_DIRS[index][2] as *const f32 as *const u8);
     debug_register_color(b"color".as_ptr(), 5, &LIGHT_COLORS[index] as *const u32 as *const u8);
-    debug_register_f32(b"intensity".as_ptr(), 9, &LIGHT_INTENSITY[index]);
+    debug_register_f32(b"intensity".as_ptr(), 9, &LIGHT_INTENSITY[index] as *const f32 as *const u8);
     debug_group_end();
 }
 

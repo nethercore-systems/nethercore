@@ -160,7 +160,8 @@ unsafe fn draw_scene(fov: f32) {
 
 /// Draw the scope circle mask
 unsafe fn draw_scope_mask() {
-    draw_circle(CENTER_X, CENTER_Y, SCOPE_RADIUS, 0xFFFFFFFF);
+    set_color(0xFFFFFFFF);
+    draw_circle(CENTER_X, CENTER_Y, SCOPE_RADIUS);
 }
 
 /// Draw scope reticle (crosshairs)
@@ -170,6 +171,8 @@ unsafe fn draw_reticle() {
     let gap = 20.0;
     let length = 40.0;
 
+    set_color(reticle_color);
+
     // Horizontal lines
     draw_line(
         CENTER_X - SCOPE_RADIUS + 30.0,
@@ -177,7 +180,6 @@ unsafe fn draw_reticle() {
         CENTER_X - gap,
         CENTER_Y,
         thickness,
-        reticle_color,
     );
     draw_line(
         CENTER_X + gap,
@@ -185,7 +187,6 @@ unsafe fn draw_reticle() {
         CENTER_X + SCOPE_RADIUS - 30.0,
         CENTER_Y,
         thickness,
-        reticle_color,
     );
 
     // Vertical lines
@@ -195,7 +196,6 @@ unsafe fn draw_reticle() {
         CENTER_X,
         CENTER_Y - gap,
         thickness,
-        reticle_color,
     );
     draw_line(
         CENTER_X,
@@ -203,7 +203,6 @@ unsafe fn draw_reticle() {
         CENTER_X,
         CENTER_Y + SCOPE_RADIUS - 30.0,
         thickness,
-        reticle_color,
     );
 
     // Center dot
@@ -282,13 +281,13 @@ pub extern "C" fn render() {
             draw_scene(NORMAL_FOV);
 
             // Simple crosshair
+            set_color(0xFFFFFFFF);
             draw_line(
                 CENTER_X - 10.0,
                 CENTER_Y,
                 CENTER_X + 10.0,
                 CENTER_Y,
                 2.0,
-                0xFFFFFFFF,
             );
             draw_line(
                 CENTER_X,
@@ -296,7 +295,6 @@ pub extern "C" fn render() {
                 CENTER_X,
                 CENTER_Y + 10.0,
                 2.0,
-                0xFFFFFFFF,
             );
         }
 

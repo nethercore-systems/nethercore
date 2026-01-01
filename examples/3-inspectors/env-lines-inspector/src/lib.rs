@@ -112,8 +112,8 @@ pub extern "C" fn init() {
         debug_register_u8(b"variant".as_ptr(), 7, &VARIANT);
         debug_register_u8(b"line_type".as_ptr(), 9, &LINE_TYPE);
         debug_register_u8(b"thickness".as_ptr(), 9, &THICKNESS);
-        debug_register_f32(b"spacing".as_ptr(), 7, &SPACING);
-        debug_register_f32(b"fade_dist".as_ptr(), 9, &FADE_DISTANCE);
+        debug_register_f32(b"spacing".as_ptr(), 7, &SPACING as *const f32 as *const u8);
+        debug_register_f32(b"fade_dist".as_ptr(), 9, &FADE_DISTANCE as *const f32 as *const u8);
         debug_register_color(b"primary".as_ptr(), 7, &COLOR_PRIMARY as *const u32 as *const u8);
         debug_register_color(b"accent".as_ptr(), 6, &COLOR_ACCENT as *const u32 as *const u8);
         debug_register_u8(b"accent_n".as_ptr(), 8, &ACCENT_EVERY);
@@ -124,7 +124,7 @@ pub extern "C" fn init() {
         debug_group_end();
 
         debug_group_begin(b"preset".as_ptr(), 6);
-        debug_register_i32(b"index".as_ptr(), 5, &PRESET_INDEX);
+        debug_register_i32(b"index".as_ptr(), 5, &PRESET_INDEX as *const i32 as *const u8);
         debug_group_end();
     }
 }
@@ -132,11 +132,11 @@ pub extern "C" fn init() {
 #[no_mangle]
 pub extern "C" fn update() {
     unsafe {
-        if button_pressed(0, BUTTON_A) != 0 {
+        if button_pressed(0, button::A) != 0 {
             PRESET_INDEX = (PRESET_INDEX + 1) % PRESET_COUNT as i32;
             load_preset(PRESET_INDEX as usize);
         }
-        if button_pressed(0, BUTTON_B) != 0 {
+        if button_pressed(0, button::B) != 0 {
             SHAPE_INDEX = (SHAPE_INDEX + 1) % SHAPE_COUNT as i32;
         }
 

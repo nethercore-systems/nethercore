@@ -132,7 +132,7 @@ static mut ANIMATION: u32 = 0;
 
 // Animation state
 static mut FRAME_COUNT: u16 = 0;
-static mut BONE_COUNT: u8 = 0;
+static mut BONE_COUNT: u16 = 0;
 static mut ANIM_TIME: f32 = 0.0;
 static mut ANIM_SPEED: f32 = 1.0;
 static mut PAUSED: bool = false;
@@ -171,8 +171,8 @@ pub extern "C" fn init() {
 
         // Load animation
         ANIMATION = rom_keyframes(b"anim_operate".as_ptr(), 12);
-        FRAME_COUNT = keyframes_frame_count(ANIMATION);
-        BONE_COUNT = keyframes_bone_count(ANIMATION);
+        FRAME_COUNT = keyframes_frame_count(ANIMATION) as u16;
+        BONE_COUNT = keyframes_bone_count(ANIMATION) as u16;
     }
 }
 

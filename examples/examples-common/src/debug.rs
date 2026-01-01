@@ -8,21 +8,24 @@ use crate::color;
 /// Draw a simple UI header
 pub fn draw_header(title: &[u8], y: f32) {
     unsafe {
-        draw_text(title.as_ptr(), title.len() as u32, 10.0, y, 20.0, color::TEXT_WHITE);
+        set_color(color::TEXT_WHITE);
+        draw_text(title.as_ptr(), title.len() as u32, 10.0, y, 20.0);
     }
 }
 
 /// Draw a UI label
 pub fn draw_label(text: &[u8], y: f32) {
     unsafe {
-        draw_text(text.as_ptr(), text.len() as u32, 10.0, y, 16.0, color::TEXT_GRAY);
+        set_color(color::TEXT_GRAY);
+        draw_text(text.as_ptr(), text.len() as u32, 10.0, y, 16.0,);
     }
 }
 
 /// Draw a hint/instruction
 pub fn draw_hint(text: &[u8], y: f32) {
     unsafe {
-        draw_text(text.as_ptr(), text.len() as u32, 10.0, y, 14.0, color::TEXT_DIM);
+        set_color(color::TEXT_DIM);
+        draw_text(text.as_ptr(), text.len() as u32, 10.0, y, 14.0);
     }
 }
 
@@ -46,11 +49,11 @@ pub unsafe fn register_directional_light_debug(
 ) {
     debug_group_begin(name.as_ptr(), name.len() as u32);
     debug_register_bool(b"enabled".as_ptr(), 7, enabled);
-    debug_register_f32(b"dir_x".as_ptr(), 5, dir_x);
-    debug_register_f32(b"dir_y".as_ptr(), 5, dir_y);
-    debug_register_f32(b"dir_z".as_ptr(), 5, dir_z);
+    debug_register_f32(b"dir_x".as_ptr(), 5, dir_x as *const u8);
+    debug_register_f32(b"dir_y".as_ptr(), 5, dir_y as *const u8);
+    debug_register_f32(b"dir_z".as_ptr(), 5, dir_z as *const u8);
     debug_register_color(b"color".as_ptr(), 5, color);
-    debug_register_f32(b"intensity".as_ptr(), 9, intensity);
+    debug_register_f32(b"intensity".as_ptr(), 9, intensity as *const u8);
     debug_group_end();
 }
 
@@ -67,12 +70,12 @@ pub unsafe fn register_point_light_debug(
 ) {
     debug_group_begin(name.as_ptr(), name.len() as u32);
     debug_register_bool(b"enabled".as_ptr(), 7, enabled);
-    debug_register_f32(b"pos_x".as_ptr(), 5, pos_x);
-    debug_register_f32(b"pos_y".as_ptr(), 5, pos_y);
-    debug_register_f32(b"pos_z".as_ptr(), 5, pos_z);
+    debug_register_f32(b"pos_x".as_ptr(), 5, pos_x as *const u8);
+    debug_register_f32(b"pos_y".as_ptr(), 5, pos_y as *const u8);
+    debug_register_f32(b"pos_z".as_ptr(), 5, pos_z as *const u8);
     debug_register_color(b"color".as_ptr(), 5, color);
-    debug_register_f32(b"intensity".as_ptr(), 9, intensity);
-    debug_register_f32(b"range".as_ptr(), 5, range);
+    debug_register_f32(b"intensity".as_ptr(), 9, intensity as *const u8);
+    debug_register_f32(b"range".as_ptr(), 5, range as *const u8);
     debug_group_end();
 }
 
@@ -87,9 +90,9 @@ pub unsafe fn register_mr_material_debug(
     debug_group_begin(b"material".as_ptr(), 8);
     debug_register_u8(b"metallic".as_ptr(), 8, metallic);
     debug_register_u8(b"roughness".as_ptr(), 9, roughness);
-    debug_register_f32(b"emissive".as_ptr(), 8, emissive);
-    debug_register_f32(b"rim_intensity".as_ptr(), 13, rim_intensity);
-    debug_register_f32(b"rim_power".as_ptr(), 9, rim_power);
+    debug_register_f32(b"emissive".as_ptr(), 8, emissive as *const u8);
+    debug_register_f32(b"rim_intensity".as_ptr(), 13, rim_intensity as *const u8);
+    debug_register_f32(b"rim_power".as_ptr(), 9, rim_power as *const u8);
     debug_group_end();
 }
 
@@ -102,10 +105,10 @@ pub unsafe fn register_ss_material_debug(
     rim_power: *const f32,
 ) {
     debug_group_begin(b"material".as_ptr(), 8);
-    debug_register_f32(b"shininess".as_ptr(), 9, shininess);
+    debug_register_f32(b"shininess".as_ptr(), 9, shininess as *const u8);
     debug_register_color(b"specular_color".as_ptr(), 14, specular_color);
-    debug_register_f32(b"emissive".as_ptr(), 8, emissive);
-    debug_register_f32(b"rim_intensity".as_ptr(), 13, rim_intensity);
-    debug_register_f32(b"rim_power".as_ptr(), 9, rim_power);
+    debug_register_f32(b"emissive".as_ptr(), 8, emissive as *const u8);
+    debug_register_f32(b"rim_intensity".as_ptr(), 13, rim_intensity as *const u8);
+    debug_register_f32(b"rim_power".as_ptr(), 9, rim_power as *const u8);
     debug_group_end();
 }

@@ -112,7 +112,6 @@ pub extern "C" fn render() {
             200.0 * anim_scale,
             0.0, 0.0,  // UV top-left
             1.0, 1.0,  // UV bottom-right
-            0xFFFFFFFF, // White color
         );
 
         // Label for full atlas
@@ -134,13 +133,13 @@ pub extern "C" fn render() {
         draw_text(label2.as_ptr(), label2.len() as u32, glyph_x + 40.0, base_y - 30.0, 18.0);
 
         // Top-left quarter
-        draw_sprite_region(glyph_x, base_y, glyph_size, glyph_size, 0.0, 0.0, 0.5, 0.5, 0xFFFFFFFF);
+        draw_sprite_region(glyph_x, base_y, glyph_size, glyph_size, 0.0, 0.0, 0.5, 0.5);
         // Top-right quarter
-        draw_sprite_region(glyph_x + glyph_gap, base_y, glyph_size, glyph_size, 0.5, 0.0, 1.0, 0.5, 0xFFFFFFFF);
+        draw_sprite_region(glyph_x + glyph_gap, base_y, glyph_size, glyph_size, 0.5, 0.0, 1.0, 0.5);
         // Bottom-left quarter
-        draw_sprite_region(glyph_x, base_y + glyph_gap, glyph_size, glyph_size, 0.0, 0.5, 0.5, 1.0, 0xFFFFFFFF);
+        draw_sprite_region(glyph_x, base_y + glyph_gap, glyph_size, glyph_size, 0.0, 0.5, 0.5, 1.0);
         // Bottom-right quarter
-        draw_sprite_region(glyph_x + glyph_gap, base_y + glyph_gap, glyph_size, glyph_size, 0.5, 0.5, 1.0, 1.0, 0xFFFFFFFF);
+        draw_sprite_region(glyph_x + glyph_gap, base_y + glyph_gap, glyph_size, glyph_size, 0.5, 0.5, 1.0, 1.0);
 
         // Explanation text at bottom
         let note = b"Shows how sprite regions extract glyphs";

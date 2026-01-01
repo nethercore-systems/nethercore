@@ -102,7 +102,7 @@ pub extern "C" fn init() {
 
         // Get frame counts for each animation
         for i in 0..3 {
-            FRAME_COUNTS[i] = keyframes_frame_count(ANIMATIONS[i]);
+            FRAME_COUNTS[i] = keyframes_frame_count(ANIMATIONS[i]) as u16;
         }
     }
 }
