@@ -569,7 +569,7 @@ pub extern "C" fn draw_line(x1: f32, y1: f32, x2: f32, y2: f32, thickness: f32) 
 /// * `x`, `y` — Center position in screen pixels
 /// * `radius` — Circle radius in pixels
 /// 
-/// Rendered as a 16-segment triangle fan. Uses color from `set_color()`.
+/// Rendered as a 16-segment triangle fan.
 pub extern "C" fn draw_circle(x: f32, y: f32, radius: f32) void;
 
 /// Draw a circle outline.
@@ -579,7 +579,7 @@ pub extern "C" fn draw_circle(x: f32, y: f32, radius: f32) void;
 /// * `radius` — Circle radius in pixels
 /// * `thickness` — Line thickness in pixels
 /// 
-/// Rendered as 16 line segments. Uses color from `set_color()`.
+/// Rendered as 16 line segments.
 pub extern "C" fn draw_circle_outline(x: f32, y: f32, radius: f32, thickness: f32) void;
 
 /// Load a fixed-width bitmap font.
@@ -1160,34 +1160,34 @@ pub extern "C" fn debug_register_f32_range(name_ptr: u32, name_len: u32, ptr: u3
 pub extern "C" fn debug_register_u8_range(name_ptr: u32, name_len: u32, ptr: u32, min: u32, max: u32) void;
 
 /// Register a u16 with min/max range constraints.
-pub extern "C" fn debug_register_u16_range(name_ptr: [*]const u8, name_len: u32, ptr: [*]const u16, min: u32, max: u32) void;
+pub extern "C" fn debug_register_u16_range(name_ptr: u32, name_len: u32, ptr: u32, min: u32, max: u32) void;
 
 /// Register an i16 with min/max range constraints.
-pub extern "C" fn debug_register_i16_range(name_ptr: [*]const u8, name_len: u32, ptr: [*]const i16, min: i32, max: i32) void;
+pub extern "C" fn debug_register_i16_range(name_ptr: u32, name_len: u32, ptr: u32, min: i32, max: i32) void;
 
 /// Register a Vec2 (2 floats: x, y) for debug inspection.
-pub extern "C" fn debug_register_vec2(name_ptr: [*]const u8, name_len: u32, ptr: [*]const f32) void;
+pub extern "C" fn debug_register_vec2(name_ptr: u32, name_len: u32, ptr: u32) void;
 
 /// Register a Vec3 (3 floats: x, y, z) for debug inspection.
-pub extern "C" fn debug_register_vec3(name_ptr: [*]const u8, name_len: u32, ptr: [*]const f32) void;
+pub extern "C" fn debug_register_vec3(name_ptr: u32, name_len: u32, ptr: u32) void;
 
 /// Register a Rect (4 i16: x, y, w, h) for debug inspection.
-pub extern "C" fn debug_register_rect(name_ptr: [*]const u8, name_len: u32, ptr: [*]const i16) void;
+pub extern "C" fn debug_register_rect(name_ptr: u32, name_len: u32, ptr: u32) void;
 
 /// Register a Color (4 u8: RGBA) for debug inspection with color picker.
-pub extern "C" fn debug_register_color(name_ptr: [*]const u8, name_len: u32, ptr: [*]const u8) void;
+pub extern "C" fn debug_register_color(name_ptr: u32, name_len: u32, ptr: u32) void;
 
 /// Register Q8.8 fixed-point (i16) for debug inspection.
-pub extern "C" fn debug_register_fixed_i16_q8(name_ptr: [*]const u8, name_len: u32, ptr: [*]const i16) void;
+pub extern "C" fn debug_register_fixed_i16_q8(name_ptr: u32, name_len: u32, ptr: u32) void;
 
 /// Register Q16.16 fixed-point (i32) for debug inspection.
-pub extern "C" fn debug_register_fixed_i32_q16(name_ptr: [*]const u8, name_len: u32, ptr: [*]const i32) void;
+pub extern "C" fn debug_register_fixed_i32_q16(name_ptr: u32, name_len: u32, ptr: u32) void;
 
 /// Register Q24.8 fixed-point (i32) for debug inspection.
-pub extern "C" fn debug_register_fixed_i32_q8(name_ptr: [*]const u8, name_len: u32, ptr: [*]const i32) void;
+pub extern "C" fn debug_register_fixed_i32_q8(name_ptr: u32, name_len: u32, ptr: u32) void;
 
 /// Register Q8.24 fixed-point (i32) for debug inspection.
-pub extern "C" fn debug_register_fixed_i32_q24(name_ptr: [*]const u8, name_len: u32, ptr: [*]const i32) void;
+pub extern "C" fn debug_register_fixed_i32_q24(name_ptr: u32, name_len: u32, ptr: u32) void;
 
 /// Watch an i8 value (read-only).
 pub extern "C" fn debug_watch_i8(name_ptr: [*]const u8, name_len: u32, ptr: [*]const i8) void;
