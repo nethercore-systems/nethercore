@@ -62,6 +62,10 @@ pub struct TrackerModule {
     pub initial_tempo: u8,
     /// Global volume (0-128)
     pub global_volume: u8,
+    /// Mix volume (0-128, IT only - scales master output)
+    pub mix_volume: u8,
+    /// Panning separation (0-128, IT only - 128 = full stereo, 0 = mono)
+    pub panning_separation: u8,
     /// Pattern order table
     pub order_table: Vec<u8>,
     /// Pattern data
@@ -537,6 +541,18 @@ pub struct TrackerSample {
     pub sustain_loop_end: u32,
     /// Sustain loop type
     pub sustain_loop_type: LoopType,
+
+    // =========================================================================
+    // Sample auto-vibrato (IT stores per-sample, XM per-instrument)
+    // =========================================================================
+    /// Auto-vibrato speed (0-64)
+    pub vibrato_speed: u8,
+    /// Auto-vibrato depth (0-64)
+    pub vibrato_depth: u8,
+    /// Auto-vibrato rate/sweep (0-64)
+    pub vibrato_rate: u8,
+    /// Auto-vibrato waveform (0=sine, 1=ramp down, 2=square, 3=random)
+    pub vibrato_type: u8,
 }
 
 impl Default for TrackerSample {
@@ -554,6 +570,11 @@ impl Default for TrackerSample {
             sustain_loop_begin: 0,
             sustain_loop_end: 0,
             sustain_loop_type: LoopType::None,
+            // Sample auto-vibrato (IT per-sample feature)
+            vibrato_speed: 0,
+            vibrato_depth: 0,
+            vibrato_rate: 0,
+            vibrato_type: 0,
         }
     }
 }
@@ -617,5 +638,86 @@ mod tests {
         assert_eq!(pattern.num_rows, 64);
         assert_eq!(pattern.notes.len(), 64);
         assert_eq!(pattern.notes[0].len(), 8);
+    }
+
+    #[test]
+    fn test_tracker_sample_auto_vibrato_defaults() {
+        let sample = TrackerSample::default();
+
+        // Auto-vibrato should default to off (all zeros)
+        assert_eq!(sample.vibrato_speed, 0);
+        assert_eq!(sample.vibrato_depth, 0);
+        assert_eq!(sample.vibrato_rate, 0);
+        assert_eq!(sample.vibrato_type, 0);
+    }
+
+    #[test]
+    fn test_tracker_sample_auto_vibrato_fields() {
+        let sample = TrackerSample {
+            vibrato_speed: 15,
+            vibrato_depth: 32,
+            vibrato_rate: 64,
+            vibrato_type: 1, // ramp down
+            ..Default::default()
+        };
+
+        assert_eq!(sample.vibrato_speed, 15);
+        assert_eq!(sample.vibrato_depth, 32);
+        assert_eq!(sample.vibrato_rate, 64);
+        assert_eq!(sample.vibrato_type, 1);
+    }
+
+    #[test]
+    fn test_tracker_module_mix_volume_default() {
+        // IT modules should have mix_volume from header
+        // XM modules default to 128 (full volume)
+        // This tests the field exists and can hold IT range (0-128)
+        let module = TrackerModule {
+            name: "Test".to_string(),
+            num_channels: 4,
+            initial_speed: 6,
+            initial_tempo: 125,
+            global_volume: 128,
+            mix_volume: 80, // IT allows 0-128
+            panning_separation: 128,
+            order_table: vec![0],
+            patterns: vec![],
+            instruments: vec![],
+            samples: vec![],
+            format: FormatFlags::IS_IT_FORMAT,
+            message: None,
+            restart_position: 0,
+        };
+
+        assert_eq!(module.mix_volume, 80);
+    }
+
+    #[test]
+    fn test_tracker_module_panning_separation() {
+        // Panning separation: 0 = mono, 128 = full stereo
+        let mono_module = TrackerModule {
+            name: "Mono".to_string(),
+            num_channels: 4,
+            initial_speed: 6,
+            initial_tempo: 125,
+            global_volume: 128,
+            mix_volume: 128,
+            panning_separation: 0, // Mono
+            order_table: vec![0],
+            patterns: vec![],
+            instruments: vec![],
+            samples: vec![],
+            format: FormatFlags::IS_IT_FORMAT,
+            message: None,
+            restart_position: 0,
+        };
+
+        let stereo_module = TrackerModule {
+            panning_separation: 128, // Full stereo
+            ..mono_module.clone()
+        };
+
+        assert_eq!(mono_module.panning_separation, 0);
+        assert_eq!(stereo_module.panning_separation, 128);
     }
 }

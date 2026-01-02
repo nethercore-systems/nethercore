@@ -145,6 +145,37 @@ fn get_color_write_mask(stencil_mode: StencilMode) -> wgpu::ColorWrites {
     }
 }
 
+/// Get depth stencil configuration for the given mode
+///
+/// For StencilMode::Writing (mask creation):
+/// - depth_write = false (mask shouldn't pollute depth buffer)
+/// - depth_compare = Always (depth OFF - mask just defines a region)
+///
+/// Occlusion is handled by the content passes, not the stencil mask:
+/// - Scenario 1: Draw world first, then mask, then portal → portal fails depth where world is closer
+/// - Scenario 2: Draw mask, then portal, then world → world overwrites portal where closer
+fn get_depth_config(
+    depth_test: bool,
+    stencil_mode: StencilMode,
+) -> (bool, wgpu::CompareFunction) {
+    match stencil_mode {
+        StencilMode::Writing => {
+            // Mask creation: depth completely OFF (no write, no test)
+            // Stencil just marks a region - depth buffer handles occlusion during content passes
+            (false, wgpu::CompareFunction::Always)
+        }
+        _ => {
+            // Normal rendering: use depth_test setting
+            let compare = if depth_test {
+                wgpu::CompareFunction::Less
+            } else {
+                wgpu::CompareFunction::Always
+            };
+            (depth_test, compare)
+        }
+    }
+}
+
 /// Create a new pipeline for the given vertex format and render state
 pub(crate) fn create_pipeline(
     device: &wgpu::Device,
@@ -220,16 +251,15 @@ pub(crate) fn create_pipeline(
             polygon_mode: wgpu::PolygonMode::Fill,
             conservative: false,
         },
-        depth_stencil: Some(wgpu::DepthStencilState {
-            format: wgpu::TextureFormat::Depth24PlusStencil8,
-            depth_write_enabled: state.depth_test,
-            depth_compare: if state.depth_test {
-                wgpu::CompareFunction::Less
-            } else {
-                wgpu::CompareFunction::Always
-            },
-            stencil: get_stencil_state(stencil_mode),
-            bias: wgpu::DepthBiasState::default(),
+        depth_stencil: Some({
+            let (depth_write, depth_compare) = get_depth_config(state.depth_test, stencil_mode);
+            wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth24PlusStencil8,
+                depth_write_enabled: depth_write,
+                depth_compare,
+                stencil: get_stencil_state(stencil_mode),
+                bias: wgpu::DepthBiasState::default(),
+            }
         }),
         multisample: wgpu::MultisampleState {
             count: 1,

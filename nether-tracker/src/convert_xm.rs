@@ -32,6 +32,8 @@ pub fn from_xm_module(xm: &nether_xm::XmModule) -> TrackerModule {
         initial_speed: xm.default_speed as u8,
         initial_tempo: xm.default_bpm as u8,
         global_volume: 64, // XM doesn't have global volume in header
+        mix_volume: 128,   // XM doesn't have mix volume - default to full (IT feature)
+        panning_separation: 128, // XM doesn't have panning separation - default to full stereo (IT feature)
         order_table: xm.order_table.clone(),
         patterns,
         instruments,
@@ -250,7 +252,13 @@ fn convert_xm_extended_effect(param: u8) -> TrackerEffect {
         0x5 => TrackerEffect::SetFinetune(value as i8),
         0x6 => TrackerEffect::PatternLoop(value),
         0x7 => TrackerEffect::TremoloWaveform(value),
-        0x9 => TrackerEffect::None, // Retrigger note (not used in modern XM)
+        // E8x - Set coarse panning (0-F maps to panning 0-60, centered)
+        0x8 => TrackerEffect::SetPanning((value * 4).saturating_add(2).min(64)),
+        // E9x - Retrigger note every x ticks (0 = no retrigger)
+        0x9 => TrackerEffect::Retrigger {
+            ticks: value,
+            volume_change: 0,
+        },
         0xA => TrackerEffect::FineVolumeUp(value),
         0xB => TrackerEffect::FineVolumeDown(value),
         0xC => TrackerEffect::NoteCut(value),
@@ -302,6 +310,11 @@ fn convert_xm_volume_effect(vol: u8) -> Option<TrackerEffect> {
         0xB0..=0xBF => Some(TrackerEffect::TonePortamento((vol - 0xB0) as u16)),
         0xC0..=0xCF => Some(TrackerEffect::PortamentoDown((vol - 0xC0) as u16)),
         0xD0..=0xDF => Some(TrackerEffect::PortamentoUp((vol - 0xD0) as u16)),
+        // 0xE0-0xEF: Vibrato depth (speed uses memory)
+        0xE0..=0xEF => Some(TrackerEffect::Vibrato {
+            speed: 0, // Use memory for speed
+            depth: vol - 0xE0,
+        }),
         _ => None,
     }
 }
@@ -569,5 +582,68 @@ mod tests {
 
         let tracker_instr = convert_xm_instrument(&xm_instr);
         assert_eq!(tracker_instr.sample_loop_type, LoopType::None);
+    }
+
+    #[test]
+    fn test_convert_xm_extended_e8x_coarse_panning() {
+        // E80 = left, E87-E88 = center, E8F = right
+        let left = convert_xm_extended_effect(0x80);
+        assert_eq!(left, TrackerEffect::SetPanning(2)); // 0*4 + 2 = 2
+
+        let center = convert_xm_extended_effect(0x88);
+        assert_eq!(center, TrackerEffect::SetPanning(34)); // 8*4 + 2 = 34
+
+        let right = convert_xm_extended_effect(0x8F);
+        assert_eq!(right, TrackerEffect::SetPanning(62)); // 15*4 + 2 = 62
+    }
+
+    #[test]
+    fn test_convert_xm_extended_e9x_retrigger() {
+        // E93 = retrigger every 3 ticks
+        let effect = convert_xm_extended_effect(0x93);
+        assert_eq!(
+            effect,
+            TrackerEffect::Retrigger {
+                ticks: 3,
+                volume_change: 0
+            }
+        );
+
+        // E90 = no retrigger (0 ticks)
+        let no_retrigger = convert_xm_extended_effect(0x90);
+        assert_eq!(
+            no_retrigger,
+            TrackerEffect::Retrigger {
+                ticks: 0,
+                volume_change: 0
+            }
+        );
+    }
+
+    #[test]
+    fn test_convert_xm_volume_column_vibrato() {
+        // 0xE0 = vibrato depth 0 (speed from memory)
+        let vib0 = convert_xm_volume_effect(0xE0);
+        assert_eq!(
+            vib0,
+            Some(TrackerEffect::Vibrato { speed: 0, depth: 0 })
+        );
+
+        // 0xE8 = vibrato depth 8
+        let vib8 = convert_xm_volume_effect(0xE8);
+        assert_eq!(
+            vib8,
+            Some(TrackerEffect::Vibrato { speed: 0, depth: 8 })
+        );
+
+        // 0xEF = vibrato depth 15
+        let vib15 = convert_xm_volume_effect(0xEF);
+        assert_eq!(
+            vib15,
+            Some(TrackerEffect::Vibrato {
+                speed: 0,
+                depth: 15
+            })
+        );
     }
 }

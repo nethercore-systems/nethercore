@@ -29,7 +29,10 @@ mod engine;
 mod state;
 mod utils;
 
-pub use channels::TrackerChannel;
+pub use channels::{
+    TrackerChannel, DCA_CUT, DCA_NOTE_FADE, DCA_NOTE_OFF, DCT_INSTRUMENT, DCT_NOTE, DCT_OFF,
+    DCT_SAMPLE, NNA_CONTINUE, NNA_CUT, NNA_NOTE_FADE, NNA_NOTE_OFF,
+};
 pub use state::{CachedRowState, RowStateCache};
 pub use utils::{
     LINEAR_FREQ_TABLE, SINE_LUT, SINE_LUT_64, apply_channel_pan, apply_it_linear_slide,
@@ -41,8 +44,16 @@ use nether_it::ItModule;
 use nether_tracker::TrackerModule;
 use nether_xm::XmModule;
 
-/// Maximum number of tracker channels (XM: 32, IT: 64)
-pub const MAX_TRACKER_CHANNELS: usize = 64;
+/// Maximum number of tracker channels (XM: 32, IT: 64 pattern + 64 NNA virtual)
+///
+/// This includes both pattern channels and NNA virtual channels:
+/// - Pattern channels: 0..num_channels (module's channel count, max 64)
+/// - NNA channels: num_channels..128 (background channels for displaced notes)
+///
+/// IT modules with NNA:Continue/NoteOff/NoteFade need virtual channels for
+/// notes that continue playing after being displaced. The IT spec allows up to
+/// 256 virtual voices, but 128 covers typical use cases while minimizing memory.
+pub const MAX_TRACKER_CHANNELS: usize = 128;
 
 /// Default XM speed (ticks per row)
 pub const DEFAULT_SPEED: u16 = 6;

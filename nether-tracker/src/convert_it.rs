@@ -38,6 +38,8 @@ pub fn from_it_module(it: &nether_it::ItModule) -> TrackerModule {
         initial_speed: it.initial_speed,
         initial_tempo: it.initial_tempo,
         global_volume: it.global_volume,
+        mix_volume: it.mix_volume,
+        panning_separation: it.panning_separation,
         order_table: it.order_table.clone(),
         patterns,
         instruments,
@@ -318,7 +320,10 @@ fn convert_it_extended_effect(param: u8) -> TrackerEffect {
     match sub_cmd {
         nether_it::extended_effects::SET_FILTER => TrackerEffect::None, // Obsolete
         nether_it::extended_effects::GLISSANDO => TrackerEffect::SetGlissando(value != 0),
-        nether_it::extended_effects::SET_FINETUNE => TrackerEffect::None, // Not supported
+        // S2x - Set finetune: value 0-15 maps to -8..+7 semitones (centered at 8)
+        nether_it::extended_effects::SET_FINETUNE => {
+            TrackerEffect::SetFinetune((value as i8) - 8)
+        },
         nether_it::extended_effects::VIBRATO_WAVEFORM => TrackerEffect::VibratoWaveform(value),
         nether_it::extended_effects::TREMOLO_WAVEFORM => TrackerEffect::TremoloWaveform(value),
         nether_it::extended_effects::PANBRELLO_WAVEFORM => TrackerEffect::PanbrelloWaveform(value),
@@ -329,8 +334,16 @@ fn convert_it_extended_effect(param: u8) -> TrackerEffect {
         nether_it::extended_effects::SET_PANNING_COARSE => {
             TrackerEffect::SetPanning((value * 4).saturating_add(2).min(64))
         }
-        // S9x - Sound control (surround/reverse) - rarely used
-        nether_it::extended_effects::SOUND_CONTROL => TrackerEffect::None,
+        // S9x - Sound control (surround/reverse)
+        // S90 = surround off, S91 = surround on
+        // S9E = play forwards, S9F = play backwards (reverse)
+        nether_it::extended_effects::SOUND_CONTROL => match value {
+            0 => TrackerEffect::SetSurround(false),
+            1 => TrackerEffect::SetSurround(true),
+            0xE => TrackerEffect::SetSampleReverse(false),
+            0xF => TrackerEffect::SetSampleReverse(true),
+            _ => TrackerEffect::None, // S92-S9D are reserved/unused
+        },
         nether_it::extended_effects::HIGH_SAMPLE_OFFSET => TrackerEffect::HighSampleOffset(value),
         nether_it::extended_effects::PATTERN_LOOP => TrackerEffect::PatternLoop(value),
         nether_it::extended_effects::NOTE_CUT => TrackerEffect::NoteCut(value),
@@ -495,6 +508,11 @@ fn convert_it_sample(it_smp: &nether_it::ItSample) -> TrackerSample {
         } else {
             LoopType::None
         },
+        // IT stores auto-vibrato per-sample (XM stores per-instrument)
+        vibrato_speed: it_smp.vibrato_speed,
+        vibrato_depth: it_smp.vibrato_depth,
+        vibrato_rate: it_smp.vibrato_rate,
+        vibrato_type: it_smp.vibrato_type,
     }
 }
 
@@ -559,5 +577,72 @@ mod tests {
         // 0x85 = resonance 5, scaled by 8 for 0-127 range
         let effect = convert_it_effect(nether_it::effects::MIDI_MACRO, 0x85, 0);
         assert_eq!(effect, TrackerEffect::SetFilterResonance(5 * 8));
+    }
+
+    #[test]
+    fn test_convert_it_extended_s2x_finetune() {
+        // S20 = finetune -8 (0 - 8)
+        let ft_low = convert_it_extended_effect(0x20);
+        assert_eq!(ft_low, TrackerEffect::SetFinetune(-8));
+
+        // S28 = finetune 0 (8 - 8)
+        let ft_center = convert_it_extended_effect(0x28);
+        assert_eq!(ft_center, TrackerEffect::SetFinetune(0));
+
+        // S2F = finetune +7 (15 - 8)
+        let ft_high = convert_it_extended_effect(0x2F);
+        assert_eq!(ft_high, TrackerEffect::SetFinetune(7));
+    }
+
+    #[test]
+    fn test_convert_it_extended_s9x_sound_control() {
+        // S90 = surround off
+        let surround_off = convert_it_extended_effect(0x90);
+        assert_eq!(surround_off, TrackerEffect::SetSurround(false));
+
+        // S91 = surround on
+        let surround_on = convert_it_extended_effect(0x91);
+        assert_eq!(surround_on, TrackerEffect::SetSurround(true));
+
+        // S9E = play forwards
+        let forward = convert_it_extended_effect(0x9E);
+        assert_eq!(forward, TrackerEffect::SetSampleReverse(false));
+
+        // S9F = play backwards (reverse)
+        let reverse = convert_it_extended_effect(0x9F);
+        assert_eq!(reverse, TrackerEffect::SetSampleReverse(true));
+
+        // S92-S9D are reserved/unused
+        let reserved = convert_it_extended_effect(0x95);
+        assert_eq!(reserved, TrackerEffect::None);
+    }
+
+    #[test]
+    fn test_convert_it_sample_auto_vibrato() {
+        let it_sample = nether_it::ItSample {
+            name: "test".to_string(),
+            filename: String::new(),
+            global_volume: 64,
+            flags: nether_it::ItSampleFlags::empty(),
+            default_volume: 64,
+            default_pan: None,
+            length: 1000,
+            loop_begin: 0,
+            loop_end: 0,
+            c5_speed: 8363,
+            sustain_loop_begin: 0,
+            sustain_loop_end: 0,
+            vibrato_speed: 10,
+            vibrato_depth: 20,
+            vibrato_rate: 30,
+            vibrato_type: 2,
+        };
+
+        let tracker_sample = convert_it_sample(&it_sample);
+
+        assert_eq!(tracker_sample.vibrato_speed, 10);
+        assert_eq!(tracker_sample.vibrato_depth, 20);
+        assert_eq!(tracker_sample.vibrato_rate, 30);
+        assert_eq!(tracker_sample.vibrato_type, 2);
     }
 }

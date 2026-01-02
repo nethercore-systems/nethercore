@@ -2,11 +2,53 @@
 //!
 //! Per-channel playback state for tracker music, including volume, panning,
 //! vibrato, tremolo, envelopes, and IT-specific features like NNA and filters.
+//!
+//! # NNA (New Note Action) System
+//!
+//! IT modules support polyphony-like behavior through NNA. When a new note is
+//! triggered on a channel that already has a playing note:
+//!
+//! - **Cut**: Immediately silence the old note (default XM behavior)
+//! - **Continue**: Move old note to a background channel, let it play to completion
+//! - **NoteOff**: Trigger key-off on old note (release phase), move to background
+//! - **NoteFade**: Start fadeout on old note, move to background
+//!
+//! Background channels are virtual channels beyond the module's channel count
+//! that continue playing notes moved by NNA actions.
 
 use nether_tracker::TrackerInstrument;
 
 use super::FADE_IN_SAMPLES;
 use super::utils::note_to_period;
+
+// =============================================================================
+// NNA Constants
+// =============================================================================
+
+/// New Note Action: Cut the previous note immediately
+pub const NNA_CUT: u8 = 0;
+/// New Note Action: Continue playing in background
+pub const NNA_CONTINUE: u8 = 1;
+/// New Note Action: Trigger note-off (release envelopes)
+pub const NNA_NOTE_OFF: u8 = 2;
+/// New Note Action: Start fadeout
+pub const NNA_NOTE_FADE: u8 = 3;
+
+/// Duplicate Check Type: No checking
+pub const DCT_OFF: u8 = 0;
+/// Duplicate Check Type: Check for same note
+pub const DCT_NOTE: u8 = 1;
+/// Duplicate Check Type: Check for same sample
+pub const DCT_SAMPLE: u8 = 2;
+/// Duplicate Check Type: Check for same instrument
+pub const DCT_INSTRUMENT: u8 = 3;
+
+/// Duplicate Check Action: Cut the duplicate
+pub const DCA_CUT: u8 = 0;
+/// Duplicate Check Action: Note-off the duplicate
+pub const DCA_NOTE_OFF: u8 = 1;
+/// Duplicate Check Action: Fade out the duplicate
+pub const DCA_NOTE_FADE: u8 = 2;
 
 /// Per-channel playback state
 #[derive(Clone, Default, Debug)]
@@ -287,6 +329,11 @@ pub struct TrackerChannel {
     pub panbrello_waveform: u8,
     /// Panbrello is active this row
     pub panbrello_active: bool,
+
+    // --- IT S9x Sound Control ---
+    /// Surround sound mode (S91 = true, S90 = false)
+    /// When enabled, the channel is mixed to both L/R with inverted phase on one side
+    pub surround: bool,
 }
 
 impl TrackerChannel {
@@ -306,6 +353,7 @@ impl TrackerChannel {
         self.pitch_pan_center = 60; // C-5
         self.filter_cutoff = 1.0; // Wide open filter
         self.filter_b0 = 1.0; // Passthrough filter
+        self.surround = false; // Normal stereo (no surround)
     }
 
     /// Trigger a new note (unified tracker format)
@@ -506,5 +554,306 @@ impl TrackerChannel {
         self.filter_b2 = b2 / a0;
         self.filter_a1 = a1 / a0;
         self.filter_a2 = a2 / a0;
+    }
+
+    // =========================================================================
+    // NNA (New Note Action) Methods
+    // =========================================================================
+
+    /// Check if this channel is currently producing audible output
+    ///
+    /// A channel is audible if it has a note playing with non-zero volume
+    /// and hasn't fully faded out.
+    pub fn is_audible(&self) -> bool {
+        self.note_on && self.sample_handle != 0 && self.volume_fadeout > 0
+    }
+
+    /// Check if this channel can be used as a background channel
+    ///
+    /// A background channel slot is available if it's either:
+    /// - Not playing anything
+    /// - Has fully faded out
+    /// - Is a background channel with very low volume
+    pub fn is_available_for_nna(&self) -> bool {
+        !self.note_on || self.sample_handle == 0 || self.volume_fadeout == 0
+    }
+
+    /// Copy state to a background channel for NNA continuation
+    ///
+    /// This preserves all the playback state (position, envelopes, volume, etc.)
+    /// so the note can continue playing in the background.
+    pub fn copy_to_background(&self, parent_idx: u8) -> TrackerChannel {
+        let mut bg = self.clone();
+        bg.is_background = true;
+        bg.parent_channel = parent_idx;
+        bg
+    }
+
+    /// Apply NNA action to this channel
+    ///
+    /// Called when this channel needs to be "displaced" by a new note.
+    /// Returns true if the channel should be moved to background,
+    /// false if it should just be cut.
+    pub fn apply_nna_action(&mut self, action: u8) -> bool {
+        match action {
+            NNA_CUT => {
+                // Immediate cut - no background needed
+                self.note_on = false;
+                self.volume = 0.0;
+                false
+            }
+            NNA_CONTINUE => {
+                // Continue as-is in background
+                true
+            }
+            NNA_NOTE_OFF => {
+                // Trigger key-off, then move to background
+                self.key_off = true;
+                true
+            }
+            NNA_NOTE_FADE => {
+                // Start fadeout (force key_off for envelope), then move to background
+                self.key_off = true;
+                // If no fadeout rate set, use a default fast fade
+                if self.instrument_fadeout_rate == 0 {
+                    self.instrument_fadeout_rate = 1024; // Fast fade
+                }
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Apply duplicate check action to this channel
+    ///
+    /// Called when this background channel matches a duplicate check.
+    pub fn apply_dca(&mut self, action: u8) {
+        match action {
+            DCA_CUT => {
+                self.note_on = false;
+                self.volume = 0.0;
+            }
+            DCA_NOTE_OFF => {
+                self.key_off = true;
+            }
+            DCA_NOTE_FADE => {
+                self.key_off = true;
+                if self.instrument_fadeout_rate == 0 {
+                    self.instrument_fadeout_rate = 1024;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Check if this channel matches a duplicate check condition
+    ///
+    /// - DCT_NOTE: Same note value
+    /// - DCT_SAMPLE: Same sample handle
+    /// - DCT_INSTRUMENT: Same instrument number
+    pub fn matches_duplicate_check(
+        &self,
+        dct: u8,
+        note: u8,
+        sample_handle: u32,
+        instrument: u8,
+    ) -> bool {
+        if !self.is_audible() {
+            return false;
+        }
+
+        match dct {
+            DCT_OFF => false,
+            DCT_NOTE => self.current_note == note,
+            DCT_SAMPLE => self.sample_handle == sample_handle,
+            DCT_INSTRUMENT => self.instrument == instrument,
+            _ => false,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_playing_channel() -> TrackerChannel {
+        let mut ch = TrackerChannel::default();
+        ch.note_on = true;
+        ch.sample_handle = 1;
+        ch.volume = 1.0;
+        ch.volume_fadeout = 65535;
+        ch.current_note = 60; // C-5
+        ch.instrument = 1;
+        ch
+    }
+
+    #[test]
+    fn test_is_audible() {
+        let mut ch = TrackerChannel::default();
+        assert!(!ch.is_audible());
+
+        ch.note_on = true;
+        assert!(!ch.is_audible()); // No sample
+
+        ch.sample_handle = 1;
+        assert!(!ch.is_audible()); // No fadeout
+
+        ch.volume_fadeout = 65535;
+        assert!(ch.is_audible());
+    }
+
+    #[test]
+    fn test_is_available_for_nna() {
+        let mut ch = TrackerChannel::default();
+        assert!(ch.is_available_for_nna()); // Not playing
+
+        ch.note_on = true;
+        ch.sample_handle = 1;
+        ch.volume_fadeout = 65535;
+        assert!(!ch.is_available_for_nna()); // Playing
+
+        ch.volume_fadeout = 0;
+        assert!(ch.is_available_for_nna()); // Faded out
+    }
+
+    #[test]
+    fn test_nna_cut() {
+        let mut ch = create_playing_channel();
+        let needs_background = ch.apply_nna_action(NNA_CUT);
+
+        assert!(!needs_background);
+        assert!(!ch.note_on);
+        assert_eq!(ch.volume, 0.0);
+    }
+
+    #[test]
+    fn test_nna_continue() {
+        let mut ch = create_playing_channel();
+        let needs_background = ch.apply_nna_action(NNA_CONTINUE);
+
+        assert!(needs_background);
+        assert!(ch.note_on); // Still playing
+        assert!(!ch.key_off);
+    }
+
+    #[test]
+    fn test_nna_note_off() {
+        let mut ch = create_playing_channel();
+        let needs_background = ch.apply_nna_action(NNA_NOTE_OFF);
+
+        assert!(needs_background);
+        assert!(ch.note_on);
+        assert!(ch.key_off); // Key-off triggered
+    }
+
+    #[test]
+    fn test_nna_note_fade() {
+        let mut ch = create_playing_channel();
+        ch.instrument_fadeout_rate = 0; // No fadeout set
+
+        let needs_background = ch.apply_nna_action(NNA_NOTE_FADE);
+
+        assert!(needs_background);
+        assert!(ch.note_on);
+        assert!(ch.key_off);
+        assert!(ch.instrument_fadeout_rate > 0); // Default fadeout applied
+    }
+
+    #[test]
+    fn test_copy_to_background() {
+        let ch = create_playing_channel();
+        let bg = ch.copy_to_background(3);
+
+        assert!(bg.is_background);
+        assert_eq!(bg.parent_channel, 3);
+        assert_eq!(bg.current_note, 60);
+        assert!(bg.note_on);
+    }
+
+    #[test]
+    fn test_duplicate_check_off() {
+        let ch = create_playing_channel();
+        assert!(!ch.matches_duplicate_check(DCT_OFF, 60, 1, 1));
+    }
+
+    #[test]
+    fn test_duplicate_check_note() {
+        let ch = create_playing_channel();
+        // Note matches (60), other params don't matter for DCT_NOTE
+        assert!(ch.matches_duplicate_check(DCT_NOTE, 60, 99, 99));
+        assert!(!ch.matches_duplicate_check(DCT_NOTE, 61, 1, 1));
+    }
+
+    #[test]
+    fn test_duplicate_check_sample() {
+        let ch = create_playing_channel();
+        // Sample matches (1), other params don't matter for DCT_SAMPLE
+        assert!(ch.matches_duplicate_check(DCT_SAMPLE, 99, 1, 99));
+        assert!(!ch.matches_duplicate_check(DCT_SAMPLE, 60, 2, 1));
+    }
+
+    #[test]
+    fn test_duplicate_check_instrument() {
+        let ch = create_playing_channel();
+        // Instrument matches (1), other params don't matter for DCT_INSTRUMENT
+        assert!(ch.matches_duplicate_check(DCT_INSTRUMENT, 99, 99, 1));
+        assert!(!ch.matches_duplicate_check(DCT_INSTRUMENT, 60, 1, 2));
+    }
+
+    #[test]
+    fn test_dca_cut() {
+        let mut ch = create_playing_channel();
+        ch.apply_dca(DCA_CUT);
+
+        assert!(!ch.note_on);
+        assert_eq!(ch.volume, 0.0);
+    }
+
+    #[test]
+    fn test_dca_note_off() {
+        let mut ch = create_playing_channel();
+        ch.apply_dca(DCA_NOTE_OFF);
+
+        assert!(ch.note_on);
+        assert!(ch.key_off);
+    }
+
+    #[test]
+    fn test_dca_note_fade() {
+        let mut ch = create_playing_channel();
+        ch.instrument_fadeout_rate = 0;
+        ch.apply_dca(DCA_NOTE_FADE);
+
+        assert!(ch.note_on);
+        assert!(ch.key_off);
+        assert!(ch.instrument_fadeout_rate > 0);
+    }
+
+    #[test]
+    fn test_surround_default_off() {
+        let ch = TrackerChannel::default();
+        assert!(!ch.surround);
+    }
+
+    #[test]
+    fn test_surround_reset() {
+        let mut ch = TrackerChannel::default();
+        ch.surround = true;
+        ch.reset();
+        assert!(!ch.surround);
+    }
+
+    #[test]
+    fn test_sample_direction_default() {
+        let mut ch = TrackerChannel::default();
+        ch.reset();
+        assert_eq!(ch.sample_direction, 1); // Forward by default
+    }
+
+    #[test]
+    fn test_sample_direction_reverse() {
+        let mut ch = TrackerChannel::default();
+        ch.sample_direction = -1; // S9F reverse playback
+        assert_eq!(ch.sample_direction, -1);
     }
 }

@@ -37,7 +37,7 @@ static mut PORTAL_RING: u32 = 0;
 // Player state
 static mut PLAYER_X: f32 = 0.0;
 static mut PLAYER_Z: f32 = 0.0;
-static mut PLAYER_YAW: f32 = 0.0;
+static mut PLAYER_YAW: f32 = 180.0; // Start facing the portal (toward -Z)
 static mut PLAYER_PITCH: f32 = 0.0;
 static mut CURRENT_WORLD: u32 = 0; // 0 = blue world, 1 = orange world
 
@@ -130,8 +130,9 @@ pub extern "C" fn update() {
         let right_z = -forward_x;
 
         let speed = 0.15;
-        PLAYER_X += (forward_x * ly + right_x * lx) * speed;
-        PLAYER_Z += (forward_z * ly + right_z * lx) * speed;
+        // Negate lx so stick-right moves player right
+        PLAYER_X += (forward_x * ly - right_x * lx) * speed;
+        PLAYER_Z += (forward_z * ly - right_z * lx) * speed;
 
         // Check portal collision
         let portal_radius = 2.0;
@@ -201,12 +202,14 @@ unsafe fn setup_portal_camera(src_x: f32, src_z: f32, dst_x: f32, dst_z: f32) {
     camera_fov(75.0);
 }
 
-/// Draw blue world (world 0)
-unsafe fn draw_blue_world() {
-    // Blue sky gradient
+/// Draw blue world sky only
+unsafe fn draw_blue_sky() {
     env_gradient(0, 0x1144AAFF, 0x4488FFFF, 0x4488FFFF, 0x223366FF, 0.0, 0.0);
     draw_env();
+}
 
+/// Draw blue world geometry (floor, cubes, pillars)
+unsafe fn draw_blue_geometry() {
     // Blue floor
     push_identity();
     set_color(0x223366FF);
@@ -226,7 +229,7 @@ unsafe fn draw_blue_world() {
         draw_mesh(CUBE);
     }
 
-    // Blue sphere pillars
+    // Blue pillars
     for x in [-15.0, 15.0].iter() {
         for z in [-15.0, 5.0].iter() {
             push_identity();
@@ -238,12 +241,20 @@ unsafe fn draw_blue_world() {
     }
 }
 
-/// Draw orange world (world 1)
-unsafe fn draw_orange_world() {
-    // Orange sky gradient
+/// Draw blue world (world 0) - sky + geometry
+unsafe fn draw_blue_world() {
+    draw_blue_sky();
+    draw_blue_geometry();
+}
+
+/// Draw orange world sky only
+unsafe fn draw_orange_sky() {
     env_gradient(0, 0xAA4411FF, 0xFF8844FF, 0xFF8844FF, 0x663322FF, 0.0, 0.0);
     draw_env();
+}
 
+/// Draw orange world geometry (floor, spheres, pillars)
+unsafe fn draw_orange_geometry() {
     // Orange floor
     push_identity();
     set_color(0x663322FF);
@@ -272,6 +283,12 @@ unsafe fn draw_orange_world() {
         set_color(0xFFAA66FF);
         draw_mesh(CUBE);
     }
+}
+
+/// Draw orange world (world 1) - sky + geometry
+unsafe fn draw_orange_world() {
+    draw_orange_sky();
+    draw_orange_geometry();
 }
 
 /// Draw the portal frame and effect
@@ -320,54 +337,60 @@ pub extern "C" fn render() {
     unsafe {
         setup_camera();
 
-        // Determine which world we're in and which portal to look through
+        // Portal rendering with stencil partitioning + occlusion:
+        // 1. Stencil mask → marks portal region
+        // 2. Portal world inside stencil (sky + geometry)
+        // 3. Current world outside stencil (sky + geometry)
+        // 4. Stencil OFF → current world geometry again for occlusion
+        //    (depth test lets closer objects overwrite portal view)
+
         if CURRENT_WORLD == 0 {
             // In blue world, looking through portal1 shows orange world
-            draw_blue_world();
 
-            // Draw portal1 showing orange world
-            // Portal1 is at Z=-10, faces toward +Z (toward player coming from blue world)
+            // Step 1: Create portal stencil mask
             stencil_begin();
             draw_portal_mask(PORTAL1_X, PORTAL1_Z, true);
             stencil_end();
 
-            // Inside portal: render orange world from portal2's perspective
-            // Set camera as if looking from the destination portal
+            // Step 2: Draw orange world INSIDE portal
             setup_portal_camera(PORTAL1_X, PORTAL1_Z, PORTAL2_X, PORTAL2_Z);
-            depth_test(0);  // Disable depth test
             draw_orange_world();
-            depth_test(1);  // Re-enable depth test
 
-            stencil_clear();
-
-            // Restore main camera for portal frame
+            // Step 3: Draw blue world OUTSIDE portal
+            stencil_invert();
             setup_camera();
+            draw_blue_world();
 
-            // Draw portal frames on top
-            draw_portal(PORTAL1_X, PORTAL1_Z, 0xFF8844FF, true); // Orange portal (leads to orange)
+            // Step 4: Stencil OFF - draw current geometry for occlusion
+            // (objects closer than portal content will overwrite it)
+            stencil_clear();
+            draw_blue_geometry();
+
+            // Step 5: Portal frame on top
+            draw_portal(PORTAL1_X, PORTAL1_Z, 0xFF8844FF, true);
         } else {
             // In orange world, looking through portal2 shows blue world
-            draw_orange_world();
 
-            // Draw portal2 showing blue world
-            // Portal2 is at Z=+10, faces toward -Z (toward player coming from orange world)
+            // Step 1: Create portal stencil mask
             stencil_begin();
             draw_portal_mask(PORTAL2_X, PORTAL2_Z, false);
             stencil_end();
 
-            // Inside portal: render blue world from portal1's perspective
+            // Step 2: Draw blue world INSIDE portal
             setup_portal_camera(PORTAL2_X, PORTAL2_Z, PORTAL1_X, PORTAL1_Z);
-            depth_test(0);  // Disable depth test
             draw_blue_world();
-            depth_test(1);  // Re-enable depth test
 
-            stencil_clear();
-
-            // Restore main camera for portal frame
+            // Step 3: Draw orange world OUTSIDE portal
+            stencil_invert();
             setup_camera();
+            draw_orange_world();
 
-            // Draw portal frame
-            draw_portal(PORTAL2_X, PORTAL2_Z, 0x4488FFFF, false); // Blue portal (leads to blue)
+            // Step 4: Stencil OFF - draw current geometry for occlusion
+            stencil_clear();
+            draw_orange_geometry();
+
+            // Step 5: Portal frame
+            draw_portal(PORTAL2_X, PORTAL2_Z, 0x4488FFFF, false);
         }
 
         // UI - Title

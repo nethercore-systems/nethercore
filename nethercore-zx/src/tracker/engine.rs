@@ -8,6 +8,7 @@
 
 use nether_tracker::{TrackerEffect, TrackerNote};
 
+use super::channels::{DCT_OFF, NNA_CUT};
 use super::state::RowStateCache;
 use super::utils::{
     SINE_LUT, apply_channel_pan, apply_it_linear_slide, get_waveform_value, note_to_period,
@@ -228,6 +229,110 @@ impl TrackerEngine {
         }
     }
 
+    // =========================================================================
+    // NNA (New Note Action) Processing
+    // =========================================================================
+
+    /// Find an available background channel for NNA
+    ///
+    /// Background channels are slots beyond the module's channel count
+    /// that can hold notes displaced by NNA actions.
+    ///
+    /// Returns the index of an available channel, or None if all are busy.
+    fn find_background_channel(&self, num_channels: usize) -> Option<usize> {
+        // Look for an available slot in the background channel range
+        for idx in num_channels..MAX_TRACKER_CHANNELS {
+            if self.channels[idx].is_available_for_nna() {
+                return Some(idx);
+            }
+        }
+
+        // If no free slot, find the quietest background channel to steal
+        let mut quietest_idx = None;
+        let mut quietest_vol: f32 = f32::MAX;
+
+        for idx in num_channels..MAX_TRACKER_CHANNELS {
+            let ch = &self.channels[idx];
+            if ch.note_on {
+                // Calculate effective volume
+                let vol = ch.volume * (ch.volume_fadeout as f32 / 65535.0);
+                if vol < quietest_vol {
+                    quietest_vol = vol;
+                    quietest_idx = Some(idx);
+                }
+            }
+        }
+
+        quietest_idx
+    }
+
+    /// Process duplicate check for a new note trigger
+    ///
+    /// Checks all background channels for duplicates matching the DCT criteria
+    /// and applies the DCA action to matching channels.
+    fn process_duplicate_check(
+        &mut self,
+        num_channels: usize,
+        dct: u8,
+        dca: u8,
+        note: u8,
+        sample_handle: u32,
+        instrument: u8,
+    ) {
+        if dct == DCT_OFF {
+            return;
+        }
+
+        // Check background channels for duplicates
+        for idx in num_channels..MAX_TRACKER_CHANNELS {
+            if self.channels[idx].matches_duplicate_check(dct, note, sample_handle, instrument) {
+                self.channels[idx].apply_dca(dca);
+            }
+        }
+    }
+
+    /// Handle NNA for a channel when a new note is triggered
+    ///
+    /// If the channel has a note playing and NNA is not Cut, moves the
+    /// current note to a background channel before the new note takes over.
+    ///
+    /// Returns true if NNA processing occurred (note was moved to background).
+    fn handle_nna(&mut self, ch_idx: usize, num_channels: usize) -> bool {
+        let channel = &self.channels[ch_idx];
+
+        // Only process if channel has an audible note
+        if !channel.is_audible() {
+            return false;
+        }
+
+        // Get NNA action (stored from instrument on last note trigger)
+        let nna = channel.nna;
+
+        // NNA_CUT doesn't need background channel
+        if nna == NNA_CUT {
+            self.channels[ch_idx].note_on = false;
+            self.channels[ch_idx].volume = 0.0;
+            return false;
+        }
+
+        // Find a background channel to move the note to
+        if let Some(bg_idx) = self.find_background_channel(num_channels) {
+            // Copy current channel state to background
+            let bg_channel = self.channels[ch_idx].copy_to_background(ch_idx as u8);
+
+            // Apply NNA action to the background copy
+            self.channels[bg_idx] = bg_channel;
+            self.channels[bg_idx].apply_nna_action(nna);
+
+            return true;
+        }
+
+        // No background channel available - fall back to cut
+        self.channels[ch_idx].note_on = false;
+        self.channels[ch_idx].volume = 0.0;
+        false
+    }
+
     /// Internal note processing that accesses module by handle
     fn process_note_internal(
         &mut self,
@@ -282,6 +387,63 @@ impl TrackerEngine {
 
         // Handle note
         if note.has_note() {
+            // Get module channel count and NNA data for processing
+            let (num_channels, nna_data) = {
+                let loaded = match self
+                    .modules
+                    .get(raw_handle as usize)
+                    .and_then(|m| m.as_ref())
+                {
+                    Some(m) => m,
+                    None => return,
+                };
+                let instr_idx = (self.channels[ch_idx].instrument.saturating_sub(1)) as usize;
+                let nna_data = if let Some(instr) = loaded.module.instruments.get(instr_idx) {
+                    let nna = match instr.nna {
+                        nether_tracker::NewNoteAction::Cut => 0,
+                        nether_tracker::NewNoteAction::Continue => 1,
+                        nether_tracker::NewNoteAction::NoteOff => 2,
+                        nether_tracker::NewNoteAction::NoteFade => 3,
+                    };
+                    let dct = match instr.dct {
+                        nether_tracker::DuplicateCheckType::Off => 0,
+                        nether_tracker::DuplicateCheckType::Note => 1,
+                        nether_tracker::DuplicateCheckType::Sample => 2,
+                        nether_tracker::DuplicateCheckType::Instrument => 3,
+                    };
+                    let dca = match instr.dca {
+                        nether_tracker::DuplicateCheckAction::Cut => 0,
+                        nether_tracker::DuplicateCheckAction::NoteOff => 1,
+                        nether_tracker::DuplicateCheckAction::NoteFade => 2,
+                    };
+                    Some((nna, dct, dca))
+                } else {
+                    None
+                };
+                (loaded.module.num_channels as usize, nna_data)
+            };
+
+            // Process NNA: handle the currently playing note before triggering new one
+            // This is an IT feature - move the old note to a background channel based on NNA setting
+            if self.is_it_format {
+                // Handle NNA for the current channel
+                self.handle_nna(ch_idx, num_channels);
+
+                // Process duplicate check against background channels
+                if let Some((_, dct, dca)) = nna_data {
+                    let sample_handle = self.channels[ch_idx].sample_handle;
+                    let instrument = self.channels[ch_idx].instrument;
+                    self.process_duplicate_check(
+                        num_channels,
+                        dct,
+                        dca,
+                        note.note,
+                        sample_handle,
+                        instrument,
+                    );
+                }
+            }
+
             // Fetch all instrument data we need for note trigger
             let instr_data = {
                 let loaded = match self
@@ -787,6 +949,16 @@ impl TrackerEngine {
             TrackerEffect::SetGlissando(enabled) => {
                 channel.glissando = *enabled;
             }
+
+            // Sound Control Effects (IT S9x)
+            TrackerEffect::SetSurround(enabled) => {
+                channel.surround = *enabled;
+            }
+            TrackerEffect::SetSampleReverse(reversed) => {
+                // S9F = play backwards, S9E = play forwards
+                channel.sample_direction = if *reversed { -1 } else { 1 };
+            }
+
             TrackerEffect::MultiRetrigNote { ticks, volume } => {
                 channel.retrigger_tick = *ticks;
                 channel.retrigger_mode = *volume;
@@ -1172,29 +1344,59 @@ impl TrackerEngine {
     /// channel processing, envelope handling, and panning.
     ///
     /// Takes `raw_handle` instead of a module reference to avoid borrow conflicts.
+    ///
+    /// # NNA Background Channels
+    ///
+    /// When IT modules use NNA settings other than Cut, notes may be moved to
+    /// background channels (indices >= num_channels) to continue playing.
+    /// This method mixes both regular channels and background channels.
+    ///
+    /// # IT-specific features
+    ///
+    /// - **Mix Volume**: Master output scaling (0-128, applied at the end)
+    /// - **Panning Separation**: Stereo width control (0=mono, 128=full stereo)
+    /// - **Surround Mode**: Phase inversion on one channel for S91 effect
     fn mix_channels(
         &mut self,
         raw_handle: u32,
         sounds: &[Option<Sound>],
         sample_rate: u32,
     ) -> (f32, f32) {
-        let num_channels = self
+        let (num_channels, mix_volume, panning_separation) = self
             .modules
             .get(raw_handle as usize)
             .and_then(|m| m.as_ref())
-            .map(|m| m.module.num_channels as usize)
-            .unwrap_or(0);
+            .map(|m| {
+                (
+                    m.module.num_channels as usize,
+                    m.module.mix_volume,
+                    m.module.panning_separation,
+                )
+            })
+            .unwrap_or((0, 128, 128));
 
         let mut left = 0.0f32;
         let mut right = 0.0f32;
 
+        // Mix all channels - both regular (0..num_channels) and background (num_channels..MAX)
+        // Background channels are used by NNA to continue playing displaced notes
         for (ch_idx, channel) in self.channels.iter_mut().enumerate() {
-            if ch_idx >= num_channels {
-                break;
-            }
-
-            if !channel.note_on || channel.sample_handle == 0 {
-                continue;
+            // Skip inactive channels in the regular range
+            if ch_idx < num_channels {
+                if !channel.note_on || channel.sample_handle == 0 {
+                    continue;
+                }
+            } else {
+                // For background channels, also check if it's actually playing
+                // Background channels that have faded out are cleaned up here
+                if !channel.note_on || channel.sample_handle == 0 || channel.volume_fadeout == 0 {
+                    // Clean up dead background channels
+                    if channel.is_background && channel.volume_fadeout == 0 {
+                        channel.note_on = false;
+                        channel.is_background = false;
+                    }
+                    continue;
+                }
             }
 
             let sound = match sounds
@@ -1297,12 +1499,30 @@ impl TrackerEngine {
                 pan = (pan + panbrello_offset).clamp(-1.0, 1.0);
             }
 
+            // Apply panning separation (IT feature)
+            // 128 = full stereo, 0 = mono
+            // This reduces the stereo width by moving panning toward center
+            if panning_separation < 128 {
+                let sep_factor = panning_separation as f32 / 128.0;
+                pan *= sep_factor;
+            }
+
             let (l, r) = apply_channel_pan(sample * vol, pan);
-            left += l;
-            right += r;
+
+            // Apply surround mode (IT S91 effect)
+            // Inverts phase on right channel for "surround" psychoacoustic effect
+            if channel.surround {
+                left += l;
+                right -= r; // Invert phase on right channel
+            } else {
+                left += l;
+                right += r;
+            }
         }
 
-        (left, right)
+        // Apply mix volume (IT master volume, 0-128)
+        let mix_scale = mix_volume as f32 / 128.0;
+        (left * mix_scale, right * mix_scale)
     }
 
     // ========================================================================

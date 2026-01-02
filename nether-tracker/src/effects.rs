@@ -263,6 +263,17 @@ pub enum TrackerEffect {
     /// Multi retrig note (XM only)
     /// XM: Rxy
     MultiRetrigNote { ticks: u8, volume: u8 },
+
+    // =========================================================================
+    // Sound Control Effects (IT S9x)
+    // =========================================================================
+    /// Set surround sound mode (IT only)
+    /// IT: S90 = surround off, S91 = surround on
+    SetSurround(bool),
+
+    /// Set sample playback direction (IT only)
+    /// IT: S9E = play forwards, S9F = play backwards (reverse)
+    SetSampleReverse(bool),
 }
 
 impl TrackerEffect {
@@ -315,6 +326,7 @@ impl TrackerEffect {
                 | Self::FinePanningLeft(_)
                 | Self::FinePanningRight(_)
                 | Self::Panbrello { .. }
+                | Self::SetSurround(_)
         )
     }
 
@@ -357,5 +369,28 @@ mod tests {
     fn test_default_effect() {
         let effect = TrackerEffect::default();
         assert_eq!(effect, TrackerEffect::None);
+    }
+
+    #[test]
+    fn test_surround_affects_panning() {
+        let surround_on = TrackerEffect::SetSurround(true);
+        let surround_off = TrackerEffect::SetSurround(false);
+
+        assert!(surround_on.affects_panning());
+        assert!(surround_off.affects_panning());
+        assert!(!surround_on.affects_pitch());
+        assert!(!surround_on.affects_volume());
+    }
+
+    #[test]
+    fn test_sample_reverse_effect() {
+        let reverse = TrackerEffect::SetSampleReverse(true);
+        let forward = TrackerEffect::SetSampleReverse(false);
+
+        // Reverse doesn't affect pitch, volume, or panning categories
+        assert!(!reverse.affects_pitch());
+        assert!(!reverse.affects_volume());
+        assert!(!reverse.affects_panning());
+        assert!(!forward.affects_pattern_flow());
     }
 }
