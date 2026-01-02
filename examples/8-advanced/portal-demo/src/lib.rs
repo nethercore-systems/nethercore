@@ -215,12 +215,13 @@ unsafe fn draw_blue_geometry() {
     set_color(0x223366FF);
     draw_mesh(FLOOR);
 
-    // Blue cubes
+    // Blue cubes - positioned BEHIND portal 1 (further in -Z direction)
+    // so they're always visible "through" the portal, not between camera and portal
     for i in 0..5 {
         let angle = (i as f32) * 72.0 + TIME * 20.0;
         let rad = angle.to_radians();
         let x = libm::cosf(rad) * 8.0;
-        let z = libm::sinf(rad) * 8.0 - 10.0;
+        let z = libm::sinf(rad) * 8.0 - 25.0; // Far behind portal at Z=-10
 
         push_identity();
         push_translate(x, 1.0, z);
@@ -229,9 +230,9 @@ unsafe fn draw_blue_geometry() {
         draw_mesh(CUBE);
     }
 
-    // Blue pillars
+    // Blue pillars - also positioned away from portal
     for x in [-15.0, 15.0].iter() {
-        for z in [-15.0, 5.0].iter() {
+        for z in [-25.0, -5.0].iter() { // Behind portal
             push_identity();
             push_translate(*x, 2.0, *z);
             set_color(0x66AAFFFF);
@@ -260,12 +261,13 @@ unsafe fn draw_orange_geometry() {
     set_color(0x663322FF);
     draw_mesh(FLOOR);
 
-    // Orange spheres
+    // Orange spheres - positioned BEHIND portal 2 (further in +Z direction)
+    // so they're always visible "through" the portal, not between camera and portal
     for i in 0..8 {
         let angle = (i as f32) * 45.0 - TIME * 15.0;
         let rad = angle.to_radians();
         let x = libm::cosf(rad) * 6.0;
-        let z = libm::sinf(rad) * 6.0 + 10.0;
+        let z = libm::sinf(rad) * 6.0 + 25.0; // Far behind portal at Z=+10
 
         push_identity();
         push_translate(x, 1.5, z);
@@ -275,10 +277,10 @@ unsafe fn draw_orange_geometry() {
         draw_mesh(SPHERE);
     }
 
-    // Tall pillars
+    // Tall pillars - also positioned away from portal
     for x in [-12.0, 12.0].iter() {
         push_identity();
-        push_translate(*x, 3.0, 20.0);
+        push_translate(*x, 3.0, 30.0); // Behind portal
         push_scale(1.5, 6.0, 1.5);
         set_color(0xFFAA66FF);
         draw_mesh(CUBE);
@@ -337,33 +339,32 @@ pub extern "C" fn render() {
     unsafe {
         setup_camera();
 
-        // Portal rendering with stencil partitioning + occlusion:
-        // 1. Stencil mask → marks portal region
-        // 2. Portal world inside stencil (sky + geometry)
-        // 3. Current world outside stencil (sky + geometry)
-        // 4. Stencil OFF → current world geometry again for occlusion
-        //    (depth test lets closer objects overwrite portal view)
+        // Portal rendering:
+        // 1. Draw current world FIRST (establishes base sky + geometry)
+        // 2. Stencil mask → marks portal region
+        // 3. Portal world inside stencil (overwrites portal area)
+        // 4. Stencil OFF → current geometry for occlusion
+        // 5. Portal frame
 
         if CURRENT_WORLD == 0 {
             // In blue world, looking through portal1 shows orange world
 
-            // Step 1: Create portal stencil mask
+            // Step 1: Draw blue world as base (sky + geometry)
+            setup_camera();
+            draw_blue_world();
+
+            // Step 2: Create portal stencil mask
             stencil_begin();
             draw_portal_mask(PORTAL1_X, PORTAL1_Z, true);
             stencil_end();
 
-            // Step 2: Draw orange world INSIDE portal
+            // Step 3: Draw orange world INSIDE portal (overwrites blue in portal area)
             setup_portal_camera(PORTAL1_X, PORTAL1_Z, PORTAL2_X, PORTAL2_Z);
             draw_orange_world();
 
-            // Step 3: Draw blue world OUTSIDE portal
-            stencil_invert();
-            setup_camera();
-            draw_blue_world();
-
-            // Step 4: Stencil OFF - draw current geometry for occlusion
-            // (objects closer than portal content will overwrite it)
+            // Step 4: Stencil OFF - draw blue geometry for occlusion
             stencil_clear();
+            setup_camera();
             draw_blue_geometry();
 
             // Step 5: Portal frame on top
@@ -371,22 +372,22 @@ pub extern "C" fn render() {
         } else {
             // In orange world, looking through portal2 shows blue world
 
-            // Step 1: Create portal stencil mask
+            // Step 1: Draw orange world as base (sky + geometry)
+            setup_camera();
+            draw_orange_world();
+
+            // Step 2: Create portal stencil mask
             stencil_begin();
             draw_portal_mask(PORTAL2_X, PORTAL2_Z, false);
             stencil_end();
 
-            // Step 2: Draw blue world INSIDE portal
+            // Step 3: Draw blue world INSIDE portal (overwrites orange in portal area)
             setup_portal_camera(PORTAL2_X, PORTAL2_Z, PORTAL1_X, PORTAL1_Z);
             draw_blue_world();
 
-            // Step 3: Draw orange world OUTSIDE portal
-            stencil_invert();
-            setup_camera();
-            draw_orange_world();
-
-            // Step 4: Stencil OFF - draw current geometry for occlusion
+            // Step 4: Stencil OFF - draw orange geometry for occlusion
             stencil_clear();
+            setup_camera();
             draw_orange_geometry();
 
             // Step 5: Portal frame

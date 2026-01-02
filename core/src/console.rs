@@ -43,16 +43,20 @@ pub trait AudioGenerator: Send + 'static {
     type RollbackState: ConsoleRollbackState;
     /// Console FFI staging state type
     type State: Default + Send + 'static;
+    /// Console-specific audio backend type
+    type Audio: Audio;
 
     /// Get the default sample rate for this console's audio output
     fn default_sample_rate() -> u32 {
         44_100 // Default to CD quality
     }
 
-    /// Generate one frame of audio samples
+    /// Generate one frame of audio samples (synchronous mode)
     ///
     /// Called once per confirmed game frame (not during rollback).
     /// Output should be interleaved stereo samples (left, right, left, right...).
+    ///
+    /// Note: Prefer using `process_audio` which handles both sync and threaded modes.
     ///
     /// # Arguments
     /// * `rollback_state` - Mutable reference to console rollback state (e.g., audio playhead positions)
@@ -67,12 +71,35 @@ pub trait AudioGenerator: Send + 'static {
         sample_rate: u32,
         output: &mut Vec<f32>,
     );
+
+    /// Process audio for this frame, handling both sync and threaded modes
+    ///
+    /// This is the main entry point for audio processing from the game loop.
+    /// It automatically handles both synchronous and threaded audio modes:
+    /// - Sync mode: generates samples and pushes them to the audio buffer
+    /// - Threaded mode: creates a snapshot and sends it to the audio thread
+    fn process_audio(
+        rollback_state: &mut Self::RollbackState,
+        state: &mut Self::State,
+        audio: &mut Self::Audio,
+        tick_rate: u32,
+        sample_rate: u32,
+    );
+}
+
+/// No-op audio backend for consoles without audio
+pub struct NullAudio;
+
+impl Audio for NullAudio {
+    fn play(&mut self, _handle: SoundHandle, _volume: f32, _looping: bool) {}
+    fn stop(&mut self, _handle: SoundHandle) {}
 }
 
 /// No-op audio generator for consoles without audio
 impl AudioGenerator for () {
     type RollbackState = ();
     type State = ();
+    type Audio = NullAudio;
 
     fn generate_frame(
         _rollback_state: &mut Self::RollbackState,
@@ -82,6 +109,16 @@ impl AudioGenerator for () {
         _output: &mut Vec<f32>,
     ) {
         // No-op: output remains empty
+    }
+
+    fn process_audio(
+        _rollback_state: &mut Self::RollbackState,
+        _state: &mut Self::State,
+        _audio: &mut Self::Audio,
+        _tick_rate: u32,
+        _sample_rate: u32,
+    ) {
+        // No-op: no audio to process
     }
 }
 
@@ -115,7 +152,11 @@ pub trait Console: Send + 'static {
     /// Audio generator type for per-frame audio sample generation
     ///
     /// Use `()` for consoles without audio generation.
-    type AudioGenerator: AudioGenerator<RollbackState = Self::RollbackState, State = Self::State>;
+    type AudioGenerator: AudioGenerator<
+        RollbackState = Self::RollbackState,
+        State = Self::State,
+        Audio = Self::Audio,
+    >;
 
     /// Get console specifications
     fn specs() -> &'static ConsoleSpecs;

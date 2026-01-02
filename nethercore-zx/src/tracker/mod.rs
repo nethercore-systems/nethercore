@@ -23,11 +23,20 @@
 //! - **Pitch Envelope** - Modulate pitch over time with envelope points
 //! - **Filter Envelope** - Resonant low-pass filter with cutoff envelope
 //! - **64 Channels** - Twice the channel count of XM
+//!
+//! # Audio Thread Support
+//!
+//! For threaded audio generation, the engine supports snapshot/restore:
+//! - `snapshot()` - Capture current channel state for audio thread
+//! - `apply_snapshot()` - Restore channel state from snapshot
+//! - Modules are `Arc`-wrapped for safe sharing between threads
 
 mod channels;
 mod engine;
 mod state;
 mod utils;
+
+use std::sync::Arc;
 
 pub use channels::{
     TrackerChannel, DCA_CUT, DCA_NOTE_FADE, DCA_NOTE_OFF, DCT_INSTRUMENT, DCT_NOTE, DCT_OFF,
@@ -91,10 +100,14 @@ pub fn raw_tracker_handle(handle: u32) -> u32 {
 ///
 /// This contains the "heavy" state that doesn't need to be rolled back.
 /// It can be reconstructed from TrackerState by seeking to the position.
+///
+/// For audio threading, use `snapshot()` to capture channel state and
+/// `apply_snapshot()` to restore it on the audio thread's engine instance.
 #[derive(Debug)]
 pub struct TrackerEngine {
     /// Loaded tracker modules (by handle, 1-indexed)
-    pub(crate) modules: Vec<Option<LoadedModule>>,
+    /// Arc-wrapped for sharing with audio thread
+    pub(crate) modules: Vec<Option<Arc<LoadedModule>>>,
 
     /// Per-channel playback state
     pub(crate) channels: [TrackerChannel; MAX_TRACKER_CHANNELS],
@@ -142,11 +155,51 @@ pub struct TrackerEngine {
 
 /// A loaded tracker module with resolved sample handles
 #[derive(Debug)]
-pub(crate) struct LoadedModule {
+pub struct LoadedModule {
     /// Parsed tracker module data (unified format)
     pub module: TrackerModule,
     /// Sound handles for each instrument (instrument index -> sound handle)
     pub sound_handles: Vec<u32>,
+}
+
+/// Snapshot of tracker engine state for audio thread
+///
+/// This captures the mutable state needed for sample generation without
+/// requiring the full engine. Used to send state to the audio thread.
+#[derive(Clone)]
+pub struct TrackerEngineSnapshot {
+    /// Per-channel playback state (cloned)
+    pub channels: Box<[TrackerChannel; MAX_TRACKER_CHANNELS]>,
+
+    /// Global volume (0.0-1.0)
+    pub global_volume: f32,
+
+    /// Current playback position
+    pub current_order: u16,
+    pub current_row: u16,
+    pub current_tick: u16,
+
+    /// Samples rendered within current tick
+    pub tick_samples_rendered: u32,
+
+    /// Pattern delay state
+    pub pattern_delay: u8,
+    pub pattern_delay_count: u8,
+    pub fine_pattern_delay: u8,
+
+    /// Effect memory
+    pub last_global_vol_slide: u8,
+
+    /// Format flags
+    pub is_it_format: bool,
+    pub old_effects_mode: bool,
+    pub link_g_memory: bool,
+
+    /// Tempo slide
+    pub tempo_slide: i8,
+
+    /// Shared reference to loaded modules (Arc for sharing)
+    pub modules: Vec<Option<Arc<LoadedModule>>>,
 }
 
 impl Default for TrackerEngine {
@@ -207,10 +260,10 @@ impl TrackerEngine {
             self.modules.resize_with(idx + 1, || None);
         }
 
-        self.modules[idx] = Some(LoadedModule {
+        self.modules[idx] = Some(Arc::new(LoadedModule {
             module,
             sound_handles,
-        });
+        }));
 
         // Return flagged handle so unified music API can detect tracker vs PCM
         raw_handle | TRACKER_HANDLE_FLAG
@@ -245,6 +298,60 @@ impl TrackerEngine {
         self.current_tick = 0;
         self.tick_samples_rendered = 0;
         self.row_cache.clear();
+    }
+
+    /// Create a snapshot of the current engine state for audio thread
+    ///
+    /// This captures all mutable state needed for sample generation.
+    /// The modules are Arc-cloned (cheap reference increment).
+    /// The channels array is cloned (required for independent generation).
+    pub fn snapshot(&self) -> TrackerEngineSnapshot {
+        TrackerEngineSnapshot {
+            channels: Box::new(self.channels.clone()),
+            global_volume: self.global_volume,
+            current_order: self.current_order,
+            current_row: self.current_row,
+            current_tick: self.current_tick,
+            tick_samples_rendered: self.tick_samples_rendered,
+            pattern_delay: self.pattern_delay,
+            pattern_delay_count: self.pattern_delay_count,
+            fine_pattern_delay: self.fine_pattern_delay,
+            last_global_vol_slide: self.last_global_vol_slide,
+            is_it_format: self.is_it_format,
+            old_effects_mode: self.old_effects_mode,
+            link_g_memory: self.link_g_memory,
+            tempo_slide: self.tempo_slide,
+            modules: self.modules.clone(), // Arc clone - cheap
+        }
+    }
+
+    /// Apply a snapshot to this engine instance
+    ///
+    /// Used by the audio thread to update its local engine with state
+    /// received from the main thread. Does NOT modify row_cache or next_handle.
+    pub fn apply_snapshot(&mut self, snapshot: &TrackerEngineSnapshot) {
+        self.channels = *snapshot.channels.clone();
+        self.global_volume = snapshot.global_volume;
+        self.current_order = snapshot.current_order;
+        self.current_row = snapshot.current_row;
+        self.current_tick = snapshot.current_tick;
+        self.tick_samples_rendered = snapshot.tick_samples_rendered;
+        self.pattern_delay = snapshot.pattern_delay;
+        self.pattern_delay_count = snapshot.pattern_delay_count;
+        self.fine_pattern_delay = snapshot.fine_pattern_delay;
+        self.last_global_vol_slide = snapshot.last_global_vol_slide;
+        self.is_it_format = snapshot.is_it_format;
+        self.old_effects_mode = snapshot.old_effects_mode;
+        self.link_g_memory = snapshot.link_g_memory;
+        self.tempo_slide = snapshot.tempo_slide;
+        self.modules = snapshot.modules.clone(); // Arc clone - cheap
+    }
+
+    /// Get shared reference to loaded modules
+    ///
+    /// Returns Arc-wrapped modules that can be safely shared with audio thread.
+    pub fn modules_arc(&self) -> &[Option<Arc<LoadedModule>>] {
+        &self.modules
     }
 }
 

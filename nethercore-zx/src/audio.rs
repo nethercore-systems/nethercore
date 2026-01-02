@@ -415,32 +415,83 @@ fn soft_clip(x: f32) -> f32 {
 /// Nethercore ZX audio backend
 ///
 /// Wraps AudioOutput and provides the Console::Audio interface.
+/// Supports both synchronous (push_samples) and threaded (send_snapshot) modes.
 pub struct ZXAudio {
-    /// Audio output (cpal stream + ring buffer)
+    /// Audio output (cpal stream + ring buffer) - for synchronous mode
     output: Option<AudioOutput>,
+    /// Threaded audio output - for threaded mode
+    threaded_output: Option<crate::audio_thread::ThreadedAudioOutput>,
     /// Master volume (0.0 - 1.0)
     master_volume: f32,
     /// Pre-allocated buffer for volume scaling (avoids allocation per push)
     scale_buffer: Vec<f32>,
+    /// Whether to use threaded audio generation
+    use_threaded: bool,
 }
 
 impl ZXAudio {
-    /// Create new audio backend
+    /// Create new audio backend (synchronous mode)
     pub fn new() -> Result<Self, String> {
         match AudioOutput::new() {
             Ok(output) => Ok(Self {
                 output: Some(output),
+                threaded_output: None,
                 master_volume: 1.0,
                 scale_buffer: Vec::with_capacity(2048), // Pre-allocate for typical frame size
+                use_threaded: false,
             }),
             Err(e) => {
                 warn!("Failed to create audio output: {}. Audio disabled.", e);
                 Ok(Self {
                     output: None,
+                    threaded_output: None,
                     master_volume: 1.0,
                     scale_buffer: Vec::new(),
+                    use_threaded: false,
                 })
             }
+        }
+    }
+
+    /// Create new audio backend with threaded generation
+    ///
+    /// This offloads audio sample generation to a separate thread,
+    /// preventing audio pops during system load or rollback replays.
+    pub fn new_threaded() -> Result<Self, String> {
+        match crate::audio_thread::ThreadedAudioOutput::new() {
+            Ok(output) => Ok(Self {
+                output: None,
+                threaded_output: Some(output),
+                master_volume: 1.0,
+                scale_buffer: Vec::new(), // Not needed for threaded mode
+                use_threaded: true,
+            }),
+            Err(e) => {
+                warn!("Failed to create threaded audio output: {}. Audio disabled.", e);
+                Ok(Self {
+                    output: None,
+                    threaded_output: None,
+                    master_volume: 1.0,
+                    scale_buffer: Vec::new(),
+                    use_threaded: true,
+                })
+            }
+        }
+    }
+
+    /// Check if using threaded audio mode
+    pub fn is_threaded(&self) -> bool {
+        self.use_threaded
+    }
+
+    /// Send an audio snapshot to the generation thread (threaded mode only)
+    ///
+    /// Returns true if the snapshot was queued, false if dropped or not in threaded mode.
+    pub fn send_snapshot(&self, snapshot: crate::audio_thread::AudioGenSnapshot) -> bool {
+        if let Some(ref output) = self.threaded_output {
+            output.send_snapshot(snapshot)
+        } else {
+            false
         }
     }
 
@@ -456,10 +507,13 @@ impl ZXAudio {
 
     /// Get the sample rate (or default if audio is disabled)
     pub fn sample_rate(&self) -> u32 {
-        self.output
-            .as_ref()
-            .map(|o| o.sample_rate())
-            .unwrap_or(OUTPUT_SAMPLE_RATE)
+        if let Some(ref output) = self.threaded_output {
+            output.sample_rate()
+        } else if let Some(ref output) = self.output {
+            output.sample_rate()
+        } else {
+            OUTPUT_SAMPLE_RATE
+        }
     }
 
     /// Push generated audio samples to the output
@@ -495,8 +549,10 @@ impl Default for ZXAudio {
     fn default() -> Self {
         Self::new().unwrap_or(Self {
             output: None,
+            threaded_output: None,
             master_volume: 1.0,
             scale_buffer: Vec::new(),
+            use_threaded: false,
         })
     }
 }
@@ -510,6 +566,7 @@ pub struct ZXAudioGenerator;
 impl nethercore_core::AudioGenerator for ZXAudioGenerator {
     type RollbackState = crate::state::ZRollbackState;
     type State = crate::state::ZXFFIState;
+    type Audio = ZXAudio;
 
     fn default_sample_rate() -> u32 {
         OUTPUT_SAMPLE_RATE
@@ -531,6 +588,34 @@ impl nethercore_core::AudioGenerator for ZXAudioGenerator {
             sample_rate,
             output,
         );
+    }
+
+    fn process_audio(
+        rollback_state: &mut Self::RollbackState,
+        state: &mut Self::State,
+        audio: &mut Self::Audio,
+        tick_rate: u32,
+        sample_rate: u32,
+    ) {
+        if audio.is_threaded() {
+            // Threaded mode: create snapshot and send to audio thread
+            let snapshot = crate::audio_thread::AudioGenSnapshot::new(
+                rollback_state.audio,
+                rollback_state.tracker,
+                state.tracker_engine.snapshot(),
+                Arc::new(state.sounds.clone()),
+                0, // frame_number not used currently
+                tick_rate,
+                sample_rate,
+                false, // is_rollback - main loop only calls this for confirmed frames
+            );
+            audio.send_snapshot(snapshot);
+        } else {
+            // Synchronous mode: generate samples and push
+            let mut buffer = Vec::new();
+            Self::generate_frame(rollback_state, state, tick_rate, sample_rate, &mut buffer);
+            audio.push_samples(&buffer);
+        }
     }
 }
 

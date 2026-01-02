@@ -4,6 +4,7 @@
 //! used as a library by the unified launcher or as a standalone player.
 
 pub mod audio;
+pub mod audio_thread;
 pub mod console;
 pub mod ffi;
 mod font;

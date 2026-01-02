@@ -234,7 +234,15 @@ impl Console for NethercoreZX {
     }
 
     fn create_audio(&self) -> Result<Self::Audio> {
-        ZXAudio::new().map_err(|e| anyhow::anyhow!("Failed to create audio: {}", e))
+        // Use threaded audio by default for better resilience during load/rollbacks
+        // Falls back to synchronous if thread spawning fails
+        match ZXAudio::new_threaded() {
+            Ok(audio) => Ok(audio),
+            Err(e) => {
+                tracing::warn!("Threaded audio failed, falling back to sync: {}", e);
+                ZXAudio::new().map_err(|e| anyhow::anyhow!("Failed to create audio: {}", e))
+            }
+        }
     }
 
     fn map_input(&self, raw: &RawInput) -> Self::Input {

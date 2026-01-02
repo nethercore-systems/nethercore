@@ -338,6 +338,19 @@ impl<C: Console> Runtime<C> {
     pub fn audio_mut(&mut self) -> Option<&mut C::Audio> {
         self.audio.as_mut()
     }
+
+    /// Get mutable references to both game and audio for audio processing
+    ///
+    /// Returns (game, audio) tuple where either can be None.
+    /// This allows the caller to access both without borrowing issues.
+    pub fn game_and_audio_mut(
+        &mut self,
+    ) -> (
+        Option<&mut GameInstance<C::Input, C::State, C::RollbackState>>,
+        Option<&mut C::Audio>,
+    ) {
+        (self.game.as_mut(), self.audio.as_mut())
+    }
 }
 
 #[cfg(test)]

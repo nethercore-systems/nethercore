@@ -415,7 +415,8 @@ where
             false
         };
 
-        // Generate audio using the console's AudioGenerator
+        // Process audio using the console's AudioGenerator
+        // This handles both synchronous and threaded audio modes automatically
         if did_render {
             let tick_rate = session.runtime.tick_rate();
             let sample_rate = session
@@ -424,25 +425,16 @@ where
                 .map(|a| a.sample_rate())
                 .unwrap_or_else(C::AudioGenerator::default_sample_rate);
 
-            let audio_buffer = if let Some(game) = session.runtime.game_mut() {
+            let (game_opt, audio_opt) = session.runtime.game_and_audio_mut();
+            if let (Some(game), Some(audio)) = (game_opt, audio_opt) {
                 let (ffi_state, rollback_state) = game.ffi_and_rollback_mut();
-                let mut buffer = Vec::new();
-                C::AudioGenerator::generate_frame(
+                C::AudioGenerator::process_audio(
                     rollback_state,
                     ffi_state,
+                    audio,
                     tick_rate,
                     sample_rate,
-                    &mut buffer,
                 );
-                Some(buffer)
-            } else {
-                None
-            };
-
-            if let Some(buffer) = audio_buffer
-                && let Some(audio) = session.runtime.audio_mut()
-            {
-                audio.push_samples(&buffer);
             }
         }
 
