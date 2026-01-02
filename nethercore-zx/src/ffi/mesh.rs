@@ -378,6 +378,7 @@ fn draw_mesh(mut caller: Caller<'_, ZXGameContext>, handle: u32) {
 
     // Capture stencil mode for masked rendering
     let stencil_mode = state.stencil_mode;
+    let stencil_group = state.stencil_group;
 
     // Allocate combined MVP+shading buffer index (lazy allocation with deduplication)
     let buffer_index = state.add_mvp_shading_state();
@@ -395,5 +396,6 @@ fn draw_mesh(mut caller: Caller<'_, ZXGameContext>, handle: u32) {
         cull_mode,
         viewport,
         stencil_mode,
+        stencil_group,
     );
 }

@@ -102,15 +102,16 @@ impl ZXGraphics {
                         transformed
                     }));
 
-                self.quad_batch_scratch.push((
+                self.quad_batch_scratch.push(super::QuadBatchInfo {
                     base_instance,
-                    batch.instances.len() as u32,
-                    batch.textures,
-                    batch.is_screen_space,
-                    batch.viewport,
-                    batch.stencil_mode,
-                    batch.layer,
-                ));
+                    instance_count: batch.instances.len() as u32,
+                    textures: batch.textures,
+                    is_screen_space: batch.is_screen_space,
+                    viewport: batch.viewport,
+                    stencil_mode: batch.stencil_mode,
+                    stencil_group: batch.stencil_group,
+                    layer: batch.layer,
+                });
             }
 
             // Upload all instances once to GPU
@@ -121,32 +122,23 @@ impl ZXGraphics {
             }
 
             // Create draw commands for each batch with correct base_instance
-            for &(
-                base_instance,
-                instance_count,
-                textures,
-                is_screen_space,
-                viewport,
-                stencil_mode,
-                layer,
-            ) in &self.quad_batch_scratch
-            {
+            for batch in &self.quad_batch_scratch {
                 // Map FFI texture handles to graphics texture handles for this batch
                 let texture_slots = [
                     texture_map
-                        .get(&textures[0])
+                        .get(&batch.textures[0])
                         .copied()
                         .unwrap_or(TextureHandle::INVALID),
                     texture_map
-                        .get(&textures[1])
+                        .get(&batch.textures[1])
                         .copied()
                         .unwrap_or(TextureHandle::INVALID),
                     texture_map
-                        .get(&textures[2])
+                        .get(&batch.textures[2])
                         .copied()
                         .unwrap_or(TextureHandle::INVALID),
                     texture_map
-                        .get(&textures[3])
+                        .get(&batch.textures[3])
                         .copied()
                         .unwrap_or(TextureHandle::INVALID),
                 ];
@@ -159,14 +151,15 @@ impl ZXGraphics {
                     .add_command(super::command_buffer::VRPCommand::Quad {
                         base_vertex: self.unit_quad_base_vertex,
                         first_index: self.unit_quad_first_index,
-                        base_instance,
-                        instance_count,
+                        base_instance: batch.base_instance,
+                        instance_count: batch.instance_count,
                         texture_slots,
-                        depth_test: !is_screen_space && z_state.depth_test,
+                        depth_test: !batch.is_screen_space && z_state.depth_test,
                         cull_mode: z_state.cull_mode,
-                        viewport,
-                        stencil_mode,
-                        layer,
+                        viewport: batch.viewport,
+                        stencil_mode: batch.stencil_mode,
+                        stencil_group: batch.stencil_group,
+                        layer: batch.layer,
                     });
             }
         }

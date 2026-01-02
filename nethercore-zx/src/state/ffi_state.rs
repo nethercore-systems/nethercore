@@ -37,6 +37,10 @@ pub struct ZXFFIState {
     pub cull_mode: crate::graphics::CullMode,
     pub texture_filter: crate::graphics::TextureFilter,
     pub stencil_mode: crate::graphics::StencilMode,
+    /// Stencil group counter for ordering stencil operations
+    /// Increments on stencil_begin, stencil_invert, stencil_clear to preserve
+    /// the intended sequence of stencil passes when commands are sorted
+    pub stencil_group: u32,
     pub bound_textures: [u32; 4],
     /// Current layer for 2D draw ordering (higher = closer to camera)
     pub current_layer: u32,
@@ -176,6 +180,7 @@ impl Default for ZXFFIState {
             cull_mode: crate::graphics::CullMode::None,
             texture_filter: crate::graphics::TextureFilter::Nearest,
             stencil_mode: crate::graphics::StencilMode::Disabled,
+            stencil_group: 0,
             bound_textures: [0; 4],
             current_layer: DEFAULT_LAYER,
             current_viewport: crate::graphics::Viewport::FULLSCREEN,
@@ -738,20 +743,22 @@ impl ZXFFIState {
             && last_batch.is_screen_space == is_screen_space
             && last_batch.viewport == self.current_viewport
             && last_batch.stencil_mode == self.stencil_mode
+            && last_batch.stencil_group == self.stencil_group
             && last_batch.layer == layer
         {
-            // Same textures, mode, viewport, stencil, and layer - add to current batch
+            // Same textures, mode, viewport, stencil, group, and layer - add to current batch
             last_batch.instances.push(instance);
             return;
         }
 
-        // Need a new batch (first batch, textures changed, mode changed, viewport changed, stencil changed, or layer changed)
+        // Need a new batch (first batch, textures changed, mode changed, viewport changed, stencil changed, group changed, or layer changed)
         self.quad_batches.push(super::QuadBatch {
             is_screen_space,
             textures: self.bound_textures,
             instances: vec![instance],
             viewport: self.current_viewport,
             stencil_mode: self.stencil_mode,
+            stencil_group: self.stencil_group,
             layer,
         });
     }
@@ -821,6 +828,7 @@ impl ZXFFIState {
         self.cull_mode = crate::graphics::CullMode::None;
         self.texture_filter = crate::graphics::TextureFilter::Nearest;
         self.stencil_mode = crate::graphics::StencilMode::Disabled;
+        self.stencil_group = 0; // Reset stencil group counter
         self.current_layer = DEFAULT_LAYER; // Reset layer to background
         self.current_viewport = crate::graphics::Viewport::FULLSCREEN; // Reset viewport to fullscreen
         // Note: color and shading state already rebuild each frame via add_shading_state()

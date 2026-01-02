@@ -206,7 +206,7 @@ impl ZXGraphics {
 
         // OPTIMIZATION 3: Sort draw commands IN-PLACE by CommandSortKey to minimize state changes
         // Commands are reset at the start of next frame, so no need to preserve original order or clone
-        // Sort order: viewport → stencil → render_type → depth/cull → textures
+        // Sort order: stencil_group → viewport → layer → stencil_mode → render_type → depth/cull → textures
         self.command_buffer
             .commands_mut()
             .sort_unstable_by_key(|cmd| match cmd {
@@ -217,8 +217,10 @@ impl ZXGraphics {
                     textures,
                     viewport,
                     stencil_mode,
+                    stencil_group,
                     ..
                 } => CommandSortKey::mesh(
+                    *stencil_group,
                     *viewport,
                     *stencil_mode,
                     *format,
@@ -233,8 +235,10 @@ impl ZXGraphics {
                     textures,
                     viewport,
                     stencil_mode,
+                    stencil_group,
                     ..
                 } => CommandSortKey::mesh(
+                    *stencil_group,
                     *viewport,
                     *stencil_mode,
                     *format,
@@ -247,9 +251,11 @@ impl ZXGraphics {
                     texture_slots,
                     viewport,
                     stencil_mode,
+                    stencil_group,
                     layer,
                     ..
                 } => CommandSortKey::quad(
+                    *stencil_group,
                     *viewport,
                     *layer,
                     *stencil_mode,
@@ -264,8 +270,9 @@ impl ZXGraphics {
                 VRPCommand::Sky {
                     viewport,
                     stencil_mode,
+                    stencil_group,
                     ..
-                } => CommandSortKey::sky(*viewport, *stencil_mode),
+                } => CommandSortKey::sky(*stencil_group, *viewport, *stencil_mode),
             });
 
         // =================================================================
@@ -704,13 +711,13 @@ impl ZXGraphics {
                     current_viewport = Some(cmd_viewport);
                 }
 
-                // Set stencil reference if stencil mode changed and requires testing
+                // Set stencil reference if stencil mode changed
                 if current_stencil_mode != Some(cmd_stencil_mode) {
-                    // Set stencil reference to 1 for testing modes (value written by stencil_begin)
-                    if matches!(
-                        cmd_stencil_mode,
-                        StencilMode::Testing | StencilMode::TestingInverted
-                    ) {
+                    // Set stencil reference to 1 for ALL stencil modes that use it:
+                    // - Writing mode: Replace operation writes this value to stencil buffer
+                    // - Testing mode: Compare checks stencil == this value
+                    // - TestingInverted: Compare checks stencil != this value
+                    if cmd_stencil_mode.is_active() {
                         render_pass.set_stencil_reference(1);
                     }
                     current_stencil_mode = Some(cmd_stencil_mode);

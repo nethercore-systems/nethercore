@@ -241,13 +241,24 @@ fn music_play(mut caller: Caller<'_, ZXGameContext>, handle: u32, volume: f32, l
 
         // Set up tracker state with raw handle (strip flag)
         let raw_handle = raw_tracker_handle(handle);
+
+        // Get initial tempo/speed from the loaded module (fall back to defaults if not found)
+        let (initial_speed, initial_tempo) = ctx
+            .ffi
+            .tracker_engine
+            .modules
+            .get(raw_handle as usize)
+            .and_then(|m| m.as_ref())
+            .map(|m| (m.module.initial_speed as u16, m.module.initial_tempo as u16))
+            .unwrap_or((crate::tracker::DEFAULT_SPEED, crate::tracker::DEFAULT_BPM));
+
         let tracker = &mut ctx.rollback.tracker;
         tracker.handle = raw_handle;
         tracker.order_position = 0;
         tracker.row = 0;
         tracker.tick = 0;
-        tracker.speed = crate::tracker::DEFAULT_SPEED;
-        tracker.bpm = crate::tracker::DEFAULT_BPM;
+        tracker.speed = initial_speed;
+        tracker.bpm = initial_tempo;
         tracker.volume = (clamp_safe(volume, 0.0, 1.0) * 256.0) as u16;
         tracker.tick_sample_pos = 0;
 

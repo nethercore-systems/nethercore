@@ -149,6 +149,35 @@ impl Viewport {
     }
 }
 
+// =============================================================================
+// QUAD BATCH INFO (for GPU draw command creation)
+// =============================================================================
+
+/// Temporary data for processing a batch of quads during frame rendering.
+///
+/// This is an internal scratch structure used between quad instance upload
+/// and draw command creation. It captures all the state needed to create
+/// VRPCommand::Quad draw calls.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct QuadBatchInfo {
+    /// Starting instance index in the instance buffer
+    pub base_instance: u32,
+    /// Number of quad instances in this batch
+    pub instance_count: u32,
+    /// FFI texture handles (resolved to TextureHandle during command creation)
+    pub textures: [u32; 4],
+    /// True if this batch contains screen-space quads (2D)
+    pub is_screen_space: bool,
+    /// Viewport for this batch
+    pub viewport: Viewport,
+    /// Stencil mode for this batch
+    pub stencil_mode: StencilMode,
+    /// Stencil group for ordering stencil passes
+    pub stencil_group: u32,
+    /// Layer for 2D ordering (higher layers render on top)
+    pub layer: u32,
+}
+
 use pipeline::PipelineCache;
 use texture_manager::TextureManager;
 
@@ -250,8 +279,8 @@ pub struct ZXGraphics {
 
     // Persistent buffers for quad instance processing (avoids per-frame allocation)
     quad_instance_scratch: Vec<QuadInstance>,
-    /// (base_instance, instance_count, textures, is_screen_space, viewport, stencil_mode, layer)
-    quad_batch_scratch: Vec<(u32, u32, [u32; 4], bool, Viewport, StencilMode, u32)>,
+    /// Batch info for creating quad draw commands
+    quad_batch_scratch: Vec<QuadBatchInfo>,
 }
 
 impl ZXGraphics {

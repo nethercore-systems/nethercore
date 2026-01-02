@@ -168,6 +168,7 @@ fn layer(mut caller: Caller<'_, ZXGameContext>, n: u32) {
 /// ```
 fn stencil_begin(mut caller: Caller<'_, ZXGameContext>) {
     let state = &mut caller.data_mut().ffi;
+    state.stencil_group += 1; // New stencil pass starts
     state.stencil_mode = StencilMode::Writing;
 }
 
@@ -191,6 +192,7 @@ fn stencil_end(mut caller: Caller<'_, ZXGameContext>) {
 fn stencil_clear(mut caller: Caller<'_, ZXGameContext>) {
     let state = &mut caller.data_mut().ffi;
     state.stencil_mode = StencilMode::Disabled;
+    state.stencil_group += 1; // End of stencil pass, subsequent draws are separate
 }
 
 /// Enable inverted stencil testing.
@@ -211,5 +213,6 @@ fn stencil_clear(mut caller: Caller<'_, ZXGameContext>) {
 /// ```
 fn stencil_invert(mut caller: Caller<'_, ZXGameContext>) {
     let state = &mut caller.data_mut().ffi;
+    state.stencil_group += 1; // Separate group for inverted testing order control
     state.stencil_mode = StencilMode::TestingInverted;
 }

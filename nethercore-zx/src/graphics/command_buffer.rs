@@ -84,6 +84,8 @@ pub enum VRPCommand {
         viewport: Viewport,
         /// Stencil mode for masked rendering
         stencil_mode: StencilMode,
+        /// Stencil group for ordering stencil passes
+        stencil_group: u32,
     },
     /// Indexed mesh draw (draw_mesh, load_mesh_indexed)
     IndexedMesh {
@@ -101,6 +103,8 @@ pub enum VRPCommand {
         viewport: Viewport,
         /// Stencil mode for masked rendering
         stencil_mode: StencilMode,
+        /// Stencil group for ordering stencil passes
+        stencil_group: u32,
     },
     /// GPU-instanced quad draw (billboards, sprites, text, rects)
     /// All quads share a single unit quad mesh (4 vertices, 6 indices)
@@ -116,6 +120,8 @@ pub enum VRPCommand {
         viewport: Viewport,
         /// Stencil mode for masked rendering
         stencil_mode: StencilMode,
+        /// Stencil group for ordering stencil passes
+        stencil_group: u32,
         /// Layer for 2D ordering (higher layers render on top)
         layer: u32,
     },
@@ -127,20 +133,26 @@ pub enum VRPCommand {
         viewport: Viewport,
         /// Stencil mode for masked rendering
         stencil_mode: StencilMode,
+        /// Stencil group for ordering stencil passes
+        stencil_group: u32,
     },
 }
 
 /// Sort key for draw command ordering
 ///
 /// Commands are sorted to minimize GPU state changes:
-/// 1. Viewport (split-screen regions)
-/// 2. Layer (2D ordering for quads - higher layers render on top)
-/// 3. Stencil mode (masked rendering groups)
-/// 4. Render type (Quad → Mesh → Sky for optimal early-z)
-/// 5. Render state (depth test, cull mode)
-/// 6. Textures (minimize bind calls)
+/// 1. Stencil group (preserves stencil pass ordering across command sorting)
+/// 2. Viewport (split-screen regions)
+/// 3. Layer (2D ordering for quads - higher layers render on top)
+/// 4. Stencil mode (masked rendering groups)
+/// 5. Render type (Quad → Mesh → Sky for optimal early-z)
+/// 6. Render state (depth test, cull mode)
+/// 7. Textures (minimize bind calls)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CommandSortKey {
+    /// Stencil group (highest priority - preserves stencil pass sequence)
+    /// Increments on stencil_begin, stencil_invert, stencil_clear
+    pub stencil_group: u32,
     /// Viewport region (grouped first to minimize GPU viewport/scissor changes)
     pub viewport: Viewport,
     /// Layer for 2D ordering (only used for quads, 0 for other commands)
@@ -161,8 +173,9 @@ pub struct CommandSortKey {
 
 impl CommandSortKey {
     /// Create sort key for a sky command
-    pub fn sky(viewport: Viewport, stencil_mode: StencilMode) -> Self {
+    pub fn sky(stencil_group: u32, viewport: Viewport, stencil_mode: StencilMode) -> Self {
         Self {
+            stencil_group,
             viewport,
             layer: NO_LAYER,
             stencil_mode,
@@ -176,6 +189,7 @@ impl CommandSortKey {
 
     /// Create sort key for a mesh command
     pub fn mesh(
+        stencil_group: u32,
         viewport: Viewport,
         stencil_mode: StencilMode,
         vertex_format: u8,
@@ -184,6 +198,7 @@ impl CommandSortKey {
         textures: [u32; 4],
     ) -> Self {
         Self {
+            stencil_group,
             viewport,
             layer: NO_LAYER,
             stencil_mode,
@@ -197,6 +212,7 @@ impl CommandSortKey {
 
     /// Create sort key for a quad command
     pub fn quad(
+        stencil_group: u32,
         viewport: Viewport,
         layer: u32,
         stencil_mode: StencilMode,
@@ -204,6 +220,7 @@ impl CommandSortKey {
         textures: [u32; 4],
     ) -> Self {
         Self {
+            stencil_group,
             viewport,
             layer,
             stencil_mode,
@@ -278,6 +295,7 @@ impl VirtualRenderPass {
         cull_mode: CullMode,
         viewport: Viewport,
         stencil_mode: StencilMode,
+        stencil_group: u32,
     ) {
         let format_idx = format as usize;
         let stride = vertex_stride(format) as usize;
@@ -299,6 +317,7 @@ impl VirtualRenderPass {
             cull_mode,
             viewport,
             stencil_mode,
+            stencil_group,
         });
     }
 
@@ -318,6 +337,7 @@ impl VirtualRenderPass {
         cull_mode: CullMode,
         viewport: Viewport,
         stencil_mode: StencilMode,
+        stencil_group: u32,
     ) {
         let format_idx = format as usize;
         let stride = vertex_stride(format) as usize;
@@ -344,6 +364,7 @@ impl VirtualRenderPass {
             cull_mode,
             viewport,
             stencil_mode,
+            stencil_group,
         });
     }
 
@@ -365,6 +386,7 @@ impl VirtualRenderPass {
         cull_mode: CullMode,
         viewport: Viewport,
         stencil_mode: StencilMode,
+        stencil_group: u32,
     ) {
         // Use packed stride since retained meshes are stored in packed format
         let stride = vertex_stride_packed(mesh_format) as u64;
@@ -384,6 +406,7 @@ impl VirtualRenderPass {
                 cull_mode,
                 viewport,
                 stencil_mode,
+                stencil_group,
             });
         } else {
             self.commands.push(VRPCommand::Mesh {
@@ -396,6 +419,7 @@ impl VirtualRenderPass {
                 cull_mode,
                 viewport,
                 stencil_mode,
+                stencil_group,
             });
         }
     }

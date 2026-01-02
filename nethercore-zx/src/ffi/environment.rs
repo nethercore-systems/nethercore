@@ -657,6 +657,7 @@ fn draw_env(mut caller: Caller<'_, ZXGameContext>) {
 
     // Capture stencil mode for masked rendering
     let stencil_mode = state.stencil_mode;
+    let stencil_group = state.stencil_group;
 
     // Get or create shading state index for current environment configuration
     // This ensures the environment data is uploaded to GPU
@@ -670,5 +671,6 @@ fn draw_env(mut caller: Caller<'_, ZXGameContext>) {
             depth_test: false, // Environment always behind geometry
             viewport,
             stencil_mode,
+            stencil_group,
         });
 }

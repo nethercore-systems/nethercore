@@ -298,14 +298,15 @@ unsafe fn draw_portal(x: f32, z: f32, color: u32, is_portal1: bool) {
 }
 
 /// Draw portal disc for stencil mask
-unsafe fn draw_portal_mask(x: f32, z: f32) {
+unsafe fn draw_portal_mask(x: f32, z: f32, facing_positive_z: bool) {
     push_identity();
     push_translate(x, 2.3, z);
-    // Portal faces the player (approximation - should face camera)
-    let to_player_x = PLAYER_X - x;
-    let to_player_z = PLAYER_Z - z;
-    let angle = libm::atan2f(to_player_x, to_player_z).to_degrees();
-    push_rotate_y(angle);
+
+    // Disc is already vertical (generated in X-Y plane, facing +Z)
+    // Just rotate around Y to face the correct direction
+    if !facing_positive_z {
+        push_rotate_y(180.0);
+    }
 
     draw_triangles(
         PORTAL_DISC.as_ptr(),
@@ -325,8 +326,9 @@ pub extern "C" fn render() {
             draw_blue_world();
 
             // Draw portal1 showing orange world
+            // Portal1 is at Z=-10, faces toward +Z (toward player coming from blue world)
             stencil_begin();
-            draw_portal_mask(PORTAL1_X, PORTAL1_Z);
+            draw_portal_mask(PORTAL1_X, PORTAL1_Z, true);
             stencil_end();
 
             // Inside portal: render orange world from portal2's perspective
@@ -348,8 +350,9 @@ pub extern "C" fn render() {
             draw_orange_world();
 
             // Draw portal2 showing blue world
+            // Portal2 is at Z=+10, faces toward -Z (toward player coming from orange world)
             stencil_begin();
-            draw_portal_mask(PORTAL2_X, PORTAL2_Z);
+            draw_portal_mask(PORTAL2_X, PORTAL2_Z, false);
             stencil_end();
 
             // Inside portal: render blue world from portal1's perspective

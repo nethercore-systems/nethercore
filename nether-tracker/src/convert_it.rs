@@ -394,7 +394,8 @@ fn convert_it_instrument(it_instr: &nether_it::ItInstrument) -> TrackerInstrumen
         sample_loop_end: 0,
         sample_loop_type: LoopType::None,
         sample_finetune: 0,
-        sample_relative_note: 0,
+        // IT uses C-5 as reference pitch, XM uses C-4. Transpose down 12 semitones.
+        sample_relative_note: -12,
 
         // IT doesn't have XM-style auto-vibrato per instrument
         // (IT uses sample vibrato instead)

@@ -76,6 +76,7 @@ fn draw_triangles(
 
     // Capture stencil mode for masked rendering
     let stencil_mode = state.stencil_mode;
+    let stencil_group = state.stencil_group;
 
     // Allocate combined MVP+shading buffer index (lazy allocation with deduplication)
     let buffer_index = state.add_mvp_shading_state();
@@ -90,6 +91,7 @@ fn draw_triangles(
         cull_mode,
         viewport,
         stencil_mode,
+        stencil_group,
     );
 }
 
@@ -173,6 +175,7 @@ fn draw_triangles_indexed(
 
     // Capture stencil mode for masked rendering
     let stencil_mode = state.stencil_mode;
+    let stencil_group = state.stencil_group;
 
     // Allocate combined MVP+shading buffer index (lazy allocation with deduplication)
     let buffer_index = state.add_mvp_shading_state();
@@ -188,5 +191,6 @@ fn draw_triangles_indexed(
         cull_mode,
         viewport,
         stencil_mode,
+        stencil_group,
     );
 }
