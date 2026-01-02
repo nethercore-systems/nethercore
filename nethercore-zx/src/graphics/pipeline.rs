@@ -70,10 +70,13 @@ fn get_stencil_state(stencil_mode: StencilMode) -> wgpu::StencilState {
     match stencil_mode {
         StencilMode::Writing => {
             // Writing mode: Always pass, replace stencil with reference value
+            // Use Replace for depth_fail_op so stencil mask is written regardless of
+            // what's already in the depth buffer (essential for portal-style effects
+            // where the mask shape must be written even if other geometry is in front)
             let face = wgpu::StencilFaceState {
                 compare: wgpu::CompareFunction::Always,
                 fail_op: wgpu::StencilOperation::Keep,
-                depth_fail_op: wgpu::StencilOperation::Keep,
+                depth_fail_op: wgpu::StencilOperation::Replace,
                 pass_op: wgpu::StencilOperation::Replace,
             };
             wgpu::StencilState {

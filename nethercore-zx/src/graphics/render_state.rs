@@ -171,13 +171,13 @@ impl StencilMode {
                 front: wgpu::StencilFaceState {
                     compare: wgpu::CompareFunction::Always,
                     fail_op: wgpu::StencilOperation::Keep,
-                    depth_fail_op: wgpu::StencilOperation::Keep,
+                    depth_fail_op: wgpu::StencilOperation::Replace,
                     pass_op: wgpu::StencilOperation::Replace,
                 },
                 back: wgpu::StencilFaceState {
                     compare: wgpu::CompareFunction::Always,
                     fail_op: wgpu::StencilOperation::Keep,
-                    depth_fail_op: wgpu::StencilOperation::Keep,
+                    depth_fail_op: wgpu::StencilOperation::Replace,
                     pass_op: wgpu::StencilOperation::Replace,
                 },
                 read_mask: 0xFF,

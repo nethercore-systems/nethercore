@@ -1,6 +1,6 @@
 [game]
 id = "tracker-demo-split"
-title = "Tracker Demo (Split Samples)"
+title = "Tracker Demo XM (Split Samples)"
 author = "Nethercore Examples"
 version = "0.3.0"
 description = "XM tracker music with split sample workflow - samples loaded separately from WAV files"

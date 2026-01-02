@@ -40,20 +40,6 @@ use ffi::*;
 const SCREEN_WIDTH: f32 = 960.0;
 const SCREEN_HEIGHT: f32 = 540.0;
 
-// Button constants
-pub mod button {
-    pub const UP: u32 = 0;
-    pub const DOWN: u32 = 1;
-    pub const LEFT: u32 = 2;
-    pub const RIGHT: u32 = 3;
-    pub const A: u32 = 4;
-    pub const B: u32 = 5;
-    pub const X: u32 = 6;
-    pub const Y: u32 = 7;
-    pub const L1: u32 = 8;
-    pub const R1: u32 = 9;
-}
-
 // Colors
 const COLOR_BG: u32 = 0x1a1a2eFF;
 const COLOR_WHITE: u32 = 0xFFFFFFFF;

@@ -15,27 +15,21 @@ use nethercore_shared::ZX_ROM_FORMAT;
 use zx_common::{
     vertex_stride_packed, NetherZXAnimationHeader, NetherZXMeshHeader, NetherZXSkeletonHeader,
     PackedData, PackedKeyframes, PackedMesh, PackedSkeleton, PackedSound, PackedTexture,
-    PackedTracker, TextureFormat, ZMetadata, ZXDataPack, ZXRom, INVERSE_BIND_MATRIX_SIZE,
+    PackedTracker, TextureFormat, TrackerFormat, ZMetadata, ZXDataPack, ZXRom,
+    INVERSE_BIND_MATRIX_SIZE,
 };
 
 use crate::manifest::{AssetsSection, NetherManifest};
-
-/// Tracker format enum
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum TrackerFormat {
-    XM,
-    IT,
-}
 
 /// Detect tracker format by magic bytes
 fn detect_tracker_format(data: &[u8]) -> Option<TrackerFormat> {
     // Check for XM magic: "Extended Module: " (17 bytes)
     if data.len() >= 17 && &data[0..17] == b"Extended Module: " {
-        return Some(TrackerFormat::XM);
+        return Some(TrackerFormat::Xm);
     }
     // Check for IT magic: "IMPM" (4 bytes)
     if data.len() >= 4 && &data[0..4] == b"IMPM" {
-        return Some(TrackerFormat::IT);
+        return Some(TrackerFormat::It);
     }
     None
 }
@@ -327,7 +321,7 @@ fn load_assets(
 
         // Try to extract samples based on format
         let extracted_samples = match format {
-            Some(TrackerFormat::XM) => {
+            Some(TrackerFormat::Xm) => {
                 match nether_xm::extract_samples(&tracker_data) {
                     Ok(samples) => samples,
                     Err(e) => {
@@ -342,7 +336,7 @@ fn load_assets(
                     }
                 }
             }
-            Some(TrackerFormat::IT) => {
+            Some(TrackerFormat::It) => {
                 // Extract samples from IT file
                 match nether_it::extract_samples(&tracker_data) {
                     Ok(it_samples) => {
@@ -992,7 +986,7 @@ fn load_tracker(
 
     // Get instrument names and pack based on format
     let (sample_ids, pattern_data) = match format {
-        TrackerFormat::XM => {
+        TrackerFormat::Xm => {
             // Get instrument names from XM file (for mapping to sounds)
             let sample_ids = nether_xm::get_instrument_names(&data).with_context(|| {
                 format!("Failed to parse XM tracker instruments: {}", path.display())
@@ -1014,7 +1008,7 @@ fn load_tracker(
 
             (sample_ids, pattern_data)
         }
-        TrackerFormat::IT => {
+        TrackerFormat::It => {
             // Get instrument names from IT file (for mapping to sounds)
             let sample_ids = nether_it::get_instrument_names(&data).with_context(|| {
                 format!("Failed to parse IT tracker instruments: {}", path.display())
@@ -1035,6 +1029,7 @@ fn load_tracker(
 
     Ok(PackedTracker {
         id: id.to_string(),
+        format,
         pattern_data,
         sample_ids,
     })

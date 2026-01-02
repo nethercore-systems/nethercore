@@ -601,16 +601,33 @@ pub struct PackedData {
     pub data: Vec<u8>,
 }
 
-/// Packed tracker module (XM pattern data + sample mapping)
+/// Tracker format (XM or IT)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encode, Decode, Default)]
+#[repr(u8)]
+pub enum TrackerFormat {
+    /// Extended Module format (FastTracker II)
+    #[default]
+    Xm = 0,
+    /// Impulse Tracker format
+    It = 1,
+}
+
+/// Packed tracker module (XM/IT pattern data + sample mapping)
 ///
-/// Contains XM pattern data with sample references resolved at load time.
+/// Contains tracker pattern data with sample references resolved at load time.
 /// Samples are loaded separately via `rom_sound()` and mapped by ID.
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct PackedTracker {
     /// Asset ID (e.g., "level1_music", "boss_theme")
     pub id: String,
 
-    /// XM pattern data (samples stripped, patterns + instrument metadata only)
+    /// Tracker format (XM or IT)
+    #[serde(default)]
+    pub format: TrackerFormat,
+
+    /// Pattern data (samples stripped, patterns + instrument metadata only)
+    /// - XM: NCXM format (minimal XM)
+    /// - IT: NCIT format (minimal IT)
     pub pattern_data: Vec<u8>,
 
     /// Instrument index -> ROM sample ID mapping
@@ -623,9 +640,15 @@ pub struct PackedTracker {
 
 impl PackedTracker {
     /// Create a new packed tracker
-    pub fn new(id: impl Into<String>, pattern_data: Vec<u8>, sample_ids: Vec<String>) -> Self {
+    pub fn new(
+        id: impl Into<String>,
+        format: TrackerFormat,
+        pattern_data: Vec<u8>,
+        sample_ids: Vec<String>,
+    ) -> Self {
         Self {
             id: id.into(),
+            format,
             pattern_data,
             sample_ids,
         }
@@ -1148,11 +1171,13 @@ mod tests {
         let mut pack = ZXDataPack::new();
         pack.trackers.push(PackedTracker::new(
             "level1_music",
+            TrackerFormat::Xm,
             vec![0x45, 0x78, 0x74], // Dummy XM data
             vec!["kick".to_string(), "snare".to_string()],
         ));
         pack.trackers.push(PackedTracker::new(
             "boss_theme",
+            TrackerFormat::Xm,
             vec![0x01, 0x02, 0x03],
             vec!["bass".to_string()],
         ));
@@ -1173,6 +1198,7 @@ mod tests {
     fn test_packed_tracker() {
         let tracker = PackedTracker::new(
             "test_song",
+            TrackerFormat::Xm,
             vec![0; 1024],
             vec!["drum".to_string(), "bass".to_string(), "lead".to_string()],
         );

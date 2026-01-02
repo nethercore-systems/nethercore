@@ -25,87 +25,87 @@ pub fn generate_mist_it() -> (Vec<u8>, Vec<(&'static str, Vec<i16>)>) {
 
     // 1. Sub pad
     let sub_data = synthesizers::generate_pad_sub();
-    samples.push(("pad_sub", sub_data));
-    let sub_sample = make_sample("Sub Drone", sample_rate);
+    samples.push(("sub_drone", sub_data));
+    let sub_sample = make_sample("sub_drone", sample_rate);
     writer.add_sample(sub_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument_fade("Sub Drone", 1, 512));
+    writer.add_instrument(make_instrument_fade("sub_drone", 1, 512));
 
     // 2. Air pad
     let air_data = synthesizers::generate_pad_air();
-    samples.push(("pad_air", air_data));
-    let air_sample = make_sample("Air Pad", sample_rate);
+    samples.push(("air_pad", air_data));
+    let air_sample = make_sample("air_pad", sample_rate);
     writer.add_sample(air_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument_fade("Air", 2, 512));
+    writer.add_instrument(make_instrument_fade("air_pad", 2, 512));
 
     // 3. Warm pad
     let warm_data = synthesizers::generate_pad_warm();
-    samples.push(("pad_warm", warm_data));
-    let warm_sample = make_sample("Warm Pad", sample_rate);
+    samples.push(("warm_pad", warm_data));
+    let warm_sample = make_sample("warm_pad", sample_rate);
     writer.add_sample(warm_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument_fade("Warm", 3, 512));
+    writer.add_instrument(make_instrument_fade("warm_pad", 3, 512));
 
     // 4. Cold pad
     let cold_data = synthesizers::generate_pad_cold();
-    samples.push(("pad_cold", cold_data));
-    let cold_sample = make_sample("Cold Pad", sample_rate);
+    samples.push(("cold_pad", cold_data));
+    let cold_sample = make_sample("cold_pad", sample_rate);
     writer.add_sample(cold_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument_fade("Cold", 4, 512));
+    writer.add_instrument(make_instrument_fade("cold_pad", 4, 512));
 
     // 5. Noise breath
     let breath_data = synthesizers::generate_noise_breath();
-    samples.push(("noise_breath", breath_data));
-    let breath_sample = make_sample("Breath", sample_rate);
+    samples.push(("breath", breath_data));
+    let breath_sample = make_sample("breath", sample_rate);
     writer.add_sample(breath_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument_continue("Breath", 5));
+    writer.add_instrument(make_instrument_continue("breath", 5));
 
     // 6. Glass bell
     let bell_data = synthesizers::generate_bell_glass();
-    samples.push(("bell_glass", bell_data));
-    let bell_sample = make_sample("Glass Bell", sample_rate);
+    samples.push(("glass_bell", bell_data));
+    let bell_sample = make_sample("glass_bell", sample_rate);
     writer.add_sample(bell_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument_continue("Bell", 6));
+    writer.add_instrument(make_instrument_continue("glass_bell", 6));
 
     // 7. Sub bass
     let bass_data = synthesizers::generate_bass_sub();
-    samples.push(("bass_sub", bass_data));
-    let bass_sample = make_sample("Deep Bass", sample_rate);
+    samples.push(("deep_bass", bass_data));
+    let bass_sample = make_sample("deep_bass", sample_rate);
     writer.add_sample(bass_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument_fade("Bass", 7, 256));
+    writer.add_instrument(make_instrument_fade("deep_bass", 7, 256));
 
     // 8. Ghost lead
     let ghost_data = synthesizers::generate_lead_ghost();
-    samples.push(("lead_ghost", ghost_data));
-    let ghost_sample = make_sample("Ghost Lead", sample_rate);
+    samples.push(("ghost_lead", ghost_data));
+    let ghost_sample = make_sample("ghost_lead", sample_rate);
     writer.add_sample(ghost_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument_fade("Ghost", 8, 384));
+    writer.add_instrument(make_instrument_fade("ghost_lead", 8, 384));
 
     // 9. Reverb sim
     let reverb_data = synthesizers::generate_reverb_sim();
-    samples.push(("reverb_sim", reverb_data));
-    let reverb_sample = make_sample("Reverb", sample_rate);
+    samples.push(("reverb", reverb_data));
+    let reverb_sample = make_sample("reverb", sample_rate);
     writer.add_sample(reverb_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument_continue("Reverb", 9));
+    writer.add_instrument(make_instrument_continue("reverb", 9));
 
     // 10. Wind atmosphere
     let wind_data = synthesizers::generate_atmos_wind();
-    samples.push(("atmos_wind", wind_data));
-    let wind_sample = make_sample("Wind", sample_rate);
+    samples.push(("wind", wind_data));
+    let wind_sample = make_sample("wind", sample_rate);
     writer.add_sample(wind_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument_continue("Wind", 10));
+    writer.add_instrument(make_instrument_continue("wind", 10));
 
     // 11. Dark hit (accent)
     let hit_data = synthesizers::generate_hit_dark();
-    samples.push(("hit_dark", hit_data));
-    let hit_sample = make_sample("Dark Hit", sample_rate);
+    samples.push(("dark_hit", hit_data));
+    let hit_sample = make_sample("dark_hit", sample_rate);
     writer.add_sample(hit_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument_continue("Hit", 11));
+    writer.add_instrument(make_instrument_continue("dark_hit", 11));
 
     // 12. Echo lead (counter melody)
     let echo_data = synthesizers::generate_lead_echo();
-    samples.push(("lead_echo", echo_data));
-    let echo_sample = make_sample("Echo Lead", sample_rate);
+    samples.push(("echo_lead", echo_data));
+    let echo_sample = make_sample("echo_lead", sample_rate);
     writer.add_sample(echo_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument_fade("Echo", 12, 384));
+    writer.add_instrument(make_instrument_fade("echo_lead", 12, 384));
 
     // Create patterns (6 patterns, 64 rows each)
     // Pattern 0: Intro (emergence)

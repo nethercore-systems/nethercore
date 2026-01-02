@@ -131,107 +131,107 @@ pub fn generate_storm_it() -> (Vec<u8>, Vec<(&'static str, Vec<i16>)>) {
     // 1. Kick - transient + sine sweep
     let kick_data = synthesizers::generate_kick_dnb();
     samples.push(("kick_dnb", kick_data));
-    let kick_sample = make_sample("Kick DnB", sample_rate);
+    let kick_sample = make_sample("kick_dnb", sample_rate);
     writer.add_sample(kick_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument("Kick", 1));
+    writer.add_instrument(make_instrument("kick_dnb", 1));
 
     // 2. Snare - layered
     let snare_data = synthesizers::generate_snare_dnb();
     samples.push(("snare_dnb", snare_data));
-    let snare_sample = make_sample("Snare DnB", sample_rate);
+    let snare_sample = make_sample("snare_dnb", sample_rate);
     writer.add_sample(snare_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument("Snare", 2));
+    writer.add_instrument(make_instrument("snare_dnb", 2));
 
     // 3. Hihat closed
     let hh_closed_data = synthesizers::generate_hihat_closed();
-    samples.push(("hihat_closed", hh_closed_data));
-    let hh_sample = make_sample("HH Closed", sample_rate);
+    samples.push(("hh_closed", hh_closed_data));
+    let hh_sample = make_sample("hh_closed", sample_rate);
     writer.add_sample(hh_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument("HH Closed", 3));
+    writer.add_instrument(make_instrument("hh_closed", 3));
 
     // 4. Hihat open
     let hh_open_data = synthesizers::generate_hihat_open();
-    samples.push(("hihat_open", hh_open_data));
-    let hho_sample = make_sample("HH Open", sample_rate);
+    samples.push(("hh_open", hh_open_data));
+    let hho_sample = make_sample("hh_open", sample_rate);
     writer.add_sample(hho_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument("HH Open", 4));
+    writer.add_instrument(make_instrument("hh_open", 4));
 
     // 5. Break slice
     let break_data = synthesizers::generate_break_slice();
     samples.push(("break_slice", break_data));
-    let break_sample = make_sample("Break Slice", sample_rate);
+    let break_sample = make_sample("break_slice", sample_rate);
     writer.add_sample(break_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument("Break", 5));
+    writer.add_instrument(make_instrument("break_slice", 5));
 
-    // 6. Cymbal
+    // 6. Cymbal (storm-specific)
     let cymbal_data = synthesizers::generate_cymbal();
-    samples.push(("cymbal", cymbal_data));
-    let cymbal_sample = make_sample("Cymbal", sample_rate);
+    samples.push(("cymbal_storm", cymbal_data));
+    let cymbal_sample = make_sample("cymbal_storm", sample_rate);
     writer.add_sample(cymbal_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument("Cymbal", 6));
+    writer.add_instrument(make_instrument("cymbal_storm", 6));
 
     // 7. Sub bass
     let sub_data = synthesizers::generate_bass_sub_dnb();
-    samples.push(("bass_sub", sub_data));
-    let sub_sample = make_sample("Sub Bass", sample_rate);
+    samples.push(("sub_bass", sub_data));
+    let sub_sample = make_sample("sub_bass", sample_rate);
     writer.add_sample(sub_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument("Sub", 7));
+    writer.add_instrument(make_instrument("sub_bass", 7));
 
     // 8. Reese bass
     let reese_data = synthesizers::generate_bass_reese();
-    samples.push(("bass_reese", reese_data));
-    let reese_sample = make_sample("Reese Bass", sample_rate);
+    samples.push(("reese_bass", reese_data));
+    let reese_sample = make_sample("reese_bass", sample_rate);
     writer.add_sample(reese_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument("Reese", 8));
+    writer.add_instrument(make_instrument("reese_bass", 8));
 
     // 9. Wobble bass
     let wobble_data = synthesizers::generate_bass_wobble();
-    samples.push(("bass_wobble", wobble_data));
-    let wobble_sample = make_sample("Wobble Bass", sample_rate);
+    samples.push(("wobble_bass", wobble_data));
+    let wobble_sample = make_sample("wobble_bass", sample_rate);
     writer.add_sample(wobble_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument("Wobble", 9));
+    writer.add_instrument(make_instrument("wobble_bass", 9));
 
     // 10. Dark pad
     let pad_data = synthesizers::generate_pad_dark();
-    samples.push(("pad_dark", pad_data));
-    let pad_sample = make_sample("Dark Pad", sample_rate);
+    samples.push(("dark_pad", pad_data));
+    let pad_sample = make_sample("dark_pad", sample_rate);
     writer.add_sample(pad_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument_continue("Pad", 10));
+    writer.add_instrument(make_instrument_continue("dark_pad", 10));
 
     // 11. Lead stab
     let stab_data = synthesizers::generate_lead_stab();
     samples.push(("lead_stab", stab_data));
-    let stab_sample = make_sample("Lead Stab", sample_rate);
+    let stab_sample = make_sample("lead_stab", sample_rate);
     writer.add_sample(stab_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument("Stab", 11));
+    writer.add_instrument(make_instrument("lead_stab", 11));
 
     // 12. Lead main
     let lead_data = synthesizers::generate_lead_main();
     samples.push(("lead_main", lead_data));
-    let lead_sample = make_sample("Lead Main", sample_rate);
+    let lead_sample = make_sample("lead_main", sample_rate);
     writer.add_sample(lead_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument("Lead", 12));
+    writer.add_instrument(make_instrument("lead_main", 12));
 
     // 13. FX Riser
     let riser_data = synthesizers::generate_fx_riser();
     samples.push(("fx_riser", riser_data));
-    let riser_sample = make_sample("FX Riser", sample_rate);
+    let riser_sample = make_sample("fx_riser", sample_rate);
     writer.add_sample(riser_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument("Riser", 13));
+    writer.add_instrument(make_instrument("fx_riser", 13));
 
     // 14. FX Impact
     let impact_data = synthesizers::generate_fx_impact();
     samples.push(("fx_impact", impact_data));
-    let impact_sample = make_sample("FX Impact", sample_rate);
+    let impact_sample = make_sample("fx_impact", sample_rate);
     writer.add_sample(impact_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument("Impact", 14));
+    writer.add_instrument(make_instrument("fx_impact", 14));
 
     // 15. Atmosphere
     let atmos_data = synthesizers::generate_atmos_storm();
-    samples.push(("atmos_storm", atmos_data));
-    let atmos_sample = make_sample("Atmosphere", sample_rate);
+    samples.push(("atmosphere", atmos_data));
+    let atmos_sample = make_sample("atmosphere", sample_rate);
     writer.add_sample(atmos_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument_continue("Atmos", 15));
+    writer.add_instrument(make_instrument_continue("atmosphere", 15));
 
     // ========================================================================
     // Create 12 unique patterns for ~90 second track

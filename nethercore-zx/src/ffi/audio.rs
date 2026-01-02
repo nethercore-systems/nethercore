@@ -10,6 +10,8 @@ use anyhow::Result;
 use tracing::{info, warn};
 use wasmtime::{Caller, Linker};
 
+use zx_common::TrackerFormat;
+
 use crate::audio::Sound;
 use crate::state::{MAX_CHANNELS, tracker_flags};
 use crate::tracker::{is_tracker_handle, raw_tracker_handle};
@@ -443,18 +445,6 @@ fn rom_tracker(mut caller: Caller<'_, ZXGameContext>, id_ptr: u32, id_len: u32) 
         }
     };
 
-    // Parse the tracker data (auto-detects NCXM minimal or standard XM format)
-    let module = match nether_xm::parse_xm_minimal(&packed_tracker.pattern_data) {
-        Ok(m) => m,
-        Err(e) => {
-            warn!(
-                "rom_tracker: failed to parse tracker data for '{}': {:?}",
-                id, e
-            );
-            return 0;
-        }
-    };
-
     // Resolve instrument names to sound handles
     // Auto-load samples from data pack if they're not already loaded
     let mut sound_handles = Vec::new();
@@ -503,8 +493,37 @@ fn rom_tracker(mut caller: Caller<'_, ZXGameContext>, id_ptr: u32, id_len: u32) 
         sound_handles.push(sound_handle);
     }
 
-    // Load the module into the tracker engine
-    let handle = ctx.ffi.tracker_engine.load_xm_module(module, sound_handles);
+    // Parse and load the tracker based on format
+    let handle = match packed_tracker.format {
+        TrackerFormat::Xm => {
+            // Parse XM/NCXM format
+            let module = match nether_xm::parse_xm_minimal(&packed_tracker.pattern_data) {
+                Ok(m) => m,
+                Err(e) => {
+                    warn!(
+                        "rom_tracker: failed to parse XM tracker data for '{}': {:?}",
+                        id, e
+                    );
+                    return 0;
+                }
+            };
+            ctx.ffi.tracker_engine.load_xm_module(module, sound_handles)
+        }
+        TrackerFormat::It => {
+            // Parse IT/NCIT format
+            let module = match nether_it::parse_it_minimal(&packed_tracker.pattern_data) {
+                Ok(m) => m,
+                Err(e) => {
+                    warn!(
+                        "rom_tracker: failed to parse IT tracker data for '{}': {:?}",
+                        id, e
+                    );
+                    return 0;
+                }
+            };
+            ctx.ffi.tracker_engine.load_it_module(module, sound_handles)
+        }
+    };
 
     info!("Loaded tracker '{}' as handle {}", id, handle);
     handle

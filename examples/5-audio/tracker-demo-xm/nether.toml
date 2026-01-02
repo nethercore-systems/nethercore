@@ -1,6 +1,6 @@
 [game]
-id = "tracker-demo"
-title = "Tracker Demo"
+id = "tracker-demo-xm"
+title = "Tracker Demo (XM)"
 author = "Nethercore Examples"
 version = "1.0.0"
 description = "XM tracker music playback with three songs: Funky Jazz, Eurobeat, and Synthwave"

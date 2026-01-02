@@ -1,48 +1,9 @@
 #![no_std]
 #![no_main]
 
-extern "C" {
-    // Camera functions
-    fn camera_set(eye_x: f32, eye_y: f32, eye_z: f32, center_x: f32, center_y: f32, center_z: f32);
-    fn camera_fov(fov_degrees: f32);
-
-    // Init config
-    fn set_clear_color(color: u32);
-
-    // Input
-    fn button_held(player: u32, button: u32) -> u32;
-    fn button_pressed(player: u32, button: u32) -> u32;
-
-    // Drawing
-    fn set_color(color: u32);
-    fn draw_text(text_ptr: *const u8, text_len: u32, x: f32, y: f32, scale: f32);
-    fn draw_rect(x: f32, y: f32, width: f32, height: f32);
-
-    // Audio
-    fn load_sound(data_ptr: *const i16, byte_len: u32) -> u32;
-    fn play_sound(sound: u32, volume: f32, pan: f32);
-    fn channel_play(channel: u32, sound: u32, volume: f32, pan: f32, looping: u32);
-    fn channel_set(channel: u32, volume: f32, pan: f32);
-    fn channel_stop(channel: u32);
-}
-
-// Button constants
-pub mod button {
-    pub const UP: u32 = 0;
-    pub const DOWN: u32 = 1;
-    pub const LEFT: u32 = 2;
-    pub const RIGHT: u32 = 3;
-    pub const A: u32 = 4;
-    pub const B: u32 = 5;
-    pub const X: u32 = 6;
-    pub const Y: u32 = 7;
-    pub const L1: u32 = 8;
-    pub const R1: u32 = 9;
-    pub const L3: u32 = 10;
-    pub const R3: u32 = 11;
-    pub const START: u32 = 12;
-    pub const SELECT: u32 = 13;
-}
+#[path = "../../../../include/zx.rs"]
+mod ffi;
+use ffi::*;
 
 // Global state
 static mut BEEP_SOUND: u32 = 0;

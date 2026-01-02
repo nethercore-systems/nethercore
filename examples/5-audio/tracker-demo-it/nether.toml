@@ -1,6 +1,6 @@
 [game]
-id = "it-tracker-demo"
-title = "IT Tracker Demo"
+id = "tracker-demo-it"
+title = "Tracker Demo (IT)"
 author = "Nethercore Examples"
 version = "1.0.0"
 description = "IT tracker music playback with three songs: Nether Dawn (Orchestral), Nether Mist (Ambient), Nether Storm (DnB)"

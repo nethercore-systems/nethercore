@@ -50,6 +50,7 @@ pub use formats::{
     PackedSound,
     PackedTexture,
     PackedTracker,
+    TrackerFormat,
     PlatformBoneKeyframe,
     // ROM format constants (from nethercore_shared)
     RomFormat,

@@ -1,9 +1,9 @@
 [package]
-name = "it-tracker-demo-split"
+name = "tracker-demo-it"
 version = "0.1.0"
 edition = "2021"
 publish = false
-description = "IT tracker demo with split sample assets for Nethercore ZX"
+description = "IT tracker music playback demo for Nethercore ZX"
 
 [lib]
 crate-type = ["cdylib"]

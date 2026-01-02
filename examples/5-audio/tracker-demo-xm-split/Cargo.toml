@@ -1,5 +1,5 @@
 [package]
-name = "tracker-demo-split"
+name = "tracker-demo-xm-split"
 version = "0.1.0"
 edition = "2021"
 description = "XM tracker music with split sample workflow"

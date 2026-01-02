@@ -114,8 +114,8 @@ pub extern "C" fn update() {
         // Camera control with right stick
         let rx = right_stick_x(0);
         let ry = right_stick_y(0);
-        PLAYER_YAW += rx * 2.0;
-        PLAYER_PITCH -= ry * 1.5;
+        PLAYER_YAW -= rx * 2.0;  // Stick right = look right
+        PLAYER_PITCH += ry * 1.5; // Stick up = look up
         if PLAYER_PITCH > 45.0 { PLAYER_PITCH = 45.0; }
         if PLAYER_PITCH < -45.0 { PLAYER_PITCH = -45.0; }
 

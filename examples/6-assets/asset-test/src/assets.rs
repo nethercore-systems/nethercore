@@ -9,12 +9,6 @@
 static CUBE_MESH: &[u8] = include_bytes!("../../../assets/cube.nczxmesh");
 static CHECKERBOARD_TEX: &[u8] = include_bytes!("../../../assets/checkerboard.nczxtex");
 
-// FFI functions for loading assets
-extern "C" {
-    fn rom_mesh(data_ptr: u32, data_len: u32) -> u32;
-    fn rom_texture(data_ptr: u32, data_len: u32) -> u32;
-}
-
 /// Loaded asset handles
 #[derive(Debug, Clone, Copy)]
 pub struct Assets {

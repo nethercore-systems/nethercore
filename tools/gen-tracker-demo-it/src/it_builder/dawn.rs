@@ -25,115 +25,115 @@ pub fn generate_dawn_it() -> (Vec<u8>, Vec<(&'static str, Vec<i16>)>) {
 
     // 1. Cello (strings low)
     let cello_data = synthesizers::generate_strings_cello();
-    samples.push(("strings_cello", cello_data));
-    let cello_sample = make_sample("Cello", sample_rate);
+    samples.push(("cello", cello_data));
+    let cello_sample = make_sample("cello", sample_rate);
     writer.add_sample(cello_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument_continue("Cello", 1));
+    writer.add_instrument(make_instrument_continue("cello", 1));
 
     // 2. Viola (strings mid)
     let viola_data = synthesizers::generate_strings_viola();
-    samples.push(("strings_viola", viola_data));
-    let viola_sample = make_sample("Viola", sample_rate);
+    samples.push(("viola", viola_data));
+    let viola_sample = make_sample("viola", sample_rate);
     writer.add_sample(viola_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument_continue("Viola", 2));
+    writer.add_instrument(make_instrument_continue("viola", 2));
 
     // 3. Violin (strings high)
     let violin_data = synthesizers::generate_strings_violin();
-    samples.push(("strings_violin", violin_data));
-    let violin_sample = make_sample("Violin", sample_rate);
+    samples.push(("violin", violin_data));
+    let violin_sample = make_sample("violin", sample_rate);
     writer.add_sample(violin_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument_continue("Violin", 3));
+    writer.add_instrument(make_instrument_continue("violin", 3));
 
     // 4. French horn (brass low)
     let horn_data = synthesizers::generate_brass_horn();
-    samples.push(("brass_horn", horn_data));
-    let horn_sample = make_sample("Horn", sample_rate);
+    samples.push(("horn", horn_data));
+    let horn_sample = make_sample("horn", sample_rate);
     writer.add_sample(horn_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument("Horn", 4));
+    writer.add_instrument(make_instrument("horn", 4));
 
     // 5. Trumpet (brass high)
     let trumpet_data = synthesizers::generate_brass_trumpet();
-    samples.push(("brass_trumpet", trumpet_data));
-    let trumpet_sample = make_sample("Trumpet", sample_rate);
+    samples.push(("trumpet", trumpet_data));
+    let trumpet_sample = make_sample("trumpet", sample_rate);
     writer.add_sample(trumpet_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument("Trumpet", 5));
+    writer.add_instrument(make_instrument("trumpet", 5));
 
     // 6. Flute
     let flute_data = synthesizers::generate_flute();
     samples.push(("flute", flute_data));
-    let flute_sample = make_sample("Flute", sample_rate);
+    let flute_sample = make_sample("flute", sample_rate);
     writer.add_sample(flute_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument("Flute", 6));
+    writer.add_instrument(make_instrument("flute", 6));
 
     // 7. Timpani
     let timpani_data = synthesizers::generate_timpani();
     samples.push(("timpani", timpani_data));
-    let timpani_sample = make_sample("Timpani", sample_rate);
+    let timpani_sample = make_sample("timpani", sample_rate);
     writer.add_sample(timpani_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument("Timpani", 7));
+    writer.add_instrument(make_instrument("timpani", 7));
 
     // 8. Snare (orchestral)
     let snare_data = synthesizers::generate_snare_orch();
-    samples.push(("snare_orch", snare_data));
-    let snare_sample = make_sample("Snare Roll", sample_rate);
+    samples.push(("snare_roll", snare_data));
+    let snare_sample = make_sample("snare_roll", sample_rate);
     writer.add_sample(snare_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument("Snare", 8));
+    writer.add_instrument(make_instrument("snare_roll", 8));
 
     // 9. Cymbal crash
     let cymbal_data = synthesizers::generate_cymbal_crash();
     samples.push(("cymbal_crash", cymbal_data));
-    let cymbal_sample = make_sample("Cymbal", sample_rate);
+    let cymbal_sample = make_sample("cymbal_crash", sample_rate);
     writer.add_sample(cymbal_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument("Cymbal", 9));
+    writer.add_instrument(make_instrument("cymbal_crash", 9));
 
     // 10. Harp
     let harp_data = synthesizers::generate_harp_gliss();
-    samples.push(("harp_gliss", harp_data));
-    let harp_sample = make_sample("Harp", sample_rate);
+    samples.push(("harp", harp_data));
+    let harp_sample = make_sample("harp", sample_rate);
     writer.add_sample(harp_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument("Harp", 10));
+    writer.add_instrument(make_instrument("harp", 10));
 
     // 11. Choir Ah
     let choir_ah_data = synthesizers::generate_choir_ah();
     samples.push(("choir_ah", choir_ah_data));
-    let choir_ah_sample = make_sample("Choir Ah", sample_rate);
+    let choir_ah_sample = make_sample("choir_ah", sample_rate);
     writer.add_sample(choir_ah_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument_fade("Choir Ah", 11, 768));
+    writer.add_instrument(make_instrument_fade("choir_ah", 11, 768));
 
     // 12. Choir Oh
     let choir_oh_data = synthesizers::generate_choir_oh();
     samples.push(("choir_oh", choir_oh_data));
-    let choir_oh_sample = make_sample("Choir Oh", sample_rate);
+    let choir_oh_sample = make_sample("choir_oh", sample_rate);
     writer.add_sample(choir_oh_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument_fade("Choir Oh", 12, 768));
+    writer.add_instrument(make_instrument_fade("choir_oh", 12, 768));
 
     // 13. Piano
     let piano_data = synthesizers::generate_piano();
     samples.push(("piano", piano_data));
-    let piano_sample = make_sample("Piano", sample_rate);
+    let piano_sample = make_sample("piano", sample_rate);
     writer.add_sample(piano_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument("Piano", 13));
+    writer.add_instrument(make_instrument("piano", 13));
 
     // 14. Epic bass
     let bass_data = synthesizers::generate_bass_epic();
-    samples.push(("bass_epic", bass_data));
-    let bass_sample = make_sample("Epic Bass", sample_rate);
+    samples.push(("epic_bass", bass_data));
+    let bass_sample = make_sample("epic_bass", sample_rate);
     writer.add_sample(bass_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument("Bass", 14));
+    writer.add_instrument(make_instrument("epic_bass", 14));
 
     // 15. Orchestra pad
     let pad_data = synthesizers::generate_pad_orchestra();
-    samples.push(("pad_orchestra", pad_data));
-    let pad_sample = make_sample("Pad", sample_rate);
+    samples.push(("pad", pad_data));
+    let pad_sample = make_sample("pad", sample_rate);
     writer.add_sample(pad_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument_continue("Pad", 15));
+    writer.add_instrument(make_instrument_continue("pad", 15));
 
     // 16. Epic FX
     let fx_data = synthesizers::generate_fx_epic();
     samples.push(("fx_epic", fx_data));
-    let fx_sample = make_sample("FX Epic", sample_rate);
+    let fx_sample = make_sample("fx_epic", sample_rate);
     writer.add_sample(fx_sample, &samples.last().unwrap().1);
-    writer.add_instrument(make_instrument("FX", 16));
+    writer.add_instrument(make_instrument("fx_epic", 16));
 
     // Create patterns (6 patterns, 64 rows each)
     // Pattern 0: Intro
