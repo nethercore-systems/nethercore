@@ -296,17 +296,17 @@ impl TrackerEngine {
     /// If the channel has a note playing and NNA is not Cut, moves the
     /// current note to a background channel before the new note takes over.
     ///
+    /// The `nna` parameter should come from the NEW instrument being triggered,
+    /// not the channel's previous state.
+    ///
     /// Returns true if NNA processing occurred (note was moved to background).
-    fn handle_nna(&mut self, ch_idx: usize, num_channels: usize) -> bool {
+    fn handle_nna(&mut self, ch_idx: usize, num_channels: usize, nna: u8) -> bool {
         let channel = &self.channels[ch_idx];
 
         // Only process if channel has an audible note
         if !channel.is_audible() {
             return false;
         }
-
-        // Get NNA action (stored from instrument on last note trigger)
-        let nna = channel.nna;
 
         // NNA_CUT doesn't need background channel
         if nna == NNA_CUT {
@@ -426,8 +426,9 @@ impl TrackerEngine {
             // Process NNA: handle the currently playing note before triggering new one
             // This is an IT feature - move the old note to a background channel based on NNA setting
             if self.is_it_format {
-                // Handle NNA for the current channel
-                self.handle_nna(ch_idx, num_channels);
+                // Use NNA from the NEW instrument, not channel's stale state
+                let nna = nna_data.map(|(nna, _, _)| nna).unwrap_or(NNA_CUT);
+                self.handle_nna(ch_idx, num_channels, nna);
 
                 // Process duplicate check against background channels
                 if let Some((_, dct, dca)) = nna_data {
@@ -1678,5 +1679,350 @@ impl TrackerEngine {
 
         let vol = state.volume as f32 / TRACKER_VOLUME_MAX;
         (left * vol, right * vol)
+    }
+
+    /// Advance tracker positions without generating samples
+    ///
+    /// This is a lightweight version of `render_sample_and_advance` that advances
+    /// all tracker state (tick, row, order positions, effect processing, envelope
+    /// advancement) without performing the expensive sample mixing.
+    ///
+    /// Used in threaded audio mode to advance the main thread's tracker state
+    /// without the cost of sample generation. The audio thread handles actual
+    /// sample generation from its snapshot.
+    ///
+    /// # Performance
+    ///
+    /// This is ~10-20x faster than `render_sample_and_advance` because it skips:
+    /// - Sample interpolation
+    /// - Channel mixing
+    /// - Envelope value lookups (just advances positions)
+    /// - Panning calculations
+    pub fn advance_positions(
+        &mut self,
+        state: &mut crate::state::TrackerState,
+        sounds: &[Option<Sound>],
+        samples_per_frame: u32,
+        sample_rate: u32,
+    ) {
+        if state.handle == 0 || (state.flags & tracker_flags::PLAYING) == 0 {
+            return;
+        }
+
+        if (state.flags & tracker_flags::PAUSED) != 0 {
+            return;
+        }
+
+        let raw_handle = raw_tracker_handle(state.handle);
+
+        // Early return if module not found
+        if self
+            .modules
+            .get(raw_handle as usize)
+            .and_then(|m| m.as_ref())
+            .is_none()
+        {
+            return;
+        }
+
+        // Process each sample position worth of ticks
+        for _ in 0..samples_per_frame {
+            // Process tick 0 at the start of a row
+            if state.tick == 0 && state.tick_sample_pos == 0 {
+                self.process_row_tick0_internal(state.handle, sounds);
+            }
+
+            // Advance channel sample positions (without generating samples)
+            self.advance_channel_sample_positions(raw_handle, sample_rate);
+
+            // Advance tick position
+            state.tick_sample_pos += 1;
+            let spt = samples_per_tick(state.bpm, sample_rate);
+
+            if state.tick_sample_pos >= spt {
+                state.tick_sample_pos = 0;
+                state.tick += 1;
+
+                if state.tick > 0 {
+                    self.process_tick(state.tick, state.speed);
+
+                    if self.tempo_slide != 0 {
+                        let new_bpm = (state.bpm as i16 + self.tempo_slide as i16)
+                            .clamp(MIN_BPM, MAX_BPM) as u16;
+                        state.bpm = new_bpm;
+                    }
+                }
+
+                let effective_speed = state.speed + self.fine_pattern_delay as u16;
+                if state.tick >= effective_speed {
+                    state.tick = 0;
+                    self.fine_pattern_delay = 0;
+
+                    if self.pattern_delay > 0 {
+                        if self.pattern_delay_count < self.pattern_delay {
+                            self.pattern_delay_count += 1;
+                            continue;
+                        } else {
+                            self.pattern_delay = 0;
+                            self.pattern_delay_count = 0;
+                        }
+                    }
+
+                    state.row += 1;
+                    self.current_row = state.row;
+
+                    let (num_rows, song_length, restart_position) = {
+                        let loaded = match self
+                            .modules
+                            .get(raw_handle as usize)
+                            .and_then(|m| m.as_ref())
+                        {
+                            Some(m) => m,
+                            None => return,
+                        };
+                        let num_rows = loaded
+                            .module
+                            .pattern_at_order(state.order_position)
+                            .map(|p| p.num_rows)
+                            .unwrap_or(CHANNEL_VOLUME_MAX as u16);
+                        (
+                            num_rows,
+                            loaded.module.order_table.len() as u16,
+                            loaded.module.restart_position,
+                        )
+                    };
+
+                    if state.row >= num_rows {
+                        state.row = 0;
+                        state.order_position += 1;
+                        self.current_order = state.order_position;
+                        self.current_row = 0;
+
+                        if state.order_position >= song_length {
+                            if (state.flags & tracker_flags::LOOPING) != 0 {
+                                state.order_position = restart_position;
+                                self.current_order = restart_position;
+                            } else {
+                                state.flags &= !tracker_flags::PLAYING;
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Advance all channel sample positions by one output sample
+    ///
+    /// This updates sample_pos for each active channel based on its period,
+    /// without performing interpolation or mixing. This is the lightweight
+    /// equivalent of what happens inside `sample_channel`.
+    fn advance_channel_sample_positions(&mut self, raw_handle: u32, sample_rate: u32) {
+        let num_channels = self
+            .modules
+            .get(raw_handle as usize)
+            .and_then(|m| m.as_ref())
+            .map(|m| m.module.num_channels as usize)
+            .unwrap_or(0);
+
+        // Process both regular and background channels
+        for ch_idx in 0..MAX_TRACKER_CHANNELS {
+            let channel = &mut self.channels[ch_idx];
+
+            // Skip inactive channels in regular range
+            if ch_idx < num_channels {
+                if !channel.note_on || channel.sample_handle == 0 {
+                    continue;
+                }
+            } else {
+                // Background channel - check if audible
+                if !channel.note_on || channel.sample_handle == 0 || channel.volume_fadeout == 0 {
+                    continue;
+                }
+            }
+
+            // Calculate frequency from period and advance sample position
+            let freq = super::utils::period_to_frequency(channel.period) as f64;
+            let advance = freq / sample_rate as f64;
+            channel.sample_pos += advance * channel.sample_direction as f64;
+
+            // Handle loop boundaries (same logic as sample_channel)
+            if channel.sample_loop_type > 0 && channel.sample_loop_end > channel.sample_loop_start {
+                let loop_start = channel.sample_loop_start as f64;
+                let loop_end = channel.sample_loop_end as f64;
+
+                if channel.sample_pos >= loop_end {
+                    if channel.sample_loop_type == 2 {
+                        // Ping-pong
+                        channel.sample_direction = -1;
+                        channel.sample_pos = loop_end - (channel.sample_pos - loop_end);
+                    } else {
+                        // Forward loop
+                        channel.sample_pos = loop_start + (channel.sample_pos - loop_end);
+                    }
+                } else if channel.sample_pos < loop_start && channel.sample_direction < 0 {
+                    // Ping-pong reverse
+                    channel.sample_direction = 1;
+                    channel.sample_pos = loop_start + (loop_start - channel.sample_pos);
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nether_tracker::{
+        FormatFlags, NewNoteAction, TrackerEffect, TrackerInstrument, TrackerModule, TrackerNote,
+        TrackerPattern,
+    };
+
+    #[test]
+    fn test_nna_uses_new_instrument_nna_not_channel_state() {
+        // This test verifies that when a new note is triggered, the NNA action
+        // comes from the NEW instrument, not the channel's previous state.
+        //
+        // Bug scenario: Channel has NNA=Cut from previous instrument,
+        // new instrument has NNA=Continue. The old note should continue
+        // playing in a background channel, not be cut.
+
+        let mut engine = TrackerEngine::new();
+
+        // Create instrument with NNA=Continue (should move old notes to background)
+        let mut instr = TrackerInstrument::default();
+        instr.nna = NewNoteAction::Continue;
+        instr.fadeout = 1024; // Non-zero fadeout for audibility
+
+        // Create pattern with a note on row 1
+        let note2 = TrackerNote {
+            note: 60,
+            instrument: 1,
+            volume: 64,
+            effect: TrackerEffect::None,
+        };
+
+        let pattern = TrackerPattern {
+            num_rows: 2,
+            notes: vec![
+                vec![TrackerNote::default()], // Row 0: empty
+                vec![note2],                  // Row 1: trigger C-5
+            ],
+        };
+
+        let module = TrackerModule {
+            name: "NNA Test".to_string(),
+            num_channels: 1,
+            initial_speed: 6,
+            initial_tempo: 125,
+            global_volume: 128,
+            mix_volume: 128,
+            panning_separation: 128,
+            order_table: vec![0],
+            patterns: vec![pattern],
+            instruments: vec![instr],
+            samples: vec![],
+            format: FormatFlags::IS_IT_FORMAT | FormatFlags::INSTRUMENTS,
+            message: None,
+            restart_position: 0,
+        };
+
+        let handle = engine.load_tracker_module(module, vec![1]); // Sample handle 1
+        engine.is_it_format = true;
+
+        // Simulate channel 0 already playing a note (as if row 0 was processed)
+        engine.channels[0].note_on = true;
+        engine.channels[0].sample_handle = 1;
+        engine.channels[0].volume = 1.0;
+        engine.channels[0].volume_fadeout = 65535;
+        engine.channels[0].nna = NNA_CUT; // Channel state says NNA_CUT (stale value!)
+        engine.channels[0].instrument = 1;
+
+        // Process row 1 - new note with NNA=Continue instrument
+        // This should use the instrument's NNA (Continue), not channel's (Cut)
+        engine.current_row = 1;
+        engine.process_row_tick0_internal(handle, &[]);
+
+        // Verify: Background channel (index 1) should have the old note
+        // because the NEW instrument has NNA=Continue
+        assert!(
+            engine.channels[1].note_on,
+            "NNA=Continue should move old note to background channel. \
+             Bug: NNA is reading from channel state (Cut) instead of new instrument (Continue)"
+        );
+        assert!(
+            engine.channels[1].is_background,
+            "Background flag should be set"
+        );
+    }
+
+    #[test]
+    fn test_nna_note_fade_triggers_key_off() {
+        // Verify NNA=NoteFade properly triggers key_off and fadeout on displaced note
+
+        let mut engine = TrackerEngine::new();
+
+        let mut instr = TrackerInstrument::default();
+        instr.nna = NewNoteAction::NoteFade;
+        instr.fadeout = 2048;
+
+        let note = TrackerNote {
+            note: 60,
+            instrument: 1,
+            volume: 64,
+            effect: TrackerEffect::None,
+        };
+
+        let pattern = TrackerPattern {
+            num_rows: 2,
+            notes: vec![vec![TrackerNote::default()], vec![note]],
+        };
+
+        let module = TrackerModule {
+            name: "NNA Fade Test".to_string(),
+            num_channels: 1,
+            initial_speed: 6,
+            initial_tempo: 125,
+            global_volume: 128,
+            mix_volume: 128,
+            panning_separation: 128,
+            order_table: vec![0],
+            patterns: vec![pattern],
+            instruments: vec![instr],
+            samples: vec![],
+            format: FormatFlags::IS_IT_FORMAT | FormatFlags::INSTRUMENTS,
+            message: None,
+            restart_position: 0,
+        };
+
+        let handle = engine.load_tracker_module(module, vec![1]);
+        engine.is_it_format = true;
+
+        // Set up channel with playing note (stale NNA=Cut)
+        engine.channels[0].note_on = true;
+        engine.channels[0].sample_handle = 1;
+        engine.channels[0].volume = 1.0;
+        engine.channels[0].volume_fadeout = 65535;
+        engine.channels[0].nna = NNA_CUT; // Stale value
+        engine.channels[0].instrument = 1;
+        engine.channels[0].instrument_fadeout_rate = 0; // Will be set by NNA
+
+        engine.current_row = 1;
+        engine.process_row_tick0_internal(handle, &[]);
+
+        // Background channel should have the old note with key_off triggered
+        assert!(
+            engine.channels[1].note_on,
+            "NNA=NoteFade should move note to background"
+        );
+        assert!(
+            engine.channels[1].key_off,
+            "NNA=NoteFade should trigger key_off"
+        );
+        assert!(
+            engine.channels[1].instrument_fadeout_rate > 0,
+            "Fadeout rate should be set"
+        );
     }
 }

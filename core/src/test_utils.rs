@@ -6,8 +6,8 @@ use wasmtime::Linker;
 use winit::window::Window;
 
 use crate::console::{
-    Audio, Console, ConsoleInput, ConsoleResourceManager, ConsoleSpecs, Graphics, RawInput,
-    SoundHandle,
+    Audio, AudioGenerator, Console, ConsoleInput, ConsoleResourceManager, ConsoleSpecs, Graphics,
+    RawInput, SoundHandle,
 };
 use crate::wasm::WasmGameContext;
 
@@ -40,6 +40,35 @@ impl Audio for TestAudio {
     }
     fn stop(&mut self, _handle: SoundHandle) {
         self.stop_count += 1;
+    }
+}
+
+/// Test audio generator (no-op, but compatible with TestAudio)
+pub struct TestAudioGenerator;
+
+impl AudioGenerator for TestAudioGenerator {
+    type RollbackState = ();
+    type State = ();
+    type Audio = TestAudio;
+
+    fn generate_frame(
+        _rollback_state: &mut Self::RollbackState,
+        _state: &mut Self::State,
+        _tick_rate: u32,
+        _sample_rate: u32,
+        _output: &mut Vec<f32>,
+    ) {
+        // No-op: output remains empty
+    }
+
+    fn process_audio(
+        _rollback_state: &mut Self::RollbackState,
+        _state: &mut Self::State,
+        _audio: &mut Self::Audio,
+        _tick_rate: u32,
+        _sample_rate: u32,
+    ) {
+        // No-op: no audio to process
     }
 }
 
@@ -93,7 +122,7 @@ impl Console for TestConsole {
     type State = ();
     type RollbackState = ();
     type ResourceManager = TestResourceManager;
-    type AudioGenerator = ();
+    type AudioGenerator = TestAudioGenerator;
 
     fn specs() -> &'static ConsoleSpecs {
         &ConsoleSpecs {

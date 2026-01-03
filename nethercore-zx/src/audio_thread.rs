@@ -26,12 +26,12 @@
 //! audio.send_snapshot(snapshot);
 //! ```
 
-use std::sync::mpsc::{self, RecvTimeoutError, SyncSender, TrySendError};
+use std::sync::mpsc::{self, SyncSender, TrySendError};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-use ringbuf::traits::Producer;
+use ringbuf::traits::{Observer, Producer};
 use ringbuf::HeapProd;
 use tracing::{debug, error, trace, warn};
 
@@ -100,8 +100,8 @@ impl AudioGenSnapshot {
 /// Returned from `AudioGenThread::spawn()`. Use this to send snapshots
 /// to the audio thread and to shut down cleanly.
 pub struct AudioGenHandle {
-    /// Sender for snapshots to audio thread
-    tx: SyncSender<AudioGenSnapshot>,
+    /// Sender for snapshots to audio thread (Option to allow explicit drop before join)
+    tx: Option<SyncSender<AudioGenSnapshot>>,
 
     /// Thread join handle
     handle: Option<JoinHandle<()>>,
@@ -114,7 +114,11 @@ impl AudioGenHandle {
     /// and a warning is logged. This prevents the main thread from
     /// blocking on audio generation.
     pub fn send_snapshot(&self, snapshot: AudioGenSnapshot) -> bool {
-        match self.tx.try_send(snapshot) {
+        let Some(ref tx) = self.tx else {
+            warn!("Audio thread sender already dropped");
+            return false;
+        };
+        match tx.try_send(snapshot) {
             Ok(()) => true,
             Err(TrySendError::Full(_)) => {
                 debug!("Audio snapshot channel full, dropping frame");
@@ -135,14 +139,24 @@ impl AudioGenHandle {
 
 impl Drop for AudioGenHandle {
     fn drop(&mut self) {
-        // Drop the sender to signal the thread to exit
-        // The thread will receive Disconnected and exit its loop
+        // IMPORTANT: Drop the sender FIRST to signal the thread to exit.
+        // The thread's recv_timeout() will return Disconnected and break the loop.
+        // If we join() before dropping the sender, we deadlock!
+        drop(self.tx.take());
+
         if let Some(handle) = self.handle.take() {
-            // Wait for the thread to finish (with timeout)
+            // Now wait for the thread to finish
             let _ = handle.join();
         }
     }
 }
+
+/// Ring buffer capacity (must match RING_BUFFER_SIZE in new())
+const RING_BUFFER_CAPACITY: usize = 13230;
+/// Target buffer fill level - keep ~60% full (~90ms)
+const TARGET_BUFFER_SAMPLES: usize = 7938;
+/// Generate more when buffer drops below this (~40%)
+const LOW_BUFFER_THRESHOLD: usize = 5292;
 
 /// Audio generation thread state
 struct AudioGenThread {
@@ -160,6 +174,22 @@ struct AudioGenThread {
 
     /// Output sample rate
     sample_rate: u32,
+
+    // === Persistent playback state (continues between snapshots) ===
+    /// Current audio playback state (SFX channels)
+    current_audio: AudioPlaybackState,
+
+    /// Current tracker state (position, tempo, etc.)
+    current_tracker: TrackerState,
+
+    /// Current sound data reference
+    current_sounds: Option<Arc<Vec<Option<Sound>>>>,
+
+    /// Current tick rate (fps)
+    current_tick_rate: u32,
+
+    /// Whether we have valid state to generate audio from
+    has_state: bool,
 }
 
 impl AudioGenThread {
@@ -180,70 +210,152 @@ impl AudioGenThread {
                     output_buffer: Vec::with_capacity(2048),
                     tracker_engine: TrackerEngine::new(),
                     sample_rate,
+                    // Persistent state - starts empty, filled by first snapshot
+                    current_audio: AudioPlaybackState::default(),
+                    current_tracker: TrackerState::default(),
+                    current_sounds: None,
+                    current_tick_rate: 60,
+                    has_state: false,
                 };
                 audio_gen.run();
             })
             .expect("failed to spawn audio generation thread");
 
         AudioGenHandle {
-            tx,
+            tx: Some(tx),
             handle: Some(handle),
         }
     }
 
-    /// Main thread loop
+    /// Main thread loop - BUFFER-DRIVEN, not snapshot-driven
+    ///
+    /// Key insight: Generate audio based on buffer fill level, not snapshot arrival.
+    /// This prevents timing mismatches between main thread jitter and cpal consumption.
     fn run(&mut self) {
-        debug!("Audio generation thread started");
+        debug!("Audio generation thread started (buffer-driven mode)");
 
         loop {
-            // Wait for a snapshot with timeout
-            // Timeout allows us to generate silence if main thread stalls
-            match self.rx.recv_timeout(Duration::from_millis(20)) {
+            // 1. Check for new snapshots (non-blocking)
+            //    New snapshots UPDATE our state but don't trigger immediate generation
+            match self.rx.try_recv() {
                 Ok(snapshot) => {
-                    self.process_snapshot(snapshot);
+                    self.apply_snapshot(snapshot);
                 }
-                Err(RecvTimeoutError::Timeout) => {
-                    // Main thread is slow - generate silence to prevent underrun
-                    trace!("Audio thread: no snapshot received, generating silence");
-                    self.generate_silence();
+                Err(mpsc::TryRecvError::Empty) => {
+                    // No new snapshot - that's fine, we continue with current state
                 }
-                Err(RecvTimeoutError::Disconnected) => {
-                    // Main thread dropped the sender - exit
+                Err(mpsc::TryRecvError::Disconnected) => {
                     debug!("Audio generation thread exiting (channel disconnected)");
                     break;
                 }
             }
+
+            // 2. Check buffer fill level and generate if needed
+            let buffer_filled = RING_BUFFER_CAPACITY - self.producer.vacant_len();
+
+            if buffer_filled < LOW_BUFFER_THRESHOLD {
+                // Buffer is getting low - generate more samples
+                if self.has_state {
+                    // Generate a frame's worth of audio using persistent state
+                    self.generate_frame();
+                } else {
+                    // No state yet - generate silence
+                    self.generate_silence();
+                }
+            } else if buffer_filled >= TARGET_BUFFER_SAMPLES {
+                // Buffer is healthy - sleep a bit to avoid busy-waiting
+                thread::sleep(Duration::from_micros(500));
+            }
+            // If between thresholds, continue loop without sleeping (responsive to snapshots)
         }
 
         debug!("Audio generation thread finished");
     }
 
-    /// Process a snapshot and generate audio samples
-    fn process_snapshot(&mut self, snapshot: AudioGenSnapshot) {
-        // Handle rollback - drain any pending snapshots
+    /// Apply a snapshot to update persistent state (does NOT generate samples)
+    ///
+    /// This is called when a new snapshot arrives from the main thread.
+    /// Key insight: If we already have state and are "in sync", we just continue
+    /// generating without resetting positions. Only rollbacks force a full reset.
+    fn apply_snapshot(&mut self, snapshot: AudioGenSnapshot) {
+        // Handle rollback - drain pending and FORCE reset all state
         if snapshot.is_rollback {
-            debug!("Audio thread: rollback detected, draining pending snapshots");
+            debug!("Audio thread: rollback detected, forcing state reset");
             while self.rx.try_recv().is_ok() {
                 // Drain pending snapshots
             }
+            // Full reset on rollback
+            self.current_audio = snapshot.audio;
+            self.current_tracker = snapshot.tracker;
+            self.current_sounds = Some(snapshot.sounds);
+            self.current_tick_rate = snapshot.tick_rate;
+            self.sample_rate = snapshot.sample_rate;
+            self.tracker_engine.apply_snapshot(&snapshot.tracker_snapshot);
+            self.has_state = true;
+            debug!("Rollback: reset to frame {}", snapshot.frame_number);
+            return;
         }
 
-        // Apply tracker snapshot to local engine
+        // First snapshot - initialize everything
+        if !self.has_state {
+            self.current_audio = snapshot.audio;
+            self.current_tracker = snapshot.tracker;
+            self.current_sounds = Some(snapshot.sounds);
+            self.current_tick_rate = snapshot.tick_rate;
+            self.sample_rate = snapshot.sample_rate;
+            self.tracker_engine.apply_snapshot(&snapshot.tracker_snapshot);
+            self.has_state = true;
+            trace!("Initialized from snapshot frame {}", snapshot.frame_number);
+            return;
+        }
+
+        // Already have state - only update what's necessary:
+        // 1. Sound data (in case new sounds were loaded)
+        self.current_sounds = Some(snapshot.sounds);
+        self.current_tick_rate = snapshot.tick_rate;
+        self.sample_rate = snapshot.sample_rate;
+
+        // 2. Tracker engine state (modules, channel configs) - always apply
+        //    This ensures we have the latest module data and channel configurations
         self.tracker_engine.apply_snapshot(&snapshot.tracker_snapshot);
 
-        // Create mutable copies for generation
-        let mut audio = snapshot.audio;
-        let mut tracker = snapshot.tracker;
+        // 3. DON'T reset audio/tracker positions - we're already ahead!
+        //    The main thread is just "confirming" where we were.
+        //    Our continuous generation keeps advancing from where we are.
 
-        // Generate samples
+        // 4. However, check for new SFX that started (sound != 0 with position 0)
+        //    These need to be copied over as they're new events from main thread
+        for (i, channel) in snapshot.audio.channels.iter().enumerate() {
+            if channel.sound != 0 && channel.position == 0 {
+                // New sound started on main thread - apply it
+                self.current_audio.channels[i] = *channel;
+                trace!("New SFX on channel {}: sound {}", i, channel.sound);
+            }
+        }
+
+        trace!("Updated snapshot frame {} (continuing)", snapshot.frame_number);
+    }
+
+    /// Generate one frame of audio using persistent state
+    ///
+    /// This advances the audio/tracker state and pushes samples to the ring buffer.
+    /// Called continuously based on buffer fill level, NOT on snapshot arrival.
+    fn generate_frame(&mut self) {
+        let Some(ref sounds) = self.current_sounds else {
+            // No sounds loaded yet
+            self.generate_silence();
+            return;
+        };
+
+        // Generate samples using persistent state
         self.output_buffer.clear();
         generate_audio_frame_with_tracker(
-            &mut audio,
-            &mut tracker,
+            &mut self.current_audio,
+            &mut self.current_tracker,
             &mut self.tracker_engine,
-            &snapshot.sounds,
-            snapshot.tick_rate,
-            snapshot.sample_rate,
+            sounds,
+            self.current_tick_rate,
+            self.sample_rate,
             &mut self.output_buffer,
         );
 
@@ -321,9 +433,11 @@ impl ThreadedAudioOutput {
                         &config,
                         move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
                             use ringbuf::traits::Consumer;
-                            for sample in data.iter_mut() {
-                                *sample = consumer.try_pop().unwrap_or(0.0);
-                            }
+                            // Batch read all available samples at once (much more efficient
+                            // than per-sample try_pop which causes timing gaps and popping)
+                            let popped = consumer.pop_slice(data);
+                            // Fill any remaining samples with silence
+                            data[popped..].fill(0.0);
                         },
                         |err| error!("Audio stream error: {}", err),
                         None,
@@ -332,14 +446,26 @@ impl ThreadedAudioOutput {
             }
             cpal::SampleFormat::I16 => {
                 let config = config.into();
+                // Pre-allocate buffer for batch reads (avoids per-sample atomic ops)
+                let mut temp_buffer: Vec<f32> = vec![0.0; 4096];
                 device
                     .build_output_stream(
                         &config,
                         move |data: &mut [i16], _: &cpal::OutputCallbackInfo| {
                             use ringbuf::traits::Consumer;
-                            for sample in data.iter_mut() {
-                                let f = consumer.try_pop().unwrap_or(0.0);
-                                *sample = (f * 32767.0).clamp(-32768.0, 32767.0) as i16;
+                            // Resize temp buffer if needed (rare, only on first use or format change)
+                            if temp_buffer.len() < data.len() {
+                                temp_buffer.resize(data.len(), 0.0);
+                            }
+                            // Batch read f32 samples
+                            let popped = consumer.pop_slice(&mut temp_buffer[..data.len()]);
+                            // Convert popped samples to i16
+                            for (i, &f) in temp_buffer[..popped].iter().enumerate() {
+                                data[i] = (f * 32767.0).clamp(-32768.0, 32767.0) as i16;
+                            }
+                            // Fill remaining with silence
+                            for sample in &mut data[popped..] {
+                                *sample = 0;
                             }
                         },
                         |err| error!("Audio stream error: {}", err),
@@ -349,14 +475,26 @@ impl ThreadedAudioOutput {
             }
             cpal::SampleFormat::U16 => {
                 let config = config.into();
+                // Pre-allocate buffer for batch reads (avoids per-sample atomic ops)
+                let mut temp_buffer: Vec<f32> = vec![0.0; 4096];
                 device
                     .build_output_stream(
                         &config,
                         move |data: &mut [u16], _: &cpal::OutputCallbackInfo| {
                             use ringbuf::traits::Consumer;
-                            for sample in data.iter_mut() {
-                                let f = consumer.try_pop().unwrap_or(0.0);
-                                *sample = ((f * 32767.0 + 32768.0).clamp(0.0, 65535.0)) as u16;
+                            // Resize temp buffer if needed (rare, only on first use or format change)
+                            if temp_buffer.len() < data.len() {
+                                temp_buffer.resize(data.len(), 0.0);
+                            }
+                            // Batch read f32 samples
+                            let popped = consumer.pop_slice(&mut temp_buffer[..data.len()]);
+                            // Convert popped samples to u16
+                            for (i, &f) in temp_buffer[..popped].iter().enumerate() {
+                                data[i] = ((f * 32767.0 + 32768.0).clamp(0.0, 65535.0)) as u16;
+                            }
+                            // Fill remaining with silence (0x8000 is silence for u16 audio)
+                            for sample in &mut data[popped..] {
+                                *sample = 32768;
                             }
                         },
                         |err| error!("Audio stream error: {}", err),
@@ -409,6 +547,7 @@ impl ThreadedAudioOutput {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
 
     #[test]
     fn test_snapshot_creation() {
@@ -434,5 +573,89 @@ mod tests {
         assert_eq!(snapshot.tick_rate, 60);
         assert_eq!(snapshot.sample_rate, 44100);
         assert!(!snapshot.is_rollback);
+    }
+
+    #[test]
+    fn test_audio_thread_shutdown_does_not_hang() {
+        // This test verifies that dropping AudioGenHandle doesn't deadlock.
+        // The bug was: Drop tried to join() the thread before dropping the sender,
+        // but the thread was waiting for Disconnected which only happens when sender drops.
+        use ringbuf::HeapRb;
+        use ringbuf::traits::Split;
+
+        let ring = HeapRb::<f32>::new(4096);
+        let (producer, _consumer) = ring.split();
+
+        let handle = AudioGenThread::spawn(producer, 44100);
+
+        // Drop should complete within a reasonable time (not hang)
+        // We use a thread with timeout to detect hangs
+        let (tx, rx) = std::sync::mpsc::channel();
+        let drop_thread = std::thread::spawn(move || {
+            drop(handle);
+            let _ = tx.send(());
+        });
+
+        // Wait up to 1 second for drop to complete
+        match rx.recv_timeout(Duration::from_secs(1)) {
+            Ok(()) => {
+                // Success - drop completed
+                drop_thread.join().unwrap();
+            }
+            Err(_) => {
+                panic!("AudioGenHandle::drop() deadlocked - sender must be dropped before join()");
+            }
+        }
+    }
+
+    #[test]
+    fn test_audio_thread_processes_snapshots() {
+        // Test that the audio thread actually processes snapshots and produces samples
+        use ringbuf::HeapRb;
+        use ringbuf::traits::{Consumer, Split};
+
+        let ring = HeapRb::<f32>::new(8192);
+        let (producer, mut consumer) = ring.split();
+
+        let handle = AudioGenThread::spawn(producer, 44100);
+
+        // Create a snapshot with empty audio (should generate silence)
+        let audio = AudioPlaybackState::default();
+        let tracker = TrackerState::default();
+        let tracker_engine = TrackerEngine::new();
+        let tracker_snapshot = tracker_engine.snapshot();
+        let sounds = Arc::new(Vec::new());
+
+        let snapshot = AudioGenSnapshot::new(
+            audio,
+            tracker,
+            tracker_snapshot,
+            sounds,
+            0,
+            60,
+            44100,
+            false,
+        );
+
+        // Send snapshot
+        assert!(handle.send_snapshot(snapshot));
+
+        // Give the thread time to process
+        std::thread::sleep(Duration::from_millis(50));
+
+        // Should have generated samples (735 stereo samples = 1470 floats per frame at 60fps/44.1kHz)
+        let mut samples_received = 0;
+        while consumer.try_pop().is_some() {
+            samples_received += 1;
+        }
+
+        // Should have generated at least one frame's worth of samples
+        assert!(
+            samples_received >= 735 * 2,
+            "Expected at least 1470 samples, got {}",
+            samples_received
+        );
+
+        drop(handle);
     }
 }

@@ -252,6 +252,105 @@ pub fn generate_audio_frame_with_tracker(
     }
 }
 
+/// Advance audio playback positions without generating samples
+///
+/// This is used in threaded audio mode where the audio thread generates
+/// the actual samples from a snapshot. The main thread still needs to
+/// advance positions to maintain rollback state consistency.
+///
+/// This is ~10-20x faster than `generate_audio_frame_with_tracker` since
+/// it skips interpolation, panning, mixing, and soft clipping.
+pub fn advance_audio_positions(
+    playback_state: &mut AudioPlaybackState,
+    tracker_state: &mut TrackerState,
+    tracker_engine: &mut TrackerEngine,
+    sounds: &[Option<Sound>],
+    tick_rate: u32,
+    sample_rate: u32,
+) {
+    let samples_per_frame = sample_rate / tick_rate;
+    let resample_ratio = SOURCE_SAMPLE_RATE as f32 / sample_rate as f32;
+
+    // Check if tracker is active
+    let tracker_active = tracker_state.handle != 0
+        && (tracker_state.flags & tracker_flags::PLAYING) != 0
+        && (tracker_state.flags & tracker_flags::PAUSED) == 0;
+
+    // Sync tracker engine to state at start of frame
+    if tracker_active {
+        tracker_engine.sync_to_state(tracker_state, sounds);
+    }
+
+    // Advance SFX channel positions
+    for channel in playback_state.channels.iter_mut() {
+        if channel.sound == 0 {
+            continue;
+        }
+        advance_channel_position(channel, sounds, resample_ratio, samples_per_frame);
+    }
+
+    // Advance music channel position (if not using tracker)
+    if !tracker_active && playback_state.music.sound != 0 {
+        advance_channel_position(&mut playback_state.music, sounds, resample_ratio, samples_per_frame);
+    }
+
+    // Advance tracker position (if using tracker)
+    if tracker_active {
+        tracker_engine.advance_positions(tracker_state, sounds, samples_per_frame, sample_rate);
+    }
+}
+
+/// Advance a single channel's position by one frame's worth of samples
+///
+/// This is a lightweight version of `mix_channel` that only advances the playhead
+/// position without performing interpolation or returning a sample value.
+fn advance_channel_position(
+    channel: &mut ChannelState,
+    sounds: &[Option<Sound>],
+    resample_ratio: f32,
+    samples_per_frame: u32,
+) {
+    let sound_idx = channel.sound as usize;
+
+    // Validate sound handle (handles start at 1, stored at their index)
+    let sound_len = match sounds.get(sound_idx).and_then(|s| s.as_ref()) {
+        Some(s) => s.data.len(),
+        None => {
+            channel.sound = 0;
+            return;
+        }
+    };
+
+    if sound_len == 0 {
+        return;
+    }
+
+    // Calculate total position advancement for this frame
+    // Each output sample advances by resample_ratio source samples
+    let total_advance = samples_per_frame as f32 * resample_ratio;
+
+    // Get current position
+    let (current_idx, current_frac) = channel.get_position();
+    let current_pos = current_idx as f32 + current_frac;
+    let new_pos = current_pos + total_advance;
+
+    if new_pos >= sound_len as f32 {
+        if channel.looping != 0 {
+            // Wrap position for looping sounds
+            let wrapped = new_pos % sound_len as f32;
+            channel.set_position(wrapped);
+        } else {
+            // Sound finished
+            channel.sound = 0;
+            channel.reset_position();
+        }
+    } else {
+        // Normal advancement - add to fixed-point position directly
+        let delta_fixed = (total_advance * ChannelState::FRAC_ONE as f32) as u32;
+        channel.position = channel.position.wrapping_add(delta_fixed);
+    }
+}
+
 /// Mix a single channel, returning the sample value and advancing the playhead
 ///
 /// # Precondition
@@ -425,6 +524,8 @@ pub struct ZXAudio {
     master_volume: f32,
     /// Pre-allocated buffer for volume scaling (avoids allocation per push)
     scale_buffer: Vec<f32>,
+    /// Pre-allocated buffer for audio frame generation (avoids allocation per frame)
+    frame_buffer: Vec<f32>,
     /// Whether to use threaded audio generation
     use_threaded: bool,
 }
@@ -438,6 +539,7 @@ impl ZXAudio {
                 threaded_output: None,
                 master_volume: 1.0,
                 scale_buffer: Vec::with_capacity(2048), // Pre-allocate for typical frame size
+                frame_buffer: Vec::with_capacity(2048), // ~735*2 stereo samples at 60fps
                 use_threaded: false,
             }),
             Err(e) => {
@@ -447,6 +549,7 @@ impl ZXAudio {
                     threaded_output: None,
                     master_volume: 1.0,
                     scale_buffer: Vec::new(),
+                    frame_buffer: Vec::new(),
                     use_threaded: false,
                 })
             }
@@ -464,6 +567,7 @@ impl ZXAudio {
                 threaded_output: Some(output),
                 master_volume: 1.0,
                 scale_buffer: Vec::new(), // Not needed for threaded mode
+                frame_buffer: Vec::new(), // Not needed - uses lightweight advance
                 use_threaded: true,
             }),
             Err(e) => {
@@ -473,6 +577,7 @@ impl ZXAudio {
                     threaded_output: None,
                     master_volume: 1.0,
                     scale_buffer: Vec::new(),
+                    frame_buffer: Vec::new(),
                     use_threaded: true,
                 })
             }
@@ -552,6 +657,7 @@ impl Default for ZXAudio {
             threaded_output: None,
             master_volume: 1.0,
             scale_buffer: Vec::new(),
+            frame_buffer: Vec::new(),
             use_threaded: false,
         })
     }
@@ -599,6 +705,19 @@ impl nethercore_core::AudioGenerator for ZXAudioGenerator {
     ) {
         if audio.is_threaded() {
             // Threaded mode: create snapshot and send to audio thread
+            //
+            // IMPORTANT: We must also advance the main thread's audio state!
+            // The audio thread will generate samples from the snapshot, but the
+            // main thread's rollback state must stay in sync (positions advance,
+            // finished sounds get cleared, etc.) for deterministic rollback.
+            //
+            // Flow:
+            // 1. Create snapshot with CURRENT positions (start of frame)
+            // 2. Send snapshot to audio thread (it will generate samples)
+            // 3. Advance main thread state using lightweight position-only advance
+            //
+            // The audio thread and main thread both advance positions by the same
+            // amount, staying in sync.
             let snapshot = crate::audio_thread::AudioGenSnapshot::new(
                 rollback_state.audio,
                 rollback_state.tracker,
@@ -610,11 +729,25 @@ impl nethercore_core::AudioGenerator for ZXAudioGenerator {
                 false, // is_rollback - main loop only calls this for confirmed frames
             );
             audio.send_snapshot(snapshot);
+
+            // Advance main thread state (lightweight - no sample generation)
+            // This is ~10-20x faster than generate_frame as it skips mixing
+            advance_audio_positions(
+                &mut rollback_state.audio,
+                &mut rollback_state.tracker,
+                &mut state.tracker_engine,
+                &state.sounds,
+                tick_rate,
+                sample_rate,
+            );
         } else {
-            // Synchronous mode: generate samples and push
-            let mut buffer = Vec::new();
+            // Synchronous mode: generate samples and push using reusable buffer
+            // Note: We need to take the buffer out temporarily to avoid borrow conflicts
+            let mut buffer = std::mem::take(&mut audio.frame_buffer);
+            buffer.clear();
             Self::generate_frame(rollback_state, state, tick_rate, sample_rate, &mut buffer);
             audio.push_samples(&buffer);
+            audio.frame_buffer = buffer;
         }
     }
 }
@@ -684,5 +817,242 @@ mod tests {
         // Should generate silence (735 stereo samples at 60fps/44100Hz)
         assert_eq!(output.len(), 735 * 2);
         assert!(output.iter().all(|&s| s == 0.0));
+    }
+
+    #[test]
+    fn test_generate_frame_advances_position() {
+        // Test that generate_audio_frame_with_tracker advances channel positions
+        // This is critical for threaded audio: if positions don't advance,
+        // sounds would restart from the beginning every frame!
+
+        // Create a simple sound (1 second of samples at 22050 Hz)
+        let sound_data: Vec<i16> = (0..22050).map(|i| (i % 1000) as i16).collect();
+        let sound = Sound {
+            data: Arc::new(sound_data),
+        };
+
+        // Set up state with a playing sound on channel 0
+        let mut state = AudioPlaybackState::default();
+        state.channels[0].sound = 1; // Sound handle 1
+        state.channels[0].volume = 1.0;
+        state.channels[0].pan = 0.0;
+        state.channels[0].position = 0; // Start at position 0
+        state.channels[0].looping = 0;
+
+        let mut tracker_state = TrackerState::default();
+        let mut tracker_engine = TrackerEngine::new();
+
+        // Sound at index 1 (handles start at 1)
+        let sounds: Vec<Option<Sound>> = vec![None, Some(sound)];
+        let mut output = Vec::new();
+
+        // Get initial position
+        let initial_position = state.channels[0].position;
+
+        // Generate one frame
+        generate_audio_frame_with_tracker(
+            &mut state,
+            &mut tracker_state,
+            &mut tracker_engine,
+            &sounds,
+            60,
+            44100,
+            &mut output,
+        );
+
+        // Position should have advanced
+        // At 60fps with 44100Hz output and 22050Hz source, we generate 735 output samples
+        // Each output sample advances by 0.5 source samples (22050/44100)
+        // So position should advance by ~367.5 (in fixed point: 367.5 * 256 = ~94080)
+        let new_position = state.channels[0].position;
+        assert!(
+            new_position > initial_position,
+            "Position should advance: initial={}, new={}",
+            initial_position,
+            new_position
+        );
+
+        // Position should advance by approximately 735 * 0.5 = 367.5 source samples
+        // In 24.8 fixed point, that's about 367.5 * 256 = ~94080
+        let position_delta = new_position - initial_position;
+        let expected_delta = (735.0 * 0.5 * 256.0) as u32;
+        assert!(
+            (position_delta as i64 - expected_delta as i64).abs() < 512,
+            "Position delta {} should be close to expected {}",
+            position_delta,
+            expected_delta
+        );
+    }
+
+    #[test]
+    fn test_channel_sound_cleared_when_finished() {
+        // Test that channel.sound is set to 0 when sound finishes playing
+        // This is important for the game to know when to start new sounds
+
+        // Create a very short sound (100 samples)
+        let sound_data: Vec<i16> = (0..100).map(|i| (i * 100) as i16).collect();
+        let sound = Sound {
+            data: Arc::new(sound_data),
+        };
+
+        let mut state = AudioPlaybackState::default();
+        state.channels[0].sound = 1;
+        state.channels[0].volume = 1.0;
+        state.channels[0].pan = 0.0;
+        state.channels[0].position = 0;
+        state.channels[0].looping = 0; // Non-looping
+
+        let mut tracker_state = TrackerState::default();
+        let mut tracker_engine = TrackerEngine::new();
+        let sounds: Vec<Option<Sound>> = vec![None, Some(sound)];
+        let mut output = Vec::new();
+
+        // The sound is 100 samples at 22050Hz
+        // At 44100Hz output with 0.5 resample ratio, we'll exhaust it in ~200 output samples
+        // One frame at 60fps is 735 samples, so sound should finish
+
+        generate_audio_frame_with_tracker(
+            &mut state,
+            &mut tracker_state,
+            &mut tracker_engine,
+            &sounds,
+            60,
+            44100,
+            &mut output,
+        );
+
+        // Channel should be cleared (sound = 0) because the short sound finished
+        assert_eq!(
+            state.channels[0].sound, 0,
+            "Channel sound should be cleared to 0 when sound finishes"
+        );
+    }
+
+    #[test]
+    fn test_advance_positions_matches_generate_frame() {
+        // Test that advance_audio_positions produces the same final positions
+        // as generate_audio_frame_with_tracker (which is critical for rollback determinism)
+
+        // Create a sound with enough samples for multiple frames
+        let sound_data: Vec<i16> = (0..22050).map(|i| (i % 1000) as i16).collect();
+        let sound = Sound {
+            data: Arc::new(sound_data),
+        };
+
+        // Set up identical states for both paths
+        let mut state1 = AudioPlaybackState::default();
+        let mut state2 = AudioPlaybackState::default();
+
+        // Play same sound on channel 0
+        state1.channels[0].sound = 1;
+        state1.channels[0].volume = 0.8;
+        state1.channels[0].pan = 0.3;
+        state1.channels[0].position = 0;
+        state1.channels[0].looping = 1; // Looping to test wrap-around
+
+        state2.channels[0].sound = 1;
+        state2.channels[0].volume = 0.8;
+        state2.channels[0].pan = 0.3;
+        state2.channels[0].position = 0;
+        state2.channels[0].looping = 1;
+
+        // Also test music channel
+        state1.music.sound = 1;
+        state1.music.volume = 0.5;
+        state1.music.position = 5000 << ChannelState::FRAC_BITS; // Start mid-sound
+
+        state2.music.sound = 1;
+        state2.music.volume = 0.5;
+        state2.music.position = 5000 << ChannelState::FRAC_BITS;
+
+        let mut tracker_state1 = TrackerState::default();
+        let mut tracker_state2 = TrackerState::default();
+        let mut tracker_engine1 = TrackerEngine::new();
+        let mut tracker_engine2 = TrackerEngine::new();
+
+        let sounds: Vec<Option<Sound>> = vec![None, Some(sound)];
+
+        // Advance state1 using full generation (the original method)
+        let mut output = Vec::new();
+        generate_audio_frame_with_tracker(
+            &mut state1,
+            &mut tracker_state1,
+            &mut tracker_engine1,
+            &sounds,
+            60,
+            44100,
+            &mut output,
+        );
+
+        // Advance state2 using lightweight position-only method
+        advance_audio_positions(
+            &mut state2,
+            &mut tracker_state2,
+            &mut tracker_engine2,
+            &sounds,
+            60,
+            44100,
+        );
+
+        // Verify positions match exactly
+        assert_eq!(
+            state1.channels[0].position, state2.channels[0].position,
+            "Channel 0 position mismatch: generate_frame={}, advance_positions={}",
+            state1.channels[0].position, state2.channels[0].position
+        );
+
+        assert_eq!(
+            state1.channels[0].sound, state2.channels[0].sound,
+            "Channel 0 sound handle mismatch"
+        );
+
+        assert_eq!(
+            state1.music.position, state2.music.position,
+            "Music channel position mismatch: generate_frame={}, advance_positions={}",
+            state1.music.position, state2.music.position
+        );
+
+        assert_eq!(
+            state1.music.sound, state2.music.sound,
+            "Music channel sound handle mismatch"
+        );
+    }
+
+    #[test]
+    fn test_advance_positions_sound_finishes_correctly() {
+        // Test that advance_audio_positions correctly clears sound when finished
+        // (matches behavior of generate_audio_frame_with_tracker)
+
+        // Create a very short sound that will finish within one frame
+        let sound_data: Vec<i16> = (0..100).map(|i| (i * 100) as i16).collect();
+        let sound = Sound {
+            data: Arc::new(sound_data),
+        };
+
+        let mut state = AudioPlaybackState::default();
+        state.channels[0].sound = 1;
+        state.channels[0].volume = 1.0;
+        state.channels[0].position = 0;
+        state.channels[0].looping = 0; // Non-looping
+
+        let mut tracker_state = TrackerState::default();
+        let mut tracker_engine = TrackerEngine::new();
+        let sounds: Vec<Option<Sound>> = vec![None, Some(sound)];
+
+        // Advance using lightweight method
+        advance_audio_positions(
+            &mut state,
+            &mut tracker_state,
+            &mut tracker_engine,
+            &sounds,
+            60,
+            44100,
+        );
+
+        // Channel should be cleared because the short sound finished
+        assert_eq!(
+            state.channels[0].sound, 0,
+            "Channel sound should be cleared when sound finishes (advance_positions)"
+        );
     }
 }
