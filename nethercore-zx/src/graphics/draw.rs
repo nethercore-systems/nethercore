@@ -156,6 +156,7 @@ impl ZXGraphics {
                         viewport: batch.viewport,
                         pass_id: batch.pass_id,
                         z_index: batch.z_index,
+                        is_screen_space: batch.is_screen_space,
                     });
             }
         }

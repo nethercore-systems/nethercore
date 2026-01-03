@@ -182,6 +182,7 @@ fn tint_color(color: u32, tint_r: f32, tint_g: f32, tint_b: f32) -> u32 {
 /// Demo 0: Circle mask - render scene only inside circle
 unsafe fn demo_circle_mask() {
     // Draw circle shape to stencil buffer (mask creation)
+    // Screen-space quads now use PassConfig depth settings, so depth_write=false in stencil_write
     begin_pass_stencil_write(1, 0);
     set_color(0xFFFFFFFF);
     draw_circle(SCREEN_CX, SCREEN_CY, 200.0);
@@ -226,16 +227,44 @@ unsafe fn demo_inverted_mask() {
 
 /// Demo 2: Diagonal split - different tints on each side
 unsafe fn demo_diagonal_split() {
-    // Left half mask
+    // Create diagonal mask using draw_triangles with ortho projection
     begin_pass_stencil_write(1, 0);
     set_color(0xFFFFFFFF);
-    draw_rect(0.0, 0.0, SCREEN_WIDTH / 2.0, SCREEN_HEIGHT);
 
-    // Draw left half with warm tint
+    // Set up orthographic projection for screen-space triangle
+    // Ortho matrix: maps (0,0)-(width,height) to clip space (-1,1)
+    let w = SCREEN_WIDTH;
+    let h = SCREEN_HEIGHT;
+    push_projection_matrix(
+        2.0 / w, 0.0,      0.0,  0.0,  // column 0
+        0.0,    -2.0 / h,  0.0,  0.0,  // column 1
+        0.0,     0.0,     -1.0,  0.0,  // column 2
+       -1.0,     1.0,      0.0,  1.0,  // column 3
+    );
+
+    // Identity view matrix (camera at origin looking at +Z)
+    push_view_matrix(
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 0.0, 1.0,
+    );
+
+    // Draw triangle covering diagonal (top-left to bottom-right split)
+    // Vertices: (0,0) -> (width,0) -> (0,height)
+    let vertices: [f32; 9] = [
+        0.0, 0.0, 0.0,    // top-left
+        w,   0.0, 0.0,    // top-right
+        0.0, h,   0.0,    // bottom-left
+    ];
+    push_identity();
+    draw_triangles(vertices.as_ptr(), 3, 0);
+
+    // Draw top-left half with warm tint
     begin_pass_stencil_test(1, 0);
     draw_scene_tinted(0xFFCC99FF); // Warm orange tint
 
-    // Right half - invert stencil to draw other side
+    // Bottom-right half - invert stencil to draw other side
     begin_pass_full(
         compare::LESS,      // depth_compare
         1,                  // depth_write
@@ -276,8 +305,18 @@ unsafe fn demo_animated_portal() {
     );
     draw_scene();
 
-    // 2. Draw portal ring (normal rendering)
-    begin_pass(0);
+    // 2. Draw portal ring (NO depth write - decorative only)
+    // Must not write depth or it will block the inner portal scene
+    begin_pass_full(
+        compare::ALWAYS,    // depth_compare - always pass
+        0,                  // depth_write = FALSE (critical!)
+        0,                  // clear_depth
+        compare::ALWAYS,    // stencil_compare
+        0,                  // stencil_ref
+        stencil_op::KEEP,   // stencil_pass_op
+        stencil_op::KEEP,   // stencil_fail_op
+        stencil_op::KEEP,   // stencil_depth_fail_op
+    );
     let ring_width = 6.0;
     set_color(0x8800FFFF);
     draw_circle(SCREEN_CX, SCREEN_CY, radius + ring_width / 2.0);

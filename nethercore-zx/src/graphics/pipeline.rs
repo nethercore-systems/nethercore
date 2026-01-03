@@ -29,6 +29,8 @@ pub(crate) enum PipelineKey {
         depth_test: bool,
         /// Hash of PassConfig fields that affect pipeline state
         pass_config_hash: u64,
+        /// True for screen-space quads (always write depth), false for billboards (use PassConfig)
+        is_screen_space: bool,
     },
     /// Procedural sky rendering pipeline (always renders behind)
     Sky {
@@ -63,10 +65,11 @@ impl PipelineKey {
     }
 
     /// Create a quad pipeline key
-    pub fn quad(state: &RenderState, pass_config: &PassConfig) -> Self {
+    pub fn quad(state: &RenderState, pass_config: &PassConfig, is_screen_space: bool) -> Self {
         Self::Quad {
             depth_test: state.depth_test,
             pass_config_hash: pass_config_hash(pass_config),
+            is_screen_space,
         }
     }
 
@@ -189,10 +192,15 @@ pub(crate) fn create_pipeline(
 }
 
 /// Create a quad pipeline for GPU-instanced rendering
+///
+/// `is_screen_space` determines depth behavior:
+/// - true: Screen-space quads always write depth at 0 for early-z optimization
+/// - false: Billboards use PassConfig depth settings (they're 3D positioned)
 pub(crate) fn create_quad_pipeline(
     device: &wgpu::Device,
     surface_format: wgpu::TextureFormat,
     pass_config: &PassConfig,
+    is_screen_space: bool,
 ) -> PipelineEntry {
     // Load quad shader (generated from quad_template.wgsl by build.rs)
     use crate::shader_gen::QUAD_SHADER;
@@ -219,9 +227,16 @@ pub(crate) fn create_quad_pipeline(
     let quad_format = FORMAT_UV | FORMAT_COLOR;
     let vertex_info = VertexFormatInfo::for_format(quad_format);
 
+    // Both screen-space and billboard quads use PassConfig depth settings.
+    // This allows stencil operations to work with 2D primitives (depth_write=false in stencil_write).
+    // Screen-space quads are still "on top" because they render at depth 0 (near plane).
+    // The `is_screen_space` parameter is kept for potential future use but doesn't affect depth.
+    let _ = is_screen_space; // Suppress unused warning
+    let (depth_write_enabled, depth_compare) = (pass_config.depth_write, pass_config.depth_compare);
+
     // Create render pipeline
     let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("Quad Pipeline"),
+        label: Some(if is_screen_space { "Screen-Space Quad Pipeline" } else { "Billboard Pipeline" }),
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
             module: &shader_module,
@@ -250,8 +265,8 @@ pub(crate) fn create_quad_pipeline(
         },
         depth_stencil: Some(wgpu::DepthStencilState {
             format: wgpu::TextureFormat::Depth24PlusStencil8,
-            depth_write_enabled: true, // Always write depth for early-z optimization
-            depth_compare: wgpu::CompareFunction::Always, // Quads always draw (sorting via sort key)
+            depth_write_enabled,
+            depth_compare,
             stencil: pass_config.to_wgpu_stencil_state(),
             bias: wgpu::DepthBiasState::default(),
         }),
@@ -665,14 +680,18 @@ impl PipelineCache {
     /// Get or create a quad pipeline
     ///
     /// Returns a reference to the cached quad pipeline, creating it if necessary.
+    /// `is_screen_space` determines depth behavior:
+    /// - true (screen-space): always writes depth at 0 for early-z optimization
+    /// - false (billboard): uses PassConfig depth settings
     pub fn get_or_create_quad(
         &mut self,
         device: &wgpu::Device,
         surface_format: wgpu::TextureFormat,
         state: &RenderState,
         pass_config: &PassConfig,
+        is_screen_space: bool,
     ) -> &PipelineEntry {
-        let key = PipelineKey::quad(state, pass_config);
+        let key = PipelineKey::quad(state, pass_config, is_screen_space);
 
         // Return existing pipeline if cached
         if self.pipelines.contains_key(&key) {
@@ -681,12 +700,13 @@ impl PipelineCache {
 
         // Otherwise, create a new quad pipeline
         tracing::debug!(
-            "Creating quad pipeline: depth={}, pass_config={:?}",
+            "Creating quad pipeline: depth={}, is_screen_space={}, pass_config={:?}",
             state.depth_test,
+            is_screen_space,
             pass_config
         );
 
-        let entry = create_quad_pipeline(device, surface_format, pass_config);
+        let entry = create_quad_pipeline(device, surface_format, pass_config, is_screen_space);
         self.pipelines.insert(key, entry);
         &self.pipelines[&key]
     }

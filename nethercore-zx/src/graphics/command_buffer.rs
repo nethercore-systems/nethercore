@@ -115,6 +115,8 @@ pub enum VRPCommand {
         pass_id: u32,
         /// Z-index for 2D ordering within a pass (higher = closer to camera)
         z_index: u32,
+        /// True if screen-space quad (always writes depth), false if billboard (uses PassConfig depth)
+        is_screen_space: bool,
     },
     /// Sky draw (fullscreen gradient + sun)
     Sky {

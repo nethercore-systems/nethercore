@@ -509,20 +509,80 @@ impl ZXGraphics {
             return;
         };
 
-        // Render pass - render game content to offscreen target
-        {
+        // Helper closure to resolve FFI texture handles to TextureHandle
+        let resolve_textures = |textures: &[u32; 4]| -> [TextureHandle; 4] {
+            [
+                texture_map
+                    .get(&textures[0])
+                    .copied()
+                    .unwrap_or(TextureHandle::INVALID),
+                texture_map
+                    .get(&textures[1])
+                    .copied()
+                    .unwrap_or(TextureHandle::INVALID),
+                texture_map
+                    .get(&textures[2])
+                    .copied()
+                    .unwrap_or(TextureHandle::INVALID),
+                texture_map
+                    .get(&textures[3])
+                    .copied()
+                    .unwrap_or(TextureHandle::INVALID),
+            ]
+        };
+
+        // Process commands in segments, restarting render pass when depth_clear is needed
+        // Commands are sorted by pass_id, so all commands from the same pass are contiguous
+        let commands = self.command_buffer.commands();
+        let mut cmd_idx = 0;
+
+        // First render pass: clear color, depth, and stencil
+        let mut is_first_pass = true;
+
+        while cmd_idx < commands.len() {
+            // Determine what load ops we need for this render pass segment
+            let first_cmd = &commands[cmd_idx];
+            let first_pass_id = match first_cmd {
+                VRPCommand::Mesh { pass_id, .. }
+                | VRPCommand::IndexedMesh { pass_id, .. }
+                | VRPCommand::Quad { pass_id, .. }
+                | VRPCommand::Sky { pass_id, .. } => *pass_id,
+            };
+            let first_pass_config = z_state
+                .pass_configs
+                .get(first_pass_id as usize)
+                .copied()
+                .unwrap_or_default();
+
+            // Determine load ops based on whether this is the first pass and depth_clear flag
+            let (color_load, depth_load, stencil_load) = if is_first_pass {
+                // First pass: always clear color/depth/stencil
+                (
+                    wgpu::LoadOp::Clear(wgpu::Color {
+                        r: clear_color[0] as f64,
+                        g: clear_color[1] as f64,
+                        b: clear_color[2] as f64,
+                        a: clear_color[3] as f64,
+                    }),
+                    wgpu::LoadOp::Clear(1.0),
+                    wgpu::LoadOp::Clear(0),
+                )
+            } else if first_pass_config.depth_clear {
+                // Mid-frame depth clear: preserve color, clear depth, preserve stencil
+                (wgpu::LoadOp::Load, wgpu::LoadOp::Clear(1.0), wgpu::LoadOp::Load)
+            } else {
+                // No clear needed: preserve everything
+                (wgpu::LoadOp::Load, wgpu::LoadOp::Load, wgpu::LoadOp::Load)
+            };
+
+            // Create render pass for this segment
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Game Render Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &self.render_target.color_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: clear_color[0] as f64,
-                            g: clear_color[1] as f64,
-                            b: clear_color[2] as f64,
-                            a: clear_color[3] as f64,
-                        }),
+                        load: color_load,
                         store: wgpu::StoreOp::Store,
                     },
                     depth_slice: None,
@@ -530,11 +590,11 @@ impl ZXGraphics {
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: &self.render_target.depth_view,
                     depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
+                        load: depth_load,
                         store: wgpu::StoreOp::Store,
                     }),
                     stencil_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(0),
+                        load: stencil_load,
                         store: wgpu::StoreOp::Store,
                     }),
                 }),
@@ -542,7 +602,7 @@ impl ZXGraphics {
                 occlusion_query_set: None,
             });
 
-            // State tracking to skip redundant GPU calls (commands are sorted by viewport/pipeline/texture)
+            // State tracking (reset for each render pass segment)
             let mut current_viewport: Option<super::Viewport> = None;
             let mut current_pass_id: Option<u32> = None;
             let mut bound_pipeline: Option<PipelineKey> = None;
@@ -550,29 +610,9 @@ impl ZXGraphics {
             let mut bound_vertex_format: Option<(u8, BufferSource)> = None;
             let mut frame_bind_group_set = false;
 
-            // Helper closure to resolve FFI texture handles to TextureHandle
-            let resolve_textures = |textures: &[u32; 4]| -> [TextureHandle; 4] {
-                [
-                    texture_map
-                        .get(&textures[0])
-                        .copied()
-                        .unwrap_or(TextureHandle::INVALID),
-                    texture_map
-                        .get(&textures[1])
-                        .copied()
-                        .unwrap_or(TextureHandle::INVALID),
-                    texture_map
-                        .get(&textures[2])
-                        .copied()
-                        .unwrap_or(TextureHandle::INVALID),
-                    texture_map
-                        .get(&textures[3])
-                        .copied()
-                        .unwrap_or(TextureHandle::INVALID),
-                ]
-            };
-
-            for cmd in self.command_buffer.commands() {
+            // Process commands until we hit a pass that needs depth clear
+            while cmd_idx < commands.len() {
+                let cmd = &commands[cmd_idx];
                 // Destructure command variant to extract common fields
                 // For Mesh/IndexedMesh: resolve FFI texture handles to TextureHandle
                 // For Quad: use texture_slots directly (already TextureHandle)
@@ -585,6 +625,7 @@ impl ZXGraphics {
                     buffer_source,
                     is_quad,
                     is_sky,
+                    is_screen_space_quad,
                 ) = match cmd {
                     VRPCommand::Mesh {
                         format,
@@ -601,6 +642,7 @@ impl ZXGraphics {
                         *cull_mode,
                         resolve_textures(textures), // Resolve FFI handles at render time
                         BufferSource::Immediate(*buffer_index),
+                        false,
                         false,
                         false,
                     ),
@@ -621,12 +663,14 @@ impl ZXGraphics {
                         BufferSource::Retained(*buffer_index),
                         false,
                         false,
+                        false,
                     ),
                     VRPCommand::Quad {
                         cull_mode,
                         texture_slots,
                         viewport,
                         pass_id,
+                        is_screen_space,
                         ..
                     } => (
                         *viewport,
@@ -637,6 +681,7 @@ impl ZXGraphics {
                         BufferSource::Quad,
                         true,
                         false,
+                        *is_screen_space,
                     ),
                     VRPCommand::Sky { viewport, pass_id, .. } => (
                         *viewport,
@@ -647,6 +692,7 @@ impl ZXGraphics {
                         BufferSource::Quad,          // Sky renders as a fullscreen quad
                         false,
                         true,
+                        false,
                     ),
                 };
 
@@ -654,6 +700,16 @@ impl ZXGraphics {
                 let cmd_pass_config = z_state.pass_configs.get(cmd_pass_id as usize)
                     .copied()
                     .unwrap_or_default();
+
+                // Check if this pass needs depth clear and we're not already in a fresh pass
+                // If so, break out to restart the render pass with the correct load ops
+                if current_pass_id.is_some()
+                    && current_pass_id != Some(cmd_pass_id)
+                    && cmd_pass_config.depth_clear
+                {
+                    // Don't increment cmd_idx - we'll process this command in the next render pass
+                    break;
+                }
 
                 // Set viewport and scissor rect if changed (split-screen support)
                 if current_viewport != Some(cmd_viewport) {
@@ -699,11 +755,14 @@ impl ZXGraphics {
                     );
                 } else if is_quad {
                     // Quad rendering: Ensure quad pipeline exists
+                    // Screen-space quads always write depth (early-z optimization)
+                    // Billboards use PassConfig depth settings (they're 3D positioned)
                     self.pipeline_cache.get_or_create_quad(
                         &self.device,
                         self.config.format,
                         &state,
                         &cmd_pass_config,
+                        is_screen_space_quad,
                     );
                 } else {
                     // Regular mesh rendering: Ensure format-specific pipeline exists
@@ -728,7 +787,7 @@ impl ZXGraphics {
                 let pipeline_key = if is_sky {
                     PipelineKey::sky(&cmd_pass_config)
                 } else if is_quad {
-                    PipelineKey::quad(&state, &cmd_pass_config)
+                    PipelineKey::quad(&state, &cmd_pass_config, is_screen_space_quad)
                 } else {
                     PipelineKey::new(self.current_render_mode, format, &state, &cmd_pass_config)
                 };
@@ -917,8 +976,16 @@ impl ZXGraphics {
                         render_pass.draw(0..3, *shading_state_index..*shading_state_index + 1);
                     }
                 }
+
+                // Move to next command
+                cmd_idx += 1;
             }
+            // Inner while loop ends - render_pass is dropped here, ending the GPU pass
+
+            // No longer the first pass - subsequent passes preserve color
+            is_first_pass = false;
         }
+        // Outer while loop ends
 
         // Move texture cache back into self (preserving allocations for next frame)
         self.texture_bind_groups = texture_bind_groups;

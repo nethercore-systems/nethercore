@@ -1,6 +1,6 @@
 # Nethercore Examples
 
-**42 working examples** organized into 8 categories to help you learn game development with Nethercore.
+**40 working examples** organized into 8 categories to help you learn game development with Nethercore.
 
 ## 📁 Organization
 
@@ -13,7 +13,7 @@ examples/
 ├── 5-audio/             →  2 examples   (Sound effects, music)
 ├── 6-assets/            →  4 examples   (ROM loading, data packs)
 ├── 7-games/             →  2 examples   (Complete games)
-├── 8-advanced/          →  5 examples   (Stencils, viewports, mirrors)
+├── 8-advanced/          →  3 examples   (Stencils, viewports, mirrors)
 └── examples-common/     →  Support library
 ```
 
@@ -175,17 +175,15 @@ Fully playable games demonstrating complete game loops.
 
 ---
 
-### 8. Advanced Rendering (5 examples)
+### 8. Advanced Rendering (3 examples)
 
 Stencil buffers, viewports, and advanced techniques.
 
 | Example | Description | Difficulty | Key Features |
 |---------|-------------|------------|--------------|
 | **stencil-demo** | All 4 stencil masking modes | 🔴 Advanced | Circle, inverted, diagonal, multiple masks |
-| **portal-demo** | Portal rendering using stencil masking | 🔴 Advanced | Stencil + teleportation |
 | **viewport-test** | Split-screen rendering (2P, 4P) | 🟡 Intermediate | Multiple viewports |
 | **rear-mirror** | Rear-view mirror for racing | 🔴 Advanced | Secondary viewport |
-| **scope-shooter** | Sniper scope mechanic | 🔴 Advanced | Stencil masking + zoom |
 
 ---
 
@@ -200,10 +198,10 @@ Stencil buffers, viewports, and advanced techniques.
 
 ## 📊 Statistics
 
-- **Total Examples:** 42 working examples
+- **Total Examples:** 41 working examples
 - **Beginner-Friendly:** 10 examples (🟢)
 - **Intermediate:** 23 examples (🟡)
-- **Advanced:** 13 examples (🔴)
+- **Advanced:** 12 examples (🔴)
 - **Languages:** Rust, C, Zig
 - **Complete Games:** 2
 

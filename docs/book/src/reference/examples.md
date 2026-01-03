@@ -1,6 +1,6 @@
 # Example Games
 
-The Nethercore repository includes 42 working examples organized into 8 categories. Each example is a complete, buildable project.
+The Nethercore repository includes 41 working examples organized into 8 categories. Each example is a complete, buildable project.
 
 ## Location
 
@@ -15,7 +15,7 @@ nethercore/examples/
 ├── 5-audio/             (2 examples)
 ├── 6-assets/            (4 examples)
 ├── 7-games/             (2 examples)
-├── 8-advanced/          (5 examples)
+├── 8-advanced/          (4 examples)
 └── examples-common/     (support library)
 ```
 
@@ -109,7 +109,6 @@ New to Nethercore? Follow this progression:
 | Example | Description |
 |---------|-------------|
 | **stencil-demo** | All 4 stencil masking modes |
-| **portal-demo** | Portal rendering using stencil masking |
 | **viewport-test** | Split-screen rendering (2P, 4P) |
 | **rear-mirror** | Rear-view mirror using viewport |
 | **scope-shooter** | Sniper scope mechanic with stencil |
