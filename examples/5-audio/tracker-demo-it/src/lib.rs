@@ -32,11 +32,11 @@ const COLOR_GRAY: u32 = 0x888888FF;
 const COLOR_PLAYING: u32 = 0x00FF00FF;
 const COLOR_PAUSED: u32 = 0xFFAA00FF;
 const COLOR_DAWN: u32 = 0xFFD700FF;
-const COLOR_MIST: u32 = 0x6A5ACDFF;
+const COLOR_ACID: u32 = 0x00FF00FF;
 const COLOR_STORM: u32 = 0xFF4500FF;
 
 const NUM_SONGS: u32 = 3;
-const TEMPOS: [u32; 3] = [90, 70, 174];
+const TEMPOS: [u32; 3] = [90, 130, 174];
 
 static mut TRACKER_HANDLES: [u32; 3] = [0; 3];
 static mut CURRENT_SONG: u32 = 0;
@@ -75,7 +75,7 @@ pub extern "C" fn init() {
     unsafe {
         set_clear_color(COLOR_BG);
         TRACKER_HANDLES[0] = rom_tracker(b"nether_dawn".as_ptr(), 11);
-        TRACKER_HANDLES[1] = rom_tracker(b"nether_mist".as_ptr(), 11);
+        TRACKER_HANDLES[1] = rom_tracker(b"nether_acid".as_ptr(), 11);
         TRACKER_HANDLES[2] = rom_tracker(b"nether_storm".as_ptr(), 12);
         music_play(TRACKER_HANDLES[0], VOLUME, 1);
         music_set_tempo(CURRENT_TEMPO);
@@ -131,7 +131,7 @@ pub extern "C" fn render() {
         // Song info
         let (title, color): (&[u8], u32) = match CURRENT_SONG {
             0 => (b"Nether Dawn (Orchestral)", COLOR_DAWN),
-            1 => (b"Nether Mist (Ambient)", COLOR_MIST),
+            1 => (b"Nether Acid (Acid Techno)", COLOR_ACID),
             _ => (b"Nether Storm (DnB)", COLOR_STORM),
         };
         draw_text_str(title, 60.0, 60.0, 32.0, color);

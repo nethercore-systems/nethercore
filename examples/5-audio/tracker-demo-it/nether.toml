@@ -3,7 +3,7 @@ id = "tracker-demo-it"
 title = "Tracker Demo (IT)"
 author = "Nethercore Examples"
 version = "1.0.0"
-description = "IT tracker music playback with three songs: Nether Dawn (Orchestral), Nether Mist (Ambient), Nether Storm (DnB)"
+description = "IT tracker music playback with three songs: Nether Dawn (Orchestral), Nether Acid (Acid Techno), Nether Storm (DnB)"
 tags = ["audio", "music", "tracker", "impulse-tracker"]
 
 # ============================================================================
@@ -18,7 +18,7 @@ tags = ["audio", "music", "tracker", "impulse-tracker"]
 #
 # Available songs:
 #   - "Nether Dawn" (Orchestral, 90 BPM, D major): strings, brass, choir, timpani, flute
-#   - "Nether Mist" (Ambient, 70 BPM, D minor): pads, drones, bells, atmospheric textures
+#   - "Nether Acid" (Acid Techno, 130 BPM, E minor): TB-303 bass, 909 drums, resonant filter
 #   - "Nether Storm" (DnB, 174 BPM, F minor): kick, snare, reese bass, wobble bass, leads
 # ============================================================================
 
@@ -27,8 +27,8 @@ id = "nether_dawn"
 path = "../../assets/tracker-nether_dawn-embedded.it"
 
 [[assets.trackers]]
-id = "nether_mist"
-path = "../../assets/tracker-nether_mist-embedded.it"
+id = "nether_acid"
+path = "../../assets/tracker-nether_acid-embedded.it"
 
 [[assets.trackers]]
 id = "nether_storm"

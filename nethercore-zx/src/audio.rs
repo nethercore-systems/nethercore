@@ -73,6 +73,7 @@ impl AudioOutput {
         let (producer, mut consumer) = ring.split();
 
         // Build the stream based on sample format
+        // NOTE: Using batch pop_slice() instead of per-sample try_pop() to prevent timing gaps
         let stream = match config.sample_format() {
             cpal::SampleFormat::F32 => {
                 let config = config.into();
@@ -80,10 +81,10 @@ impl AudioOutput {
                     .build_output_stream(
                         &config,
                         move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                            // Read samples from ring buffer, fill with silence if not enough
-                            for sample in data.iter_mut() {
-                                *sample = consumer.try_pop().unwrap_or(0.0);
-                            }
+                            // Batch read all available samples (much more efficient than per-sample)
+                            let popped = consumer.pop_slice(data);
+                            // Fill any remaining samples with silence
+                            data[popped..].fill(0.0);
                         },
                         |err| error!("Audio stream error: {}", err),
                         None,
@@ -92,13 +93,25 @@ impl AudioOutput {
             }
             cpal::SampleFormat::I16 => {
                 let config = config.into();
+                // Pre-allocate buffer for batch reads
+                let mut temp_buffer: Vec<f32> = vec![0.0; 4096];
                 device
                     .build_output_stream(
                         &config,
                         move |data: &mut [i16], _: &cpal::OutputCallbackInfo| {
-                            for sample in data.iter_mut() {
-                                let f = consumer.try_pop().unwrap_or(0.0);
-                                *sample = (f * 32767.0).clamp(-32768.0, 32767.0) as i16;
+                            // Resize temp buffer if needed
+                            if temp_buffer.len() < data.len() {
+                                temp_buffer.resize(data.len(), 0.0);
+                            }
+                            // Batch read f32 samples
+                            let popped = consumer.pop_slice(&mut temp_buffer[..data.len()]);
+                            // Convert popped samples to i16
+                            for (i, &f) in temp_buffer[..popped].iter().enumerate() {
+                                data[i] = (f * 32767.0).clamp(-32768.0, 32767.0) as i16;
+                            }
+                            // Fill remaining with silence
+                            for sample in &mut data[popped..] {
+                                *sample = 0;
                             }
                         },
                         |err| error!("Audio stream error: {}", err),
@@ -108,13 +121,25 @@ impl AudioOutput {
             }
             cpal::SampleFormat::U16 => {
                 let config = config.into();
+                // Pre-allocate buffer for batch reads
+                let mut temp_buffer: Vec<f32> = vec![0.0; 4096];
                 device
                     .build_output_stream(
                         &config,
                         move |data: &mut [u16], _: &cpal::OutputCallbackInfo| {
-                            for sample in data.iter_mut() {
-                                let f = consumer.try_pop().unwrap_or(0.0);
-                                *sample = ((f * 32767.0 + 32768.0).clamp(0.0, 65535.0)) as u16;
+                            // Resize temp buffer if needed
+                            if temp_buffer.len() < data.len() {
+                                temp_buffer.resize(data.len(), 0.0);
+                            }
+                            // Batch read f32 samples
+                            let popped = consumer.pop_slice(&mut temp_buffer[..data.len()]);
+                            // Convert popped samples to u16
+                            for (i, &f) in temp_buffer[..popped].iter().enumerate() {
+                                data[i] = ((f * 32767.0 + 32768.0).clamp(0.0, 65535.0)) as u16;
+                            }
+                            // Fill remaining with silence (0x8000 is silence for u16 audio)
+                            for sample in &mut data[popped..] {
+                                *sample = 32768;
                             }
                         },
                         |err| error!("Audio stream error: {}", err),

@@ -1,16 +1,16 @@
 //! IT file builders for each song
 //!
-//! This module provides IT file generation for three demo songs:
+//! This module provides IT file generation for demo songs:
+//! - **Nether Acid** - Acid Techno (130 BPM, E minor, 8 channels)
 //! - **Nether Dawn** - Epic/Orchestral (90 BPM, D major, 16 channels)
-//! - **Nether Mist** - Ambient (70 BPM, D minor, 12 channels)
 //! - **Nether Storm** - DnB/Action (174 BPM, F minor, 16 channels)
 
+pub mod acid;
 pub mod dawn;
-pub mod mist;
 pub mod storm;
 
+pub use acid::generate_acid_it;
 pub use dawn::generate_dawn_it;
-pub use mist::generate_mist_it;
 pub use storm::generate_storm_it;
 
 use nether_it::{ItInstrument, ItSample, NewNoteAction};

@@ -1,23 +1,16 @@
 //! Audio synthesizers for IT tracker demo
 //!
-//! This module provides procedural audio synthesis for three genres:
+//! This module provides procedural audio synthesis for multiple genres:
+//! - **Acid Techno**: "Nether Acid" - Hypnotic at 130 BPM in E minor
 //! - **Orchestral**: "Nether Dawn" - Epic at 90 BPM in D major
-//! - **Ambient**: "Nether Mist" - Atmospheric at 70 BPM in D minor
 //! - **DnB**: "Nether Storm" - Action at 174 BPM in F minor
 
-pub mod ambient;
 pub mod common;
 pub mod dnb;
 pub mod orchestral;
+pub mod techno;
 
 // Note: Common utilities are imported directly where needed
-
-// Re-export ambient instrument generators
-pub use ambient::{
-    generate_atmos_wind, generate_bass_sub, generate_bell_glass, generate_hit_dark,
-    generate_lead_echo, generate_lead_ghost, generate_noise_breath, generate_pad_air,
-    generate_pad_cold, generate_pad_sub, generate_pad_warm, generate_reverb_sim,
-};
 
 // Re-export DnB instrument generators
 pub use dnb::{
@@ -33,4 +26,11 @@ pub use orchestral::{
     generate_choir_oh, generate_cymbal_crash, generate_flute, generate_fx_epic,
     generate_harp_gliss, generate_pad_orchestra, generate_piano, generate_snare_orch,
     generate_strings_cello, generate_strings_viola, generate_strings_violin, generate_timpani,
+};
+
+// Re-export techno instrument generators
+pub use techno::{
+    generate_atmosphere_acid, generate_bass_303, generate_bass_303_squelch, generate_clap_909,
+    generate_crash_909, generate_hat_909_closed, generate_hat_909_open, generate_kick_909,
+    generate_pad_acid, generate_riser_acid, generate_stab_acid,
 };

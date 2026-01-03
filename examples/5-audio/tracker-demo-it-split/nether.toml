@@ -21,8 +21,8 @@ id = "nether_dawn"
 path = "../../assets/tracker-nether_dawn-embedded.it"
 
 [[assets.trackers]]
-id = "nether_mist"
-path = "../../assets/tracker-nether_mist-embedded.it"
+id = "nether_acid"
+path = "../../assets/tracker-nether_acid-embedded.it"
 
 [[assets.trackers]]
 id = "nether_storm"
@@ -101,54 +101,50 @@ path = "../../assets/tracker-dawn_pad.wav"
 id = "fx_epic"
 path = "../../assets/tracker-dawn_fx_epic.wav"
 
-# --- Nether Mist (Ambient) Samples ---
+# --- Nether Acid (Acid Techno) Samples ---
 [[assets.sounds]]
-id = "sub_drone"
-path = "../../assets/tracker-mist_sub_drone.wav"
+id = "acid_kick"
+path = "../../assets/tracker-acid_kick.wav"
 
 [[assets.sounds]]
-id = "air_pad"
-path = "../../assets/tracker-mist_air_pad.wav"
+id = "acid_clap"
+path = "../../assets/tracker-acid_clap.wav"
 
 [[assets.sounds]]
-id = "warm_pad"
-path = "../../assets/tracker-mist_warm_pad.wav"
+id = "acid_hat_closed"
+path = "../../assets/tracker-acid_hat_closed.wav"
 
 [[assets.sounds]]
-id = "cold_pad"
-path = "../../assets/tracker-mist_cold_pad.wav"
+id = "acid_hat_open"
+path = "../../assets/tracker-acid_hat_open.wav"
 
 [[assets.sounds]]
-id = "breath"
-path = "../../assets/tracker-mist_breath.wav"
+id = "acid_303"
+path = "../../assets/tracker-acid_303.wav"
 
 [[assets.sounds]]
-id = "glass_bell"
-path = "../../assets/tracker-mist_glass_bell.wav"
+id = "acid_pad"
+path = "../../assets/tracker-acid_pad.wav"
 
 [[assets.sounds]]
-id = "deep_bass"
-path = "../../assets/tracker-mist_deep_bass.wav"
+id = "acid_stab"
+path = "../../assets/tracker-acid_stab.wav"
 
 [[assets.sounds]]
-id = "ghost_lead"
-path = "../../assets/tracker-mist_ghost_lead.wav"
+id = "acid_303_squelch"
+path = "../../assets/tracker-acid_303_squelch.wav"
 
 [[assets.sounds]]
-id = "reverb"
-path = "../../assets/tracker-mist_reverb.wav"
+id = "acid_riser"
+path = "../../assets/tracker-acid_riser.wav"
 
 [[assets.sounds]]
-id = "wind"
-path = "../../assets/tracker-mist_wind.wav"
+id = "acid_atmosphere"
+path = "../../assets/tracker-acid_atmosphere.wav"
 
 [[assets.sounds]]
-id = "dark_hit"
-path = "../../assets/tracker-mist_dark_hit.wav"
-
-[[assets.sounds]]
-id = "echo_lead"
-path = "../../assets/tracker-mist_echo_lead.wav"
+id = "acid_crash"
+path = "../../assets/tracker-acid_crash.wav"
 
 # --- Nether Storm (DnB) Samples ---
 [[assets.sounds]]

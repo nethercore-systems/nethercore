@@ -1,8 +1,8 @@
 //! IT Tracker Demo Generator
 //!
 //! Generates procedural audio samples and IT tracker files:
+//! - Nether Acid (Acid Techno) - 130 BPM in E minor (~60-70s)
 //! - Nether Dawn (Epic/Orchestral) - 90 BPM in D major
-//! - Nether Mist (Ambient) - 70 BPM in D minor
 //! - Nether Storm (DnB/Action) - 174 BPM in F minor
 //!
 //! Each song is generated in two variants:
@@ -34,8 +34,8 @@ fn main() {
     fs::create_dir_all(&output_dir).expect("Failed to create output directory");
 
     // Generate each song
+    generate_acid(&output_dir);
     generate_storm(&output_dir);
-    generate_mist(&output_dir);
     generate_dawn(&output_dir);
 
     println!();
@@ -63,19 +63,19 @@ fn generate_storm(output_dir: &Path) {
     println!("  Done: {} bytes IT, {} samples", it_data.len(), samples.len());
 }
 
-fn generate_mist(output_dir: &Path) {
-    println!("Generating Nether Mist (Ambient @ 70 BPM)...");
+fn generate_acid(output_dir: &Path) {
+    println!("Generating Nether Acid (Acid Techno @ 130 BPM)...");
 
-    let (it_data, samples) = it_builder::generate_mist_it();
+    let (it_data, samples) = it_builder::generate_acid_it();
 
     // Write embedded IT file
-    let it_path = output_dir.join("tracker-nether_mist-embedded.it");
+    let it_path = output_dir.join("tracker-nether_acid-embedded.it");
     fs::write(&it_path, &it_data).expect("Failed to write IT file");
     println!("  Wrote: {}", it_path.display());
 
     // Write individual WAV samples
     for (name, data) in &samples {
-        let wav_path = output_dir.join(format!("tracker-mist_{}.wav", name));
+        let wav_path = output_dir.join(format!("tracker-acid_{}.wav", name));
         write_wav(&wav_path, data);
         println!("  Wrote: {}", wav_path.display());
     }
@@ -121,23 +121,23 @@ mod tests {
         assert_eq!(module.initial_speed, 3);
         assert_eq!(module.num_instruments, 15);
         assert_eq!(module.num_samples, 15);
-        assert_eq!(module.num_patterns, 6);
+        assert_eq!(module.num_patterns, 12); // Storm has 12 patterns
     }
 
     #[test]
-    fn test_mist_parses() {
-        let (it_data, _) = it_builder::generate_mist_it();
+    fn test_acid_parses() {
+        let (it_data, _) = it_builder::generate_acid_it();
         let result = parse_it(&it_data);
-        assert!(result.is_ok(), "Mist IT parse failed: {:?}", result.err());
+        assert!(result.is_ok(), "Acid IT parse failed: {:?}", result.err());
 
         let module = result.unwrap();
-        assert_eq!(module.name, "Nether Mist");
-        assert_eq!(module.num_channels, 12);
-        assert_eq!(module.initial_tempo, 70);
+        assert_eq!(module.name, "Nether Acid");
+        assert_eq!(module.num_channels, 8);
+        assert_eq!(module.initial_tempo, 130);
         assert_eq!(module.initial_speed, 6);
-        assert_eq!(module.num_instruments, 10);
-        assert_eq!(module.num_samples, 10);
-        assert_eq!(module.num_patterns, 6);
+        assert_eq!(module.num_instruments, 11); // Updated: 7 → 11 instruments
+        assert_eq!(module.num_samples, 11);     // Updated: 7 → 11 samples
+        assert_eq!(module.num_patterns, 12);    // Updated: 6 → 12 patterns
     }
 
     #[test]
