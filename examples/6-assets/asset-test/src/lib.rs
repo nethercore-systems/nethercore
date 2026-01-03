@@ -57,9 +57,6 @@ pub extern "C" fn init() {
         // Dark blue background
         set_clear_color(0x1a1a2eFF);
 
-        // Enable depth testing for proper 3D rendering
-        depth_test(1);
-
         // Load mesh from embedded .nczxmesh data (host parses header)
         CUBE_MESH = load_zmesh(
             CUBE_MESH_DATA.as_ptr(),

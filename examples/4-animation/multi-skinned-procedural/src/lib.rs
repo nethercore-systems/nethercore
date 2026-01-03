@@ -491,7 +491,6 @@ fn update_arm2_bones(time: f32) {
 pub extern "C" fn init() {
     unsafe {
         set_clear_color(0x1a2a1aFF);
-        depth_test(1);
 
         // Generate and load Arm 1 mesh
         let (verts1, indices1) = generate_arm1_mesh();

@@ -36,8 +36,6 @@ use crate::{
 pub struct ConsoleRunner<C: Console> {
     /// Graphics backend
     graphics: C::Graphics,
-    /// Audio backend
-    audio: C::Audio,
     /// WASM engine (shared, can be cloned for multiple games)
     wasm_engine: WasmEngine,
     /// Active game session (None if no game loaded)
@@ -57,17 +55,15 @@ impl<C: Console> ConsoleRunner<C> {
     /// Returns an error if graphics or audio initialization fails.
     pub fn new(console: C, window: Arc<Window>) -> Result<Self> {
         let graphics = console.create_graphics(window)?;
-        let audio = console.create_audio()?;
         let wasm_engine = WasmEngine::new()?;
         let specs = C::specs();
 
         // Note: We don't store the console here because the Runtime takes ownership
-        // when a game is loaded. The console is primarily needed for its specs
-        // and for creating the graphics/audio/resource_manager.
+        // when a game is loaded. Audio is created in start_local/start_online
+        // and given directly to the Runtime.
 
         Ok(Self {
             graphics,
-            audio,
             wasm_engine,
             session: None,
             specs,
@@ -82,11 +78,6 @@ impl<C: Console> ConsoleRunner<C> {
     /// Get a reference to the graphics backend.
     pub fn graphics(&self) -> &C::Graphics {
         &self.graphics
-    }
-
-    /// Get a mutable reference to the audio backend.
-    pub fn audio_mut(&mut self) -> &mut C::Audio {
-        &mut self.audio
     }
 
     /// Get mutable references to both graphics and session simultaneously.
@@ -196,7 +187,7 @@ impl<C: Console> ConsoleRunner<C> {
         let mut session = GameSession::new(runtime, resource_manager);
 
         // Process resources created during init
-        session.process_pending_resources(&mut self.graphics, &mut self.audio)?;
+        session.process_pending_resources(&mut self.graphics)?;
 
         self.session = Some(session);
         Ok(())
@@ -281,7 +272,7 @@ impl<C: Console> ConsoleRunner<C> {
         let mut game_session = GameSession::new(runtime, resource_manager);
 
         // Process resources created during init
-        game_session.process_pending_resources(&mut self.graphics, &mut self.audio)?;
+        game_session.process_pending_resources(&mut self.graphics)?;
 
         self.session = Some(game_session);
         Ok(())

@@ -100,6 +100,19 @@ impl ItWriter {
         self.module.samples.len() as u8
     }
 
+    /// Add a sample header without audio data (for stripped IT files)
+    /// Returns the 1-based sample number
+    pub fn add_sample_header_only(&mut self, sample: ItSample) -> u8 {
+        let mut sample = sample;
+        sample.length = 0; // Force zero length
+        sample.flags = ItSampleFlags::from_bits(sample.flags.bits() & !ItSampleFlags::HAS_DATA.bits()); // Clear HAS_DATA flag
+
+        self.module.samples.push(sample);
+        self.sample_data.push(Vec::new()); // Empty audio data
+        self.module.num_samples = self.module.samples.len() as u16;
+        self.module.samples.len() as u8
+    }
+
     /// Add an empty pattern with the given number of rows
     /// Returns the 0-based pattern index
     pub fn add_pattern(&mut self, rows: u16) -> u8 {

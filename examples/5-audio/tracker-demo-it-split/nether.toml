@@ -7,26 +7,25 @@ description = "IT tracker demo with separate sample assets - demonstrates explic
 tags = ["audio", "music", "tracker", "impulse-tracker", "split-assets"]
 
 # ============================================================================
-# IT Tracker Modules
+# IT Tracker Modules (Stripped - No Embedded Samples)
 # ============================================================================
 #
-# These IT files contain embedded sample data. The samples are also loaded
-# explicitly below as [[assets.sounds]] entries with IDs matching the IT
-# instrument names. This allows samples to be used for both tracker playback
-# AND standalone sound effects.
+# These IT files contain NO sample data - only pattern/instrument references.
+# Samples are loaded explicitly via [[assets.sounds]] entries below.
+# This demonstrates split asset loading where tracker and samples are separate.
 # ============================================================================
 
 [[assets.trackers]]
 id = "nether_dawn"
-path = "../../assets/tracker-nether_dawn-embedded.it"
+path = "../../assets/tracker-nether_dawn.it"
 
 [[assets.trackers]]
 id = "nether_acid"
-path = "../../assets/tracker-nether_acid-embedded.it"
+path = "../../assets/tracker-nether_acid.it"
 
 [[assets.trackers]]
 id = "nether_storm"
-path = "../../assets/tracker-nether_storm-embedded.it"
+path = "../../assets/tracker-nether_storm.it"
 
 # ============================================================================
 # Explicit Sample Assets (Split Loading)

@@ -274,9 +274,6 @@ pub extern "C" fn init() {
         // Note: Sky uses reasonable defaults (blue gradient with sun) from the renderer
         // No need to set sky explicitly unless you want custom sky settings
 
-        // Enable depth testing
-        depth_test(1);
-
         // Load textures
         SPRITE_TEXTURE = load_texture(8, 8, SPRITE_PIXELS.as_ptr());
         TREE_TEXTURE = load_texture(8, 8, TREE_PIXELS.as_ptr());

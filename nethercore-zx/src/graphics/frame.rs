@@ -32,7 +32,7 @@ impl BindGroupKey {
 use super::ZXGraphics;
 use super::command_buffer::{BufferSource, CommandSortKey, VRPCommand};
 use super::pipeline::PipelineKey;
-use super::render_state::{CullMode, RenderState, StencilMode, TextureHandle};
+use super::render_state::{CullMode, PassConfig, RenderState, TextureHandle};
 use super::vertex::VERTEX_FORMAT_COUNT;
 use zx_common::pack_vertex_data;
 
@@ -206,60 +206,36 @@ impl ZXGraphics {
 
         // OPTIMIZATION 3: Sort draw commands IN-PLACE by CommandSortKey to minimize state changes
         // Commands are reset at the start of next frame, so no need to preserve original order or clone
-        // Sort order: stencil_group → viewport → layer → stencil_mode → render_type → depth/cull → textures
+        // Sort order: pass_id → viewport → z_index → render_type → cull → textures
         self.command_buffer
             .commands_mut()
             .sort_unstable_by_key(|cmd| match cmd {
                 VRPCommand::Mesh {
                     format,
-                    depth_test,
                     cull_mode,
                     textures,
                     viewport,
-                    stencil_mode,
-                    stencil_group,
+                    pass_id,
                     ..
-                } => CommandSortKey::mesh(
-                    *stencil_group,
-                    *viewport,
-                    *stencil_mode,
-                    *format,
-                    *depth_test,
-                    *cull_mode,
-                    *textures,
-                ),
+                } => CommandSortKey::mesh(*pass_id, *viewport, *format, *cull_mode, *textures),
                 VRPCommand::IndexedMesh {
                     format,
-                    depth_test,
                     cull_mode,
                     textures,
                     viewport,
-                    stencil_mode,
-                    stencil_group,
+                    pass_id,
                     ..
-                } => CommandSortKey::mesh(
-                    *stencil_group,
-                    *viewport,
-                    *stencil_mode,
-                    *format,
-                    *depth_test,
-                    *cull_mode,
-                    *textures,
-                ),
+                } => CommandSortKey::mesh(*pass_id, *viewport, *format, *cull_mode, *textures),
                 VRPCommand::Quad {
-                    depth_test,
                     texture_slots,
                     viewport,
-                    stencil_mode,
-                    stencil_group,
-                    layer,
+                    pass_id,
+                    z_index,
                     ..
                 } => CommandSortKey::quad(
-                    *stencil_group,
+                    *pass_id,
                     *viewport,
-                    *layer,
-                    *stencil_mode,
-                    *depth_test,
+                    *z_index,
                     [
                         texture_slots[0].0,
                         texture_slots[1].0,
@@ -267,12 +243,7 @@ impl ZXGraphics {
                         texture_slots[3].0,
                     ],
                 ),
-                VRPCommand::Sky {
-                    viewport,
-                    stencil_mode,
-                    stencil_group,
-                    ..
-                } => CommandSortKey::sky(*stencil_group, *viewport, *stencil_mode),
+                VRPCommand::Sky { viewport, pass_id, .. } => CommandSortKey::sky(*pass_id, *viewport),
             });
 
         // =================================================================
@@ -374,29 +345,27 @@ impl ZXGraphics {
         // This saves ~0.1ms/frame on typical hardware by avoiding descriptor set churn.
         let frame_bind_group = if let Some(first_cmd) = self.command_buffer.commands().first() {
             // Extract fields from first command variant
-            let (format, depth_test, cull_mode) = match first_cmd {
+            // Note: depth_test is now per-pass via PassConfig, but we use defaults for bind group layout
+            let (format, cull_mode, pass_id) = match first_cmd {
                 VRPCommand::Mesh {
-                    format,
-                    depth_test,
-                    cull_mode,
-                    ..
-                } => (*format, *depth_test, *cull_mode),
+                    format, cull_mode, pass_id, ..
+                } => (*format, *cull_mode, *pass_id),
                 VRPCommand::IndexedMesh {
-                    format,
-                    depth_test,
-                    cull_mode,
-                    ..
-                } => (*format, *depth_test, *cull_mode),
+                    format, cull_mode, pass_id, ..
+                } => (*format, *cull_mode, *pass_id),
                 VRPCommand::Quad {
-                    depth_test,
-                    cull_mode,
-                    ..
-                } => (self.unit_quad_format, *depth_test, *cull_mode),
-                VRPCommand::Sky { depth_test, .. } => {
+                    cull_mode, pass_id, ..
+                } => (self.unit_quad_format, *cull_mode, *pass_id),
+                VRPCommand::Sky { pass_id, .. } => {
                     // Sky uses its own pipeline, but we need values for bind group layout
-                    (0, *depth_test, CullMode::None)
+                    (0, CullMode::None, *pass_id)
                 }
             };
+
+            // Get PassConfig for the first command's pass to determine depth state
+            let pass_config = z_state.pass_configs.get(pass_id as usize)
+                .copied()
+                .unwrap_or_default();
 
             // Compute hash based on buffer capacities and render mode
             // When any capacity changes, buffer is recreated and bind group must be recreated
@@ -417,18 +386,19 @@ impl ZXGraphics {
                     cached.clone()
                 } else {
                     // Hash changed, need to recreate
+                    // Derive depth state from PassConfig for this pass
                     let first_state = RenderState {
-                        depth_test,
+                        depth_test: pass_config.depth_write,
                         cull_mode,
                     };
-                    // Use stencil_mode=0 for bind group layout - all pipelines share the same layout
+                    // Use default PassConfig for bind group layout - all pipelines share the same layout
                     let pipeline_entry = self.pipeline_cache.get_or_create(
                         &self.device,
                         self.config.format,
                         self.current_render_mode,
                         format,
                         &first_state,
-                        StencilMode::Disabled, // Bind group layout is same for all stencil modes
+                        &PassConfig::default(), // Bind group layout is same for all pass configs
                     );
 
                     // Bind group layout (grouped by purpose):
@@ -476,18 +446,19 @@ impl ZXGraphics {
                 }
             } else {
                 // No cached bind group, create new one
+                // Derive depth state from PassConfig for this pass
                 let first_state = RenderState {
-                    depth_test,
+                    depth_test: pass_config.depth_write,
                     cull_mode,
                 };
-                // Use stencil_mode=0 for bind group layout - all pipelines share the same layout
+                // Use default PassConfig for bind group layout - all pipelines share the same layout
                 let pipeline_entry = self.pipeline_cache.get_or_create(
                     &self.device,
                     self.config.format,
                     self.current_render_mode,
                     format,
                     &first_state,
-                    StencilMode::Disabled, // Bind group layout is same for all stencil modes
+                    &PassConfig::default(), // Bind group layout is same for all pass configs
                 );
 
                 // Bind group layout (grouped by purpose):
@@ -573,7 +544,7 @@ impl ZXGraphics {
 
             // State tracking to skip redundant GPU calls (commands are sorted by viewport/pipeline/texture)
             let mut current_viewport: Option<super::Viewport> = None;
-            let mut current_stencil_mode: Option<StencilMode> = None;
+            let mut current_pass_id: Option<u32> = None;
             let mut bound_pipeline: Option<PipelineKey> = None;
             let mut bound_texture_slots: Option<[TextureHandle; 4]> = None;
             let mut bound_vertex_format: Option<(u8, BufferSource)> = None;
@@ -607,9 +578,8 @@ impl ZXGraphics {
                 // For Quad: use texture_slots directly (already TextureHandle)
                 let (
                     cmd_viewport,
-                    cmd_stencil_mode,
+                    cmd_pass_id,
                     format,
-                    depth_test,
                     cull_mode,
                     texture_slots,
                     buffer_source,
@@ -618,18 +588,16 @@ impl ZXGraphics {
                 ) = match cmd {
                     VRPCommand::Mesh {
                         format,
-                        depth_test,
                         cull_mode,
                         textures,
                         buffer_index,
                         viewport,
-                        stencil_mode,
+                        pass_id,
                         ..
                     } => (
                         *viewport,
-                        *stencil_mode,
+                        *pass_id,
                         *format,
-                        *depth_test,
                         *cull_mode,
                         resolve_textures(textures), // Resolve FFI handles at render time
                         BufferSource::Immediate(*buffer_index),
@@ -638,18 +606,16 @@ impl ZXGraphics {
                     ),
                     VRPCommand::IndexedMesh {
                         format,
-                        depth_test,
                         cull_mode,
                         textures,
                         buffer_index,
                         viewport,
-                        stencil_mode,
+                        pass_id,
                         ..
                     } => (
                         *viewport,
-                        *stencil_mode,
+                        *pass_id,
                         *format,
-                        *depth_test,
                         *cull_mode,
                         resolve_textures(textures), // Resolve FFI handles at render time
                         BufferSource::Retained(*buffer_index),
@@ -657,33 +623,25 @@ impl ZXGraphics {
                         false,
                     ),
                     VRPCommand::Quad {
-                        depth_test,
                         cull_mode,
                         texture_slots,
                         viewport,
-                        stencil_mode,
+                        pass_id,
                         ..
                     } => (
                         *viewport,
-                        *stencil_mode,
+                        *pass_id,
                         self.unit_quad_format,
-                        *depth_test,
                         *cull_mode,
                         *texture_slots, // Already TextureHandle
                         BufferSource::Quad,
                         true,
                         false,
                     ),
-                    VRPCommand::Sky {
-                        depth_test,
-                        viewport,
-                        stencil_mode,
-                        ..
-                    } => (
+                    VRPCommand::Sky { viewport, pass_id, .. } => (
                         *viewport,
-                        *stencil_mode,
+                        *pass_id,
                         self.unit_quad_format, // Sky uses unit quad mesh
-                        *depth_test,
                         super::render_state::CullMode::None,
                         [TextureHandle::INVALID; 4], // Default textures (unused)
                         BufferSource::Quad,          // Sky renders as a fullscreen quad
@@ -691,6 +649,11 @@ impl ZXGraphics {
                         true,
                     ),
                 };
+
+                // Get PassConfig for this command's pass
+                let cmd_pass_config = z_state.pass_configs.get(cmd_pass_id as usize)
+                    .copied()
+                    .unwrap_or_default();
 
                 // Set viewport and scissor rect if changed (split-screen support)
                 if current_viewport != Some(cmd_viewport) {
@@ -711,21 +674,18 @@ impl ZXGraphics {
                     current_viewport = Some(cmd_viewport);
                 }
 
-                // Set stencil reference if stencil mode changed
-                if current_stencil_mode != Some(cmd_stencil_mode) {
-                    // Set stencil reference to 1 for ALL stencil modes that use it:
-                    // - Writing mode: Replace operation writes this value to stencil buffer
-                    // - Testing mode: Compare checks stencil == this value
-                    // - TestingInverted: Compare checks stencil != this value
-                    if cmd_stencil_mode.is_active() {
-                        render_pass.set_stencil_reference(1);
+                // Set stencil reference if pass changed
+                if current_pass_id != Some(cmd_pass_id) {
+                    // Set stencil reference from PassConfig
+                    if cmd_pass_config.is_stencil_active() {
+                        render_pass.set_stencil_reference(cmd_pass_config.stencil_ref as u32);
                     }
-                    current_stencil_mode = Some(cmd_stencil_mode);
+                    current_pass_id = Some(cmd_pass_id);
                 }
 
-                // Create render state from command
+                // Create render state from command (depth_test derived from PassConfig)
                 let state = RenderState {
-                    depth_test,
+                    depth_test: cmd_pass_config.depth_write,
                     cull_mode,
                 };
 
@@ -735,7 +695,7 @@ impl ZXGraphics {
                     self.pipeline_cache.get_or_create_sky(
                         &self.device,
                         self.config.format,
-                        cmd_stencil_mode,
+                        &cmd_pass_config,
                     );
                 } else if is_quad {
                     // Quad rendering: Ensure quad pipeline exists
@@ -743,7 +703,7 @@ impl ZXGraphics {
                         &self.device,
                         self.config.format,
                         &state,
-                        cmd_stencil_mode,
+                        &cmd_pass_config,
                     );
                 } else {
                     // Regular mesh rendering: Ensure format-specific pipeline exists
@@ -751,7 +711,7 @@ impl ZXGraphics {
                         self.current_render_mode,
                         format,
                         &state,
-                        cmd_stencil_mode,
+                        &cmd_pass_config,
                     ) {
                         self.pipeline_cache.get_or_create(
                             &self.device,
@@ -759,18 +719,18 @@ impl ZXGraphics {
                             self.current_render_mode,
                             format,
                             &state,
-                            cmd_stencil_mode,
+                            &cmd_pass_config,
                         );
                     }
                 }
 
                 // Now get immutable reference to pipeline entry (avoiding borrow issues)
                 let pipeline_key = if is_sky {
-                    PipelineKey::sky(cmd_stencil_mode)
+                    PipelineKey::sky(&cmd_pass_config)
                 } else if is_quad {
-                    PipelineKey::quad(&state, cmd_stencil_mode)
+                    PipelineKey::quad(&state, &cmd_pass_config)
                 } else {
-                    PipelineKey::new(self.current_render_mode, format, &state, cmd_stencil_mode)
+                    PipelineKey::new(self.current_render_mode, format, &state, &cmd_pass_config)
                 };
 
                 let pipeline_entry = self

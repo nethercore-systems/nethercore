@@ -371,7 +371,6 @@ fn rotate_point_x(point: [f32; 3], pivot: [f32; 3], angle: f32) -> [f32; 3] {
 pub extern "C" fn init() {
     unsafe {
         set_clear_color(0x202830FF);
-        depth_test(1);
 
         // Generate robot mesh
         let (vertices, indices) = generate_robot_mesh();

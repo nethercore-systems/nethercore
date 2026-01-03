@@ -61,7 +61,6 @@ pub extern "C" fn init() {
     unsafe {
         set_clear_color(0x87CEEBFF);
         render_mode(0);
-        depth_test(1);
 
         // Generate meshes
         CAR_BODY = cube(2.0, 0.8, 4.0);      // Car body

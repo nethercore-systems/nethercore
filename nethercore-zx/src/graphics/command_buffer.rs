@@ -5,14 +5,14 @@
 //! representation between FFI commands and GPU execution.
 
 use super::Viewport;
-use super::render_state::{CullMode, StencilMode, TextureHandle};
+use super::render_state::{CullMode, TextureHandle};
 use super::vertex::{VERTEX_FORMAT_COUNT, vertex_stride, vertex_stride_packed};
 
-/// Layer value for commands that don't participate in 2D layer ordering
+/// Z-index value for commands that don't participate in 2D ordering
 ///
-/// Sky and mesh commands use layer 0 as they don't use the 2D layering system.
+/// Sky and mesh commands use z_index 0 as they don't use the 2D ordering system.
 /// They're sorted by render_type instead.
-const NO_LAYER: u32 = 0;
+const NO_Z_INDEX: u32 = 0;
 
 /// Render type for command sorting and pipeline selection
 ///
@@ -78,14 +78,11 @@ pub enum VRPCommand {
         /// FFI texture handles captured at command creation time.
         /// Resolved to TextureHandle at render time via texture_map.
         textures: [u32; 4],
-        depth_test: bool,
         cull_mode: CullMode,
         /// Viewport for split-screen rendering (captured at command creation)
         viewport: Viewport,
-        /// Stencil mode for masked rendering
-        stencil_mode: StencilMode,
-        /// Stencil group for ordering stencil passes
-        stencil_group: u32,
+        /// Pass ID for render pass ordering (execution barrier)
+        pass_id: u32,
     },
     /// Indexed mesh draw (draw_mesh, load_mesh_indexed)
     IndexedMesh {
@@ -97,14 +94,11 @@ pub enum VRPCommand {
         /// FFI texture handles captured at command creation time.
         /// Resolved to TextureHandle at render time via texture_map.
         textures: [u32; 4],
-        depth_test: bool,
         cull_mode: CullMode,
         /// Viewport for split-screen rendering (captured at command creation)
         viewport: Viewport,
-        /// Stencil mode for masked rendering
-        stencil_mode: StencilMode,
-        /// Stencil group for ordering stencil passes
-        stencil_group: u32,
+        /// Pass ID for render pass ordering (execution barrier)
+        pass_id: u32,
     },
     /// GPU-instanced quad draw (billboards, sprites, text, rects)
     /// All quads share a single unit quad mesh (4 vertices, 6 indices)
@@ -114,57 +108,46 @@ pub enum VRPCommand {
         base_instance: u32,  // Starting instance index in instance buffer
         instance_count: u32, // Number of quad instances to draw
         texture_slots: [TextureHandle; 4],
-        depth_test: bool,
         cull_mode: CullMode,
         /// Viewport for split-screen rendering (captured at command creation)
         viewport: Viewport,
-        /// Stencil mode for masked rendering
-        stencil_mode: StencilMode,
-        /// Stencil group for ordering stencil passes
-        stencil_group: u32,
-        /// Layer for 2D ordering (higher layers render on top)
-        layer: u32,
+        /// Pass ID for render pass ordering (execution barrier)
+        pass_id: u32,
+        /// Z-index for 2D ordering within a pass (higher = closer to camera)
+        z_index: u32,
     },
     /// Sky draw (fullscreen gradient + sun)
     Sky {
         shading_state_index: u32, // Index into shading_states for sky data
-        depth_test: bool,         // Should be false (always behind)
         /// Viewport for split-screen rendering (captured at command creation)
         viewport: Viewport,
-        /// Stencil mode for masked rendering
-        stencil_mode: StencilMode,
-        /// Stencil group for ordering stencil passes
-        stencil_group: u32,
+        /// Pass ID for render pass ordering (execution barrier)
+        pass_id: u32,
     },
 }
 
 /// Sort key for draw command ordering
 ///
 /// Commands are sorted to minimize GPU state changes:
-/// 1. Stencil group (preserves stencil pass ordering across command sorting)
+/// 1. Pass ID (preserves render pass ordering - execution barriers)
 /// 2. Viewport (split-screen regions)
-/// 3. Layer (2D ordering for quads - higher layers render on top)
-/// 4. Stencil mode (masked rendering groups)
-/// 5. Render type (Quad → Mesh → Sky for optimal early-z)
-/// 6. Render state (depth test, cull mode)
-/// 7. Textures (minimize bind calls)
+/// 3. Z-index (2D ordering for quads - higher values render on top)
+/// 4. Render type (Quad → Mesh → Sky for optimal early-z)
+/// 5. Render state (cull mode)
+/// 6. Textures (minimize bind calls)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CommandSortKey {
-    /// Stencil group (highest priority - preserves stencil pass sequence)
-    /// Increments on stencil_begin, stencil_invert, stencil_clear
-    pub stencil_group: u32,
-    /// Viewport region (grouped first to minimize GPU viewport/scissor changes)
+    /// Pass ID (highest priority - preserves render pass sequence)
+    /// Increments on each begin_pass_*() call
+    pub pass_id: u32,
+    /// Viewport region (grouped to minimize GPU viewport/scissor changes)
     pub viewport: Viewport,
-    /// Layer for 2D ordering (only used for quads, 0 for other commands)
-    pub layer: u32,
-    /// Stencil mode for masked rendering
-    pub stencil_mode: StencilMode,
+    /// Z-index for 2D ordering (only used for quads, 0 for other commands)
+    pub z_index: u32,
     /// Render type (Quad=0, Mesh=1, Sky=2)
     pub render_type: RenderType,
     /// Vertex format (for regular pipelines)
     pub vertex_format: u8,
-    /// Depth test (false=0, true=1)
-    pub depth_test: u8,
     /// Cull mode (none=0, back=1, front=2)
     pub cull_mode: u8,
     /// Texture slots (for grouping by bound textures)
@@ -173,15 +156,13 @@ pub struct CommandSortKey {
 
 impl CommandSortKey {
     /// Create sort key for a sky command
-    pub fn sky(stencil_group: u32, viewport: Viewport, stencil_mode: StencilMode) -> Self {
+    pub fn sky(pass_id: u32, viewport: Viewport) -> Self {
         Self {
-            stencil_group,
+            pass_id,
             viewport,
-            layer: NO_LAYER,
-            stencil_mode,
+            z_index: NO_Z_INDEX,
             render_type: RenderType::Sky,
             vertex_format: 0,
-            depth_test: 0,
             cull_mode: 0,
             textures: [0; 4],
         }
@@ -189,44 +170,31 @@ impl CommandSortKey {
 
     /// Create sort key for a mesh command
     pub fn mesh(
-        stencil_group: u32,
+        pass_id: u32,
         viewport: Viewport,
-        stencil_mode: StencilMode,
         vertex_format: u8,
-        depth_test: bool,
         cull_mode: CullMode,
         textures: [u32; 4],
     ) -> Self {
         Self {
-            stencil_group,
+            pass_id,
             viewport,
-            layer: NO_LAYER,
-            stencil_mode,
+            z_index: NO_Z_INDEX,
             render_type: RenderType::Mesh,
             vertex_format,
-            depth_test: depth_test as u8,
             cull_mode: cull_mode as u8,
             textures,
         }
     }
 
     /// Create sort key for a quad command
-    pub fn quad(
-        stencil_group: u32,
-        viewport: Viewport,
-        layer: u32,
-        stencil_mode: StencilMode,
-        depth_test: bool,
-        textures: [u32; 4],
-    ) -> Self {
+    pub fn quad(pass_id: u32, viewport: Viewport, z_index: u32, textures: [u32; 4]) -> Self {
         Self {
-            stencil_group,
+            pass_id,
             viewport,
-            layer,
-            stencil_mode,
+            z_index,
             render_type: RenderType::Quad,
             vertex_format: 0,
-            depth_test: depth_test as u8,
             cull_mode: 0,
             textures,
         }
@@ -291,11 +259,9 @@ impl VirtualRenderPass {
         vertex_data: &[f32],
         buffer_index: u32,
         textures: [u32; 4],
-        depth_test: bool,
         cull_mode: CullMode,
         viewport: Viewport,
-        stencil_mode: StencilMode,
-        stencil_group: u32,
+        pass_id: u32,
     ) {
         let format_idx = format as usize;
         let stride = vertex_stride(format) as usize;
@@ -313,11 +279,9 @@ impl VirtualRenderPass {
             base_vertex,
             buffer_index,
             textures,
-            depth_test,
             cull_mode,
             viewport,
-            stencil_mode,
-            stencil_group,
+            pass_id,
         });
     }
 
@@ -333,11 +297,9 @@ impl VirtualRenderPass {
         index_data: &[u16],
         buffer_index: u32,
         textures: [u32; 4],
-        depth_test: bool,
         cull_mode: CullMode,
         viewport: Viewport,
-        stencil_mode: StencilMode,
-        stencil_group: u32,
+        pass_id: u32,
     ) {
         let format_idx = format as usize;
         let stride = vertex_stride(format) as usize;
@@ -360,11 +322,9 @@ impl VirtualRenderPass {
             first_index,
             buffer_index,
             textures,
-            depth_test,
             cull_mode,
             viewport,
-            stencil_mode,
-            stencil_group,
+            pass_id,
         });
     }
 
@@ -382,11 +342,9 @@ impl VirtualRenderPass {
         mesh_index_offset: u64,
         buffer_index: u32,
         textures: [u32; 4],
-        depth_test: bool,
         cull_mode: CullMode,
         viewport: Viewport,
-        stencil_mode: StencilMode,
-        stencil_group: u32,
+        pass_id: u32,
     ) {
         // Use packed stride since retained meshes are stored in packed format
         let stride = vertex_stride_packed(mesh_format) as u64;
@@ -402,11 +360,9 @@ impl VirtualRenderPass {
                 first_index,
                 buffer_index,
                 textures,
-                depth_test,
                 cull_mode,
                 viewport,
-                stencil_mode,
-                stencil_group,
+                pass_id,
             });
         } else {
             self.commands.push(VRPCommand::Mesh {
@@ -415,11 +371,9 @@ impl VirtualRenderPass {
                 base_vertex,
                 buffer_index,
                 textures,
-                depth_test,
                 cull_mode,
                 viewport,
-                stencil_mode,
-                stencil_group,
+                pass_id,
             });
         }
     }

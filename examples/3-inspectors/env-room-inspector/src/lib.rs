@@ -51,7 +51,6 @@ pub extern "C" fn init() {
     unsafe {
         set_clear_color(0x000000FF);
         render_mode(2);
-        depth_test(1);
         SPHERE_MESH = sphere(0.8, 24, 16);
         CUBE_MESH = cube(1.0, 1.0, 1.0);
         TORUS_MESH = torus(0.7, 0.25, 32, 16);

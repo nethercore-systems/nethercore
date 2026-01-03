@@ -35,15 +35,14 @@ impl<C: Console> GameSession<C> {
     /// This should be called after game.init() and after each game.render()
     /// to upload resources (textures, meshes, audio) that were requested
     /// during those phases.
-    pub fn process_pending_resources(
-        &mut self,
-        graphics: &mut C::Graphics,
-        audio: &mut C::Audio,
-    ) -> Result<()> {
-        let game = self
-            .runtime
-            .game_mut()
-            .ok_or_else(|| anyhow::anyhow!("No game loaded"))?;
+    ///
+    /// Audio is obtained from the runtime rather than passed as parameter.
+    pub fn process_pending_resources(&mut self, graphics: &mut C::Graphics) -> Result<()> {
+        // Get game and audio together to avoid borrow issues
+        let (game_opt, audio_opt) = self.runtime.game_and_audio_mut();
+
+        let game = game_opt.ok_or_else(|| anyhow::anyhow!("No game loaded"))?;
+        let audio = audio_opt.ok_or_else(|| anyhow::anyhow!("No audio configured"))?;
 
         let state = game.console_state_mut();
 

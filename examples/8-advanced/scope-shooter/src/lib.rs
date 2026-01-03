@@ -1,6 +1,6 @@
 //! Scope Shooter Example
 //!
-//! Demonstrates a sniper scope mechanic using stencil masking.
+//! Demonstrates a sniper scope mechanic using the render pass system for stencil masking.
 //!
 //! Controls:
 //! - Left stick: Look around
@@ -55,7 +55,6 @@ pub extern "C" fn init() {
     unsafe {
         set_clear_color(0x87CEEBFF); // Sky blue
         render_mode(0);
-        depth_test(1);
 
         // Generate scene objects
         CUBE_MESH = cube(2.0, 2.0, 2.0);
@@ -253,21 +252,29 @@ pub extern "C" fn render() {
     unsafe {
         if IS_SCOPED {
             // Draw black border outside scope using inverted stencil
-            stencil_begin();
+            begin_pass_stencil_write(1, 0);
             draw_scope_mask();
-            stencil_invert(); // Render OUTSIDE the circle
+            begin_pass_full(
+                compare::LESS,      // depth_compare
+                1,                  // depth_write
+                0,                  // clear_depth
+                compare::NOT_EQUAL, // stencil_compare (inverted - render OUTSIDE)
+                1,                  // stencil_ref
+                stencil_op::KEEP,   // stencil_pass_op
+                stencil_op::KEEP,   // stencil_fail_op
+                stencil_op::KEEP,   // stencil_depth_fail_op
+            );
             set_color(0x111111FF);
-        draw_rect(0.0, 0.0, SCREEN_WIDTH, SCREEN_HEIGHT);
-            stencil_clear();
+            draw_rect(0.0, 0.0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
             // Draw zoomed scene inside scope
-            stencil_begin();
+            begin_pass_stencil_write(1, 0);
             draw_scope_mask();
-            stencil_end();
+            begin_pass_stencil_test(1, 1); // clear_depth = 1 for proper 3D view inside scope
             draw_scene(SCOPED_FOV);
-            stencil_clear();
 
-            // Draw reticle on top
+            // Return to normal rendering for reticle
+            begin_pass(0);
             draw_reticle();
 
             // Scope frame text
@@ -315,7 +322,7 @@ pub extern "C" fn render() {
                 title.as_ptr(), title.len() as u32, 10.0, 10.0, 24.0);
 
             // Explanation
-            let explain = "Stencil masks the scope view to a circle";
+            let explain = "Render passes mask the scope view to a circle";
             set_color(0x888888FF,
             );
         draw_text(

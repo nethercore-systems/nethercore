@@ -112,9 +112,6 @@ pub extern "C" fn init() {
         // Set render mode 0 (Lambert diffuse shading)
         render_mode(0);
 
-        // Enable depth testing
-        depth_test(1);
-
         // Generate meshes
         SPHERE_MESH = sphere(1.5, 32, 16);
         CUBE_MESH = cube(1.2, 1.2, 1.2);

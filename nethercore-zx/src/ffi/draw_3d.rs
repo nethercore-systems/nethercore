@@ -74,9 +74,8 @@ fn draw_triangles(
     // Capture current viewport for split-screen rendering
     let viewport = state.current_viewport;
 
-    // Capture stencil mode for masked rendering
-    let stencil_mode = state.stencil_mode;
-    let stencil_group = state.stencil_group;
+    // Capture current pass_id for render pass ordering
+    let pass_id = state.current_pass_id;
 
     // Allocate combined MVP+shading buffer index (lazy allocation with deduplication)
     let buffer_index = state.add_mvp_shading_state();
@@ -87,11 +86,9 @@ fn draw_triangles(
         &vertex_data,
         buffer_index,
         textures,
-        state.depth_test,
         cull_mode,
         viewport,
-        stencil_mode,
-        stencil_group,
+        pass_id,
     );
 }
 
@@ -173,9 +170,8 @@ fn draw_triangles_indexed(
     // Capture current viewport for split-screen rendering
     let viewport = state.current_viewport;
 
-    // Capture stencil mode for masked rendering
-    let stencil_mode = state.stencil_mode;
-    let stencil_group = state.stencil_group;
+    // Capture current pass_id for render pass ordering
+    let pass_id = state.current_pass_id;
 
     // Allocate combined MVP+shading buffer index (lazy allocation with deduplication)
     let buffer_index = state.add_mvp_shading_state();
@@ -187,10 +183,8 @@ fn draw_triangles_indexed(
         &index_data,
         buffer_index,
         textures,
-        state.depth_test,
         cull_mode,
         viewport,
-        stencil_mode,
-        stencil_group,
+        pass_id,
     );
 }

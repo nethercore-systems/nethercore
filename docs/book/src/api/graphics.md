@@ -321,93 +321,6 @@ export fn render() void {
 
 ---
 
-### depth_test
-
-Enables or disables depth testing.
-
-**Signature:**
-
-{{#tabs global="lang"}}
-
-{{#tab name="Rust"}}
-```rust
-fn depth_test(enabled: u32)
-```
-{{#endtab}}
-
-{{#tab name="C/C++"}}
-```c
-NCZX_IMPORT void depth_test(uint32_t enabled);
-```
-{{#endtab}}
-
-{{#tab name="Zig"}}
-```zig
-pub extern fn depth_test(enabled: u32) void;
-```
-{{#endtab}}
-
-{{#endtabs}}
-
-**Parameters:**
-
-| Name | Type | Description |
-|------|------|-------------|
-| enabled | `u32` | `1` to enable, `0` to disable |
-
-**Example:**
-
-{{#tabs global="lang"}}
-
-{{#tab name="Rust"}}
-```rust
-fn render() {
-    // 3D scene with depth
-    depth_test(1);
-    draw_mesh(level);
-    draw_mesh(player);
-
-    // UI overlay without depth
-    depth_test(0);
-    draw_sprite(0.0, 0.0, 100.0, 50.0, 0xFFFFFFFF);
-}
-```
-{{#endtab}}
-
-{{#tab name="C/C++"}}
-```c
-NCZX_EXPORT void render(void) {
-    // 3D scene with depth
-    depth_test(1);
-    draw_mesh(level);
-    draw_mesh(player);
-
-    // UI overlay without depth
-    depth_test(0);
-    draw_sprite(0.0f, 0.0f, 100.0f, 50.0f, 0xFFFFFFFF);
-}
-```
-{{#endtab}}
-
-{{#tab name="Zig"}}
-```zig
-export fn render() void {
-    // 3D scene with depth
-    depth_test(1);
-    draw_mesh(level);
-    draw_mesh(player);
-
-    // UI overlay without depth
-    depth_test(0);
-    draw_sprite(0.0, 0.0, 100.0, 50.0, 0xFFFFFFFF);
-}
-```
-{{#endtab}}
-
-{{#endtabs}}
-
----
-
 ### cull_mode
 
 Sets face culling mode.
@@ -750,6 +663,419 @@ export fn render() void {
 
 ---
 
+## Render Passes (Execution Barriers)
+
+Render passes provide execution barriers with configurable depth and stencil state. Commands in pass N are guaranteed to complete before commands in pass N+1 begin.
+
+### begin_pass
+
+Starts a new render pass with standard depth testing (depth enabled, compare LESS, write ON).
+
+**Signature:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn begin_pass(clear_depth: u32)
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_IMPORT void begin_pass(uint32_t clear_depth);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn begin_pass(clear_depth: u32) void;
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| clear_depth | `u32` | `1` to clear depth buffer, `0` to preserve |
+
+**Example:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn render() {
+    // Draw world normally
+    draw_mesh(world);
+
+    // Start new pass, clear depth to draw gun on top
+    begin_pass(1);
+    draw_mesh(fps_gun);
+}
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_EXPORT void render(void) {
+    // Draw world normally
+    draw_mesh(world);
+
+    // Start new pass, clear depth to draw gun on top
+    begin_pass(1);
+    draw_mesh(fps_gun);
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+export fn render() void {
+    // Draw world normally
+    draw_mesh(world);
+
+    // Start new pass, clear depth to draw gun on top
+    begin_pass(1);
+    draw_mesh(fps_gun);
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+---
+
+### begin_pass_stencil_write
+
+Starts a stencil write pass for mask creation. Depth is disabled, stencil writes reference value on pass.
+
+**Signature:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn begin_pass_stencil_write(ref_value: u32, clear_depth: u32)
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_IMPORT void begin_pass_stencil_write(uint32_t ref_value, uint32_t clear_depth);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn begin_pass_stencil_write(ref_value: u32, clear_depth: u32) void;
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| ref_value | `u32` | Stencil reference value to write (0-255) |
+| clear_depth | `u32` | `1` to clear depth buffer, `0` to preserve |
+
+**Example:** See [Portal Effect](#stencil-portal-example) below.
+
+---
+
+### begin_pass_stencil_test
+
+Starts a stencil test pass to render only where stencil equals reference. Depth testing is enabled.
+
+**Signature:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn begin_pass_stencil_test(ref_value: u32, clear_depth: u32)
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_IMPORT void begin_pass_stencil_test(uint32_t ref_value, uint32_t clear_depth);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn begin_pass_stencil_test(ref_value: u32, clear_depth: u32) void;
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| ref_value | `u32` | Stencil reference value to test against (0-255) |
+| clear_depth | `u32` | `1` to clear depth buffer (for portal interiors), `0` to preserve |
+
+**Example:** See [Portal Effect](#stencil-portal-example) below.
+
+---
+
+### begin_pass_full
+
+Starts a pass with full control over depth and stencil state.
+
+**Signature:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn begin_pass_full(
+    depth_compare: u32,
+    depth_write: u32,
+    clear_depth: u32,
+    stencil_compare: u32,
+    stencil_ref: u32,
+    stencil_pass_op: u32,
+    stencil_fail_op: u32,
+    stencil_depth_fail_op: u32,
+)
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_IMPORT void begin_pass_full(
+    uint32_t depth_compare,
+    uint32_t depth_write,
+    uint32_t clear_depth,
+    uint32_t stencil_compare,
+    uint32_t stencil_ref,
+    uint32_t stencil_pass_op,
+    uint32_t stencil_fail_op,
+    uint32_t stencil_depth_fail_op
+);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn begin_pass_full(
+    depth_compare: u32,
+    depth_write: u32,
+    clear_depth: u32,
+    stencil_compare: u32,
+    stencil_ref: u32,
+    stencil_pass_op: u32,
+    stencil_fail_op: u32,
+    stencil_depth_fail_op: u32,
+) void;
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+**Compare Function Constants:**
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| `compare::NEVER` | 1 | Never pass |
+| `compare::LESS` | 2 | Pass if src < dst |
+| `compare::EQUAL` | 3 | Pass if src == dst |
+| `compare::LESS_EQUAL` | 4 | Pass if src <= dst |
+| `compare::GREATER` | 5 | Pass if src > dst |
+| `compare::NOT_EQUAL` | 6 | Pass if src != dst |
+| `compare::GREATER_EQUAL` | 7 | Pass if src >= dst |
+| `compare::ALWAYS` | 8 | Always pass |
+
+**Stencil Operation Constants:**
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| `stencil_op::KEEP` | 0 | Keep current value |
+| `stencil_op::ZERO` | 1 | Set to zero |
+| `stencil_op::REPLACE` | 2 | Replace with ref value |
+| `stencil_op::INCREMENT_CLAMP` | 3 | Increment, clamp to max |
+| `stencil_op::DECREMENT_CLAMP` | 4 | Decrement, clamp to 0 |
+| `stencil_op::INVERT` | 5 | Bitwise invert |
+| `stencil_op::INCREMENT_WRAP` | 6 | Increment, wrap to 0 |
+| `stencil_op::DECREMENT_WRAP` | 7 | Decrement, wrap to max |
+
+---
+
+### z_index
+
+Sets the Z-order index for 2D draw ordering within a pass. Higher values draw on top.
+
+**Signature:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn z_index(n: u32)
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_IMPORT void z_index(uint32_t n);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn z_index(n: u32) void;
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| n | `u32` | Z-order index (0-255) |
+
+**Example:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn render() {
+    // Background (lowest)
+    z_index(0);
+    draw_sprite(bg_x, bg_y, bg_w, bg_h, bg_color);
+
+    // Game objects
+    z_index(1);
+    draw_sprite(obj_x, obj_y, obj_w, obj_h, obj_color);
+
+    // UI on top
+    z_index(2);
+    draw_sprite(ui_x, ui_y, ui_w, ui_h, ui_color);
+}
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_EXPORT void render(void) {
+    // Background (lowest)
+    z_index(0);
+    draw_sprite(bg_x, bg_y, bg_w, bg_h, bg_color);
+
+    // Game objects
+    z_index(1);
+    draw_sprite(obj_x, obj_y, obj_w, obj_h, obj_color);
+
+    // UI on top
+    z_index(2);
+    draw_sprite(ui_x, ui_y, ui_w, ui_h, ui_color);
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+export fn render() void {
+    // Background (lowest)
+    z_index(0);
+    draw_sprite(bg_x, bg_y, bg_w, bg_h, bg_color);
+
+    // Game objects
+    z_index(1);
+    draw_sprite(obj_x, obj_y, obj_w, obj_h, obj_color);
+
+    // UI on top
+    z_index(2);
+    draw_sprite(ui_x, ui_y, ui_w, ui_h, ui_color);
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+---
+
+### Stencil Portal Example {#stencil-portal-example}
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn render() {
+    // 1. Draw main world
+    draw_mesh(main_world);
+
+    // 2. Write portal shape to stencil buffer (invisible)
+    begin_pass_stencil_write(1, 0);
+    draw_mesh(portal_quad);
+
+    // 3. Draw portal interior (only where stencil == 1, clear depth)
+    begin_pass_stencil_test(1, 1);
+    draw_mesh(other_world);
+
+    // 4. Return to normal rendering
+    begin_pass(0);
+    draw_mesh(portal_frame);
+}
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_EXPORT void render(void) {
+    // 1. Draw main world
+    draw_mesh(main_world);
+
+    // 2. Write portal shape to stencil buffer (invisible)
+    begin_pass_stencil_write(1, 0);
+    draw_mesh(portal_quad);
+
+    // 3. Draw portal interior (only where stencil == 1, clear depth)
+    begin_pass_stencil_test(1, 1);
+    draw_mesh(other_world);
+
+    // 4. Return to normal rendering
+    begin_pass(0);
+    draw_mesh(portal_frame);
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+export fn render() void {
+    // 1. Draw main world
+    draw_mesh(main_world);
+
+    // 2. Write portal shape to stencil buffer (invisible)
+    begin_pass_stencil_write(1, 0);
+    draw_mesh(portal_quad);
+
+    // 3. Draw portal interior (only where stencil == 1, clear depth)
+    begin_pass_stencil_test(1, 1);
+    draw_mesh(other_world);
+
+    // 4. Return to normal rendering
+    begin_pass(0);
+    draw_mesh(portal_frame);
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+---
+
 ## Complete Example
 
 {{#tabs global="lang"}}
@@ -764,8 +1090,7 @@ fn init() {
 }
 
 fn render() {
-    // Draw 3D scene
-    depth_test(1);
+    // Draw 3D scene (depth testing is enabled by default)
     cull_mode(1);  // Enable back-face culling for performance
     texture_filter(1);
 
@@ -779,9 +1104,9 @@ fn render() {
     draw_mesh(water);
     uniform_alpha(15);  // Reset to fully opaque
 
-    // Draw UI (no depth)
-    depth_test(0);
+    // Draw UI (2D draws are always on top via z_index)
     texture_filter(0);
+    z_index(1);
     draw_sprite(10.0, 10.0, 200.0, 50.0, 0xFFFFFFFF);
 }
 ```
@@ -797,8 +1122,7 @@ NCZX_EXPORT void init(void) {
 }
 
 NCZX_EXPORT void render(void) {
-    // Draw 3D scene
-    depth_test(1);
+    // Draw 3D scene (depth testing is enabled by default)
     cull_mode(1);  // Enable back-face culling for performance
     texture_filter(1);
 
@@ -812,9 +1136,9 @@ NCZX_EXPORT void render(void) {
     draw_mesh(water);
     uniform_alpha(15);  // Reset to fully opaque
 
-    // Draw UI (no depth)
-    depth_test(0);
+    // Draw UI (2D draws are always on top via z_index)
     texture_filter(0);
+    z_index(1);
     draw_sprite(10.0f, 10.0f, 200.0f, 50.0f, 0xFFFFFFFF);
 }
 ```
@@ -830,8 +1154,7 @@ export fn init() void {
 }
 
 export fn render() void {
-    // Draw 3D scene
-    depth_test(1);
+    // Draw 3D scene (depth testing is enabled by default)
     cull_mode(1);  // Enable back-face culling for performance
     texture_filter(1);
 
@@ -845,9 +1168,9 @@ export fn render() void {
     draw_mesh(water);
     uniform_alpha(15);  // Reset to fully opaque
 
-    // Draw UI (no depth)
-    depth_test(0);
+    // Draw UI (2D draws are always on top via z_index)
     texture_filter(0);
+    z_index(1);
     draw_sprite(10.0, 10.0, 200.0, 50.0, 0xFFFFFFFF);
 }
 ```

@@ -437,9 +437,6 @@ pub extern "C" fn init() {
         // Set matcap render mode
         render_mode(1);
 
-        // Enable depth testing
-        depth_test(1);
-
         // Setup camera
         CAMERA.apply();
         camera_fov(60.0);

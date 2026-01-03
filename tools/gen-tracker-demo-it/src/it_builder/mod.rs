@@ -9,9 +9,10 @@ pub mod acid;
 pub mod dawn;
 pub mod storm;
 
-pub use acid::generate_acid_it;
-pub use dawn::generate_dawn_it;
-pub use storm::generate_storm_it;
+// Stripped and embedded variants
+pub use acid::{generate_acid_it_stripped, generate_acid_it_embedded};
+pub use dawn::{generate_dawn_it_stripped, generate_dawn_it_embedded};
+pub use storm::{generate_storm_it_stripped, generate_storm_it_embedded};
 
 use nether_it::{ItInstrument, ItSample, NewNoteAction};
 

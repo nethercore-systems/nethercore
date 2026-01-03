@@ -57,9 +57,6 @@ pub extern "C" fn init() {
         // Dark blue background
         set_clear_color(0x1a2a3aFF);
 
-        // Enable depth testing
-        depth_test(1);
-
         // Load assets from ROM data pack
         // These go directly to VRAM, not WASM memory!
         CUBE_TEXTURE = rom_texture(b"cube_texture".as_ptr(), 12);

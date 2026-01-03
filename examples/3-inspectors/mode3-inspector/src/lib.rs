@@ -147,7 +147,6 @@ pub extern "C" fn init() {
     unsafe {
         set_clear_color(0x1a1a2eFF);
         render_mode(3); // Blinn-Phong (Specular-Shininess)
-        depth_test(1);
 
         // Generate meshes
         SPHERE_MESH = sphere(1.5, 32, 16);

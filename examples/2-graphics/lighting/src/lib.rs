@@ -132,9 +132,6 @@ pub extern "C" fn init() {
         // Note: Sky uses reasonable defaults (blue gradient with sun) from the renderer
         // No need to set sky explicitly unless you want custom sky settings
 
-        // Enable depth testing
-        depth_test(1);
-
         // Generate smooth sphere procedurally
         // Using 64x32 segments for a high-quality sphere (similar to subdivision level 3)
         SPHERE_MESH = sphere(1.0, 64, 32);

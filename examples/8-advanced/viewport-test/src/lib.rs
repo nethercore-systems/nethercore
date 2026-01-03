@@ -52,7 +52,6 @@ pub extern "C" fn init() {
     unsafe {
         set_clear_color(0x2a2a3aFF);
         render_mode(0);
-        depth_test(1);
 
         // Generate scene objects
         CUBE_MESH = cube(1.0, 1.0, 1.0);

@@ -6,8 +6,8 @@
 //! - Nether Storm (DnB/Action) - 174 BPM in F minor
 //!
 //! Each song is generated in two variants:
+//! - Stripped: IT file without sample data (for ROM/external samples)
 //! - Embedded: Self-contained IT file with samples embedded
-//! - External: IT file with separate WAV sample files
 
 mod it_builder;
 mod synthesizers;
@@ -46,12 +46,17 @@ fn main() {
 fn generate_storm(output_dir: &Path) {
     println!("Generating Nether Storm (DnB @ 174 BPM)...");
 
-    let (it_data, samples) = it_builder::generate_storm_it();
+    // Generate stripped IT file
+    let (it_stripped, samples) = it_builder::generate_storm_it_stripped();
+    let it_stripped_path = output_dir.join("tracker-nether_storm.it");
+    fs::write(&it_stripped_path, &it_stripped).expect("Failed to write stripped IT");
+    println!("  Wrote: {}", it_stripped_path.display());
 
-    // Write embedded IT file
-    let it_path = output_dir.join("tracker-nether_storm-embedded.it");
-    fs::write(&it_path, &it_data).expect("Failed to write IT file");
-    println!("  Wrote: {}", it_path.display());
+    // Generate embedded IT file
+    let (it_embedded, _) = it_builder::generate_storm_it_embedded();
+    let it_embedded_path = output_dir.join("tracker-nether_storm-embedded.it");
+    fs::write(&it_embedded_path, &it_embedded).expect("Failed to write embedded IT");
+    println!("  Wrote: {}", it_embedded_path.display());
 
     // Write individual WAV samples
     for (name, data) in &samples {
@@ -60,18 +65,24 @@ fn generate_storm(output_dir: &Path) {
         println!("  Wrote: {}", wav_path.display());
     }
 
-    println!("  Done: {} bytes IT, {} samples", it_data.len(), samples.len());
+    println!("  Done: {} bytes stripped, {} bytes embedded, {} samples",
+             it_stripped.len(), it_embedded.len(), samples.len());
 }
 
 fn generate_acid(output_dir: &Path) {
     println!("Generating Nether Acid (Acid Techno @ 130 BPM)...");
 
-    let (it_data, samples) = it_builder::generate_acid_it();
+    // Generate stripped IT file
+    let (it_stripped, samples) = it_builder::generate_acid_it_stripped();
+    let it_stripped_path = output_dir.join("tracker-nether_acid.it");
+    fs::write(&it_stripped_path, &it_stripped).expect("Failed to write stripped IT");
+    println!("  Wrote: {}", it_stripped_path.display());
 
-    // Write embedded IT file
-    let it_path = output_dir.join("tracker-nether_acid-embedded.it");
-    fs::write(&it_path, &it_data).expect("Failed to write IT file");
-    println!("  Wrote: {}", it_path.display());
+    // Generate embedded IT file
+    let (it_embedded, _) = it_builder::generate_acid_it_embedded();
+    let it_embedded_path = output_dir.join("tracker-nether_acid-embedded.it");
+    fs::write(&it_embedded_path, &it_embedded).expect("Failed to write embedded IT");
+    println!("  Wrote: {}", it_embedded_path.display());
 
     // Write individual WAV samples
     for (name, data) in &samples {
@@ -80,18 +91,24 @@ fn generate_acid(output_dir: &Path) {
         println!("  Wrote: {}", wav_path.display());
     }
 
-    println!("  Done: {} bytes IT, {} samples", it_data.len(), samples.len());
+    println!("  Done: {} bytes stripped, {} bytes embedded, {} samples",
+             it_stripped.len(), it_embedded.len(), samples.len());
 }
 
 fn generate_dawn(output_dir: &Path) {
     println!("Generating Nether Dawn (Orchestral @ 90 BPM)...");
 
-    let (it_data, samples) = it_builder::generate_dawn_it();
+    // Generate stripped IT file
+    let (it_stripped, samples) = it_builder::generate_dawn_it_stripped();
+    let it_stripped_path = output_dir.join("tracker-nether_dawn.it");
+    fs::write(&it_stripped_path, &it_stripped).expect("Failed to write stripped IT");
+    println!("  Wrote: {}", it_stripped_path.display());
 
-    // Write embedded IT file
-    let it_path = output_dir.join("tracker-nether_dawn-embedded.it");
-    fs::write(&it_path, &it_data).expect("Failed to write IT file");
-    println!("  Wrote: {}", it_path.display());
+    // Generate embedded IT file
+    let (it_embedded, _) = it_builder::generate_dawn_it_embedded();
+    let it_embedded_path = output_dir.join("tracker-nether_dawn-embedded.it");
+    fs::write(&it_embedded_path, &it_embedded).expect("Failed to write embedded IT");
+    println!("  Wrote: {}", it_embedded_path.display());
 
     // Write individual WAV samples
     for (name, data) in &samples {
@@ -100,7 +117,8 @@ fn generate_dawn(output_dir: &Path) {
         println!("  Wrote: {}", wav_path.display());
     }
 
-    println!("  Done: {} bytes IT, {} samples", it_data.len(), samples.len());
+    println!("  Done: {} bytes stripped, {} bytes embedded, {} samples",
+             it_stripped.len(), it_embedded.len(), samples.len());
 }
 
 #[cfg(test)]
@@ -110,7 +128,7 @@ mod tests {
 
     #[test]
     fn test_storm_parses() {
-        let (it_data, _) = it_builder::generate_storm_it();
+        let (it_data, _) = it_builder::generate_storm_it_embedded();
         let result = parse_it(&it_data);
         assert!(result.is_ok(), "Storm IT parse failed: {:?}", result.err());
 
@@ -126,7 +144,7 @@ mod tests {
 
     #[test]
     fn test_acid_parses() {
-        let (it_data, _) = it_builder::generate_acid_it();
+        let (it_data, _) = it_builder::generate_acid_it_embedded();
         let result = parse_it(&it_data);
         assert!(result.is_ok(), "Acid IT parse failed: {:?}", result.err());
 
@@ -142,7 +160,7 @@ mod tests {
 
     #[test]
     fn test_dawn_parses() {
-        let (it_data, _) = it_builder::generate_dawn_it();
+        let (it_data, _) = it_builder::generate_dawn_it_embedded();
         let result = parse_it(&it_data);
         assert!(result.is_ok(), "Dawn IT parse failed: {:?}", result.err());
 

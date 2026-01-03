@@ -84,7 +84,7 @@ fn draw_sprite(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, w: f32, h:
         view_idx,
     );
 
-    state.add_quad_instance(instance, state.current_layer);
+    state.add_quad_instance(instance, state.current_z_index);
 }
 
 /// Draw a region of a sprite sheet
@@ -143,7 +143,7 @@ fn draw_sprite_region(
         (state.view_matrices.len() - 1) as u32,
     );
 
-    state.add_quad_instance(instance, state.current_layer);
+    state.add_quad_instance(instance, state.current_z_index);
 }
 
 /// Draw a sprite with full control (rotation, origin, UV region)
@@ -211,7 +211,7 @@ fn draw_sprite_ex(
         (state.view_matrices.len() - 1) as u32,
     );
 
-    state.add_quad_instance(instance, state.current_layer);
+    state.add_quad_instance(instance, state.current_z_index);
 }
 
 /// Draw a solid color rectangle
@@ -255,7 +255,7 @@ fn draw_rect(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, w: f32, h: f
         (state.view_matrices.len() - 1) as u32,
     );
 
-    state.add_quad_instance(instance, state.current_layer);
+    state.add_quad_instance(instance, state.current_z_index);
 }
 
 /// Draw text with the built-in font
@@ -437,7 +437,7 @@ fn draw_text(
                 shading_state_index.0,
                 view_idx,
             );
-            state.add_quad_instance(instance, state.current_layer);
+            state.add_quad_instance(instance, state.current_z_index);
 
             cursor_x += glyph_width;
         }
@@ -465,7 +465,7 @@ fn draw_text(
                 shading_state_index.0,
                 view_idx,
             );
-            state.add_quad_instance(instance, state.current_layer);
+            state.add_quad_instance(instance, state.current_z_index);
 
             cursor_x += glyph_width;
         }
@@ -836,7 +836,7 @@ fn draw_line(
         view_idx,
     );
 
-    state.add_quad_instance(instance, state.current_layer);
+    state.add_quad_instance(instance, state.current_z_index);
 }
 
 /// Draw a filled circle
@@ -895,7 +895,7 @@ fn draw_circle(mut caller: Caller<'_, ZXGameContext>, x: f32, y: f32, radius: f3
             view_idx,
         );
 
-        state.add_quad_instance(instance, state.current_layer);
+        state.add_quad_instance(instance, state.current_z_index);
     }
 }
 
@@ -966,7 +966,7 @@ fn draw_circle_outline(
             view_idx,
         );
 
-        state.add_quad_instance(instance, state.current_layer);
+        state.add_quad_instance(instance, state.current_z_index);
     }
 }
 

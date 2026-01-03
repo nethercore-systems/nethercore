@@ -88,7 +88,6 @@ pub extern "C" fn init() {
     unsafe {
         // Dark blue-green background
         set_clear_color(0x1a2a3aFF);
-        depth_test(1);
 
         // Load all assets from ROM data pack
         TEXTURE = rom_texture(b"checker_texture".as_ptr(), 15);

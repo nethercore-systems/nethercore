@@ -76,7 +76,6 @@ static mut PAUSED: bool = false;
 pub extern "C" fn init() {
     unsafe {
         set_clear_color(0x1e2a1eFF);
-        depth_test(1);
 
         // Load character 1 assets from ROM
         ARM1_MESH = rom_mesh(b"arm1_mesh".as_ptr(), 9);

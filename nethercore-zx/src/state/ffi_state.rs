@@ -13,11 +13,11 @@ use super::{
     SkeletonData, SkeletonGpuInfo, StatePool, ZXInitConfig,
 };
 
-/// Default layer for 2D rendering (background layer)
+/// Default z-index for 2D rendering (background layer)
 ///
-/// Layer 0 represents the back-most layer. Higher values render on top.
-/// This is the default layer that's reset each frame.
-pub const DEFAULT_LAYER: u32 = 0;
+/// Z-index 0 represents the back-most layer. Higher values render on top.
+/// This is the default z-index that's reset each frame.
+pub const DEFAULT_Z_INDEX: u32 = 0;
 
 /// FFI staging state for Nethercore ZX
 ///
@@ -33,19 +33,19 @@ pub struct ZXFFIState {
     pub data_pack: Option<Arc<ZXDataPack>>,
 
     // Render state
-    pub depth_test: bool,
     pub cull_mode: crate::graphics::CullMode,
     pub texture_filter: crate::graphics::TextureFilter,
-    pub stencil_mode: crate::graphics::StencilMode,
-    /// Stencil group counter for ordering stencil operations
-    /// Increments on stencil_begin, stencil_invert, stencil_clear to preserve
-    /// the intended sequence of stencil passes when commands are sorted
-    pub stencil_group: u32,
     pub bound_textures: [u32; 4],
-    /// Current layer for 2D draw ordering (higher = closer to camera)
-    pub current_layer: u32,
+    /// Current z-index for 2D draw ordering (higher = closer to camera)
+    pub current_z_index: u32,
     /// Current viewport for split-screen rendering (default: fullscreen)
     pub current_viewport: crate::graphics::Viewport,
+
+    // Render pass system (replaces stencil_mode/stencil_group/depth_test)
+    /// Current pass ID (increments on each begin_pass_*() call)
+    pub current_pass_id: u32,
+    /// Pass configurations (indexed by pass_id)
+    pub pass_configs: Vec<crate::graphics::PassConfig>,
 
     // GPU skinning (3x4 matrices for 25% memory savings)
     pub bone_matrices: Vec<BoneMatrix3x4>,
@@ -176,14 +176,14 @@ impl Default for ZXFFIState {
 
         Self {
             data_pack: None, // Set during game loading
-            depth_test: true,
             cull_mode: crate::graphics::CullMode::None,
             texture_filter: crate::graphics::TextureFilter::Nearest,
-            stencil_mode: crate::graphics::StencilMode::Disabled,
-            stencil_group: 0,
             bound_textures: [0; 4],
-            current_layer: DEFAULT_LAYER,
+            current_z_index: DEFAULT_Z_INDEX,
             current_viewport: crate::graphics::Viewport::FULLSCREEN,
+            // Render pass system - pass 0 is always the default pass
+            current_pass_id: 0,
+            pass_configs: vec![crate::graphics::PassConfig::default()],
             bone_matrices: Vec::new(),
             bone_count: 0,
             skeletons: Vec::new(),
@@ -731,9 +731,9 @@ impl ZXFFIState {
 
     /// Add a quad instance to the appropriate batch (auto-batches by texture and viewport)
     ///
-    /// This automatically groups quads by texture, viewport, and layer to minimize draw calls.
-    /// When bound_textures, current_viewport, or layer changes, a new batch is created.
-    pub fn add_quad_instance(&mut self, instance: crate::graphics::QuadInstance, layer: u32) {
+    /// This automatically groups quads by texture, viewport, z-index, and pass to minimize draw calls.
+    /// When bound_textures, current_viewport, z_index, or pass_id changes, a new batch is created.
+    pub fn add_quad_instance(&mut self, instance: crate::graphics::QuadInstance, z_index: u32) {
         // Determine if this is a screen-space quad (2D)
         let is_screen_space = instance.mode == crate::graphics::QuadMode::ScreenSpace as u32;
 
@@ -742,24 +742,22 @@ impl ZXFFIState {
             && last_batch.textures == self.bound_textures
             && last_batch.is_screen_space == is_screen_space
             && last_batch.viewport == self.current_viewport
-            && last_batch.stencil_mode == self.stencil_mode
-            && last_batch.stencil_group == self.stencil_group
-            && last_batch.layer == layer
+            && last_batch.pass_id == self.current_pass_id
+            && last_batch.z_index == z_index
         {
-            // Same textures, mode, viewport, stencil, group, and layer - add to current batch
+            // Same textures, mode, viewport, pass, and z_index - add to current batch
             last_batch.instances.push(instance);
             return;
         }
 
-        // Need a new batch (first batch, textures changed, mode changed, viewport changed, stencil changed, group changed, or layer changed)
+        // Need a new batch (first batch, textures changed, mode changed, viewport changed, pass changed, or z_index changed)
         self.quad_batches.push(super::QuadBatch {
             is_screen_space,
             textures: self.bound_textures,
             instances: vec![instance],
             viewport: self.current_viewport,
-            stencil_mode: self.stencil_mode,
-            stencil_group: self.stencil_group,
-            layer,
+            pass_id: self.current_pass_id,
+            z_index,
         });
     }
 
@@ -824,13 +822,16 @@ impl ZXFFIState {
         self.bone_matrices.clear();
 
         // Reset render state to defaults each frame (immediate-mode consistency)
-        self.depth_test = true;
         self.cull_mode = crate::graphics::CullMode::None;
         self.texture_filter = crate::graphics::TextureFilter::Nearest;
-        self.stencil_mode = crate::graphics::StencilMode::Disabled;
-        self.stencil_group = 0; // Reset stencil group counter
-        self.current_layer = DEFAULT_LAYER; // Reset layer to background
+        self.current_z_index = DEFAULT_Z_INDEX; // Reset z-index to background
         self.current_viewport = crate::graphics::Viewport::FULLSCREEN; // Reset viewport to fullscreen
+
+        // Reset render pass system - pass 0 is always the default pass
+        self.current_pass_id = 0;
+        self.pass_configs.clear();
+        self.pass_configs.push(crate::graphics::PassConfig::default());
+
         // Note: color and shading state already rebuild each frame via add_shading_state()
     }
 }

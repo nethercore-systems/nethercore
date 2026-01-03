@@ -244,12 +244,6 @@ NCZX_IMPORT float trigger_right(uint32_t player);
 /** * `color` — Color in 0xRRGGBBAA format */
 NCZX_IMPORT void set_color(uint32_t color);
 
-/** Enable or disable depth testing. */
-/**  */
-/** # Arguments */
-/** * `enabled` — 0 to disable, non-zero to enable (default: enabled) */
-NCZX_IMPORT void depth_test(uint32_t enabled);
-
 /** Set the face culling mode. */
 /**  */
 /** # Arguments */
@@ -283,15 +277,18 @@ NCZX_IMPORT void uniform_alpha(uint32_t level);
 /** so both objects remain visible. */
 NCZX_IMPORT void dither_offset(uint32_t x, uint32_t y);
 
-/** Set draw layer for 2D ordering. */
+/** Set z-index for 2D ordering control within a pass. */
 /**  */
 /** # Arguments */
-/** * `n` — Layer value (0 = back, higher = front) */
+/** * `n` — Z-index value (0 = back, higher = front) */
 /**  */
-/** Higher layer values are drawn on top. Use this to ensure */
-/** UI elements appear over game content regardless of texture bindings. */
+/** Higher z-index values are drawn on top of lower values. */
+/** Use this to ensure UI elements appear over game content */
+/** regardless of texture bindings or draw order. */
+/**  */
+/** Note: z_index only affects ordering within the same pass_id. */
 /** Default: 0 (resets each frame) */
-NCZX_IMPORT void layer(uint32_t n);
+NCZX_IMPORT void z_index(uint32_t n);
 
 /** Set the viewport for subsequent draw calls. */
 /**  */
@@ -331,55 +328,72 @@ NCZX_IMPORT void viewport(uint32_t x, uint32_t y, uint32_t width, uint32_t heigh
 /** coordinates for HUD elements or between frames. */
 NCZX_IMPORT void viewport_clear(void);
 
-/** Begin writing to the stencil buffer (mask creation mode). */
+/** Begin a new render pass with optional depth clear. */
 /**  */
-/** After calling this, subsequent draw calls will write to the stencil buffer */
+/** Provides an execution barrier - commands in this pass complete before */
+/** the next pass begins. Use for layered rendering like FPS viewmodels. */
+/**  */
+/** # Arguments */
+/** * `clear_depth` — Non-zero to clear depth buffer at pass start */
+/**  */
+/** # Example (FPS viewmodel rendering) */
+/** ```rust,ignore */
+/** // Draw world first (pass 0) */
+/** draw_env(); */
+/** draw_mesh(world_mesh); */
+/**  */
+/** // Draw gun on top (pass 1 with depth clear) */
+/** begin_pass(1);  // Clear depth so gun renders on top */
+/** draw_mesh(gun_mesh); */
+/** ``` */
+NCZX_IMPORT void begin_pass(uint32_t clear_depth);
+
+/** Begin a stencil write pass (mask creation mode). */
+/**  */
+/** After calling this, subsequent draw calls write to the stencil buffer */
 /** but NOT to the color buffer. Use this to create a mask shape. */
+/** Depth testing is disabled to prevent mask geometry from polluting depth. */
 /**  */
-/** # Example (circular scope mask) */
+/** # Arguments */
+/** * `ref_value` — Stencil reference value to write (typically 1) */
+/** * `clear_depth` — Non-zero to clear depth buffer at pass start */
+/**  */
+/** # Example (scope mask) */
 /** ```rust,ignore */
-/** stencil_begin();           // Start mask creation */
-/** draw_mesh(circle_mesh);    // Draw circle to stencil only */
-/** stencil_end();             // Enable testing */
-/** draw_env();                // Only visible inside circle */
-/** draw_mesh(scene);          // Only visible inside circle */
-/** stencil_clear();           // Back to normal rendering */
+/** begin_pass_stencil_write(1, 0);  // Start mask creation */
+/** draw_mesh(circle_mesh);          // Draw circle to stencil only */
+/** begin_pass_stencil_test(1, 0);   // Enable testing */
+/** draw_env();                       // Only visible inside circle */
+/** begin_pass(0);                    // Back to normal rendering */
 /** ``` */
-NCZX_IMPORT void stencil_begin(void);
+NCZX_IMPORT void begin_pass_stencil_write(uint32_t ref_value, uint32_t clear_depth);
 
-/** End stencil mask creation and begin stencil testing. */
+/** Begin a stencil test pass (render inside mask). */
 /**  */
-/** After calling this, subsequent draw calls will only render where */
-/** the stencil buffer was written (inside the mask). */
+/** After calling this, subsequent draw calls only render where */
+/** the stencil buffer equals ref_value (inside the mask). */
 /**  */
-/** Must be called after stencil_begin() has created a mask shape. */
-NCZX_IMPORT void stencil_end(void);
+/** # Arguments */
+/** * `ref_value` — Stencil reference value to test against (must match write pass) */
+/** * `clear_depth` — Non-zero to clear depth buffer at pass start */
+NCZX_IMPORT void begin_pass_stencil_test(uint32_t ref_value, uint32_t clear_depth);
 
-/** Clear stencil state and return to normal rendering. */
+/** Begin a render pass with full control over depth and stencil state. */
 /**  */
-/** Disables stencil operations. The stencil buffer itself is cleared */
-/** at the start of each frame during render pass creation. */
+/** This is the "escape hatch" for advanced effects not covered by the */
+/** convenience functions. Most games should use begin_pass, begin_pass_stencil_write, */
+/** or begin_pass_stencil_test instead. */
 /**  */
-/** Call this when finished with masked rendering to restore normal behavior. */
-NCZX_IMPORT void stencil_clear(void);
-
-/** Enable inverted stencil testing. */
-/**  */
-/** After calling this, subsequent draw calls will only render where */
-/** the stencil buffer was NOT written (outside the mask). */
-/**  */
-/** Use this for effects like vignettes or rendering outside portals. */
-/**  */
-/** # Example (vignette effect) */
-/** ```rust,ignore */
-/** stencil_begin();           // Start mask creation */
-/** draw_mesh(rounded_rect);   // Draw center area to stencil */
-/** stencil_invert();          // Render OUTSIDE the mask */
-/** set_color(0x000000FF);     // Black vignette color */
-/** draw_rect(0.0, 0.0, 960.0, 540.0, 0x000000FF);  // Fill outside */
-/** stencil_clear();           // Back to normal */
-/** ``` */
-NCZX_IMPORT void stencil_invert(void);
+/** # Arguments */
+/** * `depth_compare` — Depth comparison function (see compare::* constants) */
+/** * `depth_write` — Non-zero to write to depth buffer */
+/** * `clear_depth` — Non-zero to clear depth buffer at pass start */
+/** * `stencil_compare` — Stencil comparison function (see compare::* constants) */
+/** * `stencil_ref` — Stencil reference value (0-255) */
+/** * `stencil_pass_op` — Operation when stencil test passes (see stencil_op::* constants) */
+/** * `stencil_fail_op` — Operation when stencil test fails */
+/** * `stencil_depth_fail_op` — Operation when depth test fails */
+NCZX_IMPORT void begin_pass_full(uint32_t depth_compare, uint32_t depth_write, uint32_t clear_depth, uint32_t stencil_compare, uint32_t stencil_ref, uint32_t stencil_pass_op, uint32_t stencil_fail_op, uint32_t stencil_depth_fail_op);
 
 /** Load a texture from RGBA pixel data. */
 /**  */
@@ -1488,6 +1502,26 @@ NCZX_IMPORT float debug_get_time_scale(void);
 // screen constants
 #define NCZX_SCREEN_WIDTH 960
 #define NCZX_SCREEN_HEIGHT 540
+
+// compare constants
+#define NCZX_COMPARE_NEVER 1
+#define NCZX_COMPARE_LESS 2
+#define NCZX_COMPARE_EQUAL 3
+#define NCZX_COMPARE_LESS_EQUAL 4
+#define NCZX_COMPARE_GREATER 5
+#define NCZX_COMPARE_NOT_EQUAL 6
+#define NCZX_COMPARE_GREATER_EQUAL 7
+#define NCZX_COMPARE_ALWAYS 8
+
+// stencil_op constants
+#define NCZX_STENCIL_OP_KEEP 0
+#define NCZX_STENCIL_OP_ZERO 1
+#define NCZX_STENCIL_OP_REPLACE 2
+#define NCZX_STENCIL_OP_INCREMENT_CLAMP 3
+#define NCZX_STENCIL_OP_DECREMENT_CLAMP 4
+#define NCZX_STENCIL_OP_INVERT 5
+#define NCZX_STENCIL_OP_INCREMENT_WRAP 6
+#define NCZX_STENCIL_OP_DECREMENT_WRAP 7
 
 // color constants
 #define NCZX_COLOR_WHITE 0xFFFFFFFF

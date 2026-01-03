@@ -81,9 +81,6 @@ pub extern "C" fn init() {
         // Use Lambert mode with normals for clear visibility
         render_mode(0);
 
-        // Enable depth testing
-        depth_test(1);
-
         // Set up lighting
         light_set(0, -0.5, -1.0, -0.5);
         light_color(0, 0xFFEEDDFF);

@@ -45,7 +45,7 @@ pub use command_buffer::{CommandSortKey, VRPCommand, VirtualRenderPass};
 pub use matrix_packing::MvpShadingIndices;
 pub use quad_instance::{QuadInstance, QuadMode};
 pub use render_state::{
-    CullMode, MatcapBlendMode, RenderState, StencilMode, TextureFilter, TextureHandle,
+    CullMode, MatcapBlendMode, PassConfig, RenderState, TextureFilter, TextureHandle,
 };
 pub use unified_shading_state::{
     DEFAULT_FLAGS,
@@ -170,12 +170,10 @@ pub(crate) struct QuadBatchInfo {
     pub is_screen_space: bool,
     /// Viewport for this batch
     pub viewport: Viewport,
-    /// Stencil mode for this batch
-    pub stencil_mode: StencilMode,
-    /// Stencil group for ordering stencil passes
-    pub stencil_group: u32,
-    /// Layer for 2D ordering (higher layers render on top)
-    pub layer: u32,
+    /// Pass ID for render pass ordering (execution barrier)
+    pub pass_id: u32,
+    /// Z-index for 2D ordering within a pass (higher = closer to camera)
+    pub z_index: u32,
 }
 
 use pipeline::PipelineCache;

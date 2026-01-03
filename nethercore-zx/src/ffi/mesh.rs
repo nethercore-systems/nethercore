@@ -376,9 +376,8 @@ fn draw_mesh(mut caller: Caller<'_, ZXGameContext>, handle: u32) {
     // Capture current viewport for split-screen rendering
     let viewport = state.current_viewport;
 
-    // Capture stencil mode for masked rendering
-    let stencil_mode = state.stencil_mode;
-    let stencil_group = state.stencil_group;
+    // Capture current pass_id for render pass ordering
+    let pass_id = state.current_pass_id;
 
     // Allocate combined MVP+shading buffer index (lazy allocation with deduplication)
     let buffer_index = state.add_mvp_shading_state();
@@ -392,10 +391,8 @@ fn draw_mesh(mut caller: Caller<'_, ZXGameContext>, handle: u32) {
         mesh_index_offset,
         buffer_index,
         textures,
-        state.depth_test,
         cull_mode,
         viewport,
-        stencil_mode,
-        stencil_group,
+        pass_id,
     );
 }

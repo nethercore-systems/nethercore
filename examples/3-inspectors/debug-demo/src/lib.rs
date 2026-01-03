@@ -118,9 +118,6 @@ pub extern "C" fn init() {
         // Dark background
         set_clear_color(0x1a1a2eFF);
 
-        // Enable depth testing
-        depth_test(1);
-
         // Generate meshes
         CUBE_MESH = cube(1.0, 1.0, 1.0);
         SPHERE_MESH = sphere(0.5, 8, 8);

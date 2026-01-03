@@ -347,7 +347,6 @@ fn update_bones(time: f32) {
 pub extern "C" fn init() {
     unsafe {
         set_clear_color(0x1a1a2eFF);
-        depth_test(1);
 
         let (vertices, indices) = generate_arm_mesh();
         ARM_MESH = load_mesh_indexed(

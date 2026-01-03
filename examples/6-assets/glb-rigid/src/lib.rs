@@ -159,7 +159,6 @@ pub extern "C" fn init() {
     unsafe {
         // Dark industrial background
         set_clear_color(0x2a2a2aFF);
-        depth_test(1);
 
         // Load mesh pieces from ROM (each from separate GLB file)
         MESH_BASE = rom_mesh(b"mesh_base".as_ptr(), 9);

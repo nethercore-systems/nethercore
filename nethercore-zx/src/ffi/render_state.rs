@@ -1,28 +1,27 @@
 //! Render state FFI functions
 //!
-//! Functions for setting render state like color, depth testing, culling, and filtering.
+//! Functions for setting render state like color, culling, filtering, and render passes.
 
 use anyhow::Result;
 use tracing::warn;
 use wasmtime::{Caller, Linker};
 
 use super::ZXGameContext;
-use crate::graphics::{CullMode, StencilMode, TextureFilter};
+use crate::graphics::{CullMode, PassConfig, TextureFilter};
 
 /// Register render state FFI functions
 pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
     linker.func_wrap("env", "set_color", set_color)?;
-    linker.func_wrap("env", "depth_test", depth_test)?;
     linker.func_wrap("env", "cull_mode", cull_mode)?;
     linker.func_wrap("env", "texture_filter", texture_filter)?;
     linker.func_wrap("env", "uniform_alpha", uniform_alpha)?;
     linker.func_wrap("env", "dither_offset", dither_offset)?;
-    linker.func_wrap("env", "layer", layer)?;
-    // Stencil functions for masked rendering (Tier 2)
-    linker.func_wrap("env", "stencil_begin", stencil_begin)?;
-    linker.func_wrap("env", "stencil_end", stencil_end)?;
-    linker.func_wrap("env", "stencil_clear", stencil_clear)?;
-    linker.func_wrap("env", "stencil_invert", stencil_invert)?;
+    linker.func_wrap("env", "z_index", z_index)?;
+    // Render pass functions for execution barriers and depth/stencil control
+    linker.func_wrap("env", "begin_pass", begin_pass)?;
+    linker.func_wrap("env", "begin_pass_stencil_write", begin_pass_stencil_write)?;
+    linker.func_wrap("env", "begin_pass_stencil_test", begin_pass_stencil_test)?;
+    linker.func_wrap("env", "begin_pass_full", begin_pass_full)?;
     Ok(())
 }
 
@@ -35,17 +34,6 @@ pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
 fn set_color(mut caller: Caller<'_, ZXGameContext>, color: u32) {
     let state = &mut caller.data_mut().ffi;
     state.update_color(color);
-}
-
-/// Enable or disable depth testing
-///
-/// # Arguments
-/// * `enabled` — 0 to disable, non-zero to enable
-///
-/// Default: enabled. Disable for 2D overlays or special effects.
-fn depth_test(mut caller: Caller<'_, ZXGameContext>, enabled: u32) {
-    let state = &mut caller.data_mut().ffi;
-    state.depth_test = enabled != 0;
 }
 
 /// Set the face culling mode
@@ -133,86 +121,170 @@ fn dither_offset(mut caller: Caller<'_, ZXGameContext>, x: u32, y: u32) {
     state.update_dither_offset(x.min(3) as u8, y.min(3) as u8);
 }
 
-/// Set the draw layer for 2D ordering control
+/// Set the z-index for 2D ordering control within a pass
 ///
 /// # Arguments
-/// * `n` — Layer value (0 = back, higher values = front)
+/// * `n` — Z-index value (0 = back, higher values = front)
 ///
-/// Higher layer values are drawn on top of lower values.
+/// Higher z-index values are drawn on top of lower values.
 /// Use this to ensure UI elements appear over game content
 /// regardless of texture bindings or draw order.
 ///
+/// Note: z_index only affects ordering within the same pass_id.
 /// Default: 0 (resets each frame)
-fn layer(mut caller: Caller<'_, ZXGameContext>, n: u32) {
+fn z_index(mut caller: Caller<'_, ZXGameContext>, n: u32) {
     let state = &mut caller.data_mut().ffi;
-    state.current_layer = n;
+    state.current_z_index = n;
 }
 
 // ============================================================================
-// Stencil Functions (Tier 2 - Masked Rendering)
+// Render Pass Functions
 // ============================================================================
 
-/// Begin writing to the stencil buffer (mask creation mode).
+/// Begin a new render pass with optional depth clear.
 ///
-/// After calling this, subsequent draw calls will write to the stencil buffer
+/// Provides an execution barrier - commands in this pass complete before
+/// the next pass begins. Use for layered rendering like FPS viewmodels.
+///
+/// # Arguments
+/// * `clear_depth` — Non-zero to clear depth buffer at pass start
+///
+/// # Example (FPS viewmodel rendering)
+/// ```rust,ignore
+/// // Draw world first (pass 0)
+/// draw_env();
+/// draw_mesh(world_mesh);
+///
+/// // Draw gun on top (pass 1 with depth clear)
+/// begin_pass(1);  // Clear depth so gun renders on top
+/// draw_mesh(gun_mesh);
+/// ```
+fn begin_pass(mut caller: Caller<'_, ZXGameContext>, clear_depth: u32) {
+    let state = &mut caller.data_mut().ffi;
+    state.current_pass_id += 1;
+    state.pass_configs.push(PassConfig::standard(clear_depth != 0));
+}
+
+/// Begin a stencil write pass (mask creation mode).
+///
+/// After calling this, subsequent draw calls write to the stencil buffer
 /// but NOT to the color buffer. Use this to create a mask shape.
+/// Depth testing is disabled to prevent mask geometry from polluting depth.
 ///
-/// # Example (circular scope mask)
+/// # Arguments
+/// * `ref_value` — Stencil reference value to write (typically 1)
+/// * `clear_depth` — Non-zero to clear depth buffer at pass start
+///
+/// # Example (scope mask)
 /// ```rust,ignore
-/// stencil_begin();           // Start mask creation
-/// draw_mesh(circle_mesh);    // Draw circle to stencil only
-/// stencil_end();             // Enable testing
-/// draw_env();                // Only visible inside circle
-/// draw_mesh(scene);          // Only visible inside circle
-/// stencil_clear();           // Back to normal rendering
+/// begin_pass_stencil_write(1, 0);  // Start mask creation
+/// draw_mesh(circle_mesh);          // Draw circle to stencil only
+/// begin_pass_stencil_test(1, 0);   // Enable testing
+/// draw_env();                       // Only visible inside circle
+/// begin_pass(0);                    // Back to normal rendering
 /// ```
-fn stencil_begin(mut caller: Caller<'_, ZXGameContext>) {
+fn begin_pass_stencil_write(mut caller: Caller<'_, ZXGameContext>, ref_value: u32, clear_depth: u32) {
     let state = &mut caller.data_mut().ffi;
-    state.stencil_group += 1; // New stencil pass starts
-    state.stencil_mode = StencilMode::Writing;
+    state.current_pass_id += 1;
+    state.pass_configs.push(PassConfig::stencil_write(ref_value as u8, clear_depth != 0));
 }
 
-/// End stencil mask creation and begin stencil testing.
+/// Begin a stencil test pass (render inside mask).
 ///
-/// After calling this, subsequent draw calls will only render where
-/// the stencil buffer was written (inside the mask).
+/// After calling this, subsequent draw calls only render where
+/// the stencil buffer equals ref_value (inside the mask).
 ///
-/// Must be called after stencil_begin() has created a mask shape.
-fn stencil_end(mut caller: Caller<'_, ZXGameContext>) {
+/// # Arguments
+/// * `ref_value` — Stencil reference value to test against (must match write pass)
+/// * `clear_depth` — Non-zero to clear depth buffer at pass start
+fn begin_pass_stencil_test(mut caller: Caller<'_, ZXGameContext>, ref_value: u32, clear_depth: u32) {
     let state = &mut caller.data_mut().ffi;
-    state.stencil_mode = StencilMode::Testing;
+    state.current_pass_id += 1;
+    state.pass_configs.push(PassConfig::stencil_test(ref_value as u8, clear_depth != 0));
 }
 
-/// Clear stencil state and return to normal rendering.
+/// Begin a render pass with full control over depth and stencil state.
 ///
-/// Disables stencil operations. The stencil buffer itself is cleared
-/// at the start of each frame during render pass creation.
+/// This is the "escape hatch" for advanced effects not covered by the
+/// convenience functions. Most games should use begin_pass, begin_pass_stencil_write,
+/// or begin_pass_stencil_test instead.
 ///
-/// Call this when finished with masked rendering to restore normal behavior.
-fn stencil_clear(mut caller: Caller<'_, ZXGameContext>) {
+/// # Arguments
+/// * `depth_compare` — Depth comparison function (see COMPARE_* constants)
+/// * `depth_write` — Non-zero to write to depth buffer
+/// * `clear_depth` — Non-zero to clear depth buffer at pass start
+/// * `stencil_compare` — Stencil comparison function (see COMPARE_* constants)
+/// * `stencil_ref` — Stencil reference value (0-255)
+/// * `stencil_pass_op` — Operation when stencil test passes (see STENCIL_OP_* constants)
+/// * `stencil_fail_op` — Operation when stencil test fails
+/// * `stencil_depth_fail_op` — Operation when depth test fails
+///
+/// # Comparison function constants (COMPARE_*)
+/// * 1 = Never, 2 = Less, 3 = Equal, 4 = LessEqual
+/// * 5 = Greater, 6 = NotEqual, 7 = GreaterEqual, 8 = Always
+///
+/// # Stencil operation constants (STENCIL_OP_*)
+/// * 0 = Keep, 1 = Zero, 2 = Replace, 3 = IncrementClamp
+/// * 4 = DecrementClamp, 5 = Invert, 6 = IncrementWrap, 7 = DecrementWrap
+fn begin_pass_full(
+    mut caller: Caller<'_, ZXGameContext>,
+    depth_compare: u32,
+    depth_write: u32,
+    clear_depth: u32,
+    stencil_compare: u32,
+    stencil_ref: u32,
+    stencil_pass_op: u32,
+    stencil_fail_op: u32,
+    stencil_depth_fail_op: u32,
+) {
     let state = &mut caller.data_mut().ffi;
-    state.stencil_mode = StencilMode::Disabled;
-    state.stencil_group += 1; // End of stencil pass, subsequent draws are separate
+    state.current_pass_id += 1;
+
+    let config = PassConfig {
+        depth_compare: compare_from_u32(depth_compare),
+        depth_write: depth_write != 0,
+        depth_clear: clear_depth != 0,
+        stencil_compare: compare_from_u32(stencil_compare),
+        stencil_ref: stencil_ref as u8,
+        stencil_pass: stencil_op_from_u32(stencil_pass_op),
+        stencil_fail: stencil_op_from_u32(stencil_fail_op),
+        stencil_depth_fail: stencil_op_from_u32(stencil_depth_fail_op),
+    };
+    state.pass_configs.push(config);
 }
 
-/// Enable inverted stencil testing.
-///
-/// After calling this, subsequent draw calls will only render where
-/// the stencil buffer was NOT written (outside the mask).
-///
-/// Use this for effects like vignettes or rendering outside portals.
-///
-/// # Example (vignette effect)
-/// ```rust,ignore
-/// stencil_begin();           // Start mask creation
-/// draw_mesh(rounded_rect);   // Draw center area to stencil
-/// stencil_invert();          // Render OUTSIDE the mask
-/// set_color(0x000000FF);     // Black vignette color
-/// draw_rect(0.0, 0.0, 960.0, 540.0, 0x000000FF);  // Fill outside
-/// stencil_clear();           // Back to normal
-/// ```
-fn stencil_invert(mut caller: Caller<'_, ZXGameContext>) {
-    let state = &mut caller.data_mut().ffi;
-    state.stencil_group += 1; // Separate group for inverted testing order control
-    state.stencil_mode = StencilMode::TestingInverted;
+/// Convert FFI compare function constant to wgpu
+fn compare_from_u32(value: u32) -> wgpu::CompareFunction {
+    match value {
+        1 => wgpu::CompareFunction::Never,
+        2 => wgpu::CompareFunction::Less,
+        3 => wgpu::CompareFunction::Equal,
+        4 => wgpu::CompareFunction::LessEqual,
+        5 => wgpu::CompareFunction::Greater,
+        6 => wgpu::CompareFunction::NotEqual,
+        7 => wgpu::CompareFunction::GreaterEqual,
+        8 => wgpu::CompareFunction::Always,
+        _ => {
+            warn!("Invalid compare function {}, using Less", value);
+            wgpu::CompareFunction::Less
+        }
+    }
+}
+
+/// Convert FFI stencil operation constant to wgpu
+fn stencil_op_from_u32(value: u32) -> wgpu::StencilOperation {
+    match value {
+        0 => wgpu::StencilOperation::Keep,
+        1 => wgpu::StencilOperation::Zero,
+        2 => wgpu::StencilOperation::Replace,
+        3 => wgpu::StencilOperation::IncrementClamp,
+        4 => wgpu::StencilOperation::DecrementClamp,
+        5 => wgpu::StencilOperation::Invert,
+        6 => wgpu::StencilOperation::IncrementWrap,
+        7 => wgpu::StencilOperation::DecrementWrap,
+        _ => {
+            warn!("Invalid stencil operation {}, using Keep", value);
+            wgpu::StencilOperation::Keep
+        }
+    }
 }

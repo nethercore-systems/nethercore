@@ -275,37 +275,80 @@ push_scale_uniform(s: f32) void
 {{#tab name="Rust"}}
 ```rust
 set_color(0xRRGGBBAA)                  // Tint color
-depth_test(enabled)                    // 0=off, 1=on
 cull_mode(mode)                        // 0=none (default), 1=back, 2=front
 texture_filter(filter)                 // 0=nearest, 1=linear
 uniform_alpha(level)                   // 0-15 dither alpha
 dither_offset(x, y)                    // 0-3 pattern offset
-layer(n)                               // 2D draw layer (0=back, higher=front)
+z_index(n)                             // 2D ordering within pass (0=back, higher=front)
 ```
 {{#endtab}}
 
 {{#tab name="C/C++"}}
 ```c
 void set_color(uint32_t color);        // Tint color
-void depth_test(uint32_t enabled);     // 0=off, 1=on
 void cull_mode(uint32_t mode);         // NCZX_CULL_NONE (default)/BACK/FRONT
 void texture_filter(uint32_t filter);  // 0=nearest, 1=linear
 void uniform_alpha(uint32_t level);    // 0-15 dither alpha
 void dither_offset(uint32_t x, uint32_t y);  // 0-3 pattern offset
-void layer(uint32_t n);                // 2D draw layer (0=back, higher=front)
+void z_index(uint32_t n);              // 2D ordering within pass (0=back, higher=front)
 ```
 {{#endtab}}
 
 {{#tab name="Zig"}}
 ```zig
 set_color(color: u32) void             // Tint color
-depth_test(enabled: u32) void          // 0=off, 1=on
 cull_mode(mode: u32) void              // CullMode.none (default)/back/front
 texture_filter(filter: u32) void       // 0=nearest, 1=linear
 uniform_alpha(level: u32) void         // 0-15 dither alpha
 dither_offset(x: u32, y: u32) void     // 0-3 pattern offset
-layer(n: u32) void                     // 2D draw layer (0=back, higher=front)
+z_index(n: u32) void                   // 2D ordering within pass (0=back, higher=front)
 ```
+{{#endtab}}
+
+{{#endtabs}}
+
+---
+
+## Render Passes (Execution Barriers)
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+begin_pass(clear_depth)                // New pass with optional depth clear
+begin_pass_stencil_write(ref_val, clear_depth)  // Create stencil mask
+begin_pass_stencil_test(ref_val, clear_depth)   // Render inside mask
+begin_pass_full(...)                   // Full control (8 params)
+```
+
+**Use Cases:**
+- FPS viewmodels: `begin_pass(1)` clears depth, gun renders on top
+- Portals: `begin_pass_stencil_write(1,0)` then `begin_pass_stencil_test(1,1)`
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+void begin_pass(uint32_t clear_depth); // New pass with optional depth clear
+void begin_pass_stencil_write(uint32_t ref_val, uint32_t clear_depth);
+void begin_pass_stencil_test(uint32_t ref_val, uint32_t clear_depth);
+void begin_pass_full(uint32_t depth_compare, uint32_t depth_write,
+                     uint32_t clear_depth, uint32_t stencil_compare,
+                     uint32_t stencil_ref, uint32_t stencil_pass_op,
+                     uint32_t stencil_fail_op, uint32_t stencil_depth_fail_op);
+```
+
+**Constants:** `NCZX_COMPARE_*`, `NCZX_STENCIL_OP_*`
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+begin_pass(clear_depth: u32) void
+begin_pass_stencil_write(ref_val: u32, clear_depth: u32) void
+begin_pass_stencil_test(ref_val: u32, clear_depth: u32) void
+begin_pass_full(...) void              // Full control (8 params)
+```
+
+**Constants:** `compare.*`, `stencil_op.*`
 {{#endtab}}
 
 {{#endtabs}}

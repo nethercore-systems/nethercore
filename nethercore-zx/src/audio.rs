@@ -609,6 +609,21 @@ impl ZXAudio {
         }
     }
 
+    /// Create a stub audio backend (no actual audio output)
+    ///
+    /// Use this when audio is needed for trait compliance but not for actual playback,
+    /// such as during resource loading where the Audio trait is required but unused.
+    pub fn new_stub() -> Self {
+        Self {
+            output: None,
+            threaded_output: None,
+            master_volume: 1.0,
+            scale_buffer: Vec::new(),
+            frame_buffer: Vec::new(),
+            use_threaded: false,
+        }
+    }
+
     /// Check if using threaded audio mode
     pub fn is_threaded(&self) -> bool {
         self.use_threaded

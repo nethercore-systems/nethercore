@@ -87,7 +87,6 @@ pub extern "C" fn init() {
     unsafe {
         // Dark blue background
         set_clear_color(0x1a2a3aFF);
-        depth_test(1);
 
         // Load assets from ROM data pack
         // These were auto-converted from the raw .glb file at pack time!

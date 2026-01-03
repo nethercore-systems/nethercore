@@ -1,6 +1,6 @@
 //! Portal Demo Example
 //!
-//! Demonstrates portal rendering using stencil masking.
+//! Demonstrates portal rendering using the render pass system.
 //! Two portals connect different environments - look through one
 //! to see what's on the other side.
 //!
@@ -59,7 +59,6 @@ pub extern "C" fn init() {
     unsafe {
         set_clear_color(0x1a1a2eFF);
         render_mode(0);
-        depth_test(1);
 
         // Generate meshes
         CUBE = cube(1.0, 1.0, 1.0);
@@ -354,16 +353,16 @@ pub extern "C" fn render() {
             draw_blue_world();
 
             // Step 2: Create portal stencil mask
-            stencil_begin();
+            begin_pass_stencil_write(1, 0);
             draw_portal_mask(PORTAL1_X, PORTAL1_Z, true);
-            stencil_end();
 
-            // Step 3: Draw orange world INSIDE portal (overwrites blue in portal area)
+            // Step 3: Draw orange world INSIDE portal (with depth clear for proper portal view)
+            begin_pass_stencil_test(1, 1); // clear_depth = 1 for portal interior
             setup_portal_camera(PORTAL1_X, PORTAL1_Z, PORTAL2_X, PORTAL2_Z);
             draw_orange_world();
 
-            // Step 4: Stencil OFF - draw blue geometry for occlusion
-            stencil_clear();
+            // Step 4: Return to normal rendering - draw blue geometry for occlusion
+            begin_pass(0);
             setup_camera();
             draw_blue_geometry();
 
@@ -377,16 +376,16 @@ pub extern "C" fn render() {
             draw_orange_world();
 
             // Step 2: Create portal stencil mask
-            stencil_begin();
+            begin_pass_stencil_write(1, 0);
             draw_portal_mask(PORTAL2_X, PORTAL2_Z, false);
-            stencil_end();
 
-            // Step 3: Draw blue world INSIDE portal (overwrites orange in portal area)
+            // Step 3: Draw blue world INSIDE portal (with depth clear for proper portal view)
+            begin_pass_stencil_test(1, 1); // clear_depth = 1 for portal interior
             setup_portal_camera(PORTAL2_X, PORTAL2_Z, PORTAL1_X, PORTAL1_Z);
             draw_blue_world();
 
-            // Step 4: Stencil OFF - draw orange geometry for occlusion
-            stencil_clear();
+            // Step 4: Return to normal rendering - draw orange geometry for occlusion
+            begin_pass(0);
             setup_camera();
             draw_orange_geometry();
 

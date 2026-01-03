@@ -231,12 +231,6 @@ pub extern "C" fn trigger_right(player: u32) f32;
 /// * `color` — Color in 0xRRGGBBAA format
 pub extern "C" fn set_color(color: u32) void;
 
-/// Enable or disable depth testing.
-/// 
-/// # Arguments
-/// * `enabled` — 0 to disable, non-zero to enable (default: enabled)
-pub extern "C" fn depth_test(enabled: u32) void;
-
 /// Set the face culling mode.
 /// 
 /// # Arguments
@@ -270,15 +264,18 @@ pub extern "C" fn uniform_alpha(level: u32) void;
 /// so both objects remain visible.
 pub extern "C" fn dither_offset(x: u32, y: u32) void;
 
-/// Set draw layer for 2D ordering.
+/// Set z-index for 2D ordering control within a pass.
 /// 
 /// # Arguments
-/// * `n` — Layer value (0 = back, higher = front)
+/// * `n` — Z-index value (0 = back, higher = front)
 /// 
-/// Higher layer values are drawn on top. Use this to ensure
-/// UI elements appear over game content regardless of texture bindings.
+/// Higher z-index values are drawn on top of lower values.
+/// Use this to ensure UI elements appear over game content
+/// regardless of texture bindings or draw order.
+/// 
+/// Note: z_index only affects ordering within the same pass_id.
 /// Default: 0 (resets each frame)
-pub extern "C" fn layer(n: u32) void;
+pub extern "C" fn z_index(n: u32) void;
 
 /// Set the viewport for subsequent draw calls.
 /// 
@@ -318,55 +315,72 @@ pub extern "C" fn viewport(x: u32, y: u32, width: u32, height: u32) void;
 /// coordinates for HUD elements or between frames.
 pub extern "C" fn viewport_clear() void;
 
-/// Begin writing to the stencil buffer (mask creation mode).
+/// Begin a new render pass with optional depth clear.
 /// 
-/// After calling this, subsequent draw calls will write to the stencil buffer
+/// Provides an execution barrier - commands in this pass complete before
+/// the next pass begins. Use for layered rendering like FPS viewmodels.
+/// 
+/// # Arguments
+/// * `clear_depth` — Non-zero to clear depth buffer at pass start
+/// 
+/// # Example (FPS viewmodel rendering)
+/// ```rust,ignore
+/// // Draw world first (pass 0)
+/// draw_env();
+/// draw_mesh(world_mesh);
+/// 
+/// // Draw gun on top (pass 1 with depth clear)
+/// begin_pass(1);  // Clear depth so gun renders on top
+/// draw_mesh(gun_mesh);
+/// ```
+pub extern "C" fn begin_pass(clear_depth: u32) void;
+
+/// Begin a stencil write pass (mask creation mode).
+/// 
+/// After calling this, subsequent draw calls write to the stencil buffer
 /// but NOT to the color buffer. Use this to create a mask shape.
+/// Depth testing is disabled to prevent mask geometry from polluting depth.
 /// 
-/// # Example (circular scope mask)
+/// # Arguments
+/// * `ref_value` — Stencil reference value to write (typically 1)
+/// * `clear_depth` — Non-zero to clear depth buffer at pass start
+/// 
+/// # Example (scope mask)
 /// ```rust,ignore
-/// stencil_begin();           // Start mask creation
-/// draw_mesh(circle_mesh);    // Draw circle to stencil only
-/// stencil_end();             // Enable testing
-/// draw_env();                // Only visible inside circle
-/// draw_mesh(scene);          // Only visible inside circle
-/// stencil_clear();           // Back to normal rendering
+/// begin_pass_stencil_write(1, 0);  // Start mask creation
+/// draw_mesh(circle_mesh);          // Draw circle to stencil only
+/// begin_pass_stencil_test(1, 0);   // Enable testing
+/// draw_env();                       // Only visible inside circle
+/// begin_pass(0);                    // Back to normal rendering
 /// ```
-pub extern "C" fn stencil_begin() void;
+pub extern "C" fn begin_pass_stencil_write(ref_value: u32, clear_depth: u32) void;
 
-/// End stencil mask creation and begin stencil testing.
+/// Begin a stencil test pass (render inside mask).
 /// 
-/// After calling this, subsequent draw calls will only render where
-/// the stencil buffer was written (inside the mask).
+/// After calling this, subsequent draw calls only render where
+/// the stencil buffer equals ref_value (inside the mask).
 /// 
-/// Must be called after stencil_begin() has created a mask shape.
-pub extern "C" fn stencil_end() void;
+/// # Arguments
+/// * `ref_value` — Stencil reference value to test against (must match write pass)
+/// * `clear_depth` — Non-zero to clear depth buffer at pass start
+pub extern "C" fn begin_pass_stencil_test(ref_value: u32, clear_depth: u32) void;
 
-/// Clear stencil state and return to normal rendering.
+/// Begin a render pass with full control over depth and stencil state.
 /// 
-/// Disables stencil operations. The stencil buffer itself is cleared
-/// at the start of each frame during render pass creation.
+/// This is the "escape hatch" for advanced effects not covered by the
+/// convenience functions. Most games should use begin_pass, begin_pass_stencil_write,
+/// or begin_pass_stencil_test instead.
 /// 
-/// Call this when finished with masked rendering to restore normal behavior.
-pub extern "C" fn stencil_clear() void;
-
-/// Enable inverted stencil testing.
-/// 
-/// After calling this, subsequent draw calls will only render where
-/// the stencil buffer was NOT written (outside the mask).
-/// 
-/// Use this for effects like vignettes or rendering outside portals.
-/// 
-/// # Example (vignette effect)
-/// ```rust,ignore
-/// stencil_begin();           // Start mask creation
-/// draw_mesh(rounded_rect);   // Draw center area to stencil
-/// stencil_invert();          // Render OUTSIDE the mask
-/// set_color(0x000000FF);     // Black vignette color
-/// draw_rect(0.0, 0.0, 960.0, 540.0, 0x000000FF);  // Fill outside
-/// stencil_clear();           // Back to normal
-/// ```
-pub extern "C" fn stencil_invert() void;
+/// # Arguments
+/// * `depth_compare` — Depth comparison function (see compare::* constants)
+/// * `depth_write` — Non-zero to write to depth buffer
+/// * `clear_depth` — Non-zero to clear depth buffer at pass start
+/// * `stencil_compare` — Stencil comparison function (see compare::* constants)
+/// * `stencil_ref` — Stencil reference value (0-255)
+/// * `stencil_pass_op` — Operation when stencil test passes (see stencil_op::* constants)
+/// * `stencil_fail_op` — Operation when stencil test fails
+/// * `stencil_depth_fail_op` — Operation when depth test fails
+pub extern "C" fn begin_pass_full(depth_compare: u32, depth_write: u32, clear_depth: u32, stencil_compare: u32, stencil_ref: u32, stencil_pass_op: u32, stencil_fail_op: u32, stencil_depth_fail_op: u32) void;
 
 /// Load a texture from RGBA pixel data.
 /// 
@@ -1481,6 +1495,28 @@ pub const TickRate = struct {
 pub const Screen = struct {
     pub const width: u32 = 960;
     pub const height: u32 = 540;
+};
+
+pub const Compare = struct {
+    pub const never: u32 = 1;
+    pub const less: u32 = 2;
+    pub const equal: u32 = 3;
+    pub const less_equal: u32 = 4;
+    pub const greater: u32 = 5;
+    pub const not_equal: u32 = 6;
+    pub const greater_equal: u32 = 7;
+    pub const always: u32 = 8;
+};
+
+pub const StencilOp = struct {
+    pub const keep: u32 = 0;
+    pub const zero: u32 = 1;
+    pub const replace: u32 = 2;
+    pub const increment_clamp: u32 = 3;
+    pub const decrement_clamp: u32 = 4;
+    pub const invert: u32 = 5;
+    pub const increment_wrap: u32 = 6;
+    pub const decrement_wrap: u32 = 7;
 };
 
 pub const color = struct {

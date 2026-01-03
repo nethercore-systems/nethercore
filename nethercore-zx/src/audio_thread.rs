@@ -216,10 +216,11 @@ impl AudioMetrics {
             let buffer_max_pct = (self.buffer_fill_max as f64 / RING_BUFFER_CAPACITY as f64) * 100.0;
             let buffer_range = self.buffer_fill_max.saturating_sub(self.buffer_fill_min);
 
-            warn!(
-                "🎵 AUDIO METRICS: buf={:.1}% (min={:.1}%, max={:.1}%, range={}), \
+            debug!(
+                "🎵 AUDIO METRICS [tid={:?}]: buf={:.1}% (min={:.1}%, max={:.1}%, range={}), \
                  frames={}, samples={}, underruns={}, overruns={}, \
                  discontinuities={}, avg_gen={:.2}μs",
+                std::thread::current().id(),
                 buffer_pct, buffer_min_pct, buffer_max_pct, buffer_range,
                 self.frames_generated, self.samples_generated,
                 self.buffer_underruns, self.buffer_overruns,
@@ -500,10 +501,36 @@ impl AudioGenThread {
             self.gen_audio.music.pan = snapshot.audio.music.pan;
         }
 
-        // Tracker: merge any non-timing changes (volume, flags)
-        self.gen_tracker.volume = snapshot.tracker.volume;
-        self.gen_tracker.flags = snapshot.tracker.flags;
-        // DON'T update order_position, row, tick - we're authoritative for timing
+        // Tracker: detect module change (new song) and merge controllable values
+        let tracker_changed = snapshot.tracker.handle != self.gen_tracker.handle;
+        if tracker_changed && snapshot.tracker.handle != 0 {
+            // New tracker module started
+            if self.gen_tracker.handle != 0 {
+                // Schedule crossfade from old song to new
+                self.crossfade_active = true;
+                self.crossfade_from = self.prev_frame_last;
+                trace!(
+                    "Tracker change ({} -> {}), scheduling crossfade",
+                    self.gen_tracker.handle,
+                    snapshot.tracker.handle
+                );
+            }
+            // Full reset of tracker state for new module
+            self.gen_tracker = snapshot.tracker;
+            self.tracker_engine.apply_snapshot(&snapshot.tracker_snapshot);
+            trace!("Merged new tracker: handle {}", snapshot.tracker.handle);
+        } else if snapshot.tracker.handle == 0 && self.gen_tracker.handle != 0 {
+            // Tracker was stopped
+            self.gen_tracker.handle = 0;
+            self.gen_tracker.flags = 0;
+        } else if snapshot.tracker.handle != 0 {
+            // Same tracker continuing - merge controllable values (volume, flags, tempo, speed)
+            // DON'T update order_position, row, tick - we're authoritative for timing
+            self.gen_tracker.volume = snapshot.tracker.volume;
+            self.gen_tracker.flags = snapshot.tracker.flags;
+            self.gen_tracker.bpm = snapshot.tracker.bpm;
+            self.gen_tracker.speed = snapshot.tracker.speed;
+        }
 
         // Update reference snapshot (for sound data access) and reset counter
         self.last_snapshot = Some(snapshot);
@@ -934,9 +961,30 @@ mod tests {
                 self.gen_audio.music.pan = snapshot.audio.music.pan;
             }
 
-            // Tracker: merge volume/flags only
-            self.gen_tracker.volume = snapshot.tracker.volume;
-            self.gen_tracker.flags = snapshot.tracker.flags;
+            // Tracker: detect module change (new song) and merge controllable values
+            let tracker_changed = snapshot.tracker.handle != self.gen_tracker.handle;
+            if tracker_changed && snapshot.tracker.handle != 0 {
+                // New tracker module started
+                if self.gen_tracker.handle != 0 {
+                    // Schedule crossfade from old song to new
+                    self.crossfade_active = true;
+                    self.crossfade_from = self.prev_frame_last;
+                }
+                // Full reset of tracker state for new module
+                self.gen_tracker = snapshot.tracker;
+                self.tracker_engine.apply_snapshot(&snapshot.tracker_snapshot);
+            } else if snapshot.tracker.handle == 0 && self.gen_tracker.handle != 0 {
+                // Tracker was stopped
+                self.gen_tracker.handle = 0;
+                self.gen_tracker.flags = 0;
+            } else if snapshot.tracker.handle != 0 {
+                // Same tracker continuing - merge controllable values (volume, flags, tempo, speed)
+                // DON'T update order_position, row, tick - we're authoritative for timing
+                self.gen_tracker.volume = snapshot.tracker.volume;
+                self.gen_tracker.flags = snapshot.tracker.flags;
+                self.gen_tracker.bpm = snapshot.tracker.bpm;
+                self.gen_tracker.speed = snapshot.tracker.speed;
+            }
 
             self.last_snapshot = Some(snapshot);
             self.samples_since_snapshot = 0;
@@ -2538,5 +2586,318 @@ mod tests {
         // Volume should update but NO crossfade
         assert_eq!(audio_gen.gen_audio.music.volume, 0.8);
         assert!(!audio_gen.crossfade_active, "Same song should NOT trigger crossfade");
+    }
+
+    // ========================================================================
+    // TRACKER MODULE CHANGE TESTS (Bug fix verification)
+    // ========================================================================
+
+    #[test]
+    fn test_tracker_handle_change_detected() {
+        // Verify that changing tracker.handle triggers a full state reset
+        // This was a bug: handle_snapshot only merged volume/flags, ignoring handle changes
+        let mut audio_gen = TestableAudioGen::new();
+
+        // Initial snapshot with tracker module 1 playing
+        let mut tracker1 = TrackerState::default();
+        tracker1.handle = 1;
+        tracker1.bpm = 120;
+        tracker1.speed = 6;
+        tracker1.order_position = 0;
+        tracker1.row = 0;
+        tracker1.flags = crate::state::tracker_flags::PLAYING;
+
+        let snapshot1 = AudioGenSnapshot::new(
+            AudioPlaybackState::default(),
+            tracker1,
+            TrackerEngine::new().snapshot(),
+            Arc::new(Vec::new()),
+            0,
+            60,
+            44100,
+            false,
+        );
+        audio_gen.handle_snapshot(snapshot1);
+
+        // Verify initial state
+        assert_eq!(audio_gen.gen_tracker.handle, 1);
+        assert_eq!(audio_gen.gen_tracker.bpm, 120);
+
+        // Simulate playback advancing (audio thread is authoritative for timing)
+        audio_gen.gen_tracker.order_position = 5;
+        audio_gen.gen_tracker.row = 32;
+        audio_gen.gen_tracker.tick = 3;
+
+        // Send snapshot with DIFFERENT tracker module (song change!)
+        let mut tracker2 = TrackerState::default();
+        tracker2.handle = 2; // Different module!
+        tracker2.bpm = 140;
+        tracker2.speed = 4;
+        tracker2.order_position = 0;
+        tracker2.row = 0;
+        tracker2.flags = crate::state::tracker_flags::PLAYING;
+
+        let snapshot2 = AudioGenSnapshot::new(
+            AudioPlaybackState::default(),
+            tracker2,
+            TrackerEngine::new().snapshot(),
+            Arc::new(Vec::new()),
+            1,
+            60,
+            44100,
+            false,
+        );
+        audio_gen.handle_snapshot(snapshot2);
+
+        // New tracker should be loaded completely
+        assert_eq!(audio_gen.gen_tracker.handle, 2, "Handle should change to new module");
+        assert_eq!(audio_gen.gen_tracker.bpm, 140, "BPM should be from new module");
+        assert_eq!(audio_gen.gen_tracker.speed, 4, "Speed should be from new module");
+        // Position should reset for new module
+        assert_eq!(audio_gen.gen_tracker.order_position, 0, "Position should reset");
+        assert_eq!(audio_gen.gen_tracker.row, 0, "Row should reset");
+    }
+
+    #[test]
+    fn test_tracker_handle_change_triggers_crossfade() {
+        // Verify that switching songs triggers crossfade (to avoid pop)
+        let mut audio_gen = TestableAudioGen::new();
+
+        // Start with tracker module 1
+        let mut tracker1 = TrackerState::default();
+        tracker1.handle = 1;
+        tracker1.flags = crate::state::tracker_flags::PLAYING;
+
+        let snapshot1 = AudioGenSnapshot::new(
+            AudioPlaybackState::default(),
+            tracker1,
+            TrackerEngine::new().snapshot(),
+            Arc::new(Vec::new()),
+            0,
+            60,
+            44100,
+            false,
+        );
+        audio_gen.handle_snapshot(snapshot1);
+
+        // Simulate audio playing
+        audio_gen.prev_frame_last = (0.3, -0.2);
+        audio_gen.crossfade_active = false;
+
+        // Switch to different module
+        let mut tracker2 = TrackerState::default();
+        tracker2.handle = 2; // Different!
+        tracker2.flags = crate::state::tracker_flags::PLAYING;
+
+        let snapshot2 = AudioGenSnapshot::new(
+            AudioPlaybackState::default(),
+            tracker2,
+            TrackerEngine::new().snapshot(),
+            Arc::new(Vec::new()),
+            1,
+            60,
+            44100,
+            false,
+        );
+        audio_gen.handle_snapshot(snapshot2);
+
+        // Crossfade should be scheduled
+        assert!(audio_gen.crossfade_active, "Song change should trigger crossfade");
+        assert_eq!(audio_gen.crossfade_from, (0.3, -0.2), "Crossfade from prev_frame_last");
+    }
+
+    #[test]
+    fn test_tracker_bpm_change_merged() {
+        // Verify that bpm changes are merged for same tracker (tempo change during playback)
+        // This was a bug: only volume/flags were merged, bpm was ignored
+        let mut audio_gen = TestableAudioGen::new();
+
+        // Initial tracker state
+        let mut tracker1 = TrackerState::default();
+        tracker1.handle = 1;
+        tracker1.bpm = 120;
+        tracker1.speed = 6;
+        tracker1.flags = crate::state::tracker_flags::PLAYING;
+
+        let snapshot1 = AudioGenSnapshot::new(
+            AudioPlaybackState::default(),
+            tracker1,
+            TrackerEngine::new().snapshot(),
+            Arc::new(Vec::new()),
+            0,
+            60,
+            44100,
+            false,
+        );
+        audio_gen.handle_snapshot(snapshot1);
+
+        assert_eq!(audio_gen.gen_tracker.bpm, 120);
+
+        // Simulate playback (audio thread advances timing)
+        audio_gen.gen_tracker.order_position = 2;
+        audio_gen.gen_tracker.row = 16;
+
+        // Send snapshot with SAME handle but different bpm (tempo change!)
+        let mut tracker2 = TrackerState::default();
+        tracker2.handle = 1; // Same module
+        tracker2.bpm = 180; // Tempo changed!
+        tracker2.speed = 6;
+        tracker2.order_position = 1; // Main thread position (should be ignored)
+        tracker2.row = 8;
+        tracker2.flags = crate::state::tracker_flags::PLAYING;
+
+        let snapshot2 = AudioGenSnapshot::new(
+            AudioPlaybackState::default(),
+            tracker2,
+            TrackerEngine::new().snapshot(),
+            Arc::new(Vec::new()),
+            1,
+            60,
+            44100,
+            false,
+        );
+        audio_gen.handle_snapshot(snapshot2);
+
+        // BPM should be updated
+        assert_eq!(audio_gen.gen_tracker.bpm, 180, "BPM should be merged from snapshot");
+
+        // But timing should NOT be reset (audio thread is authoritative)
+        assert_eq!(audio_gen.gen_tracker.order_position, 2, "Order position should NOT change");
+        assert_eq!(audio_gen.gen_tracker.row, 16, "Row should NOT change");
+
+        // No crossfade (same song, just tempo change)
+        assert!(!audio_gen.crossfade_active, "Tempo change should NOT trigger crossfade");
+    }
+
+    #[test]
+    fn test_tracker_speed_change_merged() {
+        // Verify that speed changes are merged for same tracker
+        let mut audio_gen = TestableAudioGen::new();
+
+        let mut tracker1 = TrackerState::default();
+        tracker1.handle = 1;
+        tracker1.speed = 6;
+        tracker1.flags = crate::state::tracker_flags::PLAYING;
+
+        let snapshot1 = AudioGenSnapshot::new(
+            AudioPlaybackState::default(),
+            tracker1,
+            TrackerEngine::new().snapshot(),
+            Arc::new(Vec::new()),
+            0,
+            60,
+            44100,
+            false,
+        );
+        audio_gen.handle_snapshot(snapshot1);
+
+        assert_eq!(audio_gen.gen_tracker.speed, 6);
+
+        // Change speed
+        let mut tracker2 = TrackerState::default();
+        tracker2.handle = 1;
+        tracker2.speed = 3; // Speed changed!
+        tracker2.flags = crate::state::tracker_flags::PLAYING;
+
+        let snapshot2 = AudioGenSnapshot::new(
+            AudioPlaybackState::default(),
+            tracker2,
+            TrackerEngine::new().snapshot(),
+            Arc::new(Vec::new()),
+            1,
+            60,
+            44100,
+            false,
+        );
+        audio_gen.handle_snapshot(snapshot2);
+
+        assert_eq!(audio_gen.gen_tracker.speed, 3, "Speed should be merged from snapshot");
+    }
+
+    #[test]
+    fn test_tracker_stop_detected() {
+        // Verify that setting handle to 0 stops the tracker
+        let mut audio_gen = TestableAudioGen::new();
+
+        let mut tracker1 = TrackerState::default();
+        tracker1.handle = 1;
+        tracker1.flags = crate::state::tracker_flags::PLAYING;
+
+        let snapshot1 = AudioGenSnapshot::new(
+            AudioPlaybackState::default(),
+            tracker1,
+            TrackerEngine::new().snapshot(),
+            Arc::new(Vec::new()),
+            0,
+            60,
+            44100,
+            false,
+        );
+        audio_gen.handle_snapshot(snapshot1);
+
+        assert_eq!(audio_gen.gen_tracker.handle, 1);
+        assert_ne!(audio_gen.gen_tracker.flags, 0);
+
+        // Stop tracker
+        let mut tracker2 = TrackerState::default();
+        tracker2.handle = 0; // Stopped!
+        tracker2.flags = 0;
+
+        let snapshot2 = AudioGenSnapshot::new(
+            AudioPlaybackState::default(),
+            tracker2,
+            TrackerEngine::new().snapshot(),
+            Arc::new(Vec::new()),
+            1,
+            60,
+            44100,
+            false,
+        );
+        audio_gen.handle_snapshot(snapshot2);
+
+        assert_eq!(audio_gen.gen_tracker.handle, 0, "Tracker should be stopped");
+        assert_eq!(audio_gen.gen_tracker.flags, 0, "Flags should be cleared");
+    }
+
+    #[test]
+    fn test_first_tracker_start_no_crossfade() {
+        // When starting first tracker (no previous), no crossfade needed
+        let mut audio_gen = TestableAudioGen::new();
+
+        // Empty initial state
+        let snapshot1 = AudioGenSnapshot::new(
+            AudioPlaybackState::default(),
+            TrackerState::default(),
+            TrackerEngine::new().snapshot(),
+            Arc::new(Vec::new()),
+            0,
+            60,
+            44100,
+            false,
+        );
+        audio_gen.handle_snapshot(snapshot1);
+
+        assert_eq!(audio_gen.gen_tracker.handle, 0);
+        audio_gen.crossfade_active = false;
+
+        // Start first tracker
+        let mut tracker = TrackerState::default();
+        tracker.handle = 1;
+        tracker.flags = crate::state::tracker_flags::PLAYING;
+
+        let snapshot2 = AudioGenSnapshot::new(
+            AudioPlaybackState::default(),
+            tracker,
+            TrackerEngine::new().snapshot(),
+            Arc::new(Vec::new()),
+            1,
+            60,
+            44100,
+            false,
+        );
+        audio_gen.handle_snapshot(snapshot2);
+
+        assert_eq!(audio_gen.gen_tracker.handle, 1, "First tracker should start");
+        assert!(!audio_gen.crossfade_active, "First tracker should NOT trigger crossfade");
     }
 }

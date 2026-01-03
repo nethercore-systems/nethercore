@@ -118,7 +118,6 @@ pub extern "C" fn init() {
         // Configure rendering
         set_clear_color(0x1a1a2eFF); // Dark blue
         render_mode(0); // Lambert
-        depth_test(1); // Enable depth testing
 
         // Generate all 7 plain procedural shapes
         MESH_HANDLES_PLAIN[0] = cube(1.0, 1.0, 1.0);

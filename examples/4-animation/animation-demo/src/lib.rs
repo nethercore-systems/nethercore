@@ -350,7 +350,6 @@ fn generate_arm_mesh() -> ([f32; 60 * 11], [u16; 324]) {
 pub extern "C" fn init() {
     unsafe {
         set_clear_color(0x1a1a2eFF);
-        depth_test(1);
 
         // Load the arm mesh
         let (vertices, indices) = generate_arm_mesh();

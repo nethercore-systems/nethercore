@@ -122,109 +122,131 @@ impl MatcapBlendMode {
     }
 }
 
-/// Stencil mode for masked rendering (split-screen, portals, scopes)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Hash)]
-#[repr(u8)]
-pub enum StencilMode {
-    /// Normal rendering, no stencil operations
-    #[default]
-    Disabled = 0,
-    /// Write to stencil buffer (mask creation), no color output
-    Writing = 1,
-    /// Only render where stencil == 1 (inside mask)
-    Testing = 2,
-    /// Only render where stencil == 0 (outside mask)
-    TestingInverted = 3,
+// =============================================================================
+// PassConfig - Render Pass System
+// =============================================================================
+
+/// Configuration for a render pass with depth/stencil state.
+///
+/// Each pass has its own depth and stencil configuration. Passes provide
+/// execution barriers - commands in pass N are guaranteed to complete before
+/// commands in pass N+1 begin.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct PassConfig {
+    /// Depth comparison function
+    pub depth_compare: wgpu::CompareFunction,
+    /// Whether to write to depth buffer
+    pub depth_write: bool,
+    /// Whether to clear depth buffer at pass start
+    pub depth_clear: bool,
+    /// Stencil comparison function
+    pub stencil_compare: wgpu::CompareFunction,
+    /// Stencil reference value (0-255)
+    pub stencil_ref: u8,
+    /// Stencil operation when stencil test passes
+    pub stencil_pass: wgpu::StencilOperation,
+    /// Stencil operation when stencil test fails
+    pub stencil_fail: wgpu::StencilOperation,
+    /// Stencil operation when depth test fails
+    pub stencil_depth_fail: wgpu::StencilOperation,
 }
 
-impl StencilMode {
-    pub fn from_u8(value: u8) -> Self {
-        match value {
-            0 => StencilMode::Disabled,
-            1 => StencilMode::Writing,
-            2 => StencilMode::Testing,
-            3 => StencilMode::TestingInverted,
-            _ => StencilMode::Disabled,
+impl Default for PassConfig {
+    fn default() -> Self {
+        Self {
+            depth_compare: wgpu::CompareFunction::Less,
+            depth_write: true,
+            depth_clear: false,
+            stencil_compare: wgpu::CompareFunction::Always,
+            stencil_ref: 0,
+            stencil_pass: wgpu::StencilOperation::Keep,
+            stencil_fail: wgpu::StencilOperation::Keep,
+            stencil_depth_fail: wgpu::StencilOperation::Keep,
+        }
+    }
+}
+
+impl PassConfig {
+    /// Standard pass with optional depth clear.
+    /// Depth: compare=LESS, write=ON
+    /// Stencil: disabled
+    pub fn standard(depth_clear: bool) -> Self {
+        Self {
+            depth_clear,
+            ..Default::default()
         }
     }
 
-    /// Returns true if this mode requires stencil operations
-    pub fn is_active(&self) -> bool {
-        !matches!(self, StencilMode::Disabled)
+    /// Stencil write pass (mask creation).
+    /// Depth: compare=ALWAYS, write=OFF (prevents mask polluting depth buffer)
+    /// Stencil: write ref_value on pass/depth_fail
+    /// Color: disabled (mask creation only)
+    pub fn stencil_write(ref_value: u8, depth_clear: bool) -> Self {
+        Self {
+            depth_compare: wgpu::CompareFunction::Always,
+            depth_write: false,
+            depth_clear,
+            stencil_compare: wgpu::CompareFunction::Always,
+            stencil_ref: ref_value,
+            stencil_pass: wgpu::StencilOperation::Replace,
+            stencil_fail: wgpu::StencilOperation::Keep,
+            stencil_depth_fail: wgpu::StencilOperation::Replace,
+        }
     }
 
-    /// Returns true if this mode writes to stencil buffer
+    /// Stencil test pass (render inside mask).
+    /// Depth: compare=LESS, write=ON
+    /// Stencil: only render where stencil == ref_value
+    pub fn stencil_test(ref_value: u8, depth_clear: bool) -> Self {
+        Self {
+            depth_clear,
+            stencil_compare: wgpu::CompareFunction::Equal,
+            stencil_ref: ref_value,
+            ..Default::default()
+        }
+    }
+
+    /// Returns true if this pass writes to stencil buffer
     pub fn writes_stencil(&self) -> bool {
-        matches!(self, StencilMode::Writing)
+        self.stencil_pass != wgpu::StencilOperation::Keep
+            || self.stencil_fail != wgpu::StencilOperation::Keep
+            || self.stencil_depth_fail != wgpu::StencilOperation::Keep
     }
 
-    /// Returns true if this mode tests against stencil buffer
+    /// Returns true if this pass tests against stencil buffer
     pub fn tests_stencil(&self) -> bool {
-        matches!(self, StencilMode::Testing | StencilMode::TestingInverted)
+        self.stencil_compare != wgpu::CompareFunction::Always
     }
 
-    /// Get the wgpu stencil state for this mode
-    pub fn to_wgpu_stencil_state(&self) -> wgpu::StencilState {
-        match self {
-            StencilMode::Disabled => wgpu::StencilState::default(),
-            StencilMode::Writing => wgpu::StencilState {
-                front: wgpu::StencilFaceState {
-                    compare: wgpu::CompareFunction::Always,
-                    fail_op: wgpu::StencilOperation::Keep,
-                    depth_fail_op: wgpu::StencilOperation::Replace,
-                    pass_op: wgpu::StencilOperation::Replace,
-                },
-                back: wgpu::StencilFaceState {
-                    compare: wgpu::CompareFunction::Always,
-                    fail_op: wgpu::StencilOperation::Keep,
-                    depth_fail_op: wgpu::StencilOperation::Replace,
-                    pass_op: wgpu::StencilOperation::Replace,
-                },
-                read_mask: 0xFF,
-                write_mask: 0xFF,
-            },
-            StencilMode::Testing => wgpu::StencilState {
-                front: wgpu::StencilFaceState {
-                    compare: wgpu::CompareFunction::Equal,
-                    fail_op: wgpu::StencilOperation::Keep,
-                    depth_fail_op: wgpu::StencilOperation::Keep,
-                    pass_op: wgpu::StencilOperation::Keep,
-                },
-                back: wgpu::StencilFaceState {
-                    compare: wgpu::CompareFunction::Equal,
-                    fail_op: wgpu::StencilOperation::Keep,
-                    depth_fail_op: wgpu::StencilOperation::Keep,
-                    pass_op: wgpu::StencilOperation::Keep,
-                },
-                read_mask: 0xFF,
-                write_mask: 0x00,
-            },
-            StencilMode::TestingInverted => wgpu::StencilState {
-                front: wgpu::StencilFaceState {
-                    compare: wgpu::CompareFunction::NotEqual,
-                    fail_op: wgpu::StencilOperation::Keep,
-                    depth_fail_op: wgpu::StencilOperation::Keep,
-                    pass_op: wgpu::StencilOperation::Keep,
-                },
-                back: wgpu::StencilFaceState {
-                    compare: wgpu::CompareFunction::NotEqual,
-                    fail_op: wgpu::StencilOperation::Keep,
-                    depth_fail_op: wgpu::StencilOperation::Keep,
-                    pass_op: wgpu::StencilOperation::Keep,
-                },
-                read_mask: 0xFF,
-                write_mask: 0x00,
-            },
+    /// Returns true if stencil operations are active
+    pub fn is_stencil_active(&self) -> bool {
+        self.writes_stencil() || self.tests_stencil()
+    }
+
+    /// Get color write mask (disabled during stencil-only writing)
+    pub fn color_write_mask(&self) -> wgpu::ColorWrites {
+        // Disable color output when writing to stencil but not testing
+        if self.writes_stencil() && !self.tests_stencil() {
+            wgpu::ColorWrites::empty()
+        } else {
+            wgpu::ColorWrites::ALL
         }
     }
 
-    /// Returns the color write mask for this mode
-    pub fn color_write_mask(&self) -> wgpu::ColorWrites {
-        match self {
-            // When writing to stencil, don't write color (mask creation only)
-            StencilMode::Writing => wgpu::ColorWrites::empty(),
-            // All other modes write color normally
-            _ => wgpu::ColorWrites::ALL,
+    /// Generate wgpu StencilState from this config
+    pub fn to_wgpu_stencil_state(&self) -> wgpu::StencilState {
+        let face_state = wgpu::StencilFaceState {
+            compare: self.stencil_compare,
+            fail_op: self.stencil_fail,
+            depth_fail_op: self.stencil_depth_fail,
+            pass_op: self.stencil_pass,
+        };
+
+        wgpu::StencilState {
+            front: face_state,
+            back: face_state,
+            read_mask: 0xFF,
+            write_mask: if self.writes_stencil() { 0xFF } else { 0x00 },
         }
     }
 }

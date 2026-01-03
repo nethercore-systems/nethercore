@@ -108,9 +108,8 @@ impl ZXGraphics {
                     textures: batch.textures,
                     is_screen_space: batch.is_screen_space,
                     viewport: batch.viewport,
-                    stencil_mode: batch.stencil_mode,
-                    stencil_group: batch.stencil_group,
-                    layer: batch.layer,
+                    pass_id: batch.pass_id,
+                    z_index: batch.z_index,
                 });
             }
 
@@ -145,8 +144,7 @@ impl ZXGraphics {
 
                 // Note: Quad instances contain their own shading_state_index in the instance data.
                 // BufferSource::Quad has no buffer_index - quads read transforms and shading from instance data.
-                // Screen-space quads (2D) rely on layer-based sorting, not depth testing.
-                // World-space quads (3D billboards) use depth testing for 3D occlusion.
+                // Depth/stencil state is determined per-pass via PassConfig lookup at render time.
                 self.command_buffer
                     .add_command(super::command_buffer::VRPCommand::Quad {
                         base_vertex: self.unit_quad_base_vertex,
@@ -154,12 +152,10 @@ impl ZXGraphics {
                         base_instance: batch.base_instance,
                         instance_count: batch.instance_count,
                         texture_slots,
-                        depth_test: !batch.is_screen_space && z_state.depth_test,
                         cull_mode: z_state.cull_mode,
                         viewport: batch.viewport,
-                        stencil_mode: batch.stencil_mode,
-                        stencil_group: batch.stencil_group,
-                        layer: batch.layer,
+                        pass_id: batch.pass_id,
+                        z_index: batch.z_index,
                     });
             }
         }

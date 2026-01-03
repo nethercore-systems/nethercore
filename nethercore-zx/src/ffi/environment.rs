@@ -655,9 +655,8 @@ fn draw_env(mut caller: Caller<'_, ZXGameContext>) {
     // Capture current viewport for split-screen rendering
     let viewport = state.current_viewport;
 
-    // Capture stencil mode for masked rendering
-    let stencil_mode = state.stencil_mode;
-    let stencil_group = state.stencil_group;
+    // Capture current pass_id for render pass ordering
+    let pass_id = state.current_pass_id;
 
     // Get or create shading state index for current environment configuration
     // This ensures the environment data is uploaded to GPU
@@ -668,9 +667,7 @@ fn draw_env(mut caller: Caller<'_, ZXGameContext>) {
         .render_pass
         .add_command(crate::graphics::VRPCommand::Sky {
             shading_state_index: shading_idx.0,
-            depth_test: false, // Environment always behind geometry
             viewport,
-            stencil_mode,
-            stencil_group,
+            pass_id,
         });
 }

@@ -1,6 +1,6 @@
 //! Stencil Demo Example
 //!
-//! Demonstrates all 4 stencil masking modes:
+//! Demonstrates the render pass system for stencil masking:
 //! - Circle mask (render inside)
 //! - Inverted mask (render outside / vignette)
 //! - Diagonal split
@@ -52,8 +52,8 @@ static DEMO_NAMES: [&str; 4] = [
 ];
 
 static DEMO_DESCRIPTIONS: [&str; 4] = [
-    "stencil_begin/end: Only render inside circle",
-    "stencil_invert: Render outside mask (dark edges)",
+    "begin_pass_stencil_write/test: Only render inside circle",
+    "begin_pass_full: Render outside mask (dark edges)",
     "Two masks: Different tints per half",
     "Pulsing portal with different camera inside",
 ];
@@ -63,7 +63,6 @@ pub extern "C" fn init() {
     unsafe {
         set_clear_color(0x1a1a2eFF);
         render_mode(0); // Lambert mode
-        depth_test(1);
 
         // Generate scene objects
         CUBE_MESH = cube(1.0, 1.0, 1.0);
@@ -182,17 +181,17 @@ fn tint_color(color: u32, tint_r: f32, tint_g: f32, tint_b: f32) -> u32 {
 
 /// Demo 0: Circle mask - render scene only inside circle
 unsafe fn demo_circle_mask() {
-    // Draw circle shape to stencil buffer
-    stencil_begin();
+    // Draw circle shape to stencil buffer (mask creation)
+    begin_pass_stencil_write(1, 0);
     set_color(0xFFFFFFFF);
     draw_circle(SCREEN_CX, SCREEN_CY, 200.0);
-    stencil_end();
 
     // Draw scene - only visible inside circle
+    begin_pass_stencil_test(1, 0);
     draw_scene();
 
     // Return to normal rendering
-    stencil_clear();
+    begin_pass(0);
 }
 
 /// Demo 1: Inverted mask - vignette effect
@@ -201,33 +200,55 @@ unsafe fn demo_inverted_mask() {
     draw_scene();
 
     // Create circle mask
-    stencil_begin();
+    begin_pass_stencil_write(1, 0);
     set_color(0xFFFFFFFF);
     draw_circle(SCREEN_CX, SCREEN_CY, 250.0);
-    stencil_invert();
+
+    // Enable inverted stencil test (render where stencil != 1)
+    begin_pass_full(
+        compare::LESS,      // depth_compare
+        1,                  // depth_write
+        0,                  // clear_depth
+        compare::NOT_EQUAL, // stencil_compare (inverted)
+        1,                  // stencil_ref
+        stencil_op::KEEP,   // stencil_pass_op
+        stencil_op::KEEP,   // stencil_fail_op
+        stencil_op::KEEP,   // stencil_depth_fail_op
+    );
 
     // Draw dark vignette overlay only outside circle
     set_color(0x000000AA);
-        draw_rect(0.0, 0.0, SCREEN_WIDTH, SCREEN_HEIGHT);
+    draw_rect(0.0, 0.0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
     // Return to normal rendering
-    stencil_clear();
+    begin_pass(0);
 }
 
 /// Demo 2: Diagonal split - different tints on each side
 unsafe fn demo_diagonal_split() {
     // Left half mask
-    stencil_begin();
+    begin_pass_stencil_write(1, 0);
     set_color(0xFFFFFFFF);
-        draw_rect(0.0, 0.0, SCREEN_WIDTH / 2.0, SCREEN_HEIGHT);
-    stencil_end();
+    draw_rect(0.0, 0.0, SCREEN_WIDTH / 2.0, SCREEN_HEIGHT);
+
+    // Draw left half with warm tint
+    begin_pass_stencil_test(1, 0);
     draw_scene_tinted(0xFFCC99FF); // Warm orange tint
 
     // Right half - invert stencil to draw other side
-    stencil_invert();
+    begin_pass_full(
+        compare::LESS,      // depth_compare
+        1,                  // depth_write
+        0,                  // clear_depth
+        compare::NOT_EQUAL, // stencil_compare (inverted)
+        1,                  // stencil_ref
+        stencil_op::KEEP,   // stencil_pass_op
+        stencil_op::KEEP,   // stencil_fail_op
+        stencil_op::KEEP,   // stencil_depth_fail_op
+    );
     draw_scene_tinted(0x99CCFFFF); // Cool blue tint
 
-    stencil_clear();
+    begin_pass(0);
 }
 
 /// Demo 3: Animated portal effect
@@ -238,27 +259,42 @@ unsafe fn demo_animated_portal() {
     let radius = base_radius + pulse;
 
     // 1. Draw scene outside portal (inverted stencil)
-    stencil_begin();
+    begin_pass_stencil_write(1, 0);
     set_color(0xFFFFFFFF);
     draw_circle(SCREEN_CX, SCREEN_CY, radius);
-    stencil_invert();
-    draw_scene();
-    stencil_clear();
 
-    // 2. Draw portal ring (no stencil - just 2D)
+    // Enable inverted stencil test (render outside portal)
+    begin_pass_full(
+        compare::LESS,      // depth_compare
+        1,                  // depth_write
+        0,                  // clear_depth
+        compare::NOT_EQUAL, // stencil_compare (inverted)
+        1,                  // stencil_ref
+        stencil_op::KEEP,   // stencil_pass_op
+        stencil_op::KEEP,   // stencil_fail_op
+        stencil_op::KEEP,   // stencil_depth_fail_op
+    );
+    draw_scene();
+
+    // 2. Draw portal ring (normal rendering)
+    begin_pass(0);
     let ring_width = 6.0;
     set_color(0x8800FFFF);
     draw_circle(SCREEN_CX, SCREEN_CY, radius + ring_width / 2.0);
     set_color(0x000000FF);
     draw_circle(SCREEN_CX, SCREEN_CY, radius - ring_width / 2.0);
 
-    // 3. Draw portal interior (zoomed view)
-    stencil_begin();
+    // 3. Draw portal interior (zoomed view, with depth clear)
+    begin_pass_stencil_write(1, 0);
     set_color(0xFFFFFFFF);
     draw_circle(SCREEN_CX, SCREEN_CY, radius - ring_width / 2.0);
-    stencil_end();
+
+    // Render inside portal with depth clear for proper 3D view
+    begin_pass_stencil_test(1, 1); // clear_depth = 1 for portal interior
     draw_scene_with_camera(0.0, 2.0, 5.0, 90.0);
-    stencil_clear();
+
+    // Return to normal rendering
+    begin_pass(0);
 }
 
 #[no_mangle]
