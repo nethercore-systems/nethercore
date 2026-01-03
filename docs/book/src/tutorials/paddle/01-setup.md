@@ -59,7 +59,8 @@ fn panic(_info: &PanicInfo) -> ! {
 #[link(wasm_import_module = "env")]
 extern "C" {
     fn set_clear_color(color: u32);
-    fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32);
+    fn set_color(color: u32);
+    fn draw_rect(x: f32, y: f32, w: f32, h: f32);
 }
 
 #[no_mangle]
@@ -88,7 +89,8 @@ pub extern "C" fn render() {
 
 // FFI imports from the Nethercore runtime
 NCZX_IMPORT void set_clear_color(uint32_t color);
-NCZX_IMPORT void draw_rect(float x, float y, float w, float h, uint32_t color);
+NCZX_IMPORT void set_color(uint32_t color);
+NCZX_IMPORT void draw_rect(float x, float y, float w, float h);
 
 NCZX_EXPORT void init(void) {
     // Dark background
@@ -109,7 +111,8 @@ NCZX_EXPORT void render(void) {
 ```zig
 // FFI imports from the Nethercore runtime
 extern fn set_clear_color(color: u32) void;
-extern fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32) void;
+extern fn set_color(color: u32) void;
+extern fn draw_rect(x: f32, y: f32, w: f32, h: f32) void;
 
 export fn init() void {
     // Dark background
@@ -219,9 +222,10 @@ pub extern "C" fn render() {
         let dash_width = 4.0;
         let center_x = SCREEN_WIDTH / 2.0 - dash_width / 2.0;
 
+        set_color(COLOR_GRAY);
         let mut y = 10.0;
         while y < SCREEN_HEIGHT - 10.0 {
-            draw_rect(center_x, y, dash_width, dash_height, COLOR_GRAY);
+            draw_rect(center_x, y, dash_width, dash_height);
             y += dash_height + dash_gap;
         }
     }
@@ -238,9 +242,10 @@ NCZX_EXPORT void render(void) {
     float dash_width = 4.0f;
     float center_x = SCREEN_WIDTH / 2.0f - dash_width / 2.0f;
 
+    set_color(COLOR_GRAY);
     float y = 10.0f;
     while (y < SCREEN_HEIGHT - 10.0f) {
-        draw_rect(center_x, y, dash_width, dash_height, COLOR_GRAY);
+        draw_rect(center_x, y, dash_width, dash_height);
         y += dash_height + dash_gap;
     }
 }
@@ -256,9 +261,10 @@ export fn render() void {
     const dash_width = 4.0;
     const center_x = SCREEN_WIDTH / 2.0 - dash_width / 2.0;
 
+    set_color(COLOR_GRAY);
     var y: f32 = 10.0;
     while (y < SCREEN_HEIGHT - 10.0) {
-        draw_rect(center_x, y, dash_width, dash_height, COLOR_GRAY);
+        draw_rect(center_x, y, dash_width, dash_height);
         y += dash_height + dash_gap;
     }
 }
@@ -341,28 +347,29 @@ pub extern "C" fn render() {
         let dash_width = 4.0;
         let center_x = SCREEN_WIDTH / 2.0 - dash_width / 2.0;
 
+        set_color(COLOR_GRAY);
         let mut y = 10.0;
         while y < SCREEN_HEIGHT - 10.0 {
-            draw_rect(center_x, y, dash_width, dash_height, COLOR_GRAY);
+            draw_rect(center_x, y, dash_width, dash_height);
             y += dash_height + dash_gap;
         }
 
         // Draw paddle 1 (left, blue)
+        set_color(COLOR_PLAYER1);
         draw_rect(
             PADDLE_MARGIN,
             PADDLE1_Y,
             PADDLE_WIDTH,
             PADDLE_HEIGHT,
-            COLOR_PLAYER1,
         );
 
         // Draw paddle 2 (right, red)
+        set_color(COLOR_PLAYER2);
         draw_rect(
             SCREEN_WIDTH - PADDLE_MARGIN - PADDLE_WIDTH,
             PADDLE2_Y,
             PADDLE_WIDTH,
             PADDLE_HEIGHT,
-            COLOR_PLAYER2,
         );
     }
 }
@@ -378,28 +385,29 @@ NCZX_EXPORT void render(void) {
     float dash_width = 4.0f;
     float center_x = SCREEN_WIDTH / 2.0f - dash_width / 2.0f;
 
+    set_color(COLOR_GRAY);
     float y = 10.0f;
     while (y < SCREEN_HEIGHT - 10.0f) {
-        draw_rect(center_x, y, dash_width, dash_height, COLOR_GRAY);
+        draw_rect(center_x, y, dash_width, dash_height);
         y += dash_height + dash_gap;
     }
 
     // Draw paddle 1 (left, blue)
+    set_color(COLOR_PLAYER1);
     draw_rect(
         PADDLE_MARGIN,
         paddle1_y,
         PADDLE_WIDTH,
-        PADDLE_HEIGHT,
-        COLOR_PLAYER1
+        PADDLE_HEIGHT
     );
 
     // Draw paddle 2 (right, red)
+    set_color(COLOR_PLAYER2);
     draw_rect(
         SCREEN_WIDTH - PADDLE_MARGIN - PADDLE_WIDTH,
         paddle2_y,
         PADDLE_WIDTH,
-        PADDLE_HEIGHT,
-        COLOR_PLAYER2
+        PADDLE_HEIGHT
     );
 }
 ```
@@ -414,28 +422,29 @@ export fn render() void {
     const dash_width = 4.0;
     const center_x = SCREEN_WIDTH / 2.0 - dash_width / 2.0;
 
+    set_color(COLOR_GRAY);
     var y: f32 = 10.0;
     while (y < SCREEN_HEIGHT - 10.0) {
-        draw_rect(center_x, y, dash_width, dash_height, COLOR_GRAY);
+        draw_rect(center_x, y, dash_width, dash_height);
         y += dash_height + dash_gap;
     }
 
     // Draw paddle 1 (left, blue)
+    set_color(COLOR_PLAYER1);
     draw_rect(
         PADDLE_MARGIN,
         paddle1_y,
         PADDLE_WIDTH,
         PADDLE_HEIGHT,
-        COLOR_PLAYER1,
     );
 
     // Draw paddle 2 (right, red)
+    set_color(COLOR_PLAYER2);
     draw_rect(
         SCREEN_WIDTH - PADDLE_MARGIN - PADDLE_WIDTH,
         paddle2_y,
         PADDLE_WIDTH,
         PADDLE_HEIGHT,
-        COLOR_PLAYER2,
     );
 }
 ```
@@ -533,21 +542,24 @@ Draw it in `render()` (add after paddles):
 {{#tab name="Rust"}}
 ```rust
         // Draw ball
-        draw_rect(BALL_X, BALL_Y, BALL_SIZE, BALL_SIZE, COLOR_WHITE);
+        set_color(COLOR_WHITE);
+        draw_rect(BALL_X, BALL_Y, BALL_SIZE, BALL_SIZE);
 ```
 {{#endtab}}
 
 {{#tab name="C/C++"}}
 ```c
     // Draw ball
-    draw_rect(ball_x, ball_y, BALL_SIZE, BALL_SIZE, COLOR_WHITE);
+    set_color(COLOR_WHITE);
+    draw_rect(ball_x, ball_y, BALL_SIZE, BALL_SIZE);
 ```
 {{#endtab}}
 
 {{#tab name="Zig"}}
 ```zig
     // Draw ball
-    draw_rect(ball_x, ball_y, BALL_SIZE, BALL_SIZE, COLOR_WHITE);
+    set_color(COLOR_WHITE);
+    draw_rect(ball_x, ball_y, BALL_SIZE, BALL_SIZE);
 ```
 {{#endtab}}
 
@@ -586,7 +598,8 @@ fn panic(_info: &PanicInfo) -> ! {
 #[link(wasm_import_module = "env")]
 extern "C" {
     fn set_clear_color(color: u32);
-    fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32);
+    fn set_color(color: u32);
+    fn draw_rect(x: f32, y: f32, w: f32, h: f32);
 }
 
 const SCREEN_WIDTH: f32 = 960.0;
@@ -627,19 +640,23 @@ pub extern "C" fn render() {
         let dash_gap = 15.0;
         let dash_width = 4.0;
         let center_x = SCREEN_WIDTH / 2.0 - dash_width / 2.0;
+        set_color(COLOR_GRAY);
         let mut y = 10.0;
         while y < SCREEN_HEIGHT - 10.0 {
-            draw_rect(center_x, y, dash_width, dash_height, COLOR_GRAY);
+            draw_rect(center_x, y, dash_width, dash_height);
             y += dash_height + dash_gap;
         }
 
         // Paddles
-        draw_rect(PADDLE_MARGIN, PADDLE1_Y, PADDLE_WIDTH, PADDLE_HEIGHT, COLOR_PLAYER1);
+        set_color(COLOR_PLAYER1);
+        draw_rect(PADDLE_MARGIN, PADDLE1_Y, PADDLE_WIDTH, PADDLE_HEIGHT);
+        set_color(COLOR_PLAYER2);
         draw_rect(SCREEN_WIDTH - PADDLE_MARGIN - PADDLE_WIDTH, PADDLE2_Y,
-                  PADDLE_WIDTH, PADDLE_HEIGHT, COLOR_PLAYER2);
+                  PADDLE_WIDTH, PADDLE_HEIGHT);
 
         // Ball
-        draw_rect(BALL_X, BALL_Y, BALL_SIZE, BALL_SIZE, COLOR_WHITE);
+        set_color(COLOR_WHITE);
+        draw_rect(BALL_X, BALL_Y, BALL_SIZE, BALL_SIZE);
     }
 }
 ```
@@ -651,7 +668,8 @@ pub extern "C" fn render() {
 
 // FFI imports
 NCZX_IMPORT void set_clear_color(uint32_t color);
-NCZX_IMPORT void draw_rect(float x, float y, float w, float h, uint32_t color);
+NCZX_IMPORT void set_color(uint32_t color);
+NCZX_IMPORT void draw_rect(float x, float y, float w, float h);
 
 // Constants
 #define SCREEN_WIDTH 960.0f
@@ -687,19 +705,23 @@ NCZX_EXPORT void render(void) {
     float dash_gap = 15.0f;
     float dash_width = 4.0f;
     float center_x = SCREEN_WIDTH / 2.0f - dash_width / 2.0f;
+    set_color(COLOR_GRAY);
     float y = 10.0f;
     while (y < SCREEN_HEIGHT - 10.0f) {
-        draw_rect(center_x, y, dash_width, dash_height, COLOR_GRAY);
+        draw_rect(center_x, y, dash_width, dash_height);
         y += dash_height + dash_gap;
     }
 
     // Paddles
-    draw_rect(PADDLE_MARGIN, paddle1_y, PADDLE_WIDTH, PADDLE_HEIGHT, COLOR_PLAYER1);
+    set_color(COLOR_PLAYER1);
+    draw_rect(PADDLE_MARGIN, paddle1_y, PADDLE_WIDTH, PADDLE_HEIGHT);
+    set_color(COLOR_PLAYER2);
     draw_rect(SCREEN_WIDTH - PADDLE_MARGIN - PADDLE_WIDTH, paddle2_y,
-              PADDLE_WIDTH, PADDLE_HEIGHT, COLOR_PLAYER2);
+              PADDLE_WIDTH, PADDLE_HEIGHT);
 
     // Ball
-    draw_rect(ball_x, ball_y, BALL_SIZE, BALL_SIZE, COLOR_WHITE);
+    set_color(COLOR_WHITE);
+    draw_rect(ball_x, ball_y, BALL_SIZE, BALL_SIZE);
 }
 ```
 {{#endtab}}
@@ -708,7 +730,8 @@ NCZX_EXPORT void render(void) {
 ```zig
 // FFI imports
 extern fn set_clear_color(color: u32) void;
-extern fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32) void;
+extern fn set_color(color: u32) void;
+extern fn draw_rect(x: f32, y: f32, w: f32, h: f32) void;
 
 // Constants
 const SCREEN_WIDTH: f32 = 960.0;
@@ -744,19 +767,23 @@ export fn render() void {
     const dash_gap = 15.0;
     const dash_width = 4.0;
     const center_x = SCREEN_WIDTH / 2.0 - dash_width / 2.0;
+    set_color(COLOR_GRAY);
     var y: f32 = 10.0;
     while (y < SCREEN_HEIGHT - 10.0) {
-        draw_rect(center_x, y, dash_width, dash_height, COLOR_GRAY);
+        draw_rect(center_x, y, dash_width, dash_height);
         y += dash_height + dash_gap;
     }
 
     // Paddles
-    draw_rect(PADDLE_MARGIN, paddle1_y, PADDLE_WIDTH, PADDLE_HEIGHT, COLOR_PLAYER1);
+    set_color(COLOR_PLAYER1);
+    draw_rect(PADDLE_MARGIN, paddle1_y, PADDLE_WIDTH, PADDLE_HEIGHT);
+    set_color(COLOR_PLAYER2);
     draw_rect(SCREEN_WIDTH - PADDLE_MARGIN - PADDLE_WIDTH, paddle2_y,
-              PADDLE_WIDTH, PADDLE_HEIGHT, COLOR_PLAYER2);
+              PADDLE_WIDTH, PADDLE_HEIGHT);
 
     // Ball
-    draw_rect(ball_x, ball_y, BALL_SIZE, BALL_SIZE, COLOR_WHITE);
+    set_color(COLOR_WHITE);
+    draw_rect(ball_x, ball_y, BALL_SIZE, BALL_SIZE);
 }
 ```
 {{#endtab}}

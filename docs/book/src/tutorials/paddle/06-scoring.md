@@ -474,9 +474,9 @@ Add a helper for drawing text:
 
 {{#tab name="Rust"}}
 ```rust
-fn draw_text_bytes(text: &[u8], x: f32, y: f32, size: f32, color: u32) {
+fn draw_text_bytes(text: &[u8], x: f32, y: f32, size: f32) {
     unsafe {
-        draw_text(text.as_ptr(), text.len() as u32, x, y, size, color);
+        draw_text(text.as_ptr(), text.len() as u32, x, y, size);
     }
 }
 ```
@@ -491,8 +491,10 @@ fn render_scores() {
         let score2_char = b'0' + (SCORE2 % 10) as u8;
 
         // Draw scores
-        draw_text(&[score1_char], 1, SCREEN_WIDTH / 4.0, 30.0, 48.0, COLOR_PLAYER1);
-        draw_text(&[score2_char], 1, SCREEN_WIDTH * 3.0 / 4.0, 30.0, 48.0, COLOR_PLAYER2);
+        set_color(COLOR_PLAYER1);
+        draw_text(&[score1_char], 1, SCREEN_WIDTH / 4.0, 30.0, 48.0);
+        set_color(COLOR_PLAYER2);
+        draw_text(&[score2_char], 1, SCREEN_WIDTH * 3.0 / 4.0, 30.0, 48.0);
     }
 }
 ```
@@ -500,8 +502,8 @@ fn render_scores() {
 
 {{#tab name="C/C++"}}
 ```c
-void draw_text_bytes(const uint8_t* text, uint32_t len, float x, float y, float size, uint32_t color) {
-    draw_text(text, len, x, y, size, color);
+void draw_text_bytes(const uint8_t* text, uint32_t len, float x, float y, float size) {
+    draw_text(text, len, x, y, size);
 }
 ```
 
@@ -514,16 +516,18 @@ void render_scores(void) {
     uint8_t score2_char = '0' + (score2 % 10);
 
     // Draw scores
-    draw_text(&score1_char, 1, SCREEN_WIDTH / 4.0f, 30.0f, 48.0f, COLOR_PLAYER1);
-    draw_text(&score2_char, 1, SCREEN_WIDTH * 3.0f / 4.0f, 30.0f, 48.0f, COLOR_PLAYER2);
+    set_color(COLOR_PLAYER1);
+    draw_text(&score1_char, 1, SCREEN_WIDTH / 4.0f, 30.0f, 48.0f);
+    set_color(COLOR_PLAYER2);
+    draw_text(&score2_char, 1, SCREEN_WIDTH * 3.0f / 4.0f, 30.0f, 48.0f);
 }
 ```
 {{#endtab}}
 
 {{#tab name="Zig"}}
 ```zig
-fn drawTextBytes(text: []const u8, x: f32, y: f32, size: f32, color: u32) void {
-    draw_text(text.ptr, @intCast(text.len), x, y, size, color);
+fn drawTextBytes(text: []const u8, x: f32, y: f32, size: f32) void {
+    draw_text(text.ptr, @intCast(text.len), x, y, size);
 }
 ```
 
@@ -536,8 +540,10 @@ fn renderScores() void {
     const score2_char = '0' + @as(u8, @intCast(score2 % 10));
 
     // Draw scores
-    draw_text(&score1_char, 1, SCREEN_WIDTH / 4.0, 30.0, 48.0, COLOR_PLAYER1);
-    draw_text(&score2_char, 1, SCREEN_WIDTH * 3.0 / 4.0, 30.0, 48.0, COLOR_PLAYER2);
+    set_color(COLOR_PLAYER1);
+    draw_text(&score1_char, 1, SCREEN_WIDTH / 4.0, 30.0, 48.0);
+    set_color(COLOR_PLAYER2);
+    draw_text(&score2_char, 1, SCREEN_WIDTH * 3.0 / 4.0, 30.0, 48.0);
 }
 ```
 {{#endtab}}
@@ -582,23 +588,26 @@ pub extern "C" fn render() {
 
 fn render_title() {
     unsafe {
-        draw_text_bytes(b"PADDLE", SCREEN_WIDTH / 2.0 - 100.0, 150.0, 64.0, COLOR_WHITE);
+        set_color(COLOR_WHITE);
+        draw_text_bytes(b"PADDLE", SCREEN_WIDTH / 2.0 - 100.0, 150.0, 64.0);
 
         if IS_TWO_PLAYER {
-            draw_text_bytes(b"2 PLAYER MODE", SCREEN_WIDTH / 2.0 - 100.0, 250.0, 24.0, COLOR_WHITE);
+            draw_text_bytes(b"2 PLAYER MODE", SCREEN_WIDTH / 2.0 - 100.0, 250.0, 24.0);
         } else {
-            draw_text_bytes(b"1 PLAYER VS AI", SCREEN_WIDTH / 2.0 - 100.0, 250.0, 24.0, COLOR_WHITE);
+            draw_text_bytes(b"1 PLAYER VS AI", SCREEN_WIDTH / 2.0 - 100.0, 250.0, 24.0);
         }
 
-        draw_text_bytes(b"Press A to Start", SCREEN_WIDTH / 2.0 - 120.0, 350.0, 24.0, COLOR_GRAY);
+        set_color(COLOR_GRAY);
+        draw_text_bytes(b"Press A to Start", SCREEN_WIDTH / 2.0 - 120.0, 350.0, 24.0);
     }
 }
 
 fn render_game_over() {
     unsafe {
         // Dark overlay
+        set_color(0x000000CC);
         draw_rect(SCREEN_WIDTH / 4.0, SCREEN_HEIGHT / 3.0,
-                  SCREEN_WIDTH / 2.0, SCREEN_HEIGHT / 3.0, 0x000000CC);
+                  SCREEN_WIDTH / 2.0, SCREEN_HEIGHT / 3.0);
 
         // Winner text
         let (text, color) = if WINNER == 1 {
@@ -609,20 +618,23 @@ fn render_game_over() {
             (b"AI WINS!" as &[u8], COLOR_PLAYER2)
         };
 
+        set_color(color);
         draw_text(text.as_ptr(), text.len() as u32,
-                  SCREEN_WIDTH / 2.0 - 120.0, SCREEN_HEIGHT / 2.0 - 20.0, 32.0, color);
+                  SCREEN_WIDTH / 2.0 - 120.0, SCREEN_HEIGHT / 2.0 - 20.0, 32.0);
 
+        set_color(COLOR_GRAY);
         draw_text_bytes(b"Press A to Play Again",
-                       SCREEN_WIDTH / 2.0 - 140.0, SCREEN_HEIGHT / 2.0 + 30.0, 20.0, COLOR_GRAY);
+                       SCREEN_WIDTH / 2.0 - 140.0, SCREEN_HEIGHT / 2.0 + 30.0, 20.0);
     }
 }
 
 fn render_mode_indicator() {
     unsafe {
+        set_color(COLOR_GRAY);
         if IS_TWO_PLAYER {
-            draw_text_bytes(b"2P", 10.0, 10.0, 16.0, COLOR_GRAY);
+            draw_text_bytes(b"2P", 10.0, 10.0, 16.0);
         } else {
-            draw_text_bytes(b"vs AI", 10.0, 10.0, 16.0, COLOR_GRAY);
+            draw_text_bytes(b"vs AI", 10.0, 10.0, 16.0);
         }
     }
 }
@@ -657,21 +669,24 @@ NCZX_EXPORT void render(void) {
 }
 
 void render_title(void) {
-    draw_text_bytes((const uint8_t*)"PADDLE", 6, SCREEN_WIDTH / 2.0f - 100.0f, 150.0f, 64.0f, COLOR_WHITE);
+    set_color(COLOR_WHITE);
+    draw_text_bytes((const uint8_t*)"PADDLE", 6, SCREEN_WIDTH / 2.0f - 100.0f, 150.0f, 64.0f);
 
     if (is_two_player) {
-        draw_text_bytes((const uint8_t*)"2 PLAYER MODE", 13, SCREEN_WIDTH / 2.0f - 100.0f, 250.0f, 24.0f, COLOR_WHITE);
+        draw_text_bytes((const uint8_t*)"2 PLAYER MODE", 13, SCREEN_WIDTH / 2.0f - 100.0f, 250.0f, 24.0f);
     } else {
-        draw_text_bytes((const uint8_t*)"1 PLAYER VS AI", 14, SCREEN_WIDTH / 2.0f - 100.0f, 250.0f, 24.0f, COLOR_WHITE);
+        draw_text_bytes((const uint8_t*)"1 PLAYER VS AI", 14, SCREEN_WIDTH / 2.0f - 100.0f, 250.0f, 24.0f);
     }
 
-    draw_text_bytes((const uint8_t*)"Press A to Start", 16, SCREEN_WIDTH / 2.0f - 120.0f, 350.0f, 24.0f, COLOR_GRAY);
+    set_color(COLOR_GRAY);
+    draw_text_bytes((const uint8_t*)"Press A to Start", 16, SCREEN_WIDTH / 2.0f - 120.0f, 350.0f, 24.0f);
 }
 
 void render_game_over(void) {
     // Dark overlay
+    set_color(0x000000CC);
     draw_rect(SCREEN_WIDTH / 4.0f, SCREEN_HEIGHT / 3.0f,
-              SCREEN_WIDTH / 2.0f, SCREEN_HEIGHT / 3.0f, 0x000000CC);
+              SCREEN_WIDTH / 2.0f, SCREEN_HEIGHT / 3.0f);
 
     // Winner text
     const uint8_t* text;
@@ -692,18 +707,21 @@ void render_game_over(void) {
         color = COLOR_PLAYER2;
     }
 
+    set_color(color);
     draw_text(text, text_len,
-              SCREEN_WIDTH / 2.0f - 120.0f, SCREEN_HEIGHT / 2.0f - 20.0f, 32.0f, color);
+              SCREEN_WIDTH / 2.0f - 120.0f, SCREEN_HEIGHT / 2.0f - 20.0f, 32.0f);
 
+    set_color(COLOR_GRAY);
     draw_text_bytes((const uint8_t*)"Press A to Play Again", 21,
-                   SCREEN_WIDTH / 2.0f - 140.0f, SCREEN_HEIGHT / 2.0f + 30.0f, 20.0f, COLOR_GRAY);
+                   SCREEN_WIDTH / 2.0f - 140.0f, SCREEN_HEIGHT / 2.0f + 30.0f, 20.0f);
 }
 
 void render_mode_indicator(void) {
+    set_color(COLOR_GRAY);
     if (is_two_player) {
-        draw_text_bytes((const uint8_t*)"2P", 2, 10.0f, 10.0f, 16.0f, COLOR_GRAY);
+        draw_text_bytes((const uint8_t*)"2P", 2, 10.0f, 10.0f, 16.0f);
     } else {
-        draw_text_bytes((const uint8_t*)"vs AI", 5, 10.0f, 10.0f, 16.0f, COLOR_GRAY);
+        draw_text_bytes((const uint8_t*)"vs AI", 5, 10.0f, 10.0f, 16.0f);
     }
 }
 ```
@@ -737,21 +755,24 @@ export fn render() void {
 }
 
 fn renderTitle() void {
-    drawTextBytes("PADDLE", SCREEN_WIDTH / 2.0 - 100.0, 150.0, 64.0, COLOR_WHITE);
+    set_color(COLOR_WHITE);
+    drawTextBytes("PADDLE", SCREEN_WIDTH / 2.0 - 100.0, 150.0, 64.0);
 
     if (is_two_player) {
-        drawTextBytes("2 PLAYER MODE", SCREEN_WIDTH / 2.0 - 100.0, 250.0, 24.0, COLOR_WHITE);
+        drawTextBytes("2 PLAYER MODE", SCREEN_WIDTH / 2.0 - 100.0, 250.0, 24.0);
     } else {
-        drawTextBytes("1 PLAYER VS AI", SCREEN_WIDTH / 2.0 - 100.0, 250.0, 24.0, COLOR_WHITE);
+        drawTextBytes("1 PLAYER VS AI", SCREEN_WIDTH / 2.0 - 100.0, 250.0, 24.0);
     }
 
-    drawTextBytes("Press A to Start", SCREEN_WIDTH / 2.0 - 120.0, 350.0, 24.0, COLOR_GRAY);
+    set_color(COLOR_GRAY);
+    drawTextBytes("Press A to Start", SCREEN_WIDTH / 2.0 - 120.0, 350.0, 24.0);
 }
 
 fn renderGameOver() void {
     // Dark overlay
+    set_color(0x000000CC);
     draw_rect(SCREEN_WIDTH / 4.0, SCREEN_HEIGHT / 3.0,
-              SCREEN_WIDTH / 2.0, SCREEN_HEIGHT / 3.0, 0x000000CC);
+              SCREEN_WIDTH / 2.0, SCREEN_HEIGHT / 3.0);
 
     // Winner text
     const text: []const u8 = if (winner == 1)
@@ -763,18 +784,21 @@ fn renderGameOver() void {
 
     const color: u32 = if (winner == 1) COLOR_PLAYER1 else COLOR_PLAYER2;
 
+    set_color(color);
     draw_text(text.ptr, @intCast(text.len),
-              SCREEN_WIDTH / 2.0 - 120.0, SCREEN_HEIGHT / 2.0 - 20.0, 32.0, color);
+              SCREEN_WIDTH / 2.0 - 120.0, SCREEN_HEIGHT / 2.0 - 20.0, 32.0);
 
+    set_color(COLOR_GRAY);
     drawTextBytes("Press A to Play Again",
-                 SCREEN_WIDTH / 2.0 - 140.0, SCREEN_HEIGHT / 2.0 + 30.0, 20.0, COLOR_GRAY);
+                 SCREEN_WIDTH / 2.0 - 140.0, SCREEN_HEIGHT / 2.0 + 30.0, 20.0);
 }
 
 fn renderModeIndicator() void {
+    set_color(COLOR_GRAY);
     if (is_two_player) {
-        drawTextBytes("2P", 10.0, 10.0, 16.0, COLOR_GRAY);
+        drawTextBytes("2P", 10.0, 10.0, 16.0);
     } else {
-        drawTextBytes("vs AI", 10.0, 10.0, 16.0, COLOR_GRAY);
+        drawTextBytes("vs AI", 10.0, 10.0, 16.0);
     }
 }
 ```

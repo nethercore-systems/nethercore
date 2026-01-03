@@ -20,21 +20,23 @@ Let's add helpful text on the title screen:
 fn render_title() {
     unsafe {
         // Title
-        draw_text_bytes(b"PADDLE", SCREEN_WIDTH / 2.0 - 100.0, 150.0, 64.0, COLOR_WHITE);
+        set_color(COLOR_WHITE);
+        draw_text_bytes(b"PADDLE", SCREEN_WIDTH / 2.0 - 100.0, 150.0, 64.0);
 
         // Mode indicator
         if IS_TWO_PLAYER {
-            draw_text_bytes(b"2 PLAYER MODE", SCREEN_WIDTH / 2.0 - 100.0, 250.0, 24.0, COLOR_WHITE);
+            draw_text_bytes(b"2 PLAYER MODE", SCREEN_WIDTH / 2.0 - 100.0, 250.0, 24.0);
         } else {
-            draw_text_bytes(b"1 PLAYER VS AI", SCREEN_WIDTH / 2.0 - 100.0, 250.0, 24.0, COLOR_WHITE);
+            draw_text_bytes(b"1 PLAYER VS AI", SCREEN_WIDTH / 2.0 - 100.0, 250.0, 24.0);
         }
 
         // Start prompt
-        draw_text_bytes(b"Press A to Start", SCREEN_WIDTH / 2.0 - 120.0, 350.0, 24.0, COLOR_GRAY);
+        set_color(COLOR_GRAY);
+        draw_text_bytes(b"Press A to Start", SCREEN_WIDTH / 2.0 - 120.0, 350.0, 24.0);
 
         // Controls hint
         draw_text_bytes(b"Controls: Left Stick or D-Pad Up/Down",
-                       250.0, 450.0, 18.0, COLOR_GRAY);
+                       250.0, 450.0, 18.0);
     }
 }
 ```
@@ -44,21 +46,23 @@ fn render_title() {
 ```c
 void render_title() {
     // Title
-    draw_text("PADDLE", 6, SCREEN_WIDTH / 2.0 - 100.0, 150.0, 64.0, COLOR_WHITE);
+    set_color(COLOR_WHITE);
+    draw_text("PADDLE", 6, SCREEN_WIDTH / 2.0 - 100.0, 150.0, 64.0);
 
     // Mode indicator
     if (IS_TWO_PLAYER) {
-        draw_text("2 PLAYER MODE", 13, SCREEN_WIDTH / 2.0 - 100.0, 250.0, 24.0, COLOR_WHITE);
+        draw_text("2 PLAYER MODE", 13, SCREEN_WIDTH / 2.0 - 100.0, 250.0, 24.0);
     } else {
-        draw_text("1 PLAYER VS AI", 14, SCREEN_WIDTH / 2.0 - 100.0, 250.0, 24.0, COLOR_WHITE);
+        draw_text("1 PLAYER VS AI", 14, SCREEN_WIDTH / 2.0 - 100.0, 250.0, 24.0);
     }
 
     // Start prompt
-    draw_text("Press A to Start", 16, SCREEN_WIDTH / 2.0 - 120.0, 350.0, 24.0, COLOR_GRAY);
+    set_color(COLOR_GRAY);
+    draw_text("Press A to Start", 16, SCREEN_WIDTH / 2.0 - 120.0, 350.0, 24.0);
 
     // Controls hint
     draw_text("Controls: Left Stick or D-Pad Up/Down", 38,
-              250.0, 450.0, 18.0, COLOR_GRAY);
+              250.0, 450.0, 18.0);
 }
 ```
 {{#endtab}}
@@ -67,21 +71,23 @@ void render_title() {
 ```zig
 fn render_title() void {
     // Title
-    draw_text("PADDLE", "PADDLE".len, SCREEN_WIDTH / 2.0 - 100.0, 150.0, 64.0, COLOR_WHITE);
+    set_color(COLOR_WHITE);
+    draw_text("PADDLE", "PADDLE".len, SCREEN_WIDTH / 2.0 - 100.0, 150.0, 64.0);
 
     // Mode indicator
     if (IS_TWO_PLAYER) {
-        draw_text("2 PLAYER MODE", "2 PLAYER MODE".len, SCREEN_WIDTH / 2.0 - 100.0, 250.0, 24.0, COLOR_WHITE);
+        draw_text("2 PLAYER MODE", "2 PLAYER MODE".len, SCREEN_WIDTH / 2.0 - 100.0, 250.0, 24.0);
     } else {
-        draw_text("1 PLAYER VS AI", "1 PLAYER VS AI".len, SCREEN_WIDTH / 2.0 - 100.0, 250.0, 24.0, COLOR_WHITE);
+        draw_text("1 PLAYER VS AI", "1 PLAYER VS AI".len, SCREEN_WIDTH / 2.0 - 100.0, 250.0, 24.0);
     }
 
     // Start prompt
-    draw_text("Press A to Start", "Press A to Start".len, SCREEN_WIDTH / 2.0 - 120.0, 350.0, 24.0, COLOR_GRAY);
+    set_color(COLOR_GRAY);
+    draw_text("Press A to Start", "Press A to Start".len, SCREEN_WIDTH / 2.0 - 120.0, 350.0, 24.0);
 
     // Controls hint
     draw_text("Controls: Left Stick or D-Pad Up/Down", "Controls: Left Stick or D-Pad Up/Down".len,
-              250.0, 450.0, 18.0, COLOR_GRAY);
+              250.0, 450.0, 18.0);
 }
 ```
 {{#endtab}}

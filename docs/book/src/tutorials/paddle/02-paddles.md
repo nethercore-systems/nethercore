@@ -19,7 +19,8 @@ Update your FFI imports:
 #[link(wasm_import_module = "env")]
 extern "C" {
     fn set_clear_color(color: u32);
-    fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32);
+    fn set_color(color: u32);
+    fn draw_rect(x: f32, y: f32, w: f32, h: f32);
 
     // Input functions
     fn left_stick_y(player: u32) -> f32;
@@ -31,7 +32,8 @@ extern "C" {
 {{#tab name="C/C++"}}
 ```c
 NCZX_IMPORT void set_clear_color(uint32_t color);
-NCZX_IMPORT void draw_rect(float x, float y, float w, float h, uint32_t color);
+NCZX_IMPORT void set_color(uint32_t color);
+NCZX_IMPORT void draw_rect(float x, float y, float w, float h);
 
 // Input functions
 NCZX_IMPORT float left_stick_y(uint32_t player);
@@ -42,7 +44,8 @@ NCZX_IMPORT uint32_t button_held(uint32_t player, uint32_t button);
 {{#tab name="Zig"}}
 ```zig
 pub extern fn set_clear_color(color: u32) void;
-pub extern fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32) void;
+pub extern fn set_color(color: u32) void;
+pub extern fn draw_rect(x: f32, y: f32, w: f32, h: f32) void;
 
 // Input functions
 pub extern fn left_stick_y(player: u32) f32;
@@ -349,7 +352,8 @@ fn panic(_info: &PanicInfo) -> ! {
 #[link(wasm_import_module = "env")]
 extern "C" {
     fn set_clear_color(color: u32);
-    fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32);
+    fn set_color(color: u32);
+    fn draw_rect(x: f32, y: f32, w: f32, h: f32);
     fn left_stick_y(player: u32) -> f32;
     fn button_held(player: u32, button: u32) -> u32;
 }
@@ -421,19 +425,23 @@ pub extern "C" fn render() {
         let dash_gap = 15.0;
         let dash_width = 4.0;
         let center_x = SCREEN_WIDTH / 2.0 - dash_width / 2.0;
+        set_color(COLOR_GRAY);
         let mut y = 10.0;
         while y < SCREEN_HEIGHT - 10.0 {
-            draw_rect(center_x, y, dash_width, dash_height, COLOR_GRAY);
+            draw_rect(center_x, y, dash_width, dash_height);
             y += dash_height + dash_gap;
         }
 
         // Paddles
-        draw_rect(PADDLE_MARGIN, PADDLE1_Y, PADDLE_WIDTH, PADDLE_HEIGHT, COLOR_PLAYER1);
+        set_color(COLOR_PLAYER1);
+        draw_rect(PADDLE_MARGIN, PADDLE1_Y, PADDLE_WIDTH, PADDLE_HEIGHT);
+        set_color(COLOR_PLAYER2);
         draw_rect(SCREEN_WIDTH - PADDLE_MARGIN - PADDLE_WIDTH, PADDLE2_Y,
-                  PADDLE_WIDTH, PADDLE_HEIGHT, COLOR_PLAYER2);
+                  PADDLE_WIDTH, PADDLE_HEIGHT);
 
         // Ball
-        draw_rect(BALL_X, BALL_Y, BALL_SIZE, BALL_SIZE, COLOR_WHITE);
+        set_color(COLOR_WHITE);
+        draw_rect(BALL_X, BALL_Y, BALL_SIZE, BALL_SIZE);
     }
 }
 ```
@@ -445,7 +453,8 @@ pub extern "C" fn render() {
 #include <stdbool.h>
 
 NCZX_IMPORT void set_clear_color(uint32_t color);
-NCZX_IMPORT void draw_rect(float x, float y, float w, float h, uint32_t color);
+NCZX_IMPORT void set_color(uint32_t color);
+NCZX_IMPORT void draw_rect(float x, float y, float w, float h);
 NCZX_IMPORT float left_stick_y(uint32_t player);
 NCZX_IMPORT uint32_t button_held(uint32_t player, uint32_t button);
 
@@ -508,19 +517,23 @@ NCZX_EXPORT void render() {
     float dash_gap = 15.0f;
     float dash_width = 4.0f;
     float center_x = SCREEN_WIDTH / 2.0f - dash_width / 2.0f;
+    set_color(COLOR_GRAY);
     float y = 10.0f;
     while (y < SCREEN_HEIGHT - 10.0f) {
-        draw_rect(center_x, y, dash_width, dash_height, COLOR_GRAY);
+        draw_rect(center_x, y, dash_width, dash_height);
         y += dash_height + dash_gap;
     }
 
     // Paddles
-    draw_rect(PADDLE_MARGIN, paddle1_y, PADDLE_WIDTH, PADDLE_HEIGHT, COLOR_PLAYER1);
+    set_color(COLOR_PLAYER1);
+    draw_rect(PADDLE_MARGIN, paddle1_y, PADDLE_WIDTH, PADDLE_HEIGHT);
+    set_color(COLOR_PLAYER2);
     draw_rect(SCREEN_WIDTH - PADDLE_MARGIN - PADDLE_WIDTH, paddle2_y,
-              PADDLE_WIDTH, PADDLE_HEIGHT, COLOR_PLAYER2);
+              PADDLE_WIDTH, PADDLE_HEIGHT);
 
     // Ball
-    draw_rect(ball_x, ball_y, BALL_SIZE, BALL_SIZE, COLOR_WHITE);
+    set_color(COLOR_WHITE);
+    draw_rect(ball_x, ball_y, BALL_SIZE, BALL_SIZE);
 }
 ```
 {{#endtab}}
@@ -530,7 +543,8 @@ NCZX_EXPORT void render() {
 const std = @import("std");
 
 pub extern fn set_clear_color(color: u32) void;
-pub extern fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32) void;
+pub extern fn set_color(color: u32) void;
+pub extern fn draw_rect(x: f32, y: f32, w: f32, h: f32) void;
 pub extern fn left_stick_y(player: u32) f32;
 pub extern fn button_held(player: u32, button: u32) u32;
 
@@ -595,19 +609,23 @@ export fn render() void {
     const dash_gap: f32 = 15.0;
     const dash_width: f32 = 4.0;
     const center_x: f32 = SCREEN_WIDTH / 2.0 - dash_width / 2.0;
+    set_color(COLOR_GRAY);
     var y: f32 = 10.0;
     while (y < SCREEN_HEIGHT - 10.0) {
-        draw_rect(center_x, y, dash_width, dash_height, COLOR_GRAY);
+        draw_rect(center_x, y, dash_width, dash_height);
         y += dash_height + dash_gap;
     }
 
     // Paddles
-    draw_rect(PADDLE_MARGIN, paddle1_y, PADDLE_WIDTH, PADDLE_HEIGHT, COLOR_PLAYER1);
+    set_color(COLOR_PLAYER1);
+    draw_rect(PADDLE_MARGIN, paddle1_y, PADDLE_WIDTH, PADDLE_HEIGHT);
+    set_color(COLOR_PLAYER2);
     draw_rect(SCREEN_WIDTH - PADDLE_MARGIN - PADDLE_WIDTH, paddle2_y,
-              PADDLE_WIDTH, PADDLE_HEIGHT, COLOR_PLAYER2);
+              PADDLE_WIDTH, PADDLE_HEIGHT);
 
     // Ball
-    draw_rect(ball_x, ball_y, BALL_SIZE, BALL_SIZE, COLOR_WHITE);
+    set_color(COLOR_WHITE);
+    draw_rect(ball_x, ball_y, BALL_SIZE, BALL_SIZE);
 }
 ```
 {{#endtab}}

@@ -654,7 +654,7 @@ draw_sprite(BALL_X, BALL_Y, BALL_SIZE, BALL_SIZE);
 
 {{#endtabs}}
 
-The sprite will be tinted by the bound texture. You can also use `draw_sprite_colored()` if you want to tint sprites with different colors per player.
+The sprite will be tinted by the bound texture. You can also use `set_color(0xRRGGBBAA)` before `draw_sprite()` if you want to tint sprites with different colors per player.
 
 ## New Workflow Summary
 
