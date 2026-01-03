@@ -454,6 +454,69 @@ path = "{}"
     println!("nether-cli GLB integration validated successfully");
 }
 
+/// Test that partial TRS animation (bone with R only, no T or S) uses node rest pose
+///
+/// This is a regression test for a bug where bones without all TRS channels
+/// would get identity defaults instead of their rest pose from the node.
+#[test]
+fn test_partial_trs_animation_uses_node_rest_pose() {
+    use zx_common::formats::animation::{decode_bone_transform, PlatformBoneKeyframe};
+
+    let glb_data = gltf_generator::generate_partial_trs_glb();
+
+    let dir = tempdir().expect("Failed to create temp dir");
+    let glb_path = dir.path().join("partial_trs.glb");
+    std::fs::write(&glb_path, &glb_data).expect("Failed to write GLB");
+
+    // Convert animation
+    let result =
+        convert_gltf_animation_to_memory(&glb_path, Some("PartialTrsAnim"), None, Some(30.0))
+            .expect("Animation conversion failed");
+
+    // Verify we have 3 bones
+    assert_eq!(result.bone_count, 3, "Should have 3 bones");
+
+    // Parse the animation data to extract bone 1's translation for frame 0
+    // Platform format (16 bytes per bone):
+    // - rotation: u32 (smallest-three packed quaternion) - bytes 0-3
+    // - position: [u16; 3] (f16 × 3) - bytes 4-9
+    // - scale: [u16; 3] (f16 × 3) - bytes 10-15
+
+    // For frame 0, bone 1 data starts at offset: 0 + 1*16 = 16
+    let bone1_frame0_offset = 16;
+    let bone1_data = &result.data[bone1_frame0_offset..bone1_frame0_offset + 16];
+
+    // Use the zx_common utilities to decode
+    let keyframe = PlatformBoneKeyframe::from_bytes(bone1_data);
+    let decoded = decode_bone_transform(&keyframe);
+
+    println!(
+        "Bone 1 frame 0 position: [{}, {}, {}]",
+        decoded.position[0], decoded.position[1], decoded.position[2]
+    );
+
+    // Bone 1 has its node at [0, 1, 0] but NO translation channel in the animation
+    // With the fix, it should use the node's rest pose [0, 1, 0]
+    // Without the fix, it would be identity [0, 0, 0]
+    assert!(
+        is_near(decoded.position[0], 0.0),
+        "Bone 1 X should be 0.0, got {}",
+        decoded.position[0]
+    );
+    assert!(
+        is_near(decoded.position[1], 1.0),
+        "Bone 1 Y should be 1.0 (from node rest pose), got {} - this means the fix is NOT working!",
+        decoded.position[1]
+    );
+    assert!(
+        is_near(decoded.position[2], 0.0),
+        "Bone 1 Z should be 0.0, got {}",
+        decoded.position[2]
+    );
+
+    println!("Partial TRS test PASSED: Bone without T channel correctly uses node rest pose");
+}
+
 // Helper functions
 
 fn is_near(a: f32, b: f32) -> bool {

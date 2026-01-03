@@ -266,9 +266,8 @@ const COIN_PIXELS: [u8; 8 * 8 * 4] = {
 
 // === Helper Functions ===
 
-fn draw_text_str(s: &str, x: f32, y: f32, size: f32, color: u32) {
+fn draw_text_str(s: &str, x: f32, y: f32, size: f32) {
     unsafe {
-        set_color(color);
         draw_text(s.as_ptr(), s.len() as u32, x, y, size);
     }
 }
@@ -544,6 +543,7 @@ fn render_platforms() {
             let tiles_x = libm::ceilf(platform.width / tile_size) as i32;
             let tiles_y = libm::ceilf(platform.height / tile_size) as i32;
 
+            set_color(0xFFFFFFFF);
             for ty in 0..tiles_y {
                 for tx in 0..tiles_x {
                     let tile_x = platform.x + (tx as f32 + 0.5) * tile_size;
@@ -551,7 +551,7 @@ fn render_platforms() {
 
                     push_identity();
                     push_translate(tile_x, tile_y, 0.0);
-                    draw_billboard(tile_size, tile_size, MODE_CYLINDRICAL_Y, 0xFFFFFFFF);
+                    draw_billboard(tile_size, tile_size, MODE_CYLINDRICAL_Y);
                 }
             }
         }
@@ -561,6 +561,7 @@ fn render_platforms() {
 fn render_collectibles() {
     unsafe {
         texture_bind(COIN_TEXTURE);
+        set_color(0xFFFFFFFF);
 
         let time = TICK as f32 / 60.0;
 
@@ -574,7 +575,7 @@ fn render_collectibles() {
 
             push_identity();
             push_translate(collectible.x, collectible.y + bob, 0.1);
-            draw_billboard(0.6, 0.6, MODE_CYLINDRICAL_Y, 0xFFFFFFFF);
+            draw_billboard(0.6, 0.6, MODE_CYLINDRICAL_Y);
         }
     }
 }
@@ -595,7 +596,8 @@ fn render_players() {
             push_translate(player.x, player.y + PLAYER_HEIGHT / 2.0, 0.2);
 
             // Use player color as tint
-            draw_billboard(scale_x, PLAYER_HEIGHT, MODE_CYLINDRICAL_Y, PLAYER_COLORS[i]);
+            set_color(PLAYER_COLORS[i]);
+            draw_billboard(scale_x, PLAYER_HEIGHT, MODE_CYLINDRICAL_Y);
         }
     }
 }
@@ -606,7 +608,8 @@ fn render_ui() {
         set_color(0x000000AA);
         draw_rect(10.0, 10.0, 300.0, 80.0 + (player_count() as f32 * 70.0));
 
-        draw_text_str("PLATFORMER", 20.0, 30.0, 24.0, 0xFFFFFFFF);
+        set_color(0xFFFFFFFF);
+        draw_text_str("PLATFORMER", 20.0, 30.0, 24.0);
 
         // Player scores
         let mut y_offset = 100.0;
@@ -657,15 +660,19 @@ fn render_ui() {
         // Controls hint
         set_color(0x000000AA);
         draw_rect(10.0, 480.0, 480.0, 90.0);
-        draw_text_str("L-Stick: Move  A: Jump", 20.0, 500.0, 16.0, 0xCCCCCCFF);
-        draw_text_str("Collect all coins!", 20.0, 540.0, 16.0, 0xFFD700FF);
+        set_color(0xCCCCCCFF);
+        draw_text_str("L-Stick: Move  A: Jump", 20.0, 500.0, 16.0);
+        set_color(0xFFD700FF);
+        draw_text_str("Collect all coins!", 20.0, 540.0, 16.0);
 
         // Game over overlay
         if GAME_OVER {
             set_color(0x000000DD);
-        draw_rect(150.0, 200.0, 660.0, 140.0);
-            draw_text_str("ALL COINS COLLECTED!", 200.0, 240.0, 28.0, 0xFFD700FF);
-            draw_text_str("Press START to restart", 240.0, 290.0, 20.0, 0xCCCCCCFF);
+            draw_rect(150.0, 200.0, 660.0, 140.0);
+            set_color(0xFFD700FF);
+            draw_text_str("ALL COINS COLLECTED!", 200.0, 240.0, 28.0);
+            set_color(0xCCCCCCFF);
+            draw_text_str("Press START to restart", 240.0, 290.0, 20.0);
         }
     }
 }

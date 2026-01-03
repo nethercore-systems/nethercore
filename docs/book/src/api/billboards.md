@@ -25,19 +25,19 @@ Draws a camera-facing quad using the bound texture.
 
 {{#tab name="Rust"}}
 ```rust
-fn draw_billboard(w: f32, h: f32, mode: u32, color: u32)
+fn draw_billboard(w: f32, h: f32, mode: u32)
 ```
 {{#endtab}}
 
 {{#tab name="C/C++"}}
 ```c
-NCZX_IMPORT void draw_billboard(float w, float h, uint32_t mode, uint32_t color);
+NCZX_IMPORT void draw_billboard(float w, float h, uint32_t mode);
 ```
 {{#endtab}}
 
 {{#tab name="Zig"}}
 ```zig
-pub extern fn draw_billboard(w: f32, h: f32, mode: u32, color: u32) void;
+pub extern fn draw_billboard(w: f32, h: f32, mode: u32) void;
 ```
 {{#endtab}}
 
@@ -50,7 +50,8 @@ pub extern fn draw_billboard(w: f32, h: f32, mode: u32, color: u32) void;
 | w | `f32` | Width in world units |
 | h | `f32` | Height in world units |
 | mode | `u32` | Billboard mode (1-4) |
-| color | `u32` | Tint color as `0xRRGGBBAA` |
+
+> **Note:** Use `set_color(0xRRGGBBAA)` before calling to set the billboard tint.
 
 **Example:**
 
@@ -62,10 +63,11 @@ fn render() {
     texture_bind(tree_sprite);
 
     // Trees with cylindrical Y billboards
+    set_color(0xFFFFFFFF);
     for tree in &trees {
         push_identity();
         push_translate(tree.x, tree.y, tree.z);
-        draw_billboard(2.0, 4.0, 2, 0xFFFFFFFF);
+        draw_billboard(2.0, 4.0, 2);
     }
 
     // Particles with spherical billboards
@@ -74,7 +76,8 @@ fn render() {
     for particle in &particles {
         push_identity();
         push_translate(particle.x, particle.y, particle.z);
-        draw_billboard(0.5, 0.5, 1, particle.color);
+        set_color(particle.color);
+        draw_billboard(0.5, 0.5, 1);
     }
 }
 ```
@@ -86,10 +89,11 @@ NCZX_EXPORT void render() {
     texture_bind(tree_sprite);
 
     // Trees with cylindrical Y billboards
+    set_color(0xFFFFFFFF);
     for (int i = 0; i < tree_count; i++) {
         push_identity();
         push_translate(trees[i].x, trees[i].y, trees[i].z);
-        draw_billboard(2.0, 4.0, 2, 0xFFFFFFFF);
+        draw_billboard(2.0, 4.0, 2);
     }
 
     // Particles with spherical billboards
@@ -98,7 +102,8 @@ NCZX_EXPORT void render() {
     for (int i = 0; i < particle_count; i++) {
         push_identity();
         push_translate(particles[i].x, particles[i].y, particles[i].z);
-        draw_billboard(0.5, 0.5, 1, particles[i].color);
+        set_color(particles[i].color);
+        draw_billboard(0.5, 0.5, 1);
     }
 }
 ```
@@ -110,10 +115,11 @@ export fn render() void {
     texture_bind(tree_sprite);
 
     // Trees with cylindrical Y billboards
+    set_color(0xFFFFFFFF);
     for (trees) |tree| {
         push_identity();
         push_translate(tree.x, tree.y, tree.z);
-        draw_billboard(2.0, 4.0, 2, 0xFFFFFFFF);
+        draw_billboard(2.0, 4.0, 2);
     }
 
     // Particles with spherical billboards
@@ -122,7 +128,8 @@ export fn render() void {
     for (particles) |particle| {
         push_identity();
         push_translate(particle.x, particle.y, particle.z);
-        draw_billboard(0.5, 0.5, 1, particle.color);
+        set_color(particle.color);
+        draw_billboard(0.5, 0.5, 1);
     }
 }
 ```
@@ -145,8 +152,7 @@ Draws a billboard using a texture region (sprite sheet).
 fn draw_billboard_region(
     w: f32, h: f32,
     src_x: f32, src_y: f32, src_w: f32, src_h: f32,
-    mode: u32,
-    color: u32
+    mode: u32
 )
 ```
 {{#endtab}}
@@ -156,8 +162,7 @@ fn draw_billboard_region(
 NCZX_IMPORT void draw_billboard_region(
     float w, float h,
     float src_x, float src_y, float src_w, float src_h,
-    uint32_t mode,
-    uint32_t color
+    uint32_t mode
 );
 ```
 {{#endtab}}
@@ -167,8 +172,7 @@ NCZX_IMPORT void draw_billboard_region(
 pub extern fn draw_billboard_region(
     w: f32, h: f32,
     src_x: f32, src_y: f32, src_w: f32, src_h: f32,
-    mode: u32,
-    color: u32
+    mode: u32
 ) void;
 ```
 {{#endtab}}
@@ -180,10 +184,11 @@ pub extern fn draw_billboard_region(
 | Name | Type | Description |
 |------|------|-------------|
 | w, h | `f32` | Size in world units |
-| src_x, src_y | `f32` | Source position in texture (pixels) |
-| src_w, src_h | `f32` | Source size in texture (pixels) |
+| src_x, src_y | `f32` | UV origin in texture (0.0-1.0) |
+| src_w, src_h | `f32` | UV size in texture (0.0-1.0) |
 | mode | `u32` | Billboard mode (1-4) |
-| color | `u32` | Tint color |
+
+> **Note:** Use `set_color(0xRRGGBBAA)` before calling to set the billboard tint.
 
 **Example:**
 
@@ -191,6 +196,10 @@ pub extern fn draw_billboard_region(
 
 {{#tab name="Rust"}}
 ```rust
+// Sprite sheet: 128x32 pixels, 4 frames of 32x32 each
+const FRAME_UV_W: f32 = 32.0 / 128.0;  // 0.25
+const FRAME_UV_H: f32 = 32.0 / 32.0;   // 1.0
+
 fn render() {
     texture_bind(enemy_sheet);
 
@@ -198,11 +207,11 @@ fn render() {
     let frame = ((elapsed_time() * 8.0) as u32) % 4;
     push_identity();
     push_translate(enemy.x, enemy.y + 1.0, enemy.z);
+    set_color(0xFFFFFFFF);
     draw_billboard_region(
-        2.0, 2.0,                              // Size
-        (frame * 32) as f32, 0.0, 32.0, 32.0,  // Animation frame
-        2,                                      // Cylindrical Y
-        0xFFFFFFFF
+        2.0, 2.0,                                    // Size
+        frame as f32 * FRAME_UV_W, 0.0, FRAME_UV_W, FRAME_UV_H,  // UV coords
+        2                                            // Cylindrical Y
     );
 }
 ```
@@ -210,18 +219,22 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
+/* Sprite sheet: 128x32 pixels, 4 frames of 32x32 each */
+#define FRAME_UV_W (32.0f / 128.0f)  /* 0.25 */
+#define FRAME_UV_H (32.0f / 32.0f)   /* 1.0 */
+
 NCZX_EXPORT void render() {
     texture_bind(enemy_sheet);
 
-    // Animated enemy sprite
+    /* Animated enemy sprite */
     uint32_t frame = ((uint32_t)(elapsed_time() * 8.0)) % 4;
     push_identity();
     push_translate(enemy.x, enemy.y + 1.0, enemy.z);
+    set_color(0xFFFFFFFF);
     draw_billboard_region(
-        2.0, 2.0,                              // Size
-        (float)(frame * 32), 0.0, 32.0, 32.0,  // Animation frame
-        2,                                      // Cylindrical Y
-        0xFFFFFFFF
+        2.0, 2.0,                                    /* Size */
+        (float)frame * FRAME_UV_W, 0.0, FRAME_UV_W, FRAME_UV_H,  /* UV coords */
+        2                                            /* Cylindrical Y */
     );
 }
 ```
@@ -229,6 +242,10 @@ NCZX_EXPORT void render() {
 
 {{#tab name="Zig"}}
 ```zig
+// Sprite sheet: 128x32 pixels, 4 frames of 32x32 each
+const FRAME_UV_W: f32 = 32.0 / 128.0;  // 0.25
+const FRAME_UV_H: f32 = 32.0 / 32.0;   // 1.0
+
 export fn render() void {
     texture_bind(enemy_sheet);
 
@@ -236,11 +253,11 @@ export fn render() void {
     const frame = (@as(u32, @intFromFloat(elapsed_time() * 8.0))) % 4;
     push_identity();
     push_translate(enemy.x, enemy.y + 1.0, enemy.z);
+    set_color(0xFFFFFFFF);
     draw_billboard_region(
-        2.0, 2.0,                              // Size
-        @as(f32, @floatFromInt(frame * 32)), 0.0, 32.0, 32.0,  // Animation frame
-        2,                                      // Cylindrical Y
-        0xFFFFFFFF
+        2.0, 2.0,                                    // Size
+        @as(f32, @floatFromInt(frame)) * FRAME_UV_W, 0.0, FRAME_UV_W, FRAME_UV_H,  // UV coords
+        2                                            // Cylindrical Y
     );
 }
 ```
@@ -258,22 +275,26 @@ export fn render() void {
 
 {{#tab name="Rust"}}
 ```rust
+// Vegetation atlas: 256x128 pixels, 4 tree types of 64x128 each
+const TREE_UV_W: f32 = 64.0 / 256.0;   // 0.25
+const TREE_UV_H: f32 = 128.0 / 128.0;  // 1.0
+
 fn render() {
     texture_bind(vegetation_atlas);
     blend_mode(1); // Alpha blend for transparency
     cull_mode(0);  // Double-sided
+    set_color(0xFFFFFFFF);
 
     for tree in &trees {
         push_identity();
         push_translate(tree.x, tree.height * 0.5, tree.z);
 
         // Different tree types from atlas
-        let src_x = (tree.type_id * 64) as f32;
+        let src_x = tree.type_id as f32 * TREE_UV_W;
         draw_billboard_region(
             tree.width, tree.height,
-            src_x, 0.0, 64.0, 128.0,
-            2, // Cylindrical Y - always upright
-            0xFFFFFFFF
+            src_x, 0.0, TREE_UV_W, TREE_UV_H,
+            2  // Cylindrical Y - always upright
         );
     }
 }
@@ -282,22 +303,26 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
+/* Vegetation atlas: 256x128 pixels, 4 tree types of 64x128 each */
+#define TREE_UV_W (64.0f / 256.0f)   /* 0.25 */
+#define TREE_UV_H (128.0f / 128.0f)  /* 1.0 */
+
 NCZX_EXPORT void render() {
     texture_bind(vegetation_atlas);
-    blend_mode(1); // Alpha blend for transparency
-    cull_mode(0);  // Double-sided
+    blend_mode(1); /* Alpha blend for transparency */
+    cull_mode(0);  /* Double-sided */
+    set_color(0xFFFFFFFF);
 
     for (int i = 0; i < tree_count; i++) {
         push_identity();
         push_translate(trees[i].x, trees[i].height * 0.5, trees[i].z);
 
-        // Different tree types from atlas
-        float src_x = (float)(trees[i].type_id * 64);
+        /* Different tree types from atlas */
+        float src_x = (float)trees[i].type_id * TREE_UV_W;
         draw_billboard_region(
             trees[i].width, trees[i].height,
-            src_x, 0.0, 64.0, 128.0,
-            2, // Cylindrical Y - always upright
-            0xFFFFFFFF
+            src_x, 0.0, TREE_UV_W, TREE_UV_H,
+            2  /* Cylindrical Y - always upright */
         );
     }
 }
@@ -306,22 +331,26 @@ NCZX_EXPORT void render() {
 
 {{#tab name="Zig"}}
 ```zig
+// Vegetation atlas: 256x128 pixels, 4 tree types of 64x128 each
+const TREE_UV_W: f32 = 64.0 / 256.0;   // 0.25
+const TREE_UV_H: f32 = 128.0 / 128.0;  // 1.0
+
 export fn render() void {
     texture_bind(vegetation_atlas);
     blend_mode(1); // Alpha blend for transparency
     cull_mode(0);  // Double-sided
+    set_color(0xFFFFFFFF);
 
     for (trees) |tree| {
         push_identity();
         push_translate(tree.x, tree.height * 0.5, tree.z);
 
         // Different tree types from atlas
-        const src_x = @as(f32, @floatFromInt(tree.type_id * 64));
+        const src_x = @as(f32, @floatFromInt(tree.type_id)) * TREE_UV_W;
         draw_billboard_region(
             tree.width, tree.height,
-            src_x, 0.0, 64.0, 128.0,
-            2, // Cylindrical Y - always upright
-            0xFFFFFFFF
+            src_x, 0.0, TREE_UV_W, TREE_UV_H,
+            2  // Cylindrical Y - always upright
         );
     }
 }
@@ -348,7 +377,8 @@ fn render() {
         // Spherical billboard - faces camera completely
         let alpha = (particle.life * 255.0) as u32;
         let color = (particle.color & 0xFFFFFF00) | alpha;
-        draw_billboard(particle.size, particle.size, 1, color);
+        set_color(color);
+        draw_billboard(particle.size, particle.size, 1);
     }
 }
 ```
@@ -358,17 +388,18 @@ fn render() {
 ```c
 NCZX_EXPORT void render() {
     texture_bind(particle_texture);
-    blend_mode(2); // Additive for glow
+    blend_mode(2); /* Additive for glow */
     depth_test(1);
 
     for (int i = 0; i < particle_count; i++) {
         push_identity();
         push_translate(particles[i].x, particles[i].y, particles[i].z);
 
-        // Spherical billboard - faces camera completely
+        /* Spherical billboard - faces camera completely */
         uint32_t alpha = (uint32_t)(particles[i].life * 255.0);
         uint32_t color = (particles[i].color & 0xFFFFFF00) | alpha;
-        draw_billboard(particles[i].size, particles[i].size, 1, color);
+        set_color(color);
+        draw_billboard(particles[i].size, particles[i].size, 1);
     }
 }
 ```
@@ -388,7 +419,8 @@ export fn render() void {
         // Spherical billboard - faces camera completely
         const alpha = @as(u32, @intFromFloat(particle.life * 255.0));
         const color = (particle.color & 0xFFFFFF00) | alpha;
-        draw_billboard(particle.size, particle.size, 1, color);
+        set_color(color);
+        draw_billboard(particle.size, particle.size, 1);
     }
 }
 ```
@@ -402,9 +434,13 @@ export fn render() void {
 
 {{#tab name="Rust"}}
 ```rust
+// NPC sheet: 128x128 pixels, 4x4 grid of 32x32 frames
+const FRAME_UV_SIZE: f32 = 32.0 / 128.0;  // 0.25
+
 fn render() {
     texture_bind(npc_sheet);
     blend_mode(1);
+    set_color(0xFFFFFFFF);
 
     for npc in &npcs {
         push_identity();
@@ -414,11 +450,10 @@ fn render() {
         let frame = get_npc_frame(npc);
         draw_billboard_region(
             2.0, 2.0,
-            (frame % 4 * 32) as f32,
-            (frame / 4 * 32) as f32,
-            32.0, 32.0,
-            2, // Cylindrical Y
-            0xFFFFFFFF
+            (frame % 4) as f32 * FRAME_UV_SIZE,
+            (frame / 4) as f32 * FRAME_UV_SIZE,
+            FRAME_UV_SIZE, FRAME_UV_SIZE,
+            2  // Cylindrical Y
         );
     }
 }
@@ -427,23 +462,26 @@ fn render() {
 
 {{#tab name="C/C++"}}
 ```c
+/* NPC sheet: 128x128 pixels, 4x4 grid of 32x32 frames */
+#define FRAME_UV_SIZE (32.0f / 128.0f)  /* 0.25 */
+
 NCZX_EXPORT void render() {
     texture_bind(npc_sheet);
     blend_mode(1);
+    set_color(0xFFFFFFFF);
 
     for (int i = 0; i < npc_count; i++) {
         push_identity();
         push_translate(npcs[i].x, npcs[i].y + 1.0, npcs[i].z);
 
-        // Select animation frame based on direction and state
+        /* Select animation frame based on direction and state */
         uint32_t frame = get_npc_frame(&npcs[i]);
         draw_billboard_region(
             2.0, 2.0,
-            (float)(frame % 4 * 32),
-            (float)(frame / 4 * 32),
-            32.0, 32.0,
-            2, // Cylindrical Y
-            0xFFFFFFFF
+            (float)(frame % 4) * FRAME_UV_SIZE,
+            (float)(frame / 4) * FRAME_UV_SIZE,
+            FRAME_UV_SIZE, FRAME_UV_SIZE,
+            2  /* Cylindrical Y */
         );
     }
 }
@@ -452,9 +490,13 @@ NCZX_EXPORT void render() {
 
 {{#tab name="Zig"}}
 ```zig
+// NPC sheet: 128x128 pixels, 4x4 grid of 32x32 frames
+const FRAME_UV_SIZE: f32 = 32.0 / 128.0;  // 0.25
+
 export fn render() void {
     texture_bind(npc_sheet);
     blend_mode(1);
+    set_color(0xFFFFFFFF);
 
     for (npcs) |npc| {
         push_identity();
@@ -464,11 +506,10 @@ export fn render() void {
         const frame = get_npc_frame(npc);
         draw_billboard_region(
             2.0, 2.0,
-            @as(f32, @floatFromInt(frame % 4 * 32)),
-            @as(f32, @floatFromInt(frame / 4 * 32)),
-            32.0, 32.0,
-            2, // Cylindrical Y
-            0xFFFFFFFF
+            @as(f32, @floatFromInt(frame % 4)) * FRAME_UV_SIZE,
+            @as(f32, @floatFromInt(frame / 4)) * FRAME_UV_SIZE,
+            FRAME_UV_SIZE, FRAME_UV_SIZE,
+            2  // Cylindrical Y
         );
     }
 }
@@ -499,12 +540,14 @@ fn render() {
             push_translate(enemy.x, enemy.y + 2.5, enemy.z);
 
             // Background
-            draw_billboard(1.0, 0.1, 1, 0x333333FF);
+            set_color(0x333333FF);
+            draw_billboard(1.0, 0.1, 1);
 
             // Health fill
             let ratio = enemy.health / enemy.max_health;
             push_scale(ratio, 1.0, 1.0);
-            draw_billboard(1.0, 0.1, 1, 0x00FF00FF);
+            set_color(0x00FF00FF);
+            draw_billboard(1.0, 0.1, 1);
         }
     }
 
@@ -516,27 +559,29 @@ fn render() {
 {{#tab name="C/C++"}}
 ```c
 NCZX_EXPORT void render() {
-    // Draw enemies first
+    /* Draw enemies first */
     for (int i = 0; i < enemy_count; i++) {
         draw_enemy(&enemies[i]);
     }
 
-    // Then draw health bars as billboards
-    depth_test(0); // On top of everything
-    texture_bind(0); // No texture (solid color)
+    /* Then draw health bars as billboards */
+    depth_test(0); /* On top of everything */
+    texture_bind(0); /* No texture (solid color) */
 
     for (int i = 0; i < enemy_count; i++) {
         if (enemies[i].health < enemies[i].max_health) {
             push_identity();
             push_translate(enemies[i].x, enemies[i].y + 2.5, enemies[i].z);
 
-            // Background
-            draw_billboard(1.0, 0.1, 1, 0x333333FF);
+            /* Background */
+            set_color(0x333333FF);
+            draw_billboard(1.0, 0.1, 1);
 
-            // Health fill
+            /* Health fill */
             float ratio = enemies[i].health / enemies[i].max_health;
             push_scale(ratio, 1.0, 1.0);
-            draw_billboard(1.0, 0.1, 1, 0x00FF00FF);
+            set_color(0x00FF00FF);
+            draw_billboard(1.0, 0.1, 1);
         }
     }
 
@@ -563,12 +608,14 @@ export fn render() void {
             push_translate(enemy.x, enemy.y + 2.5, enemy.z);
 
             // Background
-            draw_billboard(1.0, 0.1, 1, 0x333333FF);
+            set_color(0x333333FF);
+            draw_billboard(1.0, 0.1, 1);
 
             // Health fill
             const ratio = enemy.health / enemy.max_health;
             push_scale(ratio, 1.0, 1.0);
-            draw_billboard(1.0, 0.1, 1, 0x00FF00FF);
+            set_color(0x00FF00FF);
+            draw_billboard(1.0, 0.1, 1);
         }
     }
 
@@ -631,14 +678,15 @@ fn render() {
         texture_bind(TREE_TEX);
         blend_mode(1);
         cull_mode(0);
+        set_color(0xFFFFFFFF);
 
         push_identity();
         push_translate(5.0, 2.0, -5.0);
-        draw_billboard(2.0, 4.0, 2, 0xFFFFFFFF);
+        draw_billboard(2.0, 4.0, 2);
 
         push_identity();
         push_translate(-3.0, 1.5, -8.0);
-        draw_billboard(1.5, 3.0, 2, 0xFFFFFFFF);
+        draw_billboard(1.5, 3.0, 2);
 
         // Particles - spherical billboards
         texture_bind(PARTICLE_TEX);
@@ -649,7 +697,8 @@ fn render() {
                 push_identity();
                 push_translate(p.x, p.y, p.z);
                 let alpha = (p.life.min(1.0) * 255.0) as u32;
-                draw_billboard(p.size, p.size, 1, 0xFFAA00FF & (0xFFFFFF00 | alpha));
+                set_color(0xFFAA00FF & (0xFFFFFF00 | alpha));
+                draw_billboard(p.size, p.size, 1);
             }
         }
 
@@ -688,36 +737,38 @@ NCZX_EXPORT void update() {
             particles[i].x += particles[i].vx * dt;
             particles[i].y += particles[i].vy * dt;
             particles[i].z += particles[i].vz * dt;
-            particles[i].vy -= 5.0 * dt; // Gravity
+            particles[i].vy -= 5.0 * dt; /* Gravity */
             particles[i].life -= dt;
         }
     }
 }
 
 NCZX_EXPORT void render() {
-    // Trees - cylindrical billboards
+    /* Trees - cylindrical billboards */
     texture_bind(tree_tex);
     blend_mode(1);
     cull_mode(0);
+    set_color(0xFFFFFFFF);
 
     push_identity();
     push_translate(5.0, 2.0, -5.0);
-    draw_billboard(2.0, 4.0, 2, 0xFFFFFFFF);
+    draw_billboard(2.0, 4.0, 2);
 
     push_identity();
     push_translate(-3.0, 1.5, -8.0);
-    draw_billboard(1.5, 3.0, 2, 0xFFFFFFFF);
+    draw_billboard(1.5, 3.0, 2);
 
-    // Particles - spherical billboards
+    /* Particles - spherical billboards */
     texture_bind(particle_tex);
-    blend_mode(2); // Additive
+    blend_mode(2); /* Additive */
 
     for (int i = 0; i < 100; i++) {
         if (particles[i].life > 0.0) {
             push_identity();
             push_translate(particles[i].x, particles[i].y, particles[i].z);
             uint32_t alpha = (uint32_t)(fminf(particles[i].life, 1.0) * 255.0);
-            draw_billboard(particles[i].size, particles[i].size, 1, 0xFFAA00FF & (0xFFFFFF00 | alpha));
+            set_color(0xFFAA00FF & (0xFFFFFF00 | alpha));
+            draw_billboard(particles[i].size, particles[i].size, 1);
         }
     }
 
@@ -764,14 +815,15 @@ export fn render() void {
     texture_bind(tree_tex);
     blend_mode(1);
     cull_mode(0);
+    set_color(0xFFFFFFFF);
 
     push_identity();
     push_translate(5.0, 2.0, -5.0);
-    draw_billboard(2.0, 4.0, 2, 0xFFFFFFFF);
+    draw_billboard(2.0, 4.0, 2);
 
     push_identity();
     push_translate(-3.0, 1.5, -8.0);
-    draw_billboard(1.5, 3.0, 2, 0xFFFFFFFF);
+    draw_billboard(1.5, 3.0, 2);
 
     // Particles - spherical billboards
     texture_bind(particle_tex);
@@ -782,7 +834,8 @@ export fn render() void {
             push_identity();
             push_translate(p.x, p.y, p.z);
             const alpha = @as(u32, @intFromFloat(@min(p.life, 1.0) * 255.0));
-            draw_billboard(p.size, p.size, 1, 0xFFAA00FF & (0xFFFFFF00 | alpha));
+            set_color(0xFFAA00FF & (0xFFFFFF00 | alpha));
+            draw_billboard(p.size, p.size, 1);
         }
     }
 

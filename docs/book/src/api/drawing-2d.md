@@ -2,6 +2,8 @@
 
 Screen-space sprites, rectangles, and text rendering.
 
+> **Color:** Use `set_color(0xRRGGBBAA)` before drawing to set the tint color. Default is white (`0xFFFFFFFF`).
+
 ## Screen Coordinate System
 
 All 2D drawing uses screen-space coordinates with the following conventions:
@@ -39,19 +41,19 @@ Draws a textured quad at screen coordinates.
 
 {{#tab name="Rust"}}
 ```rust
-fn draw_sprite(x: f32, y: f32, w: f32, h: f32, color: u32)
+fn draw_sprite(x: f32, y: f32, w: f32, h: f32)
 ```
 {{#endtab}}
 
 {{#tab name="C/C++"}}
 ```c
-NCZX_IMPORT void draw_sprite(float x, float y, float w, float h, uint32_t color);
+NCZX_IMPORT void draw_sprite(float x, float y, float w, float h);
 ```
 {{#endtab}}
 
 {{#tab name="Zig"}}
 ```zig
-pub extern fn draw_sprite(x: f32, y: f32, w: f32, h: f32, color: u32) void;
+pub extern fn draw_sprite(x: f32, y: f32, w: f32, h: f32) void;
 ```
 {{#endtab}}
 
@@ -63,7 +65,6 @@ pub extern fn draw_sprite(x: f32, y: f32, w: f32, h: f32, color: u32) void;
 |------|------|-------------|
 | x, y | `f32` | Screen position (top-left corner) |
 | w, h | `f32` | Size in pixels |
-| color | `u32` | Tint color as `0xRRGGBBAA` |
 
 **Example:**
 
@@ -74,10 +75,11 @@ pub extern fn draw_sprite(x: f32, y: f32, w: f32, h: f32, color: u32) void;
 fn render() {
     // Draw full texture
     texture_bind(player_sprite);
-    draw_sprite(100.0, 100.0, 64.0, 64.0, 0xFFFFFFFF);
+    draw_sprite(100.0, 100.0, 64.0, 64.0);
 
     // Tinted sprite
-    draw_sprite(200.0, 100.0, 64.0, 64.0, 0xFF8080FF);
+    set_color(0xFF8080FF);
+    draw_sprite(200.0, 100.0, 64.0, 64.0);
 }
 ```
 {{#endtab}}
@@ -87,10 +89,11 @@ fn render() {
 NCZX_EXPORT void render() {
     // Draw full texture
     texture_bind(player_sprite);
-    draw_sprite(100.0f, 100.0f, 64.0f, 64.0f, 0xFFFFFFFF);
+    draw_sprite(100.0f, 100.0f, 64.0f, 64.0f);
 
     // Tinted sprite
-    draw_sprite(200.0f, 100.0f, 64.0f, 64.0f, 0xFF8080FF);
+    set_color(0xFF8080FF);
+    draw_sprite(200.0f, 100.0f, 64.0f, 64.0f);
 }
 ```
 {{#endtab}}
@@ -100,10 +103,11 @@ NCZX_EXPORT void render() {
 export fn render() void {
     // Draw full texture
     texture_bind(player_sprite);
-    draw_sprite(100.0, 100.0, 64.0, 64.0, 0xFFFFFFFF);
+    draw_sprite(100.0, 100.0, 64.0, 64.0);
 
     // Tinted sprite
-    draw_sprite(200.0, 100.0, 64.0, 64.0, 0xFF8080FF);
+    set_color(0xFF8080FF);
+    draw_sprite(200.0, 100.0, 64.0, 64.0);
 }
 ```
 {{#endtab}}
@@ -124,8 +128,7 @@ Draws a region of a texture (sprite sheet).
 ```rust
 fn draw_sprite_region(
     x: f32, y: f32, w: f32, h: f32,
-    src_x: f32, src_y: f32, src_w: f32, src_h: f32,
-    color: u32
+    src_x: f32, src_y: f32, src_w: f32, src_h: f32
 )
 ```
 {{#endtab}}
@@ -134,8 +137,7 @@ fn draw_sprite_region(
 ```c
 NCZX_IMPORT void draw_sprite_region(
     float x, float y, float w, float h,
-    float src_x, float src_y, float src_w, float src_h,
-    uint32_t color
+    float src_x, float src_y, float src_w, float src_h
 );
 ```
 {{#endtab}}
@@ -144,8 +146,7 @@ NCZX_IMPORT void draw_sprite_region(
 ```zig
 pub extern fn draw_sprite_region(
     x: f32, y: f32, w: f32, h: f32,
-    src_x: f32, src_y: f32, src_w: f32, src_h: f32,
-    color: u32
+    src_x: f32, src_y: f32, src_w: f32, src_h: f32
 ) void;
 ```
 {{#endtab}}
@@ -158,9 +159,8 @@ pub extern fn draw_sprite_region(
 |------|------|-------------|
 | x, y | `f32` | Screen position |
 | w, h | `f32` | Destination size in pixels |
-| src_x, src_y | `f32` | Source position in texture (pixels) |
-| src_w, src_h | `f32` | Source size in texture (pixels) |
-| color | `u32` | Tint color |
+| src_x, src_y | `f32` | Source UV position (0.0-1.0) |
+| src_w, src_h | `f32` | Source UV size (0.0-1.0) |
 
 **Example:**
 
@@ -168,14 +168,15 @@ pub extern fn draw_sprite_region(
 
 {{#tab name="Rust"}}
 ```rust
-// Sprite sheet: 4x4 grid of 32x32 sprites
+// Sprite sheet: 4x4 grid of 32x32 sprites (128x128 texture)
 fn draw_frame(frame: u32) {
     let col = frame % 4;
     let row = frame / 4;
+    // UV coordinates: frame size / texture size
+    let uv_size = 32.0 / 128.0;  // = 0.25
     draw_sprite_region(
         100.0, 100.0, 64.0, 64.0,           // Destination (scaled 2x)
-        (col * 32) as f32, (row * 32) as f32, 32.0, 32.0, // Source
-        0xFFFFFFFF
+        col as f32 * uv_size, row as f32 * uv_size, uv_size, uv_size  // Source UV
     );
 }
 ```
@@ -183,14 +184,15 @@ fn draw_frame(frame: u32) {
 
 {{#tab name="C/C++"}}
 ```c
-// Sprite sheet: 4x4 grid of 32x32 sprites
+// Sprite sheet: 4x4 grid of 32x32 sprites (128x128 texture)
 NCZX_EXPORT void draw_frame(uint32_t frame) {
     uint32_t col = frame % 4;
     uint32_t row = frame / 4;
+    // UV coordinates: frame size / texture size
+    float uv_size = 32.0f / 128.0f;  // = 0.25
     draw_sprite_region(
-        100.0f, 100.0f, 64.0f, 64.0f,           // Destination (scaled 2x)
-        (float)(col * 32), (float)(row * 32), 32.0f, 32.0f, // Source
-        0xFFFFFFFF
+        100.0f, 100.0f, 64.0f, 64.0f,       // Destination (scaled 2x)
+        (float)col * uv_size, (float)row * uv_size, uv_size, uv_size  // Source UV
     );
 }
 ```
@@ -198,14 +200,15 @@ NCZX_EXPORT void draw_frame(uint32_t frame) {
 
 {{#tab name="Zig"}}
 ```zig
-// Sprite sheet: 4x4 grid of 32x32 sprites
+// Sprite sheet: 4x4 grid of 32x32 sprites (128x128 texture)
 export fn draw_frame(frame: u32) void {
     const col = frame % 4;
     const row = frame / 4;
+    // UV coordinates: frame size / texture size
+    const uv_size = 32.0 / 128.0;  // = 0.25
     draw_sprite_region(
         100.0, 100.0, 64.0, 64.0,           // Destination (scaled 2x)
-        @floatFromInt(col * 32), @floatFromInt(row * 32), 32.0, 32.0, // Source
-        0xFFFFFFFF
+        @as(f32, @floatFromInt(col)) * uv_size, @as(f32, @floatFromInt(row)) * uv_size, uv_size, uv_size  // Source UV
     );
 }
 ```
@@ -229,8 +232,7 @@ fn draw_sprite_ex(
     x: f32, y: f32, w: f32, h: f32,
     src_x: f32, src_y: f32, src_w: f32, src_h: f32,
     origin_x: f32, origin_y: f32,
-    angle_deg: f32,
-    color: u32
+    angle_deg: f32
 )
 ```
 {{#endtab}}
@@ -241,8 +243,7 @@ NCZX_IMPORT void draw_sprite_ex(
     float x, float y, float w, float h,
     float src_x, float src_y, float src_w, float src_h,
     float origin_x, float origin_y,
-    float angle_deg,
-    uint32_t color
+    float angle_deg
 );
 ```
 {{#endtab}}
@@ -253,8 +254,7 @@ pub extern fn draw_sprite_ex(
     x: f32, y: f32, w: f32, h: f32,
     src_x: f32, src_y: f32, src_w: f32, src_h: f32,
     origin_x: f32, origin_y: f32,
-    angle_deg: f32,
-    color: u32
+    angle_deg: f32
 ) void;
 ```
 {{#endtab}}
@@ -267,10 +267,9 @@ pub extern fn draw_sprite_ex(
 |------|------|-------------|
 | x, y | `f32` | Screen position |
 | w, h | `f32` | Destination size |
-| src_x, src_y, src_w, src_h | `f32` | Source region |
+| src_x, src_y, src_w, src_h | `f32` | Source UV region (0.0-1.0) |
 | origin_x, origin_y | `f32` | Rotation origin (0-1 normalized) |
 | angle_deg | `f32` | Rotation angle in degrees |
-| color | `u32` | Tint color |
 
 **Example:**
 
@@ -282,19 +281,17 @@ fn render() {
     // Rotating sprite around center
     draw_sprite_ex(
         200.0, 200.0, 64.0, 64.0,    // Position and size
-        0.0, 0.0, 32.0, 32.0,        // Full texture
+        0.0, 0.0, 1.0, 1.0,          // Full texture UV
         0.5, 0.5,                     // Center origin
-        elapsed_time() * 90.0,        // Rotation (90 deg/sec)
-        0xFFFFFFFF
+        elapsed_time() * 90.0         // Rotation (90 deg/sec)
     );
 
     // Rotating around bottom-center (like a pendulum)
     draw_sprite_ex(
         300.0, 200.0, 64.0, 64.0,
-        0.0, 0.0, 32.0, 32.0,
+        0.0, 0.0, 1.0, 1.0,
         0.5, 1.0,                     // Bottom-center origin
-        (elapsed_time() * 2.0).sin() * 30.0,
-        0xFFFFFFFF
+        (elapsed_time() * 2.0).sin() * 30.0
     );
 }
 ```
@@ -306,19 +303,17 @@ NCZX_EXPORT void render() {
     // Rotating sprite around center
     draw_sprite_ex(
         200.0f, 200.0f, 64.0f, 64.0f,    // Position and size
-        0.0f, 0.0f, 32.0f, 32.0f,        // Full texture
+        0.0f, 0.0f, 1.0f, 1.0f,          // Full texture UV
         0.5f, 0.5f,                      // Center origin
-        elapsed_time() * 90.0f,          // Rotation (90 deg/sec)
-        0xFFFFFFFF
+        elapsed_time() * 90.0f           // Rotation (90 deg/sec)
     );
 
     // Rotating around bottom-center (like a pendulum)
     draw_sprite_ex(
         300.0f, 200.0f, 64.0f, 64.0f,
-        0.0f, 0.0f, 32.0f, 32.0f,
+        0.0f, 0.0f, 1.0f, 1.0f,
         0.5f, 1.0f,                      // Bottom-center origin
-        sinf(elapsed_time() * 2.0f) * 30.0f,
-        0xFFFFFFFF
+        sinf(elapsed_time() * 2.0f) * 30.0f
     );
 }
 ```
@@ -330,19 +325,17 @@ export fn render() void {
     // Rotating sprite around center
     draw_sprite_ex(
         200.0, 200.0, 64.0, 64.0,    // Position and size
-        0.0, 0.0, 32.0, 32.0,        // Full texture
+        0.0, 0.0, 1.0, 1.0,          // Full texture UV
         0.5, 0.5,                     // Center origin
-        elapsed_time() * 90.0,        // Rotation (90 deg/sec)
-        0xFFFFFFFF
+        elapsed_time() * 90.0         // Rotation (90 deg/sec)
     );
 
     // Rotating around bottom-center (like a pendulum)
     draw_sprite_ex(
         300.0, 200.0, 64.0, 64.0,
-        0.0, 0.0, 32.0, 32.0,
+        0.0, 0.0, 1.0, 1.0,
         0.5, 1.0,                     // Bottom-center origin
-        @sin(elapsed_time() * 2.0) * 30.0,
-        0xFFFFFFFF
+        @sin(elapsed_time() * 2.0) * 30.0
     );
 }
 ```
@@ -364,19 +357,19 @@ Draws a solid color rectangle.
 
 {{#tab name="Rust"}}
 ```rust
-fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32)
+fn draw_rect(x: f32, y: f32, w: f32, h: f32)
 ```
 {{#endtab}}
 
 {{#tab name="C/C++"}}
 ```c
-NCZX_IMPORT void draw_rect(float x, float y, float w, float h, uint32_t color);
+NCZX_IMPORT void draw_rect(float x, float y, float w, float h);
 ```
 {{#endtab}}
 
 {{#tab name="Zig"}}
 ```zig
-pub extern fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32) void;
+pub extern fn draw_rect(x: f32, y: f32, w: f32, h: f32) void;
 ```
 {{#endtab}}
 
@@ -388,7 +381,6 @@ pub extern fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32) void;
 |------|------|-------------|
 | x, y | `f32` | Screen position (top-left) |
 | w, h | `f32` | Size in pixels |
-| color | `u32` | Fill color as `0xRRGGBBAA` |
 
 **Example:**
 
@@ -398,14 +390,17 @@ pub extern fn draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32) void;
 ```rust
 fn render() {
     // Health bar background
-    draw_rect(10.0, 10.0, 100.0, 20.0, 0x333333FF);
+    set_color(0x333333FF);
+    draw_rect(10.0, 10.0, 100.0, 20.0);
 
     // Health bar fill
+    set_color(0x00FF00FF);
     let health_width = (health / max_health) * 96.0;
-    draw_rect(12.0, 12.0, health_width, 16.0, 0x00FF00FF);
+    draw_rect(12.0, 12.0, health_width, 16.0);
 
     // Semi-transparent overlay
-    draw_rect(0.0, 0.0, 960.0, 540.0, 0x00000080);
+    set_color(0x00000080);
+    draw_rect(0.0, 0.0, 960.0, 540.0);
 }
 ```
 {{#endtab}}
@@ -414,14 +409,17 @@ fn render() {
 ```c
 NCZX_EXPORT void render() {
     // Health bar background
-    draw_rect(10.0f, 10.0f, 100.0f, 20.0f, 0x333333FF);
+    set_color(0x333333FF);
+    draw_rect(10.0f, 10.0f, 100.0f, 20.0f);
 
     // Health bar fill
+    set_color(0x00FF00FF);
     float health_width = (health / max_health) * 96.0f;
-    draw_rect(12.0f, 12.0f, health_width, 16.0f, 0x00FF00FF);
+    draw_rect(12.0f, 12.0f, health_width, 16.0f);
 
     // Semi-transparent overlay
-    draw_rect(0.0f, 0.0f, 960.0f, 540.0f, 0x00000080);
+    set_color(0x00000080);
+    draw_rect(0.0f, 0.0f, 960.0f, 540.0f);
 }
 ```
 {{#endtab}}
@@ -430,14 +428,17 @@ NCZX_EXPORT void render() {
 ```zig
 export fn render() void {
     // Health bar background
-    draw_rect(10.0, 10.0, 100.0, 20.0, 0x333333FF);
+    set_color(0x333333FF);
+    draw_rect(10.0, 10.0, 100.0, 20.0);
 
     // Health bar fill
+    set_color(0x00FF00FF);
     const health_width = (health / max_health) * 96.0;
-    draw_rect(12.0, 12.0, health_width, 16.0, 0x00FF00FF);
+    draw_rect(12.0, 12.0, health_width, 16.0);
 
     // Semi-transparent overlay
-    draw_rect(0.0, 0.0, 960.0, 540.0, 0x00000080);
+    set_color(0x00000080);
+    draw_rect(0.0, 0.0, 960.0, 540.0);
 }
 ```
 {{#endtab}}
@@ -458,19 +459,19 @@ Draws a line between two points.
 
 {{#tab name="Rust"}}
 ```rust
-fn draw_line(x1: f32, y1: f32, x2: f32, y2: f32, thickness: f32, color: u32)
+fn draw_line(x1: f32, y1: f32, x2: f32, y2: f32, thickness: f32)
 ```
 {{#endtab}}
 
 {{#tab name="C/C++"}}
 ```c
-NCZX_IMPORT void draw_line(float x1, float y1, float x2, float y2, float thickness, uint32_t color);
+NCZX_IMPORT void draw_line(float x1, float y1, float x2, float y2, float thickness);
 ```
 {{#endtab}}
 
 {{#tab name="Zig"}}
 ```zig
-pub extern fn draw_line(x1: f32, y1: f32, x2: f32, y2: f32, thickness: f32, color: u32) void;
+pub extern fn draw_line(x1: f32, y1: f32, x2: f32, y2: f32, thickness: f32) void;
 ```
 {{#endtab}}
 
@@ -483,7 +484,6 @@ pub extern fn draw_line(x1: f32, y1: f32, x2: f32, y2: f32, thickness: f32, colo
 | x1, y1 | `f32` | Start point in screen pixels |
 | x2, y2 | `f32` | End point in screen pixels |
 | thickness | `f32` | Line thickness in pixels |
-| color | `u32` | Line color as `0xRRGGBBAA` |
 
 **Example:**
 
@@ -493,13 +493,15 @@ pub extern fn draw_line(x1: f32, y1: f32, x2: f32, y2: f32, thickness: f32, colo
 ```rust
 fn render() {
     // Diagonal line
-    draw_line(100.0, 100.0, 300.0, 200.0, 2.0, 0xFFFFFFFF);
+    set_color(0xFFFFFFFF);
+    draw_line(100.0, 100.0, 300.0, 200.0, 2.0);
 
     // Box outline
-    draw_line(50.0, 50.0, 150.0, 50.0, 1.0, 0x00FF00FF);
-    draw_line(150.0, 50.0, 150.0, 150.0, 1.0, 0x00FF00FF);
-    draw_line(150.0, 150.0, 50.0, 150.0, 1.0, 0x00FF00FF);
-    draw_line(50.0, 150.0, 50.0, 50.0, 1.0, 0x00FF00FF);
+    set_color(0x00FF00FF);
+    draw_line(50.0, 50.0, 150.0, 50.0, 1.0);
+    draw_line(150.0, 50.0, 150.0, 150.0, 1.0);
+    draw_line(150.0, 150.0, 50.0, 150.0, 1.0);
+    draw_line(50.0, 150.0, 50.0, 50.0, 1.0);
 }
 ```
 {{#endtab}}
@@ -508,13 +510,15 @@ fn render() {
 ```c
 NCZX_EXPORT void render() {
     // Diagonal line
-    draw_line(100.0f, 100.0f, 300.0f, 200.0f, 2.0f, 0xFFFFFFFF);
+    set_color(0xFFFFFFFF);
+    draw_line(100.0f, 100.0f, 300.0f, 200.0f, 2.0f);
 
     // Box outline
-    draw_line(50.0f, 50.0f, 150.0f, 50.0f, 1.0f, 0x00FF00FF);
-    draw_line(150.0f, 50.0f, 150.0f, 150.0f, 1.0f, 0x00FF00FF);
-    draw_line(150.0f, 150.0f, 50.0f, 150.0f, 1.0f, 0x00FF00FF);
-    draw_line(50.0f, 150.0f, 50.0f, 50.0f, 1.0f, 0x00FF00FF);
+    set_color(0x00FF00FF);
+    draw_line(50.0f, 50.0f, 150.0f, 50.0f, 1.0f);
+    draw_line(150.0f, 50.0f, 150.0f, 150.0f, 1.0f);
+    draw_line(150.0f, 150.0f, 50.0f, 150.0f, 1.0f);
+    draw_line(50.0f, 150.0f, 50.0f, 50.0f, 1.0f);
 }
 ```
 {{#endtab}}
@@ -523,13 +527,15 @@ NCZX_EXPORT void render() {
 ```zig
 export fn render() void {
     // Diagonal line
-    draw_line(100.0, 100.0, 300.0, 200.0, 2.0, 0xFFFFFFFF);
+    set_color(0xFFFFFFFF);
+    draw_line(100.0, 100.0, 300.0, 200.0, 2.0);
 
     // Box outline
-    draw_line(50.0, 50.0, 150.0, 50.0, 1.0, 0x00FF00FF);
-    draw_line(150.0, 50.0, 150.0, 150.0, 1.0, 0x00FF00FF);
-    draw_line(150.0, 150.0, 50.0, 150.0, 1.0, 0x00FF00FF);
-    draw_line(50.0, 150.0, 50.0, 50.0, 1.0, 0x00FF00FF);
+    set_color(0x00FF00FF);
+    draw_line(50.0, 50.0, 150.0, 50.0, 1.0);
+    draw_line(150.0, 50.0, 150.0, 150.0, 1.0);
+    draw_line(150.0, 150.0, 50.0, 150.0, 1.0);
+    draw_line(50.0, 150.0, 50.0, 50.0, 1.0);
 }
 ```
 {{#endtab}}
@@ -548,19 +554,19 @@ Draws a filled circle.
 
 {{#tab name="Rust"}}
 ```rust
-fn draw_circle(x: f32, y: f32, radius: f32, color: u32)
+fn draw_circle(x: f32, y: f32, radius: f32)
 ```
 {{#endtab}}
 
 {{#tab name="C/C++"}}
 ```c
-NCZX_IMPORT void draw_circle(float x, float y, float radius, uint32_t color);
+NCZX_IMPORT void draw_circle(float x, float y, float radius);
 ```
 {{#endtab}}
 
 {{#tab name="Zig"}}
 ```zig
-pub extern fn draw_circle(x: f32, y: f32, radius: f32, color: u32) void;
+pub extern fn draw_circle(x: f32, y: f32, radius: f32) void;
 ```
 {{#endtab}}
 
@@ -572,7 +578,6 @@ pub extern fn draw_circle(x: f32, y: f32, radius: f32, color: u32) void;
 |------|------|-------------|
 | x, y | `f32` | Center position in screen pixels |
 | radius | `f32` | Circle radius in pixels |
-| color | `u32` | Fill color as `0xRRGGBBAA` |
 
 **Notes:** Rendered as a 16-segment approximation.
 
@@ -584,10 +589,12 @@ pub extern fn draw_circle(x: f32, y: f32, radius: f32, color: u32) void;
 ```rust
 fn render() {
     // Player indicator
-    draw_circle(player_x, player_y, 10.0, 0x00FF00FF);
+    set_color(0x00FF00FF);
+    draw_circle(player_x, player_y, 10.0);
 
     // Semi-transparent area effect
-    draw_circle(500.0, 300.0, 50.0, 0xFF000040);
+    set_color(0xFF000040);
+    draw_circle(500.0, 300.0, 50.0);
 }
 ```
 {{#endtab}}
@@ -596,10 +603,12 @@ fn render() {
 ```c
 NCZX_EXPORT void render() {
     // Player indicator
-    draw_circle(player_x, player_y, 10.0f, 0x00FF00FF);
+    set_color(0x00FF00FF);
+    draw_circle(player_x, player_y, 10.0f);
 
     // Semi-transparent area effect
-    draw_circle(500.0f, 300.0f, 50.0f, 0xFF000040);
+    set_color(0xFF000040);
+    draw_circle(500.0f, 300.0f, 50.0f);
 }
 ```
 {{#endtab}}
@@ -608,10 +617,12 @@ NCZX_EXPORT void render() {
 ```zig
 export fn render() void {
     // Player indicator
-    draw_circle(player_x, player_y, 10.0, 0x00FF00FF);
+    set_color(0x00FF00FF);
+    draw_circle(player_x, player_y, 10.0);
 
     // Semi-transparent area effect
-    draw_circle(500.0, 300.0, 50.0, 0xFF000040);
+    set_color(0xFF000040);
+    draw_circle(500.0, 300.0, 50.0);
 }
 ```
 {{#endtab}}
@@ -630,19 +641,19 @@ Draws a circle outline.
 
 {{#tab name="Rust"}}
 ```rust
-fn draw_circle_outline(x: f32, y: f32, radius: f32, thickness: f32, color: u32)
+fn draw_circle_outline(x: f32, y: f32, radius: f32, thickness: f32)
 ```
 {{#endtab}}
 
 {{#tab name="C/C++"}}
 ```c
-NCZX_IMPORT void draw_circle_outline(float x, float y, float radius, float thickness, uint32_t color);
+NCZX_IMPORT void draw_circle_outline(float x, float y, float radius, float thickness);
 ```
 {{#endtab}}
 
 {{#tab name="Zig"}}
 ```zig
-pub extern fn draw_circle_outline(x: f32, y: f32, radius: f32, thickness: f32, color: u32) void;
+pub extern fn draw_circle_outline(x: f32, y: f32, radius: f32, thickness: f32) void;
 ```
 {{#endtab}}
 
@@ -655,7 +666,6 @@ pub extern fn draw_circle_outline(x: f32, y: f32, radius: f32, thickness: f32, c
 | x, y | `f32` | Center position in screen pixels |
 | radius | `f32` | Circle radius in pixels |
 | thickness | `f32` | Line thickness in pixels |
-| color | `u32` | Outline color as `0xRRGGBBAA` |
 
 **Notes:** Rendered as 16 line segments.
 
@@ -667,10 +677,12 @@ pub extern fn draw_circle_outline(x: f32, y: f32, radius: f32, thickness: f32, c
 ```rust
 fn render() {
     // Selection ring
-    draw_circle_outline(selected_x, selected_y, 20.0, 2.0, 0xFFFF00FF);
+    set_color(0xFFFF00FF);
+    draw_circle_outline(selected_x, selected_y, 20.0, 2.0);
 
     // Range indicator
-    draw_circle_outline(tower_x, tower_y, attack_range, 1.0, 0x00FF0080);
+    set_color(0x00FF0080);
+    draw_circle_outline(tower_x, tower_y, attack_range, 1.0);
 }
 ```
 {{#endtab}}
@@ -679,10 +691,12 @@ fn render() {
 ```c
 NCZX_EXPORT void render() {
     // Selection ring
-    draw_circle_outline(selected_x, selected_y, 20.0f, 2.0f, 0xFFFF00FF);
+    set_color(0xFFFF00FF);
+    draw_circle_outline(selected_x, selected_y, 20.0f, 2.0f);
 
     // Range indicator
-    draw_circle_outline(tower_x, tower_y, attack_range, 1.0f, 0x00FF0080);
+    set_color(0x00FF0080);
+    draw_circle_outline(tower_x, tower_y, attack_range, 1.0f);
 }
 ```
 {{#endtab}}
@@ -691,10 +705,12 @@ NCZX_EXPORT void render() {
 ```zig
 export fn render() void {
     // Selection ring
-    draw_circle_outline(selected_x, selected_y, 20.0, 2.0, 0xFFFF00FF);
+    set_color(0xFFFF00FF);
+    draw_circle_outline(selected_x, selected_y, 20.0, 2.0);
 
     // Range indicator
-    draw_circle_outline(tower_x, tower_y, attack_range, 1.0, 0x00FF0080);
+    set_color(0x00FF0080);
+    draw_circle_outline(tower_x, tower_y, attack_range, 1.0);
 }
 ```
 {{#endtab}}
@@ -715,19 +731,19 @@ Draws text using the bound font.
 
 {{#tab name="Rust"}}
 ```rust
-fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32, color: u32)
+fn draw_text(ptr: *const u8, len: u32, x: f32, y: f32, size: f32)
 ```
 {{#endtab}}
 
 {{#tab name="C/C++"}}
 ```c
-NCZX_IMPORT void draw_text(const uint8_t* ptr, uint32_t len, float x, float y, float size, uint32_t color);
+NCZX_IMPORT void draw_text(const uint8_t* ptr, uint32_t len, float x, float y, float size);
 ```
 {{#endtab}}
 
 {{#tab name="Zig"}}
 ```zig
-pub extern fn draw_text(ptr: [*]const u8, len: u32, x: f32, y: f32, size: f32, color: u32) void;
+pub extern fn draw_text(ptr: [*]const u8, len: u32, x: f32, y: f32, size: f32) void;
 ```
 {{#endtab}}
 
@@ -741,7 +757,8 @@ pub extern fn draw_text(ptr: [*]const u8, len: u32, x: f32, y: f32, size: f32, c
 | len | `u32` | String length in bytes |
 | x, y | `f32` | Screen position |
 | size | `f32` | Font size in pixels |
-| color | `u32` | Text color |
+
+> **Note:** Use `set_color(0xRRGGBBAA)` before calling `draw_text()` to set the text color.
 
 **Example:**
 
@@ -751,10 +768,12 @@ pub extern fn draw_text(ptr: [*]const u8, len: u32, x: f32, y: f32, size: f32, c
 ```rust
 fn render() {
     let text = b"SCORE: 12345";
-    draw_text(text.as_ptr(), text.len() as u32, 10.0, 10.0, 16.0, 0xFFFFFFFF);
+    set_color(0xFFFFFFFF);
+    draw_text(text.as_ptr(), text.len() as u32, 10.0, 10.0, 16.0);
 
     let title = b"GAME OVER";
-    draw_text(title.as_ptr(), title.len() as u32, 400.0, 270.0, 48.0, 0xFF0000FF);
+    set_color(0xFF0000FF);
+    draw_text(title.as_ptr(), title.len() as u32, 400.0, 270.0, 48.0);
 }
 ```
 {{#endtab}}
@@ -763,10 +782,12 @@ fn render() {
 ```c
 NCZX_EXPORT void render() {
     const char* text = "SCORE: 12345";
-    draw_text((const uint8_t*)text, strlen(text), 10.0f, 10.0f, 16.0f, 0xFFFFFFFF);
+    set_color(0xFFFFFFFF);
+    draw_text((const uint8_t*)text, strlen(text), 10.0f, 10.0f, 16.0f);
 
     const char* title = "GAME OVER";
-    draw_text((const uint8_t*)title, strlen(title), 400.0f, 270.0f, 48.0f, 0xFF0000FF);
+    set_color(0xFF0000FF);
+    draw_text((const uint8_t*)title, strlen(title), 400.0f, 270.0f, 48.0f);
 }
 ```
 {{#endtab}}
@@ -775,10 +796,12 @@ NCZX_EXPORT void render() {
 ```zig
 export fn render() void {
     const text = "SCORE: 12345";
-    draw_text(text, text.len, 10.0, 10.0, 16.0, 0xFFFFFFFF);
+    set_color(0xFFFFFFFF);
+    draw_text(text, text.len, 10.0, 10.0, 16.0);
 
     const title = "GAME OVER";
-    draw_text(title, title.len, 400.0, 270.0, 48.0, 0xFF0000FF);
+    set_color(0xFF0000FF);
+    draw_text(title, title.len, 400.0, 270.0, 48.0);
 }
 ```
 {{#endtab}}
@@ -837,7 +860,8 @@ fn render() {
 
     // Center text on screen
     let x = (screen::WIDTH as f32 - width) / 2.0;
-    draw_text(text.as_ptr(), text.len() as u32, x, 270.0, 32.0, 0xFFFFFFFF);
+    set_color(0xFFFFFFFF);
+    draw_text(text.as_ptr(), text.len() as u32, x, 270.0, 32.0);
 }
 ```
 {{#endtab}}
@@ -850,7 +874,8 @@ NCZX_EXPORT void render() {
 
     /* Center text on screen */
     float x = (NCZX_SCREEN_WIDTH - width) / 2.0f;
-    draw_text((const uint8_t*)text, 8, x, 270.0f, 32.0f, 0xFFFFFFFF);
+    set_color(0xFFFFFFFF);
+    draw_text((const uint8_t*)text, 8, x, 270.0f, 32.0f);
 }
 ```
 {{#endtab}}
@@ -863,7 +888,8 @@ export fn render() void {
 
     // Center text on screen
     const x = (@as(f32, @floatFromInt(Screen.width)) - width) / 2.0;
-    draw_text(text, text.len, x, 270.0, 32.0, 0xFFFFFFFF);
+    set_color(0xFFFFFFFF);
+    draw_text(text, text.len, x, 270.0, 32.0);
 }
 ```
 {{#endtab}}
@@ -1128,11 +1154,13 @@ pub extern fn font_bind(font_handle: u32) void;
 fn render() {
     // Use custom font
     font_bind(MY_FONT);
-    draw_text(b"Custom Text".as_ptr(), 11, 10.0, 10.0, 16.0, 0xFFFFFFFF);
+    set_color(0xFFFFFFFF);
+    draw_text(b"Custom Text".as_ptr(), 11, 10.0, 10.0, 16.0);
 
     // Switch to different font
     font_bind(TITLE_FONT);
-    draw_text(b"Title".as_ptr(), 5, 100.0, 50.0, 32.0, 0xFFD700FF);
+    set_color(0xFFD700FF);
+    draw_text(b"Title".as_ptr(), 5, 100.0, 50.0, 32.0);
 }
 ```
 {{#endtab}}
@@ -1142,11 +1170,13 @@ fn render() {
 NCZX_EXPORT void render() {
     // Use custom font
     font_bind(MY_FONT);
-    draw_text((const uint8_t*)"Custom Text", strlen("Custom Text"), 10.0f, 10.0f, 16.0f, 0xFFFFFFFF);
+    set_color(0xFFFFFFFF);
+    draw_text((const uint8_t*)"Custom Text", strlen("Custom Text"), 10.0f, 10.0f, 16.0f);
 
     // Switch to different font
     font_bind(TITLE_FONT);
-    draw_text((const uint8_t*)"Title", strlen("Title"), 100.0f, 50.0f, 32.0f, 0xFFD700FF);
+    set_color(0xFFD700FF);
+    draw_text((const uint8_t*)"Title", strlen("Title"), 100.0f, 50.0f, 32.0f);
 }
 ```
 {{#endtab}}
@@ -1156,11 +1186,13 @@ NCZX_EXPORT void render() {
 export fn render() void {
     // Use custom font
     font_bind(MY_FONT);
-    draw_text("Custom Text", "Custom Text".len, 10.0, 10.0, 16.0, 0xFFFFFFFF);
+    set_color(0xFFFFFFFF);
+    draw_text("Custom Text", "Custom Text".len, 10.0, 10.0, 16.0);
 
     // Switch to different font
     font_bind(TITLE_FONT);
-    draw_text("Title", "Title".len, 100.0, 50.0, 32.0, 0xFFD700FF);
+    set_color(0xFFD700FF);
+    draw_text("Title", "Title".len, 100.0, 50.0, 32.0);
 }
 ```
 {{#endtab}}
@@ -1178,6 +1210,13 @@ export fn render() void {
 static mut UI_FONT: u32 = 0;
 static mut ICON_SHEET: u32 = 0;
 
+// Icon sheet is 64x32 pixels with 16x16 icons
+const ICON_SIZE: f32 = 16.0;
+const SHEET_W: f32 = 64.0;
+const SHEET_H: f32 = 32.0;
+const ICON_UV_W: f32 = ICON_SIZE / SHEET_W;  // 0.25
+const ICON_UV_H: f32 = ICON_SIZE / SHEET_H;  // 0.5
+
 fn init() {
     unsafe {
         UI_FONT = rom_font(b"ui_font".as_ptr(), 7);
@@ -1192,32 +1231,38 @@ fn render() {
         blend_mode(1);
 
         // Background panel
-        draw_rect(5.0, 5.0, 200.0, 80.0, 0x00000099);
+        set_color(0x00000099);
+        draw_rect(5.0, 5.0, 200.0, 80.0);
 
-        // Health bar
-        draw_rect(10.0, 10.0, 102.0, 12.0, 0x333333FF);
-        draw_rect(11.0, 11.0, health as f32, 10.0, 0x00FF00FF);
+        // Health bar background
+        set_color(0x333333FF);
+        draw_rect(10.0, 10.0, 102.0, 12.0);
 
-        // Health icon
+        // Health bar fill
+        set_color(0x00FF00FF);
+        draw_rect(11.0, 11.0, health as f32, 10.0);
+
+        // Health icon (first icon in sheet)
         texture_bind(ICON_SHEET);
+        set_color(0xFFFFFFFF);
         draw_sprite_region(
-            10.0, 25.0, 16.0, 16.0,   // Position
-            0.0, 0.0, 16.0, 16.0,     // Heart icon
-            0xFFFFFFFF
+            10.0, 25.0, 16.0, 16.0,      // Position and size
+            0.0, 0.0, ICON_UV_W, ICON_UV_H  // UV region (0.0-1.0)
         );
 
         // Score text
         font_bind(UI_FONT);
+        set_color(0xFFFFFFFF);
         let score_text = b"SCORE: 12345";
         draw_text(score_text.as_ptr(), score_text.len() as u32,
-                  30.0, 25.0, 12.0, 0xFFFFFFFF);
+                  30.0, 25.0, 12.0);
 
-        // Animated coin icon
+        // Animated coin icon (4 frames in bottom row)
         let frame = ((elapsed_time() * 8.0) as u32) % 4;
+        set_color(0xFFD700FF);
         draw_sprite_region(
             10.0, 45.0, 16.0, 16.0,
-            (frame * 16) as f32, 16.0, 16.0, 16.0,
-            0xFFD700FF
+            frame as f32 * ICON_UV_W, 0.5, ICON_UV_W, ICON_UV_H  // UV coords
         );
 
         // Re-enable depth for 3D
@@ -1233,46 +1278,59 @@ fn render() {
 static uint32_t UI_FONT = 0;
 static uint32_t ICON_SHEET = 0;
 
+/* Icon sheet is 64x32 pixels with 16x16 icons */
+#define ICON_SIZE 16.0f
+#define SHEET_W 64.0f
+#define SHEET_H 32.0f
+#define ICON_UV_W (ICON_SIZE / SHEET_W)  /* 0.25 */
+#define ICON_UV_H (ICON_SIZE / SHEET_H)  /* 0.5 */
+
 NCZX_EXPORT void init() {
     UI_FONT = rom_font("ui_font", strlen("ui_font"));
     ICON_SHEET = rom_texture("icons", strlen("icons"));
 }
 
 NCZX_EXPORT void render() {
-    // Disable depth for 2D overlay
+    /* Disable depth for 2D overlay */
     depth_test(0);
     blend_mode(1);
 
-    // Background panel
-    draw_rect(5.0f, 5.0f, 200.0f, 80.0f, 0x00000099);
+    /* Background panel */
+    set_color(0x00000099);
+    draw_rect(5.0f, 5.0f, 200.0f, 80.0f);
 
-    // Health bar
-    draw_rect(10.0f, 10.0f, 102.0f, 12.0f, 0x333333FF);
-    draw_rect(11.0f, 11.0f, (float)health, 10.0f, 0x00FF00FF);
+    /* Health bar background */
+    set_color(0x333333FF);
+    draw_rect(10.0f, 10.0f, 102.0f, 12.0f);
 
-    // Health icon
+    /* Health bar fill */
+    set_color(0x00FF00FF);
+    draw_rect(11.0f, 11.0f, (float)health, 10.0f);
+
+    /* Health icon (first icon in sheet) */
     texture_bind(ICON_SHEET);
+    set_color(0xFFFFFFFF);
     draw_sprite_region(
-        10.0f, 25.0f, 16.0f, 16.0f,   // Position
-        0.0f, 0.0f, 16.0f, 16.0f,     // Heart icon
-        0xFFFFFFFF
+        10.0f, 25.0f, 16.0f, 16.0f,      /* Position and size */
+        0.0f, 0.0f, ICON_UV_W, ICON_UV_H  /* UV region (0.0-1.0) */
     );
 
-    // Score text
+    /* Score text */
     font_bind(UI_FONT);
+    set_color(0xFFFFFFFF);
     const char* score_text = "SCORE: 12345";
     draw_text((const uint8_t*)score_text, strlen(score_text),
-              30.0f, 25.0f, 12.0f, 0xFFFFFFFF);
+              30.0f, 25.0f, 12.0f);
 
-    // Animated coin icon
+    /* Animated coin icon (4 frames in bottom row) */
     uint32_t frame = ((uint32_t)(elapsed_time() * 8.0f)) % 4;
+    set_color(0xFFD700FF);
     draw_sprite_region(
         10.0f, 45.0f, 16.0f, 16.0f,
-        (float)(frame * 16), 16.0f, 16.0f, 16.0f,
-        0xFFD700FF
+        (float)frame * ICON_UV_W, 0.5f, ICON_UV_W, ICON_UV_H  /* UV coords */
     );
 
-    // Re-enable depth for 3D
+    /* Re-enable depth for 3D */
     depth_test(1);
     blend_mode(0);
 }
@@ -1283,6 +1341,13 @@ NCZX_EXPORT void render() {
 ```zig
 var UI_FONT: u32 = 0;
 var ICON_SHEET: u32 = 0;
+
+// Icon sheet is 64x32 pixels with 16x16 icons
+const ICON_SIZE: f32 = 16.0;
+const SHEET_W: f32 = 64.0;
+const SHEET_H: f32 = 32.0;
+const ICON_UV_W: f32 = ICON_SIZE / SHEET_W;  // 0.25
+const ICON_UV_H: f32 = ICON_SIZE / SHEET_H;  // 0.5
 
 export fn init() void {
     UI_FONT = rom_font("ui_font", "ui_font".len);
@@ -1295,32 +1360,38 @@ export fn render() void {
     blend_mode(1);
 
     // Background panel
-    draw_rect(5.0, 5.0, 200.0, 80.0, 0x00000099);
+    set_color(0x00000099);
+    draw_rect(5.0, 5.0, 200.0, 80.0);
 
-    // Health bar
-    draw_rect(10.0, 10.0, 102.0, 12.0, 0x333333FF);
-    draw_rect(11.0, 11.0, @floatFromInt(health), 10.0, 0x00FF00FF);
+    // Health bar background
+    set_color(0x333333FF);
+    draw_rect(10.0, 10.0, 102.0, 12.0);
 
-    // Health icon
+    // Health bar fill
+    set_color(0x00FF00FF);
+    draw_rect(11.0, 11.0, @floatFromInt(health), 10.0);
+
+    // Health icon (first icon in sheet)
     texture_bind(ICON_SHEET);
+    set_color(0xFFFFFFFF);
     draw_sprite_region(
-        10.0, 25.0, 16.0, 16.0,   // Position
-        0.0, 0.0, 16.0, 16.0,     // Heart icon
-        0xFFFFFFFF
+        10.0, 25.0, 16.0, 16.0,      // Position and size
+        0.0, 0.0, ICON_UV_W, ICON_UV_H  // UV region (0.0-1.0)
     );
 
     // Score text
     font_bind(UI_FONT);
+    set_color(0xFFFFFFFF);
     const score_text = "SCORE: 12345";
     draw_text(score_text, score_text.len,
-              30.0, 25.0, 12.0, 0xFFFFFFFF);
+              30.0, 25.0, 12.0);
 
-    // Animated coin icon
+    // Animated coin icon (4 frames in bottom row)
     const frame = @as(u32, @intFromFloat(elapsed_time() * 8.0)) % 4;
+    set_color(0xFFD700FF);
     draw_sprite_region(
         10.0, 45.0, 16.0, 16.0,
-        @floatFromInt(frame * 16), 16.0, 16.0, 16.0,
-        0xFFD700FF
+        @as(f32, @floatFromInt(frame)) * ICON_UV_W, 0.5, ICON_UV_W, ICON_UV_H  // UV coords
     );
 
     // Re-enable depth for 3D

@@ -463,7 +463,8 @@ pub extern fn texture_filter(filter: u32) void;
 fn render() {
     // Pixel art sprites
     texture_filter(0);
-    draw_sprite(0.0, 0.0, 64.0, 64.0, 0xFFFFFFFF);
+    set_color(0xFFFFFFFF);
+    draw_sprite(0.0, 0.0, 64.0, 64.0);
 
     // Photo textures
     texture_filter(1);
@@ -477,7 +478,8 @@ fn render() {
 NCZX_EXPORT void render(void) {
     // Pixel art sprites
     texture_filter(0);
-    draw_sprite(0.0f, 0.0f, 64.0f, 64.0f, 0xFFFFFFFF);
+    set_color(0xFFFFFFFF);
+    draw_sprite(0.0f, 0.0f, 64.0f, 64.0f);
 
     // Photo textures
     texture_filter(1);
@@ -491,7 +493,8 @@ NCZX_EXPORT void render(void) {
 export fn render() void {
     // Pixel art sprites
     texture_filter(0);
-    draw_sprite(0.0, 0.0, 64.0, 64.0, 0xFFFFFFFF);
+    set_color(0xFFFFFFFF);
+    draw_sprite(0.0, 0.0, 64.0, 64.0);
 
     // Photo textures
     texture_filter(1);
@@ -952,15 +955,18 @@ pub extern fn z_index(n: u32) void;
 fn render() {
     // Background (lowest)
     z_index(0);
-    draw_sprite(bg_x, bg_y, bg_w, bg_h, bg_color);
+    set_color(bg_color);
+    draw_sprite(bg_x, bg_y, bg_w, bg_h);
 
     // Game objects
     z_index(1);
-    draw_sprite(obj_x, obj_y, obj_w, obj_h, obj_color);
+    set_color(obj_color);
+    draw_sprite(obj_x, obj_y, obj_w, obj_h);
 
     // UI on top
     z_index(2);
-    draw_sprite(ui_x, ui_y, ui_w, ui_h, ui_color);
+    set_color(ui_color);
+    draw_sprite(ui_x, ui_y, ui_w, ui_h);
 }
 ```
 {{#endtab}}
@@ -970,15 +976,18 @@ fn render() {
 NCZX_EXPORT void render(void) {
     // Background (lowest)
     z_index(0);
-    draw_sprite(bg_x, bg_y, bg_w, bg_h, bg_color);
+    set_color(bg_color);
+    draw_sprite(bg_x, bg_y, bg_w, bg_h);
 
     // Game objects
     z_index(1);
-    draw_sprite(obj_x, obj_y, obj_w, obj_h, obj_color);
+    set_color(obj_color);
+    draw_sprite(obj_x, obj_y, obj_w, obj_h);
 
     // UI on top
     z_index(2);
-    draw_sprite(ui_x, ui_y, ui_w, ui_h, ui_color);
+    set_color(ui_color);
+    draw_sprite(ui_x, ui_y, ui_w, ui_h);
 }
 ```
 {{#endtab}}
@@ -988,15 +997,246 @@ NCZX_EXPORT void render(void) {
 export fn render() void {
     // Background (lowest)
     z_index(0);
-    draw_sprite(bg_x, bg_y, bg_w, bg_h, bg_color);
+    set_color(bg_color);
+    draw_sprite(bg_x, bg_y, bg_w, bg_h);
 
     // Game objects
     z_index(1);
-    draw_sprite(obj_x, obj_y, obj_w, obj_h, obj_color);
+    set_color(obj_color);
+    draw_sprite(obj_x, obj_y, obj_w, obj_h);
 
     // UI on top
     z_index(2);
-    draw_sprite(ui_x, ui_y, ui_w, ui_h, ui_color);
+    set_color(ui_color);
+    draw_sprite(ui_x, ui_y, ui_w, ui_h);
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+---
+
+## Viewport
+
+Functions for split-screen rendering. Each player can have their own viewport region.
+
+### viewport
+
+Set the viewport for subsequent draw calls.
+
+**Signature:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn viewport(x: u32, y: u32, width: u32, height: u32)
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_IMPORT void viewport(uint32_t x, uint32_t y, uint32_t width, uint32_t height);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn viewport(x: u32, y: u32, width: u32, height: u32) void;
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| x | `u32` | Left edge of viewport in screen pixels |
+| y | `u32` | Top edge of viewport in screen pixels |
+| width | `u32` | Width of viewport in screen pixels |
+| height | `u32` | Height of viewport in screen pixels |
+
+**Behavior:**
+- Camera aspect ratio automatically adjusts to viewport dimensions
+- 2D coordinates (`draw_sprite`, `draw_text`, etc.) become viewport-relative
+- Native resolution is 960×540
+
+**Example:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn render() {
+    // 2-player horizontal split
+
+    // Left half (player 1)
+    viewport(0, 0, 480, 540);
+    camera_position(p1.x, p1.y, p1.z);
+    draw_mesh(world);
+    set_color(0xFFFFFFFF);
+    draw_text_str("P1", 10.0, 10.0, 16.0);
+
+    // Right half (player 2)
+    viewport(480, 0, 480, 540);
+    camera_position(p2.x, p2.y, p2.z);
+    draw_mesh(world);
+    set_color(0xFFFFFFFF);
+    draw_text_str("P2", 10.0, 10.0, 16.0);
+
+    // Reset to fullscreen for shared UI
+    viewport_clear();
+    set_color(0xFFFFFFFF);
+    draw_text_str("SCORE: 1000", 400.0, 10.0, 16.0);
+}
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_EXPORT void render(void) {
+    // 2-player horizontal split
+
+    // Left half (player 1)
+    viewport(0, 0, 480, 540);
+    camera_position(p1.x, p1.y, p1.z);
+    draw_mesh(world);
+    set_color(0xFFFFFFFF);
+    draw_text("P1", 2, 10.0f, 10.0f, 16.0f);
+
+    // Right half (player 2)
+    viewport(480, 0, 480, 540);
+    camera_position(p2.x, p2.y, p2.z);
+    draw_mesh(world);
+    set_color(0xFFFFFFFF);
+    draw_text("P2", 2, 10.0f, 10.0f, 16.0f);
+
+    // Reset to fullscreen for shared UI
+    viewport_clear();
+    set_color(0xFFFFFFFF);
+    draw_text("SCORE: 1000", 11, 400.0f, 10.0f, 16.0f);
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+export fn render() void {
+    // 2-player horizontal split
+
+    // Left half (player 1)
+    viewport(0, 0, 480, 540);
+    camera_position(p1.x, p1.y, p1.z);
+    draw_mesh(world);
+    set_color(0xFFFFFFFF);
+    draw_text("P1", 2, 10.0, 10.0, 16.0);
+
+    // Right half (player 2)
+    viewport(480, 0, 480, 540);
+    camera_position(p2.x, p2.y, p2.z);
+    draw_mesh(world);
+    set_color(0xFFFFFFFF);
+    draw_text("P2", 2, 10.0, 10.0, 16.0);
+
+    // Reset to fullscreen for shared UI
+    viewport_clear();
+    set_color(0xFFFFFFFF);
+    draw_text("SCORE: 1000", 11, 400.0, 10.0, 16.0);
+}
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+---
+
+### viewport_clear
+
+Reset viewport to fullscreen (960×540).
+
+**Signature:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn viewport_clear()
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_IMPORT void viewport_clear(void);
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+pub extern fn viewport_clear() void;
+```
+{{#endtab}}
+
+{{#endtabs}}
+
+**Example:**
+
+{{#tabs global="lang"}}
+
+{{#tab name="Rust"}}
+```rust
+fn render() {
+    // Draw player viewports...
+    viewport(0, 0, 480, 540);
+    // ... render player 1 ...
+
+    viewport(480, 0, 480, 540);
+    // ... render player 2 ...
+
+    // Back to fullscreen for UI overlay
+    viewport_clear();
+    z_index(10);
+    set_color(0x00000080);
+    draw_rect(0.0, 500.0, 960.0, 40.0);  // Bottom bar
+}
+```
+{{#endtab}}
+
+{{#tab name="C/C++"}}
+```c
+NCZX_EXPORT void render(void) {
+    // Draw player viewports...
+    viewport(0, 0, 480, 540);
+    // ... render player 1 ...
+
+    viewport(480, 0, 480, 540);
+    // ... render player 2 ...
+
+    // Back to fullscreen for UI overlay
+    viewport_clear();
+    z_index(10);
+    set_color(0x00000080);
+    draw_rect(0.0f, 500.0f, 960.0f, 40.0f);  // Bottom bar
+}
+```
+{{#endtab}}
+
+{{#tab name="Zig"}}
+```zig
+export fn render() void {
+    // Draw player viewports...
+    viewport(0, 0, 480, 540);
+    // ... render player 1 ...
+
+    viewport(480, 0, 480, 540);
+    // ... render player 2 ...
+
+    // Back to fullscreen for UI overlay
+    viewport_clear();
+    z_index(10);
+    set_color(0x00000080);
+    draw_rect(0.0, 500.0, 960.0, 40.0);  // Bottom bar
 }
 ```
 {{#endtab}}
@@ -1107,7 +1347,8 @@ fn render() {
     // Draw UI (2D draws are always on top via z_index)
     texture_filter(0);
     z_index(1);
-    draw_sprite(10.0, 10.0, 200.0, 50.0, 0xFFFFFFFF);
+    set_color(0xFFFFFFFF);
+    draw_sprite(10.0, 10.0, 200.0, 50.0);
 }
 ```
 {{#endtab}}
@@ -1139,7 +1380,8 @@ NCZX_EXPORT void render(void) {
     // Draw UI (2D draws are always on top via z_index)
     texture_filter(0);
     z_index(1);
-    draw_sprite(10.0f, 10.0f, 200.0f, 50.0f, 0xFFFFFFFF);
+    set_color(0xFFFFFFFF);
+    draw_sprite(10.0f, 10.0f, 200.0f, 50.0f);
 }
 ```
 {{#endtab}}
@@ -1171,7 +1413,8 @@ export fn render() void {
     // Draw UI (2D draws are always on top via z_index)
     texture_filter(0);
     z_index(1);
-    draw_sprite(10.0, 10.0, 200.0, 50.0, 0xFFFFFFFF);
+    set_color(0xFFFFFFFF);
+    draw_sprite(10.0, 10.0, 200.0, 50.0);
 }
 ```
 {{#endtab}}

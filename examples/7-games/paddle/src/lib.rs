@@ -125,9 +125,8 @@ fn load_rom_sound(id: &[u8]) -> u32 {
 
 // === Helper Functions ===
 
-fn draw_text_str(s: &[u8], x: f32, y: f32, size: f32, color: u32) {
+fn draw_text_str(s: &[u8], x: f32, y: f32, size: f32) {
     unsafe {
-        set_color(color);
         draw_text(s.as_ptr(), s.len() as u32, x, y, size);
     }
 }
@@ -464,20 +463,22 @@ fn render_scores() {
 fn render_title() {
     unsafe {
         // Title
-        draw_text_str(b"PONG", SCREEN_WIDTH / 2.0 - 80.0, 150.0, 64.0, COLOR_WHITE);
+        set_color(COLOR_WHITE);
+        draw_text_str(b"PONG", SCREEN_WIDTH / 2.0 - 80.0, 150.0, 64.0);
 
         // Mode indicator
         if IS_TWO_PLAYER {
-            draw_text_str(b"2 PLAYER MODE", SCREEN_WIDTH / 2.0 - 100.0, 250.0, 24.0, COLOR_WHITE);
+            draw_text_str(b"2 PLAYER MODE", SCREEN_WIDTH / 2.0 - 100.0, 250.0, 24.0);
         } else {
-            draw_text_str(b"1 PLAYER VS AI", SCREEN_WIDTH / 2.0 - 100.0, 250.0, 24.0, COLOR_WHITE);
+            draw_text_str(b"1 PLAYER VS AI", SCREEN_WIDTH / 2.0 - 100.0, 250.0, 24.0);
         }
 
         // Instructions
-        draw_text_str(b"Press A to Start", SCREEN_WIDTH / 2.0 - 120.0, 350.0, 24.0, COLOR_GRAY);
+        set_color(COLOR_GRAY);
+        draw_text_str(b"Press A to Start", SCREEN_WIDTH / 2.0 - 120.0, 350.0, 24.0);
 
         // Controls hint
-        draw_text_str(b"Controls: Left Stick or D-Pad Up/Down", 250.0, 450.0, 18.0, COLOR_GRAY);
+        draw_text_str(b"Controls: Left Stick or D-Pad Up/Down", 250.0, 450.0, 18.0);
     }
 }
 
@@ -489,17 +490,20 @@ fn render_game_over() {
 
         // Winner text
         if WINNER == 1 {
-            draw_text_str(b"PLAYER 1 WINS!", SCREEN_WIDTH / 2.0 - 130.0, SCREEN_HEIGHT / 2.0 - 30.0, 32.0, COLOR_PLAYER1);
+            set_color(COLOR_PLAYER1);
+            draw_text_str(b"PLAYER 1 WINS!", SCREEN_WIDTH / 2.0 - 130.0, SCREEN_HEIGHT / 2.0 - 30.0, 32.0);
         } else {
+            set_color(COLOR_PLAYER2);
             if IS_TWO_PLAYER {
-                draw_text_str(b"PLAYER 2 WINS!", SCREEN_WIDTH / 2.0 - 130.0, SCREEN_HEIGHT / 2.0 - 30.0, 32.0, COLOR_PLAYER2);
+                draw_text_str(b"PLAYER 2 WINS!", SCREEN_WIDTH / 2.0 - 130.0, SCREEN_HEIGHT / 2.0 - 30.0, 32.0);
             } else {
-                draw_text_str(b"AI WINS!", SCREEN_WIDTH / 2.0 - 70.0, SCREEN_HEIGHT / 2.0 - 30.0, 32.0, COLOR_PLAYER2);
+                draw_text_str(b"AI WINS!", SCREEN_WIDTH / 2.0 - 70.0, SCREEN_HEIGHT / 2.0 - 30.0, 32.0);
             }
         }
 
         // Restart prompt
-        draw_text_str(b"Press A to Play Again", SCREEN_WIDTH / 2.0 - 150.0, SCREEN_HEIGHT / 2.0 + 30.0, 20.0, COLOR_GRAY);
+        set_color(COLOR_GRAY);
+        draw_text_str(b"Press A to Play Again", SCREEN_WIDTH / 2.0 - 150.0, SCREEN_HEIGHT / 2.0 + 30.0, 20.0);
     }
 }
 
@@ -519,10 +523,11 @@ pub extern "C" fn render() {
                 render_ball();
 
                 // Show mode indicator
+                set_color(COLOR_GRAY);
                 if IS_TWO_PLAYER {
-                    draw_text_str(b"2P", 10.0, 10.0, 16.0, COLOR_GRAY);
+                    draw_text_str(b"2P", 10.0, 10.0, 16.0);
                 } else {
-                    draw_text_str(b"vs AI", 10.0, 10.0, 16.0, COLOR_GRAY);
+                    draw_text_str(b"vs AI", 10.0, 10.0, 16.0);
                 }
             }
 

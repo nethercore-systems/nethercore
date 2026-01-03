@@ -122,7 +122,7 @@ Nethercore ZX uses **CPU-side layer sorting** for 2D elements (sprites, text, UI
 ### Layer System
 
 ```rust
-fn layer(n: u32)  // Set current layer (0 = back, higher = front)
+fn z_index(n: u32)  // Set current layer (0 = back, higher = front)
 ```
 
 **Key concepts:**
@@ -143,16 +143,20 @@ Layer 0 (background) → Layer 1 → Layer 2 → ... (foreground)
 **Example:**
 ```rust
 // Background sprite
-layer(0);
-draw_sprite(bg_x, bg_y, bg_w, bg_h, bg_color);
+z_index(0);
+set_color(bg_color);
+draw_sprite(bg_x, bg_y, bg_w, bg_h);
 
 // Character (layer 1)
-layer(1);
-draw_sprite(char_x, char_y, char_w, char_h, char_color);
+z_index(1);
+set_color(char_color);
+draw_sprite(char_x, char_y, char_w, char_h);
 
 // UI text (layer 2 - on top)
-layer(2);
-draw_text("Score: 100", 10.0, 10.0, 16.0, WHITE);
+z_index(2);
+set_color(WHITE);
+let score_text = b"Score: 100";
+draw_text(score_text.as_ptr(), score_text.len() as u32, 10.0, 10.0, 16.0);
 ```
 
 ### Batching Within Layers

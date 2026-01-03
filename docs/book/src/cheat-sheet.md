@@ -517,16 +517,12 @@ material_mre(texture)                  // Bind MRE to slot 1
 // Mode 3 (Specular-Shininess)
 material_shininess(value)              // 0.0-1.0 → 1-256
 material_specular(0xRRGGBBAA)          // Specular color
-material_specular_color(r, g, b)       // RGB floats
-material_specular_damping(value)
 
 // Override flags
 use_uniform_color(enabled)
 use_uniform_metallic(enabled)
 use_uniform_roughness(enabled)
 use_uniform_emissive(enabled)
-use_uniform_specular(enabled)
-use_matcap_reflection(enabled)
 ```
 {{#endtab}}
 
@@ -543,16 +539,12 @@ void material_mre(uint32_t texture);       // Bind MRE to slot 1
 // Mode 3 (Specular-Shininess)
 void material_shininess(float value);  // 0.0-1.0 → 1-256
 void material_specular(uint32_t color);    // Specular color
-void material_specular_color(float r, float g, float b);
-void material_specular_damping(float value);
 
 // Override flags
 void use_uniform_color(uint32_t enabled);
 void use_uniform_metallic(uint32_t enabled);
 void use_uniform_roughness(uint32_t enabled);
 void use_uniform_emissive(uint32_t enabled);
-void use_uniform_specular(uint32_t enabled);
-void use_matcap_reflection(uint32_t enabled);
 ```
 {{#endtab}}
 
@@ -569,16 +561,12 @@ material_mre(texture: u32) void        // Bind MRE to slot 1
 // Mode 3 (Specular-Shininess)
 material_shininess(value: f32) void    // 0.0-1.0 → 1-256
 material_specular(color: u32) void     // Specular color
-material_specular_color(r: f32, g: f32, b: f32) void
-material_specular_damping(value: f32) void
 
 // Override flags
 use_uniform_color(enabled: u32) void
 use_uniform_metallic(enabled: u32) void
 use_uniform_roughness(enabled: u32) void
 use_uniform_emissive(enabled: u32) void
-use_uniform_specular(enabled: u32) void
-use_matcap_reflection(enabled: u32) void
 ```
 {{#endtab}}
 
@@ -706,23 +694,25 @@ matcap_set(slot: u32, texture: u32) void  // Slot 1-3 (Mode 1 only)
 
 ## 2D Drawing
 
+**Note:** Use `set_color(0xRRGGBBAA)` before drawing to set the tint color. Source coordinates (`src_*`) are UV values (0.0-1.0), not pixels.
+
 {{#tabs global="lang"}}
 
 {{#tab name="Rust"}}
 ```rust
-// Sprites
-draw_sprite(x, y, w, h, color)
-draw_sprite_region(x, y, w, h, src_x, src_y, src_w, src_h, color)
-draw_sprite_ex(x, y, w, h, src_x, src_y, src_w, src_h, ox, oy, angle, color)
+// Sprites (use set_color() for tinting)
+draw_sprite(x, y, w, h)
+draw_sprite_region(x, y, w, h, src_x, src_y, src_w, src_h)  // UV coords (0.0-1.0)
+draw_sprite_ex(x, y, w, h, src_x, src_y, src_w, src_h, ox, oy, angle)
 
-// Primitives
-draw_rect(x, y, w, h, color)
-draw_line(x1, y1, x2, y2, thickness, color)
-draw_circle(x, y, radius, color)               // Filled, 16 segments
-draw_circle_outline(x, y, radius, thickness, color)
+// Primitives (use set_color() for color)
+draw_rect(x, y, w, h)
+draw_line(x1, y1, x2, y2, thickness)
+draw_circle(x, y, radius)                      // Filled, 16 segments
+draw_circle_outline(x, y, radius, thickness)
 
-// Text
-draw_text(ptr, len, x, y, size, color)
+// Text (use set_color() for color)
+draw_text(ptr, len, x, y, size)
 text_width(ptr, len, size) -> f32              // Measure text width
 load_font(tex, char_w, char_h, first_cp, count) -> u32
 load_font_ex(tex, widths_ptr, char_h, first_cp, count) -> u32
@@ -732,50 +722,48 @@ font_bind(handle)
 
 {{#tab name="C/C++"}}
 ```c
-// Sprites
-void draw_sprite(float x, float y, float w, float h, uint32_t color);
+// Sprites (use set_color() for tinting)
+void draw_sprite(float x, float y, float w, float h);
 void draw_sprite_region(float x, float y, float w, float h,
-                        float src_x, float src_y, float src_w, float src_h, uint32_t color);
+                        float src_x, float src_y, float src_w, float src_h);  // UV coords (0.0-1.0)
 void draw_sprite_ex(float x, float y, float w, float h,
                     float src_x, float src_y, float src_w, float src_h,
-                    float ox, float oy, float angle, uint32_t color);
+                    float ox, float oy, float angle);
 
-// Primitives
-void draw_rect(float x, float y, float w, float h, uint32_t color);
-void draw_line(float x1, float y1, float x2, float y2, float thickness, uint32_t color);
-void draw_circle(float x, float y, float radius, uint32_t color);
-void draw_circle_outline(float x, float y, float radius, float thickness, uint32_t color);
+// Primitives (use set_color() for color)
+void draw_rect(float x, float y, float w, float h);
+void draw_line(float x1, float y1, float x2, float y2, float thickness);
+void draw_circle(float x, float y, float radius);
+void draw_circle_outline(float x, float y, float radius, float thickness);
 
-// Text
-void draw_text(const uint8_t* ptr, uint32_t len, float x, float y, float size, uint32_t color);
+// Text (use set_color() for color)
+void draw_text(const uint8_t* ptr, uint32_t len, float x, float y, float size);
 float text_width(const uint8_t* ptr, uint32_t len, float size);
 uint32_t load_font(uint32_t tex, uint32_t char_w, uint32_t char_h, uint32_t first_cp, uint32_t count);
 uint32_t load_font_ex(uint32_t tex, const uint8_t* widths, uint32_t char_h, uint32_t first_cp, uint32_t count);
 void font_bind(uint32_t handle);
-// Helper: NCZX_DRAW_TEXT("Hello", x, y, size, color)
 ```
 {{#endtab}}
 
 {{#tab name="Zig"}}
 ```zig
-// Sprites
-draw_sprite(x: f32, y: f32, w: f32, h: f32, color: u32) void
-draw_sprite_region(x: f32, y: f32, w: f32, h: f32, src_x: f32, src_y: f32, src_w: f32, src_h: f32, color: u32) void
-draw_sprite_ex(x: f32, y: f32, w: f32, h: f32, src_x: f32, src_y: f32, src_w: f32, src_h: f32, ox: f32, oy: f32, angle: f32, color: u32) void
+// Sprites (use set_color() for tinting)
+draw_sprite(x: f32, y: f32, w: f32, h: f32) void
+draw_sprite_region(x: f32, y: f32, w: f32, h: f32, src_x: f32, src_y: f32, src_w: f32, src_h: f32) void  // UV coords (0.0-1.0)
+draw_sprite_ex(x: f32, y: f32, w: f32, h: f32, src_x: f32, src_y: f32, src_w: f32, src_h: f32, ox: f32, oy: f32, angle: f32) void
 
-// Primitives
-draw_rect(x: f32, y: f32, w: f32, h: f32, color: u32) void
-draw_line(x1: f32, y1: f32, x2: f32, y2: f32, thickness: f32, color: u32) void
-draw_circle(x: f32, y: f32, radius: f32, color: u32) void
-draw_circle_outline(x: f32, y: f32, radius: f32, thickness: f32, color: u32) void
+// Primitives (use set_color() for color)
+draw_rect(x: f32, y: f32, w: f32, h: f32) void
+draw_line(x1: f32, y1: f32, x2: f32, y2: f32, thickness: f32) void
+draw_circle(x: f32, y: f32, radius: f32) void
+draw_circle_outline(x: f32, y: f32, radius: f32, thickness: f32) void
 
-// Text
-draw_text(ptr: [*]const u8, len: u32, x: f32, y: f32, size: f32, color: u32) void
+// Text (use set_color() for color)
+draw_text(ptr: [*]const u8, len: u32, x: f32, y: f32, size: f32) void
 text_width(ptr: [*]const u8, len: u32, size: f32) f32
 load_font(tex: u32, char_w: u32, char_h: u32, first_cp: u32, count: u32) u32
 load_font_ex(tex: u32, widths: [*]const u8, char_h: u32, first_cp: u32, count: u32) u32
 font_bind(handle: u32) void
-// Helper: zx.text("Hello", x, y, size, color)
 ```
 {{#endtab}}
 
@@ -785,27 +773,29 @@ font_bind(handle: u32) void
 
 ## Billboards
 
+**Note:** Use `set_color(0xRRGGBBAA)` before drawing to set the tint color. UV coordinates are 0.0-1.0.
+
 {{#tabs global="lang"}}
 
 {{#tab name="Rust"}}
 ```rust
-draw_billboard(w, h, mode, color)      // mode: 1=sphere, 2=cylY, 3=cylX, 4=cylZ
-draw_billboard_region(w, h, sx, sy, sw, sh, mode, color)
+draw_billboard(w, h, mode)             // mode: 1=sphere, 2=cylY, 3=cylX, 4=cylZ
+draw_billboard_region(w, h, sx, sy, sw, sh, mode)  // UV coords (0.0-1.0)
 ```
 {{#endtab}}
 
 {{#tab name="C/C++"}}
 ```c
-void draw_billboard(float w, float h, uint32_t mode, uint32_t color);
-void draw_billboard_region(float w, float h, float sx, float sy, float sw, float sh, uint32_t mode, uint32_t color);
+void draw_billboard(float w, float h, uint32_t mode);
+void draw_billboard_region(float w, float h, float sx, float sy, float sw, float sh, uint32_t mode);
 // Modes: NCZX_BILLBOARD_SPHERICAL, NCZX_BILLBOARD_CYLINDRICAL_Y/X/Z
 ```
 {{#endtab}}
 
 {{#tab name="Zig"}}
 ```zig
-draw_billboard(w: f32, h: f32, mode: u32, color: u32) void
-draw_billboard_region(w: f32, h: f32, sx: f32, sy: f32, sw: f32, sh: f32, mode: u32, color: u32) void
+draw_billboard(w: f32, h: f32, mode: u32) void
+draw_billboard_region(w: f32, h: f32, sx: f32, sy: f32, sw: f32, sh: f32, mode: u32) void
 // Modes: Billboard.spherical, Billboard.cylindrical_y/x/z
 ```
 {{#endtab}}

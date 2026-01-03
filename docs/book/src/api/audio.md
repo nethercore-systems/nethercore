@@ -799,7 +799,7 @@ fn init() {
         AMBIENT = rom_sound(b"wind".as_ptr(), 4);
 
         // Start music and ambient
-        music_play(MUSIC, 0.6);
+        music_play(MUSIC, 0.6, 1); // 1 = loop
         channel_play(15, AMBIENT, 0.3, 0.0, 1); // Looping ambient
     }
 }
@@ -855,7 +855,7 @@ NCZX_EXPORT void init() {
     AMBIENT = rom_sound("wind", 4);
 
     // Start music and ambient
-    music_play(MUSIC, 0.6f);
+    music_play(MUSIC, 0.6f, 1); // 1 = loop
     channel_play(15, AMBIENT, 0.3f, 0.0f, 1); // Looping ambient
 }
 
@@ -908,7 +908,7 @@ export fn init() void {
     AMBIENT = rom_sound("wind".ptr, 4);
 
     // Start music and ambient
-    music_play(MUSIC, 0.6);
+    music_play(MUSIC, 0.6, 1); // 1 = loop
     channel_play(15, AMBIENT, 0.3, 0.0, 1); // Looping ambient
 }
 

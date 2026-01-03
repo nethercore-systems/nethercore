@@ -355,6 +355,9 @@ Runtime value editing for development (F3 to open panel):
 - **One vertex buffer per stride**: Avoids padding waste
 - **Procedural sky**: Gradient + sun, provides ambient/reflection in all modes
 - **2D/3D drawing**: Screen space sprites, world space billboards, immediate triangles, retained meshes
+- **State-based color**: Use `set_color(0xRRGGBBAA)` before draw calls (2D functions don't take color params)
+- **Z-ordering for 2D**: Use `z_index(n)` to control 2D draw order (0-255, higher draws on top)
+- **Split-screen viewports**: Use `viewport(x, y, w, h)` and `viewport_clear()` for multiplayer
 
 ### Local Storage
 ```
@@ -413,29 +416,37 @@ This repository works with Claude Code plugins for ZX game development assistanc
 
 | Plugin | Purpose |
 |--------|---------|
-| `nethercore-zx-dev` | Core game development - FFI specs, project templates, debugging |
-| `nethercore-zx-game-design` | Game design workflow - GDDs, constraints, multiplayer patterns |
-| `nethercore-zx-procgen` | Procedural asset generation - textures, meshes, sounds, animations |
-| `nethercore-zx-publish` | Publishing workflow - ROM packaging, platform upload |
-| `nethercore-zx-orchestrator` | Meta-orchestration - coordinates full development pipeline |
-| `nethercore-zx-test` | Testing and QA - sync tests, replay regression, determinism |
-| `nethercore-zx-optimize` | Optimization - resource budgets, performance tuning |
-| `nethercore-zx-cicd` | CI/CD automation - GitHub Actions, quality gates |
-| `game-design` | Platform-agnostic design - world building, narrative, replayability |
+| `ai-game-studio` | Intelligent request routing, GDD tracking, quality analysis, completion verification |
+| `creative-direction` | Art, sound, tech directors - coherence and quality across disciplines |
+| `game-design` | Platform-agnostic design - world building, narrative, characters, replayability |
+| `sound-design` | Platform-agnostic audio - sonic style language, synthesis, music, SFX |
+| `tracker-music` | Tracker module generation (XM/IT) - pattern design, end-to-end song generation |
+| `zx-dev` | Core game development - FFI specs, project templates, rollback safety review |
+| `zx-game-design` | ZX-specific design - GDDs, constraints, multiplayer patterns |
+| `zx-procgen` | Procedural asset generation - textures, meshes, sounds, animations |
+| `zx-publish` | Publishing workflow - ROM packaging, platform upload |
+| `zx-orchestrator` | Meta-orchestration - coordinates full development pipeline |
+| `zx-test` | Testing and QA - sync tests, replay regression, determinism |
+| `zx-optimize` | Optimization - resource budgets, performance tuning |
+| `zx-cicd` | CI/CD automation - GitHub Actions, quality gates |
 
 ### Plugin Structure
 
 ```
 ../nethercore-ai-plugins/
-├── nethercore-zx-dev/           # Core game development
-├── nethercore-zx-game-design/   # Game design workflow
-├── nethercore-zx-procgen/       # Procedural asset generation
-├── nethercore-zx-publish/       # Publishing workflow
-├── nethercore-zx-orchestrator/  # Meta-orchestration
-├── nethercore-zx-test/          # Testing and QA
-├── nethercore-zx-optimize/      # Optimization
-├── nethercore-zx-cicd/          # CI/CD automation
+├── ai-game-studio/              # Intelligent game development studio
+├── creative-direction/          # Art, sound, tech directors
 ├── game-design/                 # Platform-agnostic design
+├── sound-design/                # Audio design and composition
+├── tracker-music/               # Tracker module generation
+├── zx-dev/                      # Core game development
+├── zx-game-design/              # ZX-specific design
+├── zx-procgen/                  # Procedural asset generation
+├── zx-publish/                  # Publishing workflow
+├── zx-orchestrator/             # Meta-orchestration
+├── zx-test/                     # Testing and QA
+├── zx-optimize/                 # Optimization
+├── zx-cicd/                     # CI/CD automation
 ├── LICENSE-MIT
 ├── LICENSE-APACHE
 └── README.md
@@ -462,15 +473,19 @@ Add to your global Claude settings (`~/.claude/settings.json`) or project settin
     }
   },
   "enabledPlugins": {
-    "nethercore-zx-dev@nethercore-ai-plugins": true,
-    "nethercore-zx-game-design@nethercore-ai-plugins": true,
-    "nethercore-zx-procgen@nethercore-ai-plugins": true,
-    "nethercore-zx-publish@nethercore-ai-plugins": true,
-    "nethercore-zx-orchestrator@nethercore-ai-plugins": true,
-    "nethercore-zx-test@nethercore-ai-plugins": true,
-    "nethercore-zx-optimize@nethercore-ai-plugins": true,
-    "nethercore-zx-cicd@nethercore-ai-plugins": true,
-    "game-design@nethercore-ai-plugins": true
+    "ai-game-studio@nethercore-ai-plugins": true,
+    "creative-direction@nethercore-ai-plugins": true,
+    "game-design@nethercore-ai-plugins": true,
+    "sound-design@nethercore-ai-plugins": true,
+    "tracker-music@nethercore-ai-plugins": true,
+    "zx-dev@nethercore-ai-plugins": true,
+    "zx-game-design@nethercore-ai-plugins": true,
+    "zx-procgen@nethercore-ai-plugins": true,
+    "zx-publish@nethercore-ai-plugins": true,
+    "zx-orchestrator@nethercore-ai-plugins": true,
+    "zx-test@nethercore-ai-plugins": true,
+    "zx-optimize@nethercore-ai-plugins": true,
+    "zx-cicd@nethercore-ai-plugins": true
   }
 }
 ```

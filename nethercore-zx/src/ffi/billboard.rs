@@ -29,15 +29,15 @@ pub fn register(linker: &mut Linker<ZXGameContext>) -> Result<()> {
 /// * `w` — Billboard width in world units
 /// * `h` — Billboard height in world units
 /// * `mode` — Billboard mode (1=spherical, 2=cylindrical Y, 3=cylindrical X, 4=cylindrical Z)
-/// * `color` — Color tint (0xRRGGBBAA)
 ///
 /// The billboard is positioned at the current transform origin and always faces the camera.
+/// Use `set_color()` to tint the billboard before drawing.
 /// Modes:
 /// - 1 (spherical): Faces camera completely (rotates on all axes)
 /// - 2 (cylindrical Y): Rotates around Y axis only (stays upright)
 /// - 3 (cylindrical X): Rotates around X axis only
 /// - 4 (cylindrical Z): Rotates around Z axis only
-fn draw_billboard(mut caller: Caller<'_, ZXGameContext>, w: f32, h: f32, mode: u32, color: u32) {
+fn draw_billboard(mut caller: Caller<'_, ZXGameContext>, w: f32, h: f32, mode: u32) {
     // Validate mode
     if !(1..=4).contains(&mode) {
         warn!("draw_billboard: invalid mode {} (must be 1-4)", mode);
@@ -45,9 +45,6 @@ fn draw_billboard(mut caller: Caller<'_, ZXGameContext>, w: f32, h: f32, mode: u
     }
 
     let state = &mut caller.data_mut().ffi;
-
-    // Set color in shading state before creating shading state index
-    state.update_color(color);
 
     // Get shading state index (now includes the color we just set)
     let shading_state_index = state.add_shading_state();
@@ -113,9 +110,9 @@ fn draw_billboard(mut caller: Caller<'_, ZXGameContext>, w: f32, h: f32, mode: u
 /// * `src_w` — Source texture width (0.0-1.0)
 /// * `src_h` — Source texture height (0.0-1.0)
 /// * `mode` — Billboard mode (1=spherical, 2=cylindrical Y, 3=cylindrical X, 4=cylindrical Z)
-/// * `color` — Color tint (0xRRGGBBAA)
 ///
 /// This allows drawing a region of a sprite sheet as a billboard.
+/// Use `set_color()` to tint the billboard before drawing.
 fn draw_billboard_region(
     mut caller: Caller<'_, ZXGameContext>,
     w: f32,
@@ -125,7 +122,6 @@ fn draw_billboard_region(
     src_w: f32,
     src_h: f32,
     mode: u32,
-    color: u32,
 ) {
     // Validate mode
     if !(1..=4).contains(&mode) {
@@ -135,10 +131,7 @@ fn draw_billboard_region(
 
     let state = &mut caller.data_mut().ffi;
 
-    // Set color in shading state before creating shading state index
-    state.update_color(color);
-
-    // Get shading state index (now includes the color we just set)
+    // Get shading state index (uses current color from set_color())
     let shading_state_index = state.add_shading_state();
 
     // Convert FFI mode (1-4) to QuadMode enum (0-3)

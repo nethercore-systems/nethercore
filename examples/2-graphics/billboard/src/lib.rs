@@ -258,9 +258,8 @@ const PARTICLE_PIXELS: [u8; 8 * 8 * 4] = {
     pixels
 };
 
-fn draw_text_str(s: &str, x: f32, y: f32, size: f32, color: u32) {
+fn draw_text_str(s: &str, x: f32, y: f32, size: f32) {
     unsafe {
-        set_color(color);
         draw_text(s.as_ptr(), s.len() as u32, x, y, size);
     }
 }
@@ -378,14 +377,16 @@ pub extern "C" fn render() {
 
         // Draw mode comparison sprites
         texture_bind(SPRITE_TEXTURE);
+        set_color(0xFFFFFFFF);
         for &(x, y, z, mode, _) in &positions {
             push_identity();
             push_translate(x, y + 3.0, z);
-            draw_billboard(1.5, 1.5, mode, 0xFFFFFFFF);
+            draw_billboard(1.5, 1.5, mode);
         }
 
         // === Draw trees (Cylindrical Y - typical use case) ===
         texture_bind(TREE_TEXTURE);
+        set_color(0xFFFFFFFF);
         let tree_positions = [
             (-6.0, 0.0, -4.0),
             (-4.0, 0.0, -6.0),
@@ -398,7 +399,7 @@ pub extern "C" fn render() {
         for &(x, _y, z) in &tree_positions {
             push_identity();
             push_translate(x, 1.0, z);
-            draw_billboard(2.0, 2.0, billboard::CYLINDRICAL_Y, 0xFFFFFFFF);
+            draw_billboard(2.0, 2.0, billboard::CYLINDRICAL_Y);
         }
 
         // === Draw particle system (Spherical - particles always face camera) ===
@@ -412,14 +413,16 @@ pub extern "C" fn render() {
                 // Apply alpha to color
                 let alpha = p.alpha();
                 let color = (p.color & 0xFFFFFF00) | (alpha as u32);
+                set_color(color);
 
-                draw_billboard(p.size, p.size, billboard::SPHERICAL, color);
+                draw_billboard(p.size, p.size, billboard::SPHERICAL);
             }
         }
 
         // === Draw ground plane indicator ===
         // Four corner markers to show ground level
         texture_bind(SPRITE_TEXTURE);
+        set_color(0x88888888);
         let ground_markers = [
             (-8.0, 0.0, -8.0),
             (8.0, 0.0, -8.0),
@@ -430,22 +433,27 @@ pub extern "C" fn render() {
         for &(x, y, z) in &ground_markers {
             push_identity();
             push_translate(x, y, z);
-            draw_billboard(0.5, 0.5, billboard::SPHERICAL, 0x88888888);
+            draw_billboard(0.5, 0.5, billboard::SPHERICAL);
         }
 
         // === Draw UI overlay ===
-        draw_text_str("Billboard Demo", 20.0, 30.0, 24.0, 0xFFFFFFFF);
-        draw_text_str("L-Stick: Rotate camera", 20.0, 100.0, 16.0, 0xCCCCCCFF);
-        draw_text_str("A: Pause/Resume", 20.0, 145.0, 16.0, 0xCCCCCCFF);
+        set_color(0xFFFFFFFF);
+        draw_text_str("Billboard Demo", 20.0, 30.0, 24.0);
+        set_color(0xCCCCCCFF);
+        draw_text_str("L-Stick: Rotate camera", 20.0, 100.0, 16.0);
+        draw_text_str("A: Pause/Resume", 20.0, 145.0, 16.0);
 
         // Mode labels at top
-        draw_text_str("Compare billboard modes (top row):", 20.0, 190.0, 16.0, 0xFFDD88FF);
-        draw_text_str("1=Spherical 2=CylY 3=CylX 4=CylZ", 20.0, 235.0, 16.0, 0xAAAAAAFF);
+        set_color(0xFFDD88FF);
+        draw_text_str("Compare billboard modes (top row):", 20.0, 190.0, 16.0);
+        set_color(0xAAAAAAFF);
+        draw_text_str("1=Spherical 2=CylY 3=CylX 4=CylZ", 20.0, 235.0, 16.0);
 
         if PAUSED {
             set_color(0x000000CC);
-        draw_rect(340.0, 240.0, 280.0, 120.0);
-            draw_text_str("PAUSED", 380.0, 280.0, 32.0, 0xFFFF00FF);
+            draw_rect(340.0, 240.0, 280.0, 120.0);
+            set_color(0xFFFF00FF);
+            draw_text_str("PAUSED", 380.0, 280.0, 32.0);
         }
     }
 }

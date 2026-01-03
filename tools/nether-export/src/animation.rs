@@ -255,9 +255,22 @@ fn sample_animation(
         bail!("Animation too short for given frame rate");
     }
 
-    // Initialize frames with identity transforms
+    // Initialize frames with node rest poses (not identity defaults)
+    // This ensures bones without animation channels keep their bind pose
     let mut frames: Vec<Vec<BoneTRS>> = (0..frame_count)
-        .map(|_| vec![BoneTRS::default(); bone_count])
+        .map(|_| {
+            joints
+                .iter()
+                .map(|joint| {
+                    let (t, r, s) = joint.transform().decomposed();
+                    BoneTRS {
+                        position: t,
+                        rotation: r,
+                        scale: s,
+                    }
+                })
+                .collect()
+        })
         .collect();
 
     // Sample each channel
