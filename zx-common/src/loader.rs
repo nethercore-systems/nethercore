@@ -113,7 +113,7 @@ impl RomLoader for ZXRomLoader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ZMetadata;
+    use crate::ZXMetadata;
     use std::path::PathBuf;
     use tempfile::TempDir;
 
@@ -131,7 +131,7 @@ mod tests {
     fn create_test_rom() -> ZXRom {
         ZXRom {
             version: ZX_ROM_FORMAT.version,
-            metadata: ZMetadata {
+            metadata: ZXMetadata {
                 id: "test-game".to_string(),
                 title: "Test Game".to_string(),
                 author: "Test Author".to_string(),

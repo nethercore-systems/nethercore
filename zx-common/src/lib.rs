@@ -57,7 +57,7 @@ pub use formats::{
     SAMPLE_RATE,
     TextureFormat,
     // ROM types
-    ZMetadata,
+    ZXMetadata,
     ZX_ROM_FORMAT,
     ZXDataPack,
     ZXRom,

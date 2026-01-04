@@ -57,7 +57,7 @@ pub struct ZXRom {
     pub version: u32,
 
     /// Game metadata
-    pub metadata: ZMetadata,
+    pub metadata: ZXMetadata,
 
     /// Compiled WASM code (must fit in 4MB RAM)
     pub code: Vec<u8>,
@@ -82,7 +82,7 @@ pub struct ZXRom {
 
 /// Nethercore ZX specific metadata
 #[derive(Debug, Clone, Encode, Decode)]
-pub struct ZMetadata {
+pub struct ZXMetadata {
     // Core game info
     /// Game slug (e.g., "platformer")
     pub id: String,
@@ -232,7 +232,7 @@ mod tests {
     fn create_test_rom() -> ZXRom {
         ZXRom {
             version: ZX_ROM_FORMAT.version,
-            metadata: ZMetadata {
+            metadata: ZXMetadata {
                 id: "test-game".to_string(),
                 title: "Test Game".to_string(),
                 author: "Test Author".to_string(),

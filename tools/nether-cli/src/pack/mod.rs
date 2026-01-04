@@ -17,7 +17,7 @@ use nethercore_shared::{ConsoleType, ZX_ROM_FORMAT};
 use zx_common::{
     vertex_stride_packed, NetherZXAnimationHeader, NetherZXMeshHeader, NetherZXSkeletonHeader,
     PackedData, PackedKeyframes, PackedMesh, PackedSkeleton, PackedSound, PackedTexture,
-    PackedTracker, TextureFormat, TrackerFormat, ZMetadata, ZXDataPack, ZXRom,
+    PackedTracker, TextureFormat, TrackerFormat, ZXMetadata, ZXDataPack, ZXRom,
     INVERSE_BIND_MATRIX_SIZE,
 };
 
@@ -150,7 +150,7 @@ pub fn execute(args: PackArgs) -> Result<()> {
     }
 
     // Create metadata
-    let metadata = ZMetadata {
+    let metadata = ZXMetadata {
         id: manifest.game.id.clone(),
         title: manifest.game.title.clone(),
         author: manifest.game.author.clone(),
